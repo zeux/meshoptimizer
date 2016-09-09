@@ -18,17 +18,12 @@ While the library implements two algorithms, [Tipsify](http://gfx.cs.princeton.e
 
 To use Tipsify for post-transform optimization, invoke this function:
 
-    #include "posttloptimizertipsify.hpp"
-    
     optimizePostTLTipsify(new_index_data, index_data, index_count, vertex_count)
     
 You have to pass a pointer to the resulting index array as new_index_data, which will be filled with an optimized index sequence.
 
 To use Tipsify for post-transform and overdraw optimization, you have to invoke the function with an additional output argument, which you then have to pass to another function:
 
-    #include "posttloptimizertipsify.hpp"
-    #include "overdrawoptimizertipsify.hpp"
-    
     float threshold = 1.05f;
   
     std::vector<unsigned int> temp_clusters;
@@ -43,8 +38,6 @@ You can also provide a threshold that will determine how much the algorithm can 
 
 This process is pretty straightforward - it does not try to model cache replacement and instead just orders vertices in the order of their use, which generally produces results that are close to optimal on real meshes. To invoke it, call:
 
-    #include "pretloptimizer.hpp"
-    
     optimizePreTL(new_vertices, vertices, indices, index_count, vertex_count, vertex_size)
     
 In a similar fashion to other functions, you have to provide a pointer to the resulting vertex buffer which will be filled with vertices from the source vertex buffer.

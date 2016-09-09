@@ -2,10 +2,7 @@
 #include <ctime>
 
 #include "../src/math.hpp"
-#include "../src/overdrawoptimizertipsify.hpp"
-#include "../src/posttloptimizertipsify.hpp"
-#include "../src/posttloptimizertomf.hpp"
-#include "../src/vcacheanalyzer.hpp"
+#include "../src/meshoptimizer.hpp"
 
 #include "tiny_obj_loader.h"
 
