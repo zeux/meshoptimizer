@@ -11,15 +11,11 @@ namespace
 	{
 		float x, y, z;
 
-		vec3()
+		vec3(): x(0), y(0), z(0)
 		{
 		}
 
 		vec3(float x, float y, float z): x(x), y(y), z(z)
-		{
-		}
-
-		explicit vec3(const float* ptr): x(ptr[0]), y(ptr[1]), z(ptr[2])
 		{
 		}
 	};
@@ -129,9 +125,9 @@ namespace
 
 	template <typename T> void calculateMeshInfo(MeshInfo& info, const T* indices, size_t index_count, const void* vertex_positions, size_t vertex_positions_stride, const std::vector<unsigned int>& clusters)
 	{
-		info.cluster_centroids.resize(clusters.size(), vec3(0, 0, 0));
-		info.cluster_normals.resize(clusters.size(), vec3(0, 0, 0));
-		info.mesh_centroid = vec3(0, 0, 0);
+		info.cluster_centroids.resize(clusters.size());
+		info.cluster_normals.resize(clusters.size());
+		info.mesh_centroid = vec3();
 
 		size_t face_count = index_count / 3;
 
@@ -163,19 +159,17 @@ namespace
 				cluster_area = 0;
 			}
 
-			vec3 positions[] =
-			{
-				vec3(reinterpret_cast<const float*>(static_cast<const char*>(vertex_positions) + indices[i * 3 + 0] * vertex_positions_stride)),
-				vec3(reinterpret_cast<const float*>(static_cast<const char*>(vertex_positions) + indices[i * 3 + 1] * vertex_positions_stride)),
-				vec3(reinterpret_cast<const float*>(static_cast<const char*>(vertex_positions) + indices[i * 3 + 2] * vertex_positions_stride))
-			};
+			const vec3& p0 = *reinterpret_cast<const vec3*>(static_cast<const char*>(vertex_positions) + indices[i * 3 + 0] * vertex_positions_stride);
+			const vec3& p1 = *reinterpret_cast<const vec3*>(static_cast<const char*>(vertex_positions) + indices[i * 3 + 1] * vertex_positions_stride);
+			const vec3& p2 = *reinterpret_cast<const vec3*>(static_cast<const char*>(vertex_positions) + indices[i * 3 + 2] * vertex_positions_stride);
 			
-			vec3 normal = cross(positions[1] - positions[0], positions[2] - positions[0]);
+			vec3 normal = cross(p1 - p0, p2 - p0);
 
 			float area = length(normal);
+			vec3 centroid_area = (p0 + p1 + p2) * area;
 
-			info.mesh_centroid += (positions[0] + positions[1] + positions[2]) * area;
-			info.cluster_centroids[current_cluster] += (positions[0] + positions[1] + positions[2]) * area;
+			info.mesh_centroid += centroid_area;
+			info.cluster_centroids[current_cluster] += centroid_area;
 			info.cluster_normals[current_cluster] += normal;
 			
 			cluster_area += area;
