@@ -26,12 +26,6 @@ namespace
 		0.0512263001867729f, 0.0332724579777247f, 0.0181112321185824f, 0.00640328752334662f,
 	};
 
-	template <typename T>
-	struct face_t
-	{
-		T a, b, c;
-	};
-
 	struct Vertex
 	{
 		Vertex(): cache_position(-1), score(0), triangles_total(0), triangles_not_added(0), triangles(0)
@@ -65,21 +59,15 @@ namespace
 
 		const float m_inf = -1e32f;
 
-		const face_t<T>* faces = reinterpret_cast<const face_t<T>*>(indices);
-
 		assert(index_count % 3 == 0);
 		size_t face_count = index_count / 3;
 
 		std::vector<Vertex> vertices(vertex_count);
 
 		// initializing vertex data
-		for (size_t i = 0; i < face_count; ++i)
+		for (size_t i = 0; i < index_count; ++i)
 		{
-			const face_t<T>& f = faces[i];
-
-			vertices[f.a].triangles_total++;
-			vertices[f.b].triangles_total++;
-			vertices[f.c].triangles_total++;
+			vertices[indices[i]].triangles_total++;
 		}
 
 		// calculate total triangle number
@@ -98,15 +86,13 @@ namespace
 		// fill triangle indices
 		for (size_t i = 0; i < face_count; ++i)
 		{
-			const face_t<T>& f = faces[i];
-
-			Vertex& a = vertices[f.a];
+			Vertex& a = vertices[indices[i * 3 + 0]];
 			a.triangles[a.triangles_not_added++] = static_cast<unsigned int>(i);
 
-			Vertex& b = vertices[f.b];
+			Vertex& b = vertices[indices[i * 3 + 1]];
 			b.triangles[b.triangles_not_added++] = static_cast<unsigned int>(i);
 
-			Vertex& c = vertices[f.c];
+			Vertex& c = vertices[indices[i * 3 + 2]];
 			c.triangles[c.triangles_not_added++] = static_cast<unsigned int>(i);
 		}
 
@@ -123,9 +109,11 @@ namespace
 
 		for (size_t i = 0; i < face_count; ++i)
 		{
-			const face_t<T>& t = faces[i];
+			unsigned int tri_a = indices[i * 3 + 0];
+			unsigned int tri_b = indices[i * 3 + 1];
+			unsigned int tri_c = indices[i * 3 + 2];
 
-			triangle_scores[i] = vertices[t.a].score + vertices[t.b].score + vertices[t.c].score;
+			triangle_scores[i] = vertices[tri_a].score + vertices[tri_b].score + vertices[tri_c].score;
 		}
 
 		T* destination_end = destination + index_count;
@@ -158,9 +146,9 @@ namespace
 				}
 			}
 
-			unsigned int tri_a = faces[min_tri].a;
-			unsigned int tri_b = faces[min_tri].b;
-			unsigned int tri_c = faces[min_tri].c;
+			unsigned int tri_a = indices[min_tri * 3 + 0];
+			unsigned int tri_b = indices[min_tri * 3 + 1];
+			unsigned int tri_c = indices[min_tri * 3 + 2];
 
 			// add it to drawing sequence
 			*destination++ = tri_a;
