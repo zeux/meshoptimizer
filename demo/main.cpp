@@ -7,7 +7,6 @@
 #include "../src/posttloptimizertomf.hpp"
 #include "../src/vcacheanalyzer.hpp"
 
-#define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
 
 const size_t kCacheSize = 24;
