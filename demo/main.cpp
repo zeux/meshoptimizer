@@ -1,7 +1,6 @@
 #include <cstdio>
 #include <ctime>
 
-#include "../src/math.hpp"
 #include "../src/meshoptimizer.hpp"
 
 #include "tiny_obj_loader.h"
@@ -10,8 +9,8 @@ const size_t kCacheSize = 24;
 
 struct Vertex
 {
-	vec3 position;
-	vec3 normal;
+	float px, py, pz;
+	float nx, ny, nz;
 };
 
 struct Mesh
@@ -30,7 +29,7 @@ Mesh generatePlane(unsigned int N)
 	for (unsigned int y = 0; y <= N; ++y)
 		for (unsigned int x = 0; x <= N; ++x)
 		{
-			Vertex v = { vec3(x, y, 0), vec3(0, 0, 1) };
+			Vertex v = { float(x), float(y), 0, 0, 0, 1 };
 
 			result.vertices.push_back(v);
 		}
@@ -71,7 +70,8 @@ Mesh readOBJ(const char* path)
 
 	for (size_t i = 0; i < attrib.vertices.size(); i += 3)
 	{
-		Vertex v = { vec3(&attrib.vertices[i]), vec3(0,0,1) };
+		const float* av = &attrib.vertices[i];
+		Vertex v = { av[0], av[1], av[2], 0, 0, 1 };
 
 		result.vertices.push_back(v);
 	}
@@ -121,7 +121,7 @@ void optimizeTipsifyOverdraw(Mesh& mesh)
 
 	const float kThreshold = 1.05f; // allow up to 5% worse ACMR to get more reordering opportunities for overdraw
 
-	optimizeOverdrawTipsify(&mesh.indices[0], &result[0], mesh.indices.size(), &mesh.vertices[0].position, sizeof(Vertex), mesh.vertices.size(), clusters, kCacheSize, kThreshold);
+	optimizeOverdrawTipsify(&mesh.indices[0], &result[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), clusters, kCacheSize, kThreshold);
 }
 
 void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
