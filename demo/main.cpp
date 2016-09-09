@@ -58,27 +58,34 @@ Mesh readOBJ(const char* path)
 	std::vector<shape_t> shapes;
 	std::vector<material_t> materials;
 	std::string error;
+
 	if (!LoadObj(&attrib, &shapes, &materials, &error, path))
+	{
+		printf("Error loading %s: %s\n", path, error.c_str());
 		return Mesh();
-
-	if (shapes.empty())
-		return Mesh();
-
-	const mesh_t& om = shapes[0].mesh;
+	}
 
 	Mesh result;
+
 	result.vertices.reserve(attrib.vertices.size() / 3);
 
 	for (size_t i = 0; i < attrib.vertices.size(); i += 3)
 	{
 		Vertex v = { vec3(&attrib.vertices[i]), vec3(0,0,1) };
+
 		result.vertices.push_back(v);
 	}
 
-	result.indices.reserve(om.indices.size());
+	size_t total_indices = 0;
 
-	for (size_t i = 0; i < om.indices.size(); ++i)
-		result.indices.push_back(om.indices[i].vertex_index);
+	for (auto& s: shapes)
+		total_indices += s.mesh.indices.size();
+
+	result.indices.reserve(total_indices);
+
+	for (auto& s: shapes)
+		for (size_t i = 0; i < s.mesh.indices.size(); ++i)
+			result.indices.push_back(s.mesh.indices[i].vertex_index);
 
 	return result;
 }
@@ -156,7 +163,7 @@ int main(int argc, char** argv)
 	}
 
 	optimize(mesh, "Original", optimizeNone);
-	optimize(mesh, "TomF", optimizeTomF);
 	optimize(mesh, "Tipsify", optimizeTipsify);
 	optimize(mesh, "Tipsify + overdraw", optimizeTipsifyOverdraw);
+	optimize(mesh, "TomF", optimizeTomF);
 }
