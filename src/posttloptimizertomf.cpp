@@ -38,10 +38,9 @@ namespace
 		float score;
 	};
 
-	template <typename T>
-	struct vertex_t
+	struct Vertex
 	{
-		vertex_t(): cache_position(-1), score(0), triangles_total(0), triangles_not_added(0), triangles(0)
+		Vertex(): cache_position(-1), score(0), triangles_total(0), triangles_not_added(0), triangles(0)
 		{
 		}
 		
@@ -49,11 +48,10 @@ namespace
 		float score;
 		unsigned int triangles_total;
 		unsigned int triangles_not_added;
-		triangle_t<T>** triangles;
+		unsigned int* triangles;
 	};
 
-	template <typename T>
-	static float vertexScore(const vertex_t<T>& vertex)
+	static float vertexScore(const Vertex& vertex)
 	{
 		// check if there are any triangles needed
 		if (vertex.triangles_not_added == 0) return -1;
@@ -66,7 +64,7 @@ namespace
 		return score + valence_boost_scale / sqrtf((float)vertex.triangles_not_added);
 	}
 
-	template <typename T> static void optimizeLinear(T* destination, const T* indices, size_t count, size_t vertex_count, unsigned int cache_size)
+	template <typename T> static void optimizeLinear(T* destination, const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 	{
 		assert(destination != indices);
 		assert(cache_size <= max_cache_size);
@@ -75,10 +73,10 @@ namespace
 
 		const face_t<T>* faces = reinterpret_cast<const face_t<T>*>(indices);
 
-		assert(count % 3 == 0);
-		size_t face_count = count / 3;
+		assert(index_count % 3 == 0);
+		size_t face_count = index_count / 3;
 
-		std::vector<vertex_t<T> > vertices(vertex_count);
+		std::vector<Vertex> vertices(vertex_count);
 
 		// initializing vertex data
 		for (size_t i = 0; i < face_count; ++i)
@@ -91,13 +89,13 @@ namespace
 		}
 
 		// calculate total triangle number
-		std::vector<triangle_t<T>*> triangle_indices(count); // total triangle indices count == index count
-		triangle_t<T>** triangle_indices_ptr = &triangle_indices[0];
+		std::vector<unsigned int> triangle_indices(index_count); // total triangle indices count == index count
+		unsigned int* triangle_indices_ptr = &triangle_indices[0];
 
 		// allocate storage for triangle indices
 		for (size_t i = 0; i < vertex_count; ++i)
 		{
-			vertex_t<T>& v = vertices[i];
+			Vertex& v = vertices[i];
 
 			v.triangles = triangle_indices_ptr;
 			triangle_indices_ptr += v.triangles_total;
@@ -115,20 +113,20 @@ namespace
 			t.b = f.b;
 			t.c = f.c;
 			
-			vertex_t<T>& a = vertices[f.a];
-			a.triangles[a.triangles_not_added++] = &t;
+			Vertex& a = vertices[f.a];
+			a.triangles[a.triangles_not_added++] = static_cast<unsigned int>(i);
 
-			vertex_t<T>& b = vertices[f.b];
-			b.triangles[b.triangles_not_added++] = &t;
+			Vertex& b = vertices[f.b];
+			b.triangles[b.triangles_not_added++] = static_cast<unsigned int>(i);
 
-			vertex_t<T>& c = vertices[f.c];
-			c.triangles[c.triangles_not_added++] = &t;
+			Vertex& c = vertices[f.c];
+			c.triangles[c.triangles_not_added++] = static_cast<unsigned int>(i);
 		}
 
 		// compute initial vertex scores
 		for (size_t i = 0; i < vertex_count; ++i)
 		{
-			vertex_t<T>& v = vertices[i];
+			Vertex& v = vertices[i];
 
 			v.score = vertexScore(v);
 		}
@@ -141,7 +139,7 @@ namespace
 			t.score = vertices[t.a].score + vertices[t.b].score + vertices[t.c].score;
 		}
 
-		T* destination_end = destination + count;
+		T* destination_end = destination + index_count;
 
 		unsigned int cache_holder[2 * (max_cache_size + 3)];
 		unsigned int* cache = cache_holder;
@@ -237,7 +235,7 @@ namespace
 			// update cache positions, vertices scores and triangle scores, and find new min_face
 			for (size_t i = 0; i < cache_new_size; ++i)
 			{
-				vertex_t<T>& v = vertices[cache[i]];
+				Vertex& v = vertices[cache[i]];
 
 				v.cache_position = i >= cache_size ? -1 : (int)i;
 
@@ -247,7 +245,7 @@ namespace
 				// update scores of vertex triangles
 				for (size_t j = 0; j < v.triangles_total; ++j)
 				{
-					triangle_t<T>& t = *v.triangles[j];
+					triangle_t<T>& t = triangles[v.triangles[j]];
 
 					t.score += score_diff;
 
