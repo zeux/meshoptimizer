@@ -47,3 +47,7 @@ In a similar fashion to other functions, you have to provide a pointer to the re
 You can use the provided analyzer to compute approximate statistics for the given vertex data by calling analyzePostTL function.
 
 The common metric to use is ACMR - average cache miss ratio, which is the ratio of the total number of vertex invocations to the triangle count. The worst-case ACMR is 3 (GPU has to process 3 vertices for each triangle); on regular grids the optimal ACMR approaches 0.5. On real meshes it usually is in [0.5..1.5] ratio depending on the amount of vertex splits.
+
+## License
+
+This library is available to anybody free of charge, under the terms of MIT License (see LICENSE.md)
