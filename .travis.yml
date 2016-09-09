@@ -1,0 +1,7 @@
+os:
+  - linux
+  - osx
+sudo: required
+dist: trusty
+language: cpp
+script: make
