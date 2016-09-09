@@ -1,19 +1,14 @@
 #include <cstdio>
 #include <ctime>
 
-#include "math.hpp"
-#include "overdrawoptimizertipsify.hpp"
-#include "posttloptimizertipsify.hpp"
-#include "posttloptimizertomf.hpp"
-#include "pretloptimizer.hpp"
-#include "vcacheanalyzer.hpp"
+#include "../src/math.hpp"
+#include "../src/overdrawoptimizertipsify.hpp"
+#include "../src/posttloptimizertipsify.hpp"
+#include "../src/posttloptimizertomf.hpp"
+#include "../src/vcacheanalyzer.hpp"
 
-#define USEOBJ 0
-
-#if USEOBJ
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
-#endif
 
 const size_t kCacheSize = 24;
 
@@ -59,15 +54,18 @@ Mesh generatePlane(unsigned int N)
 	return result;
 }
 
-#if USEOBJ
 Mesh readOBJ(const char* path)
 {
 	using namespace tinyobj;
+
 	attrib_t attrib;
 	std::vector<shape_t> shapes;
 	std::vector<material_t> materials;
 	std::string error;
 	if (!LoadObj(&attrib, &shapes, &materials, &error, path))
+		return Mesh();
+
+	if (shapes.empty())
 		return Mesh();
 
 	const mesh_t& om = shapes[0].mesh;
@@ -88,7 +86,6 @@ Mesh readOBJ(const char* path)
 
 	return result;
 }
-#endif
 
 void optimizeNone(Mesh& mesh)
 {
@@ -139,11 +136,23 @@ void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
 
 int main(int argc, char** argv)
 {
-#if USEOBJ
-	Mesh mesh = argc > 1 ? readOBJ(argv[1]) : generatePlane(1000);
-#else
-	Mesh mesh = generatePlane(1000);
-#endif
+	Mesh mesh;
+
+	if (argc > 1)
+	{
+		mesh = readOBJ(argv[1]);
+		if (mesh.vertices.empty())
+		{
+			printf("Mesh %s appears to be empty\n", argv[1]);
+			return 0;
+		}
+	}
+	else
+	{
+		printf("Usage: %s [.obj file]\n", argv[0]);
+		printf("Defaulting to a tesselated plane\n");
+		mesh = generatePlane(1000);
+	}
 
 	optimize(mesh, "none", optimizeNone);
 	optimize(mesh, "TomF", optimizeTomF);
