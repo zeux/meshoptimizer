@@ -4,4 +4,4 @@ os:
 sudo: required
 dist: trusty
 language: cpp
-script: make
+script: make test

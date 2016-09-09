@@ -9,8 +9,12 @@ OBJECTS=$(SOURCES:%=$(BUILD)/%.o)
 EXECUTABLE=$(BUILD)/meshoptimizer
 
 CXXFLAGS=-g -Wall -std=c++11 -O3 -DNDEBUG
+LDFLAGS=-pthread
 
 all: $(EXECUTABLE)
+
+test: $(EXECUTABLE)
+	$(EXECUTABLE) demo/bunny.obj
 
 $(EXECUTABLE): $(OBJECTS)
 	$(CXX) $(OBJECTS) $(LDFLAGS) -o $@
