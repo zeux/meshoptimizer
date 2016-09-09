@@ -32,12 +32,6 @@ namespace
 		T a, b, c;
 	};
 
-	template <typename T>
-	struct triangle_t: public face_t<T>
-	{
-		float score;
-	};
-
 	struct Vertex
 	{
 		Vertex(): cache_position(-1), score(0), triangles_total(0), triangles_not_added(0), triangles(0)
@@ -101,18 +95,11 @@ namespace
 			triangle_indices_ptr += v.triangles_total;
 		}
 
-		std::vector<triangle_t<T> > triangles(face_count);
-
 		// fill triangle indices
 		for (size_t i = 0; i < face_count; ++i)
 		{
 			const face_t<T>& f = faces[i];
-			triangle_t<T>& t = triangles[i];
 
-			t.a = f.a;
-			t.b = f.b;
-			t.c = f.c;
-			
 			Vertex& a = vertices[f.a];
 			a.triangles[a.triangles_not_added++] = static_cast<unsigned int>(i);
 
@@ -132,11 +119,13 @@ namespace
 		}
 
 		// compute triangle scores
+		std::vector<float> triangle_scores(face_count);
+
 		for (size_t i = 0; i < face_count; ++i)
 		{
-			triangle_t<T>& t = triangles[i];
+			const face_t<T>& t = faces[i];
 
-			t.score = vertices[t.a].score + vertices[t.b].score + vertices[t.c].score;
+			triangle_scores[i] = vertices[t.a].score + vertices[t.b].score + vertices[t.c].score;
 		}
 
 		T* destination_end = destination + index_count;
@@ -147,47 +136,51 @@ namespace
 		unsigned int* cache_new = cache + max_cache_size + 3;
 		unsigned int* cache_new_end = cache_new;
 
-		triangle_t<T>* min_tri = 0;
+		int min_tri = -1;
 
 		// main body
 		while (destination != destination_end)
 		{
 			// find triangle with the best score if it was not found on previous step
-			if (min_tri == 0)
+			if (min_tri < 0)
 			{
 				float min_score = m_inf;
 				
 				for (size_t i = 0; i < face_count; ++i)
 				{
-					triangle_t<T>& t = triangles[i];
+					float tri_score = triangle_scores[i];
 
-					if (min_score < t.score)
+					if (min_score < tri_score)
 					{
-						min_tri = &t;
-						min_score = t.score;
+						min_tri = int(i);
+						min_score = tri_score;
 					}
 				}
 			}
 
-			// add it to drawing sequence
-			*destination++ = min_tri->a;
-			*destination++ = min_tri->b;
-			*destination++ = min_tri->c;
+			unsigned int tri_a = faces[min_tri].a;
+			unsigned int tri_b = faces[min_tri].b;
+			unsigned int tri_c = faces[min_tri].c;
 
-			min_tri->score = m_inf;
+			// add it to drawing sequence
+			*destination++ = tri_a;
+			*destination++ = tri_b;
+			*destination++ = tri_c;
+
+			triangle_scores[min_tri] = m_inf;
 
 			// construct new cache
 			cache_new_end = cache_new;
 
 			// new triangle
-			*cache_new_end++ = min_tri->a;
-			*cache_new_end++ = min_tri->b;
-			*cache_new_end++ = min_tri->c;
+			*cache_new_end++ = tri_a;
+			*cache_new_end++ = tri_b;
+			*cache_new_end++ = tri_c;
 
 			// old parts
-			int cp_a = vertices[min_tri->a].cache_position;
-			int cp_b = vertices[min_tri->b].cache_position;
-			int cp_c = vertices[min_tri->c].cache_position;
+			int cp_a = vertices[tri_a].cache_position;
+			int cp_b = vertices[tri_b].cache_position;
+			int cp_c = vertices[tri_c].cache_position;
 
 			// order indices
 			if (cp_a > cp_b) std::swap(cp_a, cp_b);
@@ -225,11 +218,11 @@ namespace
 			std::swap(cache_end, cache_new_end);
 
 			// modify vertices
-			vertices[min_tri->a].triangles_not_added--;
-			vertices[min_tri->b].triangles_not_added--;
-			vertices[min_tri->c].triangles_not_added--;
+			vertices[tri_a].triangles_not_added--;
+			vertices[tri_b].triangles_not_added--;
+			vertices[tri_c].triangles_not_added--;
 
-			min_tri = 0;
+			min_tri = -1;
 			float min_score = m_inf;
 
 			// update cache positions, vertices scores and triangle scores, and find new min_face
@@ -245,14 +238,16 @@ namespace
 				// update scores of vertex triangles
 				for (size_t j = 0; j < v.triangles_total; ++j)
 				{
-					triangle_t<T>& t = triangles[v.triangles[j]];
+					unsigned int tri = v.triangles[j];
 
-					t.score += score_diff;
+					triangle_scores[tri] += score_diff;
 
-					if (min_score < t.score)
+					float tri_score = triangle_scores[tri];
+
+					if (min_score < tri_score)
 					{
-						min_tri = &t;
-						min_score = t.score;
+						min_tri = tri;
+						min_score = tri_score;
 					}
 				}
 
