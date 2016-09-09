@@ -119,7 +119,7 @@ namespace
 				*dest_it++ = indices[j];
 		}
 
-		assert(dest_it == destination);
+		assert(dest_it == destination + index_count);
 	}
 	
 	template <typename T> std::pair<float, unsigned int> calculateACMR(const T* indices, size_t index_count, unsigned int cache_size, float threshold, std::vector<unsigned int>& cache_time_stamps, unsigned int& time_stamp)
