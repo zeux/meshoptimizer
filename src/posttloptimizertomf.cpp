@@ -66,9 +66,10 @@ namespace
 		}
 		
 	public:
-		static void optimize(T* destination, const T* indices, size_t count, size_t vertex_count)
+		static void optimize(T* destination, const T* indices, size_t count, size_t vertex_count, unsigned int cache_size)
 		{
 			assert(destination != indices);
+			assert(cache_size <= max_cache_size);
 
 			const float m_inf = -1e32f;
 			
@@ -217,9 +218,9 @@ namespace
 					cache_new_end = std::copy(cache + cp_c + 1, cache_end, cache_new_end);
 				}
 				
-				size_t cache_size = cache_new_end - cache_new;
+				size_t cache_new_size = cache_new_end - cache_new;
 				
-				if (cache_size > max_cache_size) cache_new_end = cache_new + max_cache_size;
+				if (cache_new_size > cache_size) cache_new_end = cache_new + cache_size;
 				
 				std::swap(cache, cache_new);
 				std::swap(cache_end, cache_new_end);
@@ -233,10 +234,10 @@ namespace
 				float min_score = m_inf;
 
 				// update cache positions, vertices scores and triangle scores, and find new min_face
-				for (size_t i = 0; i < cache_size; ++i)
+				for (size_t i = 0; i < cache_new_size; ++i)
 				{
 					vertex_t& v = vertices[cache[i]];
-					v.cache_position = i >= max_cache_size ? -1 : (int)i;
+					v.cache_position = i >= cache_size ? -1 : (int)i;
 					
 					float score = vertexScore(v);
 					float score_diff = score - v.score;
@@ -262,12 +263,12 @@ namespace
 	};
 }
 
-void optimizePostTLTomF(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count)
+void optimizePostTLTomF(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
-	MeshOptimizerLinear<unsigned short>::optimize(destination, indices, index_count, vertex_count);
+	MeshOptimizerLinear<unsigned short>::optimize(destination, indices, index_count, vertex_count, cache_size);
 }
 
-void optimizePostTLTomF(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count)
+void optimizePostTLTomF(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
-	MeshOptimizerLinear<unsigned int>::optimize(destination, indices, index_count, vertex_count);
+	MeshOptimizerLinear<unsigned int>::optimize(destination, indices, index_count, vertex_count, cache_size);
 }

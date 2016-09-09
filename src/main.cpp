@@ -60,7 +60,7 @@ void optimizeTomF(Mesh& mesh)
 {
 	std::vector<unsigned int> result(mesh.indices.size());
 
-	optimizePostTLTomF(&result[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size());
+	optimizePostTLTomF(&result[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), std::min(int(kCacheSize), 32));
 
 	mesh.indices.swap(result);
 }
@@ -81,7 +81,7 @@ void optimizeTipsifyOverdraw(Mesh& mesh)
 	std::vector<unsigned int> clusters;
 	optimizePostTLTipsify(&result[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, &clusters);
 
-	const float kThreshold = 1;
+	const float kThreshold = 1.1f; // allow up to 10% worse ACMR to get more reordering opportunities for overdraw
 
 	optimizeOverdrawTipsify(&mesh.indices[0], &result[0], mesh.indices.size(), &mesh.vertices[0].position, sizeof(Vertex), mesh.vertices.size(), clusters, kCacheSize, kThreshold);
 
