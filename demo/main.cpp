@@ -98,7 +98,7 @@ void optimizeTomF(Mesh& mesh)
 {
 	std::vector<unsigned int> result(mesh.indices.size());
 
-	optimizePostTLTomF(&result[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), std::min(int(kCacheSize), 32));
+	optimizePostTransformTomF(&result[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), std::min(int(kCacheSize), 32));
 
 	mesh.indices.swap(result);
 }
@@ -107,7 +107,7 @@ void optimizeTipsify(Mesh& mesh)
 {
 	std::vector<unsigned int> result(mesh.indices.size());
 
-	optimizePostTLTipsify(&result[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize);
+	optimizePostTransformTipsify(&result[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize);
 
 	mesh.indices.swap(result);
 }
@@ -117,7 +117,7 @@ void optimizeTipsifyOverdraw(Mesh& mesh)
 	std::vector<unsigned int> result(mesh.indices.size());
 
 	std::vector<unsigned int> clusters;
-	optimizePostTLTipsify(&result[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, &clusters);
+	optimizePostTransformTipsify(&result[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, &clusters);
 
 	const float kThreshold = 1.05f; // allow up to 5% worse ACMR to get more reordering opportunities for overdraw
 
@@ -132,7 +132,7 @@ void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
 	optf(copy);
 	clock_t end = clock();
 
-	PostTLCacheStatistics stats = analyzePostTL(&copy.indices[0], copy.indices.size(), copy.vertices.size(), kCacheSize);
+	PostTransformCacheStatistics stats = analyzePostTransform(&copy.indices[0], copy.indices.size(), copy.vertices.size(), kCacheSize);
 
 	printf("%s: ACMR %f in %f msec\n", name, stats.acmr, double(end - start) / CLOCKS_PER_SEC * 1000);
 }

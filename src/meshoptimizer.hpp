@@ -9,8 +9,8 @@
 //
 // destination must contain enough space for the resulting index buffer
 // cache_size is a trade off for algorithm performance vs ACMR, and is limited to 32
-void optimizePostTLTomF(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 16);
-void optimizePostTLTomF(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 16);
+void optimizePostTransformTomF(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 16);
+void optimizePostTransformTomF(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 16);
 
 // Vertex transform cache optimizer using the Tipsify algorithm by Sander et al
 //   http://gfx.cs.princeton.edu/pubs/Sander_2007_%3ETR/tipsy.pdf
@@ -19,15 +19,15 @@ void optimizePostTLTomF(unsigned int* destination, const unsigned int* indices, 
 // destination must contain enough space for the resulting index buffer
 // cache_size should be less than the actual GPU cache size to avoid cache thrashing
 // clusters is an optional output for the overdraw optimizer (below)
-void optimizePostTLTipsify(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 16, std::vector<unsigned int>* clusters = 0);
-void optimizePostTLTipsify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 16, std::vector<unsigned int>* clusters = 0);
+void optimizePostTransformTipsify(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 16, std::vector<unsigned int>* clusters = 0);
+void optimizePostTransformTipsify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 16, std::vector<unsigned int>* clusters = 0);
 
 // Overdraw optimizer using the Tipsify algorithm
 // Reorders indices to reduce the number of GPU vertex shader invocations and the pixel overdraw
 //
 // destination must contain enough space for the resulting index buffer
-// indices must contain index data that is the result of optimizePostTLTipsify (*not* the original mesh indices!)
-// clusters must contain cluster data that is the result of optimizePostTLTipsify
+// indices must contain index data that is the result of optimizePostTransformTipsify (*not* the original mesh indices!)
+// clusters must contain cluster data that is the result of optimizePostTransformTipsify
 // vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
 // cache_size should be less than the actual GPU cache size to avoid cache thrashing
 // threshold indicates how much the overdraw optimizer can degrade vertex cache efficiency (1.05 = up to 5%) to reduce overdraw more efficiently
@@ -39,10 +39,10 @@ void optimizeOverdrawTipsify(unsigned int* destination, const unsigned int* indi
 //
 // desination must contain enough space for the resulting vertex buffer
 // indices is used both as an input and as an output index buffer
-void optimizePreTL(void* destination, const void* vertices, unsigned short* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
-void optimizePreTL(void* destination, const void* vertices, unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
+void optimizePreTransform(void* destination, const void* vertices, unsigned short* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
+void optimizePreTransform(void* destination, const void* vertices, unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
 
-struct PostTLCacheStatistics
+struct PostTransformCacheStatistics
 {
 	unsigned int hits, misses;
 	float hit_percent, miss_percent;
@@ -52,5 +52,5 @@ struct PostTLCacheStatistics
 // Vertex transform cache analyzer
 // Returns cache hit statistics using a simplified FIFO model
 // Results will not match actual GPU performance
-PostTLCacheStatistics analyzePostTL(const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 32);
-PostTLCacheStatistics analyzePostTL(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 32);
+PostTransformCacheStatistics analyzePostTransform(const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 32);
+PostTransformCacheStatistics analyzePostTransform(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 32);

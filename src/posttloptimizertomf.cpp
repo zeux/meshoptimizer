@@ -263,12 +263,12 @@ namespace
 	};
 }
 
-void optimizePostTLTomF(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+void optimizePostTransformTomF(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
 	MeshOptimizerLinear<unsigned short>::optimize(destination, indices, index_count, vertex_count, cache_size);
 }
 
-void optimizePostTLTomF(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+void optimizePostTransformTomF(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
 	MeshOptimizerLinear<unsigned int>::optimize(destination, indices, index_count, vertex_count, cache_size);
 }

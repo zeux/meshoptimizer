@@ -6,7 +6,7 @@
 
 namespace
 {
-	template <typename T> void optimizePreTLImpl(void* destination, const void* vertices, T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+	template <typename T> void optimizePreTransformImpl(void* destination, const void* vertices, T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 	{
 		assert(destination != vertices);
 
@@ -32,12 +32,12 @@ namespace
 	}
 }
 
-void optimizePreTL(void* destination, const void* vertices, unsigned short* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+void optimizePreTransform(void* destination, const void* vertices, unsigned short* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
-	optimizePreTLImpl(destination, vertices, indices, index_count, vertex_count, vertex_size);
+	optimizePreTransformImpl(destination, vertices, indices, index_count, vertex_count, vertex_size);
 }
 
-void optimizePreTL(void* destination, const void* vertices, unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+void optimizePreTransform(void* destination, const void* vertices, unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
-	optimizePreTLImpl(destination, vertices, indices, index_count, vertex_count, vertex_size);
+	optimizePreTransformImpl(destination, vertices, indices, index_count, vertex_count, vertex_size);
 }
