@@ -131,7 +131,7 @@ void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
 
 	PostTLCacheStatistics stats = analyzePostTL(&copy.indices[0], copy.indices.size(), copy.vertices.size(), kCacheSize);
 
-	printf("%s: ACMR %f in %f msec (%d triangles)\n", name, stats.acmr, double(end - start) / CLOCKS_PER_SEC * 1000, int(mesh.indices.size() / 3));
+	printf("%s: ACMR %f in %f msec\n", name, stats.acmr, double(end - start) / CLOCKS_PER_SEC * 1000);
 }
 
 int main(int argc, char** argv)
@@ -141,20 +141,25 @@ int main(int argc, char** argv)
 	if (argc > 1)
 	{
 		mesh = readOBJ(argv[1]);
+
 		if (mesh.vertices.empty())
 		{
 			printf("Mesh %s appears to be empty\n", argv[1]);
 			return 0;
 		}
+
+		printf("Using %s (%d vertices, %d triangles)\n", argv[1], int(mesh.vertices.size()), int(mesh.indices.size() / 3));
 	}
 	else
 	{
 		printf("Usage: %s [.obj file]\n", argv[0]);
-		printf("Defaulting to a tesselated plane\n");
+
 		mesh = generatePlane(1000);
+
+		printf("Using a tesselated plane (%d vertices, %d triangles)\n", int(mesh.vertices.size()), int(mesh.indices.size() / 3));
 	}
 
-	optimize(mesh, "none", optimizeNone);
+	optimize(mesh, "Original", optimizeNone);
 	optimize(mesh, "TomF", optimizeTomF);
 	optimize(mesh, "Tipsify", optimizeTipsify);
 	optimize(mesh, "Tipsify + overdraw", optimizeTipsifyOverdraw);
