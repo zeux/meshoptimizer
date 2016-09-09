@@ -1,12 +1,14 @@
 #include "posttloptimizertipsify.hpp"
 
+#include <cassert>
+
 namespace
 {
 	struct Adjacency
 	{
-		vector<unsigned int> triangle_counts;
-		vector<unsigned int> offsets;
-		vector<unsigned int> data;
+		std::vector<unsigned int> triangle_counts;
+		std::vector<unsigned int> offsets;
+		std::vector<unsigned int> data;
 
 		unsigned int getTriangleCount(unsigned int vertex) const
 		{
@@ -15,7 +17,7 @@ namespace
 		
 		std::pair<const unsigned int*, const unsigned int*> getTriangleRange(unsigned int vertex) const
 		{
-			return std::make_pair(data.begin() + offsets[vertex], data.begin() + offsets[vertex] + triangle_counts[vertex]);
+			return std::make_pair(&data[0] + offsets[vertex], &data[0] + offsets[vertex] + triangle_counts[vertex]);
 		}
 	};
 
@@ -43,7 +45,7 @@ namespace
 		// fill triangle data
 		adjacency.data.resize(offset);
 
-		vector<unsigned int> filled_triangle_counts(vertex_count, 0);
+		std::vector<unsigned int> filled_triangle_counts(vertex_count, 0);
 		
 		for (size_t i = 0; i < index_count / 3; ++i)
 		{
@@ -60,7 +62,7 @@ namespace
 		}
 	}
 
-	unsigned int getNextVertexDeadEnd(vector<unsigned int>& dead_end, unsigned int& input_cursor, const vector<unsigned int>& live_triangles)
+	unsigned int getNextVertexDeadEnd(std::vector<unsigned int>& dead_end, unsigned int& input_cursor, const std::vector<unsigned int>& live_triangles)
 	{
 		// check dead-end stack
 		while (!dead_end.empty())
@@ -86,7 +88,7 @@ namespace
 		return static_cast<unsigned int>(-1);
 	}
 
-	unsigned int getNextVertexNeighbour(const vector<unsigned int>& next_candidates, const vector<unsigned int>& live_triangles, const vector<unsigned int>& cache_time_stamps, unsigned int time_stamp, unsigned int cache_size)
+	unsigned int getNextVertexNeighbour(const std::vector<unsigned int>& next_candidates, const std::vector<unsigned int>& live_triangles, const std::vector<unsigned int>& cache_time_stamps, unsigned int time_stamp, unsigned int cache_size)
 	{
 		unsigned int best_candidate = static_cast<unsigned int>(-1);
 		int best_priority = -1;
@@ -117,7 +119,7 @@ namespace
 		return best_candidate;
 	}
 
-	template <typename T> void tipsify(T* destination, const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, vector<unsigned int>* clusters)
+	template <typename T> void tipsify(T* destination, const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, std::vector<unsigned int>* clusters)
 	{
 		assert(destination != indices);
 
@@ -133,17 +135,17 @@ namespace
 		buildAdjacency(adjacency, indices, index_count, vertex_count);
 
 		// live triangle counts
-		vector<unsigned int> live_triangles = adjacency.triangle_counts;
+		std::vector<unsigned int> live_triangles = adjacency.triangle_counts;
 
 		// cache time stamps
-		vector<unsigned int> cache_time_stamps(vertex_count, 0);
+		std::vector<unsigned int> cache_time_stamps(vertex_count, 0);
 
 		// dead-end stack
-		vector<unsigned int> dead_end;
+		std::vector<unsigned int> dead_end;
 		dead_end.reserve(index_count);
 
 		// emitted flags
-		vector<bool> emitted_flags(index_count / 3, false);
+		std::vector<bool> emitted_flags(index_count / 3, false);
 		
 		// prepare clusters
 		if (clusters)
@@ -160,7 +162,7 @@ namespace
 		
 		T* dest_it = destination;
 
-		vector<unsigned int> next_candidates;
+		std::vector<unsigned int> next_candidates;
 
 		while (current_vertex != static_cast<unsigned int>(-1))
 		{
@@ -232,12 +234,12 @@ namespace
 	}
 }
 
-void optimizePostTLTipsify(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, vector<unsigned int>* clusters)
+void optimizePostTLTipsify(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, std::vector<unsigned int>* clusters)
 {
 	tipsify(destination, indices, index_count, vertex_count, cache_size, clusters);
 }
 
-void optimizePostTLTipsify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, vector<unsigned int>* clusters)
+void optimizePostTLTipsify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, std::vector<unsigned int>* clusters)
 {
 	tipsify(destination, indices, index_count, vertex_count, cache_size, clusters);
 }

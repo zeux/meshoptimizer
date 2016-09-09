@@ -1,5 +1,9 @@
 #include "pretloptimizer.hpp"
 
+#include <cassert>
+#include <cstring>
+#include <vector>
+
 namespace
 {
 	template <typename T> void optimizePreTLImpl(void* destination, const void* vertices, T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
@@ -7,7 +11,7 @@ namespace
 		assert(destination != vertices);
 
 		// build vertex remap table
-		vector<unsigned int> vertex_remap(vertex_count, static_cast<unsigned int>(-1));
+		std::vector<unsigned int> vertex_remap(vertex_count, static_cast<unsigned int>(-1));
 
 		size_t vertex = 0;
 

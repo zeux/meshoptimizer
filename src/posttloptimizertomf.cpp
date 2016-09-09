@@ -1,5 +1,9 @@
 #include "posttloptimizertomf.hpp"
 
+#include <cassert>
+#include <cmath>
+#include <vector>
+
 namespace
 {
 	const size_t max_cache_size = 32;
@@ -73,7 +77,7 @@ namespace
 			assert(count % 3 == 0);
 			size_t face_count = count / 3;
 			
-			vector<vertex_t> vertices(vertex_count);
+			std::vector<vertex_t> vertices(vertex_count);
 			
 			// initializing vertex data
 			for (size_t i = 0; i < face_count; ++i)
@@ -86,8 +90,7 @@ namespace
 			}
 			
 			// calculate total triangle number
-			
-			vector<triangle_t*> triangle_indices(count); // total triangle indices count == index count
+			std::vector<triangle_t*> triangle_indices(count); // total triangle indices count == index count
 			triangle_t** triangle_indices_ptr = &triangle_indices[0];
 			
 			// allocate storage for triangle indices
@@ -99,7 +102,7 @@ namespace
 				triangle_indices_ptr += v.triangles_total;
 			}
 
-			vector<triangle_t> triangles(face_count);
+			std::vector<triangle_t> triangles(face_count);
 			
 			// fill triangle indices
 			for (size_t i = 0; i < face_count; ++i)

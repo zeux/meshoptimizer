@@ -1,12 +1,14 @@
 #include "vcacheanalyzer.hpp"
 
+#include <vector>
+
 namespace
 {
 	template <typename T> PostTLCacheStatistics analyzePostTLImpl(const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 	{
 		PostTLCacheStatistics result = {};
 
-		vector<unsigned int> cache_time_stamps(vertex_count, 0);
+		std::vector<unsigned int> cache_time_stamps(vertex_count, 0);
 		unsigned int time_stamp = cache_size + 1;
 		
 		for (const T* indices_end = indices + index_count; indices != indices_end; ++indices)

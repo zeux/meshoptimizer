@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+
 struct PostTLCacheStatistics
 {
 	unsigned int hits, misses;
