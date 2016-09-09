@@ -1,4 +1,4 @@
-# meshoptimizer
+# meshoptimizer [![Build Status](https://travis-ci.org/zeux/meshoptimizer.svg?branch=master)](https://travis-ci.org/zeux/meshoptimizer)
 
 ## Purpose
 
@@ -14,7 +14,7 @@ Finally, one of the algorithms is capable of optimizing for overdraw by splittin
 
 ## Post-transform optimizer
 
-While the library implements two algorithms, [Tipsify](http://gfx.cs.princeton.edu/pubs/Sander_2007_%3ETR/tipsy.pdf) and [TomF Linear-Speed Vertex Cache Optimization](https://tomforsyth1000.github.io/papers/fast_vert_cache_opt.html), it's recommended to use Tipsify since it usually generates results that are roughly the same in terms of efficiency, but is faster and has an additional overdraw optimization option.
+While the library implements two algorithms, [Tipsify](http://gfx.cs.princeton.edu/pubs/Sander_2007_%3ETR/tipsy.pdf) and [Linear-Speed Vertex Cache Optimization](https://tomforsyth1000.github.io/papers/fast_vert_cache_opt.html), it's recommended to use Tipsify since it usually generates results that are roughly the same in terms of efficiency, but is faster and has an additional overdraw optimization option.
 
 To use Tipsify for post-transform optimization, invoke this function:
 
