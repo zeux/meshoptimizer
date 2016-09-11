@@ -11,6 +11,7 @@ struct Vertex
 {
 	float px, py, pz;
 	float nx, ny, nz;
+	float tx, ty;
 };
 
 struct Mesh
@@ -64,28 +65,41 @@ Mesh readOBJ(const char* path)
 		return Mesh();
 	}
 
-	Mesh result;
-
-	result.vertices.reserve(attrib.vertices.size() / 3);
-
-	for (size_t i = 0; i < attrib.vertices.size(); i += 3)
-	{
-		const float* av = &attrib.vertices[i];
-		Vertex v = { av[0], av[1], av[2], 0, 0, 1 };
-
-		result.vertices.push_back(v);
-	}
-
 	size_t total_indices = 0;
 
 	for (auto& s: shapes)
 		total_indices += s.mesh.indices.size();
 
-	result.indices.reserve(total_indices);
+	std::vector<Vertex> vertices;
+	vertices.reserve(total_indices);
 
 	for (auto& s: shapes)
-		for (size_t i = 0; i < s.mesh.indices.size(); ++i)
-			result.indices.push_back(s.mesh.indices[i].vertex_index);
+		for (auto& i: s.mesh.indices)
+		{
+			Vertex v =
+			{
+				attrib.vertices[i.vertex_index * 3 + 0],
+				attrib.vertices[i.vertex_index * 3 + 1],
+				attrib.vertices[i.vertex_index * 3 + 2],
+				i.normal_index >= 0 ? attrib.normals[i.normal_index * 3 + 0] : 0,
+				i.normal_index >= 0 ? attrib.normals[i.normal_index * 3 + 1] : 0,
+				i.normal_index >= 0 ? attrib.normals[i.normal_index * 3 + 2] : 0,
+				i.texcoord_index >= 0 ? attrib.texcoords[i.texcoord_index * 2 + 0] : 0,
+				i.texcoord_index >= 0 ? attrib.texcoords[i.texcoord_index * 2 + 1] : 0,
+			};
+
+			vertices.push_back(v);
+		}
+
+	Mesh result;
+
+	result.indices.resize(total_indices);
+
+	size_t total_vertices = generateIndexBuffer(&result.indices[0], &vertices[0], total_indices, sizeof(Vertex));
+
+	result.vertices.resize(total_vertices);
+
+	generateVertexBuffer(&result.vertices[0], &result.indices[0], &vertices[0], total_indices, sizeof(Vertex));
 
 	return result;
 }
