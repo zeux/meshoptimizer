@@ -62,13 +62,12 @@ namespace
 		}
 	}
 
-	unsigned int getNextVertexDeadEnd(std::vector<unsigned int>& dead_end, unsigned int& input_cursor, const std::vector<unsigned int>& live_triangles)
+	unsigned int getNextVertexDeadEnd(const std::vector<unsigned int>& dead_end, unsigned int& dead_end_top, unsigned int& input_cursor, const std::vector<unsigned int>& live_triangles)
 	{
 		// check dead-end stack
-		while (!dead_end.empty())
+		while (dead_end_top)
 		{
-			unsigned int vertex = dead_end.back();
-			dead_end.pop_back();
+			unsigned int vertex = dead_end[--dead_end_top];
 
 			if (live_triangles[vertex] > 0)
 				return vertex;
@@ -78,24 +77,22 @@ namespace
 		while (input_cursor < live_triangles.size())
 		{
 			if (live_triangles[input_cursor] > 0)
-			{
 				return input_cursor;
-			}
-			
+
 			++input_cursor;
 		}
 
 		return static_cast<unsigned int>(-1);
 	}
 
-	unsigned int getNextVertexNeighbour(const std::vector<unsigned int>& next_candidates, const std::vector<unsigned int>& live_triangles, const std::vector<unsigned int>& cache_time_stamps, unsigned int time_stamp, unsigned int cache_size)
+	unsigned int getNextVertexNeighbour(const unsigned int* next_candidates_begin, const unsigned int* next_candidates_end, const std::vector<unsigned int>& live_triangles, const std::vector<unsigned int>& cache_time_stamps, unsigned int time_stamp, unsigned int cache_size)
 	{
 		unsigned int best_candidate = static_cast<unsigned int>(-1);
 		int best_priority = -1;
 
-		for (size_t it = 0; it < next_candidates.size(); ++it)
+		for (const unsigned int* next_candidate = next_candidates_begin; next_candidate != next_candidates_end; ++next_candidate)
 		{
-			unsigned int vertex = next_candidates[it];
+			unsigned int vertex = *next_candidate;
 
 			// otherwise we don't need to process it
 			if (live_triangles[vertex] > 0)
@@ -141,11 +138,11 @@ namespace
 		std::vector<unsigned int> cache_time_stamps(vertex_count, 0);
 
 		// dead-end stack
-		std::vector<unsigned int> dead_end;
-		dead_end.reserve(index_count);
+		std::vector<unsigned int> dead_end(index_count);
+		unsigned int dead_end_top = 0;
 
 		// emitted flags
-		std::vector<bool> emitted_flags(index_count / 3, false);
+		std::vector<char> emitted_flags(index_count / 3, false);
 		
 		// prepare clusters
 		if (clusters)
@@ -162,15 +159,13 @@ namespace
 		
 		unsigned int output_triangle = 0;
 
-		std::vector<unsigned int> next_candidates;
-
 		while (current_vertex != static_cast<unsigned int>(-1))
 		{
-			next_candidates.clear();
-
-			std::pair<const unsigned int*, const unsigned int*> p = adjacency.getTriangleRange(current_vertex);
+			const unsigned int* next_candidates_begin = &dead_end[0] + dead_end_top;
 
 			// emit all vertex neighbours
+			std::pair<const unsigned int*, const unsigned int*> p = adjacency.getTriangleRange(current_vertex);
+
 			for (const unsigned int* it = p.first; it != p.second; ++it)
 			{
 				unsigned int triangle = *it;
@@ -186,14 +181,10 @@ namespace
 					output_triangle++;
 
 					// update dead-end stack
-					dead_end.push_back(a);
-					dead_end.push_back(b);
-					dead_end.push_back(c);
-
-					// register as candidate
-					next_candidates.push_back(a);
-					next_candidates.push_back(b);
-					next_candidates.push_back(c);
+					dead_end[dead_end_top + 0] = a;
+					dead_end[dead_end_top + 1] = b;
+					dead_end[dead_end_top + 2] = c;
+					dead_end_top += 3;
 
 					// update live triangle counts
 					live_triangles[a]--;
@@ -215,13 +206,16 @@ namespace
 					emitted_flags[triangle] = true;
 				}
 			}
+
+			// next candidates are the ones we pushed to dead-end stack just now
+			const unsigned int* next_candidates_end = &dead_end[0] + dead_end_top;
 			
 			// get next vertex
-			current_vertex = getNextVertexNeighbour(next_candidates, live_triangles, cache_time_stamps, time_stamp, cache_size);
+			current_vertex = getNextVertexNeighbour(next_candidates_begin, next_candidates_end, live_triangles, cache_time_stamps, time_stamp, cache_size);
 
 			if (current_vertex == static_cast<unsigned int>(-1))
 			{
-				current_vertex = getNextVertexDeadEnd(dead_end, input_cursor, live_triangles);
+				current_vertex = getNextVertexDeadEnd(dead_end, dead_end_top, input_cursor, live_triangles);
 				
 				if (clusters && current_vertex != static_cast<unsigned int>(-1))
 				{
