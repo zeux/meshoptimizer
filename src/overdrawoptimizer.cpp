@@ -292,7 +292,7 @@ namespace
 		}
 	}
 
-	template <typename T> void optimizeOverdrawTipsifyImpl(T* destination, const T* indices, size_t index_count, const void* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const std::vector<unsigned int>& hard_clusters, unsigned int cache_size, float threshold)
+	template <typename T> void optimizeOverdrawTipsify(T* destination, const T* indices, size_t index_count, const void* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const std::vector<unsigned int>& hard_clusters, unsigned int cache_size, float threshold)
 	{
 		assert(destination != indices);
 
@@ -313,12 +313,12 @@ namespace
 	}
 }
 
-void optimizeOverdrawTipsify(unsigned short* destination, const unsigned short* indices, size_t index_count, const void* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const std::vector<unsigned int>& clusters, unsigned int cache_size, float threshold)
+void optimizeOverdraw(unsigned short* destination, const unsigned short* indices, size_t index_count, const void* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const std::vector<unsigned int>& clusters, unsigned int cache_size, float threshold)
 {
-	optimizeOverdrawTipsifyImpl(destination, indices, index_count, vertex_positions, vertex_positions_stride, vertex_count, clusters, cache_size, threshold);
+	optimizeOverdrawTipsify(destination, indices, index_count, vertex_positions, vertex_positions_stride, vertex_count, clusters, cache_size, threshold);
 }
 
-void optimizeOverdrawTipsify(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const std::vector<unsigned int>& clusters, unsigned int cache_size, float threshold)
+void optimizeOverdraw(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const std::vector<unsigned int>& clusters, unsigned int cache_size, float threshold)
 {
-	optimizeOverdrawTipsifyImpl(destination, indices, index_count, vertex_positions, vertex_positions_stride, vertex_count, clusters, cache_size, threshold);
+	optimizeOverdrawTipsify(destination, indices, index_count, vertex_positions, vertex_positions_stride, vertex_count, clusters, cache_size, threshold);
 }

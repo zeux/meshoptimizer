@@ -13,15 +13,6 @@ size_t generateIndexBuffer(unsigned int* destination, const void* vertices, size
 // destination must contain enough space for the resulting vertex buffer (max index + 1 elements)
 void generateVertexBuffer(void* destination, const unsigned int* indices, const void* vertices, size_t vertex_count, size_t vertex_size);
 
-// Vertex transform cache optimizer using the "Linear-Speed Vertex Cache Optimisation" by Tom Forsyth
-//   https://tomforsyth1000.github.io/papers/fast_vert_cache_opt.html
-// Reorders indices to reduce the number of GPU vertex shader invocations
-//
-// destination must contain enough space for the resulting index buffer (index_count elements)
-// cache_size is a trade off for algorithm performance vs ACMR, and is limited to 32
-void optimizePostTransformTomF(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 16);
-void optimizePostTransformTomF(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 16);
-
 // Vertex transform cache optimizer using the Tipsify algorithm by Sander et al
 //   http://gfx.cs.princeton.edu/pubs/Sander_2007_%3ETR/tipsy.pdf
 // Reorders indices to reduce the number of GPU vertex shader invocations
@@ -29,8 +20,8 @@ void optimizePostTransformTomF(unsigned int* destination, const unsigned int* in
 // destination must contain enough space for the resulting index buffer (index_count elements)
 // cache_size should be less than the actual GPU cache size to avoid cache thrashing
 // clusters is an optional output for the overdraw optimizer (below)
-void optimizePostTransformTipsify(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 16, std::vector<unsigned int>* clusters = 0);
-void optimizePostTransformTipsify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 16, std::vector<unsigned int>* clusters = 0);
+void optimizePostTransform(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 16, std::vector<unsigned int>* clusters = 0);
+void optimizePostTransform(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 16, std::vector<unsigned int>* clusters = 0);
 
 // Overdraw optimizer using the Tipsify algorithm
 // Reorders indices to reduce the number of GPU vertex shader invocations and the pixel overdraw
@@ -41,8 +32,8 @@ void optimizePostTransformTipsify(unsigned int* destination, const unsigned int*
 // vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
 // cache_size should be less than the actual GPU cache size to avoid cache thrashing
 // threshold indicates how much the overdraw optimizer can degrade vertex cache efficiency (1.05 = up to 5%) to reduce overdraw more efficiently
-void optimizeOverdrawTipsify(unsigned short* destination, const unsigned short* indices, size_t index_count, const void* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const std::vector<unsigned int>& clusters, unsigned int cache_size = 16, float threshold = 1);
-void optimizeOverdrawTipsify(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const std::vector<unsigned int>& clusters, unsigned int cache_size = 16, float threshold = 1);
+void optimizeOverdraw(unsigned short* destination, const unsigned short* indices, size_t index_count, const void* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const std::vector<unsigned int>& clusters, unsigned int cache_size = 16, float threshold = 1);
+void optimizeOverdraw(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const std::vector<unsigned int>& clusters, unsigned int cache_size = 16, float threshold = 1);
 
 // Vertex fetch cache optimizer
 // Reorders vertices and changes indices to reduce the amount of GPU memory fetches during vertex processing

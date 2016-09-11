@@ -119,7 +119,7 @@ namespace
 		return best_candidate;
 	}
 
-	template <typename T> void tipsify(T* destination, const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, std::vector<unsigned int>* clusters)
+	template <typename T> void optimizePostTransformTipsify(T* destination, const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, std::vector<unsigned int>* clusters)
 	{
 		assert(destination != indices);
 
@@ -234,12 +234,12 @@ namespace
 	}
 }
 
-void optimizePostTransformTipsify(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, std::vector<unsigned int>* clusters)
+void optimizePostTransform(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, std::vector<unsigned int>* clusters)
 {
-	tipsify(destination, indices, index_count, vertex_count, cache_size, clusters);
+	optimizePostTransformTipsify(destination, indices, index_count, vertex_count, cache_size, clusters);
 }
 
-void optimizePostTransformTipsify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, std::vector<unsigned int>* clusters)
+void optimizePostTransform(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, std::vector<unsigned int>* clusters)
 {
-	tipsify(destination, indices, index_count, vertex_count, cache_size, clusters);
+	optimizePostTransformTipsify(destination, indices, index_count, vertex_count, cache_size, clusters);
 }

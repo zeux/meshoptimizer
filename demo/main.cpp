@@ -104,38 +104,29 @@ Mesh readOBJ(const char* path)
 	return result;
 }
 
-void optimizeNone(Mesh& mesh)
+void optNone(Mesh& mesh)
 {
 }
 
-void optimizeTomF(Mesh& mesh)
+void optPostTransform(Mesh& mesh)
 {
 	std::vector<unsigned int> result(mesh.indices.size());
 
-	optimizePostTransformTomF(&result[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), std::min(int(kCacheSize), 32));
+	optimizePostTransform(&result[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize);
 
 	mesh.indices.swap(result);
 }
 
-void optimizeTipsify(Mesh& mesh)
-{
-	std::vector<unsigned int> result(mesh.indices.size());
-
-	optimizePostTransformTipsify(&result[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize);
-
-	mesh.indices.swap(result);
-}
-
-void optimizeTipsifyOverdraw(Mesh& mesh)
+void optOverdraw(Mesh& mesh)
 {
 	std::vector<unsigned int> result(mesh.indices.size());
 
 	std::vector<unsigned int> clusters;
-	optimizePostTransformTipsify(&result[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, &clusters);
+	optimizePostTransform(&result[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, &clusters);
 
 	const float kThreshold = 1.05f; // allow up to 5% worse ACMR to get more reordering opportunities for overdraw
 
-	optimizeOverdrawTipsify(&mesh.indices[0], &result[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), clusters, kCacheSize, kThreshold);
+	optimizeOverdraw(&mesh.indices[0], &result[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), clusters, kCacheSize, kThreshold);
 }
 
 void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
@@ -148,7 +139,7 @@ void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
 
 	PostTransformCacheStatistics stats = analyzePostTransform(&copy.indices[0], copy.indices.size(), copy.vertices.size(), kCacheSize);
 
-	printf("%s: ACMR %f in %f msec\n", name, stats.acmr, double(end - start) / CLOCKS_PER_SEC * 1000);
+	printf("%-10s: ACMR %f in %f msec\n", name, stats.acmr, double(end - start) / CLOCKS_PER_SEC * 1000);
 }
 
 int main(int argc, char** argv)
@@ -176,8 +167,7 @@ int main(int argc, char** argv)
 		printf("Using a tesselated plane (%d vertices, %d triangles)\n", int(mesh.vertices.size()), int(mesh.indices.size() / 3));
 	}
 
-	optimize(mesh, "Original", optimizeNone);
-	optimize(mesh, "Tipsify", optimizeTipsify);
-	optimize(mesh, "Tipsify + overdraw", optimizeTipsifyOverdraw);
-	optimize(mesh, "TomF", optimizeTomF);
+	optimize(mesh, "Original", optNone);
+	optimize(mesh, "Cache", optPostTransform);
+	optimize(mesh, "Overdraw", optOverdraw);
 }
