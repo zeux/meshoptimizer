@@ -160,7 +160,7 @@ namespace
 		unsigned int time_stamp = cache_size + 1;
 		unsigned int input_cursor = 1; // vertex to restart from in case of dead-end
 		
-		T* dest_it = destination;
+		unsigned int output_triangle = 0;
 
 		std::vector<unsigned int> next_candidates;
 
@@ -180,9 +180,10 @@ namespace
 					unsigned int a = indices[triangle * 3 + 0], b = indices[triangle * 3 + 1], c = indices[triangle * 3 + 2];
 
 					// output indices
-					*dest_it++ = static_cast<T>(a);
-					*dest_it++ = static_cast<T>(b);
-					*dest_it++ = static_cast<T>(c);
+					destination[output_triangle * 3 + 0] = static_cast<T>(a);
+					destination[output_triangle * 3 + 1] = static_cast<T>(b);
+					destination[output_triangle * 3 + 2] = static_cast<T>(c);
+					output_triangle++;
 
 					// update dead-end stack
 					dead_end.push_back(a);
@@ -225,12 +226,12 @@ namespace
 				if (clusters && current_vertex != static_cast<unsigned int>(-1))
 				{
 					// hard boundary, add cluster information
-					clusters->push_back(static_cast<unsigned int>(dest_it - destination) / 3);
+					clusters->push_back(output_triangle);
 				}
 			}
 		}
 
-		assert(dest_it == destination + index_count);
+		assert(output_triangle == index_count / 3);
 	}
 }
 
