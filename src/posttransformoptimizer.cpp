@@ -9,16 +9,6 @@ namespace
 		std::vector<unsigned int> triangle_counts;
 		std::vector<unsigned int> offsets;
 		std::vector<unsigned int> data;
-
-		unsigned int getTriangleCount(unsigned int vertex) const
-		{
-			return triangle_counts[vertex];
-		}
-		
-		std::pair<const unsigned int*, const unsigned int*> getTriangleRange(unsigned int vertex) const
-		{
-			return std::make_pair(&data[0] + offsets[vertex], &data[0] + offsets[vertex] + triangle_counts[vertex]);
-		}
 	};
 
 	template <typename T> void buildAdjacency(Adjacency& adjacency, const T* indices, size_t index_count, size_t vertex_count)
@@ -164,9 +154,10 @@ namespace
 			const unsigned int* next_candidates_begin = &dead_end[0] + dead_end_top;
 
 			// emit all vertex neighbours
-			std::pair<const unsigned int*, const unsigned int*> p = adjacency.getTriangleRange(current_vertex);
+			const unsigned int* neighbours_begin = &adjacency.data[0] + adjacency.offsets[current_vertex];
+			const unsigned int* neighbours_end = neighbours_begin + adjacency.triangle_counts[current_vertex];
 
-			for (const unsigned int* it = p.first; it != p.second; ++it)
+			for (const unsigned int* it = neighbours_begin; it != neighbours_end; ++it)
 			{
 				unsigned int triangle = *it;
 
