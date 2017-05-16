@@ -16,6 +16,9 @@ all: $(EXECUTABLE)
 test: $(EXECUTABLE)
 	$(EXECUTABLE) demo/bunny.obj
 
+format:
+	clang-format -i src/*
+
 $(EXECUTABLE): $(OBJECTS)
 	$(CXX) $(OBJECTS) $(LDFLAGS) -o $@
 
@@ -27,4 +30,4 @@ $(BUILD)/%.o: %
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all clean
+.PHONY: all clean format
