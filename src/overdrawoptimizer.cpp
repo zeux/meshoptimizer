@@ -24,6 +24,13 @@ namespace
 		    , z(z)
 		{
 		}
+
+		explicit vec3(const float* v)
+		    : x(v[0])
+		    , y(v[1])
+		    , z(v[2])
+		{
+		}
 	};
 
 	inline float dot(const vec3& lhs, const vec3& rhs)
@@ -130,13 +137,14 @@ namespace
 	};
 
 	template <typename T>
-	void calculateMeshInfo(MeshInfo& info, const T* indices, size_t index_count, const void* vertex_positions, size_t vertex_positions_stride, const std::vector<unsigned int>& clusters)
+	void calculateMeshInfo(MeshInfo& info, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, const std::vector<unsigned int>& clusters)
 	{
 		info.cluster_centroids.resize(clusters.size());
 		info.cluster_normals.resize(clusters.size());
 		info.mesh_centroid = vec3();
 
 		size_t face_count = index_count / 3;
+		size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
 		unsigned int current_cluster = 0;
 		unsigned int next_cluster_face = (clusters.size() > 1) ? clusters[1] : face_count;
@@ -166,9 +174,9 @@ namespace
 				cluster_area = 0;
 			}
 
-			const vec3& p0 = *reinterpret_cast<const vec3*>(static_cast<const char*>(vertex_positions) + indices[i * 3 + 0] * vertex_positions_stride);
-			const vec3& p1 = *reinterpret_cast<const vec3*>(static_cast<const char*>(vertex_positions) + indices[i * 3 + 1] * vertex_positions_stride);
-			const vec3& p2 = *reinterpret_cast<const vec3*>(static_cast<const char*>(vertex_positions) + indices[i * 3 + 2] * vertex_positions_stride);
+			vec3 p0(vertex_positions + vertex_stride_float * indices[i * 3 + 0]);
+			vec3 p1(vertex_positions + vertex_stride_float * indices[i * 3 + 1]);
+			vec3 p2(vertex_positions + vertex_stride_float * indices[i * 3 + 2]);
 
 			vec3 normal = cross(p1 - p0, p2 - p0);
 
@@ -187,7 +195,7 @@ namespace
 	}
 
 	template <typename T>
-	void optimizeOverdrawOrder(T* destination, const T* indices, size_t index_count, const void* vertex_positions, size_t vertex_positions_stride, const std::vector<unsigned int>& clusters)
+	void optimizeOverdrawOrder(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, const std::vector<unsigned int>& clusters)
 	{
 		// mesh information
 		MeshInfo info;
@@ -303,9 +311,11 @@ namespace
 	}
 
 	template <typename T>
-	void optimizeOverdrawTipsify(T* destination, const T* indices, size_t index_count, const void* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const std::vector<unsigned int>& hard_clusters, unsigned int cache_size, float threshold)
+	void optimizeOverdrawTipsify(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const std::vector<unsigned int>& hard_clusters, unsigned int cache_size, float threshold)
 	{
 		assert(destination != indices);
+		assert(vertex_positions_stride > 0);
+		assert(vertex_positions_stride % sizeof(float) == 0);
 
 		// guard for empty meshes
 		if (index_count == 0 || vertex_count == 0)
@@ -324,12 +334,12 @@ namespace
 	}
 }
 
-void optimizeOverdraw(unsigned short* destination, const unsigned short* indices, size_t index_count, const void* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const std::vector<unsigned int>& clusters, unsigned int cache_size, float threshold)
+void optimizeOverdraw(unsigned short* destination, const unsigned short* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const std::vector<unsigned int>& clusters, unsigned int cache_size, float threshold)
 {
 	optimizeOverdrawTipsify(destination, indices, index_count, vertex_positions, vertex_positions_stride, vertex_count, clusters, cache_size, threshold);
 }
 
-void optimizeOverdraw(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const std::vector<unsigned int>& clusters, unsigned int cache_size, float threshold)
+void optimizeOverdraw(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const std::vector<unsigned int>& clusters, unsigned int cache_size, float threshold)
 {
 	optimizeOverdrawTipsify(destination, indices, index_count, vertex_positions, vertex_positions_stride, vertex_count, clusters, cache_size, threshold);
 }
