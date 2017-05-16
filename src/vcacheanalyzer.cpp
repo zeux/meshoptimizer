@@ -29,6 +29,7 @@ namespace
 		result.miss_percent = 100 * static_cast<float>(result.misses) / index_count;
 
 		result.acmr = static_cast<float>(result.misses) / (index_count / 3);
+		result.atvr = static_cast<float>(result.misses) / vertex_count;
 
 		return result;
 	}

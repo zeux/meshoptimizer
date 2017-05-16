@@ -47,7 +47,8 @@ struct PostTransformCacheStatistics
 {
 	unsigned int hits, misses;
 	float hit_percent, miss_percent;
-	float acmr; // transformed vertices / triangle count
+	float acmr; // transformed vertices / triangle count; best case 0.5, worst case 3.0, optimum depends on topology
+	float atvr; // transformed vertices / vertex count; best case 1.0, worse case 6.0, optimum is 1.0 (each vertex is transformed once)
 };
 
 // Vertex transform cache analyzer

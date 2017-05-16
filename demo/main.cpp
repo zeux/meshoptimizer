@@ -139,7 +139,7 @@ void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
 
 	PostTransformCacheStatistics stats = analyzePostTransform(&copy.indices[0], copy.indices.size(), copy.vertices.size(), kCacheSize);
 
-	printf("%-10s: ACMR %f in %f msec\n", name, stats.acmr, double(end - start) / CLOCKS_PER_SEC * 1000);
+	printf("%-10s: ACMR %f ATVR %f in %f msec\n", name, stats.acmr, stats.atvr, double(end - start) / CLOCKS_PER_SEC * 1000);
 }
 
 int main(int argc, char** argv)
