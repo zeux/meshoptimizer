@@ -6,7 +6,8 @@
 
 namespace
 {
-	template <typename T> void optimizePreTransformImpl(void* destination, const void* vertices, T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+	template <typename T>
+	void optimizePreTransformImpl(void* destination, const void* vertices, T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 	{
 		assert(destination != vertices);
 
@@ -23,7 +24,7 @@ namespace
 			{
 				// add vertex
 				memcpy(static_cast<char*>(destination) + vertex * vertex_size, static_cast<const char*>(vertices) + *indices * vertex_size, vertex_size);
-				
+
 				index = static_cast<unsigned int>(vertex++);
 			}
 

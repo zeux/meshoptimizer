@@ -13,11 +13,11 @@ namespace
 		unsigned int h = seed ^ len;
 
 		// Mix 4 bytes at a time into the hash
-		const unsigned char * data = (const unsigned char *)key;
+		const unsigned char* data = (const unsigned char*)key;
 
-		while(len >= 4)
+		while (len >= 4)
 		{
-			unsigned int k = *(unsigned int *)data;
+			unsigned int k = *(unsigned int*)data;
 
 			k *= m;
 			k ^= k >> r;
@@ -31,12 +31,15 @@ namespace
 		}
 
 		// Handle the last few bytes of the input array
-		switch(len)
+		switch (len)
 		{
-		case 3: h ^= data[2] << 16;
-		case 2: h ^= data[1] << 8;
-		case 1: h ^= data[0];
-		        h *= m;
+		case 3:
+			h ^= data[2] << 16;
+		case 2:
+			h ^= data[1] << 8;
+		case 1:
+			h ^= data[0];
+			h *= m;
 		};
 
 		// Do a few final mixes of the hash to ensure the last few
@@ -76,7 +79,7 @@ namespace
 		while (buckets < count)
 			buckets *= 2;
 
-		HashEntry dummy = { 0, 0 };
+		HashEntry dummy = {0, 0};
 
 		table.clear();
 		table.resize(buckets, dummy);
@@ -112,7 +115,7 @@ namespace
 
 size_t generateIndexBuffer(unsigned int* destination, const void* vertices, size_t vertex_count, size_t vertex_size)
 {
-	Hasher hasher = { vertex_size };
+	Hasher hasher = {vertex_size};
 
 	std::vector<HashEntry> table;
 	hashInit(table, vertex_count);
