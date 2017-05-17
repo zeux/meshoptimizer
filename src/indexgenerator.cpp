@@ -10,7 +10,7 @@ namespace
 		const unsigned int m = 0x5bd1e995;
 		const int r = 24;
 
-		unsigned int h = seed ^ len;
+		unsigned int h = seed ^ static_cast<unsigned int>(len);
 
 		// Mix 4 bytes at a time into the hash
 		const unsigned char* data = (const unsigned char*)key;
@@ -89,7 +89,7 @@ namespace
 	{
 		assert((table.size() & (table.size() - 1)) == 0);
 
-		unsigned int hash = hasher(key);
+		size_t hash = hasher(key);
 
 		size_t hashmod = table.size() - 1;
 		size_t bucket = hash & hashmod;

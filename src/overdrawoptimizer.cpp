@@ -146,8 +146,8 @@ namespace
 		size_t face_count = index_count / 3;
 		size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
-		unsigned int current_cluster = 0;
-		unsigned int next_cluster_face = (clusters.size() > 1) ? clusters[1] : face_count;
+		size_t current_cluster = 0;
+		size_t next_cluster_face = (clusters.size() > 1) ? clusters[1] : face_count;
 
 		float cluster_area = 0;
 		float mesh_area = 0;
@@ -220,7 +220,7 @@ namespace
 		{
 			unsigned int cluster = sort_data[i].cluster;
 
-			unsigned int next_cluster_face = (clusters.size() > cluster + 1) ? clusters[cluster + 1] : index_count / 3;
+			size_t next_cluster_face = (clusters.size() > cluster + 1) ? clusters[cluster + 1] : index_count / 3;
 
 			for (size_t j = clusters[cluster] * 3; j < next_cluster_face * 3; ++j)
 				*dest_it++ = indices[j];
@@ -230,7 +230,7 @@ namespace
 	}
 
 	template <typename T>
-	std::pair<float, unsigned int> calculateACMR(const T* indices, size_t index_count, unsigned int cache_size, float threshold, std::vector<unsigned int>& cache_time_stamps, unsigned int& time_stamp)
+	std::pair<float, size_t> calculateACMR(const T* indices, size_t index_count, unsigned int cache_size, float threshold, std::vector<unsigned int>& cache_time_stamps, unsigned int& time_stamp)
 	{
 		// Ensures that all vertices are not in cache
 		assert(time_stamp <= static_cast<unsigned int>(-1) - (cache_size + 1));
@@ -289,7 +289,7 @@ namespace
 		std::vector<unsigned int> cache_time_stamps(vertex_count, 0);
 		unsigned int time_stamp = 0;
 
-		std::pair<float, unsigned int> p = calculateACMR(indices, index_count, cache_size, 0, cache_time_stamps, time_stamp);
+		std::pair<float, size_t> p = calculateACMR(indices, index_count, cache_size, 0, cache_time_stamps, time_stamp);
 
 		assert(p.second == index_count / 3);
 
@@ -297,14 +297,14 @@ namespace
 
 		for (size_t it = 0; it < clusters.size(); ++it)
 		{
-			unsigned int start = clusters[it];
-			unsigned int end = (it + 1 < clusters.size()) ? clusters[it + 1] : index_count / 3;
+			size_t start = clusters[it];
+			size_t end = (it + 1 < clusters.size()) ? clusters[it + 1] : index_count / 3;
 
 			while (start != end)
 			{
-				std::pair<float, unsigned int> cp = calculateACMR(indices + start * 3, (end - start) * 3, cache_size, acmr_threshold, cache_time_stamps, time_stamp);
+				std::pair<float, size_t> cp = calculateACMR(indices + start * 3, (end - start) * 3, cache_size, acmr_threshold, cache_time_stamps, time_stamp);
 
-				destination.push_back(start);
+				destination.push_back(static_cast<unsigned int>(start));
 				start += cp.second;
 			}
 		}
