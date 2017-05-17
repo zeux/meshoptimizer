@@ -1,6 +1,8 @@
 project(meshoptimizer)
 cmake_minimum_required(VERSION 3.4)
 
+option(BUILD_DEMO "Build demo" OFF)
+
 set(CMAKE_CXX_STANDARD 11)
 
 set(SOURCES
@@ -15,5 +17,7 @@ set(SOURCES
 
 add_library(meshoptimizer STATIC ${SOURCES})
 
-add_executable(demo demo/main.cpp demo/tiny_obj_loader.cpp)
-target_link_libraries(demo meshoptimizer)
+if(BUILD_DEMO)
+	add_executable(demo demo/main.cpp demo/tiny_obj_loader.cpp)
+	target_link_libraries(demo meshoptimizer)
+endif()
