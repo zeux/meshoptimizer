@@ -129,6 +129,18 @@ void optOverdraw(Mesh& mesh)
 	optimizeOverdraw(&mesh.indices[0], &result[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), clusters, kCacheSize, kThreshold);
 }
 
+void optOverdrawOnly(Mesh& mesh)
+{
+	std::vector<unsigned int> result(mesh.indices.size());
+
+	std::vector<unsigned int> clusters;
+	clusters.push_back(0);
+
+	optimizeOverdraw(&result[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), clusters, kCacheSize, 3.f);
+
+	mesh.indices.swap(result);
+}
+
 void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
 {
 	Mesh copy = mesh;
@@ -137,9 +149,10 @@ void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
 	optf(copy);
 	clock_t end = clock();
 
-	PostTransformCacheStatistics stats = analyzePostTransform(&copy.indices[0], copy.indices.size(), copy.vertices.size(), kCacheSize);
+	PostTransformCacheStatistics ptcs = analyzePostTransform(&copy.indices[0], copy.indices.size(), copy.vertices.size(), kCacheSize);
+	OverdrawStatistics os = analyzeOverdraw(&copy.indices[0], copy.indices.size(), &copy.vertices[0].px, sizeof(Vertex), copy.vertices.size());
 
-	printf("%-10s: ACMR %f ATVR %f in %f msec\n", name, stats.acmr, stats.atvr, double(end - start) / CLOCKS_PER_SEC * 1000);
+	printf("%-15s: ACMR %f ATVR %f Overdraw %f in %f msec\n", name, ptcs.acmr, ptcs.atvr, os.overdraw, double(end - start) / CLOCKS_PER_SEC * 1000);
 }
 
 int main(int argc, char** argv)
@@ -169,5 +182,6 @@ int main(int argc, char** argv)
 
 	optimize(mesh, "Original", optNone);
 	optimize(mesh, "Cache", optPostTransform);
-	optimize(mesh, "Overdraw", optOverdraw);
+	optimize(mesh, "Cache+Overdraw", optOverdraw);
+	optimize(mesh, "Overdraw Only", optOverdrawOnly);
 }

@@ -56,3 +56,18 @@ struct PostTransformCacheStatistics
 // Results will not match actual GPU performance
 PostTransformCacheStatistics analyzePostTransform(const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 32);
 PostTransformCacheStatistics analyzePostTransform(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 32);
+
+struct OverdrawStatistics
+{
+	unsigned int pixels_covered;
+	unsigned int pixels_shaded;
+	float overdraw;
+};
+
+// Overdraw analyzer
+// Returns overdraw statistics using a software rasterizer
+// Results will not match actual GPU performance
+//
+// vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
+OverdrawStatistics analyzeOverdraw(const unsigned short* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count);
+OverdrawStatistics analyzeOverdraw(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count);
