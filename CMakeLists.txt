@@ -6,13 +6,13 @@ option(BUILD_DEMO "Build demo" OFF)
 set(CMAKE_CXX_STANDARD 11)
 
 set(SOURCES
+    src/meshoptimizer.hpp
     src/indexgenerator.cpp
     src/overdrawanalyzer.cpp
     src/overdrawoptimizer.cpp
+    src/posttransformanalyzer.cpp
     src/posttransformoptimizer.cpp
     src/pretransformoptimizer.cpp
-    src/vcacheanalyzer.cpp
-    src/meshoptimizer.hpp
 )
 
 add_library(meshoptimizer STATIC ${SOURCES})
