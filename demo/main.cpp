@@ -1,9 +1,10 @@
-#include <cstdio>
-#include <ctime>
-
 #include "../src/meshoptimizer.hpp"
 
 #include "tiny_obj_loader.h"
+
+#include <algorithm>
+#include <cstdio>
+#include <ctime>
 
 const size_t kCacheSize = 24;
 
@@ -108,6 +109,27 @@ void optNone(Mesh& mesh)
 {
 }
 
+void optRandomShuffle(Mesh& mesh)
+{
+	std::vector<unsigned int> faces(mesh.indices.size() / 3);
+
+	for (size_t i = 0; i < faces.size(); ++i)
+		faces[i] = i;
+
+	std::random_shuffle(faces.begin(), faces.end());
+
+	std::vector<unsigned int> result(mesh.indices.size());
+
+	for (size_t i = 0; i < faces.size(); ++i)
+	{
+		result[i * 3 + 0] = mesh.indices[faces[i] * 3 + 0];
+		result[i * 3 + 1] = mesh.indices[faces[i] * 3 + 1];
+		result[i * 3 + 2] = mesh.indices[faces[i] * 3 + 2];
+	}
+
+	mesh.indices.swap(result);
+}
+
 void optPostTransform(Mesh& mesh)
 {
 	std::vector<unsigned int> result(mesh.indices.size());
@@ -181,6 +203,7 @@ int main(int argc, char** argv)
 	}
 
 	optimize(mesh, "Original", optNone);
+	optimize(mesh, "Random Shuffle", optRandomShuffle);
 	optimize(mesh, "Cache", optPostTransform);
 	optimize(mesh, "Cache+Overdraw", optOverdraw);
 	optimize(mesh, "Overdraw Only", optOverdrawOnly);
