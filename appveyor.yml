@@ -1,0 +1,12 @@
+version: "{branch}-{build}"
+
+os: Visual Studio 2015
+
+platform: x64
+configuration: Release
+
+before_build:
+  - cmake -G "Visual Studio 14 2015 Win64"
+
+build:
+  project: meshoptimizer.sln
