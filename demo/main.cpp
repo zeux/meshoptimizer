@@ -114,7 +114,7 @@ void optRandomShuffle(Mesh& mesh)
 	std::vector<unsigned int> faces(mesh.indices.size() / 3);
 
 	for (size_t i = 0; i < faces.size(); ++i)
-		faces[i] = i;
+		faces[i] = static_cast<unsigned int>(i);
 
 	std::random_shuffle(faces.begin(), faces.end());
 
