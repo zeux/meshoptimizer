@@ -1,4 +1,4 @@
-# meshoptimizer [![Build Status](https://travis-ci.org/zeux/meshoptimizer.svg?branch=master)](https://travis-ci.org/zeux/meshoptimizer)
+# meshoptimizer [![Build Status](https://travis-ci.org/zeux/meshoptimizer.svg?branch=master)](https://travis-ci.org/zeux/meshoptimizer) [![Build status](https://ci.appveyor.com/api/projects/status/ptx6p8wmqchivawq?svg=true)](https://ci.appveyor.com/project/zeux/meshoptimizer)
 
 ## Purpose
 
