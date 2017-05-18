@@ -148,8 +148,8 @@ namespace
 			}
 		}
 
-		float radius = std::max(maxv[0] - minv[0], std::max(maxv[1] - minv[1], maxv[2] - minv[2]));
-		float scale = kViewport / radius;
+		float extent = std::max(maxv[0] - minv[0], std::max(maxv[1] - minv[1], maxv[2] - minv[2]));
+		float scale = kViewport / extent;
 
 		OverdrawBuffer* buffer = new OverdrawBuffer();
 
@@ -192,11 +192,12 @@ namespace
 
 			for (int y = 0; y < kViewport; ++y)
 				for (int x = 0; x < kViewport; ++x)
-					if (buffer->overdraw[y][x])
-					{
-						result.pixels_covered += 1;
-						result.pixels_shaded += buffer->overdraw[y][x];
-					}
+				{
+					unsigned int overdraw = buffer->overdraw[y][x];
+
+					result.pixels_covered += overdraw > 0;
+					result.pixels_shaded += overdraw;
+				}
 		}
 
 		delete buffer;
