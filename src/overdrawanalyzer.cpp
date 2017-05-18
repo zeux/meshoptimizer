@@ -11,8 +11,8 @@ namespace
 
 	struct OverdrawBuffer
 	{
-		float z[kViewport][kViewport];
-		unsigned int overdraw[kViewport][kViewport];
+		float z[kViewport][kViewport][2];
+		unsigned int overdraw[kViewport][kViewport][2];
 	};
 
 	inline float det2x2(float a, float b, float c, float d)
@@ -45,10 +45,7 @@ namespace
 		// compute depth gradients
 		float DZx, DZy;
 		float det = computeDepthGradients(DZx, DZy, v1x, v1y, v1z, v2x, v2y, v2z, v3x, v3y, v3z);
-
-		// cull backface/degenerate triangles
-		if (det >= 0)
-			return;
+		int sign = det > 0;
 
 		// 28.4 fixed-point coordinates
 		const int X1 = int(16.0f * v1x + 0.5f);
@@ -83,9 +80,18 @@ namespace
 		int C3 = DY31 * X3 - DX31 * Y3;
 
 		// correct for fill convention
-		if (DY12 < 0 || (DY12 == 0 && DX12 > 0)) C1++;
-		if (DY23 < 0 || (DY23 == 0 && DX23 > 0)) C2++;
-		if (DY31 < 0 || (DY31 == 0 && DX31 > 0)) C3++;
+		if (sign)
+		{
+			if (DY12 > 0 || (DY12 == 0 && DX12 < 0)) C1--;
+			if (DY23 > 0 || (DY23 == 0 && DX23 < 0)) C2--;
+			if (DY31 > 0 || (DY31 == 0 && DX31 < 0)) C3--;
+		}
+		else
+		{
+			if (DY12 < 0 || (DY12 == 0 && DX12 > 0)) C1++;
+			if (DY23 < 0 || (DY23 == 0 && DX23 > 0)) C2++;
+			if (DY31 < 0 || (DY31 == 0 && DX31 > 0)) C3++;
+		}
 
 		int CY1 = C1 + DX12 * (miny << 4) - DY12 * (minx << 4);
 		int CY2 = C2 + DX23 * (miny << 4) - DY23 * (minx << 4);
@@ -102,12 +108,14 @@ namespace
 
 			for (int x = minx; x < maxx; x++)
 			{
-				if (CX1 > 0 && CX2 > 0 && CX3 > 0)
+				if (sign ? (CX1 < 0 && CX2 < 0 && CX3 < 0) : (CX1 > 0 && CX2 > 0 && CX3 > 0))
 				{
-					if (ZX >= buffer.z[y][x])
+					float z = sign ? kViewport - ZX : ZX;
+
+					if (z >= buffer.z[y][x][sign])
 					{
-						buffer.z[y][x] = ZX;
-						buffer.overdraw[y][x]++;
+						buffer.z[y][x][sign] = z;
+						buffer.overdraw[y][x][sign]++;
 					}
 				}
 
@@ -153,7 +161,7 @@ namespace
 
 		OverdrawBuffer* buffer = new OverdrawBuffer();
 
-		for (int axis = 0; axis < 6; ++axis)
+		for (int axis = 0; axis < 3; ++axis)
 		{
 			memset(buffer, 0, sizeof(OverdrawBuffer));
 
@@ -172,32 +180,24 @@ namespace
 				case 0: /* +X */
 					rasterize(*buffer, kViewport - vn0[2], kViewport - vn0[1], vn0[0], kViewport - vn1[2], kViewport - vn1[1], vn1[0], kViewport - vn2[2], kViewport - vn2[1], vn2[0]);
 					break;
-				case 1: /* -X */
-					rasterize(*buffer, vn0[2], kViewport - vn0[1], kViewport - vn0[0], vn1[2], kViewport - vn1[1], kViewport - vn1[0], vn2[2], kViewport - vn2[1], kViewport - vn2[0]);
-					break;
-				case 2: /* +Y */
+				case 1: /* +Y */
 					rasterize(*buffer, vn0[0], vn0[2], vn0[1], vn1[0], vn1[2], vn1[1], vn2[0], vn2[2], vn2[1]);
 					break;
-				case 3: /* -Y */
-					rasterize(*buffer, vn0[2], vn0[0], kViewport - vn0[1], vn1[2], vn1[0], kViewport - vn1[1], vn2[2], vn2[0], kViewport - vn2[1]);
-					break;
-				case 4: /* +Z */
+				case 2: /* +Z */
 					rasterize(*buffer, vn0[0], kViewport - vn0[1], vn0[2], vn1[0], kViewport - vn1[1], vn1[2], vn2[0], kViewport - vn2[1], vn2[2]);
-					break;
-				case 5: /* -Z */
-					rasterize(*buffer, kViewport - vn0[0], kViewport - vn0[1], kViewport - vn0[2], kViewport - vn1[0], kViewport - vn1[1], kViewport - vn1[2], kViewport - vn2[0], kViewport - vn2[1], kViewport - vn2[2]);
 					break;
 				}
 			}
 
 			for (int y = 0; y < kViewport; ++y)
 				for (int x = 0; x < kViewport; ++x)
-				{
-					unsigned int overdraw = buffer->overdraw[y][x];
+					for (int s = 0; s < 2; ++s)
+					{
+						unsigned int overdraw = buffer->overdraw[y][x][s];
 
-					result.pixels_covered += overdraw > 0;
-					result.pixels_shaded += overdraw;
-				}
+						result.pixels_covered += overdraw > 0;
+						result.pixels_shaded += overdraw;
+					}
 		}
 
 		delete buffer;
