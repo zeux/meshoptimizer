@@ -40,12 +40,20 @@ namespace
 
 	// half-space fixed point triangle rasterizer
 	// adapted from http://forum.devmaster.net/t/advanced-rasterization/6145
-	void rasterize(OverdrawBuffer& buffer, float v1x, float v1y, float v1z, float v2x, float v2y, float v2z, float v3x, float v3y, float v3z)
+	void rasterize(OverdrawBuffer* buffer, float v1x, float v1y, float v1z, float v2x, float v2y, float v2z, float v3x, float v3y, float v3z)
 	{
 		// compute depth gradients
 		float DZx, DZy;
 		float det = computeDepthGradients(DZx, DZy, v1x, v1y, v1z, v2x, v2y, v2z, v3x, v3y, v3z);
 		int sign = det > 0;
+
+		// flip backfacing triangles to simplify rasterization logic
+		if (sign)
+		{
+			std::swap(v2x, v3x);
+			std::swap(v2y, v3y);
+			std::swap(v2z, v3z);
+		}
 
 		// 28.4 fixed-point coordinates
 		const int X1 = int(16.0f * v1x + 0.5f);
@@ -80,18 +88,9 @@ namespace
 		int C3 = DY31 * X3 - DX31 * Y3;
 
 		// correct for fill convention
-		if (sign)
-		{
-			if (DY12 > 0 || (DY12 == 0 && DX12 < 0)) C1--;
-			if (DY23 > 0 || (DY23 == 0 && DX23 < 0)) C2--;
-			if (DY31 > 0 || (DY31 == 0 && DX31 < 0)) C3--;
-		}
-		else
-		{
-			if (DY12 < 0 || (DY12 == 0 && DX12 > 0)) C1++;
-			if (DY23 < 0 || (DY23 == 0 && DX23 > 0)) C2++;
-			if (DY31 < 0 || (DY31 == 0 && DX31 > 0)) C3++;
-		}
+		if (DY12 < 0 || (DY12 == 0 && DX12 > 0)) C1++;
+		if (DY23 < 0 || (DY23 == 0 && DX23 > 0)) C2++;
+		if (DY31 < 0 || (DY31 == 0 && DX31 > 0)) C3++;
 
 		int CY1 = C1 + DX12 * (miny << 4) - DY12 * (minx << 4);
 		int CY2 = C2 + DX23 * (miny << 4) - DY23 * (minx << 4);
@@ -108,14 +107,14 @@ namespace
 
 			for (int x = minx; x < maxx; x++)
 			{
-				if (sign ? (CX1 < 0 && CX2 < 0 && CX3 < 0) : (CX1 > 0 && CX2 > 0 && CX3 > 0))
+				if (CX1 > 0 && CX2 > 0 && CX3 > 0)
 				{
 					float z = sign ? kViewport - ZX : ZX;
 
-					if (z >= buffer.z[y][x][sign])
+					if (z >= buffer->z[y][x][sign])
 					{
-						buffer.z[y][x][sign] = z;
-						buffer.overdraw[y][x][sign]++;
+						buffer->z[y][x][sign] = z;
+						buffer->overdraw[y][x][sign]++;
 					}
 				}
 
@@ -177,14 +176,14 @@ namespace
 
 				switch (axis)
 				{
-				case 0: /* +X */
-					rasterize(*buffer, kViewport - vn0[2], kViewport - vn0[1], vn0[0], kViewport - vn1[2], kViewport - vn1[1], vn1[0], kViewport - vn2[2], kViewport - vn2[1], vn2[0]);
+				case 0:
+					rasterize(buffer, vn0[2], vn0[1], vn0[0], vn1[2], vn1[1], vn1[0], vn2[2], vn2[1], vn2[0]);
 					break;
-				case 1: /* +Y */
-					rasterize(*buffer, vn0[0], vn0[2], vn0[1], vn1[0], vn1[2], vn1[1], vn2[0], vn2[2], vn2[1]);
+				case 1:
+					rasterize(buffer, vn0[0], vn0[2], vn0[1], vn1[0], vn1[2], vn1[1], vn2[0], vn2[2], vn2[1]);
 					break;
-				case 2: /* +Z */
-					rasterize(*buffer, vn0[0], kViewport - vn0[1], vn0[2], vn1[0], kViewport - vn1[1], vn1[2], vn2[0], kViewport - vn2[1], vn2[2]);
+				case 2:
+					rasterize(buffer, vn0[1], vn0[0], vn0[2], vn1[1], vn1[0], vn1[2], vn2[1], vn2[0], vn2[2]);
 					break;
 				}
 			}
