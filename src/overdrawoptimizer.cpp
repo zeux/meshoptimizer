@@ -7,128 +7,15 @@
 
 namespace
 {
-	struct vec3
+	struct Vector3
 	{
 		float x, y, z;
-
-		vec3()
-		    : x(0)
-		    , y(0)
-		    , z(0)
-		{
-		}
-
-		vec3(float x, float y, float z)
-		    : x(x)
-		    , y(y)
-		    , z(z)
-		{
-		}
-
-		explicit vec3(const float* v)
-		    : x(v[0])
-		    , y(v[1])
-		    , z(v[2])
-		{
-		}
-	};
-
-	inline float dot(const vec3& lhs, const vec3& rhs)
-	{
-		return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
-	}
-
-	inline vec3 cross(const vec3& lhs, const vec3& rhs)
-	{
-		return vec3(
-		    lhs.y * rhs.z - lhs.z * rhs.y,
-		    lhs.z * rhs.x - lhs.x * rhs.z,
-		    lhs.x * rhs.y - lhs.y * rhs.x);
-	}
-
-	inline vec3& operator+=(vec3& lhs, const vec3& rhs)
-	{
-		lhs.x += rhs.x;
-		lhs.y += rhs.y;
-		lhs.z += rhs.z;
-		return lhs;
-	}
-
-	inline vec3& operator-=(vec3& lhs, const vec3& rhs)
-	{
-		lhs.x -= rhs.x;
-		lhs.y -= rhs.y;
-		lhs.z -= rhs.z;
-		return lhs;
-	}
-
-	inline vec3& operator*=(vec3& lhs, float rhs)
-	{
-		lhs.x *= rhs;
-		lhs.y *= rhs;
-		lhs.z *= rhs;
-		return lhs;
-	}
-
-	inline vec3& operator/=(vec3& lhs, float rhs)
-	{
-		lhs.x /= rhs;
-		lhs.y /= rhs;
-		lhs.z /= rhs;
-		return lhs;
-	}
-
-	inline vec3 operator+(const vec3& lhs, const vec3& rhs)
-	{
-		return vec3(lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z);
-	}
-
-	inline vec3 operator-(const vec3& lhs, const vec3& rhs)
-	{
-		return vec3(lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z);
-	}
-
-	inline vec3 operator*(const vec3& lhs, float rhs)
-	{
-		return vec3(lhs.x * rhs, lhs.y * rhs, lhs.z * rhs);
-	}
-
-	inline vec3 operator/(const vec3& lhs, float rhs)
-	{
-		return vec3(lhs.x / rhs, lhs.y / rhs, lhs.z / rhs);
-	}
-
-	inline float length(const vec3& v)
-	{
-		return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
-	}
-
-	inline vec3 normalize(const vec3& v)
-	{
-		float l = sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
-		float s = l == 0 ? 0 : 1 / l;
-		return vec3(v.x * s, v.y * s, v.z * s);
-	}
-}
-
-namespace
-{
-	struct MeshInfo
-	{
-		std::vector<vec3> cluster_centroids;
-		std::vector<vec3> cluster_normals;
-		vec3 mesh_centroid;
 	};
 
 	struct ClusterSortData
 	{
 		unsigned int cluster;
 		float dot_product;
-
-		bool operator<(const ClusterSortData& other) const
-		{
-			return (dot_product < other.dot_product);
-		}
 
 		bool operator>(const ClusterSortData& other) const
 		{
@@ -137,96 +24,76 @@ namespace
 	};
 
 	template <typename T>
-	void calculateMeshInfo(MeshInfo& info, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, const std::vector<unsigned int>& clusters)
+	void calculateSortData(std::vector<ClusterSortData>& sort_data, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, const std::vector<unsigned int>& clusters)
 	{
-		info.cluster_centroids.resize(clusters.size());
-		info.cluster_normals.resize(clusters.size());
-		info.mesh_centroid = vec3();
+		assert(sort_data.size() == clusters.size());
 
-		size_t face_count = index_count / 3;
 		size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
-		size_t current_cluster = 0;
-		size_t next_cluster_face = (clusters.size() > 1) ? clusters[1] : face_count;
+		Vector3 mesh_centroid = Vector3();
 
-		float cluster_area = 0;
-		float mesh_area = 0;
-
-		for (size_t i = 0; i <= face_count; ++i)
+		for (size_t i = 0; i < index_count; ++i)
 		{
-			if (i == next_cluster_face)
+			const Vector3& p = *reinterpret_cast<const Vector3*>(vertex_positions + vertex_stride_float * indices[i]);
+
+			mesh_centroid.x += p.x;
+			mesh_centroid.y += p.y;
+			mesh_centroid.z += p.z;
+		}
+
+		mesh_centroid.x /= index_count;
+		mesh_centroid.y /= index_count;
+		mesh_centroid.z /= index_count;
+
+		for (size_t cluster = 0; cluster < clusters.size(); ++cluster)
+		{
+			size_t cluster_begin = clusters[cluster] * 3;
+			size_t cluster_end = (clusters.size() > cluster + 1) ? clusters[cluster + 1] * 3 : index_count;
+
+			float cluster_area = 0;
+			Vector3 cluster_centroid = Vector3();
+			Vector3 cluster_normal = Vector3();
+
+			for (size_t i = cluster_begin; i < cluster_end; i += 3)
 			{
-				// finalize cluster information
-				info.cluster_centroids[current_cluster] /= cluster_area * 3;
-				info.cluster_normals[current_cluster] = normalize(info.cluster_normals[current_cluster]);
+				const Vector3& p0 = *reinterpret_cast<const Vector3*>(vertex_positions + vertex_stride_float * indices[i + 0]);
+				const Vector3& p1 = *reinterpret_cast<const Vector3*>(vertex_positions + vertex_stride_float * indices[i + 1]);
+				const Vector3& p2 = *reinterpret_cast<const Vector3*>(vertex_positions + vertex_stride_float * indices[i + 2]);
 
-				// move to next cluster
-				++current_cluster;
+				Vector3 p10 = {p1.x - p0.x, p1.y - p0.y, p1.z - p0.z};
+				Vector3 p20 = {p2.x - p0.x, p2.y - p0.y, p2.z - p0.z};
+				Vector3 normal = {p10.y * p20.z - p10.z * p20.y, p10.z * p20.x - p10.x * p20.z, p10.x * p20.y - p10.y * p20.x};
 
-				if (current_cluster == clusters.size())
-				{
-					assert(i == face_count);
-					break;
-				}
+				float area = sqrtf(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
+				Vector3 centroid_area = {(p0.x + p1.x + p2.x) * (area / 3), (p0.y + p1.y + p2.y) * (area / 3), (p0.z + p1.z + p2.z) * (area / 3)};
 
-				next_cluster_face = (clusters.size() > current_cluster + 1) ? clusters[current_cluster + 1] : face_count;
-
-				cluster_area = 0;
+				cluster_centroid.x += centroid_area.x;
+				cluster_centroid.y += centroid_area.y;
+				cluster_centroid.z += centroid_area.z;
+				cluster_normal.x += normal.x;
+				cluster_normal.y += normal.y;
+				cluster_normal.z += normal.z;
+				cluster_area += area;
 			}
 
-			vec3 p0(vertex_positions + vertex_stride_float * indices[i * 3 + 0]);
-			vec3 p1(vertex_positions + vertex_stride_float * indices[i * 3 + 1]);
-			vec3 p2(vertex_positions + vertex_stride_float * indices[i * 3 + 2]);
+			float inv_cluster_area = cluster_area == 0 ? 0 : 1 / cluster_area;
 
-			vec3 normal = cross(p1 - p0, p2 - p0);
+			cluster_centroid.x *= inv_cluster_area;
+			cluster_centroid.y *= inv_cluster_area;
+			cluster_centroid.z *= inv_cluster_area;
 
-			float area = length(normal);
-			vec3 centroid_area = (p0 + p1 + p2) * area;
+			float cluster_normal_length = sqrtf(cluster_normal.x * cluster_normal.x + cluster_normal.y * cluster_normal.y + cluster_normal.z * cluster_normal.z);
+			float inv_cluster_normal_length = cluster_normal_length == 0 ? 0 : 1 / cluster_normal_length;
 
-			info.mesh_centroid += centroid_area;
-			info.cluster_centroids[current_cluster] += centroid_area;
-			info.cluster_normals[current_cluster] += normal;
+			cluster_normal.x *= inv_cluster_normal_length;
+			cluster_normal.y *= inv_cluster_normal_length;
+			cluster_normal.z *= inv_cluster_normal_length;
 
-			cluster_area += area;
-			mesh_area += area;
+			Vector3 centroid_vector = {cluster_centroid.x - mesh_centroid.x, cluster_centroid.y - mesh_centroid.y, cluster_centroid.z - mesh_centroid.z};
+
+			sort_data[cluster].cluster = static_cast<unsigned int>(cluster);
+			sort_data[cluster].dot_product = centroid_vector.x * cluster_normal.x + centroid_vector.y * cluster_normal.y + centroid_vector.z * cluster_normal.z;
 		}
-
-		info.mesh_centroid /= mesh_area * 3;
-	}
-
-	template <typename T>
-	void optimizeOverdrawOrder(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, const std::vector<unsigned int>& clusters)
-	{
-		// mesh information
-		MeshInfo info;
-		calculateMeshInfo(info, indices, index_count, vertex_positions, vertex_positions_stride, clusters);
-
-		// fill sort data
-		std::vector<ClusterSortData> sort_data(clusters.size());
-
-		for (size_t i = 0; i < clusters.size(); ++i)
-		{
-			sort_data[i].cluster = static_cast<unsigned int>(i);
-			sort_data[i].dot_product = dot(info.cluster_centroids[i] - info.mesh_centroid, info.cluster_normals[i]);
-		}
-
-		// high product = possible occluder, render early
-		std::sort(sort_data.begin(), sort_data.end(), std::greater<ClusterSortData>());
-
-		// fill output buffer
-		T* dest_it = destination;
-
-		for (size_t i = 0; i < clusters.size(); ++i)
-		{
-			unsigned int cluster = sort_data[i].cluster;
-
-			size_t next_cluster_face = (clusters.size() > cluster + 1) ? clusters[cluster + 1] : index_count / 3;
-
-			for (size_t j = clusters[cluster] * 3; j < next_cluster_face * 3; ++j)
-				*dest_it++ = indices[j];
-		}
-
-		assert(dest_it == destination + index_count);
 	}
 
 	template <typename T>
@@ -329,8 +196,28 @@ namespace
 		std::vector<unsigned int> clusters;
 		generateSoftBoundaries(clusters, indices, index_count, vertex_count, hard_clusters, cache_size, threshold);
 
-		// optimize overdraw order
-		optimizeOverdrawOrder(destination, indices, index_count, vertex_positions, vertex_positions_stride, clusters);
+		// fill sort data
+		std::vector<ClusterSortData> sort_data(clusters.size());
+		calculateSortData(sort_data, indices, index_count, vertex_positions, vertex_positions_stride, clusters);
+
+		// high product = possible occluder, render early
+		std::sort(sort_data.begin(), sort_data.end(), std::greater<ClusterSortData>());
+
+		// fill output buffer
+		T* dest_it = destination;
+
+		for (size_t i = 0; i < clusters.size(); ++i)
+		{
+			unsigned int cluster = sort_data[i].cluster;
+
+			size_t cluster_begin = clusters[cluster] * 3;
+			size_t cluster_end = (clusters.size() > cluster + 1) ? clusters[cluster + 1] * 3 : index_count;
+
+			for (size_t j = cluster_begin; j < cluster_end; ++j)
+				*dest_it++ = indices[j];
+		}
+
+		assert(dest_it == destination + index_count);
 	}
 }
 
