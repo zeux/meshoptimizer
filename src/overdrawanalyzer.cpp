@@ -55,9 +55,15 @@ namespace
 		// flip backfacing triangles to simplify rasterization logic
 		if (sign)
 		{
+			// flipping v2 & v3 preserves depth gradients since they're based on v1
 			std::swap(v2x, v3x);
 			std::swap(v2y, v3y);
 			std::swap(v2z, v3z);
+
+			// flip depth since we rasterize backfacing triangles to second buffer with reverse Z; only v1z is used below
+			v1z = kViewport - v1z;
+			DZx = -DZx;
+			DZy = -DZy;
 		}
 
 		// coordinates, 28.4 fixed point
@@ -107,11 +113,9 @@ namespace
 				// check if all CXn are non-negative
 				if ((CX1 | CX2 | CX3) >= 0)
 				{
-					float z = sign ? kViewport - ZX : ZX;
-
-					if (z >= buffer->z[y][x][sign])
+					if (ZX >= buffer->z[y][x][sign])
 					{
-						buffer->z[y][x][sign] = z;
+						buffer->z[y][x][sign] = ZX;
 						buffer->overdraw[y][x][sign]++;
 					}
 				}
