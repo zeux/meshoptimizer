@@ -60,48 +60,40 @@ namespace
 			std::swap(v2z, v3z);
 		}
 
-		// 28.4 fixed-point coordinates
-		const int X1 = int(16.0f * v1x + 0.5f);
-		const int X2 = int(16.0f * v2x + 0.5f);
-		const int X3 = int(16.0f * v3x + 0.5f);
+		// coordinates, 28.4 fixed point
+		int X1 = int(16.0f * v1x + 0.5f);
+		int X2 = int(16.0f * v2x + 0.5f);
+		int X3 = int(16.0f * v3x + 0.5f);
 
-		const int Y1 = int(16.0f * v1y + 0.5f);
-		const int Y2 = int(16.0f * v2y + 0.5f);
-		const int Y3 = int(16.0f * v3y + 0.5f);
+		int Y1 = int(16.0f * v1y + 0.5f);
+		int Y2 = int(16.0f * v2y + 0.5f);
+		int Y3 = int(16.0f * v3y + 0.5f);
 
-		// deltas
-		const int DX12 = X1 - X2;
-		const int DX23 = X2 - X3;
-		const int DX31 = X3 - X1;
+		// bounding rectangle, clipped against viewport
+		int minx = std::max((std::min(X1, std::min(X2, X3)) + 0xF) >> 4, 0);
+		int maxx = std::min((std::max(X1, std::max(X2, X3)) + 0xF) >> 4, kViewport);
+		int miny = std::max((std::min(Y1, std::min(Y2, Y3)) + 0xF) >> 4, 0);
+		int maxy = std::min((std::max(Y1, std::max(Y2, Y3)) + 0xF) >> 4, kViewport);
 
-		const int DY12 = Y1 - Y2;
-		const int DY23 = Y2 - Y3;
-		const int DY31 = Y3 - Y1;
+		// deltas, 28.4 fixed point
+		int DX12 = X1 - X2;
+		int DX23 = X2 - X3;
+		int DX31 = X3 - X1;
 
-		// bounding rectangle
-		int minx = std::min(X1, std::min(X2, X3)) >> 4;
-		int maxx = (std::max(X1, std::max(X2, X3)) + 0xF) >> 4;
-		int miny = std::min(Y1, std::min(Y2, Y3)) >> 4;
-		int maxy = (std::max(Y1, std::max(Y2, Y3)) + 0xF) >> 4;
+		int DY12 = Y1 - Y2;
+		int DY23 = Y2 - Y3;
+		int DY31 = Y3 - Y1;
 
-		assert(minx >= 0 && maxx <= kViewport);
-		assert(miny >= 0 && maxy <= kViewport);
+		// fill convention correction
+		int TL1 = DY12 < 0 || (DY12 == 0 && DX12 > 0);
+		int TL2 = DY23 < 0 || (DY23 == 0 && DX23 > 0);
+		int TL3 = DY31 < 0 || (DY31 == 0 && DX31 > 0);
 
-		// half-edge constants
-		int C1 = DY12 * X1 - DX12 * Y1;
-		int C2 = DY23 * X2 - DX23 * Y2;
-		int C3 = DY31 * X3 - DX31 * Y3;
-
-		// correct for fill convention
-		if (DY12 < 0 || (DY12 == 0 && DX12 > 0)) C1++;
-		if (DY23 < 0 || (DY23 == 0 && DX23 > 0)) C2++;
-		if (DY31 < 0 || (DY31 == 0 && DX31 > 0)) C3++;
-
-		int CY1 = C1 + DX12 * (miny << 4) - DY12 * (minx << 4);
-		int CY2 = C2 + DX23 * (miny << 4) - DY23 * (minx << 4);
-		int CY3 = C3 + DX31 * (miny << 4) - DY31 * (minx << 4);
-
-		float ZY = v1z + DZx * (minx - v1x) + DZy * (miny - v1y);
+		// half edge equations, 24.8 fixed point
+		int CY1 = DX12 * ((miny << 4) - Y1) - DY12 * ((minx << 4) - X1) + TL1 - 1;
+		int CY2 = DX23 * ((miny << 4) - Y2) - DY23 * ((minx << 4) - X2) + TL2 - 1;
+		int CY3 = DX31 * ((miny << 4) - Y3) - DY31 * ((minx << 4) - X3) + TL3 - 1;
+		float ZY = v1z + (DZx * float((minx << 4) - X1) + DZy * float((miny << 4) - Y1)) * (1 / 16.f);
 
 		for (int y = miny; y < maxy; y++)
 		{
@@ -112,7 +104,8 @@ namespace
 
 			for (int x = minx; x < maxx; x++)
 			{
-				if (CX1 > 0 && CX2 > 0 && CX3 > 0)
+				// check if all CXn are non-negative
+				if ((CX1 | CX2 | CX3) >= 0)
 				{
 					float z = sign ? kViewport - ZX : ZX;
 
