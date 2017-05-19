@@ -9,6 +9,11 @@ namespace
 {
 	const int kViewport = 256;
 
+	struct Vector3
+	{
+		float x, y, z;
+	};
+
 	struct OverdrawBuffer
 	{
 		float z[kViewport][kViewport][2];
@@ -158,6 +163,23 @@ namespace
 		float extent = std::max(maxv[0] - minv[0], std::max(maxv[1] - minv[1], maxv[2] - minv[2]));
 		float scale = kViewport / extent;
 
+		std::vector<Vector3> triangles(index_count);
+
+		for (size_t i = 0; i < index_count; i += 3)
+		{
+			const float* v0 = vertex_positions + indices[i + 0] * vertex_stride_float;
+			const float* v1 = vertex_positions + indices[i + 1] * vertex_stride_float;
+			const float* v2 = vertex_positions + indices[i + 2] * vertex_stride_float;
+
+			Vector3 vn0 = {(v0[0] - minv[0]) * scale, (v0[1] - minv[1]) * scale, (v0[2] - minv[2]) * scale};
+			Vector3 vn1 = {(v1[0] - minv[0]) * scale, (v1[1] - minv[1]) * scale, (v1[2] - minv[2]) * scale};
+			Vector3 vn2 = {(v2[0] - minv[0]) * scale, (v2[1] - minv[1]) * scale, (v2[2] - minv[2]) * scale};
+
+			triangles[i + 0] = vn0;
+			triangles[i + 1] = vn1;
+			triangles[i + 2] = vn2;
+		}
+
 		OverdrawBuffer* buffer = new OverdrawBuffer();
 
 		for (int axis = 0; axis < 3; ++axis)
@@ -166,13 +188,9 @@ namespace
 
 			for (size_t i = 0; i < index_count; i += 3)
 			{
-				const float* v0 = vertex_positions + indices[i + 0] * vertex_stride_float;
-				const float* v1 = vertex_positions + indices[i + 1] * vertex_stride_float;
-				const float* v2 = vertex_positions + indices[i + 2] * vertex_stride_float;
-
-				float vn0[3] = {(v0[0] - minv[0]) * scale, (v0[1] - minv[1]) * scale, (v0[2] - minv[2]) * scale};
-				float vn1[3] = {(v1[0] - minv[0]) * scale, (v1[1] - minv[1]) * scale, (v1[2] - minv[2]) * scale};
-				float vn2[3] = {(v2[0] - minv[0]) * scale, (v2[1] - minv[1]) * scale, (v2[2] - minv[2]) * scale};
+				const float* vn0 = &triangles[i + 0].x;
+				const float* vn1 = &triangles[i + 1].x;
+				const float* vn2 = &triangles[i + 2].x;
 
 				switch (axis)
 				{
