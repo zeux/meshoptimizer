@@ -155,10 +155,11 @@ void optOverdrawOnly(Mesh& mesh)
 {
 	std::vector<unsigned int> result(mesh.indices.size());
 
-	std::vector<unsigned int> clusters;
-	clusters.push_back(0);
+	// use single input cluster encompassing the entire mesh and worst-case ACMR so that overdraw optimizer can sort *all* triangles
+	std::vector<unsigned int> clusters(1);
+	const float kThreshold = 3.f;
 
-	optimizeOverdraw(&result[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), clusters, kCacheSize, 3.f);
+	optimizeOverdraw(&result[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), clusters, kCacheSize, kThreshold);
 
 	mesh.indices.swap(result);
 }
