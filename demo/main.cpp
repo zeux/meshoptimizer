@@ -31,7 +31,7 @@ Mesh generatePlane(unsigned int N)
 	for (unsigned int y = 0; y <= N; ++y)
 		for (unsigned int x = 0; x <= N; ++x)
 		{
-			Vertex v = { float(x), float(y), 0, 0, 0, 1 };
+			Vertex v = {float(x), float(y), 0, 0, 0, 1};
 
 			result.vertices.push_back(v);
 		}
@@ -68,26 +68,26 @@ Mesh readOBJ(const char* path)
 
 	size_t total_indices = 0;
 
-	for (auto& s: shapes)
+	for (auto& s : shapes)
 		total_indices += s.mesh.indices.size();
 
 	std::vector<Vertex> vertices;
 	vertices.reserve(total_indices);
 
-	for (auto& s: shapes)
-		for (auto& i: s.mesh.indices)
+	for (auto& s : shapes)
+		for (auto& i : s.mesh.indices)
 		{
 			Vertex v =
-			{
-				attrib.vertices[i.vertex_index * 3 + 0],
-				attrib.vertices[i.vertex_index * 3 + 1],
-				attrib.vertices[i.vertex_index * 3 + 2],
-				i.normal_index >= 0 ? attrib.normals[i.normal_index * 3 + 0] : 0,
-				i.normal_index >= 0 ? attrib.normals[i.normal_index * 3 + 1] : 0,
-				i.normal_index >= 0 ? attrib.normals[i.normal_index * 3 + 2] : 0,
-				i.texcoord_index >= 0 ? attrib.texcoords[i.texcoord_index * 2 + 0] : 0,
-				i.texcoord_index >= 0 ? attrib.texcoords[i.texcoord_index * 2 + 1] : 0,
-			};
+			    {
+			        attrib.vertices[i.vertex_index * 3 + 0],
+			        attrib.vertices[i.vertex_index * 3 + 1],
+			        attrib.vertices[i.vertex_index * 3 + 2],
+			        i.normal_index >= 0 ? attrib.normals[i.normal_index * 3 + 0] : 0,
+			        i.normal_index >= 0 ? attrib.normals[i.normal_index * 3 + 1] : 0,
+			        i.normal_index >= 0 ? attrib.normals[i.normal_index * 3 + 2] : 0,
+			        i.texcoord_index >= 0 ? attrib.texcoords[i.texcoord_index * 2 + 0] : 0,
+			        i.texcoord_index >= 0 ? attrib.texcoords[i.texcoord_index * 2 + 1] : 0,
+			    };
 
 			vertices.push_back(v);
 		}
@@ -146,7 +146,8 @@ void optOverdraw(Mesh& mesh)
 	std::vector<unsigned int> clusters;
 	optimizePostTransform(&result[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, &clusters);
 
-	const float kThreshold = 1.05f; // allow up to 5% worse ACMR to get more reordering opportunities for overdraw
+	// allow up to 5% worse ACMR to get more reordering opportunities for overdraw
+	const float kThreshold = 1.05f;
 
 	optimizeOverdraw(&mesh.indices[0], &result[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), clusters, kCacheSize, kThreshold);
 }

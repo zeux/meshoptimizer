@@ -17,7 +17,7 @@ test: $(EXECUTABLE)
 	$(EXECUTABLE) demo/bunny.obj
 
 format:
-	clang-format -i src/*
+	clang-format -i $(SOURCES)
 
 $(EXECUTABLE): $(OBJECTS)
 	$(CXX) $(OBJECTS) $(LDFLAGS) -o $@
