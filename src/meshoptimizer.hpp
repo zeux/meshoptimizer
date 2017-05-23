@@ -45,8 +45,7 @@ void optimizePreTransform(void* destination, const void* vertices, unsigned int*
 
 struct PostTransformCacheStatistics
 {
-	unsigned int hits, misses;
-	float hit_percent, miss_percent;
+	unsigned int vertices_transformed;
 	float acmr; // transformed vertices / triangle count; best case 0.5, worst case 3.0, optimum depends on topology
 	float atvr; // transformed vertices / vertex count; best case 1.0, worse case 6.0, optimum is 1.0 (each vertex is transformed once)
 };
@@ -61,7 +60,7 @@ struct OverdrawStatistics
 {
 	unsigned int pixels_covered;
 	unsigned int pixels_shaded;
-	float overdraw;
+	float overdraw; // shaded pixels / covered pixels; best case 1.0
 };
 
 // Overdraw analyzer

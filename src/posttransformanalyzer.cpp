@@ -20,17 +20,12 @@ namespace
 			{
 				// cache miss
 				cache_time_stamps[index] = time_stamp++;
-				result.misses++;
+				result.vertices_transformed++;
 			}
 		}
 
-		result.hits = static_cast<unsigned int>(index_count) - result.misses;
-
-		result.hit_percent = 100 * static_cast<float>(result.hits) / index_count;
-		result.miss_percent = 100 * static_cast<float>(result.misses) / index_count;
-
-		result.acmr = static_cast<float>(result.misses) / (index_count / 3);
-		result.atvr = static_cast<float>(result.misses) / vertex_count;
+		result.acmr = static_cast<float>(result.vertices_transformed) / (index_count / 3);
+		result.atvr = static_cast<float>(result.vertices_transformed) / vertex_count;
 
 		return result;
 	}
