@@ -26,8 +26,8 @@ To use Tipsify for post-transform and overdraw optimization, you have to invoke 
 
     float threshold = 1.05f;
   
-    std::vector<unsigned int> temp_clusters;
-    optimizePostTransform(temp_index_data, index_data, index_count, vertex_count, 16, &temp_clusters);
+    std::vector<unsigned int> clusters;
+    optimizePostTransform(temp_index_data, index_data, index_count, vertex_count, 16, &clusters);
     optimizeOverdraw(new_index_data, index_data, index_count, vertex_positions, vertex_stride, vertex_count, clusters, 16, threshold);
 
 The first call generates a cache-optimized index sequence to the temp location as well as a set of clusters that the second call then reorders to get better overdraw results. The overdraw optimizer also needs to read vertex positions, which you have to provide as a pointer to a float3 vector and a stride, similar to glVertexPointer.
