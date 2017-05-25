@@ -73,7 +73,8 @@ OverdrawStatistics analyzeOverdraw(const unsigned int* indices, size_t index_cou
 
 struct PreTransformCacheStatistics
 {
-	float overfetch;
+	unsigned int bytes_fetched;
+	float overfetch; // fetched bytes / vertex buffer size; best case 1.0 (each byte is fetched once)
 };
 
 // Vertex fetch cache analyzer

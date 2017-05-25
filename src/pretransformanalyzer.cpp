@@ -15,7 +15,6 @@ namespace
 
 		// simple direct mapped cache; on typical mesh data this is close to 4-way cache, and this model is a gross approximation anyway
 		size_t cache[kCacheSize / kCacheLine] = {};
-		size_t fetched = 0;
 
 		for (size_t i = 0; i < index_count; ++i)
 		{
@@ -34,12 +33,12 @@ namespace
 				size_t line = tag % (sizeof(cache) / sizeof(cache[0]));
 
 				// we store +1 since cache is filled with 0 by default
-				fetched += cache[line] != tag + 1;
+				result.bytes_fetched += (cache[line] != tag + 1) * kCacheLine;
 				cache[line] = tag + 1;
 			}
 		}
 
-		result.overfetch = static_cast<float>(fetched * kCacheLine) / static_cast<float>(vertex_count * vertex_size);
+		result.overfetch = static_cast<float>(result.bytes_fetched) / static_cast<float>(vertex_count * vertex_size);
 
 		return result;
 	}
