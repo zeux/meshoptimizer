@@ -70,3 +70,14 @@ struct OverdrawStatistics
 // vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
 OverdrawStatistics analyzeOverdraw(const unsigned short* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count);
 OverdrawStatistics analyzeOverdraw(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count);
+
+struct PreTransformCacheStatistics
+{
+	float overfetch;
+};
+
+// Vertex fetch cache analyzer
+// Returns cache hit statistics using a simplified direct mapped model
+// Results will not match actual GPU performance
+PreTransformCacheStatistics analyzePreTransform(const unsigned short* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
+PreTransformCacheStatistics analyzePreTransform(const unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size);

@@ -12,6 +12,7 @@ set(SOURCES
     src/overdrawoptimizer.cpp
     src/posttransformanalyzer.cpp
     src/posttransformoptimizer.cpp
+    src/pretransformanalyzer.cpp
     src/pretransformoptimizer.cpp
 )
 
