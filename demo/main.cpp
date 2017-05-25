@@ -133,55 +133,44 @@ void optRandomShuffle(Mesh& mesh)
 void optTransform(Mesh& mesh)
 {
 	std::vector<unsigned int> result(mesh.indices.size());
-
 	optimizePostTransform(&result[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize);
-
 	mesh.indices.swap(result);
-}
-
-void optTransformOverdraw(Mesh& mesh)
-{
-	std::vector<unsigned int> result(mesh.indices.size());
-
-	std::vector<unsigned int> clusters;
-	optimizePostTransform(&result[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, &clusters);
-
-	// allow up to 5% worse ACMR to get more reordering opportunities for overdraw
-	const float kThreshold = 1.05f;
-
-	optimizeOverdraw(&mesh.indices[0], &result[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), clusters, kCacheSize, kThreshold);
 }
 
 void optOverdraw(Mesh& mesh)
 {
-	std::vector<unsigned int> result(mesh.indices.size());
-
 	// use single input cluster encompassing the entire mesh and worst-case ACMR so that overdraw optimizer can sort *all* triangles
+	// warning: this significantly deteriorates the vertex transform cache efficiency so it is not advised; look at optComplete for the recommended method
 	std::vector<unsigned int> clusters(1);
 	const float kThreshold = 3.f;
 
+	std::vector<unsigned int> result(mesh.indices.size());
 	optimizeOverdraw(&result[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), clusters, kCacheSize, kThreshold);
-
 	mesh.indices.swap(result);
 }
 
-void optFetchTransformOverdraw(Mesh& mesh)
+void optFetch(Mesh& mesh)
 {
-	std::vector<unsigned int> result(mesh.indices.size());
+	std::vector<Vertex> result(mesh.vertices.size());
+	optimizePreTransform(&result[0], &mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), sizeof(Vertex));
+	mesh.vertices.swap(result);
+}
 
+void optComplete(Mesh& mesh)
+{
+	// post-transform optimization should go first as it provides data for overdraw
+	std::vector<unsigned int> newindices(mesh.indices.size());
 	std::vector<unsigned int> clusters;
-	optimizePostTransform(&result[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, &clusters);
+	optimizePostTransform(&newindices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, &clusters);
 
-	// allow up to 5% worse ACMR to get more reordering opportunities for overdraw
-	const float kThreshold = 1.05f;
+	// reorder indices for overdraw, balancing overdraw and vertex transform efficiency
+	const float kThreshold = 1.05f; // allow up to 5% worse ACMR to get more reordering opportunities for overdraw
+	optimizeOverdraw(&mesh.indices[0], &newindices[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), clusters, kCacheSize, kThreshold);
 
-	optimizeOverdraw(&mesh.indices[0], &result[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), clusters, kCacheSize, kThreshold);
-
-	std::vector<Vertex> newvert(mesh.vertices.size());
-
-	optimizePreTransform(&newvert[0], &mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), sizeof(Vertex));
-
-	mesh.vertices.swap(newvert);
+	// pre-transform optimization should go last as it depends on the final index order
+	std::vector<Vertex> newvertices(mesh.vertices.size());
+	optimizePreTransform(&newvertices[0], &mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), sizeof(Vertex));
+	mesh.vertices.swap(newvertices);
 }
 
 void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
@@ -196,7 +185,7 @@ void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
 	PreTransformCacheStatistics vfs = analyzePreTransform(&copy.indices[0], copy.indices.size(), copy.vertices.size(), sizeof(Vertex));
 	OverdrawStatistics os = analyzeOverdraw(&copy.indices[0], copy.indices.size(), &copy.vertices[0].px, sizeof(Vertex), copy.vertices.size());
 
-	printf("%-25s: ACMR %f ATVR %f Overfetch %f Overdraw %f in %f msec\n", name, vts.acmr, vts.atvr, vfs.overfetch, os.overdraw, double(end - start) / CLOCKS_PER_SEC * 1000);
+	printf("%-15s: ACMR %f ATVR %f Overfetch %f Overdraw %f in %f msec\n", name, vts.acmr, vts.atvr, vfs.overfetch, os.overdraw, double(end - start) / CLOCKS_PER_SEC * 1000);
 }
 
 int main(int argc, char** argv)
@@ -227,7 +216,7 @@ int main(int argc, char** argv)
 	optimize(mesh, "Original", optNone);
 	optimize(mesh, "Random Shuffle", optRandomShuffle);
 	optimize(mesh, "Transform", optTransform);
-	optimize(mesh, "Transform+Overdraw", optTransformOverdraw);
-	optimize(mesh, "Fetch+Transform+Overdraw", optFetchTransformOverdraw);
-	optimize(mesh, "Overdraw Only", optOverdraw);
+	optimize(mesh, "Overdraw", optOverdraw);
+	optimize(mesh, "Fetch", optFetch);
+	optimize(mesh, "Cache+Overdraw", optComplete);
 }
