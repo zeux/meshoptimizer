@@ -1,7 +1,7 @@
 #include "meshoptimizer.hpp"
 
-#include <vector>
 #include <cassert>
+#include <vector>
 
 namespace
 {
@@ -11,7 +11,7 @@ namespace
 		PreTransformCacheStatistics result = {};
 
 		const size_t kCacheLine = 64;
-		const size_t kCacheSize = 128*1024;
+		const size_t kCacheSize = 128 * 1024;
 
 		// simple direct mapped cache; on typical mesh data this is close to 4-way cache, and this model is a gross approximation anyway
 		size_t cache[kCacheSize / kCacheLine] = {};
