@@ -1,9 +1,12 @@
+#define _CRT_SECURE_NO_WARNINGS
+
 #include "objparser.hpp"
 
 #include <cassert>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 static int fixupIndex(int index, size_t size)
 {
@@ -223,20 +226,47 @@ bool objParseFile(ObjFile& result, const char* path)
 	if (!file)
 		return false;
 
-	bool success = true;
+	char buffer[65536];
+	size_t size = 0;
 
-	char line[1024];
-	while (fgets(line, sizeof(line), file))
+	while (!feof(file))
 	{
-		if (!objParseLine(result, line))
+		size += fread(buffer + size, 1, sizeof(buffer) - size, file);
+
+		size_t line = 0;
+
+		while (line < size)
 		{
-			success = false;
-			break;
+			// find the end of current line
+			void* eol = memchr(buffer + line, '\n', size - line);
+			if (!eol)
+				break;
+
+			// zero-terminate for objParseLine
+			size_t next = static_cast<char*>(eol) - buffer;
+
+			buffer[next] = 0;
+
+			if (!objParseLine(result, buffer + line))
+			{
+				fclose(file);
+				return false;
+			}
+
+			line = next + 1;
 		}
+
+		// move prefix of the last line in the buffer to the beginning of the buffer for next iteration
+		assert(line <= size);
+
+		memmove(buffer, buffer + line, size - line);
+		size -= line;
 	}
 
+	// note that we don't process the last (partial) line here if it doesn't end with a newline
+
 	fclose(file);
-	return success;
+	return true;
 }
 
 void objTriangulate(ObjFile& result)
