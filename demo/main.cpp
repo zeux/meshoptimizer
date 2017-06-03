@@ -194,7 +194,9 @@ int main(int argc, char** argv)
 
 	if (argc > 1)
 	{
+		clock_t start = clock();
 		mesh = readOBJ(argv[1]);
+		clock_t end = clock();
 
 		if (mesh.vertices.empty())
 		{
@@ -202,7 +204,7 @@ int main(int argc, char** argv)
 			return 0;
 		}
 
-		printf("Using %s (%d vertices, %d triangles)\n", argv[1], int(mesh.vertices.size()), int(mesh.indices.size() / 3));
+		printf("Using %s (%d vertices, %d triangles); read in %f msec\n", argv[1], int(mesh.vertices.size()), int(mesh.indices.size() / 3), double(end - start) / CLOCKS_PER_SEC * 1000);
 	}
 	else
 	{
