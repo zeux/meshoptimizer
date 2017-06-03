@@ -4,7 +4,7 @@
 
 struct ObjFile
 {
-	std::vector<float> v; // positions; stride 4 (xyzw)
+	std::vector<float> v; // positions; stride 3 (xyz)
 	std::vector<float> vt; // texture coordinates; stride 3 (uvw)
 	std::vector<float> vn; // vertex normals; stride 3 (xyz)
 

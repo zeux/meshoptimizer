@@ -1,12 +1,112 @@
 #include "objparser.hpp"
 
 #include <cassert>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 
 static int fixupIndex(int index, size_t size)
 {
-	return (index >= 0) ? index - 1 : size + index;
+	return (index >= 0) ? index - 1 : int(size) + index;
+}
+
+static int parseInt(const char* s, const char** end)
+{
+	// skip whitespace
+	while (*s == ' ' || *s == '\t')
+		s++;
+
+	// read sign bit
+	int sign = (*s == '-');
+	s += (*s == '-' || *s == '+');
+
+	unsigned int result = 0;
+
+	for (;;)
+	{
+		if (unsigned(*s - '0') < 10)
+			result = result * 10 + (*s - '0');
+		else
+			break;
+
+		s++;
+	}
+
+	// return end-of-string
+	*end = s;
+
+	return sign ? -int(result) : int(result);
+}
+
+static float parseFloat(const char* s, const char** end)
+{
+	static const double digits[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+	static const double powers[] = { 1e0, 1e+1, 1e+2, 1e+3, 1e+4, 1e+5, 1e+6, 1e+7, 1e+8, 1e+9, 1e+10, 1e+11, 1e+12, 1e+13, 1e+14, 1e+15, 1e+16, 1e+17, 1e+18, 1e+19, 1e+20, 1e+21, 1e+22 };
+
+	// skip whitespace
+	while (*s == ' ' || *s == '\t')
+		s++;
+
+	// read sign
+	double sign = (*s == '-') ? -1 : 1;
+	s += (*s == '-' || *s == '+');
+
+	// read integer part
+	double result = 0; 
+	int power = 0;
+
+	while (unsigned(*s - '0') < 10)
+	{
+		result = result * 10 + digits[*s - '0'];
+		s++;
+	}
+
+	// read fractional part
+	if (*s == '.')
+	{
+		s++;
+
+		while (unsigned(*s - '0') < 10)
+		{
+			result = result * 10 + digits[*s - '0'];
+			s++;
+			power--;
+		}
+	}
+
+	// read exponent part
+	if ((*s | ' ') == 'e')
+	{
+		s++;
+
+		// read exponent sign
+		int expsign = (*s == '-') ? -1 : 1;
+		s += (*s == '-' || *s == '+');
+
+		// read exponent
+		int exppower = 0;
+
+		while (unsigned(*s - '0') < 10)
+		{
+			exppower = exppower * 10 + (*s - '0');
+			s++;
+		}
+
+		// done!
+		power += expsign * exppower;
+	}
+
+	// return end-of-string
+	*end = s;
+
+	// note: this is precise if result < 9e15
+	// for longer inputs we lose a bit of precision here
+	if (unsigned(-power) < sizeof(powers) / sizeof(powers[0]))
+		return float(sign * result / powers[-power]);
+	else if (unsigned(power) < sizeof(powers) / sizeof(powers[0]))
+		return float(sign * result * powers[power]);
+	else
+		return float(sign * result * pow(10.0, power));
 }
 
 static const char* parseFace(const char* s, int& vi, int& vti, int& vni)
@@ -17,20 +117,20 @@ static const char* parseFace(const char* s, int& vi, int& vti, int& vni)
 	if (unsigned(*s - '0') > 9 && *s != '-')
 		return s;
 
-	vi = strtol(s, (char**)&s, 10);
+	vi = parseInt(s, &s);
 
 	if (*s != '/')
 		return s;
 	s++;
 
 	if (*s != '/')
-		vti = strtol(s, (char**)&s, 10);
+		vti = parseInt(s, &s);
 
 	if (*s != '/')
 		return s;
 	s++;
 
-	vni = strtol(s, (char**)&s, 10);
+	vni = parseInt(s, &s);
 
 	return s;
 }
@@ -39,28 +139,25 @@ bool objParseLine(ObjFile& result, const char* line)
 {
 	if (line[0] == 'v' && line[1] == ' ')
 	{
-		float x, y, z;
-		float w = 1;
+		const char* s = line + 2;
 
-		int r = sscanf(line, "v %f %f %f %f", &x, &y, &z, &w);
-		if (r != 3 && r != 4)
-			return false;
+		float x = parseFloat(s, &s);
+		float y = parseFloat(s, &s);
+		float z = parseFloat(s, &s);
 
 		result.v.push_back(x);
 		result.v.push_back(y);
 		result.v.push_back(z);
-		result.v.push_back(w);
 
 		return true;
 	}
 	else if (line[0] == 'v' && line[1] == 't' && line[2] == ' ')
 	{
-		float u, v;
-		float w = 1;
+		const char* s = line + 3;
 
-		int r = sscanf(line, "vt %f %f %f", &u, &v, &w);
-		if (r != 2 && r != 3)
-			return false;
+		float u = parseFloat(s, &s);
+		float v = parseFloat(s, &s);
+		float w = parseFloat(s, &s);
 
 		result.vt.push_back(u);
 		result.vt.push_back(v);
@@ -70,11 +167,11 @@ bool objParseLine(ObjFile& result, const char* line)
 	}
 	else if (line[0] == 'v' && line[1] == 'n' && line[2] == ' ')
 	{
-		float x, y, z;
+		const char* s = line + 3;
 
-		int r = sscanf(line, "vn %f %f %f", &x, &y, &z);
-		if (r != 3)
-			return false;
+		float x = parseFloat(s, &s);
+		float y = parseFloat(s, &s);
+		float z = parseFloat(s, &s);
 
 		result.vn.push_back(x);
 		result.vn.push_back(y);
@@ -87,7 +184,7 @@ bool objParseLine(ObjFile& result, const char* line)
 		const char* s = line + 2;
 		int fv = 0;
 
-		size_t v = result.v.size() / 4;
+		size_t v = result.v.size() / 3;
 		size_t vt = result.vt.size() / 3;
 		size_t vn = result.vn.size() / 3;
 

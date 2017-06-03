@@ -76,9 +76,9 @@ Mesh parseObj(const char* path)
 
 		Vertex v =
 		    {
-		        file.v[vi * 4 + 0],
-		        file.v[vi * 4 + 1],
-		        file.v[vi * 4 + 2],
+		        file.v[vi * 3 + 0],
+		        file.v[vi * 3 + 1],
+		        file.v[vi * 3 + 2],
 
 		        vni >= 0 ? file.vn[vni * 3 + 0] : 0,
 		        vni >= 0 ? file.vn[vni * 3 + 1] : 0,
