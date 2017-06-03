@@ -117,15 +117,13 @@ static const char* parseFace(const char* s, int& vi, int& vti, int& vni)
 	while (*s == ' ' || *s == '\t')
 		s++;
 
-	if (unsigned(*s - '0') > 9 && *s != '-')
-		return s;
-
 	vi = parseInt(s, &s);
 
 	if (*s != '/')
 		return s;
 	s++;
 
+	// handle vi//vni indices
 	if (*s != '/')
 		vti = parseInt(s, &s);
 
@@ -138,7 +136,7 @@ static const char* parseFace(const char* s, int& vi, int& vti, int& vni)
 	return s;
 }
 
-bool objParseLine(ObjFile& result, const char* line)
+void objParseLine(ObjFile& result, const char* line)
 {
 	if (line[0] == 'v' && line[1] == ' ')
 	{
@@ -151,8 +149,6 @@ bool objParseLine(ObjFile& result, const char* line)
 		result.v.push_back(x);
 		result.v.push_back(y);
 		result.v.push_back(z);
-
-		return true;
 	}
 	else if (line[0] == 'v' && line[1] == 't' && line[2] == ' ')
 	{
@@ -165,8 +161,6 @@ bool objParseLine(ObjFile& result, const char* line)
 		result.vt.push_back(u);
 		result.vt.push_back(v);
 		result.vt.push_back(w);
-
-		return true;
 	}
 	else if (line[0] == 'v' && line[1] == 'n' && line[2] == ' ')
 	{
@@ -179,8 +173,6 @@ bool objParseLine(ObjFile& result, const char* line)
 		result.vn.push_back(x);
 		result.vn.push_back(y);
 		result.vn.push_back(z);
-
-		return true;
 	}
 	else if (line[0] == 'f' && line[1] == ' ')
 	{
@@ -206,17 +198,7 @@ bool objParseLine(ObjFile& result, const char* line)
 			fv++;
 		}
 
-		if (fv < 3)
-			return false;
-
 		result.fv.push_back(fv);
-
-		return true;
-	}
-	else
-	{
-		// ignore unknown line
-		return true;
 	}
 }
 
@@ -247,11 +229,8 @@ bool objParseFile(ObjFile& result, const char* path)
 
 			buffer[next] = 0;
 
-			if (!objParseLine(result, buffer + line))
-			{
-				fclose(file);
-				return false;
-			}
+			// process next line
+			objParseLine(result, buffer + line);
 
 			line = next + 1;
 		}
@@ -263,9 +242,59 @@ bool objParseFile(ObjFile& result, const char* path)
 		size -= line;
 	}
 
-	// note that we don't process the last (partial) line here if it doesn't end with a newline
+	if (size)
+	{
+		// process last line
+		assert(size < sizeof(buffer));
+		buffer[size] = 0;
+
+		objParseLine(result, buffer);
+	}
 
 	fclose(file);
+	return true;
+}
+
+bool objValidate(const ObjFile& result)
+{
+	size_t total_indices = 0;
+
+	for (size_t face = 0; face < result.fv.size(); ++face)
+	{
+		int fv = result.fv[face];
+
+		if (fv < 3)
+			return false;
+
+		total_indices += fv;
+	}
+
+	if (total_indices * 3 != result.f.size())
+		return false;
+
+	size_t v = result.v.size() / 3;
+	size_t vt = result.vt.size() / 3;
+	size_t vn = result.vn.size() / 3;
+
+	for (size_t i = 0; i < result.f.size(); i += 3)
+	{
+		int vi = result.f[i + 0];
+		int vti = result.f[i + 1];
+		int vni = result.f[i + 2];
+
+		if (vi < 0)
+			return false;
+
+		if (vi >= 0 && size_t(vi) >= v)
+			return false;
+
+		if (vti >= 0 && size_t(vti) >= vt)
+			return false;
+
+		if (vni >= 0 && size_t(vni) >= vn)
+			return false;
+	}
+
 	return true;
 }
 

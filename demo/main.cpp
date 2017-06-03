@@ -57,7 +57,13 @@ Mesh parseObj(const char* path)
 
 	if (!objParseFile(file, path))
 	{
-		printf("Error loading %s\n", path);
+		printf("Error loading %s: file not found\n", path);
+		return Mesh();
+	}
+
+	if (!objValidate(file))
+	{
+		printf("Error loading %s: invalid file data\n", path);
 		return Mesh();
 	}
 

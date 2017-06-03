@@ -12,7 +12,8 @@ struct ObjFile
 	std::vector<int> f; // face elements; stride defined by fv (*3)
 };
 
-bool objParseLine(ObjFile& result, const char* line);
+void objParseLine(ObjFile& result, const char* line);
 bool objParseFile(ObjFile& result, const char* path);
 
+bool objValidate(const ObjFile& result);
 void objTriangulate(ObjFile& result);
