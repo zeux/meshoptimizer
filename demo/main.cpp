@@ -1,10 +1,10 @@
 #include "../src/meshoptimizer.hpp"
 
-#include "tiny_obj_loader.h"
-
 #include <algorithm>
 #include <cstdio>
 #include <ctime>
+
+#include "objparser.hpp"
 
 const size_t kCacheSize = 24;
 
@@ -51,46 +51,45 @@ Mesh generatePlane(unsigned int N)
 	return result;
 }
 
-Mesh readOBJ(const char* path)
+Mesh parseObj(const char* path)
 {
-	using namespace tinyobj;
+	ObjFile file;
 
-	attrib_t attrib;
-	std::vector<shape_t> shapes;
-	std::vector<material_t> materials;
-	std::string error;
-
-	if (!LoadObj(&attrib, &shapes, &materials, &error, path))
+	if (!objParseFile(file, path))
 	{
-		printf("Error loading %s: %s\n", path, error.c_str());
+		printf("Error loading %s\n", path);
 		return Mesh();
 	}
 
-	size_t total_indices = 0;
+	objTriangulate(file);
 
-	for (auto& s : shapes)
-		total_indices += s.mesh.indices.size();
+	size_t total_indices = file.f.size() / 3;
 
 	std::vector<Vertex> vertices;
 	vertices.reserve(total_indices);
 
-	for (auto& s : shapes)
-		for (auto& i : s.mesh.indices)
-		{
-			Vertex v =
-			    {
-			        attrib.vertices[i.vertex_index * 3 + 0],
-			        attrib.vertices[i.vertex_index * 3 + 1],
-			        attrib.vertices[i.vertex_index * 3 + 2],
-			        i.normal_index >= 0 ? attrib.normals[i.normal_index * 3 + 0] : 0,
-			        i.normal_index >= 0 ? attrib.normals[i.normal_index * 3 + 1] : 0,
-			        i.normal_index >= 0 ? attrib.normals[i.normal_index * 3 + 2] : 0,
-			        i.texcoord_index >= 0 ? attrib.texcoords[i.texcoord_index * 2 + 0] : 0,
-			        i.texcoord_index >= 0 ? attrib.texcoords[i.texcoord_index * 2 + 1] : 0,
-			    };
+	for (size_t i = 0; i < file.f.size(); i += 3)
+	{
+		int vi = file.f[i + 0];
+		int vti = file.f[i + 1];
+		int vni = file.f[i + 2];
 
-			vertices.push_back(v);
-		}
+		Vertex v =
+		    {
+		        file.v[vi * 4 + 0],
+		        file.v[vi * 4 + 1],
+		        file.v[vi * 4 + 2],
+
+		        vni >= 0 ? file.vn[vni * 3 + 0] : 0,
+		        vni >= 0 ? file.vn[vni * 3 + 1] : 0,
+		        vni >= 0 ? file.vn[vni * 3 + 2] : 0,
+
+		        vti >= 0 ? file.vt[vti * 3 + 0] : 0,
+		        vti >= 0 ? file.vt[vti * 3 + 1] : 0,
+		    };
+
+		vertices.push_back(v);
+	}
 
 	Mesh result;
 
@@ -195,7 +194,7 @@ int main(int argc, char** argv)
 	if (argc > 1)
 	{
 		clock_t start = clock();
-		mesh = readOBJ(argv[1]);
+		mesh = parseObj(argv[1]);
 		clock_t end = clock();
 
 		if (mesh.vertices.empty())

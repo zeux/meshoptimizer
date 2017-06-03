@@ -19,6 +19,6 @@ set(SOURCES
 add_library(meshoptimizer STATIC ${SOURCES})
 
 if(BUILD_DEMO)
-	add_executable(demo demo/main.cpp demo/tiny_obj_loader.cpp)
+	add_executable(demo demo/main.cpp demo/objparser.cpp)
 	target_link_libraries(demo meshoptimizer)
 endif()
