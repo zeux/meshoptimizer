@@ -92,8 +92,8 @@ inline int quantizeUnorm(float v, int bits)
 {
 	const float scale = float((1 << bits) - 1);
 
-	v = (v > 0) ? v : 0;
-	v = (v < 1) ? v : 1;
+	v = (v >= 0) ? v : 0;
+	v = (v <= 1) ? v : 1;
 
 	return int(v * scale + 0.5f);
 }
@@ -106,10 +106,12 @@ inline int quantizeSnorm(float v, int bits)
 {
 	const float scale = float((1 << (bits - 1)) - 1);
 
-	v = (v > -1) ? v : -1;
-	v = (v < +1) ? v : +1;
+	float round = (v >= 0 ? 0.5f : -0.5f);
 
-	return int(v * scale + (v >= 0 ? 0.5f : -0.5f));
+	v = (v >= -1) ? v : -1;
+	v = (v <= +1) ? v : +1;
+
+	return int(v * scale + round);
 }
 
 // Quantize a float into half-precision floating point value
