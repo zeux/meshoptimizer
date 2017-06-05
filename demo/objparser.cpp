@@ -43,8 +43,8 @@ static int parseInt(const char* s, const char** end)
 
 static float parseFloat(const char* s, const char** end)
 {
-	static const double digits[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
-	static const double powers[] = { 1e0, 1e+1, 1e+2, 1e+3, 1e+4, 1e+5, 1e+6, 1e+7, 1e+8, 1e+9, 1e+10, 1e+11, 1e+12, 1e+13, 1e+14, 1e+15, 1e+16, 1e+17, 1e+18, 1e+19, 1e+20, 1e+21, 1e+22 };
+	static const double digits[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+	static const double powers[] = {1e0, 1e+1, 1e+2, 1e+3, 1e+4, 1e+5, 1e+6, 1e+7, 1e+8, 1e+9, 1e+10, 1e+11, 1e+12, 1e+13, 1e+14, 1e+15, 1e+16, 1e+17, 1e+18, 1e+19, 1e+20, 1e+21, 1e+22};
 
 	// skip whitespace
 	while (*s == ' ' || *s == '\t')
@@ -55,7 +55,7 @@ static float parseFloat(const char* s, const char** end)
 	s += (*s == '-' || *s == '+');
 
 	// read integer part
-	double result = 0; 
+	double result = 0;
 	int power = 0;
 
 	while (unsigned(*s - '0') < 10)
