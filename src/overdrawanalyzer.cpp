@@ -216,7 +216,7 @@ namespace
 
 		delete buffer;
 
-		result.overdraw = static_cast<float>(result.pixels_shaded) / static_cast<float>(result.pixels_covered);
+		result.overdraw = result.pixels_covered ? float(result.pixels_shaded) / float(result.pixels_covered) : 0.f;
 
 		return result;
 	}
