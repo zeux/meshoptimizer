@@ -31,7 +31,7 @@ Mesh generatePlane(unsigned int N)
 	for (unsigned int y = 0; y <= N; ++y)
 		for (unsigned int x = 0; x <= N; ++x)
 		{
-			Vertex v = {float(x), float(y), 0, 0, 0, 1};
+			Vertex v = {float(x), float(y), 0, 0, 0, 1, float(x) / float(N), float(y) / float(N)};
 
 			result.vertices.push_back(v);
 		}
