@@ -98,7 +98,7 @@ namespace
 
 				if (priority > best_priority)
 				{
-					best_candidate = static_cast<int>(vertex);
+					best_candidate = vertex;
 					best_priority = priority;
 				}
 			}
@@ -168,9 +168,9 @@ namespace
 					unsigned int a = indices[triangle * 3 + 0], b = indices[triangle * 3 + 1], c = indices[triangle * 3 + 2];
 
 					// output indices
-					destination[output_triangle * 3 + 0] = static_cast<T>(a);
-					destination[output_triangle * 3 + 1] = static_cast<T>(b);
-					destination[output_triangle * 3 + 2] = static_cast<T>(c);
+					destination[output_triangle * 3 + 0] = T(a);
+					destination[output_triangle * 3 + 1] = T(b);
+					destination[output_triangle * 3 + 2] = T(c);
 					output_triangle++;
 
 					// update dead-end stack

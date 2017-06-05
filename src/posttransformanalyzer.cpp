@@ -24,8 +24,8 @@ namespace
 			}
 		}
 
-		result.acmr = static_cast<float>(result.vertices_transformed) / (index_count / 3);
-		result.atvr = static_cast<float>(result.vertices_transformed) / vertex_count;
+		result.acmr = float(result.vertices_transformed) / float(index_count / 3);
+		result.atvr = float(result.vertices_transformed) / float(vertex_count);
 
 		return result;
 	}

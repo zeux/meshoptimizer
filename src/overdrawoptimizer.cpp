@@ -132,7 +132,7 @@ namespace
 			}
 
 			// update ACMR & check for threshold
-			acmr = static_cast<float>(cache_misses) / (face + 1);
+			acmr = float(cache_misses) / float(face + 1);
 
 			if (acmr <= threshold)
 			{

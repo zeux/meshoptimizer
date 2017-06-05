@@ -38,7 +38,7 @@ namespace
 			}
 		}
 
-		result.overfetch = static_cast<float>(result.bytes_fetched) / static_cast<float>(vertex_count * vertex_size);
+		result.overfetch = float(result.bytes_fetched) / float(vertex_count * vertex_size);
 
 		return result;
 	}
