@@ -5,6 +5,10 @@ option(BUILD_DEMO "Build demo" OFF)
 
 set(CMAKE_CXX_STANDARD 11)
 
+if(MSVC)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4 /WX")
+endif(MSVC)
+
 set(SOURCES
     src/meshoptimizer.hpp
     src/indexgenerator.cpp

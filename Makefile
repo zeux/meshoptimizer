@@ -8,8 +8,8 @@ OBJECTS=$(SOURCES:%=$(BUILD)/%.o)
 
 EXECUTABLE=$(BUILD)/meshoptimizer
 
-CXXFLAGS=-g -Wall -std=c++11 -O3 -DNDEBUG
-LDFLAGS=-pthread
+CXXFLAGS=-g -Wall -Wextra -Werror -std=c++11 -O3 -DNDEBUG
+LDFLAGS=
 
 all: $(EXECUTABLE)
 
