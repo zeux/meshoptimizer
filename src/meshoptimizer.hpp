@@ -90,7 +90,7 @@ PreTransformCacheStatistics analyzePreTransform(const unsigned int* indices, siz
 // Maximum reconstruction error: 1/2^(bits+1)
 inline int quantizeUnorm(float v, int bits)
 {
-	const float scale = (1 << bits) - 1;
+	const float scale = float((1 << bits) - 1);
 
 	v = (v > 0) ? v : 0;
 	v = (v < 1) ? v : 1;
@@ -104,7 +104,7 @@ inline int quantizeUnorm(float v, int bits)
 // Warning: OpenGL fixed function reconstruction function can't represent 0 exactly; when using OpenGL, use this function and have the shader reconstruct by dividing by 2^(bits-1)-1.
 inline int quantizeSnorm(float v, int bits)
 {
-	const float scale = (1 << (bits - 1)) - 1;
+	const float scale = float((1 << (bits - 1)) - 1);
 
 	v = (v > -1) ? v : -1;
 	v = (v < +1) ? v : +1;
