@@ -193,31 +193,29 @@ void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
 	printf("%-15s: ACMR %f ATVR %f Overfetch %f Overdraw %f in %f msec\n", name, vts.acmr, vts.atvr, vfs.overfetch, os.overdraw, double(end - start) / CLOCKS_PER_SEC * 1000);
 }
 
-int main(int argc, char** argv)
+void process(const char* path)
 {
 	Mesh mesh;
 
-	if (argc > 1)
+	if (path)
 	{
 		clock_t start = clock();
-		mesh = parseObj(argv[1]);
+		mesh = parseObj(path);
 		clock_t end = clock();
 
 		if (mesh.vertices.empty())
 		{
-			printf("Mesh %s appears to be empty\n", argv[1]);
-			return 0;
+			printf("Mesh %s is empty, skipping\n", path);
+			return;
 		}
 
-		printf("Using %s (%d vertices, %d triangles); read in %f msec\n", argv[1], int(mesh.vertices.size()), int(mesh.indices.size() / 3), double(end - start) / CLOCKS_PER_SEC * 1000);
+		printf("# %s: %d vertices, %d triangles; read in %f msec\n", path, int(mesh.vertices.size()), int(mesh.indices.size() / 3), double(end - start) / CLOCKS_PER_SEC * 1000);
 	}
 	else
 	{
-		printf("Usage: %s [.obj file]\n", argv[0]);
-
 		mesh = generatePlane(1000);
 
-		printf("Using a tesselated plane (%d vertices, %d triangles)\n", int(mesh.vertices.size()), int(mesh.indices.size() / 3));
+		printf("# tessellated plane: %d vertices, %d triangles\n", int(mesh.vertices.size()), int(mesh.indices.size() / 3));
 	}
 
 	optimize(mesh, "Original", optNone);
@@ -226,4 +224,20 @@ int main(int argc, char** argv)
 	optimize(mesh, "Overdraw", optOverdraw);
 	optimize(mesh, "Fetch", optFetch);
 	optimize(mesh, "Cache+Overdraw", optComplete);
+}
+
+int main(int argc, char** argv)
+{
+	if (argc == 1)
+	{
+		printf("Usage: %s [.obj file]\n", argv[0]);
+		process(0);
+	}
+	else
+	{
+		for (int i = 1; i < argc; ++i)
+		{
+			process(argv[i]);
+		}
+	}
 }
