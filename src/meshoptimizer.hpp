@@ -82,3 +82,32 @@ struct PreTransformCacheStatistics
 // Results will not match actual GPU performance
 PreTransformCacheStatistics analyzePreTransform(const unsigned short* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
 PreTransformCacheStatistics analyzePreTransform(const unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
+
+// Quantization into commonly supported data formats
+
+// Quantize a float in [0..1] range into an N-bit fixed point unorm value
+// Assumes reconstruction function (q / (2^bits-1)), which is the case for fixed-function normalized fixed point conversion
+// Maximum reconstruction error: 1/2^(bits+1)
+inline int quantizeUnorm(float v, int bits)
+{
+	const float scale = (1 << bits) - 1;
+
+	v = (v > 0) ? v : 0;
+	v = (v < 1) ? v : 1;
+
+	return int(v * scale + 0.5f);
+}
+
+// Quantize a float in [-1..1] range into an N-bit fixed point snorm value
+// Assumes reconstruction function (q / (2^(bits-1)-1)), which is the case for fixed-function normalized fixed point conversion (except OpenGL)
+// Maximum reconstruction error: 1/2^bits
+// Warning: OpenGL fixed function reconstruction function can't represent 0 exactly; when using OpenGL, use this function and have the shader reconstruct by dividing by 2^(bits-1)-1.
+inline int quantizeSnorm(float v, int bits)
+{
+	const float scale = (1 << (bits - 1)) - 1;
+
+	v = (v > -1) ? v : -1;
+	v = (v < +1) ? v : +1;
+
+	return int(v * scale + (v >= 0 ? 0.5f : -0.5f));
+}
