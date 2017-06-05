@@ -198,7 +198,7 @@ void objParseLine(ObjFile& result, const char* line)
 			fv++;
 		}
 
-		result.fv.push_back(fv);
+		result.fv.push_back(char(fv));
 	}
 }
 

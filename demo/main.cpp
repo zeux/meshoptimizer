@@ -112,6 +112,7 @@ Mesh parseObj(const char* path)
 
 void optNone(Mesh& mesh)
 {
+	(void)mesh;
 }
 
 void optRandomShuffle(Mesh& mesh)
