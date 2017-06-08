@@ -12,6 +12,7 @@
 struct Options
 {
 	bool wireframe;
+	enum { Mode_Default, Mode_Texture, Mode_Normals } mode;
 };
 
 struct Vertex
@@ -80,6 +81,11 @@ static Mesh parseObj(const char* path)
 	return result;
 }
 
+Mesh optimize(const Mesh& mesh, int lod)
+{
+	return mesh;
+}
+
 void display(int width, int height, const Mesh& mesh, const Options& options)
 {
 	glViewport(0, 0, width, height);
@@ -130,13 +136,33 @@ void display(int width, int height, const Mesh& mesh, const Options& options)
 	{
 		const Vertex& v = mesh.vertices[mesh.indices[i]];
 
-		float intensity = -(v.pz - centerz) / extent * 0.5f + 0.5f;
+		switch (options.mode)
+		{
+		case Options::Mode_Texture:
+			glColor3f(v.tx - floorf(v.tx), v.ty - floorf(v.ty), 0.5f);
+			break;
 
-		glColor3f(intensity, intensity, intensity);
+		case Options::Mode_Normals:
+			glColor3f(v.nx * 0.5f + 0.5f, v.ny * 0.5f + 0.5f, v.nz * 0.5f + 0.5f);
+			break;
+
+		default:
+			float intensity = -(v.pz - centerz) / extent * 0.5f + 0.5f;
+			glColor3f(intensity, intensity, intensity);
+		}
+
 		glVertex3f((v.px - centerx) / extent * scalex, (v.py - centery) / extent * scaley, (v.pz - centerz) / extent);
 	}
 
 	glEnd();
+}
+
+void stats(HWND hWnd, const char* path, const Mesh& mesh)
+{
+	char title[256];
+	sprintf(title, "%s: %d triangles", path, int(mesh.indices.size() / 3));
+
+	SetWindowTextA(hWnd, title);
 }
 
 int main(int argc, char** argv)
@@ -158,8 +184,13 @@ int main(int argc, char** argv)
 
 	ShowWindow(hWnd, SW_SHOWNORMAL);
 
-	Mesh mesh = parseObj(argv[1]);
+	const char* path = argv[1];
+	Mesh basemesh = parseObj(path);
 	Options options = {};
+
+	stats(hWnd, path, basemesh);
+
+	Mesh mesh = basemesh;
 
 	MSG msg;
 
@@ -173,6 +204,24 @@ int main(int argc, char** argv)
 			if (msg.wParam == 'W')
 			{
 				options.wireframe = !options.wireframe;
+			}
+			else if (msg.wParam == 'T')
+			{
+				options.mode = options.mode == Options::Mode_Texture ? Options::Mode_Default : Options::Mode_Texture;
+			}
+			else if (msg.wParam == 'N')
+			{
+				options.mode = options.mode == Options::Mode_Normals ? Options::Mode_Default : Options::Mode_Normals;
+			}
+			else if (msg.wParam == '0')
+			{
+				mesh = basemesh;
+				stats(hWnd, path, mesh);
+			}
+			else if (msg.wParam >= '1' && msg.wParam <= '9')
+			{
+				mesh = optimize(basemesh, msg.wParam - '0');
+				stats(hWnd, path, mesh);
 			}
 		}
 
