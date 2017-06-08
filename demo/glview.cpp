@@ -157,10 +157,10 @@ void display(int width, int height, const Mesh& mesh, const Options& options)
 	glEnd();
 }
 
-void stats(HWND hWnd, const char* path, const Mesh& mesh)
+void stats(HWND hWnd, const char* path, const Mesh& mesh, int lod)
 {
 	char title[256];
-	sprintf(title, "%s: %d triangles", path, int(mesh.indices.size() / 3));
+	snprintf(title, sizeof(title), "%s: LOD %d - %d triangles", path, lod, int(mesh.indices.size() / 3));
 
 	SetWindowTextA(hWnd, title);
 }
@@ -188,7 +188,7 @@ int main(int argc, char** argv)
 	Mesh basemesh = parseObj(path);
 	Options options = {};
 
-	stats(hWnd, path, basemesh);
+	stats(hWnd, path, basemesh, 0);
 
 	Mesh mesh = basemesh;
 
@@ -216,12 +216,13 @@ int main(int argc, char** argv)
 			else if (msg.wParam == '0')
 			{
 				mesh = basemesh;
-				stats(hWnd, path, mesh);
+				stats(hWnd, path, mesh, 0);
 			}
 			else if (msg.wParam >= '1' && msg.wParam <= '9')
 			{
-				mesh = optimize(basemesh, msg.wParam - '0');
-				stats(hWnd, path, mesh);
+				int lod = int(msg.wParam - '0');
+				mesh = optimize(basemesh, lod);
+				stats(hWnd, path, mesh, lod);
 			}
 		}
 
