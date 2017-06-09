@@ -2,6 +2,7 @@
 #include "../src/meshoptimizer.hpp"
 
 #include <algorithm>
+#include <cassert>
 
 #define NOMINMAX
 #include <windows.h>
@@ -51,6 +52,9 @@ static Mesh parseObj(const char* path)
 		int vti = file.f[i + 1];
 		int vni = file.f[i + 2];
 
+		// TODO
+		vni = vti = -1;
+
 		Vertex v =
 		    {
 		        file.v[vi * 3 + 0],
@@ -81,9 +85,190 @@ static Mesh parseObj(const char* path)
 	return result;
 }
 
+struct Vector3
+{
+	float x, y, z;
+};
+
+struct Quadric
+{
+	// TODO the matrix is symmetric, so we only really need 10 floats here
+	float m[4][4];
+};
+
+void quadricFromPlane(Quadric& Q, float a, float b, float c, float d)
+{
+	Q.m[0][0] = a * a;
+	Q.m[0][1] = a * b;
+	Q.m[0][2] = a * c;
+	Q.m[0][3] = a * d;
+	Q.m[1][0] = b * a;
+	Q.m[1][1] = b * b;
+	Q.m[1][2] = b * c;
+	Q.m[1][3] = b * d;
+	Q.m[2][0] = c * a;
+	Q.m[2][1] = c * b;
+	Q.m[2][2] = c * c;
+	Q.m[2][3] = c * d;
+	Q.m[3][0] = d * a;
+	Q.m[3][1] = d * b;
+	Q.m[3][2] = d * c;
+	Q.m[3][3] = d * d;
+}
+
+void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2)
+{
+	Vector3 p10 = { p1.x - p0.x, p1.y - p0.y, p1.z - p0.z };
+	Vector3 p20 = { p2.x - p0.x, p2.y - p0.y, p2.z - p0.z };
+	Vector3 normal = { p10.y * p20.z - p10.z * p20.y, p10.z * p20.x - p10.x * p20.z, p10.x * p20.y - p10.y * p20.x };
+
+	// TODO: do we need to normalize here? plane eqn is the same but plane distance scale can vary
+	float area = sqrtf(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
+	normal.x /= area;
+	normal.y /= area;
+	normal.z /= area;
+
+	float distance = normal.x * p0.x + normal.y * p0.y + normal.z * p0.z;
+
+	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance);
+}
+
+void quadricAdd(Quadric& Q, const Quadric& R)
+{
+	Q.m[0][0] += R.m[0][0];
+	Q.m[0][1] += R.m[0][1];
+	Q.m[0][2] += R.m[0][2];
+	Q.m[0][3] += R.m[0][3];
+	Q.m[1][0] += R.m[1][0];
+	Q.m[1][1] += R.m[1][1];
+	Q.m[1][2] += R.m[1][2];
+	Q.m[1][3] += R.m[1][3];
+	Q.m[2][0] += R.m[2][0];
+	Q.m[2][1] += R.m[2][1];
+	Q.m[2][2] += R.m[2][2];
+	Q.m[2][3] += R.m[2][3];
+	Q.m[3][0] += R.m[3][0];
+	Q.m[3][1] += R.m[3][1];
+	Q.m[3][2] += R.m[3][2];
+	Q.m[3][3] += R.m[3][3];
+}
+
+float quadricError(Quadric& Q, const Vector3& v)
+{
+	float vTQv =
+		(Q.m[0][0] * v.x + Q.m[0][1] * v.y + Q.m[0][2] * v.z + Q.m[0][3]) * v.x +
+		(Q.m[1][0] * v.x + Q.m[1][1] * v.y + Q.m[1][2] * v.z + Q.m[1][3]) * v.y +
+		(Q.m[2][0] * v.x + Q.m[2][1] * v.y + Q.m[2][2] * v.z + Q.m[2][3]) * v.z +
+		(Q.m[3][0] * v.x + Q.m[3][1] * v.y + Q.m[3][2] * v.z + Q.m[3][3]);
+
+	return fabsf(vTQv);
+}
+
 Mesh optimize(const Mesh& mesh, int lod)
 {
-	return mesh;
+	std::vector<Vector3> vertex_positions(mesh.vertices.size());
+
+	for (size_t i = 0; i < mesh.vertices.size(); ++i)
+	{
+		const Vertex& v = mesh.vertices[i];
+
+		vertex_positions[i].x = v.px;
+		vertex_positions[i].y = v.py;
+		vertex_positions[i].z = v.pz;
+	}
+
+	std::vector<Quadric> vertex_quadrics(mesh.vertices.size());
+
+	for (size_t i = 0; i < mesh.indices.size(); i += 3)
+	{
+		Quadric Q;
+		quadricFromTriangle(Q, vertex_positions[mesh.indices[i + 0]], vertex_positions[mesh.indices[i + 1]], vertex_positions[mesh.indices[i + 2]]);
+
+		quadricAdd(vertex_quadrics[mesh.indices[i + 0]], Q);
+		quadricAdd(vertex_quadrics[mesh.indices[i + 1]], Q);
+		quadricAdd(vertex_quadrics[mesh.indices[i + 2]], Q);
+	}
+
+	struct Collapse
+	{
+		size_t v0;
+		size_t v1;
+		float error;
+	};
+
+	std::vector<Collapse> edge_collapses(mesh.indices.size());
+
+	for (size_t i = 0; i < mesh.indices.size(); i += 3)
+	{
+		float cost0 = quadricError(vertex_quadrics[mesh.indices[i + 0]], vertex_positions[mesh.indices[i + 1]]);
+		float cost1 = quadricError(vertex_quadrics[mesh.indices[i + 1]], vertex_positions[mesh.indices[i + 2]]);
+		float cost2 = quadricError(vertex_quadrics[mesh.indices[i + 2]], vertex_positions[mesh.indices[i + 0]]);
+
+		// TODO: do we need uni-directional or bi-directional cost?
+		cost0 = std::max(cost0, quadricError(vertex_quadrics[mesh.indices[i + 1]], vertex_positions[mesh.indices[i + 0]]));
+		cost1 = std::max(cost1, quadricError(vertex_quadrics[mesh.indices[i + 2]], vertex_positions[mesh.indices[i + 1]]));
+		cost2 = std::max(cost2, quadricError(vertex_quadrics[mesh.indices[i + 0]], vertex_positions[mesh.indices[i + 2]]));
+
+		edge_collapses[i + 0] = { mesh.indices[i + 0], mesh.indices[i + 1], cost0 };
+		edge_collapses[i + 1] = { mesh.indices[i + 1], mesh.indices[i + 2], cost1 };
+		edge_collapses[i + 2] = { mesh.indices[i + 2], mesh.indices[i + 0], cost2 };
+	}
+
+	std::sort(edge_collapses.begin(), edge_collapses.end(), [](const Collapse& l, const Collapse& r) { return l.error < r.error; });
+
+	std::vector<unsigned int> vertex_remap(mesh.vertices.size());
+
+	for (size_t i = 0; i < mesh.vertices.size(); ++i)
+	{
+		vertex_remap[i] = unsigned(i);
+	}
+
+	float threshold = powf(0.9f, float(lod));
+	size_t edge_collapse_target_count = size_t(edge_collapses.size() * (1 - threshold));
+
+	size_t collapses = 0;
+	float worst_error = 0;
+
+	for (size_t i = 0; i < edge_collapse_target_count; ++i)
+	{
+		const Collapse& c = edge_collapses[i];
+
+		if (vertex_remap[c.v0] != c.v0)
+			continue;
+
+		if (vertex_remap[c.v1] != c.v1)
+			continue;
+
+		vertex_remap[c.v0] = vertex_remap[c.v1];
+
+		collapses++;
+		worst_error = c.error;
+	}
+
+	printf("collapses: %d, worst error: %f\n", int(collapses), worst_error);
+
+	std::vector<unsigned int> indices;
+	indices.reserve(mesh.indices.size());
+
+	for (size_t i = 0; i < mesh.indices.size(); i += 3)
+	{
+		unsigned int v0 = vertex_remap[mesh.indices[i + 0]];
+		unsigned int v1 = vertex_remap[mesh.indices[i + 1]];
+		unsigned int v2 = vertex_remap[mesh.indices[i + 2]];
+
+		if (v0 != v1 && v0 != v2 && v1 != v2)
+		{
+			indices.push_back(v0);
+			indices.push_back(v1);
+			indices.push_back(v2);
+		}
+	}
+
+	Mesh result = mesh;
+
+	result.indices.swap(indices);
+
+	return result;
 }
 
 void display(int width, int height, const Mesh& mesh, const Options& options)
