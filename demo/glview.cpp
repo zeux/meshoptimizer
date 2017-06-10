@@ -205,9 +205,9 @@ Mesh optimize(const Mesh& mesh, int lod)
 		float cost2 = quadricError(vertex_quadrics[mesh.indices[i + 2]], vertex_positions[mesh.indices[i + 0]]);
 
 		// TODO: do we need uni-directional or bi-directional cost?
-		cost0 = std::max(cost0, quadricError(vertex_quadrics[mesh.indices[i + 1]], vertex_positions[mesh.indices[i + 0]]));
-		cost1 = std::max(cost1, quadricError(vertex_quadrics[mesh.indices[i + 2]], vertex_positions[mesh.indices[i + 1]]));
-		cost2 = std::max(cost2, quadricError(vertex_quadrics[mesh.indices[i + 0]], vertex_positions[mesh.indices[i + 2]]));
+		cost0 += quadricError(vertex_quadrics[mesh.indices[i + 1]], vertex_positions[mesh.indices[i + 0]]);
+		cost1 += quadricError(vertex_quadrics[mesh.indices[i + 2]], vertex_positions[mesh.indices[i + 1]]);
+		cost2 += quadricError(vertex_quadrics[mesh.indices[i + 0]], vertex_positions[mesh.indices[i + 2]]);
 
 		edge_collapses[i + 0] = { mesh.indices[i + 0], mesh.indices[i + 1], cost0 };
 		edge_collapses[i + 1] = { mesh.indices[i + 1], mesh.indices[i + 2], cost1 };
