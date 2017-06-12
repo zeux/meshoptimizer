@@ -126,9 +126,12 @@ void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1, const
 	// TODO: do we need to normalize here? plane eqn is the same but plane distance scale can vary
 	float area = sqrtf(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
 
-	normal.x /= area;
-	normal.y /= area;
-	normal.z /= area;
+	if (area > 0)
+	{
+		normal.x /= area;
+		normal.y /= area;
+		normal.z /= area;
+	}
 
 	float distance = normal.x * p0.x + normal.y * p0.y + normal.z * p0.z;
 
@@ -208,18 +211,20 @@ Mesh optimize(const Mesh& mesh, int lod)
 
 		for (size_t i = 0; i < indices.size(); i += 3)
 		{
-			float cost0 = quadricError(vertex_quadrics[indices[i + 0]], vertex_positions[indices[i + 1]]);
-			float cost1 = quadricError(vertex_quadrics[indices[i + 1]], vertex_positions[indices[i + 2]]);
-			float cost2 = quadricError(vertex_quadrics[indices[i + 2]], vertex_positions[indices[i + 0]]);
+			static const int next[3] = { 1, 2, 0 };
 
-			// TODO: do we need uni-directional or bi-directional cost?
-			cost0 += quadricError(vertex_quadrics[indices[i + 1]], vertex_positions[indices[i + 0]]);
-			cost1 += quadricError(vertex_quadrics[indices[i + 2]], vertex_positions[indices[i + 1]]);
-			cost2 += quadricError(vertex_quadrics[indices[i + 0]], vertex_positions[indices[i + 2]]);
+			for (int e = 0; e < 3; ++e)
+			{
+				unsigned int i0 = indices[i + e];
+				unsigned int i1 = indices[i + next[e]];
 
-			edge_collapses[i + 0] = { indices[i + 0], indices[i + 1], cost0 };
-			edge_collapses[i + 1] = { indices[i + 1], indices[i + 2], cost1 };
-			edge_collapses[i + 2] = { indices[i + 2], indices[i + 0], cost2 };
+				float cost = quadricError(vertex_quadrics[i0], vertex_positions[i1]);
+
+				// TODO: do we need uni-directional or bi-directional cost?
+				cost += quadricError(vertex_quadrics[i1], vertex_positions[i0]);
+
+				edge_collapses[i + e] = { i0, i1, cost };
+			}
 		}
 
 		std::sort(edge_collapses.begin(), edge_collapses.end(), [](const Collapse& l, const Collapse& r) { return l.error < r.error; });
