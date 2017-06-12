@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <ctime>
 
 #define NOMINMAX
 #include <windows.h>
@@ -124,6 +125,7 @@ void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1, const
 
 	// TODO: do we need to normalize here? plane eqn is the same but plane distance scale can vary
 	float area = sqrtf(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
+
 	normal.x /= area;
 	normal.y /= area;
 	normal.z /= area;
@@ -166,6 +168,8 @@ float quadricError(Quadric& Q, const Vector3& v)
 
 Mesh optimize(const Mesh& mesh, int lod)
 {
+	float threshold = powf(0.9f, float(lod));
+
 	std::vector<Vector3> vertex_positions(mesh.vertices.size());
 
 	for (size_t i = 0; i < mesh.vertices.size(); ++i)
@@ -189,84 +193,100 @@ Mesh optimize(const Mesh& mesh, int lod)
 		quadricAdd(vertex_quadrics[mesh.indices[i + 2]], Q);
 	}
 
-	struct Collapse
+	std::vector<unsigned int> indices = mesh.indices;
+
+	while (float(indices.size()) / float(mesh.indices.size()) > threshold)
 	{
-		size_t v0;
-		size_t v1;
-		float error;
-	};
-
-	std::vector<Collapse> edge_collapses(mesh.indices.size());
-
-	for (size_t i = 0; i < mesh.indices.size(); i += 3)
-	{
-		float cost0 = quadricError(vertex_quadrics[mesh.indices[i + 0]], vertex_positions[mesh.indices[i + 1]]);
-		float cost1 = quadricError(vertex_quadrics[mesh.indices[i + 1]], vertex_positions[mesh.indices[i + 2]]);
-		float cost2 = quadricError(vertex_quadrics[mesh.indices[i + 2]], vertex_positions[mesh.indices[i + 0]]);
-
-		// TODO: do we need uni-directional or bi-directional cost?
-		cost0 += quadricError(vertex_quadrics[mesh.indices[i + 1]], vertex_positions[mesh.indices[i + 0]]);
-		cost1 += quadricError(vertex_quadrics[mesh.indices[i + 2]], vertex_positions[mesh.indices[i + 1]]);
-		cost2 += quadricError(vertex_quadrics[mesh.indices[i + 0]], vertex_positions[mesh.indices[i + 2]]);
-
-		edge_collapses[i + 0] = { mesh.indices[i + 0], mesh.indices[i + 1], cost0 };
-		edge_collapses[i + 1] = { mesh.indices[i + 1], mesh.indices[i + 2], cost1 };
-		edge_collapses[i + 2] = { mesh.indices[i + 2], mesh.indices[i + 0], cost2 };
-	}
-
-	std::sort(edge_collapses.begin(), edge_collapses.end(), [](const Collapse& l, const Collapse& r) { return l.error < r.error; });
-
-	std::vector<unsigned int> vertex_remap(mesh.vertices.size());
-
-	for (size_t i = 0; i < mesh.vertices.size(); ++i)
-	{
-		vertex_remap[i] = unsigned(i);
-	}
-
-	float threshold = powf(0.9f, float(lod));
-	size_t edge_collapse_target_count = size_t(edge_collapses.size() * (1 - threshold));
-
-	size_t collapses = 0;
-	float worst_error = 0;
-
-	for (size_t i = 0; i < edge_collapse_target_count; ++i)
-	{
-		const Collapse& c = edge_collapses[i];
-
-		if (vertex_remap[c.v0] != c.v0)
-			continue;
-
-		if (vertex_remap[c.v1] != c.v1)
-			continue;
-
-		vertex_remap[c.v0] = vertex_remap[c.v1];
-
-		collapses++;
-		worst_error = c.error;
-	}
-
-	printf("collapses: %d, worst error: %f\n", int(collapses), worst_error);
-
-	std::vector<unsigned int> indices;
-	indices.reserve(mesh.indices.size());
-
-	for (size_t i = 0; i < mesh.indices.size(); i += 3)
-	{
-		unsigned int v0 = vertex_remap[mesh.indices[i + 0]];
-		unsigned int v1 = vertex_remap[mesh.indices[i + 1]];
-		unsigned int v2 = vertex_remap[mesh.indices[i + 2]];
-
-		if (v0 != v1 && v0 != v2 && v1 != v2)
+		struct Collapse
 		{
-			indices.push_back(v0);
-			indices.push_back(v1);
-			indices.push_back(v2);
+			size_t v0;
+			size_t v1;
+			float error;
+		};
+
+		std::vector<Collapse> edge_collapses(indices.size());
+
+		for (size_t i = 0; i < indices.size(); i += 3)
+		{
+			float cost0 = quadricError(vertex_quadrics[indices[i + 0]], vertex_positions[indices[i + 1]]);
+			float cost1 = quadricError(vertex_quadrics[indices[i + 1]], vertex_positions[indices[i + 2]]);
+			float cost2 = quadricError(vertex_quadrics[indices[i + 2]], vertex_positions[indices[i + 0]]);
+
+			// TODO: do we need uni-directional or bi-directional cost?
+			cost0 += quadricError(vertex_quadrics[indices[i + 1]], vertex_positions[indices[i + 0]]);
+			cost1 += quadricError(vertex_quadrics[indices[i + 2]], vertex_positions[indices[i + 1]]);
+			cost2 += quadricError(vertex_quadrics[indices[i + 0]], vertex_positions[indices[i + 2]]);
+
+			edge_collapses[i + 0] = { indices[i + 0], indices[i + 1], cost0 };
+			edge_collapses[i + 1] = { indices[i + 1], indices[i + 2], cost1 };
+			edge_collapses[i + 2] = { indices[i + 2], indices[i + 0], cost2 };
 		}
+
+		std::sort(edge_collapses.begin(), edge_collapses.end(), [](const Collapse& l, const Collapse& r) { return l.error < r.error; });
+
+		std::vector<unsigned int> vertex_remap(mesh.vertices.size());
+
+		for (size_t i = 0; i < mesh.vertices.size(); ++i)
+		{
+			vertex_remap[i] = unsigned(i);
+		}
+
+		// TODO: not clear whether we should go by error or by count
+		size_t edge_collapse_target_count = size_t(edge_collapses.size() * 0.1);
+
+		size_t collapses = 0;
+		float worst_error = 0;
+
+		for (size_t i = 0; i < edge_collapse_target_count; ++i)
+		{
+			const Collapse& c = edge_collapses[i];
+
+			if (vertex_remap[c.v0] != c.v0)
+				continue;
+
+			if (vertex_remap[c.v1] != c.v1)
+				continue;
+
+			quadricAdd(vertex_quadrics[vertex_remap[c.v1]], vertex_quadrics[vertex_remap[c.v0]]);
+
+			vertex_remap[c.v0] = vertex_remap[c.v1];
+
+			collapses++;
+			worst_error = c.error;
+		}
+
+		printf("collapses: %d, worst error: %e\n", int(collapses), worst_error);
+
+		size_t write = 0;
+
+		for (size_t i = 0; i < indices.size(); i += 3)
+		{
+			unsigned int v0 = vertex_remap[indices[i + 0]];
+			unsigned int v1 = vertex_remap[indices[i + 1]];
+			unsigned int v2 = vertex_remap[indices[i + 2]];
+
+			if (v0 != v1 && v0 != v2 && v1 != v2)
+			{
+				indices[write + 0] = v0;
+				indices[write + 1] = v1;
+				indices[write + 2] = v2;
+				write += 3;
+			}
+		}
+
+		indices.resize(write);
 	}
 
 	Mesh result = mesh;
 
-	result.indices.swap(indices);
+	for (size_t i = 0; i < mesh.vertices.size(); ++i)
+	{
+		result.vertices[i].px = vertex_positions[i].x;
+		result.vertices[i].py = vertex_positions[i].y;
+		result.vertices[i].pz = vertex_positions[i].z;
+	}
+
+	result.indices = indices;
 
 	return result;
 }
@@ -342,10 +362,10 @@ void display(int width, int height, const Mesh& mesh, const Options& options)
 	glEnd();
 }
 
-void stats(HWND hWnd, const char* path, const Mesh& mesh, int lod)
+void stats(HWND hWnd, const char* path, const Mesh& mesh, int lod, double time)
 {
 	char title[256];
-	snprintf(title, sizeof(title), "%s: LOD %d - %d triangles", path, lod, int(mesh.indices.size() / 3));
+	snprintf(title, sizeof(title), "%s: LOD %d - %d triangles (%.1f msec)", path, lod, int(mesh.indices.size() / 3), time * 1000);
 
 	SetWindowTextA(hWnd, title);
 }
@@ -373,7 +393,7 @@ int main(int argc, char** argv)
 	Mesh basemesh = parseObj(path);
 	Options options = {};
 
-	stats(hWnd, path, basemesh, 0);
+	stats(hWnd, path, basemesh, 0, 0);
 
 	Mesh mesh = basemesh;
 
@@ -401,13 +421,17 @@ int main(int argc, char** argv)
 			else if (msg.wParam == '0')
 			{
 				mesh = basemesh;
-				stats(hWnd, path, mesh, 0);
+				stats(hWnd, path, mesh, 0, 0);
 			}
 			else if (msg.wParam >= '1' && msg.wParam <= '9')
 			{
 				int lod = int(msg.wParam - '0');
+
+				clock_t start = clock();
 				mesh = optimize(basemesh, lod);
-				stats(hWnd, path, mesh, lod);
+				clock_t end = clock();
+
+				stats(hWnd, path, mesh, lod, double(end - start) / CLOCKS_PER_SEC);
 			}
 		}
 
