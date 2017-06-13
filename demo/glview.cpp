@@ -1,3 +1,4 @@
+#ifdef _WIN32
 #include "objparser.hpp"
 #include "../src/meshoptimizer.hpp"
 
@@ -447,3 +448,4 @@ int main(int argc, char** argv)
 		SwapBuffers(hDC);
 	}
 }
+#endif
