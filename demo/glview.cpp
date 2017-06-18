@@ -15,7 +15,7 @@
 struct Options
 {
 	bool wireframe;
-	enum { Mode_Default, Mode_Texture, Mode_Normals } mode;
+	enum { Mode_Default, Mode_Texture, Mode_Normals, Mode_UV } mode;
 };
 
 struct Vertex
@@ -348,6 +348,8 @@ void display(int width, int height, const Mesh& mesh, const Options& options)
 	float centerx = 0;
 	float centery = 0;
 	float centerz = 0;
+	float centeru = 0;
+	float centerv = 0;
 
 	for (size_t i = 0; i < mesh.vertices.size(); ++i)
 	{
@@ -356,13 +358,18 @@ void display(int width, int height, const Mesh& mesh, const Options& options)
 		centerx += v.px;
 		centery += v.py;
 		centerz += v.pz;
+		centeru += v.tx;
+		centerv += v.ty;
 	}
 
 	centerx /= float(mesh.vertices.size());
 	centery /= float(mesh.vertices.size());
 	centerz /= float(mesh.vertices.size());
+	centeru /= float(mesh.vertices.size());
+	centerv /= float(mesh.vertices.size());
 
 	float extent = 0;
+	float extentuv = 0;
 
 	for (size_t i = 0; i < mesh.vertices.size(); ++i)
 	{
@@ -371,9 +378,12 @@ void display(int width, int height, const Mesh& mesh, const Options& options)
 		extent = std::max(extent, fabsf(v.px - centerx));
 		extent = std::max(extent, fabsf(v.py - centery));
 		extent = std::max(extent, fabsf(v.pz - centerz));
+		extentuv = std::max(extentuv, fabsf(v.tx - centeru));
+		extentuv = std::max(extentuv, fabsf(v.ty - centerv));
 	}
 
 	extent *= 1.1f;
+	extentuv *= 1.1f;
 
 	float scalex = width > height ? float(height) / float(width) : 1;
 	float scaley = height > width ? float(width) / float(height) : 1;
@@ -386,20 +396,25 @@ void display(int width, int height, const Mesh& mesh, const Options& options)
 
 		switch (options.mode)
 		{
+		case Options::Mode_UV:
+			glVertex3f((v.tx - centeru) / extentuv * scalex, (v.ty - centerv) / extentuv * scaley, 0);
+			break;
+
 		case Options::Mode_Texture:
 			glColor3f(v.tx - floorf(v.tx), v.ty - floorf(v.ty), 0.5f);
+			glVertex3f((v.px - centerx) / extent * scalex, (v.py - centery) / extent * scaley, (v.pz - centerz) / extent);
 			break;
 
 		case Options::Mode_Normals:
 			glColor3f(v.nx * 0.5f + 0.5f, v.ny * 0.5f + 0.5f, v.nz * 0.5f + 0.5f);
+			glVertex3f((v.px - centerx) / extent * scalex, (v.py - centery) / extent * scaley, (v.pz - centerz) / extent);
 			break;
 
 		default:
 			float intensity = -(v.pz - centerz) / extent * 0.5f + 0.5f;
 			glColor3f(intensity, intensity, intensity);
+			glVertex3f((v.px - centerx) / extent * scalex, (v.py - centery) / extent * scaley, (v.pz - centerz) / extent);
 		}
-
-		glVertex3f((v.px - centerx) / extent * scalex, (v.py - centery) / extent * scaley, (v.pz - centerz) / extent);
 	}
 
 	glEnd();
@@ -460,6 +475,10 @@ int main(int argc, char** argv)
 			else if (msg.wParam == 'N')
 			{
 				options.mode = options.mode == Options::Mode_Normals ? Options::Mode_Default : Options::Mode_Normals;
+			}
+			else if (msg.wParam == 'U')
+			{
+				options.mode = options.mode == Options::Mode_UV ? Options::Mode_Default : Options::Mode_UV;
 			}
 			else if (msg.wParam == '0')
 			{
