@@ -118,27 +118,6 @@ void quadricFromPlane(Quadric& Q, float a, float b, float c, float d)
 	Q.m[3][3] = d * d;
 }
 
-void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2)
-{
-	Vector3 p10 = { p1.x - p0.x, p1.y - p0.y, p1.z - p0.z };
-	Vector3 p20 = { p2.x - p0.x, p2.y - p0.y, p2.z - p0.z };
-	Vector3 normal = { p10.y * p20.z - p10.z * p20.y, p10.z * p20.x - p10.x * p20.z, p10.x * p20.y - p10.y * p20.x };
-
-	// TODO: do we need to normalize here? plane eqn is the same but plane distance scale can vary
-	float area = sqrtf(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
-
-	if (area > 0)
-	{
-		normal.x /= area;
-		normal.y /= area;
-		normal.z /= area;
-	}
-
-	float distance = normal.x * p0.x + normal.y * p0.y + normal.z * p0.z;
-
-	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance);
-}
-
 void quadricAdd(Quadric& Q, const Quadric& R)
 {
 	Q.m[0][0] += R.m[0][0];
@@ -159,6 +138,50 @@ void quadricAdd(Quadric& Q, const Quadric& R)
 	Q.m[3][3] += R.m[3][3];
 }
 
+void quadricMul(Quadric& Q, float s)
+{
+	Q.m[0][0] *= s;
+	Q.m[0][1] *= s;
+	Q.m[0][2] *= s;
+	Q.m[0][3] *= s;
+	Q.m[1][0] *= s;
+	Q.m[1][1] *= s;
+	Q.m[1][2] *= s;
+	Q.m[1][3] *= s;
+	Q.m[2][0] *= s;
+	Q.m[2][1] *= s;
+	Q.m[2][2] *= s;
+	Q.m[2][3] *= s;
+	Q.m[3][0] *= s;
+	Q.m[3][1] *= s;
+	Q.m[3][2] *= s;
+	Q.m[3][3] *= s;
+}
+
+void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2)
+{
+	Vector3 p10 = { p1.x - p0.x, p1.y - p0.y, p1.z - p0.z };
+	Vector3 p20 = { p2.x - p0.x, p2.y - p0.y, p2.z - p0.z };
+	Vector3 normal = { p10.y * p20.z - p10.z * p20.y, p10.z * p20.x - p10.x * p20.z, p10.x * p20.y - p10.y * p20.x };
+
+	float area = sqrtf(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
+
+	if (area > 0)
+	{
+		normal.x /= area;
+		normal.y /= area;
+		normal.z /= area;
+	}
+
+	float distance = normal.x * p0.x + normal.y * p0.y + normal.z * p0.z;
+
+	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance);
+
+	// Three classical weighting methods include weight=1, weight=area and weight=area^2
+	// We use weight=area for now
+	quadricMul(Q, area);
+}
+
 float quadricError(Quadric& Q, const Vector3& v)
 {
 	float vTQv =
@@ -172,7 +195,7 @@ float quadricError(Quadric& Q, const Vector3& v)
 
 Mesh optimize(const Mesh& mesh, int lod)
 {
-	float threshold = powf(0.9f, float(lod));
+	float threshold = powf(0.75f, float(lod));
 
 	std::vector<Vector3> vertex_positions(mesh.vertices.size());
 
@@ -199,7 +222,9 @@ Mesh optimize(const Mesh& mesh, int lod)
 
 	std::vector<unsigned int> indices = mesh.indices;
 
-	while (float(indices.size()) / float(mesh.indices.size()) > threshold)
+	size_t target_index_count = size_t(mesh.indices.size() * threshold);
+
+	while (indices.size() > target_index_count)
 	{
 		struct Collapse
 		{
@@ -208,7 +233,8 @@ Mesh optimize(const Mesh& mesh, int lod)
 			float error;
 		};
 
-		std::vector<Collapse> edge_collapses(indices.size());
+		std::vector<Collapse> edge_collapses;
+		edge_collapses.reserve(indices.size());
 
 		for (size_t i = 0; i < indices.size(); i += 3)
 		{
@@ -224,7 +250,8 @@ Mesh optimize(const Mesh& mesh, int lod)
 				// TODO: do we need uni-directional or bi-directional cost?
 				cost += quadricError(vertex_quadrics[i1], vertex_positions[i0]);
 
-				edge_collapses[i + e] = { i0, i1, cost };
+				Collapse c = { i0, i1, cost };
+				edge_collapses.push_back(c);
 			}
 		}
 
@@ -237,13 +264,16 @@ Mesh optimize(const Mesh& mesh, int lod)
 			vertex_remap[i] = unsigned(i);
 		}
 
-		// TODO: not clear whether we should go by error or by count
-		size_t edge_collapse_target_count = size_t(edge_collapses.size() * 0.1);
+		// each collapse removes 2 triangles
+		size_t edge_collapse_goal = (indices.size() - target_index_count) / 6;
+
+		// TODO: this is incorrect since edge_collapses have duplicate edges since cost is bidirectional
+		float target_error = edge_collapses[edge_collapse_goal].error;
 
 		size_t collapses = 0;
 		float worst_error = 0;
 
-		for (size_t i = 0; i < edge_collapse_target_count; ++i)
+		for (size_t i = 0; i < edge_collapses.size(); ++i)
 		{
 			const Collapse& c = edge_collapses[i];
 
@@ -259,9 +289,16 @@ Mesh optimize(const Mesh& mesh, int lod)
 
 			collapses++;
 			worst_error = c.error;
+
+			if (collapses >= edge_collapse_goal)
+				break;
 		}
 
-		printf("collapses: %d, worst error: %e\n", int(collapses), worst_error);
+		printf("collapses: %d/%d, worst error: %e, target error: %e\n", int(collapses), int(edge_collapses.size()), worst_error, target_error);
+
+		// no edges can be collapsed any more => bail out
+		if (collapses == 0)
+			break;
 
 		size_t write = 0;
 
