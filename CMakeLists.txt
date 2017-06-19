@@ -14,6 +14,7 @@ set(SOURCES
     src/indexgenerator.cpp
     src/overdrawanalyzer.cpp
     src/overdrawoptimizer.cpp
+    src/simplifier.cpp
     src/vcacheanalyzer.cpp
     src/vcacheoptimizer.cpp
     src/vfetchanalyzer.cpp

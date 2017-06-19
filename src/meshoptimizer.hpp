@@ -106,6 +106,13 @@ struct VertexFetchStatistics
 MESHOPTIMIZER_API VertexFetchStatistics analyzeVertexFetch(const unsigned short* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
 MESHOPTIMIZER_API VertexFetchStatistics analyzeVertexFetch(const unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
 
+// Mesh simplifier
+// Reduces the number of triangles in the mesh, attempting to preserve mesh appearance as much as possible
+// Returns the number of indices after simplification, with indices array modified in place
+// 
+// vertices should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
+size_t simplify(unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t target_index_count);
+
 // Quantization into commonly supported data formats
 
 // Quantize a float in [0..1] range into an N-bit fixed point unorm value
