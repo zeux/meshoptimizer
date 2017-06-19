@@ -245,13 +245,11 @@ Mesh optimize(const Mesh& mesh, int lod)
 				unsigned int i0 = indices[i + e];
 				unsigned int i1 = indices[i + next[e]];
 
-				float cost = quadricError(vertex_quadrics[i0], vertex_positions[i1]);
+				Collapse c01 = { i0, i1, quadricError(vertex_quadrics[i0], vertex_positions[i1]) };
+				edge_collapses.push_back(c01);
 
-				// TODO: do we need uni-directional or bi-directional cost?
-				cost += quadricError(vertex_quadrics[i1], vertex_positions[i0]);
-
-				Collapse c = { i0, i1, cost };
-				edge_collapses.push_back(c);
+				Collapse c10 = { i1, i0, quadricError(vertex_quadrics[i1], vertex_positions[i0]) };
+				edge_collapses.push_back(c10);
 			}
 		}
 
@@ -321,13 +319,6 @@ Mesh optimize(const Mesh& mesh, int lod)
 	}
 
 	Mesh result = mesh;
-
-	for (size_t i = 0; i < mesh.vertices.size(); ++i)
-	{
-		result.vertices[i].px = vertex_positions[i].x;
-		result.vertices[i].py = vertex_positions[i].y;
-		result.vertices[i].pz = vertex_positions[i].z;
-	}
 
 	result.indices = indices;
 
