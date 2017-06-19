@@ -179,11 +179,10 @@ namespace
 				vertex_remap[i] = unsigned(i);
 			}
 
+			std::vector<char> vertex_locked(vertex_count);
+
 			// each collapse removes 2 triangles
 			size_t edge_collapse_goal = (index_count - target_index_count) / 6 + 1;
-
-			// TODO: this is incorrect since edge_collapses have duplicate edges since cost is bidirectional
-			float target_error = edge_collapses[edge_collapse_goal].error;
 
 			size_t collapses = 0;
 			float worst_error = 0;
@@ -192,15 +191,18 @@ namespace
 			{
 				const Collapse& c = edge_collapses[i];
 
-				if (vertex_remap[c.v0] != c.v0)
+				if (vertex_locked[c.v0] || vertex_locked[c.v1])
 					continue;
 
-				if (vertex_remap[c.v1] != c.v1)
-					continue;
+				assert(vertex_remap[c.v0] == c.v0);
+				assert(vertex_remap[c.v1] == c.v1);
 
-				quadricAdd(vertex_quadrics[vertex_remap[c.v1]], vertex_quadrics[vertex_remap[c.v0]]);
+				quadricAdd(vertex_quadrics[c.v1], vertex_quadrics[c.v0]);
 
-				vertex_remap[c.v0] = vertex_remap[c.v1];
+				vertex_remap[c.v0] = unsigned(c.v1);
+
+				vertex_locked[c.v0] = 1;
+				vertex_locked[c.v1] = 1;
 
 				collapses++;
 				worst_error = c.error;
@@ -209,7 +211,7 @@ namespace
 					break;
 			}
 
-			printf("collapses: %d/%d, worst error: %e, target error: %e\n", int(collapses), int(edge_collapses.size()), worst_error, target_error);
+			printf("collapses: %d/%d, worst error: %e\n", int(collapses), int(edge_collapses.size()), worst_error);
 
 			// no edges can be collapsed any more => bail out
 			if (collapses == 0)
@@ -222,6 +224,10 @@ namespace
 				unsigned int v0 = vertex_remap[indices[i + 0]];
 				unsigned int v1 = vertex_remap[indices[i + 1]];
 				unsigned int v2 = vertex_remap[indices[i + 2]];
+
+				assert(vertex_remap[v0] == v0);
+				assert(vertex_remap[v1] == v1);
+				assert(vertex_remap[v2] == v2);
 
 				if (v0 != v1 && v0 != v2 && v1 != v2)
 				{
