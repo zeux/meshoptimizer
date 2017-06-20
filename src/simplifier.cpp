@@ -3,12 +3,54 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
-#include <set>
 
 // This work is based on:
 // Michael Garland and Paul S. Heckbert. Surface simplification using quadric error metrics. 1997
 namespace
 {
+	size_t hash(unsigned long long key)
+	{
+		key = (~key) + (key << 18);
+		key = key ^ (key >> 31);
+		key = key * 21;
+		key = key ^ (key >> 11);
+		key = key + (key << 6);
+		key = key ^ (key >> 22);
+		return size_t(key);
+	}
+
+	template <typename T> void hashInit(std::vector<T>& table, size_t count)
+	{
+		size_t buckets = 1;
+		while (buckets < count)
+			buckets *= 2;
+
+		table.clear();
+		table.resize(buckets);
+	}
+
+	template <typename T> T* hashLookup(std::vector<T>& table, const T& key)
+	{
+		assert((table.size() & (table.size() - 1)) == 0);
+
+		size_t hashmod = table.size() - 1;
+		size_t bucket = hash(key) & hashmod;
+
+		for (size_t probe = 0; probe <= hashmod; ++probe)
+		{
+			T& item = table[bucket];
+
+			if (item == T() || item == key)
+				return &item;
+
+			// hash collision, quadratic probing
+			bucket = (bucket + probe + 1) & hashmod;
+		}
+
+		assert(false && "Hash table is full");
+		return 0;
+	}
+
 	struct Vector3
 	{
 		float x, y, z;
@@ -152,6 +194,11 @@ namespace
 		return fabsf(vTQv);
 	}
 
+	unsigned long long edgeId(unsigned int a, unsigned int b)
+	{
+		return (static_cast<unsigned long long>(a) << 32) | b;
+	}
+
 	size_t simplifyEdgeCollapse(unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t target_index_count)
 	{
 		std::vector<Vector3> vertex_positions(vertex_count);
@@ -179,13 +226,22 @@ namespace
 		}
 
 		// edge quadrics for boundary edges
-		std::set<std::pair<unsigned int, unsigned int>> edges;
+		std::vector<unsigned long long> edges;
+		hashInit(edges, index_count);
 
 		for (size_t i = 0; i < index_count; i += 3)
 		{
-			edges.insert(std::make_pair(indices[i + 0], indices[i + 1]));
-			edges.insert(std::make_pair(indices[i + 1], indices[i + 2]));
-			edges.insert(std::make_pair(indices[i + 2], indices[i + 0]));
+			static const int next[3] = { 1, 2, 0 };
+
+			for (int e = 0; e < 3; ++e)
+			{
+				unsigned int i0 = indices[i + e];
+				unsigned int i1 = indices[i + next[e]];
+
+				unsigned long long edge = edgeId(i0, i1);
+
+				*hashLookup(edges, edge) = edge;
+			}
 		}
 
 		for (size_t i = 0; i < index_count; i += 3)
@@ -197,7 +253,9 @@ namespace
 				unsigned int i0 = indices[i + e];
 				unsigned int i1 = indices[i + next[e]];
 
-				if (edges.count(std::make_pair(i1, i0)) == 0)
+				unsigned long long edge = edgeId(i1, i0);
+
+				if (*hashLookup(edges, edge) != edge)
 				{
 					unsigned int i2 = indices[i + next[next[e]]];
 
