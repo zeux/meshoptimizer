@@ -157,9 +157,12 @@ void display(int width, int height, const Mesh& mesh, const Options& options)
 	{
 		const Vertex& v = mesh.vertices[mesh.indices[i]];
 
+		float intensity = -(v.pz - centerz) / extent * 0.5f + 0.5f;
+
 		switch (options.mode)
 		{
 		case Options::Mode_UV:
+			glColor3f(intensity, intensity, intensity);
 			glVertex3f((v.tx - centeru) / extentuv * scalex, (v.ty - centerv) / extentuv * scaley, 0);
 			break;
 
@@ -174,7 +177,6 @@ void display(int width, int height, const Mesh& mesh, const Options& options)
 			break;
 
 		default:
-			float intensity = -(v.pz - centerz) / extent * 0.5f + 0.5f;
 			glColor3f(intensity, intensity, intensity);
 			glVertex3f((v.px - centerx) / extent * scalex, (v.py - centery) / extent * scaley, (v.pz - centerz) / extent);
 		}
