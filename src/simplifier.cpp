@@ -3,7 +3,10 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <set>
 
+// This work is based on:
+// Michael Garland and Paul S. Heckbert. Surface simplification using quadric error metrics. 1997
 namespace
 {
 	struct Vector3
@@ -28,6 +31,20 @@ namespace
 			return error < other.error;
 		}
 	};
+
+	float normalize(Vector3& v)
+	{
+		float length = sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
+
+		if (length > 0)
+		{
+			v.x /= length;
+			v.y /= length;
+			v.z /= length;
+		}
+
+		return length;
+	}
 
 	void quadricFromPlane(Quadric& Q, float a, float b, float c, float d)
 	{
@@ -93,16 +110,9 @@ namespace
 	{
 		Vector3 p10 = { p1.x - p0.x, p1.y - p0.y, p1.z - p0.z };
 		Vector3 p20 = { p2.x - p0.x, p2.y - p0.y, p2.z - p0.z };
+
 		Vector3 normal = { p10.y * p20.z - p10.z * p20.y, p10.z * p20.x - p10.x * p20.z, p10.x * p20.y - p10.y * p20.x };
-
-		float area = sqrtf(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
-
-		if (area > 0)
-		{
-			normal.x /= area;
-			normal.y /= area;
-			normal.z /= area;
-		}
+		float area = normalize(normal);
 
 		float distance = normal.x * p0.x + normal.y * p0.y + normal.z * p0.z;
 
@@ -111,6 +121,24 @@ namespace
 		// Three classical weighting methods include weight=1, weight=area and weight=area^2
 		// We use weight=area for now
 		quadricMul(Q, area);
+	}
+
+	void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2)
+	{
+		Vector3 p10 = { p1.x - p0.x, p1.y - p0.y, p1.z - p0.z };
+		float length = normalize(p10);
+
+		Vector3 p20 = { p2.x - p0.x, p2.y - p0.y, p2.z - p0.z };
+		float p20p = p20.x * p10.x + p20.y * p10.y + p20.z * p10.z;
+
+		Vector3 normal = { p20.x - p10.x * p20p, p20.y - p10.y * p20p, p20.z - p10.z * p20p };
+		normalize(normal);
+
+		float distance = normal.x * p0.x + normal.y * p0.y + normal.z * p0.z;
+
+		quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance);
+
+		quadricMul(Q, length * 1000);
 	}
 
 	float quadricError(Quadric& Q, const Vector3& v)
@@ -139,6 +167,7 @@ namespace
 
 		std::vector<Quadric> vertex_quadrics(vertex_count);
 
+		// face quadrics
 		for (size_t i = 0; i < index_count; i += 3)
 		{
 			Quadric Q;
@@ -147,6 +176,38 @@ namespace
 			quadricAdd(vertex_quadrics[indices[i + 0]], Q);
 			quadricAdd(vertex_quadrics[indices[i + 1]], Q);
 			quadricAdd(vertex_quadrics[indices[i + 2]], Q);
+		}
+
+		// edge quadrics for boundary edges
+		std::set<std::pair<unsigned int, unsigned int>> edges;
+
+		for (size_t i = 0; i < index_count; i += 3)
+		{
+			edges.insert(std::make_pair(indices[i + 0], indices[i + 1]));
+			edges.insert(std::make_pair(indices[i + 1], indices[i + 2]));
+			edges.insert(std::make_pair(indices[i + 2], indices[i + 0]));
+		}
+
+		for (size_t i = 0; i < index_count; i += 3)
+		{
+			static const int next[3] = { 1, 2, 0 };
+
+			for (int e = 0; e < 3; ++e)
+			{
+				unsigned int i0 = indices[i + e];
+				unsigned int i1 = indices[i + next[e]];
+
+				if (edges.count(std::make_pair(i1, i0)) == 0)
+				{
+					unsigned int i2 = indices[i + next[next[e]]];
+
+					Quadric Q;
+					quadricFromTriangleEdge(Q, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2]);
+
+					quadricAdd(vertex_quadrics[i0], Q);
+					quadricAdd(vertex_quadrics[i1], Q);
+				}
+			}
 		}
 
 		while (index_count > target_index_count)
