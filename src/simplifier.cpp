@@ -58,8 +58,10 @@ namespace
 
 	struct Quadric
 	{
-		// TODO the matrix is symmetric, so we only really need 10 floats here
-		float m[4][4];
+		float a00;
+		float a10, a11;
+		float a20, a21, a22;
+		float b0, b1, b2, c;
 	};
 
 	struct Collapse
@@ -88,64 +90,60 @@ namespace
 		return length;
 	}
 
-	void quadricFromPlane(Quadric& Q, float a, float b, float c, float d)
-	{
-		Q.m[0][0] = a * a;
-		Q.m[0][1] = a * b;
-		Q.m[0][2] = a * c;
-		Q.m[0][3] = a * d;
-		Q.m[1][0] = b * a;
-		Q.m[1][1] = b * b;
-		Q.m[1][2] = b * c;
-		Q.m[1][3] = b * d;
-		Q.m[2][0] = c * a;
-		Q.m[2][1] = c * b;
-		Q.m[2][2] = c * c;
-		Q.m[2][3] = c * d;
-		Q.m[3][0] = d * a;
-		Q.m[3][1] = d * b;
-		Q.m[3][2] = d * c;
-		Q.m[3][3] = d * d;
-	}
-
 	void quadricAdd(Quadric& Q, const Quadric& R)
 	{
-		Q.m[0][0] += R.m[0][0];
-		Q.m[0][1] += R.m[0][1];
-		Q.m[0][2] += R.m[0][2];
-		Q.m[0][3] += R.m[0][3];
-		Q.m[1][0] += R.m[1][0];
-		Q.m[1][1] += R.m[1][1];
-		Q.m[1][2] += R.m[1][2];
-		Q.m[1][3] += R.m[1][3];
-		Q.m[2][0] += R.m[2][0];
-		Q.m[2][1] += R.m[2][1];
-		Q.m[2][2] += R.m[2][2];
-		Q.m[2][3] += R.m[2][3];
-		Q.m[3][0] += R.m[3][0];
-		Q.m[3][1] += R.m[3][1];
-		Q.m[3][2] += R.m[3][2];
-		Q.m[3][3] += R.m[3][3];
+		Q.a00 += R.a00;
+		Q.a10 += R.a10;
+		Q.a11 += R.a11;
+		Q.a20 += R.a20;
+		Q.a21 += R.a21;
+		Q.a22 += R.a22;
+		Q.b0 += R.b0;
+		Q.b1 += R.b1;
+		Q.b2 += R.b2;
+		Q.c += R.c;
 	}
 
 	void quadricMul(Quadric& Q, float s)
 	{
-		Q.m[0][0] *= s;
-		Q.m[0][1] *= s;
-		Q.m[0][2] *= s;
-		Q.m[0][3] *= s;
-		Q.m[1][0] *= s;
-		Q.m[1][1] *= s;
-		Q.m[1][2] *= s;
-		Q.m[1][3] *= s;
-		Q.m[2][0] *= s;
-		Q.m[2][1] *= s;
-		Q.m[2][2] *= s;
-		Q.m[2][3] *= s;
-		Q.m[3][0] *= s;
-		Q.m[3][1] *= s;
-		Q.m[3][2] *= s;
-		Q.m[3][3] *= s;
+		Q.a00 *= s;
+		Q.a10 *= s;
+		Q.a11 *= s;
+		Q.a20 *= s;
+		Q.a21 *= s;
+		Q.a22 *= s;
+		Q.b0 *= s;
+		Q.b1 *= s;
+		Q.b2 *= s;
+		Q.c *= s;
+	}
+
+	float quadricError(Quadric& Q, const Vector3& v)
+	{
+		float xx = v.x * v.x;
+		float xy = v.x * v.y;
+		float xz = v.x * v.z;
+		float yy = v.y * v.y;
+		float yz = v.y * v.z;
+		float zz = v.z * v.z;
+
+		float vTQv = Q.a00 * xx + Q.a10 * xy * 2 + Q.a11 * yy + Q.a20 * xz * 2 + Q.a21 * yz * 2 + Q.a22 * zz + Q.b0 * v.x * 2 + Q.b1 * v.y * 2 + Q.b2 * v.z * 2 + Q.c;
+
+		return fabsf(vTQv);
+	}
+
+	void quadricFromPlane(Quadric& Q, float a, float b, float c, float d)
+	{
+		Q.a00 = a * a;
+		Q.a10 = b * a;
+		Q.a11 = b * b;
+		Q.a20 = c * a;
+		Q.a21 = c * b;
+		Q.a22 = c * c;
+		Q.b0 = d * a;
+		Q.b1 = d * b;
+		Q.b2 = d * c;
+		Q.c = d * d;
 	}
 
 	void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2)
@@ -181,17 +179,6 @@ namespace
 		quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance);
 
 		quadricMul(Q, length * 1000);
-	}
-
-	float quadricError(Quadric& Q, const Vector3& v)
-	{
-		float vTQv =
-			(Q.m[0][0] * v.x + Q.m[0][1] * v.y + Q.m[0][2] * v.z + Q.m[0][3]) * v.x +
-			(Q.m[1][0] * v.x + Q.m[1][1] * v.y + Q.m[1][2] * v.z + Q.m[1][3]) * v.y +
-			(Q.m[2][0] * v.x + Q.m[2][1] * v.y + Q.m[2][2] * v.z + Q.m[2][3]) * v.z +
-			(Q.m[3][0] * v.x + Q.m[3][1] * v.y + Q.m[3][2] * v.z + Q.m[3][3]);
-
-		return fabsf(vTQv);
 	}
 
 	unsigned long long edgeId(unsigned int a, unsigned int b)
