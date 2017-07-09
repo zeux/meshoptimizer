@@ -111,7 +111,7 @@ MESHOPTIMIZER_API VertexFetchStatistics analyzeVertexFetch(const unsigned int* i
 // Returns the number of indices after simplification, with indices array modified in place
 // 
 // vertices should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
-size_t simplify(unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t target_index_count);
+MESHOPTIMIZER_API size_t simplify(unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t target_index_count);
 
 // Quantization into commonly supported data formats
 

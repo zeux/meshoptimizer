@@ -11,6 +11,8 @@
 
 #pragma comment(lib, "opengl32.lib")
 
+using namespace meshopt;
+
 struct Options
 {
 	bool wireframe;
