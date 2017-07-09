@@ -1,3 +1,4 @@
+// This file is part of meshoptimizer library; see meshoptimizer.hpp for version/license details
 #include "meshoptimizer.hpp"
 
 #include <cassert>
