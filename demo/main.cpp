@@ -6,6 +6,8 @@
 
 #include "objparser.hpp"
 
+using namespace meshopt;
+
 const size_t kCacheSize = 24;
 
 struct Vertex

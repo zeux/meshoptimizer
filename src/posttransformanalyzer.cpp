@@ -3,33 +3,33 @@
 
 #include <vector>
 
-namespace
+namespace meshopt
 {
-	template <typename T>
-	PostTransformCacheStatistics analyzePostTransformImpl(const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+
+template <typename T>
+static PostTransformCacheStatistics analyzePostTransformImpl(const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+{
+	PostTransformCacheStatistics result = {};
+
+	std::vector<unsigned int> cache_time_stamps(vertex_count, 0);
+	unsigned int time_stamp = cache_size + 1;
+
+	for (const T* indices_end = indices + index_count; indices != indices_end; ++indices)
 	{
-		PostTransformCacheStatistics result = {};
+		T index = *indices;
 
-		std::vector<unsigned int> cache_time_stamps(vertex_count, 0);
-		unsigned int time_stamp = cache_size + 1;
-
-		for (const T* indices_end = indices + index_count; indices != indices_end; ++indices)
+		if (time_stamp - cache_time_stamps[index] > cache_size)
 		{
-			T index = *indices;
-
-			if (time_stamp - cache_time_stamps[index] > cache_size)
-			{
-				// cache miss
-				cache_time_stamps[index] = time_stamp++;
-				result.vertices_transformed++;
-			}
+			// cache miss
+			cache_time_stamps[index] = time_stamp++;
+			result.vertices_transformed++;
 		}
-
-		result.acmr = float(result.vertices_transformed) / float(index_count / 3);
-		result.atvr = float(result.vertices_transformed) / float(vertex_count);
-
-		return result;
 	}
+
+	result.acmr = float(result.vertices_transformed) / float(index_count / 3);
+	result.atvr = float(result.vertices_transformed) / float(vertex_count);
+
+	return result;
 }
 
 PostTransformCacheStatistics analyzePostTransform(const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
@@ -41,3 +41,5 @@ PostTransformCacheStatistics analyzePostTransform(const unsigned int* indices, s
 {
 	return analyzePostTransformImpl(indices, index_count, vertex_count, cache_size);
 }
+
+} // namespace meshopt

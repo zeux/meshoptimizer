@@ -5,32 +5,32 @@
 #include <cstring>
 #include <vector>
 
-namespace
+namespace meshopt
 {
-	template <typename T>
-	void optimizePreTransformImpl(void* destination, const void* vertices, T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+
+template <typename T>
+static void optimizePreTransformImpl(void* destination, const void* vertices, T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+{
+	assert(destination != vertices);
+
+	// build vertex remap table
+	std::vector<unsigned int> vertex_remap(vertex_count, static_cast<unsigned int>(-1));
+
+	size_t vertex = 0;
+
+	for (T* indices_end = indices + index_count; indices != indices_end; ++indices)
 	{
-		assert(destination != vertices);
+		unsigned int& index = vertex_remap[*indices];
 
-		// build vertex remap table
-		std::vector<unsigned int> vertex_remap(vertex_count, static_cast<unsigned int>(-1));
-
-		size_t vertex = 0;
-
-		for (T* indices_end = indices + index_count; indices != indices_end; ++indices)
+		if (index == static_cast<unsigned int>(-1)) // vertex was not added to destination VB
 		{
-			unsigned int& index = vertex_remap[*indices];
+			// add vertex
+			memcpy(static_cast<char*>(destination) + vertex * vertex_size, static_cast<const char*>(vertices) + *indices * vertex_size, vertex_size);
 
-			if (index == static_cast<unsigned int>(-1)) // vertex was not added to destination VB
-			{
-				// add vertex
-				memcpy(static_cast<char*>(destination) + vertex * vertex_size, static_cast<const char*>(vertices) + *indices * vertex_size, vertex_size);
-
-				index = static_cast<unsigned int>(vertex++);
-			}
-
-			*indices = static_cast<T>(index);
+			index = static_cast<unsigned int>(vertex++);
 		}
+
+		*indices = static_cast<T>(index);
 	}
 }
 
@@ -43,3 +43,5 @@ void optimizePreTransform(void* destination, const void* vertices, unsigned int*
 {
 	optimizePreTransformImpl(destination, vertices, indices, index_count, vertex_count, vertex_size);
 }
+
+} // namespace meshopt

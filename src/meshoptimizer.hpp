@@ -18,6 +18,9 @@
 #	define MESHOPTIMIZER_API
 #endif
 
+namespace meshopt
+{
+
 // Index buffer generator
 // Generates index buffer from the unindexed vertex stream and returns number of unique vertices (max index + 1)
 // destination must contain enough space for the resulting index buffer (vertex_count elements)
@@ -155,6 +158,8 @@ inline unsigned short quantizeHalf(float v)
 
 	return (unsigned short)(s | h);
 }
+
+} // namespace meshopt
 
 /**
  * Copyright (c) 2016-2017 Arseny Kapoulkine
