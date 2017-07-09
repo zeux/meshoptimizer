@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cmath>
 #include <functional>
+#include <vector>
 
 namespace
 {
@@ -145,12 +146,12 @@ namespace
 	}
 
 	template <typename T>
-	void generateSoftBoundaries(std::vector<unsigned int>& destination, const T* indices, size_t index_count, size_t vertex_count, const std::vector<unsigned int>& clusters, unsigned int cache_size, float threshold)
+	void generateSoftBoundaries(std::vector<unsigned int>& destination, const T* indices, size_t index_count, size_t vertex_count, const unsigned int* clusters, size_t cluster_count, unsigned int cache_size, float threshold)
 	{
 		if (threshold <= 0)
 		{
 			// hard boundaries only
-			destination = clusters;
+			destination.assign(clusters, clusters + cluster_count);
 			return;
 		}
 
@@ -158,15 +159,14 @@ namespace
 		unsigned int time_stamp = 0;
 
 		std::pair<float, size_t> p = calculateACMR(indices, index_count, cache_size, 0, cache_time_stamps, time_stamp);
-
 		assert(p.second == index_count / 3);
 
 		float acmr_threshold = p.first * threshold;
 
-		for (size_t it = 0; it < clusters.size(); ++it)
+		for (size_t it = 0; it < cluster_count; ++it)
 		{
 			size_t start = clusters[it];
-			size_t end = (it + 1 < clusters.size()) ? clusters[it + 1] : index_count / 3;
+			size_t end = (it + 1 < cluster_count) ? clusters[it + 1] : index_count / 3;
 
 			while (start != end)
 			{
@@ -179,7 +179,7 @@ namespace
 	}
 
 	template <typename T>
-	void optimizeOverdrawTipsify(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const std::vector<unsigned int>& hard_clusters, unsigned int cache_size, float threshold)
+	void optimizeOverdrawTipsify(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const unsigned int* hard_clusters, size_t hard_cluster_count, unsigned int cache_size, float threshold)
 	{
 		assert(destination != indices);
 		assert(vertex_positions_stride > 0);
@@ -191,11 +191,12 @@ namespace
 			return;
 		}
 
-		assert(!hard_clusters.empty());
+		// we're expecting at least one cluster as an input
+		assert(hard_clusters && hard_cluster_count > 0);
 
 		// generate soft boundaries
 		std::vector<unsigned int> clusters;
-		generateSoftBoundaries(clusters, indices, index_count, vertex_count, hard_clusters, cache_size, threshold);
+		generateSoftBoundaries(clusters, indices, index_count, vertex_count, hard_clusters, hard_cluster_count, cache_size, threshold);
 
 		// fill sort data
 		std::vector<ClusterSortData> sort_data(clusters.size());
@@ -222,12 +223,12 @@ namespace
 	}
 }
 
-void optimizeOverdraw(unsigned short* destination, const unsigned short* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const std::vector<unsigned int>& clusters, unsigned int cache_size, float threshold)
+void optimizeOverdraw(unsigned short* destination, const unsigned short* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const unsigned int* clusters, size_t cluster_count, unsigned int cache_size, float threshold)
 {
-	optimizeOverdrawTipsify(destination, indices, index_count, vertex_positions, vertex_positions_stride, vertex_count, clusters, cache_size, threshold);
+	optimizeOverdrawTipsify(destination, indices, index_count, vertex_positions, vertex_positions_stride, vertex_count, clusters, cluster_count, cache_size, threshold);
 }
 
-void optimizeOverdraw(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const std::vector<unsigned int>& clusters, unsigned int cache_size, float threshold)
+void optimizeOverdraw(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const unsigned int* clusters, size_t cluster_count, unsigned int cache_size, float threshold)
 {
-	optimizeOverdrawTipsify(destination, indices, index_count, vertex_positions, vertex_positions_stride, vertex_count, clusters, cache_size, threshold);
+	optimizeOverdrawTipsify(destination, indices, index_count, vertex_positions, vertex_positions_stride, vertex_count, clusters, cluster_count, cache_size, threshold);
 }

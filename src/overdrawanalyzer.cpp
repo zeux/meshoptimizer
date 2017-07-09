@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cfloat>
 #include <cstring>
+#include <vector>
 
 namespace
 {

@@ -147,11 +147,11 @@ void optOverdraw(Mesh& mesh)
 {
 	// use single input cluster encompassing the entire mesh and worst-case ACMR so that overdraw optimizer can sort *all* triangles
 	// warning: this significantly deteriorates the vertex transform cache efficiency so it is not advised; look at optComplete for the recommended method
-	std::vector<unsigned int> clusters(1);
+	const unsigned int clusters[] = { 0 };
 	const float kThreshold = 3.f;
 
 	std::vector<unsigned int> result(mesh.indices.size());
-	optimizeOverdraw(&result[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), clusters, kCacheSize, kThreshold);
+	optimizeOverdraw(&result[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), clusters, sizeof(clusters) / sizeof(clusters[0]), kCacheSize, kThreshold);
 	mesh.indices.swap(result);
 }
 
@@ -166,12 +166,13 @@ void optComplete(Mesh& mesh)
 {
 	// post-transform optimization should go first as it provides data for overdraw
 	std::vector<unsigned int> newindices(mesh.indices.size());
-	std::vector<unsigned int> clusters;
-	optimizePostTransform(&newindices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, &clusters);
+	std::vector<unsigned int> clusters(mesh.indices.size() / 3);
+	size_t cluster_count = 0;
+	optimizePostTransform(&newindices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, &clusters[0], &cluster_count);
 
 	// reorder indices for overdraw, balancing overdraw and vertex transform efficiency
 	const float kThreshold = 1.05f; // allow up to 5% worse ACMR to get more reordering opportunities for overdraw
-	optimizeOverdraw(&mesh.indices[0], &newindices[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), clusters, kCacheSize, kThreshold);
+	optimizeOverdraw(&mesh.indices[0], &newindices[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), &clusters[0], cluster_count, kCacheSize, kThreshold);
 
 	// pre-transform optimization should go last as it depends on the final index order
 	std::vector<Vertex> newvertices(mesh.vertices.size());
