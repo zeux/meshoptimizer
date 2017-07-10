@@ -117,12 +117,19 @@ static unsigned int getNextVertexNeighbour(const unsigned int* next_candidates_b
 template <typename T>
 static void optimizeVertexCacheTipsify(T* destination, const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int* clusters, size_t* cluster_count)
 {
-	assert(destination != indices);
-
 	// guard for empty meshes
 	if (index_count == 0 || vertex_count == 0)
 	{
 		return;
+	}
+
+	// support in-place optimization
+	std::vector<T> indices_copy;
+
+	if (destination == indices)
+	{
+		indices_copy.assign(indices, indices + index_count);
+		indices = &indices_copy[0];
 	}
 
 	// build adjacency information

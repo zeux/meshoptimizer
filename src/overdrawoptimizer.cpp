@@ -183,7 +183,6 @@ static void generateSoftBoundaries(std::vector<unsigned int>& destination, const
 template <typename T>
 static void optimizeOverdrawTipsify(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const unsigned int* hard_clusters, size_t hard_cluster_count, unsigned int cache_size, float threshold)
 {
-	assert(destination != indices);
 	assert(vertex_positions_stride > 0);
 	assert(vertex_positions_stride % sizeof(float) == 0);
 
@@ -191,6 +190,15 @@ static void optimizeOverdrawTipsify(T* destination, const T* indices, size_t ind
 	if (index_count == 0 || vertex_count == 0)
 	{
 		return;
+	}
+
+	// support in-place optimization
+	std::vector<T> indices_copy;
+
+	if (destination == indices)
+	{
+		indices_copy.assign(indices, indices + index_count);
+		indices = &indices_copy[0];
 	}
 
 	// we're expecting at least one cluster as an input

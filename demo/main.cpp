@@ -140,46 +140,37 @@ void optRandomShuffle(Mesh& mesh)
 
 void optCache(Mesh& mesh)
 {
-	std::vector<unsigned int> result(mesh.indices.size());
-	optimizeVertexCache(&result[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize);
-	mesh.indices.swap(result);
+	optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize);
 }
 
 void optOverdraw(Mesh& mesh)
 {
 	// use single input cluster encompassing the entire mesh and worst-case ACMR so that overdraw optimizer can sort *all* triangles
-	// warning: this significantly deteriorates the vertex transform cache efficiency so it is not advised; look at optComplete for the recommended method
+	// warning: this significantly deteriorates the vertex cache efficiency so it is not advised; look at optComplete for the recommended method
 	const unsigned int clusters[] = {0};
 	const float kThreshold = 3.f;
 
-	std::vector<unsigned int> result(mesh.indices.size());
-	optimizeOverdraw(&result[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), clusters, sizeof(clusters) / sizeof(clusters[0]), kCacheSize, kThreshold);
-	mesh.indices.swap(result);
+	optimizeOverdraw(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), clusters, sizeof(clusters) / sizeof(clusters[0]), kCacheSize, kThreshold);
 }
 
 void optFetch(Mesh& mesh)
 {
-	std::vector<Vertex> result(mesh.vertices.size());
-	optimizeVertexFetch(&result[0], &mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), sizeof(Vertex));
-	mesh.vertices.swap(result);
+	optimizeVertexFetch(&mesh.vertices[0], &mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), sizeof(Vertex));
 }
 
 void optComplete(Mesh& mesh)
 {
-	// post-transform optimization should go first as it provides data for overdraw
-	std::vector<unsigned int> newindices(mesh.indices.size());
+	// vertex cache optimization should go first as it provides data for overdraw
 	std::vector<unsigned int> clusters(mesh.indices.size() / 3);
 	size_t cluster_count = 0;
-	optimizeVertexCache(&newindices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, &clusters[0], &cluster_count);
+	optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, &clusters[0], &cluster_count);
 
-	// reorder indices for overdraw, balancing overdraw and vertex transform efficiency
+	// reorder indices for overdraw, balancing overdraw and vertex cache efficiency
 	const float kThreshold = 1.05f; // allow up to 5% worse ACMR to get more reordering opportunities for overdraw
-	optimizeOverdraw(&mesh.indices[0], &newindices[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), &clusters[0], cluster_count, kCacheSize, kThreshold);
+	optimizeOverdraw(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), &clusters[0], cluster_count, kCacheSize, kThreshold);
 
-	// pre-transform optimization should go last as it depends on the final index order
-	std::vector<Vertex> newvertices(mesh.vertices.size());
-	optimizeVertexFetch(&newvertices[0], &mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), sizeof(Vertex));
-	mesh.vertices.swap(newvertices);
+	// vertex fetch optimization should go last as it depends on the final index order
+	optimizeVertexFetch(&mesh.vertices[0], &mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), sizeof(Vertex));
 }
 
 void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
