@@ -168,6 +168,7 @@ static void generateSoftBoundaries(std::vector<unsigned int>& destination, const
 	{
 		size_t start = clusters[it];
 		size_t end = (it + 1 < cluster_count) ? clusters[it + 1] : index_count / 3;
+		assert(start <= end);
 
 		while (start != end)
 		{

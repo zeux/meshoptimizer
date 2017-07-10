@@ -22,6 +22,8 @@ static void buildAdjacency(Adjacency& adjacency, const T* indices, size_t index_
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
+		assert(indices[i] < vertex_count);
+
 		adjacency.triangle_counts[indices[i]]++;
 	}
 
@@ -41,7 +43,9 @@ static void buildAdjacency(Adjacency& adjacency, const T* indices, size_t index_
 
 	std::vector<unsigned int> filled_triangle_counts(vertex_count, 0);
 
-	for (size_t i = 0; i < index_count / 3; ++i)
+	size_t face_count = index_count / 3;
+
+	for (size_t i = 0; i < face_count; ++i)
 	{
 		unsigned int a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
 

@@ -16,21 +16,25 @@ static void optimizeVertexFetchImpl(void* destination, const void* vertices, T* 
 	// build vertex remap table
 	std::vector<unsigned int> vertex_remap(vertex_count, static_cast<unsigned int>(-1));
 
-	size_t vertex = 0;
+	unsigned int vertex = 0;
 
-	for (T* indices_end = indices + index_count; indices != indices_end; ++indices)
+	for (size_t i = 0; i < index_count; ++i)
 	{
-		unsigned int& index = vertex_remap[*indices];
+		T index = indices[i];
+		assert(index < vertex_count);
 
-		if (index == static_cast<unsigned int>(-1)) // vertex was not added to destination VB
+		unsigned int& remap = vertex_remap[index];
+
+		if (remap == static_cast<unsigned int>(-1)) // vertex was not added to destination VB
 		{
 			// add vertex
-			memcpy(static_cast<char*>(destination) + vertex * vertex_size, static_cast<const char*>(vertices) + *indices * vertex_size, vertex_size);
+			memcpy(static_cast<char*>(destination) + vertex * vertex_size, static_cast<const char*>(vertices) + index * vertex_size, vertex_size);
 
-			index = static_cast<unsigned int>(vertex++);
+			remap = vertex++;
 		}
 
-		*indices = static_cast<T>(index);
+		// modify indices in place
+		indices[i] = static_cast<T>(remap);
 	}
 }
 

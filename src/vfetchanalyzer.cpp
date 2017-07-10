@@ -21,6 +21,7 @@ static VertexFetchStatistics analyzeVertexFetchImpl(const T* indices, size_t ind
 	for (size_t i = 0; i < index_count; ++i)
 	{
 		T index = indices[i];
+		assert(index < vertex_count);
 
 		size_t start_address = index * vertex_size;
 		size_t end_address = start_address + vertex_size;
@@ -40,7 +41,7 @@ static VertexFetchStatistics analyzeVertexFetchImpl(const T* indices, size_t ind
 		}
 	}
 
-	result.overfetch = float(result.bytes_fetched) / float(vertex_count * vertex_size);
+	result.overfetch = vertex_count == 0 ? 0 : float(result.bytes_fetched) / float(vertex_count * vertex_size);
 
 	return result;
 }
