@@ -16,17 +16,21 @@ The vertex cache optimization algorithm is capable of optimizing for overdraw by
 
 To optimize the index buffer for vertex cache, call:
 
-    meshopt::optimizeVertexCache(index_data, index_data, index_count, vertex_count);
-    
+```c++
+meshopt::optimizeVertexCache(index_data, index_data, index_count, vertex_count);
+```
+
 The given example optimizes index_data in place; you can also specify a different destination index buffer.
 
 To perform both vertex cache and overdraw optimization, you have to invoke the function with additional output arguments, which you then have to pass to another function:
 
-    std::vector<unsigned int> clusters(index_count / 3);
-	size_t cluster_count = 0;
-    meshopt::optimizeVertexCache(index_data, index_data, index_count, vertex_count, 16, &clusters[0], &cluster_count);
-    meshopt::optimizeOverdraw(index_data, index_data, index_count, vertex_positions, vertex_stride, vertex_count,
-		&clusters[0], cluster_count, 16, 1.05f);
+```c++
+std::vector<unsigned int> clusters(index_count / 3);
+size_t cluster_count = 0;
+meshopt::optimizeVertexCache(index_data, index_data, index_count, vertex_count, 16, &clusters[0], &cluster_count);
+meshopt::optimizeOverdraw(index_data, index_data, index_count, vertex_positions, vertex_stride, vertex_count,
+    &clusters[0], cluster_count, 16, 1.05f);
+```
 
 The first call generates a cache-optimized index sequence as well as a set of clusters that the second call then reorders to get better overdraw results. The overdraw optimizer also needs to read vertex positions, which you have to provide as a pointer to a float3 vector and a stride, similar to glVertexPointer.
 
@@ -38,8 +42,10 @@ Note that the vertex cache optimization algorithm models the cache as a fixed-si
 
 To optimize the index/vertex buffers for vertex fetch efficiency, call:
 
-    meshopt::optimizeVertexFetch(vertices, vertices, indices, index_count, vertex_count, vertex_size);
-    
+```c++
+meshopt::optimizeVertexFetch(vertices, vertices, indices, index_count, vertex_count, vertex_size);
+```
+
 In a similar fashion to other functions, you have to provide a pointer to the resulting vertex buffer which will be filled with vertices from the source vertex buffer. The given example optimizes vertex and index buffers in place.
 
 Note that the algorithm does not try to model cache replacement precisely and instead just orders vertices in the order of use, which generally produces results that are close to optimal.
@@ -48,11 +54,11 @@ Note that the algorithm does not try to model cache replacement precisely and in
 
 The library provides analyzers for all three major optimization routines to understand the impact of these optimizations. For each optimization there is a corresponding analyze function, like analyzeOverdraw, that returns a struct with statistics.
 
-analyzeVertexCache returns vertex cache statistics. The common metric to use is ACMR - average cache miss ratio, which is the ratio of the total number of vertex invocations to the triangle count. The worst-case ACMR is 3 (GPU has to process 3 vertices for each triangle); on regular grids the optimal ACMR approaches 0.5. On real meshes it usually is in [0.5..1.5] ratio depending on the amount of vertex splits. One other useful metric is ATVR - average transformed vertex ratio - which represents the ratio of vertex shader invocations to the total vertices, and has the best case of 1.0 regardless of mesh topology (each vertex is transformed once).
+`analyzeVertexCache` returns vertex cache statistics. The common metric to use is ACMR - average cache miss ratio, which is the ratio of the total number of vertex invocations to the triangle count. The worst-case ACMR is 3 (GPU has to process 3 vertices for each triangle); on regular grids the optimal ACMR approaches 0.5. On real meshes it usually is in [0.5..1.5] ratio depending on the amount of vertex splits. One other useful metric is ATVR - average transformed vertex ratio - which represents the ratio of vertex shader invocations to the total vertices, and has the best case of 1.0 regardless of mesh topology (each vertex is transformed once).
 
-analyzeVertexFetch returns vertex fetch statistics. The main metric it uses is overfetch - the ratio between the number of bytes read from the vertex buffer to the total number of bytes in the vertex buffer. Assuming non-redundant vertex buffers, the best case is 1.0 - each byte is fetched once.
+`analyzeVertexFetch` returns vertex fetch statistics. The main metric it uses is overfetch - the ratio between the number of bytes read from the vertex buffer to the total number of bytes in the vertex buffer. Assuming non-redundant vertex buffers, the best case is 1.0 - each byte is fetched once.
 
-analyzeOverdraw returns overdraw statistics. The main metric it uses is overdraw - the ratio between the number of pixel shader invocations to the total number of covered pixels, as measured from several different orthographic cameras. The best case for overdraw is 1.0 - each pixel is shaded once.
+`analyzeOverdraw` returns overdraw statistics. The main metric it uses is overdraw - the ratio between the number of pixel shader invocations to the total number of covered pixels, as measured from several different orthographic cameras. The best case for overdraw is 1.0 - each pixel is shaded once.
 
 Note that all analyzers use approximate models for the relevant GPU units, so the numbers you will get as the result are only a rough approximation of the actual performance.
 
