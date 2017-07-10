@@ -14,32 +14,34 @@ The vertex cache optimization algorithm is capable of optimizing for overdraw by
 
 ## Vertex cache optimizer
 
-Vertex cache optimizer models the cache as a fixed-size FIFO buffer (which defaults to 16 vertices but can be customized by changing the function arguments). To invoke it, call:
+To optimize the index buffer for vertex cache, call:
 
     meshopt::optimizeVertexCache(index_data, index_data, index_count, vertex_count);
     
-index_data will be filled with an optimized index sequence. Note that you can run this algorithm in place, or specify a different destination index buffer.
+The given example optimizes index_data in place; you can also specify a different destination index buffer.
 
 To perform both vertex cache and overdraw optimization, you have to invoke the function with additional output arguments, which you then have to pass to another function:
 
-    float threshold = 1.05f;
-  
     std::vector<unsigned int> clusters(index_count / 3);
 	size_t cluster_count = 0;
     meshopt::optimizeVertexCache(index_data, index_data, index_count, vertex_count, 16, &clusters[0], &cluster_count);
-    meshopt::optimizeOverdraw(index_data, index_data, index_count, vertex_positions, vertex_stride, vertex_count, &clusters[0], cluster_count, 16, threshold);
+    meshopt::optimizeOverdraw(index_data, index_data, index_count, vertex_positions, vertex_stride, vertex_count, &clusters[0], cluster_count, 16, 1.05f);
 
 The first call generates a cache-optimized index sequence as well as a set of clusters that the second call then reorders to get better overdraw results. The overdraw optimizer also needs to read vertex positions, which you have to provide as a pointer to a float3 vector and a stride, similar to glVertexPointer.
 
 You can also provide a threshold that will determine how much the algorithm can compromise the vertex cache hit ratio in favor of overdraw; 1.05 means that the resulting vertex cache hit ratio should be at most 5% worse than a non-overdraw optimized order.
 
+Note that the vertex cache optimization algorithm models the cache as a fixed-size FIFO buffer, which may or may not match hardware. Additionally, overdraw optimization is performed using a view-independent heuristic and as such does not guarantee that the overdraw of the resulting mesh is optimal.
+
 ## Vertex fetch optimizer
 
-This algorithm is pretty straightforward - it does not try to model cache replacement and instead just orders vertices in the order of their use, which generally produces results that are close to optimal on real meshes. To invoke it, call:
+To optimize the index/vertex buffers for vertex fetch efficiency, call:
 
-    meshopt::optimizeVertexFetch(new_vertices, vertices, indices, index_count, vertex_count, vertex_size);
+    meshopt::optimizeVertexFetch(vertices, vertices, indices, index_count, vertex_count, vertex_size);
     
-In a similar fashion to other functions, you have to provide a pointer to the resulting vertex buffer which will be filled with vertices from the source vertex buffer.
+In a similar fashion to other functions, you have to provide a pointer to the resulting vertex buffer which will be filled with vertices from the source vertex buffer. The given example optimizes vertex and index buffers in place.
+
+Note that the algorithm does not try to model cache replacement precisely and instead just orders vertices in the order of use, which generally produces results that are close to optimal.
 
 ## Efficiency analyzers
 
