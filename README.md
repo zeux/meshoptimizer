@@ -25,7 +25,8 @@ To perform both vertex cache and overdraw optimization, you have to invoke the f
     std::vector<unsigned int> clusters(index_count / 3);
 	size_t cluster_count = 0;
     meshopt::optimizeVertexCache(index_data, index_data, index_count, vertex_count, 16, &clusters[0], &cluster_count);
-    meshopt::optimizeOverdraw(index_data, index_data, index_count, vertex_positions, vertex_stride, vertex_count, &clusters[0], cluster_count, 16, 1.05f);
+    meshopt::optimizeOverdraw(index_data, index_data, index_count, vertex_positions, vertex_stride, vertex_count,
+		&clusters[0], cluster_count, 16, 1.05f);
 
 The first call generates a cache-optimized index sequence as well as a set of clusters that the second call then reorders to get better overdraw results. The overdraw optimizer also needs to read vertex positions, which you have to provide as a pointer to a float3 vector and a stride, similar to glVertexPointer.
 
