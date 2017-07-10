@@ -149,7 +149,7 @@ void optOverdraw(Mesh& mesh)
 {
 	// use single input cluster encompassing the entire mesh and worst-case ACMR so that overdraw optimizer can sort *all* triangles
 	// warning: this significantly deteriorates the vertex transform cache efficiency so it is not advised; look at optComplete for the recommended method
-	const unsigned int clusters[] = { 0 };
+	const unsigned int clusters[] = {0};
 	const float kThreshold = 3.f;
 
 	std::vector<unsigned int> result(mesh.indices.size());
