@@ -14,24 +14,22 @@ The vertex cache optimization algorithm is capable of optimizing for overdraw by
 
 ## Vertex cache optimizer
 
-The library implements an algorithm [Tipsify](http://gfx.cs.princeton.edu/pubs/Sander_2007_%3ETR/tipsy.pdf) for vertex cache and overdraw optimization.
+Vertex cache optimizer models the cache as a fixed-size FIFO buffer (which defaults to 16 vertices but can be customized by changing the function arguments). To invoke it, call:
 
-To use Tipsify for vertex cache optimization, invoke this function:
-
-    meshopt::optimizeVertexCache(new_index_data, index_data, index_count, vertex_count);
+    meshopt::optimizeVertexCache(index_data, index_data, index_count, vertex_count);
     
-You have to pass a pointer to the resulting index array as new_index_data, which will be filled with an optimized index sequence.
+index_data will be filled with an optimized index sequence. Note that you can run this algorithm in place, or specify a different destination index buffer.
 
-To use Tipsify for vertex cache and overdraw optimization, you have to invoke the function with additional output arguments, which you then have to pass to another function:
+To perform both vertex cache and overdraw optimization, you have to invoke the function with additional output arguments, which you then have to pass to another function:
 
     float threshold = 1.05f;
   
     std::vector<unsigned int> clusters(index_count / 3);
 	size_t cluster_count = 0;
-    meshopt::optimizeVertexCache(temp_index_data, index_data, index_count, vertex_count, 16, &clusters[0], &cluster_count);
-    meshopt::optimizeOverdraw(new_index_data, temp_index_data, index_count, vertex_positions, vertex_stride, vertex_count, &clusters[0], cluster_count, 16, threshold);
+    meshopt::optimizeVertexCache(index_data, index_data, index_count, vertex_count, 16, &clusters[0], &cluster_count);
+    meshopt::optimizeOverdraw(index_data, index_data, index_count, vertex_positions, vertex_stride, vertex_count, &clusters[0], cluster_count, 16, threshold);
 
-The first call generates a cache-optimized index sequence to the temp location as well as a set of clusters that the second call then reorders to get better overdraw results. The overdraw optimizer also needs to read vertex positions, which you have to provide as a pointer to a float3 vector and a stride, similar to glVertexPointer.
+The first call generates a cache-optimized index sequence as well as a set of clusters that the second call then reorders to get better overdraw results. The overdraw optimizer also needs to read vertex positions, which you have to provide as a pointer to a float3 vector and a stride, similar to glVertexPointer.
 
 You can also provide a threshold that will determine how much the algorithm can compromise the vertex cache hit ratio in favor of overdraw; 1.05 means that the resulting vertex cache hit ratio should be at most 5% worse than a non-overdraw optimized order.
 
