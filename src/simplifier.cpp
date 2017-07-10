@@ -191,7 +191,7 @@ static unsigned long long edgeId(unsigned int a, unsigned int b)
 	return (static_cast<unsigned long long>(a) << 32) | b;
 }
 
-static size_t simplifyEdgeCollapse(unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t target_index_count)
+static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t target_index_count)
 {
 	std::vector<Vector3> vertex_positions(vertex_count);
 
@@ -260,6 +260,14 @@ static size_t simplifyEdgeCollapse(unsigned int* indices, size_t index_count, co
 		}
 	}
 
+	if (result != indices)
+	{
+		for (size_t i = 0; i < index_count; ++i)
+		{
+			result[i] = indices[i];
+		}
+	}
+
 	while (index_count > target_index_count)
 	{
 		std::vector<Collapse> edge_collapses;
@@ -271,8 +279,8 @@ static size_t simplifyEdgeCollapse(unsigned int* indices, size_t index_count, co
 
 			for (int e = 0; e < 3; ++e)
 			{
-				unsigned int i0 = indices[i + e];
-				unsigned int i1 = indices[i + next[e]];
+				unsigned int i0 = result[i + e];
+				unsigned int i1 = result[i + next[e]];
 
 				Collapse c01 = { i0, i1, quadricError(vertex_quadrics[i0], vertex_positions[i1]) };
 				Collapse c10 = { i1, i0, quadricError(vertex_quadrics[i1], vertex_positions[i0]) };
@@ -332,9 +340,9 @@ static size_t simplifyEdgeCollapse(unsigned int* indices, size_t index_count, co
 
 		for (size_t i = 0; i < index_count; i += 3)
 		{
-			unsigned int v0 = vertex_remap[indices[i + 0]];
-			unsigned int v1 = vertex_remap[indices[i + 1]];
-			unsigned int v2 = vertex_remap[indices[i + 2]];
+			unsigned int v0 = vertex_remap[result[i + 0]];
+			unsigned int v1 = vertex_remap[result[i + 1]];
+			unsigned int v2 = vertex_remap[result[i + 2]];
 
 			assert(vertex_remap[v0] == v0);
 			assert(vertex_remap[v1] == v1);
@@ -342,9 +350,9 @@ static size_t simplifyEdgeCollapse(unsigned int* indices, size_t index_count, co
 
 			if (v0 != v1 && v0 != v2 && v1 != v2)
 			{
-				indices[write + 0] = v0;
-				indices[write + 1] = v1;
-				indices[write + 2] = v2;
+				result[write + 0] = v0;
+				result[write + 1] = v1;
+				result[write + 2] = v2;
 				write += 3;
 			}
 		}
@@ -355,9 +363,9 @@ static size_t simplifyEdgeCollapse(unsigned int* indices, size_t index_count, co
 	return index_count;
 }
 
-size_t simplify(unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t target_index_count)
+size_t simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t target_index_count)
 {
-	return simplifyEdgeCollapse(indices, index_count, vertices, vertex_count, vertex_size, target_index_count);
+	return simplifyEdgeCollapse(destination, indices, index_count, vertices, vertex_count, vertex_size, target_index_count);
 }
 
 } // namespace meshopt

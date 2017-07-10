@@ -110,8 +110,9 @@ MESHOPTIMIZER_API VertexFetchStatistics analyzeVertexFetch(const unsigned int* i
 // Reduces the number of triangles in the mesh, attempting to preserve mesh appearance as much as possible
 // Returns the number of indices after simplification, with indices array modified in place
 // 
+// destination must contain enough space for the source index buffer (since optimization is iterative, this means index_count elements - *not* target_index_count!)
 // vertices should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
-MESHOPTIMIZER_API size_t simplify(unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t target_index_count);
+MESHOPTIMIZER_API size_t simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t target_index_count);
 
 // Quantization into commonly supported data formats
 
