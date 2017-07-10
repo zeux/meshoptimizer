@@ -7,9 +7,9 @@ namespace meshopt
 {
 
 template <typename T>
-static PostTransformCacheStatistics analyzePostTransformImpl(const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+static VertexCacheStatistics analyzeVertexCacheImpl(const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
-	PostTransformCacheStatistics result = {};
+	VertexCacheStatistics result = {};
 
 	std::vector<unsigned int> cache_time_stamps(vertex_count, 0);
 	unsigned int time_stamp = cache_size + 1;
@@ -32,14 +32,14 @@ static PostTransformCacheStatistics analyzePostTransformImpl(const T* indices, s
 	return result;
 }
 
-PostTransformCacheStatistics analyzePostTransform(const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+VertexCacheStatistics analyzeVertexCache(const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
-	return analyzePostTransformImpl(indices, index_count, vertex_count, cache_size);
+	return analyzeVertexCacheImpl(indices, index_count, vertex_count, cache_size);
 }
 
-PostTransformCacheStatistics analyzePostTransform(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+VertexCacheStatistics analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
-	return analyzePostTransformImpl(indices, index_count, vertex_count, cache_size);
+	return analyzeVertexCacheImpl(indices, index_count, vertex_count, cache_size);
 }
 
 } // namespace meshopt

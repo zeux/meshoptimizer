@@ -111,7 +111,7 @@ static unsigned int getNextVertexNeighbour(const unsigned int* next_candidates_b
 }
 
 template <typename T>
-static void optimizePostTransformTipsify(T* destination, const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int* clusters, size_t* cluster_count)
+static void optimizeVertexCacheTipsify(T* destination, const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int* clusters, size_t* cluster_count)
 {
 	assert(destination != indices);
 
@@ -231,14 +231,14 @@ static void optimizePostTransformTipsify(T* destination, const T* indices, size_
 	}
 }
 
-void optimizePostTransform(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int* clusters, size_t* cluster_count)
+void optimizeVertexCache(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int* clusters, size_t* cluster_count)
 {
-	optimizePostTransformTipsify(destination, indices, index_count, vertex_count, cache_size, clusters, cluster_count);
+	optimizeVertexCacheTipsify(destination, indices, index_count, vertex_count, cache_size, clusters, cluster_count);
 }
 
-void optimizePostTransform(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int* clusters, size_t* cluster_count)
+void optimizeVertexCache(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int* clusters, size_t* cluster_count)
 {
-	optimizePostTransformTipsify(destination, indices, index_count, vertex_count, cache_size, clusters, cluster_count);
+	optimizeVertexCacheTipsify(destination, indices, index_count, vertex_count, cache_size, clusters, cluster_count);
 }
 
 } // namespace meshopt

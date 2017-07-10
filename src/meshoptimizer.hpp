@@ -38,15 +38,15 @@ MESHOPTIMIZER_API void generateVertexBuffer(void* destination, const unsigned in
 // destination must contain enough space for the resulting index buffer (index_count elements)
 // cache_size should be less than the actual GPU cache size to avoid cache thrashing
 // clusters is an optional output for the overdraw optimizer; if specified, it must contain space for index_count/3 elements
-MESHOPTIMIZER_API void optimizePostTransform(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 16, unsigned int* clusters = 0, size_t* cluster_count = 0);
-MESHOPTIMIZER_API void optimizePostTransform(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 16, unsigned int* clusters = 0, size_t* cluster_count = 0);
+MESHOPTIMIZER_API void optimizeVertexCache(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 16, unsigned int* clusters = 0, size_t* cluster_count = 0);
+MESHOPTIMIZER_API void optimizeVertexCache(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 16, unsigned int* clusters = 0, size_t* cluster_count = 0);
 
 // Overdraw optimizer using the Tipsify algorithm
 // Reorders indices to reduce the number of GPU vertex shader invocations and the pixel overdraw
 //
 // destination must contain enough space for the resulting index buffer (index_count elements)
-// indices must contain index data that is the result of optimizePostTransform (*not* the original mesh indices!)
-// clusters must contain cluster data that is the result of optimizePostTransform
+// indices must contain index data that is the result of optimizeVertexCache (*not* the original mesh indices!)
+// clusters must contain cluster data that is the result of optimizeVertexCache
 // vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
 // cache_size should be less than the actual GPU cache size to avoid cache thrashing
 // threshold indicates how much the overdraw optimizer can degrade vertex cache efficiency (1.05 = up to 5%) to reduce overdraw more efficiently
@@ -58,10 +58,10 @@ MESHOPTIMIZER_API void optimizeOverdraw(unsigned int* destination, const unsigne
 //
 // desination must contain enough space for the resulting vertex buffer (vertex_count elements)
 // indices is used both as an input and as an output index buffer
-MESHOPTIMIZER_API void optimizePreTransform(void* destination, const void* vertices, unsigned short* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
-MESHOPTIMIZER_API void optimizePreTransform(void* destination, const void* vertices, unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
+MESHOPTIMIZER_API void optimizeVertexFetch(void* destination, const void* vertices, unsigned short* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
+MESHOPTIMIZER_API void optimizeVertexFetch(void* destination, const void* vertices, unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
 
-struct PostTransformCacheStatistics
+struct VertexCacheStatistics
 {
 	unsigned int vertices_transformed;
 	float acmr; // transformed vertices / triangle count; best case 0.5, worst case 3.0, optimum depends on topology
@@ -71,8 +71,8 @@ struct PostTransformCacheStatistics
 // Vertex transform cache analyzer
 // Returns cache hit statistics using a simplified FIFO model
 // Results will not match actual GPU performance
-MESHOPTIMIZER_API PostTransformCacheStatistics analyzePostTransform(const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 32);
-MESHOPTIMIZER_API PostTransformCacheStatistics analyzePostTransform(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 32);
+MESHOPTIMIZER_API VertexCacheStatistics analyzeVertexCache(const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 32);
+MESHOPTIMIZER_API VertexCacheStatistics analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 32);
 
 struct OverdrawStatistics
 {
@@ -89,7 +89,7 @@ struct OverdrawStatistics
 MESHOPTIMIZER_API OverdrawStatistics analyzeOverdraw(const unsigned short* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count);
 MESHOPTIMIZER_API OverdrawStatistics analyzeOverdraw(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count);
 
-struct PreTransformCacheStatistics
+struct VertexFetchStatistics
 {
 	unsigned int bytes_fetched;
 	float overfetch; // fetched bytes / vertex buffer size; best case 1.0 (each byte is fetched once)
@@ -98,8 +98,8 @@ struct PreTransformCacheStatistics
 // Vertex fetch cache analyzer
 // Returns cache hit statistics using a simplified direct mapped model
 // Results will not match actual GPU performance
-MESHOPTIMIZER_API PreTransformCacheStatistics analyzePreTransform(const unsigned short* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
-MESHOPTIMIZER_API PreTransformCacheStatistics analyzePreTransform(const unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
+MESHOPTIMIZER_API VertexFetchStatistics analyzeVertexFetch(const unsigned short* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
+MESHOPTIMIZER_API VertexFetchStatistics analyzeVertexFetch(const unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
 
 // Quantization into commonly supported data formats
 

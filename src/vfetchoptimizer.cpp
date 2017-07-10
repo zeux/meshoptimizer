@@ -9,7 +9,7 @@ namespace meshopt
 {
 
 template <typename T>
-static void optimizePreTransformImpl(void* destination, const void* vertices, T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+static void optimizeVertexFetchImpl(void* destination, const void* vertices, T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
 	assert(destination != vertices);
 
@@ -34,14 +34,14 @@ static void optimizePreTransformImpl(void* destination, const void* vertices, T*
 	}
 }
 
-void optimizePreTransform(void* destination, const void* vertices, unsigned short* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+void optimizeVertexFetch(void* destination, const void* vertices, unsigned short* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
-	optimizePreTransformImpl(destination, vertices, indices, index_count, vertex_count, vertex_size);
+	optimizeVertexFetchImpl(destination, vertices, indices, index_count, vertex_count, vertex_size);
 }
 
-void optimizePreTransform(void* destination, const void* vertices, unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+void optimizeVertexFetch(void* destination, const void* vertices, unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
-	optimizePreTransformImpl(destination, vertices, indices, index_count, vertex_count, vertex_size);
+	optimizeVertexFetchImpl(destination, vertices, indices, index_count, vertex_count, vertex_size);
 }
 
 } // namespace meshopt

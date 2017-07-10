@@ -14,10 +14,10 @@ set(SOURCES
     src/indexgenerator.cpp
     src/overdrawanalyzer.cpp
     src/overdrawoptimizer.cpp
-    src/posttransformanalyzer.cpp
-    src/posttransformoptimizer.cpp
-    src/pretransformanalyzer.cpp
-    src/pretransformoptimizer.cpp
+    src/vcacheanalyzer.cpp
+    src/vcacheoptimizer.cpp
+    src/vfetchanalyzer.cpp
+    src/vfetchoptimizer.cpp
 )
 
 add_library(meshoptimizer STATIC ${SOURCES})

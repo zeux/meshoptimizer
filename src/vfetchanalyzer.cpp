@@ -8,9 +8,9 @@ namespace meshopt
 {
 
 template <typename T>
-static PreTransformCacheStatistics analyzePreTransformImpl(const T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+static VertexFetchStatistics analyzeVertexFetchImpl(const T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
-	PreTransformCacheStatistics result = {};
+	VertexFetchStatistics result = {};
 
 	const size_t kCacheLine = 64;
 	const size_t kCacheSize = 128 * 1024;
@@ -45,14 +45,14 @@ static PreTransformCacheStatistics analyzePreTransformImpl(const T* indices, siz
 	return result;
 }
 
-PreTransformCacheStatistics analyzePreTransform(const unsigned short* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+VertexFetchStatistics analyzeVertexFetch(const unsigned short* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
-	return analyzePreTransformImpl(indices, index_count, vertex_count, vertex_size);
+	return analyzeVertexFetchImpl(indices, index_count, vertex_count, vertex_size);
 }
 
-PreTransformCacheStatistics analyzePreTransform(const unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+VertexFetchStatistics analyzeVertexFetch(const unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
-	return analyzePreTransformImpl(indices, index_count, vertex_count, vertex_size);
+	return analyzeVertexFetchImpl(indices, index_count, vertex_count, vertex_size);
 }
 
 } // namespace meshopt
