@@ -10,6 +10,9 @@ namespace meshopt
 template <typename T>
 static VertexFetchStatistics analyzeVertexFetchImpl(const T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
+	assert(index_count % 3 == 0);
+	assert(vertex_size > 0);
+
 	VertexFetchStatistics result = {};
 
 	const size_t kCacheLine = 64;

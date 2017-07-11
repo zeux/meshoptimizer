@@ -11,6 +11,9 @@ namespace meshopt
 template <typename T>
 static void optimizeVertexFetchImpl(void* destination, const void* vertices, T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
+	assert(index_count % 3 == 0);
+	assert(vertex_size > 0);
+
 	// support in-place optimization
 	std::vector<char> vertices_copy;
 
@@ -41,8 +44,10 @@ static void optimizeVertexFetchImpl(void* destination, const void* vertices, T* 
 		}
 
 		// modify indices in place
-		indices[i] = static_cast<T>(remap);
+		indices[i] = T(remap);
 	}
+
+	assert(vertex <= vertex_count);
 }
 
 void optimizeVertexFetch(void* destination, const void* vertices, unsigned short* indices, size_t index_count, size_t vertex_count, size_t vertex_size)

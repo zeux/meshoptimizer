@@ -10,6 +10,9 @@ namespace meshopt
 template <typename T>
 static VertexCacheStatistics analyzeVertexCacheImpl(const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
+	assert(index_count % 3 == 0);
+	assert(cache_size >= 3);
+
 	VertexCacheStatistics result = {};
 
 	std::vector<unsigned int> cache_time_stamps(vertex_count, 0);

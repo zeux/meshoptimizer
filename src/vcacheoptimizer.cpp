@@ -43,7 +43,7 @@ static void buildAdjacency(Adjacency& adjacency, const T* indices, size_t index_
 	// fill triangle data
 	adjacency.data.resize(offset);
 
-	std::vector<unsigned int> filled_triangle_counts(vertex_count, 0);
+	std::vector<unsigned int> offsets = adjacency.offsets;
 
 	size_t face_count = index_count / 3;
 
@@ -51,14 +51,9 @@ static void buildAdjacency(Adjacency& adjacency, const T* indices, size_t index_
 	{
 		unsigned int a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
 
-		adjacency.data[adjacency.offsets[a] + filled_triangle_counts[a]] = static_cast<unsigned int>(i);
-		filled_triangle_counts[a]++;
-
-		adjacency.data[adjacency.offsets[b] + filled_triangle_counts[b]] = static_cast<unsigned int>(i);
-		filled_triangle_counts[b]++;
-
-		adjacency.data[adjacency.offsets[c] + filled_triangle_counts[c]] = static_cast<unsigned int>(i);
-		filled_triangle_counts[c]++;
+		adjacency.data[offsets[a]++] = unsigned(i);
+		adjacency.data[offsets[b]++] = unsigned(i);
+		adjacency.data[offsets[c]++] = unsigned(i);
 	}
 }
 
@@ -119,6 +114,9 @@ static unsigned int getNextVertexNeighbour(const unsigned int* next_candidates_b
 template <typename T>
 static void optimizeVertexCacheTipsify(T* destination, const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
+	assert(index_count % 3 == 0);
+	assert(cache_size >= 3);
+
 	// guard for empty meshes
 	if (index_count == 0 || vertex_count == 0)
 	{

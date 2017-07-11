@@ -103,6 +103,10 @@ static void calculateSortData(std::vector<ClusterSortData>& sort_data, const T* 
 
 static unsigned int updateCache(unsigned int a, unsigned int b, unsigned int c, unsigned int cache_size, std::vector<unsigned int>& cache_time_stamps, unsigned int& time_stamp)
 {
+	assert(a < cache_time_stamps.size());
+	assert(b < cache_time_stamps.size());
+	assert(c < cache_time_stamps.size());
+
 	unsigned int cache_misses = 0;
 
 	// if vertex is not in cache, put it in cache
@@ -125,36 +129,6 @@ static unsigned int updateCache(unsigned int a, unsigned int b, unsigned int c, 
 	}
 
 	return cache_misses;
-}
-
-template <typename T>
-static std::pair<float, size_t> calculateACMR(const T* indices, size_t index_count, unsigned int cache_size, float threshold, std::vector<unsigned int>& cache_time_stamps, unsigned int& time_stamp)
-{
-	// Ensures that all vertices are not in cache
-	assert(time_stamp <= static_cast<unsigned int>(-1) - (cache_size + 1));
-	time_stamp += cache_size + 1;
-
-	float acmr = 0;
-	unsigned int cache_misses = 0;
-
-	size_t face_count = index_count / 3;
-
-	for (size_t face = 0; face < face_count; ++face)
-	{
-		unsigned int a = indices[face * 3 + 0], b = indices[face * 3 + 1], c = indices[face * 3 + 2];
-
-		cache_misses += updateCache(a, b, c, cache_size, cache_time_stamps, time_stamp);
-
-		// update ACMR & check for threshold
-		acmr = float(cache_misses) / float(face + 1);
-
-		if (acmr <= threshold)
-		{
-			return std::make_pair(acmr, face + 1);
-		}
-	}
-
-	return std::make_pair(acmr, face_count);
 }
 
 template <typename T>
@@ -221,13 +195,18 @@ static void generateSoftBoundaries(std::vector<unsigned int>& destination, const
 			}
 		}
 	}
+
+	assert(destination.size() >= clusters.size());
+	assert(destination.size() <= index_count / 3);
 }
 
 template <typename T>
 static void optimizeOverdrawTipsify(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, unsigned int cache_size, float threshold)
 {
+	assert(index_count % 3 == 0);
 	assert(vertex_positions_stride > 0);
 	assert(vertex_positions_stride % sizeof(float) == 0);
+	assert(cache_size >= 3);
 
 	// guard for empty meshes
 	if (index_count == 0 || vertex_count == 0)
@@ -262,20 +241,20 @@ static void optimizeOverdrawTipsify(T* destination, const T* indices, size_t ind
 	std::sort(sort_data.begin(), sort_data.end(), std::greater<ClusterSortData>());
 
 	// fill output buffer
-	T* dest_it = destination;
+	size_t offset = 0;
 
 	for (size_t i = 0; i < clusters.size(); ++i)
 	{
 		unsigned int cluster = sort_data[i].cluster;
 
 		size_t cluster_begin = clusters[cluster] * 3;
-		size_t cluster_end = (clusters.size() > cluster + 1) ? clusters[cluster + 1] * 3 : index_count;
+		size_t cluster_end = (cluster + 1 < clusters.size()) ? clusters[cluster + 1] * 3 : index_count;
 
 		for (size_t j = cluster_begin; j < cluster_end; ++j)
-			*dest_it++ = indices[j];
+			destination[offset++] = indices[j];
 	}
 
-	assert(dest_it == destination + index_count);
+	assert(offset == index_count);
 }
 
 void optimizeOverdraw(unsigned short* destination, const unsigned short* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, unsigned int cache_size, float threshold)
