@@ -145,12 +145,10 @@ void optCache(Mesh& mesh)
 
 void optOverdraw(Mesh& mesh)
 {
-	// use single input cluster encompassing the entire mesh and worst-case ACMR so that overdraw optimizer can sort *all* triangles
+	// use worst-case ACMR threshold so that overdraw optimizer can sort *all* triangles
 	// warning: this significantly deteriorates the vertex cache efficiency so it is not advised; look at optComplete for the recommended method
-	const unsigned int clusters[] = {0};
 	const float kThreshold = 3.f;
-
-	optimizeOverdraw(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), clusters, sizeof(clusters) / sizeof(clusters[0]), kCacheSize, kThreshold);
+	optimizeOverdraw(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), kCacheSize, kThreshold);
 }
 
 void optFetch(Mesh& mesh)
@@ -161,13 +159,11 @@ void optFetch(Mesh& mesh)
 void optComplete(Mesh& mesh)
 {
 	// vertex cache optimization should go first as it provides data for overdraw
-	std::vector<unsigned int> clusters(mesh.indices.size() / 3);
-	size_t cluster_count = 0;
-	optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, &clusters[0], &cluster_count);
+	optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize);
 
 	// reorder indices for overdraw, balancing overdraw and vertex cache efficiency
 	const float kThreshold = 1.05f; // allow up to 5% worse ACMR to get more reordering opportunities for overdraw
-	optimizeOverdraw(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), &clusters[0], cluster_count, kCacheSize, kThreshold);
+	optimizeOverdraw(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), kCacheSize, kThreshold);
 
 	// vertex fetch optimization should go last as it depends on the final index order
 	optimizeVertexFetch(&mesh.vertices[0], &mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), sizeof(Vertex));

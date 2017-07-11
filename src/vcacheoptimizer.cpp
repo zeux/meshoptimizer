@@ -117,7 +117,7 @@ static unsigned int getNextVertexNeighbour(const unsigned int* next_candidates_b
 }
 
 template <typename T>
-static void optimizeVertexCacheTipsify(T* destination, const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int* clusters, size_t* cluster_count)
+static void optimizeVertexCacheTipsify(T* destination, const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
 	// guard for empty meshes
 	if (index_count == 0 || vertex_count == 0)
@@ -151,14 +151,6 @@ static void optimizeVertexCacheTipsify(T* destination, const T* indices, size_t 
 
 	// emitted flags
 	std::vector<char> emitted_flags(index_count / 3, false);
-
-	// prepare clusters
-	size_t cluster_offset = 0;
-
-	if (clusters)
-	{
-		clusters[cluster_offset++] = 0;
-	}
 
 	unsigned int current_vertex = 0;
 
@@ -225,33 +217,20 @@ static void optimizeVertexCacheTipsify(T* destination, const T* indices, size_t 
 		if (current_vertex == static_cast<unsigned int>(-1))
 		{
 			current_vertex = getNextVertexDeadEnd(dead_end, dead_end_top, input_cursor, live_triangles);
-
-			if (clusters && current_vertex != static_cast<unsigned int>(-1))
-			{
-				// hard boundary, add cluster information
-				clusters[cluster_offset++] = output_triangle;
-			}
 		}
 	}
 
 	assert(output_triangle == index_count / 3);
-	assert(cluster_offset <= index_count / 3);
-
-	if (clusters)
-	{
-		assert(cluster_count);
-		*cluster_count = cluster_offset;
-	}
 }
 
-void optimizeVertexCache(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int* clusters, size_t* cluster_count)
+void optimizeVertexCache(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
-	optimizeVertexCacheTipsify(destination, indices, index_count, vertex_count, cache_size, clusters, cluster_count);
+	optimizeVertexCacheTipsify(destination, indices, index_count, vertex_count, cache_size);
 }
 
-void optimizeVertexCache(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int* clusters, size_t* cluster_count)
+void optimizeVertexCache(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
-	optimizeVertexCacheTipsify(destination, indices, index_count, vertex_count, cache_size, clusters, cluster_count);
+	optimizeVertexCacheTipsify(destination, indices, index_count, vertex_count, cache_size);
 }
 
 } // namespace meshopt

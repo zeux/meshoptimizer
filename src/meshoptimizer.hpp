@@ -38,21 +38,19 @@ MESHOPTIMIZER_API void generateVertexBuffer(void* destination, const unsigned in
 //
 // destination must contain enough space for the resulting index buffer (index_count elements)
 // cache_size should be less than the actual GPU cache size to avoid cache thrashing
-// clusters is an optional output for the overdraw optimizer; if specified, it must contain space for index_count/3 elements
-MESHOPTIMIZER_API void optimizeVertexCache(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 16, unsigned int* clusters = 0, size_t* cluster_count = 0);
-MESHOPTIMIZER_API void optimizeVertexCache(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 16, unsigned int* clusters = 0, size_t* cluster_count = 0);
+MESHOPTIMIZER_API void optimizeVertexCache(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 16);
+MESHOPTIMIZER_API void optimizeVertexCache(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = 16);
 
 // Overdraw optimizer using the Tipsify algorithm
 // Reorders indices to reduce the number of GPU vertex shader invocations and the pixel overdraw
 //
 // destination must contain enough space for the resulting index buffer (index_count elements)
 // indices must contain index data that is the result of optimizeVertexCache (*not* the original mesh indices!)
-// clusters must contain cluster data that is the result of optimizeVertexCache
 // vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
 // cache_size should be less than the actual GPU cache size to avoid cache thrashing
 // threshold indicates how much the overdraw optimizer can degrade vertex cache efficiency (1.05 = up to 5%) to reduce overdraw more efficiently
-MESHOPTIMIZER_API void optimizeOverdraw(unsigned short* destination, const unsigned short* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const unsigned int* clusters, size_t cluster_count, unsigned int cache_size = 16, float threshold = 1);
-MESHOPTIMIZER_API void optimizeOverdraw(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const unsigned int* clusters, size_t cluster_count, unsigned int cache_size = 16, float threshold = 1);
+MESHOPTIMIZER_API void optimizeOverdraw(unsigned short* destination, const unsigned short* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, unsigned int cache_size = 16, float threshold = 1);
+MESHOPTIMIZER_API void optimizeOverdraw(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, unsigned int cache_size = 16, float threshold = 1);
 
 // Vertex fetch cache optimizer
 // Reorders vertices and changes indices to reduce the amount of GPU memory fetches during vertex processing

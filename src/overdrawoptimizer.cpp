@@ -101,6 +101,32 @@ static void calculateSortData(std::vector<ClusterSortData>& sort_data, const T* 
 	}
 }
 
+static unsigned int updateCache(unsigned int a, unsigned int b, unsigned int c, unsigned int cache_size, std::vector<unsigned int>& cache_time_stamps, unsigned int& time_stamp)
+{
+	unsigned int cache_misses = 0;
+
+	// if vertex is not in cache, put it in cache
+	if (time_stamp - cache_time_stamps[a] > cache_size)
+	{
+		cache_time_stamps[a] = time_stamp++;
+		cache_misses++;
+	}
+
+	if (time_stamp - cache_time_stamps[b] > cache_size)
+	{
+		cache_time_stamps[b] = time_stamp++;
+		cache_misses++;
+	}
+
+	if (time_stamp - cache_time_stamps[c] > cache_size)
+	{
+		cache_time_stamps[c] = time_stamp++;
+		cache_misses++;
+	}
+
+	return cache_misses;
+}
+
 template <typename T>
 static std::pair<float, size_t> calculateACMR(const T* indices, size_t index_count, unsigned int cache_size, float threshold, std::vector<unsigned int>& cache_time_stamps, unsigned int& time_stamp)
 {
@@ -117,24 +143,7 @@ static std::pair<float, size_t> calculateACMR(const T* indices, size_t index_cou
 	{
 		unsigned int a = indices[face * 3 + 0], b = indices[face * 3 + 1], c = indices[face * 3 + 2];
 
-		// if vertex is not in cache, put it in cache
-		if (time_stamp - cache_time_stamps[a] > cache_size)
-		{
-			cache_time_stamps[a] = time_stamp++;
-			cache_misses++;
-		}
-
-		if (time_stamp - cache_time_stamps[b] > cache_size)
-		{
-			cache_time_stamps[b] = time_stamp++;
-			cache_misses++;
-		}
-
-		if (time_stamp - cache_time_stamps[c] > cache_size)
-		{
-			cache_time_stamps[c] = time_stamp++;
-			cache_misses++;
-		}
+		cache_misses += updateCache(a, b, c, cache_size, cache_time_stamps, time_stamp);
 
 		// update ACMR & check for threshold
 		acmr = float(cache_misses) / float(face + 1);
@@ -149,41 +158,73 @@ static std::pair<float, size_t> calculateACMR(const T* indices, size_t index_cou
 }
 
 template <typename T>
-static void generateSoftBoundaries(std::vector<unsigned int>& destination, const T* indices, size_t index_count, size_t vertex_count, const unsigned int* clusters, size_t cluster_count, unsigned int cache_size, float threshold)
+static float generateHardBoundaries(std::vector<unsigned int>& destination, const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
-	if (threshold <= 0)
+	std::vector<unsigned int> cache_time_stamps(vertex_count, 0);
+	unsigned int time_stamp = cache_size + 1;
+
+	unsigned int cache_misses = 0;
+
+	size_t face_count = index_count / 3;
+
+	for (size_t i = 0; i < face_count; ++i)
 	{
-		// hard boundaries only
-		destination.assign(clusters, clusters + cluster_count);
-		return;
+		unsigned int m = updateCache(indices[i * 3 + 0], indices[i * 3 + 1], indices[i * 3 + 2], cache_size, cache_time_stamps, time_stamp);
+
+		if (m == 3)
+		{
+			destination.push_back(unsigned(i));
+		}
+
+		cache_misses += m;
 	}
 
+	return float(cache_misses) / float(face_count);
+}
+
+template <typename T>
+static void generateSoftBoundaries(std::vector<unsigned int>& destination, const T* indices, size_t index_count, size_t vertex_count, const std::vector<unsigned int>& clusters, unsigned int cache_size, float acmr_threshold)
+{
 	std::vector<unsigned int> cache_time_stamps(vertex_count, 0);
 	unsigned int time_stamp = 0;
 
-	std::pair<float, size_t> p = calculateACMR(indices, index_count, cache_size, 0, cache_time_stamps, time_stamp);
-	assert(p.second == index_count / 3);
-
-	float acmr_threshold = p.first * threshold;
-
-	for (size_t it = 0; it < cluster_count; ++it)
+	for (size_t it = 0; it < clusters.size(); ++it)
 	{
 		size_t start = clusters[it];
-		size_t end = (it + 1 < cluster_count) ? clusters[it + 1] : index_count / 3;
+		size_t end = (it + 1 < clusters.size()) ? clusters[it + 1] : index_count / 3;
 		assert(start <= end);
 
-		while (start != end)
-		{
-			std::pair<float, size_t> cp = calculateACMR(indices + start * 3, (end - start) * 3, cache_size, acmr_threshold, cache_time_stamps, time_stamp);
+		unsigned int running_misses = 0;
+		unsigned int running_faces = 0;
 
-			destination.push_back(static_cast<unsigned int>(start));
-			start += cp.second;
+		// reset cache
+		time_stamp += cache_size + 1;
+
+		destination.push_back(unsigned(start));
+
+		for (size_t i = start; i < end; ++i)
+		{
+			unsigned int m = updateCache(indices[i * 3 + 0], indices[i * 3 + 1], indices[i * 3 + 2], cache_size, cache_time_stamps, time_stamp);
+
+			running_misses += m;
+			running_faces += 1;
+
+			if (float(running_misses) / float(running_faces) <= acmr_threshold && i != start)
+			{
+				destination.push_back(unsigned(i));
+
+				// reset cache
+				time_stamp += cache_size + 1;
+
+				running_misses = 0;
+				running_faces = 0;
+			}
 		}
 	}
 }
 
 template <typename T>
-static void optimizeOverdrawTipsify(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const unsigned int* hard_clusters, size_t hard_cluster_count, unsigned int cache_size, float threshold)
+static void optimizeOverdrawTipsify(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, unsigned int cache_size, float threshold)
 {
 	assert(vertex_positions_stride > 0);
 	assert(vertex_positions_stride % sizeof(float) == 0);
@@ -203,12 +244,15 @@ static void optimizeOverdrawTipsify(T* destination, const T* indices, size_t ind
 		indices = &indices_copy[0];
 	}
 
-	// we're expecting at least one cluster as an input
-	assert(hard_clusters && hard_cluster_count > 0);
+	// generate hard boundaries from full-triangle cache misses
+	std::vector<unsigned int> hard_clusters;
+	float acmr = generateHardBoundaries(hard_clusters, indices, index_count, vertex_count, cache_size);
 
 	// generate soft boundaries
-	std::vector<unsigned int> clusters;
-	generateSoftBoundaries(clusters, indices, index_count, vertex_count, hard_clusters, hard_cluster_count, cache_size, threshold);
+	std::vector<unsigned int> soft_clusters;
+	generateSoftBoundaries(soft_clusters, indices, index_count, vertex_count, hard_clusters, cache_size, acmr * threshold);
+
+	const std::vector<unsigned int>& clusters = soft_clusters;
 
 	// fill sort data
 	std::vector<ClusterSortData> sort_data(clusters.size());
@@ -234,14 +278,14 @@ static void optimizeOverdrawTipsify(T* destination, const T* indices, size_t ind
 	assert(dest_it == destination + index_count);
 }
 
-void optimizeOverdraw(unsigned short* destination, const unsigned short* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const unsigned int* clusters, size_t cluster_count, unsigned int cache_size, float threshold)
+void optimizeOverdraw(unsigned short* destination, const unsigned short* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, unsigned int cache_size, float threshold)
 {
-	optimizeOverdrawTipsify(destination, indices, index_count, vertex_positions, vertex_positions_stride, vertex_count, clusters, cluster_count, cache_size, threshold);
+	optimizeOverdrawTipsify(destination, indices, index_count, vertex_positions, vertex_positions_stride, vertex_count, cache_size, threshold);
 }
 
-void optimizeOverdraw(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, const unsigned int* clusters, size_t cluster_count, unsigned int cache_size, float threshold)
+void optimizeOverdraw(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, unsigned int cache_size, float threshold)
 {
-	optimizeOverdrawTipsify(destination, indices, index_count, vertex_positions, vertex_positions_stride, vertex_count, clusters, cluster_count, cache_size, threshold);
+	optimizeOverdrawTipsify(destination, indices, index_count, vertex_positions, vertex_positions_stride, vertex_count, cache_size, threshold);
 }
 
 } // namespace meshopt
