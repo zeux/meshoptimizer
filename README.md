@@ -10,7 +10,7 @@ Vertex fetch optimization involves reordering vertices (and remapping triangle i
 
 You should first optimize your mesh for vertex cache (to get the optimal triangle order), and then optimize the result for vertex fetch (which keeps the triangle order but changes the vertex data) for maximum efficiency.
 
-The vertex cache optimization algorithm is capable of optimizing for overdraw by splitting the mesh into clusters and reordering them using a heuristic that tries to reduce overdraw. The heuristic needs access to vertex positions.
+Additionally the library provides a way to optimize the mesh for overdraw by splitting the mesh into clusters and reordering them using a heuristic that tries to reduce overdraw. The heuristic needs access to vertex positions.
 
 ## Vertex cache optimizer
 
@@ -22,17 +22,14 @@ meshopt::optimizeVertexCache(index_data, index_data, index_count, vertex_count);
 
 The given example optimizes index_data in place; you can also specify a different destination index buffer.
 
-To perform both vertex cache and overdraw optimization, you have to invoke the function with additional output arguments, which you then have to pass to another function:
+To perform both vertex cache and overdraw optimization, you have to invoke another function on the index buffer produced by `optimizeVertexCache`:
 
 ```c++
-std::vector<unsigned int> clusters(index_count / 3);
-size_t cluster_count = 0;
-meshopt::optimizeVertexCache(index_data, index_data, index_count, vertex_count, 16, &clusters[0], &cluster_count);
-meshopt::optimizeOverdraw(index_data, index_data, index_count, vertex_positions, vertex_stride, vertex_count,
-    &clusters[0], cluster_count, 16, 1.05f);
+meshopt::optimizeVertexCache(index_data, index_data, index_count, vertex_count, 16);
+meshopt::optimizeOverdraw(index_data, index_data, index_count, vertex_positions, vertex_stride, vertex_count, 16, 1.05f);
 ```
 
-The first call generates a cache-optimized index sequence as well as a set of clusters that the second call then reorders to get better overdraw results. The overdraw optimizer also needs to read vertex positions, which you have to provide as a pointer to a float3 vector and a stride, similar to glVertexPointer.
+The first call generates a cache-optimized index sequence that the second call then reorders to get better overdraw results. The overdraw optimizer also needs to read vertex positions, which you have to provide as a pointer to a float3 vector and a stride, similar to glVertexPointer.
 
 You can also provide a threshold that will determine how much the algorithm can compromise the vertex cache hit ratio in favor of overdraw; 1.05 means that the resulting vertex cache hit ratio should be at most 5% worse than a non-overdraw optimized order.
 
