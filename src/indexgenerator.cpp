@@ -117,6 +117,9 @@ static HashEntry* hashLookup(std::vector<HashEntry>& table, const Hasher& hasher
 
 size_t generateIndexBuffer(unsigned int* destination, const void* vertices, size_t vertex_count, size_t vertex_size)
 {
+	assert(vertex_count % 3 == 0);
+	assert(vertex_size > 0);
+
 	Hasher hasher = {vertex_size};
 
 	std::vector<HashEntry> table;
@@ -144,6 +147,10 @@ size_t generateIndexBuffer(unsigned int* destination, const void* vertices, size
 
 void generateVertexBuffer(void* destination, const unsigned int* indices, const void* vertices, size_t vertex_count, size_t vertex_size)
 {
+	assert(destination != vertices);
+	assert(vertex_count % 3 == 0);
+	assert(vertex_size > 0);
+
 	unsigned int next_vertex = 0;
 
 	for (size_t i = 0; i < vertex_count; ++i)
