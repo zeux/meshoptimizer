@@ -80,7 +80,7 @@ static unsigned int getNextVertexDeadEnd(const std::vector<unsigned int>& dead_e
 	return static_cast<unsigned int>(-1);
 }
 
-static unsigned int getNextVertexNeighbour(const unsigned int* next_candidates_begin, const unsigned int* next_candidates_end, const std::vector<unsigned int>& live_triangles, const std::vector<unsigned int>& cache_time_stamps, unsigned int time_stamp, unsigned int cache_size)
+static unsigned int getNextVertexNeighbour(const unsigned int* next_candidates_begin, const unsigned int* next_candidates_end, const std::vector<unsigned int>& live_triangles, const std::vector<unsigned int>& cache_timestamps, unsigned int timestamp, unsigned int cache_size)
 {
 	unsigned int best_candidate = static_cast<unsigned int>(-1);
 	int best_priority = -1;
@@ -95,9 +95,9 @@ static unsigned int getNextVertexNeighbour(const unsigned int* next_candidates_b
 			int priority = 0;
 
 			// will it be in cache after fanning?
-			if (2 * live_triangles[vertex] + time_stamp - cache_time_stamps[vertex] <= cache_size)
+			if (2 * live_triangles[vertex] + timestamp - cache_timestamps[vertex] <= cache_size)
 			{
-				priority = time_stamp - cache_time_stamps[vertex]; // position in cache
+				priority = timestamp - cache_timestamps[vertex]; // position in cache
 			}
 
 			if (priority > best_priority)
@@ -141,7 +141,7 @@ static void optimizeVertexCacheTipsify(T* destination, const T* indices, size_t 
 	std::vector<unsigned int> live_triangles = adjacency.triangle_counts;
 
 	// cache time stamps
-	std::vector<unsigned int> cache_time_stamps(vertex_count, 0);
+	std::vector<unsigned int> cache_timestamps(vertex_count, 0);
 
 	// dead-end stack
 	std::vector<unsigned int> dead_end(index_count);
@@ -152,7 +152,7 @@ static void optimizeVertexCacheTipsify(T* destination, const T* indices, size_t 
 
 	unsigned int current_vertex = 0;
 
-	unsigned int time_stamp = cache_size + 1;
+	unsigned int timestamp = cache_size + 1;
 	unsigned int input_cursor = 1; // vertex to restart from in case of dead-end
 
 	unsigned int output_triangle = 0;
@@ -192,14 +192,14 @@ static void optimizeVertexCacheTipsify(T* destination, const T* indices, size_t 
 
 				// update cache info
 				// if vertex is not in cache, put it in cache
-				if (time_stamp - cache_time_stamps[a] > cache_size)
-					cache_time_stamps[a] = time_stamp++;
+				if (timestamp - cache_timestamps[a] > cache_size)
+					cache_timestamps[a] = timestamp++;
 
-				if (time_stamp - cache_time_stamps[b] > cache_size)
-					cache_time_stamps[b] = time_stamp++;
+				if (timestamp - cache_timestamps[b] > cache_size)
+					cache_timestamps[b] = timestamp++;
 
-				if (time_stamp - cache_time_stamps[c] > cache_size)
-					cache_time_stamps[c] = time_stamp++;
+				if (timestamp - cache_timestamps[c] > cache_size)
+					cache_timestamps[c] = timestamp++;
 
 				// update emitted flags
 				emitted_flags[triangle] = true;
@@ -210,7 +210,7 @@ static void optimizeVertexCacheTipsify(T* destination, const T* indices, size_t 
 		const unsigned int* next_candidates_end = &dead_end[0] + dead_end_top;
 
 		// get next vertex
-		current_vertex = getNextVertexNeighbour(next_candidates_begin, next_candidates_end, live_triangles, cache_time_stamps, time_stamp, cache_size);
+		current_vertex = getNextVertexNeighbour(next_candidates_begin, next_candidates_end, live_triangles, cache_timestamps, timestamp, cache_size);
 
 		if (current_vertex == static_cast<unsigned int>(-1))
 		{

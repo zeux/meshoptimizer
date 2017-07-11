@@ -101,30 +101,30 @@ static void calculateSortData(std::vector<ClusterSortData>& sort_data, const T* 
 	}
 }
 
-static unsigned int updateCache(unsigned int a, unsigned int b, unsigned int c, unsigned int cache_size, std::vector<unsigned int>& cache_time_stamps, unsigned int& time_stamp)
+static unsigned int updateCache(unsigned int a, unsigned int b, unsigned int c, unsigned int cache_size, std::vector<unsigned int>& cache_timestamps, unsigned int& timestamp)
 {
-	assert(a < cache_time_stamps.size());
-	assert(b < cache_time_stamps.size());
-	assert(c < cache_time_stamps.size());
+	assert(a < cache_timestamps.size());
+	assert(b < cache_timestamps.size());
+	assert(c < cache_timestamps.size());
 
 	unsigned int cache_misses = 0;
 
 	// if vertex is not in cache, put it in cache
-	if (time_stamp - cache_time_stamps[a] > cache_size)
+	if (timestamp - cache_timestamps[a] > cache_size)
 	{
-		cache_time_stamps[a] = time_stamp++;
+		cache_timestamps[a] = timestamp++;
 		cache_misses++;
 	}
 
-	if (time_stamp - cache_time_stamps[b] > cache_size)
+	if (timestamp - cache_timestamps[b] > cache_size)
 	{
-		cache_time_stamps[b] = time_stamp++;
+		cache_timestamps[b] = timestamp++;
 		cache_misses++;
 	}
 
-	if (time_stamp - cache_time_stamps[c] > cache_size)
+	if (timestamp - cache_timestamps[c] > cache_size)
 	{
-		cache_time_stamps[c] = time_stamp++;
+		cache_timestamps[c] = timestamp++;
 		cache_misses++;
 	}
 
@@ -134,8 +134,8 @@ static unsigned int updateCache(unsigned int a, unsigned int b, unsigned int c, 
 template <typename T>
 static float generateHardBoundaries(std::vector<unsigned int>& destination, const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
-	std::vector<unsigned int> cache_time_stamps(vertex_count, 0);
-	unsigned int time_stamp = cache_size + 1;
+	std::vector<unsigned int> cache_timestamps(vertex_count, 0);
+	unsigned int timestamp = cache_size + 1;
 
 	unsigned int cache_misses = 0;
 
@@ -143,7 +143,7 @@ static float generateHardBoundaries(std::vector<unsigned int>& destination, cons
 
 	for (size_t i = 0; i < face_count; ++i)
 	{
-		unsigned int m = updateCache(indices[i * 3 + 0], indices[i * 3 + 1], indices[i * 3 + 2], cache_size, cache_time_stamps, time_stamp);
+		unsigned int m = updateCache(indices[i * 3 + 0], indices[i * 3 + 1], indices[i * 3 + 2], cache_size, cache_timestamps, timestamp);
 
 		if (m == 3)
 		{
@@ -159,8 +159,8 @@ static float generateHardBoundaries(std::vector<unsigned int>& destination, cons
 template <typename T>
 static void generateSoftBoundaries(std::vector<unsigned int>& destination, const T* indices, size_t index_count, size_t vertex_count, const std::vector<unsigned int>& clusters, unsigned int cache_size, float acmr_threshold)
 {
-	std::vector<unsigned int> cache_time_stamps(vertex_count, 0);
-	unsigned int time_stamp = 0;
+	std::vector<unsigned int> cache_timestamps(vertex_count, 0);
+	unsigned int timestamp = 0;
 
 	for (size_t it = 0; it < clusters.size(); ++it)
 	{
@@ -172,13 +172,13 @@ static void generateSoftBoundaries(std::vector<unsigned int>& destination, const
 		unsigned int running_faces = 0;
 
 		// reset cache
-		time_stamp += cache_size + 1;
+		timestamp += cache_size + 1;
 
 		destination.push_back(unsigned(start));
 
 		for (size_t i = start; i < end; ++i)
 		{
-			unsigned int m = updateCache(indices[i * 3 + 0], indices[i * 3 + 1], indices[i * 3 + 2], cache_size, cache_time_stamps, time_stamp);
+			unsigned int m = updateCache(indices[i * 3 + 0], indices[i * 3 + 1], indices[i * 3 + 2], cache_size, cache_timestamps, timestamp);
 
 			running_misses += m;
 			running_faces += 1;
@@ -188,7 +188,7 @@ static void generateSoftBoundaries(std::vector<unsigned int>& destination, const
 				destination.push_back(unsigned(i));
 
 				// reset cache
-				time_stamp += cache_size + 1;
+				timestamp += cache_size + 1;
 
 				running_misses = 0;
 				running_faces = 0;

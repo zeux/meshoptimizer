@@ -15,18 +15,18 @@ static VertexCacheStatistics analyzeVertexCacheImpl(const T* indices, size_t ind
 
 	VertexCacheStatistics result = {};
 
-	std::vector<unsigned int> cache_time_stamps(vertex_count, 0);
-	unsigned int time_stamp = cache_size + 1;
+	std::vector<unsigned int> cache_timestamps(vertex_count, 0);
+	unsigned int timestamp = cache_size + 1;
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
 		T index = indices[i];
 		assert(index < vertex_count);
 
-		if (time_stamp - cache_time_stamps[index] > cache_size)
+		if (timestamp - cache_timestamps[index] > cache_size)
 		{
 			// cache miss
-			cache_time_stamps[index] = time_stamp++;
+			cache_timestamps[index] = timestamp++;
 			result.vertices_transformed++;
 		}
 	}
