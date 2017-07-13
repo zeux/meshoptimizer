@@ -115,10 +115,16 @@ static HashEntry* hashLookup(std::vector<HashEntry>& table, const Hasher& hasher
 	return 0;
 }
 
-size_t generateIndexBuffer(unsigned int* destination, const void* vertices, size_t vertex_count, size_t vertex_size)
+size_t generateVertexRemap(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)
 {
-	assert(vertex_count % 3 == 0);
+	assert(indices || index_count == vertex_count);
+	assert(index_count % 3 == 0);
 	assert(vertex_size > 0);
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		destination[i] = static_cast<unsigned int>(-1);
+	}
 
 	Hasher hasher = {vertex_size};
 
@@ -127,41 +133,57 @@ size_t generateIndexBuffer(unsigned int* destination, const void* vertices, size
 
 	unsigned int next_vertex = 0;
 
-	for (size_t i = 0; i < vertex_count; ++i)
+	for (size_t i = 0; i < index_count; ++i)
 	{
-		const void* vertex = static_cast<const char*>(vertices) + i * vertex_size;
+		unsigned int index = indices ? indices[i] : unsigned(i);
+		assert(index < vertex_count);
 
-		HashEntry* entry = hashLookup(table, hasher, vertex);
-
-		if (!entry->key)
+		if (destination[index] == static_cast<unsigned int>(-1))
 		{
-			entry->key = vertex;
-			entry->value = next_vertex++;
-		}
+			const void* vertex = static_cast<const char*>(vertices) + i * vertex_size;
 
-		destination[i] = entry->value;
+			HashEntry* entry = hashLookup(table, hasher, vertex);
+
+			if (!entry->key)
+			{
+				entry->key = vertex;
+				entry->value = next_vertex++;
+			}
+
+			destination[index] = entry->value;
+		}
 	}
 
 	return next_vertex;
 }
 
-void generateVertexBuffer(void* destination, const unsigned int* indices, const void* vertices, size_t vertex_count, size_t vertex_size)
+void remapVertexBuffer(void* destination, const void* vertices, size_t vertex_count, size_t vertex_size, const unsigned int* remap)
 {
 	assert(destination != vertices);
-	assert(vertex_count % 3 == 0);
 	assert(vertex_size > 0);
-
-	unsigned int next_vertex = 0;
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		assert(indices[i] <= next_vertex);
+		memcpy(static_cast<char*>(destination) + remap[i] * vertex_size, static_cast<const char*>(vertices) + i * vertex_size, vertex_size);
+	}
+}
 
-		if (indices[i] == next_vertex)
+void remapIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count, const unsigned int* remap)
+{
+	assert(index_count % 3 == 0);
+
+	if (indices)
+	{
+		for (size_t i = 0; i < index_count; ++i)
 		{
-			memcpy(static_cast<char*>(destination) + next_vertex * vertex_size, static_cast<const char*>(vertices) + i * vertex_size, vertex_size);
-
-			next_vertex++;
+			destination[i] = remap[indices[i]];
+		}
+	}
+	else
+	{
+		for (size_t i = 0; i < index_count; ++i)
+		{
+			destination[i] = remap[i];
 		}
 	}
 }

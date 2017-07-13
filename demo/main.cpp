@@ -103,13 +103,15 @@ Mesh parseObj(const char* path, clock_t& reindex)
 
 	Mesh result;
 
-	result.indices.resize(total_indices);
+	std::vector<unsigned int> remap(total_indices);
 
-	size_t total_vertices = generateIndexBuffer(&result.indices[0], &vertices[0], total_indices, sizeof(Vertex));
+	size_t total_vertices = generateVertexRemap(&remap[0], NULL, total_indices, &vertices[0], total_indices, sizeof(Vertex));
+
+	result.indices.resize(total_indices);
+	remapIndexBuffer(&result.indices[0], NULL, total_indices, &remap[0]);
 
 	result.vertices.resize(total_vertices);
-
-	generateVertexBuffer(&result.vertices[0], &result.indices[0], &vertices[0], total_indices, sizeof(Vertex));
+	remapVertexBuffer(&result.vertices[0], &vertices[0], total_indices, sizeof(Vertex), &remap[0]);
 
 	return result;
 }
