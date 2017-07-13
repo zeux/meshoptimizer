@@ -140,7 +140,7 @@ size_t generateVertexRemap(unsigned int* destination, const unsigned int* indice
 
 		if (destination[index] == static_cast<unsigned int>(-1))
 		{
-			const void* vertex = static_cast<const char*>(vertices) + i * vertex_size;
+			const void* vertex = static_cast<const char*>(vertices) + index * vertex_size;
 
 			HashEntry* entry = hashLookup(table, hasher, vertex);
 
