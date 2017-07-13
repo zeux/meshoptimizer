@@ -9,7 +9,7 @@ namespace meshopt
 {
 
 template <typename T>
-static void optimizeVertexFetchImpl(void* destination, const void* vertices, T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+static size_t optimizeVertexFetchImpl(void* destination, const void* vertices, T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
 	assert(index_count % 3 == 0);
 	assert(vertex_size > 0);
@@ -26,7 +26,7 @@ static void optimizeVertexFetchImpl(void* destination, const void* vertices, T* 
 	// build vertex remap table
 	std::vector<unsigned int> vertex_remap(vertex_count, static_cast<unsigned int>(-1));
 
-	unsigned int vertex = 0;
+	unsigned int next_vertex = 0;
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
@@ -38,26 +38,28 @@ static void optimizeVertexFetchImpl(void* destination, const void* vertices, T* 
 		if (remap == static_cast<unsigned int>(-1)) // vertex was not added to destination VB
 		{
 			// add vertex
-			memcpy(static_cast<char*>(destination) + vertex * vertex_size, static_cast<const char*>(vertices) + index * vertex_size, vertex_size);
+			memcpy(static_cast<char*>(destination) + next_vertex * vertex_size, static_cast<const char*>(vertices) + index * vertex_size, vertex_size);
 
-			remap = vertex++;
+			remap = next_vertex++;
 		}
 
 		// modify indices in place
 		indices[i] = T(remap);
 	}
 
-	assert(vertex <= vertex_count);
+	assert(next_vertex <= vertex_count);
+
+	return next_vertex;
 }
 
-void optimizeVertexFetch(void* destination, const void* vertices, unsigned short* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+size_t optimizeVertexFetch(void* destination, const void* vertices, unsigned short* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
-	optimizeVertexFetchImpl(destination, vertices, indices, index_count, vertex_count, vertex_size);
+	return optimizeVertexFetchImpl(destination, vertices, indices, index_count, vertex_count, vertex_size);
 }
 
-void optimizeVertexFetch(void* destination, const void* vertices, unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+size_t optimizeVertexFetch(void* destination, const void* vertices, unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
-	optimizeVertexFetchImpl(destination, vertices, indices, index_count, vertex_count, vertex_size);
+	return optimizeVertexFetchImpl(destination, vertices, indices, index_count, vertex_count, vertex_size);
 }
 
 } // namespace meshopt
