@@ -53,7 +53,7 @@ Mesh generatePlane(unsigned int N)
 	return result;
 }
 
-Mesh parseObj(const char* path)
+Mesh parseObj(const char* path, clock_t& reindex)
 {
 	ObjFile file;
 
@@ -98,6 +98,8 @@ Mesh parseObj(const char* path)
 
 		vertices.push_back(v);
 	}
+
+	reindex = clock();
 
 	Mesh result;
 
@@ -181,7 +183,7 @@ void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
 	VertexFetchStatistics vfs = analyzeVertexFetch(&copy.indices[0], copy.indices.size(), copy.vertices.size(), sizeof(Vertex));
 	OverdrawStatistics os = analyzeOverdraw(&copy.indices[0], copy.indices.size(), &copy.vertices[0].px, sizeof(Vertex), copy.vertices.size());
 
-	printf("%-9s: ACMR %f ATVR %f Overfetch %f Overdraw %f in %f msec\n", name, vcs.acmr, vcs.atvr, vfs.overfetch, os.overdraw, double(end - start) / CLOCKS_PER_SEC * 1000);
+	printf("%-9s: ACMR %f ATVR %f Overfetch %f Overdraw %f in %.2f msec\n", name, vcs.acmr, vcs.atvr, vfs.overfetch, os.overdraw, double(end - start) / CLOCKS_PER_SEC * 1000);
 }
 
 void process(const char* path)
@@ -191,7 +193,8 @@ void process(const char* path)
 	if (path)
 	{
 		clock_t start = clock();
-		mesh = parseObj(path);
+		clock_t middle;
+		mesh = parseObj(path, middle);
 		clock_t end = clock();
 
 		if (mesh.vertices.empty())
@@ -200,7 +203,7 @@ void process(const char* path)
 			return;
 		}
 
-		printf("# %s: %d vertices, %d triangles; read in %f msec\n", path, int(mesh.vertices.size()), int(mesh.indices.size() / 3), double(end - start) / CLOCKS_PER_SEC * 1000);
+		printf("# %s: %d vertices, %d triangles; read in %.2f msec; indexed in %.2f msec\n", path, int(mesh.vertices.size()), int(mesh.indices.size() / 3), double(middle - start) / CLOCKS_PER_SEC * 1000, double(end - middle) / CLOCKS_PER_SEC * 1000);
 	}
 	else
 	{
