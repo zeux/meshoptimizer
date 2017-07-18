@@ -8,8 +8,7 @@
 namespace meshopt
 {
 
-template <typename T>
-static size_t optimizeVertexFetchImpl(void* destination, const void* vertices, T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+size_t optimizeVertexFetch(void* destination, const void* vertices, unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
 	assert(index_count % 3 == 0);
 	assert(vertex_size > 0);
@@ -30,7 +29,7 @@ static size_t optimizeVertexFetchImpl(void* destination, const void* vertices, T
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
-		T index = indices[i];
+		unsigned int index = indices[i];
 		assert(index < vertex_count);
 
 		unsigned int& remap = vertex_remap[index];
@@ -44,22 +43,12 @@ static size_t optimizeVertexFetchImpl(void* destination, const void* vertices, T
 		}
 
 		// modify indices in place
-		indices[i] = T(remap);
+		indices[i] = remap;
 	}
 
 	assert(next_vertex <= vertex_count);
 
 	return next_vertex;
-}
-
-size_t optimizeVertexFetch(void* destination, const void* vertices, unsigned short* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
-{
-	return optimizeVertexFetchImpl(destination, vertices, indices, index_count, vertex_count, vertex_size);
-}
-
-size_t optimizeVertexFetch(void* destination, const void* vertices, unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
-{
-	return optimizeVertexFetchImpl(destination, vertices, indices, index_count, vertex_count, vertex_size);
 }
 
 } // namespace meshopt

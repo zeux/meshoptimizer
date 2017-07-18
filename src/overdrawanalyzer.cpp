@@ -136,8 +136,7 @@ static void rasterize(OverdrawBuffer* buffer, float v1x, float v1y, float v1z, f
 	}
 }
 
-template <typename T>
-static OverdrawStatistics analyzeOverdrawImpl(const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count)
+OverdrawStatistics analyzeOverdraw(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count)
 {
 	assert(vertex_positions_stride > 0);
 	assert(vertex_positions_stride % sizeof(float) == 0);
@@ -222,16 +221,6 @@ static OverdrawStatistics analyzeOverdrawImpl(const T* indices, size_t index_cou
 	result.overdraw = result.pixels_covered ? float(result.pixels_shaded) / float(result.pixels_covered) : 0.f;
 
 	return result;
-}
-
-OverdrawStatistics analyzeOverdraw(const unsigned short* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count)
-{
-	return analyzeOverdrawImpl(indices, index_count, vertex_positions, vertex_positions_stride, vertex_count);
-}
-
-OverdrawStatistics analyzeOverdraw(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count)
-{
-	return analyzeOverdrawImpl(indices, index_count, vertex_positions, vertex_positions_stride, vertex_count);
 }
 
 } // namespace meshopt

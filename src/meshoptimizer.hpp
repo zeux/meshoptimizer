@@ -8,7 +8,7 @@
  */
 #pragma once
 
-#include <cstddef>
+#include <stddef.h>
 
 // Version macro; major * 100 + minor * 10 + patch
 #define MESHOPTIMIZER_VERSION 100

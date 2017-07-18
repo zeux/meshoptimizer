@@ -7,8 +7,7 @@
 namespace meshopt
 {
 
-template <typename T>
-static VertexCacheStatistics analyzeVertexCacheImpl(const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+VertexCacheStatistics analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
 	assert(index_count % 3 == 0);
 	assert(cache_size >= 3);
@@ -20,7 +19,7 @@ static VertexCacheStatistics analyzeVertexCacheImpl(const T* indices, size_t ind
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
-		T index = indices[i];
+		unsigned int index = indices[i];
 		assert(index < vertex_count);
 
 		if (timestamp - cache_timestamps[index] > cache_size)
@@ -35,16 +34,6 @@ static VertexCacheStatistics analyzeVertexCacheImpl(const T* indices, size_t ind
 	result.atvr = vertex_count == 0 ? 0 : float(result.vertices_transformed) / float(vertex_count);
 
 	return result;
-}
-
-VertexCacheStatistics analyzeVertexCache(const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
-{
-	return analyzeVertexCacheImpl(indices, index_count, vertex_count, cache_size);
-}
-
-VertexCacheStatistics analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
-{
-	return analyzeVertexCacheImpl(indices, index_count, vertex_count, cache_size);
 }
 
 } // namespace meshopt
