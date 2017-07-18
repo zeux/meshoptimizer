@@ -47,7 +47,6 @@ MESHOPTIMIZER_API void remapIndexBuffer(unsigned int* destination, const unsigne
 //
 // destination must contain enough space for the resulting index buffer (index_count elements)
 // cache_size should be less than the actual GPU cache size to avoid cache thrashing
-MESHOPTIMIZER_API void optimizeVertexCache(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = MESHOPTIMIZER_DEFAULT_VCACHE_SIZE);
 MESHOPTIMIZER_API void optimizeVertexCache(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = MESHOPTIMIZER_DEFAULT_VCACHE_SIZE);
 
 // Overdraw optimizer
@@ -58,7 +57,6 @@ MESHOPTIMIZER_API void optimizeVertexCache(unsigned int* destination, const unsi
 // vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
 // cache_size should be less than the actual GPU cache size to avoid cache thrashing
 // threshold indicates how much the overdraw optimizer can degrade vertex cache efficiency (1.05 = up to 5%) to reduce overdraw more efficiently
-MESHOPTIMIZER_API void optimizeOverdraw(unsigned short* destination, const unsigned short* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, unsigned int cache_size = MESHOPTIMIZER_DEFAULT_VCACHE_SIZE, float threshold = 1);
 MESHOPTIMIZER_API void optimizeOverdraw(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, unsigned int cache_size = MESHOPTIMIZER_DEFAULT_VCACHE_SIZE, float threshold = 1);
 
 // Vertex fetch cache optimizer
@@ -66,7 +64,6 @@ MESHOPTIMIZER_API void optimizeOverdraw(unsigned int* destination, const unsigne
 //
 // desination must contain enough space for the resulting vertex buffer (vertex_count elements)
 // indices is used both as an input and as an output index buffer
-MESHOPTIMIZER_API size_t optimizeVertexFetch(void* destination, const void* vertices, unsigned short* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
 MESHOPTIMIZER_API size_t optimizeVertexFetch(void* destination, const void* vertices, unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
 
 struct VertexCacheStatistics
@@ -79,7 +76,6 @@ struct VertexCacheStatistics
 // Vertex transform cache analyzer
 // Returns cache hit statistics using a simplified FIFO model
 // Results will not match actual GPU performance
-MESHOPTIMIZER_API VertexCacheStatistics analyzeVertexCache(const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = MESHOPTIMIZER_DEFAULT_VCACHE_SIZE);
 MESHOPTIMIZER_API VertexCacheStatistics analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = MESHOPTIMIZER_DEFAULT_VCACHE_SIZE);
 
 struct OverdrawStatistics
@@ -94,7 +90,6 @@ struct OverdrawStatistics
 // Results will not match actual GPU performance
 //
 // vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
-MESHOPTIMIZER_API OverdrawStatistics analyzeOverdraw(const unsigned short* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count);
 MESHOPTIMIZER_API OverdrawStatistics analyzeOverdraw(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count);
 
 struct VertexFetchStatistics
@@ -106,7 +101,6 @@ struct VertexFetchStatistics
 // Vertex fetch cache analyzer
 // Returns cache hit statistics using a simplified direct mapped model
 // Results will not match actual GPU performance
-MESHOPTIMIZER_API VertexFetchStatistics analyzeVertexFetch(const unsigned short* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
 MESHOPTIMIZER_API VertexFetchStatistics analyzeVertexFetch(const unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
 
 // Quantization into commonly supported data formats
@@ -130,93 +124,121 @@ inline unsigned short quantizeHalf(float v);
 
 } // namespace meshopt
 
-// Static assertion
-#define MESHOPTIMIZER_STATIC_ASSERT(cond) { static const char condition_failed[(cond) ? 1 : -1] = {0}; (void)condition_failed[0]; }
-
 // C++ template interface
 namespace meshopt
 {
 
 template <typename T>
+struct IndexAdapter
+{
+	T* result;
+	unsigned int* data;
+	size_t count;
+
+	IndexAdapter(T* result, const T* input, size_t count): result(result), data(0), count(count)
+	{
+		data = new unsigned int[count];
+
+		if (input)
+		{
+			for (size_t i = 0; i < count; ++i)
+				data[i] = input[i];
+		}
+	}
+
+	~IndexAdapter()
+	{
+		if (result)
+		{
+			for (size_t i = 0; i < count; ++i)
+				result[i] = data[i];
+		}
+
+		delete[] data;
+	}
+};
+
+template <typename T>
 inline size_t generateVertexRemap(unsigned int* destination, const T* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)
 {
-	MESHOPTIMIZER_STATIC_ASSERT(sizeof(T) == sizeof(unsigned int));
+	if (indices)
+	{
+		IndexAdapter<T> in(0, indices, index_count);
 
-	return generateVertexRemap(destination, reinterpret_cast<const unsigned int*>(indices), index_count, vertices, vertex_count, vertex_size);
+		return generateVertexRemap(destination, in.data, index_count, vertices, vertex_count, vertex_size);
+	}
+	else
+	{
+		return generateVertexRemap(destination, static_cast<const unsigned int*>(0), index_count, vertices, vertex_count, vertex_size);
+	}
 }
 
 template <typename T>
 inline void remapIndexBuffer(T* destination, const T* indices, size_t index_count, const unsigned int* remap)
 {
-	MESHOPTIMIZER_STATIC_ASSERT(sizeof(T) == sizeof(unsigned int));
+	if (indices)
+	{
+		IndexAdapter<T> in(0, indices, index_count);
+		IndexAdapter<T> out(destination, 0, index_count);
 
-	remapIndexBuffer(reinterpret_cast<unsigned int*>(destination), reinterpret_cast<const unsigned int*>(indices), index_count, remap);
+		remapIndexBuffer(out.data, in.data, index_count, remap);
+	}
+	else
+	{
+		IndexAdapter<T> out(destination, 0, index_count);
+
+		remapIndexBuffer(out.data, static_cast<const unsigned int*>(0), index_count, remap);
+	}
 }
 
 template <typename T>
 inline void optimizeVertexCache(T* destination, const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
-	MESHOPTIMIZER_STATIC_ASSERT(sizeof(T) == 2 || sizeof(T) == 4);
+	IndexAdapter<T> in(0, indices, index_count);
+	IndexAdapter<T> out(destination, 0, index_count);
 
-	if (sizeof(T) == 2)
-		optimizeVertexCache(reinterpret_cast<unsigned short*>(destination), reinterpret_cast<const unsigned short*>(indices), index_count, vertex_count, cache_size);
-	else
-		optimizeVertexCache(reinterpret_cast<unsigned int*>(destination), reinterpret_cast<const unsigned int*>(indices), index_count, vertex_count, cache_size);
+	optimizeVertexCache(out.data, in.data, index_count, vertex_count, cache_size);
 }
 
 template <typename T>
 inline void optimizeOverdraw(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, unsigned int cache_size = MESHOPTIMIZER_DEFAULT_VCACHE_SIZE, float threshold = 1)
 {
-	MESHOPTIMIZER_STATIC_ASSERT(sizeof(T) == 2 || sizeof(T) == 4);
+	IndexAdapter<T> in(0, indices, index_count);
+	IndexAdapter<T> out(destination, 0, index_count);
 
-	if (sizeof(T) == 2)
-		optimizeOverdraw(reinterpret_cast<unsigned short*>(destination), reinterpret_cast<const unsigned short*>(indices), index_count, vertex_positions, vertex_positions_stride, vertex_count, cache_size, threshold);
-	else
-		optimizeOverdraw(reinterpret_cast<unsigned int*>(destination), reinterpret_cast<const unsigned int*>(indices), index_count, vertex_positions, vertex_positions_stride, vertex_count, cache_size, threshold);
+	optimizeOverdraw(out.data, in.data, index_count, vertex_positions, vertex_positions_stride, vertex_count, cache_size, threshold);
 }
 
 template <typename T>
 inline size_t optimizeVertexFetch(void* destination, const void* vertices, T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
-	MESHOPTIMIZER_STATIC_ASSERT(sizeof(T) == 2 || sizeof(T) == 4);
+	IndexAdapter<T> inout(indices, indices, index_count);
 
-	if (sizeof(T) == 2)
-		return optimizeVertexFetch(destination, vertices, reinterpret_cast<unsigned short*>(indices), index_count, vertex_count, vertex_size);
-	else
-		return optimizeVertexFetch(destination, vertices, reinterpret_cast<unsigned int*>(indices), index_count, vertex_count, vertex_size);
+	return optimizeVertexFetch(destination, vertices, inout.data, index_count, vertex_count, vertex_size);
 }
 
 template <typename T>
 inline VertexCacheStatistics analyzeVertexCache(const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = MESHOPTIMIZER_DEFAULT_VCACHE_SIZE)
 {
-	MESHOPTIMIZER_STATIC_ASSERT(sizeof(T) == 2 || sizeof(T) == 4);
+	IndexAdapter<T> in(0, indices, index_count);
 
-	if (sizeof(T) == 2)
-		return analyzeVertexCache(reinterpret_cast<const unsigned short*>(indices), index_count, vertex_count, cache_size);
-	else
-		return analyzeVertexCache(reinterpret_cast<const unsigned int*>(indices), index_count, vertex_count, cache_size);
+	return analyzeVertexCache(in.data, index_count, vertex_count, cache_size);
 }
 
 template <typename T>
 inline OverdrawStatistics analyzeOverdraw(const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count)
 {
-	MESHOPTIMIZER_STATIC_ASSERT(sizeof(T) == 2 || sizeof(T) == 4);
+	IndexAdapter<T> in(0, indices, index_count);
 
-	if (sizeof(T) == 2)
-		return analyzeOverdraw(reinterpret_cast<const unsigned short*>(indices), index_count, vertex_positions, vertex_positions_stride, vertex_count);
-	else
-		return analyzeOverdraw(reinterpret_cast<const unsigned int*>(indices), index_count, vertex_positions, vertex_positions_stride, vertex_count);
+	return analyzeOverdraw(in.data, index_count, vertex_positions, vertex_positions_stride, vertex_count);
 }
 
 template <typename T>
 inline VertexFetchStatistics analyzeVertexFetch(const T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
-	MESHOPTIMIZER_STATIC_ASSERT(sizeof(T) == 2 || sizeof(T) == 4);
+	IndexAdapter<T> in(0, indices, index_count);
 
-	if (sizeof(T) == 2)
-		return analyzeVertexFetch(reinterpret_cast<const unsigned short*>(indices), index_count, vertex_count, vertex_size);
-	else
-		return analyzeVertexFetch(reinterpret_cast<const unsigned int*>(indices), index_count, vertex_count, vertex_size);
+	return analyzeVertexFetch(in.data, index_count, vertex_count, vertex_size);
 }
 
 } // namespace meshopt
