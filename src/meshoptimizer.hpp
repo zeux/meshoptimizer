@@ -128,8 +128,11 @@ inline unsigned short quantizeHalf(float v);
 namespace meshopt
 {
 
+template <typename T, bool ZeroCopy = sizeof(T) == sizeof(unsigned int)>
+struct IndexAdapter;
+
 template <typename T>
-struct IndexAdapter
+struct IndexAdapter<T, false>
 {
 	T* result;
 	unsigned int* data;
@@ -155,6 +158,16 @@ struct IndexAdapter
 		}
 
 		delete[] data;
+	}
+};
+
+template <typename T>
+struct IndexAdapter<T, true>
+{
+	unsigned int* data;
+
+	IndexAdapter(T* result, const T* input, size_t): data(reinterpret_cast<unsigned int*>(result ? result : const_cast<T*>(input)))
+	{
 	}
 };
 
