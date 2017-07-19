@@ -211,7 +211,7 @@ inline void remapIndexBuffer(T* destination, const T* indices, size_t index_coun
 }
 
 template <typename T>
-inline void optimizeVertexCache(T* destination, const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+inline void optimizeVertexCache(T* destination, const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = MESHOPTIMIZER_DEFAULT_VCACHE_SIZE)
 {
 	IndexAdapter<T> in(0, indices, index_count);
 	IndexAdapter<T> out(destination, 0, index_count);
