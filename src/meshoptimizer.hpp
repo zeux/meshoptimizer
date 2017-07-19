@@ -15,7 +15,7 @@
 
 // If no API is defined, assume default
 #ifndef MESHOPTIMIZER_API
-#	define MESHOPTIMIZER_API
+#define MESHOPTIMIZER_API
 #endif
 
 // Default vertex cache size
@@ -108,13 +108,15 @@ MESHOPTIMIZER_API VertexFetchStatistics analyzeVertexFetch(const unsigned int* i
 // Quantize a float in [0..1] range into an N-bit fixed point unorm value
 // Assumes reconstruction function (q / (2^N-1)), which is the case for fixed-function normalized fixed point conversion
 // Maximum reconstruction error: 1/2^(N+1)
-template <int N> inline int quantizeUnorm(float v);
+template <int N>
+inline int quantizeUnorm(float v);
 
 // Quantize a float in [-1..1] range into an N-bit fixed point snorm value
 // Assumes reconstruction function (q / (2^(N-1)-1)), which is the case for fixed-function normalized fixed point conversion (except OpenGL)
 // Maximum reconstruction error: 1/2^N
 // Warning: OpenGL fixed function reconstruction function can't represent 0 exactly; when using OpenGL, use this function and have the shader reconstruct by dividing by 2^(N-1)-1.
-template <int N> inline int quantizeSnorm(float v);
+template <int N>
+inline int quantizeSnorm(float v);
 
 // Quantize a float into half-precision floating point value
 // Generates +-inf for overflow, preserves NaN, flushes denormals to zero, rounds to nearest
@@ -138,7 +140,10 @@ struct IndexAdapter<T, false>
 	unsigned int* data;
 	size_t count;
 
-	IndexAdapter(T* result, const T* input, size_t count): result(result), data(0), count(count)
+	IndexAdapter(T* result, const T* input, size_t count)
+	    : result(result)
+	    , data(0)
+	    , count(count)
 	{
 		data = new unsigned int[count];
 
@@ -166,7 +171,8 @@ struct IndexAdapter<T, true>
 {
 	unsigned int* data;
 
-	IndexAdapter(T* result, const T* input, size_t): data(reinterpret_cast<unsigned int*>(result ? result : const_cast<T*>(input)))
+	IndexAdapter(T* result, const T* input, size_t)
+	    : data(reinterpret_cast<unsigned int*>(result ? result : const_cast<T*>(input)))
 	{
 	}
 };
@@ -260,7 +266,8 @@ inline VertexFetchStatistics analyzeVertexFetch(const T* indices, size_t index_c
 namespace meshopt
 {
 
-template <int N> inline int quantizeUnorm(float v)
+template <int N>
+inline int quantizeUnorm(float v)
 {
 	const float scale = float((1 << N) - 1);
 
@@ -270,7 +277,8 @@ template <int N> inline int quantizeUnorm(float v)
 	return int(v * scale + 0.5f);
 }
 
-template <int N> inline int quantizeSnorm(float v)
+template <int N>
+inline int quantizeSnorm(float v)
 {
 	const float scale = float((1 << (N - 1)) - 1);
 
