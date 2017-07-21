@@ -16,8 +16,7 @@ struct Adjacency
 	std::vector<unsigned int> data;
 };
 
-template <typename T>
-static void buildAdjacency(Adjacency& adjacency, const T* indices, size_t index_count, size_t vertex_count)
+static void buildAdjacency(Adjacency& adjacency, const unsigned int* indices, size_t index_count, size_t vertex_count)
 {
 	// fill triangle counts
 	adjacency.triangle_counts.resize(vertex_count, 0);
@@ -111,8 +110,7 @@ static unsigned int getNextVertexNeighbour(const unsigned int* next_candidates_b
 	return best_candidate;
 }
 
-template <typename T>
-static void optimizeVertexCacheTipsify(T* destination, const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+void optimizeVertexCache(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
 	assert(index_count % 3 == 0);
 	assert(cache_size >= 3);
@@ -124,7 +122,7 @@ static void optimizeVertexCacheTipsify(T* destination, const T* indices, size_t 
 	}
 
 	// support in-place optimization
-	std::vector<T> indices_copy;
+	std::vector<unsigned int> indices_copy;
 
 	if (destination == indices)
 	{
@@ -174,9 +172,9 @@ static void optimizeVertexCacheTipsify(T* destination, const T* indices, size_t 
 				unsigned int a = indices[triangle * 3 + 0], b = indices[triangle * 3 + 1], c = indices[triangle * 3 + 2];
 
 				// output indices
-				destination[output_triangle * 3 + 0] = T(a);
-				destination[output_triangle * 3 + 1] = T(b);
-				destination[output_triangle * 3 + 2] = T(c);
+				destination[output_triangle * 3 + 0] = a;
+				destination[output_triangle * 3 + 1] = b;
+				destination[output_triangle * 3 + 2] = c;
 				output_triangle++;
 
 				// update dead-end stack
@@ -219,16 +217,6 @@ static void optimizeVertexCacheTipsify(T* destination, const T* indices, size_t 
 	}
 
 	assert(output_triangle == index_count / 3);
-}
-
-void optimizeVertexCache(unsigned short* destination, const unsigned short* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
-{
-	optimizeVertexCacheTipsify(destination, indices, index_count, vertex_count, cache_size);
-}
-
-void optimizeVertexCache(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
-{
-	optimizeVertexCacheTipsify(destination, indices, index_count, vertex_count, cache_size);
 }
 
 } // namespace meshopt

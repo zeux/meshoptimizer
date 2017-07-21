@@ -7,8 +7,7 @@
 namespace meshopt
 {
 
-template <typename T>
-static VertexFetchStatistics analyzeVertexFetchImpl(const T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+VertexFetchStatistics analyzeVertexFetch(const unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
 	assert(index_count % 3 == 0);
 	assert(vertex_size > 0);
@@ -23,7 +22,7 @@ static VertexFetchStatistics analyzeVertexFetchImpl(const T* indices, size_t ind
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
-		T index = indices[i];
+		unsigned int index = indices[i];
 		assert(index < vertex_count);
 
 		size_t start_address = index * vertex_size;
@@ -47,16 +46,6 @@ static VertexFetchStatistics analyzeVertexFetchImpl(const T* indices, size_t ind
 	result.overfetch = vertex_count == 0 ? 0 : float(result.bytes_fetched) / float(vertex_count * vertex_size);
 
 	return result;
-}
-
-VertexFetchStatistics analyzeVertexFetch(const unsigned short* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
-{
-	return analyzeVertexFetchImpl(indices, index_count, vertex_count, vertex_size);
-}
-
-VertexFetchStatistics analyzeVertexFetch(const unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
-{
-	return analyzeVertexFetchImpl(indices, index_count, vertex_count, vertex_size);
 }
 
 } // namespace meshopt

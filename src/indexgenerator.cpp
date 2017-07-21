@@ -55,56 +55,64 @@ static unsigned int MurmurHash2(const void* key, size_t len, unsigned int seed)
 	return h;
 }
 
-struct Hasher
+struct VertexHasher
 {
-	size_t size;
+	const char* vertices;
+	size_t vertex_size;
 
-	size_t operator()(const void* ptr) const
+	unsigned int empty() const
 	{
-		return MurmurHash2(ptr, size, 0);
+		return ~0u;
 	}
 
-	size_t operator()(const void* lhs, const void* rhs) const
+	size_t operator()(unsigned int index) const
 	{
-		return memcmp(lhs, rhs, size) == 0;
+		return MurmurHash2(vertices + index * vertex_size, vertex_size, 0);
+	}
+
+	size_t operator()(unsigned int lhs, unsigned int rhs) const
+	{
+		return memcmp(vertices + lhs * vertex_size, vertices + rhs * vertex_size, vertex_size) == 0;
 	}
 };
 
-struct HashEntry
+struct VertexHashEntry
 {
-	const void* key;
+	unsigned int key;
 	unsigned int value;
 };
 
-static void hashInit(std::vector<HashEntry>& table, size_t count)
+template <typename T, typename Hash>
+static void hashInit(std::vector<T>& table, const Hash& hash, size_t count)
 {
 	size_t buckets = 1;
 	while (buckets < count)
 		buckets *= 2;
 
-	HashEntry dummy = {0, 0};
+	T dummy = T();
+	dummy.key = hash.empty();
 
 	table.clear();
 	table.resize(buckets, dummy);
 }
 
-static HashEntry* hashLookup(std::vector<HashEntry>& table, const Hasher& hasher, const void* key)
+template <typename T, typename Hash, typename Key>
+static T* hashLookup(std::vector<T>& table, const Hash& hash, const Key& key)
 {
 	assert((table.size() & (table.size() - 1)) == 0);
 
-	size_t hash = hasher(key);
-
 	size_t hashmod = table.size() - 1;
-	size_t bucket = hash & hashmod;
+	size_t hashval = hash(key);
+	size_t bucket = hashval & hashmod;
 
 	for (size_t probe = 0; probe <= hashmod; ++probe)
 	{
-		HashEntry& item = table[bucket];
+		T& item = table[bucket];
 
-		if (item.key == 0)
+		if (item.key == hash.empty())
 			return &item;
 
-		if (hasher(item.key, key))
+		if (hash(item.key, key))
 			return &item;
 
 		// hash collision, quadratic probing
@@ -123,13 +131,13 @@ size_t generateVertexRemap(unsigned int* destination, const unsigned int* indice
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		destination[i] = static_cast<unsigned int>(-1);
+		destination[i] = ~0u;
 	}
 
-	Hasher hasher = {vertex_size};
+	VertexHasher hasher = {static_cast<const char*>(vertices), vertex_size};
 
-	std::vector<HashEntry> table;
-	hashInit(table, vertex_count);
+	std::vector<VertexHashEntry> table;
+	hashInit(table, hasher, vertex_count);
 
 	unsigned int next_vertex = 0;
 
@@ -138,15 +146,13 @@ size_t generateVertexRemap(unsigned int* destination, const unsigned int* indice
 		unsigned int index = indices ? indices[i] : unsigned(i);
 		assert(index < vertex_count);
 
-		if (destination[index] == static_cast<unsigned int>(-1))
+		if (destination[index] == ~0u)
 		{
-			const void* vertex = static_cast<const char*>(vertices) + i * vertex_size;
+			VertexHashEntry* entry = hashLookup(table, hasher, index);
 
-			HashEntry* entry = hashLookup(table, hasher, vertex);
-
-			if (!entry->key)
+			if (entry->key == ~0u)
 			{
-				entry->key = vertex;
+				entry->key = index;
 				entry->value = next_vertex++;
 			}
 

@@ -28,8 +28,7 @@ struct ClusterSortData
 	}
 };
 
-template <typename T>
-static void calculateSortData(std::vector<ClusterSortData>& sort_data, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, const std::vector<unsigned int>& clusters)
+static void calculateSortData(std::vector<ClusterSortData>& sort_data, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, const std::vector<unsigned int>& clusters)
 {
 	assert(sort_data.size() == clusters.size());
 
@@ -131,8 +130,7 @@ static unsigned int updateCache(unsigned int a, unsigned int b, unsigned int c, 
 	return cache_misses;
 }
 
-template <typename T>
-static float generateHardBoundaries(std::vector<unsigned int>& destination, const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+static float generateHardBoundaries(std::vector<unsigned int>& destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
 	std::vector<unsigned int> cache_timestamps(vertex_count, 0);
 	unsigned int timestamp = cache_size + 1;
@@ -156,8 +154,7 @@ static float generateHardBoundaries(std::vector<unsigned int>& destination, cons
 	return float(cache_misses) / float(face_count);
 }
 
-template <typename T>
-static void generateSoftBoundaries(std::vector<unsigned int>& destination, const T* indices, size_t index_count, size_t vertex_count, const std::vector<unsigned int>& clusters, unsigned int cache_size, float acmr_threshold)
+static void generateSoftBoundaries(std::vector<unsigned int>& destination, const unsigned int* indices, size_t index_count, size_t vertex_count, const std::vector<unsigned int>& clusters, unsigned int cache_size, float acmr_threshold)
 {
 	std::vector<unsigned int> cache_timestamps(vertex_count, 0);
 	unsigned int timestamp = 0;
@@ -200,8 +197,7 @@ static void generateSoftBoundaries(std::vector<unsigned int>& destination, const
 	assert(destination.size() <= index_count / 3);
 }
 
-template <typename T>
-static void optimizeOverdrawTipsify(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, unsigned int cache_size, float threshold)
+void optimizeOverdraw(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, unsigned int cache_size, float threshold)
 {
 	assert(index_count % 3 == 0);
 	assert(vertex_positions_stride > 0);
@@ -215,7 +211,7 @@ static void optimizeOverdrawTipsify(T* destination, const T* indices, size_t ind
 	}
 
 	// support in-place optimization
-	std::vector<T> indices_copy;
+	std::vector<unsigned int> indices_copy;
 
 	if (destination == indices)
 	{
@@ -255,16 +251,6 @@ static void optimizeOverdrawTipsify(T* destination, const T* indices, size_t ind
 	}
 
 	assert(offset == index_count);
-}
-
-void optimizeOverdraw(unsigned short* destination, const unsigned short* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, unsigned int cache_size, float threshold)
-{
-	optimizeOverdrawTipsify(destination, indices, index_count, vertex_positions, vertex_positions_stride, vertex_count, cache_size, threshold);
-}
-
-void optimizeOverdraw(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, unsigned int cache_size, float threshold)
-{
-	optimizeOverdrawTipsify(destination, indices, index_count, vertex_positions, vertex_positions_stride, vertex_count, cache_size, threshold);
 }
 
 } // namespace meshopt
