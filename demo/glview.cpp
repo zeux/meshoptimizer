@@ -55,9 +55,6 @@ static Mesh parseObj(const char* path)
 		int vti = file.f[i + 1];
 		int vni = file.f[i + 2];
 
-		// TODO
-		vni = vti = -1;
-
 		Vertex v =
 		    {
 		        file.v[vi * 3 + 0],
