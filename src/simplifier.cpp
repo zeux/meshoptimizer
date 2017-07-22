@@ -268,6 +268,9 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 		}
 	}
 
+	size_t pass_count = 0;
+	float worst_error = 0;
+
 	while (index_count > target_index_count)
 	{
 		std::vector<Collapse> edge_collapses;
@@ -304,7 +307,7 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 		size_t edge_collapse_goal = (index_count - target_index_count) / 6 + 1;
 
 		size_t collapses = 0;
-		float worst_error = 0;
+		float pass_error = 0;
 
 		for (size_t i = 0; i < edge_collapses.size(); ++i)
 		{
@@ -324,13 +327,16 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 			vertex_locked[c.v1] = 1;
 
 			collapses++;
-			worst_error = c.error;
+			pass_error = c.error;
 
 			if (collapses >= edge_collapse_goal)
 				break;
 		}
 
-		printf("collapses: %d/%d, worst error: %e\n", int(collapses), int(edge_collapses.size()), worst_error);
+		printf("pass %d: collapses: %d/%d, error: %e\n", int(pass_count), int(collapses), int(edge_collapses.size()), pass_error);
+
+		pass_count++;
+		worst_error = std::max(worst_error, pass_error);
 
 		// no edges can be collapsed any more => bail out
 		if (collapses == 0)
@@ -359,6 +365,8 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 
 		index_count = write;
 	}
+
+	printf("passes: %d, worst error: %e\n", int(pass_count), worst_error);
 
 	return index_count;
 }
