@@ -4,4 +4,9 @@ os:
 sudo: required
 dist: trusty
 language: cpp
-script: make test
+
+script:
+  - make config=coverage test
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
