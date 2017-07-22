@@ -2,11 +2,20 @@ version: "{branch}-{build}"
 
 os: Visual Studio 2015
 
-platform: x64
+platform: Win32
 configuration: Release
 
-before_build:
-  - cmake -G "Visual Studio 14 2015 Win64"
+environment:
+  matrix:
+    - cmake_generator: "Visual Studio 9 2008"
+      msbuild_path: C:\Windows\Microsoft.NET\Framework\v3.5\msbuild
+    - cmake_generator: "Visual Studio 14 2015"
+      msbuild_path: msbuild
 
-build:
-  project: meshoptimizer.sln
+before_build:
+  - cmake -G "%cmake_generator%"
+
+build_script:
+  - "%msbuild_path% meshoptimizer.sln"
+
+test: off
