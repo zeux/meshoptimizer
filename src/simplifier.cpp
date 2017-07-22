@@ -309,12 +309,18 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 		size_t collapses = 0;
 		float pass_error = 0;
 
+		float error_goal = edge_collapse_goal < edge_collapses.size() ? edge_collapses[edge_collapse_goal].error : edge_collapses.back().error;
+		float error_limit = error_goal * 1.5f;
+
 		for (size_t i = 0; i < edge_collapses.size(); ++i)
 		{
 			const Collapse& c = edge_collapses[i];
 
 			if (vertex_locked[c.v0] || vertex_locked[c.v1])
 				continue;
+
+			if (c.error > error_limit)
+				break;
 
 			assert(vertex_remap[c.v0] == c.v0);
 			assert(vertex_remap[c.v1] == c.v1);
