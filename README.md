@@ -50,10 +50,10 @@ In general it's better to use the cache size that's smaller than your target GPU
 After transforming the vertices, GPU sends the triangles for rasterization which results in generating pixels that are usually first ran through the depth test, and pixels that pass it get the pixel shader executed to generate the final color. As pixel shaders get more expensive, it becomes more and more important to reduce overdraw. While in general improving overdraw requires view-dependent operations, this library provides an algorithm to reorder triangles to minimize the overdraw from all directions, which you should run after vertex cache optimization like this:
 
 ```c++
-meshopt::optimizeOverdraw(indices, indices, index_count, &vertices[0].pos.x, sizeof(Vertex), vertex_count, 16, 1.05f);
+meshopt::optimizeOverdraw(indices, indices, index_count, &vertices[0].x, sizeof(Vertex), vertex_count, 16, 1.05f);
 ```
 
-The overdraw optimizer needs to read vertex positions as a float3 from the vertex; the code snippet above assumes that the vertex has a `float3 pos` field.
+The overdraw optimizer needs to read vertex positions as a float3 from the vertex; the code snippet above assumes that the vertex stores position as `float x, y, z`.
 
 When performing the overdraw optimization you have to specify the vertex cache size along with a floating-point threshold parameter. The algorithm tries to maintain a balance between vertex cache efficiency and overdraw; the threshold determines how much the algorithm can compromise the vertex cache hit ratio, with 1.05 meaning that the resulting ratio should be at most 5% worse than before the optimization.
 
@@ -80,18 +80,18 @@ Quantization is usually domain specific; it's common to quantize normals using 3
 The number of combinations here is too large but this library does provide the building blocks, specifically functions to quantize floating point values to normalized integers, as well as half-precision floats. For example, here's how you can quantize a normal:
 
 ```c++
-unsigned int result =
-	(meshopt::quantizeUnorm<10>(n.x) << 20) |
-	(meshopt::quantizeUnorm<10>(n.y) << 10) |
-	 meshopt::quantizeUnorm<10>(n.z);
+unsigned int normal =
+	(meshopt::quantizeUnorm<10>(v.nx) << 20) |
+	(meshopt::quantizeUnorm<10>(v.ny) << 10) |
+	 meshopt::quantizeUnorm<10>(v.nz);
 ```
 
 and here's how you can quantize a position:
 
 ```c++
-unsigned short px = meshopt::quantizeHalf(p.x);
-unsigned short py = meshopt::quantizeHalf(p.y);
-unsigned short pz = meshopt::quantizeHalf(p.z);
+unsigned short px = meshopt::quantizeHalf(v.x);
+unsigned short py = meshopt::quantizeHalf(v.y);
+unsigned short pz = meshopt::quantizeHalf(v.z);
 ```
 
 Note that the signed quantization (`quantizeSnorm`) assumes Direct3D rules for the value reconstruction that apply to all graphics APIs except for OpenGL (where you should reconstruct the value in the shader, as mentioned in the function comments).
