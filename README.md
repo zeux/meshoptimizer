@@ -2,54 +2,98 @@
 
 ## Purpose
 
-To make sure GPU can render indexed meshes efficiently, you should optimize them for vertex fetch locality and for vertex cache (to reduce the number of vertex shader invocations). This library provides algorithms for both.
+When GPU renders triangle meshes, various stages of the GPU pipeline have to process vertex and index data. The efficiency of these stages depends on the data you feed to them; this library provides algorithms to help optimize meshes for these stages.
 
-Vertex cache optimization involves reordering triangle indices to make sure that the vertices referenced by the triangles are hitting the built-in fixed size GPU cache (which is usually small, 16-32 vertices, and can have different replacement policies) as much as possible. All algorithms take index data as an input and produce a new index buffer.
+When optimizing a mesh, you should typically feed it through a set of optimizations (the order is important!):
 
-Vertex fetch optimization involves reordering vertices (and remapping triangle indices) to make sure that the memory cache that GPU uses to fetch vertex data is utilized efficiently.
+1. Indexing
+2. Vertex cache optimization
+3. Overdraw optimization
+4. Vertex fetch optimization
+5. Vertex quantization
 
-You should first optimize your mesh for vertex cache (to get the optimal triangle order), and then optimize the result for vertex fetch (which keeps the triangle order but changes the vertex data) for maximum efficiency.
+## Indexing
 
-Additionally the library provides a way to optimize the mesh for overdraw by splitting the mesh into clusters and reordering them using a heuristic that tries to reduce overdraw. The heuristic needs access to vertex positions.
+Most algorithms in this library assume that a mesh has a vertex buffer and an index buffer. For algorithms to work well and also for GPU to render your mesh efficiently, the vertex buffer has to have no redundant vertices; you can generate an index buffer from an unindexed vertex buffer or reindex an existing (potentially redundant) index buffer as follows:
 
-## Vertex cache optimizer
-
-To optimize the index buffer for vertex cache, call:
-
-```c++
-meshopt::optimizeVertexCache(index_data, index_data, index_count, vertex_count);
-```
-
-The given example optimizes index_data in place; you can also specify a different destination index buffer.
-
-To perform both vertex cache and overdraw optimization, you have to invoke another function on the index buffer produced by `optimizeVertexCache`:
+First, generate a remap table from your existing vertex (and, optionally, index) data:
 
 ```c++
-meshopt::optimizeVertexCache(index_data, index_data, index_count, vertex_count, 16);
-meshopt::optimizeOverdraw(index_data, index_data, index_count, vertex_positions, vertex_stride, vertex_count, 16, 1.05f);
+size_t index_count = face_count * 3;
+std::vector<unsigned int> remap(index_count); // you can use any other way to allocate temporary memory for the remap table
+size_t vertex_count = generateVertexRemap(&remap[0], NULL, index_count, &unindexed_vertices[0], index_count, sizeof(Vertex));
 ```
 
-The first call generates a cache-optimized index sequence that the second call then reorders to get better overdraw results. The overdraw optimizer also needs to read vertex positions, which you have to provide as a pointer to a float3 vector and a stride, similar to glVertexPointer.
+Note that in this case we only have an unindexed vertex buffer; the remap table is generated based on binary equivalence of the input vertices, so the resulting mesh will render the same way. After generating the remap table, you can allocate space for the target vertex buffer (`vertex_count` elements) and index buffer (`index_count` elements) and generate them:
 
-You can also provide a threshold that will determine how much the algorithm can compromise the vertex cache hit ratio in favor of overdraw; 1.05 means that the resulting vertex cache hit ratio should be at most 5% worse than a non-overdraw optimized order.
+```c++
+meshopt::remapIndexBuffer(indices, NULL, index_count, &remap[0]);
+meshopt::remapVertexBuffer(vertices, &unindexed_vertices[0], index_count, sizeof(Vertex), &remap[0]);
+```
 
-Note that the vertex cache optimization algorithm models the cache as a fixed-size FIFO buffer, which may or may not match hardware. Additionally, overdraw optimization is performed using a view-independent heuristic and as such does not guarantee that the overdraw of the resulting mesh is optimal.
+You can then further optimize the resulting buffers by calling the other functions on these in-place.
 
-## Vertex fetch optimizer
+## Vertex cache optimization
+
+When the GPU renders the mesh, it has to run the vertex shader for each vertex; usually GPUs have a built-in fixed size cache that stores the transformed vertices (the result of running the vertex shader), and uses this cache to reduce the number of vertex shader invocations. This cache is usually small, 16-32 vertices, and can have different replacement policies; to use this cache efficiently, you have to reorder your triangles to maximize the locality of reused vertex references like so:
+
+```c++
+meshopt::optimizeVertexCache(indices, indices, index_count, vertex_count, 16);
+```
+
+In general it's better to use the cache size that's smaller than your target GPU cache size than the one that's bigger; 16 is a reasonable default value.
+
+## Overdraw optimization
+
+After transforming the vertices, GPU sends the triangles for rasterization which results in generating pixels that are usually first ran through the depth test, and pixels that pass it get the pixel shader executed to generate the final color. As pixel shaders get more expensive, it becomes more and more important to reduce overdraw. While in general improving overdraw requires view-dependent operations, this library provides an algorithm to reorder triangles to minimize the overdraw from all directions, which you should run after vertex cache optimization like this:
+
+```c++
+meshopt::optimizeOverdraw(indices, indices, index_count, &vertices[0].position.x, sizeof(Vertex), vertex_count, 16, 1.05f);
+```
+
+The overdraw optimizer needs to read vertex positions as a float3 from the vertex; the code snippet above assumes that the vertex has a `float3 position` field.
+
+When performing the overdraw optimization you have to specify the vertex cache size along with a floating-point threshold parameter. The algorithm tries to maintain a balance between vertex cache efficiency and overdraw; the threshold determines how much the algorithm can compromise the vertex cache hit ratio, with 1.05 meaning that the resulting ratio should be at most 5% worse than before the optimization.
+
+## Vertex fetch optimization
+
+After the final triangle order has been established, we still can optimize the vertex buffer for memory efficiency. Before running the vertex shader GPU has to fetch the vertex attributes from the vertex buffer; the fetch is usually backed by a memory cache, and as such optimizing the data for the locality of memory access is important. You can do this by running this code:
 
 To optimize the index/vertex buffers for vertex fetch efficiency, call:
 
 ```c++
-meshopt::optimizeVertexFetch(vertices, vertices, indices, index_count, vertex_count, vertex_size);
+meshopt::optimizeVertexFetch(vertices, vertices, indices, index_count, vertex_count, sizeof(Vertex));
 ```
 
-In a similar fashion to other functions, you have to provide a pointer to the resulting vertex buffer which will be filled with vertices from the source vertex buffer. The given example optimizes vertex and index buffers in place.
+This will reorder the vertices in the vertex buffer to try to improve the locality of reference, and rewrite the indices in place to match. This optimization has to be performed on the final index buffer since the optimal vertex order depends on the triangle order.
 
 Note that the algorithm does not try to model cache replacement precisely and instead just orders vertices in the order of use, which generally produces results that are close to optimal.
 
+## Vertex quantization
+
+Finally, to optimize memory bandwidth when fetching the vertex data even further, and to reduce the amount of memory required to store the mesh, it is often beneficial to quantize the vertex attributes to smaller types. While this optimization can technically be at any part of the pipeline (and sometimes doing quantization as the first step can somewhat perform indexing), it generally is easier to run this after all other optimizations since some of them require access to float3 positions.
+
+Quantization is usually domain specific; it's common to quantize normals using 3 8-bit integers but you can use higher-precision quantization (for example using 10 bits per component in a 10_10_10_2 format), or a different encoding to use just 2 components. For positions and UV data the two most common storage formats are half precision floats, and 16-bit normalized integers that encode the position relative to the AABB of the mesh or the UV bounding rectangle.
+
+The number of combinations here is too large but this library does provide the building blocks, specifically functions to quantize floating point values to normalized integers, as well as half-precision floats. For example, here's how you can quantize a normal:
+
+```c++
+unsigned int result = (meshopt::quantizeUnorm<10>(n.x) << 20) | (meshopt::quantizeUnorm<10>(n.y) << 10) | meshopt::quantizeUnorm<10>(n.z);
+```
+
+and here's how you can quantize a position:
+
+```c++
+unsigned short px = meshopt::quantizeHalf(p.x);
+unsigned short py = meshopt::quantizeHalf(p.y);
+unsigned short pz = meshopt::quantizeHalf(p.z);
+```
+
+Note that the signed quantization (`quantizeSnorm`) assumes Direct3D rules for the value reconstruction that apply to all graphics APIs except for OpenGL (where you should reconstruct the value in the shader, as mentioned in the function comments).
+
 ## Efficiency analyzers
 
-The library provides analyzers for all three major optimization routines to understand the impact of these optimizations. For each optimization there is a corresponding analyze function, like analyzeOverdraw, that returns a struct with statistics.
+While the only way to get precise performance data is to measure performance on the target GPU, it can be valuable to measure the impact of these optimization in a GPU-independent manner. To this end, the library provides analyzers for all three major optimization routines. For each optimization there is a corresponding analyze function, like `analyzeOverdraw`, that returns a struct with statistics.
 
 `analyzeVertexCache` returns vertex cache statistics. The common metric to use is ACMR - average cache miss ratio, which is the ratio of the total number of vertex invocations to the triangle count. The worst-case ACMR is 3 (GPU has to process 3 vertices for each triangle); on regular grids the optimal ACMR approaches 0.5. On real meshes it usually is in [0.5..1.5] ratio depending on the amount of vertex splits. One other useful metric is ATVR - average transformed vertex ratio - which represents the ratio of vertex shader invocations to the total vertices, and has the best case of 1.0 regardless of mesh topology (each vertex is transformed once).
 
