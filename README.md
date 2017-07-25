@@ -24,14 +24,16 @@ std::vector<unsigned int> remap(index_count); // you can use any other way to al
 size_t vertex_count = generateVertexRemap(&remap[0], NULL, index_count, &unindexed_vertices[0], index_count, sizeof(Vertex));
 ```
 
-Note that in this case we only have an unindexed vertex buffer; the remap table is generated based on binary equivalence of the input vertices, so the resulting mesh will render the same way. After generating the remap table, you can allocate space for the target vertex buffer (`vertex_count` elements) and index buffer (`index_count` elements) and generate them:
+Note that in this case we only have an unindexed vertex buffer; the remap table is generated based on binary equivalence of the input vertices, so the resulting mesh will render the same way.
+
+After generating the remap table, you can allocate space for the target vertex buffer (`vertex_count` elements) and index buffer (`index_count` elements) and generate them:
 
 ```c++
 meshopt::remapIndexBuffer(indices, NULL, index_count, &remap[0]);
 meshopt::remapVertexBuffer(vertices, &unindexed_vertices[0], index_count, sizeof(Vertex), &remap[0]);
 ```
 
-You can then further optimize the resulting buffers by calling the other functions on these in-place.
+You can then further optimize the resulting buffers by calling the other functions on them in-place.
 
 ## Vertex cache optimization
 
@@ -48,10 +50,10 @@ In general it's better to use the cache size that's smaller than your target GPU
 After transforming the vertices, GPU sends the triangles for rasterization which results in generating pixels that are usually first ran through the depth test, and pixels that pass it get the pixel shader executed to generate the final color. As pixel shaders get more expensive, it becomes more and more important to reduce overdraw. While in general improving overdraw requires view-dependent operations, this library provides an algorithm to reorder triangles to minimize the overdraw from all directions, which you should run after vertex cache optimization like this:
 
 ```c++
-meshopt::optimizeOverdraw(indices, indices, index_count, &vertices[0].position.x, sizeof(Vertex), vertex_count, 16, 1.05f);
+meshopt::optimizeOverdraw(indices, indices, index_count, &vertices[0].pos.x, sizeof(Vertex), vertex_count, 16, 1.05f);
 ```
 
-The overdraw optimizer needs to read vertex positions as a float3 from the vertex; the code snippet above assumes that the vertex has a `float3 position` field.
+The overdraw optimizer needs to read vertex positions as a float3 from the vertex; the code snippet above assumes that the vertex has a `float3 pos` field.
 
 When performing the overdraw optimization you have to specify the vertex cache size along with a floating-point threshold parameter. The algorithm tries to maintain a balance between vertex cache efficiency and overdraw; the threshold determines how much the algorithm can compromise the vertex cache hit ratio, with 1.05 meaning that the resulting ratio should be at most 5% worse than before the optimization.
 
@@ -78,7 +80,10 @@ Quantization is usually domain specific; it's common to quantize normals using 3
 The number of combinations here is too large but this library does provide the building blocks, specifically functions to quantize floating point values to normalized integers, as well as half-precision floats. For example, here's how you can quantize a normal:
 
 ```c++
-unsigned int result = (meshopt::quantizeUnorm<10>(n.x) << 20) | (meshopt::quantizeUnorm<10>(n.y) << 10) | meshopt::quantizeUnorm<10>(n.z);
+unsigned int result =
+	(meshopt::quantizeUnorm<10>(n.x) << 20) |
+	(meshopt::quantizeUnorm<10>(n.y) << 10) |
+	 meshopt::quantizeUnorm<10>(n.z);
 ```
 
 and here's how you can quantize a position:
