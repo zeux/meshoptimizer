@@ -42,6 +42,12 @@ MESHOPTIMIZER_API void remapVertexBuffer(void* destination, const void* vertices
 // indices can be NULL if the input is unindexed
 MESHOPTIMIZER_API void remapIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count, const unsigned int* remap);
 
+// Generate an optimal grid that maximizes the vertex cache hit ratio by prefetching rows of vertices and returns the number of indices
+// This function generates an index buffer for a grid with WxH quads, indexing into a (W+1)x(H+1) vertex buffer
+//
+// destination should contain enough space for the resulting index buffer, or NULL
+MESHOPTIMIZER_API size_t generateOptimalGrid(unsigned int* destination, unsigned int width, unsigned int height, unsigned int cache_size);
+
 // Vertex transform cache optimizer
 // Reorders indices to reduce the number of GPU vertex shader invocations
 //
