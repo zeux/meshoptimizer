@@ -143,7 +143,7 @@ static float generateHardBoundaries(std::vector<unsigned int>& destination, cons
 	{
 		unsigned int m = updateCache(indices[i * 3 + 0], indices[i * 3 + 1], indices[i * 3 + 2], cache_size, cache_timestamps, timestamp);
 
-		if (m == 3)
+		if (i == 0 || m == 3)
 		{
 			destination.push_back(unsigned(i));
 		}
