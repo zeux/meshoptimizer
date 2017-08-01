@@ -1,0 +1,826 @@
+#ifdef _WIN32
+#include <d3d11.h>
+#include <d3dcompiler.h>
+#include <stdio.h>
+#include <assert.h>
+
+#include <cassert>
+#include <cmath>
+#include <vector>
+
+#pragma comment (lib, "d3d11.lib")
+#pragma comment (lib, "d3dcompiler.lib")
+#pragma comment (lib, "dxgi.lib")
+
+namespace TomF
+{
+	const size_t max_cache_size = 32;
+		
+	const float valence_boost_scale = 2.0f;
+	const float last_triangle_score = 0.75f;
+
+	// The table is for max_cache_size = 32, cache_decay_power = 1.5, 
+	// Equation is ((position - 3) / (max_cache_size - 3)) ^ cache_decay_power
+	static const float cache_scores[max_cache_size] =
+	{
+		last_triangle_score, last_triangle_score, last_triangle_score,
+		// perl -e "for ($i = 32; $i > 3; --$i) {print sqrt(($i - 3) / 29)*(($i-3)/29);print 'f, ';}"
+		1, 0.948724356160999f, 0.898356365398566f, 0.84891268884993f, 0.800410940418327f,
+		0.752869781209394f, 0.706309027617917f, 0.660749775712085f, 0.616214545218346f,
+		0.572727447267172f, 0.530314381193352f, 0.489003267201725f, 0.448824323769283f,
+		0.409810401494183f, 0.371997389083488f, 0.335424712859142f, 0.300135959460546f,
+		0.266179663821797f, 0.233610323536753f, 0.202489730867139f, 0.172888763130359f,
+		0.144889856948659f, 0.118590544520125f, 0.0941087226511742f, 0.0715909309083965f,
+		0.0512263001867729f, 0.0332724579777247f, 0.0181112321185824f, 0.00640328752334662f,
+	};
+
+	struct Vertex
+	{
+		Vertex(): cache_position(-1), score(0), triangles_total(0), triangles_not_added(0), triangles(0)
+		{
+		}
+		
+		int cache_position;
+		float score;
+		unsigned int triangles_total;
+		unsigned int triangles_not_added;
+		unsigned int* triangles;
+	};
+
+	static float vertexScore(const Vertex& vertex)
+	{
+		// check if there are any triangles needed
+		if (vertex.triangles_not_added == 0) return -1;
+
+		float score = vertex.cache_position == -1 ? 0 : cache_scores[vertex.cache_position];
+
+		// Bonus points for having a low number of tris still to use the vert, so we get rid of lone verts quickly.
+		// return score + valence_boost_scale * powf(vertex.triangles_not_added, -valence_boost_power);
+		// for valence_boost_power = 0.5f
+		return score + valence_boost_scale / sqrtf((float)vertex.triangles_not_added);
+	}
+
+	void optimizeVertexCache(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+	{
+		// support in-place optimization
+		std::vector<unsigned int> indices_copy;
+
+		if (destination == indices)
+		{
+			indices_copy.assign(indices, indices + index_count);
+			indices = &indices_copy[0];
+		}
+
+		// clamp cache size to the size of LUT
+		if (cache_size > max_cache_size)
+			cache_size = max_cache_size;
+
+		const float m_inf = -1e32f;
+
+		assert(index_count % 3 == 0);
+		size_t face_count = index_count / 3;
+
+		std::vector<Vertex> vertices(vertex_count);
+
+		// initializing vertex data
+		for (size_t i = 0; i < index_count; ++i)
+		{
+			vertices[indices[i]].triangles_total++;
+		}
+
+		// calculate total triangle number
+		std::vector<unsigned int> triangle_indices(index_count); // total triangle indices count == index count
+		unsigned int* triangle_indices_ptr = &triangle_indices[0];
+
+		// allocate storage for triangle indices
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			Vertex& v = vertices[i];
+
+			v.triangles = triangle_indices_ptr;
+			triangle_indices_ptr += v.triangles_total;
+		}
+
+		// fill triangle indices
+		for (size_t i = 0; i < face_count; ++i)
+		{
+			Vertex& a = vertices[indices[i * 3 + 0]];
+			a.triangles[a.triangles_not_added++] = static_cast<unsigned int>(i);
+
+			Vertex& b = vertices[indices[i * 3 + 1]];
+			b.triangles[b.triangles_not_added++] = static_cast<unsigned int>(i);
+
+			Vertex& c = vertices[indices[i * 3 + 2]];
+			c.triangles[c.triangles_not_added++] = static_cast<unsigned int>(i);
+		}
+
+		// compute initial vertex scores
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			Vertex& v = vertices[i];
+
+			v.score = vertexScore(v);
+		}
+
+		// compute triangle scores
+		std::vector<float> triangle_scores(face_count);
+
+		for (size_t i = 0; i < face_count; ++i)
+		{
+			unsigned int tri_a = indices[i * 3 + 0];
+			unsigned int tri_b = indices[i * 3 + 1];
+			unsigned int tri_c = indices[i * 3 + 2];
+
+			triangle_scores[i] = vertices[tri_a].score + vertices[tri_b].score + vertices[tri_c].score;
+		}
+
+		unsigned int* destination_end = destination + index_count;
+
+		unsigned int cache_holder[2 * (max_cache_size + 3)];
+		unsigned int* cache = cache_holder;
+		unsigned int* cache_end = cache;
+		unsigned int* cache_new = cache + max_cache_size + 3;
+		unsigned int* cache_new_end = cache_new;
+
+		int min_tri = -1;
+
+		// main body
+		while (destination != destination_end)
+		{
+			// find triangle with the best score if it was not found on previous step
+			if (min_tri < 0)
+			{
+				float min_score = m_inf;
+				
+				for (size_t i = 0; i < face_count; ++i)
+				{
+					float tri_score = triangle_scores[i];
+
+					if (min_score < tri_score)
+					{
+						min_tri = int(i);
+						min_score = tri_score;
+					}
+				}
+			}
+
+			unsigned int tri_a = indices[min_tri * 3 + 0];
+			unsigned int tri_b = indices[min_tri * 3 + 1];
+			unsigned int tri_c = indices[min_tri * 3 + 2];
+
+			// add it to drawing sequence
+			*destination++ = tri_a;
+			*destination++ = tri_b;
+			*destination++ = tri_c;
+
+			triangle_scores[min_tri] = m_inf;
+
+			// construct new cache
+			cache_new_end = cache_new;
+
+			// new triangle
+			*cache_new_end++ = tri_a;
+			*cache_new_end++ = tri_b;
+			*cache_new_end++ = tri_c;
+
+			// old parts
+			int cp_a = vertices[tri_a].cache_position;
+			int cp_b = vertices[tri_b].cache_position;
+			int cp_c = vertices[tri_c].cache_position;
+
+			// order indices
+			if (cp_a > cp_b) std::swap(cp_a, cp_b);
+			if (cp_a > cp_c) std::swap(cp_a, cp_c);
+			if (cp_b > cp_c) std::swap(cp_b, cp_c);
+
+			if (cp_c == -1) // largest is -1 => all 3 are -1
+			{
+				cache_new_end = std::copy(cache, cache_end, cache_new_end);
+			}
+			else if (cp_b == -1) // cp_a == -1, cp_b == -1
+			{
+				cache_new_end = std::copy(cache, cache + cp_c, cache_new_end);
+				cache_new_end = std::copy(cache + cp_c + 1, cache_end, cache_new_end);
+			}
+			else if (cp_a == -1) // only cp_a == -1
+			{
+				cache_new_end = std::copy(cache, cache + cp_b, cache_new_end);
+				cache_new_end = std::copy(cache + cp_b + 1, cache + cp_c, cache_new_end);
+				cache_new_end = std::copy(cache + cp_c + 1, cache_end, cache_new_end);
+			}
+			else
+			{
+				cache_new_end = std::copy(cache, cache + cp_a, cache_new_end);
+				cache_new_end = std::copy(cache + cp_a + 1, cache + cp_b, cache_new_end);
+				cache_new_end = std::copy(cache + cp_b + 1, cache + cp_c, cache_new_end);
+				cache_new_end = std::copy(cache + cp_c + 1, cache_end, cache_new_end);
+			}
+
+			size_t cache_new_size = cache_new_end - cache_new;
+
+			if (cache_new_size > cache_size) cache_new_end = cache_new + cache_size;
+
+			std::swap(cache, cache_new);
+			std::swap(cache_end, cache_new_end);
+
+			// modify vertices
+			vertices[tri_a].triangles_not_added--;
+			vertices[tri_b].triangles_not_added--;
+			vertices[tri_c].triangles_not_added--;
+
+			min_tri = -1;
+			float min_score = m_inf;
+
+			// update cache positions, vertices scores and triangle scores, and find new min_face
+			for (size_t i = 0; i < cache_new_size; ++i)
+			{
+				Vertex& v = vertices[cache[i]];
+
+				v.cache_position = i >= cache_size ? -1 : (int)i;
+
+				float score = vertexScore(v);
+				float score_diff = score - v.score;
+				
+				// update scores of vertex triangles
+				for (size_t j = 0; j < v.triangles_total; ++j)
+				{
+					unsigned int tri = v.triangles[j];
+
+					triangle_scores[tri] += score_diff;
+
+					float tri_score = triangle_scores[tri];
+
+					if (min_score < tri_score)
+					{
+						min_tri = tri;
+						min_score = tri_score;
+					}
+				}
+
+				v.score = score;
+			}
+		}
+	}
+}
+
+namespace Tipsify
+{
+	struct Adjacency
+	{
+		std::vector<unsigned int> triangle_counts;
+		std::vector<unsigned int> offsets;
+		std::vector<unsigned int> data;
+	};
+
+	static void buildAdjacency(Adjacency& adjacency, const unsigned int* indices, size_t index_count, size_t vertex_count)
+	{
+		// fill triangle counts
+		adjacency.triangle_counts.resize(vertex_count, 0);
+
+		for (size_t i = 0; i < index_count; ++i)
+		{
+			assert(indices[i] < vertex_count);
+
+			adjacency.triangle_counts[indices[i]]++;
+		}
+
+		// fill offset table
+		adjacency.offsets.resize(vertex_count);
+
+		unsigned int offset = 0;
+
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			adjacency.offsets[i] = offset;
+			offset += adjacency.triangle_counts[i];
+		}
+
+		// fill triangle data
+		adjacency.data.resize(offset);
+
+		std::vector<unsigned int> offsets = adjacency.offsets;
+
+		size_t face_count = index_count / 3;
+
+		for (size_t i = 0; i < face_count; ++i)
+		{
+			unsigned int a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
+
+			adjacency.data[offsets[a]++] = unsigned(i);
+			adjacency.data[offsets[b]++] = unsigned(i);
+			adjacency.data[offsets[c]++] = unsigned(i);
+		}
+	}
+
+	static unsigned int getNextVertexDeadEnd(const std::vector<unsigned int>& dead_end, unsigned int& dead_end_top, unsigned int& input_cursor, const std::vector<unsigned int>& live_triangles)
+	{
+		// check dead-end stack
+		while (dead_end_top)
+		{
+			unsigned int vertex = dead_end[--dead_end_top];
+
+			if (live_triangles[vertex] > 0)
+				return vertex;
+		}
+
+		// input order
+		while (input_cursor < live_triangles.size())
+		{
+			if (live_triangles[input_cursor] > 0)
+				return input_cursor;
+
+			++input_cursor;
+		}
+
+		return static_cast<unsigned int>(-1);
+	}
+
+	static unsigned int getNextVertexNeighbour(const unsigned int* next_candidates_begin, const unsigned int* next_candidates_end, const std::vector<unsigned int>& live_triangles, const std::vector<unsigned int>& cache_timestamps, unsigned int timestamp, unsigned int cache_size)
+	{
+		unsigned int best_candidate = static_cast<unsigned int>(-1);
+		int best_priority = -1;
+
+		for (const unsigned int* next_candidate = next_candidates_begin; next_candidate != next_candidates_end; ++next_candidate)
+		{
+			unsigned int vertex = *next_candidate;
+
+			// otherwise we don't need to process it
+			if (live_triangles[vertex] > 0)
+			{
+				int priority = 0;
+
+				// will it be in cache after fanning?
+				if (2 * live_triangles[vertex] + timestamp - cache_timestamps[vertex] <= cache_size)
+				{
+					priority = timestamp - cache_timestamps[vertex]; // position in cache
+				}
+
+				if (priority > best_priority)
+				{
+					best_candidate = vertex;
+					best_priority = priority;
+				}
+			}
+		}
+
+		return best_candidate;
+	}
+
+	void optimizeVertexCache(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+	{
+		assert(index_count % 3 == 0);
+		assert(cache_size >= 3);
+
+		// guard for empty meshes
+		if (index_count == 0 || vertex_count == 0)
+		{
+			return;
+		}
+
+		// support in-place optimization
+		std::vector<unsigned int> indices_copy;
+
+		if (destination == indices)
+		{
+			indices_copy.assign(indices, indices + index_count);
+			indices = &indices_copy[0];
+		}
+
+		// build adjacency information
+		Adjacency adjacency;
+
+		buildAdjacency(adjacency, indices, index_count, vertex_count);
+
+		// live triangle counts
+		std::vector<unsigned int> live_triangles = adjacency.triangle_counts;
+
+		// cache time stamps
+		std::vector<unsigned int> cache_timestamps(vertex_count, 0);
+
+		// dead-end stack
+		std::vector<unsigned int> dead_end(index_count);
+		unsigned int dead_end_top = 0;
+
+		// emitted flags
+		std::vector<char> emitted_flags(index_count / 3, false);
+
+		unsigned int current_vertex = 0;
+
+		unsigned int timestamp = cache_size + 1;
+		unsigned int input_cursor = 1; // vertex to restart from in case of dead-end
+
+		unsigned int output_triangle = 0;
+
+		while (current_vertex != static_cast<unsigned int>(-1))
+		{
+			const unsigned int* next_candidates_begin = &dead_end[0] + dead_end_top;
+
+			// emit all vertex neighbours
+			const unsigned int* neighbours_begin = &adjacency.data[0] + adjacency.offsets[current_vertex];
+			const unsigned int* neighbours_end = neighbours_begin + adjacency.triangle_counts[current_vertex];
+
+			for (const unsigned int* it = neighbours_begin; it != neighbours_end; ++it)
+			{
+				unsigned int triangle = *it;
+
+				if (!emitted_flags[triangle])
+				{
+					unsigned int a = indices[triangle * 3 + 0], b = indices[triangle * 3 + 1], c = indices[triangle * 3 + 2];
+
+					// output indices
+					destination[output_triangle * 3 + 0] = a;
+					destination[output_triangle * 3 + 1] = b;
+					destination[output_triangle * 3 + 2] = c;
+					output_triangle++;
+
+					// update dead-end stack
+					dead_end[dead_end_top + 0] = a;
+					dead_end[dead_end_top + 1] = b;
+					dead_end[dead_end_top + 2] = c;
+					dead_end_top += 3;
+
+					// update live triangle counts
+					live_triangles[a]--;
+					live_triangles[b]--;
+					live_triangles[c]--;
+
+					// update cache info
+					// if vertex is not in cache, put it in cache
+					if (timestamp - cache_timestamps[a] > cache_size)
+						cache_timestamps[a] = timestamp++;
+
+					if (timestamp - cache_timestamps[b] > cache_size)
+						cache_timestamps[b] = timestamp++;
+
+					if (timestamp - cache_timestamps[c] > cache_size)
+						cache_timestamps[c] = timestamp++;
+
+					// update emitted flags
+					emitted_flags[triangle] = true;
+				}
+			}
+
+			// next candidates are the ones we pushed to dead-end stack just now
+			const unsigned int* next_candidates_end = &dead_end[0] + dead_end_top;
+
+			// get next vertex
+			current_vertex = getNextVertexNeighbour(next_candidates_begin, next_candidates_end, live_triangles, cache_timestamps, timestamp, cache_size);
+
+			if (current_vertex == static_cast<unsigned int>(-1))
+			{
+				current_vertex = getNextVertexDeadEnd(dead_end, dead_end_top, input_cursor, live_triangles);
+			}
+		}
+
+		assert(output_triangle == index_count / 3);
+	}
+}
+
+void gridGen(std::vector<unsigned int>& indices, int x0, int x1, int y0, int y1, int width, int cacheSize, bool prefetch)
+{
+    if (x1 - x0 + 1 < cacheSize)
+    {
+        if (2 * (x1 - x0) + 1 > cacheSize && prefetch)
+        {
+            for (int x = x0; x < x1; x++)
+            {
+                indices.push_back(x + 0);
+                indices.push_back(x + 0);
+                indices.push_back(x + 1);
+            }
+        }
+
+        for (int y = y0; y < y1; y++)
+        {
+            for (int x = x0; x < x1; x++)
+            {
+                indices.push_back((width + 1) * (y + 0) + (x + 0));
+                indices.push_back((width + 1) * (y + 1) + (x + 0));
+                indices.push_back((width + 1) * (y + 0) + (x + 1));
+
+                indices.push_back((width + 1) * (y + 0) + (x + 1));
+                indices.push_back((width + 1) * (y + 1) + (x + 0));
+                indices.push_back((width + 1) * (y + 1) + (x + 1));
+            }
+        }
+    }
+    else
+    {
+        int xm = x0 + cacheSize - 2;
+        gridGen(indices, x0, xm, y0, y1, width, cacheSize, prefetch);
+        gridGen(indices, xm, x1, y0, y1, width, cacheSize, prefetch);
+    }
+}
+
+unsigned int queryVSInvocations(ID3D11Device* device, ID3D11DeviceContext* context, const unsigned int* indices, size_t index_count)
+{
+	ID3D11Buffer* ib = 0;
+
+	{
+		D3D11_BUFFER_DESC bd = {};
+
+		bd.Usage = D3D11_USAGE_DYNAMIC;
+		bd.ByteWidth = index_count * 4;
+		bd.BindFlags = D3D11_BIND_INDEX_BUFFER;
+		bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+		device->CreateBuffer(&bd, 0, &ib);
+
+		D3D11_MAPPED_SUBRESOURCE ms;
+		context->Map(ib, 0, D3D11_MAP_WRITE_DISCARD, 0, &ms);
+		memcpy(ms.pData, indices, index_count * 4);
+		context->Unmap(ib, 0);
+	}
+
+	context->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	context->IASetIndexBuffer(ib, DXGI_FORMAT_R32_UINT, 0);
+
+	D3D11_QUERY_DESC qdesc = { D3D11_QUERY_PIPELINE_STATISTICS };
+	ID3D11Query* query = 0;
+	device->CreateQuery(&qdesc, &query);
+
+	context->Begin(query);
+	context->DrawIndexed(index_count, 0, 0);
+	context->End(query);
+
+	D3D11_QUERY_DATA_PIPELINE_STATISTICS stats = {};
+	while (S_FALSE == context->GetData(query, &stats, sizeof(stats), 0))
+		;
+
+	query->Release();
+	ib->Release();
+
+	assert(stats.IAVertices == index_count);
+
+	return stats.VSInvocations;
+}
+
+unsigned int estimateVSInvocationsFIFO(const unsigned int* indices, size_t index_count, size_t cache_size)
+{
+	std::vector<unsigned int> cache;
+
+	unsigned int invocations = 0;
+
+	for (size_t i = 0; i < index_count; ++i)
+	{
+		unsigned int index = indices[i];
+
+		bool found = false;
+
+		for (size_t j = 0; j < cache.size(); ++j)
+		{
+			if (cache[j] == index)
+			{
+				found = true;
+				break;
+			}
+		}
+
+		if (!found)
+			invocations++;
+
+		if (!found)
+			cache.push_back(index);
+
+		if (cache.size() > cache_size)
+			cache.erase(cache.begin(), cache.end() - cache_size);
+	}
+
+	return invocations;
+}
+
+unsigned int estimateVSInvocationsLRU(const unsigned int* indices, size_t index_count, size_t cache_size)
+{
+	std::vector<unsigned int> cache;
+
+	unsigned int invocations = 0;
+
+	for (size_t i = 0; i < index_count; ++i)
+	{
+		unsigned int index = indices[i];
+
+		bool found = false;
+
+		for (size_t j = 0; j < cache.size(); ++j)
+		{
+			if (cache[j] == index)
+			{
+				found = true;
+				cache.erase(cache.begin() + j);
+				break;
+			}
+		}
+
+		if (!found)
+			invocations++;
+
+		cache.push_back(index);
+
+		if (cache.size() > cache_size)
+			cache.erase(cache.begin(), cache.end() - cache_size);
+	}
+
+	return invocations;
+}
+
+unsigned int estimateVSInvocationsReuse(const unsigned int* indices, size_t index_count, size_t warp_size, size_t fifo_size, size_t triangle_limit)
+{
+	std::vector<unsigned int> warp;
+
+	unsigned int invocations = 0;
+	unsigned int triangles = 0;
+
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		bool found[3] = {};
+
+		for (size_t k = 0; k < 3; ++k)
+		{
+			for (size_t j = 0; j < warp.size(); ++j)
+			{
+				if (warp.size() - j > fifo_size)
+					continue;
+
+				if (warp[j] == indices[i + k])
+				{
+					found[k] = true;
+					break;
+				}
+			}
+		}
+
+		// triangle doesn't fit into warp we're currently building - flush
+		if (warp.size() + !found[0] + !found[1] + !found[2] > warp_size || triangles >= triangle_limit)
+		{
+			invocations += warp.size();
+			warp.clear();
+
+			// restart warp from scratch
+			warp.push_back(indices[i + 0]);
+			warp.push_back(indices[i + 1]);
+			warp.push_back(indices[i + 2]);
+			triangles = 1;
+		}
+		else
+		{
+			if (!found[0])
+				warp.push_back(indices[i + 0]);
+			if (!found[1])
+				warp.push_back(indices[i + 1]);
+			if (!found[2])
+				warp.push_back(indices[i + 2]);
+			triangles++;
+		}
+	}
+
+	// last warp
+	invocations += warp.size();
+
+	return invocations;
+}
+
+void setupShaders(ID3D11Device* device, ID3D11DeviceContext* context)
+{
+	// load and compile the two shaders
+	const char* shaders =
+		"#define ATTRIBUTES 5\n"
+		"struct Foo { float4 v[ATTRIBUTES]; };"
+		"float4 VS(uint index: SV_VertexId, out Foo foo: FOO): SV_Position { uint i = index % 3; [unroll] for (int j = 0; j < ATTRIBUTES; j++) foo.v[j] = j; return float4(i != 0, i != 2, 0, 1); }"
+		"float4 PS(Foo foo: FOO): SV_Target { float4 result = 0; [unroll] for (int j = 0; j < ATTRIBUTES; j++) result += foo.v[j]; return result; }";
+
+	ID3DBlob* vsblob = 0;
+	ID3DBlob* psblob = 0;
+	D3DCompile(shaders, strlen(shaders), 0, 0, 0, "VS", "vs_5_0", 0, 0, &vsblob, 0);
+	D3DCompile(shaders, strlen(shaders), 0, 0, 0, "PS", "ps_5_0", 0, 0, &psblob, 0);
+
+	ID3D11VertexShader* vs = 0;
+	ID3D11PixelShader* ps = 0;
+	device->CreateVertexShader(vsblob->GetBufferPointer(), vsblob->GetBufferSize(), 0, &vs);
+	device->CreatePixelShader(psblob->GetBufferPointer(), psblob->GetBufferSize(), 0, &ps);
+
+	context->VSSetShader(vs, 0, 0);
+	context->PSSetShader(ps, 0, 0);
+}
+
+template <typename Cache>
+void inspectCache(Cache cache)
+{
+	unsigned int max_cache_size = 200;
+	unsigned int grid_size = 100;
+
+	for (unsigned int cache_size = 3; cache_size <= max_cache_size; cache_size += 1)
+	{
+		std::vector<unsigned int> grid1;
+		gridGen(grid1, 0, grid_size, 0, grid_size, grid_size, cache_size, true);
+
+		std::vector<unsigned int> grid2;
+		gridGen(grid2, 0, grid_size, 0, grid_size, grid_size, cache_size, false);
+
+		std::vector<unsigned int> grid3;
+		gridGen(grid3, 0, grid_size, 0, grid_size, grid_size, grid_size * 4, false); // this generates a simple indexed grid without striping/degenerate triangles
+		Tipsify::optimizeVertexCache(&grid3[0], &grid3[0], grid3.size(), (grid_size + 1) * (grid_size + 1), cache_size);
+
+		std::vector<unsigned int> grid4;
+		gridGen(grid4, 0, grid_size, 0, grid_size, grid_size, grid_size * 4, false); // this generates a simple indexed grid without striping/degenerate triangles
+		TomF::optimizeVertexCache(&grid4[0], &grid4[0], grid4.size(), (grid_size + 1) * (grid_size + 1), cache_size);
+
+		unsigned int invocations1 = cache(&grid1[0], grid1.size());
+		unsigned int invocations2 = cache(&grid2[0], grid2.size());
+		unsigned int invocations3 = cache(&grid3[0], grid3.size());
+		unsigned int invocations4 = cache(&grid4[0], grid4.size());
+
+		unsigned int ideal_invocations = (grid_size + 1) * (grid_size + 1);
+
+		printf("%d, %f, %f, %f, %f\n", cache_size,
+			double(invocations1) / double(ideal_invocations),
+			double(invocations2) / double(ideal_invocations),
+			double(invocations3) / double(ideal_invocations),
+			double(invocations4) / double(ideal_invocations));
+	}
+}
+
+void testCache(IDXGIAdapter* adapter)
+{
+	ID3D11Device* device = 0;
+	ID3D11DeviceContext* context = 0;
+    D3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, 0, 0, 0, 0, D3D11_SDK_VERSION, &device, 0, &context);
+
+	setupShaders(device, context);
+
+	inspectCache([&](const unsigned int* indices, size_t index_count) { return queryVSInvocations(device, context, indices, index_count); });
+
+	unsigned int dib[] = { 0, 1, 1, 2, 3, 4, 5, 5, 5 };
+
+	printf("// Degenerate IB invocations: %d\n", queryVSInvocations(device, context, dib, sizeof(dib) / sizeof(dib[0])));
+
+	printf("// Reuse boundaries: ");
+
+	unsigned int last = 0;
+
+	for (unsigned int count = 3; count < 1000; count += 3)
+	{
+		std::vector<unsigned int> ib;
+
+		for (unsigned int i = 0; i < count; i += 3)
+		{
+			ib.push_back(0);
+			ib.push_back(1);
+			ib.push_back(2);
+		}
+
+		unsigned int invocations = queryVSInvocations(device, context, ib.data(), ib.size());
+
+		if (invocations != last)
+		{
+			printf("%d, ", count);
+			last = invocations;
+		}
+	}
+
+	printf("\n");
+}
+
+void modelCacheFIFO(size_t model_cache_size)
+{
+	inspectCache([&](const unsigned int* indices, size_t index_count) { return estimateVSInvocationsFIFO(indices, index_count, model_cache_size); });
+}
+
+void modelCacheLRU(size_t model_cache_size)
+{
+	inspectCache([&](const unsigned int* indices, size_t index_count) { return estimateVSInvocationsLRU(indices, index_count, model_cache_size); });
+}
+
+void modelCacheReuse(size_t model_warp_size, size_t model_fifo_size, size_t model_triangle_limit)
+{
+	inspectCache([&](const unsigned int* indices, size_t index_count) { return estimateVSInvocationsReuse(indices, index_count, model_warp_size, model_fifo_size, model_triangle_limit); });
+}
+
+int main(int argc, char** argv)
+{
+	IDXGIFactory1* factory = 0;
+	CreateDXGIFactory1(__uuidof(IDXGIFactory1), (void**)&factory);
+
+	IDXGIAdapter* adapter = NULL;
+	for (unsigned int index = 0; SUCCEEDED(factory->EnumAdapters(index, &adapter)); ++index)
+	{
+		DXGI_ADAPTER_DESC ad = {};
+		adapter->GetDesc(&ad);
+
+		printf("// GPU %d: %S\n", index, ad.Description);
+
+		testCache(adapter);
+	}
+
+	printf("// Model FIFO 128\n");
+	modelCacheFIFO(128);
+
+	printf("// Model LRU 16\n");
+	modelCacheLRU(16);
+
+	printf("// Model Reuse 32\n");
+	modelCacheReuse(32, 32, 32);
+
+	printf("// Model Reuse 32 w/16-entry FIFO\n");
+	modelCacheReuse(32, 16, 32);
+}
+#endif
