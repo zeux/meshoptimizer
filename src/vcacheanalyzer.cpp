@@ -2,12 +2,13 @@
 #include "meshoptimizer.hpp"
 
 #include <cassert>
+#include <algorithm>
 #include <vector>
 
 namespace meshopt
 {
 
-VertexCacheStatistics analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+static VertexCacheStatistics analyzeVertexCacheFIFO(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
 	assert(index_count % 3 == 0);
 	assert(cache_size >= 3);
@@ -34,6 +35,48 @@ VertexCacheStatistics analyzeVertexCache(const unsigned int* indices, size_t ind
 	result.atvr = vertex_count == 0 ? 0 : float(result.vertices_transformed) / float(vertex_count);
 
 	return result;
+}
+
+static VertexCacheStatistics analyzeVertexCacheLRU(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+{
+	assert(index_count % 3 == 0);
+	assert(cache_size >= 3);
+
+	VertexCacheStatistics result = {};
+
+	std::vector<unsigned int> cache;
+	cache.reserve(cache_size + 1);
+
+	for (size_t i = 0; i < index_count; ++i)
+	{
+		unsigned int index = indices[i];
+		assert(index < vertex_count);
+
+		std::vector<unsigned int>::iterator it = std::find(cache.begin(), cache.end(), index);
+
+		if (it == cache.end())
+			result.vertices_transformed++;
+		else
+			cache.erase(it);
+
+		cache.push_back(index);
+
+		if (cache.size() > cache_size)
+			cache.erase(cache.begin(), cache.end() - cache_size);
+	}
+
+	result.acmr = index_count == 0 ? 0 : float(result.vertices_transformed) / float(index_count / 3);
+	result.atvr = vertex_count == 0 ? 0 : float(result.vertices_transformed) / float(vertex_count);
+
+	return result;
+}
+
+VertexCacheStatistics analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+{
+	if (cache_size == 0)
+		return analyzeVertexCacheLRU(indices, index_count, vertex_count, 16);
+	else
+		return analyzeVertexCacheFIFO(indices, index_count, vertex_count, cache_size);
 }
 
 } // namespace meshopt
