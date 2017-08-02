@@ -147,6 +147,11 @@ void optCache(Mesh& mesh)
 	optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize);
 }
 
+void optCache0(Mesh& mesh)
+{
+	optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), 0);
+}
+
 void optOverdraw(Mesh& mesh)
 {
 	// use worst-case ACMR threshold so that overdraw optimizer can sort *all* triangles
@@ -217,6 +222,7 @@ void process(const char* path)
 	optimize(mesh, "Original", optNone);
 	optimize(mesh, "Random", optRandomShuffle);
 	optimize(mesh, "Cache", optCache);
+	optimize(mesh, "Cache0", optCache0);
 	optimize(mesh, "Overdraw", optOverdraw);
 	optimize(mesh, "Fetch", optFetch);
 	optimize(mesh, "Complete", optComplete);
