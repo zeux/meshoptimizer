@@ -8,6 +8,9 @@
 #include <cmath>
 #include <vector>
 
+#include "../src/meshoptimizer.hpp"
+#include "objparser.hpp"
+
 #pragma comment (lib, "d3d11.lib")
 #pragma comment (lib, "d3dcompiler.lib")
 #pragma comment (lib, "dxgi.lib")
@@ -263,219 +266,6 @@ namespace TomF
 	}
 }
 
-namespace Tipsify
-{
-	struct Adjacency
-	{
-		std::vector<unsigned int> triangle_counts;
-		std::vector<unsigned int> offsets;
-		std::vector<unsigned int> data;
-	};
-
-	static void buildAdjacency(Adjacency& adjacency, const unsigned int* indices, size_t index_count, size_t vertex_count)
-	{
-		// fill triangle counts
-		adjacency.triangle_counts.resize(vertex_count, 0);
-
-		for (size_t i = 0; i < index_count; ++i)
-		{
-			assert(indices[i] < vertex_count);
-
-			adjacency.triangle_counts[indices[i]]++;
-		}
-
-		// fill offset table
-		adjacency.offsets.resize(vertex_count);
-
-		unsigned int offset = 0;
-
-		for (size_t i = 0; i < vertex_count; ++i)
-		{
-			adjacency.offsets[i] = offset;
-			offset += adjacency.triangle_counts[i];
-		}
-
-		// fill triangle data
-		adjacency.data.resize(offset);
-
-		std::vector<unsigned int> offsets = adjacency.offsets;
-
-		size_t face_count = index_count / 3;
-
-		for (size_t i = 0; i < face_count; ++i)
-		{
-			unsigned int a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
-
-			adjacency.data[offsets[a]++] = unsigned(i);
-			adjacency.data[offsets[b]++] = unsigned(i);
-			adjacency.data[offsets[c]++] = unsigned(i);
-		}
-	}
-
-	static unsigned int getNextVertexDeadEnd(const std::vector<unsigned int>& dead_end, unsigned int& dead_end_top, unsigned int& input_cursor, const std::vector<unsigned int>& live_triangles)
-	{
-		// check dead-end stack
-		while (dead_end_top)
-		{
-			unsigned int vertex = dead_end[--dead_end_top];
-
-			if (live_triangles[vertex] > 0)
-				return vertex;
-		}
-
-		// input order
-		while (input_cursor < live_triangles.size())
-		{
-			if (live_triangles[input_cursor] > 0)
-				return input_cursor;
-
-			++input_cursor;
-		}
-
-		return static_cast<unsigned int>(-1);
-	}
-
-	static unsigned int getNextVertexNeighbour(const unsigned int* next_candidates_begin, const unsigned int* next_candidates_end, const std::vector<unsigned int>& live_triangles, const std::vector<unsigned int>& cache_timestamps, unsigned int timestamp, unsigned int cache_size)
-	{
-		unsigned int best_candidate = static_cast<unsigned int>(-1);
-		int best_priority = -1;
-
-		for (const unsigned int* next_candidate = next_candidates_begin; next_candidate != next_candidates_end; ++next_candidate)
-		{
-			unsigned int vertex = *next_candidate;
-
-			// otherwise we don't need to process it
-			if (live_triangles[vertex] > 0)
-			{
-				int priority = 0;
-
-				// will it be in cache after fanning?
-				if (2 * live_triangles[vertex] + timestamp - cache_timestamps[vertex] <= cache_size)
-				{
-					priority = timestamp - cache_timestamps[vertex]; // position in cache
-				}
-
-				if (priority > best_priority)
-				{
-					best_candidate = vertex;
-					best_priority = priority;
-				}
-			}
-		}
-
-		return best_candidate;
-	}
-
-	void optimizeVertexCache(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
-	{
-		assert(index_count % 3 == 0);
-		assert(cache_size >= 3);
-
-		// guard for empty meshes
-		if (index_count == 0 || vertex_count == 0)
-		{
-			return;
-		}
-
-		// support in-place optimization
-		std::vector<unsigned int> indices_copy;
-
-		if (destination == indices)
-		{
-			indices_copy.assign(indices, indices + index_count);
-			indices = &indices_copy[0];
-		}
-
-		// build adjacency information
-		Adjacency adjacency;
-
-		buildAdjacency(adjacency, indices, index_count, vertex_count);
-
-		// live triangle counts
-		std::vector<unsigned int> live_triangles = adjacency.triangle_counts;
-
-		// cache time stamps
-		std::vector<unsigned int> cache_timestamps(vertex_count, 0);
-
-		// dead-end stack
-		std::vector<unsigned int> dead_end(index_count);
-		unsigned int dead_end_top = 0;
-
-		// emitted flags
-		std::vector<char> emitted_flags(index_count / 3, false);
-
-		unsigned int current_vertex = 0;
-
-		unsigned int timestamp = cache_size + 1;
-		unsigned int input_cursor = 1; // vertex to restart from in case of dead-end
-
-		unsigned int output_triangle = 0;
-
-		while (current_vertex != static_cast<unsigned int>(-1))
-		{
-			const unsigned int* next_candidates_begin = &dead_end[0] + dead_end_top;
-
-			// emit all vertex neighbours
-			const unsigned int* neighbours_begin = &adjacency.data[0] + adjacency.offsets[current_vertex];
-			const unsigned int* neighbours_end = neighbours_begin + adjacency.triangle_counts[current_vertex];
-
-			for (const unsigned int* it = neighbours_begin; it != neighbours_end; ++it)
-			{
-				unsigned int triangle = *it;
-
-				if (!emitted_flags[triangle])
-				{
-					unsigned int a = indices[triangle * 3 + 0], b = indices[triangle * 3 + 1], c = indices[triangle * 3 + 2];
-
-					// output indices
-					destination[output_triangle * 3 + 0] = a;
-					destination[output_triangle * 3 + 1] = b;
-					destination[output_triangle * 3 + 2] = c;
-					output_triangle++;
-
-					// update dead-end stack
-					dead_end[dead_end_top + 0] = a;
-					dead_end[dead_end_top + 1] = b;
-					dead_end[dead_end_top + 2] = c;
-					dead_end_top += 3;
-
-					// update live triangle counts
-					live_triangles[a]--;
-					live_triangles[b]--;
-					live_triangles[c]--;
-
-					// update cache info
-					// if vertex is not in cache, put it in cache
-					if (timestamp - cache_timestamps[a] > cache_size)
-						cache_timestamps[a] = timestamp++;
-
-					if (timestamp - cache_timestamps[b] > cache_size)
-						cache_timestamps[b] = timestamp++;
-
-					if (timestamp - cache_timestamps[c] > cache_size)
-						cache_timestamps[c] = timestamp++;
-
-					// update emitted flags
-					emitted_flags[triangle] = true;
-				}
-			}
-
-			// next candidates are the ones we pushed to dead-end stack just now
-			const unsigned int* next_candidates_end = &dead_end[0] + dead_end_top;
-
-			// get next vertex
-			current_vertex = getNextVertexNeighbour(next_candidates_begin, next_candidates_end, live_triangles, cache_timestamps, timestamp, cache_size);
-
-			if (current_vertex == static_cast<unsigned int>(-1))
-			{
-				current_vertex = getNextVertexDeadEnd(dead_end, dead_end_top, input_cursor, live_triangles);
-			}
-		}
-
-		assert(output_triangle == index_count / 3);
-	}
-}
-
 void gridGen(std::vector<unsigned int>& indices, int x0, int x1, int y0, int y1, int width, int cacheSize, bool prefetch)
 {
     if (x1 - x0 + 1 < cacheSize)
@@ -718,7 +508,7 @@ void inspectCache(Cache cache)
 
 		std::vector<unsigned int> grid3;
 		gridGen(grid3, 0, grid_size, 0, grid_size, grid_size, grid_size * 4, false); // this generates a simple indexed grid without striping/degenerate triangles
-		Tipsify::optimizeVertexCache(&grid3[0], &grid3[0], grid3.size(), (grid_size + 1) * (grid_size + 1), cache_size);
+		meshopt::optimizeVertexCache(&grid3[0], &grid3[0], grid3.size(), (grid_size + 1) * (grid_size + 1), cache_size);
 
 		std::vector<unsigned int> grid4;
 		gridGen(grid4, 0, grid_size, 0, grid_size, grid_size, grid_size * 4, false); // this generates a simple indexed grid without striping/degenerate triangles
@@ -780,6 +570,62 @@ void testCache(IDXGIAdapter* adapter)
 	printf("\n");
 }
 
+void testCacheMeshes(IDXGIAdapter* adapter, int argc, char** argv)
+{
+	ID3D11Device* device = 0;
+	ID3D11DeviceContext* context = 0;
+    D3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, 0, 0, 0, 0, D3D11_SDK_VERSION, &device, 0, &context);
+
+	setupShaders(device, context);
+
+	for (int i = 1; i < argc; ++i)
+	{
+		const char* path = argv[i];
+
+		ObjFile file;
+
+		if (!objParseFile(file, path))
+		{
+			printf("Error loading %s: file not found\n", path);
+			continue;
+		}
+
+		if (!objValidate(file))
+		{
+			printf("Error loading %s: invalid file data\n", path);
+			continue;
+		}
+
+		objTriangulate(file);
+
+		std::vector<unsigned int> ib1;
+
+		for (size_t i = 0; i < file.f.size(); i += 3)
+			ib1.push_back(file.f[i]);
+
+		unsigned int vertex_count = file.v.size() / 3;
+		unsigned int index_count = ib1.size();
+
+		unsigned int invocations1 = queryVSInvocations(device, context, ib1.data(), index_count);
+
+		printf("%s: baseline %f\n", path, double(invocations1) / double(vertex_count));
+
+		for (unsigned int cache_size = 14; cache_size <= 24; ++cache_size)
+		{
+			std::vector<unsigned int> ib2(ib1.size());
+			meshopt::optimizeVertexCache(&ib2[0], &ib1[0], ib1.size(), vertex_count, cache_size);
+
+			std::vector<unsigned int> ib3(ib1.size());
+			TomF::optimizeVertexCache(&ib3[0], &ib1[0], ib1.size(), vertex_count, cache_size);
+
+			unsigned int invocations2 = queryVSInvocations(device, context, ib2.data(), index_count);
+			unsigned int invocations3 = queryVSInvocations(device, context, ib3.data(), index_count);
+
+			printf("%s: %d tipsify %f tomf %f\n", path, cache_size, double(invocations2) / double(vertex_count), double(invocations3) / double(vertex_count));
+		}
+	}
+}
+
 void modelCacheFIFO(size_t model_cache_size)
 {
 	inspectCache([&](const unsigned int* indices, size_t index_count) { return estimateVSInvocationsFIFO(indices, index_count, model_cache_size); });
@@ -808,19 +654,29 @@ int main(int argc, char** argv)
 
 		printf("// GPU %d: %S\n", index, ad.Description);
 
-		testCache(adapter);
+		if (argc == 1)
+		{
+			testCache(adapter);
+		}
+		else
+		{
+			testCacheMeshes(adapter, argc, argv);
+		}
 	}
 
-	printf("// Model FIFO 128\n");
-	modelCacheFIFO(128);
+	if (argc == 1)
+	{
+		printf("// Model FIFO 128\n");
+		modelCacheFIFO(128);
 
-	printf("// Model LRU 16\n");
-	modelCacheLRU(16);
+		printf("// Model LRU 16\n");
+		modelCacheLRU(16);
 
-	printf("// Model Reuse 32\n");
-	modelCacheReuse(32, 32, 32);
+		printf("// Model Reuse 32\n");
+		modelCacheReuse(32, 32, 32);
 
-	printf("// Model Reuse 32 w/16-entry FIFO\n");
-	modelCacheReuse(32, 16, 32);
+		printf("// Model Reuse 32 w/16-entry FIFO\n");
+		modelCacheReuse(32, 16, 32);
+	}
 }
 #endif
