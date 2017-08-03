@@ -383,14 +383,14 @@ static void optimizeVertexCacheLRU(unsigned int* destination, const unsigned int
 		else if (cp_a == -1) // only cp_a == -1
 		{
 			cache_new_end = std::copy(cache, cache + cp_b, cache_new_end);
-			cache_new_end = std::copy(cache + cp_b + 1, cache + cp_c, cache_new_end);
+			if (cp_b != cp_c) cache_new_end = std::copy(cache + cp_b + 1, cache + cp_c, cache_new_end);
 			cache_new_end = std::copy(cache + cp_c + 1, cache_end, cache_new_end);
 		}
 		else
 		{
 			cache_new_end = std::copy(cache, cache + cp_a, cache_new_end);
-			cache_new_end = std::copy(cache + cp_a + 1, cache + cp_b, cache_new_end);
-			cache_new_end = std::copy(cache + cp_b + 1, cache + cp_c, cache_new_end);
+			if (cp_a != cp_b) cache_new_end = std::copy(cache + cp_a + 1, cache + cp_b, cache_new_end);
+			if (cp_b != cp_c) cache_new_end = std::copy(cache + cp_b + 1, cache + cp_c, cache_new_end);
 			cache_new_end = std::copy(cache + cp_c + 1, cache_end, cache_new_end);
 		}
 
