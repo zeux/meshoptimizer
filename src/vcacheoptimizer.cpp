@@ -200,6 +200,7 @@ static void optimizeVertexCacheFIFO(unsigned int* destination, const unsigned in
 		}
 	}
 
+	assert(input_cursor == index_count / 3);
 	assert(output_triangle == index_count / 3);
 }
 
@@ -223,35 +224,18 @@ static const float cache_scores[max_cache_size] =
 	0.0512263001867729f, 0.0332724579777247f, 0.0181112321185824f, 0.00640328752334662f,
 };
 
-struct Vertex
-{
-	Vertex()
-	    : cache_position(-1)
-	    , score(0)
-	    , triangles_total(0)
-	    , triangles_not_added(0)
-	    , triangles(0)
-	{
-	}
-
-	int cache_position;
-	float score;
-	unsigned int triangles_total;
-	unsigned int triangles_not_added;
-	unsigned int* triangles;
-};
-
-static float vertexScore(const Vertex& vertex)
+static float vertexScore(int cache_position, unsigned int live_triangles)
 {
 	// check if there are any triangles needed
-	if (vertex.triangles_not_added == 0) return -1;
+	if (live_triangles == 0)
+		return -1;
 
-	float score = vertex.cache_position == -1 ? 0 : cache_scores[vertex.cache_position];
+	float score = cache_position == -1 ? 0 : cache_scores[cache_position];
 
 	// Bonus points for having a low number of tris still to use the vert, so we get rid of lone verts quickly.
 	// return score + valence_boost_scale * powf(vertex.triangles_not_added, -valence_boost_power);
 	// for valence_boost_power = 0.5f
-	return score + valence_boost_scale / sqrtf((float)vertex.triangles_not_added);
+	return score + valence_boost_scale / sqrtf(float(live_triangles));
 }
 
 static unsigned int getNextTriangleDeadEnd(unsigned int& input_cursor, const std::vector<char>& emitted_flags)
@@ -273,63 +257,36 @@ static void optimizeVertexCacheLRU(unsigned int* destination, const unsigned int
 	assert(index_count % 3 == 0);
 	assert(cache_size <= max_cache_size);
 
-	size_t face_count = index_count / 3;
+	// build adjacency information
+	Adjacency adjacency;
 
-	std::vector<Vertex> vertices(vertex_count);
+	buildAdjacency(adjacency, indices, index_count, vertex_count);
 
-	// initializing vertex data
-	for (size_t i = 0; i < index_count; ++i)
-	{
-		vertices[indices[i]].triangles_total++;
-	}
+	// live triangle counts
+	std::vector<unsigned int> live_triangles = adjacency.triangle_counts;
 
-	// calculate total triangle number
-	std::vector<unsigned int> triangle_indices(index_count); // total triangle indices count == index count
-	unsigned int* triangle_indices_ptr = &triangle_indices[0];
-
-	// allocate storage for triangle indices
-	for (size_t i = 0; i < vertex_count; ++i)
-	{
-		Vertex& v = vertices[i];
-
-		v.triangles = triangle_indices_ptr;
-		triangle_indices_ptr += v.triangles_total;
-	}
-
-	// fill triangle indices
-	for (size_t i = 0; i < face_count; ++i)
-	{
-		Vertex& a = vertices[indices[i * 3 + 0]];
-		a.triangles[a.triangles_not_added++] = static_cast<unsigned int>(i);
-
-		Vertex& b = vertices[indices[i * 3 + 1]];
-		b.triangles[b.triangles_not_added++] = static_cast<unsigned int>(i);
-
-		Vertex& c = vertices[indices[i * 3 + 2]];
-		c.triangles[c.triangles_not_added++] = static_cast<unsigned int>(i);
-	}
+	// emitted flags
+	std::vector<char> emitted_flags(index_count / 3, false);
 
 	// compute initial vertex scores
+	std::vector<float> vertex_scores(vertex_count);
+
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		Vertex& v = vertices[i];
-
-		v.score = vertexScore(v);
+		vertex_scores[i] = vertexScore(-1, live_triangles[i]);
 	}
 
 	// compute triangle scores
-	std::vector<float> triangle_scores(face_count);
+	std::vector<float> triangle_scores(index_count / 3);
 
-	for (size_t i = 0; i < face_count; ++i)
+	for (size_t i = 0; i < triangle_scores.size(); ++i)
 	{
-		unsigned int tri_a = indices[i * 3 + 0];
-		unsigned int tri_b = indices[i * 3 + 1];
-		unsigned int tri_c = indices[i * 3 + 2];
+		unsigned int a = indices[i * 3 + 0];
+		unsigned int b = indices[i * 3 + 1];
+		unsigned int c = indices[i * 3 + 2];
 
-		triangle_scores[i] = vertices[tri_a].score + vertices[tri_b].score + vertices[tri_c].score;
+		triangle_scores[i] = vertex_scores[a] + vertex_scores[b] + vertex_scores[c];
 	}
-
-	unsigned int* destination_end = destination + index_count;
 
 	unsigned int cache_holder[2 * (max_cache_size + 3)];
 	unsigned int* cache = cache_holder;
@@ -337,68 +294,46 @@ static void optimizeVertexCacheLRU(unsigned int* destination, const unsigned int
 	unsigned int* cache_new = cache + max_cache_size + 3;
 	unsigned int* cache_new_end = cache_new;
 
-	// emitted flags
-	std::vector<char> emitted_flags(index_count / 3, false);
-
 	unsigned int current_triangle = 0;
 	unsigned int input_cursor = 1;
 
-	// main body
-	while (destination != destination_end)
+	unsigned int output_triangle = 0;
+
+	float min_score = -1e22;
+
+	while (current_triangle != ~0u)
 	{
-		assert(current_triangle < index_count / 3);
+		assert(output_triangle < index_count / 3);
 
-		unsigned int tri_a = indices[current_triangle * 3 + 0];
-		unsigned int tri_b = indices[current_triangle * 3 + 1];
-		unsigned int tri_c = indices[current_triangle * 3 + 2];
+		unsigned int a = indices[current_triangle * 3 + 0];
+		unsigned int b = indices[current_triangle * 3 + 1];
+		unsigned int c = indices[current_triangle * 3 + 2];
 
-		// add it to drawing sequence
-		*destination++ = tri_a;
-		*destination++ = tri_b;
-		*destination++ = tri_c;
+		// output indices
+		destination[output_triangle * 3 + 0] = a;
+		destination[output_triangle * 3 + 1] = b;
+		destination[output_triangle * 3 + 2] = c;
+		output_triangle++;
 
+		// update emitted flags
 		emitted_flags[current_triangle] = true;
-		triangle_scores[current_triangle] = -1e32f; // TODO: 0?
+		triangle_scores[current_triangle] = min_score;
 
 		// construct new cache
 		cache_new_end = cache_new;
 
 		// new triangle
-		*cache_new_end++ = tri_a;
-		*cache_new_end++ = tri_b;
-		*cache_new_end++ = tri_c;
+		*cache_new_end++ = a;
+		*cache_new_end++ = b;
+		*cache_new_end++ = c;
 
-		// old parts
-		int cp_a = vertices[tri_a].cache_position;
-		int cp_b = vertices[tri_b].cache_position;
-		int cp_c = vertices[tri_c].cache_position;
-
-		// order indices
-		if (cp_a > cp_b) std::swap(cp_a, cp_b);
-		if (cp_a > cp_c) std::swap(cp_a, cp_c);
-		if (cp_b > cp_c) std::swap(cp_b, cp_c);
-
-		if (cp_c == -1) // largest is -1 => all 3 are -1
+		// old triangles
+		for (const unsigned int* it = cache; it != cache_end; ++it)
 		{
-			cache_new_end = std::copy(cache, cache_end, cache_new_end);
-		}
-		else if (cp_b == -1) // cp_a == -1, cp_b == -1
-		{
-			cache_new_end = std::copy(cache, cache + cp_c, cache_new_end);
-			cache_new_end = std::copy(cache + cp_c + 1, cache_end, cache_new_end);
-		}
-		else if (cp_a == -1) // only cp_a == -1
-		{
-			cache_new_end = std::copy(cache, cache + cp_b, cache_new_end);
-			if (cp_b != cp_c) cache_new_end = std::copy(cache + cp_b + 1, cache + cp_c, cache_new_end);
-			cache_new_end = std::copy(cache + cp_c + 1, cache_end, cache_new_end);
-		}
-		else
-		{
-			cache_new_end = std::copy(cache, cache + cp_a, cache_new_end);
-			if (cp_a != cp_b) cache_new_end = std::copy(cache + cp_a + 1, cache + cp_b, cache_new_end);
-			if (cp_b != cp_c) cache_new_end = std::copy(cache + cp_b + 1, cache + cp_c, cache_new_end);
-			cache_new_end = std::copy(cache + cp_c + 1, cache_end, cache_new_end);
+			if (*it != a && *it != b && *it != c)
+			{
+				*cache_new_end++ = *it;
+			}
 		}
 
 		size_t cache_new_size = cache_new_end - cache_new;
@@ -408,29 +343,32 @@ static void optimizeVertexCacheLRU(unsigned int* destination, const unsigned int
 		std::swap(cache, cache_new);
 		std::swap(cache_end, cache_new_end);
 
-		// modify vertices
-		vertices[tri_a].triangles_not_added--;
-		vertices[tri_b].triangles_not_added--;
-		vertices[tri_c].triangles_not_added--;
+		// update live triangle counts
+		live_triangles[a]--;
+		live_triangles[b]--;
+		live_triangles[c]--;
 
 		current_triangle = ~0u;
 
-		float best_score = -1e32f; // TODO: 0?
+		float best_score = min_score;
 
 		// update cache positions, vertices scores and triangle scores, and find next best triangle
 		for (size_t i = 0; i < cache_new_size; ++i)
 		{
-			Vertex& v = vertices[cache[i]];
+			unsigned int index = cache[i];
 
-			v.cache_position = i >= cache_size ? -1 : (int)i;
+			int cache_position = i >= cache_size ? -1 : int(i);
 
-			float score = vertexScore(v);
-			float score_diff = score - v.score;
+			float score = vertexScore(cache_position, live_triangles[index]);
+			float score_diff = score - vertex_scores[index];
 
 			// update scores of vertex triangles
-			for (size_t j = 0; j < v.triangles_total; ++j)
+			const unsigned int* neighbours_begin = &adjacency.data[0] + adjacency.offsets[index];
+			const unsigned int* neighbours_end = neighbours_begin + adjacency.triangle_counts[index];
+
+			for (const unsigned int* it = neighbours_begin; it != neighbours_end; ++it)
 			{
-				unsigned int tri = v.triangles[j];
+				unsigned int tri = *it;
 
 				triangle_scores[tri] += score_diff;
 
@@ -443,7 +381,7 @@ static void optimizeVertexCacheLRU(unsigned int* destination, const unsigned int
 				}
 			}
 
-			v.score = score;
+			vertex_scores[index] = score;
 		}
 
 		// step through input triangles in order if we hit a dead-end
@@ -454,7 +392,7 @@ static void optimizeVertexCacheLRU(unsigned int* destination, const unsigned int
 	}
 
 	assert(input_cursor == index_count / 3);
-	assert(current_triangle == ~0u);
+	assert(output_triangle == index_count / 3);
 }
 
 void optimizeVertexCache(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
