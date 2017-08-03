@@ -327,9 +327,23 @@ void testCacheMeshes(IDXGIAdapter* adapter, int argc, char** argv)
 
 	setupShaders(device, context);
 
+	bool stat = false;
+
+	double atvr_sum = 0;
+	double atvr_count = 0;
+
+	unsigned int total_invocations = 0;
+	unsigned int total_vertices = 0;
+
 	for (int i = 1; i < argc; ++i)
 	{
 		const char* path = argv[i];
+
+		if (strcmp(path, "--stat") == 0)
+		{
+			stat = true;
+			continue;
+		}
 
 		ObjFile file;
 
@@ -357,21 +371,42 @@ void testCacheMeshes(IDXGIAdapter* adapter, int argc, char** argv)
 
 		unsigned int invocations1 = queryVSInvocations(device, context, ib1.data(), index_count);
 
-		printf("%s: baseline %f\n", path, double(invocations1) / double(vertex_count));
-
-		for (unsigned int cache_size = 14; cache_size <= 24; ++cache_size)
+		if (stat)
 		{
 			std::vector<unsigned int> ib2(ib1.size());
-			meshopt::optimizeVertexCache(&ib2[0], &ib1[0], ib1.size(), vertex_count, cache_size);
+			meshopt::optimizeVertexCache(&ib2[0], &ib1[0], ib1.size(), vertex_count, 0);
 
-			std::vector<unsigned int> ib3(ib1.size());
-			meshopt::optimizeVertexCache(&ib3[0], &ib1[0], ib1.size(), vertex_count, 0);
+			unsigned int invocations = queryVSInvocations(device, context, ib2.data(), index_count);
 
-			unsigned int invocations2 = queryVSInvocations(device, context, ib2.data(), index_count);
-			unsigned int invocations3 = queryVSInvocations(device, context, ib3.data(), index_count);
+			atvr_sum += double(invocations) / double(vertex_count);
+			atvr_count += 1;
 
-			printf("%s: %d tipsify %f tomf %f\n", path, cache_size, double(invocations2) / double(vertex_count), double(invocations3) / double(vertex_count));
+			total_invocations += invocations;
+			total_vertices += vertex_count;
 		}
+		else
+		{
+			printf("%s: baseline %f\n", path, double(invocations1) / double(vertex_count));
+
+			for (unsigned int cache_size = 14; cache_size <= 24; ++cache_size)
+			{
+				std::vector<unsigned int> ib2(ib1.size());
+				meshopt::optimizeVertexCache(&ib2[0], &ib1[0], ib1.size(), vertex_count, cache_size);
+
+				std::vector<unsigned int> ib3(ib1.size());
+				meshopt::optimizeVertexCache(&ib3[0], &ib1[0], ib1.size(), vertex_count, 0);
+
+				unsigned int invocations2 = queryVSInvocations(device, context, ib2.data(), index_count);
+				unsigned int invocations3 = queryVSInvocations(device, context, ib3.data(), index_count);
+
+				printf("%s: %d tipsify %f tomf %f\n", path, cache_size, double(invocations2) / double(vertex_count), double(invocations3) / double(vertex_count));
+			}
+		}
+	}
+
+	if (stat)
+	{
+		printf("ATVR: average %f cumulative %f; %d vertices\n", atvr_sum / atvr_count, double(total_invocations) / double(total_vertices), total_vertices);
 	}
 }
 
