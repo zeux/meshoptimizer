@@ -200,7 +200,6 @@ static void optimizeVertexCacheFIFO(unsigned int* destination, const unsigned in
 		}
 	}
 
-	assert(input_cursor == index_count / 3);
 	assert(output_triangle == index_count / 3);
 }
 
