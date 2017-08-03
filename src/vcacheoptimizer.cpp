@@ -208,7 +208,7 @@ const size_t max_cache_size = 32;
 const float valence_boost_scale = 2.0f;
 const float last_triangle_score = 0.75f;
 
-// The table is for max_cache_size = 32, cache_decay_power = 1.5, 
+// The table is for max_cache_size = 32, cache_decay_power = 1.5,
 // Equation is ((position - 3) / (max_cache_size - 3)) ^ cache_decay_power
 static const float cache_scores[max_cache_size] =
 {
@@ -225,7 +225,12 @@ static const float cache_scores[max_cache_size] =
 
 struct Vertex
 {
-	Vertex(): cache_position(-1), score(0), triangles_total(0), triangles_not_added(0), triangles(0)
+	Vertex()
+	    : cache_position(-1)
+	    , score(0)
+	    , triangles_total(0)
+	    , triangles_not_added(0)
+	    , triangles(0)
 	{
 	}
 

@@ -1,8 +1,8 @@
 #ifdef _WIN32
+#include <assert.h>
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <stdio.h>
-#include <assert.h>
 
 #include <cassert>
 #include <cmath>
@@ -11,44 +11,44 @@
 #include "../src/meshoptimizer.hpp"
 #include "objparser.hpp"
 
-#pragma comment (lib, "d3d11.lib")
-#pragma comment (lib, "d3dcompiler.lib")
-#pragma comment (lib, "dxgi.lib")
+#pragma comment(lib, "d3d11.lib")
+#pragma comment(lib, "d3dcompiler.lib")
+#pragma comment(lib, "dxgi.lib")
 
 void gridGen(std::vector<unsigned int>& indices, int x0, int x1, int y0, int y1, int width, int cacheSize, bool prefetch)
 {
-    if (x1 - x0 + 1 < cacheSize)
-    {
-        if (2 * (x1 - x0) + 1 > cacheSize && prefetch)
-        {
-            for (int x = x0; x < x1; x++)
-            {
-                indices.push_back(x + 0);
-                indices.push_back(x + 0);
-                indices.push_back(x + 1);
-            }
-        }
+	if (x1 - x0 + 1 < cacheSize)
+	{
+		if (2 * (x1 - x0) + 1 > cacheSize && prefetch)
+		{
+			for (int x = x0; x < x1; x++)
+			{
+				indices.push_back(x + 0);
+				indices.push_back(x + 0);
+				indices.push_back(x + 1);
+			}
+		}
 
-        for (int y = y0; y < y1; y++)
-        {
-            for (int x = x0; x < x1; x++)
-            {
-                indices.push_back((width + 1) * (y + 0) + (x + 0));
-                indices.push_back((width + 1) * (y + 1) + (x + 0));
-                indices.push_back((width + 1) * (y + 0) + (x + 1));
+		for (int y = y0; y < y1; y++)
+		{
+			for (int x = x0; x < x1; x++)
+			{
+				indices.push_back((width + 1) * (y + 0) + (x + 0));
+				indices.push_back((width + 1) * (y + 1) + (x + 0));
+				indices.push_back((width + 1) * (y + 0) + (x + 1));
 
-                indices.push_back((width + 1) * (y + 0) + (x + 1));
-                indices.push_back((width + 1) * (y + 1) + (x + 0));
-                indices.push_back((width + 1) * (y + 1) + (x + 1));
-            }
-        }
-    }
-    else
-    {
-        int xm = x0 + cacheSize - 2;
-        gridGen(indices, x0, xm, y0, y1, width, cacheSize, prefetch);
-        gridGen(indices, xm, x1, y0, y1, width, cacheSize, prefetch);
-    }
+				indices.push_back((width + 1) * (y + 0) + (x + 1));
+				indices.push_back((width + 1) * (y + 1) + (x + 0));
+				indices.push_back((width + 1) * (y + 1) + (x + 1));
+			}
+		}
+	}
+	else
+	{
+		int xm = x0 + cacheSize - 2;
+		gridGen(indices, x0, xm, y0, y1, width, cacheSize, prefetch);
+		gridGen(indices, xm, x1, y0, y1, width, cacheSize, prefetch);
+	}
 }
 
 unsigned int queryVSInvocations(ID3D11Device* device, ID3D11DeviceContext* context, const unsigned int* indices, size_t index_count)
@@ -74,7 +74,7 @@ unsigned int queryVSInvocations(ID3D11Device* device, ID3D11DeviceContext* conte
 	context->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	context->IASetIndexBuffer(ib, DXGI_FORMAT_R32_UINT, 0);
 
-	D3D11_QUERY_DESC qdesc = { D3D11_QUERY_PIPELINE_STATISTICS };
+	D3D11_QUERY_DESC qdesc = {D3D11_QUERY_PIPELINE_STATISTICS};
 	ID3D11Query* query = 0;
 	device->CreateQuery(&qdesc, &query);
 
@@ -222,10 +222,10 @@ void setupShaders(ID3D11Device* device, ID3D11DeviceContext* context)
 {
 	// load and compile the two shaders
 	const char* shaders =
-		"#define ATTRIBUTES 5\n"
-		"struct Foo { float4 v[ATTRIBUTES]; };"
-		"float4 VS(uint index: SV_VertexId, out Foo foo: FOO): SV_Position { uint i = index % 3; [unroll] for (int j = 0; j < ATTRIBUTES; j++) foo.v[j] = j; return float4(i != 0, i != 2, 0, 1); }"
-		"float4 PS(Foo foo: FOO): SV_Target { float4 result = 0; [unroll] for (int j = 0; j < ATTRIBUTES; j++) result += foo.v[j]; return result; }";
+	    "#define ATTRIBUTES 5\n"
+	    "struct Foo { float4 v[ATTRIBUTES]; };"
+	    "float4 VS(uint index: SV_VertexId, out Foo foo: FOO): SV_Position { uint i = index % 3; [unroll] for (int j = 0; j < ATTRIBUTES; j++) foo.v[j] = j; return float4(i != 0, i != 2, 0, 1); }"
+	    "float4 PS(Foo foo: FOO): SV_Target { float4 result = 0; [unroll] for (int j = 0; j < ATTRIBUTES; j++) result += foo.v[j]; return result; }";
 
 	ID3DBlob* vsblob = 0;
 	ID3DBlob* psblob = 0;
@@ -271,10 +271,10 @@ void inspectCache(Cache cache)
 		unsigned int ideal_invocations = (grid_size + 1) * (grid_size + 1);
 
 		printf("%d, %f, %f, %f, %f\n", cache_size,
-			double(invocations1) / double(ideal_invocations),
-			double(invocations2) / double(ideal_invocations),
-			double(invocations3) / double(ideal_invocations),
-			double(invocations4) / double(ideal_invocations));
+		       double(invocations1) / double(ideal_invocations),
+		       double(invocations2) / double(ideal_invocations),
+		       double(invocations3) / double(ideal_invocations),
+		       double(invocations4) / double(ideal_invocations));
 	}
 }
 
@@ -282,13 +282,13 @@ void testCache(IDXGIAdapter* adapter)
 {
 	ID3D11Device* device = 0;
 	ID3D11DeviceContext* context = 0;
-    D3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, 0, 0, 0, 0, D3D11_SDK_VERSION, &device, 0, &context);
+	D3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, 0, 0, 0, 0, D3D11_SDK_VERSION, &device, 0, &context);
 
 	setupShaders(device, context);
 
 	inspectCache([&](const unsigned int* indices, size_t index_count) { return queryVSInvocations(device, context, indices, index_count); });
 
-	unsigned int dib[] = { 0, 1, 1, 2, 3, 4, 5, 5, 5 };
+	unsigned int dib[] = {0, 1, 1, 2, 3, 4, 5, 5, 5};
 
 	printf("// Degenerate IB invocations: %d\n", queryVSInvocations(device, context, dib, sizeof(dib) / sizeof(dib[0])));
 
@@ -323,7 +323,7 @@ void testCacheMeshes(IDXGIAdapter* adapter, int argc, char** argv)
 {
 	ID3D11Device* device = 0;
 	ID3D11DeviceContext* context = 0;
-    D3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, 0, 0, 0, 0, D3D11_SDK_VERSION, &device, 0, &context);
+	D3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, 0, 0, 0, 0, D3D11_SDK_VERSION, &device, 0, &context);
 
 	setupShaders(device, context);
 
