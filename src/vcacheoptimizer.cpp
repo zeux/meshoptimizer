@@ -78,12 +78,12 @@ static unsigned int getNextVertexDeadEnd(const std::vector<unsigned int>& dead_e
 		++input_cursor;
 	}
 
-	return static_cast<unsigned int>(-1);
+	return ~0u;
 }
 
 static unsigned int getNextVertexNeighbour(const unsigned int* next_candidates_begin, const unsigned int* next_candidates_end, const std::vector<unsigned int>& live_triangles, const std::vector<unsigned int>& cache_timestamps, unsigned int timestamp, unsigned int cache_size)
 {
-	unsigned int best_candidate = static_cast<unsigned int>(-1);
+	unsigned int best_candidate = ~0u;
 	int best_priority = -1;
 
 	for (const unsigned int* next_candidate = next_candidates_begin; next_candidate != next_candidates_end; ++next_candidate)
@@ -139,7 +139,7 @@ static void optimizeVertexCacheFIFO(unsigned int* destination, const unsigned in
 
 	unsigned int output_triangle = 0;
 
-	while (current_vertex != static_cast<unsigned int>(-1))
+	while (current_vertex != ~0u)
 	{
 		const unsigned int* next_candidates_begin = &dead_end[0] + dead_end_top;
 
@@ -194,7 +194,7 @@ static void optimizeVertexCacheFIFO(unsigned int* destination, const unsigned in
 		// get next vertex
 		current_vertex = getNextVertexNeighbour(next_candidates_begin, next_candidates_end, live_triangles, cache_timestamps, timestamp, cache_size);
 
-		if (current_vertex == static_cast<unsigned int>(-1))
+		if (current_vertex == ~0u)
 		{
 			current_vertex = getNextVertexDeadEnd(dead_end, dead_end_top, input_cursor, live_triangles);
 		}
@@ -249,12 +249,24 @@ static float vertexScore(const Vertex& vertex)
 	return score + valence_boost_scale / sqrtf((float)vertex.triangles_not_added);
 }
 
+static unsigned int getNextTriangleDeadEnd(unsigned int& input_cursor, const std::vector<char>& emitted_flags)
+{
+	// input order
+	while (input_cursor < emitted_flags.size())
+	{
+		if (!emitted_flags[input_cursor])
+			return input_cursor;
+
+		++input_cursor;
+	}
+
+	return ~0u;
+}
+
 static void optimizeVertexCacheLRU(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
 	assert(index_count % 3 == 0);
 	assert(cache_size <= max_cache_size);
-
-	const float m_inf = -1e32f;
 
 	size_t face_count = index_count / 3;
 
@@ -320,38 +332,28 @@ static void optimizeVertexCacheLRU(unsigned int* destination, const unsigned int
 	unsigned int* cache_new = cache + max_cache_size + 3;
 	unsigned int* cache_new_end = cache_new;
 
-	int min_tri = -1;
+	// emitted flags
+	std::vector<char> emitted_flags(index_count / 3, false);
+
+	unsigned int current_triangle = 0;
+	unsigned int input_cursor = 1;
 
 	// main body
 	while (destination != destination_end)
 	{
-		// find triangle with the best score if it was not found on previous step
-		if (min_tri < 0)
-		{
-			float min_score = m_inf;
+		assert(current_triangle < index_count / 3);
 
-			for (size_t i = 0; i < face_count; ++i)
-			{
-				float tri_score = triangle_scores[i];
-
-				if (min_score < tri_score)
-				{
-					min_tri = int(i);
-					min_score = tri_score;
-				}
-			}
-		}
-
-		unsigned int tri_a = indices[min_tri * 3 + 0];
-		unsigned int tri_b = indices[min_tri * 3 + 1];
-		unsigned int tri_c = indices[min_tri * 3 + 2];
+		unsigned int tri_a = indices[current_triangle * 3 + 0];
+		unsigned int tri_b = indices[current_triangle * 3 + 1];
+		unsigned int tri_c = indices[current_triangle * 3 + 2];
 
 		// add it to drawing sequence
 		*destination++ = tri_a;
 		*destination++ = tri_b;
 		*destination++ = tri_c;
 
-		triangle_scores[min_tri] = m_inf;
+		emitted_flags[current_triangle] = true;
+		triangle_scores[current_triangle] = -1e32f; // TODO: 0?
 
 		// construct new cache
 		cache_new_end = cache_new;
@@ -406,10 +408,11 @@ static void optimizeVertexCacheLRU(unsigned int* destination, const unsigned int
 		vertices[tri_b].triangles_not_added--;
 		vertices[tri_c].triangles_not_added--;
 
-		min_tri = -1;
-		float min_score = m_inf;
+		current_triangle = ~0u;
 
-		// update cache positions, vertices scores and triangle scores, and find new min_face
+		float best_score = -1e32f; // TODO: 0?
+
+		// update cache positions, vertices scores and triangle scores, and find next best triangle
 		for (size_t i = 0; i < cache_new_size; ++i)
 		{
 			Vertex& v = vertices[cache[i]];
@@ -428,16 +431,25 @@ static void optimizeVertexCacheLRU(unsigned int* destination, const unsigned int
 
 				float tri_score = triangle_scores[tri];
 
-				if (min_score < tri_score)
+				if (best_score < tri_score)
 				{
-					min_tri = tri;
-					min_score = tri_score;
+					current_triangle = tri;
+					best_score = tri_score;
 				}
 			}
 
 			v.score = score;
 		}
+
+		// step through input triangles in order if we hit a dead-end
+		if (current_triangle == ~0u)
+		{
+			current_triangle = getNextTriangleDeadEnd(input_cursor, emitted_flags);
+		}
 	}
+
+	assert(input_cursor == index_count / 3);
+	assert(current_triangle == ~0u);
 }
 
 void optimizeVertexCache(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
