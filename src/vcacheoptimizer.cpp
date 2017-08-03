@@ -299,7 +299,7 @@ static void optimizeVertexCacheLRU(unsigned int* destination, const unsigned int
 
 	unsigned int output_triangle = 0;
 
-	float min_score = -1e22;
+	float min_score = -1e22f;
 
 	while (current_triangle != ~0u)
 	{
