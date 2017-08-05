@@ -204,37 +204,38 @@ static void optimizeVertexCacheFIFO(unsigned int* destination, const unsigned in
 }
 
 const size_t max_cache_size = 32;
+const size_t max_valence = 32;
 
-const float valence_boost_scale = 2.0f;
-const float last_triangle_score = 0.75f;
+static float vertex_score_table_cache[1 + max_cache_size];
+static float vertex_score_table_live[max_valence];
 
-// The table is for max_cache_size = 32, cache_decay_power = 1.5,
-// Equation is ((position - 3) / (max_cache_size - 3)) ^ cache_decay_power
-static const float cache_scores[max_cache_size] =
+void vertexScoreInit(float last_triangle_score, float valence_boost_scale, float valence_boost_power, float cache_decay_power)
 {
-	last_triangle_score, last_triangle_score, last_triangle_score,
-	// perl -e "for ($i = 32; $i > 3; --$i) {print sqrt(($i - 3) / 29)*(($i-3)/29);print 'f, ';}"
-	1, 0.948724356160999f, 0.898356365398566f, 0.84891268884993f, 0.800410940418327f,
-	0.752869781209394f, 0.706309027617917f, 0.660749775712085f, 0.616214545218346f,
-	0.572727447267172f, 0.530314381193352f, 0.489003267201725f, 0.448824323769283f,
-	0.409810401494183f, 0.371997389083488f, 0.335424712859142f, 0.300135959460546f,
-	0.266179663821797f, 0.233610323536753f, 0.202489730867139f, 0.172888763130359f,
-	0.144889856948659f, 0.118590544520125f, 0.0941087226511742f, 0.0715909309083965f,
-	0.0512263001867729f, 0.0332724579777247f, 0.0181112321185824f, 0.00640328752334662f,
-};
+	vertex_score_table_cache[0] = 0;
+
+	for (size_t i = 0; i < max_cache_size; ++i)
+	{
+		vertex_score_table_cache[1 + i] = (i < 3) ? last_triangle_score : powf(float(max_cache_size - i) / float(max_cache_size - 3), cache_decay_power);
+	}
+
+	vertex_score_table_live[0] = 0;
+
+	for (size_t i = 1; i < sizeof(vertex_score_table_live) / sizeof(vertex_score_table_live[0]); ++i)
+	{
+		vertex_score_table_live[i] = valence_boost_scale / powf(float(i), valence_boost_power);
+	}
+}
+
+// TODO: figure out optimal values and pregenerate the tables
+static struct VertexScoreInitializer { VertexScoreInitializer() { vertexScoreInit(0.75f, 2.0f, 0.5f, 1.5f); } } vertex_score_table_init;
 
 static float vertexScore(int cache_position, unsigned int live_triangles)
 {
-	// check if there are any triangles needed
-	if (live_triangles == 0)
-		return -1;
+	assert(cache_position >= -1 && cache_position < int(max_cache_size));
 
-	float score = cache_position == -1 ? 0 : cache_scores[cache_position];
+	unsigned int live_triangles_clamped = live_triangles < max_valence ? live_triangles : max_valence - 1;
 
-	// Bonus points for having a low number of tris still to use the vert, so we get rid of lone verts quickly.
-	// return score + valence_boost_scale * powf(vertex.triangles_not_added, -valence_boost_power);
-	// for valence_boost_power = 0.5f
-	return score + valence_boost_scale / sqrtf(float(live_triangles));
+	return vertex_score_table_cache[1 + cache_position] + vertex_score_table_live[live_triangles_clamped];
 }
 
 static unsigned int getNextTriangleDeadEnd(unsigned int& input_cursor, const std::vector<char>& emitted_flags)
