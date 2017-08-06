@@ -308,9 +308,8 @@ static void optimizeVertexCacheLRU(unsigned int* destination, const unsigned int
 
 	unsigned int cache_holder[2 * (max_cache_size + 3)];
 	unsigned int* cache = cache_holder;
-	unsigned int* cache_end = cache;
-	unsigned int* cache_new = cache + max_cache_size + 3;
-	unsigned int* cache_new_end = cache_new;
+	unsigned int* cache_new = cache_holder + max_cache_size + 3;
+	size_t cache_count = 0;
 
 	unsigned int current_triangle = 0;
 	unsigned int input_cursor = 1;
@@ -337,29 +336,25 @@ static void optimizeVertexCacheLRU(unsigned int* destination, const unsigned int
 		emitted_flags[current_triangle] = true;
 		triangle_scores[current_triangle] = min_score;
 
-		// construct new cache
-		cache_new_end = cache_new;
-
 		// new triangle
-		*cache_new_end++ = a;
-		*cache_new_end++ = b;
-		*cache_new_end++ = c;
+		size_t write = 0;
+		cache_new[write++] = a;
+		cache_new[write++] = b;
+		cache_new[write++] = c;
 
 		// old triangles
-		for (const unsigned int* it = cache; it != cache_end; ++it)
+		for (size_t i = 0; i < cache_count; ++i)
 		{
-			if (*it != a && *it != b && *it != c)
+			unsigned int index = cache[i];
+
+			if (index != a && index != b && index != c)
 			{
-				*cache_new_end++ = *it;
+				cache_new[write++] = index;
 			}
 		}
 
-		size_t cache_new_size = cache_new_end - cache_new;
-
-		if (cache_new_size > cache_size) cache_new_end = cache_new + cache_size;
-
 		std::swap(cache, cache_new);
-		std::swap(cache_end, cache_new_end);
+		cache_count = write > cache_size ? cache_size : write;
 
 		// update live triangle counts
 		live_triangles[a]--;
@@ -368,10 +363,10 @@ static void optimizeVertexCacheLRU(unsigned int* destination, const unsigned int
 
 		current_triangle = ~0u;
 
-		float best_score = min_score;
+		float best_score = 0;
 
 		// update cache positions, vertices scores and triangle scores, and find next best triangle
-		for (size_t i = 0; i < cache_new_size; ++i)
+		for (size_t i = 0; i < write; ++i)
 		{
 			unsigned int index = cache[i];
 
@@ -387,16 +382,15 @@ static void optimizeVertexCacheLRU(unsigned int* destination, const unsigned int
 			for (const unsigned int* it = neighbours_begin; it != neighbours_end; ++it)
 			{
 				unsigned int tri = *it;
-
-				triangle_scores[tri] += score_diff;
-
-				float tri_score = triangle_scores[tri];
+				float tri_score = triangle_scores[tri] + score_diff;
 
 				if (best_score < tri_score)
 				{
 					current_triangle = tri;
 					best_score = tri_score;
 				}
+
+				triangle_scores[tri] = tri_score;
 			}
 
 			vertex_scores[index] = score;
