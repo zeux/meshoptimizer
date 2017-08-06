@@ -1,7 +1,6 @@
 // This file is part of meshoptimizer library; see meshoptimizer.hpp for version/license details
 #include "meshoptimizer.hpp"
 
-#include <algorithm>
 #include <cassert>
 #include <vector>
 
@@ -44,25 +43,36 @@ static VertexCacheStatistics analyzeVertexCacheLRU(const unsigned int* indices, 
 
 	VertexCacheStatistics result = {};
 
-	std::vector<unsigned int> cache;
-	cache.reserve(cache_size + 1);
+	std::vector<unsigned int> cache_storage(2 * (cache_size + 1));
+	unsigned int* cache = &cache_storage[0];
+	unsigned int* cache_new = &cache_storage[cache_size + 1];
+	size_t cache_count = 0;
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
 		unsigned int index = indices[i];
 		assert(index < vertex_count);
 
-		std::vector<unsigned int>::iterator it = std::find(cache.begin(), cache.end(), index);
+		size_t write = 0;
+		cache_new[write++] = index;
 
-		if (it == cache.end())
+		for (size_t j = 0; j < cache_count; ++j)
+		{
+			unsigned int cache_index = cache[j];
+
+			cache_new[write] = cache_index;
+			write += cache_index != index;
+		}
+
+		assert(write <= cache_count + 1);
+
+		if (write == cache_count + 1)
+		{
 			result.vertices_transformed++;
-		else
-			cache.erase(it);
+		}
 
-		cache.push_back(index);
-
-		if (cache.size() > cache_size)
-			cache.erase(cache.begin(), cache.end() - cache_size);
+		std::swap(cache, cache_new);
+		cache_count = write > cache_size ? cache_size : write;
 	}
 
 	result.acmr = index_count == 0 ? 0 : float(result.vertices_transformed) / float(index_count / 3);
