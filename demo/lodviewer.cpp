@@ -1,13 +1,13 @@
 #ifdef _WIN32
-#include "objparser.hpp"
 #include "../src/meshoptimizer.hpp"
+#include "objparser.hpp"
 
 #include <algorithm>
 #include <ctime>
 
 #define NOMINMAX
-#include <windows.h>
 #include <GL/gl.h>
+#include <windows.h>
 
 #pragma comment(lib, "opengl32.lib")
 
@@ -16,7 +16,13 @@ using namespace meshopt;
 struct Options
 {
 	bool wireframe;
-	enum { Mode_Default, Mode_Texture, Mode_Normals, Mode_UV } mode;
+	enum
+	{
+		Mode_Default,
+		Mode_Texture,
+		Mode_Normals,
+		Mode_UV
+	} mode;
 };
 
 struct Vertex
@@ -204,7 +210,7 @@ int main(int argc, char** argv)
 	HWND hWnd = CreateWindow(L"ListBox", L"Title", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, NULL, NULL);
 	HDC hDC = GetDC(hWnd);
 
-	PIXELFORMATDESCRIPTOR pfd = { sizeof(pfd), 1, PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER, 0, 32 };
+	PIXELFORMATDESCRIPTOR pfd = {sizeof(pfd), 1, PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER, 0, 32};
 	pfd.cDepthBits = 24;
 
 	SetPixelFormat(hDC, ChoosePixelFormat(hDC, &pfd), &pfd);

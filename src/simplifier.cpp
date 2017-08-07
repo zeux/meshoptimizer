@@ -153,10 +153,10 @@ static void quadricFromPlane(Quadric& Q, float a, float b, float c, float d)
 
 static void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2)
 {
-	Vector3 p10 = { p1.x - p0.x, p1.y - p0.y, p1.z - p0.z };
-	Vector3 p20 = { p2.x - p0.x, p2.y - p0.y, p2.z - p0.z };
+	Vector3 p10 = {p1.x - p0.x, p1.y - p0.y, p1.z - p0.z};
+	Vector3 p20 = {p2.x - p0.x, p2.y - p0.y, p2.z - p0.z};
 
-	Vector3 normal = { p10.y * p20.z - p10.z * p20.y, p10.z * p20.x - p10.x * p20.z, p10.x * p20.y - p10.y * p20.x };
+	Vector3 normal = {p10.y * p20.z - p10.z * p20.y, p10.z * p20.x - p10.x * p20.z, p10.x * p20.y - p10.y * p20.x};
 	float area = normalize(normal);
 
 	float distance = normal.x * p0.x + normal.y * p0.y + normal.z * p0.z;
@@ -170,13 +170,13 @@ static void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1
 
 static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2)
 {
-	Vector3 p10 = { p1.x - p0.x, p1.y - p0.y, p1.z - p0.z };
+	Vector3 p10 = {p1.x - p0.x, p1.y - p0.y, p1.z - p0.z};
 	float length = normalize(p10);
 
-	Vector3 p20 = { p2.x - p0.x, p2.y - p0.y, p2.z - p0.z };
+	Vector3 p20 = {p2.x - p0.x, p2.y - p0.y, p2.z - p0.z};
 	float p20p = p20.x * p10.x + p20.y * p10.y + p20.z * p10.z;
 
-	Vector3 normal = { p20.x - p10.x * p20p, p20.y - p10.y * p20p, p20.z - p10.z * p20p };
+	Vector3 normal = {p20.x - p10.x * p20p, p20.y - p10.y * p20p, p20.z - p10.z * p20p};
 	normalize(normal);
 
 	float distance = normal.x * p0.x + normal.y * p0.y + normal.z * p0.z;
@@ -223,7 +223,7 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 
 	for (size_t i = 0; i < index_count; i += 3)
 	{
-		static const int next[3] = { 1, 2, 0 };
+		static const int next[3] = {1, 2, 0};
 
 		for (int e = 0; e < 3; ++e)
 		{
@@ -238,7 +238,7 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 
 	for (size_t i = 0; i < index_count; i += 3)
 	{
-		static const int next[3] = { 1, 2, 0 };
+		static const int next[3] = {1, 2, 0};
 
 		for (int e = 0; e < 3; ++e)
 		{
@@ -278,15 +278,15 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 
 		for (size_t i = 0; i < index_count; i += 3)
 		{
-			static const int next[3] = { 1, 2, 0 };
+			static const int next[3] = {1, 2, 0};
 
 			for (int e = 0; e < 3; ++e)
 			{
 				unsigned int i0 = result[i + e];
 				unsigned int i1 = result[i + next[e]];
 
-				Collapse c01 = { i0, i1, quadricError(vertex_quadrics[i0], vertex_positions[i1]) };
-				Collapse c10 = { i1, i0, quadricError(vertex_quadrics[i1], vertex_positions[i0]) };
+				Collapse c01 = {i0, i1, quadricError(vertex_quadrics[i0], vertex_positions[i1])};
+				Collapse c10 = {i1, i0, quadricError(vertex_quadrics[i1], vertex_positions[i0])};
 
 				edge_collapses.push_back(c01.error <= c10.error ? c01 : c10);
 			}

@@ -1,9 +1,9 @@
 #include "../src/meshoptimizer.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <ctime>
-#include <cmath>
 
 #include "objparser.hpp"
 
