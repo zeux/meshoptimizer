@@ -21,7 +21,7 @@ First, generate a remap table from your existing vertex (and, optionally, index)
 ```c++
 size_t index_count = face_count * 3;
 std::vector<unsigned int> remap(index_count); // you can use any other way to allocate temporary memory for the remap table
-size_t vertex_count = generateVertexRemap(&remap[0], NULL, index_count, &unindexed_vertices[0], index_count, sizeof(Vertex));
+size_t vertex_count = meshopt::generateVertexRemap(&remap[0], NULL, index_count, &unindexed_vertices[0], index_count, sizeof(Vertex));
 ```
 
 Note that in this case we only have an unindexed vertex buffer; the remap table is generated based on binary equivalence of the input vertices, so the resulting mesh will render the same way.
