@@ -192,14 +192,15 @@ void optCompleteSimplify(Mesh& mesh)
 	{
 		std::vector<unsigned int>& lod = lods[i];
 
-		size_t target_count = size_t(double(mesh.indices.size()) * pow(0.7, double(i)));
+		float threshold = powf(0.7f, float(i));
+		size_t target_index_count = size_t(mesh.indices.size() * threshold);
 
 		// we can simplify all the way from base level or from the last result
 		// simplifying from the base level sometimes produces better results, but simplifying from last level is faster
 		const std::vector<unsigned int>& source = lods[i - 1];
 
 		lod.resize(source.size());
-		lod.resize(simplify(&lod[0], &source[0], source.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex), target_count));
+		lod.resize(simplify(&lod[0], &source[0], source.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex), target_index_count));
 	}
 
 	// optimize each individual LOD for vertex cache & overdraw

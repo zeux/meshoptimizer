@@ -6,8 +6,9 @@
 #include <ctime>
 
 #define NOMINMAX
-#include <GL/gl.h>
 #include <windows.h>
+
+#include <GL/gl.h>
 
 #pragma comment(lib, "opengl32.lib")
 
@@ -94,7 +95,7 @@ static Mesh parseObj(const char* path)
 
 Mesh optimize(const Mesh& mesh, int lod)
 {
-	float threshold = powf(0.75f, float(lod));
+	float threshold = powf(0.7f, float(lod));
 	size_t target_index_count = size_t(mesh.indices.size() * threshold);
 
 	Mesh result = mesh;
