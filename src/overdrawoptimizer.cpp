@@ -53,6 +53,7 @@ static void calculateSortData(std::vector<ClusterSortData>& sort_data, const uns
 	{
 		size_t cluster_begin = clusters[cluster] * 3;
 		size_t cluster_end = (clusters.size() > cluster + 1) ? clusters[cluster + 1] * 3 : index_count;
+		assert(cluster_begin < cluster_end);
 
 		float cluster_area = 0;
 		Vector3 cluster_centroid = Vector3();
@@ -130,12 +131,10 @@ static unsigned int updateCache(unsigned int a, unsigned int b, unsigned int c, 
 	return cache_misses;
 }
 
-static float generateHardBoundaries(std::vector<unsigned int>& destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+static void generateHardBoundaries(std::vector<unsigned int>& destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
 	std::vector<unsigned int> cache_timestamps(vertex_count, 0);
 	unsigned int timestamp = cache_size + 1;
-
-	unsigned int cache_misses = 0;
 
 	size_t face_count = index_count / 3;
 
@@ -143,18 +142,18 @@ static float generateHardBoundaries(std::vector<unsigned int>& destination, cons
 	{
 		unsigned int m = updateCache(indices[i * 3 + 0], indices[i * 3 + 1], indices[i * 3 + 2], cache_size, cache_timestamps, timestamp);
 
+		// when all three vertices are not in the cache it's usually relatively safe to assume that this is a new patch in the mesh
+		// that is disjoint from previous vertices; sometimes it might come back to reference existing vertices but that frequently
+		// suggests an inefficiency in the vertex cache optimization algorithm
+		// usually the first triangle has 3 misses unless it's degenerate - thus we make sure the first cluster always starts with 0
 		if (i == 0 || m == 3)
 		{
 			destination.push_back(unsigned(i));
 		}
-
-		cache_misses += m;
 	}
-
-	return float(cache_misses) / float(face_count);
 }
 
-static void generateSoftBoundaries(std::vector<unsigned int>& destination, const unsigned int* indices, size_t index_count, size_t vertex_count, const std::vector<unsigned int>& clusters, unsigned int cache_size, float acmr_threshold)
+static void generateSoftBoundaries(std::vector<unsigned int>& destination, const unsigned int* indices, size_t index_count, size_t vertex_count, const std::vector<unsigned int>& clusters, unsigned int cache_size, float threshold)
 {
 	std::vector<unsigned int> cache_timestamps(vertex_count, 0);
 	unsigned int timestamp = 0;
@@ -163,15 +162,31 @@ static void generateSoftBoundaries(std::vector<unsigned int>& destination, const
 	{
 		size_t start = clusters[it];
 		size_t end = (it + 1 < clusters.size()) ? clusters[it + 1] : index_count / 3;
-		assert(start <= end);
-
-		unsigned int running_misses = 0;
-		unsigned int running_faces = 0;
+		assert(start < end);
 
 		// reset cache
 		timestamp += cache_size + 1;
 
+		// measure cluster ACMR
+		unsigned int cluster_misses = 0;
+
+		for (size_t i = start; i < end; ++i)
+		{
+			unsigned int m = updateCache(indices[i * 3 + 0], indices[i * 3 + 1], indices[i * 3 + 2], cache_size, cache_timestamps, timestamp);
+
+			cluster_misses += m;
+		}
+
+		float cluster_threshold = threshold * (float(cluster_misses) / float(end - start));
+
+		// first cluster always starts from the hard cluster boundary
 		destination.push_back(unsigned(start));
+
+		// reset cache
+		timestamp += cache_size + 1;
+
+		unsigned int running_misses = 0;
+		unsigned int running_faces = 0;
 
 		for (size_t i = start; i < end; ++i)
 		{
@@ -180,9 +195,12 @@ static void generateSoftBoundaries(std::vector<unsigned int>& destination, const
 			running_misses += m;
 			running_faces += 1;
 
-			if (float(running_misses) / float(running_faces) <= acmr_threshold && i != start)
+			if (float(running_misses) / float(running_faces) <= cluster_threshold)
 			{
-				destination.push_back(unsigned(i));
+				// we have reached the target ACMR with the current triangle so we need to start a new cluster on the next one
+				// note that this may mean that we add 'end` to destination for the last triangle, which will imply that the last
+				// cluster is empty; however, the 'pop_back' after the loop will clean it up
+				destination.push_back(unsigned(i + 1));
 
 				// reset cache
 				timestamp += cache_size + 1;
@@ -190,6 +208,17 @@ static void generateSoftBoundaries(std::vector<unsigned int>& destination, const
 				running_misses = 0;
 				running_faces = 0;
 			}
+		}
+
+		// each time we reach the target ACMR we flush the cluster
+		// this means that the last cluster is by definition not very good - there are frequent cases where we are left with a few triangles
+		// in the last cluster, producing a very bad ACMR and significantly penalizing the overall results
+		// thus we remove the last cluster boundary, merging the last complete cluster with the last incomplete one
+		// there are sometimes cases when the last cluster is actually good enough - in which case the code above would have added 'end'
+		// to the cluster boundary array which we need to remove anyway - this code will do that automatically
+		if (destination.back() != start)
+		{
+			destination.pop_back();
 		}
 	}
 
@@ -221,11 +250,11 @@ void optimizeOverdraw(unsigned int* destination, const unsigned int* indices, si
 
 	// generate hard boundaries from full-triangle cache misses
 	std::vector<unsigned int> hard_clusters;
-	float acmr = generateHardBoundaries(hard_clusters, indices, index_count, vertex_count, cache_size);
+	generateHardBoundaries(hard_clusters, indices, index_count, vertex_count, cache_size);
 
 	// generate soft boundaries
 	std::vector<unsigned int> soft_clusters;
-	generateSoftBoundaries(soft_clusters, indices, index_count, vertex_count, hard_clusters, cache_size, acmr * threshold);
+	generateSoftBoundaries(soft_clusters, indices, index_count, vertex_count, hard_clusters, cache_size, threshold);
 
 	const std::vector<unsigned int>& clusters = soft_clusters;
 
@@ -242,9 +271,11 @@ void optimizeOverdraw(unsigned int* destination, const unsigned int* indices, si
 	for (size_t i = 0; i < clusters.size(); ++i)
 	{
 		unsigned int cluster = sort_data[i].cluster;
+		assert(cluster < clusters.size());
 
 		size_t cluster_begin = clusters[cluster] * 3;
 		size_t cluster_end = (cluster + 1 < clusters.size()) ? clusters[cluster + 1] * 3 : index_count;
+		assert(cluster_begin < cluster_end);
 
 		for (size_t j = cluster_begin; j < cluster_end; ++j)
 			destination[offset++] = indices[j];
