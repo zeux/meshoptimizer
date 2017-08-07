@@ -339,7 +339,7 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 				break;
 		}
 
-		printf("pass %d: collapses: %d/%d, error: %e\n", int(pass_count), int(collapses), int(edge_collapses.size()), pass_error);
+		// printf("pass %d: collapses: %d/%d, error: %e\n", int(pass_count), int(collapses), int(edge_collapses.size()), pass_error);
 
 		pass_count++;
 		worst_error = std::max(worst_error, pass_error);
@@ -372,7 +372,7 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 		index_count = write;
 	}
 
-	printf("passes: %d, worst error: %e\n", int(pass_count), worst_error);
+	// printf("passes: %d, worst error: %e\n", int(pass_count), worst_error);
 
 	return index_count;
 }
