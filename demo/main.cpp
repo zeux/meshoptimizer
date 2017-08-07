@@ -178,6 +178,60 @@ void optComplete(Mesh& mesh)
 	optimizeVertexFetch(&mesh.vertices[0], &mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), sizeof(Vertex));
 }
 
+void optCompleteSimplify(Mesh& mesh)
+{
+	// generate 4 LOD levels (1-4), with each subsequent LOD using 70% triangles
+	// note that each LOD uses the same (shared) vertex buffer
+	// vertex cache optimization should go first as it provides data for overdraw
+	std::vector<unsigned int> lods[5];
+
+	lods[0] = mesh.indices;
+
+	for (size_t i = 1; i < sizeof(lods) / sizeof(lods[0]); ++i)
+	{
+		std::vector<unsigned int>& lod = lods[i];
+
+		size_t target_count = size_t(double(mesh.indices.size()) * pow(0.7, double(i)));
+
+		// we can simplify all the way from base level or from the last result
+		// simplifying from the base level sometimes produces better results, but simplifying from last level is faster
+		const std::vector<unsigned int>& source = lods[i - 1];
+
+		lod.resize(source.size());
+		lod.resize(simplify(&lod[0], &source[0], source.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex), target_count));
+	}
+
+	// optimize each individual LOD for vertex cache & overdraw
+	for (size_t i = 0; i < sizeof(lods) / sizeof(lods[0]); ++i)
+	{
+		std::vector<unsigned int>& lod = lods[i];
+
+		optimizeVertexCache(&lod[0], &lod[0], lod.size(), mesh.vertices.size(), kCacheSize);
+		optimizeOverdraw(&lod[0], &lod[0], lod.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), kCacheSize, 1.0f);
+	}
+
+	// concatenate all LODs into one IB
+	mesh.indices.clear();
+
+	for (size_t i = 0; i < sizeof(lods) / sizeof(lods[0]); ++i)
+	{
+		mesh.indices.insert(mesh.indices.end(), lods[i].begin(), lods[i].end());
+	}
+
+	// vertex fetch optimization should go last as it depends on the final index order
+	// note that the order of LODs above affects vertex fetch results; here we optimize for LOD0 fetch as a primary goal
+	optimizeVertexFetch(&mesh.vertices[0], &mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), sizeof(Vertex));
+
+	printf("%-9s:", "Simplify");
+
+	for (size_t i = 0; i < sizeof(lods) / sizeof(lods[0]); ++i)
+	{
+		printf(" LOD%d %d", int(i), int(lods[i].size()) / 3);
+	}
+
+	printf("\n");
+}
+
 void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
 {
 	Mesh copy = mesh;
@@ -227,6 +281,9 @@ void process(const char* path)
 	optimize(mesh, "Overdraw", optOverdraw);
 	optimize(mesh, "Fetch", optFetch);
 	optimize(mesh, "Complete", optComplete);
+
+	// note: the ATVR/overdraw output from this pass is not necessarily correct since we analyze all LODs at once
+	optimize(mesh, "Simplify", optCompleteSimplify);
 }
 
 int main(int argc, char** argv)
