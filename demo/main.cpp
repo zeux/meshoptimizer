@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <ctime>
+#include <cmath>
 
 #include "objparser.hpp"
 
