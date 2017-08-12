@@ -318,8 +318,6 @@ static void optimizeVertexCacheLRU(unsigned int* destination, const unsigned int
 
 	unsigned int output_triangle = 0;
 
-	float min_score = -1e22f;
-
 	while (current_triangle != ~0u)
 	{
 		assert(output_triangle < index_count / 3);
@@ -336,13 +334,13 @@ static void optimizeVertexCacheLRU(unsigned int* destination, const unsigned int
 
 		// update emitted flags
 		emitted_flags[current_triangle] = true;
-		triangle_scores[current_triangle] = min_score;
+		triangle_scores[current_triangle] = 0;
 
 		// new triangle
-		size_t write = 0;
-		cache_new[write++] = a;
-		cache_new[write++] = b;
-		cache_new[write++] = c;
+		size_t cache_write = 0;
+		cache_new[cache_write++] = a;
+		cache_new[cache_write++] = b;
+		cache_new[cache_write++] = c;
 
 		// old triangles
 		for (size_t i = 0; i < cache_count; ++i)
@@ -351,31 +349,55 @@ static void optimizeVertexCacheLRU(unsigned int* destination, const unsigned int
 
 			if (index != a && index != b && index != c)
 			{
-				cache_new[write++] = index;
+				cache_new[cache_write++] = index;
 			}
 		}
 
 		std::swap(cache, cache_new);
-		cache_count = write > cache_size ? cache_size : write;
+		cache_count = cache_write > cache_size ? cache_size : cache_write;
 
 		// update live triangle counts
 		live_triangles[a]--;
 		live_triangles[b]--;
 		live_triangles[c]--;
 
-		current_triangle = ~0u;
+		// remove emitted triangle from adjacency data
+		// this makes sure that we spend less time traversing these lists on subsequent iterations
+		for (size_t k = 0; k < 3; ++k)
+		{
+			unsigned int index = indices[current_triangle * 3 + k];
 
+			unsigned int* neighbours = &adjacency.data[0] + adjacency.offsets[index];
+			size_t neighbours_size = adjacency.triangle_counts[index];
+
+			for (size_t i = 0; i < neighbours_size; ++i)
+			{
+				unsigned int tri = neighbours[i];
+
+				if (tri == current_triangle)
+				{
+					neighbours[i] = neighbours[neighbours_size - 1];
+					adjacency.triangle_counts[index]--;
+					break;
+				}
+			}
+		}
+
+		unsigned int best_triangle = ~0u;
 		float best_score = 0;
 
-		// update cache positions, vertices scores and triangle scores, and find next best triangle
-		for (size_t i = 0; i < write; ++i)
+		// update cache positions, vertex scores and triangle scores, and find next best triangle
+		for (size_t i = 0; i < cache_write; ++i)
 		{
 			unsigned int index = cache[i];
 
 			int cache_position = i >= cache_size ? -1 : int(i);
 
+			// update vertex score
 			float score = vertexScore(cache_position, live_triangles[index]);
 			float score_diff = score - vertex_scores[index];
+
+			vertex_scores[index] = score;
 
 			// update scores of vertex triangles
 			const unsigned int* neighbours_begin = &adjacency.data[0] + adjacency.offsets[index];
@@ -384,21 +406,24 @@ static void optimizeVertexCacheLRU(unsigned int* destination, const unsigned int
 			for (const unsigned int* it = neighbours_begin; it != neighbours_end; ++it)
 			{
 				unsigned int tri = *it;
+				assert(!emitted_flags[tri]);
+
 				float tri_score = triangle_scores[tri] + score_diff;
+				assert(tri_score > 0);
 
 				if (best_score < tri_score)
 				{
-					current_triangle = tri;
+					best_triangle = tri;
 					best_score = tri_score;
 				}
 
 				triangle_scores[tri] = tri_score;
 			}
-
-			vertex_scores[index] = score;
 		}
 
 		// step through input triangles in order if we hit a dead-end
+		current_triangle = best_triangle;
+
 		if (current_triangle == ~0u)
 		{
 			current_triangle = getNextTriangleDeadEnd(input_cursor, emitted_flags);
