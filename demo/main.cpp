@@ -42,13 +42,13 @@ Mesh generatePlane(unsigned int N)
 	for (unsigned int y = 0; y < N; ++y)
 		for (unsigned int x = 0; x < N; ++x)
 		{
-			result.indices.push_back((y + 0) * N + (x + 0));
-			result.indices.push_back((y + 0) * N + (x + 1));
-			result.indices.push_back((y + 1) * N + (x + 0));
+			result.indices.push_back((y + 0) * (N + 1) + (x + 0));
+			result.indices.push_back((y + 0) * (N + 1) + (x + 1));
+			result.indices.push_back((y + 1) * (N + 1) + (x + 0));
 
-			result.indices.push_back((y + 1) * N + (x + 0));
-			result.indices.push_back((y + 0) * N + (x + 1));
-			result.indices.push_back((y + 1) * N + (x + 1));
+			result.indices.push_back((y + 1) * (N + 1) + (x + 0));
+			result.indices.push_back((y + 0) * (N + 1) + (x + 1));
+			result.indices.push_back((y + 1) * (N + 1) + (x + 1));
 		}
 
 	return result;
