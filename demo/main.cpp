@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <ctime>
 
 #include "objparser.hpp"
@@ -181,14 +182,16 @@ void optComplete(Mesh& mesh)
 
 void optCompleteSimplify(Mesh& mesh)
 {
+	static const size_t lod_count = 5;
+
 	// generate 4 LOD levels (1-4), with each subsequent LOD using 70% triangles
 	// note that each LOD uses the same (shared) vertex buffer
 	// vertex cache optimization should go first as it provides data for overdraw
-	std::vector<unsigned int> lods[5];
+	std::vector<unsigned int> lods[lod_count];
 
 	lods[0] = mesh.indices;
 
-	for (size_t i = 1; i < sizeof(lods) / sizeof(lods[0]); ++i)
+	for (size_t i = 1; i < lod_count; ++i)
 	{
 		std::vector<unsigned int>& lod = lods[i];
 
@@ -204,7 +207,7 @@ void optCompleteSimplify(Mesh& mesh)
 	}
 
 	// optimize each individual LOD for vertex cache & overdraw
-	for (size_t i = 0; i < sizeof(lods) / sizeof(lods[0]); ++i)
+	for (size_t i = 0; i < lod_count; ++i)
 	{
 		std::vector<unsigned int>& lod = lods[i];
 
@@ -213,15 +216,31 @@ void optCompleteSimplify(Mesh& mesh)
 	}
 
 	// concatenate all LODs into one IB
-	mesh.indices.clear();
+	// note: the order of concatenation is important - since we optimize the entire IB for vertex fetch,
+	// putting coarse LODs first makes sure that the vertex range referenced by them is as small as possible
+	// some GPUs process the entire range referenced by the index buffer region so doing this optimizes the vertex transform
+	// cost for coarse LODs
+	size_t lod_index_offsets[lod_count] = {};
+	size_t lod_index_counts[lod_count] = {};
+	size_t total_index_count = 0;
 
-	for (size_t i = 0; i < sizeof(lods) / sizeof(lods[0]); ++i)
+	for (int i = lod_count - 1; i >= 0; --i)
 	{
-		mesh.indices.insert(mesh.indices.end(), lods[i].begin(), lods[i].end());
+		lod_index_offsets[i] = total_index_count;
+		lod_index_counts[i] = lods[i].size();
+
+		total_index_count += lods[i].size();
+	}
+
+	mesh.indices.resize(total_index_count);
+
+	for (size_t i = 0; i < lod_count; ++i)
+	{
+		memcpy(&mesh.indices[lod_index_offsets[i]], lods[i].data(), lods[i].size() * sizeof(lods[i][0]));
 	}
 
 	// vertex fetch optimization should go last as it depends on the final index order
-	// note that the order of LODs above affects vertex fetch results; here we optimize for LOD0 fetch as a primary goal
+	// note that the order of LODs above affects vertex fetch results
 	optimizeVertexFetch(&mesh.vertices[0], &mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), sizeof(Vertex));
 
 	printf("%-9s:", "Simplify");
@@ -232,6 +251,10 @@ void optCompleteSimplify(Mesh& mesh)
 	}
 
 	printf("\n");
+
+	// for using LOD data at runtime, in addition to VB and IB you have to save lod_index_offsets/lod_index_counts.
+	(void)lod_index_offsets;
+	(void)lod_index_counts;
 }
 
 void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
