@@ -1,4 +1,4 @@
-#include "../src/meshoptimizer.hpp"
+#include "../src/meshoptimizer.h"
 
 #include <algorithm>
 #include <cmath>
@@ -6,7 +6,7 @@
 #include <cstring>
 #include <ctime>
 
-#include "objparser.hpp"
+#include "objparser.h"
 
 using namespace meshopt;
 

@@ -8,8 +8,8 @@
 #include <cmath>
 #include <vector>
 
-#include "../src/meshoptimizer.hpp"
-#include "objparser.hpp"
+#include "../src/meshoptimizer.h"
+#include "objparser.h"
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")

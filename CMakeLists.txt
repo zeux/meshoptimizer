@@ -10,7 +10,7 @@ if(MSVC)
 endif(MSVC)
 
 set(SOURCES
-    src/meshoptimizer.hpp
+    src/meshoptimizer.h
     src/indexgenerator.cpp
     src/overdrawanalyzer.cpp
     src/overdrawoptimizer.cpp

@@ -1,6 +1,6 @@
 #define _CRT_SECURE_NO_WARNINGS
 
-#include "objparser.hpp"
+#include "objparser.h"
 
 #include <cassert>
 #include <cmath>
