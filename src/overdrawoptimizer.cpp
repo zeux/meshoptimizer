@@ -9,7 +9,7 @@
 
 // This work is based on:
 // Pedro Sander, Diego Nehab and Joshua Barczak. Fast Triangle Reordering for Vertex Locality and Reduced Overdraw. 2007
-namespace
+namespace meshopt
 {
 
 struct Vector3
@@ -230,6 +230,8 @@ static void generateSoftBoundaries(std::vector<unsigned int>& destination, const
 
 void meshopt_optimizeOverdraw(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, unsigned int cache_size, float threshold)
 {
+	using namespace meshopt;
+
 	assert(index_count % 3 == 0);
 	assert(vertex_positions_stride > 0);
 	assert(vertex_positions_stride % sizeof(float) == 0);

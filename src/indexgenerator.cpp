@@ -6,7 +6,7 @@
 #include <cstring>
 #include <vector>
 
-namespace
+namespace meshopt
 {
 
 static unsigned int MurmurHash2(const void* key, size_t len, unsigned int seed)
@@ -128,6 +128,8 @@ static T* hashLookup(std::vector<T>& table, const Hash& hash, const Key& key)
 
 size_t meshopt_generateVertexRemap(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)
 {
+	using namespace meshopt;
+
 	assert(indices || index_count == vertex_count);
 	assert(index_count % 3 == 0);
 	assert(vertex_size > 0);

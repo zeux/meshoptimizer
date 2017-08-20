@@ -8,7 +8,7 @@
 
 // This work is based on:
 // Michael Garland and Paul S. Heckbert. Surface simplification using quadric error metrics. 1997
-namespace
+namespace meshopt
 {
 
 static size_t hash(unsigned long long key)
@@ -377,9 +377,11 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 	return index_count;
 }
 
-} // namespace
+} // namespace meshopt
 
 size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t target_index_count)
 {
+	using namespace meshopt;
+
 	return simplifyEdgeCollapse(destination, indices, index_count, vertices, vertex_count, vertex_size, target_index_count);
 }
