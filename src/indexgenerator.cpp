@@ -6,7 +6,7 @@
 #include <cstring>
 #include <vector>
 
-namespace meshopt
+namespace
 {
 
 static unsigned int MurmurHash2(const void* key, size_t len, unsigned int seed)
@@ -124,7 +124,9 @@ static T* hashLookup(std::vector<T>& table, const Hash& hash, const Key& key)
 	return 0;
 }
 
-size_t generateVertexRemap(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)
+} // namespace meshopt
+
+size_t meshopt_generateVertexRemap(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)
 {
 	assert(indices || index_count == vertex_count);
 	assert(index_count % 3 == 0);
@@ -164,7 +166,7 @@ size_t generateVertexRemap(unsigned int* destination, const unsigned int* indice
 	return next_vertex;
 }
 
-void remapVertexBuffer(void* destination, const void* vertices, size_t vertex_count, size_t vertex_size, const unsigned int* remap)
+void meshopt_remapVertexBuffer(void* destination, const void* vertices, size_t vertex_count, size_t vertex_size, const unsigned int* remap)
 {
 	assert(destination != vertices);
 	assert(vertex_size > 0);
@@ -175,7 +177,7 @@ void remapVertexBuffer(void* destination, const void* vertices, size_t vertex_co
 	}
 }
 
-void remapIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count, const unsigned int* remap)
+void meshopt_remapIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count, const unsigned int* remap)
 {
 	assert(index_count % 3 == 0);
 
@@ -194,5 +196,3 @@ void remapIndexBuffer(unsigned int* destination, const unsigned int* indices, si
 		}
 	}
 }
-
-} // namespace meshopt

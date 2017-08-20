@@ -5,11 +5,12 @@ config=release
 
 BUILD=build/$(config)
 
-SOURCES=$(wildcard src/*.cpp demo/*.cpp)
+SOURCES=$(wildcard src/*.cpp demo/*.c demo/*.cpp)
 OBJECTS=$(SOURCES:%=$(BUILD)/%.o)
 
 EXECUTABLE=$(BUILD)/meshoptimizer
 
+CFLAGS=-g -Wall -Wextra -Werror -std=c99
 CXXFLAGS=-g -Wall -Wextra -Wno-missing-field-initializers -Werror -std=c++11
 LDFLAGS=
 
@@ -47,9 +48,13 @@ format:
 $(EXECUTABLE): $(OBJECTS)
 	$(CXX) $(OBJECTS) $(LDFLAGS) -o $@
 
-$(BUILD)/%.o: %
+$(BUILD)/%.cpp.o: %.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $< $(CXXFLAGS) -c -MMD -MP -o $@
+
+$(BUILD)/%.c.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $< $(CFLAGS) -c -MMD -MP -o $@
 
 -include $(OBJECTS:.o=.d)
 clean:

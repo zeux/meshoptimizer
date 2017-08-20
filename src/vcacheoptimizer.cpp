@@ -8,7 +8,7 @@
 // This work is based on:
 // Tom Forsyth. Linear-Speed Vertex Cache Optimisation. 2006
 // Pedro Sander, Diego Nehab and Joshua Barczak. Fast Triangle Reordering for Vertex Locality and Reduced Overdraw. 2007
-namespace meshopt
+namespace
 {
 
 struct Adjacency
@@ -434,7 +434,9 @@ static void optimizeVertexCacheLRU(unsigned int* destination, const unsigned int
 	assert(output_triangle == index_count / 3);
 }
 
-void optimizeVertexCache(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+} // namespace
+
+void meshopt_optimizeVertexCache(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
 	assert(index_count % 3 == 0);
 	assert(cache_size == 0 || cache_size >= 3);
@@ -459,5 +461,3 @@ void optimizeVertexCache(unsigned int* destination, const unsigned int* indices,
 	else
 		optimizeVertexCacheFIFO(destination, indices, index_count, vertex_count, cache_size);
 }
-
-} // namespace meshopt

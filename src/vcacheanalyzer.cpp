@@ -4,7 +4,7 @@
 #include <cassert>
 #include <vector>
 
-namespace meshopt
+namespace
 {
 
 static VertexCacheStatistics analyzeVertexCacheFIFO(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
@@ -81,12 +81,12 @@ static VertexCacheStatistics analyzeVertexCacheLRU(const unsigned int* indices, 
 	return result;
 }
 
-VertexCacheStatistics analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+} // namespace
+
+VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
 	if (cache_size == 0)
 		return analyzeVertexCacheLRU(indices, index_count, vertex_count, 16);
 	else
 		return analyzeVertexCacheFIFO(indices, index_count, vertex_count, cache_size);
 }
-
-} // namespace meshopt

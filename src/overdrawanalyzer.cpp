@@ -7,7 +7,7 @@
 #include <cstring>
 #include <vector>
 
-namespace meshopt
+namespace
 {
 
 const int kViewport = 256;
@@ -136,7 +136,9 @@ static void rasterize(OverdrawBuffer* buffer, float v1x, float v1y, float v1z, f
 	}
 }
 
-OverdrawStatistics analyzeOverdraw(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count)
+} // namespace
+
+OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count)
 {
 	assert(vertex_positions_stride > 0);
 	assert(vertex_positions_stride % sizeof(float) == 0);
@@ -222,5 +224,3 @@ OverdrawStatistics analyzeOverdraw(const unsigned int* indices, size_t index_cou
 
 	return result;
 }
-
-} // namespace meshopt

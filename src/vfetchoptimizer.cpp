@@ -5,10 +5,7 @@
 #include <cstring>
 #include <vector>
 
-namespace meshopt
-{
-
-size_t optimizeVertexFetch(void* destination, const void* vertices, unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+size_t meshopt_optimizeVertexFetch(void* destination, const void* vertices, unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
 	assert(index_count % 3 == 0);
 	assert(vertex_size > 0);
@@ -50,5 +47,3 @@ size_t optimizeVertexFetch(void* destination, const void* vertices, unsigned int
 
 	return next_vertex;
 }
-
-} // namespace meshopt
