@@ -9,7 +9,7 @@
 namespace meshopt
 {
 
-static unsigned int MurmurHash2(const void* key, size_t len, unsigned int seed)
+static unsigned int murmurHash2(const void* key, size_t len, unsigned int seed)
 {
 	const unsigned int m = 0x5bd1e995;
 	const int r = 24;
@@ -68,7 +68,7 @@ struct VertexHasher
 
 	size_t operator()(unsigned int index) const
 	{
-		return MurmurHash2(vertices + index * vertex_size, vertex_size, 0);
+		return murmurHash2(vertices + index * vertex_size, vertex_size, 0);
 	}
 
 	size_t operator()(unsigned int lhs, unsigned int rhs) const
@@ -175,7 +175,10 @@ void meshopt_remapVertexBuffer(void* destination, const void* vertices, size_t v
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		memcpy(static_cast<char*>(destination) + remap[i] * vertex_size, static_cast<const char*>(vertices) + i * vertex_size, vertex_size);
+		if (remap[i] != ~0u)
+		{
+			memcpy(static_cast<char*>(destination) + remap[i] * vertex_size, static_cast<const char*>(vertices) + i * vertex_size, vertex_size);
+		}
 	}
 }
 
@@ -183,18 +186,11 @@ void meshopt_remapIndexBuffer(unsigned int* destination, const unsigned int* ind
 {
 	assert(index_count % 3 == 0);
 
-	if (indices)
+	for (size_t i = 0; i < index_count; ++i)
 	{
-		for (size_t i = 0; i < index_count; ++i)
-		{
-			destination[i] = remap[indices[i]];
-		}
-	}
-	else
-	{
-		for (size_t i = 0; i < index_count; ++i)
-		{
-			destination[i] = remap[i];
-		}
+		unsigned int index = indices ? indices[i] : unsigned(i);
+		assert(remap[index] != ~0u);
+
+		destination[i] = remap[index];
 	}
 }
