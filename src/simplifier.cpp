@@ -191,13 +191,15 @@ static unsigned long long edgeId(unsigned int a, unsigned int b)
 	return (static_cast<unsigned long long>(a) << 32) | b;
 }
 
-static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t target_index_count)
+static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_positions_stride, size_t vertex_count, size_t target_index_count)
 {
+	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
+
 	std::vector<Vector3> vertex_positions(vertex_count);
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		const float* v = reinterpret_cast<const float*>(static_cast<const char*>(vertices) + i * vertex_size);
+		const float* v = vertex_positions_data + i * vertex_stride_float;
 
 		vertex_positions[i].x = v[0];
 		vertex_positions[i].y = v[1];
@@ -379,9 +381,14 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 
 } // namespace meshopt
 
-size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t target_index_count)
+size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, size_t target_index_count)
 {
 	using namespace meshopt;
 
-	return simplifyEdgeCollapse(destination, indices, index_count, vertices, vertex_count, vertex_size, target_index_count);
+	assert(index_count % 3 == 0);
+	assert(vertex_positions_stride > 0);
+	assert(vertex_positions_stride % sizeof(float) == 0);
+	assert(target_index_count <= index_count);
+
+	return simplifyEdgeCollapse(destination, indices, index_count, vertex_positions, vertex_positions_stride, vertex_count, target_index_count);
 }

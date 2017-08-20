@@ -101,7 +101,7 @@ Mesh optimize(const Mesh& mesh, int lod)
 	size_t target_index_count = size_t(mesh.indices.size() * threshold);
 
 	Mesh result = mesh;
-	result.indices.resize(meshopt::simplify(&result.indices[0], &result.indices[0], mesh.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex), target_index_count));
+	result.indices.resize(simplify(&result.indices[0], &result.indices[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), target_index_count));
 
 	return result;
 }

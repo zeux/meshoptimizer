@@ -92,9 +92,9 @@ struct VertexCacheStatistics
  * Returns the number of indices after simplification, with destination containing new index data
  * 
  * destination must contain enough space for the source index buffer (since optimization is iterative, this means index_count elements - *not* target_index_count!)
- * vertices should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
+ * vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
  */
-MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t target_index_count);
+MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, size_t target_index_count);
 
 /**
  * Vertex transform cache analyzer
@@ -286,12 +286,12 @@ inline size_t optimizeVertexFetch(void* destination, const void* vertices, T* in
 }
 
 template <typename T>
-inline size_t simplify(T* destination, const T* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t target_index_count)
+inline size_t simplify(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, size_t target_index_count)
 {
 	IndexAdapter<T> in(0, indices, index_count);
 	IndexAdapter<T> out(destination, 0, index_count);
 
-	return meshopt_simplify(out.data, in.data, index_count, vertices, vertex_count, vertex_size, target_index_count);
+	return meshopt_simplify(out.data, in.data, index_count, vertex_positions, vertex_positions_stride, vertex_count, target_index_count);
 }
 
 template <typename T>

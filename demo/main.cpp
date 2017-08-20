@@ -203,7 +203,7 @@ void optCompleteSimplify(Mesh& mesh)
 		const std::vector<unsigned int>& source = lods[i - 1];
 
 		lod.resize(source.size());
-		lod.resize(simplify(&lod[0], &source[0], source.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex), target_index_count));
+		lod.resize(simplify(&lod[0], &source[0], source.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), target_index_count));
 	}
 
 	// optimize each individual LOD for vertex cache & overdraw
