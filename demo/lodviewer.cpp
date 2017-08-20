@@ -10,7 +10,9 @@
 
 #include <GL/gl.h>
 
+#pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "opengl32.lib")
+#pragma comment(lib, "user32.lib")
 
 using namespace meshopt;
 
@@ -82,10 +84,10 @@ static Mesh parseObj(const char* path)
 	Mesh result;
 
 	std::vector<unsigned int> remap(total_indices);
-	size_t total_vertices = generateVertexRemap(&remap[0], NULL, total_indices, &vertices[0], total_indices, sizeof(Vertex));
+	size_t total_vertices = generateVertexRemap(&remap[0], static_cast<unsigned int*>(0), total_indices, &vertices[0], total_indices, sizeof(Vertex));
 
 	result.indices.resize(total_indices);
-	remapIndexBuffer(&result.indices[0], NULL, total_indices, &remap[0]);
+	remapIndexBuffer(&result.indices[0], static_cast<unsigned int*>(0), total_indices, &remap[0]);
 
 	result.vertices.resize(total_vertices);
 	remapVertexBuffer(&result.vertices[0], &vertices[0], total_indices, sizeof(Vertex), &remap[0]);
@@ -208,7 +210,7 @@ int main(int argc, char** argv)
 		return 0;
 	}
 
-	HWND hWnd = CreateWindow(L"ListBox", L"Title", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, NULL, NULL);
+	HWND hWnd = CreateWindowW(L"ListBox", L"Title", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, NULL, NULL);
 	HDC hDC = GetDC(hWnd);
 
 	PIXELFORMATDESCRIPTOR pfd = {sizeof(pfd), 1, PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER, 0, 32};
