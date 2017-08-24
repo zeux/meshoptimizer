@@ -138,7 +138,7 @@ static void rasterize(OverdrawBuffer* buffer, float v1x, float v1y, float v1z, f
 
 } // namespace meshopt
 
-OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count)
+OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	using namespace meshopt;
 

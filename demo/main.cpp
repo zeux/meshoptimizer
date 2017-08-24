@@ -159,7 +159,7 @@ void optOverdraw(Mesh& mesh)
 	// use worst-case ACMR threshold so that overdraw optimizer can sort *all* triangles
 	// warning: this significantly deteriorates the vertex cache efficiency so it is not advised; look at optComplete for the recommended method
 	const float kThreshold = 3.f;
-	optimizeOverdraw(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), kCacheSize, kThreshold);
+	optimizeOverdraw(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), kCacheSize, kThreshold);
 }
 
 void optFetch(Mesh& mesh)
@@ -174,7 +174,7 @@ void optComplete(Mesh& mesh)
 
 	// reorder indices for overdraw, balancing overdraw and vertex cache efficiency
 	const float kThreshold = 1.05f; // allow up to 5% worse ACMR to get more reordering opportunities for overdraw
-	optimizeOverdraw(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), kCacheSize, kThreshold);
+	optimizeOverdraw(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), kCacheSize, kThreshold);
 
 	// vertex fetch optimization should go last as it depends on the final index order
 	optimizeVertexFetch(&mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
@@ -203,7 +203,7 @@ void optCompleteSimplify(Mesh& mesh)
 		const std::vector<unsigned int>& source = lods[i - 1];
 
 		lod.resize(source.size());
-		lod.resize(simplify(&lod[0], &source[0], source.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), target_index_count));
+		lod.resize(simplify(&lod[0], &source[0], source.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count));
 	}
 
 	// optimize each individual LOD for vertex cache & overdraw
@@ -212,7 +212,7 @@ void optCompleteSimplify(Mesh& mesh)
 		std::vector<unsigned int>& lod = lods[i];
 
 		optimizeVertexCache(&lod[0], &lod[0], lod.size(), mesh.vertices.size(), kCacheSize);
-		optimizeOverdraw(&lod[0], &lod[0], lod.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), kCacheSize, 1.0f);
+		optimizeOverdraw(&lod[0], &lod[0], lod.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), kCacheSize, 1.0f);
 	}
 
 	// concatenate all LODs into one IB
@@ -268,7 +268,7 @@ void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
 	VertexCacheStatistics vcs = analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), kCacheSize);
 	VertexCacheStatistics vc0s = analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), 0);
 	VertexFetchStatistics vfs = analyzeVertexFetch(&copy.indices[0], copy.indices.size(), copy.vertices.size(), sizeof(Vertex));
-	OverdrawStatistics os = analyzeOverdraw(&copy.indices[0], copy.indices.size(), &copy.vertices[0].px, sizeof(Vertex), copy.vertices.size());
+	OverdrawStatistics os = analyzeOverdraw(&copy.indices[0], copy.indices.size(), &copy.vertices[0].px, copy.vertices.size(), sizeof(Vertex));
 
 	printf("%-9s: ACMR %f ATVR %f (LRU %f) Overfetch %f Overdraw %f in %.2f msec\n", name, vcs.acmr, vcs.atvr, vc0s.atvr, vfs.overfetch, os.overdraw, double(end - start) / CLOCKS_PER_SEC * 1000);
 }

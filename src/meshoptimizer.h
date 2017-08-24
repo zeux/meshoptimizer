@@ -68,7 +68,7 @@ MESHOPTIMIZER_API void meshopt_optimizeVertexCache(unsigned int* destination, co
  * cache_size should be less than the actual GPU cache size to avoid cache thrashing
  * threshold indicates how much the overdraw optimizer can degrade vertex cache efficiency (1.05 = up to 5%) to reduce overdraw more efficiently
  */
-MESHOPTIMIZER_API void meshopt_optimizeOverdraw(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, unsigned int cache_size, float threshold);
+MESHOPTIMIZER_API void meshopt_optimizeOverdraw(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, unsigned int cache_size, float threshold);
 
 /**
  * Vertex fetch cache optimizer
@@ -94,7 +94,7 @@ struct VertexCacheStatistics
  * destination must contain enough space for the source index buffer (since optimization is iterative, this means index_count elements - *not* target_index_count!)
  * vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
  */
-MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, size_t target_index_count);
+MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count);
 
 /**
  * Vertex transform cache analyzer
@@ -117,7 +117,7 @@ struct OverdrawStatistics
  *
  * vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
  */
-MESHOPTIMIZER_API struct OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count);
+MESHOPTIMIZER_API struct OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 
 struct VertexFetchStatistics
 {
@@ -269,12 +269,12 @@ inline void optimizeVertexCache(T* destination, const T* indices, size_t index_c
 }
 
 template <typename T>
-inline void optimizeOverdraw(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, unsigned int cache_size = MESHOPTIMIZER_DEFAULT_VCACHE_SIZE, float threshold = 1)
+inline void optimizeOverdraw(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, unsigned int cache_size = MESHOPTIMIZER_DEFAULT_VCACHE_SIZE, float threshold = 1)
 {
 	IndexAdapter<T> in(0, indices, index_count);
 	IndexAdapter<T> out(destination, 0, index_count);
 
-	meshopt_optimizeOverdraw(out.data, in.data, index_count, vertex_positions, vertex_positions_stride, vertex_count, cache_size, threshold);
+	meshopt_optimizeOverdraw(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride, cache_size, threshold);
 }
 
 template <typename T>
@@ -286,12 +286,12 @@ inline size_t optimizeVertexFetch(void* destination, T* indices, size_t index_co
 }
 
 template <typename T>
-inline size_t simplify(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count, size_t target_index_count)
+inline size_t simplify(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count)
 {
 	IndexAdapter<T> in(0, indices, index_count);
 	IndexAdapter<T> out(destination, 0, index_count);
 
-	return meshopt_simplify(out.data, in.data, index_count, vertex_positions, vertex_positions_stride, vertex_count, target_index_count);
+	return meshopt_simplify(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride, target_index_count);
 }
 
 template <typename T>
@@ -303,11 +303,11 @@ inline VertexCacheStatistics analyzeVertexCache(const T* indices, size_t index_c
 }
 
 template <typename T>
-inline OverdrawStatistics analyzeOverdraw(const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, size_t vertex_count)
+inline OverdrawStatistics analyzeOverdraw(const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	IndexAdapter<T> in(0, indices, index_count);
 
-	return meshopt_analyzeOverdraw(in.data, index_count, vertex_positions, vertex_positions_stride, vertex_count);
+	return meshopt_analyzeOverdraw(in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride);
 }
 
 template <typename T>
