@@ -142,7 +142,7 @@ OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, size_t i
 {
 	using namespace meshopt;
 
-	assert(vertex_positions_stride > 0);
+	assert(vertex_positions_stride > 0 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
 
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);

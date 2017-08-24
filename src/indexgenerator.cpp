@@ -108,7 +108,7 @@ size_t meshopt_generateVertexRemap(unsigned int* destination, const unsigned int
 
 	assert(indices || index_count == vertex_count);
 	assert(index_count % 3 == 0);
-	assert(vertex_size > 0);
+	assert(vertex_size > 0 && vertex_size <= 256);
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
@@ -147,7 +147,7 @@ size_t meshopt_generateVertexRemap(unsigned int* destination, const unsigned int
 void meshopt_remapVertexBuffer(void* destination, const void* vertices, size_t vertex_count, size_t vertex_size, const unsigned int* remap)
 {
 	assert(destination != vertices);
-	assert(vertex_size > 0);
+	assert(vertex_size > 0 && vertex_size <= 256);
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{

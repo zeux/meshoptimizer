@@ -8,7 +8,7 @@
 size_t meshopt_optimizeVertexFetch(void* destination, unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)
 {
 	assert(index_count % 3 == 0);
-	assert(vertex_size > 0);
+	assert(vertex_size > 0 && vertex_size <= 256);
 
 	// support in-place optimization
 	std::vector<char> vertices_copy;
