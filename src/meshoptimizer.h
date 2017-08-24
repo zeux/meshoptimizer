@@ -77,7 +77,7 @@ MESHOPTIMIZER_API void meshopt_optimizeOverdraw(unsigned int* destination, const
  * desination must contain enough space for the resulting vertex buffer (vertex_count elements)
  * indices is used both as an input and as an output index buffer
  */
-MESHOPTIMIZER_API size_t meshopt_optimizeVertexFetch(void* destination, const void* vertices, unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
+MESHOPTIMIZER_API size_t meshopt_optimizeVertexFetch(void* destination, unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size);
 
 struct VertexCacheStatistics
 {
@@ -278,11 +278,11 @@ inline void optimizeOverdraw(T* destination, const T* indices, size_t index_coun
 }
 
 template <typename T>
-inline size_t optimizeVertexFetch(void* destination, const void* vertices, T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+inline size_t optimizeVertexFetch(void* destination, T* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)
 {
 	IndexAdapter<T> inout(indices, indices, index_count);
 
-	return meshopt_optimizeVertexFetch(destination, vertices, inout.data, index_count, vertex_count, vertex_size);
+	return meshopt_optimizeVertexFetch(destination, inout.data, index_count, vertices, vertex_count, vertex_size);
 }
 
 template <typename T>

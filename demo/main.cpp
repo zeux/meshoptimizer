@@ -164,7 +164,7 @@ void optOverdraw(Mesh& mesh)
 
 void optFetch(Mesh& mesh)
 {
-	optimizeVertexFetch(&mesh.vertices[0], &mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), sizeof(Vertex));
+	optimizeVertexFetch(&mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
 }
 
 void optComplete(Mesh& mesh)
@@ -177,7 +177,7 @@ void optComplete(Mesh& mesh)
 	optimizeOverdraw(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, sizeof(Vertex), mesh.vertices.size(), kCacheSize, kThreshold);
 
 	// vertex fetch optimization should go last as it depends on the final index order
-	optimizeVertexFetch(&mesh.vertices[0], &mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), sizeof(Vertex));
+	optimizeVertexFetch(&mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
 }
 
 void optCompleteSimplify(Mesh& mesh)
@@ -241,7 +241,7 @@ void optCompleteSimplify(Mesh& mesh)
 
 	// vertex fetch optimization should go last as it depends on the final index order
 	// note that the order of LODs above affects vertex fetch results
-	optimizeVertexFetch(&mesh.vertices[0], &mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), sizeof(Vertex));
+	optimizeVertexFetch(&mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
 
 	printf("%-9s:", "Simplify");
 
