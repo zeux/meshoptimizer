@@ -112,7 +112,7 @@ static unsigned int getNextVertexNeighbour(const unsigned int* next_candidates_b
 	return best_candidate;
 }
 
-static void optimizeVertexCacheFIFO(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+static void optimizeVertexCacheTipsify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
 	// build adjacency information
 	Adjacency adjacency;
@@ -272,7 +272,7 @@ static unsigned int getNextTriangleDeadEnd(unsigned int& input_cursor, const std
 	return ~0u;
 }
 
-static void optimizeVertexCacheLRU(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+static void optimizeVertexCacheForsyth(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
 	assert(index_count % 3 == 0);
 	assert(cache_size <= max_cache_size);
@@ -459,7 +459,7 @@ void meshopt_optimizeVertexCache(unsigned int* destination, const unsigned int* 
 	}
 
 	if (cache_size == 0)
-		optimizeVertexCacheLRU(destination, indices, index_count, vertex_count, 16);
+		optimizeVertexCacheForsyth(destination, indices, index_count, vertex_count, 16);
 	else
-		optimizeVertexCacheFIFO(destination, indices, index_count, vertex_count, cache_size);
+		optimizeVertexCacheTipsify(destination, indices, index_count, vertex_count, cache_size);
 }
