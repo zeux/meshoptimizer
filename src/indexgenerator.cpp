@@ -76,11 +76,11 @@ static void hashInit(std::vector<T>& table, const Hash& hash, size_t count)
 template <typename T, typename Hash, typename Key>
 static T* hashLookup(std::vector<T>& table, const Hash& hash, const Key& key)
 {
+	assert(table.size() > 0);
 	assert((table.size() & (table.size() - 1)) == 0);
 
 	size_t hashmod = table.size() - 1;
-	size_t hashval = hash(key);
-	size_t bucket = hashval & hashmod;
+	size_t bucket = hash(key) & hashmod;
 
 	for (size_t probe = 0; probe <= hashmod; ++probe)
 	{
@@ -141,6 +141,8 @@ size_t meshopt_generateVertexRemap(unsigned int* destination, const unsigned int
 		}
 	}
 
+	assert(next_vertex <= vertex_count);
+
 	return next_vertex;
 }
 
@@ -153,6 +155,8 @@ void meshopt_remapVertexBuffer(void* destination, const void* vertices, size_t v
 	{
 		if (remap[i] != ~0u)
 		{
+			assert(remap[i] < vertex_count);
+
 			memcpy(static_cast<char*>(destination) + remap[i] * vertex_size, static_cast<const char*>(vertices) + i * vertex_size, vertex_size);
 		}
 	}

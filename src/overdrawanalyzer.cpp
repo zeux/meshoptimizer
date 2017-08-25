@@ -142,6 +142,7 @@ OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, size_t i
 {
 	using namespace meshopt;
 
+	assert(index_count % 3 == 0);
 	assert(vertex_positions_stride > 0 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
 
@@ -168,19 +169,15 @@ OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, size_t i
 
 	std::vector<Vector3> triangles(index_count);
 
-	for (size_t i = 0; i < index_count; i += 3)
+	for (size_t i = 0; i < index_count; ++i)
 	{
-		const float* v0 = vertex_positions + indices[i + 0] * vertex_stride_float;
-		const float* v1 = vertex_positions + indices[i + 1] * vertex_stride_float;
-		const float* v2 = vertex_positions + indices[i + 2] * vertex_stride_float;
+		unsigned int index = indices[i];
+		assert(index < vertex_count);
 
-		Vector3 vn0 = {(v0[0] - minv[0]) * scale, (v0[1] - minv[1]) * scale, (v0[2] - minv[2]) * scale};
-		Vector3 vn1 = {(v1[0] - minv[0]) * scale, (v1[1] - minv[1]) * scale, (v1[2] - minv[2]) * scale};
-		Vector3 vn2 = {(v2[0] - minv[0]) * scale, (v2[1] - minv[1]) * scale, (v2[2] - minv[2]) * scale};
+		const float* v = vertex_positions + index * vertex_stride_float;
+		Vector3 vn = {(v[0] - minv[0]) * scale, (v[1] - minv[1]) * scale, (v[2] - minv[2]) * scale};
 
-		triangles[i + 0] = vn0;
-		triangles[i + 1] = vn1;
-		triangles[i + 2] = vn2;
+		triangles[i] = vn;
 	}
 
 	OverdrawBuffer* buffer = new OverdrawBuffer();

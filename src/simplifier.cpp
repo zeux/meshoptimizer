@@ -36,6 +36,7 @@ static void hashInit(std::vector<T>& table, size_t count)
 template <typename T>
 static T* hashLookup(std::vector<T>& table, const T& key)
 {
+	assert(table.size() > 0);
 	assert((table.size() & (table.size() - 1)) == 0);
 
 	size_t hashmod = table.size() - 1;
