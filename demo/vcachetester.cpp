@@ -6,6 +6,8 @@
 
 #include <cassert>
 #include <cmath>
+
+#include <algorithm>
 #include <vector>
 
 #include "../src/meshoptimizer.h"
@@ -53,6 +55,9 @@ void gridGen(std::vector<unsigned int>& indices, int x0, int x1, int y0, int y1,
 
 unsigned int queryVSInvocations(ID3D11Device* device, ID3D11DeviceContext* context, const unsigned int* indices, size_t index_count)
 {
+	if (index_count == 0)
+		return 0;
+
 	ID3D11Buffer* ib = 0;
 
 	{
@@ -319,6 +324,122 @@ void testCache(IDXGIAdapter* adapter)
 	printf("\n");
 }
 
+void testCacheSequence(IDXGIAdapter* adapter, int argc, char** argv)
+{
+	ID3D11Device* device = 0;
+	ID3D11DeviceContext* context = 0;
+	D3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, 0, 0, 0, 0, D3D11_SDK_VERSION, &device, 0, &context);
+
+	setupShaders(device, context);
+
+	std::vector<unsigned int> ib;
+
+	for (int i = 2; i < argc; ++i)
+	{
+		char* end;
+		unsigned int i0 = strtol(argv[i], &end, 10);
+
+		if (end[0] == '-')
+		{
+			unsigned int i1 = strtol(end + 1, &end, 10);
+
+			if (end[0] != 0 || i1 < i0)
+			{
+				printf("Unrecognized index range: %s\n", argv[i]);
+				return;
+			}
+
+			for (unsigned int ii = i0; ii <= i1; ++ii)
+				ib.push_back(ii);
+		}
+		else if (end[0] == 0)
+		{
+			ib.push_back(i0);
+		}
+		else
+		{
+			printf("Unrecognized index range: %s\n", argv[i]);
+			return;
+		}
+	}
+
+	if (ib.size() % 3)
+		ib.resize(ib.size() - ib.size() % 3);
+
+	std::vector<bool> xformed(ib.size());
+
+	for (size_t i = 0; i < ib.size(); i += 3)
+	{
+		unsigned int inv0 = i == 0 ? 0 : queryVSInvocations(device, context, ib.data(), i);
+		unsigned int inv1 = queryVSInvocations(device, context, ib.data(), i + 3);
+
+		unsigned int a = ib[i + 0];
+		unsigned int b = ib[i + 1];
+		unsigned int c = ib[i + 2];
+
+		ib[i + 0] = ib[i + 1] = ib[i + 2] = a;
+		unsigned int inva = queryVSInvocations(device, context, ib.data(), i + 3);
+
+		ib[i + 1] = ib[i + 2] = b;
+		unsigned int invb = queryVSInvocations(device, context, ib.data(), i + 3);
+
+		ib[i + 2] = c;
+		unsigned int invc = queryVSInvocations(device, context, ib.data(), i + 3);
+
+		if (inva < inv0 || invb < inva || invc < invb || inv1 < invc)
+		{
+			printf("desync at %d\n", int(i));
+			break;
+		}
+
+		xformed[i + 0] = inva == inv0 + 1;
+		xformed[i + 1] = invb == inva + 1;
+		xformed[i + 2] = invc == invb + 1;
+	}
+
+	printf("// Sequence:");
+
+	for (size_t i = 0; i < ib.size(); ++i)
+	{
+		if (xformed[i])
+			printf(" +%d", ib[i]);
+		else
+			printf(" %d", ib[i]);
+	}
+
+	printf("\n");
+
+	std::vector<unsigned int> cached;
+
+	for (size_t i = 0; i < ib.size(); ++i)
+	{
+		unsigned int index = ib[i];
+		unsigned int inv0 = queryVSInvocations(device, context, ib.data(), ib.size());
+
+		ib.push_back(index);
+		ib.push_back(index);
+		ib.push_back(index);
+
+		unsigned int inv1 = queryVSInvocations(device, context, ib.data(), ib.size() + 3);
+
+		ib.resize(ib.size() - 3);
+
+		if (inv1 == inv0)
+			cached.push_back(index);
+	}
+
+	std::sort(cached.begin(), cached.end());
+	cached.erase(std::unique(cached.begin(), cached.end()), cached.end());
+
+	printf("// Cached  :");
+
+	for (size_t i = 0; i < cached.size(); ++i)
+		printf(" %d", cached[i]);
+
+	printf(" (%d)\n", int(cached.size()));
+
+	printf("// Invocations: %d\n", queryVSInvocations(device, context, ib.data(), ib.size()));
+}
 void testCacheMeshes(IDXGIAdapter* adapter, int argc, char** argv)
 {
 	ID3D11Device* device = 0;
@@ -441,6 +562,10 @@ int main(int argc, char** argv)
 		if (argc == 1)
 		{
 			testCache(adapter);
+		}
+		else if (strcmp(argv[1], "--") == 0)
+		{
+			testCacheSequence(adapter, argc, argv);
 		}
 		else
 		{
