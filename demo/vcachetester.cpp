@@ -352,6 +352,19 @@ void testCacheSequence(IDXGIAdapter* adapter, int argc, char** argv)
 			for (unsigned int ii = i0; ii <= i1; ++ii)
 				ib.push_back(ii);
 		}
+		else if (end[0] == '*')
+		{
+			unsigned int i1 = strtol(end + 1, &end, 10);
+
+			if (end[0] != 0 || i1 == 0)
+			{
+				printf("Unrecognized index range: %s\n", argv[i]);
+				return;
+			}
+
+			for (unsigned int ii = 0; ii < i1; ++ii)
+				ib.push_back(i0);
+		}
 		else if (end[0] == 0)
 		{
 			ib.push_back(i0);
@@ -420,7 +433,7 @@ void testCacheSequence(IDXGIAdapter* adapter, int argc, char** argv)
 		ib.push_back(index);
 		ib.push_back(index);
 
-		unsigned int inv1 = queryVSInvocations(device, context, ib.data(), ib.size() + 3);
+		unsigned int inv1 = queryVSInvocations(device, context, ib.data(), ib.size());
 
 		ib.resize(ib.size() - 3);
 
