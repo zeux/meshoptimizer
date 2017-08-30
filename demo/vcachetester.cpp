@@ -570,7 +570,10 @@ int main(int argc, char** argv)
 		DXGI_ADAPTER_DESC ad = {};
 		adapter->GetDesc(&ad);
 
-		printf("// GPU %d: %S\n", index, ad.Description);
+		if (ad.VendorId == 0x1414 && ad.DeviceId == 0x8c)
+			continue; // Skip Microsoft Basic Render Driver
+
+		printf("// GPU %d: %S (Vendor %04x Device %04x)\n", index, ad.Description, ad.VendorId, ad.DeviceId);
 
 		if (argc == 1)
 		{
