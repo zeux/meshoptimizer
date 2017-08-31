@@ -17,33 +17,40 @@
 #pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "dxgi.lib")
 
+void stripGen(std::vector<unsigned int>& indices, int x0, int x1, int y0, int y1, int width, bool prefetch)
+{
+	if (prefetch)
+	{
+		for (int x = x0; x < x1; x++)
+		{
+			indices.push_back(x + 0);
+			indices.push_back(x + 0);
+			indices.push_back(x + 1);
+		}
+	}
+
+	for (int y = y0; y < y1; y++)
+	{
+		for (int x = x0; x < x1; x++)
+		{
+			indices.push_back((width + 1) * (y + 0) + (x + 0));
+			indices.push_back((width + 1) * (y + 1) + (x + 0));
+			indices.push_back((width + 1) * (y + 0) + (x + 1));
+
+			indices.push_back((width + 1) * (y + 0) + (x + 1));
+			indices.push_back((width + 1) * (y + 1) + (x + 0));
+			indices.push_back((width + 1) * (y + 1) + (x + 1));
+		}
+	}
+}
+
 void gridGen(std::vector<unsigned int>& indices, int x0, int x1, int y0, int y1, int width, int cacheSize, bool prefetch)
 {
 	if (x1 - x0 + 1 < cacheSize)
 	{
-		if (2 * (x1 - x0) + 1 > cacheSize && prefetch)
-		{
-			for (int x = x0; x < x1; x++)
-			{
-				indices.push_back(x + 0);
-				indices.push_back(x + 0);
-				indices.push_back(x + 1);
-			}
-		}
+		bool prefetchStrip = 2 * (x1 - x0) + 1 > cacheSize && prefetch;
 
-		for (int y = y0; y < y1; y++)
-		{
-			for (int x = x0; x < x1; x++)
-			{
-				indices.push_back((width + 1) * (y + 0) + (x + 0));
-				indices.push_back((width + 1) * (y + 1) + (x + 0));
-				indices.push_back((width + 1) * (y + 0) + (x + 1));
-
-				indices.push_back((width + 1) * (y + 0) + (x + 1));
-				indices.push_back((width + 1) * (y + 1) + (x + 0));
-				indices.push_back((width + 1) * (y + 1) + (x + 1));
-			}
-		}
+		stripGen(indices, x0, x1, y0, y1, width, prefetchStrip);
 	}
 	else
 	{
@@ -365,6 +372,18 @@ void testCacheSequence(IDXGIAdapter* adapter, int argc, char** argv)
 			for (unsigned int ii = 0; ii < i1; ++ii)
 				ib.push_back(i0);
 		}
+		else if (end[0] == 'x')
+		{
+			unsigned int i1 = strtol(end + 1, &end, 10);
+
+			if (end[0] != 0)
+			{
+				printf("Unrecognized index range: %s\n", argv[i]);
+				return;
+			}
+
+			stripGen(ib, 0, i0, 0, i1, i0, true);
+		}
 		else if (end[0] == 0)
 		{
 			ib.push_back(i0);
@@ -593,6 +612,9 @@ int main(int argc, char** argv)
 	{
 		printf("// Model FIFO 128\n");
 		modelCacheFIFO(128);
+
+		printf("// Model FIFO 16\n");
+		modelCacheFIFO(16);
 
 		printf("// Model LRU 16\n");
 		modelCacheLRU(16);
