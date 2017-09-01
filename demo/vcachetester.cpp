@@ -344,24 +344,32 @@ void testCacheSequence(IDXGIAdapter* adapter, int argc, char** argv)
 	for (int i = 2; i < argc; ++i)
 	{
 		char* end;
-		unsigned int i0 = strtol(argv[i], &end, 10);
+		int i0 = strtol(argv[i], &end, 10);
 
 		if (end[0] == '-')
 		{
-			unsigned int i1 = strtol(end + 1, &end, 10);
+			int i1 = strtol(end + 1, &end, 10);
 
-			if (end[0] != 0 || i1 < i0)
+			if (end[0] != 0)
 			{
 				printf("Unrecognized index range: %s\n", argv[i]);
 				return;
 			}
 
-			for (unsigned int ii = i0; ii <= i1; ++ii)
-				ib.push_back(ii);
+			if (i0 < i1)
+			{
+				for (int ii = i0; ii <= i1; ++ii)
+					ib.push_back(ii);
+			}
+			else
+			{
+				for (int ii = i0; ii >= i1; --ii)
+					ib.push_back(ii);
+			}
 		}
 		else if (end[0] == '*')
 		{
-			unsigned int i1 = strtol(end + 1, &end, 10);
+			int i1 = strtol(end + 1, &end, 10);
 
 			if (end[0] != 0 || i1 == 0)
 			{
@@ -369,12 +377,12 @@ void testCacheSequence(IDXGIAdapter* adapter, int argc, char** argv)
 				return;
 			}
 
-			for (unsigned int ii = 0; ii < i1; ++ii)
+			for (int ii = 0; ii < i1; ++ii)
 				ib.push_back(i0);
 		}
 		else if (end[0] == 'x')
 		{
-			unsigned int i1 = strtol(end + 1, &end, 10);
+			int i1 = strtol(end + 1, &end, 10);
 
 			if (end[0] != 0)
 			{
