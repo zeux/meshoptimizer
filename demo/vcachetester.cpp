@@ -441,10 +441,15 @@ void testCacheSequence(IDXGIAdapter* adapter, int argc, char** argv)
 
 	for (size_t i = 0; i < ib.size(); ++i)
 	{
+		if (i % 24 == 0)
+		{
+			printf("\n// %3d*3:", int(i / 3));
+		}
+
 		if (xformed[i])
-			printf(" +%d", ib[i]);
+			printf(" %3d*", ib[i]);
 		else
-			printf(" %d", ib[i]);
+			printf(" %3d ", ib[i]);
 	}
 
 	printf("\n");
@@ -480,6 +485,7 @@ void testCacheSequence(IDXGIAdapter* adapter, int argc, char** argv)
 
 	printf("// Invocations: %d\n", queryVSInvocations(device, context, ib.data(), ib.size()));
 }
+
 void testCacheMeshes(IDXGIAdapter* adapter, int argc, char** argv)
 {
 	ID3D11Device* device = 0;
