@@ -106,130 +106,6 @@ unsigned int queryVSInvocations(ID3D11Device* device, ID3D11DeviceContext* conte
 	return stats.VSInvocations;
 }
 
-unsigned int estimateVSInvocationsFIFO(const unsigned int* indices, size_t index_count, size_t cache_size)
-{
-	std::vector<unsigned int> cache;
-
-	unsigned int invocations = 0;
-
-	for (size_t i = 0; i < index_count; ++i)
-	{
-		unsigned int index = indices[i];
-
-		bool found = false;
-
-		for (size_t j = 0; j < cache.size(); ++j)
-		{
-			if (cache[j] == index)
-			{
-				found = true;
-				break;
-			}
-		}
-
-		if (!found)
-			invocations++;
-
-		if (!found)
-			cache.push_back(index);
-
-		if (cache.size() > cache_size)
-			cache.erase(cache.begin(), cache.end() - cache_size);
-	}
-
-	return invocations;
-}
-
-unsigned int estimateVSInvocationsLRU(const unsigned int* indices, size_t index_count, size_t cache_size)
-{
-	std::vector<unsigned int> cache;
-
-	unsigned int invocations = 0;
-
-	for (size_t i = 0; i < index_count; ++i)
-	{
-		unsigned int index = indices[i];
-
-		bool found = false;
-
-		for (size_t j = 0; j < cache.size(); ++j)
-		{
-			if (cache[j] == index)
-			{
-				found = true;
-				cache.erase(cache.begin() + j);
-				break;
-			}
-		}
-
-		if (!found)
-			invocations++;
-
-		cache.push_back(index);
-
-		if (cache.size() > cache_size)
-			cache.erase(cache.begin(), cache.end() - cache_size);
-	}
-
-	return invocations;
-}
-
-unsigned int estimateVSInvocationsReuse(const unsigned int* indices, size_t index_count, size_t warp_size, size_t fifo_size, size_t triangle_limit)
-{
-	std::vector<unsigned int> warp;
-
-	unsigned int invocations = 0;
-	unsigned int triangles = 0;
-
-	for (size_t i = 0; i < index_count; i += 3)
-	{
-		bool found[3] = {};
-
-		for (size_t k = 0; k < 3; ++k)
-		{
-			for (size_t j = 0; j < warp.size(); ++j)
-			{
-				if (warp.size() - j > fifo_size)
-					continue;
-
-				if (warp[j] == indices[i + k])
-				{
-					found[k] = true;
-					break;
-				}
-			}
-		}
-
-		// triangle doesn't fit into warp we're currently building - flush
-		if (warp.size() + !found[0] + !found[1] + !found[2] > warp_size || triangles >= triangle_limit)
-		{
-			invocations += warp.size();
-			warp.clear();
-
-			// restart warp from scratch
-			warp.push_back(indices[i + 0]);
-			warp.push_back(indices[i + 1]);
-			warp.push_back(indices[i + 2]);
-			triangles = 1;
-		}
-		else
-		{
-			if (!found[0])
-				warp.push_back(indices[i + 0]);
-			if (!found[1])
-				warp.push_back(indices[i + 1]);
-			if (!found[2])
-				warp.push_back(indices[i + 2]);
-			triangles++;
-		}
-	}
-
-	// last warp
-	invocations += warp.size();
-
-	return invocations;
-}
-
 void setupShaders(ID3D11Device* device, ID3D11DeviceContext* context)
 {
 	// load and compile the two shaders
@@ -299,36 +175,6 @@ void testCache(IDXGIAdapter* adapter)
 	setupShaders(device, context);
 
 	inspectCache([&](const unsigned int* indices, size_t index_count) { return queryVSInvocations(device, context, indices, index_count); });
-
-	unsigned int dib[] = {0, 1, 1, 2, 3, 4, 5, 5, 5};
-
-	printf("// Degenerate IB invocations: %d\n", queryVSInvocations(device, context, dib, sizeof(dib) / sizeof(dib[0])));
-
-	printf("// Reuse boundaries: ");
-
-	unsigned int last = 0;
-
-	for (unsigned int count = 3; count < 1000; count += 3)
-	{
-		std::vector<unsigned int> ib;
-
-		for (unsigned int i = 0; i < count; i += 3)
-		{
-			ib.push_back(0);
-			ib.push_back(1);
-			ib.push_back(2);
-		}
-
-		unsigned int invocations = queryVSInvocations(device, context, ib.data(), ib.size());
-
-		if (invocations != last)
-		{
-			printf("%d, ", count);
-			last = invocations;
-		}
-	}
-
-	printf("\n");
 }
 
 void testCacheSequence(IDXGIAdapter* adapter, int argc, char** argv)
@@ -553,20 +399,23 @@ void testCacheMeshes(IDXGIAdapter* adapter, int argc, char** argv)
 		}
 		else
 		{
-			printf("%s: baseline %f\n", path, double(invocations1) / double(vertex_count));
+			printf("%s: baseline    %f\n", path, double(invocations1) / double(vertex_count));
 
-			for (unsigned int cache_size = 14; cache_size <= 24; ++cache_size)
+			std::vector<unsigned int> ib3(ib1.size());
+			meshopt::optimizeVertexCache(&ib3[0], &ib1[0], ib1.size(), vertex_count, 0);
+
+			unsigned int invocations3 = queryVSInvocations(device, context, ib3.data(), index_count);
+
+			printf("%s: forsyth     %f\n", path, double(invocations3) / double(vertex_count));
+
+			for (unsigned int cache_size = 12; cache_size <= 24; ++cache_size)
 			{
 				std::vector<unsigned int> ib2(ib1.size());
 				meshopt::optimizeVertexCache(&ib2[0], &ib1[0], ib1.size(), vertex_count, cache_size);
 
-				std::vector<unsigned int> ib3(ib1.size());
-				meshopt::optimizeVertexCache(&ib3[0], &ib1[0], ib1.size(), vertex_count, 0);
-
 				unsigned int invocations2 = queryVSInvocations(device, context, ib2.data(), index_count);
-				unsigned int invocations3 = queryVSInvocations(device, context, ib3.data(), index_count);
 
-				printf("%s: %d tipsify %f tomf %f\n", path, cache_size, double(invocations2) / double(vertex_count), double(invocations3) / double(vertex_count));
+				printf("%s: tipsify(%d) %f\n", path, cache_size, double(invocations2) / double(vertex_count));
 			}
 		}
 	}
@@ -575,21 +424,6 @@ void testCacheMeshes(IDXGIAdapter* adapter, int argc, char** argv)
 	{
 		printf("ATVR: average %f cumulative %f; %d vertices\n", atvr_sum / atvr_count, double(total_invocations) / double(total_vertices), total_vertices);
 	}
-}
-
-void modelCacheFIFO(size_t model_cache_size)
-{
-	inspectCache([&](const unsigned int* indices, size_t index_count) { return estimateVSInvocationsFIFO(indices, index_count, model_cache_size); });
-}
-
-void modelCacheLRU(size_t model_cache_size)
-{
-	inspectCache([&](const unsigned int* indices, size_t index_count) { return estimateVSInvocationsLRU(indices, index_count, model_cache_size); });
-}
-
-void modelCacheReuse(size_t model_warp_size, size_t model_fifo_size, size_t model_triangle_limit)
-{
-	inspectCache([&](const unsigned int* indices, size_t index_count) { return estimateVSInvocationsReuse(indices, index_count, model_warp_size, model_fifo_size, model_triangle_limit); });
 }
 
 int main(int argc, char** argv)
@@ -612,7 +446,7 @@ int main(int argc, char** argv)
 		{
 			testCache(adapter);
 		}
-		else if (strcmp(argv[1], "--") == 0)
+		else if (argc > 1 && strcmp(argv[1], "--") == 0)
 		{
 			testCacheSequence(adapter, argc, argv);
 		}
@@ -620,24 +454,6 @@ int main(int argc, char** argv)
 		{
 			testCacheMeshes(adapter, argc, argv);
 		}
-	}
-
-	if (argc == 1)
-	{
-		printf("// Model FIFO 128\n");
-		modelCacheFIFO(128);
-
-		printf("// Model FIFO 16\n");
-		modelCacheFIFO(16);
-
-		printf("// Model LRU 16\n");
-		modelCacheLRU(16);
-
-		printf("// Model Reuse 32\n");
-		modelCacheReuse(32, 32, 32);
-
-		printf("// Model Reuse 32 w/16-entry FIFO\n");
-		modelCacheReuse(32, 16, 32);
 	}
 }
 #endif
