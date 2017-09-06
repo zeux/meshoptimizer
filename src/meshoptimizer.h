@@ -146,8 +146,7 @@ namespace meshopt
  * Assumes reconstruction function (q / (2^N-1)), which is the case for fixed-function normalized fixed point conversion
  * Maximum reconstruction error: 1/2^(N+1)
  */
-template <int N>
-inline int quantizeUnorm(float v);
+inline int quantizeUnorm(float v, int N);
 
 /**
  * Quantize a float in [-1..1] range into an N-bit fixed point snorm value
@@ -155,8 +154,7 @@ inline int quantizeUnorm(float v);
  * Maximum reconstruction error: 1/2^N
  * Warning: OpenGL fixed function reconstruction function can't represent 0 exactly; when using OpenGL, use this function and have the shader reconstruct by dividing by 2^(N-1)-1.
  */
-template <int N>
-inline int quantizeSnorm(float v);
+inline int quantizeSnorm(float v, int N);
 
 /**
  * Quantize a float into half-precision floating point value
@@ -326,8 +324,7 @@ inline VertexFetchStatistics analyzeVertexFetch(const T* indices, size_t index_c
 namespace meshopt
 {
 
-template <int N>
-inline int quantizeUnorm(float v)
+inline int quantizeUnorm(float v, int N)
 {
 	const float scale = float((1 << N) - 1);
 
@@ -337,8 +334,7 @@ inline int quantizeUnorm(float v)
 	return int(v * scale + 0.5f);
 }
 
-template <int N>
-inline int quantizeSnorm(float v)
+inline int quantizeSnorm(float v, int N)
 {
 	const float scale = float((1 << (N - 1)) - 1);
 

@@ -82,9 +82,9 @@ The number of combinations here is too large but this library does provide the b
 
 ```c++
 unsigned int normal =
-	(meshopt::quantizeUnorm<10>(v.nx) << 20) |
-	(meshopt::quantizeUnorm<10>(v.ny) << 10) |
-	 meshopt::quantizeUnorm<10>(v.nz);
+	(meshopt::quantizeUnorm(v.nx, 10) << 20) |
+	(meshopt::quantizeUnorm(v.ny, 10) << 10) |
+	 meshopt::quantizeUnorm(v.nz, 10);
 ```
 
 and here's how you can quantize a position:
