@@ -1,6 +1,7 @@
 #include "../src/meshoptimizer.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -273,6 +274,31 @@ void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
 	printf("%-9s: ACMR %f ATVR %f (LRU %f) Overfetch %f Overdraw %f in %.2f msec\n", name, vcs.acmr, vcs.atvr, vc0s.atvr, vfs.overfetch, os.overdraw, double(end - start) / CLOCKS_PER_SEC * 1000);
 }
 
+void encodeIndex(const Mesh& mesh)
+{
+	clock_t start = clock();
+
+	std::vector<uint8_t> buffer(meshopt_encodeIndexBufferBound(mesh.indices.size(), mesh.vertices.size()));
+	buffer.resize(meshopt_encodeIndexBuffer(&buffer[0], buffer.size(), &mesh.indices[0], mesh.indices.size()));
+
+	clock_t middle = clock();
+
+	std::vector<uint32_t> result(mesh.indices.size());
+	meshopt_decodeIndexBuffer(&result[0], mesh.indices.size(), &buffer[0], buffer.size());
+
+	clock_t end = clock();
+
+	for (size_t i = 0; i < mesh.indices.size(); i += 3)
+	{
+		assert(
+			(result[i+0] == mesh.indices[i+0] && result[i+1] == mesh.indices[i+1] && result[i+2] == mesh.indices[i+2]) ||
+			(result[i+1] == mesh.indices[i+0] && result[i+2] == mesh.indices[i+1] && result[i+0] == mesh.indices[i+2]) ||
+			(result[i+2] == mesh.indices[i+0] && result[i+0] == mesh.indices[i+1] && result[i+1] == mesh.indices[i+2]));
+	}
+
+	printf("Index encode: %.1f bits/triangle; encode %.2f msec, decode %.2f msec\n", double(buffer.size() * 8) / double(mesh.indices.size() / 3), double(middle - start) / CLOCKS_PER_SEC * 1000, double(end - middle) / CLOCKS_PER_SEC * 1000);
+}
+
 void process(const char* path)
 {
 	Mesh mesh;
@@ -309,6 +335,11 @@ void process(const char* path)
 
 	// note: the ATVR/overdraw output from this pass is not necessarily correct since we analyze all LODs at once
 	optimize(mesh, "Simplify", optCompleteSimplify);
+
+	Mesh copy = mesh;
+	optComplete(copy);
+
+	encodeIndex(copy);
 }
 
 int main(int argc, char** argv)
