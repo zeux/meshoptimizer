@@ -74,17 +74,10 @@ MESHOPTIMIZER_API void meshopt_optimizeOverdraw(unsigned int* destination, const
  * Vertex fetch cache optimizer
  * Reorders vertices and changes indices to reduce the amount of GPU memory fetches during vertex processing
  *
- * desination must contain enough space for the resulting vertex buffer (vertex_count elements)
+ * destination must contain enough space for the resulting vertex buffer (vertex_count elements)
  * indices is used both as an input and as an output index buffer
  */
 MESHOPTIMIZER_API size_t meshopt_optimizeVertexFetch(void* destination, unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size);
-
-struct VertexCacheStatistics
-{
-	unsigned int vertices_transformed;
-	float acmr; /* transformed vertices / triangle count; best case 0.5, worst case 3.0, optimum depends on topology */
-	float atvr; /* transformed vertices / vertex count; best case 1.0, worse case 6.0, optimum is 1.0 (each vertex is transformed once) */
-};
 
 /**
  * Mesh simplifier
@@ -95,6 +88,13 @@ struct VertexCacheStatistics
  * vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
  */
 MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count);
+
+struct VertexCacheStatistics
+{
+	unsigned int vertices_transformed;
+	float acmr; /* transformed vertices / triangle count; best case 0.5, worst case 3.0, optimum depends on topology */
+	float atvr; /* transformed vertices / vertex count; best case 1.0, worse case 6.0, optimum is 1.0 (each vertex is transformed once) */
+};
 
 /**
  * Vertex transform cache analyzer
