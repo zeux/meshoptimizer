@@ -291,9 +291,9 @@ void encodeIndex(const Mesh& mesh)
 	for (size_t i = 0; i < mesh.indices.size(); i += 3)
 	{
 		assert(
-			(result[i+0] == mesh.indices[i+0] && result[i+1] == mesh.indices[i+1] && result[i+2] == mesh.indices[i+2]) ||
-			(result[i+1] == mesh.indices[i+0] && result[i+2] == mesh.indices[i+1] && result[i+0] == mesh.indices[i+2]) ||
-			(result[i+2] == mesh.indices[i+0] && result[i+0] == mesh.indices[i+1] && result[i+1] == mesh.indices[i+2]));
+		    (result[i + 0] == mesh.indices[i + 0] && result[i + 1] == mesh.indices[i + 1] && result[i + 2] == mesh.indices[i + 2]) ||
+		    (result[i + 1] == mesh.indices[i + 0] && result[i + 2] == mesh.indices[i + 1] && result[i + 0] == mesh.indices[i + 2]) ||
+		    (result[i + 2] == mesh.indices[i + 0] && result[i + 0] == mesh.indices[i + 1] && result[i + 1] == mesh.indices[i + 2]));
 	}
 
 	printf("Index encode: %.1f bits/triangle; encode %.2f msec, decode %.2f msec\n", double(buffer.size() * 8) / double(mesh.indices.size() / 3), double(middle - start) / CLOCKS_PER_SEC * 1000, double(end - middle) / CLOCKS_PER_SEC * 1000);

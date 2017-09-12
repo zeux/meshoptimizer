@@ -8,87 +8,87 @@
 // Conor Stokes. Vertex Cache Optimised Index Buffer Compression. 2014
 namespace meshopt
 {
-	typedef unsigned int VertexFifo[16];
-	typedef unsigned int EdgeFifo[16][2];
 
-	static const unsigned int kTriangleIndexOrder[3][3] =
+typedef unsigned int VertexFifo[16];
+typedef unsigned int EdgeFifo[16][2];
+
+static const unsigned int kTriangleIndexOrder[3][3] =
+    {
+        // clang-format array formatting is broken :/
+        {0, 1, 2},
+        {1, 2, 0},
+        {2, 0, 1},
+};
+
+static int getEdgeFifo(EdgeFifo fifo, unsigned int a, unsigned int b, unsigned int c, size_t offset)
+{
+	for (int i = 0; i < 16; ++i)
 	{
-		{ 0, 1, 2 },
-		{ 1, 2, 0 },
-		{ 2, 0, 1 },
-	};
+		unsigned int index = (offset - 1 - i) & 15;
+		unsigned int e0 = fifo[index][0];
+		unsigned int e1 = fifo[index][1];
 
-	static int getEdgeFifo(EdgeFifo fifo, unsigned int a, unsigned int b, unsigned int c, size_t offset)
-	{
-		for (int i = 0; i < 16; ++i)
-		{
-			unsigned int index = (offset - 1 - i) & 15;
-			unsigned int e0 = fifo[index][0];
-			unsigned int e1 = fifo[index][1];
-
-			if (e0 == a && e1 == b)
-				return (i << 2) | 0;
-			if (e0 == b && e1 == c)
-				return (i << 2) | 1;
-			if (e0 == c && e1 == a)
-				return (i << 2) | 2;
-		}
-
-		return -1;
+		if (e0 == a && e1 == b)
+			return (i << 2) | 0;
+		if (e0 == b && e1 == c)
+			return (i << 2) | 1;
+		if (e0 == c && e1 == a)
+			return (i << 2) | 2;
 	}
 
-	static void pushEdgeFifo(EdgeFifo fifo, unsigned int a, unsigned int b, size_t& offset)
+	return -1;
+}
+
+static void pushEdgeFifo(EdgeFifo fifo, unsigned int a, unsigned int b, size_t& offset)
+{
+	fifo[offset][0] = a;
+	fifo[offset][1] = b;
+	offset = (offset + 1) & 15;
+}
+
+static int getVertexFifo(VertexFifo fifo, unsigned int v, size_t offset)
+{
+	for (int i = 0; i < 16; ++i)
 	{
-		fifo[offset][0] = a;
-		fifo[offset][1] = b;
-		offset = (offset + 1) & 15;
+		unsigned int index = (offset - 1 - i) & 15;
+
+		if (fifo[index] == v)
+			return i;
 	}
 
-	static int getVertexFifo(VertexFifo fifo, unsigned int v, size_t offset)
+	return -1;
+}
+
+static void pushVertexFifo(VertexFifo fifo, unsigned int v, size_t& offset)
+{
+	fifo[offset] = v;
+	offset = (offset + 1) & 15;
+}
+
+static void encodeVarInt(unsigned char*& data, unsigned int v)
+{
+	do
 	{
-		for (int i = 0; i < 16; ++i)
-		{
-			unsigned int index = (offset - 1 - i) & 15;
+		*data++ = (v & 127) | (v > 127 ? 128 : 0);
+		v >>= 7;
+	} while (v);
+}
 
-			if (fifo[index] == v)
-				return i;
-		}
+static unsigned int decodeVarInt(const unsigned char*& data)
+{
+	unsigned int result = 0;
+	unsigned int shift = 0;
+	unsigned char group;
 
-		return -1;
-	}
-
-	static void pushVertexFifo(VertexFifo fifo, unsigned int v, size_t& offset)
+	do
 	{
-		fifo[offset] = v;
-		offset = (offset + 1) & 15;
-	}
+		group = *data++;
+		result |= (group & 127) << shift;
+		shift += 7;
+	} while (group & 128);
 
-	static void encodeVarInt(unsigned char*& data, unsigned int v)
-	{
-		do
-		{
-			*data++ = (v & 127) | (v > 127 ? 128 : 0);
-			v >>= 7;
-		}
-		while (v);
-	}
-
-	static unsigned int decodeVarInt(const unsigned char*& data)
-	{
-		unsigned int result = 0;
-		unsigned int shift = 0;
-		unsigned char group;
-
-		do
-		{
-			group = *data++;
-			result |= (group & 127) << shift;
-			shift += 7;
-		}
-		while (group & 128);
-
-		return result;
-	}
+	return result;
+}
 }
 
 size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, const unsigned int* indices, size_t index_count)
