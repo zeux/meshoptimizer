@@ -85,6 +85,7 @@ MESHOPTIMIZER_API size_t meshopt_optimizeVertexFetch(void* destination, unsigned
 /**
  * Experimental: Index buffer encoder
  * Encodes index data into an array of bytes that is generally much smaller (<1.5 bytes/triangle) and compresses better (<1 bytes/triangle) compared to original.
+ * For maximum efficiency the index buffer being encoded has to be optimized for vertex cache and vertex fetch first.
  *
  * buffer must contain enough space for the encoded index buffer (use meshopt_encodeIndexBufferBound to estimate)
  */
