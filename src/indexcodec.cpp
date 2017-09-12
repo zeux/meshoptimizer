@@ -176,6 +176,7 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 	}
 
 	assert(data <= buffer + buffer_size);
+	(void)buffer_size;
 
 	return data - buffer;
 }
@@ -187,7 +188,7 @@ size_t meshopt_encodeIndexBufferBound(size_t index_count, size_t vertex_count)
 	// compute number of bits required for each index
 	unsigned int vertex_bits = 1;
 
-	while (vertex_bits < 32 && vertex_count > (1 << vertex_bits))
+	while (vertex_bits < 32 && vertex_count > (1u << vertex_bits))
 		vertex_bits++;
 
 	// worst-case encoding is 2 header bytes + 3 varint-7 encoded indices
@@ -282,4 +283,5 @@ void meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, co
 	}
 
 	assert(data == buffer + buffer_size);
+	(void)buffer_size;
 }
