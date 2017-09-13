@@ -303,6 +303,27 @@ inline size_t optimizeVertexFetch(void* destination, T* indices, size_t index_co
 }
 
 template <typename T>
+inline size_t encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, const T* indices, size_t index_count)
+{
+	IndexAdapter<T> in(0, indices, index_count);
+
+	return meshopt_encodeIndexBuffer(buffer, buffer_size, in.data, index_count);
+}
+
+inline size_t encodeIndexBufferBound(size_t index_count, size_t vertex_count)
+{
+	return meshopt_encodeIndexBufferBound(index_count, vertex_count);
+}
+
+template <typename T>
+inline void decodeIndexBuffer(T* destination, size_t index_count, const unsigned char* buffer, size_t buffer_size)
+{
+	IndexAdapter<T> out(destination, 0, index_count);
+
+	meshopt_decodeIndexBuffer(out.data, index_count, buffer, buffer_size);
+}
+
+template <typename T>
 inline size_t simplify(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count)
 {
 	IndexAdapter<T> in(0, indices, index_count);

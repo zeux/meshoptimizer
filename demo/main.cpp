@@ -278,13 +278,13 @@ void encodeIndex(const Mesh& mesh)
 {
 	clock_t start = clock();
 
-	std::vector<uint8_t> buffer(meshopt_encodeIndexBufferBound(mesh.indices.size(), mesh.vertices.size()));
-	buffer.resize(meshopt_encodeIndexBuffer(&buffer[0], buffer.size(), &mesh.indices[0], mesh.indices.size()));
+	std::vector<uint8_t> buffer(meshopt::encodeIndexBufferBound(mesh.indices.size(), mesh.vertices.size()));
+	buffer.resize(meshopt::encodeIndexBuffer(&buffer[0], buffer.size(), &mesh.indices[0], mesh.indices.size()));
 
 	clock_t middle = clock();
 
 	std::vector<uint32_t> result(mesh.indices.size());
-	meshopt_decodeIndexBuffer(&result[0], mesh.indices.size(), &buffer[0], buffer.size());
+	meshopt::decodeIndexBuffer(&result[0], mesh.indices.size(), &buffer[0], buffer.size());
 
 	clock_t end = clock();
 
