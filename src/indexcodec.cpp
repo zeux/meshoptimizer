@@ -125,7 +125,7 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 
 			int fec = (fc >= 0 && fc < 14) ? (fc + 1) : (c == next) ? (next++, 0) : 15;
 
-			*data++ = fe | (fec << 4);
+			*data++ = static_cast<unsigned char>(fe | (fec << 4));
 
 			if (fec == 15)
 				encodeVarInt(data, next - c);
@@ -148,8 +148,8 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 			int feb = (fb >= 0 && fb < 14) ? (fb + 1) : (b == next) ? (next++, 0) : 15;
 			int fec = (fc >= 0 && fc < 14) ? (fc + 1) : (c == next) ? (next++, 0) : 15;
 
-			*data++ = (fea << 4) | 15;
-			*data++ = (feb << 4) | fec;
+			*data++ = static_cast<unsigned char>((fea << 4) | 15);
+			*data++ = static_cast<unsigned char>((feb << 4) | fec);
 
 			if (fea == 15)
 				encodeVarInt(data, next - a);
@@ -188,7 +188,7 @@ size_t meshopt_encodeIndexBufferBound(size_t index_count, size_t vertex_count)
 	// compute number of bits required for each index
 	unsigned int vertex_bits = 1;
 
-	while (vertex_bits < 32 && vertex_count > (1u << vertex_bits))
+	while (vertex_bits < 32 && vertex_count > size_t(1) << vertex_bits)
 		vertex_bits++;
 
 	// worst-case encoding is 2 header bytes + 3 varint-7 encoded indices
