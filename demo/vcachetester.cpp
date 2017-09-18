@@ -272,16 +272,33 @@ void testCacheSequence(IDXGIAdapter* adapter, int argc, char** argv)
 		ib[i + 2] = c;
 		unsigned int invc = queryVSInvocations(device, context, ib.data(), i + 3);
 
-		if (inva < inv0 || invb < inva || invc < invb || inv1 < invc)
-		{
-			printf("desync at %d\n", int(i));
-			break;
-		}
+		assert(inv0 <= inva);
+		assert(inva <= invb);
+		assert(invb <= invc);
+		assert(invc <= inv1);
 
-		xformed[i + 0] = inva == inv0 + 1;
-		xformed[i + 1] = invb == inva + 1;
-		xformed[i + 2] = invc == invb + 1;
+		assert(inv0 + 3 >= inv1);
+
+		// some HW does a cache flush if the entire triangle doesn't fit
+		// in this case we can't rely on only inva/invb/invc
+		if (inv0 + 3 == inv1)
+		{
+			xformed[i + 0] = true;
+			xformed[i + 1] = true;
+			xformed[i + 2] = true;
+		}
+		else
+		{
+			xformed[i + 0] = inva == inv0 + 1;
+			xformed[i + 1] = invb == inva + 1;
+			xformed[i + 2] = invc == invb + 1;
+		}
 	}
+
+	unsigned int xformed_total = 0;
+
+	for (size_t i = 0; i < ib.size(); ++i)
+		xformed_total += xformed[i];
 
 	printf("// Sequence:");
 
@@ -329,7 +346,11 @@ void testCacheSequence(IDXGIAdapter* adapter, int argc, char** argv)
 
 	printf(" (%d)\n", int(cached.size()));
 
-	printf("// Invocations: %d\n", queryVSInvocations(device, context, ib.data(), ib.size()));
+	unsigned int invocations = queryVSInvocations(device, context, ib.data(), ib.size());
+
+	printf("// Invocations: %d\n", invocations);
+
+	assert(xformed_total == invocations);
 }
 
 void testCacheMeshes(IDXGIAdapter* adapter, int argc, char** argv)
