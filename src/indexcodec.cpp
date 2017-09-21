@@ -132,7 +132,7 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 
 			int fec = (fc >= 0 && fc < 14) ? (fc + 1) : (c == next) ? (next++, 0) : 15;
 
-			*data++ = static_cast<unsigned char>(fe | (fec << 4));
+			*data++ = static_cast<unsigned char>((fe << 4) | fec);
 
 			if (fec == 15)
 				encodeVarInt(data, next - c);
@@ -157,7 +157,7 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 			int feb = (fb >= 0 && fb < 14) ? (fb + 1) : (b == next) ? (next++, 0) : 15;
 			int fec = (fc >= 0 && fc < 14) ? (fc + 1) : (c == next) ? (next++, 0) : 15;
 
-			*data++ = static_cast<unsigned char>((fea << 4) | 15);
+			*data++ = static_cast<unsigned char>((15 << 4) | fea);
 			*data++ = static_cast<unsigned char>((feb << 4) | fec);
 
 			if (fea == 15)
@@ -229,14 +229,14 @@ void meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, co
 	{
 		unsigned char code = *data++;
 
-		int fe = code & 15;
+		int fe = code >> 4;
 
 		if (fe < 15)
 		{
 			unsigned int a = edgefifo[(edgefifooffset - 1 - fe) & 15][0];
 			unsigned int b = edgefifo[(edgefifooffset - 1 - fe) & 15][1];
 
-			int fec = code >> 4;
+			int fec = code & 15;
 
 			unsigned int c = (fec == 0) ? next++ : (fec < 15) ? vertexfifo[(vertexfifooffset - fec) & 15] : next - decodeVarInt(data);
 
@@ -252,7 +252,7 @@ void meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, co
 		}
 		else
 		{
-			int fea = code >> 4;
+			int fea = code & 15;
 
 			unsigned char codeaux = *data++;
 
