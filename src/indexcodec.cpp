@@ -20,6 +20,13 @@ static const unsigned int kTriangleIndexOrder[3][3] =
         {2, 0, 1},
 };
 
+static int rotateTriangle(unsigned int a, unsigned int b, unsigned int c, unsigned int next)
+{
+	(void)a;
+
+	return (b == next) ? 1 : (c == next) ? 2 : 0;
+}
+
 static int getEdgeFifo(EdgeFifo fifo, unsigned int a, unsigned int b, unsigned int c, size_t offset)
 {
 	for (int i = 0; i < 16; ++i)
@@ -138,7 +145,9 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 		}
 		else
 		{
-			unsigned int a = indices[i + 0], b = indices[i + 1], c = indices[i + 2];
+			const unsigned int* order = kTriangleIndexOrder[rotateTriangle(indices[i + 0], indices[i + 1], indices[i + 2], next)];
+
+			unsigned int a = indices[i + order[0]], b = indices[i + order[1]], c = indices[i + order[2]];
 
 			int fa = getVertexFifo(vertexfifo, a, vertexfifooffset);
 			int fb = getVertexFifo(vertexfifo, b, vertexfifooffset);
