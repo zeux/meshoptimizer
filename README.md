@@ -2,7 +2,20 @@
 
 ## Purpose
 
-When GPU renders triangle meshes, various stages of the GPU pipeline have to process vertex and index data. The efficiency of these stages depends on the data you feed to them; this library provides algorithms to help optimize meshes for these stages.
+When GPU renders triangle meshes, various stages of the GPU pipeline have to process vertex and index data. The efficiency of these stages depends on the data you feed to them; this library provides algorithms to help optimize meshes for these stages, as well as algorithms to reduce the mesh complexity and storage overhead.
+
+The library provides a C and C++ interface for all algorithms; you can use it from C/C++ or from other languages via FFI (such as P/Invoke).
+
+## Building
+
+meshoptimizer is distributed as a set of C++ source files. To include it into your project, you can use one of the two options:
+
+* Use CMake to build the library (either as a standalone project or as part of your project)
+* Add source files to your project's build system
+
+The source files are organized in such a way that you don't need to change your build-system settings, and you only need to add the files for the algorithms you use.
+
+## Pipeline
 
 When optimizing a mesh, you should typically feed it through a set of optimizations (the order is important!):
 
