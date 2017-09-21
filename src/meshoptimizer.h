@@ -108,7 +108,7 @@ MESHOPTIMIZER_API void meshopt_decodeIndexBuffer(unsigned int* destination, size
  */
 MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count);
 
-struct VertexCacheStatistics
+struct meshopt_VertexCacheStatistics
 {
 	unsigned int vertices_transformed;
 	float acmr; /* transformed vertices / triangle count; best case 0.5, worst case 3.0, optimum depends on topology */
@@ -120,9 +120,9 @@ struct VertexCacheStatistics
  * Returns cache hit statistics using a simplified FIFO model
  * Results will not match actual GPU performance
  */
-MESHOPTIMIZER_API struct VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size);
+MESHOPTIMIZER_API struct meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size);
 
-struct OverdrawStatistics
+struct meshopt_OverdrawStatistics
 {
 	unsigned int pixels_covered;
 	unsigned int pixels_shaded;
@@ -136,9 +136,9 @@ struct OverdrawStatistics
  *
  * vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
  */
-MESHOPTIMIZER_API struct OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
+MESHOPTIMIZER_API struct meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 
-struct VertexFetchStatistics
+struct meshopt_VertexFetchStatistics
 {
 	unsigned int bytes_fetched;
 	float overfetch; /* fetched bytes / vertex buffer size; best case 1.0 (each byte is fetched once) */
@@ -149,7 +149,7 @@ struct VertexFetchStatistics
  * Returns cache hit statistics using a simplified direct mapped model
  * Results will not match actual GPU performance
  */
-MESHOPTIMIZER_API struct VertexFetchStatistics meshopt_analyzeVertexFetch(const unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
+MESHOPTIMIZER_API struct meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -333,7 +333,7 @@ inline size_t simplify(T* destination, const T* indices, size_t index_count, con
 }
 
 template <typename T>
-inline VertexCacheStatistics analyzeVertexCache(const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = MESHOPTIMIZER_DEFAULT_VCACHE_SIZE)
+inline meshopt_VertexCacheStatistics analyzeVertexCache(const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = MESHOPTIMIZER_DEFAULT_VCACHE_SIZE)
 {
 	IndexAdapter<T> in(0, indices, index_count);
 
@@ -341,7 +341,7 @@ inline VertexCacheStatistics analyzeVertexCache(const T* indices, size_t index_c
 }
 
 template <typename T>
-inline OverdrawStatistics analyzeOverdraw(const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+inline meshopt_OverdrawStatistics analyzeOverdraw(const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	IndexAdapter<T> in(0, indices, index_count);
 
@@ -349,7 +349,7 @@ inline OverdrawStatistics analyzeOverdraw(const T* indices, size_t index_count, 
 }
 
 template <typename T>
-inline VertexFetchStatistics analyzeVertexFetch(const T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+inline meshopt_VertexFetchStatistics analyzeVertexFetch(const T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
 	IndexAdapter<T> in(0, indices, index_count);
 

@@ -7,12 +7,12 @@
 namespace meshopt
 {
 
-static VertexCacheStatistics analyzeVertexCacheFIFO(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+static meshopt_VertexCacheStatistics analyzeVertexCacheFIFO(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
 	assert(index_count % 3 == 0);
 	assert(cache_size >= 3);
 
-	VertexCacheStatistics result = {};
+	meshopt_VertexCacheStatistics result = {};
 
 	std::vector<unsigned int> cache_timestamps(vertex_count, 0);
 	unsigned int timestamp = cache_size + 1;
@@ -36,12 +36,12 @@ static VertexCacheStatistics analyzeVertexCacheFIFO(const unsigned int* indices,
 	return result;
 }
 
-static VertexCacheStatistics analyzeVertexCacheLRU(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+static meshopt_VertexCacheStatistics analyzeVertexCacheLRU(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
 	assert(index_count % 3 == 0);
 	assert(cache_size >= 3);
 
-	VertexCacheStatistics result = {};
+	meshopt_VertexCacheStatistics result = {};
 
 	std::vector<unsigned int> cache_storage(2 * (cache_size + 1));
 	unsigned int* cache = &cache_storage[0];
@@ -83,7 +83,7 @@ static VertexCacheStatistics analyzeVertexCacheLRU(const unsigned int* indices, 
 
 } // namespace meshopt
 
-VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
 	using namespace meshopt;
 

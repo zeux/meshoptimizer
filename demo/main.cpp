@@ -266,10 +266,10 @@ void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
 	optf(copy);
 	clock_t end = clock();
 
-	VertexCacheStatistics vcs = analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), kCacheSize);
-	VertexCacheStatistics vc0s = analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), 0);
-	VertexFetchStatistics vfs = analyzeVertexFetch(&copy.indices[0], copy.indices.size(), copy.vertices.size(), sizeof(Vertex));
-	OverdrawStatistics os = analyzeOverdraw(&copy.indices[0], copy.indices.size(), &copy.vertices[0].px, copy.vertices.size(), sizeof(Vertex));
+	meshopt_VertexCacheStatistics vcs = analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), kCacheSize);
+	meshopt_VertexCacheStatistics vc0s = analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), 0);
+	meshopt_VertexFetchStatistics vfs = analyzeVertexFetch(&copy.indices[0], copy.indices.size(), copy.vertices.size(), sizeof(Vertex));
+	meshopt_OverdrawStatistics os = analyzeOverdraw(&copy.indices[0], copy.indices.size(), &copy.vertices[0].px, copy.vertices.size(), sizeof(Vertex));
 
 	printf("%-9s: ACMR %f ATVR %f (LRU %f) Overfetch %f Overdraw %f in %.2f msec\n", name, vcs.acmr, vcs.atvr, vc0s.atvr, vfs.overfetch, os.overdraw, double(end - start) / CLOCKS_PER_SEC * 1000);
 }
