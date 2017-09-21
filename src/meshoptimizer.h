@@ -241,16 +241,9 @@ struct IndexAdapter<T, true>
 template <typename T>
 inline size_t generateVertexRemap(unsigned int* destination, const T* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)
 {
-	if (indices)
-	{
-		IndexAdapter<T> in(0, indices, index_count);
+	IndexAdapter<T> in(0, indices, indices ? index_count : 0);
 
-		return meshopt_generateVertexRemap(destination, in.data, index_count, vertices, vertex_count, vertex_size);
-	}
-	else
-	{
-		return meshopt_generateVertexRemap(destination, 0, index_count, vertices, vertex_count, vertex_size);
-	}
+	return meshopt_generateVertexRemap(destination, indices ? in.data : 0, index_count, vertices, vertex_count, vertex_size);
 }
 
 inline void remapVertexBuffer(void* destination, const void* vertices, size_t vertex_count, size_t vertex_size, const unsigned int* remap)
@@ -261,19 +254,10 @@ inline void remapVertexBuffer(void* destination, const void* vertices, size_t ve
 template <typename T>
 inline void remapIndexBuffer(T* destination, const T* indices, size_t index_count, const unsigned int* remap)
 {
-	if (indices)
-	{
-		IndexAdapter<T> in(0, indices, index_count);
-		IndexAdapter<T> out(destination, 0, index_count);
+	IndexAdapter<T> in(0, indices, indices ? index_count : 0);
+	IndexAdapter<T> out(destination, 0, index_count);
 
-		meshopt_remapIndexBuffer(out.data, in.data, index_count, remap);
-	}
-	else
-	{
-		IndexAdapter<T> out(destination, 0, index_count);
-
-		meshopt_remapIndexBuffer(out.data, 0, index_count, remap);
-	}
+	meshopt_remapIndexBuffer(out.data, indices ? in.data : 0, index_count, remap);
 }
 
 template <typename T>
