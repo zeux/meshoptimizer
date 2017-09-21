@@ -9,8 +9,6 @@
 
 #include "objparser.h"
 
-using namespace meshopt;
-
 const size_t kCacheSize = 24;
 
 struct Vertex
@@ -108,13 +106,13 @@ Mesh parseObj(const char* path, clock_t& reindex)
 
 	std::vector<unsigned int> remap(total_indices);
 
-	size_t total_vertices = generateVertexRemap(&remap[0], static_cast<unsigned int*>(0), total_indices, &vertices[0], total_indices, sizeof(Vertex));
+	size_t total_vertices = meshopt_generateVertexRemap(&remap[0], NULL, total_indices, &vertices[0], total_indices, sizeof(Vertex));
 
 	result.indices.resize(total_indices);
-	remapIndexBuffer(&result.indices[0], static_cast<unsigned int*>(0), total_indices, &remap[0]);
+	meshopt_remapIndexBuffer(&result.indices[0], NULL, total_indices, &remap[0]);
 
 	result.vertices.resize(total_vertices);
-	remapVertexBuffer(&result.vertices[0], &vertices[0], total_indices, sizeof(Vertex), &remap[0]);
+	meshopt_remapVertexBuffer(&result.vertices[0], &vertices[0], total_indices, sizeof(Vertex), &remap[0]);
 
 	return result;
 }
@@ -147,12 +145,12 @@ void optRandomShuffle(Mesh& mesh)
 
 void optCache(Mesh& mesh)
 {
-	optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize);
+	meshopt_optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize);
 }
 
 void optCache0(Mesh& mesh)
 {
-	optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), 0);
+	meshopt_optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), 0);
 }
 
 void optOverdraw(Mesh& mesh)
@@ -160,25 +158,25 @@ void optOverdraw(Mesh& mesh)
 	// use worst-case ACMR threshold so that overdraw optimizer can sort *all* triangles
 	// warning: this significantly deteriorates the vertex cache efficiency so it is not advised; look at optComplete for the recommended method
 	const float kThreshold = 3.f;
-	optimizeOverdraw(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), kCacheSize, kThreshold);
+	meshopt_optimizeOverdraw(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), kCacheSize, kThreshold);
 }
 
 void optFetch(Mesh& mesh)
 {
-	optimizeVertexFetch(&mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
+	meshopt_optimizeVertexFetch(&mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
 }
 
 void optComplete(Mesh& mesh)
 {
 	// vertex cache optimization should go first as it provides data for overdraw
-	optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize);
+	meshopt_optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize);
 
 	// reorder indices for overdraw, balancing overdraw and vertex cache efficiency
 	const float kThreshold = 1.05f; // allow up to 5% worse ACMR to get more reordering opportunities for overdraw
-	optimizeOverdraw(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), kCacheSize, kThreshold);
+	meshopt_optimizeOverdraw(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), kCacheSize, kThreshold);
 
 	// vertex fetch optimization should go last as it depends on the final index order
-	optimizeVertexFetch(&mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
+	meshopt_optimizeVertexFetch(&mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
 }
 
 void optCompleteSimplify(Mesh& mesh)
@@ -204,7 +202,7 @@ void optCompleteSimplify(Mesh& mesh)
 		const std::vector<unsigned int>& source = lods[i - 1];
 
 		lod.resize(source.size());
-		lod.resize(simplify(&lod[0], &source[0], source.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count));
+		lod.resize(meshopt_simplify(&lod[0], &source[0], source.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count));
 	}
 
 	// optimize each individual LOD for vertex cache & overdraw
@@ -212,8 +210,8 @@ void optCompleteSimplify(Mesh& mesh)
 	{
 		std::vector<unsigned int>& lod = lods[i];
 
-		optimizeVertexCache(&lod[0], &lod[0], lod.size(), mesh.vertices.size(), kCacheSize);
-		optimizeOverdraw(&lod[0], &lod[0], lod.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), kCacheSize, 1.0f);
+		meshopt_optimizeVertexCache(&lod[0], &lod[0], lod.size(), mesh.vertices.size(), kCacheSize);
+		meshopt_optimizeOverdraw(&lod[0], &lod[0], lod.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), kCacheSize, 1.0f);
 	}
 
 	// concatenate all LODs into one IB
@@ -242,7 +240,7 @@ void optCompleteSimplify(Mesh& mesh)
 
 	// vertex fetch optimization should go last as it depends on the final index order
 	// note that the order of LODs above affects vertex fetch results
-	optimizeVertexFetch(&mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
+	meshopt_optimizeVertexFetch(&mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
 
 	printf("%-9s:", "Simplify");
 
@@ -266,10 +264,10 @@ void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
 	optf(copy);
 	clock_t end = clock();
 
-	meshopt_VertexCacheStatistics vcs = analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), kCacheSize);
-	meshopt_VertexCacheStatistics vc0s = analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), 0);
-	meshopt_VertexFetchStatistics vfs = analyzeVertexFetch(&copy.indices[0], copy.indices.size(), copy.vertices.size(), sizeof(Vertex));
-	meshopt_OverdrawStatistics os = analyzeOverdraw(&copy.indices[0], copy.indices.size(), &copy.vertices[0].px, copy.vertices.size(), sizeof(Vertex));
+	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), kCacheSize);
+	meshopt_VertexCacheStatistics vc0s = meshopt_analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), 0);
+	meshopt_VertexFetchStatistics vfs = meshopt_analyzeVertexFetch(&copy.indices[0], copy.indices.size(), copy.vertices.size(), sizeof(Vertex));
+	meshopt_OverdrawStatistics os = meshopt_analyzeOverdraw(&copy.indices[0], copy.indices.size(), &copy.vertices[0].px, copy.vertices.size(), sizeof(Vertex));
 
 	printf("%-9s: ACMR %f ATVR %f (LRU %f) Overfetch %f Overdraw %f in %.2f msec\n", name, vcs.acmr, vcs.atvr, vc0s.atvr, vfs.overfetch, os.overdraw, double(end - start) / CLOCKS_PER_SEC * 1000);
 }
@@ -278,13 +276,13 @@ void encodeIndex(const Mesh& mesh)
 {
 	clock_t start = clock();
 
-	std::vector<uint8_t> buffer(meshopt::encodeIndexBufferBound(mesh.indices.size(), mesh.vertices.size()));
-	buffer.resize(meshopt::encodeIndexBuffer(&buffer[0], buffer.size(), &mesh.indices[0], mesh.indices.size()));
+	std::vector<uint8_t> buffer(meshopt_encodeIndexBufferBound(mesh.indices.size(), mesh.vertices.size()));
+	buffer.resize(meshopt_encodeIndexBuffer(&buffer[0], buffer.size(), &mesh.indices[0], mesh.indices.size()));
 
 	clock_t middle = clock();
 
 	std::vector<uint32_t> result(mesh.indices.size());
-	meshopt::decodeIndexBuffer(&result[0], mesh.indices.size(), &buffer[0], buffer.size());
+	meshopt_decodeIndexBuffer(&result[0], mesh.indices.size(), &buffer[0], buffer.size());
 
 	clock_t end = clock();
 

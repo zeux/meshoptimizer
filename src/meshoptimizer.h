@@ -157,15 +157,12 @@ MESHOPTIMIZER_API struct meshopt_VertexFetchStatistics meshopt_analyzeVertexFetc
 
 /* Quantization into commonly supported data formats */
 #ifdef __cplusplus
-namespace meshopt
-{
-
 /**
  * Quantize a float in [0..1] range into an N-bit fixed point unorm value
  * Assumes reconstruction function (q / (2^N-1)), which is the case for fixed-function normalized fixed point conversion
  * Maximum reconstruction error: 1/2^(N+1)
  */
-inline int quantizeUnorm(float v, int N);
+inline int meshopt_quantizeUnorm(float v, int N);
 
 /**
  * Quantize a float in [-1..1] range into an N-bit fixed point snorm value
@@ -173,7 +170,7 @@ inline int quantizeUnorm(float v, int N);
  * Maximum reconstruction error: 1/2^N
  * Warning: OpenGL fixed function reconstruction function can't represent 0 exactly; when using OpenGL, use this function and have the shader reconstruct by dividing by 2^(N-1)-1.
  */
-inline int quantizeSnorm(float v, int N);
+inline int meshopt_quantizeSnorm(float v, int N);
 
 /**
  * Quantize a float into half-precision floating point value
@@ -181,27 +178,22 @@ inline int quantizeSnorm(float v, int N);
  * Representable magnitude range: [6e-5; 65504]
  * Maximum relative reconstruction error: 5e-4
  */
-inline unsigned short quantizeHalf(float v);
-
-} /* namespace meshopt */
+inline unsigned short meshopt_quantizeHalf(float v);
 #endif
 
 /* C++ template interface */
 #ifdef __cplusplus
-namespace meshopt
-{
-
 template <typename T, bool ZeroCopy = sizeof(T) == sizeof(unsigned int)>
-struct IndexAdapter;
+struct meshopt_IndexAdapter;
 
 template <typename T>
-struct IndexAdapter<T, false>
+struct meshopt_IndexAdapter<T, false>
 {
 	T* result;
 	unsigned int* data;
 	size_t count;
 
-	IndexAdapter(T* result, const T* input, size_t count)
+	meshopt_IndexAdapter(T* result, const T* input, size_t count)
 	    : result(result)
 	    , data(0)
 	    , count(count)
@@ -215,7 +207,7 @@ struct IndexAdapter<T, false>
 		}
 	}
 
-	~IndexAdapter()
+	~meshopt_IndexAdapter()
 	{
 		if (result)
 		{
@@ -228,127 +220,112 @@ struct IndexAdapter<T, false>
 };
 
 template <typename T>
-struct IndexAdapter<T, true>
+struct meshopt_IndexAdapter<T, true>
 {
 	unsigned int* data;
 
-	IndexAdapter(T* result, const T* input, size_t)
+	meshopt_IndexAdapter(T* result, const T* input, size_t)
 	    : data(reinterpret_cast<unsigned int*>(result ? result : const_cast<T*>(input)))
 	{
 	}
 };
 
 template <typename T>
-inline size_t generateVertexRemap(unsigned int* destination, const T* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)
+inline size_t meshopt_generateVertexRemap(unsigned int* destination, const T* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)
 {
-	IndexAdapter<T> in(0, indices, indices ? index_count : 0);
+	meshopt_IndexAdapter<T> in(0, indices, indices ? index_count : 0);
 
 	return meshopt_generateVertexRemap(destination, indices ? in.data : 0, index_count, vertices, vertex_count, vertex_size);
 }
 
-inline void remapVertexBuffer(void* destination, const void* vertices, size_t vertex_count, size_t vertex_size, const unsigned int* remap)
-{
-	return meshopt_remapVertexBuffer(destination, vertices, vertex_count, vertex_size, remap);
-}
-
 template <typename T>
-inline void remapIndexBuffer(T* destination, const T* indices, size_t index_count, const unsigned int* remap)
+inline void meshopt_remapIndexBuffer(T* destination, const T* indices, size_t index_count, const unsigned int* remap)
 {
-	IndexAdapter<T> in(0, indices, indices ? index_count : 0);
-	IndexAdapter<T> out(destination, 0, index_count);
+	meshopt_IndexAdapter<T> in(0, indices, indices ? index_count : 0);
+	meshopt_IndexAdapter<T> out(destination, 0, index_count);
 
 	meshopt_remapIndexBuffer(out.data, indices ? in.data : 0, index_count, remap);
 }
 
 template <typename T>
-inline void optimizeVertexCache(T* destination, const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = MESHOPTIMIZER_DEFAULT_VCACHE_SIZE)
+inline void meshopt_optimizeVertexCache(T* destination, const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
-	IndexAdapter<T> in(0, indices, index_count);
-	IndexAdapter<T> out(destination, 0, index_count);
+	meshopt_IndexAdapter<T> in(0, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, 0, index_count);
 
 	meshopt_optimizeVertexCache(out.data, in.data, index_count, vertex_count, cache_size);
 }
 
 template <typename T>
-inline void optimizeOverdraw(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, unsigned int cache_size = MESHOPTIMIZER_DEFAULT_VCACHE_SIZE, float threshold = 1)
+inline void meshopt_optimizeOverdraw(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, unsigned int cache_size, float threshold)
 {
-	IndexAdapter<T> in(0, indices, index_count);
-	IndexAdapter<T> out(destination, 0, index_count);
+	meshopt_IndexAdapter<T> in(0, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, 0, index_count);
 
 	meshopt_optimizeOverdraw(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride, cache_size, threshold);
 }
 
 template <typename T>
-inline size_t optimizeVertexFetch(void* destination, T* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)
+inline size_t meshopt_optimizeVertexFetch(void* destination, T* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)
 {
-	IndexAdapter<T> inout(indices, indices, index_count);
+	meshopt_IndexAdapter<T> inout(indices, indices, index_count);
 
 	return meshopt_optimizeVertexFetch(destination, inout.data, index_count, vertices, vertex_count, vertex_size);
 }
 
 template <typename T>
-inline size_t encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, const T* indices, size_t index_count)
+inline size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, const T* indices, size_t index_count)
 {
-	IndexAdapter<T> in(0, indices, index_count);
+	meshopt_IndexAdapter<T> in(0, indices, index_count);
 
 	return meshopt_encodeIndexBuffer(buffer, buffer_size, in.data, index_count);
 }
 
-inline size_t encodeIndexBufferBound(size_t index_count, size_t vertex_count)
-{
-	return meshopt_encodeIndexBufferBound(index_count, vertex_count);
-}
-
 template <typename T>
-inline void decodeIndexBuffer(T* destination, size_t index_count, const unsigned char* buffer, size_t buffer_size)
+inline void meshopt_decodeIndexBuffer(T* destination, size_t index_count, const unsigned char* buffer, size_t buffer_size)
 {
-	IndexAdapter<T> out(destination, 0, index_count);
+	meshopt_IndexAdapter<T> out(destination, 0, index_count);
 
 	meshopt_decodeIndexBuffer(out.data, index_count, buffer, buffer_size);
 }
 
 template <typename T>
-inline size_t simplify(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count)
+inline size_t meshopt_simplify(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count)
 {
-	IndexAdapter<T> in(0, indices, index_count);
-	IndexAdapter<T> out(destination, 0, index_count);
+	meshopt_IndexAdapter<T> in(0, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, 0, index_count);
 
 	return meshopt_simplify(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride, target_index_count);
 }
 
 template <typename T>
-inline meshopt_VertexCacheStatistics analyzeVertexCache(const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size = MESHOPTIMIZER_DEFAULT_VCACHE_SIZE)
+inline meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
-	IndexAdapter<T> in(0, indices, index_count);
+	meshopt_IndexAdapter<T> in(0, indices, index_count);
 
 	return meshopt_analyzeVertexCache(in.data, index_count, vertex_count, cache_size);
 }
 
 template <typename T>
-inline meshopt_OverdrawStatistics analyzeOverdraw(const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+inline meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
-	IndexAdapter<T> in(0, indices, index_count);
+	meshopt_IndexAdapter<T> in(0, indices, index_count);
 
 	return meshopt_analyzeOverdraw(in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride);
 }
 
 template <typename T>
-inline meshopt_VertexFetchStatistics analyzeVertexFetch(const T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+inline meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
-	IndexAdapter<T> in(0, indices, index_count);
+	meshopt_IndexAdapter<T> in(0, indices, index_count);
 
 	return meshopt_analyzeVertexFetch(in.data, index_count, vertex_count, vertex_size);
 }
-
-} /* namespace meshopt */
 #endif
 
 /* Inline implementation */
 #ifdef __cplusplus
-namespace meshopt
-{
-
-inline int quantizeUnorm(float v, int N)
+inline int meshopt_quantizeUnorm(float v, int N)
 {
 	const float scale = float((1 << N) - 1);
 
@@ -358,7 +335,7 @@ inline int quantizeUnorm(float v, int N)
 	return int(v * scale + 0.5f);
 }
 
-inline int quantizeSnorm(float v, int N)
+inline int meshopt_quantizeSnorm(float v, int N)
 {
 	const float scale = float((1 << (N - 1)) - 1);
 
@@ -370,7 +347,7 @@ inline int quantizeSnorm(float v, int N)
 	return int(v * scale + round);
 }
 
-inline unsigned short quantizeHalf(float v)
+inline unsigned short meshopt_quantizeHalf(float v)
 {
 	union { float f; unsigned int ui; } u = {v};
 	unsigned int ui = u.ui;
@@ -392,8 +369,6 @@ inline unsigned short quantizeHalf(float v)
 
 	return (unsigned short)(s | h);
 }
-
-} /* namespace meshopt */
 #endif
 
 /**

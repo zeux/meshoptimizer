@@ -14,8 +14,6 @@
 #pragma comment(lib, "opengl32.lib")
 #pragma comment(lib, "user32.lib")
 
-using namespace meshopt;
-
 struct Options
 {
 	bool wireframe;
@@ -84,13 +82,13 @@ static Mesh parseObj(const char* path)
 	Mesh result;
 
 	std::vector<unsigned int> remap(total_indices);
-	size_t total_vertices = generateVertexRemap(&remap[0], static_cast<unsigned int*>(0), total_indices, &vertices[0], total_indices, sizeof(Vertex));
+	size_t total_vertices = meshopt_generateVertexRemap(&remap[0], NULL, total_indices, &vertices[0], total_indices, sizeof(Vertex));
 
 	result.indices.resize(total_indices);
-	remapIndexBuffer(&result.indices[0], static_cast<unsigned int*>(0), total_indices, &remap[0]);
+	meshopt_remapIndexBuffer(&result.indices[0], NULL, total_indices, &remap[0]);
 
 	result.vertices.resize(total_vertices);
-	remapVertexBuffer(&result.vertices[0], &vertices[0], total_indices, sizeof(Vertex), &remap[0]);
+	meshopt_remapVertexBuffer(&result.vertices[0], &vertices[0], total_indices, sizeof(Vertex), &remap[0]);
 
 	return result;
 }
@@ -101,7 +99,7 @@ Mesh optimize(const Mesh& mesh, int lod)
 	size_t target_index_count = size_t(mesh.indices.size() * threshold);
 
 	Mesh result = mesh;
-	result.indices.resize(simplify(&result.indices[0], &result.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count));
+	result.indices.resize(meshopt_simplify(&result.indices[0], &result.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count));
 
 	return result;
 }

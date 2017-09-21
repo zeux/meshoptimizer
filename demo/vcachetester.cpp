@@ -145,11 +145,11 @@ void inspectCache(Cache cache)
 
 		std::vector<unsigned int> grid3;
 		gridGen(grid3, 0, grid_size, 0, grid_size, grid_size, grid_size * 4, false); // this generates a simple indexed grid without striping/degenerate triangles
-		meshopt::optimizeVertexCache(&grid3[0], &grid3[0], grid3.size(), (grid_size + 1) * (grid_size + 1), cache_size);
+		meshopt_optimizeVertexCache(&grid3[0], &grid3[0], grid3.size(), (grid_size + 1) * (grid_size + 1), cache_size);
 
 		std::vector<unsigned int> grid4;
 		gridGen(grid4, 0, grid_size, 0, grid_size, grid_size, grid_size * 4, false); // this generates a simple indexed grid without striping/degenerate triangles
-		meshopt::optimizeVertexCache(&grid4[0], &grid4[0], grid4.size(), (grid_size + 1) * (grid_size + 1), 0);
+		meshopt_optimizeVertexCache(&grid4[0], &grid4[0], grid4.size(), (grid_size + 1) * (grid_size + 1), 0);
 
 		unsigned int invocations1 = cache(&grid1[0], grid1.size());
 		unsigned int invocations2 = cache(&grid2[0], grid2.size());
@@ -408,7 +408,7 @@ void testCacheMeshes(IDXGIAdapter* adapter, int argc, char** argv)
 		if (stat)
 		{
 			std::vector<unsigned int> ib2(ib1.size());
-			meshopt::optimizeVertexCache(&ib2[0], &ib1[0], ib1.size(), vertex_count, 0);
+			meshopt_optimizeVertexCache(&ib2[0], &ib1[0], ib1.size(), vertex_count, 0);
 
 			unsigned int invocations = queryVSInvocations(device, context, ib2.data(), index_count);
 
@@ -423,7 +423,7 @@ void testCacheMeshes(IDXGIAdapter* adapter, int argc, char** argv)
 			printf("%s: baseline    %f\n", path, double(invocations1) / double(vertex_count));
 
 			std::vector<unsigned int> ib3(ib1.size());
-			meshopt::optimizeVertexCache(&ib3[0], &ib1[0], ib1.size(), vertex_count, 0);
+			meshopt_optimizeVertexCache(&ib3[0], &ib1[0], ib1.size(), vertex_count, 0);
 
 			unsigned int invocations3 = queryVSInvocations(device, context, ib3.data(), index_count);
 
@@ -432,7 +432,7 @@ void testCacheMeshes(IDXGIAdapter* adapter, int argc, char** argv)
 			for (unsigned int cache_size = 12; cache_size <= 24; ++cache_size)
 			{
 				std::vector<unsigned int> ib2(ib1.size());
-				meshopt::optimizeVertexCache(&ib2[0], &ib1[0], ib1.size(), vertex_count, cache_size);
+				meshopt_optimizeVertexCache(&ib2[0], &ib1[0], ib1.size(), vertex_count, cache_size);
 
 				unsigned int invocations2 = queryVSInvocations(device, context, ib2.data(), index_count);
 
