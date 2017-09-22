@@ -34,8 +34,7 @@ First, generate a remap table from your existing vertex (and, optionally, index)
 ```c++
 size_t index_count = face_count * 3;
 std::vector<unsigned int> remap(index_count); // allocate temporary memory for the remap table
-size_t vertex_count = meshopt::generateVertexRemap(&remap[0], static_cast<unsigned int*>(NULL), index_count,
-                                                   &unindexed_vertices[0], index_count, sizeof(Vertex));
+size_t vertex_count = meshopt_generateVertexRemap(&remap[0], NULL, index_count, &unindexed_vertices[0], index_count, sizeof(Vertex));
 ```
 
 Note that in this case we only have an unindexed vertex buffer; the remap table is generated based on binary equivalence of the input vertices, so the resulting mesh will render the same way.
@@ -43,8 +42,8 @@ Note that in this case we only have an unindexed vertex buffer; the remap table 
 After generating the remap table, you can allocate space for the target vertex buffer (`vertex_count` elements) and index buffer (`index_count` elements) and generate them:
 
 ```c++
-meshopt::remapIndexBuffer(indices, static_cast<unsigned int*>(NULL), index_count, &remap[0]);
-meshopt::remapVertexBuffer(vertices, &unindexed_vertices[0], index_count, sizeof(Vertex), &remap[0]);
+meshopt_remapIndexBuffer(indices, NULL, index_count, &remap[0]);
+meshopt_remapVertexBuffer(vertices, &unindexed_vertices[0], index_count, sizeof(Vertex), &remap[0]);
 ```
 
 You can then further optimize the resulting buffers by calling the other functions on them in-place.
@@ -54,7 +53,7 @@ You can then further optimize the resulting buffers by calling the other functio
 When the GPU renders the mesh, it has to run the vertex shader for each vertex; usually GPUs have a built-in fixed size cache that stores the transformed vertices (the result of running the vertex shader), and uses this cache to reduce the number of vertex shader invocations. This cache is usually small, 16-32 vertices, and can have different replacement policies; to use this cache efficiently, you have to reorder your triangles to maximize the locality of reused vertex references like so:
 
 ```c++
-meshopt::optimizeVertexCache(indices, indices, index_count, vertex_count, 16);
+meshopt_optimizeVertexCache(indices, indices, index_count, vertex_count, 16);
 ```
 
 In general it's better to use the cache size that's smaller than your target GPU cache size than the one that's bigger; 16 is a reasonable default value.
@@ -64,7 +63,7 @@ In general it's better to use the cache size that's smaller than your target GPU
 After transforming the vertices, GPU sends the triangles for rasterization which results in generating pixels that are usually first ran through the depth test, and pixels that pass it get the pixel shader executed to generate the final color. As pixel shaders get more expensive, it becomes more and more important to reduce overdraw. While in general improving overdraw requires view-dependent operations, this library provides an algorithm to reorder triangles to minimize the overdraw from all directions, which you should run after vertex cache optimization like this:
 
 ```c++
-meshopt::optimizeOverdraw(indices, indices, index_count, &vertices[0].x, sizeof(Vertex), vertex_count, 16, 1.05f);
+meshopt_optimizeOverdraw(indices, indices, index_count, &vertices[0].x, sizeof(Vertex), vertex_count, 16, 1.05f);
 ```
 
 The overdraw optimizer needs to read vertex positions as a float3 from the vertex; the code snippet above assumes that the vertex stores position as `float x, y, z`.
@@ -78,7 +77,7 @@ After the final triangle order has been established, we still can optimize the v
 To optimize the index/vertex buffers for vertex fetch efficiency, call:
 
 ```c++
-meshopt::optimizeVertexFetch(vertices, vertices, indices, index_count, vertex_count, sizeof(Vertex));
+meshopt_optimizeVertexFetch(vertices, vertices, indices, index_count, vertex_count, sizeof(Vertex));
 ```
 
 This will reorder the vertices in the vertex buffer to try to improve the locality of reference, and rewrite the indices in place to match. This optimization has to be performed on the final index buffer since the optimal vertex order depends on the triangle order.
@@ -95,17 +94,17 @@ The number of combinations here is too large but this library does provide the b
 
 ```c++
 unsigned int normal =
-	(meshopt::quantizeUnorm(v.nx, 10) << 20) |
-	(meshopt::quantizeUnorm(v.ny, 10) << 10) |
-	 meshopt::quantizeUnorm(v.nz, 10);
+	(meshopt_quantizeUnorm(v.nx, 10) << 20) |
+	(meshopt_quantizeUnorm(v.ny, 10) << 10) |
+	 meshopt_quantizeUnorm(v.nz, 10);
 ```
 
 and here's how you can quantize a position:
 
 ```c++
-unsigned short px = meshopt::quantizeHalf(v.x);
-unsigned short py = meshopt::quantizeHalf(v.y);
-unsigned short pz = meshopt::quantizeHalf(v.z);
+unsigned short px = meshopt_quantizeHalf(v.x);
+unsigned short py = meshopt_quantizeHalf(v.y);
+unsigned short pz = meshopt_quantizeHalf(v.z);
 ```
 
 Note that the signed quantization (`quantizeSnorm`) assumes Direct3D rules for the value reconstruction that apply to all graphics APIs except for OpenGL (where you should reconstruct the value in the shader, as mentioned in the function comments).
