@@ -6,6 +6,7 @@ dist: trusty
 language: cpp
 
 script:
+  - make config=release
   - make config=coverage test
 
 after_success:
