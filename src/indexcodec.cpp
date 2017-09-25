@@ -5,6 +5,7 @@
 #include <cstring>
 
 // This work is based on:
+// Fabian Giesen. Simple lossless index buffer compression & follow-up. 2013
 // Conor Stokes. Vertex Cache Optimised Index Buffer Compression. 2014
 namespace meshopt
 {
