@@ -1,7 +1,7 @@
+language: cpp
 os:
   - linux
   - osx
-language: cpp
 
 script:
   - make config=release
