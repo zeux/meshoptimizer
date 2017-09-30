@@ -99,13 +99,11 @@ static unsigned int decodeVarInt(const unsigned char*& data)
 }
 }
 
-size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, const unsigned int* indices, size_t index_count, int version)
+size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, const unsigned int* indices, size_t index_count)
 {
 	using namespace meshopt;
 
 	assert(index_count % 3 == 0);
-	assert(version == 1);
-	(void)version;
 
 	EdgeFifo edgefifo;
 	memset(edgefifo, -1, sizeof(edgefifo));
@@ -209,13 +207,11 @@ size_t meshopt_encodeIndexBufferBound(size_t index_count, size_t vertex_count)
 	return (index_count / 3) * (2 + 3 * vertex_groups);
 }
 
-void meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, const unsigned char* buffer, size_t buffer_size, int version)
+void meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, const unsigned char* buffer, size_t buffer_size)
 {
 	using namespace meshopt;
 
 	assert(index_count % 3 == 0);
-	assert(version == 1);
-	(void)version;
 
 	EdgeFifo edgefifo;
 	memset(edgefifo, -1, sizeof(edgefifo));
