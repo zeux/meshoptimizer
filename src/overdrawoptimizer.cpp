@@ -1,10 +1,10 @@
 // This file is part of meshoptimizer library; see meshoptimizer.h for version/license details
 #include "meshoptimizer.h"
 
-#include <algorithm>
 #include <cassert>
 #include <cmath>
-#include <functional>
+
+#include <algorithm>
 #include <vector>
 
 // This work is based on:
@@ -22,9 +22,10 @@ struct ClusterSortData
 	unsigned int cluster;
 	float dot_product;
 
-	bool operator>(const ClusterSortData& other) const
+	bool operator<(const ClusterSortData& other) const
 	{
-		return (dot_product > other.dot_product);
+		// high product = possible occluder, render early
+		return dot_product > other.dot_product;
 	}
 };
 
@@ -267,7 +268,7 @@ void meshopt_optimizeOverdraw(unsigned int* destination, const unsigned int* ind
 	calculateSortData(sort_data, indices, index_count, vertex_positions, vertex_positions_stride, clusters);
 
 	// high product = possible occluder, render early
-	std::sort(sort_data.begin(), sort_data.end(), std::greater<ClusterSortData>());
+	std::sort(sort_data.begin(), sort_data.end());
 
 	// fill output buffer
 	size_t offset = 0;

@@ -1,9 +1,10 @@
 // This file is part of meshoptimizer library; see meshoptimizer.h for version/license details
 #include "meshoptimizer.h"
 
-#include <algorithm>
 #include <cassert>
 #include <cmath>
+
+#include <algorithm>
 #include <vector>
 
 // This work is based on:

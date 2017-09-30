@@ -3,6 +3,7 @@
 
 #include <cassert>
 #include <cstring>
+
 #include <vector>
 
 size_t meshopt_optimizeVertexFetch(void* destination, unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)

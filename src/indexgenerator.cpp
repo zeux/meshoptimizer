@@ -1,9 +1,9 @@
 // This file is part of meshoptimizer library; see meshoptimizer.h for version/license details
 #include "meshoptimizer.h"
 
-#include <algorithm>
 #include <cassert>
 #include <cstring>
+
 #include <vector>
 
 namespace meshopt

@@ -2,6 +2,7 @@
 #include "meshoptimizer.h"
 
 #include <cassert>
+
 #include <vector>
 
 namespace meshopt

@@ -1,10 +1,11 @@
 // This file is part of meshoptimizer library; see meshoptimizer.h for version/license details
 #include "meshoptimizer.h"
 
-#include <algorithm>
 #include <cassert>
 #include <cfloat>
 #include <cstring>
+
+#include <algorithm>
 #include <vector>
 
 namespace meshopt

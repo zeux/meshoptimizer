@@ -2,7 +2,6 @@
 #include "meshoptimizer.h"
 
 #include <cassert>
-#include <vector>
 
 meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
