@@ -18,8 +18,8 @@
 #define MESHOPTIMIZER_API
 #endif
 
-/* Default vertex cache size */
-#define MESHOPTIMIZER_DEFAULT_VCACHE_SIZE 16
+/* Recommended vertex cache size; it provides a reasonable balance between performance on different GPUs */
+#define MESHOPTIMIZER_VCACHE_SIZE 16
 
 /* Index buffer codec version */
 #define MESHOPTIMIZER_INDEX_CODEC_VERSION 1
