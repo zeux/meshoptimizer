@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <vector>
 
+// This work is based on:
+// Nicolas Capens. Advanced Rasterization. 2004
 namespace meshopt
 {
 
@@ -48,7 +50,6 @@ static float computeDepthGradients(float& dzdx, float& dzdy, float x1, float y1,
 }
 
 // half-space fixed point triangle rasterizer
-// adapted from http://forum.devmaster.net/t/advanced-rasterization/6145
 static void rasterize(OverdrawBuffer* buffer, float v1x, float v1y, float v1z, float v2x, float v2y, float v2z, float v3x, float v3y, float v3z)
 {
 	// compute depth gradients
