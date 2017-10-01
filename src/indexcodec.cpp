@@ -131,7 +131,7 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 			int fe = fer >> 2;
 			int fc = getVertexFifo(vertexfifo, c, vertexfifooffset);
 
-			int fec = (fc >= 0 && fc < 14) ? (fc + 1) : (c == next) ? (next++, 0) : 15;
+			int fec = (fc >= 1 && fc < 15) ? fc : (c == next) ? (next++, 0) : 15;
 
 			*data++ = static_cast<unsigned char>((fe << 4) | fec);
 
@@ -239,7 +239,7 @@ void meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, co
 
 			int fec = code & 15;
 
-			unsigned int c = (fec == 0) ? next++ : (fec < 15) ? vertexfifo[(vertexfifooffset - fec) & 15] : next - decodeVarInt(data);
+			unsigned int c = (fec == 0) ? next++ : (fec < 15) ? vertexfifo[(vertexfifooffset - 1 - fec) & 15] : next - decodeVarInt(data);
 
 			destination[i + 0] = a;
 			destination[i + 1] = b;
