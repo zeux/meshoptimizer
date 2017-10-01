@@ -11,6 +11,7 @@ endif(MSVC)
 
 set(SOURCES
     src/meshoptimizer.h
+    src/indexcodec.cpp
     src/indexgenerator.cpp
     src/overdrawanalyzer.cpp
     src/overdrawoptimizer.cpp
@@ -24,6 +25,6 @@ set(SOURCES
 add_library(meshoptimizer STATIC ${SOURCES})
 
 if(BUILD_DEMO)
-	add_executable(demo demo/main.cpp demo/objparser.cpp)
-	target_link_libraries(demo meshoptimizer)
+    add_executable(demo demo/main.cpp demo/objparser.cpp)
+    target_link_libraries(demo meshoptimizer)
 endif()
