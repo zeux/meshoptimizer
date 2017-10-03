@@ -116,7 +116,8 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 
 	unsigned int next = 0;
 
-	unsigned char* data = buffer;
+	unsigned char* code = buffer;
+	unsigned char* data = buffer + index_count / 3;
 
 	for (size_t i = 0; i < index_count; i += 3)
 	{
@@ -133,7 +134,7 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 
 			int fec = (fc >= 1 && fc < 15) ? fc : (c == next) ? (next++, 0) : 15;
 
-			*data++ = static_cast<unsigned char>((fe << 4) | fec);
+			*code++ = static_cast<unsigned char>((fe << 4) | fec);
 
 			if (fec == 15)
 				encodeVarInt(data, next - c);
@@ -158,7 +159,7 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 			int feb = (fb >= 0 && fb < 14) ? (fb + 1) : (b == next) ? (next++, 0) : 15;
 			int fec = (fc >= 0 && fc < 14) ? (fc + 1) : (c == next) ? (next++, 0) : 15;
 
-			*data++ = static_cast<unsigned char>((15 << 4) | fea);
+			*code++ = static_cast<unsigned char>((15 << 4) | fea);
 			*data++ = static_cast<unsigned char>((feb << 4) | fec);
 
 			if (fea == 15)
@@ -224,20 +225,21 @@ void meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, co
 
 	unsigned int next = 0;
 
-	const unsigned char* data = buffer;
+	const unsigned char* code = buffer;
+	const unsigned char* data = buffer + index_count / 3;
 
 	for (size_t i = 0; i < index_count; i += 3)
 	{
-		unsigned char code = *data++;
+		unsigned char codetri = *code++;
 
-		int fe = code >> 4;
+		int fe = codetri >> 4;
 
 		if (fe < 15)
 		{
 			unsigned int a = edgefifo[(edgefifooffset - 1 - fe) & 15][0];
 			unsigned int b = edgefifo[(edgefifooffset - 1 - fe) & 15][1];
 
-			int fec = code & 15;
+			int fec = codetri & 15;
 
 			unsigned int c = (fec == 0) ? next++ : (fec < 15) ? vertexfifo[(vertexfifooffset - 1 - fec) & 15] : next - decodeVarInt(data);
 
@@ -253,7 +255,7 @@ void meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, co
 		}
 		else
 		{
-			int fea = code & 15;
+			int fea = codetri & 15;
 
 			unsigned char codeaux = *data++;
 
