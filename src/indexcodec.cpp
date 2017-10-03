@@ -241,7 +241,10 @@ void meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, co
 
 			int fec = codetri & 15;
 
-			unsigned int c = (fec == 0) ? next++ : (fec < 15) ? vertexfifo[(vertexfifooffset - 1 - fec) & 15] : next - decodeVarInt(data);
+			unsigned int c = (fec == 0) ? next++ : vertexfifo[(vertexfifooffset - 1 - fec) & 15];
+
+			if (fec == 15)
+				c = next - decodeVarInt(data);
 
 			destination[i + 0] = a;
 			destination[i + 1] = b;
@@ -262,9 +265,9 @@ void meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, co
 			int feb = codeaux >> 4;
 			int fec = codeaux & 15;
 
-			unsigned int a = (fea == 0) ? next++ : (fea < 15) ? vertexfifo[(vertexfifooffset - fea) & 15] : 0;
-			unsigned int b = (feb == 0) ? next++ : (feb < 15) ? vertexfifo[(vertexfifooffset - feb) & 15] : 0;
-			unsigned int c = (fec == 0) ? next++ : (fec < 15) ? vertexfifo[(vertexfifooffset - fec) & 15] : 0;
+			unsigned int a = (fea == 0) ? next++ : vertexfifo[(vertexfifooffset - fea) & 15];
+			unsigned int b = (feb == 0) ? next++ : vertexfifo[(vertexfifooffset - feb) & 15];
+			unsigned int c = (fec == 0) ? next++ : vertexfifo[(vertexfifooffset - fec) & 15];
 
 			if (fea == 15)
 				a = next - decodeVarInt(data);
