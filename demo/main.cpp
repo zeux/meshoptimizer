@@ -294,7 +294,11 @@ void encodeIndex(const Mesh& mesh)
 		    (result[i + 2] == mesh.indices[i + 0] && result[i + 0] == mesh.indices[i + 1] && result[i + 1] == mesh.indices[i + 2]));
 	}
 
-	printf("Index encode: %.1f bits/triangle; encode %.2f msec, decode %.2f msec\n", double(buffer.size() * 8) / double(mesh.indices.size() / 3), double(middle - start) / CLOCKS_PER_SEC * 1000, double(end - middle) / CLOCKS_PER_SEC * 1000);
+	printf("Index encode: %.1f bits/triangle; encode %.2f msec, decode %.2f msec (%.2f Mtri/s)\n",
+	       double(buffer.size() * 8) / double(mesh.indices.size() / 3),
+	       double(middle - start) / CLOCKS_PER_SEC * 1000,
+	       double(end - middle) / CLOCKS_PER_SEC * 1000,
+	       (double(result.size() / 3) / 1e6) / (double(end - middle) / CLOCKS_PER_SEC));
 }
 
 void process(const char* path)
@@ -335,7 +339,8 @@ void process(const char* path)
 	optimize(mesh, "Simplify", optCompleteSimplify);
 
 	Mesh copy = mesh;
-	optComplete(copy);
+	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size(), 0);
+	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
 
 	encodeIndex(copy);
 }
