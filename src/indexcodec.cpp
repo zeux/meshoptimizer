@@ -151,16 +151,30 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 
 			unsigned int a = indices[i + order[0]], b = indices[i + order[1]], c = indices[i + order[2]];
 
-			int fa = getVertexFifo(vertexfifo, a, vertexfifooffset);
 			int fb = getVertexFifo(vertexfifo, b, vertexfifooffset);
 			int fc = getVertexFifo(vertexfifo, c, vertexfifooffset);
 
-			int fea = (fa >= 0 && fa < 14) ? (fa + 1) : (a == next) ? (next++, 0) : 15;
+			// after rotation, a is almost always equal to next, so we don't waste bits on FIFO encoding for a
+			int fea = (a == next) ? (next++, 0) : 15;
 			int feb = (fb >= 0 && fb < 14) ? (fb + 1) : (b == next) ? (next++, 0) : 15;
 			int fec = (fc >= 0 && fc < 14) ? (fc + 1) : (c == next) ? (next++, 0) : 15;
 
-			*code++ = static_cast<unsigned char>((15 << 4) | fea);
-			*data++ = static_cast<unsigned char>((feb << 4) | fec);
+			// fb is almost never equal to fc (since it implies a degenerate triangle)
+			// we use f0 to encode feb=fec=0, fa to encode fea=0 and ff to encode fea=15; f5 is not currently used
+			if (fea == 0 && feb < 4 && fec < 4 && (feb == 0 || feb != fec))
+			{
+				*code++ = static_cast<unsigned char>((15 << 4) | (feb << 2) | fec);
+			}
+			else if (fea == 0)
+			{
+				*code++ = static_cast<unsigned char>((15 << 4) | 10);
+				*data++ = static_cast<unsigned char>((feb << 4) | fec);
+			}
+			else
+			{
+				*code++ = static_cast<unsigned char>((15 << 4) | fea);
+				*data++ = static_cast<unsigned char>((feb << 4) | fec);
+			}
 
 			if (fea == 15)
 				encodeVarInt(data, next - a);
@@ -258,14 +272,21 @@ void meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, co
 		}
 		else
 		{
-			int fea = codetri & 15;
+			int fea = 0;
+			int feb = (codetri >> 2) & 3;
+			int fec = codetri & 3;
 
-			unsigned char codeaux = *data++;
+			if ((codetri & 15) == 10 || (codetri & 15) == 15)
+			{
+				fea = (codetri & 15) == 10 ? 0 : 15;
 
-			int feb = codeaux >> 4;
-			int fec = codeaux & 15;
+				unsigned char codeaux = *data++;
 
-			unsigned int a = (fea == 0) ? next++ : vertexfifo[(vertexfifooffset - fea) & 15];
+				feb = codeaux >> 4;
+				fec = codeaux & 15;
+			}
+
+			unsigned int a = (fea == 0) ? next++ : 0;
 			unsigned int b = (feb == 0) ? next++ : vertexfifo[(vertexfifooffset - feb) & 15];
 			unsigned int c = (fec == 0) ? next++ : vertexfifo[(vertexfifooffset - fec) & 15];
 
