@@ -159,20 +159,20 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 			int feb = (fb >= 0 && fb < 14) ? (fb + 1) : (b == next) ? (next++, 0) : 15;
 			int fec = (fc >= 0 && fc < 14) ? (fc + 1) : (c == next) ? (next++, 0) : 15;
 
-			// fb is almost never equal to fc (since it implies a degenerate triangle)
-			// we use f0 to encode feb=fec=0, fa to encode fea=0 and ff to encode fea=15; f5 is not currently used
-			if (fea == 0 && feb < 4 && fec < 4 && (feb == 0 || feb != fec))
+			// when feb < 4 and fec < 4, we can encode them in 4 bits; we reserve fe for fea=0 fallback and ff for fea=15
+			// fe corresponds to feb=3 fec=2 which is extremely unlikely - a triangle like this should've been edge-encoded
+			if (fea == 0 && feb < 4 && fec < 4 && ((feb << 2) | fec) < 14)
 			{
 				*code++ = static_cast<unsigned char>((15 << 4) | (feb << 2) | fec);
 			}
 			else if (fea == 0)
 			{
-				*code++ = static_cast<unsigned char>((15 << 4) | 10);
+				*code++ = static_cast<unsigned char>((15 << 4) | 14);
 				*data++ = static_cast<unsigned char>((feb << 4) | fec);
 			}
 			else
 			{
-				*code++ = static_cast<unsigned char>((15 << 4) | fea);
+				*code++ = static_cast<unsigned char>((15 << 4) | 15);
 				*data++ = static_cast<unsigned char>((feb << 4) | fec);
 			}
 
@@ -276,9 +276,9 @@ void meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, co
 			int feb = (codetri >> 2) & 3;
 			int fec = codetri & 3;
 
-			if ((codetri & 15) == 10 || (codetri & 15) == 15)
+			if ((codetri & 15) >= 14)
 			{
-				fea = (codetri & 15) == 10 ? 0 : 15;
+				fea = (codetri & 15) == 14 ? 0 : 15;
 
 				unsigned char codeaux = *data++;
 
