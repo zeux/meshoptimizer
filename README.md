@@ -63,7 +63,7 @@ In general it's better to use the cache size that's smaller than your target GPU
 After transforming the vertices, GPU sends the triangles for rasterization which results in generating pixels that are usually first ran through the depth test, and pixels that pass it get the pixel shader executed to generate the final color. As pixel shaders get more expensive, it becomes more and more important to reduce overdraw. While in general improving overdraw requires view-dependent operations, this library provides an algorithm to reorder triangles to minimize the overdraw from all directions, which you should run after vertex cache optimization like this:
 
 ```c++
-meshopt_optimizeOverdraw(indices, indices, index_count, &vertices[0].x, sizeof(Vertex), vertex_count, 16, 1.05f);
+meshopt_optimizeOverdraw(indices, indices, index_count, &vertices[0].x, vertex_count, sizeof(Vertex), 16, 1.05f);
 ```
 
 The overdraw optimizer needs to read vertex positions as a float3 from the vertex; the code snippet above assumes that the vertex stores position as `float x, y, z`.
@@ -77,7 +77,7 @@ After the final triangle order has been established, we still can optimize the v
 To optimize the index/vertex buffers for vertex fetch efficiency, call:
 
 ```c++
-meshopt_optimizeVertexFetch(vertices, vertices, indices, index_count, vertex_count, sizeof(Vertex));
+meshopt_optimizeVertexFetch(vertices, indices, index_count, vertices, vertex_count, sizeof(Vertex));
 ```
 
 This will reorder the vertices in the vertex buffer to try to improve the locality of reference, and rewrite the indices in place to match. This optimization has to be performed on the final index buffer since the optimal vertex order depends on the triangle order.
