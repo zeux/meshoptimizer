@@ -81,10 +81,13 @@ static void rasterize(OverdrawBuffer* buffer, float v1x, float v1y, float v1z, f
 	int Y3 = int(16.0f * v3y + 0.5f);
 
 	// bounding rectangle, clipped against viewport
-	int minx = std::max((std::min(X1, std::min(X2, X3)) + 0xF) >> 4, 0);
-	int maxx = std::min((std::max(X1, std::max(X2, X3)) + 0xF) >> 4, kViewport);
-	int miny = std::max((std::min(Y1, std::min(Y2, Y3)) + 0xF) >> 4, 0);
-	int maxy = std::min((std::max(Y1, std::max(Y2, Y3)) + 0xF) >> 4, kViewport);
+	// since we rasterize pixels with covered centers, min >0.5 should round up
+	// as for max, due to top-left filling convention we will never rasterize right/bottom edges
+	// so max >= 0.5 should round down
+	int minx = std::max((std::min(X1, std::min(X2, X3)) + 7) >> 4, 0);
+	int maxx = std::min((std::max(X1, std::max(X2, X3)) + 7) >> 4, kViewport);
+	int miny = std::max((std::min(Y1, std::min(Y2, Y3)) + 7) >> 4, 0);
+	int maxy = std::min((std::max(Y1, std::max(Y2, Y3)) + 7) >> 4, kViewport);
 
 	// deltas, 28.4 fixed point
 	int DX12 = X1 - X2;
@@ -101,10 +104,13 @@ static void rasterize(OverdrawBuffer* buffer, float v1x, float v1y, float v1z, f
 	int TL3 = DY31 < 0 || (DY31 == 0 && DX31 > 0);
 
 	// half edge equations, 24.8 fixed point
-	int CY1 = DX12 * ((miny << 4) - Y1) - DY12 * ((minx << 4) - X1) + TL1 - 1;
-	int CY2 = DX23 * ((miny << 4) - Y2) - DY23 * ((minx << 4) - X2) + TL2 - 1;
-	int CY3 = DX31 * ((miny << 4) - Y3) - DY31 * ((minx << 4) - X3) + TL3 - 1;
-	float ZY = v1z + (DZx * float((minx << 4) - X1) + DZy * float((miny << 4) - Y1)) * (1 / 16.f);
+	// note that we offset minx/miny by half pixel since we want to rasterize pixels with covered centers
+	int FX = (minx << 4) + 8;
+	int FY = (miny << 4) + 8;
+	int CY1 = DX12 * (FY - Y1) - DY12 * (FX - X1) + TL1 - 1;
+	int CY2 = DX23 * (FY - Y2) - DY23 * (FX - X2) + TL2 - 1;
+	int CY3 = DX31 * (FY - Y3) - DY31 * (FX - X3) + TL3 - 1;
+	float ZY = v1z + (DZx * float(FX - X1) + DZy * float(FY - Y1)) * (1 / 16.f);
 
 	for (int y = miny; y < maxy; y++)
 	{
