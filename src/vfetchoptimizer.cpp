@@ -21,7 +21,8 @@ size_t meshopt_optimizeVertexFetch(void* destination, unsigned int* indices, siz
 	}
 
 	// build vertex remap table
-	std::vector<unsigned int> vertex_remap(vertex_count, static_cast<unsigned int>(-1));
+	const unsigned int no_remap = ~0u;
+	std::vector<unsigned int> vertex_remap(vertex_count, no_remap);
 
 	unsigned int next_vertex = 0;
 
@@ -32,7 +33,7 @@ size_t meshopt_optimizeVertexFetch(void* destination, unsigned int* indices, siz
 
 		unsigned int& remap = vertex_remap[index];
 
-		if (remap == static_cast<unsigned int>(-1)) // vertex was not added to destination VB
+		if (remap == no_remap) // vertex was not added to destination VB
 		{
 			// add vertex
 			memcpy(static_cast<char*>(destination) + next_vertex * vertex_size, static_cast<const char*>(vertices) + index * vertex_size, vertex_size);

@@ -97,7 +97,7 @@ static void calculateSortData(std::vector<ClusterSortData>& sort_data, const uns
 
 		Vector3 centroid_vector = {cluster_centroid.x - mesh_centroid.x, cluster_centroid.y - mesh_centroid.y, cluster_centroid.z - mesh_centroid.z};
 
-		sort_data[cluster].cluster = static_cast<unsigned int>(cluster);
+		sort_data[cluster].cluster = unsigned(cluster);
 		sort_data[cluster].dot_product = centroid_vector.x * cluster_normal.x + centroid_vector.y * cluster_normal.y + centroid_vector.z * cluster_normal.z;
 	}
 }
