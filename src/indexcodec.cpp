@@ -21,6 +21,12 @@ static const unsigned int kTriangleIndexOrder[3][3] =
         {2, 0, 1},
 };
 
+static const unsigned char kCodeAuxTable[16] =
+    {
+        // clang-format array formatting is broken :/
+        0x00, 0x01, 0x10, 0x02, 0x20, 0x03, 0x30, 0x67, 0x76, 0x78, 0x87, 0x89, 0x98, 0xff, 0, 0,
+};
+
 static int rotateTriangle(unsigned int a, unsigned int b, unsigned int c, unsigned int next)
 {
 	(void)a;
@@ -97,6 +103,15 @@ static unsigned int decodeVarInt(const unsigned char*& data)
 
 	return result;
 }
+
+static int getCodeAuxIndex(unsigned char v)
+{
+	for (int i = 0; i < 16; ++i)
+		if (kCodeAuxTable[i] == v)
+			return i;
+
+	return -1;
+}
 }
 
 size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, const unsigned int* indices, size_t index_count)
@@ -159,21 +174,23 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 			int feb = (fb >= 0 && fb < 14) ? (fb + 1) : (b == next) ? (next++, 0) : 15;
 			int fec = (fc >= 0 && fc < 14) ? (fc + 1) : (c == next) ? (next++, 0) : 15;
 
-			// when feb < 4 and fec < 4, we can encode them in 4 bits; we reserve fe for fea=0 fallback and ff for fea=15
-			// fe corresponds to feb=3 fec=2 which is extremely unlikely - a triangle like this should've been edge-encoded
-			if (fea == 0 && feb < 4 && fec < 4 && ((feb << 2) | fec) < 14)
+			// we encode feb & fec in 4 bits using a table if possible, and as a full byte otherwise
+			unsigned char codeaux = static_cast<unsigned char>((feb << 4) | fec);
+			int codeauxindex = getCodeAuxIndex(codeaux);
+
+			if (fea == 0 && codeauxindex >= 0 && codeauxindex < 14)
 			{
-				*code++ = static_cast<unsigned char>((15 << 4) | (feb << 2) | fec);
+				*code++ = static_cast<unsigned char>((15 << 4) | codeauxindex);
 			}
 			else if (fea == 0)
 			{
 				*code++ = static_cast<unsigned char>((15 << 4) | 14);
-				*data++ = static_cast<unsigned char>((feb << 4) | fec);
+				*data++ = codeaux;
 			}
 			else
 			{
 				*code++ = static_cast<unsigned char>((15 << 4) | 15);
-				*data++ = static_cast<unsigned char>((feb << 4) | fec);
+				*data++ = codeaux;
 			}
 
 			if (fea == 15)
@@ -272,15 +289,17 @@ void meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, co
 		}
 		else
 		{
+			unsigned char codeaux = kCodeAuxTable[codetri & 15];
+
 			int fea = 0;
-			int feb = (codetri >> 2) & 3;
-			int fec = codetri & 3;
+			int feb = codeaux >> 4;
+			int fec = codeaux & 15;
 
 			if ((codetri & 15) >= 14)
 			{
 				fea = (codetri & 15) == 14 ? 0 : 15;
 
-				unsigned char codeaux = *data++;
+				codeaux = *data++;
 
 				feb = codeaux >> 4;
 				fec = codeaux & 15;
