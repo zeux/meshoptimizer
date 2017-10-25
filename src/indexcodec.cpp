@@ -79,7 +79,7 @@ static void pushVertexFifo(VertexFifo fifo, unsigned int v, size_t& offset)
 	offset = (offset + 1) & 15;
 }
 
-static void encodeVarInt(unsigned char*& data, unsigned int v)
+static void encodeVByte(unsigned char*& data, unsigned int v)
 {
 	do
 	{
@@ -88,7 +88,7 @@ static void encodeVarInt(unsigned char*& data, unsigned int v)
 	} while (v);
 }
 
-static unsigned int decodeVarInt(const unsigned char*& data)
+static unsigned int decodeVByte(const unsigned char*& data)
 {
 	unsigned int result = 0;
 	unsigned int shift = 0;
@@ -102,6 +102,26 @@ static unsigned int decodeVarInt(const unsigned char*& data)
 	} while (group & 128);
 
 	return result;
+}
+
+static void encodeIndex(unsigned char*& data, unsigned int index, unsigned int next, unsigned int last)
+{
+	(void)next;
+
+	unsigned int d = index - last;
+	unsigned int v = (d << 1) ^ (int(d) >> 31);
+
+	encodeVByte(data, v);
+}
+
+static unsigned int decodeIndex(const unsigned char*& data, unsigned int next, unsigned int last)
+{
+	(void)next;
+
+	unsigned int v = decodeVByte(data);
+	unsigned int d = (v >> 1) ^ -int(v & 1);
+
+	return last + d;
 }
 
 static int getCodeAuxIndex(unsigned char v)
@@ -130,6 +150,7 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 	size_t vertexfifooffset = 0;
 
 	unsigned int next = 0;
+	unsigned int last = 0;
 
 	unsigned char* code = buffer;
 	unsigned char* data = buffer + index_count / 3;
@@ -152,7 +173,7 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 			*code++ = static_cast<unsigned char>((fe << 4) | fec);
 
 			if (fec == 15)
-				encodeVarInt(data, next - c);
+				encodeIndex(data, c, next, last), last = c;
 
 			if (fec == 0 || fec == 15)
 				pushVertexFifo(vertexfifo, c, vertexfifooffset);
@@ -194,13 +215,13 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 			}
 
 			if (fea == 15)
-				encodeVarInt(data, next - a);
+				encodeIndex(data, a, next, last), last = a;
 
 			if (feb == 15)
-				encodeVarInt(data, next - b);
+				encodeIndex(data, b, next, last), last = b;
 
 			if (fec == 15)
-				encodeVarInt(data, next - c);
+				encodeIndex(data, c, next, last), last = c;
 
 			if (fea == 0 || fea == 15)
 				pushVertexFifo(vertexfifo, a, vertexfifooffset);
@@ -233,8 +254,8 @@ size_t meshopt_encodeIndexBufferBound(size_t index_count, size_t vertex_count)
 	while (vertex_bits < 32 && vertex_count > size_t(1) << vertex_bits)
 		vertex_bits++;
 
-	// worst-case encoding is 2 header bytes + 3 varint-7 encoded indices
-	unsigned int vertex_groups = (vertex_bits + 6) / 7;
+	// worst-case encoding is 2 header bytes + 3 varint-7 encoded index deltas
+	unsigned int vertex_groups = (vertex_bits + 1 + 6) / 7;
 
 	return (index_count / 3) * (2 + 3 * vertex_groups);
 }
@@ -255,6 +276,7 @@ void meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, co
 	size_t vertexfifooffset = 0;
 
 	unsigned int next = 0;
+	unsigned int last = 0;
 
 	const unsigned char* code = buffer;
 	const unsigned char* data = buffer + index_count / 3;
@@ -275,7 +297,7 @@ void meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, co
 			unsigned int c = (fec == 0) ? next++ : vertexfifo[(vertexfifooffset - 1 - fec) & 15];
 
 			if (fec == 15)
-				c = next - decodeVarInt(data);
+				last = c = decodeIndex(data, next, last);
 
 			destination[i + 0] = a;
 			destination[i + 1] = b;
@@ -310,13 +332,13 @@ void meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, co
 			unsigned int c = (fec == 0) ? next++ : vertexfifo[(vertexfifooffset - fec) & 15];
 
 			if (fea == 15)
-				a = next - decodeVarInt(data);
+				last = a = decodeIndex(data, next, last);
 
 			if (feb == 15)
-				b = next - decodeVarInt(data);
+				last = b = decodeIndex(data, next, last);
 
 			if (fec == 15)
-				c = next - decodeVarInt(data);
+				last = c = decodeIndex(data, next, last);
 
 			destination[i + 0] = a;
 			destination[i + 1] = b;
