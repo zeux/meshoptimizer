@@ -36,8 +36,7 @@ meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* ind
 		// flush cache if triangle doesn't fit into warp or into the triangle buffer
 		if ((buffer_size && buffer_offset == buffer_size) || (warp_size && warp_offset + ac + bc + cc > warp_size))
 		{
-			if (warp_offset > 0)
-				result.warps_executed++;
+			result.warps_executed += warp_offset > 0;
 
 			warp_offset = 0;
 			buffer_offset = 0;
@@ -61,6 +60,8 @@ meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* ind
 
 		buffer_offset++;
 	}
+
+	result.warps_executed += warp_offset > 0;
 
 	result.acmr = index_count == 0 ? 0 : float(result.vertices_transformed) / float(index_count / 3);
 	result.atvr = vertex_count == 0 ? 0 : float(result.vertices_transformed) / float(vertex_count);
