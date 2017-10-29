@@ -9,7 +9,7 @@
 
 #include "objparser.h"
 
-const size_t kCacheSize = 24;
+const size_t kCacheSize = 16;
 
 struct Vertex
 {
