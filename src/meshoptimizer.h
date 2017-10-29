@@ -110,6 +110,7 @@ MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsig
 struct meshopt_VertexCacheStatistics
 {
 	unsigned int vertices_transformed;
+	unsigned int warps_executed;
 	float acmr; /* transformed vertices / triangle count; best case 0.5, worst case 3.0, optimum depends on topology */
 	float atvr; /* transformed vertices / vertex count; best case 1.0, worse case 6.0, optimum is 1.0 (each vertex is transformed once) */
 };
@@ -119,7 +120,7 @@ struct meshopt_VertexCacheStatistics
  * Returns cache hit statistics using a simplified FIFO model
  * Results will not match actual GPU performance
  */
-MESHOPTIMIZER_API struct meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size);
+MESHOPTIMIZER_API struct meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int warp_size, unsigned int buffer_size);
 
 struct meshopt_OverdrawStatistics
 {
@@ -298,11 +299,11 @@ inline size_t meshopt_simplify(T* destination, const T* indices, size_t index_co
 }
 
 template <typename T>
-inline meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+inline meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int warp_size, unsigned int buffer_size)
 {
 	meshopt_IndexAdapter<T> in(0, indices, index_count);
 
-	return meshopt_analyzeVertexCache(in.data, index_count, vertex_count, cache_size);
+	return meshopt_analyzeVertexCache(in.data, index_count, vertex_count, cache_size, warp_size, buffer_size);
 }
 
 template <typename T>
