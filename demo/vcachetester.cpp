@@ -259,39 +259,45 @@ void testCacheSequence(IDXGIAdapter* adapter, int argc, char** argv)
 		unsigned int inv0 = i == 0 ? 0 : queryVSInvocations(device, context, ib.data(), i);
 		unsigned int inv1 = queryVSInvocations(device, context, ib.data(), i + 3);
 
-		unsigned int a = ib[i + 0];
-		unsigned int b = ib[i + 1];
-		unsigned int c = ib[i + 2];
-
-		ib[i + 0] = ib[i + 1] = ib[i + 2] = a;
-		unsigned int inva = queryVSInvocations(device, context, ib.data(), i + 3);
-
-		ib[i + 1] = ib[i + 2] = b;
-		unsigned int invb = queryVSInvocations(device, context, ib.data(), i + 3);
-
-		ib[i + 2] = c;
-		unsigned int invc = queryVSInvocations(device, context, ib.data(), i + 3);
-
-		assert(inv0 <= inva);
-		assert(inva <= invb);
-		assert(invb <= invc);
-		assert(invc <= inv1);
-
+		assert(inv0 <= inv1);
 		assert(inv0 + 3 >= inv1);
 
-		// some HW does a cache flush if the entire triangle doesn't fit
-		// in this case we can't rely on only inva/invb/invc
-		if (inv0 + 3 == inv1)
+		switch (inv1 - inv0)
 		{
-			xformed[i + 0] = true;
-			xformed[i + 1] = true;
-			xformed[i + 2] = true;
-		}
-		else
+		case 0:
+			xformed[i + 0] = xformed[i + 1] = xformed[i + 2] = false;
+			break;
+
+		case 3:
+			xformed[i + 0] = xformed[i + 1] = xformed[i + 2] = true;
+			break;
+
+		case 1:
+		case 2:
 		{
+			unsigned int a = ib[i + 0];
+			unsigned int b = ib[i + 1];
+			unsigned int c = ib[i + 2];
+
+			ib[i + 0] = ib[i + 1] = ib[i + 2] = a;
+			unsigned int inva = queryVSInvocations(device, context, ib.data(), i + 3);
+
+			ib[i + 1] = ib[i + 2] = b;
+			unsigned int invb = queryVSInvocations(device, context, ib.data(), i + 3);
+
+			ib[i + 2] = c;
+			unsigned int invc = queryVSInvocations(device, context, ib.data(), i + 3);
+
+			assert(inv0 <= inva);
+			assert(inva <= invb);
+			assert(invb <= invc);
+			assert(invc <= inv1);
+
 			xformed[i + 0] = inva == inv0 + 1;
 			xformed[i + 1] = invb == inva + 1;
 			xformed[i + 2] = invc == invb + 1;
+			break;
+		}
 		}
 	}
 
