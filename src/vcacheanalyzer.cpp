@@ -5,11 +5,6 @@
 
 #include <vector>
 
-namespace meshopt
-{
-
-}
-
 meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int warp_size, unsigned int buffer_size)
 {
 	assert(index_count % 3 == 0);
