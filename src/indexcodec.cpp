@@ -90,16 +90,23 @@ static void encodeVByte(unsigned char*& data, unsigned int v)
 
 static unsigned int decodeVByte(const unsigned char*& data)
 {
-	unsigned int result = 0;
-	unsigned int shift = 0;
-	unsigned char group;
+	unsigned char lead = *data++;
 
-	do
+	if (lead < 128)
+		return lead;
+
+	unsigned int result = lead & 127;
+	unsigned int shift = 7;
+
+	for (int i = 0; i < 4; ++i)
 	{
-		group = *data++;
+		unsigned char group = *data++;
 		result |= (group & 127) << shift;
 		shift += 7;
-	} while (group & 128);
+
+		if (group < 128)
+			break;
+	}
 
 	return result;
 }
@@ -238,6 +245,14 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 		}
 	}
 
+	// add padding for decoding to be able to assume that each triangle is encoded as <= 16 bytes of extra data
+	// this is enough space for aux byte + 5 bytes per varint index which is the absolute worst case for any input
+	for (size_t i = 0; i < 16; ++i)
+	{
+		*data++ = 0;
+	}
+
+	assert(data >= buffer + index_count / 3 + 16);
 	assert(data <= buffer + buffer_size);
 	(void)buffer_size;
 
@@ -257,14 +272,17 @@ size_t meshopt_encodeIndexBufferBound(size_t index_count, size_t vertex_count)
 	// worst-case encoding is 2 header bytes + 3 varint-7 encoded index deltas
 	unsigned int vertex_groups = (vertex_bits + 1 + 6) / 7;
 
-	return (index_count / 3) * (2 + 3 * vertex_groups);
+	return (index_count / 3) * (2 + 3 * vertex_groups) + 16;
 }
 
-void meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, const unsigned char* buffer, size_t buffer_size)
+int meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, const unsigned char* buffer, size_t buffer_size)
 {
 	using namespace meshopt;
 
 	assert(index_count % 3 == 0);
+
+	if (buffer_size <= index_count / 3 + 16)
+		return -1;
 
 	EdgeFifo edgefifo;
 	memset(edgefifo, -1, sizeof(edgefifo));
@@ -280,9 +298,13 @@ void meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, co
 
 	const unsigned char* code = buffer;
 	const unsigned char* data = buffer + index_count / 3;
+	const unsigned char* data_safe_end = buffer + buffer_size - 16;
 
 	for (size_t i = 0; i < index_count; i += 3)
 	{
+		if (data > data_safe_end)
+			return -2;
+
 		unsigned char codetri = *code++;
 
 		int fe = codetri >> 4;
@@ -359,6 +381,8 @@ void meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, co
 		}
 	}
 
-	assert(data == buffer + buffer_size);
-	(void)buffer_size;
+	if (data != data_safe_end)
+		return -3;
+
+	return 0;
 }

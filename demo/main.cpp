@@ -285,7 +285,9 @@ void encodeIndex(const Mesh& mesh)
 	clock_t middle = clock();
 
 	std::vector<uint32_t> result(mesh.indices.size());
-	meshopt_decodeIndexBuffer(&result[0], mesh.indices.size(), &buffer[0], buffer.size());
+	int res = meshopt_decodeIndexBuffer(&result[0], mesh.indices.size(), &buffer[0], buffer.size());
+	assert(res == 0);
+	(void)res;
 
 	clock_t end = clock();
 
