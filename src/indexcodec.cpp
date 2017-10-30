@@ -21,7 +21,7 @@ static const unsigned int kTriangleIndexOrder[3][3] =
         {2, 0, 1},
 };
 
-static const unsigned char kCodeAuxTable[16] =
+static const unsigned char kCodeAuxEncodingTable[16] =
     {
         // clang-format array formatting is broken :/
         0x00, 0x01, 0x10, 0x02, 0x20, 0x03, 0x30, 0x67, 0x76, 0x78, 0x87, 0x89, 0x98, 0xff, 0, 0,
@@ -131,10 +131,10 @@ static unsigned int decodeIndex(const unsigned char*& data, unsigned int next, u
 	return last + d;
 }
 
-static int getCodeAuxIndex(unsigned char v)
+static int getCodeAuxIndex(unsigned char v, const unsigned char* table)
 {
 	for (int i = 0; i < 16; ++i)
-		if (kCodeAuxTable[i] == v)
+		if (table[i] == v)
 			return i;
 
 	return -1;
@@ -161,6 +161,8 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 
 	unsigned char* code = buffer;
 	unsigned char* data = buffer + index_count / 3;
+
+	const unsigned char* codeaux_table = kCodeAuxEncodingTable;
 
 	for (size_t i = 0; i < index_count; i += 3)
 	{
@@ -204,20 +206,16 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 
 			// we encode feb & fec in 4 bits using a table if possible, and as a full byte otherwise
 			unsigned char codeaux = static_cast<unsigned char>((feb << 4) | fec);
-			int codeauxindex = getCodeAuxIndex(codeaux);
+			int codeauxindex = getCodeAuxIndex(codeaux, codeaux_table);
 
+			// <14 encodes an index into codeaux table, 14 encodes fea=0, 15 encodes fea=15
 			if (fea == 0 && codeauxindex >= 0 && codeauxindex < 14)
 			{
 				*code++ = static_cast<unsigned char>((15 << 4) | codeauxindex);
 			}
-			else if (fea == 0)
-			{
-				*code++ = static_cast<unsigned char>((15 << 4) | 14);
-				*data++ = codeaux;
-			}
 			else
 			{
-				*code++ = static_cast<unsigned char>((15 << 4) | 15);
+				*code++ = static_cast<unsigned char>((15 << 4) | 14 | fea);
 				*data++ = codeaux;
 			}
 
@@ -245,11 +243,12 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 		}
 	}
 
-	// add padding for decoding to be able to assume that each triangle is encoded as <= 16 bytes of extra data
+	// add codeaux encoding table to the end of the stream; this is used for decoding codeaux *and* as padding
+	// we need padding for decoding to be able to assume that each triangle is encoded as <= 16 bytes of extra data
 	// this is enough space for aux byte + 5 bytes per varint index which is the absolute worst case for any input
 	for (size_t i = 0; i < 16; ++i)
 	{
-		*data++ = 0;
+		*data++ = codeaux_table[i];
 	}
 
 	assert(data >= buffer + index_count / 3 + 16);
@@ -300,6 +299,8 @@ int meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, con
 	const unsigned char* data = buffer + index_count / 3;
 	const unsigned char* data_safe_end = buffer + buffer_size - 16;
 
+	const unsigned char* codeaux_table = data_safe_end;
+
 	for (size_t i = 0; i < index_count; i += 3)
 	{
 		if (data > data_safe_end)
@@ -333,7 +334,7 @@ int meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, con
 		}
 		else
 		{
-			unsigned char codeaux = kCodeAuxTable[codetri & 15];
+			unsigned char codeaux = codeaux_table[codetri & 15];
 
 			int fea = 0;
 			int feb = codeaux >> 4;
