@@ -281,7 +281,7 @@ int meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, con
 
 	assert(index_count % 3 == 0);
 
-	if (buffer_size <= index_count / 3 + 16)
+	if (buffer_size < index_count / 3 + 16)
 		return -1;
 
 	EdgeFifo edgefifo;
