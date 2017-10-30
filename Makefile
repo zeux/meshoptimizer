@@ -24,13 +24,8 @@ ifeq ($(config),coverage)
 endif
 
 ifeq ($(config),sanitize)
-	CXXFLAGS+=-fsanitize=address
-	LDFLAGS+=-fsanitize=address
-
-	ifneq ($(shell uname),Darwin)
-		CXXFLAGS+=-fsanitize=undefined
-		LDFLAGS+=-fsanitize=undefined
-	endif
+	CXXFLAGS+=-fsanitize=address,undefined
+	LDFLAGS+=-fsanitize=address,undefined
 endif
 
 ifeq ($(config),analyze)
