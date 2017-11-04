@@ -5,7 +5,7 @@
 
 #include <vector>
 
-meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int warp_size, unsigned int buffer_size)
+meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int warp_size, unsigned int primgroup_size)
 {
 	assert(index_count % 3 == 0);
 	assert(cache_size >= 3);
@@ -14,7 +14,7 @@ meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* ind
 	meshopt_VertexCacheStatistics result = {};
 
 	unsigned int warp_offset = 0;
-	unsigned int buffer_offset = 0;
+	unsigned int primgroup_offset = 0;
 
 	std::vector<unsigned int> cache_timestamps(vertex_count, 0);
 	unsigned int timestamp = cache_size + 1;
@@ -28,13 +28,13 @@ meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* ind
 		bool bc = (timestamp - cache_timestamps[b]) > cache_size;
 		bool cc = (timestamp - cache_timestamps[c]) > cache_size;
 
-		// flush cache if triangle doesn't fit into warp or into the triangle buffer
-		if ((buffer_size && buffer_offset == buffer_size) || (warp_size && warp_offset + ac + bc + cc > warp_size))
+		// flush cache if triangle doesn't fit into warp or into the primitive buffer
+		if ((primgroup_size && primgroup_offset == primgroup_size) || (warp_size && warp_offset + ac + bc + cc > warp_size))
 		{
 			result.warps_executed += warp_offset > 0;
 
 			warp_offset = 0;
-			buffer_offset = 0;
+			primgroup_offset = 0;
 
 			// reset cache
 			timestamp += cache_size + 1;
@@ -53,7 +53,7 @@ meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* ind
 			}
 		}
 
-		buffer_offset++;
+		primgroup_offset++;
 	}
 
 	result.warps_executed += warp_offset > 0;

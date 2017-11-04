@@ -121,7 +121,7 @@ struct meshopt_VertexCacheStatistics
  * Returns cache hit statistics using a simplified FIFO model
  * Results will not match actual GPU performance
  */
-MESHOPTIMIZER_API struct meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int warp_size, unsigned int buffer_size);
+MESHOPTIMIZER_API struct meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int warp_size, unsigned int primgroup_size);
 
 struct meshopt_OverdrawStatistics
 {
