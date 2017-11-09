@@ -306,11 +306,11 @@ void testCacheSequence(IDXGIAdapter* adapter, int argc, char** argv)
 	for (size_t i = 0; i < ib.size(); ++i)
 		xformed_total += xformed[i];
 
-	printf("// Sequence:");
+	printf("// Sequence: %d indices", int(ib.size()));
 
 	for (size_t i = 0; i < ib.size(); ++i)
 	{
-		if (i % 24 == 0)
+		if (i % 12 == 0)
 		{
 			printf("\n// %3d*3:", int(i / 3));
 		}
