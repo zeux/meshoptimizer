@@ -288,14 +288,25 @@ void testCacheSequence(IDXGIAdapter* adapter, int argc, char** argv)
 			ib[i + 2] = c;
 			unsigned int invc = queryVSInvocations(device, context, ib.data(), i + 3);
 
-			assert(inv0 <= inva);
-			assert(inva <= invb);
-			assert(invb <= invc);
-			assert(invc <= inv1);
+			assert(inv0 <= inva && inva <= inv1);
+			assert(inv0 <= invb && invb <= inv1);
+			assert(inv0 <= invc && invc <= inv1);
 
-			xformed[i + 0] = inva == inv0 + 1;
-			xformed[i + 1] = invb == inva + 1;
-			xformed[i + 2] = invc == invb + 1;
+			if (inv1 - inv0 == 1 && a == c && inva == inv1 && invb == inv0 && invc == inv1)
+			{
+				xformed[i + 0] = false;
+				xformed[i + 1] = false;
+				xformed[i + 2] = true;
+			}
+			else
+			{
+				assert(inva <= invb);
+				assert(invb <= invc);
+
+				xformed[i + 0] = inva == inv0 + 1;
+				xformed[i + 1] = invb == inva + 1;
+				xformed[i + 2] = invc == invb + 1;
+			}
 			break;
 		}
 		}
