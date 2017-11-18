@@ -21,6 +21,8 @@ struct Adjacency
 
 static void buildAdjacency(Adjacency& adjacency, const unsigned int* indices, size_t index_count, size_t vertex_count)
 {
+	size_t face_count = index_count / 3;
+
 	// fill triangle counts
 	adjacency.triangle_counts.resize(vertex_count, 0);
 
@@ -47,8 +49,6 @@ static void buildAdjacency(Adjacency& adjacency, const unsigned int* indices, si
 
 	std::vector<unsigned int> offsets = adjacency.offsets;
 
-	size_t face_count = index_count / 3;
-
 	for (size_t i = 0; i < face_count; ++i)
 	{
 		unsigned int a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
@@ -59,7 +59,7 @@ static void buildAdjacency(Adjacency& adjacency, const unsigned int* indices, si
 	}
 }
 
-static unsigned int getNextVertexDeadEnd(const std::vector<unsigned int>& dead_end, unsigned int& dead_end_top, unsigned int& input_cursor, const std::vector<unsigned int>& live_triangles)
+static unsigned int getNextVertexDeadEnd(const unsigned int* dead_end, unsigned int& dead_end_top, unsigned int& input_cursor, const unsigned int* live_triangles, size_t vertex_count)
 {
 	// check dead-end stack
 	while (dead_end_top)
@@ -71,7 +71,7 @@ static unsigned int getNextVertexDeadEnd(const std::vector<unsigned int>& dead_e
 	}
 
 	// input order
-	while (input_cursor < live_triangles.size())
+	while (input_cursor < vertex_count)
 	{
 		if (live_triangles[input_cursor] > 0)
 			return input_cursor;
@@ -82,7 +82,7 @@ static unsigned int getNextVertexDeadEnd(const std::vector<unsigned int>& dead_e
 	return ~0u;
 }
 
-static unsigned int getNextVertexNeighbour(const unsigned int* next_candidates_begin, const unsigned int* next_candidates_end, const std::vector<unsigned int>& live_triangles, const std::vector<unsigned int>& cache_timestamps, unsigned int timestamp, unsigned int cache_size)
+static unsigned int getNextVertexNeighbour(const unsigned int* next_candidates_begin, const unsigned int* next_candidates_end, const unsigned int* live_triangles, const unsigned int* cache_timestamps, unsigned int timestamp, unsigned int cache_size)
 {
 	unsigned int best_candidate = ~0u;
 	int best_priority = -1;
@@ -115,6 +115,8 @@ static unsigned int getNextVertexNeighbour(const unsigned int* next_candidates_b
 
 static void optimizeVertexCacheTipsify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
+	size_t face_count = index_count / 3;
+
 	// build adjacency information
 	Adjacency adjacency;
 
@@ -131,7 +133,7 @@ static void optimizeVertexCacheTipsify(unsigned int* destination, const unsigned
 	unsigned int dead_end_top = 0;
 
 	// emitted flags
-	std::vector<char> emitted_flags(index_count / 3, false);
+	std::vector<char> emitted_flags(face_count, false);
 
 	unsigned int current_vertex = 0;
 
@@ -193,15 +195,15 @@ static void optimizeVertexCacheTipsify(unsigned int* destination, const unsigned
 		const unsigned int* next_candidates_end = &dead_end[0] + dead_end_top;
 
 		// get next vertex
-		current_vertex = getNextVertexNeighbour(next_candidates_begin, next_candidates_end, live_triangles, cache_timestamps, timestamp, cache_size);
+		current_vertex = getNextVertexNeighbour(next_candidates_begin, next_candidates_end, &live_triangles[0], &cache_timestamps[0], timestamp, cache_size);
 
 		if (current_vertex == ~0u)
 		{
-			current_vertex = getNextVertexDeadEnd(dead_end, dead_end_top, input_cursor, live_triangles);
+			current_vertex = getNextVertexDeadEnd(&dead_end[0], dead_end_top, input_cursor, &live_triangles[0], vertex_count);
 		}
 	}
 
-	assert(output_triangle == index_count / 3);
+	assert(output_triangle == face_count);
 }
 
 const size_t max_cache_size = 32;
@@ -259,10 +261,10 @@ static float vertexScore(int cache_position, unsigned int live_triangles)
 	return vertex_score_table_cache[1 + cache_position] + vertex_score_table_live[live_triangles_clamped];
 }
 
-static unsigned int getNextTriangleDeadEnd(unsigned int& input_cursor, const std::vector<char>& emitted_flags)
+static unsigned int getNextTriangleDeadEnd(unsigned int& input_cursor, const char* emitted_flags, size_t face_count)
 {
 	// input order
-	while (input_cursor < emitted_flags.size())
+	while (input_cursor < face_count)
 	{
 		if (!emitted_flags[input_cursor])
 			return input_cursor;
@@ -278,6 +280,8 @@ static void optimizeVertexCacheForsyth(unsigned int* destination, const unsigned
 	assert(index_count % 3 == 0);
 	assert(cache_size <= max_cache_size);
 
+	size_t face_count = index_count / 3;
+
 	// build adjacency information
 	Adjacency adjacency;
 
@@ -287,7 +291,7 @@ static void optimizeVertexCacheForsyth(unsigned int* destination, const unsigned
 	std::vector<unsigned int> live_triangles = adjacency.triangle_counts;
 
 	// emitted flags
-	std::vector<char> emitted_flags(index_count / 3, false);
+	std::vector<char> emitted_flags(face_count, false);
 
 	// compute initial vertex scores
 	std::vector<float> vertex_scores(vertex_count);
@@ -298,7 +302,7 @@ static void optimizeVertexCacheForsyth(unsigned int* destination, const unsigned
 	}
 
 	// compute triangle scores
-	std::vector<float> triangle_scores(index_count / 3);
+	std::vector<float> triangle_scores(face_count);
 
 	for (size_t i = 0; i < triangle_scores.size(); ++i)
 	{
@@ -321,7 +325,7 @@ static void optimizeVertexCacheForsyth(unsigned int* destination, const unsigned
 
 	while (current_triangle != ~0u)
 	{
-		assert(output_triangle < index_count / 3);
+		assert(output_triangle < face_count);
 
 		unsigned int a = indices[current_triangle * 3 + 0];
 		unsigned int b = indices[current_triangle * 3 + 1];
@@ -427,12 +431,12 @@ static void optimizeVertexCacheForsyth(unsigned int* destination, const unsigned
 
 		if (current_triangle == ~0u)
 		{
-			current_triangle = getNextTriangleDeadEnd(input_cursor, emitted_flags);
+			current_triangle = getNextTriangleDeadEnd(input_cursor, &emitted_flags[0], face_count);
 		}
 	}
 
-	assert(input_cursor == index_count / 3);
-	assert(output_triangle == index_count / 3);
+	assert(input_cursor == face_count);
+	assert(output_triangle == face_count);
 }
 
 } // namespace meshopt
@@ -446,9 +450,7 @@ void meshopt_optimizeVertexCache(unsigned int* destination, const unsigned int* 
 
 	// guard for empty meshes
 	if (index_count == 0 || vertex_count == 0)
-	{
 		return;
-	}
 
 	// support in-place optimization
 	std::vector<unsigned int> indices_copy;
