@@ -12,11 +12,6 @@
 namespace meshopt
 {
 
-struct Vector3
-{
-	float x, y, z;
-};
-
 struct ClusterSortData
 {
 	unsigned int cluster;
@@ -33,20 +28,20 @@ static void calculateSortData(ClusterSortData* sort_data, const unsigned int* in
 {
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
-	Vector3 mesh_centroid = Vector3();
+	float mesh_centroid[3] = {};
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
-		const Vector3& p = *reinterpret_cast<const Vector3*>(vertex_positions + vertex_stride_float * indices[i]);
+		const float* p = vertex_positions + vertex_stride_float * indices[i];
 
-		mesh_centroid.x += p.x;
-		mesh_centroid.y += p.y;
-		mesh_centroid.z += p.z;
+		mesh_centroid[0] += p[0];
+		mesh_centroid[1] += p[1];
+		mesh_centroid[2] += p[2];
 	}
 
-	mesh_centroid.x /= index_count;
-	mesh_centroid.y /= index_count;
-	mesh_centroid.z /= index_count;
+	mesh_centroid[0] /= index_count;
+	mesh_centroid[1] /= index_count;
+	mesh_centroid[2] /= index_count;
 
 	for (size_t cluster = 0; cluster < cluster_count; ++cluster)
 	{
@@ -55,48 +50,50 @@ static void calculateSortData(ClusterSortData* sort_data, const unsigned int* in
 		assert(cluster_begin < cluster_end);
 
 		float cluster_area = 0;
-		Vector3 cluster_centroid = Vector3();
-		Vector3 cluster_normal = Vector3();
+		float cluster_centroid[3] = {};
+		float cluster_normal[3] = {};
 
 		for (size_t i = cluster_begin; i < cluster_end; i += 3)
 		{
-			const Vector3& p0 = *reinterpret_cast<const Vector3*>(vertex_positions + vertex_stride_float * indices[i + 0]);
-			const Vector3& p1 = *reinterpret_cast<const Vector3*>(vertex_positions + vertex_stride_float * indices[i + 1]);
-			const Vector3& p2 = *reinterpret_cast<const Vector3*>(vertex_positions + vertex_stride_float * indices[i + 2]);
+			const float* p0 = vertex_positions + vertex_stride_float * indices[i + 0];
+			const float* p1 = vertex_positions + vertex_stride_float * indices[i + 1];
+			const float* p2 = vertex_positions + vertex_stride_float * indices[i + 2];
 
-			Vector3 p10 = {p1.x - p0.x, p1.y - p0.y, p1.z - p0.z};
-			Vector3 p20 = {p2.x - p0.x, p2.y - p0.y, p2.z - p0.z};
-			Vector3 normal = {p10.y * p20.z - p10.z * p20.y, p10.z * p20.x - p10.x * p20.z, p10.x * p20.y - p10.y * p20.x};
+			float p10[3] = {p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]};
+			float p20[3] = {p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]};
 
-			float area = sqrtf(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
-			Vector3 centroid_area = {(p0.x + p1.x + p2.x) * (area / 3), (p0.y + p1.y + p2.y) * (area / 3), (p0.z + p1.z + p2.z) * (area / 3)};
+			float normalx = p10[1] * p20[2] - p10[2] * p20[1];
+			float normaly = p10[2] * p20[0] - p10[0] * p20[2];
+			float normalz = p10[0] * p20[1] - p10[1] * p20[0];
 
-			cluster_centroid.x += centroid_area.x;
-			cluster_centroid.y += centroid_area.y;
-			cluster_centroid.z += centroid_area.z;
-			cluster_normal.x += normal.x;
-			cluster_normal.y += normal.y;
-			cluster_normal.z += normal.z;
+			float area = sqrtf(normalx * normalx + normaly * normaly + normalz * normalz);
+
+			cluster_centroid[0] += (p0[0] + p1[0] + p2[0]) * (area / 3);
+			cluster_centroid[1] += (p0[1] + p1[1] + p2[1]) * (area / 3);
+			cluster_centroid[2] += (p0[2] + p1[2] + p2[2]) * (area / 3);
+			cluster_normal[0] += normalx;
+			cluster_normal[1] += normaly;
+			cluster_normal[2] += normalz;
 			cluster_area += area;
 		}
 
 		float inv_cluster_area = cluster_area == 0 ? 0 : 1 / cluster_area;
 
-		cluster_centroid.x *= inv_cluster_area;
-		cluster_centroid.y *= inv_cluster_area;
-		cluster_centroid.z *= inv_cluster_area;
+		cluster_centroid[0] *= inv_cluster_area;
+		cluster_centroid[1] *= inv_cluster_area;
+		cluster_centroid[2] *= inv_cluster_area;
 
-		float cluster_normal_length = sqrtf(cluster_normal.x * cluster_normal.x + cluster_normal.y * cluster_normal.y + cluster_normal.z * cluster_normal.z);
+		float cluster_normal_length = sqrtf(cluster_normal[0] * cluster_normal[0] + cluster_normal[1] * cluster_normal[1] + cluster_normal[2] * cluster_normal[2]);
 		float inv_cluster_normal_length = cluster_normal_length == 0 ? 0 : 1 / cluster_normal_length;
 
-		cluster_normal.x *= inv_cluster_normal_length;
-		cluster_normal.y *= inv_cluster_normal_length;
-		cluster_normal.z *= inv_cluster_normal_length;
+		cluster_normal[0] *= inv_cluster_normal_length;
+		cluster_normal[1] *= inv_cluster_normal_length;
+		cluster_normal[2] *= inv_cluster_normal_length;
 
-		Vector3 centroid_vector = {cluster_centroid.x - mesh_centroid.x, cluster_centroid.y - mesh_centroid.y, cluster_centroid.z - mesh_centroid.z};
+		float centroid_vector[3] = {cluster_centroid[0] - mesh_centroid[0], cluster_centroid[1] - mesh_centroid[1], cluster_centroid[2] - mesh_centroid[2]};
 
 		sort_data[cluster].cluster = unsigned(cluster);
-		sort_data[cluster].dot_product = centroid_vector.x * cluster_normal.x + centroid_vector.y * cluster_normal.y + centroid_vector.z * cluster_normal.z;
+		sort_data[cluster].dot_product = centroid_vector[0] * cluster_normal[0] + centroid_vector[1] * cluster_normal[1] + centroid_vector[2] * cluster_normal[2];
 	}
 }
 
