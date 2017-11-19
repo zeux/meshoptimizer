@@ -15,11 +15,6 @@ namespace meshopt
 
 const int kViewport = 256;
 
-struct Vector3
-{
-	float x, y, z;
-};
-
 struct OverdrawBuffer
 {
 	float z[kViewport][kViewport][2];
@@ -175,7 +170,7 @@ meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, 
 	float extent = std::max(maxv[0] - minv[0], std::max(maxv[1] - minv[1], maxv[2] - minv[2]));
 	float scale = kViewport / extent;
 
-	std::vector<Vector3> triangles(index_count);
+	std::vector<float> triangles(index_count * 3);
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
@@ -183,9 +178,10 @@ meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, 
 		assert(index < vertex_count);
 
 		const float* v = vertex_positions + index * vertex_stride_float;
-		Vector3 vn = {(v[0] - minv[0]) * scale, (v[1] - minv[1]) * scale, (v[2] - minv[2]) * scale};
 
-		triangles[i] = vn;
+		triangles[i * 3 + 0] = (v[0] - minv[0]) * scale;
+		triangles[i * 3 + 1] = (v[1] - minv[1]) * scale;
+		triangles[i * 3 + 2] = (v[2] - minv[2]) * scale;
 	}
 
 	OverdrawBuffer* buffer = new OverdrawBuffer();
@@ -196,9 +192,9 @@ meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, 
 
 		for (size_t i = 0; i < index_count; i += 3)
 		{
-			const float* vn0 = &triangles[i + 0].x;
-			const float* vn1 = &triangles[i + 1].x;
-			const float* vn2 = &triangles[i + 2].x;
+			const float* vn0 = &triangles[3 * (i + 0)];
+			const float* vn1 = &triangles[3 * (i + 1)];
+			const float* vn2 = &triangles[3 * (i + 2)];
 
 			switch (axis)
 			{
