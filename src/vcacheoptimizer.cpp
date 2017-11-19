@@ -211,7 +211,7 @@ const size_t max_valence = 32;
 
 #if 0
 static float vertex_score_table_cache[1 + max_cache_size];
-static float vertex_score_table_live[max_valence];
+static float vertex_score_table_live[1 + max_valence];
 
 void vertexScoreInit(float last_triangle_score, float valence_boost_scale, float valence_boost_power, float cache_decay_power)
 {
@@ -224,7 +224,7 @@ void vertexScoreInit(float last_triangle_score, float valence_boost_scale, float
 
 	vertex_score_table_live[0] = 0;
 
-	for (size_t i = 1; i < max_valence; ++i)
+	for (size_t i = 1; i <= max_valence; ++i)
 	{
 		vertex_score_table_live[i] = valence_boost_scale / powf(float(i), valence_boost_power);
 	}
@@ -257,7 +257,7 @@ static float vertexScore(int cache_position, unsigned int live_triangles)
 {
 	assert(cache_position >= -1 && cache_position < int(max_cache_size));
 
-	unsigned int live_triangles_clamped = live_triangles < max_valence ? live_triangles : max_valence - 1;
+	unsigned int live_triangles_clamped = live_triangles < max_valence ? live_triangles : max_valence;
 
 	return vertex_score_table_cache[1 + cache_position] + vertex_score_table_live[live_triangles_clamped];
 }
