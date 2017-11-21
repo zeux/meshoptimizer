@@ -53,10 +53,8 @@ You can then further optimize the resulting buffers by calling the other functio
 When the GPU renders the mesh, it has to run the vertex shader for each vertex; usually GPUs have a built-in fixed size cache that stores the transformed vertices (the result of running the vertex shader), and uses this cache to reduce the number of vertex shader invocations. This cache is usually small, 16-32 vertices, and can have different replacement policies; to use this cache efficiently, you have to reorder your triangles to maximize the locality of reused vertex references like so:
 
 ```c++
-meshopt_optimizeVertexCache(indices, indices, index_count, vertex_count, 16);
+meshopt_optimizeVertexCache(indices, indices, index_count, vertex_count);
 ```
-
-In general it's better to use the cache size that's smaller than your target GPU cache size than the one that's bigger; 16 is a reasonable default value.
 
 ## Overdraw optimization
 
