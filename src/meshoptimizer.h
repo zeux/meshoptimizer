@@ -54,9 +54,18 @@ MESHOPTIMIZER_API void meshopt_remapIndexBuffer(unsigned int* destination, const
  * Reorders indices to reduce the number of GPU vertex shader invocations
  *
  * destination must contain enough space for the resulting index buffer (index_count elements)
+ */
+MESHOPTIMIZER_API void meshopt_optimizeVertexCache(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count);
+
+/**
+ * Vertex transform cache optimizer for FIFO caches
+ * Reorders indices to reduce the number of GPU vertex shader invocations
+ * Generally takes ~3x less time to optimize meshes but produces inferior results compared to meshopt_optimizeVertexCache
+ *
+ * destination must contain enough space for the resulting index buffer (index_count elements)
  * cache_size should be less than the actual GPU cache size to avoid cache thrashing
  */
-MESHOPTIMIZER_API void meshopt_optimizeVertexCache(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size);
+MESHOPTIMIZER_API void meshopt_optimizeVertexCacheFifo(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size);
 
 /**
  * Overdraw optimizer
@@ -249,12 +258,21 @@ inline void meshopt_remapIndexBuffer(T* destination, const T* indices, size_t in
 }
 
 template <typename T>
-inline void meshopt_optimizeVertexCache(T* destination, const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+inline void meshopt_optimizeVertexCache(T* destination, const T* indices, size_t index_count, size_t vertex_count)
 {
 	meshopt_IndexAdapter<T> in(0, indices, index_count);
 	meshopt_IndexAdapter<T> out(destination, 0, index_count);
 
-	meshopt_optimizeVertexCache(out.data, in.data, index_count, vertex_count, cache_size);
+	meshopt_optimizeVertexCache(out.data, in.data, index_count, vertex_count);
+}
+
+template <typename T>
+inline void meshopt_optimizeVertexCacheFifo(T* destination, const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+{
+	meshopt_IndexAdapter<T> in(0, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, 0, index_count);
+
+	meshopt_optimizeVertexCacheFifo(out.data, in.data, index_count, vertex_count, cache_size);
 }
 
 template <typename T>

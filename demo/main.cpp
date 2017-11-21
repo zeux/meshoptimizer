@@ -145,12 +145,12 @@ void optRandomShuffle(Mesh& mesh)
 
 void optCache(Mesh& mesh)
 {
-	meshopt_optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize);
+	meshopt_optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size());
 }
 
-void optCache0(Mesh& mesh)
+void optCacheFifo(Mesh& mesh)
 {
-	meshopt_optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), 0);
+	meshopt_optimizeVertexCacheFifo(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize);
 }
 
 void optOverdraw(Mesh& mesh)
@@ -169,7 +169,7 @@ void optFetch(Mesh& mesh)
 void optComplete(Mesh& mesh)
 {
 	// vertex cache optimization should go first as it provides data for overdraw
-	meshopt_optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize);
+	meshopt_optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size());
 
 	// reorder indices for overdraw, balancing overdraw and vertex cache efficiency
 	const float kThreshold = 1.05f; // allow up to 5% worse ACMR to get more reordering opportunities for overdraw
@@ -210,7 +210,7 @@ void optCompleteSimplify(Mesh& mesh)
 	{
 		std::vector<unsigned int>& lod = lods[i];
 
-		meshopt_optimizeVertexCache(&lod[0], &lod[0], lod.size(), mesh.vertices.size(), kCacheSize);
+		meshopt_optimizeVertexCache(&lod[0], &lod[0], lod.size(), mesh.vertices.size());
 		meshopt_optimizeOverdraw(&lod[0], &lod[0], lod.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), kCacheSize, 1.0f);
 	}
 
@@ -335,7 +335,7 @@ void process(const char* path)
 	optimize(mesh, "Original", optNone);
 	optimize(mesh, "Random", optRandomShuffle);
 	optimize(mesh, "Cache", optCache);
-	optimize(mesh, "Cache0", optCache0);
+	optimize(mesh, "CacheFifo", optCacheFifo);
 	optimize(mesh, "Overdraw", optOverdraw);
 	optimize(mesh, "Fetch", optFetch);
 	optimize(mesh, "Complete", optComplete);
@@ -344,7 +344,7 @@ void process(const char* path)
 	optimize(mesh, "Simplify", optCompleteSimplify);
 
 	Mesh copy = mesh;
-	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size(), 0);
+	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
 	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
 
 	encodeIndex(copy);

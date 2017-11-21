@@ -442,12 +442,11 @@ static void optimizeVertexCacheForsyth(unsigned int* destination, const unsigned
 
 } // namespace meshopt
 
-void meshopt_optimizeVertexCache(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+void meshopt_optimizeVertexCache(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count)
 {
 	using namespace meshopt;
 
 	assert(index_count % 3 == 0);
-	assert(cache_size == 0 || cache_size >= 3);
 
 	// guard for empty meshes
 	if (index_count == 0 || vertex_count == 0)
@@ -462,8 +461,28 @@ void meshopt_optimizeVertexCache(unsigned int* destination, const unsigned int* 
 		indices = &indices_copy[0];
 	}
 
-	if (cache_size == 0)
-		optimizeVertexCacheForsyth(destination, indices, index_count, vertex_count, 16);
-	else
-		optimizeVertexCacheTipsify(destination, indices, index_count, vertex_count, cache_size);
+	optimizeVertexCacheForsyth(destination, indices, index_count, vertex_count, 16);
+}
+
+void meshopt_optimizeVertexCacheFifo(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
+{
+	using namespace meshopt;
+
+	assert(index_count % 3 == 0);
+	assert(cache_size >= 3);
+
+	// guard for empty meshes
+	if (index_count == 0 || vertex_count == 0)
+		return;
+
+	// support in-place optimization
+	std::vector<unsigned int> indices_copy;
+
+	if (destination == indices)
+	{
+		indices_copy.assign(indices, indices + index_count);
+		indices = &indices_copy[0];
+	}
+
+	optimizeVertexCacheTipsify(destination, indices, index_count, vertex_count, cache_size);
 }
