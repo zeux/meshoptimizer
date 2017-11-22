@@ -158,7 +158,7 @@ void optOverdraw(Mesh& mesh)
 	// use worst-case ACMR threshold so that overdraw optimizer can sort *all* triangles
 	// warning: this significantly deteriorates the vertex cache efficiency so it is not advised; look at optComplete for the recommended method
 	const float kThreshold = 3.f;
-	meshopt_optimizeOverdraw(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), kCacheSize, kThreshold);
+	meshopt_optimizeOverdraw(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), kThreshold);
 }
 
 void optFetch(Mesh& mesh)
@@ -173,7 +173,7 @@ void optComplete(Mesh& mesh)
 
 	// reorder indices for overdraw, balancing overdraw and vertex cache efficiency
 	const float kThreshold = 1.05f; // allow up to 5% worse ACMR to get more reordering opportunities for overdraw
-	meshopt_optimizeOverdraw(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), kCacheSize, kThreshold);
+	meshopt_optimizeOverdraw(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), kThreshold);
 
 	// vertex fetch optimization should go last as it depends on the final index order
 	meshopt_optimizeVertexFetch(&mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
@@ -211,7 +211,7 @@ void optCompleteSimplify(Mesh& mesh)
 		std::vector<unsigned int>& lod = lods[i];
 
 		meshopt_optimizeVertexCache(&lod[0], &lod[0], lod.size(), mesh.vertices.size());
-		meshopt_optimizeOverdraw(&lod[0], &lod[0], lod.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), kCacheSize, 1.0f);
+		meshopt_optimizeOverdraw(&lod[0], &lod[0], lod.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), 1.0f);
 	}
 
 	// concatenate all LODs into one IB

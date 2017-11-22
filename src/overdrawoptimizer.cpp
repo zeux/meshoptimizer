@@ -230,14 +230,13 @@ static size_t generateSoftBoundaries(unsigned int* destination, const unsigned i
 
 } // namespace
 
-void meshopt_optimizeOverdraw(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, unsigned int cache_size, float threshold)
+void meshopt_optimizeOverdraw(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, float threshold)
 {
 	using namespace meshopt;
 
 	assert(index_count % 3 == 0);
 	assert(vertex_positions_stride > 0 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
-	assert(cache_size >= 3);
 
 	// guard for empty meshes
 	if (index_count == 0 || vertex_count == 0)
@@ -251,6 +250,8 @@ void meshopt_optimizeOverdraw(unsigned int* destination, const unsigned int* ind
 		indices_copy.assign(indices, indices + index_count);
 		indices = &indices_copy[0];
 	}
+
+	unsigned int cache_size = 16;
 
 	// generate hard boundaries from full-triangle cache misses
 	std::vector<unsigned int> hard_clusters(index_count / 3);

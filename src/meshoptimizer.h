@@ -18,9 +18,6 @@
 #define MESHOPTIMIZER_API
 #endif
 
-/* Recommended vertex cache size; it provides a reasonable balance between performance on different GPUs */
-#define MESHOPTIMIZER_VCACHE_SIZE 16
-
 /* C interface */
 #ifdef __cplusplus
 extern "C" {
@@ -74,10 +71,9 @@ MESHOPTIMIZER_API void meshopt_optimizeVertexCacheFifo(unsigned int* destination
  * destination must contain enough space for the resulting index buffer (index_count elements)
  * indices must contain index data that is the result of optimizeVertexCache (*not* the original mesh indices!)
  * vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
- * cache_size should be less than the actual GPU cache size to avoid cache thrashing
  * threshold indicates how much the overdraw optimizer can degrade vertex cache efficiency (1.05 = up to 5%) to reduce overdraw more efficiently
  */
-MESHOPTIMIZER_API void meshopt_optimizeOverdraw(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, unsigned int cache_size, float threshold);
+MESHOPTIMIZER_API void meshopt_optimizeOverdraw(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, float threshold);
 
 /**
  * Vertex fetch cache optimizer
@@ -276,12 +272,12 @@ inline void meshopt_optimizeVertexCacheFifo(T* destination, const T* indices, si
 }
 
 template <typename T>
-inline void meshopt_optimizeOverdraw(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, unsigned int cache_size, float threshold)
+inline void meshopt_optimizeOverdraw(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, float threshold)
 {
 	meshopt_IndexAdapter<T> in(0, indices, index_count);
 	meshopt_IndexAdapter<T> out(destination, 0, index_count);
 
-	meshopt_optimizeOverdraw(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride, cache_size, threshold);
+	meshopt_optimizeOverdraw(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride, threshold);
 }
 
 template <typename T>
