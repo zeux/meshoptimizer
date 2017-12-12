@@ -139,6 +139,26 @@ bool isMeshValid(const Mesh& mesh)
 	return true;
 }
 
+void rotateTriangle(Triangle& t)
+{
+	int c01 = memcmp(&t.v[0], &t.v[1], sizeof(Vertex));
+	int c02 = memcmp(&t.v[0], &t.v[2], sizeof(Vertex));
+	int c12 = memcmp(&t.v[1], &t.v[2], sizeof(Vertex));
+
+	if (c12 < 0 && c01 > 0)
+	{
+		// 1 is minimum, rotate 012 => 120
+		Vertex tv = t.v[0];
+		t.v[0] = t.v[1], t.v[1] = t.v[2], t.v[2] = tv;
+	}
+	else if (c02 > 0 && c12 > 0)
+	{
+		// 2 is minimum, rotate 012 => 201
+		Vertex tv = t.v[2];
+		t.v[2] = t.v[1], t.v[1] = t.v[0], t.v[0] = tv;
+	}
+}
+
 bool areMeshesEqual(const Mesh& lhs, const Mesh& rhs)
 {
 	if (lhs.indices.size() != rhs.indices.size())
@@ -156,6 +176,9 @@ bool areMeshesEqual(const Mesh& lhs, const Mesh& rhs)
 			lt[i].v[k] = lhs.vertices[lhs.indices[i * 3 + k]];
 			rt[i].v[k] = rhs.vertices[rhs.indices[i * 3 + k]];
 		}
+
+		rotateTriangle(lt[i]);
+		rotateTriangle(rt[i]);
 	}
 
 	std::sort(lt.begin(), lt.end());
@@ -368,8 +391,7 @@ void stripify(const Mesh& mesh)
 	copy.indices.resize(meshopt_unstripify(&copy.indices[0], &strip[0], strip.size()));
 
 	assert(isMeshValid(copy));
-	// TODO: This is broken!
-	// assert(areMeshesEqual(mesh, copy));
+	assert(areMeshesEqual(mesh, copy));
 
 	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, 0, 0);
 	meshopt_VertexCacheStatistics vcs_nv = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), 32, 32, 32);
