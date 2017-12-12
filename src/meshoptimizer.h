@@ -332,6 +332,24 @@ inline size_t meshopt_simplify(T* destination, const T* indices, size_t index_co
 }
 
 template <typename T>
+inline size_t meshopt_stripify(T* destination, const T* indices, size_t index_count, size_t vertex_count)
+{
+	meshopt_IndexAdapter<T> in(0, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, 0, (index_count / 3) * 4);
+
+	return meshopt_stripify(out.data, in.data, index_count, vertex_count);
+}
+
+template <typename T>
+inline size_t meshopt_unstripify(T* destination, const T* indices, size_t index_count)
+{
+	meshopt_IndexAdapter<T> in(0, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, 0, (index_count - 2) * 3);
+
+	return meshopt_unstripify(out.data, in.data, index_count);
+}
+
+template <typename T>
 inline meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int warp_size, unsigned int buffer_size)
 {
 	meshopt_IndexAdapter<T> in(0, indices, index_count);
