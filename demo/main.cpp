@@ -24,6 +24,16 @@ struct Mesh
 	std::vector<unsigned int> indices;
 };
 
+struct Triangle
+{
+	Vertex v[3];
+
+	bool operator<(const Triangle& other) const
+	{
+		return memcmp(v, other.v, sizeof(Triangle)) < 0;
+	}
+};
+
 Mesh generatePlane(unsigned int N)
 {
 	Mesh result;
@@ -115,6 +125,43 @@ Mesh parseObj(const char* path, clock_t& reindex)
 	meshopt_remapVertexBuffer(&result.vertices[0], &vertices[0], total_indices, sizeof(Vertex), &remap[0]);
 
 	return result;
+}
+
+bool isMeshValid(const Mesh& mesh)
+{
+	if (mesh.indices.size() % 3 != 0)
+		return false;
+
+	for (size_t i = 0; i < mesh.indices.size(); ++i)
+		if (mesh.indices[i] >= mesh.vertices.size())
+			return false;
+
+	return true;
+}
+
+bool areMeshesEqual(const Mesh& lhs, const Mesh& rhs)
+{
+	if (lhs.indices.size() != rhs.indices.size())
+		return false;
+
+	size_t triangles = lhs.indices.size() / 3;
+
+	std::vector<Triangle> lt(triangles);
+	std::vector<Triangle> rt(triangles);
+
+	for (size_t i = 0; i < triangles; ++i)
+	{
+		for (int k = 0; k < 3; ++k)
+		{
+			lt[i].v[k] = lhs.vertices[lhs.indices[i * 3 + k]];
+			rt[i].v[k] = rhs.vertices[rhs.indices[i * 3 + k]];
+		}
+	}
+
+	std::sort(lt.begin(), lt.end());
+	std::sort(rt.begin(), rt.end());
+
+	return memcmp(&lt[0], &rt[0], triangles * sizeof(Triangle)) == 0;
 }
 
 void optNone(Mesh& mesh)
@@ -256,13 +303,17 @@ void optCompleteSimplify(Mesh& mesh)
 	(void)lod_index_counts;
 }
 
-void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
+void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh), bool compare = true)
 {
 	Mesh copy = mesh;
 
 	clock_t start = clock();
 	optf(copy);
 	clock_t end = clock();
+
+	assert(isMeshValid(copy));
+	assert(!compare || areMeshesEqual(mesh, copy));
+	(void)compare;
 
 	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), kCacheSize, 0, 0);
 	meshopt_VertexFetchStatistics vfs = meshopt_analyzeVertexFetch(&copy.indices[0], copy.indices.size(), copy.vertices.size(), sizeof(Vertex));
@@ -313,15 +364,17 @@ void stripify(const Mesh& mesh)
 	strip.resize(meshopt_stripify(&strip[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size()));
 	clock_t end = clock();
 
-	std::vector<unsigned int> list(mesh.indices.size());
-	list.resize(meshopt_unstripify(&list[0], &strip[0], strip.size()));
+	Mesh copy = mesh;
+	copy.indices.resize(meshopt_unstripify(&copy.indices[0], &strip[0], strip.size()));
 
-	assert(list.size() == mesh.indices.size());
+	assert(isMeshValid(copy));
+	// TODO: This is broken!
+	// assert(areMeshesEqual(mesh, copy));
 
-	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&list[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, 0, 0);
-	meshopt_VertexCacheStatistics vcs_nv = meshopt_analyzeVertexCache(&list[0], mesh.indices.size(), mesh.vertices.size(), 32, 32, 32);
-	meshopt_VertexCacheStatistics vcs_amd = meshopt_analyzeVertexCache(&list[0], mesh.indices.size(), mesh.vertices.size(), 14, 64, 128);
-	meshopt_VertexCacheStatistics vcs_intel = meshopt_analyzeVertexCache(&list[0], mesh.indices.size(), mesh.vertices.size(), 128, 0, 0);
+	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, 0, 0);
+	meshopt_VertexCacheStatistics vcs_nv = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), 32, 32, 32);
+	meshopt_VertexCacheStatistics vcs_amd = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), 14, 64, 128);
+	meshopt_VertexCacheStatistics vcs_intel = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), 128, 0, 0);
 
 	printf("Stripify : ACMR %f ATVR %f (NV %f AMD %f Intel %f); %d strip indices (%.1f%%) in %.2f msec\n",
 	       vcs.acmr, vcs.atvr, vcs_nv.atvr, vcs_amd.atvr, vcs_intel.atvr,
@@ -364,7 +417,7 @@ void process(const char* path)
 	optimize(mesh, "Complete", optComplete);
 
 	// note: the ATVR/overdraw output from this pass is not necessarily correct since we analyze all LODs at once
-	optimize(mesh, "Simplify", optCompleteSimplify);
+	optimize(mesh, "Simplify", optCompleteSimplify, /* compare= */ false);
 
 	Mesh copy = mesh;
 	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
