@@ -113,6 +113,24 @@ MESHOPTIMIZER_API int meshopt_decodeIndexBuffer(unsigned int* destination, size_
  */
 MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count);
 
+/**
+ * Experimental: Mesh stripifier
+ * Converts a previously vertex cache optimized triangle list to triangle strip, stitching strips using restart index
+ * Returns the number of indices in the resulting strip, with destination containing new index data
+ *
+ * destination must contain enough space for the worst case target index buffer (index_count / 3 * 4 elements)
+ */
+size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count);
+
+/**
+ * Experimental: Mesh unstripifier
+ * Converts a triangle strip to a triangle list
+ * Returns the number of indices in the resulting list, with destination containing new index data
+ *
+ * destination must contain enough space for the worst case target index buffer ((index_count - 2) * 3 elements)
+ */
+size_t meshopt_unstripify(unsigned int* destination, const unsigned int* indices, size_t index_count);
+
 struct meshopt_VertexCacheStatistics
 {
 	unsigned int vertices_transformed;

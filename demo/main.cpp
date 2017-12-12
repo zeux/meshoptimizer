@@ -306,6 +306,31 @@ void encodeIndex(const Mesh& mesh)
 	       (double(result.size() / 3) / 1e6) / (double(end - middle) / CLOCKS_PER_SEC));
 }
 
+void stripify(const Mesh& mesh)
+{
+	clock_t start = clock();
+	std::vector<unsigned int> strip(mesh.indices.size() / 3 * 4);
+	strip.resize(meshopt_stripify(&strip[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size()));
+	clock_t end = clock();
+
+	std::vector<unsigned int> list(mesh.indices.size());
+	list.resize(meshopt_unstripify(&list[0], &strip[0], strip.size()));
+
+	assert(list.size() == mesh.indices.size());
+
+	meshopt_VertexCacheStatistics tri_amd = meshopt_analyzeVertexCache(&mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), 14, 64, 128);
+	meshopt_VertexCacheStatistics tri_nv = meshopt_analyzeVertexCache(&mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), 32, 32, 32);
+
+	meshopt_VertexCacheStatistics str_amd = meshopt_analyzeVertexCache(&list[0], list.size(), mesh.vertices.size(), 14, 64, 128);
+	meshopt_VertexCacheStatistics str_nv = meshopt_analyzeVertexCache(&list[0], list.size(), mesh.vertices.size(), 32, 32, 32);
+
+	printf("Stripify: %d triangles => %d strip indices (%.1f%%) in %.2f msec; list ACMR: AMD %.2f NV %.2f; strip ACMR AMD %.2f NV %.2f\n",
+		int(mesh.indices.size() / 3), int(strip.size()), double(strip.size()) / double(mesh.indices.size()) * 100,
+		double(end - start) / CLOCKS_PER_SEC * 1000,
+		tri_amd.acmr, tri_nv.acmr,
+		str_amd.acmr, str_nv.acmr);
+}
+
 void process(const char* path)
 {
 	Mesh mesh;
@@ -348,6 +373,8 @@ void process(const char* path)
 	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
 
 	encodeIndex(copy);
+
+	stripify(copy);
 }
 
 int main(int argc, char** argv)
