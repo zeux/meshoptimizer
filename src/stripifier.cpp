@@ -125,13 +125,21 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 			buffer_size--;
 
 			// we need to pre-rotate the triangle so that we will find a match in the existing buffer on the next iteration
-			if (findStripNext(buffer, buffer_size, a, c) >= 0)
+			int ea = findStripNext(buffer, buffer_size, c, b);
+			int eb = findStripNext(buffer, buffer_size, a, c);
+			int ec = findStripNext(buffer, buffer_size, b, a);
+
+			if (ea >= 0)
+			{
+				// keep abc
+			}
+			else if (eb >= 0)
 			{
 				// abc -> bca
 				unsigned int t = a;
 				a = b, b = c, c = t;
 			}
-			else if (findStripNext(buffer, buffer_size, b, a) >= 0)
+			else if (ec >= 0)
 			{
 				// abc -> cab
 				unsigned int t = c;
