@@ -50,7 +50,7 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 
 	size_t index_offset = 0;
 
-	unsigned int strip[3] = {};
+	unsigned int strip[2] = {};
 	unsigned int stripx = 0;
 
 	size_t strip_size = 0;
@@ -82,7 +82,7 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 
 		// find next triangle
 		// note that the order of last edge flips on every iteration
-		int next = findStripNext(buffer, buffer_size, strip[1 + stripx], strip[2 - stripx]);
+		int next = findStripNext(buffer, buffer_size, strip[stripx], strip[stripx ^ 1]);
 
 		if (next >= 0)
 		{
@@ -105,22 +105,18 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 
 			// in some cases we need to perform a swap to pick a different outgoing triangle edge
 			// for [a b c], the default strip edge is [b c], but we might want to use [a c]
-			int cont = findStripNext(buffer, buffer_size, stripx ? strip[2] : v, stripx ? v : strip[2]);
-			int swap = findStripNext(buffer, buffer_size, stripx ? v : strip[1], stripx ? strip[1] : v);
+			int cont = findStripNext(buffer, buffer_size, stripx ? strip[1] : v, stripx ? v : strip[1]);
+			int swap = findStripNext(buffer, buffer_size, stripx ? v : strip[0], stripx ? strip[0] : v);
 
 			if (cont < 0 && swap >= 0)
 			{
 				// [a b c] => [a b a c]
-				unsigned int sa = strip[1];
-
-				destination[strip_size++] = sa;
+				destination[strip_size++] = strip[0];
 				destination[strip_size++] = v;
 
 				// next strip has same winding
 				// ? a b => b a v
-				strip[0] = strip[2];
-				strip[1] = sa;
-				strip[2] = v;
+				strip[1] = v;
 			}
 			else
 			{
@@ -129,8 +125,7 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 
 				// next strip has flipped winding
 				strip[0] = strip[1];
-				strip[1] = strip[2];
-				strip[2] = v;
+				strip[1] = v;
 				stripx ^= 1;
 			}
 		}
@@ -183,9 +178,8 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 			destination[strip_size++] = c;
 
 			// new strip always starts with the same edge winding
-			strip[0] = a;
-			strip[1] = b;
-			strip[2] = c;
+			strip[0] = b;
+			strip[1] = c;
 			stripx = 1;
 		}
 	}
