@@ -50,7 +50,7 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 
 	size_t index_offset = 0;
 
-	unsigned int strip[2] = {};
+	unsigned int strip[3] = {};
 	unsigned int stripx = 0;
 
 	size_t strip_size = 0;
@@ -82,7 +82,7 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 
 		// find next triangle
 		// note that the order of last edge flips on every iteration
-		int next = findStripNext(buffer, buffer_size, strip[stripx], strip[stripx ^ 1]);
+		int next = findStripNext(buffer, buffer_size, strip[1 + stripx], strip[2 - stripx]);
 
 		if (next >= 0)
 		{
@@ -97,7 +97,8 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 
 			// next strip has flipped winding
 			strip[0] = strip[1];
-			strip[1] = v;
+			strip[1] = strip[2];
+			strip[2] = v;
 			stripx ^= 1;
 
 			// unordered removal from the buffer
@@ -113,56 +114,100 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 		}
 		else
 		{
-			// if we didn't find anything, we need to find the next new triangle
-			// we use a heuristic to maximize the strip length
-			unsigned int i = findStripFirst(buffer, buffer_size, &valence[0]);
-			unsigned int a = buffer[i][0], b = buffer[i][1], c = buffer[i][2];
+			// in some cases we need to perform a swap to pick a different outgoing triangle edge
+			// for [a b c], the default strip edge is [b c], but we might want to use [a c]
+			int swap = findStripNext(buffer, buffer_size, strip[stripx ? 0 : 2], strip[stripx ? 2 : 0]);
 
-			// unordered removal from the buffer
-			buffer[i][0] = buffer[buffer_size - 1][0];
-			buffer[i][1] = buffer[buffer_size - 1][1];
-			buffer[i][2] = buffer[buffer_size - 1][2];
-			buffer_size--;
-
-			// we need to pre-rotate the triangle so that we will find a match in the existing buffer on the next iteration
-			int ea = findStripNext(buffer, buffer_size, c, b);
-			int eb = findStripNext(buffer, buffer_size, a, c);
-			int ec = findStripNext(buffer, buffer_size, b, a);
-
-			if (ea >= 0)
+			if (swap >= 0)
 			{
-				// keep abc
+				// reorganize strip to insert a degenerate triangle
+				assert(destination[strip_size - 3] == strip[0]);
+				assert(destination[strip_size - 2] == strip[1]);
+				assert(destination[strip_size - 1] == strip[2]);
+
+				// [a b c] => [a b a c]
+				destination[strip_size - 1] = strip[0];
+				destination[strip_size++] = strip[2];
+
+				// next
+				assert((swap & 3) < 3);
+
+				unsigned int i = swap >> 2;
+				unsigned int a = buffer[i][0], b = buffer[i][1], c = buffer[i][2];
+				unsigned int v = buffer[i][swap & 3];
+
+				// emit the next vertex in the strip
+				destination[strip_size++] = v;
+
+				// next strip has same winding
+				strip[1] = strip[2];
+				strip[2] = v;
+
+				// unordered removal from the buffer
+				buffer[i][0] = buffer[buffer_size - 1][0];
+				buffer[i][1] = buffer[buffer_size - 1][1];
+				buffer[i][2] = buffer[buffer_size - 1][2];
+				buffer_size--;
+
+				// update vertex valences for strip start heuristic
+				valence[a]--;
+				valence[b]--;
+				valence[c]--;
 			}
-			else if (eb >= 0)
+			else
 			{
-				// abc -> bca
-				unsigned int t = a;
-				a = b, b = c, c = t;
+				// if we didn't find anything, we need to find the next new triangle
+				// we use a heuristic to maximize the strip length
+				unsigned int i = findStripFirst(buffer, buffer_size, &valence[0]);
+				unsigned int a = buffer[i][0], b = buffer[i][1], c = buffer[i][2];
+
+				// unordered removal from the buffer
+				buffer[i][0] = buffer[buffer_size - 1][0];
+				buffer[i][1] = buffer[buffer_size - 1][1];
+				buffer[i][2] = buffer[buffer_size - 1][2];
+				buffer_size--;
+
+				// we need to pre-rotate the triangle so that we will find a match in the existing buffer on the next iteration
+				int ea = findStripNext(buffer, buffer_size, c, b);
+				int eb = findStripNext(buffer, buffer_size, a, c);
+				int ec = findStripNext(buffer, buffer_size, b, a);
+
+				if (ea >= 0)
+				{
+					// keep abc
+				}
+				else if (eb >= 0)
+				{
+					// abc -> bca
+					unsigned int t = a;
+					a = b, b = c, c = t;
+				}
+				else if (ec >= 0)
+				{
+					// abc -> cab
+					unsigned int t = c;
+					c = b, b = a, a = t;
+				}
+
+				// emit the new strip; we use restart indices
+				if (strip_size)
+					destination[strip_size++] = ~0u;
+
+				destination[strip_size++] = a;
+				destination[strip_size++] = b;
+				destination[strip_size++] = c;
+
+				// new strip always starts with the same edge winding
+				strip[0] = a;
+				strip[1] = b;
+				strip[2] = c;
+				stripx = 1;
+
+				// update vertex valences for strip start heuristic
+				valence[a]--;
+				valence[b]--;
+				valence[c]--;
 			}
-			else if (ec >= 0)
-			{
-				// abc -> cab
-				unsigned int t = c;
-				c = b, b = a, a = t;
-			}
-
-			// emit the new strip; we use restart indices
-			if (strip_size)
-				destination[strip_size++] = ~0u;
-
-			destination[strip_size++] = a;
-			destination[strip_size++] = b;
-			destination[strip_size++] = c;
-
-			// new strip always starts with the same edge winding
-			strip[0] = b;
-			strip[1] = c;
-			stripx = 1;
-
-			// update vertex valences for strip start heuristic
-			valence[a]--;
-			valence[b]--;
-			valence[c]--;
 		}
 	}
 
