@@ -2,8 +2,10 @@
 
 #include <cassert>
 
-#include <algorithm>
 #include <vector>
+
+namespace meshopt
+{
 
 static unsigned int findStripFirst(const unsigned int buffer[][3], unsigned int buffer_size, const unsigned int* valence)
 {
@@ -12,7 +14,8 @@ static unsigned int findStripFirst(const unsigned int buffer[][3], unsigned int 
 
 	for (unsigned int i = 0; i < buffer_size; ++i)
 	{
-		unsigned int v = std::min(valence[buffer[i][0]], std::min(valence[buffer[i][1]], valence[buffer[i][2]]));
+		unsigned int va = valence[buffer[i][0]], vb = valence[buffer[i][1]], vc = valence[buffer[i][2]];
+		unsigned int v = (va < vb && va < vc) ? va : (vb < vc) ? vb : vc;
 
 		if (v < iv)
 		{
@@ -41,8 +44,15 @@ static int findStripNext(const unsigned int buffer[][3], unsigned int buffer_siz
 	return -1;
 }
 
+}
+
 size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count)
 {
+	assert(destination != indices);
+	assert(index_count % 3 == 0);
+
+	using namespace meshopt;
+
 	const size_t buffer_capacity = 8;
 
 	unsigned int buffer[buffer_capacity][3] = {};
@@ -51,10 +61,11 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 	size_t index_offset = 0;
 
 	unsigned int strip[2] = {};
-	unsigned int stripx = 0;
+	unsigned int parity = 0;
 
 	size_t strip_size = 0;
 
+	// compute vertex valence; this is used to prioritize starting triangle for strips
 	std::vector<unsigned int> valence(vertex_count, 0);
 
 	for (size_t i = 0; i < index_count; ++i)
@@ -104,8 +115,8 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 			// find next triangle (note that edge order flips on every iteration)
 			// in some cases we need to perform a swap to pick a different outgoing triangle edge
 			// for [a b c], the default strip edge is [b c], but we might want to use [a c]
-			int cont = findStripNext(buffer, buffer_size, stripx ? strip[1] : v, stripx ? v : strip[1]);
-			int swap = cont < 0 ? findStripNext(buffer, buffer_size, stripx ? v : strip[0], stripx ? strip[0] : v) : -1;
+			int cont = findStripNext(buffer, buffer_size, parity ? strip[1] : v, parity ? v : strip[1]);
+			int swap = cont < 0 ? findStripNext(buffer, buffer_size, parity ? v : strip[0], parity ? strip[0] : v) : -1;
 
 			if (cont < 0 && swap >= 0)
 			{
@@ -127,7 +138,7 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 				// next strip has flipped winding
 				strip[0] = strip[1];
 				strip[1] = v;
-				stripx ^= 1;
+				parity ^= 1;
 
 				next = cont;
 			}
@@ -188,7 +199,7 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 			// new strip always starts with the same edge winding
 			strip[0] = b;
 			strip[1] = c;
-			stripx = 1;
+			parity = 1;
 		}
 	}
 
@@ -197,6 +208,8 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 
 size_t meshopt_unstripify(unsigned int* destination, const unsigned int* indices, size_t index_count)
 {
+	assert(destination != indices);
+
 	size_t offset = 0;
 	size_t start = 0;
 
@@ -210,8 +223,11 @@ size_t meshopt_unstripify(unsigned int* destination, const unsigned int* indices
 		{
 			unsigned int a = indices[i - 2], b = indices[i - 1], c = indices[i];
 
-			if ((i - start) % 2 == 1)
-				std::swap(a, b);
+			if ((i - start) & 1)
+			{
+				unsigned int t = a;
+				a = b, b = t;
+			}
 
 			if (a != b && a != c && b != c)
 			{
