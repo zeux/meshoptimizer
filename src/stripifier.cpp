@@ -65,8 +65,12 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 		valence[index]++;
 	}
 
+	int next = -1;
+
 	while (buffer_size > 0 || index_offset < index_count)
 	{
+		assert(next < 0 || (size_t(next >> 2) < buffer_size && (next & 3) < 3));
+
 		// fill triangle buffer
 		while (buffer_size < buffer_capacity && index_offset < index_count)
 		{
@@ -80,14 +84,8 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 
 		assert(buffer_size > 0);
 
-		// find next triangle
-		// note that the order of last edge flips on every iteration
-		int next = findStripNext(buffer, buffer_size, strip[stripx], strip[stripx ^ 1]);
-
 		if (next >= 0)
 		{
-			assert((next & 3) < 3);
-
 			unsigned int i = next >> 2;
 			unsigned int a = buffer[i][0], b = buffer[i][1], c = buffer[i][2];
 			unsigned int v = buffer[i][next & 3];
@@ -103,10 +101,11 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 			valence[b]--;
 			valence[c]--;
 
+			// find next triangle (note that edge order flips on every iteration)
 			// in some cases we need to perform a swap to pick a different outgoing triangle edge
 			// for [a b c], the default strip edge is [b c], but we might want to use [a c]
 			int cont = findStripNext(buffer, buffer_size, stripx ? strip[1] : v, stripx ? v : strip[1]);
-			int swap = findStripNext(buffer, buffer_size, stripx ? v : strip[0], stripx ? strip[0] : v);
+			int swap = cont < 0 ? findStripNext(buffer, buffer_size, stripx ? v : strip[0], stripx ? strip[0] : v) : -1;
 
 			if (cont < 0 && swap >= 0)
 			{
@@ -117,6 +116,8 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 				// next strip has same winding
 				// ? a b => b a v
 				strip[1] = v;
+
+				next = swap;
 			}
 			else
 			{
@@ -127,6 +128,8 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 				strip[0] = strip[1];
 				strip[1] = v;
 				stripx ^= 1;
+
+				next = cont;
 			}
 		}
 		else
@@ -149,24 +152,29 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 
 			// we need to pre-rotate the triangle so that we will find a match in the existing buffer on the next iteration
 			int ea = findStripNext(buffer, buffer_size, c, b);
-			int eb = findStripNext(buffer, buffer_size, a, c);
-			int ec = findStripNext(buffer, buffer_size, b, a);
+			int eb = ea < 0 ? findStripNext(buffer, buffer_size, a, c) : -1;
+			int ec = eb < 0 ? findStripNext(buffer, buffer_size, b, a) : -1;
 
 			if (ea >= 0)
 			{
 				// keep abc
+				next = ea;
 			}
 			else if (eb >= 0)
 			{
 				// abc -> bca
 				unsigned int t = a;
 				a = b, b = c, c = t;
+
+				next = eb;
 			}
 			else if (ec >= 0)
 			{
 				// abc -> cab
 				unsigned int t = c;
 				c = b, b = a, a = t;
+
+				next = ec;
 			}
 
 			// emit the new strip; we use restart indices
