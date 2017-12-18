@@ -170,6 +170,10 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 	// for now we keep it simple and use the table that has been generated based on symbol frequency on a training mesh set
 	const unsigned char* codeaux_table = kCodeAuxEncodingTable;
 
+	// two last entries of codeaux_table are redundant - they are never referenced by the encoding
+	// make sure that they are both zero, since they can serve as version/other data in the future
+	assert(codeaux_table[14] == 0 && codeaux_table[15] == 0);
+
 	for (size_t i = 0; i < index_count; i += 3)
 	{
 		int fer = getEdgeFifo(edgefifo, indices[i + 0], indices[i + 1], indices[i + 2], edgefifooffset);
