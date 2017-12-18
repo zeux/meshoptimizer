@@ -43,7 +43,7 @@ static int findStripNext(const unsigned int buffer[][3], unsigned int buffer_siz
 
 size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count)
 {
-	const size_t buffer_capacity = 16;
+	const size_t buffer_capacity = 8;
 
 	unsigned int buffer[buffer_capacity][3] = {};
 	unsigned int buffer_size = 0;
