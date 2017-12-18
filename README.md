@@ -105,8 +105,6 @@ unsigned short py = meshopt_quantizeHalf(v.y);
 unsigned short pz = meshopt_quantizeHalf(v.z);
 ```
 
-Note that the signed quantization (`quantizeSnorm`) assumes Direct3D rules for the value reconstruction that apply to all graphics APIs except for OpenGL (where you should reconstruct the value in the shader, as mentioned in the function comments).
-
 ## Efficiency analyzers
 
 While the only way to get precise performance data is to measure performance on the target GPU, it can be valuable to measure the impact of these optimization in a GPU-independent manner. To this end, the library provides analyzers for all three major optimization routines. For each optimization there is a corresponding analyze function, like `meshopt_analyzeOverdraw`, that returns a struct with statistics.

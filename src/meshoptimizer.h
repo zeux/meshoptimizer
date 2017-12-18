@@ -190,9 +190,8 @@ inline int meshopt_quantizeUnorm(float v, int N);
 
 /**
  * Quantize a float in [-1..1] range into an N-bit fixed point snorm value
- * Assumes reconstruction function (q / (2^(N-1)-1)), which is the case for fixed-function normalized fixed point conversion (except OpenGL)
+ * Assumes reconstruction function (q / (2^(N-1)-1)), which is the case for fixed-function normalized fixed point conversion (except early OpenGL versions)
  * Maximum reconstruction error: 1/2^N
- * Warning: OpenGL fixed function reconstruction function can't represent 0 exactly; when using OpenGL, use this function and have the shader reconstruct by dividing by 2^(N-1)-1.
  */
 inline int meshopt_quantizeSnorm(float v, int N);
 
