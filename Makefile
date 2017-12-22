@@ -2,6 +2,7 @@
 MAKEFLAGS+=-r
 
 config=release
+files=demo/bunny.obj
 
 BUILD=build/$(config)
 
@@ -35,7 +36,7 @@ endif
 all: $(EXECUTABLE)
 
 test: $(EXECUTABLE)
-	$(EXECUTABLE) demo/bunny.obj
+	$(EXECUTABLE) $(files)
 
 format:
 	clang-format -i $(SOURCES)
