@@ -1,6 +1,6 @@
 #ifdef _WIN32
 #include "../src/meshoptimizer.h"
-#include "objparser.h"
+#include "../demo/objparser.h"
 
 #include <algorithm>
 #include <ctime>

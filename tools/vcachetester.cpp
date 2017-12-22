@@ -11,7 +11,7 @@
 #include <vector>
 
 #include "../src/meshoptimizer.h"
-#include "objparser.h"
+#include "../demo/objparser.h"
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
