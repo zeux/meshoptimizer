@@ -16,7 +16,7 @@ CXXFLAGS=-g -Wall -Wextra -Wno-missing-field-initializers -Werror -std=c++98
 LDFLAGS=
 
 ifeq ($(config),release)
-	CXXFLAGS+=-O3 -DNDEBUG
+	CXXFLAGS+=-O3
 endif
 
 ifeq ($(config),coverage)
