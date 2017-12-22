@@ -202,6 +202,13 @@ inline int meshopt_quantizeSnorm(float v, int N);
  * Maximum relative reconstruction error: 5e-4
  */
 inline unsigned short meshopt_quantizeHalf(float v);
+
+/**
+ * Quantize a float into a floating point value with a limited number of significant mantissa bits
+ * Generates +-inf for overflow, preserves NaN, flushes denormals to zero, rounds to nearest
+ * Assumes N is in a valid mantissa precision range, which is 1..23
+ */
+inline float meshopt_quantizeFloat(float v, int N);
 #endif
 
 /* C++ template interface */
@@ -418,6 +425,27 @@ inline unsigned short meshopt_quantizeHalf(float v)
 	h = (em > (255 << 23)) ? 0x7e00 : h;
 
 	return (unsigned short)(s | h);
+}
+
+inline float meshopt_quantizeFloat(float v, int N)
+{
+	union { float f; unsigned int ui; } u = {v};
+	unsigned int ui = u.ui;
+
+	const int mask = (1 << (23 - N)) - 1;
+	const int round = (1 << (23 - N)) >> 1;
+
+	int e = ui & 0x7f800000;
+	unsigned int rui = (ui + round) & ~mask;
+
+	/* round all numbers except inf/nan; this is important to make sure nan doesn't overflow into -0 */
+	ui = e == 0x7f800000 ? ui : rui;
+
+	/* flush denormals to zero */
+	ui = e == 0 ? 0 : ui;
+
+	u.ui = ui;
+	return u.f;
 }
 #endif
 
