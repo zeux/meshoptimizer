@@ -44,7 +44,7 @@ static int findStripNext(const unsigned int buffer[][3], unsigned int buffer_siz
 	return -1;
 }
 
-}
+} // namespace meshopt
 
 size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count)
 {
