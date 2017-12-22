@@ -17,6 +17,13 @@ struct Adjacency
 	std::vector<unsigned int> triangle_counts;
 	std::vector<unsigned int> offsets;
 	std::vector<unsigned int> data;
+
+	Adjacency(size_t index_count, size_t vertex_count)
+	    : triangle_counts(vertex_count)
+	    , offsets(vertex_count)
+	    , data(index_count)
+	{
+	}
 };
 
 static void buildAdjacency(Adjacency& adjacency, const unsigned int* indices, size_t index_count, size_t vertex_count)
@@ -24,7 +31,10 @@ static void buildAdjacency(Adjacency& adjacency, const unsigned int* indices, si
 	size_t face_count = index_count / 3;
 
 	// fill triangle counts
-	adjacency.triangle_counts.resize(vertex_count, 0);
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		adjacency.triangle_counts[i] = 0;
+	}
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
@@ -34,8 +44,6 @@ static void buildAdjacency(Adjacency& adjacency, const unsigned int* indices, si
 	}
 
 	// fill offset table
-	adjacency.offsets.resize(vertex_count);
-
 	unsigned int offset = 0;
 
 	for (size_t i = 0; i < vertex_count; ++i)
@@ -44,18 +52,24 @@ static void buildAdjacency(Adjacency& adjacency, const unsigned int* indices, si
 		offset += adjacency.triangle_counts[i];
 	}
 
+	assert(offset == index_count);
+
 	// fill triangle data
-	adjacency.data.resize(offset);
-
-	std::vector<unsigned int> offsets = adjacency.offsets;
-
 	for (size_t i = 0; i < face_count; ++i)
 	{
 		unsigned int a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
 
-		adjacency.data[offsets[a]++] = unsigned(i);
-		adjacency.data[offsets[b]++] = unsigned(i);
-		adjacency.data[offsets[c]++] = unsigned(i);
+		adjacency.data[adjacency.offsets[a]++] = unsigned(i);
+		adjacency.data[adjacency.offsets[b]++] = unsigned(i);
+		adjacency.data[adjacency.offsets[c]++] = unsigned(i);
+	}
+
+	// fix offsets that have been disturbed by the previous pass
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		assert(adjacency.offsets[i] >= adjacency.triangle_counts[i]);
+
+		adjacency.offsets[i] -= adjacency.triangle_counts[i];
 	}
 }
 
@@ -210,8 +224,7 @@ void meshopt_optimizeVertexCache(unsigned int* destination, const unsigned int* 
 	size_t face_count = index_count / 3;
 
 	// build adjacency information
-	Adjacency adjacency;
-
+	Adjacency adjacency(index_count, vertex_count);
 	buildAdjacency(adjacency, indices, index_count, vertex_count);
 
 	// live triangle counts
@@ -389,8 +402,7 @@ void meshopt_optimizeVertexCacheFifo(unsigned int* destination, const unsigned i
 	size_t face_count = index_count / 3;
 
 	// build adjacency information
-	Adjacency adjacency;
-
+	Adjacency adjacency(index_count, vertex_count);
 	buildAdjacency(adjacency, indices, index_count, vertex_count);
 
 	// live triangle counts
