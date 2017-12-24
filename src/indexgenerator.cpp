@@ -1,10 +1,8 @@
 // This file is part of meshoptimizer library; see meshoptimizer.h for version/license details
 #include "meshoptimizer.h"
 
-#include <cassert>
-#include <cstring>
-
-#include <vector>
+#include <assert.h>
+#include <string.h>
 
 namespace meshopt
 {
@@ -59,34 +57,29 @@ struct VertexHashEntry
 	unsigned int value;
 };
 
-template <typename T, typename Hash>
-static void hashInit(std::vector<T>& table, const Hash& hash, size_t count)
+static size_t hashBuckets(size_t count)
 {
 	size_t buckets = 1;
 	while (buckets < count)
 		buckets *= 2;
 
-	T dummy = T();
-	dummy.key = hash.empty();
-
-	table.clear();
-	table.resize(buckets, dummy);
+	return buckets;
 }
 
 template <typename T, typename Hash, typename Key>
-static T* hashLookup(std::vector<T>& table, const Hash& hash, const Key& key)
+static T* hashLookup(T* table, size_t buckets, const Hash& hash, const Key& key, const Key& empty)
 {
-	assert(table.size() > 0);
-	assert((table.size() & (table.size() - 1)) == 0);
+	assert(buckets > 0);
+	assert((buckets & (buckets - 1)) == 0);
 
-	size_t hashmod = table.size() - 1;
+	size_t hashmod = buckets - 1;
 	size_t bucket = hash(key) & hashmod;
 
 	for (size_t probe = 0; probe <= hashmod; ++probe)
 	{
 		T& item = table[bucket];
 
-		if (item.key == hash.empty())
+		if (item.key == empty)
 			return &item;
 
 		if (hash(item.key, key))
@@ -117,8 +110,8 @@ size_t meshopt_generateVertexRemap(unsigned int* destination, const unsigned int
 
 	VertexHasher hasher = {static_cast<const char*>(vertices), vertex_size};
 
-	std::vector<VertexHashEntry> table;
-	hashInit(table, hasher, vertex_count);
+	meshopt_Buffer<VertexHashEntry> table(hashBuckets(vertex_count));
+	memset(table.data, -1, table.size * sizeof(VertexHashEntry));
 
 	unsigned int next_vertex = 0;
 
@@ -129,7 +122,7 @@ size_t meshopt_generateVertexRemap(unsigned int* destination, const unsigned int
 
 		if (destination[index] == ~0u)
 		{
-			VertexHashEntry* entry = hashLookup(table, hasher, index);
+			VertexHashEntry* entry = hashLookup(table.data, table.size, hasher, index, ~0u);
 
 			if (entry->key == ~0u)
 			{
