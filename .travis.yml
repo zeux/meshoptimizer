@@ -6,6 +6,11 @@ compiler:
   - clang
   - gcc
 
+matrix:
+  exclude:
+    - os: osx
+      compiler: gcc
+
 script:
   - make config=release
   - make config=coverage test
