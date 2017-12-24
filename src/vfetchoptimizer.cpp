@@ -1,10 +1,8 @@
 // This file is part of meshoptimizer library; see meshoptimizer.h for version/license details
 #include "meshoptimizer.h"
 
-#include <cassert>
-#include <cstring>
-
-#include <vector>
+#include <assert.h>
+#include <string.h>
 
 size_t meshopt_optimizeVertexFetch(void* destination, unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)
 {
@@ -12,16 +10,18 @@ size_t meshopt_optimizeVertexFetch(void* destination, unsigned int* indices, siz
 	assert(vertex_size > 0 && vertex_size <= 256);
 
 	// support in-place optimization
-	std::vector<char> vertices_copy;
+	meshopt_Buffer<char> vertices_copy;
 
 	if (destination == vertices)
 	{
-		vertices_copy.assign(static_cast<const char*>(vertices), static_cast<const char*>(vertices) + vertex_count * vertex_size);
-		vertices = &vertices_copy[0];
+		vertices_copy.data = new char[vertex_count * vertex_size];
+		memcpy(vertices_copy.data, vertices, vertex_count * vertex_size);
+		vertices = vertices_copy.data;
 	}
 
 	// build vertex remap table
-	std::vector<unsigned int> vertex_remap(vertex_count, ~0u);
+	meshopt_Buffer<unsigned int> vertex_remap(vertex_count);
+	memset(vertex_remap.data, -1, vertex_remap.size * sizeof(unsigned int));
 
 	unsigned int next_vertex = 0;
 
