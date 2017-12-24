@@ -1,11 +1,11 @@
 // This file is part of meshoptimizer library; see meshoptimizer.h for version/license details
 #include "meshoptimizer.h"
 
-#include <cassert>
-#include <cmath>
+#include <assert.h>
+#include <math.h>
+#include <string.h>
 
 #include <algorithm>
-#include <vector>
 
 // This work is based on:
 // Pedro Sander, Diego Nehab and Joshua Barczak. Fast Triangle Reordering for Vertex Locality and Reduced Overdraw. 2007
@@ -125,7 +125,9 @@ static unsigned int updateCache(unsigned int a, unsigned int b, unsigned int c, 
 
 static size_t generateHardBoundaries(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
-	std::vector<unsigned int> cache_timestamps(vertex_count, 0);
+	meshopt_Buffer<unsigned int> cache_timestamps(vertex_count);
+	memset(cache_timestamps.data, 0, vertex_count * sizeof(unsigned int));
+
 	unsigned int timestamp = cache_size + 1;
 
 	size_t face_count = index_count / 3;
@@ -153,7 +155,9 @@ static size_t generateHardBoundaries(unsigned int* destination, const unsigned i
 
 static size_t generateSoftBoundaries(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, const unsigned int* clusters, size_t cluster_count, unsigned int cache_size, float threshold)
 {
-	std::vector<unsigned int> cache_timestamps(vertex_count, 0);
+	meshopt_Buffer<unsigned int> cache_timestamps(vertex_count);
+	memset(cache_timestamps.data, 0, vertex_count * sizeof(unsigned int));
+
 	unsigned int timestamp = 0;
 
 	size_t result = 0;
@@ -243,33 +247,34 @@ void meshopt_optimizeOverdraw(unsigned int* destination, const unsigned int* ind
 		return;
 
 	// support in-place optimization
-	std::vector<unsigned int> indices_copy;
+	meshopt_Buffer<unsigned int> indices_copy;
 
 	if (destination == indices)
 	{
-		indices_copy.assign(indices, indices + index_count);
-		indices = &indices_copy[0];
+		indices_copy.data = new unsigned int[index_count];
+		memcpy(indices_copy.data, indices, index_count * sizeof(unsigned int));
+		indices = indices_copy.data;
 	}
 
 	unsigned int cache_size = 16;
 
 	// generate hard boundaries from full-triangle cache misses
-	std::vector<unsigned int> hard_clusters(index_count / 3);
+	meshopt_Buffer<unsigned int> hard_clusters(index_count / 3);
 	size_t hard_cluster_count = generateHardBoundaries(&hard_clusters[0], indices, index_count, vertex_count, cache_size);
 
 	// generate soft boundaries
-	std::vector<unsigned int> soft_clusters(index_count / 3 + 1);
+	meshopt_Buffer<unsigned int> soft_clusters(index_count / 3 + 1);
 	size_t soft_cluster_count = generateSoftBoundaries(&soft_clusters[0], indices, index_count, vertex_count, &hard_clusters[0], hard_cluster_count, cache_size, threshold);
 
 	const unsigned int* clusters = &soft_clusters[0];
 	size_t cluster_count = soft_cluster_count;
 
 	// fill sort data
-	std::vector<ClusterSortData> sort_data(cluster_count);
+	meshopt_Buffer<ClusterSortData> sort_data(cluster_count);
 	calculateSortData(&sort_data[0], indices, index_count, vertex_positions, vertex_positions_stride, clusters, cluster_count);
 
 	// high product = possible occluder, render early
-	std::sort(sort_data.begin(), sort_data.end());
+	std::sort(sort_data.data, sort_data.data + cluster_count);
 
 	// fill output buffer
 	size_t offset = 0;

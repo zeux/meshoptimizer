@@ -1,12 +1,9 @@
 // This file is part of meshoptimizer library; see meshoptimizer.h for version/license details
 #include "meshoptimizer.h"
 
-#include <cassert>
-#include <cfloat>
-#include <cstring>
-
-#include <algorithm>
-#include <vector>
+#include <assert.h>
+#include <float.h>
+#include <string.h>
 
 // This work is based on:
 // Nicolas Capens. Advanced Rasterization. 2004
@@ -20,6 +17,18 @@ struct OverdrawBuffer
 	float z[kViewport][kViewport][2];
 	unsigned int overdraw[kViewport][kViewport][2];
 };
+
+template <typename T>
+static T min(T a, T b)
+{
+	return a < b ? a : b;
+}
+
+template <typename T>
+static T max(T a, T b)
+{
+	return a > b ? a : b;
+}
 
 static float det2x2(float a, float b, float c, float d)
 {
@@ -56,9 +65,10 @@ static void rasterize(OverdrawBuffer* buffer, float v1x, float v1y, float v1z, f
 	if (sign)
 	{
 		// flipping v2 & v3 preserves depth gradients since they're based on v1
-		std::swap(v2x, v3x);
-		std::swap(v2y, v3y);
-		std::swap(v2z, v3z);
+		float t;
+		t = v2x, v2x = v3x, v3x = t;
+		t = v2y, v2y = v3y, v3y = t;
+		t = v2z, v2z = v3z, v3z = t;
 
 		// flip depth since we rasterize backfacing triangles to second buffer with reverse Z; only v1z is used below
 		v1z = kViewport - v1z;
@@ -79,10 +89,10 @@ static void rasterize(OverdrawBuffer* buffer, float v1x, float v1y, float v1z, f
 	// since we rasterize pixels with covered centers, min >0.5 should round up
 	// as for max, due to top-left filling convention we will never rasterize right/bottom edges
 	// so max >= 0.5 should round down
-	int minx = std::max((std::min(X1, std::min(X2, X3)) + 7) >> 4, 0);
-	int maxx = std::min((std::max(X1, std::max(X2, X3)) + 7) >> 4, kViewport);
-	int miny = std::max((std::min(Y1, std::min(Y2, Y3)) + 7) >> 4, 0);
-	int maxy = std::min((std::max(Y1, std::max(Y2, Y3)) + 7) >> 4, kViewport);
+	int minx = max((min(X1, min(X2, X3)) + 7) >> 4, 0);
+	int maxx = min((max(X1, max(X2, X3)) + 7) >> 4, kViewport);
+	int miny = max((min(Y1, min(Y2, Y3)) + 7) >> 4, 0);
+	int maxy = min((max(Y1, max(Y2, Y3)) + 7) >> 4, kViewport);
 
 	// deltas, 28.4 fixed point
 	int DX12 = X1 - X2;
@@ -162,15 +172,15 @@ meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, 
 
 		for (int j = 0; j < 3; ++j)
 		{
-			minv[j] = std::min(minv[j], v[j]);
-			maxv[j] = std::max(maxv[j], v[j]);
+			minv[j] = min(minv[j], v[j]);
+			maxv[j] = max(maxv[j], v[j]);
 		}
 	}
 
-	float extent = std::max(maxv[0] - minv[0], std::max(maxv[1] - minv[1], maxv[2] - minv[2]));
+	float extent = max(maxv[0] - minv[0], max(maxv[1] - minv[1], maxv[2] - minv[2]));
 	float scale = kViewport / extent;
 
-	std::vector<float> triangles(index_count * 3);
+	meshopt_Buffer<float> triangles(index_count * 3);
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
@@ -184,7 +194,8 @@ meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, 
 		triangles[i * 3 + 2] = (v[2] - minv[2]) * scale;
 	}
 
-	OverdrawBuffer* buffer = new OverdrawBuffer();
+	meshopt_Buffer<OverdrawBuffer> buffer_storage(1);
+	OverdrawBuffer* buffer = buffer_storage.data;
 
 	for (int axis = 0; axis < 3; ++axis)
 	{
@@ -220,8 +231,6 @@ meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, 
 					result.pixels_shaded += overdraw;
 				}
 	}
-
-	delete buffer;
 
 	result.overdraw = result.pixels_covered ? float(result.pixels_shaded) / float(result.pixels_covered) : 0.f;
 
