@@ -8,6 +8,7 @@
  */
 #pragma once
 
+#include <assert.h>
 #include <stddef.h>
 
 /* Version macro; major * 100 + minor * 10 + patch */
@@ -447,6 +448,44 @@ inline float meshopt_quantizeFloat(float v, int N)
 	u.ui = ui;
 	return u.f;
 }
+#endif
+
+/* Internal implementation helpers */
+#ifdef __cplusplus
+template <typename T>
+class meshopt_Buffer
+{
+	meshopt_Buffer(const meshopt_Buffer&);
+	meshopt_Buffer& operator=(const meshopt_Buffer&);
+
+  public:
+	T* data;
+	size_t size;
+
+	meshopt_Buffer()
+	    : data(0)
+	    , size(0)
+	{
+	}
+
+	explicit meshopt_Buffer(size_t size)
+	    : data(new T[size])
+	    , size(size)
+	{
+	}
+
+	T& operator[](size_t index)
+	{
+		assert(index < size);
+		return data[index];
+	}
+
+	const T& operator[](size_t index) const
+	{
+		assert(index < size);
+		return data[index];
+	}
+};
 #endif
 
 /**
