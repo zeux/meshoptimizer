@@ -1,11 +1,11 @@
 // This file is part of meshoptimizer library; see meshoptimizer.h for version/license details
 #include "meshoptimizer.h"
 
-#include <cassert>
-#include <cmath>
+#include <assert.h>
+#include <math.h>
+#include <string.h>
 
 #include <algorithm>
-#include <vector>
 
 // This work is based on:
 // Michael Garland and Paul S. Heckbert. Surface simplification using quadric error metrics. 1997
@@ -23,31 +23,29 @@ static size_t hash(unsigned long long key)
 	return size_t(key);
 }
 
-template <typename T>
-static void hashInit(std::vector<T>& table, size_t count)
+static size_t hashBuckets(size_t count)
 {
 	size_t buckets = 1;
 	while (buckets < count)
 		buckets *= 2;
 
-	table.clear();
-	table.resize(buckets);
+	return buckets;
 }
 
 template <typename T>
-static T* hashLookup(std::vector<T>& table, const T& key)
+static T* hashLookup(T* table, size_t buckets, const T& key, const T& empty)
 {
-	assert(table.size() > 0);
-	assert((table.size() & (table.size() - 1)) == 0);
+	assert(buckets > 0);
+	assert((buckets & (buckets - 1)) == 0);
 
-	size_t hashmod = table.size() - 1;
+	size_t hashmod = buckets - 1;
 	size_t bucket = hash(key) & hashmod;
 
 	for (size_t probe = 0; probe <= hashmod; ++probe)
 	{
 		T& item = table[bucket];
 
-		if (item == T() || item == key)
+		if (item == empty || item == key)
 			return &item;
 
 		// hash collision, quadratic probing
@@ -197,7 +195,7 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 {
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
-	std::vector<Vector3> vertex_positions(vertex_count);
+	meshopt_Buffer<Vector3> vertex_positions(vertex_count);
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
@@ -208,7 +206,8 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 		vertex_positions[i].z = v[2];
 	}
 
-	std::vector<Quadric> vertex_quadrics(vertex_count);
+	meshopt_Buffer<Quadric> vertex_quadrics(vertex_count);
+	memset(vertex_quadrics.data, 0, vertex_count * sizeof(Quadric));
 
 	// face quadrics
 	for (size_t i = 0; i < index_count; i += 3)
@@ -222,8 +221,8 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 	}
 
 	// edge quadrics for boundary edges
-	std::vector<unsigned long long> edges;
-	hashInit(edges, index_count);
+	meshopt_Buffer<unsigned long long> edges(hashBuckets(index_count));
+	memset(edges.data, 0, edges.size * sizeof(unsigned long long));
 
 	for (size_t i = 0; i < index_count; i += 3)
 	{
@@ -236,7 +235,7 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 
 			unsigned long long edge = edgeId(i0, i1);
 
-			*hashLookup(edges, edge) = edge;
+			*hashLookup(edges.data, edges.size, edge, 0ull) = edge;
 		}
 	}
 
@@ -251,7 +250,7 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 
 			unsigned long long edge = edgeId(i1, i0);
 
-			if (*hashLookup(edges, edge) != edge)
+			if (*hashLookup(edges.data, edges.size, edge, 0ull) != edge)
 			{
 				unsigned int i2 = indices[i + next[next[e]]];
 
@@ -277,8 +276,8 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 
 	while (index_count > target_index_count)
 	{
-		std::vector<Collapse> edge_collapses;
-		edge_collapses.reserve(index_count);
+		meshopt_Buffer<Collapse> edge_collapses(index_count);
+		size_t edge_collapse_count = 0;
 
 		for (size_t i = 0; i < index_count; i += 3)
 		{
@@ -291,21 +290,23 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 
 				Collapse c01 = {i0, i1, quadricError(vertex_quadrics[i0], vertex_positions[i1])};
 				Collapse c10 = {i1, i0, quadricError(vertex_quadrics[i1], vertex_positions[i0])};
+				Collapse c = c01.error <= c10.error ? c01 : c10;
 
-				edge_collapses.push_back(c01.error <= c10.error ? c01 : c10);
+				edge_collapses[edge_collapse_count++] = c;
 			}
 		}
 
-		std::sort(edge_collapses.begin(), edge_collapses.end());
+		std::sort(edge_collapses.data, edge_collapses.data + edge_collapse_count);
 
-		std::vector<unsigned int> vertex_remap(vertex_count);
+		meshopt_Buffer<unsigned int> vertex_remap(vertex_count);
 
-		for (size_t i = 0; i < vertex_remap.size(); ++i)
+		for (size_t i = 0; i < vertex_count; ++i)
 		{
 			vertex_remap[i] = unsigned(i);
 		}
 
-		std::vector<char> vertex_locked(vertex_count);
+		meshopt_Buffer<char> vertex_locked(vertex_count);
+		memset(vertex_locked.data, 0, vertex_count);
 
 		// each collapse removes 2 triangles
 		size_t edge_collapse_goal = (index_count - target_index_count) / 6 + 1;
@@ -313,10 +314,10 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 		size_t collapses = 0;
 		float pass_error = 0;
 
-		float error_goal = edge_collapse_goal < edge_collapses.size() ? edge_collapses[edge_collapse_goal].error : edge_collapses.back().error;
+		float error_goal = edge_collapses[edge_collapse_goal < edge_collapse_count ? edge_collapse_goal : edge_collapse_count - 1].error;
 		float error_limit = error_goal * 1.5f;
 
-		for (size_t i = 0; i < edge_collapses.size(); ++i)
+		for (size_t i = 0; i < edge_collapse_count; ++i)
 		{
 			const Collapse& c = edge_collapses[i];
 
@@ -343,10 +344,10 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 				break;
 		}
 
-		// printf("pass %d: collapses: %d/%d, error: %e\n", int(pass_count), int(collapses), int(edge_collapses.size()), pass_error);
+		// printf("pass %d: collapses: %d/%d, error: %e\n", int(pass_count), int(collapses), int(edge_collapse_count), pass_error);
 
 		pass_count++;
-		worst_error = std::max(worst_error, pass_error);
+		worst_error = (worst_error < pass_error) ? pass_error : worst_error;
 
 		// no edges can be collapsed any more => bail out
 		if (collapses == 0)
