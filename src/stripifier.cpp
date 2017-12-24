@@ -1,8 +1,7 @@
 #include "meshoptimizer.h"
 
-#include <cassert>
-
-#include <vector>
+#include <assert.h>
+#include <string.h>
 
 namespace meshopt
 {
@@ -66,7 +65,8 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 	size_t strip_size = 0;
 
 	// compute vertex valence; this is used to prioritize starting triangle for strips
-	std::vector<unsigned int> valence(vertex_count, 0);
+	meshopt_Buffer<unsigned int> valence(vertex_count);
+	memset(valence.data, 0, vertex_count * sizeof(unsigned int));
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
