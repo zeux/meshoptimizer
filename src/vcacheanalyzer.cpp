@@ -1,9 +1,8 @@
 // This file is part of meshoptimizer library; see meshoptimizer.h for version/license details
 #include "meshoptimizer.h"
 
-#include <cassert>
-
-#include <vector>
+#include <assert.h>
+#include <string.h>
 
 meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int warp_size, unsigned int primgroup_size)
 {
@@ -16,7 +15,9 @@ meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* ind
 	unsigned int warp_offset = 0;
 	unsigned int primgroup_offset = 0;
 
-	std::vector<unsigned int> cache_timestamps(vertex_count, 0);
+	meshopt_Buffer<unsigned int> cache_timestamps(vertex_count);
+	memset(cache_timestamps.data, 0, vertex_count * sizeof(unsigned int));
+
 	unsigned int timestamp = cache_size + 1;
 
 	for (size_t i = 0; i < index_count; i += 3)

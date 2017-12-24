@@ -1,10 +1,9 @@
 // This file is part of meshoptimizer library; see meshoptimizer.h for version/license details
 #include "meshoptimizer.h"
 
-#include <cassert>
-#include <cmath>
-
-#include <vector>
+#include <assert.h>
+#include <math.h>
+#include <string.h>
 
 // This work is based on:
 // Tom Forsyth. Linear-Speed Vertex Cache Optimisation. 2006
@@ -14,9 +13,9 @@ namespace meshopt
 
 struct Adjacency
 {
-	std::vector<unsigned int> triangle_counts;
-	std::vector<unsigned int> offsets;
-	std::vector<unsigned int> data;
+	meshopt_Buffer<unsigned int> triangle_counts;
+	meshopt_Buffer<unsigned int> offsets;
+	meshopt_Buffer<unsigned int> data;
 
 	Adjacency(size_t index_count, size_t vertex_count)
 	    : triangle_counts(vertex_count)
@@ -210,12 +209,13 @@ void meshopt_optimizeVertexCache(unsigned int* destination, const unsigned int* 
 		return;
 
 	// support in-place optimization
-	std::vector<unsigned int> indices_copy;
+	meshopt_Buffer<unsigned int> indices_copy;
 
 	if (destination == indices)
 	{
-		indices_copy.assign(indices, indices + index_count);
-		indices = &indices_copy[0];
+		indices_copy.data = new unsigned int[index_count];
+		memcpy(indices_copy.data, indices, index_count * sizeof(unsigned int));
+		indices = indices_copy.data;
 	}
 
 	unsigned int cache_size = 16;
@@ -228,13 +228,15 @@ void meshopt_optimizeVertexCache(unsigned int* destination, const unsigned int* 
 	buildAdjacency(adjacency, indices, index_count, vertex_count);
 
 	// live triangle counts
-	std::vector<unsigned int> live_triangles = adjacency.triangle_counts;
+	meshopt_Buffer<unsigned int> live_triangles(vertex_count);
+	memcpy(live_triangles.data, adjacency.triangle_counts.data, vertex_count * sizeof(unsigned int));
 
 	// emitted flags
-	std::vector<char> emitted_flags(face_count, false);
+	meshopt_Buffer<char> emitted_flags(face_count);
+	memset(emitted_flags.data, 0, face_count);
 
 	// compute initial vertex scores
-	std::vector<float> vertex_scores(vertex_count);
+	meshopt_Buffer<float> vertex_scores(vertex_count);
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
@@ -242,9 +244,9 @@ void meshopt_optimizeVertexCache(unsigned int* destination, const unsigned int* 
 	}
 
 	// compute triangle scores
-	std::vector<float> triangle_scores(face_count);
+	meshopt_Buffer<float> triangle_scores(face_count);
 
-	for (size_t i = 0; i < triangle_scores.size(); ++i)
+	for (size_t i = 0; i < face_count; ++i)
 	{
 		unsigned int a = indices[i * 3 + 0];
 		unsigned int b = indices[i * 3 + 1];
@@ -298,7 +300,8 @@ void meshopt_optimizeVertexCache(unsigned int* destination, const unsigned int* 
 			}
 		}
 
-		std::swap(cache, cache_new);
+		unsigned int* cache_temp = cache;
+		cache = cache_new, cache_new = cache_temp;
 		cache_count = cache_write > cache_size ? cache_size : cache_write;
 
 		// update live triangle counts
@@ -391,12 +394,13 @@ void meshopt_optimizeVertexCacheFifo(unsigned int* destination, const unsigned i
 		return;
 
 	// support in-place optimization
-	std::vector<unsigned int> indices_copy;
+	meshopt_Buffer<unsigned int> indices_copy;
 
 	if (destination == indices)
 	{
-		indices_copy.assign(indices, indices + index_count);
-		indices = &indices_copy[0];
+		indices_copy.data = new unsigned int[index_count];
+		memcpy(indices_copy.data, indices, index_count * sizeof(unsigned int));
+		indices = indices_copy.data;
 	}
 
 	size_t face_count = index_count / 3;
@@ -406,17 +410,20 @@ void meshopt_optimizeVertexCacheFifo(unsigned int* destination, const unsigned i
 	buildAdjacency(adjacency, indices, index_count, vertex_count);
 
 	// live triangle counts
-	std::vector<unsigned int> live_triangles = adjacency.triangle_counts;
+	meshopt_Buffer<unsigned int> live_triangles(vertex_count);
+	memcpy(live_triangles.data, adjacency.triangle_counts.data, vertex_count * sizeof(unsigned int));
 
 	// cache time stamps
-	std::vector<unsigned int> cache_timestamps(vertex_count, 0);
+	meshopt_Buffer<unsigned int> cache_timestamps(vertex_count);
+	memset(cache_timestamps.data, 0, vertex_count * sizeof(unsigned int));
 
 	// dead-end stack
-	std::vector<unsigned int> dead_end(index_count);
+	meshopt_Buffer<unsigned int> dead_end(index_count);
 	unsigned int dead_end_top = 0;
 
 	// emitted flags
-	std::vector<char> emitted_flags(face_count, false);
+	meshopt_Buffer<char> emitted_flags(face_count);
+	memset(emitted_flags.data, 0, face_count);
 
 	unsigned int current_vertex = 0;
 
