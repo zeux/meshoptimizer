@@ -130,20 +130,16 @@ const size_t max_cache_size = 16;
 const size_t max_valence = 8;
 
 // last_triangle_score = 0.8, cache_decay_power = 1.5
-static const float vertex_score_table_cache[1 + max_cache_size] =
-    {
-        // clang-format array formatting is broken :/
-        0.000000f,
-        0.800000f, 0.800000f, 0.800000f, 1.000000f, 0.948724f, 0.898356f, 0.848913f, 0.800411f,
-        0.752870f, 0.706309f, 0.660750f, 0.616215f, 0.572727f, 0.530314f, 0.489003f, 0.448824f,
+static const float vertex_score_table_cache[1 + max_cache_size] = {
+    0.000000f,
+    0.800000f, 0.800000f, 0.800000f, 1.000000f, 0.948724f, 0.898356f, 0.848913f, 0.800411f,
+    0.752870f, 0.706309f, 0.660750f, 0.616215f, 0.572727f, 0.530314f, 0.489003f, 0.448824f,
 };
 
 // valence_boost_scale = 3.2, valence_boost_power = 0.9
-static const float vertex_score_table_live[1 + max_valence] =
-    {
-        // clang-format array formatting is broken :/
-        0.000000f,
-        3.200000f, 1.714838f, 1.190531f, 0.918959f, 0.751756f, 0.637990f, 0.555344f, 0.492458f,
+static const float vertex_score_table_live[1 + max_valence] = {
+    0.000000f,
+    3.200000f, 1.714838f, 1.190531f, 0.918959f, 0.751756f, 0.637990f, 0.555344f, 0.492458f,
 };
 
 static float vertexScore(int cache_position, unsigned int live_triangles)

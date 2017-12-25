@@ -13,18 +13,14 @@ namespace meshopt
 typedef unsigned int VertexFifo[16];
 typedef unsigned int EdgeFifo[16][2];
 
-static const unsigned int kTriangleIndexOrder[3][3] =
-    {
-        // clang-format array formatting is broken :/
-        {0, 1, 2},
-        {1, 2, 0},
-        {2, 0, 1},
+static const unsigned int kTriangleIndexOrder[3][3] = {
+    {0, 1, 2},
+    {1, 2, 0},
+    {2, 0, 1},
 };
 
-static const unsigned char kCodeAuxEncodingTable[16] =
-    {
-        // clang-format array formatting is broken :/
-        0x00, 0x01, 0x10, 0x02, 0x20, 0x03, 0x30, 0x67, 0x76, 0x78, 0x87, 0x89, 0x98, 0xff, 0, 0,
+static const unsigned char kCodeAuxEncodingTable[16] = {
+    0x00, 0x01, 0x10, 0x02, 0x20, 0x03, 0x30, 0x67, 0x76, 0x78, 0x87, 0x89, 0x98, 0xff, 0, 0,
 };
 
 static int rotateTriangle(unsigned int a, unsigned int b, unsigned int c, unsigned int next)
