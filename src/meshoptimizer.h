@@ -458,7 +458,7 @@ class meshopt_Buffer
 	meshopt_Buffer(const meshopt_Buffer&);
 	meshopt_Buffer& operator=(const meshopt_Buffer&);
 
-  public:
+public:
 	T* data;
 	size_t size;
 
@@ -472,6 +472,11 @@ class meshopt_Buffer
 	    : data(new T[size])
 	    , size(size)
 	{
+	}
+
+	~meshopt_Buffer()
+	{
+		delete[] data;
 	}
 
 	T& operator[](size_t index)
