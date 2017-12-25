@@ -139,7 +139,7 @@ bool isMeshValid(const Mesh& mesh)
 	return true;
 }
 
-void rotateTriangle(Triangle& t)
+bool rotateTriangle(Triangle& t)
 {
 	int c01 = memcmp(&t.v[0], &t.v[1], sizeof(Vertex));
 	int c02 = memcmp(&t.v[0], &t.v[2], sizeof(Vertex));
@@ -157,34 +157,39 @@ void rotateTriangle(Triangle& t)
 		Vertex tv = t.v[2];
 		t.v[2] = t.v[1], t.v[1] = t.v[0], t.v[0] = tv;
 	}
+
+	return c01 != 0 && c02 != 0 && c12 != 0;
+}
+
+void deindexMesh(std::vector<Triangle>& dest, const Mesh& mesh)
+{
+	size_t triangles = mesh.indices.size() / 3;
+
+	dest.reserve(triangles);
+
+	for (size_t i = 0; i < triangles; ++i)
+	{
+		Triangle t;
+
+		for (int k = 0; k < 3; ++k)
+			t.v[k] = mesh.vertices[mesh.indices[i * 3 + k]];
+
+		// skip degenerate triangles since some algorithms don't preserve them
+		if (rotateTriangle(t))
+			dest.push_back(t);
+	}
 }
 
 bool areMeshesEqual(const Mesh& lhs, const Mesh& rhs)
 {
-	if (lhs.indices.size() != rhs.indices.size())
-		return false;
-
-	size_t triangles = lhs.indices.size() / 3;
-
-	std::vector<Triangle> lt(triangles);
-	std::vector<Triangle> rt(triangles);
-
-	for (size_t i = 0; i < triangles; ++i)
-	{
-		for (int k = 0; k < 3; ++k)
-		{
-			lt[i].v[k] = lhs.vertices[lhs.indices[i * 3 + k]];
-			rt[i].v[k] = rhs.vertices[rhs.indices[i * 3 + k]];
-		}
-
-		rotateTriangle(lt[i]);
-		rotateTriangle(rt[i]);
-	}
+	std::vector<Triangle> lt, rt;
+	deindexMesh(lt, lhs);
+	deindexMesh(rt, rhs);
 
 	std::sort(lt.begin(), lt.end());
 	std::sort(rt.begin(), rt.end());
 
-	return memcmp(&lt[0], &rt[0], triangles * sizeof(Triangle)) == 0;
+	return lt.size() == rt.size() && memcmp(&lt[0], &rt[0], lt.size() * sizeof(Triangle)) == 0;
 }
 
 void optNone(Mesh& mesh)
