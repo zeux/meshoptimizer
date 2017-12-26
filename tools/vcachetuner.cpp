@@ -9,29 +9,24 @@
 #include <cstring>
 #include <thread>
 
+const int max_cache_size = 16;
+const int max_valence = 8;
+
 namespace meshopt
 {
-	extern thread_local float vertex_score_table_cache[1 + 32];
-	extern thread_local float vertex_score_table_live[1 + 32];
+	extern thread_local float vertex_score_table_cache[1 + max_cache_size];
+	extern thread_local float vertex_score_table_live[1 + max_valence];
 }
 
-enum Profile
+struct { int cache, warp, triangle; } profiles[] =
 {
-	Profile_AMD_GCN,
-	Profile_NVidia,
-	Profile_NVidia_Pascal,
-	Profile_Intel,
-
-	Profile_Count
+	{ 14, 64, 128 }, // AMD GCN
+	{ 32, 32, 32 }, // NVidia Pascal
+	// { 16, 32, 32 }, // NVidia Kepler, Maxwell
+	// { 128, 0, 0 }, // Intel
 };
 
-struct { int cache, warp, triangle; } profiles[Profile_Count] =
-{
-	{ 14, 64, 128 },
-	{ 16, 32, 32 },
-	{ 32, 32, 32 },
-	{ 128, 0, 0 },
-};
+const int Profile_Count = sizeof(profiles) / sizeof(profiles[0]);
 
 typedef struct { uint64_t state;  uint64_t inc; } pcg32_random_t;
 
@@ -57,8 +52,8 @@ float rand01()
 
 struct State
 {
-	float cache[32];
-	float live[32];
+	float cache[max_cache_size];
+	float live[max_valence];
 };
 
 struct Mesh
@@ -160,12 +155,12 @@ Mesh objmesh(const char* path)
 
 void compute_atvr(const State& state, const Mesh& mesh, float result[Profile_Count])
 {
-	memcpy(meshopt::vertex_score_table_cache + 1, state.cache, 32 * sizeof(float));
-	memcpy(meshopt::vertex_score_table_live + 1, state.live, 32 * sizeof(float));
+	memcpy(meshopt::vertex_score_table_cache + 1, state.cache, max_cache_size * sizeof(float));
+	memcpy(meshopt::vertex_score_table_live + 1, state.live, max_valence * sizeof(float));
 
 	std::vector<unsigned int> indices(mesh.indices.size());
 
-	meshopt_optimizeVertexCache(&indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertex_count, 0);
+	meshopt_optimizeVertexCache(&indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertex_count);
 
 	for (int profile = 0; profile < Profile_Count; ++profile)
 		result[profile] = meshopt_analyzeVertexCache(&indices[0], indices.size(), mesh.vertex_count, profiles[profile].cache, profiles[profile].warp, profiles[profile].triangle).atvr;
@@ -209,11 +204,11 @@ std::vector<State> gen0(size_t count)
 	{
 		State state = {};
 
-		for (int j = 0; j < 32; ++j)
-		{
+		for (int j = 0; j < max_cache_size; ++j)
 			state.cache[j] = rndcache(j);
+
+		for (int j = 0; j < max_valence; ++j)
 			state.live[j] = rndlive(j);
-		}
 
 		result.push_back(state);
 	}
@@ -295,20 +290,30 @@ std::pair<State, float> genN(std::vector<State>& seed, const std::vector<Mesh>& 
 		// crossover
 		if (rand01() < crossover)
 		{
-			size_t idxcache = std::min(int(rand01() * 32 + 0.5f), 31);
-			size_t idxlive = std::min(int(rand01() * 32 + 0.5f), 31);
+			size_t idxcache = std::min(int(rand01() * max_cache_size + 0.5f), 15);
 
-			memcpy(state.cache + idxcache, s1.cache + idxcache, (32 - idxcache) * sizeof(float));
-			memcpy(state.live + idxlive, s1.live + idxlive, (32 - idxlive) * sizeof(float));
+			memcpy(state.cache + idxcache, s1.cache + idxcache, (max_cache_size - idxcache) * sizeof(float));
+		}
+
+		if (rand01() < crossover)
+		{
+			size_t idxlive = std::min(int(rand01() * max_valence + 0.5f), 7);
+
+			memcpy(state.live + idxlive, s1.live + idxlive, (max_valence - idxlive) * sizeof(float));
 		}
 
 		// mutate
 		if (rand01() < mutate)
 		{
-			size_t idxcache = std::min(int(rand01() * 32 + 0.5f), 31);
-			size_t idxlive = std::min(int(rand01() * 32 + 0.5f), 31);
+			size_t idxcache = std::min(int(rand01() * max_cache_size + 0.5f), 15);
 
 			state.cache[idxcache] = rndcache(idxcache);
+		}
+
+		if (rand01() < mutate)
+		{
+			size_t idxlive = std::min(int(rand01() * max_valence + 0.5f), 7);
+
 			state.live[idxlive] = rndlive(idxlive);
 		}
 
@@ -359,17 +364,15 @@ bool save_state(const char* path, const std::vector<State>& result)
 void dump_state(const State& state)
 {
 	printf("cache:");
-	for (int i = 0; i < 32; ++i)
+	for (int i = 0; i < max_cache_size; ++i)
 	{
-		if (i == 16) printf(" |");
 		printf(" %.3f", state.cache[i]);
 	}
 	printf("\n");
 
 	printf("live:");
-	for (int i = 0; i < 32; ++i)
+	for (int i = 0; i < max_valence; ++i)
 	{
-		if (i == 8) printf(" |");
 		printf(" %.3f", state.live[i]);
 	}
 	printf("\n");
@@ -378,8 +381,8 @@ void dump_state(const State& state)
 int main(int argc, char** argv)
 {
 	State baseline;
-	memcpy(baseline.cache, meshopt::vertex_score_table_cache + 1, 32 * sizeof(float));
-	memcpy(baseline.live, meshopt::vertex_score_table_live + 1, 32 * sizeof(float));
+	memcpy(baseline.cache, meshopt::vertex_score_table_cache + 1, max_cache_size * sizeof(float));
+	memcpy(baseline.live, meshopt::vertex_score_table_live + 1, max_valence * sizeof(float));
 
 	std::vector<Mesh> meshes;
 
@@ -416,7 +419,7 @@ int main(int argc, char** argv)
 	compute_atvr(baseline, meshes[0], atvr_0);
 	compute_atvr(baseline, meshes.back(), atvr_N);
 
-	printf("baseline: grid %f %f %s %f %f\n", atvr_0[Profile_AMD_GCN], atvr_0[Profile_NVidia_Pascal], argv[argc - 1], atvr_N[Profile_AMD_GCN], atvr_N[Profile_NVidia_Pascal]);
+	printf("baseline: grid %f %f %s %f %f\n", atvr_0[0], atvr_0[1], argv[argc - 1], atvr_N[0], atvr_N[1]);
 
 	for (;;)
 	{
@@ -426,12 +429,12 @@ int main(int argc, char** argv)
 		compute_atvr(best.first, meshes[0], atvr_0);
 		compute_atvr(best.first, meshes.back(), atvr_N);
 
-		printf("%d: fitness %f; grid %f %f %s %f %f\n", int(gen), best.second, atvr_0[Profile_AMD_GCN], atvr_0[Profile_NVidia_Pascal], argv[argc - 1], atvr_N[Profile_AMD_GCN], atvr_N[Profile_NVidia_Pascal]);
+		printf("%d: fitness %f; grid %f %f %s %f %f\n", int(gen), best.second, atvr_0[0], atvr_0[1], argv[argc - 1], atvr_N[0], atvr_N[1]);
 
 		if (gen % 100 == 0)
 		{
 			char buf[128];
-			sprintf(buf, "gcloud logging write vcache-log \"fitness %f; grid %f %f %s %f %f\"", best.second, atvr_0[Profile_AMD_GCN], atvr_0[Profile_NVidia_Pascal], argv[argc - 1], atvr_N[Profile_AMD_GCN], atvr_N[Profile_NVidia_Pascal]);
+			sprintf(buf, "gcloud logging write vcache-log \"fitness %f; grid %f %f %s %f %f\"", best.second, atvr_0[0], atvr_0[1], argv[argc - 1], atvr_N[0], atvr_N[1]);
 			system(buf);
 		}
 
