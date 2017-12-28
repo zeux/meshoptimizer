@@ -147,6 +147,10 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 
 	assert(index_count % 3 == 0);
 
+	// the minimum valid encoding is 1 byte per triangle and a 16-byte codeaux table
+	if (buffer_size < index_count / 3 + 16)
+		return 0;
+
 	EdgeFifo edgefifo;
 	memset(edgefifo, -1, sizeof(edgefifo));
 
@@ -161,6 +165,7 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 
 	unsigned char* code = buffer;
 	unsigned char* data = buffer + index_count / 3;
+	unsigned char* data_safe_end = buffer + buffer_size - 16;
 
 	// use static encoding table; it's possible to pack the result and then build an optimal table and repack
 	// for now we keep it simple and use the table that has been generated based on symbol frequency on a training mesh set
@@ -172,6 +177,12 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 
 	for (size_t i = 0; i < index_count; i += 3)
 	{
+		// make sure we have enough space to write a triangle
+		// each triangle writes at most 16 bytes: 1b for codeaux and 5b for each free index
+		// after this we can be sure we can write without extra bounds checks
+		if (data > data_safe_end)
+			return 0;
+
 		int fer = getEdgeFifo(edgefifo, indices[i + 0], indices[i + 1], indices[i + 2], edgefifooffset);
 
 		if (fer >= 0 && (fer >> 2) < 15)
@@ -256,6 +267,10 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 		}
 	}
 
+	// make sure we have enough space to write codeaux table
+	if (data > data_safe_end)
+		return 0;
+
 	// add codeaux encoding table to the end of the stream; this is used for decoding codeaux *and* as padding
 	// we need padding for decoding to be able to assume that each triangle is encoded as <= 16 bytes of extra data
 	// this is enough space for aux byte + 5 bytes per varint index which is the absolute worst case for any input
@@ -266,7 +281,6 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 
 	assert(data >= buffer + index_count / 3 + 16);
 	assert(data <= buffer + buffer_size);
-	(void)buffer_size;
 
 	return data - buffer;
 }
