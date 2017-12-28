@@ -471,9 +471,10 @@ public:
 	}
 
 	explicit meshopt_Buffer(size_t size)
-	    : data(new T[size])
+	    : data(0)
 	    , size(size)
 	{
+		data = new T[size];
 	}
 
 	~meshopt_Buffer()
