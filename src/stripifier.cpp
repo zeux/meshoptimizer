@@ -101,10 +101,8 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 			unsigned int a = buffer[i][0], b = buffer[i][1], c = buffer[i][2];
 			unsigned int v = buffer[i][next & 3];
 
-			// unordered removal from the buffer
-			buffer[i][0] = buffer[buffer_size - 1][0];
-			buffer[i][1] = buffer[buffer_size - 1][1];
-			buffer[i][2] = buffer[buffer_size - 1][2];
+			// ordered removal from the buffer
+			memmove(buffer[i], buffer[i + 1], (buffer_size - i - 1) * sizeof(buffer[0]));
 			buffer_size--;
 
 			// update vertex valences for strip start heuristic
@@ -150,10 +148,8 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 			unsigned int i = findStripFirst(buffer, buffer_size, &valence[0]);
 			unsigned int a = buffer[i][0], b = buffer[i][1], c = buffer[i][2];
 
-			// unordered removal from the buffer
-			buffer[i][0] = buffer[buffer_size - 1][0];
-			buffer[i][1] = buffer[buffer_size - 1][1];
-			buffer[i][2] = buffer[buffer_size - 1][2];
+			// ordered removal from the buffer
+			memmove(buffer[i], buffer[i + 1], (buffer_size - i - 1) * sizeof(buffer[0]));
 			buffer_size--;
 
 			// update vertex valences for strip start heuristic
