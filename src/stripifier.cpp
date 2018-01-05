@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <string.h>
+#include <limits.h>
 
 namespace meshopt
 {
@@ -159,15 +160,23 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 
 			// we need to pre-rotate the triangle so that we will find a match in the existing buffer on the next iteration
 			int ea = findStripNext(buffer, buffer_size, c, b);
-			int eb = ea < 0 ? findStripNext(buffer, buffer_size, a, c) : -1;
-			int ec = eb < 0 ? findStripNext(buffer, buffer_size, b, a) : -1;
+			int eb = findStripNext(buffer, buffer_size, a, c);
+			int ec = findStripNext(buffer, buffer_size, b, a);
 
-			if (ea >= 0)
+			// in some cases we can have several matching edges; since we can pick any edge, we pick the one with the smallest
+			// triangle index in the buffer. this reduces the effect of stripification on ACMR and additionally - for unclear
+			// reasons - slightly improves the stripification efficiency
+			int mine = INT_MAX;
+			mine = (ea >= 0 && mine > ea) ? ea : mine;
+			mine = (eb >= 0 && mine > eb) ? eb : mine;
+			mine = (ec >= 0 && mine > ec) ? ec : mine;
+
+			if (ea == mine)
 			{
 				// keep abc
 				next = ea;
 			}
-			else if (eb >= 0)
+			else if (eb == mine)
 			{
 				// abc -> bca
 				unsigned int t = a;
@@ -175,7 +184,7 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 
 				next = eb;
 			}
-			else if (ec >= 0)
+			else if (ec == mine)
 			{
 				// abc -> cab
 				unsigned int t = c;
