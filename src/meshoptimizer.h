@@ -123,7 +123,7 @@ MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsig
  *
  * destination must contain enough space for the worst case target index buffer (index_count / 3 * 4 elements)
  */
-size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count);
+MESHOPTIMIZER_API size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count);
 
 /**
  * Experimental: Mesh unstripifier
@@ -132,7 +132,7 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
  *
  * destination must contain enough space for the worst case target index buffer ((index_count - 2) * 3 elements)
  */
-size_t meshopt_unstripify(unsigned int* destination, const unsigned int* indices, size_t index_count);
+MESHOPTIMIZER_API size_t meshopt_unstripify(unsigned int* destination, const unsigned int* indices, size_t index_count);
 
 struct meshopt_VertexCacheStatistics
 {
