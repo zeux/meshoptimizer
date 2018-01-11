@@ -139,13 +139,13 @@ struct meshopt_VertexCacheStatistics
 	unsigned int vertices_transformed;
 	unsigned int warps_executed;
 	float acmr; /* transformed vertices / triangle count; best case 0.5, worst case 3.0, optimum depends on topology */
-	float atvr; /* transformed vertices / vertex count; best case 1.0, worse case 6.0, optimum is 1.0 (each vertex is transformed once) */
+	float atvr; /* transformed vertices / vertex count; best case 1.0, worst case 6.0, optimum is 1.0 (each vertex is transformed once) */
 };
 
 /**
  * Vertex transform cache analyzer
  * Returns cache hit statistics using a simplified FIFO model
- * Results will not match actual GPU performance
+ * Results may not match actual GPU performance
  */
 MESHOPTIMIZER_API struct meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int warp_size, unsigned int primgroup_size);
 
@@ -159,7 +159,7 @@ struct meshopt_OverdrawStatistics
 /**
  * Overdraw analyzer
  * Returns overdraw statistics using a software rasterizer
- * Results will not match actual GPU performance
+ * Results may not match actual GPU performance
  *
  * vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
  */
@@ -174,7 +174,7 @@ struct meshopt_VertexFetchStatistics
 /**
  * Vertex fetch cache analyzer
  * Returns cache hit statistics using a simplified direct mapped model
- * Results will not match actual GPU performance
+ * Results may not match actual GPU performance
  */
 MESHOPTIMIZER_API struct meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
 
