@@ -214,7 +214,14 @@ inline unsigned short meshopt_quantizeHalf(float v);
 inline float meshopt_quantizeFloat(float v, int N);
 #endif
 
-/* C++ template interface */
+/**
+ * C++ template interface
+ *
+ * These functions mirror the C interface the library provides, providing template-based overloads so that
+ * the caller can use an arbitrary type for the index data, both for input and output.
+ * When the supplied type is the same size as that of unsigned int, the wrappers are zero-cost; when it's not,
+ * the wrappers end up allocating memory and copying index data to convert from one type to another.
+ */
 #ifdef __cplusplus
 template <typename T, bool ZeroCopy = sizeof(T) == sizeof(unsigned int)>
 struct meshopt_IndexAdapter;
