@@ -258,6 +258,8 @@ void optCompleteSimplify(Mesh& mesh)
 {
 	static const size_t lod_count = 5;
 
+	clock_t start = clock();
+
 	// generate 4 LOD levels (1-4), with each subsequent LOD using 70% triangles
 	// note that each LOD uses the same (shared) vertex buffer
 	std::vector<unsigned int> lods[lod_count];
@@ -278,6 +280,8 @@ void optCompleteSimplify(Mesh& mesh)
 		lod.resize(source.size());
 		lod.resize(meshopt_simplify(&lod[0], &source[0], source.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), std::min(source.size(), target_index_count)));
 	}
+
+	clock_t end = clock();
 
 	// optimize each individual LOD for vertex cache & overdraw
 	for (size_t i = 0; i < lod_count; ++i)
@@ -323,7 +327,7 @@ void optCompleteSimplify(Mesh& mesh)
 		printf(" LOD%d %d", int(i), int(lods[i].size()) / 3);
 	}
 
-	printf("\n");
+	printf(" in %.2f msec\n", double(end - start) / CLOCKS_PER_SEC * 1000);
 
 	// for using LOD data at runtime, in addition to VB and IB you have to save lod_index_offsets/lod_index_counts.
 	(void)lod_index_offsets;
@@ -443,7 +447,7 @@ void process(const char* path)
 	optimize(mesh, "Complete", optComplete);
 
 	// note: the ATVR/overdraw output from this pass is not necessarily correct since we analyze all LODs at once
-	optimize(mesh, "Simplify", optCompleteSimplify, /* compare= */ false);
+	optimize(mesh, "CmpltLod", optCompleteSimplify, /* compare= */ false);
 
 	Mesh copy = mesh;
 	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
