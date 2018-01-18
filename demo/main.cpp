@@ -243,7 +243,7 @@ void optFetch(Mesh& mesh)
 
 void optComplete(Mesh& mesh)
 {
-	// vertex cache optimization should go first as it provides data for overdraw
+	// vertex cache optimization should go first as it provides starting order for overdraw
 	meshopt_optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size());
 
 	// reorder indices for overdraw, balancing overdraw and vertex cache efficiency
@@ -260,7 +260,6 @@ void optCompleteSimplify(Mesh& mesh)
 
 	// generate 4 LOD levels (1-4), with each subsequent LOD using 70% triangles
 	// note that each LOD uses the same (shared) vertex buffer
-	// vertex cache optimization should go first as it provides data for overdraw
 	std::vector<unsigned int> lods[lod_count];
 
 	lods[0] = mesh.indices;

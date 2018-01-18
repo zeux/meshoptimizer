@@ -9,7 +9,7 @@ struct ObjFile
 	std::vector<float> vn; // vertex normals; stride 3 (xyz)
 
 	std::vector<char> fv; // face vertex count
-	std::vector<int> f; // face elements; stride defined by fv (*3)
+	std::vector<int> f; // face elements; stride defined by fv (*3 since f contains indices into v/vt/vn)
 };
 
 void objParseLine(ObjFile& result, const char* line);
