@@ -7,6 +7,7 @@
 #include <cstring>
 #include <ctime>
 
+#include "miniz.h"
 #include "objparser.h"
 
 const size_t kCacheSize = 16;
@@ -357,6 +358,13 @@ void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh), bool
 	printf("%-9s: ACMR %f ATVR %f (NV %f AMD %f Intel %f) Overfetch %f Overdraw %f in %.2f msec\n", name, vcs.acmr, vcs.atvr, vcs_nv.atvr, vcs_amd.atvr, vcs_intel.atvr, vfs.overfetch, os.overdraw, double(end - start) / CLOCKS_PER_SEC * 1000);
 }
 
+size_t compress(const std::vector<unsigned char>& data)
+{
+	std::vector<unsigned char> cbuf(tdefl_compress_bound(data.size()));
+	unsigned int flags = tdefl_create_comp_flags_from_zip_params(MZ_DEFAULT_LEVEL, 15, MZ_DEFAULT_STRATEGY);
+	return tdefl_compress_mem_to_mem(&cbuf[0], cbuf.size(), &data[0], data.size(), flags);
+}
+
 void encodeIndex(const Mesh& mesh)
 {
 	clock_t start = clock();
@@ -373,6 +381,8 @@ void encodeIndex(const Mesh& mesh)
 
 	clock_t end = clock();
 
+	size_t csize = compress(buffer);
+
 	for (size_t i = 0; i < mesh.indices.size(); i += 3)
 	{
 		assert(
@@ -381,8 +391,9 @@ void encodeIndex(const Mesh& mesh)
 		    (result[i + 2] == mesh.indices[i + 0] && result[i + 0] == mesh.indices[i + 1] && result[i + 1] == mesh.indices[i + 2]));
 	}
 
-	printf("Index encode: %.1f bits/triangle; encode %.2f msec, decode %.2f msec (%.2f Mtri/s)\n",
+	printf("Index encode: %.1f bits/triangle (post-deflate %.1f bits/triangle); encode %.2f msec, decode %.2f msec (%.2f Mtri/s)\n",
 	       double(buffer.size() * 8) / double(mesh.indices.size() / 3),
+	       double(csize * 8) / double(mesh.indices.size() / 3),
 	       double(middle - start) / CLOCKS_PER_SEC * 1000,
 	       double(end - middle) / CLOCKS_PER_SEC * 1000,
 	       (double(result.size() / 3) / 1e6) / (double(end - middle) / CLOCKS_PER_SEC));
@@ -453,9 +464,8 @@ void process(const char* path)
 	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
 	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
 
-	encodeIndex(copy);
-
 	stripify(copy);
+	encodeIndex(copy);
 }
 
 int main(int argc, char** argv)
