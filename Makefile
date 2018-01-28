@@ -38,6 +38,9 @@ all: $(EXECUTABLE)
 test: $(EXECUTABLE)
 	$(EXECUTABLE) $(files)
 
+dev: $(EXECUTABLE)
+	$(EXECUTABLE) -d $(files:demo/bunny.obj=data/kitten.obj data/nyra.obj data/zeuxcg.obj)
+
 format:
 	clang-format -i $(SOURCES)
 

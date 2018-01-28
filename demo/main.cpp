@@ -391,7 +391,7 @@ void encodeIndex(const Mesh& mesh)
 		    (result[i + 2] == mesh.indices[i + 0] && result[i + 0] == mesh.indices[i + 1] && result[i + 1] == mesh.indices[i + 2]));
 	}
 
-	printf("Index encode: %.1f bits/triangle (post-deflate %.1f bits/triangle); encode %.2f msec, decode %.2f msec (%.2f Mtri/s)\n",
+	printf("IdxCodec : %.1f bits/triangle (post-deflate %.1f bits/triangle); encode %.2f msec, decode %.2f msec (%.2f Mtri/s)\n",
 	       double(buffer.size() * 8) / double(mesh.indices.size() / 3),
 	       double(csize * 8) / double(mesh.indices.size() / 3),
 	       double(middle - start) / CLOCKS_PER_SEC * 1000,
@@ -423,10 +423,8 @@ void stripify(const Mesh& mesh)
 	       double(end - start) / CLOCKS_PER_SEC * 1000);
 }
 
-void process(const char* path)
+bool loadMesh(Mesh& mesh, const char* path)
 {
-	Mesh mesh;
-
 	if (path)
 	{
 		clock_t start = clock();
@@ -437,7 +435,7 @@ void process(const char* path)
 		if (mesh.vertices.empty())
 		{
 			printf("Mesh %s is empty, skipping\n", path);
-			return;
+			return false;
 		}
 
 		printf("# %s: %d vertices, %d triangles; read in %.2f msec; indexed in %.2f msec\n", path, int(mesh.vertices.size()), int(mesh.indices.size() / 3), double(middle - start) / CLOCKS_PER_SEC * 1000, double(end - middle) / CLOCKS_PER_SEC * 1000);
@@ -448,6 +446,15 @@ void process(const char* path)
 
 		printf("# tessellated plane: %d vertices, %d triangles\n", int(mesh.vertices.size()), int(mesh.indices.size() / 3));
 	}
+
+	return true;
+}
+
+void process(const char* path)
+{
+	Mesh mesh;
+	if (!loadMesh(mesh, path))
+		return;
 
 	optimize(mesh, "Original", optNone);
 	optimize(mesh, "Random", optRandomShuffle);
@@ -465,6 +472,20 @@ void process(const char* path)
 	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
 
 	stripify(copy);
+
+	encodeIndex(copy);
+}
+
+void processDev(const char* path)
+{
+	Mesh mesh;
+	if (!loadMesh(mesh, path))
+		return;
+
+	Mesh copy = mesh;
+	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
+	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
+
 	encodeIndex(copy);
 }
 
@@ -477,9 +498,19 @@ int main(int argc, char** argv)
 	}
 	else
 	{
-		for (int i = 1; i < argc; ++i)
+		if (argc > 2 && strcmp(argv[1], "-d") == 0)
 		{
-			process(argv[i]);
+			for (int i = 2; i < argc; ++i)
+			{
+				processDev(argv[i]);
+			}
+		}
+		else
+		{
+			for (int i = 1; i < argc; ++i)
+			{
+				process(argv[i]);
+			}
 		}
 	}
 }
