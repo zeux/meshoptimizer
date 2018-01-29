@@ -15,7 +15,9 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 {
 	(void)prediction;
 
-	assert(vertex_count > 0);
+	assert(vertex_count > 0 && vertex_count <= 256);
+
+	*data++ = static_cast<unsigned char>(vertex_count - 1);
 
 	for (size_t k = 0; k < vertex_size; ++k)
 	{
