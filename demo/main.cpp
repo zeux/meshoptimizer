@@ -520,6 +520,7 @@ void process(const char* path)
 	stripify(copy);
 
 	encodeIndex(copy);
+	encodeVertex(copy);
 }
 
 void processDev(const char* path)
