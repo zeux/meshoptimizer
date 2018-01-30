@@ -6,6 +6,8 @@
 
 #include <stdio.h>
 
+// #define TRACE
+
 // This work is based on:
 // TODO: references
 namespace meshopt
@@ -16,6 +18,66 @@ const size_t kVertexBlockSize = 256;
 static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction)
 {
 	assert(vertex_count > 0 && vertex_count <= 256);
+
+#ifdef TRACE
+	printf("vertex block; count %d\n", int(vertex_count));
+
+	{
+		for (size_t k = 0; k < vertex_size; ++k)
+		{
+			printf("%02x    ", vertex_data[k]);
+		}
+
+		printf("| base\n");
+	}
+
+	for (size_t i = 1; i < vertex_count; ++i)
+	{
+		for (size_t k = 0; k < vertex_size; ++k)
+		{
+			size_t vertex_offset = i * vertex_size + k;
+
+			unsigned char p = vertex_data[vertex_offset - vertex_size];
+
+			if (prediction && prediction[i])
+			{
+				unsigned char pa = prediction[i] >> 16;
+				unsigned char pb = prediction[i] >> 8;
+				unsigned char pc = prediction[i] >> 0;
+				assert(pa > 0 && pb > 0 && pc > 0);
+
+				if (pa <= i && pb <= i && pc <= i)
+				{
+					unsigned char va = vertex_data[vertex_offset - pa * vertex_size];
+					unsigned char vb = vertex_data[vertex_offset - pb * vertex_size];
+					unsigned char vc = vertex_data[vertex_offset - pc * vertex_size];
+
+					p = va + vb - vc;
+				}
+			}
+
+			printf("%02x/%02x ", vertex_data[vertex_offset], (unsigned char)(vertex_data[vertex_offset] - p));
+		}
+
+		printf("| ");
+
+		if (prediction && prediction[i])
+		{
+			unsigned char pa = prediction[i] >> 16;
+			unsigned char pb = prediction[i] >> 8;
+			unsigned char pc = prediction[i] >> 0;
+			assert(pa > 0 && pb > 0 && pc > 0);
+
+			printf("pgram %d %d %d", pa, pb, pc);
+		}
+		else
+		{
+			printf("delta");
+		}
+
+		printf("\n");
+	}
+#endif
 
 	*data++ = static_cast<unsigned char>(vertex_count - 1);
 
