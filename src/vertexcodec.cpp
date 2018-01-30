@@ -32,7 +32,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 		{
 			unsigned char p = vertex_data[vertex_offset - vertex_size];
 
-			if (prediction[i])
+			if (prediction && prediction[i])
 			{
 				unsigned char pa = prediction[i] >> 16;
 				unsigned char pb = prediction[i] >> 8;
