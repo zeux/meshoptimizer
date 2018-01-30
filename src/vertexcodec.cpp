@@ -68,7 +68,14 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 			unsigned char pc = prediction[i] >> 0;
 			assert(pa > 0 && pb > 0 && pc > 0);
 
-			printf("pgram %d %d %d", pa, pb, pc);
+			if (pa <= i && pb <= i && pc <= i)
+			{
+				printf("pgram %d %d %d", pa, pb, pc);
+			}
+			else
+			{
+				printf("pdelta");
+			}
 		}
 		else
 		{
