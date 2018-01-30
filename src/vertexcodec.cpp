@@ -131,7 +131,6 @@ static size_t decodeVertexPrediction(DecodePredictionState& state, unsigned int*
 	assert(index_count % 3 == 0);
 
 	// the minimum valid encoding is 1 byte per triangle and a 16-byte codeaux table
-	// TODO: partial bounds check?..
 	if (buffer_size < index_count / 3 + 16)
 		return 0;
 
@@ -260,9 +259,8 @@ static size_t decodeVertexPrediction(DecodePredictionState& state, unsigned int*
 	}
 
 	// we should've read all data bytes and stopped at the boundary between data and codeaux table
-	// TODO!
-	// if (data != data_safe_end)
-		// return 0;
+	if (i == index_count && data != data_safe_end)
+		return 0;
 
 	state.code_offset = code - buffer;
 	state.data_offset = data - buffer - index_count / 3;
@@ -280,9 +278,6 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	assert(vertex_size > 0 && vertex_size <= 256);
 	assert(index_count % 3 == 0);
 	assert(index_buffer == 0 || index_buffer_size > 0);
-
-	(void)index_buffer;
-	(void)index_buffer_size;
 
 	const unsigned char* vertex_data = static_cast<const unsigned char*>(vertices);
 
