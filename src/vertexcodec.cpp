@@ -15,6 +15,11 @@ namespace meshopt
 
 const size_t kVertexBlockSize = 256;
 
+inline unsigned char zigzag8(unsigned char v)
+{
+	return (v >> 7) | ((v ^ -(v >> 7)) << 1);
+}
+
 inline int bits(unsigned char v)
 {
 	int result = 0;
@@ -69,7 +74,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 				}
 			}
 
-			unsigned char delta = vertex_data[vertex_offset] - p;
+			unsigned char delta = zigzag8(vertex_data[vertex_offset] - p);
 
 			if (!uniqb[k][delta])
 			{
@@ -158,7 +163,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 				}
 			}
 
-			unsigned char delta = vertex_data[vertex_offset] - p;
+			unsigned char delta = zigzag8(vertex_data[vertex_offset] - p);
 
 			*data++ = delta;
 			vertex_offset += vertex_size;
