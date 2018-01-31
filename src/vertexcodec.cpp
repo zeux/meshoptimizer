@@ -29,6 +29,19 @@ inline int bits(unsigned char v)
 	return result;
 }
 
+inline int bitsset(unsigned char v)
+{
+	int result = 0;
+
+	while (v)
+	{
+		result += (v & 1);
+		v >>= 1;
+	}
+
+	return result;
+}
+
 static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction)
 {
 	assert(vertex_count > 0 && vertex_count <= 256);
@@ -47,6 +60,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 
 	int uniq[256] = {};
 	int max[256] = {};
+	int orv[256] = {};
 	bool uniqb[256][256] = {};
 
 	for (size_t i = 1; i < vertex_count; ++i)
@@ -87,6 +101,8 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 				max[k] = delta;
 			}
 
+			orv[k] |= delta;
+
 		#if TRACE > 1
 			printf("%02x/%02x ", vertex_data[vertex_offset], delta);
 		#endif
@@ -126,9 +142,19 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 	printf("| uniq\n");
 
 	for (size_t k = 0; k < vertex_size; ++k)
-		printf("%02x/%d  ", max[k], bits(max[k]));
+		printf("%02x    ", max[k]);
 
-	printf("| max/bits\n");
+	printf("| max\n");
+
+	for (size_t k = 0; k < vertex_size; ++k)
+		printf("%d     ", bits(max[k]));
+
+	printf("| maxbits\n");
+
+	for (size_t k = 0; k < vertex_size; ++k)
+		printf("%d     ", bitsset(orv[k]));
+
+	printf("| bits set\n");
 #endif
 
 	*data++ = static_cast<unsigned char>(vertex_count - 1);
