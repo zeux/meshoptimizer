@@ -6,7 +6,7 @@
 
 #include <stdio.h>
 
-// #define TRACE
+#define TRACE 0
 
 // This work is based on:
 // TODO: references
@@ -15,11 +15,20 @@ namespace meshopt
 
 const size_t kVertexBlockSize = 256;
 
+inline int bits(unsigned char v)
+{
+	int result = 0;
+	while (v >= (1 << result))
+		result++;
+
+	return result;
+}
+
 static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction)
 {
 	assert(vertex_count > 0 && vertex_count <= 256);
 
-#ifdef TRACE
+#if TRACE > 0
 	printf("vertex block; count %d\n", int(vertex_count));
 
 	{
@@ -30,6 +39,10 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 
 		printf("| base\n");
 	}
+
+	int uniq[256] = {};
+	int max[256] = {};
+	bool uniqb[256][256] = {};
 
 	for (size_t i = 1; i < vertex_count; ++i)
 	{
@@ -56,9 +69,25 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 				}
 			}
 
-			printf("%02x/%02x ", vertex_data[vertex_offset], (unsigned char)(vertex_data[vertex_offset] - p));
+			unsigned char delta = vertex_data[vertex_offset] - p;
+
+			if (!uniqb[k][delta])
+			{
+				uniqb[k][delta] = true;
+				uniq[k]++;
+			}
+
+			if (delta > max[k])
+			{
+				max[k] = delta;
+			}
+
+		#if TRACE > 1
+			printf("%02x/%02x ", vertex_data[vertex_offset], delta);
+		#endif
 		}
 
+	#if TRACE > 1
 		printf("| ");
 
 		if (prediction && prediction[i])
@@ -83,7 +112,18 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 		}
 
 		printf("\n");
+	#endif
 	}
+
+	for (size_t k = 0; k < vertex_size; ++k)
+		printf("%-3d   ", uniq[k]);
+
+	printf("| uniq\n");
+
+	for (size_t k = 0; k < vertex_size; ++k)
+		printf("%02x/%d  ", max[k], bits(max[k]));
+
+	printf("| max/bits\n");
 #endif
 
 	*data++ = static_cast<unsigned char>(vertex_count - 1);
@@ -118,7 +158,9 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 				}
 			}
 
-			*data++ = vertex_data[vertex_offset] - p;
+			unsigned char delta = vertex_data[vertex_offset] - p;
+
+			*data++ = delta;
 			vertex_offset += vertex_size;
 		}
 	}
