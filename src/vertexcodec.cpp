@@ -42,11 +42,9 @@ inline int bitsset(unsigned char v)
 	return result;
 }
 
-static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction)
-{
-	assert(vertex_count > 0 && vertex_count <= 256);
-
 #if TRACE > 0
+static void traceEncodeVertexBlock(const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction)
+{
 	printf("vertex block; count %d\n", int(vertex_count));
 
 	{
@@ -155,6 +153,15 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 		printf("%d     ", bitsset(orv[k]));
 
 	printf("| bits set\n");
+}
+#endif
+
+static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction)
+{
+	assert(vertex_count > 0 && vertex_count <= 256);
+
+#if TRACE > 0
+	traceEncodeVertexBlock(vertex_data, vertex_count, vertex_size, prediction);
 #endif
 
 	*data++ = static_cast<unsigned char>(vertex_count - 1);
