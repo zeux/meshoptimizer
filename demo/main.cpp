@@ -10,6 +10,15 @@
 #include "miniz.h"
 #include "objparser.h"
 
+#ifdef __linux__
+clock_t clock()
+{
+	timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return clock_t((double(ts.tv_sec) + 1e-9 * double(ts.tv_nsec)) * CLOCKS_PER_SEC);
+}
+#endif
+
 const size_t kCacheSize = 16;
 
 struct Vertex
@@ -391,12 +400,12 @@ void encodeIndex(const Mesh& mesh)
 		    (result[i + 2] == mesh.indices[i + 0] && result[i + 0] == mesh.indices[i + 1] && result[i + 1] == mesh.indices[i + 2]));
 	}
 
-	printf("IdxCodec : %.1f bits/triangle (post-deflate %.1f bits/triangle); encode %.2f msec, decode %.2f msec (%.2f Mtri/s)\n",
+	printf("IdxCodec : %.1f bits/triangle (post-deflate %.1f bits/triangle); encode %.2f msec, decode %.2f msec (%.2f GB/s)\n",
 	       double(buffer.size() * 8) / double(mesh.indices.size() / 3),
 	       double(csize * 8) / double(mesh.indices.size() / 3),
 	       double(middle - start) / CLOCKS_PER_SEC * 1000,
 	       double(end - middle) / CLOCKS_PER_SEC * 1000,
-	       (double(result.size() / 3) / 1e6) / (double(end - middle) / CLOCKS_PER_SEC));
+	       (double(result.size() * 4) / (1 << 30)) / (double(end - middle) / CLOCKS_PER_SEC));
 }
 
 struct PackedVertex
