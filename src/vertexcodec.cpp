@@ -156,6 +156,44 @@ static void traceEncodeVertexBlock(const unsigned char* vertex_data, size_t vert
 }
 #endif
 
+static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buffer, size_t buffer_size)
+{
+	unsigned char max = 0;
+
+	for (size_t k = 0; k < buffer_size; ++k)
+		if (max < buffer[k])
+			max = buffer[k];
+
+	unsigned char bits = 0;
+
+	while (max >= (1 << bits))
+		bits++;
+
+	assert(bits <= 8);
+
+	*data++ = bits;
+
+	if (bits == 0)
+		return data;
+
+	size_t group_size = 8 / bits;
+
+	for (size_t i = 0; i < buffer_size; i += group_size)
+	{
+		unsigned char byte = 0;
+
+		for (size_t k = 0; k < group_size && i + k < buffer_size; ++k)
+		{
+			byte <<= bits;
+			byte |= buffer[i + k];
+		}
+
+		*data++ = byte;
+	}
+
+	return data;
+}
+
 static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction)
 {
 	assert(vertex_count > 0 && vertex_count <= 256);
@@ -170,6 +208,8 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 	{
 		*data++ = vertex_data[k];
 	}
+
+	unsigned char buffer[256];
 
 	for (size_t k = 0; k < vertex_size; ++k)
 	{
@@ -198,9 +238,11 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 
 			unsigned char delta = zigzag8(vertex_data[vertex_offset] - p);
 
-			*data++ = delta;
+			buffer[i - 1] = delta;
 			vertex_offset += vertex_size;
 		}
+
+		data = encodeBytes(data, buffer, vertex_count - 1);
 	}
 
 	return data;
