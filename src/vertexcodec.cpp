@@ -59,6 +59,7 @@ static void traceEncodeVertexBlock(const unsigned char* vertex_data, size_t vert
 	int uniq[256] = {};
 	int max[256] = {};
 	int orv[256] = {};
+	int sumb[256] = {};
 	bool uniqb[256][256] = {};
 
 	for (size_t i = 1; i < vertex_count; ++i)
@@ -100,6 +101,8 @@ static void traceEncodeVertexBlock(const unsigned char* vertex_data, size_t vert
 			}
 
 			orv[k] |= delta;
+
+			sumb[k] += bits(delta);
 
 		#if TRACE > 1
 			printf("%02x/%02x ", vertex_data[vertex_offset], delta);
@@ -148,6 +151,11 @@ static void traceEncodeVertexBlock(const unsigned char* vertex_data, size_t vert
 		printf("%d     ", bits(max[k]));
 
 	printf("| maxbits\n");
+
+	for (size_t k = 0; k < vertex_size; ++k)
+		printf("%3.1f   ", double(sumb[k]) / double(vertex_count - 1));
+
+	printf("| avgbits\n");
 
 	for (size_t k = 0; k < vertex_size; ++k)
 		printf("%d     ", bitsset(orv[k]));
