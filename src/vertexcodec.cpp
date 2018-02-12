@@ -164,7 +164,7 @@ static void traceEncodeVertexBlock(const unsigned char* vertex_data, size_t vert
 }
 #endif
 
-static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buffer, size_t buffer_size)
+static int computeEncodeBits(const unsigned char* buffer, size_t buffer_size)
 {
 	unsigned char max = 0;
 
@@ -179,7 +179,12 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 
 	assert(bits <= 8);
 
-	*data++ = bits;
+	return bits;
+}
+
+static unsigned char* encodeBytesRaw(unsigned char* data, const unsigned char* buffer, size_t buffer_size, int bits)
+{
+	assert(bits >= 0 && bits <= 8);
 
 	if (bits == 0)
 		return data;
@@ -198,6 +203,17 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 
 		*data++ = byte;
 	}
+
+	return data;
+}
+
+static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buffer, size_t buffer_size)
+{
+	int bits = computeEncodeBits(buffer, buffer_size);
+
+	*data++ = bits;
+
+	data = encodeBytesRaw(data, buffer, buffer_size, bits);
 
 	return data;
 }
