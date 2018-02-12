@@ -367,11 +367,12 @@ void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh), bool
 	printf("%-9s: ACMR %f ATVR %f (NV %f AMD %f Intel %f) Overfetch %f Overdraw %f in %.2f msec\n", name, vcs.acmr, vcs.atvr, vcs_nv.atvr, vcs_amd.atvr, vcs_intel.atvr, vfs.overfetch, os.overdraw, double(end - start) / CLOCKS_PER_SEC * 1000);
 }
 
-size_t compress(const std::vector<unsigned char>& data)
+template <typename T>
+size_t compress(const std::vector<T>& data)
 {
-	std::vector<unsigned char> cbuf(tdefl_compress_bound(data.size()));
+	std::vector<unsigned char> cbuf(tdefl_compress_bound(data.size() * sizeof(T)));
 	unsigned int flags = tdefl_create_comp_flags_from_zip_params(MZ_DEFAULT_LEVEL, 15, MZ_DEFAULT_STRATEGY);
-	return tdefl_compress_mem_to_mem(&cbuf[0], cbuf.size(), &data[0], data.size(), flags);
+	return tdefl_compress_mem_to_mem(&cbuf[0], cbuf.size(), &data[0], data.size() * sizeof(T), flags);
 }
 
 void encodeIndex(const Mesh& mesh)
