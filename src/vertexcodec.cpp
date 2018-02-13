@@ -548,7 +548,13 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	unsigned char* data = buffer;
 
 	unsigned char last_vertex[256];
-	memset(last_vertex, 0, vertex_size);
+
+	for (size_t k = 0; k < vertex_size; ++k)
+	{
+		last_vertex[k] = vertex_data[k];
+
+		*data++ = last_vertex[k];
+	}
 
 	unsigned int prediction[kVertexBlockSize];
 	DecodePredictionState pstate = {};
