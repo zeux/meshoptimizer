@@ -21,6 +21,7 @@ inline unsigned char zigzag8(unsigned char v)
 	return (v >> 7) | ((v ^ -(v >> 7)) << 1);
 }
 
+#if TRACE > 1
 inline int bits(unsigned char v)
 {
 	int result = 0;
@@ -43,7 +44,6 @@ inline int bitsset(unsigned char v)
 	return result;
 }
 
-#if TRACE > 1
 static void traceEncodeVertexBlock(const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction)
 {
 	printf("vertex block; count %d\n", int(vertex_count));
