@@ -184,10 +184,7 @@ static int computeEncodeBits(const unsigned char* buffer, size_t buffer_size)
 
 static unsigned char* encodeBytesRaw(unsigned char* data, const unsigned char* buffer, size_t buffer_size, int bits)
 {
-	assert(bits >= 0 && bits <= 8);
-
-	if (bits == 0)
-		return data;
+	assert(bits >= 1 && bits <= 8);
 
 	size_t group_size = 8 / bits;
 
@@ -209,13 +206,59 @@ static unsigned char* encodeBytesRaw(unsigned char* data, const unsigned char* b
 
 static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buffer, size_t buffer_size)
 {
-	int bits = computeEncodeBits(buffer, buffer_size);
+	int buffer_bits = computeEncodeBits(buffer, buffer_size);
 
-	*data++ = bits;
+	if (buffer_bits == 0)
+	{
+		*data++ = 0;
 
-	data = encodeBytesRaw(data, buffer, buffer_size, bits);
+		return data;
+	}
+	else
+	{
+		*data++ = 1;
 
-	return data;
+		unsigned char* header = data;
+		unsigned char headerbyte = 0;
+		unsigned int headerbits = 0;
+
+		data += ((buffer_size + 15) / 16 + 3) / 4;
+
+		unsigned char* header_end = data;
+
+		for (size_t i = 0; i < buffer_size; i += 16)
+		{
+			size_t group_size = (i + 16 <= buffer_size) ? 16 : buffer_size - i;
+
+			int bits = computeEncodeBits(buffer + i, group_size);
+			if (bits == 0) bits = 1; // todo: we lose ~1 bpv here, is this fixable?
+
+			int bitslog2 = (bits == 1) ? 0 : (bits == 2) ? 1 : (bits == 4) ? 2 : 3;
+
+			headerbyte <<= 2;
+			headerbyte |= bitslog2;
+			headerbits += 2;
+
+			if (headerbits == 8)
+			{
+				*header++ = headerbyte;
+				headerbyte = 0;
+				headerbits = 0;
+			}
+
+			data = encodeBytesRaw(data, buffer + i, group_size, bits);
+		}
+
+		if (headerbits)
+		{
+			headerbyte <<= (8 - headerbits);
+			*header++ = headerbyte;
+		}
+
+		assert(header == header_end);
+
+		return data;
+	}
 }
 
 static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction)
