@@ -14,6 +14,7 @@ namespace meshopt
 {
 
 const size_t kVertexBlockSize = 256;
+const size_t kByteGroupSize = 16;
 
 inline unsigned char zigzag8(unsigned char v)
 {
@@ -222,16 +223,21 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 		unsigned char headerbyte = 0;
 		unsigned int headerbits = 0;
 
-		data += ((buffer_size + 15) / 16 + 3) / 4;
+		// round buffer_size to byte group size to get number of groups
+		// round number of groups to 4 to get number of header bytes
+		data += ((buffer_size + kByteGroupSize - 1) / kByteGroupSize + 3) / 4;
 
 		unsigned char* header_end = data;
 
-		for (size_t i = 0; i < buffer_size; i += 16)
+		for (size_t i = 0; i < buffer_size; i += kByteGroupSize)
 		{
-			size_t group_size = (i + 16 <= buffer_size) ? 16 : buffer_size - i;
+			size_t group_size = (i + kByteGroupSize <= buffer_size) ? kByteGroupSize : buffer_size - i;
 
 			int bits = computeEncodeBits(buffer + i, group_size);
-			if (bits == 0) bits = 1; // todo: we lose ~1 bpv here, is this fixable?
+
+			// todo: we lose ~1 bpv here, is this fixable?
+			if (bits == 0)
+				bits = 1;
 
 			int bitslog2 = (bits == 1) ? 0 : (bits == 2) ? 1 : (bits == 4) ? 2 : 3;
 
