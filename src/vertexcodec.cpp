@@ -43,7 +43,7 @@ inline int bitsset(unsigned char v)
 	return result;
 }
 
-#if TRACE > 0
+#if TRACE > 1
 static void traceEncodeVertexBlock(const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction)
 {
 	printf("vertex block; count %d\n", int(vertex_count));
@@ -105,12 +105,12 @@ static void traceEncodeVertexBlock(const unsigned char* vertex_data, size_t vert
 
 			sumb[k] += bits(delta);
 
-		#if TRACE > 1
+		#if TRACE > 2
 			printf("%02x/%02x ", vertex_data[vertex_offset], delta);
 		#endif
 		}
 
-	#if TRACE > 1
+	#if TRACE > 2
 		printf("| ");
 
 		if (prediction && prediction[i])
@@ -162,6 +162,17 @@ static void traceEncodeVertexBlock(const unsigned char* vertex_data, size_t vert
 		printf("%d     ", bitsset(orv[k]));
 
 	printf("| bits set\n");
+}
+#endif
+
+#if TRACE > 0
+static size_t encodeVertexBlockStats[256];
+
+static void dumpEncodeVertexBlockStats()
+{
+	for (size_t k = 0; k < 256; ++k)
+		if (encodeVertexBlockStats[k])
+			printf("%2d: %d\n", int(k), int(encodeVertexBlockStats[k]));
 }
 #endif
 
@@ -271,7 +282,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 {
 	assert(vertex_count > 0 && vertex_count <= 256);
 
-#if TRACE > 0
+#if TRACE > 1
 	traceEncodeVertexBlock(vertex_data, vertex_count, vertex_size, prediction);
 #endif
 
@@ -310,7 +321,13 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 			vertex_offset += vertex_size;
 		}
 
-		data = encodeBytes(data, buffer, vertex_count);
+		unsigned char* next = encodeBytes(data, buffer, vertex_count);
+
+	#if TRACE > 0
+		encodeVertexBlockStats[k] += next - data;
+	#endif
+
+		data = next;
 	}
 
 	for (size_t k = 0; k < vertex_size; ++k)
@@ -559,6 +576,10 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	unsigned int prediction[kVertexBlockSize];
 	DecodePredictionState pstate = {};
 
+#if TRACE > 0
+	memset(encodeVertexBlockStats, 0, sizeof(encodeVertexBlockStats));
+#endif
+
 	size_t vertex_offset = 0;
 
 	if (index_buffer)
@@ -586,6 +607,10 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 		data = encodeVertexBlock(data, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, 0, last_vertex);
 		vertex_offset += block_size;
 	}
+
+#if TRACE > 0
+	dumpEncodeVertexBlockStats();
+#endif
 
 	assert(size_t(data - buffer) <= buffer_size);
 
