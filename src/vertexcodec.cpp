@@ -267,7 +267,7 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 	}
 }
 
-static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction)
+static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction, unsigned char last_vertex[256])
 {
 	assert(vertex_count > 0 && vertex_count <= 256);
 
@@ -277,20 +277,15 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 
 	*data++ = static_cast<unsigned char>(vertex_count - 1);
 
-	for (size_t k = 0; k < vertex_size; ++k)
-	{
-		*data++ = vertex_data[k];
-	}
-
 	unsigned char buffer[256];
 
 	for (size_t k = 0; k < vertex_size; ++k)
 	{
-		size_t vertex_offset = k + vertex_size;
+		size_t vertex_offset = k;
 
-		for (size_t i = 1; i < vertex_count; ++i)
+		for (size_t i = 0; i < vertex_count; ++i)
 		{
-			unsigned char p = vertex_data[vertex_offset - vertex_size];
+			unsigned char p = (i == 0) ? last_vertex[k] : vertex_data[vertex_offset - vertex_size];
 
 			if (prediction && prediction[i])
 			{
@@ -311,11 +306,16 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 
 			unsigned char delta = zigzag8(vertex_data[vertex_offset] - p);
 
-			buffer[i - 1] = delta;
+			buffer[i] = delta;
 			vertex_offset += vertex_size;
 		}
 
-		data = encodeBytes(data, buffer, vertex_count - 1);
+		data = encodeBytes(data, buffer, vertex_count);
+	}
+
+	for (size_t k = 0; k < vertex_size; ++k)
+	{
+		last_vertex[k] = vertex_data[vertex_size * (vertex_count - 1) + k];
 	}
 
 	return data;
@@ -547,6 +547,9 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 
 	unsigned char* data = buffer;
 
+	unsigned char last_vertex[256];
+	memset(last_vertex, 0, vertex_size);
+
 	unsigned int prediction[kVertexBlockSize];
 	DecodePredictionState pstate = {};
 
@@ -565,7 +568,7 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 			if (vertex_offset + block_size > vertex_count)
 				break;
 
-			data = encodeVertexBlock(data, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, prediction);
+			data = encodeVertexBlock(data, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, prediction, last_vertex);
 			vertex_offset += block_size;
 		}
 	}
@@ -574,7 +577,7 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	{
 		size_t block_size = (vertex_offset + kVertexBlockSize < vertex_count) ? kVertexBlockSize : vertex_count - vertex_offset;
 
-		data = encodeVertexBlock(data, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, 0);
+		data = encodeVertexBlock(data, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, 0, last_vertex);
 		vertex_offset += block_size;
 	}
 
