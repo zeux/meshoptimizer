@@ -21,7 +21,7 @@ inline unsigned char zigzag8(unsigned char v)
 	return (v >> 7) | ((v ^ -(v >> 7)) << 1);
 }
 
-#if TRACE > 1
+#if TRACE > 0
 inline int bits(unsigned char v)
 {
 	int result = 0;
@@ -43,7 +43,9 @@ inline int bitsset(unsigned char v)
 
 	return result;
 }
+#endif
 
+#if TRACE > 1
 static void traceEncodeVertexBlock(const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction)
 {
 	printf("vertex block; count %d\n", int(vertex_count));
@@ -166,13 +168,30 @@ static void traceEncodeVertexBlock(const unsigned char* vertex_data, size_t vert
 #endif
 
 #if TRACE > 0
-static size_t encodeVertexBlockStats[256];
+struct EncodeVertexBlockStats
+{
+	size_t bytes[256];
+	size_t bitsopt[256];
+};
+
+static EncodeVertexBlockStats encodeVertexBlockStats;
 
 static void dumpEncodeVertexBlockStats()
 {
+	const EncodeVertexBlockStats& stats = encodeVertexBlockStats;
+
+	size_t bytes = 0;
+	size_t bitsopt = 0;
+
 	for (size_t k = 0; k < 256; ++k)
-		if (encodeVertexBlockStats[k])
-			printf("%2d: %d\n", int(k), int(encodeVertexBlockStats[k]));
+		if (stats.bytes[k])
+		{
+			printf("%2d: %d bytes (optimal %.1f bytes, exp %.1f bytes)\n", int(k), int(stats.bytes[k]), float(stats.bitsopt[k]) / 8);
+			bytes += stats.bytes[k];
+			bitsopt += stats.bitsopt[k];
+		}
+
+	printf("total: %d bytes (optimal %.1f bytes, exp %.1f bytes)\n", int(bytes), float(bitsopt) / 8);
 }
 #endif
 
@@ -324,7 +343,12 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 		unsigned char* next = encodeBytes(data, buffer, vertex_count);
 
 	#if TRACE > 0
-		encodeVertexBlockStats[k] += next - data;
+		EncodeVertexBlockStats& stats = encodeVertexBlockStats;
+
+		stats.bytes[k] += next - data;
+
+		for (size_t i = 0; i < vertex_count; ++i)
+			stats.bitsopt[k] += bits(buffer[i]);
 	#endif
 
 		data = next;
@@ -577,7 +601,7 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	DecodePredictionState pstate = {};
 
 #if TRACE > 0
-	memset(encodeVertexBlockStats, 0, sizeof(encodeVertexBlockStats));
+	memset(&encodeVertexBlockStats, 0, sizeof(encodeVertexBlockStats));
 #endif
 
 	size_t vertex_offset = 0;
