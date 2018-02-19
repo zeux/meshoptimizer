@@ -1,14 +1,14 @@
 #include "../src/meshoptimizer.h"
 #include "../demo/objparser.h"
 
-#include <vector>
 #include <algorithm>
 #include <functional>
+#include <vector>
+
 #include <cmath>
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
-#include <thread>
 
 const int max_cache_size = 16;
 const int max_valence = 8;
@@ -228,14 +228,14 @@ State mutate(const State& state)
 
 	if (rand01() < 0.7f)
 	{
-		size_t idxcache = std::min(int(rand01() * max_cache_size + 0.5f), 15);
+		size_t idxcache = std::min(int(rand01() * max_cache_size + 0.5f), int(max_cache_size - 1));
 
 		result.cache[idxcache] = rndcache();
 	}
 
 	if (rand01() < 0.7f)
 	{
-		size_t idxlive = std::min(int(rand01() * max_valence + 0.5f), 7);
+		size_t idxlive = std::min(int(rand01() * max_valence + 0.5f), int(max_valence - 1));
 
 		result.live[idxlive] = rndlive();
 	}
@@ -253,7 +253,7 @@ State mutate(const State& state)
 	{
 		uint32_t idxlive = rand32();
 
-		for (size_t i = 0; i < max_cache_size; ++i)
+		for (size_t i = 0; i < max_valence; ++i)
 			if (idxlive & (1 << i))
 				result.live[i] *= 0.9f + 0.2f * rand01();
 	}
