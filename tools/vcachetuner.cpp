@@ -261,13 +261,15 @@ State mutate(const State& state)
 	return result;
 }
 
-bool accept(float fitnew, float fitold, size_t i)
+bool accept(float fitnew, float fitold, float temp)
 {
 	if (fitnew >= fitold)
 		return true;
 
-	float temp = 1 + i * 8;
-	float prob = exp2((fitnew - fitold) * temp);
+	if (temp == 0)
+		return false;
+
+	float prob = exp2((fitnew - fitold) / temp);
 
 	return rand01() < prob;
 }
@@ -304,25 +306,29 @@ std::pair<State, float> genN(std::vector<State>& seed, const std::vector<Mesh>& 
 
 		seedfit[i] = resultfit[offset];
 
+		float temp = (float(i) / float(seed.size() - 1)) / 0.1f;
+
 		for (size_t s = 0; s < steps; ++s)
-			if (accept(resultfit[offset + s + 1], seedfit[i], i))
+		{
+			if (accept(resultfit[offset + s + 1], seedfit[i], temp))
 			{
 				seedfit[i] = resultfit[offset + s + 1];
 				seed[i] = result[offset + s + 1];
 			}
-	}
-
-	// perform promotion from each temperature to the next one
-	for (size_t i = 1; i < seed.size(); ++i)
-	{
-		if (seedfit[i] < seedfit[i - 1])
-		{
-			seedfit[i] = seedfit[i - 1];
-			seed[i] = seed[i - 1];
 		}
 	}
 
-	return std::make_pair(seed.back(), seedfit.back());
+	// perform promotion from each temperature to the next one
+	for (size_t i = seed.size() - 1; i > 0; --i)
+	{
+		if (seedfit[i] > seedfit[i - 1])
+		{
+			seedfit[i - 1] = seedfit[i];
+			seed[i - 1] = seed[i];
+		}
+	}
+
+	return std::make_pair(seed[0], seedfit[0]);
 }
 
 bool load_state(const char* path, std::vector<State>& result)
