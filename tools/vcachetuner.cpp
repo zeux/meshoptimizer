@@ -240,22 +240,40 @@ State mutate(const State& state)
 		result.live[idxlive] = rndlive();
 	}
 
-	if (rand01() < 0.1f)
+	if (rand01() < 0.2f)
 	{
-		uint32_t idxmask = rand32();
+		uint32_t mask = rand32();
 
 		for (size_t i = 0; i < max_cache_size; ++i)
-			if (idxmask & (1 << i))
+			if (mask & (1 << i))
 				result.cache[i] *= 0.9f + 0.2f * rand01();
 	}
 
-	if (rand01() < 0.1f)
+	if (rand01() < 0.2f)
 	{
-		uint32_t idxlive = rand32();
+		uint32_t mask = rand32();
 
 		for (size_t i = 0; i < max_valence; ++i)
-			if (idxlive & (1 << i))
+			if (mask & (1 << i))
 				result.live[i] *= 0.9f + 0.2f * rand01();
+	}
+
+	if (rand01() < 0.05f)
+	{
+		uint32_t mask = rand32();
+
+		for (size_t i = 0; i < max_cache_size; ++i)
+			if (mask & (1 << i))
+				result.cache[i] = rndcache();
+	}
+
+	if (rand01() < 0.05f)
+	{
+		uint32_t mask = rand32();
+
+		for (size_t i = 0; i < max_valence; ++i)
+			if (mask & (1 << i))
+				result.live[i] = rndlive();
 	}
 
 	return result;
