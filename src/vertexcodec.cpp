@@ -186,12 +186,12 @@ static void dumpEncodeVertexBlockStats()
 	for (size_t k = 0; k < 256; ++k)
 		if (stats.bytes[k])
 		{
-			printf("%2d: %d bytes (optimal %.1f bytes, exp %.1f bytes)\n", int(k), int(stats.bytes[k]), float(stats.bitsopt[k]) / 8);
+			printf("%2d: %d bytes (optimal %.1f bytes)\n", int(k), int(stats.bytes[k]), float(stats.bitsopt[k]) / 8);
 			bytes += stats.bytes[k];
 			bitsopt += stats.bitsopt[k];
 		}
 
-	printf("total: %d bytes (optimal %.1f bytes, exp %.1f bytes)\n", int(bytes), float(bitsopt) / 8);
+	printf("total: %d bytes (optimal %.1f bytes)\n", int(bytes), float(bitsopt) / 8);
 }
 #endif
 
