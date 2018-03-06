@@ -223,11 +223,21 @@ static int computeEncodeBits(const unsigned char* buffer, size_t buffer_size)
 	return bits;
 }
 
-static unsigned char* encodeBytesRaw(unsigned char* data, const unsigned char* buffer, size_t buffer_size, int bits)
+static unsigned char* encodeBytesVar(unsigned char* data, const unsigned char* buffer, size_t buffer_size, int bits)
 {
 	assert(bits >= 1 && bits <= 8);
 
+	if (bits == 8)
+	{
+		memcpy(data, buffer, buffer_size);
+		return data + buffer_size;
+	}
+
 	size_t group_size = 8 / bits;
+
+	// fixed portion: bits bits for each value
+	// variable portion: full byte for each out-of-range value (using 1...1 as sentinel)
+	unsigned char sentinel = (1 << bits) - 1;
 
 	for (size_t i = 0; i < buffer_size; i += group_size)
 	{
@@ -235,11 +245,21 @@ static unsigned char* encodeBytesRaw(unsigned char* data, const unsigned char* b
 
 		for (size_t k = 0; k < group_size && i + k < buffer_size; ++k)
 		{
+			unsigned char enc = (buffer[i + k] >= sentinel) ? sentinel : buffer[i + k];
+
 			byte <<= bits;
-			byte |= buffer[i + k];
+			byte |= enc;
 		}
 
 		*data++ = byte;
+	}
+
+	for (size_t i = 0; i < buffer_size; ++i)
+	{
+		if (buffer[i] >= sentinel)
+		{
+			*data++ = buffer[i];
+		}
 	}
 
 	return data;
@@ -277,13 +297,22 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 		{
 			size_t group_size = (i + kByteGroupSize <= buffer_size) ? kByteGroupSize : buffer_size - i;
 
-			int bits = computeEncodeBits(buffer + i, group_size);
+			int best_bits = 8;
+			size_t best_size = group_size; // assume encodeBytesVar(8) just stores as is
 
-			// todo: we lose ~1 bpv here, is this fixable?
-			if (bits == 0)
-				bits = 1;
+			for (int bits = 1; bits < 8; bits *= 2)
+			{
+				unsigned char* end = encodeBytesVar(data, buffer + i, group_size, bits);
 
-			int bitslog2 = (bits == 1) ? 0 : (bits == 2) ? 1 : (bits == 4) ? 2 : 3;
+				if (size_t(end - data) < best_size)
+				{
+					best_bits = bits;
+					best_size = end - data;
+				}
+			}
+
+			int bitslog2 = (best_bits == 1) ? 0 : (best_bits == 2) ? 1 : (best_bits == 4) ? 2 : 3;
+			assert((1 << bitslog2) == best_bits);
 
 			headerbyte <<= 2;
 			headerbyte |= bitslog2;
@@ -296,7 +325,7 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 				headerbits = 0;
 			}
 
-			data = encodeBytesRaw(data, buffer + i, group_size, bits);
+			data = encodeBytesVar(data, buffer + i, group_size, best_bits);
 		}
 
 		if (headerbits)
