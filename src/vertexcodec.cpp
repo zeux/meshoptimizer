@@ -182,7 +182,7 @@ struct EncodeVertexBlockStats
 
 static EncodeVertexBlockStats encodeVertexBlockStats;
 
-static void dumpEncodeVertexBlockStats()
+static void dumpEncodeVertexBlockStats(size_t vertex_count, size_t vertex_size)
 {
 	const EncodeVertexBlockStats& stats = encodeVertexBlockStats;
 
@@ -202,6 +202,23 @@ static void dumpEncodeVertexBlockStats()
 		}
 
 	printf("total: %d bytes (optimal %d bytes; headers %d, content %d)\n", int(bytes), int(bitsopt) / 8, int(headers), int(content));
+
+	if (vertex_size == 16)
+	{
+		// assume the following layout:
+		// 6b position
+		// 2b padding
+		// 3b normal
+		// 1b padding
+		// 4b uv
+		size_t bytes_pos = stats.bytes[0] + stats.bytes[1] + stats.bytes[2] + stats.bytes[3] + stats.bytes[4] + stats.bytes[5];
+		size_t bytes_nrm = stats.bytes[8] + stats.bytes[9] + stats.bytes[10];
+		size_t bytes_tex = stats.bytes[12] + stats.bytes[13] + stats.bytes[14] + stats.bytes[15];
+
+		printf("pos: %d bytes, %.1f bpv\n", int(bytes_pos), float(bytes_pos) / float(vertex_count) * 8);
+		printf("nrm: %d bytes, %.1f bpv\n", int(bytes_nrm), float(bytes_nrm) / float(vertex_count) * 8);
+		printf("tex: %d bytes, %.1f bpv\n", int(bytes_tex), float(bytes_tex) / float(vertex_count) * 8);
+	}
 }
 #endif
 
@@ -694,7 +711,7 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	}
 
 #if TRACE > 0
-	dumpEncodeVertexBlockStats();
+	dumpEncodeVertexBlockStats(vertex_count, vertex_size);
 #endif
 
 	assert(size_t(data - buffer) <= buffer_size);
