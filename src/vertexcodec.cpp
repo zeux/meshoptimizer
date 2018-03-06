@@ -650,7 +650,9 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 		*data++ = last_vertex[k];
 	}
 
-	unsigned int prediction[kVertexBlockSize];
+	const size_t prediction_capacity = kVertexBlockSize + 2;
+	unsigned int prediction[prediction_capacity];
+
 	DecodePredictionState pstate = {};
 
 #if TRACE > 0
@@ -658,22 +660,28 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 #endif
 
 	size_t vertex_offset = 0;
+	size_t prediction_offset = 0;
 
 	if (index_buffer)
 	{
 		for (;;)
 		{
-			size_t psize = decodeVertexPrediction(pstate, prediction, sizeof(prediction) / sizeof(prediction[0]), index_count, index_buffer, index_buffer_size);
+			size_t psize = decodeVertexPrediction(pstate, prediction + prediction_offset, prediction_capacity - prediction_offset, index_count, index_buffer, index_buffer_size);
 			if (psize == 0)
 				break;
 
-			size_t block_size = psize;
+			size_t block_size = psize + prediction_offset;
 
 			if (vertex_offset + block_size > vertex_count)
 				break;
 
-			data = encodeVertexBlock(data, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, prediction, last_vertex);
-			vertex_offset += block_size;
+			size_t block_size_clamped = (block_size > kVertexBlockSize) ? kVertexBlockSize : block_size;
+
+			data = encodeVertexBlock(data, vertex_data + vertex_offset * vertex_size, block_size_clamped, vertex_size, prediction, last_vertex);
+			vertex_offset += block_size_clamped;
+
+			prediction_offset = block_size - block_size_clamped;
+			memset(&prediction[0], 0, prediction_offset * sizeof(prediction[0]));
 		}
 	}
 
