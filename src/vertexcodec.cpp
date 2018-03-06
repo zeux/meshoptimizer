@@ -172,6 +172,12 @@ struct EncodeVertexBlockStats
 {
 	size_t bytes[256];
 	size_t bitsopt[256];
+
+	size_t headers[256];
+	size_t content[256];
+
+	size_t current_headers;
+	size_t current_content;
 };
 
 static EncodeVertexBlockStats encodeVertexBlockStats;
@@ -182,16 +188,20 @@ static void dumpEncodeVertexBlockStats()
 
 	size_t bytes = 0;
 	size_t bitsopt = 0;
+	size_t headers = 0;
+	size_t content = 0;
 
 	for (size_t k = 0; k < 256; ++k)
 		if (stats.bytes[k])
 		{
-			printf("%2d: %d bytes (optimal %.1f bytes)\n", int(k), int(stats.bytes[k]), float(stats.bitsopt[k]) / 8);
+			printf("%2d: %d bytes (optimal %d bytes; headers %d, content %d)\n", int(k), int(stats.bytes[k]), int(stats.bitsopt[k]) / 8, int(stats.headers[k]), int(stats.content[k]));
 			bytes += stats.bytes[k];
 			bitsopt += stats.bitsopt[k];
+			headers += stats.headers[k];
+			content += stats.content[k];
 		}
 
-	printf("total: %d bytes (optimal %.1f bytes)\n", int(bytes), float(bitsopt) / 8);
+	printf("total: %d bytes (optimal %d bytes; headers %d, content %d)\n", int(bytes), int(bitsopt) / 8, int(headers), int(content));
 }
 #endif
 
@@ -259,6 +269,10 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 
 		unsigned char* header_end = data;
 
+	#if TRACE > 0
+		encodeVertexBlockStats.current_headers += header_end - header;
+	#endif
+
 		for (size_t i = 0; i < buffer_size; i += kByteGroupSize)
 		{
 			size_t group_size = (i + kByteGroupSize <= buffer_size) ? kByteGroupSize : buffer_size - i;
@@ -292,6 +306,10 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 		}
 
 		assert(header == header_end);
+
+	#if TRACE > 0
+		encodeVertexBlockStats.current_content += data - header_end;
+	#endif
 
 		return data;
 	}
@@ -349,6 +367,12 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 
 		for (size_t i = 0; i < vertex_count; ++i)
 			stats.bitsopt[k] += bits(buffer[i]);
+
+		stats.headers[k] += stats.current_headers;
+		stats.content[k] += stats.current_content;
+
+		stats.current_headers = 0;
+		stats.current_content = 0;
 	#endif
 
 		data = next;
