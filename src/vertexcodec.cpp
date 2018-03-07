@@ -172,6 +172,7 @@ struct EncodeVertexBlockStats
 {
 	size_t bytes[256];
 	size_t bitsopt[256];
+	size_t bitsenc[256];
 
 	size_t headers[256];
 	size_t content[256];
@@ -188,20 +189,22 @@ static void dumpEncodeVertexBlockStats(size_t vertex_count, size_t vertex_size)
 
 	size_t bytes = 0;
 	size_t bitsopt = 0;
+	size_t bitsenc = 0;
 	size_t headers = 0;
 	size_t content = 0;
 
 	for (size_t k = 0; k < 256; ++k)
 		if (stats.bytes[k])
 		{
-			printf("%2d: %d bytes (optimal %d bytes; headers %d, content %d)\n", int(k), int(stats.bytes[k]), int(stats.bitsopt[k]) / 8, int(stats.headers[k]), int(stats.content[k]));
+			printf("%2d: %d bytes (optimal %d bytes, optenc %d bytes; headers %d, content %d)\n", int(k), int(stats.bytes[k]), int(stats.bitsopt[k]) / 8, int(stats.bitsenc[k]) / 8, int(stats.headers[k]), int(stats.content[k]));
 			bytes += stats.bytes[k];
 			bitsopt += stats.bitsopt[k];
+			bitsenc += stats.bitsenc[k];
 			headers += stats.headers[k];
 			content += stats.content[k];
 		}
 
-	printf("total: %d bytes (optimal %d bytes; headers %d, content %d)\n", int(bytes), int(bitsopt) / 8, int(headers), int(content));
+	printf("total: %d bytes (optimal %dd bytes, optenc %d bytes; headers %d, content %d)\n", int(bytes), int(bitsopt) / 8, int(bitsenc) / 8, int(headers), int(content));
 
 	if (vertex_size == 16)
 	{
@@ -211,8 +214,8 @@ static void dumpEncodeVertexBlockStats(size_t vertex_count, size_t vertex_size)
 		// 3b normal
 		// 1b padding
 		// 4b uv
-		size_t bytes_pos = stats.bytes[0] + stats.bytes[1] + stats.bytes[2] + stats.bytes[3] + stats.bytes[4] + stats.bytes[5];
-		size_t bytes_nrm = stats.bytes[8] + stats.bytes[9] + stats.bytes[10];
+		size_t bytes_pos = stats.bytes[0] + stats.bytes[1] + stats.bytes[2] + stats.bytes[3] + stats.bytes[4] + stats.bytes[5] + stats.bytes[6] + stats.bytes[7];
+		size_t bytes_nrm = stats.bytes[8] + stats.bytes[9] + stats.bytes[10] + stats.bytes[11];
 		size_t bytes_tex = stats.bytes[12] + stats.bytes[13] + stats.bytes[14] + stats.bytes[15];
 
 		printf("pos: %d bytes, %.1f bpv\n", int(bytes_pos), float(bytes_pos) / float(vertex_count) * 8);
@@ -412,7 +415,10 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 		stats.bytes[k] += next - data;
 
 		for (size_t i = 0; i < vertex_count; ++i)
+		{
 			stats.bitsopt[k] += bits(buffer[i]);
+			stats.bitsenc[k] += bits(buffer[i]) + bits(bits(buffer[i]));
+		}
 
 		stats.headers[k] += stats.current_headers;
 		stats.content[k] += stats.current_content;
