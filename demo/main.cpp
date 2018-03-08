@@ -417,28 +417,52 @@ struct PackedVertex
 	unsigned short tx, ty;
 };
 
+void packMesh(std::vector<PackedVertex>& pv, const std::vector<Vertex>& vertices)
+{
+	for (size_t i = 0; i < vertices.size(); ++i)
+	{
+		pv[i].px = meshopt_quantizeHalf(vertices[i].px);
+		pv[i].py = meshopt_quantizeHalf(vertices[i].py);
+		pv[i].pz = meshopt_quantizeHalf(vertices[i].pz);
+		pv[i].pw = 0;
+
+		pv[i].nx = meshopt_quantizeSnorm(vertices[i].nx, 8);
+		pv[i].ny = meshopt_quantizeSnorm(vertices[i].ny, 8);
+		pv[i].nz = meshopt_quantizeSnorm(vertices[i].nz, 8);
+		pv[i].nw = 0;
+
+		pv[i].tx = meshopt_quantizeHalf(vertices[i].tx);
+		pv[i].ty = meshopt_quantizeHalf(vertices[i].ty);
+	}
+}
+
 void encodeVertex(const Mesh& mesh)
+{
+	std::vector<PackedVertex> pv(mesh.vertices.size());
+	packMesh(pv, mesh.vertices);
+
+	clock_t start = clock();
+
+	std::vector<unsigned char> vbuf(meshopt_encodeVertexBufferBound(mesh.vertices.size(), sizeof(PackedVertex)));
+	vbuf.resize(meshopt_encodeVertexBuffer(&vbuf[0], vbuf.size(), &pv[0], mesh.vertices.size(), sizeof(PackedVertex), mesh.indices.size(), 0, 0));
+
+	clock_t end = clock();
+
+	size_t csize = compress(vbuf);
+
+	printf("VtxCodec : %.1f bits/vertex (post-deflate %.1f bits/vertex); encode %.2f msec\n",
+	       double(vbuf.size() * 8) / double(mesh.vertices.size()),
+	       double(csize * 8) / double(mesh.vertices.size()),
+	       double(end - start) / CLOCKS_PER_SEC * 1000);
+}
+
+void encodeVertexPred(const Mesh& mesh)
 {
 	std::vector<unsigned char> ibuf(meshopt_encodeIndexBufferBound(mesh.indices.size(), mesh.vertices.size()));
 	ibuf.resize(meshopt_encodeIndexBuffer(&ibuf[0], ibuf.size(), &mesh.indices[0], mesh.indices.size()));
 
 	std::vector<PackedVertex> pv(mesh.vertices.size());
-
-	for (size_t i = 0; i < mesh.vertices.size(); ++i)
-	{
-		pv[i].px = meshopt_quantizeHalf(mesh.vertices[i].px);
-		pv[i].py = meshopt_quantizeHalf(mesh.vertices[i].py);
-		pv[i].pz = meshopt_quantizeHalf(mesh.vertices[i].pz);
-		pv[i].pw = 0;
-
-		pv[i].nx = meshopt_quantizeSnorm(mesh.vertices[i].nx, 8);
-		pv[i].ny = meshopt_quantizeSnorm(mesh.vertices[i].ny, 8);
-		pv[i].nz = meshopt_quantizeSnorm(mesh.vertices[i].nz, 8);
-		pv[i].nw = 0;
-
-		pv[i].tx = meshopt_quantizeHalf(mesh.vertices[i].tx);
-		pv[i].ty = meshopt_quantizeHalf(mesh.vertices[i].ty);
-	}
+	packMesh(pv, mesh.vertices);
 
 	clock_t start = clock();
 
@@ -449,7 +473,7 @@ void encodeVertex(const Mesh& mesh)
 
 	size_t csize = compress(vbuf);
 
-	printf("VtxCodec : %.1f bits/vertex (post-deflate %.1f bits/vertex); encode %.2f msec\n",
+	printf("VtxCodecP: %.1f bits/vertex (post-deflate %.1f bits/vertex); encode %.2f msec\n",
 	       double(vbuf.size() * 8) / double(mesh.vertices.size()),
 	       double(csize * 8) / double(mesh.vertices.size()),
 	       double(end - start) / CLOCKS_PER_SEC * 1000);
@@ -531,6 +555,7 @@ void process(const char* path)
 
 	encodeIndex(copy);
 	encodeVertex(copy);
+	encodeVertexPred(copy);
 }
 
 void processDev(const char* path)
@@ -543,7 +568,7 @@ void processDev(const char* path)
 	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
 	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
 
-	encodeVertex(copy);
+	encodeVertexPred(copy);
 }
 
 int main(int argc, char** argv)
