@@ -230,47 +230,39 @@ static void dumpEncodeVertexBlockStats(size_t vertex_count, size_t vertex_size)
 }
 #endif
 
-static int computeEncodeBits(const unsigned char* buffer, size_t buffer_size)
+static bool encodeBytesFits(const unsigned char* buffer, size_t buffer_size, int bits)
 {
-	unsigned char max = 0;
-
 	for (size_t k = 0; k < buffer_size; ++k)
-		if (max < buffer[k])
-			max = buffer[k];
+		if (buffer[k] >= (1 << bits))
+			return false;
 
-	unsigned char bits = 0;
-
-	while (max >= (1 << bits))
-		bits++;
-
-	assert(bits <= 8);
-
-	return bits;
+	return true;
 }
 
-static unsigned char* encodeBytesVar(unsigned char* data, const unsigned char* buffer, size_t buffer_size, int bits)
+static unsigned char* encodeBytesGroup(unsigned char* data, const unsigned char* buffer, int bits)
 {
 	assert(bits >= 1 && bits <= 8);
 
 	if (bits == 8)
 	{
-		memcpy(data, buffer, buffer_size);
-		return data + buffer_size;
+		memcpy(data, buffer, kByteGroupSize);
+		return data + kByteGroupSize;
 	}
 
-	size_t group_size = 8 / bits;
+	size_t byte_size = 8 / bits;
+	assert(kByteGroupSize % byte_size == 0);
 
 	// fixed portion: bits bits for each value
 	// variable portion: full byte for each out-of-range value (using 1...1 as sentinel)
 	unsigned char sentinel = (1 << bits) - 1;
 
-	for (size_t i = 0; i < buffer_size; i += group_size)
+	for (size_t i = 0; i < kByteGroupSize; i += byte_size)
 	{
 		unsigned char byte = 0;
 
-		for (size_t k = 0; k < group_size; ++k)
+		for (size_t k = 0; k < byte_size; ++k)
 		{
-			unsigned char enc = (i + k < buffer_size) ? ((buffer[i + k] >= sentinel) ? sentinel : buffer[i + k]) : 0;
+			unsigned char enc = (buffer[i + k] >= sentinel) ? sentinel : buffer[i + k];
 
 			byte <<= bits;
 			byte |= enc;
@@ -279,7 +271,7 @@ static unsigned char* encodeBytesVar(unsigned char* data, const unsigned char* b
 		*data++ = byte;
 	}
 
-	for (size_t i = 0; i < buffer_size; ++i)
+	for (size_t i = 0; i < kByteGroupSize; ++i)
 	{
 		if (buffer[i] >= sentinel)
 		{
@@ -290,7 +282,7 @@ static unsigned char* encodeBytesVar(unsigned char* data, const unsigned char* b
 	return data;
 }
 
-static const unsigned char* decodeBytesVar(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size, int bits)
+static const unsigned char* decodeBytesGroup(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, int bits)
 {
 	assert(bits >= 1 && bits <= 8);
 
@@ -299,32 +291,30 @@ static const unsigned char* decodeBytesVar(const unsigned char* data, const unsi
 
 	if (bits == 8)
 	{
-		memcpy(buffer, data, buffer_size);
+		memcpy(buffer, data, kByteGroupSize);
 
-		return data + buffer_size;
+		return data + kByteGroupSize;
 	}
 
-	size_t group_size = 8 / bits;
+	size_t byte_size = 8 / bits;
+	assert(kByteGroupSize % byte_size == 0);
 
-	const unsigned char* data_var = data + (buffer_size + group_size - 1) / group_size;
+	const unsigned char* data_var = data + kByteGroupSize / byte_size;
 
 	// fixed portion: bits bits for each value
 	// variable portion: full byte for each out-of-range value (using 1...1 as sentinel)
 	unsigned char sentinel = (1 << bits) - 1;
 
-	for (size_t i = 0; i < buffer_size; i += group_size)
+	for (size_t i = 0; i < kByteGroupSize; i += byte_size)
 	{
 		unsigned char byte = *data++;
 
-		for (size_t k = 0; k < group_size; ++k)
+		for (size_t k = 0; k < byte_size; ++k)
 		{
 			unsigned char enc = byte >> (8 - bits);
 			byte <<= bits;
 
-			if (i + k < buffer_size)
-			{
-				buffer[i + k] = (enc == sentinel) ? *data_var++ : enc;
-			}
+			buffer[i + k] = (enc == sentinel) ? *data_var++ : enc;
 		}
 	}
 
@@ -333,9 +323,9 @@ static const unsigned char* decodeBytesVar(const unsigned char* data, const unsi
 
 static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buffer, size_t buffer_size)
 {
-	int buffer_bits = computeEncodeBits(buffer, buffer_size);
+	assert(buffer_size % kByteGroupSize == 0);
 
-	if (buffer_bits == 0)
+	if (encodeBytesFits(buffer, buffer_size, 0))
 	{
 		*data++ = 0;
 
@@ -347,9 +337,8 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 
 		unsigned char* header = data;
 
-		// round buffer_size to byte group size to get number of groups
 		// round number of groups to 4 to get number of header bytes
-		size_t header_size = ((buffer_size + kByteGroupSize - 1) / kByteGroupSize + 3) / 4;
+		size_t header_size = (buffer_size / kByteGroupSize + 3) / 4;
 
 		data += header_size;
 
@@ -361,14 +350,12 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 
 		for (size_t i = 0; i < buffer_size; i += kByteGroupSize)
 		{
-			size_t group_size = (i + kByteGroupSize <= buffer_size) ? kByteGroupSize : buffer_size - i;
-
 			int best_bits = 8;
-			size_t best_size = group_size; // assume encodeBytesVar(8) just stores as is
+			size_t best_size = kByteGroupSize; // assume encodeBytesVar(8) just stores as is
 
 			for (int bits = 1; bits < 8; bits *= 2)
 			{
-				unsigned char* end = encodeBytesVar(data, buffer + i, group_size, bits);
+				unsigned char* end = encodeBytesGroup(data, buffer + i, bits);
 
 				if (size_t(end - data) < best_size)
 				{
@@ -384,7 +371,7 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 
 			header[header_offset / 4] |= bitslog2 << ((header_offset % 4) * 2);
 
-			data = encodeBytesVar(data, buffer + i, group_size, best_bits);
+			data = encodeBytesGroup(data, buffer + i, best_bits);
 		}
 
 	#if TRACE > 0
@@ -397,6 +384,8 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 
 static const unsigned char* decodeBytes(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size)
 {
+	assert(buffer_size % kByteGroupSize == 0);
+
 	if (size_t(data_end - data) < 1)
 		return 0;
 
@@ -412,9 +401,8 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 	{
 		const unsigned char* header = data;
 
-		// round buffer_size to byte group size to get number of groups
 		// round number of groups to 4 to get number of header bytes
-		size_t header_size = ((buffer_size + kByteGroupSize - 1) / kByteGroupSize + 3) / 4;
+		size_t header_size = (buffer_size / kByteGroupSize + 3) / 4;
 
 		if (size_t(data_end - data) < header_size)
 			return 0;
@@ -423,14 +411,12 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 
 		for (size_t i = 0; i < buffer_size; i += kByteGroupSize)
 		{
-			size_t group_size = (i + kByteGroupSize <= buffer_size) ? kByteGroupSize : buffer_size - i;
-
 			size_t header_offset = i / kByteGroupSize;
 
 			int bitslog2 = (header[header_offset / 4] >> ((header_offset % 4) * 2)) & 3;
 			int bits = 1 << bitslog2;
 
-			data = decodeBytesVar(data, data_end, buffer + i, group_size, bits);
+			data = decodeBytesGroup(data, data_end, buffer + i, bits);
 			if (!data)
 				return 0;
 		}
@@ -453,6 +439,10 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 #endif
 
 	unsigned char buffer[256];
+	assert(sizeof(buffer) % kByteGroupSize == 0);
+
+	// we sometimes encode elements we didn't fill when rounding to kByteGroupSize
+	memset(buffer, 0, sizeof(buffer));
 
 	for (size_t k = 0; k < vertex_size; ++k)
 	{
@@ -489,7 +479,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 		unsigned char* olddata = data;
 	#endif
 
-		data = encodeBytes(data, buffer, vertex_count);
+		data = encodeBytes(data, buffer, (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1));
 
 	#if TRACE > 0
 		EncodeVertexBlockStats& stats = encodeVertexBlockStats;
@@ -523,10 +513,11 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 	assert(vertex_count > 0 && vertex_count <= 256);
 
 	unsigned char buffer[256];
+	assert(sizeof(buffer) % kByteGroupSize == 0);
 
 	for (size_t k = 0; k < vertex_size; ++k)
 	{
-		data = decodeBytes(data, data_end, buffer, vertex_count);
+		data = decodeBytes(data, data_end, buffer, (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1));
 		if (!data)
 			return 0;
 
