@@ -21,6 +21,11 @@ inline unsigned char zigzag8(unsigned char v)
 	return (v >> 7) | ((v ^ -(v >> 7)) << 1);
 }
 
+inline unsigned char unzigzag8(unsigned char v)
+{
+	return (-(v & 1)) ^ (v >> 1);
+}
+
 #if TRACE > 0
 inline int bits(unsigned char v)
 {
@@ -263,9 +268,9 @@ static unsigned char* encodeBytesVar(unsigned char* data, const unsigned char* b
 	{
 		unsigned char byte = 0;
 
-		for (size_t k = 0; k < group_size && i + k < buffer_size; ++k)
+		for (size_t k = 0; k < group_size; ++k)
 		{
-			unsigned char enc = (buffer[i + k] >= sentinel) ? sentinel : buffer[i + k];
+			unsigned char enc = (i + k < buffer_size) ? ((buffer[i + k] >= sentinel) ? sentinel : buffer[i + k]) : 0;
 
 			byte <<= bits;
 			byte |= enc;
@@ -285,6 +290,47 @@ static unsigned char* encodeBytesVar(unsigned char* data, const unsigned char* b
 	return data;
 }
 
+static const unsigned char* decodeBytesVar(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size, int bits)
+{
+	assert(bits >= 1 && bits <= 8);
+
+	// TODO: missing OOB data checks
+	(void)data_end;
+
+	if (bits == 8)
+	{
+		memcpy(buffer, data, buffer_size);
+
+		return data + buffer_size;
+	}
+
+	size_t group_size = 8 / bits;
+
+	const unsigned char* data_var = data + (buffer_size + group_size - 1) / group_size;
+
+	// fixed portion: bits bits for each value
+	// variable portion: full byte for each out-of-range value (using 1...1 as sentinel)
+	unsigned char sentinel = (1 << bits) - 1;
+
+	for (size_t i = 0; i < buffer_size; i += group_size)
+	{
+		unsigned char byte = *data++;
+
+		for (size_t k = 0; k < group_size; ++k)
+		{
+			unsigned char enc = byte >> (8 - bits);
+			byte <<= bits;
+
+			if (i + k < buffer_size)
+			{
+				buffer[i + k] = (enc == sentinel) ? *data_var++ : enc;
+			}
+		}
+	}
+
+	return data_var;
+}
+
 static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buffer, size_t buffer_size)
 {
 	int buffer_bits = computeEncodeBits(buffer, buffer_size);
@@ -300,14 +346,14 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 		*data++ = 1;
 
 		unsigned char* header = data;
-		unsigned char headerbyte = 0;
-		unsigned int headerbits = 0;
 
 		// round buffer_size to byte group size to get number of groups
 		// round number of groups to 4 to get number of header bytes
-		data += ((buffer_size + kByteGroupSize - 1) / kByteGroupSize + 3) / 4;
+		size_t header_size = ((buffer_size + kByteGroupSize - 1) / kByteGroupSize + 3) / 4;
 
-		unsigned char* header_end = data;
+		data += header_size;
+
+		memset(header, 0, header_size);
 
 	#if TRACE > 0
 		encodeVertexBlockStats.current_headers += header_end - header;
@@ -334,33 +380,67 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 			int bitslog2 = (best_bits == 1) ? 0 : (best_bits == 2) ? 1 : (best_bits == 4) ? 2 : 3;
 			assert((1 << bitslog2) == best_bits);
 
-			headerbyte <<= 2;
-			headerbyte |= bitslog2;
-			headerbits += 2;
+			size_t header_offset = i / kByteGroupSize;
 
-			if (headerbits == 8)
-			{
-				*header++ = headerbyte;
-				headerbyte = 0;
-				headerbits = 0;
-			}
+			header[header_offset / 4] |= bitslog2 << ((header_offset % 4) * 2);
 
 			data = encodeBytesVar(data, buffer + i, group_size, best_bits);
 		}
-
-		if (headerbits)
-		{
-			headerbyte <<= (8 - headerbits);
-			*header++ = headerbyte;
-		}
-
-		assert(header == header_end);
 
 	#if TRACE > 0
 		encodeVertexBlockStats.current_content += data - header_end;
 	#endif
 
 		return data;
+	}
+}
+
+static const unsigned char* decodeBytes(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size)
+{
+	if (size_t(data_end - data) < 1)
+		return 0;
+
+	unsigned char encoding = *data++;
+
+	if (encoding == 0)
+	{
+		memset(buffer, 0, buffer_size);
+
+		return data;
+	}
+	else if (encoding == 1)
+	{
+		const unsigned char* header = data;
+
+		// round buffer_size to byte group size to get number of groups
+		// round number of groups to 4 to get number of header bytes
+		size_t header_size = ((buffer_size + kByteGroupSize - 1) / kByteGroupSize + 3) / 4;
+
+		if (size_t(data_end - data) < header_size)
+			return 0;
+
+		data += header_size;
+
+		for (size_t i = 0; i < buffer_size; i += kByteGroupSize)
+		{
+			size_t group_size = (i + kByteGroupSize <= buffer_size) ? kByteGroupSize : buffer_size - i;
+
+			size_t header_offset = i / kByteGroupSize;
+
+			int bitslog2 = (header[header_offset / 4] >> ((header_offset % 4) * 2)) & 3;
+			int bits = 1 << bitslog2;
+
+			data = decodeBytesVar(data, data_end, buffer + i, group_size, bits);
+			if (!data)
+				return 0;
+		}
+
+		return data;
+	}
+	else
+	{
+		// TODO: malformed data, we might want to return a different error code upstream?
+		return 0;
 	}
 }
 
@@ -371,8 +451,6 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 #if TRACE > 1
 	traceEncodeVertexBlock(vertex_data, vertex_count, vertex_size, prediction);
 #endif
-
-	*data++ = static_cast<unsigned char>(vertex_count - 1);
 
 	unsigned char buffer[256];
 
@@ -407,12 +485,16 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 			vertex_offset += vertex_size;
 		}
 
-		unsigned char* next = encodeBytes(data, buffer, vertex_count);
+	#if TRACE > 0
+		unsigned char* olddata = data;
+	#endif
+
+		data = encodeBytes(data, buffer, vertex_count);
 
 	#if TRACE > 0
 		EncodeVertexBlockStats& stats = encodeVertexBlockStats;
 
-		stats.bytes[k] += next - data;
+		stats.bytes[k] += data - olddata;
 
 		for (size_t i = 0; i < vertex_count; ++i)
 		{
@@ -426,8 +508,55 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 		stats.current_headers = 0;
 		stats.current_content = 0;
 	#endif
+	}
 
-		data = next;
+	for (size_t k = 0; k < vertex_size; ++k)
+	{
+		last_vertex[k] = vertex_data[vertex_size * (vertex_count - 1) + k];
+	}
+
+	return data;
+}
+
+static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction, unsigned char last_vertex[256])
+{
+	assert(vertex_count > 0 && vertex_count <= 256);
+
+	unsigned char buffer[256];
+
+	for (size_t k = 0; k < vertex_size; ++k)
+	{
+		data = decodeBytes(data, data_end, buffer, vertex_count);
+		if (!data)
+			return 0;
+
+		size_t vertex_offset = k;
+
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			unsigned char p = (i == 0) ? last_vertex[k] : vertex_data[vertex_offset - vertex_size];
+
+			if (prediction && prediction[i])
+			{
+				unsigned char pa = prediction[i] >> 16;
+				unsigned char pb = prediction[i] >> 8;
+				unsigned char pc = prediction[i] >> 0;
+				assert(pa > 0 && pb > 0 && pc > 0);
+
+				if (pa <= i && pb <= i && pc <= i)
+				{
+					unsigned char va = vertex_data[vertex_offset - pa * vertex_size];
+					unsigned char vb = vertex_data[vertex_offset - pb * vertex_size];
+					unsigned char vc = vertex_data[vertex_offset - pc * vertex_size];
+
+					p = va + vb - vc;
+				}
+			}
+
+			vertex_data[vertex_offset] = unzigzag8(buffer[i]) + p;
+
+			vertex_offset += vertex_size;
+		}
 	}
 
 	for (size_t k = 0; k < vertex_size; ++k)
@@ -727,5 +856,86 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 
 size_t meshopt_encodeVertexBufferBound(size_t vertex_count, size_t vertex_size)
 {
+	// TODO: This significantly overestimates worst case, refine
 	return vertex_count * vertex_size * 2;
+}
+
+int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t vertex_size, size_t index_count, const unsigned char* buffer, size_t buffer_size, const unsigned char* index_buffer, size_t index_buffer_size)
+{
+	using namespace meshopt;
+
+	for (int i = 0; i < 256; ++i)
+		assert(unzigzag8(zigzag8(i)) == i);
+
+	assert(vertex_size > 0 && vertex_size <= 256);
+	assert(index_count % 3 == 0);
+	assert(index_buffer == 0 || index_buffer_size > 0);
+
+	unsigned char* vertex_data = static_cast<unsigned char*>(destination);
+
+	const unsigned char* data = buffer;
+	const unsigned char* data_end = buffer + buffer_size;
+
+	if (size_t(data_end - data) < vertex_size)
+		return -1;
+
+	unsigned char last_vertex[256];
+
+	// TODO: bounds checks on data
+	for (size_t k = 0; k < vertex_size; ++k)
+	{
+		last_vertex[k] = *data++;
+
+		vertex_data[k] = last_vertex[k];
+	}
+
+	const size_t prediction_capacity = kVertexBlockSize + 2;
+	unsigned int prediction[prediction_capacity];
+
+	DecodePredictionState pstate = {};
+
+	size_t vertex_offset = 0;
+	size_t prediction_offset = 0;
+
+	if (index_buffer)
+	{
+		for (;;)
+		{
+			size_t psize = decodeVertexPrediction(pstate, prediction + prediction_offset, prediction_capacity - prediction_offset, index_count, index_buffer, index_buffer_size);
+			if (psize == 0)
+				break;
+
+			size_t block_size = psize + prediction_offset;
+
+			if (vertex_offset + block_size > vertex_count)
+				break;
+
+			size_t block_size_clamped = (block_size > kVertexBlockSize) ? kVertexBlockSize : block_size;
+
+			data = decodeVertexBlock(data, data_end, vertex_data + vertex_offset * vertex_size, block_size_clamped, vertex_size, prediction, last_vertex);
+			if (!data)
+				return -2;
+
+			vertex_offset += block_size_clamped;
+
+			prediction_offset = block_size - block_size_clamped;
+			memset(&prediction[0], 0, prediction_offset * sizeof(prediction[0]));
+		}
+	}
+
+	while (vertex_offset < vertex_count)
+	{
+		size_t block_size = (vertex_offset + kVertexBlockSize < vertex_count) ? kVertexBlockSize : vertex_count - vertex_offset;
+
+		data = decodeVertexBlock(data, data_end, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, 0, last_vertex);
+		if (!data)
+			return -2;
+
+		vertex_offset += block_size;
+	}
+
+	if (data != data_end)
+		return -3;
+
+	return 0;
 }
