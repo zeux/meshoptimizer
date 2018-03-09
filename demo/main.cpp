@@ -436,6 +436,18 @@ void packMesh(std::vector<PackedVertex>& pv, const std::vector<Vertex>& vertices
 	}
 }
 
+void packVertex(const Mesh& mesh)
+{
+	std::vector<PackedVertex> pv(mesh.vertices.size());
+	packMesh(pv, mesh.vertices);
+
+	size_t csize = compress(pv);
+
+	printf("VtxPack  : %.1f bits/vertex (post-deflate %.1f bits/vertex)\n",
+	       double(pv.size() * sizeof(PackedVertex) * 8) / double(mesh.vertices.size()),
+	       double(csize * 8) / double(mesh.vertices.size()));
+}
+
 void encodeVertex(const Mesh& mesh)
 {
 	std::vector<PackedVertex> pv(mesh.vertices.size());
@@ -446,14 +458,25 @@ void encodeVertex(const Mesh& mesh)
 	std::vector<unsigned char> vbuf(meshopt_encodeVertexBufferBound(mesh.vertices.size(), sizeof(PackedVertex)));
 	vbuf.resize(meshopt_encodeVertexBuffer(&vbuf[0], vbuf.size(), &pv[0], mesh.vertices.size(), sizeof(PackedVertex), mesh.indices.size(), 0, 0));
 
+	clock_t middle = clock();
+
+	std::vector<PackedVertex> result(mesh.vertices.size());
+	int res = meshopt_decodeVertexBuffer(&result[0], mesh.vertices.size(), sizeof(PackedVertex), mesh.indices.size(), &vbuf[0], vbuf.size(), 0, 0);
+	assert(res == 0);
+	(void)res;
+
 	clock_t end = clock();
+
+	assert(memcmp(&pv[0], &result[0], pv.size() * sizeof(PackedVertex)) == 0);
 
 	size_t csize = compress(vbuf);
 
-	printf("VtxCodec : %.1f bits/vertex (post-deflate %.1f bits/vertex); encode %.2f msec\n",
+	printf("VtxCodec : %.1f bits/vertex (post-deflate %.1f bits/vertex); encode %.2f msec, decode %.2f msec (%.2f GB/s)\n",
 	       double(vbuf.size() * 8) / double(mesh.vertices.size()),
 	       double(csize * 8) / double(mesh.vertices.size()),
-	       double(end - start) / CLOCKS_PER_SEC * 1000);
+	       double(middle - start) / CLOCKS_PER_SEC * 1000,
+	       double(end - middle) / CLOCKS_PER_SEC * 1000,
+	       (double(result.size() * sizeof(PackedVertex)) / (1 << 30)) / (double(end - middle) / CLOCKS_PER_SEC));
 }
 
 void encodeVertexPred(const Mesh& mesh)
@@ -469,14 +492,25 @@ void encodeVertexPred(const Mesh& mesh)
 	std::vector<unsigned char> vbuf(meshopt_encodeVertexBufferBound(mesh.vertices.size(), sizeof(PackedVertex)));
 	vbuf.resize(meshopt_encodeVertexBuffer(&vbuf[0], vbuf.size(), &pv[0], mesh.vertices.size(), sizeof(PackedVertex), mesh.indices.size(), &ibuf[0], ibuf.size()));
 
+	clock_t middle = clock();
+
+	std::vector<PackedVertex> result(mesh.vertices.size());
+	int res = meshopt_decodeVertexBuffer(&result[0], mesh.vertices.size(), sizeof(PackedVertex), mesh.indices.size(), &vbuf[0], vbuf.size(), &ibuf[0], ibuf.size());
+	assert(res == 0);
+	(void)res;
+
 	clock_t end = clock();
+
+	assert(memcmp(&pv[0], &result[0], pv.size() * sizeof(PackedVertex)) == 0);
 
 	size_t csize = compress(vbuf);
 
-	printf("VtxCodecP: %.1f bits/vertex (post-deflate %.1f bits/vertex); encode %.2f msec\n",
+	printf("VtxCodecP: %.1f bits/vertex (post-deflate %.1f bits/vertex); encode %.2f msec, decode %.2f msec (%.2f GB/s)\n",
 	       double(vbuf.size() * 8) / double(mesh.vertices.size()),
 	       double(csize * 8) / double(mesh.vertices.size()),
-	       double(end - start) / CLOCKS_PER_SEC * 1000);
+	       double(middle - start) / CLOCKS_PER_SEC * 1000,
+	       double(end - middle) / CLOCKS_PER_SEC * 1000,
+	       (double(result.size() * sizeof(PackedVertex)) / (1 << 30)) / (double(end - middle) / CLOCKS_PER_SEC));
 }
 
 void stripify(const Mesh& mesh)
@@ -554,6 +588,7 @@ void process(const char* path)
 	stripify(copy);
 
 	encodeIndex(copy);
+	packVertex(copy);
 	encodeVertex(copy);
 	encodeVertexPred(copy);
 }
