@@ -11,11 +11,16 @@
 #include "objparser.h"
 
 #ifdef __linux__
-clock_t clock()
+double timestamp()
 {
 	timespec ts;
 	clock_gettime(CLOCK_MONOTONIC, &ts);
-	return clock_t((double(ts.tv_sec) + 1e-9 * double(ts.tv_nsec)) * CLOCKS_PER_SEC);
+	return double(ts.tv_sec) + 1e-9 * double(ts.tv_nsec);
+}
+#else
+double timestamp()
+{
+	return double(clock()) / double(CLOCKS_PER_SEC);
 }
 #endif
 
@@ -74,7 +79,7 @@ Mesh generatePlane(unsigned int N)
 	return result;
 }
 
-Mesh parseObj(const char* path, clock_t& reindex)
+Mesh parseObj(const char* path, double& reindex)
 {
 	ObjFile file;
 
@@ -120,7 +125,7 @@ Mesh parseObj(const char* path, clock_t& reindex)
 		vertices.push_back(v);
 	}
 
-	reindex = clock();
+	reindex = timestamp();
 
 	Mesh result;
 
@@ -268,7 +273,7 @@ void optCompleteSimplify(Mesh& mesh)
 {
 	static const size_t lod_count = 5;
 
-	clock_t start = clock();
+	double start = timestamp();
 
 	// generate 4 LOD levels (1-4), with each subsequent LOD using 70% triangles
 	// note that each LOD uses the same (shared) vertex buffer
@@ -291,7 +296,7 @@ void optCompleteSimplify(Mesh& mesh)
 		lod.resize(meshopt_simplify(&lod[0], &source[0], source.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), std::min(source.size(), target_index_count)));
 	}
 
-	clock_t end = clock();
+	double end = timestamp();
 
 	// optimize each individual LOD for vertex cache & overdraw
 	for (size_t i = 0; i < lod_count; ++i)
@@ -337,7 +342,7 @@ void optCompleteSimplify(Mesh& mesh)
 		printf(" LOD%d %d", int(i), int(lods[i].size()) / 3);
 	}
 
-	printf(" in %.2f msec\n", double(end - start) / CLOCKS_PER_SEC * 1000);
+	printf(" in %.2f msec\n", (end - start) * 1000);
 
 	// for using LOD data at runtime, in addition to VB and IB you have to save lod_index_offsets/lod_index_counts.
 	(void)lod_index_offsets;
@@ -348,9 +353,9 @@ void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh), bool
 {
 	Mesh copy = mesh;
 
-	clock_t start = clock();
+	double start = timestamp();
 	optf(copy);
-	clock_t end = clock();
+	double end = timestamp();
 
 	assert(isMeshValid(copy));
 	assert(!compare || areMeshesEqual(mesh, copy));
@@ -364,7 +369,7 @@ void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh), bool
 	meshopt_VertexCacheStatistics vcs_amd = meshopt_analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), 14, 64, 128);
 	meshopt_VertexCacheStatistics vcs_intel = meshopt_analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), 128, 0, 0);
 
-	printf("%-9s: ACMR %f ATVR %f (NV %f AMD %f Intel %f) Overfetch %f Overdraw %f in %.2f msec\n", name, vcs.acmr, vcs.atvr, vcs_nv.atvr, vcs_amd.atvr, vcs_intel.atvr, vfs.overfetch, os.overdraw, double(end - start) / CLOCKS_PER_SEC * 1000);
+	printf("%-9s: ACMR %f ATVR %f (NV %f AMD %f Intel %f) Overfetch %f Overdraw %f in %.2f msec\n", name, vcs.acmr, vcs.atvr, vcs_nv.atvr, vcs_amd.atvr, vcs_intel.atvr, vfs.overfetch, os.overdraw, (end - start) * 1000);
 }
 
 template <typename T>
@@ -377,19 +382,19 @@ size_t compress(const std::vector<T>& data)
 
 void encodeIndex(const Mesh& mesh)
 {
-	clock_t start = clock();
+	double start = timestamp();
 
 	std::vector<unsigned char> buffer(meshopt_encodeIndexBufferBound(mesh.indices.size(), mesh.vertices.size()));
 	buffer.resize(meshopt_encodeIndexBuffer(&buffer[0], buffer.size(), &mesh.indices[0], mesh.indices.size()));
 
-	clock_t middle = clock();
+	double middle = timestamp();
 
 	std::vector<unsigned int> result(mesh.indices.size());
 	int res = meshopt_decodeIndexBuffer(&result[0], mesh.indices.size(), &buffer[0], buffer.size());
 	assert(res == 0);
 	(void)res;
 
-	clock_t end = clock();
+	double end = timestamp();
 
 	size_t csize = compress(buffer);
 
@@ -404,9 +409,9 @@ void encodeIndex(const Mesh& mesh)
 	printf("IdxCodec : %.1f bits/triangle (post-deflate %.1f bits/triangle); encode %.2f msec, decode %.2f msec (%.2f GB/s)\n",
 	       double(buffer.size() * 8) / double(mesh.indices.size() / 3),
 	       double(csize * 8) / double(mesh.indices.size() / 3),
-	       double(middle - start) / CLOCKS_PER_SEC * 1000,
-	       double(end - middle) / CLOCKS_PER_SEC * 1000,
-	       (double(result.size() * 4) / (1 << 30)) / (double(end - middle) / CLOCKS_PER_SEC));
+	       (middle - start) * 1000,
+	       (end - middle) * 1000,
+	       (double(result.size() * 4) / (1 << 30)) / (end - middle));
 }
 
 struct PackedVertex
@@ -453,19 +458,19 @@ void encodeVertex(const Mesh& mesh)
 	std::vector<PackedVertex> pv(mesh.vertices.size());
 	packMesh(pv, mesh.vertices);
 
-	clock_t start = clock();
+	double start = timestamp();
 
 	std::vector<unsigned char> vbuf(meshopt_encodeVertexBufferBound(mesh.vertices.size(), sizeof(PackedVertex)));
 	vbuf.resize(meshopt_encodeVertexBuffer(&vbuf[0], vbuf.size(), &pv[0], mesh.vertices.size(), sizeof(PackedVertex), mesh.indices.size(), 0, 0));
 
-	clock_t middle = clock();
+	double middle = timestamp();
 
 	std::vector<PackedVertex> result(mesh.vertices.size());
 	int res = meshopt_decodeVertexBuffer(&result[0], mesh.vertices.size(), sizeof(PackedVertex), mesh.indices.size(), &vbuf[0], vbuf.size(), 0, 0);
 	assert(res == 0);
 	(void)res;
 
-	clock_t end = clock();
+	double end = timestamp();
 
 	assert(memcmp(&pv[0], &result[0], pv.size() * sizeof(PackedVertex)) == 0);
 
@@ -474,9 +479,9 @@ void encodeVertex(const Mesh& mesh)
 	printf("VtxCodec : %.1f bits/vertex (post-deflate %.1f bits/vertex); encode %.2f msec, decode %.2f msec (%.2f GB/s)\n",
 	       double(vbuf.size() * 8) / double(mesh.vertices.size()),
 	       double(csize * 8) / double(mesh.vertices.size()),
-	       double(middle - start) / CLOCKS_PER_SEC * 1000,
-	       double(end - middle) / CLOCKS_PER_SEC * 1000,
-	       (double(result.size() * sizeof(PackedVertex)) / (1 << 30)) / (double(end - middle) / CLOCKS_PER_SEC));
+	       (middle - start) * 1000,
+	       (end - middle) * 1000,
+	       (double(result.size() * sizeof(PackedVertex)) / (1 << 30)) / (end - middle));
 }
 
 void encodeVertexPred(const Mesh& mesh)
@@ -487,19 +492,19 @@ void encodeVertexPred(const Mesh& mesh)
 	std::vector<PackedVertex> pv(mesh.vertices.size());
 	packMesh(pv, mesh.vertices);
 
-	clock_t start = clock();
+	double start = timestamp();
 
 	std::vector<unsigned char> vbuf(meshopt_encodeVertexBufferBound(mesh.vertices.size(), sizeof(PackedVertex)));
 	vbuf.resize(meshopt_encodeVertexBuffer(&vbuf[0], vbuf.size(), &pv[0], mesh.vertices.size(), sizeof(PackedVertex), mesh.indices.size(), &ibuf[0], ibuf.size()));
 
-	clock_t middle = clock();
+	double middle = timestamp();
 
 	std::vector<PackedVertex> result(mesh.vertices.size());
 	int res = meshopt_decodeVertexBuffer(&result[0], mesh.vertices.size(), sizeof(PackedVertex), mesh.indices.size(), &vbuf[0], vbuf.size(), &ibuf[0], ibuf.size());
 	assert(res == 0);
 	(void)res;
 
-	clock_t end = clock();
+	double end = timestamp();
 
 	assert(memcmp(&pv[0], &result[0], pv.size() * sizeof(PackedVertex)) == 0);
 
@@ -508,17 +513,17 @@ void encodeVertexPred(const Mesh& mesh)
 	printf("VtxCodecP: %.1f bits/vertex (post-deflate %.1f bits/vertex); encode %.2f msec, decode %.2f msec (%.2f GB/s)\n",
 	       double(vbuf.size() * 8) / double(mesh.vertices.size()),
 	       double(csize * 8) / double(mesh.vertices.size()),
-	       double(middle - start) / CLOCKS_PER_SEC * 1000,
-	       double(end - middle) / CLOCKS_PER_SEC * 1000,
-	       (double(result.size() * sizeof(PackedVertex)) / (1 << 30)) / (double(end - middle) / CLOCKS_PER_SEC));
+	       (middle - start) * 1000,
+	       (end - middle) * 1000,
+	       (double(result.size() * sizeof(PackedVertex)) / (1 << 30)) / (end - middle));
 }
 
 void stripify(const Mesh& mesh)
 {
-	clock_t start = clock();
+	double start = timestamp();
 	std::vector<unsigned int> strip(mesh.indices.size() / 3 * 4);
 	strip.resize(meshopt_stripify(&strip[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size()));
-	clock_t end = clock();
+	double end = timestamp();
 
 	Mesh copy = mesh;
 	copy.indices.resize(meshopt_unstripify(&copy.indices[0], &strip[0], strip.size()));
@@ -534,17 +539,17 @@ void stripify(const Mesh& mesh)
 	printf("Stripify : ACMR %f ATVR %f (NV %f AMD %f Intel %f); %d strip indices (%.1f%%) in %.2f msec\n",
 	       vcs.acmr, vcs.atvr, vcs_nv.atvr, vcs_amd.atvr, vcs_intel.atvr,
 	       int(strip.size()), double(strip.size()) / double(mesh.indices.size()) * 100,
-	       double(end - start) / CLOCKS_PER_SEC * 1000);
+	       (end - start) * 1000);
 }
 
 bool loadMesh(Mesh& mesh, const char* path)
 {
 	if (path)
 	{
-		clock_t start = clock();
-		clock_t middle;
+		double start = timestamp();
+		double middle;
 		mesh = parseObj(path, middle);
-		clock_t end = clock();
+		double end = timestamp();
 
 		if (mesh.vertices.empty())
 		{
@@ -552,7 +557,7 @@ bool loadMesh(Mesh& mesh, const char* path)
 			return false;
 		}
 
-		printf("# %s: %d vertices, %d triangles; read in %.2f msec; indexed in %.2f msec\n", path, int(mesh.vertices.size()), int(mesh.indices.size() / 3), double(middle - start) / CLOCKS_PER_SEC * 1000, double(end - middle) / CLOCKS_PER_SEC * 1000);
+		printf("# %s: %d vertices, %d triangles; read in %.2f msec; indexed in %.2f msec\n", path, int(mesh.vertices.size()), int(mesh.indices.size() / 3), (middle - start) * 1000, (end - middle) * 1000);
 	}
 	else
 	{
