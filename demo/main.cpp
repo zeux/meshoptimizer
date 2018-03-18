@@ -10,12 +10,24 @@
 #include "miniz.h"
 #include "objparser.h"
 
-#ifdef __linux__
+#if defined(__linux__)
 double timestamp()
 {
 	timespec ts;
 	clock_gettime(CLOCK_MONOTONIC, &ts);
 	return double(ts.tv_sec) + 1e-9 * double(ts.tv_nsec);
+}
+#elif defined(_WIN32)
+struct LARGE_INTEGER { __int64 QuadPart; };
+extern "C" __declspec(dllimport) int __stdcall QueryPerformanceCounter(LARGE_INTEGER* lpPerformanceCount);
+extern "C" __declspec(dllimport) int __stdcall QueryPerformanceFrequency(LARGE_INTEGER* lpFrequency);
+
+double timestamp()
+{
+	LARGE_INTEGER freq, counter;
+	QueryPerformanceFrequency(&freq);
+	QueryPerformanceCounter(&counter);
+	return double(counter.QuadPart) / double(freq.QuadPart);
 }
 #else
 double timestamp()
