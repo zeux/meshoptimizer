@@ -389,7 +389,8 @@ void encodeIndex(const Mesh& mesh)
 
 	double middle = timestamp();
 
-	std::vector<unsigned int> result(mesh.indices.size());
+	// using meshopt_Buffer instead of std::vector to avoid memset overhead
+	meshopt_Buffer<unsigned int> result(mesh.indices.size());
 	int res = meshopt_decodeIndexBuffer(&result[0], mesh.indices.size(), &buffer[0], buffer.size());
 	assert(res == 0);
 	(void)res;
@@ -411,7 +412,7 @@ void encodeIndex(const Mesh& mesh)
 	       double(csize * 8) / double(mesh.indices.size() / 3),
 	       (middle - start) * 1000,
 	       (end - middle) * 1000,
-	       (double(result.size() * 4) / (1 << 30)) / (end - middle));
+	       (double(result.size * 4) / (1 << 30)) / (end - middle));
 }
 
 struct PackedVertex
