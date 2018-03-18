@@ -574,7 +574,7 @@ bool loadMesh(Mesh& mesh, const char* path)
 	}
 	else
 	{
-		mesh = generatePlane(1000);
+		mesh = generatePlane(200);
 
 		printf("# tessellated plane: %d vertices, %d triangles\n", int(mesh.vertices.size()), int(mesh.indices.size() / 3));
 	}
@@ -635,11 +635,18 @@ int main(int argc, char** argv)
 	}
 	else
 	{
-		if (argc > 2 && strcmp(argv[1], "-d") == 0)
+		if (strcmp(argv[1], "-d") == 0)
 		{
-			for (int i = 2; i < argc; ++i)
+			if (argc > 2)
 			{
-				processDev(argv[i]);
+				for (int i = 2; i < argc; ++i)
+				{
+					processDev(argv[i]);
+				}
+			}
+			else
+			{
+				processDev(0);
 			}
 		}
 		else
