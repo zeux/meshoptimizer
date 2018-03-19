@@ -345,7 +345,7 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 		memset(header, 0, header_size);
 
 	#if TRACE > 0
-		encodeVertexBlockStats.current_headers += header_end - header;
+		encodeVertexBlockStats.current_headers += header_size;
 	#endif
 
 		for (size_t i = 0; i < buffer_size; i += kByteGroupSize)
@@ -375,7 +375,7 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 		}
 
 	#if TRACE > 0
-		encodeVertexBlockStats.current_content += data - header_end;
+		encodeVertexBlockStats.current_content += data - header - header_size;
 	#endif
 
 		return data;
