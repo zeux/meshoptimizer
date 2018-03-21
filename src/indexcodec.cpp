@@ -69,10 +69,10 @@ static int getVertexFifo(VertexFifo fifo, unsigned int v, size_t offset)
 	return -1;
 }
 
-static void pushVertexFifo(VertexFifo fifo, unsigned int v, size_t& offset)
+static void pushVertexFifo(VertexFifo fifo, unsigned int v, size_t& offset, int cond = 1)
 {
 	fifo[offset] = v;
-	offset = (offset + 1) & 15;
+	offset = (offset + cond) & 15;
 }
 
 static void encodeVByte(unsigned char*& data, unsigned int v)
@@ -340,33 +340,56 @@ int meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, con
 
 		unsigned char codetri = *code++;
 
-		int fe = codetri >> 4;
-
-		if (fe < 15)
+		if (codetri < 0xf0)
 		{
+			int fe = codetri >> 4;
+
 			// fifo reads are wrapped around 16 entry buffer
 			unsigned int a = edgefifo[(edgefifooffset - 1 - fe) & 15][0];
 			unsigned int b = edgefifo[(edgefifooffset - 1 - fe) & 15][1];
 
 			int fec = codetri & 15;
 
-			unsigned int c = (fec == 0) ? next++ : vertexfifo[(vertexfifooffset - 1 - fec) & 15];
+			// note: this is the most common branch in the entire decoder
+			// inside this if we try to stay branchless (by using cmov/etc.) since these aren't predictable
+			if (fec != 15)
+			{
+				// fifo reads are wrapped around 16 entry buffer
+				unsigned int cf = vertexfifo[(vertexfifooffset - 1 - fec) & 15];
+				unsigned int c = (fec == 0) ? next : cf;
 
-			// note that we need to update the last index since free indices are delta-encoded
-			if (fec == 15)
+				int fec0 = fec == 0;
+				next += fec0;
+
+				// output triangle
+				destination[i + 0] = a;
+				destination[i + 1] = b;
+				destination[i + 2] = c;
+
+				// push vertex/edge fifo must match the encoding step *exactly* otherwise the data will not be decoded correctly
+				pushVertexFifo(vertexfifo, c, vertexfifooffset, fec0);
+
+				pushEdgeFifo(edgefifo, c, b, edgefifooffset);
+				pushEdgeFifo(edgefifo, a, c, edgefifooffset);
+			}
+			else
+			{
+				unsigned int c = 0;
+
+				// note that we need to update the last index since free indices are delta-encoded
 				last = c = decodeIndex(data, next, last);
 
-			// output triangle
-			destination[i + 0] = a;
-			destination[i + 1] = b;
-			destination[i + 2] = c;
+				// output triangle
+				destination[i + 0] = a;
+				destination[i + 1] = b;
+				destination[i + 2] = c;
 
-			// push vertex/edge fifo must match the encoding step *exactly* otherwise the data will not be decoded correctly
-			if (fec == 0 || fec == 15)
+				// push vertex/edge fifo must match the encoding step *exactly* otherwise the data will not be decoded correctly
 				pushVertexFifo(vertexfifo, c, vertexfifooffset);
 
-			pushEdgeFifo(edgefifo, c, b, edgefifooffset);
-			pushEdgeFifo(edgefifo, a, c, edgefifooffset);
+				pushEdgeFifo(edgefifo, c, b, edgefifooffset);
+				pushEdgeFifo(edgefifo, a, c, edgefifooffset);
+			}
 		}
 		else
 		{
