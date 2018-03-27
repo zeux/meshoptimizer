@@ -463,14 +463,9 @@ int meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, con
 				destination[i + 2] = c;
 
 				// push vertex/edge fifo must match the encoding step *exactly* otherwise the data will not be decoded correctly
-				if (fea == 0 || fea == 15)
-					pushVertexFifo(vertexfifo, a, vertexfifooffset);
-
-				if (feb == 0 || feb == 15)
-					pushVertexFifo(vertexfifo, b, vertexfifooffset);
-
-				if (fec == 0 || fec == 15)
-					pushVertexFifo(vertexfifo, c, vertexfifooffset);
+				pushVertexFifo(vertexfifo, a, vertexfifooffset);
+				pushVertexFifo(vertexfifo, b, vertexfifooffset, (feb == 0) | (feb == 15));
+				pushVertexFifo(vertexfifo, c, vertexfifooffset, (fec == 0) | (fec == 15));
 
 				pushEdgeFifo(edgefifo, b, a, edgefifooffset);
 				pushEdgeFifo(edgefifo, c, b, edgefifooffset);
