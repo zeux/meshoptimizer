@@ -682,12 +682,9 @@ static size_t decodeVertexPrediction(DecodePredictionState& state, unsigned int*
 				unsigned int nb = c - b;
 				unsigned int nc = c - co;
 
-				unsigned int p =
-					(na < 256 && nb < 256 && nc < 256)
-					? (na << 16) | (nb << 8) | nc
-					: 0;
+				unsigned int p = (na << 16) | (nb << 8) | nc;
 
-				result[result_offset++] = p;
+				result[result_offset++] = (na | nb | nc) < 256 ? p : 0;
 			}
 
 			// push vertex/edge fifo must match the encoding step *exactly* otherwise the data will not be decoded correctly
@@ -700,22 +697,12 @@ static size_t decodeVertexPrediction(DecodePredictionState& state, unsigned int*
 		else
 		{
 			// fast path: read codeaux from the table; we wrap table index so this access is memory-safe
-			unsigned char codeaux = codeaux_table[codetri & 15];
+			// slow path: read a full byte for codeaux instead of using a table lookup
+			unsigned char codeaux = (codetri & 15) >= 14 ? *data++ : codeaux_table[codetri & 15];
 
-			int fea = 0;
+			int fea = (codetri & 15) == 15 ? 15 : 0;
 			int feb = codeaux >> 4;
 			int fec = codeaux & 15;
-
-			// slow path: read a full byte for codeaux instead of using a table lookup
-			if ((codetri & 15) >= 14)
-			{
-				fea = (codetri & 15) == 14 ? 0 : 15;
-
-				codeaux = *data++;
-
-				feb = codeaux >> 4;
-				fec = codeaux & 15;
-			}
 
 			// fifo reads are wrapped around 16 entry buffer
 			// also note that we increment next for all three vertices before decoding indices - this matches encoder behavior
