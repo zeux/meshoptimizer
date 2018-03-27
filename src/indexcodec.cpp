@@ -20,7 +20,7 @@ static const unsigned int kTriangleIndexOrder[3][3] = {
 };
 
 static const unsigned char kCodeAuxEncodingTable[16] = {
-    0x00, 0x01, 0x10, 0x02, 0x20, 0x03, 0x30, 0x67, 0x76, 0x78, 0x87, 0x89, 0x98, 0xff, 0, 0,
+    0x00, 0x01, 0x10, 0x02, 0x20, 0x03, 0x30, 0x67, 0x76, 0x78, 0x87, 0x89, 0x98, 0, 0, 0,
 };
 
 static int rotateTriangle(unsigned int a, unsigned int b, unsigned int c, unsigned int next)
@@ -350,7 +350,7 @@ int meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, con
 
 			int fec = codetri & 15;
 
-			// note: this is the most common branch in the entire decoder
+			// note: this is the most common path in the entire decoder
 			// inside this if we try to stay branchless (by using cmov/etc.) since these aren't predictable
 			if (fec != 15)
 			{
@@ -393,58 +393,89 @@ int meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, con
 		}
 		else
 		{
-			// fast path: read codeaux from the table; we wrap table index so this access is memory-safe
-			unsigned char codeaux = codeaux_table[codetri & 15];
-
-			int fea = 0;
-			int feb = codeaux >> 4;
-			int fec = codeaux & 15;
-
-			// slow path: read a full byte for codeaux instead of using a table lookup
-			if ((codetri & 15) >= 14)
+			// fast path: read codeaux from the table
+			if (codetri < 0xfe)
 			{
-				fea = (codetri & 15) == 14 ? 0 : 15;
+				unsigned char codeaux = codeaux_table[codetri & 15];
 
-				codeaux = *data++;
+				// note: table can't contain feb/fec=15
+				int feb = codeaux >> 4;
+				int fec = codeaux & 15;
 
-				feb = codeaux >> 4;
-				fec = codeaux & 15;
-			}
+				// fifo reads are wrapped around 16 entry buffer
+				// also note that we increment next for all three vertices before decoding indices - this matches encoder behavior
+				unsigned int a = next++;
 
-			// fifo reads are wrapped around 16 entry buffer
-			// also note that we increment next for all three vertices before decoding indices - this matches encoder behavior
-			unsigned int a = (fea == 0) ? next++ : 0;
-			unsigned int b = (feb == 0) ? next++ : vertexfifo[(vertexfifooffset - feb) & 15];
-			unsigned int c = (fec == 0) ? next++ : vertexfifo[(vertexfifooffset - fec) & 15];
+				unsigned int bf = vertexfifo[(vertexfifooffset - feb) & 15];
+				unsigned int b = (feb == 0) ? next : bf;
 
-			// note that we need to update the last index since free indices are delta-encoded
-			if (fea == 15)
-				last = a = decodeIndex(data, next, last);
+				int feb0 = feb == 0;
+				next += feb0;
 
-			if (feb == 15)
-				last = b = decodeIndex(data, next, last);
+				unsigned int cf = vertexfifo[(vertexfifooffset - fec) & 15];
+				unsigned int c = (fec == 0) ? next : cf;
 
-			if (fec == 15)
-				last = c = decodeIndex(data, next, last);
+				int fec0 = fec == 0;
+				next += fec0;
 
-			// output triangle
-			destination[i + 0] = a;
-			destination[i + 1] = b;
-			destination[i + 2] = c;
+				// output triangle
+				destination[i + 0] = a;
+				destination[i + 1] = b;
+				destination[i + 2] = c;
 
-			// push vertex/edge fifo must match the encoding step *exactly* otherwise the data will not be decoded correctly
-			if (fea == 0 || fea == 15)
+				// push vertex/edge fifo must match the encoding step *exactly* otherwise the data will not be decoded correctly
 				pushVertexFifo(vertexfifo, a, vertexfifooffset);
+				pushVertexFifo(vertexfifo, b, vertexfifooffset, feb0);
+				pushVertexFifo(vertexfifo, c, vertexfifooffset, fec0);
 
-			if (feb == 0 || feb == 15)
-				pushVertexFifo(vertexfifo, b, vertexfifooffset);
+				pushEdgeFifo(edgefifo, b, a, edgefifooffset);
+				pushEdgeFifo(edgefifo, c, b, edgefifooffset);
+				pushEdgeFifo(edgefifo, a, c, edgefifooffset);
+			}
+			else
+			{
+				// slow path: read a full byte for codeaux instead of using a table lookup
+				unsigned char codeaux = *data++;
 
-			if (fec == 0 || fec == 15)
-				pushVertexFifo(vertexfifo, c, vertexfifooffset);
+				int fea = codetri == 0xfe ? 0 : 15;
+				int feb = codeaux >> 4;
+				int fec = codeaux & 15;
 
-			pushEdgeFifo(edgefifo, b, a, edgefifooffset);
-			pushEdgeFifo(edgefifo, c, b, edgefifooffset);
-			pushEdgeFifo(edgefifo, a, c, edgefifooffset);
+				// fifo reads are wrapped around 16 entry buffer
+				// also note that we increment next for all three vertices before decoding indices - this matches encoder behavior
+				unsigned int a = (fea == 0) ? next++ : 0;
+				unsigned int b = (feb == 0) ? next++ : vertexfifo[(vertexfifooffset - feb) & 15];
+				unsigned int c = (fec == 0) ? next++ : vertexfifo[(vertexfifooffset - fec) & 15];
+
+				// note that we need to update the last index since free indices are delta-encoded
+				if (fea == 15)
+					last = a = decodeIndex(data, next, last);
+
+				if (feb == 15)
+					last = b = decodeIndex(data, next, last);
+
+				if (fec == 15)
+					last = c = decodeIndex(data, next, last);
+
+				// output triangle
+				destination[i + 0] = a;
+				destination[i + 1] = b;
+				destination[i + 2] = c;
+
+				// push vertex/edge fifo must match the encoding step *exactly* otherwise the data will not be decoded correctly
+				if (fea == 0 || fea == 15)
+					pushVertexFifo(vertexfifo, a, vertexfifooffset);
+
+				if (feb == 0 || feb == 15)
+					pushVertexFifo(vertexfifo, b, vertexfifooffset);
+
+				if (fec == 0 || fec == 15)
+					pushVertexFifo(vertexfifo, c, vertexfifooffset);
+
+				pushEdgeFifo(edgefifo, b, a, edgefifooffset);
+				pushEdgeFifo(edgefifo, c, b, edgefifooffset);
+				pushEdgeFifo(edgefifo, a, c, edgefifooffset);
+			}
 		}
 	}
 
