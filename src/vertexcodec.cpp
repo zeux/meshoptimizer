@@ -454,9 +454,9 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 
 			if (prediction && prediction[i])
 			{
-				int pa = (prediction[i] >> 16) & 0xff;
-				int pb = (prediction[i] >> 8) & 0xff;
-				int pc = (prediction[i] >> 0) & 0xff;
+				unsigned int pa = (prediction[i] >> 16) & 0xff;
+				unsigned int pb = (prediction[i] >> 8) & 0xff;
+				unsigned int pc = (prediction[i] >> 0) & 0xff;
 				assert(pa > 0 && pb > 0 && pc > 0);
 
 				if (pa <= i && pb <= i && pc <= i)
@@ -529,9 +529,9 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 
 			if (prediction && prediction[i])
 			{
-				int pa = (prediction[i] >> 16) & 0xff;
-				int pb = (prediction[i] >> 8) & 0xff;
-				int pc = (prediction[i] >> 0) & 0xff;
+				unsigned int pa = (prediction[i] >> 16) & 0xff;
+				unsigned int pb = (prediction[i] >> 8) & 0xff;
+				unsigned int pc = (prediction[i] >> 0) & 0xff;
 				assert(pa > 0 && pb > 0 && pc > 0);
 
 				if (pa <= i && pb <= i && pc <= i)
