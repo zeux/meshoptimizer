@@ -13,7 +13,8 @@
 namespace meshopt
 {
 
-const size_t kVertexBlockSize = 256;
+const size_t kVertexBlockSizeBytes = 8192;
+const size_t kVertexBlockMaxSize = 256;
 const size_t kByteGroupSize = 16;
 
 inline unsigned char zigzag8(unsigned char v)
@@ -430,15 +431,27 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 	}
 }
 
+size_t getVertexBlockSize(size_t vertex_size)
+{
+	// make sure the entire block fits into the scratch buffer
+	size_t result = kVertexBlockSizeBytes / vertex_size;
+
+	// align to byte group size; we encode each byte as a byte group
+	// if vertex block is misaligned, it results in wasted bytes, so just truncate the block size
+	result &= ~(kByteGroupSize - 1);
+
+	return (result < kVertexBlockMaxSize) ? result : kVertexBlockMaxSize;
+}
+
 static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction, unsigned char last_vertex[256])
 {
-	assert(vertex_count > 0 && vertex_count <= 256);
+	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 
 #if TRACE > 1
 	traceEncodeVertexBlock(vertex_data, vertex_count, vertex_size, prediction);
 #endif
 
-	unsigned char buffer[256];
+	unsigned char buffer[kVertexBlockMaxSize];
 	assert(sizeof(buffer) % kByteGroupSize == 0);
 
 	// we sometimes encode elements we didn't fill when rounding to kByteGroupSize
@@ -510,9 +523,9 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 
 static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction, unsigned char last_vertex[256])
 {
-	assert(vertex_count > 0 && vertex_count <= 256);
+	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 
-	unsigned char buffer[256];
+	unsigned char buffer[kVertexBlockMaxSize];
 	assert(sizeof(buffer) % kByteGroupSize == 0);
 
 	for (size_t k = 0; k < vertex_size; ++k)
@@ -780,7 +793,9 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 		*data++ = last_vertex[k];
 	}
 
-	const size_t prediction_capacity = kVertexBlockSize + 2;
+	size_t vertexBlockSize = getVertexBlockSize(vertex_size);
+
+	const size_t prediction_capacity = kVertexBlockMaxSize + 2;
 	unsigned int prediction[prediction_capacity];
 
 	DecodePredictionState pstate = {};
@@ -805,7 +820,7 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 			if (vertex_offset + block_size > vertex_count)
 				break;
 
-			size_t block_size_clamped = (block_size > kVertexBlockSize) ? kVertexBlockSize : block_size;
+			size_t block_size_clamped = (block_size > vertexBlockSize) ? vertexBlockSize : block_size;
 
 			data = encodeVertexBlock(data, vertex_data + vertex_offset * vertex_size, block_size_clamped, vertex_size, prediction, last_vertex);
 			vertex_offset += block_size_clamped;
@@ -817,7 +832,7 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 
 	while (vertex_offset < vertex_count)
 	{
-		size_t block_size = (vertex_offset + kVertexBlockSize < vertex_count) ? kVertexBlockSize : vertex_count - vertex_offset;
+		size_t block_size = (vertex_offset + vertexBlockSize < vertex_count) ? vertexBlockSize : vertex_count - vertex_offset;
 
 		data = encodeVertexBlock(data, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, 0, last_vertex);
 		vertex_offset += block_size;
@@ -865,7 +880,9 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 		vertex_data[k] = last_vertex[k];
 	}
 
-	const size_t prediction_capacity = kVertexBlockSize + 2;
+	size_t vertexBlockSize = getVertexBlockSize(vertex_size);
+
+	const size_t prediction_capacity = kVertexBlockMaxSize + 2;
 	unsigned int prediction[prediction_capacity];
 
 	DecodePredictionState pstate = {};
@@ -886,7 +903,7 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 			if (vertex_offset + block_size > vertex_count)
 				break;
 
-			size_t block_size_clamped = (block_size > kVertexBlockSize) ? kVertexBlockSize : block_size;
+			size_t block_size_clamped = (block_size > vertexBlockSize) ? vertexBlockSize : block_size;
 
 			data = decodeVertexBlock(data, data_end, vertex_data + vertex_offset * vertex_size, block_size_clamped, vertex_size, prediction, last_vertex);
 			if (!data)
@@ -901,7 +918,7 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 
 	while (vertex_offset < vertex_count)
 	{
-		size_t block_size = (vertex_offset + kVertexBlockSize < vertex_count) ? kVertexBlockSize : vertex_count - vertex_offset;
+		size_t block_size = (vertex_offset + vertexBlockSize < vertex_count) ? vertexBlockSize : vertex_count - vertex_offset;
 
 		data = decodeVertexBlock(data, data_end, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, 0, last_vertex);
 		if (!data)
