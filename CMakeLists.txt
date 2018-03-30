@@ -14,8 +14,10 @@ set(SOURCES
     src/overdrawanalyzer.cpp
     src/overdrawoptimizer.cpp
     src/simplifier.cpp
+    src/stripifier.cpp
     src/vcacheanalyzer.cpp
     src/vcacheoptimizer.cpp
+    src/vertexcodec.cpp
     src/vfetchanalyzer.cpp
     src/vfetchoptimizer.cpp
 )
@@ -23,6 +25,6 @@ set(SOURCES
 add_library(meshoptimizer STATIC ${SOURCES})
 
 if(BUILD_DEMO)
-    add_executable(demo demo/main.cpp demo/objparser.cpp)
+    add_executable(demo demo/main.cpp demo/miniz.cpp demo/objparser.cpp)
     target_link_libraries(demo meshoptimizer)
 endif()
