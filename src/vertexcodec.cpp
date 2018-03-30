@@ -454,9 +454,9 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 
 			if (prediction && prediction[i])
 			{
-				unsigned char pa = prediction[i] >> 16;
-				unsigned char pb = prediction[i] >> 8;
-				unsigned char pc = prediction[i] >> 0;
+				int pa = (prediction[i] >> 16) & 0xff;
+				int pb = (prediction[i] >> 8) & 0xff;
+				int pc = (prediction[i] >> 0) & 0xff;
 				assert(pa > 0 && pb > 0 && pc > 0);
 
 				if (pa <= i && pb <= i && pc <= i)
@@ -529,9 +529,9 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 
 			if (prediction && prediction[i])
 			{
-				unsigned char pa = prediction[i] >> 16;
-				unsigned char pb = prediction[i] >> 8;
-				unsigned char pc = prediction[i] >> 0;
+				int pa = (prediction[i] >> 16) & 0xff;
+				int pb = (prediction[i] >> 8) & 0xff;
+				int pc = (prediction[i] >> 0) & 0xff;
 				assert(pa > 0 && pb > 0 && pc > 0);
 
 				if (pa <= i && pb <= i && pc <= i)
@@ -828,6 +828,7 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 #endif
 
 	assert(size_t(data - buffer) <= buffer_size);
+	(void)buffer_size;
 
 	return data - buffer;
 }
