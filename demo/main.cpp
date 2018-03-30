@@ -340,7 +340,7 @@ void optCompleteSimplify(Mesh& mesh)
 
 	for (size_t i = 0; i < lod_count; ++i)
 	{
-		memcpy(&mesh.indices[lod_index_offsets[i]], lods[i].data(), lods[i].size() * sizeof(lods[i][0]));
+		memcpy(&mesh.indices[lod_index_offsets[i]], &lods[i][0], lods[i].size() * sizeof(lods[i][0]));
 	}
 
 	// vertex fetch optimization should go last as it depends on the final index order
