@@ -843,9 +843,6 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 {
 	using namespace meshopt;
 
-	for (int i = 0; i < 256; ++i)
-		assert(unzigzag8(zigzag8(i)) == i);
-
 	assert(vertex_size > 0 && vertex_size <= 256);
 	assert(index_count % 3 == 0);
 	assert(index_buffer == 0 || index_buffer_size > 0);
