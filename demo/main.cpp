@@ -444,9 +444,9 @@ void packMesh(std::vector<PackedVertex>& pv, const std::vector<Vertex>& vertices
 		pv[i].pz = meshopt_quantizeHalf(vertices[i].pz);
 		pv[i].pw = 0;
 
-		pv[i].nx = meshopt_quantizeSnorm(vertices[i].nx, 8);
-		pv[i].ny = meshopt_quantizeSnorm(vertices[i].ny, 8);
-		pv[i].nz = meshopt_quantizeSnorm(vertices[i].nz, 8);
+		pv[i].nx = char(meshopt_quantizeSnorm(vertices[i].nx, 8));
+		pv[i].ny = char(meshopt_quantizeSnorm(vertices[i].ny, 8));
+		pv[i].nz = char(meshopt_quantizeSnorm(vertices[i].nz, 8));
 		pv[i].nw = 0;
 
 		pv[i].tx = meshopt_quantizeHalf(vertices[i].tx);
