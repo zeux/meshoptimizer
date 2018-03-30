@@ -18,4 +18,5 @@ before_build:
 build_script:
   - "%msbuild_path% meshoptimizer.sln"
 
-test: off
+test_script:
+  - Release\demo.exe demo/bunny.obj
