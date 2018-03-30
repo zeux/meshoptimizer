@@ -13,7 +13,7 @@ environment:
       msbuild_path: msbuild
 
 before_build:
-  - cmake -G "%cmake_generator%"
+  - cmake -G "%cmake_generator%" -DBUILD_DEMO=ON
 
 build_script:
   - "%msbuild_path% meshoptimizer.sln"
