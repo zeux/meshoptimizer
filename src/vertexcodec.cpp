@@ -334,6 +334,8 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, const un
 {
 	assert(bitslog2 >= 0 && bitslog2 <= 3);
 
+	(void)data_end; // TODO
+
 	switch (bitslog2)
 	{
 	case 0:
@@ -408,43 +410,7 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, const un
 	}
 
 	default:
-		{
-			int bits = 1 << bitslog2;
-
-			// TODO: missing OOB data checks
-			(void)data_end;
-
-			if (bits == 8)
-			{
-				memcpy(buffer, data, kByteGroupSize);
-
-				return data + kByteGroupSize;
-			}
-
-			size_t byte_size = 8 / bits;
-			assert(kByteGroupSize % byte_size == 0);
-
-			const unsigned char* data_var = data + kByteGroupSize / byte_size;
-
-			// fixed portion: bits bits for each value
-			// variable portion: full byte for each out-of-range value (using 1...1 as sentinel)
-			unsigned char sentinel = (1 << bits) - 1;
-
-			for (size_t i = 0; i < kByteGroupSize; i += byte_size)
-			{
-				unsigned char byte = *data++;
-
-				for (size_t k = 0; k < byte_size; ++k)
-				{
-					unsigned char enc = byte >> (8 - bits);
-					byte <<= bits;
-
-					buffer[i + k] = (enc == sentinel) ? *data_var++ : enc;
-				}
-			}
-
-			return data_var;
-		}
+		return data;
 	}
 }
 #else
@@ -687,6 +653,184 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 	return data;
 }
 
+#if SIMD
+inline __m128i transpose_4x4(__m128i m)
+{
+	return _mm_shuffle_epi8(m, _mm_setr_epi8(0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15));
+}
+
+#define combine_4_2bits(n0, n1, n2, n3) (n0 + (n1<<2) + (n2<<4) + (n3<<6))
+#define _128_shuffle(x, y, n0, n1, n2, n3) _mm_shuffle_ps(x, y, combine_4_2bits (n0, n1, n2, n3))
+#define _128i_shuffle(x, y, n0, n1, n2, n3) _mm_castps_si128(_128_shuffle(_mm_castsi128_ps(x), _mm_castsi128_ps(y), n0, n1, n2, n3))
+
+inline void transpose_4x4_dwords(__m128i w0, __m128i w1,
+	__m128i w2, __m128i w3,
+	__m128i &r0, __m128i &r1,
+	__m128i &r2, __m128i &r3)
+{
+	// 0  1  2  3
+	// 4  5  6  7
+	// 8  9  10 11
+	// 12 13 14 15
+
+	__m128i x0 = _128i_shuffle(w0, w1, 0, 1, 0, 1); // 0 1 4 5
+	__m128i x1 = _128i_shuffle(w0, w1, 2, 3, 2, 3); // 2 3 6 7
+	__m128i x2 = _128i_shuffle(w2, w3, 0, 1, 0, 1); // 8 9 12 13
+	__m128i x3 = _128i_shuffle(w2, w3, 2, 3, 2, 3); // 10 11 14 15
+
+	r0 = _128i_shuffle(x0, x2, 0, 2, 0, 2);
+	r1 = _128i_shuffle(x0, x2, 1, 3, 1, 3);
+	r2 = _128i_shuffle(x1, x3, 0, 2, 0, 2);
+	r3 = _128i_shuffle(x1, x3, 1, 3, 1, 3);
+}
+
+inline void transpose_16x16(
+	__m128i&  x0, __m128i&  x1, __m128i&  x2, __m128i&  x3,
+	__m128i&  x4, __m128i&  x5, __m128i&  x6, __m128i&  x7,
+	__m128i&  x8, __m128i&  x9, __m128i& x10, __m128i& x11,
+	__m128i& x12, __m128i& x13, __m128i& x14, __m128i& x15)
+{
+	__m128i w00, w01, w02, w03;
+	__m128i w10, w11, w12, w13;
+	__m128i w20, w21, w22, w23;
+	__m128i w30, w31, w32, w33;
+
+	transpose_4x4_dwords(x0, x1, x2, x3, w00, w01, w02, w03);
+	transpose_4x4_dwords(x4, x5, x6, x7, w10, w11, w12, w13);
+	transpose_4x4_dwords(x8, x9, x10, x11, w20, w21, w22, w23);
+	transpose_4x4_dwords(x12, x13, x14, x15, w30, w31, w32, w33);
+	w00 = transpose_4x4(w00);
+	w01 = transpose_4x4(w01);
+	w02 = transpose_4x4(w02);
+	w03 = transpose_4x4(w03);
+	w10 = transpose_4x4(w10);
+	w11 = transpose_4x4(w11);
+	w12 = transpose_4x4(w12);
+	w13 = transpose_4x4(w13);
+	w20 = transpose_4x4(w20);
+	w21 = transpose_4x4(w21);
+	w22 = transpose_4x4(w22);
+	w23 = transpose_4x4(w23);
+	w30 = transpose_4x4(w30);
+	w31 = transpose_4x4(w31);
+	w32 = transpose_4x4(w32);
+	w33 = transpose_4x4(w33);
+	transpose_4x4_dwords(w00, w10, w20, w30, x0, x1, x2, x3);
+	transpose_4x4_dwords(w01, w11, w21, w31, x4, x5, x6, x7);
+	transpose_4x4_dwords(w02, w12, w22, w32, x8, x9, x10, x11);
+	transpose_4x4_dwords(w03, w13, w23, w33, x12, x13, x14, x15);
+}
+
+__m128i unzigzag8(__m128i v)
+{
+	__m128i xl = _mm_sub_epi8(_mm_setzero_si128(), _mm_and_si128(v, _mm_set1_epi8(1)));
+	__m128i xr = _mm_and_si128(_mm_srli_epi16(v, 1), _mm_set1_epi8(127));
+
+	return _mm_xor_si128(xl, xr);
+}
+
+static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction, unsigned char last_vertex[256])
+{
+	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
+	assert(vertex_size % 16 == 0); // TODO
+
+	unsigned char buffer[kVertexBlockMaxSize * 16];
+	unsigned char transposed[kVertexBlockMaxSize * 16];
+
+	size_t vertex_count_aligned = (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1);
+
+	for (size_t k = 0; k < vertex_size; k += 16)
+	{
+		for (size_t j = 0; j < 16; ++j)
+		{
+			data = decodeBytes(data, data_end, buffer + j * vertex_count_aligned, vertex_count_aligned);
+			if (!data)
+				return 0;
+		}
+
+		for (size_t j = 0; j < vertex_count_aligned; j += 16)
+		{
+			__m128i r0 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 0 * vertex_count_aligned));
+			__m128i r1 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 1 * vertex_count_aligned));
+			__m128i r2 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 2 * vertex_count_aligned));
+			__m128i r3 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 3 * vertex_count_aligned));
+			__m128i r4 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 4 * vertex_count_aligned));
+			__m128i r5 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 5 * vertex_count_aligned));
+			__m128i r6 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 6 * vertex_count_aligned));
+			__m128i r7 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 7 * vertex_count_aligned));
+			__m128i r8 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 8 * vertex_count_aligned));
+			__m128i r9 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 9 * vertex_count_aligned));
+			__m128i r10 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 10 * vertex_count_aligned));
+			__m128i r11 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 11 * vertex_count_aligned));
+			__m128i r12 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 12 * vertex_count_aligned));
+			__m128i r13 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 13 * vertex_count_aligned));
+			__m128i r14 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 14 * vertex_count_aligned));
+			__m128i r15 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 15 * vertex_count_aligned));
+
+			transpose_16x16(r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15);
+
+			_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + j * 16 + 0 * 16), r0);
+			_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + j * 16 + 1 * 16), r1);
+			_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + j * 16 + 2 * 16), r2);
+			_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + j * 16 + 3 * 16), r3);
+			_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + j * 16 + 4 * 16), r4);
+			_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + j * 16 + 5 * 16), r5);
+			_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + j * 16 + 6 * 16), r6);
+			_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + j * 16 + 7 * 16), r7);
+			_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + j * 16 + 8 * 16), r8);
+			_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + j * 16 + 9 * 16), r9);
+			_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + j * 16 + 10 * 16), r10);
+			_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + j * 16 + 11 * 16), r11);
+			_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + j * 16 + 12 * 16), r12);
+			_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + j * 16 + 13 * 16), r13);
+			_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + j * 16 + 14 * 16), r14);
+			_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + j * 16 + 15 * 16), r15);
+		}
+
+		size_t vertex_offset = k;
+
+		__m128i pi = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&last_vertex[k]));
+
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			__m128i p = pi;
+
+			if (prediction && prediction[i])
+			{
+				unsigned int pa = (prediction[i] >> 16) & 0xff;
+				unsigned int pb = (prediction[i] >> 8) & 0xff;
+				unsigned int pc = (prediction[i] >> 0) & 0xff;
+				assert(pa > 0 && pb > 0 && pc > 0);
+
+				if (pa <= i && pb <= i && pc <= i)
+				{
+					__m128i va = _mm_loadu_si128(reinterpret_cast<__m128i*>(&transposed[(i - pa) * 16]));
+					__m128i vb = _mm_loadu_si128(reinterpret_cast<__m128i*>(&transposed[(i - pb) * 16]));
+					__m128i vc = _mm_loadu_si128(reinterpret_cast<__m128i*>(&transposed[(i - pc) * 16]));
+
+					p = _mm_sub_epi8(_mm_add_epi8(va, vb), vc);
+				}
+			}
+
+			__m128i v = _mm_add_epi8(unzigzag8(_mm_loadu_si128(reinterpret_cast<__m128i*>(&transposed[i * 16]))), p);
+
+			_mm_storeu_si128(reinterpret_cast<__m128i*>(&vertex_data[vertex_offset]), v);
+			_mm_storeu_si128(reinterpret_cast<__m128i*>(&transposed[i * 16]), v);
+
+			pi = v;
+
+			vertex_offset += vertex_size;
+		}
+	}
+
+	for (size_t k = 0; k < vertex_size; ++k)
+	{
+		last_vertex[k] = vertex_data[vertex_size * (vertex_count - 1) + k];
+	}
+
+	return data;
+}
+#else
 static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction, unsigned char last_vertex[256])
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
@@ -736,6 +880,7 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 
 	return data;
 }
+#endif
 
 typedef unsigned int VertexFifo[16];
 typedef unsigned int EdgeFifo[16][3];
