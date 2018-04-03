@@ -7,6 +7,11 @@
 #include <stdio.h>
 
 #define TRACE 0
+#define SIMD 0
+
+#if SIMD
+#include <tmmintrin.h>
+#endif
 
 // This work is based on:
 // TODO: references
@@ -283,8 +288,169 @@ static unsigned char* encodeBytesGroup(unsigned char* data, const unsigned char*
 	return data;
 }
 
-static const unsigned char* decodeBytesGroup(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, int bits)
+#if SIMD
+static unsigned char kDecodeBytesGroupShuffle[256][8];
+static unsigned char kDecodeBytesGroupCount[256];
+static bool gDecodeBytesGroupInitialized;
+
+static void decodeBytesGroupBuildTables()
 {
+	if (gDecodeBytesGroupInitialized)
+		return;
+
+	for (int mask = 0; mask < 256; ++mask)
+	{
+		unsigned char shuffle[8];
+		memset(shuffle, 0x80, 8);
+
+		unsigned char count = 0;
+
+		for (int i = 0; i < 8; ++i)
+			if (mask & (1 << (7 - i)))
+			{
+				shuffle[i] = count;
+				count++;
+			}
+
+		memcpy(kDecodeBytesGroupShuffle[mask], shuffle, 8);
+		kDecodeBytesGroupCount[mask] = count;
+	}
+
+	gDecodeBytesGroupInitialized = true;
+}
+
+static __m128i decodeShuffleMask(unsigned char mask0, unsigned char mask1)
+{
+	__m128i sm0 = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(&kDecodeBytesGroupShuffle[mask0]));
+	__m128i sm1 = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(&kDecodeBytesGroupShuffle[mask1]));
+
+	unsigned char cnt0 = kDecodeBytesGroupCount[mask0];
+	__m128i sm1off = _mm_add_epi8(sm1, _mm_set1_epi8(cnt0));
+
+	return _mm_or_si128(sm0, _mm_slli_si128(sm1off, 8));
+}
+
+static const unsigned char* decodeBytesGroup(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, int bitslog2)
+{
+	assert(bitslog2 >= 0 && bitslog2 <= 3);
+
+	switch (bitslog2)
+	{
+	case 0:
+	{
+		unsigned char mask0 = data[0];
+		unsigned char mask1 = data[1];
+
+		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + 2));
+
+		__m128i shuf = decodeShuffleMask(mask0, mask1);
+
+		// note: this will set unused entries to 0 since shuf mask will have high bits set to 1
+		__m128i result = _mm_shuffle_epi8(rest, shuf);
+
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
+
+		return data + 2 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
+	}
+
+	case 1:
+	{
+		__m128i sel2 = _mm_cvtsi32_si128(*reinterpret_cast<const int*>(data));
+		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + 4));
+
+		__m128i sel22 = _mm_and_si128(_mm_set1_epi8(15), _mm_unpacklo_epi8(_mm_srli_epi16(sel2, 4), sel2));
+		__m128i sel2222 = _mm_and_si128(_mm_set1_epi8(3), _mm_unpacklo_epi8(_mm_srli_epi16(sel22, 2), sel22));
+
+		__m128i mask = _mm_cmpeq_epi8(sel2222, _mm_set1_epi8(3));
+		int mask16 = _mm_movemask_epi8(_mm_shuffle_epi8(mask, _mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)));
+		unsigned char mask0 = (unsigned char)(mask16 >> 8);
+		unsigned char mask1 = (unsigned char)(mask16 & 255);
+
+		__m128i shuf = decodeShuffleMask(mask0, mask1);
+
+		__m128i result = _mm_or_si128(_mm_shuffle_epi8(rest, shuf), _mm_andnot_si128(mask, sel2222));
+
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
+
+		return data + 4 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
+	}
+
+	case 2:
+	{
+		__m128i sel4 = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(data));
+		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + 8));
+
+		__m128i sel44 = _mm_and_si128(_mm_set1_epi8(15), _mm_unpacklo_epi8(_mm_srli_epi16(sel4, 4), sel4));
+
+		__m128i mask = _mm_cmpeq_epi8(sel44, _mm_set1_epi8(15));
+		int mask16 = _mm_movemask_epi8(_mm_shuffle_epi8(mask, _mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)));
+		unsigned char mask0 = (unsigned char)(mask16 >> 8);
+		unsigned char mask1 = (unsigned char)(mask16 & 255);
+
+		__m128i shuf = decodeShuffleMask(mask0, mask1);
+
+		__m128i result = _mm_or_si128(_mm_shuffle_epi8(rest, shuf), _mm_andnot_si128(mask, sel44));
+
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
+
+		return data + 8 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
+	}
+
+	case 3:
+	{
+		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data));
+
+		__m128i result = rest;
+
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
+
+		return data + 16;
+	}
+
+	default:
+		{
+			int bits = 1 << bitslog2;
+
+			// TODO: missing OOB data checks
+			(void)data_end;
+
+			if (bits == 8)
+			{
+				memcpy(buffer, data, kByteGroupSize);
+
+				return data + kByteGroupSize;
+			}
+
+			size_t byte_size = 8 / bits;
+			assert(kByteGroupSize % byte_size == 0);
+
+			const unsigned char* data_var = data + kByteGroupSize / byte_size;
+
+			// fixed portion: bits bits for each value
+			// variable portion: full byte for each out-of-range value (using 1...1 as sentinel)
+			unsigned char sentinel = (1 << bits) - 1;
+
+			for (size_t i = 0; i < kByteGroupSize; i += byte_size)
+			{
+				unsigned char byte = *data++;
+
+				for (size_t k = 0; k < byte_size; ++k)
+				{
+					unsigned char enc = byte >> (8 - bits);
+					byte <<= bits;
+
+					buffer[i + k] = (enc == sentinel) ? *data_var++ : enc;
+				}
+			}
+
+			return data_var;
+		}
+	}
+}
+#else
+static const unsigned char* decodeBytesGroup(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, int bitslog2)
+{
+	int bits = 1 << bitslog2;
 	assert(bits >= 1 && bits <= 8);
 
 	// TODO: missing OOB data checks
@@ -321,6 +487,7 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, const un
 
 	return data_var;
 }
+#endif
 
 static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buffer, size_t buffer_size)
 {
@@ -415,9 +582,8 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 			size_t header_offset = i / kByteGroupSize;
 
 			int bitslog2 = (header[header_offset / 4] >> ((header_offset % 4) * 2)) & 3;
-			int bits = 1 << bitslog2;
 
-			data = decodeBytesGroup(data, data_end, buffer + i, bits);
+			data = decodeBytesGroup(data, data_end, buffer + i, bitslog2);
 			if (!data)
 				return 0;
 		}
@@ -861,6 +1027,10 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 	assert(vertex_size > 0 && vertex_size <= 256);
 	assert(index_count % 3 == 0);
 	assert(index_buffer == 0 || index_buffer_size > 0);
+
+#if SIMD
+	decodeBytesGroupBuildTables();
+#endif
 
 	unsigned char* vertex_data = static_cast<unsigned char*>(destination);
 
