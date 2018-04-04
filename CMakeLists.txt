@@ -23,6 +23,7 @@ set(SOURCES
 )
 
 add_library(meshoptimizer STATIC ${SOURCES})
+target_include_directories(meshoptimizer INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 if(BUILD_DEMO)
     add_executable(demo demo/main.cpp demo/miniz.cpp demo/objparser.cpp)
