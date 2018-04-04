@@ -16,13 +16,11 @@ const size_t max_valence = 8;
 
 static const float vertex_score_table_cache[1 + max_cache_size] = {
     0.f,
-    0.792f, 0.767f, 0.764f, 0.956f, 0.827f, 0.751f, 0.820f, 0.864f, 0.738f, 0.788f, 0.642f, 0.646f, 0.165f, 0.654f, 0.545f, 0.284f
-};
+    0.792f, 0.767f, 0.764f, 0.956f, 0.827f, 0.751f, 0.820f, 0.864f, 0.738f, 0.788f, 0.642f, 0.646f, 0.165f, 0.654f, 0.545f, 0.284f};
 
 static const float vertex_score_table_live[1 + max_valence] = {
     0.f,
-    0.994f, 0.721f, 0.479f, 0.423f, 0.174f, 0.080f, 0.249f, 0.056f
-};
+    0.994f, 0.721f, 0.479f, 0.423f, 0.174f, 0.080f, 0.249f, 0.056f};
 
 struct Adjacency
 {

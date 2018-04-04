@@ -118,12 +118,12 @@ static void traceEncodeVertexBlock(const unsigned char* vertex_data, size_t vert
 
 			sumb[k] += bits(delta);
 
-		#if TRACE > 2
+#if TRACE > 2
 			printf("%02x/%02x ", vertex_data[vertex_offset], delta);
-		#endif
+#endif
 		}
 
-	#if TRACE > 2
+#if TRACE > 2
 		printf("| ");
 
 		if (prediction && prediction[i])
@@ -148,7 +148,7 @@ static void traceEncodeVertexBlock(const unsigned char* vertex_data, size_t vert
 		}
 
 		printf("\n");
-	#endif
+#endif
 	}
 
 	for (size_t k = 0; k < vertex_size; ++k)
@@ -478,9 +478,9 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 
 		memset(header, 0, header_size);
 
-	#if TRACE > 0
+#if TRACE > 0
 		encodeVertexBlockStats.current_headers += header_size;
-	#endif
+#endif
 
 		for (size_t i = 0; i < buffer_size; i += kByteGroupSize)
 		{
@@ -508,9 +508,9 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 			data = encodeBytesGroup(data, buffer + i, best_bits);
 		}
 
-	#if TRACE > 0
+#if TRACE > 0
 		encodeVertexBlockStats.current_content += data - header - header_size;
-	#endif
+#endif
 
 		return data;
 	}
@@ -620,13 +620,13 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 			vertex_offset += vertex_size;
 		}
 
-	#if TRACE > 0
+#if TRACE > 0
 		unsigned char* olddata = data;
-	#endif
+#endif
 
 		data = encodeBytes(data, buffer, (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1));
 
-	#if TRACE > 0
+#if TRACE > 0
 		EncodeVertexBlockStats& stats = encodeVertexBlockStats;
 
 		stats.bytes[k] += data - olddata;
@@ -642,7 +642,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 
 		stats.current_headers = 0;
 		stats.current_content = 0;
-	#endif
+#endif
 	}
 
 	for (size_t k = 0; k < vertex_size; ++k)
@@ -659,14 +659,14 @@ inline __m128i transpose_4x4(__m128i m)
 	return _mm_shuffle_epi8(m, _mm_setr_epi8(0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15));
 }
 
-#define combine_4_2bits(n0, n1, n2, n3) (n0 + (n1<<2) + (n2<<4) + (n3<<6))
-#define _128_shuffle(x, y, n0, n1, n2, n3) _mm_shuffle_ps(x, y, combine_4_2bits (n0, n1, n2, n3))
+#define combine_4_2bits(n0, n1, n2, n3) (n0 + (n1 << 2) + (n2 << 4) + (n3 << 6))
+#define _128_shuffle(x, y, n0, n1, n2, n3) _mm_shuffle_ps(x, y, combine_4_2bits(n0, n1, n2, n3))
 #define _128i_shuffle(x, y, n0, n1, n2, n3) _mm_castps_si128(_128_shuffle(_mm_castsi128_ps(x), _mm_castsi128_ps(y), n0, n1, n2, n3))
 
 inline void transpose_4x4_dwords(__m128i w0, __m128i w1,
-	__m128i w2, __m128i w3,
-	__m128i &r0, __m128i &r1,
-	__m128i &r2, __m128i &r3)
+                                 __m128i w2, __m128i w3,
+                                 __m128i& r0, __m128i& r1,
+                                 __m128i& r2, __m128i& r3)
 {
 	// 0  1  2  3
 	// 4  5  6  7
@@ -685,10 +685,10 @@ inline void transpose_4x4_dwords(__m128i w0, __m128i w1,
 }
 
 inline void transpose_16x16(
-	__m128i&  x0, __m128i&  x1, __m128i&  x2, __m128i&  x3,
-	__m128i&  x4, __m128i&  x5, __m128i&  x6, __m128i&  x7,
-	__m128i&  x8, __m128i&  x9, __m128i& x10, __m128i& x11,
-	__m128i& x12, __m128i& x13, __m128i& x14, __m128i& x15)
+    __m128i& x0, __m128i& x1, __m128i& x2, __m128i& x3,
+    __m128i& x4, __m128i& x5, __m128i& x6, __m128i& x7,
+    __m128i& x8, __m128i& x9, __m128i& x10, __m128i& x11,
+    __m128i& x12, __m128i& x13, __m128i& x14, __m128i& x15)
 {
 	__m128i w00, w01, w02, w03;
 	__m128i w10, w11, w12, w13;
@@ -1086,7 +1086,7 @@ static size_t decodeVertexPrediction(DecodePredictionState& state, unsigned int*
 	return result_offset;
 }
 
-}
+} // namespace meshopt
 
 size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, const void* vertices, size_t vertex_count, size_t vertex_size, size_t index_count, const unsigned char* index_buffer, size_t index_buffer_size)
 {

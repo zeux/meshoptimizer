@@ -18,7 +18,10 @@ double timestamp()
 	return double(ts.tv_sec) + 1e-9 * double(ts.tv_nsec);
 }
 #elif defined(_WIN32)
-struct LARGE_INTEGER { __int64 QuadPart; };
+struct LARGE_INTEGER
+{
+	__int64 QuadPart;
+};
 extern "C" __declspec(dllimport) int __stdcall QueryPerformanceCounter(LARGE_INTEGER* lpPerformanceCount);
 extern "C" __declspec(dllimport) int __stdcall QueryPerformanceFrequency(LARGE_INTEGER* lpFrequency);
 
