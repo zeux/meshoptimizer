@@ -344,6 +344,14 @@ inline void meshopt_optimizeOverdraw(T* destination, const T* indices, size_t in
 }
 
 template <typename T>
+inline size_t meshopt_optimizeVertexFetchRemap(unsigned int* destination, const T* indices, size_t index_count, size_t vertex_count)
+{
+	meshopt_IndexAdapter<T> in(0, indices, index_count);
+
+	return meshopt_optimizeVertexFetchRemap(destination, in.data, index_count, vertex_count);
+}
+
+template <typename T>
 inline size_t meshopt_optimizeVertexFetch(void* destination, T* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)
 {
 	meshopt_IndexAdapter<T> inout(indices, indices, index_count);
