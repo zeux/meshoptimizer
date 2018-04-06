@@ -41,141 +41,6 @@ inline int bits(unsigned char v)
 
 	return result;
 }
-
-inline int bitsset(unsigned char v)
-{
-	int result = 0;
-
-	while (v)
-	{
-		result += (v & 1);
-		v >>= 1;
-	}
-
-	return result;
-}
-#endif
-
-#if TRACE > 1
-static void traceEncodeVertexBlock(const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction)
-{
-	printf("vertex block; count %d\n", int(vertex_count));
-
-	{
-		for (size_t k = 0; k < vertex_size; ++k)
-		{
-			printf("%02x    ", vertex_data[k]);
-		}
-
-		printf("| base\n");
-	}
-
-	int uniq[256] = {};
-	int max[256] = {};
-	int orv[256] = {};
-	int sumb[256] = {};
-	bool uniqb[256][256] = {};
-
-	for (size_t i = 1; i < vertex_count; ++i)
-	{
-		for (size_t k = 0; k < vertex_size; ++k)
-		{
-			size_t vertex_offset = i * vertex_size + k;
-
-			unsigned char p = vertex_data[vertex_offset - vertex_size];
-
-			if (prediction && prediction[i])
-			{
-				unsigned char pa = prediction[i] >> 16;
-				unsigned char pb = prediction[i] >> 8;
-				unsigned char pc = prediction[i] >> 0;
-				assert(pa > 0 && pb > 0 && pc > 0);
-
-				if (pa <= i && pb <= i && pc <= i)
-				{
-					unsigned char va = vertex_data[vertex_offset - pa * vertex_size];
-					unsigned char vb = vertex_data[vertex_offset - pb * vertex_size];
-					unsigned char vc = vertex_data[vertex_offset - pc * vertex_size];
-
-					p = va + vb - vc;
-				}
-			}
-
-			unsigned char delta = zigzag8(vertex_data[vertex_offset] - p);
-
-			if (!uniqb[k][delta])
-			{
-				uniqb[k][delta] = true;
-				uniq[k]++;
-			}
-
-			if (delta > max[k])
-			{
-				max[k] = delta;
-			}
-
-			orv[k] |= delta;
-
-			sumb[k] += bits(delta);
-
-#if TRACE > 2
-			printf("%02x/%02x ", vertex_data[vertex_offset], delta);
-#endif
-		}
-
-#if TRACE > 2
-		printf("| ");
-
-		if (prediction && prediction[i])
-		{
-			unsigned char pa = prediction[i] >> 16;
-			unsigned char pb = prediction[i] >> 8;
-			unsigned char pc = prediction[i] >> 0;
-			assert(pa > 0 && pb > 0 && pc > 0);
-
-			if (pa <= i && pb <= i && pc <= i)
-			{
-				printf("pgram %d %d %d", pa, pb, pc);
-			}
-			else
-			{
-				printf("pdelta");
-			}
-		}
-		else
-		{
-			printf("delta");
-		}
-
-		printf("\n");
-#endif
-	}
-
-	for (size_t k = 0; k < vertex_size; ++k)
-		printf("%-3d   ", uniq[k]);
-
-	printf("| uniq\n");
-
-	for (size_t k = 0; k < vertex_size; ++k)
-		printf("%02x    ", max[k]);
-
-	printf("| max\n");
-
-	for (size_t k = 0; k < vertex_size; ++k)
-		printf("%d     ", bits(max[k]));
-
-	printf("| maxbits\n");
-
-	for (size_t k = 0; k < vertex_size; ++k)
-		printf("%3.1f   ", double(sumb[k]) / double(vertex_count - 1));
-
-	printf("| avgbits\n");
-
-	for (size_t k = 0; k < vertex_size; ++k)
-		printf("%d     ", bitsset(orv[k]));
-
-	printf("| bits set\n");
-}
 #endif
 
 #if TRACE > 0
@@ -455,19 +320,29 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, const un
 }
 #endif
 
-static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buffer, size_t buffer_size)
+static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buffer, size_t buffer_size, const unsigned char* rawbuffer)
 {
 	assert(buffer_size % kByteGroupSize == 0);
+
+	(void)rawbuffer;
 
 	if (encodeBytesFits(buffer, buffer_size, 0))
 	{
 		*data++ = 0;
+
+#if TRACE > 1
+		printf("skip (0)\n");
+#endif
 
 		return data;
 	}
 	else
 	{
 		*data++ = 1;
+
+#if TRACE > 1
+		printf("encode (1)\n");
+#endif
 
 		unsigned char* header = data;
 
@@ -504,6 +379,30 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 			size_t header_offset = i / kByteGroupSize;
 
 			header[header_offset / 4] |= bitslog2 << ((header_offset % 4) * 2);
+
+#if TRACE > 1
+			printf("group %d: bits %d encoded size %d\n", int(i / kByteGroupSize), 1 << bitslog2, int(best_size));
+#endif
+
+#if TRACE > 2
+			printf("source: ");
+			for (size_t j = 0; j < kByteGroupSize; ++j)
+			{
+				unsigned char v = rawbuffer[i + j];
+
+				printf("%02x  ", v);
+			}
+			printf("\n");
+
+			printf("deltas: ");
+			for (size_t j = 0; j < kByteGroupSize; ++j)
+			{
+				unsigned char v = buffer[i + j];
+
+				printf("%02x%c ", v, (bitslog2 == 3 || v < (1 << (1 << bitslog2)) - 1) ? ' ' : '*');
+			}
+			printf("\n");
+#endif
 
 			data = encodeBytesGroup(data, buffer + i, best_bits);
 		}
@@ -579,15 +478,22 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 
-#if TRACE > 1
-	traceEncodeVertexBlock(vertex_data, vertex_count, vertex_size, prediction);
-#endif
-
 	unsigned char buffer[kVertexBlockMaxSize];
 	assert(sizeof(buffer) % kByteGroupSize == 0);
 
 	// we sometimes encode elements we didn't fill when rounding to kByteGroupSize
 	memset(buffer, 0, sizeof(buffer));
+
+#if TRACE > 1
+	printf("vertex block; count %d\n", int(vertex_count));
+#endif
+
+#if TRACE > 2
+	unsigned char rawbuffer[kVertexBlockMaxSize];
+	memset(rawbuffer, 0, sizeof(rawbuffer));
+#else
+	unsigned char* rawbuffer = 0;
+#endif
 
 	for (size_t k = 0; k < vertex_size; ++k)
 	{
@@ -618,13 +524,21 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 
 			buffer[i] = delta;
 			vertex_offset += vertex_size;
+
+#if TRACE > 2
+			rawbuffer[i] = vertex_data[vertex_offset];
+#endif
 		}
 
 #if TRACE > 0
 		unsigned char* olddata = data;
 #endif
 
-		data = encodeBytes(data, buffer, (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1));
+#if TRACE > 1
+		printf("vertex byte %d: ", int(k));
+#endif
+
+		data = encodeBytes(data, buffer, (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1), rawbuffer);
 
 #if TRACE > 0
 		EncodeVertexBlockStats& stats = encodeVertexBlockStats;
