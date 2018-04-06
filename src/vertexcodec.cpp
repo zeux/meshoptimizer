@@ -523,11 +523,12 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 			unsigned char delta = zigzag8(vertex_data[vertex_offset] - p);
 
 			buffer[i] = delta;
-			vertex_offset += vertex_size;
 
 #if TRACE > 2
 			rawbuffer[i] = vertex_data[vertex_offset];
 #endif
+
+			vertex_offset += vertex_size;
 		}
 
 #if TRACE > 0
@@ -548,7 +549,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 		for (size_t i = 0; i < vertex_count; ++i)
 		{
 			stats.bitsopt[k] += bits(buffer[i]);
-			stats.bitsenc[k] += bits(buffer[i]) + bits(bits(buffer[i]));
+			stats.bitsenc[k] += bits(buffer[i]) + bits(char(bits(buffer[i])));
 		}
 
 		stats.headers[k] += stats.current_headers;
