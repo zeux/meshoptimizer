@@ -78,6 +78,15 @@ MESHOPTIMIZER_API void meshopt_optimizeOverdraw(unsigned int* destination, const
 
 /**
  * Vertex fetch cache optimizer
+ * Generates vertex remap to reduce the amount of GPU memory fetches during vertex processing
+ * The resulting remap table should be used to reorder vertex/index buffers using meshopt_remapVertexBuffer/meshopt_remapIndexBuffer
+ *
+ * destination must contain enough space for the resulting remap table (vertex_count elements)
+ */
+MESHOPTIMIZER_API size_t meshopt_optimizeVertexFetchRemap(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count);
+
+/**
+ * Vertex fetch cache optimizer
  * Reorders vertices and changes indices to reduce the amount of GPU memory fetches during vertex processing
  *
  * destination must contain enough space for the resulting vertex buffer (vertex_count elements)

@@ -4,6 +4,30 @@
 #include <assert.h>
 #include <string.h>
 
+size_t meshopt_optimizeVertexFetchRemap(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count)
+{
+	assert(index_count % 3 == 0);
+
+	memset(destination, -1, vertex_count * sizeof(unsigned int));
+
+	unsigned int next_vertex = 0;
+
+	for (size_t i = 0; i < index_count; ++i)
+	{
+		unsigned int index = indices[i];
+		assert(index < vertex_count);
+
+		if (destination[index] == ~0u)
+		{
+			destination[index] = next_vertex++;
+		}
+	}
+
+	assert(next_vertex <= vertex_count);
+
+	return next_vertex;
+}
+
 size_t meshopt_optimizeVertexFetch(void* destination, unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)
 {
 	assert(index_count % 3 == 0);
