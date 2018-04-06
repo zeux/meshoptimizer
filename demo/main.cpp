@@ -271,6 +271,16 @@ void optFetch(Mesh& mesh)
 	meshopt_optimizeVertexFetch(&mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
 }
 
+void optFetchRemap(Mesh& mesh)
+{
+	// this produces results equivalent to optFetch, but can be used to remap multiple vertex streams
+	std::vector<unsigned int> remap(mesh.vertices.size());
+	meshopt_optimizeVertexFetchRemap(&remap[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size());
+
+	meshopt_remapIndexBuffer(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &remap[0]);
+	meshopt_remapVertexBuffer(&mesh.vertices[0], &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex), &remap[0]);
+}
+
 void optComplete(Mesh& mesh)
 {
 	// vertex cache optimization should go first as it provides starting order for overdraw
@@ -597,6 +607,7 @@ void process(const char* path)
 	optimize(mesh, "CacheFifo", optCacheFifo);
 	optimize(mesh, "Overdraw", optOverdraw);
 	optimize(mesh, "Fetch", optFetch);
+	optimize(mesh, "FetchMap", optFetchRemap);
 	optimize(mesh, "Complete", optComplete);
 
 	// note: the ATVR/overdraw output from this pass is not necessarily correct since we analyze all LODs at once
