@@ -6,7 +6,6 @@
 
 #include <stdio.h>
 
-#define TRACE 0
 #define SIMD 0
 
 #if SIMD
@@ -31,75 +30,6 @@ inline unsigned char unzigzag8(unsigned char v)
 {
 	return (-(v & 1)) ^ (v >> 1);
 }
-
-#if TRACE > 0
-inline int bits(unsigned char v)
-{
-	int result = 0;
-	while (v >= (1 << result))
-		result++;
-
-	return result;
-}
-#endif
-
-#if TRACE > 0
-struct EncodeVertexBlockStats
-{
-	size_t bytes[256];
-	size_t bitsopt[256];
-	size_t bitsenc[256];
-
-	size_t headers[256];
-	size_t content[256];
-
-	size_t current_headers;
-	size_t current_content;
-};
-
-static EncodeVertexBlockStats encodeVertexBlockStats;
-
-static void dumpEncodeVertexBlockStats(size_t vertex_count, size_t vertex_size)
-{
-	const EncodeVertexBlockStats& stats = encodeVertexBlockStats;
-
-	size_t bytes = 0;
-	size_t bitsopt = 0;
-	size_t bitsenc = 0;
-	size_t headers = 0;
-	size_t content = 0;
-
-	for (size_t k = 0; k < 256; ++k)
-		if (stats.bytes[k])
-		{
-			printf("%2d: %d bytes (optimal %d bytes, optenc %d bytes; headers %d, content %d)\n", int(k), int(stats.bytes[k]), int(stats.bitsopt[k]) / 8, int(stats.bitsenc[k]) / 8, int(stats.headers[k]), int(stats.content[k]));
-			bytes += stats.bytes[k];
-			bitsopt += stats.bitsopt[k];
-			bitsenc += stats.bitsenc[k];
-			headers += stats.headers[k];
-			content += stats.content[k];
-		}
-
-	printf("total: %d bytes (optimal %dd bytes, optenc %d bytes; headers %d, content %d)\n", int(bytes), int(bitsopt) / 8, int(bitsenc) / 8, int(headers), int(content));
-
-	if (vertex_size == 16)
-	{
-		// assume the following layout:
-		// 6b position
-		// 2b padding
-		// 3b normal
-		// 1b padding
-		// 4b uv
-		size_t bytes_pos = stats.bytes[0] + stats.bytes[1] + stats.bytes[2] + stats.bytes[3] + stats.bytes[4] + stats.bytes[5] + stats.bytes[6] + stats.bytes[7];
-		size_t bytes_nrm = stats.bytes[8] + stats.bytes[9] + stats.bytes[10] + stats.bytes[11];
-		size_t bytes_tex = stats.bytes[12] + stats.bytes[13] + stats.bytes[14] + stats.bytes[15];
-
-		printf("pos: %d bytes, %.1f bpv\n", int(bytes_pos), float(bytes_pos) / float(vertex_count) * 8);
-		printf("nrm: %d bytes, %.1f bpv\n", int(bytes_nrm), float(bytes_nrm) / float(vertex_count) * 8);
-		printf("tex: %d bytes, %.1f bpv\n", int(bytes_tex), float(bytes_tex) / float(vertex_count) * 8);
-	}
-}
-#endif
 
 static bool encodeBytesFits(const unsigned char* buffer, size_t buffer_size, int bits)
 {
@@ -337,29 +267,19 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, const un
 }
 #endif
 
-static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buffer, size_t buffer_size, const unsigned char* rawbuffer)
+static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buffer, size_t buffer_size)
 {
 	assert(buffer_size % kByteGroupSize == 0);
-
-	(void)rawbuffer;
 
 	if (encodeBytesFits(buffer, buffer_size, 0))
 	{
 		*data++ = 0;
-
-#if TRACE > 1
-		printf("skip (0)\n");
-#endif
 
 		return data;
 	}
 	else
 	{
 		*data++ = 1;
-
-#if TRACE > 1
-		printf("encode (1)\n");
-#endif
 
 		unsigned char* header = data;
 
@@ -369,10 +289,6 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 		data += header_size;
 
 		memset(header, 0, header_size);
-
-#if TRACE > 0
-		encodeVertexBlockStats.current_headers += header_size;
-#endif
 
 		for (size_t i = 0; i < buffer_size; i += kByteGroupSize)
 		{
@@ -397,39 +313,11 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 
 			header[header_offset / 4] |= bitslog2 << ((header_offset % 4) * 2);
 
-#if TRACE > 1
-			printf("group %d: bits %d encoded size %d\n", int(i / kByteGroupSize), 1 << bitslog2, int(best_size));
-#endif
-
-#if TRACE > 2
-			printf("source: ");
-			for (size_t j = 0; j < kByteGroupSize; ++j)
-			{
-				unsigned char v = rawbuffer[i + j];
-
-				printf("%02x  ", v);
-			}
-			printf("\n");
-
-			printf("deltas: ");
-			for (size_t j = 0; j < kByteGroupSize; ++j)
-			{
-				unsigned char v = buffer[i + j];
-
-				printf("%02x%c ", v, (bitslog2 == 3 || v < (1 << (1 << bitslog2)) - 1) ? ' ' : '*');
-			}
-			printf("\n");
-#endif
-
 			unsigned char* next = encodeBytesGroup(data, buffer + i, best_bits);
 
 			assert(data + best_size == next);
 			data = next;
 		}
-
-#if TRACE > 0
-		encodeVertexBlockStats.current_content += data - header - header_size;
-#endif
 
 		return data;
 	}
@@ -504,17 +392,6 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 	// we sometimes encode elements we didn't fill when rounding to kByteGroupSize
 	memset(buffer, 0, sizeof(buffer));
 
-#if TRACE > 1
-	printf("vertex block; count %d\n", int(vertex_count));
-#endif
-
-#if TRACE > 2
-	unsigned char rawbuffer[kVertexBlockMaxSize];
-	memset(rawbuffer, 0, sizeof(rawbuffer));
-#else
-	unsigned char* rawbuffer = 0;
-#endif
-
 	for (size_t k = 0; k < vertex_size; ++k)
 	{
 		size_t vertex_offset = k;
@@ -544,40 +421,10 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 
 			buffer[i] = delta;
 
-#if TRACE > 2
-			rawbuffer[i] = vertex_data[vertex_offset];
-#endif
-
 			vertex_offset += vertex_size;
 		}
 
-#if TRACE > 0
-		unsigned char* olddata = data;
-#endif
-
-#if TRACE > 1
-		printf("vertex byte %d: ", int(k));
-#endif
-
-		data = encodeBytes(data, buffer, (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1), rawbuffer);
-
-#if TRACE > 0
-		EncodeVertexBlockStats& stats = encodeVertexBlockStats;
-
-		stats.bytes[k] += data - olddata;
-
-		for (size_t i = 0; i < vertex_count; ++i)
-		{
-			stats.bitsopt[k] += bits(buffer[i]);
-			stats.bitsenc[k] += bits(buffer[i]) + bits(char(bits(buffer[i])));
-		}
-
-		stats.headers[k] += stats.current_headers;
-		stats.content[k] += stats.current_content;
-
-		stats.current_headers = 0;
-		stats.current_content = 0;
-#endif
+		data = encodeBytes(data, buffer, (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1));
 	}
 
 	for (size_t k = 0; k < vertex_size; ++k)
@@ -1051,10 +898,6 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 
 	DecodePredictionState pstate = {};
 
-#if TRACE > 0
-	memset(&encodeVertexBlockStats, 0, sizeof(encodeVertexBlockStats));
-#endif
-
 	size_t vertex_offset = 0;
 	size_t prediction_offset = 0;
 
@@ -1088,10 +931,6 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 		data = encodeVertexBlock(data, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, 0, last_vertex);
 		vertex_offset += block_size;
 	}
-
-#if TRACE > 0
-	dumpEncodeVertexBlockStats(vertex_count, vertex_size);
-#endif
 
 	assert(size_t(data - buffer) <= buffer_size);
 	(void)buffer_size;
