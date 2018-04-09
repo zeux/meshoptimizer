@@ -636,6 +636,7 @@ void processDev(const char* path)
 	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
 
 	encodeIndex(copy);
+	packVertex(copy);
 	encodeVertex(copy);
 	encodeVertexPred(copy);
 }
