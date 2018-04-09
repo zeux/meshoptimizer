@@ -142,12 +142,8 @@ static __m128i decodeShuffleMask(unsigned char mask0, unsigned char mask1)
 	return _mm_or_si128(sm0, _mm_slli_si128(sm1off, 8));
 }
 
-static const unsigned char* decodeBytesGroup(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, int bitslog2)
+static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned char* buffer, int bitslog2)
 {
-	assert(bitslog2 >= 0 && bitslog2 <= 3);
-
-	(void)data_end; // TODO
-
 	switch (bitslog2)
 	{
 	case 0:
@@ -222,25 +218,13 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, const un
 	}
 
 	default:
+		assert(!"Unexpected bit length"); // This can never happen since bitslog2 is a 2-bit value
 		return data;
 	}
 }
 #else
-static const unsigned char* decodeBytesGroup(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, int bitslog2)
+static const unsigned char* decodeBytesGroupImpl(const unsigned char* data, unsigned char* buffer, int bits)
 {
-	int bits = 1 << bitslog2;
-	assert(bits >= 1 && bits <= 8);
-
-	// TODO: missing OOB data checks
-	(void)data_end;
-
-	if (bits == 8)
-	{
-		memcpy(buffer, data, kByteGroupSize);
-
-		return data + kByteGroupSize;
-	}
-
 	size_t byte_size = 8 / bits;
 	assert(kByteGroupSize % byte_size == 0);
 
@@ -264,6 +248,25 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, const un
 	}
 
 	return data_var;
+}
+
+static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned char* buffer, int bitslog2)
+{
+	switch (bitslog2)
+	{
+	case 0:
+		return decodeBytesGroupImpl(data, buffer, 1);
+	case 1:
+		return decodeBytesGroupImpl(data, buffer, 2);
+	case 2:
+		return decodeBytesGroupImpl(data, buffer, 4);
+	case 3:
+		memcpy(buffer, data, kByteGroupSize);
+		return data + kByteGroupSize;
+	default:
+		assert(!"Unexpected bit length"); // This can never happen since bitslog2 is a 2-bit value
+		return data;
+	}
 }
 #endif
 
@@ -356,7 +359,8 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 
 			int bitslog2 = (header[header_offset / 4] >> ((header_offset % 4) * 2)) & 3;
 
-			data = decodeBytesGroup(data, data_end, buffer + i, bitslog2);
+			// TODO: OOB check; decodeBytesGroup can statically read at most 8+16=24 bytes
+			data = decodeBytesGroup(data, buffer + i, bitslog2);
 			if (!data)
 				return 0;
 		}
