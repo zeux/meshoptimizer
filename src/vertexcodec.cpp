@@ -746,6 +746,12 @@ static size_t decodeVertexPrediction(DecodePredictionState& state, unsigned int*
 	if (buffer_size < index_count / 3 + 16)
 		return 0;
 
+	size_t edgefifooffset = state.edgefifooffset;
+	size_t vertexfifooffset = state.vertexfifooffset;
+
+	unsigned int next = state.next;
+	unsigned int last = state.last;
+
 	// since we store 16-byte codeaux table at the end, triangle data has to begin before data_safe_end
 	const unsigned char* code = buffer + state.code_offset;
 	const unsigned char* data = buffer + index_count / 3 + state.data_offset;
@@ -774,17 +780,17 @@ static size_t decodeVertexPrediction(DecodePredictionState& state, unsigned int*
 		if (fe < 15)
 		{
 			// fifo reads are wrapped around 16 entry buffer
-			unsigned int a = state.edgefifo[(state.edgefifooffset - 1 - fe) & 15][0];
-			unsigned int b = state.edgefifo[(state.edgefifooffset - 1 - fe) & 15][1];
-			unsigned int co = state.edgefifo[(state.edgefifooffset - 1 - fe) & 15][2];
+			unsigned int a = state.edgefifo[(edgefifooffset - 1 - fe) & 15][0];
+			unsigned int b = state.edgefifo[(edgefifooffset - 1 - fe) & 15][1];
+			unsigned int co = state.edgefifo[(edgefifooffset - 1 - fe) & 15][2];
 
 			int fec = codetri & 15;
 
-			unsigned int c = (fec == 0) ? state.next++ : state.vertexfifo[(state.vertexfifooffset - 1 - fec) & 15];
+			unsigned int c = (fec == 0) ? next++ : state.vertexfifo[(vertexfifooffset - 1 - fec) & 15];
 
 			// note that we need to update the last index since free indices are delta-encoded
 			if (fec == 15)
-				state.last = c = decodeIndex(data, state.next, state.last);
+				last = c = decodeIndex(data, next, last);
 
 			// output prediction data
 			if (fec == 0)
@@ -800,10 +806,10 @@ static size_t decodeVertexPrediction(DecodePredictionState& state, unsigned int*
 
 			// push vertex/edge fifo must match the encoding step *exactly* otherwise the data will not be decoded correctly
 			if (fec == 0 || fec == 15)
-				pushVertexFifo(state.vertexfifo, c, state.vertexfifooffset);
+				pushVertexFifo(state.vertexfifo, c, vertexfifooffset);
 
-			pushEdgeFifo(state.edgefifo, c, b, a, state.edgefifooffset);
-			pushEdgeFifo(state.edgefifo, a, c, b, state.edgefifooffset);
+			pushEdgeFifo(state.edgefifo, c, b, a, edgefifooffset);
+			pushEdgeFifo(state.edgefifo, a, c, b, edgefifooffset);
 		}
 		else
 		{
@@ -817,19 +823,19 @@ static size_t decodeVertexPrediction(DecodePredictionState& state, unsigned int*
 
 			// fifo reads are wrapped around 16 entry buffer
 			// also note that we increment next for all three vertices before decoding indices - this matches encoder behavior
-			unsigned int a = (fea == 0) ? state.next++ : 0;
-			unsigned int b = (feb == 0) ? state.next++ : state.vertexfifo[(state.vertexfifooffset - feb) & 15];
-			unsigned int c = (fec == 0) ? state.next++ : state.vertexfifo[(state.vertexfifooffset - fec) & 15];
+			unsigned int a = (fea == 0) ? next++ : 0;
+			unsigned int b = (feb == 0) ? next++ : state.vertexfifo[(vertexfifooffset - feb) & 15];
+			unsigned int c = (fec == 0) ? next++ : state.vertexfifo[(vertexfifooffset - fec) & 15];
 
 			// note that we need to update the last index since free indices are delta-encoded
 			if (fea == 15)
-				state.last = a = decodeIndex(data, state.next, state.last);
+				last = a = decodeIndex(data, next, last);
 
 			if (feb == 15)
-				state.last = b = decodeIndex(data, state.next, state.last);
+				last = b = decodeIndex(data, next, last);
 
 			if (fec == 15)
-				state.last = c = decodeIndex(data, state.next, state.last);
+				last = c = decodeIndex(data, next, last);
 
 			// output prediction data
 			if (fea == 0)
@@ -843,17 +849,17 @@ static size_t decodeVertexPrediction(DecodePredictionState& state, unsigned int*
 
 			// push vertex/edge fifo must match the encoding step *exactly* otherwise the data will not be decoded correctly
 			if (fea == 0 || fea == 15)
-				pushVertexFifo(state.vertexfifo, a, state.vertexfifooffset);
+				pushVertexFifo(state.vertexfifo, a, vertexfifooffset);
 
 			if (feb == 0 || feb == 15)
-				pushVertexFifo(state.vertexfifo, b, state.vertexfifooffset);
+				pushVertexFifo(state.vertexfifo, b, vertexfifooffset);
 
 			if (fec == 0 || fec == 15)
-				pushVertexFifo(state.vertexfifo, c, state.vertexfifooffset);
+				pushVertexFifo(state.vertexfifo, c, vertexfifooffset);
 
-			pushEdgeFifo(state.edgefifo, b, a, c, state.edgefifooffset);
-			pushEdgeFifo(state.edgefifo, c, b, a, state.edgefifooffset);
-			pushEdgeFifo(state.edgefifo, a, c, b, state.edgefifooffset);
+			pushEdgeFifo(state.edgefifo, b, a, c, edgefifooffset);
+			pushEdgeFifo(state.edgefifo, c, b, a, edgefifooffset);
+			pushEdgeFifo(state.edgefifo, a, c, b, edgefifooffset);
 		}
 	}
 
@@ -864,6 +870,12 @@ static size_t decodeVertexPrediction(DecodePredictionState& state, unsigned int*
 	state.code_offset = code - buffer;
 	state.data_offset = data - buffer - index_count / 3;
 	state.index_offset = i;
+
+	state.edgefifooffset = edgefifooffset;
+	state.vertexfifooffset = vertexfifooffset;
+
+	state.next = next;
+	state.last = last;
 
 	return result_offset;
 }
