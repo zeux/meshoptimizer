@@ -259,11 +259,11 @@ static __m128i decodeShuffleMask(unsigned char mask0, unsigned char mask1)
 {
 	__m128i sm0 = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(&kDecodeBytesGroupShuffle[mask0]));
 	__m128i sm1 = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(&kDecodeBytesGroupShuffle[mask1]));
+	__m128i sm1off = _mm_set1_epi8(kDecodeBytesGroupCount[mask0]);
 
-	unsigned char cnt0 = kDecodeBytesGroupCount[mask0];
-	__m128i sm1off = _mm_add_epi8(sm1, _mm_set1_epi8(cnt0));
+	__m128i sm1r = _mm_add_epi8(sm1, sm1off);
 
-	return _mm_or_si128(sm0, _mm_slli_si128(sm1off, 8));
+	return _mm_unpacklo_epi64(sm0, sm1r);
 }
 
 static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned char* buffer, int bitslog2)
@@ -425,7 +425,21 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 
 		data += header_size;
 
-		for (size_t i = 0; i < buffer_size; i += kByteGroupSize)
+		size_t i = 0;
+
+		for (; i + kByteGroupSize * 4 <= buffer_size; i += kByteGroupSize * 4)
+		{
+			size_t header_offset = i / kByteGroupSize;
+			unsigned char header_byte = header[header_offset / 4];
+
+			// TODO: OOB check; decodeBytesGroup can statically read at most 8+16=24 bytes
+			data = decodeBytesGroup(data, buffer + i + kByteGroupSize * 0, (header_byte >> 0) & 3);
+			data = decodeBytesGroup(data, buffer + i + kByteGroupSize * 1, (header_byte >> 2) & 3);
+			data = decodeBytesGroup(data, buffer + i + kByteGroupSize * 2, (header_byte >> 4) & 3);
+			data = decodeBytesGroup(data, buffer + i + kByteGroupSize * 3, (header_byte >> 6) & 3);
+		}
+
+		for (; i < buffer_size; i += kByteGroupSize)
 		{
 			size_t header_offset = i / kByteGroupSize;
 
@@ -522,45 +536,47 @@ __m128i unzigzag8(__m128i v)
 	return _mm_xor_si128(xl, xr);
 }
 
+static void transposeVertexBlock16(unsigned char* transposed, const unsigned char* buffer, size_t vertex_count_aligned, size_t vertex_size_16, const unsigned char* last_vertex)
+{
+	__m128i pi = _mm_loadu_si128(reinterpret_cast<const __m128i*>(last_vertex));
+
+	for (size_t j = 0; j < vertex_count_aligned; j += 16)
+	{
+#define LOAD(i) __m128i r##i = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + i * vertex_count_aligned))
+#define FIXD(i) r##i = pi = _mm_add_epi8(pi, unzigzag8(r##i))
+#define SAVE(i) _mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + i) * vertex_size_16), r##i)
+
+		LOAD(0); LOAD(1); LOAD(2); LOAD(3); LOAD(4); LOAD(5); LOAD(6); LOAD(7); LOAD(8); LOAD(9); LOAD(10); LOAD(11); LOAD(12); LOAD(13); LOAD(14); LOAD(15);
+
+		transpose_16x16(r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15);
+		FIXD(0); FIXD(1); FIXD(2); FIXD(3); FIXD(4); FIXD(5); FIXD(6); FIXD(7); FIXD(8); FIXD(9); FIXD(10); FIXD(11); FIXD(12); FIXD(13); FIXD(14); FIXD(15);
+
+		SAVE(0); SAVE(1); SAVE(2); SAVE(3); SAVE(4); SAVE(5); SAVE(6); SAVE(7); SAVE(8); SAVE(9); SAVE(10); SAVE(11); SAVE(12); SAVE(13); SAVE(14); SAVE(15);
+
+#undef LOAD
+#undef FIXD
+#undef SAVE
+	}
+}
+
 static void transposeVertexBlock16(unsigned char* transposed, const unsigned char* buffer, size_t vertex_count_aligned, size_t vertex_size_16)
 {
 	for (size_t j = 0; j < vertex_count_aligned; j += 16)
 	{
-		__m128i r0 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 0 * vertex_count_aligned));
-		__m128i r1 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 1 * vertex_count_aligned));
-		__m128i r2 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 2 * vertex_count_aligned));
-		__m128i r3 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 3 * vertex_count_aligned));
-		__m128i r4 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 4 * vertex_count_aligned));
-		__m128i r5 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 5 * vertex_count_aligned));
-		__m128i r6 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 6 * vertex_count_aligned));
-		__m128i r7 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 7 * vertex_count_aligned));
-		__m128i r8 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 8 * vertex_count_aligned));
-		__m128i r9 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 9 * vertex_count_aligned));
-		__m128i r10 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 10 * vertex_count_aligned));
-		__m128i r11 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 11 * vertex_count_aligned));
-		__m128i r12 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 12 * vertex_count_aligned));
-		__m128i r13 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 13 * vertex_count_aligned));
-		__m128i r14 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 14 * vertex_count_aligned));
-		__m128i r15 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + 15 * vertex_count_aligned));
+#define LOAD(i) __m128i r##i = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + i * vertex_count_aligned))
+#define FIXD(i) r##i = unzigzag8(r##i)
+#define SAVE(i) _mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + i) * vertex_size_16), r##i)
+
+		LOAD(0); LOAD(1); LOAD(2); LOAD(3); LOAD(4); LOAD(5); LOAD(6); LOAD(7); LOAD(8); LOAD(9); LOAD(10); LOAD(11); LOAD(12); LOAD(13); LOAD(14); LOAD(15);
 
 		transpose_16x16(r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15);
+		FIXD(0); FIXD(1); FIXD(2); FIXD(3); FIXD(4); FIXD(5); FIXD(6); FIXD(7); FIXD(8); FIXD(9); FIXD(10); FIXD(11); FIXD(12); FIXD(13); FIXD(14); FIXD(15);
 
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + 0) * vertex_size_16), r0);
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + 1) * vertex_size_16), r1);
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + 2) * vertex_size_16), r2);
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + 3) * vertex_size_16), r3);
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + 4) * vertex_size_16), r4);
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + 5) * vertex_size_16), r5);
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + 6) * vertex_size_16), r6);
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + 7) * vertex_size_16), r7);
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + 8) * vertex_size_16), r8);
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + 9) * vertex_size_16), r9);
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + 10) * vertex_size_16), r10);
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + 11) * vertex_size_16), r11);
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + 12) * vertex_size_16), r12);
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + 13) * vertex_size_16), r13);
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + 14) * vertex_size_16), r14);
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + 15) * vertex_size_16), r15);
+		SAVE(0); SAVE(1); SAVE(2); SAVE(3); SAVE(4); SAVE(5); SAVE(6); SAVE(7); SAVE(8); SAVE(9); SAVE(10); SAVE(11); SAVE(12); SAVE(13); SAVE(14); SAVE(15);
+
+#undef LOAD
+#undef FIXD
+#undef SAVE
 	}
 }
 
@@ -585,36 +601,46 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 				return 0;
 		}
 
-		transposeVertexBlock16(transposed + k, buffer, vertex_count_aligned, vertex_size_16);
-
-		__m128i pi = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&last_vertex[k]));
-
-		for (size_t i = 0; i < vertex_count; ++i)
+		if (prediction)
 		{
-			__m128i p = pi;
+			transposeVertexBlock16(transposed + k, buffer, vertex_count_aligned, vertex_size_16);
 
-			if (prediction && prediction[i])
+			__m128i pi = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&last_vertex[k]));
+
+			for (size_t i = 0; i < vertex_count; ++i)
 			{
-				unsigned int pa = (prediction[i] >> 16) & 0xff;
-				unsigned int pb = (prediction[i] >> 8) & 0xff;
-				unsigned int pc = (prediction[i] >> 0) & 0xff;
-				assert(pa > 0 && pb > 0 && pc > 0);
+				__m128i p = pi;
 
-				if (pa <= i && pb <= i && pc <= i)
+				if (prediction[i])
 				{
-					__m128i va = _mm_loadu_si128(reinterpret_cast<__m128i*>(&transposed[k + (i - pa) * vertex_size_16]));
-					__m128i vb = _mm_loadu_si128(reinterpret_cast<__m128i*>(&transposed[k + (i - pb) * vertex_size_16]));
-					__m128i vc = _mm_loadu_si128(reinterpret_cast<__m128i*>(&transposed[k + (i - pc) * vertex_size_16]));
+					unsigned int pa = (prediction[i] >> 16) & 0xff;
+					unsigned int pb = (prediction[i] >> 8) & 0xff;
+					unsigned int pc = (prediction[i] >> 0) & 0xff;
 
-					p = _mm_sub_epi8(_mm_add_epi8(va, vb), vc);
+					size_t ipa = i - pa;
+					size_t ipb = i - pb;
+					size_t ipc = i - pc;
+
+					if (ptrdiff_t(ipa | ipb | ipc) >= 0)
+					{
+						__m128i va = _mm_loadu_si128(reinterpret_cast<__m128i*>(&transposed[k + ipa * vertex_size_16]));
+						__m128i vb = _mm_loadu_si128(reinterpret_cast<__m128i*>(&transposed[k + ipb * vertex_size_16]));
+						__m128i vc = _mm_loadu_si128(reinterpret_cast<__m128i*>(&transposed[k + ipc * vertex_size_16]));
+
+						p = _mm_sub_epi8(_mm_add_epi8(va, vb), vc);
+					}
 				}
+
+				__m128i v = _mm_add_epi8(_mm_loadu_si128(reinterpret_cast<__m128i*>(&transposed[k + i * vertex_size_16])), p);
+
+				_mm_storeu_si128(reinterpret_cast<__m128i*>(&transposed[k + i * vertex_size_16]), v);
+
+				pi = v;
 			}
-
-			__m128i v = _mm_add_epi8(unzigzag8(_mm_loadu_si128(reinterpret_cast<__m128i*>(&transposed[k + i * vertex_size_16]))), p);
-
-			_mm_storeu_si128(reinterpret_cast<__m128i*>(&transposed[k + i * vertex_size_16]), v);
-
-			pi = v;
+		}
+		else
+		{
+			transposeVertexBlock16(transposed + k, buffer, vertex_count_aligned, vertex_size_16, &last_vertex[k]);
 		}
 	}
 
