@@ -21,6 +21,18 @@ const size_t kVertexBlockSizeBytes = 8192;
 const size_t kVertexBlockMaxSize = 256;
 const size_t kByteGroupSize = 16;
 
+size_t getVertexBlockSize(size_t vertex_size)
+{
+	// make sure the entire block fits into the scratch buffer
+	size_t result = kVertexBlockSizeBytes / vertex_size;
+
+	// align to byte group size; we encode each byte as a byte group
+	// if vertex block is misaligned, it results in wasted bytes, so just truncate the block size
+	result &= ~(kByteGroupSize - 1);
+
+	return (result < kVertexBlockMaxSize) ? result : kVertexBlockMaxSize;
+}
+
 inline unsigned char zigzag8(unsigned char v)
 {
 	return (v >> 7) | ((v ^ -(v >> 7)) << 1);
@@ -95,6 +107,115 @@ static unsigned char* encodeBytesGroup(unsigned char* data, const unsigned char*
 		{
 			*data++ = buffer[i];
 		}
+	}
+
+	return data;
+}
+
+static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buffer, size_t buffer_size)
+{
+	assert(buffer_size % kByteGroupSize == 0);
+
+	if (encodeBytesFits(buffer, buffer_size, 0))
+	{
+		*data++ = 0;
+
+		return data;
+	}
+	else
+	{
+		*data++ = 1;
+
+		unsigned char* header = data;
+
+		// round number of groups to 4 to get number of header bytes
+		size_t header_size = (buffer_size / kByteGroupSize + 3) / 4;
+
+		data += header_size;
+
+		memset(header, 0, header_size);
+
+		for (size_t i = 0; i < buffer_size; i += kByteGroupSize)
+		{
+			int best_bits = 8;
+			size_t best_size = kByteGroupSize; // assume encodeBytesVar(8) just stores as is
+
+			for (int bits = 1; bits < 8; bits *= 2)
+			{
+				size_t size = encodeBytesGroupMeasure(buffer + i, bits);
+
+				if (size < best_size)
+				{
+					best_bits = bits;
+					best_size = size;
+				}
+			}
+
+			int bitslog2 = (best_bits == 1) ? 0 : (best_bits == 2) ? 1 : (best_bits == 4) ? 2 : 3;
+			assert((1 << bitslog2) == best_bits);
+
+			size_t header_offset = i / kByteGroupSize;
+
+			header[header_offset / 4] |= bitslog2 << ((header_offset % 4) * 2);
+
+			unsigned char* next = encodeBytesGroup(data, buffer + i, best_bits);
+
+			assert(data + best_size == next);
+			data = next;
+		}
+
+		return data;
+	}
+}
+
+static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction, unsigned char last_vertex[256])
+{
+	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
+
+	unsigned char buffer[kVertexBlockMaxSize];
+	assert(sizeof(buffer) % kByteGroupSize == 0);
+
+	// we sometimes encode elements we didn't fill when rounding to kByteGroupSize
+	memset(buffer, 0, sizeof(buffer));
+
+	for (size_t k = 0; k < vertex_size; ++k)
+	{
+		size_t vertex_offset = k;
+
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			unsigned char p = (i == 0) ? last_vertex[k] : vertex_data[vertex_offset - vertex_size];
+
+			if (prediction && prediction[i])
+			{
+				unsigned int pa = (prediction[i] >> 16) & 0xff;
+				unsigned int pb = (prediction[i] >> 8) & 0xff;
+				unsigned int pc = (prediction[i] >> 0) & 0xff;
+				assert(pa > 0 && pb > 0 && pc > 0);
+
+				if (pa <= i && pb <= i && pc <= i)
+				{
+					unsigned char va = vertex_data[vertex_offset - pa * vertex_size];
+					unsigned char vb = vertex_data[vertex_offset - pb * vertex_size];
+					unsigned char vc = vertex_data[vertex_offset - pc * vertex_size];
+
+					p = va + vb - vc;
+				}
+			}
+
+			unsigned char delta = zigzag8(vertex_data[vertex_offset] - p);
+
+			buffer[i] = delta;
+
+			vertex_offset += vertex_size;
+		}
+
+		data = encodeBytes(data, buffer, (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1));
+	}
+
+	for (size_t k = 0; k < vertex_size; ++k)
+	{
+		last_vertex[k] = vertex_data[vertex_size * (vertex_count - 1) + k];
 	}
 
 	return data;
@@ -274,62 +395,6 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 }
 #endif
 
-static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buffer, size_t buffer_size)
-{
-	assert(buffer_size % kByteGroupSize == 0);
-
-	if (encodeBytesFits(buffer, buffer_size, 0))
-	{
-		*data++ = 0;
-
-		return data;
-	}
-	else
-	{
-		*data++ = 1;
-
-		unsigned char* header = data;
-
-		// round number of groups to 4 to get number of header bytes
-		size_t header_size = (buffer_size / kByteGroupSize + 3) / 4;
-
-		data += header_size;
-
-		memset(header, 0, header_size);
-
-		for (size_t i = 0; i < buffer_size; i += kByteGroupSize)
-		{
-			int best_bits = 8;
-			size_t best_size = kByteGroupSize; // assume encodeBytesVar(8) just stores as is
-
-			for (int bits = 1; bits < 8; bits *= 2)
-			{
-				size_t size = encodeBytesGroupMeasure(buffer + i, bits);
-
-				if (size < best_size)
-				{
-					best_bits = bits;
-					best_size = size;
-				}
-			}
-
-			int bitslog2 = (best_bits == 1) ? 0 : (best_bits == 2) ? 1 : (best_bits == 4) ? 2 : 3;
-			assert((1 << bitslog2) == best_bits);
-
-			size_t header_offset = i / kByteGroupSize;
-
-			header[header_offset / 4] |= bitslog2 << ((header_offset % 4) * 2);
-
-			unsigned char* next = encodeBytesGroup(data, buffer + i, best_bits);
-
-			assert(data + best_size == next);
-			data = next;
-		}
-
-		return data;
-	}
-}
-
 static const unsigned char* decodeBytes(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size)
 {
 	assert(buffer_size % kByteGroupSize == 0);
@@ -376,71 +441,6 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 		// TODO: malformed data, we might want to return a different error code upstream?
 		return 0;
 	}
-}
-
-size_t getVertexBlockSize(size_t vertex_size)
-{
-	// make sure the entire block fits into the scratch buffer
-	size_t result = kVertexBlockSizeBytes / vertex_size;
-
-	// align to byte group size; we encode each byte as a byte group
-	// if vertex block is misaligned, it results in wasted bytes, so just truncate the block size
-	result &= ~(kByteGroupSize - 1);
-
-	return (result < kVertexBlockMaxSize) ? result : kVertexBlockMaxSize;
-}
-
-static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction, unsigned char last_vertex[256])
-{
-	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
-
-	unsigned char buffer[kVertexBlockMaxSize];
-	assert(sizeof(buffer) % kByteGroupSize == 0);
-
-	// we sometimes encode elements we didn't fill when rounding to kByteGroupSize
-	memset(buffer, 0, sizeof(buffer));
-
-	for (size_t k = 0; k < vertex_size; ++k)
-	{
-		size_t vertex_offset = k;
-
-		for (size_t i = 0; i < vertex_count; ++i)
-		{
-			unsigned char p = (i == 0) ? last_vertex[k] : vertex_data[vertex_offset - vertex_size];
-
-			if (prediction && prediction[i])
-			{
-				unsigned int pa = (prediction[i] >> 16) & 0xff;
-				unsigned int pb = (prediction[i] >> 8) & 0xff;
-				unsigned int pc = (prediction[i] >> 0) & 0xff;
-				assert(pa > 0 && pb > 0 && pc > 0);
-
-				if (pa <= i && pb <= i && pc <= i)
-				{
-					unsigned char va = vertex_data[vertex_offset - pa * vertex_size];
-					unsigned char vb = vertex_data[vertex_offset - pb * vertex_size];
-					unsigned char vc = vertex_data[vertex_offset - pc * vertex_size];
-
-					p = va + vb - vc;
-				}
-			}
-
-			unsigned char delta = zigzag8(vertex_data[vertex_offset] - p);
-
-			buffer[i] = delta;
-
-			vertex_offset += vertex_size;
-		}
-
-		data = encodeBytes(data, buffer, (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1));
-	}
-
-	for (size_t k = 0; k < vertex_size; ++k)
-	{
-		last_vertex[k] = vertex_data[vertex_size * (vertex_count - 1) + k];
-	}
-
-	return data;
 }
 
 #if SIMD
