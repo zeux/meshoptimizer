@@ -223,7 +223,8 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 	}
 }
 #else
-static const unsigned char* decodeBytesGroupImpl(const unsigned char* data, unsigned char* buffer, int bits)
+template <int bits>
+static const unsigned char* decodeBytesGroupImpl(const unsigned char* data, unsigned char* buffer)
 {
 	size_t byte_size = 8 / bits;
 	assert(kByteGroupSize % byte_size == 0);
@@ -243,7 +244,10 @@ static const unsigned char* decodeBytesGroupImpl(const unsigned char* data, unsi
 			unsigned char enc = byte >> (8 - bits);
 			byte <<= bits;
 
-			buffer[i + k] = (enc == sentinel) ? *data_var++ : enc;
+			unsigned char encv = *data_var;
+
+			buffer[i + k] = (enc == sentinel) ? encv : enc;
+			data_var += enc == sentinel;
 		}
 	}
 
@@ -255,11 +259,11 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 	switch (bitslog2)
 	{
 	case 0:
-		return decodeBytesGroupImpl(data, buffer, 1);
+		return decodeBytesGroupImpl<1>(data, buffer);
 	case 1:
-		return decodeBytesGroupImpl(data, buffer, 2);
+		return decodeBytesGroupImpl<2>(data, buffer);
 	case 2:
-		return decodeBytesGroupImpl(data, buffer, 4);
+		return decodeBytesGroupImpl<4>(data, buffer);
 	case 3:
 		memcpy(buffer, data, kByteGroupSize);
 		return data + kByteGroupSize;
