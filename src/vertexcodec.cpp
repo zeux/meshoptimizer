@@ -201,6 +201,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 }
 
 #if SIMD
+// clang-format off
 #define Z 128
 static const unsigned char kDecodeBytesGroupShuffle[256][8] = {
 	{Z,Z,Z,Z,Z,Z,Z,Z,},{Z,Z,Z,Z,Z,Z,Z,0,},{Z,Z,Z,Z,Z,Z,0,Z,},{Z,Z,Z,Z,Z,Z,0,1,},{Z,Z,Z,Z,Z,0,Z,Z,},{Z,Z,Z,Z,Z,0,Z,1,},{Z,Z,Z,Z,Z,0,1,Z,},{Z,Z,Z,Z,Z,0,1,2,},
@@ -244,6 +245,7 @@ static const unsigned char kDecodeBytesGroupCount[256] = {
 	1,2,2,3,2,3,3,4,2,3,3,4,3,4,4,5,2,3,3,4,3,4,4,5,3,4,4,5,4,5,5,6,2,3,3,4,3,4,4,5,3,4,4,5,4,5,5,6,3,4,4,5,4,5,5,6,4,5,5,6,5,6,6,7,
 	2,3,3,4,3,4,4,5,3,4,4,5,4,5,5,6,3,4,4,5,4,5,5,6,4,5,5,6,5,6,6,7,3,4,4,5,4,5,5,6,4,5,5,6,5,6,6,7,4,5,5,6,5,6,6,7,5,6,6,7,6,7,7,8,
 };
+// clang-format on
 
 static __m128i decodeShuffleMask(unsigned char mask0, unsigned char mask1)
 {
@@ -537,12 +539,13 @@ static void transposeVertexBlock16(unsigned char* transposed, const unsigned cha
 #define FIXD(i) r##i = pi = _mm_add_epi8(pi, unzigzag8(r##i))
 #define SAVE(i) _mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + i) * vertex_size_16), r##i)
 
-		LOAD(0); LOAD(1); LOAD(2); LOAD(3); LOAD(4); LOAD(5); LOAD(6); LOAD(7); LOAD(8); LOAD(9); LOAD(10); LOAD(11); LOAD(12); LOAD(13); LOAD(14); LOAD(15);
+		LOAD(0), LOAD(1), LOAD(2), LOAD(3), LOAD(4), LOAD(5), LOAD(6), LOAD(7), LOAD(8), LOAD(9), LOAD(10), LOAD(11), LOAD(12), LOAD(13), LOAD(14), LOAD(15);
 
 		transpose_16x16(r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15);
-		FIXD(0); FIXD(1); FIXD(2); FIXD(3); FIXD(4); FIXD(5); FIXD(6); FIXD(7); FIXD(8); FIXD(9); FIXD(10); FIXD(11); FIXD(12); FIXD(13); FIXD(14); FIXD(15);
 
-		SAVE(0); SAVE(1); SAVE(2); SAVE(3); SAVE(4); SAVE(5); SAVE(6); SAVE(7); SAVE(8); SAVE(9); SAVE(10); SAVE(11); SAVE(12); SAVE(13); SAVE(14); SAVE(15);
+		FIXD(0), FIXD(1), FIXD(2), FIXD(3), FIXD(4), FIXD(5), FIXD(6), FIXD(7), FIXD(8), FIXD(9), FIXD(10), FIXD(11), FIXD(12), FIXD(13), FIXD(14), FIXD(15);
+
+		SAVE(0), SAVE(1), SAVE(2), SAVE(3), SAVE(4), SAVE(5), SAVE(6), SAVE(7), SAVE(8), SAVE(9), SAVE(10), SAVE(11), SAVE(12), SAVE(13), SAVE(14), SAVE(15);
 
 #undef LOAD
 #undef FIXD
