@@ -4,16 +4,12 @@
 #include <assert.h>
 #include <string.h>
 
-#include <stdio.h>
-
 #define SIMD 0
 
 #if SIMD
 #include <tmmintrin.h>
 #endif
 
-// This work is based on:
-// TODO: references
 namespace meshopt
 {
 
@@ -171,7 +167,7 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 	}
 }
 
-static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction, unsigned char last_vertex[256])
+static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 
@@ -185,30 +181,13 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 	{
 		size_t vertex_offset = k;
 
+		unsigned char p = last_vertex[k];
+
 		for (size_t i = 0; i < vertex_count; ++i)
 		{
-			unsigned char p = (i == 0) ? last_vertex[k] : vertex_data[vertex_offset - vertex_size];
+			buffer[i] = zigzag8(vertex_data[vertex_offset] - p);
 
-			if (prediction && prediction[i])
-			{
-				unsigned int pa = (prediction[i] >> 16) & 0xff;
-				unsigned int pb = (prediction[i] >> 8) & 0xff;
-				unsigned int pc = (prediction[i] >> 0) & 0xff;
-				assert(pa > 0 && pb > 0 && pc > 0);
-
-				if (pa <= i && pb <= i && pc <= i)
-				{
-					unsigned char va = vertex_data[vertex_offset - pa * vertex_size];
-					unsigned char vb = vertex_data[vertex_offset - pb * vertex_size];
-					unsigned char vc = vertex_data[vertex_offset - pc * vertex_size];
-
-					p = va + vb - vc;
-				}
-			}
-
-			unsigned char delta = zigzag8(vertex_data[vertex_offset] - p);
-
-			buffer[i] = delta;
+			p = vertex_data[vertex_offset];
 
 			vertex_offset += vertex_size;
 		}
@@ -216,10 +195,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 		data = encodeBytes(data, buffer, (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1));
 	}
 
-	for (size_t k = 0; k < vertex_size; ++k)
-	{
-		last_vertex[k] = vertex_data[vertex_size * (vertex_count - 1) + k];
-	}
+	memcpy(last_vertex, &vertex_data[vertex_size * (vertex_count - 1)], vertex_size);
 
 	return data;
 }
@@ -559,28 +535,7 @@ static void transposeVertexBlock16(unsigned char* transposed, const unsigned cha
 	}
 }
 
-static void transposeVertexBlock16(unsigned char* transposed, const unsigned char* buffer, size_t vertex_count_aligned, size_t vertex_size_16)
-{
-	for (size_t j = 0; j < vertex_count_aligned; j += 16)
-	{
-#define LOAD(i) __m128i r##i = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + i * vertex_count_aligned))
-#define FIXD(i) r##i = unzigzag8(r##i)
-#define SAVE(i) _mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + i) * vertex_size_16), r##i)
-
-		LOAD(0); LOAD(1); LOAD(2); LOAD(3); LOAD(4); LOAD(5); LOAD(6); LOAD(7); LOAD(8); LOAD(9); LOAD(10); LOAD(11); LOAD(12); LOAD(13); LOAD(14); LOAD(15);
-
-		transpose_16x16(r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15);
-		FIXD(0); FIXD(1); FIXD(2); FIXD(3); FIXD(4); FIXD(5); FIXD(6); FIXD(7); FIXD(8); FIXD(9); FIXD(10); FIXD(11); FIXD(12); FIXD(13); FIXD(14); FIXD(15);
-
-		SAVE(0); SAVE(1); SAVE(2); SAVE(3); SAVE(4); SAVE(5); SAVE(6); SAVE(7); SAVE(8); SAVE(9); SAVE(10); SAVE(11); SAVE(12); SAVE(13); SAVE(14); SAVE(15);
-
-#undef LOAD
-#undef FIXD
-#undef SAVE
-	}
-}
-
-static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction, unsigned char last_vertex[256])
+static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 
@@ -601,47 +556,7 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 				return 0;
 		}
 
-		if (prediction)
-		{
-			transposeVertexBlock16(transposed + k, buffer, vertex_count_aligned, vertex_size_16);
-
-			__m128i pi = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&last_vertex[k]));
-
-			for (size_t i = 0; i < vertex_count; ++i)
-			{
-				__m128i p = pi;
-
-				if (prediction[i])
-				{
-					unsigned int pa = (prediction[i] >> 16) & 0xff;
-					unsigned int pb = (prediction[i] >> 8) & 0xff;
-					unsigned int pc = (prediction[i] >> 0) & 0xff;
-
-					size_t ipa = i - pa;
-					size_t ipb = i - pb;
-					size_t ipc = i - pc;
-
-					if (ptrdiff_t(ipa | ipb | ipc) >= 0)
-					{
-						__m128i va = _mm_loadu_si128(reinterpret_cast<__m128i*>(&transposed[k + ipa * vertex_size_16]));
-						__m128i vb = _mm_loadu_si128(reinterpret_cast<__m128i*>(&transposed[k + ipb * vertex_size_16]));
-						__m128i vc = _mm_loadu_si128(reinterpret_cast<__m128i*>(&transposed[k + ipc * vertex_size_16]));
-
-						p = _mm_sub_epi8(_mm_add_epi8(va, vb), vc);
-					}
-				}
-
-				__m128i v = _mm_add_epi8(_mm_loadu_si128(reinterpret_cast<__m128i*>(&transposed[k + i * vertex_size_16])), p);
-
-				_mm_storeu_si128(reinterpret_cast<__m128i*>(&transposed[k + i * vertex_size_16]), v);
-
-				pi = v;
-			}
-		}
-		else
-		{
-			transposeVertexBlock16(transposed + k, buffer, vertex_count_aligned, vertex_size_16, &last_vertex[k]);
-		}
+		transposeVertexBlock16(transposed + k, buffer, vertex_count_aligned, vertex_size_16, &last_vertex[k]);
 	}
 
 	if (vertex_size & 15)
@@ -664,15 +579,12 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 
 	memcpy(vertex_data, transposed, vertex_count * vertex_size);
 
-	for (size_t k = 0; k < vertex_size; ++k)
-	{
-		last_vertex[k] = transposed[vertex_size * (vertex_count - 1) + k];
-	}
+	memcpy(last_vertex, &transposed[vertex_size * (vertex_count - 1)], vertex_size);
 
 	return data;
 }
 #else
-static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned int* prediction, unsigned char last_vertex[256])
+static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 
@@ -687,265 +599,32 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 
 		size_t vertex_offset = k;
 
+		unsigned char p = last_vertex[k];
+
 		for (size_t i = 0; i < vertex_count; ++i)
 		{
-			// TODO: don't read from vertex_data
-			unsigned char p = (i == 0) ? last_vertex[k] : vertex_data[vertex_offset - vertex_size];
+			unsigned char v = unzigzag8(buffer[i]) + p;
 
-			if (prediction && prediction[i])
-			{
-				unsigned int pa = (prediction[i] >> 16) & 0xff;
-				unsigned int pb = (prediction[i] >> 8) & 0xff;
-				unsigned int pc = (prediction[i] >> 0) & 0xff;
-				assert(pa > 0 && pb > 0 && pc > 0);
-
-				if (pa <= i && pb <= i && pc <= i)
-				{
-					// TODO: don't read from vertex_data
-					unsigned char va = vertex_data[vertex_offset - pa * vertex_size];
-					unsigned char vb = vertex_data[vertex_offset - pb * vertex_size];
-					unsigned char vc = vertex_data[vertex_offset - pc * vertex_size];
-
-					p = va + vb - vc;
-				}
-			}
-
-			vertex_data[vertex_offset] = unzigzag8(buffer[i]) + p;
+			vertex_data[vertex_offset] = v;
+			p = v;
 
 			vertex_offset += vertex_size;
 		}
-	}
 
-	for (size_t k = 0; k < vertex_size; ++k)
-	{
-		// TODO: don't read from vertex_data
-		last_vertex[k] = vertex_data[vertex_size * (vertex_count - 1) + k];
+		last_vertex[k] = p;
 	}
 
 	return data;
 }
 #endif
 
-typedef unsigned int VertexFifo[16];
-typedef unsigned int EdgeFifo[16][3];
-
-static void pushEdgeFifo(EdgeFifo fifo, unsigned int a, unsigned int b, unsigned int c, size_t& offset)
-{
-	fifo[offset][0] = a;
-	fifo[offset][1] = b;
-	fifo[offset][2] = c;
-	offset = (offset + 1) & 15;
-}
-
-static void pushVertexFifo(VertexFifo fifo, unsigned int v, size_t& offset)
-{
-	fifo[offset] = v;
-	offset = (offset + 1) & 15;
-}
-
-static unsigned int decodeVByte(const unsigned char*& data)
-{
-	unsigned char lead = *data++;
-
-	// fast path: single byte
-	if (lead < 128)
-		return lead;
-
-	// slow path: up to 4 extra bytes
-	// note that this loop always terminates, which is important for malformed data
-	unsigned int result = lead & 127;
-	unsigned int shift = 7;
-
-	for (int i = 0; i < 4; ++i)
-	{
-		unsigned char group = *data++;
-		result |= (group & 127) << shift;
-		shift += 7;
-
-		if (group < 128)
-			break;
-	}
-
-	return result;
-}
-
-static unsigned int decodeIndex(const unsigned char*& data, unsigned int next, unsigned int last)
-{
-	(void)next;
-
-	unsigned int v = decodeVByte(data);
-	unsigned int d = (v >> 1) ^ -int(v & 1);
-
-	return last + d;
-}
-
-struct DecodePredictionState
-{
-	EdgeFifo edgefifo;
-	VertexFifo vertexfifo;
-	size_t edgefifooffset;
-	size_t vertexfifooffset;
-
-	unsigned int next;
-	unsigned int last;
-
-	size_t code_offset;
-	size_t data_offset;
-
-	size_t index_offset;
-};
-
-static size_t decodeVertexPrediction(DecodePredictionState& state, unsigned int* result, size_t result_size, size_t index_count, const unsigned char* buffer, size_t buffer_size)
-{
-	assert(index_count % 3 == 0);
-
-	// the minimum valid encoding is 1 byte per triangle and a 16-byte codeaux table
-	if (buffer_size < index_count / 3 + 16)
-		return 0;
-
-	size_t edgefifooffset = state.edgefifooffset;
-	size_t vertexfifooffset = state.vertexfifooffset;
-
-	unsigned int next = state.next;
-	unsigned int last = state.last;
-
-	// since we store 16-byte codeaux table at the end, triangle data has to begin before data_safe_end
-	const unsigned char* code = buffer + state.code_offset;
-	const unsigned char* data = buffer + index_count / 3 + state.data_offset;
-	const unsigned char* data_safe_end = buffer + buffer_size - 16;
-
-	const unsigned char* codeaux_table = data_safe_end;
-
-	size_t result_offset = 0;
-	size_t i = state.index_offset;
-
-	for (; i < index_count; i += 3)
-	{
-		if (result_offset + 3 > result_size)
-			break;
-
-		// make sure we have enough data to read for a triangle
-		// each triangle reads at most 16 bytes of data: 1b for codeaux and 5b for each free index
-		// after this we can be sure we can read without extra bounds checks
-		if (data > data_safe_end)
-			return 0;
-
-		unsigned char codetri = *code++;
-
-		int fe = codetri >> 4;
-
-		if (fe < 15)
-		{
-			// fifo reads are wrapped around 16 entry buffer
-			unsigned int a = state.edgefifo[(edgefifooffset - 1 - fe) & 15][0];
-			unsigned int b = state.edgefifo[(edgefifooffset - 1 - fe) & 15][1];
-			unsigned int co = state.edgefifo[(edgefifooffset - 1 - fe) & 15][2];
-
-			int fec = codetri & 15;
-
-			unsigned int c = (fec == 0) ? next++ : state.vertexfifo[(vertexfifooffset - 1 - fec) & 15];
-
-			// note that we need to update the last index since free indices are delta-encoded
-			if (fec == 15)
-				last = c = decodeIndex(data, next, last);
-
-			// output prediction data
-			if (fec == 0)
-			{
-				unsigned int na = c - a;
-				unsigned int nb = c - b;
-				unsigned int nc = c - co;
-
-				unsigned int p = (na << 16) | (nb << 8) | nc;
-
-				result[result_offset++] = (na | nb | nc) < 256 ? p : 0;
-			}
-
-			// push vertex/edge fifo must match the encoding step *exactly* otherwise the data will not be decoded correctly
-			if (fec == 0 || fec == 15)
-				pushVertexFifo(state.vertexfifo, c, vertexfifooffset);
-
-			pushEdgeFifo(state.edgefifo, c, b, a, edgefifooffset);
-			pushEdgeFifo(state.edgefifo, a, c, b, edgefifooffset);
-		}
-		else
-		{
-			// fast path: read codeaux from the table; we wrap table index so this access is memory-safe
-			// slow path: read a full byte for codeaux instead of using a table lookup
-			unsigned char codeaux = (codetri & 15) >= 14 ? *data++ : codeaux_table[codetri & 15];
-
-			int fea = (codetri & 15) == 15 ? 15 : 0;
-			int feb = codeaux >> 4;
-			int fec = codeaux & 15;
-
-			// fifo reads are wrapped around 16 entry buffer
-			// also note that we increment next for all three vertices before decoding indices - this matches encoder behavior
-			unsigned int a = (fea == 0) ? next++ : 0;
-			unsigned int b = (feb == 0) ? next++ : state.vertexfifo[(vertexfifooffset - feb) & 15];
-			unsigned int c = (fec == 0) ? next++ : state.vertexfifo[(vertexfifooffset - fec) & 15];
-
-			// note that we need to update the last index since free indices are delta-encoded
-			if (fea == 15)
-				last = a = decodeIndex(data, next, last);
-
-			if (feb == 15)
-				last = b = decodeIndex(data, next, last);
-
-			if (fec == 15)
-				last = c = decodeIndex(data, next, last);
-
-			// output prediction data
-			if (fea == 0)
-				result[result_offset++] = 0;
-
-			if (feb == 0)
-				result[result_offset++] = 0;
-
-			if (fec == 0)
-				result[result_offset++] = 0;
-
-			// push vertex/edge fifo must match the encoding step *exactly* otherwise the data will not be decoded correctly
-			if (fea == 0 || fea == 15)
-				pushVertexFifo(state.vertexfifo, a, vertexfifooffset);
-
-			if (feb == 0 || feb == 15)
-				pushVertexFifo(state.vertexfifo, b, vertexfifooffset);
-
-			if (fec == 0 || fec == 15)
-				pushVertexFifo(state.vertexfifo, c, vertexfifooffset);
-
-			pushEdgeFifo(state.edgefifo, b, a, c, edgefifooffset);
-			pushEdgeFifo(state.edgefifo, c, b, a, edgefifooffset);
-			pushEdgeFifo(state.edgefifo, a, c, b, edgefifooffset);
-		}
-	}
-
-	// we should've read all data bytes and stopped at the boundary between data and codeaux table
-	if (i == index_count && data != data_safe_end)
-		return 0;
-
-	state.code_offset = code - buffer;
-	state.data_offset = data - buffer - index_count / 3;
-	state.index_offset = i;
-
-	state.edgefifooffset = edgefifooffset;
-	state.vertexfifooffset = vertexfifooffset;
-
-	state.next = next;
-	state.last = last;
-
-	return result_offset;
-}
-
 } // namespace meshopt
 
-size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, const void* vertices, size_t vertex_count, size_t vertex_size, size_t index_count, const unsigned char* index_buffer, size_t index_buffer_size)
+size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, const void* vertices, size_t vertex_count, size_t vertex_size)
 {
 	using namespace meshopt;
 
 	assert(vertex_size > 0 && vertex_size <= 256);
-	assert(index_count % 3 == 0);
-	assert(index_buffer == 0 || index_buffer_size > 0);
 
 	const unsigned char* vertex_data = static_cast<const unsigned char*>(vertices);
 
@@ -960,44 +639,15 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 		*data++ = last_vertex[k];
 	}
 
-	size_t vertexBlockSize = getVertexBlockSize(vertex_size);
-
-	const size_t prediction_capacity = kVertexBlockMaxSize + 2;
-	unsigned int prediction[prediction_capacity];
-
-	DecodePredictionState pstate = {};
+	size_t vertex_block_size = getVertexBlockSize(vertex_size);
 
 	size_t vertex_offset = 0;
-	size_t prediction_offset = 0;
-
-	if (index_buffer)
-	{
-		for (;;)
-		{
-			size_t psize = decodeVertexPrediction(pstate, prediction + prediction_offset, prediction_capacity - prediction_offset, index_count, index_buffer, index_buffer_size);
-			if (psize == 0)
-				break;
-
-			size_t block_size = psize + prediction_offset;
-
-			if (vertex_offset + block_size > vertex_count)
-				break;
-
-			size_t block_size_clamped = (block_size > vertexBlockSize) ? vertexBlockSize : block_size;
-
-			data = encodeVertexBlock(data, vertex_data + vertex_offset * vertex_size, block_size_clamped, vertex_size, prediction, last_vertex);
-			vertex_offset += block_size_clamped;
-
-			prediction_offset = block_size - block_size_clamped;
-			memset(&prediction[0], 0, prediction_offset * sizeof(prediction[0]));
-		}
-	}
 
 	while (vertex_offset < vertex_count)
 	{
-		size_t block_size = (vertex_offset + vertexBlockSize < vertex_count) ? vertexBlockSize : vertex_count - vertex_offset;
+		size_t block_size = (vertex_offset + vertex_block_size < vertex_count) ? vertex_block_size : vertex_count - vertex_offset;
 
-		data = encodeVertexBlock(data, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, 0, last_vertex);
+		data = encodeVertexBlock(data, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, last_vertex);
 		vertex_offset += block_size;
 	}
 
@@ -1013,13 +663,11 @@ size_t meshopt_encodeVertexBufferBound(size_t vertex_count, size_t vertex_size)
 	return vertex_count * vertex_size * 2;
 }
 
-int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t vertex_size, size_t index_count, const unsigned char* buffer, size_t buffer_size, const unsigned char* index_buffer, size_t index_buffer_size)
+int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t vertex_size, const unsigned char* buffer, size_t buffer_size)
 {
 	using namespace meshopt;
 
 	assert(vertex_size > 0 && vertex_size <= 256);
-	assert(index_count % 3 == 0);
-	assert(index_buffer == 0 || index_buffer_size > 0);
 
 #if SIMD
 	decodeBytesGroupBuildTables();
@@ -1043,47 +691,15 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 		vertex_data[k] = last_vertex[k];
 	}
 
-	size_t vertexBlockSize = getVertexBlockSize(vertex_size);
-
-	const size_t prediction_capacity = kVertexBlockMaxSize + 2;
-	unsigned int prediction[prediction_capacity];
-
-	DecodePredictionState pstate = {};
+	size_t vertex_block_size = getVertexBlockSize(vertex_size);
 
 	size_t vertex_offset = 0;
-	size_t prediction_offset = 0;
-
-	if (index_buffer)
-	{
-		for (;;)
-		{
-			size_t psize = decodeVertexPrediction(pstate, prediction + prediction_offset, prediction_capacity - prediction_offset, index_count, index_buffer, index_buffer_size);
-			if (psize == 0)
-				break;
-
-			size_t block_size = psize + prediction_offset;
-
-			if (vertex_offset + block_size > vertex_count)
-				break;
-
-			size_t block_size_clamped = (block_size > vertexBlockSize) ? vertexBlockSize : block_size;
-
-			data = decodeVertexBlock(data, data_end, vertex_data + vertex_offset * vertex_size, block_size_clamped, vertex_size, prediction, last_vertex);
-			if (!data)
-				return -2;
-
-			vertex_offset += block_size_clamped;
-
-			prediction_offset = block_size - block_size_clamped;
-			memset(&prediction[0], 0, prediction_offset * sizeof(prediction[0]));
-		}
-	}
 
 	while (vertex_offset < vertex_count)
 	{
-		size_t block_size = (vertex_offset + vertexBlockSize < vertex_count) ? vertexBlockSize : vertex_count - vertex_offset;
+		size_t block_size = (vertex_offset + vertex_block_size < vertex_count) ? vertex_block_size : vertex_count - vertex_offset;
 
-		data = decodeVertexBlock(data, data_end, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, 0, last_vertex);
+		data = decodeVertexBlock(data, data_end, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, last_vertex);
 		if (!data)
 			return -2;
 

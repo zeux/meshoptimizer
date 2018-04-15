@@ -118,11 +118,10 @@ MESHOPTIMIZER_API int meshopt_decodeIndexBuffer(unsigned int* destination, size_
  * Experimental: Vertex buffer encoder
  * Encodes vertex data into an array of bytes that is generally smaller and compresses better compared to original.
  * Returns encoded data size on success, 0 on error
- * For maximum efficiency you should provide the encoded index buffer from meshopt_encodeIndexBuffer
  *
  * buffer must contain enough space for the encoded vertex buffer (use meshopt_encodeVertexBufferBound to estimate)
  */
-MESHOPTIMIZER_API size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, const void* vertices, size_t vertex_count, size_t vertex_size, size_t index_count, const unsigned char* index_buffer, size_t index_buffer_size);
+MESHOPTIMIZER_API size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, const void* vertices, size_t vertex_count, size_t vertex_size);
 MESHOPTIMIZER_API size_t meshopt_encodeVertexBufferBound(size_t vertex_count, size_t vertex_size);
 
 /**
@@ -132,7 +131,7 @@ MESHOPTIMIZER_API size_t meshopt_encodeVertexBufferBound(size_t vertex_count, si
  *
  * destination must contain enough space for the resulting vertex buffer (vertex_count * vertex_size bytes)
  */
-MESHOPTIMIZER_API int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t vertex_size, size_t index_count, const unsigned char* buffer, size_t buffer_size, const unsigned char* index_buffer, size_t index_buffer_size);
+MESHOPTIMIZER_API int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t vertex_size, const unsigned char* buffer, size_t buffer_size);
 
 /**
  * Experimental: Mesh simplifier
