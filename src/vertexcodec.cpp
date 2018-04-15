@@ -631,13 +631,7 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	unsigned char* data = buffer;
 
 	unsigned char last_vertex[256];
-
-	for (size_t k = 0; k < vertex_size; ++k)
-	{
-		last_vertex[k] = vertex_data[k];
-
-		*data++ = last_vertex[k];
-	}
+	memcpy(last_vertex, vertex_data, vertex_size);
 
 	size_t vertex_block_size = getVertexBlockSize(vertex_size);
 
@@ -650,6 +644,16 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 		data = encodeVertexBlock(data, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, last_vertex);
 		vertex_offset += block_size;
 	}
+
+	// write first vertex to the end of the stream and pad it to 32 bytes; this is important to simplify bounds checks in decoder
+	if (vertex_size < 32)
+	{
+		memset(data, 0, 32 - vertex_size);
+		data += 32 - vertex_size;
+	}
+
+	memcpy(data, vertex_data, vertex_size);
+	data += vertex_size;
 
 	assert(size_t(data - buffer) <= buffer_size);
 	(void)buffer_size;
@@ -682,14 +686,7 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 		return -1;
 
 	unsigned char last_vertex[256];
-
-	// TODO: bounds checks on data
-	for (size_t k = 0; k < vertex_size; ++k)
-	{
-		last_vertex[k] = *data++;
-
-		vertex_data[k] = last_vertex[k];
-	}
+	memcpy(last_vertex, data_end - vertex_size, vertex_size);
 
 	size_t vertex_block_size = getVertexBlockSize(vertex_size);
 
@@ -706,7 +703,9 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 		vertex_offset += block_size;
 	}
 
-	if (data != data_end)
+	size_t tail_size = vertex_size < 32 ? 32 : vertex_size;
+
+	if (size_t(data_end - data) != tail_size)
 		return -3;
 
 	return 0;
