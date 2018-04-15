@@ -420,7 +420,7 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 		size_t i = 0;
 
 		// fast-path: process 4 groups at a time, do a shared bounds check - each group reads <=32b
-		for (; i + kByteGroupSize * 4 <= buffer_size && size_t(data_end - data) <= 128; i += kByteGroupSize * 4)
+		for (; i + kByteGroupSize * 4 <= buffer_size && size_t(data_end - data) >= 128; i += kByteGroupSize * 4)
 		{
 			size_t header_offset = i / kByteGroupSize;
 			unsigned char header_byte = header[header_offset / 4];
@@ -535,11 +535,11 @@ static void transposeVertexBlock16(unsigned char* transposed, const unsigned cha
 
 	for (size_t j = 0; j < vertex_count_aligned; j += 16)
 	{
-#define LOAD(i) __m128i r##i = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + i * vertex_count_aligned))
+#define LOAD(i) r##i = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + i * vertex_count_aligned))
 #define FIXD(i) r##i = pi = _mm_add_epi8(pi, unzigzag8(r##i))
 #define SAVE(i) _mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + i) * vertex_size_16), r##i)
 
-		LOAD(0), LOAD(1), LOAD(2), LOAD(3), LOAD(4), LOAD(5), LOAD(6), LOAD(7), LOAD(8), LOAD(9), LOAD(10), LOAD(11), LOAD(12), LOAD(13), LOAD(14), LOAD(15);
+		__m128i LOAD(0), LOAD(1), LOAD(2), LOAD(3), LOAD(4), LOAD(5), LOAD(6), LOAD(7), LOAD(8), LOAD(9), LOAD(10), LOAD(11), LOAD(12), LOAD(13), LOAD(14), LOAD(15);
 
 		transpose_16x16(r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15);
 
