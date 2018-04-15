@@ -403,28 +403,29 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 
 		size_t i = 0;
 
-		for (; i + kByteGroupSize * 4 <= buffer_size; i += kByteGroupSize * 4)
+		// fast-path: process 4 groups at a time, do a shared bounds check - each group reads <=32b
+		for (; i + kByteGroupSize * 4 <= buffer_size && size_t(data_end - data) <= 128; i += kByteGroupSize * 4)
 		{
 			size_t header_offset = i / kByteGroupSize;
 			unsigned char header_byte = header[header_offset / 4];
 
-			// TODO: OOB check; decodeBytesGroup can statically read at most 8+16=24 bytes
 			data = decodeBytesGroup(data, buffer + i + kByteGroupSize * 0, (header_byte >> 0) & 3);
 			data = decodeBytesGroup(data, buffer + i + kByteGroupSize * 1, (header_byte >> 2) & 3);
 			data = decodeBytesGroup(data, buffer + i + kByteGroupSize * 2, (header_byte >> 4) & 3);
 			data = decodeBytesGroup(data, buffer + i + kByteGroupSize * 3, (header_byte >> 6) & 3);
 		}
 
+		// slow-path: process remaining groups
 		for (; i < buffer_size; i += kByteGroupSize)
 		{
+			if (size_t(data_end - data) < 32)
+				return 0;
+
 			size_t header_offset = i / kByteGroupSize;
 
 			int bitslog2 = (header[header_offset / 4] >> ((header_offset % 4) * 2)) & 3;
 
-			// TODO: OOB check; decodeBytesGroup can statically read at most 8+16=24 bytes
 			data = decodeBytesGroup(data, buffer + i, bitslog2);
-			if (!data)
-				return 0;
 		}
 
 		return data;
@@ -663,8 +664,17 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 
 size_t meshopt_encodeVertexBufferBound(size_t vertex_count, size_t vertex_size)
 {
-	// TODO: This significantly overestimates worst case, refine
-	return vertex_count * vertex_size * 2;
+	using namespace meshopt;
+
+	size_t vertex_block_size = getVertexBlockSize(vertex_size);
+	size_t vertex_block_count = (vertex_count + vertex_block_size - 1) / vertex_block_size;
+
+	size_t vertex_block_header_size = 1 + (vertex_block_size / kByteGroupSize + 3) / 4;
+	size_t vertex_block_data_size = vertex_block_size;
+
+	size_t tail_size = vertex_size < 32 ? 32 : vertex_size;
+
+	return vertex_block_count * vertex_size * (vertex_block_header_size + vertex_block_data_size) + tail_size;
 }
 
 int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t vertex_size, const unsigned char* buffer, size_t buffer_size)
