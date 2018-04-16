@@ -454,71 +454,55 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 }
 
 #if SIMD
-inline __m128i transpose_4x4(__m128i m)
+static void transpose8(__m128i& x0, __m128i& x1, __m128i& x2, __m128i& x3)
 {
-	return _mm_shuffle_epi8(m, _mm_setr_epi8(0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15));
+	__m128i t0 = _mm_unpacklo_epi8(x0, x1);
+	__m128i t1 = _mm_unpackhi_epi8(x0, x1);
+	__m128i t2 = _mm_unpacklo_epi8(x2, x3);
+	__m128i t3 = _mm_unpackhi_epi8(x2, x3);
+
+	x0 = _mm_unpacklo_epi16(t0, t2);
+	x1 = _mm_unpackhi_epi16(t0, t2);
+	x2 = _mm_unpacklo_epi16(t1, t3);
+	x3 = _mm_unpackhi_epi16(t1, t3);
 }
 
-#define combine_4_2bits(n0, n1, n2, n3) (n0 + (n1 << 2) + (n2 << 4) + (n3 << 6))
-#define _128_shuffle(x, y, n0, n1, n2, n3) _mm_shuffle_ps(x, y, combine_4_2bits(n0, n1, n2, n3))
-#define _128i_shuffle(x, y, n0, n1, n2, n3) _mm_castps_si128(_128_shuffle(_mm_castsi128_ps(x), _mm_castsi128_ps(y), n0, n1, n2, n3))
-
-inline void transpose_4x4_dwords(__m128i w0, __m128i w1,
-                                 __m128i w2, __m128i w3,
-                                 __m128i& r0, __m128i& r1,
-                                 __m128i& r2, __m128i& r3)
+static void transpose32(__m128i& x0, __m128i& x1, __m128i& x2, __m128i& x3)
 {
-	// 0  1  2  3
-	// 4  5  6  7
-	// 8  9  10 11
-	// 12 13 14 15
+	__m128i t0 = _mm_unpacklo_epi32(x0, x1);
+	__m128i t1 = _mm_unpackhi_epi32(x0, x1);
+	__m128i t2 = _mm_unpacklo_epi32(x2, x3);
+	__m128i t3 = _mm_unpackhi_epi32(x2, x3);
 
-	__m128i x0 = _128i_shuffle(w0, w1, 0, 1, 0, 1); // 0 1 4 5
-	__m128i x1 = _128i_shuffle(w0, w1, 2, 3, 2, 3); // 2 3 6 7
-	__m128i x2 = _128i_shuffle(w2, w3, 0, 1, 0, 1); // 8 9 12 13
-	__m128i x3 = _128i_shuffle(w2, w3, 2, 3, 2, 3); // 10 11 14 15
-
-	r0 = _128i_shuffle(x0, x2, 0, 2, 0, 2);
-	r1 = _128i_shuffle(x0, x2, 1, 3, 1, 3);
-	r2 = _128i_shuffle(x1, x3, 0, 2, 0, 2);
-	r3 = _128i_shuffle(x1, x3, 1, 3, 1, 3);
+	x0 = _mm_unpacklo_epi64(t0, t2);
+	x1 = _mm_unpackhi_epi64(t0, t2);
+	x2 = _mm_unpacklo_epi64(t1, t3);
+	x3 = _mm_unpackhi_epi64(t1, t3);
 }
 
-inline void transpose_16x16(
+static void transpose16x16(
     __m128i& x0, __m128i& x1, __m128i& x2, __m128i& x3,
     __m128i& x4, __m128i& x5, __m128i& x6, __m128i& x7,
     __m128i& x8, __m128i& x9, __m128i& x10, __m128i& x11,
     __m128i& x12, __m128i& x13, __m128i& x14, __m128i& x15)
 {
-	__m128i w00, w01, w02, w03;
-	__m128i w10, w11, w12, w13;
-	__m128i w20, w21, w22, w23;
-	__m128i w30, w31, w32, w33;
+	transpose8(x0, x1, x2, x3);
+	transpose8(x4, x5, x6, x7);
+	transpose8(x8, x9, x10, x11);
+	transpose8(x12, x13, x14, x15);
 
-	transpose_4x4_dwords(x0, x1, x2, x3, w00, w01, w02, w03);
-	transpose_4x4_dwords(x4, x5, x6, x7, w10, w11, w12, w13);
-	transpose_4x4_dwords(x8, x9, x10, x11, w20, w21, w22, w23);
-	transpose_4x4_dwords(x12, x13, x14, x15, w30, w31, w32, w33);
-	w00 = transpose_4x4(w00);
-	w01 = transpose_4x4(w01);
-	w02 = transpose_4x4(w02);
-	w03 = transpose_4x4(w03);
-	w10 = transpose_4x4(w10);
-	w11 = transpose_4x4(w11);
-	w12 = transpose_4x4(w12);
-	w13 = transpose_4x4(w13);
-	w20 = transpose_4x4(w20);
-	w21 = transpose_4x4(w21);
-	w22 = transpose_4x4(w22);
-	w23 = transpose_4x4(w23);
-	w30 = transpose_4x4(w30);
-	w31 = transpose_4x4(w31);
-	w32 = transpose_4x4(w32);
-	w33 = transpose_4x4(w33);
-	transpose_4x4_dwords(w00, w10, w20, w30, x0, x1, x2, x3);
-	transpose_4x4_dwords(w01, w11, w21, w31, x4, x5, x6, x7);
-	transpose_4x4_dwords(w02, w12, w22, w32, x8, x9, x10, x11);
-	transpose_4x4_dwords(w03, w13, w23, w33, x12, x13, x14, x15);
+	transpose32(x0, x4, x8, x12);
+	transpose32(x1, x5, x9, x13);
+	transpose32(x2, x6, x10, x14);
+	transpose32(x3, x7, x11, x15);
+
+	__m128i t;
+	t = x1, x1 = x4, x4 = t;
+	t = x2, x2 = x8, x8 = t;
+	t = x3, x3 = x12, x12 = t;
+	t = x6, x6 = x9, x9 = t;
+	t = x7, x7 = x13, x13 = t;
+	t = x11, x11 = x14, x14 = t;
 }
 
 __m128i unzigzag8(__m128i v)
@@ -527,30 +511,6 @@ __m128i unzigzag8(__m128i v)
 	__m128i xr = _mm_and_si128(_mm_srli_epi16(v, 1), _mm_set1_epi8(127));
 
 	return _mm_xor_si128(xl, xr);
-}
-
-static void transposeVertexBlock16(unsigned char* transposed, const unsigned char* buffer, size_t vertex_count_aligned, size_t vertex_size_16, const unsigned char* last_vertex)
-{
-	__m128i pi = _mm_loadu_si128(reinterpret_cast<const __m128i*>(last_vertex));
-
-	for (size_t j = 0; j < vertex_count_aligned; j += 16)
-	{
-#define LOAD(i) r##i = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + i * vertex_count_aligned))
-#define FIXD(i) r##i = pi = _mm_add_epi8(pi, unzigzag8(r##i))
-#define SAVE(i) _mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + i) * vertex_size_16), r##i)
-
-		__m128i LOAD(0), LOAD(1), LOAD(2), LOAD(3), LOAD(4), LOAD(5), LOAD(6), LOAD(7), LOAD(8), LOAD(9), LOAD(10), LOAD(11), LOAD(12), LOAD(13), LOAD(14), LOAD(15);
-
-		transpose_16x16(r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15);
-
-		FIXD(0), FIXD(1), FIXD(2), FIXD(3), FIXD(4), FIXD(5), FIXD(6), FIXD(7), FIXD(8), FIXD(9), FIXD(10), FIXD(11), FIXD(12), FIXD(13), FIXD(14), FIXD(15);
-
-		SAVE(0), SAVE(1), SAVE(2), SAVE(3), SAVE(4), SAVE(5), SAVE(6), SAVE(7), SAVE(8), SAVE(9), SAVE(10), SAVE(11), SAVE(12), SAVE(13), SAVE(14), SAVE(15);
-
-#undef LOAD
-#undef FIXD
-#undef SAVE
-	}
 }
 
 static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
@@ -574,7 +534,26 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 				return 0;
 		}
 
-		transposeVertexBlock16(transposed + k, buffer, vertex_count_aligned, vertex_size_16, &last_vertex[k]);
+		__m128i pi = _mm_loadu_si128(reinterpret_cast<const __m128i*>(last_vertex));
+
+		for (size_t j = 0; j < vertex_count_aligned; j += 16)
+		{
+#define LOAD(i) r##i = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + i * vertex_count_aligned))
+#define FIXD(i) r##i = pi = _mm_add_epi8(pi, unzigzag8(r##i))
+#define SAVE(i) _mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + i) * vertex_size_16), r##i)
+
+			__m128i LOAD(0), LOAD(1), LOAD(2), LOAD(3), LOAD(4), LOAD(5), LOAD(6), LOAD(7), LOAD(8), LOAD(9), LOAD(10), LOAD(11), LOAD(12), LOAD(13), LOAD(14), LOAD(15);
+
+			transpose16x16(r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15);
+
+			FIXD(0), FIXD(1), FIXD(2), FIXD(3), FIXD(4), FIXD(5), FIXD(6), FIXD(7), FIXD(8), FIXD(9), FIXD(10), FIXD(11), FIXD(12), FIXD(13), FIXD(14), FIXD(15);
+
+			SAVE(0), SAVE(1), SAVE(2), SAVE(3), SAVE(4), SAVE(5), SAVE(6), SAVE(7), SAVE(8), SAVE(9), SAVE(10), SAVE(11), SAVE(12), SAVE(13), SAVE(14), SAVE(15);
+
+#undef LOAD
+#undef FIXD
+#undef SAVE
+		}
 	}
 
 	if (vertex_size & 15)
