@@ -284,17 +284,18 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 		__m128i sel2 = _mm_cvtsi32_si128(*reinterpret_cast<const int*>(data));
 		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + 4));
 
-		__m128i sel22 = _mm_and_si128(_mm_set1_epi8(15), _mm_unpacklo_epi8(_mm_srli_epi16(sel2, 4), sel2));
-		__m128i sel2222 = _mm_and_si128(_mm_set1_epi8(3), _mm_unpacklo_epi8(_mm_srli_epi16(sel22, 2), sel22));
+		__m128i sel22 = _mm_unpacklo_epi8(_mm_srli_epi16(sel2, 4), sel2);
+		__m128i sel2222 = _mm_unpacklo_epi8(_mm_srli_epi16(sel22, 2), sel22);
+		__m128i sel = _mm_and_si128(sel2222, _mm_set1_epi8(3));
 
-		__m128i mask = _mm_cmpeq_epi8(sel2222, _mm_set1_epi8(3));
+		__m128i mask = _mm_cmpeq_epi8(sel, _mm_set1_epi8(3));
 		int mask16 = _mm_movemask_epi8(_mm_shuffle_epi8(mask, _mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)));
 		unsigned char mask0 = (unsigned char)(mask16 >> 8);
 		unsigned char mask1 = (unsigned char)(mask16 & 255);
 
 		__m128i shuf = decodeShuffleMask(mask0, mask1);
 
-		__m128i result = _mm_or_si128(_mm_shuffle_epi8(rest, shuf), _mm_andnot_si128(mask, sel2222));
+		__m128i result = _mm_or_si128(_mm_shuffle_epi8(rest, shuf), _mm_andnot_si128(mask, sel));
 
 		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
 
@@ -306,16 +307,17 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 		__m128i sel4 = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(data));
 		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + 8));
 
-		__m128i sel44 = _mm_and_si128(_mm_set1_epi8(15), _mm_unpacklo_epi8(_mm_srli_epi16(sel4, 4), sel4));
+		__m128i sel44 = _mm_unpacklo_epi8(_mm_srli_epi16(sel4, 4), sel4);
+		__m128i sel = _mm_and_si128(sel44, _mm_set1_epi8(15));
 
-		__m128i mask = _mm_cmpeq_epi8(sel44, _mm_set1_epi8(15));
+		__m128i mask = _mm_cmpeq_epi8(sel, _mm_set1_epi8(15));
 		int mask16 = _mm_movemask_epi8(_mm_shuffle_epi8(mask, _mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)));
 		unsigned char mask0 = (unsigned char)(mask16 >> 8);
 		unsigned char mask1 = (unsigned char)(mask16 & 255);
 
 		__m128i shuf = decodeShuffleMask(mask0, mask1);
 
-		__m128i result = _mm_or_si128(_mm_shuffle_epi8(rest, shuf), _mm_andnot_si128(mask, sel44));
+		__m128i result = _mm_or_si128(_mm_shuffle_epi8(rest, shuf), _mm_andnot_si128(mask, sel));
 
 		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
 
