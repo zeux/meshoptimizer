@@ -6,7 +6,7 @@
 
 #define SIMD 0
 
-#if SIMD
+#if SIMD == 1
 #include <tmmintrin.h>
 #endif
 
@@ -246,7 +246,9 @@ static const unsigned char kDecodeBytesGroupCount[256] = {
 	2,3,3,4,3,4,4,5,3,4,4,5,4,5,5,6,3,4,4,5,4,5,5,6,4,5,5,6,5,6,6,7,3,4,4,5,4,5,5,6,4,5,5,6,5,6,6,7,4,5,5,6,5,6,6,7,5,6,6,7,6,7,7,8,
 };
 // clang-format on
+#endif
 
+#if SIMD == 1
 static __m128i decodeShuffleMask(unsigned char mask0, unsigned char mask1)
 {
 	__m128i sm0 = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(&kDecodeBytesGroupShuffle[mask0]));
@@ -340,7 +342,9 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 		return data;
 	}
 }
-#else
+#endif
+
+#if SIMD == 0
 template <int bits>
 static const unsigned char* decodeBytesGroupImpl(const unsigned char* data, unsigned char* buffer)
 {
@@ -455,7 +459,7 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 	}
 }
 
-#if SIMD
+#if SIMD == 1
 static void transpose8(__m128i& x0, __m128i& x1, __m128i& x2, __m128i& x3)
 {
 	__m128i t0 = _mm_unpacklo_epi8(x0, x1);
@@ -582,7 +586,9 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 
 	return data;
 }
-#else
+#endif
+
+#if SIMD == 0
 static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
