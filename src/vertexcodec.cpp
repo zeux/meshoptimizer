@@ -536,13 +536,13 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 				return 0;
 		}
 
-		__m128i pi = _mm_loadu_si128(reinterpret_cast<const __m128i*>(last_vertex));
+		__m128i pi = _mm_loadu_si128(reinterpret_cast<const __m128i*>(last_vertex + k));
 
 		for (size_t j = 0; j < vertex_count_aligned; j += 16)
 		{
 #define LOAD(i) r##i = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + i * vertex_count_aligned))
 #define FIXD(i) r##i = pi = _mm_add_epi8(pi, unzigzag8(r##i))
-#define SAVE(i) _mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + (j + i) * vertex_size_16), r##i)
+#define SAVE(i) _mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + k + (j + i) * vertex_size_16), r##i)
 
 			__m128i LOAD(0), LOAD(1), LOAD(2), LOAD(3), LOAD(4), LOAD(5), LOAD(6), LOAD(7), LOAD(8), LOAD(9), LOAD(10), LOAD(11), LOAD(12), LOAD(13), LOAD(14), LOAD(15);
 
