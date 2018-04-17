@@ -10,6 +10,10 @@
 #include <tmmintrin.h>
 #endif
 
+#if SIMD == 2
+#include <arm_neon.h>
+#endif
+
 namespace meshopt
 {
 
@@ -344,6 +348,115 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 }
 #endif
 
+#if SIMD == 2
+static uint8x16_t shuffleBytes(unsigned char mask0, unsigned char mask1, uint8x8_t rest0, uint8x8_t rest1)
+{
+	uint8x8_t sm0 = vld1_u8(kDecodeBytesGroupShuffle[mask0]);
+	uint8x8_t sm1 = vld1_u8(kDecodeBytesGroupShuffle[mask1]);
+
+	uint8x8_t r0 = vtbl1_u8(rest0, sm0);
+	uint8x8_t r1 = vtbl1_u8(rest1, sm1);
+
+	return vcombine_u8(r0, r1);
+}
+
+static int neonMoveMask(uint8x16_t mask)
+{
+	static const uint8x16_t byte_mask = { -128, 64, 32, 16, 8, 4, 2, 1, -128, 64, 32, 16, 8, 4, 2, 1 };
+
+	uint8x16_t masked = vandq_u8(mask, byte_mask);
+
+	// we need horizontal sums of each half of masked
+	// the endianness of the platform determines the order of high/low in sum1 below
+	// we assume little endian here
+	uint8x8_t sum1 = vpadd_u8(vget_high_u8(masked), vget_low_u8(masked));
+	uint8x8_t sum2 = vpadd_u8(sum1, sum1);
+	uint8x8_t sum3 = vpadd_u8(sum2, sum2);
+
+	// note: here we treat 2b sum as a 16bit mask; this depends on endianness, see above
+	return vget_lane_u16(vreinterpret_u16_u8(sum3), 0);
+}
+
+static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned char* buffer, int bitslog2)
+{
+	switch (bitslog2)
+	{
+	case 0:
+	{
+		unsigned char mask0 = data[0];
+		unsigned char mask1 = data[1];
+
+		uint8x8_t rest0 = vld1_u8(data + 2);
+		uint8x8_t rest1 = vld1_u8(data + 2 + kDecodeBytesGroupCount[mask0]);
+
+		uint8x16_t result = shuffleBytes(mask0, mask1, rest0, rest1);
+
+		vst1q_u8(buffer, result);
+
+		return data + 2 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
+	}
+
+	case 1:
+	{
+		uint8x8_t sel2 = vld1_u8(data);
+		uint8x8_t sel22 = vzip_u8(vshr_n_u8(sel2, 4), sel2).val[0];
+		uint8x8x2_t sel2222 = vzip_u8(vshr_n_u8(sel22, 2), sel22);
+		uint8x16_t sel = vandq_u8(vcombine_u8(sel2222.val[0], sel2222.val[1]), vdupq_n_u8(3));
+
+		uint8x16_t mask = vceqq_u8(sel, vdupq_n_u8(3));
+		int mask16 = neonMoveMask(mask);
+		unsigned char mask0 = (unsigned char)(mask16 >> 8);
+		unsigned char mask1 = (unsigned char)(mask16 & 255);
+
+		uint8x8_t rest0 = vld1_u8(data + 4);
+		uint8x8_t rest1 = vld1_u8(data + 4 + kDecodeBytesGroupCount[mask0]);
+
+		uint8x16_t result = vbslq_u8(mask, shuffleBytes(mask0, mask1, rest0, rest1), sel);
+
+		vst1q_u8(buffer, result);
+
+		return data + 4 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
+	}
+
+	case 2:
+	{
+		uint8x8_t sel4 = vld1_u8(data);
+		uint8x8x2_t sel44 = vzip_u8(vshr_n_u8(sel4, 4), vand_u8(sel4, vdup_n_u8(15)));
+		uint8x16_t sel = vcombine_u8(sel44.val[0], sel44.val[1]);
+
+		uint8x16_t mask = vceqq_u8(sel, vdupq_n_u8(15));
+		int mask16 = neonMoveMask(mask);
+		unsigned char mask0 = (unsigned char)(mask16 >> 8);
+		unsigned char mask1 = (unsigned char)(mask16 & 255);
+
+		uint8x8_t rest0 = vld1_u8(data + 8);
+		uint8x8_t rest1 = vld1_u8(data + 8 + kDecodeBytesGroupCount[mask0]);
+
+		uint8x16_t result = vbslq_u8(mask, shuffleBytes(mask0, mask1, rest0, rest1), sel);
+
+		vst1q_u8(buffer, result);
+
+		return data + 8 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
+	}
+
+	case 3:
+	{
+		uint8x16_t rest = vld1q_u8(data);
+
+		uint8x16_t result = rest;
+
+		vst1q_u8(buffer, result);
+
+		return data + 16;
+	}
+
+	default:
+		assert(!"Unexpected bit length"); // This can never happen since bitslog2 is a 2-bit value
+		return data;
+	}
+}
+#endif
+
 #if SIMD == 0
 template <int bits>
 static const unsigned char* decodeBytesGroupImpl(const unsigned char* data, unsigned char* buffer)
@@ -573,6 +686,139 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 			{
 				__m128i v = _mm_loadu_si128(reinterpret_cast<__m128i*>(&transposed[read + k]));
 				_mm_storeu_si128(reinterpret_cast<__m128i*>(&transposed[write + k]), v);
+			}
+
+			read += vertex_size_16;
+			write += vertex_size;
+		}
+	}
+
+	memcpy(vertex_data, transposed, vertex_count * vertex_size);
+
+	memcpy(last_vertex, &transposed[vertex_size * (vertex_count - 1)], vertex_size);
+
+	return data;
+}
+#endif
+
+#if SIMD == 2
+static void transpose8(uint8x16_t& x0, uint8x16_t& x1, uint8x16_t& x2, uint8x16_t& x3)
+{
+	uint8x16x2_t t01 = vzipq_u8(x0, x1);
+	uint8x16x2_t t23 = vzipq_u8(x2, x3);
+
+	uint16x8x2_t x01 = vzipq_u16(vreinterpretq_u16_u8(t01.val[0]), vreinterpretq_u16_u8(t23.val[0]));
+	uint16x8x2_t x23 = vzipq_u16(vreinterpretq_u16_u8(t01.val[1]), vreinterpretq_u16_u8(t23.val[1]));
+
+	x0 = x01.val[0];
+	x1 = x01.val[1];
+	x2 = x23.val[0];
+	x3 = x23.val[1];
+}
+
+static void transpose32(uint8x16_t& x0, uint8x16_t& x1, uint8x16_t& x2, uint8x16_t& x3)
+{
+	uint32x4x2_t t01 = vzipq_u32(vreinterpretq_u32_u8(x0), vreinterpretq_u32_u8(x1));
+	uint32x4x2_t t23 = vzipq_u32(vreinterpretq_u32_u8(x2), vreinterpretq_u32_u8(x3));
+
+	uint64x2_t t0 = vreinterpretq_u64_u32(t01.val[0]);
+	uint64x2_t t1 = vreinterpretq_u64_u32(t01.val[1]);
+	uint64x2_t t2 = vreinterpretq_u64_u32(t23.val[0]);
+	uint64x2_t t3 = vreinterpretq_u64_u32(t23.val[1]);
+
+	x0 = vreinterpretq_u8_u64(vcombine_u64(vget_low_u64(t0), vget_low_u64(t2)));
+	x1 = vreinterpretq_u8_u64(vcombine_u64(vget_high_u64(t0), vget_high_u64(t2)));
+	x2 = vreinterpretq_u8_u64(vcombine_u64(vget_low_u64(t1), vget_low_u64(t3)));
+	x3 = vreinterpretq_u8_u64(vcombine_u64(vget_high_u64(t1), vget_high_u64(t3)));
+}
+
+static void transpose16x16(
+    uint8x16_t& x0, uint8x16_t& x1, uint8x16_t& x2, uint8x16_t& x3,
+    uint8x16_t& x4, uint8x16_t& x5, uint8x16_t& x6, uint8x16_t& x7,
+    uint8x16_t& x8, uint8x16_t& x9, uint8x16_t& x10, uint8x16_t& x11,
+    uint8x16_t& x12, uint8x16_t& x13, uint8x16_t& x14, uint8x16_t& x15)
+{
+	transpose8(x0, x1, x2, x3);
+	transpose8(x4, x5, x6, x7);
+	transpose8(x8, x9, x10, x11);
+	transpose8(x12, x13, x14, x15);
+
+	transpose32(x0, x4, x8, x12);
+	transpose32(x1, x5, x9, x13);
+	transpose32(x2, x6, x10, x14);
+	transpose32(x3, x7, x11, x15);
+
+	uint8x16_t t;
+	t = x1, x1 = x4, x4 = t;
+	t = x2, x2 = x8, x8 = t;
+	t = x3, x3 = x12, x12 = t;
+	t = x6, x6 = x9, x9 = t;
+	t = x7, x7 = x13, x13 = t;
+	t = x11, x11 = x14, x14 = t;
+}
+
+uint8x16_t unzigzag8(uint8x16_t v)
+{
+	uint8x16_t xl = vreinterpretq_u8_s8(vnegq_s8(vreinterpretq_s8_u8(vandq_u8(v, vdupq_n_u8(1)))));
+	uint8x16_t xr = vshrq_n_u8(v, 1);
+
+	return veorq_u8(xl, xr);
+}
+
+static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
+{
+	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
+
+	unsigned char buffer[kVertexBlockMaxSize * 16];
+	unsigned char transposed[kVertexBlockSizeBytes];
+
+	size_t vertex_size_16 = (vertex_size + 15) & ~15;
+	size_t vertex_count_aligned = (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1);
+
+	assert(vertex_size_16 * vertex_count_aligned <= sizeof(transposed));
+
+	for (size_t k = 0; k < vertex_size; k += 16)
+	{
+		for (size_t j = 0; j < 16 && k + j < vertex_size; ++j)
+		{
+			data = decodeBytes(data, data_end, buffer + j * vertex_count_aligned, vertex_count_aligned);
+			if (!data)
+				return 0;
+		}
+
+		uint8x16_t pi = vld1q_u8(last_vertex + k);
+
+		for (size_t j = 0; j < vertex_count_aligned; j += 16)
+		{
+#define LOAD(i) r##i = vld1q_u8(buffer + j + i * vertex_count_aligned)
+#define FIXD(i) r##i = pi = vaddq_u8(pi, unzigzag8(r##i))
+#define SAVE(i) vst1q_u8(transposed + k + (j + i) * vertex_size_16, r##i)
+
+			uint8x16_t LOAD(0), LOAD(1), LOAD(2), LOAD(3), LOAD(4), LOAD(5), LOAD(6), LOAD(7), LOAD(8), LOAD(9), LOAD(10), LOAD(11), LOAD(12), LOAD(13), LOAD(14), LOAD(15);
+
+			transpose16x16(r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15);
+
+			FIXD(0), FIXD(1), FIXD(2), FIXD(3), FIXD(4), FIXD(5), FIXD(6), FIXD(7), FIXD(8), FIXD(9), FIXD(10), FIXD(11), FIXD(12), FIXD(13), FIXD(14), FIXD(15);
+
+			SAVE(0), SAVE(1), SAVE(2), SAVE(3), SAVE(4), SAVE(5), SAVE(6), SAVE(7), SAVE(8), SAVE(9), SAVE(10), SAVE(11), SAVE(12), SAVE(13), SAVE(14), SAVE(15);
+
+#undef LOAD
+#undef FIXD
+#undef SAVE
+		}
+	}
+
+	if (vertex_size & 15)
+	{
+		size_t read = vertex_size_16;
+		size_t write = vertex_size;
+
+		for (size_t i = 1; i < vertex_count; ++i)
+		{
+			for (size_t k = 0; k < vertex_size; k += 16)
+			{
+				uint8x16_t v = vld1q_u8(&transposed[read + k]);
+				vst1q_u8(&transposed[write + k], v);
 			}
 
 			read += vertex_size_16;
