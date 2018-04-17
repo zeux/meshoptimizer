@@ -21,13 +21,10 @@ const size_t kVertexBlockSizeBytes = 8192;
 const size_t kVertexBlockMaxSize = 256;
 const size_t kByteGroupSize = 16;
 
-size_t getVertexBlockSize(size_t vertex_size)
+static size_t getVertexBlockSize(size_t vertex_size)
 {
-	// align vertex to 16b to facilitate SIMD implementation
-	size_t vertex_size_16 = (vertex_size + 15) & ~15;
-
 	// make sure the entire block fits into the scratch buffer
-	size_t result = kVertexBlockSizeBytes / vertex_size_16;
+	size_t result = kVertexBlockSizeBytes / vertex_size;
 
 	// align to byte group size; we encode each byte as a byte group
 	// if vertex block is misaligned, it results in wasted bytes, so just truncate the block size
@@ -586,45 +583,7 @@ static void transpose8(__m128i& x0, __m128i& x1, __m128i& x2, __m128i& x3)
 	x3 = _mm_unpackhi_epi16(t1, t3);
 }
 
-static void transpose32(__m128i& x0, __m128i& x1, __m128i& x2, __m128i& x3)
-{
-	__m128i t0 = _mm_unpacklo_epi32(x0, x1);
-	__m128i t1 = _mm_unpackhi_epi32(x0, x1);
-	__m128i t2 = _mm_unpacklo_epi32(x2, x3);
-	__m128i t3 = _mm_unpackhi_epi32(x2, x3);
-
-	x0 = _mm_unpacklo_epi64(t0, t2);
-	x1 = _mm_unpackhi_epi64(t0, t2);
-	x2 = _mm_unpacklo_epi64(t1, t3);
-	x3 = _mm_unpackhi_epi64(t1, t3);
-}
-
-static void transpose16x16(
-    __m128i& x0, __m128i& x1, __m128i& x2, __m128i& x3,
-    __m128i& x4, __m128i& x5, __m128i& x6, __m128i& x7,
-    __m128i& x8, __m128i& x9, __m128i& x10, __m128i& x11,
-    __m128i& x12, __m128i& x13, __m128i& x14, __m128i& x15)
-{
-	transpose8(x0, x1, x2, x3);
-	transpose8(x4, x5, x6, x7);
-	transpose8(x8, x9, x10, x11);
-	transpose8(x12, x13, x14, x15);
-
-	transpose32(x0, x4, x8, x12);
-	transpose32(x1, x5, x9, x13);
-	transpose32(x2, x6, x10, x14);
-	transpose32(x3, x7, x11, x15);
-
-	__m128i t;
-	t = x1, x1 = x4, x4 = t;
-	t = x2, x2 = x8, x8 = t;
-	t = x3, x3 = x12, x12 = t;
-	t = x6, x6 = x9, x9 = t;
-	t = x7, x7 = x13, x13 = t;
-	t = x11, x11 = x14, x14 = t;
-}
-
-__m128i unzigzag8(__m128i v)
+static __m128i unzigzag8(__m128i v)
 {
 	__m128i xl = _mm_sub_epi8(_mm_setzero_si128(), _mm_and_si128(v, _mm_set1_epi8(1)));
 	__m128i xr = _mm_and_si128(_mm_srli_epi16(v, 1), _mm_set1_epi8(127));
@@ -636,60 +595,64 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 
-	unsigned char buffer[kVertexBlockMaxSize * 16];
+	unsigned char buffer[kVertexBlockMaxSize * 4];
 	unsigned char transposed[kVertexBlockSizeBytes];
 
-	size_t vertex_size_16 = (vertex_size + 15) & ~15;
 	size_t vertex_count_aligned = (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1);
 
-	assert(vertex_size_16 * vertex_count_aligned <= sizeof(transposed));
-
-	for (size_t k = 0; k < vertex_size; k += 16)
+	for (size_t k = 0; k < vertex_size; k += 4)
 	{
-		for (size_t j = 0; j < 16 && k + j < vertex_size; ++j)
+		for (size_t j = 0; j < 4; ++j)
 		{
 			data = decodeBytes(data, data_end, buffer + j * vertex_count_aligned, vertex_count_aligned);
 			if (!data)
 				return 0;
 		}
 
-		__m128i pi = _mm_loadu_si128(reinterpret_cast<const __m128i*>(last_vertex + k));
+		__m128i pi = _mm_cvtsi32_si128(*reinterpret_cast<const int*>(last_vertex + k));
 
-		for (size_t j = 0; j < vertex_count_aligned; j += 16)
+		for (size_t j = 0; j < vertex_count_aligned; )
 		{
 #define LOAD(i) r##i = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + i * vertex_count_aligned))
-#define FIXD(i) r##i = pi = _mm_add_epi8(pi, unzigzag8(r##i))
-#define SAVE(i) _mm_storeu_si128(reinterpret_cast<__m128i*>(transposed + k + (j + i) * vertex_size_16), r##i)
+#define GRP4(i) t0 = _mm_shuffle_epi32(r##i, 0), t1 = _mm_shuffle_epi32(r##i, 1), t2 = _mm_shuffle_epi32(r##i, 2), t3 = _mm_shuffle_epi32(r##i, 3)
+#define FIXD(i) t##i = pi = _mm_add_epi8(pi, t##i)
+#define SAVE(i) *reinterpret_cast<int*>(transposed + k + (j + i) * vertex_size) = _mm_cvtsi128_si32(t##i)
 
-			__m128i LOAD(0), LOAD(1), LOAD(2), LOAD(3), LOAD(4), LOAD(5), LOAD(6), LOAD(7), LOAD(8), LOAD(9), LOAD(10), LOAD(11), LOAD(12), LOAD(13), LOAD(14), LOAD(15);
+			__m128i LOAD(0), LOAD(1), LOAD(2), LOAD(3);
 
-			transpose16x16(r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15);
+			r0 = unzigzag8(r0);
+			r1 = unzigzag8(r1);
+			r2 = unzigzag8(r2);
+			r3 = unzigzag8(r3);
 
-			FIXD(0), FIXD(1), FIXD(2), FIXD(3), FIXD(4), FIXD(5), FIXD(6), FIXD(7), FIXD(8), FIXD(9), FIXD(10), FIXD(11), FIXD(12), FIXD(13), FIXD(14), FIXD(15);
+			transpose8(r0, r1, r2, r3);
 
-			SAVE(0), SAVE(1), SAVE(2), SAVE(3), SAVE(4), SAVE(5), SAVE(6), SAVE(7), SAVE(8), SAVE(9), SAVE(10), SAVE(11), SAVE(12), SAVE(13), SAVE(14), SAVE(15);
+			__m128i t0, t1, t2, t3;
+
+			GRP4(0);
+			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
+			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
+			j += 4;
+
+			GRP4(1);
+			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
+			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
+			j += 4;
+
+			GRP4(2);
+			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
+			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
+			j += 4;
+
+			GRP4(3);
+			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
+			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
+			j += 4;
 
 #undef LOAD
+#undef GRP4
 #undef FIXD
 #undef SAVE
-		}
-	}
-
-	if (vertex_size & 15)
-	{
-		size_t read = vertex_size_16;
-		size_t write = vertex_size;
-
-		for (size_t i = 1; i < vertex_count; ++i)
-		{
-			for (size_t k = 0; k < vertex_size; k += 16)
-			{
-				__m128i v = _mm_loadu_si128(reinterpret_cast<__m128i*>(&transposed[read + k]));
-				_mm_storeu_si128(reinterpret_cast<__m128i*>(&transposed[write + k]), v);
-			}
-
-			read += vertex_size_16;
-			write += vertex_size;
 		}
 	}
 
@@ -716,48 +679,7 @@ static void transpose8(uint8x16_t& x0, uint8x16_t& x1, uint8x16_t& x2, uint8x16_
 	x3 = x23.val[1];
 }
 
-static void transpose32(uint8x16_t& x0, uint8x16_t& x1, uint8x16_t& x2, uint8x16_t& x3)
-{
-	uint32x4x2_t t01 = vzipq_u32(vreinterpretq_u32_u8(x0), vreinterpretq_u32_u8(x1));
-	uint32x4x2_t t23 = vzipq_u32(vreinterpretq_u32_u8(x2), vreinterpretq_u32_u8(x3));
-
-	uint64x2_t t0 = vreinterpretq_u64_u32(t01.val[0]);
-	uint64x2_t t1 = vreinterpretq_u64_u32(t01.val[1]);
-	uint64x2_t t2 = vreinterpretq_u64_u32(t23.val[0]);
-	uint64x2_t t3 = vreinterpretq_u64_u32(t23.val[1]);
-
-	x0 = vreinterpretq_u8_u64(vcombine_u64(vget_low_u64(t0), vget_low_u64(t2)));
-	x1 = vreinterpretq_u8_u64(vcombine_u64(vget_high_u64(t0), vget_high_u64(t2)));
-	x2 = vreinterpretq_u8_u64(vcombine_u64(vget_low_u64(t1), vget_low_u64(t3)));
-	x3 = vreinterpretq_u8_u64(vcombine_u64(vget_high_u64(t1), vget_high_u64(t3)));
-}
-
-static void transpose16x16(
-    uint8x16_t& x0, uint8x16_t& x1, uint8x16_t& x2, uint8x16_t& x3,
-    uint8x16_t& x4, uint8x16_t& x5, uint8x16_t& x6, uint8x16_t& x7,
-    uint8x16_t& x8, uint8x16_t& x9, uint8x16_t& x10, uint8x16_t& x11,
-    uint8x16_t& x12, uint8x16_t& x13, uint8x16_t& x14, uint8x16_t& x15)
-{
-	transpose8(x0, x1, x2, x3);
-	transpose8(x4, x5, x6, x7);
-	transpose8(x8, x9, x10, x11);
-	transpose8(x12, x13, x14, x15);
-
-	transpose32(x0, x4, x8, x12);
-	transpose32(x1, x5, x9, x13);
-	transpose32(x2, x6, x10, x14);
-	transpose32(x3, x7, x11, x15);
-
-	uint8x16_t t;
-	t = x1, x1 = x4, x4 = t;
-	t = x2, x2 = x8, x8 = t;
-	t = x3, x3 = x12, x12 = t;
-	t = x6, x6 = x9, x9 = t;
-	t = x7, x7 = x13, x13 = t;
-	t = x11, x11 = x14, x14 = t;
-}
-
-uint8x16_t unzigzag8(uint8x16_t v)
+static uint8x16_t unzigzag8(uint8x16_t v)
 {
 	uint8x16_t xl = vreinterpretq_u8_s8(vnegq_s8(vreinterpretq_s8_u8(vandq_u8(v, vdupq_n_u8(1)))));
 	uint8x16_t xr = vshrq_n_u8(v, 1);
@@ -769,60 +691,64 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 
-	unsigned char buffer[kVertexBlockMaxSize * 16];
+	unsigned char buffer[kVertexBlockMaxSize * 4];
 	unsigned char transposed[kVertexBlockSizeBytes];
 
-	size_t vertex_size_16 = (vertex_size + 15) & ~15;
 	size_t vertex_count_aligned = (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1);
 
-	assert(vertex_size_16 * vertex_count_aligned <= sizeof(transposed));
-
-	for (size_t k = 0; k < vertex_size; k += 16)
+	for (size_t k = 0; k < vertex_size; k += 4)
 	{
-		for (size_t j = 0; j < 16 && k + j < vertex_size; ++j)
+		for (size_t j = 0; j < 4; ++j)
 		{
 			data = decodeBytes(data, data_end, buffer + j * vertex_count_aligned, vertex_count_aligned);
 			if (!data)
 				return 0;
 		}
 
-		uint8x16_t pi = vld1q_u8(last_vertex + k);
+		uint8x8_t pi = vreinterpret_u8_u32(vdup_n_u32(*reinterpret_cast<int*>(last_vertex + k)));
 
-		for (size_t j = 0; j < vertex_count_aligned; j += 16)
+		for (size_t j = 0; j < vertex_count_aligned; )
 		{
 #define LOAD(i) r##i = vld1q_u8(buffer + j + i * vertex_count_aligned)
-#define FIXD(i) r##i = pi = vaddq_u8(pi, unzigzag8(r##i))
-#define SAVE(i) vst1q_u8(transposed + k + (j + i) * vertex_size_16, r##i)
+#define GRP4(i) t0 = vget_low_u8(r##i), t1 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t0), 1)), t2 = vget_high_u8(r##i), t3 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t2), 1))
+#define FIXD(i) t##i = pi = vadd_u8(pi, t##i)
+#define SAVE(i) *reinterpret_cast<int*>(transposed + k + (j + i) * vertex_size) = vget_lane_u32(vreinterpret_u32_u8(t##i), 0)
 
-			uint8x16_t LOAD(0), LOAD(1), LOAD(2), LOAD(3), LOAD(4), LOAD(5), LOAD(6), LOAD(7), LOAD(8), LOAD(9), LOAD(10), LOAD(11), LOAD(12), LOAD(13), LOAD(14), LOAD(15);
+			uint8x16_t LOAD(0), LOAD(1), LOAD(2), LOAD(3);
 
-			transpose16x16(r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15);
+			r0 = unzigzag8(r0);
+			r1 = unzigzag8(r1);
+			r2 = unzigzag8(r2);
+			r3 = unzigzag8(r3);
 
-			FIXD(0), FIXD(1), FIXD(2), FIXD(3), FIXD(4), FIXD(5), FIXD(6), FIXD(7), FIXD(8), FIXD(9), FIXD(10), FIXD(11), FIXD(12), FIXD(13), FIXD(14), FIXD(15);
+			transpose8(r0, r1, r2, r3);
 
-			SAVE(0), SAVE(1), SAVE(2), SAVE(3), SAVE(4), SAVE(5), SAVE(6), SAVE(7), SAVE(8), SAVE(9), SAVE(10), SAVE(11), SAVE(12), SAVE(13), SAVE(14), SAVE(15);
+			uint8x8_t t0, t1, t2, t3;
+
+			GRP4(0);
+			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
+			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
+			j += 4;
+
+			GRP4(1);
+			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
+			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
+			j += 4;
+
+			GRP4(2);
+			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
+			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
+			j += 4;
+
+			GRP4(3);
+			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
+			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
+			j += 4;
 
 #undef LOAD
+#undef GRP4
 #undef FIXD
 #undef SAVE
-		}
-	}
-
-	if (vertex_size & 15)
-	{
-		size_t read = vertex_size_16;
-		size_t write = vertex_size;
-
-		for (size_t i = 1; i < vertex_count; ++i)
-		{
-			for (size_t k = 0; k < vertex_size; k += 16)
-			{
-				uint8x16_t v = vld1q_u8(&transposed[read + k]);
-				vst1q_u8(&transposed[write + k], v);
-			}
-
-			read += vertex_size_16;
-			write += vertex_size;
 		}
 	}
 
@@ -832,6 +758,7 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 
 	return data;
 }
+
 #endif
 
 #if SIMD == 0
@@ -876,6 +803,7 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	using namespace meshopt;
 
 	assert(vertex_size > 0 && vertex_size <= 256);
+	assert(vertex_size % 4 == 0);
 
 	const unsigned char* vertex_data = static_cast<const unsigned char*>(vertices);
 
@@ -916,6 +844,9 @@ size_t meshopt_encodeVertexBufferBound(size_t vertex_count, size_t vertex_size)
 {
 	using namespace meshopt;
 
+	assert(vertex_size > 0 && vertex_size <= 256);
+	assert(vertex_size % 4 == 0);
+
 	size_t vertex_block_size = getVertexBlockSize(vertex_size);
 	size_t vertex_block_count = (vertex_count + vertex_block_size - 1) / vertex_block_size;
 
@@ -932,6 +863,7 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 	using namespace meshopt;
 
 	assert(vertex_size > 0 && vertex_size <= 256);
+	assert(vertex_size % 4 == 0);
 
 	unsigned char* vertex_data = static_cast<unsigned char*>(destination);
 
