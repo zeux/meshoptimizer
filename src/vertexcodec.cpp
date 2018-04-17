@@ -359,7 +359,7 @@ static uint8x16_t shuffleBytes(unsigned char mask0, unsigned char mask1, uint8x8
 
 static int neonMoveMask(uint8x16_t mask)
 {
-	static const uint8x16_t byte_mask = { -128, 64, 32, 16, 8, 4, 2, 1, -128, 64, 32, 16, 8, 4, 2, 1 };
+	static const uint8x16_t byte_mask = {128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1};
 
 	uint8x16_t masked = vandq_u8(mask, byte_mask);
 
@@ -611,12 +611,14 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 
 		__m128i pi = _mm_cvtsi32_si128(*reinterpret_cast<const int*>(last_vertex + k));
 
-		for (size_t j = 0; j < vertex_count_aligned; )
+		unsigned char* savep = transposed + k;
+
+		for (size_t j = 0; j < vertex_count_aligned; j += 16)
 		{
 #define LOAD(i) r##i = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + i * vertex_count_aligned))
 #define GRP4(i) t0 = _mm_shuffle_epi32(r##i, 0), t1 = _mm_shuffle_epi32(r##i, 1), t2 = _mm_shuffle_epi32(r##i, 2), t3 = _mm_shuffle_epi32(r##i, 3)
 #define FIXD(i) t##i = pi = _mm_add_epi8(pi, t##i)
-#define SAVE(i) *reinterpret_cast<int*>(transposed + k + (j + i) * vertex_size) = _mm_cvtsi128_si32(t##i)
+#define SAVE(i) *reinterpret_cast<int*>(savep) = _mm_cvtsi128_si32(t##i), savep += vertex_size
 
 			__m128i LOAD(0), LOAD(1), LOAD(2), LOAD(3);
 
@@ -632,22 +634,18 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 			GRP4(0);
 			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
 			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
-			j += 4;
 
 			GRP4(1);
 			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
 			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
-			j += 4;
 
 			GRP4(2);
 			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
 			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
-			j += 4;
 
 			GRP4(3);
 			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
 			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
-			j += 4;
 
 #undef LOAD
 #undef GRP4
@@ -705,14 +703,16 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 				return 0;
 		}
 
-		uint8x8_t pi = vreinterpret_u8_u32(vdup_n_u32(*reinterpret_cast<int*>(last_vertex + k)));
+		uint8x8_t pi = vreinterpret_u8_u32(vld1_lane_u32(reinterpret_cast<uint32_t*>(last_vertex + k), vdup_n_u32(0), 0));
 
-		for (size_t j = 0; j < vertex_count_aligned; )
+		unsigned char* savep = transposed + k;
+
+		for (size_t j = 0; j < vertex_count_aligned; j += 16)
 		{
 #define LOAD(i) r##i = vld1q_u8(buffer + j + i * vertex_count_aligned)
 #define GRP4(i) t0 = vget_low_u8(r##i), t1 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t0), 1)), t2 = vget_high_u8(r##i), t3 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t2), 1))
 #define FIXD(i) t##i = pi = vadd_u8(pi, t##i)
-#define SAVE(i) *reinterpret_cast<int*>(transposed + k + (j + i) * vertex_size) = vget_lane_u32(vreinterpret_u32_u8(t##i), 0)
+#define SAVE(i) vst1_lane_u32(reinterpret_cast<uint32_t*>(savep), vreinterpret_u32_u8(t##i), 0), savep += vertex_size
 
 			uint8x16_t LOAD(0), LOAD(1), LOAD(2), LOAD(3);
 
@@ -728,22 +728,18 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 			GRP4(0);
 			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
 			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
-			j += 4;
 
 			GRP4(1);
 			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
 			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
-			j += 4;
 
 			GRP4(2);
 			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
 			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
-			j += 4;
 
 			GRP4(3);
 			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
 			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
-			j += 4;
 
 #undef LOAD
 #undef GRP4
