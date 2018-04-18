@@ -26,6 +26,7 @@ namespace meshopt
 const size_t kVertexBlockSizeBytes = 8192;
 const size_t kVertexBlockMaxSize = 256;
 const size_t kByteGroupSize = 16;
+const size_t kTailMaxSize = 32;
 
 static size_t getVertexBlockSize(size_t vertex_size)
 {
@@ -142,11 +143,11 @@ static unsigned char* encodeBytes(unsigned char* data, unsigned char* data_end, 
 
 	for (size_t i = 0; i < buffer_size; i += kByteGroupSize)
 	{
-		if (size_t(data_end - data) < 32)
+		if (size_t(data_end - data) < kTailMaxSize)
 			return 0;
 
 		int best_bits = 8;
-		size_t best_size = kByteGroupSize; // assume encodeBytesVar(8) just stores as is
+		size_t best_size = encodeBytesGroupMeasure(buffer + i, 8);
 
 		for (int bits = 1; bits < 8; bits *= 2)
 		{
@@ -278,7 +279,7 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 
 	for (size_t i = 0; i < buffer_size; i += kByteGroupSize)
 	{
-		if (size_t(data_end - data) < 32)
+		if (size_t(data_end - data) < kTailMaxSize)
 			return 0;
 
 		size_t header_offset = i / kByteGroupSize;
@@ -607,7 +608,7 @@ static const unsigned char* decodeBytesSimd(const unsigned char* data, const uns
 	size_t i = 0;
 
 	// fast-path: process 4 groups at a time, do a shared bounds check - each group reads <=32b
-	for (; i + kByteGroupSize * 4 <= buffer_size && size_t(data_end - data) >= 128; i += kByteGroupSize * 4)
+	for (; i + kByteGroupSize * 4 <= buffer_size && size_t(data_end - data) >= kTailMaxSize * 4; i += kByteGroupSize * 4)
 	{
 		size_t header_offset = i / kByteGroupSize;
 		unsigned char header_byte = header[header_offset / 4];
@@ -621,7 +622,7 @@ static const unsigned char* decodeBytesSimd(const unsigned char* data, const uns
 	// slow-path: process remaining groups
 	for (; i < buffer_size; i += kByteGroupSize)
 	{
-		if (size_t(data_end - data) < 32)
+		if (size_t(data_end - data) < kTailMaxSize)
 			return 0;
 
 		size_t header_offset = i / kByteGroupSize;
@@ -757,16 +758,16 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 		vertex_offset += block_size;
 	}
 
-	size_t tail_size = vertex_size < 32 ? 32 : vertex_size;
+	size_t tail_size = vertex_size < kTailMaxSize ? kTailMaxSize : vertex_size;
 
 	if (size_t(data_end - data) < tail_size)
 		return 0;
 
 	// write first vertex to the end of the stream and pad it to 32 bytes; this is important to simplify bounds checks in decoder
-	if (vertex_size < 32)
+	if (vertex_size < kTailMaxSize)
 	{
-		memset(data, 0, 32 - vertex_size);
-		data += 32 - vertex_size;
+		memset(data, 0, kTailMaxSize - vertex_size);
+		data += kTailMaxSize - vertex_size;
 	}
 
 	memcpy(data, vertex_data, vertex_size);
@@ -791,7 +792,7 @@ size_t meshopt_encodeVertexBufferBound(size_t vertex_count, size_t vertex_size)
 	size_t vertex_block_header_size = (vertex_block_size / kByteGroupSize + 3) / 4;
 	size_t vertex_block_data_size = vertex_block_size;
 
-	size_t tail_size = vertex_size < 32 ? 32 : vertex_size;
+	size_t tail_size = vertex_size < kTailMaxSize ? kTailMaxSize : vertex_size;
 
 	return vertex_block_count * vertex_size * (vertex_block_header_size + vertex_block_data_size) + tail_size;
 }
@@ -837,7 +838,7 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 		vertex_offset += block_size;
 	}
 
-	size_t tail_size = vertex_size < 32 ? 32 : vertex_size;
+	size_t tail_size = vertex_size < kTailMaxSize ? kTailMaxSize : vertex_size;
 
 	if (size_t(data_end - data) != tail_size)
 		return -3;
