@@ -196,6 +196,121 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 	return data;
 }
 
+#if SIMD == 0
+template <int bits>
+static const unsigned char* decodeBytesGroupImpl(const unsigned char* data, unsigned char* buffer)
+{
+	size_t byte_size = 8 / bits;
+	assert(kByteGroupSize % byte_size == 0);
+
+	const unsigned char* data_var = data + kByteGroupSize / byte_size;
+
+	// fixed portion: bits bits for each value
+	// variable portion: full byte for each out-of-range value (using 1...1 as sentinel)
+	unsigned char sentinel = (1 << bits) - 1;
+
+	for (size_t i = 0; i < kByteGroupSize; i += byte_size)
+	{
+		unsigned char byte = *data++;
+
+		for (size_t k = 0; k < byte_size; ++k)
+		{
+			unsigned char enc = byte >> (8 - bits);
+			byte <<= bits;
+
+			unsigned char encv = *data_var;
+
+			buffer[i + k] = (enc == sentinel) ? encv : enc;
+			data_var += enc == sentinel;
+		}
+	}
+
+	return data_var;
+}
+
+static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned char* buffer, int bitslog2)
+{
+	switch (bitslog2)
+	{
+	case 0:
+		memset(buffer, 0, kByteGroupSize);
+		return data;
+	case 1:
+		return decodeBytesGroupImpl<2>(data, buffer);
+	case 2:
+		return decodeBytesGroupImpl<4>(data, buffer);
+	case 3:
+		memcpy(buffer, data, kByteGroupSize);
+		return data + kByteGroupSize;
+	default:
+		assert(!"Unexpected bit length"); // This can never happen since bitslog2 is a 2-bit value
+		return data;
+	}
+}
+
+static const unsigned char* decodeBytes(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size)
+{
+	assert(buffer_size % kByteGroupSize == 0);
+
+	const unsigned char* header = data;
+
+	// round number of groups to 4 to get number of header bytes
+	size_t header_size = (buffer_size / kByteGroupSize + 3) / 4;
+
+	if (size_t(data_end - data) < header_size)
+		return 0;
+
+	data += header_size;
+
+	for (size_t i = 0; i < buffer_size; i += kByteGroupSize)
+	{
+		if (size_t(data_end - data) < 32)
+			return 0;
+
+		size_t header_offset = i / kByteGroupSize;
+
+		int bitslog2 = (header[header_offset / 4] >> ((header_offset % 4) * 2)) & 3;
+
+		data = decodeBytesGroup(data, buffer + i, bitslog2);
+	}
+
+	return data;
+}
+
+static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
+{
+	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
+
+	unsigned char buffer[kVertexBlockMaxSize];
+	assert(sizeof(buffer) % kByteGroupSize == 0);
+
+	for (size_t k = 0; k < vertex_size; ++k)
+	{
+		data = decodeBytes(data, data_end, buffer, (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1));
+		if (!data)
+			return 0;
+
+		size_t vertex_offset = k;
+
+		unsigned char p = last_vertex[k];
+
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			unsigned char v = unzigzag8(buffer[i]) + p;
+
+			vertex_data[vertex_offset] = v;
+			p = v;
+
+			vertex_offset += vertex_size;
+		}
+
+		last_vertex[k] = p;
+	}
+
+	return data;
+}
+#endif
+
 #if SIMD
 static unsigned char kDecodeBytesGroupShuffle[256][8];
 static unsigned char kDecodeBytesGroupCount[256];
@@ -417,59 +532,7 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 }
 #endif
 
-#if SIMD == 0
-template <int bits>
-static const unsigned char* decodeBytesGroupImpl(const unsigned char* data, unsigned char* buffer)
-{
-	size_t byte_size = 8 / bits;
-	assert(kByteGroupSize % byte_size == 0);
-
-	const unsigned char* data_var = data + kByteGroupSize / byte_size;
-
-	// fixed portion: bits bits for each value
-	// variable portion: full byte for each out-of-range value (using 1...1 as sentinel)
-	unsigned char sentinel = (1 << bits) - 1;
-
-	for (size_t i = 0; i < kByteGroupSize; i += byte_size)
-	{
-		unsigned char byte = *data++;
-
-		for (size_t k = 0; k < byte_size; ++k)
-		{
-			unsigned char enc = byte >> (8 - bits);
-			byte <<= bits;
-
-			unsigned char encv = *data_var;
-
-			buffer[i + k] = (enc == sentinel) ? encv : enc;
-			data_var += enc == sentinel;
-		}
-	}
-
-	return data_var;
-}
-
-static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned char* buffer, int bitslog2)
-{
-	switch (bitslog2)
-	{
-	case 0:
-		memset(buffer, 0, kByteGroupSize);
-		return data;
-	case 1:
-		return decodeBytesGroupImpl<2>(data, buffer);
-	case 2:
-		return decodeBytesGroupImpl<4>(data, buffer);
-	case 3:
-		memcpy(buffer, data, kByteGroupSize);
-		return data + kByteGroupSize;
-	default:
-		assert(!"Unexpected bit length"); // This can never happen since bitslog2 is a 2-bit value
-		return data;
-	}
-}
-#endif
-
+#if SIMD
 static const unsigned char* decodeBytes(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size)
 {
 	assert(buffer_size % kByteGroupSize == 0);
@@ -513,6 +576,7 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 
 	return data;
 }
+#endif
 
 #if SIMD == 1
 static void transpose8(__m128i& x0, __m128i& x1, __m128i& x2, __m128i& x3)
@@ -534,76 +598,6 @@ static __m128i unzigzag8(__m128i v)
 	__m128i xr = _mm_and_si128(_mm_srli_epi16(v, 1), _mm_set1_epi8(127));
 
 	return _mm_xor_si128(xl, xr);
-}
-
-static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
-{
-	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
-
-	unsigned char buffer[kVertexBlockMaxSize * 4];
-	unsigned char transposed[kVertexBlockSizeBytes];
-
-	size_t vertex_count_aligned = (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1);
-
-	for (size_t k = 0; k < vertex_size; k += 4)
-	{
-		for (size_t j = 0; j < 4; ++j)
-		{
-			data = decodeBytes(data, data_end, buffer + j * vertex_count_aligned, vertex_count_aligned);
-			if (!data)
-				return 0;
-		}
-
-		__m128i pi = _mm_cvtsi32_si128(*reinterpret_cast<const int*>(last_vertex + k));
-
-		unsigned char* savep = transposed + k;
-
-		for (size_t j = 0; j < vertex_count_aligned; j += 16)
-		{
-#define LOAD(i) r##i = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + i * vertex_count_aligned))
-#define GRP4(i) t0 = _mm_shuffle_epi32(r##i, 0), t1 = _mm_shuffle_epi32(r##i, 1), t2 = _mm_shuffle_epi32(r##i, 2), t3 = _mm_shuffle_epi32(r##i, 3)
-#define FIXD(i) t##i = pi = _mm_add_epi8(pi, t##i)
-#define SAVE(i) *reinterpret_cast<int*>(savep) = _mm_cvtsi128_si32(t##i), savep += vertex_size
-
-			__m128i LOAD(0), LOAD(1), LOAD(2), LOAD(3);
-
-			r0 = unzigzag8(r0);
-			r1 = unzigzag8(r1);
-			r2 = unzigzag8(r2);
-			r3 = unzigzag8(r3);
-
-			transpose8(r0, r1, r2, r3);
-
-			__m128i t0, t1, t2, t3;
-
-			GRP4(0);
-			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
-			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
-
-			GRP4(1);
-			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
-			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
-
-			GRP4(2);
-			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
-			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
-
-			GRP4(3);
-			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
-			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
-
-#undef LOAD
-#undef GRP4
-#undef FIXD
-#undef SAVE
-		}
-	}
-
-	memcpy(vertex_data, transposed, vertex_count * vertex_size);
-
-	memcpy(last_vertex, &transposed[vertex_size * (vertex_count - 1)], vertex_size);
-
-	return data;
 }
 #endif
 
@@ -629,7 +623,9 @@ static uint8x16_t unzigzag8(uint8x16_t v)
 
 	return veorq_u8(xl, xr);
 }
+#endif
 
+#if SIMD
 static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
@@ -648,18 +644,37 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 				return 0;
 		}
 
+#if SIMD == 1
+#define TEMP __m128i
+#define LOAD(i) __m128i r##i = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + i * vertex_count_aligned))
+#define GRP4(i) t0 = _mm_shuffle_epi32(r##i, 0), t1 = _mm_shuffle_epi32(r##i, 1), t2 = _mm_shuffle_epi32(r##i, 2), t3 = _mm_shuffle_epi32(r##i, 3)
+#define FIXD(i) t##i = pi = _mm_add_epi8(pi, t##i)
+#define SAVE(i) *reinterpret_cast<int*>(savep) = _mm_cvtsi128_si32(t##i), savep += vertex_size
+#endif
+
+#if SIMD == 2
+#define TEMP uint8x8_t
+#define LOAD(i) uint8x16_t r##i = vld1q_u8(buffer + j + i * vertex_count_aligned)
+#define GRP4(i) t0 = vget_low_u8(r##i), t1 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t0), 1)), t2 = vget_high_u8(r##i), t3 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t2), 1))
+#define FIXD(i) t##i = pi = vadd_u8(pi, t##i)
+#define SAVE(i) vst1_lane_u32(reinterpret_cast<uint32_t*>(savep), vreinterpret_u32_u8(t##i), 0), savep += vertex_size
+#endif
+
+#if SIMD == 1
+		__m128i pi = _mm_cvtsi32_si128(*reinterpret_cast<const int*>(last_vertex + k));
+#endif
+#if SIMD == 2
 		uint8x8_t pi = vreinterpret_u8_u32(vld1_lane_u32(reinterpret_cast<uint32_t*>(last_vertex + k), vdup_n_u32(0), 0));
+#endif
 
 		unsigned char* savep = transposed + k;
 
 		for (size_t j = 0; j < vertex_count_aligned; j += 16)
 		{
-#define LOAD(i) r##i = vld1q_u8(buffer + j + i * vertex_count_aligned)
-#define GRP4(i) t0 = vget_low_u8(r##i), t1 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t0), 1)), t2 = vget_high_u8(r##i), t3 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t2), 1))
-#define FIXD(i) t##i = pi = vadd_u8(pi, t##i)
-#define SAVE(i) vst1_lane_u32(reinterpret_cast<uint32_t*>(savep), vreinterpret_u32_u8(t##i), 0), savep += vertex_size
-
-			uint8x16_t LOAD(0), LOAD(1), LOAD(2), LOAD(3);
+			LOAD(0);
+			LOAD(1);
+			LOAD(2);
+			LOAD(3);
 
 			r0 = unzigzag8(r0);
 			r1 = unzigzag8(r1);
@@ -668,7 +683,7 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 
 			transpose8(r0, r1, r2, r3);
 
-			uint8x8_t t0, t1, t2, t3;
+			TEMP t0, t1, t2, t3;
 
 			GRP4(0);
 			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
@@ -686,6 +701,7 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
 			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
 
+#undef TEMP
 #undef LOAD
 #undef GRP4
 #undef FIXD
@@ -696,42 +712,6 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 	memcpy(vertex_data, transposed, vertex_count * vertex_size);
 
 	memcpy(last_vertex, &transposed[vertex_size * (vertex_count - 1)], vertex_size);
-
-	return data;
-}
-
-#endif
-
-#if SIMD == 0
-static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
-{
-	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
-
-	unsigned char buffer[kVertexBlockMaxSize];
-	assert(sizeof(buffer) % kByteGroupSize == 0);
-
-	for (size_t k = 0; k < vertex_size; ++k)
-	{
-		data = decodeBytes(data, data_end, buffer, (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1));
-		if (!data)
-			return 0;
-
-		size_t vertex_offset = k;
-
-		unsigned char p = last_vertex[k];
-
-		for (size_t i = 0; i < vertex_count; ++i)
-		{
-			unsigned char v = unzigzag8(buffer[i]) + p;
-
-			vertex_data[vertex_offset] = v;
-			p = v;
-
-			vertex_offset += vertex_size;
-		}
-
-		last_vertex[k] = p;
-	}
 
 	return data;
 }
