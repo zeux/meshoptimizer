@@ -197,51 +197,33 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 }
 
 #if SIMD
-// clang-format off
-#define Z 128
-static const unsigned char kDecodeBytesGroupShuffle[256][8] = {
-	{Z,Z,Z,Z,Z,Z,Z,Z,},{Z,Z,Z,Z,Z,Z,Z,0,},{Z,Z,Z,Z,Z,Z,0,Z,},{Z,Z,Z,Z,Z,Z,0,1,},{Z,Z,Z,Z,Z,0,Z,Z,},{Z,Z,Z,Z,Z,0,Z,1,},{Z,Z,Z,Z,Z,0,1,Z,},{Z,Z,Z,Z,Z,0,1,2,},
-	{Z,Z,Z,Z,0,Z,Z,Z,},{Z,Z,Z,Z,0,Z,Z,1,},{Z,Z,Z,Z,0,Z,1,Z,},{Z,Z,Z,Z,0,Z,1,2,},{Z,Z,Z,Z,0,1,Z,Z,},{Z,Z,Z,Z,0,1,Z,2,},{Z,Z,Z,Z,0,1,2,Z,},{Z,Z,Z,Z,0,1,2,3,},
-	{Z,Z,Z,0,Z,Z,Z,Z,},{Z,Z,Z,0,Z,Z,Z,1,},{Z,Z,Z,0,Z,Z,1,Z,},{Z,Z,Z,0,Z,Z,1,2,},{Z,Z,Z,0,Z,1,Z,Z,},{Z,Z,Z,0,Z,1,Z,2,},{Z,Z,Z,0,Z,1,2,Z,},{Z,Z,Z,0,Z,1,2,3,},
-	{Z,Z,Z,0,1,Z,Z,Z,},{Z,Z,Z,0,1,Z,Z,2,},{Z,Z,Z,0,1,Z,2,Z,},{Z,Z,Z,0,1,Z,2,3,},{Z,Z,Z,0,1,2,Z,Z,},{Z,Z,Z,0,1,2,Z,3,},{Z,Z,Z,0,1,2,3,Z,},{Z,Z,Z,0,1,2,3,4,},
-	{Z,Z,0,Z,Z,Z,Z,Z,},{Z,Z,0,Z,Z,Z,Z,1,},{Z,Z,0,Z,Z,Z,1,Z,},{Z,Z,0,Z,Z,Z,1,2,},{Z,Z,0,Z,Z,1,Z,Z,},{Z,Z,0,Z,Z,1,Z,2,},{Z,Z,0,Z,Z,1,2,Z,},{Z,Z,0,Z,Z,1,2,3,},
-	{Z,Z,0,Z,1,Z,Z,Z,},{Z,Z,0,Z,1,Z,Z,2,},{Z,Z,0,Z,1,Z,2,Z,},{Z,Z,0,Z,1,Z,2,3,},{Z,Z,0,Z,1,2,Z,Z,},{Z,Z,0,Z,1,2,Z,3,},{Z,Z,0,Z,1,2,3,Z,},{Z,Z,0,Z,1,2,3,4,},
-	{Z,Z,0,1,Z,Z,Z,Z,},{Z,Z,0,1,Z,Z,Z,2,},{Z,Z,0,1,Z,Z,2,Z,},{Z,Z,0,1,Z,Z,2,3,},{Z,Z,0,1,Z,2,Z,Z,},{Z,Z,0,1,Z,2,Z,3,},{Z,Z,0,1,Z,2,3,Z,},{Z,Z,0,1,Z,2,3,4,},
-	{Z,Z,0,1,2,Z,Z,Z,},{Z,Z,0,1,2,Z,Z,3,},{Z,Z,0,1,2,Z,3,Z,},{Z,Z,0,1,2,Z,3,4,},{Z,Z,0,1,2,3,Z,Z,},{Z,Z,0,1,2,3,Z,4,},{Z,Z,0,1,2,3,4,Z,},{Z,Z,0,1,2,3,4,5,},
-	{Z,0,Z,Z,Z,Z,Z,Z,},{Z,0,Z,Z,Z,Z,Z,1,},{Z,0,Z,Z,Z,Z,1,Z,},{Z,0,Z,Z,Z,Z,1,2,},{Z,0,Z,Z,Z,1,Z,Z,},{Z,0,Z,Z,Z,1,Z,2,},{Z,0,Z,Z,Z,1,2,Z,},{Z,0,Z,Z,Z,1,2,3,},
-	{Z,0,Z,Z,1,Z,Z,Z,},{Z,0,Z,Z,1,Z,Z,2,},{Z,0,Z,Z,1,Z,2,Z,},{Z,0,Z,Z,1,Z,2,3,},{Z,0,Z,Z,1,2,Z,Z,},{Z,0,Z,Z,1,2,Z,3,},{Z,0,Z,Z,1,2,3,Z,},{Z,0,Z,Z,1,2,3,4,},
-	{Z,0,Z,1,Z,Z,Z,Z,},{Z,0,Z,1,Z,Z,Z,2,},{Z,0,Z,1,Z,Z,2,Z,},{Z,0,Z,1,Z,Z,2,3,},{Z,0,Z,1,Z,2,Z,Z,},{Z,0,Z,1,Z,2,Z,3,},{Z,0,Z,1,Z,2,3,Z,},{Z,0,Z,1,Z,2,3,4,},
-	{Z,0,Z,1,2,Z,Z,Z,},{Z,0,Z,1,2,Z,Z,3,},{Z,0,Z,1,2,Z,3,Z,},{Z,0,Z,1,2,Z,3,4,},{Z,0,Z,1,2,3,Z,Z,},{Z,0,Z,1,2,3,Z,4,},{Z,0,Z,1,2,3,4,Z,},{Z,0,Z,1,2,3,4,5,},
-	{Z,0,1,Z,Z,Z,Z,Z,},{Z,0,1,Z,Z,Z,Z,2,},{Z,0,1,Z,Z,Z,2,Z,},{Z,0,1,Z,Z,Z,2,3,},{Z,0,1,Z,Z,2,Z,Z,},{Z,0,1,Z,Z,2,Z,3,},{Z,0,1,Z,Z,2,3,Z,},{Z,0,1,Z,Z,2,3,4,},
-	{Z,0,1,Z,2,Z,Z,Z,},{Z,0,1,Z,2,Z,Z,3,},{Z,0,1,Z,2,Z,3,Z,},{Z,0,1,Z,2,Z,3,4,},{Z,0,1,Z,2,3,Z,Z,},{Z,0,1,Z,2,3,Z,4,},{Z,0,1,Z,2,3,4,Z,},{Z,0,1,Z,2,3,4,5,},
-	{Z,0,1,2,Z,Z,Z,Z,},{Z,0,1,2,Z,Z,Z,3,},{Z,0,1,2,Z,Z,3,Z,},{Z,0,1,2,Z,Z,3,4,},{Z,0,1,2,Z,3,Z,Z,},{Z,0,1,2,Z,3,Z,4,},{Z,0,1,2,Z,3,4,Z,},{Z,0,1,2,Z,3,4,5,},
-	{Z,0,1,2,3,Z,Z,Z,},{Z,0,1,2,3,Z,Z,4,},{Z,0,1,2,3,Z,4,Z,},{Z,0,1,2,3,Z,4,5,},{Z,0,1,2,3,4,Z,Z,},{Z,0,1,2,3,4,Z,5,},{Z,0,1,2,3,4,5,Z,},{Z,0,1,2,3,4,5,6,},
-	{0,Z,Z,Z,Z,Z,Z,Z,},{0,Z,Z,Z,Z,Z,Z,1,},{0,Z,Z,Z,Z,Z,1,Z,},{0,Z,Z,Z,Z,Z,1,2,},{0,Z,Z,Z,Z,1,Z,Z,},{0,Z,Z,Z,Z,1,Z,2,},{0,Z,Z,Z,Z,1,2,Z,},{0,Z,Z,Z,Z,1,2,3,},
-	{0,Z,Z,Z,1,Z,Z,Z,},{0,Z,Z,Z,1,Z,Z,2,},{0,Z,Z,Z,1,Z,2,Z,},{0,Z,Z,Z,1,Z,2,3,},{0,Z,Z,Z,1,2,Z,Z,},{0,Z,Z,Z,1,2,Z,3,},{0,Z,Z,Z,1,2,3,Z,},{0,Z,Z,Z,1,2,3,4,},
-	{0,Z,Z,1,Z,Z,Z,Z,},{0,Z,Z,1,Z,Z,Z,2,},{0,Z,Z,1,Z,Z,2,Z,},{0,Z,Z,1,Z,Z,2,3,},{0,Z,Z,1,Z,2,Z,Z,},{0,Z,Z,1,Z,2,Z,3,},{0,Z,Z,1,Z,2,3,Z,},{0,Z,Z,1,Z,2,3,4,},
-	{0,Z,Z,1,2,Z,Z,Z,},{0,Z,Z,1,2,Z,Z,3,},{0,Z,Z,1,2,Z,3,Z,},{0,Z,Z,1,2,Z,3,4,},{0,Z,Z,1,2,3,Z,Z,},{0,Z,Z,1,2,3,Z,4,},{0,Z,Z,1,2,3,4,Z,},{0,Z,Z,1,2,3,4,5,},
-	{0,Z,1,Z,Z,Z,Z,Z,},{0,Z,1,Z,Z,Z,Z,2,},{0,Z,1,Z,Z,Z,2,Z,},{0,Z,1,Z,Z,Z,2,3,},{0,Z,1,Z,Z,2,Z,Z,},{0,Z,1,Z,Z,2,Z,3,},{0,Z,1,Z,Z,2,3,Z,},{0,Z,1,Z,Z,2,3,4,},
-	{0,Z,1,Z,2,Z,Z,Z,},{0,Z,1,Z,2,Z,Z,3,},{0,Z,1,Z,2,Z,3,Z,},{0,Z,1,Z,2,Z,3,4,},{0,Z,1,Z,2,3,Z,Z,},{0,Z,1,Z,2,3,Z,4,},{0,Z,1,Z,2,3,4,Z,},{0,Z,1,Z,2,3,4,5,},
-	{0,Z,1,2,Z,Z,Z,Z,},{0,Z,1,2,Z,Z,Z,3,},{0,Z,1,2,Z,Z,3,Z,},{0,Z,1,2,Z,Z,3,4,},{0,Z,1,2,Z,3,Z,Z,},{0,Z,1,2,Z,3,Z,4,},{0,Z,1,2,Z,3,4,Z,},{0,Z,1,2,Z,3,4,5,},
-	{0,Z,1,2,3,Z,Z,Z,},{0,Z,1,2,3,Z,Z,4,},{0,Z,1,2,3,Z,4,Z,},{0,Z,1,2,3,Z,4,5,},{0,Z,1,2,3,4,Z,Z,},{0,Z,1,2,3,4,Z,5,},{0,Z,1,2,3,4,5,Z,},{0,Z,1,2,3,4,5,6,},
-	{0,1,Z,Z,Z,Z,Z,Z,},{0,1,Z,Z,Z,Z,Z,2,},{0,1,Z,Z,Z,Z,2,Z,},{0,1,Z,Z,Z,Z,2,3,},{0,1,Z,Z,Z,2,Z,Z,},{0,1,Z,Z,Z,2,Z,3,},{0,1,Z,Z,Z,2,3,Z,},{0,1,Z,Z,Z,2,3,4,},
-	{0,1,Z,Z,2,Z,Z,Z,},{0,1,Z,Z,2,Z,Z,3,},{0,1,Z,Z,2,Z,3,Z,},{0,1,Z,Z,2,Z,3,4,},{0,1,Z,Z,2,3,Z,Z,},{0,1,Z,Z,2,3,Z,4,},{0,1,Z,Z,2,3,4,Z,},{0,1,Z,Z,2,3,4,5,},
-	{0,1,Z,2,Z,Z,Z,Z,},{0,1,Z,2,Z,Z,Z,3,},{0,1,Z,2,Z,Z,3,Z,},{0,1,Z,2,Z,Z,3,4,},{0,1,Z,2,Z,3,Z,Z,},{0,1,Z,2,Z,3,Z,4,},{0,1,Z,2,Z,3,4,Z,},{0,1,Z,2,Z,3,4,5,},
-	{0,1,Z,2,3,Z,Z,Z,},{0,1,Z,2,3,Z,Z,4,},{0,1,Z,2,3,Z,4,Z,},{0,1,Z,2,3,Z,4,5,},{0,1,Z,2,3,4,Z,Z,},{0,1,Z,2,3,4,Z,5,},{0,1,Z,2,3,4,5,Z,},{0,1,Z,2,3,4,5,6,},
-	{0,1,2,Z,Z,Z,Z,Z,},{0,1,2,Z,Z,Z,Z,3,},{0,1,2,Z,Z,Z,3,Z,},{0,1,2,Z,Z,Z,3,4,},{0,1,2,Z,Z,3,Z,Z,},{0,1,2,Z,Z,3,Z,4,},{0,1,2,Z,Z,3,4,Z,},{0,1,2,Z,Z,3,4,5,},
-	{0,1,2,Z,3,Z,Z,Z,},{0,1,2,Z,3,Z,Z,4,},{0,1,2,Z,3,Z,4,Z,},{0,1,2,Z,3,Z,4,5,},{0,1,2,Z,3,4,Z,Z,},{0,1,2,Z,3,4,Z,5,},{0,1,2,Z,3,4,5,Z,},{0,1,2,Z,3,4,5,6,},
-	{0,1,2,3,Z,Z,Z,Z,},{0,1,2,3,Z,Z,Z,4,},{0,1,2,3,Z,Z,4,Z,},{0,1,2,3,Z,Z,4,5,},{0,1,2,3,Z,4,Z,Z,},{0,1,2,3,Z,4,Z,5,},{0,1,2,3,Z,4,5,Z,},{0,1,2,3,Z,4,5,6,},
-	{0,1,2,3,4,Z,Z,Z,},{0,1,2,3,4,Z,Z,5,},{0,1,2,3,4,Z,5,Z,},{0,1,2,3,4,Z,5,6,},{0,1,2,3,4,5,Z,Z,},{0,1,2,3,4,5,Z,6,},{0,1,2,3,4,5,6,Z,},{0,1,2,3,4,5,6,7,},
-};
-#undef Z
+static unsigned char kDecodeBytesGroupShuffle[256][8];
+static unsigned char kDecodeBytesGroupCount[256];
 
-static const unsigned char kDecodeBytesGroupCount[256] = {
-	0,1,1,2,1,2,2,3,1,2,2,3,2,3,3,4,1,2,2,3,2,3,3,4,2,3,3,4,3,4,4,5,1,2,2,3,2,3,3,4,2,3,3,4,3,4,4,5,2,3,3,4,3,4,4,5,3,4,4,5,4,5,5,6,
-	1,2,2,3,2,3,3,4,2,3,3,4,3,4,4,5,2,3,3,4,3,4,4,5,3,4,4,5,4,5,5,6,2,3,3,4,3,4,4,5,3,4,4,5,4,5,5,6,3,4,4,5,4,5,5,6,4,5,5,6,5,6,6,7,
-	1,2,2,3,2,3,3,4,2,3,3,4,3,4,4,5,2,3,3,4,3,4,4,5,3,4,4,5,4,5,5,6,2,3,3,4,3,4,4,5,3,4,4,5,4,5,5,6,3,4,4,5,4,5,5,6,4,5,5,6,5,6,6,7,
-	2,3,3,4,3,4,4,5,3,4,4,5,4,5,5,6,3,4,4,5,4,5,5,6,4,5,5,6,5,6,6,7,3,4,4,5,4,5,5,6,4,5,5,6,5,6,6,7,4,5,5,6,5,6,6,7,5,6,6,7,6,7,7,8,
-};
-// clang-format on
+static bool decodeBytesGroupBuildTables()
+{
+	for (int mask = 0; mask < 256; ++mask)
+	{
+		unsigned char shuffle[8];
+		memset(shuffle, 0x80, 8);
+
+		unsigned char count = 0;
+
+		for (int i = 0; i < 8; ++i)
+			if (mask & (1 << i))
+			{
+				shuffle[i] = count;
+				count++;
+			}
+
+		memcpy(kDecodeBytesGroupShuffle[mask], shuffle, 8);
+		kDecodeBytesGroupCount[mask] = count;
+	}
+
+	return true;
+}
+
+static bool gDecodeBytesGroupInitialized = decodeBytesGroupBuildTables();
 #endif
 
 #if SIMD == 1
@@ -279,9 +261,9 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 		__m128i sel = _mm_and_si128(sel2222, _mm_set1_epi8(3));
 
 		__m128i mask = _mm_cmpeq_epi8(sel, _mm_set1_epi8(3));
-		int mask16 = _mm_movemask_epi8(_mm_shuffle_epi8(mask, _mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)));
-		unsigned char mask0 = (unsigned char)(mask16 >> 8);
-		unsigned char mask1 = (unsigned char)(mask16 & 255);
+		int mask16 = _mm_movemask_epi8(mask);
+		unsigned char mask0 = (unsigned char)(mask16 & 255);
+		unsigned char mask1 = (unsigned char)(mask16 >> 8);
 
 		__m128i shuf = decodeShuffleMask(mask0, mask1);
 
@@ -301,9 +283,9 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 		__m128i sel = _mm_and_si128(sel44, _mm_set1_epi8(15));
 
 		__m128i mask = _mm_cmpeq_epi8(sel, _mm_set1_epi8(15));
-		int mask16 = _mm_movemask_epi8(_mm_shuffle_epi8(mask, _mm_set_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)));
-		unsigned char mask0 = (unsigned char)(mask16 >> 8);
-		unsigned char mask1 = (unsigned char)(mask16 & 255);
+		int mask16 = _mm_movemask_epi8(mask);
+		unsigned char mask0 = (unsigned char)(mask16 & 255);
+		unsigned char mask1 = (unsigned char)(mask16 >> 8);
 
 		__m128i shuf = decodeShuffleMask(mask0, mask1);
 
@@ -346,14 +328,14 @@ static uint8x16_t shuffleBytes(unsigned char mask0, unsigned char mask1, uint8x8
 
 static int neonMoveMask(uint8x16_t mask)
 {
-	static const uint8x16_t byte_mask = {128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1};
+	static const uint8x16_t byte_mask = {1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128};
 
 	uint8x16_t masked = vandq_u8(mask, byte_mask);
 
 	// we need horizontal sums of each half of masked
 	// the endianness of the platform determines the order of high/low in sum1 below
 	// we assume little endian here
-	uint8x8_t sum1 = vpadd_u8(vget_high_u8(masked), vget_low_u8(masked));
+	uint8x8_t sum1 = vpadd_u8(vget_low_u8(masked), vget_high_u8(masked));
 	uint8x8_t sum2 = vpadd_u8(sum1, sum1);
 	uint8x8_t sum3 = vpadd_u8(sum2, sum2);
 
@@ -383,8 +365,8 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 
 		uint8x16_t mask = vceqq_u8(sel, vdupq_n_u8(3));
 		int mask16 = neonMoveMask(mask);
-		unsigned char mask0 = (unsigned char)(mask16 >> 8);
-		unsigned char mask1 = (unsigned char)(mask16 & 255);
+		unsigned char mask0 = (unsigned char)(mask16 & 255);
+		unsigned char mask1 = (unsigned char)(mask16 >> 8);
 
 		uint8x8_t rest0 = vld1_u8(data + 4);
 		uint8x8_t rest1 = vld1_u8(data + 4 + kDecodeBytesGroupCount[mask0]);
@@ -404,8 +386,8 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 
 		uint8x16_t mask = vceqq_u8(sel, vdupq_n_u8(15));
 		int mask16 = neonMoveMask(mask);
-		unsigned char mask0 = (unsigned char)(mask16 >> 8);
-		unsigned char mask1 = (unsigned char)(mask16 & 255);
+		unsigned char mask0 = (unsigned char)(mask16 & 255);
+		unsigned char mask1 = (unsigned char)(mask16 >> 8);
 
 		uint8x8_t rest0 = vld1_u8(data + 8);
 		uint8x8_t rest1 = vld1_u8(data + 8 + kDecodeBytesGroupCount[mask0]);
