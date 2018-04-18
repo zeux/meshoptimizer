@@ -124,7 +124,7 @@ static unsigned char* encodeBytesGroup(unsigned char* data, const unsigned char*
 	return data;
 }
 
-static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buffer, size_t buffer_size)
+static unsigned char* encodeBytes(unsigned char* data, unsigned char* data_end, const unsigned char* buffer, size_t buffer_size)
 {
 	assert(buffer_size % kByteGroupSize == 0);
 
@@ -133,12 +133,18 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 	// round number of groups to 4 to get number of header bytes
 	size_t header_size = (buffer_size / kByteGroupSize + 3) / 4;
 
+	if (size_t(data_end - data) < header_size)
+		return 0;
+
 	data += header_size;
 
 	memset(header, 0, header_size);
 
 	for (size_t i = 0; i < buffer_size; i += kByteGroupSize)
 	{
+		if (size_t(data_end - data) < 32)
+			return 0;
+
 		int best_bits = 8;
 		size_t best_size = kByteGroupSize; // assume encodeBytesVar(8) just stores as is
 
@@ -169,7 +175,7 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 	return data;
 }
 
-static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
+static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data_end, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 
@@ -194,7 +200,9 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 			vertex_offset += vertex_size;
 		}
 
-		data = encodeBytes(data, buffer, (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1));
+		data = encodeBytes(data, data_end, buffer, (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1));
+		if (!data)
+			return 0;
 	}
 
 	memcpy(last_vertex, &vertex_data[vertex_size * (vertex_count - 1)], vertex_size);
@@ -729,6 +737,7 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	const unsigned char* vertex_data = static_cast<const unsigned char*>(vertices);
 
 	unsigned char* data = buffer;
+	unsigned char* data_end = buffer + buffer_size;
 
 	unsigned char last_vertex[256];
 	memcpy(last_vertex, vertex_data, vertex_size);
@@ -741,9 +750,17 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	{
 		size_t block_size = (vertex_offset + vertex_block_size < vertex_count) ? vertex_block_size : vertex_count - vertex_offset;
 
-		data = encodeVertexBlock(data, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, last_vertex);
+		data = encodeVertexBlock(data, data_end, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, last_vertex);
+		if (!data)
+			return 0;
+
 		vertex_offset += block_size;
 	}
+
+	size_t tail_size = vertex_size < 32 ? 32 : vertex_size;
+
+	if (size_t(data_end - data) < tail_size)
+		return 0;
 
 	// write first vertex to the end of the stream and pad it to 32 bytes; this is important to simplify bounds checks in decoder
 	if (vertex_size < 32)
@@ -755,8 +772,8 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	memcpy(data, vertex_data, vertex_size);
 	data += vertex_size;
 
-	assert(size_t(data - buffer) <= buffer_size);
-	(void)buffer_size;
+	assert(data >= buffer + tail_size);
+	assert(data <= buffer + buffer_size);
 
 	return data - buffer;
 }
