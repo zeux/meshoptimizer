@@ -432,6 +432,19 @@ void encodeIndex(const Mesh& mesh)
 		    (result[i + 2] == mesh.indices[i + 0] && result[i + 0] == mesh.indices[i + 1] && result[i + 1] == mesh.indices[i + 2]));
 	}
 
+	if (mesh.vertices.size() <= 65536)
+	{
+		meshopt_Buffer<unsigned short> result2(mesh.indices.size());
+		int res2 = meshopt_decodeIndexBuffer(&result2[0], mesh.indices.size(), &buffer[0], buffer.size());
+		assert(res2 == 0);
+		(void)res2;
+
+		for (size_t i = 0; i < mesh.indices.size(); i += 3)
+		{
+			assert(result[i + 0] == result2[i + 0] && result[i + 1] == result2[i + 1] && result[i + 2] == result2[i + 2]);
+		}
+	}
+
 	printf("IdxCodec : %.1f bits/triangle (post-deflate %.1f bits/triangle); encode %.2f msec, decode %.2f msec (%.2f GB/s)\n",
 	       double(buffer.size() * 8) / double(mesh.indices.size() / 3),
 	       double(csize * 8) / double(mesh.indices.size() / 3),
