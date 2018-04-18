@@ -112,7 +112,7 @@ MESHOPTIMIZER_API size_t meshopt_encodeIndexBufferBound(size_t index_count, size
  *
  * destination must contain enough space for the resulting index buffer (index_count elements)
  */
-MESHOPTIMIZER_API int meshopt_decodeIndexBuffer(unsigned int* destination, size_t index_count, const unsigned char* buffer, size_t buffer_size);
+MESHOPTIMIZER_API int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t index_size, const unsigned char* buffer, size_t buffer_size);
 
 /**
  * Experimental: Vertex buffer encoder
@@ -369,9 +369,10 @@ inline size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_siz
 template <typename T>
 inline int meshopt_decodeIndexBuffer(T* destination, size_t index_count, const unsigned char* buffer, size_t buffer_size)
 {
-	meshopt_IndexAdapter<T> out(destination, 0, index_count);
+	char index_size_valid[sizeof(T) == 2 || sizeof(T) == 4 ? 1 : -1];
+	(void)index_size_valid;
 
-	return meshopt_decodeIndexBuffer(out.data, index_count, buffer, buffer_size);
+	return meshopt_decodeIndexBuffer(destination, index_count, sizeof(T), buffer, buffer_size);
 }
 
 template <typename T>
