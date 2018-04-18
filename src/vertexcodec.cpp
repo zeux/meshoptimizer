@@ -4,13 +4,19 @@
 #include <assert.h>
 #include <string.h>
 
-#define SIMD 0
+#ifdef __ARM_NEON__
+#define SIMD_NEON
+#endif
 
-#if SIMD == 1
+#if defined(__AVX__) || defined(__SSSE3__)
+#define SIMD_SSE
+#endif
+
+#ifdef SIMD_SSE
 #include <tmmintrin.h>
 #endif
 
-#if SIMD == 2
+#ifdef SIMD_NEON
 #include <arm_neon.h>
 #endif
 
@@ -196,7 +202,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char
 	return data;
 }
 
-#if SIMD == 0
+#if !defined(SIMD_SSE) && !defined(SIMD_NEON)
 template <int bits>
 static const unsigned char* decodeBytesGroupImpl(const unsigned char* data, unsigned char* buffer)
 {
@@ -311,7 +317,7 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 }
 #endif
 
-#if SIMD
+#if defined(SIMD_SSE) || defined(SIMD_NEON)
 static unsigned char kDecodeBytesGroupShuffle[256][8];
 static unsigned char kDecodeBytesGroupCount[256];
 
@@ -341,7 +347,7 @@ static bool decodeBytesGroupBuildTables()
 static bool gDecodeBytesGroupInitialized = decodeBytesGroupBuildTables();
 #endif
 
-#if SIMD == 1
+#ifdef SIMD_SSE
 static __m128i decodeShuffleMask(unsigned char mask0, unsigned char mask1)
 {
 	__m128i sm0 = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(&kDecodeBytesGroupShuffle[mask0]));
@@ -353,7 +359,28 @@ static __m128i decodeShuffleMask(unsigned char mask0, unsigned char mask1)
 	return _mm_unpacklo_epi64(sm0, sm1r);
 }
 
-static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned char* buffer, int bitslog2)
+static void transpose8(__m128i& x0, __m128i& x1, __m128i& x2, __m128i& x3)
+{
+	__m128i t0 = _mm_unpacklo_epi8(x0, x1);
+	__m128i t1 = _mm_unpackhi_epi8(x0, x1);
+	__m128i t2 = _mm_unpacklo_epi8(x2, x3);
+	__m128i t3 = _mm_unpackhi_epi8(x2, x3);
+
+	x0 = _mm_unpacklo_epi16(t0, t2);
+	x1 = _mm_unpackhi_epi16(t0, t2);
+	x2 = _mm_unpacklo_epi16(t1, t3);
+	x3 = _mm_unpackhi_epi16(t1, t3);
+}
+
+static __m128i unzigzag8(__m128i v)
+{
+	__m128i xl = _mm_sub_epi8(_mm_setzero_si128(), _mm_and_si128(v, _mm_set1_epi8(1)));
+	__m128i xr = _mm_and_si128(_mm_srli_epi16(v, 1), _mm_set1_epi8(127));
+
+	return _mm_xor_si128(xl, xr);
+}
+
+static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int bitslog2)
 {
 	switch (bitslog2)
 	{
@@ -429,7 +456,7 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 }
 #endif
 
-#if SIMD == 2
+#ifdef SIMD_NEON
 static uint8x16_t shuffleBytes(unsigned char mask0, unsigned char mask1, uint8x8_t rest0, uint8x8_t rest1)
 {
 	uint8x8_t sm0 = vld1_u8(kDecodeBytesGroupShuffle[mask0]);
@@ -458,7 +485,29 @@ static int neonMoveMask(uint8x16_t mask)
 	return vget_lane_u16(vreinterpret_u16_u8(sum3), 0);
 }
 
-static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned char* buffer, int bitslog2)
+static void transpose8(uint8x16_t& x0, uint8x16_t& x1, uint8x16_t& x2, uint8x16_t& x3)
+{
+	uint8x16x2_t t01 = vzipq_u8(x0, x1);
+	uint8x16x2_t t23 = vzipq_u8(x2, x3);
+
+	uint16x8x2_t x01 = vzipq_u16(vreinterpretq_u16_u8(t01.val[0]), vreinterpretq_u16_u8(t23.val[0]));
+	uint16x8x2_t x23 = vzipq_u16(vreinterpretq_u16_u8(t01.val[1]), vreinterpretq_u16_u8(t23.val[1]));
+
+	x0 = x01.val[0];
+	x1 = x01.val[1];
+	x2 = x23.val[0];
+	x3 = x23.val[1];
+}
+
+static uint8x16_t unzigzag8(uint8x16_t v)
+{
+	uint8x16_t xl = vreinterpretq_u8_s8(vnegq_s8(vreinterpretq_s8_u8(vandq_u8(v, vdupq_n_u8(1)))));
+	uint8x16_t xr = vshrq_n_u8(v, 1);
+
+	return veorq_u8(xl, xr);
+}
+
+static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int bitslog2)
 {
 	switch (bitslog2)
 	{
@@ -532,8 +581,8 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 }
 #endif
 
-#if SIMD
-static const unsigned char* decodeBytes(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size)
+#if defined(SIMD_SSE) || defined(SIMD_NEON)
+static const unsigned char* decodeBytesSimd(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size)
 {
 	assert(buffer_size % kByteGroupSize == 0);
 
@@ -555,10 +604,10 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 		size_t header_offset = i / kByteGroupSize;
 		unsigned char header_byte = header[header_offset / 4];
 
-		data = decodeBytesGroup(data, buffer + i + kByteGroupSize * 0, (header_byte >> 0) & 3);
-		data = decodeBytesGroup(data, buffer + i + kByteGroupSize * 1, (header_byte >> 2) & 3);
-		data = decodeBytesGroup(data, buffer + i + kByteGroupSize * 2, (header_byte >> 4) & 3);
-		data = decodeBytesGroup(data, buffer + i + kByteGroupSize * 3, (header_byte >> 6) & 3);
+		data = decodeBytesGroupSimd(data, buffer + i + kByteGroupSize * 0, (header_byte >> 0) & 3);
+		data = decodeBytesGroupSimd(data, buffer + i + kByteGroupSize * 1, (header_byte >> 2) & 3);
+		data = decodeBytesGroupSimd(data, buffer + i + kByteGroupSize * 2, (header_byte >> 4) & 3);
+		data = decodeBytesGroupSimd(data, buffer + i + kByteGroupSize * 3, (header_byte >> 6) & 3);
 	}
 
 	// slow-path: process remaining groups
@@ -571,62 +620,13 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 
 		int bitslog2 = (header[header_offset / 4] >> ((header_offset % 4) * 2)) & 3;
 
-		data = decodeBytesGroup(data, buffer + i, bitslog2);
+		data = decodeBytesGroupSimd(data, buffer + i, bitslog2);
 	}
 
 	return data;
 }
-#endif
 
-#if SIMD == 1
-static void transpose8(__m128i& x0, __m128i& x1, __m128i& x2, __m128i& x3)
-{
-	__m128i t0 = _mm_unpacklo_epi8(x0, x1);
-	__m128i t1 = _mm_unpackhi_epi8(x0, x1);
-	__m128i t2 = _mm_unpacklo_epi8(x2, x3);
-	__m128i t3 = _mm_unpackhi_epi8(x2, x3);
-
-	x0 = _mm_unpacklo_epi16(t0, t2);
-	x1 = _mm_unpackhi_epi16(t0, t2);
-	x2 = _mm_unpacklo_epi16(t1, t3);
-	x3 = _mm_unpackhi_epi16(t1, t3);
-}
-
-static __m128i unzigzag8(__m128i v)
-{
-	__m128i xl = _mm_sub_epi8(_mm_setzero_si128(), _mm_and_si128(v, _mm_set1_epi8(1)));
-	__m128i xr = _mm_and_si128(_mm_srli_epi16(v, 1), _mm_set1_epi8(127));
-
-	return _mm_xor_si128(xl, xr);
-}
-#endif
-
-#if SIMD == 2
-static void transpose8(uint8x16_t& x0, uint8x16_t& x1, uint8x16_t& x2, uint8x16_t& x3)
-{
-	uint8x16x2_t t01 = vzipq_u8(x0, x1);
-	uint8x16x2_t t23 = vzipq_u8(x2, x3);
-
-	uint16x8x2_t x01 = vzipq_u16(vreinterpretq_u16_u8(t01.val[0]), vreinterpretq_u16_u8(t23.val[0]));
-	uint16x8x2_t x23 = vzipq_u16(vreinterpretq_u16_u8(t01.val[1]), vreinterpretq_u16_u8(t23.val[1]));
-
-	x0 = x01.val[0];
-	x1 = x01.val[1];
-	x2 = x23.val[0];
-	x3 = x23.val[1];
-}
-
-static uint8x16_t unzigzag8(uint8x16_t v)
-{
-	uint8x16_t xl = vreinterpretq_u8_s8(vnegq_s8(vreinterpretq_s8_u8(vandq_u8(v, vdupq_n_u8(1)))));
-	uint8x16_t xr = vshrq_n_u8(v, 1);
-
-	return veorq_u8(xl, xr);
-}
-#endif
-
-#if SIMD
-static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
+static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 
@@ -639,12 +639,12 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 	{
 		for (size_t j = 0; j < 4; ++j)
 		{
-			data = decodeBytes(data, data_end, buffer + j * vertex_count_aligned, vertex_count_aligned);
+			data = decodeBytesSimd(data, data_end, buffer + j * vertex_count_aligned, vertex_count_aligned);
 			if (!data)
 				return 0;
 		}
 
-#if SIMD == 1
+#ifdef SIMD_SSE
 #define TEMP __m128i
 #define LOAD(i) __m128i r##i = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + i * vertex_count_aligned))
 #define GRP4(i) t0 = _mm_shuffle_epi32(r##i, 0), t1 = _mm_shuffle_epi32(r##i, 1), t2 = _mm_shuffle_epi32(r##i, 2), t3 = _mm_shuffle_epi32(r##i, 3)
@@ -652,7 +652,7 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 #define SAVE(i) *reinterpret_cast<int*>(savep) = _mm_cvtsi128_si32(t##i), savep += vertex_size
 #endif
 
-#if SIMD == 2
+#ifdef SIMD_NEON
 #define TEMP uint8x8_t
 #define LOAD(i) uint8x16_t r##i = vld1q_u8(buffer + j + i * vertex_count_aligned)
 #define GRP4(i) t0 = vget_low_u8(r##i), t1 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t0), 1)), t2 = vget_high_u8(r##i), t3 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t2), 1))
@@ -660,10 +660,10 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 #define SAVE(i) vst1_lane_u32(reinterpret_cast<uint32_t*>(savep), vreinterpret_u32_u8(t##i), 0), savep += vertex_size
 #endif
 
-#if SIMD == 1
+#ifdef SIMD_SSE
 		__m128i pi = _mm_cvtsi32_si128(*reinterpret_cast<const int*>(last_vertex + k));
 #endif
-#if SIMD == 2
+#ifdef SIMD_NEON
 		uint8x8_t pi = vreinterpret_u8_u32(vld1_lane_u32(reinterpret_cast<uint32_t*>(last_vertex + k), vdup_n_u32(0), 0));
 #endif
 
@@ -786,6 +786,14 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 	assert(vertex_size > 0 && vertex_size <= 256);
 	assert(vertex_size % 4 == 0);
 
+	const unsigned char* (*decode)(const unsigned char*, const unsigned char*, unsigned char*, size_t, size_t, unsigned char[256]) = 0;
+
+#if defined(SIMD_SSE) || defined(SIMD_NEON)
+	decode = decodeVertexBlockSimd;
+#else
+	decode = decodeVertexBlock;
+#endif
+
 	unsigned char* vertex_data = static_cast<unsigned char*>(destination);
 
 	const unsigned char* data = buffer;
@@ -805,7 +813,7 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 	{
 		size_t block_size = (vertex_offset + vertex_block_size < vertex_count) ? vertex_block_size : vertex_count - vertex_offset;
 
-		data = decodeVertexBlock(data, data_end, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, last_vertex);
+		data = decode(data, data_end, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, last_vertex);
 		if (!data)
 			return -2;
 
