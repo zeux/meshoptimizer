@@ -43,10 +43,10 @@ inline unsigned char unzigzag8(unsigned char v)
 	return (-(v & 1)) ^ (v >> 1);
 }
 
-static bool encodeBytesFits(const unsigned char* buffer, size_t buffer_size, int bits)
+static bool encodeBytesGroupZero(const unsigned char* buffer)
 {
-	for (size_t k = 0; k < buffer_size; ++k)
-		if (buffer[k] >= (1 << bits))
+	for (size_t i = 0; i < kByteGroupSize; ++i)
+		if (buffer[i])
 			return false;
 
 	return true;
@@ -55,6 +55,9 @@ static bool encodeBytesFits(const unsigned char* buffer, size_t buffer_size, int
 static size_t encodeBytesGroupMeasure(const unsigned char* buffer, int bits)
 {
 	assert(bits >= 1 && bits <= 8);
+
+	if (bits == 1)
+		return encodeBytesGroupZero(buffer) ? 0 : size_t(-1);
 
 	if (bits == 8)
 		return kByteGroupSize;
@@ -72,6 +75,9 @@ static size_t encodeBytesGroupMeasure(const unsigned char* buffer, int bits)
 static unsigned char* encodeBytesGroup(unsigned char* data, const unsigned char* buffer, int bits)
 {
 	assert(bits >= 1 && bits <= 8);
+
+	if (bits == 1)
+		return data;
 
 	if (bits == 8)
 	{
@@ -116,56 +122,45 @@ static unsigned char* encodeBytes(unsigned char* data, const unsigned char* buff
 {
 	assert(buffer_size % kByteGroupSize == 0);
 
-	if (encodeBytesFits(buffer, buffer_size, 0))
+	unsigned char* header = data;
+
+	// round number of groups to 4 to get number of header bytes
+	size_t header_size = (buffer_size / kByteGroupSize + 3) / 4;
+
+	data += header_size;
+
+	memset(header, 0, header_size);
+
+	for (size_t i = 0; i < buffer_size; i += kByteGroupSize)
 	{
-		*data++ = 0;
+		int best_bits = 8;
+		size_t best_size = kByteGroupSize; // assume encodeBytesVar(8) just stores as is
 
-		return data;
-	}
-	else
-	{
-		*data++ = 1;
-
-		unsigned char* header = data;
-
-		// round number of groups to 4 to get number of header bytes
-		size_t header_size = (buffer_size / kByteGroupSize + 3) / 4;
-
-		data += header_size;
-
-		memset(header, 0, header_size);
-
-		for (size_t i = 0; i < buffer_size; i += kByteGroupSize)
+		for (int bits = 1; bits < 8; bits *= 2)
 		{
-			int best_bits = 8;
-			size_t best_size = kByteGroupSize; // assume encodeBytesVar(8) just stores as is
+			size_t size = encodeBytesGroupMeasure(buffer + i, bits);
 
-			for (int bits = 1; bits < 8; bits *= 2)
+			if (size < best_size)
 			{
-				size_t size = encodeBytesGroupMeasure(buffer + i, bits);
-
-				if (size < best_size)
-				{
-					best_bits = bits;
-					best_size = size;
-				}
+				best_bits = bits;
+				best_size = size;
 			}
-
-			int bitslog2 = (best_bits == 1) ? 0 : (best_bits == 2) ? 1 : (best_bits == 4) ? 2 : 3;
-			assert((1 << bitslog2) == best_bits);
-
-			size_t header_offset = i / kByteGroupSize;
-
-			header[header_offset / 4] |= bitslog2 << ((header_offset % 4) * 2);
-
-			unsigned char* next = encodeBytesGroup(data, buffer + i, best_bits);
-
-			assert(data + best_size == next);
-			data = next;
 		}
 
-		return data;
+		int bitslog2 = (best_bits == 1) ? 0 : (best_bits == 2) ? 1 : (best_bits == 4) ? 2 : 3;
+		assert((1 << bitslog2) == best_bits);
+
+		size_t header_offset = i / kByteGroupSize;
+
+		header[header_offset / 4] |= bitslog2 << ((header_offset % 4) * 2);
+
+		unsigned char* next = encodeBytesGroup(data, buffer + i, best_bits);
+
+		assert(data + best_size == next);
+		data = next;
 	}
+
+	return data;
 }
 
 static unsigned char* encodeVertexBlock(unsigned char* data, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
@@ -267,19 +262,11 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 	{
 	case 0:
 	{
-		unsigned char mask0 = data[0];
-		unsigned char mask1 = data[1];
-
-		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + 2));
-
-		__m128i shuf = decodeShuffleMask(mask0, mask1);
-
-		// note: this will set unused entries to 0 since shuf mask will have high bits set to 1
-		__m128i result = _mm_shuffle_epi8(rest, shuf);
+		__m128i result = _mm_setzero_si128();
 
 		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
 
-		return data + 2 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
+		return data;
 	}
 
 	case 1:
@@ -380,17 +367,11 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 	{
 	case 0:
 	{
-		unsigned char mask0 = data[0];
-		unsigned char mask1 = data[1];
-
-		uint8x8_t rest0 = vld1_u8(data + 2);
-		uint8x8_t rest1 = vld1_u8(data + 2 + kDecodeBytesGroupCount[mask0]);
-
-		uint8x16_t result = shuffleBytes(mask0, mask1, rest0, rest1);
+		uint8x16_t result = vdupq_n_u8(0);
 
 		vst1q_u8(buffer, result);
 
-		return data + 2 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
+		return data;
 	}
 
 	case 1:
@@ -491,7 +472,8 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 	switch (bitslog2)
 	{
 	case 0:
-		return decodeBytesGroupImpl<1>(data, buffer);
+		memset(buffer, 0, kByteGroupSize);
+		return data;
 	case 1:
 		return decodeBytesGroupImpl<2>(data, buffer);
 	case 2:
@@ -510,63 +492,44 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 {
 	assert(buffer_size % kByteGroupSize == 0);
 
-	if (size_t(data_end - data) < 1)
+	const unsigned char* header = data;
+
+	// round number of groups to 4 to get number of header bytes
+	size_t header_size = (buffer_size / kByteGroupSize + 3) / 4;
+
+	if (size_t(data_end - data) < header_size)
 		return 0;
 
-	unsigned char encoding = *data++;
+	data += header_size;
 
-	if (encoding == 0)
+	size_t i = 0;
+
+	// fast-path: process 4 groups at a time, do a shared bounds check - each group reads <=32b
+	for (; i + kByteGroupSize * 4 <= buffer_size && size_t(data_end - data) >= 128; i += kByteGroupSize * 4)
 	{
-		memset(buffer, 0, buffer_size);
+		size_t header_offset = i / kByteGroupSize;
+		unsigned char header_byte = header[header_offset / 4];
 
-		return data;
+		data = decodeBytesGroup(data, buffer + i + kByteGroupSize * 0, (header_byte >> 0) & 3);
+		data = decodeBytesGroup(data, buffer + i + kByteGroupSize * 1, (header_byte >> 2) & 3);
+		data = decodeBytesGroup(data, buffer + i + kByteGroupSize * 2, (header_byte >> 4) & 3);
+		data = decodeBytesGroup(data, buffer + i + kByteGroupSize * 3, (header_byte >> 6) & 3);
 	}
-	else if (encoding == 1)
+
+	// slow-path: process remaining groups
+	for (; i < buffer_size; i += kByteGroupSize)
 	{
-		const unsigned char* header = data;
-
-		// round number of groups to 4 to get number of header bytes
-		size_t header_size = (buffer_size / kByteGroupSize + 3) / 4;
-
-		if (size_t(data_end - data) < header_size)
+		if (size_t(data_end - data) < 32)
 			return 0;
 
-		data += header_size;
+		size_t header_offset = i / kByteGroupSize;
 
-		size_t i = 0;
+		int bitslog2 = (header[header_offset / 4] >> ((header_offset % 4) * 2)) & 3;
 
-		// fast-path: process 4 groups at a time, do a shared bounds check - each group reads <=32b
-		for (; i + kByteGroupSize * 4 <= buffer_size && size_t(data_end - data) >= 128; i += kByteGroupSize * 4)
-		{
-			size_t header_offset = i / kByteGroupSize;
-			unsigned char header_byte = header[header_offset / 4];
-
-			data = decodeBytesGroup(data, buffer + i + kByteGroupSize * 0, (header_byte >> 0) & 3);
-			data = decodeBytesGroup(data, buffer + i + kByteGroupSize * 1, (header_byte >> 2) & 3);
-			data = decodeBytesGroup(data, buffer + i + kByteGroupSize * 2, (header_byte >> 4) & 3);
-			data = decodeBytesGroup(data, buffer + i + kByteGroupSize * 3, (header_byte >> 6) & 3);
-		}
-
-		// slow-path: process remaining groups
-		for (; i < buffer_size; i += kByteGroupSize)
-		{
-			if (size_t(data_end - data) < 32)
-				return 0;
-
-			size_t header_offset = i / kByteGroupSize;
-
-			int bitslog2 = (header[header_offset / 4] >> ((header_offset % 4) * 2)) & 3;
-
-			data = decodeBytesGroup(data, buffer + i, bitslog2);
-		}
-
-		return data;
+		data = decodeBytesGroup(data, buffer + i, bitslog2);
 	}
-	else
-	{
-		// TODO: malformed data, we might want to return a different error code upstream?
-		return 0;
-	}
+
+	return data;
 }
 
 #if SIMD == 1
@@ -846,7 +809,7 @@ size_t meshopt_encodeVertexBufferBound(size_t vertex_count, size_t vertex_size)
 	size_t vertex_block_size = getVertexBlockSize(vertex_size);
 	size_t vertex_block_count = (vertex_count + vertex_block_size - 1) / vertex_block_size;
 
-	size_t vertex_block_header_size = 1 + (vertex_block_size / kByteGroupSize + 3) / 4;
+	size_t vertex_block_header_size = (vertex_block_size / kByteGroupSize + 3) / 4;
 	size_t vertex_block_data_size = vertex_block_size;
 
 	size_t tail_size = vertex_size < 32 ? 32 : vertex_size;
