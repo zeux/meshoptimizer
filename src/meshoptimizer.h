@@ -280,7 +280,7 @@ struct meshopt_IndexAdapter<T, false>
 		if (result)
 		{
 			for (size_t i = 0; i < count; ++i)
-				result[i] = data[i];
+				result[i] = T(data[i]);
 		}
 
 		delete[] data;
