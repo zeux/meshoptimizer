@@ -325,12 +325,8 @@ void meshopt_optimizeOverdraw(unsigned int* destination, const unsigned int* ind
 		size_t end = (cluster + 1 < cluster_count) ? clusters[cluster + 1] : index_count / 3;
 		assert(start < end);
 
-		for (size_t i = start; i < end; ++i)
-		{
-			destination[offset++] = indices[3 * i + 0];
-			destination[offset++] = indices[3 * i + 1];
-			destination[offset++] = indices[3 * i + 2];
-		}
+		memcpy(destination + offset, indices + start * 3, (end - start) * 3 * sizeof(unsigned int));
+		offset += (end - start) * 3;
 	}
 
 	assert(offset == index_count);
