@@ -5,26 +5,12 @@
 #include <math.h>
 #include <string.h>
 
-#include <algorithm>
-
 // This work is based on:
 // Pedro Sander, Diego Nehab and Joshua Barczak. Fast Triangle Reordering for Vertex Locality and Reduced Overdraw. 2007
 namespace meshopt
 {
 
-struct ClusterSortData
-{
-	unsigned int cluster;
-	float dot_product;
-
-	bool operator<(const ClusterSortData& other) const
-	{
-		// high product = possible occluder, render early
-		return dot_product > other.dot_product;
-	}
-};
-
-static void calculateSortData(ClusterSortData* sort_data, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, const unsigned int* clusters, size_t cluster_count)
+static void calculateSortData(float* sort_data, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, const unsigned int* clusters, size_t cluster_count)
 {
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
@@ -92,8 +78,57 @@ static void calculateSortData(ClusterSortData* sort_data, const unsigned int* in
 
 		float centroid_vector[3] = {cluster_centroid[0] - mesh_centroid[0], cluster_centroid[1] - mesh_centroid[1], cluster_centroid[2] - mesh_centroid[2]};
 
-		sort_data[cluster].cluster = unsigned(cluster);
-		sort_data[cluster].dot_product = centroid_vector[0] * cluster_normal[0] + centroid_vector[1] * cluster_normal[1] + centroid_vector[2] * cluster_normal[2];
+		sort_data[cluster] = centroid_vector[0] * cluster_normal[0] + centroid_vector[1] * cluster_normal[1] + centroid_vector[2] * cluster_normal[2];
+	}
+}
+
+static void calculateSortOrderRadix(unsigned int* sort_order, const float* sort_data, unsigned short* sort_keys, size_t cluster_count)
+{
+	// compute sort data bounds and renormalize, using fixed point snorm
+	float sort_data_max = 1e-3f;
+
+	for (size_t i = 0; i < cluster_count; ++i)
+	{
+		float dpa = fabsf(sort_data[i]);
+
+		sort_data_max = (sort_data_max < dpa) ? dpa : sort_data_max;
+	}
+
+	const int sort_bits = 11;
+
+	for (size_t i = 0; i < cluster_count; ++i)
+	{
+		// note that we flip distribution since high dot product should come first
+		float sort_key = 0.5f - 0.5f * (sort_data[i] / sort_data_max);
+
+		sort_keys[i] = meshopt_quantizeUnorm(sort_key, sort_bits) & ((1 << sort_bits) - 1);
+	}
+
+	// fill histogram for counting sort
+	unsigned int histogram[1 << sort_bits];
+	memset(histogram, 0, sizeof(histogram));
+
+	for (size_t i = 0; i < cluster_count; ++i)
+	{
+		histogram[sort_keys[i]]++;
+	}
+
+	// compute offsets based on histogram data
+	size_t histogram_sum = 0;
+
+	for (size_t i = 0; i < 1 << sort_bits; ++i)
+	{
+		size_t count = histogram[i];
+		histogram[i] = unsigned(histogram_sum);
+		histogram_sum += count;
+	}
+
+	assert(histogram_sum == cluster_count);
+
+	// compute sort order based on offsets
+	for (size_t i = 0; i < cluster_count; ++i)
+	{
+		sort_order[histogram[sort_keys[i]]++] = unsigned(i);
 	}
 }
 
@@ -270,18 +305,20 @@ void meshopt_optimizeOverdraw(unsigned int* destination, const unsigned int* ind
 	size_t cluster_count = soft_cluster_count;
 
 	// fill sort data
-	meshopt_Buffer<ClusterSortData> sort_data(cluster_count);
+	meshopt_Buffer<float> sort_data(cluster_count);
 	calculateSortData(&sort_data[0], indices, index_count, vertex_positions, vertex_positions_stride, clusters, cluster_count);
 
-	// high product = possible occluder, render early
-	std::sort(sort_data.data, sort_data.data + cluster_count);
+	// sort clusters using sort data
+	meshopt_Buffer<unsigned short> sort_keys(cluster_count);
+	meshopt_Buffer<unsigned int> sort_order(cluster_count);
+	calculateSortOrderRadix(&sort_order[0], &sort_data[0], &sort_keys[0], cluster_count);
 
 	// fill output buffer
 	size_t offset = 0;
 
 	for (size_t it = 0; it < cluster_count; ++it)
 	{
-		unsigned int cluster = sort_data[it].cluster;
+		unsigned int cluster = sort_order[it];
 		assert(cluster < cluster_count);
 
 		size_t start = clusters[cluster];
