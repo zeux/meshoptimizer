@@ -12,6 +12,12 @@
 #define SIMD_SSE
 #endif
 
+#if !defined(SIMD_SSE) && defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
+#define SIMD_SSE
+#define SIMD_FALLBACK
+#include <intrin.h>
+#endif
+
 #ifdef SIMD_SSE
 #include <tmmintrin.h>
 #endif
@@ -211,7 +217,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 	return data;
 }
 
-#if !defined(SIMD_SSE) && !defined(SIMD_NEON)
+#if defined(SIMD_FALLBACK) || (!defined(SIMD_SSE) && !defined(SIMD_NEON))
 template <int bits>
 static const unsigned char* decodeBytesGroupImpl(const unsigned char* data, unsigned char* buffer)
 {
@@ -806,7 +812,11 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 
 	const unsigned char* (*decode)(const unsigned char*, const unsigned char*, unsigned char*, size_t, size_t, unsigned char[256]) = 0;
 
-#if defined(SIMD_SSE) || defined(SIMD_NEON)
+#if defined(SIMD_SSE) && defined(SIMD_FALLBACK)
+	int cpuinfo[4] = {};
+	__cpuid(cpuinfo, 1);
+	decode = (cpuinfo[2] & (1 << 9)) ? decodeVertexBlockSimd : decodeVertexBlock;
+#elif defined(SIMD_SSE) || defined(SIMD_NEON)
 	decode = decodeVertexBlockSimd;
 #else
 	decode = decodeVertexBlock;
