@@ -294,6 +294,9 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 	// this is enough space for aux byte + 5 bytes per varint index which is the absolute worst case for any input
 	for (size_t i = 0; i < 16; ++i)
 	{
+		// decoder assumes that table entries never refer to separately encoded indices
+		assert((codeaux_table[i] & 0xf) != 0xf && (codeaux_table[i] >> 4) != 0xf);
+
 		*data++ = codeaux_table[i];
 	}
 
