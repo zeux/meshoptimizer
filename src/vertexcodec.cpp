@@ -218,8 +218,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 }
 
 #if defined(SIMD_FALLBACK) || (!defined(SIMD_SSE) && !defined(SIMD_NEON))
-template <int bits>
-static const unsigned char* decodeBytesGroupImpl(const unsigned char* data, unsigned char* buffer)
+static const unsigned char* decodeBytesGroupImpl(const unsigned char* data, unsigned char* buffer, int bits)
 {
 	size_t byte_size = 8 / bits;
 	assert(kByteGroupSize % byte_size == 0);
@@ -257,9 +256,9 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 		memset(buffer, 0, kByteGroupSize);
 		return data;
 	case 1:
-		return decodeBytesGroupImpl<2>(data, buffer);
+		return decodeBytesGroupImpl(data, buffer, 2);
 	case 2:
-		return decodeBytesGroupImpl<4>(data, buffer);
+		return decodeBytesGroupImpl(data, buffer, 4);
 	case 3:
 		memcpy(buffer, data, kByteGroupSize);
 		return data + kByteGroupSize;
@@ -303,7 +302,7 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 
 	unsigned char buffer[kVertexBlockMaxSize];
-	assert(sizeof(buffer) % kByteGroupSize == 0);
+	unsigned char transposed[kVertexBlockSizeBytes];
 
 	for (size_t k = 0; k < vertex_size; ++k)
 	{
@@ -319,14 +318,16 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 		{
 			unsigned char v = unzigzag8(buffer[i]) + p;
 
-			vertex_data[vertex_offset] = v;
+			transposed[vertex_offset] = v;
 			p = v;
 
 			vertex_offset += vertex_size;
 		}
-
-		last_vertex[k] = p;
 	}
+
+	memcpy(vertex_data, transposed, vertex_count * vertex_size);
+
+	memcpy(last_vertex, &transposed[vertex_size * (vertex_count - 1)], vertex_size);
 
 	return data;
 }
@@ -600,6 +601,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 static const unsigned char* decodeBytesSimd(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size)
 {
 	assert(buffer_size % kByteGroupSize == 0);
+	assert(kByteGroupSize == 16);
 
 	const unsigned char* header = data;
 
