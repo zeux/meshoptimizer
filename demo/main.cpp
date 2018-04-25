@@ -374,11 +374,11 @@ void simplify(const Mesh& mesh)
 	for (size_t i = 0; i < lod_count; ++i)
 	{
 		size_t lod_offset = lod_index_offsets[i];
-		size_t lod_count = lod_index_counts[i];
+		size_t lod_size = lod_index_counts[i];
 
-		meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&indices[lod_offset], lod_count, vertices.size(), kCacheSize, 0, 0);
-		meshopt_VertexFetchStatistics vfs = meshopt_analyzeVertexFetch(&indices[lod_offset], lod_count, vertices.size(), sizeof(Vertex));
-		meshopt_OverdrawStatistics os = meshopt_analyzeOverdraw(&indices[lod_offset], lod_count, &vertices[0].px, vertices.size(), sizeof(Vertex));
+		meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&indices[lod_offset], lod_size, vertices.size(), kCacheSize, 0, 0);
+		meshopt_VertexFetchStatistics vfs = meshopt_analyzeVertexFetch(&indices[lod_offset], lod_size, vertices.size(), sizeof(Vertex));
+		meshopt_OverdrawStatistics os = meshopt_analyzeOverdraw(&indices[lod_offset], lod_size, &vertices[0].px, vertices.size(), sizeof(Vertex));
 
 		printf("    LOD%d : %3.0f%% triangles; ACMR %f ATVR %f Overfetch %f Overdraw %f\n",
 			int(i), double(lod_index_counts[i]) / double(lod_index_counts[0]) * 100,
