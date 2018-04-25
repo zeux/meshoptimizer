@@ -294,7 +294,7 @@ void optComplete(Mesh& mesh)
 	meshopt_optimizeVertexFetch(&mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
 }
 
-void optCompleteSimplify(Mesh& mesh)
+void simplify(const Mesh& mesh)
 {
 	static const size_t lod_count = 5;
 
@@ -321,7 +321,7 @@ void optCompleteSimplify(Mesh& mesh)
 		lod.resize(meshopt_simplify(&lod[0], &source[0], source.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), std::min(source.size(), target_index_count)));
 	}
 
-	double end = timestamp();
+	double middle = timestamp();
 
 	// optimize each individual LOD for vertex cache & overdraw
 	for (size_t i = 0; i < lod_count; ++i)
@@ -337,6 +337,8 @@ void optCompleteSimplify(Mesh& mesh)
 	// putting coarse LODs first makes sure that the vertex range referenced by them is as small as possible
 	// some GPUs process the entire range referenced by the index buffer region so doing this optimizes the vertex transform
 	// cost for coarse LODs
+	// this order also produces much better vertex fetch cache coherency for coarse LODs (since they're essentially optimized first)
+	// somewhat surprisingly, the vertex fetch cache coherency for fine LODs doesn't seem to suffer that much.
 	size_t lod_index_offsets[lod_count] = {};
 	size_t lod_index_counts[lod_count] = {};
 	size_t total_index_count = 0;
@@ -349,32 +351,44 @@ void optCompleteSimplify(Mesh& mesh)
 		total_index_count += lods[i].size();
 	}
 
-	mesh.indices.resize(total_index_count);
+	std::vector<unsigned int> indices(total_index_count);
 
 	for (size_t i = 0; i < lod_count; ++i)
 	{
-		memcpy(&mesh.indices[lod_index_offsets[i]], &lods[i][0], lods[i].size() * sizeof(lods[i][0]));
+		memcpy(&indices[lod_index_offsets[i]], &lods[i][0], lods[i].size() * sizeof(lods[i][0]));
 	}
+
+	std::vector<Vertex> vertices = mesh.vertices;
 
 	// vertex fetch optimization should go last as it depends on the final index order
 	// note that the order of LODs above affects vertex fetch results
-	meshopt_optimizeVertexFetch(&mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
+	meshopt_optimizeVertexFetch(&vertices[0], &indices[0], indices.size(), &vertices[0], vertices.size(), sizeof(Vertex));
 
-	printf("%-9s:", "Simplify");
+	double end = timestamp();
 
-	for (size_t i = 0; i < sizeof(lods) / sizeof(lods[0]); ++i)
+	printf("%-9s: %d triangles => %d LOD levels down to %d triangles in %.2f msec, optimized in %.2f msec\n",
+		"Simplify",
+		int(lod_index_counts[0]) / 3, int(lod_count), int(lod_index_counts[lod_count - 1]) / 3,
+		(middle - start) * 1000, (end - middle) * 1000);
+
+	for (size_t i = 0; i < lod_count; ++i)
 	{
-		printf(" LOD%d %d", int(i), int(lods[i].size()) / 3);
+		size_t lod_offset = lod_index_offsets[i];
+		size_t lod_count = lod_index_counts[i];
+
+		meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&indices[lod_offset], lod_count, vertices.size(), kCacheSize, 0, 0);
+		meshopt_VertexFetchStatistics vfs = meshopt_analyzeVertexFetch(&indices[lod_offset], lod_count, vertices.size(), sizeof(Vertex));
+		meshopt_OverdrawStatistics os = meshopt_analyzeOverdraw(&indices[lod_offset], lod_count, &vertices[0].px, vertices.size(), sizeof(Vertex));
+
+		printf("    LOD%d : %3.0f%% triangles; ACMR %f ATVR %f Overfetch %f Overdraw %f\n",
+			int(i), double(lod_index_counts[i]) / double(lod_index_counts[0]) * 100,
+			vcs.acmr, vcs.atvr, vfs.overfetch, os.overdraw);
 	}
 
-	printf(" in %.2f msec\n", (end - start) * 1000);
-
-	// for using LOD data at runtime, in addition to VB and IB you have to save lod_index_offsets/lod_index_counts.
-	(void)lod_index_offsets;
-	(void)lod_index_counts;
+	// for using LOD data at runtime, in addition to vertices and indices you have to save lod_index_offsets/lod_index_counts.
 }
 
-void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh), bool compare = true)
+void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
 {
 	Mesh copy = mesh;
 
@@ -383,8 +397,7 @@ void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh), bool
 	double end = timestamp();
 
 	assert(isMeshValid(copy));
-	assert(!compare || areMeshesEqual(mesh, copy));
-	(void)compare;
+	assert(areMeshesEqual(mesh, copy));
 
 	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), kCacheSize, 0, 0);
 	meshopt_VertexFetchStatistics vfs = meshopt_analyzeVertexFetch(&copy.indices[0], copy.indices.size(), copy.vertices.size(), sizeof(Vertex));
@@ -622,8 +635,7 @@ void process(const char* path)
 	optimize(mesh, "FetchMap", optFetchRemap);
 	optimize(mesh, "Complete", optComplete);
 
-	// note: the ATVR/overdraw output from this pass is not necessarily correct since we analyze all LODs at once
-	optimize(mesh, "CmpltLod", optCompleteSimplify, /* compare= */ false);
+	simplify(mesh);
 
 	Mesh copy = mesh;
 	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
