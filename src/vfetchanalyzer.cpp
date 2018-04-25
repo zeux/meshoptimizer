@@ -2,6 +2,7 @@
 #include "meshoptimizer.h"
 
 #include <assert.h>
+#include <string.h>
 
 meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
@@ -9,6 +10,9 @@ meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const unsigned int* ind
 	assert(vertex_size > 0 && vertex_size <= 256);
 
 	meshopt_VertexFetchStatistics result = {};
+
+	meshopt_Buffer<char> vertex_visited(vertex_count);
+	memset(vertex_visited.data, 0, vertex_count);
 
 	const size_t kCacheLine = 64;
 	const size_t kCacheSize = 128 * 1024;
@@ -20,6 +24,8 @@ meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const unsigned int* ind
 	{
 		unsigned int index = indices[i];
 		assert(index < vertex_count);
+
+		vertex_visited[index] = 1;
 
 		size_t start_address = index * vertex_size;
 		size_t end_address = start_address + vertex_size;
@@ -39,7 +45,12 @@ meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const unsigned int* ind
 		}
 	}
 
-	result.overfetch = vertex_count == 0 ? 0 : float(result.bytes_fetched) / float(vertex_count * vertex_size);
+	size_t unique_vertex_count = 0;
+
+	for (size_t i = 0; i < vertex_count; ++i)
+		unique_vertex_count += vertex_visited[i];
+
+	result.overfetch = unique_vertex_count == 0 ? 0 : float(result.bytes_fetched) / float(unique_vertex_count * vertex_size);
 
 	return result;
 }
