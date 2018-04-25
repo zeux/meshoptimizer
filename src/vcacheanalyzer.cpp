@@ -57,10 +57,15 @@ meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* ind
 		primgroup_offset++;
 	}
 
+	size_t unique_vertex_count = 0;
+
+	for (size_t i = 0; i < vertex_count; ++i)
+		unique_vertex_count += cache_timestamps[i] > 0;
+
 	result.warps_executed += warp_offset > 0;
 
 	result.acmr = index_count == 0 ? 0 : float(result.vertices_transformed) / float(index_count / 3);
-	result.atvr = vertex_count == 0 ? 0 : float(result.vertices_transformed) / float(vertex_count);
+	result.atvr = unique_vertex_count == 0 ? 0 : float(result.vertices_transformed) / float(unique_vertex_count);
 
 	return result;
 }
