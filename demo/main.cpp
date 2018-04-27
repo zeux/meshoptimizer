@@ -294,6 +294,66 @@ void optComplete(Mesh& mesh)
 	meshopt_optimizeVertexFetch(&mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
 }
 
+struct PackedVertex
+{
+	unsigned short px, py, pz;
+	unsigned short pw; // padding to 4b boundary
+	unsigned char nx, ny, nz, nw;
+	unsigned short tx, ty;
+};
+
+void packMesh(std::vector<PackedVertex>& pv, const std::vector<Vertex>& vertices)
+{
+	for (size_t i = 0; i < vertices.size(); ++i)
+	{
+		pv[i].px = meshopt_quantizeHalf(vertices[i].px);
+		pv[i].py = meshopt_quantizeHalf(vertices[i].py);
+		pv[i].pz = meshopt_quantizeHalf(vertices[i].pz);
+		pv[i].pw = 0;
+
+		pv[i].nx = char(meshopt_quantizeSnorm(vertices[i].nx, 8));
+		pv[i].ny = char(meshopt_quantizeSnorm(vertices[i].ny, 8));
+		pv[i].nz = char(meshopt_quantizeSnorm(vertices[i].nz, 8));
+		pv[i].nw = 0;
+
+		pv[i].tx = meshopt_quantizeHalf(vertices[i].tx);
+		pv[i].ty = meshopt_quantizeHalf(vertices[i].ty);
+	}
+}
+
+struct PackedVertexOct
+{
+	unsigned short px, py, pz;
+	unsigned char nu, nv; // octahedron encoded normal, aliases .pw
+	unsigned short tx, ty;
+};
+
+void packMesh(std::vector<PackedVertexOct>& pv, const std::vector<Vertex>& vertices)
+{
+	for (size_t i = 0; i < vertices.size(); ++i)
+	{
+		pv[i].px = meshopt_quantizeHalf(vertices[i].px);
+		pv[i].py = meshopt_quantizeHalf(vertices[i].py);
+		pv[i].pz = meshopt_quantizeHalf(vertices[i].pz);
+
+		float nsum = fabsf(vertices[i].nx) + fabsf(vertices[i].ny) + fabsf(vertices[i].nz);
+		float nx = vertices[i].nx / nsum;
+		float ny = vertices[i].ny / nsum;
+		float nz = vertices[i].nz;
+
+		float nu = nz >= 0 ? nx : (1 - fabsf(ny)) * (nx >= 0 ? 1 : -1);
+		float nv = nz >= 0 ? ny : (1 - fabsf(nx)) * (ny >= 0 ? 1 : -1);
+
+		pv[i].nu = char(meshopt_quantizeSnorm(nu, 8));
+		pv[i].nv = char(meshopt_quantizeSnorm(nv, 8));
+
+		pv[i].tx = meshopt_quantizeHalf(vertices[i].tx);
+		pv[i].ty = meshopt_quantizeHalf(vertices[i].ty);
+	}
+}
+
+
+
 void simplify(const Mesh& mesh)
 {
 	static const size_t lod_count = 5;
@@ -385,6 +445,34 @@ void simplify(const Mesh& mesh)
 			vcs.acmr, vcs.atvr, vfs.overfetch, os.overdraw);
 	}
 
+	// idx codec
+	typedef PackedVertexOct PV;
+	std::vector<PV> pv(vertices.size());
+	packMesh(pv, vertices);
+
+	std::vector<unsigned char> vbuf(meshopt_encodeVertexBufferBound(vertices.size(), sizeof(PV)));
+	vbuf.resize(meshopt_encodeVertexBuffer(&vbuf[0], vbuf.size(), &pv[0], vertices.size(), sizeof(PV)));
+
+	std::vector<unsigned char> ibuf(meshopt_encodeIndexBufferBound(indices.size(), vertices.size()));
+	ibuf.resize(meshopt_encodeIndexBuffer(&ibuf[0], ibuf.size(), &indices[0], indices.size()));
+
+	printf("    Codec: VB %.1f bits/vertex, IB %.1f bits/triangle; IB",
+		double(vbuf.size()) / double(vertices.size()) * 8,
+		double(ibuf.size()) / double(indices.size() / 3) * 8);
+
+	for (size_t i = 0; i < lod_count; ++i)
+	{
+		size_t lod_offset = lod_index_offsets[i];
+		size_t lod_size = lod_index_counts[i];
+
+		ibuf.resize(ibuf.capacity());
+		ibuf.resize(meshopt_encodeIndexBuffer(&ibuf[0], ibuf.size(), &indices[lod_offset], lod_size));
+
+		printf(" LOD%d %.1f", int(i), double(ibuf.size()) / double(lod_size / 3) * 8);
+	}
+
+	printf("\n");
+
 	// for using LOD data at runtime, in addition to vertices and indices you have to save lod_index_offsets/lod_index_counts.
 }
 
@@ -464,64 +552,6 @@ void encodeIndex(const Mesh& mesh)
 	       (middle - start) * 1000,
 	       (end - middle) * 1000,
 	       (double(result.size * 4) / (1 << 30)) / (end - middle));
-}
-
-struct PackedVertex
-{
-	unsigned short px, py, pz;
-	unsigned short pw; // padding to 4b boundary
-	unsigned char nx, ny, nz, nw;
-	unsigned short tx, ty;
-};
-
-void packMesh(std::vector<PackedVertex>& pv, const std::vector<Vertex>& vertices)
-{
-	for (size_t i = 0; i < vertices.size(); ++i)
-	{
-		pv[i].px = meshopt_quantizeHalf(vertices[i].px);
-		pv[i].py = meshopt_quantizeHalf(vertices[i].py);
-		pv[i].pz = meshopt_quantizeHalf(vertices[i].pz);
-		pv[i].pw = 0;
-
-		pv[i].nx = char(meshopt_quantizeSnorm(vertices[i].nx, 8));
-		pv[i].ny = char(meshopt_quantizeSnorm(vertices[i].ny, 8));
-		pv[i].nz = char(meshopt_quantizeSnorm(vertices[i].nz, 8));
-		pv[i].nw = 0;
-
-		pv[i].tx = meshopt_quantizeHalf(vertices[i].tx);
-		pv[i].ty = meshopt_quantizeHalf(vertices[i].ty);
-	}
-}
-
-struct PackedVertexOct
-{
-	unsigned short px, py, pz;
-	unsigned char nu, nv; // octahedron encoded normal, aliases .pw
-	unsigned short tx, ty;
-};
-
-void packMesh(std::vector<PackedVertexOct>& pv, const std::vector<Vertex>& vertices)
-{
-	for (size_t i = 0; i < vertices.size(); ++i)
-	{
-		pv[i].px = meshopt_quantizeHalf(vertices[i].px);
-		pv[i].py = meshopt_quantizeHalf(vertices[i].py);
-		pv[i].pz = meshopt_quantizeHalf(vertices[i].pz);
-
-		float nsum = fabsf(vertices[i].nx) + fabsf(vertices[i].ny) + fabsf(vertices[i].nz);
-		float nx = vertices[i].nx / nsum;
-		float ny = vertices[i].ny / nsum;
-		float nz = vertices[i].nz;
-
-		float nu = nz >= 0 ? nx : (1 - fabsf(ny)) * (nx >= 0 ? 1 : -1);
-		float nv = nz >= 0 ? ny : (1 - fabsf(nx)) * (ny >= 0 ? 1 : -1);
-
-		pv[i].nu = char(meshopt_quantizeSnorm(nu, 8));
-		pv[i].nv = char(meshopt_quantizeSnorm(nv, 8));
-
-		pv[i].tx = meshopt_quantizeHalf(vertices[i].tx);
-		pv[i].ty = meshopt_quantizeHalf(vertices[i].ty);
-	}
 }
 
 template <typename PV>
