@@ -352,8 +352,6 @@ void packMesh(std::vector<PackedVertexOct>& pv, const std::vector<Vertex>& verti
 	}
 }
 
-
-
 void simplify(const Mesh& mesh)
 {
 	static const size_t lod_count = 5;
@@ -431,49 +429,31 @@ void simplify(const Mesh& mesh)
 		int(lod_index_counts[0]) / 3, int(lod_count), int(lod_index_counts[lod_count - 1]) / 3,
 		(middle - start) * 1000, (end - middle) * 1000);
 
-	for (size_t i = 0; i < lod_count; ++i)
-	{
-		size_t lod_offset = lod_index_offsets[i];
-		size_t lod_size = lod_index_counts[i];
-
-		meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&indices[lod_offset], lod_size, vertices.size(), kCacheSize, 0, 0);
-		meshopt_VertexFetchStatistics vfs = meshopt_analyzeVertexFetch(&indices[lod_offset], lod_size, vertices.size(), sizeof(Vertex));
-		meshopt_OverdrawStatistics os = meshopt_analyzeOverdraw(&indices[lod_offset], lod_size, &vertices[0].px, vertices.size(), sizeof(Vertex));
-
-		printf("    LOD%d : %3.0f%% triangles; ACMR %f ATVR %f Overfetch %f Overdraw %f\n",
-			int(i), double(lod_index_counts[i]) / double(lod_index_counts[0]) * 100,
-			vcs.acmr, vcs.atvr, vfs.overfetch, os.overdraw);
-	}
-
-	// idx codec
-	typedef PackedVertexOct PV;
-	std::vector<PV> pv(vertices.size());
-	packMesh(pv, vertices);
-
-	std::vector<unsigned char> vbuf(meshopt_encodeVertexBufferBound(vertices.size(), sizeof(PV)));
-	vbuf.resize(meshopt_encodeVertexBuffer(&vbuf[0], vbuf.size(), &pv[0], vertices.size(), sizeof(PV)));
-
-	std::vector<unsigned char> ibuf(meshopt_encodeIndexBufferBound(indices.size(), vertices.size()));
-	ibuf.resize(meshopt_encodeIndexBuffer(&ibuf[0], ibuf.size(), &indices[0], indices.size()));
-
-	printf("    Codec: VB %.1f bits/vertex, IB %.1f bits/triangle; IB",
-		double(vbuf.size()) / double(vertices.size()) * 8,
-		double(ibuf.size()) / double(indices.size() / 3) * 8);
-
-	for (size_t i = 0; i < lod_count; ++i)
-	{
-		size_t lod_offset = lod_index_offsets[i];
-		size_t lod_size = lod_index_counts[i];
-
-		ibuf.resize(ibuf.capacity());
-		ibuf.resize(meshopt_encodeIndexBuffer(&ibuf[0], ibuf.size(), &indices[lod_offset], lod_size));
-
-		printf(" LOD%d %.1f", int(i), double(ibuf.size()) / double(lod_size / 3) * 8);
-	}
-
-	printf("\n");
-
 	// for using LOD data at runtime, in addition to vertices and indices you have to save lod_index_offsets/lod_index_counts.
+
+	{
+		meshopt_VertexCacheStatistics vcs0 = meshopt_analyzeVertexCache(&indices[lod_index_offsets[0]], lod_index_counts[0], vertices.size(), kCacheSize, 0, 0);
+		meshopt_VertexFetchStatistics vfs0 = meshopt_analyzeVertexFetch(&indices[lod_index_offsets[0]], lod_index_counts[0], vertices.size(), sizeof(Vertex));
+		meshopt_VertexCacheStatistics vcsN = meshopt_analyzeVertexCache(&indices[lod_index_offsets[lod_count-1]], lod_index_counts[lod_count-1], vertices.size(), kCacheSize, 0, 0);
+		meshopt_VertexFetchStatistics vfsN = meshopt_analyzeVertexFetch(&indices[lod_index_offsets[lod_count-1]], lod_index_counts[lod_count-1], vertices.size(), sizeof(Vertex));
+
+		typedef PackedVertexOct PV;
+
+		std::vector<PV> pv(vertices.size());
+		packMesh(pv, vertices);
+
+		std::vector<unsigned char> vbuf(meshopt_encodeVertexBufferBound(vertices.size(), sizeof(PV)));
+		vbuf.resize(meshopt_encodeVertexBuffer(&vbuf[0], vbuf.size(), &pv[0], vertices.size(), sizeof(PV)));
+
+		std::vector<unsigned char> ibuf(meshopt_encodeIndexBufferBound(indices.size(), vertices.size()));
+		ibuf.resize(meshopt_encodeIndexBuffer(&ibuf[0], ibuf.size(), &indices[0], indices.size()));
+
+		printf("%-9s  ACMR %f...%f Overfetch %f..%f Codec VB %.1f bits/vertex IB %.1f bits/triangle\n",
+			"",
+			vcs0.acmr, vcsN.acmr, vfs0.overfetch, vfsN.overfetch,
+			double(vbuf.size()) / double(vertices.size()) * 8,
+			double(ibuf.size()) / double(indices.size() / 3) * 8);
+	}
 }
 
 void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
@@ -665,8 +645,6 @@ void process(const char* path)
 	optimize(mesh, "FetchMap", optFetchRemap);
 	optimize(mesh, "Complete", optComplete);
 
-	simplify(mesh);
-
 	Mesh copy = mesh;
 	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
 	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
@@ -677,6 +655,8 @@ void process(const char* path)
 	packVertex<PackedVertex>(copy, "");
 	encodeVertex<PackedVertex>(copy, "");
 	encodeVertex<PackedVertexOct>(copy, "O");
+
+	simplify(mesh);
 }
 
 void processDev(const char* path)
@@ -685,14 +665,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	Mesh copy = mesh;
-	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
-	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
-
-	encodeIndex(copy);
-	packVertex<PackedVertex>(copy, "");
-	encodeVertex<PackedVertex>(copy, "");
-	encodeVertex<PackedVertexOct>(copy, "O");
+	simplify(mesh);
 }
 
 int main(int argc, char** argv)
