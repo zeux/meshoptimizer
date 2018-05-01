@@ -10,6 +10,8 @@
 namespace meshopt
 {
 
+const unsigned char kIndexHeader = 0xe0;
+
 typedef unsigned int VertexFifo[16];
 typedef unsigned int EdgeFifo[16][2];
 
@@ -165,9 +167,11 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 
 	assert(index_count % 3 == 0);
 
-	// the minimum valid encoding is 1 byte per triangle and a 16-byte codeaux table
-	if (buffer_size < index_count / 3 + 16)
+	// the minimum valid encoding is header, 1 byte per triangle and a 16-byte codeaux table
+	if (buffer_size < 1 + index_count / 3 + 16)
 		return 0;
+
+	buffer[0] = kIndexHeader;
 
 	EdgeFifo edgefifo;
 	memset(edgefifo, -1, sizeof(edgefifo));
@@ -181,17 +185,13 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 	unsigned int next = 0;
 	unsigned int last = 0;
 
-	unsigned char* code = buffer;
-	unsigned char* data = buffer + index_count / 3;
+	unsigned char* code = buffer + 1;
+	unsigned char* data = code + index_count / 3;
 	unsigned char* data_safe_end = buffer + buffer_size - 16;
 
 	// use static encoding table; it's possible to pack the result and then build an optimal table and repack
 	// for now we keep it simple and use the table that has been generated based on symbol frequency on a training mesh set
 	const unsigned char* codeaux_table = kCodeAuxEncodingTable;
-
-	// two last entries of codeaux_table are redundant - they are never referenced by the encoding
-	// make sure that they are both zero, since they can serve as version/other data in the future
-	assert(codeaux_table[14] == 0 && codeaux_table[15] == 0);
 
 	for (size_t i = 0; i < index_count; i += 3)
 	{
@@ -319,7 +319,7 @@ size_t meshopt_encodeIndexBufferBound(size_t index_count, size_t vertex_count)
 	// worst-case encoding is 2 header bytes + 3 varint-7 encoded index deltas
 	unsigned int vertex_groups = (vertex_bits + 1 + 6) / 7;
 
-	return (index_count / 3) * (2 + 3 * vertex_groups) + 16;
+	return 1 + (index_count / 3) * (2 + 3 * vertex_groups) + 16;
 }
 
 int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t index_size, const unsigned char* buffer, size_t buffer_size)
@@ -329,8 +329,11 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 	assert(index_count % 3 == 0);
 	assert(index_size == 2 || index_size == 4);
 
-	// the minimum valid encoding is 1 byte per triangle and a 16-byte codeaux table
-	if (buffer_size < index_count / 3 + 16)
+	// the minimum valid encoding is header, 1 byte per triangle and a 16-byte codeaux table
+	if (buffer_size < 1 + index_count / 3 + 16)
+		return -2;
+
+	if (buffer[0] != kIndexHeader)
 		return -1;
 
 	EdgeFifo edgefifo;
@@ -346,8 +349,8 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 	unsigned int last = 0;
 
 	// since we store 16-byte codeaux table at the end, triangle data has to begin before data_safe_end
-	const unsigned char* code = buffer;
-	const unsigned char* data = buffer + index_count / 3;
+	const unsigned char* code = buffer + 1;
+	const unsigned char* data = code + index_count / 3;
 	const unsigned char* data_safe_end = buffer + buffer_size - 16;
 
 	const unsigned char* codeaux_table = data_safe_end;
