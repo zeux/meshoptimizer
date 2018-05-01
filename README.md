@@ -105,6 +105,52 @@ unsigned short py = meshopt_quantizeHalf(v.y);
 unsigned short pz = meshopt_quantizeHalf(v.z);
 ```
 
+## Buffer encoding
+
+After all of the above optimizations, the geometry data is optimal for GPU to consume - however, you don't have to store the data as is. In case storage size or transmission bandwidth is of importance, you might want to compress vertex and index data. While several mesh compression libraries, like Google Draco, are available, they typically are designed to maximize the compression ratio at the cost of preserving the vertex/index order (which makes the meshes inefficient to render on GPU) or decompression performance. Additionally they frequently don't support custom game-ready quantized vertex formats and thus require to re-quantize the data after loading it, making decoding even slower.
+
+Alternatively you can use general purpose compression libraries like zstd or Oodle to compress vertex/index data - however these compressors aren't designed to exploit redundancies in vertex/index data and as such compression rates can be unsatisfactory.
+
+To that end, this library provides algorithms to "encode" vertex and index data. The result of the encoding is generally significantly smaller than initial data, and remains compressible with general purpose compressors - so you can either store encoded data directly (for modest compression ratios and maximum decoding performance), or further compress it with zstd et al, to maximize compression rate.
+
+To encode, you need to allocate target buffers (preferably using the worst case bound) and call encoding functions:
+
+```c++
+std::vector<unsigned char> vbuf(meshopt_encodeVertexBufferBound(vertex_count, sizeof(Vertex)));
+vbuf.resize(meshopt_encodeVertexBuffer(&vbuf[0], vbuf.size(), vertices, vertex_count sizeof(Vertex)));
+
+std::vector<unsigned char> ibuf(meshopt_encodeIndexBufferBound(index_count, vertex_count));
+ibuf.resize(meshopt_encodeIndexBuffer(&ibuf[0], ibuf.size(), indices, index_count));
+```
+
+You can then either serialize `vbuf`/`ibuf` as is, or compress them further. To decode the data at runtime, call decoding functions:
+
+```c++
+int resvb = meshopt_decodeVertexBuffer(vertices, vertex_count, sizeof(Vertex), &vbuf[0], vbuf.size());
+int resib = meshopt_decodeIndexBuffer(indices, index_count, &buffer[0], buffer.size());
+assert(resvb == 0 && resib == 0);
+```
+
+Note that vertex encoding assumes that vertex buffer was optimized for vertex fetch, and that vertices are quantized; index encoding assumes that the vertex/index buffers were optimized for vertex cache and vertex fetch. Feeding unoptimized data into the encoders will produce poor compression rates. Both codecs are lossless - the only lossy step is quantization that happens before encoding.
+
+Decoding functions are heavily optimized; you can expect both decoders to run at 1-2 GB/s on modern desktop CPUs. Compression ratios depend on the data; vertex data compression ratio is typically around 1.5-2x (compared to already quantized data), index data compression ratio is around 5-6x (compared to raw 16-bit index data). General purpose lossless compressors can further improve on these results.
+
+## Triangle strip conversion
+
+On most hardware, indexed triangle lists are the most efficient way to drive the GPU. However, in some cases triangle strips might prove beneficial:
+
+- On some older GPUs, triangle strips may be a bit more efficient to decode
+- On extremely memory constrained systems, index buffers for triangle strips could save a bit of memory
+
+While in general usage of triangle strips is not recommended, this library provides an algorithm for converting a vertex cache optimized triangle list to a triangle strip:
+
+```c++
+std::vector<unsigned int> strip(index_count / 3 * 4);
+size_t strip_size = meshopt_stripify(&strip[0], indices, index_count, vertex_count);
+```
+
+Typically you should expect triangle strips to have ~50-60% of indices compared to triangle lists (~1.5-1.8 indices per triangle) and have ~5% worse ACMR. Note that triangle strips require restart index support for rendering; using degenerate triangles to connect strips is not supported.
+
 ## Efficiency analyzers
 
 While the only way to get precise performance data is to measure performance on the target GPU, it can be valuable to measure the impact of these optimization in a GPU-independent manner. To this end, the library provides analyzers for all three major optimization routines. For each optimization there is a corresponding analyze function, like `meshopt_analyzeOverdraw`, that returns a struct with statistics.
