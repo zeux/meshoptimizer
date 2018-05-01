@@ -23,7 +23,8 @@ static size_t hash(unsigned long long key)
 	return size_t(key);
 }
 
-static size_t hashBuckets(size_t count)
+// TODO: figure out naming conflicts between indexgenerator.cpp and this file
+static size_t hashBuckets2(size_t count)
 {
 	size_t buckets = 1;
 	while (buckets < count)
@@ -221,7 +222,7 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 	}
 
 	// edge quadrics for boundary edges
-	meshopt_Buffer<unsigned long long> edges(hashBuckets(index_count));
+	meshopt_Buffer<unsigned long long> edges(hashBuckets2(index_count));
 	memset(edges.data, 0, edges.size * sizeof(unsigned long long));
 
 	for (size_t i = 0; i < index_count; i += 3)
