@@ -29,6 +29,8 @@
 namespace meshopt
 {
 
+const unsigned char kVertexHeader = 0xa0;
+
 const size_t kVertexBlockSizeBytes = 8192;
 const size_t kVertexBlockMaxSize = 256;
 const size_t kByteGroupSize = 16;
@@ -748,6 +750,11 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	unsigned char* data = buffer;
 	unsigned char* data_end = buffer + buffer_size;
 
+	if (size_t(data_end - data) < 1 + vertex_size)
+		return 0;
+
+	*data++ = kVertexHeader;
+
 	unsigned char last_vertex[256];
 	memcpy(last_vertex, vertex_data, vertex_size);
 
@@ -802,7 +809,7 @@ size_t meshopt_encodeVertexBufferBound(size_t vertex_count, size_t vertex_size)
 
 	size_t tail_size = vertex_size < kTailMaxSize ? kTailMaxSize : vertex_size;
 
-	return vertex_block_count * vertex_size * (vertex_block_header_size + vertex_block_data_size) + tail_size;
+	return 1 + vertex_block_count * vertex_size * (vertex_block_header_size + vertex_block_data_size) + tail_size;
 }
 
 int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t vertex_size, const unsigned char* buffer, size_t buffer_size)
@@ -829,7 +836,10 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 	const unsigned char* data = buffer;
 	const unsigned char* data_end = buffer + buffer_size;
 
-	if (size_t(data_end - data) < vertex_size)
+	if (size_t(data_end - data) < 1 + vertex_size)
+		return -2;
+
+	if (*data++ != kVertexHeader)
 		return -1;
 
 	unsigned char last_vertex[256];
