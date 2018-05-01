@@ -79,7 +79,7 @@ To optimize the index/vertex buffers for vertex fetch efficiency, call:
 meshopt_optimizeVertexFetch(vertices, indices, index_count, vertices, vertex_count, sizeof(Vertex));
 ```
 
-This will reorder the vertices in the vertex buffer to try to improve the locality of reference, and rewrite the indices in place to match. This optimization has to be performed on the final index buffer since the optimal vertex order depends on the triangle order.
+This will reorder the vertices in the vertex buffer to try to improve the locality of reference, and rewrite the indices in place to match; if the vertex data is stored using multiple streams, you should use `meshopt_optimizeVertexFetchRemap` instead. This optimization has to be performed on the final index buffer since the optimal vertex order depends on the triangle order.
 
 Note that the algorithm does not try to model cache replacement precisely and instead just orders vertices in the order of use, which generally produces results that are close to optimal.
 
