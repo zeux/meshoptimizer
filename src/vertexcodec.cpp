@@ -755,8 +755,9 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 
 	*data++ = kVertexHeader;
 
-	unsigned char last_vertex[256];
-	memcpy(last_vertex, vertex_data, vertex_size);
+	unsigned char last_vertex[256] = {};
+	if (vertex_count > 0)
+		memcpy(last_vertex, vertex_data, vertex_size);
 
 	size_t vertex_block_size = getVertexBlockSize(vertex_size);
 
