@@ -1,5 +1,5 @@
 /**
- * meshoptimizer - version 0.7
+ * meshoptimizer - version 0.8
  *
  * Copyright (C) 2016-2018, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
  * Report bugs and download new versions at https://github.com/zeux/meshoptimizer
@@ -12,7 +12,7 @@
 #include <stddef.h>
 
 /* Version macro; major * 100 + minor * 10 + patch */
-#define MESHOPTIMIZER_VERSION 70
+#define MESHOPTIMIZER_VERSION 80
 
 /* If no API is defined, assume default */
 #ifndef MESHOPTIMIZER_API
