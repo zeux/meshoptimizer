@@ -24,6 +24,7 @@ When optimizing a mesh, you should typically feed it through a set of optimizati
 3. Overdraw optimization
 4. Vertex fetch optimization
 5. Vertex quantization
+6. (optional) Vertex/index buffer compression
 
 ## Indexing
 
@@ -105,7 +106,7 @@ unsigned short py = meshopt_quantizeHalf(v.y);
 unsigned short pz = meshopt_quantizeHalf(v.z);
 ```
 
-## Buffer encoding
+## Vertex/index buffer compression
 
 After all of the above optimizations, the geometry data is optimal for GPU to consume - however, you don't have to store the data as is. In case storage size or transmission bandwidth is of importance, you might want to compress vertex and index data. While several mesh compression libraries, like Google Draco, are available, they typically are designed to maximize the compression ratio at the cost of preserving the vertex/index order (which makes the meshes inefficient to render on GPU) or decompression performance. Additionally they frequently don't support custom game-ready quantized vertex formats and thus require to re-quantize the data after loading it, making decoding even slower.
 
