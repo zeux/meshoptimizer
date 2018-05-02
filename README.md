@@ -134,7 +134,7 @@ assert(resvb == 0 && resib == 0);
 
 Note that vertex encoding assumes that vertex buffer was optimized for vertex fetch, and that vertices are quantized; index encoding assumes that the vertex/index buffers were optimized for vertex cache and vertex fetch. Feeding unoptimized data into the encoders will produce poor compression rates. Both codecs are lossless - the only lossy step is quantization that happens before encoding.
 
-Decoding functions are heavily optimized; you can expect both decoders to run at 1-2 GB/s on modern desktop CPUs. Compression ratios depend on the data; vertex data compression ratio is typically around 1.5-2x (compared to already quantized data), index data compression ratio is around 5-6x (compared to raw 16-bit index data). General purpose lossless compressors can further improve on these results.
+Decoding functions are heavily optimized and can directly target write-combined memory; you can expect both decoders to run at 1-2 GB/s on modern desktop CPUs. Compression ratios depend on the data; vertex data compression ratio is typically around 2-4x (compared to already quantized data), index data compression ratio is around 5-6x (compared to raw 16-bit index data). General purpose lossless compressors can further improve on these results.
 
 ## Triangle strip conversion
 
