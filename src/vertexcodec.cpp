@@ -220,47 +220,43 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 }
 
 #if defined(SIMD_FALLBACK) || (!defined(SIMD_SSE) && !defined(SIMD_NEON))
-static const unsigned char* decodeBytesGroupImpl(const unsigned char* data, unsigned char* buffer, int bits)
-{
-	size_t byte_size = 8 / bits;
-	assert(kByteGroupSize % byte_size == 0);
-
-	const unsigned char* data_var = data + kByteGroupSize / byte_size;
-
-	// fixed portion: bits bits for each value
-	// variable portion: full byte for each out-of-range value (using 1...1 as sentinel)
-	unsigned char sentinel = (1 << bits) - 1;
-
-	for (size_t i = 0; i < kByteGroupSize; i += byte_size)
-	{
-		unsigned char byte = *data++;
-
-		for (size_t k = 0; k < byte_size; ++k)
-		{
-			unsigned char enc = byte >> (8 - bits);
-			byte <<= bits;
-
-			unsigned char encv = *data_var;
-
-			buffer[i + k] = (enc == sentinel) ? encv : enc;
-			data_var += enc == sentinel;
-		}
-	}
-
-	return data_var;
-}
-
 static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned char* buffer, int bitslog2)
 {
+#define READ() byte = *data++
+#define NEXT(bits) enc = byte >> (8 - bits), byte <<= bits, encv = *data_var, *buffer++ = (enc == (1 << bits) - 1) ? encv : enc, data_var += (enc == (1 << bits) - 1)
+
+	unsigned char byte, enc, encv;
+	const unsigned char* data_var;
+
 	switch (bitslog2)
 	{
 	case 0:
 		memset(buffer, 0, kByteGroupSize);
 		return data;
 	case 1:
-		return decodeBytesGroupImpl(data, buffer, 2);
+		data_var = data + 4;
+
+		// 4 groups with 4 2-bit values in each byte
+		READ(), NEXT(2), NEXT(2), NEXT(2), NEXT(2);
+		READ(), NEXT(2), NEXT(2), NEXT(2), NEXT(2);
+		READ(), NEXT(2), NEXT(2), NEXT(2), NEXT(2);
+		READ(), NEXT(2), NEXT(2), NEXT(2), NEXT(2);
+
+		return data_var;
 	case 2:
-		return decodeBytesGroupImpl(data, buffer, 4);
+		data_var = data + 8;
+
+		// 8 groups with 2 4-bit values in each byte
+		READ(), NEXT(4), NEXT(4);
+		READ(), NEXT(4), NEXT(4);
+		READ(), NEXT(4), NEXT(4);
+		READ(), NEXT(4), NEXT(4);
+		READ(), NEXT(4), NEXT(4);
+		READ(), NEXT(4), NEXT(4);
+		READ(), NEXT(4), NEXT(4);
+		READ(), NEXT(4), NEXT(4);
+
+		return data_var;
 	case 3:
 		memcpy(buffer, data, kByteGroupSize);
 		return data + kByteGroupSize;
@@ -268,6 +264,9 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 		assert(!"Unexpected bit length"); // This can never happen since bitslog2 is a 2-bit value
 		return data;
 	}
+
+#undef READ
+#undef NEXT
 }
 
 static const unsigned char* decodeBytes(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size)
