@@ -305,9 +305,11 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 	unsigned char buffer[kVertexBlockMaxSize];
 	unsigned char transposed[kVertexBlockSizeBytes];
 
+	size_t vertex_count_aligned = (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1);
+
 	for (size_t k = 0; k < vertex_size; ++k)
 	{
-		data = decodeBytes(data, data_end, buffer, (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1));
+		data = decodeBytes(data, data_end, buffer, vertex_count_aligned);
 		if (!data)
 			return 0;
 
