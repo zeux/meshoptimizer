@@ -560,7 +560,8 @@ void encodeVertex(const Mesh& mesh, const char* pvn)
 
 	double middle = timestamp();
 
-	std::vector<PV> result(mesh.vertices.size());
+	// using meshopt_Buffer instead of std::vector to avoid memset overhead
+	meshopt_Buffer<PV> result(mesh.vertices.size());
 	int res = meshopt_decodeVertexBuffer(&result[0], mesh.vertices.size(), sizeof(PV), &vbuf[0], vbuf.size());
 	assert(res == 0);
 	(void)res;
@@ -576,7 +577,7 @@ void encodeVertex(const Mesh& mesh, const char* pvn)
 	       double(csize * 8) / double(mesh.vertices.size()),
 	       (middle - start) * 1000,
 	       (end - middle) * 1000,
-	       (double(result.size() * sizeof(PV)) / (1 << 30)) / (end - middle));
+	       (double(result.size * sizeof(PV)) / (1 << 30)) / (end - middle));
 }
 
 void stripify(const Mesh& mesh)
