@@ -218,7 +218,10 @@ int main(int argc, char** argv)
 		std::vector<PV> pv(mesh.vertices.size());
 		packMesh(pv, mesh.vertices, bitsp, bitst);
 
-		printf("baseline   : size: %d bytes\n", int(pv.size() * sizeof(PV)) + int(mesh.indices.size() * sizeof(unsigned int)));
+		printf("baseline   : size: %d bytes; vb %.1f bpv, ib %.1f bpv\n",
+			int(pv.size() * sizeof(PV)) + int(mesh.indices.size() * sizeof(unsigned int)),
+			double(pv.size() * sizeof(PV) * 8) / double(pv.size()),
+			double(mesh.indices.size() * sizeof(unsigned int) * 8) / double(pv.size()));
 
 		std::vector<PV> vbd(mesh.vertices.size());
 		std::vector<unsigned int> ibd(mesh.indices.size());
@@ -233,7 +236,11 @@ int main(int argc, char** argv)
 			ZSTD_decompress(&ibd[0], ibd.size() * sizeof(ibd[0]), &ibz[0], ibz.size());
 			double end = timestamp();
 
-			printf("zstd only  : size: %d bytes; decoding time: %.2f msec\n", int(vbz.size() + ibz.size()), (end - start) * 1000);
+			printf("zstd only  : size: %d bytes; vb %.1f bpv, ib %.1f bpv; decoding time: %.2f msec\n",
+				int(vbz.size() + ibz.size()),
+				double(vbz.size() * 8) / double(pv.size()),
+				double(ibz.size() * 8) / double(pv.size()),
+				(end - start) * 1000);
 		}
 #endif
 
@@ -250,7 +257,11 @@ int main(int argc, char** argv)
 			assert(dvb == 0 && dib == 0);
 			double end = timestamp();
 
-			printf("codec      : size: %d bytes; decoding time: %.2f msec\n", int(vbuf.size() + ibuf.size()), (end - start) * 1000);
+			printf("codec      : size: %d bytes; vb %.1f bpv, ib %.1f bpv; decoding time: %.2f msec\n",
+				int(vbuf.size() + ibuf.size()),
+				double(vbuf.size() * 8) / double(pv.size()),
+				double(ibuf.size() * 8) / double(pv.size()),
+				(end - start) * 1000);
 		}
 
 #ifdef WITH_ZSTD
@@ -268,7 +279,11 @@ int main(int argc, char** argv)
 			assert(dvbz == 0 && dibz == 0);
 			double end = timestamp();
 
-			printf("codec+zstd : size: %d bytes; decoding time: %.2f msec\n", int(vbz.size() + ibz.size()), (end - start) * 1000);
+			printf("codec+zstd : size: %d bytes; vb %.1f bpv, ib %.1f bpv; decoding time: %.2f msec\n",
+				int(vbz.size() + ibz.size()),
+				double(vbz.size() * 8) / double(pv.size()),
+				double(ibz.size() * 8) / double(pv.size()),
+				(end - start) * 1000);
 		}
 #endif
 	}
