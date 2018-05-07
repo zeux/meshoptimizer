@@ -72,8 +72,8 @@ struct Quadric
 
 struct Collapse
 {
-	size_t v0;
-	size_t v1;
+	unsigned int v0;
+	unsigned int v1;
 	float error;
 
 	bool operator<(const Collapse& other) const
@@ -275,9 +275,12 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 	size_t pass_count = 0;
 	float worst_error = 0;
 
+	meshopt_Buffer<Collapse> edge_collapses(index_count);
+	meshopt_Buffer<unsigned int> vertex_remap(vertex_count);
+	meshopt_Buffer<char> vertex_locked(vertex_count);
+
 	while (index_count > target_index_count)
 	{
-		meshopt_Buffer<Collapse> edge_collapses(index_count);
 		size_t edge_collapse_count = 0;
 
 		for (size_t i = 0; i < index_count; i += 3)
@@ -299,14 +302,11 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 
 		std::sort(edge_collapses.data, edge_collapses.data + edge_collapse_count);
 
-		meshopt_Buffer<unsigned int> vertex_remap(vertex_count);
-
 		for (size_t i = 0; i < vertex_count; ++i)
 		{
 			vertex_remap[i] = unsigned(i);
 		}
 
-		meshopt_Buffer<char> vertex_locked(vertex_count);
 		memset(vertex_locked.data, 0, vertex_count);
 
 		// each collapse removes 2 triangles
