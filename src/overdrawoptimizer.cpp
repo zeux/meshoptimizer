@@ -286,7 +286,7 @@ void meshopt_optimizeOverdraw(unsigned int* destination, const unsigned int* ind
 
 	if (destination == indices)
 	{
-		indices_copy.data = new unsigned int[index_count];
+		indices_copy.allocate(index_count);
 		memcpy(indices_copy.data, indices, index_count * sizeof(unsigned int));
 		indices = indices_copy.data;
 	}

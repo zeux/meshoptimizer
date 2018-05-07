@@ -177,7 +177,7 @@ void meshopt_optimizeVertexCache(unsigned int* destination, const unsigned int* 
 
 	if (destination == indices)
 	{
-		indices_copy.data = new unsigned int[index_count];
+		indices_copy.allocate(index_count);
 		memcpy(indices_copy.data, indices, index_count * sizeof(unsigned int));
 		indices = indices_copy.data;
 	}
@@ -362,7 +362,7 @@ void meshopt_optimizeVertexCacheFifo(unsigned int* destination, const unsigned i
 
 	if (destination == indices)
 	{
-		indices_copy.data = new unsigned int[index_count];
+		indices_copy.allocate(index_count);
 		memcpy(indices_copy.data, indices, index_count * sizeof(unsigned int));
 		indices = indices_copy.data;
 	}

@@ -38,7 +38,7 @@ size_t meshopt_optimizeVertexFetch(void* destination, unsigned int* indices, siz
 
 	if (destination == vertices)
 	{
-		vertices_copy.data = new char[vertex_count * vertex_size];
+		vertices_copy.allocate(vertex_count * vertex_size);
 		memcpy(vertices_copy.data, vertices, vertex_count * vertex_size);
 		vertices = vertices_copy.data;
 	}

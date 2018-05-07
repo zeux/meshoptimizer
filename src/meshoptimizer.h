@@ -537,6 +537,13 @@ public:
 		assert(index < size);
 		return data[index];
 	}
+
+	void allocate(size_t size_)
+	{
+		assert(!data);
+		data = new T[size_];
+		size = size_;
+	}
 };
 #endif
 

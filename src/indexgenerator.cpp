@@ -148,7 +148,7 @@ void meshopt_remapVertexBuffer(void* destination, const void* vertices, size_t v
 
 	if (destination == vertices)
 	{
-		vertices_copy.data = new char[vertex_count * vertex_size];
+		vertices_copy.allocate(vertex_count * vertex_size);
 		memcpy(vertices_copy.data, vertices, vertex_count * vertex_size);
 		vertices = vertices_copy.data;
 	}
