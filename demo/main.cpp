@@ -425,17 +425,17 @@ void simplify(const Mesh& mesh)
 	double end = timestamp();
 
 	printf("%-9s: %d triangles => %d LOD levels down to %d triangles in %.2f msec, optimized in %.2f msec\n",
-		"Simplify",
-		int(lod_index_counts[0]) / 3, int(lod_count), int(lod_index_counts[lod_count - 1]) / 3,
-		(middle - start) * 1000, (end - middle) * 1000);
+	       "Simplify",
+	       int(lod_index_counts[0]) / 3, int(lod_count), int(lod_index_counts[lod_count - 1]) / 3,
+	       (middle - start) * 1000, (end - middle) * 1000);
 
 	// for using LOD data at runtime, in addition to vertices and indices you have to save lod_index_offsets/lod_index_counts.
 
 	{
 		meshopt_VertexCacheStatistics vcs0 = meshopt_analyzeVertexCache(&indices[lod_index_offsets[0]], lod_index_counts[0], vertices.size(), kCacheSize, 0, 0);
 		meshopt_VertexFetchStatistics vfs0 = meshopt_analyzeVertexFetch(&indices[lod_index_offsets[0]], lod_index_counts[0], vertices.size(), sizeof(Vertex));
-		meshopt_VertexCacheStatistics vcsN = meshopt_analyzeVertexCache(&indices[lod_index_offsets[lod_count-1]], lod_index_counts[lod_count-1], vertices.size(), kCacheSize, 0, 0);
-		meshopt_VertexFetchStatistics vfsN = meshopt_analyzeVertexFetch(&indices[lod_index_offsets[lod_count-1]], lod_index_counts[lod_count-1], vertices.size(), sizeof(Vertex));
+		meshopt_VertexCacheStatistics vcsN = meshopt_analyzeVertexCache(&indices[lod_index_offsets[lod_count - 1]], lod_index_counts[lod_count - 1], vertices.size(), kCacheSize, 0, 0);
+		meshopt_VertexFetchStatistics vfsN = meshopt_analyzeVertexFetch(&indices[lod_index_offsets[lod_count - 1]], lod_index_counts[lod_count - 1], vertices.size(), sizeof(Vertex));
 
 		typedef PackedVertexOct PV;
 
@@ -449,10 +449,10 @@ void simplify(const Mesh& mesh)
 		ibuf.resize(meshopt_encodeIndexBuffer(&ibuf[0], ibuf.size(), &indices[0], indices.size()));
 
 		printf("%-9s  ACMR %f...%f Overfetch %f..%f Codec VB %.1f bits/vertex IB %.1f bits/triangle\n",
-			"",
-			vcs0.acmr, vcsN.acmr, vfs0.overfetch, vfsN.overfetch,
-			double(vbuf.size()) / double(vertices.size()) * 8,
-			double(ibuf.size()) / double(indices.size() / 3) * 8);
+		       "",
+		       vcs0.acmr, vcsN.acmr, vfs0.overfetch, vfsN.overfetch,
+		       double(vbuf.size()) / double(vertices.size()) * 8,
+		       double(ibuf.size()) / double(indices.size() / 3) * 8);
 	}
 }
 
