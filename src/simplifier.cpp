@@ -5,7 +5,11 @@
 #include <math.h>
 #include <string.h>
 
-#include <algorithm>
+#define TRACE 0
+
+#if TRACE
+#include <stdio.h>
+#endif
 
 // This work is based on:
 // Michael Garland and Paul S. Heckbert. Surface simplification using quadric error metrics. 1997
@@ -74,12 +78,11 @@ struct Collapse
 {
 	unsigned int v0;
 	unsigned int v1;
-	float error;
 
-	bool operator<(const Collapse& other) const
-	{
-		return error < other.error;
-	}
+	union {
+		float error;
+		unsigned int errorui;
+	};
 };
 
 static float normalize(Vector3& v)
@@ -192,6 +195,42 @@ static unsigned long long edgeId(unsigned int a, unsigned int b)
 	return (static_cast<unsigned long long>(a) << 32) | b;
 }
 
+static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapses, size_t collapse_count)
+{
+	const int sort_bits = 11;
+
+	// fill histogram for counting sort
+	unsigned int histogram[1 << sort_bits];
+	memset(histogram, 0, sizeof(histogram));
+
+	for (size_t i = 0; i < collapse_count; ++i)
+	{
+		unsigned int key = (collapses[i].errorui << 1) >> (32 - sort_bits);
+
+		histogram[key]++;
+	}
+
+	// compute offsets based on histogram data
+	size_t histogram_sum = 0;
+
+	for (size_t i = 0; i < 1 << sort_bits; ++i)
+	{
+		size_t count = histogram[i];
+		histogram[i] = unsigned(histogram_sum);
+		histogram_sum += count;
+	}
+
+	assert(histogram_sum == collapse_count);
+
+	// compute sort order based on offsets
+	for (size_t i = 0; i < collapse_count; ++i)
+	{
+		unsigned int key = (collapses[i].errorui << 1) >> (32 - sort_bits);
+
+		sort_order[histogram[key]++] = unsigned(i);
+	}
+}
+
 static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_positions_stride, size_t vertex_count, size_t target_index_count)
 {
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
@@ -276,6 +315,7 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 	float worst_error = 0;
 
 	meshopt_Buffer<Collapse> edge_collapses(index_count);
+	meshopt_Buffer<unsigned int> collapse_order(index_count);
 	meshopt_Buffer<unsigned int> vertex_remap(vertex_count);
 	meshopt_Buffer<char> vertex_locked(vertex_count);
 
@@ -295,12 +335,13 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 				Collapse c01 = {i0, i1, quadricError(vertex_quadrics[i0], vertex_positions[i1])};
 				Collapse c10 = {i1, i0, quadricError(vertex_quadrics[i1], vertex_positions[i0])};
 				Collapse c = c01.error <= c10.error ? c01 : c10;
+				assert(c.error >= 0);
 
 				edge_collapses[edge_collapse_count++] = c;
 			}
 		}
 
-		std::sort(edge_collapses.data, edge_collapses.data + edge_collapse_count);
+		sortEdgeCollapses(collapse_order.data, edge_collapses.data, edge_collapse_count);
 
 		for (size_t i = 0; i < vertex_count; ++i)
 		{
@@ -315,12 +356,12 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 		size_t collapses = 0;
 		float pass_error = 0;
 
-		float error_goal = edge_collapses[edge_collapse_goal < edge_collapse_count ? edge_collapse_goal : edge_collapse_count - 1].error;
+		float error_goal = edge_collapses[collapse_order[edge_collapse_goal < edge_collapse_count ? edge_collapse_goal : edge_collapse_count - 1]].error;
 		float error_limit = error_goal * 1.5f;
 
 		for (size_t i = 0; i < edge_collapse_count; ++i)
 		{
-			const Collapse& c = edge_collapses[i];
+			const Collapse& c = edge_collapses[collapse_order[i]];
 
 			if (vertex_locked[c.v0] || vertex_locked[c.v1])
 				continue;
@@ -345,7 +386,9 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 				break;
 		}
 
-		// printf("pass %d: collapses: %d/%d, error: %e\n", int(pass_count), int(collapses), int(edge_collapse_count), pass_error);
+#if TRACE
+		printf("pass %d: collapses: %d/%d (target %d), error: %e\n", int(pass_count), int(collapses), int(edge_collapse_count), int(edge_collapse_goal), pass_error);
+#endif
 
 		pass_count++;
 		worst_error = (worst_error < pass_error) ? pass_error : worst_error;
@@ -378,7 +421,9 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 		index_count = write;
 	}
 
-	// printf("passes: %d, worst error: %e\n", int(pass_count), worst_error);
+#if TRACE
+	printf("passes: %d, worst error: %e\n", int(pass_count), worst_error);
+#endif
 
 	return index_count;
 }
