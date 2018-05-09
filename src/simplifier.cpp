@@ -332,8 +332,8 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 				unsigned int i0 = result[i + e];
 				unsigned int i1 = result[i + next[e]];
 
-				Collapse c01 = {i0, i1, quadricError(vertex_quadrics[i0], vertex_positions[i1])};
-				Collapse c10 = {i1, i0, quadricError(vertex_quadrics[i1], vertex_positions[i0])};
+				Collapse c01 = {i0, i1, {quadricError(vertex_quadrics[i0], vertex_positions[i1])}};
+				Collapse c10 = {i1, i0, {quadricError(vertex_quadrics[i1], vertex_positions[i0])}};
 				Collapse c = c01.error <= c10.error ? c01 : c10;
 				assert(c.error >= 0);
 
