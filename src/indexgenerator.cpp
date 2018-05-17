@@ -35,11 +35,6 @@ struct VertexHasher
 	const char* vertices;
 	size_t vertex_size;
 
-	unsigned int empty() const
-	{
-		return ~0u;
-	}
-
 	size_t operator()(unsigned int index) const
 	{
 		return murmurHash(vertices + index * vertex_size, vertex_size, 0);
