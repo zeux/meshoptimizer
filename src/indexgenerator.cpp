@@ -46,12 +46,6 @@ struct VertexHasher
 	}
 };
 
-struct VertexHashEntry
-{
-	unsigned int key;
-	unsigned int value;
-};
-
 static size_t hashBuckets(size_t count)
 {
 	size_t buckets = 1;
@@ -61,8 +55,8 @@ static size_t hashBuckets(size_t count)
 	return buckets;
 }
 
-template <typename T, typename Hash, typename Key>
-static T* hashLookup(T* table, size_t buckets, const Hash& hash, const Key& key, const Key& empty)
+template <typename T, typename Hash>
+static T* hashLookup(T* table, size_t buckets, const Hash& hash, const T& key, const T& empty)
 {
 	assert(buckets > 0);
 	assert((buckets & (buckets - 1)) == 0);
@@ -74,10 +68,10 @@ static T* hashLookup(T* table, size_t buckets, const Hash& hash, const Key& key,
 	{
 		T& item = table[bucket];
 
-		if (item.key == empty)
+		if (item == empty)
 			return &item;
 
-		if (hash(item.key, key))
+		if (hash(item, key))
 			return &item;
 
 		// hash collision, quadratic probing
@@ -98,15 +92,12 @@ size_t meshopt_generateVertexRemap(unsigned int* destination, const unsigned int
 	assert(index_count % 3 == 0);
 	assert(vertex_size > 0 && vertex_size <= 256);
 
-	for (size_t i = 0; i < vertex_count; ++i)
-	{
-		destination[i] = ~0u;
-	}
+	memset(destination, -1, vertex_count * sizeof(unsigned int));
 
 	VertexHasher hasher = {static_cast<const char*>(vertices), vertex_size};
 
-	meshopt_Buffer<VertexHashEntry> table(hashBuckets(vertex_count));
-	memset(table.data, -1, table.size * sizeof(VertexHashEntry));
+	meshopt_Buffer<unsigned int> table(hashBuckets(vertex_count));
+	memset(table.data, -1, table.size * sizeof(unsigned int));
 
 	unsigned int next_vertex = 0;
 
@@ -117,15 +108,20 @@ size_t meshopt_generateVertexRemap(unsigned int* destination, const unsigned int
 
 		if (destination[index] == ~0u)
 		{
-			VertexHashEntry* entry = hashLookup(table.data, table.size, hasher, index, ~0u);
+			unsigned int* entry = hashLookup(table.data, table.size, hasher, index, ~0u);
 
-			if (entry->key == ~0u)
+			if (*entry == ~0u)
 			{
-				entry->key = index;
-				entry->value = next_vertex++;
-			}
+				*entry = index;
 
-			destination[index] = entry->value;
+				destination[index] = next_vertex++;
+			}
+			else
+			{
+				assert(destination[*entry] != ~0u);
+
+				destination[index] = destination[*entry];
+			}
 		}
 	}
 
