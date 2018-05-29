@@ -16,6 +16,64 @@
 namespace meshopt
 {
 
+struct EdgeAdjacency
+{
+	meshopt_Buffer<unsigned int> counts;
+	meshopt_Buffer<unsigned int> offsets;
+	meshopt_Buffer<unsigned int> data;
+
+	EdgeAdjacency(size_t index_count, size_t vertex_count)
+	    : counts(vertex_count)
+	    , offsets(vertex_count)
+	    , data(index_count)
+	{
+	}
+};
+
+static void buildEdgeAdjacency(EdgeAdjacency& adjacency, const unsigned int* indices, size_t index_count, size_t vertex_count)
+{
+	size_t face_count = index_count / 3;
+
+	// fill edge counts
+	memset(adjacency.counts.data, 0, vertex_count * sizeof(unsigned int));
+
+	for (size_t i = 0; i < index_count; ++i)
+	{
+		assert(indices[i] < vertex_count);
+
+		adjacency.counts[indices[i]]++;
+	}
+
+	// fill offset table
+	unsigned int offset = 0;
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		adjacency.offsets[i] = offset;
+		offset += adjacency.counts[i];
+	}
+
+	assert(offset == index_count);
+
+	// fill edge data
+	for (size_t i = 0; i < face_count; ++i)
+	{
+		unsigned int a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
+
+		adjacency.data[adjacency.offsets[a]++] = b;
+		adjacency.data[adjacency.offsets[b]++] = c;
+		adjacency.data[adjacency.offsets[c]++] = a;
+	}
+
+	// fix offsets that have been disturbed by the previous pass
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		assert(adjacency.offsets[i] >= adjacency.counts[i]);
+
+		adjacency.offsets[i] -= adjacency.counts[i];
+	}
+}
+
 static size_t hash(unsigned long long key)
 {
 	key = (~key) + (key << 18);
@@ -244,10 +302,15 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 	unsigned int* result = destination;
 
+	// build adjacency information
+	EdgeAdjacency adjacency(index_count, vertex_count);
+	buildEdgeAdjacency(adjacency, indices, index_count, vertex_count);
+
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
 	meshopt_Buffer<Vector3> vertex_positions(vertex_count);
 
+	// copy positions to make code slightly simpler and improve cache efficiency
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
 		const float* v = vertex_positions_data + i * vertex_stride_float;
