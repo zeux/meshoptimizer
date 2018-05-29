@@ -22,35 +22,32 @@ static const float vertex_score_table_live[1 + max_valence] = {
     0.f,
     0.994f, 0.721f, 0.479f, 0.423f, 0.174f, 0.080f, 0.249f, 0.056f};
 
-struct Adjacency
+struct TriangleAdjacency
 {
-	meshopt_Buffer<unsigned int> triangle_counts;
+	meshopt_Buffer<unsigned int> counts;
 	meshopt_Buffer<unsigned int> offsets;
 	meshopt_Buffer<unsigned int> data;
 
-	Adjacency(size_t index_count, size_t vertex_count)
-	    : triangle_counts(vertex_count)
+	TriangleAdjacency(size_t index_count, size_t vertex_count)
+	    : counts(vertex_count)
 	    , offsets(vertex_count)
 	    , data(index_count)
 	{
 	}
 };
 
-static void buildAdjacency(Adjacency& adjacency, const unsigned int* indices, size_t index_count, size_t vertex_count)
+static void buildTriangleAdjacency(TriangleAdjacency& adjacency, const unsigned int* indices, size_t index_count, size_t vertex_count)
 {
 	size_t face_count = index_count / 3;
 
 	// fill triangle counts
-	for (size_t i = 0; i < vertex_count; ++i)
-	{
-		adjacency.triangle_counts[i] = 0;
-	}
+	memset(adjacency.counts.data, 0, vertex_count * sizeof(unsigned int));
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
 		assert(indices[i] < vertex_count);
 
-		adjacency.triangle_counts[indices[i]]++;
+		adjacency.counts[indices[i]]++;
 	}
 
 	// fill offset table
@@ -59,7 +56,7 @@ static void buildAdjacency(Adjacency& adjacency, const unsigned int* indices, si
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
 		adjacency.offsets[i] = offset;
-		offset += adjacency.triangle_counts[i];
+		offset += adjacency.counts[i];
 	}
 
 	assert(offset == index_count);
@@ -77,9 +74,9 @@ static void buildAdjacency(Adjacency& adjacency, const unsigned int* indices, si
 	// fix offsets that have been disturbed by the previous pass
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		assert(adjacency.offsets[i] >= adjacency.triangle_counts[i]);
+		assert(adjacency.offsets[i] >= adjacency.counts[i]);
 
-		adjacency.offsets[i] -= adjacency.triangle_counts[i];
+		adjacency.offsets[i] -= adjacency.counts[i];
 	}
 }
 
@@ -188,12 +185,12 @@ void meshopt_optimizeVertexCache(unsigned int* destination, const unsigned int* 
 	size_t face_count = index_count / 3;
 
 	// build adjacency information
-	Adjacency adjacency(index_count, vertex_count);
-	buildAdjacency(adjacency, indices, index_count, vertex_count);
+	TriangleAdjacency adjacency(index_count, vertex_count);
+	buildTriangleAdjacency(adjacency, indices, index_count, vertex_count);
 
 	// live triangle counts
 	meshopt_Buffer<unsigned int> live_triangles(vertex_count);
-	memcpy(live_triangles.data, adjacency.triangle_counts.data, vertex_count * sizeof(unsigned int));
+	memcpy(live_triangles.data, adjacency.counts.data, vertex_count * sizeof(unsigned int));
 
 	// emitted flags
 	meshopt_Buffer<char> emitted_flags(face_count);
@@ -280,7 +277,7 @@ void meshopt_optimizeVertexCache(unsigned int* destination, const unsigned int* 
 			unsigned int index = indices[current_triangle * 3 + k];
 
 			unsigned int* neighbours = &adjacency.data[0] + adjacency.offsets[index];
-			size_t neighbours_size = adjacency.triangle_counts[index];
+			size_t neighbours_size = adjacency.counts[index];
 
 			for (size_t i = 0; i < neighbours_size; ++i)
 			{
@@ -289,7 +286,7 @@ void meshopt_optimizeVertexCache(unsigned int* destination, const unsigned int* 
 				if (tri == current_triangle)
 				{
 					neighbours[i] = neighbours[neighbours_size - 1];
-					adjacency.triangle_counts[index]--;
+					adjacency.counts[index]--;
 					break;
 				}
 			}
@@ -313,7 +310,7 @@ void meshopt_optimizeVertexCache(unsigned int* destination, const unsigned int* 
 
 			// update scores of vertex triangles
 			const unsigned int* neighbours_begin = &adjacency.data[0] + adjacency.offsets[index];
-			const unsigned int* neighbours_end = neighbours_begin + adjacency.triangle_counts[index];
+			const unsigned int* neighbours_end = neighbours_begin + adjacency.counts[index];
 
 			for (const unsigned int* it = neighbours_begin; it != neighbours_end; ++it)
 			{
@@ -370,12 +367,12 @@ void meshopt_optimizeVertexCacheFifo(unsigned int* destination, const unsigned i
 	size_t face_count = index_count / 3;
 
 	// build adjacency information
-	Adjacency adjacency(index_count, vertex_count);
-	buildAdjacency(adjacency, indices, index_count, vertex_count);
+	TriangleAdjacency adjacency(index_count, vertex_count);
+	buildTriangleAdjacency(adjacency, indices, index_count, vertex_count);
 
 	// live triangle counts
 	meshopt_Buffer<unsigned int> live_triangles(vertex_count);
-	memcpy(live_triangles.data, adjacency.triangle_counts.data, vertex_count * sizeof(unsigned int));
+	memcpy(live_triangles.data, adjacency.counts.data, vertex_count * sizeof(unsigned int));
 
 	// cache time stamps
 	meshopt_Buffer<unsigned int> cache_timestamps(vertex_count);
@@ -402,7 +399,7 @@ void meshopt_optimizeVertexCacheFifo(unsigned int* destination, const unsigned i
 
 		// emit all vertex neighbours
 		const unsigned int* neighbours_begin = &adjacency.data[0] + adjacency.offsets[current_vertex];
-		const unsigned int* neighbours_end = neighbours_begin + adjacency.triangle_counts[current_vertex];
+		const unsigned int* neighbours_end = neighbours_begin + adjacency.counts[current_vertex];
 
 		for (const unsigned int* it = neighbours_begin; it != neighbours_end; ++it)
 		{
