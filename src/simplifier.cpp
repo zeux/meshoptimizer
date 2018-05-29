@@ -231,8 +231,19 @@ static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapse
 	}
 }
 
-static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_positions_stride, size_t vertex_count, size_t target_index_count)
+} // namespace meshopt
+
+size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count)
 {
+	using namespace meshopt;
+
+	assert(index_count % 3 == 0);
+	assert(vertex_positions_stride > 0 && vertex_positions_stride <= 256);
+	assert(vertex_positions_stride % sizeof(float) == 0);
+	assert(target_index_count <= index_count);
+
+	unsigned int* result = destination;
+
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
 	meshopt_Buffer<Vector3> vertex_positions(vertex_count);
@@ -426,18 +437,4 @@ static size_t simplifyEdgeCollapse(unsigned int* result, const unsigned int* ind
 #endif
 
 	return index_count;
-}
-
-} // namespace meshopt
-
-size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count)
-{
-	using namespace meshopt;
-
-	assert(index_count % 3 == 0);
-	assert(vertex_positions_stride > 0 && vertex_positions_stride <= 256);
-	assert(vertex_positions_stride % sizeof(float) == 0);
-	assert(target_index_count <= index_count);
-
-	return simplifyEdgeCollapse(destination, indices, index_count, vertex_positions, vertex_positions_stride, vertex_count, target_index_count);
 }
