@@ -1,18 +1,13 @@
-#ifdef _WIN32
 #include "../src/meshoptimizer.h"
 #include "../demo/objparser.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdio>
 #include <ctime>
 
-#define NOMINMAX
-#include <windows.h>
-
 #include <GL/gl.h>
-
-#pragma comment(lib, "gdi32.lib")
-#pragma comment(lib, "opengl32.lib")
-#pragma comment(lib, "user32.lib")
+#include <GLFW/glfw3.h>
 
 struct Options
 {
@@ -192,12 +187,54 @@ void display(int width, int height, const Mesh& mesh, const Options& options)
 	glEnd();
 }
 
-void stats(HWND hWnd, const char* path, const Mesh& mesh, int lod, double time)
+void stats(GLFWwindow* window, const char* path, const Mesh& mesh, int lod, double time)
 {
 	char title[256];
 	snprintf(title, sizeof(title), "%s: LOD %d - %d triangles (%.1f msec)", path, lod, int(mesh.indices.size() / 3), time * 1000);
 
-	SetWindowTextA(hWnd, title);
+	glfwSetWindowTitle(window, title);
+}
+
+Mesh basemesh, mesh;
+const char* path;
+Options options;
+
+void keyhandler(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    if (action == GLFW_PRESS)
+	{
+		if (key == GLFW_KEY_W)
+		{
+			options.wireframe = !options.wireframe;
+		}
+		else if (key == GLFW_KEY_T)
+		{
+			options.mode = options.mode == Options::Mode_Texture ? Options::Mode_Default : Options::Mode_Texture;
+		}
+		else if (key == GLFW_KEY_N)
+		{
+			options.mode = options.mode == Options::Mode_Normals ? Options::Mode_Default : Options::Mode_Normals;
+		}
+		else if (key == GLFW_KEY_U)
+		{
+			options.mode = options.mode == Options::Mode_UV ? Options::Mode_Default : Options::Mode_UV;
+		}
+		else if (key == GLFW_KEY_0)
+		{
+			mesh = basemesh;
+			stats(window, path, mesh, 0, 0);
+		}
+		else if (key >= GLFW_KEY_1 && key <= GLFW_KEY_9)
+		{
+			int lod = int(key - GLFW_KEY_1 + 1);
+
+			clock_t start = clock();
+			mesh = optimize(basemesh, lod);
+			clock_t end = clock();
+
+			stats(window, path, mesh, lod, double(end - start) / CLOCKS_PER_SEC);
+		}
+	}
 }
 
 int main(int argc, char** argv)
@@ -208,72 +245,27 @@ int main(int argc, char** argv)
 		return 0;
 	}
 
-	HWND hWnd = CreateWindowW(L"ListBox", L"Title", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, NULL, NULL);
-	HDC hDC = GetDC(hWnd);
+	path = argv[1];
+	basemesh = parseObj(path);
+	mesh = basemesh;
 
-	PIXELFORMATDESCRIPTOR pfd = {sizeof(pfd), 1, PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER, 0, 32};
-	pfd.cDepthBits = 24;
+	glfwInit();
 
-	SetPixelFormat(hDC, ChoosePixelFormat(hDC, &pfd), &pfd);
-	wglMakeCurrent(hDC, wglCreateContext(hDC));
+	GLFWwindow* window = glfwCreateWindow(640, 480, "Simple example", NULL, NULL);
+    glfwMakeContextCurrent(window);
 
-	ShowWindow(hWnd, SW_SHOWNORMAL);
+	stats(window, path, basemesh, 0, 0);
 
-	const char* path = argv[1];
-	Mesh basemesh = parseObj(path);
-	Options options = {};
+	glfwSetKeyCallback(window, keyhandler);
 
-	stats(hWnd, path, basemesh, 0, 0);
-
-	Mesh mesh = basemesh;
-
-	MSG msg;
-
-	while (GetMessage(&msg, hWnd, 0, 0) && msg.message)
+    while (!glfwWindowShouldClose(window))
 	{
-		TranslateMessage(&msg);
-		DispatchMessage(&msg);
+        int width, height;
+        glfwGetFramebufferSize(window, &width, &height);
 
-		if (msg.message == WM_KEYDOWN)
-		{
-			if (msg.wParam == 'W')
-			{
-				options.wireframe = !options.wireframe;
-			}
-			else if (msg.wParam == 'T')
-			{
-				options.mode = options.mode == Options::Mode_Texture ? Options::Mode_Default : Options::Mode_Texture;
-			}
-			else if (msg.wParam == 'N')
-			{
-				options.mode = options.mode == Options::Mode_Normals ? Options::Mode_Default : Options::Mode_Normals;
-			}
-			else if (msg.wParam == 'U')
-			{
-				options.mode = options.mode == Options::Mode_UV ? Options::Mode_Default : Options::Mode_UV;
-			}
-			else if (msg.wParam == '0')
-			{
-				mesh = basemesh;
-				stats(hWnd, path, mesh, 0, 0);
-			}
-			else if (msg.wParam >= '1' && msg.wParam <= '9')
-			{
-				int lod = int(msg.wParam - '0');
+		display(width, height, mesh, options);
 
-				clock_t start = clock();
-				mesh = optimize(basemesh, lod);
-				clock_t end = clock();
-
-				stats(hWnd, path, mesh, lod, double(end - start) / CLOCKS_PER_SEC);
-			}
-		}
-
-		RECT rect;
-		GetClientRect(hWnd, &rect);
-
-		display(rect.right - rect.left, rect.bottom - rect.top, mesh, options);
-		SwapBuffers(hDC);
+        glfwSwapBuffers(window);
+        glfwPollEvents();
 	}
 }
-#endif
