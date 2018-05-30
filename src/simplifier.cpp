@@ -159,13 +159,15 @@ static T* hashLookup2(T* table, size_t buckets, const Hash& hash, const T& key, 
 	return 0;
 }
 
-static void buildPositionRemap(unsigned int* remap, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride)
+static void buildPositionRemap(unsigned int* remap, unsigned int* reverse_remap, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride)
 {
 	PositionHasher hasher = {vertex_positions_data, vertex_positions_stride / sizeof(float)};
 
 	meshopt_Buffer<unsigned int> table(hashBuckets2(vertex_count));
 	memset(table.data, -1, table.size * sizeof(unsigned int));
 
+	// build forward remap: for each vertex, which other (canonical) vertex does it map to?
+	// we use position equivalence for this, and remap vertices to other existing vertices
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
 		unsigned int index = unsigned(i);
@@ -184,6 +186,22 @@ static void buildPositionRemap(unsigned int* remap, const float* vertex_position
 			remap[index] = remap[*entry];
 		}
 	}
+
+	// build reverse remap table: for each vertex, which other vertex remaps to this one?
+	// this is a many-to-one relationship, but we only identify vertices for which it's 2-1 (so a pair of vertices)
+	for (size_t i = 0; i < vertex_count; ++i)
+		reverse_remap[i] = unsigned(i);
+
+	for (size_t i = 0; i < vertex_count; ++i)
+		if (remap[i] != i)
+		{
+			// first vertex to remap to remap[i]: keep
+			if (reverse_remap[remap[i]] == remap[i])
+				reverse_remap[remap[i]] = unsigned(i);
+			// more than one vertex, invalidate entry
+			else
+				reverse_remap[remap[i]] = ~0u;
+		}
 }
 
 enum VertexKind
@@ -225,27 +243,8 @@ static size_t countOpenEdges(const EdgeAdjacency& adjacency, unsigned int vertex
 	return result;
 }
 
-static void classifyVertices(char* result, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap)
+static void classifyVertices(char* result, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* reverse_remap)
 {
-	// build reverse remap table: for each vertex, which other vertex remaps to this one?
-	// this is a many-to-one relationship, but we only identify vertices for which it's 2-1 (so a pair of vertices)
-	meshopt_Buffer<unsigned int> reverse_remap(vertex_count);
-
-	for (size_t i = 0; i < vertex_count; ++i)
-		reverse_remap[i] = unsigned(i);
-
-	for (size_t i = 0; i < vertex_count; ++i)
-		if (remap[i] != i)
-		{
-			// first vertex to remap to remap[i]: keep
-			if (reverse_remap[remap[i]] == remap[i])
-				reverse_remap[remap[i]] = unsigned(i);
-			// more than one vertex, invalidate entry
-			else
-				reverse_remap[remap[i]] = ~0u;
-		}
-
-	// classify vertices
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
 		if (reverse_remap[i] == i)
@@ -483,17 +482,18 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	buildEdgeAdjacency(adjacency, indices, index_count, vertex_count);
 
 	// build position remap that maps each vertex to the one with identical position
-	meshopt_Buffer<unsigned int> position_remap(vertex_count);
-	buildPositionRemap(position_remap.data, vertex_positions_data, vertex_count, vertex_positions_stride);
+	meshopt_Buffer<unsigned int> remap(vertex_count);
+	meshopt_Buffer<unsigned int> reverse_remap(vertex_count);
+	buildPositionRemap(remap.data, reverse_remap.data, vertex_positions_data, vertex_count, vertex_positions_stride);
 
 	// classify vertices; vertex kind determines collapse rules, see kCanCollapse
 	meshopt_Buffer<char> vertex_kind(vertex_count);
-	classifyVertices(vertex_kind.data, vertex_count, adjacency, position_remap.data);
+	classifyVertices(vertex_kind.data, vertex_count, adjacency, remap.data, reverse_remap.data);
 
 #if TRACE
 	size_t unique_positions = 0;
 	for (size_t i = 0; i < vertex_count; ++i)
-		unique_positions += position_remap[i] == i;
+		unique_positions += remap[i] == i;
 
 	printf("position remap: %d vertices => %d positions\n", int(vertex_count), int(unique_positions));
 
