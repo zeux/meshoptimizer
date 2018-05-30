@@ -186,6 +186,120 @@ static void buildPositionRemap(unsigned int* remap, const float* vertex_position
 	}
 }
 
+enum VertexKind
+{
+	Kind_Manifold, // not on an attribute seam, not on any boundary
+	Kind_Border, // not on an attribute seam, has exactly two open edges
+	Kind_Seam, // on an attribute seam with exactly two attribute seam edges
+	Kind_Locked, // none of the above; these vertices can't move
+
+	Kind_Count
+};
+
+/*
+const char kCanCollapse[Kind_Count][Kind_Count] =
+{
+	{ 1, 1, 1, 0, },
+	{ 0, 1, 0, 0, },
+	{ 0, 0, 1, 0, },
+	{ 0, 0, 0, 0, },
+};
+*/
+
+static size_t countOpenEdges(const EdgeAdjacency& adjacency, unsigned int vertex, unsigned int* last = 0)
+{
+	size_t result = 0;
+
+	unsigned int count = adjacency.counts[vertex];
+	const unsigned int* data = adjacency.data.data + adjacency.offsets[vertex];
+
+	for (size_t i = 0; i < count; ++i)
+		if (!findEdge(adjacency, data[i], vertex))
+		{
+			result++;
+
+			if (last)
+				*last = data[i];
+		}
+
+	return result;
+}
+
+static void classifyVertices(char* result, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap)
+{
+	// build reverse remap table: for each vertex, which other vertex remaps to this one?
+	// this is a many-to-one relationship, but we only identify vertices for which it's 2-1 (so a pair of vertices)
+	meshopt_Buffer<unsigned int> reverse_remap(vertex_count);
+
+	for (size_t i = 0; i < vertex_count; ++i)
+		reverse_remap[i] = unsigned(i);
+
+	for (size_t i = 0; i < vertex_count; ++i)
+		if (remap[i] != i)
+		{
+			// first vertex to remap to remap[i]: keep
+			if (reverse_remap[remap[i]] == remap[i])
+				reverse_remap[remap[i]] = unsigned(i);
+			// more than one vertex, invalidate entry
+			else
+				reverse_remap[remap[i]] = ~0u;
+		}
+
+	// classify vertices
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		if (reverse_remap[i] == i)
+		{
+			// no attribute seam, need to check if it's manifold
+			size_t edges = countOpenEdges(adjacency, i);
+
+			// note: we classify any vertices with no open edges as manifold
+			// this is technically incorrect - if 4 triangles share an edge, we'll classify vertices as manifold
+			// it's unclear if this is a problem in practice
+			// also note that we classify vertices as border if they have *one* open edge, not two
+			// this is because we only have half-edges - so a border vertex would have one incoming and one outgoing edge
+			if (edges == 0)
+				result[i] = Kind_Manifold;
+			else if (edges == 1)
+				result[i] = Kind_Border;
+			else
+				result[i] = Kind_Locked;
+
+		}
+		else if (reverse_remap[i] != ~0u)
+		{
+			// attribute seam; need to distinguish between Seam and Locked
+			unsigned int a = 0;
+			size_t a_count = countOpenEdges(adjacency, i, &a);
+			unsigned int b = 0;
+			size_t b_count = countOpenEdges(adjacency, reverse_remap[i], &b);
+
+			// seam should have one open half-edge for each vertex, and the edges need to "connect" - point to the same vertex post-remap
+			if (a_count == 1 && b_count == 1)
+			{
+				// "flip" a & b between one side of the seam and the other
+				unsigned int af = (remap[a] == a) ? reverse_remap[a] : remap[a];
+				unsigned int bf = (remap[b] == b) ? reverse_remap[b] : remap[b];
+
+				if (af != ~0u && findEdge(adjacency, af, reverse_remap[i]) &&
+					bf != ~0u && findEdge(adjacency, bf, i))
+					result[i] = Kind_Seam;
+				else
+					result[i] = Kind_Locked;
+			}
+			else
+			{
+				result[i] = Kind_Locked;
+			}
+		}
+		else
+		{
+			// more than one vertex maps to this one; we don't have classification available
+			result[i] = Kind_Locked;
+		}
+	}
+}
+
 struct Vector3
 {
 	float x, y, z;
@@ -372,12 +486,23 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	meshopt_Buffer<unsigned int> position_remap(vertex_count);
 	buildPositionRemap(position_remap.data, vertex_positions_data, vertex_count, vertex_positions_stride);
 
+	// classify vertices; vertex kind determines collapse rules, see kCanCollapse
+	meshopt_Buffer<char> vertex_kind(vertex_count);
+	classifyVertices(vertex_kind.data, vertex_count, adjacency, position_remap.data);
+
 #if TRACE
 	size_t unique_positions = 0;
 	for (size_t i = 0; i < vertex_count; ++i)
 		unique_positions += position_remap[i] == i;
 
 	printf("position remap: %d vertices => %d positions\n", int(vertex_count), int(unique_positions));
+
+	size_t kinds[Kind_Count] = {};
+	for (size_t i = 0; i < vertex_count; ++i)
+		kinds[int(vertex_kind[i])]++;
+
+	printf("kinds: manifold %d, border %d, seam %d, locked %d\n",
+		int(kinds[Kind_Manifold]), int(kinds[Kind_Border]), int(kinds[Kind_Seam]), int(kinds[Kind_Locked]));
 #endif
 
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
