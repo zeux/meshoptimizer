@@ -74,49 +74,16 @@ static void buildEdgeAdjacency(EdgeAdjacency& adjacency, const unsigned int* ind
 	}
 }
 
-static size_t hash(unsigned long long key)
+static bool findEdge(const EdgeAdjacency& adjacency, unsigned int a, unsigned int b)
 {
-	key = (~key) + (key << 18);
-	key = key ^ (key >> 31);
-	key = key * 21;
-	key = key ^ (key >> 11);
-	key = key + (key << 6);
-	key = key ^ (key >> 22);
-	return size_t(key);
-}
+	unsigned int count = adjacency.counts[a];
+	const unsigned int* data = adjacency.data.data + adjacency.offsets[a];
 
-// TODO: figure out naming conflicts between indexgenerator.cpp and this file
-static size_t hashBuckets2(size_t count)
-{
-	size_t buckets = 1;
-	while (buckets < count)
-		buckets *= 2;
+	for (unsigned int i = 0; i < count; ++i)
+		if (data[i] == b)
+			return true;
 
-	return buckets;
-}
-
-template <typename T>
-static T* hashLookup(T* table, size_t buckets, const T& key, const T& empty)
-{
-	assert(buckets > 0);
-	assert((buckets & (buckets - 1)) == 0);
-
-	size_t hashmod = buckets - 1;
-	size_t bucket = hash(key) & hashmod;
-
-	for (size_t probe = 0; probe <= hashmod; ++probe)
-	{
-		T& item = table[bucket];
-
-		if (item == empty || item == key)
-			return &item;
-
-		// hash collision, quadratic probing
-		bucket = (bucket + probe + 1) & hashmod;
-	}
-
-	assert(false && "Hash table is full");
-	return 0;
+	return false;
 }
 
 struct Vector3
@@ -248,11 +215,6 @@ static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3
 	quadricMul(Q, length * 1000);
 }
 
-static unsigned long long edgeId(unsigned int a, unsigned int b)
-{
-	return (static_cast<unsigned long long>(a) << 32) | b;
-}
-
 static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapses, size_t collapse_count)
 {
 	const int sort_bits = 11;
@@ -335,8 +297,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	}
 
 	// edge quadrics for boundary edges
-	meshopt_Buffer<unsigned long long> edges(hashBuckets2(index_count));
-	memset(edges.data, 0, edges.size * sizeof(unsigned long long));
+	size_t boundary = 0;
 
 	for (size_t i = 0; i < index_count; i += 3)
 	{
@@ -347,24 +308,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 			unsigned int i0 = indices[i + e];
 			unsigned int i1 = indices[i + next[e]];
 
-			unsigned long long edge = edgeId(i0, i1);
-
-			*hashLookup(edges.data, edges.size, edge, 0ull) = edge;
-		}
-	}
-
-	for (size_t i = 0; i < index_count; i += 3)
-	{
-		static const int next[3] = {1, 2, 0};
-
-		for (int e = 0; e < 3; ++e)
-		{
-			unsigned int i0 = indices[i + e];
-			unsigned int i1 = indices[i + next[e]];
-
-			unsigned long long edge = edgeId(i1, i0);
-
-			if (*hashLookup(edges.data, edges.size, edge, 0ull) != edge)
+			if (!findEdge(adjacency, i1, i0))
 			{
 				unsigned int i2 = indices[i + next[next[e]]];
 
@@ -373,9 +317,15 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 				quadricAdd(vertex_quadrics[i0], Q);
 				quadricAdd(vertex_quadrics[i1], Q);
+
+				boundary++;
 			}
 		}
 	}
+
+#if TRACE
+	printf("vertices: %d, half-edges: %d, boundary: %d\n", int(vertex_count), int(index_count), int(boundary));
+#endif
 
 	if (result != indices)
 	{
