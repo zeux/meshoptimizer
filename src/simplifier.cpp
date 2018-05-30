@@ -79,7 +79,7 @@ static bool findEdge(const EdgeAdjacency& adjacency, unsigned int a, unsigned in
 	unsigned int count = adjacency.counts[a];
 	const unsigned int* data = adjacency.data.data + adjacency.offsets[a];
 
-	for (unsigned int i = 0; i < count; ++i)
+	for (size_t i = 0; i < count; ++i)
 		if (data[i] == b)
 			return true;
 
