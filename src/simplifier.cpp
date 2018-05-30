@@ -329,10 +329,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 	if (result != indices)
 	{
-		for (size_t i = 0; i < index_count; ++i)
-		{
-			result[i] = indices[i];
-		}
+		memcpy(result, indices, index_count * sizeof(unsigned int));
 	}
 
 	size_t pass_count = 0;
