@@ -86,6 +86,106 @@ static bool findEdge(const EdgeAdjacency& adjacency, unsigned int a, unsigned in
 	return false;
 }
 
+struct PositionHasher
+{
+	const float* vertex_positions;
+	size_t vertex_stride_float;
+
+	size_t hash(unsigned int index) const
+	{
+		// MurmurHash2
+		const unsigned int m = 0x5bd1e995;
+		const int r = 24;
+
+		unsigned int h = 0;
+		const unsigned int* key = reinterpret_cast<const unsigned int*>(vertex_positions + index * vertex_stride_float);
+
+		for (size_t i = 0; i < 3; ++i)
+		{
+			unsigned int k = key[i];
+
+			k *= m;
+			k ^= k >> r;
+			k *= m;
+
+			h *= m;
+			h ^= k;
+		}
+
+		return h;
+	}
+
+	bool equal(unsigned int lhs, unsigned int rhs) const
+	{
+		return memcmp(vertex_positions + lhs * vertex_stride_float, vertex_positions + rhs * vertex_stride_float, 12) == 0;
+	}
+};
+
+// TODO: is there a better way to resolve naming conflicts with indexgenerator.cpp?
+static size_t hashBuckets2(size_t count)
+{
+	size_t buckets = 1;
+	while (buckets < count)
+		buckets *= 2;
+
+	return buckets;
+}
+
+// TODO: is there a better way to resolve naming conflicts with indexgenerator.cpp?
+template <typename T, typename Hash>
+static T* hashLookup2(T* table, size_t buckets, const Hash& hash, const T& key, const T& empty)
+{
+	assert(buckets > 0);
+	assert((buckets & (buckets - 1)) == 0);
+
+	size_t hashmod = buckets - 1;
+	size_t bucket = hash.hash(key) & hashmod;
+
+	for (size_t probe = 0; probe <= hashmod; ++probe)
+	{
+		T& item = table[bucket];
+
+		if (item == empty)
+			return &item;
+
+		if (hash.equal(item, key))
+			return &item;
+
+		// hash collision, quadratic probing
+		bucket = (bucket + probe + 1) & hashmod;
+	}
+
+	assert(false && "Hash table is full");
+	return 0;
+}
+
+static void buildPositionRemap(unsigned int* remap, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride)
+{
+	PositionHasher hasher = {vertex_positions_data, vertex_positions_stride / sizeof(float)};
+
+	meshopt_Buffer<unsigned int> table(hashBuckets2(vertex_count));
+	memset(table.data, -1, table.size * sizeof(unsigned int));
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		unsigned int index = unsigned(i);
+		unsigned int* entry = hashLookup2(table.data, table.size, hasher, index, ~0u);
+
+		if (*entry == ~0u)
+		{
+			*entry = index;
+
+			remap[index] = index;
+		}
+		else
+		{
+			assert(remap[*entry] != ~0u);
+
+			remap[index] = remap[*entry];
+		}
+	}
+}
+
 struct Vector3
 {
 	float x, y, z;
@@ -267,6 +367,18 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	// build adjacency information
 	EdgeAdjacency adjacency(index_count, vertex_count);
 	buildEdgeAdjacency(adjacency, indices, index_count, vertex_count);
+
+	// build position remap that maps each vertex to the one with identical position
+	meshopt_Buffer<unsigned int> position_remap(vertex_count);
+	buildPositionRemap(position_remap.data, vertex_positions_data, vertex_count, vertex_positions_stride);
+
+#if TRACE
+	size_t unique_positions = 0;
+	for (size_t i = 0; i < vertex_count; ++i)
+		unique_positions += position_remap[i] == i;
+
+	printf("position remap: %d vertices => %d positions\n", int(vertex_count), int(unique_positions));
+#endif
 
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
