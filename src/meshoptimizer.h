@@ -142,7 +142,7 @@ MESHOPTIMIZER_API int meshopt_decodeVertexBuffer(void* destination, size_t verte
  * destination must contain enough space for the source index buffer (since optimization is iterative, this means index_count elements - *not* target_index_count!)
  * vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
  */
-MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count);
+MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, unsigned char* out_vertex_kind);
 
 /**
  * Mesh stripifier
@@ -382,7 +382,7 @@ inline size_t meshopt_simplify(T* destination, const T* indices, size_t index_co
 	meshopt_IndexAdapter<T> in(0, indices, index_count);
 	meshopt_IndexAdapter<T> out(destination, 0, index_count);
 
-	return meshopt_simplify(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride, target_index_count);
+	return meshopt_simplify(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride, target_index_count, 0);
 }
 
 template <typename T>

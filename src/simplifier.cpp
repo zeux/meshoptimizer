@@ -477,7 +477,7 @@ static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapse
 
 } // namespace meshopt
 
-size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count)
+size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, unsigned char* out_vertex_kind)
 {
 	using namespace meshopt;
 
@@ -503,6 +503,9 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	// classify vertices; vertex kind determines collapse rules, see kCanCollapse
 	meshopt_Buffer<unsigned char> vertex_kind(vertex_count);
 	classifyVertices(vertex_kind.data, vertex_count, adjacency, remap.data, reverse_remap.data);
+
+	if (out_vertex_kind)
+		memcpy(out_vertex_kind, vertex_kind.data, vertex_count);
 
 #if TRACE
 	size_t unique_positions = 0;
