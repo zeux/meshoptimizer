@@ -247,54 +247,61 @@ static void classifyVertices(char* result, size_t vertex_count, const EdgeAdjace
 {
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		if (reverse_remap[i] == i)
+		if (remap[i] == i)
 		{
-			// no attribute seam, need to check if it's manifold
-			size_t edges = countOpenEdges(adjacency, i);
-
-			// note: we classify any vertices with no open edges as manifold
-			// this is technically incorrect - if 4 triangles share an edge, we'll classify vertices as manifold
-			// it's unclear if this is a problem in practice
-			// also note that we classify vertices as border if they have *one* open edge, not two
-			// this is because we only have half-edges - so a border vertex would have one incoming and one outgoing edge
-			if (edges == 0)
-				result[i] = Kind_Manifold;
-			else if (edges == 1)
-				result[i] = Kind_Border;
-			else
-				result[i] = Kind_Locked;
-
-		}
-		else if (reverse_remap[i] != ~0u)
-		{
-			// attribute seam; need to distinguish between Seam and Locked
-			unsigned int a = 0;
-			size_t a_count = countOpenEdges(adjacency, i, &a);
-			unsigned int b = 0;
-			size_t b_count = countOpenEdges(adjacency, reverse_remap[i], &b);
-
-			// seam should have one open half-edge for each vertex, and the edges need to "connect" - point to the same vertex post-remap
-			if (a_count == 1 && b_count == 1)
+			if (reverse_remap[i] == i)
 			{
-				// "flip" a & b between one side of the seam and the other
-				unsigned int af = (remap[a] == a) ? reverse_remap[a] : remap[a];
-				unsigned int bf = (remap[b] == b) ? reverse_remap[b] : remap[b];
+				// no attribute seam, need to check if it's manifold
+				size_t edges = countOpenEdges(adjacency, i);
 
-				if (af != ~0u && findEdge(adjacency, af, reverse_remap[i]) &&
-					bf != ~0u && findEdge(adjacency, bf, i))
-					result[i] = Kind_Seam;
+				// note: we classify any vertices with no open edges as manifold
+				// this is technically incorrect - if 4 triangles share an edge, we'll classify vertices as manifold
+				// it's unclear if this is a problem in practice
+				// also note that we classify vertices as border if they have *one* open edge, not two
+				// this is because we only have half-edges - so a border vertex would have one incoming and one outgoing edge
+				if (edges == 0)
+					result[i] = Kind_Manifold;
+				else if (edges == 1)
+					result[i] = Kind_Border;
 				else
 					result[i] = Kind_Locked;
+
+			}
+			else if (reverse_remap[i] != ~0u)
+			{
+				// attribute seam; need to distinguish between Seam and Locked
+				unsigned int a = 0;
+				size_t a_count = countOpenEdges(adjacency, i, &a);
+				unsigned int b = 0;
+				size_t b_count = countOpenEdges(adjacency, reverse_remap[i], &b);
+
+				// seam should have one open half-edge for each vertex, and the edges need to "connect" - point to the same vertex post-remap
+				if (a_count == 1 && b_count == 1)
+				{
+					// "flip" a & b between one side of the seam and the other
+					unsigned int af = (remap[a] == a) ? reverse_remap[a] : remap[a];
+					unsigned int bf = (remap[b] == b) ? reverse_remap[b] : remap[b];
+
+					if (af != ~0u && findEdge(adjacency, af, reverse_remap[i]) &&
+						bf != ~0u && findEdge(adjacency, bf, i))
+						result[i] = Kind_Seam;
+					else
+						result[i] = Kind_Locked;
+				}
+				else
+				{
+					result[i] = Kind_Locked;
+				}
 			}
 			else
 			{
+				// more than one vertex maps to this one; we don't have classification available
 				result[i] = Kind_Locked;
 			}
 		}
 		else
 		{
-			// more than one vertex maps to this one; we don't have classification available
-			result[i] = Kind_Locked;
+			result[i] = result[remap[i]];
 		}
 	}
 }
