@@ -303,6 +303,8 @@ static void classifyVertices(unsigned char* result, size_t vertex_count, const E
 		}
 		else
 		{
+			assert(remap[i] < i);
+
 			result[i] = result[remap[i]];
 		}
 	}
@@ -537,9 +539,9 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	// face quadrics
 	for (size_t i = 0; i < index_count; i += 3)
 	{
-		unsigned int i0 = remap[indices[i + 0]];
-		unsigned int i1 = remap[indices[i + 1]];
-		unsigned int i2 = remap[indices[i + 2]];
+		unsigned int i0 = indices[i + 0];
+		unsigned int i1 = indices[i + 1];
+		unsigned int i2 = indices[i + 2];
 
 		// TODO: degenerate triangles can produce degenerate quadrics
 		// assert(i0 != i1 && i0 != i2 && i1 != i2);
@@ -547,9 +549,9 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		Quadric Q;
 		quadricFromTriangle(Q, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2]);
 
-		quadricAdd(vertex_quadrics[i0], Q);
-		quadricAdd(vertex_quadrics[i1], Q);
-		quadricAdd(vertex_quadrics[i2], Q);
+		quadricAdd(vertex_quadrics[remap[i0]], Q);
+		quadricAdd(vertex_quadrics[remap[i1]], Q);
+		quadricAdd(vertex_quadrics[remap[i2]], Q);
 	}
 
 	// edge quadrics for boundary edges
@@ -561,13 +563,13 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 		for (int e = 0; e < 3; ++e)
 		{
-			unsigned int i0 = remap[indices[i + e]];
-			unsigned int i1 = remap[indices[i + next[e]]];
+			unsigned int i0 = indices[i + e];
+			unsigned int i1 = indices[i + next[e]];
 
 			// TODO: this will only work for border i0; it would be nice to make it work for seam v0?
 			if (vertex_kind[i0] == Kind_Border && !findEdge(adjacency, i1, i0))
 			{
-				unsigned int i2 = remap[indices[i + next[next[e]]]];
+				unsigned int i2 = indices[i + next[next[e]]];
 
 				// TODO: degenerate triangles can produce degenerate quadrics
 				// assert(i0 != i1 && i0 != i2 && i1 != i2);
@@ -575,8 +577,8 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 				Quadric Q;
 				quadricFromTriangleEdge(Q, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2]);
 
-				quadricAdd(vertex_quadrics[i0], Q);
-				quadricAdd(vertex_quadrics[i1], Q);
+				quadricAdd(vertex_quadrics[remap[i0]], Q);
+				quadricAdd(vertex_quadrics[remap[i1]], Q);
 
 				boundary++;
 			}
@@ -610,30 +612,33 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 			for (int e = 0; e < 3; ++e)
 			{
-				unsigned int i0 = remap[result[i + e]];
-				unsigned int i1 = remap[result[i + next[e]]];
+				unsigned int i0 = result[i + e];
+				unsigned int i1 = result[i + next[e]];
 
 				// TODO: i0==i1 is an interesting condition... it seems like it can arise when collapsing a seam loop
-				if (i0 != i1 && kCanCollapse[vertex_kind[i0]][vertex_kind[i1]])
+				if (remap[i0] == remap[i1])
+					continue;
+
+				if (!kCanCollapse[vertex_kind[i0]][vertex_kind[i1]])
+					continue;
+
+				// TODO: we currently push the same collapse twice for manifold edges
+				// TODO: needs cleanup in general...
+				if (vertex_kind[i0] == vertex_kind[i1])
 				{
-					// TODO: we currently push the same collapse twice for manifold edges
-					// TODO: needs cleanup in general...
-					if (vertex_kind[i0] == vertex_kind[i1])
-					{
-						Collapse c01 = {i0, i1, {quadricError(vertex_quadrics[i0], vertex_positions[i1])}};
-						Collapse c10 = {i1, i0, {quadricError(vertex_quadrics[i1], vertex_positions[i0])}};
-						Collapse c = c01.error <= c10.error ? c01 : c10;
-						assert(c.error >= 0);
+					Collapse c01 = {i0, i1, {quadricError(vertex_quadrics[remap[i0]], vertex_positions[i1])}};
+					Collapse c10 = {i1, i0, {quadricError(vertex_quadrics[remap[i1]], vertex_positions[i0])}};
+					Collapse c = c01.error <= c10.error ? c01 : c10;
+					assert(c.error >= 0);
 
-						edge_collapses[edge_collapse_count++] = c;
-					}
-					else
-					{
-						Collapse c = {i0, i1, {quadricError(vertex_quadrics[i0], vertex_positions[i1])}};
-						assert(c.error >= 0);
+					edge_collapses[edge_collapse_count++] = c;
+				}
+				else
+				{
+					Collapse c = {i0, i1, {quadricError(vertex_quadrics[remap[i0]], vertex_positions[i1])}};
+					assert(c.error >= 0);
 
-						edge_collapses[edge_collapse_count++] = c;
-					}
+					edge_collapses[edge_collapse_count++] = c;
 				}
 			}
 		}
@@ -664,40 +669,52 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		{
 			const Collapse& c = edge_collapses[collapse_order[i]];
 
-			if (vertex_locked[c.v0] || vertex_locked[c.v1])
+			unsigned int r0 = remap[c.v0];
+			unsigned int r1 = remap[c.v1];
+
+			if (vertex_locked[r0] || vertex_locked[r1])
 				continue;
 
 			if (c.error > error_limit)
 				break;
 
 #if TRACE > 1
-			printf("collapse: %d (kind %d rr %d) => %d (kind %d rr %d); error %e\n",
-				c.v0, vertex_kind[c.v0], reverse_remap[c.v0],
-				c.v1, vertex_kind[c.v1], reverse_remap[c.v1],
+			printf("collapse: %d (kind %d r %d rr %d) => %d (kind %d r %d rr %d); error %e\n",
+				c.v0, vertex_kind[c.v0], remap[c.v0], reverse_remap[c.v0],
+				c.v1, vertex_kind[c.v1], remap[c.v1], reverse_remap[c.v1],
 				c.error);
 #endif
 
-			assert(collapse_remap[c.v0] == c.v0);
-			assert(collapse_remap[c.v1] == c.v1);
+			assert(collapse_remap[r0] == r0);
+			assert(collapse_remap[r1] == r1);
 
-			quadricAdd(vertex_quadrics[c.v1], vertex_quadrics[c.v0]);
+			quadricAdd(vertex_quadrics[r1], vertex_quadrics[r0]);
 
-			collapse_remap[c.v0] = unsigned(c.v1);
-
-			assert(remap[c.v0] == c.v0);
-			assert(remap[c.v1] == c.v1);
-			assert(reverse_remap[c.v0] != ~0u);
-			assert(reverse_remap[c.v1] != ~0u); // TODO not true for manifold->locked?
-
-			if (reverse_remap[c.v0] != c.v0)
+			if (vertex_kind[c.v1] == Kind_Seam)
 			{
-				assert(vertex_kind[c.v0] == Kind_Seam && vertex_kind[c.v1] == Kind_Seam);
+				// remap v0 to v1 and seam pair of v0 to seam pair of v1
+				// note that v0 might be manifold so it might not have a pair
+				collapse_remap[c.v0] = c.v1;
 
-				collapse_remap[reverse_remap[c.v0]] = reverse_remap[c.v1];
+				unsigned int s0 = c.v0 == r0 ? reverse_remap[r0] : r0;
+				unsigned int s1 = c.v1 == r1 ? reverse_remap[r1] : r1;
+
+				assert(s0 != ~0u);
+				assert(s1 != ~0u && s1 != c.v1);
+
+				if (s0 != c.v0)
+					collapse_remap[s0] = s1;
+			}
+			else
+			{
+				assert(c.v0 == r0 && c.v1 == r1);
+				assert(reverse_remap[r0] == r0 && reverse_remap[r1] == r1);
+
+				collapse_remap[r0] = r1;
 			}
 
-			vertex_locked[c.v0] = 1;
-			vertex_locked[c.v1] = 1;
+			vertex_locked[r0] = 1;
+			vertex_locked[r1] = 1;
 
 			collapses++;
 			pass_error = c.error;
