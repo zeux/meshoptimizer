@@ -214,7 +214,10 @@ enum VertexKind
 	Kind_Count
 };
 
-/*
+// manifold vertices can collapse on anything except locked
+// border/seam vertices can only be collapsed onto border/seam respectively
+// TODO: manifold->seam and seam->seam collapse can map to the wrong vertex (on the other side of the seam)
+// TODO: investigate collapsing vertices onto locked vertices
 const char kCanCollapse[Kind_Count][Kind_Count] =
 {
 	{ 1, 1, 1, 0, },
@@ -222,7 +225,6 @@ const char kCanCollapse[Kind_Count][Kind_Count] =
 	{ 0, 0, 1, 0, },
 	{ 0, 0, 0, 0, },
 };
-*/
 
 static size_t countOpenEdges(const EdgeAdjacency& adjacency, unsigned int vertex, unsigned int* last = 0)
 {
@@ -493,6 +495,9 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	meshopt_Buffer<unsigned int> reverse_remap(vertex_count);
 	buildPositionRemap(remap.data, reverse_remap.data, vertex_positions_data, vertex_count, vertex_positions_stride);
 
+	// TODO: maybe make this an option? this disables seam awareness
+	// for (size_t i = 0; i < vertex_count; ++i) remap[i] = reverse_remap[i] = unsigned(i);
+
 	// classify vertices; vertex kind determines collapse rules, see kCanCollapse
 	meshopt_Buffer<unsigned char> vertex_kind(vertex_count);
 	classifyVertices(vertex_kind.data, vertex_count, adjacency, remap.data, reverse_remap.data);
@@ -506,7 +511,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 	size_t kinds[Kind_Count] = {};
 	for (size_t i = 0; i < vertex_count; ++i)
-		kinds[vertex_kind[i]]++;
+		kinds[vertex_kind[i]] += remap[i] == i;
 
 	printf("kinds: manifold %d, border %d, seam %d, locked %d\n",
 		int(kinds[Kind_Manifold]), int(kinds[Kind_Border]), int(kinds[Kind_Seam]), int(kinds[Kind_Locked]));
@@ -532,9 +537,12 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	// face quadrics
 	for (size_t i = 0; i < index_count; i += 3)
 	{
-		unsigned int i0 = indices[i + 0];
-		unsigned int i1 = indices[i + 1];
-		unsigned int i2 = indices[i + 2];
+		unsigned int i0 = remap[indices[i + 0]];
+		unsigned int i1 = remap[indices[i + 1]];
+		unsigned int i2 = remap[indices[i + 2]];
+
+		// TODO: degenerate triangles can produce degenerate quadrics
+		// assert(i0 != i1 && i0 != i2 && i1 != i2);
 
 		Quadric Q;
 		quadricFromTriangle(Q, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2]);
@@ -553,12 +561,16 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 		for (int e = 0; e < 3; ++e)
 		{
-			unsigned int i0 = indices[i + e];
-			unsigned int i1 = indices[i + next[e]];
+			unsigned int i0 = remap[indices[i + e]];
+			unsigned int i1 = remap[indices[i + next[e]]];
 
-			if (!findEdge(adjacency, i1, i0))
+			// TODO: this will only work for border i0; it would be nice to make it work for seam v0?
+			if (vertex_kind[i0] == Kind_Border && !findEdge(adjacency, i1, i0))
 			{
-				unsigned int i2 = indices[i + next[next[e]]];
+				unsigned int i2 = remap[indices[i + next[next[e]]]];
+
+				// TODO: degenerate triangles can produce degenerate quadrics
+				// assert(i0 != i1 && i0 != i2 && i1 != i2);
 
 				Quadric Q;
 				quadricFromTriangleEdge(Q, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2]);
@@ -598,15 +610,31 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 			for (int e = 0; e < 3; ++e)
 			{
-				unsigned int i0 = result[i + e];
-				unsigned int i1 = result[i + next[e]];
+				unsigned int i0 = remap[result[i + e]];
+				unsigned int i1 = remap[result[i + next[e]]];
 
-				Collapse c01 = {i0, i1, {quadricError(vertex_quadrics[i0], vertex_positions[i1])}};
-				Collapse c10 = {i1, i0, {quadricError(vertex_quadrics[i1], vertex_positions[i0])}};
-				Collapse c = c01.error <= c10.error ? c01 : c10;
-				assert(c.error >= 0);
+				// TODO: i0==i1 is an interesting condition... it seems like it can arise when collapsing a seam loop
+				if (i0 != i1 && kCanCollapse[vertex_kind[i0]][vertex_kind[i1]])
+				{
+					// TODO: we currently push the same collapse twice for manifold edges
+					// TODO: needs cleanup in general...
+					if (vertex_kind[i0] == vertex_kind[i1])
+					{
+						Collapse c01 = {i0, i1, {quadricError(vertex_quadrics[i0], vertex_positions[i1])}};
+						Collapse c10 = {i1, i0, {quadricError(vertex_quadrics[i1], vertex_positions[i0])}};
+						Collapse c = c01.error <= c10.error ? c01 : c10;
+						assert(c.error >= 0);
 
-				edge_collapses[edge_collapse_count++] = c;
+						edge_collapses[edge_collapse_count++] = c;
+					}
+					else
+					{
+						Collapse c = {i0, i1, {quadricError(vertex_quadrics[i0], vertex_positions[i1])}};
+						assert(c.error >= 0);
+
+						edge_collapses[edge_collapse_count++] = c;
+					}
+				}
 			}
 		}
 
@@ -642,12 +670,31 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 			if (c.error > error_limit)
 				break;
 
+#if TRACE > 1
+			printf("collapse: %d (kind %d rr %d) => %d (kind %d rr %d); error %e\n",
+				c.v0, vertex_kind[c.v0], reverse_remap[c.v0],
+				c.v1, vertex_kind[c.v1], reverse_remap[c.v1],
+				c.error);
+#endif
+
 			assert(collapse_remap[c.v0] == c.v0);
 			assert(collapse_remap[c.v1] == c.v1);
 
 			quadricAdd(vertex_quadrics[c.v1], vertex_quadrics[c.v0]);
 
 			collapse_remap[c.v0] = unsigned(c.v1);
+
+			assert(remap[c.v0] == c.v0);
+			assert(remap[c.v1] == c.v1);
+			assert(reverse_remap[c.v0] != ~0u);
+			assert(reverse_remap[c.v1] != ~0u); // TODO not true for manifold->locked?
+
+			if (reverse_remap[c.v0] != c.v0)
+			{
+				assert(vertex_kind[c.v0] == Kind_Seam && vertex_kind[c.v1] == Kind_Seam);
+
+				collapse_remap[reverse_remap[c.v0]] = reverse_remap[c.v1];
+			}
 
 			vertex_locked[c.v0] = 1;
 			vertex_locked[c.v1] = 1;
@@ -660,7 +707,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		}
 
 #if TRACE
-		printf("pass %d: collapses: %d/%d (target %d), error: %e\n", int(pass_count), int(collapses), int(edge_collapse_count), int(edge_collapse_goal), pass_error);
+		printf("pass %d: triangles: %d, collapses: %d/%d (target %d), error: %e\n", int(pass_count), int(index_count / 3), int(collapses), int(edge_collapse_count), int(edge_collapse_goal), pass_error);
 #endif
 
 		pass_count++;
@@ -690,6 +737,10 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 				write += 3;
 			}
 		}
+
+		// TODO: this should be an assertion instead; this means we selected a bunch of collapses but they failed to collapse any triangles?
+		if (write == index_count)
+			break;
 
 		index_count = write;
 	}
