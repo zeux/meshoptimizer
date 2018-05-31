@@ -243,7 +243,7 @@ static size_t countOpenEdges(const EdgeAdjacency& adjacency, unsigned int vertex
 	return result;
 }
 
-static void classifyVertices(char* result, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* reverse_remap)
+static void classifyVertices(unsigned char* result, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* reverse_remap)
 {
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
@@ -494,7 +494,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	buildPositionRemap(remap.data, reverse_remap.data, vertex_positions_data, vertex_count, vertex_positions_stride);
 
 	// classify vertices; vertex kind determines collapse rules, see kCanCollapse
-	meshopt_Buffer<char> vertex_kind(vertex_count);
+	meshopt_Buffer<unsigned char> vertex_kind(vertex_count);
 	classifyVertices(vertex_kind.data, vertex_count, adjacency, remap.data, reverse_remap.data);
 
 #if TRACE
@@ -506,7 +506,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 	size_t kinds[Kind_Count] = {};
 	for (size_t i = 0; i < vertex_count; ++i)
-		kinds[int(vertex_kind[i])]++;
+		kinds[vertex_kind[i]]++;
 
 	printf("kinds: manifold %d, border %d, seam %d, locked %d\n",
 		int(kinds[Kind_Manifold]), int(kinds[Kind_Border]), int(kinds[Kind_Seam]), int(kinds[Kind_Locked]));
@@ -532,12 +532,16 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	// face quadrics
 	for (size_t i = 0; i < index_count; i += 3)
 	{
-		Quadric Q;
-		quadricFromTriangle(Q, vertex_positions[indices[i + 0]], vertex_positions[indices[i + 1]], vertex_positions[indices[i + 2]]);
+		unsigned int i0 = indices[i + 0];
+		unsigned int i1 = indices[i + 1];
+		unsigned int i2 = indices[i + 2];
 
-		quadricAdd(vertex_quadrics[indices[i + 0]], Q);
-		quadricAdd(vertex_quadrics[indices[i + 1]], Q);
-		quadricAdd(vertex_quadrics[indices[i + 2]], Q);
+		Quadric Q;
+		quadricFromTriangle(Q, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2]);
+
+		quadricAdd(vertex_quadrics[i0], Q);
+		quadricAdd(vertex_quadrics[i1], Q);
+		quadricAdd(vertex_quadrics[i2], Q);
 	}
 
 	// edge quadrics for boundary edges
@@ -581,7 +585,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 	meshopt_Buffer<Collapse> edge_collapses(index_count);
 	meshopt_Buffer<unsigned int> collapse_order(index_count);
-	meshopt_Buffer<unsigned int> vertex_remap(vertex_count);
+	meshopt_Buffer<unsigned int> collapse_remap(vertex_count);
 	meshopt_Buffer<char> vertex_locked(vertex_count);
 
 	while (index_count > target_index_count)
@@ -606,11 +610,15 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 			}
 		}
 
+		// no edges can be collapsed any more => bail out
+		if (edge_collapse_count == 0)
+			break;
+
 		sortEdgeCollapses(collapse_order.data, edge_collapses.data, edge_collapse_count);
 
 		for (size_t i = 0; i < vertex_count; ++i)
 		{
-			vertex_remap[i] = unsigned(i);
+			collapse_remap[i] = unsigned(i);
 		}
 
 		memset(vertex_locked.data, 0, vertex_count);
@@ -634,12 +642,12 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 			if (c.error > error_limit)
 				break;
 
-			assert(vertex_remap[c.v0] == c.v0);
-			assert(vertex_remap[c.v1] == c.v1);
+			assert(collapse_remap[c.v0] == c.v0);
+			assert(collapse_remap[c.v1] == c.v1);
 
 			quadricAdd(vertex_quadrics[c.v1], vertex_quadrics[c.v0]);
 
-			vertex_remap[c.v0] = unsigned(c.v1);
+			collapse_remap[c.v0] = unsigned(c.v1);
 
 			vertex_locked[c.v0] = 1;
 			vertex_locked[c.v1] = 1;
@@ -666,13 +674,13 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 		for (size_t i = 0; i < index_count; i += 3)
 		{
-			unsigned int v0 = vertex_remap[result[i + 0]];
-			unsigned int v1 = vertex_remap[result[i + 1]];
-			unsigned int v2 = vertex_remap[result[i + 2]];
+			unsigned int v0 = collapse_remap[result[i + 0]];
+			unsigned int v1 = collapse_remap[result[i + 1]];
+			unsigned int v2 = collapse_remap[result[i + 2]];
 
-			assert(vertex_remap[v0] == v0);
-			assert(vertex_remap[v1] == v1);
-			assert(vertex_remap[v2] == v2);
+			assert(collapse_remap[v0] == v0);
+			assert(collapse_remap[v1] == v1);
+			assert(collapse_remap[v2] == v2);
 
 			if (v0 != v1 && v0 != v2 && v1 != v2)
 			{
