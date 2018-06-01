@@ -9,6 +9,8 @@
 #include <GL/gl.h>
 #include <GLFW/glfw3.h>
 
+extern unsigned char* meshopt_simplifyDebugKind;
+
 struct Options
 {
 	bool wireframe;
@@ -97,7 +99,8 @@ Mesh optimize(const Mesh& mesh, int lod)
 
 	Mesh result = mesh;
 	result.kinds.resize(result.vertices.size());
-	result.indices.resize(meshopt_simplify(&result.indices[0], &result.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, &result.kinds[0]));
+	meshopt_simplifyDebugKind = &result.kinds[0];
+	result.indices.resize(meshopt_simplify(&result.indices[0], &result.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count));
 
 	return result;
 }
