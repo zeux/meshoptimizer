@@ -216,7 +216,6 @@ enum VertexKind
 
 // manifold vertices can collapse on anything except locked
 // border/seam vertices can only be collapsed onto border/seam respectively
-// TODO: manifold->seam and seam->seam collapse can map to the wrong vertex (on the other side of the seam)
 // TODO: investigate collapsing vertices onto locked vertices
 const char kCanCollapse[Kind_Count][Kind_Count] =
 {
@@ -421,7 +420,7 @@ static void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1
 	quadricMul(Q, area);
 }
 
-static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2)
+static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2, float weight)
 {
 	Vector3 p10 = {p1.x - p0.x, p1.y - p0.y, p1.z - p0.z};
 	float length = normalize(p10);
@@ -436,7 +435,7 @@ static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3
 
 	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance);
 
-	quadricMul(Q, length * 1000);
+	quadricMul(Q, length * weight);
 }
 
 static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapses, size_t collapse_count)
@@ -569,22 +568,26 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 			unsigned int i0 = indices[i + e];
 			unsigned int i1 = indices[i + next[e]];
 
-			// TODO: this will only work for border i0; it would be nice to make it work for seam v0?
-			if (vertex_kind[i0] == Kind_Border && !findEdge(adjacency, i1, i0))
-			{
-				unsigned int i2 = indices[i + next[next[e]]];
+			if (vertex_kind[i0] != Kind_Border && vertex_kind[i0] != Kind_Seam)
+				continue;
 
-				// TODO: degenerate triangles can produce degenerate quadrics
-				// assert(i0 != i1 && i0 != i2 && i1 != i2);
+			if (findEdge(adjacency, i1, i0))
+				continue;
 
-				Quadric Q;
-				quadricFromTriangleEdge(Q, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2]);
+			unsigned int i2 = indices[i + next[next[e]]];
 
-				quadricAdd(vertex_quadrics[remap[i0]], Q);
-				quadricAdd(vertex_quadrics[remap[i1]], Q);
+			// TODO: degenerate triangles can produce degenerate quadrics
+			// assert(i0 != i1 && i0 != i2 && i1 != i2);
 
-				boundary++;
-			}
+			float edgeWeight = vertex_kind[i0] == Kind_Seam ? 1.f : 10.f;
+
+			Quadric Q;
+			quadricFromTriangleEdge(Q, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2], edgeWeight);
+
+			quadricAdd(vertex_quadrics[remap[i0]], Q);
+			quadricAdd(vertex_quadrics[remap[i1]], Q);
+
+			boundary++;
 		}
 	}
 
