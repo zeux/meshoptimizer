@@ -7,40 +7,40 @@
 namespace meshopt
 {
 
-static unsigned int murmurHash(const char* key, size_t len, unsigned int h)
-{
-	const unsigned int m = 0x5bd1e995;
-	const int r = 24;
-
-	while (len >= 4)
-	{
-		unsigned int k = *reinterpret_cast<const unsigned int*>(key);
-
-		k *= m;
-		k ^= k >> r;
-		k *= m;
-
-		h *= m;
-		h ^= k;
-
-		key += 4;
-		len -= 4;
-	}
-
-	return h;
-}
-
 struct VertexHasher
 {
 	const char* vertices;
 	size_t vertex_size;
 
-	size_t operator()(unsigned int index) const
+	size_t hash(unsigned int index) const
 	{
-		return murmurHash(vertices + index * vertex_size, vertex_size, 0);
+		// MurmurHash2
+		const unsigned int m = 0x5bd1e995;
+		const int r = 24;
+
+		unsigned int h = 0;
+		const char* key = vertices + index * vertex_size;
+		size_t len = vertex_size;
+
+		while (len >= 4)
+		{
+			unsigned int k = *reinterpret_cast<const unsigned int*>(key);
+
+			k *= m;
+			k ^= k >> r;
+			k *= m;
+
+			h *= m;
+			h ^= k;
+
+			key += 4;
+			len -= 4;
+		}
+
+		return h;
 	}
 
-	size_t operator()(unsigned int lhs, unsigned int rhs) const
+	bool equal(unsigned int lhs, unsigned int rhs) const
 	{
 		return memcmp(vertices + lhs * vertex_size, vertices + rhs * vertex_size, vertex_size) == 0;
 	}
@@ -62,7 +62,7 @@ static T* hashLookup(T* table, size_t buckets, const Hash& hash, const T& key, c
 	assert((buckets & (buckets - 1)) == 0);
 
 	size_t hashmod = buckets - 1;
-	size_t bucket = hash(key) & hashmod;
+	size_t bucket = hash.hash(key) & hashmod;
 
 	for (size_t probe = 0; probe <= hashmod; ++probe)
 	{
@@ -71,7 +71,7 @@ static T* hashLookup(T* table, size_t buckets, const Hash& hash, const T& key, c
 		if (item == empty)
 			return &item;
 
-		if (hash(item, key))
+		if (hash.equal(item, key))
 			return &item;
 
 		// hash collision, quadratic probing

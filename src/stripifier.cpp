@@ -12,7 +12,7 @@ static unsigned int findStripFirst(const unsigned int buffer[][3], unsigned int 
 	unsigned int index = 0;
 	unsigned int iv = ~0u;
 
-	for (unsigned int i = 0; i < buffer_size; ++i)
+	for (size_t i = 0; i < buffer_size; ++i)
 	{
 		unsigned int va = valence[buffer[i][0]], vb = valence[buffer[i][1]], vc = valence[buffer[i][2]];
 		unsigned int v = (va < vb && va < vc) ? va : (vb < vc) ? vb : vc;
@@ -29,7 +29,7 @@ static unsigned int findStripFirst(const unsigned int buffer[][3], unsigned int 
 
 static int findStripNext(const unsigned int buffer[][3], unsigned int buffer_size, unsigned int e0, unsigned int e1)
 {
-	for (unsigned int i = 0; i < buffer_size; ++i)
+	for (size_t i = 0; i < buffer_size; ++i)
 	{
 		unsigned int a = buffer[i][0], b = buffer[i][1], c = buffer[i][2];
 
