@@ -216,10 +216,9 @@ enum VertexKind
 
 // manifold vertices can collapse on anything except locked
 // border/seam vertices can only be collapsed onto border/seam respectively
-// TODO: investigate collapsing vertices onto locked vertices
 const char kCanCollapse[Kind_Count][Kind_Count] =
 {
-	{ 1, 1, 1, 0, },
+	{ 1, 1, 1, 1, },
 	{ 0, 1, 0, 0, },
 	{ 0, 0, 1, 0, },
 	{ 0, 0, 0, 0, },
@@ -696,27 +695,23 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 			quadricAdd(vertex_quadrics[r1], vertex_quadrics[r0]);
 
-			if (vertex_kind[c.v1] == Kind_Seam)
+			if (vertex_kind[c.v0] == Kind_Seam)
 			{
 				// remap v0 to v1 and seam pair of v0 to seam pair of v1
-				// note that v0 might be manifold so it might not have a pair
-				collapse_remap[c.v0] = c.v1;
-
 				unsigned int s0 = c.v0 == r0 ? reverse_remap[r0] : r0;
 				unsigned int s1 = c.v1 == r1 ? reverse_remap[r1] : r1;
 
-				assert(s0 != ~0u);
+				assert(s0 != ~0u && s0 != c.v0);
 				assert(s1 != ~0u && s1 != c.v1);
 
-				if (s0 != c.v0)
-					collapse_remap[s0] = s1;
+				collapse_remap[c.v0] = c.v1;
+				collapse_remap[s0] = s1;
 			}
 			else
 			{
-				assert(c.v0 == r0 && c.v1 == r1);
-				assert(reverse_remap[r0] == r0 && reverse_remap[r1] == r1);
+				assert(c.v0 == r0 && reverse_remap[r0] == r0);
 
-				collapse_remap[r0] = r1;
+				collapse_remap[c.v0] = c.v1;
 			}
 
 			vertex_locked[r0] = 1;
