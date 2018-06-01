@@ -2,7 +2,7 @@
 MAKEFLAGS+=-r
 
 config=release
-files=demo/bunny.obj
+files=demo/pirate.obj
 
 BUILD=build/$(config)
 
@@ -39,7 +39,7 @@ test: $(EXECUTABLE)
 	$(EXECUTABLE) $(files)
 
 dev: $(EXECUTABLE)
-	$(EXECUTABLE) -d $(files:demo/bunny.obj=data/kitten.obj data/nyra.obj data/zeuxcg.obj)
+	$(EXECUTABLE) -d $(files)
 
 format:
 	clang-format -i $(SOURCES)
