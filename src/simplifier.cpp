@@ -216,6 +216,7 @@ enum VertexKind
 
 // manifold vertices can collapse on anything except locked
 // border/seam vertices can only be collapsed onto border/seam respectively
+// TODO: seam->seam collapses don't make sure the collapse is along a seam edge
 const char kCanCollapse[Kind_Count][Kind_Count] =
 {
 	{ 1, 1, 1, 1, },
@@ -605,7 +606,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	meshopt_Buffer<Collapse> edge_collapses(index_count);
 	meshopt_Buffer<unsigned int> collapse_order(index_count);
 	meshopt_Buffer<unsigned int> collapse_remap(vertex_count);
-	meshopt_Buffer<char> vertex_locked(vertex_count);
+	meshopt_Buffer<char> collapse_locked(vertex_count);
 
 	while (index_count > target_index_count)
 	{
@@ -659,7 +660,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 			collapse_remap[i] = unsigned(i);
 		}
 
-		memset(vertex_locked.data, 0, vertex_count);
+		memset(collapse_locked.data, 0, vertex_count);
 
 		// each collapse removes 2 triangles
 		size_t edge_collapse_goal = (index_count - target_index_count) / 6 + 1;
@@ -677,7 +678,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 			unsigned int r0 = remap[c.v0];
 			unsigned int r1 = remap[c.v1];
 
-			if (vertex_locked[r0] || vertex_locked[r1])
+			if (collapse_locked[r0] || collapse_locked[r1])
 				continue;
 
 			if (c.error > error_limit)
@@ -714,8 +715,8 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 				collapse_remap[c.v0] = c.v1;
 			}
 
-			vertex_locked[r0] = 1;
-			vertex_locked[r1] = 1;
+			collapse_locked[r0] = 1;
+			collapse_locked[r1] = 1;
 
 			collapses++;
 			pass_error = c.error;
@@ -756,10 +757,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 			}
 		}
 
-		// TODO: this should be an assertion instead; this means we selected a bunch of collapses but they failed to collapse any triangles?
-		if (write == index_count)
-			break;
-
+		assert(write < index_count);
 		index_count = write;
 	}
 
