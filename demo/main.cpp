@@ -568,6 +568,15 @@ void encodeIndexCoverage()
 		else
 			assert(result < 0);
 	}
+
+	// check that decoder doesn't accept extra bytes after a valid stream
+	{
+		std::vector<unsigned char> largebuffer(buffer);
+		largebuffer.push_back(0);
+
+		int result = meshopt_decodeIndexBuffer(destination, index_count, &largebuffer[0], largebuffer.size());
+		assert(result < 0);
+	}
 }
 
 template <typename PV>
@@ -657,6 +666,15 @@ void encodeVertexCoverage()
 			assert(result == 0);
 		else
 			assert(result < 0);
+	}
+
+	// check that decoder doesn't accept extra bytes after a valid stream
+	{
+		std::vector<unsigned char> largebuffer(buffer);
+		largebuffer.push_back(0);
+
+		int result = meshopt_decodeVertexBuffer(destination, vertex_count, sizeof(PV), &largebuffer[0], largebuffer.size());
+		assert(result < 0);
 	}
 }
 
