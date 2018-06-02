@@ -207,9 +207,9 @@ static void buildPositionRemap(unsigned int* remap, unsigned int* reverse_remap,
 enum VertexKind
 {
 	Kind_Manifold, // not on an attribute seam, not on any boundary
-	Kind_Border, // not on an attribute seam, has exactly two open edges
-	Kind_Seam, // on an attribute seam with exactly two attribute seam edges
-	Kind_Locked, // none of the above; these vertices can't move
+	Kind_Border,   // not on an attribute seam, has exactly two open edges
+	Kind_Seam,     // on an attribute seam with exactly two attribute seam edges
+	Kind_Locked,   // none of the above; these vertices can't move
 
 	Kind_Count
 };
@@ -217,12 +217,11 @@ enum VertexKind
 // manifold vertices can collapse on anything except locked
 // border/seam vertices can only be collapsed onto border/seam respectively
 // TODO: seam->seam collapses don't make sure the collapse is along a seam edge
-const char kCanCollapse[Kind_Count][Kind_Count] =
-{
-	{ 1, 1, 1, 1, },
-	{ 0, 1, 0, 0, },
-	{ 0, 0, 1, 0, },
-	{ 0, 0, 0, 0, },
+const char kCanCollapse[Kind_Count][Kind_Count] = {
+    {1, 1, 1, 1},
+    {0, 1, 0, 0},
+    {0, 0, 1, 0},
+    {0, 0, 0, 0},
 };
 
 static size_t countOpenEdges(const EdgeAdjacency& adjacency, unsigned int vertex, unsigned int* last = 0)
@@ -266,7 +265,6 @@ static void classifyVertices(unsigned char* result, size_t vertex_count, const E
 					result[i] = Kind_Border;
 				else
 					result[i] = Kind_Locked;
-
 			}
 			else if (reverse_remap[i] != ~0u)
 			{
@@ -284,7 +282,7 @@ static void classifyVertices(unsigned char* result, size_t vertex_count, const E
 					unsigned int bf = (remap[b] == b) ? reverse_remap[b] : remap[b];
 
 					if (af != ~0u && findEdge(adjacency, af, reverse_remap[i]) &&
-						bf != ~0u && findEdge(adjacency, bf, i))
+					    bf != ~0u && findEdge(adjacency, bf, i))
 						result[i] = Kind_Seam;
 					else
 						result[i] = Kind_Locked;
@@ -521,7 +519,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		kinds[vertex_kind[i]] += remap[i] == i;
 
 	printf("kinds: manifold %d, border %d, seam %d, locked %d\n",
-		int(kinds[Kind_Manifold]), int(kinds[Kind_Border]), int(kinds[Kind_Seam]), int(kinds[Kind_Locked]));
+	       int(kinds[Kind_Manifold]), int(kinds[Kind_Border]), int(kinds[Kind_Seam]), int(kinds[Kind_Locked]));
 #endif
 
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
@@ -689,9 +687,9 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 #if TRACE > 1
 			printf("collapse: %d (kind %d r %d rr %d) => %d (kind %d r %d rr %d); error %e\n",
-				c.v0, vertex_kind[c.v0], remap[c.v0], reverse_remap[c.v0],
-				c.v1, vertex_kind[c.v1], remap[c.v1], reverse_remap[c.v1],
-				c.error);
+			       c.v0, vertex_kind[c.v0], remap[c.v0], reverse_remap[c.v0],
+			       c.v1, vertex_kind[c.v1], remap[c.v1], reverse_remap[c.v1],
+			       c.error);
 #endif
 
 			assert(collapse_remap[r0] == r0);
