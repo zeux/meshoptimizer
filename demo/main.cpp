@@ -581,6 +581,17 @@ void encodeIndexCoverage()
 
 		assert(result < 0);
 	}
+
+	// check that decoder doesn't accept malformed headers
+	{
+		std::vector<unsigned char> brokenbuffer(buffer);
+		brokenbuffer[0] = 0;
+
+		int result = meshopt_decodeIndexBuffer(destination, index_count, &brokenbuffer[0], brokenbuffer.size());
+		(void)result;
+
+		assert(result < 0);
+	}
 }
 
 template <typename PV>
@@ -680,6 +691,17 @@ void encodeVertexCoverage()
 		largebuffer.push_back(0);
 
 		int result = meshopt_decodeVertexBuffer(destination, vertex_count, sizeof(PV), &largebuffer[0], largebuffer.size());
+		(void)result;
+
+		assert(result < 0);
+	}
+
+	// check that decoder doesn't accept malformed headers
+	{
+		std::vector<unsigned char> brokenbuffer(buffer);
+		brokenbuffer[0] = 0;
+
+		int result = meshopt_decodeVertexBuffer(destination, vertex_count, sizeof(PV), &brokenbuffer[0], brokenbuffer.size());
 		(void)result;
 
 		assert(result < 0);
