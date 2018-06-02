@@ -536,9 +536,9 @@ void encodeIndex(const Mesh& mesh)
 
 void encodeIndexCoverage()
 {
-	const unsigned int indices[] = { 0, 1, 2, 2, 1, 3 };
+	const unsigned int indices[] = { 0, 1, 2, 2, 1, 3, 4, 6, 5 };
 	const size_t index_count = sizeof(indices) / sizeof(indices[0]);
-	const size_t vertex_count = 4;
+	const size_t vertex_count = 7;
 
 	std::vector<unsigned char> buffer(meshopt_encodeIndexBufferBound(index_count, vertex_count));
 	buffer.resize(meshopt_encodeIndexBuffer(&buffer[0], buffer.size(), indices, index_count));
