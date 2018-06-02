@@ -536,9 +536,12 @@ void encodeIndex(const Mesh& mesh)
 
 void encodeIndexCoverage()
 {
-	const unsigned int indices[] = { 0, 1, 2, 2, 1, 3, 4, 6, 5 };
+	// note: 4 6 5 triangle here is a combo-breaker:
+	// we encode it without rotating, a=next, c=next - this means we do *not* bump next to 6
+	// which means that the next triangle can't be encoded via next sequencing!
+	const unsigned int indices[] = { 0, 1, 2, 2, 1, 3, 4, 6, 5, 7, 8, 9 };
 	const size_t index_count = sizeof(indices) / sizeof(indices[0]);
-	const size_t vertex_count = 7;
+	const size_t vertex_count = 10;
 
 	std::vector<unsigned char> buffer(meshopt_encodeIndexBufferBound(index_count, vertex_count));
 	buffer.resize(meshopt_encodeIndexBuffer(&buffer[0], buffer.size(), indices, index_count));
