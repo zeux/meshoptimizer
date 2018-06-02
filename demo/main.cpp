@@ -534,6 +534,42 @@ void encodeIndex(const Mesh& mesh)
 	       (double(result.size * 4) / (1 << 30)) / (end - middle));
 }
 
+void encodeIndexCoverage()
+{
+	const unsigned int indices[] = { 0, 1, 2, 2, 1, 3 };
+	const size_t index_count = sizeof(indices) / sizeof(indices[0]);
+	const size_t vertex_count = 4;
+
+	std::vector<unsigned char> buffer(meshopt_encodeIndexBufferBound(index_count, vertex_count));
+	buffer.resize(meshopt_encodeIndexBuffer(&buffer[0], buffer.size(), indices, index_count));
+
+	// check that encode is memory-safe; note that we reallocate the buffer for each try to make sure ASAN can verify buffer access
+	for (size_t i = 0; i <= buffer.size(); ++i)
+	{
+		std::vector<unsigned char> shortbuffer(i);
+		size_t result = meshopt_encodeIndexBuffer(i == 0 ? 0 : &shortbuffer[0], i, indices, index_count);
+
+		if (i == buffer.size())
+			assert(result == buffer.size());
+		else
+			assert(result == 0);
+	}
+
+	// check that decode is memory-safe; note that we reallocate the buffer for each try to make sure ASAN can verify buffer access
+	unsigned int destination[index_count];
+
+	for (size_t i = 0; i <= buffer.size(); ++i)
+	{
+		std::vector<unsigned char> shortbuffer(buffer.begin(), buffer.begin() + i);
+		int result = meshopt_decodeIndexBuffer(destination, index_count, i == 0 ? 0 : &shortbuffer[0], i);
+
+		if (i == buffer.size())
+			assert(result == 0);
+		else
+			assert(result < 0);
+	}
+}
+
 template <typename PV>
 void packVertex(const Mesh& mesh, const char* pvn)
 {
@@ -669,6 +705,11 @@ void processDev(const char* path)
 	simplify(mesh);
 }
 
+void processCoverage()
+{
+	encodeIndexCoverage();
+}
+
 int main(int argc, char** argv)
 {
 	if (argc == 1)
@@ -698,6 +739,8 @@ int main(int argc, char** argv)
 			{
 				process(argv[i]);
 			}
+
+			processCoverage();
 		}
 	}
 }
