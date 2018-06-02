@@ -548,6 +548,7 @@ void encodeIndexCoverage()
 	{
 		std::vector<unsigned char> shortbuffer(i);
 		size_t result = meshopt_encodeIndexBuffer(i == 0 ? 0 : &shortbuffer[0], i, indices, index_count);
+		(void)result;
 
 		if (i == buffer.size())
 			assert(result == buffer.size());
@@ -562,6 +563,7 @@ void encodeIndexCoverage()
 	{
 		std::vector<unsigned char> shortbuffer(buffer.begin(), buffer.begin() + i);
 		int result = meshopt_decodeIndexBuffer(destination, index_count, i == 0 ? 0 : &shortbuffer[0], i);
+		(void)result;
 
 		if (i == buffer.size())
 			assert(result == 0);
@@ -575,6 +577,8 @@ void encodeIndexCoverage()
 		largebuffer.push_back(0);
 
 		int result = meshopt_decodeIndexBuffer(destination, index_count, &largebuffer[0], largebuffer.size());
+		(void)result;
+
 		assert(result < 0);
 	}
 }
@@ -647,6 +651,7 @@ void encodeVertexCoverage()
 	{
 		std::vector<unsigned char> shortbuffer(i);
 		size_t result = meshopt_encodeVertexBuffer(i == 0 ? 0 : &shortbuffer[0], i, vertices, vertex_count, sizeof(PV));
+		(void)result;
 
 		if (i == buffer.size())
 			assert(result == buffer.size());
@@ -661,6 +666,7 @@ void encodeVertexCoverage()
 	{
 		std::vector<unsigned char> shortbuffer(buffer.begin(), buffer.begin() + i);
 		int result = meshopt_decodeVertexBuffer(destination, vertex_count, sizeof(PV), i == 0 ? 0 : &shortbuffer[0], i);
+		(void)result;
 
 		if (i == buffer.size())
 			assert(result == 0);
@@ -674,6 +680,8 @@ void encodeVertexCoverage()
 		largebuffer.push_back(0);
 
 		int result = meshopt_decodeVertexBuffer(destination, vertex_count, sizeof(PV), &largebuffer[0], largebuffer.size());
+		(void)result;
+
 		assert(result < 0);
 	}
 }
