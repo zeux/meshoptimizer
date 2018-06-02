@@ -616,6 +616,50 @@ void encodeVertex(const Mesh& mesh, const char* pvn)
 	       (double(result.size * sizeof(PV)) / (1 << 30)) / (end - middle));
 }
 
+void encodeVertexCoverage()
+{
+	typedef PackedVertexOct PV;
+
+	const PV vertices[] =
+	{
+		{ 0, 0, 0, 0, 0, 0, 0 },
+		{ 300, 0, 0, 0, 0, 500, 0 },
+		{ 0, 300, 0, 0, 0, 0, 500 },
+		{ 300, 300, 0, 0, 0, 500, 500 },
+	};
+
+	const size_t vertex_count = 4;
+
+	std::vector<unsigned char> buffer(meshopt_encodeVertexBufferBound(vertex_count, sizeof(PV)));
+	buffer.resize(meshopt_encodeVertexBuffer(&buffer[0], buffer.size(), vertices, vertex_count, sizeof(PV)));
+
+	// check that encode is memory-safe; note that we reallocate the buffer for each try to make sure ASAN can verify buffer access
+	for (size_t i = 0; i <= buffer.size(); ++i)
+	{
+		std::vector<unsigned char> shortbuffer(i);
+		size_t result = meshopt_encodeVertexBuffer(i == 0 ? 0 : &shortbuffer[0], i, vertices, vertex_count, sizeof(PV));
+
+		if (i == buffer.size())
+			assert(result == buffer.size());
+		else
+			assert(result == 0);
+	}
+
+	// check that decode is memory-safe; note that we reallocate the buffer for each try to make sure ASAN can verify buffer access
+	PV destination[vertex_count];
+
+	for (size_t i = 0; i <= buffer.size(); ++i)
+	{
+		std::vector<unsigned char> shortbuffer(buffer.begin(), buffer.begin() + i);
+		int result = meshopt_decodeVertexBuffer(destination, vertex_count, sizeof(PV), i == 0 ? 0 : &shortbuffer[0], i);
+
+		if (i == buffer.size())
+			assert(result == 0);
+		else
+			assert(result < 0);
+	}
+}
+
 void stripify(const Mesh& mesh)
 {
 	double start = timestamp();
@@ -708,6 +752,7 @@ void processDev(const char* path)
 void processCoverage()
 {
 	encodeIndexCoverage();
+	encodeVertexCoverage();
 }
 
 int main(int argc, char** argv)
