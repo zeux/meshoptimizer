@@ -252,7 +252,7 @@ static void classifyVertices(unsigned char* result, size_t vertex_count, const E
 			if (reverse_remap[i] == i)
 			{
 				// no attribute seam, need to check if it's manifold
-				size_t edges = countOpenEdges(adjacency, i);
+				size_t edges = countOpenEdges(adjacency, unsigned(i));
 
 				// note: we classify any vertices with no open edges as manifold
 				// this is technically incorrect - if 4 triangles share an edge, we'll classify vertices as manifold
@@ -270,7 +270,7 @@ static void classifyVertices(unsigned char* result, size_t vertex_count, const E
 			{
 				// attribute seam; need to distinguish between Seam and Locked
 				unsigned int a = 0;
-				size_t a_count = countOpenEdges(adjacency, i, &a);
+				size_t a_count = countOpenEdges(adjacency, unsigned(i), &a);
 				unsigned int b = 0;
 				size_t b_count = countOpenEdges(adjacency, reverse_remap[i], &b);
 
@@ -282,7 +282,7 @@ static void classifyVertices(unsigned char* result, size_t vertex_count, const E
 					unsigned int bf = (remap[b] == b) ? reverse_remap[b] : remap[b];
 
 					if (af != ~0u && findEdge(adjacency, af, reverse_remap[i]) &&
-					    bf != ~0u && findEdge(adjacency, bf, i))
+					    bf != ~0u && findEdge(adjacency, bf, unsigned(i)))
 						result[i] = Kind_Seam;
 					else
 						result[i] = Kind_Locked;

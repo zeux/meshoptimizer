@@ -19,7 +19,7 @@ static unsigned int findStripFirst(const unsigned int buffer[][3], unsigned int 
 
 		if (v < iv)
 		{
-			index = i;
+			index = unsigned(i);
 			iv = v;
 		}
 	}
@@ -34,11 +34,11 @@ static int findStripNext(const unsigned int buffer[][3], unsigned int buffer_siz
 		unsigned int a = buffer[i][0], b = buffer[i][1], c = buffer[i][2];
 
 		if (e0 == a && e1 == b)
-			return (i << 2) | 2;
+			return (int(i) << 2) | 2;
 		else if (e0 == b && e1 == c)
-			return (i << 2) | 0;
+			return (int(i) << 2) | 0;
 		else if (e0 == c && e1 == a)
-			return (i << 2) | 1;
+			return (int(i) << 2) | 1;
 	}
 
 	return -1;
