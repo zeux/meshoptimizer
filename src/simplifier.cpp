@@ -243,7 +243,7 @@ static size_t countOpenEdges(const EdgeAdjacency& adjacency, unsigned int vertex
 	return result;
 }
 
-static void classifyVertices(unsigned char* result, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* reverse_remap)
+static void classifyVertices(unsigned char* result, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* reverse_remap, size_t lockedstats[4])
 {
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
@@ -264,7 +264,7 @@ static void classifyVertices(unsigned char* result, size_t vertex_count, const E
 				else if (edges == 1)
 					result[i] = Kind_Border;
 				else
-					result[i] = Kind_Locked;
+					result[i] = Kind_Locked, lockedstats[0]++;
 			}
 			else if (reverse_remap[i] != ~0u)
 			{
@@ -285,17 +285,17 @@ static void classifyVertices(unsigned char* result, size_t vertex_count, const E
 					    bf != ~0u && findEdge(adjacency, bf, unsigned(i)))
 						result[i] = Kind_Seam;
 					else
-						result[i] = Kind_Locked;
+						result[i] = Kind_Locked, lockedstats[1]++;
 				}
 				else
 				{
-					result[i] = Kind_Locked;
+					result[i] = Kind_Locked, lockedstats[2]++;
 				}
 			}
 			else
 			{
 				// more than one vertex maps to this one; we don't have classification available
-				result[i] = Kind_Locked;
+				result[i] = Kind_Locked, lockedstats[3]++;
 			}
 		}
 		else
@@ -502,9 +502,11 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	// TODO: maybe make this an option? this disables seam awareness
 	// for (size_t i = 0; i < vertex_count; ++i) remap[i] = reverse_remap[i] = unsigned(i);
 
+	size_t lockedstats[4] = {};
+
 	// classify vertices; vertex kind determines collapse rules, see kCanCollapse
 	meshopt_Buffer<unsigned char> vertex_kind(vertex_count);
-	classifyVertices(vertex_kind.data, vertex_count, adjacency, remap.data, reverse_remap.data);
+	classifyVertices(vertex_kind.data, vertex_count, adjacency, remap.data, reverse_remap.data, lockedstats);
 
 	if (meshopt_simplifyDebugKind)
 		memcpy(meshopt_simplifyDebugKind, vertex_kind.data, vertex_count);
@@ -522,6 +524,8 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 	printf("kinds: manifold %d, border %d, seam %d, locked %d\n",
 	       int(kinds[Kind_Manifold]), int(kinds[Kind_Border]), int(kinds[Kind_Seam]), int(kinds[Kind_Locked]));
+	printf("locked: 0 %d, 1 %d, 2 %d, 3 %d\n",
+	       int(lockedstats[0]), int(lockedstats[1]), int(lockedstats[2]), int(lockedstats[3]));
 #endif
 
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
