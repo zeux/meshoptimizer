@@ -1,13 +1,17 @@
-#include "../src/meshoptimizer.h"
 #include "../demo/objparser.h"
+#include "../src/meshoptimizer.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <ctime>
 
-#include <GL/gl.h>
 #include <GLFW/glfw3.h>
+#include <GL/gl.h>
+
+#ifdef _WIN32
+#pragma comment(lib, "opengl32.lib")
+#endif
 
 extern unsigned char* meshopt_simplifyDebugKind;
 
@@ -228,7 +232,7 @@ Options options;
 
 void keyhandler(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-    if (action == GLFW_PRESS)
+	if (action == GLFW_PRESS)
 	{
 		if (key == GLFW_KEY_W)
 		{
@@ -283,20 +287,20 @@ int main(int argc, char** argv)
 	glfwInit();
 
 	GLFWwindow* window = glfwCreateWindow(640, 480, "Simple example", NULL, NULL);
-    glfwMakeContextCurrent(window);
+	glfwMakeContextCurrent(window);
 
 	stats(window, path, basemesh, 0, 0);
 
 	glfwSetKeyCallback(window, keyhandler);
 
-    while (!glfwWindowShouldClose(window))
+	while (!glfwWindowShouldClose(window))
 	{
-        int width, height;
-        glfwGetFramebufferSize(window, &width, &height);
+		int width, height;
+		glfwGetFramebufferSize(window, &width, &height);
 
 		display(width, height, mesh, options);
 
-        glfwSwapBuffers(window);
-        glfwPollEvents();
+		glfwSwapBuffers(window);
+		glfwPollEvents();
 	}
 }
