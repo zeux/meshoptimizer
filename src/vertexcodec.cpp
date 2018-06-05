@@ -351,7 +351,7 @@ static bool decodeBytesGroupBuildTables()
 		{
 			int maski = (mask >> i) & 1;
 			shuffle[i] = maski ? count : 0x80;
-			count += maski;
+			count += char(maski);
 		}
 
 		memcpy(kDecodeBytesGroupShuffle[mask], shuffle, 8);
