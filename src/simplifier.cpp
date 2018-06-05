@@ -415,6 +415,7 @@ static void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1
 
 	// Three classical weighting methods include weight=1, weight=area and weight=area^2
 	// We use weight=area for now
+	// TODO: Garland97 uses weight=1; with a different weight it might be important to normalize the sum in each vertex?
 	quadricMul(Q, area);
 }
 
@@ -431,6 +432,7 @@ static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3
 
 	float distance = normal.x * p0.x + normal.y * p0.y + normal.z * p0.z;
 
+	// TODO: We should be able to encode squared distance to the edge here?
 	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance);
 
 	quadricMul(Q, length * weight);
@@ -633,6 +635,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 				// TODO: needs cleanup in general...
 				if (vertex_kind[i0] == vertex_kind[i1])
 				{
+					// TODO: Garland97 uses Q1+Q2 for error estimation; here we asssume that V1 produces zero error for Q1 but it actually gets larger with more collapses
 					Collapse c01 = {i0, i1, {quadricError(vertex_quadrics[remap[i0]], vertex_positions[i1])}};
 					Collapse c10 = {i1, i0, {quadricError(vertex_quadrics[remap[i1]], vertex_positions[i0])}};
 					Collapse c = c01.error <= c10.error ? c01 : c10;
