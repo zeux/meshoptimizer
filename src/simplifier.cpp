@@ -771,6 +771,29 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 #if TRACE
 	printf("passes: %d, worst error: %e\n", int(pass_count), worst_error);
+
+	size_t locked_collapses[Kind_Count][Kind_Count] = {};
+
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		static const int next[3] = {1, 2, 0};
+
+		for (int e = 0; e < 3; ++e)
+		{
+			unsigned int i0 = result[i + e];
+			unsigned int i1 = result[i + next[e]];
+
+			unsigned char k0 = vertex_kind[i0];
+			unsigned char k1 = vertex_kind[i1];
+
+			locked_collapses[k0][k1] += !kCanCollapse[k0][k1];
+		}
+	}
+
+	for (int k0 = 0; k0 < Kind_Count; ++k0)
+		for (int k1 = 0; k1 < Kind_Count; ++k1)
+			if (locked_collapses[k0][k1])
+				printf("locked collapses %d -> %d: %d\n", k0, k1, int(locked_collapses[k0][k1]));
 #endif
 
 	return index_count;
