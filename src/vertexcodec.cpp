@@ -345,16 +345,14 @@ static bool decodeBytesGroupBuildTables()
 	for (int mask = 0; mask < 256; ++mask)
 	{
 		unsigned char shuffle[8];
-		memset(shuffle, 0x80, 8);
-
 		unsigned char count = 0;
 
 		for (int i = 0; i < 8; ++i)
-			if (mask & (1 << i))
-			{
-				shuffle[i] = count;
-				count++;
-			}
+		{
+			int maski = (mask >> i) & 1;
+			shuffle[i] = maski ? count : 0x80;
+			count += maski;
+		}
 
 		memcpy(kDecodeBytesGroupShuffle[mask], shuffle, 8);
 		kDecodeBytesGroupCount[mask] = count;
@@ -831,6 +829,10 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 	decode = decodeVertexBlockSimd;
 #else
 	decode = decodeVertexBlock;
+#endif
+
+#if defined(SIMD_SSE) || defined(SIMD_NEON)
+	assert(gDecodeBytesGroupInitialized);
 #endif
 
 	unsigned char* vertex_data = static_cast<unsigned char*>(destination);
