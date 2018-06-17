@@ -1,13 +1,14 @@
 #include "../src/meshoptimizer.h"
 #include "../demo/objparser.h"
 
-#include <vector>
 #include <algorithm>
 #include <functional>
+#include <vector>
+
+#include <cmath>
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
-#include <thread>
 
 const int max_cache_size = 16;
 const int max_valence = 8;
@@ -48,6 +49,11 @@ pcg32_random_t rngstate = PCG32_INITIALIZER;
 float rand01()
 {
 	return pcg32_random_r(&rngstate) / float(1ull << 32);
+}
+
+uint32_t rand32()
+{
+	return pcg32_random_r(&rngstate);
 }
 
 struct State
@@ -186,12 +192,12 @@ float fitness_score(const State& state, const std::vector<Mesh>& meshes)
 	return result / count;
 }
 
-float rndcache(int j)
+float rndcache()
 {
 	return rand01();
 }
 
-float rndlive(int j)
+float rndlive()
 {
 	return rand01();
 }
@@ -205,10 +211,10 @@ std::vector<State> gen0(size_t count)
 		State state = {};
 
 		for (int j = 0; j < max_cache_size; ++j)
-			state.cache[j] = rndcache(j);
+			state.cache[j] = rndcache();
 
 		for (int j = 0; j < max_valence; ++j)
-			state.live[j] = rndlive(j);
+			state.live[j] = rndlive();
 
 		result.push_back(state);
 	}
@@ -231,7 +237,134 @@ size_t rndindex(const std::vector<float>& prob)
 	return prob.size() - 1;
 }
 
-std::pair<State, float> genN(std::vector<State>& seed, const std::vector<Mesh>& meshes, float crossover, float mutate)
+State mutate(const State& state)
+{
+	State result = state;
+
+	if (rand01() < 0.7f)
+	{
+		size_t idxcache = std::min(int(rand01() * max_cache_size + 0.5f), int(max_cache_size - 1));
+
+		result.cache[idxcache] = rndcache();
+	}
+
+	if (rand01() < 0.7f)
+	{
+		size_t idxlive = std::min(int(rand01() * max_valence + 0.5f), int(max_valence - 1));
+
+		result.live[idxlive] = rndlive();
+	}
+
+	if (rand01() < 0.2f)
+	{
+		uint32_t mask = rand32();
+
+		for (size_t i = 0; i < max_cache_size; ++i)
+			if (mask & (1 << i))
+				result.cache[i] *= 0.9f + 0.2f * rand01();
+	}
+
+	if (rand01() < 0.2f)
+	{
+		uint32_t mask = rand32();
+
+		for (size_t i = 0; i < max_valence; ++i)
+			if (mask & (1 << i))
+				result.live[i] *= 0.9f + 0.2f * rand01();
+	}
+
+	if (rand01() < 0.05f)
+	{
+		uint32_t mask = rand32();
+
+		for (size_t i = 0; i < max_cache_size; ++i)
+			if (mask & (1 << i))
+				result.cache[i] = rndcache();
+	}
+
+	if (rand01() < 0.05f)
+	{
+		uint32_t mask = rand32();
+
+		for (size_t i = 0; i < max_valence; ++i)
+			if (mask & (1 << i))
+				result.live[i] = rndlive();
+	}
+
+	return result;
+}
+
+bool accept(float fitnew, float fitold, float temp)
+{
+	if (fitnew >= fitold)
+		return true;
+
+	if (temp == 0)
+		return false;
+
+	float prob = exp2((fitnew - fitold) / temp);
+
+	return rand01() < prob;
+}
+
+std::pair<State, float> genN_SA(std::vector<State>& seed, const std::vector<Mesh>& meshes, size_t steps)
+{
+	std::vector<State> result;
+	result.reserve(seed.size() * (1 + steps));
+
+	// perform several parallel steps of mutation for each temperature
+	for (size_t i = 0; i < seed.size(); ++i)
+	{
+		result.push_back(seed[i]);
+
+		for (size_t s = 0; s < steps; ++s)
+			result.push_back(mutate(seed[i]));
+	}
+
+	// compute fitness for all temperatures & mutations in parallel
+	std::vector<float> resultfit(result.size());
+
+	#pragma omp parallel for
+	for (size_t i = 0; i < result.size(); ++i)
+	{
+		resultfit[i] = fitness_score(result[i], meshes);
+	}
+
+	// perform annealing for each temperature
+	std::vector<float> seedfit(seed.size());
+
+	for (size_t i = 0; i < seed.size(); ++i)
+	{
+		size_t offset = i * (1 + steps);
+
+		seedfit[i] = resultfit[offset];
+
+		float temp = (float(i) / float(seed.size() - 1)) / 0.1f;
+
+		for (size_t s = 0; s < steps; ++s)
+		{
+			if (accept(resultfit[offset + s + 1], seedfit[i], temp))
+			{
+				seedfit[i] = resultfit[offset + s + 1];
+				seed[i] = result[offset + s + 1];
+			}
+		}
+	}
+
+	// perform promotion from each temperature to the next one
+	for (size_t i = seed.size() - 1; i > 0; --i)
+	{
+		if (seedfit[i] > seedfit[i - 1])
+		{
+			seedfit[i - 1] = seedfit[i];
+			seed[i - 1] = seed[i];
+		}
+	}
+
+	return std::make_pair(seed[0], seedfit[0]);
+}
+
+std::pair<State, float> genN_GA(std::vector<State>& seed, const std::vector<Mesh>& meshes, float crossover, float mutate)
 {
 	std::vector<State> result;
 	result.reserve(seed.size());
@@ -307,14 +440,14 @@ std::pair<State, float> genN(std::vector<State>& seed, const std::vector<Mesh>& 
 		{
 			size_t idxcache = std::min(int(rand01() * max_cache_size + 0.5f), 15);
 
-			state.cache[idxcache] = rndcache(idxcache);
+			state.cache[idxcache] = rndcache();
 		}
 
 		if (rand01() < mutate)
 		{
 			size_t idxlive = std::min(int(rand01() * max_valence + 0.5f), 7);
 
-			state.live[idxlive] = rndlive(idxlive);
+			state.live[idxlive] = rndlive();
 		}
 
 		result.push_back(state);
@@ -380,6 +513,8 @@ void dump_state(const State& state)
 
 int main(int argc, char** argv)
 {
+	bool annealing = false;
+
 	State baseline;
 	memcpy(baseline.cache, meshopt::vertex_score_table_cache + 1, max_cache_size * sizeof(float));
 	memcpy(baseline.live, meshopt::vertex_score_table_live + 1, max_valence * sizeof(float));
@@ -409,7 +544,7 @@ int main(int argc, char** argv)
 	}
 	else
 	{
-		pop = gen0(1000);
+		pop = gen0(annealing ? 32 : 1000);
 	}
 
 	printf("%d meshes, %.1fM triangles\n", int(meshes.size()), double(total_triangles) / 1e6);
@@ -423,7 +558,7 @@ int main(int argc, char** argv)
 
 	for (;;)
 	{
-		auto best = genN(pop, meshes, 0.7f, 0.3f);
+		auto best = annealing ? genN_SA(pop, meshes, 31) : genN_GA(pop, meshes, 0.7f, 0.3f);
 		gen++;
 
 		compute_atvr(best.first, meshes[0], atvr_0);
