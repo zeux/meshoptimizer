@@ -222,6 +222,21 @@ std::vector<State> gen0(size_t count)
 	return result;
 }
 
+size_t rndindex(const std::vector<float>& prob)
+{
+	float r = rand01();
+
+	for (size_t i = 0; i < prob.size(); ++i)
+	{
+		r -= prob[i];
+
+		if (r <= 0)
+			return i;
+	}
+
+	return prob.size() - 1;
+}
+
 State mutate(const State& state)
 {
 	State result = state;
@@ -292,7 +307,7 @@ bool accept(float fitnew, float fitold, float temp)
 	return rand01() < prob;
 }
 
-std::pair<State, float> genN(std::vector<State>& seed, const std::vector<Mesh>& meshes, size_t steps)
+std::pair<State, float> genN_SA(std::vector<State>& seed, const std::vector<Mesh>& meshes, size_t steps)
 {
 	std::vector<State> result;
 	result.reserve(seed.size() * (1 + steps));
@@ -347,6 +362,100 @@ std::pair<State, float> genN(std::vector<State>& seed, const std::vector<Mesh>& 
 	}
 
 	return std::make_pair(seed[0], seedfit[0]);
+}
+
+std::pair<State, float> genN_GA(std::vector<State>& seed, const std::vector<Mesh>& meshes, float crossover, float mutate)
+{
+	std::vector<State> result;
+	result.reserve(seed.size());
+
+	std::vector<float> seedprob(seed.size());
+
+	#pragma omp parallel for
+	for (size_t i = 0; i < seed.size(); ++i)
+	{
+		seedprob[i] = fitness_score(seed[i], meshes);
+	}
+
+	State best = {};
+	float bestfit = 0;
+	float probsum = 0;
+
+	for (size_t i = 0; i < seed.size(); ++i)
+	{
+		float score = seedprob[i];
+		probsum += score;
+
+		if (score > bestfit)
+		{
+			best = seed[i];
+			bestfit = score;
+		}
+	}
+
+	for (auto& prob: seedprob)
+	{
+		prob /= probsum;
+	}
+
+	std::vector<unsigned int> seedidx;
+	seedidx.reserve(seed.size());
+	for (size_t i = 0; i < seed.size(); ++i)
+		seedidx.push_back(i);
+
+	std::sort(seedidx.begin(), seedidx.end(), [&](size_t l, size_t r) { return seedprob[l] < seedprob[r]; });
+
+	while (result.size() < seed.size() / 4)
+	{
+		size_t idx = seedidx.back();
+		seedidx.pop_back();
+
+		result.push_back(seed[idx]);
+	}
+
+	while (result.size() < seed.size())
+	{
+		State s0 = seed[rndindex(seedprob)];
+		State s1 = seed[rndindex(seedprob)];
+
+		State state = s0;
+
+		// crossover
+		if (rand01() < crossover)
+		{
+			size_t idxcache = std::min(int(rand01() * max_cache_size + 0.5f), 15);
+
+			memcpy(state.cache + idxcache, s1.cache + idxcache, (max_cache_size - idxcache) * sizeof(float));
+		}
+
+		if (rand01() < crossover)
+		{
+			size_t idxlive = std::min(int(rand01() * max_valence + 0.5f), 7);
+
+			memcpy(state.live + idxlive, s1.live + idxlive, (max_valence - idxlive) * sizeof(float));
+		}
+
+		// mutate
+		if (rand01() < mutate)
+		{
+			size_t idxcache = std::min(int(rand01() * max_cache_size + 0.5f), 15);
+
+			state.cache[idxcache] = rndcache();
+		}
+
+		if (rand01() < mutate)
+		{
+			size_t idxlive = std::min(int(rand01() * max_valence + 0.5f), 7);
+
+			state.live[idxlive] = rndlive();
+		}
+
+		result.push_back(state);
+	}
+
+	seed.swap(result);
+
+	return std::make_pair(best, bestfit);
 }
 
 bool load_state(const char* path, std::vector<State>& result)
@@ -404,6 +513,8 @@ void dump_state(const State& state)
 
 int main(int argc, char** argv)
 {
+	bool annealing = false;
+
 	State baseline;
 	memcpy(baseline.cache, meshopt::vertex_score_table_cache + 1, max_cache_size * sizeof(float));
 	memcpy(baseline.live, meshopt::vertex_score_table_live + 1, max_valence * sizeof(float));
@@ -433,7 +544,7 @@ int main(int argc, char** argv)
 	}
 	else
 	{
-		pop = gen0(32);
+		pop = gen0(annealing ? 32 : 1000);
 	}
 
 	printf("%d meshes, %.1fM triangles\n", int(meshes.size()), double(total_triangles) / 1e6);
@@ -447,7 +558,7 @@ int main(int argc, char** argv)
 
 	for (;;)
 	{
-		auto best = genN(pop, meshes, 31);
+		auto best = annealing ? genN_SA(pop, meshes, 31) : genN_GA(pop, meshes, 0.7f, 0.3f);
 		gen++;
 
 		compute_atvr(best.first, meshes[0], atvr_0);
