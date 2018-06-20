@@ -11,14 +11,14 @@
 namespace meshopt
 {
 
-const size_t max_cache_size = 16;
-const size_t max_valence = 8;
+const size_t kCacheSizeMax = 16;
+const size_t kValenceMax = 8;
 
-static const float vertex_score_table_cache[1 + max_cache_size] = {
+static const float kVertexScoreTableCache[1 + kCacheSizeMax] = {
     0.f,
     0.792f, 0.767f, 0.764f, 0.956f, 0.827f, 0.751f, 0.820f, 0.864f, 0.738f, 0.788f, 0.642f, 0.646f, 0.165f, 0.654f, 0.545f, 0.284f};
 
-static const float vertex_score_table_live[1 + max_valence] = {
+static const float kVertexScoreTableLive[1 + kValenceMax] = {
     0.f,
     0.994f, 0.721f, 0.479f, 0.423f, 0.174f, 0.080f, 0.249f, 0.056f};
 
@@ -136,11 +136,11 @@ static unsigned int getNextVertexNeighbour(const unsigned int* next_candidates_b
 
 static float vertexScore(int cache_position, unsigned int live_triangles)
 {
-	assert(cache_position >= -1 && cache_position < int(max_cache_size));
+	assert(cache_position >= -1 && cache_position < int(kCacheSizeMax));
 
-	unsigned int live_triangles_clamped = live_triangles < max_valence ? live_triangles : max_valence;
+	unsigned int live_triangles_clamped = live_triangles < kValenceMax ? live_triangles : kValenceMax;
 
-	return vertex_score_table_cache[1 + cache_position] + vertex_score_table_live[live_triangles_clamped];
+	return kVertexScoreTableCache[1 + cache_position] + kVertexScoreTableLive[live_triangles_clamped];
 }
 
 static unsigned int getNextTriangleDeadEnd(unsigned int& input_cursor, const char* emitted_flags, size_t face_count)
@@ -180,7 +180,7 @@ void meshopt_optimizeVertexCache(unsigned int* destination, const unsigned int* 
 	}
 
 	unsigned int cache_size = 16;
-	assert(cache_size <= max_cache_size);
+	assert(cache_size <= kCacheSizeMax);
 
 	size_t face_count = index_count / 3;
 
@@ -216,9 +216,9 @@ void meshopt_optimizeVertexCache(unsigned int* destination, const unsigned int* 
 		triangle_scores[i] = vertex_scores[a] + vertex_scores[b] + vertex_scores[c];
 	}
 
-	unsigned int cache_holder[2 * (max_cache_size + 3)];
+	unsigned int cache_holder[2 * (kCacheSizeMax + 3)];
 	unsigned int* cache = cache_holder;
-	unsigned int* cache_new = cache_holder + max_cache_size + 3;
+	unsigned int* cache_new = cache_holder + kCacheSizeMax + 3;
 	size_t cache_count = 0;
 
 	unsigned int current_triangle = 0;

@@ -10,13 +10,13 @@
 #include <cstdint>
 #include <cstring>
 
-const int max_cache_size = 16;
-const int max_valence = 8;
+const int kCacheSizeMax = 16;
+const int kValenceMax = 8;
 
 namespace meshopt
 {
-	extern thread_local float vertex_score_table_cache[1 + max_cache_size];
-	extern thread_local float vertex_score_table_live[1 + max_valence];
+	extern thread_local float kVertexScoreTableCache[1 + kCacheSizeMax];
+	extern thread_local float kVertexScoreTableLive[1 + kValenceMax];
 }
 
 struct { int cache, warp, triangle; } profiles[] =
@@ -58,8 +58,8 @@ uint32_t rand32()
 
 struct State
 {
-	float cache[max_cache_size];
-	float live[max_valence];
+	float cache[kCacheSizeMax];
+	float live[kValenceMax];
 };
 
 struct Mesh
@@ -161,8 +161,8 @@ Mesh objmesh(const char* path)
 
 void compute_atvr(const State& state, const Mesh& mesh, float result[Profile_Count])
 {
-	memcpy(meshopt::vertex_score_table_cache + 1, state.cache, max_cache_size * sizeof(float));
-	memcpy(meshopt::vertex_score_table_live + 1, state.live, max_valence * sizeof(float));
+	memcpy(meshopt::kVertexScoreTableCache + 1, state.cache, kCacheSizeMax * sizeof(float));
+	memcpy(meshopt::kVertexScoreTableLive + 1, state.live, kValenceMax * sizeof(float));
 
 	std::vector<unsigned int> indices(mesh.indices.size());
 
@@ -210,10 +210,10 @@ std::vector<State> gen0(size_t count)
 	{
 		State state = {};
 
-		for (int j = 0; j < max_cache_size; ++j)
+		for (int j = 0; j < kCacheSizeMax; ++j)
 			state.cache[j] = rndcache();
 
-		for (int j = 0; j < max_valence; ++j)
+		for (int j = 0; j < kValenceMax; ++j)
 			state.live[j] = rndlive();
 
 		result.push_back(state);
@@ -243,14 +243,14 @@ State mutate(const State& state)
 
 	if (rand01() < 0.7f)
 	{
-		size_t idxcache = std::min(int(rand01() * max_cache_size + 0.5f), int(max_cache_size - 1));
+		size_t idxcache = std::min(int(rand01() * kCacheSizeMax + 0.5f), int(kCacheSizeMax - 1));
 
 		result.cache[idxcache] = rndcache();
 	}
 
 	if (rand01() < 0.7f)
 	{
-		size_t idxlive = std::min(int(rand01() * max_valence + 0.5f), int(max_valence - 1));
+		size_t idxlive = std::min(int(rand01() * kValenceMax + 0.5f), int(kValenceMax - 1));
 
 		result.live[idxlive] = rndlive();
 	}
@@ -259,7 +259,7 @@ State mutate(const State& state)
 	{
 		uint32_t mask = rand32();
 
-		for (size_t i = 0; i < max_cache_size; ++i)
+		for (size_t i = 0; i < kCacheSizeMax; ++i)
 			if (mask & (1 << i))
 				result.cache[i] *= 0.9f + 0.2f * rand01();
 	}
@@ -268,7 +268,7 @@ State mutate(const State& state)
 	{
 		uint32_t mask = rand32();
 
-		for (size_t i = 0; i < max_valence; ++i)
+		for (size_t i = 0; i < kValenceMax; ++i)
 			if (mask & (1 << i))
 				result.live[i] *= 0.9f + 0.2f * rand01();
 	}
@@ -277,7 +277,7 @@ State mutate(const State& state)
 	{
 		uint32_t mask = rand32();
 
-		for (size_t i = 0; i < max_cache_size; ++i)
+		for (size_t i = 0; i < kCacheSizeMax; ++i)
 			if (mask & (1 << i))
 				result.cache[i] = rndcache();
 	}
@@ -286,7 +286,7 @@ State mutate(const State& state)
 	{
 		uint32_t mask = rand32();
 
-		for (size_t i = 0; i < max_valence; ++i)
+		for (size_t i = 0; i < kValenceMax; ++i)
 			if (mask & (1 << i))
 				result.live[i] = rndlive();
 	}
@@ -423,29 +423,29 @@ std::pair<State, float> genN_GA(std::vector<State>& seed, const std::vector<Mesh
 		// crossover
 		if (rand01() < crossover)
 		{
-			size_t idxcache = std::min(int(rand01() * max_cache_size + 0.5f), 15);
+			size_t idxcache = std::min(int(rand01() * kCacheSizeMax + 0.5f), 15);
 
-			memcpy(state.cache + idxcache, s1.cache + idxcache, (max_cache_size - idxcache) * sizeof(float));
+			memcpy(state.cache + idxcache, s1.cache + idxcache, (kCacheSizeMax - idxcache) * sizeof(float));
 		}
 
 		if (rand01() < crossover)
 		{
-			size_t idxlive = std::min(int(rand01() * max_valence + 0.5f), 7);
+			size_t idxlive = std::min(int(rand01() * kValenceMax + 0.5f), 7);
 
-			memcpy(state.live + idxlive, s1.live + idxlive, (max_valence - idxlive) * sizeof(float));
+			memcpy(state.live + idxlive, s1.live + idxlive, (kValenceMax - idxlive) * sizeof(float));
 		}
 
 		// mutate
 		if (rand01() < mutate)
 		{
-			size_t idxcache = std::min(int(rand01() * max_cache_size + 0.5f), 15);
+			size_t idxcache = std::min(int(rand01() * kCacheSizeMax + 0.5f), 15);
 
 			state.cache[idxcache] = rndcache();
 		}
 
 		if (rand01() < mutate)
 		{
-			size_t idxlive = std::min(int(rand01() * max_valence + 0.5f), 7);
+			size_t idxlive = std::min(int(rand01() * kValenceMax + 0.5f), 7);
 
 			state.live[idxlive] = rndlive();
 		}
@@ -497,14 +497,14 @@ bool save_state(const char* path, const std::vector<State>& result)
 void dump_state(const State& state)
 {
 	printf("cache:");
-	for (int i = 0; i < max_cache_size; ++i)
+	for (int i = 0; i < kCacheSizeMax; ++i)
 	{
 		printf(" %.3f", state.cache[i]);
 	}
 	printf("\n");
 
 	printf("live:");
-	for (int i = 0; i < max_valence; ++i)
+	for (int i = 0; i < kValenceMax; ++i)
 	{
 		printf(" %.3f", state.live[i]);
 	}
@@ -516,8 +516,8 @@ int main(int argc, char** argv)
 	bool annealing = false;
 
 	State baseline;
-	memcpy(baseline.cache, meshopt::vertex_score_table_cache + 1, max_cache_size * sizeof(float));
-	memcpy(baseline.live, meshopt::vertex_score_table_live + 1, max_valence * sizeof(float));
+	memcpy(baseline.cache, meshopt::kVertexScoreTableCache + 1, kCacheSizeMax * sizeof(float));
+	memcpy(baseline.live, meshopt::kVertexScoreTableLive + 1, kValenceMax * sizeof(float));
 
 	std::vector<Mesh> meshes;
 
