@@ -96,8 +96,9 @@ size_t meshopt_generateVertexRemap(unsigned int* destination, const unsigned int
 
 	VertexHasher hasher = {static_cast<const char*>(vertices), vertex_size};
 
-	meshopt_Buffer<unsigned int> table(hashBuckets(vertex_count));
-	memset(table.data, -1, table.size * sizeof(unsigned int));
+	size_t table_size = hashBuckets(vertex_count);
+	meshopt_Buffer<unsigned int> table(table_size);
+	memset(table.data, -1, table_size * sizeof(unsigned int));
 
 	unsigned int next_vertex = 0;
 
@@ -108,7 +109,7 @@ size_t meshopt_generateVertexRemap(unsigned int* destination, const unsigned int
 
 		if (destination[index] == ~0u)
 		{
-			unsigned int* entry = hashLookup(table.data, table.size, hasher, index, ~0u);
+			unsigned int* entry = hashLookup(table.data, table_size, hasher, index, ~0u);
 
 			if (*entry == ~0u)
 			{

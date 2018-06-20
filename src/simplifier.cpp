@@ -163,15 +163,16 @@ static void buildPositionRemap(unsigned int* remap, unsigned int* reverse_remap,
 {
 	PositionHasher hasher = {vertex_positions_data, vertex_positions_stride / sizeof(float)};
 
-	meshopt_Buffer<unsigned int> table(hashBuckets2(vertex_count));
-	memset(table.data, -1, table.size * sizeof(unsigned int));
+	size_t table_size = hashBuckets2(vertex_count);
+	meshopt_Buffer<unsigned int> table(table_size);
+	memset(table.data, -1, table_size * sizeof(unsigned int));
 
 	// build forward remap: for each vertex, which other (canonical) vertex does it map to?
 	// we use position equivalence for this, and remap vertices to other existing vertices
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
 		unsigned int index = unsigned(i);
-		unsigned int* entry = hashLookup2(table.data, table.size, hasher, index, ~0u);
+		unsigned int* entry = hashLookup2(table.data, table_size, hasher, index, ~0u);
 
 		if (*entry == ~0u)
 		{

@@ -45,7 +45,7 @@ size_t meshopt_optimizeVertexFetch(void* destination, unsigned int* indices, siz
 
 	// build vertex remap table
 	meshopt_Buffer<unsigned int> vertex_remap(vertex_count);
-	memset(vertex_remap.data, -1, vertex_remap.size * sizeof(unsigned int));
+	memset(vertex_remap.data, -1, vertex_count * sizeof(unsigned int));
 
 	unsigned int next_vertex = 0;
 
