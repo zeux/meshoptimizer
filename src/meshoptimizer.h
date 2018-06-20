@@ -26,6 +26,7 @@ extern "C" {
 
 /**
  * Generates a vertex remap table from the vertex buffer and an optional index buffer and returns number of unique vertices
+ * As a result, all vertices that are binary equivalent map to the same (new) location, with no gaps in the resulting sequence.
  *
  * destination must contain enough space for the resulting remap table (vertex_count elements)
  * indices can be NULL if the input is unindexed
