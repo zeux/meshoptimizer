@@ -10,6 +10,7 @@ namespace meshopt
 struct VertexHasher
 {
 	const char* vertices;
+	size_t vertex_stride;
 	size_t vertex_size;
 
 	size_t hash(unsigned int index) const
@@ -19,7 +20,7 @@ struct VertexHasher
 		const int r = 24;
 
 		unsigned int h = 0;
-		const char* key = vertices + index * vertex_size;
+		const char* key = vertices + index * vertex_stride;
 		size_t len = vertex_size;
 
 		while (len >= 4)
@@ -42,7 +43,7 @@ struct VertexHasher
 
 	bool equal(unsigned int lhs, unsigned int rhs) const
 	{
-		return memcmp(vertices + lhs * vertex_size, vertices + rhs * vertex_size, vertex_size) == 0;
+		return memcmp(vertices + lhs * vertex_stride, vertices + rhs * vertex_stride, vertex_size) == 0;
 	}
 };
 
@@ -94,7 +95,7 @@ size_t meshopt_generateVertexRemap(unsigned int* destination, const unsigned int
 
 	memset(destination, -1, vertex_count * sizeof(unsigned int));
 
-	VertexHasher hasher = {static_cast<const char*>(vertices), vertex_size};
+	VertexHasher hasher = {static_cast<const char*>(vertices), vertex_size, vertex_size};
 
 	size_t table_size = hashBuckets(vertex_count);
 	meshopt_Buffer<unsigned int> table(table_size);
