@@ -143,7 +143,7 @@ On most hardware, indexed triangle lists are the most efficient way to drive the
 - On some older GPUs, triangle strips may be a bit more efficient to render
 - On extremely memory constrained systems, index buffers for triangle strips could save a bit of memory
 
-While in general usage of triangle strips is not recommended, this library provides an algorithm for converting a vertex cache optimized triangle list to a triangle strip:
+This library provides an algorithm for converting a vertex cache optimized triangle list to a triangle strip:
 
 ```c++
 std::vector<unsigned int> strip(index_count / 3 * 4);
