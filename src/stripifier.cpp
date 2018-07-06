@@ -4,6 +4,8 @@
 #include <limits.h>
 #include <string.h>
 
+// This work is based on:
+// Francine Evans, Steven Skiena and Amitabh Varshney. Optimizing Triangle Strips for Fast Rendering. 1996
 namespace meshopt
 {
 
@@ -228,12 +230,14 @@ size_t meshopt_unstripify(unsigned int* destination, const unsigned int* indices
 		{
 			unsigned int a = indices[i - 2], b = indices[i - 1], c = indices[i];
 
+			// flip winding for odd triangles
 			if ((i - start) & 1)
 			{
 				unsigned int t = a;
 				a = b, b = t;
 			}
 
+			// although we use restart indices, strip swaps still produce degenerate triangles, so skip them
 			if (a != b && a != c && b != c)
 			{
 				destination[offset + 0] = a;
