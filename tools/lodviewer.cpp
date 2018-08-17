@@ -109,11 +109,9 @@ Mesh optimize(const Mesh& mesh, int lod)
 	return result;
 }
 
-void display(int width, int height, const Mesh& mesh, const Options& options)
+void display(int x, int y, int width, int height, const Mesh& mesh, const Options& options)
 {
-	glViewport(0, 0, width, height);
-	glClearDepth(1.f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glViewport(x, y, width, height);
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS);
 	glDepthMask(GL_TRUE);
@@ -218,16 +216,22 @@ void display(int width, int height, const Mesh& mesh, const Options& options)
 	}
 }
 
-void stats(GLFWwindow* window, const char* path, const Mesh& mesh, int lod, double time)
+void stats(GLFWwindow* window, const char* path, unsigned int triangles, int lod, double time)
 {
 	char title[256];
-	snprintf(title, sizeof(title), "%s: LOD %d - %d triangles (%.1f msec)", path, lod, int(mesh.indices.size() / 3), time * 1000);
+	snprintf(title, sizeof(title), "%s: LOD %d - %d triangles (%.1f msec)", path, lod, triangles, time * 1000);
 
 	glfwSetWindowTitle(window, title);
 }
 
-Mesh basemesh, mesh;
-const char* path;
+struct File
+{
+	Mesh basemesh;
+	Mesh lodmesh;
+	const char* path;
+};
+
+std::vector<File> files;
 Options options;
 
 void keyhandler(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -254,20 +258,21 @@ void keyhandler(GLFWwindow* window, int key, int scancode, int action, int mods)
 		{
 			options.mode = options.mode == Options::Mode_Kind ? Options::Mode_Default : Options::Mode_Kind;
 		}
-		else if (key == GLFW_KEY_0)
+		else if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9)
 		{
-			mesh = optimize(basemesh, 0);
-			stats(window, path, mesh, 0, 0);
-		}
-		else if (key >= GLFW_KEY_1 && key <= GLFW_KEY_9)
-		{
-			int lod = int(key - GLFW_KEY_1 + 1);
+			int lod = int(key - GLFW_KEY_0);
+
+			unsigned int triangles = 0;
 
 			clock_t start = clock();
-			mesh = optimize(basemesh, lod);
+			for (auto& f : files)
+			{
+				f.lodmesh = optimize(f.basemesh, lod);
+				triangles += unsigned(f.lodmesh.indices.size() / 3);
+			}
 			clock_t end = clock();
 
-			stats(window, path, mesh, lod, double(end - start) / CLOCKS_PER_SEC);
+			stats(window, files[0].path, triangles, lod, double(end - start) / CLOCKS_PER_SEC);
 		}
 	}
 }
@@ -276,20 +281,30 @@ int main(int argc, char** argv)
 {
 	if (argc <= 1)
 	{
-		printf("Usage: %s [.obj file]\n", argv[0]);
+		printf("Usage: %s [.obj files]\n", argv[0]);
 		return 0;
 	}
 
-	path = argv[1];
-	basemesh = parseObj(path);
-	mesh = optimize(basemesh, 0);
+	unsigned int basetriangles = 0;
+
+	for (int i = 1; i < argc; ++i)
+	{
+		files.emplace_back();
+		File& f = files.back();
+
+		f.path = argv[i];
+		f.basemesh = parseObj(f.path);
+		f.lodmesh = optimize(f.basemesh, 0);
+
+		basetriangles += unsigned(f.basemesh.indices.size() / 3);
+	}
 
 	glfwInit();
 
 	GLFWwindow* window = glfwCreateWindow(640, 480, "Simple example", NULL, NULL);
 	glfwMakeContextCurrent(window);
 
-	stats(window, path, basemesh, 0, 0);
+	stats(window, files[0].path, basetriangles, 0, 0);
 
 	glfwSetKeyCallback(window, keyhandler);
 
@@ -298,7 +313,24 @@ int main(int argc, char** argv)
 		int width, height;
 		glfwGetFramebufferSize(window, &width, &height);
 
-		display(width, height, mesh, options);
+		glViewport(0, 0, width, height);
+		glClearDepth(1.f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		int cols = int(ceil(sqrt(double(files.size()))));
+		int rows = int(ceil(double(files.size()) / cols));
+
+		int tilew = width / cols;
+		int tileh = height / rows;
+
+		for (size_t i = 0; i < files.size(); ++i)
+		{
+			File& f = files[i];
+			int x = int(i) % cols;
+			int y = int(i) / cols;
+
+			display(x * tilew, y * tileh, tilew, tileh, f.lodmesh, options);
+		}
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
