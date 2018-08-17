@@ -539,7 +539,7 @@ void encodeIndexCoverage()
 	// note: 4 6 5 triangle here is a combo-breaker:
 	// we encode it without rotating, a=next, c=next - this means we do *not* bump next to 6
 	// which means that the next triangle can't be encoded via next sequencing!
-	const unsigned int indices[] = { 0, 1, 2, 2, 1, 3, 4, 6, 5, 7, 8, 9 };
+	const unsigned int indices[] = {0, 1, 2, 2, 1, 3, 4, 6, 5, 7, 8, 9};
 	const size_t index_count = sizeof(indices) / sizeof(indices[0]);
 	const size_t vertex_count = 10;
 
@@ -648,12 +648,12 @@ void encodeVertexCoverage()
 	typedef PackedVertexOct PV;
 
 	const PV vertices[] =
-	{
-		{ 0, 0, 0, 0, 0, 0, 0 },
-		{ 300, 0, 0, 0, 0, 500, 0 },
-		{ 0, 300, 0, 0, 0, 0, 500 },
-		{ 300, 300, 0, 0, 0, 500, 500 },
-	};
+	    {
+	        {0, 0, 0, 0, 0, 0, 0},
+	        {300, 0, 0, 0, 0, 500, 0},
+	        {0, 300, 0, 0, 0, 0, 500},
+	        {300, 300, 0, 0, 0, 500, 500},
+	    };
 
 	const size_t vertex_count = 4;
 

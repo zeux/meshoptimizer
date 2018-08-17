@@ -6,8 +6,8 @@
 #include <cstdio>
 #include <ctime>
 
-#include <GLFW/glfw3.h>
 #include <GL/gl.h>
+#include <GLFW/glfw3.h>
 
 #ifdef _WIN32
 #pragma comment(lib, "opengl32.lib")

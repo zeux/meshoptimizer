@@ -1,5 +1,5 @@
-#include "../src/meshoptimizer.h"
 #include "../demo/objparser.h"
+#include "../src/meshoptimizer.h"
 
 #ifdef WITH_ZSTD
 #include <zstd.h>
@@ -7,10 +7,10 @@
 
 #include <algorithm>
 #include <cassert>
-#include <cmath>
-#include <ctime>
-#include <cstdio>
 #include <cfloat>
+#include <cmath>
+#include <cstdio>
+#include <ctime>
 #include <vector>
 
 #if defined(__linux__)
@@ -125,10 +125,10 @@ struct PackedVertexOct
 
 void packMesh(std::vector<PackedVertexOct>& pv, const std::vector<Vertex>& vertices, int bitsp, int bitst)
 {
-	float minp[3] = { +FLT_MAX, +FLT_MAX, +FLT_MAX };
-	float maxp[3] = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
-	float mint[2] = { +FLT_MAX, +FLT_MAX };
-	float maxt[2] = { -FLT_MAX, -FLT_MAX };
+	float minp[3] = {+FLT_MAX, +FLT_MAX, +FLT_MAX};
+	float maxp[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+	float mint[2] = {+FLT_MAX, +FLT_MAX};
+	float maxt[2] = {-FLT_MAX, -FLT_MAX};
 
 	for (size_t i = 0; i < vertices.size(); ++i)
 	{
@@ -219,9 +219,9 @@ int main(int argc, char** argv)
 		packMesh(pv, mesh.vertices, bitsp, bitst);
 
 		printf("baseline   : size: %d bytes; vb %.1f bpv, ib %.1f bpv\n",
-			int(pv.size() * sizeof(PV)) + int(mesh.indices.size() * sizeof(unsigned int)),
-			double(pv.size() * sizeof(PV) * 8) / double(pv.size()),
-			double(mesh.indices.size() * sizeof(unsigned int) * 8) / double(pv.size()));
+		       int(pv.size() * sizeof(PV)) + int(mesh.indices.size() * sizeof(unsigned int)),
+		       double(pv.size() * sizeof(PV) * 8) / double(pv.size()),
+		       double(mesh.indices.size() * sizeof(unsigned int) * 8) / double(pv.size()));
 
 		std::vector<PV> vbd(mesh.vertices.size());
 		std::vector<unsigned int> ibd(mesh.indices.size());
@@ -237,10 +237,10 @@ int main(int argc, char** argv)
 			double end = timestamp();
 
 			printf("zstd only  : size: %d bytes; vb %.1f bpv, ib %.1f bpv; decoding time: %.2f msec\n",
-				int(vbz.size() + ibz.size()),
-				double(vbz.size() * 8) / double(pv.size()),
-				double(ibz.size() * 8) / double(pv.size()),
-				(end - start) * 1000);
+			       int(vbz.size() + ibz.size()),
+			       double(vbz.size() * 8) / double(pv.size()),
+			       double(ibz.size() * 8) / double(pv.size()),
+			       (end - start) * 1000);
 		}
 #endif
 
@@ -258,10 +258,10 @@ int main(int argc, char** argv)
 			double end = timestamp();
 
 			printf("codec      : size: %d bytes; vb %.1f bpv, ib %.1f bpv; decoding time: %.2f msec\n",
-				int(vbuf.size() + ibuf.size()),
-				double(vbuf.size() * 8) / double(pv.size()),
-				double(ibuf.size() * 8) / double(pv.size()),
-				(end - start) * 1000);
+			       int(vbuf.size() + ibuf.size()),
+			       double(vbuf.size() * 8) / double(pv.size()),
+			       double(ibuf.size() * 8) / double(pv.size()),
+			       (end - start) * 1000);
 		}
 
 #ifdef WITH_ZSTD
@@ -280,10 +280,10 @@ int main(int argc, char** argv)
 			double end = timestamp();
 
 			printf("codec+zstd : size: %d bytes; vb %.1f bpv, ib %.1f bpv; decoding time: %.2f msec\n",
-				int(vbz.size() + ibz.size()),
-				double(vbz.size() * 8) / double(pv.size()),
-				double(ibz.size() * 8) / double(pv.size()),
-				(end - start) * 1000);
+			       int(vbz.size() + ibz.size()),
+			       double(vbz.size() * 8) / double(pv.size()),
+			       double(ibz.size() * 8) / double(pv.size()),
+			       (end - start) * 1000);
 		}
 #endif
 	}
