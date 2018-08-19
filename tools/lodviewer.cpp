@@ -6,7 +6,6 @@
 #include <cstdio>
 #include <ctime>
 
-#include <GL/gl.h>
 #include <GLFW/glfw3.h>
 
 #ifdef _WIN32
