@@ -2,10 +2,13 @@
 #include "meshoptimizer.h"
 
 #include <assert.h>
+#include <float.h>
 #include <math.h>
 #include <string.h>
 
+#ifndef TRACE
 #define TRACE 0
+#endif
 
 #if TRACE
 #include <stdio.h>
@@ -313,6 +316,46 @@ struct Vector3
 	float x, y, z;
 };
 
+static void rescalePositions(Vector3* result, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride)
+{
+	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
+
+	float minv[3] = {FLT_MAX, FLT_MAX, FLT_MAX};
+	float maxv[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		const float* v = vertex_positions_data + i * vertex_stride_float;
+
+		result[i].x = v[0];
+		result[i].y = v[1];
+		result[i].z = v[2];
+
+		for (int j = 0; j < 3; ++j)
+		{
+			float vj = v[j];
+
+			minv[j] = minv[j] > vj ? vj : minv[j];
+			maxv[j] = maxv[j] < vj ? vj : maxv[j];
+		}
+	}
+
+	float extent = 0.f;
+
+	extent = (maxv[0] - minv[0]) < extent ? extent : (maxv[0] - minv[0]);
+	extent = (maxv[1] - minv[1]) < extent ? extent : (maxv[1] - minv[1]);
+	extent = (maxv[2] - minv[2]) < extent ? extent : (maxv[2] - minv[2]);
+
+	float scale = extent == 0 ? 0.f : 1.f / extent;
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		result[i].x = (result[i].x - minv[0]) * scale;
+		result[i].y = (result[i].y - minv[1]) * scale;
+		result[i].z = (result[i].z - minv[2]) * scale;
+	}
+}
+
 struct Quadric
 {
 	float a00;
@@ -531,19 +574,8 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	       int(lockedstats[0]), int(lockedstats[1]), int(lockedstats[2]), int(lockedstats[3]));
 #endif
 
-	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
-
 	meshopt_Buffer<Vector3> vertex_positions(vertex_count);
-
-	// copy positions to make code slightly simpler and improve cache efficiency
-	for (size_t i = 0; i < vertex_count; ++i)
-	{
-		const float* v = vertex_positions_data + i * vertex_stride_float;
-
-		vertex_positions[i].x = v[0];
-		vertex_positions[i].y = v[1];
-		vertex_positions[i].z = v[2];
-	}
+	rescalePositions(vertex_positions.data, vertex_positions_data, vertex_count, vertex_positions_stride);
 
 	meshopt_Buffer<Quadric> vertex_quadrics(vertex_count);
 	memset(vertex_quadrics.data, 0, vertex_count * sizeof(Quadric));
