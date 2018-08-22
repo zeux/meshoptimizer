@@ -16,6 +16,7 @@
 
 // This work is based on:
 // Michael Garland and Paul S. Heckbert. Surface simplification using quadric error metrics. 1997
+// Michael Garland. Quadric-based polygonal surface simplification. 1999
 namespace meshopt
 {
 
@@ -457,10 +458,6 @@ static void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1
 
 	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance);
 
-	// Three classical weighting methods include weight=1, weight=area and weight=area^2
-	// We use weight=area for now
-	// TODO: Garland97 uses weight=1; with a different weight it might be important to normalize the sum in each vertex?
-	// TODO: area^2 might be the only way to achieve volume preservation
 	quadricMul(Q, area);
 }
 
@@ -477,11 +474,9 @@ static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3
 
 	float distance = normal.x * p0.x + normal.y * p0.y + normal.z * p0.z;
 
-	// TODO: We should be able to encode squared distance to the edge here?
 	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance);
 
-	// TODO: Lindstrom and Garland use length^2
-	quadricMul(Q, length * weight);
+	quadricMul(Q, length * length * weight);
 }
 
 static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapses, size_t collapse_count)
