@@ -489,6 +489,7 @@ static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapse
 
 	for (size_t i = 0; i < collapse_count; ++i)
 	{
+		// skip sign bit since error is non-negative
 		unsigned int key = (collapses[i].errorui << 1) >> (32 - sort_bits);
 
 		histogram[key]++;
