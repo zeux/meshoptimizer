@@ -370,13 +370,14 @@ void simplify(const Mesh& mesh)
 
 		float threshold = powf(0.7f, float(i));
 		size_t target_index_count = size_t(mesh.indices.size() * threshold) / 3 * 3;
+		float target_error = 1e-3f;
 
 		// we can simplify all the way from base level or from the last result
 		// simplifying from the base level sometimes produces better results, but simplifying from last level is faster
 		const std::vector<unsigned int>& source = lods[i - 1];
 
 		lod.resize(source.size());
-		lod.resize(meshopt_simplify(&lod[0], &source[0], source.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), std::min(source.size(), target_index_count)));
+		lod.resize(meshopt_simplify(&lod[0], &source[0], source.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), std::min(source.size(), target_index_count), target_error));
 	}
 
 	double middle = timestamp();

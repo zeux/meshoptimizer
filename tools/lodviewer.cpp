@@ -99,11 +99,12 @@ Mesh optimize(const Mesh& mesh, int lod)
 {
 	float threshold = powf(0.7f, float(lod));
 	size_t target_index_count = size_t(mesh.indices.size() * threshold);
+	float target_error = 1e-3f;
 
 	Mesh result = mesh;
 	result.kinds.resize(result.vertices.size());
 	meshopt_simplifyDebugKind = &result.kinds[0];
-	result.indices.resize(meshopt_simplify(&result.indices[0], &result.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count));
+	result.indices.resize(meshopt_simplify(&result.indices[0], &result.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error));
 
 	return result;
 }

@@ -521,7 +521,7 @@ static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapse
 // TODO: this is necessary for lodviewer but will go away at some point
 unsigned char* meshopt_simplifyDebugKind = 0;
 
-size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count)
+size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error)
 {
 	using namespace meshopt;
 
@@ -688,7 +688,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 			}
 		}
 
-		// no edges can be collapsed any more => bail out
+		// no edges can be collapsed any more due to topology restrictions => bail out
 		if (edge_collapse_count == 0)
 			break;
 
@@ -707,8 +707,12 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		size_t collapses = 0;
 		float pass_error = 0;
 
-		float error_goal = edge_collapses[collapse_order[edge_collapse_goal < edge_collapse_count ? edge_collapse_goal : edge_collapse_count - 1]].error;
-		float error_limit = error_goal * 1.5f;
+		float error_goal = edge_collapse_goal < edge_collapse_count ? edge_collapses[collapse_order[edge_collapse_goal]].error * 1.5f : FLT_MAX;
+		float error_limit = error_goal > target_error ? target_error : error_goal;
+
+		// no edges can be collapsed any more due to hitting the error limit => bail out
+		if (edge_collapses[collapse_order[0]].error > error_limit)
+			break;
 
 		for (size_t i = 0; i < edge_collapse_count; ++i)
 		{
