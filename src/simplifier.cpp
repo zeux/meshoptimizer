@@ -617,9 +617,11 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 			unsigned int i0 = indices[i + e];
 			unsigned int i1 = indices[i + next[e]];
 
+			// TODO: do we need to check vertex_kind[i1]? i0 can be locked and i1 can be seam...
 			if (vertex_kind[i0] != Kind_Border && vertex_kind[i0] != Kind_Seam)
 				continue;
 
+			// TODO: should this use wedge or edge search?
 			if (findEdge(adjacency, i1, i0))
 				continue;
 
@@ -677,11 +679,15 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 				if (!kCanCollapse[vertex_kind[i0]][vertex_kind[i1]])
 					continue;
 
-				// TODO: we currently push the same collapse twice for manifold edges
-				// TODO: needs cleanup in general...
+				// TODO: Garland97 uses Q1+Q2 for error estimation; here we asssume that V1 produces zero error for Q1 but it actually gets larger with more collapses
 				if (vertex_kind[i0] == vertex_kind[i1])
 				{
-					// TODO: Garland97 uses Q1+Q2 for error estimation; here we asssume that V1 produces zero error for Q1 but it actually gets larger with more collapses
+					// manifold edges should occur twice (i0->i1 and i1->i0) - skip redundant edges
+					// TODO: this should also work for seam edges, but it increases the error on some models...
+					if (vertex_kind[i0] == Kind_Manifold && i1 > i0)
+						continue;
+
+					// if vertex kinds match, we can collapse the edge in either direction - pick the one with minimum error
 					Collapse c01 = {i0, i1, {quadricError(vertex_quadrics[remap[i0]], vertex_positions[i1])}};
 					Collapse c10 = {i1, i0, {quadricError(vertex_quadrics[remap[i1]], vertex_positions[i0])}};
 					Collapse c = c01.error <= c10.error ? c01 : c10;
@@ -691,6 +697,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 				}
 				else
 				{
+					// if vertex kinds are different, edge can only be collapsed in one direction
 					Collapse c = {i0, i1, {quadricError(vertex_quadrics[remap[i0]], vertex_positions[i1])}};
 					assert(c.error >= 0);
 
@@ -713,6 +720,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		memset(collapse_locked.data, 0, vertex_count);
 
 		// each collapse removes 2 triangles
+		// TODO: except for border collapses :) this can lead to a few small passes in the end
 		size_t edge_collapse_goal = (index_count - target_index_count) / 6 + 1;
 
 		size_t collapses = 0;
@@ -748,6 +756,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 			assert(collapse_remap[r0] == r0);
 			assert(collapse_remap[r1] == r1);
 
+			// TODO: this artificially magnifies future error with each collapse even for coplanar triangles
 			quadricAdd(vertex_quadrics[r1], vertex_quadrics[r0]);
 
 			if (vertex_kind[c.v0] == Kind_Seam)
