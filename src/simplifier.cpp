@@ -163,9 +163,9 @@ static T* hashLookup2(T* table, size_t buckets, const Hash& hash, const T& key, 
 	return 0;
 }
 
-static void buildPositionRemap(unsigned int* remap, unsigned int* reverse_remap, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride)
+static void buildPositionRemap(unsigned int* remap, unsigned int* wedge, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride)
 {
-	PositionHasher hasher = {vertex_positions_data, vertex_positions_stride / sizeof(float)};
+	PositionHasher hasher = { vertex_positions_data, vertex_positions_stride / sizeof(float) };
 
 	size_t table_size = hashBuckets2(vertex_count);
 	meshopt_Buffer<unsigned int> table(table_size);
@@ -192,20 +192,18 @@ static void buildPositionRemap(unsigned int* remap, unsigned int* reverse_remap,
 		}
 	}
 
-	// build reverse remap table: for each vertex, which other vertex remaps to this one?
-	// this is a many-to-one relationship, but we only identify vertices for which it's 2-1 (so a pair of vertices)
+	// build wedge table: for each vertex, which other vertex is the next wedge that also maps to the same vertex?
+	// entries in table form a (cyclic) wedge loop per vertex; for manifold vertices, wedge[i] == remap[i] == i
 	for (size_t i = 0; i < vertex_count; ++i)
-		reverse_remap[i] = unsigned(i);
+		wedge[i] = unsigned(i);
 
 	for (size_t i = 0; i < vertex_count; ++i)
 		if (remap[i] != i)
 		{
-			// first vertex to remap to remap[i]: keep
-			if (reverse_remap[remap[i]] == remap[i])
-				reverse_remap[remap[i]] = unsigned(i);
-			// more than one vertex, invalidate entry
-			else
-				reverse_remap[remap[i]] = ~0u;
+			unsigned int r = remap[i];
+
+			wedge[i] = wedge[r];
+			wedge[r] = unsigned(i);
 		}
 }
 
@@ -222,6 +220,8 @@ enum VertexKind
 // manifold vertices can collapse on anything except locked
 // border/seam vertices can only be collapsed onto border/seam respectively
 // TODO: seam->seam collapses don't make sure the collapse is along a seam edge
+// TODO: allow border->locked collapses?
+// TODO: allow seam->locked collapses?
 const char kCanCollapse[Kind_Count][Kind_Count] = {
     {1, 1, 1, 1},
     {0, 1, 0, 0},
@@ -248,13 +248,29 @@ static size_t countOpenEdges(const EdgeAdjacency& adjacency, unsigned int vertex
 	return result;
 }
 
-static void classifyVertices(unsigned char* result, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* reverse_remap, size_t lockedstats[4])
+static bool findWedgeEdge(const EdgeAdjacency& adjacency, const unsigned int* wedge, unsigned int a, unsigned int b)
+{
+	unsigned int v = a;
+
+	do
+	{
+		if (findEdge(adjacency, v, b))
+			return true;
+
+		v = wedge[v];
+	}
+	while (v != a);
+
+	return false;
+}
+
+static void classifyVertices(unsigned char* result, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* wedge, size_t lockedstats[4])
 {
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
 		if (remap[i] == i)
 		{
-			if (reverse_remap[i] == i)
+			if (wedge[i] == i)
 			{
 				// no attribute seam, need to check if it's manifold
 				size_t edges = countOpenEdges(adjacency, unsigned(i));
@@ -271,23 +287,19 @@ static void classifyVertices(unsigned char* result, size_t vertex_count, const E
 				else
 					result[i] = Kind_Locked, lockedstats[0]++;
 			}
-			else if (reverse_remap[i] != ~0u)
+			else if (wedge[wedge[i]] == i)
 			{
 				// attribute seam; need to distinguish between Seam and Locked
 				unsigned int a = 0;
 				size_t a_count = countOpenEdges(adjacency, unsigned(i), &a);
 				unsigned int b = 0;
-				size_t b_count = countOpenEdges(adjacency, reverse_remap[i], &b);
+				size_t b_count = countOpenEdges(adjacency, wedge[i], &b);
 
 				// seam should have one open half-edge for each vertex, and the edges need to "connect" - point to the same vertex post-remap
 				if (a_count == 1 && b_count == 1)
 				{
-					// "flip" a & b between one side of the seam and the other
-					unsigned int af = (remap[a] == a) ? reverse_remap[a] : remap[a];
-					unsigned int bf = (remap[b] == b) ? reverse_remap[b] : remap[b];
-
-					if (af != ~0u && findEdge(adjacency, af, reverse_remap[i]) &&
-					    bf != ~0u && findEdge(adjacency, bf, unsigned(i)))
+					if (findWedgeEdge(adjacency, wedge, a, wedge[i]) &&
+						findWedgeEdge(adjacency, wedge, b, unsigned(i)))
 						result[i] = Kind_Seam;
 					else
 						result[i] = Kind_Locked, lockedstats[1]++;
@@ -538,17 +550,17 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 	// build position remap that maps each vertex to the one with identical position
 	meshopt_Buffer<unsigned int> remap(vertex_count);
-	meshopt_Buffer<unsigned int> reverse_remap(vertex_count);
-	buildPositionRemap(remap.data, reverse_remap.data, vertex_positions_data, vertex_count, vertex_positions_stride);
+	meshopt_Buffer<unsigned int> wedge(vertex_count);
+	buildPositionRemap(remap.data, wedge.data, vertex_positions_data, vertex_count, vertex_positions_stride);
 
 	// TODO: maybe make this an option? this disables seam awareness
-	// for (size_t i = 0; i < vertex_count; ++i) remap[i] = reverse_remap[i] = unsigned(i);
+	// for (size_t i = 0; i < vertex_count; ++i) remap[i] = wedge[i] = unsigned(i);
 
 	size_t lockedstats[4] = {};
 
 	// classify vertices; vertex kind determines collapse rules, see kCanCollapse
 	meshopt_Buffer<unsigned char> vertex_kind(vertex_count);
-	classifyVertices(vertex_kind.data, vertex_count, adjacency, remap.data, reverse_remap.data, lockedstats);
+	classifyVertices(vertex_kind.data, vertex_count, adjacency, remap.data, wedge.data, lockedstats);
 
 	if (meshopt_simplifyDebugKind)
 		memcpy(meshopt_simplifyDebugKind, vertex_kind.data, vertex_count);
@@ -728,9 +740,9 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 				break;
 
 #if TRACE > 1
-			printf("collapse: %d (kind %d r %d rr %d) => %d (kind %d r %d rr %d); error %e\n",
-			       c.v0, vertex_kind[c.v0], remap[c.v0], reverse_remap[c.v0],
-			       c.v1, vertex_kind[c.v1], remap[c.v1], reverse_remap[c.v1],
+			printf("collapse: %d (kind %d r %d w %d) => %d (kind %d r %d w %d); error %e\n",
+			       c.v0, vertex_kind[c.v0], remap[c.v0], wedge[c.v0],
+			       c.v1, vertex_kind[c.v1], remap[c.v1], wedge[c.v1],
 			       c.error);
 #endif
 
@@ -742,18 +754,17 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 			if (vertex_kind[c.v0] == Kind_Seam)
 			{
 				// remap v0 to v1 and seam pair of v0 to seam pair of v1
-				unsigned int s0 = c.v0 == r0 ? reverse_remap[r0] : r0;
-				unsigned int s1 = c.v1 == r1 ? reverse_remap[r1] : r1;
+				unsigned int s0 = wedge[c.v0];
+				unsigned int s1 = wedge[c.v1];
 
-				assert(s0 != ~0u && s0 != c.v0);
-				assert(s1 != ~0u && s1 != c.v1);
+				assert(s0 != c.v0 && s1 != c.v1);
 
 				collapse_remap[c.v0] = c.v1;
 				collapse_remap[s0] = s1;
 			}
 			else
 			{
-				assert(c.v0 == r0 && reverse_remap[r0] == r0);
+				assert(wedge[c.v0] == c.v0);
 
 				collapse_remap[c.v0] = c.v1;
 			}
