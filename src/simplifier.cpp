@@ -78,18 +78,6 @@ static void buildEdgeAdjacency(EdgeAdjacency& adjacency, const unsigned int* ind
 	}
 }
 
-static bool findEdge(const EdgeAdjacency& adjacency, unsigned int a, unsigned int b)
-{
-	unsigned int count = adjacency.counts[a];
-	const unsigned int* data = adjacency.data.data + adjacency.offsets[a];
-
-	for (size_t i = 0; i < count; ++i)
-		if (data[i] == b)
-			return true;
-
-	return false;
-}
-
 struct PositionHasher
 {
 	const float* vertex_positions;
@@ -165,7 +153,7 @@ static T* hashLookup2(T* table, size_t buckets, const Hash& hash, const T& key, 
 
 static void buildPositionRemap(unsigned int* remap, unsigned int* wedge, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride)
 {
-	PositionHasher hasher = { vertex_positions_data, vertex_positions_stride / sizeof(float) };
+	PositionHasher hasher = {vertex_positions_data, vertex_positions_stride / sizeof(float)};
 
 	size_t table_size = hashBuckets2(vertex_count);
 	meshopt_Buffer<unsigned int> table(table_size);
@@ -229,6 +217,33 @@ const char kCanCollapse[Kind_Count][Kind_Count] = {
     {0, 0, 0, 0},
 };
 
+static bool findEdge(const EdgeAdjacency& adjacency, unsigned int a, unsigned int b)
+{
+	unsigned int count = adjacency.counts[a];
+	const unsigned int* data = adjacency.data.data + adjacency.offsets[a];
+
+	for (size_t i = 0; i < count; ++i)
+		if (data[i] == b)
+			return true;
+
+	return false;
+}
+
+static bool findWedgeEdge(const EdgeAdjacency& adjacency, const unsigned int* wedge, unsigned int a, unsigned int b)
+{
+	unsigned int v = a;
+
+	do
+	{
+		if (findEdge(adjacency, v, b))
+			return true;
+
+		v = wedge[v];
+	} while (v != a);
+
+	return false;
+}
+
 static size_t countOpenEdges(const EdgeAdjacency& adjacency, unsigned int vertex, unsigned int* last = 0)
 {
 	size_t result = 0;
@@ -246,22 +261,6 @@ static size_t countOpenEdges(const EdgeAdjacency& adjacency, unsigned int vertex
 		}
 
 	return result;
-}
-
-static bool findWedgeEdge(const EdgeAdjacency& adjacency, const unsigned int* wedge, unsigned int a, unsigned int b)
-{
-	unsigned int v = a;
-
-	do
-	{
-		if (findEdge(adjacency, v, b))
-			return true;
-
-		v = wedge[v];
-	}
-	while (v != a);
-
-	return false;
 }
 
 static void classifyVertices(unsigned char* result, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* wedge, size_t lockedstats[4])
@@ -299,7 +298,7 @@ static void classifyVertices(unsigned char* result, size_t vertex_count, const E
 				if (a_count == 1 && b_count == 1)
 				{
 					if (findWedgeEdge(adjacency, wedge, a, wedge[i]) &&
-						findWedgeEdge(adjacency, wedge, b, unsigned(i)))
+					    findWedgeEdge(adjacency, wedge, b, unsigned(i)))
 						result[i] = Kind_Seam;
 					else
 						result[i] = Kind_Locked, lockedstats[1]++;
