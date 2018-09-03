@@ -568,6 +568,12 @@ static size_t fillEdgeCollapses(Collapse* collapses, const unsigned int* indices
 			if (remap[i0] == remap[i1])
 				continue;
 
+			// TODO: this logic is sort of tricky
+			// we only check collapse in a unidirectional way, but we ignore the fact that the edge can be flipped
+			// that is, given a a->b edge, if we see it as b->a, we can still collapse it as a->b.
+			// this works because edges like this with different kinds imply that one of the kinds is manifold (due to how kCanCollapse is built)
+			// for manifold vertices, all adjoining edges have an edge pair so this just effectively filters out redundancy
+			// it seems like we should spell all of this out in code explicitly.
 			if (!kCanCollapse[vertex_kind[i0]][vertex_kind[i1]])
 				continue;
 
