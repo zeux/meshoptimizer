@@ -604,6 +604,32 @@ static size_t fillEdgeCollapses(Collapse* collapses, const unsigned int* indices
 		}
 	}
 
+#if TRACE
+	size_t ckinds[Kind_Count][Kind_Count] = {};
+	float cerrors[Kind_Count][Kind_Count] = {};
+
+	for (int k0 = 0; k0 < Kind_Count; ++k0)
+		for (int k1 = 0; k1 < Kind_Count; ++k1)
+			cerrors[k0][k1] = FLT_MAX;
+
+	for (size_t i = 0; i < collapse_count; ++i)
+	{
+		unsigned int i0 = collapses[i].v0;
+		unsigned int i1 = collapses[i].v1;
+
+		unsigned char k0 = vertex_kind[i0];
+		unsigned char k1 = vertex_kind[i1];
+
+		ckinds[k0][k1]++;
+		cerrors[k0][k1] = (collapses[i].error < cerrors[k0][k1]) ? collapses[i].error : cerrors[k0][k1];
+	}
+
+	for (int k0 = 0; k0 < Kind_Count; ++k0)
+		for (int k1 = 0; k1 < Kind_Count; ++k1)
+			if (ckinds[k0][k1])
+				printf("collapses %d -> %d: %d, min error %e\n", k0, k1, int(ckinds[k0][k1]), cerrors[k0][k1]);
+#endif
+
 	return collapse_count;
 }
 
