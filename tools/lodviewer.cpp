@@ -233,6 +233,7 @@ struct File
 
 std::vector<File> files;
 Options options;
+bool redraw;
 
 void keyhandler(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
@@ -241,22 +242,27 @@ void keyhandler(GLFWwindow* window, int key, int scancode, int action, int mods)
 		if (key == GLFW_KEY_W)
 		{
 			options.wireframe = !options.wireframe;
+			redraw = true;
 		}
 		else if (key == GLFW_KEY_T)
 		{
 			options.mode = options.mode == Options::Mode_Texture ? Options::Mode_Default : Options::Mode_Texture;
+			redraw = true;
 		}
 		else if (key == GLFW_KEY_N)
 		{
 			options.mode = options.mode == Options::Mode_Normals ? Options::Mode_Default : Options::Mode_Normals;
+			redraw = true;
 		}
 		else if (key == GLFW_KEY_U)
 		{
 			options.mode = options.mode == Options::Mode_UV ? Options::Mode_Default : Options::Mode_UV;
+			redraw = true;
 		}
 		else if (key == GLFW_KEY_K)
 		{
 			options.mode = options.mode == Options::Mode_Kind ? Options::Mode_Default : Options::Mode_Kind;
+			redraw = true;
 		}
 		else if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9)
 		{
@@ -273,8 +279,14 @@ void keyhandler(GLFWwindow* window, int key, int scancode, int action, int mods)
 			clock_t end = clock();
 
 			stats(window, files[0].path, triangles, lod, double(end - start) / CLOCKS_PER_SEC);
+			redraw = true;
 		}
 	}
+}
+
+void sizehandler(GLFWwindow* window, int width, int height)
+{
+	redraw = true;
 }
 
 int main(int argc, char** argv)
@@ -307,32 +319,41 @@ int main(int argc, char** argv)
 	stats(window, files[0].path, basetriangles, 0, 0);
 
 	glfwSetKeyCallback(window, keyhandler);
+	glfwSetWindowSizeCallback(window, sizehandler);
+
+	redraw = true;
 
 	while (!glfwWindowShouldClose(window))
 	{
-		int width, height;
-		glfwGetFramebufferSize(window, &width, &height);
-
-		glViewport(0, 0, width, height);
-		glClearDepth(1.f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-		int cols = int(ceil(sqrt(double(files.size()))));
-		int rows = int(ceil(double(files.size()) / cols));
-
-		int tilew = width / cols;
-		int tileh = height / rows;
-
-		for (size_t i = 0; i < files.size(); ++i)
+		if (redraw)
 		{
-			File& f = files[i];
-			int x = int(i) % cols;
-			int y = int(i) / cols;
+			redraw = false;
 
-			display(x * tilew, y * tileh, tilew, tileh, f.lodmesh, options);
+			int width, height;
+			glfwGetFramebufferSize(window, &width, &height);
+
+			glViewport(0, 0, width, height);
+			glClearDepth(1.f);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+			int cols = int(ceil(sqrt(double(files.size()))));
+			int rows = int(ceil(double(files.size()) / cols));
+
+			int tilew = width / cols;
+			int tileh = height / rows;
+
+			for (size_t i = 0; i < files.size(); ++i)
+			{
+				File& f = files[i];
+				int x = int(i) % cols;
+				int y = int(i) / cols;
+
+				display(x * tilew, y * tileh, tilew, tileh, f.lodmesh, options);
+			}
+
+			glfwSwapBuffers(window);
 		}
 
-		glfwSwapBuffers(window);
-		glfwPollEvents();
+		glfwWaitEvents();
 	}
 }
