@@ -797,14 +797,6 @@ void remapEdgeLoops(unsigned int* loop, size_t vertex_count, const unsigned int*
 			}
 		}
 	}
-
-	for (size_t i = 0; i < vertex_count; ++i)
-	{
-		if (collapse_remap[i] != i)
-		{
-			loop[i] = ~0u;
-		}
-	}
 }
 
 } // namespace meshopt
