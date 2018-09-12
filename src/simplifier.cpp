@@ -207,7 +207,6 @@ enum VertexKind
 
 // manifold vertices can collapse on anything except locked
 // border/seam vertices can only be collapsed onto border/seam respectively
-// TODO: seam->seam collapses don't make sure the collapse is along a seam edge
 // TODO: allow border->locked collapses? to make these work we might need to compute loop metadata for them? somehow?
 // TODO: allow seam->locked collapses? to make these work we might need to compute loop metadata for them? somehow?
 const char kCanCollapse[Kind_Count][Kind_Count] = {
@@ -284,14 +283,18 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, size_t v
 				// also note that we classify vertices as border if they have *one* open edge, not two
 				// this is because we only have half-edges - so a border vertex would have one incoming and one outgoing edge
 				if (edges == 0)
+				{
 					result[i] = Kind_Manifold;
+				}
 				else if (edges == 1)
 				{
 					result[i] = Kind_Border;
 					loop[i] = v;
 				}
 				else
+				{
 					result[i] = Kind_Locked, lockedstats[0]++;
+				}
 			}
 			else if (wedge[wedge[i]] == i)
 			{
@@ -314,12 +317,12 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, size_t v
 						result[i] = Kind_Seam;
 
 						loop[i] = a;
-
-						assert(loop[wedge[i]] == ~0u);
 						loop[wedge[i]] = b;
 					}
 					else
+					{
 						result[i] = Kind_Locked, lockedstats[1]++;
+					}
 				}
 				else
 				{
@@ -598,18 +601,14 @@ static size_t fillEdgeCollapses(Collapse* collapses, const unsigned int* indices
 			// TODO: Garland97 uses Q1+Q2 for error estimation; here we asssume that V1 produces zero error for Q1 but it actually gets larger with more collapses
 			if (vertex_kind[i0] == vertex_kind[i1])
 			{
-				// manifold edges should occur twice (i0->i1 and i1->i0) - skip redundant edges
-				// TODO: this should also work for seam edges, but it increases the error on some models...
-				if (vertex_kind[i0] == Kind_Manifold && i1 > i0)
+				// manifold and seam edges should occur twice (i0->i1 and i1->i0) - skip redundant edges
+				if ((vertex_kind[i0] == Kind_Manifold || vertex_kind[i0] == Kind_Seam) && remap[i1] > remap[i0])
 					continue;
 
-				if (vertex_kind[i0] == Kind_Border || vertex_kind[i0] == Kind_Seam)
-				{
-					// two vertices are on a border or a seam, but there's no direct edge between them
-					// this indicates that they belong to two different edge loops and we should not collapse this edge
-					if (loop[i0] != i1 && loop[i1] != i0)
-						continue;
-				}
+				// two vertices are on a border or a seam, but there's no direct edge between them
+				// this indicates that they belong to two different edge loops and we should not collapse this edge
+				if ((vertex_kind[i0] == Kind_Border || vertex_kind[i0] == Kind_Seam) && loop[i0] != i1 && loop[i1] != i0)
+					continue;
 
 				// if vertex kinds match, we can collapse the edge in either direction - pick the one with minimum error
 				Collapse c01 = {i0, i1, {quadricError(vertex_quadrics[remap[i0]], vertex_positions[i1])}};
@@ -783,18 +782,11 @@ void remapEdgeLoops(unsigned int* loop, size_t vertex_count, const unsigned int*
 	{
 		if (loop[i] != ~0u)
 		{
-			unsigned int a = unsigned(i);
-			unsigned int b = loop[i];
+			unsigned int l = loop[i];
+			unsigned int r = collapse_remap[l];
 
-			// special case when the seam edge is collapsed in a direction opposite to where loop goes
-			if (collapse_remap[b] == a)
-			{
-				loop[a] = loop[b];
-			}
-			else
-			{
-				loop[a] = collapse_remap[b];
-			}
+			// i == r is a special case when the seam edge is collapsed in a direction opposite to where loop goes
+			loop[i] = (i == r) ? loop[l] : r;
 		}
 	}
 }
@@ -828,6 +820,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	// TODO: maybe make this an option? this disables seam awareness
 	// for (size_t i = 0; i < vertex_count; ++i) remap[i] = wedge[i] = unsigned(i);
 
+	// TODO: remove this when TRACE is removed
 	size_t lockedstats[4] = {};
 
 	// classify vertices; vertex kind determines collapse rules, see kCanCollapse
