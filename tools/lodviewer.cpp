@@ -13,6 +13,7 @@
 #endif
 
 extern unsigned char* meshopt_simplifyDebugKind;
+extern unsigned int* meshopt_simplifyDebugLoop;
 
 struct Options
 {
@@ -38,7 +39,10 @@ struct Mesh
 {
 	std::vector<Vertex> vertices;
 	std::vector<unsigned int> indices;
+
+	// TODO: this is debug only visualization and will go away at some point
 	std::vector<unsigned char> kinds;
+	std::vector<unsigned int> loop;
 };
 
 static Mesh parseObj(const char* path)
@@ -103,7 +107,9 @@ Mesh optimize(const Mesh& mesh, int lod)
 
 	Mesh result = mesh;
 	result.kinds.resize(result.vertices.size());
+	result.loop.resize(result.vertices.size());
 	meshopt_simplifyDebugKind = &result.kinds[0];
+	meshopt_simplifyDebugLoop = &result.loop[0];
 	result.indices.resize(meshopt_simplify(&result.indices[0], &result.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error));
 
 	return result;
@@ -115,6 +121,10 @@ void display(int x, int y, int width, int height, const Mesh& mesh, const Option
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS);
 	glDepthMask(GL_TRUE);
+
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+	glRotatef(0.f, 0.f, 1.f, 0.f);
 
 	glPolygonMode(GL_FRONT_AND_BACK, options.wireframe ? GL_LINE : GL_FILL);
 
@@ -194,9 +204,35 @@ void display(int x, int y, int width, int height, const Mesh& mesh, const Option
 
 	glEnd();
 
-	if (options.mode == Options::Mode_Kind && !mesh.kinds.empty())
+	float zbias = 1e-3f;
+
+	if (options.mode == Options::Mode_Kind && !mesh.kinds.empty() && !mesh.loop.empty())
 	{
-		glPointSize(2);
+		glLineWidth(1);
+
+		glBegin(GL_LINES);
+
+		for (size_t i = 0; i < mesh.indices.size(); ++i)
+		{
+			unsigned int a = mesh.indices[i];
+			unsigned int b = mesh.loop[a];
+
+			if (b != ~0u)
+			{
+				const Vertex& v0 = mesh.vertices[a];
+				const Vertex& v1 = mesh.vertices[b];
+
+				unsigned char kind = mesh.kinds[a];
+
+				glColor3f(kind == 0 || kind == 3, kind == 0 || kind == 2, kind == 0 || kind == 1);
+				glVertex3f((v0.px - centerx) / extent * scalex, (v0.py - centery) / extent * scaley, (v0.pz - centerz) / extent - zbias);
+				glVertex3f((v1.px - centerx) / extent * scalex, (v1.py - centery) / extent * scaley, (v1.pz - centerz) / extent - zbias);
+			}
+		}
+
+		glEnd();
+
+		glPointSize(3);
 
 		glBegin(GL_POINTS);
 
@@ -208,7 +244,7 @@ void display(int x, int y, int width, int height, const Mesh& mesh, const Option
 			if (kind != 0)
 			{
 				glColor3f(kind == 0 || kind == 3, kind == 0 || kind == 2, kind == 0 || kind == 1);
-				glVertex3f((v.px - centerx) / extent * scalex, (v.py - centery) / extent * scaley, (v.pz - centerz) / extent);
+				glVertex3f((v.px - centerx) / extent * scalex, (v.py - centery) / extent * scaley, (v.pz - centerz) / extent - zbias * 2);
 			}
 		}
 
