@@ -208,8 +208,8 @@ enum VertexKind
 // manifold vertices can collapse on anything except locked
 // border/seam vertices can only be collapsed onto border/seam respectively
 // TODO: seam->seam collapses don't make sure the collapse is along a seam edge
-// TODO: allow border->locked collapses?
-// TODO: allow seam->locked collapses?
+// TODO: allow border->locked collapses? to make these work we might need to compute loop metadata for them? somehow?
+// TODO: allow seam->locked collapses? to make these work we might need to compute loop metadata for them? somehow?
 const char kCanCollapse[Kind_Count][Kind_Count] = {
     {1, 1, 1, 1},
     {0, 1, 0, 0},
@@ -217,7 +217,7 @@ const char kCanCollapse[Kind_Count][Kind_Count] = {
     {0, 0, 0, 0},
 };
 
-static bool findEdge(const EdgeAdjacency& adjacency, unsigned int a, unsigned int b)
+static bool hasEdge(const EdgeAdjacency& adjacency, unsigned int a, unsigned int b)
 {
 	unsigned int count = adjacency.counts[a];
 	const unsigned int* data = adjacency.data.data + adjacency.offsets[a];
@@ -229,19 +229,19 @@ static bool findEdge(const EdgeAdjacency& adjacency, unsigned int a, unsigned in
 	return false;
 }
 
-static bool findWedgeEdge(const EdgeAdjacency& adjacency, const unsigned int* wedge, unsigned int a, unsigned int b)
+static unsigned int findWedgeEdge(const EdgeAdjacency& adjacency, const unsigned int* wedge, unsigned int a, unsigned int b)
 {
 	unsigned int v = a;
 
 	do
 	{
-		if (findEdge(adjacency, v, b))
-			return true;
+		if (hasEdge(adjacency, v, b))
+			return v;
 
 		v = wedge[v];
 	} while (v != a);
 
-	return false;
+	return ~0u;
 }
 
 static size_t countOpenEdges(const EdgeAdjacency& adjacency, unsigned int vertex, unsigned int* last = 0)
@@ -252,7 +252,7 @@ static size_t countOpenEdges(const EdgeAdjacency& adjacency, unsigned int vertex
 	const unsigned int* data = adjacency.data.data + adjacency.offsets[vertex];
 
 	for (size_t i = 0; i < count; ++i)
-		if (!findEdge(adjacency, data[i], vertex))
+		if (!hasEdge(adjacency, data[i], vertex))
 		{
 			result++;
 
@@ -263,8 +263,11 @@ static size_t countOpenEdges(const EdgeAdjacency& adjacency, unsigned int vertex
 	return result;
 }
 
-static void classifyVertices(unsigned char* result, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* wedge, size_t lockedstats[4])
+static void classifyVertices(unsigned char* result, unsigned int* loop, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* wedge, size_t lockedstats[4])
 {
+	for (size_t i = 0; i < vertex_count; ++i)
+		loop[i] = ~0u;
+
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
 		if (remap[i] == i)
@@ -272,7 +275,8 @@ static void classifyVertices(unsigned char* result, size_t vertex_count, const E
 			if (wedge[i] == i)
 			{
 				// no attribute seam, need to check if it's manifold
-				size_t edges = countOpenEdges(adjacency, unsigned(i));
+				unsigned int v = 0;
+				size_t edges = countOpenEdges(adjacency, unsigned(i), &v);
 
 				// note: we classify any vertices with no open edges as manifold
 				// this is technically incorrect - if 4 triangles share an edge, we'll classify vertices as manifold
@@ -282,7 +286,10 @@ static void classifyVertices(unsigned char* result, size_t vertex_count, const E
 				if (edges == 0)
 					result[i] = Kind_Manifold;
 				else if (edges == 1)
+				{
 					result[i] = Kind_Border;
+					loop[i] = v;
+				}
 				else
 					result[i] = Kind_Locked, lockedstats[0]++;
 			}
@@ -297,9 +304,20 @@ static void classifyVertices(unsigned char* result, size_t vertex_count, const E
 				// seam should have one open half-edge for each vertex, and the edges need to "connect" - point to the same vertex post-remap
 				if (a_count == 1 && b_count == 1)
 				{
-					if (findWedgeEdge(adjacency, wedge, a, wedge[i]) &&
-					    findWedgeEdge(adjacency, wedge, b, unsigned(i)))
+					// TODO: if ao == a or bo == b, we have a seam that connects both vertex pairs to the same target vertex
+					// does this still mean the vertex can be a seam vertex?
+					unsigned int ao = findWedgeEdge(adjacency, wedge, a, wedge[i]);
+					unsigned int bo = findWedgeEdge(adjacency, wedge, b, unsigned(i));
+
+					if (ao != ~0u && bo != ~0u)
+					{
 						result[i] = Kind_Seam;
+
+						loop[i] = a;
+
+						assert(loop[wedge[i]] == ~0u);
+						loop[wedge[i]] = b;
+					}
 					else
 						result[i] = Kind_Locked, lockedstats[1]++;
 				}
@@ -528,7 +546,7 @@ static size_t fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* ind
 				continue;
 
 			// TODO: should this use wedge or edge search?
-			if (findEdge(adjacency, i1, i0))
+			if (hasEdge(adjacency, i1, i0))
 				continue;
 
 			unsigned int i2 = indices[i + next[next[e]]];
@@ -551,7 +569,7 @@ static size_t fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* ind
 	return boundary;
 }
 
-static size_t fillEdgeCollapses(Collapse* collapses, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const Quadric* vertex_quadrics, const unsigned int* remap, const unsigned char* vertex_kind)
+static size_t fillEdgeCollapses(Collapse* collapses, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const Quadric* vertex_quadrics, const unsigned int* remap, const unsigned char* vertex_kind, const unsigned int* loop)
 {
 	size_t collapse_count = 0;
 
@@ -584,6 +602,14 @@ static size_t fillEdgeCollapses(Collapse* collapses, const unsigned int* indices
 				// TODO: this should also work for seam edges, but it increases the error on some models...
 				if (vertex_kind[i0] == Kind_Manifold && i1 > i0)
 					continue;
+
+				if (vertex_kind[i0] == Kind_Border || vertex_kind[i0] == Kind_Seam)
+				{
+					// two vertices are on a border or a seam, but there's no direct edge between them
+					// this indicates that they belong to two different edge loops and we should not collapse this edge
+					if (loop[i0] != i1 && loop[i1] != i0)
+						continue;
+				}
 
 				// if vertex kinds match, we can collapse the edge in either direction - pick the one with minimum error
 				Collapse c01 = {i0, i1, {quadricError(vertex_quadrics[remap[i0]], vertex_positions[i1])}};
@@ -751,10 +777,41 @@ static size_t remapIndexBuffer(unsigned int* indices, size_t index_count, const 
 	return write;
 }
 
+void remapEdgeLoops(unsigned int* loop, size_t vertex_count, const unsigned int* collapse_remap)
+{
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		if (loop[i] != ~0u)
+		{
+			unsigned int a = unsigned(i);
+			unsigned int b = loop[i];
+
+			// special case when the seam edge is collapsed in a direction opposite to where loop goes
+			if (collapse_remap[b] == a)
+			{
+				loop[a] = loop[b];
+			}
+			else
+			{
+				loop[a] = collapse_remap[b];
+			}
+		}
+	}
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		if (collapse_remap[i] != i)
+		{
+			loop[i] = ~0u;
+		}
+	}
+}
+
 } // namespace meshopt
 
 // TODO: this is necessary for lodviewer but will go away at some point
 unsigned char* meshopt_simplifyDebugKind = 0;
+unsigned int* meshopt_simplifyDebugLoop = 0;
 
 size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error)
 {
@@ -783,10 +840,8 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 	// classify vertices; vertex kind determines collapse rules, see kCanCollapse
 	meshopt_Buffer<unsigned char> vertex_kind(vertex_count);
-	classifyVertices(vertex_kind.data, vertex_count, adjacency, remap.data, wedge.data, lockedstats);
-
-	if (meshopt_simplifyDebugKind)
-		memcpy(meshopt_simplifyDebugKind, vertex_kind.data, vertex_count);
+	meshopt_Buffer<unsigned int> loop(vertex_count);
+	classifyVertices(vertex_kind.data, loop.data, vertex_count, adjacency, remap.data, wedge.data, lockedstats);
 
 #if TRACE
 	size_t unique_positions = 0;
@@ -835,7 +890,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 	while (result_count > target_index_count)
 	{
-		size_t edge_collapse_count = fillEdgeCollapses(edge_collapses.data, result, result_count, vertex_positions.data, vertex_quadrics.data, remap.data, vertex_kind.data);
+		size_t edge_collapse_count = fillEdgeCollapses(edge_collapses.data, result, result_count, vertex_positions.data, vertex_quadrics.data, remap.data, vertex_kind.data, loop.data);
 
 		// no edges can be collapsed any more due to topology restrictions => bail out
 		if (edge_collapse_count == 0)
@@ -874,6 +929,8 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 			break;
 
 		result_count = remapIndexBuffer(result, result_count, collapse_remap.data);
+
+		remapEdgeLoops(loop.data, vertex_count, collapse_remap.data);
 	}
 
 #if TRACE
@@ -902,6 +959,12 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 			if (locked_collapses[k0][k1])
 				printf("locked collapses %d -> %d: %d\n", k0, k1, int(locked_collapses[k0][k1]));
 #endif
+
+	if (meshopt_simplifyDebugKind)
+		memcpy(meshopt_simplifyDebugKind, vertex_kind.data, vertex_count);
+
+	if (meshopt_simplifyDebugLoop)
+		memcpy(meshopt_simplifyDebugLoop, loop.data, vertex_count * sizeof(unsigned int));
 
 	return result_count;
 }
