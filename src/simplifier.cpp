@@ -216,6 +216,16 @@ const char kCanCollapse[Kind_Count][Kind_Count] = {
     {0, 0, 0, 0},
 };
 
+// if a vertex is manifold or seam, adjoining edges are guaranteed to have an opposite edge
+// note that for seam edges, the opposite edge isn't present in the attribute-based topology
+// but is present if you consider a position-only mesh variant
+const char kHasOpposite[Kind_Count][Kind_Count] = {
+	{1, 1, 1, 1},
+	{1, 0, 1, 0},
+	{1, 1, 1, 1},
+	{1, 0, 1, 0},
+};
+
 static bool hasEdge(const EdgeAdjacency& adjacency, unsigned int a, unsigned int b)
 {
 	unsigned int count = adjacency.counts[a];
@@ -589,28 +599,27 @@ static size_t fillEdgeCollapses(Collapse* collapses, const unsigned int* indices
 			if (remap[i0] == remap[i1])
 				continue;
 
-			// TODO: this logic is sort of tricky
-			// we only check collapse in a unidirectional way, but we ignore the fact that the edge can be flipped
-			// that is, given a a->b edge, if we see it as b->a, we can still collapse it as a->b.
-			// this works because edges like this with different kinds imply that one of the kinds is manifold (due to how kCanCollapse is built)
-			// for manifold vertices, all adjoining edges have an edge pair so this just effectively filters out redundancy
-			// it seems like we should spell all of this out in code explicitly.
-			if (!kCanCollapse[vertex_kind[i0]][vertex_kind[i1]])
+			unsigned char k0 = vertex_kind[i0];
+			unsigned char k1 = vertex_kind[i1];
+
+			// the edge has to be collapsible in at least one direction
+			if (!(kCanCollapse[k0][k1] | kCanCollapse[k1][k0]))
+				continue;
+
+			// manifold and seam edges should occur twice (i0->i1 and i1->i0) - skip redundant edges
+			if (kHasOpposite[k0][k1] && remap[i1] > remap[i0])
+				continue;
+
+			// two vertices are on a border or a seam, but there's no direct edge between them
+			// this indicates that they belong to two different edge loops and we should not collapse this edge
+			if (k0 == k1 && (k0 == Kind_Border || k0 == Kind_Seam) && loop[i0] != i1 && loop[i1] != i0)
 				continue;
 
 			// TODO: Garland97 uses Q1+Q2 for error estimation; here we asssume that V1 produces zero error for Q1 but it actually gets larger with more collapses
-			if (vertex_kind[i0] == vertex_kind[i1])
+
+			// edge can be collapsed in either direction - pick the one with minimum error
+			if (kCanCollapse[k0][k1] & kCanCollapse[k1][k0])
 			{
-				// manifold and seam edges should occur twice (i0->i1 and i1->i0) - skip redundant edges
-				if ((vertex_kind[i0] == Kind_Manifold || vertex_kind[i0] == Kind_Seam) && remap[i1] > remap[i0])
-					continue;
-
-				// two vertices are on a border or a seam, but there's no direct edge between them
-				// this indicates that they belong to two different edge loops and we should not collapse this edge
-				if ((vertex_kind[i0] == Kind_Border || vertex_kind[i0] == Kind_Seam) && loop[i0] != i1 && loop[i1] != i0)
-					continue;
-
-				// if vertex kinds match, we can collapse the edge in either direction - pick the one with minimum error
 				Collapse c01 = {i0, i1, {quadricError(vertex_quadrics[remap[i0]], vertex_positions[i1])}};
 				Collapse c10 = {i1, i0, {quadricError(vertex_quadrics[remap[i1]], vertex_positions[i0])}};
 				Collapse c = c01.error <= c10.error ? c01 : c10;
@@ -620,8 +629,11 @@ static size_t fillEdgeCollapses(Collapse* collapses, const unsigned int* indices
 			}
 			else
 			{
-				// if vertex kinds are different, edge can only be collapsed in one direction
-				Collapse c = {i0, i1, {quadricError(vertex_quadrics[remap[i0]], vertex_positions[i1])}};
+				// edge can only be collapsed in one direction
+				unsigned int e0 = kCanCollapse[k0][k1] ? i0 : i1;
+				unsigned int e1 = kCanCollapse[k0][k1] ? i1 : i0;
+
+				Collapse c = {e0, e1, {quadricError(vertex_quadrics[remap[e0]], vertex_positions[e1])}};
 				assert(c.error >= 0);
 
 				collapses[collapse_count++] = c;
