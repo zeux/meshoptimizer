@@ -529,9 +529,6 @@ static void fillFaceQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 		unsigned int i1 = indices[i + 1];
 		unsigned int i2 = indices[i + 2];
 
-		// TODO: degenerate triangles can produce degenerate quadrics
-		// assert(i0 != i1 && i0 != i2 && i1 != i2);
-
 		Quadric Q;
 		quadricFromTriangle(Q, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2]);
 
@@ -558,14 +555,11 @@ static size_t fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* ind
 			if (vertex_kind[i0] != Kind_Border && vertex_kind[i0] != Kind_Seam)
 				continue;
 
-			// TODO: should this use wedge or edge search?
+			// TODO: should this use wedge or edge search? should this use loop data instead?
 			if (hasEdge(adjacency, i1, i0))
 				continue;
 
 			unsigned int i2 = indices[i + next[next[e]]];
-
-			// TODO: degenerate triangles can produce degenerate quadrics
-			// assert(i0 != i1 && i0 != i2 && i1 != i2);
 
 			float edgeWeight = vertex_kind[i0] == Kind_Seam ? 1.f : 10.f;
 
@@ -614,8 +608,6 @@ static size_t fillEdgeCollapses(Collapse* collapses, const unsigned int* indices
 			// this indicates that they belong to two different edge loops and we should not collapse this edge
 			if (k0 == k1 && (k0 == Kind_Border || k0 == Kind_Seam) && loop[i0] != i1 && loop[i1] != i0)
 				continue;
-
-			// TODO: Garland97 uses Q1+Q2 for error estimation; here we asssume that V1 produces zero error for Q1 but it actually gets larger with more collapses
 
 			// edge can be collapsed in either direction - pick the one with minimum error
 			if (kCanCollapse[k0][k1] & kCanCollapse[k1][k0])
