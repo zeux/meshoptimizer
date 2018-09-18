@@ -699,22 +699,27 @@ static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapse
 	}
 }
 
-static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, size_t collapse_limit, float error_limit, float& pass_error)
+static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, size_t triangle_collapse_goal, float error_limit, float& pass_error)
 {
+	// TODO: remove this when TRACE is removed
 	size_t pass_collapses = 0;
+	size_t triangle_collapses = 0;
 
 	for (size_t i = 0; i < collapse_count; ++i)
 	{
 		const Collapse& c = collapses[collapse_order[i]];
+
+		if (c.error > error_limit)
+			break;
+
+		if (triangle_collapses >= triangle_collapse_goal)
+			break;
 
 		unsigned int r0 = remap[c.v0];
 		unsigned int r1 = remap[c.v1];
 
 		if (collapse_locked[r0] || collapse_locked[r1])
 			continue;
-
-		if (c.error > error_limit)
-			break;
 
 		assert(collapse_remap[r0] == r0);
 		assert(collapse_remap[r1] == r1);
@@ -743,11 +748,11 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		collapse_locked[r0] = 1;
 		collapse_locked[r1] = 1;
 
+		// border edges collapse 1 triangle, other edges collapse 2 or more
+		triangle_collapses += (vertex_kind[c.v0] == Kind_Border) ? 1 : 2;
+
 		pass_collapses++;
 		pass_error = c.error;
-
-		if (pass_collapses >= collapse_limit)
-			break;
 	}
 
 	return pass_collapses;
@@ -780,7 +785,7 @@ static size_t remapIndexBuffer(unsigned int* indices, size_t index_count, const 
 	return write;
 }
 
-void remapEdgeLoops(unsigned int* loop, size_t vertex_count, const unsigned int* collapse_remap)
+static void remapEdgeLoops(unsigned int* loop, size_t vertex_count, const unsigned int* collapse_remap)
 {
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
@@ -887,11 +892,16 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 		sortEdgeCollapses(collapse_order.data, edge_collapses.data, edge_collapse_count);
 
-		// each collapse removes 2 triangles
-		// TODO: except for border collapses :) this can lead to a few small passes in the end
-		size_t edge_collapse_goal = (result_count - target_index_count) / 6 + 1;
+		// most collapses remove 2 triangles; use this to establish a bound on the pass in terms of error limit
+		// note that edge_collapse_goal is an estimate; triangle_collapse_goal will be used to actually limit collapses
+		size_t triangle_collapse_goal = (result_count - target_index_count) / 3;
+		size_t edge_collapse_goal = triangle_collapse_goal / 2;
 
-		float error_goal = edge_collapse_goal < edge_collapse_count ? edge_collapses[collapse_order[edge_collapse_goal]].error * 1.5f : FLT_MAX;
+		// we limit the error in each pass based on the error of optimal last collapse; since many collapses will be locked
+		// as they will share vertices with other successfull collapses, we need to increase the acceptable error by this factor
+		const float kPassErrorBound = 1.5f;
+
+		float error_goal = edge_collapse_goal < edge_collapse_count ? edge_collapses[collapse_order[edge_collapse_goal]].error * kPassErrorBound : FLT_MAX;
 		float error_limit = error_goal > target_error ? target_error : error_goal;
 
 		// no edges can be collapsed any more due to hitting the error limit => bail out
@@ -904,22 +914,22 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		memset(collapse_locked.data, 0, vertex_count);
 
 		float pass_error = 0;
-		size_t collapses = performEdgeCollapses(collapse_remap.data, collapse_locked.data, vertex_quadrics.data, edge_collapses.data, edge_collapse_count, collapse_order.data, remap.data, wedge.data, vertex_kind.data, edge_collapse_goal, error_limit, pass_error);
-
-#if TRACE
-		printf("pass %d: triangles: %d, collapses: %d/%d (target %d), error: %e\n", int(pass_count), int(result_count / 3), int(collapses), int(edge_collapse_count), int(edge_collapse_goal), pass_error);
-#endif
+		size_t collapses = performEdgeCollapses(collapse_remap.data, collapse_locked.data, vertex_quadrics.data, edge_collapses.data, edge_collapse_count, collapse_order.data, remap.data, wedge.data, vertex_kind.data, triangle_collapse_goal, error_limit, pass_error);
+		(void)collapses;
 
 		pass_count++;
 		worst_error = (worst_error < pass_error) ? pass_error : worst_error;
 
-		// no edges can be collapsed any more => bail out
-		if (collapses == 0)
-			break;
-
-		result_count = remapIndexBuffer(result, result_count, collapse_remap.data);
-
 		remapEdgeLoops(loop.data, vertex_count, collapse_remap.data);
+
+		size_t new_count = remapIndexBuffer(result, result_count, collapse_remap.data);
+		assert(new_count < result_count);
+
+#if TRACE
+		printf("pass %d: triangles: %d -> %d, collapses: %d/%d, error: %e (limit %e)\n", int(pass_count), int(result_count / 3), int(new_count / 3), int(collapses), int(edge_collapse_count), pass_error, error_limit);
+#endif
+
+		result_count = new_count;
 	}
 
 #if TRACE
