@@ -1,3 +1,5 @@
+#define _CRT_SECURE_NO_WARNINGS
+
 #include "../demo/objparser.h"
 #include "../src/meshoptimizer.h"
 
@@ -45,7 +47,7 @@ struct Mesh
 	std::vector<unsigned int> loop;
 };
 
-static Mesh parseObj(const char* path)
+Mesh parseObj(const char* path)
 {
 	ObjFile file;
 
@@ -97,6 +99,37 @@ static Mesh parseObj(const char* path)
 	meshopt_remapVertexBuffer(&result.vertices[0], &vertices[0], total_indices, sizeof(Vertex), &remap[0]);
 
 	return result;
+}
+
+bool saveObj(const Mesh& mesh, const char* path)
+{
+	std::vector<Vertex> verts = mesh.vertices;
+	std::vector<unsigned int> tris = mesh.indices;
+	size_t vertcount = meshopt_optimizeVertexFetch(verts.data(), tris.data(), tris.size(), verts.data(), verts.size(), sizeof(Vertex));
+
+	FILE* obj = fopen(path, "w");
+	if (!obj)
+		return false;
+
+	for (size_t i = 0; i < vertcount; ++i)
+	{
+		fprintf(obj, "v %f %f %f\n", verts[i].px, verts[i].py, verts[i].pz);
+		fprintf(obj, "vn %f %f %f\n", verts[i].nx, verts[i].ny, verts[i].nz);
+		fprintf(obj, "vt %f %f %f\n", verts[i].tx, verts[i].ty, 0.f);
+	}
+
+	for (size_t i = 0; i < tris.size(); i += 3)
+	{
+		unsigned int i0 = tris[i + 0] + 1;
+		unsigned int i1 = tris[i + 1] + 1;
+		unsigned int i2 = tris[i + 2] + 1;
+
+		fprintf(obj, "f %d/%d/%d %d/%d/%d %d/%d/%d\n", i0, i0, i0, i1, i1, i1, i2, i2, i2);
+	}
+
+	fclose(obj);
+
+	return true;
 }
 
 Mesh optimize(const Mesh& mesh, int lod)
@@ -316,6 +349,20 @@ void keyhandler(GLFWwindow* window, int key, int scancode, int action, int mods)
 
 			stats(window, files[0].path, triangles, lod, double(end - start) / CLOCKS_PER_SEC);
 			redraw = true;
+		}
+		else if (key == GLFW_KEY_S)
+		{
+			int i = 0;
+
+			for (auto& f : files)
+			{
+				char path[32];
+				sprintf(path, "result%d.obj", i);
+
+				saveObj(f.lodmesh, path);
+
+				printf("Saved LOD of %s to %s\n", f.path, path);
+			}
 		}
 	}
 }
