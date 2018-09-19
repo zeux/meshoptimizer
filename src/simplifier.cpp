@@ -781,7 +781,6 @@ static size_t remapIndexBuffer(unsigned int* indices, size_t index_count, const 
 		}
 	}
 
-	assert(write < index_count);
 	return write;
 }
 
@@ -882,7 +881,8 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 	size_t result_count = index_count;
 
-	while (result_count > target_index_count)
+	// make sure we need to remove at least one triangle (this is different from (result_count > target_index_count) when target index count isn't divisible by 3)
+	while (result_count >= target_index_count + 3)
 	{
 		size_t edge_collapse_count = fillEdgeCollapses(edge_collapses.data, result, result_count, vertex_positions.data, vertex_quadrics.data, remap.data, vertex_kind.data, loop.data);
 
@@ -895,6 +895,8 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		// most collapses remove 2 triangles; use this to establish a bound on the pass in terms of error limit
 		// note that edge_collapse_goal is an estimate; triangle_collapse_goal will be used to actually limit collapses
 		size_t triangle_collapse_goal = (result_count - target_index_count) / 3;
+		assert(triangle_collapse_goal > 0);
+
 		size_t edge_collapse_goal = triangle_collapse_goal / 2;
 
 		// we limit the error in each pass based on the error of optimal last collapse; since many collapses will be locked
@@ -916,6 +918,9 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		float pass_error = 0;
 		size_t collapses = performEdgeCollapses(collapse_remap.data, collapse_locked.data, vertex_quadrics.data, edge_collapses.data, edge_collapse_count, collapse_order.data, remap.data, wedge.data, vertex_kind.data, triangle_collapse_goal, error_limit, pass_error);
 		(void)collapses;
+
+		// TODO: this is relying on checks above to bail out early, which might be somewhat unsafe...
+		assert(collapses > 0);
 
 		pass_count++;
 		worst_error = (worst_error < pass_error) ? pass_error : worst_error;
