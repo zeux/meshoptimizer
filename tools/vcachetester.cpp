@@ -414,10 +414,10 @@ void testCacheMeshes(IDXGIAdapter* adapter, int argc, char** argv)
 
 		std::vector<unsigned int> ib1;
 
-		for (size_t i = 0; i < file.f.size(); i += 3)
+		for (size_t i = 0; i < file.f_size; i += 3)
 			ib1.push_back(file.f[i]);
 
-		unsigned int vertex_count = file.v.size() / 3;
+		unsigned int vertex_count = file.v_size / 3;
 		unsigned int index_count = ib1.size();
 
 		unsigned int invocations1 = queryVSInvocations(device, context, ib1.data(), index_count);

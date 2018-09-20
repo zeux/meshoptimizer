@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <vector>
 
 #include "miniz.h"
 #include "objparser.h"
@@ -112,16 +113,15 @@ Mesh parseObj(const char* path, double& reindex)
 
 	objTriangulate(file);
 
-	size_t total_indices = file.f.size() / 3;
+	size_t total_indices = file.f_size / 3;
 
-	std::vector<Vertex> vertices;
-	vertices.reserve(total_indices);
+	std::vector<Vertex> vertices(total_indices);
 
-	for (size_t i = 0; i < file.f.size(); i += 3)
+	for (size_t i = 0; i < total_indices; ++i)
 	{
-		int vi = file.f[i + 0];
-		int vti = file.f[i + 1];
-		int vni = file.f[i + 2];
+		int vi = file.f[i * 3 + 0];
+		int vti = file.f[i * 3 + 1];
+		int vni = file.f[i * 3 + 2];
 
 		Vertex v =
 		    {
@@ -137,7 +137,7 @@ Mesh parseObj(const char* path, double& reindex)
 		        vti >= 0 ? file.vt[vti * 3 + 1] : 0,
 		    };
 
-		vertices.push_back(v);
+		vertices[i] = v;
 	}
 
 	reindex = timestamp();

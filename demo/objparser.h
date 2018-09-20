@@ -1,15 +1,31 @@
 #pragma once
 
-#include <vector>
+#include <stddef.h>
 
-struct ObjFile
+class ObjFile
 {
-	std::vector<float> v; // positions; stride 3 (xyz)
-	std::vector<float> vt; // texture coordinates; stride 3 (uvw)
-	std::vector<float> vn; // vertex normals; stride 3 (xyz)
+public:
+	float* v; // positions; stride 3 (xyz)
+	size_t v_size, v_cap;
 
-	std::vector<char> fv; // face vertex count
-	std::vector<int> f; // face elements; stride defined by fv (*3 since f contains indices into v/vt/vn)
+	float* vt; // texture coordinates; stride 3 (uvw)
+	size_t vt_size, vt_cap;
+
+	float* vn; // vertex normals; stride 3 (xyz)
+	size_t vn_size, vn_cap;
+
+	char* fv; // face vertex count
+	size_t fv_size, fv_cap;
+
+	int* f; // face elements; stride defined by fv (*3 since f contains indices into v/vt/vn)
+	size_t f_size, f_cap;
+
+	ObjFile();
+	~ObjFile();
+
+private:
+	ObjFile(const ObjFile&);
+	ObjFile& operator=(const ObjFile&);
 };
 
 void objParseLine(ObjFile& result, const char* line);

@@ -8,6 +8,22 @@
 #include <cstdlib>
 #include <cstring>
 
+template <typename T>
+static void growArray(T*& data, size_t& capacity)
+{
+	size_t newcapacity = capacity == 0 ? 32 : capacity + capacity / 2;
+	T* newdata = new T[newcapacity];
+
+	if (data)
+	{
+		memcpy(newdata, data, capacity * sizeof(T));
+		delete[] data;
+	}
+
+	data = newdata;
+	capacity = newcapacity;
+}
+
 static int fixupIndex(int index, size_t size)
 {
 	return (index >= 0) ? index - 1 : int(size) + index;
@@ -136,6 +152,34 @@ static const char* parseFace(const char* s, int& vi, int& vti, int& vni)
 	return s;
 }
 
+ObjFile::ObjFile()
+    : v(0)
+    , v_size(0)
+    , v_cap(0)
+    , vt(0)
+    , vt_size(0)
+    , vt_cap(0)
+    , vn(0)
+    , vn_size(0)
+    , vn_cap(0)
+    , fv(0)
+    , fv_size(0)
+    , fv_cap(0)
+    , f(0)
+    , f_size(0)
+    , f_cap(0)
+{
+}
+
+ObjFile::~ObjFile()
+{
+	delete[] v;
+	delete[] vt;
+	delete[] vn;
+	delete[] fv;
+	delete[] f;
+}
+
 void objParseLine(ObjFile& result, const char* line)
 {
 	if (line[0] == 'v' && line[1] == ' ')
@@ -146,9 +190,12 @@ void objParseLine(ObjFile& result, const char* line)
 		float y = parseFloat(s, &s);
 		float z = parseFloat(s, &s);
 
-		result.v.push_back(x);
-		result.v.push_back(y);
-		result.v.push_back(z);
+		if (result.v_size + 3 > result.v_cap)
+			growArray(result.v, result.v_cap);
+
+		result.v[result.v_size++] = x;
+		result.v[result.v_size++] = y;
+		result.v[result.v_size++] = z;
 	}
 	else if (line[0] == 'v' && line[1] == 't' && line[2] == ' ')
 	{
@@ -158,9 +205,12 @@ void objParseLine(ObjFile& result, const char* line)
 		float v = parseFloat(s, &s);
 		float w = parseFloat(s, &s);
 
-		result.vt.push_back(u);
-		result.vt.push_back(v);
-		result.vt.push_back(w);
+		if (result.vt_size + 3 > result.vt_cap)
+			growArray(result.vt, result.vt_cap);
+
+		result.vt[result.vt_size++] = u;
+		result.vt[result.vt_size++] = v;
+		result.vt[result.vt_size++] = w;
 	}
 	else if (line[0] == 'v' && line[1] == 'n' && line[2] == ' ')
 	{
@@ -170,18 +220,21 @@ void objParseLine(ObjFile& result, const char* line)
 		float y = parseFloat(s, &s);
 		float z = parseFloat(s, &s);
 
-		result.vn.push_back(x);
-		result.vn.push_back(y);
-		result.vn.push_back(z);
+		if (result.vn_size + 3 > result.vn_cap)
+			growArray(result.vn, result.vn_cap);
+
+		result.vn[result.vn_size++] = x;
+		result.vn[result.vn_size++] = y;
+		result.vn[result.vn_size++] = z;
 	}
 	else if (line[0] == 'f' && line[1] == ' ')
 	{
 		const char* s = line + 2;
 		int fv = 0;
 
-		size_t v = result.v.size() / 3;
-		size_t vt = result.vt.size() / 3;
-		size_t vn = result.vn.size() / 3;
+		size_t v = result.v_size / 3;
+		size_t vt = result.vt_size / 3;
+		size_t vn = result.vn_size / 3;
 
 		while (*s)
 		{
@@ -191,14 +244,20 @@ void objParseLine(ObjFile& result, const char* line)
 			if (vi == 0)
 				break;
 
-			result.f.push_back(fixupIndex(vi, v));
-			result.f.push_back(fixupIndex(vti, vt));
-			result.f.push_back(fixupIndex(vni, vn));
+			if (result.f_size + 3 > result.f_cap)
+				growArray(result.f, result.f_cap);
+
+			result.f[result.f_size++] = fixupIndex(vi, v);
+			result.f[result.f_size++] = fixupIndex(vti, vt);
+			result.f[result.f_size++] = fixupIndex(vni, vn);
 
 			fv++;
 		}
 
-		result.fv.push_back(char(fv));
+		if (result.fv_size + 1 > result.fv_cap)
+			growArray(result.fv, result.fv_cap);
+
+		result.fv[result.fv_size++] = char(fv);
 	}
 }
 
@@ -259,7 +318,7 @@ bool objValidate(const ObjFile& result)
 {
 	size_t total_indices = 0;
 
-	for (size_t face = 0; face < result.fv.size(); ++face)
+	for (size_t face = 0; face < result.fv_size; ++face)
 	{
 		int fv = result.fv[face];
 
@@ -269,14 +328,14 @@ bool objValidate(const ObjFile& result)
 		total_indices += fv;
 	}
 
-	if (total_indices * 3 != result.f.size())
+	if (total_indices * 3 != result.f_size)
 		return false;
 
-	size_t v = result.v.size() / 3;
-	size_t vt = result.vt.size() / 3;
-	size_t vn = result.vn.size() / 3;
+	size_t v = result.v_size / 3;
+	size_t vt = result.vt_size / 3;
+	size_t vn = result.vn_size / 3;
 
-	for (size_t i = 0; i < result.f.size(); i += 3)
+	for (size_t i = 0; i < result.f_size; i += 3)
 	{
 		int vi = result.f[i + 0];
 		int vti = result.f[i + 1];
@@ -302,7 +361,7 @@ void objTriangulate(ObjFile& result)
 {
 	size_t total_indices = 0;
 
-	for (size_t face = 0; face < result.fv.size(); ++face)
+	for (size_t face = 0; face < result.fv_size; ++face)
 	{
 		int fv = result.fv[face];
 
@@ -310,12 +369,12 @@ void objTriangulate(ObjFile& result)
 		total_indices += (fv - 2) * 3;
 	}
 
-	std::vector<int> f(total_indices * 3);
+	int* f = new int[total_indices * 3];
 
 	size_t read = 0;
 	size_t write = 0;
 
-	for (size_t face = 0; face < result.fv.size(); ++face)
+	for (size_t face = 0; face < result.fv_size; ++face)
 	{
 		int fv = result.fv[face];
 
@@ -339,9 +398,17 @@ void objTriangulate(ObjFile& result)
 		read += fv * 3;
 	}
 
-	assert(read == result.f.size());
+	assert(read == result.f_size);
 	assert(write == total_indices * 3);
 
-	result.f.swap(f);
-	std::vector<char>(total_indices / 3, 3).swap(result.fv);
+	delete[] result.f;
+	result.f = f;
+	result.f_size = result.f_cap = write;
+
+	char* fv = new char[total_indices / 3];
+	memset(fv, 3, total_indices / 3);
+
+	delete[] result.fv;
+	result.fv = fv;
+	result.fv_size = result.fv_cap = total_indices / 3;
 }
