@@ -220,10 +220,10 @@ const char kCanCollapse[Kind_Count][Kind_Count] = {
 // note that for seam edges, the opposite edge isn't present in the attribute-based topology
 // but is present if you consider a position-only mesh variant
 const char kHasOpposite[Kind_Count][Kind_Count] = {
-	{1, 1, 1, 1},
-	{1, 0, 1, 0},
-	{1, 1, 1, 1},
-	{1, 0, 1, 0},
+    {1, 1, 1, 1},
+    {1, 0, 1, 0},
+    {1, 1, 1, 1},
+    {1, 0, 1, 0},
 };
 
 static bool hasEdge(const EdgeAdjacency& adjacency, unsigned int a, unsigned int b)
@@ -881,12 +881,11 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 	size_t result_count = index_count;
 
-	// make sure we need to remove at least one triangle (this is different from (result_count > target_index_count) when target index count isn't divisible by 3)
-	while (result_count >= target_index_count + 3)
+	while (result_count > target_index_count)
 	{
 		size_t edge_collapse_count = fillEdgeCollapses(edge_collapses.data, result, result_count, vertex_positions.data, vertex_quadrics.data, remap.data, vertex_kind.data, loop.data);
 
-		// no edges can be collapsed any more due to topology restrictions => bail out
+		// no edges can be collapsed any more due to topology restrictions
 		if (edge_collapse_count == 0)
 			break;
 
@@ -895,8 +894,6 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		// most collapses remove 2 triangles; use this to establish a bound on the pass in terms of error limit
 		// note that edge_collapse_goal is an estimate; triangle_collapse_goal will be used to actually limit collapses
 		size_t triangle_collapse_goal = (result_count - target_index_count) / 3;
-		assert(triangle_collapse_goal > 0);
-
 		size_t edge_collapse_goal = triangle_collapse_goal / 2;
 
 		// we limit the error in each pass based on the error of optimal last collapse; since many collapses will be locked
@@ -906,10 +903,6 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		float error_goal = edge_collapse_goal < edge_collapse_count ? edge_collapses[collapse_order[edge_collapse_goal]].error * kPassErrorBound : FLT_MAX;
 		float error_limit = error_goal > target_error ? target_error : error_goal;
 
-		// no edges can be collapsed any more due to hitting the error limit => bail out
-		if (edge_collapses[collapse_order[0]].error > error_limit)
-			break;
-
 		for (size_t i = 0; i < vertex_count; ++i)
 			collapse_remap[i] = unsigned(i);
 
@@ -917,10 +910,10 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 		float pass_error = 0;
 		size_t collapses = performEdgeCollapses(collapse_remap.data, collapse_locked.data, vertex_quadrics.data, edge_collapses.data, edge_collapse_count, collapse_order.data, remap.data, wedge.data, vertex_kind.data, triangle_collapse_goal, error_limit, pass_error);
-		(void)collapses;
 
-		// TODO: this is relying on checks above to bail out early, which might be somewhat unsafe...
-		assert(collapses > 0);
+		// no edges can be collapsed any more due to hitting the error limit or triangle collapse limit
+		if (collapses == 0)
+			break;
 
 		pass_count++;
 		worst_error = (worst_error < pass_error) ? pass_error : worst_error;
