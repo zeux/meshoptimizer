@@ -242,25 +242,21 @@ void objParseLine(ObjFile& result, const char* line)
 			if (vi == 0)
 				break;
 
-			f[fv][0] = vi;
-			f[fv][1] = vti;
-			f[fv][2] = vni;
+			f[fv][0] = fixupIndex(vi, v);
+			f[fv][1] = fixupIndex(vti, vt);
+			f[fv][2] = fixupIndex(vni, vn);
 
 			if (fv == 2)
 			{
 				if (result.f_size + 9 > result.f_cap)
 					growArray(result.f, result.f_cap);
 
-				for (int k = 0; k < 3; ++k)
-				{
-					result.f[result.f_size++] = fixupIndex(f[k][0], v);
-					result.f[result.f_size++] = fixupIndex(f[k][1], vt);
-					result.f[result.f_size++] = fixupIndex(f[k][2], vn);
-				}
+				memcpy(&result.f[result.f_size], f, 9 * sizeof(int));
+				result.f_size += 9;
 
-				f[1][0] = vi;
-				f[1][1] = vti;
-				f[1][2] = vni;
+				f[1][0] = f[2][0];
+				f[1][1] = f[2][1];
+				f[1][2] = f[2][2];
 			}
 			else
 			{
