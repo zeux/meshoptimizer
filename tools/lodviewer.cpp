@@ -58,8 +58,6 @@ Mesh parseObj(const char* path)
 		return Mesh();
 	}
 
-	objTriangulate(file);
-
 	size_t total_indices = file.f_size / 3;
 
 	std::vector<Vertex> vertices(total_indices);

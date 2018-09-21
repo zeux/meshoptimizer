@@ -14,10 +14,7 @@ public:
 	float* vn; // vertex normals; stride 3 (xyz)
 	size_t vn_size, vn_cap;
 
-	char* fv; // face vertex count
-	size_t fv_size, fv_cap;
-
-	int* f; // face elements; stride defined by fv (*3 since f contains indices into v/vt/vn)
+	int* f; // face elements; stride 9 (3 groups of indices into v/vt/vn)
 	size_t f_size, f_cap;
 
 	ObjFile();
@@ -32,4 +29,3 @@ void objParseLine(ObjFile& result, const char* line);
 bool objParseFile(ObjFile& result, const char* path);
 
 bool objValidate(const ObjFile& result);
-void objTriangulate(ObjFile& result);

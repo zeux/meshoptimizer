@@ -162,9 +162,6 @@ ObjFile::ObjFile()
     , vn(0)
     , vn_size(0)
     , vn_cap(0)
-    , fv(0)
-    , fv_size(0)
-    , fv_cap(0)
     , f(0)
     , f_size(0)
     , f_cap(0)
@@ -176,7 +173,6 @@ ObjFile::~ObjFile()
 	delete[] v;
 	delete[] vt;
 	delete[] vn;
-	delete[] fv;
 	delete[] f;
 }
 
@@ -230,11 +226,13 @@ void objParseLine(ObjFile& result, const char* line)
 	else if (line[0] == 'f' && line[1] == ' ')
 	{
 		const char* s = line + 2;
-		int fv = 0;
 
 		size_t v = result.v_size / 3;
 		size_t vt = result.vt_size / 3;
 		size_t vn = result.vn_size / 3;
+
+		int fv = 0;
+		int f[3][3] = {};
 
 		while (*s)
 		{
@@ -244,20 +242,31 @@ void objParseLine(ObjFile& result, const char* line)
 			if (vi == 0)
 				break;
 
-			if (result.f_size + 3 > result.f_cap)
-				growArray(result.f, result.f_cap);
+			f[fv][0] = vi;
+			f[fv][1] = vti;
+			f[fv][2] = vni;
 
-			result.f[result.f_size++] = fixupIndex(vi, v);
-			result.f[result.f_size++] = fixupIndex(vti, vt);
-			result.f[result.f_size++] = fixupIndex(vni, vn);
+			if (fv == 2)
+			{
+				if (result.f_size + 9 > result.f_cap)
+					growArray(result.f, result.f_cap);
 
-			fv++;
+				for (int k = 0; k < 3; ++k)
+				{
+					result.f[result.f_size++] = fixupIndex(f[k][0], v);
+					result.f[result.f_size++] = fixupIndex(f[k][1], vt);
+					result.f[result.f_size++] = fixupIndex(f[k][2], vn);
+				}
+
+				f[1][0] = vi;
+				f[1][1] = vti;
+				f[1][2] = vni;
+			}
+			else
+			{
+				fv++;
+			}
 		}
-
-		if (result.fv_size + 1 > result.fv_cap)
-			growArray(result.fv, result.fv_cap);
-
-		result.fv[result.fv_size++] = char(fv);
 	}
 }
 
@@ -316,21 +325,6 @@ bool objParseFile(ObjFile& result, const char* path)
 
 bool objValidate(const ObjFile& result)
 {
-	size_t total_indices = 0;
-
-	for (size_t face = 0; face < result.fv_size; ++face)
-	{
-		int fv = result.fv[face];
-
-		if (fv < 3)
-			return false;
-
-		total_indices += fv;
-	}
-
-	if (total_indices * 3 != result.f_size)
-		return false;
-
 	size_t v = result.v_size / 3;
 	size_t vt = result.vt_size / 3;
 	size_t vn = result.vn_size / 3;
@@ -355,60 +349,4 @@ bool objValidate(const ObjFile& result)
 	}
 
 	return true;
-}
-
-void objTriangulate(ObjFile& result)
-{
-	size_t total_indices = 0;
-
-	for (size_t face = 0; face < result.fv_size; ++face)
-	{
-		int fv = result.fv[face];
-
-		assert(fv >= 3);
-		total_indices += (fv - 2) * 3;
-	}
-
-	int* f = new int[total_indices * 3];
-
-	size_t read = 0;
-	size_t write = 0;
-
-	for (size_t face = 0; face < result.fv_size; ++face)
-	{
-		int fv = result.fv[face];
-
-		for (int i = 0; i + 2 < fv; ++i)
-		{
-			f[write + 0] = result.f[read + 0];
-			f[write + 1] = result.f[read + 1];
-			f[write + 2] = result.f[read + 2];
-
-			f[write + 3] = result.f[read + i * 3 + 3];
-			f[write + 4] = result.f[read + i * 3 + 4];
-			f[write + 5] = result.f[read + i * 3 + 5];
-
-			f[write + 6] = result.f[read + i * 3 + 6];
-			f[write + 7] = result.f[read + i * 3 + 7];
-			f[write + 8] = result.f[read + i * 3 + 8];
-
-			write += 9;
-		}
-
-		read += fv * 3;
-	}
-
-	assert(read == result.f_size);
-	assert(write == total_indices * 3);
-
-	delete[] result.f;
-	result.f = f;
-	result.f_size = result.f_cap = write;
-
-	char* fv = new char[total_indices / 3];
-	memset(fv, 3, total_indices / 3);
-
-	delete[] result.fv;
-	result.fv = fv;
-	result.fv_size = result.fv_cap = total_indices / 3;
 }

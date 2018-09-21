@@ -410,8 +410,6 @@ void testCacheMeshes(IDXGIAdapter* adapter, int argc, char** argv)
 			continue;
 		}
 
-		objTriangulate(file);
-
 		std::vector<unsigned int> ib1;
 
 		for (size_t i = 0; i < file.f_size; i += 3)
