@@ -413,6 +413,7 @@ struct Collapse
 	unsigned int v1;
 
 	union {
+		unsigned int bidi;
 		float error;
 		unsigned int errorui;
 	};
@@ -576,7 +577,7 @@ static size_t fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* ind
 	return boundary;
 }
 
-static size_t fillEdgeCollapses(Collapse* collapses, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const Quadric* vertex_quadrics, const unsigned int* remap, const unsigned char* vertex_kind, const unsigned int* loop)
+static size_t pickEdgeCollapses(Collapse* collapses, const unsigned int* indices, size_t index_count, const unsigned int* remap, const unsigned char* vertex_kind, const unsigned int* loop)
 {
 	size_t collapse_count = 0;
 
@@ -612,11 +613,7 @@ static size_t fillEdgeCollapses(Collapse* collapses, const unsigned int* indices
 			// edge can be collapsed in either direction - pick the one with minimum error
 			if (kCanCollapse[k0][k1] & kCanCollapse[k1][k0])
 			{
-				Collapse c01 = {i0, i1, {quadricError(vertex_quadrics[remap[i0]], vertex_positions[i1])}};
-				Collapse c10 = {i1, i0, {quadricError(vertex_quadrics[remap[i1]], vertex_positions[i0])}};
-				Collapse c = c01.error <= c10.error ? c01 : c10;
-				assert(c.error >= 0);
-
+				Collapse c = {i0, i1, {/* bidi= */ 1}};
 				collapses[collapse_count++] = c;
 			}
 			else
@@ -625,15 +622,42 @@ static size_t fillEdgeCollapses(Collapse* collapses, const unsigned int* indices
 				unsigned int e0 = kCanCollapse[k0][k1] ? i0 : i1;
 				unsigned int e1 = kCanCollapse[k0][k1] ? i1 : i0;
 
-				Collapse c = {e0, e1, {quadricError(vertex_quadrics[remap[e0]], vertex_positions[e1])}};
-				assert(c.error >= 0);
-
+				Collapse c = {e0, e1, {/* bidi= */ 0}};
 				collapses[collapse_count++] = c;
 			}
 		}
 	}
 
+	return collapse_count;
+}
+
+static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const Vector3* vertex_positions, const Quadric* vertex_quadrics, const unsigned int* remap)
+{
+	for (size_t i = 0; i < collapse_count; ++i)
+	{
+		Collapse& c = collapses[i];
+
+		unsigned int i0 = c.v0;
+		unsigned int i1 = c.v1;
+
+		// most edges are bidirectional which means we need to evaluate errors for two collapses
+		// to keep this code branchless we just use the same edge for unidirectional edges
+		unsigned int j0 = c.bidi ? i1 : i0;
+		unsigned int j1 = c.bidi ? i0 : i1;
+
+		float ei = quadricError(vertex_quadrics[remap[i0]], vertex_positions[i1]);
+		float ej = quadricError(vertex_quadrics[remap[j0]], vertex_positions[j1]);
+
+		// pick edge direction with minimal error
+		c.v0 = ei <= ej ? i0 : j0;
+		c.v1 = ei <= ej ? i1 : j1;
+		c.error = ei <= ej ? ei : ej;
+	}
+}
+
 #if TRACE
+static void dumpEdgeCollapses(const Collapse* collapses, size_t collapse_count, const unsigned char* vertex_kind)
+{
 	size_t ckinds[Kind_Count][Kind_Count] = {};
 	float cerrors[Kind_Count][Kind_Count] = {};
 
@@ -657,10 +681,8 @@ static size_t fillEdgeCollapses(Collapse* collapses, const unsigned int* indices
 		for (int k1 = 0; k1 < Kind_Count; ++k1)
 			if (ckinds[k0][k1])
 				printf("collapses %d -> %d: %d, min error %e\n", k0, k1, int(ckinds[k0][k1]), cerrors[k0][k1]);
-#endif
-
-	return collapse_count;
 }
+#endif
 
 static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapses, size_t collapse_count)
 {
@@ -718,7 +740,7 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		unsigned int r0 = remap[c.v0];
 		unsigned int r1 = remap[c.v1];
 
-		if (collapse_locked[r0] || collapse_locked[r1])
+		if (collapse_locked[r0] | collapse_locked[r1])
 			continue;
 
 		assert(collapse_remap[r0] == r0);
@@ -883,11 +905,17 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 	while (result_count > target_index_count)
 	{
-		size_t edge_collapse_count = fillEdgeCollapses(edge_collapses.data, result, result_count, vertex_positions.data, vertex_quadrics.data, remap.data, vertex_kind.data, loop.data);
+		size_t edge_collapse_count = pickEdgeCollapses(edge_collapses.data, result, result_count, remap.data, vertex_kind.data, loop.data);
 
 		// no edges can be collapsed any more due to topology restrictions
 		if (edge_collapse_count == 0)
 			break;
+
+		rankEdgeCollapses(edge_collapses.data, edge_collapse_count, vertex_positions.data, vertex_quadrics.data, remap.data);
+
+#if TRACE
+		dumpEdgeCollapses(edge_collapses.data, edge_collapse_count, vertex_kind.data);
+#endif
 
 		sortEdgeCollapses(collapse_order.data, edge_collapses.data, edge_collapse_count);
 
