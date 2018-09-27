@@ -463,16 +463,28 @@ static void quadricMul(Quadric& Q, float s)
 
 static float quadricError(const Quadric& Q, const Vector3& v)
 {
-	float xx = v.x * v.x;
-	float xy = v.x * v.y;
-	float xz = v.x * v.z;
-	float yy = v.y * v.y;
-	float yz = v.y * v.z;
-	float zz = v.z * v.z;
+	float rx = Q.b0;
+	float ry = Q.b1;
+	float rz = Q.b2;
 
-	float vTQv = Q.a00 * xx + Q.a10 * xy * 2 + Q.a11 * yy + Q.a20 * xz * 2 + Q.a21 * yz * 2 + Q.a22 * zz + Q.b0 * v.x * 2 + Q.b1 * v.y * 2 + Q.b2 * v.z * 2 + Q.c;
+	rx += Q.a10 * v.y;
+	ry += Q.a21 * v.z;
+	rz += Q.a20 * v.x;
 
-	return fabsf(vTQv);
+	rx *= 2;
+	ry *= 2;
+	rz *= 2;
+
+	rx += Q.a00 * v.x;
+	ry += Q.a11 * v.y;
+	rz += Q.a22 * v.z;
+
+	float r = Q.c;
+	r += rx * v.x;
+	r += ry * v.y;
+	r += rz * v.z;
+
+	return fabsf(r);
 }
 
 static void quadricFromPlane(Quadric& Q, float a, float b, float c, float d)
