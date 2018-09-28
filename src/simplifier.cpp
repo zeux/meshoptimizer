@@ -553,6 +553,7 @@ static void fillFaceQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 
 static size_t fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const unsigned int* remap, const unsigned char* vertex_kind, const EdgeAdjacency& adjacency)
 {
+	// TODO: remove when TRACE is removed
 	size_t boundary = 0;
 
 	for (size_t i = 0; i < index_count; i += 3)
@@ -667,7 +668,7 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 	}
 }
 
-#if TRACE
+#if TRACE > 1
 static void dumpEdgeCollapses(const Collapse* collapses, size_t collapse_count, const unsigned char* vertex_kind)
 {
 	size_t ckinds[Kind_Count][Kind_Count] = {};
@@ -693,6 +694,32 @@ static void dumpEdgeCollapses(const Collapse* collapses, size_t collapse_count, 
 		for (int k1 = 0; k1 < Kind_Count; ++k1)
 			if (ckinds[k0][k1])
 				printf("collapses %d -> %d: %d, min error %e\n", k0, k1, int(ckinds[k0][k1]), cerrors[k0][k1]);
+}
+
+static void dumpLockedCollapses(const unsigned int* indices, size_t index_count, const unsigned char* vertex_kind)
+{
+	size_t locked_collapses[Kind_Count][Kind_Count] = {};
+
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		static const int next[3] = {1, 2, 0};
+
+		for (int e = 0; e < 3; ++e)
+		{
+			unsigned int i0 = indices[i + e];
+			unsigned int i1 = indices[i + next[e]];
+
+			unsigned char k0 = vertex_kind[i0];
+			unsigned char k1 = vertex_kind[i1];
+
+			locked_collapses[k0][k1] += !kCanCollapse[k0][k1] && !kCanCollapse[k1][k0];
+		}
+	}
+
+	for (int k0 = 0; k0 < Kind_Count; ++k0)
+		for (int k1 = 0; k1 < Kind_Count; ++k1)
+			if (locked_collapses[k0][k1])
+				printf("locked collapses %d -> %d: %d\n", k0, k1, int(locked_collapses[k0][k1]));
 }
 #endif
 
@@ -925,7 +952,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 		rankEdgeCollapses(edge_collapses.data, edge_collapse_count, vertex_positions.data, vertex_quadrics.data, remap.data);
 
-#if TRACE
+#if TRACE > 1
 		dumpEdgeCollapses(edge_collapses.data, edge_collapse_count, vertex_kind.data);
 #endif
 
@@ -964,7 +991,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		assert(new_count < result_count);
 
 #if TRACE
-		printf("pass %d: triangles: %d -> %d, collapses: %d/%d, error: %e (limit %e)\n", int(pass_count), int(result_count / 3), int(new_count / 3), int(collapses), int(edge_collapse_count), pass_error, error_limit);
+		printf("pass %d: triangles: %d -> %d, collapses: %d/%d (goal: %d), error: %e (limit %e goal %e)\n", int(pass_count), int(result_count / 3), int(new_count / 3), int(collapses), int(edge_collapse_count), int(edge_collapse_goal), pass_error, error_limit, error_goal);
 #endif
 
 		result_count = new_count;
@@ -972,29 +999,10 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 #if TRACE
 	printf("passes: %d, worst error: %e\n", int(pass_count), worst_error);
+#endif
 
-	size_t locked_collapses[Kind_Count][Kind_Count] = {};
-
-	for (size_t i = 0; i < result_count; i += 3)
-	{
-		static const int next[3] = {1, 2, 0};
-
-		for (int e = 0; e < 3; ++e)
-		{
-			unsigned int i0 = result[i + e];
-			unsigned int i1 = result[i + next[e]];
-
-			unsigned char k0 = vertex_kind[i0];
-			unsigned char k1 = vertex_kind[i1];
-
-			locked_collapses[k0][k1] += !kCanCollapse[k0][k1];
-		}
-	}
-
-	for (int k0 = 0; k0 < Kind_Count; ++k0)
-		for (int k1 = 0; k1 < Kind_Count; ++k1)
-			if (locked_collapses[k0][k1])
-				printf("locked collapses %d -> %d: %d\n", k0, k1, int(locked_collapses[k0][k1]));
+#if TRACE > 1
+	dumpLockedCollapses(result, result_count, vertex_kind.data);
 #endif
 
 	if (meshopt_simplifyDebugKind)
