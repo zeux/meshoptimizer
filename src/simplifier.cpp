@@ -207,8 +207,8 @@ enum VertexKind
 
 // manifold vertices can collapse on anything except locked
 // border/seam vertices can only be collapsed onto border/seam respectively
-// TODO: allow border->locked collapses? to make these work we might need to compute loop metadata for them? somehow?
-// TODO: allow seam->locked collapses? to make these work we might need to compute loop metadata for them? somehow?
+// TODO: allow border->locked collapses? to make these work we might need to compute loop metadata for them? + audit all loop checks!
+// TODO: allow seam->locked collapses? to make these work we might need to compute loop metadata for them? + audit all loop checks!
 const char kCanCollapse[Kind_Count][Kind_Count] = {
     {1, 1, 1, 1},
     {0, 1, 0, 0},
@@ -551,7 +551,7 @@ static void fillFaceQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 	}
 }
 
-static size_t fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const unsigned int* remap, const unsigned char* vertex_kind, const EdgeAdjacency& adjacency)
+static size_t fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const unsigned int* remap, const unsigned char* vertex_kind, const unsigned int* loop)
 {
 	// TODO: remove when TRACE is removed
 	size_t boundary = 0;
@@ -565,12 +565,11 @@ static size_t fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* ind
 			unsigned int i0 = indices[i + e];
 			unsigned int i1 = indices[i + next[e]];
 
-			// TODO: do we need to check vertex_kind[i1]? i0 can be locked and i1 can be seam...
+			// TODO: if we extend loop[] to track locked vertices, we will need to check vertex_kind[i1] as well
 			if (vertex_kind[i0] != Kind_Border && vertex_kind[i0] != Kind_Seam)
 				continue;
 
-			// TODO: should this use wedge or edge search? should this use loop data instead?
-			if (hasEdge(adjacency, i1, i0))
+			if (loop[i0] != i1)
 				continue;
 
 			unsigned int i2 = indices[i + next[next[e]]];
@@ -922,7 +921,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 	fillFaceQuadrics(vertex_quadrics.data, indices, index_count, vertex_positions.data, remap.data);
 
-	size_t boundary = fillEdgeQuadrics(vertex_quadrics.data, indices, index_count, vertex_positions.data, remap.data, vertex_kind.data, adjacency);
+	size_t boundary = fillEdgeQuadrics(vertex_quadrics.data, indices, index_count, vertex_positions.data, remap.data, vertex_kind.data, loop.data);
 	(void)boundary;
 
 #if TRACE
