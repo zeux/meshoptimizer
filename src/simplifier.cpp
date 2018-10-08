@@ -622,7 +622,8 @@ static size_t pickEdgeCollapses(Collapse* collapses, const unsigned int* indices
 			if (k0 == k1 && (k0 == Kind_Border || k0 == Kind_Seam) && loop[i0] != i1 && loop[i1] != i0)
 				continue;
 
-			// edge can be collapsed in either direction - pick the one with minimum error
+			// edge can be collapsed in either direction - we will pick the one with minimum error
+			// note: we evaluate error later during collapse ranking, here we just tag the edge as bidirectional
 			if (kCanCollapse[k0][k1] & kCanCollapse[k1][k0])
 			{
 				Collapse c = {i0, i1, {/* bidi= */ 1}};
@@ -753,6 +754,7 @@ static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapse
 	// compute sort order based on offsets
 	for (size_t i = 0; i < collapse_count; ++i)
 	{
+		// skip sign bit since error is non-negative
 		unsigned int key = (collapses[i].errorui << 1) >> (32 - sort_bits);
 
 		sort_order[histogram[key]++] = unsigned(i);
@@ -778,6 +780,9 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		unsigned int r0 = remap[c.v0];
 		unsigned int r1 = remap[c.v1];
 
+		// we don't collapse vertices that had source or target vertex involved in a collapse
+		// it's important to not move the vertices twice since it complicates the tracking/remapping logic
+		// it's important to not move other vertices towards a moved vertex to preserve error since we don't re-rank collapses mid-pass
 		if (collapse_locked[r0] | collapse_locked[r1])
 			continue;
 
@@ -794,6 +799,7 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 			unsigned int s1 = wedge[c.v1];
 
 			assert(s0 != c.v0 && s1 != c.v1);
+			assert(wedge[s0] == c.v0 && wedge[s1] == c.v1);
 
 			collapse_remap[c.v0] = c.v1;
 			collapse_remap[s0] = s1;
@@ -828,6 +834,7 @@ static size_t remapIndexBuffer(unsigned int* indices, size_t index_count, const 
 		unsigned int v1 = collapse_remap[indices[i + 1]];
 		unsigned int v2 = collapse_remap[indices[i + 2]];
 
+		// we never move the vertex twice during a single pass
 		assert(collapse_remap[v0] == v0);
 		assert(collapse_remap[v1] == v1);
 		assert(collapse_remap[v2] == v2);
