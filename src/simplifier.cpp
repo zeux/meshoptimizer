@@ -272,7 +272,7 @@ static size_t countOpenEdges(const EdgeAdjacency& adjacency, unsigned int vertex
 	return result;
 }
 
-static void classifyVertices(unsigned char* result, unsigned int* loop, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* wedge, size_t lockedstats[4])
+static void classifyVertices(unsigned char* result, unsigned int* loop, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* wedge)
 {
 	for (size_t i = 0; i < vertex_count; ++i)
 		loop[i] = ~0u;
@@ -303,7 +303,7 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, size_t v
 				}
 				else
 				{
-					result[i] = Kind_Locked, lockedstats[0]++;
+					result[i] = Kind_Locked;
 				}
 			}
 			else if (wedge[wedge[i]] == i)
@@ -331,18 +331,18 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, size_t v
 					}
 					else
 					{
-						result[i] = Kind_Locked, lockedstats[1]++;
+						result[i] = Kind_Locked;
 					}
 				}
 				else
 				{
-					result[i] = Kind_Locked, lockedstats[2]++;
+					result[i] = Kind_Locked;
 				}
 			}
 			else
 			{
 				// more than one vertex maps to this one; we don't have classification available
-				result[i] = Kind_Locked, lockedstats[3]++;
+				result[i] = Kind_Locked;
 			}
 		}
 		else
@@ -551,11 +551,8 @@ static void fillFaceQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 	}
 }
 
-static size_t fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const unsigned int* remap, const unsigned char* vertex_kind, const unsigned int* loop)
+static void fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const unsigned int* remap, const unsigned char* vertex_kind, const unsigned int* loop)
 {
-	// TODO: remove when TRACE is removed
-	size_t boundary = 0;
-
 	for (size_t i = 0; i < index_count; i += 3)
 	{
 		static const int next[3] = {1, 2, 0};
@@ -581,12 +578,8 @@ static size_t fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* ind
 
 			quadricAdd(vertex_quadrics[remap[i0]], Q);
 			quadricAdd(vertex_quadrics[remap[i1]], Q);
-
-			boundary++;
 		}
 	}
-
-	return boundary;
 }
 
 static size_t pickEdgeCollapses(Collapse* collapses, const unsigned int* indices, size_t index_count, const unsigned int* remap, const unsigned char* vertex_kind, const unsigned int* loop)
@@ -895,13 +888,10 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	// TODO: maybe make this an option? this disables seam awareness
 	// for (size_t i = 0; i < vertex_count; ++i) remap[i] = wedge[i] = unsigned(i);
 
-	// TODO: remove this when TRACE is removed
-	size_t lockedstats[4] = {};
-
 	// classify vertices; vertex kind determines collapse rules, see kCanCollapse
 	meshopt_Buffer<unsigned char> vertex_kind(vertex_count);
 	meshopt_Buffer<unsigned int> loop(vertex_count);
-	classifyVertices(vertex_kind.data, loop.data, vertex_count, adjacency, remap.data, wedge.data, lockedstats);
+	classifyVertices(vertex_kind.data, loop.data, vertex_count, adjacency, remap.data, wedge.data);
 
 #if TRACE
 	size_t unique_positions = 0;
@@ -916,8 +906,6 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 	printf("kinds: manifold %d, border %d, seam %d, locked %d\n",
 	       int(kinds[Kind_Manifold]), int(kinds[Kind_Border]), int(kinds[Kind_Seam]), int(kinds[Kind_Locked]));
-	printf("locked: 0 %d, 1 %d, 2 %d, 3 %d\n",
-	       int(lockedstats[0]), int(lockedstats[1]), int(lockedstats[2]), int(lockedstats[3]));
 #endif
 
 	meshopt_Buffer<Vector3> vertex_positions(vertex_count);
@@ -927,13 +915,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	memset(vertex_quadrics.data, 0, vertex_count * sizeof(Quadric));
 
 	fillFaceQuadrics(vertex_quadrics.data, indices, index_count, vertex_positions.data, remap.data);
-
-	size_t boundary = fillEdgeQuadrics(vertex_quadrics.data, indices, index_count, vertex_positions.data, remap.data, vertex_kind.data, loop.data);
-	(void)boundary;
-
-#if TRACE
-	printf("vertices: %d, half-edges: %d, boundary: %d\n", int(vertex_count), int(index_count), int(boundary));
-#endif
+	fillEdgeQuadrics(vertex_quadrics.data, indices, index_count, vertex_positions.data, remap.data, vertex_kind.data, loop.data);
 
 	if (result != indices)
 		memcpy(result, indices, index_count * sizeof(unsigned int));
