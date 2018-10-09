@@ -113,7 +113,6 @@ struct PositionHasher
 	}
 };
 
-// TODO: is there a better way to resolve naming conflicts with indexgenerator.cpp?
 static size_t hashBuckets2(size_t count)
 {
 	size_t buckets = 1;
@@ -123,7 +122,6 @@ static size_t hashBuckets2(size_t count)
 	return buckets;
 }
 
-// TODO: is there a better way to resolve naming conflicts with indexgenerator.cpp?
 template <typename T, typename Hash>
 static T* hashLookup2(T* table, size_t buckets, const Hash& hash, const T& key, const T& empty)
 {
@@ -317,8 +315,6 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, size_t v
 				// seam should have one open half-edge for each vertex, and the edges need to "connect" - point to the same vertex post-remap
 				if (a_count == 1 && b_count == 1)
 				{
-					// TODO: if ao == a or bo == b, we have a seam that connects both vertex pairs to the same target vertex
-					// does this still mean the vertex can be a seam vertex?
 					unsigned int ao = findWedgeEdge(adjacency, wedge, a, wedge[i]);
 					unsigned int bo = findWedgeEdge(adjacency, wedge, b, unsigned(i));
 
@@ -595,7 +591,9 @@ static size_t pickEdgeCollapses(Collapse* collapses, const unsigned int* indices
 			unsigned int i0 = indices[i + e];
 			unsigned int i1 = indices[i + next[e]];
 
-			// TODO: i0==i1 is an interesting condition... it seems like it can arise when collapsing a seam loop
+			// this can happen either when input has a zero-length edge, or when we perform collapses for complex
+			// topology w/seams and collapse a manifold vertex that connects to both wedges onto one of them
+			// we leave edges like this alone since they may be important for preserving mesh integrity
 			if (remap[i0] == remap[i1])
 				continue;
 
@@ -756,8 +754,7 @@ static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapse
 
 static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, size_t triangle_collapse_goal, float error_limit, float& pass_error)
 {
-	// TODO: remove this when TRACE is removed
-	size_t pass_collapses = 0;
+	size_t edge_collapses = 0;
 	size_t triangle_collapses = 0;
 
 	for (size_t i = 0; i < collapse_count; ++i)
@@ -809,12 +806,12 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 
 		// border edges collapse 1 triangle, other edges collapse 2 or more
 		triangle_collapses += (vertex_kind[c.v0] == Kind_Border) ? 1 : 2;
+		edge_collapses++;
 
-		pass_collapses++;
 		pass_error = c.error;
 	}
 
-	return pass_collapses;
+	return edge_collapses;
 }
 
 static size_t remapIndexBuffer(unsigned int* indices, size_t index_count, const unsigned int* collapse_remap)
@@ -884,9 +881,6 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	meshopt_Buffer<unsigned int> remap(vertex_count);
 	meshopt_Buffer<unsigned int> wedge(vertex_count);
 	buildPositionRemap(remap.data, wedge.data, vertex_positions_data, vertex_count, vertex_positions_stride);
-
-	// TODO: maybe make this an option? this disables seam awareness
-	// for (size_t i = 0; i < vertex_count; ++i) remap[i] = wedge[i] = unsigned(i);
 
 	// classify vertices; vertex kind determines collapse rules, see kCanCollapse
 	meshopt_Buffer<unsigned char> vertex_kind(vertex_count);
@@ -963,6 +957,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 		memset(collapse_locked.data, 0, vertex_count);
 
+		// TODO: remove this when TRACE is removed
 		float pass_error = 0;
 		size_t collapses = performEdgeCollapses(collapse_remap.data, collapse_locked.data, vertex_quadrics.data, edge_collapses.data, edge_collapse_count, collapse_order.data, remap.data, wedge.data, vertex_kind.data, triangle_collapse_goal, error_limit, pass_error);
 
