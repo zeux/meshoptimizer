@@ -205,8 +205,6 @@ enum VertexKind
 
 // manifold vertices can collapse on anything except locked
 // border/seam vertices can only be collapsed onto border/seam respectively
-// TODO: allow border->locked collapses? to make these work we might need to compute loop metadata for them? + audit all loop checks!
-// TODO: allow seam->locked collapses? to make these work we might need to compute loop metadata for them? + audit all loop checks!
 const char kCanCollapse[Kind_Count][Kind_Count] = {
     {1, 1, 1, 1},
     {0, 1, 0, 0},
@@ -558,16 +556,22 @@ static void fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 			unsigned int i0 = indices[i + e];
 			unsigned int i1 = indices[i + next[e]];
 
-			// TODO: if we extend loop[] to track locked vertices, we will need to check vertex_kind[i1] as well
-			if (vertex_kind[i0] != Kind_Border && vertex_kind[i0] != Kind_Seam)
-				continue;
+			unsigned char k0 = vertex_kind[i0];
+			unsigned char k1 = vertex_kind[i1];
 
-			if (loop[i0] != i1)
+			// check that i0 and i1 are border/seam and are on the same edge loop
+			// loop[] tracks half edges so we only need to check i0->i1
+			if (k0 != k1 || (k0 != Kind_Border && k0 != Kind_Seam) || loop[i0] != i1)
 				continue;
 
 			unsigned int i2 = indices[i + next[next[e]]];
 
-			float edgeWeight = vertex_kind[i0] == Kind_Seam ? 1.f : 10.f;
+			// we try hard to maintain border edge geometry; seam edges can move more freely
+			// due to topological restrictions on collapses, seam quadrics slightly improves collapse structure but aren't critical
+			const float kEdgeWeightSeam = 1.f;
+			const float kEdgeWeightBorder = 10.f;
+
+			float edgeWeight = (k0 == Kind_Seam) ? kEdgeWeightSeam : kEdgeWeightBorder;
 
 			Quadric Q;
 			quadricFromTriangleEdge(Q, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2], edgeWeight);
@@ -610,7 +614,8 @@ static size_t pickEdgeCollapses(Collapse* collapses, const unsigned int* indices
 
 			// two vertices are on a border or a seam, but there's no direct edge between them
 			// this indicates that they belong to two different edge loops and we should not collapse this edge
-			if (k0 == k1 && (k0 == Kind_Border || k0 == Kind_Seam) && loop[i0] != i1 && loop[i1] != i0)
+			// loop[] tracks half edges so we only need to check i0->i1
+			if (k0 == k1 && (k0 == Kind_Border || k0 == Kind_Seam) && loop[i0] != i1)
 				continue;
 
 			// edge can be collapsed in either direction - we will pick the one with minimum error
@@ -752,7 +757,7 @@ static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapse
 	}
 }
 
-static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, size_t triangle_collapse_goal, float error_limit, float& pass_error)
+static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, size_t triangle_collapse_goal, float error_limit)
 {
 	size_t edge_collapses = 0;
 	size_t triangle_collapses = 0;
@@ -779,7 +784,6 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		assert(collapse_remap[r0] == r0);
 		assert(collapse_remap[r1] == r1);
 
-		// TODO: this artificially magnifies future error with each collapse even for coplanar triangles
 		quadricAdd(vertex_quadrics[r1], vertex_quadrics[r0]);
 
 		if (vertex_kind[c.v0] == Kind_Seam)
@@ -807,8 +811,6 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		// border edges collapse 1 triangle, other edges collapse 2 or more
 		triangle_collapses += (vertex_kind[c.v0] == Kind_Border) ? 1 : 2;
 		edge_collapses++;
-
-		pass_error = c.error;
 	}
 
 	return edge_collapses;
@@ -858,9 +860,10 @@ static void remapEdgeLoops(unsigned int* loop, size_t vertex_count, const unsign
 
 } // namespace meshopt
 
-// TODO: this is necessary for lodviewer but will go away at some point
+#if TRACE
 unsigned char* meshopt_simplifyDebugKind = 0;
 unsigned int* meshopt_simplifyDebugLoop = 0;
+#endif
 
 size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error)
 {
@@ -914,8 +917,10 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	if (result != indices)
 		memcpy(result, indices, index_count * sizeof(unsigned int));
 
+#if TRACE
 	size_t pass_count = 0;
 	float worst_error = 0;
+#endif
 
 	meshopt_Buffer<Collapse> edge_collapses(index_count);
 	meshopt_Buffer<unsigned int> collapse_order(index_count);
@@ -957,16 +962,11 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 		memset(collapse_locked.data, 0, vertex_count);
 
-		// TODO: remove this when TRACE is removed
-		float pass_error = 0;
-		size_t collapses = performEdgeCollapses(collapse_remap.data, collapse_locked.data, vertex_quadrics.data, edge_collapses.data, edge_collapse_count, collapse_order.data, remap.data, wedge.data, vertex_kind.data, triangle_collapse_goal, error_limit, pass_error);
+		size_t collapses = performEdgeCollapses(collapse_remap.data, collapse_locked.data, vertex_quadrics.data, edge_collapses.data, edge_collapse_count, collapse_order.data, remap.data, wedge.data, vertex_kind.data, triangle_collapse_goal, error_limit);
 
 		// no edges can be collapsed any more due to hitting the error limit or triangle collapse limit
 		if (collapses == 0)
 			break;
-
-		pass_count++;
-		worst_error = (worst_error < pass_error) ? pass_error : worst_error;
 
 		remapEdgeLoops(loop.data, vertex_count, collapse_remap.data);
 
@@ -974,6 +974,18 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		assert(new_count < result_count);
 
 #if TRACE
+		float pass_error = 0.f;
+		for (size_t i = 0; i < edge_collapse_count; ++i)
+		{
+			Collapse& c = edge_collapses[collapse_order[i]];
+
+			if (collapse_remap[c.v0] == c.v1)
+				pass_error = c.error;
+		}
+
+		pass_count++;
+		worst_error = (worst_error < pass_error) ? pass_error : worst_error;
+
 		printf("pass %d: triangles: %d -> %d, collapses: %d/%d (goal: %d), error: %e (limit %e goal %e)\n", int(pass_count), int(result_count / 3), int(new_count / 3), int(collapses), int(edge_collapse_count), int(edge_collapse_goal), pass_error, error_limit, error_goal);
 #endif
 
@@ -988,11 +1000,13 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	dumpLockedCollapses(result, result_count, vertex_kind.data);
 #endif
 
+#if TRACE
 	if (meshopt_simplifyDebugKind)
 		memcpy(meshopt_simplifyDebugKind, vertex_kind.data, vertex_count);
 
 	if (meshopt_simplifyDebugLoop)
 		memcpy(meshopt_simplifyDebugLoop, loop.data, vertex_count * sizeof(unsigned int));
+#endif
 
 	return result_count;
 }
