@@ -7,7 +7,7 @@
 #include <string.h>
 
 #ifndef TRACE
-#define TRACE 1
+#define TRACE 0
 #endif
 
 #if TRACE
