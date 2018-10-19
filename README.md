@@ -4,7 +4,7 @@
 
 When GPU renders triangle meshes, various stages of the GPU pipeline have to process vertex and index data. The efficiency of these stages depends on the data you feed to them; this library provides algorithms to help optimize meshes for these stages, as well as algorithms to reduce the mesh complexity and storage overhead.
 
-The library provides a C and C++ interface for all algorithms; you can use it from C/C++ or from other languages via FFI (such as P/Invoke).
+The library provides a C and C++ interface for all algorithms; you can use it from C/C++ or from other languages via FFI (such as P/Invoke). If you want to use this library from Rust, you should use [meshopt crate](https://crates.io/crates/meshopt).
 
 ## Building
 
@@ -108,7 +108,7 @@ unsigned short pz = meshopt_quantizeHalf(v.z);
 
 ## Vertex/index buffer compression
 
-After all of the above optimizations, the geometry data is optimal for GPU to consume - however, you don't have to store the data as is. In case storage size or transmission bandwidth is of importance, you might want to compress vertex and index data. While several mesh compression libraries, like Google Draco, are available, they typically are designed to maximize the compression ratio at the cost of preserving the vertex/index order (which makes the meshes inefficient to render on GPU) or decompression performance. Additionally they frequently don't support custom game-ready quantized vertex formats and thus require to re-quantize the data after loading it, introducing extra quantization errors and making decoding slower.
+After all of the above optimizations, the geometry data is optimal for GPU to consume - however, you don't have to store the data as is. In case storage size or transmission bandwidth is of importance, you might want to compress vertex and index data. While several mesh compression libraries, like Google Draco, are available, they typically are designed to maximize the compression ratio at the cost of disturbing the vertex/index order (which makes the meshes inefficient to render on GPU) or decompression performance. Additionally they frequently don't support custom game-ready quantized vertex formats and thus require to re-quantize the data after loading it, introducing extra quantization errors and making decoding slower.
 
 Alternatively you can use general purpose compression libraries like zstd or Oodle to compress vertex/index data - however these compressors aren't designed to exploit redundancies in vertex/index data and as such compression rates can be unsatisfactory.
 
