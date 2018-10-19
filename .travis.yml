@@ -1,18 +1,16 @@
 language: sh
 
-os:
-  - linux
-  - osx
-  - windows
-
 matrix:
-  exclude:
-    - os: windows
   include:
+    - os: linux
+      env:
+        - CC=gcc
+        - CXX=g++
     - os: linux
       env:
         - CC=clang
         - CXX=clang++
+    - os: osx
     - os: windows
       env:
         - CMAKE_GENERATOR="Visual Studio 15 2017"
@@ -20,10 +18,12 @@ matrix:
       env:
         - CMAKE_GENERATOR="Visual Studio 15 2017 Win64"
 
+before_script:
+  - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then PATH=$PATH:/c/Program\ Files/CMake/bin; fi
+
 script:
   - if [[ "$TRAVIS_OS_NAME" != "windows" ]]; then make config=release; fi
   - if [[ "$TRAVIS_OS_NAME" != "windows" ]]; then make config=coverage test; fi
-  - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then PATH=$PATH:/c/Program\ Files/CMake/bin; fi
   - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then cmake -G "$CMAKE_GENERATOR" -DBUILD_DEMO=ON; fi
   - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then cmake --build . -- -verbosity:minimal; fi
   - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then ./Debug/demo.exe demo/pirate.obj; fi
