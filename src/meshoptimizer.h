@@ -81,6 +81,7 @@ MESHOPTIMIZER_API void meshopt_optimizeOverdraw(unsigned int* destination, const
 /**
  * Vertex fetch cache optimizer
  * Generates vertex remap to reduce the amount of GPU memory fetches during vertex processing
+ * Returns the number of unique vertices, which is the same as input vertex count unless some vertices are unused
  * The resulting remap table should be used to reorder vertex/index buffers using meshopt_remapVertexBuffer/meshopt_remapIndexBuffer
  *
  * destination must contain enough space for the resulting remap table (vertex_count elements)
@@ -90,6 +91,7 @@ MESHOPTIMIZER_API size_t meshopt_optimizeVertexFetchRemap(unsigned int* destinat
 /**
  * Vertex fetch cache optimizer
  * Reorders vertices and changes indices to reduce the amount of GPU memory fetches during vertex processing
+ * Returns the number of unique vertices, which is the same as input vertex count unless some vertices are unused
  *
  * destination must contain enough space for the resulting vertex buffer (vertex_count elements)
  * indices is used both as an input and as an output index buffer
@@ -142,6 +144,7 @@ MESHOPTIMIZER_API int meshopt_decodeVertexBuffer(void* destination, size_t verte
  * 
  * destination must contain enough space for the source index buffer (since optimization is iterative, this means index_count elements - *not* target_index_count!)
  * vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
+ * Caveat: the simplifier will read the entire vertex, not just the first 12 bytes, to determine attribute seams; this might lead to interface changes.
  */
 MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error);
 
