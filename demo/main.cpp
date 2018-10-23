@@ -712,6 +712,7 @@ void encodeVertexCoverage()
 
 void stripify(const Mesh& mesh)
 {
+	// note: input mesh is assumed to be optimized for vertex cache and vertex fetch
 	double start = timestamp();
 	std::vector<unsigned int> strip(mesh.indices.size() / 3 * 4);
 	strip.resize(meshopt_stripify(&strip[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size()));
@@ -732,6 +733,38 @@ void stripify(const Mesh& mesh)
 	       vcs.acmr, vcs.atvr, vcs_nv.atvr, vcs_amd.atvr, vcs_intel.atvr,
 	       int(strip.size()), double(strip.size()) / double(mesh.indices.size()) * 100,
 	       (end - start) * 1000);
+}
+
+void meshlets(const Mesh& mesh)
+{
+	const size_t max_vertices = 64;
+	const size_t max_triangles = 126;
+
+	// note: input mesh is assumed to be optimized for vertex cache and vertex fetch
+	double start = timestamp();
+	std::vector<meshopt_Meshlet> meshlets(meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles));
+	meshlets.resize(meshopt_buildMeshlets(&meshlets[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), max_vertices, max_triangles));
+	double end = timestamp();
+
+	double avg_vertices = 0;
+	double avg_triangles = 0;
+	size_t not_full = 0;
+
+	for (size_t i = 0; i < meshlets.size(); ++i)
+	{
+		const meshopt_Meshlet& m = meshlets[i];
+
+		avg_vertices += m.vertex_count;
+		avg_triangles += m.triangle_count;
+		not_full += m.vertex_count < max_vertices;
+	}
+
+	avg_vertices /= double(meshlets.size());
+	avg_triangles /= double(meshlets.size());
+
+	printf("Meshlets : %d meshlets (avg vertices %.1f, avg triangles %.1f, not full %d) in %.2f msec\n",
+			int(meshlets.size()), avg_vertices, avg_triangles, int(not_full), (end - start) * 1000);
+
 }
 
 bool loadMesh(Mesh& mesh, const char* path)
@@ -781,6 +814,7 @@ void process(const char* path)
 	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
 
 	stripify(copy);
+	meshlets(copy);
 
 	encodeIndex(copy);
 	packVertex<PackedVertex>(copy, "");
@@ -796,7 +830,11 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	simplify(mesh);
+	Mesh copy = mesh;
+	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
+	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
+
+	meshlets(copy);
 }
 
 void processCoverage()

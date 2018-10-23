@@ -211,6 +211,27 @@ struct meshopt_VertexFetchStatistics
  */
 MESHOPTIMIZER_API struct meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
 
+struct meshopt_Meshlet
+{
+	unsigned int vertices[64];
+	unsigned char indices[126][3];
+	unsigned char triangle_count;
+	unsigned char vertex_count;
+};
+
+/**
+ * Experimental: Meshlet builder
+ * Splits the mesh into a set of meshlets where each meshlet has a micro index buffer indexing into meshlet vertices that refer to the original vertex buffer
+ * The resulting data can be used to render meshes using NVidia programmable mesh shading pipeline, or in other cluster-based renderers.
+ * For maximum efficiency the index buffer being converted has to be optimized for vertex cache first.
+ *
+ * destination must contain enough space for all meshlets, worst case size can be computed with meshopt_buildMeshletsBound
+ * max_vertices and max_triangles can't exceed limits statically declared in meshopt_Meshlet
+ */
+MESHOPTIMIZER_API size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, size_t max_vertices, size_t max_triangles);
+MESHOPTIMIZER_API size_t meshopt_buildMeshletsBound(size_t index_count, size_t max_vertices, size_t max_triangles);
+
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
