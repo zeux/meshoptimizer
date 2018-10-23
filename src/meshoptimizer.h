@@ -154,18 +154,20 @@ MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsig
  * Returns the number of indices in the resulting strip, with destination containing new index data
  * For maximum efficiency the index buffer being converted has to be optimized for vertex cache first.
  *
- * destination must contain enough space for the worst case target index buffer (index_count / 3 * 4 elements)
+ * destination must contain enough space for the target index buffer, worst case can be computed with meshopt_stripifyBound
  */
 MESHOPTIMIZER_API size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count);
+MESHOPTIMIZER_API size_t meshopt_stripifyBound(size_t index_count);
 
 /**
  * Mesh unstripifier
  * Converts a triangle strip to a triangle list
  * Returns the number of indices in the resulting list, with destination containing new index data
  *
- * destination must contain enough space for the worst case target index buffer ((index_count - 2) * 3 elements)
+ * destination must contain enough space for the target index buffer, worst case can be computed with meshopt_unstripifyBound
  */
 MESHOPTIMIZER_API size_t meshopt_unstripify(unsigned int* destination, const unsigned int* indices, size_t index_count);
+MESHOPTIMIZER_API size_t meshopt_unstripifyBound(size_t index_count);
 
 struct meshopt_VertexCacheStatistics
 {

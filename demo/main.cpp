@@ -714,12 +714,13 @@ void stripify(const Mesh& mesh)
 {
 	// note: input mesh is assumed to be optimized for vertex cache and vertex fetch
 	double start = timestamp();
-	std::vector<unsigned int> strip(mesh.indices.size() / 3 * 4);
+	std::vector<unsigned int> strip(meshopt_stripifyBound(mesh.indices.size()));
 	strip.resize(meshopt_stripify(&strip[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size()));
 	double end = timestamp();
 
 	Mesh copy = mesh;
 	copy.indices.resize(meshopt_unstripify(&copy.indices[0], &strip[0], strip.size()));
+	assert(copy.indices.size() <= meshopt_unstripifyBound(strip.size()));
 
 	assert(isMeshValid(copy));
 	assert(areMeshesEqual(mesh, copy));

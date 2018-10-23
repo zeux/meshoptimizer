@@ -213,6 +213,14 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 	return strip_size;
 }
 
+size_t meshopt_stripifyBound(size_t index_count)
+{
+	assert(index_count % 3 == 0);
+
+	// worst case is 1 restart index and 3 indices per triangle
+	return (index_count / 3) * 4;
+}
+
 size_t meshopt_unstripify(unsigned int* destination, const unsigned int* indices, size_t index_count)
 {
 	assert(destination != indices);
@@ -249,4 +257,11 @@ size_t meshopt_unstripify(unsigned int* destination, const unsigned int* indices
 	}
 
 	return offset;
+}
+
+size_t meshopt_unstripifyBound(size_t index_count)
+{
+	assert(index_count == 0 || index_count >= 3);
+
+	return (index_count == 0) ? 0 : (index_count - 2) * 3;
 }
