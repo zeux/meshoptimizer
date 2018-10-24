@@ -11,6 +11,7 @@ set(SOURCES
     src/meshoptimizer.h
     src/indexcodec.cpp
     src/indexgenerator.cpp
+    src/meshletbuilder.cpp
     src/overdrawanalyzer.cpp
     src/overdrawoptimizer.cpp
     src/simplifier.cpp
