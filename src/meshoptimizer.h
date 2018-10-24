@@ -19,6 +19,9 @@
 #define MESHOPTIMIZER_API
 #endif
 
+/* Experimental APIs have unstable interface and might have implementation that's not fully tested or optimized */
+#define MESHOPTIMIZER_EXPERIMENTAL MESHOPTIMIZER_API
+
 /* C interface */
 #ifdef __cplusplus
 extern "C" {
@@ -146,7 +149,7 @@ MESHOPTIMIZER_API int meshopt_decodeVertexBuffer(void* destination, size_t verte
  * vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
  * Caveat: the simplifier will read the entire vertex, not just the first 12 bytes, to determine attribute seams; this might lead to interface changes.
  */
-MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error);
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error);
 
 /**
  * Mesh stripifier
@@ -230,8 +233,8 @@ struct meshopt_Meshlet
  * destination must contain enough space for all meshlets, worst case size can be computed with meshopt_buildMeshletsBound
  * max_vertices and max_triangles can't exceed limits statically declared in meshopt_Meshlet
  */
-MESHOPTIMIZER_API size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, size_t max_vertices, size_t max_triangles);
-MESHOPTIMIZER_API size_t meshopt_buildMeshletsBound(size_t index_count, size_t max_vertices, size_t max_triangles);
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, size_t max_vertices, size_t max_triangles);
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_buildMeshletsBound(size_t index_count, size_t max_vertices, size_t max_triangles);
 
 
 #ifdef __cplusplus
