@@ -7,10 +7,14 @@
 size_t meshopt_buildMeshletsBound(size_t index_count, size_t max_vertices, size_t max_triangles)
 {
 	assert(index_count % 3 == 0);
+	assert(max_vertices >= 3);
+	assert(max_triangles >= 1);
 
 	// meshlet construction is limited by max vertices and max triangles per meshlet
 	// the worst case is that the input is an unindexed stream since this equally stresses both limits
-	size_t meshlet_limit_vertices = (index_count + max_vertices - 1) / max_vertices;
+	// note that we assume that in the worst case, we leave 2 vertices unpacked in each meshlet - if we have space for 3 we can pack any triangle
+	size_t max_vertices_conservative = max_vertices - 2;
+	size_t meshlet_limit_vertices = (index_count + max_vertices_conservative - 1) / max_vertices_conservative;
 	size_t meshlet_limit_triangles = (index_count / 3 + max_triangles - 1) / max_triangles; 
 
 	return meshlet_limit_vertices > meshlet_limit_triangles ? meshlet_limit_vertices : meshlet_limit_triangles;
@@ -19,6 +23,8 @@ size_t meshopt_buildMeshletsBound(size_t index_count, size_t max_vertices, size_
 size_t meshopt_buildMeshlets(meshopt_Meshlet* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, size_t max_vertices, size_t max_triangles)
 {
 	assert(index_count % 3 == 0);
+	assert(max_vertices >= 3);
+	assert(max_triangles >= 1);
 
 	meshopt_Meshlet meshlet;
 	memset(&meshlet, 0, sizeof(meshlet));
