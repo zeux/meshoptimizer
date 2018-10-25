@@ -1,25 +1,19 @@
-language: sh
+language: cpp
 
 matrix:
   include:
     - os: linux
-      env:
-        - CC=gcc
-        - CXX=g++
+      compiler: gcc
     - os: linux
-      env:
-        - CC=clang
-        - CXX=clang++
+      compiler: clang
     - os: osx
+      compiler: clang
     - os: windows
       env:
         - TARGET="Visual Studio 15 2017"
     - os: windows
       env:
         - TARGET="Visual Studio 15 2017 Win64"
-
-before_script:
-  - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then PATH=$PATH:/c/Program\ Files/CMake/bin; fi
 
 script:
   - if [[ "$TRAVIS_OS_NAME" != "windows" ]]; then make config=release; fi
