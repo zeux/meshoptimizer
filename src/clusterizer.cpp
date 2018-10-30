@@ -103,6 +103,7 @@ meshopt_Cone meshopt_computeClusterCone(const unsigned int* indices, size_t inde
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
 	float normals[256][3];
+	float corners[256][3];
 	unsigned int triangles = 0;
 
 	for (unsigned int i = 0; i < index_count; i += 3)
@@ -130,6 +131,9 @@ meshopt_Cone meshopt_computeClusterCone(const unsigned int* indices, size_t inde
 		normals[triangles][0] = normalx / area;
 		normals[triangles][1] = normaly / area;
 		normals[triangles][2] = normalz / area;
+		corners[triangles][0] = p0[0];
+		corners[triangles][1] = p0[1];
+		corners[triangles][2] = p0[2];
 		triangles++;
 	}
 
@@ -159,17 +163,74 @@ meshopt_Cone meshopt_computeClusterCone(const unsigned int* indices, size_t inde
 		mindp = (dp < mindp) ? dp : mindp;
 	}
 
-	meshopt_Cone cone;
+	if (1)
+	{
+		meshopt_Cone cone;
 
-	cone.apex[0] = 0.f;
-	cone.apex[1] = 0.f;
-	cone.apex[2] = 0.f;
-	cone.direction[0] = avgnormal[0];
-	cone.direction[1] = avgnormal[1];
-	cone.direction[2] = avgnormal[2];
-	cone.cutoff = (mindp <= 0.f) ? 1 : sqrtf(1 - mindp * mindp);
+		cone.apex[0] = 0.f;
+		cone.apex[1] = 0.f;
+		cone.apex[2] = 0.f;
+		cone.direction[0] = avgnormal[0];
+		cone.direction[1] = avgnormal[1];
+		cone.direction[2] = avgnormal[2];
+		cone.cutoff = (mindp <= 0.f) ? 1 : sqrtf(1 - mindp * mindp);
 
-	return cone;
+		return cone;
+	}
+	else
+	{
+		avgnormal[0] *= -1;
+		avgnormal[1] *= -1;
+		avgnormal[2] *= -1;
+
+		float center[3] = {};
+
+		// probably not a great idea to just average a single corner
+		for (unsigned int i = 0; i < triangles; ++i)
+		{
+			center[0] += corners[i][0];
+			center[1] += corners[i][1];
+			center[2] += corners[i][2];
+		}
+
+		// TODO: triangles==0
+		center[0] /= triangles;
+		center[1] /= triangles;
+		center[2] /= triangles;
+
+		// for each triangle:
+		// intersect center+t*avgnormal with triangle
+		// record maximum t
+		// if any triangles are parallel, we need a degen cone
+		float maxt = 0;
+
+		for (unsigned int i = 0; i < triangles; ++i)
+		{
+			// dot(center+t*avgnormal-corner, trinormal) = 0
+			// dot(center-corner, trinormal) + t * dot(avgnormal, trinormal) = 0
+			float dc = (center[0] - corners[i][0]) * normals[i][0] + (center[1] - corners[i][1]) * normals[i][1] + (center[2] - corners[i][2]) * normals[i][2];
+			float dn = avgnormal[0] * normals[i][0] + avgnormal[1] * normals[i][1] + avgnormal[2] * normals[i][2];
+
+			// TODO: if (dn == 0.f) maxt = inf
+			float t = -dc / dn;
+
+			maxt = (t > maxt) ? t : maxt;
+		}
+
+		meshopt_Cone cone;
+
+		// TODO: the signs are potentially wrong here
+		cone.apex[0] = center[0] + avgnormal[0] * maxt;
+		cone.apex[1] = center[1] + avgnormal[1] * maxt;
+		cone.apex[2] = center[2] + avgnormal[2] * maxt;
+		cone.direction[0] = -avgnormal[0];
+		cone.direction[1] = -avgnormal[1];
+		cone.direction[2] = -avgnormal[2];
+		// TODO: this is potentially wrong as well :)
+		cone.cutoff = (mindp <= 0.f) ? 1 : sqrtf(1 - mindp * mindp);
+
+		return cone;
+	}
 }
 
 meshopt_Cone meshopt_computeMeshletCone(const meshopt_Meshlet* meshlet, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
