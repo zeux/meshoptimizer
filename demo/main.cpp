@@ -1,11 +1,12 @@
 #include "../src/meshoptimizer.h"
 
+#include <assert.h>
+#include <math.h>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+
 #include <algorithm>
-#include <cassert>
-#include <cmath>
-#include <cstdio>
-#include <cstring>
-#include <ctime>
 #include <vector>
 
 #include "miniz.h"
@@ -766,6 +767,42 @@ void meshlets(const Mesh& mesh)
 	printf("Meshlets : %d meshlets (avg vertices %.1f, avg triangles %.1f, not full %d) in %.2f msec\n",
 			int(meshlets.size()), avg_vertices, avg_triangles, int(not_full), (end - start) * 1000);
 
+	float camera[3] = { 100, 100, 100 };
+	float view[3] = { -0.577350f, -0.577350f, -0.577350f };
+
+	size_t rejected_ortho = 0;
+	size_t rejected_persp = 0;
+	size_t accepted = 0;
+
+	double startc = timestamp();
+	for (size_t i = 0; i < meshlets.size(); ++i)
+	{
+		meshopt_Cone cone = meshopt_computeMeshletCone(&meshlets[i], &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
+
+		// trivial accept: we can't ever cull this meshlet
+		if (cone.cutoff >= 1)
+		{
+			accepted++;
+		}
+		else
+		{
+			// orthographic projection: dot(view, cone.direction) > cone.cutoff
+			rejected_ortho += view[0] * cone.direction[0] + view[1] * cone.direction[1] + view[2] * cone.direction[2] > cone.cutoff;
+
+			// perspective projection: dot(normalize(cone.apex - camera_position), cone.direction) > cone.cutoff
+			float mview[3] = { cone.apex[0] - camera[0], cone.apex[1] - camera[1], cone.apex[2] - camera[2] };
+			float mviewlength = sqrtf(mview[0] * mview[0] + mview[1] * mview[1] + mview[2] * mview[2]);
+
+			rejected_persp += mview[0] * cone.direction[0] + mview[1] * cone.direction[1] + mview[2] * cone.direction[2] > cone.cutoff * mviewlength;
+		}
+	}
+	double endc = timestamp();
+
+	printf("ConeCull : rejected %d ortho (%.1f%%) / %d persp (%.1f%%), trivially accepted %d (%.1f%%) in %.2f msec\n",
+			int(rejected_ortho), double(rejected_ortho) / double(meshlets.size()) * 100,
+			int(rejected_persp), double(rejected_persp) / double(meshlets.size()) * 100,
+			int(accepted), double(accepted) / double(meshlets.size()) * 100,
+			(endc - startc) * 1000);
 }
 
 bool loadMesh(Mesh& mesh, const char* path)
