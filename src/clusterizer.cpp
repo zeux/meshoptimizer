@@ -174,7 +174,7 @@ meshopt_Cone meshopt_computeClusterCone(const unsigned int* indices, size_t inde
 
 meshopt_Cone meshopt_computeMeshletCone(const meshopt_Meshlet* meshlet, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
-	assert(meshlet->triangle_count <= 256);
+	assert(int(meshlet->triangle_count) <= 256);
 
 	assert(vertex_positions_stride > 0 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
