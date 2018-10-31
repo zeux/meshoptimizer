@@ -786,14 +786,14 @@ void meshlets(const Mesh& mesh)
 		}
 		else
 		{
-			// orthographic projection: dot(view, cone.direction) > cone.cutoff
-			rejected_ortho += view[0] * cone.direction[0] + view[1] * cone.direction[1] + view[2] * cone.direction[2] > cone.cutoff;
+			// orthographic projection: dot(view, cone.axis) > cone.cutoff
+			rejected_ortho += view[0] * cone.axis[0] + view[1] * cone.axis[1] + view[2] * cone.axis[2] > cone.cutoff;
 
-			// perspective projection: dot(normalize(cone.apex - camera_position), cone.direction) > cone.cutoff
+			// perspective projection: dot(normalize(cone.apex - camera_position), cone.axis) > cone.cutoff
 			float mview[3] = { cone.apex[0] - camera[0], cone.apex[1] - camera[1], cone.apex[2] - camera[2] };
 			float mviewlength = sqrtf(mview[0] * mview[0] + mview[1] * mview[1] + mview[2] * mview[2]);
 
-			rejected_persp += mview[0] * cone.direction[0] + mview[1] * cone.direction[1] + mview[2] * cone.direction[2] > cone.cutoff * mviewlength;
+			rejected_persp += mview[0] * cone.axis[0] + mview[1] * cone.axis[1] + mview[2] * cone.axis[2] > cone.cutoff * mviewlength;
 		}
 	}
 	double endc = timestamp();

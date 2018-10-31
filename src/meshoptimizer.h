@@ -238,7 +238,7 @@ MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_buildMeshletsBound(size_t index_count,
 struct meshopt_Cone
 {
 	float apex[3];
-	float direction[3];
+	float axis[3];
 	float cutoff; /* = cos(angle/2) */
 };
 
@@ -246,8 +246,8 @@ struct meshopt_Cone
  * Experimental: Cluster cone generator
  * Creates cone that can be used for backface culling using one of the formulas below:
  *
- * orthographic projection: dot(view, cone.direction) > cone.cutoff
- * perspective projection: dot(normalize(cone.apex - camera_position), cone.direction) > cone.cutoff
+ * orthographic projection: dot(view, cone.axis) > cone.cutoff
+ * perspective projection: dot(normalize(cone.apex - camera_position), cone.axis) > cone.cutoff
  *
  * vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
  */

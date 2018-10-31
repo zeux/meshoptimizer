@@ -154,27 +154,27 @@ meshopt_Cone meshopt_computeClusterCone(const unsigned int* indices, size_t inde
 	cluster_centroid[2] *= inv_cluster_area;
 
 	// build a cone around triangle normals
-	float avgnormal[3] = {};
+	float axis[3] = {};
 
 	for (unsigned int i = 0; i < triangles; ++i)
 	{
-		avgnormal[0] += normals[i][0];
-		avgnormal[1] += normals[i][1];
-		avgnormal[2] += normals[i][2];
+		axis[0] += normals[i][0];
+		axis[1] += normals[i][1];
+		axis[2] += normals[i][2];
 	}
 
-	float avglength = sqrtf(avgnormal[0] * avgnormal[0] + avgnormal[1] * avgnormal[1] + avgnormal[2] * avgnormal[2]);
+	float avglength = sqrtf(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]);
 	float invavglength = avglength == 0.f ? 0.f : 1.f / avglength;
 
-	avgnormal[0] *= invavglength;
-	avgnormal[1] *= invavglength;
-	avgnormal[2] *= invavglength;
+	axis[0] *= invavglength;
+	axis[1] *= invavglength;
+	axis[2] *= invavglength;
 
 	float mindp = 1.f;
 
 	for (unsigned int i = 0; i < triangles; ++i)
 	{
-		float dp = normals[i][0] * avgnormal[0] + normals[i][1] * avgnormal[1] + normals[i][2] * avgnormal[2];
+		float dp = normals[i][0] * axis[0] + normals[i][1] * axis[1] + normals[i][2] * axis[2];
 
 		mindp = (dp < mindp) ? dp : mindp;
 	}
@@ -189,33 +189,39 @@ meshopt_Cone meshopt_computeClusterCone(const unsigned int* indices, size_t inde
 
 	float maxt = 0;
 
-	// we need to find the point on centroid-t*avgnormal ray that lies in negative half-space of all triangles
+	// we need to find the point on centroid-t*axis ray that lies in negative half-space of all triangles
 	for (unsigned int i = 0; i < triangles; ++i)
 	{
-		// dot(centroid-t*avgnormal-corner, trinormal) = 0
-		// dot(centroid-corner, trinormal) - t * dot(avgnormal, trinormal) = 0
+		// dot(centroid-t*axis-corner, trinormal) = 0
+		// dot(centroid-corner, trinormal) - t * dot(axis, trinormal) = 0
 		float cx = cluster_centroid[0] - corners[i][0];
 		float cy = cluster_centroid[1] - corners[i][1];
 		float cz = cluster_centroid[2] - corners[i][2];
 
 		float dc = cx * normals[i][0] + cy * normals[i][1] + cz * normals[i][2];
-		float dn = avgnormal[0] * normals[i][0] + avgnormal[1] * normals[i][1] + avgnormal[2] * normals[i][2];
+		float dn = axis[0] * normals[i][0] + axis[1] * normals[i][1] + axis[2] * normals[i][2];
 
-		// TODO: if (dn == 0.f) maxt = inf
+		// dn should be more than mindp cutoff above
+		assert(dn > 0.f);
 		float t = dc / dn;
 
 		maxt = (t > maxt) ? t : maxt;
 	}
 
-	// TODO: validate maxt for robustness
-
 	meshopt_Cone cone;
-	cone.apex[0] = cluster_centroid[0] - avgnormal[0] * maxt;
-	cone.apex[1] = cluster_centroid[1] - avgnormal[1] * maxt;
-	cone.apex[2] = cluster_centroid[2] - avgnormal[2] * maxt;
-	cone.direction[0] = avgnormal[0];
-	cone.direction[1] = avgnormal[1];
-	cone.direction[2] = avgnormal[2];
+
+	// cone apex should be in the negative half-space of all cluster triangles by construction
+	cone.apex[0] = cluster_centroid[0] - axis[0] * maxt;
+	cone.apex[1] = cluster_centroid[1] - axis[1] * maxt;
+	cone.apex[2] = cluster_centroid[2] - axis[2] * maxt;
+
+	// note: this axis is the axis of the normal cone, but our test for perspective camera effectively negates the axis
+	cone.axis[0] = axis[0];
+	cone.axis[1] = axis[1];
+	cone.axis[2] = axis[2];
+
+	// cos(a) for normal cone is mindp; we need to add 90 degrees on both sides and invert the cone
+	// which gives us -cos(a+90) = -(-sin(a)) = sin(a) = sqrt(1 - cos^2(a))
 	cone.cutoff = sqrtf(1 - mindp * mindp);
 
 	return cone;
