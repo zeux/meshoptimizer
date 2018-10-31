@@ -180,7 +180,9 @@ meshopt_Cone meshopt_computeClusterCone(const unsigned int* indices, size_t inde
 	}
 
 	// degenerate cluster, no valid triangles or normal cone is larger than a hemisphere
-	if (triangles == 0 || mindp <= 0.f)
+	// note that if mindp is positive but close to 0, the triangle intersection code below gets less stable
+	// we arbitrarily decide that if a normal cone is ~168 degrees wide or more, the cone isn't useful
+	if (triangles == 0 || mindp <= 0.1f)
 	{
 		meshopt_Cone cone = {};
 		cone.cutoff = 1;
