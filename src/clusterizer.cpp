@@ -11,8 +11,8 @@ namespace meshopt
 static void computeBoundingSphere(float result[4], const float points[][3], size_t count)
 {
 	// find extremum points along all 3 axes; for each axis we get a pair of points with min/max coordinates
-	unsigned int pmin[3] = {0, 0, 0};
-	unsigned int pmax[3] = {0, 0, 0};
+	size_t pmin[3] = {0, 0, 0};
+	size_t pmax[3] = {0, 0, 0};
 
 	for (size_t i = 0; i < count; ++i)
 	{
