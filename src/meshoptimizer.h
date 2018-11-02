@@ -237,6 +237,10 @@ MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_buildMeshletsBound(size_t index_count,
 
 struct meshopt_Bounds
 {
+	/* bounding sphere, useful for frustum and occlusion culling */
+	float center[3];
+	float radius;
+
 	/* normal cone, useful for backface culling */
 	float cone_apex[3];
 	float cone_axis[3];

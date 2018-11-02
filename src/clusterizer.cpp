@@ -176,6 +176,7 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
+	// compute triangle normals and gather triangle corners
 	float normals[256][3];
 	float corners[256][3][3];
 	unsigned int triangles = 0;
@@ -202,7 +203,7 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 		if (area == 0.f)
 			continue;
 
-		// record triangle normals & corners for future use (this is a plane eqn)
+		// record triangle normals & corners for future use; normal and corner 0 define a plane equation
 		normals[triangles][0] = normalx / area;
 		normals[triangles][1] = normaly / area;
 		normals[triangles][2] = normalz / area;
@@ -218,11 +219,10 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 
 	float center[3] = { psphere[0], psphere[1], psphere[2] };
 
-	// treating triangle normals as points, find the bounding sphere
+	// treating triangle normals as points, find the bounding sphere - the sphere center determines the optimal cone axis
 	float nsphere[4] = {};
 	computeBoundingSphere(nsphere, normals, triangles);
 
-	// build a cone around triangle normals
 	float axis[3] = { nsphere[0], nsphere[1], nsphere[2] };
 	float axislength = sqrtf(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]);
 	float invaxislength = axislength == 0.f ? 0.f : 1.f / axislength;
@@ -231,6 +231,7 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 	axis[1] *= invaxislength;
 	axis[2] *= invaxislength;
 
+	// compute a tight cone around all normals, mindp = cos(angle/2)
 	float mindp = 1.f;
 
 	for (unsigned int i = 0; i < triangles; ++i)
@@ -240,12 +241,19 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 		mindp = (dp < mindp) ? dp : mindp;
 	}
 
+	// prepare bounds with the bounding sphere; note that below we can return bounds without cone information for degenerate cones
+	meshopt_Bounds bounds = {};
+
+	bounds.center[0] = center[0];
+	bounds.center[1] = center[1];
+	bounds.center[2] = center[2];
+	bounds.radius = psphere[3];
+
 	// degenerate cluster, no valid triangles or normal cone is larger than a hemisphere
 	// note that if mindp is positive but close to 0, the triangle intersection code below gets less stable
 	// we arbitrarily decide that if a normal cone is ~168 degrees wide or more, the cone isn't useful
 	if (triangles == 0 || mindp <= 0.1f)
 	{
-		meshopt_Bounds bounds = {};
 		bounds.cone_cutoff = 1;
 		return bounds;
 	}
@@ -270,8 +278,6 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 
 		maxt = (t > maxt) ? t : maxt;
 	}
-
-	meshopt_Bounds bounds;
 
 	// cone apex should be in the negative half-space of all cluster triangles by construction
 	bounds.cone_apex[0] = center[0] - axis[0] * maxt;
