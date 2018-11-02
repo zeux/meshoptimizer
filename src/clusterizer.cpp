@@ -256,6 +256,7 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 	if (triangles == 0 || mindp <= 0.1f)
 	{
 		bounds.cone_cutoff = 1;
+		bounds.cone_cutoff_s8 = 127;
 		return bounds;
 	}
 
@@ -293,6 +294,16 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 	// cos(a) for normal cone is mindp; we need to add 90 degrees on both sides and invert the cone
 	// which gives us -cos(a+90) = -(-sin(a)) = sin(a) = sqrt(1 - cos^2(a))
 	bounds.cone_cutoff = sqrtf(1 - mindp * mindp);
+
+	// quantize axis & cutoff to 8-bit SNORM format
+	bounds.cone_axis_s8[0] = meshopt_quantizeSnorm(bounds.cone_axis[0], 8);
+	bounds.cone_axis_s8[1] = meshopt_quantizeSnorm(bounds.cone_axis[1], 8);
+	bounds.cone_axis_s8[2] = meshopt_quantizeSnorm(bounds.cone_axis[2], 8);
+	bounds.cone_cutoff_s8 = meshopt_quantizeSnorm(bounds.cone_cutoff, 8) + 2;
+
+	// for the test to be conservative, we need to adjust the cutoff
+	// each axis component has up to 0.5/127 error, so the dot product can accumulate 1.5/127; the cutoff can also get rounded down for an extra 0.5/127 error
+	bounds.cone_cutoff_s8 = (bounds.cone_cutoff_s8 < 125) ? bounds.cone_cutoff_s8 + 2 : 127;
 
 	return bounds;
 }
