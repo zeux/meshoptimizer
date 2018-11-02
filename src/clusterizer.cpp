@@ -5,13 +5,14 @@
 #include <math.h>
 #include <string.h>
 
-namespace meshopt {
+namespace meshopt
+{
 
 static void computeBoundingSphere(float result[4], const float points[][3], size_t count)
 {
 	// find extremum points along all 3 axes; for each axis we get a pair of points with min/max coordinates
-	unsigned int pmin[3] = { 0, 0, 0 };
-	unsigned int pmax[3] = { 0, 0, 0 };
+	unsigned int pmin[3] = {0, 0, 0};
+	unsigned int pmax[3] = {0, 0, 0};
 
 	for (size_t i = 0; i < count; ++i)
 	{
@@ -46,7 +47,7 @@ static void computeBoundingSphere(float result[4], const float points[][3], size
 	const float* p1 = points[pmin[paxis]];
 	const float* p2 = points[pmax[paxis]];
 
-	float center[3] = { (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, (p1[2] + p2[2]) / 2 };
+	float center[3] = {(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, (p1[2] + p2[2]) / 2};
 	float radius = sqrtf(paxisd2) / 2;
 
 	// iteratively adjust the sphere up until all points fit
@@ -75,7 +76,7 @@ static void computeBoundingSphere(float result[4], const float points[][3], size
 	result[3] = radius;
 }
 
-}
+} // namespace meshopt
 
 size_t meshopt_buildMeshletsBound(size_t index_count, size_t max_vertices, size_t max_triangles)
 {
@@ -88,7 +89,7 @@ size_t meshopt_buildMeshletsBound(size_t index_count, size_t max_vertices, size_
 	// note that we assume that in the worst case, we leave 2 vertices unpacked in each meshlet - if we have space for 3 we can pack any triangle
 	size_t max_vertices_conservative = max_vertices - 2;
 	size_t meshlet_limit_vertices = (index_count + max_vertices_conservative - 1) / max_vertices_conservative;
-	size_t meshlet_limit_triangles = (index_count / 3 + max_triangles - 1) / max_triangles; 
+	size_t meshlet_limit_triangles = (index_count / 3 + max_triangles - 1) / max_triangles;
 
 	return meshlet_limit_vertices > meshlet_limit_triangles ? meshlet_limit_vertices : meshlet_limit_triangles;
 }
@@ -190,8 +191,8 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 		const float* p1 = vertex_positions + vertex_stride_float * b;
 		const float* p2 = vertex_positions + vertex_stride_float * c;
 
-		float p10[3] = { p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2] };
-		float p20[3] = { p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2] };
+		float p10[3] = {p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]};
+		float p20[3] = {p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]};
 
 		float normalx = p10[1] * p20[2] - p10[2] * p20[1];
 		float normaly = p10[2] * p20[0] - p10[0] * p20[2];
@@ -217,13 +218,13 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 	float psphere[4] = {};
 	computeBoundingSphere(psphere, corners[0], triangles * 3);
 
-	float center[3] = { psphere[0], psphere[1], psphere[2] };
+	float center[3] = {psphere[0], psphere[1], psphere[2]};
 
 	// treating triangle normals as points, find the bounding sphere - the sphere center determines the optimal cone axis
 	float nsphere[4] = {};
 	computeBoundingSphere(nsphere, normals, triangles);
 
-	float axis[3] = { nsphere[0], nsphere[1], nsphere[2] };
+	float axis[3] = {nsphere[0], nsphere[1], nsphere[2]};
 	float axislength = sqrtf(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]);
 	float invaxislength = axislength == 0.f ? 0.f : 1.f / axislength;
 
