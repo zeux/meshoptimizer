@@ -5,6 +5,78 @@
 #include <math.h>
 #include <string.h>
 
+namespace meshopt {
+
+static void computeBoundingSphere(float result[4], const float points[][3], size_t count)
+{
+	// find extremum points along all 3 axes; for each axis we get a pair of points with min/max coordinates
+	unsigned int pmin[3] = { 0, 0, 0 };
+	unsigned int pmax[3] = { 0, 0, 0 };
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		const float* p = points[i];
+
+		for (int axis = 0; axis < 3; ++axis)
+		{
+			pmin[axis] = (p[axis] < points[pmin[axis]][axis]) ? i : pmin[axis];
+			pmax[axis] = (p[axis] > points[pmax[axis]][axis]) ? i : pmax[axis];
+		}
+	}
+
+	// find the pair of points with largest distance
+	float paxisd2 = 0;
+	int paxis = 0;
+
+	for (int axis = 0; axis < 3; ++axis)
+	{
+		const float* p1 = points[pmin[axis]];
+		const float* p2 = points[pmax[axis]];
+
+		float d2 = (p2[0] - p1[0]) * (p2[0] - p1[0]) + (p2[1] - p1[1]) * (p2[1] - p1[1]) + (p2[2] - p1[2]) * (p2[2] - p1[2]);
+
+		if (d2 > paxisd2)
+		{
+			paxisd2 = d2;
+			paxis = axis;
+		}
+	}
+
+	// use the longest segment as the initial sphere diameter
+	const float* p1 = points[pmin[paxis]];
+	const float* p2 = points[pmax[paxis]];
+
+	float center[3] = { (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, (p1[2] + p2[2]) / 2 };
+	float radius = sqrtf(paxisd2) / 2;
+
+	// iteratively adjust the sphere up until all points fit
+	for (size_t i = 0; i < count; ++i)
+	{
+		const float* p = points[i];
+		float d2 = (p[0] - center[0]) * (p[0] - center[0]) + (p[1] - center[1]) * (p[1] - center[1]) + (p[2] - center[2]) * (p[2] - center[2]);
+
+		if (d2 > radius * radius)
+		{
+			float d = sqrtf(d2);
+			assert(d > 0);
+
+			float k = 0.5f + (radius / d) / 2;
+
+			center[0] = center[0] * k + p[0] * (1 - k);
+			center[1] = center[1] * k + p[1] * (1 - k);
+			center[2] = center[2] * k + p[2] * (1 - k);
+			radius = (radius + d) / 2;
+		}
+	}
+
+	result[0] = center[0];
+	result[1] = center[1];
+	result[2] = center[2];
+	result[3] = radius;
+}
+
+}
+
 size_t meshopt_buildMeshletsBound(size_t index_count, size_t max_vertices, size_t max_triangles)
 {
 	assert(index_count % 3 == 0);
@@ -94,6 +166,8 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* destination, const unsigned int* i
 
 meshopt_Cone meshopt_computeClusterCone(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
+	using namespace meshopt;
+
 	assert(index_count % 3 == 0);
 	assert(vertex_positions_stride > 0 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
@@ -153,22 +227,18 @@ meshopt_Cone meshopt_computeClusterCone(const unsigned int* indices, size_t inde
 	cluster_centroid[1] *= inv_cluster_area;
 	cluster_centroid[2] *= inv_cluster_area;
 
+	// treating triangle normals as points, find the bounding sphere
+	float nsphere[4] = {};
+	computeBoundingSphere(nsphere, normals, triangles);
+
 	// build a cone around triangle normals
-	float axis[3] = {};
+	float axis[3] = { nsphere[0], nsphere[1], nsphere[2] };
+	float axislength = sqrtf(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]);
+	float invaxislength = axislength == 0.f ? 0.f : 1.f / axislength;
 
-	for (unsigned int i = 0; i < triangles; ++i)
-	{
-		axis[0] += normals[i][0];
-		axis[1] += normals[i][1];
-		axis[2] += normals[i][2];
-	}
-
-	float avglength = sqrtf(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]);
-	float invavglength = avglength == 0.f ? 0.f : 1.f / avglength;
-
-	axis[0] *= invavglength;
-	axis[1] *= invavglength;
-	axis[2] *= invavglength;
+	axis[0] *= invaxislength;
+	axis[1] *= invaxislength;
+	axis[2] *= invaxislength;
 
 	float mindp = 1.f;
 
