@@ -777,23 +777,23 @@ void meshlets(const Mesh& mesh)
 	double startc = timestamp();
 	for (size_t i = 0; i < meshlets.size(); ++i)
 	{
-		meshopt_Cone cone = meshopt_computeMeshletCone(&meshlets[i], &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
+		meshopt_Bounds bounds = meshopt_computeMeshletBounds(&meshlets[i], &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
 
-		// trivial accept: we can't ever cull this meshlet
-		if (cone.cutoff >= 1)
+		// trivial accept: we can't ever backface cull this meshlet
+		if (bounds.cone_cutoff >= 1)
 		{
 			accepted++;
 		}
 		else
 		{
-			// orthographic projection: dot(view, cone.axis) > cone.cutoff
-			rejected_ortho += view[0] * cone.axis[0] + view[1] * cone.axis[1] + view[2] * cone.axis[2] > cone.cutoff;
+			// orthographic projection: dot(view, cone_axis) > cone_cutoff
+			rejected_ortho += view[0] * bounds.cone_axis[0] + view[1] * bounds.cone_axis[1] + view[2] * bounds.cone_axis[2] > bounds.cone_cutoff;
 
-			// perspective projection: dot(normalize(cone.apex - camera_position), cone.axis) > cone.cutoff
-			float mview[3] = { cone.apex[0] - camera[0], cone.apex[1] - camera[1], cone.apex[2] - camera[2] };
+			// perspective projection: dot(normalize(cone_apex - camera_position), cone_axis) > cone_cutoff
+			float mview[3] = { bounds.cone_apex[0] - camera[0], bounds.cone_apex[1] - camera[1], bounds.cone_apex[2] - camera[2] };
 			float mviewlength = sqrtf(mview[0] * mview[0] + mview[1] * mview[1] + mview[2] * mview[2]);
 
-			rejected_persp += mview[0] * cone.axis[0] + mview[1] * cone.axis[1] + mview[2] * cone.axis[2] > cone.cutoff * mviewlength;
+			rejected_persp += mview[0] * bounds.cone_axis[0] + mview[1] * bounds.cone_axis[1] + mview[2] * bounds.cone_axis[2] > bounds.cone_cutoff * mviewlength;
 		}
 	}
 	double endc = timestamp();

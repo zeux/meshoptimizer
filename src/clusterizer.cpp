@@ -164,7 +164,7 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* destination, const unsigned int* i
 	return offset;
 }
 
-meshopt_Cone meshopt_computeClusterCone(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	using namespace meshopt;
 
@@ -254,9 +254,9 @@ meshopt_Cone meshopt_computeClusterCone(const unsigned int* indices, size_t inde
 	// we arbitrarily decide that if a normal cone is ~168 degrees wide or more, the cone isn't useful
 	if (triangles == 0 || mindp <= 0.1f)
 	{
-		meshopt_Cone cone = {};
-		cone.cutoff = 1;
-		return cone;
+		meshopt_Bounds bounds = {};
+		bounds.cone_cutoff = 1;
+		return bounds;
 	}
 
 	float maxt = 0;
@@ -280,26 +280,26 @@ meshopt_Cone meshopt_computeClusterCone(const unsigned int* indices, size_t inde
 		maxt = (t > maxt) ? t : maxt;
 	}
 
-	meshopt_Cone cone;
+	meshopt_Bounds bounds;
 
 	// cone apex should be in the negative half-space of all cluster triangles by construction
-	cone.apex[0] = cluster_centroid[0] - axis[0] * maxt;
-	cone.apex[1] = cluster_centroid[1] - axis[1] * maxt;
-	cone.apex[2] = cluster_centroid[2] - axis[2] * maxt;
+	bounds.cone_apex[0] = cluster_centroid[0] - axis[0] * maxt;
+	bounds.cone_apex[1] = cluster_centroid[1] - axis[1] * maxt;
+	bounds.cone_apex[2] = cluster_centroid[2] - axis[2] * maxt;
 
 	// note: this axis is the axis of the normal cone, but our test for perspective camera effectively negates the axis
-	cone.axis[0] = axis[0];
-	cone.axis[1] = axis[1];
-	cone.axis[2] = axis[2];
+	bounds.cone_axis[0] = axis[0];
+	bounds.cone_axis[1] = axis[1];
+	bounds.cone_axis[2] = axis[2];
 
 	// cos(a) for normal cone is mindp; we need to add 90 degrees on both sides and invert the cone
 	// which gives us -cos(a+90) = -(-sin(a)) = sin(a) = sqrt(1 - cos^2(a))
-	cone.cutoff = sqrtf(1 - mindp * mindp);
+	bounds.cone_cutoff = sqrtf(1 - mindp * mindp);
 
-	return cone;
+	return bounds;
 }
 
-meshopt_Cone meshopt_computeMeshletCone(const meshopt_Meshlet* meshlet, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+meshopt_Bounds meshopt_computeMeshletBounds(const meshopt_Meshlet* meshlet, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	assert(vertex_positions_stride > 0 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
@@ -319,5 +319,5 @@ meshopt_Cone meshopt_computeMeshletCone(const meshopt_Meshlet* meshlet, const fl
 		indices[i * 3 + 2] = c;
 	}
 
-	return meshopt_computeClusterCone(indices, meshlet->triangle_count * 3, vertex_positions, vertex_count, vertex_positions_stride);
+	return meshopt_computeClusterBounds(indices, meshlet->triangle_count * 3, vertex_positions, vertex_count, vertex_positions_stride);
 }
