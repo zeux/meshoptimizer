@@ -5,6 +5,10 @@
 #include <math.h>
 #include <string.h>
 
+// This work is based on:
+// Graham Wihlidal. Optimizing the Graphics Pipeline with Compute. 2016
+// Matthaeus Chajdas. GeometryFX 1.2 - Cluster Culling. 2016
+// Jack Ritter. An Efficient Bounding Sphere. 1990
 namespace meshopt
 {
 
