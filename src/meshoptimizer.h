@@ -237,7 +237,7 @@ MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_buildMeshletsBound(size_t index_count,
 
 struct meshopt_Bounds
 {
-	/* normal cone, used for backface culling */
+	/* normal cone, useful for backface culling */
 	float cone_apex[3];
 	float cone_axis[3];
 	float cone_cutoff; /* = cos(angle/2) */

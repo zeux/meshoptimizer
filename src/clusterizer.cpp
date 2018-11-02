@@ -177,11 +177,8 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
 	float normals[256][3];
-	float corners[256][3];
+	float corners[256][3][3];
 	unsigned int triangles = 0;
-
-	float cluster_area = 0;
-	float cluster_centroid[3] = {};
 
 	for (unsigned int i = 0; i < index_count; i += 3)
 	{
@@ -209,23 +206,17 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 		normals[triangles][0] = normalx / area;
 		normals[triangles][1] = normaly / area;
 		normals[triangles][2] = normalz / area;
-		corners[triangles][0] = p0[0];
-		corners[triangles][1] = p0[1];
-		corners[triangles][2] = p0[2];
+		memcpy(corners[triangles][0], p0, 3 * sizeof(float));
+		memcpy(corners[triangles][1], p1, 3 * sizeof(float));
+		memcpy(corners[triangles][2], p2, 3 * sizeof(float));
 		triangles++;
-
-		// area-weighted centroid
-		cluster_centroid[0] += (p0[0] + p1[0] + p2[0]) * (area / 3);
-		cluster_centroid[1] += (p0[1] + p1[1] + p2[1]) * (area / 3);
-		cluster_centroid[2] += (p0[2] + p1[2] + p2[2]) * (area / 3);
-		cluster_area += area;
 	}
 
-	float inv_cluster_area = cluster_area == 0 ? 0 : 1 / cluster_area;
+	// compute cluster bounding sphere; we'll use the center to determine normal cone apex as well
+	float psphere[4] = {};
+	computeBoundingSphere(psphere, corners[0], triangles * 3);
 
-	cluster_centroid[0] *= inv_cluster_area;
-	cluster_centroid[1] *= inv_cluster_area;
-	cluster_centroid[2] *= inv_cluster_area;
+	float center[3] = { psphere[0], psphere[1], psphere[2] };
 
 	// treating triangle normals as points, find the bounding sphere
 	float nsphere[4] = {};
@@ -261,19 +252,19 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 
 	float maxt = 0;
 
-	// we need to find the point on centroid-t*axis ray that lies in negative half-space of all triangles
+	// we need to find the point on center-t*axis ray that lies in negative half-space of all triangles
 	for (unsigned int i = 0; i < triangles; ++i)
 	{
-		// dot(centroid-t*axis-corner, trinormal) = 0
-		// dot(centroid-corner, trinormal) - t * dot(axis, trinormal) = 0
-		float cx = cluster_centroid[0] - corners[i][0];
-		float cy = cluster_centroid[1] - corners[i][1];
-		float cz = cluster_centroid[2] - corners[i][2];
+		// dot(center-t*axis-corner, trinormal) = 0
+		// dot(center-corner, trinormal) - t * dot(axis, trinormal) = 0
+		float cx = center[0] - corners[i][0][0];
+		float cy = center[1] - corners[i][0][1];
+		float cz = center[2] - corners[i][0][2];
 
 		float dc = cx * normals[i][0] + cy * normals[i][1] + cz * normals[i][2];
 		float dn = axis[0] * normals[i][0] + axis[1] * normals[i][1] + axis[2] * normals[i][2];
 
-		// dn should be more than mindp cutoff above
+		// dn should be larger than mindp cutoff above
 		assert(dn > 0.f);
 		float t = dc / dn;
 
@@ -283,9 +274,9 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 	meshopt_Bounds bounds;
 
 	// cone apex should be in the negative half-space of all cluster triangles by construction
-	bounds.cone_apex[0] = cluster_centroid[0] - axis[0] * maxt;
-	bounds.cone_apex[1] = cluster_centroid[1] - axis[1] * maxt;
-	bounds.cone_apex[2] = cluster_centroid[2] - axis[2] * maxt;
+	bounds.cone_apex[0] = center[0] - axis[0] * maxt;
+	bounds.cone_apex[1] = center[1] - axis[1] * maxt;
+	bounds.cone_apex[2] = center[2] - axis[2] * maxt;
 
 	// note: this axis is the axis of the normal cone, but our test for perspective camera effectively negates the axis
 	bounds.cone_axis[0] = axis[0];
