@@ -300,10 +300,10 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 	bounds.cone_cutoff = sqrtf(1 - mindp * mindp);
 
 	// quantize axis & cutoff to 8-bit SNORM format
-	bounds.cone_axis_s8[0] = meshopt_quantizeSnorm(bounds.cone_axis[0], 8);
-	bounds.cone_axis_s8[1] = meshopt_quantizeSnorm(bounds.cone_axis[1], 8);
-	bounds.cone_axis_s8[2] = meshopt_quantizeSnorm(bounds.cone_axis[2], 8);
-	bounds.cone_cutoff_s8 = meshopt_quantizeSnorm(bounds.cone_cutoff, 8) + 2;
+	bounds.cone_axis_s8[0] = char(meshopt_quantizeSnorm(bounds.cone_axis[0], 8));
+	bounds.cone_axis_s8[1] = char(meshopt_quantizeSnorm(bounds.cone_axis[1], 8));
+	bounds.cone_axis_s8[2] = char(meshopt_quantizeSnorm(bounds.cone_axis[2], 8));
+	bounds.cone_cutoff_s8 = char(meshopt_quantizeSnorm(bounds.cone_cutoff, 8));
 
 	// for the test to be conservative, we need to adjust the cutoff
 	// each axis component has up to 0.5/127 error, so the dot product can accumulate 1.5/127; the cutoff can also get rounded down for an extra 0.5/127 error
