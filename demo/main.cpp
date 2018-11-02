@@ -768,10 +768,9 @@ void meshlets(const Mesh& mesh)
 	       int(meshlets.size()), avg_vertices, avg_triangles, int(not_full), (end - start) * 1000);
 
 	float camera[3] = {100, 100, 100};
-	float view[3] = {-0.577350f, -0.577350f, -0.577350f};
 
-	size_t rejected_ortho = 0;
-	size_t rejected_persp = 0;
+	size_t rejected = 0;
+	size_t rejected_s8 = 0;
 	size_t accepted = 0;
 
 	double startc = timestamp();
@@ -786,21 +785,19 @@ void meshlets(const Mesh& mesh)
 		}
 		else
 		{
-			// orthographic projection: dot(view, cone_axis) > cone_cutoff
-			rejected_ortho += view[0] * bounds.cone_axis[0] + view[1] * bounds.cone_axis[1] + view[2] * bounds.cone_axis[2] > bounds.cone_cutoff;
-
 			// perspective projection: dot(normalize(cone_apex - camera_position), cone_axis) > cone_cutoff
 			float mview[3] = {bounds.cone_apex[0] - camera[0], bounds.cone_apex[1] - camera[1], bounds.cone_apex[2] - camera[2]};
 			float mviewlength = sqrtf(mview[0] * mview[0] + mview[1] * mview[1] + mview[2] * mview[2]);
 
-			rejected_persp += mview[0] * bounds.cone_axis[0] + mview[1] * bounds.cone_axis[1] + mview[2] * bounds.cone_axis[2] > bounds.cone_cutoff * mviewlength;
+			rejected += mview[0] * bounds.cone_axis[0] + mview[1] * bounds.cone_axis[1] + mview[2] * bounds.cone_axis[2] > bounds.cone_cutoff * mviewlength;
+			rejected_s8 += mview[0] * (bounds.cone_axis_s8[0] / 127.f) + mview[1] * (bounds.cone_axis_s8[1] / 127.f) + mview[2] * (bounds.cone_axis_s8[2] / 127.f) > (bounds.cone_cutoff_s8 / 127.f) * mviewlength;
 		}
 	}
 	double endc = timestamp();
 
-	printf("ConeCull : rejected %d ortho (%.1f%%) / %d persp (%.1f%%), trivially accepted %d (%.1f%%) in %.2f msec\n",
-	       int(rejected_ortho), double(rejected_ortho) / double(meshlets.size()) * 100,
-	       int(rejected_persp), double(rejected_persp) / double(meshlets.size()) * 100,
+	printf("ConeCull : rejected %d (%.1f%%) / SNORM %d (%.1f%%), trivially accepted %d (%.1f%%) in %.2f msec\n",
+	       int(rejected), double(rejected) / double(meshlets.size()) * 100,
+	       int(rejected_s8), double(rejected_s8) / double(meshlets.size()) * 100,
 	       int(accepted), double(accepted) / double(meshlets.size()) * 100,
 	       (endc - startc) * 1000);
 }
