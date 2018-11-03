@@ -136,15 +136,17 @@ static void rasterize(OverdrawBuffer* buffer, float v1x, float v1y, float v1z, f
 				}
 			}
 
-			CX1 -= DY12 << 4;
-			CX2 -= DY23 << 4;
-			CX3 -= DY31 << 4;
+			// signed left shift is UB for negative numbers so use unsigned-signed casts
+			CX1 -= int(unsigned(DY12) << 4);
+			CX2 -= int(unsigned(DY23) << 4);
+			CX3 -= int(unsigned(DY31) << 4);
 			ZX += DZx;
 		}
 
-		CY1 += DX12 << 4;
-		CY2 += DX23 << 4;
-		CY3 += DX31 << 4;
+		// signed left shift is UB for negative numbers so use unsigned-signed casts
+		CY1 += int(unsigned(DX12) << 4);
+		CY2 += int(unsigned(DX23) << 4);
+		CY3 += int(unsigned(DX31) << 4);
 		ZY += DZy;
 	}
 }
