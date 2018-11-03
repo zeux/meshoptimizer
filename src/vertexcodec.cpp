@@ -50,12 +50,12 @@ static size_t getVertexBlockSize(size_t vertex_size)
 
 inline unsigned char zigzag8(unsigned char v)
 {
-	return (v >> 7) | ((v ^ -(v >> 7)) << 1);
+	return (char(v) >> 7) ^ (v << 1);
 }
 
 inline unsigned char unzigzag8(unsigned char v)
 {
-	return (-(v & 1)) ^ (v >> 1);
+	return -(v & 1) ^ (v >> 1);
 }
 
 static bool encodeBytesGroupZero(const unsigned char* buffer)
