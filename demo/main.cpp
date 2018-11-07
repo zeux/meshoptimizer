@@ -774,6 +774,7 @@ void meshlets(const Mesh& mesh)
 	size_t rejected_alt = 0;
 	size_t rejected_alt_s8 = 0;
 	size_t accepted = 0;
+	size_t accepted_s8 = 0;
 
 	double startc = timestamp();
 	for (size_t i = 0; i < meshlets.size(); ++i)
@@ -781,36 +782,35 @@ void meshlets(const Mesh& mesh)
 		meshopt_Bounds bounds = meshopt_computeMeshletBounds(&meshlets[i], &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
 
 		// trivial accept: we can't ever backface cull this meshlet
-		if (bounds.cone_cutoff >= 1)
-		{
-			accepted++;
-		}
-		else
-		{
-			// perspective projection: dot(normalize(cone_apex - camera_position), cone_axis) > cone_cutoff
-			float mview[3] = {bounds.cone_apex[0] - camera[0], bounds.cone_apex[1] - camera[1], bounds.cone_apex[2] - camera[2]};
-			float mviewlength = sqrtf(mview[0] * mview[0] + mview[1] * mview[1] + mview[2] * mview[2]);
+		accepted += (bounds.cone_cutoff >= 1);
+		accepted_s8 += (bounds.cone_cutoff_s8 >= 127);
 
-			rejected += mview[0] * bounds.cone_axis[0] + mview[1] * bounds.cone_axis[1] + mview[2] * bounds.cone_axis[2] > bounds.cone_cutoff * mviewlength;
-			rejected_s8 += mview[0] * (bounds.cone_axis_s8[0] / 127.f) + mview[1] * (bounds.cone_axis_s8[1] / 127.f) + mview[2] * (bounds.cone_axis_s8[2] / 127.f) > (bounds.cone_cutoff_s8 / 127.f) * mviewlength;
+		// perspective projection: dot(normalize(cone_apex - camera_position), cone_axis) > cone_cutoff
+		float mview[3] = {bounds.cone_apex[0] - camera[0], bounds.cone_apex[1] - camera[1], bounds.cone_apex[2] - camera[2]};
+		float mviewlength = sqrtf(mview[0] * mview[0] + mview[1] * mview[1] + mview[2] * mview[2]);
 
-			// alternative formulation for perspective projection that doesn't use apex (and uses cluster bounding sphere instead):
-			// dot(normalize(center - camera_position), cone_axis) > cone_cutoff + radius / length(center - camera_position)
-			float cview[3] = {bounds.center[0] - camera[0], bounds.center[1] - camera[1], bounds.center[2] - camera[2]};
-			float cviewlength = sqrtf(cview[0] * cview[0] + cview[1] * cview[1] + cview[2] * cview[2]);
+		rejected += mview[0] * bounds.cone_axis[0] + mview[1] * bounds.cone_axis[1] + mview[2] * bounds.cone_axis[2] > bounds.cone_cutoff * mviewlength;
+		rejected_s8 += mview[0] * (bounds.cone_axis_s8[0] / 127.f) + mview[1] * (bounds.cone_axis_s8[1] / 127.f) + mview[2] * (bounds.cone_axis_s8[2] / 127.f) > (bounds.cone_cutoff_s8 / 127.f) * mviewlength;
 
-			rejected_alt += cview[0] * bounds.cone_axis[0] + cview[1] * bounds.cone_axis[1] + cview[2] * bounds.cone_axis[2] > bounds.cone_cutoff * cviewlength + bounds.radius;
-			rejected_alt_s8 += cview[0] * (bounds.cone_axis_s8[0] / 127.f) + cview[1] * (bounds.cone_axis_s8[1] / 127.f) + cview[2] * (bounds.cone_axis_s8[2] / 127.f) > (bounds.cone_cutoff_s8 / 127.f) * cviewlength + bounds.radius;
-		}
+		// alternative formulation for perspective projection that doesn't use apex (and uses cluster bounding sphere instead):
+		// dot(normalize(center - camera_position), cone_axis) > cone_cutoff + radius / length(center - camera_position)
+		float cview[3] = {bounds.center[0] - camera[0], bounds.center[1] - camera[1], bounds.center[2] - camera[2]};
+		float cviewlength = sqrtf(cview[0] * cview[0] + cview[1] * cview[1] + cview[2] * cview[2]);
+
+		rejected_alt += cview[0] * bounds.cone_axis[0] + cview[1] * bounds.cone_axis[1] + cview[2] * bounds.cone_axis[2] > bounds.cone_cutoff * cviewlength + bounds.radius;
+		rejected_alt_s8 += cview[0] * (bounds.cone_axis_s8[0] / 127.f) + cview[1] * (bounds.cone_axis_s8[1] / 127.f) + cview[2] * (bounds.cone_axis_s8[2] / 127.f) > (bounds.cone_cutoff_s8 / 127.f) * cviewlength + bounds.radius;
 	}
 	double endc = timestamp();
 
-	printf("ConeCull : rejected apex %d (%.1f%%) / alt %d (%.1f%%) / apex snorm %d (%.1f%%) / alt snorm %d (%.1f%%), triv. accepted %d (%.1f%%) in %.2f msec\n",
+	printf("ConeCull : rejected apex %d (%.1f%%) / center %d (%.1f%%), trivially accepted %d (%.1f%%) in %.2f msec\n",
 	       int(rejected), double(rejected) / double(meshlets.size()) * 100,
 	       int(rejected_alt), double(rejected_alt) / double(meshlets.size()) * 100,
+	       int(accepted), double(accepted) / double(meshlets.size()) * 100,
+	       (endc - startc) * 1000);
+	printf("ConeCull8: rejected apex %d (%.1f%%) / center %d (%.1f%%), trivially accepted %d (%.1f%%) in %.2f msec\n",
 	       int(rejected_s8), double(rejected_s8) / double(meshlets.size()) * 100,
 	       int(rejected_alt_s8), double(rejected_alt_s8) / double(meshlets.size()) * 100,
-	       int(accepted), double(accepted) / double(meshlets.size()) * 100,
+	       int(accepted_s8), double(accepted_s8) / double(meshlets.size()) * 100,
 	       (endc - startc) * 1000);
 }
 
