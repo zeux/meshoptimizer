@@ -272,7 +272,7 @@ struct meshopt_Bounds
  * vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
  */
 MESHOPTIMIZER_EXPERIMENTAL struct meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
-MESHOPTIMIZER_EXPERIMENTAL struct meshopt_Bounds meshopt_computeMeshletBounds(const struct meshopt_Meshlet* meshlet, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
+MESHOPTIMIZER_EXPERIMENTAL struct meshopt_Bounds meshopt_computeMeshletBounds(struct meshopt_Meshlet meshlet, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 
 #ifdef __cplusplus
 } /* extern "C" */

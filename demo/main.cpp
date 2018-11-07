@@ -779,7 +779,7 @@ void meshlets(const Mesh& mesh)
 	double startc = timestamp();
 	for (size_t i = 0; i < meshlets.size(); ++i)
 	{
-		meshopt_Bounds bounds = meshopt_computeMeshletBounds(&meshlets[i], &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
+		meshopt_Bounds bounds = meshopt_computeMeshletBounds(meshlets[i], &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
 
 		// trivial accept: we can't ever backface cull this meshlet
 		accepted += (bounds.cone_cutoff >= 1);

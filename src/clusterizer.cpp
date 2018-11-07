@@ -317,18 +317,18 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 	return bounds;
 }
 
-meshopt_Bounds meshopt_computeMeshletBounds(const meshopt_Meshlet* meshlet, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+meshopt_Bounds meshopt_computeMeshletBounds(meshopt_Meshlet meshlet, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	assert(vertex_positions_stride > 0 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
 
-	unsigned int indices[sizeof(meshlet->indices) / sizeof(meshlet->indices[0][0])];
+	unsigned int indices[sizeof(meshlet.indices) / sizeof(meshlet.indices[0][0])];
 
-	for (unsigned int i = 0; i < meshlet->triangle_count; ++i)
+	for (unsigned int i = 0; i < meshlet.triangle_count; ++i)
 	{
-		unsigned int a = meshlet->vertices[meshlet->indices[i][0]];
-		unsigned int b = meshlet->vertices[meshlet->indices[i][1]];
-		unsigned int c = meshlet->vertices[meshlet->indices[i][2]];
+		unsigned int a = meshlet.vertices[meshlet.indices[i][0]];
+		unsigned int b = meshlet.vertices[meshlet.indices[i][1]];
+		unsigned int c = meshlet.vertices[meshlet.indices[i][2]];
 
 		assert(a < vertex_count && b < vertex_count && c < vertex_count);
 
@@ -337,5 +337,5 @@ meshopt_Bounds meshopt_computeMeshletBounds(const meshopt_Meshlet* meshlet, cons
 		indices[i * 3 + 2] = c;
 	}
 
-	return meshopt_computeClusterBounds(indices, meshlet->triangle_count * 3, vertex_positions, vertex_count, vertex_positions_stride);
+	return meshopt_computeClusterBounds(indices, meshlet.triangle_count * 3, vertex_positions, vertex_count, vertex_positions_stride);
 }
