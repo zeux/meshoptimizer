@@ -165,17 +165,9 @@ static void buildPositionRemap(unsigned int* remap, unsigned int* wedge, const f
 		unsigned int* entry = hashLookup2(table.data, table_size, hasher, index, ~0u);
 
 		if (*entry == ~0u)
-		{
 			*entry = index;
 
-			remap[index] = index;
-		}
-		else
-		{
-			assert(remap[*entry] != ~0u);
-
-			remap[index] = remap[*entry];
-		}
+		remap[index] = *entry;
 	}
 
 	// build wedge table: for each vertex, which other vertex is the next wedge that also maps to the same vertex?
