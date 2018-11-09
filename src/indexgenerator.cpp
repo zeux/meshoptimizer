@@ -10,8 +10,8 @@ namespace meshopt
 struct VertexHasher
 {
 	const char* vertices;
-	size_t vertex_stride;
 	size_t vertex_size;
+	size_t vertex_stride;
 
 	size_t hash(unsigned int index) const
 	{
@@ -165,6 +165,43 @@ void meshopt_remapIndexBuffer(unsigned int* destination, const unsigned int* ind
 	{
 		unsigned int index = indices ? indices[i] : unsigned(i);
 		assert(remap[index] != ~0u);
+
+		destination[i] = remap[index];
+	}
+}
+
+void meshopt_generateShadowIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t vertex_stride)
+{
+	using namespace meshopt;
+
+	assert(indices);
+	assert(index_count % 3 == 0);
+	assert(vertex_size > 0 && vertex_size <= 256);
+	assert(vertex_size <= vertex_stride);
+
+	meshopt_Buffer<unsigned int> remap(vertex_count);
+	memset(remap.data, -1, vertex_count * sizeof(unsigned int));
+
+	VertexHasher hasher = {static_cast<const char*>(vertices), vertex_size, vertex_stride};
+
+	size_t table_size = hashBuckets(vertex_count);
+	meshopt_Buffer<unsigned int> table(table_size);
+	memset(table.data, -1, table_size * sizeof(unsigned int));
+
+	for (size_t i = 0; i < index_count; ++i)
+	{
+		unsigned int index = indices[i];
+		assert(index < vertex_count);
+
+		if (remap[index] == ~0u)
+		{
+			unsigned int* entry = hashLookup(table.data, table_size, hasher, index, ~0u);
+
+			if (*entry == ~0u)
+				*entry = index;
+
+			remap[index] = *entry;
+		}
 
 		destination[i] = remap[index];
 	}

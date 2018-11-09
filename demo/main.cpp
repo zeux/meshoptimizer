@@ -737,6 +737,39 @@ void stripify(const Mesh& mesh)
 	       (end - start) * 1000);
 }
 
+void shadow(const Mesh& mesh)
+{
+	// note: input mesh is assumed to be optimized for vertex cache and vertex fetch
+
+	double start = timestamp();
+	// this index buffer can be used for position-only rendering using the same vertex data that the original index buffer uses
+	std::vector<unsigned int> shadow_indices(mesh.indices.size());
+	meshopt_generateShadowIndexBuffer(&shadow_indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(float) * 3, sizeof(Vertex));
+	double end = timestamp();
+
+	// while you can't optimize the vertex data after shadow IB was constructed, you can and should optimize the shadow IB for vertex cache
+	// this is valuable even if the original indices array was optimized for vertex cache!
+	meshopt_optimizeVertexCache(&shadow_indices[0], &shadow_indices[0], shadow_indices.size(), mesh.vertices.size());
+
+	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, 0, 0);
+	meshopt_VertexCacheStatistics vcss = meshopt_analyzeVertexCache(&shadow_indices[0], shadow_indices.size(), mesh.vertices.size(), kCacheSize, 0, 0);
+
+	std::vector<char> shadow_flags(mesh.vertices.size());
+	size_t shadow_vertices = 0;
+
+	for (size_t i = 0; i < shadow_indices.size(); ++i)
+	{
+		unsigned int index = shadow_indices[i];
+		shadow_vertices += 1 - shadow_flags[index];
+		shadow_flags[index] = 1;
+	}
+
+	printf("ShadowIB : ACMR %f (%.2fx improvement); %d shadow vertices (%.2fx improvement) in %.2f msec\n",
+	       vcss.acmr, double(vcs.vertices_transformed) / double(vcss.vertices_transformed),
+	       int(shadow_vertices), double(mesh.vertices.size()) / double(shadow_vertices),
+	       (end - start) * 1000);
+}
+
 void meshlets(const Mesh& mesh)
 {
 	const size_t max_vertices = 64;
@@ -862,6 +895,7 @@ void process(const char* path)
 
 	stripify(copy);
 	meshlets(copy);
+	shadow(copy);
 
 	encodeIndex(copy);
 	packVertex<PackedVertex>(copy, "");

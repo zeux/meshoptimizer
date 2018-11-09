@@ -53,6 +53,15 @@ MESHOPTIMIZER_API void meshopt_remapVertexBuffer(void* destination, const void* 
 MESHOPTIMIZER_API void meshopt_remapIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count, const unsigned int* remap);
 
 /**
+ * Experimental: Generate index buffer that can be used for more efficient rendering when only a subset of the vertex attributes is necessary
+ * All vertices that are binary equivalent (wrt first vertex_size bytes) map to the first vertex in the original vertex buffer.
+ * This makes it possible to use the index buffer for Z pre-pass or shadowmap rendering, while using the original vertex/index buffers elsewhere.
+ *
+ * destination must contain enough space for the resulting index buffer (index_count elements)
+ */
+MESHOPTIMIZER_EXPERIMENTAL void meshopt_generateShadowIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t vertex_stride);
+
+/**
  * Vertex transform cache optimizer
  * Reorders indices to reduce the number of GPU vertex shader invocations
  *
@@ -381,6 +390,15 @@ inline void meshopt_remapIndexBuffer(T* destination, const T* indices, size_t in
 	meshopt_IndexAdapter<T> out(destination, 0, index_count);
 
 	meshopt_remapIndexBuffer(out.data, indices ? in.data : 0, index_count, remap);
+}
+
+template <typename T>
+void meshopt_generateShadowIndexBuffer(T* destination, const T* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t vertex_stride)
+{
+	meshopt_IndexAdapter<T> in(0, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, 0, index_count);
+
+	meshopt_generateShadowIndexBuffer(out.data, in.data, index_count, vertices, vertex_count, vertex_size, vertex_stride);
 }
 
 template <typename T>
