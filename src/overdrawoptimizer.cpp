@@ -32,7 +32,7 @@ static void calculateSortData(float* sort_data, const unsigned int* indices, siz
 	for (size_t cluster = 0; cluster < cluster_count; ++cluster)
 	{
 		size_t cluster_begin = clusters[cluster] * 3;
-		size_t cluster_end = (cluster_count > cluster + 1) ? clusters[cluster + 1] * 3 : index_count;
+		size_t cluster_end = (cluster + 1 < cluster_count) ? clusters[cluster + 1] * 3 : index_count;
 		assert(cluster_begin < cluster_end);
 
 		float cluster_area = 0;
@@ -321,12 +321,12 @@ void meshopt_optimizeOverdraw(unsigned int* destination, const unsigned int* ind
 		unsigned int cluster = sort_order[it];
 		assert(cluster < cluster_count);
 
-		size_t start = clusters[cluster];
-		size_t end = (cluster + 1 < cluster_count) ? clusters[cluster + 1] : index_count / 3;
-		assert(start < end);
+		size_t cluster_begin = clusters[cluster] * 3;
+		size_t cluster_end = (cluster + 1 < cluster_count) ? clusters[cluster + 1] * 3 : index_count;
+		assert(cluster_begin < cluster_end);
 
-		memcpy(destination + offset, indices + start * 3, (end - start) * 3 * sizeof(unsigned int));
-		offset += (end - start) * 3;
+		memcpy(destination + offset, indices + cluster_begin, (cluster_end - cluster_begin) * sizeof(unsigned int));
+		offset += cluster_end - cluster_begin;
 	}
 
 	assert(offset == index_count);
