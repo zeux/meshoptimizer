@@ -265,15 +265,15 @@ struct meshopt_Bounds
  * Creates bounding volumes that can be used for frustum, backface and occlusion culling.
  *
  * For backface culling with orthographic projection, use the following formula:
- *   dot(view, cone_axis) > cone_cutoff
+ *   dot(view, cone_axis) >= cone_cutoff
  *
  * For perspective projection, you can the formula that needs cone apex in addition to axis & cutoff:
- *   dot(normalize(cone_apex - camera_position), cone_axis) > cone_cutoff
+ *   dot(normalize(cone_apex - camera_position), cone_axis) >= cone_cutoff
  *
  * Alternatively, you can use the formula that doesn't need cone apex and uses bounding sphere instead:
- *   dot(normalize(center - camera_position), cone_axis) > cone_cutoff + radius / length(center - camera_position)
+ *   dot(normalize(center - camera_position), cone_axis) >= cone_cutoff + radius / length(center - camera_position)
  * or an equivalent formula that doesn't have a singularity at center = camera_position:
- *   dot(center - camera_position, cone_axis) > cone_cutoff * length(center - camera_position) + radius
+ *   dot(center - camera_position, cone_axis) >= cone_cutoff * length(center - camera_position) + radius
  *
  * The formula that uses the apex is slightly more accurate but needs the apex; if you are already using bounding sphere
  * to do frustum/occlusion culling, the formula that doesn't use the apex may be preferable.

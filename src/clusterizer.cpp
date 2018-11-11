@@ -14,6 +14,8 @@ namespace meshopt
 
 static void computeBoundingSphere(float result[4], const float points[][3], size_t count)
 {
+	assert(count > 0);
+
 	// find extremum points along all 3 axes; for each axis we get a pair of points with min/max coordinates
 	size_t pmin[3] = {0, 0, 0};
 	size_t pmax[3] = {0, 0, 0};
@@ -218,6 +220,12 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 		triangles++;
 	}
 
+	meshopt_Bounds bounds = {};
+
+	// degenerate cluster, no valid triangles => trivial reject (cone data is 0)
+	if (triangles == 0)
+		return bounds;
+
 	// compute cluster bounding sphere; we'll use the center to determine normal cone apex as well
 	float psphere[4] = {};
 	computeBoundingSphere(psphere, corners[0], triangles * 3);
@@ -246,18 +254,16 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 		mindp = (dp < mindp) ? dp : mindp;
 	}
 
-	// prepare bounds with the bounding sphere; note that below we can return bounds without cone information for degenerate cones
-	meshopt_Bounds bounds = {};
-
+	// fill bounding sphere info; note that below we can return bounds without cone information for degenerate cones
 	bounds.center[0] = center[0];
 	bounds.center[1] = center[1];
 	bounds.center[2] = center[2];
 	bounds.radius = psphere[3];
 
-	// degenerate cluster, no valid triangles or normal cone is larger than a hemisphere
+	// degenerate cluster, normal cone is larger than a hemisphere => trivial accept
 	// note that if mindp is positive but close to 0, the triangle intersection code below gets less stable
 	// we arbitrarily decide that if a normal cone is ~168 degrees wide or more, the cone isn't useful
-	if (triangles == 0 || mindp <= 0.1f)
+	if (mindp <= 0.1f)
 	{
 		bounds.cone_cutoff = 1;
 		bounds.cone_cutoff_s8 = 127;
