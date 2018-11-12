@@ -146,7 +146,7 @@ On most hardware, indexed triangle lists are the most efficient way to drive the
 This library provides an algorithm for converting a vertex cache optimized triangle list to a triangle strip:
 
 ```c++
-std::vector<unsigned int> strip(index_count / 3 * 4);
+std::vector<unsigned int> strip(meshopt_stripifyBound(index_count));
 size_t strip_size = meshopt_stripify(&strip[0], indices, index_count, vertex_count);
 ```
 
