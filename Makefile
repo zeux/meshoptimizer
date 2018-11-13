@@ -25,7 +25,7 @@ ifeq ($(config),coverage)
 endif
 
 ifeq ($(config),sanitize)
-	CXXFLAGS+=-fsanitize=address,undefined
+	CXXFLAGS+=-fsanitize=address,undefined -fno-sanitize-recover
 	LDFLAGS+=-fsanitize=address,undefined
 endif
 
