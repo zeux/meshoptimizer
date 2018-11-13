@@ -339,18 +339,21 @@ void packMesh(std::vector<PackedVertex>& pv, const std::vector<Vertex>& vertices
 {
 	for (size_t i = 0; i < vertices.size(); ++i)
 	{
-		pv[i].px = meshopt_quantizeHalf(vertices[i].px);
-		pv[i].py = meshopt_quantizeHalf(vertices[i].py);
-		pv[i].pz = meshopt_quantizeHalf(vertices[i].pz);
-		pv[i].pw = 0;
+		const Vertex& vi = vertices[i];
+		PackedVertex& pvi = pv[i];
 
-		pv[i].nx = char(meshopt_quantizeSnorm(vertices[i].nx, 8));
-		pv[i].ny = char(meshopt_quantizeSnorm(vertices[i].ny, 8));
-		pv[i].nz = char(meshopt_quantizeSnorm(vertices[i].nz, 8));
-		pv[i].nw = 0;
+		pvi.px = meshopt_quantizeHalf(vi.px);
+		pvi.py = meshopt_quantizeHalf(vi.py);
+		pvi.pz = meshopt_quantizeHalf(vi.pz);
+		pvi.pw = 0;
 
-		pv[i].tx = meshopt_quantizeHalf(vertices[i].tx);
-		pv[i].ty = meshopt_quantizeHalf(vertices[i].ty);
+		pvi.nx = char(meshopt_quantizeSnorm(vi.nx, 8));
+		pvi.ny = char(meshopt_quantizeSnorm(vi.ny, 8));
+		pvi.nz = char(meshopt_quantizeSnorm(vi.nz, 8));
+		pvi.nw = 0;
+
+		pvi.tx = meshopt_quantizeHalf(vi.tx);
+		pvi.ty = meshopt_quantizeHalf(vi.ty);
 	}
 }
 
@@ -365,23 +368,26 @@ void packMesh(std::vector<PackedVertexOct>& pv, const std::vector<Vertex>& verti
 {
 	for (size_t i = 0; i < vertices.size(); ++i)
 	{
-		pv[i].px = meshopt_quantizeHalf(vertices[i].px);
-		pv[i].py = meshopt_quantizeHalf(vertices[i].py);
-		pv[i].pz = meshopt_quantizeHalf(vertices[i].pz);
+		const Vertex& vi = vertices[i];
+		PackedVertexOct& pvi = pv[i];
 
-		float nsum = fabsf(vertices[i].nx) + fabsf(vertices[i].ny) + fabsf(vertices[i].nz);
-		float nx = vertices[i].nx / nsum;
-		float ny = vertices[i].ny / nsum;
-		float nz = vertices[i].nz;
+		pvi.px = meshopt_quantizeHalf(vi.px);
+		pvi.py = meshopt_quantizeHalf(vi.py);
+		pvi.pz = meshopt_quantizeHalf(vi.pz);
+
+		float nsum = fabsf(vi.nx) + fabsf(vi.ny) + fabsf(vi.nz);
+		float nx = vi.nx / nsum;
+		float ny = vi.ny / nsum;
+		float nz = vi.nz;
 
 		float nu = nz >= 0 ? nx : (1 - fabsf(ny)) * (nx >= 0 ? 1 : -1);
 		float nv = nz >= 0 ? ny : (1 - fabsf(nx)) * (ny >= 0 ? 1 : -1);
 
-		pv[i].nu = char(meshopt_quantizeSnorm(nu, 8));
-		pv[i].nv = char(meshopt_quantizeSnorm(nv, 8));
+		pvi.nu = char(meshopt_quantizeSnorm(nu, 8));
+		pvi.nv = char(meshopt_quantizeSnorm(nv, 8));
 
-		pv[i].tx = meshopt_quantizeHalf(vertices[i].tx);
-		pv[i].ty = meshopt_quantizeHalf(vertices[i].ty);
+		pvi.tx = meshopt_quantizeHalf(vi.tx);
+		pvi.ty = meshopt_quantizeHalf(vi.ty);
 	}
 }
 
