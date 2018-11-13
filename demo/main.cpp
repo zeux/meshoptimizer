@@ -12,6 +12,10 @@
 #include "miniz.h"
 #include "objparser.h"
 
+// This file uses assert() to verify algorithm correctness
+#undef NDEBUG
+#include <assert.h>
+
 #if defined(__linux__)
 double timestamp()
 {

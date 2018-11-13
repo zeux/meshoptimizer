@@ -1,7 +1,7 @@
 .SUFFIXES:
 MAKEFLAGS+=-r
 
-config=release
+config=debug
 files=demo/pirate.obj
 
 BUILD=build/$(config)
@@ -16,7 +16,7 @@ CXXFLAGS=-g -Wall -Wextra -Wno-missing-field-initializers -Werror -std=c++98
 LDFLAGS=
 
 ifeq ($(config),release)
-	CXXFLAGS+=-O3
+	CXXFLAGS+=-O3 -DNDEBUG
 endif
 
 ifeq ($(config),coverage)
@@ -25,7 +25,7 @@ ifeq ($(config),coverage)
 endif
 
 ifeq ($(config),sanitize)
-	CXXFLAGS+=-fsanitize=address,undefined
+	CXXFLAGS+=-fsanitize=address,undefined -fno-sanitize-recover=all
 	LDFLAGS+=-fsanitize=address,undefined
 endif
 
