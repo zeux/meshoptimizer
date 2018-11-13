@@ -60,14 +60,10 @@ struct Mesh
 	std::vector<unsigned int> indices;
 };
 
-struct Triangle
+union Triangle
 {
 	Vertex v[3];
-
-	bool operator<(const Triangle& other) const
-	{
-		return memcmp(v, other.v, sizeof(Triangle)) < 0;
-	}
+	char data[sizeof(Vertex)*3];
 };
 
 Mesh generatePlane(unsigned int N)
@@ -245,7 +241,7 @@ unsigned int hashMesh(const Mesh& mesh)
 		// skip degenerate triangles since some algorithms don't preserve them
 		if (rotateTriangle(t))
 		{
-			unsigned int hash = hashRange(reinterpret_cast<const char*>(&t), sizeof(t));
+			unsigned int hash = hashRange(t.data, sizeof(t.data));
 
 			h1 ^= hash;
 			h2 += hash;
