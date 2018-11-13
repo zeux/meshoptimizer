@@ -17,7 +17,7 @@ matrix:
 
 script:
   - if [[ "$TRAVIS_OS_NAME" != "windows" ]]; then make config=coverage test; fi
-  - if [[ "CXX" == "clang++" ]]; then make config=sanitize test; fi
+  - if [[ "$CXX" == "clang++" ]]; then make config=sanitize test; fi
   - if [[ "$TRAVIS_OS_NAME" != "windows" ]]; then make config=release test; fi
   - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then cmake -G "$TARGET" -DBUILD_DEMO=ON; fi
   - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then cmake --build . -- -property:Configuration=Debug -verbosity:minimal; fi
