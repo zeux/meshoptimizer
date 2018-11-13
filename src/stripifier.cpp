@@ -55,6 +55,8 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 
 	using namespace meshopt;
 
+	meshopt_Allocator allocator;
+
 	const size_t buffer_capacity = 8;
 
 	unsigned int buffer[buffer_capacity][3] = {};
@@ -68,8 +70,8 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 	size_t strip_size = 0;
 
 	// compute vertex valence; this is used to prioritize starting triangle for strips
-	meshopt_Buffer<unsigned int> valence(vertex_count);
-	memset(valence.data, 0, vertex_count * sizeof(unsigned int));
+	unsigned int* valence = allocator.allocate<unsigned int>(vertex_count);
+	memset(valence, 0, vertex_count * sizeof(unsigned int));
 
 	for (size_t i = 0; i < index_count; ++i)
 	{

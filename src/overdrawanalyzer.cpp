@@ -161,6 +161,8 @@ meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, 
 	assert(vertex_positions_stride > 0 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
 
+	meshopt_Allocator allocator;
+
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
 	meshopt_OverdrawStatistics result = {};
@@ -182,7 +184,7 @@ meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, 
 	float extent = max(maxv[0] - minv[0], max(maxv[1] - minv[1], maxv[2] - minv[2]));
 	float scale = kViewport / extent;
 
-	meshopt_Buffer<float> triangles(index_count * 3);
+	float* triangles = allocator.allocate<float>(index_count * 3);
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
@@ -196,8 +198,7 @@ meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, 
 		triangles[i * 3 + 2] = (v[2] - minv[2]) * scale;
 	}
 
-	meshopt_Buffer<OverdrawBuffer> buffer_storage(1);
-	OverdrawBuffer* buffer = buffer_storage.data;
+	OverdrawBuffer* buffer = allocator.allocate<OverdrawBuffer>(1);
 
 	for (int axis = 0; axis < 3; ++axis)
 	{

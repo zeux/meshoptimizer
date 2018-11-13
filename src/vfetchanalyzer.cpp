@@ -9,10 +9,12 @@ meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const unsigned int* ind
 	assert(index_count % 3 == 0);
 	assert(vertex_size > 0 && vertex_size <= 256);
 
+	meshopt_Allocator allocator;
+
 	meshopt_VertexFetchStatistics result = {};
 
-	meshopt_Buffer<char> vertex_visited(vertex_count);
-	memset(vertex_visited.data, 0, vertex_count);
+	char* vertex_visited = allocator.allocate<char>(vertex_count);
+	memset(vertex_visited, 0, vertex_count);
 
 	const size_t kCacheLine = 64;
 	const size_t kCacheSize = 128 * 1024;

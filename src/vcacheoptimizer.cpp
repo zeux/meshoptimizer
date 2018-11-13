@@ -24,14 +24,14 @@ static const float kVertexScoreTableLive[1 + kValenceMax] = {
 
 struct TriangleAdjacency
 {
-	meshopt_Buffer<unsigned int> counts;
-	meshopt_Buffer<unsigned int> offsets;
-	meshopt_Buffer<unsigned int> data;
+	unsigned int* counts;
+	unsigned int* offsets;
+	unsigned int* data;
 
-	TriangleAdjacency(size_t index_count, size_t vertex_count)
-	    : counts(vertex_count)
-	    , offsets(vertex_count)
-	    , data(index_count)
+	TriangleAdjacency(size_t index_count, size_t vertex_count, meshopt_Allocator& allocator)
+	    : counts(allocator.allocate<unsigned int>(vertex_count))
+	    , offsets(allocator.allocate<unsigned int>(vertex_count))
+	    , data(allocator.allocate<unsigned int>(index_count))
 	{
 	}
 };
@@ -41,7 +41,7 @@ static void buildTriangleAdjacency(TriangleAdjacency& adjacency, const unsigned 
 	size_t face_count = index_count / 3;
 
 	// fill triangle counts
-	memset(adjacency.counts.data, 0, vertex_count * sizeof(unsigned int));
+	memset(adjacency.counts, 0, vertex_count * sizeof(unsigned int));
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
@@ -165,18 +165,18 @@ void meshopt_optimizeVertexCache(unsigned int* destination, const unsigned int* 
 
 	assert(index_count % 3 == 0);
 
+	meshopt_Allocator allocator;
+
 	// guard for empty meshes
 	if (index_count == 0 || vertex_count == 0)
 		return;
 
 	// support in-place optimization
-	meshopt_Buffer<unsigned int> indices_copy;
-
 	if (destination == indices)
 	{
-		indices_copy.allocate(index_count);
-		memcpy(indices_copy.data, indices, index_count * sizeof(unsigned int));
-		indices = indices_copy.data;
+		unsigned int* indices_copy = allocator.allocate<unsigned int>(index_count);
+		memcpy(indices_copy, indices, index_count * sizeof(unsigned int));
+		indices = indices_copy;
 	}
 
 	unsigned int cache_size = 16;
@@ -185,27 +185,25 @@ void meshopt_optimizeVertexCache(unsigned int* destination, const unsigned int* 
 	size_t face_count = index_count / 3;
 
 	// build adjacency information
-	TriangleAdjacency adjacency(index_count, vertex_count);
+	TriangleAdjacency adjacency(index_count, vertex_count, allocator);
 	buildTriangleAdjacency(adjacency, indices, index_count, vertex_count);
 
 	// live triangle counts
-	meshopt_Buffer<unsigned int> live_triangles(vertex_count);
-	memcpy(live_triangles.data, adjacency.counts.data, vertex_count * sizeof(unsigned int));
+	unsigned int* live_triangles = allocator.allocate<unsigned int>(vertex_count);
+	memcpy(live_triangles, adjacency.counts, vertex_count * sizeof(unsigned int));
 
 	// emitted flags
-	meshopt_Buffer<char> emitted_flags(face_count);
-	memset(emitted_flags.data, 0, face_count);
+	char* emitted_flags = allocator.allocate<char>(face_count);
+	memset(emitted_flags, 0, face_count);
 
 	// compute initial vertex scores
-	meshopt_Buffer<float> vertex_scores(vertex_count);
+	float* vertex_scores = allocator.allocate<float>(vertex_count);
 
 	for (size_t i = 0; i < vertex_count; ++i)
-	{
 		vertex_scores[i] = vertexScore(-1, live_triangles[i]);
-	}
 
 	// compute triangle scores
-	meshopt_Buffer<float> triangle_scores(face_count);
+	float* triangle_scores = allocator.allocate<float>(face_count);
 
 	for (size_t i = 0; i < face_count; ++i)
 	{
@@ -350,41 +348,41 @@ void meshopt_optimizeVertexCacheFifo(unsigned int* destination, const unsigned i
 	assert(index_count % 3 == 0);
 	assert(cache_size >= 3);
 
+	meshopt_Allocator allocator;
+
 	// guard for empty meshes
 	if (index_count == 0 || vertex_count == 0)
 		return;
 
 	// support in-place optimization
-	meshopt_Buffer<unsigned int> indices_copy;
-
 	if (destination == indices)
 	{
-		indices_copy.allocate(index_count);
-		memcpy(indices_copy.data, indices, index_count * sizeof(unsigned int));
-		indices = indices_copy.data;
+		unsigned int* indices_copy = allocator.allocate<unsigned int>(index_count);
+		memcpy(indices_copy, indices, index_count * sizeof(unsigned int));
+		indices = indices_copy;
 	}
 
 	size_t face_count = index_count / 3;
 
 	// build adjacency information
-	TriangleAdjacency adjacency(index_count, vertex_count);
+	TriangleAdjacency adjacency(index_count, vertex_count, allocator);
 	buildTriangleAdjacency(adjacency, indices, index_count, vertex_count);
 
 	// live triangle counts
-	meshopt_Buffer<unsigned int> live_triangles(vertex_count);
-	memcpy(live_triangles.data, adjacency.counts.data, vertex_count * sizeof(unsigned int));
+	unsigned int* live_triangles = allocator.allocate<unsigned int>(vertex_count);
+	memcpy(live_triangles, adjacency.counts, vertex_count * sizeof(unsigned int));
 
 	// cache time stamps
-	meshopt_Buffer<unsigned int> cache_timestamps(vertex_count);
-	memset(cache_timestamps.data, 0, vertex_count * sizeof(unsigned int));
+	unsigned int* cache_timestamps = allocator.allocate<unsigned int>(vertex_count);
+	memset(cache_timestamps, 0, vertex_count * sizeof(unsigned int));
 
 	// dead-end stack
-	meshopt_Buffer<unsigned int> dead_end(index_count);
+	unsigned int* dead_end = allocator.allocate<unsigned int>(index_count);
 	unsigned int dead_end_top = 0;
 
 	// emitted flags
-	meshopt_Buffer<char> emitted_flags(face_count);
-	memset(emitted_flags.data, 0, face_count);
+	char* emitted_flags = allocator.allocate<char>(face_count);
+	memset(emitted_flags, 0, face_count);
 
 	unsigned int current_vertex = 0;
 

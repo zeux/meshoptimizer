@@ -10,13 +10,15 @@ meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* ind
 	assert(cache_size >= 3);
 	assert(warp_size == 0 || warp_size >= 3);
 
+	meshopt_Allocator allocator;
+
 	meshopt_VertexCacheStatistics result = {};
 
 	unsigned int warp_offset = 0;
 	unsigned int primgroup_offset = 0;
 
-	meshopt_Buffer<unsigned int> cache_timestamps(vertex_count);
-	memset(cache_timestamps.data, 0, vertex_count * sizeof(unsigned int));
+	unsigned int* cache_timestamps = allocator.allocate<unsigned int>(vertex_count);
+	memset(cache_timestamps, 0, vertex_count * sizeof(unsigned int));
 
 	unsigned int timestamp = cache_size + 1;
 
