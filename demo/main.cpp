@@ -162,11 +162,16 @@ Mesh parseObj(const char* path, double& reindex)
 
 bool isMeshValid(const Mesh& mesh)
 {
-	if (mesh.indices.size() % 3 != 0)
+	size_t index_count = mesh.indices.size();
+	size_t vertex_count = mesh.vertices.size();
+
+	if (index_count % 3 != 0)
 		return false;
 
-	for (size_t i = 0; i < mesh.indices.size(); ++i)
-		if (mesh.indices[i] >= mesh.vertices.size())
+	const unsigned int* indices = &mesh.indices[0];
+
+	for (size_t i = 0; i < index_count; ++i)
+		if (indices[i] >= vertex_count)
 			return false;
 
 	return true;
@@ -194,35 +199,60 @@ bool rotateTriangle(Triangle& t)
 	return c01 != 0 && c02 != 0 && c12 != 0;
 }
 
-void deindexMesh(std::vector<Triangle>& dest, const Mesh& mesh)
+unsigned int hashRange(const char* key, size_t len)
 {
-	size_t triangles = mesh.indices.size() / 3;
+	// MurmurHash2
+	const unsigned int m = 0x5bd1e995;
+	const int r = 24;
 
-	dest.reserve(triangles);
+	unsigned int h = 0;
 
-	for (size_t i = 0; i < triangles; ++i)
+	while (len >= 4)
+	{
+		unsigned int k = *reinterpret_cast<const unsigned int*>(key);
+
+		k *= m;
+		k ^= k >> r;
+		k *= m;
+
+		h *= m;
+		h ^= k;
+
+		key += 4;
+		len -= 4;
+	}
+
+	return h;
+}
+
+unsigned int hashMesh(const Mesh& mesh)
+{
+	size_t triangle_count = mesh.indices.size() / 3;
+
+	const Vertex* vertices = &mesh.vertices[0];
+	const unsigned int* indices = &mesh.indices[0];
+
+	unsigned int h1 = 0;
+	unsigned int h2 = 0;
+
+	for (size_t i = 0; i < triangle_count; ++i)
 	{
 		Triangle t;
-
-		for (int k = 0; k < 3; ++k)
-			t.v[k] = mesh.vertices[mesh.indices[i * 3 + k]];
+		t.v[0] = vertices[indices[i * 3 + 0]];
+		t.v[1] = vertices[indices[i * 3 + 1]];
+		t.v[2] = vertices[indices[i * 3 + 2]];
 
 		// skip degenerate triangles since some algorithms don't preserve them
 		if (rotateTriangle(t))
-			dest.push_back(t);
+		{
+			unsigned int hash = hashRange(reinterpret_cast<const char*>(&t), sizeof(t));
+
+			h1 ^= hash;
+			h2 += hash;
+		}
 	}
-}
 
-bool areMeshesEqual(const Mesh& lhs, const Mesh& rhs)
-{
-	std::vector<Triangle> lt, rt;
-	deindexMesh(lt, lhs);
-	deindexMesh(rt, rhs);
-
-	std::sort(lt.begin(), lt.end());
-	std::sort(rt.begin(), rt.end());
-
-	return lt.size() == rt.size() && memcmp(&lt[0], &rt[0], lt.size() * sizeof(Triangle)) == 0;
+	return h1 * 0x5bd1e995 + h2;
 }
 
 void optNone(Mesh& mesh)
@@ -469,7 +499,7 @@ void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
 	double end = timestamp();
 
 	assert(isMeshValid(copy));
-	assert(areMeshesEqual(mesh, copy));
+	assert(hashMesh(mesh) == hashMesh(copy));
 
 	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), kCacheSize, 0, 0);
 	meshopt_VertexFetchStatistics vfs = meshopt_analyzeVertexFetch(&copy.indices[0], copy.indices.size(), copy.vertices.size(), sizeof(Vertex));
@@ -728,7 +758,7 @@ void stripify(const Mesh& mesh)
 	assert(copy.indices.size() <= meshopt_unstripifyBound(strip.size()));
 
 	assert(isMeshValid(copy));
-	assert(areMeshesEqual(mesh, copy));
+	assert(hashMesh(mesh) == hashMesh(copy));
 
 	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, 0, 0);
 	meshopt_VertexCacheStatistics vcs_nv = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), 32, 32, 32);
