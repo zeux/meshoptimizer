@@ -16,8 +16,9 @@ matrix:
         - TARGET="Visual Studio 15 2017 Win64"
 
 script:
-  - if [[ "$TRAVIS_OS_NAME" != "windows" ]]; then make config=release; fi
   - if [[ "$TRAVIS_OS_NAME" != "windows" ]]; then make config=coverage test; fi
+  - if [[ "$TRAVIS_OS_NAME" != "windows" ]]; then make config=sanitize test; fi
+  - if [[ "$TRAVIS_OS_NAME" != "windows" ]]; then make config=release test; fi
   - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then cmake -G "$TARGET" -DBUILD_DEMO=ON; fi
   - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then cmake --build . -- -verbosity:minimal; fi
   - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then ./Debug/demo.exe demo/pirate.obj; fi
