@@ -181,6 +181,8 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 
 	assert(index_count / 3 <= 256);
 
+	(void)vertex_count;
+
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
 	// compute triangle normals and gather triangle corners
