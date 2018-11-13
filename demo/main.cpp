@@ -60,14 +60,9 @@ struct Mesh
 	std::vector<unsigned int> indices;
 };
 
-struct Triangle
-{
+union Triangle {
 	Vertex v[3];
-
-	bool operator<(const Triangle& other) const
-	{
-		return memcmp(v, other.v, sizeof(Triangle)) < 0;
-	}
+	char data[sizeof(Vertex) * 3];
 };
 
 Mesh generatePlane(unsigned int N)
@@ -162,11 +157,16 @@ Mesh parseObj(const char* path, double& reindex)
 
 bool isMeshValid(const Mesh& mesh)
 {
-	if (mesh.indices.size() % 3 != 0)
+	size_t index_count = mesh.indices.size();
+	size_t vertex_count = mesh.vertices.size();
+
+	if (index_count % 3 != 0)
 		return false;
 
-	for (size_t i = 0; i < mesh.indices.size(); ++i)
-		if (mesh.indices[i] >= mesh.vertices.size())
+	const unsigned int* indices = &mesh.indices[0];
+
+	for (size_t i = 0; i < index_count; ++i)
+		if (indices[i] >= vertex_count)
 			return false;
 
 	return true;
@@ -194,35 +194,60 @@ bool rotateTriangle(Triangle& t)
 	return c01 != 0 && c02 != 0 && c12 != 0;
 }
 
-void deindexMesh(std::vector<Triangle>& dest, const Mesh& mesh)
+unsigned int hashRange(const char* key, size_t len)
 {
-	size_t triangles = mesh.indices.size() / 3;
+	// MurmurHash2
+	const unsigned int m = 0x5bd1e995;
+	const int r = 24;
 
-	dest.reserve(triangles);
+	unsigned int h = 0;
 
-	for (size_t i = 0; i < triangles; ++i)
+	while (len >= 4)
+	{
+		unsigned int k = *reinterpret_cast<const unsigned int*>(key);
+
+		k *= m;
+		k ^= k >> r;
+		k *= m;
+
+		h *= m;
+		h ^= k;
+
+		key += 4;
+		len -= 4;
+	}
+
+	return h;
+}
+
+unsigned int hashMesh(const Mesh& mesh)
+{
+	size_t triangle_count = mesh.indices.size() / 3;
+
+	const Vertex* vertices = &mesh.vertices[0];
+	const unsigned int* indices = &mesh.indices[0];
+
+	unsigned int h1 = 0;
+	unsigned int h2 = 0;
+
+	for (size_t i = 0; i < triangle_count; ++i)
 	{
 		Triangle t;
-
-		for (int k = 0; k < 3; ++k)
-			t.v[k] = mesh.vertices[mesh.indices[i * 3 + k]];
+		t.v[0] = vertices[indices[i * 3 + 0]];
+		t.v[1] = vertices[indices[i * 3 + 1]];
+		t.v[2] = vertices[indices[i * 3 + 2]];
 
 		// skip degenerate triangles since some algorithms don't preserve them
 		if (rotateTriangle(t))
-			dest.push_back(t);
+		{
+			unsigned int hash = hashRange(t.data, sizeof(t.data));
+
+			h1 ^= hash;
+			h2 += hash;
+		}
 	}
-}
 
-bool areMeshesEqual(const Mesh& lhs, const Mesh& rhs)
-{
-	std::vector<Triangle> lt, rt;
-	deindexMesh(lt, lhs);
-	deindexMesh(rt, rhs);
-
-	std::sort(lt.begin(), lt.end());
-	std::sort(rt.begin(), rt.end());
-
-	return lt.size() == rt.size() && memcmp(&lt[0], &rt[0], lt.size() * sizeof(Triangle)) == 0;
+	return h1 * 0x5bd1e995 + h2;
 }
 
 void optNone(Mesh& mesh)
@@ -232,23 +257,25 @@ void optNone(Mesh& mesh)
 
 void optRandomShuffle(Mesh& mesh)
 {
-	std::vector<unsigned int> faces(mesh.indices.size() / 3);
+	size_t triangle_count = mesh.indices.size() / 3;
 
-	for (size_t i = 0; i < faces.size(); ++i)
-		faces[i] = static_cast<unsigned int>(i);
+	unsigned int* indices = &mesh.indices[0];
 
-	std::random_shuffle(faces.begin(), faces.end());
+	unsigned int rng = 0;
 
-	std::vector<unsigned int> result(mesh.indices.size());
-
-	for (size_t i = 0; i < faces.size(); ++i)
+	for (size_t i = triangle_count - 1; i > 0; --i)
 	{
-		result[i * 3 + 0] = mesh.indices[faces[i] * 3 + 0];
-		result[i * 3 + 1] = mesh.indices[faces[i] * 3 + 1];
-		result[i * 3 + 2] = mesh.indices[faces[i] * 3 + 2];
-	}
+		// Fisher-Yates shuffle
+		size_t j = rng % (i + 1);
 
-	mesh.indices.swap(result);
+		unsigned int t;
+		t = indices[3 * j + 0], indices[3 * j + 0] = indices[3 * i + 0], indices[3 * i + 0] = t;
+		t = indices[3 * j + 1], indices[3 * j + 1] = indices[3 * i + 1], indices[3 * i + 1] = t;
+		t = indices[3 * j + 2], indices[3 * j + 2] = indices[3 * i + 2], indices[3 * i + 2] = t;
+
+		// LCG RNG, constants from Numerical Recipes
+		rng = rng * 1664525 + 1013904223;
+	}
 }
 
 void optCache(Mesh& mesh)
@@ -309,18 +336,21 @@ void packMesh(std::vector<PackedVertex>& pv, const std::vector<Vertex>& vertices
 {
 	for (size_t i = 0; i < vertices.size(); ++i)
 	{
-		pv[i].px = meshopt_quantizeHalf(vertices[i].px);
-		pv[i].py = meshopt_quantizeHalf(vertices[i].py);
-		pv[i].pz = meshopt_quantizeHalf(vertices[i].pz);
-		pv[i].pw = 0;
+		const Vertex& vi = vertices[i];
+		PackedVertex& pvi = pv[i];
 
-		pv[i].nx = char(meshopt_quantizeSnorm(vertices[i].nx, 8));
-		pv[i].ny = char(meshopt_quantizeSnorm(vertices[i].ny, 8));
-		pv[i].nz = char(meshopt_quantizeSnorm(vertices[i].nz, 8));
-		pv[i].nw = 0;
+		pvi.px = meshopt_quantizeHalf(vi.px);
+		pvi.py = meshopt_quantizeHalf(vi.py);
+		pvi.pz = meshopt_quantizeHalf(vi.pz);
+		pvi.pw = 0;
 
-		pv[i].tx = meshopt_quantizeHalf(vertices[i].tx);
-		pv[i].ty = meshopt_quantizeHalf(vertices[i].ty);
+		pvi.nx = char(meshopt_quantizeSnorm(vi.nx, 8));
+		pvi.ny = char(meshopt_quantizeSnorm(vi.ny, 8));
+		pvi.nz = char(meshopt_quantizeSnorm(vi.nz, 8));
+		pvi.nw = 0;
+
+		pvi.tx = meshopt_quantizeHalf(vi.tx);
+		pvi.ty = meshopt_quantizeHalf(vi.ty);
 	}
 }
 
@@ -335,23 +365,26 @@ void packMesh(std::vector<PackedVertexOct>& pv, const std::vector<Vertex>& verti
 {
 	for (size_t i = 0; i < vertices.size(); ++i)
 	{
-		pv[i].px = meshopt_quantizeHalf(vertices[i].px);
-		pv[i].py = meshopt_quantizeHalf(vertices[i].py);
-		pv[i].pz = meshopt_quantizeHalf(vertices[i].pz);
+		const Vertex& vi = vertices[i];
+		PackedVertexOct& pvi = pv[i];
 
-		float nsum = fabsf(vertices[i].nx) + fabsf(vertices[i].ny) + fabsf(vertices[i].nz);
-		float nx = vertices[i].nx / nsum;
-		float ny = vertices[i].ny / nsum;
-		float nz = vertices[i].nz;
+		pvi.px = meshopt_quantizeHalf(vi.px);
+		pvi.py = meshopt_quantizeHalf(vi.py);
+		pvi.pz = meshopt_quantizeHalf(vi.pz);
+
+		float nsum = fabsf(vi.nx) + fabsf(vi.ny) + fabsf(vi.nz);
+		float nx = vi.nx / nsum;
+		float ny = vi.ny / nsum;
+		float nz = vi.nz;
 
 		float nu = nz >= 0 ? nx : (1 - fabsf(ny)) * (nx >= 0 ? 1 : -1);
 		float nv = nz >= 0 ? ny : (1 - fabsf(nx)) * (ny >= 0 ? 1 : -1);
 
-		pv[i].nu = char(meshopt_quantizeSnorm(nu, 8));
-		pv[i].nv = char(meshopt_quantizeSnorm(nv, 8));
+		pvi.nu = char(meshopt_quantizeSnorm(nu, 8));
+		pvi.nv = char(meshopt_quantizeSnorm(nv, 8));
 
-		pv[i].tx = meshopt_quantizeHalf(vertices[i].tx);
-		pv[i].ty = meshopt_quantizeHalf(vertices[i].ty);
+		pvi.tx = meshopt_quantizeHalf(vi.tx);
+		pvi.ty = meshopt_quantizeHalf(vi.ty);
 	}
 }
 
@@ -469,7 +502,7 @@ void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
 	double end = timestamp();
 
 	assert(isMeshValid(copy));
-	assert(areMeshesEqual(mesh, copy));
+	assert(hashMesh(mesh) == hashMesh(copy));
 
 	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), kCacheSize, 0, 0);
 	meshopt_VertexFetchStatistics vfs = meshopt_analyzeVertexFetch(&copy.indices[0], copy.indices.size(), copy.vertices.size(), sizeof(Vertex));
@@ -492,6 +525,9 @@ size_t compress(const std::vector<T>& data)
 
 void encodeIndex(const Mesh& mesh)
 {
+	// allocate result outside of the timing loop to exclude memset() from decode timing
+	std::vector<unsigned int> result(mesh.indices.size());
+
 	double start = timestamp();
 
 	std::vector<unsigned char> buffer(meshopt_encodeIndexBufferBound(mesh.indices.size(), mesh.vertices.size()));
@@ -499,8 +535,6 @@ void encodeIndex(const Mesh& mesh)
 
 	double middle = timestamp();
 
-	// using meshopt_Buffer instead of std::vector to avoid memset overhead
-	meshopt_Buffer<unsigned int> result(mesh.indices.size());
 	int res = meshopt_decodeIndexBuffer(&result[0], mesh.indices.size(), &buffer[0], buffer.size());
 	assert(res == 0);
 	(void)res;
@@ -519,7 +553,7 @@ void encodeIndex(const Mesh& mesh)
 
 	if (mesh.vertices.size() <= 65536)
 	{
-		meshopt_Buffer<unsigned short> result2(mesh.indices.size());
+		std::vector<unsigned short> result2(mesh.indices.size());
 		int res2 = meshopt_decodeIndexBuffer(&result2[0], mesh.indices.size(), &buffer[0], buffer.size());
 		assert(res2 == 0);
 		(void)res2;
@@ -535,7 +569,7 @@ void encodeIndex(const Mesh& mesh)
 	       double(csize * 8) / double(mesh.indices.size() / 3),
 	       (middle - start) * 1000,
 	       (end - middle) * 1000,
-	       (double(result.size * 4) / (1 << 30)) / (end - middle));
+	       (double(result.size() * 4) / (1 << 30)) / (end - middle));
 }
 
 void encodeIndexCoverage()
@@ -620,6 +654,9 @@ void encodeVertex(const Mesh& mesh, const char* pvn)
 	std::vector<PV> pv(mesh.vertices.size());
 	packMesh(pv, mesh.vertices);
 
+	// allocate result outside of the timing loop to exclude memset() from decode timing
+	std::vector<PV> result(mesh.vertices.size());
+
 	double start = timestamp();
 
 	std::vector<unsigned char> vbuf(meshopt_encodeVertexBufferBound(mesh.vertices.size(), sizeof(PV)));
@@ -627,8 +664,6 @@ void encodeVertex(const Mesh& mesh, const char* pvn)
 
 	double middle = timestamp();
 
-	// using meshopt_Buffer instead of std::vector to avoid memset overhead
-	meshopt_Buffer<PV> result(mesh.vertices.size());
 	int res = meshopt_decodeVertexBuffer(&result[0], mesh.vertices.size(), sizeof(PV), &vbuf[0], vbuf.size());
 	assert(res == 0);
 	(void)res;
@@ -644,7 +679,7 @@ void encodeVertex(const Mesh& mesh, const char* pvn)
 	       double(csize * 8) / double(mesh.vertices.size()),
 	       (middle - start) * 1000,
 	       (end - middle) * 1000,
-	       (double(result.size * sizeof(PV)) / (1 << 30)) / (end - middle));
+	       (double(result.size() * sizeof(PV)) / (1 << 30)) / (end - middle));
 }
 
 void encodeVertexCoverage()
@@ -728,7 +763,7 @@ void stripify(const Mesh& mesh)
 	assert(copy.indices.size() <= meshopt_unstripifyBound(strip.size()));
 
 	assert(isMeshValid(copy));
-	assert(areMeshesEqual(mesh, copy));
+	assert(hashMesh(mesh) == hashMesh(copy));
 
 	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, 0, 0);
 	meshopt_VertexCacheStatistics vcs_nv = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), 32, 32, 32);

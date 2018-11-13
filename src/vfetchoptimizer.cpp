@@ -33,19 +33,19 @@ size_t meshopt_optimizeVertexFetch(void* destination, unsigned int* indices, siz
 	assert(index_count % 3 == 0);
 	assert(vertex_size > 0 && vertex_size <= 256);
 
-	// support in-place optimization
-	meshopt_Buffer<char> vertices_copy;
+	meshopt_Allocator allocator;
 
+	// support in-place optimization
 	if (destination == vertices)
 	{
-		vertices_copy.allocate(vertex_count * vertex_size);
-		memcpy(vertices_copy.data, vertices, vertex_count * vertex_size);
-		vertices = vertices_copy.data;
+		char* vertices_copy = allocator.allocate<char>(vertex_count * vertex_size);
+		memcpy(vertices_copy, vertices, vertex_count * vertex_size);
+		vertices = vertices_copy;
 	}
 
 	// build vertex remap table
-	meshopt_Buffer<unsigned int> vertex_remap(vertex_count);
-	memset(vertex_remap.data, -1, vertex_count * sizeof(unsigned int));
+	unsigned int* vertex_remap = allocator.allocate<unsigned int>(vertex_count);
+	memset(vertex_remap, -1, vertex_count * sizeof(unsigned int));
 
 	unsigned int next_vertex = 0;
 

@@ -22,14 +22,14 @@ namespace meshopt
 
 struct EdgeAdjacency
 {
-	meshopt_Buffer<unsigned int> counts;
-	meshopt_Buffer<unsigned int> offsets;
-	meshopt_Buffer<unsigned int> data;
+	unsigned int* counts;
+	unsigned int* offsets;
+	unsigned int* data;
 
-	EdgeAdjacency(size_t index_count, size_t vertex_count)
-	    : counts(vertex_count)
-	    , offsets(vertex_count)
-	    , data(index_count)
+	EdgeAdjacency(size_t index_count, size_t vertex_count, meshopt_Allocator& allocator)
+	    : counts(allocator.allocate<unsigned int>(vertex_count))
+	    , offsets(allocator.allocate<unsigned int>(vertex_count))
+	    , data(allocator.allocate<unsigned int>(index_count))
 	{
 	}
 };
@@ -39,7 +39,7 @@ static void buildEdgeAdjacency(EdgeAdjacency& adjacency, const unsigned int* ind
 	size_t face_count = index_count / 3;
 
 	// fill edge counts
-	memset(adjacency.counts.data, 0, vertex_count * sizeof(unsigned int));
+	memset(adjacency.counts, 0, vertex_count * sizeof(unsigned int));
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
@@ -149,20 +149,20 @@ static T* hashLookup2(T* table, size_t buckets, const Hash& hash, const T& key, 
 	return 0;
 }
 
-static void buildPositionRemap(unsigned int* remap, unsigned int* wedge, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride)
+static void buildPositionRemap(unsigned int* remap, unsigned int* wedge, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, meshopt_Allocator& allocator)
 {
 	PositionHasher hasher = {vertex_positions_data, vertex_positions_stride / sizeof(float)};
 
 	size_t table_size = hashBuckets2(vertex_count);
-	meshopt_Buffer<unsigned int> table(table_size);
-	memset(table.data, -1, table_size * sizeof(unsigned int));
+	unsigned int* table = allocator.allocate<unsigned int>(table_size);
+	memset(table, -1, table_size * sizeof(unsigned int));
 
 	// build forward remap: for each vertex, which other (canonical) vertex does it map to?
 	// we use position equivalence for this, and remap vertices to other existing vertices
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
 		unsigned int index = unsigned(i);
-		unsigned int* entry = hashLookup2(table.data, table_size, hasher, index, ~0u);
+		unsigned int* entry = hashLookup2(table, table_size, hasher, index, ~0u);
 
 		if (*entry == ~0u)
 			*entry = index;
@@ -217,7 +217,7 @@ const char kHasOpposite[Kind_Count][Kind_Count] = {
 static bool hasEdge(const EdgeAdjacency& adjacency, unsigned int a, unsigned int b)
 {
 	unsigned int count = adjacency.counts[a];
-	const unsigned int* data = adjacency.data.data + adjacency.offsets[a];
+	const unsigned int* data = adjacency.data + adjacency.offsets[a];
 
 	for (size_t i = 0; i < count; ++i)
 		if (data[i] == b)
@@ -246,7 +246,7 @@ static size_t countOpenEdges(const EdgeAdjacency& adjacency, unsigned int vertex
 	size_t result = 0;
 
 	unsigned int count = adjacency.counts[vertex];
-	const unsigned int* data = adjacency.data.data + adjacency.offsets[vertex];
+	const unsigned int* data = adjacency.data + adjacency.offsets[vertex];
 
 	for (size_t i = 0; i < count; ++i)
 		if (!hasEdge(adjacency, data[i], vertex))
@@ -866,21 +866,23 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	assert(vertex_positions_stride % sizeof(float) == 0);
 	assert(target_index_count <= index_count);
 
+	meshopt_Allocator allocator;
+
 	unsigned int* result = destination;
 
 	// build adjacency information
-	EdgeAdjacency adjacency(index_count, vertex_count);
+	EdgeAdjacency adjacency(index_count, vertex_count, allocator);
 	buildEdgeAdjacency(adjacency, indices, index_count, vertex_count);
 
 	// build position remap that maps each vertex to the one with identical position
-	meshopt_Buffer<unsigned int> remap(vertex_count);
-	meshopt_Buffer<unsigned int> wedge(vertex_count);
-	buildPositionRemap(remap.data, wedge.data, vertex_positions_data, vertex_count, vertex_positions_stride);
+	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
+	unsigned int* wedge = allocator.allocate<unsigned int>(vertex_count);
+	buildPositionRemap(remap, wedge, vertex_positions_data, vertex_count, vertex_positions_stride, allocator);
 
 	// classify vertices; vertex kind determines collapse rules, see kCanCollapse
-	meshopt_Buffer<unsigned char> vertex_kind(vertex_count);
-	meshopt_Buffer<unsigned int> loop(vertex_count);
-	classifyVertices(vertex_kind.data, loop.data, vertex_count, adjacency, remap.data, wedge.data);
+	unsigned char* vertex_kind = allocator.allocate<unsigned char>(vertex_count);
+	unsigned int* loop = allocator.allocate<unsigned int>(vertex_count);
+	classifyVertices(vertex_kind, loop, vertex_count, adjacency, remap, wedge);
 
 #if TRACE
 	size_t unique_positions = 0;
@@ -897,14 +899,14 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	       int(kinds[Kind_Manifold]), int(kinds[Kind_Border]), int(kinds[Kind_Seam]), int(kinds[Kind_Locked]));
 #endif
 
-	meshopt_Buffer<Vector3> vertex_positions(vertex_count);
-	rescalePositions(vertex_positions.data, vertex_positions_data, vertex_count, vertex_positions_stride);
+	Vector3* vertex_positions = allocator.allocate<Vector3>(vertex_count);
+	rescalePositions(vertex_positions, vertex_positions_data, vertex_count, vertex_positions_stride);
 
-	meshopt_Buffer<Quadric> vertex_quadrics(vertex_count);
-	memset(vertex_quadrics.data, 0, vertex_count * sizeof(Quadric));
+	Quadric* vertex_quadrics = allocator.allocate<Quadric>(vertex_count);
+	memset(vertex_quadrics, 0, vertex_count * sizeof(Quadric));
 
-	fillFaceQuadrics(vertex_quadrics.data, indices, index_count, vertex_positions.data, remap.data);
-	fillEdgeQuadrics(vertex_quadrics.data, indices, index_count, vertex_positions.data, remap.data, vertex_kind.data, loop.data);
+	fillFaceQuadrics(vertex_quadrics, indices, index_count, vertex_positions, remap);
+	fillEdgeQuadrics(vertex_quadrics, indices, index_count, vertex_positions, remap, vertex_kind, loop);
 
 	if (result != indices)
 		memcpy(result, indices, index_count * sizeof(unsigned int));
@@ -914,28 +916,28 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	float worst_error = 0;
 #endif
 
-	meshopt_Buffer<Collapse> edge_collapses(index_count);
-	meshopt_Buffer<unsigned int> collapse_order(index_count);
-	meshopt_Buffer<unsigned int> collapse_remap(vertex_count);
-	meshopt_Buffer<unsigned char> collapse_locked(vertex_count);
+	Collapse* edge_collapses = allocator.allocate<Collapse>(index_count);
+	unsigned int* collapse_order = allocator.allocate<unsigned int>(index_count);
+	unsigned int* collapse_remap = allocator.allocate<unsigned int>(vertex_count);
+	unsigned char* collapse_locked = allocator.allocate<unsigned char>(vertex_count);
 
 	size_t result_count = index_count;
 
 	while (result_count > target_index_count)
 	{
-		size_t edge_collapse_count = pickEdgeCollapses(edge_collapses.data, result, result_count, remap.data, vertex_kind.data, loop.data);
+		size_t edge_collapse_count = pickEdgeCollapses(edge_collapses, result, result_count, remap, vertex_kind, loop);
 
 		// no edges can be collapsed any more due to topology restrictions
 		if (edge_collapse_count == 0)
 			break;
 
-		rankEdgeCollapses(edge_collapses.data, edge_collapse_count, vertex_positions.data, vertex_quadrics.data, remap.data);
+		rankEdgeCollapses(edge_collapses, edge_collapse_count, vertex_positions, vertex_quadrics, remap);
 
 #if TRACE > 1
-		dumpEdgeCollapses(edge_collapses.data, edge_collapse_count, vertex_kind.data);
+		dumpEdgeCollapses(edge_collapses, edge_collapse_count, vertex_kind);
 #endif
 
-		sortEdgeCollapses(collapse_order.data, edge_collapses.data, edge_collapse_count);
+		sortEdgeCollapses(collapse_order, edge_collapses, edge_collapse_count);
 
 		// most collapses remove 2 triangles; use this to establish a bound on the pass in terms of error limit
 		// note that edge_collapse_goal is an estimate; triangle_collapse_goal will be used to actually limit collapses
@@ -952,17 +954,17 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		for (size_t i = 0; i < vertex_count; ++i)
 			collapse_remap[i] = unsigned(i);
 
-		memset(collapse_locked.data, 0, vertex_count);
+		memset(collapse_locked, 0, vertex_count);
 
-		size_t collapses = performEdgeCollapses(collapse_remap.data, collapse_locked.data, vertex_quadrics.data, edge_collapses.data, edge_collapse_count, collapse_order.data, remap.data, wedge.data, vertex_kind.data, triangle_collapse_goal, error_limit);
+		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, triangle_collapse_goal, error_limit);
 
 		// no edges can be collapsed any more due to hitting the error limit or triangle collapse limit
 		if (collapses == 0)
 			break;
 
-		remapEdgeLoops(loop.data, vertex_count, collapse_remap.data);
+		remapEdgeLoops(loop, vertex_count, collapse_remap);
 
-		size_t new_count = remapIndexBuffer(result, result_count, collapse_remap.data);
+		size_t new_count = remapIndexBuffer(result, result_count, collapse_remap);
 		assert(new_count < result_count);
 
 #if TRACE

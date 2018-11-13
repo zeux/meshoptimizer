@@ -601,52 +601,32 @@ inline float meshopt_quantizeFloat(float v, int N)
 
 /* Internal implementation helpers */
 #ifdef __cplusplus
-template <typename T>
-class meshopt_Buffer
+class meshopt_Allocator
 {
-	meshopt_Buffer(const meshopt_Buffer&);
-	meshopt_Buffer& operator=(const meshopt_Buffer&);
-
 public:
-	T* data;
-	size_t size;
-
-	meshopt_Buffer()
-	    : data(0)
-	    , size(0)
+	meshopt_Allocator()
+		: blocks()
+		, count(0)
 	{
 	}
 
-	explicit meshopt_Buffer(size_t size)
-	    : data(0)
-	    , size(size)
+	~meshopt_Allocator()
 	{
-		data = new T[size];
+		for (size_t i = 0; i < count; ++i)
+			operator delete(blocks[i]);
 	}
 
-	~meshopt_Buffer()
+	template <typename T> T* allocate(size_t size)
 	{
-		delete[] data;
+		assert(count < sizeof(blocks) / sizeof(blocks[0]));
+		T* result = static_cast<T*>(operator new(size > size_t(-1) / sizeof(T) ? size_t(-1) : size * sizeof(T)));
+		blocks[count++] = result;
+		return result;
 	}
 
-	T& operator[](size_t index)
-	{
-		assert(index < size);
-		return data[index];
-	}
-
-	const T& operator[](size_t index) const
-	{
-		assert(index < size);
-		return data[index];
-	}
-
-	void allocate(size_t size_)
-	{
-		assert(!data);
-		data = new T[size_];
-		size = size_;
-	}
+private:
+	void* blocks[16];
+	size_t count;
 };
 #endif
 

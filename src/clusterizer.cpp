@@ -106,6 +106,8 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* destination, const unsigned int* i
 	assert(max_vertices >= 3);
 	assert(max_triangles >= 1);
 
+	meshopt_Allocator allocator;
+
 	meshopt_Meshlet meshlet;
 	memset(&meshlet, 0, sizeof(meshlet));
 
@@ -113,8 +115,8 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* destination, const unsigned int* i
 	assert(max_triangles <= sizeof(meshlet.indices) / 3);
 
 	// index of the vertex in the meshlet, 0xff if the vertex isn't used
-	meshopt_Buffer<unsigned char> used(vertex_count);
-	memset(used.data, -1, vertex_count);
+	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
+	memset(used, -1, vertex_count);
 
 	size_t offset = 0;
 

@@ -18,24 +18,13 @@ struct OverdrawBuffer
 	unsigned int overdraw[kViewport][kViewport][2];
 };
 
-template <typename T>
-static T min(T a, T b)
-{
-	return a < b ? a : b;
-}
+#ifndef min
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#endif
 
-template <typename T>
-static T max(T a, T b)
-{
-	return a > b ? a : b;
-}
-
-static float det2x2(float a, float b, float c, float d)
-{
-	// (a b)
-	// (c d)
-	return a * d - b * c;
-}
+#ifndef max
+#define max(a, b) ((a) > (b) ? (a) : (b))
+#endif
 
 static float computeDepthGradients(float& dzdx, float& dzdy, float x1, float y1, float z1, float x2, float y2, float z2, float x3, float y3, float z3)
 {
@@ -44,11 +33,11 @@ static float computeDepthGradients(float& dzdx, float& dzdy, float x1, float y1,
 	// (x2-x1 y2-y1)(dzdx) = (z2-z1)
 	// (x3-x1 y3-y1)(dzdy)   (z3-z1)
 	// we'll solve it with Cramer's rule
-	float det = det2x2(x2 - x1, y2 - y1, x3 - x1, y3 - y1);
+	float det = (x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1);
 	float invdet = (det == 0) ? 0 : 1 / det;
 
-	dzdx = det2x2(z2 - z1, y2 - y1, z3 - z1, y3 - y1) * invdet;
-	dzdy = det2x2(x2 - x1, z2 - z1, x3 - x1, z3 - z1) * invdet;
+	dzdx = (z2 - z1) * (y3 - y1) - (y2 - y1) * (z3 - z1) * invdet;
+	dzdy = (x2 - x1) * (z3 - z1) - (z2 - z1) * (x3 - x1) * invdet;
 
 	return det;
 }
@@ -161,6 +150,8 @@ meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, 
 	assert(vertex_positions_stride > 0 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
 
+	meshopt_Allocator allocator;
+
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
 	meshopt_OverdrawStatistics result = {};
@@ -182,7 +173,7 @@ meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, 
 	float extent = max(maxv[0] - minv[0], max(maxv[1] - minv[1], maxv[2] - minv[2]));
 	float scale = kViewport / extent;
 
-	meshopt_Buffer<float> triangles(index_count * 3);
+	float* triangles = allocator.allocate<float>(index_count * 3);
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
@@ -196,8 +187,7 @@ meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, 
 		triangles[i * 3 + 2] = (v[2] - minv[2]) * scale;
 	}
 
-	meshopt_Buffer<OverdrawBuffer> buffer_storage(1);
-	OverdrawBuffer* buffer = buffer_storage.data;
+	OverdrawBuffer* buffer = allocator.allocate<OverdrawBuffer>(1);
 
 	for (int axis = 0; axis < 3; ++axis)
 	{
