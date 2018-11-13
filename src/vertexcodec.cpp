@@ -398,11 +398,6 @@ static __m128i unzigzag8(__m128i v)
 }
 
 static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int bitslog2)
-#if defined(__has_attribute)
-#if __has_attribute(no_sanitize)
-    __attribute__((no_sanitize("undefined"))) // ubsan treats the use of _mm_cvtsi32_si128 below as UB because the load address isn't aligned to 4b
-#endif
-#endif
 {
 	switch (bitslog2)
 	{
@@ -417,7 +412,13 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 
 	case 1:
 	{
-		__m128i sel2 = _mm_cvtsi32_si128(*reinterpret_cast<const int*>(data));
+#ifdef __GNUC__
+		typedef int __attribute__((aligned(1))) unaligned_int;
+#else
+		typedef int unaligned_int;
+#endif
+
+		__m128i sel2 = _mm_cvtsi32_si128(*reinterpret_cast<const unaligned_int*>(data));
 		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + 4));
 
 		__m128i sel22 = _mm_unpacklo_epi8(_mm_srli_epi16(sel2, 4), sel2);
