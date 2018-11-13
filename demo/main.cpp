@@ -528,6 +528,9 @@ size_t compress(const std::vector<T>& data)
 
 void encodeIndex(const Mesh& mesh)
 {
+	// allocate result outside of the timing loop to exclude memset() from decode timing
+	std::vector<unsigned int> result(mesh.indices.size());
+
 	double start = timestamp();
 
 	std::vector<unsigned char> buffer(meshopt_encodeIndexBufferBound(mesh.indices.size(), mesh.vertices.size()));
@@ -535,8 +538,6 @@ void encodeIndex(const Mesh& mesh)
 
 	double middle = timestamp();
 
-	// using meshopt_Buffer instead of std::vector to avoid memset overhead
-	meshopt_Buffer<unsigned int> result(mesh.indices.size());
 	int res = meshopt_decodeIndexBuffer(&result[0], mesh.indices.size(), &buffer[0], buffer.size());
 	assert(res == 0);
 	(void)res;
@@ -555,7 +556,7 @@ void encodeIndex(const Mesh& mesh)
 
 	if (mesh.vertices.size() <= 65536)
 	{
-		meshopt_Buffer<unsigned short> result2(mesh.indices.size());
+		std::vector<unsigned short> result2(mesh.indices.size());
 		int res2 = meshopt_decodeIndexBuffer(&result2[0], mesh.indices.size(), &buffer[0], buffer.size());
 		assert(res2 == 0);
 		(void)res2;
@@ -571,7 +572,7 @@ void encodeIndex(const Mesh& mesh)
 	       double(csize * 8) / double(mesh.indices.size() / 3),
 	       (middle - start) * 1000,
 	       (end - middle) * 1000,
-	       (double(result.size * 4) / (1 << 30)) / (end - middle));
+	       (double(result.size() * 4) / (1 << 30)) / (end - middle));
 }
 
 void encodeIndexCoverage()
@@ -656,6 +657,9 @@ void encodeVertex(const Mesh& mesh, const char* pvn)
 	std::vector<PV> pv(mesh.vertices.size());
 	packMesh(pv, mesh.vertices);
 
+	// allocate result outside of the timing loop to exclude memset() from decode timing
+	std::vector<PV> result(mesh.vertices.size());
+
 	double start = timestamp();
 
 	std::vector<unsigned char> vbuf(meshopt_encodeVertexBufferBound(mesh.vertices.size(), sizeof(PV)));
@@ -663,8 +667,6 @@ void encodeVertex(const Mesh& mesh, const char* pvn)
 
 	double middle = timestamp();
 
-	// using meshopt_Buffer instead of std::vector to avoid memset overhead
-	meshopt_Buffer<PV> result(mesh.vertices.size());
 	int res = meshopt_decodeVertexBuffer(&result[0], mesh.vertices.size(), sizeof(PV), &vbuf[0], vbuf.size());
 	assert(res == 0);
 	(void)res;
@@ -680,7 +682,7 @@ void encodeVertex(const Mesh& mesh, const char* pvn)
 	       double(csize * 8) / double(mesh.vertices.size()),
 	       (middle - start) * 1000,
 	       (end - middle) * 1000,
-	       (double(result.size * sizeof(PV)) / (1 << 30)) / (end - middle));
+	       (double(result.size() * sizeof(PV)) / (1 << 30)) / (end - middle));
 }
 
 void encodeVertexCoverage()
