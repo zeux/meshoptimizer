@@ -239,7 +239,7 @@ struct meshopt_Meshlet
  * For maximum efficiency the index buffer being converted has to be optimized for vertex cache first.
  *
  * destination must contain enough space for all meshlets, worst case size can be computed with meshopt_buildMeshletsBound
- * max_vertices and max_triangles can't exceed limits statically declared in meshopt_Meshlet
+ * max_vertices and max_triangles can't exceed limits statically declared in meshopt_Meshlet (max_vertices <= 64, max_triangles <= 126)
  */
 MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, size_t max_vertices, size_t max_triangles);
 MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_buildMeshletsBound(size_t index_count, size_t max_vertices, size_t max_triangles);
@@ -264,7 +264,7 @@ struct meshopt_Bounds
  * Experimental: Cluster bounds generator
  * Creates bounding volumes that can be used for frustum, backface and occlusion culling.
  *
- * For backface culling with orthographic projection, use the following formula:
+ * For backface culling with orthographic projection, use the following formula to reject backfacing clusters:
  *   dot(view, cone_axis) >= cone_cutoff
  *
  * For perspective projection, you can the formula that needs cone apex in addition to axis & cutoff:
@@ -279,6 +279,7 @@ struct meshopt_Bounds
  * to do frustum/occlusion culling, the formula that doesn't use the apex may be preferable.
  *
  * vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
+ * index_count should be less than or equal to 256*3 (the function assumes clusters of limited size)
  */
 MESHOPTIMIZER_EXPERIMENTAL struct meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 MESHOPTIMIZER_EXPERIMENTAL struct meshopt_Bounds meshopt_computeMeshletBounds(struct meshopt_Meshlet meshlet, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
