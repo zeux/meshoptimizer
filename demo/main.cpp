@@ -60,10 +60,9 @@ struct Mesh
 	std::vector<unsigned int> indices;
 };
 
-union Triangle
-{
+union Triangle {
 	Vertex v[3];
-	char data[sizeof(Vertex)*3];
+	char data[sizeof(Vertex) * 3];
 };
 
 Mesh generatePlane(unsigned int N)
@@ -258,23 +257,25 @@ void optNone(Mesh& mesh)
 
 void optRandomShuffle(Mesh& mesh)
 {
-	std::vector<unsigned int> faces(mesh.indices.size() / 3);
+	size_t triangle_count = mesh.indices.size() / 3;
 
-	for (size_t i = 0; i < faces.size(); ++i)
-		faces[i] = static_cast<unsigned int>(i);
+	unsigned int* indices = &mesh.indices[0];
 
-	std::random_shuffle(faces.begin(), faces.end());
+	unsigned int rng = 0;
 
-	std::vector<unsigned int> result(mesh.indices.size());
-
-	for (size_t i = 0; i < faces.size(); ++i)
+	for (size_t i = triangle_count - 1; i > 0; --i)
 	{
-		result[i * 3 + 0] = mesh.indices[faces[i] * 3 + 0];
-		result[i * 3 + 1] = mesh.indices[faces[i] * 3 + 1];
-		result[i * 3 + 2] = mesh.indices[faces[i] * 3 + 2];
-	}
+		// Fisher-Yates shuffle
+		size_t j = rng % (i + 1);
 
-	mesh.indices.swap(result);
+		unsigned int t;
+		t = indices[3 * j + 0], indices[3 * j + 0] = indices[3 * i + 0], indices[3 * i + 0] = t;
+		t = indices[3 * j + 1], indices[3 * j + 1] = indices[3 * i + 1], indices[3 * i + 1] = t;
+		t = indices[3 * j + 2], indices[3 * j + 2] = indices[3 * i + 2], indices[3 * i + 2] = t;
+
+		// LCG RNG, constants from Numerical Recipes
+		rng = rng * 1664525 + 1013904223;
+	}
 }
 
 void optCache(Mesh& mesh)
