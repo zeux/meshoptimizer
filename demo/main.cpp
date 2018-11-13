@@ -822,16 +822,16 @@ void meshlets(const Mesh& mesh)
 		float mview[3] = {bounds.cone_apex[0] - camera[0], bounds.cone_apex[1] - camera[1], bounds.cone_apex[2] - camera[2]};
 		float mviewlength = sqrtf(mview[0] * mview[0] + mview[1] * mview[1] + mview[2] * mview[2]);
 
-		rejected += mview[0] * bounds.cone_axis[0] + mview[1] * bounds.cone_axis[1] + mview[2] * bounds.cone_axis[2] > bounds.cone_cutoff * mviewlength;
-		rejected_s8 += mview[0] * (bounds.cone_axis_s8[0] / 127.f) + mview[1] * (bounds.cone_axis_s8[1] / 127.f) + mview[2] * (bounds.cone_axis_s8[2] / 127.f) > (bounds.cone_cutoff_s8 / 127.f) * mviewlength;
+		rejected += mview[0] * bounds.cone_axis[0] + mview[1] * bounds.cone_axis[1] + mview[2] * bounds.cone_axis[2] >= bounds.cone_cutoff * mviewlength;
+		rejected_s8 += mview[0] * (bounds.cone_axis_s8[0] / 127.f) + mview[1] * (bounds.cone_axis_s8[1] / 127.f) + mview[2] * (bounds.cone_axis_s8[2] / 127.f) >= (bounds.cone_cutoff_s8 / 127.f) * mviewlength;
 
 		// alternative formulation for perspective projection that doesn't use apex (and uses cluster bounding sphere instead):
 		// dot(normalize(center - camera_position), cone_axis) > cone_cutoff + radius / length(center - camera_position)
 		float cview[3] = {bounds.center[0] - camera[0], bounds.center[1] - camera[1], bounds.center[2] - camera[2]};
 		float cviewlength = sqrtf(cview[0] * cview[0] + cview[1] * cview[1] + cview[2] * cview[2]);
 
-		rejected_alt += cview[0] * bounds.cone_axis[0] + cview[1] * bounds.cone_axis[1] + cview[2] * bounds.cone_axis[2] > bounds.cone_cutoff * cviewlength + bounds.radius;
-		rejected_alt_s8 += cview[0] * (bounds.cone_axis_s8[0] / 127.f) + cview[1] * (bounds.cone_axis_s8[1] / 127.f) + cview[2] * (bounds.cone_axis_s8[2] / 127.f) > (bounds.cone_cutoff_s8 / 127.f) * cviewlength + bounds.radius;
+		rejected_alt += cview[0] * bounds.cone_axis[0] + cview[1] * bounds.cone_axis[1] + cview[2] * bounds.cone_axis[2] >= bounds.cone_cutoff * cviewlength + bounds.radius;
+		rejected_alt_s8 += cview[0] * (bounds.cone_axis_s8[0] / 127.f) + cview[1] * (bounds.cone_axis_s8[1] / 127.f) + cview[2] * (bounds.cone_axis_s8[2] / 127.f) >= (bounds.cone_cutoff_s8 / 127.f) * cviewlength + bounds.radius;
 	}
 	double endc = timestamp();
 
