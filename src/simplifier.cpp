@@ -991,15 +991,15 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 #endif
 
 #if TRACE > 1
-	dumpLockedCollapses(result, result_count, vertex_kind.data);
+	dumpLockedCollapses(result, result_count, vertex_kind);
 #endif
 
 #if TRACE
 	if (meshopt_simplifyDebugKind)
-		memcpy(meshopt_simplifyDebugKind, vertex_kind.data, vertex_count);
+		memcpy(meshopt_simplifyDebugKind, vertex_kind, vertex_count);
 
 	if (meshopt_simplifyDebugLoop)
-		memcpy(meshopt_simplifyDebugLoop, loop.data, vertex_count * sizeof(unsigned int));
+		memcpy(meshopt_simplifyDebugLoop, loop, vertex_count * sizeof(unsigned int));
 #endif
 
 	return result_count;
