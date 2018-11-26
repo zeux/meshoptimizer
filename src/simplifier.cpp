@@ -25,18 +25,16 @@ struct EdgeAdjacency
 	unsigned int* counts;
 	unsigned int* offsets;
 	unsigned int* data;
-
-	EdgeAdjacency(size_t index_count, size_t vertex_count, meshopt_Allocator& allocator)
-	    : counts(allocator.allocate<unsigned int>(vertex_count))
-	    , offsets(allocator.allocate<unsigned int>(vertex_count))
-	    , data(allocator.allocate<unsigned int>(index_count))
-	{
-	}
 };
 
-static void buildEdgeAdjacency(EdgeAdjacency& adjacency, const unsigned int* indices, size_t index_count, size_t vertex_count)
+static void buildEdgeAdjacency(EdgeAdjacency& adjacency, const unsigned int* indices, size_t index_count, size_t vertex_count, meshopt_Allocator& allocator)
 {
 	size_t face_count = index_count / 3;
+
+	// allocate arrays
+	adjacency.counts = allocator.allocate<unsigned int>(vertex_count);
+	adjacency.offsets = allocator.allocate<unsigned int>(vertex_count);
+	adjacency.data = allocator.allocate<unsigned int>(index_count);
 
 	// fill edge counts
 	memset(adjacency.counts, 0, vertex_count * sizeof(unsigned int));
@@ -871,8 +869,8 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	unsigned int* result = destination;
 
 	// build adjacency information
-	EdgeAdjacency adjacency(index_count, vertex_count, allocator);
-	buildEdgeAdjacency(adjacency, indices, index_count, vertex_count);
+	EdgeAdjacency adjacency = {};
+	buildEdgeAdjacency(adjacency, indices, index_count, vertex_count, allocator);
 
 	// build position remap that maps each vertex to the one with identical position
 	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);

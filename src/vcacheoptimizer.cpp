@@ -27,18 +27,16 @@ struct TriangleAdjacency
 	unsigned int* counts;
 	unsigned int* offsets;
 	unsigned int* data;
-
-	TriangleAdjacency(size_t index_count, size_t vertex_count, meshopt_Allocator& allocator)
-	    : counts(allocator.allocate<unsigned int>(vertex_count))
-	    , offsets(allocator.allocate<unsigned int>(vertex_count))
-	    , data(allocator.allocate<unsigned int>(index_count))
-	{
-	}
 };
 
-static void buildTriangleAdjacency(TriangleAdjacency& adjacency, const unsigned int* indices, size_t index_count, size_t vertex_count)
+static void buildTriangleAdjacency(TriangleAdjacency& adjacency, const unsigned int* indices, size_t index_count, size_t vertex_count, meshopt_Allocator& allocator)
 {
 	size_t face_count = index_count / 3;
+
+	// allocate arrays
+	adjacency.counts = allocator.allocate<unsigned int>(vertex_count);
+	adjacency.offsets = allocator.allocate<unsigned int>(vertex_count);
+	adjacency.data = allocator.allocate<unsigned int>(index_count);
 
 	// fill triangle counts
 	memset(adjacency.counts, 0, vertex_count * sizeof(unsigned int));
@@ -185,8 +183,8 @@ void meshopt_optimizeVertexCache(unsigned int* destination, const unsigned int* 
 	size_t face_count = index_count / 3;
 
 	// build adjacency information
-	TriangleAdjacency adjacency(index_count, vertex_count, allocator);
-	buildTriangleAdjacency(adjacency, indices, index_count, vertex_count);
+	TriangleAdjacency adjacency = {};
+	buildTriangleAdjacency(adjacency, indices, index_count, vertex_count, allocator);
 
 	// live triangle counts
 	unsigned int* live_triangles = allocator.allocate<unsigned int>(vertex_count);
@@ -365,8 +363,8 @@ void meshopt_optimizeVertexCacheFifo(unsigned int* destination, const unsigned i
 	size_t face_count = index_count / 3;
 
 	// build adjacency information
-	TriangleAdjacency adjacency(index_count, vertex_count, allocator);
-	buildTriangleAdjacency(adjacency, indices, index_count, vertex_count);
+	TriangleAdjacency adjacency = {};
+	buildTriangleAdjacency(adjacency, indices, index_count, vertex_count, allocator);
 
 	// live triangle counts
 	unsigned int* live_triangles = allocator.allocate<unsigned int>(vertex_count);
