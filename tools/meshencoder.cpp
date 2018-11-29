@@ -9,8 +9,8 @@
 // Vertex data
 // Index data
 
-#include "../demo/objparser.h"
 #include "../src/meshoptimizer.h"
+#include "objparser.h"
 
 #include <algorithm>
 #include <vector>

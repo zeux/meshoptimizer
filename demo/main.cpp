@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "miniz.h"
-#include "objparser.h"
+#include "../tools/objparser.h"
 
 // This file uses assert() to verify algorithm correctness
 #undef NDEBUG
