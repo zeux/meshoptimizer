@@ -6,9 +6,15 @@ files=demo/pirate.obj
 
 BUILD=build/$(config)
 
-SOURCES=$(wildcard src/*.cpp demo/*.c demo/*.cpp)
-OBJECTS=$(SOURCES:%=$(BUILD)/%.o)
+LIBRARY_SOURCES=$(wildcard src/*.cpp)
+LIBRARY_OBJECTS=$(LIBRARY_SOURCES:%=$(BUILD)/%.o)
 
+DEMO_SOURCES=$(wildcard demo/*.c demo/*.cpp)
+DEMO_OBJECTS=$(DEMO_SOURCES:%=$(BUILD)/%.o)
+
+OBJECTS=$(LIBRARY_OBJECTS) $(DEMO_OBJECTS)
+
+LIBRARY=$(BUILD)/libmeshoptimizer.a
 EXECUTABLE=$(BUILD)/meshoptimizer
 
 CFLAGS=-g -Wall -Wextra -Werror -std=c89
@@ -44,8 +50,14 @@ dev: $(EXECUTABLE)
 format:
 	clang-format -i $(SOURCES)
 
-$(EXECUTABLE): $(OBJECTS)
-	$(CXX) $(OBJECTS) $(LDFLAGS) -o $@
+meshencoder: $(LIBRARY) $(BUILD)/demo/objparser.cpp.o tools/meshencoder.cpp
+	$(CXX) tools/meshencoder.cpp $(LIBRARY) $(BUILD)/demo/objparser.cpp.o $(CXXFLAGS) $(LDFLAGS) -o meshencoder
+
+$(EXECUTABLE): $(DEMO_OBJECTS) $(LIBRARY)
+	$(CXX) $(DEMO_OBJECTS) $(LIBRARY) $(LDFLAGS) -o $@
+
+$(LIBRARY): $(LIBRARY_OBJECTS)
+	ar rcs $@ $^
 
 $(BUILD)/%.cpp.o: %.cpp
 	@mkdir -p $(dir $@)
@@ -56,6 +68,7 @@ $(BUILD)/%.c.o: %.c
 	$(CC) $< $(CFLAGS) -c -MMD -MP -o $@
 
 -include $(OBJECTS:.o=.d)
+
 clean:
 	rm -rf $(BUILD)
 
