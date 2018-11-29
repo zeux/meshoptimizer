@@ -56,6 +56,9 @@ format:
 meshencoder: $(ENCODER_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
 
+decoderjs: src/vertexcodec.cpp src/indexcodec.cpp
+	emcc src/vertexcodec.cpp src/indexcodec.cpp -Os -DNDEBUG -s EXPORTED_FUNCTIONS='["_meshopt_decodeVertexBuffer", "_meshopt_decodeIndexBuffer"]' -o js/decoder.js
+
 $(EXECUTABLE): $(DEMO_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
 
