@@ -90,8 +90,8 @@ int main(int argc, char** argv)
 
 	std::vector<Vertex> triangles(total_indices);
 
-	int pos_precision = 0xfffc; // 14 bits
-	int uv_precision = 0xfff0; // 12 bits
+	int pos_bits = 14;
+	int uv_bits = 12;
 
 	for (size_t i = 0; i < total_indices; ++i)
 	{
@@ -101,18 +101,18 @@ int main(int argc, char** argv)
 
 		Vertex v =
 		    {
-		        short(meshopt_quantizeUnorm(file.v[vi * 3 + 0] * scale_inverse, 16) & pos_precision),
-		        short(meshopt_quantizeUnorm(file.v[vi * 3 + 1] * scale_inverse, 16) & pos_precision),
-		        short(meshopt_quantizeUnorm(file.v[vi * 3 + 2] * scale_inverse, 16) & pos_precision),
-				0x7fff,
+		        short(meshopt_quantizeSnorm(file.v[vi * 3 + 0] * scale_inverse, pos_bits) << (16 - pos_bits)),
+		        short(meshopt_quantizeSnorm(file.v[vi * 3 + 1] * scale_inverse, pos_bits) << (16 - pos_bits)),
+		        short(meshopt_quantizeSnorm(file.v[vi * 3 + 2] * scale_inverse, pos_bits) << (16 - pos_bits)),
+				0,
 
 		        char(meshopt_quantizeSnorm(vni >= 0 ? file.vn[vni * 3 + 0] : 0, 8)),
 		        char(meshopt_quantizeSnorm(vni >= 0 ? file.vn[vni * 3 + 1] : 0, 8)),
 		        char(meshopt_quantizeSnorm(vni >= 0 ? file.vn[vni * 3 + 2] : 0, 8)),
 				0,
 
-		        (unsigned short)(meshopt_quantizeUnorm(vti >= 0 ? file.vt[vti * 3 + 0] : 0, 16) & uv_precision),
-		        (unsigned short)(meshopt_quantizeUnorm(vti >= 0 ? file.vt[vti * 3 + 1] : 0, 16) & uv_precision),
+		        (unsigned short)(meshopt_quantizeUnorm(vti >= 0 ? file.vt[vti * 3 + 0] : 0, uv_bits) << (16 - uv_bits)),
+		        (unsigned short)(meshopt_quantizeUnorm(vti >= 0 ? file.vt[vti * 3 + 1] : 0, uv_bits) << (16 - uv_bits)),
 		    };
 
 		triangles[i] = v;
