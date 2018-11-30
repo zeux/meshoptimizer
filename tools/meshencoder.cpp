@@ -3,9 +3,8 @@
 
 // Data layout:
 // Header: 32b
-// Material table: 4b * material_count
-// Material data
 // Object table: 16b * object_count
+// Object data
 // Vertex data
 // Index data
 
@@ -23,27 +22,22 @@ struct Header
 {
 	char magic[4]; // OPTM
 
-	unsigned int material_count;
-	unsigned int object_count;
-
+	unsigned int group_count;
 	unsigned int vertex_count;
 	unsigned int index_count;
 	unsigned int vertex_data_size;
 	unsigned int index_data_size;
 
 	float scale;
-};
 
-struct Material
-{
-	unsigned int name_length;
+	unsigned int reserved;
 };
 
 struct Object
 {
 	unsigned int index_offset;
 	unsigned int index_count;
-	unsigned int material_index;
+	unsigned int material_length;
 	unsigned int reserved;
 };
 
@@ -128,7 +122,13 @@ int main(int argc, char** argv)
 	std::vector<Vertex> vertices(total_vertices);
 	meshopt_remapVertexBuffer(&vertices[0], &triangles[0], total_indices, sizeof(Vertex), &remap[0]);
 
-	meshopt_optimizeVertexCache(&indices[0], &indices[0], indices.size(), vertices.size());
+	for (size_t i = 0; i < file.g_size; ++i)
+	{
+		ObjGroup& g = file.g[i];
+
+		meshopt_optimizeVertexCache(&indices[g.index_offset], &indices[g.index_offset], g.index_count, vertices.size());
+	}
+
 	meshopt_optimizeVertexFetch(&vertices[0], &indices[0], indices.size(), &vertices[0], vertices.size(), sizeof(Vertex));
 
 	std::vector<unsigned char> vbuf(meshopt_encodeVertexBufferBound(vertices.size(), sizeof(Vertex)));
@@ -147,9 +147,7 @@ int main(int argc, char** argv)
 	Header header = {};
 	memcpy(header.magic, "OPTM", 4);
 
-	header.material_count = 0;
-	header.object_count = 1;
-
+	header.group_count = unsigned(file.g_size);
 	header.vertex_count = unsigned(vertices.size());
 	header.index_count = unsigned(indices.size());
 	header.vertex_data_size = unsigned(vbuf.size());
@@ -159,12 +157,24 @@ int main(int argc, char** argv)
 
 	fwrite(&header, 1, sizeof(header), result);
 
-	Object object = {};
-	object.index_offset = 0;
-	object.index_count = indices.size();
-	object.material_index = 0;
+	for (size_t i = 0; i < file.g_size; ++i)
+	{
+		ObjGroup& g = file.g[i];
 
-	fwrite(&object, 1, sizeof(object), result);
+		Object object = {};
+		object.index_offset = unsigned(g.index_offset);
+		object.index_count = unsigned(g.index_count);
+		object.material_length = unsigned(strlen(g.material));
+
+		fwrite(&object, 1, sizeof(object), result);
+	}
+
+	for (size_t i = 0; i < file.g_size; ++i)
+	{
+		ObjGroup& g = file.g[i];
+
+		fwrite(g.material, 1, strlen(g.material), result);
+	}
 
 	fwrite(&vbuf[0], 1, vbuf.size(), result);
 	fwrite(&ibuf[0], 1, ibuf.size(), result);
