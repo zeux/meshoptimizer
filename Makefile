@@ -57,7 +57,7 @@ meshencoder: $(ENCODER_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
 
 decoderjs: src/vertexcodec.cpp src/indexcodec.cpp
-	emcc src/vertexcodec.cpp src/indexcodec.cpp -Os -DNDEBUG -s EXPORTED_FUNCTIONS='["_meshopt_decodeVertexBuffer", "_meshopt_decodeIndexBuffer", "_malloc", "_free"]' -s ALLOW_MEMORY_GROWTH=1 -s MALLOC=emmalloc -s TOTAL_STACK=65536 -s MODULARIZE=1 -s EXPORT_NAME=MeshoptDecoder --closure 0 --post-js js/decoder-post.js -o js/decoder.js
+	emcc src/vertexcodec.cpp src/indexcodec.cpp -Os -DNDEBUG -s EXPORTED_FUNCTIONS='["_meshopt_decodeVertexBuffer", "_meshopt_decodeIndexBuffer", "_malloc", "_free"]' -s ALLOW_MEMORY_GROWTH=1 -s MALLOC=emmalloc -s TOTAL_STACK=65536 -s MODULARIZE=1 -s SINGLE_FILE=1 -s EXPORT_NAME=MeshoptDecoder --closure 1 --post-js js/decoder-post.js -o js/decoder.js
 
 $(EXECUTABLE): $(DEMO_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
