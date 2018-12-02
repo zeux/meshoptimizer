@@ -1,4 +1,5 @@
-
+// This file is part of meshoptimizer library and is distributed under the terms of MIT License.
+// Copyright (C) 2016-2018, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
 var MeshoptDecoder = (function() {
   var _scriptDir = typeof document !== 'undefined' && document.currentScript ? document.currentScript.src : undefined;
   return (
