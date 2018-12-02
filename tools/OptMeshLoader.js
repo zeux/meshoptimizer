@@ -1,5 +1,3 @@
-// This file is part of meshoptimizer library and is distributed under the terms of MIT License.
-// Copyright (C) 2016-2018, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
 THREE.OptMeshLoader = (function ()
 {
 	function OptMeshLoader(manager)
