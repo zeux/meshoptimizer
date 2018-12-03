@@ -1,79 +1,91 @@
-#include "../demo/objparser.h"
-#include "../src/meshoptimizer.h"
+// Converts .obj files to .optmesh files
+// Usage: meshencoder [.obj] [.optmesh]
 
-#ifdef WITH_ZSTD
-#include <zstd.h>
-#endif
+// Data layout:
+// Header: 32b
+// Object table: 16b * object_count
+// Object data
+// Vertex data
+// Index data
+
+#include "../src/meshoptimizer.h"
+#include "objparser.h"
 
 #include <algorithm>
-#include <cassert>
-#include <cfloat>
-#include <cmath>
-#include <cstdio>
-#include <ctime>
 #include <vector>
 
-#if defined(__linux__)
-double timestamp()
-{
-	timespec ts;
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-	return double(ts.tv_sec) + 1e-9 * double(ts.tv_nsec);
-}
-#elif defined(_WIN32)
-struct LARGE_INTEGER
-{
-	__int64 QuadPart;
-};
-extern "C" __declspec(dllimport) int __stdcall QueryPerformanceCounter(LARGE_INTEGER* lpPerformanceCount);
-extern "C" __declspec(dllimport) int __stdcall QueryPerformanceFrequency(LARGE_INTEGER* lpFrequency);
+#include <math.h>
+#include <stdio.h>
+#include <string.h>
 
-double timestamp()
+struct Header
 {
-	LARGE_INTEGER freq, counter;
-	QueryPerformanceFrequency(&freq);
-	QueryPerformanceCounter(&counter);
-	return double(counter.QuadPart) / double(freq.QuadPart);
-}
-#else
-double timestamp()
+	char magic[4]; // OPTM
+
+	unsigned int group_count;
+	unsigned int vertex_count;
+	unsigned int index_count;
+	unsigned int vertex_data_size;
+	unsigned int index_data_size;
+
+	float scale;
+
+	unsigned int reserved;
+};
+
+struct Object
 {
-	return double(clock()) / double(CLOCKS_PER_SEC);
-}
-#endif
+	unsigned int index_offset;
+	unsigned int index_count;
+	unsigned int material_length;
+	unsigned int reserved;
+};
 
 struct Vertex
 {
-	float px, py, pz;
-	float nx, ny, nz;
-	float tx, ty;
+	short px, py, pz, pw; // normalized signed 16-bit value
+	char nx, ny, nz, nw; // normalized signed 8-bit value
+	unsigned short tx, ty; // normalized unsigned 16-bit value
 };
 
-struct Mesh
+int main(int argc, char** argv)
 {
-	std::vector<Vertex> vertices;
-	std::vector<unsigned int> indices;
-};
+	if (argc <= 2)
+	{
+		printf("Usage: %s [.obj] [.optmesh]\n", argv[0]);
+		return 1;
+	}
 
-Mesh parseObj(const char* path)
-{
+	const char* input = argv[1];
+	const char* output = argv[2];
+
 	ObjFile file;
 
-	if (!objParseFile(file, path))
+	if (!objParseFile(file, input))
 	{
-		printf("Error loading %s: file not found\n", path);
-		return Mesh();
+		printf("Error loading %s: file not found\n", input);
+		return 2;
 	}
 
 	if (!objValidate(file))
 	{
-		printf("Error loading %s: invalid file data\n", path);
-		return Mesh();
+		printf("Error loading %s: invalid file data\n", input);
+		return 3;
 	}
+
+	float scale = 0.f;
+
+	for (size_t i = 0; i < file.v_size; ++i)
+		scale = std::max(scale, fabsf(file.v[i]));
+
+	float scale_inverse = (scale == 0.f) ? 0.f : 1 / scale;
 
 	size_t total_indices = file.f_size / 3;
 
-	std::vector<Vertex> vertices(total_indices);
+	std::vector<Vertex> triangles(total_indices);
+
+	int pos_bits = 14;
+	int uv_bits = 12;
 
 	for (size_t i = 0; i < total_indices; ++i)
 	{
@@ -83,205 +95,90 @@ Mesh parseObj(const char* path)
 
 		Vertex v =
 		    {
-		        file.v[vi * 3 + 0],
-		        file.v[vi * 3 + 1],
-		        file.v[vi * 3 + 2],
+		        short(meshopt_quantizeSnorm(file.v[vi * 3 + 0] * scale_inverse, pos_bits) << (16 - pos_bits)),
+		        short(meshopt_quantizeSnorm(file.v[vi * 3 + 1] * scale_inverse, pos_bits) << (16 - pos_bits)),
+		        short(meshopt_quantizeSnorm(file.v[vi * 3 + 2] * scale_inverse, pos_bits) << (16 - pos_bits)),
+				0,
 
-		        vni >= 0 ? file.vn[vni * 3 + 0] : 0,
-		        vni >= 0 ? file.vn[vni * 3 + 1] : 0,
-		        vni >= 0 ? file.vn[vni * 3 + 2] : 0,
+		        char(meshopt_quantizeSnorm(vni >= 0 ? file.vn[vni * 3 + 0] : 0, 8)),
+		        char(meshopt_quantizeSnorm(vni >= 0 ? file.vn[vni * 3 + 1] : 0, 8)),
+		        char(meshopt_quantizeSnorm(vni >= 0 ? file.vn[vni * 3 + 2] : 0, 8)),
+				0,
 
-		        vti >= 0 ? file.vt[vti * 3 + 0] : 0,
-		        vti >= 0 ? file.vt[vti * 3 + 1] : 0,
+		        (unsigned short)(meshopt_quantizeUnorm(vti >= 0 ? file.vt[vti * 3 + 0] : 0, uv_bits) << (16 - uv_bits)),
+		        (unsigned short)(meshopt_quantizeUnorm(vti >= 0 ? file.vt[vti * 3 + 1] : 0, uv_bits) << (16 - uv_bits)),
 		    };
 
-		vertices[i] = v;
+		triangles[i] = v;
 	}
-
-	Mesh result;
 
 	std::vector<unsigned int> remap(total_indices);
 
-	size_t total_vertices = meshopt_generateVertexRemap(&remap[0], NULL, total_indices, &vertices[0], total_indices, sizeof(Vertex));
+	size_t total_vertices = meshopt_generateVertexRemap(&remap[0], NULL, total_indices, &triangles[0], total_indices, sizeof(Vertex));
 
-	result.indices.resize(total_indices);
-	meshopt_remapIndexBuffer(&result.indices[0], NULL, total_indices, &remap[0]);
+	std::vector<unsigned int> indices(total_indices);
+	meshopt_remapIndexBuffer(&indices[0], NULL, total_indices, &remap[0]);
 
-	result.vertices.resize(total_vertices);
-	meshopt_remapVertexBuffer(&result.vertices[0], &vertices[0], total_indices, sizeof(Vertex), &remap[0]);
+	std::vector<Vertex> vertices(total_vertices);
+	meshopt_remapVertexBuffer(&vertices[0], &triangles[0], total_indices, sizeof(Vertex), &remap[0]);
 
-	return result;
-}
-
-struct PackedVertexOct
-{
-	unsigned short px, py, pz;
-	unsigned char nu, nv; // octahedron encoded normal, aliases .pw
-	unsigned short tx, ty;
-};
-
-void packMesh(std::vector<PackedVertexOct>& pv, const std::vector<Vertex>& vertices, int bitsp, int bitst)
-{
-	float minp[3] = {+FLT_MAX, +FLT_MAX, +FLT_MAX};
-	float maxp[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
-	float mint[2] = {+FLT_MAX, +FLT_MAX};
-	float maxt[2] = {-FLT_MAX, -FLT_MAX};
-
-	for (size_t i = 0; i < vertices.size(); ++i)
+	for (size_t i = 0; i < file.g_size; ++i)
 	{
-		minp[0] = std::min(minp[0], vertices[i].px);
-		minp[1] = std::min(minp[1], vertices[i].py);
-		minp[2] = std::min(minp[2], vertices[i].pz);
-		mint[0] = std::min(mint[0], vertices[i].tx);
-		mint[1] = std::min(mint[1], vertices[i].ty);
+		ObjGroup& g = file.g[i];
 
-		maxp[0] = std::max(maxp[0], vertices[i].px);
-		maxp[1] = std::max(maxp[1], vertices[i].py);
-		maxp[2] = std::max(maxp[2], vertices[i].pz);
-		maxt[0] = std::max(maxt[0], vertices[i].tx);
-		maxt[1] = std::max(maxt[1], vertices[i].ty);
+		meshopt_optimizeVertexCache(&indices[g.index_offset], &indices[g.index_offset], g.index_count, vertices.size());
 	}
 
-	float scalep[3], scalet[2];
+	meshopt_optimizeVertexFetch(&vertices[0], &indices[0], indices.size(), &vertices[0], vertices.size(), sizeof(Vertex));
 
-	scalep[0] = minp[0] == maxp[0] ? 0 : 1 / (maxp[0] - minp[0]);
-	scalep[1] = minp[1] == maxp[1] ? 0 : 1 / (maxp[1] - minp[1]);
-	scalep[2] = minp[2] == maxp[2] ? 0 : 1 / (maxp[2] - minp[2]);
-	scalet[0] = mint[0] == maxt[0] ? 0 : 1 / (maxt[0] - mint[0]);
-	scalet[1] = mint[1] == maxt[1] ? 0 : 1 / (maxt[1] - mint[1]);
+	std::vector<unsigned char> vbuf(meshopt_encodeVertexBufferBound(vertices.size(), sizeof(Vertex)));
+	vbuf.resize(meshopt_encodeVertexBuffer(&vbuf[0], vbuf.size(), &vertices[0], vertices.size(), sizeof(Vertex)));
 
-	for (size_t i = 0; i < vertices.size(); ++i)
+	std::vector<unsigned char> ibuf(meshopt_encodeIndexBufferBound(indices.size(), vertices.size()));
+	ibuf.resize(meshopt_encodeIndexBuffer(&ibuf[0], ibuf.size(), &indices[0], indices.size()));
+
+	FILE* result = fopen(output, "wb");
+	if (!result)
 	{
-		pv[i].px = meshopt_quantizeUnorm((vertices[i].px - minp[0]) * scalep[0], bitsp);
-		pv[i].py = meshopt_quantizeUnorm((vertices[i].px - minp[1]) * scalep[1], bitsp);
-		pv[i].pz = meshopt_quantizeUnorm((vertices[i].px - minp[2]) * scalep[2], bitsp);
-
-		float nsum = fabsf(vertices[i].nx) + fabsf(vertices[i].ny) + fabsf(vertices[i].nz);
-		float nx = vertices[i].nx / nsum;
-		float ny = vertices[i].ny / nsum;
-		float nz = vertices[i].nz;
-
-		float nu = nz >= 0 ? nx : (1 - fabsf(ny)) * (nx >= 0 ? 1 : -1);
-		float nv = nz >= 0 ? ny : (1 - fabsf(nx)) * (ny >= 0 ? 1 : -1);
-
-		pv[i].nu = char(meshopt_quantizeSnorm(nu, 8));
-		pv[i].nv = char(meshopt_quantizeSnorm(nv, 8));
-
-		pv[i].tx = meshopt_quantizeUnorm((vertices[i].tx - mint[0]) * scalet[0], bitst);
-		pv[i].ty = meshopt_quantizeUnorm((vertices[i].ty - mint[1]) * scalet[1], bitst);
-	}
-}
-
-#ifdef WITH_ZSTD
-template <typename T>
-std::vector<unsigned char> compress(const std::vector<T>& v)
-{
-	std::vector<unsigned char> result(ZSTD_compressBound(v.size() * sizeof(T)));
-	result.resize(ZSTD_compress(&result[0], result.size(), &v[0], v.size() * sizeof(T), 9));
-	return result;
-}
-#endif
-
-int main(int argc, char** argv)
-{
-	if (argc == 1)
-	{
-		printf("Usage: %s [.obj file]\n", argv[0]);
-		return 1;
+		printf("Error saving %s: can't open file for writing\n", output);
+		return 4;
 	}
 
-	int bitsp = 14;
-	int bitst = 12;
+	Header header = {};
+	memcpy(header.magic, "OPTM", 4);
 
-	for (int i = 1; i < argc; ++i)
+	header.group_count = unsigned(file.g_size);
+	header.vertex_count = unsigned(vertices.size());
+	header.index_count = unsigned(indices.size());
+	header.vertex_data_size = unsigned(vbuf.size());
+	header.index_data_size = unsigned(ibuf.size());
+
+	header.scale = scale;
+
+	fwrite(&header, 1, sizeof(header), result);
+
+	for (size_t i = 0; i < file.g_size; ++i)
 	{
-		const char* path = argv[i];
+		ObjGroup& g = file.g[i];
 
-		Mesh mesh = parseObj(path);
+		Object object = {};
+		object.index_offset = unsigned(g.index_offset);
+		object.index_count = unsigned(g.index_count);
+		object.material_length = unsigned(strlen(g.material));
 
-		if (mesh.vertices.empty())
-		{
-			printf("Mesh %s is empty, skipping\n", path);
-			continue;
-		}
-
-		printf("# %s: %d vertices, %d triangles\n", path, int(mesh.vertices.size()), int(mesh.indices.size() / 3));
-
-		meshopt_optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size());
-		meshopt_optimizeVertexFetch(&mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
-
-		typedef PackedVertexOct PV;
-
-		std::vector<PV> pv(mesh.vertices.size());
-		packMesh(pv, mesh.vertices, bitsp, bitst);
-
-		printf("baseline   : size: %d bytes; vb %.1f bpv, ib %.1f bpv\n",
-		       int(pv.size() * sizeof(PV)) + int(mesh.indices.size() * sizeof(unsigned int)),
-		       double(pv.size() * sizeof(PV) * 8) / double(pv.size()),
-		       double(mesh.indices.size() * sizeof(unsigned int) * 8) / double(pv.size()));
-
-		std::vector<PV> vbd(mesh.vertices.size());
-		std::vector<unsigned int> ibd(mesh.indices.size());
-
-#ifdef WITH_ZSTD
-		{
-			std::vector<unsigned char> vbz = compress(pv);
-			std::vector<unsigned char> ibz = compress(mesh.indices);
-
-			double start = timestamp();
-			ZSTD_decompress(&vbd[0], vbd.size(), &vbz[0], vbz.size());
-			ZSTD_decompress(&ibd[0], ibd.size() * sizeof(ibd[0]), &ibz[0], ibz.size());
-			double end = timestamp();
-
-			printf("zstd only  : size: %d bytes; vb %.1f bpv, ib %.1f bpv; decoding time: %.2f msec\n",
-			       int(vbz.size() + ibz.size()),
-			       double(vbz.size() * 8) / double(pv.size()),
-			       double(ibz.size() * 8) / double(pv.size()),
-			       (end - start) * 1000);
-		}
-#endif
-
-		std::vector<unsigned char> vbuf(meshopt_encodeVertexBufferBound(mesh.vertices.size(), sizeof(PV)));
-		vbuf.resize(meshopt_encodeVertexBuffer(&vbuf[0], vbuf.size(), &pv[0], mesh.vertices.size(), sizeof(PV)));
-
-		std::vector<unsigned char> ibuf(meshopt_encodeIndexBufferBound(mesh.indices.size(), mesh.vertices.size()));
-		ibuf.resize(meshopt_encodeIndexBuffer(&ibuf[0], ibuf.size(), &mesh.indices[0], mesh.indices.size()));
-
-		{
-			double start = timestamp();
-			int dvb = meshopt_decodeVertexBuffer(&vbd[0], vbd.size(), sizeof(PV), &vbuf[0], vbuf.size());
-			int dib = meshopt_decodeIndexBuffer(&ibd[0], ibd.size(), &ibuf[0], ibuf.size());
-			assert(dvb == 0 && dib == 0);
-			double end = timestamp();
-
-			printf("codec      : size: %d bytes; vb %.1f bpv, ib %.1f bpv; decoding time: %.2f msec\n",
-			       int(vbuf.size() + ibuf.size()),
-			       double(vbuf.size() * 8) / double(pv.size()),
-			       double(ibuf.size() * 8) / double(pv.size()),
-			       (end - start) * 1000);
-		}
-
-#ifdef WITH_ZSTD
-		{
-			std::vector<unsigned char> vbz = compress(vbuf);
-			std::vector<unsigned char> ibz = compress(ibuf);
-
-			std::vector<unsigned char> scratch(std::max(vbuf.size(), ibuf.size()));
-
-			double start = timestamp();
-			ZSTD_decompress(&scratch[0], scratch.size(), &vbz[0], vbz.size());
-			int dvbz = meshopt_decodeVertexBuffer(&vbd[0], vbd.size(), sizeof(PV), &scratch[0], vbuf.size());
-			ZSTD_decompress(&scratch[0], scratch.size(), &ibz[0], ibz.size());
-			int dibz = meshopt_decodeIndexBuffer(&ibd[0], ibd.size(), &scratch[0], ibuf.size());
-			assert(dvbz == 0 && dibz == 0);
-			double end = timestamp();
-
-			printf("codec+zstd : size: %d bytes; vb %.1f bpv, ib %.1f bpv; decoding time: %.2f msec\n",
-			       int(vbz.size() + ibz.size()),
-			       double(vbz.size() * 8) / double(pv.size()),
-			       double(ibz.size() * 8) / double(pv.size()),
-			       (end - start) * 1000);
-		}
-#endif
+		fwrite(&object, 1, sizeof(object), result);
 	}
+
+	for (size_t i = 0; i < file.g_size; ++i)
+	{
+		ObjGroup& g = file.g[i];
+
+		fwrite(g.material, 1, strlen(g.material), result);
+	}
+
+	fwrite(&vbuf[0], 1, vbuf.size(), result);
+	fwrite(&ibuf[0], 1, ibuf.size(), result);
+	fclose(result);
+
+	return 0;
 }

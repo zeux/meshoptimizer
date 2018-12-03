@@ -1,7 +1,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 
-#include "../demo/objparser.h"
 #include "../src/meshoptimizer.h"
+#include "objparser.h"
 
 #include <algorithm>
 #include <cmath>

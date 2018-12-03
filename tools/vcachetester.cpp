@@ -10,8 +10,8 @@
 #include <algorithm>
 #include <vector>
 
-#include "../demo/objparser.h"
 #include "../src/meshoptimizer.h"
+#include "objparser.h"
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")

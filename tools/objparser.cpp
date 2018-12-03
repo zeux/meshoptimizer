@@ -167,6 +167,9 @@ ObjFile::ObjFile()
     , f(0)
     , f_size(0)
     , f_cap(0)
+	, g(0)
+	, g_size(0)
+	, g_cap(0)
 {
 }
 
@@ -176,6 +179,7 @@ ObjFile::~ObjFile()
 	delete[] vt;
 	delete[] vn;
 	delete[] f;
+	delete[] g;
 }
 
 void objParseLine(ObjFile& result, const char* line)
@@ -229,6 +233,14 @@ void objParseLine(ObjFile& result, const char* line)
 	{
 		const char* s = line + 2;
 
+		if (!result.g)
+		{
+			growArray(result.g, result.g_cap);
+
+			ObjGroup g = {};
+			result.g[result.g_size++] = g;
+		}
+
 		size_t v = result.v_size / 3;
 		size_t vt = result.vt_size / 3;
 		size_t vn = result.vn_size / 3;
@@ -256,6 +268,8 @@ void objParseLine(ObjFile& result, const char* line)
 				memcpy(&result.f[result.f_size], f, 9 * sizeof(int));
 				result.f_size += 9;
 
+				result.g[result.g_size - 1].index_count += 3;
+
 				f[1][0] = f[2][0];
 				f[1][1] = f[2][1];
 				f[1][2] = f[2][2];
@@ -265,6 +279,25 @@ void objParseLine(ObjFile& result, const char* line)
 				fv++;
 			}
 		}
+	}
+	else if (strncmp(line, "usemtl", 6) == 0)
+	{
+		const char* s = line + 6;
+
+		// skip whitespace
+		while (*s == ' ' || *s == '\t')
+			s++;
+
+		if (result.g_size + 1 > result.g_cap)
+			growArray(result.g, result.g_cap);
+
+		ObjGroup g = {};
+		g.index_offset = result.f_size / 3;
+
+		strncpy(g.material, s, sizeof(g.material));
+		g.material[sizeof(g.material) - 1] = 0;
+
+		result.g[result.g_size++] = g;
 	}
 }
 

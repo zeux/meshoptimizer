@@ -2,6 +2,14 @@
 
 #include <stddef.h>
 
+struct ObjGroup
+{
+	char material[256];
+
+	size_t index_offset;
+	size_t index_count;
+};
+
 class ObjFile
 {
 public:
@@ -16,6 +24,9 @@ public:
 
 	int* f; // face elements; stride 9 (3 groups of indices into v/vt/vn)
 	size_t f_size, f_cap;
+
+	ObjGroup* g;
+	size_t g_size, g_cap;
 
 	ObjFile();
 	~ObjFile();
