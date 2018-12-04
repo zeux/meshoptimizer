@@ -59,12 +59,19 @@ THREE.OptMeshLoader = (function ()
 			var indexCount = view.getUint32(12, endian);
 			var vertexDataSize = view.getUint32(16, endian);
 			var indexDataSize = view.getUint32(20, endian);
-			var scale = view.getFloat32(24, endian);
+			var posOffsetX = view.getFloat32(24, endian);
+			var posOffsetY = view.getFloat32(28, endian);
+			var posOffsetZ = view.getFloat32(32, endian);
+			var posScale = view.getFloat32(36, endian);
+			var uvOffsetX = view.getFloat32(40, endian);
+			var uvOffsetY = view.getFloat32(44, endian);
+			var uvScaleX = view.getFloat32(48, endian);
+			var uvScaleY = view.getFloat32(52, endian);
 
 			if (magic != 0x4D54504F)
 				throw new Error("Malformed mesh file: unrecognized header");
 
-			var objectOffset = 32;
+			var objectOffset = 64;
 			var objectDataOffset = objectOffset + 16 * objectCount;
 
 			var objectDataSize = 0;
@@ -93,9 +100,9 @@ THREE.OptMeshLoader = (function ()
 
 			var geometry = new THREE.BufferGeometry();
 
-			geometry.addAttribute('position', new THREE.InterleavedBufferAttribute(new THREE.InterleavedBuffer(new Int16Array(vertexBuffer), 8), 3, 0, true));
+			geometry.addAttribute('position', new THREE.InterleavedBufferAttribute(new THREE.InterleavedBuffer(new Uint16Array(vertexBuffer), 8), 3, 0, false));
 			geometry.addAttribute('normal', new THREE.InterleavedBufferAttribute(new THREE.InterleavedBuffer(new Int8Array(vertexBuffer), 16), 3, 8, true));
-			geometry.addAttribute('uv', new THREE.InterleavedBufferAttribute(new THREE.InterleavedBuffer(new Uint16Array(vertexBuffer), 8), 2, 6, true));
+			geometry.addAttribute('uv', new THREE.InterleavedBufferAttribute(new THREE.InterleavedBuffer(new Uint16Array(vertexBuffer), 8), 2, 6, false));
 			geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(indexBuffer), 1, false));
 
 			var objectDataOffsetAcc = objectDataOffset;
@@ -122,6 +129,12 @@ THREE.OptMeshLoader = (function ()
 					if (!objectMaterial)
 						objectMaterial = new THREE.MeshPhongMaterial();
 
+					if (objectMaterial.map)
+					{
+						objectMaterial.map.offset.set(uvOffsetX, uvOffsetY);
+						objectMaterial.map.repeat.set(uvScaleX, uvScaleY);
+					}
+
 					objectMaterialIndex = objectMaterials.length;
 					objectMaterialsLookup[objectMaterialName] = objectMaterialIndex;
 					objectMaterials.push(objectMaterial);
@@ -133,7 +146,8 @@ THREE.OptMeshLoader = (function ()
 			}
 
 			var mesh = new THREE.Mesh(geometry, objectMaterials);
-			mesh.scale.set(scale, scale, scale);
+			mesh.position.set(posOffsetX, posOffsetY, posOffsetZ);
+			mesh.scale.set(posScale, posScale, posScale);
 
 			var container = new THREE.Group();
 			container.add(mesh);

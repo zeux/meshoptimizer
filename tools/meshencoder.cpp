@@ -2,7 +2,7 @@
 // Usage: meshencoder [.obj] [.optmesh]
 
 // Data layout:
-// Header: 32b
+// Header: 64b
 // Object table: 16b * object_count
 // Object data
 // Vertex data
@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <vector>
 
+#include <float.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -28,9 +29,12 @@ struct Header
 	unsigned int vertex_data_size;
 	unsigned int index_data_size;
 
-	float scale;
+	float pos_offset[3];
+	float pos_scale;
+	float uv_offset[2];
+	float uv_scale[2];
 
-	unsigned int reserved;
+	unsigned int reserved[2];
 };
 
 struct Object
@@ -43,10 +47,15 @@ struct Object
 
 struct Vertex
 {
-	short px, py, pz, pw; // normalized signed 16-bit value
+	unsigned short px, py, pz, pw; // unsigned 16-bit value, use pos_offset/pos_scale to unpack
 	char nx, ny, nz, nw; // normalized signed 8-bit value
-	unsigned short tx, ty; // normalized unsigned 16-bit value
+	unsigned short tx, ty; // unsigned 16-bit value, use uv_offset/uv_scale to unpack
 };
+
+float rcpSafe(float v)
+{
+	return v == 0.f ? 0.f : 1.f / v;
+}
 
 int main(int argc, char** argv)
 {
@@ -73,12 +82,40 @@ int main(int argc, char** argv)
 		return 3;
 	}
 
-	float scale = 0.f;
+	float pos_offset[3] = { FLT_MAX, FLT_MAX, FLT_MAX };
+	float pos_scale = 0.f;
 
-	for (size_t i = 0; i < file.v_size; ++i)
-		scale = std::max(scale, fabsf(file.v[i]));
+	for (size_t i = 0; i < file.v_size; i += 3)
+	{
+		pos_offset[0] = std::min(pos_offset[0], file.v[i + 0]);
+		pos_offset[1] = std::min(pos_offset[1], file.v[i + 1]);
+		pos_offset[2] = std::min(pos_offset[2], file.v[i + 2]);
+	}
 
-	float scale_inverse = (scale == 0.f) ? 0.f : 1 / scale;
+	for (size_t i = 0; i < file.v_size; i += 3)
+	{
+		pos_scale = std::max(pos_scale, file.v[i + 0] - pos_offset[0]);
+		pos_scale = std::max(pos_scale, file.v[i + 1] - pos_offset[1]);
+		pos_scale = std::max(pos_scale, file.v[i + 2] - pos_offset[2]);
+	}
+
+	float uv_offset[2] = { FLT_MAX, FLT_MAX };
+	float uv_scale[2] = { 0, 0 };
+
+	for (size_t i = 0; i < file.vt_size; i += 3)
+	{
+		uv_offset[0] = std::min(uv_offset[0], file.vt[i + 0]);
+		uv_offset[1] = std::min(uv_offset[1], file.vt[i + 1]);
+	}
+
+	for (size_t i = 0; i < file.vt_size; i += 3)
+	{
+		uv_scale[0] = std::max(uv_scale[0], file.vt[i + 0] - uv_offset[0]);
+		uv_scale[1] = std::max(uv_scale[1], file.vt[i + 1] - uv_offset[1]);
+	}
+
+	float pos_scale_inverse = rcpSafe(pos_scale);
+	float uv_scale_inverse[2] = { rcpSafe(uv_scale[0]), rcpSafe(uv_scale[1]) };
 
 	size_t total_indices = file.f_size / 3;
 
@@ -95,9 +132,9 @@ int main(int argc, char** argv)
 
 		Vertex v =
 		    {
-		        short(meshopt_quantizeSnorm(file.v[vi * 3 + 0] * scale_inverse, pos_bits) << (16 - pos_bits)),
-		        short(meshopt_quantizeSnorm(file.v[vi * 3 + 1] * scale_inverse, pos_bits) << (16 - pos_bits)),
-		        short(meshopt_quantizeSnorm(file.v[vi * 3 + 2] * scale_inverse, pos_bits) << (16 - pos_bits)),
+		        (unsigned short)(meshopt_quantizeUnorm((file.v[vi * 3 + 0] - pos_offset[0]) * pos_scale_inverse, pos_bits)),
+		        (unsigned short)(meshopt_quantizeUnorm((file.v[vi * 3 + 1] - pos_offset[1]) * pos_scale_inverse, pos_bits)),
+		        (unsigned short)(meshopt_quantizeUnorm((file.v[vi * 3 + 2] - pos_offset[2]) * pos_scale_inverse, pos_bits)),
 				0,
 
 		        char(meshopt_quantizeSnorm(vni >= 0 ? file.vn[vni * 3 + 0] : 0, 8)),
@@ -105,8 +142,8 @@ int main(int argc, char** argv)
 		        char(meshopt_quantizeSnorm(vni >= 0 ? file.vn[vni * 3 + 2] : 0, 8)),
 				0,
 
-		        (unsigned short)(meshopt_quantizeUnorm(vti >= 0 ? file.vt[vti * 3 + 0] : 0, uv_bits) << (16 - uv_bits)),
-		        (unsigned short)(meshopt_quantizeUnorm(vti >= 0 ? file.vt[vti * 3 + 1] : 0, uv_bits) << (16 - uv_bits)),
+		        (unsigned short)(meshopt_quantizeUnorm(vti >= 0 ? (file.vt[vti * 3 + 0] - uv_offset[0]) * uv_scale_inverse[0] : 0, uv_bits)),
+		        (unsigned short)(meshopt_quantizeUnorm(vti >= 0 ? (file.vt[vti * 3 + 1] - uv_offset[1]) * uv_scale_inverse[1] : 0, uv_bits)),
 		    };
 
 		triangles[i] = v;
@@ -153,7 +190,15 @@ int main(int argc, char** argv)
 	header.vertex_data_size = unsigned(vbuf.size());
 	header.index_data_size = unsigned(ibuf.size());
 
-	header.scale = scale;
+	header.pos_offset[0] = pos_offset[0];
+	header.pos_offset[1] = pos_offset[1];
+	header.pos_offset[2] = pos_offset[2];
+	header.pos_scale = pos_scale / float((1 << pos_bits) - 1);
+
+	header.uv_offset[0] = uv_offset[0];
+	header.uv_offset[1] = uv_offset[1];
+	header.uv_scale[0] = uv_scale[0] / float((1 << uv_bits) - 1);
+	header.uv_scale[1] = uv_scale[1] / float((1 << uv_bits) - 1);
 
 	fwrite(&header, 1, sizeof(header), result);
 
