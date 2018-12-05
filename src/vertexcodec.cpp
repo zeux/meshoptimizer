@@ -4,7 +4,7 @@
 #include <assert.h>
 #include <string.h>
 
-#ifdef __ARM_NEON__
+#if defined(__ARM_NEON__) || defined(__ARM_NEON)
 #define SIMD_NEON
 #endif
 
@@ -516,10 +516,10 @@ static void transpose8(uint8x16_t& x0, uint8x16_t& x1, uint8x16_t& x2, uint8x16_
 	uint16x8x2_t x01 = vzipq_u16(vreinterpretq_u16_u8(t01.val[0]), vreinterpretq_u16_u8(t23.val[0]));
 	uint16x8x2_t x23 = vzipq_u16(vreinterpretq_u16_u8(t01.val[1]), vreinterpretq_u16_u8(t23.val[1]));
 
-	x0 = x01.val[0];
-	x1 = x01.val[1];
-	x2 = x23.val[0];
-	x3 = x23.val[1];
+	x0 = vreinterpretq_u8_u16(x01.val[0]);
+	x1 = vreinterpretq_u8_u16(x01.val[1]);
+	x2 = vreinterpretq_u8_u16(x23.val[0]);
+	x3 = vreinterpretq_u8_u16(x23.val[1]);
 }
 
 static uint8x16_t unzigzag8(uint8x16_t v)
