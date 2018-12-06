@@ -11,7 +11,7 @@
 #include <assert.h>
 #include <stddef.h>
 
-/* Version macro; major * 100 + minor * 10 + patch */
+/* Version macro; major * 1000 + minor * 10 + patch */
 #define MESHOPTIMIZER_VERSION 90
 
 /* If no API is defined, assume default */
