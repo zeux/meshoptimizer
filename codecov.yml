@@ -7,3 +7,4 @@ coverage:
 
 ignore:
   - demo
+  - tools
