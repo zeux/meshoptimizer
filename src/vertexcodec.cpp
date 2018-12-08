@@ -15,7 +15,11 @@
 #if !defined(SIMD_SSE) && defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
 #define SIMD_SSE
 #define SIMD_FALLBACK
-#include <intrin.h>
+#include <intrin.h> // __cpuid
+#endif
+
+#if !defined(SIMD_NEON) && defined(_MSC_VER) && (defined(_M_ARM) || defined(_M_ARM64))
+#define SIMD_NEON
 #endif
 
 #ifdef SIMD_SSE
@@ -23,7 +27,11 @@
 #endif
 
 #ifdef SIMD_NEON
+#if defined(_MSC_VER) && defined(_M_ARM64)
+#include <arm64_neon.h>
+#else
 #include <arm_neon.h>
+#endif
 #endif
 
 namespace meshopt
@@ -493,8 +501,9 @@ static uint8x16_t shuffleBytes(unsigned char mask0, unsigned char mask1, uint8x8
 
 static int neonMoveMask(uint8x16_t mask)
 {
-	static const uint8x16_t byte_mask = {1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128};
+	static const unsigned char byte_mask_data[16] = {1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128};
 
+	uint8x16_t byte_mask = vld1q_u8(byte_mask_data);
 	uint8x16_t masked = vandq_u8(mask, byte_mask);
 
 	// we need horizontal sums of each half of masked
