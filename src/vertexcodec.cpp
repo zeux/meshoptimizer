@@ -12,7 +12,7 @@
 #define SIMD_SSE
 #endif
 
-#if !defined(SIMD_SSE) && defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
+#if !defined(SIMD_SSE) && defined(_MSC_VER) && !defined(__clang__) && (defined(_M_IX86) || defined(_M_X64))
 #define SIMD_SSE
 #define SIMD_FALLBACK
 #include <intrin.h> // __cpuid
