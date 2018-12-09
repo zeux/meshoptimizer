@@ -14,7 +14,7 @@ meshoptimizer is hosted on GitHub; you can download the latest release using git
 git clone -b v0.9 https://github.com/zeux/meshoptimizer.git
 ```
 
-Alternatively you can download the .zip archive from GitHub: https://github.com/zeux/meshoptimizer/archive/v0.9.zip
+Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v0.9.zip).
 
 ## Building
 
