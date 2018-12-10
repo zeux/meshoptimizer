@@ -3,7 +3,7 @@ THREE.OptMeshLoader = (function ()
 	function OptMeshLoader(manager)
 	{
 		this.manager = (manager !== undefined) ? manager : THREE.DefaultLoadingManager;
-		this.materials = null;
+		this.materials = Promise.resolve(null);
 	}
 
 	OptMeshLoader.prototype =
@@ -21,7 +21,10 @@ THREE.OptMeshLoader = (function ()
 			{
 				scope.decoder.then(function ()
 				{
-					onLoad(scope.parse(data));
+					scope.materials.then(function (materials)
+					{
+						onLoad(scope.parse(data, materials));
+					});
 				});
 			}, onProgress, onError);
 		},
@@ -41,11 +44,25 @@ THREE.OptMeshLoader = (function ()
 
 		setMaterials: function (materials)
 		{
-			this.materials = materials;
+			this.materials = Promise.resolve(materials);
 			return this;
 		},
 
-		parse: function (data)
+		setMaterialLib: function (lib)
+		{
+			var scope = this;
+
+			this.materials = new Promise(function (resolve, reject)
+			{
+				var loader = new THREE.MTLLoader();
+				loader.setPath(scope.path);
+				loader.load(lib, function (materials) { materials.preload(); resolve(materials); }, null, reject);
+			});
+
+			return this;
+		},
+
+		parse: function (data, materials)
 		{
 			console.time('OptMeshLoader');
 
@@ -123,8 +140,8 @@ THREE.OptMeshLoader = (function ()
 				{
 					var objectMaterial = null;
 					
-					if (this.materials !== null)
-						objectMaterial = this.materials.create(objectMaterialName);
+					if (materials !== null)
+						objectMaterial = materials.create(objectMaterialName);
 
 					if (!objectMaterial)
 						objectMaterial = new THREE.MeshPhongMaterial();
