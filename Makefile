@@ -24,6 +24,12 @@ CFLAGS=-g -Wall -Wextra -Werror -std=c89
 CXXFLAGS=-g -Wall -Wextra -Wno-missing-field-initializers -Werror -std=c++98
 LDFLAGS=
 
+ifeq ($(config),iphone)
+	CFLAGS+=-arch armv7 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk
+	CXXFLAGS+=-arch armv7 -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk -stdlib=libc++
+	LDFLAGS+=-arch armv7 -arch arm64 -L /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk/usr/lib -mios-version-min=7.0
+endif
+
 ifeq ($(config),release)
 	CXXFLAGS+=-O3 -DNDEBUG
 endif
