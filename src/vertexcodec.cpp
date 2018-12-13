@@ -499,22 +499,26 @@ static uint8x16_t shuffleBytes(unsigned char mask0, unsigned char mask1, uint8x8
 	return vcombine_u8(r0, r1);
 }
 
-static int neonMoveMask(uint8x16_t mask)
+static void neonMoveMask(uint8x16_t mask, unsigned char& mask0, unsigned char& mask1)
 {
 	static const unsigned char byte_mask_data[16] = {1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128};
 
 	uint8x16_t byte_mask = vld1q_u8(byte_mask_data);
 	uint8x16_t masked = vandq_u8(mask, byte_mask);
 
-	// we need horizontal sums of each half of masked
-	// the endianness of the platform determines the order of high/low in sum1 below
-	// we assume little endian here
+#ifdef __aarch64__
+	// aarch64 has horizontal sums; MSVC doesn't expose this via arm64_neon.h so this path is exclusive to clang/gcc
+	mask0 = vaddv_u8(vget_low_u8(masked));
+	mask1 = vaddv_u8(vget_high_u8(masked));
+#else
+	// we need horizontal sums of each half of masked, which can be done in 3 steps (yielding sums of sizes 2, 4, 8)
 	uint8x8_t sum1 = vpadd_u8(vget_low_u8(masked), vget_high_u8(masked));
 	uint8x8_t sum2 = vpadd_u8(sum1, sum1);
 	uint8x8_t sum3 = vpadd_u8(sum2, sum2);
 
-	// note: here we treat 2b sum as a 16bit mask; this depends on endianness, see above
-	return vget_lane_u16(vreinterpret_u16_u8(sum3), 0);
+	mask0 = vget_lane_u8(sum3, 0);
+	mask1 = vget_lane_u8(sum3, 1);
+#endif
 }
 
 static void transpose8(uint8x16_t& x0, uint8x16_t& x1, uint8x16_t& x2, uint8x16_t& x3)
@@ -560,9 +564,8 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		uint8x16_t sel = vandq_u8(vcombine_u8(sel2222.val[0], sel2222.val[1]), vdupq_n_u8(3));
 
 		uint8x16_t mask = vceqq_u8(sel, vdupq_n_u8(3));
-		int mask16 = neonMoveMask(mask);
-		unsigned char mask0 = (unsigned char)(mask16 & 255);
-		unsigned char mask1 = (unsigned char)(mask16 >> 8);
+		unsigned char mask0, mask1;
+		neonMoveMask(mask, mask0, mask1);
 
 		uint8x8_t rest0 = vld1_u8(data + 4);
 		uint8x8_t rest1 = vld1_u8(data + 4 + kDecodeBytesGroupCount[mask0]);
@@ -581,9 +584,8 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		uint8x16_t sel = vcombine_u8(sel44.val[0], sel44.val[1]);
 
 		uint8x16_t mask = vceqq_u8(sel, vdupq_n_u8(15));
-		int mask16 = neonMoveMask(mask);
-		unsigned char mask0 = (unsigned char)(mask16 & 255);
-		unsigned char mask1 = (unsigned char)(mask16 >> 8);
+		unsigned char mask0, mask1;
+		neonMoveMask(mask, mask0, mask1);
 
 		uint8x8_t rest0 = vld1_u8(data + 8);
 		uint8x8_t rest1 = vld1_u8(data + 8 + kDecodeBytesGroupCount[mask0]);
