@@ -886,6 +886,39 @@ void meshlets(const Mesh& mesh)
 	       (endc - startc) * 1000);
 }
 
+void clusterBoundsCoverage()
+{
+	const float vbd[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+	const unsigned int ibd[] = { 0, 0, 0 };
+	const unsigned int ib1[] = { 0, 1, 2 };
+
+	// all of the bounds below are degenerate as they use 0 triangles, one topology-degenerate triangle and one position-degenerate triangle respectively
+	meshopt_Bounds bounds0 = meshopt_computeClusterBounds(0, 0, 0, 0, 12);
+	meshopt_Bounds boundsd = meshopt_computeClusterBounds(ibd, 3, vbd, 3, 12);
+	meshopt_Bounds bounds1 = meshopt_computeClusterBounds(ib1, 3, vbd, 3, 12);
+
+	assert(bounds0.center[0] == 0 && bounds0.center[1] == 0 && bounds0.center[2] == 0 && bounds0.radius == 0);
+	assert(boundsd.center[0] == 0 && boundsd.center[1] == 0 && boundsd.center[2] == 0 && boundsd.radius == 0);
+	assert(bounds1.center[0] == 0 && bounds1.center[1] == 0 && bounds1.center[2] == 0 && bounds1.radius == 0);
+
+	const float vb1[] = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
+	const unsigned int ib2[] = { 0, 1, 2, 0, 2, 1 };
+
+	// these bounds have a degenerate cone since the cluster has two triangles with opposite normals
+	meshopt_Bounds bounds2 = meshopt_computeClusterBounds(ib2, 6, vb1, 3, 12);
+
+	assert(bounds2.cone_apex[0] == 0 && bounds2.cone_apex[1] == 0 && bounds2.cone_apex[2] == 0);
+	assert(bounds2.cone_axis[0] == 0 && bounds2.cone_axis[1] == 0 && bounds2.cone_axis[2] == 0);
+	assert(bounds2.cone_cutoff == 1);
+	assert(bounds2.cone_axis_s8[0] == 0 && bounds2.cone_axis_s8[1] == 0 && bounds2.cone_axis_s8[2] == 0);
+	assert(bounds2.cone_cutoff_s8 == 127);
+
+	// however, the bounding sphere needs to be in tact (here we only check bbox for simplicity)
+	assert(bounds2.center[0] - bounds2.radius <= 0 && bounds2.center[0] + bounds2.radius >= 1);
+	assert(bounds2.center[1] - bounds2.radius <= 0 && bounds2.center[1] + bounds2.radius >= 1);
+	assert(bounds2.center[2] - bounds2.radius <= 0 && bounds2.center[2] + bounds2.radius >= 1);
+}
+
 bool loadMesh(Mesh& mesh, const char* path)
 {
 	if (path)
@@ -961,6 +994,7 @@ void processCoverage()
 {
 	encodeIndexCoverage();
 	encodeVertexCoverage();
+	clusterBoundsCoverage();
 }
 
 int main(int argc, char** argv)
