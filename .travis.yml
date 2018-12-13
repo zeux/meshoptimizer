@@ -24,6 +24,7 @@ script:
   - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then ./Debug/demo.exe demo/pirate.obj; fi
   - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then cmake --build . -- -property:Configuration=Release -verbosity:minimal; fi
   - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then ./Release/demo.exe demo/pirate.obj; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then make config=iphone; fi
 
 after_script:
   - if [[ "$TRAVIS_OS_NAME" != "windows" ]]; then bash <(curl -s https://codecov.io/bash); fi
