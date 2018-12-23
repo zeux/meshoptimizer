@@ -31,6 +31,10 @@ ifeq ($(config),iphone)
 	LDFLAGS+=-arch armv7 -arch arm64 -L $(IPHONESDK)/usr/lib -mios-version-min=7.0
 endif
 
+ifeq ($(config),trace)
+	CXXFLAGS+=-DTRACE=2
+endif
+
 ifeq ($(config),release)
 	CXXFLAGS+=-O3 -DNDEBUG
 endif
