@@ -9,8 +9,8 @@
 #include <algorithm>
 #include <vector>
 
-#include "miniz.h"
 #include "../tools/objparser.h"
+#include "miniz.h"
 
 // This file uses assert() to verify algorithm correctness
 #undef NDEBUG
@@ -888,9 +888,9 @@ void meshlets(const Mesh& mesh)
 
 void clusterBoundsCoverage()
 {
-	const float vbd[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-	const unsigned int ibd[] = { 0, 0, 0 };
-	const unsigned int ib1[] = { 0, 1, 2 };
+	const float vbd[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+	const unsigned int ibd[] = {0, 0, 0};
+	const unsigned int ib1[] = {0, 1, 2};
 
 	// all of the bounds below are degenerate as they use 0 triangles, one topology-degenerate triangle and one position-degenerate triangle respectively
 	meshopt_Bounds bounds0 = meshopt_computeClusterBounds(0, 0, 0, 0, 12);
@@ -901,8 +901,8 @@ void clusterBoundsCoverage()
 	assert(boundsd.center[0] == 0 && boundsd.center[1] == 0 && boundsd.center[2] == 0 && boundsd.radius == 0);
 	assert(bounds1.center[0] == 0 && bounds1.center[1] == 0 && bounds1.center[2] == 0 && bounds1.radius == 0);
 
-	const float vb1[] = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };
-	const unsigned int ib2[] = { 0, 1, 2, 0, 2, 1 };
+	const float vb1[] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+	const unsigned int ib2[] = {0, 1, 2, 0, 2, 1};
 
 	// these bounds have a degenerate cone since the cluster has two triangles with opposite normals
 	meshopt_Bounds bounds2 = meshopt_computeClusterBounds(ib2, 6, vb1, 3, 12);
@@ -987,7 +987,9 @@ void processDev(const char* path)
 	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
 	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
 
-	meshlets(copy);
+	encodeIndex(copy);
+	encodeVertex<PackedVertex>(copy, "");
+	encodeVertex<PackedVertexOct>(copy, "O");
 }
 
 void processCoverage()

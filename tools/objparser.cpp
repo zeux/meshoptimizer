@@ -167,9 +167,9 @@ ObjFile::ObjFile()
     , f(0)
     , f_size(0)
     , f_cap(0)
-	, g(0)
-	, g_size(0)
-	, g_cap(0)
+    , g(0)
+    , g_size(0)
+    , g_cap(0)
 {
 }
 

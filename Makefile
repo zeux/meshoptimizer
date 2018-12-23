@@ -58,7 +58,7 @@ dev: $(EXECUTABLE)
 	$(EXECUTABLE) -d $(files)
 
 format:
-	clang-format -i $(SOURCES)
+	clang-format -i $(LIBRARY_SOURCES) $(DEMO_SOURCES)
 
 meshencoder: $(ENCODER_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
