@@ -368,12 +368,19 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 	for (size_t i = 0; i < 256; ++i)
 		sumcode += codestats[i], sumcodeaux += codeauxstats[i];
 
-	printf("code\t\t\tcodeaux\n");
+	size_t acccode = 0, acccodeaux = 0;
+
+	printf("code\t\t\t\t\tcodeaux\n");
 
 	for (size_t i = 0; i < codetopsize && i < codeauxtopsize; ++i)
-		printf("%2d: %02x (%.1f%%)\t\t%2d: %02x (%.1f%%)\n",
-		       int(i), codetop[i], double(codestats[codetop[i]]) / double(sumcode) * 100,
-		       int(i), codeauxtop[i], double(codeauxstats[codeauxtop[i]]) / double(sumcodeaux) * 100);
+	{
+		acccode += codestats[codetop[i]];
+		acccodeaux += codeauxstats[codeauxtop[i]];
+
+		printf("%2d: %02x = %d (%.1f%% ..%.1f%%)\t\t%2d: %02x = %d (%.1f%% ..%.1f%%)\n",
+		       int(i), codetop[i], int(codestats[codetop[i]]), double(codestats[codetop[i]]) / double(sumcode) * 100, double(acccode) / double(sumcode) * 100,
+		       int(i), codeauxtop[i], int(codeauxstats[codeauxtop[i]]), double(codeauxstats[codeauxtop[i]]) / double(sumcodeaux) * 100, double(acccodeaux) / double(sumcodeaux) * 100);
+	}
 #endif
 
 	return data - buffer;
