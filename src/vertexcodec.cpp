@@ -34,6 +34,14 @@
 #endif
 #endif
 
+#ifndef TRACE
+#define TRACE 0
+#endif
+
+#if TRACE
+#include <stdio.h>
+#endif
+
 namespace meshopt
 {
 
@@ -65,6 +73,10 @@ inline unsigned char unzigzag8(unsigned char v)
 {
 	return -(v & 1) ^ (v >> 1);
 }
+
+#if TRACE
+size_t vertexstats[256];
+#endif
 
 static bool encodeBytesGroupZero(const unsigned char* buffer)
 {
@@ -217,9 +229,17 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 			vertex_offset += vertex_size;
 		}
 
+#if TRACE
+		const unsigned char* olddata = data;
+#endif
+
 		data = encodeBytes(data, data_end, buffer, (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1));
 		if (!data)
 			return 0;
+
+#if TRACE
+		vertexstats[k] += data - olddata;
+#endif
 	}
 
 	memcpy(last_vertex, &vertex_data[vertex_size * (vertex_count - 1)], vertex_size);
@@ -761,6 +781,10 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	assert(vertex_size > 0 && vertex_size <= 256);
 	assert(vertex_size % 4 == 0);
 
+#if TRACE
+	memset(vertexstats, 0, sizeof(vertexstats));
+#endif
+
 	const unsigned char* vertex_data = static_cast<const unsigned char*>(vertices);
 
 	unsigned char* data = buffer;
@@ -807,6 +831,11 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 
 	assert(data >= buffer + tail_size);
 	assert(data <= buffer + buffer_size);
+
+#if TRACE
+	for (size_t k = 0; k < vertex_size; ++k)
+		printf("%d: %d bytes, %.1f bpv\n", int(k), int(vertexstats[k]), double(vertexstats[k]) / double(vertex_count) * 8);
+#endif
 
 	return data - buffer;
 }
