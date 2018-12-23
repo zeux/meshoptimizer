@@ -75,7 +75,16 @@ inline unsigned char unzigzag8(unsigned char v)
 }
 
 #if TRACE
-size_t vertexstats[256];
+struct Stats
+{
+	size_t size;
+	size_t header;
+	size_t bitg[4];
+	size_t bitb[4];
+};
+
+Stats* bytestats;
+Stats vertexstats[256];
 #endif
 
 static bool encodeBytesGroupZero(const unsigned char* buffer)
@@ -199,7 +208,16 @@ static unsigned char* encodeBytes(unsigned char* data, unsigned char* data_end, 
 
 		assert(data + best_size == next);
 		data = next;
+
+#if TRACE > 1
+		bytestats->bitg[bitslog2]++;
+		bytestats->bitb[bitslog2] += best_size;
+#endif
 	}
+
+#if TRACE > 1
+	bytestats->header += header_size;
+#endif
 
 	return data;
 }
@@ -231,6 +249,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 
 #if TRACE
 		const unsigned char* olddata = data;
+		bytestats = &vertexstats[k];
 #endif
 
 		data = encodeBytes(data, data_end, buffer, (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1));
@@ -238,7 +257,8 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 			return 0;
 
 #if TRACE
-		vertexstats[k] += data - olddata;
+		bytestats = 0;
+		vertexstats[k].size += data - olddata;
 #endif
 	}
 
@@ -833,8 +853,25 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	assert(data <= buffer + buffer_size);
 
 #if TRACE
+	size_t total_size = data - buffer;
+
 	for (size_t k = 0; k < vertex_size; ++k)
-		printf("%d: %d bytes, %.1f bpv\n", int(k), int(vertexstats[k]), double(vertexstats[k]) / double(vertex_count) * 8);
+	{
+		const Stats& vsk = vertexstats[k];
+
+		printf("%2d: %d bytes\t%.1f%%\t%.1f bpv", int(k), int(vsk.size), double(vsk.size) / double(total_size) * 100, double(vsk.size) / double(vertex_count) * 8);
+
+#if TRACE > 1
+		printf("\t\thdr %d bytes\tbit0 %d (%d bytes)\tbit1 %d (%d bytes)\tbit2 %d (%d bytes)\tbit3 %d (%d bytes)",
+			int(vsk.header),
+			int(vsk.bitg[0]), int(vsk.bitb[0]),
+			int(vsk.bitg[1]), int(vsk.bitb[1]),
+			int(vsk.bitg[2]), int(vsk.bitb[2]),
+			int(vsk.bitg[3]), int(vsk.bitb[3]));
+#endif
+
+		printf("\n");
+	}
 #endif
 
 	return data - buffer;
