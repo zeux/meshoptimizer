@@ -4,6 +4,14 @@
 #include <assert.h>
 #include <string.h>
 
+#ifndef TRACE
+#define TRACE 0
+#endif
+
+#if TRACE
+#include <stdio.h>
+#endif
+
 // This work is based on:
 // Fabian Giesen. Simple lossless index buffer compression & follow-up. 2013
 // Conor Stokes. Vertex Cache Optimised Index Buffer Compression. 2014
@@ -160,6 +168,38 @@ static void writeTriangle(void* destination, size_t offset, size_t index_size, u
 	}
 }
 
+#if TRACE
+static size_t sortTop16(unsigned char dest[16], size_t stats[256])
+{
+	size_t destsize = 0;
+
+	for (size_t i = 0; i < 256; ++i)
+	{
+		size_t j = 0;
+		for (; j < destsize; ++j)
+		{
+			if (stats[i] >= stats[dest[j]])
+			{
+				if (destsize < 16)
+					destsize++;
+
+				memmove(&dest[j + 1], &dest[j], destsize - 1 - j);
+				dest[j] = (unsigned char)i;
+				break;
+			}
+		}
+
+		if (j == destsize && destsize < 16)
+		{
+			dest[destsize] = (unsigned char)i;
+			destsize++;
+		}
+	}
+
+	return destsize;
+}
+#endif
+
 } // namespace meshopt
 
 size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, const unsigned int* indices, size_t index_count)
@@ -167,6 +207,11 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 	using namespace meshopt;
 
 	assert(index_count % 3 == 0);
+
+#if TRACE
+	size_t codestats[256] = {};
+	size_t codeauxstats[256] = {};
+#endif
 
 	// the minimum valid encoding is header, 1 byte per triangle and a 16-byte codeaux table
 	if (buffer_size < 1 + index_count / 3 + 16)
@@ -218,6 +263,10 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 
 			*code++ = static_cast<unsigned char>((fe << 4) | fec);
 
+#if TRACE
+			codestats[code[-1]]++;
+#endif
+
 			// note that we need to update the last index since free indices are delta-encoded
 			if (fec == 15)
 				encodeIndex(data, c, next, last), last = c;
@@ -259,6 +308,11 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 				*code++ = static_cast<unsigned char>((15 << 4) | 14 | fea);
 				*data++ = codeaux;
 			}
+
+#if TRACE
+			codestats[0xf0]++;
+			codeauxstats[codeaux]++;
+#endif
 
 			// note that we need to update the last index since free indices are delta-encoded
 			if (fea == 15)
@@ -304,6 +358,23 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 
 	assert(data >= buffer + index_count / 3 + 16);
 	assert(data <= buffer + buffer_size);
+
+#if TRACE
+	unsigned char codetop[16], codeauxtop[16];
+	size_t codetopsize = sortTop16(codetop, codestats);
+	size_t codeauxtopsize = sortTop16(codeauxtop, codeauxstats);
+
+	size_t sumcode = 0, sumcodeaux = 0;
+	for (size_t i = 0; i < 256; ++i)
+		sumcode += codestats[i], sumcodeaux += codeauxstats[i];
+
+	printf("code\t\t\tcodeaux\n");
+
+	for (size_t i = 0; i < codetopsize && i < codeauxtopsize; ++i)
+		printf("%2d: %02x (%.1f%%)\t\t%2d: %02x (%.1f%%)\n",
+		       int(i), codetop[i], double(codestats[codetop[i]]) / double(sumcode) * 100,
+		       int(i), codeauxtop[i], double(codeauxstats[codeauxtop[i]]) / double(sumcodeaux) * 100);
+#endif
 
 	return data - buffer;
 }
