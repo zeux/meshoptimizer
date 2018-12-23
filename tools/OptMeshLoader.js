@@ -36,7 +36,7 @@ THREE.OptMeshLoader = (function ()
 
 		},
 
-		setPath: function (value) 
+		setPath: function (value)
 		{
 			this.path = value;
 			return this;
@@ -139,7 +139,7 @@ THREE.OptMeshLoader = (function ()
 				if (objectMaterialIndex == undefined)
 				{
 					var objectMaterial = null;
-					
+
 					if (materials !== null)
 						objectMaterial = materials.create(objectMaterialName);
 
