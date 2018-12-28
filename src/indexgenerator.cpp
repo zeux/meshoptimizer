@@ -176,7 +176,7 @@ size_t meshopt_generateVertexRemapMulti(unsigned int* destination, const unsigne
 
 	assert(indices || index_count == vertex_count);
 	assert(index_count % 3 == 0);
-	assert(stream_count <= 16);
+	assert(stream_count > 0 && stream_count <= 16);
 
 	for (size_t i = 0; i < stream_count; ++i)
 	{
@@ -308,7 +308,7 @@ void meshopt_generateShadowIndexBufferMulti(unsigned int* destination, const uns
 
 	assert(indices);
 	assert(index_count % 3 == 0);
-	assert(stream_count <= 16);
+	assert(stream_count > 0 && stream_count <= 16);
 
 	for (size_t i = 0; i < stream_count; ++i)
 	{
