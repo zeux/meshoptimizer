@@ -53,6 +53,21 @@ static void decodeIndexV0()
 	assert(memcmp(decoded, kIndexBuffer, sizeof(kIndexBuffer)) == 0);
 }
 
+static void decodeIndex16()
+{
+	const size_t index_count = sizeof(kIndexBuffer) / sizeof(kIndexBuffer[0]);
+	const size_t vertex_count = 10;
+
+	std::vector<unsigned char> buffer(meshopt_encodeIndexBufferBound(index_count, vertex_count));
+	buffer.resize(meshopt_encodeIndexBuffer(&buffer[0], buffer.size(), kIndexBuffer, index_count));
+
+	unsigned short decoded[index_count];
+	assert(meshopt_decodeIndexBuffer(decoded, index_count, &buffer[0], buffer.size()) == 0);
+
+	for (size_t i = 0; i < index_count; ++i)
+		assert(decoded[i] == kIndexBuffer[i]);
+}
+
 static void encodeIndexMemorySafe()
 {
 	const size_t index_count = sizeof(kIndexBuffer) / sizeof(kIndexBuffer[0]);
@@ -249,6 +264,7 @@ static void clusterBoundsDegenerate()
 void runTests()
 {
 	decodeIndexV0();
+	decodeIndex16();
 	encodeIndexMemorySafe();
 	decodeIndexMemorySafe();
 	decodeIndexRejectExtraBytes();
