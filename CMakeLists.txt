@@ -30,7 +30,7 @@ else()
 endif()
 
 if(BUILD_DEMO)
-    add_executable(demo demo/main.cpp demo/miniz.cpp tools/objparser.cpp)
+    add_executable(demo demo/main.cpp demo/miniz.cpp demo/tests.cpp tools/objparser.cpp)
     target_link_libraries(demo meshoptimizer)
 endif()
 
