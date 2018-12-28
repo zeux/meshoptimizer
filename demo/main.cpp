@@ -946,6 +946,86 @@ bool loadMesh(Mesh& mesh, const char* path)
 	return true;
 }
 
+void processDeinterleaved(const char* path)
+{
+	// Most algorithms in the library work out of the box with deinterleaved geometry, but some require slightly special treatment;
+	// this code runs a simplified version of complete opt. pipeline using deinterleaved geo. There's no compression performed but you
+	// can trivially run it by quantizing all elements and running meshopt_encodeVertexBuffer once for each vertex stream.
+	ObjFile file;
+	if (!objParseFile(file, path) || !objValidate(file))
+	{
+		printf("Error loading %s: file not found or invalid file data\n", path);
+		return;
+	}
+
+	size_t total_indices = file.f_size / 3;
+
+	std::vector<float> unindexed_pos(total_indices * 3);
+	std::vector<float> unindexed_nrm(total_indices * 3);
+	std::vector<float> unindexed_uv(total_indices * 2);
+
+	for (size_t i = 0; i < total_indices; ++i)
+	{
+		int vi = file.f[i * 3 + 0];
+		int vti = file.f[i * 3 + 1];
+		int vni = file.f[i * 3 + 2];
+
+		unindexed_pos[i * 3 + 0] = file.v[vi * 3 + 0];
+		unindexed_pos[i * 3 + 1] = file.v[vi * 3 + 1];
+		unindexed_pos[i * 3 + 2] = file.v[vi * 3 + 2];
+
+		if (vni >= 0)
+		{
+			unindexed_nrm[i * 3 + 0] = file.vn[vni * 3 + 0];
+			unindexed_nrm[i * 3 + 1] = file.vn[vni * 3 + 1];
+			unindexed_nrm[i * 3 + 2] = file.vn[vni * 3 + 2];
+		}
+
+		if (vti >= 0)
+		{
+			unindexed_uv[i * 2 + 0] = file.vt[vti * 3 + 0];
+			unindexed_uv[i * 2 + 1] = file.vt[vti * 3 + 1];
+		}
+	}
+
+	double start = timestamp();
+
+	meshopt_Stream streams[] = {
+	    {&unindexed_pos[0], sizeof(float) * 3, sizeof(float) * 3},
+	    {&unindexed_nrm[0], sizeof(float) * 3, sizeof(float) * 3},
+	    {&unindexed_uv[0], sizeof(float) * 2, sizeof(float) * 2},
+	};
+
+	std::vector<unsigned int> remap(total_indices);
+
+	size_t total_vertices = meshopt_generateVertexRemapMulti(&remap[0], NULL, total_indices, total_indices, streams, sizeof(streams) / sizeof(streams[0]));
+
+	std::vector<unsigned int> indices(total_indices);
+	meshopt_remapIndexBuffer(&indices[0], NULL, total_indices, &remap[0]);
+
+	std::vector<float> pos(total_vertices * 3);
+	meshopt_remapVertexBuffer(&pos[0], &unindexed_pos[0], total_indices, sizeof(float) * 3, &remap[0]);
+
+	std::vector<float> nrm(total_vertices * 3);
+	meshopt_remapVertexBuffer(&nrm[0], &unindexed_nrm[0], total_indices, sizeof(float) * 3, &remap[0]);
+
+	std::vector<float> uv(total_vertices * 2);
+	meshopt_remapVertexBuffer(&uv[0], &unindexed_uv[0], total_indices, sizeof(float) * 2, &remap[0]);
+
+	double reindex = timestamp();
+
+	meshopt_optimizeVertexCache(&indices[0], &indices[0], total_indices, total_vertices);
+
+	meshopt_optimizeVertexFetchRemap(&remap[0], &indices[0], total_indices, total_vertices);
+	meshopt_remapVertexBuffer(&pos[0], &pos[0], total_vertices, sizeof(float) * 3, &remap[0]);
+	meshopt_remapVertexBuffer(&nrm[0], &nrm[0], total_vertices, sizeof(float) * 3, &remap[0]);
+	meshopt_remapVertexBuffer(&uv[0], &uv[0], total_vertices, sizeof(float) * 2, &remap[0]);
+
+	double optimize = timestamp();
+
+	printf("Deintrlvd: %d vertices, reindexed in %.2f msec, optimized in %.2f msec\n", int(total_vertices), (reindex - start) * 1000, (optimize - reindex) * 1000);
+}
+
 void process(const char* path)
 {
 	Mesh mesh;
@@ -975,6 +1055,9 @@ void process(const char* path)
 	encodeVertex<PackedVertexOct>(copy, "O");
 
 	simplify(mesh);
+
+	if (path)
+		processDeinterleaved(path);
 }
 
 void processDev(const char* path)
