@@ -58,6 +58,9 @@ all: $(EXECUTABLE)
 test: $(EXECUTABLE)
 	$(EXECUTABLE) $(files)
 
+check: $(EXECUTABLE)
+	$(EXECUTABLE)
+
 dev: $(EXECUTABLE)
 	$(EXECUTABLE) -d $(files)
 

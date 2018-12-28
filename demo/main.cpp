@@ -65,36 +65,6 @@ union Triangle {
 	char data[sizeof(Vertex) * 3];
 };
 
-Mesh generatePlane(unsigned int N)
-{
-	Mesh result;
-
-	result.vertices.reserve((N + 1) * (N + 1));
-	result.indices.reserve(N * N * 6);
-
-	for (unsigned int y = 0; y <= N; ++y)
-		for (unsigned int x = 0; x <= N; ++x)
-		{
-			Vertex v = {float(x), float(y), 0, 0, 0, 1, float(x) / float(N), float(y) / float(N)};
-
-			result.vertices.push_back(v);
-		}
-
-	for (unsigned int y = 0; y < N; ++y)
-		for (unsigned int x = 0; x < N; ++x)
-		{
-			result.indices.push_back((y + 0) * (N + 1) + (x + 0));
-			result.indices.push_back((y + 0) * (N + 1) + (x + 1));
-			result.indices.push_back((y + 1) * (N + 1) + (x + 0));
-
-			result.indices.push_back((y + 1) * (N + 1) + (x + 0));
-			result.indices.push_back((y + 0) * (N + 1) + (x + 1));
-			result.indices.push_back((y + 1) * (N + 1) + (x + 1));
-		}
-
-	return result;
-}
-
 Mesh parseObj(const char* path, double& reindex)
 {
 	ObjFile file;
@@ -572,69 +542,6 @@ void encodeIndex(const Mesh& mesh)
 	       (double(result.size() * 4) / (1 << 30)) / (end - middle));
 }
 
-void encodeIndexCoverage()
-{
-	// note: 4 6 5 triangle here is a combo-breaker:
-	// we encode it without rotating, a=next, c=next - this means we do *not* bump next to 6
-	// which means that the next triangle can't be encoded via next sequencing!
-	const unsigned int indices[] = {0, 1, 2, 2, 1, 3, 4, 6, 5, 7, 8, 9};
-	const size_t index_count = sizeof(indices) / sizeof(indices[0]);
-	const size_t vertex_count = 10;
-
-	std::vector<unsigned char> buffer(meshopt_encodeIndexBufferBound(index_count, vertex_count));
-	buffer.resize(meshopt_encodeIndexBuffer(&buffer[0], buffer.size(), indices, index_count));
-
-	// check that encode is memory-safe; note that we reallocate the buffer for each try to make sure ASAN can verify buffer access
-	for (size_t i = 0; i <= buffer.size(); ++i)
-	{
-		std::vector<unsigned char> shortbuffer(i);
-		size_t result = meshopt_encodeIndexBuffer(i == 0 ? 0 : &shortbuffer[0], i, indices, index_count);
-		(void)result;
-
-		if (i == buffer.size())
-			assert(result == buffer.size());
-		else
-			assert(result == 0);
-	}
-
-	// check that decode is memory-safe; note that we reallocate the buffer for each try to make sure ASAN can verify buffer access
-	unsigned int destination[index_count];
-
-	for (size_t i = 0; i <= buffer.size(); ++i)
-	{
-		std::vector<unsigned char> shortbuffer(buffer.begin(), buffer.begin() + i);
-		int result = meshopt_decodeIndexBuffer(destination, index_count, i == 0 ? 0 : &shortbuffer[0], i);
-		(void)result;
-
-		if (i == buffer.size())
-			assert(result == 0);
-		else
-			assert(result < 0);
-	}
-
-	// check that decoder doesn't accept extra bytes after a valid stream
-	{
-		std::vector<unsigned char> largebuffer(buffer);
-		largebuffer.push_back(0);
-
-		int result = meshopt_decodeIndexBuffer(destination, index_count, &largebuffer[0], largebuffer.size());
-		(void)result;
-
-		assert(result < 0);
-	}
-
-	// check that decoder doesn't accept malformed headers
-	{
-		std::vector<unsigned char> brokenbuffer(buffer);
-		brokenbuffer[0] = 0;
-
-		int result = meshopt_decodeIndexBuffer(destination, index_count, &brokenbuffer[0], brokenbuffer.size());
-		(void)result;
-
-		assert(result < 0);
-	}
-}
-
 template <typename PV>
 void packVertex(const Mesh& mesh, const char* pvn)
 {
@@ -680,74 +587,6 @@ void encodeVertex(const Mesh& mesh, const char* pvn)
 	       (middle - start) * 1000,
 	       (end - middle) * 1000,
 	       (double(result.size() * sizeof(PV)) / (1 << 30)) / (end - middle));
-}
-
-void encodeVertexCoverage()
-{
-	typedef PackedVertexOct PV;
-
-	const PV vertices[] =
-	    {
-	        {0, 0, 0, 0, 0, 0, 0},
-	        {300, 0, 0, 0, 0, 500, 0},
-	        {0, 300, 0, 0, 0, 0, 500},
-	        {300, 300, 0, 0, 0, 500, 500},
-	    };
-
-	const size_t vertex_count = 4;
-
-	std::vector<unsigned char> buffer(meshopt_encodeVertexBufferBound(vertex_count, sizeof(PV)));
-	buffer.resize(meshopt_encodeVertexBuffer(&buffer[0], buffer.size(), vertices, vertex_count, sizeof(PV)));
-
-	// check that encode is memory-safe; note that we reallocate the buffer for each try to make sure ASAN can verify buffer access
-	for (size_t i = 0; i <= buffer.size(); ++i)
-	{
-		std::vector<unsigned char> shortbuffer(i);
-		size_t result = meshopt_encodeVertexBuffer(i == 0 ? 0 : &shortbuffer[0], i, vertices, vertex_count, sizeof(PV));
-		(void)result;
-
-		if (i == buffer.size())
-			assert(result == buffer.size());
-		else
-			assert(result == 0);
-	}
-
-	// check that decode is memory-safe; note that we reallocate the buffer for each try to make sure ASAN can verify buffer access
-	PV destination[vertex_count];
-
-	for (size_t i = 0; i <= buffer.size(); ++i)
-	{
-		std::vector<unsigned char> shortbuffer(buffer.begin(), buffer.begin() + i);
-		int result = meshopt_decodeVertexBuffer(destination, vertex_count, sizeof(PV), i == 0 ? 0 : &shortbuffer[0], i);
-		(void)result;
-
-		if (i == buffer.size())
-			assert(result == 0);
-		else
-			assert(result < 0);
-	}
-
-	// check that decoder doesn't accept extra bytes after a valid stream
-	{
-		std::vector<unsigned char> largebuffer(buffer);
-		largebuffer.push_back(0);
-
-		int result = meshopt_decodeVertexBuffer(destination, vertex_count, sizeof(PV), &largebuffer[0], largebuffer.size());
-		(void)result;
-
-		assert(result < 0);
-	}
-
-	// check that decoder doesn't accept malformed headers
-	{
-		std::vector<unsigned char> brokenbuffer(buffer);
-		brokenbuffer[0] = 0;
-
-		int result = meshopt_decodeVertexBuffer(destination, vertex_count, sizeof(PV), &brokenbuffer[0], brokenbuffer.size());
-		(void)result;
-
-		assert(result < 0);
-	}
 }
 
 void stripify(const Mesh& mesh)
@@ -886,63 +725,20 @@ void meshlets(const Mesh& mesh)
 	       (endc - startc) * 1000);
 }
 
-void clusterBoundsCoverage()
-{
-	const float vbd[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
-	const unsigned int ibd[] = {0, 0, 0};
-	const unsigned int ib1[] = {0, 1, 2};
-
-	// all of the bounds below are degenerate as they use 0 triangles, one topology-degenerate triangle and one position-degenerate triangle respectively
-	meshopt_Bounds bounds0 = meshopt_computeClusterBounds(0, 0, 0, 0, 12);
-	meshopt_Bounds boundsd = meshopt_computeClusterBounds(ibd, 3, vbd, 3, 12);
-	meshopt_Bounds bounds1 = meshopt_computeClusterBounds(ib1, 3, vbd, 3, 12);
-
-	assert(bounds0.center[0] == 0 && bounds0.center[1] == 0 && bounds0.center[2] == 0 && bounds0.radius == 0);
-	assert(boundsd.center[0] == 0 && boundsd.center[1] == 0 && boundsd.center[2] == 0 && boundsd.radius == 0);
-	assert(bounds1.center[0] == 0 && bounds1.center[1] == 0 && bounds1.center[2] == 0 && bounds1.radius == 0);
-
-	const float vb1[] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
-	const unsigned int ib2[] = {0, 1, 2, 0, 2, 1};
-
-	// these bounds have a degenerate cone since the cluster has two triangles with opposite normals
-	meshopt_Bounds bounds2 = meshopt_computeClusterBounds(ib2, 6, vb1, 3, 12);
-
-	assert(bounds2.cone_apex[0] == 0 && bounds2.cone_apex[1] == 0 && bounds2.cone_apex[2] == 0);
-	assert(bounds2.cone_axis[0] == 0 && bounds2.cone_axis[1] == 0 && bounds2.cone_axis[2] == 0);
-	assert(bounds2.cone_cutoff == 1);
-	assert(bounds2.cone_axis_s8[0] == 0 && bounds2.cone_axis_s8[1] == 0 && bounds2.cone_axis_s8[2] == 0);
-	assert(bounds2.cone_cutoff_s8 == 127);
-
-	// however, the bounding sphere needs to be in tact (here we only check bbox for simplicity)
-	assert(bounds2.center[0] - bounds2.radius <= 0 && bounds2.center[0] + bounds2.radius >= 1);
-	assert(bounds2.center[1] - bounds2.radius <= 0 && bounds2.center[1] + bounds2.radius >= 1);
-	assert(bounds2.center[2] - bounds2.radius <= 0 && bounds2.center[2] + bounds2.radius >= 1);
-}
-
 bool loadMesh(Mesh& mesh, const char* path)
 {
-	if (path)
+	double start = timestamp();
+	double middle;
+	mesh = parseObj(path, middle);
+	double end = timestamp();
+
+	if (mesh.vertices.empty())
 	{
-		double start = timestamp();
-		double middle;
-		mesh = parseObj(path, middle);
-		double end = timestamp();
-
-		if (mesh.vertices.empty())
-		{
-			printf("Mesh %s is empty, skipping\n", path);
-			return false;
-		}
-
-		printf("# %s: %d vertices, %d triangles; read in %.2f msec; indexed in %.2f msec\n", path, int(mesh.vertices.size()), int(mesh.indices.size() / 3), (middle - start) * 1000, (end - middle) * 1000);
-	}
-	else
-	{
-		mesh = generatePlane(200);
-
-		printf("# tessellated plane: %d vertices, %d triangles\n", int(mesh.vertices.size()), int(mesh.indices.size() / 3));
+		printf("Mesh %s is empty, skipping\n", path);
+		return false;
 	}
 
+	printf("# %s: %d vertices, %d triangles; read in %.2f msec; indexed in %.2f msec\n", path, int(mesh.vertices.size()), int(mesh.indices.size() / 3), (middle - start) * 1000, (end - middle) * 1000);
 	return true;
 }
 
@@ -1086,34 +882,21 @@ void processDev(const char* path)
 	encodeVertex<PackedVertexOct>(copy, "O");
 }
 
-void processCoverage()
-{
-	encodeIndexCoverage();
-	encodeVertexCoverage();
-	clusterBoundsCoverage();
-}
-
 int main(int argc, char** argv)
 {
+	void runTests();
+
 	if (argc == 1)
 	{
-		printf("Usage: %s [.obj file]\n", argv[0]);
-		process(0);
+		runTests();
 	}
 	else
 	{
 		if (strcmp(argv[1], "-d") == 0)
 		{
-			if (argc > 2)
+			for (int i = 2; i < argc; ++i)
 			{
-				for (int i = 2; i < argc; ++i)
-				{
-					processDev(argv[i]);
-				}
-			}
-			else
-			{
-				processDev(0);
+				processDev(argv[i]);
 			}
 		}
 		else
@@ -1123,7 +906,7 @@ int main(int argc, char** argv)
 				process(argv[i]);
 			}
 
-			processCoverage();
+			runTests();
 		}
 	}
 }
