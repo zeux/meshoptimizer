@@ -1023,7 +1023,18 @@ void processDeinterleaved(const char* path)
 
 	double optimize = timestamp();
 
-	printf("Deintrlvd: %d vertices, reindexed in %.2f msec, optimized in %.2f msec\n", int(total_vertices), (reindex - start) * 1000, (optimize - reindex) * 1000);
+	// note: since shadow index buffer is computed based on regular vertex/index buffer, the stream points at the indexed data - not unindexed_pos
+	meshopt_Stream shadow_stream = {&pos[0], sizeof(float) * 3, sizeof(float) * 3};
+
+	std::vector<unsigned int> shadow_indices(total_indices);
+	meshopt_generateShadowIndexBufferMulti(&shadow_indices[0], &indices[0], total_indices, total_vertices, &shadow_stream, 1);
+
+	meshopt_optimizeVertexCache(&shadow_indices[0], &shadow_indices[0], total_indices, total_vertices);
+
+	double shadow = timestamp();
+
+	printf("Deintrlvd: %d vertices, reindexed in %.2f msec, optimized in %.2f msec, generated & optimized shadow indices in %.2f msec\n",
+		int(total_vertices), (reindex - start) * 1000, (optimize - reindex) * 1000, (shadow - optimize) * 1000);
 }
 
 void process(const char* path)
