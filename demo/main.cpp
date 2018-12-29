@@ -6,7 +6,6 @@
 #include <string.h>
 #include <time.h>
 
-#include <algorithm>
 #include <vector>
 
 #include "../tools/objparser.h"
@@ -382,8 +381,11 @@ void simplify(const Mesh& mesh)
 		// simplifying from the base level sometimes produces better results, but simplifying from last level is faster
 		const std::vector<unsigned int>& source = lods[i - 1];
 
+		if (source.size() < target_index_count)
+			target_index_count = source.size();
+
 		lod.resize(source.size());
-		lod.resize(meshopt_simplify(&lod[0], &source[0], source.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), std::min(source.size(), target_index_count), target_error));
+		lod.resize(meshopt_simplify(&lod[0], &source[0], source.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error));
 	}
 
 	double middle = timestamp();
