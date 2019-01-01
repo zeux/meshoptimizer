@@ -72,7 +72,7 @@ meshencoder: $(ENCODER_OBJECTS) $(LIBRARY)
 
 js/decoder.js: src/vertexcodec.cpp src/indexcodec.cpp | js/decoder-post.js
 	emcc $^ -Os -DNDEBUG -s EXPORTED_FUNCTIONS='["_meshopt_decodeVertexBuffer", "_meshopt_decodeIndexBuffer", "_malloc", "_free"]' -s ALLOW_MEMORY_GROWTH=1 -s MALLOC=emmalloc -s TOTAL_STACK=65536 -s TOTAL_MEMORY=1048576 -s MODULARIZE=1 -s SINGLE_FILE=1 -s EXPORT_NAME=MeshoptDecoder --closure 1 --post-js js/decoder-post.js -o $@
-	sed -i '1s;^;// This file is part of meshoptimizer library and is distributed under the terms of MIT License.\n// Copyright (C) 2016-2018, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com);' $@
+	sed -i '1s;^;// This file is part of meshoptimizer library and is distributed under the terms of MIT License.\n// Copyright (C) 2016-2019, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com);' $@
 
 $(EXECUTABLE): $(DEMO_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
