@@ -25,7 +25,7 @@ This will give us a chance to discuss the idea before implementing it - some alg
 Contributions to this project are expected to follow the existing code style.
 `.clang-format` file mostly defines syntactic styling rules (you can run `make format` to format the code accordingly).
 
-As for naming conventions, this library uses `snake_case` for variables, `lowerCamelCase` for functions, `UpperCamelCase` for types, `kCamelCase` for global constants and `SCARY_CASE` for macros. All public functions/types must additionally have an extra `meshopt_` or `MESHOPTIMIZER_` prefix to avoid symbol conflicts.
+As for naming conventions, this library uses `snake_case` for variables, `lowerCamelCase` for functions, `UpperCamelCase` for types, `kCamelCase` for global constants and `SCARY_CASE` for macros. All public functions/types must additionally have an extra `meshopt_` prefix to avoid symbol conflicts.
 
 ## Dependencies
 
