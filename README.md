@@ -151,9 +151,12 @@ Due to a very high decoding performance and compatibility with general purpose l
 ```js
 var decoder = MeshoptDecoder(); // from js/decoder.js
 
-// decode from *Data (Uint8Array) into *Buffer (Uint8Array)
-decoder.decodeVertexBuffer(vertexBuffer, vertexCount, vertexSize, vertexData);
-decoder.decodeIndexBuffer(indexBuffer, indexCount, indexSize, indexData);
+// decoder is a Promise that is resolved when (asynchronous) WebAssembly compilation finishes
+decoder.then(function () {
+	// decode from *Data (Uint8Array) into *Buffer (Uint8Array)
+	decoder.decodeVertexBuffer(vertexBuffer, vertexCount, vertexSize, vertexData);
+	decoder.decodeIndexBuffer(indexBuffer, indexCount, indexSize, indexData);
+});
 ```
 
 A THREE.js mesh loader is provided as an example in `tools/OptMeshLoader.js`; it loads meshes encoded using `tools/meshencoder.cpp`.
