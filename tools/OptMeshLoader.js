@@ -109,11 +109,11 @@ THREE.OptMeshLoader = (function ()
 
 			var vertexBuffer = new ArrayBuffer(vertexCount * vertexSize);
 			var vertexBufferU8 = new Uint8Array(vertexBuffer);
-			this.decoder.decodeVertexBuffer(vertexBufferU8, 0, vertexCount, vertexSize, array.subarray(vertexDataOffset, vertexDataOffset + vertexDataSize));
+			this.decoder.decodeVertexBuffer(vertexBufferU8, vertexCount, vertexSize, array.subarray(vertexDataOffset, vertexDataOffset + vertexDataSize));
 
 			var indexBuffer = new ArrayBuffer(indexCount * indexSize);
 			var indexBufferU8 = new Uint8Array(indexBuffer);
-			this.decoder.decodeIndexBuffer(indexBufferU8, 0, indexCount, indexSize, array.subarray(indexDataOffset, indexDataOffset + indexDataSize));
+			this.decoder.decodeIndexBuffer(indexBufferU8, indexCount, indexSize, array.subarray(indexDataOffset, indexDataOffset + indexDataSize));
 
 			var geometry = new THREE.BufferGeometry();
 

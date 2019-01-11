@@ -1,13 +1,13 @@
-Module['decodeVertexBuffer'] = function (target, targetOffset, vertexCount, vertexSize, source)
+Module['decodeVertexBuffer'] = function (targetArray, vertexCount, vertexSize, sourceArray)
 {
 	var tp = Module["_malloc"](vertexCount * vertexSize);
-	var sp = Module["_malloc"](source.length);
+	var sp = Module["_malloc"](sourceArray.length);
 
-	Module["HEAPU8"].set(source, sp);
+	Module["HEAPU8"].set(sourceArray, sp);
 
-	var res = Module["_meshopt_decodeVertexBuffer"](tp, vertexCount, vertexSize, sp, source.length);
+	var res = Module["_meshopt_decodeVertexBuffer"](tp, vertexCount, vertexSize, sp, sourceArray.length);
 
-	target.set(Module["HEAPU8"].subarray(tp, tp + vertexCount * vertexSize), targetOffset);
+	targetArray.set(Module["HEAPU8"].subarray(tp, tp + vertexCount * vertexSize), 0);
 
 	Module["_free"](sp);
 	Module["_free"](tp);
@@ -16,16 +16,16 @@ Module['decodeVertexBuffer'] = function (target, targetOffset, vertexCount, vert
 		throw new Error("Malformed vertex buffer data");
 }
 
-Module['decodeIndexBuffer'] = function(target, targetOffset, indexCount, indexSize, source)
+Module['decodeIndexBuffer'] = function(targetArray, indexCount, indexSize, sourceArray)
 {
 	var tp = Module["_malloc"](indexCount * indexSize);
-	var sp = Module["_malloc"](source.length);
+	var sp = Module["_malloc"](sourceArray.length);
 
-	Module["HEAPU8"].set(source, sp);
+	Module["HEAPU8"].set(sourceArray, sp);
 
-	var res = Module["_meshopt_decodeIndexBuffer"](tp, indexCount, indexSize, sp, source.length);
+	var res = Module["_meshopt_decodeIndexBuffer"](tp, indexCount, indexSize, sp, sourceArray.length);
 
-	target.set(Module["HEAPU8"].subarray(tp, tp + indexCount * indexSize), targetOffset);
+	targetArray.set(Module["HEAPU8"].subarray(tp, tp + indexCount * indexSize), 0);
 
 	Module["_free"](sp);
 	Module["_free"](tp);
