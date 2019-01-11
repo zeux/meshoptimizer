@@ -146,6 +146,18 @@ Note that vertex encoding assumes that vertex buffer was optimized for vertex fe
 
 Decoding functions are heavily optimized and can directly target write-combined memory; you can expect both decoders to run at 1-2 GB/s on modern desktop CPUs. Compression ratios depend on the data; vertex data compression ratio is typically around 2-4x (compared to already quantized data), index data compression ratio is around 5-6x (compared to raw 16-bit index data). General purpose lossless compressors can further improve on these results.
 
+Due to a very high decoding performance and compatibility with general purpose lossless compressors, the compression is a good fit for the use on the web. To that end, meshoptimizer provides both vertex and index decoders compiled into WebAssembly and wrapped into a module with JavaScript-friendly interface, `js/decoder.js`, that you can use to decode meshes that were encoded offline:
+
+```js
+var decoder = MeshoptDecoder(); // from js/decoder.js
+
+// decode from *Data (Uint8Array) into *Buffer (Uint8Array)
+decoder.decodeVertexBuffer(vertexBuffer, vertexCount, vertexSize, vertexData);
+decoder.decodeIndexBuffer(indexBuffer, indexCount, indexSize, indexData);
+```
+
+A THREE.js mesh loader is provided as an example in `tools/OptMeshLoader.js`; it loads meshes encoded using `tools/meshencoder.cpp`.
+
 ## Triangle strip conversion
 
 On most hardware, indexed triangle lists are the most efficient way to drive the GPU. However, in some cases triangle strips might prove beneficial:
