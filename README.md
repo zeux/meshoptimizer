@@ -159,7 +159,7 @@ decoder.then(function () {
 });
 ```
 
-A THREE.js mesh loader is provided as an example in `tools/OptMeshLoader.js`; it loads meshes encoded using `tools/meshencoder.cpp`.
+A THREE.js mesh loader is provided as an example in `tools/OptMeshLoader.js`; it loads meshes encoded using `tools/meshencoder.cpp`. [Usage example](https://zeuxcg.org/meshoptimizer/demo/) is available, with source in `demo/index.html`.
 
 ## Triangle strip conversion
 
