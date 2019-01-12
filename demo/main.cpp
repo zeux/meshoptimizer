@@ -297,7 +297,7 @@ struct PackedVertex
 {
 	unsigned short px, py, pz;
 	unsigned short pw; // padding to 4b boundary
-	unsigned char nx, ny, nz, nw;
+	signed char nx, ny, nz, nw;
 	unsigned short tx, ty;
 };
 
@@ -326,7 +326,7 @@ void packMesh(std::vector<PackedVertex>& pv, const std::vector<Vertex>& vertices
 struct PackedVertexOct
 {
 	unsigned short px, py, pz;
-	unsigned char nu, nv; // octahedron encoded normal, aliases .pw
+	signed char nu, nv; // octahedron encoded normal, aliases .pw
 	unsigned short tx, ty;
 };
 
