@@ -819,7 +819,7 @@ void processDeinterleaved(const char* path)
 	double shadow = timestamp();
 
 	printf("Deintrlvd: %d vertices, reindexed in %.2f msec, optimized in %.2f msec, generated & optimized shadow indices in %.2f msec\n",
-		int(total_vertices), (reindex - start) * 1000, (optimize - reindex) * 1000, (shadow - optimize) * 1000);
+	       int(total_vertices), (reindex - start) * 1000, (optimize - reindex) * 1000, (shadow - optimize) * 1000);
 }
 
 void process(const char* path)

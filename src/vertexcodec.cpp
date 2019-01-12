@@ -863,11 +863,11 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 
 #if TRACE > 1
 		printf("\t\thdr %d bytes\tbit0 %d (%d bytes)\tbit1 %d (%d bytes)\tbit2 %d (%d bytes)\tbit3 %d (%d bytes)",
-			int(vsk.header),
-			int(vsk.bitg[0]), int(vsk.bitb[0]),
-			int(vsk.bitg[1]), int(vsk.bitb[1]),
-			int(vsk.bitg[2]), int(vsk.bitb[2]),
-			int(vsk.bitg[3]), int(vsk.bitb[3]));
+		       int(vsk.header),
+		       int(vsk.bitg[0]), int(vsk.bitb[0]),
+		       int(vsk.bitg[1]), int(vsk.bitb[1]),
+		       int(vsk.bitg[2]), int(vsk.bitb[2]),
+		       int(vsk.bitg[3]), int(vsk.bitb[3]));
 #endif
 
 		printf("\n");
