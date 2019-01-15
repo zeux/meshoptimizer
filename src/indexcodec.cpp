@@ -310,7 +310,7 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 			}
 
 #if TRACE
-			codestats[0xf0]++;
+			codestats[code[-1]]++;
 			codeauxstats[codeaux]++;
 #endif
 
