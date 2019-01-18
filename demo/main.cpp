@@ -862,6 +862,9 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
+	simplify(mesh);
+	return;
+
 	Mesh copy = mesh;
 	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
 	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));

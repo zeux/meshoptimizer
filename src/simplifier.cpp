@@ -762,8 +762,11 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		if (triangle_collapses >= triangle_collapse_goal)
 			break;
 
-		unsigned int r0 = remap[c.v0];
-		unsigned int r1 = remap[c.v1];
+		unsigned int i0 = c.v0;
+		unsigned int i1 = c.v1;
+
+		unsigned int r0 = remap[i0];
+		unsigned int r1 = remap[i1];
 
 		// we don't collapse vertices that had source or target vertex involved in a collapse
 		// it's important to not move the vertices twice since it complicates the tracking/remapping logic
@@ -776,30 +779,30 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 
 		quadricAdd(vertex_quadrics[r1], vertex_quadrics[r0]);
 
-		if (vertex_kind[c.v0] == Kind_Seam)
+		if (vertex_kind[i0] == Kind_Seam)
 		{
 			// remap v0 to v1 and seam pair of v0 to seam pair of v1
-			unsigned int s0 = wedge[c.v0];
-			unsigned int s1 = wedge[c.v1];
+			unsigned int s0 = wedge[i0];
+			unsigned int s1 = wedge[i1];
 
-			assert(s0 != c.v0 && s1 != c.v1);
-			assert(wedge[s0] == c.v0 && wedge[s1] == c.v1);
+			assert(s0 != i0 && s1 != i1);
+			assert(wedge[s0] == i0 && wedge[s1] == i1);
 
-			collapse_remap[c.v0] = c.v1;
+			collapse_remap[i0] = i1;
 			collapse_remap[s0] = s1;
 		}
 		else
 		{
-			assert(wedge[c.v0] == c.v0);
+			assert(wedge[i0] == i0);
 
-			collapse_remap[c.v0] = c.v1;
+			collapse_remap[i0] = i1;
 		}
 
 		collapse_locked[r0] = 1;
 		collapse_locked[r1] = 1;
 
 		// border edges collapse 1 triangle, other edges collapse 2 or more
-		triangle_collapses += (vertex_kind[c.v0] == Kind_Border) ? 1 : 2;
+		triangle_collapses += (vertex_kind[i0] == Kind_Border) ? 1 : 2;
 		edge_collapses++;
 	}
 
