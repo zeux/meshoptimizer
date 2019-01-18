@@ -156,9 +156,9 @@ static void writeTriangle(void* destination, size_t offset, size_t index_size, u
 {
 	if (index_size == 2)
 	{
-		static_cast<unsigned short*>(destination)[offset + 0] = static_cast<unsigned short>(a);
-		static_cast<unsigned short*>(destination)[offset + 1] = static_cast<unsigned short>(b);
-		static_cast<unsigned short*>(destination)[offset + 2] = static_cast<unsigned short>(c);
+		static_cast<unsigned short*>(destination)[offset + 0] = (unsigned short)(a);
+		static_cast<unsigned short*>(destination)[offset + 1] = (unsigned short)(b);
+		static_cast<unsigned short*>(destination)[offset + 2] = (unsigned short)(c);
 	}
 	else
 	{
@@ -261,7 +261,7 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 
 			int fec = (fc >= 1 && fc < 15) ? fc : (c == next) ? (next++, 0) : 15;
 
-			*code++ = static_cast<unsigned char>((fe << 4) | fec);
+			*code++ = (unsigned char)((fe << 4) | fec);
 
 #if TRACE
 			codestats[code[-1]]++;
@@ -295,17 +295,17 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 			int fec = (fc >= 0 && fc < 14) ? (fc + 1) : (c == next) ? (next++, 0) : 15;
 
 			// we encode feb & fec in 4 bits using a table if possible, and as a full byte otherwise
-			unsigned char codeaux = static_cast<unsigned char>((feb << 4) | fec);
+			unsigned char codeaux = (unsigned char)((feb << 4) | fec);
 			int codeauxindex = getCodeAuxIndex(codeaux, codeaux_table);
 
 			// <14 encodes an index into codeaux table, 14 encodes fea=0, 15 encodes fea=15
 			if (fea == 0 && codeauxindex >= 0 && codeauxindex < 14)
 			{
-				*code++ = static_cast<unsigned char>((15 << 4) | codeauxindex);
+				*code++ = (unsigned char)((15 << 4) | codeauxindex);
 			}
 			else
 			{
-				*code++ = static_cast<unsigned char>((15 << 4) | 14 | fea);
+				*code++ = (unsigned char)((15 << 4) | 14 | fea);
 				*data++ = codeaux;
 			}
 
