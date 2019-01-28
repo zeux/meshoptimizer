@@ -359,6 +359,29 @@ void packMesh(std::vector<PackedVertexOct>& pv, const std::vector<Vertex>& verti
 
 void simplify(const Mesh& mesh)
 {
+	Mesh lod;
+
+	double start = timestamp();
+
+	float threshold = 0.2f;
+	size_t target_index_count = size_t(mesh.indices.size() * threshold);
+	float target_error = 1e-3f;
+
+	lod.indices.resize(mesh.indices.size());
+	lod.indices.resize(meshopt_simplify(&lod.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error));
+
+	lod.vertices.resize(mesh.vertices.size());
+	lod.vertices.resize(meshopt_optimizeVertexFetch(&lod.vertices[0], &lod.indices[0], lod.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex)));
+
+	double end = timestamp();
+
+	printf("%-9s: %d triangles => %d triangles in %.2f msec\n",
+	       "Simplify",
+	       int(mesh.indices.size() / 3), int(lod.indices.size() / 3), (end - start) * 1000);
+}
+
+void simplifyComplete(const Mesh& mesh)
+{
 	static const size_t lod_count = 5;
 
 	double start = timestamp();
@@ -434,7 +457,7 @@ void simplify(const Mesh& mesh)
 	double end = timestamp();
 
 	printf("%-9s: %d triangles => %d LOD levels down to %d triangles in %.2f msec, optimized in %.2f msec\n",
-	       "Simplify",
+	       "SimplifyC",
 	       int(lod_index_counts[0]) / 3, int(lod_count), int(lod_index_counts[lod_count - 1]) / 3,
 	       (middle - start) * 1000, (end - middle) * 1000);
 
@@ -851,6 +874,7 @@ void process(const char* path)
 	encodeVertex<PackedVertexOct>(copy, "O");
 
 	simplify(mesh);
+	simplifyComplete(mesh);
 
 	if (path)
 		processDeinterleaved(path);
@@ -863,15 +887,6 @@ void processDev(const char* path)
 		return;
 
 	simplify(mesh);
-	return;
-
-	Mesh copy = mesh;
-	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
-	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
-
-	encodeIndex(copy);
-	encodeVertex<PackedVertex>(copy, "");
-	encodeVertex<PackedVertexOct>(copy, "O");
 }
 
 int main(int argc, char** argv)
