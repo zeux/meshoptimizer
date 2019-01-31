@@ -368,7 +368,7 @@ void simplify(const Mesh& mesh)
 	float target_error = 1e-3f;
 
 	lod.indices.resize(mesh.indices.size());
-	lod.indices.resize(meshopt_simplify(&lod.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error));
+	lod.indices.resize(meshopt_simplifySloppy(&lod.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error));
 
 	lod.vertices.resize(mesh.vertices.size());
 	lod.vertices.resize(meshopt_optimizeVertexFetch(&lod.vertices[0], &lod.indices[0], lod.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex)));
@@ -377,6 +377,29 @@ void simplify(const Mesh& mesh)
 
 	printf("%-9s: %d triangles => %d triangles in %.2f msec\n",
 	       "Simplify",
+	       int(mesh.indices.size() / 3), int(lod.indices.size() / 3), (end - start) * 1000);
+}
+
+void simplifySloppy(const Mesh& mesh)
+{
+	Mesh lod;
+
+	double start = timestamp();
+
+	float threshold = 0.2f;
+	size_t target_index_count = size_t(mesh.indices.size() * threshold);
+	float target_error = 1e-3f;
+
+	lod.indices.resize(mesh.indices.size());
+	lod.indices.resize(meshopt_simplifySloppy(&lod.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error));
+
+	lod.vertices.resize(mesh.vertices.size());
+	lod.vertices.resize(meshopt_optimizeVertexFetch(&lod.vertices[0], &lod.indices[0], lod.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex)));
+
+	double end = timestamp();
+
+	printf("%-9s: %d triangles => %d triangles in %.2f msec\n",
+	       "SimplifyS",
 	       int(mesh.indices.size() / 3), int(lod.indices.size() / 3), (end - start) * 1000);
 }
 
@@ -874,6 +897,7 @@ void process(const char* path)
 	encodeVertex<PackedVertexOct>(copy, "O");
 
 	simplify(mesh);
+	simplifySloppy(mesh);
 	simplifyComplete(mesh);
 
 	if (path)
@@ -886,7 +910,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	simplify(mesh);
+	simplifySloppy(mesh);
 }
 
 int main(int argc, char** argv)
