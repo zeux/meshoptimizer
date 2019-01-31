@@ -11,12 +11,20 @@
 
 #include <GLFW/glfw3.h>
 
+#define CGLTF_IMPLEMENTATION
+#include "cgltf.h"
+
 #ifdef _WIN32
 #pragma comment(lib, "opengl32.lib")
 #endif
 
 extern unsigned char* meshopt_simplifyDebugKind;
 extern unsigned int* meshopt_simplifyDebugLoop;
+
+#ifndef TRACE
+unsigned char* meshopt_simplifyDebugKind;
+unsigned int* meshopt_simplifyDebugLoop;
+#endif
 
 struct Options
 {
@@ -97,6 +105,182 @@ Mesh parseObj(const char* path)
 	meshopt_remapVertexBuffer(&result.vertices[0], &vertices[0], total_indices, sizeof(Vertex), &remap[0]);
 
 	return result;
+}
+
+cgltf_accessor* getAccessor(const cgltf_attribute* attributes, size_t attribute_count, cgltf_attribute_type type, int index = 0)
+{
+	for (size_t i = 0; i < attribute_count; ++i)
+		if (attributes[i].type == type && attributes[i].index == index)
+			return attributes[i].data;
+
+	return 0;
+}
+
+template <typename T>
+const T* getComponentPtr(const cgltf_accessor* a)
+{
+	const char* buffer = (char*)a->buffer_view->buffer->data;
+	size_t offset = a->offset + a->buffer_view->offset;
+
+	return reinterpret_cast<const T*>(&buffer[offset]);
+}
+
+Mesh parseGltfC(const char* path)
+{
+	cgltf_options options = {};
+	cgltf_data* data = 0;
+	cgltf_result res = cgltf_parse_file(&options, path, &data);
+
+	if (res != cgltf_result_success)
+	{
+		return Mesh();
+	}
+
+	res = cgltf_load_buffers(&options, data, path);
+	if (res != cgltf_result_success)
+	{
+		cgltf_free(data);
+		return Mesh();
+	}
+
+	res = cgltf_validate(data);
+	if (res != cgltf_result_success)
+	{
+		cgltf_free(data);
+		return Mesh();
+	}
+
+	size_t total_vertices = 0;
+	size_t total_indices = 0;
+
+	for (size_t ni = 0; ni < data->nodes_count; ++ni)
+	{
+		if (!data->nodes[ni].mesh)
+			continue;
+
+		const cgltf_mesh& mesh = *data->nodes[ni].mesh;
+
+		for (size_t pi = 0; pi < mesh.primitives_count; ++pi)
+		{
+			const cgltf_primitive& primitive = mesh.primitives[pi];
+
+			cgltf_accessor* ai = primitive.indices;
+			cgltf_accessor* ap = getAccessor(primitive.attributes, primitive.attributes_count, cgltf_attribute_type_position);
+
+			if (!ai || !ap)
+				continue;
+
+			total_vertices += ap->count;
+			total_indices += ai->count;
+		}
+	}
+
+	Mesh result;
+	result.vertices.resize(total_vertices);
+	result.indices.resize(total_indices);
+
+	size_t vertex_offset = 0;
+	size_t index_offset = 0;
+
+	for (size_t ni = 0; ni < data->nodes_count; ++ni)
+	{
+		if (!data->nodes[ni].mesh)
+			continue;
+
+		const cgltf_mesh& mesh = *data->nodes[ni].mesh;
+
+		float transform[16];
+		cgltf_node_transform_world(&data->nodes[ni], transform);
+
+		for (size_t pi = 0; pi < mesh.primitives_count; ++pi)
+		{
+			const cgltf_primitive& primitive = mesh.primitives[pi];
+
+			cgltf_accessor* ai = primitive.indices;
+			cgltf_accessor* ap = getAccessor(primitive.attributes, primitive.attributes_count, cgltf_attribute_type_position);
+
+			if (!ai || !ap)
+				continue;
+
+			if (ai->component_type == cgltf_component_type_r_32u)
+			{
+				const unsigned int* ptr = getComponentPtr<unsigned int>(ai);
+
+				for (size_t i = 0; i < ai->count; ++i)
+					result.indices[index_offset + i] = unsigned(vertex_offset + ptr[i]);
+			}
+			else
+			{
+				const unsigned short* ptr = getComponentPtr<unsigned short>(ai);
+
+				for (size_t i = 0; i < ai->count; ++i)
+					result.indices[index_offset + i] = unsigned(vertex_offset + ptr[i]);
+			}
+
+			{
+				const float* ptr = getComponentPtr<float>(ap);
+
+				for (size_t i = 0; i < ap->count; ++i)
+				{
+					result.vertices[vertex_offset + i].px = ptr[0] * transform[0] + ptr[1] * transform[4] + ptr[2] * transform[8] + transform[12];
+					result.vertices[vertex_offset + i].py = ptr[0] * transform[1] + ptr[1] * transform[5] + ptr[2] * transform[9] + transform[13];
+					result.vertices[vertex_offset + i].pz = ptr[0] * transform[2] + ptr[1] * transform[6] + ptr[2] * transform[10] + transform[14];
+					ptr += ap->stride / 4;
+				}
+			}
+
+			if (cgltf_accessor* an = getAccessor(primitive.attributes, primitive.attributes_count, cgltf_attribute_type_normal))
+			{
+				const float* ptr = getComponentPtr<float>(an);
+
+				for (size_t i = 0; i < ap->count; ++i)
+				{
+					result.vertices[vertex_offset + i].nx = ptr[0] * transform[0] + ptr[1] * transform[4] + ptr[2] * transform[8];
+					result.vertices[vertex_offset + i].ny = ptr[0] * transform[1] + ptr[1] * transform[5] + ptr[2] * transform[9];
+					result.vertices[vertex_offset + i].nz = ptr[0] * transform[2] + ptr[1] * transform[6] + ptr[2] * transform[10];
+					ptr += an->stride / 4;
+				}
+			}
+
+			if (cgltf_accessor* at = getAccessor(primitive.attributes, primitive.attributes_count, cgltf_attribute_type_texcoord))
+			{
+				const float* ptr = getComponentPtr<float>(at);
+
+				for (size_t i = 0; i < ap->count; ++i)
+				{
+					result.vertices[vertex_offset + i].tx = ptr[0];
+					result.vertices[vertex_offset + i].ty = ptr[1];
+					ptr += at->stride / 4;
+				}
+			}
+
+			vertex_offset += ap->count;
+			index_offset += ai->count;
+		}
+	}
+
+	std::vector<unsigned int> remap(total_indices);
+	size_t unique_vertices = meshopt_generateVertexRemap(&remap[0], &result.indices[0], total_indices, &result.vertices[0], total_vertices, sizeof(Vertex));
+
+	meshopt_remapIndexBuffer(&result.indices[0], &result.indices[0], total_indices, &remap[0]);
+	meshopt_remapVertexBuffer(&result.vertices[0], &result.vertices[0], total_vertices, sizeof(Vertex), &remap[0]);
+
+	result.vertices.resize(unique_vertices);
+
+	cgltf_free(data);
+
+	return result;
+}
+
+Mesh loadMesh(const char* path)
+{
+	if (strstr(path, ".obj"))
+		return parseObj(path);
+
+	if (strstr(path, ".gltf") || strstr(path, ".glb"))
+		return parseGltfC(path);
+
+	return Mesh();
 }
 
 bool saveObj(const Mesh& mesh, const char* path)
@@ -386,7 +570,7 @@ int main(int argc, char** argv)
 		File& f = files.back();
 
 		f.path = argv[i];
-		f.basemesh = parseObj(f.path);
+		f.basemesh = loadMesh(f.path);
 		f.lodmesh = optimize(f.basemesh, 0);
 
 		basetriangles += unsigned(f.basemesh.indices.size() / 3);
