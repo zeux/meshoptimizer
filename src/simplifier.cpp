@@ -851,6 +851,64 @@ static void remapEdgeLoops(unsigned int* loop, size_t vertex_count, const unsign
 	}
 }
 
+struct HashCell
+{
+	unsigned int id;
+	unsigned int cell;
+
+	bool operator==(const HashCell& other) const
+	{
+		return id == other.id;
+	}
+};
+
+struct HashCellHasher
+{
+	size_t hash(const HashCell& cell) const
+	{
+		// TODO: WE NEED TO SCRAMBLE THIS
+		return cell.id;
+	}
+
+	bool equal(const HashCell& lhs, const HashCell& rhs) const
+	{
+		return lhs.id == rhs.id;
+	}
+};
+
+struct Triangle
+{
+	unsigned int a, b, c;
+
+	bool operator==(const Triangle& other) const
+	{
+		return memcmp(this, &other, sizeof(Triangle)) == 0;
+	}
+};
+
+struct TriangleHasher
+{
+	size_t hash(const Triangle& tri) const
+	{
+		// TODO: WE NEED TO SCRAMBLE THIS
+		return tri.a ^ tri.b ^ tri.c;
+	}
+
+	bool equal(const Triangle& lhs, const Triangle& rhs) const
+	{
+		return memcmp(&lhs, &rhs, sizeof(Triangle)) == 0;
+	}
+};
+
+static unsigned int getCellId(const Vector3& v, int mask)
+{
+	int xi = int(v.x * 1023.5 + 0.5f);
+	int yi = int(v.y * 1023.5 + 0.5f);
+	int zi = int(v.z * 1023.5 + 0.5f);
+
+	return ((xi & mask) << 20) | ((yi & mask) << 10) | (zi & mask);
+}
+
 } // namespace meshopt
 
 #if TRACE
@@ -1004,4 +1062,149 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 #endif
 
 	return result_count;
+}
+
+size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error)
+{
+	(void)target_error; // TODO
+	(void)target_index_count; // TODO
+
+	using namespace meshopt;
+
+	assert(index_count % 3 == 0);
+	assert(vertex_positions_stride > 0 && vertex_positions_stride <= 256);
+	assert(vertex_positions_stride % sizeof(float) == 0);
+	assert(target_index_count <= index_count);
+
+	meshopt_Allocator allocator;
+
+	Vector3* vertex_positions = allocator.allocate<Vector3>(vertex_count);
+	rescalePositions(vertex_positions, vertex_positions_data, vertex_count, vertex_positions_stride);
+
+	unsigned int* vertex_cells = allocator.allocate<unsigned int>(vertex_count);
+
+	size_t table_size = hashBuckets2(vertex_count);
+	HashCell* table = allocator.allocate<HashCell>(table_size);
+
+	// first pass: fill cell ids and vertex ids
+	size_t cell_count = 0;
+
+	int mask = 0b1111111111;
+	HashCellHasher hasher;
+	HashCell dummy = { ~0u, 0 };
+
+	for (int pass = 9; pass >= 0; --pass)
+	{
+		memset(table, -1, table_size * sizeof(HashCell));
+
+		int maski = mask >> pass;
+
+		cell_count = 0;
+
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			HashCell cell = { getCellId(vertex_positions[i], maski), 0 };
+			HashCell* entry = hashLookup2(table, table_size, hasher, cell, dummy);
+
+			if (entry->id == ~0u)
+			{
+				entry->id = cell.id;
+				entry->cell = unsigned(cell_count++);
+			}
+
+			vertex_cells[i] = entry->cell;
+		}
+
+#if TRACE
+		printf("pass %d: cell count %d\n", pass, int(cell_count));
+#endif
+	}
+
+	// todo: we can estimate # of triangles from index buffer and vertex_cells; we can use that to trim bits from mask
+	// we can also use error as a guide - say, call it normalized distance deviation, stop at mask accordingly!
+
+	// second pass: build a quadric for each target cell
+	Quadric* cell_quadrics = allocator.allocate<Quadric>(cell_count);
+	memset(cell_quadrics, 0, cell_count * sizeof(Quadric));
+
+	fillFaceQuadrics(cell_quadrics, indices, index_count, vertex_positions, vertex_cells);
+
+	// third pass: for each target cell, find the vertex with the minimal error
+	unsigned int* cell_remap = allocator.allocate<unsigned int>(cell_count);
+	memset(cell_remap, -1, cell_count * sizeof(unsigned int));
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		unsigned int cell = vertex_cells[i];
+
+		if (cell_remap[cell] == ~0u)
+		{
+			cell_remap[cell] = unsigned(i);
+		}
+		else
+		{
+			unsigned int j = cell_remap[cell];
+
+			float ei = quadricError(cell_quadrics[cell], vertex_positions[i]);
+			float ej = quadricError(cell_quadrics[cell], vertex_positions[j]);
+
+			cell_remap[cell] = (ei < ej) ? unsigned(i) : j;
+		}
+	}
+
+	// fourth pass: collapse triangles!
+	// note that we need to filter out triangles that we've already output because we very frequently generate redundant triangles between cells :(
+	size_t tritable_size = hashBuckets2(index_count / 3); // TODO what's the real upper bound?
+	Triangle* tritable = allocator.allocate<Triangle>(tritable_size);
+	memset(tritable, -1, tritable_size * sizeof(Triangle));
+
+	Triangle tridummy = { ~0u, ~0u, ~0u };
+	TriangleHasher trihasher;
+
+	size_t write = 0;
+	size_t potential = 0;
+
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		unsigned int v0 = cell_remap[vertex_cells[indices[i + 0]]];
+		unsigned int v1 = cell_remap[vertex_cells[indices[i + 1]]];
+		unsigned int v2 = cell_remap[vertex_cells[indices[i + 2]]];
+
+		if (v0 != v1 && v0 != v2 && v1 != v2)
+		{
+			potential++;
+
+			Triangle tri = { v0, v1, v2 };
+
+			if (tri.b < tri.a && tri.b < tri.c)
+			{
+				unsigned int t = tri.a;
+				tri.a = tri.b, tri.b = tri.c, tri.c = t;
+			}
+			else if (tri.c < tri.a && tri.c < tri.b)
+			{
+				unsigned int t = tri.c;
+				tri.c = tri.b, tri.b = tri.a, tri.a = t;
+			}
+
+			Triangle* entry = hashLookup2(tritable, tritable_size, trihasher, tri, tridummy);
+
+			if (entry->a == ~0u)
+			{
+				*entry = tri;
+
+				destination[write + 0] = v0;
+				destination[write + 1] = v1;
+				destination[write + 2] = v2;
+				write += 3;
+			}
+		}
+	}
+
+#if TRACE
+	printf("source: %d vertices, %d triangles\n", int(vertex_count), int(index_count / 3));
+	printf("target: %d cells, %d potential triangles, %d filtered triangles\n", int(cell_count), int(potential), int(write / 3));
+#endif
+
+	return write;
 }
