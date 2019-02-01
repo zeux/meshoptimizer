@@ -900,15 +900,6 @@ struct TriangleHasher
 	}
 };
 
-static unsigned int getCellId(const Vector3& v, int mask)
-{
-	int xi = int(v.x * 1023.5 + 0.5f);
-	int yi = int(v.y * 1023.5 + 0.5f);
-	int zi = int(v.z * 1023.5 + 0.5f);
-
-	return ((xi & mask) << 20) | ((yi & mask) << 10) | (zi & mask);
-}
-
 } // namespace meshopt
 
 #if TRACE
@@ -1076,6 +1067,12 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	assert(vertex_positions_stride % sizeof(float) == 0);
 	assert(target_index_count <= index_count);
 
+	// we expect to get ~2 triangles/vertex in the output
+	size_t target_cell_count = target_index_count / 6;
+
+	if (target_cell_count == 0)
+		return 0;
+
 	meshopt_Allocator allocator;
 
 	Vector3* vertex_positions = allocator.allocate<Vector3>(vertex_count);
@@ -1089,21 +1086,45 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	// first pass: fill cell ids and vertex ids
 	size_t cell_count = 0;
 
-	int mask = 0b1111111111;
 	HashCellHasher hasher;
 	HashCell dummy = { ~0u, 0 };
 
-	for (int pass = 9; pass >= 0; --pass)
+#if TRACE
+	printf("source: %d vertices, %d triangles\n", int(vertex_count), int(index_count / 3));
+	printf("target: %d cells, %d triangles\n", int(target_cell_count), int(target_index_count / 3));
+#endif
+
+	float cell_min_size = 1.f / 1024.f;
+	size_t cell_min_count = vertex_count;
+	float cell_max_size = 1.f;
+	size_t cell_max_count = 1;
+
+	for (int pass = 0; pass <= 10; ++pass)
 	{
 		memset(table, -1, table_size * sizeof(HashCell));
 
-		int maski = mask >> pass;
-
+		float cell_size = (cell_min_size + cell_max_size) * 0.5f;
 		cell_count = 0;
+
+		if (pass == 10)
+			cell_size = cell_max_size;
+
+		// TODO: ROUNDING/BOUNDARY CONDITIONS?
+		float cell_scale = 1.f / cell_size;
+		cell_scale = cell_scale > 1023.5f ? 1023.5f : cell_scale;
+		cell_scale = cell_scale < 0.5f ? 0 : cell_scale;
 
 		for (size_t i = 0; i < vertex_count; ++i)
 		{
-			HashCell cell = { getCellId(vertex_positions[i], maski), 0 };
+			const Vector3& v = vertex_positions[i];
+
+			int xi = int(v.x * cell_scale + 0.5f);
+			int yi = int(v.y * cell_scale + 0.5f);
+			int zi = int(v.z * cell_scale + 0.5f);
+
+			unsigned int id = (xi << 20) | (yi << 10) | zi;
+
+			HashCell cell = { id, 0 };
 			HashCell* entry = hashLookup2(table, table_size, hasher, cell, dummy);
 
 			if (entry->id == ~0u)
@@ -1116,9 +1137,23 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 		}
 
 #if TRACE
-		printf("pass %d: cell count %d\n", pass, int(cell_count));
+		printf("pass %d: cell count %d, cell size %.3f\n", pass, int(cell_count), cell_size);
 #endif
+
+		if (cell_count < target_cell_count)
+		{
+			cell_max_size = cell_size;
+			cell_max_count = cell_count;
+		}
+		else
+		{
+			cell_min_size = cell_size;
+			cell_min_count = cell_count;
+		}
 	}
+
+	(void)cell_min_count;
+	(void)cell_max_count;
 
 	// todo: we can estimate # of triangles from index buffer and vertex_cells; we can use that to trim bits from mask
 	// we can also use error as a guide - say, call it normalized distance deviation, stop at mask accordingly!
@@ -1202,8 +1237,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	}
 
 #if TRACE
-	printf("source: %d vertices, %d triangles\n", int(vertex_count), int(index_count / 3));
-	printf("target: %d cells, %d potential triangles, %d filtered triangles\n", int(cell_count), int(potential), int(write / 3));
+	printf("result: %d cells, %d potential triangles, %d filtered triangles\n", int(cell_count), int(potential), int(write / 3));
 #endif
 
 	return write;
