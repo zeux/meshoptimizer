@@ -17,6 +17,7 @@
 // This work is based on:
 // Michael Garland and Paul S. Heckbert. Surface simplification using quadric error metrics. 1997
 // Michael Garland. Quadric-based polygonal surface simplification. 1999
+// Matthias Teschner, Bruno Heidelberger, Matthias Mueller, Danat Pomeranets, Markus Gross. Optimized Spatial Hashing for Collision Detection of Deformable Objects. 2003
 namespace meshopt
 {
 
@@ -866,13 +867,12 @@ struct HashCellHasher
 {
 	size_t hash(const HashCell& cell) const
 	{
-		unsigned int a = cell.id;
-		a = (a ^ 61) ^ (a >> 16);
-		a = a + (a << 3);
-		a = a ^ (a >> 4);
-		a = a * 0x27d4eb2d;
-		a = a ^ (a >> 15);
-		return a;
+		// MurmurHash2 finalizer
+		unsigned int h = cell.id;
+		h ^= h >> 13;
+		h *= 0x5bd1e995;
+		h ^= h >> 15;
+		return h;
 	}
 
 	bool equal(const HashCell& lhs, const HashCell& rhs) const
@@ -895,8 +895,7 @@ struct TriangleHasher
 {
 	size_t hash(const Triangle& tri) const
 	{
-		// TODO: WE NEED TO SCRAMBLE THIS
-		return tri.a ^ tri.b ^ tri.c;
+		return (tri.a * 73856093) ^ (tri.b * 19349663) ^ (tri.c * 83492791);
 	}
 
 	bool equal(const Triangle& lhs, const Triangle& rhs) const
