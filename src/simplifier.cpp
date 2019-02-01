@@ -866,8 +866,13 @@ struct HashCellHasher
 {
 	size_t hash(const HashCell& cell) const
 	{
-		// TODO: WE NEED TO SCRAMBLE THIS
-		return cell.id;
+		unsigned int a = cell.id;
+		a = (a ^ 61) ^ (a >> 16);
+		a = a + (a << 3);
+		a = a ^ (a >> 4);
+		a = a * 0x27d4eb2d;
+		a = a ^ (a >> 15);
+		return a;
 	}
 
 	bool equal(const HashCell& lhs, const HashCell& rhs) const
@@ -1055,6 +1060,15 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	return result_count;
 }
 
+// Should we target cell count vs index count? targeting cell count is faster, but targeting index count gets us more precise results
+#define SLOP_TARGET_CELLS 1
+
+// Should we filter duplicate triangles? Normally there's few of them, but in some meshes there's a lot. Filtering is done after targeting...
+#define SLOP_FILTER_DUPLICATES 0
+
+// Should we cache quadric errors?
+#define SLOP_CACHE_ERRORS 1
+
 size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error)
 {
 	(void)target_error; // TODO
@@ -1080,14 +1094,15 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 
 	unsigned int* vertex_cells = allocator.allocate<unsigned int>(vertex_count);
 
+	// TODO: we don't need a table this large if we're limiting the number of unique elements we're adding to the table
 	size_t table_size = hashBuckets2(vertex_count);
 	HashCell* table = allocator.allocate<HashCell>(table_size);
 
-	// first pass: fill cell ids and vertex ids
-	size_t cell_count = 0;
-
 	HashCellHasher hasher;
 	HashCell dummy = { ~0u, 0 };
+
+	// first pass: fill cell ids and vertex ids
+	size_t cell_count = 0;
 
 #if TRACE
 	printf("source: %d vertices, %d triangles\n", int(vertex_count), int(index_count / 3));
@@ -1137,9 +1152,10 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 		}
 
 #if TRACE
-		printf("pass %d: cell count %d, cell size %.3f\n", pass, int(cell_count), cell_size);
+		printf("pass %d: cell count %d, cell size %.4f\n", pass, int(cell_count), cell_size);
 #endif
 
+#if SLOP_TARGET_CELLS
 		if (cell_count < target_cell_count)
 		{
 			cell_max_size = cell_size;
@@ -1150,6 +1166,28 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 			cell_min_size = cell_size;
 			cell_min_count = cell_count;
 		}
+#else
+		size_t potential = 0;
+		for (size_t i = 0; i < index_count; i += 3)
+		{
+			unsigned int v0 = vertex_cells[indices[i + 0]];
+			unsigned int v1 = vertex_cells[indices[i + 1]];
+			unsigned int v2 = vertex_cells[indices[i + 2]];
+
+			potential += (v0 != v1 && v0 != v2 && v1 != v2);
+		}
+
+		if (potential < target_index_count / 3)
+		{
+			cell_max_size = cell_size;
+			cell_max_count = cell_count;
+		}
+		else
+		{
+			cell_min_size = cell_size;
+			cell_min_count = cell_count;
+		}
+#endif
 	}
 
 	(void)cell_min_count;
@@ -1168,6 +1206,10 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	unsigned int* cell_remap = allocator.allocate<unsigned int>(cell_count);
 	memset(cell_remap, -1, cell_count * sizeof(unsigned int));
 
+#if SLOP_CACHE_ERRORS
+	float* cell_errors = allocator.allocate<float>(cell_count);
+#endif
+
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
 		unsigned int cell = vertex_cells[i];
@@ -1175,20 +1217,33 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 		if (cell_remap[cell] == ~0u)
 		{
 			cell_remap[cell] = unsigned(i);
+
+#if SLOP_CACHE_ERRORS
+			cell_errors[cell] = quadricError(cell_quadrics[cell], vertex_positions[i]);
+#endif
 		}
 		else
 		{
 			unsigned int j = cell_remap[cell];
 
+#if SLOP_CACHE_ERRORS
+			float ei = quadricError(cell_quadrics[cell], vertex_positions[i]);
+			float ej = cell_errors[cell];
+
+			cell_remap[cell] = (ei < ej) ? unsigned(i) : j;
+			cell_errors[cell] = (ei < ej) ? ei : ej;
+#else
 			float ei = quadricError(cell_quadrics[cell], vertex_positions[i]);
 			float ej = quadricError(cell_quadrics[cell], vertex_positions[j]);
 
 			cell_remap[cell] = (ei < ej) ? unsigned(i) : j;
+#endif
 		}
 	}
 
 	// fourth pass: collapse triangles!
 	// note that we need to filter out triangles that we've already output because we very frequently generate redundant triangles between cells :(
+#if SLOP_FILTER_DUPLICATES
 	size_t tritable_size = hashBuckets2(index_count / 3); // TODO what's the real upper bound?
 	Triangle* tritable = allocator.allocate<Triangle>(tritable_size);
 	memset(tritable, -1, tritable_size * sizeof(Triangle));
@@ -1235,6 +1290,27 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 			}
 		}
 	}
+#else
+	size_t write = 0;
+
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		unsigned int v0 = cell_remap[vertex_cells[indices[i + 0]]];
+		unsigned int v1 = cell_remap[vertex_cells[indices[i + 1]]];
+		unsigned int v2 = cell_remap[vertex_cells[indices[i + 2]]];
+
+		if (v0 != v1 && v0 != v2 && v1 != v2)
+		{
+			destination[write + 0] = v0;
+			destination[write + 1] = v1;
+			destination[write + 2] = v2;
+			write += 3;
+		}
+	}
+
+	size_t potential = write / 3;
+	(void)potential;
+#endif
 
 #if TRACE
 	printf("result: %d cells, %d potential triangles, %d filtered triangles\n", int(cell_count), int(potential), int(write / 3));
