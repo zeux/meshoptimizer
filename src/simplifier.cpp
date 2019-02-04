@@ -905,6 +905,19 @@ struct TriangleHasher
 	}
 };
 
+struct CoarseCell
+{
+	union {
+		float error;
+		unsigned int errorui;
+	};
+	unsigned int degenerate_triangles;
+	unsigned int best_vertex;
+	// TODO: it simplifies the algorithm to have this, but it's a lot of memory; can we do better?
+	unsigned int fine_cells[8];
+	unsigned int fine_cell_count;
+};
+
 } // namespace meshopt
 
 #if TRACE
@@ -1409,19 +1422,6 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	}
 
 	// let's create an array of coarse cells
-	struct CoarseCell
-	{
-		union {
-			float error;
-			unsigned int errorui;
-		};
-		unsigned int degenerate_triangles;
-		unsigned int best_vertex;
-		// TODO: it simplifies the algorithm to have this, but it's a lot of memory; can we do better?
-		unsigned int fine_cells[8];
-		unsigned int fine_cell_count;
-	};
-
 	CoarseCell* coarse_cells = allocator.allocate<CoarseCell>(cell_count);
 	size_t coarse_cell_count = 0;
 
