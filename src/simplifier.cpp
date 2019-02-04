@@ -1078,6 +1078,9 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 // How many binary search passes do we perform? We currently run a fixed number for simplicity/robustness
 #define SLOP_PASSES 10
 
+// Should we adaptively merge cells before outputting the final geometry?
+#define SLOP_MERGE_ADAPTIVE 1
+
 size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error)
 {
 	(void)target_error;       // TODO
@@ -1104,6 +1107,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	unsigned int* vertex_cells = allocator.allocate<unsigned int>(vertex_count);
 
 	// TODO: we don't need a table this large if we're limiting the number of unique elements we're adding to the table
+	// Especially if we can alloc this *after* the counting pass, with an approx *2 size or whatever?
 	size_t table_size = hashBuckets2(vertex_count);
 	HashCell* table = allocator.allocate<HashCell>(table_size);
 
@@ -1158,7 +1162,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 		}
 
 #if TRACE
-		printf("pass %d: cell count %d, cell size %.4f\n", pass, int(cell_count), powf(2.f, -pass));
+		printf("pass %d: cell count %d, cell size %.4f\n", pass, int(cell_count), powf(2.f, -float(pass)));
 #endif
 
 		if (cell_count >= target_cell_count)
@@ -1220,6 +1224,8 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	}
 #endif
 #else
+	int mask = 0x3FFFFFFF; // all 10-bit components set
+
 #if SLOP_TARGET_CELLS_APPROX
 	size_t count_table_size = hashBuckets2(target_cell_count * 4);
 	unsigned char* count_table = allocator.allocate<unsigned char>(count_table_size);
@@ -1383,6 +1389,221 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 #endif
 		}
 	}
+
+#if SLOP_MERGE_ADAPTIVE
+	// TODO: if mask only has 1 bit set, then we can't merge anything because our grid basically has 1 cell
+	int coarse_mask = mask;
+
+	for (int bit = 0; bit < 10; ++bit)
+	{
+		if (mask & (1 << bit))
+		{
+			coarse_mask &= ~(1 << (bit + 0));
+			coarse_mask &= ~(1 << (bit + 10));
+			coarse_mask &= ~(1 << (bit + 20));
+			break;
+		}
+	}
+
+	// let's create an array of coarse cells
+	struct CoarseCell
+	{
+		union {
+			float error;
+			unsigned int errorui;
+		};
+		unsigned int degenerate_triangles;
+		unsigned int best_cell;
+		// TODO: it simplifies the algorithm to have this, but it's a lot of memory; can we do better?
+		unsigned int fine_cells[8];
+		unsigned int fine_cell_count;
+	};
+
+	CoarseCell* coarse_cells = allocator.allocate<CoarseCell>(cell_count);
+	size_t coarse_cell_count = 0;
+
+	size_t coarse_table_size = hashBuckets2(cell_count);
+	HashCell* coarse_table = allocator.allocate<HashCell>(coarse_table_size);
+
+	memset(coarse_table, -1, sizeof(HashCell) * coarse_table_size);
+
+	unsigned int* fine_to_coarse = allocator.allocate<unsigned int>(cell_count);
+
+	for (size_t i = 0; i < table_size; ++i)
+	{
+		if (table[i].id == ~0u)
+			continue;
+
+		unsigned int coarse_id = table[i].id & coarse_mask;
+		HashCell cell = {coarse_id, 0};
+		HashCell* entry = hashLookup2(coarse_table, coarse_table_size, hasher, cell, dummy);
+
+		if (entry->id == ~0u)
+		{
+			CoarseCell coarse = {};
+			coarse_cells[coarse_cell_count] = coarse;
+
+			entry->id = cell.id;
+			entry->cell = unsigned(coarse_cell_count++);
+		}
+
+		assert(coarse_cells[entry->cell].fine_cell_count < 8);
+		coarse_cells[entry->cell].fine_cells[coarse_cells[entry->cell].fine_cell_count++] = table[i].cell;
+
+		fine_to_coarse[table[i].cell] = entry->cell;
+	}
+
+	// let's compute current triangle count and also measure # of degenerate triangles for each coarse cell
+	size_t current_triangle_count = 0;
+
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		unsigned int c0 = vertex_cells[indices[i + 0]];
+		unsigned int c1 = vertex_cells[indices[i + 1]];
+		unsigned int c2 = vertex_cells[indices[i + 2]];
+
+		if (c0 != c1 && c0 != c2 && c1 != c2)
+		{
+			current_triangle_count++;
+
+			unsigned int cc0 = fine_to_coarse[c0];
+			unsigned int cc1 = fine_to_coarse[c1];
+			unsigned int cc2 = fine_to_coarse[c2];
+
+			if (cc0 == cc1)
+			{
+				coarse_cells[cc0].degenerate_triangles++;
+			}
+			else if (cc0 == cc2)
+			{
+				coarse_cells[cc0].degenerate_triangles++;
+			}
+			else if (cc1 == cc2)
+			{
+				coarse_cells[cc1].degenerate_triangles++;
+			}
+		}
+	}
+
+	// for each coarse cell, we need to compute aggregate error
+	// this can be done by picking each fine cell, adding up all quadrics, and then measuring the sum error of representative vertices
+	for (size_t i = 0; i < coarse_cell_count; ++i)
+	{
+		CoarseCell& coarse = coarse_cells[i];
+
+		if (coarse.fine_cell_count == 1)
+			continue;
+
+		Quadric Q = cell_quadrics[coarse.fine_cells[0]];
+		for (size_t j = 1; j < coarse.fine_cell_count; ++j)
+			quadricAdd(Q, cell_quadrics[coarse.fine_cells[j]]);
+
+		float minerror = 1.f;
+		unsigned int mincell = coarse.fine_cells[0];
+
+		float error = 0;
+		for (size_t j = 0; j < coarse.fine_cell_count; ++j)
+		{
+			float ce = quadricError(Q, vertex_positions[cell_remap[coarse.fine_cells[j]]]);
+
+			error += ce;
+
+			if (ce < minerror)
+			{
+				minerror = ce;
+				mincell = coarse.fine_cells[j];
+			}
+		}
+
+		coarse.error = error;
+		coarse.best_cell = mincell;
+	}
+
+	// now let's sort coarse cells by the error (we're close!)
+	unsigned int* sort_order = allocator.allocate<unsigned int>(coarse_cell_count);
+
+	{
+		const int sort_bits = 11;
+
+		// fill histogram for counting sort
+		unsigned int histogram[1 << sort_bits];
+		memset(histogram, 0, sizeof(histogram));
+
+		for (size_t i = 0; i < coarse_cell_count; ++i)
+		{
+			// skip sign bit since error is non-negative
+			unsigned int key = (coarse_cells[i].errorui << 1) >> (32 - sort_bits);
+
+			histogram[key]++;
+		}
+
+		// compute offsets based on histogram data
+		size_t histogram_sum = 0;
+
+		for (size_t i = 0; i < 1 << sort_bits; ++i)
+		{
+			size_t count = histogram[i];
+			histogram[i] = unsigned(histogram_sum);
+			histogram_sum += count;
+		}
+
+		assert(histogram_sum == coarse_cell_count);
+
+		// compute sort order based on offsets
+		for (size_t i = 0; i < coarse_cell_count; ++i)
+		{
+			// skip sign bit since error is non-negative
+			unsigned int key = (coarse_cells[i].errorui << 1) >> (32 - sort_bits);
+
+			sort_order[histogram[key]++] = unsigned(i);
+		}
+	}
+
+#if TRACE
+	printf("merge: fine cells %d, coarse cells %d; current triangle count %d - we'll try to get it down to %d\n",
+	       int(cell_count), int(coarse_cell_count), int(current_triangle_count), int(target_index_count / 3));
+#endif
+
+	// finally, let's collapse all fine cells into coarse cells up until we reach the target triangle count
+	size_t sort_index = 0;
+
+	while (current_triangle_count * 3 > target_index_count && sort_index < coarse_cell_count)
+	{
+		CoarseCell& coarse = coarse_cells[sort_order[sort_index++]];
+
+		if (coarse.degenerate_triangles == 0)
+			continue;
+
+		current_triangle_count -= coarse.degenerate_triangles;
+
+		unsigned int r = cell_remap[coarse.best_cell];
+
+		for (size_t j = 0; j < coarse.fine_cell_count; ++j)
+			cell_remap[coarse.fine_cells[j]] = r;
+	}
+
+#if TRACE
+	printf("merged %d cells; last cell error %f\n", int(sort_index), sort_index == 0 ? 0.f : coarse_cells[sort_order[sort_index - 1]].error);
+#endif
+
+	// let's confirm that we didn't mess this up
+	size_t confirm_triangle_count = 0;
+
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		unsigned int v0 = cell_remap[vertex_cells[indices[i + 0]]];
+		unsigned int v1 = cell_remap[vertex_cells[indices[i + 1]]];
+		unsigned int v2 = cell_remap[vertex_cells[indices[i + 2]]];
+
+		if (v0 != v1 && v0 != v2 && v1 != v2)
+		{
+			confirm_triangle_count++;
+		}
+	}
+
+	assert(confirm_triangle_count == current_triangle_count);
+	(void)confirm_triangle_count;
+#endif
 
 	// fourth pass: collapse triangles!
 	// note that we need to filter out triangles that we've already output because we very frequently generate redundant triangles between cells :(
