@@ -1081,6 +1081,9 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 // Should we adaptively merge cells before outputting the final geometry?
 #define SLOP_MERGE_ADAPTIVE 1
 
+// When adaptively merging cells, should we compute the resulting vertex based on all source vertices that could contribute to it?
+#define SLOP_MERGE_ADAPTIVE_PRECISE 1
+
 size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error)
 {
 	(void)target_error;       // TODO
@@ -1413,7 +1416,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 			unsigned int errorui;
 		};
 		unsigned int degenerate_triangles;
-		unsigned int best_cell;
+		unsigned int best_vertex;
 		// TODO: it simplifies the algorithm to have this, but it's a lot of memory; can we do better?
 		unsigned int fine_cells[8];
 		unsigned int fine_cell_count;
@@ -1441,6 +1444,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 		if (entry->id == ~0u)
 		{
 			CoarseCell coarse = {};
+			coarse.best_vertex = ~0u;
 			coarse_cells[coarse_cell_count] = coarse;
 
 			entry->id = cell.id;
@@ -1485,6 +1489,51 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 		}
 	}
 
+#if SLOP_MERGE_ADAPTIVE_PRECISE
+	Quadric* coarse_quadrics = allocator.allocate<Quadric>(coarse_cell_count);
+	memset(coarse_quadrics, 0, coarse_cell_count * sizeof(Quadric));
+
+	for (size_t i = 0; i < cell_count; ++i)
+	{
+		quadricAdd(coarse_quadrics[fine_to_coarse[i]], cell_quadrics[i]);
+	}
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		unsigned int cell = fine_to_coarse[vertex_cells[i]];
+		CoarseCell& coarse = coarse_cells[cell];
+
+		float error = quadricError(coarse_quadrics[cell], vertex_positions[i]);
+
+		coarse.error += error;
+
+		if (coarse.best_vertex == ~0u)
+		{
+			coarse.best_vertex = unsigned(i);
+
+#if SLOP_CACHE_ERRORS
+			cell_errors[cell] = error;
+#endif
+		}
+		else
+		{
+			unsigned int j = coarse.best_vertex;
+
+			float ei = error;
+
+#if SLOP_CACHE_ERRORS
+			float ej = cell_errors[cell];
+
+			coarse.best_vertex = (ei < ej) ? unsigned(i) : j;
+			cell_errors[cell] = (ei < ej) ? ei : ej;
+#else
+			float ej = quadricError(coarse_quadrics[cell], vertex_positions[j]);
+
+			coarse.best_vertex = (ei < ej) ? unsigned(i) : j;
+#endif
+		}
+	}
+#else
 	// for each coarse cell, we need to compute aggregate error
 	// this can be done by picking each fine cell, adding up all quadrics, and then measuring the sum error of representative vertices
 	for (size_t i = 0; i < coarse_cell_count; ++i)
@@ -1516,8 +1565,9 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 		}
 
 		coarse.error = error;
-		coarse.best_cell = mincell;
+		coarse.best_vertex = cell_remap[mincell];
 	}
+#endif
 
 	// now let's sort coarse cells by the error (we're close!)
 	unsigned int* sort_order = allocator.allocate<unsigned int>(coarse_cell_count);
@@ -1576,10 +1626,8 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 
 		current_triangle_count -= coarse.degenerate_triangles;
 
-		unsigned int r = cell_remap[coarse.best_cell];
-
 		for (size_t j = 0; j < coarse.fine_cell_count; ++j)
-			cell_remap[coarse.fine_cells[j]] = r;
+			cell_remap[coarse.fine_cells[j]] = coarse.best_vertex;
 	}
 
 #if TRACE
