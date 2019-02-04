@@ -17,6 +17,7 @@
 // This work is based on:
 // Michael Garland and Paul S. Heckbert. Surface simplification using quadric error metrics. 1997
 // Michael Garland. Quadric-based polygonal surface simplification. 1999
+// Peter Lindstrom. Out-of-Core Simplification of Large Polygonal Models. 2000
 // Matthias Teschner, Bruno Heidelberger, Matthias Mueller, Danat Pomeranets, Markus Gross. Optimized Spatial Hashing for Collision Detection of Deformable Objects. 2003
 namespace meshopt
 {
@@ -1065,6 +1066,9 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 // Should we target cell count precisely or approximately? Approximate counting is much faster but it's approximate (duh).
 #define SLOP_TARGET_CELLS_APPROX 1
 
+// Should we just consider binary subdivisions of the final grid?
+#define SLOP_TARGET_BINARY 1
+
 // Should we filter duplicate triangles? Normally there's few of them, but in some meshes there's a lot. Filtering is done after targeting...
 #define SLOP_FILTER_DUPLICATES 0
 
@@ -1076,7 +1080,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error)
 {
-	(void)target_error; // TODO
+	(void)target_error;       // TODO
 	(void)target_index_count; // TODO
 
 	using namespace meshopt;
@@ -1104,7 +1108,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	HashCell* table = allocator.allocate<HashCell>(table_size);
 
 	HashCellHasher hasher;
-	HashCell dummy = { ~0u, 0 };
+	HashCell dummy = {~0u, 0};
 
 	// first pass: fill cell ids and vertex ids
 	size_t cell_count = 0;
@@ -1114,6 +1118,108 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	printf("target: %d cells, %d triangles\n", int(target_cell_count), int(target_index_count / 3));
 #endif
 
+#if SLOP_TARGET_BINARY
+	unsigned int* vertex_ids = allocator.allocate<unsigned int>(vertex_count);
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		const Vector3& v = vertex_positions[i];
+
+		int xi = int(v.x * 1023.5f + 0.5f);
+		int yi = int(v.y * 1023.5f + 0.5f);
+		int zi = int(v.z * 1023.5f + 0.5f);
+
+		vertex_ids[i] = (xi << 20) | (yi << 10) | zi;
+	}
+
+#if SLOP_TARGET_CELLS_APPROX
+	size_t count_table_size = hashBuckets2(target_cell_count * 4);
+	unsigned char* count_table = allocator.allocate<unsigned char>(count_table_size);
+
+	int mask = 0;
+
+	// find approx mask
+	for (int pass = 0; pass < 10; ++pass)
+	{
+		int maskc = 1023 & ~((1 << (9 - pass)) - 1);
+		mask = (maskc << 20) | (maskc << 10) | maskc;
+
+		cell_count = 0;
+		memset(count_table, 0, count_table_size);
+
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			unsigned int id = vertex_ids[i] & mask;
+			HashCell cell = {id, 0};
+			size_t hash = hasher.hash(cell) & (count_table_size - 1);
+
+			cell_count += 1 - count_table[hash];
+			count_table[hash] = 1;
+		}
+
+#if TRACE
+		printf("pass %d: cell count %d, cell size %.4f\n", pass, int(cell_count), powf(2.f, -pass));
+#endif
+
+		if (cell_count >= target_cell_count)
+			break;
+	}
+
+	// fill with approx mask
+	cell_count = 0;
+	memset(table, -1, table_size * sizeof(HashCell));
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		unsigned int id = vertex_ids[i] & mask;
+		HashCell cell = {id, 0};
+		HashCell* entry = hashLookup2(table, table_size, hasher, cell, dummy);
+
+		if (entry->id == ~0u)
+		{
+			entry->id = cell.id;
+			entry->cell = unsigned(cell_count++);
+		}
+
+		vertex_cells[i] = entry->cell;
+	}
+
+#if TRACE
+	printf("result: cell count %d\n", int(cell_count));
+#endif
+#else
+	for (int pass = 0; pass < 10; ++pass)
+	{
+		int maskc = 1023 & ~((1 << (9 - pass)) - 1);
+		int mask = (maskc << 20) | (maskc << 10) | maskc;
+
+		cell_count = 0;
+		memset(table, -1, table_size * sizeof(HashCell));
+
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			unsigned int id = vertex_ids[i] & mask;
+			HashCell cell = {id, 0};
+			HashCell* entry = hashLookup2(table, table_size, hasher, cell, dummy);
+
+			if (entry->id == ~0u)
+			{
+				entry->id = cell.id;
+				entry->cell = unsigned(cell_count++);
+			}
+
+			vertex_cells[i] = entry->cell;
+		}
+
+#if TRACE
+		printf("pass %d: cell count %d, cell size %.4f\n", pass, int(cell_count), powf(2.f, -pass));
+#endif
+
+		if (cell_count >= target_cell_count)
+			break;
+	}
+#endif
+#else
 #if SLOP_TARGET_CELLS_APPROX
 	size_t count_table_size = hashBuckets2(target_cell_count * 4);
 	unsigned char* count_table = allocator.allocate<unsigned char>(count_table_size);
@@ -1152,7 +1258,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 
 				unsigned int id = (xi << 20) | (yi << 10) | zi;
 
-				HashCell cell = { id, 0 };
+				HashCell cell = {id, 0};
 				size_t hash = hasher.hash(cell) & (count_table_size - 1);
 
 				cell_count += 1 - count_table[hash];
@@ -1174,7 +1280,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 
 				unsigned int id = (xi << 20) | (yi << 10) | zi;
 
-				HashCell cell = { id, 0 };
+				HashCell cell = {id, 0};
 				HashCell* entry = hashLookup2(table, table_size, hasher, cell, dummy);
 
 				if (entry->id == ~0u)
@@ -1228,6 +1334,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 
 	(void)cell_min_count;
 	(void)cell_max_count;
+#endif
 
 	// todo: we can estimate # of triangles from index buffer and vertex_cells; we can use that to trim bits from mask
 	// we can also use error as a guide - say, call it normalized distance deviation, stop at mask accordingly!
@@ -1284,7 +1391,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	Triangle* tritable = allocator.allocate<Triangle>(tritable_size);
 	memset(tritable, -1, tritable_size * sizeof(Triangle));
 
-	Triangle tridummy = { ~0u, ~0u, ~0u };
+	Triangle tridummy = {~0u, ~0u, ~0u};
 	TriangleHasher trihasher;
 
 	size_t write = 0;
@@ -1300,7 +1407,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 		{
 			potential++;
 
-			Triangle tri = { v0, v1, v2 };
+			Triangle tri = {v0, v1, v2};
 
 			if (tri.b < tri.a && tri.b < tri.c)
 			{
