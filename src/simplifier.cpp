@@ -1208,10 +1208,12 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	printf("result: cell count %d\n", int(cell_count));
 #endif
 #else
+	int mask = 0;
+
 	for (int pass = 0; pass < 10; ++pass)
 	{
 		int maskc = 1023 & ~((1 << (9 - pass)) - 1);
-		int mask = (maskc << 20) | (maskc << 10) | maskc;
+		mask = (maskc << 20) | (maskc << 10) | maskc;
 
 		cell_count = 0;
 		memset(table, -1, table_size * sizeof(HashCell));
@@ -1232,7 +1234,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 		}
 
 #if TRACE
-		printf("pass %d: cell count %d, cell size %.4f\n", pass, int(cell_count), powf(2.f, -pass));
+		printf("pass %d: cell count %d, cell size %.4f\n", pass, int(cell_count), powf(2.f, -float(pass)));
 #endif
 
 		if (cell_count >= target_cell_count)
@@ -1241,6 +1243,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 #endif
 #else
 	int mask = 0x3FFFFFFF; // all 10-bit components set
+	(void)mask;
 
 #if SLOP_TARGET_CELLS_APPROX
 	size_t count_table_size = hashBuckets2(target_cell_count * 4);
