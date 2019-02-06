@@ -905,18 +905,57 @@ struct TriangleHasher
 	}
 };
 
-struct CoarseCell
+static size_t fillVertexCells(HashCell* table, size_t table_size, unsigned int* vertex_cells, const Vector3* vertex_positions, size_t vertex_count, int grid_size)
 {
-	union {
-		float error;
-		unsigned int errorui;
-	};
-	unsigned int degenerate_triangles;
-	unsigned int best_vertex;
-	// TODO: it simplifies the algorithm to have this, but it's a lot of memory; can we do better?
-	unsigned int fine_cells[8];
-	unsigned int fine_cell_count;
-};
+	HashCellHasher hasher;
+	HashCell dummy = { ~0u, 0 };
+
+	memset(table, -1, table_size * sizeof(HashCell));
+
+	float cell_scale = (grid_size > 1023) ? 1023.f : float(grid_size - 1);
+
+	size_t cell_count = 0;
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		const Vector3& v = vertex_positions[i];
+
+		int xi = int(v.x * cell_scale + 0.5f);
+		int yi = int(v.y * cell_scale + 0.5f);
+		int zi = int(v.z * cell_scale + 0.5f);
+
+		unsigned int id = (xi << 20) | (yi << 10) | zi;
+
+		HashCell cell = { id, 0 };
+		HashCell * entry = hashLookup2(table, table_size, hasher, cell, dummy);
+
+		if (entry->id == ~0u)
+		{
+			entry->id = cell.id;
+			entry->cell = unsigned(cell_count++);
+		}
+
+		vertex_cells[i] = entry->cell;
+	}
+
+	return cell_count;
+}
+
+static size_t countTriangles(const unsigned int* vertex_cells, const unsigned int* indices, size_t index_count)
+{
+	size_t result = 0;
+
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		unsigned int c0 = vertex_cells[indices[i + 0]];
+		unsigned int c1 = vertex_cells[indices[i + 1]];
+		unsigned int c2 = vertex_cells[indices[i + 2]];
+
+		result += (c0 != c1 && c0 != c2 && c1 != c2);
+	}
+
+	return result;
+}
 
 } // namespace meshopt
 
@@ -1073,29 +1112,8 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	return result_count;
 }
 
-// Should we target cell count vs index count? targeting cell count is faster, but targeting index count gets us more precise results
-#define SLOP_TARGET_CELLS 1
-
-// Should we target cell count precisely or approximately? Approximate counting is much faster but it's approximate (duh).
-#define SLOP_TARGET_CELLS_APPROX 1
-
-// Should we just consider binary subdivisions of the final grid?
-#define SLOP_TARGET_BINARY 1
-
 // Should we filter duplicate triangles? Normally there's few of them, but in some meshes there's a lot. Filtering is done after targeting...
-#define SLOP_FILTER_DUPLICATES 0
-
-// Should we cache quadric errors?
-#define SLOP_CACHE_ERRORS 1
-
-// How many binary search passes do we perform? We currently run a fixed number for simplicity/robustness
-#define SLOP_PASSES 10
-
-// Should we adaptively merge cells before outputting the final geometry?
-#define SLOP_MERGE_ADAPTIVE 1
-
-// When adaptively merging cells, should we compute the resulting vertex based on all source vertices that could contribute to it?
-#define SLOP_MERGE_ADAPTIVE_PRECISE 1
+#define SLOP_FILTER_DUPLICATES 1
 
 size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error)
 {
@@ -1120,16 +1138,6 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	Vector3* vertex_positions = allocator.allocate<Vector3>(vertex_count);
 	rescalePositions(vertex_positions, vertex_positions_data, vertex_count, vertex_positions_stride);
 
-	unsigned int* vertex_cells = allocator.allocate<unsigned int>(vertex_count);
-
-	// TODO: we don't need a table this large if we're limiting the number of unique elements we're adding to the table
-	// Especially if we can alloc this *after* the counting pass, with an approx *2 size or whatever?
-	size_t table_size = hashBuckets2(vertex_count);
-	HashCell* table = allocator.allocate<HashCell>(table_size);
-
-	HashCellHasher hasher;
-	HashCell dummy = {~0u, 0};
-
 	// first pass: fill cell ids and vertex ids
 	size_t cell_count = 0;
 
@@ -1138,31 +1146,31 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	printf("target: %d cells, %d triangles\n", int(target_cell_count), int(target_index_count / 3));
 #endif
 
-#if SLOP_TARGET_BINARY
 	unsigned int* vertex_ids = allocator.allocate<unsigned int>(vertex_count);
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
 		const Vector3& v = vertex_positions[i];
 
-		int xi = int(v.x * 1023.5f + 0.5f);
-		int yi = int(v.y * 1023.5f + 0.5f);
-		int zi = int(v.z * 1023.5f + 0.5f);
+		int xi = int(v.x * 1023.f + 0.5f);
+		int yi = int(v.y * 1023.f + 0.5f);
+		int zi = int(v.z * 1023.f + 0.5f);
 
 		vertex_ids[i] = (xi << 20) | (yi << 10) | zi;
 	}
 
-#if SLOP_TARGET_CELLS_APPROX
+	HashCellHasher hasher;
+
 	size_t count_table_size = hashBuckets2(target_cell_count * 4);
 	unsigned char* count_table = allocator.allocate<unsigned char>(count_table_size);
 
-	int mask = 0;
+	int bits = 10;
 
 	// find approx mask
 	for (int pass = 0; pass < 10; ++pass)
 	{
 		int maskc = 1023 & ~((1 << (9 - pass)) - 1);
-		mask = (maskc << 20) | (maskc << 10) | maskc;
+		int mask = (maskc << 20) | (maskc << 10) | maskc;
 
 		cell_count = 0;
 		memset(count_table, 0, count_table_size);
@@ -1178,191 +1186,82 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 		}
 
 #if TRACE
-		printf("pass %d: cell count %d, cell size %.4f\n", pass, int(cell_count), powf(2.f, -float(pass)));
+		printf("binary pass %d: cell count %d, grid size %d, cell size %.4f\n", pass, int(cell_count), 1 << (1 + pass), powf(2.f, -float(pass + 1)));
 #endif
 
 		if (cell_count >= target_cell_count)
+		{
+			bits = 1 + pass;
 			break;
+		}
 	}
 
-	// fill with approx mask
-	cell_count = 0;
-	memset(table, -1, table_size * sizeof(HashCell));
+	unsigned int* vertex_cells = allocator.allocate<unsigned int>(vertex_count);
+	unsigned int* vertex_cells_temp = allocator.allocate<unsigned int>(vertex_count);
 
-	for (size_t i = 0; i < vertex_count; ++i)
+	// TODO: we don't need a table this large if we're limiting the number of unique elements we're adding to the table
+	// Especially if we can alloc this *after* the counting pass, with an approx *2 size or whatever?
+	size_t table_size = hashBuckets2(vertex_count);
+	HashCell* table = allocator.allocate<HashCell>(table_size);
+
+	// invariant: # of triangles in min_grid <= target_count
+	// note that we do *not* validate that max_grid is over target_count - it basically almost is, since it has >target_cell_count cells,
+	// but even when this is violated our algorithm will just converge to a somewhat simpler mesh.
+	int min_grid = (1 << bits) / 2;
+	int max_grid = 1 << bits;
+
+	// note that we are *not* guaranteed that min_grid gives us <target_index_count triangles! because of this, we need to iteratively adjust it until it does
+	while (min_grid > 1)
 	{
-		unsigned int id = vertex_ids[i] & mask;
-		HashCell cell = {id, 0};
-		HashCell* entry = hashLookup2(table, table_size, hasher, cell, dummy);
-
-		if (entry->id == ~0u)
-		{
-			entry->id = cell.id;
-			entry->cell = unsigned(cell_count++);
-		}
-
-		vertex_cells[i] = entry->cell;
-	}
+		size_t cells = fillVertexCells(table, table_size, vertex_cells, vertex_positions, vertex_count, min_grid);
+		size_t triangles = countTriangles(vertex_cells, indices, index_count);
 
 #if TRACE
-	printf("result: cell count %d\n", int(cell_count));
+		printf("reduce pass: cell count %d, grid size %d, cell size %.4f, triangles %d\n", int(cells), min_grid, 1.f / float(min_grid), int(triangles));
 #endif
-#else
-	int mask = 0;
 
-	for (int pass = 0; pass < 10; ++pass)
-	{
-		int maskc = 1023 & ~((1 << (9 - pass)) - 1);
-		mask = (maskc << 20) | (maskc << 10) | maskc;
-
-		cell_count = 0;
-		memset(table, -1, table_size * sizeof(HashCell));
-
-		for (size_t i = 0; i < vertex_count; ++i)
+		if (triangles <= target_index_count / 3)
 		{
-			unsigned int id = vertex_ids[i] & mask;
-			HashCell cell = {id, 0};
-			HashCell* entry = hashLookup2(table, table_size, hasher, cell, dummy);
-
-			if (entry->id == ~0u)
-			{
-				entry->id = cell.id;
-				entry->cell = unsigned(cell_count++);
-			}
-
-			vertex_cells[i] = entry->cell;
-		}
-
-#if TRACE
-		printf("pass %d: cell count %d, cell size %.4f\n", pass, int(cell_count), powf(2.f, -float(pass)));
-#endif
-
-		if (cell_count >= target_cell_count)
+			cell_count = cells;
 			break;
+		}
+
+		// TODO: we could be less aggressive - if we overshoot we'll have to spend a bunch of time going back up
+		max_grid = min_grid;
+		min_grid /= 2;
 	}
-#endif
-#else
-	int mask = 0x3FFFFFFF; // all 10-bit components set
-	(void)mask;
 
-#if SLOP_TARGET_CELLS_APPROX
-	size_t count_table_size = hashBuckets2(target_cell_count * 4);
-	unsigned char* count_table = allocator.allocate<unsigned char>(count_table_size);
-#endif
+	// we ended up with 1^3 grid which means all vertices will collapse to a single point => result is empty
+	if (min_grid == 1)
+		return 0;
 
-	float cell_min_size = 1.f / 1024.f;
-	size_t cell_min_count = vertex_count;
-	float cell_max_size = 1.f;
-	size_t cell_max_count = 1;
-
-	for (int pass = 0; pass <= SLOP_PASSES; ++pass)
+	// now that we *know* min_grid results in a mesh we can use, we should try to increase the grid size in hopes of improving the quality
+	for (int pass = 0; pass < 5; ++pass)
 	{
-		float cell_size = (cell_min_size + cell_max_size) * 0.5f;
-		cell_count = 0;
+		int grid_size = (min_grid + max_grid) / 2;
 
-		if (pass == SLOP_PASSES)
-			cell_size = cell_max_size;
+		if (grid_size == min_grid)
+			break;
 
-		// TODO: ROUNDING/BOUNDARY CONDITIONS?
-		float cell_scale = 1.f / cell_size;
-		cell_scale = cell_scale > 1023.5f ? 1023.5f : cell_scale;
-		cell_scale = cell_scale < 0.5f ? 0 : cell_scale;
-
-#if SLOP_TARGET_CELLS_APPROX
-		if (pass < SLOP_PASSES)
-		{
-			memset(count_table, 0, count_table_size);
-
-			for (size_t i = 0; i < vertex_count; ++i)
-			{
-				const Vector3& v = vertex_positions[i];
-
-				int xi = int(v.x * cell_scale + 0.5f);
-				int yi = int(v.y * cell_scale + 0.5f);
-				int zi = int(v.z * cell_scale + 0.5f);
-
-				unsigned int id = (xi << 20) | (yi << 10) | zi;
-
-				HashCell cell = {id, 0};
-				size_t hash = hasher.hash(cell) & (count_table_size - 1);
-
-				cell_count += 1 - count_table[hash];
-				count_table[hash] = 1;
-			}
-		}
-		else
-#endif
-		{
-			memset(table, -1, table_size * sizeof(HashCell));
-
-			for (size_t i = 0; i < vertex_count; ++i)
-			{
-				const Vector3& v = vertex_positions[i];
-
-				int xi = int(v.x * cell_scale + 0.5f);
-				int yi = int(v.y * cell_scale + 0.5f);
-				int zi = int(v.z * cell_scale + 0.5f);
-
-				unsigned int id = (xi << 20) | (yi << 10) | zi;
-
-				HashCell cell = {id, 0};
-				HashCell* entry = hashLookup2(table, table_size, hasher, cell, dummy);
-
-				if (entry->id == ~0u)
-				{
-					entry->id = cell.id;
-					entry->cell = unsigned(cell_count++);
-				}
-
-				vertex_cells[i] = entry->cell;
-			}
-		}
+		size_t cells = fillVertexCells(table, table_size, vertex_cells_temp, vertex_positions, vertex_count, grid_size);
+		size_t triangles = countTriangles(vertex_cells_temp, indices, index_count);
 
 #if TRACE
-		printf("pass %d: cell count %d, cell size %.4f\n", pass, int(cell_count), cell_size);
+		printf("upres pass %d: cell count %d, grid size %d, cell size %.4f, triangles %d\n", pass, int(cells), grid_size, 1.f / float(grid_size), int(triangles));
 #endif
 
-#if SLOP_TARGET_CELLS
-		if (cell_count < target_cell_count)
+		if (triangles <= target_index_count / 3)
 		{
-			cell_max_size = cell_size;
-			cell_max_count = cell_count;
+			min_grid = grid_size;
+
+			memcpy(vertex_cells, vertex_cells_temp, vertex_count * sizeof(unsigned int));
+			cell_count = cells;
 		}
 		else
 		{
-			cell_min_size = cell_size;
-			cell_min_count = cell_count;
+			max_grid = grid_size;
 		}
-#else
-		size_t potential = 0;
-		for (size_t i = 0; i < index_count; i += 3)
-		{
-			unsigned int v0 = vertex_cells[indices[i + 0]];
-			unsigned int v1 = vertex_cells[indices[i + 1]];
-			unsigned int v2 = vertex_cells[indices[i + 2]];
-
-			potential += (v0 != v1 && v0 != v2 && v1 != v2);
-		}
-
-		if (potential < target_index_count / 3)
-		{
-			cell_max_size = cell_size;
-			cell_max_count = cell_count;
-		}
-		else
-		{
-			cell_min_size = cell_size;
-			cell_min_count = cell_count;
-		}
-#endif
 	}
-
-	(void)cell_min_count;
-	(void)cell_max_count;
-#endif
-
-	// todo: we can estimate # of triangles from index buffer and vertex_cells; we can use that to trim bits from mask
-	// we can also use error as a guide - say, call it normalized distance deviation, stop at mask accordingly!
 
 	// second pass: build a quadric for each target cell
 	Quadric* cell_quadrics = allocator.allocate<Quadric>(cell_count);
@@ -1374,287 +1273,19 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	unsigned int* cell_remap = allocator.allocate<unsigned int>(cell_count);
 	memset(cell_remap, -1, cell_count * sizeof(unsigned int));
 
-#if SLOP_CACHE_ERRORS
 	float* cell_errors = allocator.allocate<float>(cell_count);
-#endif
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
 		unsigned int cell = vertex_cells[i];
+		float error = quadricError(cell_quadrics[cell], vertex_positions[i]);
 
-		if (cell_remap[cell] == ~0u)
+		if (cell_remap[cell] == ~0u || cell_errors[cell] > error)
 		{
 			cell_remap[cell] = unsigned(i);
-
-#if SLOP_CACHE_ERRORS
-			cell_errors[cell] = quadricError(cell_quadrics[cell], vertex_positions[i]);
-#endif
-		}
-		else
-		{
-			unsigned int j = cell_remap[cell];
-
-#if SLOP_CACHE_ERRORS
-			float ei = quadricError(cell_quadrics[cell], vertex_positions[i]);
-			float ej = cell_errors[cell];
-
-			cell_remap[cell] = (ei < ej) ? unsigned(i) : j;
-			cell_errors[cell] = (ei < ej) ? ei : ej;
-#else
-			float ei = quadricError(cell_quadrics[cell], vertex_positions[i]);
-			float ej = quadricError(cell_quadrics[cell], vertex_positions[j]);
-
-			cell_remap[cell] = (ei < ej) ? unsigned(i) : j;
-#endif
-		}
-	}
-
-#if SLOP_MERGE_ADAPTIVE
-	// TODO: if mask only has 1 bit set, then we can't merge anything because our grid basically has 1 cell
-	int coarse_mask = mask;
-
-	for (int bit = 0; bit < 10; ++bit)
-	{
-		if (mask & (1 << bit))
-		{
-			coarse_mask &= ~(1 << (bit + 0));
-			coarse_mask &= ~(1 << (bit + 10));
-			coarse_mask &= ~(1 << (bit + 20));
-			break;
-		}
-	}
-
-	// let's create an array of coarse cells
-	CoarseCell* coarse_cells = allocator.allocate<CoarseCell>(cell_count);
-	size_t coarse_cell_count = 0;
-
-	size_t coarse_table_size = hashBuckets2(cell_count);
-	HashCell* coarse_table = allocator.allocate<HashCell>(coarse_table_size);
-
-	memset(coarse_table, -1, sizeof(HashCell) * coarse_table_size);
-
-	unsigned int* fine_to_coarse = allocator.allocate<unsigned int>(cell_count);
-
-	for (size_t i = 0; i < table_size; ++i)
-	{
-		if (table[i].id == ~0u)
-			continue;
-
-		unsigned int coarse_id = table[i].id & coarse_mask;
-		HashCell cell = {coarse_id, 0};
-		HashCell* entry = hashLookup2(coarse_table, coarse_table_size, hasher, cell, dummy);
-
-		if (entry->id == ~0u)
-		{
-			CoarseCell coarse = {};
-			coarse.best_vertex = ~0u;
-			coarse_cells[coarse_cell_count] = coarse;
-
-			entry->id = cell.id;
-			entry->cell = unsigned(coarse_cell_count++);
-		}
-
-		assert(coarse_cells[entry->cell].fine_cell_count < 8);
-		coarse_cells[entry->cell].fine_cells[coarse_cells[entry->cell].fine_cell_count++] = table[i].cell;
-
-		fine_to_coarse[table[i].cell] = entry->cell;
-	}
-
-	// let's compute current triangle count and also measure # of degenerate triangles for each coarse cell
-	size_t current_triangle_count = 0;
-
-	for (size_t i = 0; i < index_count; i += 3)
-	{
-		unsigned int c0 = vertex_cells[indices[i + 0]];
-		unsigned int c1 = vertex_cells[indices[i + 1]];
-		unsigned int c2 = vertex_cells[indices[i + 2]];
-
-		if (c0 != c1 && c0 != c2 && c1 != c2)
-		{
-			current_triangle_count++;
-
-			unsigned int cc0 = fine_to_coarse[c0];
-			unsigned int cc1 = fine_to_coarse[c1];
-			unsigned int cc2 = fine_to_coarse[c2];
-
-			if (cc0 == cc1)
-			{
-				coarse_cells[cc0].degenerate_triangles++;
-			}
-			else if (cc0 == cc2)
-			{
-				coarse_cells[cc0].degenerate_triangles++;
-			}
-			else if (cc1 == cc2)
-			{
-				coarse_cells[cc1].degenerate_triangles++;
-			}
-		}
-	}
-
-#if SLOP_MERGE_ADAPTIVE_PRECISE
-	Quadric* coarse_quadrics = allocator.allocate<Quadric>(coarse_cell_count);
-	memset(coarse_quadrics, 0, coarse_cell_count * sizeof(Quadric));
-
-	for (size_t i = 0; i < cell_count; ++i)
-	{
-		quadricAdd(coarse_quadrics[fine_to_coarse[i]], cell_quadrics[i]);
-	}
-
-	for (size_t i = 0; i < vertex_count; ++i)
-	{
-		unsigned int cell = fine_to_coarse[vertex_cells[i]];
-		CoarseCell& coarse = coarse_cells[cell];
-
-		float error = quadricError(coarse_quadrics[cell], vertex_positions[i]);
-
-		coarse.error += error;
-
-		if (coarse.best_vertex == ~0u)
-		{
-			coarse.best_vertex = unsigned(i);
-
-#if SLOP_CACHE_ERRORS
 			cell_errors[cell] = error;
-#endif
-		}
-		else
-		{
-			unsigned int j = coarse.best_vertex;
-
-			float ei = error;
-
-#if SLOP_CACHE_ERRORS
-			float ej = cell_errors[cell];
-
-			coarse.best_vertex = (ei < ej) ? unsigned(i) : j;
-			cell_errors[cell] = (ei < ej) ? ei : ej;
-#else
-			float ej = quadricError(coarse_quadrics[cell], vertex_positions[j]);
-
-			coarse.best_vertex = (ei < ej) ? unsigned(i) : j;
-#endif
 		}
 	}
-#else
-	// for each coarse cell, we need to compute aggregate error
-	// this can be done by picking each fine cell, adding up all quadrics, and then measuring the sum error of representative vertices
-	for (size_t i = 0; i < coarse_cell_count; ++i)
-	{
-		CoarseCell& coarse = coarse_cells[i];
-
-		if (coarse.fine_cell_count == 1)
-			continue;
-
-		Quadric Q = cell_quadrics[coarse.fine_cells[0]];
-		for (size_t j = 1; j < coarse.fine_cell_count; ++j)
-			quadricAdd(Q, cell_quadrics[coarse.fine_cells[j]]);
-
-		float minerror = 1.f;
-		unsigned int mincell = coarse.fine_cells[0];
-
-		float error = 0;
-		for (size_t j = 0; j < coarse.fine_cell_count; ++j)
-		{
-			float ce = quadricError(Q, vertex_positions[cell_remap[coarse.fine_cells[j]]]);
-
-			error += ce;
-
-			if (ce < minerror)
-			{
-				minerror = ce;
-				mincell = coarse.fine_cells[j];
-			}
-		}
-
-		coarse.error = error;
-		coarse.best_vertex = cell_remap[mincell];
-	}
-#endif
-
-	// now let's sort coarse cells by the error (we're close!)
-	unsigned int* sort_order = allocator.allocate<unsigned int>(coarse_cell_count);
-
-	{
-		const int sort_bits = 11;
-
-		// fill histogram for counting sort
-		unsigned int histogram[1 << sort_bits];
-		memset(histogram, 0, sizeof(histogram));
-
-		for (size_t i = 0; i < coarse_cell_count; ++i)
-		{
-			// skip sign bit since error is non-negative
-			unsigned int key = (coarse_cells[i].errorui << 1) >> (32 - sort_bits);
-
-			histogram[key]++;
-		}
-
-		// compute offsets based on histogram data
-		size_t histogram_sum = 0;
-
-		for (size_t i = 0; i < 1 << sort_bits; ++i)
-		{
-			size_t count = histogram[i];
-			histogram[i] = unsigned(histogram_sum);
-			histogram_sum += count;
-		}
-
-		assert(histogram_sum == coarse_cell_count);
-
-		// compute sort order based on offsets
-		for (size_t i = 0; i < coarse_cell_count; ++i)
-		{
-			// skip sign bit since error is non-negative
-			unsigned int key = (coarse_cells[i].errorui << 1) >> (32 - sort_bits);
-
-			sort_order[histogram[key]++] = unsigned(i);
-		}
-	}
-
-#if TRACE
-	printf("merge: fine cells %d, coarse cells %d; current triangle count %d - we'll try to get it down to %d\n",
-	       int(cell_count), int(coarse_cell_count), int(current_triangle_count), int(target_index_count / 3));
-#endif
-
-	// finally, let's collapse all fine cells into coarse cells up until we reach the target triangle count
-	size_t sort_index = 0;
-
-	while (current_triangle_count * 3 > target_index_count && sort_index < coarse_cell_count)
-	{
-		CoarseCell& coarse = coarse_cells[sort_order[sort_index++]];
-
-		if (coarse.degenerate_triangles == 0)
-			continue;
-
-		current_triangle_count -= coarse.degenerate_triangles;
-
-		for (size_t j = 0; j < coarse.fine_cell_count; ++j)
-			cell_remap[coarse.fine_cells[j]] = coarse.best_vertex;
-	}
-
-#if TRACE
-	printf("merged %d cells; last cell error %f\n", int(sort_index), sort_index == 0 ? 0.f : coarse_cells[sort_order[sort_index - 1]].error);
-#endif
-
-	// let's confirm that we didn't mess this up
-	size_t confirm_triangle_count = 0;
-
-	for (size_t i = 0; i < index_count; i += 3)
-	{
-		unsigned int v0 = cell_remap[vertex_cells[indices[i + 0]]];
-		unsigned int v1 = cell_remap[vertex_cells[indices[i + 1]]];
-		unsigned int v2 = cell_remap[vertex_cells[indices[i + 2]]];
-
-		if (v0 != v1 && v0 != v2 && v1 != v2)
-		{
-			confirm_triangle_count++;
-		}
-	}
-
-	assert(confirm_triangle_count == current_triangle_count);
-	(void)confirm_triangle_count;
-#endif
 
 	// fourth pass: collapse triangles!
 	// note that we need to filter out triangles that we've already output because we very frequently generate redundant triangles between cells :(
