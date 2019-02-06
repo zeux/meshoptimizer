@@ -1426,14 +1426,14 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	Triangle* tritable = allocator.allocate<Triangle>(tritable_size);
 
 	size_t write = filterTriangles(destination, tritable, tritable_size, indices, index_count, vertex_cells, cell_remap);
-	assert(write <= target_index_count / 3);
+	assert(write <= target_index_count);
 
 #if TRACE
 	printf("duplicates: %d triangles => %d unique\n", unsigned(countTriangles(vertex_cells, indices, index_count)), int(write / 3));
 #endif
 #else
 	size_t write = filterTriangles(destination, indices, index_count, vertex_cells, cell_remap);
-	assert(write <= target_index_count / 3);
+	assert(write <= target_index_count);
 #endif
 
 #if TRACE
