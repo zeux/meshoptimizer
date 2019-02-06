@@ -191,6 +191,8 @@ MESHOPTIMIZER_API int meshopt_decodeVertexBuffer(void* destination, size_t verte
 /**
  * Experimental: Mesh simplifier
  * Reduces the number of triangles in the mesh, attempting to preserve mesh appearance as much as possible
+ * The algorithm tries to preserve mesh topology and can stop short of the target goal based on topology constraints or target error.
+ * If not all attributes from the input mesh are required, it's recommended to reindex the mesh using meshopt_generateShadowIndexBuffer prior to simplification.
  * Returns the number of indices after simplification, with destination containing new index data
  * The resulting index buffer references vertices from the original vertex buffer.
  * If the original vertex data isn't required, creating a compact vertex buffer using meshopt_optimizeVertexFetch is recommended.
@@ -200,7 +202,18 @@ MESHOPTIMIZER_API int meshopt_decodeVertexBuffer(void* destination, size_t verte
  */
 MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error);
 
-MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error);
+/**
+ * Experimental: Mesh simplifier (sloppy)
+ * Reduces the number of triangles in the mesh, sacrificing mesh apperance for simplification performance
+ * The algorithm doesn't preserve mesh topology but is always able to reach target triangle count.
+ * Returns the number of indices after simplification, with destination containing new index data
+ * The resulting index buffer references vertices from the original vertex buffer.
+ * If the original vertex data isn't required, creating a compact vertex buffer using meshopt_optimizeVertexFetch is recommended.
+ *
+ * destination must contain enough space for the target index buffer
+ * vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
+ */
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count);
 
 /**
  * Mesh stripifier
@@ -532,12 +545,12 @@ inline size_t meshopt_simplify(T* destination, const T* indices, size_t index_co
 }
 
 template <typename T>
-inline size_t meshopt_simplifySloppy(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error)
+inline size_t meshopt_simplifySloppy(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count)
 {
 	meshopt_IndexAdapter<T> in(0, indices, index_count);
 	meshopt_IndexAdapter<T> out(destination, 0, index_count);
 
-	return meshopt_simplifySloppy(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride, target_index_count, target_error);
+	return meshopt_simplifySloppy(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride, target_index_count);
 }
 
 template <typename T>

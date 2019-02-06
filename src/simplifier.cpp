@@ -14,6 +14,9 @@
 #include <stdio.h>
 #endif
 
+// Should we use binary passes to accelerate discovery of the initial region
+#define SLOP_ACCELERATE_BINARY 1
+
 // Should we filter duplicate triangles? Normally there's few of them, but in some meshes there's a lot. Filtering is done after targeting...
 #define SLOP_FILTER_DUPLICATES 1
 
@@ -908,6 +911,7 @@ struct TriangleHasher
 	}
 };
 
+#if SLOP_ACCELERATE_BINARY
 static void computeVertexIds(unsigned int* vertex_ids, const Vector3* vertex_positions, size_t vertex_count)
 {
 	for (size_t i = 0; i < vertex_count; ++i)
@@ -980,6 +984,7 @@ static size_t fillVertexCellsPow2(HashCell* table, size_t table_size, unsigned i
 
 	return cell_count;
 }
+#endif
 
 static size_t fillVertexCells(HashCell* table, size_t table_size, unsigned int* vertex_cells, const Vector3* vertex_positions, size_t vertex_count, int grid_size)
 {
@@ -1279,10 +1284,8 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	return result_count;
 }
 
-size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error)
+size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count)
 {
-	(void)target_error;       // TODO
-
 	using namespace meshopt;
 
 	assert(index_count % 3 == 0);
@@ -1307,11 +1310,21 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	printf("target: %d cells, %d triangles\n", int(target_cell_count), int(target_index_count / 3));
 #endif
 
+	unsigned int* vertex_cells = allocator.allocate<unsigned int>(vertex_count);
+	unsigned int* vertex_cells_temp = allocator.allocate<unsigned int>(vertex_count);
+
+	// TODO: we don't need a table this large if we're limiting the number of unique elements we're adding to the table
+	// Especially if we can alloc this *after* the counting pass, with an approx *2 size or whatever?
+	size_t table_size = hashBuckets2(vertex_count);
+	HashCell* table = allocator.allocate<HashCell>(table_size);
+
+#if SLOP_ACCELERATE_BINARY
 	unsigned int* vertex_ids = allocator.allocate<unsigned int>(vertex_count);
 	computeVertexIds(vertex_ids, vertex_positions, vertex_count);
 
 	size_t count_table_size = hashBuckets2(target_cell_count * 4);
 	unsigned char* count_table = allocator.allocate<unsigned char>(count_table_size);
+#endif
 
 	int bits = 10;
 
@@ -1323,7 +1336,11 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 		if (unsigned(grid_size * grid_size * grid_size) < target_cell_count)
 			continue;
 
+#if SLOP_ACCELERATE_BINARY
 		size_t cells = countVertexCellsPow2(count_table, count_table_size, vertex_ids, vertex_count, grid_size);
+#else
+		size_t cells = fillVertexCells(table, table_size, vertex_cells, vertex_positions, vertex_count, grid_size);
+#endif
 
 #if TRACE
 		printf("binary pass %d: cell count %d, grid size %d, cell size %.4f\n", pass, int(cells), grid_size, 1.f / float(grid_size));
@@ -1338,14 +1355,6 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 
 	size_t cell_count = 0;
 
-	unsigned int* vertex_cells = allocator.allocate<unsigned int>(vertex_count);
-	unsigned int* vertex_cells_temp = allocator.allocate<unsigned int>(vertex_count);
-
-	// TODO: we don't need a table this large if we're limiting the number of unique elements we're adding to the table
-	// Especially if we can alloc this *after* the counting pass, with an approx *2 size or whatever?
-	size_t table_size = hashBuckets2(vertex_count);
-	HashCell* table = allocator.allocate<HashCell>(table_size);
-
 	// invariant: # of triangles in min_grid <= target_count
 	// note that we do *not* validate that max_grid is over target_count - it basically almost is, since it has >target_cell_count cells,
 	// but even when this is violated our algorithm will just converge to a somewhat simpler mesh.
@@ -1355,7 +1364,12 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	// note that we are *not* guaranteed that min_grid gives us <target_index_count triangles! because of this, we need to iteratively adjust it until it does
 	while (min_grid > 1)
 	{
+#if SLOP_ACCELERATE_BINARY
 		size_t cells = fillVertexCellsPow2(table, table_size, vertex_cells, vertex_ids, vertex_count, min_grid);
+#else
+		size_t cells = fillVertexCells(table, table_size, vertex_cells, vertex_positions, vertex_count, min_grid);
+#endif
+
 		size_t triangles = countTriangles(vertex_cells, indices, index_count);
 
 #if TRACE
