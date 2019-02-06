@@ -1118,7 +1118,6 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error)
 {
 	(void)target_error;       // TODO
-	(void)target_index_count; // TODO
 
 	using namespace meshopt;
 
@@ -1169,6 +1168,11 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	// find approx mask
 	for (int pass = 0; pass < 10; ++pass)
 	{
+		int grid_size = 1 << (1 + pass);
+
+		if (unsigned(grid_size * grid_size * grid_size) < target_cell_count)
+			continue;
+
 		int maskc = 1023 & ~((1 << (9 - pass)) - 1);
 		int mask = (maskc << 20) | (maskc << 10) | maskc;
 
@@ -1226,7 +1230,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 			break;
 		}
 
-		// TODO: we could be less aggressive - if we overshoot we'll have to spend a bunch of time going back up
+		// min_grid is over budget, so let's probe the next range
 		max_grid = min_grid;
 		min_grid /= 2;
 	}
@@ -1243,6 +1247,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 		if (grid_size == min_grid)
 			break;
 
+		// note that we save the cells table into _temp array; if we find a better candidate than min_grid then we will copy it to vertex_cells array
 		size_t cells = fillVertexCells(table, table_size, vertex_cells_temp, vertex_positions, vertex_count, grid_size);
 		size_t triangles = countTriangles(vertex_cells_temp, indices, index_count);
 
@@ -1254,6 +1259,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 		{
 			min_grid = grid_size;
 
+			// this may be replaced with better data on a subsequent pass... or not
 			memcpy(vertex_cells, vertex_cells_temp, vertex_count * sizeof(unsigned int));
 			cell_count = cells;
 		}
@@ -1290,7 +1296,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	// fourth pass: collapse triangles!
 	// note that we need to filter out triangles that we've already output because we very frequently generate redundant triangles between cells :(
 #if SLOP_FILTER_DUPLICATES
-	size_t tritable_size = hashBuckets2(index_count / 3); // TODO what's the real upper bound?
+	size_t tritable_size = hashBuckets2(target_index_count / 3);
 	Triangle* tritable = allocator.allocate<Triangle>(tritable_size);
 	memset(tritable, -1, tritable_size * sizeof(Triangle));
 
@@ -1336,30 +1342,35 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 			}
 		}
 	}
+
+	assert(potential <= target_index_count / 3);
+
+#if TRACE
+	printf("result: %d cells, %d potential triangles, %d filtered triangles\n", int(cell_count), int(potential), int(write / 3));
+#endif
 #else
 	size_t write = 0;
 
 	for (size_t i = 0; i < index_count; i += 3)
 	{
-		unsigned int v0 = cell_remap[vertex_cells[indices[i + 0]]];
-		unsigned int v1 = cell_remap[vertex_cells[indices[i + 1]]];
-		unsigned int v2 = cell_remap[vertex_cells[indices[i + 2]]];
+		unsigned int c0 = vertex_cells[indices[i + 0]];
+		unsigned int c1 = vertex_cells[indices[i + 1]];
+		unsigned int c2 = vertex_cells[indices[i + 2]];
 
-		if (v0 != v1 && v0 != v2 && v1 != v2)
+		if (c0 != c1 && c0 != c2 && c1 != c2)
 		{
-			destination[write + 0] = v0;
-			destination[write + 1] = v1;
-			destination[write + 2] = v2;
+			destination[write + 0] = cell_remap[c0];
+			destination[write + 1] = cell_remap[c1];
+			destination[write + 2] = cell_remap[c2];
 			write += 3;
 		}
 	}
 
-	size_t potential = write / 3;
-	(void)potential;
-#endif
+	assert(write <= target_index_count / 3);
 
 #if TRACE
-	printf("result: %d cells, %d potential triangles, %d filtered triangles\n", int(cell_count), int(potential), int(write / 3));
+	printf("result: %d cells, %d triangles\n", int(cell_count), int(write / 3));
+#endif
 #endif
 
 	return write;
