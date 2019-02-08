@@ -14,8 +14,17 @@
 #include <stdio.h>
 #endif
 
+// Should we use pure binary searh instead of a mix of different passes?
+#define SLOP_SIMPLE 1
+
+// Should we use guess to accelerate binary search?
+#define SLOP_GUESS 1
+
+// Should we use interpolation search to accelerate binary search?
+#define SLOP_INTERPOLATION 0
+
 // Should we use binary passes to accelerate discovery of the initial region
-#define SLOP_ACCELERATE_BINARY 1
+#define SLOP_ACCELERATE_BINARY 0
 
 // Should we filter duplicate triangles? Normally there's few of them, but in some meshes there's a lot. Filtering is done after targeting...
 #define SLOP_FILTER_DUPLICATES 1
@@ -1318,6 +1327,81 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	size_t table_size = hashBuckets2(vertex_count);
 	HashCell* table = allocator.allocate<HashCell>(table_size);
 
+#if SLOP_SIMPLE
+	// invariant: # of triangles in min_grid <= target_count
+	int min_grid = 1;
+	int max_grid = 1024;
+	size_t min_triangles = 0;
+	size_t max_triangles = index_count / 3; // TODO: this may overestimate the actual max if this number is >1M since our grid size is limited to 1024
+
+	(void)min_triangles;
+	(void)max_triangles;
+
+	size_t cell_count = 0;
+
+	for (int pass = 0; pass < 10; ++pass)
+	{
+		int grid_size = min_grid;
+
+	#if SLOP_INTERPOLATION
+	#if SLOP_GUESS
+		if (pass == 0)
+		{
+			// instead of starting in the middle, let's guess as to what the answer might be! triangle count usually grows as a square of grid size...
+			grid_size = sqrt(target_cell_count);
+		}
+		else
+	#endif
+		{
+			// TODO: sometimes we might decide to fall back to smth other than interpolations search, maybe clamp the interpolation factor between 1/4 and 3/4 or smth?
+			float k = (float(target_index_count / 3) - float(min_triangles)) / (float(max_triangles) - float(min_triangles));
+			float kl = 0.1f;
+			k = (k < kl) ? kl : (k > 1 - kl) ? 1 - kl : k;
+			grid_size = int(float(min_grid) * (1 - k) + float(max_grid) * k);
+		}
+	#else
+	#if SLOP_GUESS
+		if (pass == 0)
+		{
+			// instead of starting in the middle, let's guess as to what the answer might be! triangle count usually grows as a square of grid size...
+			grid_size = sqrt(target_cell_count);
+		}
+		else
+	#endif
+		{
+			grid_size = (min_grid + max_grid) / 2;
+		}
+	#endif
+
+		if (grid_size == min_grid)
+			break;
+
+		size_t cells = fillVertexCells(table, table_size, vertex_cells_temp, vertex_positions, vertex_count, grid_size);
+		size_t triangles = countTriangles(vertex_cells_temp, indices, index_count);
+
+#if TRACE
+		printf("pass %d: cell count %d, grid size %d, cell size %.4f, triangles %d\n", pass, int(cells), grid_size, 1.f / float(grid_size), int(triangles));
+#endif
+
+		if (triangles <= target_index_count / 3)
+		{
+			min_grid = grid_size;
+			min_triangles = triangles;
+
+			// this may be replaced with better data on a subsequent pass... or not
+			memcpy(vertex_cells, vertex_cells_temp, vertex_count * sizeof(unsigned int));
+			cell_count = cells;
+		}
+		else
+		{
+			max_grid = grid_size;
+			max_triangles = triangles;
+		}
+	}
+
+	if (cell_count <= 1)
+		return 0;
+#else
 #if SLOP_ACCELERATE_BINARY
 	unsigned int* vertex_ids = allocator.allocate<unsigned int>(vertex_count);
 	computeVertexIds(vertex_ids, vertex_positions, vertex_count);
@@ -1420,6 +1504,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 			max_grid = grid_size;
 		}
 	}
+#endif
 
 	// second pass: build a quadric for each target cell
 	Quadric* cell_quadrics = allocator.allocate<Quadric>(cell_count);
