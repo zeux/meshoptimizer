@@ -1238,8 +1238,6 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	unsigned int* vertex_cells = allocator.allocate<unsigned int>(vertex_count);
 	unsigned int* vertex_cells_temp = allocator.allocate<unsigned int>(vertex_count);
 
-	// TODO: we don't need a table this large if we're limiting the number of unique elements we're adding to the table
-	// Especially if we can alloc this *after* the counting pass, with an approx *2 size or whatever?
 	size_t table_size = hashBuckets2(vertex_count);
 	HashCell* table = allocator.allocate<HashCell>(table_size);
 
@@ -1259,15 +1257,13 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 		{
 			// instead of starting in the middle, let's guess as to what the answer might be! triangle count usually grows as a square of grid size...
 			grid_size = int(sqrtf(float(target_cell_count)));
-			grid_size = (grid_size < 1) ? 1 : (grid_size > 1024) ? 1024 : grid_size;
+			grid_size = (grid_size < min_grid) ? min_grid : (grid_size > max_grid) ? max_grid : grid_size;
 		}
 		else if (pass <= SLOP_INTERPOLATION)
 		{
 			float k = (float(target_index_count / 3) - float(min_triangles)) / (float(max_triangles) - float(min_triangles));
-			float kl = 0.0f; // TODO: should we even clamp since we fall back to binary? to what?
-			k = (k < kl) ? kl : (k > 1 - kl) ? 1 - kl : k;
 			grid_size = int(float(min_grid) * (1 - k) + float(max_grid) * k);
-			grid_size = (grid_size < 1) ? 1 : (grid_size > 1024) ? 1024 : grid_size;
+			grid_size = (grid_size < min_grid) ? min_grid : (grid_size > max_grid) ? max_grid : grid_size;
 		}
 		else
 		{
