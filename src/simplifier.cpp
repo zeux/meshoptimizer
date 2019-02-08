@@ -14,17 +14,8 @@
 #include <stdio.h>
 #endif
 
-// Should we use pure binary searh instead of a mix of different passes?
-#define SLOP_SIMPLE 1
-
-// Should we use guess to accelerate binary search?
-#define SLOP_GUESS 1
-
-// Should we use interpolation search to accelerate binary search?
-#define SLOP_INTERPOLATION 0
-
-// Should we use binary passes to accelerate discovery of the initial region
-#define SLOP_ACCELERATE_BINARY 0
+// How many interpolation passes should we try before falling back to binary search?
+#define SLOP_INTERPOLATION 5
 
 // Should we filter duplicate triangles? Normally there's few of them, but in some meshes there's a lot. Filtering is done after targeting...
 #define SLOP_FILTER_DUPLICATES 1
@@ -920,81 +911,6 @@ struct TriangleHasher
 	}
 };
 
-#if SLOP_ACCELERATE_BINARY
-static void computeVertexIds(unsigned int* vertex_ids, const Vector3* vertex_positions, size_t vertex_count)
-{
-	for (size_t i = 0; i < vertex_count; ++i)
-	{
-		const Vector3& v = vertex_positions[i];
-
-		int xi = int(v.x * 1023.f + 0.5f);
-		int yi = int(v.y * 1023.f + 0.5f);
-		int zi = int(v.z * 1023.f + 0.5f);
-
-		vertex_ids[i] = (xi << 20) | (yi << 10) | zi;
-	}
-}
-
-static size_t countVertexCellsPow2(unsigned char* count_table, size_t count_table_size, const unsigned int* vertex_ids, size_t vertex_count, int grid_size)
-{
-	assert((grid_size & (grid_size - 1)) == 0);
-
-	HashCellHasher hasher;
-
-	int maskc = 1023 & ~(1024 / grid_size - 1);
-	int mask = (maskc << 20) | (maskc << 10) | maskc;
-
-	memset(count_table, 0, count_table_size);
-
-	size_t cell_count = 0;
-
-	for (size_t i = 0; i < vertex_count; ++i)
-	{
-		unsigned int id = vertex_ids[i] & mask;
-		HashCell cell = { id, 0 };
-		size_t hash = hasher.hash(cell) & (count_table_size - 1);
-
-		cell_count += 1 - count_table[hash];
-		count_table[hash] = 1;
-	}
-
-	return cell_count;
-}
-
-static size_t fillVertexCellsPow2(HashCell* table, size_t table_size, unsigned int* vertex_cells, const unsigned int* vertex_ids, size_t vertex_count, int grid_size)
-{
-	assert((grid_size & (grid_size - 1)) == 0);
-
-	HashCellHasher hasher;
-	HashCell dummy = { ~0u, 0 };
-
-	memset(table, -1, table_size * sizeof(HashCell));
-
-	int maskc = 1023 & ~(1024 / grid_size - 1);
-	int mask = (maskc << 20) | (maskc << 10) | maskc;
-
-	size_t cell_count = 0;
-
-	for (size_t i = 0; i < vertex_count; ++i)
-	{
-		unsigned int id = vertex_ids[i] & mask;
-
-		HashCell cell = { id, 0 };
-		HashCell * entry = hashLookup2(table, table_size, hasher, cell, dummy);
-
-		if (entry->id == ~0u)
-		{
-			entry->id = cell.id;
-			entry->cell = unsigned(cell_count++);
-		}
-
-		vertex_cells[i] = entry->cell;
-	}
-
-	return cell_count;
-}
-#endif
-
 static size_t fillVertexCells(HashCell* table, size_t table_size, unsigned int* vertex_cells, const Vector3* vertex_positions, size_t vertex_count, int grid_size)
 {
 	HashCellHasher hasher;
@@ -1327,15 +1243,11 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	size_t table_size = hashBuckets2(vertex_count);
 	HashCell* table = allocator.allocate<HashCell>(table_size);
 
-#if SLOP_SIMPLE
 	// invariant: # of triangles in min_grid <= target_count
 	int min_grid = 1;
 	int max_grid = 1024;
 	size_t min_triangles = 0;
-	size_t max_triangles = index_count / 3; // TODO: this may overestimate the actual max if this number is >1M since our grid size is limited to 1024
-
-	(void)min_triangles;
-	(void)max_triangles;
+	size_t max_triangles = index_count / 3;
 
 	size_t cell_count = 0;
 
@@ -1343,38 +1255,24 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	{
 		int grid_size = min_grid;
 
-	#if SLOP_INTERPOLATION
-	#if SLOP_GUESS
 		if (pass == 0)
 		{
 			// instead of starting in the middle, let's guess as to what the answer might be! triangle count usually grows as a square of grid size...
 			grid_size = int(sqrtf(float(target_cell_count)));
 			grid_size = (grid_size < 1) ? 1 : (grid_size > 1024) ? 1024 : grid_size;
 		}
-		else
-	#endif
+		else if (pass <= SLOP_INTERPOLATION)
 		{
-			// TODO: sometimes we might decide to fall back to smth other than interpolations search, maybe clamp the interpolation factor between 1/4 and 3/4 or smth?
 			float k = (float(target_index_count / 3) - float(min_triangles)) / (float(max_triangles) - float(min_triangles));
-			float kl = 0.1f;
+			float kl = 0.0f; // TODO: should we even clamp since we fall back to binary? to what?
 			k = (k < kl) ? kl : (k > 1 - kl) ? 1 - kl : k;
 			grid_size = int(float(min_grid) * (1 - k) + float(max_grid) * k);
 			grid_size = (grid_size < 1) ? 1 : (grid_size > 1024) ? 1024 : grid_size;
 		}
-	#else
-	#if SLOP_GUESS
-		if (pass == 0)
-		{
-			// instead of starting in the middle, let's guess as to what the answer might be! triangle count usually grows as a square of grid size...
-			grid_size = int(sqrtf(float(target_cell_count)));
-			grid_size = (grid_size < 1) ? 1 : (grid_size > 1024) ? 1024 : grid_size;
-		}
 		else
-	#endif
 		{
 			grid_size = (min_grid + max_grid) / 2;
 		}
-	#endif
 
 		if (grid_size == min_grid)
 			break;
@@ -1383,7 +1281,10 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 		size_t triangles = countTriangles(vertex_cells_temp, indices, index_count);
 
 #if TRACE
-		printf("pass %d: cell count %d, grid size %d, cell size %.4f, triangles %d\n", pass, int(cells), grid_size, 1.f / float(grid_size), int(triangles));
+		printf("pass %d (%s): cell count %d, grid size %d, cell size %.4f, triangles %d, %s\n",
+				pass, (pass == 0) ? "guess" : (pass <= SLOP_INTERPOLATION) ? "lerp" : "binary",
+				int(cells), grid_size, 1.f / float(grid_size), int(triangles),
+				(triangles <= target_index_count / 3) ? "under" : "over");
 #endif
 
 		if (triangles <= target_index_count / 3)
@@ -1404,110 +1305,6 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 
 	if (cell_count <= 1)
 		return 0;
-#else
-#if SLOP_ACCELERATE_BINARY
-	unsigned int* vertex_ids = allocator.allocate<unsigned int>(vertex_count);
-	computeVertexIds(vertex_ids, vertex_positions, vertex_count);
-
-	size_t count_table_size = hashBuckets2(target_cell_count * 4);
-	unsigned char* count_table = allocator.allocate<unsigned char>(count_table_size);
-#endif
-
-	int bits = 10;
-
-	// find grid size that has more (estimated) cells than target
-	for (int pass = 0; pass < 10; ++pass)
-	{
-		int grid_size = 1 << (1 + pass);
-
-		if (unsigned(grid_size * grid_size * grid_size) < target_cell_count)
-			continue;
-
-#if SLOP_ACCELERATE_BINARY
-		size_t cells = countVertexCellsPow2(count_table, count_table_size, vertex_ids, vertex_count, grid_size);
-#else
-		size_t cells = fillVertexCells(table, table_size, vertex_cells, vertex_positions, vertex_count, grid_size);
-#endif
-
-#if TRACE
-		printf("binary pass %d: cell count %d, grid size %d, cell size %.4f\n", pass, int(cells), grid_size, 1.f / float(grid_size));
-#endif
-
-		if (cells >= target_cell_count)
-		{
-			bits = 1 + pass;
-			break;
-		}
-	}
-
-	size_t cell_count = 0;
-
-	// invariant: # of triangles in min_grid <= target_count
-	// note that we do *not* validate that max_grid is over target_count - it basically almost is, since it has >target_cell_count cells,
-	// but even when this is violated our algorithm will just converge to a somewhat simpler mesh.
-	int min_grid = (1 << bits) / 2;
-	int max_grid = 1 << bits;
-
-	// note that we are *not* guaranteed that min_grid gives us <target_index_count triangles! because of this, we need to iteratively adjust it until it does
-	while (min_grid > 1)
-	{
-#if SLOP_ACCELERATE_BINARY
-		size_t cells = fillVertexCellsPow2(table, table_size, vertex_cells, vertex_ids, vertex_count, min_grid);
-#else
-		size_t cells = fillVertexCells(table, table_size, vertex_cells, vertex_positions, vertex_count, min_grid);
-#endif
-
-		size_t triangles = countTriangles(vertex_cells, indices, index_count);
-
-#if TRACE
-		printf("reduce pass: cell count %d, grid size %d, cell size %.4f, triangles %d\n", int(cells), min_grid, 1.f / float(min_grid), int(triangles));
-#endif
-
-		if (triangles <= target_index_count / 3)
-		{
-			cell_count = cells;
-			break;
-		}
-
-		// min_grid is over budget, so let's probe the next range
-		max_grid = min_grid;
-		min_grid /= 2;
-	}
-
-	// we ended up with 1^3 grid which means all vertices will collapse to a single point => result is empty
-	if (min_grid == 1)
-		return 0;
-
-	// now that we *know* min_grid results in a mesh we can use, we should try to increase the grid size in hopes of improving the quality
-	for (int pass = 0; pass < 5; ++pass)
-	{
-		int grid_size = (min_grid + max_grid) / 2;
-
-		if (grid_size == min_grid)
-			break;
-
-		// note that we save the cells table into _temp array; if we find a better candidate than min_grid then we will copy it to vertex_cells array
-		size_t cells = fillVertexCells(table, table_size, vertex_cells_temp, vertex_positions, vertex_count, grid_size);
-		size_t triangles = countTriangles(vertex_cells_temp, indices, index_count);
-
-#if TRACE
-		printf("upres pass %d: cell count %d, grid size %d, cell size %.4f, triangles %d\n", pass, int(cells), grid_size, 1.f / float(grid_size), int(triangles));
-#endif
-
-		if (triangles <= target_index_count / 3)
-		{
-			min_grid = grid_size;
-
-			// this may be replaced with better data on a subsequent pass... or not
-			memcpy(vertex_cells, vertex_cells_temp, vertex_count * sizeof(unsigned int));
-			cell_count = cells;
-		}
-		else
-		{
-			max_grid = grid_size;
-		}
-	}
-#endif
 
 	// second pass: build a quadric for each target cell
 	Quadric* cell_quadrics = allocator.allocate<Quadric>(cell_count);
