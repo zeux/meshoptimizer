@@ -1348,7 +1348,8 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 		if (pass == 0)
 		{
 			// instead of starting in the middle, let's guess as to what the answer might be! triangle count usually grows as a square of grid size...
-			grid_size = sqrt(target_cell_count);
+			grid_size = int(sqrtf(float(target_cell_count)));
+			grid_size = (grid_size < 1) ? 1 : (grid_size > 1024) ? 1024 : grid_size;
 		}
 		else
 	#endif
@@ -1358,13 +1359,15 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 			float kl = 0.1f;
 			k = (k < kl) ? kl : (k > 1 - kl) ? 1 - kl : k;
 			grid_size = int(float(min_grid) * (1 - k) + float(max_grid) * k);
+			grid_size = (grid_size < 1) ? 1 : (grid_size > 1024) ? 1024 : grid_size;
 		}
 	#else
 	#if SLOP_GUESS
 		if (pass == 0)
 		{
 			// instead of starting in the middle, let's guess as to what the answer might be! triangle count usually grows as a square of grid size...
-			grid_size = sqrt(target_cell_count);
+			grid_size = int(sqrtf(float(target_cell_count)));
+			grid_size = (grid_size < 1) ? 1 : (grid_size > 1024) ? 1024 : grid_size;
 		}
 		else
 	#endif
