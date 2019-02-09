@@ -914,7 +914,7 @@ struct TriangleHasher
 static size_t fillVertexCells(HashCell* table, size_t table_size, unsigned int* vertex_cells, const Vector3* vertex_positions, size_t vertex_count, int grid_size)
 {
 	HashCellHasher hasher;
-	HashCell dummy = { ~0u, 0 };
+	HashCell dummy = {~0u, 0};
 
 	memset(table, -1, table_size * sizeof(HashCell));
 
@@ -932,8 +932,8 @@ static size_t fillVertexCells(HashCell* table, size_t table_size, unsigned int* 
 
 		unsigned int id = (xi << 20) | (yi << 10) | zi;
 
-		HashCell cell = { id, 0 };
-		HashCell * entry = hashLookup2(table, table_size, hasher, cell, dummy);
+		HashCell cell = {id, 0};
+		HashCell* entry = hashLookup2(table, table_size, hasher, cell, dummy);
 
 		if (entry->id == ~0u)
 		{
@@ -1278,9 +1278,9 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 
 #if TRACE
 		printf("pass %d (%s): cell count %d, grid size %d, cell size %.4f, triangles %d, %s\n",
-				pass, (pass == 0) ? "guess" : (pass <= SLOP_INTERPOLATION) ? "lerp" : "binary",
-				int(cells), grid_size, 1.f / float(grid_size), int(triangles),
-				(triangles <= target_index_count / 3) ? "under" : "over");
+		       pass, (pass == 0) ? "guess" : (pass <= SLOP_INTERPOLATION) ? "lerp" : "binary",
+		       int(cells), grid_size, 1.f / float(grid_size), int(triangles),
+		       (triangles <= target_index_count / 3) ? "under" : "over");
 #endif
 
 		if (triangles <= target_index_count / 3)
@@ -1317,14 +1317,14 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	// fourth pass: collapse triangles!
 	// note that we need to filter out triangles that we've already output because we very frequently generate redundant triangles between cells :(
 #if SLOP_FILTER_DUPLICATES
-	size_t tritable_size = hashBuckets2(target_index_count / 3);
+	size_t tritable_size = hashBuckets2(min_triangles);
 	Triangle* tritable = allocator.allocate<Triangle>(tritable_size);
 
 	size_t write = filterTriangles(destination, tritable, tritable_size, indices, index_count, vertex_cells, cell_remap);
 	assert(write <= target_index_count);
 
 #if TRACE
-	printf("duplicates: %d triangles => %d unique\n", unsigned(countTriangles(vertex_cells, indices, index_count)), int(write / 3));
+	printf("duplicates: %d triangles => %d unique\n", unsigned(min_triangles), int(write / 3));
 #endif
 #else
 	size_t write = filterTriangles(destination, indices, index_count, vertex_cells, cell_remap);
