@@ -1249,29 +1249,29 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 
 	size_t cell_count = 0;
 
-	for (int pass = 0; pass < 10; ++pass)
+	for (int pass = 0; pass < 10 + SLOP_INTERPOLATION; ++pass)
 	{
-		int grid_size = min_grid;
+		assert(min_triangles < target_index_count / 3);
+		assert(min_grid < max_grid && min_triangles < max_triangles);
+
+		int grid_size = 0;
 
 		if (pass == 0)
 		{
 			// instead of starting in the middle, let's guess as to what the answer might be! triangle count usually grows as a square of grid size...
 			grid_size = int(sqrtf(float(target_cell_count)));
-			grid_size = (grid_size < min_grid) ? min_grid : (grid_size > max_grid) ? max_grid : grid_size;
+			grid_size = (grid_size <= min_grid) ? min_grid + 1 : (grid_size >= max_grid) ? max_grid : grid_size;
 		}
 		else if (pass <= SLOP_INTERPOLATION)
 		{
 			float k = (float(target_index_count / 3) - float(min_triangles)) / (float(max_triangles) - float(min_triangles));
 			grid_size = int(float(min_grid) * (1 - k) + float(max_grid) * k);
-			grid_size = (grid_size < min_grid) ? min_grid : (grid_size > max_grid) ? max_grid : grid_size;
+			grid_size = (grid_size <= min_grid) ? min_grid + 1 : (grid_size >= max_grid) ? max_grid : grid_size;
 		}
 		else
 		{
 			grid_size = (min_grid + max_grid) / 2;
 		}
-
-		if (grid_size == min_grid)
-			break;
 
 		size_t cells = fillVertexCells(table, table_size, vertex_cells_temp, vertex_positions, vertex_count, grid_size);
 		size_t triangles = countTriangles(vertex_cells_temp, indices, index_count);
@@ -1297,6 +1297,9 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 			max_grid = grid_size;
 			max_triangles = triangles;
 		}
+
+		if (triangles == target_index_count / 3 || min_grid + 1 >= max_grid)
+			break;
 	}
 
 	if (cell_count <= 1)
