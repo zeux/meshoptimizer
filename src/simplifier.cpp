@@ -14,9 +14,6 @@
 #include <stdio.h>
 #endif
 
-// Should we filter duplicate triangles? Normally there's few of them, but in some meshes there's a lot. Filtering is done after targeting...
-#define SLOP_FILTER_DUPLICATES 1
-
 // This work is based on:
 // Michael Garland and Paul S. Heckbert. Surface simplification using quadric error metrics. 1997
 // Michael Garland. Quadric-based polygonal surface simplification. 1999
@@ -876,26 +873,23 @@ struct CellHasher
 	}
 };
 
-struct Triangle
-{
-	unsigned int a, b, c;
-
-	bool operator==(const Triangle& other) const
-	{
-		return memcmp(this, &other, sizeof(Triangle)) == 0;
-	}
-};
-
 struct TriangleHasher
 {
-	size_t hash(const Triangle& tri) const
+	unsigned int* indices;
+
+	size_t hash(unsigned int i) const
 	{
-		return (tri.a * 73856093) ^ (tri.b * 19349663) ^ (tri.c * 83492791);
+		const unsigned int* tri = indices + i * 3;
+
+		return (tri[0] * 73856093) ^ (tri[1] * 19349663) ^ (tri[2] * 83492791);
 	}
 
-	bool equal(const Triangle& lhs, const Triangle& rhs) const
+	bool equal(unsigned int lhs, unsigned int rhs) const
 	{
-		return memcmp(&lhs, &rhs, sizeof(Triangle)) == 0;
+		const unsigned int* lt = indices + lhs * 3;
+		const unsigned int* rt = indices + rhs * 3;
+
+		return lt[0] == rt[0] && lt[1] == rt[1] && lt[2] == rt[2];
 	}
 };
 
@@ -975,16 +969,13 @@ static void fillCellRemap(unsigned int* cell_remap, float* cell_errors, size_t c
 	}
 }
 
-#if SLOP_FILTER_DUPLICATES
-static size_t filterTriangles(unsigned int* destination, Triangle* tritable, size_t tritable_size, const unsigned int* indices, size_t index_count, const unsigned int* vertex_cells, const unsigned int* cell_remap)
+static size_t filterTriangles(unsigned int* destination, unsigned int* tritable, size_t tritable_size, const unsigned int* indices, size_t index_count, const unsigned int* vertex_cells, const unsigned int* cell_remap)
 {
-	memset(tritable, -1, tritable_size * sizeof(Triangle));
+	TriangleHasher hasher = {destination};
 
-	Triangle dummy = {~0u, ~0u, ~0u};
-	TriangleHasher hasher;
+	memset(tritable, -1, tritable_size * sizeof(unsigned int));
 
-	size_t write = 0;
-	size_t potential = 0;
+	size_t result = 0;
 
 	for (size_t i = 0; i < index_count; i += 3)
 	{
@@ -994,60 +985,34 @@ static size_t filterTriangles(unsigned int* destination, Triangle* tritable, siz
 
 		if (c0 != c1 && c0 != c2 && c1 != c2)
 		{
-			potential++;
+			unsigned int a = cell_remap[c0];
+			unsigned int b = cell_remap[c1];
+			unsigned int c = cell_remap[c2];
 
-			Triangle tri = {c0, c1, c2};
-
-			if (tri.b < tri.a && tri.b < tri.c)
+			if (b < a && b < c)
 			{
-				unsigned int t = tri.a;
-				tri.a = tri.b, tri.b = tri.c, tri.c = t;
+				unsigned int t = a;
+				a = b, b = c, c = t;
 			}
-			else if (tri.c < tri.a && tri.c < tri.b)
+			else if (c < a && c < b)
 			{
-				unsigned int t = tri.c;
-				tri.c = tri.b, tri.b = tri.a, tri.a = t;
+				unsigned int t = c;
+				c = b, b = a, a = t;
 			}
 
-			Triangle* entry = hashLookup2(tritable, tritable_size, hasher, tri, dummy);
+			destination[result * 3 + 0] = a;
+			destination[result * 3 + 1] = b;
+			destination[result * 3 + 2] = c;
 
-			if (entry->a == ~0u)
-			{
-				*entry = tri;
+			unsigned int* entry = hashLookup2(tritable, tritable_size, hasher, unsigned(result), ~0u);
 
-				destination[write + 0] = cell_remap[c0];
-				destination[write + 1] = cell_remap[c1];
-				destination[write + 2] = cell_remap[c2];
-				write += 3;
-			}
+			if (*entry == ~0u)
+				*entry = unsigned(result++);
 		}
 	}
 
-	return write;
+	return result * 3;
 }
-#else
-static size_t filterTriangles(unsigned int* destination, const unsigned int* indices, size_t index_count, const unsigned int* vertex_cells, const unsigned int* cell_remap)
-{
-	size_t write = 0;
-
-	for (size_t i = 0; i < index_count; i += 3)
-	{
-		unsigned int c0 = vertex_cells[indices[i + 0]];
-		unsigned int c1 = vertex_cells[indices[i + 1]];
-		unsigned int c2 = vertex_cells[indices[i + 2]];
-
-		if (c0 != c1 && c0 != c2 && c1 != c2)
-		{
-			destination[write + 0] = cell_remap[c0];
-			destination[write + 1] = cell_remap[c1];
-			destination[write + 2] = cell_remap[c2];
-			write += 3;
-		}
-	}
-
-	return write;
-}
-#endif
 
 } // namespace meshopt
 
@@ -1316,23 +1281,14 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 
 	// collapse triangles!
 	// note that we need to filter out triangles that we've already output because we very frequently generate redundant triangles between cells :(
-#if SLOP_FILTER_DUPLICATES
 	size_t tritable_size = hashBuckets2(min_triangles);
-	Triangle* tritable = allocator.allocate<Triangle>(tritable_size);
+	unsigned int* tritable = allocator.allocate<unsigned int>(tritable_size);
 
 	size_t write = filterTriangles(destination, tritable, tritable_size, indices, index_count, vertex_cells, cell_remap);
 	assert(write <= target_index_count);
 
 #if TRACE
-	printf("duplicates: %d triangles => %d unique\n", unsigned(min_triangles), int(write / 3));
-#endif
-#else
-	size_t write = filterTriangles(destination, indices, index_count, vertex_cells, cell_remap);
-	assert(write <= target_index_count);
-#endif
-
-#if TRACE
-	printf("result: %d cells, %d triangles\n", int(cell_count), int(write / 3));
+	printf("result: %d cells, %d triangles (%d unfiltered)\n", int(cell_count), int(write / 3), int(min_triangles));
 #endif
 
 	return write;
