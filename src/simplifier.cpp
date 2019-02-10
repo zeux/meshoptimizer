@@ -14,9 +14,6 @@
 #include <stdio.h>
 #endif
 
-// How many interpolation passes should we try before falling back to binary search?
-#define SLOP_INTERPOLATION 5
-
 // Should we filter duplicate triangles? Normally there's few of them, but in some meshes there's a lot. Filtering is done after targeting...
 #define SLOP_FILTER_DUPLICATES 1
 
@@ -904,7 +901,8 @@ struct TriangleHasher
 
 static void computeVertexIds(unsigned int* vertex_ids, const Vector3* vertex_positions, size_t vertex_count, int grid_size)
 {
-	float cell_scale = (grid_size > 1023) ? 1023.f : float(grid_size - 1);
+	assert(grid_size >= 1 && grid_size <= 1024);
+	float cell_scale = float(grid_size - 1);
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
@@ -928,7 +926,7 @@ static size_t countTriangles(const unsigned int* vertex_ids, const unsigned int*
 		unsigned int id1 = vertex_ids[indices[i + 1]];
 		unsigned int id2 = vertex_ids[indices[i + 2]];
 
-		result += (id0 != id1) & (id0 != id2) & (id1 != id2);
+		result += id0 != id1 && id0 != id2 && id1 != id2;
 	}
 
 	return result;
@@ -1235,33 +1233,36 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	unsigned int* vertex_ids = allocator.allocate<unsigned int>(vertex_count);
 
 	// invariant: # of triangles in min_grid <= target_count
-	int min_grid = 1;
-	int max_grid = 1024;
+	int min_grid = 0;
+	int max_grid = 1025;
 	size_t min_triangles = 0;
 	size_t max_triangles = index_count / 3;
 
-	for (int pass = 0; pass < 10 + SLOP_INTERPOLATION; ++pass)
+	const int kInterpolationPasses = 5;
+
+	for (int pass = 0; pass < 10 + kInterpolationPasses; ++pass)
 	{
 		assert(min_triangles < target_index_count / 3);
-		assert(min_grid < max_grid && min_triangles < max_triangles);
+		assert(max_grid - min_grid > 1);
 
 		int grid_size = 0;
 
 		if (pass == 0)
 		{
 			// instead of starting in the middle, let's guess as to what the answer might be! triangle count usually grows as a square of grid size...
-			grid_size = int(sqrtf(float(target_cell_count)));
-			grid_size = (grid_size <= min_grid) ? min_grid + 1 : (grid_size >= max_grid) ? max_grid : grid_size;
+			grid_size = int(sqrtf(float(target_cell_count)) + 0.5f);
+			grid_size = (grid_size <= min_grid) ? min_grid + 1 : (grid_size >= max_grid) ? max_grid - 1 : grid_size;
 		}
-		else if (pass <= SLOP_INTERPOLATION)
+		else if (pass <= kInterpolationPasses)
 		{
 			float k = (float(target_index_count / 3) - float(min_triangles)) / (float(max_triangles) - float(min_triangles));
-			grid_size = int(float(min_grid) * (1 - k) + float(max_grid) * k);
-			grid_size = (grid_size <= min_grid) ? min_grid + 1 : (grid_size >= max_grid) ? max_grid : grid_size;
+			grid_size = int(float(min_grid) * (1 - k) + float(max_grid) * k + 0.5f);
+			grid_size = (grid_size <= min_grid) ? min_grid + 1 : (grid_size >= max_grid) ? max_grid - 1 : grid_size;
 		}
 		else
 		{
 			grid_size = (min_grid + max_grid) / 2;
+			assert(grid_size > min_grid && grid_size < max_grid);
 		}
 
 		computeVertexIds(vertex_ids, vertex_positions, vertex_count, grid_size);
@@ -1269,7 +1270,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 
 #if TRACE
 		printf("pass %d (%s): grid size %d, triangles %d, %s\n",
-		       pass, (pass == 0) ? "guess" : (pass <= SLOP_INTERPOLATION) ? "lerp" : "binary",
+		       pass, (pass == 0) ? "guess" : (pass <= kInterpolationPasses) ? "lerp" : "binary",
 		       grid_size, int(triangles),
 		       (triangles <= target_index_count / 3) ? "under" : "over");
 #endif
@@ -1285,7 +1286,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 			max_triangles = triangles;
 		}
 
-		if (triangles == target_index_count / 3 || min_grid + 1 >= max_grid)
+		if (triangles == target_index_count / 3 || max_grid - min_grid <= 1)
 			break;
 	}
 
