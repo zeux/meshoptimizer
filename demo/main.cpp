@@ -357,13 +357,12 @@ void packMesh(std::vector<PackedVertexOct>& pv, const std::vector<Vertex>& verti
 	}
 }
 
-void simplify(const Mesh& mesh)
+void simplify(const Mesh& mesh, float threshold = 0.2f)
 {
 	Mesh lod;
 
 	double start = timestamp();
 
-	float threshold = 0.2f;
 	size_t target_index_count = size_t(mesh.indices.size() * threshold);
 	float target_error = 1e-3f;
 
@@ -380,13 +379,12 @@ void simplify(const Mesh& mesh)
 	       int(mesh.indices.size() / 3), int(lod.indices.size() / 3), (end - start) * 1000);
 }
 
-void simplifySloppy(const Mesh& mesh)
+void simplifySloppy(const Mesh& mesh, float threshold = 0.2f)
 {
 	Mesh lod;
 
 	double start = timestamp();
 
-	float threshold = 0.2f;
 	size_t target_index_count = size_t(mesh.indices.size() * threshold);
 
 	lod.indices.resize(mesh.indices.size());
