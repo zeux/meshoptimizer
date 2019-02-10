@@ -11,8 +11,10 @@
 
 #include <GLFW/glfw3.h>
 
+#ifdef GLTF
 #define CGLTF_IMPLEMENTATION
 #include "cgltf.h"
+#endif
 
 #ifdef _WIN32
 #pragma comment(lib, "opengl32.lib")
@@ -107,6 +109,7 @@ Mesh parseObj(const char* path)
 	return result;
 }
 
+#ifdef GLTF
 cgltf_accessor* getAccessor(const cgltf_attribute* attributes, size_t attribute_count, cgltf_attribute_type type, int index = 0)
 {
 	for (size_t i = 0; i < attribute_count; ++i)
@@ -125,7 +128,7 @@ const T* getComponentPtr(const cgltf_accessor* a)
 	return reinterpret_cast<const T*>(&buffer[offset]);
 }
 
-Mesh parseGltfC(const char* path)
+Mesh parseGltf(const char* path)
 {
 	cgltf_options options = {};
 	cgltf_data* data = 0;
@@ -271,14 +274,17 @@ Mesh parseGltfC(const char* path)
 
 	return result;
 }
+#endif
 
 Mesh loadMesh(const char* path)
 {
 	if (strstr(path, ".obj"))
 		return parseObj(path);
 
+#ifdef GLTF
 	if (strstr(path, ".gltf") || strstr(path, ".glb"))
-		return parseGltfC(path);
+		return parseGltf(path);
+#endif
 
 	return Mesh();
 }
