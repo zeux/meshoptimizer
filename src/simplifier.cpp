@@ -859,32 +859,23 @@ static void remapEdgeLoops(unsigned int* loop, size_t vertex_count, const unsign
 	}
 }
 
-struct HashCell
+struct CellHasher
 {
-	unsigned int id;
-	unsigned int cell;
+	const unsigned int* vertex_ids;
 
-	bool operator==(const HashCell& other) const
-	{
-		return id == other.id;
-	}
-};
-
-struct HashCellHasher
-{
-	size_t hash(const HashCell& cell) const
+	size_t hash(unsigned int i) const
 	{
 		// MurmurHash2 finalizer
-		unsigned int h = cell.id;
+		unsigned int h = vertex_ids[i];
 		h ^= h >> 13;
 		h *= 0x5bd1e995;
 		h ^= h >> 15;
 		return h;
 	}
 
-	bool equal(const HashCell& lhs, const HashCell& rhs) const
+	bool equal(unsigned int lhs, unsigned int rhs) const
 	{
-		return lhs.id == rhs.id;
+		return vertex_ids[lhs] == vertex_ids[rhs];
 	}
 };
 
@@ -943,40 +934,30 @@ static size_t countTriangles(const unsigned int* vertex_ids, const unsigned int*
 	return result;
 }
 
-static size_t fillVertexCells(HashCell* table, size_t table_size, unsigned int* vertex_cells, const Vector3* vertex_positions, size_t vertex_count, int grid_size)
+static size_t fillVertexCells(unsigned int* table, size_t table_size, unsigned int* vertex_cells, const unsigned int* vertex_ids, size_t vertex_count)
 {
-	HashCellHasher hasher;
-	HashCell dummy = {~0u, 0};
+	CellHasher hasher = {vertex_ids};
 
-	memset(table, -1, table_size * sizeof(HashCell));
+	memset(table, -1, table_size * sizeof(unsigned int));
 
-	float cell_scale = (grid_size > 1023) ? 1023.f : float(grid_size - 1);
-
-	size_t cell_count = 0;
+	size_t result = 0;
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		const Vector3& v = vertex_positions[i];
+		unsigned int* entry = hashLookup2(table, table_size, hasher, unsigned(i), ~0u);
 
-		int xi = int(v.x * cell_scale + 0.5f);
-		int yi = int(v.y * cell_scale + 0.5f);
-		int zi = int(v.z * cell_scale + 0.5f);
-
-		unsigned int id = (xi << 20) | (yi << 10) | zi;
-
-		HashCell cell = {id, 0};
-		HashCell* entry = hashLookup2(table, table_size, hasher, cell, dummy);
-
-		if (entry->id == ~0u)
+		if (*entry == ~0u)
 		{
-			entry->id = cell.id;
-			entry->cell = unsigned(cell_count++);
+			*entry = unsigned(i);
+			vertex_cells[i] = unsigned(result++);
 		}
-
-		vertex_cells[i] = entry->cell;
+		else
+		{
+			vertex_cells[i] = vertex_cells[*entry];
+		}
 	}
 
-	return cell_count;
+	return result;
 }
 
 static void fillCellRemap(unsigned int* cell_remap, float* cell_errors, size_t cell_count, const unsigned int* vertex_cells, const Quadric* cell_quadrics, const Vector3* vertex_positions, size_t vertex_count)
@@ -1313,11 +1294,12 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 
 	// build vertex->cell association by mapping all vertices with the same quantized position to the same cell
 	size_t table_size = hashBuckets2(vertex_count);
-	HashCell* table = allocator.allocate<HashCell>(table_size);
+	unsigned int* table = allocator.allocate<unsigned int>(table_size);
 
 	unsigned int* vertex_cells = allocator.allocate<unsigned int>(vertex_count);
 
-	size_t cell_count = fillVertexCells(table, table_size, vertex_cells, vertex_positions, vertex_count, min_grid);
+	computeVertexIds(vertex_ids, vertex_positions, vertex_count, min_grid);
+	size_t cell_count = fillVertexCells(table, table_size, vertex_cells, vertex_ids, vertex_count);
 
 	// build a quadric for each target cell
 	Quadric* cell_quadrics = allocator.allocate<Quadric>(cell_count);
