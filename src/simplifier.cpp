@@ -859,8 +859,9 @@ struct CellHasher
 
 	size_t hash(unsigned int i) const
 	{
-		// MurmurHash2 finalizer
 		unsigned int h = vertex_ids[i];
+
+		// MurmurHash2 finalizer
 		h ^= h >> 13;
 		h *= 0x5bd1e995;
 		h ^= h >> 15;
@@ -881,6 +882,7 @@ struct TriangleHasher
 	{
 		const unsigned int* tri = indices + i * 3;
 
+		// Optimized Spatial Hashing for Collision Detection of Deformable Objects
 		return (tri[0] * 73856093) ^ (tri[1] * 19349663) ^ (tri[2] * 83492791);
 	}
 

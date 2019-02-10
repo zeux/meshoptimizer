@@ -548,7 +548,7 @@ template <typename T>
 inline size_t meshopt_simplifySloppy(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count)
 {
 	meshopt_IndexAdapter<T> in(0, indices, index_count);
-	meshopt_IndexAdapter<T> out(destination, 0, index_count);
+	meshopt_IndexAdapter<T> out(destination, 0, target_index_count);
 
 	return meshopt_simplifySloppy(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride, target_index_count);
 }

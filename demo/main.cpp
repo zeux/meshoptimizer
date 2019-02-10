@@ -366,7 +366,7 @@ void simplify(const Mesh& mesh, float threshold = 0.2f)
 	size_t target_index_count = size_t(mesh.indices.size() * threshold);
 	float target_error = 1e-3f;
 
-	lod.indices.resize(mesh.indices.size());
+	lod.indices.resize(mesh.indices.size()); // note: simplify needs space for index_count elements in the destination array, not target_index_count
 	lod.indices.resize(meshopt_simplify(&lod.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error));
 
 	lod.vertices.resize(mesh.vertices.size());
@@ -387,7 +387,7 @@ void simplifySloppy(const Mesh& mesh, float threshold = 0.2f)
 
 	size_t target_index_count = size_t(mesh.indices.size() * threshold);
 
-	lod.indices.resize(mesh.indices.size());
+	lod.indices.resize(target_index_count);
 	lod.indices.resize(meshopt_simplifySloppy(&lod.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count));
 
 	lod.vertices.resize(mesh.vertices.size());
