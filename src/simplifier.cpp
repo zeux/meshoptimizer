@@ -17,6 +17,8 @@
 // This work is based on:
 // Michael Garland and Paul S. Heckbert. Surface simplification using quadric error metrics. 1997
 // Michael Garland. Quadric-based polygonal surface simplification. 1999
+// Peter Lindstrom. Out-of-Core Simplification of Large Polygonal Models. 2000
+// Matthias Teschner, Bruno Heidelberger, Matthias Mueller, Danat Pomeranets, Markus Gross. Optimized Spatial Hashing for Collision Detection of Deformable Objects. 2003
 namespace meshopt
 {
 
@@ -851,6 +853,169 @@ static void remapEdgeLoops(unsigned int* loop, size_t vertex_count, const unsign
 	}
 }
 
+struct CellHasher
+{
+	const unsigned int* vertex_ids;
+
+	size_t hash(unsigned int i) const
+	{
+		unsigned int h = vertex_ids[i];
+
+		// MurmurHash2 finalizer
+		h ^= h >> 13;
+		h *= 0x5bd1e995;
+		h ^= h >> 15;
+		return h;
+	}
+
+	bool equal(unsigned int lhs, unsigned int rhs) const
+	{
+		return vertex_ids[lhs] == vertex_ids[rhs];
+	}
+};
+
+struct TriangleHasher
+{
+	unsigned int* indices;
+
+	size_t hash(unsigned int i) const
+	{
+		const unsigned int* tri = indices + i * 3;
+
+		// Optimized Spatial Hashing for Collision Detection of Deformable Objects
+		return (tri[0] * 73856093) ^ (tri[1] * 19349663) ^ (tri[2] * 83492791);
+	}
+
+	bool equal(unsigned int lhs, unsigned int rhs) const
+	{
+		const unsigned int* lt = indices + lhs * 3;
+		const unsigned int* rt = indices + rhs * 3;
+
+		return lt[0] == rt[0] && lt[1] == rt[1] && lt[2] == rt[2];
+	}
+};
+
+static void computeVertexIds(unsigned int* vertex_ids, const Vector3* vertex_positions, size_t vertex_count, int grid_size)
+{
+	assert(grid_size >= 1 && grid_size <= 1024);
+	float cell_scale = float(grid_size - 1);
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		const Vector3& v = vertex_positions[i];
+
+		int xi = int(v.x * cell_scale + 0.5f);
+		int yi = int(v.y * cell_scale + 0.5f);
+		int zi = int(v.z * cell_scale + 0.5f);
+
+		vertex_ids[i] = (xi << 20) | (yi << 10) | zi;
+	}
+}
+
+static size_t countTriangles(const unsigned int* vertex_ids, const unsigned int* indices, size_t index_count)
+{
+	size_t result = 0;
+
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		unsigned int id0 = vertex_ids[indices[i + 0]];
+		unsigned int id1 = vertex_ids[indices[i + 1]];
+		unsigned int id2 = vertex_ids[indices[i + 2]];
+
+		result += id0 != id1 && id0 != id2 && id1 != id2;
+	}
+
+	return result;
+}
+
+static size_t fillVertexCells(unsigned int* table, size_t table_size, unsigned int* vertex_cells, const unsigned int* vertex_ids, size_t vertex_count)
+{
+	CellHasher hasher = {vertex_ids};
+
+	memset(table, -1, table_size * sizeof(unsigned int));
+
+	size_t result = 0;
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		unsigned int* entry = hashLookup2(table, table_size, hasher, unsigned(i), ~0u);
+
+		if (*entry == ~0u)
+		{
+			*entry = unsigned(i);
+			vertex_cells[i] = unsigned(result++);
+		}
+		else
+		{
+			vertex_cells[i] = vertex_cells[*entry];
+		}
+	}
+
+	return result;
+}
+
+static void fillCellRemap(unsigned int* cell_remap, float* cell_errors, size_t cell_count, const unsigned int* vertex_cells, const Quadric* cell_quadrics, const Vector3* vertex_positions, size_t vertex_count)
+{
+	memset(cell_remap, -1, cell_count * sizeof(unsigned int));
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		unsigned int cell = vertex_cells[i];
+		float error = quadricError(cell_quadrics[cell], vertex_positions[i]);
+
+		if (cell_remap[cell] == ~0u || cell_errors[cell] > error)
+		{
+			cell_remap[cell] = unsigned(i);
+			cell_errors[cell] = error;
+		}
+	}
+}
+
+static size_t filterTriangles(unsigned int* destination, unsigned int* tritable, size_t tritable_size, const unsigned int* indices, size_t index_count, const unsigned int* vertex_cells, const unsigned int* cell_remap)
+{
+	TriangleHasher hasher = {destination};
+
+	memset(tritable, -1, tritable_size * sizeof(unsigned int));
+
+	size_t result = 0;
+
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		unsigned int c0 = vertex_cells[indices[i + 0]];
+		unsigned int c1 = vertex_cells[indices[i + 1]];
+		unsigned int c2 = vertex_cells[indices[i + 2]];
+
+		if (c0 != c1 && c0 != c2 && c1 != c2)
+		{
+			unsigned int a = cell_remap[c0];
+			unsigned int b = cell_remap[c1];
+			unsigned int c = cell_remap[c2];
+
+			if (b < a && b < c)
+			{
+				unsigned int t = a;
+				a = b, b = c, c = t;
+			}
+			else if (c < a && c < b)
+			{
+				unsigned int t = c;
+				c = b, b = a, a = t;
+			}
+
+			destination[result * 3 + 0] = a;
+			destination[result * 3 + 1] = b;
+			destination[result * 3 + 2] = c;
+
+			unsigned int* entry = hashLookup2(tritable, tritable_size, hasher, unsigned(result), ~0u);
+
+			if (*entry == ~0u)
+				*entry = unsigned(result++);
+		}
+	}
+
+	return result * 3;
+}
+
 } // namespace meshopt
 
 #if TRACE
@@ -1004,4 +1169,129 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 #endif
 
 	return result_count;
+}
+
+size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count)
+{
+	using namespace meshopt;
+
+	assert(index_count % 3 == 0);
+	assert(vertex_positions_stride > 0 && vertex_positions_stride <= 256);
+	assert(vertex_positions_stride % sizeof(float) == 0);
+	assert(target_index_count <= index_count);
+
+	// we expect to get ~2 triangles/vertex in the output
+	size_t target_cell_count = target_index_count / 6;
+
+	if (target_cell_count == 0)
+		return 0;
+
+	meshopt_Allocator allocator;
+
+	Vector3* vertex_positions = allocator.allocate<Vector3>(vertex_count);
+	rescalePositions(vertex_positions, vertex_positions_data, vertex_count, vertex_positions_stride);
+
+	// find the optimal grid size using guided binary search
+#if TRACE
+	printf("source: %d vertices, %d triangles\n", int(vertex_count), int(index_count / 3));
+	printf("target: %d cells, %d triangles\n", int(target_cell_count), int(target_index_count / 3));
+#endif
+
+	unsigned int* vertex_ids = allocator.allocate<unsigned int>(vertex_count);
+
+	// invariant: # of triangles in min_grid <= target_count
+	int min_grid = 0;
+	int max_grid = 1025;
+	size_t min_triangles = 0;
+	size_t max_triangles = index_count / 3;
+
+	const int kInterpolationPasses = 5;
+
+	for (int pass = 0; pass < 10 + kInterpolationPasses; ++pass)
+	{
+		assert(min_triangles < target_index_count / 3);
+		assert(max_grid - min_grid > 1);
+
+		int grid_size = 0;
+
+		if (pass == 0)
+		{
+			// instead of starting in the middle, let's guess as to what the answer might be! triangle count usually grows as a square of grid size...
+			grid_size = int(sqrtf(float(target_cell_count)) + 0.5f);
+			grid_size = (grid_size <= min_grid) ? min_grid + 1 : (grid_size >= max_grid) ? max_grid - 1 : grid_size;
+		}
+		else if (pass <= kInterpolationPasses)
+		{
+			float k = (float(target_index_count / 3) - float(min_triangles)) / (float(max_triangles) - float(min_triangles));
+			grid_size = int(float(min_grid) * (1 - k) + float(max_grid) * k + 0.5f);
+			grid_size = (grid_size <= min_grid) ? min_grid + 1 : (grid_size >= max_grid) ? max_grid - 1 : grid_size;
+		}
+		else
+		{
+			grid_size = (min_grid + max_grid) / 2;
+			assert(grid_size > min_grid && grid_size < max_grid);
+		}
+
+		computeVertexIds(vertex_ids, vertex_positions, vertex_count, grid_size);
+		size_t triangles = countTriangles(vertex_ids, indices, index_count);
+
+#if TRACE
+		printf("pass %d (%s): grid size %d, triangles %d, %s\n",
+		       pass, (pass == 0) ? "guess" : (pass <= kInterpolationPasses) ? "lerp" : "binary",
+		       grid_size, int(triangles),
+		       (triangles <= target_index_count / 3) ? "under" : "over");
+#endif
+
+		if (triangles <= target_index_count / 3)
+		{
+			min_grid = grid_size;
+			min_triangles = triangles;
+		}
+		else
+		{
+			max_grid = grid_size;
+			max_triangles = triangles;
+		}
+
+		if (triangles == target_index_count / 3 || max_grid - min_grid <= 1)
+			break;
+	}
+
+	if (min_triangles == 0)
+		return 0;
+
+	// build vertex->cell association by mapping all vertices with the same quantized position to the same cell
+	size_t table_size = hashBuckets2(vertex_count);
+	unsigned int* table = allocator.allocate<unsigned int>(table_size);
+
+	unsigned int* vertex_cells = allocator.allocate<unsigned int>(vertex_count);
+
+	computeVertexIds(vertex_ids, vertex_positions, vertex_count, min_grid);
+	size_t cell_count = fillVertexCells(table, table_size, vertex_cells, vertex_ids, vertex_count);
+
+	// build a quadric for each target cell
+	Quadric* cell_quadrics = allocator.allocate<Quadric>(cell_count);
+	memset(cell_quadrics, 0, cell_count * sizeof(Quadric));
+
+	fillFaceQuadrics(cell_quadrics, indices, index_count, vertex_positions, vertex_cells);
+
+	// for each target cell, find the vertex with the minimal error
+	unsigned int* cell_remap = allocator.allocate<unsigned int>(cell_count);
+	float* cell_errors = allocator.allocate<float>(cell_count);
+
+	fillCellRemap(cell_remap, cell_errors, cell_count, vertex_cells, cell_quadrics, vertex_positions, vertex_count);
+
+	// collapse triangles!
+	// note that we need to filter out triangles that we've already output because we very frequently generate redundant triangles between cells :(
+	size_t tritable_size = hashBuckets2(min_triangles);
+	unsigned int* tritable = allocator.allocate<unsigned int>(tritable_size);
+
+	size_t write = filterTriangles(destination, tritable, tritable_size, indices, index_count, vertex_cells, cell_remap);
+	assert(write <= target_index_count);
+
+#if TRACE
+	printf("result: %d cells, %d triangles (%d unfiltered)\n", int(cell_count), int(write / 3), int(min_triangles));
+#endif
+
+	return write;
 }
