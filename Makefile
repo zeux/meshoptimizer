@@ -21,7 +21,7 @@ LIBRARY=$(BUILD)/libmeshoptimizer.a
 EXECUTABLE=$(BUILD)/meshoptimizer
 
 CFLAGS=-g -Wall -Wextra -Werror -std=c89
-CXXFLAGS=-g -Wall -Wextra -Wno-missing-field-initializers -Werror -std=c++98
+CXXFLAGS=-g -Wall -Wextra -Wshadow -Wno-missing-field-initializers -Werror -std=c++98
 LDFLAGS=
 
 ifeq ($(config),iphone)

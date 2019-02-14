@@ -395,10 +395,10 @@ struct meshopt_IndexAdapter<T, false>
 	unsigned int* data;
 	size_t count;
 
-	meshopt_IndexAdapter(T* result, const T* input, size_t count)
-	    : result(result)
+	meshopt_IndexAdapter(T* result_, const T* input, size_t count_)
+	    : result(result_)
 	    , data(0)
-	    , count(count)
+	    , count(count_)
 	{
 		data = new unsigned int[count];
 
