@@ -487,7 +487,7 @@ static void quadricFromPlane(Quadric& Q, float a, float b, float c, float d)
 	Q.c = d * d;
 }
 
-static void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2)
+static void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2, float weight)
 {
 	Vector3 p10 = {p1.x - p0.x, p1.y - p0.y, p1.z - p0.z};
 	Vector3 p20 = {p2.x - p0.x, p2.y - p0.y, p2.z - p0.z};
@@ -499,7 +499,7 @@ static void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1
 
 	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance);
 
-	quadricMul(Q, area);
+	quadricMul(Q, area * weight);
 }
 
 static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2, float weight)
@@ -529,7 +529,7 @@ static void fillFaceQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 		unsigned int i2 = indices[i + 2];
 
 		Quadric Q;
-		quadricFromTriangle(Q, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2]);
+		quadricFromTriangle(Q, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2], 1.f);
 
 		quadricAdd(vertex_quadrics[remap[i0]], Q);
 		quadricAdd(vertex_quadrics[remap[i1]], Q);
@@ -954,6 +954,36 @@ static size_t fillVertexCells(unsigned int* table, size_t table_size, unsigned i
 	return result;
 }
 
+static void fillCellQuadrics(Quadric* cell_quadrics, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const unsigned int* vertex_cells)
+{
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		unsigned int i0 = indices[i + 0];
+		unsigned int i1 = indices[i + 1];
+		unsigned int i2 = indices[i + 2];
+
+		unsigned int c0 = vertex_cells[i0];
+		unsigned int c1 = vertex_cells[i1];
+		unsigned int c2 = vertex_cells[i2];
+
+		bool single_cell = (c0 == c1) & (c0 == c2);
+
+		Quadric Q;
+		quadricFromTriangle(Q, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2], single_cell ? 3.f : 1.f);
+
+		if (single_cell)
+		{
+			quadricAdd(cell_quadrics[c0], Q);
+		}
+		else
+		{
+			quadricAdd(cell_quadrics[c0], Q);
+			quadricAdd(cell_quadrics[c1], Q);
+			quadricAdd(cell_quadrics[c2], Q);
+		}
+	}
+}
+
 static void fillCellRemap(unsigned int* cell_remap, float* cell_errors, size_t cell_count, const unsigned int* vertex_cells, const Quadric* cell_quadrics, const Vector3* vertex_positions, size_t vertex_count)
 {
 	memset(cell_remap, -1, cell_count * sizeof(unsigned int));
@@ -1273,7 +1303,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	Quadric* cell_quadrics = allocator.allocate<Quadric>(cell_count);
 	memset(cell_quadrics, 0, cell_count * sizeof(Quadric));
 
-	fillFaceQuadrics(cell_quadrics, indices, index_count, vertex_positions, vertex_cells);
+	fillCellQuadrics(cell_quadrics, indices, index_count, vertex_positions, vertex_cells);
 
 	// for each target cell, find the vertex with the minimal error
 	unsigned int* cell_remap = allocator.allocate<unsigned int>(cell_count);
