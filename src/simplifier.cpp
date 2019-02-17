@@ -922,7 +922,7 @@ static size_t countTriangles(const unsigned int* vertex_ids, const unsigned int*
 		unsigned int id1 = vertex_ids[indices[i + 1]];
 		unsigned int id2 = vertex_ids[indices[i + 2]];
 
-		result += id0 != id1 && id0 != id2 && id1 != id2;
+		result += (id0 != id1) & (id0 != id2) & (id1 != id2);
 	}
 
 	return result;
