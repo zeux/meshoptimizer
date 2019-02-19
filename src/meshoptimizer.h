@@ -340,6 +340,14 @@ struct meshopt_Bounds
 MESHOPTIMIZER_EXPERIMENTAL struct meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 MESHOPTIMIZER_EXPERIMENTAL struct meshopt_Bounds meshopt_computeMeshletBounds(struct meshopt_Meshlet meshlet, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 
+/**
+ * Experimental: Set allocation callbacks
+ * These callbacks will be used instead of the default operator new/operator delete for all temporary allocations in the library.
+ * Note that all algorithms only allocate memory for temporary use.
+ * allocate/deallocate are always called in a stack-like order - last pointer to be allocated is deallocated first.
+ */
+MESHOPTIMIZER_EXPERIMENTAL void meshopt_setAllocator(void* (*allocate)(size_t), void (*deallocate)(void*));
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
@@ -686,6 +694,15 @@ inline float meshopt_quantizeFloat(float v, int N)
 class meshopt_Allocator
 {
 public:
+	template <typename T>
+	struct StorageT
+	{
+		static void* (*allocate)(size_t);
+		static void (*deallocate)(void*);
+	};
+
+	typedef StorageT<void> Storage;
+
 	meshopt_Allocator()
 		: blocks()
 		, count(0)
@@ -694,14 +711,14 @@ public:
 
 	~meshopt_Allocator()
 	{
-		for (size_t i = 0; i < count; ++i)
-			operator delete(blocks[i]);
+		for (size_t i = count; i > 0; --i)
+			Storage::deallocate(blocks[i - 1]);
 	}
 
 	template <typename T> T* allocate(size_t size)
 	{
 		assert(count < sizeof(blocks) / sizeof(blocks[0]));
-		T* result = static_cast<T*>(operator new(size > size_t(-1) / sizeof(T) ? size_t(-1) : size * sizeof(T)));
+		T* result = static_cast<T*>(Storage::allocate(size > size_t(-1) / sizeof(T) ? size_t(-1) : size * sizeof(T)));
 		blocks[count++] = result;
 		return result;
 	}
@@ -710,6 +727,10 @@ private:
 	void* blocks[16];
 	size_t count;
 };
+
+// This makes sure that allocate/deallocate are lazily generated in translation units that need them and are deduplicated by the linker
+template <typename T> void* (*meshopt_Allocator::StorageT<T>::allocate)(size_t) = operator new;
+template <typename T> void (*meshopt_Allocator::StorageT<T>::deallocate)(void*) = operator delete;
 #endif
 
 /**
