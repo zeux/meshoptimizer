@@ -14,6 +14,21 @@
 #include <stdio.h>
 #endif
 
+// 0 = no weight
+// 1 = weight by sqrt(area) (linear)
+// 2 = weight by area
+// 3 = weight by area^2 (this results in error = volume^2)
+int gQuadricWeight = 2;
+
+// 0 = don't normalize errors
+// 1 = use normalized errors for ranking & limiting
+// 2 = use normalized errors for limiting and non-normalized errors for ranking
+int gQuadricMode = 0;
+
+// 0 = rebuild quadrics from scratch on each pass
+// 1 = keep quadrics around
+int gQuadricMemory = 1;
+
 // This work is based on:
 // Michael Garland and Paul S. Heckbert. Surface simplification using quadric error metrics. 1997
 // Michael Garland. Quadric-based polygonal surface simplification. 1999
@@ -403,6 +418,7 @@ struct Collapse
 		float error;
 		unsigned int errorui;
 	};
+	float weight;
 };
 
 static float normalize(Vector3& v)
@@ -490,7 +506,13 @@ static void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1
 
 	float distance = normal.x * p0.x + normal.y * p0.y + normal.z * p0.z;
 
-	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, area * weight);
+	switch (gQuadricWeight)
+	{
+	case 0: quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, weight); break;
+	case 1: quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, sqrtf(area) * weight); break;
+	case 2: quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, area * weight); break;
+	case 3: quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, area * area * weight); break;
+	}
 }
 
 static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2, float weight)
@@ -506,7 +528,13 @@ static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3
 
 	float distance = normal.x * p0.x + normal.y * p0.y + normal.z * p0.z;
 
-	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, length * length * weight);
+	switch (gQuadricWeight)
+	{
+	case 0: quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, weight); break;
+	case 1: quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, length * weight); break;
+	case 2: quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, length * length * weight); break;
+	case 3: quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, length * length * length * length * weight); break;
+	}
 }
 
 static void fillFaceQuadrics(Quadric* vertex_quadrics, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const unsigned int* remap)
@@ -635,13 +663,24 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 		unsigned int j0 = c.bidi ? i1 : i0;
 		unsigned int j1 = c.bidi ? i0 : i1;
 
-		float ei = quadricError(vertex_quadrics[remap[i0]], vertex_positions[i1]);
-		float ej = quadricError(vertex_quadrics[remap[j0]], vertex_positions[j1]);
+		const Quadric& qi = vertex_quadrics[remap[i0]];
+		const Quadric& qj = vertex_quadrics[remap[j0]];
+
+		float ei = quadricError(qi, vertex_positions[i1]);
+		float ej = quadricError(qj, vertex_positions[j1]);
 
 		// pick edge direction with minimal error
 		c.v0 = ei <= ej ? i0 : j0;
 		c.v1 = ei <= ej ? i1 : j1;
 		c.error = ei <= ej ? ei : ej;
+		c.weight = ei <= ej ? qi.w : qj.w;
+
+		if (gQuadricMode == 1)
+		{
+			float iw = c.weight == 0.f ? 0.f : 1.f / c.weight;
+
+			c.error *= iw;
+		}
 	}
 }
 
@@ -738,7 +777,7 @@ static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapse
 	}
 }
 
-static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, size_t triangle_collapse_goal, float error_limit)
+static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, size_t triangle_collapse_goal, float error_limit, float error_goal)
 {
 	size_t edge_collapses = 0;
 	size_t triangle_collapses = 0;
@@ -747,7 +786,18 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 	{
 		const Collapse& c = collapses[collapse_order[i]];
 
-		if (c.error > error_limit)
+		if (gQuadricMode == 2)
+		{
+			if (c.error > error_limit * c.weight)
+				break;
+		}
+		else
+		{
+			if (c.error > error_limit)
+				break;
+		}
+
+		if (c.error > error_goal)
 			break;
 
 		if (triangle_collapses >= triangle_collapse_goal)
@@ -1108,8 +1158,17 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 	size_t result_count = index_count;
 
+	float error_limit = target_error * target_error;
+
 	while (result_count > target_index_count)
 	{
+		if (gQuadricMemory == 0)
+		{
+			memset(vertex_quadrics, 0, vertex_count * sizeof(Quadric));
+			fillFaceQuadrics(vertex_quadrics, result, result_count, vertex_positions, remap);
+			fillEdgeQuadrics(vertex_quadrics, result, result_count, vertex_positions, remap, vertex_kind, loop);
+		}
+
 		size_t edge_collapse_count = pickEdgeCollapses(edge_collapses, result, result_count, remap, vertex_kind, loop);
 
 		// no edges can be collapsed any more due to topology restrictions
@@ -1134,14 +1193,13 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		const float kPassErrorBound = 1.5f;
 
 		float error_goal = edge_collapse_goal < edge_collapse_count ? edge_collapses[collapse_order[edge_collapse_goal]].error * kPassErrorBound : FLT_MAX;
-		float error_limit = error_goal > target_error ? target_error : error_goal;
 
 		for (size_t i = 0; i < vertex_count; ++i)
 			collapse_remap[i] = unsigned(i);
 
 		memset(collapse_locked, 0, vertex_count);
 
-		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, triangle_collapse_goal, error_limit);
+		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, triangle_collapse_goal, error_limit, error_goal);
 
 		// no edges can be collapsed any more due to hitting the error limit or triangle collapse limit
 		if (collapses == 0)

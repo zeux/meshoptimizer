@@ -23,6 +23,23 @@
 extern unsigned char* meshopt_simplifyDebugKind;
 extern unsigned int* meshopt_simplifyDebugLoop;
 
+// 0 = no weight
+// 1 = weight by sqrt(area) (linear)
+// 2 = weight by area
+// 3 = weight by area^2 (this results in error = volume^2)
+extern int gQuadricWeight;
+
+// 0 = don't normalize errors
+// 1 = use normalized errors for ranking & limiting
+// 2 = use normalized errors for limiting and non-normalized errors for ranking
+extern int gQuadricMode;
+
+// 0 = rebuild quadrics from scratch on each pass
+// 1 = keep quadrics around
+extern int gQuadricMemory;
+
+int gLod;
+
 #ifndef TRACE
 unsigned char* meshopt_simplifyDebugKind;
 unsigned int* meshopt_simplifyDebugLoop;
@@ -322,9 +339,9 @@ bool saveObj(const Mesh& mesh, const char* path)
 
 Mesh optimize(const Mesh& mesh, int lod)
 {
-	float threshold = powf(0.7f, float(lod));
+	float threshold = powf(0.5f, float(lod));
 	size_t target_index_count = size_t(mesh.indices.size() * threshold);
-	float target_error = 1e-3f;
+	float target_error = 1;
 
 	Mesh result = mesh;
 	result.kinds.resize(result.vertices.size());
@@ -476,7 +493,7 @@ void display(int x, int y, int width, int height, const Mesh& mesh, const Option
 void stats(GLFWwindow* window, const char* path, unsigned int triangles, int lod, double time)
 {
 	char title[256];
-	snprintf(title, sizeof(title), "%s: LOD %d - %d triangles (%.1f msec)", path, lod, triangles, time * 1000);
+	snprintf(title, sizeof(title), "%s: LOD %d - %d triangles (%.1f msec); quadric weight %d mode %d memory %d", path, lod, triangles, time, gQuadricWeight, gQuadricMode, gQuadricMemory);
 
 	glfwSetWindowTitle(window, title);
 }
@@ -524,6 +541,7 @@ void keyhandler(GLFWwindow* window, int key, int scancode, int action, int mods)
 		else if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9)
 		{
 			int lod = int(key - GLFW_KEY_0);
+			gLod = lod;
 
 			unsigned int triangles = 0;
 
@@ -551,6 +569,27 @@ void keyhandler(GLFWwindow* window, int key, int scancode, int action, int mods)
 
 				printf("Saved LOD of %s to %s\n", f.path, path);
 			}
+		}
+		else if (key == GLFW_KEY_Q || key == GLFW_KEY_A || key == GLFW_KEY_Z)
+		{
+			if (key == GLFW_KEY_Q) gQuadricWeight = (gQuadricWeight + 1) % 4;
+			if (key == GLFW_KEY_A) gQuadricMode = (gQuadricMode + 1) % 2;
+			if (key == GLFW_KEY_Z) gQuadricMemory = (gQuadricMemory + 1) % 2;
+
+			printf("Quadric setup: weight %d mode %d memory %d\n", gQuadricWeight, gQuadricMode, gQuadricMemory);
+
+			unsigned int triangles = 0;
+
+			clock_t start = clock();
+			for (auto& f : files)
+			{
+				f.lodmesh = optimize(f.basemesh, gLod);
+				triangles += unsigned(f.lodmesh.indices.size() / 3);
+			}
+			clock_t end = clock();
+
+			stats(window, files[0].path, triangles, gLod, double(end - start) / CLOCKS_PER_SEC);
+			redraw = true;
 		}
 	}
 }
