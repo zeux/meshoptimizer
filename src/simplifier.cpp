@@ -387,10 +387,10 @@ static void rescalePositions(Vector3* result, const float* vertex_positions_data
 
 struct Quadric
 {
-	float a00;
-	float a10, a11;
-	float a20, a21, a22;
+	float a00, a11, a22;
+	float a10, a20, a21;
 	float b0, b1, b2, c;
+	float w;
 };
 
 struct Collapse
@@ -422,29 +422,16 @@ static float normalize(Vector3& v)
 static void quadricAdd(Quadric& Q, const Quadric& R)
 {
 	Q.a00 += R.a00;
-	Q.a10 += R.a10;
 	Q.a11 += R.a11;
+	Q.a22 += R.a22;
+	Q.a10 += R.a10;
 	Q.a20 += R.a20;
 	Q.a21 += R.a21;
-	Q.a22 += R.a22;
 	Q.b0 += R.b0;
 	Q.b1 += R.b1;
 	Q.b2 += R.b2;
 	Q.c += R.c;
-}
-
-static void quadricMul(Quadric& Q, float s)
-{
-	Q.a00 *= s;
-	Q.a10 *= s;
-	Q.a11 *= s;
-	Q.a20 *= s;
-	Q.a21 *= s;
-	Q.a22 *= s;
-	Q.b0 *= s;
-	Q.b1 *= s;
-	Q.b2 *= s;
-	Q.c *= s;
+	Q.w += R.w;
 }
 
 static float quadricError(const Quadric& Q, const Vector3& v)
@@ -473,18 +460,24 @@ static float quadricError(const Quadric& Q, const Vector3& v)
 	return fabsf(r);
 }
 
-static void quadricFromPlane(Quadric& Q, float a, float b, float c, float d)
+static void quadricFromPlane(Quadric& Q, float a, float b, float c, float d, float w)
 {
-	Q.a00 = a * a;
-	Q.a10 = b * a;
-	Q.a11 = b * b;
-	Q.a20 = c * a;
-	Q.a21 = c * b;
-	Q.a22 = c * c;
-	Q.b0 = d * a;
-	Q.b1 = d * b;
-	Q.b2 = d * c;
-	Q.c = d * d;
+	float aw = a * w;
+	float bw = b * w;
+	float cw = c * w;
+	float dw = d * w;
+
+	Q.a00 = a * aw;
+	Q.a11 = b * bw;
+	Q.a22 = c * cw;
+	Q.a10 = a * bw;
+	Q.a20 = a * cw;
+	Q.a21 = b * cw;
+	Q.b0 = a * dw;
+	Q.b1 = b * dw;
+	Q.b2 = c * dw;
+	Q.c = d * dw;
+	Q.w = w;
 }
 
 static void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2, float weight)
@@ -497,9 +490,7 @@ static void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1
 
 	float distance = normal.x * p0.x + normal.y * p0.y + normal.z * p0.z;
 
-	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance);
-
-	quadricMul(Q, area * weight);
+	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, area * weight);
 }
 
 static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2, float weight)
@@ -515,9 +506,7 @@ static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3
 
 	float distance = normal.x * p0.x + normal.y * p0.y + normal.z * p0.z;
 
-	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance);
-
-	quadricMul(Q, length * length * weight);
+	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, length * length * weight);
 }
 
 static void fillFaceQuadrics(Quadric* vertex_quadrics, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const unsigned int* remap)
