@@ -512,6 +512,7 @@ static void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1
 	case 1: quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, sqrtf(area) * weight); break;
 	case 2: quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, area * weight); break;
 	case 3: quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, area * area * weight); break;
+	default: memset(&Q, 0, sizeof(Q));
 	}
 }
 
@@ -534,6 +535,7 @@ static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3
 	case 1: quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, length * weight); break;
 	case 2: quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, length * length * weight); break;
 	case 3: quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, length * length * length * length * weight); break;
+	default: memset(&Q, 0, sizeof(Q));
 	}
 }
 
