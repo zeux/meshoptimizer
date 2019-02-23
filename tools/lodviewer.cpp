@@ -341,7 +341,7 @@ Mesh optimize(const Mesh& mesh, int lod)
 {
 	float threshold = powf(0.5f, float(lod));
 	size_t target_index_count = size_t(mesh.indices.size() * threshold);
-	float target_error = 1;
+	float target_error = 1e-2f;
 
 	Mesh result = mesh;
 	result.kinds.resize(result.vertices.size());

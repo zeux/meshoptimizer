@@ -228,3 +228,64 @@ meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, 
 
 	return result;
 }
+
+void meshopt_rasterize(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, char* output)
+{
+	using namespace meshopt;
+
+	assert(index_count % 3 == 0);
+	assert(vertex_positions_stride > 0 && vertex_positions_stride <= 256);
+	assert(vertex_positions_stride % sizeof(float) == 0);
+
+	meshopt_Allocator allocator;
+
+	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
+
+	float minv[3] = {FLT_MAX, FLT_MAX, FLT_MAX};
+	float maxv[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		const float* v = vertex_positions + i * vertex_stride_float;
+
+		for (int j = 0; j < 3; ++j)
+		{
+			minv[j] = min(minv[j], v[j]);
+			maxv[j] = max(maxv[j], v[j]);
+		}
+	}
+
+	float extent = max(maxv[0] - minv[0], max(maxv[1] - minv[1], maxv[2] - minv[2]));
+	float scale = kViewport / extent;
+
+	float* triangles = allocator.allocate<float>(index_count * 3);
+
+	for (size_t i = 0; i < index_count; ++i)
+	{
+		unsigned int index = indices[i];
+		assert(index < vertex_count);
+
+		const float* v = vertex_positions + index * vertex_stride_float;
+
+		triangles[i * 3 + 0] = (v[0] - minv[0]) * scale;
+		triangles[i * 3 + 1] = (v[1] - minv[1]) * scale;
+		triangles[i * 3 + 2] = (v[2] - minv[2]) * scale;
+	}
+
+	OverdrawBuffer* buffer = allocator.allocate<OverdrawBuffer>(1);
+	memset(buffer, 0, sizeof(OverdrawBuffer));
+
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		const float* vn0 = &triangles[3 * (i + 0)];
+		const float* vn1 = &triangles[3 * (i + 1)];
+		const float* vn2 = &triangles[3 * (i + 2)];
+
+		// rasterize(buffer, vn0[2], vn0[1], vn0[0], vn1[2], vn1[1], vn1[0], vn2[2], vn2[1], vn2[0]);
+		rasterize(buffer, vn0[1], vn0[0], vn0[2], vn1[1], vn1[0], vn1[2], vn2[1], vn2[0], vn2[2]);
+	}
+
+	for (int y = 0; y < kViewport; ++y)
+		for (int x = 0; x < kViewport; ++x)
+			*output++ = (buffer->overdraw[y][x][0] | buffer->overdraw[y][x][1]) > 0;
+}

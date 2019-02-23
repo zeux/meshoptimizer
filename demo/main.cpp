@@ -400,6 +400,56 @@ void simplifySloppy(const Mesh& mesh, float threshold = 0.2f)
 	       int(mesh.indices.size() / 3), int(lod.indices.size() / 3), (end - start) * 1000);
 }
 
+void meshopt_rasterize(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, char* output);
+
+extern int gQuadricWeight;
+extern int gQuadricMode;
+extern int gQuadricMemory;
+
+void simplifyAnalyze(const Mesh& mesh, float threshold = 0.2f)
+{
+	for (gQuadricMemory = 0; gQuadricMemory < 2; ++gQuadricMemory)
+	{
+		for (gQuadricMode = 0; gQuadricMode < 3; ++gQuadricMode)
+		{
+			for (gQuadricWeight = 0; gQuadricWeight < 4; ++gQuadricWeight)
+			{
+				Mesh lod;
+
+				size_t target_index_count = size_t(mesh.indices.size() * threshold);
+				float target_error = 1e-2f;
+
+				lod.indices.resize(mesh.indices.size()); // note: simplify needs space for index_count elements in the destination array, not target_index_count
+				lod.indices.resize(meshopt_simplify(&lod.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error));
+
+				char buf1[256][256];
+				meshopt_rasterize(&mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), &buf1[0][0]);
+
+				char buf2[256][256];
+				meshopt_rasterize(&lod.indices[0], lod.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), &buf2[0][0]);
+
+				int delta = 0;
+				int total = 0;
+
+				for (int y = 0; y < 256; ++y)
+					for (int x = 0; x < 256; ++x)
+					{
+						total += buf1[y][x] == 1;
+						delta += buf1[y][x] != buf2[y][x];
+					}
+
+				printf("%-9s: (%d%d%d) : %d triangles => %d triangles; error rate %.2f%%\n",
+				       "Simplify",
+				       gQuadricWeight,
+				       gQuadricMode,
+				       gQuadricMemory,
+				       int(mesh.indices.size() / 3), int(lod.indices.size() / 3),
+				       double(delta) / double(total) * 100);
+			}
+		}
+	}
+}
+
 void simplifyComplete(const Mesh& mesh)
 {
 	static const size_t lod_count = 5;
@@ -907,8 +957,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	simplify(mesh, 0.1f);
-	simplifySloppy(mesh, 0.1f);
+	simplifyAnalyze(mesh, 0.1f);
 }
 
 int main(int argc, char** argv)
