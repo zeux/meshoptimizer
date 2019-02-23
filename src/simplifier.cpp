@@ -809,7 +809,7 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		if (gQuadricMode == 2)
 		{
 			if (c.error > error_limit * c.weight)
-				break;
+				continue; // note: since the collapses aren't sorted by error/weight, we need to look further until we bump against the error_goal
 		}
 		else
 		{
