@@ -364,7 +364,7 @@ void simplify(const Mesh& mesh, float threshold = 0.2f)
 	double start = timestamp();
 
 	size_t target_index_count = size_t(mesh.indices.size() * threshold);
-	float target_error = 1e-3f;
+	float target_error = 1e-2f;
 
 	lod.indices.resize(mesh.indices.size()); // note: simplify needs space for index_count elements in the destination array, not target_index_count
 	lod.indices.resize(meshopt_simplify(&lod.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error));
@@ -418,7 +418,7 @@ void simplifyComplete(const Mesh& mesh)
 
 		float threshold = powf(0.7f, float(i));
 		size_t target_index_count = size_t(mesh.indices.size() * threshold) / 3 * 3;
-		float target_error = 1e-3f;
+		float target_error = 1e-2f;
 
 		// we can simplify all the way from base level or from the last result
 		// simplifying from the base level sometimes produces better results, but simplifying from last level is faster
