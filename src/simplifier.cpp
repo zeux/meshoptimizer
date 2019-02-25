@@ -14,8 +14,6 @@
 #include <stdio.h>
 #endif
 
-int gQuadricWeight, gQuadricMode, gQuadricMemory;
-
 // This work is based on:
 // Michael Garland and Paul S. Heckbert. Surface simplification using quadric error metrics. 1997
 // Michael Garland. Quadric-based polygonal surface simplification. 1999
@@ -405,7 +403,6 @@ struct Collapse
 		float error;
 		unsigned int errorui;
 	};
-	float weight;
 };
 
 static float normalize(Vector3& v)
@@ -655,7 +652,6 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 		c.v0 = ei <= ej ? i0 : j0;
 		c.v1 = ei <= ej ? i1 : j1;
 		c.error = ei <= ej ? ei : ej;
-		c.weight = ei <= ej ? qi.w : qj.w;
 	}
 }
 

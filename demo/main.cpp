@@ -400,103 +400,6 @@ void simplifySloppy(const Mesh& mesh, float threshold = 0.2f)
 	       int(mesh.indices.size() / 3), int(lod.indices.size() / 3), (end - start) * 1000);
 }
 
-void meshopt_rasterize(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, char* output);
-
-extern int gQuadricWeight;
-extern int gQuadricMode;
-extern int gQuadricMemory;
-
-double resrat[4][3][2];
-double reserr[4][3][2];
-
-bool check(char (&buf)[256][256], int x, int y)
-{
-	return x >= 0 && x < 256 && y >= 0 && y < 256 && buf[y][x] == 1;
-}
-
-int distance(char (&buf)[256][256], int x, int y)
-{
-	if (check(buf, x, y))
-		return 0;
-
-	int dlimit = 256;
-
-	for (int d = 1; d < dlimit; ++d)
-	{
-		for (int xi = x - d; xi <= x + d; ++xi)
-			if (check(buf, xi, y - d) || check(buf, xi, y + d))
-			{
-				int dist = int(sqrtf(d * d + (xi - x) * (xi - x)) + 0.5f);
-				if (dist < dlimit)
-					dlimit = dist;
-			}
-
-		for (int yi = y - d; yi <= y + d; ++yi)
-			if (check(buf, x - d, yi) || check(buf, x + d, yi))
-			{
-				int dist = int(sqrtf(d * d + (yi - y) * (yi - y)) + 0.5f);
-				if (dist < dlimit)
-					dlimit = dist;
-			}
-	}
-
-	return dlimit;
-}
-
-void simplifyAnalyze(const Mesh& mesh, float threshold = 0.2f)
-{
-	for (gQuadricMemory = 0; gQuadricMemory < 2; ++gQuadricMemory)
-	{
-		for (gQuadricMode = 0; gQuadricMode < 3; ++gQuadricMode)
-		{
-			for (gQuadricWeight = 0; gQuadricWeight < 4; ++gQuadricWeight)
-			{
-				Mesh lod;
-
-				size_t target_index_count = size_t(mesh.indices.size() * threshold);
-				float target_error = 1e-2f;
-
-				lod.indices.resize(mesh.indices.size()); // note: simplify needs space for index_count elements in the destination array, not target_index_count
-				lod.indices.resize(meshopt_simplify(&lod.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error));
-
-				char buf1[256][256];
-				meshopt_rasterize(&mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), &buf1[0][0]);
-
-				char buf2[256][256];
-				meshopt_rasterize(&lod.indices[0], lod.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), &buf2[0][0]);
-
-				int delta = 0;
-				int total = 0;
-				int error = 0;
-
-				for (int y = 0; y < 256; ++y)
-					for (int x = 0; x < 256; ++x)
-					{
-						total += buf1[y][x] == 1;
-						delta += buf1[y][x] != buf2[y][x];
-
-						if (buf1[y][x])
-							error += distance(buf2, x, y);
-						if (buf2[y][x])
-							error += distance(buf1, x, y);
-					}
-
-				printf("%-9s: (%d%d%d) : %d triangles => %d triangles; error rate %.2f%%, error %e\n",
-				       "Simplify",
-				       gQuadricWeight,
-				       gQuadricMode,
-				       gQuadricMemory,
-				       int(mesh.indices.size() / 3), int(lod.indices.size() / 3),
-				       double(delta) / double(total) * 100,
-				       double(error) / double(total));
-
-				resrat[gQuadricWeight][gQuadricMode][gQuadricMemory] += double(delta) / double(total) * 100;
-				reserr[gQuadricWeight][gQuadricMode][gQuadricMemory] += double(error) / double(total);
-			}
-		}
-	}
-}
-
 void simplifyComplete(const Mesh& mesh)
 {
 	static const size_t lod_count = 5;
@@ -1004,7 +907,8 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	simplifyAnalyze(mesh, 0.1f);
+	simplify(mesh, 0.01f);
+	simplifySloppy(mesh, 0.01f);
 }
 
 int main(int argc, char** argv)
@@ -1034,21 +938,4 @@ int main(int argc, char** argv)
 			runTests();
 		}
 	}
-
-	for (gQuadricMemory = 0; gQuadricMemory < 2; ++gQuadricMemory)
-	{
-		for (gQuadricMode = 0; gQuadricMode < 3; ++gQuadricMode)
-		{
-			for (gQuadricWeight = 0; gQuadricWeight < 4; ++gQuadricWeight)
-			{
-				printf("Results: (%d%d%d) : error rate %.2f%%, error %e\n",
-				       gQuadricWeight,
-				       gQuadricMode,
-				       gQuadricMemory,
-				       resrat[gQuadricWeight][gQuadricMode][gQuadricMemory] / double(argc - 1),
-				       reserr[gQuadricWeight][gQuadricMode][gQuadricMemory] / double(argc - 1));
-			}
-		}
-	}
-
 }
