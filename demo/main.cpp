@@ -419,18 +419,28 @@ int distance(char (&buf)[256][256], int x, int y)
 	if (check(buf, x, y))
 		return 0;
 
-	for (int d = 1; d < 256; ++d)
+	int dlimit = 256;
+
+	for (int d = 1; d < dlimit; ++d)
 	{
 		for (int xi = x - d; xi <= x + d; ++xi)
 			if (check(buf, xi, y - d) || check(buf, xi, y + d))
-				return d;
+			{
+				int dist = int(sqrtf(d * d + (xi - x) * (xi - x)) + 0.5f);
+				if (dist < dlimit)
+					dlimit = dist;
+			}
 
 		for (int yi = y - d; yi <= y + d; ++yi)
 			if (check(buf, x - d, yi) || check(buf, x + d, yi))
-				return d;
+			{
+				int dist = int(sqrtf(d * d + (yi - y) * (yi - y)) + 0.5f);
+				if (dist < dlimit)
+					dlimit = dist;
+			}
 	}
 
-	return 256;
+	return dlimit;
 }
 
 void simplifyAnalyze(const Mesh& mesh, float threshold = 0.2f)
