@@ -689,18 +689,20 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 		float ei = quadricError(qi, vertex_positions[i1]);
 		float ej = quadricError(qj, vertex_positions[j1]);
 
+		if (gQuadricMode == 1)
+		{
+			float iw = qi.w == 0.f ? 0.f : 1.f / qi.w;
+			float jw = qj.w == 0.f ? 0.f : 1.f / qj.w;
+
+			ei *= iw;
+			ej *= jw;
+		}
+
 		// pick edge direction with minimal error
 		c.v0 = ei <= ej ? i0 : j0;
 		c.v1 = ei <= ej ? i1 : j1;
 		c.error = ei <= ej ? ei : ej;
 		c.weight = ei <= ej ? qi.w : qj.w;
-
-		if (gQuadricMode == 1)
-		{
-			float iw = c.weight == 0.f ? 0.f : 1.f / c.weight;
-
-			c.error *= iw;
-		}
 	}
 }
 
