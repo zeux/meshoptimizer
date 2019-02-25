@@ -387,10 +387,10 @@ static void rescalePositions(Vector3* result, const float* vertex_positions_data
 
 struct Quadric
 {
-	float a00;
-	float a10, a11;
-	float a20, a21, a22;
+	float a00, a11, a22;
+	float a10, a20, a21;
 	float b0, b1, b2, c;
+	float w;
 };
 
 struct Collapse
@@ -422,29 +422,16 @@ static float normalize(Vector3& v)
 static void quadricAdd(Quadric& Q, const Quadric& R)
 {
 	Q.a00 += R.a00;
-	Q.a10 += R.a10;
 	Q.a11 += R.a11;
+	Q.a22 += R.a22;
+	Q.a10 += R.a10;
 	Q.a20 += R.a20;
 	Q.a21 += R.a21;
-	Q.a22 += R.a22;
 	Q.b0 += R.b0;
 	Q.b1 += R.b1;
 	Q.b2 += R.b2;
 	Q.c += R.c;
-}
-
-static void quadricMul(Quadric& Q, float s)
-{
-	Q.a00 *= s;
-	Q.a10 *= s;
-	Q.a11 *= s;
-	Q.a20 *= s;
-	Q.a21 *= s;
-	Q.a22 *= s;
-	Q.b0 *= s;
-	Q.b1 *= s;
-	Q.b2 *= s;
-	Q.c *= s;
+	Q.w += R.w;
 }
 
 static float quadricError(const Quadric& Q, const Vector3& v)
@@ -470,21 +457,29 @@ static float quadricError(const Quadric& Q, const Vector3& v)
 	r += ry * v.y;
 	r += rz * v.z;
 
-	return fabsf(r);
+	float s = Q.w == 0.f ? 0.f : 1.f / Q.w;
+
+	return fabsf(r) * s;
 }
 
-static void quadricFromPlane(Quadric& Q, float a, float b, float c, float d)
+static void quadricFromPlane(Quadric& Q, float a, float b, float c, float d, float w)
 {
-	Q.a00 = a * a;
-	Q.a10 = b * a;
-	Q.a11 = b * b;
-	Q.a20 = c * a;
-	Q.a21 = c * b;
-	Q.a22 = c * c;
-	Q.b0 = d * a;
-	Q.b1 = d * b;
-	Q.b2 = d * c;
-	Q.c = d * d;
+	float aw = a * w;
+	float bw = b * w;
+	float cw = c * w;
+	float dw = d * w;
+
+	Q.a00 = a * aw;
+	Q.a11 = b * bw;
+	Q.a22 = c * cw;
+	Q.a10 = a * bw;
+	Q.a20 = a * cw;
+	Q.a21 = b * cw;
+	Q.b0 = a * dw;
+	Q.b1 = b * dw;
+	Q.b2 = c * dw;
+	Q.c = d * dw;
+	Q.w = w;
 }
 
 static void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2, float weight)
@@ -492,14 +487,14 @@ static void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1
 	Vector3 p10 = {p1.x - p0.x, p1.y - p0.y, p1.z - p0.z};
 	Vector3 p20 = {p2.x - p0.x, p2.y - p0.y, p2.z - p0.z};
 
+	// normal = cross(p1 - p0, p2 - p0)
 	Vector3 normal = {p10.y * p20.z - p10.z * p20.y, p10.z * p20.x - p10.x * p20.z, p10.x * p20.y - p10.y * p20.x};
 	float area = normalize(normal);
 
 	float distance = normal.x * p0.x + normal.y * p0.y + normal.z * p0.z;
 
-	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance);
-
-	quadricMul(Q, area * weight);
+	// we use sqrtf(area) so that the error is scaled linearly; this tends to improve silhouettes
+	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, sqrtf(area) * weight);
 }
 
 static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2, float weight)
@@ -507,17 +502,18 @@ static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3
 	Vector3 p10 = {p1.x - p0.x, p1.y - p0.y, p1.z - p0.z};
 	float length = normalize(p10);
 
+	// p20p = length of projection of p2-p0 onto normalize(p1 - p0)
 	Vector3 p20 = {p2.x - p0.x, p2.y - p0.y, p2.z - p0.z};
 	float p20p = p20.x * p10.x + p20.y * p10.y + p20.z * p10.z;
 
+	// normal = altitude of triangle from point p2 onto edge p1-p0
 	Vector3 normal = {p20.x - p10.x * p20p, p20.y - p10.y * p20p, p20.z - p10.z * p20p};
 	normalize(normal);
 
 	float distance = normal.x * p0.x + normal.y * p0.y + normal.z * p0.z;
 
-	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance);
-
-	quadricMul(Q, length * length * weight);
+	// note: the weight is scaled linearly with edge length; this has to match the triangle weight
+	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, length * weight);
 }
 
 static void fillFaceQuadrics(Quadric* vertex_quadrics, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const unsigned int* remap)
@@ -646,8 +642,11 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 		unsigned int j0 = c.bidi ? i1 : i0;
 		unsigned int j1 = c.bidi ? i0 : i1;
 
-		float ei = quadricError(vertex_quadrics[remap[i0]], vertex_positions[i1]);
-		float ej = quadricError(vertex_quadrics[remap[j0]], vertex_positions[j1]);
+		const Quadric& qi = vertex_quadrics[remap[i0]];
+		const Quadric& qj = vertex_quadrics[remap[j0]];
+
+		float ei = quadricError(qi, vertex_positions[i1]);
+		float ej = quadricError(qj, vertex_positions[j1]);
 
 		// pick edge direction with minimal error
 		c.v0 = ei <= ej ? i0 : j0;
@@ -1119,6 +1118,9 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 	size_t result_count = index_count;
 
+	// target_error input is linear; we need to adjust it to match quadricError units
+	float error_target = target_error * target_error;
+
 	while (result_count > target_index_count)
 	{
 		size_t edge_collapse_count = pickEdgeCollapses(edge_collapses, result, result_count, remap, vertex_kind, loop);
@@ -1145,7 +1147,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		const float kPassErrorBound = 1.5f;
 
 		float error_goal = edge_collapse_goal < edge_collapse_count ? edge_collapses[collapse_order[edge_collapse_goal]].error * kPassErrorBound : FLT_MAX;
-		float error_limit = error_goal > target_error ? target_error : error_goal;
+		float error_limit = error_goal < error_target ? error_goal : error_target;
 
 		for (size_t i = 0; i < vertex_count; ++i)
 			collapse_remap[i] = unsigned(i);
