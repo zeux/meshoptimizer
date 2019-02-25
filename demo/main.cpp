@@ -406,6 +406,33 @@ extern int gQuadricWeight;
 extern int gQuadricMode;
 extern int gQuadricMemory;
 
+double resrat[4][3][2];
+double reserr[4][3][2];
+
+bool check(char (&buf)[256][256], int x, int y)
+{
+	return x >= 0 && x < 256 && y >= 0 && y < 256 && buf[y][x] == 1;
+}
+
+int distance(char (&buf)[256][256], int x, int y)
+{
+	if (check(buf, x, y))
+		return 0;
+
+	for (int d = 1; d < 256; ++d)
+	{
+		for (int xi = x - d; xi <= x + d; ++xi)
+			if (check(buf, xi, y - d) || check(buf, xi, y + d))
+				return d;
+
+		for (int yi = y - d; yi <= y + d; ++yi)
+			if (check(buf, x - d, yi) || check(buf, x + d, yi))
+				return d;
+	}
+
+	return 256;
+}
+
 void simplifyAnalyze(const Mesh& mesh, float threshold = 0.2f)
 {
 	for (gQuadricMemory = 0; gQuadricMemory < 2; ++gQuadricMemory)
@@ -430,21 +457,31 @@ void simplifyAnalyze(const Mesh& mesh, float threshold = 0.2f)
 
 				int delta = 0;
 				int total = 0;
+				int error = 0;
 
 				for (int y = 0; y < 256; ++y)
 					for (int x = 0; x < 256; ++x)
 					{
 						total += buf1[y][x] == 1;
 						delta += buf1[y][x] != buf2[y][x];
+
+						if (buf1[y][x])
+							error += distance(buf2, x, y);
+						if (buf2[y][x])
+							error += distance(buf1, x, y);
 					}
 
-				printf("%-9s: (%d%d%d) : %d triangles => %d triangles; error rate %.2f%%\n",
+				printf("%-9s: (%d%d%d) : %d triangles => %d triangles; error rate %.2f%%, error %e\n",
 				       "Simplify",
 				       gQuadricWeight,
 				       gQuadricMode,
 				       gQuadricMemory,
 				       int(mesh.indices.size() / 3), int(lod.indices.size() / 3),
-				       double(delta) / double(total) * 100);
+				       double(delta) / double(total) * 100,
+				       double(error) / double(total));
+
+				resrat[gQuadricWeight][gQuadricMode][gQuadricMemory] += double(delta) / double(total) * 100;
+				reserr[gQuadricWeight][gQuadricMode][gQuadricMemory] += double(error) / double(total);
 			}
 		}
 	}
@@ -987,4 +1024,21 @@ int main(int argc, char** argv)
 			runTests();
 		}
 	}
+
+	for (gQuadricMemory = 0; gQuadricMemory < 2; ++gQuadricMemory)
+	{
+		for (gQuadricMode = 0; gQuadricMode < 3; ++gQuadricMode)
+		{
+			for (gQuadricWeight = 0; gQuadricWeight < 4; ++gQuadricWeight)
+			{
+				printf("Results: (%d%d%d) : error rate %.2f%%, error %e\n",
+				       gQuadricWeight,
+				       gQuadricMode,
+				       gQuadricMemory,
+				       resrat[gQuadricWeight][gQuadricMode][gQuadricMemory] / double(argc - 1),
+				       reserr[gQuadricWeight][gQuadricMode][gQuadricMemory] / double(argc - 1));
+			}
+		}
+	}
+
 }
