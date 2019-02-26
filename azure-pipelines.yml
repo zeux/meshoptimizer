@@ -20,6 +20,14 @@ pool:
 
 steps:
 - script: |
-    make config=coverage test
-    make config=sanitize test
+    if [[ "$AGENT_OS" != "windows" ]]; then make config=coverage test; fi
+    if [[ "$AGENT_OS" != "windows" ]]; then make config=sanitize test; fi
+    if [[ "$AGENT_OS" != "windows" ]]; then make config=release test; fi
+    if [[ "$AGENT_OS" == "windows" ]]; then cmake -G "Visual Studio 15 2017" -DBUILD_DEMO=ON; fi
+    if [[ "$AGENT_OS" == "windows" ]]; then cmake --build . -- -property:Configuration=Debug -verbosity:minimal; fi
+    if [[ "$AGENT_OS" == "windows" ]]; then ./Debug/demo.exe demo/pirate.obj; fi
+    if [[ "$AGENT_OS" == "windows" ]]; then cmake --build . -- -property:Configuration=Release -verbosity:minimal; fi
+    if [[ "$AGENT_OS" == "windows" ]]; then ./Release/demo.exe demo/pirate.obj; fi
+    if [[ "$AGENT_OS" == "osx" ]]; then make config=iphone; fi
+    if [[ "$AGENT_OS" != "windows" ]]; then bash <(curl -s https://codecov.io/bash); fi
   displayName: 'make'
