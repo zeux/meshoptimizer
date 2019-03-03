@@ -145,7 +145,7 @@ static T* hashLookup2(T* table, size_t buckets, const Hash& hash, const T& key, 
 		bucket = (bucket + probe + 1) & hashmod;
 	}
 
-	assert(false && "Hash table is full");
+	assert(false && "Hash table is full"); // unreachable
 	return 0;
 }
 
