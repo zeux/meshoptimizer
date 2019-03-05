@@ -445,7 +445,7 @@ void display(int x, int y, int width, int height, const Mesh& mesh, const Option
 
 				unsigned char kind = mesh.kinds[a];
 
-				glColor3f(kind == 0 || kind == 3, kind == 0 || kind == 2, kind == 0 || kind == 1);
+				glColor3f(kind == 0 || kind == 4, kind == 0 || kind == 2 || kind == 3, kind == 0 || kind == 1 || kind == 3);
 				glVertex3f((v0.px - centerx) / extent * scalex, (v0.py - centery) / extent * scaley, (v0.pz - centerz) / extent - zbias);
 				glVertex3f((v1.px - centerx) / extent * scalex, (v1.py - centery) / extent * scaley, (v1.pz - centerz) / extent - zbias);
 			}
@@ -464,7 +464,7 @@ void display(int x, int y, int width, int height, const Mesh& mesh, const Option
 
 			if (kind != 0)
 			{
-				glColor3f(kind == 0 || kind == 3, kind == 0 || kind == 2, kind == 0 || kind == 1);
+				glColor3f(kind == 0 || kind == 4, kind == 0 || kind == 2 || kind == 3, kind == 0 || kind == 1 || kind == 3);
 				glVertex3f((v.px - centerx) / extent * scalex, (v.py - centery) / extent * scaley, (v.pz - centerz) / extent - zbias * 2);
 			}
 		}

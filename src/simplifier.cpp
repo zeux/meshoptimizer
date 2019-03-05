@@ -190,28 +190,34 @@ enum VertexKind
 	Kind_Manifold, // not on an attribute seam, not on any boundary
 	Kind_Border,   // not on an attribute seam, has exactly two open edges
 	Kind_Seam,     // on an attribute seam with exactly two attribute seam edges
+	Kind_Complex,  // none of the above; these vertices can move as long as all wedges move to the target vertex
 	Kind_Locked,   // none of the above; these vertices can't move
 
 	Kind_Count
 };
 
-// manifold vertices can collapse on anything except locked
+// manifold vertices can collapse onto anything
 // border/seam vertices can only be collapsed onto border/seam respectively
+// complex vertices can collapse onto complex/locked
+// a rule of thumb is that collapsing kind A into kind B preserves the kind B in the target vertex
+// for example, while we could collapse Complex into Manifold, this would mean the target vertex isn't Manifold anymore
 const unsigned char kCanCollapse[Kind_Count][Kind_Count] = {
-    {1, 1, 1, 1},
-    {0, 1, 0, 0},
-    {0, 0, 1, 0},
-    {0, 0, 0, 0},
+    {1, 1, 1, 1, 1},
+    {0, 1, 0, 0, 0},
+    {0, 0, 1, 0, 0},
+    {0, 0, 0, 1, 1},
+    {0, 0, 0, 0, 0},
 };
 
 // if a vertex is manifold or seam, adjoining edges are guaranteed to have an opposite edge
 // note that for seam edges, the opposite edge isn't present in the attribute-based topology
 // but is present if you consider a position-only mesh variant
 const unsigned char kHasOpposite[Kind_Count][Kind_Count] = {
-    {1, 1, 1, 1},
-    {1, 0, 1, 0},
-    {1, 1, 1, 1},
-    {1, 0, 1, 0},
+    {1, 1, 1, 0, 1},
+    {1, 0, 1, 0, 0},
+    {1, 1, 1, 0, 1},
+    {0, 0, 0, 0, 0},
+    {1, 0, 1, 0, 0},
 };
 
 static bool hasEdge(const EdgeAdjacency& adjacency, unsigned int a, unsigned int b)
@@ -780,7 +786,17 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 
 		quadricAdd(vertex_quadrics[r1], vertex_quadrics[r0]);
 
-		if (vertex_kind[i0] == Kind_Seam)
+		if (vertex_kind[i0] == Kind_Complex)
+		{
+			unsigned int v = i0;
+
+			do
+			{
+				collapse_remap[v] = r1;
+				v = wedge[v];
+			} while (v != i0);
+		}
+		else if (vertex_kind[i0] == Kind_Seam)
 		{
 			// remap v0 to v1 and seam pair of v0 to seam pair of v1
 			unsigned int s0 = wedge[i0];
