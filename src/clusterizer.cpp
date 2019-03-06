@@ -327,10 +327,11 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 	return bounds;
 }
 
-meshopt_Bounds meshopt_computeMeshletBounds(meshopt_Meshlet meshlet, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+meshopt_Bounds meshopt_computeMeshletBounds(const meshopt_Meshlet* meshlet_ptr, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	assert(vertex_positions_stride > 0 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
+	const meshopt_Meshlet& meshlet = *meshlet_ptr;
 
 	unsigned int indices[sizeof(meshlet.indices) / sizeof(meshlet.indices[0][0])];
 
