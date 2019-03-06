@@ -271,6 +271,13 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, size_t v
 	for (size_t i = 0; i < vertex_count; ++i)
 		loop[i] = ~0u;
 
+#if TRACE
+	size_t lockedstats[4] = {};
+#define TRACELOCKED(i) lockedstats[i]++;
+#else
+#define TRACELOCKED(i) (void)0
+#endif
+
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
 		if (remap[i] == i)
@@ -298,6 +305,7 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, size_t v
 				else
 				{
 					result[i] = Kind_Locked;
+					TRACELOCKED(0);
 				}
 			}
 			else if (wedge[wedge[i]] == i)
@@ -324,17 +332,20 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, size_t v
 					else
 					{
 						result[i] = Kind_Locked;
+						TRACELOCKED(1);
 					}
 				}
 				else
 				{
 					result[i] = Kind_Locked;
+					TRACELOCKED(2);
 				}
 			}
 			else
 			{
 				// more than one vertex maps to this one; we don't have classification available
 				result[i] = Kind_Locked;
+				TRACELOCKED(3);
 			}
 		}
 		else
@@ -344,6 +355,11 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, size_t v
 			result[i] = result[remap[i]];
 		}
 	}
+
+#if TRACE
+	printf("locked: many open edges %d, disconnected seam %d, many seam edges %d, many wedges %d\n",
+	       int(lockedstats[0]), int(lockedstats[1]), int(lockedstats[2]), int(lockedstats[3]));
+#endif
 }
 
 struct Vector3
