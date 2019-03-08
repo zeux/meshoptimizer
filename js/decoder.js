@@ -43,7 +43,7 @@ var MeshoptDecoder = (function() {
     var res = fun(tp, count, size, sp, source.length);
     target.set(heap.subarray(tp, tp + count * size), 0);
     sbrk(tp - sbrk(0));
-    if (res != 0) throw new Error("Malformed buffer data");
+    if (res != 0) throw new Error("Malformed buffer data: " + res);
   };
 
   return {
