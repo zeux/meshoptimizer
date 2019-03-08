@@ -70,9 +70,10 @@ format:
 meshencoder: $(ENCODER_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
 
-js/decoder.js: src/vertexcodec.cpp src/indexcodec.cpp js/decoder-post.js
-	emcc $(filter %.cpp,$^) -O3 -DNDEBUG -s EXPORTED_FUNCTIONS='["_meshopt_decodeVertexBuffer", "_meshopt_decodeIndexBuffer", "_sbrk"]' -s WASM=1 -s ALLOW_MEMORY_GROWTH=1 -s MALLOC=emmalloc -s TOTAL_STACK=32768 -s TOTAL_MEMORY=65536 -s MODULARIZE=1 -s SINGLE_FILE=1 -s EXPORT_NAME=MeshoptDecoder --closure 1 --post-js js/decoder-post.js -o $@
-	sed -i '1s;^;// This file is part of meshoptimizer library and is distributed under the terms of MIT License.\n// Copyright (C) 2016-2019, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com);' $@
+js/decoder.js: src/vertexcodec.cpp src/indexcodec.cpp
+	@mkdir -p build
+	emcc $(filter %.cpp,$^) -O3 -DNDEBUG -s EXPORTED_FUNCTIONS='["_meshopt_decodeVertexBuffer", "_meshopt_decodeIndexBuffer"]' -s ALLOW_MEMORY_GROWTH=1 -s TOTAL_STACK=32768 -s TOTAL_MEMORY=65536 -o build/decoder.wasm
+	sed -i "s#\(var wasm = \)\".*\";#\\1\"$$(cat build/decoder.wasm | base64 -w 0)\";#" $@
 
 $(EXECUTABLE): $(DEMO_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
