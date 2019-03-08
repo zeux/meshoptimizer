@@ -149,14 +149,12 @@ Decoding functions are heavily optimized and can directly target write-combined 
 Due to a very high decoding performance and compatibility with general purpose lossless compressors, the compression is a good fit for the use on the web. To that end, meshoptimizer provides both vertex and index decoders compiled into WebAssembly and wrapped into a module with JavaScript-friendly interface, `js/decoder.js`, that you can use to decode meshes that were encoded offline:
 
 ```js
-var decoder = MeshoptDecoder(); // from js/decoder.js
+// ready is a Promise that is resolved when (asynchronous) WebAssembly compilation finishes
+await MeshoptDecoder.ready;
 
-// decoder is a Promise that is resolved when (asynchronous) WebAssembly compilation finishes
-decoder.then(function () {
-	// decode from *Data (Uint8Array) into *Buffer (Uint8Array)
-	decoder.decodeVertexBuffer(vertexBuffer, vertexCount, vertexSize, vertexData);
-	decoder.decodeIndexBuffer(indexBuffer, indexCount, indexSize, indexData);
-});
+// decode from *Data (Uint8Array) into *Buffer (Uint8Array)
+MeshoptDecoder.decodeVertexBuffer(vertexBuffer, vertexCount, vertexSize, vertexData);
+MeshoptDecoder.decodeIndexBuffer(indexBuffer, indexCount, indexSize, indexData);
 ```
 
 A THREE.js mesh loader is provided as an example in `tools/OptMeshLoader.js`; it loads meshes encoded using `tools/meshencoder.cpp`. [Usage example](https://zeuxcg.org/meshoptimizer/demo/) is available, with source in `demo/index.html`.
