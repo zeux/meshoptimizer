@@ -5,18 +5,17 @@ function MeshoptDecoder() {
 
   var wasm = "WASMHERE";
 
-  var page = 65536;
   var memory = new WebAssembly.Memory({
     initial: 1
   });
   var heap = new Uint8Array(memory.buffer);
-  var brk = 32768;
+  var brk = 32768; // stack top
 
   var sbrk = function(size) {
     var old = brk;
     brk += size;
     if (brk > heap.length) {
-      memory.grow(Math.ceil((brk - heap.length) / page));
+      memory.grow(Math.ceil((brk - heap.length) / 65536));
       heap = new Uint8Array(memory.buffer);
     }
     return old;
@@ -31,36 +30,33 @@ function MeshoptDecoder() {
     }
   };
 
-  var exports = {};
-
-  var source = fetch('data:application/octet-stream;base64,' + wasm);
-  var instance = source
+  var instance = {};
+  var promise =
+    fetch('data:application/octet-stream;base64,' + wasm)
     .then(response => response.arrayBuffer())
     .then(bytes => WebAssembly.instantiate(bytes, imports))
-    .then(result => exports = result.instance.exports);
+    .then(result => instance = result.instance);
 
   Module.then = function(callback) {
-    instance.then(callback);
+    promise.then(callback);
+  };
+
+  var decode = function(fun, target, count, size, source) {
+    var tp = sbrk(count * size);
+    var sp = sbrk(source.length);
+    heap.set(source, sp);
+    var res = fun(tp, count, size, sp, source.length);
+    target.set(heap.subarray(tp, tp + count * size), 0);
+    sbrk(tp - sbrk(0));
+    if (res != 0) throw new Error("Malformed buffer data");
   };
 
   Module.decodeVertexBuffer = function(target, count, size, source) {
-    var tp = sbrk(count * size);
-    var sp = sbrk(source.length);
-    heap.set(source, sp);
-    var res = exports["_meshopt_decodeVertexBuffer"](tp, count, size, sp, source.length);
-    target.set(heap.subarray(tp, tp + count * size), 0);
-    sbrk(tp - sbrk(0));
-    if (res != 0) throw new Error("Malformed vertex buffer data");
+    decode(instance.exports["_meshopt_decodeVertexBuffer"], target, count, size, source);
   };
 
   Module.decodeIndexBuffer = function(target, count, size, source) {
-    var tp = sbrk(count * size);
-    var sp = sbrk(source.length);
-    heap.set(source, sp);
-    var res = exports["_meshopt_decodeIndexBuffer"](tp, count, size, sp, source.length);
-    target.set(heap.subarray(tp, tp + count * size), 0);
-    sbrk(tp - sbrk(0));
-    if (res != 0) throw new Error("Malformed index buffer data");
+    decode(instance.exports["_meshopt_decodeIndexBuffer"], target, count, size, source);
   };
 
   return Module;
