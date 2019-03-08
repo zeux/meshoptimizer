@@ -1122,8 +1122,8 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	for (size_t i = 0; i < vertex_count; ++i)
 		kinds[vertex_kind[i]] += remap[i] == i;
 
-	printf("kinds: manifold %d, border %d, seam %d, locked %d\n",
-	       int(kinds[Kind_Manifold]), int(kinds[Kind_Border]), int(kinds[Kind_Seam]), int(kinds[Kind_Locked]));
+	printf("kinds: manifold %d, border %d, seam %d, complex %d, locked %d\n",
+	       int(kinds[Kind_Manifold]), int(kinds[Kind_Border]), int(kinds[Kind_Seam]), int(kinds[Kind_Complex]), int(kinds[Kind_Locked]));
 #endif
 
 	Vector3* vertex_positions = allocator.allocate<Vector3>(vertex_count);
