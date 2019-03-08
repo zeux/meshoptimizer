@@ -80,7 +80,7 @@
 				var onError = function () {};
 
 				new THREE.OptMeshLoader()
-					.setDecoder(MeshoptDecoder())
+					.setDecoder(MeshoptDecoder)
 					.setMaterials(null) // materials can be fetched using MTLLoader
 					.setPath('./')
 					.load('pirate.optmesh', function (object)

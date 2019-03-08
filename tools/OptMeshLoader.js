@@ -19,7 +19,7 @@ THREE.OptMeshLoader = (function ()
 			loader.setPath(this.path);
 			loader.load(url, function (data)
 			{
-				scope.decoder.then(function ()
+				scope.decoder.ready.then(function ()
 				{
 					scope.materials.then(function (materials)
 					{
