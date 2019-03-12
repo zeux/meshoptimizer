@@ -130,20 +130,31 @@ int main(int argc, char** argv)
 		int vti = file.f[i * 3 + 1];
 		int vni = file.f[i * 3 + 2];
 
+		float px = (file.v[vi * 3 + 0] - pos_offset[0]) * pos_scale_inverse;
+		float py = (file.v[vi * 3 + 1] - pos_offset[1]) * pos_scale_inverse;
+		float pz = (file.v[vi * 3 + 2] - pos_offset[2]) * pos_scale_inverse;
+
+		float nx = vni >= 0 ? file.vn[vni * 3 + 0] : 0;
+		float ny = vni >= 0 ? file.vn[vni * 3 + 1] : 0;
+		float nz = vni >= 0 ? file.vn[vni * 3 + 2] : 0;
+
+		float tx = vti >= 0 ? (file.vt[vti * 3 + 0] - uv_offset[0]) * uv_scale_inverse[0] : 0;
+		float ty = vti >= 0 ? (file.vt[vti * 3 + 1] - uv_offset[1]) * uv_scale_inverse[1] : 0;
+
 		Vertex v =
 		    {
-		        (unsigned short)(meshopt_quantizeUnorm((file.v[vi * 3 + 0] - pos_offset[0]) * pos_scale_inverse, pos_bits)),
-		        (unsigned short)(meshopt_quantizeUnorm((file.v[vi * 3 + 1] - pos_offset[1]) * pos_scale_inverse, pos_bits)),
-		        (unsigned short)(meshopt_quantizeUnorm((file.v[vi * 3 + 2] - pos_offset[2]) * pos_scale_inverse, pos_bits)),
+		        (unsigned short)(meshopt_quantizeUnorm(px, pos_bits)),
+		        (unsigned short)(meshopt_quantizeUnorm(py, pos_bits)),
+		        (unsigned short)(meshopt_quantizeUnorm(pz, pos_bits)),
 				0,
 
-		        char(meshopt_quantizeSnorm(vni >= 0 ? file.vn[vni * 3 + 0] : 0, 8)),
-		        char(meshopt_quantizeSnorm(vni >= 0 ? file.vn[vni * 3 + 1] : 0, 8)),
-		        char(meshopt_quantizeSnorm(vni >= 0 ? file.vn[vni * 3 + 2] : 0, 8)),
+		        char(meshopt_quantizeSnorm(nx, 8)),
+		        char(meshopt_quantizeSnorm(ny, 8)),
+		        char(meshopt_quantizeSnorm(nz, 8)),
 				0,
 
-		        (unsigned short)(meshopt_quantizeUnorm(vti >= 0 ? (file.vt[vti * 3 + 0] - uv_offset[0]) * uv_scale_inverse[0] : 0, uv_bits)),
-		        (unsigned short)(meshopt_quantizeUnorm(vti >= 0 ? (file.vt[vti * 3 + 1] - uv_offset[1]) * uv_scale_inverse[1] : 0, uv_bits)),
+		        (unsigned short)(meshopt_quantizeUnorm(tx, uv_bits)),
+		        (unsigned short)(meshopt_quantizeUnorm(ty, uv_bits)),
 		    };
 
 		triangles[i] = v;
