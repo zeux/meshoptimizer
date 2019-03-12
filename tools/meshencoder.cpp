@@ -130,14 +130,29 @@ int main(int argc, char** argv)
 		int vti = file.f[i * 3 + 1];
 		int vni = file.f[i * 3 + 2];
 
+		// note: we scale the vertices uniformly; this is not the best option wrt compression quality
+		// however, it means we can scale the mesh uniformly without distorting the normals
+		// this is helpful for backends like ThreeJS that apply mesh scaling to normals
 		float px = (file.v[vi * 3 + 0] - pos_offset[0]) * pos_scale_inverse;
 		float py = (file.v[vi * 3 + 1] - pos_offset[1]) * pos_scale_inverse;
 		float pz = (file.v[vi * 3 + 2] - pos_offset[2]) * pos_scale_inverse;
 
+		// normal is 0 if absent from the mesh
 		float nx = vni >= 0 ? file.vn[vni * 3 + 0] : 0;
 		float ny = vni >= 0 ? file.vn[vni * 3 + 1] : 0;
 		float nz = vni >= 0 ? file.vn[vni * 3 + 2] : 0;
 
+		// scale the normal to make sure the largest component is +-1.0
+		// this reduces the entropy of the normal by ~1.5 bits without losing precision
+		// it's better to use octahedral encoding but that requires special shader support
+		float nm = std::max(fabsf(nx), std::max(fabsf(ny), fabsf(nz)));
+		float ns = nm == 0.f ? 0.f : 1 / nm;
+
+		nx *= ns;
+		ny *= ns;
+		nz *= ns;
+
+		// texture coordinates are 0 if absent, and require a texture matrix to decode
 		float tx = vti >= 0 ? (file.vt[vti * 3 + 0] - uv_offset[0]) * uv_scale_inverse[0] : 0;
 		float ty = vti >= 0 ? (file.vt[vti * 3 + 1] - uv_offset[1]) * uv_scale_inverse[1] : 0;
 
