@@ -210,24 +210,23 @@ The first simplification algorithm, `meshopt_simplify`, follows the topology of 
 
 ```
 float threshold = 0.2f;
-size_t target_index_count = size_t(mesh.indices.size() * threshold);
+size_t target_index_count = size_t(index_count * threshold);
 float target_error = 1e-2f;
 
-std::vector<unsigned int> lod(mesh.indices.size());
-lod.resize(meshopt_simplify(&lod[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error));
+std::vector<unsigned int> lod(index_count);
+lod.resize(meshopt_simplify(&lod[0], indices, index_count, &vertices[0].x, vertex_count, sizeof(Vertex), target_index_count, target_error));
 ```
 
 Target error is an approximate measure of the deviation from the original mesh using distance normalized to 0..1 (so 1e-2f means that simplifier will try to maintain the error to be below 1% of the mesh extents). Note that because of topological restrictions and error bounds simplifier isn't guaranteed to reach the target index count and can stop earlier.
 
 The second simplification algorithm, `meshopt_simplifySloppy`, doesn't follow the topology of the original mesh. This means that it doesn't preserve attribute seams or borders, but it can collapse internal details that are too small to matter better because it can merge mesh features that are topologically disjoint but spatially close.
 
-
 ```
 float threshold = 0.2f;
-size_t target_index_count = size_t(mesh.indices.size() * threshold);
+size_t target_index_count = size_t(index_count * threshold);
 
 std::vector<unsigned int> lod(target_index_count);
-lod.resize(meshopt_simplifySloppy(&lod[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count));
+lod.resize(meshopt_simplifySloppy(&lod[0], indices, index_count, &vertices[0].x, vertex_count, sizeof(Vertex), target_index_count));
 ```
 
 This algorithm is guaranteed to return a result at or below the target index count. It is 5-6x faster than `meshopt_simplify` when simplification ratio is large, and is able to reach ~20M triangles/sec on a desktop CPU (`meshopt_simplify` works at ~3M triangles/sec).
