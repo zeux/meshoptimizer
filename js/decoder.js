@@ -31,8 +31,10 @@ var MeshoptDecoder = (function() {
 
 	var instance = {};
 	var promise =
-		fetch('data:application/octet-stream;base64,' + wasm)
-		.then(response => response.arrayBuffer())
+		(typeof fetch === 'function'
+			? fetch('data:application/octet-stream;base64,' + wasm)
+			  .then(response => response.arrayBuffer())
+			: Promise.resolve(Buffer.from(wasm, 'base64').buffer))
 		.then(bytes => WebAssembly.instantiate(bytes, imports))
 		.then(result => instance = result.instance);
 
