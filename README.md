@@ -245,6 +245,20 @@ While the only way to get precise performance data is to measure performance on 
 
 Note that all analyzers use approximate models for the relevant GPU units, so the numbers you will get as the result are only a rough approximation of the actual performance.
 
+## Memory management
+
+Many algorithms allocate temporary memory to store intermediate results or accelerate processing. The amount of memory allocated is a function of various input parameters such as vertex count and index count. By default memory is allocated using `operator new` and `operator delete`; if these operators are overloaded by the application, the overloads will be used instead. Alternatively it's possible to specify custom allocation/deallocation functions using `meshopt_setAllocator`, e.g.
+
+```c++
+meshopt_setAllocator(malloc, free);
+```
+
+> Note that currently the library expects the allocation function to either throw in case of out-of-memory (in which case the exception will propagate to the caller) or abort, so technically the use of `malloc` above isn't safe.
+
+Vertex and index decoders (`meshopt_decodeVertexBuffer` and `meshopt_decodeIndexBuffer`) do not allocate memory and work completely within the buffer space provided via arguments.
+
+All functions have bounded stack usage that does not exceed 32 KB for any algorithms.
+
 ## License
 
 This library is available to anybody free of charge, under the terms of MIT License (see LICENSE.md).
