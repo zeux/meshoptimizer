@@ -770,7 +770,7 @@ static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapse
 	}
 }
 
-static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, size_t triangle_collapse_goal, float error_limit)
+static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, size_t triangle_collapse_goal, float error_goal, float error_limit)
 {
 	size_t edge_collapses = 0;
 	size_t triangle_collapses = 0;
@@ -780,6 +780,9 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		const Collapse& c = collapses[collapse_order[i]];
 
 		if (c.error > error_limit)
+			break;
+
+		if (c.error > error_goal && triangle_collapses > triangle_collapse_goal / 10)
 			break;
 
 		if (triangle_collapses >= triangle_collapse_goal)
@@ -1151,7 +1154,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	size_t result_count = index_count;
 
 	// target_error input is linear; we need to adjust it to match quadricError units
-	float error_target = target_error * target_error;
+	float error_limit = target_error * target_error;
 
 	while (result_count > target_index_count)
 	{
@@ -1179,14 +1182,13 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		const float kPassErrorBound = 1.5f;
 
 		float error_goal = edge_collapse_goal < edge_collapse_count ? edge_collapses[collapse_order[edge_collapse_goal]].error * kPassErrorBound : FLT_MAX;
-		float error_limit = error_goal < error_target ? error_goal : error_target;
 
 		for (size_t i = 0; i < vertex_count; ++i)
 			collapse_remap[i] = unsigned(i);
 
 		memset(collapse_locked, 0, vertex_count);
 
-		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, triangle_collapse_goal, error_limit);
+		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, triangle_collapse_goal, error_goal, error_limit);
 
 		// no edges can be collapsed any more due to hitting the error limit or triangle collapse limit
 		if (collapses == 0)
