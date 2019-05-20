@@ -43,13 +43,9 @@ static int parseInt(const char* s, const char** end)
 
 	unsigned int result = 0;
 
-	for (;;)
+	while (unsigned(*s - '0') < 10)
 	{
-		if (unsigned(*s - '0') < 10)
-			result = result * 10 + (*s - '0');
-		else
-			break;
-
+		result = result * 10 + (*s - '0');
 		s++;
 	}
 
