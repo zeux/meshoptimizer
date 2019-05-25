@@ -907,7 +907,8 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	simplify(mesh, 0.01f);
+	simplifySloppy(mesh, 0.5f);
+	simplifySloppy(mesh, 0.1f);
 	simplifySloppy(mesh, 0.01f);
 }
 
