@@ -222,7 +222,7 @@ bool getAttributeBounds(const Scene& scene, cgltf_attribute_type type, Attr& min
 
 		for (size_t j = 0; j < mesh.streams.size(); ++j)
 		{
-			const Stream& s = mesh.streams[i];
+			const Stream& s = mesh.streams[j];
 
 			if (s.type == type)
 			{
@@ -428,7 +428,7 @@ std::string to_string(size_t v)
 std::string to_string(float v)
 {
 	char buf[512];
-	sprintf(buf, "%f", v);
+	sprintf(buf, "%1.7e", v);
 	return buf;
 }
 
