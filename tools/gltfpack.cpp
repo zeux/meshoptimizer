@@ -154,11 +154,54 @@ void parseMeshes(cgltf_data* data, std::vector<Mesh>& meshes)
 	}
 }
 
+void reindexMesh(Mesh& mesh)
+{
+	size_t total_vertices = mesh.streams[0].data.size();
+	size_t total_indices = mesh.indices.size();
+
+	std::vector<meshopt_Stream> streams;
+	for (size_t i = 0; i < mesh.streams.size(); ++i)
+	{
+		meshopt_Stream stream = { &mesh.streams[i].data[0], sizeof(Attr), sizeof(Attr) };
+		streams.push_back(stream);
+	}
+
+	std::vector<unsigned int> remap(total_indices);
+	size_t unique_vertices = meshopt_generateVertexRemapMulti(&remap[0], &mesh.indices[0], total_indices, total_vertices, &streams[0], streams.size());
+
+	meshopt_remapIndexBuffer(&mesh.indices[0], &mesh.indices[0], total_indices, &remap[0]);
+
+	for (size_t i = 0; i < mesh.streams.size(); ++i)
+	{
+		meshopt_remapVertexBuffer(&mesh.streams[i].data[0], &mesh.streams[i].data[0], total_vertices, sizeof(Attr), &remap[0]);
+		mesh.streams[i].data.resize(unique_vertices);
+	}
+}
+
+void optimizeMesh(Mesh& mesh)
+{
+	size_t vertex_count = mesh.streams[0].data.size();
+
+	meshopt_optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), vertex_count);
+
+	std::vector<unsigned int> remap(vertex_count);
+	meshopt_optimizeVertexFetchRemap(&remap[0], &mesh.indices[0], mesh.indices.size(), vertex_count);
+
+	for (size_t i = 0; i < mesh.streams.size(); ++i)
+		meshopt_remapVertexBuffer(&mesh.streams[i].data[0], &mesh.streams[i].data[0], vertex_count, sizeof(Attr), &remap[0]);
+}
+
 bool process(Scene& scene, std::string& json, std::string& bin)
 {
 	cgltf_data* data = scene.data;
 
 	parseMeshes(data, scene.meshes);
+
+	for (size_t i = 0; i < scene.meshes.size(); ++i)
+	{
+		reindexMesh(scene.meshes[i]);
+		optimizeMesh(scene.meshes[i]);
+	}
 
 	(void)json;
 	(void)bin;
