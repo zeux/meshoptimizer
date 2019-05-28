@@ -285,6 +285,19 @@ QuantizationParams prepareQuantization(const Scene& scene, const Settings& setti
 	return result;
 }
 
+void rescaleNormal(float& nx, float& ny, float& nz)
+{
+	// scale the normal to make sure the largest component is +-1.0
+	// this reduces the entropy of the normal by ~1.5 bits without losing precision
+	// it's better to use octahedral encoding but that requires special shader support
+	float nm = std::max(fabsf(nx), std::max(fabsf(ny), fabsf(nz)));
+	float ns = nm == 0.f ? 0.f : 1 / nm;
+
+	nx *= ns;
+	ny *= ns;
+	nz *= ns;
+}
+
 std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream(std::string& bin, const Stream& stream, const QuantizationParams& params)
 {
 	if (stream.type == cgltf_attribute_type_position)
@@ -332,16 +345,7 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			const Attr& a = stream.data[i];
 
 			float nx = a.f[0], ny = a.f[1], nz = a.f[2];
-
-			// scale the normal to make sure the largest component is +-1.0
-			// this reduces the entropy of the normal by ~1.5 bits without losing precision
-			// it's better to use octahedral encoding but that requires special shader support
-			float nm = std::max(fabsf(nx), std::max(fabsf(ny), fabsf(nz)));
-			float ns = nm == 0.f ? 0.f : 1 / nm;
-
-			nx *= ns;
-			ny *= ns;
-			nz *= ns;
+			rescaleNormal(nx, ny, nz);
 
 			int8_t v[4] = {
 			    int8_t(meshopt_quantizeSnorm(nx, 8)),
@@ -352,6 +356,25 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 		}
 
 		return std::make_pair(std::make_pair(cgltf_component_type_r_8, cgltf_type_vec3), 4);
+	}
+	else if (stream.type == cgltf_attribute_type_tangent)
+	{
+		for (size_t i = 0; i < stream.data.size(); ++i)
+		{
+			const Attr& a = stream.data[i];
+
+			float nx = a.f[0], ny = a.f[1], nz = a.f[2], nw = a.f[3];
+			rescaleNormal(nx, ny, nz);
+
+			int8_t v[4] = {
+			    int8_t(meshopt_quantizeSnorm(nx, 8)),
+			    int8_t(meshopt_quantizeSnorm(ny, 8)),
+			    int8_t(meshopt_quantizeSnorm(nz, 8)),
+			    int8_t(meshopt_quantizeSnorm(nw, 8))};
+			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+		}
+
+		return std::make_pair(std::make_pair(cgltf_component_type_r_8, cgltf_type_vec4), 4);
 	}
 	else if (stream.type == cgltf_attribute_type_color || stream.type == cgltf_attribute_type_weights)
 	{
