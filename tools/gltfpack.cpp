@@ -150,7 +150,7 @@ void parseMeshes(cgltf_data* data, std::vector<Mesh>& meshes)
 				if (attr.type == cgltf_attribute_type_invalid)
 					continue;
 
-				Stream s = { attr.type, attr.index };
+				Stream s = {attr.type, attr.index};
 				s.data.resize(attr.data->count);
 
 				for (size_t i = 0; i < attr.data->count; ++i)
@@ -184,7 +184,7 @@ void reindexMesh(Mesh& mesh)
 	std::vector<meshopt_Stream> streams;
 	for (size_t i = 0; i < mesh.streams.size(); ++i)
 	{
-		meshopt_Stream stream = { &mesh.streams[i].data[0], sizeof(Attr), sizeof(Attr) };
+		meshopt_Stream stream = {&mesh.streams[i].data[0], sizeof(Attr), sizeof(Attr)};
 		streams.push_back(stream);
 	}
 
@@ -296,11 +296,10 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			const Attr& a = stream.data[i];
 
 			uint16_t v[4] = {
-				uint16_t(meshopt_quantizeUnorm((a.f[0] - params.pos_offset[0]) * pos_rscale, params.pos_bits)),
-				uint16_t(meshopt_quantizeUnorm((a.f[1] - params.pos_offset[1]) * pos_rscale, params.pos_bits)),
-				uint16_t(meshopt_quantizeUnorm((a.f[2] - params.pos_offset[2]) * pos_rscale, params.pos_bits)),
-				0
-			};
+			    uint16_t(meshopt_quantizeUnorm((a.f[0] - params.pos_offset[0]) * pos_rscale, params.pos_bits)),
+			    uint16_t(meshopt_quantizeUnorm((a.f[1] - params.pos_offset[1]) * pos_rscale, params.pos_bits)),
+			    uint16_t(meshopt_quantizeUnorm((a.f[2] - params.pos_offset[2]) * pos_rscale, params.pos_bits)),
+			    0};
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
@@ -309,8 +308,8 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 	else if (stream.type == cgltf_attribute_type_texcoord)
 	{
 		float uv_rscale[2] = {
-			params.uv_scale[0] == 0.f ? 0.f : 1.f / params.uv_scale[0],
-			params.uv_scale[1] == 0.f ? 0.f : 1.f / params.uv_scale[1],
+		    params.uv_scale[0] == 0.f ? 0.f : 1.f / params.uv_scale[0],
+		    params.uv_scale[1] == 0.f ? 0.f : 1.f / params.uv_scale[1],
 		};
 
 		for (size_t i = 0; i < stream.data.size(); ++i)
@@ -318,8 +317,8 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			const Attr& a = stream.data[i];
 
 			uint16_t v[2] = {
-				uint16_t(meshopt_quantizeUnorm((a.f[0] - params.uv_offset[0]) * uv_rscale[0], params.uv_bits)),
-				uint16_t(meshopt_quantizeUnorm((a.f[1] - params.uv_offset[1]) * uv_rscale[1], params.uv_bits)),
+			    uint16_t(meshopt_quantizeUnorm((a.f[0] - params.uv_offset[0]) * uv_rscale[0], params.uv_bits)),
+			    uint16_t(meshopt_quantizeUnorm((a.f[1] - params.uv_offset[1]) * uv_rscale[1], params.uv_bits)),
 			};
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
@@ -345,11 +344,10 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			nz *= ns;
 
 			int8_t v[4] = {
-				int8_t(meshopt_quantizeSnorm(nx, 8)),
-				int8_t(meshopt_quantizeSnorm(ny, 8)),
-				int8_t(meshopt_quantizeSnorm(nz, 8)),
-				0
-			};
+			    int8_t(meshopt_quantizeSnorm(nx, 8)),
+			    int8_t(meshopt_quantizeSnorm(ny, 8)),
+			    int8_t(meshopt_quantizeSnorm(nz, 8)),
+			    0};
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
@@ -362,11 +360,10 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			const Attr& a = stream.data[i];
 
 			uint8_t v[4] = {
-				uint8_t(meshopt_quantizeUnorm(a.f[0], 8)),
-				uint8_t(meshopt_quantizeUnorm(a.f[1], 8)),
-				uint8_t(meshopt_quantizeUnorm(a.f[2], 8)),
-				uint8_t(meshopt_quantizeUnorm(a.f[3], 8))
-			};
+			    uint8_t(meshopt_quantizeUnorm(a.f[0], 8)),
+			    uint8_t(meshopt_quantizeUnorm(a.f[1], 8)),
+			    uint8_t(meshopt_quantizeUnorm(a.f[2], 8)),
+			    uint8_t(meshopt_quantizeUnorm(a.f[3], 8))};
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
@@ -379,11 +376,10 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			const Attr& a = stream.data[i];
 
 			uint8_t v[4] = {
-				uint8_t(a.f[0]),
-				uint8_t(a.f[1]),
-				uint8_t(a.f[2]),
-				uint8_t(a.f[3])
-			};
+			    uint8_t(a.f[0]),
+			    uint8_t(a.f[1]),
+			    uint8_t(a.f[2]),
+			    uint8_t(a.f[3])};
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
@@ -396,11 +392,10 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			const Attr& a = stream.data[i];
 
 			float v[4] = {
-				a.f[0],
-				a.f[1],
-				a.f[2],
-				a.f[3]
-			};
+			    a.f[0],
+			    a.f[1],
+			    a.f[2],
+			    a.f[3]};
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
@@ -412,7 +407,7 @@ cgltf_component_type writeIndexStream(std::string& bin, const std::vector<unsign
 {
 	for (size_t i = 0; i < stream.size(); ++i)
 	{
-		uint32_t v[1] = { stream[i] };
+		uint32_t v[1] = {stream[i]};
 		bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 	}
 
@@ -465,13 +460,20 @@ const char* componentType(cgltf_component_type type)
 {
 	switch (type)
 	{
-		case cgltf_component_type_r_8: return "5120";
-		case cgltf_component_type_r_8u: return "5121";
-		case cgltf_component_type_r_16: return "5122";
-		case cgltf_component_type_r_16u: return "5123";
-		case cgltf_component_type_r_32u: return "5125";
-		case cgltf_component_type_r_32f: return "5126";
-		default: return "0";
+	case cgltf_component_type_r_8:
+		return "5120";
+	case cgltf_component_type_r_8u:
+		return "5121";
+	case cgltf_component_type_r_16:
+		return "5122";
+	case cgltf_component_type_r_16u:
+		return "5123";
+	case cgltf_component_type_r_32u:
+		return "5125";
+	case cgltf_component_type_r_32f:
+		return "5126";
+	default:
+		return "0";
 	}
 }
 
@@ -479,11 +481,16 @@ const char* shapeType(cgltf_type type)
 {
 	switch (type)
 	{
-	case cgltf_type_scalar: return "\"SCALAR\"";
-	case cgltf_type_vec2: return "\"VEC2\"";
-	case cgltf_type_vec3: return "\"VEC3\"";
-	case cgltf_type_vec4: return "\"VEC4\"";
-	default: return "\"\"";
+	case cgltf_type_scalar:
+		return "\"SCALAR\"";
+	case cgltf_type_vec2:
+		return "\"VEC2\"";
+	case cgltf_type_vec3:
+		return "\"VEC3\"";
+	case cgltf_type_vec4:
+		return "\"VEC4\"";
+	default:
+		return "\"\"";
 	}
 }
 
@@ -491,14 +498,22 @@ const char* attributeType(cgltf_attribute_type type)
 {
 	switch (type)
 	{
-	case cgltf_attribute_type_position: return "POSITION";
-	case cgltf_attribute_type_normal: return "NORMAL";
-	case cgltf_attribute_type_tangent: return "TANGENT";
-	case cgltf_attribute_type_texcoord: return "TEXCOORD";
-	case cgltf_attribute_type_color: return "COLOR";
-	case cgltf_attribute_type_joints: return "JOINTS";
-	case cgltf_attribute_type_weights: return "WEIGHTS";
-	default: return "ATTRIBUTE";
+	case cgltf_attribute_type_position:
+		return "POSITION";
+	case cgltf_attribute_type_normal:
+		return "NORMAL";
+	case cgltf_attribute_type_tangent:
+		return "TANGENT";
+	case cgltf_attribute_type_texcoord:
+		return "TEXCOORD";
+	case cgltf_attribute_type_color:
+		return "COLOR";
+	case cgltf_attribute_type_joints:
+		return "JOINTS";
+	case cgltf_attribute_type_weights:
+		return "WEIGHTS";
+	default:
+		return "ATTRIBUTE";
 	}
 }
 
@@ -522,8 +537,8 @@ void writeTextureInfo(std::string& json, const cgltf_data* data, const cgltf_tex
 
 void writeMaterialInfo(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationParams& qp)
 {
-	static const float white[4] = { 1, 1, 1, 1 };
-	static const float black[4] = { 0, 0, 0, 0 };
+	static const float white[4] = {1, 1, 1, 1};
+	static const float black[4] = {0, 0, 0, 0};
 
 	if (material.has_pbr_metallic_roughness)
 	{
@@ -772,9 +787,9 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			json_buffer_views += "{\"buffer\":0";
 			json_buffer_views += ",\"byteLength\":";
 			json_buffer_views += to_string(bin.size() - bin_offset),
-			json_buffer_views += ",\"byteOffset\":";
+			    json_buffer_views += ",\"byteOffset\":";
 			json_buffer_views += to_string(bin_offset),
-			json_buffer_views += ",\"byteStride\":";
+			    json_buffer_views += ",\"byteStride\":";
 			json_buffer_views += to_string(p.second);
 			json_buffer_views += ",\"target\":34962";
 			json_buffer_views += "}";
@@ -835,9 +850,9 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			json_buffer_views += "{\"buffer\":0";
 			json_buffer_views += ",\"byteLength\":";
 			json_buffer_views += to_string(bin.size() - bin_offset),
-			json_buffer_views += ",\"byteOffset\":";
+			    json_buffer_views += ",\"byteOffset\":";
 			json_buffer_views += to_string(bin_offset),
-			json_buffer_views += ",\"target\":34963";
+			    json_buffer_views += ",\"target\":34963";
 			json_buffer_views += "}";
 
 			comma(json_accessors);

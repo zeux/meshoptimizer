@@ -68,7 +68,7 @@ dev: $(EXECUTABLE)
 	$(EXECUTABLE) -d $(files)
 
 format:
-	clang-format -i $(LIBRARY_SOURCES) $(DEMO_SOURCES)
+	clang-format -i $(LIBRARY_SOURCES) $(DEMO_SOURCES) $(ENCODER_SOURCES) $(GLTFPACK_SOURCES)
 
 meshencoder: $(ENCODER_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
