@@ -43,6 +43,7 @@ struct Settings
 {
 	int pos_bits;
 	int uv_bits;
+	bool compress;
 };
 
 struct QuantizationParams
@@ -203,7 +204,10 @@ void optimizeMesh(Mesh& mesh)
 	meshopt_optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), vertex_count);
 
 	std::vector<unsigned int> remap(vertex_count);
-	meshopt_optimizeVertexFetchRemap(&remap[0], &mesh.indices[0], mesh.indices.size(), vertex_count);
+	size_t unique_vertices = meshopt_optimizeVertexFetchRemap(&remap[0], &mesh.indices[0], mesh.indices.size(), vertex_count);
+	assert(unique_vertices == vertex_count);
+
+	meshopt_remapIndexBuffer(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &remap[0]);
 
 	for (size_t i = 0; i < mesh.streams.size(); ++i)
 		meshopt_remapVertexBuffer(&mesh.streams[i].data[0], &mesh.streams[i].data[0], vertex_count, sizeof(Attr), &remap[0]);
@@ -412,6 +416,26 @@ cgltf_component_type writeIndexStream(std::string& bin, const std::vector<unsign
 	return cgltf_component_type_r_32u;
 }
 
+void compressVertexStream(std::string& bin, size_t offset, size_t count, size_t stride)
+{
+	std::vector<unsigned char> compressed(meshopt_encodeVertexBufferBound(count, stride));
+	size_t size = meshopt_encodeVertexBuffer(&compressed[0], compressed.size(), bin.c_str() + offset, count, stride);
+
+	bin.erase(offset);
+	bin.append(reinterpret_cast<const char*>(&compressed[0]), size);
+}
+
+void compressIndexStream(std::string& bin, size_t offset, size_t count, size_t stride)
+{
+	assert(stride == 4);
+
+	std::vector<unsigned char> compressed(meshopt_encodeIndexBufferBound(count, count * 3));
+	size_t size = meshopt_encodeIndexBuffer(&compressed[0], compressed.size(), reinterpret_cast<const unsigned int*>(bin.c_str() + offset), count);
+
+	bin.erase(offset);
+	bin.append(reinterpret_cast<const char*>(&compressed[0]), size);
+}
+
 void comma(std::string& s)
 {
 	if (!s.empty())
@@ -508,6 +532,9 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			size_t bin_offset = bin.size();
 			std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> p = writeVertexStream(bin, stream, qp);
 
+			if (settings.compress)
+				compressVertexStream(bin, bin_offset, stream.data.size(), p.second);
+
 			comma(json_buffer_views);
 			json_buffer_views += "{\"buffer\":0";
 			json_buffer_views += ",\"byteLength\":";
@@ -567,6 +594,9 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		{
 			size_t bin_offset = bin.size();
 			cgltf_component_type p = writeIndexStream(bin, mesh.indices);
+
+			if (settings.compress)
+				compressIndexStream(bin, bin_offset, mesh.indices.size(), p == cgltf_component_type_r_16u ? 2 : 4);
 
 			comma(json_buffer_views);
 			json_buffer_views += "{\"buffer\":0";
@@ -657,6 +687,7 @@ int main(int argc, char** argv)
 	Settings settings = {};
 	settings.pos_bits = 14;
 	settings.uv_bits = 12;
+	settings.compress = false;
 
 	for (int i = 1; i < argc - 2; ++i)
 	{
@@ -669,6 +700,10 @@ int main(int argc, char** argv)
 		else if (strncmp(arg, "-vt", 3) == 0 && isdigit(arg[3]))
 		{
 			settings.uv_bits = atoi(arg + 3);
+		}
+		else if (strcmp(arg, "-c") == 0)
+		{
+			settings.compress = true;
 		}
 		else
 		{
