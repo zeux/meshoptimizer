@@ -24,6 +24,7 @@ struct Stream
 
 struct Mesh
 {
+	cgltf_material* material;
 	std::vector<Stream> streams;
 	std::vector<unsigned int> indices;
 };
@@ -132,6 +133,8 @@ void parseMeshes(cgltf_data* data, std::vector<Mesh>& meshes)
 			const cgltf_primitive& primitive = mesh.primitives[pi];
 
 			Mesh result;
+
+			result.material = primitive.material;
 
 			if (cgltf_accessor* a = primitive.indices)
 			{
@@ -271,7 +274,7 @@ QuantizationParams prepareQuantization(const Scene& scene, const Settings& setti
 	result.uv_bits = settings.uv_bits;
 
 	Attr uv_min, uv_max;
-	if (getAttributeBounds(scene, cgltf_attribute_type_position, uv_min, uv_max))
+	if (getAttributeBounds(scene, cgltf_attribute_type_texcoord, uv_min, uv_max))
 	{
 		result.uv_offset[0] = uv_min.f[0];
 		result.uv_offset[1] = uv_min.f[1];
@@ -438,7 +441,9 @@ void compressIndexStream(std::string& bin, size_t offset, size_t count, size_t s
 
 void comma(std::string& s)
 {
-	if (!s.empty())
+	char ch = s.empty() ? 0 : s[s.size() - 1];
+
+	if (ch != 0 && ch != '[' && ch != '{')
 		s += ',';
 }
 
@@ -452,7 +457,7 @@ std::string to_string(size_t v)
 std::string to_string(float v)
 {
 	char buf[512];
-	sprintf(buf, "%1.7e", v);
+	sprintf(buf, "%.7g", v);
 	return buf;
 }
 
@@ -497,6 +502,160 @@ const char* attributeType(cgltf_attribute_type type)
 	}
 }
 
+void writeTextureInfo(std::string& json, const cgltf_data* data, const cgltf_texture_view& view, const QuantizationParams& qp)
+{
+	assert(view.texture);
+
+	json += "{\"index\":";
+	json += to_string(size_t(view.texture - data->textures));
+	json += ",\"extensions\":{\"KHR_texture_transform\":{";
+	json += "\"offset\":[";
+	json += to_string(qp.uv_offset[0]);
+	json += ",";
+	json += to_string(qp.uv_offset[1]);
+	json += "],\"scale\":[";
+	json += to_string(qp.uv_scale[0] / float((1 << qp.uv_bits) - 1));
+	json += ",";
+	json += to_string(qp.uv_scale[1] / float((1 << qp.uv_bits) - 1));
+	json += "]}}}";
+}
+
+void writeMaterialInfo(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationParams& qp)
+{
+	static const float white[4] = { 1, 1, 1, 1 };
+	static const float black[4] = { 0, 0, 0, 0 };
+
+	if (material.has_pbr_metallic_roughness)
+	{
+		const cgltf_pbr_metallic_roughness& pbr = material.pbr_metallic_roughness;
+
+		comma(json);
+		json += "\"pbrMetallicRoughness\":{";
+		if (memcmp(pbr.base_color_factor, white, 16) != 0)
+		{
+			comma(json);
+			json += "\"baseColorFactor\":[";
+			json += to_string(pbr.base_color_factor[0]);
+			json += ",";
+			json += to_string(pbr.base_color_factor[1]);
+			json += ",";
+			json += to_string(pbr.base_color_factor[2]);
+			json += ",";
+			json += to_string(pbr.base_color_factor[3]);
+			json += "]";
+		}
+		if (pbr.base_color_texture.texture)
+		{
+			comma(json);
+			json += "\"baseColorTexture\":";
+			writeTextureInfo(json, data, pbr.base_color_texture, qp);
+		}
+		if (pbr.metallic_factor != 1)
+		{
+			comma(json);
+			json += "\"metallicFactor\":";
+			json += to_string(pbr.metallic_factor);
+		}
+		if (pbr.roughness_factor != 1)
+		{
+			comma(json);
+			json += "\"roughnessFactor\":";
+			json += to_string(pbr.roughness_factor);
+		}
+		if (pbr.metallic_roughness_texture.texture)
+		{
+			comma(json);
+			json += "\"metallicRoughnessTexture\":";
+			writeTextureInfo(json, data, pbr.metallic_roughness_texture, qp);
+		}
+		json += "}";
+	}
+
+	if (material.has_pbr_specular_glossiness)
+	{
+		const cgltf_pbr_specular_glossiness& pbr = material.pbr_specular_glossiness;
+
+		comma(json);
+		json += "\"extensions\":{\"KHR_materials_pbrSpecularGlossiness\":{";
+		if (pbr.diffuse_texture.texture)
+		{
+			comma(json);
+			json += "\"diffuseTexture\":";
+			writeTextureInfo(json, data, pbr.diffuse_texture, qp);
+		}
+		if (pbr.specular_glossiness_texture.texture)
+		{
+			comma(json);
+			json += "\"specularGlossinessTexture\":";
+			writeTextureInfo(json, data, pbr.specular_glossiness_texture, qp);
+		}
+		if (memcmp(pbr.diffuse_factor, white, 16) != 0)
+		{
+			comma(json);
+			json += "\"diffuseFactor\":[";
+			json += to_string(pbr.diffuse_factor[0]);
+			json += ",";
+			json += to_string(pbr.diffuse_factor[1]);
+			json += ",";
+			json += to_string(pbr.diffuse_factor[2]);
+			json += ",";
+			json += to_string(pbr.diffuse_factor[3]);
+			json += "]";
+		}
+		if (memcmp(pbr.specular_factor, white, 12) != 0)
+		{
+			comma(json);
+			json += "\"specularFactor\":[";
+			json += to_string(pbr.specular_factor[0]);
+			json += ",";
+			json += to_string(pbr.specular_factor[1]);
+			json += ",";
+			json += to_string(pbr.specular_factor[2]);
+			json += "]";
+		}
+		if (pbr.glossiness_factor != 1)
+		{
+			comma(json);
+			json += "\"glossinessFactor\":";
+			json += to_string(pbr.glossiness_factor);
+		}
+		json += "}}";
+	}
+
+	if (material.normal_texture.texture)
+	{
+		comma(json);
+		json += "\"normalTexture\":";
+		writeTextureInfo(json, data, material.normal_texture, qp);
+	}
+
+	if (material.occlusion_texture.texture)
+	{
+		comma(json);
+		json += "\"occlusionTexture\":";
+		writeTextureInfo(json, data, material.occlusion_texture, qp);
+	}
+
+	if (material.emissive_texture.texture)
+	{
+		comma(json);
+		json += "\"emissiveTexture\":";
+		writeTextureInfo(json, data, material.emissive_texture, qp);
+	}
+
+	if (memcmp(material.emissive_factor, black, 12) != 0)
+	{
+		comma(json);
+		json += "\"emissiveFactor\":[";
+		json += to_string(material.emissive_factor[0]);
+		json += ",";
+		json += to_string(material.emissive_factor[1]);
+		json += ",";
+		json += to_string(material.emissive_factor[2]);
+		json += "]";
+	}
+}
+
 bool process(Scene& scene, const Settings& settings, std::string& json, std::string& bin)
 {
 	cgltf_data* data = scene.data;
@@ -511,13 +670,54 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 
 	QuantizationParams qp = prepareQuantization(scene, settings);
 
+	std::string json_images;
+	std::string json_textures;
+	std::string json_materials;
 	std::string json_buffer_views;
 	std::string json_accessors;
 	std::string json_meshes;
 	std::string json_nodes;
 	std::string json_roots;
 
+	bool has_pbr_specular_glossiness = false;
+
 	size_t view_offset = 0;
+
+	for (size_t i = 0; i < scene.data->images_count; ++i)
+	{
+		const cgltf_image& image = scene.data->images[i];
+
+		comma(json_images);
+		json_images += "{\"uri\":\"";
+		json_images += image.uri;
+		json_images += "\"}";
+	}
+
+	for (size_t i = 0; i < scene.data->textures_count; ++i)
+	{
+		const cgltf_texture& texture = scene.data->textures[i];
+
+		comma(json_textures);
+		json_textures += "{";
+		if (texture.image)
+		{
+			json_textures += "\"source\":";
+			json_textures += to_string(size_t(texture.image - scene.data->images));
+		}
+		json_textures += "}";
+	}
+
+	for (size_t i = 0; i < scene.data->materials_count; ++i)
+	{
+		const cgltf_material& material = scene.data->materials[i];
+
+		comma(json_materials);
+		json_materials += "{";
+		writeMaterialInfo(json_materials, scene.data, material, qp);
+		json_materials += "}";
+
+		has_pbr_specular_glossiness = has_pbr_specular_glossiness || material.has_pbr_specular_glossiness;
+	}
 
 	for (size_t i = 0; i < scene.meshes.size(); ++i)
 	{
@@ -627,6 +827,11 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		json_meshes += json_attributes;
 		json_meshes += "},\"indices\":";
 		json_meshes += to_string(index_view);
+		if (mesh.material)
+		{
+			json_meshes += ",\"material\":";
+			json_meshes += to_string(size_t(mesh.material - scene.data->materials));
+		}
 		json_meshes += "}]}";
 
 		float node_scale = qp.pos_scale / float((1 << qp.pos_bits) - 1);
@@ -657,6 +862,12 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 	json += json_buffer_views;
 	json += "],\"accessors\":[";
 	json += json_accessors;
+	json += "],\"images\":[";
+	json += json_images;
+	json += "],\"textures\":[";
+	json += json_textures;
+	json += "],\"materials\":[";
+	json += json_materials;
 	json += "],\"meshes\":[";
 	json += json_meshes;
 	json += "],\"nodes\":[";
@@ -667,6 +878,14 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 	json += "]}";
 	json += "],\"scene\":0";
 	json += ",\"asset\":{\"version\":\"2.0\"}";
+	json += ",\"extensionsUsed\":[";
+	json += "\"KHR_texture_transform\"";
+	if (has_pbr_specular_glossiness)
+	{
+		comma(json);
+		json += "\"KHR_materials_pbrSpecularGlossiness\"";
+	}
+	json += "]";
 
 	return true;
 }
