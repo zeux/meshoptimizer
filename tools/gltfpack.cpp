@@ -571,57 +571,6 @@ void writeMaterialInfo(std::string& json, const cgltf_data* data, const cgltf_ma
 		json += "}";
 	}
 
-	if (material.has_pbr_specular_glossiness)
-	{
-		const cgltf_pbr_specular_glossiness& pbr = material.pbr_specular_glossiness;
-
-		comma(json);
-		json += "\"extensions\":{\"KHR_materials_pbrSpecularGlossiness\":{";
-		if (pbr.diffuse_texture.texture)
-		{
-			comma(json);
-			json += "\"diffuseTexture\":";
-			writeTextureInfo(json, data, pbr.diffuse_texture, qp);
-		}
-		if (pbr.specular_glossiness_texture.texture)
-		{
-			comma(json);
-			json += "\"specularGlossinessTexture\":";
-			writeTextureInfo(json, data, pbr.specular_glossiness_texture, qp);
-		}
-		if (memcmp(pbr.diffuse_factor, white, 16) != 0)
-		{
-			comma(json);
-			json += "\"diffuseFactor\":[";
-			json += to_string(pbr.diffuse_factor[0]);
-			json += ",";
-			json += to_string(pbr.diffuse_factor[1]);
-			json += ",";
-			json += to_string(pbr.diffuse_factor[2]);
-			json += ",";
-			json += to_string(pbr.diffuse_factor[3]);
-			json += "]";
-		}
-		if (memcmp(pbr.specular_factor, white, 12) != 0)
-		{
-			comma(json);
-			json += "\"specularFactor\":[";
-			json += to_string(pbr.specular_factor[0]);
-			json += ",";
-			json += to_string(pbr.specular_factor[1]);
-			json += ",";
-			json += to_string(pbr.specular_factor[2]);
-			json += "]";
-		}
-		if (pbr.glossiness_factor != 1)
-		{
-			comma(json);
-			json += "\"glossinessFactor\":";
-			json += to_string(pbr.glossiness_factor);
-		}
-		json += "}}";
-	}
-
 	if (material.normal_texture.texture)
 	{
 		comma(json);
@@ -653,6 +602,90 @@ void writeMaterialInfo(std::string& json, const cgltf_data* data, const cgltf_ma
 		json += ",";
 		json += to_string(material.emissive_factor[2]);
 		json += "]";
+	}
+
+	if (material.alpha_mode != cgltf_alpha_mode_opaque)
+	{
+		comma(json);
+		json += "\"alphaMode\":";
+		json += (material.alpha_mode == cgltf_alpha_mode_blend) ? "\"BLEND\"" : "\"MASK\"";
+	}
+
+	if (material.alpha_cutoff != 0.5f)
+	{
+		comma(json);
+		json += "\"alphaCutoff\":";
+		json += to_string(material.alpha_cutoff);
+	}
+
+	if (material.double_sided)
+	{
+		comma(json);
+		json += "\"doubleSided\":true";
+	}
+
+	if (material.has_pbr_specular_glossiness || material.unlit)
+	{
+		comma(json);
+		json += "\"extensions\":{";
+
+		if (material.has_pbr_specular_glossiness)
+		{
+			const cgltf_pbr_specular_glossiness& pbr = material.pbr_specular_glossiness;
+
+			comma(json);
+			json += "\"KHR_materials_pbrSpecularGlossiness\":{";
+			if (pbr.diffuse_texture.texture)
+			{
+				comma(json);
+				json += "\"diffuseTexture\":";
+				writeTextureInfo(json, data, pbr.diffuse_texture, qp);
+			}
+			if (pbr.specular_glossiness_texture.texture)
+			{
+				comma(json);
+				json += "\"specularGlossinessTexture\":";
+				writeTextureInfo(json, data, pbr.specular_glossiness_texture, qp);
+			}
+			if (memcmp(pbr.diffuse_factor, white, 16) != 0)
+			{
+				comma(json);
+				json += "\"diffuseFactor\":[";
+				json += to_string(pbr.diffuse_factor[0]);
+				json += ",";
+				json += to_string(pbr.diffuse_factor[1]);
+				json += ",";
+				json += to_string(pbr.diffuse_factor[2]);
+				json += ",";
+				json += to_string(pbr.diffuse_factor[3]);
+				json += "]";
+			}
+			if (memcmp(pbr.specular_factor, white, 12) != 0)
+			{
+				comma(json);
+				json += "\"specularFactor\":[";
+				json += to_string(pbr.specular_factor[0]);
+				json += ",";
+				json += to_string(pbr.specular_factor[1]);
+				json += ",";
+				json += to_string(pbr.specular_factor[2]);
+				json += "]";
+			}
+			if (pbr.glossiness_factor != 1)
+			{
+				comma(json);
+				json += "\"glossinessFactor\":";
+				json += to_string(pbr.glossiness_factor);
+			}
+			json += "}";
+		}
+		if (material.unlit)
+		{
+			comma(json);
+			json += "\"KHR_materials_unlit\":{}";
+		}
+
+		json += "}";
 	}
 }
 
