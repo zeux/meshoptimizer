@@ -278,7 +278,7 @@ QuantizationParams prepareQuantization(const Scene& scene, const Settings& setti
 	return result;
 }
 
-std::pair<cgltf_component_type, cgltf_type> writeVertexStream(std::string& bin, const Stream& stream, const QuantizationParams& params)
+std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream(std::string& bin, const Stream& stream, const QuantizationParams& params)
 {
 	if (stream.type == cgltf_attribute_type_position)
 	{
@@ -288,15 +288,16 @@ std::pair<cgltf_component_type, cgltf_type> writeVertexStream(std::string& bin, 
 		{
 			const Attr& a = stream.data[i];
 
-			uint16_t v[3] = {
+			uint16_t v[4] = {
 				uint16_t(meshopt_quantizeUnorm((a.f[0] - params.pos_offset[0]) * pos_rscale, params.pos_bits)),
 				uint16_t(meshopt_quantizeUnorm((a.f[1] - params.pos_offset[1]) * pos_rscale, params.pos_bits)),
 				uint16_t(meshopt_quantizeUnorm((a.f[2] - params.pos_offset[2]) * pos_rscale, params.pos_bits)),
+				0
 			};
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(cgltf_component_type_r_16u, cgltf_type_vec3);
+		return std::make_pair(std::make_pair(cgltf_component_type_r_16u, cgltf_type_vec3), 8);
 	}
 	else if (stream.type == cgltf_attribute_type_texcoord)
 	{
@@ -316,7 +317,7 @@ std::pair<cgltf_component_type, cgltf_type> writeVertexStream(std::string& bin, 
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(cgltf_component_type_r_16u, cgltf_type_vec2);
+		return std::make_pair(std::make_pair(cgltf_component_type_r_16u, cgltf_type_vec2), 4);
 	}
 	else if (stream.type == cgltf_attribute_type_normal || stream.type == cgltf_attribute_type_tangent)
 	{
@@ -345,7 +346,7 @@ std::pair<cgltf_component_type, cgltf_type> writeVertexStream(std::string& bin, 
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(cgltf_component_type_r_8, cgltf_type_vec3);
+		return std::make_pair(std::make_pair(cgltf_component_type_r_8, cgltf_type_vec3), 4);
 	}
 	else if (stream.type == cgltf_attribute_type_color || stream.type == cgltf_attribute_type_weights)
 	{
@@ -362,7 +363,7 @@ std::pair<cgltf_component_type, cgltf_type> writeVertexStream(std::string& bin, 
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(cgltf_component_type_r_8u, cgltf_type_vec4);
+		return std::make_pair(std::make_pair(cgltf_component_type_r_8u, cgltf_type_vec4), 4);
 	}
 	else if (stream.type == cgltf_attribute_type_joints)
 	{
@@ -379,7 +380,7 @@ std::pair<cgltf_component_type, cgltf_type> writeVertexStream(std::string& bin, 
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(cgltf_component_type_r_8u, cgltf_type_vec4);
+		return std::make_pair(std::make_pair(cgltf_component_type_r_8u, cgltf_type_vec4), 4);
 	}
 	else
 	{
@@ -396,7 +397,7 @@ std::pair<cgltf_component_type, cgltf_type> writeVertexStream(std::string& bin, 
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(cgltf_component_type_r_32f, cgltf_type_vec4);
+		return std::make_pair(std::make_pair(cgltf_component_type_r_32f, cgltf_type_vec4), 16);
 	}
 }
 
@@ -505,7 +506,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			const Stream& stream = mesh.streams[j];
 
 			size_t bin_offset = bin.size();
-			std::pair<cgltf_component_type, cgltf_type> p = writeVertexStream(bin, stream, qp);
+			std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> p = writeVertexStream(bin, stream, qp);
 
 			comma(json_buffer_views);
 			json_buffer_views += "{\"buffer\":0";
@@ -514,7 +515,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			json_buffer_views += ",\"byteOffset\":";
 			json_buffer_views += to_string(bin_offset),
 			json_buffer_views += ",\"byteStride\":";
-			json_buffer_views += to_string(cgltf_calc_size(p.second, p.first));
+			json_buffer_views += to_string(p.second);
 			json_buffer_views += ",\"target\":34962";
 			json_buffer_views += "}";
 
@@ -522,20 +523,27 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			json_accessors += "{\"bufferView\":";
 			json_accessors += to_string(view_offset);
 			json_accessors += ",\"componentType\":";
-			json_accessors += componentType(p.first);
+			json_accessors += componentType(p.first.first);
 			json_accessors += ",\"count\":";
 			json_accessors += to_string(stream.data.size());
 			json_accessors += ",\"type\":";
-			json_accessors += shapeType(p.second);
+			json_accessors += shapeType(p.first.second);
 
 			if (stream.type == cgltf_attribute_type_position)
 			{
-				char max[64];
-				sprintf(max, "%d,%d,%d", 1 << qp.pos_bits, 1 << qp.pos_bits, 1 << qp.pos_bits);
+				size_t maxp = (1 << qp.pos_bits) - 1;
 
 				json_accessors += ",\"min\":[0,0,0],\"max\":[";
-				json_accessors += max;
+				json_accessors += to_string(maxp);
+				json_accessors += ",";
+				json_accessors += to_string(maxp);
+				json_accessors += ",";
+				json_accessors += to_string(maxp);
 				json_accessors += "]";
+			}
+			else if (stream.type == cgltf_attribute_type_normal || stream.type == cgltf_attribute_type_tangent || stream.type == cgltf_attribute_type_color)
+			{
+				json_accessors += ",\"normalized\":true";
 			}
 
 			json_accessors += "}";
@@ -566,8 +574,6 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			json_buffer_views += to_string(bin.size() - bin_offset),
 			json_buffer_views += ",\"byteOffset\":";
 			json_buffer_views += to_string(bin_offset),
-			json_buffer_views += ",\"byteStride\":";
-			json_buffer_views += to_string(cgltf_calc_size(cgltf_type_scalar, p));
 			json_buffer_views += ",\"target\":34963";
 			json_buffer_views += "}";
 
@@ -591,7 +597,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		json_meshes += json_attributes;
 		json_meshes += "},\"indices\":";
 		json_meshes += to_string(index_view);
-		json_meshes += "}";
+		json_meshes += "}]}";
 
 		float node_scale = qp.pos_scale / float((1 << qp.pos_bits) - 1);
 
@@ -617,7 +623,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		json_roots += to_string(i);
 	}
 
-	json += "\"buffer_views\":[";
+	json += "\"bufferViews\":[";
 	json += json_buffer_views;
 	json += "],\"accessors\":[";
 	json += json_accessors;
@@ -630,6 +636,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 	json += json_roots;
 	json += "]}";
 	json += "],\"scene\":0";
+	json += ",\"asset\":{\"version\":\"2.0\"}";
 
 	return true;
 }
@@ -747,12 +754,12 @@ int main(int argc, char** argv)
 		writeU32(out, 2);
 		writeU32(out, 12 + 8 + json.size() + 8 + bin.size());
 
-		writeU32(out, 0x4E4F534A);
 		writeU32(out, json.size());
+		writeU32(out, 0x4E4F534A);
 		fwrite(json.c_str(), json.size(), 1, out);
 
-		writeU32(out, 0x004E4942);
 		writeU32(out, bin.size());
+		writeU32(out, 0x004E4942);
 		fwrite(bin.c_str(), bin.size(), 1, out);
 
 		fclose(out);
