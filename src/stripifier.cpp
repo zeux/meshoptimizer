@@ -48,7 +48,7 @@ static int findStripNext(const unsigned int buffer[][3], unsigned int buffer_siz
 
 } // namespace meshopt
 
-size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count)
+size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, int use_restart)
 {
 	assert(destination != indices);
 	assert(index_count % 3 == 0);
@@ -197,18 +197,43 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 				next = ec;
 			}
 
-			// emit the new strip; we use restart indices
-			if (strip_size)
-				destination[strip_size++] = ~0u;
+			if (use_restart)
+			{
+				// strip restart index is always 0xff..ff
+				if (strip_size)
+					destination[strip_size++] = ~0u;
 
-			destination[strip_size++] = a;
-			destination[strip_size++] = b;
-			destination[strip_size++] = c;
+				destination[strip_size++] = a;
+				destination[strip_size++] = b;
+				destination[strip_size++] = c;
 
-			// new strip always starts with the same edge winding
-			strip[0] = b;
-			strip[1] = c;
-			parity = 1;
+				// new strip always starts with the same edge winding
+				strip[0] = b;
+				strip[1] = c;
+				parity = 1;
+			}
+			else
+			{
+				if (strip_size)
+				{
+					// connect last strip using degenerate triangles
+					destination[strip_size++] = strip[1];
+					destination[strip_size++] = a;
+				}
+
+				// note that we may need to flip the emitted triangle based on parity
+				// we always end up with outgoing edge "cb" in the end
+				unsigned int e0 = parity ? c : b;
+				unsigned int e1 = parity ? b : c;
+
+				destination[strip_size++] = a;
+				destination[strip_size++] = e0;
+				destination[strip_size++] = e1;
+
+				strip[0] = e0;
+				strip[1] = e1;
+				parity ^= 1;
+			}
 		}
 	}
 
@@ -219,8 +244,9 @@ size_t meshopt_stripifyBound(size_t index_count)
 {
 	assert(index_count % 3 == 0);
 
-	// worst case is 1 restart index and 3 indices per triangle
-	return (index_count / 3) * 4;
+	// worst case without restarts is 2 degenerate indices and 3 indices per triangle
+	// worst case with restarts is 1 restart index and 3 indices per triangle
+	return (index_count / 3) * 5;
 }
 
 size_t meshopt_unstripify(unsigned int* destination, const unsigned int* indices, size_t index_count)
