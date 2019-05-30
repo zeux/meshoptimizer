@@ -402,21 +402,18 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 		{
 			const Attr& a = stream.data[i];
 
-			/*()
-		    // TODO: normalize sum to 255
 			uint8_t v[4] = {
 			    uint8_t(meshopt_quantizeUnorm(a.f[0], 8)),
 			    uint8_t(meshopt_quantizeUnorm(a.f[1], 8)),
 			    uint8_t(meshopt_quantizeUnorm(a.f[2], 8)),
 			    uint8_t(meshopt_quantizeUnorm(a.f[3], 8))};
-			  */
 
-			float v[4] = { a.f[0], a.f[1], a.f[2], a.f[3] };
+		    // TODO: normalize sum to exactly 255
 
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(std::make_pair(cgltf_component_type_r_32f, cgltf_type_vec4), 16);
+		return std::make_pair(std::make_pair(cgltf_component_type_r_8u, cgltf_type_vec4), 4);
 	}
 	else if (stream.type == cgltf_attribute_type_joints)
 	{
