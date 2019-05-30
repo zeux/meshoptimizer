@@ -859,6 +859,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 
 			if (stream.type == cgltf_attribute_type_position)
 			{
+				// TODO: compute precise min/max (validator isn't happy with imprecise data for some reason)
 				size_t maxp = (1 << qp.pos_bits) - 1;
 
 				json_accessors += ",\"min\":[0,0,0],\"max\":[";
