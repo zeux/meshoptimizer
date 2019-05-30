@@ -587,6 +587,8 @@ void writeTextureInfo(std::string& json, const cgltf_data* data, const cgltf_tex
 
 	json += "{\"index\":";
 	json += to_string(size_t(view.texture - data->textures));
+	json += ",\"texCoord\":";
+	json += to_string(size_t(view.texcoord));
 	json += ",\"extensions\":{\"KHR_texture_transform\":{";
 	json += "\"offset\":[";
 	json += to_string(qp.uv_offset[0]);
@@ -768,6 +770,42 @@ void writeMaterialInfo(std::string& json, const cgltf_data* data, const cgltf_ma
 	}
 }
 
+bool usesTextureSet(const cgltf_material& material, int set)
+{
+	if (material.has_pbr_metallic_roughness)
+	{
+		const cgltf_pbr_metallic_roughness& pbr = material.pbr_metallic_roughness;
+
+		if (pbr.base_color_texture.texture && pbr.base_color_texture.texcoord == set)
+			return true;
+
+		if (pbr.metallic_roughness_texture.texture && pbr.metallic_roughness_texture.texcoord == set)
+			return true;
+	}
+
+	if (material.has_pbr_specular_glossiness)
+	{
+		const cgltf_pbr_specular_glossiness& pbr = material.pbr_specular_glossiness;
+
+		if (pbr.diffuse_texture.texture && pbr.diffuse_texture.texcoord == set)
+			return true;
+
+		if (pbr.specular_glossiness_texture.texture && pbr.specular_glossiness_texture.texcoord == set)
+			return true;
+	}
+
+	if (material.normal_texture.texture && material.normal_texture.texcoord == set)
+		return true;
+
+	if (material.occlusion_texture.texture && material.occlusion_texture.texcoord == set)
+		return true;
+
+	if (material.emissive_texture.texture && material.emissive_texture.texcoord == set)
+		return true;
+
+	return false;
+}
+
 bool process(Scene& scene, const Settings& settings, std::string& json, std::string& bin)
 {
 	cgltf_data* data = scene.data;
@@ -842,6 +880,12 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		for (size_t j = 0; j < mesh.streams.size(); ++j)
 		{
 			const Stream& stream = mesh.streams[j];
+
+			if (stream.type == cgltf_attribute_type_texcoord && (!mesh.material || !usesTextureSet(*mesh.material, stream.index)))
+				continue;
+
+			if ((stream.type == cgltf_attribute_type_joints || stream.type == cgltf_attribute_type_weights) && !mesh.skin)
+				continue;
 
 			size_t bin_offset = bin.size();
 			std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> p = writeVertexStream(bin, stream, qp);
