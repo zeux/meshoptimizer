@@ -1,3 +1,29 @@
+// gltfpack is part of meshoptimizer library; see meshoptimizer.h for version/license details
+//
+// gltfpack is a command-line tool that takes a glTF file as an input and can produce two types of files:
+// - regular glb/gltf files that use data that has been optimized for GPU consumption using various cache optimizers
+// and quantization
+// - packed glb/gltf files that additionally use meshoptimizer codecs to reduce the size of vertex/index data; these
+// files can be further compressed with deflate/etc.
+//
+// To load regular glb files, it should be sufficient to use a standard glTF loader (although note that these files
+// use quantized position/texture coordinates that are technically invalid per spec; THREE.js and BabylonJS support
+// these files out of the box).
+// To load packed glb files, meshoptimizer vertex decoder needs to be integrated into the loader; demo/GLPLoader.js
+// contains a work-in-progress loader - please note that the extension specification isn't ready yet so the format
+// will change!
+//
+// Usage:
+// gltfpack [options] input output
+//
+// Options:
+// -vpN: use N-bit quantization for position (default: 14; N should be between 1 and 16)
+// -vtN: use N-bit quantization for texture corodinates (default: 12; N should be between 1 and 16)
+// -c: produced packed glb files
+//
+// gltfpack currently supports materials, meshes, nodes and skinning data
+// gltfpack doesn't support morph targets, animation data, lights and cameras
+
 #include "../src/meshoptimizer.h"
 
 #include <string>
@@ -1037,26 +1063,31 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		node_offset++;
 	}
 
-	std::vector<bool> joints(data->nodes_count);
+	std::vector<bool> node_keep(data->nodes_count);
+	std::vector<bool> node_named(data->nodes_count);
+	std::vector<int> node_remap(data->nodes_count, -1);
 
 	for (size_t i = 0; i < data->skins_count; ++i)
 	{
 		const cgltf_skin& skin = data->skins[i];
 
+		// for now we keep all joints directly referenced by the skin and the entire ancestry tree; we keep names for joints as well
 		for (size_t j = 0; j < skin.joints_count; ++j)
 		{
-			for (cgltf_node* node = skin.joints[j]; node; node = node->parent)
-				joints[node - data->nodes] = true;
+			cgltf_node* joint = skin.joints[j];
+
+			for (cgltf_node* node = joint; node; node = node->parent)
+				node_keep[node - data->nodes] = true;
+
+			node_named[joint - data->nodes] = true;
 		}
 	}
 
-	std::vector<int> joints_remap(data->nodes_count, -1);
-
 	for (size_t i = 0; i < data->nodes_count; ++i)
 	{
-		if (joints[i])
+		if (node_keep[i])
 		{
-			joints_remap[i] = int(node_offset);
+			node_remap[i] = int(node_offset);
 
 			node_offset++;
 		}
@@ -1064,19 +1095,19 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 
 	for (size_t i = 0; i < data->nodes_count; ++i)
 	{
-		if (joints[i])
+		if (node_keep[i])
 		{
 			const cgltf_node& node = data->nodes[i];
 
 			if (!node.parent)
 			{
 				comma(json_roots);
-				json_roots += to_string(size_t(joints_remap[i]));
+				json_roots += to_string(size_t(node_remap[i]));
 			}
 
 			comma(json_nodes);
 			json_nodes += "{";
-			if (node.name)
+			if (node.name && node_named[i])
 			{
 				comma(json_nodes);
 				json_nodes += "\"name\":\"";
@@ -1137,10 +1168,10 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 				for (size_t j = 0; j < node.children_count; ++j)
 				{
 					ptrdiff_t child = node.children[j] - data->nodes;
-					if (joints[child])
+					if (node_keep[child])
 					{
 						comma(json_nodes);
-						json_nodes += to_string(size_t(joints_remap[child]));
+						json_nodes += to_string(size_t(node_remap[child]));
 					}
 				}
 				json_nodes += "]";
@@ -1205,7 +1236,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		for (size_t j = 0; j < skin.joints_count; ++j)
 		{
 			comma(json_skins);
-			json_skins += to_string(size_t(joints_remap[skin.joints[j] - data->nodes]));
+			json_skins += to_string(size_t(node_remap[skin.joints[j] - data->nodes]));
 		}
 		json_skins += "]";
 		json_skins += ",\"inverseBindMatrices\":";
@@ -1214,7 +1245,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		{
 			comma(json_skins);
 			json_skins += "\"skeleton\":";
-			json_skins += to_string(size_t(joints_remap[skin.skeleton - data->nodes]));
+			json_skins += to_string(size_t(node_remap[skin.skeleton - data->nodes]));
 		}
 		json_skins += "}";
 	}
