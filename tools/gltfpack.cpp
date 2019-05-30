@@ -402,15 +402,21 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 		{
 			const Attr& a = stream.data[i];
 
+			/*()
+		    // TODO: normalize sum to 255
 			uint8_t v[4] = {
 			    uint8_t(meshopt_quantizeUnorm(a.f[0], 8)),
 			    uint8_t(meshopt_quantizeUnorm(a.f[1], 8)),
 			    uint8_t(meshopt_quantizeUnorm(a.f[2], 8)),
 			    uint8_t(meshopt_quantizeUnorm(a.f[3], 8))};
+			  */
+
+			float v[4] = { a.f[0], a.f[1], a.f[2], a.f[3] };
+
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(std::make_pair(cgltf_component_type_r_8u, cgltf_type_vec4), 4);
+		return std::make_pair(std::make_pair(cgltf_component_type_r_32f, cgltf_type_vec4), 16);
 	}
 	else if (stream.type == cgltf_attribute_type_joints)
 	{
@@ -1091,18 +1097,14 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 				cgltf_accessor_read_float(skin.inverse_bind_matrices, j, transform, 16);
 			}
 
-			// TODO: this is what should happen, right?
-			if (0)
-			{
-				float node_scale = qp.pos_scale / float((1 << qp.pos_bits) - 1);
+			float node_scale = qp.pos_scale / float((1 << qp.pos_bits) - 1);
 
-				for (int k = 0; k < 12; ++k)
-					transform[k] *= node_scale;
+			for (int k = 0; k < 12; ++k)
+				transform[k] *= node_scale;
 
-				transform[12] += qp.pos_offset[0];
-				transform[13] += qp.pos_offset[1];
-				transform[14] += qp.pos_offset[2];
-			}
+			transform[12] += qp.pos_offset[0];
+			transform[13] += qp.pos_offset[1];
+			transform[14] += qp.pos_offset[2];
 
 			bin.append(reinterpret_cast<const char*>(transform), sizeof(transform));
 		}
