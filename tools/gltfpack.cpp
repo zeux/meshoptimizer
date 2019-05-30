@@ -1091,7 +1091,18 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 				cgltf_accessor_read_float(skin.inverse_bind_matrices, j, transform, 16);
 			}
 
-			// TODO: transform qp
+			// TODO: this is what should happen, right?
+			if (0)
+			{
+				float node_scale = qp.pos_scale / float((1 << qp.pos_bits) - 1);
+
+				for (int k = 0; k < 12; ++k)
+					transform[k] *= node_scale;
+
+				transform[12] += qp.pos_offset[0];
+				transform[13] += qp.pos_offset[1];
+				transform[14] += qp.pos_offset[2];
+			}
 
 			bin.append(reinterpret_cast<const char*>(transform), sizeof(transform));
 		}
