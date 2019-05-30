@@ -1013,6 +1013,13 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 
 			comma(json_nodes);
 			json_nodes += "{";
+			if (node.name)
+			{
+				comma(json_nodes);
+				json_nodes += "\"name\":\"";
+				json_nodes += node.name; // TODO: escape \ and "
+				json_nodes += "\"";
+			}
 			if (node.has_translation)
 			{
 				comma(json_nodes);
