@@ -302,6 +302,24 @@ void rescaleNormal(float& nx, float& ny, float& nz)
 	nz *= ns;
 }
 
+void renormalizeWeights(uint8_t (&w)[4])
+{
+	int sum = w[0] + w[1] + w[2] + w[3];
+
+	if (sum == 255)
+		return;
+
+	// we assume that the total error is limited to 0.5/component = 2
+	// this means that it's acceptable to adjust the max. component to compensate for the error
+	int max = 0;
+
+	for (int k = 1; k < 4; ++k)
+		if (w[k] > w[max])
+			max = k;
+
+	w[max] += 255 - sum;
+}
+
 std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream(std::string& bin, const Stream& stream, const QuantizationParams& params)
 {
 	if (stream.type == cgltf_attribute_type_position)
@@ -408,7 +426,7 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			    uint8_t(meshopt_quantizeUnorm(a.f[2], 8)),
 			    uint8_t(meshopt_quantizeUnorm(a.f[3], 8))};
 
-		    // TODO: normalize sum to exactly 255
+			renormalizeWeights(v);
 
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
@@ -1095,7 +1113,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 
 		for (size_t j = 0; j < skin.joints_count; ++j)
 		{
-			float transform[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+			float transform[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
 
 			if (skin.inverse_bind_matrices)
 			{
