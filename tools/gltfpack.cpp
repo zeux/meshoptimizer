@@ -25,6 +25,7 @@ struct Stream
 struct Mesh
 {
 	cgltf_material* material;
+	cgltf_skin* skin;
 	std::vector<Stream> streams;
 	std::vector<unsigned int> indices;
 };
@@ -120,13 +121,15 @@ void parseMeshes(cgltf_data* data, std::vector<Mesh>& meshes)
 {
 	for (size_t ni = 0; ni < data->nodes_count; ++ni)
 	{
-		if (!data->nodes[ni].mesh)
+		const cgltf_node& node = data->nodes[ni];
+
+		if (!node.mesh)
 			continue;
 
 		float transform[16];
-		cgltf_node_transform_world(&data->nodes[ni], transform);
+		cgltf_node_transform_world(&node, transform);
 
-		const cgltf_mesh& mesh = *data->nodes[ni].mesh;
+		const cgltf_mesh& mesh = *node.mesh;
 
 		for (size_t pi = 0; pi < mesh.primitives_count; ++pi)
 		{
@@ -135,6 +138,7 @@ void parseMeshes(cgltf_data* data, std::vector<Mesh>& meshes)
 			Mesh result;
 
 			result.material = primitive.material;
+			result.skin = node.skin;
 
 			if (cgltf_accessor* a = primitive.indices)
 			{
@@ -748,11 +752,13 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 	std::string json_accessors;
 	std::string json_meshes;
 	std::string json_nodes;
+	std::string json_skins;
 	std::string json_roots;
 
 	bool has_pbr_specular_glossiness = false;
 
 	size_t view_offset = 0;
+	size_t node_offset = 0;
 
 	for (size_t i = 0; i < scene.data->images_count; ++i)
 	{
@@ -922,6 +928,12 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		comma(json_nodes);
 		json_nodes += "{\"mesh\":";
 		json_nodes += to_string(i);
+		if (mesh.skin)
+		{
+			comma(json_nodes);
+			json_nodes += "\"skin\":";
+			json_nodes += to_string(size_t(mesh.skin - data->skins));
+		}
 		json_nodes += ",\"translation\":[";
 		json_nodes += to_string(qp.pos_offset[0]);
 		json_nodes += ",";
@@ -938,7 +950,137 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		json_nodes += "}";
 
 		comma(json_roots);
-		json_roots += to_string(i);
+		json_roots += to_string(node_offset);
+
+		node_offset++;
+	}
+
+	std::vector<bool> joints(data->nodes_count);
+
+	for (size_t i = 0; i < data->skins_count; ++i)
+	{
+		const cgltf_skin& skin = data->skins[i];
+
+		for (size_t j = 0; j < skin.joints_count; ++j)
+		{
+			for (cgltf_node* node = skin.joints[j]; node; node = node->parent)
+				joints[node - data->nodes] = true;
+		}
+	}
+
+	std::vector<int> joints_remap(data->nodes_count, -1);
+
+	for (size_t i = 0; i < data->nodes_count; ++i)
+	{
+		if (joints[i])
+		{
+			joints_remap[i] = int(node_offset);
+
+			node_offset++;
+		}
+	}
+
+	for (size_t i = 0; i < data->nodes_count; ++i)
+	{
+		if (joints[i])
+		{
+			const cgltf_node& node = data->nodes[i];
+
+			if (!node.parent)
+			{
+				comma(json_roots);
+				json_roots += to_string(size_t(joints_remap[i]));
+			}
+
+			comma(json_nodes);
+			json_nodes += "{";
+			if (node.has_translation)
+			{
+				comma(json_nodes);
+				json_nodes += "\"translation\":[";
+				json_nodes += to_string(node.translation[0]);
+				json_nodes += ",";
+				json_nodes += to_string(node.translation[1]);
+				json_nodes += ",";
+				json_nodes += to_string(node.translation[2]);
+				json_nodes += "]";
+			}
+			if (node.has_rotation)
+			{
+				comma(json_nodes);
+				json_nodes += "\"rotation\":[";
+				json_nodes += to_string(node.rotation[0]);
+				json_nodes += ",";
+				json_nodes += to_string(node.rotation[1]);
+				json_nodes += ",";
+				json_nodes += to_string(node.rotation[2]);
+				json_nodes += ",";
+				json_nodes += to_string(node.rotation[3]);
+				json_nodes += "]";
+			}
+			if (node.has_scale)
+			{
+				comma(json_nodes);
+				json_nodes += "\"scale\":[";
+				json_nodes += to_string(node.scale[0]);
+				json_nodes += ",";
+				json_nodes += to_string(node.scale[1]);
+				json_nodes += ",";
+				json_nodes += to_string(node.scale[2]);
+				json_nodes += "]";
+			}
+			if (node.has_matrix)
+			{
+				comma(json_nodes);
+				json_nodes += "\"matrix\":[";
+				for (int k = 0; k < 16; ++k)
+				{
+					json_nodes += to_string(node.matrix[k]);
+					if (k != 15)
+						json_nodes += ",";
+				}
+				json_nodes += "]";
+			}
+			if (node.children_count)
+			{
+				comma(json_nodes);
+				json_nodes += "\"children\":[";
+				for (size_t j = 0; j < node.children_count; ++j)
+				{
+					ptrdiff_t child = node.children[j] - data->nodes;
+					if (joints[child])
+					{
+						comma(json_nodes);
+						json_nodes += to_string(size_t(joints_remap[child]));
+					}
+				}
+				json_nodes += "]";
+			}
+			json_nodes += "}";
+		}
+	}
+
+	for (size_t i = 0; i < data->skins_count; ++i)
+	{
+		const cgltf_skin& skin = data->skins[i];
+
+		comma(json_skins);
+
+		json_skins += "{";
+		json_skins += "\"joints\":[";
+		for (size_t j = 0; j < skin.joints_count; ++j)
+		{
+			comma(json_skins);
+			json_skins += to_string(size_t(joints_remap[skin.joints[j] - data->nodes]));
+		}
+		json_skins += "]";
+		if (skin.skeleton)
+		{
+			comma(json_skins);
+			json_skins += "\"skeleton\":";
+			json_skins += to_string(size_t(joints_remap[skin.skeleton - data->nodes]));
+		}
+		json_skins += "}";
 	}
 
 	json += "\"bufferViews\":[";
@@ -960,6 +1102,9 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 	json += json_roots;
 	json += "]}";
 	json += "],\"scene\":0";
+	json += ",\"skins\":[";
+	json += json_skins;
+	json += "]";
 	json += ",\"asset\":{\"version\":\"2.0\"}";
 	json += ",\"extensionsUsed\":[";
 	json += "\"KHR_texture_transform\"";
