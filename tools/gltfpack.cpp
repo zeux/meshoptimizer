@@ -380,7 +380,23 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 
 		return std::make_pair(std::make_pair(cgltf_component_type_r_8, cgltf_type_vec4), 4);
 	}
-	else if (stream.type == cgltf_attribute_type_color || stream.type == cgltf_attribute_type_weights)
+	else if (stream.type == cgltf_attribute_type_color)
+	{
+		for (size_t i = 0; i < stream.data.size(); ++i)
+		{
+			const Attr& a = stream.data[i];
+
+			uint8_t v[4] = {
+			    uint8_t(meshopt_quantizeUnorm(a.f[0], 8)),
+			    uint8_t(meshopt_quantizeUnorm(a.f[1], 8)),
+			    uint8_t(meshopt_quantizeUnorm(a.f[2], 8)),
+			    uint8_t(meshopt_quantizeUnorm(a.f[3], 8))};
+			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+		}
+
+		return std::make_pair(std::make_pair(cgltf_component_type_r_8u, cgltf_type_vec4), 4);
+	}
+	else if (stream.type == cgltf_attribute_type_weights)
 	{
 		for (size_t i = 0; i < stream.data.size(); ++i)
 		{
@@ -850,7 +866,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 				json_accessors += to_string(maxp);
 				json_accessors += "]";
 			}
-			else if (stream.type == cgltf_attribute_type_normal || stream.type == cgltf_attribute_type_tangent || stream.type == cgltf_attribute_type_color)
+			else if (stream.type == cgltf_attribute_type_normal || stream.type == cgltf_attribute_type_tangent || stream.type == cgltf_attribute_type_color || stream.type == cgltf_attribute_type_weights)
 			{
 				json_accessors += ",\"normalized\":true";
 			}
@@ -1064,6 +1080,44 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 	{
 		const cgltf_skin& skin = data->skins[i];
 
+		size_t bin_offset = bin.size();
+
+		for (size_t j = 0; j < skin.joints_count; ++j)
+		{
+			float transform[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+
+			if (skin.inverse_bind_matrices)
+			{
+				cgltf_accessor_read_float(skin.inverse_bind_matrices, j, transform, 16);
+			}
+
+			// TODO: transform qp
+
+			bin.append(reinterpret_cast<const char*>(transform), sizeof(transform));
+		}
+
+		comma(json_buffer_views);
+		json_buffer_views += "{\"buffer\":0";
+		json_buffer_views += ",\"byteLength\":";
+		json_buffer_views += to_string(bin.size() - bin_offset);
+		json_buffer_views += ",\"byteOffset\":";
+		json_buffer_views += to_string(bin_offset);
+		json_buffer_views += "}";
+
+		comma(json_accessors);
+		json_accessors += "{\"bufferView\":";
+		json_accessors += to_string(view_offset);
+		json_accessors += ",\"componentType\":";
+		json_accessors += componentType(cgltf_component_type_r_32f);
+		json_accessors += ",\"count\":";
+		json_accessors += to_string(skin.joints_count);
+		json_accessors += ",\"type\":\"MAT4\"";
+		json_accessors += "}";
+
+		size_t matrix_view = view_offset;
+
+		view_offset++;
+
 		comma(json_skins);
 
 		json_skins += "{";
@@ -1074,6 +1128,8 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			json_skins += to_string(size_t(joints_remap[skin.joints[j] - data->nodes]));
 		}
 		json_skins += "]";
+		json_skins += ",\"inverseBindMatrices\":";
+		json_skins += to_string(matrix_view);
 		if (skin.skeleton)
 		{
 			comma(json_skins);
