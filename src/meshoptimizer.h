@@ -220,6 +220,7 @@ MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifySloppy(unsigned int* destinati
  * Converts a previously vertex cache optimized triangle list to triangle strip, stitching strips using restart index or degenerate triangles
  * Returns the number of indices in the resulting strip, with destination containing new index data
  * For maximum efficiency the index buffer being converted has to be optimized for vertex cache first.
+ * Using restart indices can result in ~10% smaller index buffers, but on some GPUs restart indices may result in decreased performance.
  *
  * destination must contain enough space for the target index buffer, worst case can be computed with meshopt_stripifyBound
  */

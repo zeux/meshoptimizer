@@ -170,10 +170,12 @@ This library provides an algorithm for converting a vertex cache optimized trian
 
 ```c++
 std::vector<unsigned int> strip(meshopt_stripifyBound(index_count));
-size_t strip_size = meshopt_stripify(&strip[0], indices, index_count, vertex_count);
+bool use_restart = true;
+size_t strip_size = meshopt_stripify(&strip[0], indices, index_count, vertex_count, use_restart);
 ```
 
-Typically you should expect triangle strips to have ~50-60% of indices compared to triangle lists (~1.5-1.8 indices per triangle) and have ~5% worse ACMR. Note that triangle strips require restart index support for rendering; using degenerate triangles to connect strips is not supported.
+Typically you should expect triangle strips to have ~50-60% of indices compared to triangle lists (~1.5-1.8 indices per triangle) and have ~5% worse ACMR.
+Note that triangle strips can be stitched with or without restart index support. Using restart indices can result in ~10% smaller index buffers, but on some GPUs restart indices may result in decreased performance.
 
 ## Deinterleaved geometry
 
