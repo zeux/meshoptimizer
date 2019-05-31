@@ -64,6 +64,7 @@ struct Settings
 	int pos_bits;
 	int uv_bits;
 	bool compress;
+	bool verbose;
 };
 
 struct QuantizationParams
@@ -887,6 +888,11 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 {
 	cgltf_data* data = scene.data;
 
+	if (settings.verbose)
+	{
+		printf("input: %d nodes, %d meshes, %d skins\n", int(scene.data->nodes_count), int(scene.data->meshes_count), int(scene.data->skins_count));
+	}
+
 	parseMeshes(data, scene.meshes);
 	mergeMeshes(scene.meshes);
 
@@ -899,6 +905,22 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 
 		reindexMesh(mesh);
 		optimizeMesh(mesh);
+	}
+
+	if (settings.verbose)
+	{
+		size_t triangles = 0;
+		size_t vertices = 0;
+
+		for (size_t i = 0; i < scene.meshes.size(); ++i)
+		{
+			const Mesh& mesh = scene.meshes[i];
+
+			triangles += mesh.indices.size() / 3;
+			vertices += mesh.streams.empty() ? 0 : mesh.streams[0].data.size();
+		}
+
+		printf("meshes: %d triangles, %d vertices\n", int(triangles), int(vertices));
 	}
 
 	QuantizationParams qp = prepareQuantization(scene, settings);
@@ -1344,6 +1366,12 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 	}
 	json += "]";
 
+	if (settings.verbose)
+	{
+		printf("output: %d nodes, %d meshes\n", int(node_offset), int(mesh_offset));
+		printf("output: JSON %d bytes, buffers %d bytes\n", int(json.size()), int(bin.size()));
+	}
+
 	return true;
 }
 
@@ -1362,6 +1390,7 @@ int main(int argc, char** argv)
 		fprintf(stderr, "-vpN: use N-bit quantization for position (default: 14; N should be between 1 and 16)\n");
 		fprintf(stderr, "-vtN: use N-bit quantization for texture corodinates (default: 12; N should be between 1 and 16)\n");
 		fprintf(stderr, "-c: produce compressed glb files\n");
+		fprintf(stderr, "-v: verbose output\n");
 
 		return 1;
 	}
@@ -1385,6 +1414,10 @@ int main(int argc, char** argv)
 		else if (strcmp(arg, "-c") == 0)
 		{
 			settings.compress = true;
+		}
+		else if (strcmp(arg, "-v") == 0)
+		{
+			settings.verbose = true;
 		}
 		else
 		{
