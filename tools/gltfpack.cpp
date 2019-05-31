@@ -1264,7 +1264,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 	json += ",\"skins\":[";
 	json += json_skins;
 	json += "]";
-	json += ",\"asset\":{\"version\":\"2.0\"}";
+	json += ",\"asset\":{\"version\":\"2.0\", \"generator\":\"gltfpack\"}";
 	json += ",\"extensionsUsed\":[";
 	json += "\"KHR_texture_transform\"";
 	if (has_pbr_specular_glossiness)
