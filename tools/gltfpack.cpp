@@ -198,6 +198,65 @@ void parseMeshes(cgltf_data* data, std::vector<Mesh>& meshes)
 	}
 }
 
+bool canMerge(const Mesh& lhs, const Mesh& rhs)
+{
+	if (lhs.material != rhs.material)
+		return false;
+
+	if (lhs.skin != rhs.skin)
+		return false;
+
+	if (lhs.streams.size() != rhs.streams.size())
+		return false;
+
+	for (size_t i = 0; i < lhs.streams.size(); ++i)
+		if (lhs.streams[i].type != rhs.streams[i].type || lhs.streams[i].index != rhs.streams[i].index)
+			return false;
+
+	return true;
+}
+
+void mergeMeshes(Mesh& target, const Mesh& mesh)
+{
+	assert(target.streams.size() == mesh.streams.size());
+
+	size_t vertex_offset = target.streams[0].data.size();
+	size_t index_offset = target.indices.size();
+
+	for (size_t i = 0; i < target.streams.size(); ++i)
+		target.streams[i].data.insert(target.streams[i].data.end(), mesh.streams[i].data.begin(), mesh.streams[i].data.end());
+
+	target.indices.resize(target.indices.size() + mesh.indices.size());
+
+	size_t index_count = mesh.indices.size();
+
+	for (size_t i = 0; i < index_count; ++i)
+		target.indices[index_offset + i] = unsigned(vertex_offset + mesh.indices[i]);
+}
+
+void mergeMeshes(std::vector<Mesh>& meshes)
+{
+	for (size_t i = 0; i < meshes.size(); ++i)
+	{
+		Mesh& mesh = meshes[i];
+
+		for (size_t j = 0; j < i; ++j)
+		{
+			Mesh& target = meshes[j];
+
+			if (target.indices.size() && canMerge(mesh, target))
+			{
+				mergeMeshes(target, mesh);
+
+				mesh.streams.clear();
+				mesh.indices.clear();
+
+				break;
+			}
+		}
+	}
+}
+
 void reindexMesh(Mesh& mesh)
 {
 	size_t total_vertices = mesh.streams[0].data.size();
@@ -829,11 +888,17 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 	cgltf_data* data = scene.data;
 
 	parseMeshes(data, scene.meshes);
+	mergeMeshes(scene.meshes);
 
 	for (size_t i = 0; i < scene.meshes.size(); ++i)
 	{
-		reindexMesh(scene.meshes[i]);
-		optimizeMesh(scene.meshes[i]);
+		Mesh& mesh = scene.meshes[i];
+
+		if (mesh.indices.empty())
+			continue;
+
+		reindexMesh(mesh);
+		optimizeMesh(mesh);
 	}
 
 	QuantizationParams qp = prepareQuantization(scene, settings);
@@ -852,6 +917,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 
 	size_t view_offset = 0;
 	size_t node_offset = 0;
+	size_t mesh_offset = 0;
 
 	for (size_t i = 0; i < scene.data->images_count; ++i)
 	{
@@ -892,6 +958,9 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 	for (size_t i = 0; i < scene.meshes.size(); ++i)
 	{
 		const Mesh& mesh = scene.meshes[i];
+
+		if (mesh.indices.empty())
+			continue;
 
 		std::string json_attributes;
 
@@ -1027,7 +1096,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 
 		comma(json_nodes);
 		json_nodes += "{\"mesh\":";
-		json_nodes += to_string(i);
+		json_nodes += to_string(mesh_offset);
 		if (mesh.skin)
 		{
 			comma(json_nodes);
@@ -1053,6 +1122,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		json_roots += to_string(node_offset);
 
 		node_offset++;
+		mesh_offset++;
 	}
 
 	std::vector<bool> node_keep(data->nodes_count);
@@ -1103,7 +1173,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			{
 				comma(json_nodes);
 				json_nodes += "\"name\":\"";
-				json_nodes += node.name; // TODO: escape \ and "
+				json_nodes += node.name;
 				json_nodes += "\"";
 			}
 			if (node.has_translation)
