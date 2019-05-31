@@ -1382,24 +1382,14 @@ void writeU32(FILE* out, uint32_t data)
 
 int main(int argc, char** argv)
 {
-	if (argc < 3)
-	{
-		fprintf(stderr, "Usage: gltfpack [options] input output\n");
-		fprintf(stderr, "\n");
-		fprintf(stderr, "Options:\n");
-		fprintf(stderr, "-vpN: use N-bit quantization for position (default: 14; N should be between 1 and 16)\n");
-		fprintf(stderr, "-vtN: use N-bit quantization for texture corodinates (default: 12; N should be between 1 and 16)\n");
-		fprintf(stderr, "-c: produce compressed glb files\n");
-		fprintf(stderr, "-v: verbose output\n");
-
-		return 1;
-	}
-
 	Settings settings = {};
 	settings.pos_bits = 14;
 	settings.uv_bits = 12;
 
-	for (int i = 1; i < argc - 2; ++i)
+	const char* input = 0;
+	const char* output = 0;
+
+	for (int i = 1; i < argc; ++i)
 	{
 		const char* arg = argv[i];
 
@@ -1419,15 +1409,39 @@ int main(int argc, char** argv)
 		{
 			settings.verbose = true;
 		}
+		else if (arg[0] == '-')
+		{
+			fprintf(stderr, "Unrecognized option %s\n", arg);
+			return 1;
+		}
+		else if (!input)
+		{
+			input = arg;
+		}
+		else if (!output)
+		{
+			output = arg;
+		}
 		else
 		{
-			fprintf(stderr, "Unrecognized option %s\n", argv[i]);
+			fprintf(stderr, "Too many filenames, expected two\n");
 			return 1;
 		}
 	}
 
-	const char* input = argv[argc - 2];
-	const char* output = argv[argc - 1];
+	if (!input || !output)
+	{
+		fprintf(stderr, "Usage: gltfpack [options] input output\n");
+		fprintf(stderr, "\n");
+		fprintf(stderr, "Options:\n");
+		fprintf(stderr, "-vpN: use N-bit quantization for position (default: 14; N should be between 1 and 16)\n");
+		fprintf(stderr, "-vtN: use N-bit quantization for texture corodinates (default: 12; N should be between 1 and 16)\n");
+		fprintf(stderr, "-c: produce compressed glb files\n");
+		fprintf(stderr, "-v: verbose output\n");
+
+		return 1;
+	}
+
 
 	Scene scene = {};
 
