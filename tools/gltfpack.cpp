@@ -13,14 +13,6 @@
 // contains a work-in-progress loader - please note that the extension specification isn't ready yet so the format
 // will change!
 //
-// Usage:
-// gltfpack [options] input output
-//
-// Options:
-// -vpN: use N-bit quantization for position (default: 14; N should be between 1 and 16)
-// -vtN: use N-bit quantization for texture corodinates (default: 12; N should be between 1 and 16)
-// -c: produced packed glb files
-//
 // gltfpack currently supports materials, meshes, nodes and skinning data
 // gltfpack doesn't support morph targets, animation data, lights and cameras
 
@@ -1295,13 +1287,18 @@ int main(int argc, char** argv)
 	if (argc < 3)
 	{
 		fprintf(stderr, "Usage: gltfpack [options] input output\n");
+		fprintf(stderr, "\n");
+		fprintf(stderr, "Options:\n");
+		fprintf(stderr, "-vpN: use N-bit quantization for position (default: 14; N should be between 1 and 16)\n");
+		fprintf(stderr, "-vtN: use N-bit quantization for texture corodinates (default: 12; N should be between 1 and 16)\n");
+		fprintf(stderr, "-c: produce compressed glb files\n");
+
 		return 1;
 	}
 
 	Settings settings = {};
 	settings.pos_bits = 14;
 	settings.uv_bits = 12;
-	settings.compress = false;
 
 	for (int i = 1; i < argc - 2; ++i)
 	{
