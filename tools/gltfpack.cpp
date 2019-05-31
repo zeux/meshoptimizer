@@ -1012,8 +1012,12 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			json_buffer_views += to_string(p.second);
 			if (settings.compress)
 			{
-				json_buffer_views += ",\"count\":";
+				json_buffer_views += ",\"extra\":{\"decodeMode\":\"VERTEX\"";
+				json_buffer_views += ",\"decodeCount\":";
 				json_buffer_views += to_string(stream.data.size());
+				json_buffer_views += ",\"decodeStride\":";
+				json_buffer_views += to_string(p.second);
+				json_buffer_views += "}";
 			}
 			json_buffer_views += ",\"target\":34962";
 			json_buffer_views += "}";
@@ -1079,10 +1083,12 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			json_buffer_views += to_string(bin_offset);
 			if (settings.compress)
 			{
-				json_buffer_views += ",\"byteStride\":";
-				json_buffer_views += to_string(size_t(p == cgltf_component_type_r_16u ? 2 : 4));
-				json_buffer_views += ",\"count\":";
+				json_buffer_views += ",\"extra\":{\"decodeMode\":\"INDEX\"";
+				json_buffer_views += ",\"decodeCount\":";
 				json_buffer_views += to_string(mesh.indices.size());
+				json_buffer_views += ",\"decodeStride\":";
+				json_buffer_views += to_string(size_t(p == cgltf_component_type_r_16u ? 2 : 4));
+				json_buffer_views += "}";
 			}
 			json_buffer_views += ",\"target\":34963";
 			json_buffer_views += "}";
