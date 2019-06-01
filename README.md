@@ -170,8 +170,8 @@ This library provides an algorithm for converting a vertex cache optimized trian
 
 ```c++
 std::vector<unsigned int> strip(meshopt_stripifyBound(index_count));
-bool use_restart = true;
-size_t strip_size = meshopt_stripify(&strip[0], indices, index_count, vertex_count, use_restart);
+unsigned int restart_index = ~0u;
+size_t strip_size = meshopt_stripify(&strip[0], indices, index_count, vertex_count, restart_index);
 ```
 
 Typically you should expect triangle strips to have ~50-60% of indices compared to triangle lists (~1.5-1.8 indices per triangle) and have ~5% worse ACMR.

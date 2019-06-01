@@ -623,14 +623,16 @@ void encodeVertex(const Mesh& mesh, const char* pvn)
 
 void stripify(const Mesh& mesh, bool use_restart)
 {
+	unsigned int restart_index = use_restart ? ~0u : 0;
+
 	// note: input mesh is assumed to be optimized for vertex cache and vertex fetch
 	double start = timestamp();
 	std::vector<unsigned int> strip(meshopt_stripifyBound(mesh.indices.size()));
-	strip.resize(meshopt_stripify(&strip[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), use_restart));
+	strip.resize(meshopt_stripify(&strip[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), restart_index));
 	double end = timestamp();
 
 	Mesh copy = mesh;
-	copy.indices.resize(meshopt_unstripify(&copy.indices[0], &strip[0], strip.size()));
+	copy.indices.resize(meshopt_unstripify(&copy.indices[0], &strip[0], strip.size(), restart_index));
 	assert(copy.indices.size() <= meshopt_unstripifyBound(strip.size()));
 
 	assert(isMeshValid(copy));
