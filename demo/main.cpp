@@ -644,7 +644,7 @@ void stripify(const Mesh& mesh, bool use_restart)
 	meshopt_VertexCacheStatistics vcs_intel = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), 128, 0, 0);
 
 	printf("Stripify%c: ACMR %f ATVR %f (NV %f AMD %f Intel %f); %d strip indices (%.1f%%) in %.2f msec\n",
-		   use_restart ? 'R' : ' ',
+	       use_restart ? 'R' : ' ',
 	       vcs.acmr, vcs.atvr, vcs_nv.atvr, vcs_amd.atvr, vcs_intel.atvr,
 	       int(strip.size()), double(strip.size()) / double(mesh.indices.size()) * 100,
 	       (end - start) * 1000);
