@@ -37,4 +37,7 @@ endif()
 if(BUILD_TOOLS)
     add_executable(meshencoder tools/meshencoder.cpp tools/objparser.cpp)
     target_link_libraries(meshencoder meshoptimizer)
+
+    add_executable(gltfpack tools/gltfpack.cpp)
+    target_link_libraries(gltfpack meshoptimizer)
 endif()
