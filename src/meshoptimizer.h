@@ -223,6 +223,7 @@ MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifySloppy(unsigned int* destinati
  * Using restart indices can result in ~10% smaller index buffers, but on some GPUs restart indices may result in decreased performance.
  *
  * destination must contain enough space for the target index buffer, worst case can be computed with meshopt_stripifyBound
+ * restart_index should be 0xffff or 0xffffffff depending on index size, or 0 to use degenerate triangles
  */
 MESHOPTIMIZER_API size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int restart_index);
 MESHOPTIMIZER_API size_t meshopt_stripifyBound(size_t index_count);
