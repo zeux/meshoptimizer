@@ -20,6 +20,7 @@
 
 #include <string>
 #include <vector>
+#include <map>
 
 #include <float.h>
 #include <math.h>
@@ -204,16 +205,76 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 
 cgltf_data* parseSceneObj(fastObjMesh* obj)
 {
-	cgltf_data* data = (cgltf_data*)malloc(sizeof(cgltf_data));
-	memset(data, 0, sizeof(cgltf_data));
+	cgltf_data* data = (cgltf_data*)calloc(1, sizeof(cgltf_data));
 	data->memory_free = cgltf_default_free;
 
-	(void)obj;
+	std::map<std::string, size_t> textures;
+
+	for (unsigned int mi = 0; mi < obj->material_count; ++mi)
+	{
+		fastObjMaterial& om = obj->materials[mi];
+
+		if (om.map_Kd.name)
+			textures[om.map_Kd.name] = 0;
+	}
+
+	size_t image_offset = 0;
+
+	for (std::map<std::string, size_t>::iterator ti = textures.begin(); ti != textures.end(); ++ti)
+		ti->second = image_offset++;
+
+	data->images = (cgltf_image*)calloc(textures.size(), sizeof(cgltf_image));
+	data->images_count = textures.size();
+
+	for (std::map<std::string, size_t>::iterator ti = textures.begin(); ti != textures.end(); ++ti)
+	{
+		data->images[ti->second].uri = strdup(ti->first.c_str());
+	}
+
+	data->textures = (cgltf_texture*)calloc(textures.size(), sizeof(cgltf_texture));
+	data->textures_count = textures.size();
+
+	for (std::map<std::string, size_t>::iterator ti = textures.begin(); ti != textures.end(); ++ti)
+	{
+		data->textures[ti->second].image = &data->images[ti->second];
+	}
+
+	data->materials = (cgltf_material*)calloc(obj->material_count, sizeof(cgltf_material));
+	data->materials_count = obj->material_count;
+
+	for (unsigned int mi = 0; mi < obj->material_count; ++mi)
+	{
+		cgltf_material& gm = data->materials[mi];
+		fastObjMaterial& om = obj->materials[mi];
+
+		gm.has_pbr_metallic_roughness = true;
+		gm.pbr_metallic_roughness.base_color_factor[0] = 1.0f;
+		gm.pbr_metallic_roughness.base_color_factor[1] = 1.0f;
+		gm.pbr_metallic_roughness.base_color_factor[2] = 1.0f;
+		gm.pbr_metallic_roughness.base_color_factor[3] = 1.0f;
+		gm.pbr_metallic_roughness.metallic_factor = 1.0f;
+		gm.pbr_metallic_roughness.roughness_factor = 1.0f;
+
+		gm.alpha_cutoff = 0.5f;
+
+		if (om.map_Kd.name)
+		{
+			gm.pbr_metallic_roughness.base_color_texture.texture = &data->textures[textures[om.map_Kd.name]];
+			gm.pbr_metallic_roughness.base_color_texture.scale = 1.0f;
+
+			gm.alpha_mode = (om.illum == 4 || om.illum == 6 || om.illum == 7 || om.illum == 9) ? cgltf_alpha_mode_mask : cgltf_alpha_mode_opaque;
+		}
+
+		if (om.map_d.name)
+		{
+			gm.alpha_mode = cgltf_alpha_mode_blend;
+		}
+	}
 
 	return data;
 }
 
-void parseMeshesObj(fastObjMesh* obj, std::vector<Mesh>& meshes)
+void parseMeshesObj(fastObjMesh* obj, cgltf_data* data, std::vector<Mesh>& meshes)
 {
 	unsigned int material_count = std::max(obj->material_count, 1u);
 
@@ -243,6 +304,12 @@ void parseMeshesObj(fastObjMesh* obj, std::vector<Mesh>& meshes)
 		meshes.push_back(Mesh());
 
 		Mesh& mesh = meshes.back();
+
+		if (data->materials_count)
+		{
+			assert(mi < data->materials_count);
+			mesh.material = &data->materials[mi];
+		}
 
 		mesh.streams.resize(3);
 		mesh.streams[0].type = cgltf_attribute_type_position;
@@ -275,7 +342,7 @@ void parseMeshesObj(fastObjMesh* obj, std::vector<Mesh>& meshes)
 
 				Attr p = { obj->positions[ii.p * 3 + 0], obj->positions[ii.p * 3 + 1], obj->positions[ii.p * 3 + 2] };
 				Attr n = { obj->normals[ii.n * 3 + 0], obj->normals[ii.n * 3 + 1], obj->normals[ii.n * 3 + 2] };
-				Attr t = { obj->texcoords[ii.t * 2 + 0], obj->texcoords[ii.t * 2 + 1] };
+				Attr t = { obj->texcoords[ii.t * 2 + 0], 1.f - obj->texcoords[ii.t * 2 + 1] };
 
 				mesh.streams[0].data[vo + vi] = p;
 				mesh.streams[1].data[vo + vi] = n;
@@ -1575,7 +1642,7 @@ int main(int argc, char** argv)
 		}
 
 		scene.data = parseSceneObj(obj);
-		parseMeshesObj(obj, scene.meshes);
+		parseMeshesObj(obj, scene.data, scene.meshes);
 
 		fast_obj_destroy(obj);
 	}

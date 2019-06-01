@@ -30,8 +30,11 @@
 
 typedef struct
 {
-    /* Path to texture */
+    /* Texture name from .mtl file */
     char*                       name;
+
+    /* Path to texture */
+    char*                       path;
 
 } fastObjTexture;
 
@@ -725,6 +728,7 @@ fastObjTexture map_default(void)
     fastObjTexture map;
 
     map.name = 0;
+    map.path = 0;
 
     return map;
 }
@@ -822,6 +826,7 @@ static
 void map_clean(fastObjTexture* map)
 {
     memory_dealloc(map->name);
+    memory_dealloc(map->path);
 }
 
 
@@ -873,6 +878,7 @@ const char* read_map(fastObjData* data, const char* ptr, fastObjTexture* map)
     const char* s;
     const char* e;
     char*       name;
+    char*       path;
 
     ptr = skip_whitespace(ptr);
 
@@ -888,10 +894,13 @@ const char* read_map(fastObjData* data, const char* ptr, fastObjTexture* map)
 
     e = ptr;
 
-    name = string_concat(data->base, s, e);
-    string_fix_separators(name);
+    name = string_copy(s, e);
+
+    path = string_concat(data->base, s, e);
+    string_fix_separators(path);
 
     map->name = name;
+    map->path = path;
 
     return e;
 }
