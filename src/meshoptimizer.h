@@ -217,13 +217,15 @@ MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifySloppy(unsigned int* destinati
 
 /**
  * Mesh stripifier
- * Converts a previously vertex cache optimized triangle list to triangle strip, stitching strips using restart index
+ * Converts a previously vertex cache optimized triangle list to triangle strip, stitching strips using restart index or degenerate triangles
  * Returns the number of indices in the resulting strip, with destination containing new index data
  * For maximum efficiency the index buffer being converted has to be optimized for vertex cache first.
+ * Using restart indices can result in ~10% smaller index buffers, but on some GPUs restart indices may result in decreased performance.
  *
  * destination must contain enough space for the target index buffer, worst case can be computed with meshopt_stripifyBound
+ * restart_index should be 0xffff or 0xffffffff depending on index size, or 0 to use degenerate triangles
  */
-MESHOPTIMIZER_API size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count);
+MESHOPTIMIZER_API size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int restart_index);
 MESHOPTIMIZER_API size_t meshopt_stripifyBound(size_t index_count);
 
 /**
@@ -233,7 +235,7 @@ MESHOPTIMIZER_API size_t meshopt_stripifyBound(size_t index_count);
  *
  * destination must contain enough space for the target index buffer, worst case can be computed with meshopt_unstripifyBound
  */
-MESHOPTIMIZER_API size_t meshopt_unstripify(unsigned int* destination, const unsigned int* indices, size_t index_count);
+MESHOPTIMIZER_API size_t meshopt_unstripify(unsigned int* destination, const unsigned int* indices, size_t index_count, unsigned int restart_index);
 MESHOPTIMIZER_API size_t meshopt_unstripifyBound(size_t index_count);
 
 struct meshopt_VertexCacheStatistics
@@ -562,21 +564,21 @@ inline size_t meshopt_simplifySloppy(T* destination, const T* indices, size_t in
 }
 
 template <typename T>
-inline size_t meshopt_stripify(T* destination, const T* indices, size_t index_count, size_t vertex_count)
+inline size_t meshopt_stripify(T* destination, const T* indices, size_t index_count, size_t vertex_count, T restart_index)
 {
 	meshopt_IndexAdapter<T> in(0, indices, index_count);
-	meshopt_IndexAdapter<T> out(destination, 0, (index_count / 3) * 4);
+	meshopt_IndexAdapter<T> out(destination, 0, (index_count / 3) * 5);
 
-	return meshopt_stripify(out.data, in.data, index_count, vertex_count);
+	return meshopt_stripify(out.data, in.data, index_count, vertex_count, unsigned(restart_index));
 }
 
 template <typename T>
-inline size_t meshopt_unstripify(T* destination, const T* indices, size_t index_count)
+inline size_t meshopt_unstripify(T* destination, const T* indices, size_t index_count, T restart_index)
 {
 	meshopt_IndexAdapter<T> in(0, indices, index_count);
 	meshopt_IndexAdapter<T> out(destination, 0, (index_count - 2) * 3);
 
-	return meshopt_unstripify(out.data, in.data, index_count);
+	return meshopt_unstripify(out.data, in.data, index_count, unsigned(restart_index));
 }
 
 template <typename T>
