@@ -351,9 +351,11 @@ void parseMeshesObj(fastObjMesh* obj, cgltf_data* data, std::vector<Mesh>& meshe
 
 			for (unsigned int vi = 2; vi < obj->groups[gi].vertices[fi]; ++vi)
 			{
-				mesh.indices[io + 0] = unsigned(vo);
-				mesh.indices[io + 1] = unsigned(vo + vi - 1);
-				mesh.indices[io + 2] = unsigned(vo + vi);
+				size_t to = io + (vi - 2) * 3;
+
+				mesh.indices[to + 0] = unsigned(vo);
+				mesh.indices[to + 1] = unsigned(vo + vi - 1);
+				mesh.indices[to + 2] = unsigned(vo + vi);
 			}
 
 			vertex_offset[mi] += obj->groups[gi].vertices[fi];
