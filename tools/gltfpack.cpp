@@ -259,6 +259,8 @@ void parseMeshesObj(fastObjMesh* obj, std::vector<Mesh>& meshes)
 
 	for (unsigned int gi = 0; gi < obj->group_count; ++gi)
 	{
+		size_t group_offset = 0;
+
 		for (unsigned int fi = 0; fi < obj->groups[gi].face_count; ++fi)
 		{
 			unsigned int mi = obj->groups[gi].materials[fi];
@@ -269,7 +271,7 @@ void parseMeshesObj(fastObjMesh* obj, std::vector<Mesh>& meshes)
 
 			for (unsigned int vi = 0; vi < obj->groups[gi].vertices[fi]; ++vi)
 			{
-				fastObjIndex ii = obj->groups[gi].indices[vo + vi];
+				fastObjIndex ii = obj->groups[gi].indices[group_offset + vi];
 
 				Attr p = { obj->positions[ii.p * 3 + 0], obj->positions[ii.p * 3 + 1], obj->positions[ii.p * 3 + 2] };
 				Attr n = { obj->normals[ii.n * 3 + 0], obj->normals[ii.n * 3 + 1], obj->normals[ii.n * 3 + 2] };
@@ -289,6 +291,7 @@ void parseMeshesObj(fastObjMesh* obj, std::vector<Mesh>& meshes)
 
 			vertex_offset[mi] += obj->groups[gi].vertices[fi];
 			index_offset[mi] += (obj->groups[gi].vertices[fi] - 2) * 3;
+			group_offset += obj->groups[gi].vertices[fi];
 		}
 	}
 }
