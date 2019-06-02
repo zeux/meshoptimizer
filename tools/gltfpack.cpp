@@ -349,9 +349,9 @@ void parseMeshesObj(fastObjMesh* obj, cgltf_data* data, std::vector<Mesh>& meshe
 			{
 				fastObjIndex ii = obj->groups[gi].indices[group_offset + vi];
 
-				Attr p = { obj->positions[ii.p * 3 + 0], obj->positions[ii.p * 3 + 1], obj->positions[ii.p * 3 + 2] };
-				Attr n = { obj->normals[ii.n * 3 + 0], obj->normals[ii.n * 3 + 1], obj->normals[ii.n * 3 + 2] };
-				Attr t = { obj->texcoords[ii.t * 2 + 0], 1.f - obj->texcoords[ii.t * 2 + 1] };
+				Attr p = { { obj->positions[ii.p * 3 + 0], obj->positions[ii.p * 3 + 1], obj->positions[ii.p * 3 + 2] } };
+				Attr n = { { obj->normals[ii.n * 3 + 0], obj->normals[ii.n * 3 + 1], obj->normals[ii.n * 3 + 2] } };
+				Attr t = { { obj->texcoords[ii.t * 2 + 0], 1.f - obj->texcoords[ii.t * 2 + 1] } };
 
 				mesh.streams[0].data[vo + vi] = p;
 				mesh.streams[1].data[vo + vi] = n;
