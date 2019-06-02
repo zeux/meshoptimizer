@@ -157,7 +157,7 @@ MeshoptDecoder.decodeVertexBuffer(vertexBuffer, vertexCount, vertexSize, vertexD
 MeshoptDecoder.decodeIndexBuffer(indexBuffer, indexCount, indexSize, indexData);
 ```
 
-[Usage example](https://zeuxcg.org/meshoptimizer/demo/) is available, with source in `demo/index.html`; this example uses .GLB files encoded using `gltfpack` (`tools/gltfpack.cpp`).
+[Usage example](https://meshoptimizer.org/demo/) is available, with source in `demo/index.html`; this example uses .GLB files encoded using `gltfpack` (`tools/gltfpack.cpp`).
 
 ## Triangle strip conversion
 
