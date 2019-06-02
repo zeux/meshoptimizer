@@ -1453,9 +1453,8 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 				json_nodes += "\"matrix\":[";
 				for (int k = 0; k < 16; ++k)
 				{
+					comma(json_nodes);
 					json_nodes += to_string(node.matrix[k]);
-					if (k != 15)
-						json_nodes += ",";
 				}
 				json_nodes += "]";
 			}
@@ -1495,12 +1494,14 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 
 			float node_scale = qp.pos_scale / float((1 << qp.pos_bits) - 1);
 
+			// pos_offset has to be applied first, thus it results in an offset rotated by the bind matrix
+			transform[12] += qp.pos_offset[0] * transform[0] + qp.pos_offset[1] * transform[4] + qp.pos_offset[2] * transform[8];
+			transform[13] += qp.pos_offset[0] * transform[1] + qp.pos_offset[1] * transform[5] + qp.pos_offset[2] * transform[9];
+			transform[14] += qp.pos_offset[0] * transform[2] + qp.pos_offset[1] * transform[6] + qp.pos_offset[2] * transform[10];
+
+			// node_scale will be applied before the rotation/scale from transform
 			for (int k = 0; k < 12; ++k)
 				transform[k] *= node_scale;
-
-			transform[12] += qp.pos_offset[0];
-			transform[13] += qp.pos_offset[1];
-			transform[14] += qp.pos_offset[2];
 
 			bin.append(reinterpret_cast<const char*>(transform), sizeof(transform));
 		}
