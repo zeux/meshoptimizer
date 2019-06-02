@@ -1165,6 +1165,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 	std::string json_nodes;
 	std::string json_skins;
 	std::string json_roots;
+	std::string json_animations;
 
 	bool has_pbr_specular_glossiness = false;
 
@@ -1549,6 +1550,57 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		json_skins += "}";
 	}
 
+	for (size_t i = 0; i < data->animations_count; ++i)
+	{
+		const cgltf_animation& animation = data->animations[i];
+
+		std::string json_samplers;
+		std::string json_channels;
+
+		size_t track_offset = 0;
+
+		for (size_t j = 0; j < animation.channels_count; ++j)
+		{
+			const cgltf_animation_channel& channel = animation.channels[j];
+			const cgltf_animation_sampler& sampler = *channel.sampler;
+
+			if (!channel.target_node || !node_keep[channel.target_node - data->nodes])
+				continue;
+
+			if (channel.target_path != cgltf_animation_path_type_translation && channel.target_path != cgltf_animation_path_type_rotation && channel.target_path != cgltf_animation_path_type_scale)
+				continue;
+
+			size_t count = sampler.input->count;
+
+			for (size_t k = 0; k < count; ++k)
+			{
+				float time = 0;
+				cgltf_accessor_read_float(sampler.input, k, &time, 1);
+
+				Attr attr = {};
+				cgltf_accessor_read_float(sampler.output, k, attr.f, 4);
+
+				printf("time: %f; value: %f %f %f %f\n", time, attr.f[0], attr.f[1], attr.f[2], attr.f[3]);
+			}
+
+			(void)track_offset;
+		}
+
+		comma(json_animations);
+		json_animations += "{";
+		if (animation.name)
+		{
+			json_animations += "\"name\":\"";
+			json_animations += animation.name;
+			json_animations += "\",";
+		}
+		json_animations += "\"samplers\":[";
+		json_animations += json_samplers;
+		json_animations += "],\"channels\":[";
+		json_animations += json_channels;
+		json_animations += "]}";
+	}
+
 	json += "\"bufferViews\":[";
 	json += json_buffer_views;
 	json += "],\"accessors\":[";
@@ -1561,6 +1613,10 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 	json += json_materials;
 	json += "],\"meshes\":[";
 	json += json_meshes;
+	json += "],\"skins\":[";
+	json += json_skins;
+	json += "],\"animations\":[";
+	json += json_animations;
 	json += "],\"nodes\":[";
 	json += json_nodes;
 	json += "],\"scenes\":[";
@@ -1568,9 +1624,6 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 	json += json_roots;
 	json += "]}";
 	json += "],\"scene\":0";
-	json += ",\"skins\":[";
-	json += json_skins;
-	json += "]";
 	json += ",\"asset\":{\"version\":\"2.0\", \"generator\":\"gltfpack\"}";
 	json += ",\"extensionsUsed\":[";
 	json += "\"KHR_quantized_geometry\"";
