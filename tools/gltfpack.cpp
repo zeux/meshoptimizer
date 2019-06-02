@@ -252,7 +252,7 @@ cgltf_data* parseSceneObj(fastObjMesh* obj)
 		gm.pbr_metallic_roughness.base_color_factor[1] = 1.0f;
 		gm.pbr_metallic_roughness.base_color_factor[2] = 1.0f;
 		gm.pbr_metallic_roughness.base_color_factor[3] = 1.0f;
-		gm.pbr_metallic_roughness.metallic_factor = 1.0f;
+		gm.pbr_metallic_roughness.metallic_factor = 0.0f;
 		gm.pbr_metallic_roughness.roughness_factor = 1.0f;
 
 		gm.alpha_cutoff = 0.5f;
