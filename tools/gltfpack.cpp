@@ -20,12 +20,16 @@
 
 #include <string>
 #include <vector>
+#include <map>
 
 #include <float.h>
 #include <math.h>
 
 #define CGLTF_IMPLEMENTATION
 #include "cgltf.h"
+
+#define FAST_OBJ_IMPLEMENTATION
+#include "fast_obj.h"
 
 struct Attr
 {
@@ -136,7 +140,7 @@ void transformNormal(float* ptr, const float* transform)
 	ptr[2] = z * s;
 }
 
-void parseMeshes(cgltf_data* data, std::vector<Mesh>& meshes)
+void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 {
 	for (size_t ni = 0; ni < data->nodes_count; ++ni)
 	{
@@ -195,6 +199,168 @@ void parseMeshes(cgltf_data* data, std::vector<Mesh>& meshes)
 
 			if (result.indices.size() && result.streams.size())
 				meshes.push_back(result);
+		}
+	}
+}
+
+cgltf_data* parseSceneObj(fastObjMesh* obj)
+{
+	cgltf_data* data = (cgltf_data*)calloc(1, sizeof(cgltf_data));
+	data->memory_free = cgltf_default_free;
+
+	std::map<std::string, size_t> textures;
+
+	for (unsigned int mi = 0; mi < obj->material_count; ++mi)
+	{
+		fastObjMaterial& om = obj->materials[mi];
+
+		if (om.map_Kd.name)
+			textures[om.map_Kd.name] = 0;
+	}
+
+	size_t image_offset = 0;
+
+	for (std::map<std::string, size_t>::iterator ti = textures.begin(); ti != textures.end(); ++ti)
+		ti->second = image_offset++;
+
+	data->images = (cgltf_image*)calloc(textures.size(), sizeof(cgltf_image));
+	data->images_count = textures.size();
+
+	for (std::map<std::string, size_t>::iterator ti = textures.begin(); ti != textures.end(); ++ti)
+	{
+		data->images[ti->second].uri = strdup(ti->first.c_str());
+	}
+
+	data->textures = (cgltf_texture*)calloc(textures.size(), sizeof(cgltf_texture));
+	data->textures_count = textures.size();
+
+	for (std::map<std::string, size_t>::iterator ti = textures.begin(); ti != textures.end(); ++ti)
+	{
+		data->textures[ti->second].image = &data->images[ti->second];
+	}
+
+	data->materials = (cgltf_material*)calloc(obj->material_count, sizeof(cgltf_material));
+	data->materials_count = obj->material_count;
+
+	for (unsigned int mi = 0; mi < obj->material_count; ++mi)
+	{
+		cgltf_material& gm = data->materials[mi];
+		fastObjMaterial& om = obj->materials[mi];
+
+		gm.has_pbr_metallic_roughness = true;
+		gm.pbr_metallic_roughness.base_color_factor[0] = 1.0f;
+		gm.pbr_metallic_roughness.base_color_factor[1] = 1.0f;
+		gm.pbr_metallic_roughness.base_color_factor[2] = 1.0f;
+		gm.pbr_metallic_roughness.base_color_factor[3] = 1.0f;
+		gm.pbr_metallic_roughness.metallic_factor = 1.0f;
+		gm.pbr_metallic_roughness.roughness_factor = 1.0f;
+
+		gm.alpha_cutoff = 0.5f;
+
+		if (om.map_Kd.name)
+		{
+			gm.pbr_metallic_roughness.base_color_texture.texture = &data->textures[textures[om.map_Kd.name]];
+			gm.pbr_metallic_roughness.base_color_texture.scale = 1.0f;
+
+			gm.alpha_mode = (om.illum == 4 || om.illum == 6 || om.illum == 7 || om.illum == 9) ? cgltf_alpha_mode_mask : cgltf_alpha_mode_opaque;
+		}
+
+		if (om.map_d.name)
+		{
+			gm.alpha_mode = cgltf_alpha_mode_blend;
+		}
+	}
+
+	return data;
+}
+
+void parseMeshesObj(fastObjMesh* obj, cgltf_data* data, std::vector<Mesh>& meshes)
+{
+	unsigned int material_count = std::max(obj->material_count, 1u);
+
+	std::vector<size_t> vertex_count(material_count);
+	std::vector<size_t> index_count(material_count);
+
+	for (unsigned int gi = 0; gi < obj->group_count; ++gi)
+	{
+		for (unsigned int fi = 0; fi < obj->groups[gi].face_count; ++fi)
+		{
+			unsigned int mi = obj->groups[gi].materials[fi];
+
+			vertex_count[mi] += obj->groups[gi].vertices[fi];
+			index_count[mi] += (obj->groups[gi].vertices[fi] - 2) * 3;
+		}
+	}
+
+	std::vector<size_t> mesh_index(material_count);
+
+	for (unsigned int mi = 0; mi < material_count; ++mi)
+	{
+		if (index_count[mi] == 0)
+			continue;
+
+		mesh_index[mi] = meshes.size();
+
+		meshes.push_back(Mesh());
+
+		Mesh& mesh = meshes.back();
+
+		if (data->materials_count)
+		{
+			assert(mi < data->materials_count);
+			mesh.material = &data->materials[mi];
+		}
+
+		mesh.streams.resize(3);
+		mesh.streams[0].type = cgltf_attribute_type_position;
+		mesh.streams[0].data.resize(vertex_count[mi]);
+		mesh.streams[1].type = cgltf_attribute_type_normal;
+		mesh.streams[1].data.resize(vertex_count[mi]);
+		mesh.streams[2].type = cgltf_attribute_type_texcoord;
+		mesh.streams[2].data.resize(vertex_count[mi]);
+		mesh.indices.resize(index_count[mi]);
+	}
+
+	std::vector<size_t> vertex_offset(material_count);
+	std::vector<size_t> index_offset(material_count);
+
+	for (unsigned int gi = 0; gi < obj->group_count; ++gi)
+	{
+		size_t group_offset = 0;
+
+		for (unsigned int fi = 0; fi < obj->groups[gi].face_count; ++fi)
+		{
+			unsigned int mi = obj->groups[gi].materials[fi];
+			Mesh& mesh = meshes[mesh_index[mi]];
+
+			size_t vo = vertex_offset[mi];
+			size_t io = index_offset[mi];
+
+			for (unsigned int vi = 0; vi < obj->groups[gi].vertices[fi]; ++vi)
+			{
+				fastObjIndex ii = obj->groups[gi].indices[group_offset + vi];
+
+				Attr p = { obj->positions[ii.p * 3 + 0], obj->positions[ii.p * 3 + 1], obj->positions[ii.p * 3 + 2] };
+				Attr n = { obj->normals[ii.n * 3 + 0], obj->normals[ii.n * 3 + 1], obj->normals[ii.n * 3 + 2] };
+				Attr t = { obj->texcoords[ii.t * 2 + 0], 1.f - obj->texcoords[ii.t * 2 + 1] };
+
+				mesh.streams[0].data[vo + vi] = p;
+				mesh.streams[1].data[vo + vi] = n;
+				mesh.streams[2].data[vo + vi] = t;
+			}
+
+			for (unsigned int vi = 2; vi < obj->groups[gi].vertices[fi]; ++vi)
+			{
+				size_t to = io + (vi - 2) * 3;
+
+				mesh.indices[to + 0] = unsigned(vo);
+				mesh.indices[to + 1] = unsigned(vo + vi - 1);
+				mesh.indices[to + 2] = unsigned(vo + vi);
+			}
+
+			vertex_offset[mi] += obj->groups[gi].vertices[fi];
+			index_offset[mi] += (obj->groups[gi].vertices[fi] - 2) * 3;
+			group_offset += obj->groups[gi].vertices[fi];
 		}
 	}
 }
@@ -893,7 +1059,6 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		printf("input: %d nodes, %d meshes, %d skins\n", int(scene.data->nodes_count), int(scene.data->meshes_count), int(scene.data->skins_count));
 	}
 
-	parseMeshes(data, scene.meshes);
 	mergeMeshes(scene.meshes);
 
 	for (size_t i = 0; i < scene.meshes.size(); ++i)
@@ -1451,14 +1616,41 @@ int main(int argc, char** argv)
 
 	Scene scene = {};
 
-	cgltf_options options = {};
-	cgltf_result result = cgltf_parse_file(&options, input, &scene.data);
-	result = (result == cgltf_result_success) ? cgltf_validate(scene.data) : result;
-	result = (result == cgltf_result_success) ? cgltf_load_buffers(&options, scene.data, input) : result;
+	const char* iext = strrchr(input, '.');
 
-	if (result != cgltf_result_success)
+	if (iext && (strcmp(iext, ".gltf") == 0 || strcmp(iext, ".GLTF") == 0 || strcmp(iext, ".glb") == 0 || strcmp(iext, ".GLB") == 0))
 	{
-		fprintf(stderr, "Error loading %s: %s\n", input, getError(result));
+		cgltf_options options = {};
+		cgltf_result result = cgltf_parse_file(&options, input, &scene.data);
+		result = (result == cgltf_result_success) ? cgltf_validate(scene.data) : result;
+		result = (result == cgltf_result_success) ? cgltf_load_buffers(&options, scene.data, input) : result;
+
+		if (result != cgltf_result_success)
+		{
+			fprintf(stderr, "Error loading %s: %s\n", input, getError(result));
+			return 2;
+		}
+
+		parseMeshesGltf(scene.data, scene.meshes);
+	}
+	else if (iext && (strcmp(iext, ".obj") == 0 || strcmp(iext, ".OBJ") == 0))
+	{
+		fastObjMesh* obj = fast_obj_read(input);
+
+		if (!obj)
+		{
+			fprintf(stderr, "Error loading %s: file not found\n", input);
+			return 2;
+		}
+
+		scene.data = parseSceneObj(obj);
+		parseMeshesObj(obj, scene.data, scene.meshes);
+
+		fast_obj_destroy(obj);
+	}
+	else
+	{
+		fprintf(stderr, "Error loading %s: unknown extension (expected .gltf or .glb or .obj)\n", input);
 		return 2;
 	}
 
@@ -1469,9 +1661,9 @@ int main(int argc, char** argv)
 		return 3;
 	}
 
-	const char* ext = strrchr(output, '.');
+	const char* oext = strrchr(output, '.');
 
-	if (ext && (strcmp(ext, ".gltf") == 0 || strcmp(ext, ".GLTF") == 0))
+	if (oext && (strcmp(oext, ".gltf") == 0 || strcmp(oext, ".GLTF") == 0))
 	{
 		std::string binpath = output;
 		binpath.replace(binpath.size() - 5, 5, ".bin");
@@ -1498,7 +1690,7 @@ int main(int argc, char** argv)
 		fclose(outjson);
 		fclose(outbin);
 	}
-	else if (ext && (strcmp(ext, ".glb") == 0 || strcmp(ext, ".GLB") == 0))
+	else if (oext && (strcmp(oext, ".glb") == 0 || strcmp(oext, ".GLB") == 0))
 	{
 		FILE* out = fopen(output, "wb");
 		if (!out)
