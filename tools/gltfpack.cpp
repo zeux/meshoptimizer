@@ -465,7 +465,9 @@ void optimizeMesh(Mesh& mesh)
 
 	std::vector<unsigned int> remap(vertex_count);
 	size_t unique_vertices = meshopt_optimizeVertexFetchRemap(&remap[0], &mesh.indices[0], mesh.indices.size(), vertex_count);
+
 	assert(unique_vertices == vertex_count);
+	(void)unique_vertices;
 
 	meshopt_remapIndexBuffer(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &remap[0]);
 
@@ -743,6 +745,7 @@ void compressVertexStream(std::string& bin, size_t offset, size_t count, size_t 
 void compressIndexStream(std::string& bin, size_t offset, size_t count, size_t stride)
 {
 	assert(stride == 4);
+	(void)stride;
 
 	std::vector<unsigned char> compressed(meshopt_encodeIndexBufferBound(count, count * 3));
 	size_t size = meshopt_encodeIndexBuffer(&compressed[0], compressed.size(), reinterpret_cast<const unsigned int*>(bin.c_str() + offset), count);
