@@ -27,9 +27,9 @@
 #include "../src/meshoptimizer.h"
 
 #include <algorithm>
+#include <map>
 #include <string>
 #include <vector>
-#include <map>
 
 #include <float.h>
 #include <math.h>
@@ -349,9 +349,9 @@ void parseMeshesObj(fastObjMesh* obj, cgltf_data* data, std::vector<Mesh>& meshe
 			{
 				fastObjIndex ii = obj->groups[gi].indices[group_offset + vi];
 
-				Attr p = { obj->positions[ii.p * 3 + 0], obj->positions[ii.p * 3 + 1], obj->positions[ii.p * 3 + 2] };
-				Attr n = { obj->normals[ii.n * 3 + 0], obj->normals[ii.n * 3 + 1], obj->normals[ii.n * 3 + 2] };
-				Attr t = { obj->texcoords[ii.t * 2 + 0], 1.f - obj->texcoords[ii.t * 2 + 1] };
+				Attr p = {{obj->positions[ii.p * 3 + 0], obj->positions[ii.p * 3 + 1], obj->positions[ii.p * 3 + 2]}};
+				Attr n = {{obj->normals[ii.n * 3 + 0], obj->normals[ii.n * 3 + 1], obj->normals[ii.n * 3 + 2]}};
+				Attr t = {{obj->texcoords[ii.t * 2 + 0], 1.f - obj->texcoords[ii.t * 2 + 1]}};
 
 				mesh.streams[0].data[vo + vi] = p;
 				mesh.streams[1].data[vo + vi] = n;
@@ -465,7 +465,9 @@ void optimizeMesh(Mesh& mesh)
 
 	std::vector<unsigned int> remap(vertex_count);
 	size_t unique_vertices = meshopt_optimizeVertexFetchRemap(&remap[0], &mesh.indices[0], mesh.indices.size(), vertex_count);
+
 	assert(unique_vertices == vertex_count);
+	(void)unique_vertices;
 
 	meshopt_remapIndexBuffer(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &remap[0]);
 
@@ -743,6 +745,7 @@ void compressVertexStream(std::string& bin, size_t offset, size_t count, size_t 
 void compressIndexStream(std::string& bin, size_t offset, size_t count, size_t stride)
 {
 	assert(stride == 4);
+	(void)stride;
 
 	std::vector<unsigned char> compressed(meshopt_encodeIndexBufferBound(count, count * 3));
 	size_t size = meshopt_encodeIndexBuffer(&compressed[0], compressed.size(), reinterpret_cast<const unsigned int*>(bin.c_str() + offset), count);
@@ -1631,7 +1634,6 @@ int main(int argc, char** argv)
 
 		return 1;
 	}
-
 
 	Scene scene = {};
 
