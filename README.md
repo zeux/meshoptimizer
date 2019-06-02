@@ -157,7 +157,7 @@ MeshoptDecoder.decodeVertexBuffer(vertexBuffer, vertexCount, vertexSize, vertexD
 MeshoptDecoder.decodeIndexBuffer(indexBuffer, indexCount, indexSize, indexData);
 ```
 
-A THREE.js mesh loader is provided as an example in `tools/OptMeshLoader.js`; it loads meshes encoded using `tools/meshencoder.cpp`. [Usage example](https://zeuxcg.org/meshoptimizer/demo/) is available, with source in `demo/index.html`.
+[Usage example](https://zeuxcg.org/meshoptimizer/demo/) is available, with source in `demo/index.html`; this example uses .GLB files encoded using `gltfpack` (`tools/gltfpack.cpp`).
 
 ## Triangle strip conversion
 
