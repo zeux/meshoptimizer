@@ -834,6 +834,12 @@ const char* shapeType(cgltf_type type)
 		return "\"VEC3\"";
 	case cgltf_type_vec4:
 		return "\"VEC4\"";
+	case cgltf_type_mat2:
+		return "\"MAT2\"";
+	case cgltf_type_mat3:
+		return "\"MAT3\"";
+	case cgltf_type_mat4:
+		return "\"MAT4\"";
 	default:
 		return "\"\"";
 	}
@@ -1100,8 +1106,11 @@ void writeBufferView(std::string& json, cgltf_buffer_view_type type, size_t coun
 		json += ",\"byteStride\":";
 		json += to_string(stride);
 	}
-	json += ",\"target\":";
-	json += (type == cgltf_buffer_view_type_vertices) ? "34962" : "34963";
+	if (type == cgltf_buffer_view_type_vertices || type == cgltf_buffer_view_type_indices)
+	{
+		json += ",\"target\":";
+		json += (type == cgltf_buffer_view_type_vertices) ? "34962" : "34963";
+	}
 	if (compressed)
 	{
 		json += ",\"extensions\":{";
@@ -1531,22 +1540,10 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		}
 
 		comma(json_buffer_views);
-		json_buffer_views += "{\"buffer\":0";
-		json_buffer_views += ",\"byteLength\":";
-		json_buffer_views += to_string(bin.size() - bin_offset);
-		json_buffer_views += ",\"byteOffset\":";
-		json_buffer_views += to_string(bin_offset);
-		json_buffer_views += "}";
+		writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, skin.joints_count, 64, bin_offset, bin.size() - bin_offset, false);
 
 		comma(json_accessors);
-		json_accessors += "{\"bufferView\":";
-		json_accessors += to_string(view_offset);
-		json_accessors += ",\"componentType\":";
-		json_accessors += componentType(cgltf_component_type_r_32f);
-		json_accessors += ",\"count\":";
-		json_accessors += to_string(skin.joints_count);
-		json_accessors += ",\"type\":\"MAT4\"";
-		json_accessors += "}";
+		writeAccessor(json_accessors, view_offset, cgltf_type_mat4, cgltf_component_type_r_32f, false, skin.joints_count);
 
 		size_t matrix_view = view_offset;
 
