@@ -16,8 +16,17 @@
 // gltfpack currently supports materials, meshes, nodes and skinning data
 // gltfpack doesn't support morph targets, animation data, lights and cameras
 
+#ifndef _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+
+#ifndef _CRT_NONSTDC_NO_WARNINGS
+#define _CRT_NONSTDC_NO_WARNINGS
+#endif
+
 #include "../src/meshoptimizer.h"
 
+#include <algorithm>
 #include <string>
 #include <vector>
 #include <map>
@@ -167,7 +176,7 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 			{
 				result.indices.resize(a->count);
 				for (size_t i = 0; i < a->count; ++i)
-					result.indices[i] = cgltf_accessor_read_index(a, i);
+					result.indices[i] = unsigned(cgltf_accessor_read_index(a, i));
 			}
 
 			for (size_t ai = 0; ai < primitive.attributes_count; ++ai)
@@ -1723,13 +1732,13 @@ int main(int argc, char** argv)
 
 		writeU32(out, 0x46546C67);
 		writeU32(out, 2);
-		writeU32(out, 12 + 8 + json.size() + 8 + bin.size());
+		writeU32(out, uint32_t(12 + 8 + json.size() + 8 + bin.size()));
 
-		writeU32(out, json.size());
+		writeU32(out, uint32_t(json.size()));
 		writeU32(out, 0x4E4F534A);
 		fwrite(json.c_str(), json.size(), 1, out);
 
-		writeU32(out, bin.size());
+		writeU32(out, uint32_t(bin.size()));
 		writeU32(out, 0x004E4942);
 		fwrite(bin.c_str(), bin.size(), 1, out);
 
