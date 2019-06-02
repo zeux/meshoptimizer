@@ -1050,6 +1050,36 @@ bool usesTextureSet(const cgltf_material& material, int set)
 	return false;
 }
 
+void writeBufferView(std::string& json, cgltf_buffer_view_type type, size_t count, size_t stride, size_t bin_offset, size_t bin_size, bool compressed)
+{
+	assert(compressed || bin_size == count * stride);
+	json += "{\"buffer\":0";
+	json += ",\"byteLength\":";
+	json += to_string(bin_size);
+	json += ",\"byteOffset\":";
+	json += to_string(bin_offset);
+	if (type == cgltf_buffer_view_type_vertices)
+	{
+		json += ",\"byteStride\":";
+		json += to_string(stride);
+	}
+	json += ",\"target\":";
+	json += (type == cgltf_buffer_view_type_vertices) ? "34962" : "34963";
+	if (compressed)
+	{
+		json += ",\"extensions\":{";
+		json += "\"KHR_meshopt_compression\":{";
+		json += "\"mode\":";
+		json += (type == cgltf_buffer_view_type_vertices) ? "\"VERTEX\"" : "\"INDEX\"";
+		json += ",\"count\":";
+		json += to_string(count);
+		json += ",\"byteStride\":";
+		json += to_string(stride);
+		json += "}}";
+	}
+	json += "}";
+}
+
 bool process(Scene& scene, const Settings& settings, std::string& json, std::string& bin)
 {
 	cgltf_data* data = scene.data;
@@ -1168,24 +1198,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 				compressVertexStream(bin, bin_offset, stream.data.size(), p.second);
 
 			comma(json_buffer_views);
-			json_buffer_views += "{\"buffer\":0";
-			json_buffer_views += ",\"byteLength\":";
-			json_buffer_views += to_string(bin.size() - bin_offset);
-			json_buffer_views += ",\"byteOffset\":";
-			json_buffer_views += to_string(bin_offset);
-			json_buffer_views += ",\"byteStride\":";
-			json_buffer_views += to_string(p.second);
-			if (settings.compress)
-			{
-				json_buffer_views += ",\"extra\":{\"decodeMode\":\"VERTEX\"";
-				json_buffer_views += ",\"decodeCount\":";
-				json_buffer_views += to_string(stream.data.size());
-				json_buffer_views += ",\"decodeStride\":";
-				json_buffer_views += to_string(p.second);
-				json_buffer_views += "}";
-			}
-			json_buffer_views += ",\"target\":34962";
-			json_buffer_views += "}";
+			writeBufferView(json_buffer_views, cgltf_buffer_view_type_vertices, stream.data.size(), p.second, bin_offset, bin.size() - bin_offset, settings.compress);
 
 			comma(json_accessors);
 			json_accessors += "{\"bufferView\":";
@@ -1237,26 +1250,13 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			size_t bin_offset = bin.size();
 			cgltf_component_type p = writeIndexStream(bin, mesh.indices);
 
+			size_t index_size = (p == cgltf_component_type_r_16u) ? 2 : 4;
+
 			if (settings.compress)
-				compressIndexStream(bin, bin_offset, mesh.indices.size(), p == cgltf_component_type_r_16u ? 2 : 4);
+				compressIndexStream(bin, bin_offset, mesh.indices.size(), index_size);
 
 			comma(json_buffer_views);
-			json_buffer_views += "{\"buffer\":0";
-			json_buffer_views += ",\"byteLength\":";
-			json_buffer_views += to_string(bin.size() - bin_offset);
-			json_buffer_views += ",\"byteOffset\":";
-			json_buffer_views += to_string(bin_offset);
-			if (settings.compress)
-			{
-				json_buffer_views += ",\"extra\":{\"decodeMode\":\"INDEX\"";
-				json_buffer_views += ",\"decodeCount\":";
-				json_buffer_views += to_string(mesh.indices.size());
-				json_buffer_views += ",\"decodeStride\":";
-				json_buffer_views += to_string(size_t(p == cgltf_component_type_r_16u ? 2 : 4));
-				json_buffer_views += "}";
-			}
-			json_buffer_views += ",\"target\":34963";
-			json_buffer_views += "}";
+			writeBufferView(json_buffer_views, cgltf_buffer_view_type_indices, mesh.indices.size(), index_size, bin_offset, bin.size() - bin_offset, settings.compress);
 
 			comma(json_accessors);
 			json_accessors += "{\"bufferView\":";
@@ -1529,7 +1529,17 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 	json += "]";
 	json += ",\"asset\":{\"version\":\"2.0\", \"generator\":\"gltfpack\"}";
 	json += ",\"extensionsUsed\":[";
-	json += "\"KHR_texture_transform\"";
+	json += "\"KHR_quantized_geometry\"";
+	if (settings.compress)
+	{
+		comma(json);
+		json += "\"KHR_meshopt_compression\"";
+	}
+	if (!json_textures.empty())
+	{
+		comma(json);
+		json += "\"KHR_texture_transform\"";
+	}
 	if (has_pbr_specular_glossiness)
 	{
 		comma(json);
