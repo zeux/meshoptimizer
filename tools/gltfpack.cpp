@@ -92,6 +92,14 @@ struct QuantizationParams
 	int uv_bits;
 };
 
+struct StreamFormat
+{
+	cgltf_type type;
+	cgltf_component_type component_type;
+	bool normalized;
+	size_t stride;
+};
+
 const char* getError(cgltf_result result)
 {
 	switch (result)
@@ -576,7 +584,7 @@ void renormalizeWeights(uint8_t (&w)[4])
 	w[max] += 255 - sum;
 }
 
-std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream(std::string& bin, const Stream& stream, const QuantizationParams& params)
+StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationParams& params)
 {
 	if (stream.type == cgltf_attribute_type_position)
 	{
@@ -594,7 +602,8 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(std::make_pair(cgltf_component_type_r_16u, cgltf_type_vec3), 8);
+		StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_16u, false, 8};
+		return format;
 	}
 	else if (stream.type == cgltf_attribute_type_texcoord)
 	{
@@ -614,7 +623,8 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(std::make_pair(cgltf_component_type_r_16u, cgltf_type_vec2), 4);
+		StreamFormat format = {cgltf_type_vec2, cgltf_component_type_r_16u, false, 4};
+		return format;
 	}
 	else if (stream.type == cgltf_attribute_type_normal || stream.type == cgltf_attribute_type_tangent)
 	{
@@ -633,7 +643,8 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(std::make_pair(cgltf_component_type_r_8, cgltf_type_vec3), 4);
+		StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_8, true, 4};
+		return format;
 	}
 	else if (stream.type == cgltf_attribute_type_tangent)
 	{
@@ -652,7 +663,8 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(std::make_pair(cgltf_component_type_r_8, cgltf_type_vec4), 4);
+		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_8, true, 4};
+		return format;
 	}
 	else if (stream.type == cgltf_attribute_type_color)
 	{
@@ -668,7 +680,8 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(std::make_pair(cgltf_component_type_r_8u, cgltf_type_vec4), 4);
+		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_8u, true, 4};
+		return format;
 	}
 	else if (stream.type == cgltf_attribute_type_weights)
 	{
@@ -687,7 +700,8 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(std::make_pair(cgltf_component_type_r_8u, cgltf_type_vec4), 4);
+		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_8u, true, 4};
+		return format;
 	}
 	else if (stream.type == cgltf_attribute_type_joints)
 	{
@@ -703,7 +717,8 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(std::make_pair(cgltf_component_type_r_8u, cgltf_type_vec4), 4);
+		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_8u, false, 4};
+		return format;
 	}
 	else
 	{
@@ -719,7 +734,8 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(std::make_pair(cgltf_component_type_r_32f, cgltf_type_vec4), 16);
+		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_32f, false, 16};
+		return format;
 	}
 }
 
@@ -747,7 +763,7 @@ void getPositionBounds(uint16_t min[3], uint16_t max[3], const Stream& stream, c
 	}
 }
 
-cgltf_component_type writeIndexStream(std::string& bin, const std::vector<unsigned int>& stream)
+StreamFormat writeIndexStream(std::string& bin, const std::vector<unsigned int>& stream)
 {
 	for (size_t i = 0; i < stream.size(); ++i)
 	{
@@ -755,10 +771,11 @@ cgltf_component_type writeIndexStream(std::string& bin, const std::vector<unsign
 		bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 	}
 
-	return cgltf_component_type_r_32u;
+	StreamFormat format = {cgltf_type_scalar, cgltf_component_type_r_32u, false, 4};
+	return format;
 }
 
-cgltf_component_type writeTimeStream(std::string& bin, const std::vector<float>& data)
+StreamFormat writeTimeStream(std::string& bin, const std::vector<float>& data)
 {
 	for (size_t i = 0; i < data.size(); ++i)
 	{
@@ -766,13 +783,15 @@ cgltf_component_type writeTimeStream(std::string& bin, const std::vector<float>&
 		bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 	}
 
-	return cgltf_component_type_r_32f;
+	StreamFormat format = {cgltf_type_scalar, cgltf_component_type_r_32f, false, 4};
+	return format;
 }
 
-std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeKeyframeStream(std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data)
+StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data)
 {
 	if (type == cgltf_animation_path_type_rotation)
 	{
+		// TODO: in theory, we can use short-normalized quaternion tracks although it looks like three.js and babylon.js have issues with those
 		for (size_t i = 0; i < data.size(); ++i)
 		{
 			const Attr& a = data[i];
@@ -781,7 +800,8 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeKeyframeStre
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(std::make_pair(cgltf_component_type_r_32f, cgltf_type_vec4), 16);
+		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_32f, false, 16};
+		return format;
 	}
 	else
 	{
@@ -793,7 +813,8 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeKeyframeStre
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(std::make_pair(cgltf_component_type_r_32f, cgltf_type_vec3), 12);
+		StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_32f, false, 12};
+		return format;
 	}
 }
 
@@ -1464,17 +1485,15 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 				continue;
 
 			size_t bin_offset = bin.size();
-			std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> p = writeVertexStream(bin, stream, qp);
+			StreamFormat format = writeVertexStream(bin, stream, qp);
 
 			if (settings.compress)
-				compressVertexStream(bin, bin_offset, stream.data.size(), p.second);
+				compressVertexStream(bin, bin_offset, stream.data.size(), format.stride);
 
 			comma(json_buffer_views);
-			writeBufferView(json_buffer_views, cgltf_buffer_view_type_vertices, stream.data.size(), p.second, bin_offset, bin.size() - bin_offset, settings.compress);
+			writeBufferView(json_buffer_views, cgltf_buffer_view_type_vertices, stream.data.size(), format.stride, bin_offset, bin.size() - bin_offset, settings.compress);
 
 			bytes_vertex += bin.size() - bin_offset;
-
-			bool normalized = (stream.type == cgltf_attribute_type_normal || stream.type == cgltf_attribute_type_tangent || stream.type == cgltf_attribute_type_color || stream.type == cgltf_attribute_type_weights);
 
 			comma(json_accessors);
 			if (stream.type == cgltf_attribute_type_position)
@@ -1486,11 +1505,11 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 				float minf[3] = { float(min[0]), float(min[1]), float(min[2])};
 				float maxf[3] = { float(max[0]), float(max[1]), float(max[2])};
 
-				writeAccessor(json_accessors, view_offset, p.first.second, p.first.first, normalized, stream.data.size(), minf, maxf);
+				writeAccessor(json_accessors, view_offset, format.type, format.component_type, format.normalized, stream.data.size(), minf, maxf);
 			}
 			else
 			{
-				writeAccessor(json_accessors, view_offset, p.first.second, p.first.first, normalized, stream.data.size());
+				writeAccessor(json_accessors, view_offset, format.type, format.component_type, format.normalized, stream.data.size());
 			}
 
 			comma(json_attributes);
@@ -1511,20 +1530,18 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 
 		{
 			size_t bin_offset = bin.size();
-			cgltf_component_type p = writeIndexStream(bin, mesh.indices);
-
-			size_t index_size = (p == cgltf_component_type_r_16u) ? 2 : 4;
+			StreamFormat format = writeIndexStream(bin, mesh.indices);
 
 			if (settings.compress)
-				compressIndexStream(bin, bin_offset, mesh.indices.size(), index_size);
+				compressIndexStream(bin, bin_offset, mesh.indices.size(), format.stride);
 
 			comma(json_buffer_views);
-			writeBufferView(json_buffer_views, cgltf_buffer_view_type_indices, mesh.indices.size(), index_size, bin_offset, bin.size() - bin_offset, settings.compress);
+			writeBufferView(json_buffer_views, cgltf_buffer_view_type_indices, mesh.indices.size(), format.stride, bin_offset, bin.size() - bin_offset, settings.compress);
 
 			bytes_index += bin.size() - bin_offset;
 
 			comma(json_accessors);
-			writeAccessor(json_accessors, view_offset, cgltf_type_scalar, p, false, mesh.indices.size());
+			writeAccessor(json_accessors, view_offset, format.type, format.component_type, format.normalized, mesh.indices.size());
 
 			index_view = view_offset;
 
@@ -1813,15 +1830,15 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 				time[j] = mint + float(j) / settings.anim_freq;
 
 			size_t bin_offset = bin.size();
-			cgltf_component_type p = writeTimeStream(bin, time);
+			StreamFormat format = writeTimeStream(bin, time);
 
 			comma(json_buffer_views);
-			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, frames, 4, bin_offset, bin.size() - bin_offset, false);
+			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, frames, format.stride, bin_offset, bin.size() - bin_offset, false);
 
 			bytes_time += bin.size() - bin_offset;
 
 			comma(json_accessors);
-			writeAccessor(json_accessors, view_offset, cgltf_type_scalar, p, false, frames, &time.front(), &time.back());
+			writeAccessor(json_accessors, view_offset, cgltf_type_scalar, format.component_type, format.normalized, frames, &time.front(), &time.back());
 
 			view_offset++;
 		}
@@ -1833,15 +1850,15 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			std::vector<float> pose(1, mint);
 
 			size_t bin_offset = bin.size();
-			cgltf_component_type p = writeTimeStream(bin, pose);
+			StreamFormat format = writeTimeStream(bin, pose);
 
 			comma(json_buffer_views);
-			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, 1, 4, bin_offset, bin.size() - bin_offset, false);
+			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, 1, format.stride, bin_offset, bin.size() - bin_offset, false);
 
 			bytes_time += bin.size() - bin_offset;
 
 			comma(json_accessors);
-			writeAccessor(json_accessors, view_offset, cgltf_type_scalar, p, false, 1, &pose.front(), &pose.back());
+			writeAccessor(json_accessors, view_offset, cgltf_type_scalar, format.component_type, format.normalized, 1, &pose.front(), &pose.back());
 
 			view_offset++;
 		}
@@ -1868,15 +1885,15 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			}
 
 			size_t bin_offset = bin.size();
-			std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> p = writeKeyframeStream(bin, channel.target_path, track);
+			StreamFormat format = writeKeyframeStream(bin, channel.target_path, track);
 
 			comma(json_buffer_views);
-			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, track.size(), p.second, bin_offset, bin.size() - bin_offset, false);
+			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, track.size(), format.stride, bin_offset, bin.size() - bin_offset, false);
 
 			bytes_keyframe += bin.size() - bin_offset;
 
 			comma(json_accessors);
-			writeAccessor(json_accessors, view_offset, p.first.second, p.first.first, false, track.size());
+			writeAccessor(json_accessors, view_offset, format.type, format.component_type, format.normalized, track.size());
 
 			size_t data_view = view_offset;
 
