@@ -722,6 +722,30 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 	}
 }
 
+void getPositionBounds(uint16_t min[3], uint16_t max[3], const Stream& stream, const QuantizationParams& params)
+{
+	assert(stream.type == cgltf_attribute_type_position);
+	assert(stream.data.size() > 0);
+
+	min[0] = min[1] = min[2] = 0xffff;
+	max[0] = max[1] = max[2] = 0;
+
+	float pos_rscale = params.pos_scale == 0.f ? 0.f : 1.f / params.pos_scale;
+
+	for (size_t i = 0; i < stream.data.size(); ++i)
+	{
+		const Attr& a = stream.data[i];
+
+		for (int k = 0; k < 3; ++k)
+		{
+			uint16_t v = uint16_t(meshopt_quantizeUnorm((a.f[k] - params.pos_offset[k]) * pos_rscale, params.pos_bits));
+
+			min[k] = std::min(min[k], v);
+			max[k] = std::max(max[k], v);
+		}
+	}
+}
+
 cgltf_component_type writeIndexStream(std::string& bin, const std::vector<unsigned int>& stream)
 {
 	for (size_t i = 0; i < stream.size(); ++i)
@@ -1224,15 +1248,22 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 
 			if (stream.type == cgltf_attribute_type_position)
 			{
-				// TODO: compute precise min/max (validator isn't happy with imprecise data for some reason)
-				size_t maxp = (1 << qp.pos_bits) - 1;
+				uint16_t min[3] = {};
+				uint16_t max[3] = {};
+				getPositionBounds(min, max, stream, qp);
 
-				json_accessors += ",\"min\":[0,0,0],\"max\":[";
-				json_accessors += to_string(maxp);
+				json_accessors += ",\"min\":[";
+				json_accessors += to_string(size_t(min[0]));
 				json_accessors += ",";
-				json_accessors += to_string(maxp);
+				json_accessors += to_string(size_t(min[1]));
 				json_accessors += ",";
-				json_accessors += to_string(maxp);
+				json_accessors += to_string(size_t(min[2]));
+				json_accessors += "],\"max\":[";
+				json_accessors += to_string(size_t(max[0]));
+				json_accessors += ",";
+				json_accessors += to_string(size_t(max[1]));
+				json_accessors += ",";
+				json_accessors += to_string(size_t(max[2]));
 				json_accessors += "]";
 			}
 			else if (stream.type == cgltf_attribute_type_normal || stream.type == cgltf_attribute_type_tangent || stream.type == cgltf_attribute_type_color || stream.type == cgltf_attribute_type_weights)
