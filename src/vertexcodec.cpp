@@ -721,6 +721,7 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 
 #ifdef SIMD_SSE
 #define TEMP __m128i
+#define PREP() __m128i pi = _mm_cvtsi32_si128(*reinterpret_cast<const int*>(last_vertex + k))
 #define LOAD(i) __m128i r##i = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + i * vertex_count_aligned))
 #define GRP4(i) t0 = _mm_shuffle_epi32(r##i, 0), t1 = _mm_shuffle_epi32(r##i, 1), t2 = _mm_shuffle_epi32(r##i, 2), t3 = _mm_shuffle_epi32(r##i, 3)
 #define FIXD(i) t##i = pi = _mm_add_epi8(pi, t##i)
@@ -729,18 +730,14 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 
 #ifdef SIMD_NEON
 #define TEMP uint8x8_t
+#define PREP() uint8x8_t pi = vreinterpret_u8_u32(vld1_lane_u32(reinterpret_cast<uint32_t*>(last_vertex + k), vdup_n_u32(0), 0))
 #define LOAD(i) uint8x16_t r##i = vld1q_u8(buffer + j + i * vertex_count_aligned)
 #define GRP4(i) t0 = vget_low_u8(r##i), t1 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t0), 1)), t2 = vget_high_u8(r##i), t3 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t2), 1))
 #define FIXD(i) t##i = pi = vadd_u8(pi, t##i)
 #define SAVE(i) vst1_lane_u32(reinterpret_cast<uint32_t*>(savep), vreinterpret_u32_u8(t##i), 0), savep += vertex_size
 #endif
 
-#ifdef SIMD_SSE
-		__m128i pi = _mm_cvtsi32_si128(*reinterpret_cast<const int*>(last_vertex + k));
-#endif
-#ifdef SIMD_NEON
-		uint8x8_t pi = vreinterpret_u8_u32(vld1_lane_u32(reinterpret_cast<uint32_t*>(last_vertex + k), vdup_n_u32(0), 0));
-#endif
+		PREP();
 
 		unsigned char* savep = transposed + k;
 
@@ -777,6 +774,7 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
 
 #undef TEMP
+#undef PREP
 #undef LOAD
 #undef GRP4
 #undef FIXD

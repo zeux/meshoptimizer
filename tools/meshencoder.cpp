@@ -48,8 +48,8 @@ struct Object
 struct Vertex
 {
 	unsigned short px, py, pz, pw; // unsigned 16-bit value, use pos_offset/pos_scale to unpack
-	char nx, ny, nz, nw; // normalized signed 8-bit value
-	unsigned short tx, ty; // unsigned 16-bit value, use uv_offset/uv_scale to unpack
+	char nx, ny, nz, nw;           // normalized signed 8-bit value
+	unsigned short tx, ty;         // unsigned 16-bit value, use uv_offset/uv_scale to unpack
 };
 
 float rcpSafe(float v)
@@ -82,7 +82,7 @@ int main(int argc, char** argv)
 		return 3;
 	}
 
-	float pos_offset[3] = { FLT_MAX, FLT_MAX, FLT_MAX };
+	float pos_offset[3] = {FLT_MAX, FLT_MAX, FLT_MAX};
 	float pos_scale = 0.f;
 
 	for (size_t i = 0; i < file.v_size; i += 3)
@@ -99,8 +99,8 @@ int main(int argc, char** argv)
 		pos_scale = std::max(pos_scale, file.v[i + 2] - pos_offset[2]);
 	}
 
-	float uv_offset[2] = { FLT_MAX, FLT_MAX };
-	float uv_scale[2] = { 0, 0 };
+	float uv_offset[2] = {FLT_MAX, FLT_MAX};
+	float uv_scale[2] = {0, 0};
 
 	for (size_t i = 0; i < file.vt_size; i += 3)
 	{
@@ -115,7 +115,7 @@ int main(int argc, char** argv)
 	}
 
 	float pos_scale_inverse = rcpSafe(pos_scale);
-	float uv_scale_inverse[2] = { rcpSafe(uv_scale[0]), rcpSafe(uv_scale[1]) };
+	float uv_scale_inverse[2] = {rcpSafe(uv_scale[0]), rcpSafe(uv_scale[1])};
 
 	size_t total_indices = file.f_size / 3;
 
@@ -161,12 +161,12 @@ int main(int argc, char** argv)
 		        (unsigned short)(meshopt_quantizeUnorm(px, pos_bits)),
 		        (unsigned short)(meshopt_quantizeUnorm(py, pos_bits)),
 		        (unsigned short)(meshopt_quantizeUnorm(pz, pos_bits)),
-				0,
+		        0,
 
 		        char(meshopt_quantizeSnorm(nx, 8)),
 		        char(meshopt_quantizeSnorm(ny, 8)),
 		        char(meshopt_quantizeSnorm(nz, 8)),
-				0,
+		        0,
 
 		        (unsigned short)(meshopt_quantizeUnorm(tx, uv_bits)),
 		        (unsigned short)(meshopt_quantizeUnorm(ty, uv_bits)),

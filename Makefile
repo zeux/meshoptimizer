@@ -15,7 +15,10 @@ DEMO_OBJECTS=$(DEMO_SOURCES:%=$(BUILD)/%.o)
 ENCODER_SOURCES=tools/meshencoder.cpp tools/objparser.cpp
 ENCODER_OBJECTS=$(ENCODER_SOURCES:%=$(BUILD)/%.o)
 
-OBJECTS=$(LIBRARY_OBJECTS) $(DEMO_OBJECTS) $(ENCODER_OBJECTS)
+GLTFPACK_SOURCES=tools/gltfpack.cpp
+GLTFPACK_OBJECTS=$(GLTFPACK_SOURCES:%=$(BUILD)/%.o)
+
+OBJECTS=$(LIBRARY_OBJECTS) $(DEMO_OBJECTS) $(GLTFPACK_OBJECTS)
 
 LIBRARY=$(BUILD)/libmeshoptimizer.a
 EXECUTABLE=$(BUILD)/meshoptimizer
@@ -65,9 +68,12 @@ dev: $(EXECUTABLE)
 	$(EXECUTABLE) -d $(files)
 
 format:
-	clang-format -i $(LIBRARY_SOURCES) $(DEMO_SOURCES)
+	clang-format -i $(LIBRARY_SOURCES) $(DEMO_SOURCES) $(ENCODER_SOURCES) $(GLTFPACK_SOURCES)
 
 meshencoder: $(ENCODER_OBJECTS) $(LIBRARY)
+	$(CXX) $^ $(LDFLAGS) -o $@
+
+gltfpack: $(GLTFPACK_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
 
 js/decoder.js: src/vertexcodec.cpp src/indexcodec.cpp
