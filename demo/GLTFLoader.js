@@ -12,6 +12,7 @@ THREE.GLTFLoader = ( function () {
 
 		this.manager = ( manager !== undefined ) ? manager : THREE.DefaultLoadingManager;
 		this.dracoLoader = null;
+		this.meshoptDecoder = null;
 
 	}
 
@@ -118,6 +119,13 @@ THREE.GLTFLoader = ( function () {
 
 		},
 
+		setMeshoptDecoder: function ( decoder ) {
+
+			this.meshoptDecoder = decoder;
+			return this;
+
+		},
+
 		parse: function ( data, path, onLoad, onError ) {
 
 			var content;
@@ -196,6 +204,10 @@ THREE.GLTFLoader = ( function () {
 							extensions[ EXTENSIONS.KHR_TEXTURE_TRANSFORM ] = new GLTFTextureTransformExtension( json );
 							break;
 
+						case EXTENSIONS.KHR_MESHOPT_COMPRESSION:
+							extensions[ extensionName ] = new GLTFMeshoptCompressionExtension( json, this.meshoptDecoder );
+							break;
+
 						default:
 
 							if ( extensionsRequired.indexOf( extensionName ) >= 0 ) {
@@ -271,7 +283,8 @@ THREE.GLTFLoader = ( function () {
 		KHR_MATERIALS_PBR_SPECULAR_GLOSSINESS: 'KHR_materials_pbrSpecularGlossiness',
 		KHR_MATERIALS_UNLIT: 'KHR_materials_unlit',
 		KHR_TEXTURE_TRANSFORM: 'KHR_texture_transform',
-		MSFT_TEXTURE_DDS: 'MSFT_texture_dds'
+		MSFT_TEXTURE_DDS: 'MSFT_texture_dds',
+		KHR_MESHOPT_COMPRESSION: 'KHR_meshopt_compression',
 	};
 
 	/**
@@ -989,6 +1002,61 @@ THREE.GLTFLoader = ( function () {
 			}
 
 		};
+
+	}
+
+	/**
+	 * meshoptimizer Compression Extension
+	 */
+	function GLTFMeshoptCompressionExtension( json, meshoptDecoder ) {
+
+		if ( ! meshoptDecoder ) {
+
+			throw new Error( 'THREE.GLTFLoader: No MeshoptDecoder instance provided.' );
+
+		}
+
+		this.name = EXTENSIONS.KHR_MESHOPT_COMPRESSION;
+		this.json = json;
+		this.meshoptDecoder = meshoptDecoder;
+
+	}
+
+	GLTFMeshoptCompressionExtension.prototype.decodeBufferView = function ( bufferViewDef, buffer ) {
+
+		var decoder = this.meshoptDecoder;
+
+		return decoder.ready.then( function () {
+
+			var extensionDef = bufferViewDef.extensions[ EXTENSIONS.KHR_MESHOPT_COMPRESSION ];
+
+			var byteOffset = bufferViewDef.byteOffset || 0;
+			var byteLength = bufferViewDef.byteLength || 0;
+
+			var count = extensionDef.count;
+			var stride = extensionDef.byteStride;
+
+			var result = new ArrayBuffer(count * stride);
+			var source = buffer.slice(byteOffset, byteOffset + byteLength);
+
+			switch ( extensionDef.mode ) {
+
+				case 'VERTEX':
+					decoder.decodeVertexBuffer(new Uint8Array(result), count, stride, new Uint8Array(source));
+					break;
+
+				case 'INDEX':
+					decoder.decodeIndexBuffer(new Uint8Array(result), count, stride, new Uint8Array(source));
+					break;
+
+				default:
+					throw new Error( 'Unknown decode mode: ' + extensionDef.mode );
+
+			}
+
+			return result;
+
+		} );
 
 	}
 
@@ -1862,15 +1930,29 @@ THREE.GLTFLoader = ( function () {
 
 		var bufferViewDef = this.json.bufferViews[ bufferViewIndex ];
 
-		return this.getDependency( 'buffer', bufferViewDef.buffer ).then( function ( buffer ) {
+		if ( bufferViewDef.extensions && bufferViewDef.extensions[ EXTENSIONS.KHR_MESHOPT_COMPRESSION ] ) {
 
-			var byteLength = bufferViewDef.byteLength || 0;
-			var byteOffset = bufferViewDef.byteOffset || 0;
-			return buffer.slice( byteOffset, byteOffset + byteLength );
+			var extension = this.extensions[ EXTENSIONS.KHR_MESHOPT_COMPRESSION ];
 
-		} );
+			return this.getDependency( 'buffer', bufferViewDef.buffer ).then( function ( buffer ) {
 
-	};
+				return extension.decodeBufferView( bufferViewDef, buffer );
+
+			} );
+
+		} else {
+
+			return this.getDependency( 'buffer', bufferViewDef.buffer ).then( function ( buffer ) {
+
+				var byteLength = bufferViewDef.byteLength || 0;
+				var byteOffset = bufferViewDef.byteOffset || 0;
+				return buffer.slice( byteOffset, byteOffset + byteLength );
+
+			} );
+
+		}
+
+	}
 
 	/**
 	 * Specification: https://github.com/KhronosGroup/glTF/blob/master/specification/2.0/README.md#accessors
