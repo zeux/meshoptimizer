@@ -1122,7 +1122,8 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 
 	if (settings.verbose)
 	{
-		printf("input: %d nodes, %d meshes, %d skins\n", int(scene.data->nodes_count), int(scene.data->meshes_count), int(scene.data->skins_count));
+		printf("input: %d nodes, %d meshes, %d skins, %d animations\n",
+		       int(data->nodes_count), int(data->meshes_count), int(data->skins_count), int(data->animations_count));
 	}
 
 	mergeMeshes(scene.meshes);
@@ -1173,9 +1174,13 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 	size_t node_offset = 0;
 	size_t mesh_offset = 0;
 
-	for (size_t i = 0; i < scene.data->images_count; ++i)
+	size_t bytes_vertex = 0;
+	size_t bytes_index = 0;
+	size_t bytes_anim = 0;
+
+	for (size_t i = 0; i < data->images_count; ++i)
 	{
-		const cgltf_image& image = scene.data->images[i];
+		const cgltf_image& image = data->images[i];
 
 		comma(json_images);
 		json_images += "{\"uri\":\"";
@@ -1183,27 +1188,27 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		json_images += "\"}";
 	}
 
-	for (size_t i = 0; i < scene.data->textures_count; ++i)
+	for (size_t i = 0; i < data->textures_count; ++i)
 	{
-		const cgltf_texture& texture = scene.data->textures[i];
+		const cgltf_texture& texture = data->textures[i];
 
 		comma(json_textures);
 		json_textures += "{";
 		if (texture.image)
 		{
 			json_textures += "\"source\":";
-			json_textures += to_string(size_t(texture.image - scene.data->images));
+			json_textures += to_string(size_t(texture.image - data->images));
 		}
 		json_textures += "}";
 	}
 
-	for (size_t i = 0; i < scene.data->materials_count; ++i)
+	for (size_t i = 0; i < data->materials_count; ++i)
 	{
-		const cgltf_material& material = scene.data->materials[i];
+		const cgltf_material& material = data->materials[i];
 
 		comma(json_materials);
 		json_materials += "{";
-		writeMaterialInfo(json_materials, scene.data, material, qp);
+		writeMaterialInfo(json_materials, data, material, qp);
 		json_materials += "}";
 
 		has_pbr_specular_glossiness = has_pbr_specular_glossiness || material.has_pbr_specular_glossiness;
@@ -1236,6 +1241,8 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 
 			comma(json_buffer_views);
 			writeBufferView(json_buffer_views, cgltf_buffer_view_type_vertices, stream.data.size(), p.second, bin_offset, bin.size() - bin_offset, settings.compress);
+
+			bytes_vertex += bin.size() - bin_offset;
 
 			comma(json_accessors);
 			json_accessors += "{\"bufferView\":";
@@ -1302,6 +1309,8 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			comma(json_buffer_views);
 			writeBufferView(json_buffer_views, cgltf_buffer_view_type_indices, mesh.indices.size(), index_size, bin_offset, bin.size() - bin_offset, settings.compress);
 
+			bytes_index += bin.size() - bin_offset;
+
 			comma(json_accessors);
 			json_accessors += "{\"bufferView\":";
 			json_accessors += to_string(view_offset);
@@ -1325,7 +1334,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		if (mesh.material)
 		{
 			json_meshes += ",\"material\":";
-			json_meshes += to_string(size_t(mesh.material - scene.data->materials));
+			json_meshes += to_string(size_t(mesh.material - data->materials));
 		}
 		json_meshes += "}]}";
 
@@ -1580,7 +1589,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 				Attr attr = {};
 				cgltf_accessor_read_float(sampler.output, k, attr.f, 4);
 
-				printf("time: %f; value: %f %f %f %f\n", time, attr.f[0], attr.f[1], attr.f[2], attr.f[3]);
+				// printf("time: %f; value: %f %f %f %f\n", time, attr.f[0], attr.f[1], attr.f[2], attr.f[3]);
 			}
 
 			(void)track_offset;
@@ -1647,7 +1656,8 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 	if (settings.verbose)
 	{
 		printf("output: %d nodes, %d meshes\n", int(node_offset), int(mesh_offset));
-		printf("output: JSON %d bytes, buffers %d bytes\n", int(json.size()), int(bin.size()));
+		printf("output: JSON %d bytes, buffers %d bytes (vertex %d bytes, index %d bytes, animation %d bytes)\n",
+		       int(json.size()), int(bin.size()), int(bytes_vertex), int(bytes_index), int(bytes_anim));
 	}
 
 	return true;
