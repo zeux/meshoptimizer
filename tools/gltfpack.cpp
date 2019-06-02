@@ -1218,6 +1218,98 @@ void writeAccessor(std::string& json, size_t view, cgltf_type type, cgltf_compon
 	json += "}";
 }
 
+void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& sampler, cgltf_animation_path_type type, int frames, float mint, int freq)
+{
+	assert(sampler.interpolation == cgltf_interpolation_type_linear);
+
+	size_t cursor = 0;
+
+	for (int i = 0; i < frames; ++i)
+	{
+		float time = mint + float(i) / freq;
+
+		while (cursor + 1 < sampler.input->count)
+		{
+			float next_time = 0;
+			cgltf_accessor_read_float(sampler.input, cursor + 1, &next_time, 1);
+
+			if (next_time > time)
+				break;
+
+			cursor++;
+		}
+
+		float cursor_time = 0;
+		Attr cursor_data = {};
+		cgltf_accessor_read_float(sampler.input, cursor, &cursor_time, 1);
+		cgltf_accessor_read_float(sampler.output, cursor, cursor_data.f, 4);
+
+		if (cursor + 1 < sampler.input->count)
+		{
+			float next_time = 0;
+			Attr next_data = {};
+			cgltf_accessor_read_float(sampler.input, cursor + 1, &next_time, 1);
+			cgltf_accessor_read_float(sampler.output, cursor + 1, next_data.f, 4);
+
+			float inv_range = (cursor_time < next_time) ? 1.f / (next_time - cursor_time) : 0.f;
+			float t = std::max(0.f, std::min(1.f, (time - cursor_time) * inv_range));
+
+			const Attr& l = cursor_data;
+			const Attr& r = next_data;
+
+			if (type == cgltf_animation_path_type_rotation)
+			{
+				// Approximating slerp, https://zeux.io/2015/07/23/approximating-slerp/
+				// We also handle quaternion double-cover
+			    float ca = l.f[0] * r.f[0] + l.f[1] * r.f[1] + l.f[2] * r.f[2] + l.f[3] * r.f[3];
+
+			    float d = fabsf(ca);
+			    float A = 1.0904f + d * (-3.2452f + d * (3.55645f - d * 1.43519f));
+			    float B = 0.848013f + d * (-1.06021f + d * 0.215638f);
+			    float k = A * (t - 0.5f) * (t - 0.5f) + B;
+			    float ot = t + t * (t - 0.5f) * (t - 1) * k;
+
+			    float t0 = 1 - ot;
+			    float t1 = ca > 0 ? ot : -ot;
+
+				Attr lerp = { {
+					l.f[0] * t0 + r.f[0] * t1,
+					l.f[1] * t0 + r.f[1] * t1,
+					l.f[2] * t0 + r.f[2] * t1,
+					l.f[3] * t0 + r.f[3] * t1,
+				} };
+
+				float len = sqrtf(lerp.f[0] * lerp.f[0] + lerp.f[1] * lerp.f[1] + lerp.f[2] * lerp.f[2] + lerp.f[3] * lerp.f[3]);
+
+				if (len > 0.f)
+				{
+					lerp.f[0] /= len;
+					lerp.f[1] /= len;
+					lerp.f[2] /= len;
+					lerp.f[3] /= len;
+				}
+
+				data.push_back(lerp);
+			}
+			else
+			{
+				Attr lerp = { {
+					l.f[0] * (1 - t) + r.f[0] * t,
+					l.f[1] * (1 - t) + r.f[1] * t,
+					l.f[2] * (1 - t) + r.f[2] * t,
+					l.f[3] * (1 - t) + r.f[3] * t,
+				} };
+
+				data.push_back(lerp);
+			}
+		}
+		else
+		{
+			data.push_back(cursor_data);
+		}
+	}
+}
+
 bool process(Scene& scene, const Settings& settings, std::string& json, std::string& bin)
 {
 	cgltf_data* data = scene.data;
@@ -1278,6 +1370,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 
 	size_t bytes_vertex = 0;
 	size_t bytes_index = 0;
+	size_t bytes_skin = 0;
 	size_t bytes_time = 0;
 	size_t bytes_keyframe = 0;
 
@@ -1594,6 +1687,8 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			bin.append(reinterpret_cast<const char*>(transform), sizeof(transform));
 		}
 
+		bytes_skin += bin.size() - bin_offset;
+
 		comma(json_buffer_views);
 		writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, skin.joints_count, 64, bin_offset, bin.size() - bin_offset, false);
 
@@ -1643,6 +1738,30 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			maxt = std::max(maxt, sampler.input->max[0]);
 		}
 
+		int frames = std::max(1, int((maxt - mint) * settings.anim_freq + 0.5f));
+
+		size_t time_view = view_offset;
+
+		{
+			std::vector<float> time(frames);
+
+			for (int j = 0; j < frames; ++j)
+				time[j] = mint + float(j) / settings.anim_freq;
+
+			size_t bin_offset = bin.size();
+			cgltf_component_type p = writeTimeStream(bin, time);
+
+			comma(json_buffer_views);
+			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, frames, 4, bin_offset, bin.size() - bin_offset, false);
+
+			bytes_time += bin.size() - bin_offset;
+
+			comma(json_accessors);
+			writeAccessor(json_accessors, view_offset, cgltf_type_scalar, p, false, frames);
+
+			view_offset++;
+		}
+
 		size_t track_offset = 0;
 
 		for (size_t j = 0; j < animation.channels_count; ++j)
@@ -1659,56 +1778,23 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			if (sampler.interpolation != cgltf_interpolation_type_linear)
 				continue;
 
-			size_t count = sampler.input->count;
+			std::vector<Attr> track;
+			resampleKeyframes(track, sampler, channel.target_path, frames, mint, settings.anim_freq);
 
-			std::vector<float> time;
-			std::vector<Attr> attr;
+			size_t bin_offset = bin.size();
+			std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> p = writeKeyframeStream(bin, channel.target_path, track);
 
-			for (size_t k = 0; k < count; ++k)
-			{
-				float t = 0;
-				cgltf_accessor_read_float(sampler.input, k, &t, 1);
+			comma(json_buffer_views);
+			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, track.size(), p.second, bin_offset, bin.size() - bin_offset, false);
 
-				Attr a = {};
-				cgltf_accessor_read_float(sampler.output, k, a.f, 4);
+			bytes_keyframe += bin.size() - bin_offset;
 
-				time.push_back(t);
-				attr.push_back(a);
-			}
-
-			size_t time_view = view_offset;
-
-			{
-				size_t bin_offset = bin.size();
-				cgltf_component_type p = writeTimeStream(bin, time);
-
-				comma(json_buffer_views);
-				writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, count, 4, bin_offset, bin.size() - bin_offset, false);
-
-				bytes_time += bin.size() - bin_offset;
-
-				comma(json_accessors);
-				writeAccessor(json_accessors, view_offset, cgltf_type_scalar, p, false, count);
-
-				view_offset++;
-			}
+			comma(json_accessors);
+			writeAccessor(json_accessors, view_offset, p.first.second, p.first.first, false, track.size());
 
 			size_t data_view = view_offset;
 
-			{
-				size_t bin_offset = bin.size();
-				std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> p = writeKeyframeStream(bin, channel.target_path, attr);
-
-				comma(json_buffer_views);
-				writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, count, p.second, bin_offset, bin.size() - bin_offset, false);
-
-				bytes_keyframe += bin.size() - bin_offset;
-
-				comma(json_accessors);
-				writeAccessor(json_accessors, view_offset, p.first.second, p.first.first, false, count);
-
-				view_offset++;
-			}
+			view_offset++;
 
 			comma(json_samplers);
 			json_samplers += "{\"input\":";
@@ -1790,8 +1876,8 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 	if (settings.verbose)
 	{
 		printf("output: %d nodes, %d meshes\n", int(node_offset), int(mesh_offset));
-		printf("output: JSON %d bytes, buffers %d bytes (vertex %d bytes, index %d bytes, time %d bytes, keyframe %d bytes)\n",
-		       int(json.size()), int(bin.size()), int(bytes_vertex), int(bytes_index), int(bytes_time), int(bytes_keyframe));
+		printf("output: JSON %d bytes, buffers %d bytes (vertex %d bytes, index %d bytes, skin %d bytes, time %d bytes, keyframe %d bytes)\n",
+		       int(json.size()), int(bin.size()), int(bytes_vertex), int(bytes_index), int(bytes_skin), int(bytes_time), int(bytes_keyframe));
 	}
 
 	return true;
