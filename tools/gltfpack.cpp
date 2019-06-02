@@ -836,7 +836,7 @@ std::string to_string(size_t v)
 std::string to_string(float v)
 {
 	char buf[512];
-	sprintf(buf, "%.7g", v);
+	sprintf(buf, "%.9g", v);
 	return buf;
 }
 
@@ -1216,6 +1216,40 @@ void writeAccessor(std::string& json, size_t view, cgltf_type type, cgltf_compon
 	}
 
 	json += "}";
+}
+
+bool isTrackConstant(const cgltf_animation_sampler& sampler, cgltf_animation_path_type type)
+{
+	const float tolerance_generic = 1e-4f;
+	const float tolerance_rotation = 1e-3f;
+
+	Attr first = {};
+	cgltf_accessor_read_float(sampler.output, 0, first.f, 4);
+
+	for (size_t i = 1; i < sampler.output->count; ++i)
+	{
+		Attr attr = {};
+		cgltf_accessor_read_float(sampler.output, i, attr.f, 4);
+
+		if (type == cgltf_animation_path_type_rotation)
+		{
+			float error = 1.f - fabsf(first.f[0] * attr.f[0] + first.f[1] * attr.f[1] + first.f[2] * attr.f[2] + first.f[3] * attr.f[3]);
+
+			if (error > tolerance_rotation)
+				return false;
+		}
+		else
+		{
+			float error = 0;
+			for (int k = 0; k < 4; ++k)
+				error += fabsf(attr.f[0] - first.f[0]);
+
+			if (error > tolerance_generic)
+				return false;
+		}
+	}
+
+	return true;
 }
 
 void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& sampler, cgltf_animation_path_type type, int frames, float mint, int freq)
@@ -1727,42 +1761,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		std::string json_samplers;
 		std::string json_channels;
 
-		float mint = 0, maxt = 0;
-
-		for (size_t j = 0; j < animation.channels_count; ++j)
-		{
-			const cgltf_animation_channel& channel = animation.channels[j];
-			const cgltf_animation_sampler& sampler = *channel.sampler;
-
-			mint = std::min(mint, sampler.input->min[0]);
-			maxt = std::max(maxt, sampler.input->max[0]);
-		}
-
-		int frames = std::max(1, int((maxt - mint) * settings.anim_freq + 0.5f));
-
-		size_t time_view = view_offset;
-
-		{
-			std::vector<float> time(frames);
-
-			for (int j = 0; j < frames; ++j)
-				time[j] = mint + float(j) / settings.anim_freq;
-
-			size_t bin_offset = bin.size();
-			cgltf_component_type p = writeTimeStream(bin, time);
-
-			comma(json_buffer_views);
-			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, frames, 4, bin_offset, bin.size() - bin_offset, false);
-
-			bytes_time += bin.size() - bin_offset;
-
-			comma(json_accessors);
-			writeAccessor(json_accessors, view_offset, cgltf_type_scalar, p, false, frames);
-
-			view_offset++;
-		}
-
-		size_t track_offset = 0;
+		std::vector<const cgltf_animation_channel*> tracks;
 
 		for (size_t j = 0; j < animation.channels_count; ++j)
 		{
@@ -1778,8 +1777,95 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			if (sampler.interpolation != cgltf_interpolation_type_linear)
 				continue;
 
+			tracks.push_back(&channel);
+		}
+
+		if (tracks.empty())
+			continue;
+
+		float mint = 0, maxt = 0;
+		bool needs_time = false;
+		bool needs_pose = false;
+
+		for (size_t j = 0; j < tracks.size(); ++j)
+		{
+			const cgltf_animation_channel& channel = *tracks[j];
+			const cgltf_animation_sampler& sampler = *channel.sampler;
+
+			mint = std::min(mint, sampler.input->min[0]);
+			maxt = std::max(maxt, sampler.input->max[0]);
+
+			bool tc = isTrackConstant(sampler, channel.target_path);
+
+			needs_time = needs_time || !tc;
+			needs_pose = needs_pose || tc;
+		}
+
+		int frames = std::max(1, int((maxt - mint) * settings.anim_freq + 0.5f));
+
+		size_t time_view = view_offset;
+
+		if (needs_time)
+		{
+			std::vector<float> time(frames);
+
+			for (int j = 0; j < frames; ++j)
+				time[j] = mint + float(j) / settings.anim_freq;
+
+			size_t bin_offset = bin.size();
+			cgltf_component_type p = writeTimeStream(bin, time);
+
+			comma(json_buffer_views);
+			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, frames, 4, bin_offset, bin.size() - bin_offset, false);
+
+			bytes_time += bin.size() - bin_offset;
+
+			comma(json_accessors);
+			writeAccessor(json_accessors, view_offset, cgltf_type_scalar, p, false, frames, &time.front(), &time.back());
+
+			view_offset++;
+		}
+
+		size_t pose_view = view_offset;
+
+		if (needs_pose)
+		{
+			std::vector<float> pose(1, mint);
+
+			size_t bin_offset = bin.size();
+			cgltf_component_type p = writeTimeStream(bin, pose);
+
+			comma(json_buffer_views);
+			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, 1, 4, bin_offset, bin.size() - bin_offset, false);
+
+			bytes_time += bin.size() - bin_offset;
+
+			comma(json_accessors);
+			writeAccessor(json_accessors, view_offset, cgltf_type_scalar, p, false, 1, &pose.front(), &pose.back());
+
+			view_offset++;
+		}
+
+		size_t track_offset = 0;
+
+		for (size_t j = 0; j < tracks.size(); ++j)
+		{
+			const cgltf_animation_channel& channel = *tracks[j];
+			const cgltf_animation_sampler& sampler = *channel.sampler;
+
+			bool tc = isTrackConstant(sampler, channel.target_path);
+
 			std::vector<Attr> track;
-			resampleKeyframes(track, sampler, channel.target_path, frames, mint, settings.anim_freq);
+			if (tc)
+			{
+				Attr pose = {};
+				cgltf_accessor_read_float(sampler.output, 0, pose.f, 4);
+				track.push_back(pose);
+			}
+			else
+			{
+				resampleKeyframes(track, sampler, channel.target_path, frames, mint, settings.anim_freq);
+			}
 
 			size_t bin_offset = bin.size();
 			std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> p = writeKeyframeStream(bin, channel.target_path, track);
@@ -1798,7 +1884,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 
 			comma(json_samplers);
 			json_samplers += "{\"input\":";
-			json_samplers += to_string(time_view);
+			json_samplers += to_string(tc ? pose_view : time_view);
 			json_samplers += ",\"output\":";
 			json_samplers += to_string(data_view);
 			json_samplers += "}";
