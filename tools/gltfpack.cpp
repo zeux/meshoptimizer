@@ -758,6 +758,45 @@ cgltf_component_type writeIndexStream(std::string& bin, const std::vector<unsign
 	return cgltf_component_type_r_32u;
 }
 
+cgltf_component_type writeTimeStream(std::string& bin, const std::vector<float>& data)
+{
+	for (size_t i = 0; i < data.size(); ++i)
+	{
+		float v[1] = { data[i] };
+		bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+	}
+
+	return cgltf_component_type_r_32f;
+}
+
+std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeKeyframeStream(std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data)
+{
+	if (type == cgltf_animation_path_type_rotation)
+	{
+		for (size_t i = 0; i < data.size(); ++i)
+		{
+			const Attr& a = data[i];
+
+			float v[4] = { a.f[0], a.f[1], a.f[2], a.f[3] };
+			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+		}
+
+		return std::make_pair(std::make_pair(cgltf_component_type_r_32f, cgltf_type_vec4), 16);
+	}
+	else
+	{
+		for (size_t i = 0; i < data.size(); ++i)
+		{
+			const Attr& a = data[i];
+
+			float v[3] = { a.f[0], a.f[1], a.f[2] };
+			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+		}
+
+		return std::make_pair(std::make_pair(cgltf_component_type_r_32f, cgltf_type_vec3), 12);
+	}
+}
+
 void compressVertexStream(std::string& bin, size_t offset, size_t count, size_t stride)
 {
 	std::vector<unsigned char> compressed(meshopt_encodeVertexBufferBound(count, stride));
@@ -865,6 +904,21 @@ const char* attributeType(cgltf_attribute_type type)
 		return "WEIGHTS";
 	default:
 		return "ATTRIBUTE";
+	}
+}
+
+const char* animationPath(cgltf_animation_path_type type)
+{
+	switch (type)
+	{
+	case cgltf_animation_path_type_translation:
+		return "\"translation\"";
+	case cgltf_animation_path_type_rotation:
+		return "\"rotation\"";
+	case cgltf_animation_path_type_scale:
+		return "\"scale\"";
+	default:
+		return "\"\"";
 	}
 }
 
@@ -1224,7 +1278,8 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 
 	size_t bytes_vertex = 0;
 	size_t bytes_index = 0;
-	size_t bytes_anim = 0;
+	size_t bytes_time = 0;
+	size_t bytes_keyframe = 0;
 
 	for (size_t i = 0; i < data->images_count; ++i)
 	{
@@ -1601,20 +1656,77 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			if (channel.target_path != cgltf_animation_path_type_translation && channel.target_path != cgltf_animation_path_type_rotation && channel.target_path != cgltf_animation_path_type_scale)
 				continue;
 
+			if (sampler.interpolation != cgltf_interpolation_type_linear)
+				continue;
+
 			size_t count = sampler.input->count;
+
+			std::vector<float> time;
+			std::vector<Attr> attr;
 
 			for (size_t k = 0; k < count; ++k)
 			{
-				float time = 0;
-				cgltf_accessor_read_float(sampler.input, k, &time, 1);
+				float t = 0;
+				cgltf_accessor_read_float(sampler.input, k, &t, 1);
 
-				Attr attr = {};
-				cgltf_accessor_read_float(sampler.output, k, attr.f, 4);
+				Attr a = {};
+				cgltf_accessor_read_float(sampler.output, k, a.f, 4);
 
-				// printf("time: %f; value: %f %f %f %f\n", time, attr.f[0], attr.f[1], attr.f[2], attr.f[3]);
+				time.push_back(t);
+				attr.push_back(a);
 			}
 
-			(void)track_offset;
+			size_t time_view = view_offset;
+
+			{
+				size_t bin_offset = bin.size();
+				cgltf_component_type p = writeTimeStream(bin, time);
+
+				comma(json_buffer_views);
+				writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, count, 4, bin_offset, bin.size() - bin_offset, false);
+
+				bytes_time += bin.size() - bin_offset;
+
+				comma(json_accessors);
+				writeAccessor(json_accessors, view_offset, cgltf_type_scalar, p, false, count);
+
+				view_offset++;
+			}
+
+			size_t data_view = view_offset;
+
+			{
+				size_t bin_offset = bin.size();
+				std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> p = writeKeyframeStream(bin, channel.target_path, attr);
+
+				comma(json_buffer_views);
+				writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, count, p.second, bin_offset, bin.size() - bin_offset, false);
+
+				bytes_keyframe += bin.size() - bin_offset;
+
+				comma(json_accessors);
+				writeAccessor(json_accessors, view_offset, p.first.second, p.first.first, false, count);
+
+				view_offset++;
+			}
+
+			comma(json_samplers);
+			json_samplers += "{\"input\":";
+			json_samplers += to_string(time_view);
+			json_samplers += ",\"output\":";
+			json_samplers += to_string(data_view);
+			json_samplers += "}";
+
+			comma(json_channels);
+			json_channels += "{\"sampler\":";
+			json_channels += to_string(track_offset);
+			json_channels += ",\"target\":{\"node\":";
+			json_channels += to_string(size_t(node_remap[channel.target_node - data->nodes]));
+			json_channels += ",\"path\":";
+			json_channels += animationPath(channel.target_path);
+			json_channels += "}}";
+
+			track_offset++;
 		}
 
 		comma(json_animations);
@@ -1678,8 +1790,8 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 	if (settings.verbose)
 	{
 		printf("output: %d nodes, %d meshes\n", int(node_offset), int(mesh_offset));
-		printf("output: JSON %d bytes, buffers %d bytes (vertex %d bytes, index %d bytes, animation %d bytes)\n",
-		       int(json.size()), int(bin.size()), int(bytes_vertex), int(bytes_index), int(bytes_anim));
+		printf("output: JSON %d bytes, buffers %d bytes (vertex %d bytes, index %d bytes, time %d bytes, keyframe %d bytes)\n",
+		       int(json.size()), int(bin.size()), int(bytes_vertex), int(bytes_index), int(bytes_time), int(bytes_keyframe));
 	}
 
 	return true;
