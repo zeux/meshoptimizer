@@ -76,6 +76,7 @@ struct Settings
 {
 	int pos_bits;
 	int uv_bits;
+	int anim_freq;
 	bool compress;
 	bool verbose;
 };
@@ -1116,6 +1117,44 @@ void writeBufferView(std::string& json, cgltf_buffer_view_type type, size_t coun
 	json += "}";
 }
 
+void writeAccessor(std::string& json, size_t view, cgltf_type type, cgltf_component_type component_type, bool normalized, size_t count, const float* min = 0, const float* max = 0)
+{
+	json += "{\"bufferView\":";
+	json += to_string(view);
+	json += ",\"componentType\":";
+	json += componentType(component_type);
+	json += ",\"count\":";
+	json += to_string(count);
+	json += ",\"type\":";
+	json += shapeType(type);
+
+	if (normalized)
+	{
+		json += ",\"normalized\":true";
+	}
+
+	if (min && max)
+	{
+		size_t num_components = cgltf_num_components(type);
+
+		json += ",\"min\":[";
+		for (size_t k = 0; k < num_components; ++k)
+		{
+			comma(json);
+			json += to_string(min[k]);
+		}
+		json += "],\"max\":[";
+		for (size_t k = 0; k < num_components; ++k)
+		{
+			comma(json);
+			json += to_string(max[k]);
+		}
+		json += "]";
+	}
+
+	json += "}";
+}
+
 bool process(Scene& scene, const Settings& settings, std::string& json, std::string& bin)
 {
 	cgltf_data* data = scene.data;
@@ -1244,42 +1283,24 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 
 			bytes_vertex += bin.size() - bin_offset;
 
-			comma(json_accessors);
-			json_accessors += "{\"bufferView\":";
-			json_accessors += to_string(view_offset);
-			json_accessors += ",\"componentType\":";
-			json_accessors += componentType(p.first.first);
-			json_accessors += ",\"count\":";
-			json_accessors += to_string(stream.data.size());
-			json_accessors += ",\"type\":";
-			json_accessors += shapeType(p.first.second);
+			bool normalized = (stream.type == cgltf_attribute_type_normal || stream.type == cgltf_attribute_type_tangent || stream.type == cgltf_attribute_type_color || stream.type == cgltf_attribute_type_weights);
 
+			comma(json_accessors);
 			if (stream.type == cgltf_attribute_type_position)
 			{
 				uint16_t min[3] = {};
 				uint16_t max[3] = {};
 				getPositionBounds(min, max, stream, qp);
 
-				json_accessors += ",\"min\":[";
-				json_accessors += to_string(size_t(min[0]));
-				json_accessors += ",";
-				json_accessors += to_string(size_t(min[1]));
-				json_accessors += ",";
-				json_accessors += to_string(size_t(min[2]));
-				json_accessors += "],\"max\":[";
-				json_accessors += to_string(size_t(max[0]));
-				json_accessors += ",";
-				json_accessors += to_string(size_t(max[1]));
-				json_accessors += ",";
-				json_accessors += to_string(size_t(max[2]));
-				json_accessors += "]";
-			}
-			else if (stream.type == cgltf_attribute_type_normal || stream.type == cgltf_attribute_type_tangent || stream.type == cgltf_attribute_type_color || stream.type == cgltf_attribute_type_weights)
-			{
-				json_accessors += ",\"normalized\":true";
-			}
+				float minf[3] = { float(min[0]), float(min[1]), float(min[2])};
+				float maxf[3] = { float(max[0]), float(max[1]), float(max[2])};
 
-			json_accessors += "}";
+				writeAccessor(json_accessors, view_offset, p.first.second, p.first.first, normalized, stream.data.size(), minf, maxf);
+			}
+			else
+			{
+				writeAccessor(json_accessors, view_offset, p.first.second, p.first.first, normalized, stream.data.size());
+			}
 
 			comma(json_attributes);
 			json_attributes += "\"";
@@ -1312,14 +1333,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			bytes_index += bin.size() - bin_offset;
 
 			comma(json_accessors);
-			json_accessors += "{\"bufferView\":";
-			json_accessors += to_string(view_offset);
-			json_accessors += ",\"componentType\":";
-			json_accessors += componentType(p);
-			json_accessors += ",\"count\":";
-			json_accessors += to_string(mesh.indices.size());
-			json_accessors += ",\"type\":\"SCALAR\"";
-			json_accessors += "}";
+			writeAccessor(json_accessors, view_offset, cgltf_type_scalar, p, false, mesh.indices.size());
 
 			index_view = view_offset;
 
@@ -1566,6 +1580,17 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		std::string json_samplers;
 		std::string json_channels;
 
+		float mint = 0, maxt = 0;
+
+		for (size_t j = 0; j < animation.channels_count; ++j)
+		{
+			const cgltf_animation_channel& channel = animation.channels[j];
+			const cgltf_animation_sampler& sampler = *channel.sampler;
+
+			mint = std::min(mint, sampler.input->min[0]);
+			maxt = std::max(maxt, sampler.input->max[0]);
+		}
+
 		size_t track_offset = 0;
 
 		for (size_t j = 0; j < animation.channels_count; ++j)
@@ -1673,6 +1698,7 @@ int main(int argc, char** argv)
 	Settings settings = {};
 	settings.pos_bits = 14;
 	settings.uv_bits = 12;
+	settings.anim_freq = 15;
 
 	const char* input = 0;
 	const char* output = 0;
@@ -1688,6 +1714,10 @@ int main(int argc, char** argv)
 		else if (strncmp(arg, "-vt", 3) == 0 && isdigit(arg[3]))
 		{
 			settings.uv_bits = atoi(arg + 3);
+		}
+		else if (strncmp(arg, "-af", 3) == 0 && isdigit(arg[3]))
+		{
+			settings.anim_freq = atoi(arg + 3);
 		}
 		else if (strcmp(arg, "-c") == 0)
 		{
@@ -1724,6 +1754,7 @@ int main(int argc, char** argv)
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "-vpN: use N-bit quantization for position (default: 14; N should be between 1 and 16)\n");
 		fprintf(stderr, "-vtN: use N-bit quantization for texture corodinates (default: 12; N should be between 1 and 16)\n");
+		fprintf(stderr, "-afN: resample animations at N Hz (default: 15)\n");
 		fprintf(stderr, "-c: produce compressed glb files\n");
 		fprintf(stderr, "-v: verbose output\n");
 
