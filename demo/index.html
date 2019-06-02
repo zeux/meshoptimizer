@@ -30,10 +30,10 @@
 		<a href="https://github.com/zeux/meshoptimizer" target="_blank" rel="noopener">meshoptimizer</a>
 		</div>
 
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/99/three.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/105/three.min.js"></script>
 
 		<script src="../js/decoder.js"></script>
-		<script src="../tools/OptMeshLoader.js"></script>
+		<script src="GLTFLoader.js"></script>
 
 		<script>
 			var container;
@@ -79,14 +79,9 @@
 				var onProgress = function (xhr) {};
 				var onError = function () {};
 
-				new THREE.OptMeshLoader()
-					.setDecoder(MeshoptDecoder)
-					.setMaterials(null) // materials can be fetched using MTLLoader
-					.setPath('./')
-					.load('pirate.optmesh', function (object)
-					{
-						scene.add(object);
-					}, onProgress, onError);
+				var loader = new THREE.GLTFLoader()
+				loader.setMeshoptDecoder(MeshoptDecoder)
+				loader.load('pirate.glb', function (gltf) { scene.add(gltf.scene); }, onProgress, onError);
 
 				renderer = new THREE.WebGLRenderer();
 				renderer.setPixelRatio(window.devicePixelRatio);
