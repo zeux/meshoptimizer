@@ -13,7 +13,7 @@
 // contains a work-in-progress loader - please note that the extension specification isn't ready yet so the format
 // will change!
 //
-// gltfpack currently supports materials, meshes, nodes, skinning and animations
+// gltfpack supports materials, meshes, nodes, skinning and animations
 // gltfpack doesn't support morph targets, lights and cameras
 
 #ifndef _CRT_SECURE_NO_WARNINGS
@@ -2068,17 +2068,25 @@ int main(int argc, char** argv)
 	{
 		const char* arg = argv[i];
 
-		if (strncmp(arg, "-vp", 3) == 0 && isdigit(arg[3]))
+		if (strcmp(arg, "-vp") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.pos_bits = atoi(arg + 3);
+			settings.pos_bits = atoi(argv[++i]);
 		}
-		else if (strncmp(arg, "-vt", 3) == 0 && isdigit(arg[3]))
+		else if (strcmp(arg, "-vt") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.uv_bits = atoi(arg + 3);
+			settings.uv_bits = atoi(argv[++i]);
 		}
-		else if (strncmp(arg, "-af", 3) == 0 && isdigit(arg[3]))
+		else if (strcmp(arg, "-af") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.anim_freq = atoi(arg + 3);
+			settings.anim_freq = atoi(argv[++i]);
+		}
+		else if (strcmp(arg, "-i") == 0 && i + 1 < argc && !input)
+		{
+			input = argv[++i];
+		}
+		else if (strcmp(arg, "-o") == 0 && i + 1 < argc && !output)
+		{
+			output = argv[++i];
 		}
 		else if (strcmp(arg, "-c") == 0)
 		{
@@ -2088,34 +2096,23 @@ int main(int argc, char** argv)
 		{
 			settings.verbose = true;
 		}
-		else if (arg[0] == '-')
-		{
-			fprintf(stderr, "Unrecognized option %s\n", arg);
-			return 1;
-		}
-		else if (!input)
-		{
-			input = arg;
-		}
-		else if (!output)
-		{
-			output = arg;
-		}
 		else
 		{
-			fprintf(stderr, "Too many filenames, expected two\n");
+			fprintf(stderr, "Unrecognized option %s\n", arg);
 			return 1;
 		}
 	}
 
 	if (!input || !output)
 	{
-		fprintf(stderr, "Usage: gltfpack [options] input output\n");
+		fprintf(stderr, "Usage: gltfpack [options] -i input -o output\n");
 		fprintf(stderr, "\n");
 		fprintf(stderr, "Options:\n");
-		fprintf(stderr, "-vpN: use N-bit quantization for position (default: 14; N should be between 1 and 16)\n");
-		fprintf(stderr, "-vtN: use N-bit quantization for texture corodinates (default: 12; N should be between 1 and 16)\n");
-		fprintf(stderr, "-afN: resample animations at N Hz (default: 30)\n");
+		fprintf(stderr, "-i file: input file to process, .obj/.gltf/.glb\n");
+		fprintf(stderr, "-o file: output file path, .gltf/.glb\n");
+		fprintf(stderr, "-vp N: use N-bit quantization for position (default: 14; N should be between 1 and 16)\n");
+		fprintf(stderr, "-vt N: use N-bit quantization for texture corodinates (default: 12; N should be between 1 and 16)\n");
+		fprintf(stderr, "-af N: resample animations at N Hz (default: 30)\n");
 		fprintf(stderr, "-c: produce compressed glb files\n");
 		fprintf(stderr, "-v: verbose output\n");
 

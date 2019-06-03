@@ -283,7 +283,7 @@ cmake --build . --config Release --target gltfpack
 You can then run the resulting command-line binary like this (run it without arguments for a list of options):
 
 ```
-gltfpack scene.gltf scene.glb
+gltfpack -i scene.gltf -o scene.glb
 ```
 
 gltfpack can produce two types of output files:
