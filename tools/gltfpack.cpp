@@ -1818,7 +1818,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			needs_pose = needs_pose || tc;
 		}
 
-		int frames = std::max(1, int((maxt - mint) * settings.anim_freq + 0.5f));
+		int frames = 1 + int(ceilf((maxt - mint) * settings.anim_freq));
 
 		size_t time_view = view_offset;
 
