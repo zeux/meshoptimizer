@@ -792,16 +792,37 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 	if (type == cgltf_animation_path_type_rotation)
 	{
 		// TODO: in theory, we can use short-normalized quaternion tracks although it looks like three.js and babylon.js have issues with those
-		for (size_t i = 0; i < data.size(); ++i)
+		if (0)
 		{
-			const Attr& a = data[i];
+			for (size_t i = 0; i < data.size(); ++i)
+			{
+				const Attr& a = data[i];
 
-			float v[4] = { a.f[0], a.f[1], a.f[2], a.f[3] };
-			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+				int16_t v[4] = {
+					int16_t(meshopt_quantizeSnorm(a.f[0], 16)),
+					int16_t(meshopt_quantizeSnorm(a.f[1], 16)),
+					int16_t(meshopt_quantizeSnorm(a.f[2], 16)),
+					int16_t(meshopt_quantizeSnorm(a.f[3], 16)),
+				};
+				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+			}
+
+			StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16, true, 8};
+			return format;
 		}
+		else
+		{
+			for (size_t i = 0; i < data.size(); ++i)
+			{
+				const Attr& a = data[i];
 
-		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_32f, false, 16};
-		return format;
+				float v[4] = { a.f[0], a.f[1], a.f[2], a.f[3] };
+				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+			}
+
+			StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_32f, false, 16};
+			return format;
+		}
 	}
 	else
 	{
@@ -1191,7 +1212,7 @@ void writeBufferView(std::string& json, cgltf_buffer_view_type type, size_t coun
 		json += ",\"extensions\":{";
 		json += "\"KHR_meshopt_compression\":{";
 		json += "\"mode\":";
-		json += (type == cgltf_buffer_view_type_vertices) ? "\"VERTEX\"" : "\"INDEX\"";
+		json += (type == cgltf_buffer_view_type_vertices) ? "\"VERTEX\"" : (type == cgltf_buffer_view_type_indices) ? "\"INDEX\"" : "\"GENERIC\"";
 		json += ",\"count\":";
 		json += to_string(count);
 		json += ",\"byteStride\":";
@@ -1886,8 +1907,14 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			size_t bin_offset = bin.size();
 			StreamFormat format = writeKeyframeStream(bin, channel.target_path, track);
 
+			// TODO: need to enable GENERIC support in GLTFLoader.js
+			bool compress = settings.compress && !tc && false;
+
+			if (compress)
+				compressVertexStream(bin, bin_offset, track.size(), format.stride);
+
 			comma(json_buffer_views);
-			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, track.size(), format.stride, bin_offset, bin.size() - bin_offset, false);
+			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, track.size(), format.stride, bin_offset, bin.size() - bin_offset, compress);
 
 			bytes_keyframe += bin.size() - bin_offset;
 
