@@ -255,7 +255,7 @@ Many algorithms allocate temporary memory to store intermediate results or accel
 meshopt_setAllocator(malloc, free);
 ```
 
-> Note that currently the library expects the allocation function to either throw in case of out-of-memory (in which case the exception will propagate to the caller) or abort, so technically the use of `malloc` above isn't safe.
+> Note that the library expects the allocation function to either throw in case of out-of-memory (in which case the exception will propagate to the caller) or abort, so technically the use of `malloc` above isn't safe. If you want to handle out-of-memory errors without using C++ exceptions, you can use `setjmp`/`longjmp` instead.
 
 Vertex and index decoders (`meshopt_decodeVertexBuffer` and `meshopt_decodeIndexBuffer`) do not allocate memory and work completely within the buffer space provided via arguments.
 
