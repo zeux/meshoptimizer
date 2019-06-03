@@ -157,7 +157,7 @@ MeshoptDecoder.decodeVertexBuffer(vertexBuffer, vertexCount, vertexSize, vertexD
 MeshoptDecoder.decodeIndexBuffer(indexBuffer, indexCount, indexSize, indexData);
 ```
 
-[Usage example](https://meshoptimizer.org/demo/) is available, with source in `demo/index.html`; this example uses .GLB files encoded using `gltfpack` (`tools/gltfpack.cpp`).
+[Usage example](https://meshoptimizer.org/demo/) is available, with source in `demo/index.html`; this example uses .GLB files encoded using `gltfpack`.
 
 ## Triangle strip conversion
 
@@ -260,6 +260,50 @@ meshopt_setAllocator(malloc, free);
 Vertex and index decoders (`meshopt_decodeVertexBuffer` and `meshopt_decodeIndexBuffer`) do not allocate memory and work completely within the buffer space provided via arguments.
 
 All functions have bounded stack usage that does not exceed 32 KB for any algorithms.
+
+## gltfpack
+
+meshoptimizer provides many algorithms that can be integrated into a content pipeline or a rendering engine to improve performance. Often integration requires some conscious choices for optimal results - should we optimize for overdraw or not? what should the vertex format be? do we use triangle lists or strips? However, in some cases optimality is not a requirement.
+
+For engines that want a relatively simple way to load meshes, and would like the meshes to perform reasonably well on target hardware and be reasonably fast to load, meshoptimizer provides a command-line tool, `gltfpack`. `gltfpack` can take an `.obj` or `.gltf` file as an input, and produce a `.gltf` or `.glb` file that is optimized for rendering performance and download size.
+
+To build gltfpack on Linux/macOS, you can use make:
+
+```
+make config=release gltfpack
+```
+
+On Windows (and other platforms), you can use CMake:
+
+```
+cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TOOLS=ON
+cmake --build . --config Release --target gltfpack
+```
+
+You can then run the resulting command-line binary like this (run it without arguments for a list of options):
+
+```
+gltfpack scene.gltf scene.glb
+```
+
+gltfpack can produce two types of output files:
+
+- Regular `.glb`/`.gltf` files that have been optimized for GPU consumption using various cache optimizers and quantization. These files can be loaded by standard GLTF loaders present in frameworks such as [three.js](https://threejs.org/) and [Babylon.js](https://www.babylonjs.com/).
+- Compressed `.glb`/`.gltf` files that use meshoptimizer codecs to reduce the download size further. Loading these files requires extending GLTF loaders with custom decompression support; `demo/GLTFLoader.js` contains a custom version of three.js loader that can be used to load them.
+
+> Note: files produced by gltfpack use `KHR_quantized_geometry` and `KHR_meshopt_compression` pseudo-extensions; both of these have *not* been standardized but eventually - hopefully! - will be.
+
+When using compressed files, `js/meshopt_decoder.js` needs to be loaded to provide the WebAssembly decoder module like this:
+
+```
+<script src="js/meshopt_decoder.js"></script>
+
+...
+
+var loader = new THREE.GLTFLoader();
+loader.setMeshoptDecoder(MeshoptDecoder);
+loader.load('pirate.glb', function (gltf) { scene.add(gltf.scene); });
+```
 
 ## License
 
