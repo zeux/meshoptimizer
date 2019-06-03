@@ -76,6 +76,7 @@ struct Settings
 {
 	int pos_bits;
 	int uv_bits;
+	int anim_freq;
 	bool compress;
 	bool verbose;
 };
@@ -89,6 +90,14 @@ struct QuantizationParams
 	float uv_offset[2];
 	float uv_scale[2];
 	int uv_bits;
+};
+
+struct StreamFormat
+{
+	cgltf_type type;
+	cgltf_component_type component_type;
+	bool normalized;
+	size_t stride;
 };
 
 const char* getError(cgltf_result result)
@@ -575,7 +584,7 @@ void renormalizeWeights(uint8_t (&w)[4])
 	w[max] += 255 - sum;
 }
 
-std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream(std::string& bin, const Stream& stream, const QuantizationParams& params)
+StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationParams& params)
 {
 	if (stream.type == cgltf_attribute_type_position)
 	{
@@ -593,7 +602,8 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(std::make_pair(cgltf_component_type_r_16u, cgltf_type_vec3), 8);
+		StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_16u, false, 8};
+		return format;
 	}
 	else if (stream.type == cgltf_attribute_type_texcoord)
 	{
@@ -613,7 +623,8 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(std::make_pair(cgltf_component_type_r_16u, cgltf_type_vec2), 4);
+		StreamFormat format = {cgltf_type_vec2, cgltf_component_type_r_16u, false, 4};
+		return format;
 	}
 	else if (stream.type == cgltf_attribute_type_normal || stream.type == cgltf_attribute_type_tangent)
 	{
@@ -632,7 +643,8 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(std::make_pair(cgltf_component_type_r_8, cgltf_type_vec3), 4);
+		StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_8, true, 4};
+		return format;
 	}
 	else if (stream.type == cgltf_attribute_type_tangent)
 	{
@@ -651,7 +663,8 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(std::make_pair(cgltf_component_type_r_8, cgltf_type_vec4), 4);
+		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_8, true, 4};
+		return format;
 	}
 	else if (stream.type == cgltf_attribute_type_color)
 	{
@@ -667,7 +680,8 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(std::make_pair(cgltf_component_type_r_8u, cgltf_type_vec4), 4);
+		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_8u, true, 4};
+		return format;
 	}
 	else if (stream.type == cgltf_attribute_type_weights)
 	{
@@ -686,7 +700,8 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(std::make_pair(cgltf_component_type_r_8u, cgltf_type_vec4), 4);
+		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_8u, true, 4};
+		return format;
 	}
 	else if (stream.type == cgltf_attribute_type_joints)
 	{
@@ -702,7 +717,8 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(std::make_pair(cgltf_component_type_r_8u, cgltf_type_vec4), 4);
+		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_8u, false, 4};
+		return format;
 	}
 	else
 	{
@@ -718,7 +734,8 @@ std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> writeVertexStream
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		return std::make_pair(std::make_pair(cgltf_component_type_r_32f, cgltf_type_vec4), 16);
+		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_32f, false, 16};
+		return format;
 	}
 }
 
@@ -746,7 +763,7 @@ void getPositionBounds(uint16_t min[3], uint16_t max[3], const Stream& stream, c
 	}
 }
 
-cgltf_component_type writeIndexStream(std::string& bin, const std::vector<unsigned int>& stream)
+StreamFormat writeIndexStream(std::string& bin, const std::vector<unsigned int>& stream)
 {
 	for (size_t i = 0; i < stream.size(); ++i)
 	{
@@ -754,7 +771,51 @@ cgltf_component_type writeIndexStream(std::string& bin, const std::vector<unsign
 		bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 	}
 
-	return cgltf_component_type_r_32u;
+	StreamFormat format = {cgltf_type_scalar, cgltf_component_type_r_32u, false, 4};
+	return format;
+}
+
+StreamFormat writeTimeStream(std::string& bin, const std::vector<float>& data)
+{
+	for (size_t i = 0; i < data.size(); ++i)
+	{
+		float v[1] = { data[i] };
+		bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+	}
+
+	StreamFormat format = {cgltf_type_scalar, cgltf_component_type_r_32f, false, 4};
+	return format;
+}
+
+StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data)
+{
+	if (type == cgltf_animation_path_type_rotation)
+	{
+		// TODO: in theory, we can use short-normalized quaternion tracks although it looks like three.js and babylon.js have issues with those
+		for (size_t i = 0; i < data.size(); ++i)
+		{
+			const Attr& a = data[i];
+
+			float v[4] = { a.f[0], a.f[1], a.f[2], a.f[3] };
+			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+		}
+
+		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_32f, false, 16};
+		return format;
+	}
+	else
+	{
+		for (size_t i = 0; i < data.size(); ++i)
+		{
+			const Attr& a = data[i];
+
+			float v[3] = { a.f[0], a.f[1], a.f[2] };
+			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+		}
+
+		StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_32f, false, 12};
+		return format;
+	}
 }
 
 void compressVertexStream(std::string& bin, size_t offset, size_t count, size_t stride)
@@ -796,7 +857,7 @@ std::string to_string(size_t v)
 std::string to_string(float v)
 {
 	char buf[512];
-	sprintf(buf, "%.7g", v);
+	sprintf(buf, "%.9g", v);
 	return buf;
 }
 
@@ -833,6 +894,12 @@ const char* shapeType(cgltf_type type)
 		return "\"VEC3\"";
 	case cgltf_type_vec4:
 		return "\"VEC4\"";
+	case cgltf_type_mat2:
+		return "\"MAT2\"";
+	case cgltf_type_mat3:
+		return "\"MAT3\"";
+	case cgltf_type_mat4:
+		return "\"MAT4\"";
 	default:
 		return "\"\"";
 	}
@@ -858,6 +925,21 @@ const char* attributeType(cgltf_attribute_type type)
 		return "WEIGHTS";
 	default:
 		return "ATTRIBUTE";
+	}
+}
+
+const char* animationPath(cgltf_animation_path_type type)
+{
+	switch (type)
+	{
+	case cgltf_animation_path_type_translation:
+		return "\"translation\"";
+	case cgltf_animation_path_type_rotation:
+		return "\"rotation\"";
+	case cgltf_animation_path_type_scale:
+		return "\"scale\"";
+	default:
+		return "\"\"";
 	}
 }
 
@@ -1099,8 +1181,11 @@ void writeBufferView(std::string& json, cgltf_buffer_view_type type, size_t coun
 		json += ",\"byteStride\":";
 		json += to_string(stride);
 	}
-	json += ",\"target\":";
-	json += (type == cgltf_buffer_view_type_vertices) ? "34962" : "34963";
+	if (type == cgltf_buffer_view_type_vertices || type == cgltf_buffer_view_type_indices)
+	{
+		json += ",\"target\":";
+		json += (type == cgltf_buffer_view_type_vertices) ? "34962" : "34963";
+	}
 	if (compressed)
 	{
 		json += ",\"extensions\":{";
@@ -1116,13 +1201,178 @@ void writeBufferView(std::string& json, cgltf_buffer_view_type type, size_t coun
 	json += "}";
 }
 
+void writeAccessor(std::string& json, size_t view, cgltf_type type, cgltf_component_type component_type, bool normalized, size_t count, const float* min = 0, const float* max = 0)
+{
+	json += "{\"bufferView\":";
+	json += to_string(view);
+	json += ",\"componentType\":";
+	json += componentType(component_type);
+	json += ",\"count\":";
+	json += to_string(count);
+	json += ",\"type\":";
+	json += shapeType(type);
+
+	if (normalized)
+	{
+		json += ",\"normalized\":true";
+	}
+
+	if (min && max)
+	{
+		size_t num_components = cgltf_num_components(type);
+
+		json += ",\"min\":[";
+		for (size_t k = 0; k < num_components; ++k)
+		{
+			comma(json);
+			json += to_string(min[k]);
+		}
+		json += "],\"max\":[";
+		for (size_t k = 0; k < num_components; ++k)
+		{
+			comma(json);
+			json += to_string(max[k]);
+		}
+		json += "]";
+	}
+
+	json += "}";
+}
+
+bool isTrackConstant(const cgltf_animation_sampler& sampler, cgltf_animation_path_type type)
+{
+	const float tolerance_generic = 1e-4f;
+	const float tolerance_rotation = 1e-3f;
+
+	Attr first = {};
+	cgltf_accessor_read_float(sampler.output, 0, first.f, 4);
+
+	for (size_t i = 1; i < sampler.output->count; ++i)
+	{
+		Attr attr = {};
+		cgltf_accessor_read_float(sampler.output, i, attr.f, 4);
+
+		if (type == cgltf_animation_path_type_rotation)
+		{
+			float error = 1.f - fabsf(first.f[0] * attr.f[0] + first.f[1] * attr.f[1] + first.f[2] * attr.f[2] + first.f[3] * attr.f[3]);
+
+			if (error > tolerance_rotation)
+				return false;
+		}
+		else
+		{
+			float error = 0;
+			for (int k = 0; k < 4; ++k)
+				error += fabsf(attr.f[0] - first.f[0]);
+
+			if (error > tolerance_generic)
+				return false;
+		}
+	}
+
+	return true;
+}
+
+void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& sampler, cgltf_animation_path_type type, int frames, float mint, int freq)
+{
+	assert(sampler.interpolation == cgltf_interpolation_type_linear);
+
+	size_t cursor = 0;
+
+	for (int i = 0; i < frames; ++i)
+	{
+		float time = mint + float(i) / freq;
+
+		while (cursor + 1 < sampler.input->count)
+		{
+			float next_time = 0;
+			cgltf_accessor_read_float(sampler.input, cursor + 1, &next_time, 1);
+
+			if (next_time > time)
+				break;
+
+			cursor++;
+		}
+
+		float cursor_time = 0;
+		Attr cursor_data = {};
+		cgltf_accessor_read_float(sampler.input, cursor, &cursor_time, 1);
+		cgltf_accessor_read_float(sampler.output, cursor, cursor_data.f, 4);
+
+		if (cursor + 1 < sampler.input->count)
+		{
+			float next_time = 0;
+			Attr next_data = {};
+			cgltf_accessor_read_float(sampler.input, cursor + 1, &next_time, 1);
+			cgltf_accessor_read_float(sampler.output, cursor + 1, next_data.f, 4);
+
+			float inv_range = (cursor_time < next_time) ? 1.f / (next_time - cursor_time) : 0.f;
+			float t = std::max(0.f, std::min(1.f, (time - cursor_time) * inv_range));
+
+			const Attr& l = cursor_data;
+			const Attr& r = next_data;
+
+			if (type == cgltf_animation_path_type_rotation)
+			{
+				// Approximating slerp, https://zeux.io/2015/07/23/approximating-slerp/
+				// We also handle quaternion double-cover
+			    float ca = l.f[0] * r.f[0] + l.f[1] * r.f[1] + l.f[2] * r.f[2] + l.f[3] * r.f[3];
+
+			    float d = fabsf(ca);
+			    float A = 1.0904f + d * (-3.2452f + d * (3.55645f - d * 1.43519f));
+			    float B = 0.848013f + d * (-1.06021f + d * 0.215638f);
+			    float k = A * (t - 0.5f) * (t - 0.5f) + B;
+			    float ot = t + t * (t - 0.5f) * (t - 1) * k;
+
+			    float t0 = 1 - ot;
+			    float t1 = ca > 0 ? ot : -ot;
+
+				Attr lerp = { {
+					l.f[0] * t0 + r.f[0] * t1,
+					l.f[1] * t0 + r.f[1] * t1,
+					l.f[2] * t0 + r.f[2] * t1,
+					l.f[3] * t0 + r.f[3] * t1,
+				} };
+
+				float len = sqrtf(lerp.f[0] * lerp.f[0] + lerp.f[1] * lerp.f[1] + lerp.f[2] * lerp.f[2] + lerp.f[3] * lerp.f[3]);
+
+				if (len > 0.f)
+				{
+					lerp.f[0] /= len;
+					lerp.f[1] /= len;
+					lerp.f[2] /= len;
+					lerp.f[3] /= len;
+				}
+
+				data.push_back(lerp);
+			}
+			else
+			{
+				Attr lerp = { {
+					l.f[0] * (1 - t) + r.f[0] * t,
+					l.f[1] * (1 - t) + r.f[1] * t,
+					l.f[2] * (1 - t) + r.f[2] * t,
+					l.f[3] * (1 - t) + r.f[3] * t,
+				} };
+
+				data.push_back(lerp);
+			}
+		}
+		else
+		{
+			data.push_back(cursor_data);
+		}
+	}
+}
+
 bool process(Scene& scene, const Settings& settings, std::string& json, std::string& bin)
 {
 	cgltf_data* data = scene.data;
 
 	if (settings.verbose)
 	{
-		printf("input: %d nodes, %d meshes, %d skins\n", int(scene.data->nodes_count), int(scene.data->meshes_count), int(scene.data->skins_count));
+		printf("input: %d nodes, %d meshes, %d skins, %d animations\n",
+		       int(data->nodes_count), int(data->meshes_count), int(data->skins_count), int(data->animations_count));
 	}
 
 	mergeMeshes(scene.meshes);
@@ -1165,6 +1415,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 	std::string json_nodes;
 	std::string json_skins;
 	std::string json_roots;
+	std::string json_animations;
 
 	bool has_pbr_specular_glossiness = false;
 
@@ -1172,9 +1423,15 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 	size_t node_offset = 0;
 	size_t mesh_offset = 0;
 
-	for (size_t i = 0; i < scene.data->images_count; ++i)
+	size_t bytes_vertex = 0;
+	size_t bytes_index = 0;
+	size_t bytes_skin = 0;
+	size_t bytes_time = 0;
+	size_t bytes_keyframe = 0;
+
+	for (size_t i = 0; i < data->images_count; ++i)
 	{
-		const cgltf_image& image = scene.data->images[i];
+		const cgltf_image& image = data->images[i];
 
 		comma(json_images);
 		json_images += "{\"uri\":\"";
@@ -1182,27 +1439,27 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		json_images += "\"}";
 	}
 
-	for (size_t i = 0; i < scene.data->textures_count; ++i)
+	for (size_t i = 0; i < data->textures_count; ++i)
 	{
-		const cgltf_texture& texture = scene.data->textures[i];
+		const cgltf_texture& texture = data->textures[i];
 
 		comma(json_textures);
 		json_textures += "{";
 		if (texture.image)
 		{
 			json_textures += "\"source\":";
-			json_textures += to_string(size_t(texture.image - scene.data->images));
+			json_textures += to_string(size_t(texture.image - data->images));
 		}
 		json_textures += "}";
 	}
 
-	for (size_t i = 0; i < scene.data->materials_count; ++i)
+	for (size_t i = 0; i < data->materials_count; ++i)
 	{
-		const cgltf_material& material = scene.data->materials[i];
+		const cgltf_material& material = data->materials[i];
 
 		comma(json_materials);
 		json_materials += "{";
-		writeMaterialInfo(json_materials, scene.data, material, qp);
+		writeMaterialInfo(json_materials, data, material, qp);
 		json_materials += "}";
 
 		has_pbr_specular_glossiness = has_pbr_specular_glossiness || material.has_pbr_specular_glossiness;
@@ -1228,50 +1485,32 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 				continue;
 
 			size_t bin_offset = bin.size();
-			std::pair<std::pair<cgltf_component_type, cgltf_type>, size_t> p = writeVertexStream(bin, stream, qp);
+			StreamFormat format = writeVertexStream(bin, stream, qp);
 
 			if (settings.compress)
-				compressVertexStream(bin, bin_offset, stream.data.size(), p.second);
+				compressVertexStream(bin, bin_offset, stream.data.size(), format.stride);
 
 			comma(json_buffer_views);
-			writeBufferView(json_buffer_views, cgltf_buffer_view_type_vertices, stream.data.size(), p.second, bin_offset, bin.size() - bin_offset, settings.compress);
+			writeBufferView(json_buffer_views, cgltf_buffer_view_type_vertices, stream.data.size(), format.stride, bin_offset, bin.size() - bin_offset, settings.compress);
+
+			bytes_vertex += bin.size() - bin_offset;
 
 			comma(json_accessors);
-			json_accessors += "{\"bufferView\":";
-			json_accessors += to_string(view_offset);
-			json_accessors += ",\"componentType\":";
-			json_accessors += componentType(p.first.first);
-			json_accessors += ",\"count\":";
-			json_accessors += to_string(stream.data.size());
-			json_accessors += ",\"type\":";
-			json_accessors += shapeType(p.first.second);
-
 			if (stream.type == cgltf_attribute_type_position)
 			{
 				uint16_t min[3] = {};
 				uint16_t max[3] = {};
 				getPositionBounds(min, max, stream, qp);
 
-				json_accessors += ",\"min\":[";
-				json_accessors += to_string(size_t(min[0]));
-				json_accessors += ",";
-				json_accessors += to_string(size_t(min[1]));
-				json_accessors += ",";
-				json_accessors += to_string(size_t(min[2]));
-				json_accessors += "],\"max\":[";
-				json_accessors += to_string(size_t(max[0]));
-				json_accessors += ",";
-				json_accessors += to_string(size_t(max[1]));
-				json_accessors += ",";
-				json_accessors += to_string(size_t(max[2]));
-				json_accessors += "]";
-			}
-			else if (stream.type == cgltf_attribute_type_normal || stream.type == cgltf_attribute_type_tangent || stream.type == cgltf_attribute_type_color || stream.type == cgltf_attribute_type_weights)
-			{
-				json_accessors += ",\"normalized\":true";
-			}
+				float minf[3] = { float(min[0]), float(min[1]), float(min[2])};
+				float maxf[3] = { float(max[0]), float(max[1]), float(max[2])};
 
-			json_accessors += "}";
+				writeAccessor(json_accessors, view_offset, format.type, format.component_type, format.normalized, stream.data.size(), minf, maxf);
+			}
+			else
+			{
+				writeAccessor(json_accessors, view_offset, format.type, format.component_type, format.normalized, stream.data.size());
+			}
 
 			comma(json_attributes);
 			json_attributes += "\"";
@@ -1291,25 +1530,18 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 
 		{
 			size_t bin_offset = bin.size();
-			cgltf_component_type p = writeIndexStream(bin, mesh.indices);
-
-			size_t index_size = (p == cgltf_component_type_r_16u) ? 2 : 4;
+			StreamFormat format = writeIndexStream(bin, mesh.indices);
 
 			if (settings.compress)
-				compressIndexStream(bin, bin_offset, mesh.indices.size(), index_size);
+				compressIndexStream(bin, bin_offset, mesh.indices.size(), format.stride);
 
 			comma(json_buffer_views);
-			writeBufferView(json_buffer_views, cgltf_buffer_view_type_indices, mesh.indices.size(), index_size, bin_offset, bin.size() - bin_offset, settings.compress);
+			writeBufferView(json_buffer_views, cgltf_buffer_view_type_indices, mesh.indices.size(), format.stride, bin_offset, bin.size() - bin_offset, settings.compress);
+
+			bytes_index += bin.size() - bin_offset;
 
 			comma(json_accessors);
-			json_accessors += "{\"bufferView\":";
-			json_accessors += to_string(view_offset);
-			json_accessors += ",\"componentType\":";
-			json_accessors += componentType(p);
-			json_accessors += ",\"count\":";
-			json_accessors += to_string(mesh.indices.size());
-			json_accessors += ",\"type\":\"SCALAR\"";
-			json_accessors += "}";
+			writeAccessor(json_accessors, view_offset, format.type, format.component_type, format.normalized, mesh.indices.size());
 
 			index_view = view_offset;
 
@@ -1324,7 +1556,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		if (mesh.material)
 		{
 			json_meshes += ",\"material\":";
-			json_meshes += to_string(size_t(mesh.material - scene.data->materials));
+			json_meshes += to_string(size_t(mesh.material - data->materials));
 		}
 		json_meshes += "}]}";
 
@@ -1506,23 +1738,13 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			bin.append(reinterpret_cast<const char*>(transform), sizeof(transform));
 		}
 
+		bytes_skin += bin.size() - bin_offset;
+
 		comma(json_buffer_views);
-		json_buffer_views += "{\"buffer\":0";
-		json_buffer_views += ",\"byteLength\":";
-		json_buffer_views += to_string(bin.size() - bin_offset);
-		json_buffer_views += ",\"byteOffset\":";
-		json_buffer_views += to_string(bin_offset);
-		json_buffer_views += "}";
+		writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, skin.joints_count, 64, bin_offset, bin.size() - bin_offset, false);
 
 		comma(json_accessors);
-		json_accessors += "{\"bufferView\":";
-		json_accessors += to_string(view_offset);
-		json_accessors += ",\"componentType\":";
-		json_accessors += componentType(cgltf_component_type_r_32f);
-		json_accessors += ",\"count\":";
-		json_accessors += to_string(skin.joints_count);
-		json_accessors += ",\"type\":\"MAT4\"";
-		json_accessors += "}";
+		writeAccessor(json_accessors, view_offset, cgltf_type_mat4, cgltf_component_type_r_32f, false, skin.joints_count);
 
 		size_t matrix_view = view_offset;
 
@@ -1549,6 +1771,168 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		json_skins += "}";
 	}
 
+	for (size_t i = 0; i < data->animations_count; ++i)
+	{
+		const cgltf_animation& animation = data->animations[i];
+
+		std::string json_samplers;
+		std::string json_channels;
+
+		std::vector<const cgltf_animation_channel*> tracks;
+
+		for (size_t j = 0; j < animation.channels_count; ++j)
+		{
+			const cgltf_animation_channel& channel = animation.channels[j];
+			const cgltf_animation_sampler& sampler = *channel.sampler;
+
+			if (!channel.target_node || !node_keep[channel.target_node - data->nodes])
+				continue;
+
+			if (channel.target_path != cgltf_animation_path_type_translation && channel.target_path != cgltf_animation_path_type_rotation && channel.target_path != cgltf_animation_path_type_scale)
+				continue;
+
+			if (sampler.interpolation != cgltf_interpolation_type_linear)
+				continue;
+
+			tracks.push_back(&channel);
+		}
+
+		if (tracks.empty())
+			continue;
+
+		float mint = 0, maxt = 0;
+		bool needs_time = false;
+		bool needs_pose = false;
+
+		for (size_t j = 0; j < tracks.size(); ++j)
+		{
+			const cgltf_animation_channel& channel = *tracks[j];
+			const cgltf_animation_sampler& sampler = *channel.sampler;
+
+			mint = std::min(mint, sampler.input->min[0]);
+			maxt = std::max(maxt, sampler.input->max[0]);
+
+			bool tc = isTrackConstant(sampler, channel.target_path);
+
+			needs_time = needs_time || !tc;
+			needs_pose = needs_pose || tc;
+		}
+
+		int frames = std::max(1, int((maxt - mint) * settings.anim_freq + 0.5f));
+
+		size_t time_view = view_offset;
+
+		if (needs_time)
+		{
+			std::vector<float> time(frames);
+
+			for (int j = 0; j < frames; ++j)
+				time[j] = mint + float(j) / settings.anim_freq;
+
+			size_t bin_offset = bin.size();
+			StreamFormat format = writeTimeStream(bin, time);
+
+			comma(json_buffer_views);
+			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, frames, format.stride, bin_offset, bin.size() - bin_offset, false);
+
+			bytes_time += bin.size() - bin_offset;
+
+			comma(json_accessors);
+			writeAccessor(json_accessors, view_offset, cgltf_type_scalar, format.component_type, format.normalized, frames, &time.front(), &time.back());
+
+			view_offset++;
+		}
+
+		size_t pose_view = view_offset;
+
+		if (needs_pose)
+		{
+			std::vector<float> pose(1, mint);
+
+			size_t bin_offset = bin.size();
+			StreamFormat format = writeTimeStream(bin, pose);
+
+			comma(json_buffer_views);
+			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, 1, format.stride, bin_offset, bin.size() - bin_offset, false);
+
+			bytes_time += bin.size() - bin_offset;
+
+			comma(json_accessors);
+			writeAccessor(json_accessors, view_offset, cgltf_type_scalar, format.component_type, format.normalized, 1, &pose.front(), &pose.back());
+
+			view_offset++;
+		}
+
+		size_t track_offset = 0;
+
+		for (size_t j = 0; j < tracks.size(); ++j)
+		{
+			const cgltf_animation_channel& channel = *tracks[j];
+			const cgltf_animation_sampler& sampler = *channel.sampler;
+
+			bool tc = isTrackConstant(sampler, channel.target_path);
+
+			std::vector<Attr> track;
+			if (tc)
+			{
+				Attr pose = {};
+				cgltf_accessor_read_float(sampler.output, 0, pose.f, 4);
+				track.push_back(pose);
+			}
+			else
+			{
+				resampleKeyframes(track, sampler, channel.target_path, frames, mint, settings.anim_freq);
+			}
+
+			size_t bin_offset = bin.size();
+			StreamFormat format = writeKeyframeStream(bin, channel.target_path, track);
+
+			comma(json_buffer_views);
+			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, track.size(), format.stride, bin_offset, bin.size() - bin_offset, false);
+
+			bytes_keyframe += bin.size() - bin_offset;
+
+			comma(json_accessors);
+			writeAccessor(json_accessors, view_offset, format.type, format.component_type, format.normalized, track.size());
+
+			size_t data_view = view_offset;
+
+			view_offset++;
+
+			comma(json_samplers);
+			json_samplers += "{\"input\":";
+			json_samplers += to_string(tc ? pose_view : time_view);
+			json_samplers += ",\"output\":";
+			json_samplers += to_string(data_view);
+			json_samplers += "}";
+
+			comma(json_channels);
+			json_channels += "{\"sampler\":";
+			json_channels += to_string(track_offset);
+			json_channels += ",\"target\":{\"node\":";
+			json_channels += to_string(size_t(node_remap[channel.target_node - data->nodes]));
+			json_channels += ",\"path\":";
+			json_channels += animationPath(channel.target_path);
+			json_channels += "}}";
+
+			track_offset++;
+		}
+
+		comma(json_animations);
+		json_animations += "{";
+		if (animation.name)
+		{
+			json_animations += "\"name\":\"";
+			json_animations += animation.name;
+			json_animations += "\",";
+		}
+		json_animations += "\"samplers\":[";
+		json_animations += json_samplers;
+		json_animations += "],\"channels\":[";
+		json_animations += json_channels;
+		json_animations += "]}";
+	}
+
 	json += "\"bufferViews\":[";
 	json += json_buffer_views;
 	json += "],\"accessors\":[";
@@ -1561,6 +1945,10 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 	json += json_materials;
 	json += "],\"meshes\":[";
 	json += json_meshes;
+	json += "],\"skins\":[";
+	json += json_skins;
+	json += "],\"animations\":[";
+	json += json_animations;
 	json += "],\"nodes\":[";
 	json += json_nodes;
 	json += "],\"scenes\":[";
@@ -1568,9 +1956,6 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 	json += json_roots;
 	json += "]}";
 	json += "],\"scene\":0";
-	json += ",\"skins\":[";
-	json += json_skins;
-	json += "]";
 	json += ",\"asset\":{\"version\":\"2.0\", \"generator\":\"gltfpack\"}";
 	json += ",\"extensionsUsed\":[";
 	json += "\"KHR_quantized_geometry\"";
@@ -1594,7 +1979,8 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 	if (settings.verbose)
 	{
 		printf("output: %d nodes, %d meshes\n", int(node_offset), int(mesh_offset));
-		printf("output: JSON %d bytes, buffers %d bytes\n", int(json.size()), int(bin.size()));
+		printf("output: JSON %d bytes, buffers %d bytes (vertex %d bytes, index %d bytes, skin %d bytes, time %d bytes, keyframe %d bytes)\n",
+		       int(json.size()), int(bin.size()), int(bytes_vertex), int(bytes_index), int(bytes_skin), int(bytes_time), int(bytes_keyframe));
 	}
 
 	return true;
@@ -1610,6 +1996,7 @@ int main(int argc, char** argv)
 	Settings settings = {};
 	settings.pos_bits = 14;
 	settings.uv_bits = 12;
+	settings.anim_freq = 15;
 
 	const char* input = 0;
 	const char* output = 0;
@@ -1625,6 +2012,10 @@ int main(int argc, char** argv)
 		else if (strncmp(arg, "-vt", 3) == 0 && isdigit(arg[3]))
 		{
 			settings.uv_bits = atoi(arg + 3);
+		}
+		else if (strncmp(arg, "-af", 3) == 0 && isdigit(arg[3]))
+		{
+			settings.anim_freq = atoi(arg + 3);
 		}
 		else if (strcmp(arg, "-c") == 0)
 		{
@@ -1661,6 +2052,7 @@ int main(int argc, char** argv)
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "-vpN: use N-bit quantization for position (default: 14; N should be between 1 and 16)\n");
 		fprintf(stderr, "-vtN: use N-bit quantization for texture corodinates (default: 12; N should be between 1 and 16)\n");
+		fprintf(stderr, "-afN: resample animations at N Hz (default: 15)\n");
 		fprintf(stderr, "-c: produce compressed glb files\n");
 		fprintf(stderr, "-v: verbose output\n");
 
