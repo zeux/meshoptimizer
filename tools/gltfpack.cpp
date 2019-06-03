@@ -9,12 +9,12 @@
 // To load regular glb files, it should be sufficient to use a standard glTF loader (although note that these files
 // use quantized position/texture coordinates that are technically invalid per spec; THREE.js and BabylonJS support
 // these files out of the box).
-// To load packed glb files, meshoptimizer vertex decoder needs to be integrated into the loader; demo/GLPLoader.js
+// To load packed glb files, meshoptimizer vertex decoder needs to be integrated into the loader; demo/GLTFLoader.js
 // contains a work-in-progress loader - please note that the extension specification isn't ready yet so the format
 // will change!
 //
-// gltfpack currently supports materials, meshes, nodes and skinning data
-// gltfpack doesn't support morph targets, animation data, lights and cameras
+// gltfpack currently supports materials, meshes, nodes, skinning and animations
+// gltfpack doesn't support morph targets, lights and cameras
 
 #ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
@@ -779,7 +779,7 @@ StreamFormat writeTimeStream(std::string& bin, const std::vector<float>& data)
 {
 	for (size_t i = 0; i < data.size(); ++i)
 	{
-		float v[1] = { data[i] };
+		float v[1] = {data[i]};
 		bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 	}
 
@@ -799,10 +799,10 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 				const Attr& a = data[i];
 
 				int16_t v[4] = {
-					int16_t(meshopt_quantizeSnorm(a.f[0], 16)),
-					int16_t(meshopt_quantizeSnorm(a.f[1], 16)),
-					int16_t(meshopt_quantizeSnorm(a.f[2], 16)),
-					int16_t(meshopt_quantizeSnorm(a.f[3], 16)),
+				    int16_t(meshopt_quantizeSnorm(a.f[0], 16)),
+				    int16_t(meshopt_quantizeSnorm(a.f[1], 16)),
+				    int16_t(meshopt_quantizeSnorm(a.f[2], 16)),
+				    int16_t(meshopt_quantizeSnorm(a.f[3], 16)),
 				};
 				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 			}
@@ -816,7 +816,7 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 			{
 				const Attr& a = data[i];
 
-				float v[4] = { a.f[0], a.f[1], a.f[2], a.f[3] };
+				float v[4] = {a.f[0], a.f[1], a.f[2], a.f[3]};
 				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 			}
 
@@ -830,7 +830,7 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 		{
 			const Attr& a = data[i];
 
-			float v[3] = { a.f[0], a.f[1], a.f[2] };
+			float v[3] = {a.f[0], a.f[1], a.f[2]};
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
@@ -1336,23 +1336,23 @@ void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& s
 			{
 				// Approximating slerp, https://zeux.io/2015/07/23/approximating-slerp/
 				// We also handle quaternion double-cover
-			    float ca = l.f[0] * r.f[0] + l.f[1] * r.f[1] + l.f[2] * r.f[2] + l.f[3] * r.f[3];
+				float ca = l.f[0] * r.f[0] + l.f[1] * r.f[1] + l.f[2] * r.f[2] + l.f[3] * r.f[3];
 
-			    float d = fabsf(ca);
-			    float A = 1.0904f + d * (-3.2452f + d * (3.55645f - d * 1.43519f));
-			    float B = 0.848013f + d * (-1.06021f + d * 0.215638f);
-			    float k = A * (t - 0.5f) * (t - 0.5f) + B;
-			    float ot = t + t * (t - 0.5f) * (t - 1) * k;
+				float d = fabsf(ca);
+				float A = 1.0904f + d * (-3.2452f + d * (3.55645f - d * 1.43519f));
+				float B = 0.848013f + d * (-1.06021f + d * 0.215638f);
+				float k = A * (t - 0.5f) * (t - 0.5f) + B;
+				float ot = t + t * (t - 0.5f) * (t - 1) * k;
 
-			    float t0 = 1 - ot;
-			    float t1 = ca > 0 ? ot : -ot;
+				float t0 = 1 - ot;
+				float t1 = ca > 0 ? ot : -ot;
 
-				Attr lerp = { {
-					l.f[0] * t0 + r.f[0] * t1,
-					l.f[1] * t0 + r.f[1] * t1,
-					l.f[2] * t0 + r.f[2] * t1,
-					l.f[3] * t0 + r.f[3] * t1,
-				} };
+				Attr lerp = {{
+				    l.f[0] * t0 + r.f[0] * t1,
+				    l.f[1] * t0 + r.f[1] * t1,
+				    l.f[2] * t0 + r.f[2] * t1,
+				    l.f[3] * t0 + r.f[3] * t1,
+				}};
 
 				float len = sqrtf(lerp.f[0] * lerp.f[0] + lerp.f[1] * lerp.f[1] + lerp.f[2] * lerp.f[2] + lerp.f[3] * lerp.f[3]);
 
@@ -1368,12 +1368,12 @@ void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& s
 			}
 			else
 			{
-				Attr lerp = { {
-					l.f[0] * (1 - t) + r.f[0] * t,
-					l.f[1] * (1 - t) + r.f[1] * t,
-					l.f[2] * (1 - t) + r.f[2] * t,
-					l.f[3] * (1 - t) + r.f[3] * t,
-				} };
+				Attr lerp = {{
+				    l.f[0] * (1 - t) + r.f[0] * t,
+				    l.f[1] * (1 - t) + r.f[1] * t,
+				    l.f[2] * (1 - t) + r.f[2] * t,
+				    l.f[3] * (1 - t) + r.f[3] * t,
+				}};
 
 				data.push_back(lerp);
 			}
@@ -1522,8 +1522,8 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 				uint16_t max[3] = {};
 				getPositionBounds(min, max, stream, qp);
 
-				float minf[3] = { float(min[0]), float(min[1]), float(min[2])};
-				float maxf[3] = { float(max[0]), float(max[1]), float(max[2])};
+				float minf[3] = {float(min[0]), float(min[1]), float(min[2])};
+				float maxf[3] = {float(max[0]), float(max[1]), float(max[2])};
 
 				writeAccessor(json_accessors, view_offset, format.type, format.component_type, format.normalized, stream.data.size(), minf, maxf);
 			}
@@ -1811,6 +1811,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			if (channel.target_path != cgltf_animation_path_type_translation && channel.target_path != cgltf_animation_path_type_rotation && channel.target_path != cgltf_animation_path_type_scale)
 				continue;
 
+			// TODO: add support for CUBICSPLINE, STEP
 			if (sampler.interpolation != cgltf_interpolation_type_linear)
 				continue;
 
