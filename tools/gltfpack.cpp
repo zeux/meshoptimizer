@@ -792,16 +792,37 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 	if (type == cgltf_animation_path_type_rotation)
 	{
 		// TODO: in theory, we can use short-normalized quaternion tracks although it looks like three.js and babylon.js have issues with those
-		for (size_t i = 0; i < data.size(); ++i)
+		if (0)
 		{
-			const Attr& a = data[i];
+			for (size_t i = 0; i < data.size(); ++i)
+			{
+				const Attr& a = data[i];
 
-			float v[4] = { a.f[0], a.f[1], a.f[2], a.f[3] };
-			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+				int16_t v[4] = {
+					int16_t(meshopt_quantizeSnorm(a.f[0], 16)),
+					int16_t(meshopt_quantizeSnorm(a.f[1], 16)),
+					int16_t(meshopt_quantizeSnorm(a.f[2], 16)),
+					int16_t(meshopt_quantizeSnorm(a.f[3], 16)),
+				};
+				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+			}
+
+			StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16, true, 8};
+			return format;
 		}
+		else
+		{
+			for (size_t i = 0; i < data.size(); ++i)
+			{
+				const Attr& a = data[i];
 
-		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_32f, false, 16};
-		return format;
+				float v[4] = { a.f[0], a.f[1], a.f[2], a.f[3] };
+				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+			}
+
+			StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_32f, false, 16};
+			return format;
+		}
 	}
 	else
 	{
@@ -1191,7 +1212,7 @@ void writeBufferView(std::string& json, cgltf_buffer_view_type type, size_t coun
 		json += ",\"extensions\":{";
 		json += "\"KHR_meshopt_compression\":{";
 		json += "\"mode\":";
-		json += (type == cgltf_buffer_view_type_vertices) ? "\"VERTEX\"" : "\"INDEX\"";
+		json += (type == cgltf_buffer_view_type_vertices) ? "\"VERTEX\"" : (type == cgltf_buffer_view_type_indices) ? "\"INDEX\"" : "\"GENERIC\"";
 		json += ",\"count\":";
 		json += to_string(count);
 		json += ",\"byteStride\":";
@@ -1241,8 +1262,7 @@ void writeAccessor(std::string& json, size_t view, cgltf_type type, cgltf_compon
 
 bool isTrackConstant(const cgltf_animation_sampler& sampler, cgltf_animation_path_type type)
 {
-	const float tolerance_generic = 1e-4f;
-	const float tolerance_rotation = 1e-3f;
+	const float tolerance = 1e-3f;
 
 	Attr first = {};
 	cgltf_accessor_read_float(sampler.output, 0, first.f, 4);
@@ -1256,7 +1276,7 @@ bool isTrackConstant(const cgltf_animation_sampler& sampler, cgltf_animation_pat
 		{
 			float error = 1.f - fabsf(first.f[0] * attr.f[0] + first.f[1] * attr.f[1] + first.f[2] * attr.f[2] + first.f[3] * attr.f[3]);
 
-			if (error > tolerance_rotation)
+			if (error > tolerance)
 				return false;
 		}
 		else
@@ -1265,7 +1285,7 @@ bool isTrackConstant(const cgltf_animation_sampler& sampler, cgltf_animation_pat
 			for (int k = 0; k < 4; ++k)
 				error += fabsf(attr.f[0] - first.f[0]);
 
-			if (error > tolerance_generic)
+			if (error > tolerance)
 				return false;
 		}
 	}
@@ -1818,7 +1838,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			needs_pose = needs_pose || tc;
 		}
 
-		int frames = std::max(1, int((maxt - mint) * settings.anim_freq + 0.5f));
+		int frames = 1 + int(ceilf((maxt - mint) * settings.anim_freq));
 
 		size_t time_view = view_offset;
 
@@ -1887,8 +1907,14 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			size_t bin_offset = bin.size();
 			StreamFormat format = writeKeyframeStream(bin, channel.target_path, track);
 
+			// TODO: need to enable GENERIC support in GLTFLoader.js
+			bool compress = settings.compress && !tc && false;
+
+			if (compress)
+				compressVertexStream(bin, bin_offset, track.size(), format.stride);
+
 			comma(json_buffer_views);
-			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, track.size(), format.stride, bin_offset, bin.size() - bin_offset, false);
+			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, track.size(), format.stride, bin_offset, bin.size() - bin_offset, compress);
 
 			bytes_keyframe += bin.size() - bin_offset;
 
@@ -1996,7 +2022,7 @@ int main(int argc, char** argv)
 	Settings settings = {};
 	settings.pos_bits = 14;
 	settings.uv_bits = 12;
-	settings.anim_freq = 15;
+	settings.anim_freq = 30;
 
 	const char* input = 0;
 	const char* output = 0;
@@ -2052,7 +2078,7 @@ int main(int argc, char** argv)
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "-vpN: use N-bit quantization for position (default: 14; N should be between 1 and 16)\n");
 		fprintf(stderr, "-vtN: use N-bit quantization for texture corodinates (default: 12; N should be between 1 and 16)\n");
-		fprintf(stderr, "-afN: resample animations at N Hz (default: 15)\n");
+		fprintf(stderr, "-afN: resample animations at N Hz (default: 30)\n");
 		fprintf(stderr, "-c: produce compressed glb files\n");
 		fprintf(stderr, "-v: verbose output\n");
 
