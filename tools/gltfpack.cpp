@@ -1241,8 +1241,7 @@ void writeAccessor(std::string& json, size_t view, cgltf_type type, cgltf_compon
 
 bool isTrackConstant(const cgltf_animation_sampler& sampler, cgltf_animation_path_type type)
 {
-	const float tolerance_generic = 1e-4f;
-	const float tolerance_rotation = 1e-3f;
+	const float tolerance = 1e-3f;
 
 	Attr first = {};
 	cgltf_accessor_read_float(sampler.output, 0, first.f, 4);
@@ -1256,7 +1255,7 @@ bool isTrackConstant(const cgltf_animation_sampler& sampler, cgltf_animation_pat
 		{
 			float error = 1.f - fabsf(first.f[0] * attr.f[0] + first.f[1] * attr.f[1] + first.f[2] * attr.f[2] + first.f[3] * attr.f[3]);
 
-			if (error > tolerance_rotation)
+			if (error > tolerance)
 				return false;
 		}
 		else
@@ -1265,7 +1264,7 @@ bool isTrackConstant(const cgltf_animation_sampler& sampler, cgltf_animation_pat
 			for (int k = 0; k < 4; ++k)
 				error += fabsf(attr.f[0] - first.f[0]);
 
-			if (error > tolerance_generic)
+			if (error > tolerance)
 				return false;
 		}
 	}
@@ -1996,7 +1995,7 @@ int main(int argc, char** argv)
 	Settings settings = {};
 	settings.pos_bits = 14;
 	settings.uv_bits = 12;
-	settings.anim_freq = 15;
+	settings.anim_freq = 30;
 
 	const char* input = 0;
 	const char* output = 0;
@@ -2052,7 +2051,7 @@ int main(int argc, char** argv)
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "-vpN: use N-bit quantization for position (default: 14; N should be between 1 and 16)\n");
 		fprintf(stderr, "-vtN: use N-bit quantization for texture corodinates (default: 12; N should be between 1 and 16)\n");
-		fprintf(stderr, "-afN: resample animations at N Hz (default: 15)\n");
+		fprintf(stderr, "-afN: resample animations at N Hz (default: 30)\n");
 		fprintf(stderr, "-c: produce compressed glb files\n");
 		fprintf(stderr, "-v: verbose output\n");
 
