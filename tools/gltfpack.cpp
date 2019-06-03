@@ -1959,30 +1959,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		json_animations += "]}";
 	}
 
-	json += "\"bufferViews\":[";
-	json += json_buffer_views;
-	json += "],\"accessors\":[";
-	json += json_accessors;
-	json += "],\"images\":[";
-	json += json_images;
-	json += "],\"textures\":[";
-	json += json_textures;
-	json += "],\"materials\":[";
-	json += json_materials;
-	json += "],\"meshes\":[";
-	json += json_meshes;
-	json += "],\"skins\":[";
-	json += json_skins;
-	json += "],\"animations\":[";
-	json += json_animations;
-	json += "],\"nodes\":[";
-	json += json_nodes;
-	json += "],\"scenes\":[";
-	json += "{\"nodes\":[";
-	json += json_roots;
-	json += "]}";
-	json += "],\"scene\":0";
-	json += ",\"asset\":{\"version\":\"2.0\", \"generator\":\"gltfpack\"}";
+	json += "\"asset\":{\"version\":\"2.0\", \"generator\":\"gltfpack\"}";
 	json += ",\"extensionsUsed\":[";
 	json += "\"KHR_quantized_geometry\"";
 	if (settings.compress)
@@ -2001,6 +1978,65 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		json += "\"KHR_materials_pbrSpecularGlossiness\"";
 	}
 	json += "]";
+
+	if (!json_buffer_views.empty())
+	{
+		json += ",\"bufferViews\":[";
+		json += json_buffer_views;
+		json += "]";
+	}
+	if (!json_accessors.empty())
+	{
+		json += ",\"accessors\":[";
+		json += json_accessors;
+		json += "]";
+	}
+	if (!json_images.empty())
+	{
+		json += ",\"images\":[";
+		json += json_images;
+		json += "]";
+	}
+	if (!json_textures.empty())
+	{
+		json += ",\"textures\":[";
+		json += json_textures;
+		json += "]";
+	}
+	if (!json_materials.empty())
+	{
+		json += ",\"materials\":[";
+		json += json_materials;
+		json += "]";
+	}
+	if (!json_meshes.empty())
+	{
+		json += ",\"meshes\":[";
+		json += json_meshes;
+		json += "]";
+	}
+	if (!json_skins.empty())
+	{
+		json += ",\"skins\":[";
+		json += json_skins;
+		json += "]";
+	}
+	if (!json_animations.empty())
+	{
+		json += ",\"animations\":[";
+		json += json_animations;
+		json += "]";
+	}
+	if (!json_roots.empty())
+	{
+		json += ",\"nodes\":[";
+		json += json_nodes;
+		json += "],\"scenes\":[";
+		json += "{\"nodes\":[";
+		json += json_roots;
+		json += "]}";
+		json += "],\"scene\":0";
+	}
 
 	if (settings.verbose)
 	{
