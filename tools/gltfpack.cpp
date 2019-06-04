@@ -2156,7 +2156,7 @@ int main(int argc, char** argv)
 		std::string binname = binpath;
 		std::string::size_type slash = binname.find_last_of("/\\");
 		if (slash != std::string::npos)
-			binname.erase(0, slash);
+			binname.erase(0, slash + 1);
 
 		FILE* outjson = fopen(output, "wb");
 		FILE* outbin = fopen(binpath.c_str(), "wb");
