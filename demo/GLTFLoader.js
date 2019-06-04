@@ -1039,18 +1039,20 @@ THREE.GLTFLoader = ( function () {
 			var result = new ArrayBuffer(count * stride);
 			var source = buffer.slice(byteOffset, byteOffset + byteLength);
 
-			switch ( extensionDef.mode ) {
+			var sourceArray = new Uint8Array(source);
 
-				case 'VERTEX':
-					decoder.decodeVertexBuffer(new Uint8Array(result), count, stride, new Uint8Array(source));
+			switch ( sourceArray[0] >> 4 ) {
+
+				case 0xA:
+					decoder.decodeVertexBuffer(new Uint8Array(result), count, stride, sourceArray);
 					break;
 
-				case 'INDEX':
-					decoder.decodeIndexBuffer(new Uint8Array(result), count, stride, new Uint8Array(source));
+				case 0xE:
+					decoder.decodeIndexBuffer(new Uint8Array(result), count, stride, sourceArray);
 					break;
 
 				default:
-					throw new Error( 'Unknown decode mode: ' + extensionDef.mode );
+					throw new Error( 'THREE.GLTFLoader: Unrecognized meshopt buffer header.' );
 
 			}
 
