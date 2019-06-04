@@ -210,7 +210,7 @@ This library provides two simplification algorithms that reduce the number of tr
 
 The first simplification algorithm, `meshopt_simplify`, follows the topology of the original mesh in an attempt to preserve attribute seams, borders and overall appearance. For meshes with inconsistent topology or many seams, such as faceted meshes, it can result in simplifier getting "stuck" and not being able to simplify the mesh fully; it's recommended to preprocess the index buffer with `meshopt_generateShadowIndexBuffer` to discard any vertex attributes that aren't critical and can be rebuilt later such as normals.
 
-```
+```c++
 float threshold = 0.2f;
 size_t target_index_count = size_t(index_count * threshold);
 float target_error = 1e-2f;
@@ -223,7 +223,7 @@ Target error is an approximate measure of the deviation from the original mesh u
 
 The second simplification algorithm, `meshopt_simplifySloppy`, doesn't follow the topology of the original mesh. This means that it doesn't preserve attribute seams or borders, but it can collapse internal details that are too small to matter better because it can merge mesh features that are topologically disjoint but spatially close.
 
-```
+```c++
 float threshold = 0.2f;
 size_t target_index_count = size_t(index_count * threshold);
 
@@ -295,7 +295,7 @@ gltfpack can produce two types of output files:
 
 When using compressed files, `js/meshopt_decoder.js` needs to be loaded to provide the WebAssembly decoder module like this:
 
-```
+```js
 <script src="js/meshopt_decoder.js"></script>
 
 ...
