@@ -1435,9 +1435,18 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		const cgltf_image& image = data->images[i];
 
 		comma(json_images);
-		json_images += "{\"uri\":\"";
-		json_images += image.uri;
-		json_images += "\"}";
+		json_images += "{";
+		if (image.uri)
+		{
+			json_images += "\"uri\":\"";
+			json_images += image.uri;
+			json_images += "\"";
+		}
+		else
+		{
+			fprintf(stderr, "Warning: image %d has embedded texture data, skipping\n", int(i));
+		}
+		json_images += "}";
 	}
 
 	for (size_t i = 0; i < data->textures_count; ++i)
