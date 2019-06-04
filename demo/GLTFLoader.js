@@ -1039,18 +1039,20 @@ THREE.GLTFLoader = ( function () {
 			var result = new ArrayBuffer(count * stride);
 			var source = buffer.slice(byteOffset, byteOffset + byteLength);
 
-			switch ( extensionDef.mode ) {
+			var sourceArray = new Uint8Array(source);
 
-				case 'VERTEX':
-					decoder.decodeVertexBuffer(new Uint8Array(result), count, stride, new Uint8Array(source));
+			switch ( sourceArray[0] >> 4 ) {
+
+				case 0xA:
+					decoder.decodeVertexBuffer(new Uint8Array(result), count, stride, sourceArray);
 					break;
 
-				case 'INDEX':
-					decoder.decodeIndexBuffer(new Uint8Array(result), count, stride, new Uint8Array(source));
+				case 0xE:
+					decoder.decodeIndexBuffer(new Uint8Array(result), count, stride, sourceArray);
 					break;
 
 				default:
-					throw new Error( 'Unknown decode mode: ' + extensionDef.mode );
+					throw new Error( 'THREE.GLTFLoader: Unrecognized meshopt buffer header.' );
 
 			}
 
@@ -2951,12 +2953,52 @@ THREE.GLTFLoader = ( function () {
 
 				}
 
+				var outputArray = outputAccessor.array;
+
+				if ( outputAccessor.normalized ) {
+
+					var scale;
+
+					if ( outputArray.constructor === Int8Array ) {
+
+						scale = 1 / 127;
+
+					} else if ( outputArray.constructor === Uint8Array ) {
+
+						scale = 1 / 255;
+
+					} else if ( outputArray.constructor == Int16Array ) {
+
+						scale = 1 / 32767;
+
+					} else if ( outputArray.constructor === Uint16Array ) {
+
+						scale = 1 / 65535;
+
+					} else {
+
+						throw new Error( 'THREE.GLTFLoader: Unsupported output accessor component type.' );
+
+					}
+
+					var scaled = new Float32Array( outputArray.length );
+
+					for ( var j = 0, jl = outputArray.length; j < jl; j ++ ) {
+
+						scaled[j] = outputArray[j] * scale;
+
+					}
+
+					outputArray = scaled;
+
+				}
+
 				for ( var j = 0, jl = targetNames.length; j < jl; j ++ ) {
 
 					var track = new TypedKeyframeTrack(
 						targetNames[ j ] + '.' + PATH_PROPERTIES[ target.path ],
 						inputAccessor.array,
-						outputAccessor.array,
+						outputArray,
 						interpolation
 					);
 
