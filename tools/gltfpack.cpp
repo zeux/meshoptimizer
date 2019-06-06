@@ -33,11 +33,11 @@
 
 #include <float.h>
 #include <math.h>
+#include <stdio.h>
+#include <stdint.h>
+#include <string.h>
 
-#define CGLTF_IMPLEMENTATION
 #include "cgltf.h"
-
-#define FAST_OBJ_IMPLEMENTATION
 #include "fast_obj.h"
 
 struct Attr
@@ -221,10 +221,15 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 	}
 }
 
+void defaultFree(void*, void* p)
+{
+	free(p);
+}
+
 cgltf_data* parseSceneObj(fastObjMesh* obj)
 {
 	cgltf_data* data = (cgltf_data*)calloc(1, sizeof(cgltf_data));
-	data->memory_free = cgltf_default_free;
+	data->memory_free = defaultFree;
 
 	std::map<std::string, size_t> textures;
 
@@ -581,7 +586,7 @@ void renormalizeWeights(uint8_t (&w)[4])
 		if (w[k] > w[max])
 			max = k;
 
-	w[max] += 255 - sum;
+	w[max] += uint8_t(255 - sum);
 }
 
 StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationParams& params)
@@ -1203,7 +1208,7 @@ void writeBufferView(std::string& json, cgltf_buffer_view_type type, size_t coun
 	json += "}";
 }
 
-void writeAccessor(std::string& json, size_t view, cgltf_type type, cgltf_component_type component_type, bool normalized, size_t count, const float* min = 0, const float* max = 0)
+void writeAccessor(std::string& json, size_t view, cgltf_type type, cgltf_component_type component_type, bool normalized, size_t count, const float* min = 0, const float* max = 0, size_t numminmax = 0)
 {
 	json += "{\"bufferView\":";
 	json += to_string(view);
@@ -1221,16 +1226,16 @@ void writeAccessor(std::string& json, size_t view, cgltf_type type, cgltf_compon
 
 	if (min && max)
 	{
-		size_t num_components = cgltf_num_components(type);
+		assert(numminmax);
 
 		json += ",\"min\":[";
-		for (size_t k = 0; k < num_components; ++k)
+		for (size_t k = 0; k < numminmax; ++k)
 		{
 			comma(json);
 			json += to_string(min[k]);
 		}
 		json += "],\"max\":[";
-		for (size_t k = 0; k < num_components; ++k)
+		for (size_t k = 0; k < numminmax; ++k)
 		{
 			comma(json);
 			json += to_string(max[k]);
@@ -1579,7 +1584,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 				float minf[3] = {float(min[0]), float(min[1]), float(min[2])};
 				float maxf[3] = {float(max[0]), float(max[1]), float(max[2])};
 
-				writeAccessor(json_accessors, view_offset, format.type, format.component_type, format.normalized, stream.data.size(), minf, maxf);
+				writeAccessor(json_accessors, view_offset, format.type, format.component_type, format.normalized, stream.data.size(), minf, maxf, 3);
 			}
 			else
 			{
@@ -1951,7 +1956,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			bytes_time += bin.size() - bin_offset;
 
 			comma(json_accessors);
-			writeAccessor(json_accessors, view_offset, cgltf_type_scalar, format.component_type, format.normalized, frames, &time.front(), &time.back());
+			writeAccessor(json_accessors, view_offset, cgltf_type_scalar, format.component_type, format.normalized, frames, &time.front(), &time.back(), 1);
 
 			view_offset++;
 		}
@@ -1971,7 +1976,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			bytes_time += bin.size() - bin_offset;
 
 			comma(json_accessors);
-			writeAccessor(json_accessors, view_offset, cgltf_type_scalar, format.component_type, format.normalized, 1, &pose.front(), &pose.back());
+			writeAccessor(json_accessors, view_offset, cgltf_type_scalar, format.component_type, format.normalized, 1, &pose.front(), &pose.back(), 1);
 
 			view_offset++;
 		}

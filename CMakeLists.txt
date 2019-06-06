@@ -35,6 +35,6 @@ if(BUILD_DEMO)
 endif()
 
 if(BUILD_TOOLS)
-    add_executable(gltfpack tools/gltfpack.cpp)
+    add_executable(gltfpack tools/gltfpack.cpp tools/meshloader.cpp)
     target_link_libraries(gltfpack meshoptimizer)
 endif()

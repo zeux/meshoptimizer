@@ -12,7 +12,7 @@ LIBRARY_OBJECTS=$(LIBRARY_SOURCES:%=$(BUILD)/%.o)
 DEMO_SOURCES=$(wildcard demo/*.c demo/*.cpp) tools/objparser.cpp
 DEMO_OBJECTS=$(DEMO_SOURCES:%=$(BUILD)/%.o)
 
-GLTFPACK_SOURCES=tools/gltfpack.cpp
+GLTFPACK_SOURCES=tools/gltfpack.cpp tools/meshloader.cpp
 GLTFPACK_OBJECTS=$(GLTFPACK_SOURCES:%=$(BUILD)/%.o)
 
 OBJECTS=$(LIBRARY_OBJECTS) $(DEMO_OBJECTS) $(GLTFPACK_OBJECTS)
@@ -65,7 +65,7 @@ dev: $(EXECUTABLE)
 	$(EXECUTABLE) -d $(files)
 
 format:
-	clang-format -i $(LIBRARY_SOURCES) $(DEMO_SOURCES) $(ENCODER_SOURCES) $(GLTFPACK_SOURCES)
+	clang-format -i $(LIBRARY_SOURCES) $(DEMO_SOURCES) $(GLTFPACK_SOURCES)
 
 gltfpack: $(GLTFPACK_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
