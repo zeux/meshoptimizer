@@ -106,6 +106,8 @@ struct NodeInfo
 	bool keep;
 	bool named;
 
+	unsigned int animated_paths;
+
 	int remap;
 };
 
@@ -1250,6 +1252,24 @@ void writeAccessor(std::string& json, size_t view, cgltf_type type, cgltf_compon
 	json += "}";
 }
 
+float getDelta(const Attr& l, const Attr& r, cgltf_animation_path_type type)
+{
+	if (type == cgltf_animation_path_type_rotation)
+	{
+		float error = 1.f - fabsf(l.f[0] * r.f[0] + l.f[1] * r.f[1] + l.f[2] * r.f[2] + l.f[3] * r.f[3]);
+
+		return error;
+	}
+	else
+	{
+		float error = 0;
+		for (int k = 0; k < 4; ++k)
+			error += fabsf(r.f[0] - l.f[0]);
+
+		return error;
+	}
+}
+
 bool isTrackConstant(const cgltf_animation_sampler& sampler, cgltf_animation_path_type type)
 {
 	const float tolerance = 1e-3f;
@@ -1262,22 +1282,8 @@ bool isTrackConstant(const cgltf_animation_sampler& sampler, cgltf_animation_pat
 		Attr attr = {};
 		cgltf_accessor_read_float(sampler.output, i, attr.f, 4);
 
-		if (type == cgltf_animation_path_type_rotation)
-		{
-			float error = 1.f - fabsf(first.f[0] * attr.f[0] + first.f[1] * attr.f[1] + first.f[2] * attr.f[2] + first.f[3] * attr.f[3]);
-
-			if (error > tolerance)
-				return false;
-		}
-		else
-		{
-			float error = 0;
-			for (int k = 0; k < 4; ++k)
-				error += fabsf(attr.f[0] - first.f[0]);
-
-			if (error > tolerance)
-				return false;
-		}
+		if (getDelta(first, attr, type) > tolerance)
+			return false;
 	}
 
 	return true;
@@ -1828,6 +1834,60 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		json_skins += "}";
 	}
 
+	// mark individual node components as animated
+	for (size_t i = 0; i < data->animations_count; ++i)
+	{
+		const cgltf_animation& animation = data->animations[i];
+
+		for (size_t j = 0; j < animation.channels_count; ++j)
+		{
+			const cgltf_animation_channel& channel = animation.channels[j];
+			const cgltf_animation_sampler& sampler = *channel.sampler;
+
+			if (!channel.target_node)
+				continue;
+
+			NodeInfo& ni = nodes[channel.target_node - data->nodes];
+
+			if (channel.target_path != cgltf_animation_path_type_translation && channel.target_path != cgltf_animation_path_type_rotation && channel.target_path != cgltf_animation_path_type_scale)
+				continue;
+
+			// mark nodes that have animation tracks that change their base transform as animated
+			if (!isTrackConstant(sampler, channel.target_path))
+			{
+				ni.animated_paths |= (1 << channel.target_path);
+			}
+			else
+			{
+				Attr base = {};
+
+				switch (channel.target_path)
+				{
+				case cgltf_animation_path_type_translation:
+					memcpy(base.f, channel.target_node->translation, 3 * sizeof(float));
+					break;
+				case cgltf_animation_path_type_rotation:
+					memcpy(base.f, channel.target_node->rotation, 4 * sizeof(float));
+					break;
+				case cgltf_animation_path_type_scale:
+					memcpy(base.f, channel.target_node->scale, 3 * sizeof(float));
+					break;
+				default:;
+				}
+
+				Attr first = {};
+				cgltf_accessor_read_float(sampler.output, 0, first.f, 4);
+
+				const float tolerance = 1e-3f;
+
+				if (getDelta(base, first, channel.target_path) > tolerance)
+				{
+					ni.animated_paths |= (1 << channel.target_path);
+				}
+			}
+		}
+	}
+
 	for (size_t i = 0; i < data->animations_count; ++i)
 	{
 		const cgltf_animation& animation = data->animations[i];
@@ -1842,7 +1902,12 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			const cgltf_animation_channel& channel = animation.channels[j];
 			const cgltf_animation_sampler& sampler = *channel.sampler;
 
-			if (!channel.target_node || !nodes[channel.target_node - data->nodes].keep)
+			if (!channel.target_node)
+				continue;
+
+			NodeInfo& ni = nodes[channel.target_node - data->nodes];
+
+			if (!ni.keep)
 				continue;
 
 			if (channel.target_path != cgltf_animation_path_type_translation && channel.target_path != cgltf_animation_path_type_rotation && channel.target_path != cgltf_animation_path_type_scale)
@@ -1850,6 +1915,9 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 
 			// TODO: add support for CUBICSPLINE, STEP
 			if (sampler.interpolation != cgltf_interpolation_type_linear)
+				continue;
+
+			if (!settings.anim_const && (ni.animated_paths & (1 << channel.target_path)) == 0)
 				continue;
 
 			tracks.push_back(&channel);
