@@ -27,14 +27,13 @@
 #include "../src/meshoptimizer.h"
 
 #include <algorithm>
-#include <map>
 #include <string>
 #include <vector>
 
 #include <float.h>
 #include <math.h>
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "cgltf.h"
@@ -226,40 +225,47 @@ void defaultFree(void*, void* p)
 	free(p);
 }
 
+size_t textureIndex(const std::vector<std::string>& textures, const std::string& name)
+{
+	std::vector<std::string>::const_iterator it = std::lower_bound(textures.begin(), textures.end(), name);
+	assert(it != textures.end());
+	assert(*it == name);
+
+	return size_t(it - textures.begin());
+}
+
 cgltf_data* parseSceneObj(fastObjMesh* obj)
 {
 	cgltf_data* data = (cgltf_data*)calloc(1, sizeof(cgltf_data));
 	data->memory_free = defaultFree;
 
-	std::map<std::string, size_t> textures;
+	std::vector<std::string> textures;
 
 	for (unsigned int mi = 0; mi < obj->material_count; ++mi)
 	{
 		fastObjMaterial& om = obj->materials[mi];
 
 		if (om.map_Kd.name)
-			textures[om.map_Kd.name] = 0;
+			textures.push_back(om.map_Kd.name);
 	}
 
-	size_t image_offset = 0;
-
-	for (std::map<std::string, size_t>::iterator ti = textures.begin(); ti != textures.end(); ++ti)
-		ti->second = image_offset++;
+	std::sort(textures.begin(), textures.end());
+	textures.erase(std::unique(textures.begin(), textures.end()), textures.end());
 
 	data->images = (cgltf_image*)calloc(textures.size(), sizeof(cgltf_image));
 	data->images_count = textures.size();
 
-	for (std::map<std::string, size_t>::iterator ti = textures.begin(); ti != textures.end(); ++ti)
+	for (size_t i = 0; i < textures.size(); ++i)
 	{
-		data->images[ti->second].uri = strdup(ti->first.c_str());
+		data->images[i].uri = strdup(textures[i].c_str());
 	}
 
 	data->textures = (cgltf_texture*)calloc(textures.size(), sizeof(cgltf_texture));
 	data->textures_count = textures.size();
 
-	for (std::map<std::string, size_t>::iterator ti = textures.begin(); ti != textures.end(); ++ti)
+	for (size_t i = 0; i < textures.size(); ++i)
 	{
-		data->textures[ti->second].image = &data->images[ti->second];
+		data->textures[i].image = &data->images[i];
 	}
 
 	data->materials = (cgltf_material*)calloc(obj->material_count, sizeof(cgltf_material));
@@ -282,7 +288,7 @@ cgltf_data* parseSceneObj(fastObjMesh* obj)
 
 		if (om.map_Kd.name)
 		{
-			gm.pbr_metallic_roughness.base_color_texture.texture = &data->textures[textures[om.map_Kd.name]];
+			gm.pbr_metallic_roughness.base_color_texture.texture = &data->textures[textureIndex(textures, om.map_Kd.name)];
 			gm.pbr_metallic_roughness.base_color_texture.scale = 1.0f;
 
 			gm.alpha_mode = (om.illum == 4 || om.illum == 6 || om.illum == 7 || om.illum == 9) ? cgltf_alpha_mode_mask : cgltf_alpha_mode_opaque;
