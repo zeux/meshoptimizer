@@ -61,17 +61,6 @@ struct Mesh
 	std::vector<unsigned int> indices;
 };
 
-struct Scene
-{
-	cgltf_data* data;
-	std::vector<Mesh> meshes;
-
-	~Scene()
-	{
-		cgltf_free(data);
-	}
-};
-
 struct Settings
 {
 	int pos_bits;
@@ -495,16 +484,16 @@ void optimizeMesh(Mesh& mesh)
 		meshopt_remapVertexBuffer(&mesh.streams[i].data[0], &mesh.streams[i].data[0], vertex_count, sizeof(Attr), &remap[0]);
 }
 
-bool getAttributeBounds(const Scene& scene, cgltf_attribute_type type, Attr& min, Attr& max)
+bool getAttributeBounds(const std::vector<Mesh>& meshes, cgltf_attribute_type type, Attr& min, Attr& max)
 {
 	min.f[0] = min.f[1] = min.f[2] = min.f[3] = +FLT_MAX;
 	max.f[0] = max.f[1] = max.f[2] = max.f[3] = -FLT_MAX;
 
 	bool valid = false;
 
-	for (size_t i = 0; i < scene.meshes.size(); ++i)
+	for (size_t i = 0; i < meshes.size(); ++i)
 	{
-		const Mesh& mesh = scene.meshes[i];
+		const Mesh& mesh = meshes[i];
 
 		for (size_t j = 0; j < mesh.streams.size(); ++j)
 		{
@@ -535,14 +524,14 @@ bool getAttributeBounds(const Scene& scene, cgltf_attribute_type type, Attr& min
 	return valid;
 }
 
-QuantizationParams prepareQuantization(const Scene& scene, const Settings& settings)
+QuantizationParams prepareQuantization(const std::vector<Mesh>& meshes, const Settings& settings)
 {
 	QuantizationParams result = {};
 
 	result.pos_bits = settings.pos_bits;
 
 	Attr pos_min, pos_max;
-	if (getAttributeBounds(scene, cgltf_attribute_type_position, pos_min, pos_max))
+	if (getAttributeBounds(meshes, cgltf_attribute_type_position, pos_min, pos_max))
 	{
 		result.pos_offset[0] = pos_min.f[0];
 		result.pos_offset[1] = pos_min.f[1];
@@ -553,7 +542,7 @@ QuantizationParams prepareQuantization(const Scene& scene, const Settings& setti
 	result.uv_bits = settings.uv_bits;
 
 	Attr uv_min, uv_max;
-	if (getAttributeBounds(scene, cgltf_attribute_type_texcoord, uv_min, uv_max))
+	if (getAttributeBounds(meshes, cgltf_attribute_type_texcoord, uv_min, uv_max))
 	{
 		result.uv_offset[0] = uv_min.f[0];
 		result.uv_offset[1] = uv_min.f[1];
@@ -1443,21 +1432,19 @@ void prepareNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, size_t node_of
 	}
 }
 
-bool process(Scene& scene, const Settings& settings, std::string& json, std::string& bin)
+bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings, std::string& json, std::string& bin)
 {
-	cgltf_data* data = scene.data;
-
 	if (settings.verbose)
 	{
 		printf("input: %d nodes, %d meshes, %d skins, %d animations\n",
 		       int(data->nodes_count), int(data->meshes_count), int(data->skins_count), int(data->animations_count));
 	}
 
-	mergeMeshes(scene.meshes);
+	mergeMeshes(meshes);
 
-	for (size_t i = 0; i < scene.meshes.size(); ++i)
+	for (size_t i = 0; i < meshes.size(); ++i)
 	{
-		Mesh& mesh = scene.meshes[i];
+		Mesh& mesh = meshes[i];
 
 		if (mesh.indices.empty())
 			continue;
@@ -1471,9 +1458,9 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		size_t triangles = 0;
 		size_t vertices = 0;
 
-		for (size_t i = 0; i < scene.meshes.size(); ++i)
+		for (size_t i = 0; i < meshes.size(); ++i)
 		{
-			const Mesh& mesh = scene.meshes[i];
+			const Mesh& mesh = meshes[i];
 
 			triangles += mesh.indices.size() / 3;
 			vertices += mesh.streams.empty() ? 0 : mesh.streams[0].data.size();
@@ -1482,7 +1469,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		printf("meshes: %d triangles, %d vertices\n", int(triangles), int(vertices));
 	}
 
-	QuantizationParams qp = prepareQuantization(scene, settings);
+	QuantizationParams qp = prepareQuantization(meshes, settings);
 
 	std::string json_images;
 	std::string json_textures;
@@ -1552,9 +1539,9 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		has_pbr_specular_glossiness = has_pbr_specular_glossiness || material.has_pbr_specular_glossiness;
 	}
 
-	for (size_t i = 0; i < scene.meshes.size(); ++i)
+	for (size_t i = 0; i < meshes.size(); ++i)
 	{
-		const Mesh& mesh = scene.meshes[i];
+		const Mesh& mesh = meshes[i];
 
 		if (mesh.indices.empty())
 			continue;
@@ -2228,24 +2215,26 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
-	Scene scene = {};
+	cgltf_data* data = 0;
+	std::vector<Mesh> meshes;
 
 	const char* iext = strrchr(input, '.');
 
 	if (iext && (strcmp(iext, ".gltf") == 0 || strcmp(iext, ".GLTF") == 0 || strcmp(iext, ".glb") == 0 || strcmp(iext, ".GLB") == 0))
 	{
 		cgltf_options options = {};
-		cgltf_result result = cgltf_parse_file(&options, input, &scene.data);
-		result = (result == cgltf_result_success) ? cgltf_validate(scene.data) : result;
-		result = (result == cgltf_result_success) ? cgltf_load_buffers(&options, scene.data, input) : result;
+		cgltf_result result = cgltf_parse_file(&options, input, &data);
+		result = (result == cgltf_result_success) ? cgltf_validate(data) : result;
+		result = (result == cgltf_result_success) ? cgltf_load_buffers(&options, data, input) : result;
 
 		if (result != cgltf_result_success)
 		{
 			fprintf(stderr, "Error loading %s: %s\n", input, getError(result));
+			cgltf_free(data);
 			return 2;
 		}
 
-		parseMeshesGltf(scene.data, scene.meshes);
+		parseMeshesGltf(data, meshes);
 	}
 	else if (iext && (strcmp(iext, ".obj") == 0 || strcmp(iext, ".OBJ") == 0))
 	{
@@ -2254,11 +2243,12 @@ int main(int argc, char** argv)
 		if (!obj)
 		{
 			fprintf(stderr, "Error loading %s: file not found\n", input);
+			cgltf_free(data);
 			return 2;
 		}
 
-		scene.data = parseSceneObj(obj);
-		parseMeshesObj(obj, scene.data, scene.meshes);
+		data = parseSceneObj(obj);
+		parseMeshesObj(obj, data, meshes);
 
 		fast_obj_destroy(obj);
 	}
@@ -2269,11 +2259,14 @@ int main(int argc, char** argv)
 	}
 
 	std::string json, bin;
-	if (!process(scene, settings, json, bin))
+	if (!process(data, meshes, settings, json, bin))
 	{
 		fprintf(stderr, "Error processing %s\n", input);
+		cgltf_free(data);
 		return 3;
 	}
+
+	cgltf_free(data);
 
 	const char* oext = strrchr(output, '.');
 
