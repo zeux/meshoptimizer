@@ -77,6 +77,7 @@ struct Settings
 	int pos_bits;
 	int uv_bits;
 	int anim_freq;
+	bool anim_const;
 	bool compress;
 	bool verbose;
 };
@@ -98,6 +99,14 @@ struct StreamFormat
 	cgltf_component_type component_type;
 	bool normalized;
 	size_t stride;
+};
+
+struct NodeInfo
+{
+	bool keep;
+	bool named;
+
+	int remap;
 };
 
 const char* getError(cgltf_result result)
@@ -1366,6 +1375,68 @@ void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& s
 	}
 }
 
+void prepareNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, size_t node_offset)
+{
+	assert(data->nodes_count == nodes.size());
+
+	// mark all joints as kept & named (names might be important to manipulate externally)
+	for (size_t i = 0; i < data->skins_count; ++i)
+	{
+		const cgltf_skin& skin = data->skins[i];
+
+		// for now we keep all joints directly referenced by the skin and the entire ancestry tree; we keep names for joints as well
+		for (size_t j = 0; j < skin.joints_count; ++j)
+		{
+			NodeInfo& ni = nodes[skin.joints[j] - data->nodes];
+
+			ni.keep = true;
+			ni.named = true;
+		}
+	}
+
+	// mark all animated nodes as kept & named
+	for (size_t i = 0; i < data->animations_count; ++i)
+	{
+		const cgltf_animation& animation = data->animations[i];
+
+		for (size_t j = 0; j < animation.channels_count; ++j)
+		{
+			const cgltf_animation_channel& channel = animation.channels[j];
+
+			if (channel.target_node)
+			{
+				NodeInfo& ni = nodes[channel.target_node - data->nodes];
+
+				ni.keep = true;
+				ni.named = true;
+			}
+		}
+	}
+
+	// to keep a node, we currently need to keep the entire ancestry chain
+	for (size_t i = 0; i < data->nodes_count; ++i)
+	{
+		if (!nodes[i].keep)
+			continue;
+
+		for (cgltf_node* node = &data->nodes[i]; node; node = node->parent)
+			nodes[node - data->nodes].keep = true;
+	}
+
+	// generate sequential indices for all nodes; they aren't sorted topologically
+	for (size_t i = 0; i < data->nodes_count; ++i)
+	{
+		NodeInfo& ni = nodes[i];
+
+		if (ni.keep)
+		{
+			ni.remap = int(node_offset);
+
+			node_offset++;
+		}
+	}
+}
+
 bool process(Scene& scene, const Settings& settings, std::string& json, std::string& bin)
 {
 	cgltf_data* data = scene.data;
@@ -1603,120 +1674,96 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		mesh_offset++;
 	}
 
-	std::vector<bool> node_keep(data->nodes_count);
-	std::vector<bool> node_named(data->nodes_count);
-	std::vector<int> node_remap(data->nodes_count, -1);
-
-	for (size_t i = 0; i < data->skins_count; ++i)
-	{
-		const cgltf_skin& skin = data->skins[i];
-
-		// for now we keep all joints directly referenced by the skin and the entire ancestry tree; we keep names for joints as well
-		for (size_t j = 0; j < skin.joints_count; ++j)
-		{
-			cgltf_node* joint = skin.joints[j];
-
-			for (cgltf_node* node = joint; node; node = node->parent)
-				node_keep[node - data->nodes] = true;
-
-			node_named[joint - data->nodes] = true;
-		}
-	}
+	std::vector<NodeInfo> nodes(data->nodes_count);
+	prepareNodes(data, nodes, node_offset);
 
 	for (size_t i = 0; i < data->nodes_count; ++i)
 	{
-		if (node_keep[i])
-		{
-			node_remap[i] = int(node_offset);
+		NodeInfo& ni = nodes[i];
 
-			node_offset++;
+		if (!ni.keep)
+			continue;
+
+		const cgltf_node& node = data->nodes[i];
+
+		if (!node.parent)
+		{
+			comma(json_roots);
+			json_roots += to_string(size_t(ni.remap));
 		}
-	}
 
-	for (size_t i = 0; i < data->nodes_count; ++i)
-	{
-		if (node_keep[i])
+		comma(json_nodes);
+		json_nodes += "{";
+		if (node.name && ni.named)
 		{
-			const cgltf_node& node = data->nodes[i];
-
-			if (!node.parent)
-			{
-				comma(json_roots);
-				json_roots += to_string(size_t(node_remap[i]));
-			}
-
 			comma(json_nodes);
-			json_nodes += "{";
-			if (node.name && node_named[i])
+			json_nodes += "\"name\":\"";
+			json_nodes += node.name;
+			json_nodes += "\"";
+		}
+		if (node.has_translation)
+		{
+			comma(json_nodes);
+			json_nodes += "\"translation\":[";
+			json_nodes += to_string(node.translation[0]);
+			json_nodes += ",";
+			json_nodes += to_string(node.translation[1]);
+			json_nodes += ",";
+			json_nodes += to_string(node.translation[2]);
+			json_nodes += "]";
+		}
+		if (node.has_rotation)
+		{
+			comma(json_nodes);
+			json_nodes += "\"rotation\":[";
+			json_nodes += to_string(node.rotation[0]);
+			json_nodes += ",";
+			json_nodes += to_string(node.rotation[1]);
+			json_nodes += ",";
+			json_nodes += to_string(node.rotation[2]);
+			json_nodes += ",";
+			json_nodes += to_string(node.rotation[3]);
+			json_nodes += "]";
+		}
+		if (node.has_scale)
+		{
+			comma(json_nodes);
+			json_nodes += "\"scale\":[";
+			json_nodes += to_string(node.scale[0]);
+			json_nodes += ",";
+			json_nodes += to_string(node.scale[1]);
+			json_nodes += ",";
+			json_nodes += to_string(node.scale[2]);
+			json_nodes += "]";
+		}
+		if (node.has_matrix)
+		{
+			comma(json_nodes);
+			json_nodes += "\"matrix\":[";
+			for (int k = 0; k < 16; ++k)
 			{
 				comma(json_nodes);
-				json_nodes += "\"name\":\"";
-				json_nodes += node.name;
-				json_nodes += "\"";
+				json_nodes += to_string(node.matrix[k]);
 			}
-			if (node.has_translation)
+			json_nodes += "]";
+		}
+		if (node.children_count)
+		{
+			comma(json_nodes);
+			json_nodes += "\"children\":[";
+			for (size_t j = 0; j < node.children_count; ++j)
 			{
-				comma(json_nodes);
-				json_nodes += "\"translation\":[";
-				json_nodes += to_string(node.translation[0]);
-				json_nodes += ",";
-				json_nodes += to_string(node.translation[1]);
-				json_nodes += ",";
-				json_nodes += to_string(node.translation[2]);
-				json_nodes += "]";
-			}
-			if (node.has_rotation)
-			{
-				comma(json_nodes);
-				json_nodes += "\"rotation\":[";
-				json_nodes += to_string(node.rotation[0]);
-				json_nodes += ",";
-				json_nodes += to_string(node.rotation[1]);
-				json_nodes += ",";
-				json_nodes += to_string(node.rotation[2]);
-				json_nodes += ",";
-				json_nodes += to_string(node.rotation[3]);
-				json_nodes += "]";
-			}
-			if (node.has_scale)
-			{
-				comma(json_nodes);
-				json_nodes += "\"scale\":[";
-				json_nodes += to_string(node.scale[0]);
-				json_nodes += ",";
-				json_nodes += to_string(node.scale[1]);
-				json_nodes += ",";
-				json_nodes += to_string(node.scale[2]);
-				json_nodes += "]";
-			}
-			if (node.has_matrix)
-			{
-				comma(json_nodes);
-				json_nodes += "\"matrix\":[";
-				for (int k = 0; k < 16; ++k)
+				NodeInfo& ci = nodes[node.children[j] - data->nodes];
+
+				if (ci.keep)
 				{
 					comma(json_nodes);
-					json_nodes += to_string(node.matrix[k]);
+					json_nodes += to_string(size_t(ci.remap));
 				}
-				json_nodes += "]";
 			}
-			if (node.children_count)
-			{
-				comma(json_nodes);
-				json_nodes += "\"children\":[";
-				for (size_t j = 0; j < node.children_count; ++j)
-				{
-					ptrdiff_t child = node.children[j] - data->nodes;
-					if (node_keep[child])
-					{
-						comma(json_nodes);
-						json_nodes += to_string(size_t(node_remap[child]));
-					}
-				}
-				json_nodes += "]";
-			}
-			json_nodes += "}";
+			json_nodes += "]";
 		}
+		json_nodes += "}";
 	}
 
 	for (size_t i = 0; i < data->skins_count; ++i)
@@ -1767,7 +1814,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		for (size_t j = 0; j < skin.joints_count; ++j)
 		{
 			comma(json_skins);
-			json_skins += to_string(size_t(node_remap[skin.joints[j] - data->nodes]));
+			json_skins += to_string(size_t(nodes[skin.joints[j] - data->nodes].remap));
 		}
 		json_skins += "]";
 		json_skins += ",\"inverseBindMatrices\":";
@@ -1776,7 +1823,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 		{
 			comma(json_skins);
 			json_skins += "\"skeleton\":";
-			json_skins += to_string(size_t(node_remap[skin.skeleton - data->nodes]));
+			json_skins += to_string(size_t(nodes[skin.skeleton - data->nodes].remap));
 		}
 		json_skins += "}";
 	}
@@ -1795,7 +1842,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			const cgltf_animation_channel& channel = animation.channels[j];
 			const cgltf_animation_sampler& sampler = *channel.sampler;
 
-			if (!channel.target_node || !node_keep[channel.target_node - data->nodes])
+			if (!channel.target_node || !nodes[channel.target_node - data->nodes].keep)
 				continue;
 
 			if (channel.target_path != cgltf_animation_path_type_translation && channel.target_path != cgltf_animation_path_type_rotation && channel.target_path != cgltf_animation_path_type_scale)
@@ -1926,7 +1973,7 @@ bool process(Scene& scene, const Settings& settings, std::string& json, std::str
 			json_channels += "{\"sampler\":";
 			json_channels += to_string(track_offset);
 			json_channels += ",\"target\":{\"node\":";
-			json_channels += to_string(size_t(node_remap[channel.target_node - data->nodes]));
+			json_channels += to_string(size_t(nodes[channel.target_node - data->nodes].remap));
 			json_channels += ",\"path\":";
 			json_channels += animationPath(channel.target_path);
 			json_channels += "}}";
@@ -2069,6 +2116,10 @@ int main(int argc, char** argv)
 		{
 			settings.anim_freq = atoi(argv[++i]);
 		}
+		else if (strcmp(arg, "-ac") == 0)
+		{
+			settings.anim_const = true;
+		}
 		else if (strcmp(arg, "-i") == 0 && i + 1 < argc && !input)
 		{
 			input = argv[++i];
@@ -2102,6 +2153,7 @@ int main(int argc, char** argv)
 		fprintf(stderr, "-vp N: use N-bit quantization for position (default: 14; N should be between 1 and 16)\n");
 		fprintf(stderr, "-vt N: use N-bit quantization for texture corodinates (default: 12; N should be between 1 and 16)\n");
 		fprintf(stderr, "-af N: resample animations at N Hz (default: 30)\n");
+		fprintf(stderr, "-ac: keep constant animation tracks even if they don't modify the node transform\n");
 		fprintf(stderr, "-c: produce compressed glb files\n");
 		fprintf(stderr, "-v: verbose output\n");
 
