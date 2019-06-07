@@ -1381,10 +1381,64 @@ void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& s
 	}
 }
 
-void prepareNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, size_t node_offset)
+void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes)
 {
-	assert(data->nodes_count == nodes.size());
+	for (size_t i = 0; i < data->animations_count; ++i)
+	{
+		const cgltf_animation& animation = data->animations[i];
 
+		for (size_t j = 0; j < animation.channels_count; ++j)
+		{
+			const cgltf_animation_channel& channel = animation.channels[j];
+			const cgltf_animation_sampler& sampler = *channel.sampler;
+
+			if (!channel.target_node)
+				continue;
+
+			NodeInfo& ni = nodes[channel.target_node - data->nodes];
+
+			if (channel.target_path != cgltf_animation_path_type_translation && channel.target_path != cgltf_animation_path_type_rotation && channel.target_path != cgltf_animation_path_type_scale)
+				continue;
+
+			// mark nodes that have animation tracks that change their base transform as animated
+			if (!isTrackConstant(sampler, channel.target_path))
+			{
+				ni.animated_paths |= (1 << channel.target_path);
+			}
+			else
+			{
+				Attr base = {};
+
+				switch (channel.target_path)
+				{
+				case cgltf_animation_path_type_translation:
+					memcpy(base.f, channel.target_node->translation, 3 * sizeof(float));
+					break;
+				case cgltf_animation_path_type_rotation:
+					memcpy(base.f, channel.target_node->rotation, 4 * sizeof(float));
+					break;
+				case cgltf_animation_path_type_scale:
+					memcpy(base.f, channel.target_node->scale, 3 * sizeof(float));
+					break;
+				default:;
+				}
+
+				Attr first = {};
+				cgltf_accessor_read_float(sampler.output, 0, first.f, 4);
+
+				const float tolerance = 1e-3f;
+
+				if (getDelta(base, first, channel.target_path) > tolerance)
+				{
+					ni.animated_paths |= (1 << channel.target_path);
+				}
+			}
+		}
+	}
+}
+
+void markNeeded(cgltf_data* data, std::vector<NodeInfo>& nodes)
+{
 	// mark all joints as kept & named (names might be important to manipulate externally)
 	for (size_t i = 0; i < data->skins_count; ++i)
 	{
@@ -1418,7 +1472,10 @@ void prepareNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, size_t node_of
 			}
 		}
 	}
+}
 
+void remapNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, size_t node_offset)
+{
 	// to keep a node, we currently need to keep the entire ancestry chain
 	for (size_t i = 0; i < data->nodes_count; ++i)
 	{
@@ -1463,6 +1520,11 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		reindexMesh(mesh);
 		optimizeMesh(mesh);
 	}
+
+	std::vector<NodeInfo> nodes(data->nodes_count);
+
+	markAnimated(data, nodes);
+	markNeeded(data, nodes);
 
 	if (settings.verbose)
 	{
@@ -1678,8 +1740,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		mesh_offset++;
 	}
 
-	std::vector<NodeInfo> nodes(data->nodes_count);
-	prepareNodes(data, nodes, node_offset);
+	remapNodes(data, nodes, node_offset);
 
 	for (size_t i = 0; i < data->nodes_count; ++i)
 	{
@@ -1830,60 +1891,6 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			json_skins += to_string(size_t(nodes[skin.skeleton - data->nodes].remap));
 		}
 		json_skins += "}";
-	}
-
-	// mark individual node components as animated
-	for (size_t i = 0; i < data->animations_count; ++i)
-	{
-		const cgltf_animation& animation = data->animations[i];
-
-		for (size_t j = 0; j < animation.channels_count; ++j)
-		{
-			const cgltf_animation_channel& channel = animation.channels[j];
-			const cgltf_animation_sampler& sampler = *channel.sampler;
-
-			if (!channel.target_node)
-				continue;
-
-			NodeInfo& ni = nodes[channel.target_node - data->nodes];
-
-			if (channel.target_path != cgltf_animation_path_type_translation && channel.target_path != cgltf_animation_path_type_rotation && channel.target_path != cgltf_animation_path_type_scale)
-				continue;
-
-			// mark nodes that have animation tracks that change their base transform as animated
-			if (!isTrackConstant(sampler, channel.target_path))
-			{
-				ni.animated_paths |= (1 << channel.target_path);
-			}
-			else
-			{
-				Attr base = {};
-
-				switch (channel.target_path)
-				{
-				case cgltf_animation_path_type_translation:
-					memcpy(base.f, channel.target_node->translation, 3 * sizeof(float));
-					break;
-				case cgltf_animation_path_type_rotation:
-					memcpy(base.f, channel.target_node->rotation, 4 * sizeof(float));
-					break;
-				case cgltf_animation_path_type_scale:
-					memcpy(base.f, channel.target_node->scale, 3 * sizeof(float));
-					break;
-				default:;
-				}
-
-				Attr first = {};
-				cgltf_accessor_read_float(sampler.output, 0, first.f, 4);
-
-				const float tolerance = 1e-3f;
-
-				if (getDelta(base, first, channel.target_path) > tolerance)
-				{
-					ni.animated_paths |= (1 << channel.target_path);
-				}
-			}
-		}
 	}
 
 	for (size_t i = 0; i < data->animations_count; ++i)
