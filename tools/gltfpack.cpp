@@ -1558,6 +1558,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	bool has_pbr_specular_glossiness = false;
 
 	size_t view_offset = 0;
+	size_t accr_offset = 0;
 	size_t node_offset = 0;
 	size_t mesh_offset = 0;
 
@@ -1659,6 +1660,8 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 				writeAccessor(json_accessors, view_offset, format.type, format.component_type, format.normalized, stream.data.size());
 			}
 
+			view_offset++;
+
 			comma(json_attributes);
 			json_attributes += "\"";
 			json_attributes += attributeType(stream.type);
@@ -1668,12 +1671,12 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 				json_attributes += to_string(size_t(stream.index));
 			}
 			json_attributes += "\":";
-			json_attributes += to_string(view_offset);
+			json_attributes += to_string(accr_offset);
 
-			view_offset++;
+			accr_offset++;
 		}
 
-		size_t index_view = 0;
+		size_t index_accr = 0;
 
 		{
 			size_t bin_offset = bin.size();
@@ -1690,16 +1693,18 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			comma(json_accessors);
 			writeAccessor(json_accessors, view_offset, format.type, format.component_type, format.normalized, mesh.indices.size());
 
-			index_view = view_offset;
-
 			view_offset++;
+
+			index_accr = accr_offset;
+
+			accr_offset++;
 		}
 
 		comma(json_meshes);
 		json_meshes += "{\"primitives\":[{\"attributes\":{";
 		json_meshes += json_attributes;
 		json_meshes += "},\"indices\":";
-		json_meshes += to_string(index_view);
+		json_meshes += to_string(index_accr);
 		if (mesh.material)
 		{
 			json_meshes += ",\"material\":";
@@ -1868,9 +1873,11 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		comma(json_accessors);
 		writeAccessor(json_accessors, view_offset, cgltf_type_mat4, cgltf_component_type_r_32f, false, skin.joints_count);
 
-		size_t matrix_view = view_offset;
-
 		view_offset++;
+
+		size_t matrix_accr = accr_offset;
+
+		accr_offset++;
 
 		comma(json_skins);
 
@@ -1883,7 +1890,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		}
 		json_skins += "]";
 		json_skins += ",\"inverseBindMatrices\":";
-		json_skins += to_string(matrix_view);
+		json_skins += to_string(matrix_accr);
 		if (skin.skeleton)
 		{
 			comma(json_skins);
@@ -1951,7 +1958,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 		int frames = 1 + int(ceilf((maxt - mint) * settings.anim_freq));
 
-		size_t time_view = view_offset;
+		size_t time_accr = accr_offset;
 
 		if (needs_time)
 		{
@@ -1972,9 +1979,10 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			writeAccessor(json_accessors, view_offset, cgltf_type_scalar, format.component_type, format.normalized, frames, &time.front(), &time.back(), 1);
 
 			view_offset++;
+			accr_offset++;
 		}
 
-		size_t pose_view = view_offset;
+		size_t pose_accr = accr_offset;
 
 		if (needs_pose)
 		{
@@ -1992,6 +2000,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			writeAccessor(json_accessors, view_offset, cgltf_type_scalar, format.component_type, format.normalized, 1, &pose.front(), &pose.back(), 1);
 
 			view_offset++;
+			accr_offset++;
 		}
 
 		size_t track_offset = 0;
@@ -2031,15 +2040,17 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			comma(json_accessors);
 			writeAccessor(json_accessors, view_offset, format.type, format.component_type, format.normalized, track.size());
 
-			size_t data_view = view_offset;
-
 			view_offset++;
+
+			size_t data_accr = accr_offset;
+
+			accr_offset++;
 
 			comma(json_samplers);
 			json_samplers += "{\"input\":";
-			json_samplers += to_string(tc ? pose_view : time_view);
+			json_samplers += to_string(tc ? pose_accr : time_accr);
 			json_samplers += ",\"output\":";
-			json_samplers += to_string(data_view);
+			json_samplers += to_string(data_accr);
 			json_samplers += "}";
 
 			comma(json_channels);
