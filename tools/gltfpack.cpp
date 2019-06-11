@@ -1474,7 +1474,7 @@ void markNeeded(cgltf_data* data, std::vector<NodeInfo>& nodes)
 	}
 }
 
-void remapNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, size_t node_offset)
+void remapNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, size_t& node_offset)
 {
 	// to keep a node, we currently need to keep the entire ancestry chain
 	for (size_t i = 0; i < data->nodes_count; ++i)
@@ -1567,6 +1567,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	size_t bytes_skin = 0;
 	size_t bytes_time = 0;
 	size_t bytes_keyframe = 0;
+	size_t bytes_image = 0;
 
 	for (size_t i = 0; i < data->images_count; ++i)
 	{
@@ -1580,10 +1581,28 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			json_images += image.uri;
 			json_images += "\"";
 		}
-		else
+		else if (image.buffer_view && image.buffer_view->buffer->data)
 		{
-			fprintf(stderr, "Warning: image %d has embedded texture data, skipping\n", int(i));
+			const char* img = static_cast<const char*>(image.buffer_view->buffer->data) + image.buffer_view->offset;
+			size_t size = image.buffer_view->size;
+
+			size_t bin_offset = bin.size();
+			bin.append(img, size);
+
+			comma(json_buffer_views);
+			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, size, 1, bin_offset, bin.size() - bin_offset, false);
+
+			// image data may not be aligned by 4b => align buffer after writing it
+			bin.resize((bin.size() + 3) & ~3);
+
+			json_images += "\"bufferView\":";
+			json_images += to_string(view_offset);
+
+			view_offset++;
+
+			bytes_image += bin.size() - bin_offset;
 		}
+
 		json_images += "}";
 	}
 
@@ -2162,8 +2181,8 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	if (settings.verbose)
 	{
 		printf("output: %d nodes, %d meshes\n", int(node_offset), int(mesh_offset));
-		printf("output: JSON %d bytes, buffers %d bytes (vertex %d bytes, index %d bytes, skin %d bytes, time %d bytes, keyframe %d bytes)\n",
-		       int(json.size()), int(bin.size()), int(bytes_vertex), int(bytes_index), int(bytes_skin), int(bytes_time), int(bytes_keyframe));
+		printf("output: JSON %d bytes, buffers %d bytes (vertex %d bytes, index %d bytes, skin %d bytes, time %d bytes, keyframe %d bytes, image %d bytes)\n",
+		       int(json.size()), int(bin.size()), int(bytes_vertex), int(bytes_index), int(bytes_skin), int(bytes_time), int(bytes_keyframe), int(bytes_image));
 	}
 
 	return true;
