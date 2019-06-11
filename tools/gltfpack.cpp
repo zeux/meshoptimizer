@@ -166,8 +166,9 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 		if (!node.mesh)
 			continue;
 
-		float transform[16];
-		cgltf_node_transform_world(&node, transform);
+		float transform[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+		if (!node.skin)
+			cgltf_node_transform_world(&node, transform);
 
 		const cgltf_mesh& mesh = *node.mesh;
 
