@@ -157,6 +157,28 @@ void transformNormal(float* ptr, const float* transform)
 	ptr[2] = z * s;
 }
 
+void transformMesh(Mesh& mesh, const cgltf_node* node)
+{
+	float transform[16];
+	cgltf_node_transform_world(node, transform);
+
+	for (size_t si = 0; si < mesh.streams.size(); ++si)
+	{
+		Stream& stream = mesh.streams[si];
+
+		if (stream.type == cgltf_attribute_type_position)
+		{
+			for (size_t i = 0; i < stream.data.size(); ++i)
+				transformPosition(stream.data[i].f, transform);
+		}
+		else if (stream.type == cgltf_attribute_type_normal || stream.type == cgltf_attribute_type_tangent)
+		{
+			for (size_t i = 0; i < stream.data.size(); ++i)
+				transformNormal(stream.data[i].f, transform);
+		}
+	}
+}
+
 void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 {
 	for (size_t ni = 0; ni < data->nodes_count; ++ni)
@@ -165,10 +187,6 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 
 		if (!node.mesh)
 			continue;
-
-		float transform[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
-		if (!node.skin)
-			cgltf_node_transform_world(&node, transform);
 
 		const cgltf_mesh& mesh = *node.mesh;
 
@@ -201,19 +219,11 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 				for (size_t i = 0; i < attr.data->count; ++i)
 					cgltf_accessor_read_float(attr.data, i, s.data[i].f, 4);
 
-				if (attr.type == cgltf_attribute_type_position)
-				{
-					for (size_t i = 0; i < attr.data->count; ++i)
-						transformPosition(s.data[i].f, transform);
-				}
-				else if (attr.type == cgltf_attribute_type_normal || attr.type == cgltf_attribute_type_tangent)
-				{
-					for (size_t i = 0; i < attr.data->count; ++i)
-						transformNormal(s.data[i].f, transform);
-				}
-
 				result.streams.push_back(s);
 			}
+
+			if (!node.skin)
+				transformMesh(result, &node);
 
 			if (result.indices.size() && result.streams.size())
 				meshes.push_back(result);
