@@ -311,15 +311,12 @@ void parseMeshesObj(fastObjMesh* obj, cgltf_data* data, std::vector<Mesh>& meshe
 	std::vector<size_t> vertex_count(material_count);
 	std::vector<size_t> index_count(material_count);
 
-	for (unsigned int gi = 0; gi < obj->group_count; ++gi)
+	for (unsigned int fi = 0; fi < obj->face_count; ++fi)
 	{
-		for (unsigned int fi = 0; fi < obj->groups[gi].face_count; ++fi)
-		{
-			unsigned int mi = obj->groups[gi].materials[fi];
+		unsigned int mi = obj->face_materials[fi];
 
-			vertex_count[mi] += obj->groups[gi].vertices[fi];
-			index_count[mi] += (obj->groups[gi].vertices[fi] - 2) * 3;
-		}
+		vertex_count[mi] += obj->face_vertices[fi];
+		index_count[mi] += (obj->face_vertices[fi] - 2) * 3;
 	}
 
 	std::vector<size_t> mesh_index(material_count);
@@ -354,44 +351,41 @@ void parseMeshesObj(fastObjMesh* obj, cgltf_data* data, std::vector<Mesh>& meshe
 	std::vector<size_t> vertex_offset(material_count);
 	std::vector<size_t> index_offset(material_count);
 
-	for (unsigned int gi = 0; gi < obj->group_count; ++gi)
+	size_t group_offset = 0;
+
+	for (unsigned int fi = 0; fi < obj->face_count; ++fi)
 	{
-		size_t group_offset = 0;
+		unsigned int mi = obj->face_materials[fi];
+		Mesh& mesh = meshes[mesh_index[mi]];
 
-		for (unsigned int fi = 0; fi < obj->groups[gi].face_count; ++fi)
+		size_t vo = vertex_offset[mi];
+		size_t io = index_offset[mi];
+
+		for (unsigned int vi = 0; vi < obj->face_vertices[fi]; ++vi)
 		{
-			unsigned int mi = obj->groups[gi].materials[fi];
-			Mesh& mesh = meshes[mesh_index[mi]];
+			fastObjIndex ii = obj->indices[group_offset + vi];
 
-			size_t vo = vertex_offset[mi];
-			size_t io = index_offset[mi];
+			Attr p = {{obj->positions[ii.p * 3 + 0], obj->positions[ii.p * 3 + 1], obj->positions[ii.p * 3 + 2]}};
+			Attr n = {{obj->normals[ii.n * 3 + 0], obj->normals[ii.n * 3 + 1], obj->normals[ii.n * 3 + 2]}};
+			Attr t = {{obj->texcoords[ii.t * 2 + 0], 1.f - obj->texcoords[ii.t * 2 + 1]}};
 
-			for (unsigned int vi = 0; vi < obj->groups[gi].vertices[fi]; ++vi)
-			{
-				fastObjIndex ii = obj->groups[gi].indices[group_offset + vi];
-
-				Attr p = {{obj->positions[ii.p * 3 + 0], obj->positions[ii.p * 3 + 1], obj->positions[ii.p * 3 + 2]}};
-				Attr n = {{obj->normals[ii.n * 3 + 0], obj->normals[ii.n * 3 + 1], obj->normals[ii.n * 3 + 2]}};
-				Attr t = {{obj->texcoords[ii.t * 2 + 0], 1.f - obj->texcoords[ii.t * 2 + 1]}};
-
-				mesh.streams[0].data[vo + vi] = p;
-				mesh.streams[1].data[vo + vi] = n;
-				mesh.streams[2].data[vo + vi] = t;
-			}
-
-			for (unsigned int vi = 2; vi < obj->groups[gi].vertices[fi]; ++vi)
-			{
-				size_t to = io + (vi - 2) * 3;
-
-				mesh.indices[to + 0] = unsigned(vo);
-				mesh.indices[to + 1] = unsigned(vo + vi - 1);
-				mesh.indices[to + 2] = unsigned(vo + vi);
-			}
-
-			vertex_offset[mi] += obj->groups[gi].vertices[fi];
-			index_offset[mi] += (obj->groups[gi].vertices[fi] - 2) * 3;
-			group_offset += obj->groups[gi].vertices[fi];
+			mesh.streams[0].data[vo + vi] = p;
+			mesh.streams[1].data[vo + vi] = n;
+			mesh.streams[2].data[vo + vi] = t;
 		}
+
+		for (unsigned int vi = 2; vi < obj->face_vertices[fi]; ++vi)
+		{
+			size_t to = io + (vi - 2) * 3;
+
+			mesh.indices[to + 0] = unsigned(vo);
+			mesh.indices[to + 1] = unsigned(vo + vi - 1);
+			mesh.indices[to + 2] = unsigned(vo + vi);
+		}
+
+		vertex_offset[mi] += obj->face_vertices[fi];
+		index_offset[mi] += (obj->face_vertices[fi] - 2) * 3;
+		group_offset += obj->face_vertices[fi];
 	}
 }
 
