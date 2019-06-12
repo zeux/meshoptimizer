@@ -1,5 +1,5 @@
 #include "../src/meshoptimizer.h"
-#include "objparser.h"
+#include "fast_obj.h"
 
 #include <algorithm>
 #include <functional>
@@ -98,21 +98,17 @@ Mesh gridmesh(unsigned int N)
 
 Mesh objmesh(const char* path)
 {
-	ObjFile file;
-
-	if (!objParseFile(file, path))
+	fastObjMesh* obj = fast_obj_read(path);
+	if (!obj)
 	{
 		printf("Error loading %s: file not found\n", path);
 		return Mesh();
 	}
 
-	if (!objValidate(file))
-	{
-		printf("Error loading %s: invalid file data\n", path);
-		return Mesh();
-	}
+	size_t total_indices = 0;
 
-	size_t total_indices = file.f_size / 3;
+	for (unsigned int i = 0; i < obj->face_count; ++i)
+		total_indices += 3 * (obj->face_vertices[i] - 2);
 
 	struct Vertex
 	{
@@ -123,28 +119,43 @@ Mesh objmesh(const char* path)
 
 	std::vector<Vertex> vertices(total_indices);
 
-	for (size_t i = 0; i < total_indices; ++i)
+	size_t vertex_offset = 0;
+	size_t index_offset = 0;
+
+	for (unsigned int i = 0; i < obj->face_count; ++i)
 	{
-		int vi = file.f[i * 3 + 0];
-		int vti = file.f[i * 3 + 1];
-		int vni = file.f[i * 3 + 2];
+		for (unsigned int j = 0; j < obj->face_vertices[i]; ++j)
+		{
+			fastObjIndex gi = obj->indices[index_offset + j];
 
-		Vertex v =
-		    {
-		        file.v[vi * 3 + 0],
-		        file.v[vi * 3 + 1],
-		        file.v[vi * 3 + 2],
+			Vertex v =
+			    {
+			        obj->positions[gi.p * 3 + 0],
+			        obj->positions[gi.p * 3 + 1],
+			        obj->positions[gi.p * 3 + 2],
+			        obj->normals[gi.n * 3 + 0],
+			        obj->normals[gi.n * 3 + 1],
+			        obj->normals[gi.n * 3 + 2],
+			        obj->texcoords[gi.t * 2 + 0],
+			        obj->texcoords[gi.t * 2 + 1],
+			    };
 
-		        vni >= 0 ? file.vn[vni * 3 + 0] : 0,
-		        vni >= 0 ? file.vn[vni * 3 + 1] : 0,
-		        vni >= 0 ? file.vn[vni * 3 + 2] : 0,
+			// triangulate polygon on the fly; offset-3 is always the first polygon vertex
+			if (j >= 3)
+			{
+				vertices[vertex_offset + 0] = vertices[vertex_offset - 3];
+				vertices[vertex_offset + 1] = vertices[vertex_offset - 1];
+				vertex_offset += 2;
+			}
 
-		        vti >= 0 ? file.vt[vti * 3 + 0] : 0,
-		        vti >= 0 ? file.vt[vti * 3 + 1] : 0,
-		    };
+			vertices[vertex_offset] = v;
+			vertex_offset++;
+		}
 
-		vertices[i] = v;
+		index_offset += obj->face_vertices[i];
 	}
+
+	fast_obj_destroy(obj);
 
 	Mesh result;
 

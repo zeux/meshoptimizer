@@ -9,7 +9,7 @@ BUILD=build/$(config)
 LIBRARY_SOURCES=$(wildcard src/*.cpp)
 LIBRARY_OBJECTS=$(LIBRARY_SOURCES:%=$(BUILD)/%.o)
 
-DEMO_SOURCES=$(wildcard demo/*.c demo/*.cpp) tools/objparser.cpp
+DEMO_SOURCES=$(wildcard demo/*.c demo/*.cpp) tools/meshloader.cpp
 DEMO_OBJECTS=$(DEMO_SOURCES:%=$(BUILD)/%.o)
 
 GLTFPACK_SOURCES=tools/gltfpack.cpp tools/meshloader.cpp

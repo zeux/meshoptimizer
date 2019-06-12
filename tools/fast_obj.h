@@ -33,7 +33,7 @@ typedef struct
     /* Texture name from .mtl file */
     char*                       name;
 
-    /* Path to texture */
+    /* Resolved path to texture */
     char*                       path;
 
 } fastObjTexture;
@@ -88,14 +88,11 @@ typedef struct
     /* Number of faces */
     unsigned int                face_count;
 
-    /* Material index for each face */
-    unsigned int*               materials;
+    /* First face in fastObjMesh face_* arrays */
+    unsigned int                face_offset;
 
-    /* Vertex count for each face */
-    unsigned int*               vertices;
-
-    /* Array of indices */
-    fastObjIndex*               indices;
+    /* First index in fastObjMesh indices array */
+    unsigned int                index_offset;
 
 } fastObjGroup;
 
@@ -111,6 +108,14 @@ typedef struct
 
     unsigned int                normal_count;
     float*                      normals;
+
+    /* Face data: one element for each face */
+    unsigned int                face_count;
+    unsigned int*               face_vertices;
+    unsigned int*               face_materials;
+
+    /* Index data: one element for each face vertex */
+    fastObjIndex*               indices;
 
     /* Materials */
     unsigned int                material_count;
@@ -437,11 +442,10 @@ fastObjGroup group_default(void)
 {
     fastObjGroup group;
 
-    group.name       = 0;
-    group.face_count = 0;
-    group.materials  = 0;
-    group.vertices   = 0;
-    group.indices    = 0;
+    group.name         = 0;
+    group.face_count   = 0;
+    group.face_offset  = 0;
+    group.index_offset = 0;
 
     return group;
 }
@@ -451,10 +455,6 @@ static
 void group_clean(fastObjGroup* group)
 {
     memory_dealloc(group->name);
-
-    array_clean(group->materials);
-    array_clean(group->vertices);
-    array_clean(group->indices);
 }
 
 
@@ -469,6 +469,8 @@ void flush_output(fastObjData* data)
 
     /* Reset for more data */
     data->group = group_default();
+    data->group.face_offset = array_size(data->mesh->face_vertices);
+    data->group.index_offset = array_size(data->mesh->indices);
 }
 
 
@@ -685,14 +687,14 @@ const char* parse_face(fastObjData* data, const char* ptr)
         else
             vn.n = 0;
 
-        array_push(data->group.indices, vn);
+        array_push(data->mesh->indices, vn);
         count++;
 
         ptr = skip_whitespace(ptr);
     }
 
-    array_push(data->group.vertices, count);
-    array_push(data->group.materials, data->material);
+    array_push(data->mesh->face_vertices, count);
+    array_push(data->mesh->face_materials, data->material);
 
     data->group.face_count++;
 
@@ -1245,6 +1247,9 @@ void fast_obj_destroy(fastObjMesh* m)
     array_clean(m->positions);
     array_clean(m->texcoords);
     array_clean(m->normals);
+    array_clean(m->face_vertices);
+    array_clean(m->face_materials);
+    array_clean(m->indices);
     array_clean(m->groups);
     array_clean(m->materials);
 
@@ -1277,11 +1282,14 @@ fastObjMesh* fast_obj_read(const char* path)
     if (!m)
         return 0;
 
-    m->positions = 0;
-    m->texcoords = 0;
-    m->normals   = 0;
-    m->materials = 0;
-    m->groups    = 0;
+    m->positions      = 0;
+    m->texcoords      = 0;
+    m->normals        = 0;
+    m->face_vertices  = 0;
+    m->face_materials = 0;
+    m->indices        = 0;
+    m->materials      = 0;
+    m->groups         = 0;
 
 
     /* Add dummy position/texcoord/normal */
@@ -1371,6 +1379,7 @@ fastObjMesh* fast_obj_read(const char* path)
     m->position_count = array_size(m->positions) / 3;
     m->texcoord_count = array_size(m->texcoords) / 2;
     m->normal_count   = array_size(m->normals) / 3;
+    m->face_count     = array_size(m->face_vertices);
     m->material_count = array_size(m->materials);
     m->group_count    = array_size(m->groups);
 
