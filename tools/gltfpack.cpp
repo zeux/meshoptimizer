@@ -2355,7 +2355,7 @@ int main(int argc, char** argv)
 			return 4;
 		}
 
-		char bufferspec[32];
+		char bufferspec[64];
 		sprintf(bufferspec, "{\"buffers\":[{\"byteLength\":%zu}],", bin.size());
 
 		json.insert(0, bufferspec);
