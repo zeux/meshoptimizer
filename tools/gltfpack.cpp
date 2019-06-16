@@ -63,9 +63,11 @@ struct Mesh
 struct Settings
 {
 	int pos_bits;
-	int uv_bits;
+	int tex_bits;
+
 	int anim_freq;
 	bool anim_const;
+
 	bool compress;
 	bool verbose;
 };
@@ -555,7 +557,7 @@ QuantizationParams prepareQuantization(const std::vector<Mesh>& meshes, const Se
 		result.pos_scale = std::max(pos_max.f[0] - pos_min.f[0], std::max(pos_max.f[1] - pos_min.f[1], pos_max.f[2] - pos_min.f[2]));
 	}
 
-	result.uv_bits = settings.uv_bits;
+	result.uv_bits = settings.tex_bits;
 
 	Attr uv_min, uv_max;
 	if (getAttributeBounds(meshes, cgltf_attribute_type_texcoord, uv_min, uv_max))
@@ -2202,11 +2204,12 @@ int main(int argc, char** argv)
 {
 	Settings settings = {};
 	settings.pos_bits = 14;
-	settings.uv_bits = 12;
+	settings.tex_bits = 12;
 	settings.anim_freq = 30;
 
 	const char* input = 0;
 	const char* output = 0;
+	bool help = false;
 
 	for (int i = 1; i < argc; ++i)
 	{
@@ -2218,7 +2221,7 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-vt") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.uv_bits = atoi(argv[++i]);
+			settings.tex_bits = atoi(argv[++i]);
 		}
 		else if (strcmp(arg, "-af") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
@@ -2244,6 +2247,10 @@ int main(int argc, char** argv)
 		{
 			settings.verbose = true;
 		}
+		else if (strcmp(arg, "-h") == 0)
+		{
+			help = true;
+		}
 		else
 		{
 			fprintf(stderr, "Unrecognized option %s\n", arg);
@@ -2251,7 +2258,7 @@ int main(int argc, char** argv)
 		}
 	}
 
-	if (!input || !output)
+	if (!input || !output || help)
 	{
 		fprintf(stderr, "Usage: gltfpack [options] -i input -o output\n");
 		fprintf(stderr, "\n");
@@ -2264,6 +2271,7 @@ int main(int argc, char** argv)
 		fprintf(stderr, "-ac: keep constant animation tracks even if they don't modify the node transform\n");
 		fprintf(stderr, "-c: produce compressed glb files\n");
 		fprintf(stderr, "-v: verbose output\n");
+		fprintf(stderr, "-h: display this help and exit\n");
 
 		return 1;
 	}
