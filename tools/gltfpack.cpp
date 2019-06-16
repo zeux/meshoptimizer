@@ -64,6 +64,7 @@ struct Settings
 {
 	int pos_bits;
 	int tex_bits;
+	int nrm_bits;
 	bool nrm_unit;
 
 	int anim_freq;
@@ -647,6 +648,8 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	}
 	else if (stream.type == cgltf_attribute_type_normal)
 	{
+		int bits = settings.nrm_unit ? 8 : settings.nrm_bits;
+
 		for (size_t i = 0; i < stream.data.size(); ++i)
 		{
 			const Attr& a = stream.data[i];
@@ -657,9 +660,9 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 				rescaleNormal(nx, ny, nz);
 
 			int8_t v[4] = {
-			    int8_t(meshopt_quantizeSnorm(nx, 8)),
-			    int8_t(meshopt_quantizeSnorm(ny, 8)),
-			    int8_t(meshopt_quantizeSnorm(nz, 8)),
+			    int8_t(meshopt_quantizeSnorm(nx, bits)),
+			    int8_t(meshopt_quantizeSnorm(ny, bits)),
+			    int8_t(meshopt_quantizeSnorm(nz, bits)),
 			    0};
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
@@ -669,6 +672,8 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	}
 	else if (stream.type == cgltf_attribute_type_tangent)
 	{
+		int bits = settings.nrm_unit ? 8 : settings.nrm_bits;
+
 		for (size_t i = 0; i < stream.data.size(); ++i)
 		{
 			const Attr& a = stream.data[i];
@@ -679,9 +684,9 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 				rescaleNormal(nx, ny, nz);
 
 			int8_t v[4] = {
-			    int8_t(meshopt_quantizeSnorm(nx, 8)),
-			    int8_t(meshopt_quantizeSnorm(ny, 8)),
-			    int8_t(meshopt_quantizeSnorm(nz, 8)),
+			    int8_t(meshopt_quantizeSnorm(nx, bits)),
+			    int8_t(meshopt_quantizeSnorm(ny, bits)),
+			    int8_t(meshopt_quantizeSnorm(nz, bits)),
 			    int8_t(meshopt_quantizeSnorm(nw, 8))};
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
@@ -2210,6 +2215,7 @@ int main(int argc, char** argv)
 	Settings settings = {};
 	settings.pos_bits = 14;
 	settings.tex_bits = 12;
+	settings.nrm_bits = 8;
 	settings.anim_freq = 30;
 
 	const char* input = 0;
@@ -2227,6 +2233,10 @@ int main(int argc, char** argv)
 		else if (strcmp(arg, "-vt") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.tex_bits = atoi(argv[++i]);
+		}
+		else if (strcmp(arg, "-vn") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		{
+			settings.nrm_bits = atoi(argv[++i]);
 		}
 		else if (strcmp(arg, "-vu") == 0)
 		{
@@ -2274,8 +2284,9 @@ int main(int argc, char** argv)
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "-i file: input file to process, .obj/.gltf/.glb\n");
 		fprintf(stderr, "-o file: output file path, .gltf/.glb\n");
-		fprintf(stderr, "-vp N: use N-bit quantization for position (default: 14; N should be between 1 and 16)\n");
+		fprintf(stderr, "-vp N: use N-bit quantization for positions (default: 14; N should be between 1 and 16)\n");
 		fprintf(stderr, "-vt N: use N-bit quantization for texture corodinates (default: 12; N should be between 1 and 16)\n");
+		fprintf(stderr, "-vn N: use N-bit quantization for normals and tangents (default: 8; N should be between 1 and 8)\n");
 		fprintf(stderr, "-vu: use unit-length normal/tangent vectors (default: off)\n");
 		fprintf(stderr, "-af N: resample animations at N Hz (default: 30)\n");
 		fprintf(stderr, "-ac: keep constant animation tracks even if they don't modify the node transform\n");
