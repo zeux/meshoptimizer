@@ -64,6 +64,7 @@ struct Settings
 {
 	int pos_bits;
 	int tex_bits;
+	bool nrm_unit;
 
 	int anim_freq;
 	bool anim_const;
@@ -602,7 +603,7 @@ void renormalizeWeights(uint8_t (&w)[4])
 	w[max] += uint8_t(255 - sum);
 }
 
-StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationParams& params)
+StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationParams& params, const Settings& settings)
 {
 	if (stream.type == cgltf_attribute_type_position)
 	{
@@ -644,14 +645,16 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 		StreamFormat format = {cgltf_type_vec2, cgltf_component_type_r_16u, false, 4};
 		return format;
 	}
-	else if (stream.type == cgltf_attribute_type_normal || stream.type == cgltf_attribute_type_tangent)
+	else if (stream.type == cgltf_attribute_type_normal)
 	{
 		for (size_t i = 0; i < stream.data.size(); ++i)
 		{
 			const Attr& a = stream.data[i];
 
 			float nx = a.f[0], ny = a.f[1], nz = a.f[2];
-			rescaleNormal(nx, ny, nz);
+
+			if (!settings.nrm_unit)
+				rescaleNormal(nx, ny, nz);
 
 			int8_t v[4] = {
 			    int8_t(meshopt_quantizeSnorm(nx, 8)),
@@ -671,7 +674,9 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 			const Attr& a = stream.data[i];
 
 			float nx = a.f[0], ny = a.f[1], nz = a.f[2], nw = a.f[3];
-			rescaleNormal(nx, ny, nz);
+
+			if (!settings.nrm_unit)
+				rescaleNormal(nx, ny, nz);
 
 			int8_t v[4] = {
 			    int8_t(meshopt_quantizeSnorm(nx, 8)),
@@ -1659,7 +1664,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 				continue;
 
 			size_t bin_offset = bin.size();
-			StreamFormat format = writeVertexStream(bin, stream, qp);
+			StreamFormat format = writeVertexStream(bin, stream, qp, settings);
 
 			if (settings.compress)
 				compressVertexStream(bin, bin_offset, stream.data.size(), format.stride);
@@ -2223,6 +2228,10 @@ int main(int argc, char** argv)
 		{
 			settings.tex_bits = atoi(argv[++i]);
 		}
+		else if (strcmp(arg, "-vu") == 0)
+		{
+			settings.nrm_unit = true;
+		}
 		else if (strcmp(arg, "-af") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.anim_freq = atoi(argv[++i]);
@@ -2267,6 +2276,7 @@ int main(int argc, char** argv)
 		fprintf(stderr, "-o file: output file path, .gltf/.glb\n");
 		fprintf(stderr, "-vp N: use N-bit quantization for position (default: 14; N should be between 1 and 16)\n");
 		fprintf(stderr, "-vt N: use N-bit quantization for texture corodinates (default: 12; N should be between 1 and 16)\n");
+		fprintf(stderr, "-vu: use unit-length normal/tangent vectors (default: off)\n");
 		fprintf(stderr, "-af N: resample animations at N Hz (default: 30)\n");
 		fprintf(stderr, "-ac: keep constant animation tracks even if they don't modify the node transform\n");
 		fprintf(stderr, "-c: produce compressed glb files\n");
