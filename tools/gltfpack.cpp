@@ -735,20 +735,47 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	}
 	else if (stream.type == cgltf_attribute_type_joints)
 	{
+		unsigned int maxj = 0;
+
 		for (size_t i = 0; i < stream.data.size(); ++i)
+			maxj = std::max(maxj, unsigned(stream.data[i].f[0]));
+
+		assert(maxj <= 65535);
+
+		if (maxj <= 255)
 		{
-			const Attr& a = stream.data[i];
+			for (size_t i = 0; i < stream.data.size(); ++i)
+			{
+				const Attr& a = stream.data[i];
 
-			uint8_t v[4] = {
-			    uint8_t(a.f[0]),
-			    uint8_t(a.f[1]),
-			    uint8_t(a.f[2]),
-			    uint8_t(a.f[3])};
-			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+				uint8_t v[4] = {
+				    uint8_t(a.f[0]),
+				    uint8_t(a.f[1]),
+				    uint8_t(a.f[2]),
+				    uint8_t(a.f[3])};
+				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+			}
+
+			StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_8u, false, 4};
+			return format;
 		}
+		else
+		{
+			for (size_t i = 0; i < stream.data.size(); ++i)
+			{
+				const Attr& a = stream.data[i];
 
-		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_8u, false, 4};
-		return format;
+				uint16_t v[4] = {
+				    uint16_t(a.f[0]),
+				    uint16_t(a.f[1]),
+				    uint16_t(a.f[2]),
+				    uint16_t(a.f[3])};
+				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+			}
+
+			StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16u, false, 8};
+			return format;
+		}
 	}
 	else
 	{
