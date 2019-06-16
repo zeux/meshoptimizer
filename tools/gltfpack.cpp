@@ -795,14 +795,36 @@ void getPositionBounds(uint16_t min[3], uint16_t max[3], const Stream& stream, c
 
 StreamFormat writeIndexStream(std::string& bin, const std::vector<unsigned int>& stream)
 {
+	unsigned int maxi = 0;
 	for (size_t i = 0; i < stream.size(); ++i)
-	{
-		uint32_t v[1] = {stream[i]};
-		bin.append(reinterpret_cast<const char*>(v), sizeof(v));
-	}
+		maxi = std::max(maxi, stream[i]);
 
-	StreamFormat format = {cgltf_type_scalar, cgltf_component_type_r_32u, false, 4};
-	return format;
+	// save 16-bit indices if we can; note that we can't use restart index (65535)
+	if (maxi < 65535)
+	{
+		for (size_t i = 0; i < stream.size(); ++i)
+		{
+			uint16_t v[1] = {uint16_t(stream[i])};
+			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+		}
+
+		// each chunk must be aligned to 4 bytes
+		bin.resize((bin.size() + 3) & ~3);
+
+		StreamFormat format = {cgltf_type_scalar, cgltf_component_type_r_16u, false, 2};
+		return format;
+	}
+	else
+	{
+		for (size_t i = 0; i < stream.size(); ++i)
+		{
+			uint32_t v[1] = {stream[i]};
+			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+		}
+
+		StreamFormat format = {cgltf_type_scalar, cgltf_component_type_r_32u, false, 4};
+		return format;
+	}
 }
 
 StreamFormat writeTimeStream(std::string& bin, const std::vector<float>& data)
@@ -863,11 +885,15 @@ void compressVertexStream(std::string& bin, size_t offset, size_t count, size_t 
 
 void compressIndexStream(std::string& bin, size_t offset, size_t count, size_t stride)
 {
-	assert(stride == 4);
-	(void)stride;
+	assert(stride == 2 || stride == 4);
 
 	std::vector<unsigned char> compressed(meshopt_encodeIndexBufferBound(count, count * 3));
-	size_t size = meshopt_encodeIndexBuffer(&compressed[0], compressed.size(), reinterpret_cast<const unsigned int*>(bin.c_str() + offset), count);
+	size_t size = 0;
+
+	if (stride == 2)
+		size = meshopt_encodeIndexBuffer(&compressed[0], compressed.size(), reinterpret_cast<const uint16_t*>(bin.c_str() + offset), count);
+	else
+		size = meshopt_encodeIndexBuffer(&compressed[0], compressed.size(), reinterpret_cast<const uint32_t*>(bin.c_str() + offset), count);
 
 	bin.erase(offset);
 	bin.append(reinterpret_cast<const char*>(&compressed[0]), size);
@@ -1204,7 +1230,7 @@ bool usesTextureSet(const cgltf_material& material, int set)
 
 void writeBufferView(std::string& json, cgltf_buffer_view_type type, size_t count, size_t stride, size_t bin_offset, size_t bin_size, bool compressed)
 {
-	assert(compressed || bin_size == count * stride);
+	assert(compressed || bin_size == (((count * stride) + 3) & ~3));
 	json += "{\"buffer\":0";
 	json += ",\"byteLength\":";
 	json += to_string(bin_size);
@@ -1611,7 +1637,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			comma(json_buffer_views);
 			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, size, 1, bin_offset, bin.size() - bin_offset, false);
 
-			// image data may not be aligned by 4b => align buffer after writing it
+			// each chunk must be aligned to 4 bytes
 			bin.resize((bin.size() + 3) & ~3);
 
 			json_images += "\"bufferView\":";
