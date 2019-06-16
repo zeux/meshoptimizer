@@ -198,17 +198,20 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 		{
 			const cgltf_primitive& primitive = mesh.primitives[pi];
 
+			if (!primitive.indices)
+				continue;
+
+			if (primitive.type != cgltf_primitive_type_triangles)
+				continue;
+
 			Mesh result;
 
 			result.material = primitive.material;
 			result.skin = node.skin;
 
-			if (cgltf_accessor* a = primitive.indices)
-			{
-				result.indices.resize(a->count);
-				for (size_t i = 0; i < a->count; ++i)
-					result.indices[i] = unsigned(cgltf_accessor_read_index(a, i));
-			}
+			result.indices.resize(primitive.indices->count);
+			for (size_t i = 0; i < primitive.indices->count; ++i)
+				result.indices[i] = unsigned(cgltf_accessor_read_index(primitive.indices, i));
 
 			for (size_t ai = 0; ai < primitive.attributes_count; ++ai)
 			{
@@ -229,8 +232,7 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 			if (!node.skin)
 				transformMesh(result, &node);
 
-			if (result.indices.size() && result.streams.size())
-				meshes.push_back(result);
+			meshes.push_back(result);
 		}
 	}
 }
