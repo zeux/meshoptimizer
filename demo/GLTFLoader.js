@@ -1037,18 +1037,16 @@ THREE.GLTFLoader = ( function () {
 			var stride = extensionDef.byteStride;
 
 			var result = new ArrayBuffer(count * stride);
-			var source = buffer.slice(byteOffset, byteOffset + byteLength);
+			var source = new Uint8Array(buffer, byteOffset, byteLength);
 
-			var sourceArray = new Uint8Array(source);
-
-			switch ( sourceArray[0] >> 4 ) {
+			switch ( source[0] >> 4 ) {
 
 				case 0xA:
-					decoder.decodeVertexBuffer(new Uint8Array(result), count, stride, sourceArray);
+					decoder.decodeVertexBuffer(new Uint8Array(result), count, stride, source);
 					break;
 
 				case 0xE:
-					decoder.decodeIndexBuffer(new Uint8Array(result), count, stride, sourceArray);
+					decoder.decodeIndexBuffer(new Uint8Array(result), count, stride, source);
 					break;
 
 				default:
