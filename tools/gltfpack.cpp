@@ -103,6 +103,27 @@ struct NodeInfo
 	int remap;
 };
 
+struct BufferView
+{
+	enum Kind
+	{
+		Kind_Vertex,
+		Kind_Index,
+		Kind_Skin,
+		Kind_Time,
+		Kind_Keyframe,
+		Kind_Image,
+		Kind_Count
+	};
+
+	Kind kind;
+	int variant;
+	size_t stride;
+	bool compressed;
+
+	std::string data;
+};
+
 const char* getError(cgltf_result result)
 {
 	switch (result)
@@ -835,9 +856,6 @@ StreamFormat writeIndexStream(std::string& bin, const std::vector<unsigned int>&
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		// each chunk must be aligned to 4 bytes
-		bin.resize((bin.size() + 3) & ~3);
-
 		StreamFormat format = {cgltf_type_scalar, cgltf_component_type_r_16u, false, 2};
 		return format;
 	}
@@ -1255,23 +1273,37 @@ bool usesTextureSet(const cgltf_material& material, int set)
 	return false;
 }
 
-void writeBufferView(std::string& json, cgltf_buffer_view_type type, size_t count, size_t stride, size_t bin_offset, size_t bin_size, bool compressed)
+size_t getBufferView(std::vector<BufferView>& views, BufferView::Kind kind, int variant, size_t stride, bool compressed)
 {
-	assert(compressed || bin_size == (((count * stride) + 3) & ~3));
+	if (variant >= 0)
+	{
+		for (size_t i = 0; i < views.size(); ++i)
+			if (views[i].kind == kind && views[i].variant == variant && views[i].stride == stride && views[i].compressed == compressed)
+				return i;
+	}
+
+	BufferView view = {kind, variant, stride, compressed};
+	views.push_back(view);
+
+	return views.size() - 1;
+}
+
+void writeBufferView(std::string& json, BufferView::Kind kind, size_t count, size_t stride, size_t bin_offset, size_t bin_size, bool compressed)
+{
 	json += "{\"buffer\":0";
 	json += ",\"byteLength\":";
 	json += to_string(bin_size);
 	json += ",\"byteOffset\":";
 	json += to_string(bin_offset);
-	if (type == cgltf_buffer_view_type_vertices)
+	if (kind == BufferView::Kind_Vertex)
 	{
 		json += ",\"byteStride\":";
 		json += to_string(stride);
 	}
-	if (type == cgltf_buffer_view_type_vertices || type == cgltf_buffer_view_type_indices)
+	if (kind == BufferView::Kind_Vertex || kind == BufferView::Kind_Index)
 	{
 		json += ",\"target\":";
-		json += (type == cgltf_buffer_view_type_vertices) ? "34962" : "34963";
+		json += (kind == BufferView::Kind_Vertex) ? "34962" : "34963";
 	}
 	if (compressed)
 	{
@@ -1286,10 +1318,12 @@ void writeBufferView(std::string& json, cgltf_buffer_view_type type, size_t coun
 	json += "}";
 }
 
-void writeAccessor(std::string& json, size_t view, cgltf_type type, cgltf_component_type component_type, bool normalized, size_t count, const float* min = 0, const float* max = 0, size_t numminmax = 0)
+void writeAccessor(std::string& json, size_t view, size_t offset, cgltf_type type, cgltf_component_type component_type, bool normalized, size_t count, const float* min = 0, const float* max = 0, size_t numminmax = 0)
 {
 	json += "{\"bufferView\":";
 	json += to_string(view);
+	json += ",\"byteOffset\":";
+	json += to_string(offset);
 	json += ",\"componentType\":";
 	json += componentType(component_type);
 	json += ",\"count\":";
@@ -1619,7 +1653,6 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	std::string json_images;
 	std::string json_textures;
 	std::string json_materials;
-	std::string json_buffer_views;
 	std::string json_accessors;
 	std::string json_meshes;
 	std::string json_nodes;
@@ -1627,19 +1660,14 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	std::string json_roots;
 	std::string json_animations;
 
+	std::vector<BufferView> views;
+	std::string scratch;
+
 	bool has_pbr_specular_glossiness = false;
 
-	size_t view_offset = 0;
 	size_t accr_offset = 0;
 	size_t node_offset = 0;
 	size_t mesh_offset = 0;
-
-	size_t bytes_vertex = 0;
-	size_t bytes_index = 0;
-	size_t bytes_skin = 0;
-	size_t bytes_time = 0;
-	size_t bytes_keyframe = 0;
-	size_t bytes_image = 0;
 
 	for (size_t i = 0; i < data->images_count; ++i)
 	{
@@ -1658,21 +1686,16 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			const char* img = static_cast<const char*>(image.buffer_view->buffer->data) + image.buffer_view->offset;
 			size_t size = image.buffer_view->size;
 
-			size_t bin_offset = bin.size();
-			bin.append(img, size);
+			size_t view = getBufferView(views, BufferView::Kind_Image, i, 1, false);
 
-			comma(json_buffer_views);
-			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, size, 1, bin_offset, bin.size() - bin_offset, false);
+			assert(views[view].data.empty());
+			views[view].data.append(img, size);
 
 			// each chunk must be aligned to 4 bytes
-			bin.resize((bin.size() + 3) & ~3);
+			views[view].data.resize((views[view].data.size() + 3) & ~3);
 
 			json_images += "\"bufferView\":";
-			json_images += to_string(view_offset);
-
-			view_offset++;
-
-			bytes_image += bin.size() - bin_offset;
+			json_images += to_string(view);
 		}
 
 		json_images += "}";
@@ -1723,16 +1746,13 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			if ((stream.type == cgltf_attribute_type_joints || stream.type == cgltf_attribute_type_weights) && !mesh.skin)
 				continue;
 
-			size_t bin_offset = bin.size();
-			StreamFormat format = writeVertexStream(bin, stream, qp, settings);
+			scratch.clear();
+			StreamFormat format = writeVertexStream(scratch, stream, qp, settings);
 
-			if (settings.compress)
-				compressVertexStream(bin, bin_offset, stream.data.size(), format.stride);
-
-			comma(json_buffer_views);
-			writeBufferView(json_buffer_views, cgltf_buffer_view_type_vertices, stream.data.size(), format.stride, bin_offset, bin.size() - bin_offset, settings.compress);
-
-			bytes_vertex += bin.size() - bin_offset;
+			// TODO: ideally variant would be stream.type but we're hitting a three.js bug with position interleaving
+			size_t view = getBufferView(views, BufferView::Kind_Vertex, stream.type == cgltf_attribute_type_position ? -1 : int(stream.type), format.stride, settings.compress);
+			size_t offset = views[view].data.size();
+			views[view].data += scratch;
 
 			comma(json_accessors);
 			if (stream.type == cgltf_attribute_type_position)
@@ -1744,14 +1764,14 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 				float minf[3] = {float(min[0]), float(min[1]), float(min[2])};
 				float maxf[3] = {float(max[0]), float(max[1]), float(max[2])};
 
-				writeAccessor(json_accessors, view_offset, format.type, format.component_type, format.normalized, stream.data.size(), minf, maxf, 3);
+				writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, stream.data.size(), minf, maxf, 3);
 			}
 			else
 			{
-				writeAccessor(json_accessors, view_offset, format.type, format.component_type, format.normalized, stream.data.size());
+				writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, stream.data.size());
 			}
 
-			view_offset++;
+			size_t vertex_accr = accr_offset++;
 
 			comma(json_attributes);
 			json_attributes += "\"";
@@ -1762,33 +1782,24 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 				json_attributes += to_string(size_t(stream.index));
 			}
 			json_attributes += "\":";
-			json_attributes += to_string(accr_offset);
-
-			accr_offset++;
+			json_attributes += to_string(vertex_accr);
 		}
 
 		size_t index_accr = 0;
 
 		{
-			size_t bin_offset = bin.size();
-			StreamFormat format = writeIndexStream(bin, mesh.indices);
+			scratch.clear();
+			StreamFormat format = writeIndexStream(scratch, mesh.indices);
 
-			if (settings.compress)
-				compressIndexStream(bin, bin_offset, mesh.indices.size(), format.stride);
-
-			comma(json_buffer_views);
-			writeBufferView(json_buffer_views, cgltf_buffer_view_type_indices, mesh.indices.size(), format.stride, bin_offset, bin.size() - bin_offset, settings.compress);
-
-			bytes_index += bin.size() - bin_offset;
+			// TODO: ideally variant would be 0 but this hurts index compression
+			size_t view = getBufferView(views, BufferView::Kind_Index, -1, format.stride, settings.compress);
+			size_t offset = views[view].data.size();
+			views[view].data += scratch;
 
 			comma(json_accessors);
-			writeAccessor(json_accessors, view_offset, format.type, format.component_type, format.normalized, mesh.indices.size());
+			writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, mesh.indices.size());
 
-			view_offset++;
-
-			index_accr = accr_offset;
-
-			accr_offset++;
+			index_accr = accr_offset++;
 		}
 
 		comma(json_meshes);
@@ -1931,7 +1942,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	{
 		const cgltf_skin& skin = data->skins[i];
 
-		size_t bin_offset = bin.size();
+		scratch.clear();
 
 		for (size_t j = 0; j < skin.joints_count; ++j)
 		{
@@ -1953,25 +1964,19 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			for (int k = 0; k < 12; ++k)
 				transform[k] *= node_scale;
 
-			bin.append(reinterpret_cast<const char*>(transform), sizeof(transform));
+			scratch.append(reinterpret_cast<const char*>(transform), sizeof(transform));
 		}
 
-		bytes_skin += bin.size() - bin_offset;
-
-		comma(json_buffer_views);
-		writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, skin.joints_count, 64, bin_offset, bin.size() - bin_offset, false);
+		size_t view = getBufferView(views, BufferView::Kind_Skin, 0, 64, settings.compress);
+		size_t offset = views[view].data.size();
+		views[view].data += scratch;
 
 		comma(json_accessors);
-		writeAccessor(json_accessors, view_offset, cgltf_type_mat4, cgltf_component_type_r_32f, false, skin.joints_count);
+		writeAccessor(json_accessors, view, offset, cgltf_type_mat4, cgltf_component_type_r_32f, false, skin.joints_count);
 
-		view_offset++;
-
-		size_t matrix_accr = accr_offset;
-
-		accr_offset++;
+		size_t matrix_accr = accr_offset++;
 
 		comma(json_skins);
-
 		json_skins += "{";
 		json_skins += "\"joints\":[";
 		for (size_t j = 0; j < skin.joints_count; ++j)
@@ -2049,7 +2054,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 		int frames = 1 + int(ceilf((maxt - mint) * settings.anim_freq));
 
-		size_t time_accr = accr_offset;
+		size_t time_accr = 0;
 
 		if (needs_time)
 		{
@@ -2058,40 +2063,36 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			for (int j = 0; j < frames; ++j)
 				time[j] = mint + float(j) / settings.anim_freq;
 
-			size_t bin_offset = bin.size();
-			StreamFormat format = writeTimeStream(bin, time);
+			scratch.clear();
+			StreamFormat format = writeTimeStream(scratch, time);
 
-			comma(json_buffer_views);
-			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, frames, format.stride, bin_offset, bin.size() - bin_offset, false);
-
-			bytes_time += bin.size() - bin_offset;
+			size_t view = getBufferView(views, BufferView::Kind_Time, 0, format.stride, settings.compress);
+			size_t offset = views[view].data.size();
+			views[view].data += scratch;
 
 			comma(json_accessors);
-			writeAccessor(json_accessors, view_offset, cgltf_type_scalar, format.component_type, format.normalized, frames, &time.front(), &time.back(), 1);
+			writeAccessor(json_accessors, view, offset, cgltf_type_scalar, format.component_type, format.normalized, frames, &time.front(), &time.back(), 1);
 
-			view_offset++;
-			accr_offset++;
+			time_accr = accr_offset++;
 		}
 
-		size_t pose_accr = accr_offset;
+		size_t pose_accr = 0;
 
 		if (needs_pose)
 		{
 			std::vector<float> pose(1, mint);
 
-			size_t bin_offset = bin.size();
-			StreamFormat format = writeTimeStream(bin, pose);
+			scratch.clear();
+			StreamFormat format = writeTimeStream(scratch, pose);
 
-			comma(json_buffer_views);
-			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, 1, format.stride, bin_offset, bin.size() - bin_offset, false);
-
-			bytes_time += bin.size() - bin_offset;
+			size_t view = getBufferView(views, BufferView::Kind_Time, 0, format.stride, settings.compress);
+			size_t offset = views[view].data.size();
+			views[view].data += scratch;
 
 			comma(json_accessors);
-			writeAccessor(json_accessors, view_offset, cgltf_type_scalar, format.component_type, format.normalized, 1, &pose.front(), &pose.back(), 1);
+			writeAccessor(json_accessors, view, offset, cgltf_type_scalar, format.component_type, format.normalized, 1, &pose.front(), &pose.back(), 1);
 
-			view_offset++;
-			accr_offset++;
+			pose_accr = accr_offset++;
 		}
 
 		size_t track_offset = 0;
@@ -2115,27 +2116,17 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 				resampleKeyframes(track, sampler, channel.target_path, frames, mint, settings.anim_freq);
 			}
 
-			size_t bin_offset = bin.size();
-			StreamFormat format = writeKeyframeStream(bin, channel.target_path, track);
+			scratch.clear();
+			StreamFormat format = writeKeyframeStream(scratch, channel.target_path, track);
 
-			bool compress = settings.compress && !tc;
-
-			if (compress)
-				compressVertexStream(bin, bin_offset, track.size(), format.stride);
-
-			comma(json_buffer_views);
-			writeBufferView(json_buffer_views, cgltf_buffer_view_type_invalid, track.size(), format.stride, bin_offset, bin.size() - bin_offset, compress);
-
-			bytes_keyframe += bin.size() - bin_offset;
+			size_t view = getBufferView(views, BufferView::Kind_Keyframe, channel.target_path, format.stride, settings.compress);
+			size_t offset = views[view].data.size();
+			views[view].data += scratch;
 
 			comma(json_accessors);
-			writeAccessor(json_accessors, view_offset, format.type, format.component_type, format.normalized, track.size());
+			writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, track.size());
 
-			view_offset++;
-
-			size_t data_accr = accr_offset;
-
-			accr_offset++;
+			size_t data_accr = accr_offset++;
 
 			comma(json_samplers);
 			json_samplers += "{\"input\":";
@@ -2191,10 +2182,36 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	}
 	json += "]";
 
-	if (!json_buffer_views.empty())
+	size_t bytes[BufferView::Kind_Count] = {};
+	size_t bytes_raw[BufferView::Kind_Count] = {};
+
+	if (!views.empty())
 	{
 		json += ",\"bufferViews\":[";
-		json += json_buffer_views;
+		for (size_t i = 0; i < views.size(); ++i)
+		{
+			BufferView& view = views[i];
+
+			size_t offset = bin.size();
+			bin += view.data;
+			bin.resize((bin.size() + 3) & ~3);
+
+			size_t count = view.data.size() / view.stride;
+
+			if (view.compressed)
+			{
+				if (view.kind == BufferView::Kind_Index)
+					compressIndexStream(bin, offset, count, view.stride);
+				else
+					compressVertexStream(bin, offset, count, view.stride);
+			}
+
+			comma(json);
+			writeBufferView(json, view.kind, count, view.stride, offset, bin.size() - offset, view.compressed);
+
+			bytes[view.kind] += bin.size() - offset;
+			bytes_raw[view.kind] += view.data.size();
+		}
 		json += "]";
 	}
 	if (!json_accessors.empty())
@@ -2253,8 +2270,10 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	if (settings.verbose)
 	{
 		printf("output: %d nodes, %d meshes\n", int(node_offset), int(mesh_offset));
-		printf("output: JSON %d bytes, buffers %d bytes (vertex %d bytes, index %d bytes, skin %d bytes, time %d bytes, keyframe %d bytes, image %d bytes)\n",
-		       int(json.size()), int(bin.size()), int(bytes_vertex), int(bytes_index), int(bytes_skin), int(bytes_time), int(bytes_keyframe), int(bytes_image));
+		printf("output: JSON %d bytes, buffers %d bytes\n", int(json.size()), int(bin.size()));
+		printf("output: buffers: vertex %d bytes, index %d bytes, skin %d bytes, time %d bytes, keyframe %d bytes, image %d bytes\n",
+		       int(bytes[BufferView::Kind_Vertex]), int(bytes[BufferView::Kind_Index]), int(bytes[BufferView::Kind_Skin]),
+		       int(bytes[BufferView::Kind_Time]), int(bytes[BufferView::Kind_Keyframe]), int(bytes[BufferView::Kind_Image]));
 	}
 
 	return true;
