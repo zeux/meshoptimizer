@@ -641,11 +641,12 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 			    uint16_t(meshopt_quantizeUnorm((a.f[0] - params.pos_offset[0]) * pos_rscale, params.pos_bits)),
 			    uint16_t(meshopt_quantizeUnorm((a.f[1] - params.pos_offset[1]) * pos_rscale, params.pos_bits)),
 			    uint16_t(meshopt_quantizeUnorm((a.f[2] - params.pos_offset[2]) * pos_rscale, params.pos_bits)),
-			    0};
+			    1};
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_16u, false, 8};
+		// note: vec4 is used instead of vec3 to avoid three.js bug with interleaved buffers (#16802)
+		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16u, false, 8};
 		return format;
 	}
 	else if (stream.type == cgltf_attribute_type_texcoord)
@@ -690,7 +691,8 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_8, true, 4};
+		// note: vec4 is used instead of vec3 to avoid three.js bug with interleaved buffers (#16802)
+		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_8, true, 4};
 		return format;
 	}
 	else if (stream.type == cgltf_attribute_type_tangent)
@@ -1749,8 +1751,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			scratch.clear();
 			StreamFormat format = writeVertexStream(scratch, stream, qp, settings);
 
-			// TODO: ideally variant would be stream.type but we're hitting a three.js bug with position interleaving
-			size_t view = getBufferView(views, BufferView::Kind_Vertex, stream.type == cgltf_attribute_type_position ? -1 : int(stream.type), format.stride, settings.compress);
+			size_t view = getBufferView(views, BufferView::Kind_Vertex, 0, format.stride, settings.compress);
 			size_t offset = views[view].data.size();
 			views[view].data += scratch;
 
