@@ -1688,7 +1688,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			const char* img = static_cast<const char*>(image.buffer_view->buffer->data) + image.buffer_view->offset;
 			size_t size = image.buffer_view->size;
 
-			size_t view = getBufferView(views, BufferView::Kind_Image, i, 1, false);
+			size_t view = getBufferView(views, BufferView::Kind_Image, -1, 1, false);
 
 			assert(views[view].data.empty());
 			views[view].data.append(img, size);
