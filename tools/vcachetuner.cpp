@@ -381,7 +381,7 @@ int main(int argc, char** argv)
 	}
 	else
 	{
-		pop = gen0(100, meshes);
+		pop = gen0(95, meshes);
 	}
 
 	printf("%d meshes, %.1fM triangles\n", int(meshes.size()), double(total_triangles) / 1e6);
