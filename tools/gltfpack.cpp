@@ -1397,10 +1397,90 @@ bool isTrackConstant(const cgltf_animation_sampler& sampler, cgltf_animation_pat
 	return true;
 }
 
+Attr interpolateLinear(const Attr& l, const Attr& r, float t, cgltf_animation_path_type type)
+{
+	if (type == cgltf_animation_path_type_rotation)
+	{
+		// Approximating slerp, https://zeux.io/2015/07/23/approximating-slerp/
+		// We also handle quaternion double-cover
+		float ca = l.f[0] * r.f[0] + l.f[1] * r.f[1] + l.f[2] * r.f[2] + l.f[3] * r.f[3];
+
+		float d = fabsf(ca);
+		float A = 1.0904f + d * (-3.2452f + d * (3.55645f - d * 1.43519f));
+		float B = 0.848013f + d * (-1.06021f + d * 0.215638f);
+		float k = A * (t - 0.5f) * (t - 0.5f) + B;
+		float ot = t + t * (t - 0.5f) * (t - 1) * k;
+
+		float t0 = 1 - ot;
+		float t1 = ca > 0 ? ot : -ot;
+
+		Attr lerp = {{
+		    l.f[0] * t0 + r.f[0] * t1,
+		    l.f[1] * t0 + r.f[1] * t1,
+		    l.f[2] * t0 + r.f[2] * t1,
+		    l.f[3] * t0 + r.f[3] * t1,
+		}};
+
+		float len = sqrtf(lerp.f[0] * lerp.f[0] + lerp.f[1] * lerp.f[1] + lerp.f[2] * lerp.f[2] + lerp.f[3] * lerp.f[3]);
+
+		if (len > 0.f)
+		{
+			lerp.f[0] /= len;
+			lerp.f[1] /= len;
+			lerp.f[2] /= len;
+			lerp.f[3] /= len;
+		}
+
+		return lerp;
+	}
+	else
+	{
+		Attr lerp = {{
+		    l.f[0] * (1 - t) + r.f[0] * t,
+		    l.f[1] * (1 - t) + r.f[1] * t,
+		    l.f[2] * (1 - t) + r.f[2] * t,
+		    l.f[3] * (1 - t) + r.f[3] * t,
+		}};
+
+		return lerp;
+	}
+}
+
+Attr interpolateHermite(const Attr& v0, const Attr& t0, const Attr& v1, const Attr& t1, float t, float dt, cgltf_animation_path_type type)
+{
+	float s0 = 1 + t * t * (2 * t - 3);
+	float s1 = t + t * t * (t - 2);
+	float s2 = 1 - s0;
+	float s3 = t * t * (t - 1);
+
+	float ts1 = dt * s1;
+	float ts3 = dt * s3;
+
+	Attr lerp = {{
+		s0 * v0.f[0] + ts1 * t0.f[0] + s2 * v1.f[0] + ts3 * t1.f[0],
+		s0 * v0.f[1] + ts1 * t0.f[1] + s2 * v1.f[1] + ts3 * t1.f[1],
+		s0 * v0.f[2] + ts1 * t0.f[2] + s2 * v1.f[2] + ts3 * t1.f[2],
+		s0 * v0.f[3] + ts1 * t0.f[3] + s2 * v1.f[3] + ts3 * t1.f[3],
+	}};
+
+	if (type == cgltf_animation_path_type_rotation)
+	{
+		float len = sqrtf(lerp.f[0] * lerp.f[0] + lerp.f[1] * lerp.f[1] + lerp.f[2] * lerp.f[2] + lerp.f[3] * lerp.f[3]);
+
+		if (len > 0.f)
+		{
+			lerp.f[0] /= len;
+			lerp.f[1] /= len;
+			lerp.f[2] /= len;
+			lerp.f[3] /= len;
+		}
+	}
+
+	return lerp;
+}
+
 void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& sampler, cgltf_animation_path_type type, int frames, float mint, int freq)
 {
-	assert(sampler.interpolation == cgltf_interpolation_type_linear);
-
 	size_t cursor = 0;
 
 	for (int i = 0; i < frames; ++i)
@@ -1418,73 +1498,59 @@ void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& s
 			cursor++;
 		}
 
-		float cursor_time = 0;
-		Attr cursor_data = {};
-		cgltf_accessor_read_float(sampler.input, cursor, &cursor_time, 1);
-		cgltf_accessor_read_float(sampler.output, cursor, cursor_data.f, 4);
-
 		if (cursor + 1 < sampler.input->count)
 		{
+			float cursor_time = 0;
 			float next_time = 0;
-			Attr next_data = {};
+			cgltf_accessor_read_float(sampler.input, cursor + 0, &cursor_time, 1);
 			cgltf_accessor_read_float(sampler.input, cursor + 1, &next_time, 1);
-			cgltf_accessor_read_float(sampler.output, cursor + 1, next_data.f, 4);
 
-			float inv_range = (cursor_time < next_time) ? 1.f / (next_time - cursor_time) : 0.f;
+			float range = next_time - cursor_time;
+			float inv_range = (range == 0.f) ? 0.f : 1.f / (next_time - cursor_time);
 			float t = std::max(0.f, std::min(1.f, (time - cursor_time) * inv_range));
 
-			const Attr& l = cursor_data;
-			const Attr& r = next_data;
-
-			if (type == cgltf_animation_path_type_rotation)
+			switch (sampler.interpolation)
 			{
-				// Approximating slerp, https://zeux.io/2015/07/23/approximating-slerp/
-				// We also handle quaternion double-cover
-				float ca = l.f[0] * r.f[0] + l.f[1] * r.f[1] + l.f[2] * r.f[2] + l.f[3] * r.f[3];
-
-				float d = fabsf(ca);
-				float A = 1.0904f + d * (-3.2452f + d * (3.55645f - d * 1.43519f));
-				float B = 0.848013f + d * (-1.06021f + d * 0.215638f);
-				float k = A * (t - 0.5f) * (t - 0.5f) + B;
-				float ot = t + t * (t - 0.5f) * (t - 1) * k;
-
-				float t0 = 1 - ot;
-				float t1 = ca > 0 ? ot : -ot;
-
-				Attr lerp = {{
-				    l.f[0] * t0 + r.f[0] * t1,
-				    l.f[1] * t0 + r.f[1] * t1,
-				    l.f[2] * t0 + r.f[2] * t1,
-				    l.f[3] * t0 + r.f[3] * t1,
-				}};
-
-				float len = sqrtf(lerp.f[0] * lerp.f[0] + lerp.f[1] * lerp.f[1] + lerp.f[2] * lerp.f[2] + lerp.f[3] * lerp.f[3]);
-
-				if (len > 0.f)
-				{
-					lerp.f[0] /= len;
-					lerp.f[1] /= len;
-					lerp.f[2] /= len;
-					lerp.f[3] /= len;
-				}
-
-				data.push_back(lerp);
-			}
-			else
+			case cgltf_interpolation_type_linear:
 			{
-				Attr lerp = {{
-				    l.f[0] * (1 - t) + r.f[0] * t,
-				    l.f[1] * (1 - t) + r.f[1] * t,
-				    l.f[2] * (1 - t) + r.f[2] * t,
-				    l.f[3] * (1 - t) + r.f[3] * t,
-				}};
+				Attr v0 = {};
+				Attr v1 = {};
+				cgltf_accessor_read_float(sampler.output, cursor + 0, v0.f, 4);
+				cgltf_accessor_read_float(sampler.output, cursor + 1, v1.f, 4);
+				data.push_back(interpolateLinear(v0, v1, t, type));
+			} break;
 
-				data.push_back(lerp);
+			case cgltf_interpolation_type_step:
+			{
+				Attr v = {};
+				cgltf_accessor_read_float(sampler.output, cursor, v.f, 4);
+				data.push_back(v);
+			} break;
+
+			case cgltf_interpolation_type_cubic_spline:
+			{
+				Attr v0 = {};
+				Attr b0 = {};
+				Attr a1 = {};
+				Attr v1 = {};
+				cgltf_accessor_read_float(sampler.output, cursor * 3 + 1, v0.f, 4);
+				cgltf_accessor_read_float(sampler.output, cursor * 3 + 2, b0.f, 4);
+				cgltf_accessor_read_float(sampler.output, cursor * 3 + 3, a1.f, 4);
+				cgltf_accessor_read_float(sampler.output, cursor * 3 + 4, v1.f, 4);
+				data.push_back(interpolateHermite(v0, b0, v1, a1, t, range, type));
+			} break;
+
+			default:
+				assert(!"Unknown interpolation type");
 			}
 		}
 		else
 		{
-			data.push_back(cursor_data);
+			size_t offset = sampler.interpolation == cgltf_interpolation_type_cubic_spline ? cursor * 3 + 1 : cursor;
+
+			Attr v = {};
+			cgltf_accessor_read_float(sampler.output, offset, v.f, 4);
+			data.push_back(v);
 		}
 	}
 }
@@ -2009,7 +2075,6 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		for (size_t j = 0; j < animation.channels_count; ++j)
 		{
 			const cgltf_animation_channel& channel = animation.channels[j];
-			const cgltf_animation_sampler& sampler = *channel.sampler;
 
 			if (!channel.target_node)
 				continue;
@@ -2020,10 +2085,6 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 				continue;
 
 			if (channel.target_path != cgltf_animation_path_type_translation && channel.target_path != cgltf_animation_path_type_rotation && channel.target_path != cgltf_animation_path_type_scale)
-				continue;
-
-			// TODO: add support for CUBICSPLINE, STEP
-			if (sampler.interpolation != cgltf_interpolation_type_linear)
 				continue;
 
 			if (!settings.anim_const && (ni.animated_paths & (1 << channel.target_path)) == 0)
