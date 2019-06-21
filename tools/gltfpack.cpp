@@ -1457,10 +1457,10 @@ Attr interpolateHermite(const Attr& v0, const Attr& t0, const Attr& v1, const At
 	float ts3 = dt * s3;
 
 	Attr lerp = {{
-		s0 * v0.f[0] + ts1 * t0.f[0] + s2 * v1.f[0] + ts3 * t1.f[0],
-		s0 * v0.f[1] + ts1 * t0.f[1] + s2 * v1.f[1] + ts3 * t1.f[1],
-		s0 * v0.f[2] + ts1 * t0.f[2] + s2 * v1.f[2] + ts3 * t1.f[2],
-		s0 * v0.f[3] + ts1 * t0.f[3] + s2 * v1.f[3] + ts3 * t1.f[3],
+	    s0 * v0.f[0] + ts1 * t0.f[0] + s2 * v1.f[0] + ts3 * t1.f[0],
+	    s0 * v0.f[1] + ts1 * t0.f[1] + s2 * v1.f[1] + ts3 * t1.f[1],
+	    s0 * v0.f[2] + ts1 * t0.f[2] + s2 * v1.f[2] + ts3 * t1.f[2],
+	    s0 * v0.f[3] + ts1 * t0.f[3] + s2 * v1.f[3] + ts3 * t1.f[3],
 	}};
 
 	if (type == cgltf_animation_path_type_rotation)
@@ -1518,14 +1518,16 @@ void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& s
 				cgltf_accessor_read_float(sampler.output, cursor + 0, v0.f, 4);
 				cgltf_accessor_read_float(sampler.output, cursor + 1, v1.f, 4);
 				data.push_back(interpolateLinear(v0, v1, t, type));
-			} break;
+			}
+			break;
 
 			case cgltf_interpolation_type_step:
 			{
 				Attr v = {};
 				cgltf_accessor_read_float(sampler.output, cursor, v.f, 4);
 				data.push_back(v);
-			} break;
+			}
+			break;
 
 			case cgltf_interpolation_type_cubic_spline:
 			{
@@ -1538,7 +1540,8 @@ void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& s
 				cgltf_accessor_read_float(sampler.output, cursor * 3 + 3, a1.f, 4);
 				cgltf_accessor_read_float(sampler.output, cursor * 3 + 4, v1.f, 4);
 				data.push_back(interpolateHermite(v0, b0, v1, a1, t, range, type));
-			} break;
+			}
+			break;
 
 			default:
 				assert(!"Unknown interpolation type");
@@ -2114,7 +2117,10 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			needs_pose = needs_pose || tc;
 		}
 
-		int frames = 1 + int(ceilf((maxt - mint) * settings.anim_freq));
+		// round the number of frames to nearest but favor the "up" direction
+		// this means that at 10 Hz resampling, we will try to preserve the last frame <10ms
+		// but if the last frame is <2ms we favor just removing this data
+		int frames = 1 + int((maxt - mint) * settings.anim_freq + 0.8f);
 
 		size_t time_accr = 0;
 
