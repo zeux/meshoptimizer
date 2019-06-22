@@ -6,6 +6,7 @@ option(BUILD_TOOLS "Build tools" OFF)
 
 set(SOURCES
     src/meshoptimizer.h
+    src/allocator.cpp
     src/clusterizer.cpp
     src/indexcodec.cpp
     src/indexgenerator.cpp
