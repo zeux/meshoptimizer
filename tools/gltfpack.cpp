@@ -54,8 +54,11 @@ struct Stream
 
 struct Mesh
 {
+	cgltf_node* node;
+
 	cgltf_material* material;
 	cgltf_skin* skin;
+
 	std::vector<Stream> streams;
 	std::vector<unsigned int> indices;
 };
@@ -208,7 +211,7 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 {
 	for (size_t ni = 0; ni < data->nodes_count; ++ni)
 	{
-		const cgltf_node& node = data->nodes[ni];
+		cgltf_node& node = data->nodes[ni];
 
 		if (!node.mesh)
 			continue;
@@ -226,6 +229,8 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 				continue;
 
 			Mesh result;
+
+			result.node = &node;
 
 			result.material = primitive.material;
 			result.skin = node.skin;
@@ -249,9 +254,6 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 
 				result.streams.push_back(s);
 			}
-
-			if (!node.skin)
-				transformMesh(result, &node);
 
 			meshes.push_back(result);
 		}
@@ -1683,6 +1685,17 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	{
 		printf("input: %d nodes, %d meshes, %d skins, %d animations\n",
 		       int(data->nodes_count), int(data->meshes_count), int(data->skins_count), int(data->animations_count));
+	}
+
+	for (size_t i = 0; i < meshes.size(); ++i)
+	{
+		Mesh& mesh = meshes[i];
+
+		if (mesh.node)
+		{
+			transformMesh(mesh, mesh.node);
+			mesh.node = 0;
+		}
 	}
 
 	mergeMeshes(meshes);
