@@ -100,6 +100,7 @@ struct NodeInfo
 {
 	bool keep;
 	bool named;
+	bool animated;
 
 	unsigned int animated_paths;
 
@@ -430,6 +431,24 @@ void parseMeshesObj(fastObjMesh* obj, cgltf_data* data, std::vector<Mesh>& meshe
 
 bool canMerge(const Mesh& lhs, const Mesh& rhs)
 {
+	if (lhs.node != rhs.node)
+	{
+		if (!lhs.node || !rhs.node)
+			return false;
+
+		if (lhs.node->parent != rhs.node->parent)
+			return false;
+
+		bool lhs_transform = lhs.node->has_translation | lhs.node->has_rotation | lhs.node->has_scale | lhs.node->has_matrix;
+		bool rhs_transform = rhs.node->has_translation | rhs.node->has_rotation | rhs.node->has_scale | rhs.node->has_matrix;
+
+		if (lhs_transform || rhs_transform)
+			return false;
+
+		// we can merge nodes that don't have transforms of their own and have the same parent
+		// this is helpful when instead of splitting mesh into primitives, DCCs split mesh into mesh nodes
+	}
+
 	if (lhs.material != rhs.material)
 		return false;
 
@@ -1614,6 +1633,14 @@ void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes)
 			}
 		}
 	}
+
+	for (size_t i = 0; i < data->nodes_count; ++i)
+	{
+		NodeInfo& ni = nodes[i];
+
+		for (cgltf_node* node = &data->nodes[i]; node; node = node->parent)
+			ni.animated |= nodes[node - data->nodes].animated_paths != 0;
+	}
 }
 
 void markNeeded(cgltf_data* data, std::vector<NodeInfo>& nodes)
@@ -1633,7 +1660,7 @@ void markNeeded(cgltf_data* data, std::vector<NodeInfo>& nodes)
 		}
 	}
 
-	// mark all animated nodes as kept & named
+	// mark all animated nodes as kept
 	for (size_t i = 0; i < data->animations_count; ++i)
 	{
 		const cgltf_animation& animation = data->animations[i];
@@ -1647,8 +1674,16 @@ void markNeeded(cgltf_data* data, std::vector<NodeInfo>& nodes)
 				NodeInfo& ni = nodes[channel.target_node - data->nodes];
 
 				ni.keep = true;
-				ni.named = true;
 			}
+		}
+	}
+
+	// mark all animated mesh nodes as kept
+	for (size_t i = 0; i < data->nodes_count; ++i)
+	{
+		if (data->nodes[i].mesh && !data->nodes[i].skin && nodes[i].animated)
+		{
+			nodes[i].keep = true;
 		}
 	}
 }
@@ -1687,14 +1722,28 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		       int(data->nodes_count), int(data->meshes_count), int(data->skins_count), int(data->animations_count));
 	}
 
+	std::vector<NodeInfo> nodes(data->nodes_count);
+
+	markAnimated(data, nodes);
+	markNeeded(data, nodes);
+
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
 		Mesh& mesh = meshes[i];
 
 		if (mesh.node)
 		{
-			transformMesh(mesh, mesh.node);
-			mesh.node = 0;
+			NodeInfo& ni = nodes[mesh.node - data->nodes];
+
+			ni.animated = false; // TODO: we haven't implemented correct node assignment yet
+
+			// we transform all non-animated meshes to world space
+			// this makes sure that quantization doesn't introduce gaps if the original scene was watertight
+			if (mesh.skin || !ni.animated)
+			{
+				transformMesh(mesh, mesh.node);
+				mesh.node = 0;
+			}
 		}
 	}
 
@@ -1710,11 +1759,6 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		reindexMesh(mesh);
 		optimizeMesh(mesh);
 	}
-
-	std::vector<NodeInfo> nodes(data->nodes_count);
-
-	markAnimated(data, nodes);
-	markNeeded(data, nodes);
 
 	if (settings.verbose)
 	{
