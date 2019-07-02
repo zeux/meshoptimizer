@@ -219,16 +219,28 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 			continue;
 
 		const cgltf_mesh& mesh = *node.mesh;
+		int mesh_id = int(&mesh - data->meshes);
 
 		for (size_t pi = 0; pi < mesh.primitives_count; ++pi)
 		{
 			const cgltf_primitive& primitive = mesh.primitives[pi];
 
 			if (!primitive.indices)
+			{
+				fprintf(stderr, "Warning: ignoring primitive %d of mesh %d because it has no index data\n", int(pi), mesh_id);
 				continue;
+			}
 
 			if (primitive.type != cgltf_primitive_type_triangles)
+			{
+				fprintf(stderr, "Warning: ignoring primitive %d of mesh %d because type %d is not supported\n", int(pi), mesh_id, primitive.type);
 				continue;
+			}
+
+			if (primitive.targets_count)
+			{
+				fprintf(stderr, "Warning: ignoring %d morph targets in primitive %d of mesh %d\n", int(primitive.targets_count), int(pi), mesh_id);
+			}
 
 			Mesh result;
 
@@ -246,7 +258,10 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 				const cgltf_attribute& attr = primitive.attributes[ai];
 
 				if (attr.type == cgltf_attribute_type_invalid)
+				{
+					fprintf(stderr, "Warning: ignoring unknown attribute %s in primitive %d of mesh %d\n", attr.name, int(pi), mesh_id);
 					continue;
+				}
 
 				Stream s = {attr.type, attr.index};
 				s.data.resize(attr.data->count);
@@ -1892,6 +1907,10 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 			writeEmbeddedImage(json_images, views, img, size, image.mime_type);
 		}
+		else
+		{
+			fprintf(stderr, "Warning: ignoring image %d since it has no URI and no valid buffer data\n", int(i));
+		}
 
 		json_images += "}";
 	}
@@ -2218,7 +2237,10 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			const cgltf_animation_channel& channel = animation.channels[j];
 
 			if (!channel.target_node)
+			{
+				fprintf(stderr, "Warning: ignoring channel %d of animation %d because it has no target node\n", int(j), int(i));
 				continue;
+			}
 
 			NodeInfo& ni = nodes[channel.target_node - data->nodes];
 
@@ -2226,7 +2248,10 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 				continue;
 
 			if (channel.target_path != cgltf_animation_path_type_translation && channel.target_path != cgltf_animation_path_type_rotation && channel.target_path != cgltf_animation_path_type_scale)
+			{
+				fprintf(stderr, "Warning: ignoring channel %d of animation %d because target path %d is not supported\n", int(j), int(i), channel.target_path);
 				continue;
+			}
 
 			if (!settings.anim_const && (ni.animated_paths & (1 << channel.target_path)) == 0)
 				continue;
@@ -2235,7 +2260,10 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		}
 
 		if (tracks.empty())
+		{
+			fprintf(stderr, "Warning: ignoring animation %d because it has no valid tracks\n", int(i));
 			continue;
+		}
 
 		float mint = 0, maxt = 0;
 		bool needs_time = false;
