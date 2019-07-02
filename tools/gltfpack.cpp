@@ -1393,7 +1393,7 @@ float getDelta(const Attr& l, const Attr& r, cgltf_animation_path_type type)
 	{
 		float error = 0;
 		for (int k = 0; k < 4; ++k)
-			error += fabsf(r.f[0] - l.f[0]);
+			error += fabsf(r.f[k] - l.f[k]);
 
 		return error;
 	}
