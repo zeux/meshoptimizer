@@ -1735,9 +1735,14 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		{
 			NodeInfo& ni = nodes[mesh.node - data->nodes];
 
+			// skinned meshes don't use the node transform
+			if (mesh.skin)
+			{
+				mesh.node = 0;
+			}
 			// we transform all non-animated meshes to world space
 			// this makes sure that quantization doesn't introduce gaps if the original scene was watertight
-			if (mesh.skin || !ni.animated)
+			else if (!ni.animated)
 			{
 				transformMesh(mesh, mesh.node);
 				mesh.node = 0;
