@@ -1893,10 +1893,11 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 				uint16_t max[3] = {};
 				getPositionBounds(min, max, stream, qp);
 
-				float minf[3] = {float(min[0]), float(min[1]), float(min[2])};
-				float maxf[3] = {float(max[0]), float(max[1]), float(max[2])};
+				// note: vec4 is used instead of vec3 to avoid three.js bug with interleaved buffers (#16802)
+				float minf[4] = {float(min[0]), float(min[1]), float(min[2]), 1};
+				float maxf[4] = {float(max[0]), float(max[1]), float(max[2]), 1};
 
-				writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, stream.data.size(), minf, maxf, 3);
+				writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, stream.data.size(), minf, maxf, 4);
 			}
 			else
 			{
