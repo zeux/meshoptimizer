@@ -105,6 +105,7 @@ struct NodeInfo
 	unsigned int animated_paths;
 
 	int remap;
+	std::vector<size_t> meshes;
 };
 
 struct BufferView
@@ -1643,7 +1644,7 @@ void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes)
 	}
 }
 
-void markNeeded(cgltf_data* data, std::vector<NodeInfo>& nodes)
+void markNeeded(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Mesh>& meshes)
 {
 	// mark all joints as kept & named (names might be important to manipulate externally)
 	for (size_t i = 0; i < data->skins_count; ++i)
@@ -1678,12 +1679,19 @@ void markNeeded(cgltf_data* data, std::vector<NodeInfo>& nodes)
 		}
 	}
 
-	// mark all animated mesh nodes as kept
-	for (size_t i = 0; i < data->nodes_count; ++i)
+	// mark all mesh nodes as kept
+	for (size_t i = 0; i < meshes.size(); ++i)
 	{
-		if (data->nodes[i].mesh && !data->nodes[i].skin && nodes[i].animated)
+		const Mesh& mesh = meshes[i];
+
+		if (mesh.indices.empty())
+			continue;
+
+		if (mesh.node)
 		{
-			nodes[i].keep = true;
+			NodeInfo& ni = nodes[mesh.node - data->nodes];
+
+			ni.keep = true;
 		}
 	}
 }
@@ -1780,7 +1788,6 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	std::vector<NodeInfo> nodes(data->nodes_count);
 
 	markAnimated(data, nodes);
-	markNeeded(data, nodes);
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
@@ -1790,22 +1797,23 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		{
 			NodeInfo& ni = nodes[mesh.node - data->nodes];
 
-			// skinned meshes don't use the node transform
-			if (mesh.skin)
-			{
-				mesh.node = 0;
-			}
-			// we transform all non-animated meshes to world space
+			// we transform all non-skinned non-animated meshes to world space
 			// this makes sure that quantization doesn't introduce gaps if the original scene was watertight
-			else if (!ni.animated)
+			if (!ni.animated && !mesh.skin)
 			{
 				transformMesh(mesh, mesh.node);
 				mesh.node = 0;
 			}
+
+			// skinned and animated meshes will be anchored to the same node that they used to be in
+			// for animated meshes, this is important since they need to be transformed by the same animation
+			// for skinned meshes, in theory this isn't important since the transform of the skinned node doesn't matter; in practice this affects generated bounding box in three.js
 		}
 	}
 
 	mergeMeshes(meshes);
+
+	markNeeded(data, nodes, meshes);
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
@@ -1913,8 +1921,6 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 		has_pbr_specular_glossiness = has_pbr_specular_glossiness || material.has_pbr_specular_glossiness;
 	}
-
-	std::vector<int> node_mesh(nodes.size(), -1);
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
@@ -2032,7 +2038,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		if (mesh.node)
 		{
 			assert(nodes[mesh.node - data->nodes].keep);
-			node_mesh[mesh.node - data->nodes] = int(node_offset);
+			nodes[mesh.node - data->nodes].meshes.push_back(node_offset);
 		}
 		else
 		{
@@ -2116,7 +2122,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			}
 			json_nodes += "]";
 		}
-		if (node.children_count || node_mesh[i] >= 0)
+		if (node.children_count || !ni.meshes.empty())
 		{
 			comma(json_nodes);
 			json_nodes += "\"children\":[";
@@ -2130,10 +2136,10 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 					json_nodes += to_string(size_t(ci.remap));
 				}
 			}
-			if (node_mesh[i] >= 0)
+			for (size_t j = 0; j < ni.meshes.size(); ++j)
 			{
 				comma(json_nodes);
-				json_nodes += to_string(size_t(node_mesh[i]));
+				json_nodes += to_string(ni.meshes[j]);
 			}
 			json_nodes += "]";
 		}
