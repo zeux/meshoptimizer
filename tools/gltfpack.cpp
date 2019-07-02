@@ -1735,8 +1735,6 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		{
 			NodeInfo& ni = nodes[mesh.node - data->nodes];
 
-			ni.animated = false; // TODO: we haven't implemented correct node assignment yet
-
 			// we transform all non-animated meshes to world space
 			// this makes sure that quantization doesn't introduce gaps if the original scene was watertight
 			if (mesh.skin || !ni.animated)
@@ -1855,6 +1853,8 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		has_pbr_specular_glossiness = has_pbr_specular_glossiness || material.has_pbr_specular_glossiness;
 	}
 
+	std::vector<int> node_mesh(nodes.size(), -1);
+
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
 		const Mesh& mesh = meshes[i];
@@ -1967,8 +1967,16 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		json_nodes += "]";
 		json_nodes += "}";
 
-		comma(json_roots);
-		json_roots += to_string(node_offset);
+		if (mesh.node)
+		{
+			assert(nodes[mesh.node - data->nodes].keep);
+			node_mesh[mesh.node - data->nodes] = int(node_offset);
+		}
+		else
+		{
+			comma(json_roots);
+			json_roots += to_string(node_offset);
+		}
 
 		node_offset++;
 		mesh_offset++;
@@ -2046,7 +2054,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			}
 			json_nodes += "]";
 		}
-		if (node.children_count)
+		if (node.children_count || node_mesh[i] >= 0)
 		{
 			comma(json_nodes);
 			json_nodes += "\"children\":[";
@@ -2059,6 +2067,11 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 					comma(json_nodes);
 					json_nodes += to_string(size_t(ci.remap));
 				}
+			}
+			if (node_mesh[i] >= 0)
+			{
+				comma(json_nodes);
+				json_nodes += to_string(size_t(node_mesh[i]));
 			}
 			json_nodes += "]";
 		}
