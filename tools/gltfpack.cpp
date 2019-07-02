@@ -1714,6 +1714,61 @@ void remapNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, size_t& node_off
 	}
 }
 
+bool parseDataUri(const char* uri, std::string& mime_type, std::string& result)
+{
+	if (strncmp(uri, "data:", 5) == 0)
+	{
+		const char* comma = strchr(uri, ',');
+
+		if (comma && comma - uri >= 7 && strncmp(comma - 7, ";base64", 7) == 0)
+		{
+			const char* base64 = comma + 1;
+			size_t base64_size = strlen(base64);
+			size_t size = base64_size - base64_size / 4;
+
+			if (base64_size >= 2)
+			{
+				size -= base64[base64_size - 2] == '=';
+				size -= base64[base64_size - 1] == '=';
+			}
+
+			void* data = 0;
+
+			cgltf_options options = {};
+			cgltf_result res = cgltf_load_buffer_base64(&options, size, base64, &data);
+
+			if (res != cgltf_result_success)
+				return false;
+
+			mime_type = std::string(uri + 5, comma - 7);
+			result = std::string(static_cast<const char*>(data), size);
+
+			free(data);
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void writeEmbeddedImage(std::string& json, std::vector<BufferView>& views, const char* data, size_t size, const char* mime_type)
+{
+	size_t view = getBufferView(views, BufferView::Kind_Image, -1, 1, false);
+
+	assert(views[view].data.empty());
+	views[view].data.append(data, size);
+
+	// each chunk must be aligned to 4 bytes
+	views[view].data.resize((views[view].data.size() + 3) & ~3);
+
+	json += "\"bufferView\":";
+	json += to_string(view);
+	json += ",\"mimeType\":\"";
+	json += mime_type;
+	json += "\"";
+}
+
 bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings, std::string& json, std::string& bin)
 {
 	if (settings.verbose)
@@ -1808,25 +1863,26 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		json_images += "{";
 		if (image.uri)
 		{
-			json_images += "\"uri\":\"";
-			json_images += image.uri;
-			json_images += "\"";
+			std::string mime_type;
+			std::string img;
+
+			if (parseDataUri(image.uri, mime_type, img))
+			{
+				writeEmbeddedImage(json_images, views, img.c_str(), img.size(), mime_type.c_str());
+			}
+			else
+			{
+				json_images += "\"uri\":\"";
+				json_images += image.uri;
+				json_images += "\"";
+			}
 		}
-		else if (image.buffer_view && image.buffer_view->buffer->data)
+		else if (image.buffer_view && image.buffer_view->buffer->data && image.mime_type)
 		{
 			const char* img = static_cast<const char*>(image.buffer_view->buffer->data) + image.buffer_view->offset;
 			size_t size = image.buffer_view->size;
 
-			size_t view = getBufferView(views, BufferView::Kind_Image, -1, 1, false);
-
-			assert(views[view].data.empty());
-			views[view].data.append(img, size);
-
-			// each chunk must be aligned to 4 bytes
-			views[view].data.resize((views[view].data.size() + 3) & ~3);
-
-			json_images += "\"bufferView\":";
-			json_images += to_string(view);
+			writeEmbeddedImage(json_images, views, img, size, image.mime_type);
 		}
 
 		json_images += "}";
