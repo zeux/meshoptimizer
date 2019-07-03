@@ -1205,7 +1205,7 @@ void writeMaterialInfo(std::string& json, const cgltf_data* data, const cgltf_ma
 	{
 		comma(json);
 		append(json, "\"alphaMode\":");
-		json += (material.alpha_mode == cgltf_alpha_mode_blend) ? "\"BLEND\"" : "\"MASK\"";
+		append(json, (material.alpha_mode == cgltf_alpha_mode_blend) ? "\"BLEND\"" : "\"MASK\"");
 	}
 
 	if (material.alpha_cutoff != 0.5f)
@@ -1352,7 +1352,7 @@ void writeBufferView(std::string& json, BufferView::Kind kind, size_t count, siz
 	if (kind == BufferView::Kind_Vertex || kind == BufferView::Kind_Index)
 	{
 		append(json, ",\"target\":");
-		json += (kind == BufferView::Kind_Vertex) ? "34962" : "34963";
+		append(json, (kind == BufferView::Kind_Vertex) ? "34962" : "34963");
 	}
 	if (compressed)
 	{
@@ -1374,11 +1374,11 @@ void writeAccessor(std::string& json, size_t view, size_t offset, cgltf_type typ
 	append(json, ",\"byteOffset\":");
 	append(json, offset);
 	append(json, ",\"componentType\":");
-	json += componentType(component_type);
+	append(json, componentType(component_type));
 	append(json, ",\"count\":");
 	append(json, count);
 	append(json, ",\"type\":");
-	json += shapeType(type);
+	append(json, shapeType(type));
 
 	if (normalized)
 	{
@@ -1798,7 +1798,7 @@ void writeEmbeddedImage(std::string& json, std::vector<BufferView>& views, const
 	append(json, "\"bufferView\":");
 	append(json, view);
 	append(json, ",\"mimeType\":\"");
-	json += mime_type;
+	append(json, mime_type);
 	append(json, "\"");
 }
 
@@ -1906,7 +1906,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			else
 			{
 				append(json_images, "\"uri\":\"");
-				json_images += image.uri;
+				append(json_images, image.uri);
 				append(json_images, "\"");
 			}
 		}
