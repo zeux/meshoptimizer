@@ -988,21 +988,31 @@ void comma(std::string& s)
 	char ch = s.empty() ? 0 : s[s.size() - 1];
 
 	if (ch != 0 && ch != '[' && ch != '{')
-		s += ',';
+		s += ",";
 }
 
-std::string to_string(size_t v)
+void append(std::string& s, size_t v)
 {
 	char buf[32];
 	sprintf(buf, "%zu", v);
-	return buf;
+	s += buf;
 }
 
-std::string to_string(float v)
+void append(std::string& s, float v)
 {
 	char buf[512];
 	sprintf(buf, "%.9g", v);
-	return buf;
+	s += buf;
+}
+
+void append(std::string& s, const char* v)
+{
+	s += v;
+}
+
+void append(std::string& s, const std::string& v)
+{
+	s += v;
 }
 
 const char* componentType(cgltf_component_type type)
@@ -1091,20 +1101,20 @@ void writeTextureInfo(std::string& json, const cgltf_data* data, const cgltf_tex
 {
 	assert(view.texture);
 
-	json += "{\"index\":";
-	json += to_string(size_t(view.texture - data->textures));
-	json += ",\"texCoord\":";
-	json += to_string(size_t(view.texcoord));
-	json += ",\"extensions\":{\"KHR_texture_transform\":{";
-	json += "\"offset\":[";
-	json += to_string(qp.uv_offset[0]);
-	json += ",";
-	json += to_string(qp.uv_offset[1]);
-	json += "],\"scale\":[";
-	json += to_string(qp.uv_scale[0] / float((1 << qp.uv_bits) - 1));
-	json += ",";
-	json += to_string(qp.uv_scale[1] / float((1 << qp.uv_bits) - 1));
-	json += "]}}}";
+	append(json, "{\"index\":");
+	append(json, size_t(view.texture - data->textures));
+	append(json, ",\"texCoord\":");
+	append(json, size_t(view.texcoord));
+	append(json, ",\"extensions\":{\"KHR_texture_transform\":{");
+	append(json, "\"offset\":[");
+	append(json, qp.uv_offset[0]);
+	append(json, ",");
+	append(json, qp.uv_offset[1]);
+	append(json, "],\"scale\":[");
+	append(json, qp.uv_scale[0] / float((1 << qp.uv_bits) - 1));
+	append(json, ",");
+	append(json, qp.uv_scale[1] / float((1 << qp.uv_bits) - 1));
+	append(json, "]}}}");
 }
 
 void writeMaterialInfo(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationParams& qp)
@@ -1117,162 +1127,162 @@ void writeMaterialInfo(std::string& json, const cgltf_data* data, const cgltf_ma
 		const cgltf_pbr_metallic_roughness& pbr = material.pbr_metallic_roughness;
 
 		comma(json);
-		json += "\"pbrMetallicRoughness\":{";
+		append(json, "\"pbrMetallicRoughness\":{");
 		if (memcmp(pbr.base_color_factor, white, 16) != 0)
 		{
 			comma(json);
-			json += "\"baseColorFactor\":[";
-			json += to_string(pbr.base_color_factor[0]);
-			json += ",";
-			json += to_string(pbr.base_color_factor[1]);
-			json += ",";
-			json += to_string(pbr.base_color_factor[2]);
-			json += ",";
-			json += to_string(pbr.base_color_factor[3]);
-			json += "]";
+			append(json, "\"baseColorFactor\":[");
+			append(json, pbr.base_color_factor[0]);
+			append(json, ",");
+			append(json, pbr.base_color_factor[1]);
+			append(json, ",");
+			append(json, pbr.base_color_factor[2]);
+			append(json, ",");
+			append(json, pbr.base_color_factor[3]);
+			append(json, "]");
 		}
 		if (pbr.base_color_texture.texture)
 		{
 			comma(json);
-			json += "\"baseColorTexture\":";
+			append(json, "\"baseColorTexture\":");
 			writeTextureInfo(json, data, pbr.base_color_texture, qp);
 		}
 		if (pbr.metallic_factor != 1)
 		{
 			comma(json);
-			json += "\"metallicFactor\":";
-			json += to_string(pbr.metallic_factor);
+			append(json, "\"metallicFactor\":");
+			append(json, pbr.metallic_factor);
 		}
 		if (pbr.roughness_factor != 1)
 		{
 			comma(json);
-			json += "\"roughnessFactor\":";
-			json += to_string(pbr.roughness_factor);
+			append(json, "\"roughnessFactor\":");
+			append(json, pbr.roughness_factor);
 		}
 		if (pbr.metallic_roughness_texture.texture)
 		{
 			comma(json);
-			json += "\"metallicRoughnessTexture\":";
+			append(json, "\"metallicRoughnessTexture\":");
 			writeTextureInfo(json, data, pbr.metallic_roughness_texture, qp);
 		}
-		json += "}";
+		append(json, "}");
 	}
 
 	if (material.normal_texture.texture)
 	{
 		comma(json);
-		json += "\"normalTexture\":";
+		append(json, "\"normalTexture\":");
 		writeTextureInfo(json, data, material.normal_texture, qp);
 	}
 
 	if (material.occlusion_texture.texture)
 	{
 		comma(json);
-		json += "\"occlusionTexture\":";
+		append(json, "\"occlusionTexture\":");
 		writeTextureInfo(json, data, material.occlusion_texture, qp);
 	}
 
 	if (material.emissive_texture.texture)
 	{
 		comma(json);
-		json += "\"emissiveTexture\":";
+		append(json, "\"emissiveTexture\":");
 		writeTextureInfo(json, data, material.emissive_texture, qp);
 	}
 
 	if (memcmp(material.emissive_factor, black, 12) != 0)
 	{
 		comma(json);
-		json += "\"emissiveFactor\":[";
-		json += to_string(material.emissive_factor[0]);
-		json += ",";
-		json += to_string(material.emissive_factor[1]);
-		json += ",";
-		json += to_string(material.emissive_factor[2]);
-		json += "]";
+		append(json, "\"emissiveFactor\":[");
+		append(json, material.emissive_factor[0]);
+		append(json, ",");
+		append(json, material.emissive_factor[1]);
+		append(json, ",");
+		append(json, material.emissive_factor[2]);
+		append(json, "]");
 	}
 
 	if (material.alpha_mode != cgltf_alpha_mode_opaque)
 	{
 		comma(json);
-		json += "\"alphaMode\":";
+		append(json, "\"alphaMode\":");
 		json += (material.alpha_mode == cgltf_alpha_mode_blend) ? "\"BLEND\"" : "\"MASK\"";
 	}
 
 	if (material.alpha_cutoff != 0.5f)
 	{
 		comma(json);
-		json += "\"alphaCutoff\":";
-		json += to_string(material.alpha_cutoff);
+		append(json, "\"alphaCutoff\":");
+		append(json, material.alpha_cutoff);
 	}
 
 	if (material.double_sided)
 	{
 		comma(json);
-		json += "\"doubleSided\":true";
+		append(json, "\"doubleSided\":true");
 	}
 
 	if (material.has_pbr_specular_glossiness || material.unlit)
 	{
 		comma(json);
-		json += "\"extensions\":{";
+		append(json, "\"extensions\":{");
 
 		if (material.has_pbr_specular_glossiness)
 		{
 			const cgltf_pbr_specular_glossiness& pbr = material.pbr_specular_glossiness;
 
 			comma(json);
-			json += "\"KHR_materials_pbrSpecularGlossiness\":{";
+			append(json, "\"KHR_materials_pbrSpecularGlossiness\":{");
 			if (pbr.diffuse_texture.texture)
 			{
 				comma(json);
-				json += "\"diffuseTexture\":";
+				append(json, "\"diffuseTexture\":");
 				writeTextureInfo(json, data, pbr.diffuse_texture, qp);
 			}
 			if (pbr.specular_glossiness_texture.texture)
 			{
 				comma(json);
-				json += "\"specularGlossinessTexture\":";
+				append(json, "\"specularGlossinessTexture\":");
 				writeTextureInfo(json, data, pbr.specular_glossiness_texture, qp);
 			}
 			if (memcmp(pbr.diffuse_factor, white, 16) != 0)
 			{
 				comma(json);
-				json += "\"diffuseFactor\":[";
-				json += to_string(pbr.diffuse_factor[0]);
-				json += ",";
-				json += to_string(pbr.diffuse_factor[1]);
-				json += ",";
-				json += to_string(pbr.diffuse_factor[2]);
-				json += ",";
-				json += to_string(pbr.diffuse_factor[3]);
-				json += "]";
+				append(json, "\"diffuseFactor\":[");
+				append(json, pbr.diffuse_factor[0]);
+				append(json, ",");
+				append(json, pbr.diffuse_factor[1]);
+				append(json, ",");
+				append(json, pbr.diffuse_factor[2]);
+				append(json, ",");
+				append(json, pbr.diffuse_factor[3]);
+				append(json, "]");
 			}
 			if (memcmp(pbr.specular_factor, white, 12) != 0)
 			{
 				comma(json);
-				json += "\"specularFactor\":[";
-				json += to_string(pbr.specular_factor[0]);
-				json += ",";
-				json += to_string(pbr.specular_factor[1]);
-				json += ",";
-				json += to_string(pbr.specular_factor[2]);
-				json += "]";
+				append(json, "\"specularFactor\":[");
+				append(json, pbr.specular_factor[0]);
+				append(json, ",");
+				append(json, pbr.specular_factor[1]);
+				append(json, ",");
+				append(json, pbr.specular_factor[2]);
+				append(json, "]");
 			}
 			if (pbr.glossiness_factor != 1)
 			{
 				comma(json);
-				json += "\"glossinessFactor\":";
-				json += to_string(pbr.glossiness_factor);
+				append(json, "\"glossinessFactor\":");
+				append(json, pbr.glossiness_factor);
 			}
-			json += "}";
+			append(json, "}");
 		}
 		if (material.unlit)
 		{
 			comma(json);
-			json += "\"KHR_materials_unlit\":{}";
+			append(json, "\"KHR_materials_unlit\":{}");
 		}
 
-		json += "}";
+		append(json, "}");
 	}
 }
 
@@ -1329,72 +1339,72 @@ size_t getBufferView(std::vector<BufferView>& views, BufferView::Kind kind, int 
 
 void writeBufferView(std::string& json, BufferView::Kind kind, size_t count, size_t stride, size_t bin_offset, size_t bin_size, bool compressed)
 {
-	json += "{\"buffer\":0";
-	json += ",\"byteLength\":";
-	json += to_string(bin_size);
-	json += ",\"byteOffset\":";
-	json += to_string(bin_offset);
+	append(json, "{\"buffer\":0");
+	append(json, ",\"byteLength\":");
+	append(json, bin_size);
+	append(json, ",\"byteOffset\":");
+	append(json, bin_offset);
 	if (kind == BufferView::Kind_Vertex)
 	{
-		json += ",\"byteStride\":";
-		json += to_string(stride);
+		append(json, ",\"byteStride\":");
+		append(json, stride);
 	}
 	if (kind == BufferView::Kind_Vertex || kind == BufferView::Kind_Index)
 	{
-		json += ",\"target\":";
+		append(json, ",\"target\":");
 		json += (kind == BufferView::Kind_Vertex) ? "34962" : "34963";
 	}
 	if (compressed)
 	{
-		json += ",\"extensions\":{";
-		json += "\"KHR_meshopt_compression\":{";
-		json += "\"count\":";
-		json += to_string(count);
-		json += ",\"byteStride\":";
-		json += to_string(stride);
-		json += "}}";
+		append(json, ",\"extensions\":{");
+		append(json, "\"KHR_meshopt_compression\":{");
+		append(json, "\"count\":");
+		append(json, count);
+		append(json, ",\"byteStride\":");
+		append(json, stride);
+		append(json, "}}");
 	}
-	json += "}";
+	append(json, "}");
 }
 
 void writeAccessor(std::string& json, size_t view, size_t offset, cgltf_type type, cgltf_component_type component_type, bool normalized, size_t count, const float* min = 0, const float* max = 0, size_t numminmax = 0)
 {
-	json += "{\"bufferView\":";
-	json += to_string(view);
-	json += ",\"byteOffset\":";
-	json += to_string(offset);
-	json += ",\"componentType\":";
+	append(json, "{\"bufferView\":");
+	append(json, view);
+	append(json, ",\"byteOffset\":");
+	append(json, offset);
+	append(json, ",\"componentType\":");
 	json += componentType(component_type);
-	json += ",\"count\":";
-	json += to_string(count);
-	json += ",\"type\":";
+	append(json, ",\"count\":");
+	append(json, count);
+	append(json, ",\"type\":");
 	json += shapeType(type);
 
 	if (normalized)
 	{
-		json += ",\"normalized\":true";
+		append(json, ",\"normalized\":true");
 	}
 
 	if (min && max)
 	{
 		assert(numminmax);
 
-		json += ",\"min\":[";
+		append(json, ",\"min\":[");
 		for (size_t k = 0; k < numminmax; ++k)
 		{
 			comma(json);
-			json += to_string(min[k]);
+			append(json, min[k]);
 		}
-		json += "],\"max\":[";
+		append(json, "],\"max\":[");
 		for (size_t k = 0; k < numminmax; ++k)
 		{
 			comma(json);
-			json += to_string(max[k]);
+			append(json, max[k]);
 		}
-		json += "]";
+		append(json, "]");
 	}
 
-	json += "}";
+	append(json, "}");
 }
 
 float getDelta(const Attr& l, const Attr& r, cgltf_animation_path_type type)
@@ -1785,11 +1795,11 @@ void writeEmbeddedImage(std::string& json, std::vector<BufferView>& views, const
 	// each chunk must be aligned to 4 bytes
 	views[view].data.resize((views[view].data.size() + 3) & ~3);
 
-	json += "\"bufferView\":";
-	json += to_string(view);
-	json += ",\"mimeType\":\"";
+	append(json, "\"bufferView\":");
+	append(json, view);
+	append(json, ",\"mimeType\":\"");
 	json += mime_type;
-	json += "\"";
+	append(json, "\"");
 }
 
 bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings, std::string& json, std::string& bin)
@@ -1883,7 +1893,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		const cgltf_image& image = data->images[i];
 
 		comma(json_images);
-		json_images += "{";
+		append(json_images, "{");
 		if (image.uri)
 		{
 			std::string mime_type;
@@ -1895,9 +1905,9 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			}
 			else
 			{
-				json_images += "\"uri\":\"";
+				append(json_images, "\"uri\":\"");
 				json_images += image.uri;
-				json_images += "\"";
+				append(json_images, "\"");
 			}
 		}
 		else if (image.buffer_view && image.buffer_view->buffer->data && image.mime_type)
@@ -1912,7 +1922,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			fprintf(stderr, "Warning: ignoring image %d since it has no URI and no valid buffer data\n", int(i));
 		}
 
-		json_images += "}";
+		append(json_images, "}");
 	}
 
 	for (size_t i = 0; i < data->textures_count; ++i)
@@ -1920,13 +1930,13 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		const cgltf_texture& texture = data->textures[i];
 
 		comma(json_textures);
-		json_textures += "{";
+		append(json_textures, "{");
 		if (texture.image)
 		{
-			json_textures += "\"source\":";
-			json_textures += to_string(size_t(texture.image - data->images));
+			append(json_textures, "\"source\":");
+			append(json_textures, size_t(texture.image - data->images));
 		}
-		json_textures += "}";
+		append(json_textures, "}");
 	}
 
 	for (size_t i = 0; i < data->materials_count; ++i)
@@ -1934,9 +1944,9 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		const cgltf_material& material = data->materials[i];
 
 		comma(json_materials);
-		json_materials += "{";
+		append(json_materials, "{");
 		writeMaterialInfo(json_materials, data, material, qp);
-		json_materials += "}";
+		append(json_materials, "}");
 
 		has_pbr_specular_glossiness = has_pbr_specular_glossiness || material.has_pbr_specular_glossiness;
 	}
@@ -1988,15 +1998,15 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			size_t vertex_accr = accr_offset++;
 
 			comma(json_attributes);
-			json_attributes += "\"";
-			json_attributes += attributeType(stream.type);
+			append(json_attributes, "\"");
+			append(json_attributes, attributeType(stream.type));
 			if (stream.type != cgltf_attribute_type_position && stream.type != cgltf_attribute_type_normal && stream.type != cgltf_attribute_type_tangent)
 			{
-				json_attributes += "_";
-				json_attributes += to_string(size_t(stream.index));
+				append(json_attributes, "_");
+				append(json_attributes, size_t(stream.index));
 			}
-			json_attributes += "\":";
-			json_attributes += to_string(vertex_accr);
+			append(json_attributes, "\":");
+			append(json_attributes, vertex_accr);
 		}
 
 		size_t index_accr = 0;
@@ -2017,42 +2027,42 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		}
 
 		comma(json_meshes);
-		json_meshes += "{\"primitives\":[{\"attributes\":{";
-		json_meshes += json_attributes;
-		json_meshes += "},\"indices\":";
-		json_meshes += to_string(index_accr);
+		append(json_meshes, "{\"primitives\":[{\"attributes\":{");
+		append(json_meshes, json_attributes);
+		append(json_meshes, "},\"indices\":");
+		append(json_meshes, index_accr);
 		if (mesh.material)
 		{
-			json_meshes += ",\"material\":";
-			json_meshes += to_string(size_t(mesh.material - data->materials));
+			append(json_meshes, ",\"material\":");
+			append(json_meshes, size_t(mesh.material - data->materials));
 		}
-		json_meshes += "}]}";
+		append(json_meshes, "}]}");
 
 		float node_scale = qp.pos_scale / float((1 << qp.pos_bits) - 1);
 
 		comma(json_nodes);
-		json_nodes += "{\"mesh\":";
-		json_nodes += to_string(mesh_offset);
+		append(json_nodes, "{\"mesh\":");
+		append(json_nodes, mesh_offset);
 		if (mesh.skin)
 		{
 			comma(json_nodes);
-			json_nodes += "\"skin\":";
-			json_nodes += to_string(size_t(mesh.skin - data->skins));
+			append(json_nodes, "\"skin\":");
+			append(json_nodes, size_t(mesh.skin - data->skins));
 		}
-		json_nodes += ",\"translation\":[";
-		json_nodes += to_string(qp.pos_offset[0]);
-		json_nodes += ",";
-		json_nodes += to_string(qp.pos_offset[1]);
-		json_nodes += ",";
-		json_nodes += to_string(qp.pos_offset[2]);
-		json_nodes += "],\"scale\":[";
-		json_nodes += to_string(node_scale);
-		json_nodes += ",";
-		json_nodes += to_string(node_scale);
-		json_nodes += ",";
-		json_nodes += to_string(node_scale);
-		json_nodes += "]";
-		json_nodes += "}";
+		append(json_nodes, ",\"translation\":[");
+		append(json_nodes, qp.pos_offset[0]);
+		append(json_nodes, ",");
+		append(json_nodes, qp.pos_offset[1]);
+		append(json_nodes, ",");
+		append(json_nodes, qp.pos_offset[2]);
+		append(json_nodes, "],\"scale\":[");
+		append(json_nodes, node_scale);
+		append(json_nodes, ",");
+		append(json_nodes, node_scale);
+		append(json_nodes, ",");
+		append(json_nodes, node_scale);
+		append(json_nodes, "]");
+		append(json_nodes, "}");
 
 		if (mesh.node)
 		{
@@ -2062,7 +2072,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		else
 		{
 			comma(json_roots);
-			json_roots += to_string(node_offset);
+			append(json_roots, node_offset);
 		}
 
 		node_offset++;
@@ -2083,68 +2093,68 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		if (!node.parent)
 		{
 			comma(json_roots);
-			json_roots += to_string(size_t(ni.remap));
+			append(json_roots, size_t(ni.remap));
 		}
 
 		comma(json_nodes);
-		json_nodes += "{";
+		append(json_nodes, "{");
 		if (node.name && ni.named)
 		{
 			comma(json_nodes);
-			json_nodes += "\"name\":\"";
-			json_nodes += node.name;
-			json_nodes += "\"";
+			append(json_nodes, "\"name\":\"");
+			append(json_nodes, node.name);
+			append(json_nodes, "\"");
 		}
 		if (node.has_translation)
 		{
 			comma(json_nodes);
-			json_nodes += "\"translation\":[";
-			json_nodes += to_string(node.translation[0]);
-			json_nodes += ",";
-			json_nodes += to_string(node.translation[1]);
-			json_nodes += ",";
-			json_nodes += to_string(node.translation[2]);
-			json_nodes += "]";
+			append(json_nodes, "\"translation\":[");
+			append(json_nodes, node.translation[0]);
+			append(json_nodes, ",");
+			append(json_nodes, node.translation[1]);
+			append(json_nodes, ",");
+			append(json_nodes, node.translation[2]);
+			append(json_nodes, "]");
 		}
 		if (node.has_rotation)
 		{
 			comma(json_nodes);
-			json_nodes += "\"rotation\":[";
-			json_nodes += to_string(node.rotation[0]);
-			json_nodes += ",";
-			json_nodes += to_string(node.rotation[1]);
-			json_nodes += ",";
-			json_nodes += to_string(node.rotation[2]);
-			json_nodes += ",";
-			json_nodes += to_string(node.rotation[3]);
-			json_nodes += "]";
+			append(json_nodes, "\"rotation\":[");
+			append(json_nodes, node.rotation[0]);
+			append(json_nodes, ",");
+			append(json_nodes, node.rotation[1]);
+			append(json_nodes, ",");
+			append(json_nodes, node.rotation[2]);
+			append(json_nodes, ",");
+			append(json_nodes, node.rotation[3]);
+			append(json_nodes, "]");
 		}
 		if (node.has_scale)
 		{
 			comma(json_nodes);
-			json_nodes += "\"scale\":[";
-			json_nodes += to_string(node.scale[0]);
-			json_nodes += ",";
-			json_nodes += to_string(node.scale[1]);
-			json_nodes += ",";
-			json_nodes += to_string(node.scale[2]);
-			json_nodes += "]";
+			append(json_nodes, "\"scale\":[");
+			append(json_nodes, node.scale[0]);
+			append(json_nodes, ",");
+			append(json_nodes, node.scale[1]);
+			append(json_nodes, ",");
+			append(json_nodes, node.scale[2]);
+			append(json_nodes, "]");
 		}
 		if (node.has_matrix)
 		{
 			comma(json_nodes);
-			json_nodes += "\"matrix\":[";
+			append(json_nodes, "\"matrix\":[");
 			for (int k = 0; k < 16; ++k)
 			{
 				comma(json_nodes);
-				json_nodes += to_string(node.matrix[k]);
+				append(json_nodes, node.matrix[k]);
 			}
-			json_nodes += "]";
+			append(json_nodes, "]");
 		}
 		if (node.children_count || !ni.meshes.empty())
 		{
 			comma(json_nodes);
-			json_nodes += "\"children\":[";
+			append(json_nodes, "\"children\":[");
 			for (size_t j = 0; j < node.children_count; ++j)
 			{
 				NodeInfo& ci = nodes[node.children[j] - data->nodes];
@@ -2152,17 +2162,17 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 				if (ci.keep)
 				{
 					comma(json_nodes);
-					json_nodes += to_string(size_t(ci.remap));
+					append(json_nodes, size_t(ci.remap));
 				}
 			}
 			for (size_t j = 0; j < ni.meshes.size(); ++j)
 			{
 				comma(json_nodes);
-				json_nodes += to_string(ni.meshes[j]);
+				append(json_nodes, ni.meshes[j]);
 			}
-			json_nodes += "]";
+			append(json_nodes, "]");
 		}
-		json_nodes += "}";
+		append(json_nodes, "}");
 	}
 
 	for (size_t i = 0; i < data->skins_count; ++i)
@@ -2204,23 +2214,23 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		size_t matrix_accr = accr_offset++;
 
 		comma(json_skins);
-		json_skins += "{";
-		json_skins += "\"joints\":[";
+		append(json_skins, "{");
+		append(json_skins, "\"joints\":[");
 		for (size_t j = 0; j < skin.joints_count; ++j)
 		{
 			comma(json_skins);
-			json_skins += to_string(size_t(nodes[skin.joints[j] - data->nodes].remap));
+			append(json_skins, size_t(nodes[skin.joints[j] - data->nodes].remap));
 		}
-		json_skins += "]";
-		json_skins += ",\"inverseBindMatrices\":";
-		json_skins += to_string(matrix_accr);
+		append(json_skins, "]");
+		append(json_skins, ",\"inverseBindMatrices\":");
+		append(json_skins, matrix_accr);
 		if (skin.skeleton)
 		{
 			comma(json_skins);
-			json_skins += "\"skeleton\":";
-			json_skins += to_string(size_t(nodes[skin.skeleton - data->nodes].remap));
+			append(json_skins, "\"skeleton\":");
+			append(json_skins, size_t(nodes[skin.skeleton - data->nodes].remap));
 		}
-		json_skins += "}";
+		append(json_skins, "}");
 	}
 
 	for (size_t i = 0; i < data->animations_count; ++i)
@@ -2363,65 +2373,65 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			size_t data_accr = accr_offset++;
 
 			comma(json_samplers);
-			json_samplers += "{\"input\":";
-			json_samplers += to_string(tc ? pose_accr : time_accr);
-			json_samplers += ",\"output\":";
-			json_samplers += to_string(data_accr);
-			json_samplers += "}";
+			append(json_samplers, "{\"input\":");
+			append(json_samplers, tc ? pose_accr : time_accr);
+			append(json_samplers, ",\"output\":");
+			append(json_samplers, data_accr);
+			append(json_samplers, "}");
 
 			comma(json_channels);
-			json_channels += "{\"sampler\":";
-			json_channels += to_string(track_offset);
-			json_channels += ",\"target\":{\"node\":";
-			json_channels += to_string(size_t(nodes[channel.target_node - data->nodes].remap));
-			json_channels += ",\"path\":";
-			json_channels += animationPath(channel.target_path);
-			json_channels += "}}";
+			append(json_channels, "{\"sampler\":");
+			append(json_channels, track_offset);
+			append(json_channels, ",\"target\":{\"node\":");
+			append(json_channels, size_t(nodes[channel.target_node - data->nodes].remap));
+			append(json_channels, ",\"path\":");
+			append(json_channels, animationPath(channel.target_path));
+			append(json_channels, "}}");
 
 			track_offset++;
 		}
 
 		comma(json_animations);
-		json_animations += "{";
+		append(json_animations, "{");
 		if (animation.name)
 		{
-			json_animations += "\"name\":\"";
-			json_animations += animation.name;
-			json_animations += "\",";
+			append(json_animations, "\"name\":\"");
+			append(json_animations, animation.name);
+			append(json_animations, "\",");
 		}
-		json_animations += "\"samplers\":[";
-		json_animations += json_samplers;
-		json_animations += "],\"channels\":[";
-		json_animations += json_channels;
-		json_animations += "]}";
+		append(json_animations, "\"samplers\":[");
+		append(json_animations, json_samplers);
+		append(json_animations, "],\"channels\":[");
+		append(json_animations, json_channels);
+		append(json_animations, "]}");
 	}
 
-	json += "\"asset\":{\"version\":\"2.0\", \"generator\":\"gltfpack\"}";
-	json += ",\"extensionsUsed\":[";
-	json += "\"KHR_quantized_geometry\"";
+	append(json, "\"asset\":{\"version\":\"2.0\", \"generator\":\"gltfpack\"}");
+	append(json, ",\"extensionsUsed\":[");
+	append(json, "\"KHR_quantized_geometry\"");
 	if (settings.compress)
 	{
 		comma(json);
-		json += "\"KHR_meshopt_compression\"";
+		append(json, "\"KHR_meshopt_compression\"");
 	}
 	if (!json_textures.empty())
 	{
 		comma(json);
-		json += "\"KHR_texture_transform\"";
+		append(json, "\"KHR_texture_transform\"");
 	}
 	if (has_pbr_specular_glossiness)
 	{
 		comma(json);
-		json += "\"KHR_materials_pbrSpecularGlossiness\"";
+		append(json, "\"KHR_materials_pbrSpecularGlossiness\"");
 	}
-	json += "]";
+	append(json, "]");
 
 	size_t bytes[BufferView::Kind_Count] = {};
 	size_t bytes_raw[BufferView::Kind_Count] = {};
 
 	if (!views.empty())
 	{
-		json += ",\"bufferViews\":[";
+		append(json, ",\"bufferViews\":[");
 		for (size_t i = 0; i < views.size(); ++i)
 		{
 			BufferView& view = views[i];
@@ -2446,59 +2456,59 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			bytes[view.kind] += bin.size() - offset;
 			bytes_raw[view.kind] += view.data.size();
 		}
-		json += "]";
+		append(json, "]");
 	}
 	if (!json_accessors.empty())
 	{
-		json += ",\"accessors\":[";
-		json += json_accessors;
-		json += "]";
+		append(json, ",\"accessors\":[");
+		append(json, json_accessors);
+		append(json, "]");
 	}
 	if (!json_images.empty())
 	{
-		json += ",\"images\":[";
-		json += json_images;
-		json += "]";
+		append(json, ",\"images\":[");
+		append(json, json_images);
+		append(json, "]");
 	}
 	if (!json_textures.empty())
 	{
-		json += ",\"textures\":[";
-		json += json_textures;
-		json += "]";
+		append(json, ",\"textures\":[");
+		append(json, json_textures);
+		append(json, "]");
 	}
 	if (!json_materials.empty())
 	{
-		json += ",\"materials\":[";
-		json += json_materials;
-		json += "]";
+		append(json, ",\"materials\":[");
+		append(json, json_materials);
+		append(json, "]");
 	}
 	if (!json_meshes.empty())
 	{
-		json += ",\"meshes\":[";
-		json += json_meshes;
-		json += "]";
+		append(json, ",\"meshes\":[");
+		append(json, json_meshes);
+		append(json, "]");
 	}
 	if (!json_skins.empty())
 	{
-		json += ",\"skins\":[";
-		json += json_skins;
-		json += "]";
+		append(json, ",\"skins\":[");
+		append(json, json_skins);
+		append(json, "]");
 	}
 	if (!json_animations.empty())
 	{
-		json += ",\"animations\":[";
-		json += json_animations;
-		json += "]";
+		append(json, ",\"animations\":[");
+		append(json, json_animations);
+		append(json, "]");
 	}
 	if (!json_roots.empty())
 	{
-		json += ",\"nodes\":[";
-		json += json_nodes;
-		json += "],\"scenes\":[";
-		json += "{\"nodes\":[";
-		json += json_roots;
-		json += "]}";
-		json += "],\"scene\":0";
+		append(json, ",\"nodes\":[");
+		append(json, json_nodes);
+		append(json, "],\"scenes\":[");
+		append(json, "{\"nodes\":[");
+		append(json, json_roots);
+		append(json, "]}");
+		append(json, "],\"scene\":0");
 	}
 
 	if (settings.verbose)
