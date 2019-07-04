@@ -1882,7 +1882,8 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	std::vector<BufferView> views;
 	std::string scratch;
 
-	bool has_pbr_specular_glossiness = false;
+	bool ext_pbr_specular_glossiness = false;
+	bool ext_unlit = false;
 
 	size_t accr_offset = 0;
 	size_t node_offset = 0;
@@ -1948,7 +1949,8 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		writeMaterialInfo(json_materials, data, material, qp);
 		append(json_materials, "}");
 
-		has_pbr_specular_glossiness = has_pbr_specular_glossiness || material.has_pbr_specular_glossiness;
+		ext_pbr_specular_glossiness = ext_pbr_specular_glossiness || material.has_pbr_specular_glossiness;
+		ext_unlit = ext_unlit || material.unlit;
 	}
 
 	for (size_t i = 0; i < meshes.size(); ++i)
@@ -2419,10 +2421,15 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		comma(json);
 		append(json, "\"KHR_texture_transform\"");
 	}
-	if (has_pbr_specular_glossiness)
+	if (ext_pbr_specular_glossiness)
 	{
 		comma(json);
 		append(json, "\"KHR_materials_pbrSpecularGlossiness\"");
+	}
+	if (ext_unlit)
+	{
+		comma(json);
+		append(json, "\"KHR_materials_unlit\"");
 	}
 	append(json, "]");
 
