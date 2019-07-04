@@ -1357,7 +1357,7 @@ void writeBufferView(std::string& json, BufferView::Kind kind, size_t count, siz
 	if (compressed)
 	{
 		append(json, ",\"extensions\":{");
-		append(json, "\"KHR_meshopt_compression\":{");
+		append(json, "\"MESHOPT_compression\":{");
 		append(json, "\"count\":");
 		append(json, count);
 		append(json, ",\"byteStride\":");
@@ -2417,11 +2417,11 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	}
 	append(json, "}");
 	append(json, ",\"extensionsUsed\":[");
-	append(json, "\"KHR_quantized_geometry\"");
+	append(json, "\"MESHOPT_quantized_geometry\"");
 	if (settings.compress)
 	{
 		comma(json);
-		append(json, "\"KHR_meshopt_compression\"");
+		append(json, "\"MESHOPT_compression\"");
 	}
 	if (!json_textures.empty())
 	{
@@ -2439,6 +2439,16 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		append(json, "\"KHR_materials_unlit\"");
 	}
 	append(json, "]");
+	if (settings.compress)
+	{
+		append(json, ",\"extensionsRequired\":[");
+		// Note: ideally we should include MESHOPT_quantized_geometry in the required extension list (regardless of compression)
+		// This extension *only* allows the use of quantized attributes for positions/normals/etc. This happens to be supported
+		// by popular JS frameworks, however, Babylon.JS refuses to load files with unsupported required extensions.
+		// For now we don't include it in the list, which will be fixed at some point once this extension becomes official.
+		append(json, "\"MESHOPT_compression\"");
+		append(json, "]");
+	}
 
 	size_t bytes[BufferView::Kind_Count] = {};
 	size_t bytes_raw[BufferView::Kind_Count] = {};

@@ -204,7 +204,7 @@ THREE.GLTFLoader = ( function () {
 							extensions[ EXTENSIONS.KHR_TEXTURE_TRANSFORM ] = new GLTFTextureTransformExtension( json );
 							break;
 
-						case EXTENSIONS.KHR_MESHOPT_COMPRESSION:
+						case EXTENSIONS.MESHOPT_COMPRESSION:
 							extensions[ extensionName ] = new GLTFMeshoptCompressionExtension( json, this.meshoptDecoder );
 							break;
 
@@ -284,7 +284,7 @@ THREE.GLTFLoader = ( function () {
 		KHR_MATERIALS_UNLIT: 'KHR_materials_unlit',
 		KHR_TEXTURE_TRANSFORM: 'KHR_texture_transform',
 		MSFT_TEXTURE_DDS: 'MSFT_texture_dds',
-		KHR_MESHOPT_COMPRESSION: 'KHR_meshopt_compression',
+		MESHOPT_COMPRESSION: 'MESHOPT_compression',
 	};
 
 	/**
@@ -1016,7 +1016,7 @@ THREE.GLTFLoader = ( function () {
 
 		}
 
-		this.name = EXTENSIONS.KHR_MESHOPT_COMPRESSION;
+		this.name = EXTENSIONS.MESHOPT_COMPRESSION;
 		this.json = json;
 		this.meshoptDecoder = meshoptDecoder;
 
@@ -1028,7 +1028,7 @@ THREE.GLTFLoader = ( function () {
 
 		return decoder.ready.then( function () {
 
-			var extensionDef = bufferViewDef.extensions[ EXTENSIONS.KHR_MESHOPT_COMPRESSION ];
+			var extensionDef = bufferViewDef.extensions[ EXTENSIONS.MESHOPT_COMPRESSION ];
 
 			var byteOffset = bufferViewDef.byteOffset || 0;
 			var byteLength = bufferViewDef.byteLength || 0;
@@ -1930,9 +1930,9 @@ THREE.GLTFLoader = ( function () {
 
 		var bufferViewDef = this.json.bufferViews[ bufferViewIndex ];
 
-		if ( bufferViewDef.extensions && bufferViewDef.extensions[ EXTENSIONS.KHR_MESHOPT_COMPRESSION ] ) {
+		if ( bufferViewDef.extensions && bufferViewDef.extensions[ EXTENSIONS.MESHOPT_COMPRESSION ] ) {
 
-			var extension = this.extensions[ EXTENSIONS.KHR_MESHOPT_COMPRESSION ];
+			var extension = this.extensions[ EXTENSIONS.MESHOPT_COMPRESSION ];
 
 			return this.getDependency( 'buffer', bufferViewDef.buffer ).then( function ( buffer ) {
 
