@@ -2408,7 +2408,14 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		append(json_animations, "]}");
 	}
 
-	append(json, "\"asset\":{\"version\":\"2.0\", \"generator\":\"gltfpack\"}");
+	append(json, "\"asset\":{");
+	append(json, "\"version\":\"2.0\",\"generator\":\"gltfpack\"");
+	if (data->asset.extras.start_offset)
+	{
+		append(json, ",\"extras\":");
+		json.append(data->json + data->asset.extras.start_offset, data->json + data->asset.extras.end_offset);
+	}
+	append(json, "}");
 	append(json, ",\"extensionsUsed\":[");
 	append(json, "\"KHR_quantized_geometry\"");
 	if (settings.compress)
