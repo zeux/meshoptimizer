@@ -288,10 +288,10 @@ gltfpack -i scene.gltf -o scene.glb
 
 gltfpack can produce two types of output files:
 
-- Regular `.glb`/`.gltf` files that have been optimized for GPU consumption using various cache optimizers and quantization. These files can be loaded by standard GLTF loaders present in frameworks such as [three.js](https://threejs.org/) and [Babylon.js](https://www.babylonjs.com/).
-- Compressed `.glb`/`.gltf` files that use meshoptimizer codecs to reduce the download size further. Loading these files requires extending GLTF loaders with custom decompression support; `demo/GLTFLoader.js` contains a custom version of three.js loader that can be used to load them.
+- By default gltfpack outputs regular `.glb`/`.gltf` files that have been optimized for GPU consumption using various cache optimizers and quantization. These files can be loaded by standard GLTF loaders present in frameworks such as [three.js](https://threejs.org/) and [Babylon.js](https://www.babylonjs.com/).
+- When using `-c` option, gltfpack outputs compressed `.glb`/`.gltf` files that use meshoptimizer codecs to reduce the download size further. Loading these files requires extending GLTF loaders with custom decompression support; `demo/GLTFLoader.js` contains a custom version of three.js loader that can be used to load them.
 
-> Note: files produced by gltfpack use `MESHOPT_quantized_geometry` and `MESHOPT_compression` pseudo-extensions; both of these have *not* been standardized but eventually - hopefully! - will be.
+> Note: files produced by gltfpack use `MESHOPT_quantized_geometry` and `MESHOPT_compression` pseudo-extensions; both of these have *not* been standardized yet but eventually will be.
 
 When using compressed files, `js/meshopt_decoder.js` needs to be loaded to provide the WebAssembly decoder module like this:
 
