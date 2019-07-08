@@ -1515,16 +1515,36 @@ bool isTrackConstant(const cgltf_animation_sampler& sampler, cgltf_animation_pat
 {
 	const float tolerance = 1e-3f;
 
+	size_t value_stride = (sampler.interpolation == cgltf_interpolation_type_cubic_spline) ? 3 : 1;
+	size_t value_offset = (sampler.interpolation == cgltf_interpolation_type_cubic_spline) ? 1 : 0;
+
 	Attr first = {};
-	cgltf_accessor_read_float(sampler.output, 0, first.f, 4);
+	cgltf_accessor_read_float(sampler.output, 0 * value_stride + value_offset, first.f, 4);
 
 	for (size_t i = 1; i < sampler.output->count; ++i)
 	{
 		Attr attr = {};
-		cgltf_accessor_read_float(sampler.output, i, attr.f, 4);
+		cgltf_accessor_read_float(sampler.output, i * value_stride + value_offset, attr.f, 4);
 
 		if (getDelta(first, attr, type) > tolerance)
 			return false;
+	}
+
+	if (sampler.interpolation == cgltf_interpolation_type_cubic_spline)
+	{
+		for (size_t i = 0; i < sampler.output->count; ++i)
+		{
+			for (int k = 0; k < 2; ++k)
+			{
+				Attr t = {};
+				cgltf_accessor_read_float(sampler.output, i * 3 + k * 2, t.f, 4);
+
+				float error = fabsf(t.f[0]) + fabsf(t.f[1]) + fabsf(t.f[2]) + fabsf(t.f[3]);
+
+				if (error > tolerance)
+					return false;
+			}
+		}
 	}
 
 	return true;
@@ -2489,16 +2509,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			bool tc = isTrackConstant(sampler, channel.target_path);
 
 			std::vector<Attr> track;
-			if (tc)
-			{
-				Attr pose = {};
-				cgltf_accessor_read_float(sampler.output, 0, pose.f, 4);
-				track.push_back(pose);
-			}
-			else
-			{
-				resampleKeyframes(track, sampler, channel.target_path, frames, mint, settings.anim_freq);
-			}
+			resampleKeyframes(track, sampler, channel.target_path, tc ? 1 : frames, mint, settings.anim_freq);
 
 			std::string scratch;
 			StreamFormat format = writeKeyframeStream(scratch, channel.target_path, track);
