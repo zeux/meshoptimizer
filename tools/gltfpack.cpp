@@ -28,6 +28,7 @@
 #include <vector>
 
 #include <float.h>
+#include <limits.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -606,6 +607,8 @@ bool getAttributeBounds(const std::vector<Mesh>& meshes, cgltf_attribute_type ty
 	min.f[0] = min.f[1] = min.f[2] = min.f[3] = +FLT_MAX;
 	max.f[0] = max.f[1] = max.f[2] = max.f[3] = -FLT_MAX;
 
+	Attr pad = {};
+
 	bool valid = false;
 
 	for (size_t i = 0; i < meshes.size(); ++i)
@@ -618,23 +621,47 @@ bool getAttributeBounds(const std::vector<Mesh>& meshes, cgltf_attribute_type ty
 
 			if (s.type == type)
 			{
-				for (size_t k = 0; k < s.data.size(); ++k)
+				if (s.target == 0)
 				{
-					const Attr& a = s.data[k];
+					for (size_t k = 0; k < s.data.size(); ++k)
+					{
+						const Attr& a = s.data[k];
 
-					min.f[0] = std::min(min.f[0], a.f[0]);
-					min.f[1] = std::min(min.f[1], a.f[1]);
-					min.f[2] = std::min(min.f[2], a.f[2]);
-					min.f[3] = std::min(min.f[3], a.f[3]);
+						min.f[0] = std::min(min.f[0], a.f[0]);
+						min.f[1] = std::min(min.f[1], a.f[1]);
+						min.f[2] = std::min(min.f[2], a.f[2]);
+						min.f[3] = std::min(min.f[3], a.f[3]);
 
-					max.f[0] = std::max(max.f[0], a.f[0]);
-					max.f[1] = std::max(max.f[1], a.f[1]);
-					max.f[2] = std::max(max.f[2], a.f[2]);
-					max.f[3] = std::max(max.f[3], a.f[3]);
+						max.f[0] = std::max(max.f[0], a.f[0]);
+						max.f[1] = std::max(max.f[1], a.f[1]);
+						max.f[2] = std::max(max.f[2], a.f[2]);
+						max.f[3] = std::max(max.f[3], a.f[3]);
 
-					valid = true;
+						valid = true;
+					}
+				}
+				else
+				{
+					for (size_t k = 0; k < s.data.size(); ++k)
+					{
+						const Attr& a = s.data[k];
+
+						pad.f[0] = std::max(pad.f[0], fabsf(a.f[0]));
+						pad.f[1] = std::max(pad.f[1], fabsf(a.f[1]));
+						pad.f[2] = std::max(pad.f[2], fabsf(a.f[2]));
+						pad.f[3] = std::max(pad.f[3], fabsf(a.f[3]));
+					}
 				}
 			}
+		}
+	}
+
+	if (valid)
+	{
+		for (int k = 0; k < 4; ++k)
+		{
+			min.f[k] -= pad.f[k];
+			max.f[k] += pad.f[k];
 		}
 	}
 
@@ -927,26 +954,44 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	}
 }
 
-void getPositionBounds(uint16_t min[3], uint16_t max[3], const Stream& stream, const QuantizationParams& params)
+void getPositionBounds(int min[3], int max[3], const Stream& stream, const QuantizationParams& params)
 {
 	assert(stream.type == cgltf_attribute_type_position);
 	assert(stream.data.size() > 0);
 
-	min[0] = min[1] = min[2] = 0xffff;
-	max[0] = max[1] = max[2] = 0;
+	min[0] = min[1] = min[2] = INT_MAX;
+	max[0] = max[1] = max[2] = INT_MIN;
 
 	float pos_rscale = params.pos_scale == 0.f ? 0.f : 1.f / params.pos_scale;
 
-	for (size_t i = 0; i < stream.data.size(); ++i)
+	if (stream.target == 0)
 	{
-		const Attr& a = stream.data[i];
-
-		for (int k = 0; k < 3; ++k)
+		for (size_t i = 0; i < stream.data.size(); ++i)
 		{
-			uint16_t v = uint16_t(meshopt_quantizeUnorm((a.f[k] - params.pos_offset[k]) * pos_rscale, params.pos_bits));
+			const Attr& a = stream.data[i];
 
-			min[k] = std::min(min[k], v);
-			max[k] = std::max(max[k], v);
+			for (int k = 0; k < 3; ++k)
+			{
+				int v = meshopt_quantizeUnorm((a.f[k] - params.pos_offset[k]) * pos_rscale, params.pos_bits);
+
+				min[k] = std::min(min[k], v);
+				max[k] = std::max(max[k], v);
+			}
+		}
+	}
+	else
+	{
+		for (size_t i = 0; i < stream.data.size(); ++i)
+		{
+			const Attr& a = stream.data[i];
+
+			for (int k = 0; k < 3; ++k)
+			{
+				int v = meshopt_quantizeSnorm(a.f[k] * pos_rscale, params.pos_bits);
+
+				min[k] = std::min(min[k], v);
+				max[k] = std::max(max[k], v);
+			}
 		}
 	}
 }
@@ -1946,13 +1991,14 @@ void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std:
 		comma(json_accessors);
 		if (stream.type == cgltf_attribute_type_position)
 		{
-			uint16_t min[3] = {};
-			uint16_t max[3] = {};
+			int min[3] = {};
+			int max[3] = {};
 			getPositionBounds(min, max, stream, qp);
 
 			// note: vec4 is used instead of vec3 to avoid three.js bug with interleaved buffers (#16802)
-			float minf[4] = {float(min[0]), float(min[1]), float(min[2]), 1};
-			float maxf[4] = {float(max[0]), float(max[1]), float(max[2]), 1};
+			float posw = (stream.target == 0) ? 1.f : 0.f;
+			float minf[4] = {float(min[0]), float(min[1]), float(min[2]), posw};
+			float maxf[4] = {float(max[0]), float(max[1]), float(max[2]), posw};
 
 			writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, stream.data.size(), minf, maxf, 4);
 		}
