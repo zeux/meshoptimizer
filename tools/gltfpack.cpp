@@ -48,6 +48,7 @@ struct Stream
 {
 	cgltf_attribute_type type;
 	int index;
+	int target; // 0 = base mesh, 1+ = morph target
 
 	std::vector<Attr> data;
 };
@@ -61,6 +62,8 @@ struct Mesh
 
 	std::vector<Stream> streams;
 	std::vector<unsigned int> indices;
+
+	size_t targets;
 };
 
 struct Settings
@@ -237,11 +240,6 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 				continue;
 			}
 
-			if (primitive.targets_count)
-			{
-				fprintf(stderr, "Warning: ignoring %d morph targets in primitive %d of mesh %d\n", int(primitive.targets_count), int(pi), mesh_id);
-			}
-
 			Mesh result;
 
 			result.node = &node;
@@ -271,6 +269,32 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 
 				result.streams.push_back(s);
 			}
+
+			for (size_t ti = 0; ti < primitive.targets_count; ++ti)
+			{
+				const cgltf_morph_target& target = primitive.targets[ti];
+
+				for (size_t ai = 0; ai < target.attributes_count; ++ai)
+				{
+					const cgltf_attribute& attr = target.attributes[ai];
+
+					if (attr.type == cgltf_attribute_type_invalid)
+					{
+						fprintf(stderr, "Warning: ignoring unknown attribute %s in morph target %d of primitive %d of mesh %d\n", attr.name, int(ti), int(pi), mesh_id);
+						continue;
+					}
+
+					Stream s = {attr.type, attr.index, int(ti + 1)};
+					s.data.resize(attr.data->count);
+
+					for (size_t i = 0; i < attr.data->count; ++i)
+						cgltf_accessor_read_float(attr.data, i, s.data[i].f, 4);
+
+					result.streams.push_back(s);
+				}
+			}
+
+			result.targets = primitive.targets_count;
 
 			meshes.push_back(result);
 		}
@@ -402,6 +426,7 @@ void parseMeshesObj(fastObjMesh* obj, cgltf_data* data, std::vector<Mesh>& meshe
 		mesh.streams[2].type = cgltf_attribute_type_texcoord;
 		mesh.streams[2].data.resize(vertex_count[mi]);
 		mesh.indices.resize(index_count[mi]);
+		mesh.targets = 0;
 	}
 
 	std::vector<size_t> vertex_offset(material_count);
@@ -455,8 +480,8 @@ bool canMerge(const Mesh& lhs, const Mesh& rhs)
 		if (lhs.node->parent != rhs.node->parent)
 			return false;
 
-		bool lhs_transform = lhs.node->has_translation | lhs.node->has_rotation | lhs.node->has_scale | lhs.node->has_matrix;
-		bool rhs_transform = rhs.node->has_translation | rhs.node->has_rotation | rhs.node->has_scale | rhs.node->has_matrix;
+		bool lhs_transform = lhs.node->has_translation | lhs.node->has_rotation | lhs.node->has_scale | lhs.node->has_matrix | (!!lhs.node->weights);
+		bool rhs_transform = rhs.node->has_translation | rhs.node->has_rotation | rhs.node->has_scale | rhs.node->has_matrix | (!!rhs.node->weights);
 
 		if (lhs_transform || rhs_transform)
 			return false;
@@ -471,11 +496,14 @@ bool canMerge(const Mesh& lhs, const Mesh& rhs)
 	if (lhs.skin != rhs.skin)
 		return false;
 
+	if (lhs.targets != rhs.targets)
+		return false;
+
 	if (lhs.streams.size() != rhs.streams.size())
 		return false;
 
 	for (size_t i = 0; i < lhs.streams.size(); ++i)
-		if (lhs.streams[i].type != rhs.streams[i].type || lhs.streams[i].index != rhs.streams[i].index)
+		if (lhs.streams[i].type != rhs.streams[i].type || lhs.streams[i].index != rhs.streams[i].index || lhs.streams[i].target != rhs.streams[i].target)
 			return false;
 
 	return true;
@@ -1828,6 +1856,63 @@ void writeEmbeddedImage(std::string& json, std::vector<BufferView>& views, const
 	append(json, "\"");
 }
 
+void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, int target, const QuantizationParams& qp, const Settings& settings)
+{
+	std::string scratch;
+
+	for (size_t j = 0; j < mesh.streams.size(); ++j)
+	{
+		const Stream& stream = mesh.streams[j];
+
+		if (stream.target != target)
+			continue;
+
+		if (stream.type == cgltf_attribute_type_texcoord && (!mesh.material || !usesTextureSet(*mesh.material, stream.index)))
+			continue;
+
+		if ((stream.type == cgltf_attribute_type_joints || stream.type == cgltf_attribute_type_weights) && !mesh.skin)
+			continue;
+
+		scratch.clear();
+		StreamFormat format = writeVertexStream(scratch, stream, qp, settings);
+
+		size_t view = getBufferView(views, BufferView::Kind_Vertex, 0, format.stride, settings.compress);
+		size_t offset = views[view].data.size();
+		views[view].data += scratch;
+
+		comma(json_accessors);
+		if (stream.type == cgltf_attribute_type_position)
+		{
+			uint16_t min[3] = {};
+			uint16_t max[3] = {};
+			getPositionBounds(min, max, stream, qp);
+
+			// note: vec4 is used instead of vec3 to avoid three.js bug with interleaved buffers (#16802)
+			float minf[4] = {float(min[0]), float(min[1]), float(min[2]), 1};
+			float maxf[4] = {float(max[0]), float(max[1]), float(max[2]), 1};
+
+			writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, stream.data.size(), minf, maxf, 4);
+		}
+		else
+		{
+			writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, stream.data.size());
+		}
+
+		size_t vertex_accr = accr_offset++;
+
+		comma(json);
+		append(json, "\"");
+		append(json, attributeType(stream.type));
+		if (stream.type != cgltf_attribute_type_position && stream.type != cgltf_attribute_type_normal && stream.type != cgltf_attribute_type_tangent)
+		{
+			append(json, "_");
+			append(json, size_t(stream.index));
+		}
+		append(json, "\":");
+		append(json, vertex_accr);
+	}
+}
+
 bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings, std::string& json, std::string& bin)
 {
 	if (settings.verbose)
@@ -1988,55 +2073,22 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		if (mesh.indices.empty())
 			continue;
 
-		std::string json_attributes;
+		comma(json_meshes);
+		append(json_meshes, "{\"primitives\":[{\"attributes\":{");
+		writeMeshAttributes(json_meshes, views, json_accessors, accr_offset, mesh, 0, qp, settings);
+		append(json_meshes, "}");
 
-		for (size_t j = 0; j < mesh.streams.size(); ++j)
+		if (mesh.targets)
 		{
-			const Stream& stream = mesh.streams[j];
-
-			if (stream.type == cgltf_attribute_type_texcoord && (!mesh.material || !usesTextureSet(*mesh.material, stream.index)))
-				continue;
-
-			if ((stream.type == cgltf_attribute_type_joints || stream.type == cgltf_attribute_type_weights) && !mesh.skin)
-				continue;
-
-			scratch.clear();
-			StreamFormat format = writeVertexStream(scratch, stream, qp, settings);
-
-			size_t view = getBufferView(views, BufferView::Kind_Vertex, 0, format.stride, settings.compress);
-			size_t offset = views[view].data.size();
-			views[view].data += scratch;
-
-			comma(json_accessors);
-			if (stream.type == cgltf_attribute_type_position)
+			append(json_meshes, ",\"targets\":[");
+			for (size_t j = 0; j < mesh.targets; ++j)
 			{
-				uint16_t min[3] = {};
-				uint16_t max[3] = {};
-				getPositionBounds(min, max, stream, qp);
-
-				// note: vec4 is used instead of vec3 to avoid three.js bug with interleaved buffers (#16802)
-				float minf[4] = {float(min[0]), float(min[1]), float(min[2]), 1};
-				float maxf[4] = {float(max[0]), float(max[1]), float(max[2]), 1};
-
-				writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, stream.data.size(), minf, maxf, 4);
+				comma(json_meshes);
+				append(json_meshes, "{");
+				writeMeshAttributes(json_meshes, views, json_accessors, accr_offset, mesh, int(1 + j), qp, settings);
+				append(json_meshes, "}");
 			}
-			else
-			{
-				writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, stream.data.size());
-			}
-
-			size_t vertex_accr = accr_offset++;
-
-			comma(json_attributes);
-			append(json_attributes, "\"");
-			append(json_attributes, attributeType(stream.type));
-			if (stream.type != cgltf_attribute_type_position && stream.type != cgltf_attribute_type_normal && stream.type != cgltf_attribute_type_tangent)
-			{
-				append(json_attributes, "_");
-				append(json_attributes, size_t(stream.index));
-			}
-			append(json_attributes, "\":");
-			append(json_attributes, vertex_accr);
+			append(json_meshes, "]");
 		}
 
 		size_t index_accr = 0;
@@ -2056,10 +2108,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			index_accr = accr_offset++;
 		}
 
-		comma(json_meshes);
-		append(json_meshes, "{\"primitives\":[{\"attributes\":{");
-		append(json_meshes, json_attributes);
-		append(json_meshes, "},\"indices\":");
+		append(json_meshes, ",\"indices\":");
 		append(json_meshes, index_accr);
 		if (mesh.material)
 		{
