@@ -1065,11 +1065,11 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 		{
 			const Attr& a = data[i];
 
-			uint16_t v[1] = {uint16_t(meshopt_quantizeUnorm(a.f[0], 16))};
+			uint8_t v[1] = {uint8_t(meshopt_quantizeUnorm(a.f[0], 8))};
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		StreamFormat format = {cgltf_type_scalar, cgltf_component_type_r_16u, true, 1};
+		StreamFormat format = {cgltf_type_scalar, cgltf_component_type_r_8u, true, 1};
 		return format;
 	}
 	else
@@ -2593,7 +2593,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			std::string scratch;
 			StreamFormat format = writeKeyframeStream(scratch, channel.target_path, track);
 
-			size_t view = getBufferView(views, BufferView::Kind_Keyframe, channel.target_path, format.stride, settings.compress);
+			size_t view = getBufferView(views, BufferView::Kind_Keyframe, channel.target_path, format.stride, settings.compress && channel.target_path != cgltf_animation_path_type_weights);
 			size_t offset = views[view].data.size();
 			views[view].data += scratch;
 
