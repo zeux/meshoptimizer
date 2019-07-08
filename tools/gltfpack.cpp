@@ -1615,8 +1615,6 @@ bool isTrackConstant(const cgltf_animation_sampler& sampler, cgltf_animation_pat
 		}
 	}
 
-	printf("type %d true\n", type);
-
 	return true;
 }
 
@@ -1743,8 +1741,8 @@ void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& s
 				{
 					Attr v0 = {};
 					Attr v1 = {};
-					cgltf_accessor_read_float(sampler.output, cursor * components + j + 0, v0.f, 4);
-					cgltf_accessor_read_float(sampler.output, cursor * components + j + 1, v1.f, 4);
+					cgltf_accessor_read_float(sampler.output, (cursor + 0) * components + j, v0.f, 4);
+					cgltf_accessor_read_float(sampler.output, (cursor + 1) * components + j, v1.f, 4);
 					data.push_back(interpolateLinear(v0, v1, t, type));
 				}
 				break;
@@ -1763,10 +1761,10 @@ void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& s
 					Attr b0 = {};
 					Attr a1 = {};
 					Attr v1 = {};
-					cgltf_accessor_read_float(sampler.output, cursor * components * 3 + components * 1 + j, v0.f, 4);
-					cgltf_accessor_read_float(sampler.output, cursor * components * 3 + components * 2 + j, b0.f, 4);
-					cgltf_accessor_read_float(sampler.output, cursor * components * 3 + components * 3 + j, a1.f, 4);
-					cgltf_accessor_read_float(sampler.output, cursor * components * 3 + components * 4 + j, v1.f, 4);
+					cgltf_accessor_read_float(sampler.output, (cursor * 3 + 1) * components + j, v0.f, 4);
+					cgltf_accessor_read_float(sampler.output, (cursor * 3 + 2) * components + j, b0.f, 4);
+					cgltf_accessor_read_float(sampler.output, (cursor * 3 + 3) * components + j, a1.f, 4);
+					cgltf_accessor_read_float(sampler.output, (cursor * 3 + 4) * components + j, v1.f, 4);
 					data.push_back(interpolateHermite(v0, b0, v1, a1, t, range, type));
 				}
 				break;
@@ -1778,13 +1776,12 @@ void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& s
 		}
 		else
 		{
-			size_t value_stride = (sampler.interpolation == cgltf_interpolation_type_cubic_spline) ? 3 : 1;
-			size_t value_offset = (sampler.interpolation == cgltf_interpolation_type_cubic_spline) ? 1 : 0;
+			size_t offset = (sampler.interpolation == cgltf_interpolation_type_cubic_spline) ? cursor * 3 + 1 : cursor;
 
 			for (size_t j = 0; j < components; ++j)
 			{
 				Attr v = {};
-				cgltf_accessor_read_float(sampler.output, (cursor * components + j) * value_stride + value_offset, v.f, 4);
+				cgltf_accessor_read_float(sampler.output, offset * components + j, v.f, 4);
 				data.push_back(v);
 			}
 		}
@@ -2109,12 +2106,12 @@ size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_
 
 		float node_scale = qp.pos_scale / float((1 << qp.pos_bits) - 1);
 
-			// pos_offset has to be applied first, thus it results in an offset rotated by the bind matrix
+		// pos_offset has to be applied first, thus it results in an offset rotated by the bind matrix
 		transform[12] += qp.pos_offset[0] * transform[0] + qp.pos_offset[1] * transform[4] + qp.pos_offset[2] * transform[8];
 		transform[13] += qp.pos_offset[0] * transform[1] + qp.pos_offset[1] * transform[5] + qp.pos_offset[2] * transform[9];
 		transform[14] += qp.pos_offset[0] * transform[2] + qp.pos_offset[1] * transform[6] + qp.pos_offset[2] * transform[10];
 
-			// node_scale will be applied before the rotation/scale from transform
+		// node_scale will be applied before the rotation/scale from transform
 		for (int k = 0; k < 12; ++k)
 			transform[k] *= node_scale;
 
