@@ -1221,6 +1221,8 @@ const char* animationPath(cgltf_animation_path_type type)
 		return "\"rotation\"";
 	case cgltf_animation_path_type_scale:
 		return "\"scale\"";
+	case cgltf_animation_path_type_weights:
+		return "\"weights\"";
 	default:
 		return "\"\"";
 	}
@@ -2355,6 +2357,16 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		append(json_nodes, ",");
 		append(json_nodes, node_scale);
 		append(json_nodes, "]");
+		if (mesh.node && mesh.node->weights_count)
+		{
+			append(json_nodes, ",\"weights\":[");
+			for (size_t j = 0; j < mesh.node->weights_count; ++j)
+			{
+				comma(json_nodes);
+				append(json_nodes, mesh.node->weights[j]);
+			}
+			append(json_nodes, "]");
+		}
 		append(json_nodes, "}");
 
 		if (mesh.node)
@@ -2600,11 +2612,21 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			append(json_samplers, data_accr);
 			append(json_samplers, "}");
 
+			NodeInfo& tni = nodes[channel.target_node - data->nodes];
+			size_t target_node = size_t(tni.remap);
+
+			if (channel.target_path == cgltf_animation_path_type_weights)
+			{
+				// TODO: is it true that there's always at most one mesh per node in general?
+				assert(tni.meshes.size() == 1);
+				target_node = tni.meshes[0];
+			}
+
 			comma(json_channels);
 			append(json_channels, "{\"sampler\":");
 			append(json_channels, track_offset);
 			append(json_channels, ",\"target\":{\"node\":");
-			append(json_channels, size_t(nodes[channel.target_node - data->nodes].remap));
+			append(json_channels, target_node);
 			append(json_channels, ",\"path\":");
 			append(json_channels, animationPath(channel.target_path));
 			append(json_channels, "}}");
