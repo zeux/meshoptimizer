@@ -1904,6 +1904,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	std::string json_skins;
 	std::string json_roots;
 	std::string json_animations;
+	std::string json_cameras;
 	std::string json_lights;
 
 	std::vector<BufferView> views;
@@ -2201,6 +2202,12 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			}
 			append(json_nodes, "]");
 		}
+		if (node.camera)
+		{
+			comma(json_nodes);
+			append(json_nodes, "\"camera\":");
+			append(json_nodes, size_t(node.camera - data->cameras));
+		}
 		if (node.light)
 		{
 			comma(json_nodes);
@@ -2442,6 +2449,54 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		append(json_animations, "]}");
 	}
 
+	for (size_t i = 0; i < data->cameras_count; ++i)
+	{
+		const cgltf_camera& camera = data->cameras[i];
+
+		comma(json_cameras);
+		append(json_cameras, "{");
+
+		switch (camera.type)
+		{
+		case cgltf_camera_type_perspective:
+			append(json_cameras, "\"type\":\"perspective\",\"perspective\":{");
+			append(json_cameras, "\"yfov\":");
+			append(json_cameras, camera.perspective.yfov);
+			append(json_cameras, ",\"znear\":");
+			append(json_cameras, camera.perspective.znear);
+			if (camera.perspective.aspect_ratio != 0.f)
+			{
+				append(json_cameras, ",\"aspectRatio\":");
+				append(json_cameras, camera.perspective.aspect_ratio);
+			}
+			if (camera.perspective.zfar != 0.f)
+			{
+				append(json_cameras, ",\"zfar\":");
+				append(json_cameras, camera.perspective.zfar);
+			}
+			append(json_cameras, "}");
+			break;
+
+		case cgltf_camera_type_orthographic:
+			append(json_cameras, "\"type\":\"orthographic\",\"orthographic\":{");
+			append(json_cameras, "\"xmag\":");
+			append(json_cameras, camera.orthographic.xmag);
+			append(json_cameras, ",\"ymag\":");
+			append(json_cameras, camera.orthographic.ymag);
+			append(json_cameras, ",\"znear\":");
+			append(json_cameras, camera.orthographic.znear);
+			append(json_cameras, ",\"zfar\":");
+			append(json_cameras, camera.orthographic.zfar);
+			append(json_cameras, "}");
+			break;
+
+		default:
+			fprintf(stderr, "Warning: skipping camera %d of unknown type\n", int(i));
+		}
+
+		append(json_cameras, "}");
+	}
+
 	for (size_t i = 0; i < data->lights_count; ++i)
 	{
 		const cgltf_light& light = data->lights[i];
@@ -2615,14 +2670,23 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		append(json, "],\"scenes\":[");
 		append(json, "{\"nodes\":[");
 		append(json, json_roots);
-		append(json, "]}");
-		append(json, "],\"scene\":0");
+		append(json, "]}]");
+	}
+	if (!json_cameras.empty())
+	{
+		append(json, ",\"cameras\":[");
+		append(json, json_cameras);
+		append(json, "]");
 	}
 	if (!json_lights.empty())
 	{
 		append(json, ",\"extensions\":{\"KHR_lights_punctual\":{\"lights\":[");
 		append(json, json_lights);
 		append(json, "]}}");
+	}
+	if (!json_roots.empty())
+	{
+		append(json, ",\"scene\":0");
 	}
 
 	if (settings.verbose)
