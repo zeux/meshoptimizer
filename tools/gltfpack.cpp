@@ -2021,7 +2021,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 			// we transform all non-skinned non-animated meshes to world space
 			// this makes sure that quantization doesn't introduce gaps if the original scene was watertight
-			if (!ni.animated && !mesh.skin)
+			if (!ni.animated && !mesh.skin && mesh.targets == 0)
 			{
 				transformMesh(mesh, mesh.node);
 				mesh.node = 0;
