@@ -12,9 +12,6 @@
 // To load packed glb files, meshoptimizer vertex decoder needs to be integrated into the loader; demo/GLTFLoader.js
 // contains a work-in-progress loader - please note that the extension specification isn't ready yet so the format
 // will change!
-//
-// gltfpack supports materials, meshes, nodes, skinning and animations
-// gltfpack doesn't support morph targets, lights and cameras
 
 #ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
@@ -1999,6 +1996,45 @@ size_t writeAnimationTime(std::vector<BufferView>& views, std::string& json_acce
 	return time_accr;
 }
 
+size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const cgltf_skin& skin, const QuantizationParams& qp, const Settings& settings)
+{
+	std::string scratch;
+
+	for (size_t j = 0; j < skin.joints_count; ++j)
+	{
+		float transform[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+
+		if (skin.inverse_bind_matrices)
+		{
+			cgltf_accessor_read_float(skin.inverse_bind_matrices, j, transform, 16);
+		}
+
+		float node_scale = qp.pos_scale / float((1 << qp.pos_bits) - 1);
+
+			// pos_offset has to be applied first, thus it results in an offset rotated by the bind matrix
+		transform[12] += qp.pos_offset[0] * transform[0] + qp.pos_offset[1] * transform[4] + qp.pos_offset[2] * transform[8];
+		transform[13] += qp.pos_offset[0] * transform[1] + qp.pos_offset[1] * transform[5] + qp.pos_offset[2] * transform[9];
+		transform[14] += qp.pos_offset[0] * transform[2] + qp.pos_offset[1] * transform[6] + qp.pos_offset[2] * transform[10];
+
+			// node_scale will be applied before the rotation/scale from transform
+		for (int k = 0; k < 12; ++k)
+			transform[k] *= node_scale;
+
+		scratch.append(reinterpret_cast<const char*>(transform), sizeof(transform));
+	}
+
+	size_t view = getBufferView(views, BufferView::Kind_Skin, 0, 64, settings.compress);
+	size_t offset = views[view].data.size();
+	views[view].data += scratch;
+
+	comma(json_accessors);
+	writeAccessor(json_accessors, view, offset, cgltf_type_mat4, cgltf_component_type_r_32f, false, skin.joints_count);
+
+	size_t matrix_accr = accr_offset++;
+
+	return matrix_accr;
+}
+
 bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings, std::string& json, std::string& bin)
 {
 	if (settings.verbose)
@@ -2353,39 +2389,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	{
 		const cgltf_skin& skin = data->skins[i];
 
-		std::string scratch;
-
-		for (size_t j = 0; j < skin.joints_count; ++j)
-		{
-			float transform[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
-
-			if (skin.inverse_bind_matrices)
-			{
-				cgltf_accessor_read_float(skin.inverse_bind_matrices, j, transform, 16);
-			}
-
-			float node_scale = qp.pos_scale / float((1 << qp.pos_bits) - 1);
-
-			// pos_offset has to be applied first, thus it results in an offset rotated by the bind matrix
-			transform[12] += qp.pos_offset[0] * transform[0] + qp.pos_offset[1] * transform[4] + qp.pos_offset[2] * transform[8];
-			transform[13] += qp.pos_offset[0] * transform[1] + qp.pos_offset[1] * transform[5] + qp.pos_offset[2] * transform[9];
-			transform[14] += qp.pos_offset[0] * transform[2] + qp.pos_offset[1] * transform[6] + qp.pos_offset[2] * transform[10];
-
-			// node_scale will be applied before the rotation/scale from transform
-			for (int k = 0; k < 12; ++k)
-				transform[k] *= node_scale;
-
-			scratch.append(reinterpret_cast<const char*>(transform), sizeof(transform));
-		}
-
-		size_t view = getBufferView(views, BufferView::Kind_Skin, 0, 64, settings.compress);
-		size_t offset = views[view].data.size();
-		views[view].data += scratch;
-
-		comma(json_accessors);
-		writeAccessor(json_accessors, view, offset, cgltf_type_mat4, cgltf_component_type_r_32f, false, skin.joints_count);
-
-		size_t matrix_accr = accr_offset++;
+		size_t matrix_accr = writeJointBindMatrices(views, json_accessors, accr_offset, skin, qp, settings);
 
 		comma(json_skins);
 		append(json_skins, "{");
