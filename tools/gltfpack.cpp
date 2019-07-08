@@ -1977,6 +1977,28 @@ size_t writeMeshIndices(std::vector<BufferView>& views, std::string& json_access
 	return index_accr;
 }
 
+size_t writeAnimationTime(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, float mint, int frames, const Settings& settings)
+{
+	std::vector<float> time(frames);
+
+	for (int j = 0; j < frames; ++j)
+		time[j] = mint + float(j) / settings.anim_freq;
+
+	std::string scratch;
+	StreamFormat format = writeTimeStream(scratch, time);
+
+	size_t view = getBufferView(views, BufferView::Kind_Time, 0, format.stride, settings.compress);
+	size_t offset = views[view].data.size();
+	views[view].data += scratch;
+
+	comma(json_accessors);
+	writeAccessor(json_accessors, view, offset, cgltf_type_scalar, format.component_type, format.normalized, frames, &time.front(), &time.back(), 1);
+
+	size_t time_accr = accr_offset++;
+
+	return time_accr;
+}
+
 bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings, std::string& json, std::string& bin)
 {
 	if (settings.verbose)
@@ -2057,7 +2079,6 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	std::string json_lights;
 
 	std::vector<BufferView> views;
-	std::string scratch;
 
 	bool ext_pbr_specular_glossiness = false;
 	bool ext_unlit = false;
@@ -2332,7 +2353,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	{
 		const cgltf_skin& skin = data->skins[i];
 
-		scratch.clear();
+		std::string scratch;
 
 		for (size_t j = 0; j < skin.joints_count; ++j)
 		{
@@ -2451,46 +2472,8 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		// but if the last frame is <2ms we favor just removing this data
 		int frames = 1 + int((maxt - mint) * settings.anim_freq + 0.8f);
 
-		size_t time_accr = 0;
-
-		if (needs_time)
-		{
-			std::vector<float> time(frames);
-
-			for (int j = 0; j < frames; ++j)
-				time[j] = mint + float(j) / settings.anim_freq;
-
-			scratch.clear();
-			StreamFormat format = writeTimeStream(scratch, time);
-
-			size_t view = getBufferView(views, BufferView::Kind_Time, 0, format.stride, settings.compress);
-			size_t offset = views[view].data.size();
-			views[view].data += scratch;
-
-			comma(json_accessors);
-			writeAccessor(json_accessors, view, offset, cgltf_type_scalar, format.component_type, format.normalized, frames, &time.front(), &time.back(), 1);
-
-			time_accr = accr_offset++;
-		}
-
-		size_t pose_accr = 0;
-
-		if (needs_pose)
-		{
-			std::vector<float> pose(1, mint);
-
-			scratch.clear();
-			StreamFormat format = writeTimeStream(scratch, pose);
-
-			size_t view = getBufferView(views, BufferView::Kind_Time, 0, format.stride, settings.compress);
-			size_t offset = views[view].data.size();
-			views[view].data += scratch;
-
-			comma(json_accessors);
-			writeAccessor(json_accessors, view, offset, cgltf_type_scalar, format.component_type, format.normalized, 1, &pose.front(), &pose.back(), 1);
-
-			pose_accr = accr_offset++;
-		}
+		size_t time_accr = needs_time ? writeAnimationTime(views, json_accessors, accr_offset, mint, frames, settings) : 0;
+		size_t pose_accr = needs_pose ? writeAnimationTime(views, json_accessors, accr_offset, mint, 1, settings) : 0;
 
 		size_t track_offset = 0;
 
@@ -2513,7 +2496,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 				resampleKeyframes(track, sampler, channel.target_path, frames, mint, settings.anim_freq);
 			}
 
-			scratch.clear();
+			std::string scratch;
 			StreamFormat format = writeKeyframeStream(scratch, channel.target_path, track);
 
 			size_t view = getBufferView(views, BufferView::Kind_Keyframe, channel.target_path, format.stride, settings.compress);
