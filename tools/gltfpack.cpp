@@ -567,6 +567,9 @@ void reindexMesh(Mesh& mesh)
 	std::vector<meshopt_Stream> streams;
 	for (size_t i = 0; i < mesh.streams.size(); ++i)
 	{
+		if (mesh.streams[i].target)
+			continue;
+
 		meshopt_Stream stream = {&mesh.streams[i].data[0], sizeof(Attr), sizeof(Attr)};
 		streams.push_back(stream);
 	}
