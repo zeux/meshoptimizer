@@ -760,10 +760,10 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 			{
 				const Attr& a = stream.data[i];
 
-				uint16_t v[4] = {
-				    uint16_t(meshopt_quantizeSnorm(a.f[0] * pos_rscale, params.pos_bits)),
-				    uint16_t(meshopt_quantizeSnorm(a.f[1] * pos_rscale, params.pos_bits)),
-				    uint16_t(meshopt_quantizeSnorm(a.f[2] * pos_rscale, params.pos_bits)),
+				int16_t v[4] = {
+				    int16_t((a.f[0] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[0]) * pos_rscale, params.pos_bits)),
+				    int16_t((a.f[1] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[1]) * pos_rscale, params.pos_bits)),
+				    int16_t((a.f[2] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[2]) * pos_rscale, params.pos_bits)),
 				    0};
 				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 			}
@@ -987,7 +987,7 @@ void getPositionBounds(int min[3], int max[3], const Stream& stream, const Quant
 
 			for (int k = 0; k < 3; ++k)
 			{
-				int v = meshopt_quantizeSnorm(a.f[k] * pos_rscale, params.pos_bits);
+				int v = (a.f[k] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[k]) * pos_rscale, params.pos_bits);
 
 				min[k] = std::min(min[k], v);
 				max[k] = std::max(max[k], v);
