@@ -2739,8 +2739,13 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		append(json_lights, "}");
 	}
 
+	char version[32];
+	sprintf(version, "%d.%d", MESHOPTIMIZER_VERSION / 1000, (MESHOPTIMIZER_VERSION % 1000) / 10);
+
 	append(json, "\"asset\":{");
-	append(json, "\"version\":\"2.0\",\"generator\":\"gltfpack\"");
+	append(json, "\"version\":\"2.0\",\"generator\":\"gltfpack ");
+	append(json, version);
+	append(json, "\"");
 	if (data->asset.extras.start_offset)
 	{
 		append(json, ",\"extras\":");
