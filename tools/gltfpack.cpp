@@ -64,6 +64,7 @@ struct Mesh
 	std::vector<unsigned int> indices;
 
 	size_t targets;
+	std::vector<float> weights;
 };
 
 struct Settings
@@ -295,6 +296,7 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 			}
 
 			result.targets = primitive.targets_count;
+			result.weights.assign(mesh.weights, mesh.weights + mesh.weights_count);
 
 			meshes.push_back(result);
 		}
@@ -499,6 +501,13 @@ bool canMerge(const Mesh& lhs, const Mesh& rhs)
 	if (lhs.targets != rhs.targets)
 		return false;
 
+	if (lhs.weights.size() != rhs.weights.size())
+		return false;
+
+	for (size_t i = 0; i < lhs.weights.size(); ++i)
+		if (lhs.weights[i] != rhs.weights[i])
+			return false;
+
 	if (lhs.streams.size() != rhs.streams.size())
 		return false;
 
@@ -692,27 +701,50 @@ void renormalizeWeights(uint8_t (&w)[4])
 	w[max] += uint8_t(255 - sum);
 }
 
-StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationParams& params, const Settings& settings)
+StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationParams& params, const Settings& settings, bool has_targets)
 {
 	if (stream.type == cgltf_attribute_type_position)
 	{
-		float pos_rscale = params.pos_scale == 0.f ? 0.f : 1.f / params.pos_scale;
-
-		for (size_t i = 0; i < stream.data.size(); ++i)
+		if (stream.target == 0)
 		{
-			const Attr& a = stream.data[i];
+			float pos_rscale = params.pos_scale == 0.f ? 0.f : 1.f / params.pos_scale;
 
-			uint16_t v[4] = {
-			    uint16_t(meshopt_quantizeUnorm((a.f[0] - params.pos_offset[0]) * pos_rscale, params.pos_bits)),
-			    uint16_t(meshopt_quantizeUnorm((a.f[1] - params.pos_offset[1]) * pos_rscale, params.pos_bits)),
-			    uint16_t(meshopt_quantizeUnorm((a.f[2] - params.pos_offset[2]) * pos_rscale, params.pos_bits)),
-			    1};
-			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+			for (size_t i = 0; i < stream.data.size(); ++i)
+			{
+				const Attr& a = stream.data[i];
+
+				uint16_t v[4] = {
+				    uint16_t(meshopt_quantizeUnorm((a.f[0] - params.pos_offset[0]) * pos_rscale, params.pos_bits)),
+				    uint16_t(meshopt_quantizeUnorm((a.f[1] - params.pos_offset[1]) * pos_rscale, params.pos_bits)),
+				    uint16_t(meshopt_quantizeUnorm((a.f[2] - params.pos_offset[2]) * pos_rscale, params.pos_bits)),
+				    1};
+				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+			}
+
+			// note: vec4 is used instead of vec3 to avoid three.js bug with interleaved buffers (#16802)
+			StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16u, false, 8};
+			return format;
 		}
+		else
+		{
+			float pos_rscale = params.pos_scale == 0.f ? 0.f : 1.f / params.pos_scale;
 
-		// note: vec4 is used instead of vec3 to avoid three.js bug with interleaved buffers (#16802)
-		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16u, false, 8};
-		return format;
+			for (size_t i = 0; i < stream.data.size(); ++i)
+			{
+				const Attr& a = stream.data[i];
+
+				uint16_t v[4] = {
+				    uint16_t(meshopt_quantizeSnorm(a.f[0] * pos_rscale, params.pos_bits)),
+				    uint16_t(meshopt_quantizeSnorm(a.f[1] * pos_rscale, params.pos_bits)),
+				    uint16_t(meshopt_quantizeSnorm(a.f[2] * pos_rscale, params.pos_bits)),
+				    0};
+				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+			}
+
+			// note: vec4 is used instead of vec3 to avoid three.js bug with interleaved buffers (#16802)
+			StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16, false, 8};
+			return format;
+		}
 	}
 	else if (stream.type == cgltf_attribute_type_texcoord)
 	{
@@ -737,7 +769,8 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	}
 	else if (stream.type == cgltf_attribute_type_normal)
 	{
-		int bits = settings.nrm_unit ? 8 : settings.nrm_bits;
+		bool nrm_unit = has_targets || settings.nrm_unit;
+		int bits = nrm_unit ? 8 : settings.nrm_bits;
 
 		for (size_t i = 0; i < stream.data.size(); ++i)
 		{
@@ -745,7 +778,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 
 			float nx = a.f[0], ny = a.f[1], nz = a.f[2];
 
-			if (!settings.nrm_unit)
+			if (!nrm_unit)
 				rescaleNormal(nx, ny, nz);
 
 			int8_t v[4] = {
@@ -762,7 +795,8 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	}
 	else if (stream.type == cgltf_attribute_type_tangent)
 	{
-		int bits = settings.nrm_unit ? 8 : settings.nrm_bits;
+		bool nrm_unit = has_targets || settings.nrm_unit;
+		int bits = nrm_unit ? 8 : settings.nrm_bits;
 
 		for (size_t i = 0; i < stream.data.size(); ++i)
 		{
@@ -770,7 +804,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 
 			float nx = a.f[0], ny = a.f[1], nz = a.f[2], nw = a.f[3];
 
-			if (!settings.nrm_unit)
+			if (!nrm_unit)
 				rescaleNormal(nx, ny, nz);
 
 			int8_t v[4] = {
@@ -1874,7 +1908,7 @@ void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std:
 			continue;
 
 		scratch.clear();
-		StreamFormat format = writeVertexStream(scratch, stream, qp, settings);
+		StreamFormat format = writeVertexStream(scratch, stream, qp, settings, mesh.targets > 0);
 
 		size_t view = getBufferView(views, BufferView::Kind_Vertex, 0, format.stride, settings.compress);
 		size_t offset = views[view].data.size();
@@ -2115,7 +2149,19 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			append(json_meshes, ",\"material\":");
 			append(json_meshes, size_t(mesh.material - data->materials));
 		}
-		append(json_meshes, "}]}");
+		append(json_meshes, "}]");
+
+		if (mesh.weights.size())
+		{
+			append(json_meshes, ",\"weights\":[");
+			for (size_t j = 0; j < mesh.weights.size(); ++j)
+			{
+				comma(json_meshes);
+				append(json_meshes, mesh.weights[j]);
+			}
+			append(json_meshes, "]");
+		}
+		append(json_meshes, "}");
 
 		float node_scale = qp.pos_scale / float((1 << qp.pos_bits) - 1);
 
