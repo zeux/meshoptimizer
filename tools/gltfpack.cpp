@@ -1097,6 +1097,21 @@ const char* animationPath(cgltf_animation_path_type type)
 	}
 }
 
+const char* lightType(cgltf_light_type type)
+{
+	switch (type)
+	{
+	case cgltf_light_type_directional:
+		return "\"directional\"";
+	case cgltf_light_type_point:
+		return "\"point\"";
+	case cgltf_light_type_spot:
+		return "\"spot\"";
+	default:
+		return "\"\"";
+	}
+}
+
 void writeTextureInfo(std::string& json, const cgltf_data* data, const cgltf_texture_view& view, const QuantizationParams& qp)
 {
 	assert(view.texture);
@@ -1719,6 +1734,17 @@ void markNeeded(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vecto
 			ni.keep = true;
 		}
 	}
+
+	// mark all light/camera nodes as kept
+	for (size_t i = 0; i < data->nodes_count; ++i)
+	{
+		const cgltf_node& node = data->nodes[i];
+
+		if (node.light || node.camera)
+		{
+			nodes[i].keep = true;
+		}
+	}
 }
 
 void remapNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, size_t& node_offset)
@@ -1878,6 +1904,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	std::string json_skins;
 	std::string json_roots;
 	std::string json_animations;
+	std::string json_lights;
 
 	std::vector<BufferView> views;
 	std::string scratch;
@@ -2174,6 +2201,13 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			}
 			append(json_nodes, "]");
 		}
+		if (node.light)
+		{
+			comma(json_nodes);
+			append(json_nodes, "\"extensions\":{\"KHR_lights_punctual\":{\"light\":");
+			append(json_nodes, size_t(node.light - data->lights));
+			append(json_nodes, "}}");
+		}
 		append(json_nodes, "}");
 	}
 
@@ -2408,6 +2442,51 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		append(json_animations, "]}");
 	}
 
+	for (size_t i = 0; i < data->lights_count; ++i)
+	{
+		const cgltf_light& light = data->lights[i];
+
+		static const float white[3] = {1, 1, 1};
+
+		comma(json_lights);
+		append(json_lights, "{\"type\":");
+		append(json_lights, lightType(light.type));
+		if (memcmp(light.color, white, sizeof(white)) != 0)
+		{
+			comma(json_lights);
+			append(json_lights, "\"color\":[");
+			append(json_lights, light.color[0]);
+			append(json_lights, ",");
+			append(json_lights, light.color[1]);
+			append(json_lights, ",");
+			append(json_lights, light.color[2]);
+			append(json_lights, "]");
+		}
+		if (light.intensity != 1.f)
+		{
+			comma(json_lights);
+			append(json_lights, "\"intensity\":");
+			append(json_lights, light.intensity);
+		}
+		if (light.range != 0.f)
+		{
+			comma(json_lights);
+			append(json_lights, "\"range\":");
+			append(json_lights, light.range);
+		}
+		if (light.type == cgltf_light_type_spot)
+		{
+			comma(json_lights);
+			append(json_lights, "\"spot\":{");
+			append(json_lights, "\"innerConeAngle\":");
+			append(json_lights, light.spot_inner_cone_angle);
+			append(json_lights, ",\"outerConeAngle\":");
+			append(json_lights, light.spot_outer_cone_angle == 0.f ? 0.78539816339f : light.spot_outer_cone_angle);
+			append(json_lights, "}");
+		}
+		append(json_lights, "}");
+	}
+
 	append(json, "\"asset\":{");
 	append(json, "\"version\":\"2.0\",\"generator\":\"gltfpack\"");
 	if (data->asset.extras.start_offset)
@@ -2437,6 +2516,11 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	{
 		comma(json);
 		append(json, "\"KHR_materials_unlit\"");
+	}
+	if (data->lights_count)
+	{
+		comma(json);
+		append(json, "\"KHR_lights_punctual\"");
 	}
 	append(json, "]");
 	if (settings.compress)
@@ -2533,6 +2617,12 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		append(json, json_roots);
 		append(json, "]}");
 		append(json, "],\"scene\":0");
+	}
+	if (!json_lights.empty())
+	{
+		append(json, ",\"extensions\":{\"KHR_lights_punctual\":{\"lights\":[");
+		append(json, json_lights);
+		append(json, "]}}");
 	}
 
 	if (settings.verbose)
