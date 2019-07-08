@@ -1947,6 +1947,24 @@ void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std:
 	}
 }
 
+size_t writeMeshIndices(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, const Settings& settings)
+{
+	std::string scratch;
+	StreamFormat format = writeIndexStream(scratch, mesh.indices);
+
+	// TODO: ideally variant would be 0 but this hurts index compression
+	size_t view = getBufferView(views, BufferView::Kind_Index, -1, format.stride, settings.compress);
+	size_t offset = views[view].data.size();
+	views[view].data += scratch;
+
+	comma(json_accessors);
+	writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, mesh.indices.size());
+
+	size_t index_accr = accr_offset++;
+
+	return index_accr;
+}
+
 bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings, std::string& json, std::string& bin)
 {
 	if (settings.verbose)
@@ -2125,22 +2143,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			append(json_meshes, "]");
 		}
 
-		size_t index_accr = 0;
-
-		{
-			scratch.clear();
-			StreamFormat format = writeIndexStream(scratch, mesh.indices);
-
-			// TODO: ideally variant would be 0 but this hurts index compression
-			size_t view = getBufferView(views, BufferView::Kind_Index, -1, format.stride, settings.compress);
-			size_t offset = views[view].data.size();
-			views[view].data += scratch;
-
-			comma(json_accessors);
-			writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, mesh.indices.size());
-
-			index_accr = accr_offset++;
-		}
+		size_t index_accr = writeMeshIndices(views, json_accessors, accr_offset, mesh, settings);
 
 		append(json_meshes, ",\"indices\":");
 		append(json_meshes, index_accr);
