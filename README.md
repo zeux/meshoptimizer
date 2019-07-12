@@ -288,7 +288,7 @@ gltfpack -i scene.gltf -o scene.glb
 
 gltfpack can produce two types of output files:
 
-- By default gltfpack outputs regular `.glb`/`.gltf` files that have been optimized for GPU consumption using various cache optimizers and quantization. These files can be loaded by standard GLTF loaders present in frameworks such as [three.js](https://threejs.org/) and [Babylon.js](https://www.babylonjs.com/).
+- By default gltfpack outputs regular `.glb`/`.gltf` files that have been optimized for GPU consumption using various cache optimizers and quantization. These files can be loaded by standard GLTF loaders present in frameworks such as [three.js](https://threejs.org/) (r107+) and [Babylon.js](https://www.babylonjs.com/) (4.1+).
 - When using `-c` option, gltfpack outputs compressed `.glb`/`.gltf` files that use meshoptimizer codecs to reduce the download size further. Loading these files requires extending GLTF loaders with custom decompression support; `demo/GLTFLoader.js` contains a custom version of three.js loader that can be used to load them.
 
 > Note: files produced by gltfpack use `MESHOPT_quantized_geometry` and `MESHOPT_compression` pseudo-extensions; both of these have *not* been standardized yet but eventually will be.
