@@ -1576,7 +1576,6 @@ bool isTrackConstant(const cgltf_animation_sampler& sampler, cgltf_animation_pat
 	size_t value_stride = (sampler.interpolation == cgltf_interpolation_type_cubic_spline) ? 3 : 1;
 	size_t value_offset = (sampler.interpolation == cgltf_interpolation_type_cubic_spline) ? 1 : 0;
 
-	// TODO: centralize or clean this up :-/
 	size_t components = (type == cgltf_animation_path_type_weights) ? target_node->mesh->primitives[0].targets_count : 1;
 
 	assert(sampler.input->count * value_stride * components == sampler.output->count);
@@ -1700,7 +1699,6 @@ Attr interpolateHermite(const Attr& v0, const Attr& t0, const Attr& v1, const At
 
 void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& sampler, cgltf_animation_path_type type, cgltf_node* target_node, int frames, float mint, int freq)
 {
-	// TODO: centralize or clean this up :-/
 	size_t components = (type == cgltf_animation_path_type_weights) ? target_node->mesh->primitives[0].targets_count : 1;
 
 	size_t cursor = 0;
@@ -2052,7 +2050,6 @@ size_t writeMeshIndices(std::vector<BufferView>& views, std::string& json_access
 	std::string scratch;
 	StreamFormat format = writeIndexStream(scratch, mesh.indices);
 
-	// TODO: ideally variant would be 0 but this hurts index compression
 	size_t view = getBufferView(views, BufferView::Kind_Index, -1, format.stride, settings.compress);
 	size_t offset = views[view].data.size();
 	views[view].data += scratch;
@@ -2634,7 +2631,6 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 			if (channel.target_path == cgltf_animation_path_type_weights)
 			{
-				// TODO: is it true that there's always at most one mesh per node in general?
 				assert(tni.meshes.size() == 1);
 				target_node = tni.meshes[0];
 			}

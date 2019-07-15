@@ -286,6 +286,8 @@ You can then run the resulting command-line binary like this (run it without arg
 gltfpack -i scene.gltf -o scene.glb
 ```
 
+gltfpack substantially changes the glTF data by optimizing the meshes for vertex fetch and transform cache, quantizing the geometry to reduce the memory consumption and size, merging meshes to reduce the draw call count, quantizing and resampling animations to reduce animation size and simplify playback, and pruning the node tree by removing or collapsing redundant nodes.
+
 gltfpack can produce two types of output files:
 
 - By default gltfpack outputs regular `.glb`/`.gltf` files that have been optimized for GPU consumption using various cache optimizers and quantization. These files can be loaded by standard GLTF loaders present in frameworks such as [three.js](https://threejs.org/) (r107+) and [Babylon.js](https://www.babylonjs.com/) (4.1+).
