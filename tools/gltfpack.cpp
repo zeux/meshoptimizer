@@ -1243,20 +1243,33 @@ void writeTextureInfo(std::string& json, const cgltf_data* data, const cgltf_tex
 {
 	assert(view.texture);
 
+	cgltf_texture_transform transform = view.transform;
+
+	transform.offset[0] += qp.uv_offset[0];
+	transform.offset[1] += qp.uv_offset[1];
+	transform.scale[0] *= qp.uv_scale[0] / float((1 << qp.uv_bits) - 1);
+	transform.scale[1] *= qp.uv_scale[1] / float((1 << qp.uv_bits) - 1);
+
 	append(json, "{\"index\":");
 	append(json, size_t(view.texture - data->textures));
 	append(json, ",\"texCoord\":");
 	append(json, size_t(view.texcoord));
 	append(json, ",\"extensions\":{\"KHR_texture_transform\":{");
 	append(json, "\"offset\":[");
-	append(json, qp.uv_offset[0]);
+	append(json, transform.offset[0]);
 	append(json, ",");
-	append(json, qp.uv_offset[1]);
+	append(json, transform.offset[1]);
 	append(json, "],\"scale\":[");
-	append(json, qp.uv_scale[0] / float((1 << qp.uv_bits) - 1));
+	append(json, transform.scale[0]);
 	append(json, ",");
-	append(json, qp.uv_scale[1] / float((1 << qp.uv_bits) - 1));
-	append(json, "]}}}");
+	append(json, transform.scale[1]);
+	append(json, "]");
+	if (transform.rotation != 0.f)
+	{
+		append(json, ",\"rotation\":");
+		append(json, transform.rotation);
+	}
+	append(json, "}}}");
 }
 
 void writeMaterialInfo(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationParams& qp)
