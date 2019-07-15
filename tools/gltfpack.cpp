@@ -1479,7 +1479,7 @@ size_t getBufferView(std::vector<BufferView>& views, BufferView::Kind kind, int 
 	return views.size() - 1;
 }
 
-void writeBufferView(std::string& json, BufferView::Kind kind, size_t count, size_t stride, size_t bin_offset, size_t bin_size, bool compressed)
+void writeBufferView(std::string& json, BufferView::Kind kind, size_t count, size_t stride, size_t bin_offset, size_t bin_size, int compression)
 {
 	append(json, "{\"buffer\":0");
 	append(json, ",\"byteLength\":");
@@ -1496,11 +1496,13 @@ void writeBufferView(std::string& json, BufferView::Kind kind, size_t count, siz
 		append(json, ",\"target\":");
 		append(json, (kind == BufferView::Kind_Vertex) ? "34962" : "34963");
 	}
-	if (compressed)
+	if (compression >= 0)
 	{
 		append(json, ",\"extensions\":{");
 		append(json, "\"MESHOPT_compression\":{");
-		append(json, "\"count\":");
+		append(json, "\"mode\":");
+		append(json, size_t(compression));
+		append(json, ",\"count\":");
 		append(json, count);
 		append(json, ",\"byteStride\":");
 		append(json, stride);
@@ -2825,16 +2827,24 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 			size_t count = view.data.size() / view.stride;
 
+			int compression = -1;
+
 			if (view.compressed)
 			{
 				if (view.kind == BufferView::Kind_Index)
+				{
 					compressIndexStream(bin, offset, count, view.stride);
+					compression = 1;
+				}
 				else
+				{
 					compressVertexStream(bin, offset, count, view.stride);
+					compression = 0;
+				}
 			}
 
 			comma(json);
-			writeBufferView(json, view.kind, count, view.stride, offset, bin.size() - offset, view.compressed);
+			writeBufferView(json, view.kind, count, view.stride, offset, bin.size() - offset, compression);
 
 			bytes[view.kind] += bin.size() - offset;
 			bytes_raw[view.kind] += view.data.size();

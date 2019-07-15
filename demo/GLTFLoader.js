@@ -1039,18 +1039,18 @@ THREE.GLTFLoader = ( function () {
 			var result = new ArrayBuffer(count * stride);
 			var source = new Uint8Array(buffer, byteOffset, byteLength);
 
-			switch ( source[0] >> 4 ) {
+			switch ( extensionDef.mode ) {
 
-				case 0xA:
+				case 0:
 					decoder.decodeVertexBuffer(new Uint8Array(result), count, stride, source);
 					break;
 
-				case 0xE:
+				case 1:
 					decoder.decodeIndexBuffer(new Uint8Array(result), count, stride, source);
 					break;
 
 				default:
-					throw new Error( 'THREE.GLTFLoader: Unrecognized meshopt buffer header.' );
+					throw new Error( 'THREE.GLTFLoader: Unrecognized meshopt compression mode.' );
 
 			}
 
