@@ -2284,33 +2284,53 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			continue;
 
 		comma(json_meshes);
-		append(json_meshes, "{\"primitives\":[{\"attributes\":{");
-		writeMeshAttributes(json_meshes, views, json_accessors, accr_offset, mesh, 0, qp, settings);
-		append(json_meshes, "}");
+		append(json_meshes, "{\"primitives\":[");
 
-		if (mesh.targets)
+		size_t pi = i;
+		for (; pi < meshes.size(); ++pi)
 		{
-			append(json_meshes, ",\"targets\":[");
-			for (size_t j = 0; j < mesh.targets; ++j)
+			const Mesh& prim = meshes[pi];
+
+			if (prim.indices.empty())
+				continue;
+
+			if (prim.node != mesh.node || prim.skin != mesh.skin || prim.targets != mesh.targets)
+				break;
+
+			if (mesh.weights.size() && (prim.weights.size() != mesh.weights.size() || memcmp(&mesh.weights[0], &prim.weights[0], mesh.weights.size() * sizeof(float)) != 0))
+				break;
+
+			comma(json_meshes);
+			append(json_meshes, "{\"attributes\":{");
+			writeMeshAttributes(json_meshes, views, json_accessors, accr_offset, prim, 0, qp, settings);
+			append(json_meshes, "}");
+
+			if (mesh.targets)
 			{
-				comma(json_meshes);
-				append(json_meshes, "{");
-				writeMeshAttributes(json_meshes, views, json_accessors, accr_offset, mesh, int(1 + j), qp, settings);
-				append(json_meshes, "}");
+				append(json_meshes, ",\"targets\":[");
+				for (size_t j = 0; j < mesh.targets; ++j)
+				{
+					comma(json_meshes);
+					append(json_meshes, "{");
+					writeMeshAttributes(json_meshes, views, json_accessors, accr_offset, prim, int(1 + j), qp, settings);
+					append(json_meshes, "}");
+				}
+				append(json_meshes, "]");
 			}
-			append(json_meshes, "]");
+
+			size_t index_accr = writeMeshIndices(views, json_accessors, accr_offset, prim, settings);
+
+			append(json_meshes, ",\"indices\":");
+			append(json_meshes, index_accr);
+			if (prim.material)
+			{
+				append(json_meshes, ",\"material\":");
+				append(json_meshes, size_t(prim.material - data->materials));
+			}
+			append(json_meshes, "}");
 		}
 
-		size_t index_accr = writeMeshIndices(views, json_accessors, accr_offset, mesh, settings);
-
-		append(json_meshes, ",\"indices\":");
-		append(json_meshes, index_accr);
-		if (mesh.material)
-		{
-			append(json_meshes, ",\"material\":");
-			append(json_meshes, size_t(mesh.material - data->materials));
-		}
-		append(json_meshes, "}]");
+		append(json_meshes, "]");
 
 		if (mesh.weights.size())
 		{
@@ -2373,6 +2393,10 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 		node_offset++;
 		mesh_offset++;
+
+		// skip all meshes that we've written in this iteration
+		assert(pi > i);
+		i = pi - 1;
 	}
 
 	remapNodes(data, nodes, node_offset);
