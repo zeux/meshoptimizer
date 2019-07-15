@@ -744,12 +744,11 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 				    uint16_t(meshopt_quantizeUnorm((a.f[0] - params.pos_offset[0]) * pos_rscale, params.pos_bits)),
 				    uint16_t(meshopt_quantizeUnorm((a.f[1] - params.pos_offset[1]) * pos_rscale, params.pos_bits)),
 				    uint16_t(meshopt_quantizeUnorm((a.f[2] - params.pos_offset[2]) * pos_rscale, params.pos_bits)),
-				    1};
+				    0};
 				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 			}
 
-			// note: vec4 is used instead of vec3 to avoid three.js bug with interleaved buffers (#16802)
-			StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16u, false, 8};
+			StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_16u, false, 8};
 			return format;
 		}
 		else
@@ -768,8 +767,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 			}
 
-			// note: vec4 is used instead of vec3 to avoid three.js bug with interleaved buffers (#16802)
-			StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16, false, 8};
+			StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_16, false, 8};
 			return format;
 		}
 	}
@@ -816,8 +814,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		// note: vec4 is used instead of vec3 to avoid three.js bug with interleaved buffers (#16802)
-		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_8, true, 4};
+		StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_8, true, 4};
 		return format;
 	}
 	else if (stream.type == cgltf_attribute_type_tangent)
@@ -849,8 +846,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 		}
 		else
 		{
-			// note: vec4 is used instead of vec3 to avoid three.js bug with interleaved buffers (#16802)
-			StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_8, true, 4};
+			StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_8, true, 4};
 			return format;
 		}
 	}
@@ -2024,12 +2020,10 @@ void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std:
 			int max[3] = {};
 			getPositionBounds(min, max, stream, qp);
 
-			// note: vec4 is used instead of vec3 to avoid three.js bug with interleaved buffers (#16802)
-			float posw = (stream.target == 0) ? 1.f : 0.f;
-			float minf[4] = {float(min[0]), float(min[1]), float(min[2]), posw};
-			float maxf[4] = {float(max[0]), float(max[1]), float(max[2]), posw};
+			float minf[3] = {float(min[0]), float(min[1]), float(min[2])};
+			float maxf[3] = {float(max[0]), float(max[1]), float(max[2])};
 
-			writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, stream.data.size(), minf, maxf, 4);
+			writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, stream.data.size(), minf, maxf, 3);
 		}
 		else
 		{
