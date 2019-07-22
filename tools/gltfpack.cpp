@@ -1083,28 +1083,29 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 	}
 }
 
-void compressVertexStream(std::string& bin, size_t offset, size_t count, size_t stride)
+void compressVertexStream(std::string& bin, const std::string& data, size_t count, size_t stride)
 {
-	std::vector<unsigned char> compressed(meshopt_encodeVertexBufferBound(count, stride));
-	size_t size = meshopt_encodeVertexBuffer(&compressed[0], compressed.size(), bin.c_str() + offset, count, stride);
+	assert(data.size() == count * stride);
 
-	bin.erase(offset);
+	std::vector<unsigned char> compressed(meshopt_encodeVertexBufferBound(count, stride));
+	size_t size = meshopt_encodeVertexBuffer(&compressed[0], compressed.size(), data.c_str(), count, stride);
+
 	bin.append(reinterpret_cast<const char*>(&compressed[0]), size);
 }
 
-void compressIndexStream(std::string& bin, size_t offset, size_t count, size_t stride)
+void compressIndexStream(std::string& bin, const std::string& data, size_t count, size_t stride)
 {
 	assert(stride == 2 || stride == 4);
+	assert(data.size() == count * stride);
 
 	std::vector<unsigned char> compressed(meshopt_encodeIndexBufferBound(count, count * 3));
 	size_t size = 0;
 
 	if (stride == 2)
-		size = meshopt_encodeIndexBuffer(&compressed[0], compressed.size(), reinterpret_cast<const uint16_t*>(bin.c_str() + offset), count);
+		size = meshopt_encodeIndexBuffer(&compressed[0], compressed.size(), reinterpret_cast<const uint16_t*>(data.c_str()), count);
 	else
-		size = meshopt_encodeIndexBuffer(&compressed[0], compressed.size(), reinterpret_cast<const uint32_t*>(bin.c_str() + offset), count);
+		size = meshopt_encodeIndexBuffer(&compressed[0], compressed.size(), reinterpret_cast<const uint32_t*>(data.c_str()), count);
 
-	bin.erase(offset);
 	bin.append(reinterpret_cast<const char*>(&compressed[0]), size);
 }
 
@@ -2834,9 +2835,6 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			BufferView& view = views[i];
 
 			size_t offset = bin.size();
-			bin += view.data;
-			bin.resize((bin.size() + 3) & ~3);
-
 			size_t count = view.data.size() / view.stride;
 
 			int compression = -1;
@@ -2845,14 +2843,19 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			{
 				if (view.kind == BufferView::Kind_Index)
 				{
-					compressIndexStream(bin, offset, count, view.stride);
+					compressIndexStream(bin, view.data, count, view.stride);
 					compression = 1;
 				}
 				else
 				{
-					compressVertexStream(bin, offset, count, view.stride);
+					compressVertexStream(bin, view.data, count, view.stride);
 					compression = 0;
 				}
+			}
+			else
+			{
+				bin.resize((bin.size() + 3) & ~3);
+				bin += view.data;
 			}
 
 			comma(json);
