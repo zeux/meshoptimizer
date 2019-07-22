@@ -76,7 +76,7 @@ struct Settings
 	bool anim_const;
 
 	bool compress;
-	bool verbose;
+	int verbose;
 };
 
 struct QuantizationParams
@@ -129,6 +129,8 @@ struct BufferView
 	bool compressed;
 
 	std::string data;
+
+	size_t bytes;
 };
 
 const char* getError(cgltf_result result)
@@ -2023,7 +2025,7 @@ void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std:
 		scratch.clear();
 		StreamFormat format = writeVertexStream(scratch, stream, qp, settings, mesh.targets > 0);
 
-		size_t view = getBufferView(views, BufferView::Kind_Vertex, 0, format.stride, settings.compress);
+		size_t view = getBufferView(views, BufferView::Kind_Vertex, stream.type, format.stride, settings.compress);
 		size_t offset = views[view].data.size();
 		views[view].data += scratch;
 
@@ -2138,6 +2140,42 @@ size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_
 	size_t matrix_accr = accr_offset++;
 
 	return matrix_accr;
+}
+
+void printStats(const std::vector<BufferView>& views, BufferView::Kind kind)
+{
+	for (size_t i = 0; i < views.size(); ++i)
+	{
+		const BufferView& view = views[i];
+
+		if (view.kind != kind)
+			continue;
+
+		const char* variant = "unknown";
+
+		switch (kind)
+		{
+		case BufferView::Kind_Vertex:
+			variant = attributeType(cgltf_attribute_type(view.variant));
+			break;
+
+		case BufferView::Kind_Keyframe:
+			variant = animationPath(cgltf_animation_path_type(view.variant));
+			break;
+
+		default:
+			;
+		}
+
+		size_t count = view.data.size() / view.stride;
+
+		printf("%s: compressed %d bytes (%.1f bits), raw %d bytes (%d bits)\n",
+			variant,
+			int(view.bytes),
+			double(view.bytes) / double(count) * 8,
+			int(view.data.size()),
+			int(view.stride * 8));
+	}
 }
 
 bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings, std::string& json, std::string& bin)
@@ -2825,7 +2863,6 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	}
 
 	size_t bytes[BufferView::Kind_Count] = {};
-	size_t bytes_raw[BufferView::Kind_Count] = {};
 
 	if (!views.empty())
 	{
@@ -2861,8 +2898,8 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			comma(json);
 			writeBufferView(json, view.kind, count, view.stride, offset, bin.size() - offset, compression);
 
-			bytes[view.kind] += bin.size() - offset;
-			bytes_raw[view.kind] += view.data.size();
+			view.bytes = bin.size() - offset;
+			bytes[view.kind] += view.bytes;
 		}
 		append(json, "]");
 	}
@@ -2943,6 +2980,15 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		       int(bytes[BufferView::Kind_Time]), int(bytes[BufferView::Kind_Keyframe]), int(bytes[BufferView::Kind_Image]));
 	}
 
+	if (settings.verbose > 1)
+	{
+		printf("output: vertex stats:\n");
+		printStats(views, BufferView::Kind_Vertex);
+
+		printf("output: keyframe stats:\n");
+		printStats(views, BufferView::Kind_Keyframe);
+	}
+
 	return true;
 }
 
@@ -3005,7 +3051,11 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-v") == 0)
 		{
-			settings.verbose = true;
+			settings.verbose = 1;
+		}
+		else if (strcmp(arg, "-vv") == 0)
+		{
+			settings.verbose = 2;
 		}
 		else if (strcmp(arg, "-h") == 0)
 		{
@@ -3032,7 +3082,7 @@ int main(int argc, char** argv)
 		fprintf(stderr, "-af N: resample animations at N Hz (default: 30)\n");
 		fprintf(stderr, "-ac: keep constant animation tracks even if they don't modify the node transform\n");
 		fprintf(stderr, "-c: produce compressed glb files\n");
-		fprintf(stderr, "-v: verbose output\n");
+		fprintf(stderr, "-v: verbose output (-vv for more verbosity)\n");
 		fprintf(stderr, "-h: display this help and exit\n");
 
 		return 1;
