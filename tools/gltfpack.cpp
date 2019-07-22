@@ -2159,6 +2159,10 @@ void printStats(const std::vector<BufferView>& views, BufferView::Kind kind)
 			variant = attributeType(cgltf_attribute_type(view.variant));
 			break;
 
+		case BufferView::Kind_Index:
+			variant = "index";
+			break;
+
 		case BufferView::Kind_Keyframe:
 			variant = animationPath(cgltf_animation_path_type(view.variant));
 			break;
@@ -2169,7 +2173,7 @@ void printStats(const std::vector<BufferView>& views, BufferView::Kind kind)
 
 		size_t count = view.data.size() / view.stride;
 
-		printf("%s: compressed %d bytes (%.1f bits), raw %d bytes (%d bits)\n",
+		printf("    %s: compressed %d bytes (%.1f bits), raw %d bytes (%d bits)\n",
 			variant,
 			int(view.bytes),
 			double(view.bytes) / double(count) * 8,
@@ -2984,6 +2988,9 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	{
 		printf("output: vertex stats:\n");
 		printStats(views, BufferView::Kind_Vertex);
+
+		printf("output: index stats:\n");
+		printStats(views, BufferView::Kind_Index);
 
 		printf("output: keyframe stats:\n");
 		printStats(views, BufferView::Kind_Keyframe);
