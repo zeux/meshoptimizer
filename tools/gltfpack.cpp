@@ -570,17 +570,22 @@ void reindexMesh(Mesh& mesh)
 		if (mesh.streams[i].target)
 			continue;
 
+		assert(mesh.streams[i].data.size() == total_vertices);
+
 		meshopt_Stream stream = {&mesh.streams[i].data[0], sizeof(Attr), sizeof(Attr)};
 		streams.push_back(stream);
 	}
 
 	std::vector<unsigned int> remap(total_indices);
 	size_t unique_vertices = meshopt_generateVertexRemapMulti(&remap[0], &mesh.indices[0], total_indices, total_vertices, &streams[0], streams.size());
+	assert(unique_vertices <= total_vertices);
 
 	meshopt_remapIndexBuffer(&mesh.indices[0], &mesh.indices[0], total_indices, &remap[0]);
 
 	for (size_t i = 0; i < mesh.streams.size(); ++i)
 	{
+		assert(mesh.streams[i].data.size() == total_vertices);
+
 		meshopt_remapVertexBuffer(&mesh.streams[i].data[0], &mesh.streams[i].data[0], total_vertices, sizeof(Attr), &remap[0]);
 		mesh.streams[i].data.resize(unique_vertices);
 	}
