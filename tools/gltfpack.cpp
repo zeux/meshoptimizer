@@ -75,6 +75,7 @@ struct Settings
 	int anim_freq;
 	bool anim_const;
 
+	bool keep_nodes;
 	bool keep_meshes;
 
 	bool compress;
@@ -2225,7 +2226,15 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		mergeMeshes(meshes);
 	}
 
-	markNeeded(data, nodes, meshes);
+	if (!settings.keep_nodes)
+	{
+		markNeeded(data, nodes, meshes);
+	}
+	else
+	{
+		for (size_t i = 0; i < nodes.size(); ++i)
+			nodes[i].keep = true;
+	}
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
@@ -3055,6 +3064,10 @@ int main(int argc, char** argv)
 		{
 			settings.keep_meshes = true;
 		}
+		else if (strcmp(arg, "-kn") == 0)
+		{
+			settings.keep_nodes = true;
+		}
 		else if (strcmp(arg, "-i") == 0 && i + 1 < argc && !input)
 		{
 			input = argv[++i];
@@ -3100,6 +3113,7 @@ int main(int argc, char** argv)
 		fprintf(stderr, "-af N: resample animations at N Hz (default: 30)\n");
 		fprintf(stderr, "-ac: keep constant animation tracks even if they don't modify the node transform\n");
 		fprintf(stderr, "-km: keep meshes in their original place in node hierarchy and disable merging\n");
+		fprintf(stderr, "-kn: keep node hierarchy including nodes that aren't used\n");
 		fprintf(stderr, "-c: produce compressed glb files\n");
 		fprintf(stderr, "-v: verbose output (-vv for more verbosity)\n");
 		fprintf(stderr, "-h: display this help and exit\n");
