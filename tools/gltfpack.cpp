@@ -576,7 +576,7 @@ void reindexMesh(Mesh& mesh)
 		streams.push_back(stream);
 	}
 
-	std::vector<unsigned int> remap(total_indices);
+	std::vector<unsigned int> remap(total_vertices);
 	size_t unique_vertices = meshopt_generateVertexRemapMulti(&remap[0], &mesh.indices[0], total_indices, total_vertices, &streams[0], streams.size());
 	assert(unique_vertices <= total_vertices);
 
