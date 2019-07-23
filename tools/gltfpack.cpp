@@ -75,6 +75,8 @@ struct Settings
 	int anim_freq;
 	bool anim_const;
 
+	bool keep_meshes;
+
 	bool compress;
 	int verbose;
 };
@@ -2196,29 +2198,32 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 	markAnimated(data, nodes);
 
-	for (size_t i = 0; i < meshes.size(); ++i)
+	if (!settings.keep_meshes)
 	{
-		Mesh& mesh = meshes[i];
-
-		if (mesh.node)
+		for (size_t i = 0; i < meshes.size(); ++i)
 		{
-			NodeInfo& ni = nodes[mesh.node - data->nodes];
+			Mesh& mesh = meshes[i];
 
-			// we transform all non-skinned non-animated meshes to world space
-			// this makes sure that quantization doesn't introduce gaps if the original scene was watertight
-			if (!ni.animated && !mesh.skin && mesh.targets == 0)
+			if (mesh.node)
 			{
-				transformMesh(mesh, mesh.node);
-				mesh.node = 0;
+				NodeInfo& ni = nodes[mesh.node - data->nodes];
+
+				// we transform all non-skinned non-animated meshes to world space
+				// this makes sure that quantization doesn't introduce gaps if the original scene was watertight
+				if (!ni.animated && !mesh.skin && mesh.targets == 0)
+				{
+					transformMesh(mesh, mesh.node);
+					mesh.node = 0;
+				}
+
+				// skinned and animated meshes will be anchored to the same node that they used to be in
+				// for animated meshes, this is important since they need to be transformed by the same animation
+				// for skinned meshes, in theory this isn't important since the transform of the skinned node doesn't matter; in practice this affects generated bounding box in three.js
 			}
-
-			// skinned and animated meshes will be anchored to the same node that they used to be in
-			// for animated meshes, this is important since they need to be transformed by the same animation
-			// for skinned meshes, in theory this isn't important since the transform of the skinned node doesn't matter; in practice this affects generated bounding box in three.js
 		}
-	}
 
-	mergeMeshes(meshes);
+		mergeMeshes(meshes);
+	}
 
 	markNeeded(data, nodes, meshes);
 
@@ -3046,6 +3051,10 @@ int main(int argc, char** argv)
 		{
 			settings.anim_const = true;
 		}
+		else if (strcmp(arg, "-km") == 0)
+		{
+			settings.keep_meshes = true;
+		}
 		else if (strcmp(arg, "-i") == 0 && i + 1 < argc && !input)
 		{
 			input = argv[++i];
@@ -3090,6 +3099,7 @@ int main(int argc, char** argv)
 		fprintf(stderr, "-vu: use unit-length normal/tangent vectors (default: off)\n");
 		fprintf(stderr, "-af N: resample animations at N Hz (default: 30)\n");
 		fprintf(stderr, "-ac: keep constant animation tracks even if they don't modify the node transform\n");
+		fprintf(stderr, "-km: keep meshes in their original place in node hierarchy and disable merging\n");
 		fprintf(stderr, "-c: produce compressed glb files\n");
 		fprintf(stderr, "-v: verbose output (-vv for more verbosity)\n");
 		fprintf(stderr, "-h: display this help and exit\n");
