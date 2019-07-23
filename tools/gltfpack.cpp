@@ -101,7 +101,6 @@ struct StreamFormat
 struct NodeInfo
 {
 	bool keep;
-	bool named;
 	bool animated;
 
 	unsigned int animated_paths;
@@ -1868,7 +1867,7 @@ void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes)
 
 void markNeeded(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Mesh>& meshes)
 {
-	// mark all joints as kept & named (names might be important to manipulate externally)
+	// mark all joints as kept
 	for (size_t i = 0; i < data->skins_count; ++i)
 	{
 		const cgltf_skin& skin = data->skins[i];
@@ -1879,7 +1878,6 @@ void markNeeded(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vecto
 			NodeInfo& ni = nodes[skin.joints[j] - data->nodes];
 
 			ni.keep = true;
-			ni.named = true;
 		}
 	}
 
@@ -2480,7 +2478,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 		comma(json_nodes);
 		append(json_nodes, "{");
-		if (node.name && ni.named)
+		if (node.name)
 		{
 			comma(json_nodes);
 			append(json_nodes, "\"name\":\"");
