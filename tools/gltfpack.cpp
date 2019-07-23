@@ -229,7 +229,7 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 		{
 			const cgltf_primitive& primitive = mesh.primitives[pi];
 
-			if (!primitive.indices)
+			if (!primitive.indices || !primitive.indices->buffer_view)
 			{
 				fprintf(stderr, "Warning: ignoring primitive %d of mesh %d because it has no index data\n", int(pi), mesh_id);
 				continue;
@@ -2167,18 +2167,17 @@ void printStats(const std::vector<BufferView>& views, BufferView::Kind kind)
 			variant = animationPath(cgltf_animation_path_type(view.variant));
 			break;
 
-		default:
-			;
+		default:;
 		}
 
 		size_t count = view.data.size() / view.stride;
 
 		printf("    %s: compressed %d bytes (%.1f bits), raw %d bytes (%d bits)\n",
-			variant,
-			int(view.bytes),
-			double(view.bytes) / double(count) * 8,
-			int(view.data.size()),
-			int(view.stride * 8));
+		       variant,
+		       int(view.bytes),
+		       double(view.bytes) / double(count) * 8,
+		       int(view.data.size()),
+		       int(view.stride * 8));
 	}
 }
 
