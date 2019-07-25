@@ -75,6 +75,8 @@ struct Settings
 	int anim_freq;
 	bool anim_const;
 
+	bool keep_named;
+
 	bool compress;
 	int verbose;
 };
@@ -613,7 +615,7 @@ void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes)
 	}
 }
 
-bool canMergeMeshes(const Mesh& lhs, const Mesh& rhs)
+bool canMergeMeshes(const Mesh& lhs, const Mesh& rhs, const Settings& settings)
 {
 	if (lhs.node != rhs.node)
 	{
@@ -627,6 +629,9 @@ bool canMergeMeshes(const Mesh& lhs, const Mesh& rhs)
 		bool rhs_transform = rhs.node->has_translation | rhs.node->has_rotation | rhs.node->has_scale | rhs.node->has_matrix | (!!rhs.node->weights);
 
 		if (lhs_transform || rhs_transform)
+			return false;
+
+		if (settings.keep_named && (lhs.node->name || rhs.node->name))
 			return false;
 
 		// we can merge nodes that don't have transforms of their own and have the same parent
@@ -677,7 +682,7 @@ void mergeMeshes(Mesh& target, const Mesh& mesh)
 		target.indices[index_offset + i] = unsigned(vertex_offset + mesh.indices[i]);
 }
 
-void mergeMeshes(std::vector<Mesh>& meshes)
+void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings)
 {
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
@@ -687,7 +692,7 @@ void mergeMeshes(std::vector<Mesh>& meshes)
 		{
 			Mesh& target = meshes[j];
 
-			if (target.indices.size() && canMergeMeshes(mesh, target))
+			if (target.indices.size() && canMergeMeshes(mesh, target, settings))
 			{
 				mergeMeshes(target, mesh);
 
@@ -2007,7 +2012,7 @@ void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes)
 	}
 }
 
-void markNeededNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Mesh>& meshes)
+void markNeededNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Mesh>& meshes, const Settings& settings)
 {
 	// mark all joints as kept
 	for (size_t i = 0; i < data->skins_count; ++i)
@@ -2065,6 +2070,20 @@ void markNeededNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::
 		if (node.light || node.camera)
 		{
 			nodes[i].keep = true;
+		}
+	}
+
+	// mark all named nodes as needed (if -kn is specified)
+	if (settings.keep_named)
+	{
+		for (size_t i = 0; i < data->nodes_count; ++i)
+		{
+			const cgltf_node& node = data->nodes[i];
+
+			if (node.name)
+			{
+				nodes[i].keep = true;
+			}
 		}
 	}
 }
@@ -2361,7 +2380,8 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	{
 		Mesh& mesh = meshes[i];
 
-		if (mesh.node)
+		// note: when -kn is specified, we keep mesh-node attachment so that named nodes can be transformed
+		if (mesh.node && !settings.keep_named)
 		{
 			NodeInfo& ni = nodes[mesh.node - data->nodes];
 
@@ -2380,9 +2400,9 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	}
 
 	mergeMeshMaterials(data, meshes);
-	mergeMeshes(meshes);
+	mergeMeshes(meshes, settings);
 
-	markNeededNodes(data, nodes, meshes);
+	markNeededNodes(data, nodes, meshes, settings);
 
 	std::vector<MaterialInfo> materials(data->materials_count);
 
@@ -3231,6 +3251,10 @@ int main(int argc, char** argv)
 		{
 			settings.anim_const = true;
 		}
+		else if (strcmp(arg, "-kn") == 0)
+		{
+			settings.keep_named = true;
+		}
 		else if (strcmp(arg, "-i") == 0 && i + 1 < argc && !input)
 		{
 			input = argv[++i];
@@ -3275,6 +3299,7 @@ int main(int argc, char** argv)
 		fprintf(stderr, "-vu: use unit-length normal/tangent vectors (default: off)\n");
 		fprintf(stderr, "-af N: resample animations at N Hz (default: 30)\n");
 		fprintf(stderr, "-ac: keep constant animation tracks even if they don't modify the node transform\n");
+		fprintf(stderr, "-kn: keep named nodes and meshes attached to named nodes so that named nodes can be transformed externally\n");
 		fprintf(stderr, "-c: produce compressed glb files\n");
 		fprintf(stderr, "-v: verbose output (-vv for more verbosity)\n");
 		fprintf(stderr, "-h: display this help and exit\n");
