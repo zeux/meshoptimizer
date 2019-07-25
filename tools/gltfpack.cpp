@@ -109,6 +109,13 @@ struct NodeInfo
 	std::vector<size_t> meshes;
 };
 
+struct MaterialInfo
+{
+	bool keep;
+
+	int remap;
+};
+
 struct BufferView
 {
 	enum Kind
@@ -471,7 +478,142 @@ void parseMeshesObj(fastObjMesh* obj, cgltf_data* data, std::vector<Mesh>& meshe
 	}
 }
 
-bool canMerge(const Mesh& lhs, const Mesh& rhs)
+bool areTextureViewsEqual(const cgltf_texture_view& lhs, const cgltf_texture_view& rhs)
+{
+	if (lhs.has_transform != rhs.has_transform)
+		return false;
+
+	if (lhs.has_transform)
+	{
+		const cgltf_texture_transform& lt = lhs.transform;
+		const cgltf_texture_transform& rt = rhs.transform;
+
+		if (memcmp(lt.offset, rt.offset, sizeof(cgltf_float) * 2) != 0)
+			return false;
+
+		if (lt.rotation != rt.rotation)
+			return false;
+
+		if (memcmp(lt.scale, rt.scale, sizeof(cgltf_float) * 2) != 0)
+			return false;
+
+		if (lt.texcoord != rt.texcoord)
+			return false;
+	}
+
+	if (lhs.texture != rhs.texture)
+		return false;
+
+	if (lhs.texcoord != rhs.texcoord)
+		return false;
+
+	if (lhs.scale != rhs.scale)
+		return false;
+
+	return true;
+}
+
+bool areMaterialsEqual(const cgltf_material& lhs, const cgltf_material& rhs)
+{
+	if (lhs.has_pbr_metallic_roughness != rhs.has_pbr_metallic_roughness)
+		return false;
+
+	if (lhs.has_pbr_metallic_roughness)
+	{
+		const cgltf_pbr_metallic_roughness& lpbr = lhs.pbr_metallic_roughness;
+		const cgltf_pbr_metallic_roughness& rpbr = rhs.pbr_metallic_roughness;
+
+		if (!areTextureViewsEqual(lpbr.base_color_texture, rpbr.base_color_texture))
+			return false;
+
+		if (!areTextureViewsEqual(lpbr.metallic_roughness_texture, rpbr.metallic_roughness_texture))
+			return false;
+
+		if (memcmp(lpbr.base_color_factor, rpbr.base_color_factor, sizeof(cgltf_float) * 4) != 0)
+			return false;
+
+		if (lpbr.metallic_factor != rpbr.metallic_factor)
+			return false;
+
+		if (lpbr.roughness_factor != rpbr.roughness_factor)
+			return false;
+	}
+
+	if (lhs.has_pbr_specular_glossiness != rhs.has_pbr_specular_glossiness)
+		return false;
+
+	if (lhs.has_pbr_specular_glossiness)
+	{
+		const cgltf_pbr_specular_glossiness& lpbr = lhs.pbr_specular_glossiness;
+		const cgltf_pbr_specular_glossiness& rpbr = rhs.pbr_specular_glossiness;
+
+		if (!areTextureViewsEqual(lpbr.diffuse_texture, rpbr.diffuse_texture))
+			return false;
+
+		if (!areTextureViewsEqual(lpbr.specular_glossiness_texture, rpbr.specular_glossiness_texture))
+			return false;
+
+		if (memcmp(lpbr.diffuse_factor, rpbr.diffuse_factor, sizeof(cgltf_float) * 4) != 0)
+			return false;
+
+		if (memcmp(lpbr.specular_factor, rpbr.specular_factor, sizeof(cgltf_float) * 3) != 0)
+			return false;
+
+		if (lpbr.glossiness_factor != rpbr.glossiness_factor)
+			return false;
+	}
+
+	if (!areTextureViewsEqual(lhs.normal_texture, rhs.normal_texture))
+		return false;
+
+	if (!areTextureViewsEqual(lhs.occlusion_texture, rhs.occlusion_texture))
+		return false;
+
+	if (!areTextureViewsEqual(lhs.emissive_texture, rhs.emissive_texture))
+		return false;
+
+	if (memcmp(lhs.emissive_factor, rhs.emissive_factor, sizeof(cgltf_float) * 3) != 0)
+		return false;
+
+	if (lhs.alpha_mode != rhs.alpha_mode)
+		return false;
+
+	if (lhs.alpha_cutoff != rhs.alpha_cutoff)
+		return false;
+
+	if (lhs.double_sided != rhs.double_sided)
+		return false;
+
+	if (lhs.unlit != rhs.unlit)
+		return false;
+
+	return true;
+}
+
+void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes)
+{
+	for (size_t i = 0; i < meshes.size(); ++i)
+	{
+		Mesh& mesh = meshes[i];
+
+		if (mesh.indices.empty())
+			continue;
+
+		if (!mesh.material)
+			continue;
+
+		for (int j = 0; j < mesh.material - data->materials; ++j)
+		{
+			if (areMaterialsEqual(*mesh.material, data->materials[j]))
+			{
+				mesh.material = &data->materials[j];
+				break;
+			}
+		}
+	}
+}
+
+bool canMergeMeshes(const Mesh& lhs, const Mesh& rhs)
 {
 	if (lhs.node != rhs.node)
 	{
@@ -545,7 +687,7 @@ void mergeMeshes(std::vector<Mesh>& meshes)
 		{
 			Mesh& target = meshes[j];
 
-			if (target.indices.size() && canMerge(mesh, target))
+			if (target.indices.size() && canMergeMeshes(mesh, target))
 			{
 				mergeMeshes(target, mesh);
 
@@ -1865,7 +2007,7 @@ void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes)
 	}
 }
 
-void markNeeded(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Mesh>& meshes)
+void markNeededNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Mesh>& meshes)
 {
 	// mark all joints as kept
 	for (size_t i = 0; i < data->skins_count; ++i)
@@ -1923,6 +2065,25 @@ void markNeeded(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vecto
 		if (node.light || node.camera)
 		{
 			nodes[i].keep = true;
+		}
+	}
+}
+
+void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes)
+{
+	// mark all used materials as kept
+	for (size_t i = 0; i < meshes.size(); ++i)
+	{
+		const Mesh& mesh = meshes[i];
+
+		if (mesh.indices.empty())
+			continue;
+
+		if (mesh.material)
+		{
+			MaterialInfo& mi = materials[mesh.material - data->materials];
+
+			mi.keep = true;
 		}
 	}
 }
@@ -2188,8 +2349,8 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 {
 	if (settings.verbose)
 	{
-		printf("input: %d nodes, %d meshes, %d skins, %d animations\n",
-		       int(data->nodes_count), int(data->meshes_count), int(data->skins_count), int(data->animations_count));
+		printf("input: %d nodes, %d meshes (%d primitives), %d materials, %d skins, %d animations\n",
+		       int(data->nodes_count), int(data->meshes_count), int(meshes.size()), int(data->materials_count), int(data->skins_count), int(data->animations_count));
 	}
 
 	std::vector<NodeInfo> nodes(data->nodes_count);
@@ -2218,9 +2379,14 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		}
 	}
 
+	mergeMeshMaterials(data, meshes);
 	mergeMeshes(meshes);
 
-	markNeeded(data, nodes, meshes);
+	markNeededNodes(data, nodes, meshes);
+
+	std::vector<MaterialInfo> materials(data->materials_count);
+
+	markNeededMaterials(data, materials, meshes);
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
@@ -2271,6 +2437,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	size_t accr_offset = 0;
 	size_t node_offset = 0;
 	size_t mesh_offset = 0;
+	size_t material_offset = 0;
 
 	for (size_t i = 0; i < data->images_count; ++i)
 	{
@@ -2325,12 +2492,20 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 	for (size_t i = 0; i < data->materials_count; ++i)
 	{
+		MaterialInfo& mi = materials[i];
+
+		if (!mi.keep)
+			continue;
+
 		const cgltf_material& material = data->materials[i];
 
 		comma(json_materials);
 		append(json_materials, "{");
 		writeMaterialInfo(json_materials, data, material, qp);
 		append(json_materials, "}");
+
+		mi.remap = int(material_offset);
+		material_offset++;
 
 		ext_pbr_specular_glossiness = ext_pbr_specular_glossiness || material.has_pbr_specular_glossiness;
 		ext_unlit = ext_unlit || material.unlit;
@@ -2384,8 +2559,11 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			append(json_meshes, index_accr);
 			if (prim.material)
 			{
+				MaterialInfo& mi = materials[prim.material - data->materials];
+
+				assert(mi.keep);
 				append(json_meshes, ",\"material\":");
-				append(json_meshes, size_t(prim.material - data->materials));
+				append(json_meshes, size_t(mi.remap));
 			}
 			append(json_meshes, "}");
 		}
@@ -2442,8 +2620,10 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 		if (mesh.node)
 		{
-			assert(nodes[mesh.node - data->nodes].keep);
-			nodes[mesh.node - data->nodes].meshes.push_back(node_offset);
+			NodeInfo& ni = nodes[mesh.node - data->nodes];
+
+			assert(ni.keep);
+			ni.meshes.push_back(node_offset);
 		}
 		else
 		{
@@ -2979,7 +3159,12 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 	if (settings.verbose)
 	{
-		printf("output: %d nodes, %d meshes\n", int(node_offset), int(mesh_offset));
+		size_t primitives = 0;
+
+		for (size_t i = 0; i < meshes.size(); ++i)
+			primitives += !meshes[i].indices.empty();
+
+		printf("output: %d nodes, %d meshes (%d primitives), %d materials\n", int(node_offset), int(mesh_offset), int(primitives), int(material_offset));
 		printf("output: JSON %d bytes, buffers %d bytes\n", int(json.size()), int(bin.size()));
 		printf("output: buffers: vertex %d bytes, index %d bytes, skin %d bytes, time %d bytes, keyframe %d bytes, image %d bytes\n",
 		       int(bytes[BufferView::Kind_Vertex]), int(bytes[BufferView::Kind_Index]), int(bytes[BufferView::Kind_Skin]),
