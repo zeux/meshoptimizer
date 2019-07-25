@@ -631,8 +631,14 @@ bool canMergeMeshes(const Mesh& lhs, const Mesh& rhs, const Settings& settings)
 		if (lhs_transform || rhs_transform)
 			return false;
 
-		if (settings.keep_named && (lhs.node->name || rhs.node->name))
-			return false;
+		if (settings.keep_named)
+		{
+			if (lhs.node->name && *lhs.node->name)
+				return false;
+
+			if (rhs.node->name && *rhs.node->name)
+				return false;
+		}
 
 		// we can merge nodes that don't have transforms of their own and have the same parent
 		// this is helpful when instead of splitting mesh into primitives, DCCs split mesh into mesh nodes
@@ -2080,7 +2086,7 @@ void markNeededNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::
 		{
 			const cgltf_node& node = data->nodes[i];
 
-			if (node.name)
+			if (node.name && *node.name)
 			{
 				nodes[i].keep = true;
 			}
@@ -2678,7 +2684,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 		comma(json_nodes);
 		append(json_nodes, "{");
-		if (node.name)
+		if (node.name && *node.name)
 		{
 			comma(json_nodes);
 			append(json_nodes, "\"name\":\"");
@@ -2910,7 +2916,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 		comma(json_animations);
 		append(json_animations, "{");
-		if (animation.name)
+		if (animation.name && *animation.name)
 		{
 			append(json_animations, "\"name\":\"");
 			append(json_animations, animation.name);
