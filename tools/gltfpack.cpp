@@ -3217,102 +3217,8 @@ void writeU32(FILE* out, uint32_t data)
 	fwrite(&data, 4, 1, out);
 }
 
-int main(int argc, char** argv)
+int pack(const char* input, const char* output, const Settings& settings)
 {
-	Settings settings = {};
-	settings.pos_bits = 14;
-	settings.tex_bits = 12;
-	settings.nrm_bits = 8;
-	settings.anim_freq = 30;
-
-	const char* input = 0;
-	const char* output = 0;
-	bool help = false;
-
-	for (int i = 1; i < argc; ++i)
-	{
-		const char* arg = argv[i];
-
-		if (strcmp(arg, "-vp") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
-		{
-			settings.pos_bits = atoi(argv[++i]);
-		}
-		else if (strcmp(arg, "-vt") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
-		{
-			settings.tex_bits = atoi(argv[++i]);
-		}
-		else if (strcmp(arg, "-vn") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
-		{
-			settings.nrm_bits = atoi(argv[++i]);
-		}
-		else if (strcmp(arg, "-vu") == 0)
-		{
-			settings.nrm_unit = true;
-		}
-		else if (strcmp(arg, "-af") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
-		{
-			settings.anim_freq = atoi(argv[++i]);
-		}
-		else if (strcmp(arg, "-ac") == 0)
-		{
-			settings.anim_const = true;
-		}
-		else if (strcmp(arg, "-kn") == 0)
-		{
-			settings.keep_named = true;
-		}
-		else if (strcmp(arg, "-i") == 0 && i + 1 < argc && !input)
-		{
-			input = argv[++i];
-		}
-		else if (strcmp(arg, "-o") == 0 && i + 1 < argc && !output)
-		{
-			output = argv[++i];
-		}
-		else if (strcmp(arg, "-c") == 0)
-		{
-			settings.compress = true;
-		}
-		else if (strcmp(arg, "-v") == 0)
-		{
-			settings.verbose = 1;
-		}
-		else if (strcmp(arg, "-vv") == 0)
-		{
-			settings.verbose = 2;
-		}
-		else if (strcmp(arg, "-h") == 0)
-		{
-			help = true;
-		}
-		else
-		{
-			fprintf(stderr, "Unrecognized option %s\n", arg);
-			return 1;
-		}
-	}
-
-	if (!input || !output || help)
-	{
-		fprintf(stderr, "Usage: gltfpack [options] -i input -o output\n");
-		fprintf(stderr, "\n");
-		fprintf(stderr, "Options:\n");
-		fprintf(stderr, "-i file: input file to process, .obj/.gltf/.glb\n");
-		fprintf(stderr, "-o file: output file path, .gltf/.glb\n");
-		fprintf(stderr, "-vp N: use N-bit quantization for positions (default: 14; N should be between 1 and 16)\n");
-		fprintf(stderr, "-vt N: use N-bit quantization for texture corodinates (default: 12; N should be between 1 and 16)\n");
-		fprintf(stderr, "-vn N: use N-bit quantization for normals and tangents (default: 8; N should be between 1 and 8)\n");
-		fprintf(stderr, "-vu: use unit-length normal/tangent vectors (default: off)\n");
-		fprintf(stderr, "-af N: resample animations at N Hz (default: 30)\n");
-		fprintf(stderr, "-ac: keep constant animation tracks even if they don't modify the node transform\n");
-		fprintf(stderr, "-kn: keep named nodes and meshes attached to named nodes so that named nodes can be transformed externally\n");
-		fprintf(stderr, "-c: produce compressed glb files\n");
-		fprintf(stderr, "-v: verbose output (-vv for more verbosity)\n");
-		fprintf(stderr, "-h: display this help and exit\n");
-
-		return 1;
-	}
-
 	cgltf_data* data = 0;
 	std::vector<Mesh> meshes;
 
@@ -3437,4 +3343,103 @@ int main(int argc, char** argv)
 	}
 
 	return 0;
+}
+
+int main(int argc, char** argv)
+{
+	Settings settings = {};
+	settings.pos_bits = 14;
+	settings.tex_bits = 12;
+	settings.nrm_bits = 8;
+	settings.anim_freq = 30;
+
+	const char* input = 0;
+	const char* output = 0;
+	bool help = false;
+
+	for (int i = 1; i < argc; ++i)
+	{
+		const char* arg = argv[i];
+
+		if (strcmp(arg, "-vp") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		{
+			settings.pos_bits = atoi(argv[++i]);
+		}
+		else if (strcmp(arg, "-vt") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		{
+			settings.tex_bits = atoi(argv[++i]);
+		}
+		else if (strcmp(arg, "-vn") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		{
+			settings.nrm_bits = atoi(argv[++i]);
+		}
+		else if (strcmp(arg, "-vu") == 0)
+		{
+			settings.nrm_unit = true;
+		}
+		else if (strcmp(arg, "-af") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		{
+			settings.anim_freq = atoi(argv[++i]);
+		}
+		else if (strcmp(arg, "-ac") == 0)
+		{
+			settings.anim_const = true;
+		}
+		else if (strcmp(arg, "-kn") == 0)
+		{
+			settings.keep_named = true;
+		}
+		else if (strcmp(arg, "-i") == 0 && i + 1 < argc && !input)
+		{
+			input = argv[++i];
+		}
+		else if (strcmp(arg, "-o") == 0 && i + 1 < argc && !output)
+		{
+			output = argv[++i];
+		}
+		else if (strcmp(arg, "-c") == 0)
+		{
+			settings.compress = true;
+		}
+		else if (strcmp(arg, "-v") == 0)
+		{
+			settings.verbose = 1;
+		}
+		else if (strcmp(arg, "-vv") == 0)
+		{
+			settings.verbose = 2;
+		}
+		else if (strcmp(arg, "-h") == 0)
+		{
+			help = true;
+		}
+		else
+		{
+			fprintf(stderr, "Unrecognized option %s\n", arg);
+			return 1;
+		}
+	}
+
+	if (!input || !output || help)
+	{
+		fprintf(stderr, "Usage: gltfpack [options] -i input -o output\n");
+		fprintf(stderr, "\n");
+		fprintf(stderr, "Options:\n");
+		fprintf(stderr, "-i file: input file to process, .obj/.gltf/.glb\n");
+		fprintf(stderr, "-o file: output file path, .gltf/.glb\n");
+		fprintf(stderr, "-vp N: use N-bit quantization for positions (default: 14; N should be between 1 and 16)\n");
+		fprintf(stderr, "-vt N: use N-bit quantization for texture corodinates (default: 12; N should be between 1 and 16)\n");
+		fprintf(stderr, "-vn N: use N-bit quantization for normals and tangents (default: 8; N should be between 1 and 8)\n");
+		fprintf(stderr, "-vu: use unit-length normal/tangent vectors (default: off)\n");
+		fprintf(stderr, "-af N: resample animations at N Hz (default: 30)\n");
+		fprintf(stderr, "-ac: keep constant animation tracks even if they don't modify the node transform\n");
+		fprintf(stderr, "-kn: keep named nodes and meshes attached to named nodes so that named nodes can be transformed externally\n");
+		fprintf(stderr, "-c: produce compressed glb files\n");
+		fprintf(stderr, "-v: verbose output (-vv for more verbosity)\n");
+		fprintf(stderr, "-h: display this help and exit\n");
+
+		return 1;
+	}
+
+	return pack(input, output, settings);
 }
