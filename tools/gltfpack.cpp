@@ -3272,6 +3272,11 @@ int pack(const char* input, const char* output, const Settings& settings)
 
 	cgltf_free(data);
 
+	if (!output)
+	{
+		return 0;
+	}
+
 	const char* oext = strrchr(output, '.');
 
 	if (oext && (strcmp(oext, ".gltf") == 0 || strcmp(oext, ".GLTF") == 0))
@@ -3356,6 +3361,7 @@ int main(int argc, char** argv)
 	const char* input = 0;
 	const char* output = 0;
 	bool help = false;
+	int test = 0;
 
 	for (int i = 1; i < argc; ++i)
 	{
@@ -3413,11 +3419,24 @@ int main(int argc, char** argv)
 		{
 			help = true;
 		}
+		else if (strcmp(arg, "-test") == 0)
+		{
+			test = i + 1;
+			break;
+		}
 		else
 		{
 			fprintf(stderr, "Unrecognized option %s\n", arg);
 			return 1;
 		}
+	}
+
+	if (test)
+	{
+		for (int i = test; i < argc; ++i)
+			pack(argv[i], NULL, settings);
+
+		return 0;
 	}
 
 	if (!input || !output || help)
