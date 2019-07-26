@@ -2331,6 +2331,133 @@ size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_
 	return matrix_accr;
 }
 
+void writeAnimation(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const cgltf_animation& animation, cgltf_data* data, const std::vector<NodeInfo>& nodes, const Settings& settings)
+{
+	std::vector<const cgltf_animation_channel*> tracks;
+
+	for (size_t j = 0; j < animation.channels_count; ++j)
+	{
+		const cgltf_animation_channel& channel = animation.channels[j];
+
+		if (!channel.target_node)
+		{
+			fprintf(stderr, "Warning: ignoring channel %d of animation %d because it has no target node\n", int(j), int(&animation - data->animations));
+			continue;
+		}
+
+		const NodeInfo& ni = nodes[channel.target_node - data->nodes];
+
+		if (!ni.keep)
+			continue;
+
+		if (!settings.anim_const && (ni.animated_paths & (1 << channel.target_path)) == 0)
+			continue;
+
+		tracks.push_back(&channel);
+	}
+
+	if (tracks.empty())
+	{
+		fprintf(stderr, "Warning: ignoring animation %d because it has no valid tracks\n", int(&animation - data->animations));
+		return;
+	}
+
+	float mint = 0, maxt = 0;
+	bool needs_time = false;
+	bool needs_pose = false;
+
+	for (size_t j = 0; j < tracks.size(); ++j)
+	{
+		const cgltf_animation_channel& channel = *tracks[j];
+		const cgltf_animation_sampler& sampler = *channel.sampler;
+
+		mint = std::min(mint, sampler.input->min[0]);
+		maxt = std::max(maxt, sampler.input->max[0]);
+
+		bool tc = isTrackConstant(sampler, channel.target_path, channel.target_node);
+
+		needs_time = needs_time || !tc;
+		needs_pose = needs_pose || tc;
+	}
+
+	// round the number of frames to nearest but favor the "up" direction
+	// this means that at 10 Hz resampling, we will try to preserve the last frame <10ms
+	// but if the last frame is <2ms we favor just removing this data
+	int frames = 1 + int((maxt - mint) * settings.anim_freq + 0.8f);
+
+	size_t time_accr = needs_time ? writeAnimationTime(views, json_accessors, accr_offset, mint, frames, settings) : 0;
+	size_t pose_accr = needs_pose ? writeAnimationTime(views, json_accessors, accr_offset, mint, 1, settings) : 0;
+
+	std::string json_samplers;
+	std::string json_channels;
+
+	size_t track_offset = 0;
+
+	for (size_t j = 0; j < tracks.size(); ++j)
+	{
+		const cgltf_animation_channel& channel = *tracks[j];
+		const cgltf_animation_sampler& sampler = *channel.sampler;
+
+		bool tc = isTrackConstant(sampler, channel.target_path, channel.target_node);
+
+		std::vector<Attr> track;
+		resampleKeyframes(track, sampler, channel.target_path, channel.target_node, tc ? 1 : frames, mint, settings.anim_freq);
+
+		std::string scratch;
+		StreamFormat format = writeKeyframeStream(scratch, channel.target_path, track);
+
+		size_t view = getBufferView(views, BufferView::Kind_Keyframe, channel.target_path, format.stride, settings.compress && channel.target_path != cgltf_animation_path_type_weights);
+		size_t offset = views[view].data.size();
+		views[view].data += scratch;
+
+		comma(json_accessors);
+		writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, track.size());
+
+		size_t data_accr = accr_offset++;
+
+		comma(json_samplers);
+		append(json_samplers, "{\"input\":");
+		append(json_samplers, tc ? pose_accr : time_accr);
+		append(json_samplers, ",\"output\":");
+		append(json_samplers, data_accr);
+		append(json_samplers, "}");
+
+		const NodeInfo& tni = nodes[channel.target_node - data->nodes];
+		size_t target_node = size_t(tni.remap);
+
+		if (channel.target_path == cgltf_animation_path_type_weights)
+		{
+			assert(tni.meshes.size() == 1);
+			target_node = tni.meshes[0];
+		}
+
+		comma(json_channels);
+		append(json_channels, "{\"sampler\":");
+		append(json_channels, track_offset);
+		append(json_channels, ",\"target\":{\"node\":");
+		append(json_channels, target_node);
+		append(json_channels, ",\"path\":");
+		append(json_channels, animationPath(channel.target_path));
+		append(json_channels, "}}");
+
+		track_offset++;
+	}
+
+	comma(json);
+	append(json, "{");
+	if (animation.name && *animation.name)
+	{
+		append(json, "\"name\":\"");
+		append(json, animation.name);
+		append(json, "\",");
+	}
+	append(json, "\"samplers\":[");
+	append(json, json_samplers);
+	append(json, "],\"channels\":[");
+	append(json, json_channels);
+	append(json, "]}");
+}
+
 void writeCamera(std::string& json, const cgltf_camera& camera)
 {
 	comma(json);
@@ -2893,129 +3020,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	{
 		const cgltf_animation& animation = data->animations[i];
 
-		std::string json_samplers;
-		std::string json_channels;
-
-		std::vector<const cgltf_animation_channel*> tracks;
-
-		for (size_t j = 0; j < animation.channels_count; ++j)
-		{
-			const cgltf_animation_channel& channel = animation.channels[j];
-
-			if (!channel.target_node)
-			{
-				fprintf(stderr, "Warning: ignoring channel %d of animation %d because it has no target node\n", int(j), int(i));
-				continue;
-			}
-
-			NodeInfo& ni = nodes[channel.target_node - data->nodes];
-
-			if (!ni.keep)
-				continue;
-
-			if (!settings.anim_const && (ni.animated_paths & (1 << channel.target_path)) == 0)
-				continue;
-
-			tracks.push_back(&channel);
-		}
-
-		if (tracks.empty())
-		{
-			fprintf(stderr, "Warning: ignoring animation %d because it has no valid tracks\n", int(i));
-			continue;
-		}
-
-		float mint = 0, maxt = 0;
-		bool needs_time = false;
-		bool needs_pose = false;
-
-		for (size_t j = 0; j < tracks.size(); ++j)
-		{
-			const cgltf_animation_channel& channel = *tracks[j];
-			const cgltf_animation_sampler& sampler = *channel.sampler;
-
-			mint = std::min(mint, sampler.input->min[0]);
-			maxt = std::max(maxt, sampler.input->max[0]);
-
-			bool tc = isTrackConstant(sampler, channel.target_path, channel.target_node);
-
-			needs_time = needs_time || !tc;
-			needs_pose = needs_pose || tc;
-		}
-
-		// round the number of frames to nearest but favor the "up" direction
-		// this means that at 10 Hz resampling, we will try to preserve the last frame <10ms
-		// but if the last frame is <2ms we favor just removing this data
-		int frames = 1 + int((maxt - mint) * settings.anim_freq + 0.8f);
-
-		size_t time_accr = needs_time ? writeAnimationTime(views, json_accessors, accr_offset, mint, frames, settings) : 0;
-		size_t pose_accr = needs_pose ? writeAnimationTime(views, json_accessors, accr_offset, mint, 1, settings) : 0;
-
-		size_t track_offset = 0;
-
-		for (size_t j = 0; j < tracks.size(); ++j)
-		{
-			const cgltf_animation_channel& channel = *tracks[j];
-			const cgltf_animation_sampler& sampler = *channel.sampler;
-
-			bool tc = isTrackConstant(sampler, channel.target_path, channel.target_node);
-
-			std::vector<Attr> track;
-			resampleKeyframes(track, sampler, channel.target_path, channel.target_node, tc ? 1 : frames, mint, settings.anim_freq);
-
-			std::string scratch;
-			StreamFormat format = writeKeyframeStream(scratch, channel.target_path, track);
-
-			size_t view = getBufferView(views, BufferView::Kind_Keyframe, channel.target_path, format.stride, settings.compress && channel.target_path != cgltf_animation_path_type_weights);
-			size_t offset = views[view].data.size();
-			views[view].data += scratch;
-
-			comma(json_accessors);
-			writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, track.size());
-
-			size_t data_accr = accr_offset++;
-
-			comma(json_samplers);
-			append(json_samplers, "{\"input\":");
-			append(json_samplers, tc ? pose_accr : time_accr);
-			append(json_samplers, ",\"output\":");
-			append(json_samplers, data_accr);
-			append(json_samplers, "}");
-
-			NodeInfo& tni = nodes[channel.target_node - data->nodes];
-			size_t target_node = size_t(tni.remap);
-
-			if (channel.target_path == cgltf_animation_path_type_weights)
-			{
-				assert(tni.meshes.size() == 1);
-				target_node = tni.meshes[0];
-			}
-
-			comma(json_channels);
-			append(json_channels, "{\"sampler\":");
-			append(json_channels, track_offset);
-			append(json_channels, ",\"target\":{\"node\":");
-			append(json_channels, target_node);
-			append(json_channels, ",\"path\":");
-			append(json_channels, animationPath(channel.target_path));
-			append(json_channels, "}}");
-
-			track_offset++;
-		}
-
-		comma(json_animations);
-		append(json_animations, "{");
-		if (animation.name && *animation.name)
-		{
-			append(json_animations, "\"name\":\"");
-			append(json_animations, animation.name);
-			append(json_animations, "\",");
-		}
-		append(json_animations, "\"samplers\":[");
-		append(json_animations, json_samplers);
-		append(json_animations, "],\"channels\":[");
-		append(json_animations, json_channels);
-		append(json_animations, "]}");
+		writeAnimation(json_animations, views, json_accessors, accr_offset, animation, data, nodes, settings);
 	}
 
 	for (size_t i = 0; i < data->cameras_count; ++i)
