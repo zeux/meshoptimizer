@@ -3130,7 +3130,6 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			}
 			else
 			{
-				bin.resize((bin.size() + 3) & ~3);
 				bin += view.data;
 			}
 
@@ -3139,6 +3138,9 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 			view.bytes = bin.size() - offset;
 			bytes[view.kind] += view.bytes;
+
+			// align each bufferView by 4 bytes
+			bin.resize((bin.size() + 3) & ~3);
 		}
 		append(json, "]");
 	}
