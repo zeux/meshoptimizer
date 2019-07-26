@@ -2331,6 +2331,141 @@ size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_
 	return matrix_accr;
 }
 
+void writeMeshNode(std::string& json, size_t mesh_offset, const Mesh& mesh, cgltf_data* data, const QuantizationParams& qp)
+{
+	float node_scale = qp.pos_scale / float((1 << qp.pos_bits) - 1);
+
+	comma(json);
+	append(json, "{\"mesh\":");
+	append(json, mesh_offset);
+	if (mesh.skin)
+	{
+		comma(json);
+		append(json, "\"skin\":");
+		append(json, size_t(mesh.skin - data->skins));
+	}
+	append(json, ",\"translation\":[");
+	append(json, qp.pos_offset[0]);
+	append(json, ",");
+	append(json, qp.pos_offset[1]);
+	append(json, ",");
+	append(json, qp.pos_offset[2]);
+	append(json, "],\"scale\":[");
+	append(json, node_scale);
+	append(json, ",");
+	append(json, node_scale);
+	append(json, ",");
+	append(json, node_scale);
+	append(json, "]");
+	if (mesh.node && mesh.node->weights_count)
+	{
+		append(json, ",\"weights\":[");
+		for (size_t j = 0; j < mesh.node->weights_count; ++j)
+		{
+			comma(json);
+			append(json, mesh.node->weights[j]);
+		}
+		append(json, "]");
+	}
+	append(json, "}");
+}
+
+void writeNode(std::string& json, const cgltf_node& node, const std::vector<NodeInfo>& nodes, cgltf_data* data)
+{
+	const NodeInfo& ni = nodes[&node - data->nodes];
+
+	comma(json);
+	append(json, "{");
+	if (node.name && *node.name)
+	{
+		comma(json);
+		append(json, "\"name\":\"");
+		append(json, node.name);
+		append(json, "\"");
+	}
+	if (node.has_translation)
+	{
+		comma(json);
+		append(json, "\"translation\":[");
+		append(json, node.translation[0]);
+		append(json, ",");
+		append(json, node.translation[1]);
+		append(json, ",");
+		append(json, node.translation[2]);
+		append(json, "]");
+	}
+	if (node.has_rotation)
+	{
+		comma(json);
+		append(json, "\"rotation\":[");
+		append(json, node.rotation[0]);
+		append(json, ",");
+		append(json, node.rotation[1]);
+		append(json, ",");
+		append(json, node.rotation[2]);
+		append(json, ",");
+		append(json, node.rotation[3]);
+		append(json, "]");
+	}
+	if (node.has_scale)
+	{
+		comma(json);
+		append(json, "\"scale\":[");
+		append(json, node.scale[0]);
+		append(json, ",");
+		append(json, node.scale[1]);
+		append(json, ",");
+		append(json, node.scale[2]);
+		append(json, "]");
+	}
+	if (node.has_matrix)
+	{
+		comma(json);
+		append(json, "\"matrix\":[");
+		for (int k = 0; k < 16; ++k)
+		{
+			comma(json);
+			append(json, node.matrix[k]);
+		}
+		append(json, "]");
+	}
+	if (node.children_count || !ni.meshes.empty())
+	{
+		comma(json);
+		append(json, "\"children\":[");
+		for (size_t j = 0; j < node.children_count; ++j)
+		{
+			const NodeInfo& ci = nodes[node.children[j] - data->nodes];
+
+			if (ci.keep)
+			{
+				comma(json);
+				append(json, size_t(ci.remap));
+			}
+		}
+		for (size_t j = 0; j < ni.meshes.size(); ++j)
+		{
+			comma(json);
+			append(json, ni.meshes[j]);
+		}
+		append(json, "]");
+	}
+	if (node.camera)
+	{
+		comma(json);
+		append(json, "\"camera\":");
+		append(json, size_t(node.camera - data->cameras));
+	}
+	if (node.light)
+	{
+		comma(json);
+		append(json, "\"extensions\":{\"KHR_lights_punctual\":{\"light\":");
+		append(json, size_t(node.light - data->lights));
+		append(json, "}}");
+	}
+	append(json, "}");
+}
+
 void writeAnimation(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const cgltf_animation& animation, cgltf_data* data, const std::vector<NodeInfo>& nodes, const Settings& settings)
 {
 	std::vector<const cgltf_animation_channel*> tracks;
@@ -2824,41 +2959,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		}
 		append(json_meshes, "}");
 
-		float node_scale = qp.pos_scale / float((1 << qp.pos_bits) - 1);
-
-		comma(json_nodes);
-		append(json_nodes, "{\"mesh\":");
-		append(json_nodes, mesh_offset);
-		if (mesh.skin)
-		{
-			comma(json_nodes);
-			append(json_nodes, "\"skin\":");
-			append(json_nodes, size_t(mesh.skin - data->skins));
-		}
-		append(json_nodes, ",\"translation\":[");
-		append(json_nodes, qp.pos_offset[0]);
-		append(json_nodes, ",");
-		append(json_nodes, qp.pos_offset[1]);
-		append(json_nodes, ",");
-		append(json_nodes, qp.pos_offset[2]);
-		append(json_nodes, "],\"scale\":[");
-		append(json_nodes, node_scale);
-		append(json_nodes, ",");
-		append(json_nodes, node_scale);
-		append(json_nodes, ",");
-		append(json_nodes, node_scale);
-		append(json_nodes, "]");
-		if (mesh.node && mesh.node->weights_count)
-		{
-			append(json_nodes, ",\"weights\":[");
-			for (size_t j = 0; j < mesh.node->weights_count; ++j)
-			{
-				comma(json_nodes);
-				append(json_nodes, mesh.node->weights[j]);
-			}
-			append(json_nodes, "]");
-		}
-		append(json_nodes, "}");
+		writeMeshNode(json_nodes, mesh_offset, mesh, data, qp);
 
 		if (mesh.node)
 		{
@@ -2898,96 +2999,7 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			append(json_roots, size_t(ni.remap));
 		}
 
-		comma(json_nodes);
-		append(json_nodes, "{");
-		if (node.name && *node.name)
-		{
-			comma(json_nodes);
-			append(json_nodes, "\"name\":\"");
-			append(json_nodes, node.name);
-			append(json_nodes, "\"");
-		}
-		if (node.has_translation)
-		{
-			comma(json_nodes);
-			append(json_nodes, "\"translation\":[");
-			append(json_nodes, node.translation[0]);
-			append(json_nodes, ",");
-			append(json_nodes, node.translation[1]);
-			append(json_nodes, ",");
-			append(json_nodes, node.translation[2]);
-			append(json_nodes, "]");
-		}
-		if (node.has_rotation)
-		{
-			comma(json_nodes);
-			append(json_nodes, "\"rotation\":[");
-			append(json_nodes, node.rotation[0]);
-			append(json_nodes, ",");
-			append(json_nodes, node.rotation[1]);
-			append(json_nodes, ",");
-			append(json_nodes, node.rotation[2]);
-			append(json_nodes, ",");
-			append(json_nodes, node.rotation[3]);
-			append(json_nodes, "]");
-		}
-		if (node.has_scale)
-		{
-			comma(json_nodes);
-			append(json_nodes, "\"scale\":[");
-			append(json_nodes, node.scale[0]);
-			append(json_nodes, ",");
-			append(json_nodes, node.scale[1]);
-			append(json_nodes, ",");
-			append(json_nodes, node.scale[2]);
-			append(json_nodes, "]");
-		}
-		if (node.has_matrix)
-		{
-			comma(json_nodes);
-			append(json_nodes, "\"matrix\":[");
-			for (int k = 0; k < 16; ++k)
-			{
-				comma(json_nodes);
-				append(json_nodes, node.matrix[k]);
-			}
-			append(json_nodes, "]");
-		}
-		if (node.children_count || !ni.meshes.empty())
-		{
-			comma(json_nodes);
-			append(json_nodes, "\"children\":[");
-			for (size_t j = 0; j < node.children_count; ++j)
-			{
-				NodeInfo& ci = nodes[node.children[j] - data->nodes];
-
-				if (ci.keep)
-				{
-					comma(json_nodes);
-					append(json_nodes, size_t(ci.remap));
-				}
-			}
-			for (size_t j = 0; j < ni.meshes.size(); ++j)
-			{
-				comma(json_nodes);
-				append(json_nodes, ni.meshes[j]);
-			}
-			append(json_nodes, "]");
-		}
-		if (node.camera)
-		{
-			comma(json_nodes);
-			append(json_nodes, "\"camera\":");
-			append(json_nodes, size_t(node.camera - data->cameras));
-		}
-		if (node.light)
-		{
-			comma(json_nodes);
-			append(json_nodes, "\"extensions\":{\"KHR_lights_punctual\":{\"light\":");
-			append(json_nodes, size_t(node.light - data->lights));
-			append(json_nodes, "}}");
-		}
-		append(json_nodes, "}");
+		writeNode(json_nodes, node, nodes, data);
 	}
 
 	for (size_t i = 0; i < data->skins_count; ++i)
