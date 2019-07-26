@@ -204,7 +204,7 @@ THREE.GLTFLoader = ( function () {
 							extensions[ EXTENSIONS.KHR_TEXTURE_TRANSFORM ] = new GLTFTextureTransformExtension( json );
 							break;
 
-						case EXTENSIONS.KHR_MESHOPT_COMPRESSION:
+						case EXTENSIONS.MESHOPT_COMPRESSION:
 							extensions[ extensionName ] = new GLTFMeshoptCompressionExtension( json, this.meshoptDecoder );
 							break;
 
@@ -284,7 +284,7 @@ THREE.GLTFLoader = ( function () {
 		KHR_MATERIALS_UNLIT: 'KHR_materials_unlit',
 		KHR_TEXTURE_TRANSFORM: 'KHR_texture_transform',
 		MSFT_TEXTURE_DDS: 'MSFT_texture_dds',
-		KHR_MESHOPT_COMPRESSION: 'KHR_meshopt_compression',
+		MESHOPT_COMPRESSION: 'MESHOPT_compression',
 	};
 
 	/**
@@ -1016,7 +1016,7 @@ THREE.GLTFLoader = ( function () {
 
 		}
 
-		this.name = EXTENSIONS.KHR_MESHOPT_COMPRESSION;
+		this.name = EXTENSIONS.MESHOPT_COMPRESSION;
 		this.json = json;
 		this.meshoptDecoder = meshoptDecoder;
 
@@ -1028,7 +1028,7 @@ THREE.GLTFLoader = ( function () {
 
 		return decoder.ready.then( function () {
 
-			var extensionDef = bufferViewDef.extensions[ EXTENSIONS.KHR_MESHOPT_COMPRESSION ];
+			var extensionDef = bufferViewDef.extensions[ EXTENSIONS.MESHOPT_COMPRESSION ];
 
 			var byteOffset = bufferViewDef.byteOffset || 0;
 			var byteLength = bufferViewDef.byteLength || 0;
@@ -1037,20 +1037,20 @@ THREE.GLTFLoader = ( function () {
 			var stride = extensionDef.byteStride;
 
 			var result = new ArrayBuffer(count * stride);
-			var source = buffer.slice(byteOffset, byteOffset + byteLength);
+			var source = new Uint8Array(buffer, byteOffset, byteLength);
 
 			switch ( extensionDef.mode ) {
 
-				case 'VERTEX':
-					decoder.decodeVertexBuffer(new Uint8Array(result), count, stride, new Uint8Array(source));
+				case 0:
+					decoder.decodeVertexBuffer(new Uint8Array(result), count, stride, source);
 					break;
 
-				case 'INDEX':
-					decoder.decodeIndexBuffer(new Uint8Array(result), count, stride, new Uint8Array(source));
+				case 1:
+					decoder.decodeIndexBuffer(new Uint8Array(result), count, stride, source);
 					break;
 
 				default:
-					throw new Error( 'Unknown decode mode: ' + extensionDef.mode );
+					throw new Error( 'THREE.GLTFLoader: Unrecognized meshopt compression mode.' );
 
 			}
 
@@ -1930,9 +1930,9 @@ THREE.GLTFLoader = ( function () {
 
 		var bufferViewDef = this.json.bufferViews[ bufferViewIndex ];
 
-		if ( bufferViewDef.extensions && bufferViewDef.extensions[ EXTENSIONS.KHR_MESHOPT_COMPRESSION ] ) {
+		if ( bufferViewDef.extensions && bufferViewDef.extensions[ EXTENSIONS.MESHOPT_COMPRESSION ] ) {
 
-			var extension = this.extensions[ EXTENSIONS.KHR_MESHOPT_COMPRESSION ];
+			var extension = this.extensions[ EXTENSIONS.MESHOPT_COMPRESSION ];
 
 			return this.getDependency( 'buffer', bufferViewDef.buffer ).then( function ( buffer ) {
 
@@ -2012,13 +2012,15 @@ THREE.GLTFLoader = ( function () {
 			// The buffer is not interleaved if the stride is the item size in bytes.
 			if ( byteStride && byteStride !== itemBytes ) {
 
-				var ibCacheKey = 'InterleavedBuffer:' + accessorDef.bufferView + ':' + accessorDef.componentType;
+				// Each "slice" of the buffer, as defined by 'count' elements of 'byteStride' bytes, gets its own InterleavedBuffer
+				// This makes sure that IBA.count reflects accessor.count properly
+				var ibSlice = Math.floor( byteOffset / byteStride );
+				var ibCacheKey = 'InterleavedBuffer:' + accessorDef.bufferView + ':' + accessorDef.componentType + ':' + ibSlice + ':' + accessorDef.count;
 				var ib = parser.cache.get( ibCacheKey );
 
 				if ( ! ib ) {
 
-					// Use the full buffer if it's interleaved.
-					array = new TypedArray( bufferView );
+					array = new TypedArray( bufferView, ibSlice * byteStride, accessorDef.count * byteStride / elementBytes );
 
 					// Integer parameters to IB/IBA are in array elements, not bytes.
 					ib = new THREE.InterleavedBuffer( array, byteStride / elementBytes );
@@ -2027,7 +2029,7 @@ THREE.GLTFLoader = ( function () {
 
 				}
 
-				bufferAttribute = new THREE.InterleavedBufferAttribute( ib, itemSize, byteOffset / elementBytes, normalized );
+				bufferAttribute = new THREE.InterleavedBufferAttribute( ib, itemSize, (byteOffset % byteStride) / elementBytes, normalized );
 
 			} else {
 
@@ -2951,12 +2953,52 @@ THREE.GLTFLoader = ( function () {
 
 				}
 
+				var outputArray = outputAccessor.array;
+
+				if ( outputAccessor.normalized ) {
+
+					var scale;
+
+					if ( outputArray.constructor === Int8Array ) {
+
+						scale = 1 / 127;
+
+					} else if ( outputArray.constructor === Uint8Array ) {
+
+						scale = 1 / 255;
+
+					} else if ( outputArray.constructor == Int16Array ) {
+
+						scale = 1 / 32767;
+
+					} else if ( outputArray.constructor === Uint16Array ) {
+
+						scale = 1 / 65535;
+
+					} else {
+
+						throw new Error( 'THREE.GLTFLoader: Unsupported output accessor component type.' );
+
+					}
+
+					var scaled = new Float32Array( outputArray.length );
+
+					for ( var j = 0, jl = outputArray.length; j < jl; j ++ ) {
+
+						scaled[j] = outputArray[j] * scale;
+
+					}
+
+					outputArray = scaled;
+
+				}
+
 				for ( var j = 0, jl = targetNames.length; j < jl; j ++ ) {
 
 					var track = new TypedKeyframeTrack(
 						targetNames[ j ] + '.' + PATH_PROPERTIES[ target.path ],
 						inputAccessor.array,
-						outputAccessor.array,
+						outputArray,
 						interpolation
 					);
 
