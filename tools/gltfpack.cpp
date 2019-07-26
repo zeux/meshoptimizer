@@ -2331,6 +2331,95 @@ size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_
 	return matrix_accr;
 }
 
+void writeCamera(std::string& json, const cgltf_camera& camera)
+{
+	comma(json);
+	append(json, "{");
+
+	switch (camera.type)
+	{
+	case cgltf_camera_type_perspective:
+		append(json, "\"type\":\"perspective\",\"perspective\":{");
+		append(json, "\"yfov\":");
+		append(json, camera.perspective.yfov);
+		append(json, ",\"znear\":");
+		append(json, camera.perspective.znear);
+		if (camera.perspective.aspect_ratio != 0.f)
+		{
+			append(json, ",\"aspectRatio\":");
+			append(json, camera.perspective.aspect_ratio);
+		}
+		if (camera.perspective.zfar != 0.f)
+		{
+			append(json, ",\"zfar\":");
+			append(json, camera.perspective.zfar);
+		}
+		append(json, "}");
+		break;
+
+	case cgltf_camera_type_orthographic:
+		append(json, "\"type\":\"orthographic\",\"orthographic\":{");
+		append(json, "\"xmag\":");
+		append(json, camera.orthographic.xmag);
+		append(json, ",\"ymag\":");
+		append(json, camera.orthographic.ymag);
+		append(json, ",\"znear\":");
+		append(json, camera.orthographic.znear);
+		append(json, ",\"zfar\":");
+		append(json, camera.orthographic.zfar);
+		append(json, "}");
+		break;
+
+	default:
+		fprintf(stderr, "Warning: skipping camera of unknown type\n");
+	}
+
+	append(json, "}");
+}
+
+void writeLight(std::string& json, const cgltf_light& light)
+{
+	static const float white[3] = {1, 1, 1};
+
+	comma(json);
+	append(json, "{\"type\":");
+	append(json, lightType(light.type));
+	if (memcmp(light.color, white, sizeof(white)) != 0)
+	{
+		comma(json);
+		append(json, "\"color\":[");
+		append(json, light.color[0]);
+		append(json, ",");
+		append(json, light.color[1]);
+		append(json, ",");
+		append(json, light.color[2]);
+		append(json, "]");
+	}
+	if (light.intensity != 1.f)
+	{
+		comma(json);
+		append(json, "\"intensity\":");
+		append(json, light.intensity);
+	}
+	if (light.range != 0.f)
+	{
+		comma(json);
+		append(json, "\"range\":");
+		append(json, light.range);
+	}
+	if (light.type == cgltf_light_type_spot)
+	{
+		comma(json);
+		append(json, "\"spot\":{");
+		append(json, "\"innerConeAngle\":");
+		append(json, light.spot_inner_cone_angle);
+		append(json, ",\"outerConeAngle\":");
+		append(json, light.spot_outer_cone_angle == 0.f ? 0.78539816339f : light.spot_outer_cone_angle);
+		append(json, "}");
+	}
+	append(json, "}");
+}
+
 void printStats(const std::vector<BufferView>& views, BufferView::Kind kind)
 {
 	for (size_t i = 0; i < views.size(); ++i)
@@ -2933,93 +3022,14 @@ bool process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	{
 		const cgltf_camera& camera = data->cameras[i];
 
-		comma(json_cameras);
-		append(json_cameras, "{");
-
-		switch (camera.type)
-		{
-		case cgltf_camera_type_perspective:
-			append(json_cameras, "\"type\":\"perspective\",\"perspective\":{");
-			append(json_cameras, "\"yfov\":");
-			append(json_cameras, camera.perspective.yfov);
-			append(json_cameras, ",\"znear\":");
-			append(json_cameras, camera.perspective.znear);
-			if (camera.perspective.aspect_ratio != 0.f)
-			{
-				append(json_cameras, ",\"aspectRatio\":");
-				append(json_cameras, camera.perspective.aspect_ratio);
-			}
-			if (camera.perspective.zfar != 0.f)
-			{
-				append(json_cameras, ",\"zfar\":");
-				append(json_cameras, camera.perspective.zfar);
-			}
-			append(json_cameras, "}");
-			break;
-
-		case cgltf_camera_type_orthographic:
-			append(json_cameras, "\"type\":\"orthographic\",\"orthographic\":{");
-			append(json_cameras, "\"xmag\":");
-			append(json_cameras, camera.orthographic.xmag);
-			append(json_cameras, ",\"ymag\":");
-			append(json_cameras, camera.orthographic.ymag);
-			append(json_cameras, ",\"znear\":");
-			append(json_cameras, camera.orthographic.znear);
-			append(json_cameras, ",\"zfar\":");
-			append(json_cameras, camera.orthographic.zfar);
-			append(json_cameras, "}");
-			break;
-
-		default:
-			fprintf(stderr, "Warning: skipping camera %d of unknown type\n", int(i));
-		}
-
-		append(json_cameras, "}");
+		writeCamera(json_cameras, camera);
 	}
 
 	for (size_t i = 0; i < data->lights_count; ++i)
 	{
 		const cgltf_light& light = data->lights[i];
 
-		static const float white[3] = {1, 1, 1};
-
-		comma(json_lights);
-		append(json_lights, "{\"type\":");
-		append(json_lights, lightType(light.type));
-		if (memcmp(light.color, white, sizeof(white)) != 0)
-		{
-			comma(json_lights);
-			append(json_lights, "\"color\":[");
-			append(json_lights, light.color[0]);
-			append(json_lights, ",");
-			append(json_lights, light.color[1]);
-			append(json_lights, ",");
-			append(json_lights, light.color[2]);
-			append(json_lights, "]");
-		}
-		if (light.intensity != 1.f)
-		{
-			comma(json_lights);
-			append(json_lights, "\"intensity\":");
-			append(json_lights, light.intensity);
-		}
-		if (light.range != 0.f)
-		{
-			comma(json_lights);
-			append(json_lights, "\"range\":");
-			append(json_lights, light.range);
-		}
-		if (light.type == cgltf_light_type_spot)
-		{
-			comma(json_lights);
-			append(json_lights, "\"spot\":{");
-			append(json_lights, "\"innerConeAngle\":");
-			append(json_lights, light.spot_inner_cone_angle);
-			append(json_lights, ",\"outerConeAngle\":");
-			append(json_lights, light.spot_outer_cone_angle == 0.f ? 0.78539816339f : light.spot_outer_cone_angle);
-			append(json_lights, "}");
-		}
-		append(json_lights, "}");
+		writeLight(json_lights, light);
 	}
 
 	char version[32];
@@ -3217,7 +3227,7 @@ void writeU32(FILE* out, uint32_t data)
 	fwrite(&data, 4, 1, out);
 }
 
-int pack(const char* input, const char* output, const Settings& settings)
+int gltfpack(const char* input, const char* output, const Settings& settings)
 {
 	cgltf_data* data = 0;
 	std::vector<Mesh> meshes;
@@ -3434,7 +3444,7 @@ int main(int argc, char** argv)
 	if (test)
 	{
 		for (int i = test; i < argc; ++i)
-			pack(argv[i], NULL, settings);
+			gltfpack(argv[i], NULL, settings);
 
 		return 0;
 	}
@@ -3454,11 +3464,11 @@ int main(int argc, char** argv)
 		fprintf(stderr, "-ac: keep constant animation tracks even if they don't modify the node transform\n");
 		fprintf(stderr, "-kn: keep named nodes and meshes attached to named nodes so that named nodes can be transformed externally\n");
 		fprintf(stderr, "-c: produce compressed glb files\n");
-		fprintf(stderr, "-v: verbose output (-vv for more verbosity)\n");
+		fprintf(stderr, "-v: verbose output\n");
 		fprintf(stderr, "-h: display this help and exit\n");
 
 		return 1;
 	}
 
-	return pack(input, output, settings);
+	return gltfpack(input, output, settings);
 }
