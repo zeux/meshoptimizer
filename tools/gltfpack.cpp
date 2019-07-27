@@ -316,13 +316,13 @@ void defaultFree(void*, void* p)
 	free(p);
 }
 
-size_t textureIndex(const std::vector<std::string>& textures, const std::string& name)
+int textureIndex(const std::vector<std::string>& textures, const char* name)
 {
-	std::vector<std::string>::const_iterator it = std::lower_bound(textures.begin(), textures.end(), name);
-	assert(it != textures.end());
-	assert(*it == name);
+	for (size_t i = 0; i < textures.size(); ++i)
+		if (textures[i] == name)
+			return int(i);
 
-	return size_t(it - textures.begin());
+	return -1;
 }
 
 cgltf_data* parseSceneObj(fastObjMesh* obj)
@@ -336,12 +336,9 @@ cgltf_data* parseSceneObj(fastObjMesh* obj)
 	{
 		fastObjMaterial& om = obj->materials[mi];
 
-		if (om.map_Kd.name)
+		if (om.map_Kd.name && textureIndex(textures, om.map_Kd.name) < 0)
 			textures.push_back(om.map_Kd.name);
 	}
-
-	std::sort(textures.begin(), textures.end());
-	textures.erase(std::unique(textures.begin(), textures.end()), textures.end());
 
 	data->images = (cgltf_image*)calloc(textures.size(), sizeof(cgltf_image));
 	data->images_count = textures.size();
@@ -2715,7 +2712,7 @@ void printStats(const std::vector<BufferView>& views, BufferView::Kind kind, con
 		size_t count = view.data.size() / view.stride;
 
 		printf("stats: %s %s: compressed %d bytes (%.1f bits), raw %d bytes (%d bits)\n",
-			name,
+		       name,
 		       variant,
 		       int(view.bytes),
 		       double(view.bytes) / double(count) * 8,
