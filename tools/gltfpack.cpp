@@ -1400,7 +1400,16 @@ void writeTextureInfo(std::string& json, const cgltf_data* data, const cgltf_tex
 {
 	assert(view.texture);
 
-	cgltf_texture_transform transform = view.transform;
+	cgltf_texture_transform transform = {};
+
+	if (view.has_transform)
+	{
+		transform = view.transform;
+	}
+	else
+	{
+		transform.scale[0] = transform.scale[1] = 1.f;
+	}
 
 	transform.offset[0] += qp.uv_offset[0];
 	transform.offset[1] += qp.uv_offset[1];
