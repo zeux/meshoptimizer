@@ -2189,10 +2189,7 @@ void writeEmbeddedImage(std::string& json, std::vector<BufferView>& views, const
 	size_t view = getBufferView(views, BufferView::Kind_Image, -1, 1, false);
 
 	assert(views[view].data.empty());
-	views[view].data.append(data, size);
-
-	// each chunk must be aligned to 4 bytes
-	views[view].data.resize((views[view].data.size() + 3) & ~3);
+	views[view].data.assign(data, size);
 
 	append(json, "\"bufferView\":");
 	append(json, view);
