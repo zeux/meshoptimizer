@@ -237,12 +237,6 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 		{
 			const cgltf_primitive& primitive = mesh.primitives[pi];
 
-			if (!primitive.indices || !primitive.indices->buffer_view)
-			{
-				fprintf(stderr, "Warning: ignoring primitive %d of mesh %d because it has no index data\n", int(pi), mesh_id);
-				continue;
-			}
-
 			if (primitive.type != cgltf_primitive_type_triangles)
 			{
 				fprintf(stderr, "Warning: ignoring primitive %d of mesh %d because type %d is not supported\n", int(pi), mesh_id, primitive.type);
@@ -256,9 +250,21 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 			result.material = primitive.material;
 			result.skin = node.skin;
 
-			result.indices.resize(primitive.indices->count);
-			for (size_t i = 0; i < primitive.indices->count; ++i)
-				result.indices[i] = unsigned(cgltf_accessor_read_index(primitive.indices, i));
+			if (primitive.indices)
+			{
+				result.indices.resize(primitive.indices->count);
+				for (size_t i = 0; i < primitive.indices->count; ++i)
+					result.indices[i] = unsigned(cgltf_accessor_read_index(primitive.indices, i));
+			}
+			else
+			{
+				size_t count = primitive.attributes ? primitive.attributes[0].data->count : 0;
+
+				// note, while we could generate a good index buffer, reindexMesh will take care of this
+				result.indices.resize(count);
+				for (size_t i = 0; i < count; ++i)
+					result.indices[i] = unsigned(i);
+			}
 
 			for (size_t ai = 0; ai < primitive.attributes_count; ++ai)
 			{
