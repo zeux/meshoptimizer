@@ -601,9 +601,6 @@ void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes)
 	{
 		Mesh& mesh = meshes[i];
 
-		if (mesh.indices.empty())
-			continue;
-
 		if (!mesh.material)
 			continue;
 
@@ -693,25 +690,43 @@ void mergeMeshes(Mesh& target, const Mesh& mesh)
 
 void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings)
 {
+	size_t write = 0;
+
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
-		Mesh& mesh = meshes[i];
+		if (meshes[i].streams.empty())
+			continue;
 
-		for (size_t j = 0; j < i; ++j)
+		Mesh& target = meshes[write];
+
+		if (i != write)
 		{
-			Mesh& target = meshes[j];
+			Mesh& mesh = meshes[i];
 
-			if (target.indices.size() && canMergeMeshes(mesh, target, settings))
+			// note: this copy is expensive; we could use move in C++11 or swap manually which is a bit painful...
+			target = mesh;
+
+			mesh.streams.clear();
+			mesh.indices.clear();
+		}
+
+		for (size_t j = i + 1; j < meshes.size(); ++j)
+		{
+			Mesh& mesh = meshes[j];
+
+			if (!mesh.streams.empty() && canMergeMeshes(target, mesh, settings))
 			{
 				mergeMeshes(target, mesh);
 
 				mesh.streams.clear();
 				mesh.indices.clear();
-
-				break;
 			}
 		}
+
+		write++;
 	}
+
+	meshes.resize(write);
 }
 
 void reindexMesh(Mesh& mesh)
@@ -2070,9 +2085,6 @@ void markNeededNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::
 	{
 		const Mesh& mesh = meshes[i];
 
-		if (mesh.indices.empty())
-			continue;
-
 		if (mesh.node)
 		{
 			NodeInfo& ni = nodes[mesh.node - data->nodes];
@@ -2113,9 +2125,6 @@ void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials,
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
 		const Mesh& mesh = meshes[i];
-
-		if (mesh.indices.empty())
-			continue;
 
 		if (mesh.material)
 		{
@@ -2781,9 +2790,6 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	{
 		Mesh& mesh = meshes[i];
 
-		if (mesh.indices.empty())
-			continue;
-
 		reindexMesh(mesh);
 		optimizeMesh(mesh);
 	}
@@ -2904,9 +2910,6 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	{
 		const Mesh& mesh = meshes[i];
 
-		if (mesh.indices.empty())
-			continue;
-
 		comma(json_meshes);
 		append(json_meshes, "{\"primitives\":[");
 
@@ -2914,9 +2917,6 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		for (; pi < meshes.size(); ++pi)
 		{
 			const Mesh& prim = meshes[pi];
-
-			if (prim.indices.empty())
-				continue;
 
 			if (prim.node != mesh.node || prim.skin != mesh.skin || prim.targets != mesh.targets)
 				break;
@@ -3226,12 +3226,7 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 	if (settings.verbose)
 	{
-		size_t primitives = 0;
-
-		for (size_t i = 0; i < meshes.size(); ++i)
-			primitives += !meshes[i].indices.empty();
-
-		printf("output: %d nodes, %d meshes (%d primitives), %d materials\n", int(node_offset), int(mesh_offset), int(primitives), int(material_offset));
+		printf("output: %d nodes, %d meshes (%d primitives), %d materials\n", int(node_offset), int(mesh_offset), int(meshes.size()), int(material_offset));
 		printf("output: JSON %d bytes, buffers %d bytes\n", int(json.size()), int(bin.size()));
 		printf("output: buffers: vertex %d bytes, index %d bytes, skin %d bytes, time %d bytes, keyframe %d bytes, image %d bytes\n",
 		       int(bytes[BufferView::Kind_Vertex]), int(bytes[BufferView::Kind_Index]), int(bytes[BufferView::Kind_Skin]),
