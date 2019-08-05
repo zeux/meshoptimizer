@@ -58,6 +58,8 @@ struct Mesh
 	cgltf_material* material;
 	cgltf_skin* skin;
 
+	cgltf_primitive_type type;
+
 	std::vector<Stream> streams;
 	std::vector<unsigned int> indices;
 
@@ -237,9 +239,15 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 		{
 			const cgltf_primitive& primitive = mesh.primitives[pi];
 
-			if (primitive.type != cgltf_primitive_type_triangles)
+			if (primitive.type != cgltf_primitive_type_triangles && primitive.type != cgltf_primitive_type_points)
 			{
 				fprintf(stderr, "Warning: ignoring primitive %d of mesh %d because type %d is not supported\n", int(pi), mesh_id, primitive.type);
+				continue;
+			}
+
+			if (primitive.type == cgltf_primitive_type_points && primitive.indices)
+			{
+				fprintf(stderr, "Warning: ignoring primitive %d of mesh %d because indexed points are not supported\n", int(pi), mesh_id);
 				continue;
 			}
 
@@ -250,13 +258,15 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 			result.material = primitive.material;
 			result.skin = node.skin;
 
+			result.type = primitive.type;
+
 			if (primitive.indices)
 			{
 				result.indices.resize(primitive.indices->count);
 				for (size_t i = 0; i < primitive.indices->count; ++i)
 					result.indices[i] = unsigned(cgltf_accessor_read_index(primitive.indices, i));
 			}
-			else
+			else if (primitive.type != cgltf_primitive_type_points)
 			{
 				size_t count = primitive.attributes ? primitive.attributes[0].data->count : 0;
 
@@ -430,6 +440,8 @@ void parseMeshesObj(fastObjMesh* obj, cgltf_data* data, std::vector<Mesh>& meshe
 			assert(mi < data->materials_count);
 			mesh.material = &data->materials[mi];
 		}
+
+		mesh.type = cgltf_primitive_type_triangles;
 
 		mesh.streams.resize(3);
 		mesh.streams[0].type = cgltf_attribute_type_position;
@@ -650,6 +662,9 @@ bool canMergeMeshes(const Mesh& lhs, const Mesh& rhs, const Settings& settings)
 	if (lhs.skin != rhs.skin)
 		return false;
 
+	if (lhs.type != rhs.type)
+		return false;
+
 	if (lhs.targets != rhs.targets)
 		return false;
 
@@ -659,6 +674,9 @@ bool canMergeMeshes(const Mesh& lhs, const Mesh& rhs, const Settings& settings)
 	for (size_t i = 0; i < lhs.weights.size(); ++i)
 		if (lhs.weights[i] != rhs.weights[i])
 			return false;
+
+	if (lhs.indices.empty() != rhs.indices.empty())
+		return false;
 
 	if (lhs.streams.size() != rhs.streams.size())
 		return false;
@@ -2790,8 +2808,19 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	{
 		Mesh& mesh = meshes[i];
 
-		reindexMesh(mesh);
-		optimizeMesh(mesh);
+		switch (mesh.type)
+		{
+		case cgltf_primitive_type_points:
+			break;
+
+		case cgltf_primitive_type_triangles:
+			reindexMesh(mesh);
+			optimizeMesh(mesh);
+			break;
+
+		default:
+			assert(!"Unknown primitive type");
+		}
 	}
 
 	if (settings.verbose)
@@ -2928,6 +2957,8 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			append(json_meshes, "{\"attributes\":{");
 			writeMeshAttributes(json_meshes, views, json_accessors, accr_offset, prim, 0, qp, settings);
 			append(json_meshes, "}");
+			append(json_meshes, ",\"mode\":");
+			append(json_meshes, size_t(prim.type));
 
 			if (mesh.targets)
 			{
@@ -2942,10 +2973,14 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 				append(json_meshes, "]");
 			}
 
-			size_t index_accr = writeMeshIndices(views, json_accessors, accr_offset, prim, settings);
+			if (!prim.indices.empty())
+			{
+				size_t index_accr = writeMeshIndices(views, json_accessors, accr_offset, prim, settings);
 
-			append(json_meshes, ",\"indices\":");
-			append(json_meshes, index_accr);
+				append(json_meshes, ",\"indices\":");
+				append(json_meshes, index_accr);
+			}
+
 			if (prim.material)
 			{
 				MaterialInfo& mi = materials[prim.material - data->materials];
@@ -2954,6 +2989,7 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 				append(json_meshes, ",\"material\":");
 				append(json_meshes, size_t(mi.remap));
 			}
+
 			append(json_meshes, "}");
 		}
 
