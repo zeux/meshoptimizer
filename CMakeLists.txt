@@ -1,5 +1,5 @@
-project(meshoptimizer)
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
+project(meshoptimizer VERSION 0.12 LANGUAGES CXX)
 
 option(BUILD_DEMO "Build demo" OFF)
 option(BUILD_TOOLS "Build tools" OFF)
@@ -23,12 +23,12 @@ set(SOURCES
 )
 
 add_library(meshoptimizer ${SOURCES})
-target_include_directories(meshoptimizer INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_include_directories(meshoptimizer INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>")
 
 if(MSVC)
-	target_compile_options(meshoptimizer PRIVATE /W4 /WX)
+    target_compile_options(meshoptimizer PRIVATE /W4 /WX)
 else()
-	target_compile_options(meshoptimizer PRIVATE -Wall -Wextra -Werror)
+    target_compile_options(meshoptimizer PRIVATE -Wall -Wextra -Werror)
 endif()
 
 if(BUILD_SHARED_LIBS)
@@ -64,3 +64,52 @@ if(BUILD_TOOLS)
     add_executable(gltfpack tools/gltfpack.cpp tools/meshloader.cpp)
     target_link_libraries(gltfpack meshoptimizer)
 endif()
+
+install(
+    TARGETS meshoptimizer
+    EXPORT meshoptimizerTargets
+    RUNTIME DESTINATION bin
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    INCLUDES DESTINATION include
+)
+
+install(
+    FILES src/meshoptimizer.h
+    DESTINATION include
+)
+
+if(MSVC AND BUILD_SHARED_LIBS AND NOT (CMAKE_VERSION VERSION_LESS "3.1"))
+    install(
+        FILES $<TARGET_PDB_FILE:meshoptimizer>
+        DESTINATION lib
+        OPTIONAL
+    )
+endif()
+
+install(
+    EXPORT meshoptimizerTargets
+    DESTINATION lib/cmake/meshoptimizer
+    NAMESPACE meshoptimizer::
+)
+
+include(CMakePackageConfigHelpers)
+
+configure_package_config_file(
+    meshoptimizerConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfig.cmake
+    INSTALL_DESTINATION lib/cmake/meshoptimizer
+    NO_SET_AND_CHECK_MACRO
+)
+
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfigVersion.cmake
+    COMPATIBILITY ExactVersion
+)
+
+install(
+    FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfigVersion.cmake
+    DESTINATION lib/cmake/meshoptimizer
+)
