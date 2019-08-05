@@ -82,7 +82,7 @@ install(
 if(MSVC AND BUILD_SHARED_LIBS AND NOT (CMAKE_VERSION VERSION_LESS "3.1"))
     install(
         FILES $<TARGET_PDB_FILE:meshoptimizer>
-        DESTINATION lib
+        DESTINATION bin
         OPTIONAL
     )
 endif()
