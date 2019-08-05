@@ -55,6 +55,8 @@ if(BUILD_SHARED_LIBS)
     endif()
 endif()
 
+set(TARGETS meshoptimizer)
+
 if(BUILD_DEMO)
     add_executable(demo demo/main.cpp demo/miniz.cpp demo/tests.cpp tools/meshloader.cpp)
     target_link_libraries(demo meshoptimizer)
@@ -63,10 +65,19 @@ endif()
 if(BUILD_TOOLS)
     add_executable(gltfpack tools/gltfpack.cpp tools/meshloader.cpp)
     target_link_libraries(gltfpack meshoptimizer)
+    list(APPEND TARGETS gltfpack)
+
+    if(MSVC AND NOT (CMAKE_VERSION VERSION_LESS "3.1"))
+        install(
+            FILES $<TARGET_PDB_FILE:gltfpack>
+            DESTINATION bin
+            OPTIONAL
+        )
+    endif()
 endif()
 
 install(
-    TARGETS meshoptimizer
+    TARGETS ${TARGETS}
     EXPORT meshoptimizerTargets
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
