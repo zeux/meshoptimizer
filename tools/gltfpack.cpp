@@ -728,6 +728,25 @@ void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings)
 			mesh.indices.clear();
 		}
 
+		size_t target_vertices = target.streams[0].data.size();
+		size_t target_indices = target.indices.size();
+
+		for (size_t j = i + 1; j < meshes.size(); ++j)
+		{
+			Mesh& mesh = meshes[j];
+
+			if (!mesh.streams.empty() && canMergeMeshes(target, mesh, settings))
+			{
+				target_vertices += mesh.streams[0].data.size();
+				target_indices += mesh.indices.size();
+			}
+		}
+
+		for (size_t j = 0; j < target.streams.size(); ++j)
+			target.streams[j].data.reserve(target_vertices);
+
+		target.indices.reserve(target_indices);
+
 		for (size_t j = i + 1; j < meshes.size(); ++j)
 		{
 			Mesh& mesh = meshes[j];
@@ -740,6 +759,9 @@ void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings)
 				mesh.indices.clear();
 			}
 		}
+
+		assert(target.streams[0].data.size() == target_vertices);
+		assert(target.indices.size() == target_indices);
 
 		write++;
 	}
