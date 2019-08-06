@@ -5,8 +5,21 @@
 #include <float.h>
 #include <string.h>
 
+// This work is based on:
+// Fabian Giesen. Decoding Morton codes. 2009
 namespace meshopt
 {
+
+// "Insert" two 0 bits after each of the 10 low bits of x
+unsigned int part1By2(unsigned int x)
+{
+	x &= 0x000003ff;                  // x = ---- ---- ---- ---- ---- --98 7654 3210
+	x = (x ^ (x << 16)) & 0xff0000ff; // x = ---- --98 ---- ---- ---- ---- 7654 3210
+	x = (x ^ (x << 8)) & 0x0300f00f;  // x = ---- --98 ---- ---- 7654 ---- ---- 3210
+	x = (x ^ (x << 4)) & 0x030c30c3;  // x = ---- --98 ---- 76-- --54 ---- 32-- --10
+	x = (x ^ (x << 2)) & 0x09249249;  // x = ---- 9--8 --7- -6-- 5--4 --3- -2-- 1--0
+	return x;
+}
 
 static void computeOrder(unsigned int* result, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride)
 {
@@ -44,17 +57,7 @@ static void computeOrder(unsigned int* result, const float* vertex_positions_dat
 		int y = int((v[1] - minv[1]) * scale * 1023.f + 0.5f);
 		int z = int((v[2] - minv[2]) * scale * 1023.f + 0.5f);
 
-		// a *not* very efficient morton order calculation :)
-		unsigned int id = 0;
-
-		for (int bit = 0; bit < 10; ++bit)
-		{
-			id |= ((x >> bit) & 1) << (bit * 3 + 0);
-			id |= ((y >> bit) & 1) << (bit * 3 + 1);
-			id |= ((z >> bit) & 1) << (bit * 3 + 2);
-		}
-
-		result[i] = id;
+		result[i] = part1By2(x) | (part1By2(y) << 1) | (part1By2(z) << 2);
 	}
 }
 
