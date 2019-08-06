@@ -75,6 +75,8 @@ if(BUILD_TOOLS)
             OPTIONAL
         )
     endif()
+
+    set_target_properties(gltfpack PROPERTIES INSTALL_RPATH "$ORIGIN/../lib")
 endif()
 
 install(
