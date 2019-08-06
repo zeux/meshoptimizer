@@ -814,7 +814,7 @@ void sortPointMesh(Mesh& mesh)
 	size_t total_vertices = mesh.streams[positions].data.size();
 
 	std::vector<unsigned int> remap(total_vertices);
-	meshopt_spatialSort(&remap[0], mesh.streams[positions].data[0].f, total_vertices, sizeof(Attr));
+	meshopt_spatialSortRemap(&remap[0], mesh.streams[positions].data[0].f, total_vertices, sizeof(Attr));
 
 	for (size_t i = 0; i < mesh.streams.size(); ++i)
 	{

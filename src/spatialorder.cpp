@@ -107,7 +107,7 @@ static void radixPass(unsigned int* destination, const unsigned int* source, con
 
 } // namespace meshopt
 
-void meshopt_spatialSort(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+void meshopt_spatialSortRemap(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	using namespace meshopt;
 
@@ -169,7 +169,7 @@ void meshopt_spatialSortTriangles(unsigned int* destination, const unsigned int*
 
 	unsigned int* remap = allocator.allocate<unsigned int>(face_count);
 
-	meshopt_spatialSort(remap, centroids, face_count, sizeof(float) * 3);
+	meshopt_spatialSortRemap(remap, centroids, face_count, sizeof(float) * 3);
 
 	// support in-order remap
 	if (destination == indices)

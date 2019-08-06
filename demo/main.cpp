@@ -781,7 +781,7 @@ void spatialSort(const Mesh& mesh)
 	double start = timestamp();
 
 	std::vector<unsigned int> remap(mesh.vertices.size());
-	meshopt_spatialSort(&remap[0], &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
+	meshopt_spatialSortRemap(&remap[0], &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
 
 	double end = timestamp();
 

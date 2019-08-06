@@ -343,15 +343,21 @@ MESHOPTIMIZER_EXPERIMENTAL struct meshopt_Bounds meshopt_computeClusterBounds(co
 MESHOPTIMIZER_EXPERIMENTAL struct meshopt_Bounds meshopt_computeMeshletBounds(const struct meshopt_Meshlet* meshlet, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 
 /**
- * Experimental: Spatial order generator
+ * Experimental: Spatial sorter
  * Generates a remap table that can be used to reorder points for spatial locality.
  * Resulting remap table maps old vertices to new vertices and can be used in meshopt_remapVertexBuffer.
+ *
+ * destination must contain enough space for the resulting remap table (vertex_count elements)
  */
-MESHOPTIMIZER_EXPERIMENTAL void meshopt_spatialSort(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
+MESHOPTIMIZER_EXPERIMENTAL void meshopt_spatialSortRemap(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 
 /**
- * Experimental: Spatial order generator
- * Reorders triangles for spatial locality.
+ * Experimental: Spatial sorter
+ * Reorders triangles for spatial locality, and generates a new index buffer. The resulting index buffer can be used with other functions like optimizeVertexCache.
+ *
+ * destination must contain enough space for the resulting index buffer (index_count elements)
+ * indices must contain index data that is the result of meshopt_optimizeVertexCache (*not* the original mesh indices!)
+ * vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
  */
 MESHOPTIMIZER_EXPERIMENTAL void meshopt_spatialSortTriangles(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 
