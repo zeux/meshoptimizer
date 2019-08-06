@@ -343,6 +343,19 @@ MESHOPTIMIZER_EXPERIMENTAL struct meshopt_Bounds meshopt_computeClusterBounds(co
 MESHOPTIMIZER_EXPERIMENTAL struct meshopt_Bounds meshopt_computeMeshletBounds(const struct meshopt_Meshlet* meshlet, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 
 /**
+ * Experimental: Spatial order generator
+ * Generates a remap table that can be used to reorder points for spatial locality.
+ * Resulting remap table maps old vertices to new vertices and can be used in meshopt_remapVertexBuffer.
+ */
+MESHOPTIMIZER_EXPERIMENTAL void meshopt_spatialSort(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
+
+/**
+ * Experimental: Spatial order generator
+ * Reorders triangles for spatial locality.
+ */
+MESHOPTIMIZER_EXPERIMENTAL void meshopt_spatialSortTriangles(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
+
+/**
  * Set allocation callbacks
  * These callbacks will be used instead of the default operator new/operator delete for all temporary allocations in the library.
  * Note that all algorithms only allocate memory for temporary use.
@@ -619,6 +632,15 @@ inline meshopt_Bounds meshopt_computeClusterBounds(const T* indices, size_t inde
 	meshopt_IndexAdapter<T> in(0, indices, index_count);
 
 	return meshopt_computeClusterBounds(in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride);
+}
+
+template <typename T>
+inline void meshopt_spatialSortTriangles(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+{
+	meshopt_IndexAdapter<T> in(0, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, 0, index_count);
+
+	meshopt_spatialSortTriangles(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride);
 }
 #endif
 
