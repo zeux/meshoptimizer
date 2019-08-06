@@ -145,6 +145,8 @@ void meshopt_spatialSortTriangles(unsigned int* destination, const unsigned int*
 	assert(vertex_positions_stride > 0 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
 
+	(void)vertex_count;
+
 	meshopt_Allocator allocator;
 
 	float* centroids = allocator.allocate<float>(index_count);
