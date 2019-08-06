@@ -11,7 +11,7 @@ namespace meshopt
 {
 
 // "Insert" two 0 bits after each of the 10 low bits of x
-unsigned int part1By2(unsigned int x)
+inline unsigned int part1By2(unsigned int x)
 {
 	x &= 0x000003ff;                  // x = ---- ---- ---- ---- ---- --98 7654 3210
 	x = (x ^ (x << 16)) & 0xff0000ff; // x = ---- --98 ---- ---- ---- ---- 7654 3210
