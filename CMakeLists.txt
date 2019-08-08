@@ -57,11 +57,6 @@ if(BUILD_TOOLS)
     target_link_libraries(gltfpack meshoptimizer)
     list(APPEND TARGETS gltfpack)
 
-    # TARGET_PDB_FILE is available since 3.1
-    if(MSVC AND NOT (CMAKE_VERSION VERSION_LESS "3.1"))
-        install(FILES $<TARGET_PDB_FILE:gltfpack> DESTINATION bin OPTIONAL)
-    endif()
-
     set_target_properties(gltfpack PROPERTIES INSTALL_RPATH "$ORIGIN/../lib")
 endif()
 
@@ -75,8 +70,13 @@ install(FILES src/meshoptimizer.h DESTINATION include)
 install(EXPORT meshoptimizerTargets DESTINATION lib/cmake/meshoptimizer NAMESPACE meshoptimizer::)
 
 # TARGET_PDB_FILE is available since 3.1
-if(MSVC AND BUILD_SHARED_LIBS AND NOT (CMAKE_VERSION VERSION_LESS "3.1"))
-    install(FILES $<TARGET_PDB_FILE:meshoptimizer> DESTINATION bin OPTIONAL)
+if(MSVC AND NOT (CMAKE_VERSION VERSION_LESS "3.1"))
+    foreach(TARGET ${TARGETS})
+        get_target_property(TARGET_TYPE ${TARGET} TYPE)
+        if(NOT ${TARGET_TYPE} STREQUAL "STATIC_LIBRARY")
+            install(FILES $<TARGET_PDB_FILE:${TARGET}> DESTINATION bin OPTIONAL)
+        endif()
+    endforeach(TARGET)
 endif()
 
 include(CMakePackageConfigHelpers)
