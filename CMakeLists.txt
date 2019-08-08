@@ -1,5 +1,6 @@
-cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
-project(meshoptimizer VERSION 0.12 LANGUAGES CXX)
+cmake_minimum_required(VERSION 3.0)
+
+project(meshoptimizer VERSION 0.12)
 
 option(BUILD_DEMO "Build demo" OFF)
 option(BUILD_TOOLS "Build tools" OFF)
@@ -33,26 +34,14 @@ else()
 endif()
 
 if(BUILD_SHARED_LIBS)
-    set_target_properties(
-        meshoptimizer
-        PROPERTIES
-        CXX_VISIBILITY_PRESET hidden
-        VISIBILITY_INLINES_HIDDEN ON
-    )
+    set_target_properties(meshoptimizer PROPERTIES CXX_VISIBILITY_PRESET hidden)
+    set_target_properties(meshoptimizer PROPERTIES VISIBILITY_INLINES_HIDDEN ON)
+
     if(WIN32)
-        target_compile_definitions(
-            meshoptimizer
-            INTERFACE
-            "MESHOPTIMIZER_API=__declspec(dllimport)"
-            PRIVATE
-            "MESHOPTIMIZER_API=__declspec(dllexport)"
-        )
+        target_compile_definitions(meshoptimizer INTERFACE "MESHOPTIMIZER_API=__declspec(dllimport)")
+        target_compile_definitions(meshoptimizer PRIVATE "MESHOPTIMIZER_API=__declspec(dllexport)")
     else()
-        target_compile_definitions(
-            meshoptimizer
-            PUBLIC
-            "MESHOPTIMIZER_API=__attribute__((visibility(\"default\")))"
-        )
+        target_compile_definitions(meshoptimizer PUBLIC "MESHOPTIMIZER_API=__attribute__((visibility(\"default\")))")
     endif()
 endif()
 
@@ -68,62 +57,37 @@ if(BUILD_TOOLS)
     target_link_libraries(gltfpack meshoptimizer)
     list(APPEND TARGETS gltfpack)
 
+    # TARGET_PDB_FILE is available since 3.1
     if(MSVC AND NOT (CMAKE_VERSION VERSION_LESS "3.1"))
-        install(
-            FILES $<TARGET_PDB_FILE:gltfpack>
-            DESTINATION bin
-            OPTIONAL
-        )
+        install(FILES $<TARGET_PDB_FILE:gltfpack> DESTINATION bin OPTIONAL)
     endif()
 
     set_target_properties(gltfpack PROPERTIES INSTALL_RPATH "$ORIGIN/../lib")
 endif()
 
-install(
-    TARGETS ${TARGETS}
-    EXPORT meshoptimizerTargets
+install(TARGETS ${TARGETS} EXPORT meshoptimizerTargets
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
-    INCLUDES DESTINATION include
-)
+    INCLUDES DESTINATION include)
 
-install(
-    FILES src/meshoptimizer.h
-    DESTINATION include
-)
+install(FILES src/meshoptimizer.h DESTINATION include)
+install(EXPORT meshoptimizerTargets DESTINATION lib/cmake/meshoptimizer NAMESPACE meshoptimizer::)
 
+# TARGET_PDB_FILE is available since 3.1
 if(MSVC AND BUILD_SHARED_LIBS AND NOT (CMAKE_VERSION VERSION_LESS "3.1"))
-    install(
-        FILES $<TARGET_PDB_FILE:meshoptimizer>
-        DESTINATION bin
-        OPTIONAL
-    )
+    install(FILES $<TARGET_PDB_FILE:meshoptimizer> DESTINATION bin OPTIONAL)
 endif()
-
-install(
-    EXPORT meshoptimizerTargets
-    DESTINATION lib/cmake/meshoptimizer
-    NAMESPACE meshoptimizer::
-)
 
 include(CMakePackageConfigHelpers)
 
-configure_package_config_file(
-    meshoptimizerConfig.cmake.in
+configure_package_config_file(config.cmake.in
     ${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfig.cmake
-    INSTALL_DESTINATION lib/cmake/meshoptimizer
-    NO_SET_AND_CHECK_MACRO
-)
+    INSTALL_DESTINATION lib/cmake/meshoptimizer NO_SET_AND_CHECK_MACRO)
 
-write_basic_package_version_file(
-    ${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfigVersion.cmake
-    COMPATIBILITY ExactVersion
-)
+write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfigVersion.cmake COMPATIBILITY ExactVersion)
 
-install(
-    FILES
+install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfig.cmake
     ${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfigVersion.cmake
-    DESTINATION lib/cmake/meshoptimizer
-)
+    DESTINATION lib/cmake/meshoptimizer)
