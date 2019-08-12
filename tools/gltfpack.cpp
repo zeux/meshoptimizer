@@ -2294,6 +2294,9 @@ void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std:
 		if (stream.type == cgltf_attribute_type_texcoord && (!mesh.material || !usesTextureSet(*mesh.material, stream.index)))
 			continue;
 
+		if (stream.type == cgltf_attribute_type_tangent && (!mesh.material || !mesh.material->normal_texture.texture))
+			continue;
+
 		if ((stream.type == cgltf_attribute_type_joints || stream.type == cgltf_attribute_type_weights) && !mesh.skin)
 			continue;
 
