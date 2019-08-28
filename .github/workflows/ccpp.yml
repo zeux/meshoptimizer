@@ -30,6 +30,6 @@ jobs:
       run: |
         cmake -DBUILD_DEMO=ON -DBUILD_TOOLS=ON
         cmake --build . -- -property:Configuration=Debug -verbosity:minimal
-        ./Debug/demo.exe demo/pirate.obj
+        Debug/demo.exe demo/pirate.obj
         cmake --build . -- -property:Configuration=Release -verbosity:minimal
-        ./Release/demo.exe demo/pirate.obj; fi
+        Release/demo.exe demo/pirate.obj
