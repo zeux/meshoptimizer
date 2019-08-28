@@ -3,14 +3,33 @@ name: C/C++ CI
 on: [push]
 
 jobs:
-  build:
+  posix:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
       fail-fast: false
     
     steps:
     - uses: actions/checkout@v1
     - name: make test
-      run: make test
+      run: |
+        make config=sanitize test
+        make config=debug test
+        make config=release test
+        make config=release gltfpack
+
+  windows:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+    
+    steps:
+    - uses: actions/checkout@v1
+    - name: cmake test
+      run: |
+        cmake -DBUILD_DEMO=ON -DBUILD_TOOLS=ON
+        cmake --build . -- -property:Configuration=Debug -verbosity:minimal
+        ./Debug/demo.exe demo/pirate.obj
+        cmake --build . -- -property:Configuration=Release -verbosity:minimal
+        ./Release/demo.exe demo/pirate.obj; fi
