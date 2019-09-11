@@ -590,7 +590,9 @@ struct meshopt_IndexAdapter<T, false>
 	    , data(0)
 	    , count(count_)
 	{
-		data = static_cast<unsigned int*>(meshopt_Allocator::Storage::allocate(sizeof(unsigned int) * count));
+		size_t size = count > size_t(-1) / sizeof(unsigned int) ? size_t(-1) : count * sizeof(unsigned int);
+
+		data = static_cast<unsigned int*>(meshopt_Allocator::Storage::allocate(size));
 
 		if (input)
 		{
