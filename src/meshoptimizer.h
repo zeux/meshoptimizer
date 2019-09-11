@@ -413,7 +413,7 @@ inline float meshopt_quantizeFloat(float v, int N);
  * When the supplied type is the same size as that of unsigned int, the wrappers are zero-cost; when it's not,
  * the wrappers end up allocating memory and copying index data to convert from one type to another.
  */
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(MESHOPTIMIZER_NO_WRAPPERS)
 template <typename T>
 inline size_t meshopt_generateVertexRemap(unsigned int* destination, const T* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size);
 template <typename T>
@@ -574,7 +574,7 @@ template <typename T> void (*meshopt_Allocator::StorageT<T>::deallocate)(void*) 
 #endif
 
 /* Inline implementation for C++ templated wrappers */
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(MESHOPTIMIZER_NO_WRAPPERS)
 template <typename T, bool ZeroCopy = sizeof(T) == sizeof(unsigned int)>
 struct meshopt_IndexAdapter;
 
