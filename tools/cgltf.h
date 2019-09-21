@@ -1441,17 +1441,17 @@ void cgltf_node_transform_local(const cgltf_node* node, cgltf_float* out_matrix)
 		float sz = node->scale[2];
 
 		lm[0] = (1 - 2 * qy*qy - 2 * qz*qz) * sx;
-		lm[1] = (2 * qx*qy + 2 * qz*qw) * sy;
-		lm[2] = (2 * qx*qz - 2 * qy*qw) * sz;
+		lm[1] = (2 * qx*qy + 2 * qz*qw) * sx;
+		lm[2] = (2 * qx*qz - 2 * qy*qw) * sx;
 		lm[3] = 0.f;
 
-		lm[4] = (2 * qx*qy - 2 * qz*qw) * sx;
+		lm[4] = (2 * qx*qy - 2 * qz*qw) * sy;
 		lm[5] = (1 - 2 * qx*qx - 2 * qz*qz) * sy;
-		lm[6] = (2 * qy*qz + 2 * qx*qw) * sz;
+		lm[6] = (2 * qy*qz + 2 * qx*qw) * sy;
 		lm[7] = 0.f;
 
-		lm[8] = (2 * qx*qz + 2 * qy*qw) * sx;
-		lm[9] = (2 * qy*qz - 2 * qx*qw) * sy;
+		lm[8] = (2 * qx*qz + 2 * qy*qw) * sz;
+		lm[9] = (2 * qy*qz - 2 * qx*qw) * sz;
 		lm[10] = (1 - 2 * qx*qx - 2 * qy*qy) * sz;
 		lm[11] = 0.f;
 
@@ -1512,9 +1512,9 @@ static cgltf_size cgltf_component_read_index(const void* in, cgltf_component_typ
 		case cgltf_component_type_r_8:
 			return *((const int8_t*) in);
 		case cgltf_component_type_r_8u:
-		case cgltf_component_type_invalid:
-		default:
 			return *((const uint8_t*) in);
+		default:
+			return 0;
 	}
 }
 
@@ -1529,18 +1529,17 @@ static cgltf_float cgltf_component_read_float(const void* in, cgltf_component_ty
 	{
 		switch (component_type)
 		{
-			case cgltf_component_type_r_32u:
-				return *((const uint32_t*) in) / (float) UINT_MAX;
+			// note: glTF spec doesn't currently define normalized conversions for 32-bit integers
 			case cgltf_component_type_r_16:
-				return *((const int16_t*) in) / (float) SHRT_MAX;
+				return *((const int16_t*) in) / (cgltf_float)32767;
 			case cgltf_component_type_r_16u:
-				return *((const uint16_t*) in) / (float) USHRT_MAX;
+				return *((const uint16_t*) in) / (cgltf_float)65535;
 			case cgltf_component_type_r_8:
-				return *((const int8_t*) in) / (float) SCHAR_MAX;
+				return *((const int8_t*) in) / (cgltf_float)127;
 			case cgltf_component_type_r_8u:
-			case cgltf_component_type_invalid:
+				return *((const uint8_t*) in) / (cgltf_float)255;
 			default:
-				return *((const uint8_t*) in) / (float) CHAR_MAX;
+				return 0;
 		}
 	}
 
