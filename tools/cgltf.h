@@ -2012,16 +2012,15 @@ static int cgltf_parse_json_mesh(cgltf_options* options, jsmntok_t const* tokens
 		}
 		else if (cgltf_json_strcmp(tokens + i, json_chunk, "extras") == 0)
 		{
-			int skip = cgltf_parse_json_extras(tokens, i + 1, json_chunk, &out_mesh->extras);
-			if (skip < 0)
-			{
-				return skip;
-			}
+			++i;
 
-			if (tokens[i+1].type == JSMN_OBJECT)
+			out_mesh->extras.start_offset = tokens[i].start;
+			out_mesh->extras.end_offset = tokens[i].end;
+
+			if (tokens[i].type == JSMN_OBJECT)
 			{
-				int extras_size = tokens[i+1].size;
-				i += 2;
+				int extras_size = tokens[i].size;
+				++i;
 
 				for (int k = 0; k < extras_size; ++k)
 				{
@@ -2042,8 +2041,10 @@ static int cgltf_parse_json_mesh(cgltf_options* options, jsmntok_t const* tokens
 					}
 				}
 			}
-
-			i = skip;
+			else
+			{
+				i = cgltf_skip_json(tokens, i);
+			}
 		}
 		else
 		{
