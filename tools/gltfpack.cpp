@@ -64,7 +64,7 @@ struct Mesh
 	std::vector<unsigned int> indices;
 
 	size_t targets;
-	std::vector<float> weights;
+	std::vector<float> target_weights;
 };
 
 struct Settings
@@ -320,7 +320,7 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 			}
 
 			result.targets = primitive.targets_count;
-			result.weights.assign(mesh.weights, mesh.weights + mesh.weights_count);
+			result.target_weights.assign(mesh.weights, mesh.weights + mesh.weights_count);
 
 			meshes.push_back(result);
 		}
@@ -627,6 +627,21 @@ void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes)
 	}
 }
 
+bool compareMeshTargets(const Mesh& lhs, const Mesh& rhs)
+{
+	if (lhs.targets != rhs.targets)
+		return false;
+
+	if (lhs.target_weights.size() != rhs.target_weights.size())
+		return false;
+
+	for (size_t i = 0; i < lhs.target_weights.size(); ++i)
+		if (lhs.target_weights[i] != rhs.target_weights[i])
+			return false;
+
+	return true;
+}
+
 bool canMergeMeshes(const Mesh& lhs, const Mesh& rhs, const Settings& settings)
 {
 	if (lhs.node != rhs.node)
@@ -665,15 +680,8 @@ bool canMergeMeshes(const Mesh& lhs, const Mesh& rhs, const Settings& settings)
 	if (lhs.type != rhs.type)
 		return false;
 
-	if (lhs.targets != rhs.targets)
+	if (!compareMeshTargets(lhs, rhs))
 		return false;
-
-	if (lhs.weights.size() != rhs.weights.size())
-		return false;
-
-	for (size_t i = 0; i < lhs.weights.size(); ++i)
-		if (lhs.weights[i] != rhs.weights[i])
-			return false;
 
 	if (lhs.indices.empty() != rhs.indices.empty())
 		return false;
@@ -3044,7 +3052,7 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			if (prim.node != mesh.node || prim.skin != mesh.skin || prim.targets != mesh.targets)
 				break;
 
-			if (mesh.weights.size() && (prim.weights.size() != mesh.weights.size() || memcmp(&mesh.weights[0], &prim.weights[0], mesh.weights.size() * sizeof(float)) != 0))
+			if (!compareMeshTargets(mesh, prim))
 				break;
 
 			comma(json_meshes);
@@ -3089,13 +3097,13 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 		append(json_meshes, "]");
 
-		if (mesh.weights.size())
+		if (mesh.target_weights.size())
 		{
 			append(json_meshes, ",\"weights\":[");
-			for (size_t j = 0; j < mesh.weights.size(); ++j)
+			for (size_t j = 0; j < mesh.target_weights.size(); ++j)
 			{
 				comma(json_meshes);
-				append(json_meshes, mesh.weights[j]);
+				append(json_meshes, mesh.target_weights[j]);
 			}
 			append(json_meshes, "]");
 		}
