@@ -373,6 +373,8 @@ typedef struct cgltf_mesh {
 	cgltf_size primitives_count;
 	cgltf_float* weights;
 	cgltf_size weights_count;
+	char** target_names;
+	cgltf_size target_names_count;
 	cgltf_extras extras;
 } cgltf_mesh;
 
@@ -1171,6 +1173,14 @@ cgltf_result cgltf_validate(cgltf_data* data)
 			}
 		}
 
+		if (data->meshes[i].target_names)
+		{
+			if (data->meshes[i].primitives_count && data->meshes[i].primitives[0].targets_count != data->meshes[i].target_names_count)
+			{
+				return cgltf_result_invalid_gltf;
+			}
+		}
+
 		for (cgltf_size j = 0; j < data->meshes[i].primitives_count; ++j)
 		{
 			if (data->meshes[i].primitives[j].targets_count != data->meshes[i].primitives[0].targets_count)
@@ -1321,6 +1331,13 @@ void cgltf_free(cgltf_data* data)
 
 		data->memory_free(data->memory_user_data, data->meshes[i].primitives);
 		data->memory_free(data->memory_user_data, data->meshes[i].weights);
+
+		for (cgltf_size j = 0; j < data->meshes[i].target_names_count; ++j)
+		{
+			data->memory_free(data->memory_user_data, data->meshes[i].target_names[j]);
+		}
+
+		data->memory_free(data->memory_user_data, data->meshes[i].target_names);
 	}
 
 	data->memory_free(data->memory_user_data, data->meshes);
@@ -1995,7 +2012,39 @@ static int cgltf_parse_json_mesh(cgltf_options* options, jsmntok_t const* tokens
 		}
 		else if (cgltf_json_strcmp(tokens + i, json_chunk, "extras") == 0)
 		{
-			i = cgltf_parse_json_extras(tokens, i + 1, json_chunk, &out_mesh->extras);
+			++i;
+
+			out_mesh->extras.start_offset = tokens[i].start;
+			out_mesh->extras.end_offset = tokens[i].end;
+
+			if (tokens[i].type == JSMN_OBJECT)
+			{
+				int extras_size = tokens[i].size;
+				++i;
+
+				for (int k = 0; k < extras_size; ++k)
+				{
+					CGLTF_CHECK_KEY(tokens[i]);
+
+					if (cgltf_json_strcmp(tokens+i, json_chunk, "targetNames") == 0)
+					{
+						i = cgltf_parse_json_string_array(options, tokens, i + 1, json_chunk, &out_mesh->target_names, &out_mesh->target_names_count);
+					}
+					else
+					{
+						i = cgltf_skip_json(tokens, i+1);
+					}
+
+					if (i < 0)
+					{
+						return i;
+					}
+				}
+			}
+			else
+			{
+				i = cgltf_skip_json(tokens, i);
+			}
 		}
 		else
 		{
