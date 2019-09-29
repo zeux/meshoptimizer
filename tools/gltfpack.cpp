@@ -65,6 +65,7 @@ struct Mesh
 
 	size_t targets;
 	std::vector<float> target_weights;
+	std::vector<const char*> target_names;
 };
 
 struct Settings
@@ -321,6 +322,7 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 
 			result.targets = primitive.targets_count;
 			result.target_weights.assign(mesh.weights, mesh.weights + mesh.weights_count);
+			result.target_names.assign(mesh.target_names, mesh.target_names + mesh.target_names_count);
 
 			meshes.push_back(result);
 		}
@@ -637,6 +639,13 @@ bool compareMeshTargets(const Mesh& lhs, const Mesh& rhs)
 
 	for (size_t i = 0; i < lhs.target_weights.size(); ++i)
 		if (lhs.target_weights[i] != rhs.target_weights[i])
+			return false;
+
+	if (lhs.target_names.size() != rhs.target_names.size())
+		return false;
+
+	for (size_t i = 0; i < lhs.target_names.size(); ++i)
+		if (strcmp(lhs.target_names[i], rhs.target_names[i]) != 0)
 			return false;
 
 	return true;
@@ -3107,6 +3116,20 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			}
 			append(json_meshes, "]");
 		}
+
+		if (mesh.target_names.size())
+		{
+			append(json_meshes, ",\"extras\":{\"targetNames\":[");
+			for (size_t j = 0; j < mesh.target_names.size(); ++j)
+			{
+				comma(json_meshes);
+				append(json_meshes, "\"");
+				append(json_meshes, mesh.target_names[j]);
+				append(json_meshes, "\"");
+			}
+			append(json_meshes, "]}");
+		}
+
 		append(json_meshes, "}");
 
 		writeMeshNode(json_nodes, mesh_offset, mesh, data, qp);
