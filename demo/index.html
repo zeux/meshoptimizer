@@ -73,7 +73,7 @@
 
 				var loader = new THREE.GLTFLoader()
 				loader.setMeshoptDecoder(MeshoptDecoder)
-				loader.load('../jrat/scene.glb', function (gltf) {
+				loader.load('pirate.glb', function (gltf) {
 					var bbox = new THREE.Box3().setFromObject(gltf.scene);
 					var scale = 2 / (bbox.max.y - bbox.min.y);
 
