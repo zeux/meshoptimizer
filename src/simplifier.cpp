@@ -925,6 +925,25 @@ struct CellHasher
 	}
 };
 
+struct IdHasher
+{
+	size_t hash(unsigned int id) const
+	{
+		unsigned int h = id;
+
+		// MurmurHash2 finalizer
+		h ^= h >> 13;
+		h *= 0x5bd1e995;
+		h ^= h >> 15;
+		return h;
+	}
+
+	bool equal(unsigned int lhs, unsigned int rhs) const
+	{
+		return lhs == rhs;
+	}
+};
+
 struct TriangleHasher
 {
 	unsigned int* indices;
@@ -1000,6 +1019,26 @@ static size_t fillVertexCells(unsigned int* table, size_t table_size, unsigned i
 		{
 			vertex_cells[i] = vertex_cells[*entry];
 		}
+	}
+
+	return result;
+}
+
+static size_t countVertexCells(unsigned int* table, size_t table_size, const unsigned int* vertex_ids, size_t vertex_count)
+{
+	IdHasher hasher;
+
+	memset(table, -1, table_size * sizeof(unsigned int));
+
+	size_t result = 0;
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		unsigned int id = vertex_ids[i];
+		unsigned int* entry = hashLookup2(table, table_size, hasher, id, ~0u);
+
+		result += (*entry == ~0u);
+		*entry = id;
 	}
 
 	return result;
@@ -1416,7 +1455,6 @@ size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_pos
 #endif
 
 	unsigned int* vertex_ids = allocator.allocate<unsigned int>(vertex_count);
-	unsigned int* vertex_cells = allocator.allocate<unsigned int>(vertex_count);
 
 	size_t table_size = hashBuckets2(vertex_count);
 	unsigned int* table = allocator.allocate<unsigned int>(table_size);
@@ -1442,7 +1480,7 @@ size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_pos
 		grid_size = (grid_size <= min_grid) ? min_grid + 1 : (grid_size >= max_grid) ? max_grid - 1 : grid_size;
 
 		computeVertexIds(vertex_ids, vertex_positions, vertex_count, grid_size);
-		size_t vertices = fillVertexCells(table, table_size, vertex_cells, vertex_ids, vertex_count);
+		size_t vertices = countVertexCells(table, table_size, vertex_ids, vertex_count);
 
 #if TRACE
 		printf("pass %d (%s): grid size %d, vertices %d, %s\n",
@@ -1476,6 +1514,8 @@ size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_pos
 		return 0;
 
 	// build vertex->cell association by mapping all vertices with the same quantized position to the same cell
+	unsigned int* vertex_cells = allocator.allocate<unsigned int>(vertex_count);
+
 	computeVertexIds(vertex_ids, vertex_positions, vertex_count, min_grid);
 	size_t cell_count = fillVertexCells(table, table_size, vertex_cells, vertex_ids, vertex_count);
 
