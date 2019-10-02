@@ -844,6 +844,9 @@ void simplifyMesh(Mesh& mesh, float threshold, bool aggressive)
 	size_t target_index_count = size_t(double(mesh.indices.size() / 3) * threshold) * 3;
 	float target_error = 1e-2f;
 
+	if (target_index_count < 1)
+		return;
+
 	std::vector<unsigned int> indices(mesh.indices.size());
 	indices.resize(meshopt_simplify(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count, target_error));
 	mesh.indices.swap(indices);
@@ -892,6 +895,9 @@ void simplifyPointMesh(Mesh& mesh, float threshold)
 	size_t vertex_count = mesh.streams[0].data.size();
 
 	size_t target_vertex_count = size_t(double(vertex_count) * threshold);
+
+	if (target_vertex_count < 1)
+		return;
 
 	std::vector<unsigned int> indices(target_vertex_count);
 	indices.resize(meshopt_simplifyPoints(&indices[0], positions->data[0].f, vertex_count, sizeof(Attr), target_vertex_count));
