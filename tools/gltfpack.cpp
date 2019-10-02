@@ -841,18 +841,21 @@ void simplifyMesh(Mesh& mesh, float threshold, bool aggressive)
 
 	size_t vertex_count = mesh.streams[0].data.size();
 
-	size_t target_index_count = mesh.indices.size() * threshold;
+	size_t target_index_count = size_t(double(mesh.indices.size() / 3) * threshold) * 3;
 	float target_error = 1e-2f;
 
 	std::vector<unsigned int> indices(mesh.indices.size());
-	if (aggressive)
-		indices.resize(meshopt_simplifySloppy(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count));
-	else
-		indices.resize(meshopt_simplify(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count, target_error));
+	indices.resize(meshopt_simplify(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count, target_error));
 	mesh.indices.swap(indices);
 
 	// TODO: if the simplifier got stuck, reindex without normals/tangents and retry
-	// TODO: if the simplifier got stuck, use sloppy simplifier
+
+	// if the mesh is complex enough and the precise simplifier got "stuck", we'll try to simplify using the sloppy simplifier which is guaranteed to reach the target count
+	if (aggressive && mesh.indices.size() > 100 * 3 && mesh.indices.size() > target_index_count)
+	{
+		indices.resize(meshopt_simplifySloppy(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count));
+		mesh.indices.swap(indices);
+	}
 }
 
 void optimizeMesh(Mesh& mesh)
