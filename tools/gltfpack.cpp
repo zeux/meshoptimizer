@@ -880,13 +880,42 @@ void optimizeMesh(Mesh& mesh)
 	}
 }
 
+void simplifyPointMesh(Mesh& mesh, float threshold)
+{
+	if (threshold >= 1)
+		return;
+
+	const Stream* positions = getPositionStream(mesh);
+	if (!positions)
+		return;
+
+	size_t vertex_count = mesh.streams[0].data.size();
+
+	size_t target_vertex_count = size_t(double(vertex_count) * threshold);
+
+	std::vector<unsigned int> indices(target_vertex_count);
+	indices.resize(meshopt_simplifyPoints(&indices[0], positions->data[0].f, vertex_count, sizeof(Attr), target_vertex_count));
+
+	std::vector<Attr> scratch(indices.size());
+
+	for (size_t i = 0; i < mesh.streams.size(); ++i)
+	{
+		std::vector<Attr>& data = mesh.streams[i].data;
+
+		assert(data.size() == vertex_count);
+
+		for (size_t j = 0; j < indices.size(); ++j)
+			scratch[j] = data[indices[j]];
+
+		data = scratch;
+	}
+}
+
 void sortPointMesh(Mesh& mesh)
 {
 	const Stream* positions = getPositionStream(mesh);
 	if (!positions)
 		return;
-
-	assert(mesh.indices.empty());
 
 	size_t vertex_count = mesh.streams[0].data.size();
 
@@ -2973,6 +3002,8 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		switch (mesh.type)
 		{
 		case cgltf_primitive_type_points:
+			assert(mesh.indices.empty());
+			simplifyPointMesh(mesh, settings.simplify_threshold);
 			sortPointMesh(mesh);
 			break;
 
