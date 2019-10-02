@@ -80,6 +80,9 @@ struct Settings
 
 	bool keep_named;
 
+	float simplify_threshold;
+	bool simplify_aggressive;
+
 	bool compress;
 	int verbose;
 };
@@ -827,6 +830,31 @@ const Stream* getPositionStream(const Mesh& mesh)
 	return 0;
 }
 
+void simplifyMesh(Mesh& mesh, float threshold, bool aggressive)
+{
+	if (threshold >= 1)
+		return;
+
+	const Stream* positions = getPositionStream(mesh);
+	if (!positions)
+		return;
+
+	size_t vertex_count = mesh.streams[0].data.size();
+
+	size_t target_index_count = mesh.indices.size() * threshold;
+	float target_error = 1e-2f;
+
+	std::vector<unsigned int> indices(mesh.indices.size());
+	if (aggressive)
+		indices.resize(meshopt_simplifySloppy(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count));
+	else
+		indices.resize(meshopt_simplify(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count, target_error));
+	mesh.indices.swap(indices);
+
+	// TODO: if the simplifier got stuck, reindex without normals/tangents and retry
+	// TODO: if the simplifier got stuck, use sloppy simplifier
+}
+
 void optimizeMesh(Mesh& mesh)
 {
 	size_t vertex_count = mesh.streams[0].data.size();
@@ -835,9 +863,7 @@ void optimizeMesh(Mesh& mesh)
 
 	std::vector<unsigned int> remap(vertex_count);
 	size_t unique_vertices = meshopt_optimizeVertexFetchRemap(&remap[0], &mesh.indices[0], mesh.indices.size(), vertex_count);
-
-	assert(unique_vertices == vertex_count);
-	(void)unique_vertices;
+	assert(unique_vertices <= vertex_count);
 
 	meshopt_remapIndexBuffer(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &remap[0]);
 
@@ -846,6 +872,7 @@ void optimizeMesh(Mesh& mesh)
 		assert(mesh.streams[i].data.size() == vertex_count);
 
 		meshopt_remapVertexBuffer(&mesh.streams[i].data[0], &mesh.streams[i].data[0], vertex_count, sizeof(Attr), &remap[0]);
+		mesh.streams[i].data.resize(unique_vertices);
 	}
 }
 
@@ -2926,6 +2953,7 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 		case cgltf_primitive_type_triangles:
 			reindexMesh(mesh);
+			simplifyMesh(mesh, settings.simplify_threshold, settings.simplify_aggressive);
 			optimizeMesh(mesh);
 			break;
 
@@ -3560,6 +3588,7 @@ int main(int argc, char** argv)
 	settings.tex_bits = 12;
 	settings.nrm_bits = 8;
 	settings.anim_freq = 30;
+	settings.simplify_threshold = 1.f;
 
 	const char* input = 0;
 	const char* output = 0;
@@ -3597,6 +3626,14 @@ int main(int argc, char** argv)
 		else if (strcmp(arg, "-kn") == 0)
 		{
 			settings.keep_named = true;
+		}
+		else if (strcmp(arg, "-si") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		{
+			settings.simplify_threshold = atof(argv[++i]);
+		}
+		else if (strcmp(arg, "-sa") == 0)
+		{
+			settings.simplify_aggressive = true;
 		}
 		else if (strcmp(arg, "-i") == 0 && i + 1 < argc && !input)
 		{
@@ -3659,6 +3696,8 @@ int main(int argc, char** argv)
 		fprintf(stderr, "-af N: resample animations at N Hz (default: 30)\n");
 		fprintf(stderr, "-ac: keep constant animation tracks even if they don't modify the node transform\n");
 		fprintf(stderr, "-kn: keep named nodes and meshes attached to named nodes so that named nodes can be transformed externally\n");
+		fprintf(stderr, "-si R: simplify meshes to achieve the ratio R (default: 1; R should be between 0 and 1)\n");
+		fprintf(stderr, "-sa: aggressively simplify to the target ratio disregarding quality\n");
 		fprintf(stderr, "-c: produce compressed glb files\n");
 		fprintf(stderr, "-v: verbose output\n");
 		fprintf(stderr, "-h: display this help and exit\n");
