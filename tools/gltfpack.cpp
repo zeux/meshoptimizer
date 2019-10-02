@@ -2857,7 +2857,23 @@ void writeLight(std::string& json, const cgltf_light& light)
 	append(json, "}");
 }
 
-void printStats(const std::vector<BufferView>& views, BufferView::Kind kind, const char* name)
+void printMeshStats(const std::vector<Mesh>& meshes, const char* name)
+{
+	size_t triangles = 0;
+	size_t vertices = 0;
+
+	for (size_t i = 0; i < meshes.size(); ++i)
+	{
+		const Mesh& mesh = meshes[i];
+
+		triangles += mesh.indices.size() / 3;
+		vertices += mesh.streams.empty() ? 0 : mesh.streams[0].data.size();
+	}
+
+	printf("%s: %d triangles, %d vertices\n", name, int(triangles), int(vertices));
+}
+
+void printAttributeStats(const std::vector<BufferView>& views, BufferView::Kind kind, const char* name)
 {
 	for (size_t i = 0; i < views.size(); ++i)
 	{
@@ -2941,6 +2957,11 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 	markNeededMaterials(data, materials, meshes);
 
+	if (settings.verbose)
+	{
+		printMeshStats(meshes, "input");
+	}
+
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
 		Mesh& mesh = meshes[i];
@@ -2964,18 +2985,7 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 	if (settings.verbose)
 	{
-		size_t triangles = 0;
-		size_t vertices = 0;
-
-		for (size_t i = 0; i < meshes.size(); ++i)
-		{
-			const Mesh& mesh = meshes[i];
-
-			triangles += mesh.indices.size() / 3;
-			vertices += mesh.streams.empty() ? 0 : mesh.streams[0].data.size();
-		}
-
-		printf("meshes: %d triangles, %d vertices\n", int(triangles), int(vertices));
+		printMeshStats(meshes, "output");
 	}
 
 	QuantizationParams qp = prepareQuantization(meshes, settings);
@@ -3424,9 +3434,9 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 	if (settings.verbose > 1)
 	{
-		printStats(views, BufferView::Kind_Vertex, "vertex");
-		printStats(views, BufferView::Kind_Index, "index");
-		printStats(views, BufferView::Kind_Keyframe, "keyframe");
+		printAttributeStats(views, BufferView::Kind_Vertex, "vertex");
+		printAttributeStats(views, BufferView::Kind_Index, "index");
+		printAttributeStats(views, BufferView::Kind_Keyframe, "keyframe");
 	}
 }
 
