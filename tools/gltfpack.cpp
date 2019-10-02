@@ -3680,7 +3680,7 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-si") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.simplify_threshold = atof(argv[++i]);
+			settings.simplify_threshold = float(atof(argv[++i]));
 		}
 		else if (strcmp(arg, "-sa") == 0)
 		{
