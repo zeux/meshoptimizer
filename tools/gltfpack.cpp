@@ -848,10 +848,11 @@ void simplifyMesh(Mesh& mesh, float threshold, bool aggressive)
 	indices.resize(meshopt_simplify(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count, target_error));
 	mesh.indices.swap(indices);
 
-	// TODO: if the simplifier got stuck, reindex without normals/tangents and retry
+	// Note: if the simplifier got stuck, we can try to reindex without normals/tangents and retry
+	// For now we simply fall back to aggressive simplifier instead
 
 	// if the mesh is complex enough and the precise simplifier got "stuck", we'll try to simplify using the sloppy simplifier which is guaranteed to reach the target count
-	if (aggressive && mesh.indices.size() > 100 * 3 && mesh.indices.size() > target_index_count)
+	if (aggressive && target_index_count > 50 * 3 && mesh.indices.size() > target_index_count)
 	{
 		indices.resize(meshopt_simplifySloppy(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count));
 		mesh.indices.swap(indices);
