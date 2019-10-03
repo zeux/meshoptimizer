@@ -16,13 +16,12 @@ var MESHOPT_compression = /** @class */ (function () {
     };
     /** @hidden */
     MESHOPT_compression.prototype.loadBufferViewAsync = function (context, bufferView) {
-        var _this = this;
         if (bufferView.extensions && bufferView.extensions[NAME]) {
             if (bufferView._decoded) {
                 return bufferView._decoded;
             }
-            var view = _this._loader.loadBufferViewAsync(context, bufferView);
-            var decoder = _this._decoder;
+            var view = this._loader.loadBufferViewAsync(context, bufferView);
+            var decoder = this._decoder;
             bufferView._decoded = Promise.all([view, decoder.ready]).then(function (res) {
                 var source = res[0];
                 var extensionDef = bufferView.extensions[NAME];

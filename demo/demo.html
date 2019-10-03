@@ -7,6 +7,7 @@
 
         <script src="https://preview.babylonjs.com/babylon.js"></script>
         <script src="https://preview.babylonjs.com/loaders/babylon.glTF2FileLoader.js"></script>
+        <script src="babylon.glTF2FileLoader.js"></script>
 
         <script src="babylon.MESHOPT_compression.js"></script>
         <script src="../js/meshopt_decoder.js"></script>
@@ -37,18 +38,16 @@
         var createScene = function () {
             var scene = new BABYLON.Scene(engine);
         
-            //Adding a light
             var light = new BABYLON.HemisphericLight();
         
-            //Adding an Arc Rotate Camera
             var camera = new BABYLON.ArcRotateCamera("Camera", 0, 0.8, 10, BABYLON.Vector3.Zero(), scene);
             camera.attachControl(canvas, false);
         
-            // The first parameter can be used to specify which mesh to import. Here we import all meshes
             BABYLON.SceneLoader.Append("", "pirate.glb", scene, function (newMeshes) {
                 scene.activeCamera = null;
                 scene.createDefaultCameraOrLight(true);
                 scene.activeCamera.attachControl(canvas, false);
+                scene.activeCamera.alpha = Math.PI / 2;
             });
         
             return scene;
