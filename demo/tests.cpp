@@ -301,11 +301,15 @@ static void customAllocator()
 	meshopt_optimizeVertexFetch(vb, ib, 3, vb, 3, 12);
 	assert(allocCount == 3 && freeCount == 3);
 
+	// ... plus one for IndexAdapter
+	meshopt_optimizeVertexFetch(vb, ibs, 3, vb, 3, 12);
+	assert(allocCount == 6 && freeCount == 6);
+
 	meshopt_setAllocator(operator new, operator delete);
 
 	// customAlloc & customFree should not get called anymore
 	meshopt_optimizeVertexFetch(vb, ib, 3, vb, 3, 12);
-	assert(allocCount == 3 && freeCount == 3);
+	assert(allocCount == 6 && freeCount == 6);
 }
 
 static void emptyMesh()
