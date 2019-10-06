@@ -315,6 +315,23 @@ static void emptyMesh()
 	meshopt_optimizeOverdraw(0, 0, 0, 0, 0, 12, 1.f);
 }
 
+static void simplifyStuck()
+{
+	// tetrahedron can't be simplified due to collapse error restrictions
+	float vb1[] = {0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1};
+	unsigned int ib1[] = {0, 1, 2, 0, 2, 3, 0, 3, 1, 2, 1, 3};
+
+	assert(meshopt_simplify(ib1, ib1, 12, vb1, 4, 12, 6, 1e-3f) == 12);
+
+	// 5-vertex strip can't be simplified due to topology restriction since middle triangle has flipped winding
+	float vb2[] = {0, 0, 0, 1, 0, 0, 2, 0, 0, 0.5f, 1, 0, 1.5f, 1, 0};
+	unsigned int ib2[] = {0, 1, 3, 3, 1, 4, 1, 2, 4}; // ok
+	unsigned int ib3[] = {0, 1, 3, 1, 3, 4, 1, 2, 4}; // flipped
+
+	assert(meshopt_simplify(ib2, ib2, 9, vb2, 5, 12, 6, 1e-3f) == 6);
+	assert(meshopt_simplify(ib3, ib3, 9, vb2, 5, 12, 6, 1e-3f) == 9);
+}
+
 static void simplifySloppyStuck()
 {
 	const float vb[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -356,6 +373,7 @@ void runTests()
 
 	emptyMesh();
 
+	simplifyStuck();
 	simplifySloppyStuck();
 	simplifyPointsStuck();
 }
