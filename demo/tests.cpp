@@ -315,6 +315,26 @@ static void emptyMesh()
 	meshopt_optimizeOverdraw(0, 0, 0, 0, 0, 12, 1.f);
 }
 
+static void simplifySloppyStuck()
+{
+	const float vb[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+	const unsigned int ib[] = {0, 1, 2, 0, 1, 2};
+
+	// simplifying down to 0 triangles results in 0 immediately
+	assert(meshopt_simplifySloppy(0, ib, 3, vb, 3, 12, 0) == 0);
+
+	// simplifying down to 2 triangles given that all triangles are degenerate results in 0 as well
+	assert(meshopt_simplifySloppy(0, ib, 6, vb, 3, 12, 6) == 0);
+}
+
+static void simplifyPointsStuck()
+{
+	const float vb[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+	// simplifying down to 0 points results in 0 immediately
+	assert(meshopt_simplifyPoints(0, vb, 3, 12, 0) == 0);
+}
+
 void runTests()
 {
 	decodeIndexV0();
@@ -335,4 +355,7 @@ void runTests()
 	customAllocator();
 
 	emptyMesh();
+
+	simplifySloppyStuck();
+	simplifyPointsStuck();
 }
