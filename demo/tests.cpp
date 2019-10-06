@@ -1,6 +1,7 @@
 #include "../src/meshoptimizer.h"
 
 #include <assert.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <vector>
@@ -261,6 +262,59 @@ static void clusterBoundsDegenerate()
 	assert(bounds2.center[2] - bounds2.radius <= 0 && bounds2.center[2] + bounds2.radius >= 1);
 }
 
+static size_t allocCount;
+static size_t freeCount;
+
+static void* customAlloc(size_t size)
+{
+	allocCount++;
+
+	return malloc(size);
+}
+
+static void customFree(void* ptr)
+{
+	freeCount++;
+
+	free(ptr);
+}
+
+static void customAllocator()
+{
+	meshopt_setAllocator(customAlloc, customFree);
+
+	assert(allocCount == 0 && freeCount == 0);
+
+	float vb[] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+	unsigned int ib[] = {0, 1, 2};
+	unsigned short ibs[] = {0, 1, 2};
+
+	// meshopt_computeClusterBounds doesn't allocate
+	meshopt_computeClusterBounds(ib, 3, vb, 3, 12);
+	assert(allocCount == 0 && freeCount == 0);
+
+	// ... unless IndexAdapter is used
+	meshopt_computeClusterBounds(ibs, 3, vb, 3, 12);
+	assert(allocCount == 1 && freeCount == 1);
+
+	// meshopt_optimizeVertexFetch allocates internal remap table and temporary storage for in-place remaps
+	meshopt_optimizeVertexFetch(vb, ib, 3, vb, 3, 12);
+	assert(allocCount == 3 && freeCount == 3);
+
+	meshopt_setAllocator(operator new, operator delete);
+
+	// customAlloc & customFree should not get called anymore
+	meshopt_optimizeVertexFetch(vb, ib, 3, vb, 3, 12);
+	assert(allocCount == 3 && freeCount == 3);
+}
+
+static void emptyMesh()
+{
+	meshopt_optimizeVertexCache(0, 0, 0, 0);
+	meshopt_optimizeVertexCacheFifo(0, 0, 0, 0, 16);
+	meshopt_optimizeOverdraw(0, 0, 0, 0, 0, 12, 1.f);
+}
+
 void runTests()
 {
 	decodeIndexV0();
@@ -277,4 +331,8 @@ void runTests()
 	decodeVertexRejectMalformedHeaders();
 
 	clusterBoundsDegenerate();
+
+	customAllocator();
+
+	emptyMesh();
 }
