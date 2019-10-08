@@ -84,6 +84,8 @@ struct Settings
 	bool simplify_aggressive;
 
 	bool compress;
+	bool fallback;
+
 	int verbose;
 };
 
@@ -2952,7 +2954,7 @@ void printAttributeStats(const std::vector<BufferView>& views, BufferView::Kind 
 	}
 }
 
-void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings, std::string& json, std::string& bin)
+void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings, std::string& json, std::string& bin, std::string& fallback)
 {
 	if (settings.verbose)
 	{
@@ -3357,6 +3359,7 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 	if (!views.empty())
 	{
+		(void)fallback; // TODO
 		append(json, ",\"bufferViews\":[");
 		for (size_t i = 0; i < views.size(); ++i)
 		{
@@ -3495,6 +3498,17 @@ bool requiresExtension(cgltf_data* data, const char* name)
 	return false;
 }
 
+const char* getBaseName(const char* path)
+{
+	const char* slash = strrchr(path, '/');
+	const char* backslash = strrchr(path, '\\');
+
+	const char* rs = slash ? slash + 1 : path;
+	const char* bs = backslash ? backslash + 1 : path;
+
+	return std::max(rs, bs);
+}
+
 int gltfpack(const char* input, const char* output, const Settings& settings)
 {
 	cgltf_data* data = 0;
@@ -3549,8 +3563,8 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 		return 2;
 	}
 
-	std::string json, bin;
-	process(data, meshes, settings, json, bin);
+	std::string json, bin, fallback;
+	process(data, meshes, settings, json, bin, fallback);
 
 	cgltf_free(data);
 
@@ -3566,39 +3580,63 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 		std::string binpath = output;
 		binpath.replace(binpath.size() - 5, 5, ".bin");
 
-		std::string binname = binpath;
-		std::string::size_type slash = binname.find_last_of("/\\");
-		if (slash != std::string::npos)
-			binname.erase(0, slash + 1);
+		std::string fbpath = output;
+		fbpath.replace(fbpath.size() - 5, 5, ".fallback.bin");
 
 		FILE* outjson = fopen(output, "wb");
 		FILE* outbin = fopen(binpath.c_str(), "wb");
-		if (!outjson || !outbin)
+		FILE* outfb = settings.fallback ? fopen(fbpath.c_str(), "wb") : NULL;
+		if (!outjson || !outbin || (!outfb && settings.fallback))
 		{
 			fprintf(stderr, "Error saving %s\n", output);
 			return 4;
 		}
 
-		fprintf(outjson, "{\"buffers\":[{\"uri\":\"%s\",\"byteLength\":%zu}],", binname.c_str(), bin.size());
+		fprintf(outjson, "{\"buffers\":[");
+		fprintf(outjson, "{\"uri\":\"%s\",\"byteLength\":%zu}", getBaseName(binpath.c_str()), bin.size());
+		if (settings.fallback)
+			fprintf(outjson, ",{\"uri\":\"%s\",\"byteLength\":%zu}", getBaseName(fbpath.c_str()), fallback.size());
+		fprintf(outjson, "],");
 		fwrite(json.c_str(), json.size(), 1, outjson);
 		fprintf(outjson, "}");
 
 		fwrite(bin.c_str(), bin.size(), 1, outbin);
 
+		if (settings.fallback)
+			fwrite(fallback.c_str(), fallback.size(), 1, outfb);
+
 		fclose(outjson);
 		fclose(outbin);
+		if (outfb)
+			fclose(outfb);
 	}
 	else if (oext && (strcmp(oext, ".glb") == 0 || strcmp(oext, ".GLB") == 0))
 	{
+		std::string fbpath = output;
+		fbpath.replace(fbpath.size() - 4, 4, ".fallback.bin");
+
 		FILE* out = fopen(output, "wb");
-		if (!out)
+		FILE* outfb = settings.fallback ? fopen(fbpath.c_str(), "wb") : NULL;
+		if (!out || (!outfb && settings.fallback))
 		{
 			fprintf(stderr, "Error saving %s\n", output);
 			return 4;
 		}
 
-		char bufferspec[64];
-		sprintf(bufferspec, "{\"buffers\":[{\"byteLength\":%zu}],", bin.size());
+		std::string bufferspec;
+		append(bufferspec, "{\"buffers\":[");
+		append(bufferspec, "{\"byteLength\":");
+		append(bufferspec, bin.size());
+		append(bufferspec, "}");
+		if (settings.fallback)
+		{
+			append(bufferspec, ",{\"uri\":\"");
+			append(bufferspec, getBaseName(fbpath.c_str()));
+			append(bufferspec, "\",\"byteLength\":");
+			append(bufferspec, fallback.size());
+			append(bufferspec, "}");
+		}
+		append(bufferspec, "],");
 
 		json.insert(0, bufferspec);
 		json.push_back('}');
@@ -3621,7 +3659,12 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 		writeU32(out, 0x004E4942);
 		fwrite(bin.c_str(), bin.size(), 1, out);
 
+		if (settings.fallback)
+			fwrite(fallback.c_str(), fallback.size(), 1, outfb);
+
 		fclose(out);
+		if (outfb)
+			fclose(outfb);
 	}
 	else
 	{
@@ -3697,6 +3740,11 @@ int main(int argc, char** argv)
 		else if (strcmp(arg, "-c") == 0)
 		{
 			settings.compress = true;
+		}
+		else if (strcmp(arg, "-cf") == 0)
+		{
+			settings.compress = true;
+			settings.fallback = true;
 		}
 		else if (strcmp(arg, "-v") == 0)
 		{
