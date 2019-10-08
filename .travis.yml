@@ -20,6 +20,9 @@ matrix:
       env:
         - TARGET="Visual Studio 15 2017 Win64"
 
+before_script:
+  - if [[ "$TRAVIS_COMPILER" == "gcc" ]]; then sudo apt install g++; fi
+
 script:
   - if [[ "$TRAVIS_COMPILER" == "gcc" ]]; then make -j2 config=coverage test; fi
   - if [[ "$TRAVIS_COMPILER" == "clang" ]]; then make -j2 config=sanitize test; fi
