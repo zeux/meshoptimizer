@@ -6,6 +6,9 @@ matrix:
       compiler: gcc
     - os: linux
       compiler: clang
+    - os: linux
+      compiler: gcc
+      arch: arm64
     - os: osx
       compiler: clang
     - os: windows
@@ -16,6 +19,9 @@ matrix:
       compiler: cl
       env:
         - TARGET="Visual Studio 15 2017 Win64"
+
+before_script:
+  - if [[ "$TRAVIS_COMPILER" == "gcc" ]]; then sudo apt install g++; fi
 
 script:
   - if [[ "$TRAVIS_COMPILER" == "gcc" ]]; then make -j2 config=coverage test; fi
