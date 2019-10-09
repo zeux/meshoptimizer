@@ -2949,8 +2949,10 @@ void finalizeBufferViews(std::string& json, std::vector<BufferView>& views, std:
 			bin += view.data;
 		}
 
+		size_t raw_offset = (compression >= 0) ? fallback_offset : bin_offset;
+
 		comma(json);
-		writeBufferView(json, view.kind, count, view.stride, fallback_offset, view.data.size(), compression, bin_offset, bin.size() - bin_offset);
+		writeBufferView(json, view.kind, count, view.stride, raw_offset, view.data.size(), compression, bin_offset, bin.size() - bin_offset);
 
 		// record written bytes for statistics
 		view.bytes = bin.size() - bin_offset;
