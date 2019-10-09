@@ -1908,12 +1908,12 @@ void writeBufferView(std::string& json, BufferView::Kind kind, size_t count, siz
 		append(json, size_t(compressed_offset));
 		append(json, ",\"byteLength\":");
 		append(json, size_t(compressed_size));
+		append(json, ",\"byteStride\":");
+		append(json, stride);
 		append(json, ",\"mode\":");
 		append(json, size_t(compression));
 		append(json, ",\"count\":");
 		append(json, count);
-		append(json, ",\"byteStride\":");
-		append(json, stride);
 		append(json, "}}");
 	}
 	append(json, "}");
