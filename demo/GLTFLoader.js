@@ -1022,16 +1022,14 @@ THREE.GLTFLoader = ( function () {
 
 	}
 
-	GLTFMeshoptCompressionExtension.prototype.decodeBufferView = function ( bufferViewDef, buffer ) {
+	GLTFMeshoptCompressionExtension.prototype.decodeBufferView = function ( extensionDef, buffer ) {
 
 		var decoder = this.meshoptDecoder;
 
 		return decoder.ready.then( function () {
 
-			var extensionDef = bufferViewDef.extensions[ EXTENSIONS.MESHOPT_COMPRESSION ];
-
-			var byteOffset = bufferViewDef.byteOffset || 0;
-			var byteLength = bufferViewDef.byteLength || 0;
+			var byteOffset = extensionDef.byteOffset || 0;
+			var byteLength = extensionDef.byteLength || 0;
 
 			var count = extensionDef.count;
 			var stride = extensionDef.byteStride;
@@ -1933,10 +1931,11 @@ THREE.GLTFLoader = ( function () {
 		if ( bufferViewDef.extensions && bufferViewDef.extensions[ EXTENSIONS.MESHOPT_COMPRESSION ] ) {
 
 			var extension = this.extensions[ EXTENSIONS.MESHOPT_COMPRESSION ];
+			var extensionDef = bufferViewDef.extensions[ EXTENSIONS.MESHOPT_COMPRESSION ];
 
-			return this.getDependency( 'buffer', bufferViewDef.buffer ).then( function ( buffer ) {
+			return this.getDependency( 'buffer', extensionDef.buffer ).then( function ( buffer ) {
 
-				return extension.decodeBufferView( bufferViewDef, buffer );
+				return extension.decodeBufferView( extensionDef, buffer );
 
 			} );
 
