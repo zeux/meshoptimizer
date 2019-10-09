@@ -2913,7 +2913,7 @@ void writeLight(std::string& json, const cgltf_light& light)
 	append(json, "}");
 }
 
-void finalizeBufferViews(std::string& json, std::vector<BufferView>& views, std::string& bin, std::string& fallback, const Settings& settings)
+void finalizeBufferViews(std::string& json, std::vector<BufferView>& views, std::string& bin, std::string& fallback)
 {
 	for (size_t i = 0; i < views.size(); ++i)
 	{
@@ -2939,10 +2939,7 @@ void finalizeBufferViews(std::string& json, std::vector<BufferView>& views, std:
 				compression = 0;
 			}
 
-			if (settings.fallback)
-			{
-				fallback += view.data;
-			}
+			fallback += view.data;
 		}
 		else
 		{
@@ -3423,7 +3420,7 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	if (!views.empty())
 	{
 		std::string json_views;
-		finalizeBufferViews(json_views, views, bin, fallback, settings);
+		finalizeBufferViews(json_views, views, bin, fallback);
 
 		append(json, ",\"bufferViews\":[");
 		append(json, json_views);
