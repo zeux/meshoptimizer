@@ -3545,6 +3545,41 @@ const char* getBaseName(const char* path)
 	return std::max(rs, bs);
 }
 
+std::string getBufferSpec(const char* bin_path, size_t bin_size, const char* fallback_path, size_t fallback_size, bool fallback_ref)
+{
+	std::string json;
+	append(json, "\"buffers\":[");
+	append(json, "{");
+	if (bin_path)
+	{
+		append(json, "\"uri\":\"");
+		append(json, bin_path);
+		append(json, "\"");
+	}
+	comma(json);
+	append(json, "\"byteLength\":");
+	append(json, bin_size);
+	append(json, "}");
+	if (fallback_ref)
+	{
+		comma(json);
+		append(json, "{");
+		if (fallback_path)
+		{
+			append(json, "\"uri\":\"");
+			append(json, fallback_path);
+			append(json, "\"");
+		}
+		comma(json);
+		append(json, "\"byteLength\":");
+		append(json, fallback_size);
+		append(json, "}");
+	}
+	append(json, "]");
+
+	return json;
+}
+
 int gltfpack(const char* input, const char* output, const Settings& settings)
 {
 	cgltf_data* data = 0;
@@ -3628,11 +3663,11 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 			return 4;
 		}
 
-		fprintf(outjson, "{\"buffers\":[");
-		fprintf(outjson, "{\"uri\":\"%s\",\"byteLength\":%zu}", getBaseName(binpath.c_str()), bin.size());
-		if (settings.fallback)
-			fprintf(outjson, ",{\"uri\":\"%s\",\"byteLength\":%zu}", getBaseName(fbpath.c_str()), fallback.size());
-		fprintf(outjson, "],");
+		std::string bufferspec = getBufferSpec(getBaseName(binpath.c_str()), bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback.size(), settings.compress);
+
+		fprintf(outjson, "{");
+		fwrite(bufferspec.c_str(), bufferspec.size(), 1, outjson);
+		fprintf(outjson, ",");
 		fwrite(json.c_str(), json.size(), 1, outjson);
 		fprintf(outjson, "}");
 
@@ -3659,22 +3694,9 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 			return 4;
 		}
 
-		std::string bufferspec;
-		append(bufferspec, "{\"buffers\":[");
-		append(bufferspec, "{\"byteLength\":");
-		append(bufferspec, bin.size());
-		append(bufferspec, "}");
-		if (settings.fallback)
-		{
-			append(bufferspec, ",{\"uri\":\"");
-			append(bufferspec, getBaseName(fbpath.c_str()));
-			append(bufferspec, "\",\"byteLength\":");
-			append(bufferspec, fallback.size());
-			append(bufferspec, "}");
-		}
-		append(bufferspec, "],");
+		std::string bufferspec = getBufferSpec(NULL, bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback.size(), settings.compress);
 
-		json.insert(0, bufferspec);
+		json.insert(0, "{" + bufferspec + ",");
 		json.push_back('}');
 
 		while (json.size() % 4)
