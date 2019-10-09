@@ -2898,6 +2898,50 @@ void writeLight(std::string& json, const cgltf_light& light)
 	append(json, "}");
 }
 
+void finalizeBufferViews(std::string& json, std::vector<BufferView>& views, std::string& bin, std::string& fallback, const Settings& settings)
+{
+	for (size_t i = 0; i < views.size(); ++i)
+	{
+		BufferView& view = views[i];
+
+		size_t offset = bin.size();
+		size_t count = view.data.size() / view.stride;
+
+		int compression = -1;
+
+		if (view.compressed)
+		{
+			if (view.kind == BufferView::Kind_Index)
+			{
+				compressIndexStream(bin, view.data, count, view.stride);
+				compression = 1;
+			}
+			else
+			{
+				compressVertexStream(bin, view.data, count, view.stride);
+				compression = 0;
+			}
+
+			if (settings.fallback)
+			{
+				fallback += view.data;
+			}
+		}
+		else
+		{
+			bin += view.data;
+		}
+
+		comma(json);
+		writeBufferView(json, view.kind, count, view.stride, offset, bin.size() - offset, compression);
+
+		view.bytes = bin.size() - offset;
+
+		// align each bufferView by 4 bytes
+		bin.resize((bin.size() + 3) & ~3);
+	}
+}
+
 void printMeshStats(const std::vector<Mesh>& meshes, const char* name)
 {
 	size_t triangles = 0;
@@ -3344,7 +3388,7 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		append(json, "\"KHR_lights_punctual\"");
 	}
 	append(json, "]");
-	if (settings.compress)
+	if (settings.compress && !settings.fallback)
 	{
 		append(json, ",\"extensionsRequired\":[");
 		// Note: ideally we should include MESHOPT_quantized_geometry in the required extension list (regardless of compression)
@@ -3355,48 +3399,13 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		append(json, "]");
 	}
 
-	size_t bytes[BufferView::Kind_Count] = {};
-
 	if (!views.empty())
 	{
-		(void)fallback; // TODO
+		std::string json_views;
+		finalizeBufferViews(json_views, views, bin, fallback, settings);
+
 		append(json, ",\"bufferViews\":[");
-		for (size_t i = 0; i < views.size(); ++i)
-		{
-			BufferView& view = views[i];
-
-			size_t offset = bin.size();
-			size_t count = view.data.size() / view.stride;
-
-			int compression = -1;
-
-			if (view.compressed)
-			{
-				if (view.kind == BufferView::Kind_Index)
-				{
-					compressIndexStream(bin, view.data, count, view.stride);
-					compression = 1;
-				}
-				else
-				{
-					compressVertexStream(bin, view.data, count, view.stride);
-					compression = 0;
-				}
-			}
-			else
-			{
-				bin += view.data;
-			}
-
-			comma(json);
-			writeBufferView(json, view.kind, count, view.stride, offset, bin.size() - offset, compression);
-
-			view.bytes = bin.size() - offset;
-			bytes[view.kind] += view.bytes;
-
-			// align each bufferView by 4 bytes
-			bin.resize((bin.size() + 3) & ~3);
-		}
+		append(json, json_views);
 		append(json, "]");
 	}
 	if (!json_accessors.empty())
@@ -3469,6 +3478,14 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 	if (settings.verbose)
 	{
+		size_t bytes[BufferView::Kind_Count] = {};
+
+		for (size_t i = 0; i < views.size(); ++i)
+		{
+			BufferView& view = views[i];
+			bytes[view.kind] += view.bytes;
+		}
+
 		printf("output: %d nodes, %d meshes (%d primitives), %d materials\n", int(node_offset), int(mesh_offset), int(meshes.size()), int(material_offset));
 		printf("output: JSON %d bytes, buffers %d bytes\n", int(json.size()), int(bin.size()));
 		printf("output: buffers: vertex %d bytes, index %d bytes, skin %d bytes, time %d bytes, keyframe %d bytes, image %d bytes\n",
