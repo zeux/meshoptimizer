@@ -1872,13 +1872,23 @@ size_t getBufferView(std::vector<BufferView>& views, BufferView::Kind kind, int 
 	return views.size() - 1;
 }
 
-void writeBufferView(std::string& json, BufferView::Kind kind, size_t count, size_t stride, size_t bin_offset, size_t bin_size, int compression)
+void writeBufferView(std::string& json, BufferView::Kind kind, size_t count, size_t stride, size_t bin_offset, size_t bin_size, int compression, size_t compressed_offset, size_t compressed_size)
 {
-	append(json, "{\"buffer\":0");
+	assert(bin_size == count * stride);
+
+	// when compression is enabled, we store uncompressed data in buffer 1 and compressed data in buffer 0
+	// when compression is disabled, we store uncompressed data in buffer 0
+	size_t buffer = compression >= 0 ? 1 : 0;
+
+	append(json, "{\"buffer\":");
+	append(json, buffer);
+	if (bin_offset)
+	{
+		append(json, ",\"byteOffset\":");
+		append(json, bin_offset);
+	}
 	append(json, ",\"byteLength\":");
 	append(json, bin_size);
-	append(json, ",\"byteOffset\":");
-	append(json, bin_offset);
 	if (kind == BufferView::Kind_Vertex)
 	{
 		append(json, ",\"byteStride\":");
@@ -1893,7 +1903,12 @@ void writeBufferView(std::string& json, BufferView::Kind kind, size_t count, siz
 	{
 		append(json, ",\"extensions\":{");
 		append(json, "\"MESHOPT_compression\":{");
-		append(json, "\"mode\":");
+		append(json, "\"buffer\":0");
+		append(json, ",\"byteOffset\":");
+		append(json, size_t(compressed_offset));
+		append(json, ",\"byteLength\":");
+		append(json, size_t(compressed_size));
+		append(json, ",\"mode\":");
 		append(json, size_t(compression));
 		append(json, ",\"count\":");
 		append(json, count);
@@ -2904,7 +2919,9 @@ void finalizeBufferViews(std::string& json, std::vector<BufferView>& views, std:
 	{
 		BufferView& view = views[i];
 
-		size_t offset = bin.size();
+		size_t bin_offset = bin.size();
+		size_t fallback_offset = fallback.size();
+
 		size_t count = view.data.size() / view.stride;
 
 		int compression = -1;
@@ -2933,12 +2950,14 @@ void finalizeBufferViews(std::string& json, std::vector<BufferView>& views, std:
 		}
 
 		comma(json);
-		writeBufferView(json, view.kind, count, view.stride, offset, bin.size() - offset, compression);
+		writeBufferView(json, view.kind, count, view.stride, fallback_offset, view.data.size(), compression, bin_offset, bin.size() - bin_offset);
 
-		view.bytes = bin.size() - offset;
+		// record written bytes for statistics
+		view.bytes = bin.size() - bin_offset;
 
 		// align each bufferView by 4 bytes
 		bin.resize((bin.size() + 3) & ~3);
+		fallback.resize((fallback.size() + 3) & ~3);
 	}
 }
 
