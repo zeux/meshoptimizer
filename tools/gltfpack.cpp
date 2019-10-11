@@ -1882,11 +1882,8 @@ void writeBufferView(std::string& json, BufferView::Kind kind, size_t count, siz
 
 	append(json, "{\"buffer\":");
 	append(json, buffer);
-	if (bin_offset)
-	{
-		append(json, ",\"byteOffset\":");
-		append(json, bin_offset);
-	}
+	append(json, ",\"byteOffset\":");
+	append(json, bin_offset);
 	append(json, ",\"byteLength\":");
 	append(json, bin_size);
 	if (kind == BufferView::Kind_Vertex)
@@ -3572,6 +3569,10 @@ std::string getBufferSpec(const char* bin_path, size_t bin_size, const char* fal
 		comma(json);
 		append(json, "\"byteLength\":");
 		append(json, fallback_size);
+		append(json, ",\"extensions\":{");
+		append(json, "\"MESHOPT_compression\":{");
+		append(json, "\"fallback\":true");
+		append(json, "}}");
 		append(json, "}");
 	}
 	append(json, "]");
