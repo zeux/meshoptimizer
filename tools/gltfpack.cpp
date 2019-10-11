@@ -2213,6 +2213,12 @@ void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes)
 			{
 				ni.animated_paths |= (1 << channel.target_path);
 			}
+			else if (channel.target_path == cgltf_animation_path_type_weights)
+			{
+				// we currently preserve constant weight tracks because the usecase is very rare and
+				// isTrackConstant doesn't return the full set of weights to compare against
+				ni.animated_paths |= (1 << channel.target_path);
+			}
 			else
 			{
 				Attr base = {};
@@ -2228,10 +2234,9 @@ void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes)
 				case cgltf_animation_path_type_scale:
 					memcpy(base.f, channel.target_node->scale, 3 * sizeof(float));
 					break;
-				default:;
+				default:
+					assert(!"Unknown target path");
 				}
-
-				// TODO: what about cgltf_animation_path_type_weights?
 
 				const float tolerance = 1e-3f;
 
