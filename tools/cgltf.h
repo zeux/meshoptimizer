@@ -1641,9 +1641,7 @@ cgltf_bool cgltf_accessor_read_float(const cgltf_accessor* accessor, cgltf_size 
 	}
 	if (accessor->buffer_view == NULL)
 	{
-		for (cgltf_size index = 0; index < element_size; index++) {
-			out[index] = 0;
-		}
+		memset(out, 0, element_size * sizeof(cgltf_float));
 		return 1;
 	}
 	cgltf_size offset = accessor->offset + accessor->buffer_view->offset;
