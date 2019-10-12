@@ -84,6 +84,8 @@ struct Settings
 	bool simplify_aggressive;
 
 	bool compress;
+	bool fallback;
+
 	int verbose;
 };
 
@@ -1870,13 +1872,20 @@ size_t getBufferView(std::vector<BufferView>& views, BufferView::Kind kind, int 
 	return views.size() - 1;
 }
 
-void writeBufferView(std::string& json, BufferView::Kind kind, size_t count, size_t stride, size_t bin_offset, size_t bin_size, int compression)
+void writeBufferView(std::string& json, BufferView::Kind kind, size_t count, size_t stride, size_t bin_offset, size_t bin_size, int compression, size_t compressed_offset, size_t compressed_size)
 {
-	append(json, "{\"buffer\":0");
-	append(json, ",\"byteLength\":");
-	append(json, bin_size);
+	assert(bin_size == count * stride);
+
+	// when compression is enabled, we store uncompressed data in buffer 1 and compressed data in buffer 0
+	// when compression is disabled, we store uncompressed data in buffer 0
+	size_t buffer = compression >= 0 ? 1 : 0;
+
+	append(json, "{\"buffer\":");
+	append(json, buffer);
 	append(json, ",\"byteOffset\":");
 	append(json, bin_offset);
+	append(json, ",\"byteLength\":");
+	append(json, bin_size);
 	if (kind == BufferView::Kind_Vertex)
 	{
 		append(json, ",\"byteStride\":");
@@ -1891,12 +1900,17 @@ void writeBufferView(std::string& json, BufferView::Kind kind, size_t count, siz
 	{
 		append(json, ",\"extensions\":{");
 		append(json, "\"MESHOPT_compression\":{");
-		append(json, "\"mode\":");
+		append(json, "\"buffer\":0");
+		append(json, ",\"byteOffset\":");
+		append(json, size_t(compressed_offset));
+		append(json, ",\"byteLength\":");
+		append(json, size_t(compressed_size));
+		append(json, ",\"byteStride\":");
+		append(json, stride);
+		append(json, ",\"mode\":");
 		append(json, size_t(compression));
 		append(json, ",\"count\":");
 		append(json, count);
-		append(json, ",\"byteStride\":");
-		append(json, stride);
 		append(json, "}}");
 	}
 	append(json, "}");
@@ -2896,6 +2910,53 @@ void writeLight(std::string& json, const cgltf_light& light)
 	append(json, "}");
 }
 
+void finalizeBufferViews(std::string& json, std::vector<BufferView>& views, std::string& bin, std::string& fallback)
+{
+	for (size_t i = 0; i < views.size(); ++i)
+	{
+		BufferView& view = views[i];
+
+		size_t bin_offset = bin.size();
+		size_t fallback_offset = fallback.size();
+
+		size_t count = view.data.size() / view.stride;
+
+		int compression = -1;
+
+		if (view.compressed)
+		{
+			if (view.kind == BufferView::Kind_Index)
+			{
+				compressIndexStream(bin, view.data, count, view.stride);
+				compression = 1;
+			}
+			else
+			{
+				compressVertexStream(bin, view.data, count, view.stride);
+				compression = 0;
+			}
+
+			fallback += view.data;
+		}
+		else
+		{
+			bin += view.data;
+		}
+
+		size_t raw_offset = (compression >= 0) ? fallback_offset : bin_offset;
+
+		comma(json);
+		writeBufferView(json, view.kind, count, view.stride, raw_offset, view.data.size(), compression, bin_offset, bin.size() - bin_offset);
+
+		// record written bytes for statistics
+		view.bytes = bin.size() - bin_offset;
+
+		// align each bufferView by 4 bytes
+		bin.resize((bin.size() + 3) & ~3);
+		fallback.resize((fallback.size() + 3) & ~3);
+	}
+}
+
 void printMeshStats(const std::vector<Mesh>& meshes, const char* name)
 {
 	size_t triangles = 0;
@@ -2952,7 +3013,7 @@ void printAttributeStats(const std::vector<BufferView>& views, BufferView::Kind 
 	}
 }
 
-void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings, std::string& json, std::string& bin)
+void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings, std::string& json, std::string& bin, std::string& fallback)
 {
 	if (settings.verbose)
 	{
@@ -3342,7 +3403,7 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		append(json, "\"KHR_lights_punctual\"");
 	}
 	append(json, "]");
-	if (settings.compress)
+	if (settings.compress && !settings.fallback)
 	{
 		append(json, ",\"extensionsRequired\":[");
 		// Note: ideally we should include MESHOPT_quantized_geometry in the required extension list (regardless of compression)
@@ -3353,47 +3414,13 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		append(json, "]");
 	}
 
-	size_t bytes[BufferView::Kind_Count] = {};
-
 	if (!views.empty())
 	{
+		std::string json_views;
+		finalizeBufferViews(json_views, views, bin, fallback);
+
 		append(json, ",\"bufferViews\":[");
-		for (size_t i = 0; i < views.size(); ++i)
-		{
-			BufferView& view = views[i];
-
-			size_t offset = bin.size();
-			size_t count = view.data.size() / view.stride;
-
-			int compression = -1;
-
-			if (view.compressed)
-			{
-				if (view.kind == BufferView::Kind_Index)
-				{
-					compressIndexStream(bin, view.data, count, view.stride);
-					compression = 1;
-				}
-				else
-				{
-					compressVertexStream(bin, view.data, count, view.stride);
-					compression = 0;
-				}
-			}
-			else
-			{
-				bin += view.data;
-			}
-
-			comma(json);
-			writeBufferView(json, view.kind, count, view.stride, offset, bin.size() - offset, compression);
-
-			view.bytes = bin.size() - offset;
-			bytes[view.kind] += view.bytes;
-
-			// align each bufferView by 4 bytes
-			bin.resize((bin.size() + 3) & ~3);
-		}
+		append(json, json_views);
 		append(json, "]");
 	}
 	if (!json_accessors.empty())
@@ -3466,6 +3493,14 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 	if (settings.verbose)
 	{
+		size_t bytes[BufferView::Kind_Count] = {};
+
+		for (size_t i = 0; i < views.size(); ++i)
+		{
+			BufferView& view = views[i];
+			bytes[view.kind] += view.bytes;
+		}
+
 		printf("output: %d nodes, %d meshes (%d primitives), %d materials\n", int(node_offset), int(mesh_offset), int(meshes.size()), int(material_offset));
 		printf("output: JSON %d bytes, buffers %d bytes\n", int(json.size()), int(bin.size()));
 		printf("output: buffers: vertex %d bytes, index %d bytes, skin %d bytes, time %d bytes, keyframe %d bytes, image %d bytes\n",
@@ -3493,6 +3528,56 @@ bool requiresExtension(cgltf_data* data, const char* name)
 			return true;
 
 	return false;
+}
+
+const char* getBaseName(const char* path)
+{
+	const char* slash = strrchr(path, '/');
+	const char* backslash = strrchr(path, '\\');
+
+	const char* rs = slash ? slash + 1 : path;
+	const char* bs = backslash ? backslash + 1 : path;
+
+	return std::max(rs, bs);
+}
+
+std::string getBufferSpec(const char* bin_path, size_t bin_size, const char* fallback_path, size_t fallback_size, bool fallback_ref)
+{
+	std::string json;
+	append(json, "\"buffers\":[");
+	append(json, "{");
+	if (bin_path)
+	{
+		append(json, "\"uri\":\"");
+		append(json, bin_path);
+		append(json, "\"");
+	}
+	comma(json);
+	append(json, "\"byteLength\":");
+	append(json, bin_size);
+	append(json, "}");
+	if (fallback_ref)
+	{
+		comma(json);
+		append(json, "{");
+		if (fallback_path)
+		{
+			append(json, "\"uri\":\"");
+			append(json, fallback_path);
+			append(json, "\"");
+		}
+		comma(json);
+		append(json, "\"byteLength\":");
+		append(json, fallback_size);
+		append(json, ",\"extensions\":{");
+		append(json, "\"MESHOPT_compression\":{");
+		append(json, "\"fallback\":true");
+		append(json, "}}");
+		append(json, "}");
+	}
+	append(json, "]");
+
+	return json;
 }
 
 int gltfpack(const char* input, const char* output, const Settings& settings)
@@ -3549,8 +3634,8 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 		return 2;
 	}
 
-	std::string json, bin;
-	process(data, meshes, settings, json, bin);
+	std::string json, bin, fallback;
+	process(data, meshes, settings, json, bin, fallback);
 
 	cgltf_free(data);
 
@@ -3566,41 +3651,52 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 		std::string binpath = output;
 		binpath.replace(binpath.size() - 5, 5, ".bin");
 
-		std::string binname = binpath;
-		std::string::size_type slash = binname.find_last_of("/\\");
-		if (slash != std::string::npos)
-			binname.erase(0, slash + 1);
+		std::string fbpath = output;
+		fbpath.replace(fbpath.size() - 5, 5, ".fallback.bin");
 
 		FILE* outjson = fopen(output, "wb");
 		FILE* outbin = fopen(binpath.c_str(), "wb");
-		if (!outjson || !outbin)
+		FILE* outfb = settings.fallback ? fopen(fbpath.c_str(), "wb") : NULL;
+		if (!outjson || !outbin || (!outfb && settings.fallback))
 		{
 			fprintf(stderr, "Error saving %s\n", output);
 			return 4;
 		}
 
-		fprintf(outjson, "{\"buffers\":[{\"uri\":\"%s\",\"byteLength\":%zu}],", binname.c_str(), bin.size());
+		std::string bufferspec = getBufferSpec(getBaseName(binpath.c_str()), bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback.size(), settings.compress);
+
+		fprintf(outjson, "{");
+		fwrite(bufferspec.c_str(), bufferspec.size(), 1, outjson);
+		fprintf(outjson, ",");
 		fwrite(json.c_str(), json.size(), 1, outjson);
 		fprintf(outjson, "}");
 
 		fwrite(bin.c_str(), bin.size(), 1, outbin);
 
+		if (settings.fallback)
+			fwrite(fallback.c_str(), fallback.size(), 1, outfb);
+
 		fclose(outjson);
 		fclose(outbin);
+		if (outfb)
+			fclose(outfb);
 	}
 	else if (oext && (strcmp(oext, ".glb") == 0 || strcmp(oext, ".GLB") == 0))
 	{
+		std::string fbpath = output;
+		fbpath.replace(fbpath.size() - 4, 4, ".fallback.bin");
+
 		FILE* out = fopen(output, "wb");
-		if (!out)
+		FILE* outfb = settings.fallback ? fopen(fbpath.c_str(), "wb") : NULL;
+		if (!out || (!outfb && settings.fallback))
 		{
 			fprintf(stderr, "Error saving %s\n", output);
 			return 4;
 		}
 
-		char bufferspec[64];
-		sprintf(bufferspec, "{\"buffers\":[{\"byteLength\":%zu}],", bin.size());
+		std::string bufferspec = getBufferSpec(NULL, bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback.size(), settings.compress);
 
-		json.insert(0, bufferspec);
+		json.insert(0, "{" + bufferspec + ",");
 		json.push_back('}');
 
 		while (json.size() % 4)
@@ -3621,7 +3717,12 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 		writeU32(out, 0x004E4942);
 		fwrite(bin.c_str(), bin.size(), 1, out);
 
+		if (settings.fallback)
+			fwrite(fallback.c_str(), fallback.size(), 1, outfb);
+
 		fclose(out);
+		if (outfb)
+			fclose(outfb);
 	}
 	else
 	{
@@ -3698,6 +3799,11 @@ int main(int argc, char** argv)
 		{
 			settings.compress = true;
 		}
+		else if (strcmp(arg, "-cf") == 0)
+		{
+			settings.compress = true;
+			settings.fallback = true;
+		}
 		else if (strcmp(arg, "-v") == 0)
 		{
 			settings.verbose = 1;
@@ -3749,7 +3855,8 @@ int main(int argc, char** argv)
 		fprintf(stderr, "-kn: keep named nodes and meshes attached to named nodes so that named nodes can be transformed externally\n");
 		fprintf(stderr, "-si R: simplify meshes to achieve the ratio R (default: 1; R should be between 0 and 1)\n");
 		fprintf(stderr, "-sa: aggressively simplify to the target ratio disregarding quality\n");
-		fprintf(stderr, "-c: produce compressed glb files\n");
+		fprintf(stderr, "-c: produce compressed gltf/glb files\n");
+		fprintf(stderr, "-cf: produce compressed gltf/glb files with fallback for loaders that don't support compression\n");
 		fprintf(stderr, "-v: verbose output\n");
 		fprintf(stderr, "-h: display this help and exit\n");
 
