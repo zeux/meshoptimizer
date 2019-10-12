@@ -182,6 +182,30 @@ cgltf_accessor* getAccessor(const cgltf_attribute* attributes, size_t attribute_
 	return 0;
 }
 
+void readAccessor(std::vector<float>& data, const cgltf_accessor* accessor)
+{
+	assert(accessor->type == cgltf_type_scalar);
+
+	data.resize(accessor->count);
+	cgltf_accessor_unpack_floats(accessor, &data[0], data.size());
+}
+
+void readAccessor(std::vector<Attr>& data, const cgltf_accessor* accessor)
+{
+	size_t components = cgltf_num_components(accessor->type);
+
+	std::vector<float> temp(accessor->count * components);
+	cgltf_accessor_unpack_floats(accessor, &temp[0], temp.size());
+
+	data.resize(accessor->count);
+
+	for (size_t i = 0; i < accessor->count; ++i)
+	{
+		for (size_t k = 0; k < components && k < 4; ++k)
+			data[i].f[k] = temp[i * components + k];
+	}
+}
+
 void transformPosition(float* ptr, const float* transform)
 {
 	float x = ptr[0] * transform[0] + ptr[1] * transform[4] + ptr[2] * transform[8] + transform[12];
@@ -293,10 +317,7 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 				}
 
 				Stream s = {attr.type, attr.index};
-				s.data.resize(attr.data->count);
-
-				for (size_t i = 0; i < attr.data->count; ++i)
-					cgltf_accessor_read_float(attr.data, i, s.data[i].f, 4);
+				readAccessor(s.data, attr.data);
 
 				result.streams.push_back(s);
 			}
@@ -316,10 +337,7 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 					}
 
 					Stream s = {attr.type, attr.index, int(ti + 1)};
-					s.data.resize(attr.data->count);
-
-					for (size_t i = 0; i < attr.data->count; ++i)
-						cgltf_accessor_read_float(attr.data, i, s.data[i].f, 4);
+					readAccessor(s.data, attr.data);
 
 					result.streams.push_back(s);
 				}
@@ -1975,7 +1993,7 @@ float getDelta(const Attr& l, const Attr& r, cgltf_animation_path_type type)
 	}
 }
 
-bool isTrackConstant(const cgltf_animation_sampler& sampler, cgltf_animation_path_type type, cgltf_node* target_node)
+bool isTrackConstant(const cgltf_animation_sampler& sampler, cgltf_animation_path_type type, cgltf_node* target_node, Attr* out_first = 0)
 {
 	const float tolerance = 1e-3f;
 
@@ -1986,15 +2004,16 @@ bool isTrackConstant(const cgltf_animation_sampler& sampler, cgltf_animation_pat
 
 	assert(sampler.input->count * value_stride * components == sampler.output->count);
 
+	std::vector<Attr> output;
+	readAccessor(output, sampler.output);
+
 	for (size_t j = 0; j < components; ++j)
 	{
-		Attr first = {};
-		cgltf_accessor_read_float(sampler.output, j * value_stride + value_offset, first.f, 4);
+		Attr first = output[j * value_stride + value_offset];
 
 		for (size_t i = 1; i < sampler.input->count; ++i)
 		{
-			Attr attr = {};
-			cgltf_accessor_read_float(sampler.output, (i * components + j) * value_stride + value_offset, attr.f, 4);
+			const Attr& attr = output[(i * components + j) * value_stride + value_offset];
 
 			if (getDelta(first, attr, type) > tolerance)
 				return false;
@@ -2006,8 +2025,7 @@ bool isTrackConstant(const cgltf_animation_sampler& sampler, cgltf_animation_pat
 			{
 				for (int k = 0; k < 2; ++k)
 				{
-					Attr t = {};
-					cgltf_accessor_read_float(sampler.output, (i * components + j) * 3 + k * 2, t.f, 4);
+					const Attr& t = output[(i * components + j) * 3 + k * 2];
 
 					float error = fabsf(t.f[0]) + fabsf(t.f[1]) + fabsf(t.f[2]) + fabsf(t.f[3]);
 
@@ -2017,6 +2035,9 @@ bool isTrackConstant(const cgltf_animation_sampler& sampler, cgltf_animation_pat
 			}
 		}
 	}
+
+	if (out_first)
+		*out_first = output[value_offset];
 
 	return true;
 }
@@ -2107,6 +2128,11 @@ void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& s
 {
 	size_t components = (type == cgltf_animation_path_type_weights) ? target_node->mesh->primitives[0].targets_count : 1;
 
+	std::vector<float> input;
+	readAccessor(input, sampler.input);
+	std::vector<Attr> output;
+	readAccessor(output, sampler.output);
+
 	size_t cursor = 0;
 
 	for (int i = 0; i < frames; ++i)
@@ -2115,8 +2141,7 @@ void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& s
 
 		while (cursor + 1 < sampler.input->count)
 		{
-			float next_time = 0;
-			cgltf_accessor_read_float(sampler.input, cursor + 1, &next_time, 1);
+			float next_time = input[cursor + 1];
 
 			if (next_time > time)
 				break;
@@ -2126,10 +2151,8 @@ void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& s
 
 		if (cursor + 1 < sampler.input->count)
 		{
-			float cursor_time = 0;
-			float next_time = 0;
-			cgltf_accessor_read_float(sampler.input, cursor + 0, &cursor_time, 1);
-			cgltf_accessor_read_float(sampler.input, cursor + 1, &next_time, 1);
+			float cursor_time = input[cursor + 0];
+			float next_time = input[cursor + 1];
 
 			float range = next_time - cursor_time;
 			float inv_range = (range == 0.f) ? 0.f : 1.f / (next_time - cursor_time);
@@ -2141,32 +2164,25 @@ void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& s
 				{
 				case cgltf_interpolation_type_linear:
 				{
-					Attr v0 = {};
-					Attr v1 = {};
-					cgltf_accessor_read_float(sampler.output, (cursor + 0) * components + j, v0.f, 4);
-					cgltf_accessor_read_float(sampler.output, (cursor + 1) * components + j, v1.f, 4);
+					const Attr& v0 = output[(cursor + 0) * components + j];
+					const Attr& v1 = output[(cursor + 1) * components + j];
 					data.push_back(interpolateLinear(v0, v1, t, type));
 				}
 				break;
 
 				case cgltf_interpolation_type_step:
 				{
-					Attr v = {};
-					cgltf_accessor_read_float(sampler.output, cursor * components + j, v.f, 4);
+					const Attr& v = output[cursor * components + j];
 					data.push_back(v);
 				}
 				break;
 
 				case cgltf_interpolation_type_cubic_spline:
 				{
-					Attr v0 = {};
-					Attr b0 = {};
-					Attr a1 = {};
-					Attr v1 = {};
-					cgltf_accessor_read_float(sampler.output, (cursor * 3 + 1) * components + j, v0.f, 4);
-					cgltf_accessor_read_float(sampler.output, (cursor * 3 + 2) * components + j, b0.f, 4);
-					cgltf_accessor_read_float(sampler.output, (cursor * 3 + 3) * components + j, a1.f, 4);
-					cgltf_accessor_read_float(sampler.output, (cursor * 3 + 4) * components + j, v1.f, 4);
+					const Attr& v0 = output[(cursor * 3 + 1) * components + j];
+					const Attr& b0 = output[(cursor * 3 + 2) * components + j];
+					const Attr& a1 = output[(cursor * 3 + 3) * components + j];
+					const Attr& v1 = output[(cursor * 3 + 4) * components + j];
 					data.push_back(interpolateHermite(v0, b0, v1, a1, t, range, type));
 				}
 				break;
@@ -2182,8 +2198,7 @@ void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& s
 
 			for (size_t j = 0; j < components; ++j)
 			{
-				Attr v = {};
-				cgltf_accessor_read_float(sampler.output, offset * components + j, v.f, 4);
+				const Attr& v = output[offset * components + j];
 				data.push_back(v);
 			}
 		}
@@ -2207,8 +2222,15 @@ void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes)
 			NodeInfo& ni = nodes[channel.target_node - data->nodes];
 
 			// mark nodes that have animation tracks that change their base transform as animated
-			if (!isTrackConstant(sampler, channel.target_path, channel.target_node))
+			Attr first = {};
+			if (!isTrackConstant(sampler, channel.target_path, channel.target_node, &first))
 			{
+				ni.animated_paths |= (1 << channel.target_path);
+			}
+			else if (channel.target_path == cgltf_animation_path_type_weights)
+			{
+				// we currently preserve constant weight tracks because the usecase is very rare and
+				// isTrackConstant doesn't return the full set of weights to compare against
 				ni.animated_paths |= (1 << channel.target_path);
 			}
 			else
@@ -2226,11 +2248,9 @@ void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes)
 				case cgltf_animation_path_type_scale:
 					memcpy(base.f, channel.target_node->scale, 3 * sizeof(float));
 					break;
-				default:;
+				default:
+					assert(!"Unknown target path");
 				}
-
-				Attr first = {};
-				cgltf_accessor_read_float(sampler.output, 0, first.f, 4);
 
 				const float tolerance = 1e-3f;
 
