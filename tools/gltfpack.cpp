@@ -841,10 +841,10 @@ void reindexMesh(Mesh& mesh)
 	}
 }
 
-const Stream* getPositionStream(const Mesh& mesh)
+Stream* getStream(Mesh& mesh, cgltf_attribute_type type)
 {
 	for (size_t i = 0; i < mesh.streams.size(); ++i)
-		if (mesh.streams[i].type == cgltf_attribute_type_position)
+		if (mesh.streams[i].type == type)
 			return &mesh.streams[i];
 
 	return 0;
@@ -855,7 +855,7 @@ void simplifyMesh(Mesh& mesh, float threshold, bool aggressive)
 	if (threshold >= 1)
 		return;
 
-	const Stream* positions = getPositionStream(mesh);
+	const Stream* positions = getStream(mesh, cgltf_attribute_type_position);
 	if (!positions)
 		return;
 
@@ -903,12 +903,59 @@ void optimizeMesh(Mesh& mesh)
 	}
 }
 
+struct BoneInfluence
+{
+	float i;
+	float w;
+
+	bool operator<(const BoneInfluence& other) const
+	{
+		return i < other.i;
+	}
+};
+
+void sortBoneInfluences(Mesh& mesh)
+{
+	Stream* joints = getStream(mesh, cgltf_attribute_type_joints);
+	Stream* weights = getStream(mesh, cgltf_attribute_type_weights);
+
+	if (!joints || !weights)
+		return;
+
+	size_t vertex_count = mesh.streams[0].data.size();
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		Attr& ja = joints->data[i];
+		Attr& wa = weights->data[i];
+
+		BoneInfluence inf[4] = {};
+		int count = 0;
+
+		for (int k = 0; k < 4; ++k)
+			if (wa.f[k] > 0.f)
+			{
+				inf[count].i = ja.f[k];
+				inf[count].w = wa.f[k];
+				count++;
+			}
+
+		std::sort(inf, inf + count);
+
+		for (int k = 0; k < 4; ++k)
+		{
+			ja.f[k] = inf[k].i;
+			wa.f[k] = inf[k].w;
+		}
+	}
+}
+
 void simplifyPointMesh(Mesh& mesh, float threshold)
 {
 	if (threshold >= 1)
 		return;
 
-	const Stream* positions = getPositionStream(mesh);
+	const Stream* positions = getStream(mesh, cgltf_attribute_type_position);
 	if (!positions)
 		return;
 
@@ -939,7 +986,7 @@ void simplifyPointMesh(Mesh& mesh, float threshold)
 
 void sortPointMesh(Mesh& mesh)
 {
-	const Stream* positions = getPositionStream(mesh);
+	const Stream* positions = getStream(mesh, cgltf_attribute_type_position);
 	if (!positions)
 		return;
 
@@ -3098,6 +3145,7 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 			reindexMesh(mesh);
 			simplifyMesh(mesh, settings.simplify_threshold, settings.simplify_aggressive);
 			optimizeMesh(mesh);
+			sortBoneInfluences(mesh);
 			break;
 
 		default:
