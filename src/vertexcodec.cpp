@@ -406,7 +406,7 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 }
 #endif
 
-#if defined(SIMD_SSE) || defined(SIMD_NEON)
+#if defined(SIMD_SSE) || defined(SIMD_NEON) || defined(SIMD_WASM)
 static unsigned char kDecodeBytesGroupShuffle[256][8];
 static unsigned char kDecodeBytesGroupCount[256];
 
@@ -690,6 +690,47 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 #endif
 
 #ifdef SIMD_WASM
+#ifdef __wasm_unimplemented_simd128__
+static v128_t decodeShuffleMask(unsigned char mask0, unsigned char mask1)
+{
+	// TODO: 8b buffer overrun - should we use splat or extend buffers?
+	v128_t sm0 = wasm_v128_load(&kDecodeBytesGroupShuffle[mask0]);
+	v128_t sm1 = wasm_v128_load(&kDecodeBytesGroupShuffle[mask1]);
+	v128_t sm1off = wasm_i8x16_splat(kDecodeBytesGroupCount[mask0]); // TODO: use v8x16_load_splat
+
+	v128_t sm1r = wasm_i8x16_add(sm1, sm1off);
+
+	return wasm_v8x16_shuffle(sm0, sm1r, 0,1,2,3,4,5,6,7, 16,17,18,19,20,21,22,23);
+}
+
+static void wasmMoveMask(v128_t mask, unsigned char& mask0, unsigned char& mask1)
+{
+	v128_t m1 = wasm_v128_and(mask, wasm_i8x16_splat(1));
+
+	// TODO
+	mask0 = 0;
+	mask0 |= wasm_u8x16_extract_lane(m1, 0) << 7;
+	mask0 |= wasm_u8x16_extract_lane(m1, 1) << 6;
+	mask0 |= wasm_u8x16_extract_lane(m1, 2) << 5;
+	mask0 |= wasm_u8x16_extract_lane(m1, 3) << 4;
+	mask0 |= wasm_u8x16_extract_lane(m1, 4) << 3;
+	mask0 |= wasm_u8x16_extract_lane(m1, 5) << 2;
+	mask0 |= wasm_u8x16_extract_lane(m1, 6) << 1;
+	mask0 |= wasm_u8x16_extract_lane(m1, 7) << 0;
+
+	// TODO
+	mask1 = 0;
+	mask1 |= wasm_u8x16_extract_lane(m1, 8) << 7;
+	mask1 |= wasm_u8x16_extract_lane(m1, 9) << 6;
+	mask1 |= wasm_u8x16_extract_lane(m1, 10) << 5;
+	mask1 |= wasm_u8x16_extract_lane(m1, 11) << 4;
+	mask1 |= wasm_u8x16_extract_lane(m1, 12) << 3;
+	mask1 |= wasm_u8x16_extract_lane(m1, 13) << 2;
+	mask1 |= wasm_u8x16_extract_lane(m1, 14) << 1;
+	mask1 |= wasm_u8x16_extract_lane(m1, 15) << 0;
+}
+#endif
+
 static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int bitslog2)
 {
 #define READ() byte = *data++
@@ -709,6 +750,58 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		return data;
 	}
 
+#ifdef __wasm_unimplemented_simd128__
+	case 1:
+	{
+		// TODO: test 4b load splat
+		v128_t sel2 = wasm_v128_load(data);
+		v128_t rest = wasm_v128_load(data + 4);
+
+		v128_t sel22 = wasm_unpacklo_v8x16(wasm_i16x8_shr(sel2, 4), sel2);
+		v128_t sel2222 = wasm_unpacklo_v8x16(wasm_i16x8_shr(sel22, 2), sel22);
+		v128_t sel = wasm_v128_and(sel2222, wasm_i8x16_splat(3));
+
+		// TODO: branching on any(mask) may be worthwhile
+		v128_t mask = wasm_i8x16_eq(sel, wasm_i8x16_splat(3));
+
+		unsigned char mask0, mask1;
+		wasmMoveMask(mask, mask0, mask1);
+
+		v128_t shuf = decodeShuffleMask(mask0, mask1);
+
+		// TODO: test bitselect
+		v128_t result = wasm_v128_or(wasm_v8x16_swizzle(rest, shuf), wasm_v128_andnot(sel, mask));
+
+		wasm_v128_store(buffer, result);
+
+		return data + 4 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
+	}
+
+	case 2:
+	{
+		// TODO: test 8b load splat
+		v128_t sel4 = wasm_v128_load(data);
+		v128_t rest = wasm_v128_load(data + 8);
+
+		v128_t sel44 = wasm_unpacklo_v8x16(wasm_i16x8_shr(sel4, 4), sel4);
+		v128_t sel = wasm_v128_and(sel44, wasm_i8x16_splat(15));
+
+		// TODO: branching on any(mask) may be worthwhile
+		v128_t mask = wasm_i8x16_eq(sel, wasm_i8x16_splat(15));
+
+		unsigned char mask0, mask1;
+		wasmMoveMask(mask, mask0, mask1);
+
+		v128_t shuf = decodeShuffleMask(mask0, mask1);
+
+		// TODO: test bitselect
+		v128_t result = wasm_v128_or(wasm_v8x16_swizzle(rest, shuf), wasm_v128_andnot(sel, mask));
+
+		wasm_v128_store(buffer, result);
+
+		return data + 8 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
+	}
+#else
 	case 1:
 		data_var = data + 4;
 
@@ -734,6 +827,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		READ(), NEXT(4), NEXT(4);
 
 		return data_var;
+#endif
 
 	case 3:
 	{
@@ -1090,7 +1184,7 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 	decode = decodeVertexBlock;
 #endif
 
-#if defined(SIMD_SSE) || defined(SIMD_NEON)
+#if defined(SIMD_SSE) || defined(SIMD_NEON) || defined(SIMD_WASM)
 	assert(gDecodeBytesGroupInitialized);
 	(void)gDecodeBytesGroupInitialized;
 #endif
