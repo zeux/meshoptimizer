@@ -424,27 +424,6 @@ static __m128i decodeShuffleMask(unsigned char mask0, unsigned char mask1)
 	return _mm_unpacklo_epi64(sm0, sm1r);
 }
 
-static void transpose8(__m128i& x0, __m128i& x1, __m128i& x2, __m128i& x3)
-{
-	__m128i t0 = _mm_unpacklo_epi8(x0, x1);
-	__m128i t1 = _mm_unpackhi_epi8(x0, x1);
-	__m128i t2 = _mm_unpacklo_epi8(x2, x3);
-	__m128i t3 = _mm_unpackhi_epi8(x2, x3);
-
-	x0 = _mm_unpacklo_epi16(t0, t2);
-	x1 = _mm_unpackhi_epi16(t0, t2);
-	x2 = _mm_unpacklo_epi16(t1, t3);
-	x3 = _mm_unpackhi_epi16(t1, t3);
-}
-
-static __m128i unzigzag8(__m128i v)
-{
-	__m128i xl = _mm_sub_epi8(_mm_setzero_si128(), _mm_and_si128(v, _mm_set1_epi8(1)));
-	__m128i xr = _mm_and_si128(_mm_srli_epi16(v, 1), _mm_set1_epi8(127));
-
-	return _mm_xor_si128(xl, xr);
-}
-
 static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int bitslog2)
 {
 	switch (bitslog2)
@@ -511,9 +490,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 
 	case 3:
 	{
-		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data));
-
-		__m128i result = rest;
+		__m128i result = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data));
 
 		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
 
@@ -559,28 +536,6 @@ static void neonMoveMask(uint8x16_t mask, unsigned char& mask0, unsigned char& m
 	mask0 = vget_lane_u8(sum3, 0);
 	mask1 = vget_lane_u8(sum3, 1);
 #endif
-}
-
-static void transpose8(uint8x16_t& x0, uint8x16_t& x1, uint8x16_t& x2, uint8x16_t& x3)
-{
-	uint8x16x2_t t01 = vzipq_u8(x0, x1);
-	uint8x16x2_t t23 = vzipq_u8(x2, x3);
-
-	uint16x8x2_t x01 = vzipq_u16(vreinterpretq_u16_u8(t01.val[0]), vreinterpretq_u16_u8(t23.val[0]));
-	uint16x8x2_t x23 = vzipq_u16(vreinterpretq_u16_u8(t01.val[1]), vreinterpretq_u16_u8(t23.val[1]));
-
-	x0 = vreinterpretq_u8_u16(x01.val[0]);
-	x1 = vreinterpretq_u8_u16(x01.val[1]);
-	x2 = vreinterpretq_u8_u16(x23.val[0]);
-	x3 = vreinterpretq_u8_u16(x23.val[1]);
-}
-
-static uint8x16_t unzigzag8(uint8x16_t v)
-{
-	uint8x16_t xl = vreinterpretq_u8_s8(vnegq_s8(vreinterpretq_s8_u8(vandq_u8(v, vdupq_n_u8(1)))));
-	uint8x16_t xr = vshrq_n_u8(v, 1);
-
-	return veorq_u8(xl, xr);
 }
 
 static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int bitslog2)
@@ -639,9 +594,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 
 	case 3:
 	{
-		uint8x16_t rest = vld1q_u8(data);
-
-		uint8x16_t result = rest;
+		uint8x16_t result = vld1q_u8(data);
 
 		vst1q_u8(buffer, result);
 
@@ -652,6 +605,53 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		assert(!"Unexpected bit length"); // unreachable since bitslog2 is a 2-bit value
 		return data;
 	}
+}
+#endif
+
+#ifdef SIMD_SSE
+static void transpose8(__m128i& x0, __m128i& x1, __m128i& x2, __m128i& x3)
+{
+	__m128i t0 = _mm_unpacklo_epi8(x0, x1);
+	__m128i t1 = _mm_unpackhi_epi8(x0, x1);
+	__m128i t2 = _mm_unpacklo_epi8(x2, x3);
+	__m128i t3 = _mm_unpackhi_epi8(x2, x3);
+
+	x0 = _mm_unpacklo_epi16(t0, t2);
+	x1 = _mm_unpackhi_epi16(t0, t2);
+	x2 = _mm_unpacklo_epi16(t1, t3);
+	x3 = _mm_unpackhi_epi16(t1, t3);
+}
+
+static __m128i unzigzag8(__m128i v)
+{
+	__m128i xl = _mm_sub_epi8(_mm_setzero_si128(), _mm_and_si128(v, _mm_set1_epi8(1)));
+	__m128i xr = _mm_and_si128(_mm_srli_epi16(v, 1), _mm_set1_epi8(127));
+
+	return _mm_xor_si128(xl, xr);
+}
+#endif
+
+#ifdef SIMD_NEON
+static void transpose8(uint8x16_t& x0, uint8x16_t& x1, uint8x16_t& x2, uint8x16_t& x3)
+{
+	uint8x16x2_t t01 = vzipq_u8(x0, x1);
+	uint8x16x2_t t23 = vzipq_u8(x2, x3);
+
+	uint16x8x2_t x01 = vzipq_u16(vreinterpretq_u16_u8(t01.val[0]), vreinterpretq_u16_u8(t23.val[0]));
+	uint16x8x2_t x23 = vzipq_u16(vreinterpretq_u16_u8(t01.val[1]), vreinterpretq_u16_u8(t23.val[1]));
+
+	x0 = vreinterpretq_u8_u16(x01.val[0]);
+	x1 = vreinterpretq_u8_u16(x01.val[1]);
+	x2 = vreinterpretq_u8_u16(x23.val[0]);
+	x3 = vreinterpretq_u8_u16(x23.val[1]);
+}
+
+static uint8x16_t unzigzag8(uint8x16_t v)
+{
+	uint8x16_t xl = vreinterpretq_u8_s8(vnegq_s8(vreinterpretq_s8_u8(vandq_u8(v, vdupq_n_u8(1)))));
+	uint8x16_t xr = vshrq_n_u8(v, 1);
+
+	return veorq_u8(xl, xr);
 }
 #endif
 
