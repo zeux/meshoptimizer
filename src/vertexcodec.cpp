@@ -27,6 +27,10 @@
 #define SIMD_NEON
 #endif
 
+#if defined(__wasm_simd128__)
+#define SIMD_WASM
+#endif
+
 #ifdef SIMD_SSE
 #include <tmmintrin.h>
 #endif
@@ -41,6 +45,15 @@
 #else
 #include <arm_neon.h>
 #endif
+#endif
+
+#ifdef SIMD_WASM
+#include <wasm_simd128.h>
+#define wasm_v32x4_splat(v, i) wasm_v8x16_shuffle(v, v, 4*i,4*i+1,4*i+2,4*i+3, 4*i,4*i+1,4*i+2,4*i+3, 4*i,4*i+1,4*i+2,4*i+3, 4*i,4*i+1,4*i+2,4*i+3)
+#define wasm_unpacklo_v8x16(a, b) wasm_v8x16_shuffle(a, b, 0,16, 1,17, 2,18, 3,19, 4,20, 5,21, 6,22, 7,23)
+#define wasm_unpackhi_v8x16(a, b) wasm_v8x16_shuffle(a, b, 8,24, 9,25, 10,26, 11,27, 12,28, 13,29, 14,30, 15,31)
+#define wasm_unpacklo_v16x8(a, b) wasm_v8x16_shuffle(a, b, 0,1,16,17, 2,3,18,19, 4,5,20,21, 6,7,22,23)
+#define wasm_unpackhi_v16x8(a, b) wasm_v8x16_shuffle(a, b, 8,9,24,25, 10,11,26,27, 12,13,28,29, 14,15,30,31)
 #endif
 
 #ifndef TRACE
@@ -676,6 +689,71 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 }
 #endif
 
+#ifdef SIMD_WASM
+static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int bitslog2)
+{
+#define READ() byte = *data++
+#define NEXT(bits) enc = byte >> (8 - bits), byte <<= bits, encv = *data_var, *buffer++ = (enc == (1 << bits) - 1) ? encv : enc, data_var += (enc == (1 << bits) - 1)
+
+	unsigned char byte, enc, encv;
+	const unsigned char* data_var;
+
+	switch (bitslog2)
+	{
+	case 0:
+	{
+		v128_t result = wasm_i8x16_splat(0);
+
+		wasm_v128_store(buffer, result);
+
+		return data;
+	}
+
+	case 1:
+		data_var = data + 4;
+
+		// 4 groups with 4 2-bit values in each byte
+		READ(), NEXT(2), NEXT(2), NEXT(2), NEXT(2);
+		READ(), NEXT(2), NEXT(2), NEXT(2), NEXT(2);
+		READ(), NEXT(2), NEXT(2), NEXT(2), NEXT(2);
+		READ(), NEXT(2), NEXT(2), NEXT(2), NEXT(2);
+
+		return data_var;
+
+	case 2:
+		data_var = data + 8;
+
+		// 8 groups with 2 4-bit values in each byte
+		READ(), NEXT(4), NEXT(4);
+		READ(), NEXT(4), NEXT(4);
+		READ(), NEXT(4), NEXT(4);
+		READ(), NEXT(4), NEXT(4);
+		READ(), NEXT(4), NEXT(4);
+		READ(), NEXT(4), NEXT(4);
+		READ(), NEXT(4), NEXT(4);
+		READ(), NEXT(4), NEXT(4);
+
+		return data_var;
+
+	case 3:
+	{
+		v128_t result = wasm_v128_load(data);
+
+		wasm_v128_store(buffer, result);
+
+		return data + 16;
+	}
+
+	default:
+		assert(!"Unexpected bit length"); // unreachable since bitslog2 is a 2-bit value
+		return data;
+	}
+
+#undef READ
+#undef NEXT
+}
+#endif
+
 #if defined(SIMD_SSE) || defined(SIMD_AVX)
 static void transpose8(__m128i& x0, __m128i& x1, __m128i& x2, __m128i& x3)
 {
@@ -723,7 +801,30 @@ static uint8x16_t unzigzag8(uint8x16_t v)
 }
 #endif
 
-#if defined(SIMD_SSE) || defined(SIMD_AVX) || defined(SIMD_NEON)
+#ifdef SIMD_WASM
+static void transpose8(v128_t& x0, v128_t& x1, v128_t& x2, v128_t& x3)
+{
+	v128_t t0 = wasm_unpacklo_v8x16(x0, x1);
+	v128_t t1 = wasm_unpackhi_v8x16(x0, x1);
+	v128_t t2 = wasm_unpacklo_v8x16(x2, x3);
+	v128_t t3 = wasm_unpackhi_v8x16(x2, x3);
+
+	x0 = wasm_unpacklo_v16x8(t0, t2);
+	x1 = wasm_unpackhi_v16x8(t0, t2);
+	x2 = wasm_unpacklo_v16x8(t1, t3);
+	x3 = wasm_unpackhi_v16x8(t1, t3);
+}
+
+static v128_t unzigzag8(v128_t v)
+{
+	v128_t xl = wasm_i8x16_neg(wasm_v128_and(v, wasm_i8x16_splat(1)));
+	v128_t xr = wasm_u8x16_shr(v, 1);
+
+	return wasm_v128_xor(xl, xr);
+}
+#endif
+
+#if defined(SIMD_SSE) || defined(SIMD_AVX) || defined(SIMD_NEON) || defined(SIMD_WASM)
 static const unsigned char* decodeBytesSimd(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size)
 {
 	assert(buffer_size % kByteGroupSize == 0);
@@ -803,6 +904,15 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 #define GRP4(i) t0 = vget_low_u8(r##i), t1 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t0), 1)), t2 = vget_high_u8(r##i), t3 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t2), 1))
 #define FIXD(i) t##i = pi = vadd_u8(pi, t##i)
 #define SAVE(i) vst1_lane_u32(reinterpret_cast<uint32_t*>(savep), vreinterpret_u32_u8(t##i), 0), savep += vertex_size
+#endif
+
+#ifdef SIMD_WASM
+#define TEMP v128_t
+#define PREP() v128_t pi = wasm_v128_load(last_vertex + k) // TODO: use wasm_v32x4_load_splat to avoid buffer overrun
+#define LOAD(i) v128_t r##i = wasm_v128_load(buffer + j + i * vertex_count_aligned)
+#define GRP4(i) t0 = wasm_v32x4_splat(r##i, 0), t1 = wasm_v32x4_splat(r##i, 1), t2 = wasm_v32x4_splat(r##i, 2), t3 = wasm_v32x4_splat(r##i, 3)
+#define FIXD(i) t##i = pi = wasm_i8x16_add(pi, t##i)
+#define SAVE(i) *reinterpret_cast<int*>(savep) = wasm_i32x4_extract_lane(t##i, 0), savep += vertex_size
 #endif
 
 		PREP();
@@ -974,7 +1084,7 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 	int cpuinfo[4] = {};
 	__cpuid(cpuinfo, 1);
 	decode = (cpuinfo[2] & (1 << 9)) ? decodeVertexBlockSimd : decodeVertexBlock;
-#elif defined(SIMD_SSE) || defined(SIMD_AVX) || defined(SIMD_NEON)
+#elif defined(SIMD_SSE) || defined(SIMD_AVX) || defined(SIMD_NEON) || defined(SIMD_WASM)
 	decode = decodeVertexBlockSimd;
 #else
 	decode = decodeVertexBlock;
