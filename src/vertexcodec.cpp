@@ -12,7 +12,12 @@
 #define SIMD_SSE
 #endif
 
-#if !defined(SIMD_SSE) && defined(_MSC_VER) && !defined(__clang__) && (defined(_M_IX86) || defined(_M_X64))
+#if defined(__AVX512VBMI2__)
+#undef SIMD_SSE
+#define SIMD_AVX
+#endif
+
+#if !defined(SIMD_SSE) && !defined(SIMD_AVX) && defined(_MSC_VER) && !defined(__clang__) && (defined(_M_IX86) || defined(_M_X64))
 #define SIMD_SSE
 #define SIMD_FALLBACK
 #include <intrin.h> // __cpuid
@@ -24,6 +29,10 @@
 
 #ifdef SIMD_SSE
 #include <tmmintrin.h>
+#endif
+
+#ifdef SIMD_AVX
+#include <immintrin.h>
 #endif
 
 #ifdef SIMD_NEON
@@ -267,7 +276,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 	return data;
 }
 
-#if defined(SIMD_FALLBACK) || (!defined(SIMD_SSE) && !defined(SIMD_NEON))
+#if defined(SIMD_FALLBACK) || (!defined(SIMD_SSE) && !defined(SIMD_NEON) && !defined(SIMD_AVX))
 static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned char* buffer, int bitslog2)
 {
 #define READ() byte = *data++
@@ -504,6 +513,65 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 }
 #endif
 
+#ifdef SIMD_AVX
+static const __m128i decodeBytesGroupConfig[] = {
+    _mm_set1_epi8(3),
+    _mm_set1_epi8(15),
+    _mm_setr_epi8(6, 4, 2, 0, 14, 12, 10, 8, 22, 20, 18, 16, 30, 28, 26, 24),
+    _mm_setr_epi8(4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56),
+};
+
+static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int bitslog2)
+{
+	switch (bitslog2)
+	{
+	case 0:
+	{
+		__m128i result = _mm_setzero_si128();
+
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
+
+		return data;
+	}
+
+	case 1:
+	case 2:
+	{
+		const unsigned char* skip = data + (bitslog2 << 2);
+
+		__m128i selb = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(data));
+		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(skip));
+
+		__m128i sent = decodeBytesGroupConfig[bitslog2 - 1];
+		__m128i ctrl = decodeBytesGroupConfig[bitslog2 + 1];
+
+		__m128i selw = _mm_shuffle_epi32(selb, 0x44);
+		__m128i sel = _mm_and_si128(sent, _mm_multishift_epi64_epi8(ctrl, selw));
+		__mmask16 mask16 = _mm_cmp_epi8_mask(sel, sent, _MM_CMPINT_EQ);
+
+		__m128i result = _mm_mask_expand_epi8(sel, mask16, rest);
+
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
+
+		return skip + __builtin_popcount(mask16);
+	}
+
+	case 3:
+	{
+		__m128i result = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data));
+
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
+
+		return data + 16;
+	}
+
+	default:
+		assert(!"Unexpected bit length"); // unreachable since bitslog2 is a 2-bit value
+		return data;
+	}
+}
+#endif
+
 #ifdef SIMD_NEON
 static uint8x16_t shuffleBytes(unsigned char mask0, unsigned char mask1, uint8x8_t rest0, uint8x8_t rest1)
 {
@@ -608,7 +676,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 }
 #endif
 
-#ifdef SIMD_SSE
+#if defined(SIMD_SSE) || defined(SIMD_AVX)
 static void transpose8(__m128i& x0, __m128i& x1, __m128i& x2, __m128i& x3)
 {
 	__m128i t0 = _mm_unpacklo_epi8(x0, x1);
@@ -655,7 +723,7 @@ static uint8x16_t unzigzag8(uint8x16_t v)
 }
 #endif
 
-#if defined(SIMD_SSE) || defined(SIMD_NEON)
+#if defined(SIMD_SSE) || defined(SIMD_AVX) || defined(SIMD_NEON)
 static const unsigned char* decodeBytesSimd(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size)
 {
 	assert(buffer_size % kByteGroupSize == 0);
@@ -719,7 +787,7 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 				return 0;
 		}
 
-#ifdef SIMD_SSE
+#if defined(SIMD_SSE) || defined(SIMD_AVX)
 #define TEMP __m128i
 #define PREP() __m128i pi = _mm_cvtsi32_si128(*reinterpret_cast<const int*>(last_vertex + k))
 #define LOAD(i) __m128i r##i = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + i * vertex_count_aligned))
@@ -906,7 +974,7 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 	int cpuinfo[4] = {};
 	__cpuid(cpuinfo, 1);
 	decode = (cpuinfo[2] & (1 << 9)) ? decodeVertexBlockSimd : decodeVertexBlock;
-#elif defined(SIMD_SSE) || defined(SIMD_NEON)
+#elif defined(SIMD_SSE) || defined(SIMD_AVX) || defined(SIMD_NEON)
 	decode = decodeVertexBlockSimd;
 #else
 	decode = decodeVertexBlock;
