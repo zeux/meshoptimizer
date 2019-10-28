@@ -12,7 +12,7 @@
 #define SIMD_SSE
 #endif
 
-#if defined(__AVX512VBMI2__) && defined(__POPCNT__)
+#if defined(__AVX512VBMI2__) && defined(__AVX512VBMI__) && defined(__AVX512VL__) && defined(__POPCNT__)
 #undef SIMD_SSE
 #define SIMD_AVX
 #endif
