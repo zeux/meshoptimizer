@@ -12,7 +12,7 @@
 #define SIMD_SSE
 #endif
 
-#if defined(__AVX512VBMI2__)
+#if defined(__AVX512VBMI2__) && defined(__POPCNT__)
 #undef SIMD_SSE
 #define SIMD_AVX
 #endif
@@ -553,7 +553,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 
 		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
 
-		return skip + __builtin_popcount(mask16);
+		return skip + _mm_popcnt_u32(mask16);
 	}
 
 	case 3:
