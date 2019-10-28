@@ -914,6 +914,7 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 
 #if defined(SIMD_SSE) || defined(SIMD_NEON)
 	assert(gDecodeBytesGroupInitialized);
+	(void)gDecodeBytesGroupInitialized;
 #endif
 
 	unsigned char* vertex_data = static_cast<unsigned char*>(destination);
