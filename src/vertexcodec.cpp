@@ -1158,7 +1158,8 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 #endif
 
 #if defined(SIMD_WASM)
-	if (!gDecodeBytesGroupInitialized) // ???
+	// TODO: workaround for https://github.com/emscripten-core/emscripten/issues/9767
+	if (!gDecodeBytesGroupInitialized)
 		gDecodeBytesGroupInitialized = decodeBytesGroupBuildTables();
 #endif
 
