@@ -696,7 +696,10 @@ static v128_t decodeShuffleMask(unsigned char mask0, unsigned char mask1)
 	// TODO: 8b buffer overrun - should we use splat or extend buffers?
 	v128_t sm0 = wasm_v128_load(&kDecodeBytesGroupShuffle[mask0]);
 	v128_t sm1 = wasm_v128_load(&kDecodeBytesGroupShuffle[mask1]);
-	v128_t sm1off = wasm_i8x16_splat(kDecodeBytesGroupCount[mask0]); // TODO: use v8x16_load_splat
+
+	// TODO: we should use v8x16_load_splat
+	v128_t sm1off = wasm_v128_load(&kDecodeBytesGroupCount[mask0]);
+	sm1off = wasm_v8x16_shuffle(sm1off, sm1off, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
 
 	v128_t sm1r = wasm_i8x16_add(sm1, sm1off);
 
@@ -769,8 +772,8 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 
 		v128_t shuf = decodeShuffleMask(mask0, mask1);
 
-		// TODO: test bitselect
-		v128_t result = wasm_v128_or(wasm_v8x16_swizzle(rest, shuf), wasm_v128_andnot(sel, mask));
+		// TODO: test or/andnot
+		v128_t result = wasm_v128_bitselect(sel, wasm_v8x16_swizzle(rest, shuf), mask);
 
 		wasm_v128_store(buffer, result);
 
@@ -794,8 +797,8 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 
 		v128_t shuf = decodeShuffleMask(mask0, mask1);
 
-		// TODO: test bitselect
-		v128_t result = wasm_v128_or(wasm_v8x16_swizzle(rest, shuf), wasm_v128_andnot(sel, mask));
+		// TODO: test or/andnot
+		v128_t result = wasm_v128_bitselect(sel, wasm_v8x16_swizzle(rest, shuf), mask);
 
 		wasm_v128_store(buffer, result);
 
