@@ -49,11 +49,6 @@
 
 #ifdef SIMD_WASM
 #include <wasm_simd128.h>
-#define wasm_v32x4_splat(v, i) wasm_v8x16_shuffle(v, v, 4*i,4*i+1,4*i+2,4*i+3, 4*i,4*i+1,4*i+2,4*i+3, 4*i,4*i+1,4*i+2,4*i+3, 4*i,4*i+1,4*i+2,4*i+3)
-#define wasm_unpacklo_v8x16(a, b) wasm_v8x16_shuffle(a, b, 0,16, 1,17, 2,18, 3,19, 4,20, 5,21, 6,22, 7,23)
-#define wasm_unpackhi_v8x16(a, b) wasm_v8x16_shuffle(a, b, 8,24, 9,25, 10,26, 11,27, 12,28, 13,29, 14,30, 15,31)
-#define wasm_unpacklo_v16x8(a, b) wasm_v8x16_shuffle(a, b, 0,1,16,17, 2,3,18,19, 4,5,20,21, 6,7,22,23)
-#define wasm_unpackhi_v16x8(a, b) wasm_v8x16_shuffle(a, b, 8,9,24,25, 10,11,26,27, 12,13,28,29, 14,15,30,31)
 #endif
 
 #ifndef TRACE
@@ -62,6 +57,15 @@
 
 #if TRACE
 #include <stdio.h>
+#endif
+
+#ifdef SIMD_WASM
+#include <wasm_simd128.h>
+#define wasm_v32x4_splat(v, i) wasm_v8x16_shuffle(v, v, 4*i,4*i+1,4*i+2,4*i+3, 4*i,4*i+1,4*i+2,4*i+3, 4*i,4*i+1,4*i+2,4*i+3, 4*i,4*i+1,4*i+2,4*i+3)
+#define wasm_unpacklo_v8x16(a, b) wasm_v8x16_shuffle(a, b, 0,16, 1,17, 2,18, 3,19, 4,20, 5,21, 6,22, 7,23)
+#define wasm_unpackhi_v8x16(a, b) wasm_v8x16_shuffle(a, b, 8,24, 9,25, 10,26, 11,27, 12,28, 13,29, 14,30, 15,31)
+#define wasm_unpacklo_v16x8(a, b) wasm_v8x16_shuffle(a, b, 0,1,16,17, 2,3,18,19, 4,5,20,21, 6,7,22,23)
+#define wasm_unpackhi_v16x8(a, b) wasm_v8x16_shuffle(a, b, 8,9,24,25, 10,11,26,27, 12,13,28,29, 14,15,30,31)
 #endif
 
 namespace meshopt
@@ -712,25 +716,25 @@ static void wasmMoveMask(v128_t mask, unsigned char& mask0, unsigned char& mask1
 
 	// TODO
 	mask0 = 0;
-	mask0 |= wasm_u8x16_extract_lane(m1, 0) << 7;
-	mask0 |= wasm_u8x16_extract_lane(m1, 1) << 6;
-	mask0 |= wasm_u8x16_extract_lane(m1, 2) << 5;
-	mask0 |= wasm_u8x16_extract_lane(m1, 3) << 4;
-	mask0 |= wasm_u8x16_extract_lane(m1, 4) << 3;
-	mask0 |= wasm_u8x16_extract_lane(m1, 5) << 2;
-	mask0 |= wasm_u8x16_extract_lane(m1, 6) << 1;
-	mask0 |= wasm_u8x16_extract_lane(m1, 7) << 0;
+	mask0 |= wasm_u8x16_extract_lane(m1, 0) << 0;
+	mask0 |= wasm_u8x16_extract_lane(m1, 1) << 1;
+	mask0 |= wasm_u8x16_extract_lane(m1, 2) << 2;
+	mask0 |= wasm_u8x16_extract_lane(m1, 3) << 3;
+	mask0 |= wasm_u8x16_extract_lane(m1, 4) << 4;
+	mask0 |= wasm_u8x16_extract_lane(m1, 5) << 5;
+	mask0 |= wasm_u8x16_extract_lane(m1, 6) << 6;
+	mask0 |= wasm_u8x16_extract_lane(m1, 7) << 7;
 
 	// TODO
 	mask1 = 0;
-	mask1 |= wasm_u8x16_extract_lane(m1, 8) << 7;
-	mask1 |= wasm_u8x16_extract_lane(m1, 9) << 6;
-	mask1 |= wasm_u8x16_extract_lane(m1, 10) << 5;
-	mask1 |= wasm_u8x16_extract_lane(m1, 11) << 4;
-	mask1 |= wasm_u8x16_extract_lane(m1, 12) << 3;
-	mask1 |= wasm_u8x16_extract_lane(m1, 13) << 2;
-	mask1 |= wasm_u8x16_extract_lane(m1, 14) << 1;
-	mask1 |= wasm_u8x16_extract_lane(m1, 15) << 0;
+	mask1 |= wasm_u8x16_extract_lane(m1, 8) << 0;
+	mask1 |= wasm_u8x16_extract_lane(m1, 9) << 1;
+	mask1 |= wasm_u8x16_extract_lane(m1, 10) << 2;
+	mask1 |= wasm_u8x16_extract_lane(m1, 11) << 3;
+	mask1 |= wasm_u8x16_extract_lane(m1, 12) << 4;
+	mask1 |= wasm_u8x16_extract_lane(m1, 13) << 5;
+	mask1 |= wasm_u8x16_extract_lane(m1, 14) << 6;
+	mask1 |= wasm_u8x16_extract_lane(m1, 15) << 7;
 }
 #endif
 
@@ -773,7 +777,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		v128_t shuf = decodeShuffleMask(mask0, mask1);
 
 		// TODO: test or/andnot
-		v128_t result = wasm_v128_bitselect(sel, wasm_v8x16_swizzle(rest, shuf), mask);
+		v128_t result = wasm_v128_bitselect(wasm_v8x16_swizzle(rest, shuf), sel, mask);
 
 		wasm_v128_store(buffer, result);
 
@@ -798,7 +802,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		v128_t shuf = decodeShuffleMask(mask0, mask1);
 
 		// TODO: test or/andnot
-		v128_t result = wasm_v128_bitselect(sel, wasm_v8x16_swizzle(rest, shuf), mask);
+		v128_t result = wasm_v128_bitselect(wasm_v8x16_swizzle(rest, shuf), sel, mask);
 
 		wasm_v128_store(buffer, result);
 
@@ -1185,6 +1189,11 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 	decode = decodeVertexBlockSimd;
 #else
 	decode = decodeVertexBlock;
+#endif
+
+#if defined(SIMD_WASM)
+	if (!gDecodeBytesGroupInitialized) // ???
+		gDecodeBytesGroupInitialized = decodeBytesGroupBuildTables();
 #endif
 
 #if defined(SIMD_SSE) || defined(SIMD_NEON) || defined(SIMD_WASM)
