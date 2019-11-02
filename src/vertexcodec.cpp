@@ -60,7 +60,6 @@
 #endif
 
 #ifdef SIMD_WASM
-#include <wasm_simd128.h>
 #define wasm_v32x4_splat(v, i) wasm_v8x16_shuffle(v, v, 4*i,4*i+1,4*i+2,4*i+3, 4*i,4*i+1,4*i+2,4*i+3, 4*i,4*i+1,4*i+2,4*i+3, 4*i,4*i+1,4*i+2,4*i+3)
 #define wasm_unpacklo_v8x16(a, b) wasm_v8x16_shuffle(a, b, 0,16, 1,17, 2,18, 3,19, 4,20, 5,21, 6,22, 7,23)
 #define wasm_unpackhi_v8x16(a, b) wasm_v8x16_shuffle(a, b, 8,24, 9,25, 10,26, 11,27, 12,28, 13,29, 14,30, 15,31)
@@ -712,36 +711,28 @@ static v128_t decodeShuffleMask(unsigned char mask0, unsigned char mask1)
 
 static void wasmMoveMask(v128_t mask, unsigned char& mask0, unsigned char& mask1)
 {
-	v128_t m1 = wasm_v128_and(mask, wasm_i8x16_splat(1));
+	uint64_t mbits = 0x8040201008040201ull;
 
-	// TODO
-	mask0 = 0;
-	mask0 |= wasm_u8x16_extract_lane(m1, 0) << 0;
-	mask0 |= wasm_u8x16_extract_lane(m1, 1) << 1;
-	mask0 |= wasm_u8x16_extract_lane(m1, 2) << 2;
-	mask0 |= wasm_u8x16_extract_lane(m1, 3) << 3;
-	mask0 |= wasm_u8x16_extract_lane(m1, 4) << 4;
-	mask0 |= wasm_u8x16_extract_lane(m1, 5) << 5;
-	mask0 |= wasm_u8x16_extract_lane(m1, 6) << 6;
-	mask0 |= wasm_u8x16_extract_lane(m1, 7) << 7;
+	uint64_t m0_8 = wasm_i64x2_extract_lane(mask, 0) & mbits;
+	uint64_t m1_8 = wasm_i64x2_extract_lane(mask, 1) & mbits;
 
-	// TODO
-	mask1 = 0;
-	mask1 |= wasm_u8x16_extract_lane(m1, 8) << 0;
-	mask1 |= wasm_u8x16_extract_lane(m1, 9) << 1;
-	mask1 |= wasm_u8x16_extract_lane(m1, 10) << 2;
-	mask1 |= wasm_u8x16_extract_lane(m1, 11) << 3;
-	mask1 |= wasm_u8x16_extract_lane(m1, 12) << 4;
-	mask1 |= wasm_u8x16_extract_lane(m1, 13) << 5;
-	mask1 |= wasm_u8x16_extract_lane(m1, 14) << 6;
-	mask1 |= wasm_u8x16_extract_lane(m1, 15) << 7;
+	uint32_t m0_4 = m0_8 | (m0_8 >> 32);
+	uint32_t m1_4 = m1_8 | (m1_8 >> 32);
+
+	uint16_t m0_2 = m0_4 | (m0_4 >> 16);
+	uint16_t m1_2 = m1_4 | (m1_4 >> 16);
+
+	mask0 = m0_2 | (m0_2 >> 8);
+	mask1 = m1_2 | (m1_2 >> 8);
 }
 #endif
 
 static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int bitslog2)
 {
+#ifndef __wasm_unimplemented_simd128__
 #define READ() byte = *data++
 #define NEXT(bits) enc = byte >> (8 - bits), byte <<= bits, encv = *data_var, *buffer++ = (enc == (1 << bits) - 1) ? encv : enc, data_var += (enc == (1 << bits) - 1)
+#endif
 
 	unsigned char byte, enc, encv;
 	const unsigned char* data_var;
@@ -768,8 +759,15 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		v128_t sel2222 = wasm_unpacklo_v8x16(wasm_i16x8_shr(sel22, 2), sel22);
 		v128_t sel = wasm_v128_and(sel2222, wasm_i8x16_splat(3));
 
-		// TODO: branching on any(mask) may be worthwhile
 		v128_t mask = wasm_i8x16_eq(sel, wasm_i8x16_splat(3));
+
+		// TODO: is branching on any(mask) worthwhile?
+		if (!wasm_i8x16_any_true(mask))
+		{
+			wasm_v128_store(buffer, sel);
+
+			return data + 4;
+		}
 
 		unsigned char mask0, mask1;
 		wasmMoveMask(mask, mask0, mask1);
@@ -793,8 +791,15 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		v128_t sel44 = wasm_unpacklo_v8x16(wasm_i16x8_shr(sel4, 4), sel4);
 		v128_t sel = wasm_v128_and(sel44, wasm_i8x16_splat(15));
 
-		// TODO: branching on any(mask) may be worthwhile
 		v128_t mask = wasm_i8x16_eq(sel, wasm_i8x16_splat(15));
+
+		// TODO: is branching on any(mask) worthwhile?
+		if (!wasm_i8x16_any_true(mask))
+		{
+			wasm_v128_store(buffer, sel);
+
+			return data + 8;
+		}
 
 		unsigned char mask0, mask1;
 		wasmMoveMask(mask, mask0, mask1);
@@ -850,8 +855,10 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		return data;
 	}
 
+#ifndef __wasm_unimplemented_simd128__
 #undef READ
 #undef NEXT
+#endif
 }
 #endif
 
