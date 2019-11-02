@@ -27,7 +27,8 @@
 #define SIMD_NEON
 #endif
 
-#if defined(__wasm_simd128__)
+// WebAssembly SIMD implementation requires a few bleeding edge intrinsics that are only available in Chrome Canary
+#if defined(__wasm_simd128__) && defined(__wasm_unimplemented_simd128__)
 #define SIMD_WASM
 #endif
 
@@ -60,11 +61,11 @@
 #endif
 
 #ifdef SIMD_WASM
-#define wasm_v32x4_splat(v, i) wasm_v8x16_shuffle(v, v, 4*i,4*i+1,4*i+2,4*i+3, 4*i,4*i+1,4*i+2,4*i+3, 4*i,4*i+1,4*i+2,4*i+3, 4*i,4*i+1,4*i+2,4*i+3)
-#define wasm_unpacklo_v8x16(a, b) wasm_v8x16_shuffle(a, b, 0,16, 1,17, 2,18, 3,19, 4,20, 5,21, 6,22, 7,23)
-#define wasm_unpackhi_v8x16(a, b) wasm_v8x16_shuffle(a, b, 8,24, 9,25, 10,26, 11,27, 12,28, 13,29, 14,30, 15,31)
-#define wasm_unpacklo_v16x8(a, b) wasm_v8x16_shuffle(a, b, 0,1,16,17, 2,3,18,19, 4,5,20,21, 6,7,22,23)
-#define wasm_unpackhi_v16x8(a, b) wasm_v8x16_shuffle(a, b, 8,9,24,25, 10,11,26,27, 12,13,28,29, 14,15,30,31)
+#define wasm_v32x4_splat(v, i) wasm_v8x16_shuffle(v, v, 4 * i, 4 * i + 1, 4 * i + 2, 4 * i + 3, 4 * i, 4 * i + 1, 4 * i + 2, 4 * i + 3, 4 * i, 4 * i + 1, 4 * i + 2, 4 * i + 3, 4 * i, 4 * i + 1, 4 * i + 2, 4 * i + 3)
+#define wasm_unpacklo_v8x16(a, b) wasm_v8x16_shuffle(a, b, 0, 16, 1, 17, 2, 18, 3, 19, 4, 20, 5, 21, 6, 22, 7, 23)
+#define wasm_unpackhi_v8x16(a, b) wasm_v8x16_shuffle(a, b, 8, 24, 9, 25, 10, 26, 11, 27, 12, 28, 13, 29, 14, 30, 15, 31)
+#define wasm_unpacklo_v16x8(a, b) wasm_v8x16_shuffle(a, b, 0, 1, 16, 17, 2, 3, 18, 19, 4, 5, 20, 21, 6, 7, 22, 23)
+#define wasm_unpackhi_v16x8(a, b) wasm_v8x16_shuffle(a, b, 8, 9, 24, 25, 10, 11, 26, 27, 12, 13, 28, 29, 14, 15, 30, 31)
 #endif
 
 namespace meshopt
@@ -693,7 +694,6 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 #endif
 
 #ifdef SIMD_WASM
-#ifdef __wasm_unimplemented_simd128__
 static v128_t decodeShuffleMask(unsigned char mask0, unsigned char mask1)
 {
 	// TODO: 8b buffer overrun - should we use splat or extend buffers?
@@ -702,11 +702,11 @@ static v128_t decodeShuffleMask(unsigned char mask0, unsigned char mask1)
 
 	// TODO: we should use v8x16_load_splat
 	v128_t sm1off = wasm_v128_load(&kDecodeBytesGroupCount[mask0]);
-	sm1off = wasm_v8x16_shuffle(sm1off, sm1off, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+	sm1off = wasm_v8x16_shuffle(sm1off, sm1off, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
 	v128_t sm1r = wasm_i8x16_add(sm1, sm1off);
 
-	return wasm_v8x16_shuffle(sm0, sm1r, 0,1,2,3,4,5,6,7, 16,17,18,19,20,21,22,23);
+	return wasm_v8x16_shuffle(sm0, sm1r, 0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23);
 }
 
 static void wasmMoveMask(v128_t mask, unsigned char& mask0, unsigned char& mask1)
@@ -725,15 +725,9 @@ static void wasmMoveMask(v128_t mask, unsigned char& mask0, unsigned char& mask1
 	mask0 = m0_2 | (m0_2 >> 8);
 	mask1 = m1_2 | (m1_2 >> 8);
 }
-#endif
 
 static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int bitslog2)
 {
-#ifndef __wasm_unimplemented_simd128__
-#define READ() byte = *data++
-#define NEXT(bits) enc = byte >> (8 - bits), byte <<= bits, encv = *data_var, *buffer++ = (enc == (1 << bits) - 1) ? encv : enc, data_var += (enc == (1 << bits) - 1)
-#endif
-
 	unsigned char byte, enc, encv;
 	const unsigned char* data_var;
 
@@ -748,7 +742,6 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		return data;
 	}
 
-#ifdef __wasm_unimplemented_simd128__
 	case 1:
 	{
 		// TODO: test 4b load splat
@@ -761,7 +754,6 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 
 		v128_t mask = wasm_i8x16_eq(sel, wasm_i8x16_splat(3));
 
-		// TODO: is branching on any(mask) worthwhile?
 		if (!wasm_i8x16_any_true(mask))
 		{
 			wasm_v128_store(buffer, sel);
@@ -793,7 +785,6 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 
 		v128_t mask = wasm_i8x16_eq(sel, wasm_i8x16_splat(15));
 
-		// TODO: is branching on any(mask) worthwhile?
 		if (!wasm_i8x16_any_true(mask))
 		{
 			wasm_v128_store(buffer, sel);
@@ -813,33 +804,6 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 
 		return data + 8 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
 	}
-#else
-	case 1:
-		data_var = data + 4;
-
-		// 4 groups with 4 2-bit values in each byte
-		READ(), NEXT(2), NEXT(2), NEXT(2), NEXT(2);
-		READ(), NEXT(2), NEXT(2), NEXT(2), NEXT(2);
-		READ(), NEXT(2), NEXT(2), NEXT(2), NEXT(2);
-		READ(), NEXT(2), NEXT(2), NEXT(2), NEXT(2);
-
-		return data_var;
-
-	case 2:
-		data_var = data + 8;
-
-		// 8 groups with 2 4-bit values in each byte
-		READ(), NEXT(4), NEXT(4);
-		READ(), NEXT(4), NEXT(4);
-		READ(), NEXT(4), NEXT(4);
-		READ(), NEXT(4), NEXT(4);
-		READ(), NEXT(4), NEXT(4);
-		READ(), NEXT(4), NEXT(4);
-		READ(), NEXT(4), NEXT(4);
-		READ(), NEXT(4), NEXT(4);
-
-		return data_var;
-#endif
 
 	case 3:
 	{
@@ -854,11 +818,6 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		assert(!"Unexpected bit length"); // unreachable since bitslog2 is a 2-bit value
 		return data;
 	}
-
-#ifndef __wasm_unimplemented_simd128__
-#undef READ
-#undef NEXT
-#endif
 }
 #endif
 
