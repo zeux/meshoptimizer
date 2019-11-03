@@ -414,6 +414,9 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 static unsigned char kDecodeBytesGroupShuffle[256][8];
 static unsigned char kDecodeBytesGroupCount[256];
 
+#ifdef EMSCRIPTEN
+__attribute__((cold)) // this saves 500 bytes in the output binary - we don't need to vectorize this loop!
+#endif
 static bool decodeBytesGroupBuildTables()
 {
 	for (int mask = 0; mask < 256; ++mask)
@@ -1155,12 +1158,6 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 	decode = decodeVertexBlockSimd;
 #else
 	decode = decodeVertexBlock;
-#endif
-
-#if defined(SIMD_WASM)
-	// TODO: workaround for https://github.com/emscripten-core/emscripten/issues/9767
-	if (!gDecodeBytesGroupInitialized)
-		gDecodeBytesGroupInitialized = decodeBytesGroupBuildTables();
 #endif
 
 #if defined(SIMD_SSE) || defined(SIMD_NEON) || defined(SIMD_WASM)
