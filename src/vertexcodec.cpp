@@ -61,11 +61,12 @@
 #endif
 
 #ifdef SIMD_WASM
-#define wasm_v32x4_splat(v, i) wasm_v8x16_shuffle(v, v, 4 * i, 4 * i + 1, 4 * i + 2, 4 * i + 3, 4 * i, 4 * i + 1, 4 * i + 2, 4 * i + 3, 4 * i, 4 * i + 1, 4 * i + 2, 4 * i + 3, 4 * i, 4 * i + 1, 4 * i + 2, 4 * i + 3)
-#define wasm_unpacklo_v8x16(a, b) wasm_v8x16_shuffle(a, b, 0, 16, 1, 17, 2, 18, 3, 19, 4, 20, 5, 21, 6, 22, 7, 23)
-#define wasm_unpackhi_v8x16(a, b) wasm_v8x16_shuffle(a, b, 8, 24, 9, 25, 10, 26, 11, 27, 12, 28, 13, 29, 14, 30, 15, 31)
-#define wasm_unpacklo_v16x8(a, b) wasm_v8x16_shuffle(a, b, 0, 1, 16, 17, 2, 3, 18, 19, 4, 5, 20, 21, 6, 7, 22, 23)
-#define wasm_unpackhi_v16x8(a, b) wasm_v8x16_shuffle(a, b, 8, 9, 24, 25, 10, 11, 26, 27, 12, 13, 28, 29, 14, 15, 30, 31)
+#define wasmx_splat_v32x4(v, i) wasm_v8x16_shuffle(v, v, 4 * i, 4 * i + 1, 4 * i + 2, 4 * i + 3, 4 * i, 4 * i + 1, 4 * i + 2, 4 * i + 3, 4 * i, 4 * i + 1, 4 * i + 2, 4 * i + 3, 4 * i, 4 * i + 1, 4 * i + 2, 4 * i + 3)
+#define wasmx_unpacklo_v8x16(a, b) wasm_v8x16_shuffle(a, b, 0, 16, 1, 17, 2, 18, 3, 19, 4, 20, 5, 21, 6, 22, 7, 23)
+#define wasmx_unpackhi_v8x16(a, b) wasm_v8x16_shuffle(a, b, 8, 24, 9, 25, 10, 26, 11, 27, 12, 28, 13, 29, 14, 30, 15, 31)
+#define wasmx_unpacklo_v16x8(a, b) wasm_v8x16_shuffle(a, b, 0, 1, 16, 17, 2, 3, 18, 19, 4, 5, 20, 21, 6, 7, 22, 23)
+#define wasmx_unpackhi_v16x8(a, b) wasm_v8x16_shuffle(a, b, 8, 9, 24, 25, 10, 11, 26, 27, 12, 13, 28, 29, 14, 15, 30, 31)
+#define wasmx_unpacklo_v64x2(a, b) wasm_v8x16_shuffle(a, b, 0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23)
 #endif
 
 namespace meshopt
@@ -709,7 +710,7 @@ static v128_t decodeShuffleMask(unsigned char mask0, unsigned char mask1)
 
 	v128_t sm1r = wasm_i8x16_add(sm1, sm1off);
 
-	return wasm_v8x16_shuffle(sm0, sm1r, 0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23);
+	return wasmx_unpacklo_v64x2(sm0, sm1r);
 }
 
 static void wasmMoveMask(v128_t mask, unsigned char& mask0, unsigned char& mask1)
@@ -751,8 +752,8 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		v128_t sel2 = wasm_v128_load(data);
 		v128_t rest = wasm_v128_load(data + 4);
 
-		v128_t sel22 = wasm_unpacklo_v8x16(wasm_i16x8_shr(sel2, 4), sel2);
-		v128_t sel2222 = wasm_unpacklo_v8x16(wasm_i16x8_shr(sel22, 2), sel22);
+		v128_t sel22 = wasmx_unpacklo_v8x16(wasm_i16x8_shr(sel2, 4), sel2);
+		v128_t sel2222 = wasmx_unpacklo_v8x16(wasm_i16x8_shr(sel22, 2), sel22);
 		v128_t sel = wasm_v128_and(sel2222, wasm_i8x16_splat(3));
 
 		v128_t mask = wasm_i8x16_eq(sel, wasm_i8x16_splat(3));
@@ -783,7 +784,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		v128_t sel4 = wasm_v128_load(data);
 		v128_t rest = wasm_v128_load(data + 8);
 
-		v128_t sel44 = wasm_unpacklo_v8x16(wasm_i16x8_shr(sel4, 4), sel4);
+		v128_t sel44 = wasmx_unpacklo_v8x16(wasm_i16x8_shr(sel4, 4), sel4);
 		v128_t sel = wasm_v128_and(sel44, wasm_i8x16_splat(15));
 
 		v128_t mask = wasm_i8x16_eq(sel, wasm_i8x16_splat(15));
@@ -874,15 +875,15 @@ static uint8x16_t unzigzag8(uint8x16_t v)
 #ifdef SIMD_WASM
 static void transpose8(v128_t& x0, v128_t& x1, v128_t& x2, v128_t& x3)
 {
-	v128_t t0 = wasm_unpacklo_v8x16(x0, x1);
-	v128_t t1 = wasm_unpackhi_v8x16(x0, x1);
-	v128_t t2 = wasm_unpacklo_v8x16(x2, x3);
-	v128_t t3 = wasm_unpackhi_v8x16(x2, x3);
+	v128_t t0 = wasmx_unpacklo_v8x16(x0, x1);
+	v128_t t1 = wasmx_unpackhi_v8x16(x0, x1);
+	v128_t t2 = wasmx_unpacklo_v8x16(x2, x3);
+	v128_t t3 = wasmx_unpackhi_v8x16(x2, x3);
 
-	x0 = wasm_unpacklo_v16x8(t0, t2);
-	x1 = wasm_unpackhi_v16x8(t0, t2);
-	x2 = wasm_unpacklo_v16x8(t1, t3);
-	x3 = wasm_unpackhi_v16x8(t1, t3);
+	x0 = wasmx_unpacklo_v16x8(t0, t2);
+	x1 = wasmx_unpackhi_v16x8(t0, t2);
+	x2 = wasmx_unpacklo_v16x8(t1, t3);
+	x3 = wasmx_unpackhi_v16x8(t1, t3);
 }
 
 static v128_t unzigzag8(v128_t v)
@@ -980,7 +981,7 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 #define TEMP v128_t
 #define PREP() v128_t pi = wasm_v128_load(last_vertex + k) // TODO: use wasm_v32x4_load_splat to avoid buffer overrun
 #define LOAD(i) v128_t r##i = wasm_v128_load(buffer + j + i * vertex_count_aligned)
-#define GRP4(i) t0 = wasm_v32x4_splat(r##i, 0), t1 = wasm_v32x4_splat(r##i, 1), t2 = wasm_v32x4_splat(r##i, 2), t3 = wasm_v32x4_splat(r##i, 3)
+#define GRP4(i) t0 = wasmx_splat_v32x4(r##i, 0), t1 = wasmx_splat_v32x4(r##i, 1), t2 = wasmx_splat_v32x4(r##i, 2), t3 = wasmx_splat_v32x4(r##i, 3)
 #define FIXD(i) t##i = pi = wasm_i8x16_add(pi, t##i)
 #define SAVE(i) *reinterpret_cast<int*>(savep) = wasm_i32x4_extract_lane(t##i, 0), savep += vertex_size
 #endif
