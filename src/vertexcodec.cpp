@@ -61,12 +61,14 @@
 #endif
 
 #ifdef SIMD_WASM
-#define wasmx_splat_v32x4(v, i) wasm_v8x16_shuffle(v, v, 4 * i, 4 * i + 1, 4 * i + 2, 4 * i + 3, 4 * i, 4 * i + 1, 4 * i + 2, 4 * i + 3, 4 * i, 4 * i + 1, 4 * i + 2, 4 * i + 3, 4 * i, 4 * i + 1, 4 * i + 2, 4 * i + 3)
+#define wasmx_shuffle_v32x4(v, i, j, k, l) wasm_v8x16_shuffle(v, v, 4 * i, 4 * i + 1, 4 * i + 2, 4 * i + 3, 4 * j, 4 * j + 1, 4 * j + 2, 4 * j + 3, 4 * k, 4 * k + 1, 4 * k + 2, 4 * k + 3, 4 * l, 4 * l + 1, 4 * l + 2, 4 * l + 3)
+#define wasmx_splat_v32x4(v, i) wasmx_shuffle_v32x4(v, i, i, i, i)
 #define wasmx_unpacklo_v8x16(a, b) wasm_v8x16_shuffle(a, b, 0, 16, 1, 17, 2, 18, 3, 19, 4, 20, 5, 21, 6, 22, 7, 23)
 #define wasmx_unpackhi_v8x16(a, b) wasm_v8x16_shuffle(a, b, 8, 24, 9, 25, 10, 26, 11, 27, 12, 28, 13, 29, 14, 30, 15, 31)
 #define wasmx_unpacklo_v16x8(a, b) wasm_v8x16_shuffle(a, b, 0, 1, 16, 17, 2, 3, 18, 19, 4, 5, 20, 21, 6, 7, 22, 23)
 #define wasmx_unpackhi_v16x8(a, b) wasm_v8x16_shuffle(a, b, 8, 9, 24, 25, 10, 11, 26, 27, 12, 13, 28, 29, 14, 15, 30, 31)
 #define wasmx_unpacklo_v64x2(a, b) wasm_v8x16_shuffle(a, b, 0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23)
+#define wasmx_unpackhi_v64x2(a, b) wasm_v8x16_shuffle(a, b, 8, 9, 10, 11, 12, 13, 14, 15, 24, 25, 26, 27, 28, 29, 30, 31)
 #endif
 
 namespace meshopt
@@ -715,19 +717,18 @@ static v128_t decodeShuffleMask(unsigned char mask0, unsigned char mask1)
 
 static void wasmMoveMask(v128_t mask, unsigned char& mask0, unsigned char& mask1)
 {
-	uint64_t mbits = 0x8040201008040201ull;
+	v128_t mask_0 = wasmx_shuffle_v32x4(mask, 0, 2, 1, 3);
 
-	uint64_t m0_8 = wasm_i64x2_extract_lane(mask, 0) & mbits;
-	uint64_t m1_8 = wasm_i64x2_extract_lane(mask, 1) & mbits;
+	// TODO: when Chrome supports v128.const we can try doing vectorized and?
+	uint64_t mask_1a = wasm_i64x2_extract_lane(mask_0, 0) & 0x0804020108040201ull;
+	uint64_t mask_1b = wasm_i64x2_extract_lane(mask_0, 1) & 0x8040201080402010ull;
 
-	uint32_t m0_4 = m0_8 | (m0_8 >> 32);
-	uint32_t m1_4 = m1_8 | (m1_8 >> 32);
+	uint64_t mask_2 = mask_1a | mask_1b;
+	uint64_t mask_4 = mask_2 | (mask_2 >> 16);
+	uint64_t mask_8 = mask_4 | (mask_4 >> 8);
 
-	uint16_t m0_2 = m0_4 | (m0_4 >> 16);
-	uint16_t m1_2 = m1_4 | (m1_4 >> 16);
-
-	mask0 = m0_2 | (m0_2 >> 8);
-	mask1 = m1_2 | (m1_2 >> 8);
+	mask0 = uint8_t(mask_8);
+	mask1 = uint8_t(mask_8 >> 32);
 }
 
 static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int bitslog2)
@@ -758,13 +759,6 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 
 		v128_t mask = wasm_i8x16_eq(sel, wasm_i8x16_splat(3));
 
-		if (!wasm_i8x16_any_true(mask))
-		{
-			wasm_v128_store(buffer, sel);
-
-			return data + 4;
-		}
-
 		unsigned char mask0, mask1;
 		wasmMoveMask(mask, mask0, mask1);
 
@@ -788,13 +782,6 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		v128_t sel = wasm_v128_and(sel44, wasm_i8x16_splat(15));
 
 		v128_t mask = wasm_i8x16_eq(sel, wasm_i8x16_splat(15));
-
-		if (!wasm_i8x16_any_true(mask))
-		{
-			wasm_v128_store(buffer, sel);
-
-			return data + 8;
-		}
 
 		unsigned char mask0, mask1;
 		wasmMoveMask(mask, mask0, mask1);
