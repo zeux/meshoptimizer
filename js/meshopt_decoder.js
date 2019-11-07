@@ -32,7 +32,7 @@ var MeshoptDecoder = (function() {
 	function unhex(data) {
 		var bytes = new Uint8Array(data.length / 2);
 		for (var i = 0; i < data.length; i += 2) {
-			bytes[i / 2] = parseInt(data.substring(i, i + 2), 16);
+			bytes[i / 2] = parseInt(data.substr(i, 2), 16);
 		}
 		return bytes.buffer;
 	}
