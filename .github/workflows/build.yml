@@ -17,6 +17,7 @@ jobs:
         make -j2 config=debug test
         make -j2 config=release test
         make -j2 config=release gltfpack
+        strip gltfpack
     - name: make coverage
       run: |
         make -j2 config=coverage test
