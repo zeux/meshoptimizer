@@ -1156,20 +1156,51 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 		{
 			float pos_rscale = params.pos_scale == 0.f ? 0.f : 1.f / params.pos_scale;
 
+			int maxv = 0;
+
 			for (size_t i = 0; i < stream.data.size(); ++i)
 			{
 				const Attr& a = stream.data[i];
 
-				int16_t v[4] = {
-				    int16_t((a.f[0] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[0]) * pos_rscale, params.pos_bits)),
-				    int16_t((a.f[1] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[1]) * pos_rscale, params.pos_bits)),
-				    int16_t((a.f[2] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[2]) * pos_rscale, params.pos_bits)),
-				    0};
-				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+				maxv = std::max(maxv, meshopt_quantizeUnorm(fabsf(a.f[0]) * pos_rscale, params.pos_bits));
+				maxv = std::max(maxv, meshopt_quantizeUnorm(fabsf(a.f[1]) * pos_rscale, params.pos_bits));
+				maxv = std::max(maxv, meshopt_quantizeUnorm(fabsf(a.f[2]) * pos_rscale, params.pos_bits));
 			}
 
-			StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_16, false, 8};
-			return format;
+			if (maxv <= 127)
+			{
+				for (size_t i = 0; i < stream.data.size(); ++i)
+				{
+					const Attr& a = stream.data[i];
+
+					int8_t v[4] = {
+					    int8_t((a.f[0] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[0]) * pos_rscale, params.pos_bits)),
+					    int8_t((a.f[1] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[1]) * pos_rscale, params.pos_bits)),
+					    int8_t((a.f[2] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[2]) * pos_rscale, params.pos_bits)),
+					    0};
+					bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+				}
+
+				StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_8, false, 4};
+				return format;
+			}
+			else
+			{
+				for (size_t i = 0; i < stream.data.size(); ++i)
+				{
+					const Attr& a = stream.data[i];
+
+					int16_t v[4] = {
+					    int16_t((a.f[0] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[0]) * pos_rscale, params.pos_bits)),
+					    int16_t((a.f[1] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[1]) * pos_rscale, params.pos_bits)),
+					    int16_t((a.f[2] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[2]) * pos_rscale, params.pos_bits)),
+					    0};
+					bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+				}
+
+				StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_16, false, 8};
+				return format;
+			}
 		}
 	}
 	else if (stream.type == cgltf_attribute_type_texcoord)
