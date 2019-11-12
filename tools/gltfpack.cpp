@@ -841,6 +841,29 @@ void reindexMesh(Mesh& mesh)
 	}
 }
 
+void filterMesh(Mesh& mesh)
+{
+	unsigned int* indices = &mesh.indices[0];
+	size_t total_indices = mesh.indices.size();
+
+	size_t write = 0;
+
+	for (size_t i = 0; i < total_indices; i += 3)
+	{
+		unsigned int a = indices[i + 0], b = indices[i + 1], c = indices[i + 2];
+
+		if (a != b && a != c && b != c)
+		{
+			indices[write + 0] = a;
+			indices[write + 1] = b;
+			indices[write + 2] = c;
+			write += 3;
+		}
+	}
+
+	mesh.indices.resize(write);
+}
+
 Stream* getStream(Mesh& mesh, cgltf_attribute_type type)
 {
 	for (size_t i = 0; i < mesh.streams.size(); ++i)
@@ -3143,6 +3166,7 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 		case cgltf_primitive_type_triangles:
 			reindexMesh(mesh);
+			filterMesh(mesh);
 			simplifyMesh(mesh, settings.simplify_threshold, settings.simplify_aggressive);
 			optimizeMesh(mesh);
 			sortBoneInfluences(mesh);
