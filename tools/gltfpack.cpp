@@ -945,6 +945,9 @@ void sortBoneInfluences(Mesh& mesh)
 	if (!joints || !weights)
 		return;
 
+	// weights below cutoff can't be represented in quantized 8-bit storage
+	const float weight_cutoff = 0.5f / 255.f;
+
 	size_t vertex_count = mesh.streams[0].data.size();
 
 	for (size_t i = 0; i < vertex_count; ++i)
@@ -956,7 +959,7 @@ void sortBoneInfluences(Mesh& mesh)
 		int count = 0;
 
 		for (int k = 0; k < 4; ++k)
-			if (wa.f[k] > 0.f)
+			if (wa.f[k] > weight_cutoff)
 			{
 				inf[count].i = ja.f[k];
 				inf[count].w = wa.f[k];
