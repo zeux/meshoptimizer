@@ -3443,8 +3443,9 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		json.append(data->json + data->asset.extras.start_offset, data->json + data->asset.extras.end_offset);
 	}
 	append(json, "}");
+
 	append(json, ",\"extensionsUsed\":[");
-	append(json, "\"MESHOPT_quantized_geometry\"");
+	append(json, "\"KHR_quantized_geometry\"");
 	if (settings.compress)
 	{
 		comma(json);
@@ -3471,16 +3472,15 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 		append(json, "\"KHR_lights_punctual\"");
 	}
 	append(json, "]");
+
+	append(json, ",\"extensionsRequired\":[");
+	append(json, "\"KHR_quantized_geometry\"");
 	if (settings.compress && !settings.fallback)
 	{
-		append(json, ",\"extensionsRequired\":[");
-		// Note: ideally we should include MESHOPT_quantized_geometry in the required extension list (regardless of compression)
-		// This extension *only* allows the use of quantized attributes for positions/normals/etc. This happens to be supported
-		// by popular JS frameworks, however, Babylon.JS refuses to load files with unsupported required extensions.
-		// For now we don't include it in the list, which will be fixed at some point once this extension becomes official.
+		comma(json);
 		append(json, "\"MESHOPT_compression\"");
-		append(json, "]");
 	}
+	append(json, "]");
 
 	if (!views.empty())
 	{
