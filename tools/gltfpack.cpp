@@ -7,8 +7,8 @@
 // files can be further compressed with deflate/etc.
 //
 // To load regular glb files, it should be sufficient to use a standard glTF loader (although note that these files
-// use quantized position/texture coordinates that are technically invalid per spec; THREE.js and BabylonJS support
-// these files out of the box).
+// use quantized position/texture coordinates that require support for KHR_mesh_quantization; THREE.js and BabylonJS
+// support these files out of the box).
 // To load packed glb files, meshoptimizer vertex decoder needs to be integrated into the loader; demo/GLTFLoader.js
 // contains a work-in-progress loader - please note that the extension specification isn't ready yet so the format
 // will change!
@@ -3503,7 +3503,7 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	append(json, "}");
 
 	append(json, ",\"extensionsUsed\":[");
-	append(json, "\"KHR_quantized_geometry\"");
+	append(json, "\"KHR_mesh_quantization\"");
 	if (settings.compress)
 	{
 		comma(json);
@@ -3532,7 +3532,7 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 	append(json, "]");
 
 	append(json, ",\"extensionsRequired\":[");
-	append(json, "\"KHR_quantized_geometry\"");
+	append(json, "\"KHR_mesh_quantization\"");
 	if (settings.compress && !settings.fallback)
 	{
 		comma(json);
