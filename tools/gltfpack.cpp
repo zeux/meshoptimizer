@@ -1840,6 +1840,14 @@ void writeMaterialInfo(std::string& json, const cgltf_data* data, const cgltf_ma
 	static const float white[4] = {1, 1, 1, 1};
 	static const float black[4] = {0, 0, 0, 0};
 
+	if (material.name && *material.name)
+	{
+		comma(json);
+		append(json, "\"name\":\"");
+		append(json, material.name);
+		append(json, "\"");
+	}
+
 	if (material.has_pbr_metallic_roughness)
 	{
 		const cgltf_pbr_metallic_roughness& pbr = material.pbr_metallic_roughness;
