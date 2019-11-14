@@ -1086,6 +1086,29 @@ void sortPointMesh(Mesh& mesh)
 	}
 }
 
+void processMesh(Mesh& mesh, const Settings& settings)
+{
+	switch (mesh.type)
+	{
+	case cgltf_primitive_type_points:
+		assert(mesh.indices.empty());
+		simplifyPointMesh(mesh, settings.simplify_threshold);
+		sortPointMesh(mesh);
+		break;
+
+	case cgltf_primitive_type_triangles:
+		filterBones(mesh);
+		reindexMesh(mesh);
+		filterMesh(mesh);
+		simplifyMesh(mesh, settings.simplify_threshold, settings.simplify_aggressive);
+		optimizeMesh(mesh);
+		break;
+
+	default:
+		assert(!"Unknown primitive type");
+	}
+}
+
 bool getAttributeBounds(const std::vector<Mesh>& meshes, cgltf_attribute_type type, Attr& min, Attr& max)
 {
 	min.f[0] = min.f[1] = min.f[2] = min.f[3] = +FLT_MAX;
@@ -3257,27 +3280,7 @@ void process(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settin
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
-		Mesh& mesh = meshes[i];
-
-		switch (mesh.type)
-		{
-		case cgltf_primitive_type_points:
-			assert(mesh.indices.empty());
-			simplifyPointMesh(mesh, settings.simplify_threshold);
-			sortPointMesh(mesh);
-			break;
-
-		case cgltf_primitive_type_triangles:
-			filterBones(mesh);
-			reindexMesh(mesh);
-			filterMesh(mesh);
-			simplifyMesh(mesh, settings.simplify_threshold, settings.simplify_aggressive);
-			optimizeMesh(mesh);
-			break;
-
-		default:
-			assert(!"Unknown primitive type");
-		}
+		processMesh(meshes[i], settings);
 	}
 
 	if (settings.verbose)
