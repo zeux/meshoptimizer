@@ -2636,6 +2636,22 @@ void writeEmbeddedImage(std::string& json, std::vector<BufferView>& views, const
 	append(json, "\"");
 }
 
+std::string inferMimeType(const char* path)
+{
+	const char* ext = strrchr(path, '.');
+	if (!ext)
+		return "";
+
+	std::string extl = ext + 1;
+	for (size_t i = 0; i < extl.length(); ++i)
+		extl[i] = tolower(extl[i]);
+
+	if (extl == "jpg")
+		return "image/jpeg";
+	else
+		return "image/" + extl;
+}
+
 bool writeEmbeddedImage(std::string& json, std::vector<BufferView>& views, const char* path, const char* base_path)
 {
 	std::string full_path = base_path;
@@ -2668,7 +2684,7 @@ bool writeEmbeddedImage(std::string& json, std::vector<BufferView>& views, const
 
 	fclose(image);
 
-	writeEmbeddedImage(json, views, &data[0], data.size(), "");
+	writeEmbeddedImage(json, views, &data[0], data.size(), inferMimeType(path).c_str());
 	return true;
 }
 
