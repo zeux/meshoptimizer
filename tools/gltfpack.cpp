@@ -2636,7 +2636,7 @@ void writeEmbeddedImage(std::string& json, std::vector<BufferView>& views, const
 	append(json, "\"");
 }
 
-void writeEmbeddedImage(std::string& json, std::vector<BufferView>& views, const char* path, const char* base_path)
+bool writeEmbeddedImage(std::string& json, std::vector<BufferView>& views, const char* path, const char* base_path)
 {
 	std::string full_path = base_path;
 
@@ -2647,20 +2647,29 @@ void writeEmbeddedImage(std::string& json, std::vector<BufferView>& views, const
 
 	FILE* image = fopen(full_path.c_str(), "rb");
 	if (!image)
-	{
-		fprintf(stderr, "Warning: unable to open image %s, skipping\n", path);
-		return;
-	}
+		return false;
 
 	fseek(image, 0, SEEK_END);
 	long length = ftell(image);
 	fseek(image, 0, SEEK_SET);
 
+	if (length <= 0)
+	{
+		fclose(image);
+		return false;
+	}
+
 	std::vector<char> data(length);
-	fread(&data[0], data.size(), 1, image);
+	if (fread(&data[0], 1, data.size(), image) != data.size())
+	{
+		fclose(image);
+		return false;
+	}
+
 	fclose(image);
 
 	writeEmbeddedImage(json, views, &data[0], data.size(), "");
+	return true;
 }
 
 void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, int target, const QuantizationParams& qp, const Settings& settings)
@@ -3358,7 +3367,8 @@ void process(cgltf_data* data, const char* data_path, std::vector<Mesh>& meshes,
 			}
 			else if (settings.texture_embed)
 			{
-				writeEmbeddedImage(json_images, views, image.uri, data_path);
+				if (!writeEmbeddedImage(json_images, views, image.uri, data_path))
+					fprintf(stderr, "Warning: unable to read image %s, skipping\n", image.uri);
 			}
 			else
 			{
