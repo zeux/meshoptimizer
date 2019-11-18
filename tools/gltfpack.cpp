@@ -84,6 +84,7 @@ struct Settings
 	bool simplify_aggressive;
 
 	bool texture_embed;
+	bool texture_basis;
 
 	bool compress;
 	bool fallback;
@@ -2652,14 +2653,36 @@ std::string inferMimeType(const char* path)
 		return "image/" + extl;
 }
 
+std::string getFullPath(const char* path, const char* base_path)
+{
+	std::string result = base_path;
+
+	std::string::size_type slash = result.find_last_of("/\\");
+	result.erase(slash == std::string::npos ? 0 : slash + 1);
+
+	result += path;
+
+	return result;
+}
+
+std::string getFileName(const char* path)
+{
+	std::string result = path;
+
+	std::string::size_type slash = result.find_last_of("/\\");
+	if (slash != std::string::npos)
+		result.erase(0, slash + 1);
+
+	std::string::size_type dot = result.find_last_of('.');
+	if (dot != std::string::npos)
+		result.erase(dot);
+
+	return result;
+}
+
 bool writeEmbeddedImage(std::string& json, std::vector<BufferView>& views, const char* path, const char* base_path)
 {
-	std::string full_path = base_path;
-
-	std::string::size_type slash = full_path.find_last_of("/\\");
-	full_path.erase(slash == std::string::npos ? 0 : slash + 1);
-
-	full_path += path;
+	std::string full_path = getFullPath(path, base_path);
 
 	FILE* image = fopen(full_path.c_str(), "rb");
 	if (!image)
@@ -2685,6 +2708,28 @@ bool writeEmbeddedImage(std::string& json, std::vector<BufferView>& views, const
 	fclose(image);
 
 	writeEmbeddedImage(json, views, &data[0], data.size(), inferMimeType(path).c_str());
+	return true;
+}
+
+bool writeBasisImage(std::string& json, const char* path, const char* base_path, const char* output_path)
+{
+	std::string full_path = getFullPath(path, base_path);
+	std::string basis_path = getFileName(path) + ".basis";
+	std::string basis_full_path = getFullPath(basis_path.c_str(), output_path);
+
+	std::string cmd = "basisu";
+	cmd += " -mipmap";
+	cmd += " -file ";
+	cmd += full_path;
+	cmd += " -output_file ";
+	cmd += basis_full_path;
+
+	if (system(cmd.c_str()) != 0)
+		return false;
+
+	json += "\"uri\":\"";
+	json += basis_path;
+	json += "\"";
 	return true;
 }
 
@@ -3283,7 +3328,7 @@ void printAttributeStats(const std::vector<BufferView>& views, BufferView::Kind 
 	}
 }
 
-void process(cgltf_data* data, const char* data_path, std::vector<Mesh>& meshes, const Settings& settings, std::string& json, std::string& bin, std::string& fallback)
+void process(cgltf_data* data, const char* input_path, const char* output_path, std::vector<Mesh>& meshes, const Settings& settings, std::string& json, std::string& bin, std::string& fallback)
 {
 	if (settings.verbose)
 	{
@@ -3383,8 +3428,13 @@ void process(cgltf_data* data, const char* data_path, std::vector<Mesh>& meshes,
 			}
 			else if (settings.texture_embed)
 			{
-				if (!writeEmbeddedImage(json_images, views, image.uri, data_path))
+				if (!writeEmbeddedImage(json_images, views, image.uri, input_path))
 					fprintf(stderr, "Warning: unable to read image %s, skipping\n", image.uri);
+			}
+			else if (settings.texture_basis)
+			{
+				if (!writeBasisImage(json_images, image.uri, input_path, output_path))
+					fprintf(stderr, "Warning: unable to encode image %s with Basis, skipping\n", image.uri);
 			}
 			else
 			{
@@ -3892,7 +3942,7 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 	}
 
 	std::string json, bin, fallback;
-	process(data, input, meshes, settings, json, bin, fallback);
+	process(data, input, output, meshes, settings, json, bin, fallback);
 
 	cgltf_free(data);
 
@@ -4048,6 +4098,10 @@ int main(int argc, char** argv)
 		{
 			settings.texture_embed = true;
 		}
+		else if (strcmp(arg, "-tb") == 0)
+		{
+			settings.texture_basis = true;
+		}
 		else if (strcmp(arg, "-i") == 0 && i + 1 < argc && !input)
 		{
 			input = argv[++i];
@@ -4089,6 +4143,11 @@ int main(int argc, char** argv)
 		}
 	}
 
+	if (settings.texture_embed && settings.texture_basis)
+	{
+		printf("Warning: embedding Basis-encoded textures is not supported right now\n");
+	}
+
 	if (test)
 	{
 		for (int i = test; i < argc; ++i)
@@ -4117,6 +4176,7 @@ int main(int argc, char** argv)
 		fprintf(stderr, "-si R: simplify meshes to achieve the ratio R (default: 1; R should be between 0 and 1)\n");
 		fprintf(stderr, "-sa: aggressively simplify to the target ratio disregarding quality\n");
 		fprintf(stderr, "-te: embed all textures into main buffer\n");
+		fprintf(stderr, "-tb: convert all textures to Basis Universal format (with basisu executable)\n");
 		fprintf(stderr, "-c: produce compressed gltf/glb files\n");
 		fprintf(stderr, "-cf: produce compressed gltf/glb files with fallback for loaders that don't support compression\n");
 		fprintf(stderr, "-v: verbose output\n");
