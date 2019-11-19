@@ -34,6 +34,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifndef _WIN32
+#include <unistd.h>
+#endif
+
 #include "cgltf.h"
 #include "fast_obj.h"
 
@@ -2713,12 +2717,8 @@ bool readFile(const char* path, std::string& data)
 	return true;
 }
 
-bool writeBasisImage(std::string& json, const char* path, bool normal_map, const char* base_path, const char* output_path)
+bool encodeBasis(const char* input, const char* output, bool normal_map)
 {
-	std::string full_path = getFullPath(path, base_path);
-	std::string basis_path = getFileName(path) + ".basis";
-	std::string basis_full_path = getFullPath(basis_path.c_str(), output_path);
-
 	std::string cmd = "basisu";
 
 	cmd += " -mipmap";
@@ -2729,9 +2729,9 @@ bool writeBasisImage(std::string& json, const char* path, bool normal_map, const
 	}
 
 	cmd += " -file ";
-	cmd += full_path;
+	cmd += input;
 	cmd += " -output_file ";
-	cmd += basis_full_path;
+	cmd += output;
 
 #ifdef _WIN32
 	cmd += " >nul";
@@ -2739,15 +2739,9 @@ bool writeBasisImage(std::string& json, const char* path, bool normal_map, const
 	cmd += " >/dev/null";
 #endif
 
-	printf("Compressing %s to %s\n", full_path.c_str(), basis_full_path.c_str());
+	printf("Compressing %s to %s\n", input, output);
 
-	if (system(cmd.c_str()) != 0)
-		return false;
-
-	json += "\"uri\":\"";
-	json += basis_path;
-	json += "\"";
-	return true;
+	return system(cmd.c_str()) == 0;
 }
 
 void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const char* output_path, const Settings& settings)
@@ -2761,7 +2755,41 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 
 		if (parseDataUri(image.uri, mime_type, img))
 		{
+			// TODO: Basis support
 			writeEmbeddedImage(json, views, img.c_str(), img.size(), mime_type.c_str());
+		}
+		else if (settings.texture_basis)
+		{
+			std::string full_path = getFullPath(image.uri, input_path);
+			std::string basis_path = getFileName(image.uri) + ".basis";
+			std::string basis_full_path = getFullPath(basis_path.c_str(), output_path);
+
+			if (encodeBasis(full_path.c_str(), basis_full_path.c_str(), info.normal_map))
+			{
+				if (settings.texture_embed)
+				{
+					if (readFile(basis_full_path.c_str(), img))
+					{
+						writeEmbeddedImage(json, views, img.c_str(), img.size(), "image/basis");
+
+						unlink(basis_full_path.c_str());
+					}
+					else
+					{
+						fprintf(stderr, "Warning: unable to read encoded image %s, skipping\n", basis_full_path.c_str());
+					}
+				}
+				else
+				{
+					append(json, "\"uri\":\"");
+					append(json, basis_path);
+					append(json, "\"");
+				}
+			}
+			else
+			{
+				fprintf(stderr, "Warning: unable to encode image %s with Basis, skipping\n", image.uri);
+			}
 		}
 		else if (settings.texture_embed)
 		{
@@ -2776,11 +2804,6 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 				fprintf(stderr, "Warning: unable to read image %s, skipping\n", image.uri);
 			}
 		}
-		else if (settings.texture_basis)
-		{
-			if (!writeBasisImage(json, image.uri, info.normal_map, input_path, output_path))
-				fprintf(stderr, "Warning: unable to encode image %s with Basis, skipping\n", image.uri);
-		}
 		else
 		{
 			append(json, "\"uri\":\"");
@@ -2793,6 +2816,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 		const char* img = static_cast<const char*>(image.buffer_view->buffer->data) + image.buffer_view->offset;
 		size_t size = image.buffer_view->size;
 
+		// TODO: Basis support
 		writeEmbeddedImage(json, views, img, size, image.mime_type);
 	}
 	else
@@ -4179,11 +4203,6 @@ int main(int argc, char** argv)
 			fprintf(stderr, "Unrecognized option %s\n", arg);
 			return 1;
 		}
-	}
-
-	if (settings.texture_embed && settings.texture_basis)
-	{
-		printf("Warning: embedding Basis-encoded textures is not supported right now\n");
 	}
 
 	if (test)
