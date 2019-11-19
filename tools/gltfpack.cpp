@@ -2746,8 +2746,6 @@ bool encodeBasisFile(const char* input, const char* output, bool normal_map)
 	cmd += " >/dev/null";
 #endif
 
-	printf("Compressing %s to %s\n", input, output);
-
 	return system(cmd.c_str()) == 0;
 }
 
@@ -2783,9 +2781,21 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 		img_data.assign(static_cast<const char*>(view->buffer->data) + view->offset, view->size);
 		mime_type = image.mime_type;
 	}
+	else if (image.uri && settings.texture_embed)
+	{
+		std::string full_path = getFullPath(image.uri, input_path);
+
+		if (!readFile(full_path.c_str(), img_data))
+		{
+			fprintf(stderr, "Warning: unable to read image %s, skipping\n", image.uri);
+		}
+
+		mime_type = inferMimeType(image.uri);
+	}
 
 	comma(json);
 	append(json, "{");
+
 	if (!img_data.empty())
 	{
 		if (settings.texture_basis)
@@ -2816,42 +2826,13 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 
 			if (encodeBasisFile(full_path.c_str(), basis_full_path.c_str(), info.normal_map))
 			{
-				if (settings.texture_embed)
-				{
-					if (readFile(basis_full_path.c_str(), img))
-					{
-						writeEmbeddedImage(json, views, img.c_str(), img.size(), "image/basis");
-
-						unlink(basis_full_path.c_str());
-					}
-					else
-					{
-						fprintf(stderr, "Warning: unable to read encoded image %s, skipping\n", basis_full_path.c_str());
-					}
-				}
-				else
-				{
-					append(json, "\"uri\":\"");
-					append(json, basis_path);
-					append(json, "\"");
-				}
+				append(json, "\"uri\":\"");
+				append(json, basis_path);
+				append(json, "\"");
 			}
 			else
 			{
 				fprintf(stderr, "Warning: unable to encode image %s with Basis, skipping\n", image.uri);
-			}
-		}
-		else if (settings.texture_embed)
-		{
-			std::string full_path = getFullPath(image.uri, input_path);
-
-			if (readFile(full_path.c_str(), img))
-			{
-				writeEmbeddedImage(json, views, img.c_str(), img.size(), inferMimeType(image.uri).c_str());
-			}
-			else
-			{
-				fprintf(stderr, "Warning: unable to read image %s, skipping\n", image.uri);
 			}
 		}
 		else
