@@ -2724,7 +2724,7 @@ bool writeFile(const char* path, const std::string& data)
 	return result == data.size();
 }
 
-bool encodeBasis(const char* input, const char* output, bool normal_map)
+bool encodeBasisFile(const char* input, const char* output, bool normal_map)
 {
 	std::string cmd = "basisu";
 
@@ -2751,6 +2751,22 @@ bool encodeBasis(const char* input, const char* output, bool normal_map)
 	return system(cmd.c_str()) == 0;
 }
 
+bool encodeBasisData(const std::string& data, std::string& result, bool normal_map, const char* output_path)
+{
+	std::string temp_name = getFileName(output_path) + ".temp";
+	std::string temp_input = getFullPath(temp_name.c_str(), output_path) + ".png";
+	std::string temp_output = getFullPath(temp_name.c_str(), output_path) + ".basis";
+
+	bool ok =
+		writeFile(temp_input.c_str(), data) &&
+		encodeBasisFile(temp_input.c_str(), temp_output.c_str(), normal_map) &&
+		readFile(temp_output.c_str(), result);
+
+	unlink(temp_input.c_str());
+	unlink(temp_output.c_str());
+	return ok;
+}
+
 void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const char* output_path, const Settings& settings)
 {
 	comma(json);
@@ -2762,8 +2778,23 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 
 		if (parseDataUri(image.uri, mime_type, img))
 		{
-			// TODO: Basis support
-			writeEmbeddedImage(json, views, img.c_str(), img.size(), mime_type.c_str());
+			if (settings.texture_basis)
+			{
+				std::string encoded;
+
+				if (encodeBasisData(img, encoded, info.normal_map, output_path))
+				{
+					writeEmbeddedImage(json, views, encoded.c_str(), encoded.size(), "image/basis");
+				}
+				else
+				{
+					fprintf(stderr, "Warning: unable to encode image %d with Basis, skipping\n", int(index));
+				}
+			}
+			else
+			{
+				writeEmbeddedImage(json, views, img.c_str(), img.size(), mime_type.c_str());
+			}
 		}
 		else if (settings.texture_basis)
 		{
@@ -2771,7 +2802,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 			std::string basis_path = getFileName(image.uri) + ".basis";
 			std::string basis_full_path = getFullPath(basis_path.c_str(), output_path);
 
-			if (encodeBasis(full_path.c_str(), basis_full_path.c_str(), info.normal_map))
+			if (encodeBasisFile(full_path.c_str(), basis_full_path.c_str(), info.normal_map))
 			{
 				if (settings.texture_embed)
 				{
@@ -2820,11 +2851,26 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 	}
 	else if (image.buffer_view && image.buffer_view->buffer->data && image.mime_type)
 	{
-		const char* img = static_cast<const char*>(image.buffer_view->buffer->data) + image.buffer_view->offset;
-		size_t size = image.buffer_view->size;
+		const cgltf_buffer_view* view = image.buffer_view;
+		std::string img(static_cast<const char*>(view->buffer->data) + view->offset, view->size);
 
-		// TODO: Basis support
-		writeEmbeddedImage(json, views, img, size, image.mime_type);
+		if (settings.texture_basis)
+		{
+			std::string encoded;
+
+			if (encodeBasisData(img, encoded, info.normal_map, output_path))
+			{
+				writeEmbeddedImage(json, views, encoded.c_str(), encoded.size(), "image/basis");
+			}
+			else
+			{
+				fprintf(stderr, "Warning: unable to encode image %d with Basis, skipping\n", int(index));
+			}
+		}
+		else
+		{
+			writeEmbeddedImage(json, views, img.c_str(), img.size(), image.mime_type);
+		}
 	}
 	else
 	{
