@@ -2769,34 +2769,46 @@ bool encodeBasisData(const std::string& data, std::string& result, bool normal_m
 
 void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const char* output_path, const Settings& settings)
 {
+	std::string img_data;
+	std::string mime_type;
+
+	if (image.uri && parseDataUri(image.uri, mime_type, img_data))
+	{
+		// we will re-embed img_data below
+	}
+	else if (image.buffer_view && image.buffer_view->buffer->data && image.mime_type)
+	{
+		const cgltf_buffer_view* view = image.buffer_view;
+
+		img_data.assign(static_cast<const char*>(view->buffer->data) + view->offset, view->size);
+		mime_type = image.mime_type;
+	}
+
 	comma(json);
 	append(json, "{");
-	if (image.uri)
+	if (!img_data.empty())
 	{
-		std::string mime_type;
-		std::string img;
-
-		if (parseDataUri(image.uri, mime_type, img))
+		if (settings.texture_basis)
 		{
-			if (settings.texture_basis)
-			{
-				std::string encoded;
+			std::string encoded;
 
-				if (encodeBasisData(img, encoded, info.normal_map, output_path))
-				{
-					writeEmbeddedImage(json, views, encoded.c_str(), encoded.size(), "image/basis");
-				}
-				else
-				{
-					fprintf(stderr, "Warning: unable to encode image %d with Basis, skipping\n", int(index));
-				}
+			if (encodeBasisData(img_data, encoded, info.normal_map, output_path))
+			{
+				writeEmbeddedImage(json, views, encoded.c_str(), encoded.size(), "image/basis");
 			}
 			else
 			{
-				writeEmbeddedImage(json, views, img.c_str(), img.size(), mime_type.c_str());
+				fprintf(stderr, "Warning: unable to encode image %d with Basis, skipping\n", int(index));
 			}
 		}
-		else if (settings.texture_basis)
+		else
+		{
+			writeEmbeddedImage(json, views, img_data.c_str(), img_data.size(), mime_type.c_str());
+		}
+	}
+	else if (image.uri)
+	{
+		if (settings.texture_basis)
 		{
 			std::string full_path = getFullPath(image.uri, input_path);
 			std::string basis_path = getFileName(image.uri) + ".basis";
@@ -2847,29 +2859,6 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 			append(json, "\"uri\":\"");
 			append(json, image.uri);
 			append(json, "\"");
-		}
-	}
-	else if (image.buffer_view && image.buffer_view->buffer->data && image.mime_type)
-	{
-		const cgltf_buffer_view* view = image.buffer_view;
-		std::string img(static_cast<const char*>(view->buffer->data) + view->offset, view->size);
-
-		if (settings.texture_basis)
-		{
-			std::string encoded;
-
-			if (encodeBasisData(img, encoded, info.normal_map, output_path))
-			{
-				writeEmbeddedImage(json, views, encoded.c_str(), encoded.size(), "image/basis");
-			}
-			else
-			{
-				fprintf(stderr, "Warning: unable to encode image %d with Basis, skipping\n", int(index));
-			}
-		}
-		else
-		{
-			writeEmbeddedImage(json, views, img.c_str(), img.size(), image.mime_type);
 		}
 	}
 	else
