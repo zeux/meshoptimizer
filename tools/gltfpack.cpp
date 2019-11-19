@@ -3540,6 +3540,14 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 
 	for (size_t i = 0; i < data->images_count; ++i)
 	{
+		if (settings.verbose && settings.texture_basis)
+		{
+			const char* uri = data->images[i].uri;
+			bool embedded = !uri || strncmp(uri, "data:", 5) == 0;
+
+			printf("image %d (%s) is being encoded with Basis\n", int(i), embedded ? "embedded" : uri);
+		}
+
 		writeImage(json_images, views, data->images[i], images[i], i, input_path, output_path, settings);
 	}
 
