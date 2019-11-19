@@ -2685,34 +2685,31 @@ std::string getFileName(const char* path)
 	return result;
 }
 
-bool writeEmbeddedImage(std::string& json, std::vector<BufferView>& views, const char* path, const char* base_path)
+bool readFile(const char* path, std::string& data)
 {
-	std::string full_path = getFullPath(path, base_path);
-
-	FILE* image = fopen(full_path.c_str(), "rb");
-	if (!image)
+	FILE* file = fopen(path, "rb");
+	if (!file)
 		return false;
 
-	fseek(image, 0, SEEK_END);
-	long length = ftell(image);
-	fseek(image, 0, SEEK_SET);
+	fseek(file, 0, SEEK_END);
+	long length = ftell(file);
+	fseek(file, 0, SEEK_SET);
 
 	if (length <= 0)
 	{
-		fclose(image);
+		fclose(file);
 		return false;
 	}
 
-	std::vector<char> data(length);
-	if (fread(&data[0], 1, data.size(), image) != data.size())
+	data.resize(length);
+
+	if (fread(&data[0], 1, data.size(), file) != data.size())
 	{
-		fclose(image);
+		fclose(file);
 		return false;
 	}
 
-	fclose(image);
-
-	writeEmbeddedImage(json, views, &data[0], data.size(), inferMimeType(path).c_str());
+	fclose(file);
 	return true;
 }
 
@@ -2768,8 +2765,16 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 		}
 		else if (settings.texture_embed)
 		{
-			if (!writeEmbeddedImage(json, views, image.uri, input_path))
+			std::string full_path = getFullPath(image.uri, input_path);
+
+			if (readFile(full_path.c_str(), img))
+			{
+				writeEmbeddedImage(json, views, img.c_str(), img.size(), inferMimeType(image.uri).c_str());
+			}
+			else
+			{
 				fprintf(stderr, "Warning: unable to read image %s, skipping\n", image.uri);
+			}
 		}
 		else if (settings.texture_basis)
 		{
