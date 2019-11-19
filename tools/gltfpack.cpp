@@ -2733,6 +2733,51 @@ bool writeBasisImage(std::string& json, const char* path, const char* base_path,
 	return true;
 }
 
+void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, size_t index, const char* input_path, const char* output_path, const Settings& settings)
+{
+	comma(json);
+	append(json, "{");
+	if (image.uri)
+	{
+		std::string mime_type;
+		std::string img;
+
+		if (parseDataUri(image.uri, mime_type, img))
+		{
+			writeEmbeddedImage(json, views, img.c_str(), img.size(), mime_type.c_str());
+		}
+		else if (settings.texture_embed)
+		{
+			if (!writeEmbeddedImage(json, views, image.uri, input_path))
+				fprintf(stderr, "Warning: unable to read image %s, skipping\n", image.uri);
+		}
+		else if (settings.texture_basis)
+		{
+			if (!writeBasisImage(json, image.uri, input_path, output_path))
+				fprintf(stderr, "Warning: unable to encode image %s with Basis, skipping\n", image.uri);
+		}
+		else
+		{
+			append(json, "\"uri\":\"");
+			append(json, image.uri);
+			append(json, "\"");
+		}
+	}
+	else if (image.buffer_view && image.buffer_view->buffer->data && image.mime_type)
+	{
+		const char* img = static_cast<const char*>(image.buffer_view->buffer->data) + image.buffer_view->offset;
+		size_t size = image.buffer_view->size;
+
+		writeEmbeddedImage(json, views, img, size, image.mime_type);
+	}
+	else
+	{
+		fprintf(stderr, "Warning: ignoring image %d since it has no URI and no valid buffer data\n", int(index));
+	}
+
+	append(json, "}");
+}
+
 void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, int target, const QuantizationParams& qp, const Settings& settings)
 {
 	std::string scratch;
@@ -3413,49 +3458,7 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 
 	for (size_t i = 0; i < data->images_count; ++i)
 	{
-		const cgltf_image& image = data->images[i];
-
-		comma(json_images);
-		append(json_images, "{");
-		if (image.uri)
-		{
-			std::string mime_type;
-			std::string img;
-
-			if (parseDataUri(image.uri, mime_type, img))
-			{
-				writeEmbeddedImage(json_images, views, img.c_str(), img.size(), mime_type.c_str());
-			}
-			else if (settings.texture_embed)
-			{
-				if (!writeEmbeddedImage(json_images, views, image.uri, input_path))
-					fprintf(stderr, "Warning: unable to read image %s, skipping\n", image.uri);
-			}
-			else if (settings.texture_basis)
-			{
-				if (!writeBasisImage(json_images, image.uri, input_path, output_path))
-					fprintf(stderr, "Warning: unable to encode image %s with Basis, skipping\n", image.uri);
-			}
-			else
-			{
-				append(json_images, "\"uri\":\"");
-				append(json_images, image.uri);
-				append(json_images, "\"");
-			}
-		}
-		else if (image.buffer_view && image.buffer_view->buffer->data && image.mime_type)
-		{
-			const char* img = static_cast<const char*>(image.buffer_view->buffer->data) + image.buffer_view->offset;
-			size_t size = image.buffer_view->size;
-
-			writeEmbeddedImage(json_images, views, img, size, image.mime_type);
-		}
-		else
-		{
-			fprintf(stderr, "Warning: ignoring image %d since it has no URI and no valid buffer data\n", int(i));
-		}
-
-		append(json_images, "}");
+		writeImage(json_images, views, data->images[i], i, input_path, output_path, settings);
 	}
 
 	for (size_t i = 0; i < data->textures_count; ++i)
