@@ -129,6 +129,11 @@ struct MaterialInfo
 	int remap;
 };
 
+struct ImageInfo
+{
+	bool normal_map;
+};
+
 struct BufferView
 {
 	enum Kind
@@ -2711,14 +2716,21 @@ bool writeEmbeddedImage(std::string& json, std::vector<BufferView>& views, const
 	return true;
 }
 
-bool writeBasisImage(std::string& json, const char* path, const char* base_path, const char* output_path)
+bool writeBasisImage(std::string& json, const char* path, bool normal_map, const char* base_path, const char* output_path)
 {
 	std::string full_path = getFullPath(path, base_path);
 	std::string basis_path = getFileName(path) + ".basis";
 	std::string basis_full_path = getFullPath(basis_path.c_str(), output_path);
 
 	std::string cmd = "basisu";
+
 	cmd += " -mipmap";
+	if (normal_map)
+	{
+		cmd += " -normal_map";
+		// for optimal quality we should specify seperate_rg_to_color_alpha but this requires renderer awareness
+	}
+
 	cmd += " -file ";
 	cmd += full_path;
 	cmd += " -output_file ";
@@ -2733,7 +2745,7 @@ bool writeBasisImage(std::string& json, const char* path, const char* base_path,
 	return true;
 }
 
-void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, size_t index, const char* input_path, const char* output_path, const Settings& settings)
+void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const char* output_path, const Settings& settings)
 {
 	comma(json);
 	append(json, "{");
@@ -2753,7 +2765,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 		}
 		else if (settings.texture_basis)
 		{
-			if (!writeBasisImage(json, image.uri, input_path, output_path))
+			if (!writeBasisImage(json, image.uri, info.normal_map, input_path, output_path))
 				fprintf(stderr, "Warning: unable to encode image %s with Basis, skipping\n", image.uri);
 		}
 		else
@@ -3432,6 +3444,16 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 		printMeshStats(meshes, "output");
 	}
 
+	std::vector<ImageInfo> images(data->images_count);
+
+	for (size_t i = 0; i < data->materials_count; ++i)
+	{
+		const cgltf_material& material = data->materials[i];
+
+		if (material.normal_texture.texture && material.normal_texture.texture->image)
+			images[material.normal_texture.texture->image - data->images].normal_map = true;
+	}
+
 	QuantizationParams qp = prepareQuantization(meshes, settings);
 
 	std::string json_images;
@@ -3458,7 +3480,7 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 
 	for (size_t i = 0; i < data->images_count; ++i)
 	{
-		writeImage(json_images, views, data->images[i], i, input_path, output_path, settings);
+		writeImage(json_images, views, data->images[i], images[i], i, input_path, output_path, settings);
 	}
 
 	for (size_t i = 0; i < data->textures_count; ++i)
