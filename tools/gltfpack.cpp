@@ -2736,6 +2736,14 @@ bool writeBasisImage(std::string& json, const char* path, bool normal_map, const
 	cmd += " -output_file ";
 	cmd += basis_full_path;
 
+#ifdef _WIN32
+	cmd += " >nul";
+#else
+	cmd += " >/dev/null";
+#endif
+
+	printf("Compressing %s to %s\n", full_path.c_str(), basis_full_path.c_str());
+
 	if (system(cmd.c_str()) != 0)
 		return false;
 
