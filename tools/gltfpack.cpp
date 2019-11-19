@@ -2706,15 +2706,22 @@ bool readFile(const char* path, std::string& data)
 	}
 
 	data.resize(length);
-
-	if (fread(&data[0], 1, data.size(), file) != data.size())
-	{
-		fclose(file);
-		return false;
-	}
-
+	size_t result = fread(&data[0], 1, data.size(), file);
 	fclose(file);
-	return true;
+
+	return result == data.size();
+}
+
+bool writeFile(const char* path, const std::string& data)
+{
+	FILE* file = fopen(path, "wb");
+	if (!file)
+		return false;
+
+	size_t result = fwrite(&data[0], 1, data.size(), file);
+	fclose(file);
+
+	return result == data.size();
 }
 
 bool encodeBasis(const char* input, const char* output, bool normal_map)
