@@ -2756,9 +2756,9 @@ bool encodeBasisData(const std::string& data, std::string& result, bool normal_m
 	std::string temp_output = getFullPath(temp_name.c_str(), output_path) + ".basis";
 
 	bool ok =
-		writeFile(temp_input.c_str(), data) &&
-		encodeBasisFile(temp_input.c_str(), temp_output.c_str(), normal_map) &&
-		readFile(temp_output.c_str(), result);
+	    writeFile(temp_input.c_str(), data) &&
+	    encodeBasisFile(temp_input.c_str(), temp_output.c_str(), normal_map) &&
+	    readFile(temp_output.c_str(), result);
 
 	unlink(temp_input.c_str());
 	unlink(temp_output.c_str());
@@ -2792,9 +2792,6 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 
 		mime_type = inferMimeType(image.uri);
 	}
-
-	comma(json);
-	append(json, "{");
 
 	if (!img_data.empty())
 	{
@@ -2846,8 +2843,6 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 	{
 		fprintf(stderr, "Warning: ignoring image %d since it has no URI and no valid buffer data\n", int(index));
 	}
-
-	append(json, "}");
 }
 
 void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, int target, const QuantizationParams& qp, const Settings& settings)
@@ -3548,7 +3543,10 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 			printf("image %d (%s) is being encoded with Basis\n", int(i), embedded ? "embedded" : uri);
 		}
 
+		comma(json_images);
+		append(json_images, "{");
 		writeImage(json_images, views, data->images[i], images[i], i, input_path, output_path, settings);
+		append(json_images, "}");
 	}
 
 	for (size_t i = 0; i < data->textures_count; ++i)
