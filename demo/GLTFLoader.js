@@ -14,6 +14,7 @@ THREE.GLTFLoader = ( function () {
 
 		this.dracoLoader = null;
 		this.ddsLoader = null;
+		this.basisLoader = null;
 		this.meshoptDecoder = null;
 
 	}
@@ -107,6 +108,13 @@ THREE.GLTFLoader = ( function () {
 		setDDSLoader: function ( ddsLoader ) {
 
 			this.ddsLoader = ddsLoader;
+			return this;
+
+		},
+
+		setBasisLoader: function ( basisLoader ) {
+
+			this.basisLoader = basisLoader;
 			return this;
 
 		},
@@ -222,7 +230,8 @@ THREE.GLTFLoader = ( function () {
 
 				path: path || this.resourcePath || '',
 				crossOrigin: this.crossOrigin,
-				manager: this.manager
+				manager: this.manager,
+				basisLoader: this.basisLoader,
 
 			} );
 
@@ -1970,11 +1979,29 @@ THREE.GLTFLoader = ( function () {
 
 			var loader = options.manager.getHandler( sourceURI );
 
+			if ( ! loader && textureExtensions[ EXTENSIONS.MSFT_TEXTURE_DDS ] ) {
+
+				loader = parser.extensions[ EXTENSIONS.MSFT_TEXTURE_DDS ].ddsLoader
+
+			}
+
+			if ( ! loader && options.basisLoader ) {
+
+				if ( source.uri !== undefined && source.uri.toLowerCase().endsWith(".basis") ) {
+
+					loader = options.basisLoader;
+
+				} else if ( source.bufferView !== undefined && source.mimeType == "image/basis" ) {
+
+					loader = options.basisLoader;
+
+				}
+
+			}
+
 			if ( ! loader ) {
 
-				loader = textureExtensions[ EXTENSIONS.MSFT_TEXTURE_DDS ]
-					? parser.extensions[ EXTENSIONS.MSFT_TEXTURE_DDS ].ddsLoader
-					: textureLoader;
+				loader = textureLoader;
 
 			}
 
