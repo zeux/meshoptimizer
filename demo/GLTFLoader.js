@@ -231,6 +231,7 @@ THREE.GLTFLoader = ( function () {
 				path: path || this.resourcePath || '',
 				crossOrigin: this.crossOrigin,
 				manager: this.manager,
+				ddsLoader: this.ddsLoader,
 				basisLoader: this.basisLoader,
 
 			} );
@@ -1982,6 +1983,20 @@ THREE.GLTFLoader = ( function () {
 			if ( ! loader && textureExtensions[ EXTENSIONS.MSFT_TEXTURE_DDS ] ) {
 
 				loader = parser.extensions[ EXTENSIONS.MSFT_TEXTURE_DDS ].ddsLoader
+
+			}
+
+			if ( ! loader && options.ddsLoader ) {
+
+				if ( source.uri !== undefined && source.uri.toLowerCase().endsWith(".dds") ) {
+
+					loader = options.ddsLoader;
+
+				} else if ( source.bufferView !== undefined && source.mimeType == "image/vnd-ms.dds" ) {
+
+					loader = options.ddsLoader;
+
+				}
 
 			}
 
