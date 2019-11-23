@@ -90,6 +90,8 @@ struct Settings
 	bool texture_embed;
 	bool texture_basis;
 
+	int texture_quality;
+
 	bool compress;
 	bool fallback;
 
@@ -2724,9 +2726,15 @@ bool writeFile(const char* path, const std::string& data)
 	return result == data.size();
 }
 
-bool encodeBasisFile(const char* input, const char* output, bool normal_map)
+bool encodeBasisFile(const char* input, const char* output, bool normal_map, int quality)
 {
 	std::string cmd = "basisu";
+
+	char ql[16];
+	sprintf(ql, "%d", (quality * 255 + 1) / 100);
+
+	cmd += " -q ";
+	cmd += ql;
 
 	cmd += " -mipmap";
 	if (normal_map)
@@ -2749,7 +2757,7 @@ bool encodeBasisFile(const char* input, const char* output, bool normal_map)
 	return system(cmd.c_str()) == 0;
 }
 
-bool encodeBasisData(const std::string& data, std::string& result, bool normal_map, const char* output_path)
+bool encodeBasisData(const std::string& data, std::string& result, bool normal_map, int quality, const char* output_path)
 {
 	std::string temp_name = getFileName(output_path) + ".temp";
 	std::string temp_input = getFullPath(temp_name.c_str(), output_path) + ".png";
@@ -2757,7 +2765,7 @@ bool encodeBasisData(const std::string& data, std::string& result, bool normal_m
 
 	bool ok =
 	    writeFile(temp_input.c_str(), data) &&
-	    encodeBasisFile(temp_input.c_str(), temp_output.c_str(), normal_map) &&
+	    encodeBasisFile(temp_input.c_str(), temp_output.c_str(), normal_map, quality) &&
 	    readFile(temp_output.c_str(), result);
 
 	unlink(temp_input.c_str());
@@ -2799,7 +2807,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 		{
 			std::string encoded;
 
-			if (encodeBasisData(img_data, encoded, info.normal_map, output_path))
+			if (encodeBasisData(img_data, encoded, info.normal_map, settings.texture_quality, output_path))
 			{
 				writeEmbeddedImage(json, views, encoded.c_str(), encoded.size(), "image/basis");
 			}
@@ -2821,7 +2829,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 			std::string basis_path = getFileName(image.uri) + ".basis";
 			std::string basis_full_path = getFullPath(basis_path.c_str(), output_path);
 
-			if (encodeBasisFile(full_path.c_str(), basis_full_path.c_str(), info.normal_map))
+			if (encodeBasisFile(full_path.c_str(), basis_full_path.c_str(), info.normal_map, settings.texture_quality))
 			{
 				append(json, "\"uri\":\"");
 				append(json, basis_path);
@@ -4139,6 +4147,7 @@ int main(int argc, char** argv)
 	settings.nrm_bits = 8;
 	settings.anim_freq = 30;
 	settings.simplify_threshold = 1.f;
+	settings.texture_quality = 50;
 
 	const char* input = 0;
 	const char* output = 0;
@@ -4192,6 +4201,10 @@ int main(int argc, char** argv)
 		else if (strcmp(arg, "-tb") == 0)
 		{
 			settings.texture_basis = true;
+		}
+		else if (strcmp(arg, "-tq") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		{
+			settings.texture_quality = atoi(argv[++i]);
 		}
 		else if (strcmp(arg, "-i") == 0 && i + 1 < argc && !input)
 		{
@@ -4263,6 +4276,7 @@ int main(int argc, char** argv)
 		fprintf(stderr, "-sa: aggressively simplify to the target ratio disregarding quality\n");
 		fprintf(stderr, "-te: embed all textures into main buffer\n");
 		fprintf(stderr, "-tb: convert all textures to Basis Universal format (with basisu executable)\n");
+		fprintf(stderr, "-tq N: set texture encoding quality (default: 50; N should be between 1 and 100\n");
 		fprintf(stderr, "-c: produce compressed gltf/glb files\n");
 		fprintf(stderr, "-cf: produce compressed gltf/glb files with fallback for loaders that don't support compression\n");
 		fprintf(stderr, "-v: verbose output\n");
