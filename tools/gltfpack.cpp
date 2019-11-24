@@ -2745,7 +2745,7 @@ bool encodeBasisFile(const char* input, const char* output, bool normal_map, int
 	std::string cmd = "basisu";
 
 	char ql[16];
-	sprintf(ql, "%d", (quality * 255 + 1) / 100);
+	sprintf(ql, "%d", (quality * 255 + 50) / 100);
 
 	cmd += " -q ";
 	cmd += ql;
