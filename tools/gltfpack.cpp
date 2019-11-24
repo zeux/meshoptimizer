@@ -1527,11 +1527,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 		{
 			const Attr& a = stream.data[i];
 
-			float v[4] = {
-			    a.f[0],
-			    a.f[1],
-			    a.f[2],
-			    a.f[3]};
+			float v[4] = {a.f[0], a.f[1], a.f[2], a.f[3]};
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
@@ -1658,17 +1654,35 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 		StreamFormat format = {cgltf_type_scalar, cgltf_component_type_r_8u, true, 1};
 		return format;
 	}
+	else if (type == cgltf_animation_path_type_translation || type == cgltf_animation_path_type_scale)
+	{
+		int bits = 15;
+
+		for (size_t i = 0; i < data.size(); ++i)
+		{
+			const Attr& a = data[i];
+
+			float v[3] = {
+				meshopt_quantizeFloat(a.f[0], bits),
+				meshopt_quantizeFloat(a.f[1], bits),
+				meshopt_quantizeFloat(a.f[2], bits)};
+			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+		}
+
+		StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_32f, false, 12};
+		return format;
+	}
 	else
 	{
 		for (size_t i = 0; i < data.size(); ++i)
 		{
 			const Attr& a = data[i];
 
-			float v[3] = {a.f[0], a.f[1], a.f[2]};
+			float v[4] = {a.f[0], a.f[1], a.f[2], a.f[3]};
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_32f, false, 12};
+		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_32f, false, 16};
 		return format;
 	}
 }
