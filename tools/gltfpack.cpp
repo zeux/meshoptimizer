@@ -2740,8 +2740,15 @@ bool writeFile(const char* path, const std::string& data)
 	return result == data.size();
 }
 
-bool encodeBasisFile(const char* input, const char* output, bool normal_map, int quality)
+bool encodeBasis(const std::string& data, std::string& result, bool normal_map, int quality, const char* output_path)
 {
+	std::string temp_name = getFileName(output_path) + ".temp";
+	std::string temp_input = getFullPath(temp_name.c_str(), output_path) + ".png";
+	std::string temp_output = getFullPath(temp_name.c_str(), output_path) + ".basis";
+
+	if (!writeFile(temp_input.c_str(), data))
+		return false;
+
 	std::string cmd = "basisu";
 
 	char ql[16];
@@ -2758,9 +2765,9 @@ bool encodeBasisFile(const char* input, const char* output, bool normal_map, int
 	}
 
 	cmd += " -file ";
-	cmd += input;
+	cmd += temp_input;
 	cmd += " -output_file ";
-	cmd += output;
+	cmd += temp_output;
 
 #ifdef _WIN32
 	cmd += " >nul";
@@ -2768,22 +2775,13 @@ bool encodeBasisFile(const char* input, const char* output, bool normal_map, int
 	cmd += " >/dev/null";
 #endif
 
-	return system(cmd.c_str()) == 0;
-}
+	int rc = system(cmd.c_str());
 
-bool encodeBasisData(const std::string& data, std::string& result, bool normal_map, int quality, const char* output_path)
-{
-	std::string temp_name = getFileName(output_path) + ".temp";
-	std::string temp_input = getFullPath(temp_name.c_str(), output_path) + ".png";
-	std::string temp_output = getFullPath(temp_name.c_str(), output_path) + ".basis";
-
-	bool ok =
-	    writeFile(temp_input.c_str(), data) &&
-	    encodeBasisFile(temp_input.c_str(), temp_output.c_str(), normal_map, quality) &&
-	    readFile(temp_output.c_str(), result);
+	bool ok = rc == 0 && readFile(temp_output.c_str(), result);
 
 	unlink(temp_input.c_str());
 	unlink(temp_output.c_str());
+
 	return ok;
 }
 
@@ -2821,7 +2819,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 		{
 			std::string encoded;
 
-			if (encodeBasisData(img_data, encoded, info.normal_map, settings.texture_quality, output_path))
+			if (encodeBasis(img_data, encoded, info.normal_map, settings.texture_quality, output_path))
 			{
 				writeEmbeddedImage(json, views, encoded.c_str(), encoded.size(), "image/basis");
 			}
@@ -2843,15 +2841,28 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 			std::string basis_path = getFileName(image.uri) + ".basis";
 			std::string basis_full_path = getFullPath(basis_path.c_str(), output_path);
 
-			if (encodeBasisFile(full_path.c_str(), basis_full_path.c_str(), info.normal_map, settings.texture_quality))
+			if (!readFile(full_path.c_str(), img_data))
 			{
-				append(json, "\"uri\":\"");
-				append(json, basis_path);
-				append(json, "\"");
+				fprintf(stderr, "Warning: unable to read image %s, skipping\n", image.uri);
 			}
 			else
 			{
-				fprintf(stderr, "Warning: unable to encode image %s with Basis, skipping\n", image.uri);
+				std::string encoded;
+
+				if (!encodeBasis(img_data, encoded, info.normal_map, settings.texture_quality, output_path))
+				{
+					fprintf(stderr, "Warning: unable to encode image %s with Basis, skipping\n", image.uri);
+				}
+				else if (!writeFile(basis_full_path.c_str(), encoded))
+				{
+					fprintf(stderr, "Warning: unable to save Basis image %s, skipping\n", image.uri);
+				}
+				else
+				{
+					append(json, "\"uri\":\"");
+					append(json, basis_path);
+					append(json, "\"");
+				}
 			}
 		}
 		else
