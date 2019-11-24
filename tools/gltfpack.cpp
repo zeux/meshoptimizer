@@ -2749,7 +2749,8 @@ bool encodeBasis(const std::string& data, std::string& result, bool normal_map, 
 	if (!writeFile(temp_input.c_str(), data))
 		return false;
 
-	std::string cmd = "basisu";
+	const char* basisu_path = getenv("BASISU_PATH");
+	std::string cmd = basisu_path ? basisu_path : "basisu";
 
 	char ql[16];
 	sprintf(ql, "%d", (quality * 255 + 50) / 100);
