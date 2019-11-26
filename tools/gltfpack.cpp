@@ -2875,34 +2875,34 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 			std::string basis_path = getFileName(image.uri) + ".basis";
 			std::string basis_full_path = getFullPath(basis_path.c_str(), output_path);
 
-			if (!readFile(full_path.c_str(), img_data))
-			{
-				fprintf(stderr, "Warning: unable to read image %s, skipping\n", image.uri);
-			}
-			else
+			if (readFile(full_path.c_str(), img_data))
 			{
 				std::string encoded;
 
-				if (!encodeBasis(img_data, encoded, info.normal_map, settings.texture_quality))
-				{
-					fprintf(stderr, "Warning: unable to encode image %s with Basis, skipping\n", image.uri);
-				}
-				else
+				if (encodeBasis(img_data, encoded, info.normal_map, settings.texture_quality))
 				{
 					if (settings.texture_ktx2)
 						encoded = basisToKtx(encoded);
 
-					if (!writeFile(basis_full_path.c_str(), encoded))
-					{
-						fprintf(stderr, "Warning: unable to save Basis image %s, skipping\n", image.uri);
-					}
-					else
+					if (writeFile(basis_full_path.c_str(), encoded))
 					{
 						append(json, "\"uri\":\"");
 						append(json, basis_path);
 						append(json, "\"");
 					}
+					else
+					{
+						fprintf(stderr, "Warning: unable to save Basis image %s, skipping\n", image.uri);
+					}
 				}
+				else
+				{
+					fprintf(stderr, "Warning: unable to encode image %s with Basis, skipping\n", image.uri);
+				}
+			}
+			else
+			{
+				fprintf(stderr, "Warning: unable to read image %s, skipping\n", image.uri);
 			}
 		}
 		else
