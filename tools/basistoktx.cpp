@@ -171,7 +171,7 @@ std::string basisToKtx(const std::string& basis, bool srgb)
 
 	// supercompression global data
 	ktxBasisGlobalHeader sgd_header = {};
-	sgd_header.globalFlags = KTX_BU_SLICE_ETC1S | (has_alpha ? KTX_BU_SLICE_HAS_ALPHA : 0);
+	sgd_header.globalFlags = basis_header.m_flags;
 	sgd_header.endpointCount = basis_header.m_total_endpoints;
 	sgd_header.selectorCount = basis_header.m_total_selectors;
 	sgd_header.endpointsByteLength = basis_header.m_endpoint_cb_file_size;

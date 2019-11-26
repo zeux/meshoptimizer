@@ -101,8 +101,6 @@ typedef struct ktxLevelIndexEntry {
                 /*!< Number of bytes of uncompressed image data in the level. */
 } ktxLevelIndexEntry;
 
-enum sliceflags { KTX_BU_SLICE_HAS_ALPHA, KTX_BU_SLICE_ETC1S };
-
 typedef struct ktxBasisGlobalHeader {
     uint32_t globalFlags;
     uint16_t endpointCount;
