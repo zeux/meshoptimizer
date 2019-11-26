@@ -2879,7 +2879,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 		if (settings.texture_basis)
 		{
 			std::string full_path = getFullPath(image.uri, input_path);
-			std::string basis_path = getFileName(image.uri) + ".basis";
+			std::string basis_path = getFileName(image.uri) + (settings.texture_ktx2 ? ".ktx" : ".basis");
 			std::string basis_full_path = getFullPath(basis_path.c_str(), output_path);
 
 			if (readFile(full_path.c_str(), img_data))
