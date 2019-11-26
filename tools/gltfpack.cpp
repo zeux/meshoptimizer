@@ -3317,18 +3317,18 @@ void writeCamera(std::string& json, const cgltf_camera& camera)
 	case cgltf_camera_type_perspective:
 		append(json, "\"type\":\"perspective\",\"perspective\":{");
 		append(json, "\"yfov\":");
-		append(json, camera.perspective.yfov);
+		append(json, camera.data.perspective.yfov);
 		append(json, ",\"znear\":");
-		append(json, camera.perspective.znear);
-		if (camera.perspective.aspect_ratio != 0.f)
+		append(json, camera.data.perspective.znear);
+		if (camera.data.perspective.aspect_ratio != 0.f)
 		{
 			append(json, ",\"aspectRatio\":");
-			append(json, camera.perspective.aspect_ratio);
+			append(json, camera.data.perspective.aspect_ratio);
 		}
-		if (camera.perspective.zfar != 0.f)
+		if (camera.data.perspective.zfar != 0.f)
 		{
 			append(json, ",\"zfar\":");
-			append(json, camera.perspective.zfar);
+			append(json, camera.data.perspective.zfar);
 		}
 		append(json, "}");
 		break;
@@ -3336,13 +3336,13 @@ void writeCamera(std::string& json, const cgltf_camera& camera)
 	case cgltf_camera_type_orthographic:
 		append(json, "\"type\":\"orthographic\",\"orthographic\":{");
 		append(json, "\"xmag\":");
-		append(json, camera.orthographic.xmag);
+		append(json, camera.data.orthographic.xmag);
 		append(json, ",\"ymag\":");
-		append(json, camera.orthographic.ymag);
+		append(json, camera.data.orthographic.ymag);
 		append(json, ",\"znear\":");
-		append(json, camera.orthographic.znear);
+		append(json, camera.data.orthographic.znear);
 		append(json, ",\"zfar\":");
-		append(json, camera.orthographic.zfar);
+		append(json, camera.data.orthographic.zfar);
 		append(json, "}");
 		break;
 
