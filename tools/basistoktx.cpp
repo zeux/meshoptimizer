@@ -35,25 +35,24 @@ static void write(std::string& data, size_t offset, const T& value)
 	memcpy(&data[offset], &value, sizeof(T));
 }
 
-static void createDfd(std::vector<uint32_t>& result, int channels)
+static void createDfd(std::vector<uint32_t>& result)
 {
-	// TODO: spec says the DFD must have 0 samples?
-	size_t descriptor_size = sizeof(uint32_t) * (KHR_DF_WORD_SAMPLESTART + KHR_DF_WORD_SAMPLESTART * channels);
+	size_t descriptor_size = KHR_DF_WORD_SAMPLESTART;
 
 	result.clear();
 	result.resize(1 + descriptor_size);
 
-	result[0] = result.size() * sizeof(uint32_t);
+	result[0] = (1 + descriptor_size) * sizeof(uint32_t);
 
 	uint32_t* dfd = &result[1];
 
 	KHR_DFDSETVAL(dfd, VENDORID, KHR_DF_VENDORID_KHRONOS);
 	KHR_DFDSETVAL(dfd, DESCRIPTORTYPE, KHR_DF_KHR_DESCRIPTORTYPE_BASICFORMAT);
-	KHR_DFDSETVAL(dfd, VERSIONNUMBER, KHR_DF_VERSIONNUMBER_1_3); // TODO: 1.2?
-	KHR_DFDSETVAL(dfd, DESCRIPTORBLOCKSIZE, descriptor_size);
-	KHR_DFDSETVAL(dfd, MODEL, KHR_DF_MODEL_RGBSDA); // TODO: validator says it must be UNDEFINED?
+	KHR_DFDSETVAL(dfd, VERSIONNUMBER, KHR_DF_VERSIONNUMBER_1_3);
+	KHR_DFDSETVAL(dfd, DESCRIPTORBLOCKSIZE, descriptor_size * sizeof(uint32_t));
+	KHR_DFDSETVAL(dfd, MODEL, KHR_DF_MODEL_UNSPECIFIED);
 	KHR_DFDSETVAL(dfd, PRIMARIES, KHR_DF_PRIMARIES_BT709);
-	KHR_DFDSETVAL(dfd, TRANSFER, KHR_DF_TRANSFER_LINEAR); // TODO: sRGB?
+	KHR_DFDSETVAL(dfd, TRANSFER, KHR_DF_TRANSFER_LINEAR);
 	KHR_DFDSETVAL(dfd, FLAGS, KHR_DF_FLAG_ALPHA_STRAIGHT);
 }
 
@@ -81,6 +80,7 @@ std::string basisToKtx(const std::string& basis)
 	for (size_t i = 0; i < basis_header.m_total_slices; ++i)
 		read(basis, basis_header.m_slice_desc_file_ofs + i * sizeof(basist::basis_slice_desc), slices[i]);
 
+	assert(slices[0].m_level_index == 0);
 	uint32_t width = slices[0].m_orig_width;
 	uint32_t height = slices[0].m_orig_height;
 	uint32_t levels = has_alpha ? slices.size() / 2 : slices.size();
@@ -89,7 +89,7 @@ std::string basisToKtx(const std::string& basis)
 	ktx_header.typeSize = 1;
 	ktx_header.pixelWidth = width;
 	ktx_header.pixelHeight = height;
-	ktx_header.layerCount = 0; // TODO: 1 would make more sence but KTX spec says 0
+	ktx_header.layerCount = 0;
 	ktx_header.faceCount = 1;
 	ktx_header.levelCount = levels;
 	ktx_header.supercompressionScheme = KTX_SUPERCOMPRESSION_BASIS;
@@ -97,7 +97,7 @@ std::string basisToKtx(const std::string& basis)
 	size_t header_size = sizeof(KTX_header2) + levels * sizeof(ktxLevelIndexEntry);
 
 	std::vector<uint32_t> dfd;
-	createDfd(dfd, has_alpha ? 4 : 3);
+	createDfd(dfd);
 
 	const char* kvp_data[][2] = {
 	    {"KTXwriter", "gltfpack"},
@@ -202,7 +202,7 @@ std::string basisToKtx(const std::string& basis)
 		ktxLevelIndexEntry le = {};
 		le.byteOffset = file_offset;
 		le.byteLength = ktx.size() - file_offset;
-		le.uncompressedByteLength = 0; // TODO: spec clarification for Basis
+		le.uncompressedByteLength = 0;
 
 		write(ktx, ktx_level_offset + i * sizeof(ktxLevelIndexEntry), le);
 
