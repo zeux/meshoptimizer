@@ -99,21 +99,28 @@ std::string basisToKtx(const std::string& basis)
 	std::vector<uint32_t> dfd;
 	createDfd(dfd, has_alpha ? 4 : 3);
 
-	std::vector<std::pair<std::string, std::string> > kvp;
-	kvp.push_back(std::make_pair("KTXwriter", "gltfpack"));
+	const char* kvp_data[][2] = {
+	    {"KTXwriter", "gltfpack"},
+	};
 
-	size_t kvp_size = 0;
+	std::string kvp;
 
-	for (size_t i = 0; i < kvp.size(); ++i)
+	for (size_t i = 0; i < sizeof(kvp_data) / sizeof(kvp_data[0]); ++i)
 	{
-		kvp_size += sizeof(uint32_t);
-		kvp_size += kvp[i].first.length() + 1;
-		kvp_size += kvp[i].second.length() + 1;
+		const char* key = kvp_data[i][0];
+		const char* value = kvp_data[i][1];
+
+		write(kvp, uint32_t(strlen(key) + strlen(value) + 2));
+		kvp += key;
+		kvp += '\0';
+		kvp += value;
+		kvp += '\0';
 
 		if (i + 1 != kvp.size())
-			kvp_size = (kvp_size + 3) & ~3;
+			kvp.resize((kvp.size() + 3) & ~3);
 	}
 
+	size_t kvp_size = kvp.size();
 	size_t dfd_size = dfd.size() * sizeof(uint32_t);
 
 	size_t bgd_size =
@@ -145,18 +152,7 @@ std::string basisToKtx(const std::string& basis)
 		write(ktx, dfd[i]);
 
 	// key/value pair data
-	for (size_t i = 0; i < kvp.size(); ++i)
-	{
-		write(ktx, uint32_t(kvp[i].first.length() + kvp[i].second.length() + 2));
-		ktx += kvp[i].first;
-		ktx += '\0';
-		ktx += kvp[i].second;
-		ktx += '\0';
-
-		if (i + 1 != kvp.size())
-			ktx.resize((ktx.size() + 3) & ~3);
-	}
-
+	ktx += kvp;
 	ktx.resize((ktx.size() + 7) & ~7);
 
 	// supercompression global data
