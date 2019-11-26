@@ -3635,7 +3635,6 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 				append(json_textures, "\"extensions\":{\"KHR_texture_basisu\":{\"source\":");
 				append(json_textures, size_t(texture.image - data->images));
 				append(json_textures, "}}");
-
 			}
 			else
 			{

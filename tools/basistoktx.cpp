@@ -37,6 +37,8 @@ static void write(std::string& data, size_t offset, const T& value)
 
 static void createDfd(std::vector<uint32_t>& result, int channels)
 {
+	assert(channels <= 4);
+
 	size_t descriptor_size = KHR_DF_WORD_SAMPLESTART + channels * KHR_DF_WORD_SAMPLEWORDS;
 
 	result.clear();
@@ -54,6 +56,18 @@ static void createDfd(std::vector<uint32_t>& result, int channels)
 	KHR_DFDSETVAL(dfd, PRIMARIES, KHR_DF_PRIMARIES_BT709);
 	KHR_DFDSETVAL(dfd, TRANSFER, KHR_DF_TRANSFER_LINEAR);
 	KHR_DFDSETVAL(dfd, FLAGS, KHR_DF_FLAG_ALPHA_STRAIGHT);
+
+	static const khr_df_model_channels_e channel_enums[] = {
+	    KHR_DF_CHANNEL_RGBSDA_R,
+	    KHR_DF_CHANNEL_RGBSDA_G,
+	    KHR_DF_CHANNEL_RGBSDA_B,
+	    KHR_DF_CHANNEL_RGBSDA_A,
+	};
+
+	for (int i = 0; i < channels; ++i)
+	{
+		KHR_DFDSETSVAL(dfd, i, CHANNELID, channel_enums[i]);
+	}
 }
 
 std::string basisToKtx(const std::string& basis)
