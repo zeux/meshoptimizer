@@ -9,9 +9,10 @@
 
 #include "basisu_format.h"
 #include "ktx2_format.h"
+#include "khr_df.h"
 
 template <typename T>
-void read(const std::string& data, size_t offset, T& result)
+static void read(const std::string& data, size_t offset, T& result)
 {
 	if (offset + sizeof(T) > data.size())
 		throw std::out_of_range("read");
@@ -20,18 +21,40 @@ void read(const std::string& data, size_t offset, T& result)
 }
 
 template <typename T>
-void write(std::string& data, const T& value)
+static void write(std::string& data, const T& value)
 {
 	data.append(reinterpret_cast<const char*>(&value), sizeof(value));
 }
 
 template <typename T>
-void write(std::string& data, size_t offset, const T& value)
+static void write(std::string& data, size_t offset, const T& value)
 {
 	if (offset + sizeof(T) > data.size())
 		throw std::out_of_range("write");
 
 	memcpy(&data[offset], &value, sizeof(T));
+}
+
+static void createDfd(std::vector<uint32_t>& result, int channels)
+{
+	// TODO: spec says the DFD must have 0 samples?
+	size_t descriptor_size = sizeof(uint32_t) * (KHR_DF_WORD_SAMPLESTART + KHR_DF_WORD_SAMPLESTART * channels);
+
+	result.clear();
+	result.resize(1 + descriptor_size);
+
+	result[0] = result.size() * sizeof(uint32_t);
+
+	uint32_t* dfd = &result[1];
+
+	KHR_DFDSETVAL(dfd, VENDORID, KHR_DF_VENDORID_KHRONOS);
+	KHR_DFDSETVAL(dfd, DESCRIPTORTYPE, KHR_DF_KHR_DESCRIPTORTYPE_BASICFORMAT);
+	KHR_DFDSETVAL(dfd, VERSIONNUMBER, KHR_DF_VERSIONNUMBER_1_3); // TODO: 1.2?
+	KHR_DFDSETVAL(dfd, DESCRIPTORBLOCKSIZE, descriptor_size);
+	KHR_DFDSETVAL(dfd, MODEL, KHR_DF_MODEL_RGBSDA); // TODO: validator says it must be UNDEFINED?
+	KHR_DFDSETVAL(dfd, PRIMARIES, KHR_DF_PRIMARIES_BT709);
+	KHR_DFDSETVAL(dfd, TRANSFER, KHR_DF_TRANSFER_LINEAR); // TODO: sRGB?
+	KHR_DFDSETVAL(dfd, FLAGS, KHR_DF_FLAG_ALPHA_STRAIGHT);
 }
 
 void basisToKtx(const std::string& basis, std::string& ktx)
@@ -73,7 +96,10 @@ void basisToKtx(const std::string& basis, std::string& ktx)
 
 	size_t header_size = sizeof(KTX_header2) + levels * sizeof(ktxLevelIndexEntry);
 
-	size_t dfd_size = 0;
+	std::vector<uint32_t> dfd;
+	createDfd(dfd, has_alpha ? 4 : 3);
+
+	size_t dfd_size = dfd.size() * sizeof(uint32_t);
 
 	size_t bgd_size =
 		sizeof(ktxBasisGlobalHeader) + sizeof(ktxBasisSliceDesc) * levels +
@@ -81,6 +107,8 @@ void basisToKtx(const std::string& basis, std::string& ktx)
 
 	ktx_header.dataFormatDescriptor.byteOffset = header_size;
 	ktx_header.dataFormatDescriptor.byteLength = dfd_size;
+
+	// TODO: spec says keyValueData is required because it must contain KTX_writer, ugh
 
 	ktx_header.supercompressionGlobalData.byteOffset = header_size + dfd_size;
 	ktx_header.supercompressionGlobalData.byteLength = bgd_size;
@@ -97,7 +125,8 @@ void basisToKtx(const std::string& basis, std::string& ktx)
 	}
 
 	// data format descriptor
-	// TODO
+	for (size_t i = 0; i < dfd.size(); ++i)
+		write(ktx, dfd[i]);
 
 	// supercompression global data
 	ktxBasisGlobalHeader sgd_header = {};
