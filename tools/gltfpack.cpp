@@ -2855,7 +2855,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 				if (settings.texture_ktx2)
 					encoded = basisToKtx(encoded);
 
-				writeEmbeddedImage(json, views, encoded.c_str(), encoded.size(), "image/basis");
+				writeEmbeddedImage(json, views, encoded.c_str(), encoded.size(), settings.texture_ktx2 ? "image/ktx2" : "image/basis");
 			}
 			else
 			{
@@ -3630,8 +3630,18 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 		append(json_textures, "{");
 		if (texture.image)
 		{
-			append(json_textures, "\"source\":");
-			append(json_textures, size_t(texture.image - data->images));
+			if (settings.texture_ktx2)
+			{
+				append(json_textures, "\"extensions\":{\"KHR_texture_basisu\":{\"source\":");
+				append(json_textures, size_t(texture.image - data->images));
+				append(json_textures, "}}");
+
+			}
+			else
+			{
+				append(json_textures, "\"source\":");
+				append(json_textures, size_t(texture.image - data->images));
+			}
 		}
 		append(json_textures, "}");
 	}
@@ -3874,6 +3884,11 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 		comma(json);
 		append(json, "\"KHR_lights_punctual\"");
 	}
+	if (!json_textures.empty() && settings.texture_ktx2)
+	{
+		comma(json);
+		append(json, "\"KHR_image_ktx2\",\"KHR_texture_basisu\"");
+	}
 	append(json, "]");
 
 	append(json, ",\"extensionsRequired\":[");
@@ -3882,6 +3897,11 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 	{
 		comma(json);
 		append(json, "\"MESHOPT_compression\"");
+	}
+	if (!json_textures.empty() && settings.texture_ktx2)
+	{
+		comma(json);
+		append(json, "\"KHR_image_ktx2\",\"KHR_texture_basisu\"");
 	}
 	append(json, "]");
 
