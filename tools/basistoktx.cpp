@@ -1,15 +1,15 @@
-#include <string>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include <assert.h>
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "basisu_format.h"
-#include "ktx2_format.h"
 #include "khr_df.h"
+#include "ktx2_format.h"
 
 template <typename T>
 static void read(const std::string& data, size_t offset, T& result)
@@ -57,9 +57,9 @@ static void createDfd(std::vector<uint32_t>& result, int channels)
 	KHR_DFDSETVAL(dfd, FLAGS, KHR_DF_FLAG_ALPHA_STRAIGHT);
 }
 
-void basisToKtx(const std::string& basis, std::string& ktx)
+std::string basisToKtx(const std::string& basis)
 {
-	ktx.clear();
+	std::string ktx;
 
 	basist::basis_file_header basis_header;
 	read(basis, 0, basis_header);
@@ -85,7 +85,7 @@ void basisToKtx(const std::string& basis, std::string& ktx)
 	uint32_t height = slices[0].m_orig_height;
 	uint32_t levels = has_alpha ? slices.size() / 2 : slices.size();
 
-	KTX_header2 ktx_header = { KTX2_IDENTIFIER_REF };
+	KTX_header2 ktx_header = {KTX2_IDENTIFIER_REF};
 	ktx_header.typeSize = 1;
 	ktx_header.pixelWidth = width;
 	ktx_header.pixelHeight = height;
@@ -102,8 +102,8 @@ void basisToKtx(const std::string& basis, std::string& ktx)
 	size_t dfd_size = dfd.size() * sizeof(uint32_t);
 
 	size_t bgd_size =
-		sizeof(ktxBasisGlobalHeader) + sizeof(ktxBasisSliceDesc) * levels +
-		basis_header.m_endpoint_cb_file_size + basis_header.m_selector_cb_file_size + basis_header.m_tables_file_size;
+	    sizeof(ktxBasisGlobalHeader) + sizeof(ktxBasisSliceDesc) * levels +
+	    basis_header.m_endpoint_cb_file_size + basis_header.m_selector_cb_file_size + basis_header.m_tables_file_size;
 
 	ktx_header.dataFormatDescriptor.byteOffset = header_size;
 	ktx_header.dataFormatDescriptor.byteLength = dfd_size;
@@ -194,6 +194,8 @@ void basisToKtx(const std::string& basis, std::string& ktx)
 		if (i + 1 != levels)
 			ktx.resize((ktx.size() + 7) & ~7);
 	}
+
+	return ktx;
 }
 
 #ifdef STANDALONE
@@ -241,8 +243,7 @@ int main(int argc, const char** argv)
 	if (!readFile(argv[1], basis))
 		return 1;
 
-	std::string ktx;
-	basisToKtx(basis, ktx);
+	std::string ktx = basisToKtx(basis);
 
 	if (!writeFile(argv[2], ktx))
 		return 1;

@@ -91,6 +91,7 @@ struct Settings
 
 	bool texture_embed;
 	bool texture_basis;
+	bool texture_ktx2;
 
 	int texture_quality;
 
@@ -2812,6 +2813,9 @@ bool encodeBasis(const std::string& data, std::string& result, bool normal_map, 
 	return rc == 0 && readFile(temp_output.path.c_str(), result);
 }
 
+// basistoktx.cpp
+extern std::string basisToKtx(const std::string& basis);
+
 void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const char* output_path, const Settings& settings)
 {
 	std::string img_data;
@@ -2848,6 +2852,9 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 
 			if (encodeBasis(img_data, encoded, info.normal_map, settings.texture_quality))
 			{
+				if (settings.texture_ktx2)
+					encoded = basisToKtx(encoded);
+
 				writeEmbeddedImage(json, views, encoded.c_str(), encoded.size(), "image/basis");
 			}
 			else
@@ -2880,15 +2887,21 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 				{
 					fprintf(stderr, "Warning: unable to encode image %s with Basis, skipping\n", image.uri);
 				}
-				else if (!writeFile(basis_full_path.c_str(), encoded))
-				{
-					fprintf(stderr, "Warning: unable to save Basis image %s, skipping\n", image.uri);
-				}
 				else
 				{
-					append(json, "\"uri\":\"");
-					append(json, basis_path);
-					append(json, "\"");
+					if (settings.texture_ktx2)
+						encoded = basisToKtx(encoded);
+
+					if (!writeFile(basis_full_path.c_str(), encoded))
+					{
+						fprintf(stderr, "Warning: unable to save Basis image %s, skipping\n", image.uri);
+					}
+					else
+					{
+						append(json, "\"uri\":\"");
+						append(json, basis_path);
+						append(json, "\"");
+					}
 				}
 			}
 		}
@@ -4254,6 +4267,11 @@ int main(int argc, char** argv)
 		{
 			settings.texture_basis = true;
 		}
+		else if (strcmp(arg, "-tc") == 0)
+		{
+			settings.texture_basis = true;
+			settings.texture_ktx2 = true;
+		}
 		else if (strcmp(arg, "-tq") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.texture_quality = atoi(argv[++i]);
@@ -4328,6 +4346,7 @@ int main(int argc, char** argv)
 		fprintf(stderr, "-sa: aggressively simplify to the target ratio disregarding quality\n");
 		fprintf(stderr, "-te: embed all textures into main buffer\n");
 		fprintf(stderr, "-tb: convert all textures to Basis Universal format (with basisu executable)\n");
+		fprintf(stderr, "-tc: convert all textures to KTX2 with BasisU supercompression (using basisu executable)\n");
 		fprintf(stderr, "-tq N: set texture encoding quality (default: 50; N should be between 1 and 100\n");
 		fprintf(stderr, "-c: produce compressed gltf/glb files\n");
 		fprintf(stderr, "-cf: produce compressed gltf/glb files with fallback for loaders that don't support compression\n");

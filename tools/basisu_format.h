@@ -22,18 +22,7 @@ namespace basisu
 	{
 		uint8_t m_bytes[NumBytes];
 
-		inline packed_uint() {}
-		inline packed_uint(uint32_t v) { *this = v; }
-		inline packed_uint(const packed_uint& other) { *this = other; }
-
-		inline packed_uint& operator= (uint32_t v)
-		{
-			for (uint32_t i = 0; i < NumBytes; i++)
-				m_bytes[i] = static_cast<uint8_t>(v >> (i * 8));
-			return *this;
-		}
-
-		inline operator uint32_t() const
+		operator uint32_t() const
 		{
 			uint32_t result = 0;
 			for (uint32_t i = 0; i < NumBytes; i++)
