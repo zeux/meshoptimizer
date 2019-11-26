@@ -35,9 +35,9 @@ static void write(std::string& data, size_t offset, const T& value)
 	memcpy(&data[offset], &value, sizeof(T));
 }
 
-static void createDfd(std::vector<uint32_t>& result)
+static void createDfd(std::vector<uint32_t>& result, int channels)
 {
-	size_t descriptor_size = KHR_DF_WORD_SAMPLESTART;
+	size_t descriptor_size = KHR_DF_WORD_SAMPLESTART + channels * KHR_DF_WORD_SAMPLEWORDS;
 
 	result.clear();
 	result.resize(1 + descriptor_size);
@@ -50,7 +50,7 @@ static void createDfd(std::vector<uint32_t>& result)
 	KHR_DFDSETVAL(dfd, DESCRIPTORTYPE, KHR_DF_KHR_DESCRIPTORTYPE_BASICFORMAT);
 	KHR_DFDSETVAL(dfd, VERSIONNUMBER, KHR_DF_VERSIONNUMBER_1_3);
 	KHR_DFDSETVAL(dfd, DESCRIPTORBLOCKSIZE, descriptor_size * sizeof(uint32_t));
-	KHR_DFDSETVAL(dfd, MODEL, KHR_DF_MODEL_UNSPECIFIED);
+	KHR_DFDSETVAL(dfd, MODEL, KHR_DF_MODEL_RGBSDA);
 	KHR_DFDSETVAL(dfd, PRIMARIES, KHR_DF_PRIMARIES_BT709);
 	KHR_DFDSETVAL(dfd, TRANSFER, KHR_DF_TRANSFER_LINEAR);
 	KHR_DFDSETVAL(dfd, FLAGS, KHR_DF_FLAG_ALPHA_STRAIGHT);
@@ -97,7 +97,7 @@ std::string basisToKtx(const std::string& basis)
 	size_t header_size = sizeof(KTX_header2) + levels * sizeof(ktxLevelIndexEntry);
 
 	std::vector<uint32_t> dfd;
-	createDfd(dfd);
+	createDfd(dfd, has_alpha ? 4 : 3);
 
 	const char* kvp_data[][2] = {
 	    {"KTXwriter", "gltfpack"},
