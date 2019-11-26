@@ -35,7 +35,7 @@ static void write(std::string& data, size_t offset, const T& value)
 	memcpy(&data[offset], &value, sizeof(T));
 }
 
-static void createDfd(std::vector<uint32_t>& result, int channels)
+static void createDfd(std::vector<uint32_t>& result, int channels, bool srgb)
 {
 	assert(channels <= 4);
 
@@ -54,7 +54,7 @@ static void createDfd(std::vector<uint32_t>& result, int channels)
 	KHR_DFDSETVAL(dfd, DESCRIPTORBLOCKSIZE, descriptor_size * sizeof(uint32_t));
 	KHR_DFDSETVAL(dfd, MODEL, KHR_DF_MODEL_RGBSDA);
 	KHR_DFDSETVAL(dfd, PRIMARIES, KHR_DF_PRIMARIES_BT709);
-	KHR_DFDSETVAL(dfd, TRANSFER, KHR_DF_TRANSFER_LINEAR);
+	KHR_DFDSETVAL(dfd, TRANSFER, srgb ? KHR_DF_TRANSFER_SRGB : KHR_DF_TRANSFER_LINEAR);
 	KHR_DFDSETVAL(dfd, FLAGS, KHR_DF_FLAG_ALPHA_STRAIGHT);
 
 	static const khr_df_model_channels_e channel_enums[] = {
@@ -70,7 +70,7 @@ static void createDfd(std::vector<uint32_t>& result, int channels)
 	}
 }
 
-std::string basisToKtx(const std::string& basis)
+std::string basisToKtx(const std::string& basis, bool srgb)
 {
 	std::string ktx;
 
@@ -111,7 +111,7 @@ std::string basisToKtx(const std::string& basis)
 	size_t header_size = sizeof(KTX_header2) + levels * sizeof(ktxLevelIndexEntry);
 
 	std::vector<uint32_t> dfd;
-	createDfd(dfd, has_alpha ? 4 : 3);
+	createDfd(dfd, has_alpha ? 4 : 3, srgb);
 
 	const char* kvp_data[][2] = {
 	    {"KTXwriter", "gltfpack"},
@@ -284,7 +284,7 @@ int main(int argc, const char** argv)
 	if (!readFile(argv[1], basis))
 		return 1;
 
-	std::string ktx = basisToKtx(basis);
+	std::string ktx = basisToKtx(basis, true);
 
 	if (!writeFile(argv[2], ktx))
 		return 1;

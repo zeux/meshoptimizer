@@ -141,6 +141,7 @@ struct MaterialInfo
 struct ImageInfo
 {
 	bool normal_map;
+	bool srgb;
 };
 
 struct BufferView
@@ -2773,7 +2774,7 @@ struct TempFile
 	}
 };
 
-bool encodeBasis(const std::string& data, std::string& result, bool normal_map, int quality)
+bool encodeBasis(const std::string& data, std::string& result, bool normal_map, bool srgb, int quality)
 {
 	TempFile temp_input(".raw");
 	TempFile temp_output(".basis");
@@ -2791,10 +2792,15 @@ bool encodeBasis(const std::string& data, std::string& result, bool normal_map, 
 	cmd += ql;
 
 	cmd += " -mipmap";
+
 	if (normal_map)
 	{
 		cmd += " -normal_map";
 		// for optimal quality we should specify seperate_rg_to_color_alpha but this requires renderer awareness
+	}
+	else if (!srgb)
+	{
+		cmd += " -linear";
 	}
 
 	cmd += " -file ";
@@ -2808,13 +2814,14 @@ bool encodeBasis(const std::string& data, std::string& result, bool normal_map, 
 	cmd += " >/dev/null";
 #endif
 
+	printf("%s\n", cmd.c_str());
 	int rc = system(cmd.c_str());
 
 	return rc == 0 && readFile(temp_output.path.c_str(), result);
 }
 
 // basistoktx.cpp
-extern std::string basisToKtx(const std::string& basis);
+extern std::string basisToKtx(const std::string& basis, bool srgb);
 
 void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const char* output_path, const Settings& settings)
 {
@@ -2850,10 +2857,10 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 		{
 			std::string encoded;
 
-			if (encodeBasis(img_data, encoded, info.normal_map, settings.texture_quality))
+			if (encodeBasis(img_data, encoded, info.normal_map, info.srgb, settings.texture_quality))
 			{
 				if (settings.texture_ktx2)
-					encoded = basisToKtx(encoded);
+					encoded = basisToKtx(encoded, info.srgb);
 
 				writeEmbeddedImage(json, views, encoded.c_str(), encoded.size(), settings.texture_ktx2 ? "image/ktx2" : "image/basis");
 			}
@@ -2879,10 +2886,10 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 			{
 				std::string encoded;
 
-				if (encodeBasis(img_data, encoded, info.normal_map, settings.texture_quality))
+				if (encodeBasis(img_data, encoded, info.normal_map, info.srgb, settings.texture_quality))
 				{
 					if (settings.texture_ktx2)
-						encoded = basisToKtx(encoded);
+						encoded = basisToKtx(encoded, info.srgb);
 
 					if (writeFile(basis_full_path.c_str(), encoded))
 					{
@@ -3577,6 +3584,25 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 	for (size_t i = 0; i < data->materials_count; ++i)
 	{
 		const cgltf_material& material = data->materials[i];
+
+		if (material.has_pbr_metallic_roughness)
+		{
+			const cgltf_pbr_metallic_roughness& pbr = material.pbr_metallic_roughness;
+
+			if (pbr.base_color_texture.texture && pbr.base_color_texture.texture->image)
+				images[pbr.base_color_texture.texture->image - data->images].srgb = true;
+		}
+
+		if (material.has_pbr_specular_glossiness)
+		{
+			const cgltf_pbr_specular_glossiness& pbr = material.pbr_specular_glossiness;
+
+			if (pbr.diffuse_texture.texture && pbr.diffuse_texture.texture->image)
+				images[pbr.diffuse_texture.texture->image - data->images].srgb = true;
+		}
+
+		if (material.emissive_texture.texture && material.emissive_texture.texture->image)
+			images[material.emissive_texture.texture->image - data->images].srgb = true;
 
 		if (material.normal_texture.texture && material.normal_texture.texture->image)
 			images[material.normal_texture.texture->image - data->images].normal_map = true;
