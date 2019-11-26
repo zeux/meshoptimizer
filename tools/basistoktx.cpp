@@ -99,6 +99,21 @@ std::string basisToKtx(const std::string& basis)
 	std::vector<uint32_t> dfd;
 	createDfd(dfd, has_alpha ? 4 : 3);
 
+	std::vector<std::pair<std::string, std::string> > kvp;
+	kvp.push_back(std::make_pair("KTXwriter", "gltfpack"));
+
+	size_t kvp_size = 0;
+
+	for (size_t i = 0; i < kvp.size(); ++i)
+	{
+		kvp_size += sizeof(uint32_t);
+		kvp_size += kvp[i].first.length() + 1;
+		kvp_size += kvp[i].second.length() + 1;
+
+		if (i + 1 != kvp.size())
+			kvp_size = (kvp_size + 3) & ~3;
+	}
+
 	size_t dfd_size = dfd.size() * sizeof(uint32_t);
 
 	size_t bgd_size =
@@ -108,9 +123,10 @@ std::string basisToKtx(const std::string& basis)
 	ktx_header.dataFormatDescriptor.byteOffset = header_size;
 	ktx_header.dataFormatDescriptor.byteLength = dfd_size;
 
-	// TODO: spec says keyValueData is required because it must contain KTX_writer, ugh
+	ktx_header.keyValueData.byteOffset = header_size + dfd_size;
+	ktx_header.keyValueData.byteLength = kvp_size;
 
-	ktx_header.supercompressionGlobalData.byteOffset = header_size + dfd_size;
+	ktx_header.supercompressionGlobalData.byteOffset = (header_size + dfd_size + kvp_size + 7) & ~7;
 	ktx_header.supercompressionGlobalData.byteLength = bgd_size;
 
 	// KTX2 header
@@ -127,6 +143,21 @@ std::string basisToKtx(const std::string& basis)
 	// data format descriptor
 	for (size_t i = 0; i < dfd.size(); ++i)
 		write(ktx, dfd[i]);
+
+	// key/value pair data
+	for (size_t i = 0; i < kvp.size(); ++i)
+	{
+		write(ktx, uint32_t(kvp[i].first.length() + kvp[i].second.length() + 2));
+		ktx += kvp[i].first;
+		ktx += '\0';
+		ktx += kvp[i].second;
+		ktx += '\0';
+
+		if (i + 1 != kvp.size())
+			ktx.resize((ktx.size() + 3) & ~3);
+	}
+
+	ktx.resize((ktx.size() + 7) & ~7);
 
 	// supercompression global data
 	ktxBasisGlobalHeader sgd_header = {};
