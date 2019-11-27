@@ -2712,7 +2712,7 @@ std::string inferMimeType(const char* path)
 
 	std::string extl = ext + 1;
 	for (size_t i = 0; i < extl.length(); ++i)
-		extl[i] = tolower(extl[i]);
+		extl[i] = char(tolower(extl[i]));
 
 	if (extl == "jpg")
 		return "image/jpeg";
