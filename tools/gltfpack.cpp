@@ -36,6 +36,8 @@
 
 #ifdef _WIN32
 #include <io.h>
+#define popen _popen
+#define pclose _pclose
 #else
 #include <unistd.h>
 #endif
@@ -2818,12 +2820,20 @@ bool checkBasis()
 	std::string cmd = basisu_path ? basisu_path : "basisu";
 
 #ifdef _WIN32
-	cmd += " >nul 2>&1";
+	cmd += " 2>nul";
 #else
-	cmd += " >/dev/null 2>&1";
+	cmd += " 2>/dev/null";
 #endif
 
-	return system(cmd.c_str()) == 1;
+	FILE* pipe = popen(cmd.c_str(), "r");
+	if (!pipe)
+		return false;
+
+	char buf[15];
+	size_t read = fread(buf, 1, sizeof(buf), pipe);
+	pclose(pipe);
+
+	return read == sizeof(buf) && memcmp(buf, "Basis Universal", sizeof(buf)) == 0;
 }
 
 bool encodeBasis(const std::string& data, std::string& result, bool normal_map, bool srgb, int quality)
