@@ -29,14 +29,14 @@ set(SOURCES
     src/vfetchoptimizer.cpp
 )
 
+if(MSVC)
+    add_compile_options(/W4 /WX)
+else()
+    add_compile_options(-Wall -Wextra -Wshadow -Wno-missing-field-initializers -Werror)
+endif()
+
 add_library(meshoptimizer ${SOURCES})
 target_include_directories(meshoptimizer INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>")
-
-if(MSVC)
-    target_compile_options(meshoptimizer PRIVATE /W4 /WX)
-else()
-    target_compile_options(meshoptimizer PRIVATE -Wall -Wextra -Werror)
-endif()
 
 if(BUILD_SHARED_LIBS)
     set_target_properties(meshoptimizer PROPERTIES CXX_VISIBILITY_PRESET hidden)
