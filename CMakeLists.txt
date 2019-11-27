@@ -5,7 +5,7 @@ if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.15)
     cmake_policy(SET CMP0092 NEW) # Enables clean /W4 override for MSVC
 endif()
 
-project(meshoptimizer VERSION 0.12 LANGUAGES CXX)
+project(meshoptimizer VERSION 0.13 LANGUAGES CXX)
 
 option(BUILD_DEMO "Build demo" OFF)
 option(BUILD_TOOLS "Build tools" OFF)
