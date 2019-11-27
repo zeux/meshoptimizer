@@ -2812,6 +2812,20 @@ struct TempFile
 	}
 };
 
+bool checkBasis()
+{
+	const char* basisu_path = getenv("BASISU_PATH");
+	std::string cmd = basisu_path ? basisu_path : "basisu";
+
+#ifdef _WIN32
+	cmd += " >nul 2>&1";
+#else
+	cmd += " >/dev/null 2>&1";
+#endif
+
+	return system(cmd.c_str()) == 1;
+}
+
 bool encodeBasis(const std::string& data, std::string& result, bool normal_map, bool srgb, int quality)
 {
 	TempFile temp_input(".raw");
@@ -4134,6 +4148,15 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 	{
 		fprintf(stderr, "Error loading %s: unknown extension (expected .gltf or .glb or .obj)\n", input);
 		return 2;
+	}
+
+	if (data->images_count && settings.texture_basis)
+	{
+		if (!checkBasis())
+		{
+			fprintf(stderr, "Error: basisu is not present in PATH or BASISU_PATH is not set\n");
+			return 3;
+		}
 	}
 
 	std::string json, bin, fallback;
