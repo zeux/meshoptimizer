@@ -3959,15 +3959,14 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 	append(json, "}");
 
 	const ExtensionInfo extensions[] = {
-		{ "KHR_mesh_quantization", true, true },
-		{ "MESHOPT_compression", settings.compress, !settings.fallback },
-		{ "KHR_texture_transform", !json_textures.empty(), false },
-		{ "KHR_materials_pbrSpecularGlossiness", ext_pbr_specular_glossiness, false },
-		{ "KHR_materials_unlit", ext_unlit, false },
-		{ "KHR_lights_punctual", data->lights_count > 0, false },
-		{ "KHR_image_ktx2", !json_textures.empty() && settings.texture_ktx2, true },
-		{ "KHR_texture_basisu", !json_textures.empty() && settings.texture_ktx2, true },
-
+	    {"KHR_mesh_quantization", true, true},
+	    {"MESHOPT_compression", settings.compress, !settings.fallback},
+	    {"KHR_texture_transform", !json_textures.empty(), false},
+	    {"KHR_materials_pbrSpecularGlossiness", ext_pbr_specular_glossiness, false},
+	    {"KHR_materials_unlit", ext_unlit, false},
+	    {"KHR_lights_punctual", data->lights_count > 0, false},
+	    {"KHR_image_ktx2", !json_textures.empty() && settings.texture_ktx2, true},
+	    {"KHR_texture_basisu", !json_textures.empty() && settings.texture_ktx2, true},
 	};
 
 	writeExtensions(json, extensions, sizeof(extensions) / sizeof(extensions[0]));
