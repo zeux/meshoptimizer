@@ -39,7 +39,7 @@ static void createDfd(std::vector<uint32_t>& result, int channels, bool srgb)
 {
 	assert(channels <= 4);
 
-	size_t descriptor_size = KHR_DF_WORD_SAMPLESTART + channels * KHR_DF_WORD_SAMPLEWORDS;
+	int descriptor_size = KHR_DF_WORD_SAMPLESTART + channels * KHR_DF_WORD_SAMPLEWORDS;
 
 	result.clear();
 	result.resize(1 + descriptor_size);
@@ -97,7 +97,7 @@ std::string basisToKtx(const std::string& basis, bool srgb)
 	assert(slices[0].m_level_index == 0);
 	uint32_t width = slices[0].m_orig_width;
 	uint32_t height = slices[0].m_orig_height;
-	uint32_t levels = has_alpha ? slices.size() / 2 : slices.size();
+	uint32_t levels = has_alpha ? uint32_t(slices.size()) / 2 : uint32_t(slices.size());
 
 	KTX_header2 ktx_header = {KTX2_IDENTIFIER_REF};
 	ktx_header.typeSize = 1;
@@ -141,11 +141,11 @@ std::string basisToKtx(const std::string& basis, bool srgb)
 	    sizeof(ktxBasisGlobalHeader) + sizeof(ktxBasisSliceDesc) * levels +
 	    basis_header.m_endpoint_cb_file_size + basis_header.m_selector_cb_file_size + basis_header.m_tables_file_size;
 
-	ktx_header.dataFormatDescriptor.byteOffset = header_size;
-	ktx_header.dataFormatDescriptor.byteLength = dfd_size;
+	ktx_header.dataFormatDescriptor.byteOffset = uint32_t(header_size);
+	ktx_header.dataFormatDescriptor.byteLength = uint32_t(dfd_size);
 
-	ktx_header.keyValueData.byteOffset = header_size + dfd_size;
-	ktx_header.keyValueData.byteLength = kvp_size;
+	ktx_header.keyValueData.byteOffset = uint32_t(header_size + dfd_size);
+	ktx_header.keyValueData.byteLength = uint32_t(kvp_size);
 
 	ktx_header.supercompressionGlobalData.byteOffset = (header_size + dfd_size + kvp_size + 7) & ~7;
 	ktx_header.supercompressionGlobalData.byteLength = bgd_size;
