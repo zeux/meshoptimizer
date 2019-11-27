@@ -308,6 +308,8 @@ loader.setMeshoptDecoder(MeshoptDecoder);
 loader.load('pirate.glb', function (gltf) { scene.add(gltf.scene); });
 ```
 
+Additionally, gltfpack can compress textures using Basis Universal format, either storing .basis images directly (`-tb` flag, supported by three.js) or using KTX2 container (`-tc` flag, requires support for `KHR_image_ktx2`). Compression is performed using `basisu` executable.
+
 ## License
 
 This library is available to anybody free of charge, under the terms of MIT License (see LICENSE.md).
