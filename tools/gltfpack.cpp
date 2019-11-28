@@ -196,6 +196,13 @@ const char* getError(cgltf_result result)
 	case cgltf_result_out_of_memory:
 		return "out of memory";
 
+	case cgltf_result_legacy_gltf:
+		return "legacy GLTF";
+
+	case cgltf_result_data_too_short:
+	case cgltf_result_unknown_format:
+		return "not a GLTF file";
+
 	default:
 		return "unknown error";
 	}
