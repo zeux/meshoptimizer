@@ -177,12 +177,12 @@ struct BufferView
 	size_t bytes;
 };
 
-const char* getError(cgltf_result result)
+const char* getError(cgltf_result result, cgltf_data* data)
 {
 	switch (result)
 	{
 	case cgltf_result_file_not_found:
-		return "file not found";
+		return data ? "resource not found" : "file not found";
 
 	case cgltf_result_io_error:
 		return "I/O error";
@@ -200,8 +200,10 @@ const char* getError(cgltf_result result)
 		return "legacy GLTF";
 
 	case cgltf_result_data_too_short:
-	case cgltf_result_unknown_format:
 		return "not a GLTF file";
+
+	case cgltf_result_unknown_format:
+		return data ? "unknown resource format" : "not a GLTF file";
 
 	default:
 		return "unknown error";
@@ -4130,7 +4132,7 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 		const char* error = NULL;
 
 		if (result != cgltf_result_success)
-			error = getError(result);
+			error = getError(result, data);
 		else if (requiresExtension(data, "KHR_draco_mesh_compression"))
 			error = "file requires Draco mesh compression support";
 		else if (requiresExtension(data, "MESHOPT_compression"))
