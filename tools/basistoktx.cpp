@@ -298,6 +298,8 @@ std::string basisToKtx(const std::string& basis, bool srgb)
 			ktx.resize((ktx.size() + 7) & ~7);
 	}
 
+	ktx.resize((ktx.size() + 7) & ~7);
+
 	return ktx;
 }
 
