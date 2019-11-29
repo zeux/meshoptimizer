@@ -259,12 +259,14 @@ std::string basisToKtx(const std::string& basis, bool srgb)
 	// mip levels
 	for (size_t i = 0; i < levels; ++i)
 	{
-		size_t slice_index = (levels - i - 1) * (has_alpha + 1);
+		size_t level_index = levels - i - 1;
+		size_t slice_index = level_index * (has_alpha + 1);
+
 		const basist::basis_slice_desc& slice = slices[slice_index];
 		const basist::basis_slice_desc* slice_alpha = has_alpha ? &slices[slice_index + 1] : 0;
 
 		assert(slice.m_image_index == 0);
-		assert(slice.m_level_index == levels - i - 1);
+		assert(slice.m_level_index == level_index);
 
 		size_t file_offset = ktx.size();
 
@@ -278,7 +280,7 @@ std::string basisToKtx(const std::string& basis, bool srgb)
 		le.byteLength = ktx.size() - file_offset;
 		le.uncompressedByteLength = 0;
 
-		write(ktx, ktx_level_offset + i * sizeof(Ktx2LevelIndex), le);
+		write(ktx, ktx_level_offset + level_index * sizeof(Ktx2LevelIndex), le);
 
 		Ktx2BasisImageDesc sgd_image = {};
 		sgd_image.rgbSliceByteOffset = 0;
@@ -290,7 +292,7 @@ std::string basisToKtx(const std::string& basis, bool srgb)
 			sgd_image.alphaSliceByteLength = slice_alpha->m_file_size;
 		}
 
-		write(ktx, sgd_level_offset + i * sizeof(Ktx2BasisImageDesc), sgd_image);
+		write(ktx, sgd_level_offset + level_index * sizeof(Ktx2BasisImageDesc), sgd_image);
 
 		if (i + 1 != levels)
 			ktx.resize((ktx.size() + 7) & ~7);
