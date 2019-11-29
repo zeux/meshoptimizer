@@ -799,6 +799,8 @@ void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings)
 		size_t target_vertices = target.streams[0].data.size();
 		size_t target_indices = target.indices.size();
 
+		size_t last_merged = i;
+
 		for (size_t j = i + 1; j < meshes.size(); ++j)
 		{
 			Mesh& mesh = meshes[j];
@@ -807,6 +809,7 @@ void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings)
 			{
 				target_vertices += mesh.streams[0].data.size();
 				target_indices += mesh.indices.size();
+				last_merged = j;
 			}
 		}
 
@@ -815,7 +818,7 @@ void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings)
 
 		target.indices.reserve(target_indices);
 
-		for (size_t j = i + 1; j < meshes.size(); ++j)
+		for (size_t j = i + 1; j <= last_merged; ++j)
 		{
 			Mesh& mesh = meshes[j];
 
