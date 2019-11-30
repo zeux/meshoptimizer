@@ -200,7 +200,7 @@ const char* getError(cgltf_result result, cgltf_data* data)
 		return "legacy GLTF";
 
 	case cgltf_result_data_too_short:
-		return "not a GLTF file";
+		return data ? "buffer too short" : "not a GLTF file";
 
 	case cgltf_result_unknown_format:
 		return data ? "unknown resource format" : "not a GLTF file";
@@ -4138,6 +4138,29 @@ std::string getBufferSpec(const char* bin_path, size_t bin_size, const char* fal
 	return json;
 }
 
+bool needsDummyBuffers(cgltf_data* data)
+{
+	for (size_t i = 0; i < data->accessors_count; ++i)
+	{
+		cgltf_accessor* accessor = &data->accessors[i];
+
+		if (accessor->buffer_view && accessor->buffer_view->buffer->data == NULL)
+			return true;
+
+		if (accessor->is_sparse)
+		{
+			cgltf_accessor_sparse* sparse = &accessor->sparse;
+
+			if (sparse->indices_buffer_view->buffer->data == NULL)
+				return true;
+			if (sparse->values_buffer_view->buffer->data == NULL)
+				return true;
+		}
+	}
+
+	return false;
+}
+
 int gltfpack(const char* input, const char* output, const Settings& settings)
 {
 	cgltf_data* data = 0;
@@ -4149,8 +4172,8 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 	{
 		cgltf_options options = {};
 		cgltf_result result = cgltf_parse_file(&options, input, &data);
-		result = (result == cgltf_result_success) ? cgltf_validate(data) : result;
 		result = (result == cgltf_result_success) ? cgltf_load_buffers(&options, data, input) : result;
+		result = (result == cgltf_result_success) ? cgltf_validate(data) : result;
 
 		const char* error = NULL;
 
@@ -4160,6 +4183,8 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 			error = "file requires Draco mesh compression support";
 		else if (requiresExtension(data, "MESHOPT_compression"))
 			error = "file has already been compressed using gltfpack";
+		else if (needsDummyBuffers(data))
+			error = "buffer has no data";
 
 		if (error)
 		{
