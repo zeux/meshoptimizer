@@ -785,25 +785,12 @@ void mergeMeshes(Mesh& target, const Mesh& mesh)
 
 void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings)
 {
-	size_t write = 0;
-
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
-		if (meshes[i].streams.empty())
+		Mesh& target = meshes[i];
+
+		if (target.streams.empty())
 			continue;
-
-		Mesh& target = meshes[write];
-
-		if (i != write)
-		{
-			Mesh& mesh = meshes[i];
-
-			// note: this copy is expensive; we could use move in C++11 or swap manually which is a bit painful...
-			target = mesh;
-
-			mesh.streams.clear();
-			mesh.indices.clear();
-		}
 
 		size_t target_vertices = target.streams[0].data.size();
 		size_t target_indices = target.indices.size();
@@ -839,6 +826,34 @@ void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings)
 
 		assert(target.streams[0].data.size() == target_vertices);
 		assert(target.indices.size() == target_indices);
+	}
+}
+
+void filterEmptyMeshes(std::vector<Mesh>& meshes)
+{
+	size_t write = 0;
+
+	for (size_t i = 0; i < meshes.size(); ++i)
+	{
+		Mesh& mesh = meshes[i];
+
+		if (mesh.streams.empty())
+			continue;
+
+		if (mesh.streams[0].data.empty())
+			continue;
+
+		if (mesh.type == cgltf_primitive_type_triangles && mesh.indices.empty())
+			continue;
+
+		if (i != write)
+		{
+			// note: this copy is expensive; we could use move in C++11 or swap manually which is a bit painful...
+			meshes[write] = mesh;
+
+			mesh.streams.clear();
+			mesh.indices.clear();
+		}
 
 		write++;
 	}
@@ -3702,6 +3717,7 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 
 	mergeMeshMaterials(data, meshes);
 	mergeMeshes(meshes, settings);
+	filterEmptyMeshes(meshes);
 
 	markNeededNodes(data, nodes, meshes, settings);
 
@@ -3718,6 +3734,8 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 	{
 		processMesh(meshes[i], settings);
 	}
+
+	filterEmptyMeshes(meshes); // some meshes may become empty after processing
 
 	if (settings.verbose)
 	{
