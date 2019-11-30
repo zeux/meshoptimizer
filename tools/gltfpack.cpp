@@ -848,11 +848,16 @@ void filterEmptyMeshes(std::vector<Mesh>& meshes)
 
 		if (i != write)
 		{
-			// note: this copy is expensive; we could use move in C++11 or swap manually which is a bit painful...
-			meshes[write] = mesh;
+			// the following code is roughly equivalent to meshes[write] = std::move(mesh)
+			std::vector<Stream> streams;
+			streams.swap(mesh.streams);
 
-			mesh.streams.clear();
-			mesh.indices.clear();
+			std::vector<unsigned int> indices;
+			indices.swap(mesh.indices);
+
+			meshes[write] = mesh;
+			meshes[write].streams.swap(streams);
+			meshes[write].indices.swap(indices);
 		}
 
 		write++;
