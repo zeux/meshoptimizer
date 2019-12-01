@@ -1157,7 +1157,9 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 
 	const unsigned char* (*decode)(const unsigned char*, const unsigned char*, unsigned char*, size_t, size_t, unsigned char[256]) = 0;
 
-#if defined(SIMD_SSE) && defined(SIMD_FALLBACK)
+#if defined(SIMD_SSE) && defined(SIMD_FALLBACK) && !defined(_MSC_VER) // test
+	decode = __builtin_cpu_supports("ssse3") ? decodeVertexBlockSimd : decodeVertexBlock;
+#elif defined(SIMD_SSE) && defined(SIMD_FALLBACK)
 	int cpuinfo[4] = {};
 #ifdef _MSC_VER
 	__cpuid(cpuinfo, 1);

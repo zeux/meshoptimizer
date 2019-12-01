@@ -310,6 +310,8 @@ static void customAllocator()
 	// customAlloc & customFree should not get called anymore
 	meshopt_optimizeVertexFetch(vb, ib, 3, vb, 3, 12);
 	assert(allocCount == 6 && freeCount == 6);
+
+	allocCount = freeCount = 0;
 }
 
 static void emptyMesh()
@@ -356,7 +358,7 @@ static void simplifyPointsStuck()
 	assert(meshopt_simplifyPoints(0, vb, 3, 12, 0) == 0);
 }
 
-void runTests()
+static void runTestsOnce()
 {
 	decodeIndexV0();
 	decodeIndex16();
@@ -380,4 +382,23 @@ void runTests()
 	simplifyStuck();
 	simplifySloppyStuck();
 	simplifyPointsStuck();
+}
+
+void runTests()
+{
+	runTestsOnce();
+
+#ifndef _MSC_VER
+	// On GCC/clang, we use __builtin_cpu_supports to dynamically dispatch between SIMD/scalar code
+	// It's useful to be able to test scalar code in this case, so we temporarily fake the feature bits
+	// and restore them later
+	extern unsigned int __cpu_model[4];
+
+	unsigned int cpu_features = __cpu_model[3];
+	__cpu_model[3] = 0;
+
+	runTestsOnce();
+
+	__cpu_model[3] = cpu_features;
+#endif
 }
