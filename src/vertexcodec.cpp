@@ -24,7 +24,7 @@
 #endif
 
 // GCC 4.9+ and clang 3.8+ support targeting SIMD instruction sets from individual functions
-#if !defined(SIMD_SSE) && !defined(SIMD_AVX) && ((defined(__clang__) && __clang_major__ * 100 + __clang_minor__ >= 308) || (defined(__GNUC__) && __GNUC__ * 100 + __GNUC_MINOR__ >= 409)) && (defined(__i686__) || defined(__x86_64__))
+#if !defined(SIMD_SSE) && !defined(SIMD_AVX) && ((defined(__clang__) && __clang_major__ * 100 + __clang_minor__ >= 308) || (defined(__GNUC__) && __GNUC__ * 100 + __GNUC_MINOR__ >= 409)) && (defined(__i386__) || defined(__x86_64__))
 #define SIMD_SSE
 #define SIMD_FALLBACK
 #define SIMD_TARGET __attribute__((target("ssse3")))
@@ -1047,9 +1047,17 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 #if defined(SIMD_SSE) && defined(SIMD_FALLBACK) && !defined(_MSC_VER)
 static void __cpuid(int info[4], int kind)
 {
+#if defined( __i386__) && defined(__PIC__)
+	asm("mov %%ebx, %%edi\n"
+		"cpuid\n"
+		"xchg %%edi, %%ebx\n"
+	    : "=a"(info[0]), "=D"(info[1]), "=c"(info[2]), "=d"(info[3])
+	    : "a"(kind));
+#else
 	asm("cpuid"
 	    : "=a"(info[0]), "=b"(info[1]), "=c"(info[2]), "=d"(info[3])
 	    : "a"(kind));
+#endif
 }
 #endif
 
