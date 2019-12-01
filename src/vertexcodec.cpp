@@ -1049,7 +1049,7 @@ static void __cpuid(int info[4], int kind)
 {
 	asm("cpuid"
 	    : "=a"(info[0]), "=b"(info[1]), "=c"(info[2]), "=d"(info[3])
-	    : "0"(kind));
+	    : "a"(kind));
 }
 #endif
 
