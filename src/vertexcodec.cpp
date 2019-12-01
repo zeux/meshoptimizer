@@ -28,6 +28,7 @@
 #define SIMD_SSE
 #define SIMD_FALLBACK
 #define SIMD_TARGET __attribute__((target("ssse3")))
+#include <cpuid.h> // __cpuid
 #endif
 
 #if !defined(SIMD_NEON) && defined(_MSC_VER) && (defined(_M_ARM) || defined(_M_ARM64))
@@ -1044,23 +1045,6 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 }
 #endif
 
-#if defined(SIMD_SSE) && defined(SIMD_FALLBACK) && !defined(_MSC_VER)
-static void __cpuid(int info[4], int kind)
-{
-#if defined( __i386__) && defined(__PIC__)
-	asm("mov %%ebx, %%edi\n"
-		"cpuid\n"
-		"xchg %%edi, %%ebx\n"
-	    : "=a"(info[0]), "=D"(info[1]), "=c"(info[2]), "=d"(info[3])
-	    : "a"(kind));
-#else
-	asm("cpuid"
-	    : "=a"(info[0]), "=b"(info[1]), "=c"(info[2]), "=d"(info[3])
-	    : "a"(kind));
-#endif
-}
-#endif
-
 } // namespace meshopt
 
 size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, const void* vertices, size_t vertex_count, size_t vertex_size)
@@ -1175,7 +1159,11 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 
 #if defined(SIMD_SSE) && defined(SIMD_FALLBACK)
 	int cpuinfo[4] = {};
+#ifdef _MSC_VER
 	__cpuid(cpuinfo, 1);
+#else
+	__cpuid(1, cpuinfo[0], cpuinfo[1], cpuinfo[2], cpuinfo[3]);
+#endif
 	decode = (cpuinfo[2] & (1 << 9)) ? decodeVertexBlockSimd : decodeVertexBlock;
 #elif defined(SIMD_SSE) || defined(SIMD_AVX) || defined(SIMD_NEON) || defined(SIMD_WASM)
 	decode = decodeVertexBlockSimd;
