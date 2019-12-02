@@ -229,6 +229,79 @@ static void decodeVertexRejectMalformedHeaders()
 	assert(meshopt_decodeVertexBuffer(decoded, vertex_count, sizeof(PV), &brokenbuffer[0], brokenbuffer.size()) < 0);
 }
 
+static void decodeVertexBitGroups()
+{
+	unsigned char data[16 * 4];
+
+	// this tests 0/2/4/8 bit groups in one stream
+	for (size_t i = 0; i < 16; ++i)
+	{
+		data[i * 4 + 0] = 0;
+		data[i * 4 + 1] = (unsigned char)(i * 1);
+		data[i * 4 + 2] = (unsigned char)(i * 2);
+		data[i * 4 + 3] = (unsigned char)(i * 8);
+	}
+
+	std::vector<unsigned char> buffer(meshopt_encodeVertexBufferBound(16, 4));
+	buffer.resize(meshopt_encodeVertexBuffer(&buffer[0], buffer.size(), data, 16, 4));
+
+	unsigned char decoded[16 * 4];
+	assert(meshopt_decodeVertexBuffer(decoded, 16, 4, &buffer[0], buffer.size()) == 0);
+	assert(memcmp(decoded, data, sizeof(data)) == 0);
+}
+
+static void decodeVertexBitGroupSentinels()
+{
+	unsigned char data[16 * 4];
+
+	// this tests 0/2/4/8 bit groups and sentinels in one stream
+	for (size_t i = 0; i < 16; ++i)
+	{
+		if (i == 7 || i == 13)
+		{
+			data[i * 4 + 0] = 42;
+			data[i * 4 + 1] = 42;
+			data[i * 4 + 2] = 42;
+			data[i * 4 + 3] = 42;
+		}
+		else
+		{
+			data[i * 4 + 0] = 0;
+			data[i * 4 + 1] = (unsigned char)(i * 1);
+			data[i * 4 + 2] = (unsigned char)(i * 2);
+			data[i * 4 + 3] = (unsigned char)(i * 8);
+		}
+	}
+
+	std::vector<unsigned char> buffer(meshopt_encodeVertexBufferBound(16, 4));
+	buffer.resize(meshopt_encodeVertexBuffer(&buffer[0], buffer.size(), data, 16, 4));
+
+	unsigned char decoded[16 * 4];
+	assert(meshopt_decodeVertexBuffer(decoded, 16, 4, &buffer[0], buffer.size()) == 0);
+	assert(memcmp(decoded, data, sizeof(data)) == 0);
+}
+
+static void decodeVertexLarge()
+{
+	unsigned char data[128 * 4];
+
+	// this tests 0/2/4/8 bit groups in one stream
+	for (size_t i = 0; i < 128; ++i)
+	{
+		data[i * 4 + 0] = 0;
+		data[i * 4 + 1] = (unsigned char)(i * 1);
+		data[i * 4 + 2] = (unsigned char)(i * 2);
+		data[i * 4 + 3] = (unsigned char)(i * 8);
+	}
+
+	std::vector<unsigned char> buffer(meshopt_encodeVertexBufferBound(128, 4));
+	buffer.resize(meshopt_encodeVertexBuffer(&buffer[0], buffer.size(), data, 128, 4));
+
+	unsigned char decoded[128 * 4];
+	assert(meshopt_decodeVertexBuffer(decoded, 128, 4, &buffer[0], buffer.size()) == 0);
+	assert(memcmp(decoded, data, sizeof(data)) == 0);
+}
+
 static void clusterBoundsDegenerate()
 {
 	const float vbd[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -372,6 +445,9 @@ static void runTestsOnce()
 	decodeVertexMemorySafe();
 	decodeVertexRejectExtraBytes();
 	decodeVertexRejectMalformedHeaders();
+	decodeVertexBitGroups();
+	decodeVertexBitGroupSentinels();
+	decodeVertexLarge();
 
 	clusterBoundsDegenerate();
 
