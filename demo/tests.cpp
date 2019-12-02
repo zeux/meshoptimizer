@@ -384,21 +384,24 @@ static void runTestsOnce()
 	simplifyPointsStuck();
 }
 
+namespace meshopt
+{
+extern unsigned int cpuid;
+}
+
 void runTests()
 {
 	runTestsOnce();
 
-#ifndef _MSC_VER
-	// On GCC/clang, we use __builtin_cpu_supports to dynamically dispatch between SIMD/scalar code
+#if !(defined(__AVX__) || defined(__SSSE3__)) && (defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__))
+	// When SSSE3/AVX support isn't enabled unconditionally, we use a cpuid-based fallback
 	// It's useful to be able to test scalar code in this case, so we temporarily fake the feature bits
 	// and restore them later
-	extern unsigned int __cpu_model[4];
-
-	unsigned int cpu_features = __cpu_model[3];
-	__cpu_model[3] = 0;
+	unsigned int cpuid = meshopt::cpuid;
+	meshopt::cpuid = 0;
 
 	runTestsOnce();
 
-	__cpu_model[3] = cpu_features;
+	meshopt::cpuid = cpuid;
 #endif
 }

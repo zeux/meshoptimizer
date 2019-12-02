@@ -1045,6 +1045,21 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 }
 #endif
 
+#if defined(SIMD_SSE) && defined(SIMD_FALLBACK)
+static unsigned int getCpuFeatures()
+{
+	int cpuinfo[4] = {};
+#ifdef _MSC_VER
+	__cpuid(cpuinfo, 1);
+#else
+	__cpuid(1, cpuinfo[0], cpuinfo[1], cpuinfo[2], cpuinfo[3]);
+#endif
+	return cpuinfo[2];
+}
+
+unsigned int cpuid = getCpuFeatures();
+#endif
+
 } // namespace meshopt
 
 size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, const void* vertices, size_t vertex_count, size_t vertex_size)
@@ -1157,16 +1172,8 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 
 	const unsigned char* (*decode)(const unsigned char*, const unsigned char*, unsigned char*, size_t, size_t, unsigned char[256]) = 0;
 
-#if defined(SIMD_SSE) && defined(SIMD_FALLBACK) && !defined(_MSC_VER) // test
-	decode = __builtin_cpu_supports("ssse3") ? decodeVertexBlockSimd : decodeVertexBlock;
-#elif defined(SIMD_SSE) && defined(SIMD_FALLBACK)
-	int cpuinfo[4] = {};
-#ifdef _MSC_VER
-	__cpuid(cpuinfo, 1);
-#else
-	__cpuid(1, cpuinfo[0], cpuinfo[1], cpuinfo[2], cpuinfo[3]);
-#endif
-	decode = (cpuinfo[2] & (1 << 9)) ? decodeVertexBlockSimd : decodeVertexBlock;
+#if defined(SIMD_SSE) && defined(SIMD_FALLBACK)
+	decode = (cpuid & (1 << 9)) ? decodeVertexBlockSimd : decodeVertexBlock;
 #elif defined(SIMD_SSE) || defined(SIMD_AVX) || defined(SIMD_NEON) || defined(SIMD_WASM)
 	decode = decodeVertexBlockSimd;
 #else
