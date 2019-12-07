@@ -356,6 +356,12 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 				Stream s = {attr.type, attr.index};
 				readAccessor(s.data, attr.data);
 
+				if (attr.type == cgltf_attribute_type_color && attr.data->type == cgltf_type_vec3)
+				{
+					for (size_t i = 0; i < s.data.size(); ++i)
+						s.data[i].f[3] = 1.0f;
+				}
+
 				result.streams.push_back(s);
 			}
 
@@ -902,6 +908,21 @@ void filterEmptyMeshes(std::vector<Mesh>& meshes)
 	meshes.resize(write);
 }
 
+bool hasColorData(const std::vector<Attr>& data)
+{
+	const float threshold = 0.99f;
+
+	for (size_t i = 0; i < data.size(); ++i)
+	{
+		const Attr& a = data[i];
+
+		if (a.f[0] < threshold || a.f[1] < threshold || a.f[2] < threshold || a.f[3] < threshold)
+			return true;
+	}
+
+	return false;
+}
+
 void filterStreams(Mesh& mesh)
 {
 	size_t write = 0;
@@ -917,6 +938,9 @@ void filterStreams(Mesh& mesh)
 			continue;
 
 		if ((stream.type == cgltf_attribute_type_joints || stream.type == cgltf_attribute_type_weights) && !mesh.skin)
+			continue;
+
+		if (stream.type == cgltf_attribute_type_color && !hasColorData(stream.data))
 			continue;
 
 		// the following code is roughly equivalent to streams[write] = std::move(stream)
