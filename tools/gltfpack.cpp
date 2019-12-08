@@ -93,7 +93,9 @@ struct Animation
 {
 	const char* name;
 
-	std::vector<float> time; // shared time track for resampled animations
+	float start;
+	int frames;
+
 	std::vector<Track> tracks;
 };
 
@@ -2518,22 +2520,15 @@ Attr interpolateHermite(const Attr& v0, const Attr& t0, const Attr& v1, const At
 	return lerp;
 }
 
-void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& sampler, cgltf_animation_path_type type, cgltf_node* target_node, int frames, float mint, int freq)
+void resampleKeyframes(std::vector<Attr>& data, const std::vector<float>& input, const std::vector<Attr>& output, cgltf_animation_path_type type, cgltf_interpolation_type interpolation, size_t components, int frames, float mint, int freq)
 {
-	size_t components = (type == cgltf_animation_path_type_weights) ? target_node->mesh->primitives[0].targets_count : 1;
-
-	std::vector<float> input;
-	readAccessor(input, sampler.input);
-	std::vector<Attr> output;
-	readAccessor(output, sampler.output);
-
 	size_t cursor = 0;
 
 	for (int i = 0; i < frames; ++i)
 	{
 		float time = mint + float(i) / freq;
 
-		while (cursor + 1 < sampler.input->count)
+		while (cursor + 1 < input.size())
 		{
 			float next_time = input[cursor + 1];
 
@@ -2543,7 +2538,7 @@ void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& s
 			cursor++;
 		}
 
-		if (cursor + 1 < sampler.input->count)
+		if (cursor + 1 < input.size())
 		{
 			float cursor_time = input[cursor + 0];
 			float next_time = input[cursor + 1];
@@ -2554,7 +2549,7 @@ void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& s
 
 			for (size_t j = 0; j < components; ++j)
 			{
-				switch (sampler.interpolation)
+				switch (interpolation)
 				{
 				case cgltf_interpolation_type_linear:
 				{
@@ -2588,7 +2583,7 @@ void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& s
 		}
 		else
 		{
-			size_t offset = (sampler.interpolation == cgltf_interpolation_type_cubic_spline) ? cursor * 3 + 1 : cursor;
+			size_t offset = (interpolation == cgltf_interpolation_type_cubic_spline) ? cursor * 3 + 1 : cursor;
 
 			for (size_t j = 0; j < components; ++j)
 			{
@@ -2596,6 +2591,39 @@ void resampleKeyframes(std::vector<Attr>& data, const cgltf_animation_sampler& s
 				data.push_back(v);
 			}
 		}
+	}
+}
+
+void processAnimation(Animation& animation, const Settings& settings)
+{
+	float mint = 0, maxt = 0;
+
+	for (size_t i = 0; i < animation.tracks.size(); ++i)
+	{
+		const Track& track = animation.tracks[i];
+		assert(!track.time.empty());
+
+		mint = std::min(mint, track.time.front());
+		maxt = std::max(maxt, track.time.back());
+	}
+
+	// round the number of frames to nearest but favor the "up" direction
+	// this means that at 10 Hz resampling, we will try to preserve the last frame <10ms
+	// but if the last frame is <2ms we favor just removing this data
+	int frames = 1 + int((maxt - mint) * settings.anim_freq + 0.8f);
+
+	animation.start = mint;
+	animation.frames = frames;
+
+	for (size_t i = 0; i < animation.tracks.size(); ++i)
+	{
+		Track& track = animation.tracks[i];
+
+		std::vector<Attr> result;
+		resampleKeyframes(result, track.time, track.data, track.path, track.interpolation, track.components, frames, mint, settings.anim_freq);
+
+		track.time.clear();
+		track.data.swap(result);
 	}
 }
 
@@ -3495,8 +3523,15 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 
 		bool tc = isTrackConstant(sampler, channel.target_path, channel.target_node);
 
+		size_t components = (channel.target_path == cgltf_animation_path_type_weights) ? channel.target_node->mesh->primitives[0].targets_count : 1;
+
+		std::vector<float> input;
+		readAccessor(input, sampler.input);
+		std::vector<Attr> output;
+		readAccessor(output, sampler.output);
+
 		std::vector<Attr> track;
-		resampleKeyframes(track, sampler, channel.target_path, channel.target_node, tc ? 1 : frames, mint, settings.anim_freq);
+		resampleKeyframes(track, input, output, channel.target_path, sampler.interpolation, components, tc ? 1 : frames, mint, settings.anim_freq);
 
 		std::string scratch;
 		StreamFormat format = writeKeyframeStream(scratch, channel.target_path, track);
@@ -3812,6 +3847,12 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 	{
 		printf("input: %d nodes, %d meshes (%d primitives), %d materials, %d skins, %d animations\n",
 		       int(data->nodes_count), int(data->meshes_count), int(meshes.size()), int(data->materials_count), int(data->skins_count), int(data->animations_count));
+		printMeshStats(meshes, "input");
+	}
+
+	for (size_t i = 0; i < animations.size(); ++i)
+	{
+		processAnimation(animations[i], settings);
 	}
 
 	std::vector<NodeInfo> nodes(data->nodes_count);
@@ -3851,22 +3892,12 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 
 	markNeededMaterials(data, materials, meshes);
 
-	if (settings.verbose)
-	{
-		printMeshStats(meshes, "input");
-	}
-
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
 		processMesh(meshes[i], settings);
 	}
 
 	filterEmptyMeshes(meshes); // some meshes may become empty after processing
-
-	if (settings.verbose)
-	{
-		printMeshStats(meshes, "output");
-	}
 
 	std::vector<ImageInfo> images(data->images_count);
 
@@ -4184,6 +4215,7 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 
 	if (settings.verbose)
 	{
+		printMeshStats(meshes, "output");
 		printSceneStats(views, meshes, node_offset, mesh_offset, material_offset, json.size(), bin.size());
 	}
 
