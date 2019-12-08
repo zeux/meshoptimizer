@@ -81,6 +81,8 @@ struct Track
 	cgltf_node* node;
 	cgltf_animation_path_type path;
 
+	bool dummy;
+
 	size_t components; // 1 unless path is cgltf_animation_path_type_weights
 
 	cgltf_interpolation_type interpolation;
@@ -2388,7 +2390,7 @@ float getDelta(const Attr& l, const Attr& r, cgltf_animation_path_type type)
 		return fabsf(l.f[0] - r.f[0]);
 
 	default:
-		assert(!"Uknown animation path type");
+		assert(!"Uknown animation path");
 		return 0;
 	}
 }
@@ -2410,7 +2412,7 @@ float getDeltaTolerance(cgltf_animation_path_type type)
 		return 0.001f; // linear
 
 	default:
-		assert(!"Uknown animation path type");
+		assert(!"Uknown animation path");
 		return 0;
 	}
 }
@@ -2640,6 +2642,40 @@ bool isTrackEqual(const std::vector<Attr>& data, cgltf_animation_path_type type,
 	return true;
 }
 
+void getBaseTransform(Attr* result, size_t components, cgltf_animation_path_type type, cgltf_node* node)
+{
+	switch (type)
+	{
+	case cgltf_animation_path_type_translation:
+		memcpy(result->f, node->translation, 3 * sizeof(float));
+		break;
+
+	case cgltf_animation_path_type_rotation:
+		memcpy(result->f, node->rotation, 4 * sizeof(float));
+		break;
+
+	case cgltf_animation_path_type_scale:
+		memcpy(result->f, node->scale, 3 * sizeof(float));
+		break;
+
+	case cgltf_animation_path_type_weights:
+		if (node->weights_count)
+		{
+			assert(node->weights_count == components);
+			memcpy(result->f, node->weights, components * sizeof(float));
+		}
+		else if (node->mesh && node->mesh->weights_count)
+		{
+			assert(node->mesh->weights_count == components);
+			memcpy(result->f, node->mesh->weights, components * sizeof(float));
+		}
+		break;
+
+	default:
+		assert(!"Unknown animation path");
+	}
+}
+
 void processAnimation(Animation& animation, const Settings& settings)
 {
 	float mint = 0, maxt = 0;
@@ -2661,6 +2697,8 @@ void processAnimation(Animation& animation, const Settings& settings)
 	animation.start = mint;
 	animation.frames = frames;
 
+	std::vector<Attr> base;
+
 	for (size_t i = 0; i < animation.tracks.size(); ++i)
 	{
 		Track& track = animation.tracks[i];
@@ -2675,6 +2713,12 @@ void processAnimation(Animation& animation, const Settings& settings)
 		{
 			// track is constant (equal to first keyframe), we only need the first keyframe
 			track.data.resize(track.components);
+
+			// track.dummy is true iff track redundantly sets up the value to be equal to default node transform
+			base.resize(track.components);
+			getBaseTransform(&base[0], track.components, track.path, track.node);
+
+			track.dummy = isTrackEqual(track.data, track.path, 1, &base[0], track.components);
 		}
 	}
 }
