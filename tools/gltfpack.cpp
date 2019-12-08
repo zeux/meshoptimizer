@@ -76,6 +76,27 @@ struct Mesh
 	std::vector<const char*> target_names;
 };
 
+struct Track
+{
+	cgltf_node* node;
+	cgltf_animation_path_type path;
+
+	size_t components; // 1 unless path is cgltf_animation_path_type_weights
+
+	cgltf_interpolation_type interpolation;
+
+	std::vector<float> time; // empty for resampled or constant animations
+	std::vector<Attr> data;
+};
+
+struct Animation
+{
+	const char* name;
+
+	std::vector<float> time; // shared time track for resampled animations
+	std::vector<Track> tracks;
+};
+
 struct Settings
 {
 	int pos_bits;
@@ -290,7 +311,7 @@ void transformMesh(Mesh& mesh, const cgltf_node* node)
 	}
 }
 
-void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
+void parseMeshes(cgltf_data* data, std::vector<Mesh>& meshes)
 {
 	for (size_t ni = 0; ni < data->nodes_count; ++ni)
 	{
@@ -318,7 +339,7 @@ void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 				continue;
 			}
 
-			Mesh result;
+			Mesh result = {};
 
 			result.node = &node;
 
@@ -560,6 +581,56 @@ void parseMeshesObj(fastObjMesh* obj, cgltf_data* data, std::vector<Mesh>& meshe
 		vertex_offset[mi] += obj->face_vertices[fi];
 		index_offset[mi] += (obj->face_vertices[fi] - 2) * 3;
 		group_offset += obj->face_vertices[fi];
+	}
+}
+
+void parseAnimations(cgltf_data* data, std::vector<Animation>& animations)
+{
+	for (size_t i = 0; i < data->animations_count; ++i)
+	{
+		const cgltf_animation& animation = data->animations[i];
+
+		Animation result = {};
+		result.name = animation.name;
+
+		for (size_t j = 0; j < animation.channels_count; ++j)
+		{
+			const cgltf_animation_channel& channel = animation.channels[j];
+			const cgltf_animation_sampler& sampler = animation.samplers[j];
+
+			if (!channel.target_node)
+			{
+				fprintf(stderr, "Warning: ignoring channel %d of animation %d because it has no target node\n", int(j), int(i));
+				continue;
+			}
+
+			if (channel.target_path == cgltf_animation_path_type_weights && (!channel.target_node->mesh || channel.target_node->mesh->primitives_count == 0 || channel.target_node->mesh->primitives[0].targets_count == 0))
+			{
+				fprintf(stderr, "Warning: ignoring channel %d of animation %d because it contains invalid morph weight animation\n", int(j), int(i));
+				continue;
+			}
+
+			Track track = {};
+			track.node = channel.target_node;
+			track.path = channel.target_path;
+
+			track.components = (channel.target_path == cgltf_animation_path_type_weights) ? track.node->mesh->primitives[0].targets_count : 1;
+
+			track.interpolation = sampler.interpolation;
+
+			readAccessor(track.time, sampler.input);
+			readAccessor(track.data, sampler.output);
+
+			result.tracks.push_back(track);
+		}
+
+		if (result.tracks.empty())
+		{
+			fprintf(stderr, "Warning: ignoring animation %d because it has no valid tracks\n", int(i));
+			continue;
+		}
+
+		animations.push_back(result);
 	}
 }
 
@@ -3395,7 +3466,7 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 		const cgltf_animation_channel& channel = *tracks[j];
 		const cgltf_animation_sampler& sampler = *channel.sampler;
 
-		mint = std::min(mint, sampler.input->min[0]);
+		mint = std::min(mint, sampler.input->min[0]); // TODO: is min/max guaranteed to be present?
 		maxt = std::max(maxt, sampler.input->max[0]);
 
 		bool tc = isTrackConstant(sampler, channel.target_path, channel.target_node);
@@ -3732,8 +3803,11 @@ void printAttributeStats(const std::vector<BufferView>& views, BufferView::Kind 
 	}
 }
 
-void process(cgltf_data* data, const char* input_path, const char* output_path, std::vector<Mesh>& meshes, const Settings& settings, std::string& json, std::string& bin, std::string& fallback)
+void process(cgltf_data* data, const char* input_path, const char* output_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const Settings& settings, std::string& json, std::string& bin, std::string& fallback)
 {
+	// TODO: remove uses of data->animations*
+	(void)animations;
+
 	if (settings.verbose)
 	{
 		printf("input: %d nodes, %d meshes (%d primitives), %d materials, %d skins, %d animations\n",
@@ -4212,6 +4286,7 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 {
 	cgltf_data* data = 0;
 	std::vector<Mesh> meshes;
+	std::vector<Animation> animations;
 
 	const char* iext = strrchr(input, '.');
 
@@ -4240,7 +4315,8 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 			return 2;
 		}
 
-		parseMeshesGltf(data, meshes);
+		parseMeshes(data, meshes);
+		parseAnimations(data, animations);
 	}
 	else if (iext && (strcmp(iext, ".obj") == 0 || strcmp(iext, ".OBJ") == 0))
 	{
@@ -4274,7 +4350,7 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 	}
 
 	std::string json, bin, fallback;
-	process(data, input, output, meshes, settings, json, bin, fallback);
+	process(data, input, output, meshes, animations, settings, json, bin, fallback);
 
 	cgltf_free(data);
 
