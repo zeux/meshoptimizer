@@ -2393,6 +2393,28 @@ float getDelta(const Attr& l, const Attr& r, cgltf_animation_path_type type)
 	}
 }
 
+float getDeltaTolerance(cgltf_animation_path_type type)
+{
+	switch (type)
+	{
+	case cgltf_animation_path_type_translation:
+		return 0.001f; // linear
+
+	case cgltf_animation_path_type_rotation:
+		return 0.001f; // radians
+
+	case cgltf_animation_path_type_scale:
+		return 0.001f; // ratio
+
+	case cgltf_animation_path_type_weights:
+		return 0.001f; // linear
+
+	default:
+		assert(!"Uknown animation path type");
+		return 0;
+	}
+}
+
 bool isTrackConstant(const cgltf_animation_sampler& sampler, cgltf_animation_path_type type, cgltf_node* target_node, Attr* out_first = 0)
 {
 	const float tolerance = 1e-3f;
@@ -2602,14 +2624,7 @@ bool isTrackConstant(const std::vector<Attr>& data, cgltf_animation_path_type ty
 {
 	assert(data.size() == frames * components);
 
-	static const float tolerance[] =
-	{
-		0.f, //
-		0.001f, // translation, linear
-		0.001f, // rotation, radians
-		0.001f, // scale, ratio delta
-		0.001f, // weights, linear
-	};
+	float tolerance = getDeltaTolerance(type);
 
 	for (int i = 1; i < frames; ++i)
 	{
@@ -2617,7 +2632,7 @@ bool isTrackConstant(const std::vector<Attr>& data, cgltf_animation_path_type ty
 		{
 			float delta = getDelta(data[j], data[i * components + j], type);
 
-			if (delta > tolerance[type])
+			if (delta > tolerance)
 				return false;
 		}
 	}
