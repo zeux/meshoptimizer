@@ -2373,19 +2373,23 @@ void writeAccessor(std::string& json, size_t view, size_t offset, cgltf_type typ
 
 float getDelta(const Attr& l, const Attr& r, cgltf_animation_path_type type)
 {
-	if (type == cgltf_animation_path_type_rotation)
+	switch (type)
 	{
-		float error = 1.f - fabsf(l.f[0] * r.f[0] + l.f[1] * r.f[1] + l.f[2] * r.f[2] + l.f[3] * r.f[3]);
+	case cgltf_animation_path_type_translation:
+		return std::max(std::max(fabsf(l.f[0] - r.f[0]), fabsf(l.f[1] - r.f[1])), fabsf(l.f[2] - r.f[2]));
 
-		return error;
-	}
-	else
-	{
-		float error = 0;
-		for (int k = 0; k < 4; ++k)
-			error += fabsf(r.f[k] - l.f[k]);
+	case cgltf_animation_path_type_rotation:
+		return acosf(std::min(1.f, fabsf(l.f[0] * r.f[0] + l.f[1] * r.f[1] + l.f[2] * r.f[2] + l.f[3] * r.f[3])));
 
-		return error;
+	case cgltf_animation_path_type_scale:
+		return std::max(std::max(fabsf(l.f[0] / r.f[0] - 1), fabsf(l.f[1] / r.f[1] - 1)), fabsf(l.f[2] / r.f[2] - 1));
+
+	case cgltf_animation_path_type_weights:
+		return fabsf(l.f[0] - r.f[0]);
+
+	default:
+		assert(!"Uknown animation path type");
+		return 0;
 	}
 }
 
@@ -2594,6 +2598,45 @@ void resampleKeyframes(std::vector<Attr>& data, const std::vector<float>& input,
 	}
 }
 
+bool isTrackConstant(const std::vector<Attr>& data, cgltf_animation_path_type type, size_t components)
+{
+	float max_delta = 0.f;
+
+	for (size_t i = 1; i < data.size(); ++i)
+	{
+		for (size_t j = 0; j < components; ++j)
+		{
+			float delta = getDelta(data[j], data[i * components + j], type);
+
+			max_delta = std::max(max_delta, delta);
+		}
+	}
+
+	printf("%f\n", max_delta);
+
+	static const float tolerance[] =
+	{
+		0.f, //
+		0.001f, // translation, linear
+		0.001f, // rotation, radians
+		0.001f, // scale, ratio delta
+		0.001f, // weights, linear
+	};
+
+	for (size_t i = 1; i < data.size(); ++i)
+	{
+		for (size_t j = 0; j < components; ++j)
+		{
+			float delta = getDelta(data[j], data[i * components + j], type);
+
+			if (delta > tolerance[type])
+				return false;
+		}
+	}
+
+	return true;
+}
+
 void processAnimation(Animation& animation, const Settings& settings)
 {
 	float mint = 0, maxt = 0;
@@ -2624,6 +2667,13 @@ void processAnimation(Animation& animation, const Settings& settings)
 
 		track.time.clear();
 		track.data.swap(result);
+
+		printf("animation %s node %s track %s components %d\n", animation.name, track.node->name, animationPath(track.path), int(track.components));
+
+		if (isTrackConstant(track.data, track.path, track.components))
+		{
+			track.data.resize(track.components);
+		}
 	}
 }
 
