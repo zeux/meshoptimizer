@@ -2620,17 +2620,17 @@ void resampleKeyframes(std::vector<Attr>& data, const std::vector<float>& input,
 	}
 }
 
-bool isTrackConstant(const std::vector<Attr>& data, cgltf_animation_path_type type, int frames, size_t components)
+bool isTrackEqual(const std::vector<Attr>& data, cgltf_animation_path_type type, int frames, const Attr* value, size_t components)
 {
 	assert(data.size() == frames * components);
 
 	float tolerance = getDeltaTolerance(type);
 
-	for (int i = 1; i < frames; ++i)
+	for (int i = 0; i < frames; ++i)
 	{
 		for (size_t j = 0; j < components; ++j)
 		{
-			float delta = getDelta(data[j], data[i * components + j], type);
+			float delta = getDelta(value[j], data[i * components + j], type);
 
 			if (delta > tolerance)
 				return false;
@@ -2671,8 +2671,9 @@ void processAnimation(Animation& animation, const Settings& settings)
 		track.time.clear();
 		track.data.swap(result);
 
-		if (isTrackConstant(track.data, track.path, frames, track.components))
+		if (isTrackEqual(track.data, track.path, frames, &track.data[0], track.components))
 		{
+			// track is constant (equal to first keyframe), we only need the first keyframe
 			track.data.resize(track.components);
 		}
 	}
