@@ -2598,21 +2598,9 @@ void resampleKeyframes(std::vector<Attr>& data, const std::vector<float>& input,
 	}
 }
 
-bool isTrackConstant(const std::vector<Attr>& data, cgltf_animation_path_type type, size_t components)
+bool isTrackConstant(const std::vector<Attr>& data, cgltf_animation_path_type type, int frames, size_t components)
 {
-	float max_delta = 0.f;
-
-	for (size_t i = 1; i < data.size(); ++i)
-	{
-		for (size_t j = 0; j < components; ++j)
-		{
-			float delta = getDelta(data[j], data[i * components + j], type);
-
-			max_delta = std::max(max_delta, delta);
-		}
-	}
-
-	printf("%f\n", max_delta);
+	assert(data.size() == frames * components);
 
 	static const float tolerance[] =
 	{
@@ -2623,7 +2611,7 @@ bool isTrackConstant(const std::vector<Attr>& data, cgltf_animation_path_type ty
 		0.001f, // weights, linear
 	};
 
-	for (size_t i = 1; i < data.size(); ++i)
+	for (int i = 1; i < frames; ++i)
 	{
 		for (size_t j = 0; j < components; ++j)
 		{
@@ -2668,9 +2656,7 @@ void processAnimation(Animation& animation, const Settings& settings)
 		track.time.clear();
 		track.data.swap(result);
 
-		printf("animation %s node %s track %s components %d\n", animation.name, track.node->name, animationPath(track.path), int(track.components));
-
-		if (isTrackConstant(track.data, track.path, track.components))
+		if (isTrackConstant(track.data, track.path, frames, track.components))
 		{
 			track.data.resize(track.components);
 		}
