@@ -600,7 +600,6 @@ void parseAnimations(cgltf_data* data, std::vector<Animation>& animations)
 		for (size_t j = 0; j < animation.channels_count; ++j)
 		{
 			const cgltf_animation_channel& channel = animation.channels[j];
-			const cgltf_animation_sampler& sampler = animation.samplers[j];
 
 			if (!channel.target_node)
 			{
@@ -620,10 +619,10 @@ void parseAnimations(cgltf_data* data, std::vector<Animation>& animations)
 
 			track.components = (channel.target_path == cgltf_animation_path_type_weights) ? track.node->mesh->primitives[0].targets_count : 1;
 
-			track.interpolation = sampler.interpolation;
+			track.interpolation = channel.sampler->interpolation;
 
-			readAccessor(track.time, sampler.input);
-			readAccessor(track.data, sampler.output);
+			readAccessor(track.time, channel.sampler->input);
+			readAccessor(track.data, channel.sampler->output);
 
 			result.tracks.push_back(track);
 		}
