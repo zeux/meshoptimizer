@@ -607,12 +607,6 @@ void parseAnimations(cgltf_data* data, std::vector<Animation>& animations)
 				continue;
 			}
 
-			if (channel.target_path == cgltf_animation_path_type_weights && (!channel.target_node->mesh || channel.target_node->mesh->primitives_count == 0 || channel.target_node->mesh->primitives[0].targets_count == 0))
-			{
-				fprintf(stderr, "Warning: ignoring channel %d of animation %d because it contains invalid morph weight animation\n", int(j), int(i));
-				continue;
-			}
-
 			Track track = {};
 			track.node = channel.target_node;
 			track.path = channel.target_path;

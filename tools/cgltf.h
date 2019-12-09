@@ -1286,6 +1286,38 @@ cgltf_result cgltf_validate(cgltf_data* data)
 		}
 	}
 
+	for (cgltf_size i = 0; i < data->animations_count; ++i)
+	{
+		for (cgltf_size j = 0; j < data->animations[i].channels_count; ++j)
+		{
+			cgltf_animation_channel* channel = &data->animations[i].channels[j];
+
+			if (!channel->target_node)
+			{
+				continue;
+			}
+
+			cgltf_size components = 1;
+
+			if (channel->target_path == cgltf_animation_path_type_weights)
+			{
+				if (!channel->target_node->mesh || !channel->target_node->mesh->primitives_count)
+				{
+					return cgltf_result_invalid_gltf;
+				}
+
+				components = channel->target_node->mesh->primitives[0].targets_count;
+			}
+
+			cgltf_size values = channel->sampler->interpolation == cgltf_interpolation_type_cubic_spline ? 3 : 1;
+
+			if (channel->sampler->input->count * components * values != channel->sampler->output->count)
+			{
+				return cgltf_result_data_too_short;
+			}
+		}
+	}
+
 	return cgltf_result_success;
 }
 
