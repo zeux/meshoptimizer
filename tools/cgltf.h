@@ -1258,6 +1258,34 @@ cgltf_result cgltf_validate(cgltf_data* data)
 		}
 	}
 
+	for (cgltf_size i = 0; i < data->nodes_count; ++i)
+	{
+		cgltf_node* p1 = data->nodes[i].parent;
+		cgltf_node* p2 = p1 ? p1->parent : NULL;
+
+		while (p1 && p2)
+		{
+			if (p1 == p2)
+			{
+				return cgltf_result_invalid_gltf;
+			}
+
+			p1 = p1->parent;
+			p2 = p2->parent ? p2->parent->parent : NULL;
+		}
+	}
+
+	for (cgltf_size i = 0; i < data->scenes_count; ++i)
+	{
+		for (cgltf_size j = 0; j < data->scenes[i].nodes_count; ++j)
+		{
+			if (data->scenes[i].nodes[j]->parent)
+			{
+				return cgltf_result_invalid_gltf;
+			}
+		}
+	}
+
 	return cgltf_result_success;
 }
 
