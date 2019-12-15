@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.0)
 
-if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.15)
+if (CMAKE_VERSION VERSION_GREATER 3.15 OR CMAKE_VERSION VERSION_EQUAL 3.15)
     cmake_policy(SET CMP0091 NEW) # Enables use of MSVC_RUNTIME_LIBRARY
     cmake_policy(SET CMP0092 NEW) # Enables clean /W4 override for MSVC
 endif()
