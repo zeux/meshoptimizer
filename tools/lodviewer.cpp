@@ -357,6 +357,57 @@ Mesh optimize(const Mesh& mesh, int lod)
 	return result;
 }
 
+void computeNormals(Mesh& mesh)
+{
+	if (mesh.hasnormals)
+		return;
+
+	for (size_t i = 0; i < mesh.vertices.size(); ++i)
+	{
+		Vertex& v = mesh.vertices[i];
+
+		v.nx = v.ny = v.nz = 0.f;
+	}
+
+	for (size_t i = 0; i < mesh.indices.size(); i += 3)
+	{
+		Vertex& v0 = mesh.vertices[mesh.indices[i + 0]];
+		Vertex& v1 = mesh.vertices[mesh.indices[i + 1]];
+		Vertex& v2 = mesh.vertices[mesh.indices[i + 2]];
+
+		float v10[3] = {v1.px - v0.px, v1.py - v0.py, v1.pz - v0.pz};
+		float v20[3] = {v2.px - v0.px, v2.py - v0.py, v2.pz - v0.pz};
+
+		float normalx = v10[1] * v20[2] - v10[2] * v20[1];
+		float normaly = v10[2] * v20[0] - v10[0] * v20[2];
+		float normalz = v10[0] * v20[1] - v10[1] * v20[0];
+
+		v0.nx += normalx;
+		v0.ny += normaly;
+		v0.nz += normalz;
+
+		v1.nx += normalx;
+		v1.ny += normaly;
+		v1.nz += normalz;
+
+		v2.nx += normalx;
+		v2.ny += normaly;
+		v2.nz += normalz;
+	}
+
+	for (size_t i = 0; i < mesh.vertices.size(); ++i)
+	{
+		Vertex& v = mesh.vertices[i];
+
+		float nl = sqrtf(v.nx * v.nx + v.ny * v.ny + v.nz * v.nz);
+		float ns = (nl == 0.f) ? 0.f : 1.f / nl;
+
+		v.nx *= ns;
+		v.ny *= ns;
+		v.nz *= ns;
+	}
+}
+
 void display(int x, int y, int width, int height, const Mesh& mesh, const Options& options)
 {
 	glViewport(x, y, width, height);
@@ -639,6 +690,9 @@ int main(int argc, char** argv)
 				File& f = files[i];
 				int x = int(i) % cols;
 				int y = int(i) / cols;
+
+				if (options.mode == Options::Mode_Normals)
+					computeNormals(f.lodmesh);
 
 				display(x * tilew, y * tileh, tilew, tileh, f.lodmesh, options);
 			}
