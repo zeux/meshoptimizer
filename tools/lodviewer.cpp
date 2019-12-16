@@ -49,6 +49,9 @@ struct Mesh
 	std::vector<Vertex> vertices;
 	std::vector<unsigned int> indices;
 
+	bool hasnormals;
+	bool hastexture;
+
 	// TODO: this is debug only visualization and will go away at some point
 	std::vector<unsigned char> kinds;
 	std::vector<unsigned int> loop;
@@ -73,6 +76,9 @@ Mesh parseObj(const char* path)
 	size_t vertex_offset = 0;
 	size_t index_offset = 0;
 
+	bool hasnormals = false;
+	bool hastexture = false;
+
 	for (unsigned int i = 0; i < obj->face_count; ++i)
 	{
 		for (unsigned int j = 0; j < obj->face_vertices[i]; ++j)
@@ -90,6 +96,9 @@ Mesh parseObj(const char* path)
 				obj->texcoords[gi.t * 2 + 0],
 				obj->texcoords[gi.t * 2 + 1],
 			};
+
+			hasnormals |= (gi.n > 0);
+			hastexture |= (gi.t > 0);
 
 			// triangulate polygon on the fly; offset-3 is always the first polygon vertex
 			if (j >= 3)
@@ -118,6 +127,9 @@ Mesh parseObj(const char* path)
 
 	result.vertices.resize(total_vertices);
 	meshopt_remapVertexBuffer(&result.vertices[0], &vertices[0], total_indices, sizeof(Vertex), &remap[0]);
+
+	result.hasnormals = hasnormals;
+	result.hastexture = hastexture;
 
 	return result;
 }
@@ -188,6 +200,9 @@ Mesh parseGltf(const char* path)
 	size_t vertex_offset = 0;
 	size_t index_offset = 0;
 
+	bool hasnormals = false;
+	bool hastexture = false;
+
 	for (size_t ni = 0; ni < data->nodes_count; ++ni)
 	{
 		if (!data->nodes[ni].mesh)
@@ -234,6 +249,8 @@ Mesh parseGltf(const char* path)
 					result.vertices[vertex_offset + i].ny = ptr[0] * transform[1] + ptr[1] * transform[5] + ptr[2] * transform[9];
 					result.vertices[vertex_offset + i].nz = ptr[0] * transform[2] + ptr[1] * transform[6] + ptr[2] * transform[10];
 				}
+
+				hasnormals = true;
 			}
 
 			if (cgltf_accessor* at = getAccessor(primitive.attributes, primitive.attributes_count, cgltf_attribute_type_texcoord))
@@ -246,12 +263,17 @@ Mesh parseGltf(const char* path)
 					result.vertices[vertex_offset + i].tx = ptr[0];
 					result.vertices[vertex_offset + i].ty = ptr[1];
 				}
+
+				hastexture = true;
 			}
 
 			vertex_offset += ap->count;
 			index_offset += ai->count;
 		}
 	}
+
+	result.hasnormals = hasnormals;
+	result.hastexture = hastexture;
 
 	std::vector<unsigned int> remap(total_indices);
 	size_t unique_vertices = meshopt_generateVertexRemap(&remap[0], &result.indices[0], total_indices, &result.vertices[0], total_vertices, sizeof(Vertex));
@@ -290,8 +312,12 @@ bool saveObj(const Mesh& mesh, const char* path)
 	for (size_t i = 0; i < vertcount; ++i)
 	{
 		fprintf(obj, "v %f %f %f\n", verts[i].px, verts[i].py, verts[i].pz);
-		fprintf(obj, "vn %f %f %f\n", verts[i].nx, verts[i].ny, verts[i].nz);
-		fprintf(obj, "vt %f %f %f\n", verts[i].tx, verts[i].ty, 0.f);
+
+		if (mesh.hasnormals)
+			fprintf(obj, "vn %f %f %f\n", verts[i].nx, verts[i].ny, verts[i].nz);
+
+		if (mesh.hastexture)
+			fprintf(obj, "vt %f %f %f\n", verts[i].tx, verts[i].ty, 0.f);
 	}
 
 	for (size_t i = 0; i < tris.size(); i += 3)
@@ -300,7 +326,14 @@ bool saveObj(const Mesh& mesh, const char* path)
 		unsigned int i1 = tris[i + 1] + 1;
 		unsigned int i2 = tris[i + 2] + 1;
 
-		fprintf(obj, "f %d/%d/%d %d/%d/%d %d/%d/%d\n", i0, i0, i0, i1, i1, i1, i2, i2, i2);
+		if (mesh.hasnormals && mesh.hastexture)
+			fprintf(obj, "f %d/%d/%d %d/%d/%d %d/%d/%d\n", i0, i0, i0, i1, i1, i1, i2, i2, i2);
+		else if (mesh.hasnormals && !mesh.hastexture)
+			fprintf(obj, "f %d//%d %d//%d %d//%d\n", i0, i0, i1, i1, i2, i2);
+		else if (!mesh.hasnormals && mesh.hastexture)
+			fprintf(obj, "f %d/%d %d/%d %d/%d\n", i0, i0, i1, i1, i2, i2);
+		else
+			fprintf(obj, "f %d %d %dd\n", i0, i1, i2);
 	}
 
 	fclose(obj);
