@@ -10,6 +10,7 @@ project(meshoptimizer VERSION 0.13 LANGUAGES CXX)
 option(BUILD_DEMO "Build demo" OFF)
 option(BUILD_TOOLS "Build tools" OFF)
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
+set(BUILD_TOOLS_GLFW_FOLDER_NAME "glfw" CACHE STRING "Default folder to look for GLFW")
 
 set(SOURCES
     src/meshoptimizer.h
@@ -67,14 +68,23 @@ if(BUILD_TOOLS)
         set_target_properties(gltfpack PROPERTIES INSTALL_RPATH ${RPATH})
     endif()
 
-    if(EXISTS glfw)
+    find_package(glfw3 3.3 QUIET)
+
+    if (glfw3_FOUND)
+        message(STATUS "Found GLFW3 via find_package()")
+        add_executable(lodviewer tools/lodviewer.cpp tools/meshloader.cpp)
+        target_link_libraries(lodviewer ${GLFW3_LIBRARY} meshoptimizer)
+    elseif(EXISTS ${BUILD_TOOLS_GLFW_FOLDER_NAME})
+        message(STATUS "Found GLFW3 in this folder: ${BUILD_TOOLS_GLFW_FOLDER_NAME}")
         set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "")
         set(GLFW_BUILD_TESTS OFF CACHE BOOL "")
         set(GLFW_BUILD_DOCS OFF CACHE BOOL "")
         set(GLFW_INSTALL OFF CACHE BOOL "")
-        add_subdirectory(glfw)
+        add_subdirectory(${BUILD_TOOLS_GLFW_FOLDER_NAME})
         add_executable(lodviewer tools/lodviewer.cpp tools/meshloader.cpp)
         target_link_libraries(lodviewer glfw meshoptimizer)
+    else()
+        message(STATUS "GLFW3 not found. LODViewer disabled.")
     endif()
 endif()
 
