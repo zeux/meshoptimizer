@@ -10,6 +10,7 @@ project(meshoptimizer VERSION 0.13 LANGUAGES CXX)
 option(MESHOPT_BUILD_DEMO "Build demo" OFF)
 option(MESHOPT_BUILD_TOOLS "Build tools" OFF)
 option(MESHOPT_BUILD_SHARED_LIBS "Build shared libraries" OFF)
+set(MESHOPT_BUILD_TOOLS_GLFW_FOLDER_NAME "" CACHE STRING "Custom folder to look for GLFW")
 
 set(SOURCES
     src/meshoptimizer.h
@@ -65,6 +66,24 @@ if(MESHOPT_BUILD_TOOLS)
     if(MESHOPT_BUILD_SHARED_LIBS)
         string(CONCAT RPATH "$ORIGIN/../" ${CMAKE_INSTALL_LIBDIR})
         set_target_properties(gltfpack PROPERTIES INSTALL_RPATH ${RPATH})
+    endif()
+
+    if(NOT (MESHOPT_BUILD_TOOLS_GLFW_FOLDER_NAME STREQUAL ""))
+        message(STATUS "Using GLFW3 from: ${MESHOPT_BUILD_TOOLS_GLFW_FOLDER_NAME}")
+        set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "")
+        set(GLFW_BUILD_TESTS OFF CACHE BOOL "")
+        set(GLFW_BUILD_DOCS OFF CACHE BOOL "")
+        set(GLFW_INSTALL OFF CACHE BOOL "")
+        add_subdirectory(${MESHOPT_BUILD_TOOLS_GLFW_FOLDER_NAME})
+        set(glfw3_FOUND TRUE)
+        set(glfw3_LIBRARY glfw)
+    else()
+        find_package(glfw3 3.3 QUIET)
+    endif()
+
+    if (glfw3_FOUND)
+        add_executable(lodviewer tools/lodviewer.cpp tools/meshloader.cpp)
+        target_link_libraries(lodviewer ${glfw3_LIBRARY} meshoptimizer)
     endif()
 endif()
 
