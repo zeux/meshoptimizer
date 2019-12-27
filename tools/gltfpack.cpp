@@ -202,6 +202,13 @@ struct BufferView
 	size_t bytes;
 };
 
+std::string getVersion()
+{
+	char result[32];
+	sprintf(result, "%d.%d", MESHOPTIMIZER_VERSION / 1000, (MESHOPTIMIZER_VERSION % 1000) / 10);
+	return result;
+}
+
 const char* getError(cgltf_result result, cgltf_data* data)
 {
 	switch (result)
@@ -4125,12 +4132,9 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 		writeLight(json_lights, light);
 	}
 
-	char version[32];
-	sprintf(version, "%d.%d", MESHOPTIMIZER_VERSION / 1000, (MESHOPTIMIZER_VERSION % 1000) / 10);
-
 	append(json, "\"asset\":{");
 	append(json, "\"version\":\"2.0\",\"generator\":\"gltfpack ");
-	append(json, version);
+	append(json, getVersion());
 	append(json, "\"");
 	if (data->asset.extras.start_offset)
 	{
@@ -4566,6 +4570,13 @@ int main(int argc, char** argv)
 		}
 	}
 
+	// shortcut for gltfpack -v
+	if (settings.verbose && argc == 2)
+	{
+		printf("gltfpack %s\n", getVersion().c_str());
+		return 0;
+	}
+
 	if (test)
 	{
 		for (int i = test; i < argc; ++i)
@@ -4579,6 +4590,7 @@ int main(int argc, char** argv)
 
 	if (!input || !output || help)
 	{
+		fprintf(stderr, "gltfpack %s\n", getVersion().c_str());
 		fprintf(stderr, "Usage: gltfpack [options] -i input -o output\n");
 		fprintf(stderr, "\n");
 		fprintf(stderr, "Options:\n");
@@ -4599,7 +4611,7 @@ int main(int argc, char** argv)
 		fprintf(stderr, "-tq N: set texture encoding quality (default: 50; N should be between 1 and 100\n");
 		fprintf(stderr, "-c: produce compressed gltf/glb files\n");
 		fprintf(stderr, "-cf: produce compressed gltf/glb files with fallback for loaders that don't support compression\n");
-		fprintf(stderr, "-v: verbose output\n");
+		fprintf(stderr, "-v: verbose output (print version when used without other options)\n");
 		fprintf(stderr, "-h: display this help and exit\n");
 
 		return 1;
