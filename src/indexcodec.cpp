@@ -239,6 +239,8 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 	unsigned char* data = code + index_count / 3;
 	unsigned char* data_safe_end = buffer + buffer_size - 16;
 
+	int fecmax = version >= 1 ? 14 : 15;
+
 	// use static encoding table; it's possible to pack the result and then build an optimal table and repack
 	// for now we keep it simple and use the table that has been generated based on symbol frequency on a training mesh set
 	const unsigned char* codeaux_table = kCodeAuxEncodingTable;
@@ -263,7 +265,7 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 			int fe = fer >> 2;
 			int fc = getVertexFifo(vertexfifo, c, vertexfifooffset);
 
-			int fec = (fc >= 1 && fc < 15) ? fc : (c == next) ? (next++, 0) : 15;
+			int fec = (fc >= 1 && fc < fecmax) ? fc : (c == next) ? (next++, 0) : (c + 1 == last && version >= 1) ? (--last, 14) : 15;
 
 			*code++ = (unsigned char)((fe << 4) | fec);
 
@@ -276,7 +278,7 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 				encodeIndex(data, c, next, last), last = c;
 
 			// we only need to push third vertex since first two are likely already in the vertex fifo
-			if (fec == 0 || fec == 15)
+			if (fec == 0 || fec == 15 || (fec == 14 && version >= 1))
 				pushVertexFifo(vertexfifo, c, vertexfifooffset);
 
 			// we only need to push two new edges to edge fifo since the third one is already there
@@ -427,7 +429,8 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 	if ((buffer[0] & 0xf0) != kIndexHeader)
 		return -1;
 
-	if ((buffer[0] & 0x0f) > 1)
+	int version = buffer[0] & 0x0f;
+	if (version > 1)
 		return -1;
 
 	EdgeFifo edgefifo;
@@ -441,6 +444,8 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 
 	unsigned int next = 0;
 	unsigned int last = 0;
+
+	int fecmax = version >= 1 ? 14 : 15;
 
 	// since we store 16-byte codeaux table at the end, triangle data has to begin before data_safe_end
 	const unsigned char* code = buffer + 1;
@@ -471,7 +476,7 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 
 			// note: this is the most common path in the entire decoder
 			// inside this if we try to stay branchless (by using cmov/etc.) since these aren't predictable
-			if (fec != 15)
+			if (fec < fecmax)
 			{
 				// fifo reads are wrapped around 16 entry buffer
 				unsigned int cf = vertexfifo[(vertexfifooffset - 1 - fec) & 15];
@@ -494,7 +499,7 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 				unsigned int c = 0;
 
 				// note that we need to update the last index since free indices are delta-encoded
-				last = c = decodeIndex(data, next, last);
+				last = c = (fec == 14) ? last - 1 : decodeIndex(data, next, last);
 
 				// output triangle
 				writeTriangle(destination, i, index_size, a, b, c);
