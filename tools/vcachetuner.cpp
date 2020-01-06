@@ -29,11 +29,13 @@ struct Profile
 {
 	float weight;
 	int cache, warp, triangle; // vcache tuning parameters
+	int compression;
 };
 
 Profile profiles[] =
 {
-	{1.f, 0, 0, 0},  // Compression
+	{1.f, 0, 0, 0, 0},  // Compression
+	{1.f, 0, 0, 0, 1},  // Compression w/deflate
 	// {1.f, 14, 64, 128}, // AMD GCN
 	// {1.f, 32, 32, 32},  // NVidia Pascal
 	// {1.f, 16, 32, 32}, // NVidia Kepler, Maxwell
@@ -192,10 +194,10 @@ Mesh objmesh(const char* path)
 }
 
 template <typename T>
-size_t compress(const std::vector<T>& data)
+size_t compress(const std::vector<T>& data, int level = MZ_DEFAULT_LEVEL)
 {
 	std::vector<unsigned char> cbuf(tdefl_compress_bound(data.size() * sizeof(T)));
-	unsigned int flags = tdefl_create_comp_flags_from_zip_params(MZ_DEFAULT_LEVEL, 15, MZ_DEFAULT_STRATEGY);
+	unsigned int flags = tdefl_create_comp_flags_from_zip_params(level, 15, MZ_DEFAULT_STRATEGY);
 	return tdefl_compress_mem_to_mem(&cbuf[0], cbuf.size(), &data[0], data.size() * sizeof(T), flags);
 }
 
@@ -217,6 +219,17 @@ void compute_metric(const State* state, const Mesh& mesh, float result[Profile_C
 
 	meshopt_optimizeVertexFetch(NULL, &indices[0], indices.size(), NULL, mesh.vertex_count, 0);
 
+	std::vector<unsigned char> ibuf;
+
+	for (int profile = 0; profile < Profile_Count; ++profile)
+	{
+		if (profiles[profile].cache == 0)
+		{
+			ibuf.resize(meshopt_encodeIndexBufferBound(indices.size(), mesh.vertex_count));
+			ibuf.resize(meshopt_encodeIndexBuffer(&ibuf[0], ibuf.size(), &indices[0], indices.size()));
+		}
+	}
+
 	for (int profile = 0; profile < Profile_Count; ++profile)
 	{
 		if (profiles[profile].cache)
@@ -226,10 +239,8 @@ void compute_metric(const State* state, const Mesh& mesh, float result[Profile_C
 		}
 		else
 		{
-			std::vector<unsigned char> ibuf(meshopt_encodeIndexBufferBound(indices.size(), mesh.vertex_count));
-			ibuf.resize(meshopt_encodeIndexBuffer(&ibuf[0], ibuf.size(), &indices[0], indices.size()));
-
-			size_t csize = compress(ibuf);
+			// take into account both pre-deflate and post-deflate size but focus a bit more on post-deflate
+			size_t csize = profiles[profile].compression ? compress(ibuf) : ibuf.size();
 
 			result[profile] = double(csize) / double(indices.size() / 3);
 		}
@@ -425,6 +436,8 @@ void dump_stats(const State& state, const std::vector<Mesh>& meshes)
 
 int main(int argc, char** argv)
 {
+	meshopt_encodeIndexVersion(1);
+
 	std::vector<Mesh> meshes;
 
 	meshes.push_back(gridmesh(50));
