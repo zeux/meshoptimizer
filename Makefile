@@ -89,6 +89,9 @@ js/meshopt_decoder.js: build/decoder_base.wasm build/decoder_simd.wasm
 $(EXECUTABLE): $(DEMO_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
 
+vcachetuner: tools/vcachetuner.cpp $(BUILD)/tools/meshloader.cpp.o $(BUILD)/demo/miniz.cpp.o $(LIBRARY)
+	$(CXX) $^ -fopenmp $(CXXFLAGS) -std=c++11 $(LDFLAGS) -o $@
+
 $(LIBRARY): $(LIBRARY_OBJECTS)
 	ar rcs $@ $^
 

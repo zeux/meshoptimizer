@@ -16,9 +16,14 @@ const int kValenceMax = 8;
 
 namespace meshopt
 {
-extern thread_local float kVertexScoreTableCache[1 + kCacheSizeMax];
-extern thread_local float kVertexScoreTableLive[1 + kValenceMax];
+	struct VertexScoreTable
+	{
+		float cache[1 + kCacheSizeMax];
+		float live[1 + kValenceMax];
+	};
 } // namespace meshopt
+
+void meshopt_optimizeVertexCacheTable(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, const meshopt::VertexScoreTable* table);
 
 struct Profile
 {
@@ -29,8 +34,8 @@ struct Profile
 Profile profiles[] =
 {
 	{1.f, 0, 0, 0},  // Compression
-	{1.f, 14, 64, 128}, // AMD GCN
-	{1.f, 32, 32, 32},  // NVidia Pascal
+	// {1.f, 14, 64, 128}, // AMD GCN
+	// {1.f, 32, 32, 32},  // NVidia Pascal
 	// {1.f, 16, 32, 32}, // NVidia Kepler, Maxwell
 	// {1.f, 128, 0, 0}, // Intel
 };
@@ -194,14 +199,22 @@ size_t compress(const std::vector<T>& data)
 	return tdefl_compress_mem_to_mem(&cbuf[0], cbuf.size(), &data[0], data.size() * sizeof(T), flags);
 }
 
-void compute_metric(const State& state, const Mesh& mesh, float result[Profile_Count])
+void compute_metric(const State* state, const Mesh& mesh, float result[Profile_Count])
 {
-	memcpy(meshopt::kVertexScoreTableCache + 1, state.cache, kCacheSizeMax * sizeof(float));
-	memcpy(meshopt::kVertexScoreTableLive + 1, state.live, kValenceMax * sizeof(float));
-
 	std::vector<unsigned int> indices(mesh.indices.size());
 
-	meshopt_optimizeVertexCache(&indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertex_count);
+	if (state)
+	{
+		meshopt::VertexScoreTable table = {};
+		memcpy(table.cache + 1, state->cache, kCacheSizeMax * sizeof(float));
+		memcpy(table.live + 1, state->live, kValenceMax * sizeof(float));
+		meshopt_optimizeVertexCacheTable(&indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertex_count, &table);
+	}
+	else
+	{
+		meshopt_optimizeVertexCache(&indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertex_count);
+	}
+
 	meshopt_optimizeVertexFetch(NULL, &indices[0], indices.size(), NULL, mesh.vertex_count, 0);
 
 	for (int profile = 0; profile < Profile_Count; ++profile)
@@ -231,7 +244,7 @@ float fitness_score(const State& state, const std::vector<Mesh>& meshes)
 	for (auto& mesh : meshes)
 	{
 		float metric[Profile_Count];
-		compute_metric(state, mesh, metric);
+		compute_metric(&state, mesh, metric);
 
 		for (int profile = 0; profile < Profile_Count; ++profile)
 		{
@@ -393,7 +406,7 @@ void dump_stats(const State& state, const std::vector<Mesh>& meshes)
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
 		float metric[Profile_Count];
-		compute_metric(state, meshes[i], metric);
+		compute_metric(&state, meshes[i], metric);
 
 		printf(" %s", meshes[i].name);
 		for (int profile = 0; profile < Profile_Count; ++profile)
@@ -412,10 +425,6 @@ void dump_stats(const State& state, const std::vector<Mesh>& meshes)
 
 int main(int argc, char** argv)
 {
-	State baseline;
-	memcpy(baseline.cache, meshopt::kVertexScoreTableCache + 1, kCacheSizeMax * sizeof(float));
-	memcpy(baseline.live, meshopt::kVertexScoreTableLive + 1, kValenceMax * sizeof(float));
-
 	std::vector<Mesh> meshes;
 
 	meshes.push_back(gridmesh(50));
@@ -427,7 +436,7 @@ int main(int argc, char** argv)
 
 	for (auto& mesh : meshes)
 	{
-		compute_metric(baseline, mesh, mesh.metric_base);
+		compute_metric(nullptr, mesh, mesh.metric_base);
 
 		total_triangles += mesh.indices.size() / 3;
 	}
@@ -445,9 +454,6 @@ int main(int argc, char** argv)
 	}
 
 	printf("%d meshes, %.1fM triangles\n", int(meshes.size()), double(total_triangles) / 1e6);
-
-	printf("baseline:");
-	dump_stats(baseline, meshes);
 
 	for (;;)
 	{
