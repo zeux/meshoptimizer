@@ -3303,10 +3303,7 @@ size_t writeMeshIndices(std::vector<BufferView>& views, std::string& json_access
 	std::string scratch;
 	StreamFormat format = writeIndexStream(scratch, mesh.indices);
 
-	// note: we prefer to merge all index streams together; however, index codec currently doesn't handle concatenated index streams well and loses compression ratio
-	int variant = settings.compress ? -1 : 0;
-
-	size_t view = getBufferView(views, BufferView::Kind_Index, variant, format.stride, settings.compress);
+	size_t view = getBufferView(views, BufferView::Kind_Index, 0, format.stride, settings.compress);
 	size_t offset = views[view].data.size();
 	views[view].data += scratch;
 
@@ -4517,6 +4514,8 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 
 int main(int argc, char** argv)
 {
+	meshopt_encodeIndexVersion(1);
+
 	Settings settings = {};
 	settings.pos_bits = 14;
 	settings.tex_bits = 12;
