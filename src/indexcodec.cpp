@@ -295,6 +295,16 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 			int fb = getVertexFifo(vertexfifo, b, vertexfifooffset);
 			int fc = getVertexFifo(vertexfifo, c, vertexfifooffset);
 
+			// if a/b/c are 0/1/2, we emit a reset code
+			bool reset = false;
+
+			if (a == 0 && b == 1 && c == 2 && next > 0 && version >= 1)
+			{
+				reset = true;
+				next = 0;
+				fb = fc = -1;
+			}
+
 			// after rotation, a is almost always equal to next, so we don't waste bits on FIFO encoding for a
 			int fea = (a == next) ? (next++, 0) : 15;
 			int feb = (fb >= 0 && fb < 14) ? (fb + 1) : (b == next) ? (next++, 0) : 15;
@@ -305,7 +315,7 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 			int codeauxindex = getCodeAuxIndex(codeaux, codeaux_table);
 
 			// <14 encodes an index into codeaux table, 14 encodes fea=0, 15 encodes fea=15
-			if (fea == 0 && codeauxindex >= 0 && codeauxindex < 14)
+			if (fea == 0 && codeauxindex >= 0 && codeauxindex < 14 && !reset)
 			{
 				*code++ = (unsigned char)((15 << 4) | codeauxindex);
 			}
@@ -361,6 +371,9 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 
 		*data++ = codeaux_table[i];
 	}
+
+	// since we encode restarts as codeaux without a table reference, we need to make sure 00 is encoded as a table reference
+	assert(codeaux_table[0] == 0);
 
 	assert(data >= buffer + index_count / 3 + 16);
 	assert(data <= buffer + buffer_size);
@@ -558,6 +571,10 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 				int fea = codetri == 0xfe ? 0 : 15;
 				int feb = codeaux >> 4;
 				int fec = codeaux & 15;
+
+				// reset: codeaux is 0 but encoded as not-a-table
+				if (codeaux == 0)
+					next = 0;
 
 				// fifo reads are wrapped around 16 entry buffer
 				// also note that we increment next for all three vertices before decoding indices - this matches encoder behavior
