@@ -557,6 +557,9 @@ void parseMeshesObj(fastObjMesh* obj, cgltf_data* data, std::vector<Mesh>& meshe
 		mesh.targets = 0;
 	}
 
+	std::vector<char> mesh_normals(meshes.size());
+	std::vector<char> mesh_texcoords(meshes.size());
+
 	std::vector<size_t> vertex_offset(material_count);
 	std::vector<size_t> index_offset(material_count);
 
@@ -581,6 +584,9 @@ void parseMeshesObj(fastObjMesh* obj, cgltf_data* data, std::vector<Mesh>& meshe
 			mesh.streams[0].data[vo + vi] = p;
 			mesh.streams[1].data[vo + vi] = n;
 			mesh.streams[2].data[vo + vi] = t;
+
+			mesh_normals[mesh_index[mi]] |= ii.n > 0;
+			mesh_texcoords[mesh_index[mi]] |= ii.t > 0;
 		}
 
 		for (unsigned int vi = 2; vi < obj->face_vertices[fi]; ++vi)
@@ -595,6 +601,21 @@ void parseMeshesObj(fastObjMesh* obj, cgltf_data* data, std::vector<Mesh>& meshe
 		vertex_offset[mi] += obj->face_vertices[fi];
 		index_offset[mi] += (obj->face_vertices[fi] - 2) * 3;
 		group_offset += obj->face_vertices[fi];
+	}
+
+	for (size_t i = 0; i < meshes.size(); ++i)
+	{
+		Mesh& mesh = meshes[i];
+
+		assert(mesh.streams.size() == 3);
+		assert(mesh.streams[1].type == cgltf_attribute_type_normal);
+		assert(mesh.streams[2].type == cgltf_attribute_type_texcoord);
+
+		if (!mesh_texcoords[i])
+			mesh.streams.erase(mesh.streams.begin() + 2);
+
+		if (!mesh_normals[i])
+			mesh.streams.erase(mesh.streams.begin() + 1);
 	}
 }
 
