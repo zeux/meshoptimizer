@@ -50,3 +50,15 @@ jobs:
         name: gltfpack-windows
         path: Release/gltfpack.exe
       if: matrix.arch == 'x64'
+
+  nodejs:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - uses: actions/setup-node@v1
+      with:
+        node-version: '12.x'
+    - name: test
+      run: node js/meshopt_decoder.test.js
+    - name: test simd
+      run: node --experimental-wasm-simd js/meshopt_decoder.test.js
