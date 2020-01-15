@@ -3,6 +3,11 @@
 var assert = require('assert').strict;
 var decoder = require('./meshopt_decoder.js');
 
+process.on('unhandledRejection', error => {
+	console.log('unhandledRejection', error);
+	process.exit(1);
+});
+
 var tests = {
 	decodeVertexBuffer: function() {
 		var encoded = new Uint8Array([

@@ -57,7 +57,7 @@ jobs:
     - uses: actions/checkout@v1
     - uses: actions/setup-node@v1
       with:
-        node-version: '12.x'
+        node-version: '13.x'
     - name: test
       run: node js/meshopt_decoder.test.js
     - name: test simd
