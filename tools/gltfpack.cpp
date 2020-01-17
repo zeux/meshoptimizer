@@ -1336,11 +1336,25 @@ void processMesh(Mesh& mesh, const Settings& settings)
 	}
 }
 
-bool updateAttributeBounds(const Mesh& mesh, cgltf_attribute_type type, Attr& min, Attr& max)
+struct Bounds
+{
+	Attr min, max;
+
+	Bounds()
+	{
+		min.f[0] = min.f[1] = min.f[2] = min.f[3] = +FLT_MAX;
+		max.f[0] = max.f[1] = max.f[2] = max.f[3] = -FLT_MAX;
+	}
+
+	bool isValid() const
+	{
+		return min.f[0] <= max.f[0] && min.f[1] <= max.f[1] && min.f[2] <= max.f[2] && min.f[3] <= max.f[3];
+	}
+};
+
+void updateAttributeBounds(const Mesh& mesh, cgltf_attribute_type type, Bounds& b)
 {
 	Attr pad = {};
-
-	bool valid = false;
 
 	for (size_t j = 0; j < mesh.streams.size(); ++j)
 	{
@@ -1354,17 +1368,15 @@ bool updateAttributeBounds(const Mesh& mesh, cgltf_attribute_type type, Attr& mi
 				{
 					const Attr& a = s.data[k];
 
-					min.f[0] = std::min(min.f[0], a.f[0]);
-					min.f[1] = std::min(min.f[1], a.f[1]);
-					min.f[2] = std::min(min.f[2], a.f[2]);
-					min.f[3] = std::min(min.f[3], a.f[3]);
+					b.min.f[0] = std::min(b.min.f[0], a.f[0]);
+					b.min.f[1] = std::min(b.min.f[1], a.f[1]);
+					b.min.f[2] = std::min(b.min.f[2], a.f[2]);
+					b.min.f[3] = std::min(b.min.f[3], a.f[3]);
 
-					max.f[0] = std::max(max.f[0], a.f[0]);
-					max.f[1] = std::max(max.f[1], a.f[1]);
-					max.f[2] = std::max(max.f[2], a.f[2]);
-					max.f[3] = std::max(max.f[3], a.f[3]);
-
-					valid = true;
+					b.max.f[0] = std::max(b.max.f[0], a.f[0]);
+					b.max.f[1] = std::max(b.max.f[1], a.f[1]);
+					b.max.f[2] = std::max(b.max.f[2], a.f[2]);
+					b.max.f[3] = std::max(b.max.f[3], a.f[3]);
 				}
 			}
 			else
@@ -1382,16 +1394,11 @@ bool updateAttributeBounds(const Mesh& mesh, cgltf_attribute_type type, Attr& mi
 		}
 	}
 
-	if (valid)
+	for (int k = 0; k < 4; ++k)
 	{
-		for (int k = 0; k < 4; ++k)
-		{
-			min.f[k] -= pad.f[k];
-			max.f[k] += pad.f[k];
-		}
+		b.min.f[k] -= pad.f[k];
+		b.max.f[k] += pad.f[k];
 	}
-
-	return valid;
 }
 
 QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes, const Settings& settings)
@@ -1400,23 +1407,19 @@ QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes
 
 	result.bits = settings.pos_bits;
 
-	Attr min, max;
-	min.f[0] = min.f[1] = min.f[2] = min.f[3] = +FLT_MAX;
-	max.f[0] = max.f[1] = max.f[2] = max.f[3] = -FLT_MAX;
-
-	bool valid = false;
+	Bounds b;
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
-		valid |= updateAttributeBounds(meshes[i], cgltf_attribute_type_position, min, max);
+		updateAttributeBounds(meshes[i], cgltf_attribute_type_position, b);
 	}
 
-	if (valid)
+	if (b.isValid())
 	{
-		result.offset[0] = min.f[0];
-		result.offset[1] = min.f[1];
-		result.offset[2] = min.f[2];
-		result.scale = std::max(max.f[0] - min.f[0], std::max(max.f[1] - min.f[1], max.f[2] - min.f[2]));
+		result.offset[0] = b.min.f[0];
+		result.offset[1] = b.min.f[1];
+		result.offset[2] = b.min.f[2];
+		result.scale = std::max(b.max.f[0] - b.min.f[0], std::max(b.max.f[1] - b.min.f[1], b.max.f[2] - b.min.f[2]));
 	}
 
 	return result;
@@ -1428,23 +1431,19 @@ QuantizationTexture prepareQuantizationTexture(const std::vector<Mesh>& meshes, 
 
 	result.bits = settings.tex_bits;
 
-	Attr min, max;
-	min.f[0] = min.f[1] = min.f[2] = min.f[3] = +FLT_MAX;
-	max.f[0] = max.f[1] = max.f[2] = max.f[3] = -FLT_MAX;
-
-	bool valid = false;
+	Bounds b;
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
-		valid |= updateAttributeBounds(meshes[i], cgltf_attribute_type_texcoord, min, max);
+		updateAttributeBounds(meshes[i], cgltf_attribute_type_texcoord, b);
 	}
 
-	if (valid)
+	if (b.isValid())
 	{
-		result.offset[0] = min.f[0];
-		result.offset[1] = min.f[1];
-		result.scale[0] = max.f[0] - min.f[0];
-		result.scale[1] = max.f[1] - min.f[1];
+		result.offset[0] = b.min.f[0];
+		result.offset[1] = b.min.f[1];
+		result.scale[0] = b.max.f[0] - b.min.f[0];
+		result.scale[1] = b.max.f[1] - b.min.f[1];
 	}
 
 	return result;
