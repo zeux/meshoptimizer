@@ -128,15 +128,18 @@ struct Settings
 	int verbose;
 };
 
-struct QuantizationParams
+struct QuantizationPosition
 {
-	float pos_offset[3];
-	float pos_scale;
-	int pos_bits;
+	float offset[3];
+	float scale;
+	int bits;
+};
 
-	float uv_offset[2];
-	float uv_scale[2];
-	int uv_bits;
+struct QuantizationTexture
+{
+	float offset[2];
+	float scale[2];
+	int bits;
 };
 
 struct StreamFormat
@@ -1333,99 +1336,125 @@ void processMesh(Mesh& mesh, const Settings& settings)
 	}
 }
 
-bool getAttributeBounds(const std::vector<Mesh>& meshes, cgltf_attribute_type type, Attr& min, Attr& max)
+struct Bounds
 {
-	min.f[0] = min.f[1] = min.f[2] = min.f[3] = +FLT_MAX;
-	max.f[0] = max.f[1] = max.f[2] = max.f[3] = -FLT_MAX;
+	Attr min, max;
 
+	Bounds()
+	{
+		min.f[0] = min.f[1] = min.f[2] = min.f[3] = +FLT_MAX;
+		max.f[0] = max.f[1] = max.f[2] = max.f[3] = -FLT_MAX;
+	}
+
+	bool isValid() const
+	{
+		return min.f[0] <= max.f[0] && min.f[1] <= max.f[1] && min.f[2] <= max.f[2] && min.f[3] <= max.f[3];
+	}
+};
+
+void updateAttributeBounds(const Mesh& mesh, cgltf_attribute_type type, Bounds& b)
+{
 	Attr pad = {};
 
-	bool valid = false;
-
-	for (size_t i = 0; i < meshes.size(); ++i)
+	for (size_t j = 0; j < mesh.streams.size(); ++j)
 	{
-		const Mesh& mesh = meshes[i];
+		const Stream& s = mesh.streams[j];
 
-		for (size_t j = 0; j < mesh.streams.size(); ++j)
+		if (s.type == type)
 		{
-			const Stream& s = mesh.streams[j];
-
-			if (s.type == type)
+			if (s.target == 0)
 			{
-				if (s.target == 0)
+				for (size_t k = 0; k < s.data.size(); ++k)
 				{
-					for (size_t k = 0; k < s.data.size(); ++k)
-					{
-						const Attr& a = s.data[k];
+					const Attr& a = s.data[k];
 
-						min.f[0] = std::min(min.f[0], a.f[0]);
-						min.f[1] = std::min(min.f[1], a.f[1]);
-						min.f[2] = std::min(min.f[2], a.f[2]);
-						min.f[3] = std::min(min.f[3], a.f[3]);
+					b.min.f[0] = std::min(b.min.f[0], a.f[0]);
+					b.min.f[1] = std::min(b.min.f[1], a.f[1]);
+					b.min.f[2] = std::min(b.min.f[2], a.f[2]);
+					b.min.f[3] = std::min(b.min.f[3], a.f[3]);
 
-						max.f[0] = std::max(max.f[0], a.f[0]);
-						max.f[1] = std::max(max.f[1], a.f[1]);
-						max.f[2] = std::max(max.f[2], a.f[2]);
-						max.f[3] = std::max(max.f[3], a.f[3]);
-
-						valid = true;
-					}
+					b.max.f[0] = std::max(b.max.f[0], a.f[0]);
+					b.max.f[1] = std::max(b.max.f[1], a.f[1]);
+					b.max.f[2] = std::max(b.max.f[2], a.f[2]);
+					b.max.f[3] = std::max(b.max.f[3], a.f[3]);
 				}
-				else
+			}
+			else
+			{
+				for (size_t k = 0; k < s.data.size(); ++k)
 				{
-					for (size_t k = 0; k < s.data.size(); ++k)
-					{
-						const Attr& a = s.data[k];
+					const Attr& a = s.data[k];
 
-						pad.f[0] = std::max(pad.f[0], fabsf(a.f[0]));
-						pad.f[1] = std::max(pad.f[1], fabsf(a.f[1]));
-						pad.f[2] = std::max(pad.f[2], fabsf(a.f[2]));
-						pad.f[3] = std::max(pad.f[3], fabsf(a.f[3]));
-					}
+					pad.f[0] = std::max(pad.f[0], fabsf(a.f[0]));
+					pad.f[1] = std::max(pad.f[1], fabsf(a.f[1]));
+					pad.f[2] = std::max(pad.f[2], fabsf(a.f[2]));
+					pad.f[3] = std::max(pad.f[3], fabsf(a.f[3]));
 				}
 			}
 		}
 	}
 
-	if (valid)
+	for (int k = 0; k < 4; ++k)
 	{
-		for (int k = 0; k < 4; ++k)
-		{
-			min.f[k] -= pad.f[k];
-			max.f[k] += pad.f[k];
-		}
+		b.min.f[k] -= pad.f[k];
+		b.max.f[k] += pad.f[k];
 	}
-
-	return valid;
 }
 
-QuantizationParams prepareQuantization(const std::vector<Mesh>& meshes, const Settings& settings)
+QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes, const Settings& settings)
 {
-	QuantizationParams result = {};
+	QuantizationPosition result = {};
 
-	result.pos_bits = settings.pos_bits;
+	result.bits = settings.pos_bits;
 
-	Attr pos_min, pos_max;
-	if (getAttributeBounds(meshes, cgltf_attribute_type_position, pos_min, pos_max))
+	Bounds b;
+
+	for (size_t i = 0; i < meshes.size(); ++i)
 	{
-		result.pos_offset[0] = pos_min.f[0];
-		result.pos_offset[1] = pos_min.f[1];
-		result.pos_offset[2] = pos_min.f[2];
-		result.pos_scale = std::max(pos_max.f[0] - pos_min.f[0], std::max(pos_max.f[1] - pos_min.f[1], pos_max.f[2] - pos_min.f[2]));
+		updateAttributeBounds(meshes[i], cgltf_attribute_type_position, b);
 	}
 
-	result.uv_bits = settings.tex_bits;
-
-	Attr uv_min, uv_max;
-	if (getAttributeBounds(meshes, cgltf_attribute_type_texcoord, uv_min, uv_max))
+	if (b.isValid())
 	{
-		result.uv_offset[0] = uv_min.f[0];
-		result.uv_offset[1] = uv_min.f[1];
-		result.uv_scale[0] = uv_max.f[0] - uv_min.f[0];
-		result.uv_scale[1] = uv_max.f[1] - uv_min.f[1];
+		result.offset[0] = b.min.f[0];
+		result.offset[1] = b.min.f[1];
+		result.offset[2] = b.min.f[2];
+		result.scale = std::max(b.max.f[0] - b.min.f[0], std::max(b.max.f[1] - b.min.f[1], b.max.f[2] - b.min.f[2]));
 	}
 
 	return result;
+}
+
+void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTexture>& result, const std::vector<Mesh>& meshes, const Settings& settings)
+{
+	std::vector<Bounds> bounds(result.size());
+
+	for (size_t i = 0; i < meshes.size(); ++i)
+	{
+		const Mesh& mesh = meshes[i];
+
+		size_t mi = mesh.material - data->materials;
+		assert(mi < bounds.size());
+
+		updateAttributeBounds(mesh, cgltf_attribute_type_texcoord, bounds[mi]);
+	}
+
+	for (size_t i = 0; i < result.size(); ++i)
+	{
+		QuantizationTexture& qt = result[i];
+
+		qt.bits = settings.tex_bits;
+
+		const Bounds& b = bounds[i];
+
+		if (b.isValid())
+		{
+			qt.offset[0] = b.min.f[0];
+			qt.offset[1] = b.min.f[1];
+			qt.scale[0] = b.max.f[0] - b.min.f[0];
+			qt.scale[1] = b.max.f[1] - b.min.f[1];
+		}
+	}
 }
 
 void rescaleNormal(float& nx, float& ny, float& nz)
@@ -1459,22 +1488,22 @@ void renormalizeWeights(uint8_t (&w)[4])
 	w[max] += uint8_t(255 - sum);
 }
 
-StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationParams& params, const Settings& settings, bool has_targets)
+StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings, bool has_targets)
 {
 	if (stream.type == cgltf_attribute_type_position)
 	{
 		if (stream.target == 0)
 		{
-			float pos_rscale = params.pos_scale == 0.f ? 0.f : 1.f / params.pos_scale;
+			float pos_rscale = qp.scale == 0.f ? 0.f : 1.f / qp.scale;
 
 			for (size_t i = 0; i < stream.data.size(); ++i)
 			{
 				const Attr& a = stream.data[i];
 
 				uint16_t v[4] = {
-				    uint16_t(meshopt_quantizeUnorm((a.f[0] - params.pos_offset[0]) * pos_rscale, params.pos_bits)),
-				    uint16_t(meshopt_quantizeUnorm((a.f[1] - params.pos_offset[1]) * pos_rscale, params.pos_bits)),
-				    uint16_t(meshopt_quantizeUnorm((a.f[2] - params.pos_offset[2]) * pos_rscale, params.pos_bits)),
+				    uint16_t(meshopt_quantizeUnorm((a.f[0] - qp.offset[0]) * pos_rscale, qp.bits)),
+				    uint16_t(meshopt_quantizeUnorm((a.f[1] - qp.offset[1]) * pos_rscale, qp.bits)),
+				    uint16_t(meshopt_quantizeUnorm((a.f[2] - qp.offset[2]) * pos_rscale, qp.bits)),
 				    0};
 				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 			}
@@ -1484,7 +1513,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 		}
 		else
 		{
-			float pos_rscale = params.pos_scale == 0.f ? 0.f : 1.f / params.pos_scale;
+			float pos_rscale = qp.scale == 0.f ? 0.f : 1.f / qp.scale;
 
 			int maxv = 0;
 
@@ -1492,9 +1521,9 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 			{
 				const Attr& a = stream.data[i];
 
-				maxv = std::max(maxv, meshopt_quantizeUnorm(fabsf(a.f[0]) * pos_rscale, params.pos_bits));
-				maxv = std::max(maxv, meshopt_quantizeUnorm(fabsf(a.f[1]) * pos_rscale, params.pos_bits));
-				maxv = std::max(maxv, meshopt_quantizeUnorm(fabsf(a.f[2]) * pos_rscale, params.pos_bits));
+				maxv = std::max(maxv, meshopt_quantizeUnorm(fabsf(a.f[0]) * pos_rscale, qp.bits));
+				maxv = std::max(maxv, meshopt_quantizeUnorm(fabsf(a.f[1]) * pos_rscale, qp.bits));
+				maxv = std::max(maxv, meshopt_quantizeUnorm(fabsf(a.f[2]) * pos_rscale, qp.bits));
 			}
 
 			if (maxv <= 127)
@@ -1504,9 +1533,9 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 					const Attr& a = stream.data[i];
 
 					int8_t v[4] = {
-					    int8_t((a.f[0] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[0]) * pos_rscale, params.pos_bits)),
-					    int8_t((a.f[1] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[1]) * pos_rscale, params.pos_bits)),
-					    int8_t((a.f[2] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[2]) * pos_rscale, params.pos_bits)),
+					    int8_t((a.f[0] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[0]) * pos_rscale, qp.bits)),
+					    int8_t((a.f[1] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[1]) * pos_rscale, qp.bits)),
+					    int8_t((a.f[2] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[2]) * pos_rscale, qp.bits)),
 					    0};
 					bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 				}
@@ -1521,9 +1550,9 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 					const Attr& a = stream.data[i];
 
 					int16_t v[4] = {
-					    int16_t((a.f[0] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[0]) * pos_rscale, params.pos_bits)),
-					    int16_t((a.f[1] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[1]) * pos_rscale, params.pos_bits)),
-					    int16_t((a.f[2] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[2]) * pos_rscale, params.pos_bits)),
+					    int16_t((a.f[0] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[0]) * pos_rscale, qp.bits)),
+					    int16_t((a.f[1] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[1]) * pos_rscale, qp.bits)),
+					    int16_t((a.f[2] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[2]) * pos_rscale, qp.bits)),
 					    0};
 					bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 				}
@@ -1536,8 +1565,8 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	else if (stream.type == cgltf_attribute_type_texcoord)
 	{
 		float uv_rscale[2] = {
-		    params.uv_scale[0] == 0.f ? 0.f : 1.f / params.uv_scale[0],
-		    params.uv_scale[1] == 0.f ? 0.f : 1.f / params.uv_scale[1],
+		    qt.scale[0] == 0.f ? 0.f : 1.f / qt.scale[0],
+		    qt.scale[1] == 0.f ? 0.f : 1.f / qt.scale[1],
 		};
 
 		for (size_t i = 0; i < stream.data.size(); ++i)
@@ -1545,8 +1574,8 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 			const Attr& a = stream.data[i];
 
 			uint16_t v[2] = {
-			    uint16_t(meshopt_quantizeUnorm((a.f[0] - params.uv_offset[0]) * uv_rscale[0], params.uv_bits)),
-			    uint16_t(meshopt_quantizeUnorm((a.f[1] - params.uv_offset[1]) * uv_rscale[1], params.uv_bits)),
+			    uint16_t(meshopt_quantizeUnorm((a.f[0] - qt.offset[0]) * uv_rscale[0], qt.bits)),
+			    uint16_t(meshopt_quantizeUnorm((a.f[1] - qt.offset[1]) * uv_rscale[1], qt.bits)),
 			};
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
@@ -1746,7 +1775,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	}
 }
 
-void getPositionBounds(int min[3], int max[3], const Stream& stream, const QuantizationParams& params)
+void getPositionBounds(int min[3], int max[3], const Stream& stream, const QuantizationPosition& qp)
 {
 	assert(stream.type == cgltf_attribute_type_position);
 	assert(stream.data.size() > 0);
@@ -1754,7 +1783,7 @@ void getPositionBounds(int min[3], int max[3], const Stream& stream, const Quant
 	min[0] = min[1] = min[2] = INT_MAX;
 	max[0] = max[1] = max[2] = INT_MIN;
 
-	float pos_rscale = params.pos_scale == 0.f ? 0.f : 1.f / params.pos_scale;
+	float pos_rscale = qp.scale == 0.f ? 0.f : 1.f / qp.scale;
 
 	if (stream.target == 0)
 	{
@@ -1764,7 +1793,7 @@ void getPositionBounds(int min[3], int max[3], const Stream& stream, const Quant
 
 			for (int k = 0; k < 3; ++k)
 			{
-				int v = meshopt_quantizeUnorm((a.f[k] - params.pos_offset[k]) * pos_rscale, params.pos_bits);
+				int v = meshopt_quantizeUnorm((a.f[k] - qp.offset[k]) * pos_rscale, qp.bits);
 
 				min[k] = std::min(min[k], v);
 				max[k] = std::max(max[k], v);
@@ -1779,7 +1808,7 @@ void getPositionBounds(int min[3], int max[3], const Stream& stream, const Quant
 
 			for (int k = 0; k < 3; ++k)
 			{
-				int v = (a.f[k] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[k]) * pos_rscale, params.pos_bits);
+				int v = (a.f[k] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[k]) * pos_rscale, qp.bits);
 
 				min[k] = std::min(min[k], v);
 				max[k] = std::max(max[k], v);
@@ -2054,7 +2083,7 @@ const char* lightType(cgltf_light_type type)
 	}
 }
 
-void writeTextureInfo(std::string& json, const cgltf_data* data, const cgltf_texture_view& view, const QuantizationParams& qp)
+void writeTextureInfo(std::string& json, const cgltf_data* data, const cgltf_texture_view& view, const QuantizationTexture& qt)
 {
 	assert(view.texture);
 
@@ -2069,10 +2098,10 @@ void writeTextureInfo(std::string& json, const cgltf_data* data, const cgltf_tex
 		transform.scale[0] = transform.scale[1] = 1.f;
 	}
 
-	transform.offset[0] += qp.uv_offset[0];
-	transform.offset[1] += qp.uv_offset[1];
-	transform.scale[0] *= qp.uv_scale[0] / float((1 << qp.uv_bits) - 1);
-	transform.scale[1] *= qp.uv_scale[1] / float((1 << qp.uv_bits) - 1);
+	transform.offset[0] += qt.offset[0];
+	transform.offset[1] += qt.offset[1];
+	transform.scale[0] *= qt.scale[0] / float((1 << qt.bits) - 1);
+	transform.scale[1] *= qt.scale[1] / float((1 << qt.bits) - 1);
 
 	append(json, "{\"index\":");
 	append(json, size_t(view.texture - data->textures));
@@ -2096,7 +2125,7 @@ void writeTextureInfo(std::string& json, const cgltf_data* data, const cgltf_tex
 	append(json, "}}}");
 }
 
-void writeMaterialInfo(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationParams& qp)
+void writeMaterialInfo(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationTexture& qt)
 {
 	static const float white[4] = {1, 1, 1, 1};
 	static const float black[4] = {0, 0, 0, 0};
@@ -2132,7 +2161,7 @@ void writeMaterialInfo(std::string& json, const cgltf_data* data, const cgltf_ma
 		{
 			comma(json);
 			append(json, "\"baseColorTexture\":");
-			writeTextureInfo(json, data, pbr.base_color_texture, qp);
+			writeTextureInfo(json, data, pbr.base_color_texture, qt);
 		}
 		if (pbr.metallic_factor != 1)
 		{
@@ -2150,7 +2179,7 @@ void writeMaterialInfo(std::string& json, const cgltf_data* data, const cgltf_ma
 		{
 			comma(json);
 			append(json, "\"metallicRoughnessTexture\":");
-			writeTextureInfo(json, data, pbr.metallic_roughness_texture, qp);
+			writeTextureInfo(json, data, pbr.metallic_roughness_texture, qt);
 		}
 		append(json, "}");
 	}
@@ -2159,21 +2188,21 @@ void writeMaterialInfo(std::string& json, const cgltf_data* data, const cgltf_ma
 	{
 		comma(json);
 		append(json, "\"normalTexture\":");
-		writeTextureInfo(json, data, material.normal_texture, qp);
+		writeTextureInfo(json, data, material.normal_texture, qt);
 	}
 
 	if (material.occlusion_texture.texture)
 	{
 		comma(json);
 		append(json, "\"occlusionTexture\":");
-		writeTextureInfo(json, data, material.occlusion_texture, qp);
+		writeTextureInfo(json, data, material.occlusion_texture, qt);
 	}
 
 	if (material.emissive_texture.texture)
 	{
 		comma(json);
 		append(json, "\"emissiveTexture\":");
-		writeTextureInfo(json, data, material.emissive_texture, qp);
+		writeTextureInfo(json, data, material.emissive_texture, qt);
 	}
 
 	if (memcmp(material.emissive_factor, black, 12) != 0)
@@ -2223,13 +2252,13 @@ void writeMaterialInfo(std::string& json, const cgltf_data* data, const cgltf_ma
 			{
 				comma(json);
 				append(json, "\"diffuseTexture\":");
-				writeTextureInfo(json, data, pbr.diffuse_texture, qp);
+				writeTextureInfo(json, data, pbr.diffuse_texture, qt);
 			}
 			if (pbr.specular_glossiness_texture.texture)
 			{
 				comma(json);
 				append(json, "\"specularGlossinessTexture\":");
-				writeTextureInfo(json, data, pbr.specular_glossiness_texture, qp);
+				writeTextureInfo(json, data, pbr.specular_glossiness_texture, qt);
 			}
 			if (memcmp(pbr.diffuse_factor, white, 16) != 0)
 			{
@@ -3198,7 +3227,7 @@ void writeTexture(std::string& json, const cgltf_texture& texture, cgltf_data* d
 	}
 }
 
-void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, int target, const QuantizationParams& qp, const Settings& settings)
+void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, int target, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings)
 {
 	std::string scratch;
 
@@ -3210,7 +3239,7 @@ void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std:
 			continue;
 
 		scratch.clear();
-		StreamFormat format = writeVertexStream(scratch, stream, qp, settings, mesh.targets > 0);
+		StreamFormat format = writeVertexStream(scratch, stream, qp, qt, settings, mesh.targets > 0);
 
 		size_t view = getBufferView(views, BufferView::Kind_Vertex, stream.type, format.stride, settings.compress);
 		size_t offset = views[view].data.size();
@@ -3290,7 +3319,7 @@ size_t writeAnimationTime(std::vector<BufferView>& views, std::string& json_acce
 	return time_accr;
 }
 
-size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const cgltf_skin& skin, const QuantizationParams& qp, const Settings& settings)
+size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const cgltf_skin& skin, const QuantizationPosition& qp, const Settings& settings)
 {
 	std::string scratch;
 
@@ -3303,12 +3332,12 @@ size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_
 			cgltf_accessor_read_float(skin.inverse_bind_matrices, j, transform, 16);
 		}
 
-		float node_scale = qp.pos_scale / float((1 << qp.pos_bits) - 1);
+		float node_scale = qp.scale / float((1 << qp.bits) - 1);
 
 		// pos_offset has to be applied first, thus it results in an offset rotated by the bind matrix
-		transform[12] += qp.pos_offset[0] * transform[0] + qp.pos_offset[1] * transform[4] + qp.pos_offset[2] * transform[8];
-		transform[13] += qp.pos_offset[0] * transform[1] + qp.pos_offset[1] * transform[5] + qp.pos_offset[2] * transform[9];
-		transform[14] += qp.pos_offset[0] * transform[2] + qp.pos_offset[1] * transform[6] + qp.pos_offset[2] * transform[10];
+		transform[12] += qp.offset[0] * transform[0] + qp.offset[1] * transform[4] + qp.offset[2] * transform[8];
+		transform[13] += qp.offset[0] * transform[1] + qp.offset[1] * transform[5] + qp.offset[2] * transform[9];
+		transform[14] += qp.offset[0] * transform[2] + qp.offset[1] * transform[6] + qp.offset[2] * transform[10];
 
 		// node_scale will be applied before the rotation/scale from transform
 		for (int k = 0; k < 12; ++k)
@@ -3329,9 +3358,9 @@ size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_
 	return matrix_accr;
 }
 
-void writeMeshNode(std::string& json, size_t mesh_offset, const Mesh& mesh, cgltf_data* data, const QuantizationParams& qp)
+void writeMeshNode(std::string& json, size_t mesh_offset, const Mesh& mesh, cgltf_data* data, const QuantizationPosition& qp)
 {
-	float node_scale = qp.pos_scale / float((1 << qp.pos_bits) - 1);
+	float node_scale = qp.scale / float((1 << qp.bits) - 1);
 
 	comma(json);
 	append(json, "{\"mesh\":");
@@ -3343,11 +3372,11 @@ void writeMeshNode(std::string& json, size_t mesh_offset, const Mesh& mesh, cglt
 		append(json, size_t(mesh.skin - data->skins));
 	}
 	append(json, ",\"translation\":[");
-	append(json, qp.pos_offset[0]);
+	append(json, qp.offset[0]);
 	append(json, ",");
-	append(json, qp.pos_offset[1]);
+	append(json, qp.offset[1]);
 	append(json, ",");
-	append(json, qp.pos_offset[2]);
+	append(json, qp.offset[2]);
 	append(json, "],\"scale\":[");
 	append(json, node_scale);
 	append(json, ",");
@@ -3883,7 +3912,13 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 
 	analyzeImages(data, images);
 
-	QuantizationParams qp = prepareQuantization(meshes, settings);
+	QuantizationPosition qp = prepareQuantizationPosition(meshes, settings);
+
+	std::vector<QuantizationTexture> qt_materials(materials.size());
+	prepareQuantizationTexture(data, qt_materials, meshes, settings);
+
+	QuantizationTexture qt_dummy = {};
+	qt_dummy.bits = settings.tex_bits;
 
 	std::string json_images;
 	std::string json_textures;
@@ -3946,7 +3981,7 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 
 		comma(json_materials);
 		append(json_materials, "{");
-		writeMaterialInfo(json_materials, data, material, qp);
+		writeMaterialInfo(json_materials, data, material, qt_materials[i]);
 		append(json_materials, "}");
 
 		mi.remap = int(material_offset);
@@ -3974,9 +4009,11 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 			if (!compareMeshTargets(mesh, prim))
 				break;
 
+			const QuantizationTexture& qt = prim.material ? qt_materials[prim.material - data->materials] : qt_dummy;
+
 			comma(json_meshes);
 			append(json_meshes, "{\"attributes\":{");
-			writeMeshAttributes(json_meshes, views, json_accessors, accr_offset, prim, 0, qp, settings);
+			writeMeshAttributes(json_meshes, views, json_accessors, accr_offset, prim, 0, qp, qt, settings);
 			append(json_meshes, "}");
 			append(json_meshes, ",\"mode\":");
 			append(json_meshes, size_t(prim.type));
@@ -3988,7 +4025,7 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 				{
 					comma(json_meshes);
 					append(json_meshes, "{");
-					writeMeshAttributes(json_meshes, views, json_accessors, accr_offset, prim, int(1 + j), qp, settings);
+					writeMeshAttributes(json_meshes, views, json_accessors, accr_offset, prim, int(1 + j), qp, qt, settings);
 					append(json_meshes, "}");
 				}
 				append(json_meshes, "]");
