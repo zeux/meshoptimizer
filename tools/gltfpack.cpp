@@ -1425,28 +1425,36 @@ QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes
 	return result;
 }
 
-QuantizationTexture prepareQuantizationTexture(const std::vector<Mesh>& meshes, const Settings& settings)
+void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTexture>& result, const std::vector<Mesh>& meshes, const Settings& settings)
 {
-	QuantizationTexture result = {};
-
-	result.bits = settings.tex_bits;
-
-	Bounds b;
+	std::vector<Bounds> bounds(result.size());
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
-		updateAttributeBounds(meshes[i], cgltf_attribute_type_texcoord, b);
+		const Mesh& mesh = meshes[i];
+
+		size_t mi = mesh.material - data->materials;
+		assert(mi < bounds.size());
+
+		updateAttributeBounds(mesh, cgltf_attribute_type_texcoord, bounds[mi]);
 	}
 
-	if (b.isValid())
+	for (size_t i = 0; i < result.size(); ++i)
 	{
-		result.offset[0] = b.min.f[0];
-		result.offset[1] = b.min.f[1];
-		result.scale[0] = b.max.f[0] - b.min.f[0];
-		result.scale[1] = b.max.f[1] - b.min.f[1];
-	}
+		QuantizationTexture& qt = result[i];
 
-	return result;
+		qt.bits = settings.tex_bits;
+
+		const Bounds& b = bounds[i];
+
+		if (b.isValid())
+		{
+			qt.offset[0] = b.min.f[0];
+			qt.offset[1] = b.min.f[1];
+			qt.scale[0] = b.max.f[0] - b.min.f[0];
+			qt.scale[1] = b.max.f[1] - b.min.f[1];
+		}
+	}
 }
 
 void rescaleNormal(float& nx, float& ny, float& nz)
@@ -3905,7 +3913,12 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 	analyzeImages(data, images);
 
 	QuantizationPosition qp = prepareQuantizationPosition(meshes, settings);
-	QuantizationTexture qt = prepareQuantizationTexture(meshes, settings);
+
+	std::vector<QuantizationTexture> qt_materials(materials.size());
+	prepareQuantizationTexture(data, qt_materials, meshes, settings);
+
+	QuantizationTexture qt_dummy = {};
+	qt_dummy.bits = settings.tex_bits;
 
 	std::string json_images;
 	std::string json_textures;
@@ -3968,7 +3981,7 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 
 		comma(json_materials);
 		append(json_materials, "{");
-		writeMaterialInfo(json_materials, data, material, qt);
+		writeMaterialInfo(json_materials, data, material, qt_materials[i]);
 		append(json_materials, "}");
 
 		mi.remap = int(material_offset);
@@ -3995,6 +4008,8 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 
 			if (!compareMeshTargets(mesh, prim))
 				break;
+
+			const QuantizationTexture& qt = prim.material ? qt_materials[prim.material - data->materials] : qt_dummy;
 
 			comma(json_meshes);
 			append(json_meshes, "{\"attributes\":{");
