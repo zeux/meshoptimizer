@@ -27,8 +27,8 @@ static const VertexScoreTable kVertexScoreTable = {
 
 // Tuned to minimize the encoded index buffer size
 static const VertexScoreTable kVertexScoreTableStrip = {
-    {0.f, 0.977f, 0.981f, 0.984f, 0.539f, 0.401f, 0.607f, 0.358f, 0.435f, 0.715f, 0.385f, 0.312f, 0.439f, 0.465f, 0.135f, 0.183f, 0.064f},
-    {0.f, 0.944f, 0.678f, 0.417f, 0.434f, 0.481f, 0.322f, 0.297f, 0.271f},
+    {0.f, 1.000f, 1.000f, 1.000f, 0.453f, 0.561f, 0.490f, 0.459f, 0.179f, 0.526f, 0.000f, 0.227f, 0.184f, 0.490f, 0.112f, 0.050f, 0.131f},
+    {0.f, 0.956f, 0.786f, 0.577f, 0.558f, 0.618f, 0.549f, 0.499f, 0.489f},
 };
 
 struct TriangleAdjacency
