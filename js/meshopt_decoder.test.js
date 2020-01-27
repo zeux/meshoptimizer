@@ -63,6 +63,22 @@ var tests = {
 
 		assert.deepStrictEqual(result, expected);
 	},
+
+	decodeIndexBufferV1: function() {
+		var encoded = new Uint8Array([
+			0xe1, 0xf0, 0x10, 0xfe, 0x1f, 0x3e, 0x00, 0x0a, 0x00, 0x76, 0x87, 0x56, 0x67, 0x78, 0xa9, 0x86,
+			0x65, 0x89, 0x68, 0x98, 0x01, 0x69, 0x00, 0x00,
+		]);
+
+		var expected = new Uint32Array([
+			0, 1, 2, 2, 1, 3, 0, 1, 2, 2, 1, 5, 2, 1, 4
+		]);
+
+		var result = new Uint32Array(expected.length);
+		decoder.decodeIndexBuffer(new Uint8Array(result.buffer), 15, 4, encoded);
+
+		assert.deepStrictEqual(result, expected);
+	},
 };
 
 decoder.ready.then(() => {
