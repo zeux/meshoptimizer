@@ -292,9 +292,6 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 
 			unsigned int a = indices[i + order[0]], b = indices[i + order[1]], c = indices[i + order[2]];
 
-			int fb = getVertexFifo(vertexfifo, b, vertexfifooffset);
-			int fc = getVertexFifo(vertexfifo, c, vertexfifooffset);
-
 			// if a/b/c are 0/1/2, we emit a reset code
 			bool reset = false;
 
@@ -302,8 +299,14 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 			{
 				reset = true;
 				next = 0;
-				fb = fc = -1;
+
+				// reset vertex fifo to make sure we don't accidentally reference vertices from that in the future
+				// this makes sure next continues to get incremented instead of being stuck
+				memset(vertexfifo, -1, sizeof(vertexfifo));
 			}
+
+			int fb = getVertexFifo(vertexfifo, b, vertexfifooffset);
+			int fc = getVertexFifo(vertexfifo, c, vertexfifooffset);
 
 			// after rotation, a is almost always equal to next, so we don't waste bits on FIFO encoding for a
 			int fea = (a == next) ? (next++, 0) : 15;
