@@ -27,6 +27,14 @@ static const unsigned char kIndexDataV0[] = {
     0x78, 0xa9, 0x86, 0x65, 0x89, 0x68, 0x98, 0x01, 0x69, 0x00, 0x00, // clang-format :-/
 };
 
+// note: this exercises two features of v1 format, restarts (0 1 2) and last
+static const unsigned int kIndexBufferTricky[] = {0, 1, 2, 2, 1, 3, 0, 1, 2, 2, 1, 5, 2, 1, 4};
+
+static const unsigned char kIndexDataV1[] = {
+    0xe1, 0xf0, 0x10, 0xfe, 0x1f, 0x3e, 0x00, 0x0a, 0x00, 0x76, 0x87, 0x56, 0x67, 0x78, 0xa9, 0x86,
+    0x65, 0x89, 0x68, 0x98, 0x01, 0x69, 0x00, 0x00, // clang-format :-/
+};
+
 static const PV kVertexBuffer[] = {
     {0, 0, 0, 0, 0, 0, 0},
     {300, 0, 0, 0, 0, 500, 0},
@@ -52,6 +60,17 @@ static void decodeIndexV0()
 	unsigned int decoded[index_count];
 	assert(meshopt_decodeIndexBuffer(decoded, index_count, &buffer[0], buffer.size()) == 0);
 	assert(memcmp(decoded, kIndexBuffer, sizeof(kIndexBuffer)) == 0);
+}
+
+static void decodeIndexV1()
+{
+	const size_t index_count = sizeof(kIndexBufferTricky) / sizeof(kIndexBufferTricky[0]);
+
+	std::vector<unsigned char> buffer(kIndexDataV1, kIndexDataV1 + sizeof(kIndexDataV1));
+
+	unsigned int decoded[index_count];
+	assert(meshopt_decodeIndexBuffer(decoded, index_count, &buffer[0], buffer.size()) == 0);
+	assert(memcmp(decoded, kIndexBufferTricky, sizeof(kIndexBufferTricky)) == 0);
 }
 
 static void decodeIndex16()
@@ -143,6 +162,35 @@ static void decodeIndexRejectMalformedHeaders()
 
 	unsigned int decoded[index_count];
 	assert(meshopt_decodeIndexBuffer(decoded, index_count, &brokenbuffer[0], brokenbuffer.size()) < 0);
+}
+
+static void decodeIndexRejectInvalidVersion()
+{
+	const size_t index_count = sizeof(kIndexBuffer) / sizeof(kIndexBuffer[0]);
+	const size_t vertex_count = 10;
+
+	std::vector<unsigned char> buffer(meshopt_encodeIndexBufferBound(index_count, vertex_count));
+	buffer.resize(meshopt_encodeIndexBuffer(&buffer[0], buffer.size(), kIndexBuffer, index_count));
+
+	// check that decoder doesn't accept invalid version
+	std::vector<unsigned char> brokenbuffer(buffer);
+	brokenbuffer[0] |= 0x0f;
+
+	unsigned int decoded[index_count];
+	assert(meshopt_decodeIndexBuffer(decoded, index_count, &brokenbuffer[0], brokenbuffer.size()) < 0);
+}
+
+static void roundtripIndexTricky()
+{
+	const size_t index_count = sizeof(kIndexBufferTricky) / sizeof(kIndexBufferTricky[0]);
+	const size_t vertex_count = 6;
+
+	std::vector<unsigned char> buffer(meshopt_encodeIndexBufferBound(index_count, vertex_count));
+	buffer.resize(meshopt_encodeIndexBuffer(&buffer[0], buffer.size(), kIndexBufferTricky, index_count));
+
+	unsigned int decoded[index_count];
+	assert(meshopt_decodeIndexBuffer(decoded, index_count, &buffer[0], buffer.size()) == 0);
+	assert(memcmp(decoded, kIndexBufferTricky, sizeof(kIndexBufferTricky)) == 0);
 }
 
 static void decodeVertexV0()
@@ -434,11 +482,14 @@ static void simplifyPointsStuck()
 static void runTestsOnce()
 {
 	decodeIndexV0();
+	decodeIndexV1();
 	decodeIndex16();
 	encodeIndexMemorySafe();
 	decodeIndexMemorySafe();
 	decodeIndexRejectExtraBytes();
 	decodeIndexRejectMalformedHeaders();
+	decodeIndexRejectInvalidVersion();
+	roundtripIndexTricky();
 
 	decodeVertexV0();
 	encodeVertexMemorySafe();

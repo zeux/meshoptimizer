@@ -123,6 +123,7 @@ struct Settings
 	int texture_quality;
 
 	bool compress;
+	bool compressmore;
 	bool fallback;
 
 	int verbose;
@@ -1151,11 +1152,14 @@ void simplifyMesh(Mesh& mesh, float threshold, bool aggressive)
 	}
 }
 
-void optimizeMesh(Mesh& mesh)
+void optimizeMesh(Mesh& mesh, bool compressmore)
 {
 	size_t vertex_count = mesh.streams[0].data.size();
 
-	meshopt_optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), vertex_count);
+	if (compressmore)
+		meshopt_optimizeVertexCacheStrip(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), vertex_count);
+	else
+		meshopt_optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), vertex_count);
 
 	std::vector<unsigned int> remap(vertex_count);
 	size_t unique_vertices = meshopt_optimizeVertexFetchRemap(&remap[0], &mesh.indices[0], mesh.indices.size(), vertex_count);
@@ -1349,7 +1353,7 @@ void processMesh(Mesh& mesh, const Settings& settings)
 		reindexMesh(mesh);
 		filterTriangles(mesh);
 		simplifyMesh(mesh, settings.simplify_threshold, settings.simplify_aggressive);
-		optimizeMesh(mesh);
+		optimizeMesh(mesh, settings.compressmore);
 		break;
 
 	default:
@@ -3303,10 +3307,7 @@ size_t writeMeshIndices(std::vector<BufferView>& views, std::string& json_access
 	std::string scratch;
 	StreamFormat format = writeIndexStream(scratch, mesh.indices);
 
-	// note: we prefer to merge all index streams together; however, index codec currently doesn't handle concatenated index streams well and loses compression ratio
-	int variant = settings.compress ? -1 : 0;
-
-	size_t view = getBufferView(views, BufferView::Kind_Index, variant, format.stride, settings.compress);
+	size_t view = getBufferView(views, BufferView::Kind_Index, 0, format.stride, settings.compress);
 	size_t offset = views[view].data.size();
 	views[view].data += scratch;
 
@@ -4517,6 +4518,8 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 
 int main(int argc, char** argv)
 {
+	meshopt_encodeIndexVersion(1);
+
 	Settings settings = {};
 	settings.pos_bits = 14;
 	settings.tex_bits = 12;
@@ -4599,6 +4602,11 @@ int main(int argc, char** argv)
 		{
 			settings.compress = true;
 		}
+		else if (strcmp(arg, "-cc") == 0)
+		{
+			settings.compress = true;
+			settings.compressmore = true;
+		}
 		else if (strcmp(arg, "-cf") == 0)
 		{
 			settings.compress = true;
@@ -4668,6 +4676,7 @@ int main(int argc, char** argv)
 		fprintf(stderr, "-tc: convert all textures to KTX2 with BasisU supercompression (using basisu executable)\n");
 		fprintf(stderr, "-tq N: set texture encoding quality (default: 50; N should be between 1 and 100\n");
 		fprintf(stderr, "-c: produce compressed gltf/glb files\n");
+		fprintf(stderr, "-cc: produce compressed gltf/glb files with higher compression ratio\n");
 		fprintf(stderr, "-cf: produce compressed gltf/glb files with fallback for loaders that don't support compression\n");
 		fprintf(stderr, "-v: verbose output (print version when used without other options)\n");
 		fprintf(stderr, "-h: display this help and exit\n");
