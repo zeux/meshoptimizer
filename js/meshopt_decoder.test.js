@@ -1,5 +1,3 @@
-// This file is part of meshoptimizer library and is distributed under the terms of MIT License.
-// Copyright (C) 2016-2019, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
 var assert = require('assert').strict;
 var decoder = require('./meshopt_decoder.js');
 
