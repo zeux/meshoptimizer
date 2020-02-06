@@ -1458,6 +1458,9 @@ void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTextur
 	{
 		const Mesh& mesh = meshes[i];
 
+		if (!mesh.material)
+			continue;
+
 		size_t mi = mesh.material - data->materials;
 		assert(mi < bounds.size());
 
