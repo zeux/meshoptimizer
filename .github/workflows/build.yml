@@ -62,3 +62,16 @@ jobs:
       run: node js/meshopt_decoder.test.js
     - name: test simd
       run: node --experimental-wasm-simd js/meshopt_decoder.test.js
+
+  gltfpack:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
+      with:
+        repository: KhronosGroup/glTF-Sample-Models
+        path: glTF-Sample-Models
+    - name: make
+      run: make -j2 config=debug gltfpack
+    - name: test
+      run: find glTF-Sample-Models/2.0/ -name *.gltf | xargs ./gltfpack -cc -test
