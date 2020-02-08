@@ -1,5 +1,5 @@
 #include "../src/meshoptimizer.h"
-#include "fast_obj.h"
+#include "../extern/fast_obj.h"
 #include "../demo/miniz.h"
 
 #include <algorithm>

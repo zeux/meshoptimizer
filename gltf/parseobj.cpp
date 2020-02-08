@@ -1,7 +1,7 @@
 // This file is part of gltfpack; see gltfpack.h for version/license details
 #include "gltfpack.h"
 
-#include "../tools/fast_obj.h"
+#include "../extern/fast_obj.h"
 
 #include <algorithm>
 

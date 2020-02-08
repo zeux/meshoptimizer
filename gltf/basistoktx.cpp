@@ -8,8 +8,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "basisu_format.h"
-#include "khr_df.h"
+#include "../extern/basisu_format.h"
+#include "../extern/khr_df.h"
 
 // KTX Specification: 2. File Structure
 struct Ktx2Header

@@ -1,8 +1,8 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 #include "../src/meshoptimizer.h"
-#include "fast_obj.h"
-#include "cgltf.h"
+#include "../extern/fast_obj.h"
+#include "../extern/cgltf.h"
 
 #include <algorithm>
 #include <cmath>

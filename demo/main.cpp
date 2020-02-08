@@ -8,7 +8,7 @@
 
 #include <vector>
 
-#include "../tools/fast_obj.h"
+#include "../extern/fast_obj.h"
 #include "miniz.h"
 
 // This file uses assert() to verify algorithm correctness
