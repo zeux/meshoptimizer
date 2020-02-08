@@ -36,12 +36,14 @@ set(GLTF_SOURCES
     gltf/fileio.cpp
     gltf/gltfpack.cpp
     gltf/image.cpp
+    gltf/json.cpp
     gltf/material.cpp
     gltf/mesh.cpp
     gltf/node.cpp
     gltf/parseobj.cpp
     gltf/parsegltf.cpp
     gltf/stream.cpp
+    gltf/write.cpp
 )
 
 if(MSVC)

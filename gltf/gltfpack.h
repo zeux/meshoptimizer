@@ -197,6 +197,9 @@ std::string getFileName(const char* path);
 bool readFile(const char* path, std::string& data);
 bool writeFile(const char* path, const std::string& data);
 
+cgltf_data* parseObj(const char* path, std::vector<Mesh>& meshes, const char** error);
+cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error);
+
 void processAnimation(Animation& animation, const Settings& settings);
 void processMesh(Mesh& mesh, const Settings& settings);
 
@@ -231,8 +234,31 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 void compressVertexStream(std::string& bin, const std::string& data, size_t count, size_t stride);
 void compressIndexStream(std::string& bin, const std::string& data, size_t count, size_t stride);
 
-cgltf_data* parseObj(const char* path, std::vector<Mesh>& meshes, const char** error);
-cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error);
+size_t getBufferView(std::vector<BufferView>& views, BufferView::Kind kind, int variant, size_t stride, bool compressed);
+
+void comma(std::string& s);
+void append(std::string& s, size_t v);
+void append(std::string& s, float v);
+void append(std::string& s, const char* v);
+void append(std::string& s, const std::string& v);
+
+const char* attributeType(cgltf_attribute_type type);
+const char* animationPath(cgltf_animation_path_type type);
+
+void writeMaterialInfo(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationTexture& qt);
+void writeBufferView(std::string& json, BufferView::Kind kind, size_t count, size_t stride, size_t bin_offset, size_t bin_size, int compression, size_t compressed_offset, size_t compressed_size);
+void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const char* output_path, const Settings& settings);
+void writeTexture(std::string& json, const cgltf_texture& texture, cgltf_data* data, const Settings& settings);
+void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, int target, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings);
+size_t writeMeshIndices(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, const Settings& settings);
+size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const cgltf_skin& skin, const QuantizationPosition& qp, const Settings& settings);
+void writeMeshNode(std::string& json, size_t mesh_offset, const Mesh& mesh, cgltf_data* data, const QuantizationPosition& qp);
+void writeNode(std::string& json, const cgltf_node& node, const std::vector<NodeInfo>& nodes, cgltf_data* data);
+void writeAnimation(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Animation& animation, size_t i, cgltf_data* data, const std::vector<NodeInfo>& nodes, const Settings& settings);
+void writeCamera(std::string& json, const cgltf_camera& camera);
+void writeLight(std::string& json, const cgltf_light& light);
+void writeArray(std::string& json, const char* name, const std::string& contents);
+void writeExtensions(std::string& json, const ExtensionInfo* extensions, size_t count);
 
 /**
  * Copyright (c) 2016-2020 Arseny Kapoulkine
