@@ -3,6 +3,8 @@
 
 #include "../tools/fast_obj.h"
 
+#include <algorithm>
+
 #include <stdlib.h>
 #include <string.h>
 
