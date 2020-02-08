@@ -1,6 +1,8 @@
 // This file is part of gltfpack; see gltfpack.h for version/license details
 #include "gltfpack.h"
 
+#include <algorithm>
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
