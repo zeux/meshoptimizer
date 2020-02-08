@@ -195,6 +195,18 @@ bool usesTextureSet(const cgltf_material& material, int set);
 void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes);
 void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes);
 
+QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes, const Settings& settings);
+void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTexture>& result, const std::vector<Mesh>& meshes, const Settings& settings);
+void getPositionBounds(int min[3], int max[3], const Stream& stream, const QuantizationPosition& qp);
+
+StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings, bool has_targets);
+StreamFormat writeIndexStream(std::string& bin, const std::vector<unsigned int>& stream);
+StreamFormat writeTimeStream(std::string& bin, const std::vector<float>& data);
+StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data);
+
+void compressVertexStream(std::string& bin, const std::string& data, size_t count, size_t stride);
+void compressIndexStream(std::string& bin, const std::string& data, size_t count, size_t stride);
+
 cgltf_data* parseObj(const char* path, std::vector<Mesh>& meshes, const char** error);
 cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error);
 
