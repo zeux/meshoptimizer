@@ -73,6 +73,13 @@ format:
 gltfpack: $(GLTFPACK_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
 
+gltfpack.js: gltf/node/gltfpack.js
+
+gltf/node/gltfpack.js: ${LIBRARY_SOURCES} ${GLTFPACK_SOURCES} tools/meshloader.cpp
+	@mkdir -p build
+	emcc $^ -o $@ -Os -DNDEBUG -s ALLOW_MEMORY_GROWTH=1 -s NODERAWFS=1
+	sed -i '1s;^;#!/usr/bin/env node\n;' $@
+
 build/decoder_base.wasm: $(WASM_SOURCES)
 	@mkdir -p build
 	emcc $^ $(WASM_FLAGS) -o $@

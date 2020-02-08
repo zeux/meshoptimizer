@@ -282,7 +282,7 @@ cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TOOLS=ON
 cmake --build . --config Release --target gltfpack
 ```
 
-> Note: instead of building gltfpack manually, you can download a pre-built binary on [Releases page](https://github.com/zeux/meshoptimizer/releases).
+> Note: instead of building gltfpack manually, you can download a pre-built binary on [Releases page](https://github.com/zeux/meshoptimizer/releases), or use [npm package](https://www.npmjs.com/package/gltfpack).
 
 You can then run the resulting command-line binary like this (run it without arguments for a list of options):
 

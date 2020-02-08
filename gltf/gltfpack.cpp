@@ -10,6 +10,10 @@
 
 #include "../src/meshoptimizer.h"
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 std::string getVersion()
 {
 	char result[32];

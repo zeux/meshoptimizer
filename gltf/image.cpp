@@ -58,6 +58,9 @@ std::string inferMimeType(const char* path)
 
 bool checkBasis()
 {
+#ifdef __EMSCRIPTEN__
+	return false;
+#else
 	const char* basisu_path = getenv("BASISU_PATH");
 	std::string cmd = basisu_path ? basisu_path : "basisu";
 
@@ -76,6 +79,7 @@ bool checkBasis()
 	pclose(pipe);
 
 	return read == sizeof(buf) && memcmp(buf, "Basis Universal", sizeof(buf)) == 0;
+#endif
 }
 
 bool encodeBasis(const std::string& data, std::string& result, bool normal_map, bool srgb, int quality)
