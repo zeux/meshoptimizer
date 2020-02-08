@@ -17,6 +17,8 @@
 
 #include "../tools/cgltf.h"
 
+#include <assert.h>
+
 #include <string>
 #include <vector>
 
@@ -180,6 +182,9 @@ struct BufferView
 
 	size_t bytes;
 };
+
+cgltf_data* parseObj(const char* path, std::vector<Mesh>& meshes, const char** error);
+cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error);
 
 /**
  * Copyright (c) 2016-2020 Arseny Kapoulkine

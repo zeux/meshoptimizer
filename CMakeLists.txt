@@ -32,6 +32,8 @@ set(SOURCES
 
 set(GLTF_SOURCES
     gltf/basistoktx.cpp
+    gltf/parseobj.cpp
+    gltf/parsegltf.cpp
     gltf/gltfpack.cpp
 )
 
