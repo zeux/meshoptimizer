@@ -1,6 +1,6 @@
 {
 	"name": "gltfpack",
-	"version": "0.13.2",
+	"version": "0.13.3",
 	"description": "A command-line tool that can optimize glTF files for size and speed",
 	"author": "Arseny Kapoulkine",
 	"license": "MIT",
@@ -11,6 +11,10 @@
 		"type": "git",
 		"url": "https://github.com/zeux/meshoptimizer"
 	},
-	"main": "gltfpack.js",
-	"bin": "./gltfpack.js"
+	"bin": {
+		"gltfpack": "./bin/gltfpack.js"
+	},
+	"files": [
+		"bin/"
+	]
 }

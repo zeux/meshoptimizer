@@ -1,8 +1,10 @@
-# gltfpack
+# 📦 gltfpack
 
-This is an npm package for [gltfpack](https://github.com/zeux/meshoptimizer/#gltfpack) compiled from C++ to JS/WebAssembly.
+gltfpack is a tool that can automatically optimize glTF files to reduce the download size and improve loading and rendering speed.
 
 ## Installation
+
+You can download a pre-built binary for gltfpack on [Releases page](https://github.com/zeux/meshoptimizer/releases), or install [npm package](https://www.npmjs.com/package/gltfpack) as follows:
 
 ```
 npm install -g gltfpack
@@ -10,7 +12,7 @@ npm install -g gltfpack
 
 ## Usage
 
-To convert a glTF file using gltfpack, run the command-line binary like this (run it without arguments for a list of options):
+To convert a glTF file using gltfpack, run the command-line binary like this on an input `.gltf`/`.glb`/`.obj` file (run it without arguments for a list of options):
 
 ```
 gltfpack -i scene.gltf -o scene.glb
@@ -21,6 +23,8 @@ gltfpack substantially changes the glTF data by optimizing the meshes for vertex
 By default gltfpack outputs regular `.glb`/`.gltf` files that have been optimized for GPU consumption using various cache optimizers and quantization. These files can be loaded by GLTF loaders that support `KHR_mesh_quantization` extension such as [three.js](https://threejs.org/) (r111+) and [Babylon.js](https://www.babylonjs.com/) (4.1+).
 
 When using `-c` option, gltfpack outputs compressed `.glb`/`.gltf` files that use meshoptimizer codecs to reduce the download size further. Loading these files requires extending GLTF loaders with support for `MESHOPT_compression` extension; [demo/GLTFLoader.js](https://github.com/zeux/meshoptimizer/blob/master/demo/GLTFLoader.js) contains a custom version of three.js loader that can be used to load them.
+
+Additionally, gltfpack can compress textures using Basis Universal format, either storing .basis images directly (`-tb` flag, supported by three.js) or using KTX2 container (`-tc` flag, requires support for `KHR_image_ktx2`). Compression is performed using `basisu` executable.
 
 When using compressed files, [js/meshopt_decoder.js](https://github.com/zeux/meshoptimizer/blob/master/js/meshopt_decoder.js) needs to be loaded to provide the WebAssembly decoder module like this:
 

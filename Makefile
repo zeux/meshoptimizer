@@ -73,10 +73,10 @@ format:
 gltfpack: $(GLTFPACK_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
 
-gltfpack.js: gltf/node/gltfpack.js
+gltfpack.js: gltf/bin/gltfpack.js
 
-gltf/node/gltfpack.js: ${LIBRARY_SOURCES} ${GLTFPACK_SOURCES} tools/meshloader.cpp
-	@mkdir -p build
+gltf/bin/gltfpack.js: ${LIBRARY_SOURCES} ${GLTFPACK_SOURCES} tools/meshloader.cpp
+	@mkdir -p gltf/bin
 	emcc $^ -o $@ -Os -DNDEBUG -s ALLOW_MEMORY_GROWTH=1 -s NODERAWFS=1
 	sed -i '1s;^;#!/usr/bin/env node\n;' $@
 
