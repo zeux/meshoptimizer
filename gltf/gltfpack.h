@@ -209,6 +209,12 @@ bool usesTextureSet(const cgltf_material& material, int set);
 void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes);
 void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes);
 
+void analyzeImages(cgltf_data* data, std::vector<ImageInfo>& images);
+std::string inferMimeType(const char* path);
+bool checkBasis();
+bool encodeBasis(const std::string& data, std::string& result, bool normal_map, bool srgb, int quality);
+std::string basisToKtx(const std::string& basis, bool srgb);
+
 QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes, const Settings& settings);
 void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTexture>& result, const std::vector<Mesh>& meshes, const Settings& settings);
 void getPositionBounds(int min[3], int max[3], const Stream& stream, const QuantizationPosition& qp);

@@ -35,6 +35,7 @@ set(GLTF_SOURCES
     gltf/basistoktx.cpp
     gltf/fileio.cpp
     gltf/gltfpack.cpp
+    gltf/image.cpp
     gltf/material.cpp
     gltf/mesh.cpp
     gltf/parseobj.cpp
