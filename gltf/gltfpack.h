@@ -184,6 +184,14 @@ struct BufferView
 };
 
 void processAnimation(Animation& animation, const Settings& settings);
+void processMesh(Mesh& mesh, const Settings& settings);
+
+void transformMesh(Mesh& mesh, const cgltf_node* node);
+
+bool compareMeshTargets(const Mesh& lhs, const Mesh& rhs);
+
+void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings);
+void filterEmptyMeshes(std::vector<Mesh>& meshes);
 
 cgltf_data* parseObj(const char* path, std::vector<Mesh>& meshes, const char** error);
 cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error);
