@@ -12,7 +12,7 @@
 #endif
 
 TempFile::TempFile(const char* suffix)
-: fd(-1)
+    : fd(-1)
 {
 #ifdef _WIN32
 	const char* temp_dir = getenv("TEMP");

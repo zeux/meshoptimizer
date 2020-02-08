@@ -306,5 +306,3 @@ void processAnimation(Animation& animation, const Settings& settings)
 		}
 	}
 }
-
-

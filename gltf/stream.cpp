@@ -628,5 +628,3 @@ void compressIndexStream(std::string& bin, const std::string& data, size_t count
 
 	bin.append(reinterpret_cast<const char*>(&compressed[0]), size);
 }
-
-

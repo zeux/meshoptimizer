@@ -186,5 +186,3 @@ bool usesTextureSet(const cgltf_material& material, int set)
 
 	return false;
 }
-
-

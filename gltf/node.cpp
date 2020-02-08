@@ -128,5 +128,3 @@ void remapNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, size_t& node_off
 		}
 	}
 }
-
-

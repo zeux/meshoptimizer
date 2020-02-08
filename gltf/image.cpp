@@ -122,7 +122,3 @@ bool encodeBasis(const std::string& data, std::string& result, bool normal_map, 
 
 	return rc == 0 && readFile(temp_output.path.c_str(), result);
 }
-
-
-
-

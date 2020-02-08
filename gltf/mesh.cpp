@@ -55,8 +55,6 @@ void transformMesh(Mesh& mesh, const cgltf_node* node)
 	}
 }
 
-
-
 bool compareMeshTargets(const Mesh& lhs, const Mesh& rhs)
 {
 	if (lhs.targets != rhs.targets)
