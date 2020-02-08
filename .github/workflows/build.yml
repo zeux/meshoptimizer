@@ -78,7 +78,7 @@ jobs:
     - name: test
       run: find glTF-Sample-Models/2.0/ -name *.gltf | xargs ./gltfpack -cc -test
     - name: pack
-      run: find glTF-Sample-Models/2.0/ -name *.gltf | xargs -I '{}' ./gltfpack -i '{}' -o '{}-pack.gltf'
+      run: find glTF-Sample-Models/2.0/ -name *.gltf | grep -v glTF-Draco | xargs -I '{}' ./gltfpack -i '{}' -o '{}-pack.gltf'
     - name: validate
       run: |
         curl -sL $VALIDATOR | tar xJ
