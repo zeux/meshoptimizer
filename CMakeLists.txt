@@ -30,6 +30,11 @@ set(SOURCES
     src/vfetchoptimizer.cpp
 )
 
+set(GLTF_SOURCES
+    gltf/basistoktx.cpp
+    gltf/gltfpack.cpp
+)
+
 if(MSVC)
     add_compile_options(/W4 /WX)
 else()
@@ -59,7 +64,7 @@ if(MESHOPT_BUILD_DEMO)
 endif()
 
 if(MESHOPT_BUILD_TOOLS)
-    add_executable(gltfpack tools/gltfpack.cpp tools/meshloader.cpp tools/basistoktx.cpp)
+    add_executable(gltfpack ${GLTF_SOURCES} tools/meshloader.cpp)
     target_link_libraries(gltfpack meshoptimizer)
     list(APPEND TARGETS gltfpack)
 

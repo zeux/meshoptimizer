@@ -42,8 +42,8 @@
 #include <unistd.h>
 #endif
 
-#include "cgltf.h"
-#include "fast_obj.h"
+#include "../tools/cgltf.h"
+#include "../tools/fast_obj.h"
 
 struct Attr
 {
