@@ -249,42 +249,6 @@ static bool hasColorData(const std::vector<Attr>& data)
 	return false;
 }
 
-static bool usesTextureSet(const cgltf_material& material, int set)
-{
-	if (material.has_pbr_metallic_roughness)
-	{
-		const cgltf_pbr_metallic_roughness& pbr = material.pbr_metallic_roughness;
-
-		if (pbr.base_color_texture.texture && pbr.base_color_texture.texcoord == set)
-			return true;
-
-		if (pbr.metallic_roughness_texture.texture && pbr.metallic_roughness_texture.texcoord == set)
-			return true;
-	}
-
-	if (material.has_pbr_specular_glossiness)
-	{
-		const cgltf_pbr_specular_glossiness& pbr = material.pbr_specular_glossiness;
-
-		if (pbr.diffuse_texture.texture && pbr.diffuse_texture.texcoord == set)
-			return true;
-
-		if (pbr.specular_glossiness_texture.texture && pbr.specular_glossiness_texture.texcoord == set)
-			return true;
-	}
-
-	if (material.normal_texture.texture && material.normal_texture.texcoord == set)
-		return true;
-
-	if (material.occlusion_texture.texture && material.occlusion_texture.texcoord == set)
-		return true;
-
-	if (material.emissive_texture.texture && material.emissive_texture.texcoord == set)
-		return true;
-
-	return false;
-}
-
 static void filterStreams(Mesh& mesh)
 {
 	size_t write = 0;

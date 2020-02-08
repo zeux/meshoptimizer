@@ -33,6 +33,7 @@ set(SOURCES
 set(GLTF_SOURCES
     gltf/animation.cpp
     gltf/basistoktx.cpp
+    gltf/material.cpp
     gltf/mesh.cpp
     gltf/parseobj.cpp
     gltf/parsegltf.cpp
