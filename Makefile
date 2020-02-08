@@ -1,4 +1,3 @@
-.SUFFIXES:
 MAKEFLAGS+=-r -j
 
 config=debug
