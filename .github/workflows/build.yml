@@ -16,6 +16,8 @@ jobs:
         make -j2 config=sanitize test
         make -j2 config=debug test
         make -j2 config=release test
+    - name: make gltfpack
+      run: |
         make -j2 config=release gltfpack
         strip gltfpack
     - name: make coverage
