@@ -1,5 +1,5 @@
 .SUFFIXES:
-MAKEFLAGS+=-r
+MAKEFLAGS+=-r -j
 
 config=debug
 files=demo/pirate.obj
