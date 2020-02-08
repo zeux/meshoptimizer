@@ -259,8 +259,6 @@ std::string basisToKtx(const std::string& basis, bool srgb)
 	ktx.append(basis.substr(basis_header.m_tables_file_ofs, basis_header.m_tables_file_size));
 	ktx.append(basis.substr(basis_header.m_extended_file_ofs, basis_header.m_extended_file_size));
 
-	ktx.resize((ktx.size() + 7) & ~7);
-
 	// mip levels
 	for (size_t i = 0; i < levels; ++i)
 	{
@@ -298,8 +296,6 @@ std::string basisToKtx(const std::string& basis, bool srgb)
 		}
 
 		write(ktx, sgd_level_offset + level_index * sizeof(Ktx2BasisImageDesc), sgd_image);
-
-		ktx.resize((ktx.size() + 7) & ~7);
 	}
 
 	return ktx;
