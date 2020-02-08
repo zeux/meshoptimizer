@@ -183,6 +183,20 @@ struct BufferView
 	size_t bytes;
 };
 
+struct TempFile
+{
+	std::string path;
+	int fd;
+
+	TempFile(const char* suffix);
+	~TempFile();
+};
+
+std::string getFullPath(const char* path, const char* base_path);
+std::string getFileName(const char* path);
+bool readFile(const char* path, std::string& data);
+bool writeFile(const char* path, const std::string& data);
+
 void processAnimation(Animation& animation, const Settings& settings);
 void processMesh(Mesh& mesh, const Settings& settings);
 

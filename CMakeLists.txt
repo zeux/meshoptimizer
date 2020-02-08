@@ -33,6 +33,7 @@ set(SOURCES
 set(GLTF_SOURCES
     gltf/animation.cpp
     gltf/basistoktx.cpp
+    gltf/fileio.cpp
     gltf/gltfpack.cpp
     gltf/material.cpp
     gltf/mesh.cpp

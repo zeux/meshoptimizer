@@ -1,3 +1,4 @@
+// This file is part of gltfpack; see gltfpack.h for version/license details
 #include <stdexcept>
 #include <string>
 #include <vector>
