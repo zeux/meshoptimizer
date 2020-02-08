@@ -38,6 +38,7 @@ set(GLTF_SOURCES
     gltf/image.cpp
     gltf/material.cpp
     gltf/mesh.cpp
+    gltf/node.cpp
     gltf/parseobj.cpp
     gltf/parsegltf.cpp
     gltf/stream.cpp

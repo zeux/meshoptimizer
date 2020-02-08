@@ -215,6 +215,10 @@ bool checkBasis();
 bool encodeBasis(const std::string& data, std::string& result, bool normal_map, bool srgb, int quality);
 std::string basisToKtx(const std::string& basis, bool srgb);
 
+void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Animation>& animations);
+void markNeededNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Mesh>& meshes, const std::vector<Animation>& animations, const Settings& settings);
+void remapNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, size_t& node_offset);
+
 QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes, const Settings& settings);
 void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTexture>& result, const std::vector<Mesh>& meshes, const Settings& settings);
 void getPositionBounds(int min[3], int max[3], const Stream& stream, const QuantizationPosition& qp);
