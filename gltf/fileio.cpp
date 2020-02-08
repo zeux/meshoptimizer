@@ -29,7 +29,8 @@ TempFile::TempFile(const char* suffix)
 
 TempFile::~TempFile()
 {
-	unlink(path.c_str());
+	remove(path.c_str());
+
 #ifndef _WIN32
 	close(fd);
 #endif

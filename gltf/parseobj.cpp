@@ -42,7 +42,8 @@ static cgltf_data* parseSceneObj(fastObjMesh* obj)
 
 	for (size_t i = 0; i < textures.size(); ++i)
 	{
-		data->images[i].uri = strdup(textures[i].c_str());
+		data->images[i].uri = (char*)malloc(textures[i].size() + 1);
+		strcpy(data->images[i].uri, textures[i].c_str());
 	}
 
 	data->textures = (cgltf_texture*)calloc(textures.size(), sizeof(cgltf_texture));
