@@ -90,7 +90,7 @@ build/decoder_simd.wasm: $(WASM_SOURCES)
 
 js/meshopt_decoder.js: build/decoder_base.wasm build/decoder_simd.wasm
 	sed -i "s#Built with emcc.*#Built with $$(emcc --version | head -n 1)#" $@
-	sed -i "s#\(var wasm_simd = \)\".*\";#\\1\"$$(cat build/decoder_simd.wasm | hexdump -v -e '1/1 "%02X"')\";#" $@
+	sed -i "s#\(var wasm_base = \)\".*\";#\\1\"$$(cat build/decoder_base.wasm | hexdump -v -e '1/1 "%02X"')\";#" $@
 	sed -i "s#\(var wasm_simd = \)\".*\";#\\1\"$$(cat build/decoder_simd.wasm | hexdump -v -e '1/1 "%02X"')\";#" $@
 
 $(EXECUTABLE): $(DEMO_OBJECTS) $(LIBRARY)
