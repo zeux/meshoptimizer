@@ -99,6 +99,15 @@ $(EXECUTABLE): $(DEMO_OBJECTS) $(LIBRARY)
 vcachetuner: tools/vcachetuner.cpp $(BUILD)/tools/meshloader.cpp.o $(BUILD)/demo/miniz.cpp.o $(LIBRARY)
 	$(CXX) $^ -fopenmp $(CXXFLAGS) -std=c++11 $(LDFLAGS) -o $@
 
+codecbench: tools/codecbench.cpp $(LIBRARY)
+	$(CXX) $^ $(CXXFLAGS) $(LDFLAGS) -o $@
+
+codecbench.js: tools/codecbench.cpp ${LIBRARY_SOURCES}
+	emcc $^ -O3 -DNDEBUG -s ALLOW_MEMORY_GROWTH=1 -o $@
+
+codecbench-simd.js: tools/codecbench.cpp ${LIBRARY_SOURCES}
+	emcc $^ -O3 -DNDEBUG -s ALLOW_MEMORY_GROWTH=1 -munimplemented-simd128 -o $@
+
 $(LIBRARY): $(LIBRARY_OBJECTS)
 	ar rcs $@ $^
 
