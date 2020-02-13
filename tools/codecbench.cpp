@@ -92,7 +92,7 @@ int main()
 {
 	meshopt_encodeIndexVersion(1);
 
-	const int N = 2000;
+	const int N = 1000;
 
 	std::vector<Vertex> vertices;
 	vertices.reserve((N + 1) * (N + 1));

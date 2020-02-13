@@ -102,11 +102,11 @@ vcachetuner: tools/vcachetuner.cpp $(BUILD)/tools/meshloader.cpp.o $(BUILD)/demo
 codecbench: tools/codecbench.cpp $(LIBRARY)
 	$(CXX) $^ $(CXXFLAGS) $(LDFLAGS) -o $@
 
-codecbench.js: tools/codecbench.cpp ${LIBRARY_SOURCES}
-	emcc $^ -O3 -DNDEBUG -s ALLOW_MEMORY_GROWTH=1 -o $@
+codecbench.js codecbench.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
+	emcc $^ -O3 -DNDEBUG -s TOTAL_MEMORY=268435456 -o $@
 
-codecbench-simd.js: tools/codecbench.cpp ${LIBRARY_SOURCES}
-	emcc $^ -O3 -DNDEBUG -s ALLOW_MEMORY_GROWTH=1 -munimplemented-simd128 -o $@
+codecbench-simd.js codecbensh-simd.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
+	emcc $^ -O3 -DNDEBUG -s TOTAL_MEMORY=268435456 -munimplemented-simd128 -o $@
 
 $(LIBRARY): $(LIBRARY_OBJECTS)
 	ar rcs $@ $^
