@@ -105,7 +105,7 @@ codecbench: tools/codecbench.cpp $(LIBRARY)
 codecbench.js codecbench.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
 	emcc $^ -O3 -DNDEBUG -s TOTAL_MEMORY=268435456 -o $@
 
-codecbench-simd.js codecbensh-simd.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
+codecbench-simd.js codecbench-simd.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
 	emcc $^ -O3 -DNDEBUG -s TOTAL_MEMORY=268435456 -munimplemented-simd128 -o $@
 
 $(LIBRARY): $(LIBRARY_OBJECTS)
