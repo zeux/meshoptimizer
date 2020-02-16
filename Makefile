@@ -23,9 +23,11 @@ CFLAGS=-g -Wall -Wextra -Werror -std=c89
 CXXFLAGS=-g -Wall -Wextra -Wshadow -Wno-missing-field-initializers -Werror -std=c++98
 LDFLAGS=
 
-WASM_SOURCES=src/vertexcodec.cpp src/indexcodec.cpp
-WASM_EXPORTS=["_meshopt_decodeVertexBuffer","_meshopt_decodeIndexBuffer","_sbrk","__start"]
-WASM_FLAGS=-O3 -DNDEBUG -s EXPORTED_FUNCTIONS='$(WASM_EXPORTS)' -s ALLOW_MEMORY_GROWTH=1 -s TOTAL_STACK=24576 -s TOTAL_MEMORY=65536
+WASM_SOURCES=src/vertexcodec.cpp src/indexcodec.cpp src/vertexfilter.cpp
+WASM_EXPORTS="__start","_sbrk"
+WASM_EXPORTS+=,"_meshopt_decodeVertexBuffer","_meshopt_decodeIndexBuffer"
+WASM_EXPORTS+=,"_meshopt_decodeFilterOctS8","_meshopt_decodeFilterOctS12","_meshopt_decodeFilterQuatR12"
+WASM_FLAGS=-O3 -DNDEBUG -s EXPORTED_FUNCTIONS='[$(WASM_EXPORTS)]' -s ALLOW_MEMORY_GROWTH=1 -s TOTAL_STACK=24576 -s TOTAL_MEMORY=65536
 
 ifeq ($(config),iphone)
 	IPHONESDK=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk

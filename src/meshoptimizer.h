@@ -204,6 +204,24 @@ MESHOPTIMIZER_API size_t meshopt_encodeVertexBufferBound(size_t vertex_count, si
 MESHOPTIMIZER_API int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t vertex_size, const unsigned char* buffer, size_t buffer_size);
 
 /**
+ * Vertex buffer filters
+ * These functions can be used to filter output of meshopt_decodeVertexBuffer in-place.
+ * count must be aligned by 4 and stride is fixed for each function to facilitate SIMD implementation.
+ *
+ * meshopt_decodeFilterOctS8 decodes octahedral signed encoding of a unit vector with 8-bit X/Y and 1-bit Z sign as an input.
+ * Each component is stored as an 8-bit integer; stride must be equal to 4. W is preserved as is.
+ *
+ * meshopt_decodeFilterOctS12 decodes octahedral signed encoding of a unit vector with 12-bit X/Y and 1-bit Z sign as an input.
+ * Each component is stored as an 16-bit integer; stride must be equal to 8. W is preserved as is.
+ *
+ * meshopt_decodeFilterQuatR12 decodes 3-component quaternion encoding with 12-bit component encoding and a 2-bit component index indicating which component to reconstruct.
+ * Each component is stored as an 16-bit integer; stride must be equal to 8.
+ */
+MESHOPTIMIZER_EXPERIMENTAL void meshopt_decodeFilterOctS8(void* buffer, size_t vertex_count, size_t vertex_size);
+MESHOPTIMIZER_EXPERIMENTAL void meshopt_decodeFilterOctS12(void* buffer, size_t vertex_count, size_t vertex_size);
+MESHOPTIMIZER_EXPERIMENTAL void meshopt_decodeFilterQuatR12(void* buffer, size_t vertex_count, size_t vertex_size);
+
+/**
  * Experimental: Mesh simplifier
  * Reduces the number of triangles in the mesh, attempting to preserve mesh appearance as much as possible
  * The algorithm tries to preserve mesh topology and can stop short of the target goal based on topology constraints or target error.

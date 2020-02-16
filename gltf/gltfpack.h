@@ -121,6 +121,9 @@ struct StreamFormat
 	enum Filter
 	{
 		Filter_None = 0,
+		Filter_OctS8 = 1,
+		Filter_OctS12 = 2,
+		Filter_QuatR12 = 3,
 	};
 
 	cgltf_type type;

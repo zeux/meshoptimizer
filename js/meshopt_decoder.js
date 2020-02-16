@@ -61,6 +61,15 @@ var MeshoptDecoder = (function() {
 		case undefined:
 			return undefined;
 
+		case 1:
+			return instance.exports.meshopt_decodeFilterOctS8;
+
+		case 2:
+			return instance.exports.meshopt_decodeFilterOctS12;
+
+		case 3:
+			return instance.exports.meshopt_decodeFilterQuatR12;
+
 		default:
 			throw new Error("Unknown filter: " + filter);
 		}
