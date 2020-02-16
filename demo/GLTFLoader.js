@@ -1051,21 +1051,7 @@ THREE.GLTFLoader = ( function () {
 			var result = new ArrayBuffer(count * stride);
 			var source = new Uint8Array(buffer, byteOffset, byteLength);
 
-			switch ( extensionDef.mode ) {
-
-				case 0:
-					decoder.decodeVertexBuffer(new Uint8Array(result), count, stride, source);
-					break;
-
-				case 1:
-					decoder.decodeIndexBuffer(new Uint8Array(result), count, stride, source);
-					break;
-
-				default:
-					throw new Error( 'THREE.GLTFLoader: Unrecognized meshopt compression mode.' );
-
-			}
-
+			decoder.decodeGltfBuffer(new Uint8Array(result), count, stride, source, extensionDef.mode, extensionDef.filter);
 			return result;
 
 		} );

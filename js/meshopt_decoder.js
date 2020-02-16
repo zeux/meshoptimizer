@@ -38,12 +38,16 @@ var MeshoptDecoder = (function() {
 		return bytes.buffer;
 	}
 
-	function decode(fun, target, count, size, source) {
+	function decode(fun, target, count, size, source, filter) {
 		var sbrk = instance.exports.sbrk;
-		var tp = sbrk(count * size);
+		var count4 = (count + 3) & ~3; // pad for SIMD filter
+		var tp = sbrk(count4 * size);
 		var sp = sbrk(source.length);
 		heap.set(source, sp);
 		var res = fun(tp, count, size, sp, source.length);
+		if (res == 0 && filter) {
+			filter(tp, count4, size);
+		}
 		target.set(heap.subarray(tp, tp + count * size));
 		sbrk(tp - sbrk(0));
 		if (res != 0) {
@@ -51,13 +55,38 @@ var MeshoptDecoder = (function() {
 		}
 	};
 
+	function filterFun(filter) {
+		switch (filter) {
+		case 0:
+		case undefined:
+			return undefined;
+
+		default:
+			throw new Error("Unknown filter: " + filter);
+		}
+	}
+
 	return {
 		ready: promise,
-		decodeVertexBuffer: function(target, count, size, source) {
-			decode(instance.exports.meshopt_decodeVertexBuffer, target, count, size, source);
+		decodeVertexBuffer: function(target, count, size, source, filter) {
+			decode(instance.exports.meshopt_decodeVertexBuffer, target, count, size, source, filterFun(filter));
 		},
 		decodeIndexBuffer: function(target, count, size, source) {
 			decode(instance.exports.meshopt_decodeIndexBuffer, target, count, size, source);
+		},
+		decodeGltfBuffer: function(target, count, size, source, mode, filter) {
+			switch (mode) {
+			case 0:
+				decode(instance.exports.meshopt_decodeVertexBuffer, target, count, size, source, filterFun(filter));
+				break;
+
+			case 1:
+				decode(instance.exports.meshopt_decodeIndexBuffer, target, count, size, source);
+				break;
+
+			default:
+				throw new Error("Unknown mode: " + mode);
+			}
 		}
 	};
 })();
