@@ -118,10 +118,16 @@ struct QuantizationTexture
 
 struct StreamFormat
 {
+	enum Filter
+	{
+		Filter_None = 0,
+	};
+
 	cgltf_type type;
 	cgltf_component_type component_type;
 	bool normalized;
 	size_t stride;
+	Filter filter;
 };
 
 struct NodeInfo
@@ -170,6 +176,7 @@ struct BufferView
 	};
 
 	Kind kind;
+	StreamFormat::Filter filter;
 	int variant;
 	size_t stride;
 	bool compressed;
@@ -230,7 +237,7 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 void compressVertexStream(std::string& bin, const std::string& data, size_t count, size_t stride);
 void compressIndexStream(std::string& bin, const std::string& data, size_t count, size_t stride);
 
-size_t getBufferView(std::vector<BufferView>& views, BufferView::Kind kind, int variant, size_t stride, bool compressed);
+size_t getBufferView(std::vector<BufferView>& views, BufferView::Kind kind, StreamFormat::Filter filter, int variant, size_t stride, bool compressed);
 
 void comma(std::string& s);
 void append(std::string& s, size_t v);
@@ -242,7 +249,7 @@ const char* attributeType(cgltf_attribute_type type);
 const char* animationPath(cgltf_animation_path_type type);
 
 void writeMaterialInfo(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationTexture& qt);
-void writeBufferView(std::string& json, BufferView::Kind kind, size_t count, size_t stride, size_t bin_offset, size_t bin_size, int compression, size_t compressed_offset, size_t compressed_size);
+void writeBufferView(std::string& json, BufferView::Kind kind, StreamFormat::Filter filter, size_t count, size_t stride, size_t bin_offset, size_t bin_size, int compression, size_t compressed_offset, size_t compressed_size);
 void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const char* output_path, const Settings& settings);
 void writeTexture(std::string& json, const cgltf_texture& texture, cgltf_data* data, const Settings& settings);
 void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, int target, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings);
