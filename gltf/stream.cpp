@@ -537,24 +537,55 @@ StreamFormat writeTimeStream(std::string& bin, const std::vector<float>& data)
 	return format;
 }
 
-StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data)
+static void encodeQuatR(int16_t v[4], const Attr& a, int bits)
+{
+	const float scaler = sqrtf(2.f);
+
+	// establish maximum quaternion component
+	int qc = 0;
+	qc = fabsf(a.f[1]) > fabsf(a.f[qc]) ? 1 : qc;
+	qc = fabsf(a.f[2]) > fabsf(a.f[qc]) ? 2 : qc;
+	qc = fabsf(a.f[3]) > fabsf(a.f[qc]) ? 3 : qc;
+
+	// we use double-cover properties to discard the sign
+	float sign = a.f[qc] < 0.f ? -1.f : 1.f;
+
+	// note: we always encode a cyclical swizzle to be able to recover the order via rotation
+	v[0] = int16_t(meshopt_quantizeSnorm(a.f[(qc + 1) & 3] * scaler * sign, bits));
+	v[1] = int16_t(meshopt_quantizeSnorm(a.f[(qc + 2) & 3] * scaler * sign, bits));
+	v[2] = int16_t(meshopt_quantizeSnorm(a.f[(qc + 3) & 3] * scaler * sign, bits));
+	v[3] = int16_t(qc);
+}
+
+StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data, const Settings& settings)
 {
 	if (type == cgltf_animation_path_type_rotation)
 	{
+		StreamFormat::Filter filter = settings.compressmore ? StreamFormat::Filter_QuatR12 : StreamFormat::Filter_None;
+
 		for (size_t i = 0; i < data.size(); ++i)
 		{
 			const Attr& a = data[i];
 
-			int16_t v[4] = {
-			    int16_t(meshopt_quantizeSnorm(a.f[0], 16)),
-			    int16_t(meshopt_quantizeSnorm(a.f[1], 16)),
-			    int16_t(meshopt_quantizeSnorm(a.f[2], 16)),
-			    int16_t(meshopt_quantizeSnorm(a.f[3], 16)),
-			};
+			int16_t v[4];
+
+			if (filter == StreamFormat::Filter_QuatR12)
+			{
+				encodeQuatR(v, a, 12);
+			}
+			else
+			{
+			    v[0] = int16_t(meshopt_quantizeSnorm(a.f[0], 16));
+			    v[1] = int16_t(meshopt_quantizeSnorm(a.f[1], 16));
+			    v[2] = int16_t(meshopt_quantizeSnorm(a.f[2], 16));
+			    v[3] = int16_t(meshopt_quantizeSnorm(a.f[3], 16));
+
+			}
+
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16, true, 8};
+		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16, true, 8, filter};
 		return format;
 	}
 	else if (type == cgltf_animation_path_type_weights)
@@ -572,7 +603,7 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 	}
 	else if (type == cgltf_animation_path_type_translation || type == cgltf_animation_path_type_scale)
 	{
-		int bits = 15;
+		int bits = settings.compressmore ? 15 : 23;
 
 		for (size_t i = 0; i < data.size(); ++i)
 		{

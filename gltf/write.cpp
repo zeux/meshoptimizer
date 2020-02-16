@@ -920,7 +920,7 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 		bool tc = track.data.size() == track.components;
 
 		std::string scratch;
-		StreamFormat format = writeKeyframeStream(scratch, track.path, track.data);
+		StreamFormat format = writeKeyframeStream(scratch, track.path, track.data, settings);
 
 		size_t view = getBufferView(views, BufferView::Kind_Keyframe, format.filter, track.path, format.stride, settings.compress && track.path != cgltf_animation_path_type_weights);
 		size_t offset = views[view].data.size();
