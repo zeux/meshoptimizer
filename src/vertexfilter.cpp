@@ -5,16 +5,76 @@
 
 void meshopt_decodeFilterOctS8(void* buffer, size_t vertex_count, size_t vertex_size)
 {
-	(void)buffer;
-	(void)vertex_count;
+	assert(vertex_count % 4 == 0);
+	assert(vertex_size == 4);
 	(void)vertex_size;
+
+#ifdef __EMSCRIPTEN__
+	volatile // workaround to prevent autovectorization
+#endif
+	float scale = 1.f / 127.f;
+
+	signed char* data = static_cast<signed char*>(buffer);
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		float x = float(data[i * 4 + 0]) * scale;
+		float y = float(data[i * 4 + 1]) * scale;
+		float z = 1.f - fabsf(x) - fabsf(y);
+
+		float t = z >= 0.f ? 0.f : z;
+
+		x += (x >= 0.f) ? t : -t;
+		y += (y >= 0.f) ? t : -t;
+
+		float l = sqrtf(x * x + y * y + z * z);
+		float s = 127.f / l;
+
+		int xf = int(x * s + (x >= 0.f ? 0.5f : -0.5f));
+		int yf = int(y * s + (y >= 0.f ? 0.5f : -0.5f));
+		int zf = int(z * s + (z >= 0.f ? 0.5f : -0.5f));
+
+		data[i * 4 + 0] = xf;
+		data[i * 4 + 1] = yf;
+		data[i * 4 + 2] = zf;
+	}
 }
 
 void meshopt_decodeFilterOctS12(void* buffer, size_t vertex_count, size_t vertex_size)
 {
-	(void)buffer;
-	(void)vertex_count;
+	assert(vertex_count % 4 == 0);
+	assert(vertex_size == 8);
 	(void)vertex_size;
+
+#ifdef __EMSCRIPTEN__
+	volatile // workaround to prevent autovectorization
+#endif
+	float scale = 1.f / 2047.f;
+
+	short* data = static_cast<short*>(buffer);
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		float x = float(data[i * 4 + 0]) * scale;
+		float y = float(data[i * 4 + 1]) * scale;
+		float z = 1.f - fabsf(x) - fabsf(y);
+
+		float t = z >= 0.f ? 0.f : z;
+
+		x += (x >= 0.f) ? t : -t;
+		y += (y >= 0.f) ? t : -t;
+	
+		float l = sqrtf(x * x + y * y + z * z);
+		float s = 32767.f / l;
+
+		int xf = int(x * s + (x >= 0.f ? 0.5f : -0.5f));
+		int yf = int(y * s + (y >= 0.f ? 0.5f : -0.5f));
+		int zf = int(z * s + (z >= 0.f ? 0.5f : -0.5f));
+
+		data[i * 4 + 0] = xf;
+		data[i * 4 + 1] = yf;
+		data[i * 4 + 2] = zf;
+	}
 }
 
 void meshopt_decodeFilterQuatR12(void* buffer, size_t vertex_count, size_t vertex_size)
@@ -34,15 +94,15 @@ void meshopt_decodeFilterQuatR12(void* buffer, size_t vertex_count, size_t verte
 #ifdef __EMSCRIPTEN__
 	volatile // workaround to prevent autovectorization
 #endif
-	float scale = 2047.f * sqrtf(2.f);
+	float scale = 1.f / (2047.f * sqrtf(2.f));
 
 	short* data = static_cast<short*>(buffer);
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		float x = float(data[i * 4 + 0]) / scale;
-		float y = float(data[i * 4 + 1]) / scale;
-		float z = float(data[i * 4 + 2]) / scale;
+		float x = float(data[i * 4 + 0]) * scale;
+		float y = float(data[i * 4 + 1]) * scale;
+		float z = float(data[i * 4 + 2]) * scale;
 
 		float ww = 1.f - x * x - y * y - z * z;
 		float w = sqrtf(ww >= 0.f ? ww : 0.f);
