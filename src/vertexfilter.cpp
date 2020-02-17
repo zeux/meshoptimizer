@@ -31,9 +31,9 @@ void meshopt_decodeFilterOct8(void* buffer, size_t vertex_count, size_t vertex_s
 		int yf = int(y * s + (y >= 0.f ? 0.5f : -0.5f));
 		int zf = int(z * s + (z >= 0.f ? 0.5f : -0.5f));
 
-		data[i * 4 + 0] = xf;
-		data[i * 4 + 1] = yf;
-		data[i * 4 + 2] = zf;
+		data[i * 4 + 0] = (signed char)(xf);
+		data[i * 4 + 1] = (signed char)(yf);
+		data[i * 4 + 2] = (signed char)(zf);
 	}
 }
 
@@ -65,9 +65,9 @@ void meshopt_decodeFilterOct12(void* buffer, size_t vertex_count, size_t vertex_
 		int yf = int(y * s + (y >= 0.f ? 0.5f : -0.5f));
 		int zf = int(z * s + (z >= 0.f ? 0.5f : -0.5f));
 
-		data[i * 4 + 0] = xf;
-		data[i * 4 + 1] = yf;
-		data[i * 4 + 2] = zf;
+		data[i * 4 + 0] = short(xf);
+		data[i * 4 + 1] = short(yf);
+		data[i * 4 + 2] = short(zf);
 	}
 }
 
@@ -104,9 +104,9 @@ void meshopt_decodeFilterQuat12(void* buffer, size_t vertex_count, size_t vertex
 
 		int qc = data[i * 4 + 3] & 3;
 
-		data[i * 4 + order[qc][0]] = xf;
-		data[i * 4 + order[qc][1]] = yf;
-		data[i * 4 + order[qc][2]] = zf;
-		data[i * 4 + order[qc][3]] = wf;
+		data[i * 4 + order[qc][0]] = short(xf);
+		data[i * 4 + order[qc][1]] = short(yf);
+		data[i * 4 + order[qc][2]] = short(zf);
+		data[i * 4 + order[qc][3]] = short(wf);
 	}
 }
