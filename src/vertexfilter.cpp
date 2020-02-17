@@ -3,15 +3,67 @@
 
 #include <math.h>
 
+#if defined(__wasm_simd128__)
+#define SIMD_WASM
+#endif
+
+#ifdef SIMD_WASM
+#include <wasm_simd128.h>
+#endif
+
 void meshopt_decodeFilterOct8(void* buffer, size_t vertex_count, size_t vertex_size)
 {
 	assert(vertex_count % 4 == 0);
 	assert(vertex_size == 4);
 	(void)vertex_size;
 
-	const float scale = 1.f / 127.f;
-
 	signed char* data = static_cast<signed char*>(buffer);
+
+#ifdef SIMD_WASM
+	const v128_t sign = wasm_f32x4_splat(-0.f);
+
+	for (size_t i = 0; i < vertex_count; i += 4)
+	{
+		v128_t n4 = wasm_v128_load(&data[i * 4]);
+
+		// sign-extends each of x,y in [x y ? ?] with arithmetic shifts
+		v128_t xf = wasm_i32x4_shr(wasm_i32x4_shl(n4, 24), 24);
+		v128_t yf = wasm_i32x4_shr(wasm_i32x4_shl(n4, 16), 24);
+
+		// convert x and y to [-1..1] and reconstruct z
+		v128_t x = wasm_f32x4_mul(wasm_f32x4_convert_i32x4(xf), wasm_f32x4_splat(1.f / 127.f));
+		v128_t y = wasm_f32x4_mul(wasm_f32x4_convert_i32x4(yf), wasm_f32x4_splat(1.f / 127.f));
+		v128_t z = wasm_f32x4_sub(wasm_f32x4_splat(1.f), wasm_f32x4_add(wasm_f32x4_abs(x), wasm_f32x4_abs(y)));
+
+		// fixup octahedral coordinates for z<0
+		v128_t t = wasm_v128_and(z, wasm_f32x4_lt(z, wasm_f32x4_splat(0.f)));
+
+		x = wasm_f32x4_add(x, wasm_v128_xor(t, wasm_v128_and(x, sign)));
+		y = wasm_f32x4_add(y, wasm_v128_xor(t, wasm_v128_and(y, sign)));
+
+		// compute normal length & scale
+		v128_t l = wasm_f32x4_sqrt(wasm_f32x4_add(wasm_f32x4_mul(x, x), wasm_f32x4_add(wasm_f32x4_mul(y, y), wasm_f32x4_mul(z, z))));
+		v128_t s = wasm_f32x4_div(wasm_f32x4_splat(127.f), l);
+
+		// fast rounded signed float->int: addition triggers renormalization after which mantissa stores the integer value
+		const v128_t fsnap = wasm_f32x4_splat(3 << 22);
+		const v128_t fmask = wasm_i32x4_splat(0x7fffff);
+		const v128_t fbase = wasm_i32x4_splat(0x400000);
+
+		v128_t xr = wasm_i32x4_sub(wasm_v128_and(wasm_f32x4_add(wasm_f32x4_mul(x, s), fsnap), fmask), fbase);
+		v128_t yr = wasm_i32x4_sub(wasm_v128_and(wasm_f32x4_add(wasm_f32x4_mul(y, s), fsnap), fmask), fbase);
+		v128_t zr = wasm_i32x4_sub(wasm_v128_and(wasm_f32x4_add(wasm_f32x4_mul(z, s), fsnap), fmask), fbase);
+
+		// combine xr/yr/zr into final value
+		v128_t res = wasm_v128_and(n4, wasm_i32x4_splat(0xff000000));
+		res = wasm_v128_or(res, wasm_v128_and(xr, wasm_i32x4_splat(0xff)));
+		res = wasm_v128_or(res, wasm_i32x4_shl(wasm_v128_and(yr, wasm_i32x4_splat(0xff)), 8));
+		res = wasm_v128_or(res, wasm_i32x4_shl(wasm_v128_and(zr, wasm_i32x4_splat(0xff)), 16));
+
+		wasm_v128_store(&data[i * 4], res);
+	}
+#else
+	const float scale = 1.f / 127.f;
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
@@ -35,6 +87,7 @@ void meshopt_decodeFilterOct8(void* buffer, size_t vertex_count, size_t vertex_s
 		data[i * 4 + 1] = (signed char)(yf);
 		data[i * 4 + 2] = (signed char)(zf);
 	}
+#endif
 }
 
 void meshopt_decodeFilterOct12(void* buffer, size_t vertex_count, size_t vertex_size)
@@ -110,3 +163,5 @@ void meshopt_decodeFilterQuat12(void* buffer, size_t vertex_count, size_t vertex
 		data[i * 4 + order[qc][3]] = short(wf);
 	}
 }
+
+#undef SIMD_WASM
