@@ -309,7 +309,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 		bool oct = settings.compressmore && stream.target == 0;
 		int bits = settings.nrm_bits;
 
-		StreamFormat::Filter filter = oct ? (bits > 8 ? StreamFormat::Filter_Oct12 : StreamFormat::Filter_Oct8) : StreamFormat::Filter_None;
+		StreamFormat::Filter filter = oct ? StreamFormat::Filter_Oct : StreamFormat::Filter_None;
 
 		for (size_t i = 0; i < stream.data.size(); ++i)
 		{
@@ -383,7 +383,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 		bool oct = settings.compressmore && stream.target == 0;
 		int bits = (settings.nrm_bits > 8) ? 8 : settings.nrm_bits;
 
-		StreamFormat::Filter filter = oct ? StreamFormat::Filter_Oct8 : StreamFormat::Filter_None;
+		StreamFormat::Filter filter = oct ? StreamFormat::Filter_Oct : StreamFormat::Filter_None;
 
 		for (size_t i = 0; i < stream.data.size(); ++i)
 		{
@@ -586,7 +586,7 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 {
 	if (type == cgltf_animation_path_type_rotation)
 	{
-		StreamFormat::Filter filter = settings.compressmore ? StreamFormat::Filter_Quat12 : StreamFormat::Filter_None;
+		StreamFormat::Filter filter = settings.compressmore ? StreamFormat::Filter_Quat : StreamFormat::Filter_None;
 
 		for (size_t i = 0; i < data.size(); ++i)
 		{
@@ -594,7 +594,7 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 
 			int16_t v[4];
 
-			if (filter == StreamFormat::Filter_Quat12)
+			if (filter == StreamFormat::Filter_Quat)
 			{
 				encodeQuat(v, a, 12);
 			}

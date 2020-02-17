@@ -359,7 +359,7 @@ static void decodeFilterOct8()
 	    14, 130, 127, 1, // clang-format :-/
 	};
 
-	meshopt_decodeFilterOct8(data, 4, 4);
+	meshopt_decodeFilterOct(data, 4, 4);
 
 	const unsigned char expected[4 * 4] = {
 	    0, 1, 127, 0,
@@ -380,7 +380,7 @@ static void decodeFilterOct12()
 	    14, 1300, 2047, 1, // clang-format :-/
 	};
 
-	meshopt_decodeFilterOct12(data, 4, 8);
+	meshopt_decodeFilterOct(data, 4, 8);
 
 	const unsigned short expected[4 * 4] = {
 	    0, 16, 32767, 0,
@@ -401,7 +401,7 @@ static void decodeFilterQuat12()
 	    14, 1300, 0, 3, // clang-format :-/
 	};
 
-	meshopt_decodeFilterQuat12(data, 4, 8);
+	meshopt_decodeFilterQuat(data, 4, 8);
 
 	const unsigned short expected[4 * 4] = {
 	    32767, 0, 11, 0,

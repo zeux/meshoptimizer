@@ -116,7 +116,7 @@ var tests = {
 		]);
 
 		var result = new Uint16Array(expected.length);
-		decoder.decodeVertexBuffer(new Uint8Array(result.buffer), 4, 8, encoded, /* filter= */ 2);
+		decoder.decodeVertexBuffer(new Uint8Array(result.buffer), 4, 8, encoded, /* filter= */ 1);
 
 		assert.deepStrictEqual(result, expected);
 	},
@@ -138,7 +138,7 @@ var tests = {
 		]);
 
 		var result = new Uint16Array(expected.length);
-		decoder.decodeVertexBuffer(new Uint8Array(result.buffer), 4, 8, encoded, /* filter= */ 3);
+		decoder.decodeVertexBuffer(new Uint8Array(result.buffer), 4, 8, encoded, /* filter= */ 2);
 
 		assert.deepStrictEqual(result, expected);
 	},

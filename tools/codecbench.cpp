@@ -103,15 +103,15 @@ void benchFilters(size_t count)
 	{
 		double t0 = timestamp();
 
-		meshopt_decodeFilterOct8(&d4[0], count4, 4);
+		meshopt_decodeFilterOct(&d4[0], count4, 4);
 
 		double t1 = timestamp();
 
-		meshopt_decodeFilterOct12(&d8[0], count4, 8);
+		meshopt_decodeFilterOct(&d8[0], count4, 8);
 
 		double t2 = timestamp();
 
-		meshopt_decodeFilterQuat12(&d8[0], count4, 8);
+		meshopt_decodeFilterQuat(&d8[0], count4, 8);
 
 		double t3 = timestamp();
 

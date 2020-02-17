@@ -17,18 +17,15 @@
 #define wasmx_unpackhi_v16x8(a, b) wasm_v8x16_shuffle(a, b, 8, 9, 24, 25, 10, 11, 26, 27, 12, 13, 28, 29, 14, 15, 30, 31)
 #endif
 
-void meshopt_decodeFilterOct8(void* buffer, size_t vertex_count, size_t vertex_size)
+namespace meshopt
 {
-	assert(vertex_count % 4 == 0);
-	assert(vertex_size == 4);
-	(void)vertex_size;
-
-	signed char* data = static_cast<signed char*>(buffer);
 
 #ifdef SIMD_WASM
+static void decodeFilterOctSimd(signed char* data, size_t count)
+{
 	const v128_t sign = wasm_f32x4_splat(-0.f);
 
-	for (size_t i = 0; i < vertex_count; i += 4)
+	for (size_t i = 0; i < count; i += 4)
 	{
 		v128_t n4 = wasm_v128_load(&data[i * 4]);
 
@@ -71,49 +68,14 @@ void meshopt_decodeFilterOct8(void* buffer, size_t vertex_count, size_t vertex_s
 
 		wasm_v128_store(&data[i * 4], res);
 	}
-#else
-	for (size_t i = 0; i < vertex_count; ++i)
-	{
-		// convert x and y to floats and reconstruct z; this assumes zf encodes 1.f at the same bit count
-		float x = float(data[i * 4 + 0]);
-		float y = float(data[i * 4 + 1]);
-		float z = float(data[i * 4 + 2]) - fabsf(x) - fabsf(y);
-
-		// fixup octahedral coordinates for z<0
-		float t = (z >= 0.f) ? 0.f : z;
-
-		x += (x >= 0.f) ? t : -t;
-		y += (y >= 0.f) ? t : -t;
-
-		// compute normal length & scale
-		float l = sqrtf(x * x + y * y + z * z);
-		float s = 127.f / l;
-
-		// rounded signed float->int
-		int xf = int(x * s + (x >= 0.f ? 0.5f : -0.5f));
-		int yf = int(y * s + (y >= 0.f ? 0.5f : -0.5f));
-		int zf = int(z * s + (z >= 0.f ? 0.5f : -0.5f));
-
-		data[i * 4 + 0] = (signed char)(xf);
-		data[i * 4 + 1] = (signed char)(yf);
-		data[i * 4 + 2] = (signed char)(zf);
-	}
-#endif
 }
 
-void meshopt_decodeFilterOct12(void* buffer, size_t vertex_count, size_t vertex_size)
+static void decodeFilterOctSimd(short* data, size_t count)
 {
-	assert(vertex_count % 4 == 0);
-	assert(vertex_size == 8);
-	(void)vertex_size;
-
-	short* data = static_cast<short*>(buffer);
-
-#ifdef SIMD_WASM
 	const v128_t sign = wasm_f32x4_splat(-0.f);
 	volatile v128_t zmask = wasm_i32x4_splat(0x7fff); // volatile works around LLVM shuffle "optimizations"
 
-	for (size_t i = 0; i < vertex_count; i += 4)
+	for (size_t i = 0; i < count; i += 4)
 	{
 		v128_t n4_0 = wasm_v128_load(&data[(i + 0) * 4]);
 		v128_t n4_1 = wasm_v128_load(&data[(i + 2) * 4]);
@@ -168,48 +130,13 @@ void meshopt_decodeFilterOct12(void* buffer, size_t vertex_count, size_t vertex_
 		wasm_v128_store(&data[(i + 0) * 4], res_0);
 		wasm_v128_store(&data[(i + 2) * 4], res_1);
 	}
-#else
-	for (size_t i = 0; i < vertex_count; ++i)
-	{
-		// convert x and y to floats and reconstruct z; this assumes zf encodes 1.f at the same bit count
-		float x = float(data[i * 4 + 0]);
-		float y = float(data[i * 4 + 1]);
-		float z = float(data[i * 4 + 2]) - fabsf(x) - fabsf(y);
-
-		// fixup octahedral coordinates for z<0
-		float t = z >= 0.f ? 0.f : z;
-
-		x += (x >= 0.f) ? t : -t;
-		y += (y >= 0.f) ? t : -t;
-
-		// compute normal length & scale
-		float l = sqrtf(x * x + y * y + z * z);
-		float s = 32767.f / l;
-
-		// rounded signed float->int
-		int xf = int(x * s + (x >= 0.f ? 0.5f : -0.5f));
-		int yf = int(y * s + (y >= 0.f ? 0.5f : -0.5f));
-		int zf = int(z * s + (z >= 0.f ? 0.5f : -0.5f));
-
-		data[i * 4 + 0] = short(xf);
-		data[i * 4 + 1] = short(yf);
-		data[i * 4 + 2] = short(zf);
-	}
-#endif
 }
 
-void meshopt_decodeFilterQuat12(void* buffer, size_t vertex_count, size_t vertex_size)
+static void decodeFilterQuatSimd(short* data, size_t count)
 {
-	assert(vertex_count % 4 == 0);
-	assert(vertex_size == 8);
-	(void)vertex_size;
-
 	const float scale = 1.f / (2047.f * sqrtf(2.f));
 
-	short* data = static_cast<short*>(buffer);
-
-#ifdef SIMD_WASM
-	for (size_t i = 0; i < vertex_count; i += 4)
+	for (size_t i = 0; i < count; i += 4)
 	{
 		v128_t q4_0 = wasm_v128_load(&data[(i + 0) * 4]);
 		v128_t q4_1 = wasm_v128_load(&data[(i + 2) * 4]);
@@ -263,7 +190,47 @@ void meshopt_decodeFilterQuat12(void* buffer, size_t vertex_count, size_t vertex
 		out[2] = __builtin_rotateleft64(wasm_i64x2_extract_lane(res_1, 0), wasm_i32x4_extract_lane(cm, 2));
 		out[3] = __builtin_rotateleft64(wasm_i64x2_extract_lane(res_1, 1), wasm_i32x4_extract_lane(cm, 3));
 	}
-#else
+}
+#endif
+
+#if !defined(SIMD_WASM)
+template <typename T>
+static void decodeFilterOct(T* data, size_t count)
+{
+	const float max = float((1 << (sizeof(T) * 8 - 1)) - 1);
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		// convert x and y to floats and reconstruct z; this assumes zf encodes 1.f at the same bit count
+		float x = float(data[i * 4 + 0]);
+		float y = float(data[i * 4 + 1]);
+		float z = float(data[i * 4 + 2]) - fabsf(x) - fabsf(y);
+
+		// fixup octahedral coordinates for z<0
+		float t = (z >= 0.f) ? 0.f : z;
+
+		x += (x >= 0.f) ? t : -t;
+		y += (y >= 0.f) ? t : -t;
+
+		// compute normal length & scale
+		float l = sqrtf(x * x + y * y + z * z);
+		float s = max / l;
+
+		// rounded signed float->int
+		int xf = int(x * s + (x >= 0.f ? 0.5f : -0.5f));
+		int yf = int(y * s + (y >= 0.f ? 0.5f : -0.5f));
+		int zf = int(z * s + (z >= 0.f ? 0.5f : -0.5f));
+
+		data[i * 4 + 0] = T(xf);
+		data[i * 4 + 1] = T(yf);
+		data[i * 4 + 2] = T(zf);
+	}
+}
+
+static void decodeFilterQuat(short* data, size_t count)
+{
+	const float scale = 1.f / (2047.f * sqrtf(2.f));
+
 	static const int order[4][4] = {
 	    {1, 2, 3, 0},
 	    {2, 3, 0, 1},
@@ -271,7 +238,7 @@ void meshopt_decodeFilterQuat12(void* buffer, size_t vertex_count, size_t vertex
 	    {0, 1, 2, 3},
 	};
 
-	for (size_t i = 0; i < vertex_count; ++i)
+	for (size_t i = 0; i < count; ++i)
 	{
 		// convert x/y/z to [-1..1] (scaled...)
 		float x = float(data[i * 4 + 0]) * scale;
@@ -296,6 +263,43 @@ void meshopt_decodeFilterQuat12(void* buffer, size_t vertex_count, size_t vertex
 		data[i * 4 + order[qc][2]] = short(zf);
 		data[i * 4 + order[qc][3]] = short(wf);
 	}
+}
+#endif
+
+}
+
+void meshopt_decodeFilterOct(void* buffer, size_t vertex_count, size_t vertex_size)
+{
+	using namespace meshopt;
+
+	assert(vertex_count % 4 == 0);
+	assert(vertex_size == 4 || vertex_size == 8);
+
+#if defined(SIMD_WASM)
+	if (vertex_size == 4)
+		decodeFilterOctSimd(static_cast<signed char*>(buffer), vertex_count);
+	else
+		decodeFilterOctSimd(static_cast<short*>(buffer), vertex_count);
+#else
+	if (vertex_size == 4)
+		decodeFilterOct(static_cast<signed char*>(buffer), vertex_count);
+	else
+		decodeFilterOct(static_cast<short*>(buffer), vertex_count);
+#endif
+}
+
+void meshopt_decodeFilterQuat(void* buffer, size_t vertex_count, size_t vertex_size)
+{
+	using namespace meshopt;
+
+	assert(vertex_count % 4 == 0);
+	assert(vertex_size == 8);
+	(void)vertex_size;
+
+#if defined(SIMD_WASM)
+	decodeFilterQuatSimd(static_cast<short*>(buffer), vertex_count);
+#else
+	decodeFilterQuat(static_cast<short*>(buffer), vertex_count);
 #endif
 }
 
