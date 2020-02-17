@@ -350,6 +350,69 @@ static void decodeVertexLarge()
 	assert(memcmp(decoded, data, sizeof(data)) == 0);
 }
 
+static void decodeFilterOct8()
+{
+	unsigned char data[4 * 4] = {
+	    0, 1, 0, 0,
+	    0, 187, 0, 1,
+	    255, 1, 0, 0,
+	    14, 130, 0, 1, // clang-format :-/
+	};
+
+	meshopt_decodeFilterOct8(data, 4, 4);
+
+	const unsigned char expected[4 * 4] = {
+	    0, 1, 127, 0,
+	    0, 159, 82, 1,
+	    255, 1, 127, 0,
+	    1, 130, 241, 1, // clang-format :-/
+	};
+
+	assert(memcmp(data, expected, sizeof(data)) == 0);
+}
+
+static void decodeFilterOct12()
+{
+	unsigned short data[4 * 4] = {
+	    0, 1, 0, 0,
+	    0, 1870, 0, 1,
+	    2017, 1, 0, 0,
+	    14, 1300, 0, 1, // clang-format :-/
+	};
+
+	meshopt_decodeFilterOct12(data, 4, 8);
+
+	const unsigned short expected[4 * 4] = {
+	    0, 16, 32767, 0,
+	    0, 32621, 3088, 1,
+	    32764, 16, 471, 0,
+	    307, 28541, 16093, 1, // clang-format :-/
+	};
+
+	assert(memcmp(data, expected, sizeof(data)) == 0);
+}
+
+static void decodeFilterQuat12()
+{
+	unsigned short data[4 * 4] = {
+	    0, 1, 0, 0,
+	    0, 1870, 0, 1,
+	    2017, 1, 0, 2,
+	    14, 1300, 0, 3, // clang-format :-/
+	};
+
+	meshopt_decodeFilterQuat12(data, 4, 8);
+
+	const unsigned short expected[4 * 4] = {
+	    32767, 0, 11, 0,
+	    0, 25013, 0, 21166,
+	    11, 0, 23504, 22830,
+	    158, 14715, 0, 29277, // clang-format :-/
+	};
+
+	assert(memcmp(data, expected, sizeof(data)) == 0);
+}
+
 static void clusterBoundsDegenerate()
 {
 	const float vbd[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -499,6 +562,10 @@ static void runTestsOnce()
 	decodeVertexBitGroups();
 	decodeVertexBitGroupSentinels();
 	decodeVertexLarge();
+
+	decodeFilterOct8();
+	decodeFilterOct12();
+	decodeFilterQuat12();
 
 	clusterBoundsDegenerate();
 
