@@ -616,7 +616,7 @@ void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std:
 			continue;
 
 		scratch.clear();
-		StreamFormat format = writeVertexStream(scratch, stream, qp, qt, settings, mesh.targets > 0);
+		StreamFormat format = writeVertexStream(scratch, stream, qp, qt, settings);
 
 		size_t view = getBufferView(views, BufferView::Kind_Vertex, format.filter, stream.type, format.stride, settings.compress);
 		size_t offset = views[view].data.size();

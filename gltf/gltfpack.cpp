@@ -763,10 +763,6 @@ int main(int argc, char** argv)
 		{
 			settings.nrm_bits = atoi(argv[++i]);
 		}
-		else if (strcmp(arg, "-vu") == 0)
-		{
-			settings.nrm_unnormalized = true;
-		}
 		else if (strcmp(arg, "-af") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.anim_freq = atoi(argv[++i]);
