@@ -36,10 +36,13 @@ void meshopt_decodeFilterOct8(void* buffer, size_t vertex_count, size_t vertex_s
 		v128_t xf = wasm_i32x4_shr(wasm_i32x4_shl(n4, 24), 24);
 		v128_t yf = wasm_i32x4_shr(wasm_i32x4_shl(n4, 16), 24);
 
-		// convert x and y to [-1..1] and reconstruct z
-		v128_t x = wasm_f32x4_mul(wasm_f32x4_convert_i32x4(xf), wasm_f32x4_splat(1.f / 127.f));
-		v128_t y = wasm_f32x4_mul(wasm_f32x4_convert_i32x4(yf), wasm_f32x4_splat(1.f / 127.f));
-		v128_t z = wasm_f32x4_sub(wasm_f32x4_splat(1.f), wasm_f32x4_add(wasm_f32x4_abs(x), wasm_f32x4_abs(y)));
+		// unpack z; note that z is unsigned so we technically don't need to sign extend it
+		v128_t zf = wasm_i32x4_shr(wasm_i32x4_shl(n4, 8), 24);
+
+		// convert x and y to floats and reconstruct z; this assumes zf encodes 1.f at the same bit count
+		v128_t x = wasm_f32x4_convert_i32x4(xf);
+		v128_t y = wasm_f32x4_convert_i32x4(yf);
+		v128_t z = wasm_f32x4_sub(wasm_f32x4_convert_i32x4(zf), wasm_f32x4_add(wasm_f32x4_abs(x), wasm_f32x4_abs(y)));
 
 		// fixup octahedral coordinates for z<0
 		v128_t t = wasm_v128_and(z, wasm_f32x4_lt(z, wasm_f32x4_splat(0.f)));
@@ -69,14 +72,12 @@ void meshopt_decodeFilterOct8(void* buffer, size_t vertex_count, size_t vertex_s
 		wasm_v128_store(&data[i * 4], res);
 	}
 #else
-	const float scale = 1.f / 127.f;
-
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		// convert x and y to [-1..1] and reconstruct z
-		float x = float(data[i * 4 + 0]) * scale;
-		float y = float(data[i * 4 + 1]) * scale;
-		float z = 1.f - fabsf(x) - fabsf(y);
+		// convert x and y to floats and reconstruct z; this assumes zf encodes 1.f at the same bit count
+		float x = float(data[i * 4 + 0]);
+		float y = float(data[i * 4 + 1]);
+		float z = float(data[i * 4 + 2]) - fabsf(x) - fabsf(y);
 
 		// fixup octahedral coordinates for z<0
 		float t = (z >= 0.f) ? 0.f : z;
@@ -110,6 +111,7 @@ void meshopt_decodeFilterOct12(void* buffer, size_t vertex_count, size_t vertex_
 
 #ifdef SIMD_WASM
 	const v128_t sign = wasm_f32x4_splat(-0.f);
+	volatile v128_t zmask = wasm_i32x4_splat(0x7fff); // volatile works around LLVM shuffle "optimizations"
 
 	for (size_t i = 0; i < vertex_count; i += 4)
 	{
@@ -123,10 +125,14 @@ void meshopt_decodeFilterOct12(void* buffer, size_t vertex_count, size_t vertex_
 		v128_t xf = wasm_i32x4_shr(wasm_i32x4_shl(n4, 16), 16);
 		v128_t yf = wasm_i32x4_shr(n4, 16);
 
-		// convert x and y to [-1..1] and reconstruct z
-		v128_t x = wasm_f32x4_mul(wasm_f32x4_convert_i32x4(xf), wasm_f32x4_splat(1.f / 2047.f));
-		v128_t y = wasm_f32x4_mul(wasm_f32x4_convert_i32x4(yf), wasm_f32x4_splat(1.f / 2047.f));
-		v128_t z = wasm_f32x4_sub(wasm_f32x4_splat(1.f), wasm_f32x4_add(wasm_f32x4_abs(x), wasm_f32x4_abs(y)));
+		// unpack z; note that z is unsigned so we don't need to sign extend it
+		v128_t z4 = wasmx_shuffle_v32x4(n4_0, n4_1, 1, 3, 1, 3);
+		v128_t zf = wasm_v128_and(z4, zmask);
+
+		// convert x and y to floats and reconstruct z; this assumes zf encodes 1.f at the same bit count
+		v128_t x = wasm_f32x4_convert_i32x4(xf);
+		v128_t y = wasm_f32x4_convert_i32x4(yf);
+		v128_t z = wasm_f32x4_sub(wasm_f32x4_convert_i32x4(zf), wasm_f32x4_add(wasm_f32x4_abs(x), wasm_f32x4_abs(y)));
 
 		// fixup octahedral coordinates for z<0
 		v128_t t = wasm_v128_and(z, wasm_f32x4_lt(z, wasm_f32x4_splat(0.f)));
@@ -163,14 +169,12 @@ void meshopt_decodeFilterOct12(void* buffer, size_t vertex_count, size_t vertex_
 		wasm_v128_store(&data[(i + 2) * 4], res_1);
 	}
 #else
-	const float scale = 1.f / 2047.f;
-
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		// convert x and y to [-1..1] and reconstruct z
-		float x = float(data[i * 4 + 0]) * scale;
-		float y = float(data[i * 4 + 1]) * scale;
-		float z = 1.f - fabsf(x) - fabsf(y);
+		// convert x and y to floats and reconstruct z; this assumes zf encodes 1.f at the same bit count
+		float x = float(data[i * 4 + 0]);
+		float y = float(data[i * 4 + 1]);
+		float z = float(data[i * 4 + 2]) - fabsf(x) - fabsf(y);
 
 		// fixup octahedral coordinates for z<0
 		float t = z >= 0.f ? 0.f : z;
