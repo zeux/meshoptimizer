@@ -3,7 +3,7 @@
 
 #include <math.h>
 
-void meshopt_decodeFilterOctS8(void* buffer, size_t vertex_count, size_t vertex_size)
+void meshopt_decodeFilterOct8(void* buffer, size_t vertex_count, size_t vertex_size)
 {
 	assert(vertex_count % 4 == 0);
 	assert(vertex_size == 4);
@@ -22,7 +22,7 @@ void meshopt_decodeFilterOctS8(void* buffer, size_t vertex_count, size_t vertex_
 		float y = float(data[i * 4 + 1]) * scale;
 		float z = 1.f - fabsf(x) - fabsf(y);
 
-		float t = z >= 0.f ? 0.f : z;
+		float t = (z >= 0.f) ? 0.f : z;
 
 		x += (x >= 0.f) ? t : -t;
 		y += (y >= 0.f) ? t : -t;
@@ -40,7 +40,7 @@ void meshopt_decodeFilterOctS8(void* buffer, size_t vertex_count, size_t vertex_
 	}
 }
 
-void meshopt_decodeFilterOctS12(void* buffer, size_t vertex_count, size_t vertex_size)
+void meshopt_decodeFilterOct12(void* buffer, size_t vertex_count, size_t vertex_size)
 {
 	assert(vertex_count % 4 == 0);
 	assert(vertex_size == 8);
@@ -77,7 +77,7 @@ void meshopt_decodeFilterOctS12(void* buffer, size_t vertex_count, size_t vertex
 	}
 }
 
-void meshopt_decodeFilterQuatR12(void* buffer, size_t vertex_count, size_t vertex_size)
+void meshopt_decodeFilterQuat12(void* buffer, size_t vertex_count, size_t vertex_size)
 {
 	assert(vertex_count % 4 == 0);
 	assert(vertex_size == 8);

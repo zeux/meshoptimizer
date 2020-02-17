@@ -320,7 +320,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	else if (stream.type == cgltf_attribute_type_normal)
 	{
 		bool oct = settings.compressmore && stream.target == 0;
-		StreamFormat::Filter filter = oct ? (settings.nrm_bits > 10 ? StreamFormat::Filter_OctS12 : StreamFormat::Filter_OctS8) : StreamFormat::Filter_None;
+		StreamFormat::Filter filter = oct ? (settings.nrm_bits > 10 ? StreamFormat::Filter_Oct12 : StreamFormat::Filter_Oct8) : StreamFormat::Filter_None;
 
 		bool unnormalized = settings.nrm_unnormalized && !has_targets;
 		int bits = oct ? (settings.nrm_bits > 10 ? 12 : 8) : (unnormalized ? settings.nrm_bits : (settings.nrm_bits > 8 ? 16 : 8));
@@ -398,7 +398,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	else if (stream.type == cgltf_attribute_type_tangent)
 	{
 		bool oct = settings.compressmore && stream.target == 0;
-		StreamFormat::Filter filter = oct ? (settings.nrm_bits > 10 ? StreamFormat::Filter_OctS12 : StreamFormat::Filter_OctS8) : StreamFormat::Filter_None;
+		StreamFormat::Filter filter = oct ? (settings.nrm_bits > 10 ? StreamFormat::Filter_Oct12 : StreamFormat::Filter_Oct8) : StreamFormat::Filter_None;
 
 		bool unnormalized = settings.nrm_unnormalized && !has_targets;
 		int bits = unnormalized ? settings.nrm_bits : (settings.nrm_bits > 8 ? 16 : 8);
@@ -618,7 +618,7 @@ StreamFormat writeTimeStream(std::string& bin, const std::vector<float>& data)
 	return format;
 }
 
-static void encodeQuatR(int16_t v[4], const Attr& a, int bits)
+static void encodeQuat(int16_t v[4], const Attr& a, int bits)
 {
 	const float scaler = sqrtf(2.f);
 
@@ -642,7 +642,7 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 {
 	if (type == cgltf_animation_path_type_rotation)
 	{
-		StreamFormat::Filter filter = settings.compressmore ? StreamFormat::Filter_QuatR12 : StreamFormat::Filter_None;
+		StreamFormat::Filter filter = settings.compressmore ? StreamFormat::Filter_Quat12 : StreamFormat::Filter_None;
 
 		for (size_t i = 0; i < data.size(); ++i)
 		{
@@ -650,9 +650,9 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 
 			int16_t v[4];
 
-			if (filter == StreamFormat::Filter_QuatR12)
+			if (filter == StreamFormat::Filter_Quat12)
 			{
-				encodeQuatR(v, a, 12);
+				encodeQuat(v, a, 12);
 			}
 			else
 			{

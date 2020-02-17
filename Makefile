@@ -26,7 +26,7 @@ LDFLAGS=
 WASM_SOURCES=src/vertexcodec.cpp src/indexcodec.cpp src/vertexfilter.cpp
 WASM_EXPORTS="__start","_sbrk"
 WASM_EXPORTS+=,"_meshopt_decodeVertexBuffer","_meshopt_decodeIndexBuffer"
-WASM_EXPORTS+=,"_meshopt_decodeFilterOctS8","_meshopt_decodeFilterOctS12","_meshopt_decodeFilterQuatR12"
+WASM_EXPORTS+=,"_meshopt_decodeFilterOct8","_meshopt_decodeFilterOct12","_meshopt_decodeFilterQuat12"
 WASM_FLAGS=-O3 -DNDEBUG -s EXPORTED_FUNCTIONS='[$(WASM_EXPORTS)]' -s ALLOW_MEMORY_GROWTH=1 -s TOTAL_STACK=24576 -s TOTAL_MEMORY=65536
 
 ifeq ($(config),iphone)
