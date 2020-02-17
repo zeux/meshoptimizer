@@ -194,16 +194,6 @@ void meshopt_decodeFilterOct12(void* buffer, size_t vertex_count, size_t vertex_
 #endif
 }
 
-#ifdef SIMD_WASM
-static v128_t rotate64(v128_t v, int c0, int c1)
-{
-	uint64_t v0 = __builtin_rotateleft64(wasm_i64x2_extract_lane(v, 0), c0);
-	uint64_t v1 = __builtin_rotateleft64(wasm_i64x2_extract_lane(v, 1), c1);
-
-	return wasm_i64x2_make(v0, v1);
-}
-#endif
-
 void meshopt_decodeFilterQuat12(void* buffer, size_t vertex_count, size_t vertex_size)
 {
 	assert(vertex_count % 4 == 0);
@@ -262,11 +252,12 @@ void meshopt_decodeFilterQuat12(void* buffer, size_t vertex_count, size_t vertex
 		v128_t cm = wasm_i32x4_shl(wasm_i32x4_shr(q4_zc, 16), 4);
 
 		// rotate and store
-		res_0 = rotate64(res_0, wasm_i32x4_extract_lane(cm, 0), wasm_i32x4_extract_lane(cm, 1));
-		res_1 = rotate64(res_1, wasm_i32x4_extract_lane(cm, 2), wasm_i32x4_extract_lane(cm, 3));
+		uint64_t* out = (uint64_t*)&data[i * 4];
 
-		wasm_v128_store(&data[(i + 0) * 4], res_0);
-		wasm_v128_store(&data[(i + 2) * 4], res_1);
+		out[0] = __builtin_rotateleft64(wasm_i64x2_extract_lane(res_0, 0), wasm_i32x4_extract_lane(cm, 0));
+		out[1] = __builtin_rotateleft64(wasm_i64x2_extract_lane(res_0, 1), wasm_i32x4_extract_lane(cm, 1));
+		out[2] = __builtin_rotateleft64(wasm_i64x2_extract_lane(res_1, 0), wasm_i32x4_extract_lane(cm, 2));
+		out[3] = __builtin_rotateleft64(wasm_i64x2_extract_lane(res_1, 1), wasm_i32x4_extract_lane(cm, 3));
 	}
 #else
 	static const int order[4][4] = {
