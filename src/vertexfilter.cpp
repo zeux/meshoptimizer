@@ -259,7 +259,7 @@ void meshopt_decodeFilterQuat12(void* buffer, size_t vertex_count, size_t vertex
 		v128_t res_1 = wasmx_unpackhi_v16x8(wyr, xzr);
 
 		// compute component index shifted left by 4 (and moved into i32x4 slot)
-		v128_t cm = wasm_i32x4_shr(q4_zc, 16 - 4);
+		v128_t cm = wasm_i32x4_shl(wasm_i32x4_shr(q4_zc, 16), 4);
 
 		// rotate and store
 		res_0 = rotate64(res_0, wasm_i32x4_extract_lane(cm, 0), wasm_i32x4_extract_lane(cm, 1));
