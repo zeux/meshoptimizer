@@ -119,7 +119,7 @@ void meshopt_decodeFilterOct12(void* buffer, size_t vertex_count, size_t vertex_
 		// gather both x/y 16-bit pairs in each 32-bit lane
 		v128_t n4 = wasmx_shuffle_v32x4(n4_0, n4_1, 0, 2, 0, 2);
 
-		// sign-extends each of x,y in [x y ? ?] with arithmetic shifts
+		// sign-extends each of x,y in [x y] with arithmetic shifts
 		v128_t xf = wasm_i32x4_shr(wasm_i32x4_shl(n4, 16), 16);
 		v128_t yf = wasm_i32x4_shr(n4, 16);
 
@@ -194,22 +194,87 @@ void meshopt_decodeFilterOct12(void* buffer, size_t vertex_count, size_t vertex_
 #endif
 }
 
+#ifdef SIMD_WASM
+static v128_t rotate64(v128_t v, int c0, int c1)
+{
+	uint64_t v0 = __builtin_rotateleft64(wasm_i64x2_extract_lane(v, 0), c0);
+	uint64_t v1 = __builtin_rotateleft64(wasm_i64x2_extract_lane(v, 1), c1);
+
+	return wasm_i64x2_make(v0, v1);
+}
+#endif
+
 void meshopt_decodeFilterQuat12(void* buffer, size_t vertex_count, size_t vertex_size)
 {
 	assert(vertex_count % 4 == 0);
 	assert(vertex_size == 8);
 	(void)vertex_size;
 
+	const float scale = 1.f / (2047.f * sqrtf(2.f));
+
+	short* data = static_cast<short*>(buffer);
+
+#ifdef SIMD_WASM
+	for (size_t i = 0; i < vertex_count; i += 4)
+	{
+		v128_t q4_0 = wasm_v128_load(&data[(i + 0) * 4]);
+		v128_t q4_1 = wasm_v128_load(&data[(i + 2) * 4]);
+
+		// gather both x/y 16-bit pairs in each 32-bit lane
+		v128_t q4_xy = wasmx_shuffle_v32x4(q4_0, q4_1, 0, 2, 0, 2);
+		v128_t q4_zc = wasmx_shuffle_v32x4(q4_0, q4_1, 1, 3, 1, 3);
+
+		// sign-extends each of x,y in [x y] with arithmetic shifts
+		v128_t xf = wasm_i32x4_shr(wasm_i32x4_shl(q4_xy, 16), 16);
+		v128_t yf = wasm_i32x4_shr(q4_xy, 16);
+		v128_t zf = wasm_i32x4_shr(wasm_i32x4_shl(q4_zc, 16), 16);
+
+		// convert x/y/z to [-1..1] (scaled...)
+		v128_t x = wasm_f32x4_mul(wasm_f32x4_convert_i32x4(xf), wasm_f32x4_splat(scale));
+		v128_t y = wasm_f32x4_mul(wasm_f32x4_convert_i32x4(yf), wasm_f32x4_splat(scale));
+		v128_t z = wasm_f32x4_mul(wasm_f32x4_convert_i32x4(zf), wasm_f32x4_splat(scale));
+
+		// reconstruct w as a square root; we clamp to 0.f to avoid NaN due to precision errors
+		v128_t ww = wasm_f32x4_sub(wasm_f32x4_splat(1.f), wasm_f32x4_add(wasm_f32x4_mul(x, x), wasm_f32x4_add(wasm_f32x4_mul(y, y), wasm_f32x4_mul(z, z))));
+		v128_t w = wasm_f32x4_sqrt(wasm_v128_and(ww, wasm_f32x4_ge(ww, wasm_f32x4_splat(0.f))));
+
+		v128_t s = wasm_f32x4_splat(32767.f);
+
+		// fast rounded signed float->int: addition triggers renormalization after which mantissa stores the integer value
+		const v128_t fsnap = wasm_f32x4_splat(3 << 22);
+		const v128_t fmask = wasm_i32x4_splat(0x7fffff);
+		const v128_t fbase = wasm_i32x4_splat(0x400000);
+
+		v128_t xr = wasm_i32x4_sub(wasm_v128_and(wasm_f32x4_add(wasm_f32x4_mul(x, s), fsnap), fmask), fbase);
+		v128_t yr = wasm_i32x4_sub(wasm_v128_and(wasm_f32x4_add(wasm_f32x4_mul(y, s), fsnap), fmask), fbase);
+		v128_t zr = wasm_i32x4_sub(wasm_v128_and(wasm_f32x4_add(wasm_f32x4_mul(z, s), fsnap), fmask), fbase);
+		v128_t wr = wasm_i32x4_sub(wasm_v128_and(wasm_f32x4_add(wasm_f32x4_mul(w, s), fsnap), fmask), fbase);
+
+		// mix x/z and w/y to make 16-bit unpack easier
+		v128_t xzr = wasm_v128_or(wasm_v128_and(xr, wasm_i32x4_splat(0xffff)), wasm_i32x4_shl(zr, 16));
+		v128_t wyr = wasm_v128_or(wasm_v128_and(wr, wasm_i32x4_splat(0xffff)), wasm_i32x4_shl(yr, 16));
+
+		// pack x/y/z/w using 16-bit unpacks; we pack wxyz by default (for qc=0)
+		v128_t res_0 = wasmx_unpacklo_v16x8(wyr, xzr);
+		v128_t res_1 = wasmx_unpackhi_v16x8(wyr, xzr);
+
+		// compute component index shifted left by 4 (and moved into i32x4 slot)
+		v128_t cm = wasm_i32x4_shr(q4_zc, 16 - 4);
+
+		// rotate and store
+		res_0 = rotate64(res_0, wasm_i32x4_extract_lane(cm, 0), wasm_i32x4_extract_lane(cm, 1));
+		res_1 = rotate64(res_1, wasm_i32x4_extract_lane(cm, 2), wasm_i32x4_extract_lane(cm, 3));
+
+		wasm_v128_store(&data[(i + 0) * 4], res_0);
+		wasm_v128_store(&data[(i + 2) * 4], res_1);
+	}
+#else
 	static const int order[4][4] = {
 	    {1, 2, 3, 0},
 	    {2, 3, 0, 1},
 	    {3, 0, 1, 2},
 	    {0, 1, 2, 3},
 	};
-
-	const float scale = 1.f / (2047.f * sqrtf(2.f));
-
-	short* data = static_cast<short*>(buffer);
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
@@ -236,6 +301,7 @@ void meshopt_decodeFilterQuat12(void* buffer, size_t vertex_count, size_t vertex
 		data[i * 4 + order[qc][2]] = short(zf);
 		data[i * 4 + order[qc][3]] = short(wf);
 	}
+#endif
 }
 
 #undef SIMD_WASM
