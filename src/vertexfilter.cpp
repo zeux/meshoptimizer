@@ -9,10 +9,7 @@ void meshopt_decodeFilterOct8(void* buffer, size_t vertex_count, size_t vertex_s
 	assert(vertex_size == 4);
 	(void)vertex_size;
 
-#ifdef __EMSCRIPTEN__
-	volatile // workaround to prevent autovectorization
-#endif
-	float scale = 1.f / 127.f;
+	const float scale = 1.f / 127.f;
 
 	signed char* data = static_cast<signed char*>(buffer);
 
@@ -46,10 +43,7 @@ void meshopt_decodeFilterOct12(void* buffer, size_t vertex_count, size_t vertex_
 	assert(vertex_size == 8);
 	(void)vertex_size;
 
-#ifdef __EMSCRIPTEN__
-	volatile // workaround to prevent autovectorization
-#endif
-	float scale = 1.f / 2047.f;
+	const float scale = 1.f / 2047.f;
 
 	short* data = static_cast<short*>(buffer);
 
@@ -63,7 +57,7 @@ void meshopt_decodeFilterOct12(void* buffer, size_t vertex_count, size_t vertex_
 
 		x += (x >= 0.f) ? t : -t;
 		y += (y >= 0.f) ? t : -t;
-	
+
 		float l = sqrtf(x * x + y * y + z * z);
 		float s = 32767.f / l;
 
@@ -83,18 +77,14 @@ void meshopt_decodeFilterQuat12(void* buffer, size_t vertex_count, size_t vertex
 	assert(vertex_size == 8);
 	(void)vertex_size;
 
-	static const int order[4][4] =
-	{
-		{ 1, 2, 3, 0 },
-		{ 2, 3, 0, 1 },
-		{ 3, 0, 1, 2 },
-		{ 0, 1, 2, 3 },
+	static const int order[4][4] = {
+	    {1, 2, 3, 0},
+	    {2, 3, 0, 1},
+	    {3, 0, 1, 2},
+	    {0, 1, 2, 3},
 	};
 
-#ifdef __EMSCRIPTEN__
-	volatile // workaround to prevent autovectorization
-#endif
-	float scale = 1.f / (2047.f * sqrtf(2.f));
+	const float scale = 1.f / (2047.f * sqrtf(2.f));
 
 	short* data = static_cast<short*>(buffer);
 

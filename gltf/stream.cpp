@@ -343,17 +343,17 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 					int fu, fv;
 					encodeOct(fu, fv, nx, ny, nz, bits);
 
-				    v[0] = int16_t(fu);
-				    v[1] = int16_t(fv);
-				    v[2] = 0;
-				    v[3] = 0;
+					v[0] = int16_t(fu);
+					v[1] = int16_t(fv);
+					v[2] = 0;
+					v[3] = 0;
 				}
 				else
 				{
-				    v[0] = int16_t(meshopt_quantizeSnorm(nx, bits));
-				    v[1] = int16_t(meshopt_quantizeSnorm(ny, bits));
-				    v[2] = int16_t(meshopt_quantizeSnorm(nz, bits));
-				    v[3] = 0;
+					v[0] = int16_t(meshopt_quantizeSnorm(nx, bits));
+					v[1] = int16_t(meshopt_quantizeSnorm(ny, bits));
+					v[2] = int16_t(meshopt_quantizeSnorm(nz, bits));
+					v[3] = 0;
 				}
 
 				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
@@ -367,17 +367,17 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 					int fu, fv;
 					encodeOct(fu, fv, nx, ny, nz, bits);
 
-				    v[0] = int8_t(fu);
-				    v[1] = int8_t(fv);
-				    v[2] = 0;
-				    v[3] = 0;
+					v[0] = int8_t(fu);
+					v[1] = int8_t(fv);
+					v[2] = 0;
+					v[3] = 0;
 				}
 				else
 				{
-				    v[0] = int8_t(meshopt_quantizeSnorm(nx, bits));
-				    v[1] = int8_t(meshopt_quantizeSnorm(ny, bits));
-				    v[2] = int8_t(meshopt_quantizeSnorm(nz, bits));
-				    v[3] = 0;
+					v[0] = int8_t(meshopt_quantizeSnorm(nx, bits));
+					v[1] = int8_t(meshopt_quantizeSnorm(ny, bits));
+					v[2] = int8_t(meshopt_quantizeSnorm(nz, bits));
+					v[3] = 0;
 				}
 
 				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
@@ -421,17 +421,17 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 					int fu, fv;
 					encodeOct(fu, fv, nx, ny, nz, bits);
 
-				    v[0] = int16_t(fu);
-				    v[1] = int16_t(fv);
-				    v[2] = 0;
-				    v[3] = int16_t(meshopt_quantizeSnorm(nw, bits));
+					v[0] = int16_t(fu);
+					v[1] = int16_t(fv);
+					v[2] = 0;
+					v[3] = int16_t(meshopt_quantizeSnorm(nw, bits));
 				}
 				else
 				{
-				    v[0] = int16_t(meshopt_quantizeSnorm(nx, bits));
-				    v[1] = int16_t(meshopt_quantizeSnorm(ny, bits));
-				    v[2] = int16_t(meshopt_quantizeSnorm(nz, bits));
-				    v[3] = int16_t(meshopt_quantizeSnorm(nw, bits));
+					v[0] = int16_t(meshopt_quantizeSnorm(nx, bits));
+					v[1] = int16_t(meshopt_quantizeSnorm(ny, bits));
+					v[2] = int16_t(meshopt_quantizeSnorm(nz, bits));
+					v[3] = int16_t(meshopt_quantizeSnorm(nw, bits));
 				}
 
 				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
@@ -445,17 +445,17 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 					int fu, fv;
 					encodeOct(fu, fv, nx, ny, nz, bits);
 
-				    v[0] = int8_t(fu);
-				    v[1] = int8_t(fv);
-				    v[2] = 0;
-				    v[3] = int8_t(meshopt_quantizeSnorm(nw, bits));
+					v[0] = int8_t(fu);
+					v[1] = int8_t(fv);
+					v[2] = 0;
+					v[3] = int8_t(meshopt_quantizeSnorm(nw, bits));
 				}
 				else
 				{
-				    v[0] = int8_t(meshopt_quantizeSnorm(nx, bits));
-				    v[1] = int8_t(meshopt_quantizeSnorm(ny, bits));
-				    v[2] = int8_t(meshopt_quantizeSnorm(nz, bits));
-				    v[3] = int8_t(meshopt_quantizeSnorm(nw, bits));
+					v[0] = int8_t(meshopt_quantizeSnorm(nx, bits));
+					v[1] = int8_t(meshopt_quantizeSnorm(ny, bits));
+					v[2] = int8_t(meshopt_quantizeSnorm(nz, bits));
+					v[3] = int8_t(meshopt_quantizeSnorm(nw, bits));
 				}
 
 				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
@@ -656,11 +656,10 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 			}
 			else
 			{
-			    v[0] = int16_t(meshopt_quantizeSnorm(a.f[0], 16));
-			    v[1] = int16_t(meshopt_quantizeSnorm(a.f[1], 16));
-			    v[2] = int16_t(meshopt_quantizeSnorm(a.f[2], 16));
-			    v[3] = int16_t(meshopt_quantizeSnorm(a.f[3], 16));
-
+				v[0] = int16_t(meshopt_quantizeSnorm(a.f[0], 16));
+				v[1] = int16_t(meshopt_quantizeSnorm(a.f[1], 16));
+				v[2] = int16_t(meshopt_quantizeSnorm(a.f[2], 16));
+				v[3] = int16_t(meshopt_quantizeSnorm(a.f[3], 16));
 			}
 
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
