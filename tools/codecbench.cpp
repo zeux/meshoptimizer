@@ -7,9 +7,11 @@
 #include <stdio.h>
 
 #ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+
 double timestamp()
 {
-	return double(clock()) / double(CLOCKS_PER_SEC);
+	return emscripten_get_now() * 1e-3;
 }
 #else
 double timestamp()
