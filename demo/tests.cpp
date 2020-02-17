@@ -353,10 +353,10 @@ static void decodeVertexLarge()
 static void decodeFilterOct8()
 {
 	unsigned char data[4 * 4] = {
-	    0, 1, 0, 0,
-	    0, 187, 0, 1,
-	    255, 1, 0, 0,
-	    14, 130, 0, 1, // clang-format :-/
+	    0, 1, 127, 0,
+	    0, 187, 127, 1,
+	    255, 1, 127, 0,
+	    14, 130, 127, 1, // clang-format :-/
 	};
 
 	meshopt_decodeFilterOct8(data, 4, 4);
@@ -374,10 +374,10 @@ static void decodeFilterOct8()
 static void decodeFilterOct12()
 {
 	unsigned short data[4 * 4] = {
-	    0, 1, 0, 0,
-	    0, 1870, 0, 1,
-	    2017, 1, 0, 0,
-	    14, 1300, 0, 1, // clang-format :-/
+	    0, 1, 2047, 0,
+	    0, 1870, 2047, 1,
+	    2017, 1, 2047, 0,
+	    14, 1300, 2047, 1, // clang-format :-/
 	};
 
 	meshopt_decodeFilterOct12(data, 4, 8);

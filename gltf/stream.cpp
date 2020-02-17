@@ -345,7 +345,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 
 					v[0] = int16_t(fu);
 					v[1] = int16_t(fv);
-					v[2] = 0;
+					v[2] = int16_t(meshopt_quantizeSnorm(1.f, bits));
 					v[3] = 0;
 				}
 				else
@@ -369,7 +369,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 
 					v[0] = int8_t(fu);
 					v[1] = int8_t(fv);
-					v[2] = 0;
+					v[2] = int8_t(meshopt_quantizeSnorm(1.f, bits));
 					v[3] = 0;
 				}
 				else
@@ -423,7 +423,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 
 					v[0] = int16_t(fu);
 					v[1] = int16_t(fv);
-					v[2] = 0;
+					v[2] = int16_t(meshopt_quantizeSnorm(1.f, bits));
 					v[3] = int16_t(meshopt_quantizeSnorm(nw, bits));
 				}
 				else
@@ -447,7 +447,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 
 					v[0] = int8_t(fu);
 					v[1] = int8_t(fv);
-					v[2] = 0;
+					v[2] = int8_t(meshopt_quantizeSnorm(1.f, bits));
 					v[3] = int8_t(meshopt_quantizeSnorm(nw, bits));
 				}
 				else
