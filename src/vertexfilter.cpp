@@ -67,18 +67,22 @@ void meshopt_decodeFilterOct8(void* buffer, size_t vertex_count, size_t vertex_s
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
+		// convert x and y to [-1..1] and reconstruct z
 		float x = float(data[i * 4 + 0]) * scale;
 		float y = float(data[i * 4 + 1]) * scale;
 		float z = 1.f - fabsf(x) - fabsf(y);
 
+		// fixup octahedral coordinates for z<0
 		float t = (z >= 0.f) ? 0.f : z;
 
 		x += (x >= 0.f) ? t : -t;
 		y += (y >= 0.f) ? t : -t;
 
+		// compute normal length & scale
 		float l = sqrtf(x * x + y * y + z * z);
 		float s = 127.f / l;
 
+		// rounded signed float->int
 		int xf = int(x * s + (x >= 0.f ? 0.5f : -0.5f));
 		int yf = int(y * s + (y >= 0.f ? 0.5f : -0.5f));
 		int zf = int(z * s + (z >= 0.f ? 0.5f : -0.5f));
@@ -102,18 +106,22 @@ void meshopt_decodeFilterOct12(void* buffer, size_t vertex_count, size_t vertex_
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
+		// convert x and y to [-1..1] and reconstruct z
 		float x = float(data[i * 4 + 0]) * scale;
 		float y = float(data[i * 4 + 1]) * scale;
 		float z = 1.f - fabsf(x) - fabsf(y);
 
+		// fixup octahedral coordinates for z<0
 		float t = z >= 0.f ? 0.f : z;
 
 		x += (x >= 0.f) ? t : -t;
 		y += (y >= 0.f) ? t : -t;
 
+		// compute normal length & scale
 		float l = sqrtf(x * x + y * y + z * z);
 		float s = 32767.f / l;
 
+		// rounded signed float->int
 		int xf = int(x * s + (x >= 0.f ? 0.5f : -0.5f));
 		int yf = int(y * s + (y >= 0.f ? 0.5f : -0.5f));
 		int zf = int(z * s + (z >= 0.f ? 0.5f : -0.5f));
@@ -143,13 +151,16 @@ void meshopt_decodeFilterQuat12(void* buffer, size_t vertex_count, size_t vertex
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
+		// convert x/y/z to [-1..1] (scaled...)
 		float x = float(data[i * 4 + 0]) * scale;
 		float y = float(data[i * 4 + 1]) * scale;
 		float z = float(data[i * 4 + 2]) * scale;
 
+		// reconstruct w as a square root; we clamp to 0.f to avoid NaN due to precision errors
 		float ww = 1.f - x * x - y * y - z * z;
 		float w = sqrtf(ww >= 0.f ? ww : 0.f);
 
+		// rounded signed float->int
 		int xf = int(x * 32767.f + (x >= 0.f ? 0.5f : -0.5f));
 		int yf = int(y * 32767.f + (y >= 0.f ? 0.5f : -0.5f));
 		int zf = int(z * 32767.f + (z >= 0.f ? 0.5f : -0.5f));
@@ -157,6 +168,7 @@ void meshopt_decodeFilterQuat12(void* buffer, size_t vertex_count, size_t vertex
 
 		int qc = data[i * 4 + 3] & 3;
 
+		// output order is dictated by input index
 		data[i * 4 + order[qc][0]] = short(xf);
 		data[i * 4 + order[qc][1]] = short(yf);
 		data[i * 4 + order[qc][2]] = short(zf);
