@@ -232,7 +232,7 @@ void filterEmptyMeshes(std::vector<Mesh>& meshes)
 	meshes.resize(write);
 }
 
-static bool hasColorData(const std::vector<Attr>& data)
+static bool hasColors(const std::vector<Attr>& data)
 {
 	const float threshold = 0.99f;
 
@@ -247,8 +247,37 @@ static bool hasColorData(const std::vector<Attr>& data)
 	return false;
 }
 
+static bool hasDeltas(const std::vector<Attr>& data)
+{
+	const float threshold = 0.01f;
+
+	for (size_t i = 0; i < data.size(); ++i)
+	{
+		const Attr& a = data[i];
+
+		if (fabsf(a.f[0]) > threshold || fabsf(a.f[1]) > threshold || fabsf(a.f[2]) > threshold)
+			return true;
+	}
+
+	return false;
+}
+
 static void filterStreams(Mesh& mesh)
 {
+	bool morph_normal = false;
+	bool morph_tangent = false;
+
+	for (size_t i = 0; i < mesh.streams.size(); ++i)
+	{
+		Stream& stream = mesh.streams[i];
+
+		if (stream.target)
+		{
+			morph_normal = morph_normal || (stream.type == cgltf_attribute_type_normal && hasDeltas(stream.data));
+			morph_tangent = morph_tangent || (stream.type == cgltf_attribute_type_tangent && hasDeltas(stream.data));
+		}
+	}
+
 	size_t write = 0;
 
 	for (size_t i = 0; i < mesh.streams.size(); ++i)
@@ -264,7 +293,13 @@ static void filterStreams(Mesh& mesh)
 		if ((stream.type == cgltf_attribute_type_joints || stream.type == cgltf_attribute_type_weights) && !mesh.skin)
 			continue;
 
-		if (stream.type == cgltf_attribute_type_color && !hasColorData(stream.data))
+		if (stream.type == cgltf_attribute_type_color && !hasColors(stream.data))
+			continue;
+
+		if (stream.target && stream.type == cgltf_attribute_type_normal && !morph_normal)
+			continue;
+
+		if (stream.target && stream.type == cgltf_attribute_type_tangent && !morph_tangent)
 			continue;
 
 		// the following code is roughly equivalent to streams[write] = std::move(stream)
