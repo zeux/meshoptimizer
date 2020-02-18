@@ -38,7 +38,7 @@ uint32_t murmur3(uint32_t h)
 	return h;
 }
 
-void bench(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
+void benchCodecs(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
 	std::vector<Vertex> vb(vertices.size());
 	std::vector<unsigned int> ib(indices.size());
@@ -90,6 +90,40 @@ void bench(const std::vector<Vertex>& vertices, const std::vector<unsigned int>&
 	}
 }
 
+void benchFilters(size_t count)
+{
+	// note: the filters are branchless so we just run them on runs of zeroes
+	size_t count4 = (count + 3) & ~3;
+	std::vector<unsigned char> d4(count4 * 4);
+	std::vector<unsigned char> d8(count4 * 8);
+
+	printf("filters: oct8 data %d bytes, oct12/quat12 data %d bytes\n", int(d4.size()), int(d8.size()));
+
+	for (int attempt = 0; attempt < 10; ++attempt)
+	{
+		double t0 = timestamp();
+
+		meshopt_decodeFilterOct(&d4[0], count4, 4);
+
+		double t1 = timestamp();
+
+		meshopt_decodeFilterOct(&d8[0], count4, 8);
+
+		double t2 = timestamp();
+
+		meshopt_decodeFilterQuat(&d8[0], count4, 8);
+
+		double t3 = timestamp();
+
+		double GB = 1024 * 1024 * 1024;
+
+		printf("filter: oct8 %.2f ms (%.2f GB/sec), oct12 %.2f ms (%.2f GB/sec), quat12 %.2f ms (%.2f GB/sec)\n",
+			(t1 - t0) * 1000, double(d4.size()) / GB / (t1 - t0),
+			(t2 - t1) * 1000, double(d8.size()) / GB / (t2 - t1),
+			(t3 - t2) * 1000, double(d8.size()) / GB / (t3 - t2));
+	}
+}
+
 int main()
 {
 	meshopt_encodeIndexVersion(1);
@@ -135,5 +169,6 @@ int main()
 		}
 	}
 
-	bench(vertices, indices);
+	benchCodecs(vertices, indices);
+	benchFilters(N * N);
 }

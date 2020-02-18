@@ -57,7 +57,7 @@ void finalizeBufferViews(std::string& json, std::vector<BufferView>& views, std:
 		size_t raw_offset = (compression >= 0) ? fallback_offset : bin_offset;
 
 		comma(json);
-		writeBufferView(json, view.kind, count, view.stride, raw_offset, view.data.size(), compression, bin_offset, bin.size() - bin_offset);
+		writeBufferView(json, view.kind, view.filter, count, view.stride, raw_offset, view.data.size(), compression, bin_offset, bin.size() - bin_offset);
 
 		// record written bytes for statistics
 		view.bytes = bin.size() - bin_offset;
@@ -762,10 +762,6 @@ int main(int argc, char** argv)
 		else if (strcmp(arg, "-vn") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.nrm_bits = atoi(argv[++i]);
-		}
-		else if (strcmp(arg, "-vu") == 0)
-		{
-			settings.nrm_unnormalized = true;
 		}
 		else if (strcmp(arg, "-af") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{

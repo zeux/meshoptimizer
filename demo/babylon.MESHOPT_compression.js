@@ -28,16 +28,7 @@ var MESHOPT_compression = /** @class */ (function () {
                 var count = extensionDef.count;
                 var stride = extensionDef.byteStride;
                 var result = new Uint8Array(new ArrayBuffer(count * stride));
-                switch (extensionDef.mode) {
-                    case 0:
-                        decoder.decodeVertexBuffer(result, count, stride, source);
-                        break;
-                    case 1:
-                        decoder.decodeIndexBuffer(result, count, stride, source);
-                        break;
-                    default:
-                        throw new Error("GLTFLoader: Unrecognized meshopt compression mode.");
-                }
+                decoder.decodeGltfBuffer(result, count, stride, source, extensionDef.mode, extensionDef.filter);
                 return Promise.resolve(result);
             });
             return extensionDef._decoded;

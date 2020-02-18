@@ -176,19 +176,6 @@ void getPositionBounds(int min[3], int max[3], const Stream& stream, const Quant
 	}
 }
 
-static void rescaleNormal(float& nx, float& ny, float& nz)
-{
-	// scale the normal to make sure the largest component is +-1.0
-	// this reduces the entropy of the normal by ~1.5 bits without losing precision
-	// it's better to use octahedral encoding but that requires special shader support
-	float nm = std::max(fabsf(nx), std::max(fabsf(ny), fabsf(nz)));
-	float ns = nm == 0.f ? 0.f : 1 / nm;
-
-	nx *= ns;
-	ny *= ns;
-	nz *= ns;
-}
-
 static void renormalizeWeights(uint8_t (&w)[4])
 {
 	int sum = w[0] + w[1] + w[2] + w[3];
@@ -207,7 +194,22 @@ static void renormalizeWeights(uint8_t (&w)[4])
 	w[max] += uint8_t(255 - sum);
 }
 
-StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings, bool has_targets)
+static void encodeOct(int& fu, int& fv, float nx, float ny, float nz, int bits)
+{
+	float nl = fabsf(nx) + fabsf(ny) + fabsf(nz);
+	float ns = nl == 0.f ? 0.f : 1.f / nl;
+
+	nx *= ns;
+	ny *= ns;
+
+	float u = (nz >= 0.f) ? nx : (1 - fabsf(ny)) * (nx >= 0.f ? 1.f : -1.f);
+	float v = (nz >= 0.f) ? ny : (1 - fabsf(nx)) * (ny >= 0.f ? 1.f : -1.f);
+
+	fu = meshopt_quantizeSnorm(u, bits);
+	fv = meshopt_quantizeSnorm(v, bits);
+}
+
+StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings)
 {
 	if (stream.type == cgltf_attribute_type_position)
 	{
@@ -304,8 +306,10 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	}
 	else if (stream.type == cgltf_attribute_type_normal)
 	{
-		bool unnormalized = settings.nrm_unnormalized && !has_targets;
-		int bits = unnormalized ? settings.nrm_bits : (settings.nrm_bits > 8 ? 16 : 8);
+		bool oct = settings.compressmore && stream.target == 0;
+		int bits = settings.nrm_bits;
+
+		StreamFormat::Filter filter = oct ? StreamFormat::Filter_Oct : StreamFormat::Filter_None;
 
 		for (size_t i = 0; i < stream.data.size(); ++i)
 		{
@@ -313,44 +317,73 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 
 			float nx = a.f[0], ny = a.f[1], nz = a.f[2];
 
-			if (unnormalized)
-				rescaleNormal(nx, ny, nz);
-
 			if (bits > 8)
 			{
-				int16_t v[4] = {
-				    int16_t(meshopt_quantizeSnorm(nx, bits)),
-				    int16_t(meshopt_quantizeSnorm(ny, bits)),
-				    int16_t(meshopt_quantizeSnorm(nz, bits)),
-				    0};
+				int16_t v[4];
+
+				if (oct)
+				{
+					int fu, fv;
+					encodeOct(fu, fv, nx, ny, nz, bits);
+
+					v[0] = int16_t(fu);
+					v[1] = int16_t(fv);
+					v[2] = int16_t(meshopt_quantizeSnorm(1.f, bits));
+					v[3] = 0;
+				}
+				else
+				{
+					v[0] = int16_t(meshopt_quantizeSnorm(nx, bits));
+					v[1] = int16_t(meshopt_quantizeSnorm(ny, bits));
+					v[2] = int16_t(meshopt_quantizeSnorm(nz, bits));
+					v[3] = 0;
+				}
+
 				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 			}
 			else
 			{
-				int8_t v[4] = {
-				    int8_t(meshopt_quantizeSnorm(nx, bits)),
-				    int8_t(meshopt_quantizeSnorm(ny, bits)),
-				    int8_t(meshopt_quantizeSnorm(nz, bits)),
-				    0};
+				int8_t v[4];
+
+				if (oct)
+				{
+					int fu, fv;
+					encodeOct(fu, fv, nx, ny, nz, bits);
+
+					v[0] = int8_t(fu);
+					v[1] = int8_t(fv);
+					v[2] = int8_t(meshopt_quantizeSnorm(1.f, bits));
+					v[3] = 0;
+				}
+				else
+				{
+					v[0] = int8_t(meshopt_quantizeSnorm(nx, bits));
+					v[1] = int8_t(meshopt_quantizeSnorm(ny, bits));
+					v[2] = int8_t(meshopt_quantizeSnorm(nz, bits));
+					v[3] = 0;
+				}
+
 				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 			}
 		}
 
 		if (bits > 8)
 		{
-			StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_16, true, 8};
+			StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_16, true, 8, filter};
 			return format;
 		}
 		else
 		{
-			StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_8, true, 4};
+			StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_8, true, 4, filter};
 			return format;
 		}
 	}
 	else if (stream.type == cgltf_attribute_type_tangent)
 	{
-		bool unnormalized = settings.nrm_unnormalized && !has_targets;
-		int bits = unnormalized ? settings.nrm_bits : (settings.nrm_bits > 8 ? 16 : 8);
+		bool oct = settings.compressmore && stream.target == 0;
+		int bits = (settings.nrm_bits > 8) ? 8 : settings.nrm_bits;
+
+		StreamFormat::Filter filter = oct ? StreamFormat::Filter_Oct : StreamFormat::Filter_None;
 
 		for (size_t i = 0; i < stream.data.size(); ++i)
 		{
@@ -358,41 +391,33 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 
 			float nx = a.f[0], ny = a.f[1], nz = a.f[2], nw = a.f[3];
 
-			if (unnormalized)
-				rescaleNormal(nx, ny, nz);
+			int8_t v[4];
 
-			if (bits > 8)
+			if (oct)
 			{
-				int16_t v[4] = {
-				    int16_t(meshopt_quantizeSnorm(nx, bits)),
-				    int16_t(meshopt_quantizeSnorm(ny, bits)),
-				    int16_t(meshopt_quantizeSnorm(nz, bits)),
-				    int16_t(meshopt_quantizeSnorm(nw, 8))};
-				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+				int fu, fv;
+				encodeOct(fu, fv, nx, ny, nz, bits);
+
+				v[0] = int8_t(fu);
+				v[1] = int8_t(fv);
+				v[2] = int8_t(meshopt_quantizeSnorm(1.f, bits));
+				v[3] = int8_t(meshopt_quantizeSnorm(nw, bits));
 			}
 			else
 			{
-				int8_t v[4] = {
-				    int8_t(meshopt_quantizeSnorm(nx, bits)),
-				    int8_t(meshopt_quantizeSnorm(ny, bits)),
-				    int8_t(meshopt_quantizeSnorm(nz, bits)),
-				    int8_t(meshopt_quantizeSnorm(nw, 8))};
-				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+				v[0] = int8_t(meshopt_quantizeSnorm(nx, bits));
+				v[1] = int8_t(meshopt_quantizeSnorm(ny, bits));
+				v[2] = int8_t(meshopt_quantizeSnorm(nz, bits));
+				v[3] = int8_t(meshopt_quantizeSnorm(nw, bits));
 			}
+
+			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
 		cgltf_type type = (stream.target == 0) ? cgltf_type_vec4 : cgltf_type_vec3;
 
-		if (bits > 8)
-		{
-			StreamFormat format = {type, cgltf_component_type_r_16, true, 8};
-			return format;
-		}
-		else
-		{
-			StreamFormat format = {type, cgltf_component_type_r_8, true, 4};
-			return format;
-		}
+		StreamFormat format = {type, cgltf_component_type_r_8, true, 4, filter};
+		return format;
 	}
 	else if (stream.type == cgltf_attribute_type_color)
 	{
@@ -537,24 +562,54 @@ StreamFormat writeTimeStream(std::string& bin, const std::vector<float>& data)
 	return format;
 }
 
-StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data)
+static void encodeQuat(int16_t v[4], const Attr& a, int bits)
+{
+	const float scaler = sqrtf(2.f);
+
+	// establish maximum quaternion component
+	int qc = 0;
+	qc = fabsf(a.f[1]) > fabsf(a.f[qc]) ? 1 : qc;
+	qc = fabsf(a.f[2]) > fabsf(a.f[qc]) ? 2 : qc;
+	qc = fabsf(a.f[3]) > fabsf(a.f[qc]) ? 3 : qc;
+
+	// we use double-cover properties to discard the sign
+	float sign = a.f[qc] < 0.f ? -1.f : 1.f;
+
+	// note: we always encode a cyclical swizzle to be able to recover the order via rotation
+	v[0] = int16_t(meshopt_quantizeSnorm(a.f[(qc + 1) & 3] * scaler * sign, bits));
+	v[1] = int16_t(meshopt_quantizeSnorm(a.f[(qc + 2) & 3] * scaler * sign, bits));
+	v[2] = int16_t(meshopt_quantizeSnorm(a.f[(qc + 3) & 3] * scaler * sign, bits));
+	v[3] = int16_t(qc);
+}
+
+StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data, const Settings& settings)
 {
 	if (type == cgltf_animation_path_type_rotation)
 	{
+		StreamFormat::Filter filter = settings.compressmore ? StreamFormat::Filter_Quat : StreamFormat::Filter_None;
+
 		for (size_t i = 0; i < data.size(); ++i)
 		{
 			const Attr& a = data[i];
 
-			int16_t v[4] = {
-			    int16_t(meshopt_quantizeSnorm(a.f[0], 16)),
-			    int16_t(meshopt_quantizeSnorm(a.f[1], 16)),
-			    int16_t(meshopt_quantizeSnorm(a.f[2], 16)),
-			    int16_t(meshopt_quantizeSnorm(a.f[3], 16)),
-			};
+			int16_t v[4];
+
+			if (filter == StreamFormat::Filter_Quat)
+			{
+				encodeQuat(v, a, 12);
+			}
+			else
+			{
+				v[0] = int16_t(meshopt_quantizeSnorm(a.f[0], 16));
+				v[1] = int16_t(meshopt_quantizeSnorm(a.f[1], 16));
+				v[2] = int16_t(meshopt_quantizeSnorm(a.f[2], 16));
+				v[3] = int16_t(meshopt_quantizeSnorm(a.f[3], 16));
+			}
+
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16, true, 8};
+		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16, true, 8, filter};
 		return format;
 	}
 	else if (type == cgltf_animation_path_type_weights)
@@ -572,7 +627,7 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 	}
 	else if (type == cgltf_animation_path_type_translation || type == cgltf_animation_path_type_scale)
 	{
-		int bits = 15;
+		int bits = settings.compressmore ? 15 : 23;
 
 		for (size_t i = 0; i < data.size(); ++i)
 		{

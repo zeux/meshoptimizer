@@ -79,7 +79,6 @@ struct Settings
 	int pos_bits;
 	int tex_bits;
 	int nrm_bits;
-	bool nrm_unnormalized;
 
 	int anim_freq;
 	bool anim_const;
@@ -118,10 +117,18 @@ struct QuantizationTexture
 
 struct StreamFormat
 {
+	enum Filter
+	{
+		Filter_None = 0,
+		Filter_Oct = 1,
+		Filter_Quat = 2,
+	};
+
 	cgltf_type type;
 	cgltf_component_type component_type;
 	bool normalized;
 	size_t stride;
+	Filter filter;
 };
 
 struct NodeInfo
@@ -170,6 +177,7 @@ struct BufferView
 	};
 
 	Kind kind;
+	StreamFormat::Filter filter;
 	int variant;
 	size_t stride;
 	bool compressed;
@@ -222,15 +230,15 @@ QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes
 void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTexture>& result, const std::vector<Mesh>& meshes, const Settings& settings);
 void getPositionBounds(int min[3], int max[3], const Stream& stream, const QuantizationPosition& qp);
 
-StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings, bool has_targets);
+StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings);
 StreamFormat writeIndexStream(std::string& bin, const std::vector<unsigned int>& stream);
 StreamFormat writeTimeStream(std::string& bin, const std::vector<float>& data);
-StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data);
+StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data, const Settings& settings);
 
 void compressVertexStream(std::string& bin, const std::string& data, size_t count, size_t stride);
 void compressIndexStream(std::string& bin, const std::string& data, size_t count, size_t stride);
 
-size_t getBufferView(std::vector<BufferView>& views, BufferView::Kind kind, int variant, size_t stride, bool compressed);
+size_t getBufferView(std::vector<BufferView>& views, BufferView::Kind kind, StreamFormat::Filter filter, int variant, size_t stride, bool compressed);
 
 void comma(std::string& s);
 void append(std::string& s, size_t v);
@@ -242,7 +250,7 @@ const char* attributeType(cgltf_attribute_type type);
 const char* animationPath(cgltf_animation_path_type type);
 
 void writeMaterialInfo(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationTexture& qt);
-void writeBufferView(std::string& json, BufferView::Kind kind, size_t count, size_t stride, size_t bin_offset, size_t bin_size, int compression, size_t compressed_offset, size_t compressed_size);
+void writeBufferView(std::string& json, BufferView::Kind kind, StreamFormat::Filter filter, size_t count, size_t stride, size_t bin_offset, size_t bin_size, int compression, size_t compressed_offset, size_t compressed_size);
 void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const char* output_path, const Settings& settings);
 void writeTexture(std::string& json, const cgltf_texture& texture, cgltf_data* data, const Settings& settings);
 void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, int target, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings);

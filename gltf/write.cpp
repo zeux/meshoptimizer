@@ -323,22 +323,26 @@ void writeMaterialInfo(std::string& json, const cgltf_data* data, const cgltf_ma
 	}
 }
 
-size_t getBufferView(std::vector<BufferView>& views, BufferView::Kind kind, int variant, size_t stride, bool compressed)
+size_t getBufferView(std::vector<BufferView>& views, BufferView::Kind kind, StreamFormat::Filter filter, int variant, size_t stride, bool compressed)
 {
 	if (variant >= 0)
 	{
 		for (size_t i = 0; i < views.size(); ++i)
-			if (views[i].kind == kind && views[i].variant == variant && views[i].stride == stride && views[i].compressed == compressed)
+		{
+			BufferView& v = views[i];
+
+			if (v.kind == kind && v.filter == filter && v.variant == variant && v.stride == stride && v.compressed == compressed)
 				return i;
+		}
 	}
 
-	BufferView view = {kind, variant, stride, compressed};
+	BufferView view = {kind, filter, variant, stride, compressed};
 	views.push_back(view);
 
 	return views.size() - 1;
 }
 
-void writeBufferView(std::string& json, BufferView::Kind kind, size_t count, size_t stride, size_t bin_offset, size_t bin_size, int compression, size_t compressed_offset, size_t compressed_size)
+void writeBufferView(std::string& json, BufferView::Kind kind, StreamFormat::Filter filter, size_t count, size_t stride, size_t bin_offset, size_t bin_size, int compression, size_t compressed_offset, size_t compressed_size)
 {
 	assert(bin_size == count * stride);
 
@@ -375,6 +379,11 @@ void writeBufferView(std::string& json, BufferView::Kind kind, size_t count, siz
 		append(json, stride);
 		append(json, ",\"mode\":");
 		append(json, size_t(compression));
+		if (filter != StreamFormat::Filter_None)
+		{
+			append(json, ",\"filter\":");
+			append(json, size_t(filter));
+		}
 		append(json, ",\"count\":");
 		append(json, count);
 		append(json, "}}");
@@ -463,7 +472,7 @@ static bool parseDataUri(const char* uri, std::string& mime_type, std::string& r
 
 static void writeEmbeddedImage(std::string& json, std::vector<BufferView>& views, const char* data, size_t size, const char* mime_type)
 {
-	size_t view = getBufferView(views, BufferView::Kind_Image, -1, 1, false);
+	size_t view = getBufferView(views, BufferView::Kind_Image, StreamFormat::Filter_None, -1, 1, false);
 
 	assert(views[view].data.empty());
 	views[view].data.assign(data, size);
@@ -607,9 +616,9 @@ void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std:
 			continue;
 
 		scratch.clear();
-		StreamFormat format = writeVertexStream(scratch, stream, qp, qt, settings, mesh.targets > 0);
+		StreamFormat format = writeVertexStream(scratch, stream, qp, qt, settings);
 
-		size_t view = getBufferView(views, BufferView::Kind_Vertex, stream.type, format.stride, settings.compress);
+		size_t view = getBufferView(views, BufferView::Kind_Vertex, format.filter, stream.type, format.stride, settings.compress);
 		size_t offset = views[view].data.size();
 		views[view].data += scratch;
 
@@ -650,7 +659,7 @@ size_t writeMeshIndices(std::vector<BufferView>& views, std::string& json_access
 	std::string scratch;
 	StreamFormat format = writeIndexStream(scratch, mesh.indices);
 
-	size_t view = getBufferView(views, BufferView::Kind_Index, 0, format.stride, settings.compress);
+	size_t view = getBufferView(views, BufferView::Kind_Index, StreamFormat::Filter_None, 0, format.stride, settings.compress);
 	size_t offset = views[view].data.size();
 	views[view].data += scratch;
 
@@ -672,7 +681,7 @@ static size_t writeAnimationTime(std::vector<BufferView>& views, std::string& js
 	std::string scratch;
 	StreamFormat format = writeTimeStream(scratch, time);
 
-	size_t view = getBufferView(views, BufferView::Kind_Time, 0, format.stride, settings.compress);
+	size_t view = getBufferView(views, BufferView::Kind_Time, StreamFormat::Filter_None, 0, format.stride, settings.compress);
 	size_t offset = views[view].data.size();
 	views[view].data += scratch;
 
@@ -711,7 +720,7 @@ size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_
 		scratch.append(reinterpret_cast<const char*>(transform), sizeof(transform));
 	}
 
-	size_t view = getBufferView(views, BufferView::Kind_Skin, 0, 64, settings.compress);
+	size_t view = getBufferView(views, BufferView::Kind_Skin, StreamFormat::Filter_None, 0, 64, settings.compress);
 	size_t offset = views[view].data.size();
 	views[view].data += scratch;
 
@@ -911,9 +920,9 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 		bool tc = track.data.size() == track.components;
 
 		std::string scratch;
-		StreamFormat format = writeKeyframeStream(scratch, track.path, track.data);
+		StreamFormat format = writeKeyframeStream(scratch, track.path, track.data, settings);
 
-		size_t view = getBufferView(views, BufferView::Kind_Keyframe, track.path, format.stride, settings.compress && track.path != cgltf_animation_path_type_weights);
+		size_t view = getBufferView(views, BufferView::Kind_Keyframe, format.filter, track.path, format.stride, settings.compress && track.path != cgltf_animation_path_type_weights);
 		size_t offset = views[view].data.size();
 		views[view].data += scratch;
 
