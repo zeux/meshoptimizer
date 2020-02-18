@@ -20,6 +20,79 @@
 namespace meshopt
 {
 
+#if !defined(SIMD_WASM)
+template <typename T>
+static void decodeFilterOct(T* data, size_t count)
+{
+	const float max = float((1 << (sizeof(T) * 8 - 1)) - 1);
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		// convert x and y to floats and reconstruct z; this assumes zf encodes 1.f at the same bit count
+		float x = float(data[i * 4 + 0]);
+		float y = float(data[i * 4 + 1]);
+		float z = float(data[i * 4 + 2]) - fabsf(x) - fabsf(y);
+
+		// fixup octahedral coordinates for z<0
+		float t = (z >= 0.f) ? 0.f : z;
+
+		x += (x >= 0.f) ? t : -t;
+		y += (y >= 0.f) ? t : -t;
+
+		// compute normal length & scale
+		float l = sqrtf(x * x + y * y + z * z);
+		float s = max / l;
+
+		// rounded signed float->int
+		int xf = int(x * s + (x >= 0.f ? 0.5f : -0.5f));
+		int yf = int(y * s + (y >= 0.f ? 0.5f : -0.5f));
+		int zf = int(z * s + (z >= 0.f ? 0.5f : -0.5f));
+
+		data[i * 4 + 0] = T(xf);
+		data[i * 4 + 1] = T(yf);
+		data[i * 4 + 2] = T(zf);
+	}
+}
+
+static void decodeFilterQuat(short* data, size_t count)
+{
+	const float scale = 1.f / (2047.f * sqrtf(2.f));
+
+	static const int order[4][4] = {
+	    {1, 2, 3, 0},
+	    {2, 3, 0, 1},
+	    {3, 0, 1, 2},
+	    {0, 1, 2, 3},
+	};
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		// convert x/y/z to [-1..1] (scaled...)
+		float x = float(data[i * 4 + 0]) * scale;
+		float y = float(data[i * 4 + 1]) * scale;
+		float z = float(data[i * 4 + 2]) * scale;
+
+		// reconstruct w as a square root; we clamp to 0.f to avoid NaN due to precision errors
+		float ww = 1.f - x * x - y * y - z * z;
+		float w = sqrtf(ww >= 0.f ? ww : 0.f);
+
+		// rounded signed float->int
+		int xf = int(x * 32767.f + (x >= 0.f ? 0.5f : -0.5f));
+		int yf = int(y * 32767.f + (y >= 0.f ? 0.5f : -0.5f));
+		int zf = int(z * 32767.f + (z >= 0.f ? 0.5f : -0.5f));
+		int wf = int(w * 32767.f + 0.5f);
+
+		int qc = data[i * 4 + 3] & 3;
+
+		// output order is dictated by input index
+		data[i * 4 + order[qc][0]] = short(xf);
+		data[i * 4 + order[qc][1]] = short(yf);
+		data[i * 4 + order[qc][2]] = short(zf);
+		data[i * 4 + order[qc][3]] = short(wf);
+	}
+}
+#endif
+
 #ifdef SIMD_WASM
 static void decodeFilterOctSimd(signed char* data, size_t count)
 {
@@ -193,80 +266,7 @@ static void decodeFilterQuatSimd(short* data, size_t count)
 }
 #endif
 
-#if !defined(SIMD_WASM)
-template <typename T>
-static void decodeFilterOct(T* data, size_t count)
-{
-	const float max = float((1 << (sizeof(T) * 8 - 1)) - 1);
-
-	for (size_t i = 0; i < count; ++i)
-	{
-		// convert x and y to floats and reconstruct z; this assumes zf encodes 1.f at the same bit count
-		float x = float(data[i * 4 + 0]);
-		float y = float(data[i * 4 + 1]);
-		float z = float(data[i * 4 + 2]) - fabsf(x) - fabsf(y);
-
-		// fixup octahedral coordinates for z<0
-		float t = (z >= 0.f) ? 0.f : z;
-
-		x += (x >= 0.f) ? t : -t;
-		y += (y >= 0.f) ? t : -t;
-
-		// compute normal length & scale
-		float l = sqrtf(x * x + y * y + z * z);
-		float s = max / l;
-
-		// rounded signed float->int
-		int xf = int(x * s + (x >= 0.f ? 0.5f : -0.5f));
-		int yf = int(y * s + (y >= 0.f ? 0.5f : -0.5f));
-		int zf = int(z * s + (z >= 0.f ? 0.5f : -0.5f));
-
-		data[i * 4 + 0] = T(xf);
-		data[i * 4 + 1] = T(yf);
-		data[i * 4 + 2] = T(zf);
-	}
-}
-
-static void decodeFilterQuat(short* data, size_t count)
-{
-	const float scale = 1.f / (2047.f * sqrtf(2.f));
-
-	static const int order[4][4] = {
-	    {1, 2, 3, 0},
-	    {2, 3, 0, 1},
-	    {3, 0, 1, 2},
-	    {0, 1, 2, 3},
-	};
-
-	for (size_t i = 0; i < count; ++i)
-	{
-		// convert x/y/z to [-1..1] (scaled...)
-		float x = float(data[i * 4 + 0]) * scale;
-		float y = float(data[i * 4 + 1]) * scale;
-		float z = float(data[i * 4 + 2]) * scale;
-
-		// reconstruct w as a square root; we clamp to 0.f to avoid NaN due to precision errors
-		float ww = 1.f - x * x - y * y - z * z;
-		float w = sqrtf(ww >= 0.f ? ww : 0.f);
-
-		// rounded signed float->int
-		int xf = int(x * 32767.f + (x >= 0.f ? 0.5f : -0.5f));
-		int yf = int(y * 32767.f + (y >= 0.f ? 0.5f : -0.5f));
-		int zf = int(z * 32767.f + (z >= 0.f ? 0.5f : -0.5f));
-		int wf = int(w * 32767.f + 0.5f);
-
-		int qc = data[i * 4 + 3] & 3;
-
-		// output order is dictated by input index
-		data[i * 4 + order[qc][0]] = short(xf);
-		data[i * 4 + order[qc][1]] = short(yf);
-		data[i * 4 + order[qc][2]] = short(zf);
-		data[i * 4 + order[qc][3]] = short(wf);
-	}
-}
-#endif
-
-}
+} // namespace meshopt
 
 void meshopt_decodeFilterOct(void* buffer, size_t vertex_count, size_t vertex_size)
 {
