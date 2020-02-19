@@ -16,13 +16,13 @@ jobs:
         make -j2 config=sanitize test
         make -j2 config=debug test
         make -j2 config=release test
+        make -j2 config=coverage test
     - name: make gltfpack
       run: |
         make -j2 config=release gltfpack
         strip gltfpack
-    - name: make coverage
+    - name: upload coverage
       run: |
-        make -j2 config=coverage test
         find . -type f -name '*.gcno' -exec gcov -p {} +
         sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
         bash <(curl -s https://codecov.io/bash) -f 'src#*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
@@ -85,3 +85,18 @@ jobs:
         find glTF-Sample-Models/2.0/ -name *.gltfpack.gltf | xargs -L 1 ./gltf_validator -r -a
       env:
         VALIDATOR: https://github.com/KhronosGroup/glTF-Validator/releases/download/2.0.0-dev.3.2/gltf_validator-2.0.0-dev.3.2-linux64.tar.xz
+
+  arm64:
+    runs-on: ubuntu-latest
+    steps:
+    - run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
+    - uses: actions/checkout@v1
+    - name: make test
+      uses: docker://multiarch/ubuntu-core:arm64-bionic
+      with:
+        args: 'bash -c "apt-get update && apt-get install -y build-essential && make -j2 config=coverage test"'
+    - name: upload coverage
+      run: |
+        find . -type f -name '*.gcno' -exec gcov -p {} +
+        sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
+        bash <(curl -s https://codecov.io/bash) -f 'src#*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
