@@ -193,6 +193,14 @@ static void roundtripIndexTricky()
 	assert(memcmp(decoded, kIndexBufferTricky, sizeof(kIndexBufferTricky)) == 0);
 }
 
+static void encodeIndexEmpty()
+{
+	std::vector<unsigned char> buffer(meshopt_encodeIndexBufferBound(0, 0));
+	buffer.resize(meshopt_encodeIndexBuffer(&buffer[0], buffer.size(), NULL, 0));
+
+	assert(meshopt_decodeIndexBuffer(static_cast<unsigned int*>(NULL), 0, &buffer[0], buffer.size()) == 0);
+}
+
 static void decodeVertexV0()
 {
 	const size_t vertex_count = sizeof(kVertexBuffer) / sizeof(kVertexBuffer[0]);
@@ -348,6 +356,14 @@ static void decodeVertexLarge()
 	unsigned char decoded[128 * 4];
 	assert(meshopt_decodeVertexBuffer(decoded, 128, 4, &buffer[0], buffer.size()) == 0);
 	assert(memcmp(decoded, data, sizeof(data)) == 0);
+}
+
+static void encodeVertexEmpty()
+{
+	std::vector<unsigned char> buffer(meshopt_encodeVertexBufferBound(0, 16));
+	buffer.resize(meshopt_encodeVertexBuffer(&buffer[0], buffer.size(), NULL, 0, 16));
+
+	assert(meshopt_decodeVertexBuffer(NULL, 0, 16, &buffer[0], buffer.size()) == 0);
 }
 
 static void decodeFilterOct8()
@@ -553,6 +569,7 @@ static void runTestsOnce()
 	decodeIndexRejectMalformedHeaders();
 	decodeIndexRejectInvalidVersion();
 	roundtripIndexTricky();
+	encodeIndexEmpty();
 
 	decodeVertexV0();
 	encodeVertexMemorySafe();
@@ -562,6 +579,7 @@ static void runTestsOnce()
 	decodeVertexBitGroups();
 	decodeVertexBitGroupSentinels();
 	decodeVertexLarge();
+	encodeVertexEmpty();
 
 	decodeFilterOct8();
 	decodeFilterOct12();
