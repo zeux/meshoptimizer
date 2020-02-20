@@ -214,7 +214,7 @@ void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings);
 void filterEmptyMeshes(std::vector<Mesh>& meshes);
 
 bool usesTextureSet(const cgltf_material& material, int set);
-void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes);
+void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings);
 void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes);
 
 void analyzeImages(cgltf_data* data, std::vector<ImageInfo>& images);

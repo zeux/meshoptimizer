@@ -182,7 +182,7 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 		}
 	}
 
-	mergeMeshMaterials(data, meshes);
+	mergeMeshMaterials(data, meshes, settings);
 	mergeMeshes(meshes, settings);
 	filterEmptyMeshes(meshes);
 

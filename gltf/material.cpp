@@ -38,7 +38,18 @@ static bool areTextureViewsEqual(const cgltf_texture_view& lhs, const cgltf_text
 	return true;
 }
 
-static bool areMaterialsEqual(const cgltf_material& lhs, const cgltf_material& rhs)
+static bool areExtrasEqual(cgltf_data* data, const cgltf_extras& lhs, const cgltf_extras& rhs)
+{
+	if (lhs.end_offset - lhs.start_offset != rhs.end_offset - rhs.start_offset)
+		return false;
+
+	if (memcmp(data->json + lhs.start_offset, data->json + rhs.start_offset, lhs.end_offset - lhs.start_offset) != 0)
+		return false;
+
+	return true;
+}
+
+static bool areMaterialsEqual(cgltf_data* data, const cgltf_material& lhs, const cgltf_material& rhs, const Settings& settings)
 {
 	if (lhs.has_pbr_metallic_roughness != rhs.has_pbr_metallic_roughness)
 		return false;
@@ -112,10 +123,13 @@ static bool areMaterialsEqual(const cgltf_material& lhs, const cgltf_material& r
 	if (lhs.unlit != rhs.unlit)
 		return false;
 
+	if (settings.keep_extras && !areExtrasEqual(data, lhs.extras, rhs.extras))
+		return false;
+
 	return true;
 }
 
-void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes)
+void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings)
 {
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
@@ -126,7 +140,7 @@ void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes)
 
 		for (int j = 0; j < mesh.material - data->materials; ++j)
 		{
-			if (areMaterialsEqual(*mesh.material, data->materials[j]))
+			if (areMaterialsEqual(data, *mesh.material, data->materials[j], settings))
 			{
 				mesh.material = &data->materials[j];
 				break;
