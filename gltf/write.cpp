@@ -1103,3 +1103,13 @@ void writeExtensions(std::string& json, const ExtensionInfo* extensions, size_t 
 		}
 	append(json, "]");
 }
+
+void writeExtras(std::string& json, const cgltf_data* data, const cgltf_extras& extras)
+{
+	if (extras.start_offset == extras.end_offset)
+		return;
+
+	comma(json);
+	append(json, "\"extras\":");
+	appendJson(json, data->json + extras.start_offset, data->json + extras.end_offset);
+}

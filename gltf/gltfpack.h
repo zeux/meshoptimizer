@@ -84,6 +84,7 @@ struct Settings
 	bool anim_const;
 
 	bool keep_named;
+	bool keep_extras;
 
 	float simplify_threshold;
 	bool simplify_aggressive;
@@ -264,6 +265,7 @@ void writeCamera(std::string& json, const cgltf_camera& camera);
 void writeLight(std::string& json, const cgltf_light& light);
 void writeArray(std::string& json, const char* name, const std::string& contents);
 void writeExtensions(std::string& json, const ExtensionInfo* extensions, size_t count);
+void writeExtras(std::string& json, const cgltf_data* data, const cgltf_extras& extras);
 
 /**
  * Copyright (c) 2016-2020 Arseny Kapoulkine
