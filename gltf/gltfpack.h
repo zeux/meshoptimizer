@@ -245,6 +245,7 @@ void append(std::string& s, size_t v);
 void append(std::string& s, float v);
 void append(std::string& s, const char* v);
 void append(std::string& s, const std::string& v);
+void appendJson(std::string& s, const char* begin, const char* end);
 
 const char* attributeType(cgltf_attribute_type type);
 const char* animationPath(cgltf_animation_path_type type);

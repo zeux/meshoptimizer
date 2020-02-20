@@ -467,7 +467,7 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 	if (data->asset.extras.start_offset)
 	{
 		append(json, ",\"extras\":");
-		json.append(data->json + data->asset.extras.start_offset, data->json + data->asset.extras.end_offset);
+		appendJson(json, data->json + data->asset.extras.start_offset, data->json + data->asset.extras.end_offset);
 	}
 	append(json, "}");
 

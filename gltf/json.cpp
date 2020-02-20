@@ -34,3 +34,41 @@ void append(std::string& s, const std::string& v)
 {
 	s += v;
 }
+
+void appendJson(std::string& s, const char* begin, const char* end)
+{
+	enum State
+	{
+		None,
+		Escape,
+		Quoted
+	} state = None;
+
+	for (const char* it = begin; it != end; ++it)
+	{
+		char ch = *it;
+
+		// whitespace outside of quoted strings can be ignored
+		if (state != None || !isspace(ch))
+			s += ch;
+
+		// the finite automata tracks whether we're inside a quoted string
+		switch (state)
+		{
+		case None:
+			state = (ch == '"') ? Quoted : None;
+			break;
+
+		case Quoted:
+			state = (ch == '"') ? None : (ch == '\\') ? Escape : Quoted;
+			break;
+
+		case Escape:
+			state = Quoted;
+			break;
+
+		default:
+			assert(!"Unexpected parsing state");
+		}
+	}
+}
