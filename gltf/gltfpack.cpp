@@ -272,7 +272,7 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 
 		comma(json_materials);
 		append(json_materials, "{");
-		writeMaterialInfo(json_materials, data, material, qt_materials[i]);
+		writeMaterial(json_materials, data, material, qt_materials[i]);
 		if (settings.keep_extras)
 			writeExtras(json_materials, data, material.extras);
 		append(json_materials, "}");
@@ -421,24 +421,7 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 
 		size_t matrix_accr = writeJointBindMatrices(views, json_accessors, accr_offset, skin, qp, settings);
 
-		comma(json_skins);
-		append(json_skins, "{");
-		append(json_skins, "\"joints\":[");
-		for (size_t j = 0; j < skin.joints_count; ++j)
-		{
-			comma(json_skins);
-			append(json_skins, size_t(nodes[skin.joints[j] - data->nodes].remap));
-		}
-		append(json_skins, "]");
-		append(json_skins, ",\"inverseBindMatrices\":");
-		append(json_skins, matrix_accr);
-		if (skin.skeleton)
-		{
-			comma(json_skins);
-			append(json_skins, "\"skeleton\":");
-			append(json_skins, size_t(nodes[skin.skeleton - data->nodes].remap));
-		}
-		append(json_skins, "}");
+		writeSkin(json_skins, skin, matrix_accr, nodes, data);
 	}
 
 	for (size_t i = 0; i < animations.size(); ++i)
