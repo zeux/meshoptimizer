@@ -182,7 +182,7 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 		}
 	}
 
-	mergeMeshMaterials(data, meshes);
+	mergeMeshMaterials(data, meshes, settings);
 	mergeMeshes(meshes, settings);
 	filterEmptyMeshes(meshes);
 
@@ -272,7 +272,9 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 
 		comma(json_materials);
 		append(json_materials, "{");
-		writeMaterialInfo(json_materials, data, material, qt_materials[i]);
+		writeMaterial(json_materials, data, material, qt_materials[i]);
+		if (settings.keep_extras)
+			writeExtras(json_materials, data, material.extras);
 		append(json_materials, "}");
 
 		mi.remap = int(material_offset);
@@ -419,24 +421,7 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 
 		size_t matrix_accr = writeJointBindMatrices(views, json_accessors, accr_offset, skin, qp, settings);
 
-		comma(json_skins);
-		append(json_skins, "{");
-		append(json_skins, "\"joints\":[");
-		for (size_t j = 0; j < skin.joints_count; ++j)
-		{
-			comma(json_skins);
-			append(json_skins, size_t(nodes[skin.joints[j] - data->nodes].remap));
-		}
-		append(json_skins, "]");
-		append(json_skins, ",\"inverseBindMatrices\":");
-		append(json_skins, matrix_accr);
-		if (skin.skeleton)
-		{
-			comma(json_skins);
-			append(json_skins, "\"skeleton\":");
-			append(json_skins, size_t(nodes[skin.skeleton - data->nodes].remap));
-		}
-		append(json_skins, "}");
+		writeSkin(json_skins, skin, matrix_accr, nodes, data);
 	}
 
 	for (size_t i = 0; i < animations.size(); ++i)
@@ -464,11 +449,7 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 	append(json, "\"version\":\"2.0\",\"generator\":\"gltfpack ");
 	append(json, getVersion());
 	append(json, "\"");
-	if (data->asset.extras.start_offset)
-	{
-		append(json, ",\"extras\":");
-		json.append(data->json + data->asset.extras.start_offset, data->json + data->asset.extras.end_offset);
-	}
+	writeExtras(json, data, data->asset.extras);
 	append(json, "}");
 
 	const ExtensionInfo extensions[] = {
@@ -775,6 +756,10 @@ int main(int argc, char** argv)
 		{
 			settings.keep_named = true;
 		}
+		else if (strcmp(arg, "-ke") == 0)
+		{
+			settings.keep_extras = true;
+		}
 		else if (strcmp(arg, "-si") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.simplify_threshold = float(atof(argv[++i]));
@@ -879,6 +864,7 @@ int main(int argc, char** argv)
 		fprintf(stderr, "-af N: resample animations at N Hz (default: 30)\n");
 		fprintf(stderr, "-ac: keep constant animation tracks even if they don't modify the node transform\n");
 		fprintf(stderr, "-kn: keep named nodes and meshes attached to named nodes so that named nodes can be transformed externally\n");
+		fprintf(stderr, "-ke: keep extras data\n");
 		fprintf(stderr, "-si R: simplify meshes to achieve the ratio R (default: 1; R should be between 0 and 1)\n");
 		fprintf(stderr, "-sa: aggressively simplify to the target ratio disregarding quality\n");
 		fprintf(stderr, "-te: embed all textures into main buffer\n");

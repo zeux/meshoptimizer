@@ -146,7 +146,7 @@ static void writeTextureInfo(std::string& json, const cgltf_data* data, const cg
 	append(json, "}}}");
 }
 
-void writeMaterialInfo(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationTexture& qt)
+void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationTexture& qt)
 {
 	static const float white[4] = {1, 1, 1, 1};
 	static const float black[4] = {0, 0, 0, 0};
@@ -771,6 +771,28 @@ void writeMeshNode(std::string& json, size_t mesh_offset, const Mesh& mesh, cglt
 	append(json, "}");
 }
 
+void writeSkin(std::string& json, const cgltf_skin& skin, size_t matrix_accr, const std::vector<NodeInfo>& nodes, cgltf_data* data)
+{
+	comma(json);
+	append(json, "{");
+	append(json, "\"joints\":[");
+	for (size_t j = 0; j < skin.joints_count; ++j)
+	{
+		comma(json);
+		append(json, size_t(nodes[skin.joints[j] - data->nodes].remap));
+	}
+	append(json, "]");
+	append(json, ",\"inverseBindMatrices\":");
+	append(json, matrix_accr);
+	if (skin.skeleton)
+	{
+		comma(json);
+		append(json, "\"skeleton\":");
+		append(json, size_t(nodes[skin.skeleton - data->nodes].remap));
+	}
+	append(json, "}");
+}
+
 void writeNode(std::string& json, const cgltf_node& node, const std::vector<NodeInfo>& nodes, cgltf_data* data)
 {
 	const NodeInfo& ni = nodes[&node - data->nodes];
@@ -1102,4 +1124,14 @@ void writeExtensions(std::string& json, const ExtensionInfo* extensions, size_t 
 			append(json, "\"");
 		}
 	append(json, "]");
+}
+
+void writeExtras(std::string& json, const cgltf_data* data, const cgltf_extras& extras)
+{
+	if (extras.start_offset == extras.end_offset)
+		return;
+
+	comma(json);
+	append(json, "\"extras\":");
+	appendJson(json, data->json + extras.start_offset, data->json + extras.end_offset);
 }

@@ -84,6 +84,7 @@ struct Settings
 	bool anim_const;
 
 	bool keep_named;
+	bool keep_extras;
 
 	float simplify_threshold;
 	bool simplify_aggressive;
@@ -213,7 +214,7 @@ void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings);
 void filterEmptyMeshes(std::vector<Mesh>& meshes);
 
 bool usesTextureSet(const cgltf_material& material, int set);
-void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes);
+void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings);
 void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes);
 
 void analyzeImages(cgltf_data* data, std::vector<ImageInfo>& images);
@@ -245,11 +246,12 @@ void append(std::string& s, size_t v);
 void append(std::string& s, float v);
 void append(std::string& s, const char* v);
 void append(std::string& s, const std::string& v);
+void appendJson(std::string& s, const char* begin, const char* end);
 
 const char* attributeType(cgltf_attribute_type type);
 const char* animationPath(cgltf_animation_path_type type);
 
-void writeMaterialInfo(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationTexture& qt);
+void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationTexture& qt);
 void writeBufferView(std::string& json, BufferView::Kind kind, StreamFormat::Filter filter, size_t count, size_t stride, size_t bin_offset, size_t bin_size, int compression, size_t compressed_offset, size_t compressed_size);
 void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const char* output_path, const Settings& settings);
 void writeTexture(std::string& json, const cgltf_texture& texture, cgltf_data* data, const Settings& settings);
@@ -257,12 +259,14 @@ void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std:
 size_t writeMeshIndices(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, const Settings& settings);
 size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const cgltf_skin& skin, const QuantizationPosition& qp, const Settings& settings);
 void writeMeshNode(std::string& json, size_t mesh_offset, const Mesh& mesh, cgltf_data* data, const QuantizationPosition& qp);
+void writeSkin(std::string& json, const cgltf_skin& skin, size_t matrix_accr, const std::vector<NodeInfo>& nodes, cgltf_data* data);
 void writeNode(std::string& json, const cgltf_node& node, const std::vector<NodeInfo>& nodes, cgltf_data* data);
 void writeAnimation(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Animation& animation, size_t i, cgltf_data* data, const std::vector<NodeInfo>& nodes, const Settings& settings);
 void writeCamera(std::string& json, const cgltf_camera& camera);
 void writeLight(std::string& json, const cgltf_light& light);
 void writeArray(std::string& json, const char* name, const std::string& contents);
 void writeExtensions(std::string& json, const ExtensionInfo* extensions, size_t count);
+void writeExtras(std::string& json, const cgltf_data* data, const cgltf_extras& extras);
 
 /**
  * Copyright (c) 2016-2020 Arseny Kapoulkine
