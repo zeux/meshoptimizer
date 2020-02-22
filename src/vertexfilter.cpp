@@ -125,13 +125,12 @@ static void decodeFilterOctSimd(signed char* data, size_t count)
 		v128_t s = wasm_f32x4_div(wasm_f32x4_splat(127.f), l);
 
 		// fast rounded signed float->int: addition triggers renormalization after which mantissa stores the integer value
+		// note: the result is offset by 0x4B40_0000, but we only need the low 8 bits so we can omit the subtraction
 		const v128_t fsnap = wasm_f32x4_splat(3 << 22);
-		const v128_t fmask = wasm_i32x4_splat(0x7fffff);
-		const v128_t fbase = wasm_i32x4_splat(0x400000);
 
-		v128_t xr = wasm_i32x4_sub(wasm_v128_and(wasm_f32x4_add(wasm_f32x4_mul(x, s), fsnap), fmask), fbase);
-		v128_t yr = wasm_i32x4_sub(wasm_v128_and(wasm_f32x4_add(wasm_f32x4_mul(y, s), fsnap), fmask), fbase);
-		v128_t zr = wasm_i32x4_sub(wasm_v128_and(wasm_f32x4_add(wasm_f32x4_mul(z, s), fsnap), fmask), fbase);
+		v128_t xr = wasm_f32x4_add(wasm_f32x4_mul(x, s), fsnap);
+		v128_t yr = wasm_f32x4_add(wasm_f32x4_mul(y, s), fsnap);
+		v128_t zr = wasm_f32x4_add(wasm_f32x4_mul(z, s), fsnap);
 
 		// combine xr/yr/zr into final value
 		v128_t res = wasm_v128_and(n4, wasm_i32x4_splat(0xff000000));
@@ -180,13 +179,12 @@ static void decodeFilterOctSimd(short* data, size_t count)
 		v128_t s = wasm_f32x4_div(wasm_f32x4_splat(32767.f), l);
 
 		// fast rounded signed float->int: addition triggers renormalization after which mantissa stores the integer value
+		// note: the result is offset by 0x4B40_0000, but we only need the low 16 bits so we can omit the subtraction
 		const v128_t fsnap = wasm_f32x4_splat(3 << 22);
-		const v128_t fmask = wasm_i32x4_splat(0x7fffff);
-		const v128_t fbase = wasm_i32x4_splat(0x400000);
 
-		v128_t xr = wasm_i32x4_sub(wasm_v128_and(wasm_f32x4_add(wasm_f32x4_mul(x, s), fsnap), fmask), fbase);
-		v128_t yr = wasm_i32x4_sub(wasm_v128_and(wasm_f32x4_add(wasm_f32x4_mul(y, s), fsnap), fmask), fbase);
-		v128_t zr = wasm_i32x4_sub(wasm_v128_and(wasm_f32x4_add(wasm_f32x4_mul(z, s), fsnap), fmask), fbase);
+		v128_t xr = wasm_f32x4_add(wasm_f32x4_mul(x, s), fsnap);
+		v128_t yr = wasm_f32x4_add(wasm_f32x4_mul(y, s), fsnap);
+		v128_t zr = wasm_f32x4_add(wasm_f32x4_mul(z, s), fsnap);
 
 		// mix x/z and y/0 to make 16-bit unpack easier
 		v128_t xzr = wasm_v128_or(wasm_v128_and(xr, wasm_i32x4_splat(0xffff)), wasm_i32x4_shl(zr, 16));
@@ -235,14 +233,13 @@ static void decodeFilterQuatSimd(short* data, size_t count)
 		v128_t s = wasm_f32x4_splat(32767.f);
 
 		// fast rounded signed float->int: addition triggers renormalization after which mantissa stores the integer value
+		// note: the result is offset by 0x4B40_0000, but we only need the low 16 bits so we can omit the subtraction
 		const v128_t fsnap = wasm_f32x4_splat(3 << 22);
-		const v128_t fmask = wasm_i32x4_splat(0x7fffff);
-		const v128_t fbase = wasm_i32x4_splat(0x400000);
 
-		v128_t xr = wasm_i32x4_sub(wasm_v128_and(wasm_f32x4_add(wasm_f32x4_mul(x, s), fsnap), fmask), fbase);
-		v128_t yr = wasm_i32x4_sub(wasm_v128_and(wasm_f32x4_add(wasm_f32x4_mul(y, s), fsnap), fmask), fbase);
-		v128_t zr = wasm_i32x4_sub(wasm_v128_and(wasm_f32x4_add(wasm_f32x4_mul(z, s), fsnap), fmask), fbase);
-		v128_t wr = wasm_i32x4_sub(wasm_v128_and(wasm_f32x4_add(wasm_f32x4_mul(w, s), fsnap), fmask), fbase);
+		v128_t xr = wasm_f32x4_add(wasm_f32x4_mul(x, s), fsnap);
+		v128_t yr = wasm_f32x4_add(wasm_f32x4_mul(y, s), fsnap);
+		v128_t zr = wasm_f32x4_add(wasm_f32x4_mul(z, s), fsnap);
+		v128_t wr = wasm_f32x4_add(wasm_f32x4_mul(w, s), fsnap);
 
 		// mix x/z and w/y to make 16-bit unpack easier
 		v128_t xzr = wasm_v128_or(wasm_v128_and(xr, wasm_i32x4_splat(0xffff)), wasm_i32x4_shl(zr, 16));
