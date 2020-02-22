@@ -134,43 +134,40 @@ void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTextur
 	}
 }
 
-void getPositionBounds(int min[3], int max[3], const Stream& stream, const QuantizationPosition& qp)
+void getPositionBounds(float min[3], float max[3], const Stream& stream, const QuantizationPosition* qp)
 {
 	assert(stream.type == cgltf_attribute_type_position);
 	assert(stream.data.size() > 0);
 
-	min[0] = min[1] = min[2] = INT_MAX;
-	max[0] = max[1] = max[2] = INT_MIN;
+	min[0] = min[1] = min[2] = FLT_MAX;
+	max[0] = max[1] = max[2] = -FLT_MAX;
 
-	float pos_rscale = qp.scale == 0.f ? 0.f : 1.f / qp.scale;
-
-	if (stream.target == 0)
+	for (size_t i = 0; i < stream.data.size(); ++i)
 	{
-		for (size_t i = 0; i < stream.data.size(); ++i)
+		const Attr& a = stream.data[i];
+
+		for (int k = 0; k < 3; ++k)
 		{
-			const Attr& a = stream.data[i];
-
-			for (int k = 0; k < 3; ++k)
-			{
-				int v = meshopt_quantizeUnorm((a.f[k] - qp.offset[k]) * pos_rscale, qp.bits);
-
-				min[k] = std::min(min[k], v);
-				max[k] = std::max(max[k], v);
-			}
+			min[k] = std::min(min[k], a.f[k]);
+			max[k] = std::max(max[k], a.f[k]);
 		}
 	}
-	else
+
+	if (qp)
 	{
-		for (size_t i = 0; i < stream.data.size(); ++i)
+		float pos_rscale = qp->scale == 0.f ? 0.f : 1.f / qp->scale;
+
+		for (int k = 0; k < 3; ++k)
 		{
-			const Attr& a = stream.data[i];
-
-			for (int k = 0; k < 3; ++k)
+			if (stream.target == 0)
 			{
-				int v = (a.f[k] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[k]) * pos_rscale, qp.bits);
-
-				min[k] = std::min(min[k], v);
-				max[k] = std::max(max[k], v);
+				min[k] = float(meshopt_quantizeUnorm((min[k] - qp->offset[k]) * pos_rscale, qp->bits));
+				max[k] = float(meshopt_quantizeUnorm((max[k] - qp->offset[k]) * pos_rscale, qp->bits));
+			}
+			else
+			{
+				min[k] = (min[k] >= 0.f ? 1.f : -1.f) * float(meshopt_quantizeUnorm(fabsf(min[k]) * pos_rscale, qp->bits));
+				max[k] = (max[k] >= 0.f ? 1.f : -1.f) * float(meshopt_quantizeUnorm(fabsf(max[k]) * pos_rscale, qp->bits));
 			}
 		}
 	}
@@ -209,10 +206,28 @@ static void encodeOct(int& fu, int& fv, float nx, float ny, float nz, int bits)
 	fv = meshopt_quantizeSnorm(v, bits);
 }
 
+static StreamFormat writeVertexStreamRaw(std::string& bin, const Stream& stream, cgltf_type type, size_t components)
+{
+	assert(components >= 1 && components <= 4);
+
+	for (size_t i = 0; i < stream.data.size(); ++i)
+	{
+		const Attr& a = stream.data[i];
+
+		bin.append(reinterpret_cast<const char*>(a.f), sizeof(float) * components);
+	}
+
+	StreamFormat format = {type, cgltf_component_type_r_32f, false, sizeof(float) * components};
+	return format;
+}
+
 StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings)
 {
 	if (stream.type == cgltf_attribute_type_position)
 	{
+		if (!settings.quantize)
+			return writeVertexStreamRaw(bin, stream, cgltf_type_vec3, 3);
+
 		if (stream.target == 0)
 		{
 			float pos_rscale = qp.scale == 0.f ? 0.f : 1.f / qp.scale;
@@ -285,6 +300,9 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	}
 	else if (stream.type == cgltf_attribute_type_texcoord)
 	{
+		if (!settings.quantize)
+			return writeVertexStreamRaw(bin, stream, cgltf_type_vec2, 2);
+
 		float uv_rscale[2] = {
 		    qt.scale[0] == 0.f ? 0.f : 1.f / qt.scale[0],
 		    qt.scale[1] == 0.f ? 0.f : 1.f / qt.scale[1],
@@ -306,6 +324,9 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	}
 	else if (stream.type == cgltf_attribute_type_normal)
 	{
+		if (!settings.quantize)
+			return writeVertexStreamRaw(bin, stream, cgltf_type_vec3, 3);
+
 		bool oct = settings.compressmore && stream.target == 0;
 		int bits = settings.nrm_bits;
 
@@ -380,6 +401,9 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	}
 	else if (stream.type == cgltf_attribute_type_tangent)
 	{
+		if (!settings.quantize)
+			return writeVertexStreamRaw(bin, stream, cgltf_type_vec4, 4);
+
 		bool oct = settings.compressmore && stream.target == 0;
 		int bits = (settings.nrm_bits > 8) ? 8 : settings.nrm_bits;
 
@@ -506,16 +530,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	}
 	else
 	{
-		for (size_t i = 0; i < stream.data.size(); ++i)
-		{
-			const Attr& a = stream.data[i];
-
-			float v[4] = {a.f[0], a.f[1], a.f[2], a.f[3]};
-			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
-		}
-
-		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_32f, false, 16};
-		return format;
+		return writeVertexStreamRaw(bin, stream, cgltf_type_vec4, 4);
 	}
 }
 

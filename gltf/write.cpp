@@ -104,7 +104,7 @@ static const char* lightType(cgltf_light_type type)
 	}
 }
 
-static void writeTextureInfo(std::string& json, const cgltf_data* data, const cgltf_texture_view& view, const QuantizationTexture& qt)
+static void writeTextureInfo(std::string& json, const cgltf_data* data, const cgltf_texture_view& view, const QuantizationTexture* qt)
 {
 	assert(view.texture);
 
@@ -119,34 +119,41 @@ static void writeTextureInfo(std::string& json, const cgltf_data* data, const cg
 		transform.scale[0] = transform.scale[1] = 1.f;
 	}
 
-	transform.offset[0] += qt.offset[0];
-	transform.offset[1] += qt.offset[1];
-	transform.scale[0] *= qt.scale[0] / float((1 << qt.bits) - 1);
-	transform.scale[1] *= qt.scale[1] / float((1 << qt.bits) - 1);
+	if (qt)
+	{
+		transform.offset[0] += qt->offset[0];
+		transform.offset[1] += qt->offset[1];
+		transform.scale[0] *= qt->scale[0] / float((1 << qt->bits) - 1);
+		transform.scale[1] *= qt->scale[1] / float((1 << qt->bits) - 1);
+	}
 
 	append(json, "{\"index\":");
 	append(json, size_t(view.texture - data->textures));
 	append(json, ",\"texCoord\":");
 	append(json, size_t(view.texcoord));
-	append(json, ",\"extensions\":{\"KHR_texture_transform\":{");
-	append(json, "\"offset\":[");
-	append(json, transform.offset[0]);
-	append(json, ",");
-	append(json, transform.offset[1]);
-	append(json, "],\"scale\":[");
-	append(json, transform.scale[0]);
-	append(json, ",");
-	append(json, transform.scale[1]);
-	append(json, "]");
-	if (transform.rotation != 0.f)
+	if (view.has_transform || qt)
 	{
-		append(json, ",\"rotation\":");
-		append(json, transform.rotation);
+		append(json, ",\"extensions\":{\"KHR_texture_transform\":{");
+		append(json, "\"offset\":[");
+		append(json, transform.offset[0]);
+		append(json, ",");
+		append(json, transform.offset[1]);
+		append(json, "],\"scale\":[");
+		append(json, transform.scale[0]);
+		append(json, ",");
+		append(json, transform.scale[1]);
+		append(json, "]");
+		if (transform.rotation != 0.f)
+		{
+			append(json, ",\"rotation\":");
+			append(json, transform.rotation);
+		}
+		append(json, "}}");
 	}
-	append(json, "}}}");
+	append(json, "}");
 }
 
-void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationTexture& qt)
+void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationTexture* qt)
 {
 	static const float white[4] = {1, 1, 1, 1};
 	static const float black[4] = {0, 0, 0, 0};
@@ -625,14 +632,11 @@ void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std:
 		comma(json_accessors);
 		if (stream.type == cgltf_attribute_type_position)
 		{
-			int min[3] = {};
-			int max[3] = {};
-			getPositionBounds(min, max, stream, qp);
+			float min[3] = {};
+			float max[3] = {};
+			getPositionBounds(min, max, stream, settings.quantize ? &qp : NULL);
 
-			float minf[3] = {float(min[0]), float(min[1]), float(min[2])};
-			float maxf[3] = {float(max[0]), float(max[1]), float(max[2])};
-
-			writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, stream.data.size(), minf, maxf, 3);
+			writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, stream.data.size(), min, max, 3);
 		}
 		else
 		{
@@ -706,16 +710,19 @@ size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_
 			cgltf_accessor_read_float(skin.inverse_bind_matrices, j, transform, 16);
 		}
 
-		float node_scale = qp.scale / float((1 << qp.bits) - 1);
+		if (settings.quantize)
+		{
+			float node_scale = qp.scale / float((1 << qp.bits) - 1);
 
-		// pos_offset has to be applied first, thus it results in an offset rotated by the bind matrix
-		transform[12] += qp.offset[0] * transform[0] + qp.offset[1] * transform[4] + qp.offset[2] * transform[8];
-		transform[13] += qp.offset[0] * transform[1] + qp.offset[1] * transform[5] + qp.offset[2] * transform[9];
-		transform[14] += qp.offset[0] * transform[2] + qp.offset[1] * transform[6] + qp.offset[2] * transform[10];
+			// pos_offset has to be applied first, thus it results in an offset rotated by the bind matrix
+			transform[12] += qp.offset[0] * transform[0] + qp.offset[1] * transform[4] + qp.offset[2] * transform[8];
+			transform[13] += qp.offset[0] * transform[1] + qp.offset[1] * transform[5] + qp.offset[2] * transform[9];
+			transform[14] += qp.offset[0] * transform[2] + qp.offset[1] * transform[6] + qp.offset[2] * transform[10];
 
-		// node_scale will be applied before the rotation/scale from transform
-		for (int k = 0; k < 12; ++k)
-			transform[k] *= node_scale;
+			// node_scale will be applied before the rotation/scale from transform
+			for (int k = 0; k < 12; ++k)
+				transform[k] *= node_scale;
+		}
 
 		scratch.append(reinterpret_cast<const char*>(transform), sizeof(transform));
 	}
@@ -732,10 +739,8 @@ size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_
 	return matrix_accr;
 }
 
-void writeMeshNode(std::string& json, size_t mesh_offset, const Mesh& mesh, cgltf_data* data, const QuantizationPosition& qp)
+void writeMeshNode(std::string& json, size_t mesh_offset, const Mesh& mesh, cgltf_data* data, const QuantizationPosition* qp)
 {
-	float node_scale = qp.scale / float((1 << qp.bits) - 1);
-
 	comma(json);
 	append(json, "{\"mesh\":");
 	append(json, mesh_offset);
@@ -745,19 +750,24 @@ void writeMeshNode(std::string& json, size_t mesh_offset, const Mesh& mesh, cglt
 		append(json, "\"skin\":");
 		append(json, size_t(mesh.skin - data->skins));
 	}
-	append(json, ",\"translation\":[");
-	append(json, qp.offset[0]);
-	append(json, ",");
-	append(json, qp.offset[1]);
-	append(json, ",");
-	append(json, qp.offset[2]);
-	append(json, "],\"scale\":[");
-	append(json, node_scale);
-	append(json, ",");
-	append(json, node_scale);
-	append(json, ",");
-	append(json, node_scale);
-	append(json, "]");
+	if (qp)
+	{
+		float node_scale = qp->scale / float((1 << qp->bits) - 1);
+
+		append(json, ",\"translation\":[");
+		append(json, qp->offset[0]);
+		append(json, ",");
+		append(json, qp->offset[1]);
+		append(json, ",");
+		append(json, qp->offset[2]);
+		append(json, "],\"scale\":[");
+		append(json, node_scale);
+		append(json, ",");
+		append(json, node_scale);
+		append(json, ",");
+		append(json, node_scale);
+		append(json, "]");
+	}
 	if (mesh.node && mesh.node->weights_count)
 	{
 		append(json, ",\"weights\":[");
@@ -1101,29 +1111,44 @@ void writeArray(std::string& json, const char* name, const std::string& contents
 
 void writeExtensions(std::string& json, const ExtensionInfo* extensions, size_t count)
 {
-	comma(json);
-	append(json, "\"extensionsUsed\":[");
-	for (size_t i = 0; i < count; ++i)
-		if (extensions[i].used)
-		{
-			comma(json);
-			append(json, "\"");
-			append(json, extensions[i].name);
-			append(json, "\"");
-		}
-	append(json, "]");
+	bool used_extensions = false;
+	bool required_extensions = false;
 
-	comma(json);
-	append(json, "\"extensionsRequired\":[");
 	for (size_t i = 0; i < count; ++i)
-		if (extensions[i].used && extensions[i].required)
-		{
-			comma(json);
-			append(json, "\"");
-			append(json, extensions[i].name);
-			append(json, "\"");
-		}
-	append(json, "]");
+	{
+		used_extensions |= extensions[i].used;
+		required_extensions |= extensions[i].used && extensions[i].required;
+	}
+
+	if (used_extensions)
+	{
+		comma(json);
+		append(json, "\"extensionsUsed\":[");
+		for (size_t i = 0; i < count; ++i)
+			if (extensions[i].used)
+			{
+				comma(json);
+				append(json, "\"");
+				append(json, extensions[i].name);
+				append(json, "\"");
+			}
+		append(json, "]");
+	}
+
+	if (required_extensions)
+	{
+		comma(json);
+		append(json, "\"extensionsRequired\":[");
+		for (size_t i = 0; i < count; ++i)
+			if (extensions[i].used && extensions[i].required)
+			{
+				comma(json);
+				append(json, "\"");
+				append(json, extensions[i].name);
+				append(json, "\"");
+			}
+		append(json, "]");
+	}
 }
 
 void writeExtras(std::string& json, const cgltf_data* data, const cgltf_extras& extras)

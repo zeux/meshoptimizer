@@ -272,7 +272,7 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 
 		comma(json_materials);
 		append(json_materials, "{");
-		writeMaterial(json_materials, data, material, qt_materials[i]);
+		writeMaterial(json_materials, data, material, settings.quantize ? &qt_materials[i] : NULL);
 		if (settings.keep_extras)
 			writeExtras(json_materials, data, material.extras);
 		append(json_materials, "}");
@@ -372,7 +372,7 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 
 		append(json_meshes, "}");
 
-		writeMeshNode(json_nodes, mesh_offset, mesh, data, qp);
+		writeMeshNode(json_nodes, mesh_offset, mesh, data, settings.quantize ? &qp : NULL);
 
 		if (mesh.node)
 		{
@@ -453,9 +453,9 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 	append(json, "}");
 
 	const ExtensionInfo extensions[] = {
-	    {"KHR_mesh_quantization", true, true},
+	    {"KHR_mesh_quantization", settings.quantize, true},
 	    {"MESHOPT_compression", settings.compress, !settings.fallback},
-	    {"KHR_texture_transform", !json_textures.empty(), false},
+	    {"KHR_texture_transform", settings.quantize && !json_textures.empty(), false},
 	    {"KHR_materials_pbrSpecularGlossiness", ext_pbr_specular_glossiness, false},
 	    {"KHR_materials_unlit", ext_unlit, false},
 	    {"KHR_lights_punctual", data->lights_count > 0, false},
@@ -716,6 +716,7 @@ int main(int argc, char** argv)
 	meshopt_encodeIndexVersion(1);
 
 	Settings settings = {};
+	settings.quantize = true;
 	settings.pos_bits = 14;
 	settings.tex_bits = 12;
 	settings.nrm_bits = 8;
@@ -784,6 +785,10 @@ int main(int argc, char** argv)
 		else if (strcmp(arg, "-tq") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.texture_quality = atoi(argv[++i]);
+		}
+		else if (strcmp(arg, "-noq") == 0)
+		{
+			settings.quantize = false;
 		}
 		else if (strcmp(arg, "-i") == 0 && i + 1 < argc && !input)
 		{
@@ -874,6 +879,7 @@ int main(int argc, char** argv)
 		fprintf(stderr, "-c: produce compressed gltf/glb files\n");
 		fprintf(stderr, "-cc: produce compressed gltf/glb files with higher compression ratio\n");
 		fprintf(stderr, "-cf: produce compressed gltf/glb files with fallback for loaders that don't support compression\n");
+		fprintf(stderr, "-noq: disable quantization\n");
 		fprintf(stderr, "-v: verbose output (print version when used without other options)\n");
 		fprintf(stderr, "-h: display this help and exit\n");
 
