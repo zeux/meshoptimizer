@@ -15,6 +15,7 @@
 #define wasmx_shuffle_v32x4(v, w, i, j, k, l) wasm_v8x16_shuffle(v, w, 4 * i, 4 * i + 1, 4 * i + 2, 4 * i + 3, 4 * j, 4 * j + 1, 4 * j + 2, 4 * j + 3, 16 + 4 * k, 16 + 4 * k + 1, 16 + 4 * k + 2, 16 + 4 * k + 3, 16 + 4 * l, 16 + 4 * l + 1, 16 + 4 * l + 2, 16 + 4 * l + 3)
 #define wasmx_unpacklo_v16x8(a, b) wasm_v8x16_shuffle(a, b, 0, 1, 16, 17, 2, 3, 18, 19, 4, 5, 20, 21, 6, 7, 22, 23)
 #define wasmx_unpackhi_v16x8(a, b) wasm_v8x16_shuffle(a, b, 8, 9, 24, 25, 10, 11, 26, 27, 12, 13, 28, 29, 14, 15, 30, 31)
+#define wasmx_blend_v16x8(a, b, m0, m1, m2, m3, m4, m5, m6, m7) wasm_v8x16_shuffle(a, b, 0 + 16 * m0, 1 + 16 * m0, 2 + 16 * m1, 3 + 16 * m1, 4 + 16 * m2, 5 + 16 * m2, 6 + 16 * m3, 7 + 16 * m3, 8 + 16 * m4, 9 + 16 * m4, 10 + 16 * m5, 11 + 16 * m5, 12 + 16 * m6, 13 + 16 * m6, 14 + 16 * m7, 15 + 16 * m7)
 #endif
 
 namespace meshopt
@@ -147,7 +148,7 @@ static void decodeFilterOctSimd(signed char* data, size_t count)
 static void decodeFilterOctSimd(short* data, size_t count)
 {
 	const v128_t sign = wasm_f32x4_splat(-0.f);
-	volatile v128_t zmask = wasm_i32x4_splat(0x7fff); // volatile works around LLVM shuffle "optimizations"
+	volatile v128_t zmask = wasm_i32x4_splat(0x7fff); // TODO: volatile works around LLVM shuffle "optimizations"
 
 	for (size_t i = 0; i < count; i += 4)
 	{
@@ -199,6 +200,7 @@ static void decodeFilterOctSimd(short* data, size_t count)
 		v128_t res_1 = wasmx_unpackhi_v16x8(xzr, y0r);
 
 		// patch in .w
+		// TODO: this can use pblendw-like shuffles and we can remove y0r - once LLVM fixes shuffle merging
 		res_0 = wasm_v128_or(res_0, wasm_v128_and(n4_0, wasm_i64x2_splat(0xffff000000000000)));
 		res_1 = wasm_v128_or(res_1, wasm_v128_and(n4_1, wasm_i64x2_splat(0xffff000000000000)));
 
