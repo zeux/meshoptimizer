@@ -170,5 +170,5 @@ int main()
 	}
 
 	benchCodecs(vertices, indices);
-	benchFilters(N * N);
+	benchFilters(8 * N * N);
 }
