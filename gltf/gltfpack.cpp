@@ -858,33 +858,48 @@ int main(int argc, char** argv)
 	{
 		fprintf(stderr, "gltfpack %s\n", getVersion().c_str());
 		fprintf(stderr, "Usage: gltfpack [options] -i input -o output\n");
-		fprintf(stderr, "\nBasics:\n");
-		fprintf(stderr, "\t-i file: input file to process, .obj/.gltf/.glb\n");
-		fprintf(stderr, "\t-o file: output file path, .gltf/.glb\n");
-		fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc for higher compression ratio)\n");
-		fprintf(stderr, "\t-v: verbose output (print version when used without other options)\n");
-		fprintf(stderr, "\nTextures:\n");
-		fprintf(stderr, "\t-te: embed all textures into main buffer\n");
-		fprintf(stderr, "\t-tb: convert all textures to Basis Universal format (with basisu executable); will be removed in the future\n");
-		fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression (using basisu executable)\n");
-		fprintf(stderr, "\t-tq N: set texture encoding quality (default: 50; N should be between 1 and 100\n");
-		fprintf(stderr, "\nSimplification:\n");
-		fprintf(stderr, "\t-si R: simplify meshes to achieve the ratio R (default: 1; R should be between 0 and 1)\n");
-		fprintf(stderr, "\t-sa: aggressively simplify to the target ratio disregarding quality\n");
-		fprintf(stderr, "\nVertices:\n");
-		fprintf(stderr, "\t-vp N: use N-bit quantization for positions (default: 14; N should be between 1 and 16)\n");
-		fprintf(stderr, "\t-vt N: use N-bit quantization for texture corodinates (default: 12; N should be between 1 and 16)\n");
-		fprintf(stderr, "\t-vn N: use N-bit quantization for normals and tangents (default: 8; N should be between 1 and 16)\n");
-		fprintf(stderr, "\nAnimations:\n");
-		fprintf(stderr, "\t-af N: resample animations at N Hz (default: 30)\n");
-		fprintf(stderr, "\t-ac: keep constant animation tracks even if they don't modify the node transform\n");
-		fprintf(stderr, "\nScene:\n");
-		fprintf(stderr, "\t-kn: keep named nodes and meshes attached to named nodes so that named nodes can be transformed externally\n");
-		fprintf(stderr, "\t-ke: keep extras data\n");
-		fprintf(stderr, "\nMiscellaneous:\n");
-		fprintf(stderr, "\t-cf: produce compressed gltf/glb files with fallback for loaders that don't support compression\n");
-		fprintf(stderr, "\t-noq: disable quantization\n");
-		fprintf(stderr, "\t-h: display this help and exit\n");
+
+		if (help)
+		{
+			fprintf(stderr, "\nBasics:\n");
+			fprintf(stderr, "\t-i file: input file to process, .obj/.gltf/.glb\n");
+			fprintf(stderr, "\t-o file: output file path, .gltf/.glb\n");
+			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc for higher compression ratio)\n");
+			fprintf(stderr, "\nTextures:\n");
+			fprintf(stderr, "\t-te: embed all textures into main buffer\n");
+			fprintf(stderr, "\t-tb: convert all textures to Basis Universal format (with basisu executable); will be removed in the future\n");
+			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression (using basisu executable)\n");
+			fprintf(stderr, "\t-tq N: set texture encoding quality (default: 50; N should be between 1 and 100\n");
+			fprintf(stderr, "\nSimplification:\n");
+			fprintf(stderr, "\t-si R: simplify meshes to achieve the ratio R (default: 1; R should be between 0 and 1)\n");
+			fprintf(stderr, "\t-sa: aggressively simplify to the target ratio disregarding quality\n");
+			fprintf(stderr, "\nVertices:\n");
+			fprintf(stderr, "\t-vp N: use N-bit quantization for positions (default: 14; N should be between 1 and 16)\n");
+			fprintf(stderr, "\t-vt N: use N-bit quantization for texture corodinates (default: 12; N should be between 1 and 16)\n");
+			fprintf(stderr, "\t-vn N: use N-bit quantization for normals and tangents (default: 8; N should be between 1 and 16)\n");
+			fprintf(stderr, "\nAnimations:\n");
+			fprintf(stderr, "\t-af N: resample animations at N Hz (default: 30)\n");
+			fprintf(stderr, "\t-ac: keep constant animation tracks even if they don't modify the node transform\n");
+			fprintf(stderr, "\nScene:\n");
+			fprintf(stderr, "\t-kn: keep named nodes and meshes attached to named nodes so that named nodes can be transformed externally\n");
+			fprintf(stderr, "\t-ke: keep extras data\n");
+			fprintf(stderr, "\nMiscellaneous:\n");
+			fprintf(stderr, "\t-cf: produce compressed gltf/glb files with fallback for loaders that don't support compression\n");
+			fprintf(stderr, "\t-noq: disable quantization; produces much larger glTF files with no extensions\n");
+			fprintf(stderr, "\t-v: verbose output (print version when used without other options)\n");
+			fprintf(stderr, "\t-h: display this help and exit\n");
+		}
+		else
+		{
+			fprintf(stderr, "\nBasics:\n");
+			fprintf(stderr, "\t-i file: input file to process, .obj/.gltf/.glb\n");
+			fprintf(stderr, "\t-o file: output file path, .gltf/.glb\n");
+			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc for higher compression ratio)\n");
+			fprintf(stderr, "\t-te: embed all textures into main buffer\n");
+			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression (using basisu executable)\n");
+			fprintf(stderr, "\t-si R: simplify meshes to achieve the ratio R (default: 1; R should be between 0 and 1)\n");
+			fprintf(stderr, "\nRun gltfpack -h to display a full list of options\n");
+		}
 
 		return 1;
 	}
