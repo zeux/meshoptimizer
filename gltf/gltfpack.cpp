@@ -727,7 +727,7 @@ int main(int argc, char** argv)
 	const char* input = 0;
 	const char* output = 0;
 	bool help = false;
-	int test = 0;
+	bool test = false;
 
 	for (int i = 1; i < argc; ++i)
 	{
@@ -826,12 +826,16 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-test") == 0)
 		{
-			test = i + 1;
-			break;
+			test = true;
 		}
-		else
+		else if (arg[0] == '-')
 		{
 			fprintf(stderr, "Unrecognized option %s\n", arg);
+			return 1;
+		}
+		else if (!test)
+		{
+			fprintf(stderr, "Expected option, got %s instead\n", arg);
 			return 1;
 		}
 	}
@@ -845,10 +849,14 @@ int main(int argc, char** argv)
 
 	if (test)
 	{
-		for (int i = test; i < argc; ++i)
+		for (int i = 1; i < argc; ++i)
 		{
-			printf("%s\n", argv[i]);
-			gltfpack(argv[i], NULL, settings);
+			const char* path = argv[i];
+			if (path[0] == '-')
+				continue;
+
+			printf("%s\n", path);
+			gltfpack(path, NULL, settings);
 		}
 
 		return 0;
