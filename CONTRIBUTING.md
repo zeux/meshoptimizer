@@ -39,7 +39,7 @@ The demo program uses STL since it serves as an example of usage and as a test h
 
 ## Testing
 
-All pull requests will run through a continuous integration pipeline hosted on [Travis CI](https://travis-ci.org/zeux/meshoptimizer) that will run the built-in unit tests and integration tests on Windows, macOS and Linux with gcc, clang and msvc compilers.
+All pull requests will run through a continuous integration pipeline using GitHub Actions that will run the built-in unit tests and integration tests on Windows, macOS and Linux with gcc, clang and msvc compilers.
 You can run the tests yourself using `make test` or building the demo program with `cmake -DBUILD_DEMO=ON` and running it.
 
 Unit tests can be found in `demo/tests.cpp` and functional tests - in `demo/main.cpp`; when making code changes please try to make sure they are covered by an existing test or add a new test accordingly.
