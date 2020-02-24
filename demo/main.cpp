@@ -1043,6 +1043,7 @@ int main(int argc, char** argv)
 {
 	void runTests();
 
+	meshopt_encodeVertexVersion(0);
 	meshopt_encodeIndexVersion(1);
 
 	if (argc == 1)
