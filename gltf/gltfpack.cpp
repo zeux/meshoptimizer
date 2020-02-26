@@ -226,6 +226,7 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 	std::vector<BufferView> views;
 
 	bool ext_pbr_specular_glossiness = false;
+	bool ext_clearcoat = false;
 	bool ext_unlit = false;
 
 	size_t accr_offset = 0;
@@ -281,6 +282,7 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 		material_offset++;
 
 		ext_pbr_specular_glossiness = ext_pbr_specular_glossiness || material.has_pbr_specular_glossiness;
+		ext_clearcoat = ext_clearcoat || material.has_clearcoat;
 		ext_unlit = ext_unlit || material.unlit;
 	}
 
@@ -457,6 +459,7 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 	    {"MESHOPT_compression", settings.compress, !settings.fallback},
 	    {"KHR_texture_transform", settings.quantize && !json_textures.empty(), false},
 	    {"KHR_materials_pbrSpecularGlossiness", ext_pbr_specular_glossiness, false},
+	    {"KHR_materials_clearcoat", ext_clearcoat, false},
 	    {"KHR_materials_unlit", ext_unlit, false},
 	    {"KHR_lights_punctual", data->lights_count > 0, false},
 	    {"KHR_texture_basisu", !json_textures.empty() && settings.texture_ktx2, true},

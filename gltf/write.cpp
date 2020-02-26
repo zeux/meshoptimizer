@@ -249,6 +249,43 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 	append(json, "}");
 }
 
+static void writeMaterialComponent(std::string& json, const cgltf_data* data, const cgltf_clearcoat& cc, const QuantizationTexture* qt)
+{
+	comma(json);
+	append(json, "\"KHR_materials_clearcoat\":{");
+	if (cc.clearcoat_texture.texture)
+	{
+		comma(json);
+		append(json, "\"clearcoatTexture\":");
+		writeTextureInfo(json, data, cc.clearcoat_texture, qt);
+	}
+	if (cc.clearcoat_roughness_texture.texture)
+	{
+		comma(json);
+		append(json, "\"clearcoatRoughnessTexture\":");
+		writeTextureInfo(json, data, cc.clearcoat_roughness_texture, qt);
+	}
+	if (cc.clearcoat_normal_texture.texture)
+	{
+		comma(json);
+		append(json, "\"clearcoatNormalTexture\":");
+		writeTextureInfo(json, data, cc.clearcoat_normal_texture, qt);
+	}
+	if (cc.clearcoat_factor != 0)
+	{
+		comma(json);
+		append(json, "\"clearcoatFactor\":");
+		append(json, cc.clearcoat_factor);
+	}
+	if (cc.clearcoat_factor != 0)
+	{
+		comma(json);
+		append(json, "\"clearcoatRoughnessFactor\":");
+		append(json, cc.clearcoat_roughness_factor);
+	}
+	append(json, "}");
+}
+
 void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationTexture* qt)
 {
 	if (material.name && *material.name)
@@ -317,7 +354,7 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 		append(json, "\"doubleSided\":true");
 	}
 
-	if (material.has_pbr_specular_glossiness || material.unlit)
+	if (material.has_pbr_specular_glossiness || material.has_clearcoat || material.unlit)
 	{
 		comma(json);
 		append(json, "\"extensions\":{");
@@ -325,6 +362,11 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 		if (material.has_pbr_specular_glossiness)
 		{
 			writeMaterialComponent(json, data, material.pbr_specular_glossiness, qt);
+		}
+
+		if (material.has_clearcoat)
+		{
+			writeMaterialComponent(json, data, material.clearcoat, qt);
 		}
 
 		if (material.unlit)

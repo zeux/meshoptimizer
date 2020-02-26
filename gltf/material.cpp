@@ -89,6 +89,26 @@ static bool areMaterialComponentsEqual(const cgltf_pbr_specular_glossiness& lhs,
 	return true;
 }
 
+static bool areMaterialComponentsEqual(const cgltf_clearcoat& lhs, const cgltf_clearcoat& rhs)
+{
+	if (!areTextureViewsEqual(lhs.clearcoat_texture, rhs.clearcoat_texture))
+		return false;
+
+	if (!areTextureViewsEqual(lhs.clearcoat_roughness_texture, rhs.clearcoat_roughness_texture))
+		return false;
+
+	if (!areTextureViewsEqual(lhs.clearcoat_normal_texture, rhs.clearcoat_normal_texture))
+		return false;
+
+	if (lhs.clearcoat_factor != rhs.clearcoat_factor)
+		return false;
+
+	if (lhs.clearcoat_roughness_factor != rhs.clearcoat_roughness_factor)
+		return false;
+
+	return true;
+}
+
 static bool areMaterialsEqual(cgltf_data* data, const cgltf_material& lhs, const cgltf_material& rhs, const Settings& settings)
 {
 	if (lhs.has_pbr_metallic_roughness != rhs.has_pbr_metallic_roughness)
@@ -101,6 +121,12 @@ static bool areMaterialsEqual(cgltf_data* data, const cgltf_material& lhs, const
 		return false;
 
 	if (lhs.has_pbr_specular_glossiness && !areMaterialComponentsEqual(lhs.pbr_specular_glossiness, rhs.pbr_specular_glossiness))
+		return false;
+
+	if (lhs.has_clearcoat != rhs.has_clearcoat)
+		return false;
+
+	if (lhs.has_clearcoat && !areMaterialComponentsEqual(lhs.clearcoat, rhs.clearcoat))
 		return false;
 
 	if (!areTextureViewsEqual(lhs.normal_texture, rhs.normal_texture))
