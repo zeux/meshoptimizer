@@ -153,11 +153,104 @@ static void writeTextureInfo(std::string& json, const cgltf_data* data, const cg
 	append(json, "}");
 }
 
+static const float white[4] = {1, 1, 1, 1};
+static const float black[4] = {0, 0, 0, 0};
+
+static void writeMaterialComponent(std::string& json, const cgltf_data* data, const cgltf_pbr_metallic_roughness& pbr, const QuantizationTexture* qt)
+{
+	comma(json);
+	append(json, "\"pbrMetallicRoughness\":{");
+	if (memcmp(pbr.base_color_factor, white, 16) != 0)
+	{
+		comma(json);
+		append(json, "\"baseColorFactor\":[");
+		append(json, pbr.base_color_factor[0]);
+		append(json, ",");
+		append(json, pbr.base_color_factor[1]);
+		append(json, ",");
+		append(json, pbr.base_color_factor[2]);
+		append(json, ",");
+		append(json, pbr.base_color_factor[3]);
+		append(json, "]");
+	}
+	if (pbr.base_color_texture.texture)
+	{
+		comma(json);
+		append(json, "\"baseColorTexture\":");
+		writeTextureInfo(json, data, pbr.base_color_texture, qt);
+	}
+	if (pbr.metallic_factor != 1)
+	{
+		comma(json);
+		append(json, "\"metallicFactor\":");
+		append(json, pbr.metallic_factor);
+	}
+	if (pbr.roughness_factor != 1)
+	{
+		comma(json);
+		append(json, "\"roughnessFactor\":");
+		append(json, pbr.roughness_factor);
+	}
+	if (pbr.metallic_roughness_texture.texture)
+	{
+		comma(json);
+		append(json, "\"metallicRoughnessTexture\":");
+		writeTextureInfo(json, data, pbr.metallic_roughness_texture, qt);
+	}
+	append(json, "}");
+}
+
+static void writeMaterialComponent(std::string& json, const cgltf_data* data, const cgltf_pbr_specular_glossiness& pbr, const QuantizationTexture* qt)
+{
+	comma(json);
+	append(json, "\"KHR_materials_pbrSpecularGlossiness\":{");
+	if (pbr.diffuse_texture.texture)
+	{
+		comma(json);
+		append(json, "\"diffuseTexture\":");
+		writeTextureInfo(json, data, pbr.diffuse_texture, qt);
+	}
+	if (pbr.specular_glossiness_texture.texture)
+	{
+		comma(json);
+		append(json, "\"specularGlossinessTexture\":");
+		writeTextureInfo(json, data, pbr.specular_glossiness_texture, qt);
+	}
+	if (memcmp(pbr.diffuse_factor, white, 16) != 0)
+	{
+		comma(json);
+		append(json, "\"diffuseFactor\":[");
+		append(json, pbr.diffuse_factor[0]);
+		append(json, ",");
+		append(json, pbr.diffuse_factor[1]);
+		append(json, ",");
+		append(json, pbr.diffuse_factor[2]);
+		append(json, ",");
+		append(json, pbr.diffuse_factor[3]);
+		append(json, "]");
+	}
+	if (memcmp(pbr.specular_factor, white, 12) != 0)
+	{
+		comma(json);
+		append(json, "\"specularFactor\":[");
+		append(json, pbr.specular_factor[0]);
+		append(json, ",");
+		append(json, pbr.specular_factor[1]);
+		append(json, ",");
+		append(json, pbr.specular_factor[2]);
+		append(json, "]");
+	}
+	if (pbr.glossiness_factor != 1)
+	{
+		comma(json);
+		append(json, "\"glossinessFactor\":");
+		append(json, pbr.glossiness_factor);
+	}
+	append(json, "}");
+}
+
 void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationTexture* qt)
 {
-	static const float white[4] = {1, 1, 1, 1};
-	static const float black[4] = {0, 0, 0, 0};
-
 	if (material.name && *material.name)
 	{
 		comma(json);
@@ -168,48 +261,7 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 
 	if (material.has_pbr_metallic_roughness)
 	{
-		const cgltf_pbr_metallic_roughness& pbr = material.pbr_metallic_roughness;
-
-		comma(json);
-		append(json, "\"pbrMetallicRoughness\":{");
-		if (memcmp(pbr.base_color_factor, white, 16) != 0)
-		{
-			comma(json);
-			append(json, "\"baseColorFactor\":[");
-			append(json, pbr.base_color_factor[0]);
-			append(json, ",");
-			append(json, pbr.base_color_factor[1]);
-			append(json, ",");
-			append(json, pbr.base_color_factor[2]);
-			append(json, ",");
-			append(json, pbr.base_color_factor[3]);
-			append(json, "]");
-		}
-		if (pbr.base_color_texture.texture)
-		{
-			comma(json);
-			append(json, "\"baseColorTexture\":");
-			writeTextureInfo(json, data, pbr.base_color_texture, qt);
-		}
-		if (pbr.metallic_factor != 1)
-		{
-			comma(json);
-			append(json, "\"metallicFactor\":");
-			append(json, pbr.metallic_factor);
-		}
-		if (pbr.roughness_factor != 1)
-		{
-			comma(json);
-			append(json, "\"roughnessFactor\":");
-			append(json, pbr.roughness_factor);
-		}
-		if (pbr.metallic_roughness_texture.texture)
-		{
-			comma(json);
-			append(json, "\"metallicRoughnessTexture\":");
-			writeTextureInfo(json, data, pbr.metallic_roughness_texture, qt);
-		}
-		append(json, "}");
+		writeMaterialComponent(json, data, material.pbr_metallic_roughness, qt);
 	}
 
 	if (material.normal_texture.texture)
@@ -272,54 +324,9 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 
 		if (material.has_pbr_specular_glossiness)
 		{
-			const cgltf_pbr_specular_glossiness& pbr = material.pbr_specular_glossiness;
-
-			comma(json);
-			append(json, "\"KHR_materials_pbrSpecularGlossiness\":{");
-			if (pbr.diffuse_texture.texture)
-			{
-				comma(json);
-				append(json, "\"diffuseTexture\":");
-				writeTextureInfo(json, data, pbr.diffuse_texture, qt);
-			}
-			if (pbr.specular_glossiness_texture.texture)
-			{
-				comma(json);
-				append(json, "\"specularGlossinessTexture\":");
-				writeTextureInfo(json, data, pbr.specular_glossiness_texture, qt);
-			}
-			if (memcmp(pbr.diffuse_factor, white, 16) != 0)
-			{
-				comma(json);
-				append(json, "\"diffuseFactor\":[");
-				append(json, pbr.diffuse_factor[0]);
-				append(json, ",");
-				append(json, pbr.diffuse_factor[1]);
-				append(json, ",");
-				append(json, pbr.diffuse_factor[2]);
-				append(json, ",");
-				append(json, pbr.diffuse_factor[3]);
-				append(json, "]");
-			}
-			if (memcmp(pbr.specular_factor, white, 12) != 0)
-			{
-				comma(json);
-				append(json, "\"specularFactor\":[");
-				append(json, pbr.specular_factor[0]);
-				append(json, ",");
-				append(json, pbr.specular_factor[1]);
-				append(json, ",");
-				append(json, pbr.specular_factor[2]);
-				append(json, "]");
-			}
-			if (pbr.glossiness_factor != 1)
-			{
-				comma(json);
-				append(json, "\"glossinessFactor\":");
-				append(json, pbr.glossiness_factor);
-			}
-			append(json, "}");
+			writeMaterialComponent(json, data, material.pbr_specular_glossiness, qt);
 		}
+
 		if (material.unlit)
 		{
 			comma(json);
@@ -1054,13 +1061,11 @@ void writeCamera(std::string& json, const cgltf_camera& camera)
 
 void writeLight(std::string& json, const cgltf_light& light)
 {
-	static const float white[3] = {1, 1, 1};
-
 	comma(json);
 	append(json, "{\"type\":\"");
 	append(json, lightType(light.type));
 	append(json, "\"");
-	if (memcmp(light.color, white, sizeof(white)) != 0)
+	if (memcmp(light.color, white, 12) != 0)
 	{
 		comma(json);
 		append(json, "\"color\":[");
