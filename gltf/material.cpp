@@ -49,55 +49,85 @@ static bool areExtrasEqual(cgltf_data* data, const cgltf_extras& lhs, const cglt
 	return true;
 }
 
+static bool areMaterialComponentsEqual(const cgltf_pbr_metallic_roughness& lhs, const cgltf_pbr_metallic_roughness& rhs)
+{
+	if (!areTextureViewsEqual(lhs.base_color_texture, rhs.base_color_texture))
+		return false;
+
+	if (!areTextureViewsEqual(lhs.metallic_roughness_texture, rhs.metallic_roughness_texture))
+		return false;
+
+	if (memcmp(lhs.base_color_factor, rhs.base_color_factor, sizeof(cgltf_float) * 4) != 0)
+		return false;
+
+	if (lhs.metallic_factor != rhs.metallic_factor)
+		return false;
+
+	if (lhs.roughness_factor != rhs.roughness_factor)
+		return false;
+
+	return true;
+}
+
+static bool areMaterialComponentsEqual(const cgltf_pbr_specular_glossiness& lhs, const cgltf_pbr_specular_glossiness& rhs)
+{
+	if (!areTextureViewsEqual(lhs.diffuse_texture, rhs.diffuse_texture))
+		return false;
+
+	if (!areTextureViewsEqual(lhs.specular_glossiness_texture, rhs.specular_glossiness_texture))
+		return false;
+
+	if (memcmp(lhs.diffuse_factor, rhs.diffuse_factor, sizeof(cgltf_float) * 4) != 0)
+		return false;
+
+	if (memcmp(lhs.specular_factor, rhs.specular_factor, sizeof(cgltf_float) * 3) != 0)
+		return false;
+
+	if (lhs.glossiness_factor != rhs.glossiness_factor)
+		return false;
+
+	return true;
+}
+
+static bool areMaterialComponentsEqual(const cgltf_clearcoat& lhs, const cgltf_clearcoat& rhs)
+{
+	if (!areTextureViewsEqual(lhs.clearcoat_texture, rhs.clearcoat_texture))
+		return false;
+
+	if (!areTextureViewsEqual(lhs.clearcoat_roughness_texture, rhs.clearcoat_roughness_texture))
+		return false;
+
+	if (!areTextureViewsEqual(lhs.clearcoat_normal_texture, rhs.clearcoat_normal_texture))
+		return false;
+
+	if (lhs.clearcoat_factor != rhs.clearcoat_factor)
+		return false;
+
+	if (lhs.clearcoat_roughness_factor != rhs.clearcoat_roughness_factor)
+		return false;
+
+	return true;
+}
+
 static bool areMaterialsEqual(cgltf_data* data, const cgltf_material& lhs, const cgltf_material& rhs, const Settings& settings)
 {
 	if (lhs.has_pbr_metallic_roughness != rhs.has_pbr_metallic_roughness)
 		return false;
 
-	if (lhs.has_pbr_metallic_roughness)
-	{
-		const cgltf_pbr_metallic_roughness& lpbr = lhs.pbr_metallic_roughness;
-		const cgltf_pbr_metallic_roughness& rpbr = rhs.pbr_metallic_roughness;
-
-		if (!areTextureViewsEqual(lpbr.base_color_texture, rpbr.base_color_texture))
-			return false;
-
-		if (!areTextureViewsEqual(lpbr.metallic_roughness_texture, rpbr.metallic_roughness_texture))
-			return false;
-
-		if (memcmp(lpbr.base_color_factor, rpbr.base_color_factor, sizeof(cgltf_float) * 4) != 0)
-			return false;
-
-		if (lpbr.metallic_factor != rpbr.metallic_factor)
-			return false;
-
-		if (lpbr.roughness_factor != rpbr.roughness_factor)
-			return false;
-	}
+	if (lhs.has_pbr_metallic_roughness && !areMaterialComponentsEqual(lhs.pbr_metallic_roughness, rhs.pbr_metallic_roughness))
+		return false;
 
 	if (lhs.has_pbr_specular_glossiness != rhs.has_pbr_specular_glossiness)
 		return false;
 
-	if (lhs.has_pbr_specular_glossiness)
-	{
-		const cgltf_pbr_specular_glossiness& lpbr = lhs.pbr_specular_glossiness;
-		const cgltf_pbr_specular_glossiness& rpbr = rhs.pbr_specular_glossiness;
+	if (lhs.has_pbr_specular_glossiness && !areMaterialComponentsEqual(lhs.pbr_specular_glossiness, rhs.pbr_specular_glossiness))
+		return false;
 
-		if (!areTextureViewsEqual(lpbr.diffuse_texture, rpbr.diffuse_texture))
-			return false;
+	if (lhs.has_clearcoat != rhs.has_clearcoat)
+		return false;
 
-		if (!areTextureViewsEqual(lpbr.specular_glossiness_texture, rpbr.specular_glossiness_texture))
-			return false;
-
-		if (memcmp(lpbr.diffuse_factor, rpbr.diffuse_factor, sizeof(cgltf_float) * 4) != 0)
-			return false;
-
-		if (memcmp(lpbr.specular_factor, rpbr.specular_factor, sizeof(cgltf_float) * 3) != 0)
-			return false;
-
-		if (lpbr.glossiness_factor != rpbr.glossiness_factor)
-			return false;
-	}
+	if (lhs.has_clearcoat && !areMaterialComponentsEqual(lhs.clearcoat, rhs.clearcoat))
+		return false;
 
 	if (!areTextureViewsEqual(lhs.normal_texture, rhs.normal_texture))
 		return false;
