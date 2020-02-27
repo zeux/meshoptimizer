@@ -12,10 +12,10 @@
 #endif
 
 #ifdef SIMD_WASM
-#define wasmx_shuffle_v32x4(v, w, i, j, k, l) wasm_v8x16_shuffle(v, w, 4 * i, 4 * i + 1, 4 * i + 2, 4 * i + 3, 4 * j, 4 * j + 1, 4 * j + 2, 4 * j + 3, 16 + 4 * k, 16 + 4 * k + 1, 16 + 4 * k + 2, 16 + 4 * k + 3, 16 + 4 * l, 16 + 4 * l + 1, 16 + 4 * l + 2, 16 + 4 * l + 3)
 #define wasmx_unpacklo_v16x8(a, b) wasm_v8x16_shuffle(a, b, 0, 1, 16, 17, 2, 3, 18, 19, 4, 5, 20, 21, 6, 7, 22, 23)
 #define wasmx_unpackhi_v16x8(a, b) wasm_v8x16_shuffle(a, b, 8, 9, 24, 25, 10, 11, 26, 27, 12, 13, 28, 29, 14, 15, 30, 31)
-#define wasmx_blend_v16x8(a, b, m0, m1, m2, m3, m4, m5, m6, m7) wasm_v8x16_shuffle(a, b, 0 + 16 * m0, 1 + 16 * m0, 2 + 16 * m1, 3 + 16 * m1, 4 + 16 * m2, 5 + 16 * m2, 6 + 16 * m3, 7 + 16 * m3, 8 + 16 * m4, 9 + 16 * m4, 10 + 16 * m5, 11 + 16 * m5, 12 + 16 * m6, 13 + 16 * m6, 14 + 16 * m7, 15 + 16 * m7)
+#define wasmx_unziplo_v32x4(a, b) wasm_v8x16_shuffle(a, b, 0, 1, 2, 3, 8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27)
+#define wasmx_unziphi_v32x4(a, b) wasm_v8x16_shuffle(a, b, 4, 5, 6, 7, 12, 13, 14, 15, 20, 21, 22, 23, 28, 29, 30, 31)
 #endif
 
 namespace meshopt
@@ -156,14 +156,14 @@ static void decodeFilterOctSimd(short* data, size_t count)
 		v128_t n4_1 = wasm_v128_load(&data[(i + 2) * 4]);
 
 		// gather both x/y 16-bit pairs in each 32-bit lane
-		v128_t n4 = wasmx_shuffle_v32x4(n4_0, n4_1, 0, 2, 0, 2);
+		v128_t n4 = wasmx_unziplo_v32x4(n4_0, n4_1);
 
 		// sign-extends each of x,y in [x y] with arithmetic shifts
 		v128_t xf = wasm_i32x4_shr(wasm_i32x4_shl(n4, 16), 16);
 		v128_t yf = wasm_i32x4_shr(n4, 16);
 
 		// unpack z; note that z is unsigned so we don't need to sign extend it
-		v128_t z4 = wasmx_shuffle_v32x4(n4_0, n4_1, 1, 3, 1, 3);
+		v128_t z4 = wasmx_unziphi_v32x4(n4_0, n4_1);
 		v128_t zf = wasm_v128_and(z4, zmask);
 
 		// convert x and y to floats and reconstruct z; this assumes zf encodes 1.f at the same bit count
@@ -219,8 +219,8 @@ static void decodeFilterQuatSimd(short* data, size_t count)
 		v128_t q4_1 = wasm_v128_load(&data[(i + 2) * 4]);
 
 		// gather both x/y 16-bit pairs in each 32-bit lane
-		v128_t q4_xy = wasmx_shuffle_v32x4(q4_0, q4_1, 0, 2, 0, 2);
-		v128_t q4_zc = wasmx_shuffle_v32x4(q4_0, q4_1, 1, 3, 1, 3);
+		v128_t q4_xy = wasmx_unziplo_v32x4(q4_0, q4_1);
+		v128_t q4_zc = wasmx_unziphi_v32x4(q4_0, q4_1);
 
 		// sign-extends each of x,y in [x y] with arithmetic shifts
 		v128_t xf = wasm_i32x4_shr(wasm_i32x4_shl(q4_xy, 16), 16);
