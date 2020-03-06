@@ -21,7 +21,7 @@ std::string getVersion()
 	return result;
 }
 
-void finalizeBufferViews(std::string& json, std::vector<BufferView>& views, std::string& bin, std::string& fallback)
+static void finalizeBufferViews(std::string& json, std::vector<BufferView>& views, std::string& bin, std::string& fallback)
 {
 	for (size_t i = 0; i < views.size(); ++i)
 	{
@@ -68,7 +68,7 @@ void finalizeBufferViews(std::string& json, std::vector<BufferView>& views, std:
 	}
 }
 
-void printMeshStats(const std::vector<Mesh>& meshes, const char* name)
+static void printMeshStats(const std::vector<Mesh>& meshes, const char* name)
 {
 	size_t triangles = 0;
 	size_t vertices = 0;
@@ -84,7 +84,7 @@ void printMeshStats(const std::vector<Mesh>& meshes, const char* name)
 	printf("%s: %d triangles, %d vertices\n", name, int(triangles), int(vertices));
 }
 
-void printSceneStats(const std::vector<BufferView>& views, const std::vector<Mesh>& meshes, size_t node_offset, size_t mesh_offset, size_t material_offset, size_t json_size, size_t bin_size)
+static void printSceneStats(const std::vector<BufferView>& views, const std::vector<Mesh>& meshes, size_t node_offset, size_t mesh_offset, size_t material_offset, size_t json_size, size_t bin_size)
 {
 	size_t bytes[BufferView::Kind_Count] = {};
 
@@ -101,7 +101,7 @@ void printSceneStats(const std::vector<BufferView>& views, const std::vector<Mes
 	       int(bytes[BufferView::Kind_Time]), int(bytes[BufferView::Kind_Keyframe]), int(bytes[BufferView::Kind_Image]));
 }
 
-void printAttributeStats(const std::vector<BufferView>& views, BufferView::Kind kind, const char* name)
+static void printAttributeStats(const std::vector<BufferView>& views, BufferView::Kind kind, const char* name)
 {
 	for (size_t i = 0; i < views.size(); ++i)
 	{
@@ -141,7 +141,7 @@ void printAttributeStats(const std::vector<BufferView>& views, BufferView::Kind 
 	}
 }
 
-void process(cgltf_data* data, const char* input_path, const char* output_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const Settings& settings, std::string& json, std::string& bin, std::string& fallback)
+static void process(cgltf_data* data, const char* input_path, const char* output_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const Settings& settings, std::string& json, std::string& bin, std::string& fallback)
 {
 	if (settings.verbose)
 	{
@@ -515,12 +515,12 @@ void process(cgltf_data* data, const char* input_path, const char* output_path, 
 	}
 }
 
-void writeU32(FILE* out, uint32_t data)
+static void writeU32(FILE* out, uint32_t data)
 {
 	fwrite(&data, 4, 1, out);
 }
 
-const char* getBaseName(const char* path)
+static const char* getBaseName(const char* path)
 {
 	const char* slash = strrchr(path, '/');
 	const char* backslash = strrchr(path, '\\');
@@ -531,7 +531,7 @@ const char* getBaseName(const char* path)
 	return std::max(rs, bs);
 }
 
-std::string getBufferSpec(const char* bin_path, size_t bin_size, const char* fallback_path, size_t fallback_size, bool fallback_ref)
+static std::string getBufferSpec(const char* bin_path, size_t bin_size, const char* fallback_path, size_t fallback_size, bool fallback_ref)
 {
 	std::string json;
 	append(json, "\"buffers\":[");
@@ -877,7 +877,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-o file: output file path, .gltf/.glb\n");
 			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc for higher compression ratio)\n");
 			fprintf(stderr, "\nTextures:\n");
-			fprintf(stderr, "\t-te: embed all textures into main buffer\n");
+			fprintf(stderr, "\t-te: embed all textures into main buffer (.bin or .glb)\n");
 			fprintf(stderr, "\t-tb: convert all textures to Basis Universal format (with basisu executable); will be removed in the future\n");
 			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression (using basisu executable)\n");
 			fprintf(stderr, "\t-tq N: set texture encoding quality (default: 50; N should be between 1 and 100\n");
@@ -906,7 +906,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-i file: input file to process, .obj/.gltf/.glb\n");
 			fprintf(stderr, "\t-o file: output file path, .gltf/.glb\n");
 			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc for higher compression ratio)\n");
-			fprintf(stderr, "\t-te: embed all textures into main buffer\n");
+			fprintf(stderr, "\t-te: embed all textures into main buffer (.bin or .glb)\n");
 			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression (using basisu executable)\n");
 			fprintf(stderr, "\t-si R: simplify meshes to achieve the ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\nRun gltfpack -h to display a full list of options\n");
