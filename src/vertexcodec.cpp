@@ -907,7 +907,8 @@ SIMD_TARGET
 static v128_t unzigzag8(v128_t v)
 {
 	v128_t xl = wasm_i8x16_neg(wasm_v128_and(v, wasm_i8x16_splat(1)));
-	v128_t xr = wasm_u8x16_shr(v, 1);
+	// TODO: use wasm_u8x16_shr when v8 fixes codegen for constant shifts
+	v128_t xr = wasm_v128_and(wasm_u16x8_shr(v, 1), wasm_i8x16_splat(127));
 
 	return wasm_v128_xor(xl, xr);
 }
