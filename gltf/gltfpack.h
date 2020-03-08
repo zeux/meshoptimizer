@@ -80,6 +80,10 @@ struct Settings
 	int tex_bits;
 	int nrm_bits;
 
+	int trn_bits;
+	int rot_bits;
+	int scl_bits;
+
 	int anim_freq;
 	bool anim_const;
 

@@ -611,7 +611,7 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 
 			if (filter == StreamFormat::Filter_Quat)
 			{
-				encodeQuat(v, a, 12);
+				encodeQuat(v, a, settings.rot_bits);
 			}
 			else
 			{
@@ -642,16 +642,17 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 	}
 	else if (type == cgltf_animation_path_type_translation || type == cgltf_animation_path_type_scale)
 	{
-		int bits = settings.compressmore ? 15 : 23;
+		// 9 bits for sign + exponent, the rest is for mantissa
+		int mbits = (type == cgltf_animation_path_type_translation ? settings.trn_bits : settings.scl_bits) - 9;
 
 		for (size_t i = 0; i < data.size(); ++i)
 		{
 			const Attr& a = data[i];
 
 			float v[3] = {
-			    meshopt_quantizeFloat(a.f[0], bits),
-			    meshopt_quantizeFloat(a.f[1], bits),
-			    meshopt_quantizeFloat(a.f[2], bits)};
+			    meshopt_quantizeFloat(a.f[0], mbits),
+			    meshopt_quantizeFloat(a.f[1], mbits),
+			    meshopt_quantizeFloat(a.f[2], mbits)};
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
