@@ -411,10 +411,10 @@ static void decodeFilterOct12()
 static void decodeFilterQuat12()
 {
 	unsigned short data[4 * 4] = {
-	    0, 1, 0, 0x700,
-	    0, 1870, 0, 0x701,
-	    2017, 1, 0, 0x702,
-	    14, 1300, 0, 0x703, // clang-format :-/
+	    0, 1, 0, 0x7fc,
+	    0, 1870, 0, 0x7fd,
+	    2017, 1, 0, 0x7fe,
+	    14, 1300, 0, 0x7ff, // clang-format :-/
 	};
 
 	meshopt_decodeFilterQuat(data, 4, 8);
