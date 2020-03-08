@@ -57,7 +57,7 @@ static void decodeFilterOct(T* data, size_t count)
 
 static void decodeFilterQuat(short* data, size_t count)
 {
-	const float scale = 1.f / (2047.f * sqrtf(2.f));
+	const float scale = 1.f / sqrtf(2.f);
 
 	static const int order[4][4] = {
 	    {1, 2, 3, 0},
@@ -68,10 +68,14 @@ static void decodeFilterQuat(short* data, size_t count)
 
 	for (size_t i = 0; i < count; ++i)
 	{
+		// recover scale from the high byte of the component
+		int sf = data[i * 4 + 3] | 0xff;
+		float ss = scale / float(sf);
+
 		// convert x/y/z to [-1..1] (scaled...)
-		float x = float(data[i * 4 + 0]) * scale;
-		float y = float(data[i * 4 + 1]) * scale;
-		float z = float(data[i * 4 + 2]) * scale;
+		float x = float(data[i * 4 + 0]) * ss;
+		float y = float(data[i * 4 + 1]) * ss;
+		float z = float(data[i * 4 + 2]) * ss;
 
 		// reconstruct w as a square root; we clamp to 0.f to avoid NaN due to precision errors
 		float ww = 1.f - x * x - y * y - z * z;
@@ -211,7 +215,7 @@ static void decodeFilterOctSimd(short* data, size_t count)
 
 static void decodeFilterQuatSimd(short* data, size_t count)
 {
-	const float scale = 1.f / (2047.f * sqrtf(2.f));
+	const float scale = 1.f / sqrtf(2.f);
 
 	for (size_t i = 0; i < count; i += 4)
 	{
@@ -226,11 +230,16 @@ static void decodeFilterQuatSimd(short* data, size_t count)
 		v128_t xf = wasm_i32x4_shr(wasm_i32x4_shl(q4_xy, 16), 16);
 		v128_t yf = wasm_i32x4_shr(q4_xy, 16);
 		v128_t zf = wasm_i32x4_shr(wasm_i32x4_shl(q4_zc, 16), 16);
+		v128_t cf = wasm_i32x4_shr(q4_zc, 16);
+
+		// get a floating-point scaler using high byte of zc (which represents 1.f)
+		v128_t sf = wasm_v128_or(cf, wasm_i32x4_splat(0xff));
+		v128_t ss = wasm_f32x4_div(wasm_f32x4_splat(scale), wasm_f32x4_convert_i32x4(sf));
 
 		// convert x/y/z to [-1..1] (scaled...)
-		v128_t x = wasm_f32x4_mul(wasm_f32x4_convert_i32x4(xf), wasm_f32x4_splat(scale));
-		v128_t y = wasm_f32x4_mul(wasm_f32x4_convert_i32x4(yf), wasm_f32x4_splat(scale));
-		v128_t z = wasm_f32x4_mul(wasm_f32x4_convert_i32x4(zf), wasm_f32x4_splat(scale));
+		v128_t x = wasm_f32x4_mul(wasm_f32x4_convert_i32x4(xf), ss);
+		v128_t y = wasm_f32x4_mul(wasm_f32x4_convert_i32x4(yf), ss);
+		v128_t z = wasm_f32x4_mul(wasm_f32x4_convert_i32x4(zf), ss);
 
 		// reconstruct w as a square root; we clamp to 0.f to avoid NaN due to precision errors
 		// note: i32x4_max_s with 0 is equivalent to f32x4_max
@@ -257,7 +266,7 @@ static void decodeFilterQuatSimd(short* data, size_t count)
 		v128_t res_1 = wasmx_unpackhi_v16x8(wyr, xzr);
 
 		// compute component index shifted left by 4 (and moved into i32x4 slot)
-		v128_t cm = wasm_i32x4_shl(wasm_i32x4_shr(q4_zc, 16), 4);
+		v128_t cm = wasm_i32x4_shl(cf, 4);
 
 		// rotate and store
 		uint64_t* out = (uint64_t*)&data[i * 4];
