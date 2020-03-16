@@ -735,6 +735,8 @@ int main(int argc, char** argv)
 	bool help = false;
 	bool test = false;
 
+	std::vector<const char*> testinputs;
+
 	for (int i = 1; i < argc; ++i)
 	{
 		const char* arg = argv[i];
@@ -851,7 +853,11 @@ int main(int argc, char** argv)
 			fprintf(stderr, "Unrecognized option %s\n", arg);
 			return 1;
 		}
-		else if (!test)
+		else if (test)
+		{
+			testinputs.push_back(arg);
+		}
+		else
 		{
 			fprintf(stderr, "Expected option, got %s instead\n", arg);
 			return 1;
@@ -867,11 +873,9 @@ int main(int argc, char** argv)
 
 	if (test)
 	{
-		for (int i = 1; i < argc; ++i)
+		for (size_t i = 0; i < testinputs.size(); ++i)
 		{
-			const char* path = argv[i];
-			if (path[0] == '-')
-				continue;
+			const char* path = testinputs[i];
 
 			printf("%s\n", path);
 			gltfpack(path, NULL, settings);
