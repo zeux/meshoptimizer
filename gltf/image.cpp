@@ -5,11 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef _WIN32
-#define popen _popen
-#define pclose _pclose
-#endif
-
 static const char* kMimeTypes[][2] = {
     {"image/jpeg", ".jpg"},
     {"image/jpeg", ".jpeg"},
@@ -74,28 +69,20 @@ static const char* mimeExtension(const char* mime_type)
 
 bool checkBasis()
 {
-#ifdef __EMSCRIPTEN__
-	return false;
-#else
 	const char* basisu_path = getenv("BASISU_PATH");
 	std::string cmd = basisu_path ? basisu_path : "basisu";
 
+	cmd += " -version";
+
 #ifdef _WIN32
-	cmd += " 2>nul";
+	cmd += " >nul 2>nul";
 #else
-	cmd += " 2>/dev/null";
+	cmd += " >/dev/null 2>/dev/null";
 #endif
 
-	FILE* pipe = popen(cmd.c_str(), "r");
-	if (!pipe)
-		return false;
+	int rc = system(cmd.c_str());
 
-	char buf[15];
-	size_t read = fread(buf, 1, sizeof(buf), pipe);
-	pclose(pipe);
-
-	return read == sizeof(buf) && memcmp(buf, "Basis Universal", sizeof(buf)) == 0;
-#endif
+	return rc == 0;
 }
 
 bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, bool uastc)
