@@ -118,6 +118,13 @@ static void createDfd(std::vector<uint32_t>& result, int channels, bool srgb, bo
 	KHR_DFDSETVAL(dfd, TRANSFER, srgb ? KHR_DF_TRANSFER_SRGB : KHR_DF_TRANSFER_LINEAR);
 	KHR_DFDSETVAL(dfd, FLAGS, KHR_DF_FLAG_ALPHA_STRAIGHT);
 
+	if (uastc)
+	{
+		// UASTC is ASTC 4x4 - but texelBlockDimension encodes size-1
+		KHR_DFDSETVAL(dfd, TEXELBLOCKDIMENSION0, 3);
+		KHR_DFDSETVAL(dfd, TEXELBLOCKDIMENSION1, 3);
+	}
+
 	static const khr_df_model_channels_e channel_enums[] = {
 	    KHR_DF_CHANNEL_RGBSDA_R,
 	    KHR_DF_CHANNEL_RGBSDA_G,
@@ -279,6 +286,12 @@ std::string basisToKtx(const std::string& data, bool srgb, bool uastc)
 		ktx.append(data.substr(basis_header.m_extended_file_ofs, basis_header.m_extended_file_size));
 	}
 
+	// align to UASTC block size (16b) before writing mips
+	if (uastc)
+	{
+		ktx.resize((ktx.size() + 15) & ~15);
+	}
+
 	// mip levels
 	for (size_t i = 0; i < levels; ++i)
 	{
@@ -301,7 +314,7 @@ std::string basisToKtx(const std::string& data, bool srgb, bool uastc)
 		Ktx2LevelIndex le = {};
 		le.byteOffset = file_offset;
 		le.byteLength = ktx.size() - file_offset;
-		le.uncompressedByteLength = 0;
+		le.uncompressedByteLength = basis ? 0 : slice.m_file_size;
 
 		write(ktx, ktx_level_offset + level_index * sizeof(Ktx2LevelIndex), le);
 
@@ -369,7 +382,7 @@ int main(int argc, const char** argv)
 	if (!readFile(argv[1], data))
 		return 1;
 
-	std::string ktx = basisToKtx(data, true, false);
+	std::string ktx = basisToKtx(data, true, true);
 
 	if (!writeFile(argv[2], ktx))
 		return 1;
