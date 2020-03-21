@@ -147,7 +147,7 @@ std::string basisToKtx(const std::string& basis, bool srgb)
 	assert(basis_header.m_total_slices > 0);
 	assert(basis_header.m_total_images == 1);
 
-	assert(basis_header.m_format == 0);
+	assert(basis_header.m_tex_format == basist::cETC1S);
 	assert(basis_header.m_flags & basist::cBASISHeaderFlagETC1S);
 	assert(!(basis_header.m_flags & basist::cBASISHeaderFlagYFlipped));
 	assert(basis_header.m_tex_type == basist::cBASISTexType2D);
