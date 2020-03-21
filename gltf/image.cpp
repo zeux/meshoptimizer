@@ -10,11 +10,10 @@
 #define pclose _pclose
 #endif
 
-static const char* kMimeTypes[][2] =
-{
-	{ "image/jpeg", ".jpg" },
-	{ "image/jpeg", ".jpeg" },
-	{ "image/png", ".png" },
+static const char* kMimeTypes[][2] = {
+    {"image/jpeg", ".jpg"},
+    {"image/jpeg", ".jpeg"},
+    {"image/png", ".png"},
 };
 
 void analyzeImages(cgltf_data* data, std::vector<ImageInfo>& images)
