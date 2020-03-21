@@ -10,6 +10,13 @@
 #define pclose _pclose
 #endif
 
+static const char* kMimeTypes[][2] =
+{
+	{ "image/jpeg", ".jpg" },
+	{ "image/jpeg", ".jpeg" },
+	{ "image/png", ".png" },
+};
+
 void analyzeImages(cgltf_data* data, std::vector<ImageInfo>& images)
 {
 	for (size_t i = 0; i < data->materials_count; ++i)
@@ -40,20 +47,30 @@ void analyzeImages(cgltf_data* data, std::vector<ImageInfo>& images)
 	}
 }
 
-std::string inferMimeType(const char* path)
+const char* inferMimeType(const char* path)
 {
 	const char* ext = strrchr(path, '.');
 	if (!ext)
 		return "";
 
-	std::string extl = ext + 1;
+	std::string extl = ext;
 	for (size_t i = 0; i < extl.length(); ++i)
 		extl[i] = char(tolower(extl[i]));
 
-	if (extl == "jpg")
-		return "image/jpeg";
-	else
-		return "image/" + extl;
+	for (size_t i = 0; i < sizeof(kMimeTypes) / sizeof(kMimeTypes[0]); ++i)
+		if (extl == kMimeTypes[i][1])
+			return kMimeTypes[i][0];
+
+	return "";
+}
+
+static const char* mimeExtension(const char* mime_type)
+{
+	for (size_t i = 0; i < sizeof(kMimeTypes) / sizeof(kMimeTypes[0]); ++i)
+		if (strcmp(kMimeTypes[i][0], mime_type) == 0)
+			return kMimeTypes[i][1];
+
+	return ".raw";
 }
 
 bool checkBasis()
@@ -82,9 +99,9 @@ bool checkBasis()
 #endif
 }
 
-bool encodeBasis(const std::string& data, std::string& result, bool normal_map, bool srgb, int quality)
+bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality)
 {
-	TempFile temp_input(".raw");
+	TempFile temp_input(mimeExtension(mime_type));
 	TempFile temp_output(".basis");
 
 	if (!writeFile(temp_input.path.c_str(), data))

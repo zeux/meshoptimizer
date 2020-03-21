@@ -224,9 +224,9 @@ void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Setti
 void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes);
 
 void analyzeImages(cgltf_data* data, std::vector<ImageInfo>& images);
-std::string inferMimeType(const char* path);
+const char* inferMimeType(const char* path);
 bool checkBasis();
-bool encodeBasis(const std::string& data, std::string& result, bool normal_map, bool srgb, int quality);
+bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality);
 std::string basisToKtx(const std::string& basis, bool srgb);
 
 void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Animation>& animations);
