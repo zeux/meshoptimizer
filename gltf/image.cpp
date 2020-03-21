@@ -5,10 +5,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef _WIN32
-#define popen _popen
-#define pclose _pclose
-#endif
+static const char* kMimeTypes[][2] = {
+    {"image/jpeg", ".jpg"},
+    {"image/jpeg", ".jpeg"},
+    {"image/png", ".png"},
+};
 
 void analyzeImages(cgltf_data* data, std::vector<ImageInfo>& images)
 {
@@ -40,51 +41,53 @@ void analyzeImages(cgltf_data* data, std::vector<ImageInfo>& images)
 	}
 }
 
-std::string inferMimeType(const char* path)
+const char* inferMimeType(const char* path)
 {
 	const char* ext = strrchr(path, '.');
 	if (!ext)
 		return "";
 
-	std::string extl = ext + 1;
+	std::string extl = ext;
 	for (size_t i = 0; i < extl.length(); ++i)
 		extl[i] = char(tolower(extl[i]));
 
-	if (extl == "jpg")
-		return "image/jpeg";
-	else
-		return "image/" + extl;
+	for (size_t i = 0; i < sizeof(kMimeTypes) / sizeof(kMimeTypes[0]); ++i)
+		if (extl == kMimeTypes[i][1])
+			return kMimeTypes[i][0];
+
+	return "";
+}
+
+static const char* mimeExtension(const char* mime_type)
+{
+	for (size_t i = 0; i < sizeof(kMimeTypes) / sizeof(kMimeTypes[0]); ++i)
+		if (strcmp(kMimeTypes[i][0], mime_type) == 0)
+			return kMimeTypes[i][1];
+
+	return ".raw";
 }
 
 bool checkBasis()
 {
-#ifdef __EMSCRIPTEN__
-	return false;
-#else
 	const char* basisu_path = getenv("BASISU_PATH");
 	std::string cmd = basisu_path ? basisu_path : "basisu";
 
+	cmd += " -version";
+
 #ifdef _WIN32
-	cmd += " 2>nul";
+	cmd += " >nul 2>nul";
 #else
-	cmd += " 2>/dev/null";
+	cmd += " >/dev/null 2>/dev/null";
 #endif
 
-	FILE* pipe = popen(cmd.c_str(), "r");
-	if (!pipe)
-		return false;
+	int rc = system(cmd.c_str());
 
-	char buf[15];
-	size_t read = fread(buf, 1, sizeof(buf), pipe);
-	pclose(pipe);
-
-	return read == sizeof(buf) && memcmp(buf, "Basis Universal", sizeof(buf)) == 0;
-#endif
+	return rc == 0;
 }
 
-bool encodeBasis(const std::string& data, std::string& result, bool normal_map, bool srgb, int quality)
+bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, bool uastc)
 {
-	TempFile temp_input(".raw");
+	TempFile temp_input(mimeExtension(mime_type));
 	TempFile temp_output(".basis");
 
 	if (!writeFile(temp_input.path.c_str(), data))
@@ -109,6 +112,11 @@ bool encodeBasis(const std::string& data, std::string& result, bool normal_map, 
 	else if (!srgb)
 	{
 		cmd += " -linear";
+	}
+
+	if (uastc)
+	{
+		cmd += " -uastc";
 	}
 
 	cmd += " -file ";

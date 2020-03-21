@@ -797,6 +797,11 @@ int main(int argc, char** argv)
 		{
 			settings.texture_basis = true;
 		}
+		else if (strcmp(arg, "-tu") == 0)
+		{
+			settings.texture_basis = true;
+			settings.texture_uastc = true;
+		}
 		else if (strcmp(arg, "-tc") == 0)
 		{
 			settings.texture_basis = true;
@@ -900,6 +905,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-tb: convert all textures to Basis Universal format (with basisu executable); will be removed in the future\n");
 			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression (using basisu executable)\n");
 			fprintf(stderr, "\t-tq N: set texture encoding quality (default: 50; N should be between 1 and 100\n");
+			fprintf(stderr, "\t-tu: use UASTC when encoding textures (much higher quality and much larger size)\n");
 			fprintf(stderr, "\nSimplification:\n");
 			fprintf(stderr, "\t-si R: simplify meshes to achieve the ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\t-sa: aggressively simplify to the target ratio disregarding quality\n");
