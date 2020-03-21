@@ -155,7 +155,7 @@ std::string basisToKtx(const std::string& data, bool srgb, bool uastc)
 	assert(basis_header.m_total_slices > 0);
 	assert(basis_header.m_total_images == 1);
 
-	assert(basis_header.m_tex_format == uastc ? basist::cUASTC4x4 : basist::cETC1S);
+	assert(basis_header.m_tex_format == uint32_t(uastc ? basist::cUASTC4x4 : basist::cETC1S));
 	assert(!(basis_header.m_flags & basist::cBASISHeaderFlagETC1S) == uastc);
 	assert(!(basis_header.m_flags & basist::cBASISHeaderFlagYFlipped));
 	assert(basis_header.m_tex_type == basist::cBASISTexType2D);
