@@ -96,6 +96,7 @@ struct Settings
 	bool texture_embed;
 	bool texture_basis;
 	bool texture_ktx2;
+	bool texture_uastc;
 
 	int texture_quality;
 
@@ -226,7 +227,7 @@ void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials,
 void analyzeImages(cgltf_data* data, std::vector<ImageInfo>& images);
 const char* inferMimeType(const char* path);
 bool checkBasis();
-bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality);
+bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, bool uastc);
 std::string basisToKtx(const std::string& basis, bool srgb);
 
 void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Animation>& animations);

@@ -574,7 +574,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 		{
 			std::string encoded;
 
-			if (encodeBasis(img_data, mime_type.c_str(), encoded, info.normal_map, info.srgb, settings.texture_quality))
+			if (encodeBasis(img_data, mime_type.c_str(), encoded, info.normal_map, info.srgb, settings.texture_quality, settings.texture_uastc))
 			{
 				if (settings.texture_ktx2)
 					encoded = basisToKtx(encoded, info.srgb);
@@ -603,7 +603,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 			{
 				std::string encoded;
 
-				if (encodeBasis(img_data, mime_type.c_str(), encoded, info.normal_map, info.srgb, settings.texture_quality))
+				if (encodeBasis(img_data, mime_type.c_str(), encoded, info.normal_map, info.srgb, settings.texture_quality, settings.texture_uastc))
 				{
 					if (settings.texture_ktx2)
 						encoded = basisToKtx(encoded, info.srgb);

@@ -99,7 +99,7 @@ bool checkBasis()
 #endif
 }
 
-bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality)
+bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, bool uastc)
 {
 	TempFile temp_input(mimeExtension(mime_type));
 	TempFile temp_output(".basis");
@@ -126,6 +126,11 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 	else if (!srgb)
 	{
 		cmd += " -linear";
+	}
+
+	if (uastc)
+	{
+		cmd += " -uastc";
 	}
 
 	cmd += " -file ";
