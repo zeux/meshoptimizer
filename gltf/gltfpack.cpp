@@ -799,6 +799,7 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-tu") == 0)
 		{
+			settings.texture_basis = true;
 			settings.texture_uastc = true;
 		}
 		else if (strcmp(arg, "-tc") == 0)
