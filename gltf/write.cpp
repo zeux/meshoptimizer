@@ -577,7 +577,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 			if (encodeBasis(img_data, mime_type.c_str(), encoded, info.normal_map, info.srgb, settings.texture_quality, settings.texture_uastc))
 			{
 				if (settings.texture_ktx2)
-					encoded = basisToKtx(encoded, info.srgb);
+					encoded = basisToKtx(encoded, info.srgb, settings.texture_uastc);
 
 				writeEmbeddedImage(json, views, encoded.c_str(), encoded.size(), settings.texture_ktx2 ? "image/ktx2" : "image/basis");
 			}
@@ -606,7 +606,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 				if (encodeBasis(img_data, mime_type.c_str(), encoded, info.normal_map, info.srgb, settings.texture_quality, settings.texture_uastc))
 				{
 					if (settings.texture_ktx2)
-						encoded = basisToKtx(encoded, info.srgb);
+						encoded = basisToKtx(encoded, info.srgb, settings.texture_uastc);
 
 					if (writeFile(basis_full_path.c_str(), encoded))
 					{
