@@ -130,6 +130,7 @@ struct StreamFormat
 		Filter_None = 0,
 		Filter_Oct = 1,
 		Filter_Quat = 2,
+		Filter_Exp = 3,
 	};
 
 	cgltf_type type;

@@ -723,9 +723,9 @@ int main(int argc, char** argv)
 	settings.pos_bits = 14;
 	settings.tex_bits = 12;
 	settings.nrm_bits = 8;
-	settings.trn_bits = 24;
+	settings.trn_bits = 16;
 	settings.rot_bits = 12;
-	settings.scl_bits = 24;
+	settings.scl_bits = 16;
 	settings.anim_freq = 30;
 	settings.simplify_threshold = 1.f;
 	settings.texture_quality = 50;
@@ -914,9 +914,9 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-vt N: use N-bit quantization for texture corodinates (default: 12; N should be between 1 and 16)\n");
 			fprintf(stderr, "\t-vn N: use N-bit quantization for normals and tangents (default: 8; N should be between 1 and 16)\n");
 			fprintf(stderr, "\nAnimations:\n");
-			fprintf(stderr, "\t-at N: use N-bit quantization for translations (default: 24; N should be between 9 and 32)\n");
-			fprintf(stderr, "\t-ar N: use N-bit quantization for rotations (default: 12; N should be between 9 and 16)\n");
-			fprintf(stderr, "\t-as N: use N-bit quantization for scale (default: 24; N should be between 9 and 32)\n");
+			fprintf(stderr, "\t-at N: use N-bit quantization for translations (default: 16; N should be between 1 and 24)\n");
+			fprintf(stderr, "\t-ar N: use N-bit quantization for rotations (default: 12; N should be between 4 and 16)\n");
+			fprintf(stderr, "\t-as N: use N-bit quantization for scale (default: 16; N should be between 1 and 24)\n");
 			fprintf(stderr, "\t-af N: resample animations at N Hz (default: 30)\n");
 			fprintf(stderr, "\t-ac: keep constant animation tracks even if they don't modify the node transform\n");
 			fprintf(stderr, "\nScene:\n");
