@@ -105,7 +105,7 @@ static void decodeFilterExp(unsigned int* data, size_t count)
 
 		// decode mantissa and exponent
 		int m = int(v << 8) >> 8;
-		int e = char(v >> 24);
+		int e = int(v) >> 24;
 
 		union {
 			float f;
