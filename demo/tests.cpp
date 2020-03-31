@@ -429,6 +429,27 @@ static void decodeFilterQuat12()
 	assert(memcmp(data, expected, sizeof(data)) == 0);
 }
 
+static void decodeFilterExp()
+{
+	unsigned int data[4] = {
+	    0,
+	    0xff000003,
+	    0x02fffff7,
+	    0xfe7fffff, // clang-format :-/
+	};
+
+	meshopt_decodeFilterExp(data, 4, 4);
+
+	const unsigned int expected[4] = {
+	    0,
+	    0x3fc00000,
+	    0xc2100000,
+	    0x49fffffe, // clang-format :-/
+	};
+
+	assert(memcmp(data, expected, sizeof(data)) == 0);
+}
+
 static void clusterBoundsDegenerate()
 {
 	const float vbd[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -584,6 +605,7 @@ static void runTestsOnce()
 	decodeFilterOct8();
 	decodeFilterOct12();
 	decodeFilterQuat12();
+	decodeFilterExp();
 
 	clusterBoundsDegenerate();
 
