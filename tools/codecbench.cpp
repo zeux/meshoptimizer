@@ -115,12 +115,17 @@ void benchFilters(size_t count)
 
 		double t3 = timestamp();
 
+		meshopt_decodeFilterExp(&d8[0], count4, 8);
+
+		double t4 = timestamp();
+
 		double GB = 1024 * 1024 * 1024;
 
-		printf("filter: oct8 %.2f ms (%.2f GB/sec), oct12 %.2f ms (%.2f GB/sec), quat12 %.2f ms (%.2f GB/sec)\n",
+		printf("filter: oct8 %.2f ms (%.2f GB/sec), oct12 %.2f ms (%.2f GB/sec), quat12 %.2f ms (%.2f GB/sec), exp %.2f ms (%.2f GB/sec)\n",
 			(t1 - t0) * 1000, double(d4.size()) / GB / (t1 - t0),
 			(t2 - t1) * 1000, double(d8.size()) / GB / (t2 - t1),
-			(t3 - t2) * 1000, double(d8.size()) / GB / (t3 - t2));
+			(t3 - t2) * 1000, double(d8.size()) / GB / (t3 - t2),
+			(t4 - t3) * 1000, double(d8.size()) / GB / (t4 - t3));
 	}
 }
 
