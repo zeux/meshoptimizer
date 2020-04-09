@@ -58,47 +58,19 @@ var MeshoptDecoder = (function() {
 		}
 	};
 
-	function filterFun(filter) {
-		switch (filter) {
-		case 0:
-		case undefined:
-			return undefined;
-
-		case 1:
-			return instance.exports.meshopt_decodeFilterOct;
-
-		case 2:
-			return instance.exports.meshopt_decodeFilterQuat;
-
-		case 3:
-			return instance.exports.meshopt_decodeFilterExp;
-
-		default:
-			throw new Error("Unknown filter: " + filter);
-		}
-	}
+	var filters = ["", "meshopt_decodeFilterOct", "meshopt_decodeFilterQuat", "meshopt_decodeFilterExp"];
+	var decoders = ["meshopt_decodeVertexBuffer", "meshopt_decodeIndexBuffer"];
 
 	return {
 		ready: promise,
 		decodeVertexBuffer: function(target, count, size, source, filter) {
-			decode(instance.exports.meshopt_decodeVertexBuffer, target, count, size, source, filterFun(filter));
+			decode(instance.exports.meshopt_decodeVertexBuffer, target, count, size, source, instance.exports[filters[filter]]);
 		},
 		decodeIndexBuffer: function(target, count, size, source) {
 			decode(instance.exports.meshopt_decodeIndexBuffer, target, count, size, source);
 		},
 		decodeGltfBuffer: function(target, count, size, source, mode, filter) {
-			switch (mode) {
-			case 0:
-				decode(instance.exports.meshopt_decodeVertexBuffer, target, count, size, source, filterFun(filter));
-				break;
-
-			case 1:
-				decode(instance.exports.meshopt_decodeIndexBuffer, target, count, size, source);
-				break;
-
-			default:
-				throw new Error("Unknown mode: " + mode);
-			}
+			decode(instance.exports[decoders[mode]], target, count, size, source, instance.exports[filters[filter]]);
 		}
 	};
 })();
