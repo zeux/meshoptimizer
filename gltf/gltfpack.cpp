@@ -32,32 +32,35 @@ static void finalizeBufferViews(std::string& json, std::vector<BufferView>& view
 
 		size_t count = view.data.size() / view.stride;
 
-		int compression = -1;
-
-		if (view.compressed)
+		switch (view.compression)
 		{
-			if (view.kind == BufferView::Kind_Index)
-			{
-				compressIndexStream(bin, view.data, count, view.stride);
-				compression = 1;
-			}
-			else
-			{
-				compressVertexStream(bin, view.data, count, view.stride);
-				compression = 0;
-			}
-
-			fallback += view.data;
-		}
-		else
-		{
+		case BufferView::Compression_None:
 			bin += view.data;
+			break;
+
+		case BufferView::Compression_Attribute:
+			compressVertexStream(bin, view.data, count, view.stride);
+			fallback += view.data;
+			break;
+
+		case BufferView::Compression_Index:
+			compressIndexStream(bin, view.data, count, view.stride);
+			fallback += view.data;
+			break;
+
+		case BufferView::Compression_IndexSequence:
+			compressIndexSequence(bin, view.data, count, view.stride);
+			fallback += view.data;
+			break;
+
+		default:
+			assert(!"Unknown compression type");
 		}
 
-		size_t raw_offset = (compression >= 0) ? fallback_offset : bin_offset;
+		size_t raw_offset = (view.compression != BufferView::Compression_None) ? fallback_offset : bin_offset;
 
 		comma(json);
-		writeBufferView(json, view.kind, view.filter, count, view.stride, raw_offset, view.data.size(), compression, bin_offset, bin.size() - bin_offset);
+		writeBufferView(json, view.kind, view.filter, count, view.stride, raw_offset, view.data.size(), view.compression, bin_offset, bin.size() - bin_offset);
 
 		// record written bytes for statistics
 		view.bytes = bin.size() - bin_offset;

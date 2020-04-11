@@ -719,14 +719,31 @@ void compressIndexStream(std::string& bin, const std::string& data, size_t count
 {
 	assert(stride == 2 || stride == 4);
 	assert(data.size() == count * stride);
+	assert(count % 3 == 0);
 
-	std::vector<unsigned char> compressed(meshopt_encodeIndexBufferBound(count, count * 3));
+	std::vector<unsigned char> compressed(meshopt_encodeIndexBufferBound(count, count));
 	size_t size = 0;
 
 	if (stride == 2)
 		size = meshopt_encodeIndexBuffer(&compressed[0], compressed.size(), reinterpret_cast<const uint16_t*>(data.c_str()), count);
 	else
 		size = meshopt_encodeIndexBuffer(&compressed[0], compressed.size(), reinterpret_cast<const uint32_t*>(data.c_str()), count);
+
+	bin.append(reinterpret_cast<const char*>(&compressed[0]), size);
+}
+
+void compressIndexSequence(std::string& bin, const std::string& data, size_t count, size_t stride)
+{
+	assert(stride == 2 || stride == 4);
+	assert(data.size() == count * stride);
+
+	std::vector<unsigned char> compressed(meshopt_encodeIndexSequenceBound(count, count));
+	size_t size = 0;
+
+	if (stride == 2)
+		size = meshopt_encodeIndexSequence(&compressed[0], compressed.size(), reinterpret_cast<const uint16_t*>(data.c_str()), count);
+	else
+		size = meshopt_encodeIndexSequence(&compressed[0], compressed.size(), reinterpret_cast<const uint32_t*>(data.c_str()), count);
 
 	bin.append(reinterpret_cast<const char*>(&compressed[0]), size);
 }
