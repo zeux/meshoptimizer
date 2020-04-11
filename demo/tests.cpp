@@ -35,6 +35,12 @@ static const unsigned char kIndexDataV1[] = {
     0x65, 0x89, 0x68, 0x98, 0x01, 0x69, 0x00, 0x00, // clang-format :-/
 };
 
+static const unsigned int kIndexSequence[] = {0, 1, 51, 2, 49, 1000};
+
+static const unsigned char kIndexSequenceV1[] = {
+    0xd1, 0x00, 0x04, 0xcd, 0x01, 0x04, 0x07, 0x98, 0x1f, 0x00, 0x00, 0x00, 0x00, // clang-format :-/
+};
+
 static const PV kVertexBuffer[] = {
     {0, 0, 0, 0, 0, 0, 0},
     {300, 0, 0, 0, 0, 500, 0},
@@ -199,6 +205,132 @@ static void encodeIndexEmpty()
 	buffer.resize(meshopt_encodeIndexBuffer(&buffer[0], buffer.size(), NULL, 0));
 
 	assert(meshopt_decodeIndexBuffer(static_cast<unsigned int*>(NULL), 0, &buffer[0], buffer.size()) == 0);
+}
+
+static void decodeIndexSequence()
+{
+	const size_t index_count = sizeof(kIndexSequence) / sizeof(kIndexSequence[0]);
+
+	std::vector<unsigned char> buffer(kIndexSequenceV1, kIndexSequenceV1 + sizeof(kIndexSequenceV1));
+
+	unsigned int decoded[index_count];
+	assert(meshopt_decodeIndexSequence(decoded, index_count, &buffer[0], buffer.size()) == 0);
+	assert(memcmp(decoded, kIndexSequence, sizeof(kIndexSequence)) == 0);
+}
+
+static void decodeIndexSequence16()
+{
+	const size_t index_count = sizeof(kIndexSequence) / sizeof(kIndexSequence[0]);
+	const size_t vertex_count = 1001;
+
+	std::vector<unsigned char> buffer(meshopt_encodeIndexSequenceBound(index_count, vertex_count));
+	buffer.resize(meshopt_encodeIndexSequence(&buffer[0], buffer.size(), kIndexSequence, index_count));
+
+	unsigned short decoded[index_count];
+	assert(meshopt_decodeIndexSequence(decoded, index_count, &buffer[0], buffer.size()) == 0);
+
+	for (size_t i = 0; i < index_count; ++i)
+		assert(decoded[i] == kIndexSequence[i]);
+}
+
+static void encodeIndexSequenceMemorySafe()
+{
+	const size_t index_count = sizeof(kIndexSequence) / sizeof(kIndexSequence[0]);
+	const size_t vertex_count = 1001;
+
+	std::vector<unsigned char> buffer(meshopt_encodeIndexSequenceBound(index_count, vertex_count));
+	buffer.resize(meshopt_encodeIndexSequence(&buffer[0], buffer.size(), kIndexSequence, index_count));
+
+	// check that encode is memory-safe; note that we reallocate the buffer for each try to make sure ASAN can verify buffer access
+	for (size_t i = 0; i <= buffer.size(); ++i)
+	{
+		std::vector<unsigned char> shortbuffer(i);
+		size_t result = meshopt_encodeIndexSequence(i == 0 ? 0 : &shortbuffer[0], i, kIndexSequence, index_count);
+
+		if (i == buffer.size())
+			assert(result == buffer.size());
+		else
+			assert(result == 0);
+	}
+}
+
+static void decodeIndexSequenceMemorySafe()
+{
+	const size_t index_count = sizeof(kIndexSequence) / sizeof(kIndexSequence[0]);
+	const size_t vertex_count = 1001;
+
+	std::vector<unsigned char> buffer(meshopt_encodeIndexSequenceBound(index_count, vertex_count));
+	buffer.resize(meshopt_encodeIndexSequence(&buffer[0], buffer.size(), kIndexSequence, index_count));
+
+	// check that decode is memory-safe; note that we reallocate the buffer for each try to make sure ASAN can verify buffer access
+	unsigned int decoded[index_count];
+
+	for (size_t i = 0; i <= buffer.size(); ++i)
+	{
+		std::vector<unsigned char> shortbuffer(buffer.begin(), buffer.begin() + i);
+		int result = meshopt_decodeIndexSequence(decoded, index_count, i == 0 ? 0 : &shortbuffer[0], i);
+
+		if (i == buffer.size())
+			assert(result == 0);
+		else
+			assert(result < 0);
+	}
+}
+
+static void decodeIndexSequenceRejectExtraBytes()
+{
+	const size_t index_count = sizeof(kIndexSequence) / sizeof(kIndexSequence[0]);
+	const size_t vertex_count = 1001;
+
+	std::vector<unsigned char> buffer(meshopt_encodeIndexSequenceBound(index_count, vertex_count));
+	buffer.resize(meshopt_encodeIndexSequence(&buffer[0], buffer.size(), kIndexSequence, index_count));
+
+	// check that decoder doesn't accept extra bytes after a valid stream
+	std::vector<unsigned char> largebuffer(buffer);
+	largebuffer.push_back(0);
+
+	unsigned int decoded[index_count];
+	assert(meshopt_decodeIndexSequence(decoded, index_count, &largebuffer[0], largebuffer.size()) < 0);
+}
+
+static void decodeIndexSequenceRejectMalformedHeaders()
+{
+	const size_t index_count = sizeof(kIndexSequence) / sizeof(kIndexSequence[0]);
+	const size_t vertex_count = 1001;
+
+	std::vector<unsigned char> buffer(meshopt_encodeIndexSequenceBound(index_count, vertex_count));
+	buffer.resize(meshopt_encodeIndexSequence(&buffer[0], buffer.size(), kIndexSequence, index_count));
+
+	// check that decoder doesn't accept malformed headers
+	std::vector<unsigned char> brokenbuffer(buffer);
+	brokenbuffer[0] = 0;
+
+	unsigned int decoded[index_count];
+	assert(meshopt_decodeIndexSequence(decoded, index_count, &brokenbuffer[0], brokenbuffer.size()) < 0);
+}
+
+static void decodeIndexSequenceRejectInvalidVersion()
+{
+	const size_t index_count = sizeof(kIndexSequence) / sizeof(kIndexSequence[0]);
+	const size_t vertex_count = 1001;
+
+	std::vector<unsigned char> buffer(meshopt_encodeIndexSequenceBound(index_count, vertex_count));
+	buffer.resize(meshopt_encodeIndexSequence(&buffer[0], buffer.size(), kIndexSequence, index_count));
+
+	// check that decoder doesn't accept invalid version
+	std::vector<unsigned char> brokenbuffer(buffer);
+	brokenbuffer[0] |= 0x0f;
+
+	unsigned int decoded[index_count];
+	assert(meshopt_decodeIndexSequence(decoded, index_count, &brokenbuffer[0], brokenbuffer.size()) < 0);
+}
+
+static void encodeIndexSequenceEmpty()
+{
+	std::vector<unsigned char> buffer(meshopt_encodeIndexSequenceBound(0, 0));
+	buffer.resize(meshopt_encodeIndexSequence(&buffer[0], buffer.size(), NULL, 0));
+
+	assert(meshopt_decodeIndexSequence(static_cast<unsigned int*>(NULL), 0, &buffer[0], buffer.size()) == 0);
 }
 
 static void decodeVertexV0()
@@ -591,6 +723,15 @@ static void runTestsOnce()
 	decodeIndexRejectInvalidVersion();
 	roundtripIndexTricky();
 	encodeIndexEmpty();
+
+	decodeIndexSequence();
+	decodeIndexSequence16();
+	encodeIndexSequenceMemorySafe();
+	decodeIndexSequenceMemorySafe();
+	decodeIndexSequenceRejectExtraBytes();
+	decodeIndexSequenceRejectMalformedHeaders();
+	decodeIndexSequenceRejectInvalidVersion();
+	encodeIndexSequenceEmpty();
 
 	decodeVertexV0();
 	encodeVertexMemorySafe();
