@@ -78,6 +78,21 @@ var tests = {
 		assert.deepStrictEqual(result, expected);
 	},
 
+	decodeIndexSequence: function() {
+		var encoded = new Uint8Array([
+		    0xd1, 0x00, 0x04, 0xcd, 0x01, 0x04, 0x07, 0x98, 0x1f, 0x00, 0x00, 0x00, 0x00,
+		]);
+
+		var expected = new Uint32Array([
+			0, 1, 51, 2, 49, 1000
+		]);
+
+		var result = new Uint32Array(expected.length);
+		decoder.decodeIndexSequence(new Uint8Array(result.buffer), 6, 4, encoded);
+
+		assert.deepStrictEqual(result, expected);
+	},
+
 	decodeFilterOct8: function() {
 		var encoded = new Uint8Array([
 			0xa0, 0x01, 0x07, 0x00, 0x00, 0x00, 0x1e, 0x01, 0x3f, 0x00, 0x00, 0x00, 0x8b, 0x8c, 0xfd, 0x00,
