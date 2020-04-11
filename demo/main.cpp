@@ -607,6 +607,37 @@ void encodeIndex(const Mesh& mesh, char desc)
 	       (double(result.size() * 4) / (1 << 30)) / (end - middle));
 }
 
+void encodeIndexSequence(const std::vector<unsigned int>& data, size_t vertex_count, char desc)
+{
+	// allocate result outside of the timing loop to exclude memset() from decode timing
+	std::vector<unsigned int> result(data.size());
+
+	double start = timestamp();
+
+	std::vector<unsigned char> buffer(meshopt_encodeIndexSequenceBound(data.size(), vertex_count));
+	buffer.resize(meshopt_encodeIndexSequence(&buffer[0], buffer.size(), &data[0], data.size()));
+
+	double middle = timestamp();
+
+	int res = meshopt_decodeIndexSequence(&result[0], data.size(), &buffer[0], buffer.size());
+	assert(res == 0);
+	(void)res;
+
+	double end = timestamp();
+
+	size_t csize = compress(buffer);
+
+	assert(memcmp(&data[0], &result[0], data.size() * sizeof(unsigned int)) == 0);
+
+	printf("IdxCodec%c: %.1f bits/index (post-deflate %.1f bits/index); encode %.2f msec, decode %.2f msec (%.2f GB/s)\n",
+	       desc,
+	       double(buffer.size() * 8) / double(data.size()),
+	       double(csize * 8) / double(data.size()),
+	       (middle - start) * 1000,
+	       (end - middle) * 1000,
+	       (double(result.size() * 4) / (1 << 30)) / (end - middle));
+}
+
 template <typename PV>
 void packVertex(const Mesh& mesh, const char* pvn)
 {
@@ -1008,6 +1039,11 @@ void process(const char* path)
 	encodeIndex(copy, ' ');
 	encodeIndex(copystrip, 'S');
 
+	std::vector<unsigned int> strip(meshopt_stripifyBound(copystrip.indices.size()));
+	strip.resize(meshopt_stripify(&strip[0], &copystrip.indices[0], copystrip.indices.size(), copystrip.vertices.size(), 0));
+
+	encodeIndexSequence(strip, copystrip.vertices.size(), 'D');
+
 	packVertex<PackedVertex>(copy, "");
 	encodeVertex<PackedVertex>(copy, "");
 	encodeVertex<PackedVertexOct>(copy, "O");
@@ -1031,12 +1067,20 @@ void processDev(const char* path)
 		return;
 
 	Mesh copy = mesh;
-	meshopt_optimizeVertexCacheStrip(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
+	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
 	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
 
+	Mesh copystrip = mesh;
+	meshopt_optimizeVertexCacheStrip(&copystrip.indices[0], &copystrip.indices[0], copystrip.indices.size(), copystrip.vertices.size());
+	meshopt_optimizeVertexFetch(&copystrip.vertices[0], &copystrip.indices[0], copystrip.indices.size(), &copystrip.vertices[0], copystrip.vertices.size(), sizeof(Vertex));
+
 	encodeIndex(copy, ' ');
-	encodeVertex<PackedVertex>(copy, "");
-	encodeVertex<PackedVertexOct>(copy, "O");
+	encodeIndex(copystrip, 'S');
+
+	std::vector<unsigned int> strip(meshopt_stripifyBound(copystrip.indices.size()));
+	strip.resize(meshopt_stripify(&strip[0], &copystrip.indices[0], copystrip.indices.size(), copystrip.vertices.size(), 0));
+
+	encodeIndexSequence(strip, copystrip.vertices.size(), 'D');
 }
 
 int main(int argc, char** argv)

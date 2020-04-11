@@ -19,6 +19,7 @@ namespace meshopt
 {
 
 const unsigned char kIndexHeader = 0xe0;
+const unsigned char kSequenceHeader = 0xd0;
 
 static int gEncodeIndexVersion = 0;
 
@@ -125,20 +126,16 @@ static unsigned int decodeVByte(const unsigned char*& data)
 	return result;
 }
 
-static void encodeIndex(unsigned char*& data, unsigned int index, unsigned int next, unsigned int last)
+static void encodeIndex(unsigned char*& data, unsigned int index, unsigned int last)
 {
-	(void)next;
-
 	unsigned int d = index - last;
 	unsigned int v = (d << 1) ^ (int(d) >> 31);
 
 	encodeVByte(data, v);
 }
 
-static unsigned int decodeIndex(const unsigned char*& data, unsigned int next, unsigned int last)
+static unsigned int decodeIndex(const unsigned char*& data, unsigned int last)
 {
-	(void)next;
-
 	unsigned int v = decodeVByte(data);
 	unsigned int d = (v >> 1) ^ -int(v & 1);
 
@@ -284,7 +281,7 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 
 			// note that we need to update the last index since free indices are delta-encoded
 			if (fec == 15)
-				encodeIndex(data, c, next, last), last = c;
+				encodeIndex(data, c, last), last = c;
 
 			// we only need to push third vertex since first two are likely already in the vertex fifo
 			if (fec == 0 || fec >= fecmax)
@@ -344,13 +341,13 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 
 			// note that we need to update the last index since free indices are delta-encoded
 			if (fea == 15)
-				encodeIndex(data, a, next, last), last = a;
+				encodeIndex(data, a, last), last = a;
 
 			if (feb == 15)
-				encodeIndex(data, b, next, last), last = b;
+				encodeIndex(data, b, last), last = b;
 
 			if (fec == 15)
-				encodeIndex(data, c, next, last), last = c;
+				encodeIndex(data, c, last), last = c;
 
 			// only push vertices that weren't already in fifo
 			if (fea == 0 || fea == 15)
@@ -525,7 +522,7 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 
 				// fec - (fec ^ 3) decodes 13, 14 into -1, 1
 				// note that we need to update the last index since free indices are delta-encoded
-				last = c = (fec != 15) ? last + (fec - (fec ^ 3)) : decodeIndex(data, next, last);
+				last = c = (fec != 15) ? last + (fec - (fec ^ 3)) : decodeIndex(data, last);
 
 				// output triangle
 				writeTriangle(destination, i, index_size, a, b, c);
@@ -597,13 +594,13 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 
 				// note that we need to update the last index since free indices are delta-encoded
 				if (fea == 15)
-					last = a = decodeIndex(data, next, last);
+					last = a = decodeIndex(data, last);
 
 				if (feb == 15)
-					last = b = decodeIndex(data, next, last);
+					last = b = decodeIndex(data, last);
 
 				if (fec == 15)
-					last = c = decodeIndex(data, next, last);
+					last = c = decodeIndex(data, last);
 
 				// output triangle
 				writeTriangle(destination, i, index_size, a, b, c);
@@ -623,6 +620,100 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 	// we should've read all data bytes and stopped at the boundary between data and codeaux table
 	if (data != data_safe_end)
 		return -3;
+
+	return 0;
+}
+
+size_t meshopt_encodeIndexSequence(unsigned char* buffer, size_t buffer_size, const unsigned int* indices, size_t index_count)
+{
+	using namespace meshopt;
+
+	// TODO: bounds checks
+	(void)buffer_size;
+
+	int version = gEncodeIndexVersion;
+
+	buffer[0] = (unsigned char)(kSequenceHeader | version);
+
+	unsigned int last[2] = {};
+	unsigned int current = 0;
+
+	unsigned char* data = buffer + 1;
+
+	for (size_t i = 0; i < index_count; ++i)
+	{
+		unsigned int index = indices[i];
+
+		int cd = int(index - last[current]);
+
+		current ^= ((cd < 0 ? -cd : cd) >= 30);
+
+		unsigned int d = index - last[current];
+		unsigned int v = (d << 1) ^ (int(d) >> 31);
+
+		encodeVByte(data, (v << 1) | current);
+
+		last[current] = index;
+	}
+
+	return data - buffer;
+}
+
+size_t meshopt_encodeIndexSequenceBound(size_t index_count, size_t vertex_count)
+{
+	// compute number of bits required for each index
+	unsigned int vertex_bits = 1;
+
+	while (vertex_bits < 32 && vertex_count > size_t(1) << vertex_bits)
+		vertex_bits++;
+
+	// worst-case encoding is 1 varint-7 encoded index delta for a K bit value and an extra bit
+	unsigned int vertex_groups = (vertex_bits + 1 + 1 + 6) / 7;
+
+	return 1 + index_count * vertex_groups;
+}
+
+int meshopt_decodeIndexSequence(void* destination, size_t index_count, size_t index_size, const unsigned char* buffer, size_t buffer_size)
+{
+	using namespace meshopt;
+
+	// TODO: bounds checks
+	(void)buffer_size;
+
+	if ((buffer[0] & 0xf0) != kSequenceHeader)
+		return -1;
+
+	int version = buffer[0] & 0x0f;
+	if (version > 1)
+		return -1;
+
+	const unsigned char* data = buffer + 1;
+
+	unsigned int last[2] = {};
+
+	for (size_t i = 0; i < index_count; ++i)
+	{
+		unsigned int v = decodeVByte(data);
+
+		unsigned int current = v & 1;
+
+		v >>= 1;
+
+		unsigned int d = (v >> 1) ^ -int(v & 1);
+
+		unsigned int index = last[current] + d;
+
+		last[current] = index;
+
+		if (index_size == 2)
+		{
+			static_cast<unsigned short*>(destination)[i] = (unsigned short)(index);
+		}
+		else
+		{
+			static_cast<unsigned int*>(destination)[i] = index;
+		}
+	}
 
 	return 0;
 }
