@@ -630,7 +630,7 @@ size_t meshopt_encodeIndexSequence(unsigned char* buffer, size_t buffer_size, co
 
 	// the minimum valid encoding is header, 1 byte per index and a 4-byte tail
 	if (buffer_size < 1 + index_count + 4)
-		return -2;
+		return 0;
 
 	int version = gEncodeIndexVersion;
 
@@ -648,7 +648,7 @@ size_t meshopt_encodeIndexSequence(unsigned char* buffer, size_t buffer_size, co
 		// each index writes at most 5 bytes of data; there's a 4 byte tail after data_safe_end
 		// after this we can be sure we can write without extra bounds checks
 		if (data >= data_safe_end)
-			return -2;
+			return 0;
 
 		unsigned int index = indices[i];
 
