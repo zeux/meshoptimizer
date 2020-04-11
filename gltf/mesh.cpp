@@ -212,7 +212,7 @@ void filterEmptyMeshes(std::vector<Mesh>& meshes)
 		if (mesh.streams[0].data.empty())
 			continue;
 
-		if (mesh.type == cgltf_primitive_type_triangles && mesh.indices.empty())
+		if (mesh.type != cgltf_primitive_type_points && mesh.indices.empty())
 			continue;
 
 		// the following code is roughly equivalent to meshes[write] = std::move(mesh)
@@ -349,6 +349,8 @@ static void reindexMesh(Mesh& mesh)
 
 static void filterTriangles(Mesh& mesh)
 {
+	assert(mesh.type == cgltf_primitive_type_triangles);
+
 	unsigned int* indices = &mesh.indices[0];
 	size_t total_indices = mesh.indices.size();
 
@@ -381,6 +383,8 @@ static Stream* getStream(Mesh& mesh, cgltf_attribute_type type, int index = 0)
 
 static void simplifyMesh(Mesh& mesh, float threshold, bool aggressive)
 {
+	assert(mesh.type == cgltf_primitive_type_triangles);
+
 	if (threshold >= 1)
 		return;
 
@@ -413,6 +417,8 @@ static void simplifyMesh(Mesh& mesh, float threshold, bool aggressive)
 
 static void optimizeMesh(Mesh& mesh, bool compressmore)
 {
+	assert(mesh.type == cgltf_primitive_type_triangles);
+
 	size_t vertex_count = mesh.streams[0].data.size();
 
 	if (compressmore)
@@ -544,6 +550,8 @@ static void filterBones(Mesh& mesh)
 
 static void simplifyPointMesh(Mesh& mesh, float threshold)
 {
+	assert(mesh.type == cgltf_primitive_type_points);
+
 	if (threshold >= 1)
 		return;
 
@@ -578,6 +586,8 @@ static void simplifyPointMesh(Mesh& mesh, float threshold)
 
 static void sortPointMesh(Mesh& mesh)
 {
+	assert(mesh.type == cgltf_primitive_type_points);
+
 	const Stream* positions = getStream(mesh, cgltf_attribute_type_position);
 	if (!positions)
 		return;
@@ -605,6 +615,9 @@ void processMesh(Mesh& mesh, const Settings& settings)
 		assert(mesh.indices.empty());
 		simplifyPointMesh(mesh, settings.simplify_threshold);
 		sortPointMesh(mesh);
+		break;
+
+	case cgltf_primitive_type_lines:
 		break;
 
 	case cgltf_primitive_type_triangles:

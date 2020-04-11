@@ -61,6 +61,70 @@ static void readAccessor(std::vector<Attr>& data, const cgltf_accessor* accessor
 	}
 }
 
+static void fixupIndices(std::vector<unsigned int>& indices, cgltf_primitive_type& type)
+{
+	if (type == cgltf_primitive_type_line_loop)
+	{
+		std::vector<unsigned int> result;
+		result.reserve(indices.size() * 2 + 2);
+
+		for (size_t i = 1; i <= indices.size(); ++i)
+		{
+			result.push_back(indices[i - 1]);
+			result.push_back(indices[i % indices.size()]);
+		}
+
+		indices.swap(result);
+		type = cgltf_primitive_type_lines;
+	}
+	else if (type == cgltf_primitive_type_line_strip)
+	{
+		std::vector<unsigned int> result;
+		result.reserve(indices.size() * 2);
+
+		for (size_t i = 1; i < indices.size(); ++i)
+		{
+			result.push_back(indices[i - 1]);
+			result.push_back(indices[i]);
+		}
+
+		indices.swap(result);
+		type = cgltf_primitive_type_lines;
+	}
+	else if (type == cgltf_primitive_type_triangle_strip)
+	{
+		std::vector<unsigned int> result;
+		result.reserve(indices.size() * 3);
+
+		for (size_t i = 2; i < indices.size(); ++i)
+		{
+			int flip = i & 1;
+
+			result.push_back(indices[i - 2 + flip]);
+			result.push_back(indices[i - 1 - flip]);
+			result.push_back(indices[i]);
+		}
+
+		indices.swap(result);
+		type = cgltf_primitive_type_triangles;
+	}
+	else if (type == cgltf_primitive_type_triangle_fan)
+	{
+		std::vector<unsigned int> result;
+		result.reserve(indices.size() * 3);
+
+		for (size_t i = 2; i < indices.size(); ++i)
+		{
+			result.push_back(indices[0]);
+			result.push_back(indices[i - 1]);
+			result.push_back(indices[i]);
+		}
+
+		indices.swap(result);
+		type = cgltf_primitive_type_triangles;
+	}
+}
+
 static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 {
 	for (size_t ni = 0; ni < data->nodes_count; ++ni)
@@ -76,12 +140,6 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 		for (size_t pi = 0; pi < mesh.primitives_count; ++pi)
 		{
 			const cgltf_primitive& primitive = mesh.primitives[pi];
-
-			if (primitive.type != cgltf_primitive_type_triangles && primitive.type != cgltf_primitive_type_points)
-			{
-				fprintf(stderr, "Warning: ignoring primitive %d of mesh %d because type %d is not supported\n", int(pi), mesh_id, primitive.type);
-				continue;
-			}
 
 			if (primitive.type == cgltf_primitive_type_points && primitive.indices)
 			{
@@ -113,6 +171,8 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 				for (size_t i = 0; i < count; ++i)
 					result.indices[i] = unsigned(i);
 			}
+
+			fixupIndices(result.indices, result.type);
 
 			for (size_t ai = 0; ai < primitive.attributes_count; ++ai)
 			{
