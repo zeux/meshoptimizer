@@ -13,6 +13,21 @@ double timestamp()
 {
 	return emscripten_get_now() * 1e-3;
 }
+#elif defined(_WIN32)
+struct LARGE_INTEGER
+{
+	__int64 QuadPart;
+};
+extern "C" __declspec(dllimport) int __stdcall QueryPerformanceCounter(LARGE_INTEGER* lpPerformanceCount);
+extern "C" __declspec(dllimport) int __stdcall QueryPerformanceFrequency(LARGE_INTEGER* lpFrequency);
+
+double timestamp()
+{
+	LARGE_INTEGER freq, counter;
+	QueryPerformanceFrequency(&freq);
+	QueryPerformanceCounter(&counter);
+	return double(counter.QuadPart) / double(freq.QuadPart);
+}
 #else
 double timestamp()
 {
