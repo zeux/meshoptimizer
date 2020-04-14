@@ -35,7 +35,7 @@
 namespace meshopt
 {
 
-#if !defined(SIMD_WASM)
+#if !defined(SIMD_WASM) && !defined(SIMD_SSE)
 template <typename T>
 static void decodeFilterOct(T* data, size_t count)
 {
@@ -68,9 +68,7 @@ static void decodeFilterOct(T* data, size_t count)
 		data[i * 4 + 2] = T(zf);
 	}
 }
-#endif
 
-#if !defined(SIMD_WASM) && !defined(SIMD_SSE)
 static void decodeFilterQuat(short* data, size_t count)
 {
 	const float scale = 1.f / sqrtf(2.f);
@@ -105,9 +103,7 @@ static void decodeFilterQuat(short* data, size_t count)
 		data[i * 4 + ((qc + 0) & 3)] = short(wf);
 	}
 }
-#endif
 
-#if !defined(SIMD_WASM) && !defined(SIMD_SSE)
 static void decodeFilterExp(unsigned int* data, size_t count)
 {
 	for (size_t i = 0; i < count; ++i)
@@ -140,6 +136,108 @@ inline uint64_t rotate64(uint64_t v, int x)
 #else
 	return (v << (x & 63)) | (v >> ((64 - x) & 63));
 #endif
+}
+
+static void decodeFilterOctSimd(signed char* data, size_t count)
+{
+	const __m128 sign = _mm_set1_ps(-0.f);
+
+	for (size_t i = 0; i < count; i += 4)
+	{
+		__m128i n4 = _mm_loadu_si128(reinterpret_cast<__m128i*>(&data[i * 4]));
+
+		// sign-extends each of x,y in [x y ? ?] with arithmetic shifts
+		__m128i xf = _mm_srai_epi32(_mm_slli_epi32(n4, 24), 24);
+		__m128i yf = _mm_srai_epi32(_mm_slli_epi32(n4, 16), 24);
+
+		// unpack z; note that z is unsigned so we technically don't need to sign extend it
+		__m128i zf = _mm_srai_epi32(_mm_slli_epi32(n4, 8), 24);
+
+		// convert x and y to floats and reconstruct z; this assumes zf encodes 1.f at the same bit count
+		__m128 x = _mm_cvtepi32_ps(xf);
+		__m128 y = _mm_cvtepi32_ps(yf);
+		__m128 z = _mm_sub_ps(_mm_cvtepi32_ps(zf), _mm_add_ps(_mm_andnot_ps(sign, x), _mm_andnot_ps(sign, y)));
+
+		// fixup octahedral coordinates for z<0
+		__m128 t = _mm_min_ps(z, _mm_setzero_ps());
+
+		x = _mm_add_ps(x, _mm_xor_ps(t, _mm_and_ps(x, sign)));
+		y = _mm_add_ps(y, _mm_xor_ps(t, _mm_and_ps(y, sign)));
+
+		// compute normal length & scale
+		__m128 l = _mm_sqrt_ps(_mm_add_ps(_mm_mul_ps(x, x), _mm_add_ps(_mm_mul_ps(y, y), _mm_mul_ps(z, z))));
+		__m128 s = _mm_div_ps(_mm_set1_ps(127.f), l);
+
+		// rounded signed float->int
+		__m128i xr = _mm_cvtps_epi32(_mm_mul_ps(x, s));
+		__m128i yr = _mm_cvtps_epi32(_mm_mul_ps(y, s));
+		__m128i zr = _mm_cvtps_epi32(_mm_mul_ps(z, s));
+
+		// combine xr/yr/zr into final value
+		__m128i res = _mm_and_si128(n4, _mm_set1_epi32(0xff000000));
+		res = _mm_or_si128(res, _mm_and_si128(xr, _mm_set1_epi32(0xff)));
+		res = _mm_or_si128(res, _mm_slli_epi32(_mm_and_si128(yr, _mm_set1_epi32(0xff)), 8));
+		res = _mm_or_si128(res, _mm_slli_epi32(_mm_and_si128(zr, _mm_set1_epi32(0xff)), 16));
+
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(&data[i * 4]), res);
+	}
+}
+
+static void decodeFilterOctSimd(short* data, size_t count)
+{
+	const __m128 sign = _mm_set1_ps(-0.f);
+
+	for (size_t i = 0; i < count; i += 4)
+	{
+		__m128 n4_0 = _mm_loadu_ps(reinterpret_cast<float*>(&data[(i + 0) * 4]));
+		__m128 n4_1 = _mm_loadu_ps(reinterpret_cast<float*>(&data[(i + 2) * 4]));
+
+		// gather both x/y 16-bit pairs in each 32-bit lane
+		__m128i n4 = _mm_castps_si128(_mm_shuffle_ps(n4_0, n4_1, _MM_SHUFFLE(2, 0, 2, 0)));
+
+		// sign-extends each of x,y in [x y] with arithmetic shifts
+		__m128i xf = _mm_srai_epi32(_mm_slli_epi32(n4, 16), 16);
+		__m128i yf = _mm_srai_epi32(n4, 16);
+
+		// unpack z; note that z is unsigned so we don't need to sign extend it
+		__m128i z4 = _mm_castps_si128(_mm_shuffle_ps(n4_0, n4_1, _MM_SHUFFLE(3, 1, 3, 1)));
+		__m128i zf = _mm_and_si128(z4, _mm_set1_epi32(0x7fff));
+
+		// convert x and y to floats and reconstruct z; this assumes zf encodes 1.f at the same bit count
+		__m128 x = _mm_cvtepi32_ps(xf);
+		__m128 y = _mm_cvtepi32_ps(yf);
+		__m128 z = _mm_sub_ps(_mm_cvtepi32_ps(zf), _mm_add_ps(_mm_andnot_ps(sign, x), _mm_andnot_ps(sign, y)));
+
+		// fixup octahedral coordinates for z<0
+		__m128 t = _mm_min_ps(z, _mm_setzero_ps());
+
+		x = _mm_add_ps(x, _mm_xor_ps(t, _mm_and_ps(x, sign)));
+		y = _mm_add_ps(y, _mm_xor_ps(t, _mm_and_ps(y, sign)));
+
+		// compute normal length & scale
+		__m128 l = _mm_sqrt_ps(_mm_add_ps(_mm_mul_ps(x, x), _mm_add_ps(_mm_mul_ps(y, y), _mm_mul_ps(z, z))));
+		__m128 s = _mm_div_ps(_mm_set1_ps(32767.f), l);
+
+		// rounded signed float->int
+		__m128i xr = _mm_cvtps_epi32(_mm_mul_ps(x, s));
+		__m128i yr = _mm_cvtps_epi32(_mm_mul_ps(y, s));
+		__m128i zr = _mm_cvtps_epi32(_mm_mul_ps(z, s));
+
+		// mix x/z and y/0 to make 16-bit unpack easier
+		__m128i xzr = _mm_or_si128(_mm_and_si128(xr, _mm_set1_epi32(0xffff)), _mm_slli_epi32(zr, 16));
+		__m128i y0r = _mm_and_si128(yr, _mm_set1_epi32(0xffff));
+
+		// pack x/y/z using 16-bit unpacks; note that this has 0 where we should have .w
+		__m128i res_0 = _mm_unpacklo_epi16(xzr, y0r);
+		__m128i res_1 = _mm_unpackhi_epi16(xzr, y0r);
+
+		// patch in .w
+		res_0 = _mm_or_si128(res_0, _mm_and_si128(_mm_castps_si128(n4_0), _mm_set1_epi64x(0xffff000000000000)));
+		res_1 = _mm_or_si128(res_1, _mm_and_si128(_mm_castps_si128(n4_1), _mm_set1_epi64x(0xffff000000000000)));
+
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(&data[(i + 0) * 4]), res_0);
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(&data[(i + 2) * 4]), res_1);
+	}
 }
 
 static void decodeFilterQuatSimd(short* data, size_t count)
@@ -436,7 +534,7 @@ void meshopt_decodeFilterOct(void* buffer, size_t vertex_count, size_t vertex_si
 	assert(vertex_count % 4 == 0);
 	assert(vertex_size == 4 || vertex_size == 8);
 
-#if defined(SIMD_WASM)
+#if defined(SIMD_WASM) || defined(SIMD_SSE)
 	if (vertex_size == 4)
 		decodeFilterOctSimd(static_cast<signed char*>(buffer), vertex_count);
 	else
