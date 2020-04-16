@@ -103,3 +103,10 @@ jobs:
         find . -type f -name '*.gcno' -exec gcov -p {} +
         sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
         bash <(curl -s https://codecov.io/bash) -f 'src#*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
+
+  iphone:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: make
+      run: make -j2 config=iphone test
