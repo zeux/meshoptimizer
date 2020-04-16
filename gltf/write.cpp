@@ -567,6 +567,10 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 
 		mime_type = inferMimeType(image.uri);
 	}
+	else if (image.uri)
+	{
+		mime_type = image.mime_type ? image.mime_type : inferMimeType(image.uri);
+	}
 
 	if (!img_data.empty())
 	{
