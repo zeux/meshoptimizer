@@ -105,10 +105,10 @@ codecbench: tools/codecbench.cpp $(LIBRARY)
 	$(CXX) $^ $(CXXFLAGS) $(LDFLAGS) -o $@
 
 codecbench.js codecbench.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
-	emcc $^ -O3 -DNDEBUG -s TOTAL_MEMORY=268435456 -o $@
+	emcc $^ -O3 -g -DNDEBUG -s TOTAL_MEMORY=268435456 -o $@
 
 codecbench-simd.js codecbench-simd.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
-	emcc $^ -O3 -DNDEBUG -s TOTAL_MEMORY=268435456 -msimd128 -o $@
+	emcc $^ -O3 -g -DNDEBUG -s TOTAL_MEMORY=268435456 -msimd128 -o $@
 
 $(LIBRARY): $(LIBRARY_OBJECTS)
 	ar rcs $@ $^
