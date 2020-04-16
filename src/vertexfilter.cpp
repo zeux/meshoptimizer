@@ -37,11 +37,6 @@
 #include <wasm_simd128.h>
 #endif
 
-#ifdef SIMD_NEON
-#define vandq_f32(a, b) vreinterpretq_f32_s32(vandq_s32(vreinterpretq_s32_f32(a), vreinterpretq_s32_f32(b)))
-#define veorq_f32(a, b) vreinterpretq_f32_s32(veorq_s32(vreinterpretq_s32_f32(a), vreinterpretq_s32_f32(b)))
-#endif
-
 #ifdef SIMD_WASM
 #define wasmx_unpacklo_v16x8(a, b) wasm_v16x8_shuffle(a, b, 0, 8, 1, 9, 2, 10, 3, 11)
 #define wasmx_unpackhi_v16x8(a, b) wasm_v16x8_shuffle(a, b, 4, 12, 5, 13, 6, 14, 7, 15)
@@ -348,7 +343,7 @@ static void decodeFilterExpSimd(unsigned int* data, size_t count)
 #ifdef SIMD_NEON
 static void decodeFilterOctSimd(signed char* data, size_t count)
 {
-	const float32x4_t sign = vdupq_n_f32(-0.f);
+	const int32x4_t sign = vdupq_n_s32(0x80000000);
 
 	for (size_t i = 0; i < count; i += 4)
 	{
@@ -369,8 +364,8 @@ static void decodeFilterOctSimd(signed char* data, size_t count)
 		// fixup octahedral coordinates for z<0
 		float32x4_t t = vminq_f32(z, vdupq_n_f32(0.f));
 
-		x = vaddq_f32(x, veorq_f32(t, vandq_f32(x, sign)));
-		y = vaddq_f32(y, veorq_f32(t, vandq_f32(y, sign)));
+		x = vaddq_f32(x, vreinterpretq_f32_s32(veorq_s32(vreinterpretq_s32_f32(t), vandq_s32(vreinterpretq_s32_f32(x), sign))));
+		y = vaddq_f32(y, vreinterpretq_f32_s32(veorq_s32(vreinterpretq_s32_f32(t), vandq_s32(vreinterpretq_s32_f32(y), sign))));
 
 		// compute normal length & scale
 		float32x4_t l = vsqrtq_f32(vaddq_f32(vmulq_f32(x, x), vaddq_f32(vmulq_f32(y, y), vmulq_f32(z, z))));
@@ -396,7 +391,7 @@ static void decodeFilterOctSimd(signed char* data, size_t count)
 
 static void decodeFilterOctSimd(short* data, size_t count)
 {
-	const float32x4_t sign = vdupq_n_f32(-0.f);
+	const int32x4_t sign = vdupq_n_s32(0x80000000);
 
 	for (size_t i = 0; i < count; i += 4)
 	{
@@ -422,8 +417,8 @@ static void decodeFilterOctSimd(short* data, size_t count)
 		// fixup octahedral coordinates for z<0
 		float32x4_t t = vminq_f32(z, vdupq_n_f32(0.f));
 
-		x = vaddq_f32(x, veorq_f32(t, vandq_f32(x, sign)));
-		y = vaddq_f32(y, veorq_f32(t, vandq_f32(y, sign)));
+		x = vaddq_f32(x, vreinterpretq_f32_s32(veorq_s32(vreinterpretq_s32_f32(t), vandq_s32(vreinterpretq_s32_f32(x), sign))));
+		y = vaddq_f32(y, vreinterpretq_f32_s32(veorq_s32(vreinterpretq_s32_f32(t), vandq_s32(vreinterpretq_s32_f32(y), sign))));
 
 		// compute normal length & scale
 		float32x4_t l = vsqrtq_f32(vaddq_f32(vmulq_f32(x, x), vaddq_f32(vmulq_f32(y, y), vmulq_f32(z, z))));
