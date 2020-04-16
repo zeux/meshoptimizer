@@ -40,6 +40,10 @@ ifeq ($(config),trace)
 	CXXFLAGS+=-DTRACE=2
 endif
 
+ifeq ($(config),scalar)
+	CXXFLAGS+=-O3 -DNDEBUG -DMESHOPTIMIZER_NO_SIMD
+endif
+
 ifeq ($(config),release)
 	CXXFLAGS+=-O3 -DNDEBUG
 endif

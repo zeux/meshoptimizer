@@ -3,6 +3,9 @@
 
 #include <math.h>
 
+// Detect SIMD settings.
+#if !defined(MESHOPTIMIZER_NO_SIMD)
+
 #if defined(__SSE2__)
 #define SIMD_SSE
 #endif
@@ -15,6 +18,8 @@
 #if defined(__wasm_simd128__)
 #define SIMD_WASM
 #endif
+
+#endif // !MESHOPTIMIZER_NO_SIMD
 
 #ifdef SIMD_SSE
 #include <emmintrin.h>
