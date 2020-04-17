@@ -4,6 +4,9 @@
 #include <assert.h>
 #include <string.h>
 
+// Detect SIMD settings.
+#if !defined(MESHOPTIMIZER_NO_SIMD)
+
 #if defined(__ARM_NEON__) || defined(__ARM_NEON)
 #define SIMD_NEON
 #endif
@@ -39,6 +42,8 @@
 #define SIMD_WASM
 #define SIMD_TARGET __attribute__((target("unimplemented-simd128")))
 #endif
+
+#endif // !MESHOPTIMIZER_NO_SIMD
 
 #ifndef SIMD_TARGET
 #define SIMD_TARGET
