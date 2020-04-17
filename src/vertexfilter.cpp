@@ -340,6 +340,22 @@ static void decodeFilterExpSimd(unsigned int* data, size_t count)
 }
 #endif
 
+#if defined(SIMD_NEON) && !defined(__aarch64__)
+inline float32x4_t vsqrtq_f32(float32x4_t x)
+{
+	float32x4_t r = vrsqrteq_f32(x);
+	r = vmulq_f32(r, vrsqrtsq_f32(vmulq_f32(r, x), r)); // refine rsqrt estimate
+	return vmulq_f32(r, x);
+}
+
+inline float32x4_t vdivq_f32(float32x4_t x, float32x4_t y)
+{
+	float32x4_t r = vrecpeq_f32(y);
+	r = vmulq_f32(r, vrecpsq_f32(y, r)); // refine rcp estimate
+	return vmulq_f32(x, r);
+}
+#endif
+
 #ifdef SIMD_NEON
 static void decodeFilterOctSimd(signed char* data, size_t count)
 {
@@ -368,8 +384,9 @@ static void decodeFilterOctSimd(signed char* data, size_t count)
 		y = vaddq_f32(y, vreinterpretq_f32_s32(veorq_s32(vreinterpretq_s32_f32(t), vandq_s32(vreinterpretq_s32_f32(y), sign))));
 
 		// compute normal length & scale
-		float32x4_t l = vsqrtq_f32(vaddq_f32(vmulq_f32(x, x), vaddq_f32(vmulq_f32(y, y), vmulq_f32(z, z))));
-		float32x4_t s = vdivq_f32(vdupq_n_f32(127.f), l);
+		float32x4_t ll = vaddq_f32(vmulq_f32(x, x), vaddq_f32(vmulq_f32(y, y), vmulq_f32(z, z)));
+		float32x4_t rl = vrsqrteq_f32(ll);
+		float32x4_t s = vmulq_f32(vdupq_n_f32(127.f), rl);
 
 		// fast rounded signed float->int: addition triggers renormalization after which mantissa stores the integer value
 		// note: the result is offset by 0x4B40_0000, but we only need the low 16 bits so we can omit the subtraction
@@ -421,8 +438,10 @@ static void decodeFilterOctSimd(short* data, size_t count)
 		y = vaddq_f32(y, vreinterpretq_f32_s32(veorq_s32(vreinterpretq_s32_f32(t), vandq_s32(vreinterpretq_s32_f32(y), sign))));
 
 		// compute normal length & scale
-		float32x4_t l = vsqrtq_f32(vaddq_f32(vmulq_f32(x, x), vaddq_f32(vmulq_f32(y, y), vmulq_f32(z, z))));
-		float32x4_t s = vdivq_f32(vdupq_n_f32(32767.f), l);
+		float32x4_t ll = vaddq_f32(vmulq_f32(x, x), vaddq_f32(vmulq_f32(y, y), vmulq_f32(z, z)));
+		float32x4_t rl = vrsqrteq_f32(ll);
+		rl = vmulq_f32(rl, vrsqrtsq_f32(vmulq_f32(rl, ll), rl)); // refine rsqrt estimate
+		float32x4_t s = vmulq_f32(vdupq_n_f32(32767.f), rl);
 
 		// fast rounded signed float->int: addition triggers renormalization after which mantissa stores the integer value
 		// note: the result is offset by 0x4B40_0000, but we only need the low 16 bits so we can omit the subtraction
