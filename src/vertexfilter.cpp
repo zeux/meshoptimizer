@@ -181,8 +181,8 @@ static void decodeFilterOctSimd(signed char* data, size_t count)
 		y = _mm_add_ps(y, _mm_xor_ps(t, _mm_and_ps(y, sign)));
 
 		// compute normal length & scale
-		__m128 l = _mm_sqrt_ps(_mm_add_ps(_mm_mul_ps(x, x), _mm_add_ps(_mm_mul_ps(y, y), _mm_mul_ps(z, z))));
-		__m128 s = _mm_div_ps(_mm_set1_ps(127.f), l);
+		__m128 ll = _mm_add_ps(_mm_mul_ps(x, x), _mm_add_ps(_mm_mul_ps(y, y), _mm_mul_ps(z, z)));
+		__m128 s = _mm_mul_ps(_mm_set1_ps(127.f), _mm_rsqrt_ps(ll));
 
 		// rounded signed float->int
 		__m128i xr = _mm_cvtps_epi32(_mm_mul_ps(x, s));
@@ -231,8 +231,8 @@ static void decodeFilterOctSimd(short* data, size_t count)
 		y = _mm_add_ps(y, _mm_xor_ps(t, _mm_and_ps(y, sign)));
 
 		// compute normal length & scale
-		__m128 l = _mm_sqrt_ps(_mm_add_ps(_mm_mul_ps(x, x), _mm_add_ps(_mm_mul_ps(y, y), _mm_mul_ps(z, z))));
-		__m128 s = _mm_div_ps(_mm_set1_ps(32767.f), l);
+		__m128 ll = _mm_add_ps(_mm_mul_ps(x, x), _mm_add_ps(_mm_mul_ps(y, y), _mm_mul_ps(z, z)));
+		__m128 s = _mm_div_ps(_mm_set1_ps(32767.f), _mm_sqrt_ps(ll));
 
 		// rounded signed float->int
 		__m128i xr = _mm_cvtps_epi32(_mm_mul_ps(x, s));
@@ -579,8 +579,8 @@ static void decodeFilterOctSimd(signed char* data, size_t count)
 		y = wasm_f32x4_add(y, wasm_v128_xor(t, wasm_v128_and(y, sign)));
 
 		// compute normal length & scale
-		v128_t l = wasm_f32x4_sqrt(wasm_f32x4_add(wasm_f32x4_mul(x, x), wasm_f32x4_add(wasm_f32x4_mul(y, y), wasm_f32x4_mul(z, z))));
-		v128_t s = wasm_f32x4_div(wasm_f32x4_splat(127.f), l);
+		v128_t ll = wasm_f32x4_add(wasm_f32x4_mul(x, x), wasm_f32x4_add(wasm_f32x4_mul(y, y), wasm_f32x4_mul(z, z)));
+		v128_t s = wasm_f32x4_div(wasm_f32x4_splat(127.f), wasm_f32x4_sqrt(ll));
 
 		// fast rounded signed float->int: addition triggers renormalization after which mantissa stores the integer value
 		// note: the result is offset by 0x4B40_0000, but we only need the low 8 bits so we can omit the subtraction
@@ -634,8 +634,8 @@ static void decodeFilterOctSimd(short* data, size_t count)
 		y = wasm_f32x4_add(y, wasm_v128_xor(t, wasm_v128_and(y, sign)));
 
 		// compute normal length & scale
-		v128_t l = wasm_f32x4_sqrt(wasm_f32x4_add(wasm_f32x4_mul(x, x), wasm_f32x4_add(wasm_f32x4_mul(y, y), wasm_f32x4_mul(z, z))));
-		v128_t s = wasm_f32x4_div(wasm_f32x4_splat(32767.f), l);
+		v128_t ll = wasm_f32x4_add(wasm_f32x4_mul(x, x), wasm_f32x4_add(wasm_f32x4_mul(y, y), wasm_f32x4_mul(z, z)));
+		v128_t s = wasm_f32x4_div(wasm_f32x4_splat(32767.f), wasm_f32x4_sqrt(ll));
 
 		// fast rounded signed float->int: addition triggers renormalization after which mantissa stores the integer value
 		// note: the result is offset by 0x4B40_0000, but we only need the low 16 bits so we can omit the subtraction
