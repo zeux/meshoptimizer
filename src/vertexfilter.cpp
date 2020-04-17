@@ -357,7 +357,7 @@ static void decodeFilterExpSimd(unsigned int* data, size_t count)
 }
 #endif
 
-#if defined(SIMD_NEON) && !defined(__aarch64__)
+#if defined(SIMD_NEON) && !defined(__aarch64__) && !defined(_M_ARM64)
 inline float32x4_t vsqrtq_f32(float32x4_t x)
 {
 	float32x4_t r = vrsqrteq_f32(x);
