@@ -4,53 +4,66 @@
 #include <assert.h>
 #include <string.h>
 
-// Detect SIMD settings.
-#if !defined(MESHOPTIMIZER_NO_SIMD)
+// The block below auto-detects SIMD ISA that can be used on the target platform
+#ifndef MESHOPTIMIZER_NO_SIMD
 
-#if defined(__ARM_NEON__) || defined(__ARM_NEON)
-#define SIMD_NEON
-#endif
-
+// The SIMD implementation requires SSSE3, which can be enabled unconditionally through compiler settings
 #if defined(__AVX__) || defined(__SSSE3__)
 #define SIMD_SSE
 #endif
 
+// An experimental implementation using AVX512 instructions; it's only enabled when AVX512 is enabled through compiler settings
 #if defined(__AVX512VBMI2__) && defined(__AVX512VBMI__) && defined(__AVX512VL__) && defined(__POPCNT__)
 #undef SIMD_SSE
 #define SIMD_AVX
 #endif
 
+// MSVC supports compiling SSSE3 code regardless of compile options; we use a cpuid-based scalar fallback
 #if !defined(SIMD_SSE) && !defined(SIMD_AVX) && defined(_MSC_VER) && !defined(__clang__) && (defined(_M_IX86) || defined(_M_X64))
 #define SIMD_SSE
 #define SIMD_FALLBACK
-#include <intrin.h> // __cpuid
 #endif
 
-// GCC 4.9+ and clang 3.8+ support targeting SIMD instruction sets from individual functions
+// GCC 4.9+ and clang 3.8+ support targeting SIMD ISA from individual functions; we use a cpuid-based scalar fallback
 #if !defined(SIMD_SSE) && !defined(SIMD_AVX) && ((defined(__clang__) && __clang_major__ * 100 + __clang_minor__ >= 308) || (defined(__GNUC__) && __GNUC__ * 100 + __GNUC_MINOR__ >= 409)) && (defined(__i386__) || defined(__x86_64__))
 #define SIMD_SSE
 #define SIMD_FALLBACK
 #define SIMD_TARGET __attribute__((target("ssse3")))
-#include <cpuid.h> // __cpuid
 #endif
 
+// GCC/clang define these when NEON support is available
+#if defined(__ARM_NEON__) || defined(__ARM_NEON)
+#define SIMD_NEON
+#endif
+
+// On MSVC, we assume that ARM builds always target NEON-capable devices
 #if !defined(SIMD_NEON) && defined(_MSC_VER) && (defined(_M_ARM) || defined(_M_ARM64))
 #define SIMD_NEON
 #endif
 
+// When targeting Wasm SIMD we can't use runtime cpuid checks so we unconditionally enable SIMD
+// Note that we need unimplemented-simd128 subset for a few functions that are implemented de-facto
 #if defined(__wasm_simd128__)
 #define SIMD_WASM
 #define SIMD_TARGET __attribute__((target("unimplemented-simd128")))
 #endif
 
-#endif // !MESHOPTIMIZER_NO_SIMD
-
 #ifndef SIMD_TARGET
 #define SIMD_TARGET
 #endif
 
+#endif // !MESHOPTIMIZER_NO_SIMD
+
 #ifdef SIMD_SSE
 #include <tmmintrin.h>
+#endif
+
+#if defined(SIMD_SSE) && defined(SIMD_FALLBACK)
+#ifdef _MSC_VER
+#include <intrin.h> // __cpuid
+#else
+#include <cpuid.h> // __cpuid
+#endif
 #endif
 
 #ifdef SIMD_AVX
