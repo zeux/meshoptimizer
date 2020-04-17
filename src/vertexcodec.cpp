@@ -1084,7 +1084,7 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 static unsigned int getCpuFeatures()
 {
 	int cpuinfo[4] = {};
-#if defined(_MSC_VER) && !defined(__clang__)
+#ifdef _MSC_VER
 	__cpuid(cpuinfo, 1);
 #else
 	__cpuid(1, cpuinfo[0], cpuinfo[1], cpuinfo[2], cpuinfo[3]);
