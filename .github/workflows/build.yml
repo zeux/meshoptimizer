@@ -109,4 +109,4 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: make
-      run: make -j2 config=iphone test
+      run: make -j2 config=iphone
