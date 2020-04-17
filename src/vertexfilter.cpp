@@ -3,22 +3,30 @@
 
 #include <math.h>
 
-// Detect SIMD settings.
-#if !defined(MESHOPTIMIZER_NO_SIMD)
+// The block below auto-detects SIMD ISA that can be used on the target platform
+#ifndef MESHOPTIMIZER_NO_SIMD
 
+// The SIMD implementation requires SSE2, which can be enabled unconditionally through compiler settings
 #if defined(__SSE2__)
 #define SIMD_SSE
 #endif
 
+// MSVC supports compiling SSE2 code regardless of compile options; we assume all 32-bit CPUs support SSE2
 #if !defined(SIMD_SSE) && defined(_MSC_VER) && !defined(__clang__) && (defined(_M_IX86) || defined(_M_X64))
 #define SIMD_SSE
-#include <intrin.h>
 #endif
 
+// GCC/clang define these when NEON support is available
 #if defined(__ARM_NEON__) || defined(__ARM_NEON)
 #define SIMD_NEON
 #endif
 
+// On MSVC, we assume that ARM builds always target NEON-capable devices
+#if !defined(SIMD_NEON) && defined(_MSC_VER) && (defined(_M_ARM) || defined(_M_ARM64))
+#define SIMD_NEON
+#endif
+
+// When targeting Wasm SIMD we can't use runtime cpuid checks so we unconditionally enable SIMD
 #if defined(__wasm_simd128__)
 #define SIMD_WASM
 #endif
@@ -28,6 +36,10 @@
 #ifdef SIMD_SSE
 #include <emmintrin.h>
 #include <stdint.h>
+#endif
+
+#ifdef _MSC_VER
+#include <intrin.h>
 #endif
 
 #ifdef SIMD_NEON
@@ -345,7 +357,7 @@ static void decodeFilterExpSimd(unsigned int* data, size_t count)
 }
 #endif
 
-#if defined(SIMD_NEON) && !defined(__aarch64__)
+#if defined(SIMD_NEON) && !defined(__aarch64__) && !defined(_M_ARM64)
 inline float32x4_t vsqrtq_f32(float32x4_t x)
 {
 	float32x4_t r = vrsqrteq_f32(x);
