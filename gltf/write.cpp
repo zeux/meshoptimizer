@@ -549,28 +549,29 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 	{
 		// we will re-embed img_data below
 	}
-	else if (image.buffer_view && image.buffer_view->buffer->data && image.mime_type)
+	else if (image.buffer_view && image.buffer_view->buffer->data)
 	{
 		const cgltf_buffer_view* view = image.buffer_view;
 
 		img_data.assign(static_cast<const char*>(view->buffer->data) + view->offset, view->size);
-		mime_type = image.mime_type;
 	}
-	else if (image.uri && settings.texture_embed)
+	else if (image.uri)
 	{
-		std::string full_path = getFullPath(image.uri, input_path);
-
-		if (!readFile(full_path.c_str(), img_data))
+		if (settings.texture_embed)
 		{
-			fprintf(stderr, "Warning: unable to read image %s, skipping\n", image.uri);
+			std::string full_path = getFullPath(image.uri, input_path);
+
+			if (!readFile(full_path.c_str(), img_data))
+			{
+				fprintf(stderr, "Warning: unable to read image %s, skipping\n", image.uri);
+			}
 		}
 
 		mime_type = inferMimeType(image.uri);
 	}
-	else if (image.uri)
-	{
-		mime_type = image.mime_type ? image.mime_type : inferMimeType(image.uri);
-	}
+
+	if (image.mime_type)
+		mime_type = image.mime_type;
 
 	if (!img_data.empty())
 	{
