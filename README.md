@@ -1,4 +1,4 @@
-# 🐇 meshoptimizer [![Actions Status](https://github.com/zeux/meshoptimizer/workflows/build/badge.svg)](https://github.com/zeux/meshoptimizer/actions) [![Build Status](https://travis-ci.org/zeux/meshoptimizer.svg?branch=master)](https://travis-ci.org/zeux/meshoptimizer) [![codecov.io](https://codecov.io/github/zeux/meshoptimizer/coverage.svg?branch=master)](https://codecov.io/github/zeux/meshoptimizer?branch=master) ![MIT](https://img.shields.io/badge/license-MIT-blue.svg) [![GitHub](https://img.shields.io/badge/repo-github-green.svg)](https://github.com/zeux/meshoptimizer)
+# 🐇 meshoptimizer [![Actions Status](https://github.com/zeux/meshoptimizer/workflows/build/badge.svg)](https://github.com/zeux/meshoptimizer/actions) [![codecov.io](https://codecov.io/github/zeux/meshoptimizer/coverage.svg?branch=master)](https://codecov.io/github/zeux/meshoptimizer?branch=master) ![MIT](https://img.shields.io/badge/license-MIT-blue.svg) [![GitHub](https://img.shields.io/badge/repo-github-green.svg)](https://github.com/zeux/meshoptimizer)
 
 ## Purpose
 
@@ -6,17 +6,17 @@ When a GPU renders triangle meshes, various stages of the GPU pipeline have to p
 
 The library provides a C and C++ interface for all algorithms; you can use it from C/C++ or from other languages via FFI (such as P/Invoke). If you want to use this library from Rust, you should use [meshopt crate](https://crates.io/crates/meshopt).
 
-[gltfpack](#gltfpack), which is a tool that can automatically optimize glTF files, is developed and distributed alongside the library.
+[gltfpack](gltf), which is a tool that can automatically optimize glTF files, is developed and distributed alongside the library.
 
 ## Installing
 
 meshoptimizer is hosted on GitHub; you can download the latest release using git:
 
 ```
-git clone -b v0.13 https://github.com/zeux/meshoptimizer.git
+git clone -b v0.14 https://github.com/zeux/meshoptimizer.git
 ```
 
-Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v0.13.zip).
+Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v0.14.zip).
 
 ## Building
 
@@ -146,7 +146,11 @@ assert(resvb == 0 && resib == 0);
 
 Note that vertex encoding assumes that vertex buffer was optimized for vertex fetch, and that vertices are quantized; index encoding assumes that the vertex/index buffers were optimized for vertex cache and vertex fetch. Feeding unoptimized data into the encoders will produce poor compression ratios. Both codecs are lossless - the only lossy step is quantization that happens before encoding.
 
+To reduce the data size further, it's recommended to use `meshopt_optimizeVertexCacheStrip` instead of `meshopt_optimizeVertexCache` when optimizing for vertex cache, and to use new index codec version (`meshopt_encodeIndexVersion(1)`). This trades off some efficiency in vertex transform for smaller vertex and index data.
+
 Decoding functions are heavily optimized and can directly target write-combined memory; you can expect both decoders to run at 1-3 GB/s on modern desktop CPUs. Compression ratios depend on the data; vertex data compression ratio is typically around 2-4x (compared to already quantized data), index data compression ratio is around 5-6x (compared to raw 16-bit index data). General purpose lossless compressors can further improve on these results.
+
+Index buffer codec only supports triangle list topology; when encoding triangle strips or line lists, use `meshopt_encodeIndexSequence`/`meshopt_decodeIndexSequence` instead. This codec typically encodes indices into ~1 byte per index, but compressing the results further with a general purpose compressor can improve the results to 1-3 bits per index.
 
 Due to a very high decoding performance and compatibility with general purpose lossless compressors, the compression is a good fit for the use on the web. To that end, meshoptimizer provides both vertex and index decoders compiled into WebAssembly and wrapped into a module with JavaScript-friendly interface, `js/meshopt_decoder.js`, that you can use to decode meshes that were encoded offline:
 
@@ -178,6 +182,8 @@ size_t strip_size = meshopt_stripify(&strip[0], indices, index_count, vertex_cou
 
 Typically you should expect triangle strips to have ~50-60% of indices compared to triangle lists (~1.5-1.8 indices per triangle) and have ~5% worse ACMR.
 Note that triangle strips can be stitched with or without restart index support. Using restart indices can result in ~10% smaller index buffers, but on some GPUs restart indices may result in decreased performance.
+
+To reduce the triangle strip size further, it's recommended to use `meshopt_optimizeVertexCacheStrip` instead of `meshopt_optimizeVertexCache` when optimizing for vertex cache. This trades off some efficiency in vertex transform for smaller index buffers.
 
 ## Deinterleaved geometry
 
@@ -262,53 +268,6 @@ meshopt_setAllocator(malloc, free);
 Vertex and index decoders (`meshopt_decodeVertexBuffer` and `meshopt_decodeIndexBuffer`) do not allocate memory and work completely within the buffer space provided via arguments.
 
 All functions have bounded stack usage that does not exceed 32 KB for any algorithms.
-
-## gltfpack
-
-meshoptimizer provides many algorithms that can be integrated into a content pipeline or a rendering engine to improve performance. Often integration requires some conscious choices for optimal results - should we optimize for overdraw or not? what should the vertex format be? do we use triangle lists or strips? However, in some cases optimality is not a requirement.
-
-For engines that want a relatively simple way to load meshes, and would like the meshes to perform reasonably well on target hardware and be reasonably fast to load, meshoptimizer provides a command-line tool, `gltfpack`. `gltfpack` can take an `.obj` or `.gltf` file as an input, and produce a `.gltf` or `.glb` file that is optimized for rendering performance and download size.
-
-To build gltfpack on Linux/macOS, you can use make:
-
-```
-make config=release gltfpack
-```
-
-On Windows (and other platforms), you can use CMake:
-
-```
-cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TOOLS=ON
-cmake --build . --config Release --target gltfpack
-```
-
-You can then run the resulting command-line binary like this (run it without arguments for a list of options):
-
-```
-gltfpack -i scene.gltf -o scene.glb
-```
-
-gltfpack substantially changes the glTF data by optimizing the meshes for vertex fetch and transform cache, quantizing the geometry to reduce the memory consumption and size, merging meshes to reduce the draw call count, quantizing and resampling animations to reduce animation size and simplify playback, and pruning the node tree by removing or collapsing redundant nodes. It will also simplify the meshes when requested to do so.
-
-gltfpack can produce three types of output files:
-
-- By default gltfpack outputs regular `.glb`/`.gltf` files that have been optimized for GPU consumption using various cache optimizers and quantization. These files can be loaded by standard GLTF loaders present in frameworks such as [three.js](https://threejs.org/) (r111+) and [Babylon.js](https://www.babylonjs.com/) (4.1+).
-- When using `-c` option, gltfpack outputs compressed `.glb`/`.gltf` files that use meshoptimizer codecs to reduce the download size further. Loading these files requires extending GLTF loaders with support for `MESHOPT_compression` extension; `demo/GLTFLoader.js` contains a custom version of three.js loader that can be used to load them.
-- When using `-cf` option, gltfpack outputs compressed files and an extra `.fallback.bin` file with uncompressed data. These files can be loaded by standard glTF loaders; loaders with decompression support don't need to load the fallback.
-
-When using compressed files, `js/meshopt_decoder.js` needs to be loaded to provide the WebAssembly decoder module like this:
-
-```js
-<script src="js/meshopt_decoder.js"></script>
-
-...
-
-var loader = new THREE.GLTFLoader();
-loader.setMeshoptDecoder(MeshoptDecoder);
-loader.load('pirate.glb', function (gltf) { scene.add(gltf.scene); });
-```
-
-Additionally, gltfpack can compress textures using Basis Universal format, either storing .basis images directly (`-tb` flag, supported by three.js) or using KTX2 container (`-tc` flag, requires support for `KHR_image_ktx2`). Compression is performed using `basisu` executable.
 
 ## License
 

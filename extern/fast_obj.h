@@ -66,16 +66,21 @@ typedef struct
     fastObjTexture              map_Ni;
     fastObjTexture              map_d;
     fastObjTexture              map_bump;
-    
 
 } fastObjMaterial;
 
+/* Allows user override to bigger indexable array */
+#ifndef FAST_OBJ_UINT_TYPE
+#define FAST_OBJ_UINT_TYPE unsigned int
+#endif
+
+typedef FAST_OBJ_UINT_TYPE fastObjUInt;
 
 typedef struct
 {
-    unsigned int                p;
-    unsigned int                t;
-    unsigned int                n;
+    fastObjUInt                 p;
+    fastObjUInt                 t;
+    fastObjUInt                 n;
 
 } fastObjIndex;
 
@@ -198,8 +203,7 @@ double POWER_10_NEG[MAX_POWER] =
 };
 
 
-static
-void* memory_realloc(void* ptr, size_t bytes)
+static void* memory_realloc(void* ptr, size_t bytes)
 {
     return FAST_OBJ_REALLOC(ptr, bytes);
 }
@@ -218,7 +222,7 @@ void memory_dealloc(void* ptr)
 #define array_capacity(_arr)    ((_arr) ? _array_capacity(_arr) : 0)
 #define array_empty(_arr)       (array_size(_arr) == 0)
 
-#define _array_header(_arr)     ((unsigned int*)(_arr) - 2)
+#define _array_header(_arr)     ((fastObjUInt*)(_arr)-2)
 #define _array_size(_arr)       (_array_header(_arr)[0])
 #define _array_capacity(_arr)   (_array_header(_arr)[1])
 #define _array_ngrow(_arr, _n)  ((_arr) == 0 || (_array_size(_arr) + (_n) >= _array_capacity(_arr)))
@@ -226,21 +230,20 @@ void memory_dealloc(void* ptr)
 #define _array_grow(_arr, _n)   (*((void**)&(_arr)) = array_realloc(_arr, _n, sizeof(*(_arr))))
 
 
-static
-void* array_realloc(void* ptr, unsigned int n, unsigned int b)
+static void* array_realloc(void* ptr, fastObjUInt n, fastObjUInt b)
 {
-    unsigned int  sz   = array_size(ptr);
-    unsigned int  nsz  = sz + n;
-    unsigned int  cap  = array_capacity(ptr);
-    unsigned int  ncap = 3 * cap / 2;
-    unsigned int* r;
+    fastObjUInt sz = array_size(ptr);
+    fastObjUInt nsz = sz + n;
+    fastObjUInt cap = array_capacity(ptr);
+    fastObjUInt ncap = 3 * cap / 2;
+    fastObjUInt* r;
 
 
     if (ncap < nsz)
         ncap = nsz;
     ncap = (ncap + 15) & ~15u;
 
-    r = (unsigned int*)(memory_realloc(ptr ? _array_header(ptr) : 0, b * ncap + 2 * sizeof(unsigned int)));
+    r = (fastObjUInt*)(memory_realloc(ptr ? _array_header(ptr) : 0, b * ncap + 2 * sizeof(fastObjUInt)));
     if (!r)
         return 0;
 
@@ -349,10 +352,10 @@ char* string_concat(const char* a, const char* s, const char* e)
 static
 int string_equal(const char* a, const char* s, const char* e)
 {
-    while (*a++ == *s++ && s != e)
-        ;
+    size_t an = strlen(a);
+    size_t sn = (size_t)(e - s);
 
-    return (*a == '\0' && s == e);
+    return an == sn && memcmp(a, s, an) == 0;
 }
 
 
@@ -669,21 +672,21 @@ const char* parse_face(fastObjData* data, const char* ptr)
         }
 
         if (v < 0)
-            vn.p = (array_size(data->mesh->positions) / 3) - (unsigned int)(-v);
+            vn.p = (array_size(data->mesh->positions) / 3) - (fastObjUInt)(-v);
         else
-            vn.p = (unsigned int)(v);
+            vn.p = (size_t)(v);
 
         if (t < 0)
-            vn.t = (array_size(data->mesh->texcoords) / 2) - (unsigned int)(-t);
+            vn.t = (array_size(data->mesh->texcoords) / 2) - (fastObjUInt)(-t);
         else if (t > 0)
-            vn.t = (unsigned int)(t);
+            vn.t = (size_t)(t);
         else
             vn.t = 0;
 
         if (n < 0)
-            vn.n = (array_size(data->mesh->normals) / 3) - (unsigned int)(-n);
+            vn.n = (array_size(data->mesh->normals) / 3) - (fastObjUInt)(-n);
         else if (n > 0)
-            vn.n = (unsigned int)(n);
+            vn.n = (fastObjUInt)(n);
         else
             vn.n = 0;
 
@@ -1076,7 +1079,7 @@ int read_mtllib(fastObjData* data, void* file)
                          p[3] == 'p' &&
                          is_whitespace(p[4]))
                 {
-                    p = read_map(data, p + 4, &mtl.map_d);
+                    p = read_map(data, p + 4, &mtl.map_bump);
                 }
             }
             break;
@@ -1266,9 +1269,9 @@ fastObjMesh* fast_obj_read(const char* path)
     char*        start;
     char*        end;
     char*        last;
-    unsigned int read;
+    fastObjUInt  read;
     size_t       sep;
-    unsigned int bytes;
+    fastObjUInt  bytes;
 
 
     /* Open file */
@@ -1327,7 +1330,7 @@ fastObjMesh* fast_obj_read(const char* path)
     for (;;)
     {
         /* Read another buffer's worth from file */
-        read = (unsigned int)(file_read(file, start, BUFFER_SIZE));
+        read = (fastObjUInt)(file_read(file, start, BUFFER_SIZE));
         if (read == 0 && start == buffer)
             break;
 
@@ -1366,8 +1369,8 @@ fastObjMesh* fast_obj_read(const char* path)
 
 
         /* Copy overflow for next buffer */
-        bytes = (unsigned int)(end - last);
-        memcpy(buffer, last, bytes);
+        bytes = (fastObjUInt)(end - last);
+        memmove(buffer, last, bytes);
         start = buffer + bytes;
     }
 

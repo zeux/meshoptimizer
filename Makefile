@@ -1,5 +1,4 @@
-.SUFFIXES:
-MAKEFLAGS+=-r
+MAKEFLAGS+=-r -j
 
 config=debug
 files=demo/pirate.obj
@@ -12,7 +11,7 @@ LIBRARY_OBJECTS=$(LIBRARY_SOURCES:%=$(BUILD)/%.o)
 DEMO_SOURCES=$(wildcard demo/*.c demo/*.cpp) tools/meshloader.cpp
 DEMO_OBJECTS=$(DEMO_SOURCES:%=$(BUILD)/%.o)
 
-GLTFPACK_SOURCES=tools/gltfpack.cpp tools/meshloader.cpp tools/basistoktx.cpp
+GLTFPACK_SOURCES=$(wildcard gltf/*.cpp) tools/meshloader.cpp
 GLTFPACK_OBJECTS=$(GLTFPACK_SOURCES:%=$(BUILD)/%.o)
 
 OBJECTS=$(LIBRARY_OBJECTS) $(DEMO_OBJECTS) $(GLTFPACK_OBJECTS)
@@ -24,9 +23,11 @@ CFLAGS=-g -Wall -Wextra -Werror -std=c89
 CXXFLAGS=-g -Wall -Wextra -Wshadow -Wno-missing-field-initializers -Werror -std=c++98
 LDFLAGS=
 
-WASM_SOURCES=src/vertexcodec.cpp src/indexcodec.cpp
-WASM_EXPORTS=["_meshopt_decodeVertexBuffer","_meshopt_decodeIndexBuffer","_sbrk","__start"]
-WASM_FLAGS=-O3 -DNDEBUG -s EXPORTED_FUNCTIONS='$(WASM_EXPORTS)' -s ALLOW_MEMORY_GROWTH=1 -s TOTAL_STACK=24576 -s TOTAL_MEMORY=65536
+WASM_SOURCES=src/vertexcodec.cpp src/indexcodec.cpp src/vertexfilter.cpp
+WASM_EXPORTS="__start","_sbrk"
+WASM_EXPORTS+=,"_meshopt_decodeVertexBuffer","_meshopt_decodeIndexBuffer","_meshopt_decodeIndexSequence"
+WASM_EXPORTS+=,"_meshopt_decodeFilterOct","_meshopt_decodeFilterQuat","_meshopt_decodeFilterExp"
+WASM_FLAGS=-O3 -DNDEBUG -s EXPORTED_FUNCTIONS='[$(WASM_EXPORTS)]' -s ALLOW_MEMORY_GROWTH=1 -s TOTAL_STACK=24576 -s TOTAL_MEMORY=65536
 
 ifeq ($(config),iphone)
 	IPHONESDK=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk
@@ -37,6 +38,10 @@ endif
 
 ifeq ($(config),trace)
 	CXXFLAGS+=-DTRACE=2
+endif
+
+ifeq ($(config),scalar)
+	CXXFLAGS+=-O3 -DNDEBUG -DMESHOPTIMIZER_NO_SIMD
 endif
 
 ifeq ($(config),release)
@@ -74,20 +79,40 @@ format:
 gltfpack: $(GLTFPACK_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
 
+gltfpack.js: gltf/bin/gltfpack.js
+
+gltf/bin/gltfpack.js: ${LIBRARY_SOURCES} ${GLTFPACK_SOURCES} tools/meshloader.cpp
+	@mkdir -p gltf/bin
+	emcc $^ -o $@ -Os -DNDEBUG -s ALLOW_MEMORY_GROWTH=1 -s NODERAWFS=1
+	sed -i '1s;^;#!/usr/bin/env node\n;' $@
+
 build/decoder_base.wasm: $(WASM_SOURCES)
 	@mkdir -p build
 	emcc $^ $(WASM_FLAGS) -o $@
 
 build/decoder_simd.wasm: $(WASM_SOURCES)
 	@mkdir -p build
-	emcc $^ $(WASM_FLAGS) -o $@ -munimplemented-simd128 -mbulk-memory
+	emcc $^ $(WASM_FLAGS) -o $@ -msimd128 -mbulk-memory
 
 js/meshopt_decoder.js: build/decoder_base.wasm build/decoder_simd.wasm
+	sed -i "s#Built with emcc.*#Built with $$(emcc --version | head -n 1)#" $@
 	sed -i "s#\(var wasm_base = \)\".*\";#\\1\"$$(cat build/decoder_base.wasm | hexdump -v -e '1/1 "%02X"')\";#" $@
 	sed -i "s#\(var wasm_simd = \)\".*\";#\\1\"$$(cat build/decoder_simd.wasm | hexdump -v -e '1/1 "%02X"')\";#" $@
 
 $(EXECUTABLE): $(DEMO_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
+
+vcachetuner: tools/vcachetuner.cpp $(BUILD)/tools/meshloader.cpp.o $(BUILD)/demo/miniz.cpp.o $(LIBRARY)
+	$(CXX) $^ -fopenmp $(CXXFLAGS) -std=c++11 $(LDFLAGS) -o $@
+
+codecbench: tools/codecbench.cpp $(LIBRARY)
+	$(CXX) $^ $(CXXFLAGS) $(LDFLAGS) -o $@
+
+codecbench.js codecbench.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
+	emcc $^ -O3 -g -DNDEBUG -s TOTAL_MEMORY=268435456 -o $@
+
+codecbench-simd.js codecbench-simd.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
+	emcc $^ -O3 -g -DNDEBUG -s TOTAL_MEMORY=268435456 -msimd128 -o $@
 
 $(LIBRARY): $(LIBRARY_OBJECTS)
 	ar rcs $@ $^

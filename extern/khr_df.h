@@ -323,6 +323,8 @@ typedef enum _khr_df_model_e {
     /* PowerVR Texture Compression */
     KHR_DF_MODEL_PVRTC         = 164U,
     KHR_DF_MODEL_PVRTC2        = 165U,
+    /* Universal Adaptive Scalable Texture Compression */
+    KHR_DF_MODEL_UASTC         = 166U,
     /* Proprietary formats (ATITC, etc.) should follow */
     KHR_DF_MODEL_MAX = 0xFFU
 } khr_df_model_e;

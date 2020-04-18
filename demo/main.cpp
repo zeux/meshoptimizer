@@ -8,7 +8,7 @@
 
 #include <vector>
 
-#include "../tools/fast_obj.h"
+#include "../extern/fast_obj.h"
 #include "miniz.h"
 
 // This file uses assert() to verify algorithm correctness
@@ -266,6 +266,11 @@ void optCache(Mesh& mesh)
 void optCacheFifo(Mesh& mesh)
 {
 	meshopt_optimizeVertexCacheFifo(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize);
+}
+
+void optCacheStrip(Mesh& mesh)
+{
+	meshopt_optimizeVertexCacheStrip(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size());
 }
 
 void optOverdraw(Mesh& mesh)
@@ -565,7 +570,7 @@ size_t compress(const std::vector<T>& data)
 	return tdefl_compress_mem_to_mem(&cbuf[0], cbuf.size(), &data[0], data.size() * sizeof(T), flags);
 }
 
-void encodeIndex(const Mesh& mesh)
+void encodeIndex(const Mesh& mesh, char desc)
 {
 	// allocate result outside of the timing loop to exclude memset() from decode timing
 	std::vector<unsigned int> result(mesh.indices.size());
@@ -593,9 +598,41 @@ void encodeIndex(const Mesh& mesh)
 		    (result[i + 2] == mesh.indices[i + 0] && result[i + 0] == mesh.indices[i + 1] && result[i + 1] == mesh.indices[i + 2]));
 	}
 
-	printf("IdxCodec : %.1f bits/triangle (post-deflate %.1f bits/triangle); encode %.2f msec, decode %.2f msec (%.2f GB/s)\n",
+	printf("IdxCodec%c: %.1f bits/triangle (post-deflate %.1f bits/triangle); encode %.2f msec, decode %.2f msec (%.2f GB/s)\n",
+	       desc,
 	       double(buffer.size() * 8) / double(mesh.indices.size() / 3),
 	       double(csize * 8) / double(mesh.indices.size() / 3),
+	       (middle - start) * 1000,
+	       (end - middle) * 1000,
+	       (double(result.size() * 4) / (1 << 30)) / (end - middle));
+}
+
+void encodeIndexSequence(const std::vector<unsigned int>& data, size_t vertex_count, char desc)
+{
+	// allocate result outside of the timing loop to exclude memset() from decode timing
+	std::vector<unsigned int> result(data.size());
+
+	double start = timestamp();
+
+	std::vector<unsigned char> buffer(meshopt_encodeIndexSequenceBound(data.size(), vertex_count));
+	buffer.resize(meshopt_encodeIndexSequence(&buffer[0], buffer.size(), &data[0], data.size()));
+
+	double middle = timestamp();
+
+	int res = meshopt_decodeIndexSequence(&result[0], data.size(), &buffer[0], buffer.size());
+	assert(res == 0);
+	(void)res;
+
+	double end = timestamp();
+
+	size_t csize = compress(buffer);
+
+	assert(memcmp(&data[0], &result[0], data.size() * sizeof(unsigned int)) == 0);
+
+	printf("IdxCodec%c: %.1f bits/index (post-deflate %.1f bits/index); encode %.2f msec, decode %.2f msec (%.2f GB/s)\n",
+	       desc,
+	       double(buffer.size() * 8) / double(data.size()),
+	       double(csize * 8) / double(data.size()),
 	       (middle - start) * 1000,
 	       (end - middle) * 1000,
 	       (double(result.size() * 4) / (1 << 30)) / (end - middle));
@@ -648,7 +685,7 @@ void encodeVertex(const Mesh& mesh, const char* pvn)
 	       (double(result.size() * sizeof(PV)) / (1 << 30)) / (end - middle));
 }
 
-void stripify(const Mesh& mesh, bool use_restart)
+void stripify(const Mesh& mesh, bool use_restart, char desc)
 {
 	unsigned int restart_index = use_restart ? ~0u : 0;
 
@@ -671,7 +708,7 @@ void stripify(const Mesh& mesh, bool use_restart)
 	meshopt_VertexCacheStatistics vcs_intel = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), 128, 0, 0);
 
 	printf("Stripify%c: ACMR %f ATVR %f (NV %f AMD %f Intel %f); %d strip indices (%.1f%%) in %.2f msec\n",
-	       use_restart ? 'R' : ' ',
+	       desc,
 	       vcs.acmr, vcs.atvr, vcs_nv.atvr, vcs_amd.atvr, vcs_intel.atvr,
 	       int(strip.size()), double(strip.size()) / double(mesh.indices.size()) * 100,
 	       (end - start) * 1000);
@@ -978,6 +1015,7 @@ void process(const char* path)
 	optimize(mesh, "Random", optRandomShuffle);
 	optimize(mesh, "Cache", optCache);
 	optimize(mesh, "CacheFifo", optCacheFifo);
+	optimize(mesh, "CacheStrp", optCacheStrip);
 	optimize(mesh, "Overdraw", optOverdraw);
 	optimize(mesh, "Fetch", optFetch);
 	optimize(mesh, "FetchMap", optFetchRemap);
@@ -987,13 +1025,25 @@ void process(const char* path)
 	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
 	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
 
-	stripify(copy, false);
-	stripify(copy, true);
+	Mesh copystrip = mesh;
+	meshopt_optimizeVertexCacheStrip(&copystrip.indices[0], &copystrip.indices[0], copystrip.indices.size(), copystrip.vertices.size());
+	meshopt_optimizeVertexFetch(&copystrip.vertices[0], &copystrip.indices[0], copystrip.indices.size(), &copystrip.vertices[0], copystrip.vertices.size(), sizeof(Vertex));
+
+	stripify(copy, false, ' ');
+	stripify(copy, true, 'R');
+	stripify(copystrip, true, 'S');
 
 	meshlets(copy);
 	shadow(copy);
 
-	encodeIndex(copy);
+	encodeIndex(copy, ' ');
+	encodeIndex(copystrip, 'S');
+
+	std::vector<unsigned int> strip(meshopt_stripifyBound(copystrip.indices.size()));
+	strip.resize(meshopt_stripify(&strip[0], &copystrip.indices[0], copystrip.indices.size(), copystrip.vertices.size(), 0));
+
+	encodeIndexSequence(strip, copystrip.vertices.size(), 'D');
+
 	packVertex<PackedVertex>(copy, "");
 	encodeVertex<PackedVertex>(copy, "");
 	encodeVertex<PackedVertexOct>(copy, "O");
@@ -1020,14 +1070,25 @@ void processDev(const char* path)
 	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
 	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
 
-	encodeIndex(copy);
-	encodeVertex<PackedVertex>(copy, "");
-	encodeVertex<PackedVertexOct>(copy, "O");
+	Mesh copystrip = mesh;
+	meshopt_optimizeVertexCacheStrip(&copystrip.indices[0], &copystrip.indices[0], copystrip.indices.size(), copystrip.vertices.size());
+	meshopt_optimizeVertexFetch(&copystrip.vertices[0], &copystrip.indices[0], copystrip.indices.size(), &copystrip.vertices[0], copystrip.vertices.size(), sizeof(Vertex));
+
+	encodeIndex(copy, ' ');
+	encodeIndex(copystrip, 'S');
+
+	std::vector<unsigned int> strip(meshopt_stripifyBound(copystrip.indices.size()));
+	strip.resize(meshopt_stripify(&strip[0], &copystrip.indices[0], copystrip.indices.size(), copystrip.vertices.size(), 0));
+
+	encodeIndexSequence(strip, copystrip.vertices.size(), 'D');
 }
 
 int main(int argc, char** argv)
 {
 	void runTests();
+
+	meshopt_encodeVertexVersion(0);
+	meshopt_encodeIndexVersion(1);
 
 	if (argc == 1)
 	{
