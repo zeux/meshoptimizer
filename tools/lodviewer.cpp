@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <ctime>
 #include <vector>
 
@@ -564,7 +565,7 @@ std::vector<File> files;
 Options options;
 bool redraw;
 
-void keyhandler(GLFWwindow* window, int key, int scancode, int action, int mods)
+void keyhandler(GLFWwindow* window, int key, int, int action, int)
 {
 	if (action == GLFW_PRESS)
 	{
@@ -627,7 +628,7 @@ void keyhandler(GLFWwindow* window, int key, int scancode, int action, int mods)
 	}
 }
 
-void sizehandler(GLFWwindow* window, int width, int height)
+void sizehandler(GLFWwindow*, int, int)
 {
 	redraw = true;
 }
