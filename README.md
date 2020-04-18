@@ -146,6 +146,8 @@ assert(resvb == 0 && resib == 0);
 
 Note that vertex encoding assumes that vertex buffer was optimized for vertex fetch, and that vertices are quantized; index encoding assumes that the vertex/index buffers were optimized for vertex cache and vertex fetch. Feeding unoptimized data into the encoders will produce poor compression ratios. Both codecs are lossless - the only lossy step is quantization that happens before encoding.
 
+To reduce the data size further, it's recommended to use `meshopt_optimizeVertexCacheStrip` instead of `meshopt_optimizeVertexCache` when optimizing for vertex cache, and to use new index codec version (`meshopt_encodeIndexVersion(1)`). This trades off some efficiency in vertex transform for smaller vertex and index data.
+
 Decoding functions are heavily optimized and can directly target write-combined memory; you can expect both decoders to run at 1-3 GB/s on modern desktop CPUs. Compression ratios depend on the data; vertex data compression ratio is typically around 2-4x (compared to already quantized data), index data compression ratio is around 5-6x (compared to raw 16-bit index data). General purpose lossless compressors can further improve on these results.
 
 Index buffer codec only supports triangle list topology; when encoding triangle strips or line lists, use `meshopt_encodeIndexSequence`/`meshopt_decodeIndexSequence` instead. This codec typically encodes indices into ~1 byte per index, but compressing the results further with a general purpose compressor can improve the results to 1-3 bits per index.
@@ -180,6 +182,8 @@ size_t strip_size = meshopt_stripify(&strip[0], indices, index_count, vertex_cou
 
 Typically you should expect triangle strips to have ~50-60% of indices compared to triangle lists (~1.5-1.8 indices per triangle) and have ~5% worse ACMR.
 Note that triangle strips can be stitched with or without restart index support. Using restart indices can result in ~10% smaller index buffers, but on some GPUs restart indices may result in decreased performance.
+
+To reduce the triangle strip size further, it's recommended to use `meshopt_optimizeVertexCacheStrip` instead of `meshopt_optimizeVertexCache` when optimizing for vertex cache. This trades off some efficiency in vertex transform for smaller index buffers.
 
 ## Deinterleaved geometry
 
