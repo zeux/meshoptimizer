@@ -18,6 +18,8 @@ git clone -b v0.14 https://github.com/zeux/meshoptimizer.git
 
 Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v0.14.zip).
 
+The library is available as a Linux package in some distributions ([ArchLinux](https://aur.archlinux.org/packages/meshoptimizer/)).
+
 ## Building
 
 meshoptimizer is distributed as a set of C++ source files. To include it into your project, you can use one of the two options:
@@ -265,7 +267,7 @@ meshopt_setAllocator(malloc, free);
 
 > Note that the library expects the allocation function to either throw in case of out-of-memory (in which case the exception will propagate to the caller) or abort, so technically the use of `malloc` above isn't safe. If you want to handle out-of-memory errors without using C++ exceptions, you can use `setjmp`/`longjmp` instead.
 
-Vertex and index decoders (`meshopt_decodeVertexBuffer` and `meshopt_decodeIndexBuffer`) do not allocate memory and work completely within the buffer space provided via arguments.
+Vertex and index decoders (`meshopt_decodeVertexBuffer`, `meshopt_decodeIndexBuffer`, `meshopt_decodeIndexSequence`) do not allocate memory and work completely within the buffer space provided via arguments.
 
 All functions have bounded stack usage that does not exceed 32 KB for any algorithms.
 
