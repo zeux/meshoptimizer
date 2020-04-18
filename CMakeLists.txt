@@ -16,6 +16,11 @@ option(MESHOPT_BUILD_TOOLS "Build tools" OFF)
 option(MESHOPT_BUILD_SHARED_LIBS "Build shared libraries" OFF)
 set(MESHOPT_BUILD_TOOLS_GLFW_FOLDER_NAME "" CACHE STRING "Custom folder to look for GLFW")
 
+# add_library() needs BUILD_SHARED_LIBS set to decide between static and
+# shared. This also sets it back to OFF in case parent project has
+# BUILD_SHARED_LIBS but wants MESHOPT_BUILD_SHARED_LIBS to be OFF.
+set(BUILD_SHARED_LIBS ${MESHOPT_BUILD_SHARED_LIBS})
+
 set(SOURCES
     src/meshoptimizer.h
     src/allocator.cpp
