@@ -8,6 +8,37 @@
 
 #include "../src/meshoptimizer.h"
 
+static float inverseTranspose(float* result, const float* transform)
+{
+	float m[4][4] = {};
+	memcpy(m, transform, 16 * sizeof(float));
+
+	float det =
+	    m[0][0] * (m[1][1] * m[2][2] - m[2][1] * m[1][2]) -
+	    m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+	    m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+
+	float invdet = (det == 0.f) ? 0.f : 1.f / det;
+
+	float r[4][4] = {};
+
+	r[0][0] = (m[1][1] * m[2][2] - m[2][1] * m[1][2]) * invdet;
+	r[1][0] = (m[0][2] * m[2][1] - m[0][1] * m[2][2]) * invdet;
+	r[2][0] = (m[0][1] * m[1][2] - m[0][2] * m[1][1]) * invdet;
+	r[0][1] = (m[1][2] * m[2][0] - m[1][0] * m[2][2]) * invdet;
+	r[1][1] = (m[0][0] * m[2][2] - m[0][2] * m[2][0]) * invdet;
+	r[2][1] = (m[1][0] * m[0][2] - m[0][0] * m[1][2]) * invdet;
+	r[0][2] = (m[1][0] * m[2][1] - m[2][0] * m[1][1]) * invdet;
+	r[1][2] = (m[2][0] * m[0][1] - m[0][0] * m[2][1]) * invdet;
+	r[2][2] = (m[0][0] * m[1][1] - m[1][0] * m[0][1]) * invdet;
+
+	r[3][3] = 1.f;
+
+	memcpy(result, r, 16 * sizeof(float));
+
+	return det;
+}
+
 static void transformPosition(float* ptr, const float* transform)
 {
 	float x = ptr[0] * transform[0] + ptr[1] * transform[4] + ptr[2] * transform[8] + transform[12];
@@ -38,6 +69,9 @@ void transformMesh(Mesh& mesh, const cgltf_node* node)
 	float transform[16];
 	cgltf_node_transform_world(node, transform);
 
+	float transforminvt[16];
+	float det = inverseTranspose(transforminvt, transform);
+
 	for (size_t si = 0; si < mesh.streams.size(); ++si)
 	{
 		Stream& stream = mesh.streams[si];
@@ -47,11 +81,23 @@ void transformMesh(Mesh& mesh, const cgltf_node* node)
 			for (size_t i = 0; i < stream.data.size(); ++i)
 				transformPosition(stream.data[i].f, transform);
 		}
-		else if (stream.type == cgltf_attribute_type_normal || stream.type == cgltf_attribute_type_tangent)
+		else if (stream.type == cgltf_attribute_type_normal)
+		{
+			for (size_t i = 0; i < stream.data.size(); ++i)
+				transformNormal(stream.data[i].f, transforminvt);
+		}
+		else if (stream.type == cgltf_attribute_type_tangent)
 		{
 			for (size_t i = 0; i < stream.data.size(); ++i)
 				transformNormal(stream.data[i].f, transform);
 		}
+	}
+
+	if (det < 0 && mesh.type == cgltf_primitive_type_triangles)
+	{
+		// negative scale means we need to flip face winding
+		for (size_t i = 0; i < mesh.indices.size(); i += 3)
+			std::swap(mesh.indices[i + 0], mesh.indices[i + 1]);
 	}
 }
 
