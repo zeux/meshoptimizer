@@ -1,6 +1,7 @@
 /* Babylon.js extension for MESHOPT_compression; requires Babylon.js 4.1 */
-var NAME = "MESHOPT_compression";
+/* BABYLON.GLTF2.GLTFLoader.RegisterExtension("MESHOPT_compression", (loader) => new MESHOPT_compression(loader, MeshoptDecoder)); */
 var MESHOPT_compression = /** @class */ (function () {
+    var NAME = "MESHOPT_compression";
     /** @hidden */
     function MESHOPT_compression(loader, decoder) {
         /** The name of this extension. */
@@ -38,4 +39,3 @@ var MESHOPT_compression = /** @class */ (function () {
     };
     return MESHOPT_compression;
 }());
-/* BABYLON.GLTF2.GLTFLoader.RegisterExtension("MESHOPT_compression", (loader) => new MESHOPT_compression(loader, MeshoptDecoder)); */
