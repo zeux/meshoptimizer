@@ -298,6 +298,14 @@ static bool needsDummyBuffers(cgltf_data* data)
 		}
 	}
 
+	for (size_t i = 0; i < data->images_count; ++i)
+	{
+		cgltf_image* image = &data->images[i];
+
+		if (image->buffer_view && image->buffer_view->buffer->data == NULL)
+			return true;
+	}
+
 	return false;
 }
 

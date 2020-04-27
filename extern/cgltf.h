@@ -619,8 +619,9 @@ cgltf_result cgltf_load_buffers(
 		cgltf_data* data,
 		const char* gltf_path);
 
-
 cgltf_result cgltf_load_buffer_base64(const cgltf_options* options, cgltf_size size, const char* base64, void** out_data);
+
+void cgltf_decode_uri(char* uri);
 
 cgltf_result cgltf_validate(cgltf_data* data);
 
@@ -1025,6 +1026,9 @@ static cgltf_result cgltf_load_buffer_file(const cgltf_options* options, cgltf_s
 
 	cgltf_combine_paths(path, gltf_path, uri);
 
+	// after combining, the tail of the resulting path is a uri; decode_uri converts it into path
+	cgltf_decode_uri(path + strlen(path) - strlen(uri));
+
 	void* file_data = NULL;
 	cgltf_result result = file_read(&options->memory, &options->file, path, &size, &file_data);
 
@@ -1080,6 +1084,45 @@ cgltf_result cgltf_load_buffer_base64(const cgltf_options* options, cgltf_size s
 	*out_data = data;
 
 	return cgltf_result_success;
+}
+
+static int cgltf_unhex(char ch)
+{
+	return
+		(unsigned)(ch - '0') < 10 ? (ch - '0') :
+		(unsigned)(ch - 'A') < 6 ? (ch - 'A') + 10 :
+		(unsigned)(ch - 'a') < 6 ? (ch - 'a') + 10 :
+		-1;
+}
+
+void cgltf_decode_uri(char* uri)
+{
+	char* write = uri;
+	char* i = uri;
+
+	while (*i)
+	{
+		if (*i == '%')
+		{
+			int ch1 = cgltf_unhex(i[1]);
+
+			if (ch1 >= 0)
+			{
+				int ch2 = cgltf_unhex(i[2]);
+
+				if (ch2 >= 0)
+				{
+					*write++ = (char)(ch1 * 16 + ch2);
+					i += 3;
+					continue;
+				}
+			}
+		}
+
+		*write++ = *i++;
+	}
+
+	*write = 0;
 }
 
 cgltf_result cgltf_load_buffers(const cgltf_options* options, cgltf_data* data, const char* gltf_path)

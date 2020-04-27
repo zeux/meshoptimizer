@@ -540,6 +540,19 @@ static void writeEmbeddedImage(std::string& json, std::vector<BufferView>& views
 	append(json, "\"");
 }
 
+static std::string decodeUri(const char* uri)
+{
+	std::string result = uri;
+
+	if (!result.empty())
+	{
+		cgltf_decode_uri(&result[0]);
+		result.resize(strlen(result.c_str()));
+	}
+
+	return result;
+}
+
 void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const char* output_path, const Settings& settings)
 {
 	std::string img_data;
@@ -559,7 +572,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 	{
 		if (settings.texture_embed)
 		{
-			std::string full_path = getFullPath(image.uri, input_path);
+			std::string full_path = getFullPath(decodeUri(image.uri).c_str(), input_path);
 
 			if (!readFile(full_path.c_str(), img_data))
 			{
@@ -600,9 +613,9 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 	{
 		if (settings.texture_basis)
 		{
-			std::string full_path = getFullPath(image.uri, input_path);
-			std::string basis_path = getFileName(image.uri) + (settings.texture_ktx2 ? ".ktx2" : ".basis");
-			std::string basis_full_path = getFullPath(basis_path.c_str(), output_path);
+			std::string full_path = getFullPath(decodeUri(image.uri).c_str(), input_path);
+			std::string basis_uri = getFileName(image.uri) + (settings.texture_ktx2 ? ".ktx2" : ".basis");
+			std::string basis_full_path = getFullPath(decodeUri(basis_uri.c_str()).c_str(), output_path);
 
 			if (readFile(full_path.c_str(), img_data))
 			{
@@ -616,7 +629,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 					if (writeFile(basis_full_path.c_str(), encoded))
 					{
 						append(json, "\"uri\":\"");
-						append(json, basis_path);
+						append(json, basis_uri);
 						append(json, "\"");
 					}
 					else
