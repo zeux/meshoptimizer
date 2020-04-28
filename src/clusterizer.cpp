@@ -234,17 +234,12 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 		float best_distance = 1e+35; // TODO FLT_MAX
 		float best_spread = -1.f;
 
-		// TODO: update meshlet center as we go
-		float meshlet_points[64][3];
-		for (size_t i = 0; i < meshlet.vertex_count; ++i)
-		{
-			meshlet_points[i][0] = vertex_positions[meshlet.vertices[i] * vertex_stride_float + 0];
-			meshlet_points[i][1] = vertex_positions[meshlet.vertices[i] * vertex_stride_float + 1];
-			meshlet_points[i][2] = vertex_positions[meshlet.vertices[i] * vertex_stride_float + 2];
-		}
+		float meshlet_center_scale = meshlet.triangle_count == 0 ? 0.f : 1.f / float(meshlet.triangle_count);
 
-		float meshlet_center[4];
-		computeBoundingSphere(meshlet_center, meshlet_points, meshlet.vertex_count);
+		float meshlet_center[3];
+		meshlet_center[0] = meshlet_data[0] * meshlet_center_scale;
+		meshlet_center[1] = meshlet_data[1] * meshlet_center_scale;
+		meshlet_center[2] = meshlet_data[2] * meshlet_center_scale;
 
 		float meshlet_axis = meshlet_data[3] * meshlet_data[3] + meshlet_data[4] * meshlet_data[4] + meshlet_data[5] * meshlet_data[5];
 		float meshlet_axis_scale = meshlet_axis == 0.f ? 0.f : 1.f / sqrtf(meshlet_axis);
@@ -277,24 +272,26 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 				        (triangle_data[triangle * 6 + 2] - meshlet_center[2]);
 
 				float spread = meshlet_axis_scale *
-					(triangle_data[triangle * 6 + 3] * meshlet_data[3] +
-					triangle_data[triangle * 6 + 4] * meshlet_data[4] +
-					triangle_data[triangle * 6 + 5] * meshlet_data[5]);
+				               (triangle_data[triangle * 6 + 3] * meshlet_data[3] +
+				                triangle_data[triangle * 6 + 4] * meshlet_data[4] +
+				                triangle_data[triangle * 6 + 5] * meshlet_data[5]);
 
 				(void)best_distance;
 				(void)best_spread;
 
-			#if 1
+#if 0
 				if (extra < best_extra || (extra == best_extra && spread > best_spread))
-			#else
+#else
 				if (extra < best_extra || (extra == best_extra && distance < best_distance))
-			#endif
+#endif
 				{
 					best_triangle = triangle;
 					best_extra = extra;
 					best_distance = distance;
 					best_spread = spread;
 				}
+
+				// TODO: early out when best extra is 0
 			}
 		}
 
