@@ -100,7 +100,87 @@ size_t meshopt_buildMeshletsBound(size_t index_count, size_t max_vertices, size_
 	return meshlet_limit_vertices > meshlet_limit_triangles ? meshlet_limit_vertices : meshlet_limit_triangles;
 }
 
-size_t meshopt_buildMeshlets(meshopt_Meshlet* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, size_t max_vertices, size_t max_triangles)
+size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t max_triangles)
+{
+	assert(index_count % 3 == 0);
+	assert(max_vertices >= 3);
+	assert(max_triangles >= 1);
+	assert(vertex_positions_stride > 0 && vertex_positions_stride <= 256);
+	assert(vertex_positions_stride % sizeof(float) == 0);
+
+	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
+
+	(void)vertex_stride_float;
+	(void)vertex_positions;
+
+	meshopt_Allocator allocator;
+
+	meshopt_Meshlet meshlet;
+	memset(&meshlet, 0, sizeof(meshlet));
+
+	assert(max_vertices <= sizeof(meshlet.vertices) / sizeof(meshlet.vertices[0]));
+	assert(max_triangles <= sizeof(meshlet.indices) / 3);
+
+	// index of the vertex in the meshlet, 0xff if the vertex isn't used
+	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
+	memset(used, -1, vertex_count);
+
+	size_t offset = 0;
+
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		unsigned int a = indices[i + 0], b = indices[i + 1], c = indices[i + 2];
+		assert(a < vertex_count && b < vertex_count && c < vertex_count);
+
+		unsigned char& av = used[a];
+		unsigned char& bv = used[b];
+		unsigned char& cv = used[c];
+
+		unsigned int used_extra = (av == 0xff) + (bv == 0xff) + (cv == 0xff);
+
+		if (meshlet.vertex_count + used_extra > max_vertices || meshlet.triangle_count >= max_triangles)
+		{
+			destination[offset++] = meshlet;
+
+			for (size_t j = 0; j < meshlet.vertex_count; ++j)
+				used[meshlet.vertices[j]] = 0xff;
+
+			memset(&meshlet, 0, sizeof(meshlet));
+		}
+
+		if (av == 0xff)
+		{
+			av = meshlet.vertex_count;
+			meshlet.vertices[meshlet.vertex_count++] = a;
+		}
+
+		if (bv == 0xff)
+		{
+			bv = meshlet.vertex_count;
+			meshlet.vertices[meshlet.vertex_count++] = b;
+		}
+
+		if (cv == 0xff)
+		{
+			cv = meshlet.vertex_count;
+			meshlet.vertices[meshlet.vertex_count++] = c;
+		}
+
+		meshlet.indices[meshlet.triangle_count][0] = av;
+		meshlet.indices[meshlet.triangle_count][1] = bv;
+		meshlet.indices[meshlet.triangle_count][2] = cv;
+		meshlet.triangle_count++;
+	}
+
+	if (meshlet.triangle_count)
+		destination[offset++] = meshlet;
+
+	assert(offset <= meshopt_buildMeshletsBound(index_count, max_vertices, max_triangles));
+
+	return offset;
+}
+
+size_t meshopt_buildMeshletsLinear(meshopt_Meshlet* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, size_t max_vertices, size_t max_triangles)
 {
 	assert(index_count % 3 == 0);
 	assert(max_vertices >= 3);
