@@ -12,6 +12,62 @@
 namespace meshopt
 {
 
+struct TriangleAdjacency
+{
+	unsigned int* counts;
+	unsigned int* offsets;
+	unsigned int* data;
+};
+
+static void buildTriangleAdjacency(TriangleAdjacency& adjacency, const unsigned int* indices, size_t index_count, size_t vertex_count, meshopt_Allocator& allocator)
+{
+	size_t face_count = index_count / 3;
+
+	// allocate arrays
+	adjacency.counts = allocator.allocate<unsigned int>(vertex_count);
+	adjacency.offsets = allocator.allocate<unsigned int>(vertex_count);
+	adjacency.data = allocator.allocate<unsigned int>(index_count);
+
+	// fill triangle counts
+	memset(adjacency.counts, 0, vertex_count * sizeof(unsigned int));
+
+	for (size_t i = 0; i < index_count; ++i)
+	{
+		assert(indices[i] < vertex_count);
+
+		adjacency.counts[indices[i]]++;
+	}
+
+	// fill offset table
+	unsigned int offset = 0;
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		adjacency.offsets[i] = offset;
+		offset += adjacency.counts[i];
+	}
+
+	assert(offset == index_count);
+
+	// fill triangle data
+	for (size_t i = 0; i < face_count; ++i)
+	{
+		unsigned int a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
+
+		adjacency.data[adjacency.offsets[a]++] = unsigned(i);
+		adjacency.data[adjacency.offsets[b]++] = unsigned(i);
+		adjacency.data[adjacency.offsets[c]++] = unsigned(i);
+	}
+
+	// fix offsets that have been disturbed by the previous pass
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		assert(adjacency.offsets[i] >= adjacency.counts[i]);
+
+		adjacency.offsets[i] -= adjacency.counts[i];
+	}
+}
+
 static void computeBoundingSphere(float result[4], const float points[][3], size_t count)
 {
 	assert(count > 0);
@@ -102,6 +158,8 @@ size_t meshopt_buildMeshletsBound(size_t index_count, size_t max_vertices, size_
 
 size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t max_triangles)
 {
+	using namespace meshopt;
+
 	assert(index_count % 3 == 0);
 	assert(max_vertices >= 3);
 	assert(max_triangles >= 1);
@@ -121,15 +179,72 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 	assert(max_vertices <= sizeof(meshlet.vertices) / sizeof(meshlet.vertices[0]));
 	assert(max_triangles <= sizeof(meshlet.indices) / 3);
 
+	TriangleAdjacency adjacency = {};
+	buildTriangleAdjacency(adjacency, indices, index_count, vertex_count, allocator);
+
+	size_t face_count = index_count / 3;
+
+	unsigned char* emitted_flags = allocator.allocate<unsigned char>(face_count);
+	memset(emitted_flags, 0, face_count);
+
 	// index of the vertex in the meshlet, 0xff if the vertex isn't used
 	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
 	memset(used, -1, vertex_count);
 
 	size_t offset = 0;
+	size_t input_cursor = 0;
 
-	for (size_t i = 0; i < index_count; i += 3)
+	while (input_cursor < face_count)
 	{
-		unsigned int a = indices[i + 0], b = indices[i + 1], c = indices[i + 2];
+		unsigned int best_triangle = ~0u;
+		unsigned int best_cost = 4;
+
+		for (size_t i = 0; i < meshlet.vertex_count; ++i)
+		{
+			unsigned int index = meshlet.vertices[i];
+
+			unsigned int* neighbours = &adjacency.data[0] + adjacency.offsets[index];
+			size_t neighbours_size = adjacency.counts[index];
+
+			for (size_t j = 0; j < neighbours_size; ++j)
+			{
+				unsigned int triangle = neighbours[j];
+
+				// TODO: remove triangle when adding to meshlet instead
+				if (emitted_flags[triangle])
+					continue;
+
+				unsigned int a = indices[triangle * 3 + 0], b = indices[triangle * 3 + 1], c = indices[triangle * 3 + 2];
+				assert(a < vertex_count && b < vertex_count && c < vertex_count);
+
+				unsigned int cost_extra = (used[a] == 0xff) + (used[b] == 0xff) + (used[c] == 0xff);
+
+				if (cost_extra < best_cost)
+				{
+					best_triangle = triangle;
+					best_cost = cost_extra;
+				}
+			}
+		}
+
+		if (best_triangle == ~0u)
+		{
+			while (input_cursor < face_count)
+			{
+				unsigned int triangle = input_cursor++;
+
+				if (!emitted_flags[triangle])
+				{
+					best_triangle = triangle;
+					break;
+				}
+			}
+		}
+
+		if (best_triangle == ~0u)
+			break;
+
+		unsigned int a = indices[best_triangle * 3 + 0], b = indices[best_triangle * 3 + 1], c = indices[best_triangle * 3 + 2];
 		assert(a < vertex_count && b < vertex_count && c < vertex_count);
 
 		unsigned char& av = used[a];
@@ -170,6 +285,8 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 		meshlet.indices[meshlet.triangle_count][1] = bv;
 		meshlet.indices[meshlet.triangle_count][2] = cv;
 		meshlet.triangle_count++;
+
+		emitted_flags[best_triangle] = 1;
 	}
 
 	if (meshlet.triangle_count)
