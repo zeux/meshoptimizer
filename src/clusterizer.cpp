@@ -187,6 +187,22 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 	unsigned char* emitted_flags = allocator.allocate<unsigned char>(face_count);
 	memset(emitted_flags, 0, face_count);
 
+	float* triangle_center = allocator.allocate<float>(index_count);
+
+	for (size_t i = 0; i < face_count; ++i)
+	{
+		unsigned int a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
+		assert(a < vertex_count && b < vertex_count && c < vertex_count);
+
+		const float* p0 = vertex_positions + vertex_stride_float * a;
+		const float* p1 = vertex_positions + vertex_stride_float * b;
+		const float* p2 = vertex_positions + vertex_stride_float * c;
+
+		triangle_center[i * 3 + 0] = (p0[0] + p1[0] + p2[0]) / 3.f;
+		triangle_center[i * 3 + 1] = (p0[1] + p1[1] + p2[1]) / 3.f;
+		triangle_center[i * 3 + 2] = (p0[2] + p1[2] + p2[2]) / 3.f;
+	}
+
 	// index of the vertex in the meshlet, 0xff if the vertex isn't used
 	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
 	memset(used, -1, vertex_count);
@@ -197,7 +213,20 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 	while (input_cursor < face_count)
 	{
 		unsigned int best_triangle = ~0u;
-		unsigned int best_cost = 4;
+		unsigned int best_extra = 3;
+		float best_distance = 1e+35; // TODO FLT_MAX
+
+		// TODO: update meshlet center as we go
+		float meshlet_points[64][3];
+		for (size_t i = 0; i < meshlet.vertex_count; ++i)
+		{
+			meshlet_points[i][0] = vertex_positions[meshlet.vertices[i] * vertex_stride_float + 0];
+			meshlet_points[i][1] = vertex_positions[meshlet.vertices[i] * vertex_stride_float + 1];
+			meshlet_points[i][2] = vertex_positions[meshlet.vertices[i] * vertex_stride_float + 2];
+		}
+
+		float meshlet_center[4];
+		computeBoundingSphere(meshlet_center, meshlet_points, meshlet.vertex_count);
 
 		for (size_t i = 0; i < meshlet.vertex_count; ++i)
 		{
@@ -217,12 +246,25 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 				unsigned int a = indices[triangle * 3 + 0], b = indices[triangle * 3 + 1], c = indices[triangle * 3 + 2];
 				assert(a < vertex_count && b < vertex_count && c < vertex_count);
 
-				unsigned int cost_extra = (used[a] == 0xff) + (used[b] == 0xff) + (used[c] == 0xff);
+				unsigned int extra = (used[a] == 0xff) + (used[b] == 0xff) + (used[c] == 0xff);
+				float distance =
+				(triangle_center[triangle * 3 + 0] - meshlet_center[0])
+				*
+				(triangle_center[triangle * 3 + 0] - meshlet_center[0])
+				+
+				(triangle_center[triangle * 3 + 1] - meshlet_center[1])
+				*
+				(triangle_center[triangle * 3 + 1] - meshlet_center[1])
+				+
+				(triangle_center[triangle * 3 + 2] - meshlet_center[2])
+				*
+				(triangle_center[triangle * 3 + 2] - meshlet_center[2]);
 
-				if (cost_extra < best_cost)
+				if (extra < best_extra || (extra == best_extra && distance < best_distance))
 				{
 					best_triangle = triangle;
-					best_cost = cost_extra;
+					best_extra = extra;
+					best_distance = distance;
 				}
 			}
 		}
