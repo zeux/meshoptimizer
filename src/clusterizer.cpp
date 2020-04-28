@@ -179,6 +179,7 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 	assert(max_vertices <= sizeof(meshlet.vertices) / sizeof(meshlet.vertices[0]));
 	assert(max_triangles <= sizeof(meshlet.indices) / 3);
 
+	// TODO: build adjacency from position-index data only
 	TriangleAdjacency adjacency = {};
 	buildTriangleAdjacency(adjacency, indices, index_count, vertex_count, allocator);
 
@@ -187,7 +188,7 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 	unsigned char* emitted_flags = allocator.allocate<unsigned char>(face_count);
 	memset(emitted_flags, 0, face_count);
 
-	float* triangle_center = allocator.allocate<float>(index_count);
+	float* triangle_data = allocator.allocate<float>(face_count * 6);
 
 	for (size_t i = 0; i < face_count; ++i)
 	{
@@ -198,9 +199,23 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 		const float* p1 = vertex_positions + vertex_stride_float * b;
 		const float* p2 = vertex_positions + vertex_stride_float * c;
 
-		triangle_center[i * 3 + 0] = (p0[0] + p1[0] + p2[0]) / 3.f;
-		triangle_center[i * 3 + 1] = (p0[1] + p1[1] + p2[1]) / 3.f;
-		triangle_center[i * 3 + 2] = (p0[2] + p1[2] + p2[2]) / 3.f;
+		float p10[3] = {p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]};
+		float p20[3] = {p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]};
+
+		float normalx = p10[1] * p20[2] - p10[2] * p20[1];
+		float normaly = p10[2] * p20[0] - p10[0] * p20[2];
+		float normalz = p10[0] * p20[1] - p10[1] * p20[0];
+
+		float area = sqrtf(normalx * normalx + normaly * normaly + normalz * normalz);
+		float invarea = (area == 0.f) ? 0.f : 1.f / area;
+
+		triangle_data[i * 6 + 0] = (p0[0] + p1[0] + p2[0]) / 3.f;
+		triangle_data[i * 6 + 1] = (p0[1] + p1[1] + p2[1]) / 3.f;
+		triangle_data[i * 6 + 2] = (p0[2] + p1[2] + p2[2]) / 3.f;
+
+		triangle_data[i * 6 + 3] = normalx * invarea;
+		triangle_data[i * 6 + 4] = normaly * invarea;
+		triangle_data[i * 6 + 5] = normalz * invarea;
 	}
 
 	// index of the vertex in the meshlet, 0xff if the vertex isn't used
@@ -210,11 +225,14 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 	size_t offset = 0;
 	size_t input_cursor = 0;
 
+	float meshlet_data[6] = {};
+
 	while (input_cursor < face_count)
 	{
 		unsigned int best_triangle = ~0u;
 		unsigned int best_extra = 3;
 		float best_distance = 1e+35; // TODO FLT_MAX
+		float best_spread = -1.f;
 
 		// TODO: update meshlet center as we go
 		float meshlet_points[64][3];
@@ -227,6 +245,9 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 
 		float meshlet_center[4];
 		computeBoundingSphere(meshlet_center, meshlet_points, meshlet.vertex_count);
+
+		float meshlet_axis = meshlet_data[3] * meshlet_data[3] + meshlet_data[4] * meshlet_data[4] + meshlet_data[5] * meshlet_data[5];
+		float meshlet_axis_scale = meshlet_axis == 0.f ? 0.f : 1.f / sqrtf(meshlet_axis);
 
 		for (size_t i = 0; i < meshlet.vertex_count; ++i)
 		{
@@ -248,23 +269,31 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 
 				unsigned int extra = (used[a] == 0xff) + (used[b] == 0xff) + (used[c] == 0xff);
 				float distance =
-				(triangle_center[triangle * 3 + 0] - meshlet_center[0])
-				*
-				(triangle_center[triangle * 3 + 0] - meshlet_center[0])
-				+
-				(triangle_center[triangle * 3 + 1] - meshlet_center[1])
-				*
-				(triangle_center[triangle * 3 + 1] - meshlet_center[1])
-				+
-				(triangle_center[triangle * 3 + 2] - meshlet_center[2])
-				*
-				(triangle_center[triangle * 3 + 2] - meshlet_center[2]);
+				    (triangle_data[triangle * 6 + 0] - meshlet_center[0]) *
+				        (triangle_data[triangle * 6 + 0] - meshlet_center[0]) +
+				    (triangle_data[triangle * 6 + 1] - meshlet_center[1]) *
+				        (triangle_data[triangle * 6 + 1] - meshlet_center[1]) +
+				    (triangle_data[triangle * 6 + 2] - meshlet_center[2]) *
+				        (triangle_data[triangle * 6 + 2] - meshlet_center[2]);
 
+				float spread = meshlet_axis_scale *
+					(triangle_data[triangle * 6 + 3] * meshlet_data[3] +
+					triangle_data[triangle * 6 + 4] * meshlet_data[4] +
+					triangle_data[triangle * 6 + 5] * meshlet_data[5]);
+
+				(void)best_distance;
+				(void)best_spread;
+
+			#if 1
+				if (extra < best_extra || (extra == best_extra && spread > best_spread))
+			#else
 				if (extra < best_extra || (extra == best_extra && distance < best_distance))
+			#endif
 				{
 					best_triangle = triangle;
 					best_extra = extra;
 					best_distance = distance;
+					best_spread = spread;
 				}
 			}
 		}
@@ -303,6 +332,7 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 				used[meshlet.vertices[j]] = 0xff;
 
 			memset(&meshlet, 0, sizeof(meshlet));
+			memset(meshlet_data, 0, sizeof(meshlet_data));
 		}
 
 		if (av == 0xff)
@@ -327,6 +357,13 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 		meshlet.indices[meshlet.triangle_count][1] = bv;
 		meshlet.indices[meshlet.triangle_count][2] = cv;
 		meshlet.triangle_count++;
+
+		meshlet_data[0] += triangle_data[best_triangle * 6 + 0];
+		meshlet_data[1] += triangle_data[best_triangle * 6 + 1];
+		meshlet_data[2] += triangle_data[best_triangle * 6 + 2];
+		meshlet_data[3] += triangle_data[best_triangle * 6 + 3];
+		meshlet_data[4] += triangle_data[best_triangle * 6 + 4];
+		meshlet_data[5] += triangle_data[best_triangle * 6 + 5];
 
 		emitted_flags[best_triangle] = 1;
 	}

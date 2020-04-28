@@ -853,7 +853,7 @@ void meshlets(const Mesh& mesh, bool linear)
 	avg_triangles /= double(meshlets.size());
 
 	printf("Meshlets%c: %d meshlets (avg vertices %.1f, avg triangles %.1f, not full %d) in %.2f msec\n",
-		   linear ? 'L' : ' ',
+	       linear ? 'L' : ' ',
 	       int(meshlets.size()), avg_vertices, avg_triangles, int(not_full), (end - start) * 1000);
 
 	float camera[3] = {100, 100, 100};
@@ -917,9 +917,9 @@ void meshlets(const Mesh& mesh, bool linear)
 		meshlets_std += radii[i] < radius_mean + radius_stddev;
 
 	printf("BoundDist: mean %f stddev %f; %.1f%% meshlets are under mean+stddev\n",
-		radius_mean,
-		radius_stddev,
-		double(meshlets_std) / double(meshlets.size()) * 100);
+	       radius_mean,
+	       radius_stddev,
+	       double(meshlets_std) / double(meshlets.size()) * 100);
 
 	printf("ConeCull : rejected apex %d (%.1f%%) / center %d (%.1f%%), trivially accepted %d (%.1f%%) in %.2f msec\n",
 	       int(rejected), double(rejected) / double(meshlets.size()) * 100,
