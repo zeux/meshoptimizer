@@ -1181,7 +1181,6 @@ void processDev(const char* path)
 	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
 
 	meshlets(copy, false);
-	meshlets(copy, true);
 }
 
 int main(int argc, char** argv)

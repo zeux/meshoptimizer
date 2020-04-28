@@ -177,11 +177,15 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 	memset(&meshlet, 0, sizeof(meshlet));
 
 	assert(max_vertices <= sizeof(meshlet.vertices) / sizeof(meshlet.vertices[0]));
+	assert(max_vertices <= 255);
 	assert(max_triangles <= sizeof(meshlet.indices) / 3);
 
 	// TODO: build adjacency from position-index data only
 	TriangleAdjacency adjacency = {};
 	buildTriangleAdjacency(adjacency, indices, index_count, vertex_count, allocator);
+
+	unsigned int* live_triangles = allocator.allocate<unsigned int>(vertex_count);
+	memcpy(live_triangles, adjacency.counts, vertex_count * sizeof(unsigned int));
 
 	size_t face_count = index_count / 3;
 
@@ -263,6 +267,18 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 				assert(a < vertex_count && b < vertex_count && c < vertex_count);
 
 				unsigned int extra = (used[a] == 0xff) + (used[b] == 0xff) + (used[c] == 0xff);
+
+				if (extra != 0 && (live_triangles[a] == 1 || live_triangles[b] == 1 || live_triangles[c] == 1))
+				{
+					// best_triangle = triangle;
+					// goto done;
+					extra = 1;
+				}
+				else if (extra != 0)
+				{
+					extra++;
+				}
+
 				float distance =
 				    (triangle_data[triangle * 6 + 0] - meshlet_center[0]) *
 				        (triangle_data[triangle * 6 + 0] - meshlet_center[0]) +
@@ -293,6 +309,8 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 
 				// TODO: early out when best extra is 0
 			}
+
+        // done:;
 		}
 
 		if (best_triangle == ~0u)
@@ -355,6 +373,10 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 		meshlet.indices[meshlet.triangle_count][2] = cv;
 		meshlet.triangle_count++;
 
+		live_triangles[a]--;
+		live_triangles[b]--;
+		live_triangles[c]--;
+
 		meshlet_data[0] += triangle_data[best_triangle * 6 + 0];
 		meshlet_data[1] += triangle_data[best_triangle * 6 + 1];
 		meshlet_data[2] += triangle_data[best_triangle * 6 + 2];
@@ -385,6 +407,7 @@ size_t meshopt_buildMeshletsLinear(meshopt_Meshlet* destination, const unsigned 
 	memset(&meshlet, 0, sizeof(meshlet));
 
 	assert(max_vertices <= sizeof(meshlet.vertices) / sizeof(meshlet.vertices[0]));
+	assert(max_vertices <= 255);
 	assert(max_triangles <= sizeof(meshlet.indices) / 3);
 
 	// index of the vertex in the meshlet, 0xff if the vertex isn't used
