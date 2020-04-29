@@ -227,7 +227,7 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 	memset(used, -1, vertex_count);
 
 	size_t offset = 0;
-	size_t input_cursor = 0;
+	unsigned int input_cursor = 0;
 
 	float meshlet_data[6] = {};
 
@@ -235,7 +235,7 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 	{
 		unsigned int best_triangle = ~0u;
 		unsigned int best_extra = 3;
-		float best_distance = 1e+35; // TODO FLT_MAX
+		float best_distance = 1e+35f; // TODO FLT_MAX
 		float best_spread = -1.f;
 
 		float meshlet_center_scale = meshlet.triangle_count == 0 ? 0.f : 1.f / float(meshlet.triangle_count);
