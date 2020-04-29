@@ -258,15 +258,14 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 			for (size_t j = 0; j < neighbours_size; ++j)
 			{
 				unsigned int triangle = neighbours[j];
-
-				// TODO: remove triangle when adding to meshlet instead
-				if (emitted_flags[triangle])
-					continue;
+				assert(!emitted_flags[triangle]);
 
 				unsigned int a = indices[triangle * 3 + 0], b = indices[triangle * 3 + 1], c = indices[triangle * 3 + 2];
 				assert(a < vertex_count && b < vertex_count && c < vertex_count);
 
 				unsigned int extra = (used[a] == 0xff) + (used[b] == 0xff) + (used[c] == 0xff);
+
+				// TODO: early out when extra == 0
 
 				if (extra != 0 && (live_triangles[a] == 1 || live_triangles[b] == 1 || live_triangles[c] == 1))
 				{
@@ -278,6 +277,9 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 				{
 					extra++;
 				}
+
+				if (extra > best_extra)
+					continue;
 
 				float distance =
 				    (triangle_data[triangle * 6 + 0] - meshlet_center[0]) *
@@ -296,9 +298,9 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 				(void)best_spread;
 
 #if 0
-				if (extra < best_extra || (extra == best_extra && spread > best_spread))
+				if (extra < best_extra || spread > best_spread)
 #else
-				if (extra < best_extra || (extra == best_extra && distance < best_distance))
+				if (extra < best_extra || distance < best_distance)
 #endif
 				{
 					best_triangle = triangle;
@@ -376,6 +378,28 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 		live_triangles[a]--;
 		live_triangles[b]--;
 		live_triangles[c]--;
+
+		// remove emitted triangle from adjacency data
+		// this makes sure that we spend less time traversing these lists on subsequent iterations
+		for (size_t k = 0; k < 3; ++k)
+		{
+			unsigned int index = indices[best_triangle * 3 + k];
+
+			unsigned int* neighbours = &adjacency.data[0] + adjacency.offsets[index];
+			size_t neighbours_size = adjacency.counts[index];
+
+			for (size_t i = 0; i < neighbours_size; ++i)
+			{
+				unsigned int tri = neighbours[i];
+
+				if (tri == best_triangle)
+				{
+					neighbours[i] = neighbours[neighbours_size - 1];
+					adjacency.counts[index]--;
+					break;
+				}
+			}
+		}
 
 		meshlet_data[0] += triangle_data[best_triangle * 6 + 0];
 		meshlet_data[1] += triangle_data[best_triangle * 6 + 1];
