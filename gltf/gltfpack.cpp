@@ -102,9 +102,10 @@ static void printSceneStats(const std::vector<BufferView>& views, const std::vec
 
 	printf("output: %d nodes, %d meshes (%d primitives), %d materials\n", int(node_offset), int(mesh_offset), int(meshes.size()), int(material_offset));
 	printf("output: JSON %d bytes, buffers %d bytes\n", int(json_size), int(bin_size));
-	printf("output: buffers: vertex %d bytes, index %d bytes, skin %d bytes, time %d bytes, keyframe %d bytes, image %d bytes\n",
+	printf("output: buffers: vertex %d bytes, index %d bytes, skin %d bytes, time %d bytes, keyframe %d bytes, instance %d bytes, image %d bytes\n",
 	       int(bytes[BufferView::Kind_Vertex]), int(bytes[BufferView::Kind_Index]), int(bytes[BufferView::Kind_Skin]),
-	       int(bytes[BufferView::Kind_Time]), int(bytes[BufferView::Kind_Keyframe]), int(bytes[BufferView::Kind_Image]));
+	       int(bytes[BufferView::Kind_Time]), int(bytes[BufferView::Kind_Keyframe]), int(bytes[BufferView::Kind_Instance]),
+	       int(bytes[BufferView::Kind_Image]));
 }
 
 static void printAttributeStats(const std::vector<BufferView>& views, BufferView::Kind kind, const char* name)
@@ -129,6 +130,7 @@ static void printAttributeStats(const std::vector<BufferView>& views, BufferView
 			break;
 
 		case BufferView::Kind_Keyframe:
+		case BufferView::Kind_Instance:
 			variant = animationPath(cgltf_animation_path_type(view.variant));
 			break;
 
@@ -138,12 +140,9 @@ static void printAttributeStats(const std::vector<BufferView>& views, BufferView
 		size_t count = view.data.size() / view.stride;
 
 		printf("stats: %s %s: compressed %d bytes (%.1f bits), raw %d bytes (%d bits)\n",
-		       name,
-		       variant,
-		       int(view.bytes),
-		       double(view.bytes) / double(count) * 8,
-		       int(view.data.size()),
-		       int(view.stride * 8));
+		       name, variant,
+		       int(view.bytes), double(view.bytes) / double(count) * 8,
+		       int(view.data.size()), int(view.stride * 8));
 	}
 }
 
@@ -242,6 +241,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	bool ext_pbr_specular_glossiness = false;
 	bool ext_clearcoat = false;
 	bool ext_unlit = false;
+	bool ext_instancing = false;
 
 	size_t accr_offset = 0;
 	size_t node_offset = 0;
@@ -488,6 +488,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	    {"KHR_materials_unlit", ext_unlit, false},
 	    {"KHR_lights_punctual", data->lights_count > 0, false},
 	    {"KHR_texture_basisu", !json_textures.empty() && settings.texture_ktx2, true},
+	    {"EXT_mesh_gpu_instancing", ext_instancing, true},
 	};
 
 	writeExtensions(json, extensions, sizeof(extensions) / sizeof(extensions[0]));
@@ -537,6 +538,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		printAttributeStats(views, BufferView::Kind_Vertex, "vertex");
 		printAttributeStats(views, BufferView::Kind_Index, "index");
 		printAttributeStats(views, BufferView::Kind_Keyframe, "keyframe");
+		printAttributeStats(views, BufferView::Kind_Instance, "instance");
 	}
 }
 

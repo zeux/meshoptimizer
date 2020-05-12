@@ -32,9 +32,15 @@ struct Stream
 	std::vector<Attr> data;
 };
 
+struct Transform
+{
+	float data[16];
+};
+
 struct Mesh
 {
 	std::vector<cgltf_node*> nodes;
+	std::vector<Transform> instances;
 
 	cgltf_material* material;
 	cgltf_skin* skin;
@@ -184,6 +190,7 @@ struct BufferView
 		Kind_Skin,
 		Kind_Time,
 		Kind_Keyframe,
+		Kind_Instance,
 		Kind_Image,
 		Kind_Count
 	};
