@@ -69,9 +69,9 @@ void markNeededNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::
 	{
 		const Mesh& mesh = meshes[i];
 
-		if (mesh.node)
+		for (size_t j = 0; j < mesh.nodes.size(); ++j)
 		{
-			NodeInfo& ni = nodes[mesh.node - data->nodes];
+			NodeInfo& ni = nodes[mesh.nodes[j] - data->nodes];
 
 			ni.keep = true;
 		}

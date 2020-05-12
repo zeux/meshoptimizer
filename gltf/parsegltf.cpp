@@ -149,7 +149,7 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 
 			Mesh result = {};
 
-			result.node = &node;
+			result.nodes.push_back(&node);
 
 			result.material = primitive.material;
 			result.skin = node.skin;

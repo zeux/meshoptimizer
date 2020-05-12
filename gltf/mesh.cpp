@@ -123,34 +123,54 @@ bool compareMeshTargets(const Mesh& lhs, const Mesh& rhs)
 	return true;
 }
 
+bool compareMeshNodes(const Mesh& lhs, const Mesh& rhs)
+{
+	if (lhs.nodes.size() != rhs.nodes.size())
+		return false;
+
+	for (size_t i = 0; i < lhs.nodes.size(); ++i)
+		if (lhs.nodes[i] != rhs.nodes[i])
+			return false;
+
+	return true;
+}
+
+static bool canMergeMeshNodes(cgltf_node* lhs, cgltf_node* rhs, const Settings& settings)
+{
+	if (lhs == rhs)
+		return true;
+
+	if (lhs->parent != rhs->parent)
+		return false;
+
+	bool lhs_transform = lhs->has_translation | lhs->has_rotation | lhs->has_scale | lhs->has_matrix | (!!lhs->weights);
+	bool rhs_transform = rhs->has_translation | rhs->has_rotation | rhs->has_scale | rhs->has_matrix | (!!rhs->weights);
+
+	if (lhs_transform || rhs_transform)
+		return false;
+
+	if (settings.keep_named)
+	{
+		if (lhs->name && *lhs->name)
+			return false;
+
+		if (rhs->name && *rhs->name)
+			return false;
+	}
+
+	// we can merge nodes that don't have transforms of their own and have the same parent
+	// this is helpful when instead of splitting mesh into primitives, DCCs split mesh into mesh nodes
+	return true;
+}
+
 static bool canMergeMeshes(const Mesh& lhs, const Mesh& rhs, const Settings& settings)
 {
-	if (lhs.node != rhs.node)
-	{
-		if (!lhs.node || !rhs.node)
+	if (lhs.nodes.size() != rhs.nodes.size())
+		return false;
+
+	for (size_t i = 0; i < lhs.nodes.size(); ++i)
+		if (!canMergeMeshNodes(lhs.nodes[i], rhs.nodes[i], settings))
 			return false;
-
-		if (lhs.node->parent != rhs.node->parent)
-			return false;
-
-		bool lhs_transform = lhs.node->has_translation | lhs.node->has_rotation | lhs.node->has_scale | lhs.node->has_matrix | (!!lhs.node->weights);
-		bool rhs_transform = rhs.node->has_translation | rhs.node->has_rotation | rhs.node->has_scale | rhs.node->has_matrix | (!!rhs.node->weights);
-
-		if (lhs_transform || rhs_transform)
-			return false;
-
-		if (settings.keep_named)
-		{
-			if (lhs.node->name && *lhs.node->name)
-				return false;
-
-			if (rhs.node->name && *rhs.node->name)
-				return false;
-		}
-
-		// we can merge nodes that don't have transforms of their own and have the same parent
-		// this is helpful when instead of splitting mesh into primitives, DCCs split mesh into mesh nodes
-	}
 
 	if (lhs.material != rhs.material)
 		return false;
@@ -236,6 +256,7 @@ void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings)
 
 				mesh.streams.clear();
 				mesh.indices.clear();
+				mesh.nodes.clear();
 			}
 		}
 

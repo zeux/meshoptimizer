@@ -811,16 +811,16 @@ size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_
 	return matrix_accr;
 }
 
-void writeMeshNode(std::string& json, size_t mesh_offset, const Mesh& mesh, cgltf_data* data, const QuantizationPosition* qp)
+void writeMeshNode(std::string& json, size_t mesh_offset, cgltf_node* node, cgltf_skin* skin, cgltf_data* data, const QuantizationPosition* qp)
 {
 	comma(json);
 	append(json, "{\"mesh\":");
 	append(json, mesh_offset);
-	if (mesh.skin)
+	if (skin)
 	{
 		comma(json);
 		append(json, "\"skin\":");
-		append(json, size_t(mesh.skin - data->skins));
+		append(json, size_t(skin - data->skins));
 	}
 	if (qp)
 	{
@@ -840,13 +840,13 @@ void writeMeshNode(std::string& json, size_t mesh_offset, const Mesh& mesh, cglt
 		append(json, node_scale);
 		append(json, "]");
 	}
-	if (mesh.node && mesh.node->weights_count)
+	if (node && node->weights_count)
 	{
 		append(json, ",\"weights\":[");
-		for (size_t j = 0; j < mesh.node->weights_count; ++j)
+		for (size_t j = 0; j < node->weights_count; ++j)
 		{
 			comma(json);
-			append(json, mesh.node->weights[j]);
+			append(json, node->weights[j]);
 		}
 		append(json, "]");
 	}

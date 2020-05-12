@@ -167,16 +167,17 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		Mesh& mesh = meshes[i];
 
 		// note: when -kn is specified, we keep mesh-node attachment so that named nodes can be transformed
-		if (mesh.node && !settings.keep_named)
+		if (mesh.nodes.size() == 1 && !settings.keep_named)
 		{
-			NodeInfo& ni = nodes[mesh.node - data->nodes];
+			cgltf_node* node = mesh.nodes[0];
+			NodeInfo& ni = nodes[node - data->nodes];
 
 			// we transform all non-skinned non-animated meshes to world space
 			// this makes sure that quantization doesn't introduce gaps if the original scene was watertight
 			if (!ni.animated && !mesh.skin && mesh.targets == 0)
 			{
-				transformMesh(mesh, mesh.node);
-				mesh.node = 0;
+				transformMesh(mesh, node);
+				mesh.nodes.clear();
 			}
 
 			// skinned and animated meshes will be anchored to the same node that they used to be in
@@ -301,7 +302,10 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		{
 			const Mesh& prim = meshes[pi];
 
-			if (prim.node != mesh.node || prim.skin != mesh.skin || prim.targets != mesh.targets)
+			if (prim.skin != mesh.skin || prim.targets != mesh.targets)
+				break;
+
+			if (!compareMeshNodes(mesh, prim))
 				break;
 
 			if (!compareMeshTargets(mesh, prim))
@@ -377,22 +381,30 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 		append(json_meshes, "}");
 
-		writeMeshNode(json_nodes, mesh_offset, mesh, data, settings.quantize ? &qp : NULL);
-
-		if (mesh.node)
-		{
-			NodeInfo& ni = nodes[mesh.node - data->nodes];
-
-			assert(ni.keep);
-			ni.meshes.push_back(node_offset);
-		}
-		else
+		if (mesh.nodes.empty())
 		{
 			comma(json_roots);
 			append(json_roots, node_offset);
+
+			writeMeshNode(json_nodes, mesh_offset, NULL, mesh.skin, data, settings.quantize ? &qp : NULL);
+
+			node_offset++;
+		}
+		else
+		{
+			for (size_t j = 0; j < mesh.nodes.size(); ++j)
+			{
+				NodeInfo& ni = nodes[mesh.nodes[j] - data->nodes];
+
+				assert(ni.keep);
+				ni.meshes.push_back(node_offset);
+
+				writeMeshNode(json_nodes, mesh_offset, mesh.nodes[j], mesh.skin, data, settings.quantize ? &qp : NULL);
+
+				node_offset++;
+			}
 		}
 
-		node_offset++;
 		mesh_offset++;
 
 		// skip all meshes that we've written in this iteration
