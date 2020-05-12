@@ -90,6 +90,9 @@ struct Settings
 	bool keep_named;
 	bool keep_extras;
 
+	bool mesh_merge;
+	bool mesh_instancing;
+
 	float simplify_threshold;
 	bool simplify_aggressive;
 

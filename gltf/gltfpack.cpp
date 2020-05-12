@@ -796,6 +796,14 @@ int main(int argc, char** argv)
 		{
 			settings.keep_extras = true;
 		}
+		else if (strcmp(arg, "-mm") == 0)
+		{
+			settings.mesh_merge = true;
+		}
+		else if (strcmp(arg, "-mi") == 0)
+		{
+			settings.mesh_instancing = true;
+		}
 		else if (strcmp(arg, "-si") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.simplify_threshold = float(atof(argv[++i]));
@@ -937,6 +945,8 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nScene:\n");
 			fprintf(stderr, "\t-kn: keep named nodes and meshes attached to named nodes so that named nodes can be transformed externally\n");
 			fprintf(stderr, "\t-ke: keep extras data\n");
+			fprintf(stderr, "\t-mm: merge instances of the same mesh together when possible\n");
+			fprintf(stderr, "\t-mi: use EXT_mesh_gpu_instancing when serializing multiple mesh instances\n");
 			fprintf(stderr, "\nMiscellaneous:\n");
 			fprintf(stderr, "\t-cf: produce compressed gltf/glb files with fallback for loaders that don't support compression\n");
 			fprintf(stderr, "\t-noq: disable quantization; produces much larger glTF files with no extensions\n");
