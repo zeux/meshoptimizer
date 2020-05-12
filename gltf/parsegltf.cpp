@@ -127,15 +127,9 @@ static void fixupIndices(std::vector<unsigned int>& indices, cgltf_primitive_typ
 
 static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 {
-	for (size_t ni = 0; ni < data->nodes_count; ++ni)
+	for (size_t mi = 0; mi < data->meshes_count; ++mi)
 	{
-		cgltf_node& node = data->nodes[ni];
-
-		if (!node.mesh)
-			continue;
-
-		const cgltf_mesh& mesh = *node.mesh;
-		int mesh_id = int(&mesh - data->meshes);
+		const cgltf_mesh& mesh = data->meshes[mi];
 
 		for (size_t pi = 0; pi < mesh.primitives_count; ++pi)
 		{
@@ -143,16 +137,13 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 
 			if (primitive.type == cgltf_primitive_type_points && primitive.indices)
 			{
-				fprintf(stderr, "Warning: ignoring primitive %d of mesh %d because indexed points are not supported\n", int(pi), mesh_id);
+				fprintf(stderr, "Warning: ignoring primitive %d of mesh %d because indexed points are not supported\n", int(pi), int(mi));
 				continue;
 			}
 
 			Mesh result = {};
 
-			result.nodes.push_back(&node);
-
 			result.material = primitive.material;
-			result.skin = node.skin;
 
 			result.type = primitive.type;
 
@@ -180,7 +171,7 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 
 				if (attr.type == cgltf_attribute_type_invalid)
 				{
-					fprintf(stderr, "Warning: ignoring unknown attribute %s in primitive %d of mesh %d\n", attr.name, int(pi), mesh_id);
+					fprintf(stderr, "Warning: ignoring unknown attribute %s in primitive %d of mesh %d\n", attr.name, int(pi), int(mi));
 					continue;
 				}
 
@@ -206,7 +197,7 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 
 					if (attr.type == cgltf_attribute_type_invalid)
 					{
-						fprintf(stderr, "Warning: ignoring unknown attribute %s in morph target %d of primitive %d of mesh %d\n", attr.name, int(ti), int(pi), mesh_id);
+						fprintf(stderr, "Warning: ignoring unknown attribute %s in morph target %d of primitive %d of mesh %d\n", attr.name, int(ti), int(pi), int(mi));
 						continue;
 					}
 
@@ -222,6 +213,46 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 			result.target_names.assign(mesh.target_names, mesh.target_names + mesh.target_names_count);
 
 			meshes.push_back(result);
+		}
+	}
+}
+
+static void parseMeshNodesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
+{
+	for (size_t i = 0; i < data->nodes_count; ++i)
+	{
+		cgltf_node& node = data->nodes[i];
+		if (!node.mesh)
+			continue;
+
+		Mesh& mesh = meshes[node.mesh - data->meshes];
+
+		if (mesh.nodes.empty() || mesh.skin == node.skin)
+		{
+			mesh.nodes.push_back(&node);
+			mesh.skin = node.skin;
+		}
+		else
+		{
+			// this should be extremely rare - if the same mesh is used with different skins, we need to duplicate it
+			// in this case we don't spend any effort on keeping the number of duplicates to the minimum, because this
+			// should really never happen.
+			meshes.push_back(mesh);
+
+			meshes.back().nodes.push_back(&node);
+			meshes.back().skin = node.skin;
+		}
+	}
+
+	for (size_t i = 0; i < meshes.size(); ++i)
+	{
+		Mesh& mesh = meshes[i];
+
+		// because the rest of gltfpack assumes that empty nodes array = world-space mesh, we need to filter unused meshes
+		if (mesh.nodes.empty())
+		{
+			mesh.streams.clear();
+			mesh.indices.clear();
 		}
 	}
 }
@@ -336,6 +367,7 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 	}
 
 	parseMeshesGltf(data, meshes);
+	parseMeshNodesGltf(data, meshes);
 	parseAnimationsGltf(data, animations);
 
 	return data;
