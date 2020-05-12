@@ -839,12 +839,16 @@ size_t writeInstances(std::vector<BufferView>& views, std::string& json_accessor
 
 		if (settings.quantize)
 		{
-			position[i].f[0] += qp.offset[0];
-			position[i].f[1] += qp.offset[1];
-			position[i].f[2] += qp.offset[2];
+			const float* transform = transforms[i].data;
 
 			float node_scale = qp.scale / float((1 << qp.bits) - 1);
 
+			// pos_offset has to be applied first, thus it results in an offset rotated by the instance matrix
+			position[i].f[0] += qp.offset[0] * transform[0] + qp.offset[1] * transform[4] + qp.offset[2] * transform[8];
+			position[i].f[1] += qp.offset[0] * transform[1] + qp.offset[1] * transform[5] + qp.offset[2] * transform[9];
+			position[i].f[2] += qp.offset[0] * transform[2] + qp.offset[1] * transform[6] + qp.offset[2] * transform[10];
+
+			// node_scale will be applied before the rotation/scale from transform
 			scale[i].f[0] *= node_scale;
 			scale[i].f[1] *= node_scale;
 			scale[i].f[2] *= node_scale;
