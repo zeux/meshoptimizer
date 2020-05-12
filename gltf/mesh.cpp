@@ -180,6 +180,9 @@ static bool canMergeMeshes(const Mesh& lhs, const Mesh& rhs, const Settings& set
 		if (!canMergeMeshNodes(lhs.nodes[i], rhs.nodes[i], settings))
 			return false;
 
+	if (lhs.instances.size() || rhs.instances.size())
+		return false;
+
 	if (lhs.material != rhs.material)
 		return false;
 

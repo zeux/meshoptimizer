@@ -84,7 +84,9 @@ static void printMeshStats(const std::vector<Mesh>& meshes, const char* name)
 		triangles += mesh.indices.size() / 3;
 		vertices += mesh.streams.empty() ? 0 : mesh.streams[0].data.size();
 
-		instanced += mesh.indices.size() / 3 * std::max(size_t(1), mesh.nodes.size());
+		size_t instances = std::max(size_t(1), mesh.nodes.size() + mesh.instances.size());
+
+		instanced += mesh.indices.size() / 3 * instances;
 	}
 
 	printf("%s: %d triangles (%lld instanced), %d vertices\n", name, int(triangles), (long long)instanced, int(vertices));
@@ -167,6 +169,11 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
 		Mesh& mesh = meshes[i];
+		assert(mesh.instances.empty());
+
+		// mesh is already world space, skip
+		if (mesh.nodes.empty())
+			continue;
 
 		// note: when -kn is specified, we keep mesh-node attachment so that named nodes can be transformed
 		if (settings.keep_named)
@@ -178,11 +185,6 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		if (mesh.skin || mesh.targets)
 			continue;
 
-		// we only merge multiple instances together if requested
-		// this often makes the scenes faster to render by reducing the draw call count, but can result in larger files
-		if (mesh.nodes.size() > 1 && !settings.mesh_merge)
-			continue;
-
 		bool any_animated = false;
 		for (size_t j = 0; j < mesh.nodes.size(); ++j)
 			any_animated |= nodes[mesh.nodes[j] - data->nodes].animated;
@@ -191,7 +193,26 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		if (any_animated)
 			continue;
 
-		mergeMeshInstances(mesh);
+		// we only merge multiple instances together if requested
+		// this often makes the scenes faster to render by reducing the draw call count, but can result in larger files
+		if (mesh.nodes.size() > 1 && !settings.mesh_merge && !settings.mesh_instancing)
+			continue;
+
+		// prefer instancing if possible, use merging otherwise
+		if (mesh.nodes.size() > 1 && settings.mesh_instancing)
+		{
+			mesh.instances.resize(mesh.nodes.size());
+
+			for (size_t j = 0; j < mesh.nodes.size(); ++j)
+				cgltf_node_transform_world(mesh.nodes[j], mesh.instances[j].data);
+
+			mesh.nodes.clear();
+		}
+		else
+		{
+			mergeMeshInstances(mesh);
+		}
+
 		assert(mesh.nodes.empty());
 	}
 
@@ -315,6 +336,9 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 			if (prim.skin != mesh.skin || prim.targets != mesh.targets)
 				break;
 
+			if (pi > i && (mesh.instances.size() || prim.instances.size()))
+				break;
+
 			if (!compareMeshNodes(mesh, prim))
 				break;
 
@@ -391,16 +415,10 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 		append(json_meshes, "}");
 
-		if (mesh.nodes.empty())
-		{
-			comma(json_roots);
-			append(json_roots, node_offset);
+		assert(mesh.nodes.empty() || mesh.instances.empty());
+		ext_instancing = ext_instancing || !mesh.instances.empty();
 
-			writeMeshNode(json_nodes, mesh_offset, NULL, mesh.skin, data, settings.quantize ? &qp : NULL);
-
-			node_offset++;
-		}
-		else
+		if (mesh.nodes.size())
 		{
 			for (size_t j = 0; j < mesh.nodes.size(); ++j)
 			{
@@ -413,6 +431,27 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 				node_offset++;
 			}
+		}
+		else if (mesh.instances.size())
+		{
+			comma(json_roots);
+			append(json_roots, node_offset);
+
+			size_t instance_accr = writeInstances(views, json_accessors, accr_offset, mesh.instances, qp, settings);
+
+			assert(!mesh.skin);
+			writeMeshNodeInstanced(json_nodes, mesh_offset, instance_accr);
+
+			node_offset++;
+		}
+		else
+		{
+			comma(json_roots);
+			append(json_roots, node_offset);
+
+			writeMeshNode(json_nodes, mesh_offset, NULL, mesh.skin, data, settings.quantize ? &qp : NULL);
+
+			node_offset++;
 		}
 
 		mesh_offset++;
