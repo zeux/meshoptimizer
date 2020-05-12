@@ -39,18 +39,18 @@ static float inverseTranspose(float* result, const float* transform)
 	return det;
 }
 
-static void transformPosition(float* ptr, const float* transform)
+static void transformPosition(float* res, const float* ptr, const float* transform)
 {
 	float x = ptr[0] * transform[0] + ptr[1] * transform[4] + ptr[2] * transform[8] + transform[12];
 	float y = ptr[0] * transform[1] + ptr[1] * transform[5] + ptr[2] * transform[9] + transform[13];
 	float z = ptr[0] * transform[2] + ptr[1] * transform[6] + ptr[2] * transform[10] + transform[14];
 
-	ptr[0] = x;
-	ptr[1] = y;
-	ptr[2] = z;
+	res[0] = x;
+	res[1] = y;
+	res[2] = z;
 }
 
-static void transformNormal(float* ptr, const float* transform)
+static void transformNormal(float* res, const float* ptr, const float* transform)
 {
 	float x = ptr[0] * transform[0] + ptr[1] * transform[4] + ptr[2] * transform[8];
 	float y = ptr[0] * transform[1] + ptr[1] * transform[5] + ptr[2] * transform[9];
@@ -59,13 +59,17 @@ static void transformNormal(float* ptr, const float* transform)
 	float l = sqrtf(x * x + y * y + z * z);
 	float s = (l == 0.f) ? 0.f : 1 / l;
 
-	ptr[0] = x * s;
-	ptr[1] = y * s;
-	ptr[2] = z * s;
+	res[0] = x * s;
+	res[1] = y * s;
+	res[2] = z * s;
 }
 
-void transformMesh(Mesh& mesh, const cgltf_node* node)
+// assumes mesh & target are structurally identical
+static void transformMesh(Mesh& target, const Mesh& mesh, const cgltf_node* node)
 {
+	assert(target.streams.size() == mesh.streams.size());
+	assert(target.indices.size() == mesh.indices.size());
+
 	float transform[16];
 	cgltf_node_transform_world(node, transform);
 
@@ -74,30 +78,34 @@ void transformMesh(Mesh& mesh, const cgltf_node* node)
 
 	for (size_t si = 0; si < mesh.streams.size(); ++si)
 	{
-		Stream& stream = mesh.streams[si];
+		const Stream& source = mesh.streams[si];
+		Stream& stream = target.streams[si];
+
+		assert(source.type == stream.type);
+		assert(source.data.size() == stream.data.size());
 
 		if (stream.type == cgltf_attribute_type_position)
 		{
 			for (size_t i = 0; i < stream.data.size(); ++i)
-				transformPosition(stream.data[i].f, transform);
+				transformPosition(stream.data[i].f, source.data[i].f, transform);
 		}
 		else if (stream.type == cgltf_attribute_type_normal)
 		{
 			for (size_t i = 0; i < stream.data.size(); ++i)
-				transformNormal(stream.data[i].f, transforminvt);
+				transformNormal(stream.data[i].f, source.data[i].f, transforminvt);
 		}
 		else if (stream.type == cgltf_attribute_type_tangent)
 		{
 			for (size_t i = 0; i < stream.data.size(); ++i)
-				transformNormal(stream.data[i].f, transform);
+				transformNormal(stream.data[i].f, source.data[i].f, transform);
 		}
 	}
 
 	if (det < 0 && mesh.type == cgltf_primitive_type_triangles)
 	{
 		// negative scale means we need to flip face winding
-		for (size_t i = 0; i < mesh.indices.size(); i += 3)
-			std::swap(mesh.indices[i + 0], mesh.indices[i + 1]);
+		for (size_t i = 0; i < target.indices.size(); i += 3)
+			std::swap(target.indices[i + 0], target.indices[i + 1]);
 	}
 }
 
@@ -213,6 +221,40 @@ static void mergeMeshes(Mesh& target, const Mesh& mesh)
 
 	for (size_t i = 0; i < index_count; ++i)
 		target.indices[index_offset + i] = unsigned(vertex_offset + mesh.indices[i]);
+}
+
+void mergeMeshInstances(Mesh& mesh)
+{
+	if (mesh.nodes.empty())
+		return;
+
+	// fast-path: for single instance meshes we transform in-place
+	if (mesh.nodes.size() == 1)
+	{
+		transformMesh(mesh, mesh, mesh.nodes[0]);
+		mesh.nodes.clear();
+		return;
+	}
+
+	Mesh base = mesh;
+	Mesh transformed = base;
+
+	for (size_t i = 0; i < mesh.streams.size(); ++i)
+	{
+		mesh.streams[i].data.clear();
+		mesh.streams[i].data.reserve(base.streams[i].data.size() * mesh.nodes.size());
+	}
+
+	mesh.indices.clear();
+	mesh.indices.reserve(base.indices.size() * mesh.nodes.size());
+
+	for (size_t i = 0; i < mesh.nodes.size(); ++i)
+	{
+		transformMesh(transformed, base, mesh.nodes[i]);
+		mergeMeshes(mesh, transformed);
+	}
+
+	mesh.nodes.clear();
 }
 
 void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings)

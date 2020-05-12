@@ -170,23 +170,30 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		Mesh& mesh = meshes[i];
 
 		// note: when -kn is specified, we keep mesh-node attachment so that named nodes can be transformed
-		if (mesh.nodes.size() == 1 && !settings.keep_named)
-		{
-			cgltf_node* node = mesh.nodes[0];
-			NodeInfo& ni = nodes[node - data->nodes];
+		if (settings.keep_named)
+			continue;
 
-			// we transform all non-skinned non-animated meshes to world space
-			// this makes sure that quantization doesn't introduce gaps if the original scene was watertight
-			if (!ni.animated && !mesh.skin && mesh.targets == 0)
-			{
-				transformMesh(mesh, node);
-				mesh.nodes.clear();
-			}
+		// we keep skinned meshes or meshes with morph targets as is
+		// in theory we could transform both, but in practice transforming morph target meshes is more involved,
+		// and reparenting skinned meshes leads to incorrect bounding box generated in three.js
+		if (mesh.skin || mesh.targets)
+			continue;
 
-			// skinned and animated meshes will be anchored to the same node that they used to be in
-			// for animated meshes, this is important since they need to be transformed by the same animation
-			// for skinned meshes, in theory this isn't important since the transform of the skinned node doesn't matter; in practice this affects generated bounding box in three.js
-		}
+		// we only merge multiple instances together if requested
+		// this often makes the scenes faster to render by reducing the draw call count, but can result in larger files
+		if (mesh.nodes.size() > 1 && !settings.mesh_merge)
+			continue;
+
+		bool any_animated = false;
+		for (size_t j = 0; j < mesh.nodes.size(); ++j)
+			any_animated |= nodes[mesh.nodes[j] - data->nodes].animated;
+
+		// animated meshes will be anchored to the same node that they used to be in to retain the animation
+		if (any_animated)
+			continue;
+
+		mergeMeshInstances(mesh);
+		assert(mesh.nodes.empty());
 	}
 
 	mergeMeshMaterials(data, meshes, settings);
