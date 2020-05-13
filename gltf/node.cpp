@@ -137,10 +137,12 @@ void decomposeTransform(float translation[3], float rotation[4], float scale[3],
 	float m[4][4] = {};
 	memcpy(m, transform, 16 * sizeof(float));
 
+	// extract translation from last row
 	translation[0] = m[3][0];
 	translation[1] = m[3][1];
 	translation[2] = m[3][2];
 
+	// compute determinant to determine handedness
 	float det =
 	    m[0][0] * (m[1][1] * m[2][2] - m[2][1] * m[1][2]) -
 	    m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
@@ -148,10 +150,12 @@ void decomposeTransform(float translation[3], float rotation[4], float scale[3],
 
 	float sign = (det < 0.f) ? -1.f : 1.f;
 
+	// recover scale from axis lengths
 	scale[0] = sqrtf(m[0][0] * m[0][0] + m[1][0] * m[1][0] + m[2][0] * m[2][0]) * sign;
 	scale[1] = sqrtf(m[0][1] * m[0][1] + m[1][1] * m[1][1] + m[2][1] * m[2][1]) * sign;
 	scale[2] = sqrtf(m[0][2] * m[0][2] + m[1][2] * m[1][2] + m[2][2] * m[2][2]) * sign;
 
+	// normalize axes to get a pure rotation matrix
 	float rsx = (scale[0] == 0.f) ? 0.f : 1.f / scale[0];
 	float rsy = (scale[1] == 0.f) ? 0.f : 1.f / scale[1];
 	float rsz = (scale[2] == 0.f) ? 0.f : 1.f / scale[2];
@@ -160,47 +164,17 @@ void decomposeTransform(float translation[3], float rotation[4], float scale[3],
 	float r01 = m[0][1] * rsy, r11 = m[1][1] * rsy, r21 = m[2][1] * rsy;
 	float r02 = m[0][2] * rsz, r12 = m[1][2] * rsz, r22 = m[2][2] * rsz;
 
-	float qt = 1.f;
+	// "branchless" version of Mike Day's matrix to quaternion conversion
+	int qc = r22 < 0 ? (r00 > r11 ? 0 : 1) : (r00 < -r11 ? 2 : 3);
+	float qs1 = qc & 2 ? -1.f : 1.f;
+	float qs2 = qc & 1 ? -1.f : 1.f;
+	float qs3 = (qc - 1) & 2 ? -1.f : 1.f;
 
-	if (r22 < 0)
-	{
-		if (r00 > r11)
-		{
-			rotation[0] = qt = 1.f + r00 - r11 - r22;
-			rotation[1] = r01 + r10;
-			rotation[2] = r20 + r02;
-			rotation[3] = r12 - r21;
-		}
-		else
-		{
-			rotation[0] = r01 + r10;
-			rotation[1] = qt = 1.f - r00 + r11 - r22;
-			rotation[2] = r12 + r21;
-			rotation[3] = r20 - r02;
-		}
-	}
-	else
-	{
-		if (r00 < -r11)
-		{
-			rotation[0] = r20 + r02;
-			rotation[1] = r12 + r21;
-			rotation[2] = qt = 1.f - r00 - r11 + r22;
-			rotation[3] = r01 - r10;
-		}
-		else
-		{
-			rotation[0] = r12 - r21;
-			rotation[1] = r20 - r02;
-			rotation[2] = r01 - r10;
-			rotation[3] = qt = 1.f + r00 + r11 + r22;
-		}
-	}
-
+	float qt = 1.f - qs3 * r00 - qs2 * r11 - qs1 * r22;
 	float qs = 0.5f / sqrtf(qt);
 
-	rotation[0] *= qs;
-	rotation[1] *= qs;
-	rotation[2] *= qs;
-	rotation[3] *= qs;
+	rotation[qc ^ 0] = qs * qt;
+	rotation[qc ^ 1] = qs * (r01 + qs1 * r10);
+	rotation[qc ^ 2] = qs * (r20 + qs2 * r02);
+	rotation[qc ^ 3] = qs * (r12 + qs3 * r21);
 }
