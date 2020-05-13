@@ -142,9 +142,9 @@ void decomposeTransform(float translation[3], float rotation[4], float scale[3],
 	translation[2] = m[3][2];
 
 	float det =
-	m[0][0] * (m[1][1] * m[2][2] - m[2][1] * m[1][2]) -
-	m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
-	m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+	    m[0][0] * (m[1][1] * m[2][2] - m[2][1] * m[1][2]) -
+	    m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+	    m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
 
 	float sign = (det < 0.f) ? -1.f : 1.f;
 
@@ -156,44 +156,44 @@ void decomposeTransform(float translation[3], float rotation[4], float scale[3],
 	float rsy = (scale[1] == 0.f) ? 0.f : 1.f / scale[1];
 	float rsz = (scale[2] == 0.f) ? 0.f : 1.f / scale[2];
 
-	float q00 = m[0][0] * rsx, q10 = m[1][0] * rsx, q20 = m[2][0] * rsx;
-	float q01 = m[0][1] * rsy, q11 = m[1][1] * rsy, q21 = m[2][1] * rsy;
-	float q02 = m[0][2] * rsz, q12 = m[1][2] * rsz, q22 = m[2][2] * rsz;
+	float r00 = m[0][0] * rsx, r10 = m[1][0] * rsx, r20 = m[2][0] * rsx;
+	float r01 = m[0][1] * rsy, r11 = m[1][1] * rsy, r21 = m[2][1] * rsy;
+	float r02 = m[0][2] * rsz, r12 = m[1][2] * rsz, r22 = m[2][2] * rsz;
 
 	float qt = 1.f;
 
-	if (q22 < 0)
+	if (r22 < 0)
 	{
-		if (q00 > q11)
+		if (r00 > r11)
 		{
-			rotation[0] = qt = 1.f + q00 - q11 - q22;
-			rotation[1] = q01+q10;
-			rotation[2] = q20+q02;
-			rotation[3] = q12-q21;
+			rotation[0] = qt = 1.f + r00 - r11 - r22;
+			rotation[1] = r01 + r10;
+			rotation[2] = r20 + r02;
+			rotation[3] = r12 - r21;
 		}
 		else
 		{
-			rotation[0] = q01+q10;
-			rotation[1] = qt = 1.f - q00 + q11 - q22;
-			rotation[2] = q12+q21;
-			rotation[3] = q20-q02;
+			rotation[0] = r01 + r10;
+			rotation[1] = qt = 1.f - r00 + r11 - r22;
+			rotation[2] = r12 + r21;
+			rotation[3] = r20 - r02;
 		}
 	}
 	else
 	{
-		if (q00 < -q11)
+		if (r00 < -r11)
 		{
-			rotation[0] = q20+q02;
-			rotation[1] = q12+q21;
-			rotation[2] = qt = 1.f - q00 - q11 + q22;
-			rotation[3] = q01-q10;
+			rotation[0] = r20 + r02;
+			rotation[1] = r12 + r21;
+			rotation[2] = qt = 1.f - r00 - r11 + r22;
+			rotation[3] = r01 - r10;
 		}
 		else
 		{
-			rotation[0] = q12-q21;
-			rotation[1] = q20-q02;
-			rotation[2] = q01-q10;
-			rotation[3] = qt = 1.f + q00 + q11 + q22;
+			rotation[0] = r12 - r21;
+			rotation[1] = r20 - r02;
+			rotation[2] = r01 - r10;
+			rotation[3] = qt = 1.f + r00 + r11 + r22;
 		}
 	}
 

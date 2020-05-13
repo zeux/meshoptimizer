@@ -302,6 +302,7 @@ void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings)
 				mesh.streams.clear();
 				mesh.indices.clear();
 				mesh.nodes.clear();
+				mesh.instances.clear();
 			}
 		}
 
