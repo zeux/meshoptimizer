@@ -73,23 +73,29 @@ static void finalizeBufferViews(std::string& json, std::vector<BufferView>& view
 
 static void printMeshStats(const std::vector<Mesh>& meshes, const char* name)
 {
-	size_t triangles = 0;
-	size_t vertices = 0;
-	size_t instanced = 0;
+	size_t mesh_triangles = 0;
+	size_t mesh_vertices = 0;
+	size_t total_triangles = 0;
+	size_t total_instances = 0;
+	size_t total_draws = 0;
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
 		const Mesh& mesh = meshes[i];
 
-		triangles += mesh.indices.size() / 3;
-		vertices += mesh.streams.empty() ? 0 : mesh.streams[0].data.size();
+		mesh_triangles += mesh.indices.size() / 3;
+		mesh_vertices += mesh.streams.empty() ? 0 : mesh.streams[0].data.size();
 
 		size_t instances = std::max(size_t(1), mesh.nodes.size() + mesh.instances.size());
 
-		instanced += mesh.indices.size() / 3 * instances;
+		total_triangles += mesh.indices.size() / 3 * instances;
+		total_instances += instances;
+		total_draws += std::max(size_t(1), mesh.nodes.size());
 	}
 
-	printf("%s: %d triangles (%lld instanced), %d vertices\n", name, int(triangles), (long long)instanced, int(vertices));
+	printf("%s: %d meshes (%d triangles, %d vertices); %d draw calls (%d instances, %lld triangles)\n", name,
+		int(meshes.size()), int(mesh_triangles), int(mesh_vertices),
+		int(total_draws), int(total_instances), (long long)total_triangles);
 }
 
 static void printSceneStats(const std::vector<BufferView>& views, const std::vector<Mesh>& meshes, size_t node_offset, size_t mesh_offset, size_t material_offset, size_t json_size, size_t bin_size)
