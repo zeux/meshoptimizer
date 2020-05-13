@@ -990,7 +990,9 @@ THREE.GLTFLoader = ( function () {
 
 				// Geometry must be cloned here, before we modify it. Material will be cloned if
 				// necessary, when assignFinalMaterial() is called below.
-				var instancedMesh = new THREE.InstancedMesh( mesh.geometry.clone(), mesh.material, template.count );
+				var instancedGeometry = customAttributeNames.length > 0 ? mesh.geometry.clone() : mesh.geometry;
+
+				var instancedMesh = new THREE.InstancedMesh( instancedGeometry, mesh.material, template.count );
 				var matrix = new THREE.Matrix4();
 
 				var t = new THREE.Vector3( 0, 0, 0 );
@@ -1013,7 +1015,7 @@ THREE.GLTFLoader = ( function () {
 
 					var attributeSource = dependencies[ 4 + i ];
 
-					instancedMesh.geometry.setAttribute( customAttributeNames[ i ], new THREE.InstancedBufferAttribute(
+					instancedGeometry.setAttribute( customAttributeNames[ i ], new THREE.InstancedBufferAttribute(
 
 						attributeSource.array,
 						attributeSource.itemSize,
@@ -1495,12 +1497,14 @@ THREE.GLTFLoader = ( function () {
 
 	function quaternionFromBufferAttribute( quaternion, attribute, index ) {
 
+		var scale = attribute.normalized ? 1 / 32767 : 1;
+
 		return quaternion.set(
 
-			attribute.getX( index ),
-			attribute.getY( index ),
-			attribute.getZ( index ),
-			attribute.getW( index )
+			attribute.getX( index ) * scale,
+			attribute.getY( index ) * scale,
+			attribute.getZ( index ) * scale,
+			attribute.getW( index ) * scale
 
 		);
 
