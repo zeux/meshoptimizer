@@ -208,6 +208,10 @@ THREE.GLTFLoader = ( function () {
 							extensions[ extensionName ] = new GLTFMeshQuantizationExtension();
 							break;
 
+						case EXTENSIONS.EXT_MESH_GPU_INSTANCING:
+							extensions[ extensionName ] = new GLTFMeshGPUInstancingExtension( json );
+							break;
+
 						case EXTENSIONS.MESHOPT_COMPRESSION:
 							extensions[ extensionName ] = new GLTFMeshoptCompressionExtension( this.meshoptDecoder );
 							break;
@@ -291,6 +295,7 @@ THREE.GLTFLoader = ( function () {
 		KHR_TEXTURE_TRANSFORM: 'KHR_texture_transform',
 		KHR_MESH_QUANTIZATION: 'KHR_mesh_quantization',
 		MSFT_TEXTURE_DDS: 'MSFT_texture_dds',
+		EXT_MESH_GPU_INSTANCING: 'EXT_mesh_gpu_instancing',
 		MESHOPT_COMPRESSION: 'MESHOPT_compression',
 	};
 
@@ -927,6 +932,112 @@ THREE.GLTFLoader = ( function () {
 	}
 
 	/**
+	 * Instancing Extension
+	 *
+	 * Specification: https://github.com/KhronosGroup/glTF/pull/1691
+	 */
+	function GLTFMeshGPUInstancingExtension() {
+
+		this.name = EXTENSIONS.EXT_MESH_GPU_INSTANCING;
+
+	}
+
+	GLTFMeshGPUInstancingExtension.prototype.createInstancedMesh = function ( parser, nodeDef, node ) {
+
+		var extensionDef = nodeDef.extensions[ this.name ];
+		var pending = [];
+
+		// If present, extensionDef.mesh overrides nodeDef.mesh.
+		var meshIndex = extensionDef.mesh !== undefined ? extensionDef.mesh : nodeDef.mesh;
+		var meshPromise = parser.getDependency( 'mesh', meshIndex );
+
+		// Load buffers for instance TRS properties. All are optional.
+		var translationPromise = extensionDef.attributes.TRANSLATION !== undefined
+			? parser.getDependency( 'accessor', extensionDef.attributes.TRANSLATION )
+			: null;
+		var rotationPromise = extensionDef.attributes.ROTATION !== undefined
+			? parser.getDependency( 'accessor', extensionDef.attributes.ROTATION )
+			: null;
+		var scalePromise = extensionDef.attributes.SCALE !== undefined
+			? parser.getDependency( 'accessor', extensionDef.attributes.SCALE )
+			: null;
+
+		pending.push( meshPromise, translationPromise, rotationPromise, scalePromise );
+
+		// Load custom instance attributes.
+		var customAttributeNames = [];
+		for ( var attributeName in extensionDef.attributes ) {
+
+			if ( attributeName[ 0 ] === '_' ) {
+
+				customAttributeNames.push( attributeName.toLowerCase() );
+
+				pending.push( parser.getDependency( 'accessor', extensionDef.attributes[ attributeName ] ) );
+
+			}
+
+		}
+
+		return Promise.all( pending )
+			.then( function ( dependencies ) {
+
+				var mesh = dependencies[ 0 ];
+				var translation = dependencies[ 1 ];
+				var rotation = dependencies[ 2 ];
+				var scale = dependencies[ 3 ];
+
+				var template = translation || rotation || scale || dependencies[ 4 ];
+
+				// Geometry must be cloned here, before we modify it. Material will be cloned if
+				// necessary, when assignFinalMaterial() is called below.
+				var instancedGeometry = customAttributeNames.length > 0 ? mesh.geometry.clone() : mesh.geometry;
+
+				var instancedMesh = new THREE.InstancedMesh( instancedGeometry, mesh.material, template.count );
+				var matrix = new THREE.Matrix4();
+
+				var t = new THREE.Vector3( 0, 0, 0 );
+				var r = new THREE.Quaternion( 0, 0, 0, 1 );
+				var s = new THREE.Vector3( 1, 1, 1 );
+
+				// Set instance transforms.
+				for ( var i = 0; i < template.count; i ++ ) {
+
+					if ( translation ) t.fromBufferAttribute( translation, i );
+					if ( rotation ) quaternionFromBufferAttribute( r, rotation, i );
+					if ( scale ) s.fromBufferAttribute( scale, i );
+
+					instancedMesh.setMatrixAt( i, matrix.compose( t, r, s ) );
+
+				}
+
+				// Set custom instance attributes.
+				for ( var i = 0; i < customAttributeNames.length; i ++ ) {
+
+					var attributeSource = dependencies[ 4 + i ];
+
+					instancedGeometry.setAttribute( customAttributeNames[ i ], new THREE.InstancedBufferAttribute(
+
+						attributeSource.array,
+						attributeSource.itemSize,
+						attributeSource.normalized
+
+					) );
+
+				}
+
+				// Copy mesh properties first, then node properties. These may be the same object.
+				THREE.Object3D.prototype.copy.call( instancedMesh, mesh );
+				THREE.Object3D.prototype.copy.call( instancedMesh, node );
+
+				parser.assignFinalMaterial( instancedMesh );
+
+				return instancedMesh;
+
+			} );
+
+	}
+
+	/**
 	 * meshoptimizer Compression Extension
 	 */
 	function GLTFMeshoptCompressionExtension( meshoptDecoder ) {
@@ -1381,6 +1492,21 @@ THREE.GLTFLoader = ( function () {
 		}
 
 		return attributesKey;
+
+	}
+
+	function quaternionFromBufferAttribute( quaternion, attribute, index ) {
+
+		var scale = attribute.normalized ? 1 / 32767 : 1;
+
+		return quaternion.set(
+
+			attribute.getX( index ) * scale,
+			attribute.getY( index ) * scale,
+			attribute.getZ( index ) * scale,
+			attribute.getW( index ) * scale
+
+		);
 
 	}
 
@@ -2027,6 +2153,7 @@ THREE.GLTFLoader = ( function () {
 		var useVertexColors = geometry.attributes.color !== undefined;
 		var useFlatShading = geometry.attributes.normal === undefined;
 		var useSkinning = mesh.isSkinnedMesh === true;
+		var useInstancing = mesh.isInstancedMesh === true;
 		var useMorphTargets = Object.keys( geometry.morphAttributes ).length > 0;
 		var useMorphNormals = useMorphTargets && geometry.morphAttributes.normal !== undefined;
 
@@ -2071,12 +2198,13 @@ THREE.GLTFLoader = ( function () {
 		}
 
 		// Clone the material if it will be modified
-		if ( useVertexTangents || useVertexColors || useFlatShading || useSkinning || useMorphTargets ) {
+		if ( useVertexTangents || useVertexColors || useFlatShading || useSkinning || useInstancing || useMorphTargets ) {
 
 			var cacheKey = 'ClonedMaterial:' + material.uuid + ':';
 
 			if ( material.isGLTFSpecularGlossinessMaterial ) cacheKey += 'specular-glossiness:';
 			if ( useSkinning ) cacheKey += 'skinning:';
+			if ( useInstancing ) cacheKey += 'instancing:';
 			if ( useVertexTangents ) cacheKey += 'vertex-tangents:';
 			if ( useVertexColors ) cacheKey += 'vertex-colors:';
 			if ( useFlatShading ) cacheKey += 'flat-shading:';
@@ -3138,6 +3266,20 @@ THREE.GLTFLoader = ( function () {
 					node.scale.fromArray( nodeDef.scale );
 
 				}
+
+			}
+
+			// Apply instancing last, as it requires asynchronous resources.
+			if ( nodeDef.extensions && nodeDef.extensions[ EXTENSIONS.EXT_MESH_GPU_INSTANCING ] !== undefined ) {
+
+				if ( ! node.isMesh && node.children.length > 0 ) {
+
+					console.warn( 'THREE.GLTFLoader: Multi-primitive instanced meshes not yet supported.' );
+					return node;
+
+				}
+
+				return extensions[ EXTENSIONS.EXT_MESH_GPU_INSTANCING ].createInstancedMesh( parser, nodeDef, node );
 
 			}
 

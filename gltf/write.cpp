@@ -811,16 +811,69 @@ size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_
 	return matrix_accr;
 }
 
-void writeMeshNode(std::string& json, size_t mesh_offset, const Mesh& mesh, cgltf_data* data, const QuantizationPosition* qp)
+static void writeInstanceData(std::vector<BufferView>& views, std::string& json_accessors, cgltf_animation_path_type type, const std::vector<Attr>& data, const Settings& settings)
+{
+	BufferView::Compression compression = settings.compress ? BufferView::Compression_Attribute : BufferView::Compression_None;
+
+	std::string scratch;
+	StreamFormat format = writeKeyframeStream(scratch, type, data, settings);
+
+	size_t view = getBufferView(views, BufferView::Kind_Instance, format.filter, compression, format.stride, type);
+	size_t offset = views[view].data.size();
+	views[view].data += scratch;
+
+	comma(json_accessors);
+	writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, data.size());
+}
+
+size_t writeInstances(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const std::vector<Transform>& transforms, const QuantizationPosition& qp, const Settings& settings)
+{
+	std::vector<Attr> position, rotation, scale;
+	position.resize(transforms.size());
+	rotation.resize(transforms.size());
+	scale.resize(transforms.size());
+
+	for (size_t i = 0; i < transforms.size(); ++i)
+	{
+		decomposeTransform(position[i].f, rotation[i].f, scale[i].f, transforms[i].data);
+
+		if (settings.quantize)
+		{
+			const float* transform = transforms[i].data;
+
+			float node_scale = qp.scale / float((1 << qp.bits) - 1);
+
+			// pos_offset has to be applied first, thus it results in an offset rotated by the instance matrix
+			position[i].f[0] += qp.offset[0] * transform[0] + qp.offset[1] * transform[4] + qp.offset[2] * transform[8];
+			position[i].f[1] += qp.offset[0] * transform[1] + qp.offset[1] * transform[5] + qp.offset[2] * transform[9];
+			position[i].f[2] += qp.offset[0] * transform[2] + qp.offset[1] * transform[6] + qp.offset[2] * transform[10];
+
+			// node_scale will be applied before the rotation/scale from transform
+			scale[i].f[0] *= node_scale;
+			scale[i].f[1] *= node_scale;
+			scale[i].f[2] *= node_scale;
+		}
+	}
+
+	writeInstanceData(views, json_accessors, cgltf_animation_path_type_translation, position, settings);
+	writeInstanceData(views, json_accessors, cgltf_animation_path_type_rotation, rotation, settings);
+	writeInstanceData(views, json_accessors, cgltf_animation_path_type_scale, scale, settings);
+
+	size_t result = accr_offset;
+	accr_offset += 3;
+	return result;
+}
+
+void writeMeshNode(std::string& json, size_t mesh_offset, cgltf_node* node, cgltf_skin* skin, cgltf_data* data, const QuantizationPosition* qp)
 {
 	comma(json);
 	append(json, "{\"mesh\":");
 	append(json, mesh_offset);
-	if (mesh.skin)
+	if (skin)
 	{
 		comma(json);
 		append(json, "\"skin\":");
-		append(json, size_t(mesh.skin - data->skins));
+		append(json, size_t(skin - data->skins));
 	}
 	if (qp)
 	{
@@ -840,16 +893,39 @@ void writeMeshNode(std::string& json, size_t mesh_offset, const Mesh& mesh, cglt
 		append(json, node_scale);
 		append(json, "]");
 	}
-	if (mesh.node && mesh.node->weights_count)
+	if (node && node->weights_count)
 	{
 		append(json, ",\"weights\":[");
-		for (size_t j = 0; j < mesh.node->weights_count; ++j)
+		for (size_t j = 0; j < node->weights_count; ++j)
 		{
 			comma(json);
-			append(json, mesh.node->weights[j]);
+			append(json, node->weights[j]);
 		}
 		append(json, "]");
 	}
+	append(json, "}");
+}
+
+void writeMeshNodeInstanced(std::string& json, size_t mesh_offset, size_t accr_offset)
+{
+	comma(json);
+	append(json, "{\"mesh\":");
+	append(json, mesh_offset);
+	append(json, ",\"extensions\":{\"EXT_mesh_gpu_instancing\":{\"attributes\":{");
+
+	comma(json);
+	append(json, "\"TRANSLATION\":");
+	append(json, accr_offset + 0);
+
+	comma(json);
+	append(json, "\"ROTATION\":");
+	append(json, accr_offset + 1);
+
+	comma(json);
+	append(json, "\"SCALE\":");
+	append(json, accr_offset + 2);
+
+	append(json, "}}}");
 	append(json, "}");
 }
 

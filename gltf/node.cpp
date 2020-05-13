@@ -1,6 +1,9 @@
 // This file is part of gltfpack; see gltfpack.h for version/license details
 #include "gltfpack.h"
 
+#include <math.h>
+#include <string.h>
+
 void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Animation>& animations)
 {
 	for (size_t i = 0; i < animations.size(); ++i)
@@ -69,9 +72,9 @@ void markNeededNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::
 	{
 		const Mesh& mesh = meshes[i];
 
-		if (mesh.node)
+		for (size_t j = 0; j < mesh.nodes.size(); ++j)
 		{
-			NodeInfo& ni = nodes[mesh.node - data->nodes];
+			NodeInfo& ni = nodes[mesh.nodes[j] - data->nodes];
 
 			ni.keep = true;
 		}
@@ -127,4 +130,77 @@ void remapNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, size_t& node_off
 			node_offset++;
 		}
 	}
+}
+
+void decomposeTransform(float translation[3], float rotation[4], float scale[3], const float* transform)
+{
+	float m[4][4] = {};
+	memcpy(m, transform, 16 * sizeof(float));
+
+	translation[0] = m[3][0];
+	translation[1] = m[3][1];
+	translation[2] = m[3][2];
+
+	float det =
+	    m[0][0] * (m[1][1] * m[2][2] - m[2][1] * m[1][2]) -
+	    m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+	    m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+
+	float sign = (det < 0.f) ? -1.f : 1.f;
+
+	scale[0] = sqrtf(m[0][0] * m[0][0] + m[1][0] * m[1][0] + m[2][0] * m[2][0]) * sign;
+	scale[1] = sqrtf(m[0][1] * m[0][1] + m[1][1] * m[1][1] + m[2][1] * m[2][1]) * sign;
+	scale[2] = sqrtf(m[0][2] * m[0][2] + m[1][2] * m[1][2] + m[2][2] * m[2][2]) * sign;
+
+	float rsx = (scale[0] == 0.f) ? 0.f : 1.f / scale[0];
+	float rsy = (scale[1] == 0.f) ? 0.f : 1.f / scale[1];
+	float rsz = (scale[2] == 0.f) ? 0.f : 1.f / scale[2];
+
+	float r00 = m[0][0] * rsx, r10 = m[1][0] * rsx, r20 = m[2][0] * rsx;
+	float r01 = m[0][1] * rsy, r11 = m[1][1] * rsy, r21 = m[2][1] * rsy;
+	float r02 = m[0][2] * rsz, r12 = m[1][2] * rsz, r22 = m[2][2] * rsz;
+
+	float qt = 1.f;
+
+	if (r22 < 0)
+	{
+		if (r00 > r11)
+		{
+			rotation[0] = qt = 1.f + r00 - r11 - r22;
+			rotation[1] = r01 + r10;
+			rotation[2] = r20 + r02;
+			rotation[3] = r12 - r21;
+		}
+		else
+		{
+			rotation[0] = r01 + r10;
+			rotation[1] = qt = 1.f - r00 + r11 - r22;
+			rotation[2] = r12 + r21;
+			rotation[3] = r20 - r02;
+		}
+	}
+	else
+	{
+		if (r00 < -r11)
+		{
+			rotation[0] = r20 + r02;
+			rotation[1] = r12 + r21;
+			rotation[2] = qt = 1.f - r00 - r11 + r22;
+			rotation[3] = r01 - r10;
+		}
+		else
+		{
+			rotation[0] = r12 - r21;
+			rotation[1] = r20 - r02;
+			rotation[2] = r01 - r10;
+			rotation[3] = qt = 1.f + r00 + r11 + r22;
+		}
+	}
+
+	float qs = 0.5f / sqrtf(qt);
+
+	rotation[0] *= qs;
+	rotation[1] *= qs;
+	rotation[2] *= qs;
+	rotation[3] *= qs;
 }

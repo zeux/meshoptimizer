@@ -75,6 +75,7 @@ static void printMeshStats(const std::vector<Mesh>& meshes, const char* name)
 {
 	size_t triangles = 0;
 	size_t vertices = 0;
+	size_t instanced = 0;
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
@@ -82,9 +83,13 @@ static void printMeshStats(const std::vector<Mesh>& meshes, const char* name)
 
 		triangles += mesh.indices.size() / 3;
 		vertices += mesh.streams.empty() ? 0 : mesh.streams[0].data.size();
+
+		size_t instances = std::max(size_t(1), mesh.nodes.size() + mesh.instances.size());
+
+		instanced += mesh.indices.size() / 3 * instances;
 	}
 
-	printf("%s: %d triangles, %d vertices\n", name, int(triangles), int(vertices));
+	printf("%s: %d triangles (%lld instanced), %d vertices\n", name, int(triangles), (long long)instanced, int(vertices));
 }
 
 static void printSceneStats(const std::vector<BufferView>& views, const std::vector<Mesh>& meshes, size_t node_offset, size_t mesh_offset, size_t material_offset, size_t json_size, size_t bin_size)
@@ -99,9 +104,10 @@ static void printSceneStats(const std::vector<BufferView>& views, const std::vec
 
 	printf("output: %d nodes, %d meshes (%d primitives), %d materials\n", int(node_offset), int(mesh_offset), int(meshes.size()), int(material_offset));
 	printf("output: JSON %d bytes, buffers %d bytes\n", int(json_size), int(bin_size));
-	printf("output: buffers: vertex %d bytes, index %d bytes, skin %d bytes, time %d bytes, keyframe %d bytes, image %d bytes\n",
+	printf("output: buffers: vertex %d bytes, index %d bytes, skin %d bytes, time %d bytes, keyframe %d bytes, instance %d bytes, image %d bytes\n",
 	       int(bytes[BufferView::Kind_Vertex]), int(bytes[BufferView::Kind_Index]), int(bytes[BufferView::Kind_Skin]),
-	       int(bytes[BufferView::Kind_Time]), int(bytes[BufferView::Kind_Keyframe]), int(bytes[BufferView::Kind_Image]));
+	       int(bytes[BufferView::Kind_Time]), int(bytes[BufferView::Kind_Keyframe]), int(bytes[BufferView::Kind_Instance]),
+	       int(bytes[BufferView::Kind_Image]));
 }
 
 static void printAttributeStats(const std::vector<BufferView>& views, BufferView::Kind kind, const char* name)
@@ -126,6 +132,7 @@ static void printAttributeStats(const std::vector<BufferView>& views, BufferView
 			break;
 
 		case BufferView::Kind_Keyframe:
+		case BufferView::Kind_Instance:
 			variant = animationPath(cgltf_animation_path_type(view.variant));
 			break;
 
@@ -135,12 +142,9 @@ static void printAttributeStats(const std::vector<BufferView>& views, BufferView
 		size_t count = view.data.size() / view.stride;
 
 		printf("stats: %s %s: compressed %d bytes (%.1f bits), raw %d bytes (%d bits)\n",
-		       name,
-		       variant,
-		       int(view.bytes),
-		       double(view.bytes) / double(count) * 8,
-		       int(view.data.size()),
-		       int(view.stride * 8));
+		       name, variant,
+		       int(view.bytes), double(view.bytes) / double(count) * 8,
+		       int(view.data.size()), int(view.stride * 8));
 	}
 }
 
@@ -165,24 +169,51 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
 		Mesh& mesh = meshes[i];
+		assert(mesh.instances.empty());
+
+		// mesh is already world space, skip
+		if (mesh.nodes.empty())
+			continue;
 
 		// note: when -kn is specified, we keep mesh-node attachment so that named nodes can be transformed
-		if (mesh.node && !settings.keep_named)
+		if (settings.keep_named)
+			continue;
+
+		// we keep skinned meshes or meshes with morph targets as is
+		// in theory we could transform both, but in practice transforming morph target meshes is more involved,
+		// and reparenting skinned meshes leads to incorrect bounding box generated in three.js
+		if (mesh.skin || mesh.targets)
+			continue;
+
+		bool any_animated = false;
+		for (size_t j = 0; j < mesh.nodes.size(); ++j)
+			any_animated |= nodes[mesh.nodes[j] - data->nodes].animated;
+
+		// animated meshes will be anchored to the same node that they used to be in to retain the animation
+		if (any_animated)
+			continue;
+
+		// we only merge multiple instances together if requested
+		// this often makes the scenes faster to render by reducing the draw call count, but can result in larger files
+		if (mesh.nodes.size() > 1 && !settings.mesh_merge && !settings.mesh_instancing)
+			continue;
+
+		// prefer instancing if possible, use merging otherwise
+		if (mesh.nodes.size() > 1 && settings.mesh_instancing)
 		{
-			NodeInfo& ni = nodes[mesh.node - data->nodes];
+			mesh.instances.resize(mesh.nodes.size());
 
-			// we transform all non-skinned non-animated meshes to world space
-			// this makes sure that quantization doesn't introduce gaps if the original scene was watertight
-			if (!ni.animated && !mesh.skin && mesh.targets == 0)
-			{
-				transformMesh(mesh, mesh.node);
-				mesh.node = 0;
-			}
+			for (size_t j = 0; j < mesh.nodes.size(); ++j)
+				cgltf_node_transform_world(mesh.nodes[j], mesh.instances[j].data);
 
-			// skinned and animated meshes will be anchored to the same node that they used to be in
-			// for animated meshes, this is important since they need to be transformed by the same animation
-			// for skinned meshes, in theory this isn't important since the transform of the skinned node doesn't matter; in practice this affects generated bounding box in three.js
+			mesh.nodes.clear();
 		}
+		else
+		{
+			mergeMeshInstances(mesh);
+		}
+
+		assert(mesh.nodes.empty());
 	}
 
 	mergeMeshMaterials(data, meshes, settings);
@@ -231,6 +262,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	bool ext_pbr_specular_glossiness = false;
 	bool ext_clearcoat = false;
 	bool ext_unlit = false;
+	bool ext_instancing = false;
 
 	size_t accr_offset = 0;
 	size_t node_offset = 0;
@@ -301,7 +333,13 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		{
 			const Mesh& prim = meshes[pi];
 
-			if (prim.node != mesh.node || prim.skin != mesh.skin || prim.targets != mesh.targets)
+			if (prim.skin != mesh.skin || prim.targets != mesh.targets)
+				break;
+
+			if (pi > i && (mesh.instances.size() || prim.instances.size()))
+				break;
+
+			if (!compareMeshNodes(mesh, prim))
 				break;
 
 			if (!compareMeshTargets(mesh, prim))
@@ -377,22 +415,45 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 		append(json_meshes, "}");
 
-		writeMeshNode(json_nodes, mesh_offset, mesh, data, settings.quantize ? &qp : NULL);
+		assert(mesh.nodes.empty() || mesh.instances.empty());
+		ext_instancing = ext_instancing || !mesh.instances.empty();
 
-		if (mesh.node)
+		if (mesh.nodes.size())
 		{
-			NodeInfo& ni = nodes[mesh.node - data->nodes];
+			for (size_t j = 0; j < mesh.nodes.size(); ++j)
+			{
+				NodeInfo& ni = nodes[mesh.nodes[j] - data->nodes];
 
-			assert(ni.keep);
-			ni.meshes.push_back(node_offset);
+				assert(ni.keep);
+				ni.meshes.push_back(node_offset);
+
+				writeMeshNode(json_nodes, mesh_offset, mesh.nodes[j], mesh.skin, data, settings.quantize ? &qp : NULL);
+
+				node_offset++;
+			}
+		}
+		else if (mesh.instances.size())
+		{
+			comma(json_roots);
+			append(json_roots, node_offset);
+
+			size_t instance_accr = writeInstances(views, json_accessors, accr_offset, mesh.instances, qp, settings);
+
+			assert(!mesh.skin);
+			writeMeshNodeInstanced(json_nodes, mesh_offset, instance_accr);
+
+			node_offset++;
 		}
 		else
 		{
 			comma(json_roots);
 			append(json_roots, node_offset);
+
+			writeMeshNode(json_nodes, mesh_offset, NULL, mesh.skin, data, settings.quantize ? &qp : NULL);
+
+			node_offset++;
 		}
 
-		node_offset++;
 		mesh_offset++;
 
 		// skip all meshes that we've written in this iteration
@@ -466,6 +527,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	    {"KHR_materials_unlit", ext_unlit, false},
 	    {"KHR_lights_punctual", data->lights_count > 0, false},
 	    {"KHR_texture_basisu", !json_textures.empty() && settings.texture_ktx2, true},
+	    {"EXT_mesh_gpu_instancing", ext_instancing, true},
 	};
 
 	writeExtensions(json, extensions, sizeof(extensions) / sizeof(extensions[0]));
@@ -515,6 +577,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		printAttributeStats(views, BufferView::Kind_Vertex, "vertex");
 		printAttributeStats(views, BufferView::Kind_Index, "index");
 		printAttributeStats(views, BufferView::Kind_Keyframe, "keyframe");
+		printAttributeStats(views, BufferView::Kind_Instance, "instance");
 	}
 }
 
@@ -784,6 +847,14 @@ int main(int argc, char** argv)
 		{
 			settings.keep_extras = true;
 		}
+		else if (strcmp(arg, "-mm") == 0)
+		{
+			settings.mesh_merge = true;
+		}
+		else if (strcmp(arg, "-mi") == 0)
+		{
+			settings.mesh_instancing = true;
+		}
 		else if (strcmp(arg, "-si") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.simplify_threshold = float(atof(argv[++i]));
@@ -925,6 +996,8 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nScene:\n");
 			fprintf(stderr, "\t-kn: keep named nodes and meshes attached to named nodes so that named nodes can be transformed externally\n");
 			fprintf(stderr, "\t-ke: keep extras data\n");
+			fprintf(stderr, "\t-mm: merge instances of the same mesh together when possible\n");
+			fprintf(stderr, "\t-mi: use EXT_mesh_gpu_instancing when serializing multiple mesh instances\n");
 			fprintf(stderr, "\nMiscellaneous:\n");
 			fprintf(stderr, "\t-cf: produce compressed gltf/glb files with fallback for loaders that don't support compression\n");
 			fprintf(stderr, "\t-noq: disable quantization; produces much larger glTF files with no extensions\n");
