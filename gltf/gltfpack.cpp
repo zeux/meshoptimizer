@@ -230,7 +230,17 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 	std::vector<MaterialInfo> materials(data->materials_count);
 
-	markNeededMaterials(data, materials, meshes);
+	if (settings.keep_materials)
+	{
+		for (size_t i = 0; i < materials.size(); ++i)
+		{
+			materials[i].keep = true;
+		}
+	}
+	else
+	{
+		markNeededMaterials(data, materials, meshes);
+	}
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
@@ -853,6 +863,10 @@ int main(int argc, char** argv)
 		{
 			settings.keep_extras = true;
 		}
+		else if (strcmp(arg, "-km") == 0)
+		{
+			settings.keep_materials = true;
+		}
 		else if (strcmp(arg, "-mm") == 0)
 		{
 			settings.mesh_merge = true;
@@ -1002,6 +1016,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nScene:\n");
 			fprintf(stderr, "\t-kn: keep named nodes and meshes attached to named nodes so that named nodes can be transformed externally\n");
 			fprintf(stderr, "\t-ke: keep extras data\n");
+			fprintf(stderr, "\t-km: keep unused materials\n");
 			fprintf(stderr, "\t-mm: merge instances of the same mesh together when possible\n");
 			fprintf(stderr, "\t-mi: use EXT_mesh_gpu_instancing when serializing multiple mesh instances\n");
 			fprintf(stderr, "\nMiscellaneous:\n");

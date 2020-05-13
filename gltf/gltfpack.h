@@ -95,6 +95,7 @@ struct Settings
 
 	bool keep_named;
 	bool keep_extras;
+	bool keep_materials;
 
 	bool mesh_merge;
 	bool mesh_instancing;
