@@ -94,8 +94,8 @@ static void printMeshStats(const std::vector<Mesh>& meshes, const char* name)
 	}
 
 	printf("%s: %d meshes (%d triangles, %d vertices); %d draw calls (%d instances, %lld triangles)\n", name,
-		int(meshes.size()), int(mesh_triangles), int(mesh_vertices),
-		int(total_draws), int(total_instances), (long long)total_triangles);
+	       int(meshes.size()), int(mesh_triangles), int(mesh_vertices),
+	       int(total_draws), int(total_instances), (long long)total_triangles);
 }
 
 static void printSceneStats(const std::vector<BufferView>& views, const std::vector<Mesh>& meshes, size_t node_offset, size_t mesh_offset, size_t material_offset, size_t json_size, size_t bin_size)
@@ -242,10 +242,39 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		markNeededMaterials(data, materials, meshes);
 	}
 
+#ifndef NDEBUG
+	std::vector<Mesh> debug_meshes;
+
+	for (size_t i = 0; i < meshes.size(); ++i)
+	{
+		if (settings.simplify_debug > 0)
+		{
+			Mesh kinds = {};
+			Mesh loops = {};
+			debugSimplify(meshes[i], kinds, loops, settings.simplify_debug);
+			debug_meshes.push_back(kinds);
+			debug_meshes.push_back(loops);
+		}
+
+		if (settings.meshlet_debug > 0)
+		{
+			Mesh meshlets = {};
+			Mesh bounds = {};
+			debugMeshlets(meshes[i], meshlets, bounds, settings.meshlet_debug);
+			debug_meshes.push_back(meshlets);
+			debug_meshes.push_back(bounds);
+		}
+	}
+#endif
+
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
 		processMesh(meshes[i], settings);
 	}
+
+#ifndef NDEBUG
+	meshes.insert(meshes.end(), debug_meshes.begin(), debug_meshes.end());
+#endif
 
 	filterEmptyMeshes(meshes); // some meshes may become empty after processing
 
@@ -883,6 +912,16 @@ int main(int argc, char** argv)
 		{
 			settings.simplify_aggressive = true;
 		}
+#ifndef NDEBUG
+		else if (strcmp(arg, "-sd") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		{
+			settings.simplify_debug = float(atof(argv[++i]));
+		}
+		else if (strcmp(arg, "-md") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		{
+			settings.meshlet_debug = atoi(argv[++i]);
+		}
+#endif
 		else if (strcmp(arg, "-te") == 0)
 		{
 			settings.texture_embed = true;

@@ -16,5 +16,8 @@
 	},
 	"files": [
 		"bin/"
-	]
+	],
+	"scripts": {
+		"prepublishOnly": "node bin/gltfpack.js -v"
+	}
 }
