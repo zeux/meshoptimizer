@@ -498,9 +498,6 @@ static void simplifyMesh(Mesh& mesh, float threshold, bool aggressive)
 {
 	assert(mesh.type == cgltf_primitive_type_triangles);
 
-	if (threshold >= 1)
-		return;
-
 	const Stream* positions = getStream(mesh, cgltf_attribute_type_position);
 	if (!positions)
 		return;
@@ -737,7 +734,8 @@ void processMesh(Mesh& mesh, const Settings& settings)
 		filterBones(mesh);
 		reindexMesh(mesh);
 		filterTriangles(mesh);
-		simplifyMesh(mesh, settings.simplify_threshold, settings.simplify_aggressive);
+		if (settings.simplify_threshold < 1)
+			simplifyMesh(mesh, settings.simplify_threshold, settings.simplify_aggressive);
 		optimizeMesh(mesh, settings.compressmore);
 		break;
 
@@ -745,3 +743,98 @@ void processMesh(Mesh& mesh, const Settings& settings)
 		assert(!"Unknown primitive type");
 	}
 }
+
+#ifndef NDEBUG
+extern unsigned char* meshopt_simplifyDebugKind;
+extern unsigned int* meshopt_simplifyDebugLoop;
+
+void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio)
+{
+	Mesh mesh = source;
+	assert(mesh.type == cgltf_primitive_type_triangles);
+
+	Mesh dummy = {};
+	kinds = dummy;
+	loops = dummy;
+
+	// note: it's important to follow the same pipeline as processMesh
+	// otherwise the result won't match
+	filterStreams(mesh);
+	filterBones(mesh);
+	reindexMesh(mesh);
+	filterTriangles(mesh);
+
+	// before simplification we need to setup target kind/loop arrays
+	size_t vertex_count = mesh.streams[0].data.size();
+
+	std::vector<unsigned char> kind(vertex_count);
+	std::vector<unsigned int> loop(vertex_count);
+	std::vector<unsigned char> live(vertex_count);
+
+	meshopt_simplifyDebugKind = &kind[0];
+	meshopt_simplifyDebugLoop = &loop[0];
+
+	simplifyMesh(mesh, ratio, /* aggressive= */ false);
+
+	meshopt_simplifyDebugKind = 0;
+	meshopt_simplifyDebugLoop = 0;
+
+	// fill out live info
+	for (size_t i = 0; i < mesh.indices.size(); ++i)
+		live[mesh.indices[i]] = true;
+
+	// color palette for display
+	static const Attr kPalette[] =
+	{
+		{ 0.5f, 0.5f, 0.5f, 1.f }, // manifold
+		{ 0.f, 0.f, 1.f, 1.f }, // border
+		{ 0.f, 1.f, 0.f, 1.f }, // seam
+		{ 0.f, 1.f, 1.f, 1.f }, // complex
+		{ 1.f, 0.f, 0.f, 1.f }, // locked
+	};
+
+	// prepare meshes
+	kinds.nodes = mesh.nodes;
+	kinds.skin = mesh.skin;
+
+	loops.nodes = mesh.nodes;
+	loops.skin = mesh.skin;
+
+	for (size_t i = 0; i < mesh.streams.size(); ++i)
+	{
+		const Stream& stream = mesh.streams[i];
+
+		if (stream.target == 0 && (stream.type == cgltf_attribute_type_position || stream.type == cgltf_attribute_type_joints || stream.type == cgltf_attribute_type_weights))
+		{
+			kinds.streams.push_back(stream);
+			loops.streams.push_back(stream);
+		}
+	}
+
+	// transform kind/loop data into lines & points
+	Stream colors = { cgltf_attribute_type_color };
+	colors.data.resize(vertex_count);
+
+	for (size_t i = 0; i < vertex_count; ++i)
+		colors.data[i] = kPalette[kind[i]];
+
+	kinds.type = cgltf_primitive_type_points;
+
+	kinds.streams.push_back(colors);
+
+	for (size_t i = 0; i < vertex_count; ++i)
+		if (live[i] && kind[i] != 0)
+			kinds.indices.push_back(unsigned(i));
+
+	loops.type = cgltf_primitive_type_lines;
+
+	loops.streams.push_back(colors);
+
+	for (size_t i = 0; i < vertex_count; ++i)
+		if (live[i] && loop[i] != ~0u && live[loop[i]])
+		{
+			loops.indices.push_back(unsigned(i));
+			loops.indices.push_back(loop[i]);
+		}
+}
+#endif

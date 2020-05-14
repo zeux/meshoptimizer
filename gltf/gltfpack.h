@@ -102,6 +102,7 @@ struct Settings
 
 	float simplify_threshold;
 	bool simplify_aggressive;
+	float simplify_debug;
 
 	bool texture_embed;
 	bool texture_basis;
@@ -234,6 +235,8 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 
 void processAnimation(Animation& animation, const Settings& settings);
 void processMesh(Mesh& mesh, const Settings& settings);
+
+void debugSimplify(const Mesh& mesh, Mesh& kinds, Mesh& loops, float ratio);
 
 bool compareMeshTargets(const Mesh& lhs, const Mesh& rhs);
 bool compareMeshNodes(const Mesh& lhs, const Mesh& rhs);

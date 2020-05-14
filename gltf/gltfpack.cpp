@@ -242,10 +242,29 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		markNeededMaterials(data, materials, meshes);
 	}
 
+#ifndef NDEBUG
+	std::vector<Mesh> debug_meshes;
+
+	if (settings.simplify_debug > 0)
+	{
+		for (size_t i = 0; i < meshes.size(); ++i)
+		{
+			Mesh kinds, loops;
+			debugSimplify(meshes[i], kinds, loops, settings.simplify_debug);
+			debug_meshes.push_back(kinds);
+			debug_meshes.push_back(loops);
+		}
+	}
+#endif
+
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
 		processMesh(meshes[i], settings);
 	}
+
+#ifndef NDEBUG
+	meshes.insert(meshes.end(), debug_meshes.begin(), debug_meshes.end());
+#endif
 
 	filterEmptyMeshes(meshes); // some meshes may become empty after processing
 
@@ -882,6 +901,10 @@ int main(int argc, char** argv)
 		else if (strcmp(arg, "-sa") == 0)
 		{
 			settings.simplify_aggressive = true;
+		}
+		else if (strcmp(arg, "-sd") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		{
+			settings.simplify_debug = float(atof(argv[++i]));
 		}
 		else if (strcmp(arg, "-te") == 0)
 		{
