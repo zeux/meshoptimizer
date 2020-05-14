@@ -753,10 +753,6 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio)
 	Mesh mesh = source;
 	assert(mesh.type == cgltf_primitive_type_triangles);
 
-	Mesh dummy = {};
-	kinds = dummy;
-	loops = dummy;
-
 	// note: it's important to follow the same pipeline as processMesh
 	// otherwise the result won't match
 	filterStreams(mesh);
@@ -836,5 +832,120 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio)
 			loops.indices.push_back(unsigned(i));
 			loops.indices.push_back(loop[i]);
 		}
+}
+
+void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_vertices)
+{
+	Mesh mesh = source;
+	assert(mesh.type == cgltf_primitive_type_triangles);
+
+	reindexMesh(mesh);
+	optimizeMesh(mesh, false);
+
+	const Stream* positions = getStream(mesh, cgltf_attribute_type_position);
+	assert(positions);
+
+	const size_t max_triangles = 126;
+
+	std::vector<meshopt_Meshlet> mr(meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles));
+	mr.resize(meshopt_buildMeshlets(&mr[0], &mesh.indices[0], mesh.indices.size(), positions->data.size(), max_vertices, max_triangles));
+
+	// generate meshlet meshes, using unique colors
+	meshlets.nodes = mesh.nodes;
+
+	Stream mv = { cgltf_attribute_type_position };
+	Stream mc = { cgltf_attribute_type_color };
+
+	for (size_t i = 0; i < mr.size(); ++i)
+	{
+		const meshopt_Meshlet& ml = mr[i];
+
+		unsigned int h = unsigned(i);
+		h ^= h >> 13;
+		h *= 0x5bd1e995;
+		h ^= h >> 15;
+
+		Attr c = { { float(h & 0xff) / 255.f, float((h >> 8) & 0xff) / 255.f, float((h >> 16) & 0xff) / 255.f, 1.f } };
+
+		unsigned int offset = unsigned(mv.data.size());
+
+		for (size_t j = 0; j < ml.vertex_count; ++j)
+		{
+			mv.data.push_back(positions->data[ml.vertices[j]]);
+			mc.data.push_back(c);
+		}
+
+		for (size_t j = 0; j < ml.triangle_count; ++j)
+		{
+			meshlets.indices.push_back(offset + ml.indices[j][0]);
+			meshlets.indices.push_back(offset + ml.indices[j][1]);
+			meshlets.indices.push_back(offset + ml.indices[j][2]);
+		}
+	}
+
+	meshlets.type = cgltf_primitive_type_triangles;
+	meshlets.streams.push_back(mv);
+	meshlets.streams.push_back(mc);
+
+	// generate bounds meshes, using a sphere per meshlet
+	bounds.nodes = mesh.nodes;
+
+	Stream bv = { cgltf_attribute_type_position };
+	Stream bc = { cgltf_attribute_type_color };
+
+	for (size_t i = 0; i < mr.size(); ++i)
+	{
+		const meshopt_Meshlet& ml = mr[i];
+
+		meshopt_Bounds mb = meshopt_computeMeshletBounds(&ml, positions->data[0].f, positions->data.size(), sizeof(Attr));
+
+		unsigned int h = unsigned(i);
+		h ^= h >> 13;
+		h *= 0x5bd1e995;
+		h ^= h >> 15;
+
+		Attr c = { { float(h & 0xff) / 255.f, float((h >> 8) & 0xff) / 255.f, float((h >> 16) & 0xff) / 255.f, 0.1f } };
+
+		unsigned int offset = unsigned(bv.data.size());
+
+		const int N = 10;
+
+		for (int y = 0; y <= N; ++y)
+		{
+			float u = (y == N) ? 0 : float(y) / N * 2 * 3.1415926f;
+			float sinu = sinf(u), cosu = cosf(u);
+
+			for (int x = 0; x <= N; ++x)
+			{
+				float v = float(x) / N * 3.1415926f;
+				float sinv = sinf(v), cosv = cosf(v);
+
+				float fx = sinv * cosu;
+				float fy = sinv * sinu;
+				float fz = cosv;
+
+				Attr p = { { mb.center[0] + mb.radius * fx, mb.center[1] + mb.radius * fy, mb.center[2] + mb.radius * fz, 1.f } };
+
+				bv.data.push_back(p);
+				bc.data.push_back(c);
+			}
+		}
+
+		for (int y = 0; y < N; ++y)
+			for (int x = 0; x < N; ++x)
+			{
+				bounds.indices.push_back(offset + (N + 1) * (y + 0) + (x + 0));
+				bounds.indices.push_back(offset + (N + 1) * (y + 0) + (x + 1));
+				bounds.indices.push_back(offset + (N + 1) * (y + 1) + (x + 0));
+
+				bounds.indices.push_back(offset + (N + 1) * (y + 1) + (x + 0));
+				bounds.indices.push_back(offset + (N + 1) * (y + 0) + (x + 1));
+				bounds.indices.push_back(offset + (N + 1) * (y + 1) + (x + 1));
+			}
+	}
+
+	bounds.type = cgltf_primitive_type_triangles;
+	bounds.streams.push_back(bv);
+	bounds.streams.push_back(bc);
 }
 #endif

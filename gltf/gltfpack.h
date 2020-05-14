@@ -104,6 +104,8 @@ struct Settings
 	bool simplify_aggressive;
 	float simplify_debug;
 
+	int meshlet_debug;
+
 	bool texture_embed;
 	bool texture_basis;
 	bool texture_ktx2;
@@ -237,6 +239,7 @@ void processAnimation(Animation& animation, const Settings& settings);
 void processMesh(Mesh& mesh, const Settings& settings);
 
 void debugSimplify(const Mesh& mesh, Mesh& kinds, Mesh& loops, float ratio);
+void debugMeshlets(const Mesh& mesh, Mesh& meshlets, Mesh& bounds, int max_vertices);
 
 bool compareMeshTargets(const Mesh& lhs, const Mesh& rhs);
 bool compareMeshNodes(const Mesh& lhs, const Mesh& rhs);

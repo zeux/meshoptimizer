@@ -245,14 +245,24 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 #ifndef NDEBUG
 	std::vector<Mesh> debug_meshes;
 
-	if (settings.simplify_debug > 0)
+	for (size_t i = 0; i < meshes.size(); ++i)
 	{
-		for (size_t i = 0; i < meshes.size(); ++i)
+		if (settings.simplify_debug > 0)
 		{
-			Mesh kinds, loops;
+			Mesh kinds = {};
+			Mesh loops = {};
 			debugSimplify(meshes[i], kinds, loops, settings.simplify_debug);
 			debug_meshes.push_back(kinds);
 			debug_meshes.push_back(loops);
+		}
+
+		if (settings.meshlet_debug > 0)
+		{
+			Mesh meshlets = {};
+			Mesh bounds = {};
+			debugMeshlets(meshes[i], meshlets, bounds, settings.meshlet_debug);
+			debug_meshes.push_back(meshlets);
+			debug_meshes.push_back(bounds);
 		}
 	}
 #endif
@@ -905,6 +915,10 @@ int main(int argc, char** argv)
 		else if (strcmp(arg, "-sd") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.simplify_debug = float(atof(argv[++i]));
+		}
+		else if (strcmp(arg, "-md") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		{
+			settings.meshlet_debug = atoi(argv[++i]);
 		}
 		else if (strcmp(arg, "-te") == 0)
 		{
