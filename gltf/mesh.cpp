@@ -157,7 +157,7 @@ static bool canMergeMeshNodes(cgltf_node* lhs, cgltf_node* rhs, const Settings& 
 	if (lhs_transform || rhs_transform)
 		return false;
 
-	if (settings.keep_named)
+	if (settings.keep_nodes)
 	{
 		if (lhs->name && *lhs->name)
 			return false;

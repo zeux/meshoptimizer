@@ -168,8 +168,14 @@ void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Setti
 		if (!mesh.material)
 			continue;
 
+		if (settings.keep_materials && mesh.material->name && *mesh.material->name)
+			continue;
+
 		for (int j = 0; j < mesh.material - data->materials; ++j)
 		{
+			if (settings.keep_materials && data->materials[j].name && *data->materials[j].name)
+				continue;
+
 			if (areMaterialsEqual(data, *mesh.material, data->materials[j], settings))
 			{
 				mesh.material = &data->materials[j];
@@ -179,7 +185,7 @@ void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Setti
 	}
 }
 
-void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes)
+void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes, const Settings& settings)
 {
 	// mark all used materials as kept
 	for (size_t i = 0; i < meshes.size(); ++i)
@@ -191,6 +197,20 @@ void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials,
 			MaterialInfo& mi = materials[mesh.material - data->materials];
 
 			mi.keep = true;
+		}
+	}
+
+	// mark all named materials as kept if requested
+	if (settings.keep_materials)
+	{
+		for (size_t i = 0; i < data->materials_count; ++i)
+		{
+			cgltf_material& material = data->materials[i];
+
+			if (material.name && *material.name)
+			{
+				materials[i].keep = true;
+			}
 		}
 	}
 }

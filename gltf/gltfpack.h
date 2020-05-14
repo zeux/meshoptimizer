@@ -93,9 +93,9 @@ struct Settings
 	int anim_freq;
 	bool anim_const;
 
-	bool keep_named;
-	bool keep_extras;
+	bool keep_nodes;
 	bool keep_materials;
+	bool keep_extras;
 
 	bool mesh_merge;
 	bool mesh_instancing;
@@ -249,7 +249,7 @@ void filterEmptyMeshes(std::vector<Mesh>& meshes);
 
 bool usesTextureSet(const cgltf_material& material, int set);
 void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings);
-void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes);
+void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes, const Settings& settings);
 
 void analyzeImages(cgltf_data* data, std::vector<ImageInfo>& images);
 const char* inferMimeType(const char* path);
@@ -298,7 +298,7 @@ size_t writeInstances(std::vector<BufferView>& views, std::string& json_accessor
 void writeMeshNode(std::string& json, size_t mesh_offset, cgltf_node* node, cgltf_skin* skin, cgltf_data* data, const QuantizationPosition* qp);
 void writeMeshNodeInstanced(std::string& json, size_t mesh_offset, size_t accr_offset);
 void writeSkin(std::string& json, const cgltf_skin& skin, size_t matrix_accr, const std::vector<NodeInfo>& nodes, cgltf_data* data);
-void writeNode(std::string& json, const cgltf_node& node, const std::vector<NodeInfo>& nodes, cgltf_data* data);
+void writeNode(std::string& json, const cgltf_node& node, const std::vector<NodeInfo>& nodes, cgltf_data* data, const Settings& settings);
 void writeAnimation(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Animation& animation, size_t i, cgltf_data* data, const std::vector<NodeInfo>& nodes, const Settings& settings);
 void writeCamera(std::string& json, const cgltf_camera& camera);
 void writeLight(std::string& json, const cgltf_light& light);
