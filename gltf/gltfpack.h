@@ -93,9 +93,9 @@ struct Settings
 	int anim_freq;
 	bool anim_const;
 
-	bool keep_named;
-	bool keep_extras;
+	bool keep_nodes;
 	bool keep_materials;
+	bool keep_extras;
 
 	bool mesh_merge;
 	bool mesh_instancing;
@@ -249,7 +249,7 @@ void filterEmptyMeshes(std::vector<Mesh>& meshes);
 
 bool usesTextureSet(const cgltf_material& material, int set);
 void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings);
-void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes);
+void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes, const Settings& settings);
 
 void analyzeImages(cgltf_data* data, std::vector<ImageInfo>& images);
 const char* inferMimeType(const char* path);

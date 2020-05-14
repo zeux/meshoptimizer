@@ -92,7 +92,7 @@ void markNeededNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::
 	}
 
 	// mark all named nodes as needed (if -kn is specified)
-	if (settings.keep_named)
+	if (settings.keep_nodes)
 	{
 		for (size_t i = 0; i < data->nodes_count; ++i)
 		{
