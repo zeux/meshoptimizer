@@ -94,8 +94,8 @@ static void printMeshStats(const std::vector<Mesh>& meshes, const char* name)
 	}
 
 	printf("%s: %d meshes (%d triangles, %d vertices); %d draw calls (%d instances, %lld triangles)\n", name,
-		int(meshes.size()), int(mesh_triangles), int(mesh_vertices),
-		int(total_draws), int(total_instances), (long long)total_triangles);
+	       int(meshes.size()), int(mesh_triangles), int(mesh_vertices),
+	       int(total_draws), int(total_instances), (long long)total_triangles);
 }
 
 static void printSceneStats(const std::vector<BufferView>& views, const std::vector<Mesh>& meshes, size_t node_offset, size_t mesh_offset, size_t material_offset, size_t json_size, size_t bin_size)
@@ -912,6 +912,7 @@ int main(int argc, char** argv)
 		{
 			settings.simplify_aggressive = true;
 		}
+#ifndef NDEBUG
 		else if (strcmp(arg, "-sd") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.simplify_debug = float(atof(argv[++i]));
@@ -920,6 +921,7 @@ int main(int argc, char** argv)
 		{
 			settings.meshlet_debug = atoi(argv[++i]);
 		}
+#endif
 		else if (strcmp(arg, "-te") == 0)
 		{
 			settings.texture_embed = true;

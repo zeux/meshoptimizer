@@ -780,13 +780,12 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio)
 		live[mesh.indices[i]] = true;
 
 	// color palette for display
-	static const Attr kPalette[] =
-	{
-		{ 0.5f, 0.5f, 0.5f, 1.f }, // manifold
-		{ 0.f, 0.f, 1.f, 1.f }, // border
-		{ 0.f, 1.f, 0.f, 1.f }, // seam
-		{ 0.f, 1.f, 1.f, 1.f }, // complex
-		{ 1.f, 0.f, 0.f, 1.f }, // locked
+	static const Attr kPalette[] = {
+	    {0.5f, 0.5f, 0.5f, 1.f}, // manifold
+	    {0.f, 0.f, 1.f, 1.f},    // border
+	    {0.f, 1.f, 0.f, 1.f},    // seam
+	    {0.f, 1.f, 1.f, 1.f},    // complex
+	    {1.f, 0.f, 0.f, 1.f},    // locked
 	};
 
 	// prepare meshes
@@ -808,7 +807,7 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio)
 	}
 
 	// transform kind/loop data into lines & points
-	Stream colors = { cgltf_attribute_type_color };
+	Stream colors = {cgltf_attribute_type_color};
 	colors.data.resize(vertex_count);
 
 	for (size_t i = 0; i < vertex_count; ++i)
@@ -853,8 +852,8 @@ void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_ver
 	// generate meshlet meshes, using unique colors
 	meshlets.nodes = mesh.nodes;
 
-	Stream mv = { cgltf_attribute_type_position };
-	Stream mc = { cgltf_attribute_type_color };
+	Stream mv = {cgltf_attribute_type_position};
+	Stream mc = {cgltf_attribute_type_color};
 
 	for (size_t i = 0; i < mr.size(); ++i)
 	{
@@ -865,7 +864,7 @@ void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_ver
 		h *= 0x5bd1e995;
 		h ^= h >> 15;
 
-		Attr c = { { float(h & 0xff) / 255.f, float((h >> 8) & 0xff) / 255.f, float((h >> 16) & 0xff) / 255.f, 1.f } };
+		Attr c = {{float(h & 0xff) / 255.f, float((h >> 8) & 0xff) / 255.f, float((h >> 16) & 0xff) / 255.f, 1.f}};
 
 		unsigned int offset = unsigned(mv.data.size());
 
@@ -890,8 +889,8 @@ void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_ver
 	// generate bounds meshes, using a sphere per meshlet
 	bounds.nodes = mesh.nodes;
 
-	Stream bv = { cgltf_attribute_type_position };
-	Stream bc = { cgltf_attribute_type_color };
+	Stream bv = {cgltf_attribute_type_position};
+	Stream bc = {cgltf_attribute_type_color};
 
 	for (size_t i = 0; i < mr.size(); ++i)
 	{
@@ -904,7 +903,7 @@ void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_ver
 		h *= 0x5bd1e995;
 		h ^= h >> 15;
 
-		Attr c = { { float(h & 0xff) / 255.f, float((h >> 8) & 0xff) / 255.f, float((h >> 16) & 0xff) / 255.f, 0.1f } };
+		Attr c = {{float(h & 0xff) / 255.f, float((h >> 8) & 0xff) / 255.f, float((h >> 16) & 0xff) / 255.f, 0.1f}};
 
 		unsigned int offset = unsigned(bv.data.size());
 
@@ -924,7 +923,7 @@ void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_ver
 				float fy = sinv * sinu;
 				float fz = cosv;
 
-				Attr p = { { mb.center[0] + mb.radius * fx, mb.center[1] + mb.radius * fy, mb.center[2] + mb.radius * fz, 1.f } };
+				Attr p = {{mb.center[0] + mb.radius * fx, mb.center[1] + mb.radius * fy, mb.center[2] + mb.radius * fz, 1.f}};
 
 				bv.data.push_back(p);
 				bc.data.push_back(c);
