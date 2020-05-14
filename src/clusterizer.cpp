@@ -419,7 +419,7 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 	return offset;
 }
 
-size_t meshopt_buildMeshletsLinear(meshopt_Meshlet* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, size_t max_vertices, size_t max_triangles)
+size_t meshopt_buildMeshletsScan(meshopt_Meshlet* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, size_t max_vertices, size_t max_triangles)
 {
 	assert(index_count % 3 == 0);
 	assert(max_vertices >= 3);
