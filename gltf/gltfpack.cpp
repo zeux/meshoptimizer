@@ -513,7 +513,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 			append(json_roots, size_t(ni.remap));
 		}
 
-		writeNode(json_nodes, node, nodes, data);
+		writeNode(json_nodes, node, nodes, data, settings);
 	}
 
 	for (size_t i = 0; i < data->skins_count; ++i)

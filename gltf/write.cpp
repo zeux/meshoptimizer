@@ -951,7 +951,7 @@ void writeSkin(std::string& json, const cgltf_skin& skin, size_t matrix_accr, co
 	append(json, "}");
 }
 
-void writeNode(std::string& json, const cgltf_node& node, const std::vector<NodeInfo>& nodes, cgltf_data* data)
+void writeNode(std::string& json, const cgltf_node& node, const std::vector<NodeInfo>& nodes, cgltf_data* data, const Settings& settings)
 {
 	const NodeInfo& ni = nodes[&node - data->nodes];
 
@@ -1044,6 +1044,8 @@ void writeNode(std::string& json, const cgltf_node& node, const std::vector<Node
 		append(json, size_t(node.light - data->lights));
 		append(json, "}}");
 	}
+	if (settings.keep_extras)
+		writeExtras(json, data, node.extras);
 	append(json, "}");
 }
 
