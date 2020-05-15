@@ -167,6 +167,22 @@ MeshoptDecoder.decodeIndexBuffer(indexBuffer, indexCount, indexSize, indexData);
 
 [Usage example](https://meshoptimizer.org/demo/) is available, with source in `demo/index.html`; this example uses .GLB files encoded using `gltfpack`.
 
+## Point cloud compression
+
+The vertex encoding algorithms can be used to compress arbitrary streams of attribute data; one other use case besides triangle meshes is point cloud data. Typically point clouds come with position, color and possibly other attributes but don't have an implied point order.
+
+To compress point clouds efficiently, it's recommended to first preprocess the points by sorting them using the spatial sort algorithm:
+
+```c++
+std::vector<unsigned int> remap(point_count);
+meshopt_spatialSortRemap(&remap[0], positions, point_count, sizeof(vec3));
+
+// for each attribute stream
+meshopt_remapVertexBuffer(positions, positions, point_count, sizeof(vec3), &remap[0]);
+```
+
+After this the resulting arrays should be quantized (e.g. using 16-bit fixed point numbers for positions and 8-bit color components), and the result can be compressed using `meshopt_encodeVertexBuffer` as described in the previous section. To decompress, `meshopt_decodeVertexBuffer` will recover the quantized data that can be used directly or converted back to original floating-point data. The compression ratio depends on the nature of source data, for colored points it's typical to get 35-40 bits per point as a result.
+
 ## Triangle strip conversion
 
 On most hardware, indexed triangle lists are the most efficient way to drive the GPU. However, in some cases triangle strips might prove beneficial:
