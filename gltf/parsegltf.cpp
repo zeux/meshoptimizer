@@ -393,7 +393,16 @@ static void evacuateExtras(cgltf_data* data, std::string& extras)
 		evacuateExtras(data, extras, data->nodes[i].extras);
 }
 
-static void freeUnusedBuffers(cgltf_data* data)
+static void freeFile(cgltf_data* data)
+{
+	data->json = NULL;
+	data->bin = NULL;
+
+	free(data->file_data);
+	data->file_data = NULL;
+}
+
+static bool freeUnusedBuffers(cgltf_data* data)
 {
 	std::vector<char> used(data->buffers_count);
 
@@ -419,16 +428,27 @@ static void freeUnusedBuffers(cgltf_data* data)
 		}
 	}
 
+	bool free_bin = false;
+
 	for (size_t i = 0; i < data->buffers_count; ++i)
 	{
 		cgltf_buffer& buffer = data->buffers[i];
 
-		if (!used[i] && buffer.data && buffer.data != data->bin)
+		if (!used[i] && buffer.data)
 		{
-			free(buffer.data);
-			buffer.data = NULL;
+			if (buffer.data != data->bin)
+			{
+				free(buffer.data);
+				buffer.data = NULL;
+			}
+			else
+			{
+				free_bin = true;
+			}
 		}
 	}
+
+	return free_bin;
 }
 
 cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, std::string& extras, const char** error)
@@ -439,7 +459,15 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 	cgltf_result result = cgltf_parse_file(&options, path, &data);
 
 	if (data)
+	{
 		evacuateExtras(data, extras);
+
+		if (data->json == data->file_data)
+		{
+			assert(!data->bin);
+			freeFile(data);
+		}
+	}
 
 	result = (result == cgltf_result_success) ? cgltf_load_buffers(&options, data, path) : result;
 	result = (result == cgltf_result_success) ? cgltf_validate(data) : result;
@@ -465,7 +493,13 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 	parseMeshNodesGltf(data, meshes);
 	parseAnimationsGltf(data, animations);
 
-	freeUnusedBuffers(data);
+	bool free_bin = freeUnusedBuffers(data);
+
+	if (free_bin)
+	{
+		assert(data->bin);
+		freeFile(data);
+	}
 
 	return data;
 }
