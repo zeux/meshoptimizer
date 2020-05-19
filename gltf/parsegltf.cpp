@@ -148,9 +148,7 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 				continue;
 			}
 
-			Mesh dummy = {};
-			meshes.push_back(dummy);
-
+			meshes.push_back(Mesh());
 			Mesh& result = meshes.back();
 
 			result.material = primitive.material;
@@ -187,10 +185,11 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 					continue;
 				}
 
-				Stream source = {attr.type, attr.index};
-				result.streams.push_back(source);
-
+				result.streams.push_back(Stream());
 				Stream& s = result.streams.back();
+
+				s.type = attr.type;
+				s.index = attr.index;
 
 				readAccessor(s.data, attr.data);
 
@@ -215,10 +214,12 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 						continue;
 					}
 
-					Stream source = {attr.type, attr.index, int(ti + 1)};
-					result.streams.push_back(source);
-
+					result.streams.push_back(Stream());
 					Stream& s = result.streams.back();
+
+					s.type = attr.type;
+					s.index = attr.index;
+					s.target = int(ti + 1);
 
 					readAccessor(s.data, attr.data);
 				}
@@ -273,12 +274,18 @@ static void parseMeshNodesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 
 static void parseAnimationsGltf(cgltf_data* data, std::vector<Animation>& animations)
 {
+	animations.reserve(data->animations_count);
+
 	for (size_t i = 0; i < data->animations_count; ++i)
 	{
 		const cgltf_animation& animation = data->animations[i];
 
-		Animation result = {};
+		animations.push_back(Animation());
+		Animation& result = animations.back();
+
 		result.name = animation.name;
+
+		result.tracks.reserve(animation.channels_count);
 
 		for (size_t j = 0; j < animation.channels_count; ++j)
 		{
@@ -290,7 +297,9 @@ static void parseAnimationsGltf(cgltf_data* data, std::vector<Animation>& animat
 				continue;
 			}
 
-			Track track = {};
+			result.tracks.push_back(Track());
+			Track& track = result.tracks.back();
+
 			track.node = channel.target_node;
 			track.path = channel.target_path;
 
@@ -300,17 +309,13 @@ static void parseAnimationsGltf(cgltf_data* data, std::vector<Animation>& animat
 
 			readAccessor(track.time, channel.sampler->input);
 			readAccessor(track.data, channel.sampler->output);
-
-			result.tracks.push_back(track);
 		}
 
 		if (result.tracks.empty())
 		{
 			fprintf(stderr, "Warning: ignoring animation %d because it has no valid tracks\n", int(i));
-			continue;
+			animations.pop_back();
 		}
-
-		animations.push_back(result);
 	}
 }
 
