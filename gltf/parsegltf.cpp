@@ -196,7 +196,7 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 
 				if (attr.type == cgltf_attribute_type_color && attr.data->type == cgltf_type_vec3)
 				{
-					for (size_t i = 0; i < result.streams.back().data.size(); ++i)
+					for (size_t i = 0; i < s.data.size(); ++i)
 						s.data[i].f[3] = 1.0f;
 				}
 			}
@@ -462,11 +462,8 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 	{
 		evacuateExtras(data, extras);
 
-		if (data->json == data->file_data)
-		{
-			assert(!data->bin);
+		if (!data->bin)
 			freeFile(data);
-		}
 	}
 
 	result = (result == cgltf_result_success) ? cgltf_load_buffers(&options, data, path) : result;
@@ -495,11 +492,8 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 
 	bool free_bin = freeUnusedBuffers(data);
 
-	if (free_bin)
-	{
-		assert(data->bin);
+	if (data->bin && free_bin)
 		freeFile(data);
-	}
 
 	return data;
 }
