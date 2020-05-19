@@ -2,6 +2,7 @@
 #include "gltfpack.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static const char* getError(cgltf_result result, cgltf_data* data)
@@ -359,6 +360,44 @@ static bool needsDummyBuffers(cgltf_data* data)
 	return false;
 }
 
+static void freeUnusedBuffers(cgltf_data* data)
+{
+	std::vector<char> used(data->buffers_count);
+
+	for (size_t i = 0; i < data->skins_count; ++i)
+	{
+		const cgltf_skin& skin = data->skins[i];
+
+		if (skin.inverse_bind_matrices && skin.inverse_bind_matrices->buffer_view)
+		{
+			assert(skin.inverse_bind_matrices->buffer_view->buffer);
+			used[skin.inverse_bind_matrices->buffer_view->buffer - data->buffers] = 1;
+		}
+	}
+
+	for (size_t i = 0; i < data->images_count; ++i)
+	{
+		const cgltf_image& image = data->images[i];
+
+		if (image.buffer_view)
+		{
+			assert(image.buffer_view->buffer);
+			used[image.buffer_view->buffer - data->buffers] = 1;
+		}
+	}
+
+	for (size_t i = 0; i < data->buffers_count; ++i)
+	{
+		cgltf_buffer& buffer = data->buffers[i];
+
+		if (!used[i] && buffer.data && buffer.data != data->bin)
+		{
+			free(buffer.data);
+			buffer.data = NULL;
+		}
+	}
+}
+
 cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error)
 {
 	cgltf_data* data = 0;
@@ -388,6 +427,8 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 	parseMeshesGltf(data, meshes);
 	parseMeshNodesGltf(data, meshes);
 	parseAnimationsGltf(data, animations);
+
+	freeUnusedBuffers(data);
 
 	return data;
 }
