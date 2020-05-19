@@ -233,7 +233,7 @@ bool readFile(const char* path, std::string& data);
 bool writeFile(const char* path, const std::string& data);
 
 cgltf_data* parseObj(const char* path, std::vector<Mesh>& meshes, const char** error);
-cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error);
+cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, std::string& extras, const char** error);
 
 void processAnimation(Animation& animation, const Settings& settings);
 void processMesh(Mesh& mesh, const Settings& settings);
@@ -304,7 +304,7 @@ void writeCamera(std::string& json, const cgltf_camera& camera);
 void writeLight(std::string& json, const cgltf_light& light);
 void writeArray(std::string& json, const char* name, const std::string& contents);
 void writeExtensions(std::string& json, const ExtensionInfo* extensions, size_t count);
-void writeExtras(std::string& json, const cgltf_data* data, const cgltf_extras& extras);
+void writeExtras(std::string& json, const std::string& data, const cgltf_extras& extras);
 
 /**
  * Copyright (c) 2016-2020 Arseny Kapoulkine

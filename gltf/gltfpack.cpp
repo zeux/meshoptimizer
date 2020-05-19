@@ -157,7 +157,7 @@ static void printAttributeStats(const std::vector<BufferView>& views, BufferView
 	}
 }
 
-static void process(cgltf_data* data, const char* input_path, const char* output_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const Settings& settings, std::string& json, std::string& bin, std::string& fallback, size_t& fallback_size)
+static void process(cgltf_data* data, const char* input_path, const char* output_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const std::string& extras, const Settings& settings, std::string& json, std::string& bin, std::string& fallback, size_t& fallback_size)
 {
 	if (settings.verbose)
 	{
@@ -348,7 +348,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		append(json_materials, "{");
 		writeMaterial(json_materials, data, material, settings.quantize ? &qt_materials[i] : NULL);
 		if (settings.keep_extras)
-			writeExtras(json_materials, data, material.extras);
+			writeExtras(json_materials, extras, material.extras);
 		append(json_materials, "}");
 
 		mi.remap = int(material_offset);
@@ -520,7 +520,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		append(json_nodes, "{");
 		writeNode(json_nodes, node, nodes, data);
 		if (settings.keep_extras)
-			writeExtras(json_nodes, data, node.extras);
+			writeExtras(json_nodes, extras, node.extras);
 		append(json_nodes, "}");
 	}
 
@@ -558,7 +558,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	append(json, "\"version\":\"2.0\",\"generator\":\"gltfpack ");
 	append(json, getVersion());
 	append(json, "\"");
-	writeExtras(json, data, data->asset.extras);
+	writeExtras(json, extras, data->asset.extras);
 	append(json, "}");
 
 	const ExtensionInfo extensions[] = {
@@ -684,13 +684,14 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 	cgltf_data* data = 0;
 	std::vector<Mesh> meshes;
 	std::vector<Animation> animations;
+	std::string extras;
 
 	const char* iext = strrchr(input, '.');
 
 	if (iext && (strcmp(iext, ".gltf") == 0 || strcmp(iext, ".GLTF") == 0 || strcmp(iext, ".glb") == 0 || strcmp(iext, ".GLB") == 0))
 	{
 		const char* error = 0;
-		data = parseGltf(input, meshes, animations, &error);
+		data = parseGltf(input, meshes, animations, extras, &error);
 
 		if (error)
 		{
@@ -726,7 +727,7 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 
 	std::string json, bin, fallback;
 	size_t fallback_size = 0;
-	process(data, input, output, meshes, animations, settings, json, bin, fallback, fallback_size);
+	process(data, input, output, meshes, animations, extras, settings, json, bin, fallback, fallback_size);
 
 	cgltf_free(data);
 

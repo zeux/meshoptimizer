@@ -1295,12 +1295,15 @@ void writeExtensions(std::string& json, const ExtensionInfo* extensions, size_t 
 	}
 }
 
-void writeExtras(std::string& json, const cgltf_data* data, const cgltf_extras& extras)
+void writeExtras(std::string& json, const std::string& data, const cgltf_extras& extras)
 {
 	if (extras.start_offset == extras.end_offset)
 		return;
 
+	assert(extras.start_offset < data.size());
+	assert(extras.end_offset <= data.size());
+
 	comma(json);
 	append(json, "\"extras\":");
-	appendJson(json, data->json + extras.start_offset, data->json + extras.end_offset);
+	appendJson(json, data.c_str() + extras.start_offset, data.c_str() + extras.end_offset);
 }
