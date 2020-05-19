@@ -127,6 +127,13 @@ static void fixupIndices(std::vector<unsigned int>& indices, cgltf_primitive_typ
 
 static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 {
+	size_t total_primitives = 0;
+
+	for (size_t mi = 0; mi < data->meshes_count; ++mi)
+		total_primitives += data->meshes[mi].primitives_count;
+
+	meshes.reserve(total_primitives);
+
 	for (size_t mi = 0; mi < data->meshes_count; ++mi)
 	{
 		const cgltf_mesh& mesh = data->meshes[mi];
@@ -141,11 +148,16 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 				continue;
 			}
 
-			Mesh result = {};
+			Mesh dummy = {};
+			meshes.push_back(dummy);
+
+			Mesh& result = meshes.back();
 
 			result.material = primitive.material;
 
 			result.type = primitive.type;
+
+			result.streams.reserve(primitive.attributes_count);
 
 			if (primitive.indices)
 			{
@@ -175,16 +187,18 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 					continue;
 				}
 
-				Stream s = {attr.type, attr.index};
+				Stream source = {attr.type, attr.index};
+				result.streams.push_back(source);
+
+				Stream& s = result.streams.back();
+
 				readAccessor(s.data, attr.data);
 
 				if (attr.type == cgltf_attribute_type_color && attr.data->type == cgltf_type_vec3)
 				{
-					for (size_t i = 0; i < s.data.size(); ++i)
+					for (size_t i = 0; i < result.streams.back().data.size(); ++i)
 						s.data[i].f[3] = 1.0f;
 				}
-
-				result.streams.push_back(s);
 			}
 
 			for (size_t ti = 0; ti < primitive.targets_count; ++ti)
@@ -201,18 +215,18 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 						continue;
 					}
 
-					Stream s = {attr.type, attr.index, int(ti + 1)};
-					readAccessor(s.data, attr.data);
+					Stream source = {attr.type, attr.index, int(ti + 1)};
+					result.streams.push_back(source);
 
-					result.streams.push_back(s);
+					Stream& s = result.streams.back();
+
+					readAccessor(s.data, attr.data);
 				}
 			}
 
 			result.targets = primitive.targets_count;
 			result.target_weights.assign(mesh.weights, mesh.weights + mesh.weights_count);
 			result.target_names.assign(mesh.target_names, mesh.target_names + mesh.target_names_count);
-
-			meshes.push_back(result);
 		}
 	}
 }
