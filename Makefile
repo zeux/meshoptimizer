@@ -83,7 +83,7 @@ gltfpack.js: gltf/bin/gltfpack.js
 
 gltf/bin/gltfpack.js: ${LIBRARY_SOURCES} ${GLTFPACK_SOURCES} tools/meshloader.cpp
 	@mkdir -p gltf/bin
-	emcc $^ -o $@ -Os -DNDEBUG -s ALLOW_MEMORY_GROWTH=1 -s NODERAWFS=1
+	emcc $^ -o $@ -Os -DNDEBUG -s ALLOW_MEMORY_GROWTH=1 -s MAXIMUM_MEMORY=4GB -s NODERAWFS=1
 	sed -i '1s;^;#!/usr/bin/env node\n;' $@
 
 build/decoder_base.wasm: $(WASM_SOURCES)

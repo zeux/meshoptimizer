@@ -114,7 +114,6 @@ static void parseMeshesObj(fastObjMesh* obj, cgltf_data* data, std::vector<Mesh>
 		mesh_index[mi] = meshes.size();
 
 		meshes.push_back(Mesh());
-
 		Mesh& mesh = meshes.back();
 
 		if (data->materials_count)

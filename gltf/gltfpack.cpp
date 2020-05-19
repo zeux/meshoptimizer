@@ -21,40 +21,41 @@ std::string getVersion()
 	return result;
 }
 
-static void finalizeBufferViews(std::string& json, std::vector<BufferView>& views, std::string& bin, std::string& fallback)
+static void finalizeBufferViews(std::string& json, std::vector<BufferView>& views, std::string& bin, std::string* fallback, size_t& fallback_size)
 {
 	for (size_t i = 0; i < views.size(); ++i)
 	{
 		BufferView& view = views[i];
 
 		size_t bin_offset = bin.size();
-		size_t fallback_offset = fallback.size();
+		size_t fallback_offset = fallback_size;
 
 		size_t count = view.data.size() / view.stride;
 
-		switch (view.compression)
+		if (view.compression == BufferView::Compression_None)
 		{
-		case BufferView::Compression_None:
 			bin += view.data;
-			break;
+		}
+		else
+		{
+			switch (view.compression)
+			{
+			case BufferView::Compression_Attribute:
+				compressVertexStream(bin, view.data, count, view.stride);
+				break;
+			case BufferView::Compression_Index:
+				compressIndexStream(bin, view.data, count, view.stride);
+				break;
+			case BufferView::Compression_IndexSequence:
+				compressIndexSequence(bin, view.data, count, view.stride);
+				break;
+			default:
+				assert(!"Unknown compression type");
+			}
 
-		case BufferView::Compression_Attribute:
-			compressVertexStream(bin, view.data, count, view.stride);
-			fallback += view.data;
-			break;
-
-		case BufferView::Compression_Index:
-			compressIndexStream(bin, view.data, count, view.stride);
-			fallback += view.data;
-			break;
-
-		case BufferView::Compression_IndexSequence:
-			compressIndexSequence(bin, view.data, count, view.stride);
-			fallback += view.data;
-			break;
-
-		default:
-			assert(!"Unknown compression type");
+			if (fallback)
+				*fallback += view.data;
+			fallback_size += view.data.size();
 		}
 
 		size_t raw_offset = (view.compression != BufferView::Compression_None) ? fallback_offset : bin_offset;
@@ -67,7 +68,9 @@ static void finalizeBufferViews(std::string& json, std::vector<BufferView>& view
 
 		// align each bufferView by 4 bytes
 		bin.resize((bin.size() + 3) & ~3);
-		fallback.resize((fallback.size() + 3) & ~3);
+		if (fallback)
+			fallback->resize((fallback->size() + 3) & ~3);
+		fallback_size = (fallback_size + 3) & ~3;
 	}
 }
 
@@ -154,7 +157,7 @@ static void printAttributeStats(const std::vector<BufferView>& views, BufferView
 	}
 }
 
-static void process(cgltf_data* data, const char* input_path, const char* output_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const Settings& settings, std::string& json, std::string& bin, std::string& fallback)
+static void process(cgltf_data* data, const char* input_path, const char* output_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const std::string& extras, const Settings& settings, std::string& json, std::string& bin, std::string& fallback, size_t& fallback_size)
 {
 	if (settings.verbose)
 	{
@@ -345,7 +348,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		append(json_materials, "{");
 		writeMaterial(json_materials, data, material, settings.quantize ? &qt_materials[i] : NULL);
 		if (settings.keep_extras)
-			writeExtras(json_materials, data, material.extras);
+			writeExtras(json_materials, extras, material.extras);
 		append(json_materials, "}");
 
 		mi.remap = int(material_offset);
@@ -513,7 +516,12 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 			append(json_roots, size_t(ni.remap));
 		}
 
-		writeNode(json_nodes, node, nodes, data, settings);
+		comma(json_nodes);
+		append(json_nodes, "{");
+		writeNode(json_nodes, node, nodes, data);
+		if (settings.keep_extras)
+			writeExtras(json_nodes, extras, node.extras);
+		append(json_nodes, "}");
 	}
 
 	for (size_t i = 0; i < data->skins_count; ++i)
@@ -550,7 +558,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	append(json, "\"version\":\"2.0\",\"generator\":\"gltfpack ");
 	append(json, getVersion());
 	append(json, "\"");
-	writeExtras(json, data, data->asset.extras);
+	writeExtras(json, extras, data->asset.extras);
 	append(json, "}");
 
 	const ExtensionInfo extensions[] = {
@@ -568,7 +576,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	writeExtensions(json, extensions, sizeof(extensions) / sizeof(extensions[0]));
 
 	std::string json_views;
-	finalizeBufferViews(json_views, views, bin, fallback);
+	finalizeBufferViews(json_views, views, bin, settings.fallback ? &fallback : NULL, fallback_size);
 
 	writeArray(json, "bufferViews", json_views);
 	writeArray(json, "accessors", json_accessors);
@@ -676,13 +684,14 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 	cgltf_data* data = 0;
 	std::vector<Mesh> meshes;
 	std::vector<Animation> animations;
+	std::string extras;
 
 	const char* iext = strrchr(input, '.');
 
 	if (iext && (strcmp(iext, ".gltf") == 0 || strcmp(iext, ".GLTF") == 0 || strcmp(iext, ".glb") == 0 || strcmp(iext, ".GLB") == 0))
 	{
 		const char* error = 0;
-		data = parseGltf(input, meshes, animations, &error);
+		data = parseGltf(input, meshes, animations, extras, &error);
 
 		if (error)
 		{
@@ -717,7 +726,8 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 	}
 
 	std::string json, bin, fallback;
-	process(data, input, output, meshes, animations, settings, json, bin, fallback);
+	size_t fallback_size = 0;
+	process(data, input, output, meshes, animations, extras, settings, json, bin, fallback, fallback_size);
 
 	cgltf_free(data);
 
@@ -745,7 +755,7 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 			return 4;
 		}
 
-		std::string bufferspec = getBufferSpec(getBaseName(binpath.c_str()), bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback.size(), settings.compress);
+		std::string bufferspec = getBufferSpec(getBaseName(binpath.c_str()), bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback_size, settings.compress);
 
 		fprintf(outjson, "{");
 		fwrite(bufferspec.c_str(), bufferspec.size(), 1, outjson);
@@ -776,7 +786,7 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 			return 4;
 		}
 
-		std::string bufferspec = getBufferSpec(NULL, bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback.size(), settings.compress);
+		std::string bufferspec = getBufferSpec(NULL, bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback_size, settings.compress);
 
 		json.insert(0, "{" + bufferspec + ",");
 		json.push_back('}');

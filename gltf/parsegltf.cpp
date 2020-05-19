@@ -2,6 +2,7 @@
 #include "gltfpack.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static const char* getError(cgltf_result result, cgltf_data* data)
@@ -127,6 +128,13 @@ static void fixupIndices(std::vector<unsigned int>& indices, cgltf_primitive_typ
 
 static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 {
+	size_t total_primitives = 0;
+
+	for (size_t mi = 0; mi < data->meshes_count; ++mi)
+		total_primitives += data->meshes[mi].primitives_count;
+
+	meshes.reserve(total_primitives);
+
 	for (size_t mi = 0; mi < data->meshes_count; ++mi)
 	{
 		const cgltf_mesh& mesh = data->meshes[mi];
@@ -141,11 +149,14 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 				continue;
 			}
 
-			Mesh result = {};
+			meshes.push_back(Mesh());
+			Mesh& result = meshes.back();
 
 			result.material = primitive.material;
 
 			result.type = primitive.type;
+
+			result.streams.reserve(primitive.attributes_count);
 
 			if (primitive.indices)
 			{
@@ -175,7 +186,12 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 					continue;
 				}
 
-				Stream s = {attr.type, attr.index};
+				result.streams.push_back(Stream());
+				Stream& s = result.streams.back();
+
+				s.type = attr.type;
+				s.index = attr.index;
+
 				readAccessor(s.data, attr.data);
 
 				if (attr.type == cgltf_attribute_type_color && attr.data->type == cgltf_type_vec3)
@@ -183,8 +199,6 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 					for (size_t i = 0; i < s.data.size(); ++i)
 						s.data[i].f[3] = 1.0f;
 				}
-
-				result.streams.push_back(s);
 			}
 
 			for (size_t ti = 0; ti < primitive.targets_count; ++ti)
@@ -201,18 +215,20 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 						continue;
 					}
 
-					Stream s = {attr.type, attr.index, int(ti + 1)};
-					readAccessor(s.data, attr.data);
+					result.streams.push_back(Stream());
+					Stream& s = result.streams.back();
 
-					result.streams.push_back(s);
+					s.type = attr.type;
+					s.index = attr.index;
+					s.target = int(ti + 1);
+
+					readAccessor(s.data, attr.data);
 				}
 			}
 
 			result.targets = primitive.targets_count;
 			result.target_weights.assign(mesh.weights, mesh.weights + mesh.weights_count);
 			result.target_names.assign(mesh.target_names, mesh.target_names + mesh.target_names_count);
-
-			meshes.push_back(result);
 		}
 	}
 }
@@ -259,12 +275,18 @@ static void parseMeshNodesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 
 static void parseAnimationsGltf(cgltf_data* data, std::vector<Animation>& animations)
 {
+	animations.reserve(data->animations_count);
+
 	for (size_t i = 0; i < data->animations_count; ++i)
 	{
 		const cgltf_animation& animation = data->animations[i];
 
-		Animation result = {};
+		animations.push_back(Animation());
+		Animation& result = animations.back();
+
 		result.name = animation.name;
+
+		result.tracks.reserve(animation.channels_count);
 
 		for (size_t j = 0; j < animation.channels_count; ++j)
 		{
@@ -276,7 +298,9 @@ static void parseAnimationsGltf(cgltf_data* data, std::vector<Animation>& animat
 				continue;
 			}
 
-			Track track = {};
+			result.tracks.push_back(Track());
+			Track& track = result.tracks.back();
+
 			track.node = channel.target_node;
 			track.path = channel.target_path;
 
@@ -286,17 +310,13 @@ static void parseAnimationsGltf(cgltf_data* data, std::vector<Animation>& animat
 
 			readAccessor(track.time, channel.sampler->input);
 			readAccessor(track.data, channel.sampler->output);
-
-			result.tracks.push_back(track);
 		}
 
 		if (result.tracks.empty())
 		{
 			fprintf(stderr, "Warning: ignoring animation %d because it has no valid tracks\n", int(i));
-			continue;
+			animations.pop_back();
 		}
-
-		animations.push_back(result);
 	}
 }
 
@@ -340,12 +360,112 @@ static bool needsDummyBuffers(cgltf_data* data)
 	return false;
 }
 
-cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error)
+static void evacuateExtras(cgltf_data* data, std::string& extras, cgltf_extras& item)
+{
+	size_t offset = extras.size();
+
+	extras.append(data->json + item.start_offset, item.end_offset - item.start_offset);
+
+	item.start_offset = offset;
+	item.end_offset = extras.size();
+}
+
+static void evacuateExtras(cgltf_data* data, std::string& extras)
+{
+	size_t size = 0;
+
+	size += data->asset.extras.end_offset - data->asset.extras.start_offset;
+
+	for (size_t i = 0; i < data->materials_count; ++i)
+		size += data->materials[i].extras.end_offset - data->materials[i].extras.start_offset;
+
+	for (size_t i = 0; i < data->nodes_count; ++i)
+		size += data->nodes[i].extras.end_offset - data->nodes[i].extras.start_offset;
+
+	extras.reserve(size);
+
+	evacuateExtras(data, extras, data->asset.extras);
+
+	for (size_t i = 0; i < data->materials_count; ++i)
+		evacuateExtras(data, extras, data->materials[i].extras);
+
+	for (size_t i = 0; i < data->nodes_count; ++i)
+		evacuateExtras(data, extras, data->nodes[i].extras);
+}
+
+static void freeFile(cgltf_data* data)
+{
+	data->json = NULL;
+	data->bin = NULL;
+
+	free(data->file_data);
+	data->file_data = NULL;
+}
+
+static bool freeUnusedBuffers(cgltf_data* data)
+{
+	std::vector<char> used(data->buffers_count);
+
+	for (size_t i = 0; i < data->skins_count; ++i)
+	{
+		const cgltf_skin& skin = data->skins[i];
+
+		if (skin.inverse_bind_matrices && skin.inverse_bind_matrices->buffer_view)
+		{
+			assert(skin.inverse_bind_matrices->buffer_view->buffer);
+			used[skin.inverse_bind_matrices->buffer_view->buffer - data->buffers] = 1;
+		}
+	}
+
+	for (size_t i = 0; i < data->images_count; ++i)
+	{
+		const cgltf_image& image = data->images[i];
+
+		if (image.buffer_view)
+		{
+			assert(image.buffer_view->buffer);
+			used[image.buffer_view->buffer - data->buffers] = 1;
+		}
+	}
+
+	bool free_bin = false;
+
+	for (size_t i = 0; i < data->buffers_count; ++i)
+	{
+		cgltf_buffer& buffer = data->buffers[i];
+
+		if (!used[i] && buffer.data)
+		{
+			if (buffer.data != data->bin)
+			{
+				free(buffer.data);
+				buffer.data = NULL;
+			}
+			else
+			{
+				free_bin = true;
+			}
+		}
+	}
+
+	return free_bin;
+}
+
+cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, std::string& extras, const char** error)
 {
 	cgltf_data* data = 0;
 
 	cgltf_options options = {};
 	cgltf_result result = cgltf_parse_file(&options, path, &data);
+
+	if (data)
+	{
+		evacuateExtras(data, extras);
+
+		if (!data->bin)
+			freeFile(data);
+	}
+
 	result = (result == cgltf_result_success) ? cgltf_load_buffers(&options, data, path) : result;
 	result = (result == cgltf_result_success) ? cgltf_validate(data) : result;
 
@@ -369,6 +489,11 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 	parseMeshesGltf(data, meshes);
 	parseMeshNodesGltf(data, meshes);
 	parseAnimationsGltf(data, animations);
+
+	bool free_bin = freeUnusedBuffers(data);
+
+	if (data->bin && free_bin)
+		freeFile(data);
 
 	return data;
 }

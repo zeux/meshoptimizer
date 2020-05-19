@@ -951,12 +951,10 @@ void writeSkin(std::string& json, const cgltf_skin& skin, size_t matrix_accr, co
 	append(json, "}");
 }
 
-void writeNode(std::string& json, const cgltf_node& node, const std::vector<NodeInfo>& nodes, cgltf_data* data, const Settings& settings)
+void writeNode(std::string& json, const cgltf_node& node, const std::vector<NodeInfo>& nodes, cgltf_data* data)
 {
 	const NodeInfo& ni = nodes[&node - data->nodes];
 
-	comma(json);
-	append(json, "{");
 	if (node.name && *node.name)
 	{
 		comma(json);
@@ -1044,9 +1042,6 @@ void writeNode(std::string& json, const cgltf_node& node, const std::vector<Node
 		append(json, size_t(node.light - data->lights));
 		append(json, "}}");
 	}
-	if (settings.keep_extras)
-		writeExtras(json, data, node.extras);
-	append(json, "}");
 }
 
 void writeAnimation(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Animation& animation, size_t i, cgltf_data* data, const std::vector<NodeInfo>& nodes, const Settings& settings)
@@ -1300,12 +1295,15 @@ void writeExtensions(std::string& json, const ExtensionInfo* extensions, size_t 
 	}
 }
 
-void writeExtras(std::string& json, const cgltf_data* data, const cgltf_extras& extras)
+void writeExtras(std::string& json, const std::string& data, const cgltf_extras& extras)
 {
 	if (extras.start_offset == extras.end_offset)
 		return;
 
+	assert(extras.start_offset < data.size());
+	assert(extras.end_offset <= data.size());
+
 	comma(json);
 	append(json, "\"extras\":");
-	appendJson(json, data->json + extras.start_offset, data->json + extras.end_offset);
+	appendJson(json, data.c_str() + extras.start_offset, data.c_str() + extras.end_offset);
 }
