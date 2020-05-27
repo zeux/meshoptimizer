@@ -437,14 +437,11 @@ static bool freeUnusedBuffers(cgltf_data* data)
 		if (!used[i] && buffer.data)
 		{
 			if (buffer.data != data->bin)
-			{
 				free(buffer.data);
-				buffer.data = NULL;
-			}
 			else
-			{
 				free_bin = true;
-			}
+
+			buffer.data = NULL;
 		}
 	}
 
