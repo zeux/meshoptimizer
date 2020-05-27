@@ -79,7 +79,7 @@ jobs:
     - name: make
       run: make -j2 config=sanitize gltfpack
     - name: test
-      run: find glTF-Sample-Models/2.0/ -name *.gltf | xargs ./gltfpack -cc -test
+      run: find glTF-Sample-Models/2.0/ -name *.gltf -or -name *.glb | xargs ./gltfpack -cc -test
     - name: pack
       run: find glTF-Sample-Models/2.0/ -name *.gltf | grep -v glTF-Draco | xargs -I '{}' ./gltfpack -i '{}' -o '{}pack.gltf'
     - name: validate
