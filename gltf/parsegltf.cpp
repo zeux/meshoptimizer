@@ -126,7 +126,7 @@ static void fixupIndices(std::vector<unsigned int>& indices, cgltf_primitive_typ
 	}
 }
 
-static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
+static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::vector<std::pair<size_t, size_t> >& mesh_remap)
 {
 	size_t total_primitives = 0;
 
@@ -134,10 +134,13 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 		total_primitives += data->meshes[mi].primitives_count;
 
 	meshes.reserve(total_primitives);
+	mesh_remap.resize(data->meshes_count);
 
 	for (size_t mi = 0; mi < data->meshes_count; ++mi)
 	{
 		const cgltf_mesh& mesh = data->meshes[mi];
+
+		size_t remap_offset = meshes.size();
 
 		for (size_t pi = 0; pi < mesh.primitives_count; ++pi)
 		{
@@ -230,10 +233,12 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 			result.target_weights.assign(mesh.weights, mesh.weights + mesh.weights_count);
 			result.target_names.assign(mesh.target_names, mesh.target_names + mesh.target_names_count);
 		}
+
+		mesh_remap[mi] = std::make_pair(remap_offset, meshes.size());
 	}
 }
 
-static void parseMeshNodesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
+static void parseMeshNodesGltf(cgltf_data* data, std::vector<Mesh>& meshes, const std::vector<std::pair<size_t, size_t> >& mesh_remap)
 {
 	for (size_t i = 0; i < data->nodes_count; ++i)
 	{
@@ -241,22 +246,23 @@ static void parseMeshNodesGltf(cgltf_data* data, std::vector<Mesh>& meshes)
 		if (!node.mesh)
 			continue;
 
-		Mesh& mesh = meshes[node.mesh - data->meshes];
+		std::pair<size_t, size_t> range = mesh_remap[node.mesh - data->meshes];
 
-		if (mesh.nodes.empty() || mesh.skin == node.skin)
+		for (size_t mi = range.first; mi < range.second; ++mi)
 		{
-			mesh.nodes.push_back(&node);
-			mesh.skin = node.skin;
-		}
-		else
-		{
-			// this should be extremely rare - if the same mesh is used with different skins, we need to duplicate it
-			// in this case we don't spend any effort on keeping the number of duplicates to the minimum, because this
-			// should really never happen.
-			meshes.push_back(mesh);
+			Mesh* mesh = &meshes[mi];
 
-			meshes.back().nodes.push_back(&node);
-			meshes.back().skin = node.skin;
+			if (!mesh->nodes.empty() && mesh->skin != node.skin)
+			{
+				// this should be extremely rare - if the same mesh is used with different skins, we need to duplicate it
+				// in this case we don't spend any effort on keeping the number of duplicates to the minimum, because this
+				// should really never happen.
+				meshes.push_back(*mesh);
+				mesh = &meshes.back();
+			}
+
+			mesh->nodes.push_back(&node);
+			mesh->skin = node.skin;
 		}
 	}
 
@@ -483,8 +489,10 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 		return 0;
 	}
 
-	parseMeshesGltf(data, meshes);
-	parseMeshNodesGltf(data, meshes);
+	std::vector<std::pair<size_t, size_t> > mesh_remap;
+
+	parseMeshesGltf(data, meshes, mesh_remap);
+	parseMeshNodesGltf(data, meshes, mesh_remap);
 	parseAnimationsGltf(data, animations);
 
 	bool free_bin = freeUnusedBuffers(data);

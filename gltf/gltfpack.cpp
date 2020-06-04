@@ -96,7 +96,7 @@ static void printMeshStats(const std::vector<Mesh>& meshes, const char* name)
 		total_draws += std::max(size_t(1), mesh.nodes.size());
 	}
 
-	printf("%s: %d meshes (%d triangles, %d vertices); %d draw calls (%d instances, %lld triangles)\n", name,
+	printf("%s: %d mesh primitives (%d triangles, %d vertices); %d draw calls (%d instances, %lld triangles)\n", name,
 	       int(meshes.size()), int(mesh_triangles), int(mesh_vertices),
 	       int(total_draws), int(total_instances), (long long)total_triangles);
 }
