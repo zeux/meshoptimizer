@@ -95,3 +95,5 @@ else if (typeof define === 'function' && define['amd'])
 	});
 else if (typeof exports === 'object')
 	exports["MeshoptDecoder"] = MeshoptDecoder;
+else
+	(typeof self !== 'undefined' ? self : this).MeshoptDecoder = MeshoptDecoder;

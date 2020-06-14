@@ -31,7 +31,7 @@ gltfpack can also compress textures using Basis Universal format, either storing
 When using compressed files, [js/meshopt_decoder.js](https://github.com/zeux/meshoptimizer/blob/master/js/meshopt_decoder.js) needs to be loaded to provide the WebAssembly decoder module like this:
 
 ```js
-import MeshoptDecoder from "./meshopt_decoder";
+import './meshopt_decoder.js'; // imports MeshoptDecoder using ES6
 
 ...
 
