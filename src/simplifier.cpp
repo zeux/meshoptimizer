@@ -217,42 +217,34 @@ static bool hasEdge(const EdgeAdjacency& adjacency, unsigned int a, unsigned int
 	return false;
 }
 
-static unsigned int findWedgeEdge(const EdgeAdjacency& adjacency, const unsigned int* wedge, unsigned int a, unsigned int b)
+static void classifyVertices(unsigned char* result, unsigned int* loop, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* wedge, meshopt_Allocator& allocator)
 {
-	unsigned int v = a;
+	// incoming & outgoing open edges: ~0u if no open edges, i if there are more than 1
+	unsigned int* openinc = allocator.allocate<unsigned int>(vertex_count);
+	unsigned int* openout = allocator.allocate<unsigned int>(vertex_count);
 
-	do
+	memset(openinc, -1, vertex_count * sizeof(unsigned int));
+	memset(openout, -1, vertex_count * sizeof(unsigned int));
+
+	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		if (hasEdge(adjacency, v, b))
-			return v;
+		unsigned int vertex = unsigned(i);
 
-		v = wedge[v];
-	} while (v != a);
+		unsigned int count = adjacency.counts[vertex];
+		const unsigned int* data = adjacency.data + adjacency.offsets[vertex];
 
-	return ~0u;
-}
-
-static size_t countOpenEdges(const EdgeAdjacency& adjacency, unsigned int vertex, unsigned int* last = 0)
-{
-	size_t result = 0;
-
-	unsigned int count = adjacency.counts[vertex];
-	const unsigned int* data = adjacency.data + adjacency.offsets[vertex];
-
-	for (size_t i = 0; i < count; ++i)
-		if (!hasEdge(adjacency, data[i], vertex))
+		for (size_t j = 0; j < count; ++j)
 		{
-			result++;
+			unsigned int target = data[j];
 
-			if (last)
-				*last = data[i];
+			if (!hasEdge(adjacency, target, vertex))
+			{
+				openinc[target] = (openinc[target] == ~0u) ? vertex : target;
+				openout[vertex] = (openout[vertex] == ~0u) ? target : vertex;
+			}
 		}
+	}
 
-	return result;
-}
-
-static void classifyVertices(unsigned char* result, unsigned int* loop, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* wedge)
-{
 	for (size_t i = 0; i < vertex_count; ++i)
 		loop[i] = ~0u;
 
@@ -270,22 +262,19 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, size_t v
 			if (wedge[i] == i)
 			{
 				// no attribute seam, need to check if it's manifold
-				unsigned int v = 0;
-				size_t edges = countOpenEdges(adjacency, unsigned(i), &v);
+				unsigned int openi = openinc[i], openo = openout[i];
 
 				// note: we classify any vertices with no open edges as manifold
 				// this is technically incorrect - if 4 triangles share an edge, we'll classify vertices as manifold
 				// it's unclear if this is a problem in practice
-				// also note that we classify vertices as border if they have *one* open edge, not two
-				// this is because we only have half-edges - so a border vertex would have one incoming and one outgoing edge
-				if (edges == 0)
+				if (openi == ~0u && openo == ~0u)
 				{
 					result[i] = Kind_Manifold;
 				}
-				else if (edges == 1)
+				else if (openi != i && openo != i)
 				{
 					result[i] = Kind_Border;
-					loop[i] = v;
+					loop[i] = openo;
 				}
 				else
 				{
@@ -296,23 +285,21 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, size_t v
 			else if (wedge[wedge[i]] == i)
 			{
 				// attribute seam; need to distinguish between Seam and Locked
-				unsigned int a = 0;
-				size_t a_count = countOpenEdges(adjacency, unsigned(i), &a);
-				unsigned int b = 0;
-				size_t b_count = countOpenEdges(adjacency, wedge[i], &b);
+				unsigned int w = wedge[i];
+				unsigned int openiv = openinc[i], openov = openout[i];
+				unsigned int openiw = openinc[w], openow = openout[w];
 
 				// seam should have one open half-edge for each vertex, and the edges need to "connect" - point to the same vertex post-remap
-				if (a_count == 1 && b_count == 1)
+				if (openiv != ~0u && openiv != i && openov != ~0u && openov != i &&
+					openiw != ~0u && openiw != w && openow != ~0u && openow != w)
 				{
-					unsigned int ao = findWedgeEdge(adjacency, wedge, a, wedge[i]);
-					unsigned int bo = findWedgeEdge(adjacency, wedge, b, unsigned(i));
-
-					if (ao != ~0u && bo != ~0u)
+					if (remap[openiv] == remap[openow] && remap[openov] == remap[openiw] &&
+						remap[openiw] == remap[openov] && remap[openow] == remap[openiv])
 					{
 						result[i] = Kind_Seam;
 
-						loop[i] = a;
-						loop[wedge[i]] = b;
+						loop[i] = openov;
+						loop[w] = openow;
 					}
 					else
 					{
@@ -1175,7 +1162,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	// classify vertices; vertex kind determines collapse rules, see kCanCollapse
 	unsigned char* vertex_kind = allocator.allocate<unsigned char>(vertex_count);
 	unsigned int* loop = allocator.allocate<unsigned int>(vertex_count);
-	classifyVertices(vertex_kind, loop, vertex_count, adjacency, remap, wedge);
+	classifyVertices(vertex_kind, loop, vertex_count, adjacency, remap, wedge, allocator);
 
 #if TRACE
 	size_t unique_positions = 0;
