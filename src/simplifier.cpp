@@ -1141,6 +1141,7 @@ static float interpolate(float y, float x0, float y0, float x1, float y1, float 
 #ifndef NDEBUG
 unsigned char* meshopt_simplifyDebugKind = 0;
 unsigned int* meshopt_simplifyDebugLoop = 0;
+unsigned int* meshopt_simplifyDebugLoopBack = 0;
 #endif
 
 size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error)
@@ -1290,6 +1291,9 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 	if (meshopt_simplifyDebugLoop)
 		memcpy(meshopt_simplifyDebugLoop, loop, vertex_count * sizeof(unsigned int));
+
+	if (meshopt_simplifyDebugLoopBack)
+		memcpy(meshopt_simplifyDebugLoopBack, loopback, vertex_count * sizeof(unsigned int));
 #endif
 
 	return result_count;
