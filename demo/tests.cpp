@@ -689,6 +689,18 @@ static void simplifyStuck()
 
 	assert(meshopt_simplify(ib2, ib2, 9, vb2, 5, 12, 6, 1e-3f) == 6);
 	assert(meshopt_simplify(ib3, ib3, 9, vb2, 5, 12, 6, 1e-3f) == 9);
+
+	// 4-vertex quad with a locked corner can't be simplified due to border error-induced restriction
+	float vb4[] = {0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0};
+	unsigned int ib4[] = {0, 1, 3, 0, 3, 2};
+
+	assert(meshopt_simplify(ib4, ib4, 6, vb4, 4, 12, 3, 1e-3f) == 6);
+
+	// 4-vertex quad with a locked corner can't be simplified due to border error-induced restriction
+	float vb5[] = {0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0};
+	unsigned int ib5[] = {0, 1, 4, 0, 3, 2};
+
+	assert(meshopt_simplify(ib5, ib5, 6, vb5, 5, 12, 3, 1e-3f) == 6);
 }
 
 static void simplifySloppyStuck()
