@@ -289,10 +289,10 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 
 				// seam should have one open half-edge for each vertex, and the edges need to "connect" - point to the same vertex post-remap
 				if (openiv != ~0u && openiv != i && openov != ~0u && openov != i &&
-					openiw != ~0u && openiw != w && openow != ~0u && openow != w)
+				    openiw != ~0u && openiw != w && openow != ~0u && openow != w)
 				{
 					if (remap[openiv] == remap[openow] && remap[openov] == remap[openiw] &&
-						remap[openiw] == remap[openov] && remap[openow] == remap[openiv])
+					    remap[openiw] == remap[openov] && remap[openow] == remap[openiv])
 					{
 						result[i] = Kind_Seam;
 					}
