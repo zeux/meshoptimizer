@@ -747,6 +747,7 @@ void processMesh(Mesh& mesh, const Settings& settings)
 #ifndef NDEBUG
 extern unsigned char* meshopt_simplifyDebugKind;
 extern unsigned int* meshopt_simplifyDebugLoop;
+extern unsigned int* meshopt_simplifyDebugLoopBack;
 
 void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio)
 {
@@ -765,15 +766,18 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio)
 
 	std::vector<unsigned char> kind(vertex_count);
 	std::vector<unsigned int> loop(vertex_count);
+	std::vector<unsigned int> loopback(vertex_count);
 	std::vector<unsigned char> live(vertex_count);
 
 	meshopt_simplifyDebugKind = &kind[0];
 	meshopt_simplifyDebugLoop = &loop[0];
+	meshopt_simplifyDebugLoopBack = &loopback[0];
 
 	simplifyMesh(mesh, ratio, /* aggressive= */ false);
 
 	meshopt_simplifyDebugKind = 0;
 	meshopt_simplifyDebugLoop = 0;
+	meshopt_simplifyDebugLoopBack = 0;
 
 	// fill out live info
 	for (size_t i = 0; i < mesh.indices.size(); ++i)
@@ -826,10 +830,19 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio)
 	loops.streams.push_back(colors);
 
 	for (size_t i = 0; i < vertex_count; ++i)
-		if (live[i] && loop[i] != ~0u && live[loop[i]])
+		if (live[i] && (kind[i] == 1 || kind[i] == 2))
 		{
-			loops.indices.push_back(unsigned(i));
-			loops.indices.push_back(loop[i]);
+			if (loop[i] != ~0u && live[loop[i]])
+			{
+				loops.indices.push_back(unsigned(i));
+				loops.indices.push_back(loop[i]);
+			}
+
+			if (loopback[i] != ~0u && live[loopback[i]])
+			{
+				loops.indices.push_back(loopback[i]);
+				loops.indices.push_back(unsigned(i));
+			}
 		}
 }
 
