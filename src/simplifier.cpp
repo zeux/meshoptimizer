@@ -539,7 +539,7 @@ static void fillFaceQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 	}
 }
 
-static void fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const unsigned int* remap, const unsigned char* vertex_kind, const unsigned int* loop)
+static void fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const unsigned int* remap, const unsigned char* vertex_kind, const unsigned int* loop, const unsigned int* loopback)
 {
 	for (size_t i = 0; i < index_count; i += 3)
 	{
@@ -553,9 +553,20 @@ static void fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 			unsigned char k0 = vertex_kind[i0];
 			unsigned char k1 = vertex_kind[i1];
 
-			// check that i0 and i1 are border/seam and are on the same edge loop
-			// loop[] tracks half edges so we only need to check i0->i1
-			if (k0 != k1 || (k0 != Kind_Border && k0 != Kind_Seam) || loop[i0] != i1)
+			// check that either i0 or i1 are border/seam and are on the same edge loop
+			// note that we need to add the error even for edged that connect e.g. border & locked
+			// if we don't do that, the adjacent border->border edge won't have correct errors for corners
+			if (k0 != Kind_Border && k0 != Kind_Seam && k1 != Kind_Border && k1 != Kind_Seam)
+				continue;
+
+			if ((k0 == Kind_Border || k0 == Kind_Seam) && loop[i0] != i1)
+				continue;
+
+			if ((k1 == Kind_Border || k1 == Kind_Seam) && loopback[i1] != i0)
+				continue;
+
+			// seam edges should occur twice (i0->i1 and i1->i0) - skip redundant edges
+			if (kHasOpposite[k0][k1] && remap[i1] > remap[i0])
 				continue;
 
 			unsigned int i2 = indices[i + next[next[e]]];
@@ -565,7 +576,7 @@ static void fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 			const float kEdgeWeightSeam = 1.f;
 			const float kEdgeWeightBorder = 10.f;
 
-			float edgeWeight = (k0 == Kind_Seam) ? kEdgeWeightSeam : kEdgeWeightBorder;
+			float edgeWeight = (k0 == Kind_Border || k1 == Kind_Border) ? kEdgeWeightBorder : kEdgeWeightSeam;
 
 			Quadric Q;
 			quadricFromTriangleEdge(Q, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2], edgeWeight);
@@ -1182,7 +1193,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	memset(vertex_quadrics, 0, vertex_count * sizeof(Quadric));
 
 	fillFaceQuadrics(vertex_quadrics, indices, index_count, vertex_positions, remap);
-	fillEdgeQuadrics(vertex_quadrics, indices, index_count, vertex_positions, remap, vertex_kind, loop);
+	fillEdgeQuadrics(vertex_quadrics, indices, index_count, vertex_positions, remap, vertex_kind, loop, loopback);
 
 	if (result != indices)
 		memcpy(result, indices, index_count * sizeof(unsigned int));
