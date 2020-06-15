@@ -217,14 +217,16 @@ static bool hasEdge(const EdgeAdjacency& adjacency, unsigned int a, unsigned int
 	return false;
 }
 
-static void classifyVertices(unsigned char* result, unsigned int* loop, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* wedge, meshopt_Allocator& allocator)
+static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned int* loopback, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* wedge)
 {
-	// incoming & outgoing open edges: ~0u if no open edges, i if there are more than 1
-	unsigned int* openinc = allocator.allocate<unsigned int>(vertex_count);
-	unsigned int* openout = allocator.allocate<unsigned int>(vertex_count);
+	memset(loop, -1, vertex_count * sizeof(unsigned int));
+	memset(loopback, -1, vertex_count * sizeof(unsigned int));
 
-	memset(openinc, -1, vertex_count * sizeof(unsigned int));
-	memset(openout, -1, vertex_count * sizeof(unsigned int));
+	// incoming & outgoing open edges: ~0u if no open edges, i if there are more than 1
+	// note that this is the same data as required in loop[] arrays; loop[] data is only valid for border/seam
+	// but here it's okay to fill the data out for other types of vertices as well
+	unsigned int* openinc = loopback;
+	unsigned int* openout = loop;
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
@@ -244,9 +246,6 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, size_t v
 			}
 		}
 	}
-
-	for (size_t i = 0; i < vertex_count; ++i)
-		loop[i] = ~0u;
 
 #if TRACE
 	size_t lockedstats[4] = {};
@@ -274,7 +273,6 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, size_t v
 				else if (openi != i && openo != i)
 				{
 					result[i] = Kind_Border;
-					loop[i] = openo;
 				}
 				else
 				{
@@ -297,9 +295,6 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, size_t v
 						remap[openiw] == remap[openov] && remap[openow] == remap[openiv])
 					{
 						result[i] = Kind_Seam;
-
-						loop[i] = openov;
-						loop[w] = openow;
 					}
 					else
 					{
@@ -1162,7 +1157,8 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	// classify vertices; vertex kind determines collapse rules, see kCanCollapse
 	unsigned char* vertex_kind = allocator.allocate<unsigned char>(vertex_count);
 	unsigned int* loop = allocator.allocate<unsigned int>(vertex_count);
-	classifyVertices(vertex_kind, loop, vertex_count, adjacency, remap, wedge, allocator);
+	unsigned int* loopback = allocator.allocate<unsigned int>(vertex_count);
+	classifyVertices(vertex_kind, loop, loopback, vertex_count, adjacency, remap, wedge);
 
 #if TRACE
 	size_t unique_positions = 0;
@@ -1245,6 +1241,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 			break;
 
 		remapEdgeLoops(loop, vertex_count, collapse_remap);
+		remapEdgeLoops(loopback, vertex_count, collapse_remap);
 
 		size_t new_count = remapIndexBuffer(result, result_count, collapse_remap);
 		assert(new_count < result_count);
