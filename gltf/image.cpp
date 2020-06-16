@@ -5,6 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 static const char* kMimeTypes[][2] = {
     {"image/jpeg", ".jpg"},
     {"image/jpeg", ".jpeg"},
@@ -67,6 +71,33 @@ static const char* mimeExtension(const char* mime_type)
 	return ".raw";
 }
 
+#ifdef __EMSCRIPTEN__
+EM_JS(int, execute, (const char* cmd, bool ignore_stdout, bool ignore_stderr), {
+	var cp = require('child_process');
+	var stdio = [ 'ignore', ignore_stdout ? 'ignore' : 'inherit', ignore_stderr ? 'ignore' : 'inherit' ];
+	var ret = cp.spawnSync(UTF8ToString(cmd), [], {shell:true, stdio:stdio });
+	return ret.status == null ? 256 : ret.status;
+});
+#else
+static int execute(const char* cmd_, bool ignore_stdout, bool ignore_stderr)
+{
+#ifdef _WIN32
+	std::string ignore = "nul";
+#else
+	std::string ignore = "/dev/null";
+#endif
+
+	std::string cmd = cmd_;
+
+	if (ignore_stdout)
+		(cmd += " >") += ignore;
+	if (ignore_stderr)
+		(cmd += " 2>") += ignore;
+
+	return system(cmd.c_str());
+}
+#endif
+
 bool checkBasis()
 {
 	const char* basisu_path = getenv("BASISU_PATH");
@@ -74,13 +105,7 @@ bool checkBasis()
 
 	cmd += " -version";
 
-#ifdef _WIN32
-	cmd += " >nul 2>nul";
-#else
-	cmd += " >/dev/null 2>/dev/null";
-#endif
-
-	int rc = system(cmd.c_str());
+	int rc = execute(cmd.c_str(), /* ignore_stdout= */ true, /* ignore_stderr= */ true);
 
 	return rc == 0;
 }
@@ -124,13 +149,7 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 	cmd += " -output_file ";
 	cmd += temp_output.path;
 
-#ifdef _WIN32
-	cmd += " >nul";
-#else
-	cmd += " >/dev/null";
-#endif
-
-	int rc = system(cmd.c_str());
+	int rc = execute(cmd.c_str(), /* ignore_stdout= */ true, /* ignore_stderr= */ false);
 
 	return rc == 0 && readFile(temp_output.path.c_str(), result);
 }
