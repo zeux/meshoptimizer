@@ -67,8 +67,29 @@ var MeshoptDecoder = (function() {
 		}
 	};
 
-	var filters = ["", "meshopt_decodeFilterOct", "meshopt_decodeFilterQuat", "meshopt_decodeFilterExp"];
-	var decoders = ["meshopt_decodeVertexBuffer", "meshopt_decodeIndexBuffer", "meshopt_decodeIndexSequence"];
+	var filters = {
+		// legacy index-based enums for glTF
+		0: "",
+		1: "meshopt_decodeFilterOct",
+		2: "meshopt_decodeFilterQuat",
+		3: "meshopt_decodeFilterExp",
+		// string-based enums for glTF
+		NONE: "",
+		OCTAHEDRAL: "meshopt_decodeFilterOct",
+		QUATERNION: "meshopt_decodeFilterQuat",
+		EXPONENTIAL: "meshopt_decodeFilterExp",
+	};
+
+	var decoders = {
+		// legacy index-based enums for glTF
+		0: "meshopt_decodeVertexBuffer",
+		1: "meshopt_decodeIndexBuffer",
+		2: "meshopt_decodeIndexSequence",
+		// string-based enums for glTF
+		ATTRIBUTES: "meshopt_decodeVertexBuffer",
+		TRIANGLES: "meshopt_decodeIndexBuffer",
+		INDICES: "meshopt_decodeIndexSequence",
+	};
 
 	return {
 		ready: promise,
