@@ -1,9 +1,9 @@
-/* Babylon.js extension for MESHOPT_compression; requires Babylon.js 4.1 */
-/* BABYLON.GLTF2.GLTFLoader.RegisterExtension("MESHOPT_compression", (loader) => new MESHOPT_compression(loader, MeshoptDecoder)); */
-var MESHOPT_compression = /** @class */ (function () {
-    var NAME = "MESHOPT_compression";
+/* Babylon.js extension for EXT_meshopt_compression; requires Babylon.js 4.1 */
+/* BABYLON.GLTF2.GLTFLoader.RegisterExtension("EXT_meshopt_compression", (loader) => new EXT_meshopt_compression(loader, MeshoptDecoder)); */
+var EXT_meshopt_compression = /** @class */ (function () {
+    var NAME = "EXT_meshopt_compression";
     /** @hidden */
-    function MESHOPT_compression(loader, decoder) {
+    function EXT_meshopt_compression(loader, decoder) {
         /** The name of this extension. */
         this.name = NAME;
         /** Defines whether this extension is enabled. */
@@ -12,11 +12,11 @@ var MESHOPT_compression = /** @class */ (function () {
         this._decoder = decoder;
     }
     /** @hidden */
-    MESHOPT_compression.prototype.dispose = function () {
+    EXT_meshopt_compression.prototype.dispose = function () {
         delete this._loader;
     };
     /** @hidden */
-    MESHOPT_compression.prototype.loadBufferViewAsync = function (context, bufferView) {
+    EXT_meshopt_compression.prototype.loadBufferViewAsync = function (context, bufferView) {
         if (bufferView.extensions && bufferView.extensions[NAME]) {
             var extensionDef = bufferView.extensions[NAME];
             if (extensionDef._decoded) {
@@ -37,5 +37,5 @@ var MESHOPT_compression = /** @class */ (function () {
             return null;
         }
     };
-    return MESHOPT_compression;
+    return EXT_meshopt_compression;
 }());

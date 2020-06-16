@@ -296,7 +296,7 @@ THREE.GLTFLoader = ( function () {
 		KHR_MESH_QUANTIZATION: 'KHR_mesh_quantization',
 		MSFT_TEXTURE_DDS: 'MSFT_texture_dds',
 		EXT_MESH_GPU_INSTANCING: 'EXT_mesh_gpu_instancing',
-		MESHOPT_COMPRESSION: 'MESHOPT_compression',
+		MESHOPT_COMPRESSION: 'EXT_meshopt_compression',
 	};
 
 	/**
