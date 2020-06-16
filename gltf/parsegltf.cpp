@@ -478,7 +478,7 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 		*error = getError(result, data);
 	else if (requiresExtension(data, "KHR_draco_mesh_compression"))
 		*error = "file requires Draco mesh compression support";
-	else if (requiresExtension(data, "MESHOPT_compression"))
+	else if (requiresExtension(data, "EXT_meshopt_compression"))
 		*error = "file has already been compressed using gltfpack";
 	else if (needsDummyBuffers(data))
 		*error = "buffer has no data";
