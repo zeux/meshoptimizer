@@ -78,6 +78,14 @@ EM_JS(int, execute, (const char* cmd, bool ignore_stdout, bool ignore_stderr), {
 	var ret = cp.spawnSync(UTF8ToString(cmd), [], {shell:true, stdio:stdio });
 	return ret.status == null ? 256 : ret.status;
 });
+
+EM_JS(const char*, readenv, (const char* name), {
+	var val = process.env[UTF8ToString(name)];
+	if (!val) return 0;
+	var ret = _malloc(lengthBytesUTF8(val) + 1);
+	stringToUTF8(val, ret, lengthBytesUTF8(val) + 1);
+	return ret;
+});
 #else
 static int execute(const char* cmd_, bool ignore_stdout, bool ignore_stderr)
 {
@@ -96,11 +104,16 @@ static int execute(const char* cmd_, bool ignore_stdout, bool ignore_stderr)
 
 	return system(cmd.c_str());
 }
+
+static const char* readenv(const char* name)
+{
+	return getenv(name);
+}
 #endif
 
 bool checkBasis()
 {
-	const char* basisu_path = getenv("BASISU_PATH");
+	const char* basisu_path = readenv("BASISU_PATH");
 	std::string cmd = basisu_path ? basisu_path : "basisu";
 
 	cmd += " -version";
@@ -118,7 +131,7 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 	if (!writeFile(temp_input.path.c_str(), data))
 		return false;
 
-	const char* basisu_path = getenv("BASISU_PATH");
+	const char* basisu_path = readenv("BASISU_PATH");
 	std::string cmd = basisu_path ? basisu_path : "basisu";
 
 	char ql[16];
