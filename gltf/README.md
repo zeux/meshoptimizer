@@ -26,7 +26,7 @@ When using `-c` option, gltfpack outputs compressed `.glb`/`.gltf` files that us
 
 For better compression, you can use `-cc` option which applies additional compression; additionally make sure that your content delivery method is configured to use deflate (gzip) - meshoptimizer codecs are designed to produce output that can be compressed further with general purpose compressors.
 
-gltfpack can also compress textures using Basis Universal format, either storing .basis images directly (`-tb` flag, supported by three.js) or using KTX2 container (`-tc` flag, requires support for `KHR_image_ktx2`). Compression is performed using `basisu` executable that must be available in `PATH`; alternatively the path to the executable can be specified via `BASISU_PATH` environment variable.
+gltfpack can also compress textures using Basis Universal format, either storing .basis images directly (`-tb` flag, supported by three.js) or using KTX2 container (`-tc` flag, requires support for `KHR_image_ktx2`). Compression is performed using `basisu` executable that must be available in `PATH`; alternatively the path to the executable can be specified via `BASISU_PATH` environment variable. Textures can also be embedded into `.bin`/`.glb` output using `-te` flag.
 
 When using compressed files, [js/meshopt_decoder.js](https://github.com/zeux/meshoptimizer/blob/master/js/meshopt_decoder.js) needs to be loaded to provide the WebAssembly decoder module like this:
 
@@ -39,3 +39,20 @@ var loader = new THREE.GLTFLoader();
 loader.setMeshoptDecoder(MeshoptDecoder);
 loader.load('pirate.glb', function (gltf) { scene.add(gltf.scene); });
 ```
+
+## Options
+
+By default gltfpack makes certain assumptions when optimizing the scenes, for example meshes that belong to nodes that aren't animated can be merged together, and has some defaults that represent a tradeoff between precision and size that are picked to fit most use cases. However, in some cases the resulting `.gltf` file needs to retain some way for the application to manipulate individual scene elements, and in other cases precision or size are more important to optimize for. gltfpack has a rich set of command line options to control various aspects of its behavior, with the full list available via `gltfpack -h`.
+
+The following settings are frequently used to reduce the resulting data size:
+
+* -cc: produce compressed gltf/glb files (requires `EXT_meshopt_compression`)
+* -tc: convert all textures to KTX2 with BasisU supercompression (using basisu executable; requires `KHR_image_basisu`)
+* -mi: use mesh instancing when serializing references to the same meshes (requires `EXT_mesh_gpu_instancing`)
+* -si R: simplify meshes to achieve the ratio R (default: 1; R should be between 0 and 1)
+
+The following settings are frequently used to restrict some optimizations:
+
+* -kn: keep named nodes and meshes attached to named nodes so that named nodes can be transformed externally
+* -km: keep named materials and disable named material merging
+* -ke: keep extras data
