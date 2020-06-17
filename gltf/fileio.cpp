@@ -14,11 +14,15 @@
 TempFile::TempFile(const char* suffix)
     : fd(-1)
 {
-#ifdef _WIN32
+#if defined(_WIN32)
 	const char* temp_dir = getenv("TEMP");
 	path = temp_dir ? temp_dir : ".";
 	path += "\\gltfpack-XXXXXX";
 	(void)_mktemp(&path[0]);
+	path += suffix;
+#elif defined(__EMSCRIPTEN__)
+	path = "gltfpack-XXXXXX";
+	(void)mktemp(&path[0]);
 	path += suffix;
 #else
 	path = "/tmp/gltfpack-XXXXXX";

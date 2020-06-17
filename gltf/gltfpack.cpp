@@ -718,7 +718,7 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 
 	if (data->images_count && settings.texture_basis)
 	{
-		if (!checkBasis())
+		if (!checkBasis(settings.verbose > 1))
 		{
 			fprintf(stderr, "Error: basisu is not present in PATH or BASISU_PATH is not set\n");
 			return 3;

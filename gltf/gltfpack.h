@@ -253,8 +253,8 @@ void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials,
 
 void analyzeImages(cgltf_data* data, std::vector<ImageInfo>& images);
 const char* inferMimeType(const char* path);
-bool checkBasis();
-bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, bool uastc);
+bool checkBasis(bool verbose);
+bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, bool uastc, bool verbose);
 std::string basisToKtx(const std::string& data, bool srgb, bool uastc);
 
 void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Animation>& animations);

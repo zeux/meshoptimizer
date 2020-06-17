@@ -5,6 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 static const char* kMimeTypes[][2] = {
     {"image/jpeg", ".jpg"},
     {"image/jpeg", ".jpeg"},
@@ -67,25 +71,61 @@ static const char* mimeExtension(const char* mime_type)
 	return ".raw";
 }
 
-bool checkBasis()
+#ifdef __EMSCRIPTEN__
+EM_JS(int, execute, (const char* cmd, bool ignore_stdout, bool ignore_stderr), {
+	var cp = require('child_process');
+	var stdio = [ 'ignore', ignore_stdout ? 'ignore' : 'inherit', ignore_stderr ? 'ignore' : 'inherit' ];
+	var ret = cp.spawnSync(UTF8ToString(cmd), [], {shell:true, stdio:stdio });
+	return ret.status == null ? 256 : ret.status;
+});
+
+EM_JS(const char*, readenv, (const char* name), {
+	var val = process.env[UTF8ToString(name)];
+	if (!val) return 0;
+	var ret = _malloc(lengthBytesUTF8(val) + 1);
+	stringToUTF8(val, ret, lengthBytesUTF8(val) + 1);
+	return ret;
+});
+#else
+static int execute(const char* cmd_, bool ignore_stdout, bool ignore_stderr)
 {
-	const char* basisu_path = getenv("BASISU_PATH");
+#ifdef _WIN32
+	std::string ignore = "nul";
+#else
+	std::string ignore = "/dev/null";
+#endif
+
+	std::string cmd = cmd_;
+
+	if (ignore_stdout)
+		(cmd += " >") += ignore;
+	if (ignore_stderr)
+		(cmd += " 2>") += ignore;
+
+	return system(cmd.c_str());
+}
+
+static const char* readenv(const char* name)
+{
+	return getenv(name);
+}
+#endif
+
+bool checkBasis(bool verbose)
+{
+	const char* basisu_path = readenv("BASISU_PATH");
 	std::string cmd = basisu_path ? basisu_path : "basisu";
 
 	cmd += " -version";
 
-#ifdef _WIN32
-	cmd += " >nul 2>nul";
-#else
-	cmd += " >/dev/null 2>/dev/null";
-#endif
-
-	int rc = system(cmd.c_str());
+	int rc = execute(cmd.c_str(), /* ignore_stdout= */ true, /* ignore_stderr= */ true);
+	if (verbose)
+		printf("%s => %d\n", cmd.c_str(), rc);
 
 	return rc == 0;
 }
 
-bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, bool uastc)
+bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, bool uastc, bool verbose)
 {
 	TempFile temp_input(mimeExtension(mime_type));
 	TempFile temp_output(".basis");
@@ -93,7 +133,7 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 	if (!writeFile(temp_input.path.c_str(), data))
 		return false;
 
-	const char* basisu_path = getenv("BASISU_PATH");
+	const char* basisu_path = readenv("BASISU_PATH");
 	std::string cmd = basisu_path ? basisu_path : "basisu";
 
 	char ql[16];
@@ -124,13 +164,9 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 	cmd += " -output_file ";
 	cmd += temp_output.path;
 
-#ifdef _WIN32
-	cmd += " >nul";
-#else
-	cmd += " >/dev/null";
-#endif
-
-	int rc = system(cmd.c_str());
+	int rc = execute(cmd.c_str(), /* ignore_stdout= */ true, /* ignore_stderr= */ false);
+	if (verbose)
+		printf("%s => %d\n", cmd.c_str(), rc);
 
 	return rc == 0 && readFile(temp_output.path.c_str(), result);
 }
