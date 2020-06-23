@@ -24,7 +24,7 @@ CXXFLAGS=-g -Wall -Wextra -Wshadow -Wno-missing-field-initializers -Werror -std=
 LDFLAGS=
 
 WASM_SOURCES=src/vertexcodec.cpp src/indexcodec.cpp src/vertexfilter.cpp
-WASM_EXPORTS="__start","_sbrk"
+WASM_EXPORTS="__initialize","_sbrk"
 WASM_EXPORTS+=,"_meshopt_decodeVertexBuffer","_meshopt_decodeIndexBuffer","_meshopt_decodeIndexSequence"
 WASM_EXPORTS+=,"_meshopt_decodeFilterOct","_meshopt_decodeFilterQuat","_meshopt_decodeFilterExp"
 WASM_FLAGS=-O3 -DNDEBUG -s EXPORTED_FUNCTIONS='[$(WASM_EXPORTS)]' -s ALLOW_MEMORY_GROWTH=1 -s TOTAL_STACK=24576 -s TOTAL_MEMORY=65536
