@@ -22,7 +22,7 @@ gltfpack substantially changes the glTF data by optimizing the meshes for vertex
 
 By default gltfpack outputs regular `.glb`/`.gltf` files that have been optimized for GPU consumption using various cache optimizers and quantization. These files can be loaded by GLTF loaders that support `KHR_mesh_quantization` extension such as [three.js](https://threejs.org/) (r111+) and [Babylon.js](https://www.babylonjs.com/) (4.1+).
 
-When using `-c` option, gltfpack outputs compressed `.glb`/`.gltf` files that use meshoptimizer codecs to reduce the download size further. Loading these files requires extending GLTF loaders with support for `EXT_meshopt_compression` extension; [demo/GLTFLoader.js](https://github.com/zeux/meshoptimizer/blob/master/demo/GLTFLoader.js) contains a custom version of three.js loader that can be used to load them.
+When using `-c` option, gltfpack outputs compressed `.glb`/`.gltf` files that use meshoptimizer codecs to reduce the download size further. Loading these files requires extending GLTF loaders with support for `EXT_meshopt_compression` extension; [demo/THREE.EXT_meshopt_compression.js](https://github.com/zeux/meshoptimizer/blob/master/demo/THREE.EXT_meshopt_compression.js) contains a plugin that can be used with three.js r118 to load these files.
 
 For better compression, you can use `-cc` option which applies additional compression; additionally make sure that your content delivery method is configured to use deflate (gzip) - meshoptimizer codecs are designed to produce output that can be compressed further with general purpose compressors.
 
@@ -31,12 +31,12 @@ gltfpack can also compress textures using Basis Universal format, either storing
 When using compressed files, [js/meshopt_decoder.js](https://github.com/zeux/meshoptimizer/blob/master/js/meshopt_decoder.js) needs to be loaded to provide the WebAssembly decoder module like this:
 
 ```js
-import './meshopt_decoder.js'; // imports MeshoptDecoder using ES6
+import './meshopt_decoder.js'; // imports MeshoptDecoder global
 
 ...
 
-var loader = new THREE.GLTFLoader();
-loader.setMeshoptDecoder(MeshoptDecoder);
+var loader = new GLTFLoader();
+loader.register(function (parser) { return new EXT_meshopt_compression(parser, MeshoptDecoder); });
 loader.load('pirate.glb', function (gltf) { scene.add(gltf.scene); });
 ```
 
