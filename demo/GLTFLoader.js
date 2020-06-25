@@ -213,7 +213,11 @@ THREE.GLTFLoader = ( function () {
 							break;
 
 						case EXTENSIONS.MESHOPT_COMPRESSION:
-							extensions[ extensionName ] = new GLTFMeshoptCompressionExtension( this.meshoptDecoder );
+							extensions[ extensionName ] = new GLTFMeshoptCompressionExtension( this.meshoptDecoder, EXTENSIONS.MESHOPT_COMPRESSION );
+							break;
+
+						case EXTENSIONS.EXT_MESHOPT_COMPRESSION:
+							extensions[ extensionName ] = new GLTFMeshoptCompressionExtension( this.meshoptDecoder, EXTENSIONS.EXT_MESHOPT_COMPRESSION );
 							break;
 
 						default:
@@ -296,6 +300,7 @@ THREE.GLTFLoader = ( function () {
 		KHR_MESH_QUANTIZATION: 'KHR_mesh_quantization',
 		MSFT_TEXTURE_DDS: 'MSFT_texture_dds',
 		EXT_MESH_GPU_INSTANCING: 'EXT_mesh_gpu_instancing',
+		EXT_MESHOPT_COMPRESSION: 'EXT_meshopt_compression',
 		MESHOPT_COMPRESSION: 'MESHOPT_compression',
 	};
 
@@ -1040,7 +1045,7 @@ THREE.GLTFLoader = ( function () {
 	/**
 	 * meshoptimizer Compression Extension
 	 */
-	function GLTFMeshoptCompressionExtension( meshoptDecoder ) {
+	function GLTFMeshoptCompressionExtension( meshoptDecoder, name ) {
 
 		if ( ! meshoptDecoder ) {
 
@@ -1048,7 +1053,7 @@ THREE.GLTFLoader = ( function () {
 
 		}
 
-		this.name = EXTENSIONS.MESHOPT_COMPRESSION;
+		this.name = name;
 		this.meshoptDecoder = meshoptDecoder;
 
 	}
@@ -1795,6 +1800,19 @@ THREE.GLTFLoader = ( function () {
 
 			var extension = this.extensions[ EXTENSIONS.MESHOPT_COMPRESSION ];
 			var extensionDef = bufferViewDef.extensions[ EXTENSIONS.MESHOPT_COMPRESSION ];
+
+			return this.getDependency( 'buffer', extensionDef.buffer ).then( function ( buffer ) {
+
+				return extension.decodeBufferView( extensionDef, buffer );
+
+			} );
+
+		}
+
+		if ( bufferViewDef.extensions && bufferViewDef.extensions[ EXTENSIONS.EXT_MESHOPT_COMPRESSION ] ) {
+
+			var extension = this.extensions[ EXTENSIONS.EXT_MESHOPT_COMPRESSION ];
+			var extensionDef = bufferViewDef.extensions[ EXTENSIONS.EXT_MESHOPT_COMPRESSION ];
 
 			return this.getDependency( 'buffer', extensionDef.buffer ).then( function ( buffer ) {
 

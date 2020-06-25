@@ -1,15 +1,15 @@
-/* three.js extension for MESHOPT_compression; requires three.js v?? (PR19144) */
-/* loader.register(function (parser) { return new MESHOPT_compression(parser, MeshoptDecoder); }); */
-var MESHOPT_compression = (function () {
-	var NAME = "MESHOPT_compression";
+/* three.js extension for EXT_meshopt_compression; requires three.js r118 */
+/* loader.register(function (parser) { return new EXT_meshopt_compression(parser, MeshoptDecoder); }); */
+var EXT_meshopt_compression = (function () {
+	var NAME = "EXT_meshopt_compression";
 
-    function MESHOPT_compression(parser, decoder) {
+    function EXT_meshopt_compression(parser, decoder) {
         this.name = NAME;
         this._parser = parser;
         this._decoder = decoder;
     }
 
-    MESHOPT_compression.prototype.loadBufferView = function (index) {
+    EXT_meshopt_compression.prototype.loadBufferView = function (index) {
     	var bufferView = this._parser.json.bufferViews[index];
 
         if (bufferView.extensions && bufferView.extensions[NAME]) {
@@ -36,5 +36,5 @@ var MESHOPT_compression = (function () {
         }
     };
 
-    return MESHOPT_compression;
+    return EXT_meshopt_compression;
 }());

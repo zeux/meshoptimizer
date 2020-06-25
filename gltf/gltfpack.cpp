@@ -563,7 +563,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 	const ExtensionInfo extensions[] = {
 	    {"KHR_mesh_quantization", settings.quantize, true},
-	    {"MESHOPT_compression", settings.compress, !settings.fallback},
+	    {"EXT_meshopt_compression", settings.compress, !settings.fallback},
 	    {"KHR_texture_transform", settings.quantize && !json_textures.empty(), false},
 	    {"KHR_materials_pbrSpecularGlossiness", ext_pbr_specular_glossiness, false},
 	    {"KHR_materials_clearcoat", ext_clearcoat, false},
@@ -669,7 +669,7 @@ static std::string getBufferSpec(const char* bin_path, size_t bin_size, const ch
 		append(json, "\"byteLength\":");
 		append(json, fallback_size);
 		append(json, ",\"extensions\":{");
-		append(json, "\"MESHOPT_compression\":{");
+		append(json, "\"EXT_meshopt_compression\":{");
 		append(json, "\"fallback\":true");
 		append(json, "}}");
 		append(json, "}");

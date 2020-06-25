@@ -8,7 +8,7 @@
         <script src="https://preview.babylonjs.com/babylon.js"></script>
         <script src="https://preview.babylonjs.com/loaders/babylon.glTF2FileLoader.js"></script>
 
-        <script src="babylon.MESHOPT_compression.js"></script>
+        <script src="babylon.EXT_meshopt_compression.js"></script>
         <script src="../js/meshopt_decoder.js"></script>
 
         <style>
@@ -32,7 +32,7 @@
     <script>
         var canvas = document.getElementById("renderCanvas");
 
-        BABYLON.GLTF2.GLTFLoader.RegisterExtension("MESHOPT_compression", (loader) => new MESHOPT_compression(loader, MeshoptDecoder));
+        BABYLON.GLTF2.GLTFLoader.RegisterExtension("EXT_meshopt_compression", (loader) => new EXT_meshopt_compression(loader, MeshoptDecoder));
 
         var createScene = function () {
             var scene = new BABYLON.Scene(engine);

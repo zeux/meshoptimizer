@@ -104,6 +104,63 @@ static const char* lightType(cgltf_light_type type)
 	}
 }
 
+static const char* alphaMode(cgltf_alpha_mode mode)
+{
+	switch (mode)
+	{
+	case cgltf_alpha_mode_opaque:
+		return "OPAQUE";
+
+	case cgltf_alpha_mode_mask:
+		return "MASK";
+
+	case cgltf_alpha_mode_blend:
+		return "BLEND";
+
+	default:
+		return "";
+	}
+}
+
+static const char* compressionMode(BufferView::Compression mode)
+{
+	switch (mode)
+	{
+	case BufferView::Compression_Attribute:
+		return "ATTRIBUTES";
+
+	case BufferView::Compression_Index:
+		return "TRIANGLES";
+
+	case BufferView::Compression_IndexSequence:
+		return "INDICES";
+
+	default:
+		return "";
+	}
+}
+
+static const char* compressionFilter(StreamFormat::Filter filter)
+{
+	switch (filter)
+	{
+	case StreamFormat::Filter_None:
+		return "NONE";
+
+	case StreamFormat::Filter_Oct:
+		return "OCTAHEDRAL";
+
+	case StreamFormat::Filter_Quat:
+		return "QUATERNION";
+
+	case StreamFormat::Filter_Exp:
+		return "EXPONENTIAL";
+
+	default:
+		return "";
+	}
+}
+
 static void writeTextureInfo(std::string& json, const cgltf_data* data, const cgltf_texture_view& view, const QuantizationTexture* qt)
 {
 	assert(view.texture);
@@ -337,8 +394,9 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 	if (material.alpha_mode != cgltf_alpha_mode_opaque)
 	{
 		comma(json);
-		append(json, "\"alphaMode\":");
-		append(json, (material.alpha_mode == cgltf_alpha_mode_blend) ? "\"BLEND\"" : "\"MASK\"");
+		append(json, "\"alphaMode\":\"");
+		append(json, alphaMode(material.alpha_mode));
+		append(json, "\"");
 	}
 
 	if (material.alpha_cutoff != 0.5f)
@@ -404,7 +462,7 @@ void writeBufferView(std::string& json, BufferView::Kind kind, StreamFormat::Fil
 
 	// when compression is enabled, we store uncompressed data in buffer 1 and compressed data in buffer 0
 	// when compression is disabled, we store uncompressed data in buffer 0
-	size_t buffer = compression >= 0 ? 1 : 0;
+	size_t buffer = compression != BufferView::Compression_None ? 1 : 0;
 
 	append(json, "{\"buffer\":");
 	append(json, buffer);
@@ -425,7 +483,7 @@ void writeBufferView(std::string& json, BufferView::Kind kind, StreamFormat::Fil
 	if (compression != BufferView::Compression_None)
 	{
 		append(json, ",\"extensions\":{");
-		append(json, "\"MESHOPT_compression\":{");
+		append(json, "\"EXT_meshopt_compression\":{");
 		append(json, "\"buffer\":0");
 		append(json, ",\"byteOffset\":");
 		append(json, size_t(compressed_offset));
@@ -433,12 +491,14 @@ void writeBufferView(std::string& json, BufferView::Kind kind, StreamFormat::Fil
 		append(json, size_t(compressed_size));
 		append(json, ",\"byteStride\":");
 		append(json, stride);
-		append(json, ",\"mode\":");
-		append(json, size_t(compression));
+		append(json, ",\"mode\":\"");
+		append(json, compressionMode(compression));
+		append(json, "\"");
 		if (filter != StreamFormat::Filter_None)
 		{
-			append(json, ",\"filter\":");
-			append(json, size_t(filter));
+			append(json, ",\"filter\":\"");
+			append(json, compressionFilter(filter));
+			append(json, "\"");
 		}
 		append(json, ",\"count\":");
 		append(json, count);
