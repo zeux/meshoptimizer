@@ -30,12 +30,12 @@
 		<a href="https://github.com/zeux/meshoptimizer" target="_blank" rel="noopener">meshoptimizer</a>
 		</div>
 
-		<script src="https://cdn.jsdelivr.net/npm/three@v0.114.0/build/three.min.js"></script>
+		<script type="module">
+			import * as THREE from 'https://unpkg.com/three@0.118.0/build/three.module.js';
+			import { GLTFLoader } from 'https://unpkg.com/three@0.118.0/examples/jsm/loaders/GLTFLoader.js';
+			import { EXT_meshopt_compression } from './THREE.EXT_meshopt_compression.js';
+			import '../js/meshopt_decoder.js'; // imports MeshoptDecoder global
 
-		<script src="../js/meshopt_decoder.js"></script>
-		<script src="GLTFLoader.js"></script>
-
-		<script>
 			var container;
 
 			var camera, scene, renderer, mixer, clock;
@@ -71,8 +71,8 @@
 					console.log(e);
 				};
 
-				var loader = new THREE.GLTFLoader();
-				loader.setMeshoptDecoder(MeshoptDecoder);
+				var loader = new GLTFLoader();
+				loader.register(function (parser) { return new EXT_meshopt_compression(parser, MeshoptDecoder); });
 				loader.load('pirate.glb', function (gltf) {
 					var bbox = new THREE.Box3().setFromObject(gltf.scene);
 					var scale = 2 / (bbox.max.y - bbox.min.y);

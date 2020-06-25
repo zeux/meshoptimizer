@@ -38,3 +38,6 @@ var EXT_meshopt_compression = (function () {
 
     return EXT_meshopt_compression;
 }());
+
+/* three.js uses JS modules exclusively since r124 */
+export { EXT_meshopt_compression };
