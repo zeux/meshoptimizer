@@ -1,11 +1,10 @@
 /* Babylon.js extension for EXT_meshopt_compression; requires Babylon.js 4.1 */
 /* BABYLON.GLTF2.GLTFLoader.RegisterExtension("EXT_meshopt_compression", (loader) => new EXT_meshopt_compression(loader, MeshoptDecoder)); */
 var EXT_meshopt_compression = /** @class */ (function () {
-    var NAME = "EXT_meshopt_compression";
     /** @hidden */
     function EXT_meshopt_compression(loader, decoder) {
         /** The name of this extension. */
-        this.name = NAME;
+        this.name = "EXT_meshopt_compression";
         /** Defines whether this extension is enabled. */
         this.enabled = true;
         this._loader = loader;
@@ -17,8 +16,8 @@ var EXT_meshopt_compression = /** @class */ (function () {
     };
     /** @hidden */
     EXT_meshopt_compression.prototype.loadBufferViewAsync = function (context, bufferView) {
-        if (bufferView.extensions && bufferView.extensions[NAME]) {
-            var extensionDef = bufferView.extensions[NAME];
+        if (bufferView.extensions && bufferView.extensions[this.name]) {
+            var extensionDef = bufferView.extensions[this.name];
             if (extensionDef._decoded) {
                 return extensionDef._decoded;
             }
