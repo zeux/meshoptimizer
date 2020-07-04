@@ -323,7 +323,6 @@ typedef enum _khr_df_model_e {
     /* PowerVR Texture Compression */
     KHR_DF_MODEL_PVRTC         = 164U,
     KHR_DF_MODEL_PVRTC2        = 165U,
-    /* Universal Adaptive Scalable Texture Compression */
     KHR_DF_MODEL_UASTC         = 166U,
     /* Proprietary formats (ATITC, etc.) should follow */
     KHR_DF_MODEL_MAX = 0xFFU
@@ -510,14 +509,22 @@ typedef enum _khr_df_model_channels_e {
     /* MODEL_ASTC */
     KHR_DF_CHANNEL_ASTC_DATA  = 0U,
     /* MODEL_ETC1S */
-    KHR_DF_CHANNEL_ETC1S_DATA  = 0U,
-    KHR_DF_CHANNEL_ETC1S_COLOR = 0U,
+    KHR_DF_CHANNEL_ETC1S_RGB   = 0U,
+    KHR_DF_CHANNEL_ETC1S_RRR   = 3U,
+    KHR_DF_CHANNEL_ETC1S_GGG   = 4U,
+    KHR_DF_CHANNEL_ETC1S_AAA   = 15U,
     /* MODEL_PVRTC */
     KHR_DF_CHANNEL_PVRTC_DATA  = 0U,
     KHR_DF_CHANNEL_PVRTC_COLOR = 0U,
     /* MODEL_PVRTC2 */
     KHR_DF_CHANNEL_PVRTC2_DATA  = 0U,
     KHR_DF_CHANNEL_PVRTC2_COLOR = 0U,
+    /* MODEL UASTC */
+    KHR_DF_CHANNEL_UASTC_DATA  = 0U,
+    KHR_DF_CHANNEL_UASTC_RGB   = 0U,
+    KHR_DF_CHANNEL_UASTC_RGBA  = 3U,
+    KHR_DF_CHANNEL_UASTC_RRR   = 4U,
+    KHR_DF_CHANNEL_UASTC_RRRG  = 5U,
 
     /* Common channel names shared by multiple formats */
     KHR_DF_CHANNEL_COMMON_LUMA    =  0U,

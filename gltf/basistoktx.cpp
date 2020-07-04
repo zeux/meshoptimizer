@@ -95,11 +95,10 @@ static void write(std::string& data, size_t offset, const T& value)
 	memcpy(&data[offset], &value, sizeof(T));
 }
 
-static void createDfd(std::vector<uint32_t>& result, int channels, bool srgb, bool uastc)
+static void createDfd(std::vector<uint32_t>& result, bool alpha, bool srgb, bool uastc)
 {
-	assert(channels <= 4);
-
-	int descriptor_size = KHR_DF_WORD_SAMPLESTART + channels * KHR_DF_WORD_SAMPLEWORDS;
+	int sample_count = (!uastc && alpha) ? 2 : 1;
+	int descriptor_size = KHR_DF_WORD_SAMPLESTART + sample_count * KHR_DF_WORD_SAMPLEWORDS;
 
 	result.clear();
 	result.resize(1 + descriptor_size);
@@ -112,7 +111,7 @@ static void createDfd(std::vector<uint32_t>& result, int channels, bool srgb, bo
 	KHR_DFDSETVAL(dfd, DESCRIPTORTYPE, KHR_DF_KHR_DESCRIPTORTYPE_BASICFORMAT);
 	KHR_DFDSETVAL(dfd, VERSIONNUMBER, KHR_DF_VERSIONNUMBER_1_3);
 	KHR_DFDSETVAL(dfd, DESCRIPTORBLOCKSIZE, descriptor_size * sizeof(uint32_t));
-	KHR_DFDSETVAL(dfd, MODEL, uastc ? KHR_DF_MODEL_UASTC : KHR_DF_MODEL_RGBSDA);
+	KHR_DFDSETVAL(dfd, MODEL, uastc ? KHR_DF_MODEL_UASTC : KHR_DF_MODEL_ETC1S);
 	KHR_DFDSETVAL(dfd, PRIMARIES, KHR_DF_PRIMARIES_BT709);
 	KHR_DFDSETVAL(dfd, TRANSFER, srgb ? KHR_DF_TRANSFER_SRGB : KHR_DF_TRANSFER_LINEAR);
 	KHR_DFDSETVAL(dfd, FLAGS, KHR_DF_FLAG_ALPHA_STRAIGHT);
@@ -122,21 +121,29 @@ static void createDfd(std::vector<uint32_t>& result, int channels, bool srgb, bo
 		// UASTC is ASTC 4x4 - but texelBlockDimension encodes size-1
 		KHR_DFDSETVAL(dfd, TEXELBLOCKDIMENSION0, 3);
 		KHR_DFDSETVAL(dfd, TEXELBLOCKDIMENSION1, 3);
+
+		// Every block is 16 bytes = 128 bits (encoded as 127)
+		KHR_DFDSETVAL(dfd, BYTESPLANE0, 16);
+		KHR_DFDSETSVAL(dfd, 0, BITLENGTH, 127);
+
+		// The single sample stores either RGB or RGBA data
+		assert(sample_count == 1);
+		KHR_DFDSETSVAL(dfd, 0, CHANNELID, alpha ? KHR_DF_CHANNEL_UASTC_RGBA : KHR_DF_CHANNEL_UASTC_RGB);
+	}
+	else
+	{
+		// Every decoded block is 8 bytes = 64 bits (encoded as 63)
+		KHR_DFDSETSVAL(dfd, 0, BITLENGTH, 63);
+
+		// RGB is stored in sample 0, alpha is stored in sample 1
+		KHR_DFDSETSVAL(dfd, 0, CHANNELID, KHR_DF_CHANNEL_ETC1S_RGB);
+
+		if (alpha)
+			KHR_DFDSETSVAL(dfd, 1, CHANNELID, KHR_DF_CHANNEL_ETC1S_AAA);
 	}
 
-	static const khr_df_model_channels_e channel_enums[] = {
-	    KHR_DF_CHANNEL_RGBSDA_R,
-	    KHR_DF_CHANNEL_RGBSDA_G,
-	    KHR_DF_CHANNEL_RGBSDA_B,
-	    KHR_DF_CHANNEL_RGBSDA_A,
-	};
-
-	for (int i = 0; i < channels; ++i)
+	for (int i = 0; i < sample_count; ++i)
 	{
-		uint32_t qualifiers = (srgb && i == 3) ? KHR_DF_SAMPLE_DATATYPE_LINEAR : 0;
-
-		KHR_DFDSETSVAL(dfd, i, CHANNELID, channel_enums[i]);
-		KHR_DFDSETSVAL(dfd, i, QUALIFIERS, qualifiers);
 		KHR_DFDSETSVAL(dfd, i, SAMPLELOWER, 0);
 		KHR_DFDSETSVAL(dfd, i, SAMPLEUPPER, ~0u);
 	}
@@ -194,7 +201,7 @@ std::string basisToKtx(const std::string& data, bool srgb, bool uastc)
 	size_t header_size = sizeof(Ktx2Header) + levels * sizeof(Ktx2LevelIndex);
 
 	std::vector<uint32_t> dfd;
-	createDfd(dfd, has_alpha ? 4 : 3, srgb, uastc);
+	createDfd(dfd, has_alpha, srgb, uastc);
 
 	const char* kvp_data[][2] = {
 	    {"KTXwriter", "gltfpack"},
