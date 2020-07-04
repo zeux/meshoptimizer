@@ -54,7 +54,6 @@ static const uint8_t Ktx2FileIdentifier[12] = {
 // KTX Specification: 3.12.2. Basis Universal Global Data
 struct Ktx2BasisGlobalHeader
 {
-	uint32_t globalFlags;
 	uint16_t endpointCount;
 	uint16_t selectorCount;
 	uint32_t endpointsByteLength;
@@ -259,7 +258,6 @@ std::string basisToKtx(const std::string& data, bool srgb, bool uastc)
 	if (basis)
 	{
 		Ktx2BasisGlobalHeader sgd_header = {};
-		sgd_header.globalFlags = basis_header.m_flags;
 		sgd_header.endpointCount = uint16_t(basis_header.m_total_endpoints);
 		sgd_header.selectorCount = uint16_t(basis_header.m_total_selectors);
 		sgd_header.endpointsByteLength = basis_header.m_endpoint_cb_file_size;
