@@ -20,6 +20,20 @@ Alternatively you can [download the .zip archive from GitHub](https://github.com
 
 The library is available as a Linux package in some distributions ([ArchLinux](https://aur.archlinux.org/packages/meshoptimizer/)).
 
+### Installing gltfpack
+
+`gltfpack` is a CLI tool for optimizing meshes using meshoptimizer.
+
+You can download a pre-built binary for gltfpack on [Releases page](https://github.com/zeux/meshoptimizer/releases), or install [npm package](https://www.npmjs.com/package/gltfpack) as follows:
+
+```
+npm install -g gltfpack
+```
+
+You can also find prebuilt binaries of `gltfpack` built from master on [Actions page](https://github.com/zeux/meshoptimizer/actions).
+
+[Learn more about gltfpack](./gltf/README.md)
+
 ## Building
 
 meshoptimizer is distributed as a set of C++ source files. To include it into your project, you can use one of the two options:
