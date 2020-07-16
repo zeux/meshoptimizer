@@ -24,12 +24,13 @@ The library is available as a Linux package in some distributions ([ArchLinux](h
 
 `gltfpack` is a CLI tool for optimizing meshes using meshoptimizer.
 
-You can download a pre-built binary for gltfpack on Releases page, or install npm package as follows:
+You can download a pre-built binary for gltfpack on [Releases page](https://github.com/zeux/meshoptimizer/releases), or install [npm package](https://www.npmjs.com/package/gltfpack) as follows:
+
 ```
 npm install -g gltfpack
 ```
 
-You can also find prebuilt binaries of `gltfpack` built from master by going to https://github.com/zeux/meshoptimizer/actions, opening the latest run, and downloading the artifact for your platform. It will give you a binary file you can place into your `$PATH`.
+You can also find prebuilt binaries of `gltfpack` built from master on [Actions page](https://github.com/zeux/meshoptimizer/actions).
 
 [Learn more about gltfpack](./gltf/README.md)
 
