@@ -109,6 +109,17 @@ static bool areMaterialComponentsEqual(const cgltf_clearcoat& lhs, const cgltf_c
 	return true;
 }
 
+static bool areMaterialComponentsEqual(const cgltf_transmission& lhs, const cgltf_transmission& rhs)
+{
+	if (!areTextureViewsEqual(lhs.transmission_texture, rhs.transmission_texture))
+		return false;
+
+	if (lhs.transmission_factor != rhs.transmission_factor)
+		return false;
+
+	return true;
+}
+
 static bool areMaterialsEqual(cgltf_data* data, const cgltf_material& lhs, const cgltf_material& rhs, const Settings& settings)
 {
 	if (lhs.has_pbr_metallic_roughness != rhs.has_pbr_metallic_roughness)
@@ -127,6 +138,12 @@ static bool areMaterialsEqual(cgltf_data* data, const cgltf_material& lhs, const
 		return false;
 
 	if (lhs.has_clearcoat && !areMaterialComponentsEqual(lhs.clearcoat, rhs.clearcoat))
+		return false;
+
+	if (lhs.has_transmission != rhs.has_transmission)
+		return false;
+
+	if (lhs.has_transmission && !areMaterialComponentsEqual(lhs.transmission, rhs.transmission))
 		return false;
 
 	if (!areTextureViewsEqual(lhs.normal_texture, rhs.normal_texture))
@@ -215,37 +232,50 @@ void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials,
 	}
 }
 
+static bool usesTextureSet(const cgltf_texture_view& view, int set)
+{
+	return view.texture && view.texcoord == set;
+}
+
 bool usesTextureSet(const cgltf_material& material, int set)
 {
 	if (material.has_pbr_metallic_roughness)
 	{
-		const cgltf_pbr_metallic_roughness& pbr = material.pbr_metallic_roughness;
-
-		if (pbr.base_color_texture.texture && pbr.base_color_texture.texcoord == set)
+		if (usesTextureSet(material.pbr_metallic_roughness.base_color_texture, set))
 			return true;
 
-		if (pbr.metallic_roughness_texture.texture && pbr.metallic_roughness_texture.texcoord == set)
+		if (usesTextureSet(material.pbr_metallic_roughness.metallic_roughness_texture, set))
 			return true;
 	}
 
 	if (material.has_pbr_specular_glossiness)
 	{
-		const cgltf_pbr_specular_glossiness& pbr = material.pbr_specular_glossiness;
-
-		if (pbr.diffuse_texture.texture && pbr.diffuse_texture.texcoord == set)
+		if (usesTextureSet(material.pbr_specular_glossiness.diffuse_texture, set))
 			return true;
 
-		if (pbr.specular_glossiness_texture.texture && pbr.specular_glossiness_texture.texcoord == set)
+		if (usesTextureSet(material.pbr_specular_glossiness.specular_glossiness_texture, set))
 			return true;
 	}
 
-	if (material.normal_texture.texture && material.normal_texture.texcoord == set)
+	if (material.has_clearcoat)
+	{
+		if (usesTextureSet(material.clearcoat.clearcoat_texture, set))
+			return true;
+	}
+
+	if (material.has_transmission)
+	{
+		if (usesTextureSet(material.transmission.transmission_texture, set))
+			return true;
+	}
+
+	if (usesTextureSet(material.normal_texture, set))
 		return true;
 
-	if (material.occlusion_texture.texture && material.occlusion_texture.texcoord == set)
+	if (usesTextureSet(material.occlusion_texture, set))
 		return true;
 
-	if (material.emissive_texture.texture && material.emissive_texture.texcoord == set)
+	if (usesTextureSet(material.emissive_texture, set))
 		return true;
 
 	return false;

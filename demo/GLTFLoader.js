@@ -1034,6 +1034,9 @@ THREE.GLTFLoader = ( function () {
 				THREE.Object3D.prototype.copy.call( instancedMesh, mesh );
 				THREE.Object3D.prototype.copy.call( instancedMesh, node );
 
+				// Reset frustumCulled back to false, since it was set to true by .copy above
+				instancedMesh.frustumCulled = false;
+
 				parser.assignFinalMaterial( instancedMesh );
 
 				return instancedMesh;

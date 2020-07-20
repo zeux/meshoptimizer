@@ -343,6 +343,25 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 	append(json, "}");
 }
 
+static void writeMaterialComponent(std::string& json, const cgltf_data* data, const cgltf_transmission& tm, const QuantizationTexture* qt)
+{
+	comma(json);
+	append(json, "\"KHR_materials_transmission\":{");
+	if (tm.transmission_texture.texture)
+	{
+		comma(json);
+		append(json, "\"transmissionTexture\":");
+		writeTextureInfo(json, data, tm.transmission_texture, qt);
+	}
+	if (tm.transmission_factor != 0)
+	{
+		comma(json);
+		append(json, "\"transmissionFactor\":");
+		append(json, tm.transmission_factor);
+	}
+	append(json, "}");
+}
+
 void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationTexture* qt)
 {
 	if (material.name && *material.name)
@@ -412,7 +431,7 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 		append(json, "\"doubleSided\":true");
 	}
 
-	if (material.has_pbr_specular_glossiness || material.has_clearcoat || material.unlit)
+	if (material.has_pbr_specular_glossiness || material.has_clearcoat || material.has_transmission || material.unlit)
 	{
 		comma(json);
 		append(json, "\"extensions\":{");
@@ -425,6 +444,11 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 		if (material.has_clearcoat)
 		{
 			writeMaterialComponent(json, data, material.clearcoat, qt);
+		}
+
+		if (material.has_transmission)
+		{
+			writeMaterialComponent(json, data, material.transmission, qt);
 		}
 
 		if (material.unlit)
