@@ -109,6 +109,17 @@ static bool areMaterialComponentsEqual(const cgltf_clearcoat& lhs, const cgltf_c
 	return true;
 }
 
+static bool areMaterialComponentsEqual(const cgltf_transmission& lhs, const cgltf_transmission& rhs)
+{
+	if (!areTextureViewsEqual(lhs.transmission_texture, rhs.transmission_texture))
+		return false;
+
+	if (lhs.transmission_factor != rhs.transmission_factor)
+		return false;
+
+	return true;
+}
+
 static bool areMaterialsEqual(cgltf_data* data, const cgltf_material& lhs, const cgltf_material& rhs, const Settings& settings)
 {
 	if (lhs.has_pbr_metallic_roughness != rhs.has_pbr_metallic_roughness)
@@ -127,6 +138,12 @@ static bool areMaterialsEqual(cgltf_data* data, const cgltf_material& lhs, const
 		return false;
 
 	if (lhs.has_clearcoat && !areMaterialComponentsEqual(lhs.clearcoat, rhs.clearcoat))
+		return false;
+
+	if (lhs.has_transmission != rhs.has_transmission)
+		return false;
+
+	if (lhs.has_transmission && !areMaterialComponentsEqual(lhs.transmission, rhs.transmission))
 		return false;
 
 	if (!areTextureViewsEqual(lhs.normal_texture, rhs.normal_texture))
@@ -236,6 +253,22 @@ bool usesTextureSet(const cgltf_material& material, int set)
 			return true;
 
 		if (pbr.specular_glossiness_texture.texture && pbr.specular_glossiness_texture.texcoord == set)
+			return true;
+	}
+
+	if (material.has_clearcoat)
+	{
+		const cgltf_clearcoat& clearcoat = material.clearcoat;
+
+		if (clearcoat.clearcoat_texture.texture && clearcoat.clearcoat_texture.texcoord == set)
+			return true;
+	}
+
+	if (material.has_transmission)
+	{
+		const cgltf_transmission& transmission = material.transmission;
+
+		if (transmission.transmission_texture.texture && transmission.transmission_texture.texcoord == set)
 			return true;
 	}
 
