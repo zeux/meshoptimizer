@@ -236,7 +236,7 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 	else
 		cmd += " --linear";
 
-	cmd += " ";
+	cmd += " -- ";
 	cmd += temp_output.path;
 	cmd += " ";
 	cmd += temp_input.path;
