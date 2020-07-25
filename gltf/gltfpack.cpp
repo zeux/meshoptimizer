@@ -741,6 +741,12 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 				return 3;
 			}
 		}
+
+		if (settings.texture_scale < 1 && !settings.texture_toktx)
+		{
+			fprintf(stderr, "Error: -ts option is only supported by toktx\n");
+			return 3;
+		}
 	}
 
 	std::string json, bin, fallback;
@@ -1100,6 +1106,12 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nRun gltfpack -h to display a full list of options\n");
 		}
 
+		return 1;
+	}
+
+	if (settings.texture_scale < 1 && !settings.texture_ktx2)
+	{
+		fprintf(stderr, "Option -ts is only supported when -tc is set as well\n");
 		return 1;
 	}
 

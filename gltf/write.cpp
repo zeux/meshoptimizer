@@ -688,7 +688,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 			}
 			else
 			{
-				fprintf(stderr, "Warning: unable to encode image %d with Basis, skipping\n", int(index));
+				fprintf(stderr, "Warning: unable to encode image %d, skipping\n", int(index));
 			}
 		}
 		else
@@ -721,12 +721,12 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 					}
 					else
 					{
-						fprintf(stderr, "Warning: unable to save Basis image %s, skipping\n", image.uri);
+						fprintf(stderr, "Warning: unable to save encoded image %s, skipping\n", image.uri);
 					}
 				}
 				else
 				{
-					fprintf(stderr, "Warning: unable to encode image %s with Basis, skipping\n", image.uri);
+					fprintf(stderr, "Warning: unable to encode image %s, skipping\n", image.uri);
 				}
 			}
 			else
