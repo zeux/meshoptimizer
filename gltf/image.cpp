@@ -198,10 +198,10 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 	const char* toktx_path = readenv("TOKTX_PATH");
 	std::string cmd = toktx_path ? toktx_path : "toktx";
 
-	cmd += " --2d";
 	cmd += " --t2";
-
+	cmd += " --2d";
 	cmd += " --automipmap";
+	cmd += " --nowarn";
 
 	if (scale < 1)
 	{
