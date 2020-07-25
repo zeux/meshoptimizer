@@ -59,14 +59,11 @@ jobs:
     - uses: actions/checkout@v1
     - uses: actions/setup-node@v1
       with:
-        node-version: '13.x'
+        node-version: '14.6'
     - name: test
       run: node js/meshopt_decoder.test.js
     - name: test simd
-      run: |
-        export CANARY=canary20200504008edc4c19
-        curl https://nodejs.org/download/v8-canary/v15.0.0-v8-$CANARY/node-v15.0.0-v8-$CANARY-linux-x64.tar.gz | tar -xz
-        node-v15.0.0-v8-$CANARY-linux-x64/bin/node --experimental-wasm-simd js/meshopt_decoder.test.js
+      run: node --experimental-wasm-simd js/meshopt_decoder.test.js
 
   gltfpack:
     runs-on: ubuntu-latest
