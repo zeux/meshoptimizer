@@ -215,6 +215,7 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 	if (uastc)
 	{
 		cmd += " --uastc 2";
+		cmd += " --zcmp 9";
 	}
 	else
 	{
