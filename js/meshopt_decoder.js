@@ -14,6 +14,13 @@ var MeshoptDecoder = (function() {
 	// Used to unpack wasm
 	var wasmpack = new Uint8Array([32,0,65,253,3,1,2,34,4,106,6,5,11,8,7,20,13,33,12,16,128,9,116,64,19,113,127,15,10,21,22,14,255,66,24,54,136,107,18,23,192,26,114,118,132,17,77,101,130,144,27,87,131,44,45,74,156,154,70,167]);
 
+	if (typeof WebAssembly !== 'object') {
+		// This module requires WebAssembly to function
+		return {
+			supported: false,
+		};
+	}
+
 	var wasm = wasm_base;
 
 	if (WebAssembly.validate(detector)) {
@@ -93,6 +100,7 @@ var MeshoptDecoder = (function() {
 
 	return {
 		ready: promise,
+		supported: true,
 		decodeVertexBuffer: function(target, count, size, source, filter) {
 			decode(instance.exports.meshopt_decodeVertexBuffer, target, count, size, source, instance.exports[filters[filter]]);
 		},
