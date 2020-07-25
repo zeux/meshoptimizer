@@ -170,3 +170,68 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 
 	return rc == 0 && readFile(temp_output.path.c_str(), result);
 }
+
+bool checkKtx(bool verbose)
+{
+	const char* toktx_path = readenv("TOKTX_PATH");
+	std::string cmd = toktx_path ? toktx_path : "toktx";
+
+	cmd += " --version";
+
+	int rc = execute(cmd.c_str(), /* ignore_stdout= */ true, /* ignore_stderr= */ true);
+	if (verbose)
+		printf("%s => %d\n", cmd.c_str(), rc);
+
+	return rc == 0;
+}
+
+bool encodeKtx(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, bool uastc, bool verbose)
+{
+	TempFile temp_input(mimeExtension(mime_type));
+	TempFile temp_output(".ktx2");
+
+	if (!writeFile(temp_input.path.c_str(), data))
+		return false;
+
+	const char* toktx_path = readenv("TOKTX_PATH");
+	std::string cmd = toktx_path ? toktx_path : "toktx";
+
+	cmd += " --2d";
+	cmd += " --t2";
+
+	if (uastc)
+	{
+		cmd += " --uastc 2";
+	}
+	else
+	{
+		char ql[16];
+		sprintf(ql, "%d", (quality * 255 + 50) / 100);
+
+		cmd += " --bcmp";
+		cmd += " --qlevel ";
+		cmd += ql;
+
+		// for optimal quality we should specify separate_rg_to_color_alpha but this requires renderer awareness
+		if (normal_map)
+			cmd += " --normal_map";
+	}
+
+	cmd += " --automipmap";
+
+	if (srgb)
+		cmd += " --srgb";
+	else
+		cmd += " --linear";
+
+	cmd += " ";
+	cmd += temp_output.path;
+	cmd += " ";
+	cmd += temp_input.path;
+
+	int rc = execute(cmd.c_str(), /* ignore_stdout= */ false, /* ignore_stderr= */ false);
+	if (verbose)
+		printf("%s => %d\n", cmd.c_str(), rc);
+
+	return rc == 0 && readFile(temp_output.path.c_str(), result);
+}

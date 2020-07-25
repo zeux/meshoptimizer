@@ -106,10 +106,12 @@ struct Settings
 
 	int meshlet_debug;
 
+	// TODO: Remove texture_basis and texture_toktx
 	bool texture_embed;
 	bool texture_basis;
 	bool texture_ktx2;
 	bool texture_uastc;
+	mutable bool texture_toktx;
 
 	int texture_quality;
 
@@ -256,6 +258,8 @@ const char* inferMimeType(const char* path);
 bool checkBasis(bool verbose);
 bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, bool uastc, bool verbose);
 std::string basisToKtx(const std::string& data, bool srgb, bool uastc);
+bool checkKtx(bool verbose);
+bool encodeKtx(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, bool uastc, bool verbose);
 
 void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Animation>& animations);
 void markNeededNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Mesh>& meshes, const std::vector<Animation>& animations, const Settings& settings);

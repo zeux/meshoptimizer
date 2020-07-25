@@ -312,12 +312,12 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	{
 		const cgltf_image& image = data->images[i];
 
-		if (settings.verbose && settings.texture_basis)
+		if (settings.verbose == 1 && settings.texture_basis)
 		{
 			const char* uri = image.uri;
 			bool embedded = !uri || strncmp(uri, "data:", 5) == 0;
 
-			printf("image %d (%s) is being encoded with Basis\n", int(i), embedded ? "embedded" : uri);
+			printf("image %d (%s) is being encoded with %s\n", int(i), embedded ? "embedded" : uri, settings.texture_toktx ? "toktx" : "Basis");
 		}
 
 		comma(json_images);
@@ -721,10 +721,25 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 
 	if (data->images_count && settings.texture_basis)
 	{
-		if (!checkBasis(settings.verbose > 1))
+		if (settings.texture_ktx2)
 		{
-			fprintf(stderr, "Error: basisu is not present in PATH or BASISU_PATH is not set\n");
-			return 3;
+			if (checkKtx(settings.verbose > 1))
+			{
+				settings.texture_toktx = true;
+			}
+			else if (!checkBasis(settings.verbose > 1))
+			{
+				fprintf(stderr, "Error: toktx is not present in PATH or TOKTX_PATH is not set\n");
+				return 3;
+			}
+		}
+		else
+		{
+			if (!checkBasis(settings.verbose > 1))
+			{
+				fprintf(stderr, "Error: basisu is not present in PATH or BASISU_PATH is not set\n");
+				return 3;
+			}
 		}
 	}
 
