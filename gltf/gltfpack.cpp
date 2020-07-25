@@ -858,6 +858,7 @@ int main(int argc, char** argv)
 	settings.anim_freq = 30;
 	settings.simplify_threshold = 1.f;
 	settings.texture_quality = 50;
+	settings.texture_scale = 1.f;
 
 	const char* input = 0;
 	const char* output = 0;
@@ -962,6 +963,10 @@ int main(int argc, char** argv)
 		{
 			settings.texture_quality = atoi(argv[++i]);
 		}
+		else if (strcmp(arg, "-ts") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		{
+			settings.texture_scale = float(atof(argv[++i]));
+		}
 		else if (strcmp(arg, "-noq") == 0)
 		{
 			settings.quantize = false;
@@ -1055,8 +1060,9 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-te: embed all textures into main buffer (.bin or .glb)\n");
 			fprintf(stderr, "\t-tb: convert all textures to Basis Universal format (with basisu executable); will be removed in the future\n");
 			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression (using basisu executable)\n");
-			fprintf(stderr, "\t-tq N: set texture encoding quality (default: 50; N should be between 1 and 100\n");
 			fprintf(stderr, "\t-tu: use UASTC when encoding textures (much higher quality and much larger size)\n");
+			fprintf(stderr, "\t-tq N: set texture encoding quality (default: 50; N should be between 1 and 100\n");
+			fprintf(stderr, "\t-ts R: scale texture dimensions by the ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\nSimplification:\n");
 			fprintf(stderr, "\t-si R: simplify meshes to achieve the ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\t-sa: aggressively simplify to the target ratio disregarding quality\n");

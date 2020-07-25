@@ -114,6 +114,7 @@ struct Settings
 	mutable bool texture_toktx;
 
 	int texture_quality;
+	float texture_scale;
 
 	bool quantize;
 
@@ -256,10 +257,10 @@ void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials,
 void analyzeImages(cgltf_data* data, std::vector<ImageInfo>& images);
 const char* inferMimeType(const char* path);
 bool checkBasis(bool verbose);
-bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, bool uastc, bool verbose);
+bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, float scale, bool uastc, bool verbose);
 std::string basisToKtx(const std::string& data, bool srgb, bool uastc);
 bool checkKtx(bool verbose);
-bool encodeKtx(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, bool uastc, bool verbose);
+bool encodeKtx(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, float scale, bool uastc, bool verbose);
 
 void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Animation>& animations);
 void markNeededNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Mesh>& meshes, const std::vector<Animation>& animations, const Settings& settings);

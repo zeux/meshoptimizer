@@ -125,8 +125,10 @@ bool checkBasis(bool verbose)
 	return rc == 0;
 }
 
-bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, bool uastc, bool verbose)
+bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, float scale, bool uastc, bool verbose)
 {
+	(void)scale;
+
 	TempFile temp_input(mimeExtension(mime_type));
 	TempFile temp_output(".basis");
 
@@ -185,7 +187,7 @@ bool checkKtx(bool verbose)
 	return rc == 0;
 }
 
-bool encodeKtx(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, bool uastc, bool verbose)
+bool encodeKtx(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, float scale, bool uastc, bool verbose)
 {
 	TempFile temp_input(mimeExtension(mime_type));
 	TempFile temp_output(".ktx2");
@@ -198,6 +200,17 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 
 	cmd += " --2d";
 	cmd += " --t2";
+
+	cmd += " --automipmap";
+
+	if (scale < 1)
+	{
+		char sl[128];
+		sprintf(sl, "%g", scale);
+
+		cmd += " --scale ";
+		cmd += sl;
+	}
 
 	if (uastc)
 	{
@@ -216,8 +229,6 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 		if (normal_map)
 			cmd += " --normal_map";
 	}
-
-	cmd += " --automipmap";
 
 	if (srgb)
 		cmd += " --srgb";
