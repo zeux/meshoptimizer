@@ -46,7 +46,7 @@ Note that `meshopt_decoder.js` assumes that WebAssembly is supported. This is th
 
 ```js
 if (MeshoptDecoder.supported) {
-	loader.register(function (parser) { return new EXT_meshopt_compression(parser, MeshoptDecoder); });
+    loader.register(function (parser) { return new EXT_meshopt_compression(parser, MeshoptDecoder); });
 }
 ```
 
