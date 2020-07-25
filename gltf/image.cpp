@@ -200,7 +200,7 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 
 	cmd += " --t2";
 	cmd += " --2d";
-	cmd += " --automipmap";
+	cmd += " --genmipmap";
 	cmd += " --nowarn";
 
 	if (scale < 1)
