@@ -160,7 +160,7 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 	const char* basisu_path = readenv("BASISU_PATH");
 	std::string cmd = basisu_path ? basisu_path : "basisu";
 
-	const BasisSettings& bs = kBasisSettings[std::max(0, std::min(9, quality - 1))];
+	const BasisSettings& bs = kBasisSettings[quality <= 0 ? 0 : quality > 9 ? 9 : quality - 1];
 
 	cmd += " -mipmap";
 
@@ -228,7 +228,7 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 	const char* toktx_path = readenv("TOKTX_PATH");
 	std::string cmd = toktx_path ? toktx_path : "toktx";
 
-	const BasisSettings& bs = kBasisSettings[std::max(0, std::min(9, quality - 1))];
+	const BasisSettings& bs = kBasisSettings[quality <= 0 ? 0 : quality > 9 ? 9 : quality - 1];
 
 	cmd += " --t2";
 	cmd += " --2d";
