@@ -863,7 +863,7 @@ int main(int argc, char** argv)
 	settings.scl_bits = 16;
 	settings.anim_freq = 30;
 	settings.simplify_threshold = 1.f;
-	settings.texture_quality = 50;
+	settings.texture_quality = 8;
 	settings.texture_scale = 1.f;
 
 	const char* input = 0;
@@ -1067,7 +1067,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-tb: convert all textures to Basis Universal format (with basisu executable); will be removed in the future\n");
 			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression (using basisu executable)\n");
 			fprintf(stderr, "\t-tu: use UASTC when encoding textures (much higher quality and much larger size)\n");
-			fprintf(stderr, "\t-tq N: set texture encoding quality (default: 50; N should be between 1 and 100\n");
+			fprintf(stderr, "\t-tq N: set texture encoding quality (default: 8; N should be between 1 and 10\n");
 			fprintf(stderr, "\t-ts R: scale texture dimensions by the ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\nSimplification:\n");
 			fprintf(stderr, "\t-si R: simplify meshes to achieve the ratio R (default: 1; R should be between 0 and 1)\n");

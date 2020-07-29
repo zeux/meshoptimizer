@@ -9,10 +9,31 @@
 #include <emscripten.h>
 #endif
 
+struct BasisSettings
+{
+	int etc1s_l;
+	int etc1s_q;
+	int uastc_l;
+	float uastc_q;
+};
+
 static const char* kMimeTypes[][2] = {
     {"image/jpeg", ".jpg"},
     {"image/jpeg", ".jpeg"},
     {"image/png", ".png"},
+};
+
+static const BasisSettings kBasisSettings[10] = {
+    {0, 1, 0, 1.5f},
+    {0, 6, 0, 1.f},
+    {1, 20, 1, 1.0f},
+    {1, 50, 1, 0.75f},
+    {1, 90, 1, 0.5f},
+    {1, 128, 1, 0.4f},
+    {1, 160, 1, 0.34f},
+    {1, 192, 1, 0.29f}, // default
+    {1, 224, 2, 0.26f},
+    {1, 255, 2, 0.f},
 };
 
 void analyzeImages(cgltf_data* data, std::vector<ImageInfo>& images)
@@ -81,7 +102,8 @@ EM_JS(int, execute, (const char* cmd, bool ignore_stdout, bool ignore_stderr), {
 
 EM_JS(const char*, readenv, (const char* name), {
 	var val = process.env[UTF8ToString(name)];
-	if (!val) return 0;
+	if (!val)
+		return 0;
 	var ret = _malloc(lengthBytesUTF8(val) + 1);
 	stringToUTF8(val, ret, lengthBytesUTF8(val) + 1);
 	return ret;
@@ -138,11 +160,7 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 	const char* basisu_path = readenv("BASISU_PATH");
 	std::string cmd = basisu_path ? basisu_path : "basisu";
 
-	char ql[16];
-	sprintf(ql, "%d", (quality * 255 + 50) / 100);
-
-	cmd += " -q ";
-	cmd += ql;
+	const BasisSettings& bs = kBasisSettings[std::max(0, std::min(9, quality - 1))];
 
 	cmd += " -mipmap";
 
@@ -158,7 +176,19 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 
 	if (uastc)
 	{
+		char settings[128];
+		sprintf(settings, " -uastc_level %d -uastc_rdo_q %.2f", bs.uastc_l, bs.uastc_q);
+
 		cmd += " -uastc";
+		cmd += settings;
+		cmd += " -uastc_rdo_d 1024";
+	}
+	else
+	{
+		char settings[128];
+		sprintf(settings, " -comp_level %d -q %d", bs.etc1s_l, bs.etc1s_q);
+
+		cmd += settings;
 	}
 
 	cmd += " -file ";
@@ -198,6 +228,8 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 	const char* toktx_path = readenv("TOKTX_PATH");
 	std::string cmd = toktx_path ? toktx_path : "toktx";
 
+	const BasisSettings& bs = kBasisSettings[std::max(0, std::min(9, quality - 1))];
+
 	cmd += " --t2";
 	cmd += " --2d";
 	cmd += " --genmipmap";
@@ -214,17 +246,21 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 
 	if (uastc)
 	{
-		cmd += " --uastc 2";
+		char settings[128];
+		sprintf(settings, " %d --uastc_rdo_q %.2f", bs.uastc_l, bs.uastc_q);
+
+		cmd += " --uastc";
+		cmd += settings;
+		cmd += " --uastc_rdo_d 1024";
 		cmd += " --zcmp 9";
 	}
 	else
 	{
-		char ql[16];
-		sprintf(ql, "%d", (quality * 255 + 50) / 100);
+		char settings[128];
+		sprintf(settings, " --clevel %d --qlevel %d", bs.etc1s_l, bs.etc1s_q);
 
 		cmd += " --bcmp";
-		cmd += " --qlevel ";
-		cmd += ql;
+		cmd += settings;
 
 		// for optimal quality we should specify separate_rg_to_color_alpha but this requires renderer awareness
 		if (normal_map)
