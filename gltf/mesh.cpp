@@ -379,6 +379,7 @@ static void filterStreams(Mesh& mesh)
 {
 	bool morph_normal = false;
 	bool morph_tangent = false;
+	int keep_texture_set = -1;
 
 	for (size_t i = 0; i < mesh.streams.size(); ++i)
 	{
@@ -389,6 +390,11 @@ static void filterStreams(Mesh& mesh)
 			morph_normal = morph_normal || (stream.type == cgltf_attribute_type_normal && hasDeltas(stream.data));
 			morph_tangent = morph_tangent || (stream.type == cgltf_attribute_type_tangent && hasDeltas(stream.data));
 		}
+
+		if (stream.type == cgltf_attribute_type_texcoord && mesh.material && usesTextureSet(*mesh.material, stream.index))
+		{
+			keep_texture_set = std::max(keep_texture_set, stream.index);
+		}
 	}
 
 	size_t write = 0;
@@ -397,7 +403,7 @@ static void filterStreams(Mesh& mesh)
 	{
 		Stream& stream = mesh.streams[i];
 
-		if (stream.type == cgltf_attribute_type_texcoord && (!mesh.material || !usesTextureSet(*mesh.material, stream.index)))
+		if (stream.type == cgltf_attribute_type_texcoord && stream.index > keep_texture_set)
 			continue;
 
 		if (stream.type == cgltf_attribute_type_tangent && (!mesh.material || !mesh.material->normal_texture.texture))
