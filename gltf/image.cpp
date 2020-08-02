@@ -24,8 +24,8 @@ static const char* kMimeTypes[][2] = {
 };
 
 static const BasisSettings kBasisSettings[10] = {
-    {0, 1, 0, 1.5f},
-    {0, 6, 0, 1.f},
+    {1, 1, 0, 1.5f},
+    {1, 6, 0, 1.f},
     {1, 20, 1, 1.0f},
     {1, 50, 1, 0.75f},
     {1, 90, 1, 0.5f},
