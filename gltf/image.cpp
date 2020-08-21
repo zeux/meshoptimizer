@@ -218,9 +218,64 @@ bool checkKtx(bool verbose)
 	return rc == 0;
 }
 
+static bool getDimensionsPng(const std::string& data, int& width, int& height)
+{
+	if (data.size() < 8 + 8 + 13 + 4)
+		return false;
+
+	const char* signature = "\x89\x50\x4e\x47\x0d\x0a\x1a\x0a";
+	if (data.compare(0, 8, signature) != 0)
+		return false;
+
+	if (data.compare(12, 4, "IHDR") != 0)
+		return false;
+
+	width = unsigned(data[18]) * 256 + unsigned(data[19]);
+	height = unsigned(data[22]) * 256 + unsigned(data[23]);
+
+	return true;
+}
+
+static bool getDimensionsJpeg(const std::string& data, int& width, int& height)
+{
+	(void)data; (void)width; (void)height;
+	return false;
+}
+
+static bool getDimensions(const std::string& data, const char* mime_type, int& width, int& height)
+{
+	if (strcmp(mime_type, "image/png") == 0)
+		return getDimensionsPng(data, width, height);
+	if (strcmp(mime_type, "image/jpeg") == 0)
+		return getDimensionsJpeg(data, width, height);
+
+	return false;
+}
+
+static int roundPow2(int value)
+{
+	int result = 1;
+
+	while (result < value)
+		result <<= 1;
+
+	// to prevent odd texture sizes from increasing the size too much, we round to nearest power of 2 above a certain size
+	if (value > 128 && result * 3 / 4 > value)
+		result >>= 1;
+
+	return result;
+}
+
+static int roundBlock(int value)
+{
+	return (value == 1 || value == 2) ? value : (value + 3) & ~3;
+}
+
 bool encodeKtx(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, float scale, bool pow2, bool uastc, bool verbose)
 {
-	(void)pow2;
+	int width = 0, height = 0;
+	if (!getDimensions(data, mime_type, width, height))
+		return false;
 
 	TempFile temp_input(mimeExtension(mime_type));
 	TempFile temp_output(".ktx2");
@@ -238,13 +293,14 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 	cmd += " --genmipmap";
 	cmd += " --nowarn";
 
-	if (scale < 1)
-	{
-		char sl[128];
-		sprintf(sl, "%g", scale);
+	int (*round)(int value) = pow2 ? roundPow2 : roundBlock;
+	int newWidth = round(width * scale), newHeight = round(height * scale);
 
-		cmd += " --scale ";
-		cmd += sl;
+	if (newWidth != width || newHeight != height)
+	{
+		char wh[128];
+		sprintf(wh, " --resize %dx%d", newWidth, newHeight);
+		cmd += wh;
 	}
 
 	if (uastc)
