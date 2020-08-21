@@ -230,15 +230,45 @@ static bool getDimensionsPng(const std::string& data, int& width, int& height)
 	if (data.compare(12, 4, "IHDR") != 0)
 		return false;
 
-	width = unsigned(data[18]) * 256 + unsigned(data[19]);
-	height = unsigned(data[22]) * 256 + unsigned(data[23]);
+	width = (unsigned char)data[18] * 256 + (unsigned char)data[19];
+	height = (unsigned char)data[22] * 256 + (unsigned char)data[23];
 
 	return true;
 }
 
 static bool getDimensionsJpeg(const std::string& data, int& width, int& height)
 {
-	(void)data; (void)width; (void)height;
+	size_t offset = 0;
+
+	while (offset + 2 <= data.size())
+	{
+		if (data[offset] != '\xff')
+			return false;
+
+		char marker = data[++offset];
+
+		if (marker == '\xff')
+			continue; // padding
+
+		offset++;
+
+		if (marker == 0 || unsigned(marker - '\xd0') <= 9)
+			continue; // no payload
+
+		if (marker == '\xc0' || marker == '\xc2')
+		{
+			if (offset + 4 > data.size())
+				return false;
+
+			width = (unsigned char)data[offset + 0] * 256 + (unsigned char)data[offset + 1];
+			height = (unsigned char)data[offset + 2] * 256 + (unsigned char)data[offset + 3];
+
+			return true;
+		}
+
+		offset += (unsigned char)data[offset + 0] * 256 + (unsigned char)data[offset + 1];
+	}
+
 	return false;
 }
 
