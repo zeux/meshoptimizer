@@ -59,7 +59,7 @@ By default gltfpack makes certain assumptions when optimizing the scenes, for ex
 The following settings are frequently used to reduce the resulting data size:
 
 * `-cc`: produce compressed gltf/glb files (requires `EXT_meshopt_compression`)
-* `-tc`: convert all textures to KTX2 with BasisU supercompression (using basisu executable; requires `KHR_image_basisu`)
+* `-tc`: convert all textures to KTX2 with BasisU supercompression (using toktx or basisu executable; requires `KHR_image_basisu`, and may require `-tp` flag for compatibility with WebGL 1)
 * `-mi`: use mesh instancing when serializing references to the same meshes (requires `EXT_mesh_gpu_instancing`)
 * `-si R`: simplify meshes to achieve the ratio R (default: 1; R should be between 0 and 1)
 
