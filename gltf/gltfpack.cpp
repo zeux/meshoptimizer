@@ -973,6 +973,10 @@ int main(int argc, char** argv)
 		{
 			settings.texture_scale = float(atof(argv[++i]));
 		}
+		else if (strcmp(arg, "-tp") == 0)
+		{
+			settings.texture_pow2 = true;
+		}
 		else if (strcmp(arg, "-noq") == 0)
 		{
 			settings.quantize = false;
@@ -1069,6 +1073,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-tu: use UASTC when encoding textures (much higher quality and much larger size)\n");
 			fprintf(stderr, "\t-tq N: set texture encoding quality (default: 8; N should be between 1 and 10\n");
 			fprintf(stderr, "\t-ts R: scale texture dimensions by the ratio R (default: 1; R should be between 0 and 1)\n");
+			fprintf(stderr, "\t-tp: resize textures to nearest power of 2 to conform to WebGL1 restrictions\n");
 			fprintf(stderr, "\nSimplification:\n");
 			fprintf(stderr, "\t-si R: simplify meshes to achieve the ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\t-sa: aggressively simplify to the target ratio disregarding quality\n");
@@ -1112,6 +1117,12 @@ int main(int argc, char** argv)
 	if (settings.texture_scale < 1 && !settings.texture_ktx2)
 	{
 		fprintf(stderr, "Option -ts is only supported when -tc is set as well\n");
+		return 1;
+	}
+
+	if (settings.texture_pow2 && !settings.texture_ktx2)
+	{
+		fprintf(stderr, "Option -tp is only supported when -tc is set as well\n");
 		return 1;
 	}
 

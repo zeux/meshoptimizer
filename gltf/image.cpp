@@ -147,9 +147,10 @@ bool checkBasis(bool verbose)
 	return rc == 0;
 }
 
-bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, float scale, bool uastc, bool verbose)
+bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, float scale, bool pow2, bool uastc, bool verbose)
 {
 	(void)scale;
+	(void)pow2;
 
 	TempFile temp_input(mimeExtension(mime_type));
 	TempFile temp_output(".basis");
@@ -217,8 +218,10 @@ bool checkKtx(bool verbose)
 	return rc == 0;
 }
 
-bool encodeKtx(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, float scale, bool uastc, bool verbose)
+bool encodeKtx(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, float scale, bool pow2, bool uastc, bool verbose)
 {
+	(void)pow2;
+
 	TempFile temp_input(mimeExtension(mime_type));
 	TempFile temp_output(".ktx2");
 
