@@ -245,33 +245,40 @@ static bool getDimensionsJpeg(const std::string& data, int& width, int& height)
 {
 	size_t offset = 0;
 
-	while (offset + 2 <= data.size())
+	// note, this can stop parsing before reaching the end but we stop at SOF anyway
+	while (offset + 4 <= data.size())
 	{
 		if (data[offset] != '\xff')
 			return false;
 
-		char marker = data[++offset];
+		char marker = data[offset];
 
 		if (marker == '\xff')
+		{
+			offset++;
 			continue; // padding
+		}
 
-		offset++;
-
+		// d0..d9 correspond to SOI, RSTn, EOI
 		if (marker == 0 || unsigned(marker - '\xd0') <= 9)
+		{
+			offset += 2;
 			continue; // no payload
+		}
 
+		// c0..c1 correspond to SOF0, SOF1
 		if (marker == '\xc0' || marker == '\xc2')
 		{
-			if (offset + 4 > data.size())
+			if (offset + 10 > data.size())
 				return false;
 
-			width = readInt16(data, offset);
-			height = readInt16(data, offset + 2);
+			width = readInt16(data, offset + 7);
+			height = readInt16(data, offset + 5);
 
 			return true;
 		}
 
-		offset += readInt16(data, offset);
+		offset += 2 + readInt16(data, offset + 2);
 	}
 
 	return false;
