@@ -218,6 +218,11 @@ bool checkKtx(bool verbose)
 	return rc == 0;
 }
 
+static int readInt16(const std::string& data, size_t offset)
+{
+	return (unsigned char)data[offset] * 256 + (unsigned char)data[offset + 1];
+}
+
 static bool getDimensionsPng(const std::string& data, int& width, int& height)
 {
 	if (data.size() < 8 + 8 + 13 + 4)
@@ -230,8 +235,8 @@ static bool getDimensionsPng(const std::string& data, int& width, int& height)
 	if (data.compare(12, 4, "IHDR") != 0)
 		return false;
 
-	width = (unsigned char)data[18] * 256 + (unsigned char)data[19];
-	height = (unsigned char)data[22] * 256 + (unsigned char)data[23];
+	width = readInt16(data, 18);
+	height = readInt16(data, 22);
 
 	return true;
 }
@@ -260,13 +265,13 @@ static bool getDimensionsJpeg(const std::string& data, int& width, int& height)
 			if (offset + 4 > data.size())
 				return false;
 
-			width = (unsigned char)data[offset + 0] * 256 + (unsigned char)data[offset + 1];
-			height = (unsigned char)data[offset + 2] * 256 + (unsigned char)data[offset + 3];
+			width = readInt16(data, offset);
+			height = readInt16(data, offset + 2);
 
 			return true;
 		}
 
-		offset += (unsigned char)data[offset + 0] * 256 + (unsigned char)data[offset + 1];
+		offset += readInt16(data, offset);
 	}
 
 	return false;
