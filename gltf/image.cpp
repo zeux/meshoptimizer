@@ -324,7 +324,7 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 	cmd += " --nowarn";
 
 	int (*round)(int value) = pow2 ? roundPow2 : roundBlock;
-	int newWidth = round(width * scale), newHeight = round(height * scale);
+	int newWidth = round(int(width * scale)), newHeight = round(int(height * scale));
 
 	if (newWidth != width || newHeight != height)
 	{
