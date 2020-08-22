@@ -308,8 +308,14 @@ static int roundPow2(int value)
 	return result;
 }
 
-static int roundBlock(int value)
+static int roundBlock(int value, bool pow2)
 {
+	if (value == 0)
+		return 4;
+
+	if (pow2 && value > 4)
+		return roundPow2(value);
+
 	return (value + 3) & ~3;
 }
 
@@ -335,13 +341,8 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 	cmd += " --genmipmap";
 	cmd += " --nowarn";
 
-	int newWidth = roundBlock(int(width * scale)), newHeight = roundBlock(int(height * scale));
-
-	if (pow2)
-	{
-		newWidth = roundPow2(newWidth);
-		newHeight = roundPow2(newHeight);
-	}
+	int newWidth = roundBlock(int(width * scale), pow2);
+	int newHeight = roundBlock(int(height * scale), pow2);
 
 	if (newWidth != width || newHeight != height)
 	{
