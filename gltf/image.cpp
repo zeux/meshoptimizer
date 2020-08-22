@@ -251,7 +251,7 @@ static bool getDimensionsJpeg(const std::string& data, int& width, int& height)
 		if (data[offset] != '\xff')
 			return false;
 
-		char marker = data[offset];
+		char marker = data[offset + 1];
 
 		if (marker == '\xff')
 		{
