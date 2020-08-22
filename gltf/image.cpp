@@ -251,7 +251,7 @@ static bool getDimensionsJpeg(const std::string& data, int& width, int& height)
 		if (data[offset] != '\xff')
 			return false;
 
-		char marker = data[offset];
+		char marker = data[offset + 1];
 
 		if (marker == '\xff')
 		{
@@ -308,9 +308,15 @@ static int roundPow2(int value)
 	return result;
 }
 
-static int roundBlock(int value)
+static int roundBlock(int value, bool pow2)
 {
-	return (value == 1 || value == 2) ? value : (value + 3) & ~3;
+	if (value == 0)
+		return 4;
+
+	if (pow2 && value > 4)
+		return roundPow2(value);
+
+	return (value + 3) & ~3;
 }
 
 bool encodeKtx(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, float scale, bool pow2, bool uastc, bool verbose)
@@ -335,8 +341,8 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 	cmd += " --genmipmap";
 	cmd += " --nowarn";
 
-	int (*round)(int value) = pow2 ? roundPow2 : roundBlock;
-	int newWidth = round(int(width * scale)), newHeight = round(int(height * scale));
+	int newWidth = roundBlock(int(width * scale), pow2);
+	int newHeight = roundBlock(int(height * scale), pow2);
 
 	if (newWidth != width || newHeight != height)
 	{
