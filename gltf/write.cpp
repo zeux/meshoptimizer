@@ -675,13 +675,13 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 
 	if (!img_data.empty())
 	{
-		if (settings.texture_basis)
+		if (settings.texture_ktx2)
 		{
 			std::string encoded;
 
 			if (encodeImage(img_data, mime_type.c_str(), encoded, info.normal_map, info.srgb, settings.texture_quality, settings.texture_scale, settings.texture_pow2, settings.texture_uastc, settings.verbose > 1))
 			{
-				if (settings.texture_ktx2 && !settings.texture_toktx)
+				if (!settings.texture_toktx)
 					encoded = basisToKtx(encoded, info.srgb, settings.texture_uastc);
 
 				writeEmbeddedImage(json, views, encoded.c_str(), encoded.size(), settings.texture_ktx2 ? "image/ktx2" : "image/basis");
@@ -698,7 +698,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 	}
 	else if (image.uri)
 	{
-		if (settings.texture_basis)
+		if (settings.texture_ktx2)
 		{
 			std::string full_path = getFullPath(decodeUri(image.uri).c_str(), input_path);
 			std::string basis_uri = getFileName(image.uri) + (settings.texture_ktx2 ? ".ktx2" : ".basis");
@@ -710,7 +710,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 
 				if (encodeImage(img_data, mime_type.c_str(), encoded, info.normal_map, info.srgb, settings.texture_quality, settings.texture_scale, settings.texture_pow2, settings.texture_uastc, settings.verbose > 1))
 				{
-					if (settings.texture_ktx2 && !settings.texture_toktx)
+					if (!settings.texture_toktx)
 						encoded = basisToKtx(encoded, info.srgb, settings.texture_uastc);
 
 					if (writeFile(basis_full_path.c_str(), encoded))

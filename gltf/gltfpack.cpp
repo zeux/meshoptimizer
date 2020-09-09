@@ -312,12 +312,12 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	{
 		const cgltf_image& image = data->images[i];
 
-		if (settings.verbose == 1 && settings.texture_basis)
+		if (settings.verbose == 1 && settings.texture_ktx2)
 		{
 			const char* uri = image.uri;
 			bool embedded = !uri || strncmp(uri, "data:", 5) == 0;
 
-			printf("image %d (%s) is being encoded with %s\n", int(i), embedded ? "embedded" : uri, settings.texture_toktx ? "toktx" : "Basis");
+			printf("image %d (%s) is being encoded with %s\n", int(i), embedded ? "embedded" : uri, settings.texture_toktx ? "toktx" : "basisu");
 		}
 
 		comma(json_images);
@@ -719,27 +719,16 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 		return 2;
 	}
 
-	if (data->images_count && settings.texture_basis)
+	if (data->images_count && settings.texture_ktx2)
 	{
-		if (settings.texture_ktx2)
+		if (checkKtx(settings.verbose > 1))
 		{
-			if (checkKtx(settings.verbose > 1))
-			{
-				settings.texture_toktx = true;
-			}
-			else if (!checkBasis(settings.verbose > 1))
-			{
-				fprintf(stderr, "Error: toktx is not present in PATH or TOKTX_PATH is not set\n");
-				return 3;
-			}
+			settings.texture_toktx = true;
 		}
-		else
+		else if (!checkBasis(settings.verbose > 1))
 		{
-			if (!checkBasis(settings.verbose > 1))
-			{
-				fprintf(stderr, "Error: basisu is not present in PATH or BASISU_PATH is not set\n");
-				return 3;
-			}
+			fprintf(stderr, "Error: toktx is not present in PATH or TOKTX_PATH is not set\n");
+			return 3;
 		}
 
 		if (settings.texture_scale < 1 && !settings.texture_toktx)
@@ -951,18 +940,13 @@ int main(int argc, char** argv)
 		{
 			settings.texture_embed = true;
 		}
-		else if (strcmp(arg, "-tb") == 0)
-		{
-			settings.texture_basis = true;
-		}
 		else if (strcmp(arg, "-tu") == 0)
 		{
-			settings.texture_basis = true;
+			settings.texture_ktx2 = true;
 			settings.texture_uastc = true;
 		}
 		else if (strcmp(arg, "-tc") == 0)
 		{
-			settings.texture_basis = true;
 			settings.texture_ktx2 = true;
 		}
 		else if (strcmp(arg, "-tq") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
@@ -1068,8 +1052,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc for higher compression ratio)\n");
 			fprintf(stderr, "\nTextures:\n");
 			fprintf(stderr, "\t-te: embed all textures into main buffer (.bin or .glb)\n");
-			fprintf(stderr, "\t-tb: convert all textures to Basis Universal format (with basisu executable); will be removed in the future\n");
-			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression (using basisu executable)\n");
+			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression (using basisu/toktx executable)\n");
 			fprintf(stderr, "\t-tu: use UASTC when encoding textures (much higher quality and much larger size)\n");
 			fprintf(stderr, "\t-tq N: set texture encoding quality (default: 8; N should be between 1 and 10\n");
 			fprintf(stderr, "\t-ts R: scale texture dimensions by the ratio R (default: 1; R should be between 0 and 1)\n");
@@ -1106,7 +1089,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-o file: output file path, .gltf/.glb\n");
 			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc for higher compression ratio)\n");
 			fprintf(stderr, "\t-te: embed all textures into main buffer (.bin or .glb)\n");
-			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression (using basisu executable)\n");
+			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression (using basisu/toktx executable)\n");
 			fprintf(stderr, "\t-si R: simplify meshes to achieve the ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\nRun gltfpack -h to display a full list of options\n");
 		}
