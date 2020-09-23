@@ -157,7 +157,69 @@ static void printAttributeStats(const std::vector<BufferView>& views, BufferView
 	}
 }
 
-static void process(cgltf_data* data, const char* input_path, const char* output_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const std::string& extras, const Settings& settings, std::string& json, std::string& bin, std::string& fallback, size_t& fallback_size)
+static void printReport(const char* path, cgltf_data* data, const std::vector<BufferView>& views, const std::vector<Mesh>& meshes, size_t node_count, size_t mesh_count, size_t material_count, size_t animation_count, size_t json_size, size_t bin_size)
+{
+	size_t bytes[BufferView::Kind_Count] = {};
+
+	for (size_t i = 0; i < views.size(); ++i)
+	{
+		const BufferView& view = views[i];
+		bytes[view.kind] += view.bytes;
+	}
+
+	size_t total_triangles = 0;
+	size_t total_instances = 0;
+	size_t total_draws = 0;
+
+	for (size_t i = 0; i < meshes.size(); ++i)
+	{
+		const Mesh& mesh = meshes[i];
+
+		size_t instances = std::max(size_t(1), mesh.nodes.size() + mesh.instances.size());
+
+		total_triangles += mesh.indices.size() / 3 * instances;
+		total_instances += instances;
+		total_draws += std::max(size_t(1), mesh.nodes.size());
+	}
+
+	FILE* out = fopen(path, "wb");
+	if (!out)
+	{
+		fprintf(stderr, "Warning: cannot save report to %s\n", path);
+		return;
+	}
+
+	fprintf(out, "{\n");
+	fprintf(out, "\t\"generator\": \"gltfpack %s\",\n", getVersion().c_str());
+	fprintf(out, "\t\"scene\": {\n");
+	fprintf(out, "\t\t\"nodeCount\": %d,\n", int(node_count));
+	fprintf(out, "\t\t\"meshCount\": %d,\n", int(mesh_count));
+	fprintf(out, "\t\t\"materialCount\": %d,\n", int(material_count));
+	fprintf(out, "\t\t\"textureCount\": %d,\n", int(data->textures_count));
+	fprintf(out, "\t\t\"animationCount\": %d\n", int(animation_count));
+	fprintf(out, "\t},\n");
+	fprintf(out, "\t\"render\": {\n");
+	fprintf(out, "\t\t\"drawCount\": %d,\n", int(total_draws));
+	fprintf(out, "\t\t\"instanceCount\": %d,\n", int(total_instances));
+	fprintf(out, "\t\t\"triangleCount\": %lld\n", (long long)total_triangles);
+	fprintf(out, "\t},\n");
+	fprintf(out, "\t\"data\": {\n");
+	fprintf(out, "\t\t\"json\": %d,\n", int(json_size));
+	fprintf(out, "\t\t\"binary\": %d,\n", int(bin_size));
+	fprintf(out, "\t\t\"buffers\": {\n");
+	fprintf(out, "\t\t\t\"vertex\": %d,\n", int(bytes[BufferView::Kind_Vertex]));
+	fprintf(out, "\t\t\t\"index\": %d,\n", int(bytes[BufferView::Kind_Index]));
+	fprintf(out, "\t\t\t\"animation\": %d,\n", int(bytes[BufferView::Kind_Time] + bytes[BufferView::Kind_Keyframe]));
+	fprintf(out, "\t\t\t\"transform\": %d,\n", int(bytes[BufferView::Kind_Skin] + bytes[BufferView::Kind_Instance]));
+	fprintf(out, "\t\t\t\"image\": %d\n", int(bytes[BufferView::Kind_Image]));
+	fprintf(out, "\t\t}\n");
+	fprintf(out, "\t}\n");
+	fprintf(out, "}\n");
+
+	fclose(out);
+}
+
+static void process(cgltf_data* data, const char* input_path, const char* output_path, const char* report_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const std::string& extras, const Settings& settings, std::string& json, std::string& bin, std::string& fallback, size_t& fallback_size)
 {
 	if (settings.verbose)
 	{
@@ -625,6 +687,11 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		printAttributeStats(views, BufferView::Kind_Keyframe, "keyframe");
 		printAttributeStats(views, BufferView::Kind_Instance, "instance");
 	}
+
+	if (report_path)
+	{
+		printReport(report_path, data, views, meshes, node_offset, mesh_offset, material_offset, animations.size(), json.size(), bin.size());
+	}
 }
 
 static void writeU32(FILE* out, uint32_t data)
@@ -682,7 +749,7 @@ static std::string getBufferSpec(const char* bin_path, size_t bin_size, const ch
 	return json;
 }
 
-int gltfpack(const char* input, const char* output, const Settings& settings)
+int gltfpack(const char* input, const char* output, const char* report, const Settings& settings)
 {
 	cgltf_data* data = 0;
 	std::vector<Mesh> meshes;
@@ -740,7 +807,7 @@ int gltfpack(const char* input, const char* output, const Settings& settings)
 
 	std::string json, bin, fallback;
 	size_t fallback_size = 0;
-	process(data, input, output, meshes, animations, extras, settings, json, bin, fallback, fallback_size);
+	process(data, input, output, report, meshes, animations, extras, settings, json, bin, fallback, fallback_size);
 
 	cgltf_free(data);
 
@@ -857,6 +924,7 @@ int main(int argc, char** argv)
 
 	const char* input = 0;
 	const char* output = 0;
+	const char* report = 0;
 	bool help = false;
 	bool test = false;
 
@@ -973,6 +1041,10 @@ int main(int argc, char** argv)
 		{
 			output = argv[++i];
 		}
+		else if (strcmp(arg, "-r") == 0 && i + 1 < argc && !report)
+		{
+			report = argv[++i];
+		}
 		else if (strcmp(arg, "-c") == 0)
 		{
 			settings.compress = true;
@@ -1033,7 +1105,7 @@ int main(int argc, char** argv)
 			const char* path = testinputs[i];
 
 			printf("%s\n", path);
-			gltfpack(path, NULL, settings);
+			gltfpack(path, NULL, NULL, settings);
 		}
 
 		return 0;
@@ -1080,6 +1152,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-cf: produce compressed gltf/glb files with fallback for loaders that don't support compression\n");
 			fprintf(stderr, "\t-noq: disable quantization; produces much larger glTF files with no extensions\n");
 			fprintf(stderr, "\t-v: verbose output (print version when used without other options)\n");
+			fprintf(stderr, "\t-r file: output a JSON report to file\n");
 			fprintf(stderr, "\t-h: display this help and exit\n");
 		}
 		else
@@ -1109,5 +1182,5 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
-	return gltfpack(input, output, settings);
+	return gltfpack(input, output, report, settings);
 }
