@@ -749,7 +749,7 @@ static std::string getBufferSpec(const char* bin_path, size_t bin_size, const ch
 	return json;
 }
 
-int gltfpack(const char* input, const char* output, const char* report, const Settings& settings)
+int gltfpack(const char* input, const char* output, const char* report, Settings settings)
 {
 	cgltf_data* data = 0;
 	std::vector<Mesh> meshes;
@@ -757,6 +757,7 @@ int gltfpack(const char* input, const char* output, const char* report, const Se
 	std::string extras;
 
 	const char* iext = strrchr(input, '.');
+	const char* oext = output ? strrchr(output, '.') : NULL;
 
 	if (iext && (strcmp(iext, ".gltf") == 0 || strcmp(iext, ".GLTF") == 0 || strcmp(iext, ".glb") == 0 || strcmp(iext, ".GLB") == 0))
 	{
@@ -805,6 +806,11 @@ int gltfpack(const char* input, const char* output, const char* report, const Se
 		}
 	}
 
+	if (oext && (strcmp(oext, ".glb") == 0 || strcmp(oext, ".GLB") == 0))
+	{
+		settings.texture_embed = true;
+	}
+
 	std::string json, bin, fallback;
 	size_t fallback_size = 0;
 	process(data, input, output, report, meshes, animations, extras, settings, json, bin, fallback, fallback_size);
@@ -815,8 +821,6 @@ int gltfpack(const char* input, const char* output, const char* report, const Se
 	{
 		return 0;
 	}
-
-	const char* oext = strrchr(output, '.');
 
 	if (oext && (strcmp(oext, ".gltf") == 0 || strcmp(oext, ".GLTF") == 0))
 	{
@@ -1004,10 +1008,6 @@ int main(int argc, char** argv)
 			settings.meshlet_debug = atoi(argv[++i]);
 		}
 #endif
-		else if (strcmp(arg, "-te") == 0)
-		{
-			settings.texture_embed = true;
-		}
 		else if (strcmp(arg, "-tu") == 0)
 		{
 			settings.texture_ktx2 = true;
@@ -1123,7 +1123,6 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-o file: output file path, .gltf/.glb\n");
 			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc for higher compression ratio)\n");
 			fprintf(stderr, "\nTextures:\n");
-			fprintf(stderr, "\t-te: embed all textures into main buffer (.bin or .glb)\n");
 			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression (using basisu/toktx executable)\n");
 			fprintf(stderr, "\t-tu: use UASTC when encoding textures (much higher quality and much larger size)\n");
 			fprintf(stderr, "\t-tq N: set texture encoding quality (default: 8; N should be between 1 and 10\n");
@@ -1161,7 +1160,6 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-i file: input file to process, .obj/.gltf/.glb\n");
 			fprintf(stderr, "\t-o file: output file path, .gltf/.glb\n");
 			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc for higher compression ratio)\n");
-			fprintf(stderr, "\t-te: embed all textures into main buffer (.bin or .glb)\n");
 			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression (using basisu/toktx executable)\n");
 			fprintf(stderr, "\t-si R: simplify meshes to achieve the ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\nRun gltfpack -h to display a full list of options\n");

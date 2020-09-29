@@ -106,11 +106,10 @@ struct Settings
 
 	int meshlet_debug;
 
-	// TODO: Remove texture_toktx
-	bool texture_embed;
 	bool texture_ktx2;
 	bool texture_uastc;
-	mutable bool texture_toktx;
+	bool texture_embed;
+	bool texture_toktx;
 
 	int texture_quality;
 	float texture_scale;
