@@ -58,6 +58,22 @@ void analyzeImages(cgltf_data* data, std::vector<ImageInfo>& images)
 				images[pbr.diffuse_texture.texture->image - data->images].srgb = true;
 		}
 
+		if (material.has_clearcoat)
+		{
+			const cgltf_clearcoat& clearcoat = material.clearcoat;
+
+			if (clearcoat.clearcoat_normal_texture.texture && clearcoat.clearcoat_normal_texture.texture->image)
+				images[clearcoat.clearcoat_normal_texture.texture->image - data->images].normal_map = true;
+		}
+
+		if (material.has_specular)
+		{
+			const cgltf_specular& specular = material.specular;
+
+			if (specular.specular_texture.texture && specular.specular_texture.texture->image)
+				images[specular.specular_texture.texture->image - data->images].srgb = true;
+		}
+
 		if (material.emissive_texture.texture && material.emissive_texture.texture->image)
 			images[material.emissive_texture.texture->image - data->images].srgb = true;
 
