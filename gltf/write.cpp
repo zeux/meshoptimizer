@@ -161,7 +161,7 @@ static const char* compressionFilter(StreamFormat::Filter filter)
 	}
 }
 
-static void writeTextureInfo(std::string& json, const cgltf_data* data, const cgltf_texture_view& view, const QuantizationTexture* qt)
+static void writeTextureInfo(std::string& json, const cgltf_data* data, const cgltf_texture_view& view, const QuantizationTexture* qt, const char* scale = NULL)
 {
 	assert(view.texture);
 
@@ -188,6 +188,13 @@ static void writeTextureInfo(std::string& json, const cgltf_data* data, const cg
 	append(json, size_t(view.texture - data->textures));
 	append(json, ",\"texCoord\":");
 	append(json, size_t(view.texcoord));
+	if (scale && view.scale != 1)
+	{
+		append(json, ",\"");
+		append(json, scale);
+		append(json, "\":");
+		append(json, view.scale);
+	}
 	if (view.has_transform || qt)
 	{
 		append(json, ",\"extensions\":{\"KHR_texture_transform\":{");
@@ -326,7 +333,7 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 	{
 		comma(json);
 		append(json, "\"clearcoatNormalTexture\":");
-		writeTextureInfo(json, data, cc.clearcoat_normal_texture, qt);
+		writeTextureInfo(json, data, cc.clearcoat_normal_texture, qt, "scale");
 	}
 	if (cc.clearcoat_factor != 0)
 	{
@@ -423,14 +430,14 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 	{
 		comma(json);
 		append(json, "\"normalTexture\":");
-		writeTextureInfo(json, data, material.normal_texture, qt);
+		writeTextureInfo(json, data, material.normal_texture, qt, "scale");
 	}
 
 	if (material.occlusion_texture.texture)
 	{
 		comma(json);
 		append(json, "\"occlusionTexture\":");
-		writeTextureInfo(json, data, material.occlusion_texture, qt);
+		writeTextureInfo(json, data, material.occlusion_texture, qt, "strength");
 	}
 
 	if (material.emissive_texture.texture)
