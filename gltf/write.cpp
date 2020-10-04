@@ -161,7 +161,7 @@ static const char* compressionFilter(StreamFormat::Filter filter)
 	}
 }
 
-static void writeTextureInfo(std::string& json, const cgltf_data* data, const cgltf_texture_view& view, const QuantizationTexture* qt)
+static void writeTextureInfo(std::string& json, const cgltf_data* data, const cgltf_texture_view& view, const QuantizationTexture* qt, const char* scale = NULL)
 {
 	assert(view.texture);
 
@@ -188,6 +188,13 @@ static void writeTextureInfo(std::string& json, const cgltf_data* data, const cg
 	append(json, size_t(view.texture - data->textures));
 	append(json, ",\"texCoord\":");
 	append(json, size_t(view.texcoord));
+	if (scale && view.scale != 1)
+	{
+		append(json, ",\"");
+		append(json, scale);
+		append(json, "\":");
+		append(json, view.scale);
+	}
 	if (view.has_transform || qt)
 	{
 		append(json, ",\"extensions\":{\"KHR_texture_transform\":{");
@@ -326,7 +333,7 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 	{
 		comma(json);
 		append(json, "\"clearcoatNormalTexture\":");
-		writeTextureInfo(json, data, cc.clearcoat_normal_texture, qt);
+		writeTextureInfo(json, data, cc.clearcoat_normal_texture, qt, "scale");
 	}
 	if (cc.clearcoat_factor != 0)
 	{
@@ -362,6 +369,48 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 	append(json, "}");
 }
 
+static void writeMaterialComponent(std::string& json, const cgltf_data* data, const cgltf_ior& tm, const QuantizationTexture* qt)
+{
+	(void)data;
+	(void)qt;
+
+	comma(json);
+	append(json, "\"KHR_materials_ior\":{");
+	append(json, "\"ior\":");
+	append(json, tm.ior);
+	append(json, "}");
+}
+
+static void writeMaterialComponent(std::string& json, const cgltf_data* data, const cgltf_specular& tm, const QuantizationTexture* qt)
+{
+	comma(json);
+	append(json, "\"KHR_materials_specular\":{");
+	if (tm.specular_texture.texture)
+	{
+		comma(json);
+		append(json, "\"specularTexture\":");
+		writeTextureInfo(json, data, tm.specular_texture, qt);
+	}
+	if (memcmp(tm.specular_color_factor, white, 16) != 0)
+	{
+		comma(json);
+		append(json, "\"specularColorFactor\":[");
+		append(json, tm.specular_color_factor[0]);
+		append(json, ",");
+		append(json, tm.specular_color_factor[1]);
+		append(json, ",");
+		append(json, tm.specular_color_factor[2]);
+		append(json, "]");
+	}
+	if (tm.specular_factor != 1)
+	{
+		comma(json);
+		append(json, "\"specularFactor\":");
+		append(json, tm.specular_factor);
+	}
+	append(json, "}");
+}
+
 void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationTexture* qt)
 {
 	if (material.name && *material.name)
@@ -381,14 +430,14 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 	{
 		comma(json);
 		append(json, "\"normalTexture\":");
-		writeTextureInfo(json, data, material.normal_texture, qt);
+		writeTextureInfo(json, data, material.normal_texture, qt, "scale");
 	}
 
 	if (material.occlusion_texture.texture)
 	{
 		comma(json);
 		append(json, "\"occlusionTexture\":");
-		writeTextureInfo(json, data, material.occlusion_texture, qt);
+		writeTextureInfo(json, data, material.occlusion_texture, qt, "strength");
 	}
 
 	if (material.emissive_texture.texture)
@@ -431,7 +480,7 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 		append(json, "\"doubleSided\":true");
 	}
 
-	if (material.has_pbr_specular_glossiness || material.has_clearcoat || material.has_transmission || material.unlit)
+	if (material.has_pbr_specular_glossiness || material.has_clearcoat || material.has_transmission || material.has_ior || material.has_specular || material.unlit)
 	{
 		comma(json);
 		append(json, "\"extensions\":{");
@@ -449,6 +498,16 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 		if (material.has_transmission)
 		{
 			writeMaterialComponent(json, data, material.transmission, qt);
+		}
+
+		if (material.has_ior)
+		{
+			writeMaterialComponent(json, data, material.ior, qt);
+		}
+
+		if (material.has_specular)
+		{
+			writeMaterialComponent(json, data, material.specular, qt);
 		}
 
 		if (material.unlit)
