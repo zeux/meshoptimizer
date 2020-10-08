@@ -447,7 +447,7 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 static unsigned char kDecodeBytesGroupShuffle[256][8];
 static unsigned char kDecodeBytesGroupCount[256];
 
-#ifdef EMSCRIPTEN
+#ifdef __wasm__
 __attribute__((cold)) // this saves 500 bytes in the output binary - we don't need to vectorize this loop!
 #endif
 static bool
