@@ -4,6 +4,32 @@
 #include <math.h>
 #include <string.h>
 
+void markScenes(cgltf_data* data, std::vector<NodeInfo>& nodes)
+{
+	for (size_t i = 0; i < nodes.size(); ++i)
+		nodes[i].scene = -1;
+
+	for (size_t i = 0; i < data->scenes_count; ++i)
+		for (size_t j = 0; j < data->scenes[i].nodes_count; ++j)
+		{
+			NodeInfo& ni = nodes[data->scenes[i].nodes[j] - data->nodes];
+
+			if (ni.scene >= 0)
+				ni.scene = -2; // multiple scenes
+			else
+				ni.scene = int(i);
+		}
+
+	for (size_t i = 0; i < data->nodes_count; ++i)
+	{
+		cgltf_node* root = &data->nodes[i];
+		while (root->parent)
+			root = root->parent;
+
+		 nodes[i].scene = nodes[root - data->nodes].scene;
+	}
+}
+
 void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Animation>& animations)
 {
 	for (size_t i = 0; i < animations.size(); ++i)

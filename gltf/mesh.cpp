@@ -173,6 +173,9 @@ static bool canMergeMeshNodes(cgltf_node* lhs, cgltf_node* rhs, const Settings& 
 
 static bool canMergeMeshes(const Mesh& lhs, const Mesh& rhs, const Settings& settings)
 {
+	if (lhs.scene != rhs.scene)
+		return false;
+
 	if (lhs.nodes.size() != rhs.nodes.size())
 		return false;
 

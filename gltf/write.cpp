@@ -1453,3 +1453,23 @@ void writeExtras(std::string& json, const std::string& data, const cgltf_extras&
 	append(json, "\"extras\":");
 	appendJson(json, data.c_str() + extras.start_offset, data.c_str() + extras.end_offset);
 }
+
+void writeScene(std::string& json, const cgltf_scene& scene, const std::string& roots)
+{
+	comma(json);
+	append(json, "{");
+	if (scene.name && *scene.name)
+	{
+		append(json, "\"name\":\"");
+		append(json, scene.name);
+		append(json, "\"");
+	}
+	if (!roots.empty())
+	{
+		comma(json);
+		append(json, "\"nodes\":[");
+		append(json, roots);
+		append(json, "]");
+	}
+	append(json, "}");
+}

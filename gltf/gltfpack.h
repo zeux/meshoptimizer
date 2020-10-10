@@ -39,6 +39,7 @@ struct Transform
 
 struct Mesh
 {
+	int scene;
 	std::vector<cgltf_node*> nodes;
 	std::vector<Transform> instances;
 
@@ -157,6 +158,8 @@ struct StreamFormat
 
 struct NodeInfo
 {
+	int scene;
+
 	bool keep;
 	bool animated;
 
@@ -261,6 +264,7 @@ std::string basisToKtx(const std::string& data, bool srgb, bool uastc);
 bool checkKtx(bool verbose);
 bool encodeKtx(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, float scale, bool pow2, bool uastc, bool verbose);
 
+void markScenes(cgltf_data* data, std::vector<NodeInfo>& nodes);
 void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Animation>& animations);
 void markNeededNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Mesh>& meshes, const std::vector<Animation>& animations, const Settings& settings);
 void remapNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, size_t& node_offset);
@@ -309,6 +313,7 @@ void writeLight(std::string& json, const cgltf_light& light);
 void writeArray(std::string& json, const char* name, const std::string& contents);
 void writeExtensions(std::string& json, const ExtensionInfo* extensions, size_t count);
 void writeExtras(std::string& json, const std::string& data, const cgltf_extras& extras);
+void writeScene(std::string& json, const cgltf_scene& scene, const std::string& roots);
 
 /**
  * Copyright (c) 2016-2020 Arseny Kapoulkine
