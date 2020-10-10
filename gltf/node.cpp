@@ -26,7 +26,7 @@ void markScenes(cgltf_data* data, std::vector<NodeInfo>& nodes)
 		while (root->parent)
 			root = root->parent;
 
-		 nodes[i].scene = nodes[root - data->nodes].scene;
+		nodes[i].scene = nodes[root - data->nodes].scene;
 	}
 }
 
