@@ -98,7 +98,7 @@ var wasi = {
 		var path_name = Buffer.from(heap.buffer, path, path_len).toString('utf-8');
 
 		try {
-			fs.unlinkSys(path_name);
+			fs.unlinkSync(path_name);
 			return 0;
 		} catch (err) {
 			return WASI_EIO;
