@@ -24,7 +24,7 @@ CFLAGS=-g -Wall -Wextra -Werror -std=c89
 CXXFLAGS=-g -Wall -Wextra -Wshadow -Wno-missing-field-initializers -Werror -std=c++98
 LDFLAGS=
 
-WASMCC=clang
+WASMCC=clang++
 WASI_SDK=
 
 WASM_SOURCES=src/vertexcodec.cpp src/indexcodec.cpp src/vertexfilter.cpp tools/wasmstubs.cpp
@@ -84,12 +84,11 @@ format:
 gltfpack: $(GLTFPACK_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
 
-gltfpack.js: gltf/bin/gltfpack.js
+gltfpack.wasm: gltf/bin/gltfpack.wasm
 
-gltf/bin/gltfpack.js: ${LIBRARY_SOURCES} ${GLTFPACK_SOURCES} tools/meshloader.cpp
-	@mkdir -p gltf/bin
-	emcc $^ -o $@ -Os -DNDEBUG -s ALLOW_MEMORY_GROWTH=1 -s MAXIMUM_MEMORY=4GB -s NODERAWFS=1
-	sed -i '1s;^;#!/usr/bin/env node\n;' $@
+gltf/bin/gltfpack.wasm: ${LIBRARY_SOURCES} ${GLTFPACK_SOURCES} tools/meshloader.cpp
+	@mkdir -p gltf/lib
+	$(WASMCC) $^ -o $@ -Os -DNDEBUG --target=wasm32-wasi --sysroot=$(WASI_SDK)
 
 build/decoder_base.wasm: $(WASM_SOURCES)
 	@mkdir -p build

@@ -20,9 +20,13 @@ TempFile::TempFile(const char* suffix)
 	path += "\\gltfpack-XXXXXX";
 	(void)_mktemp(&path[0]);
 	path += suffix;
-#elif defined(__EMSCRIPTEN__)
-	path = "gltfpack-XXXXXX";
-	(void)mktemp(&path[0]);
+#elif defined(__wasi__)
+	static int id = 0;
+	char ids[16];
+	sprintf(ids, "%d", id++);
+
+	path = "/tmp/gltfpack-";
+	path += ids;
 	path += suffix;
 #else
 	path = "/tmp/gltfpack-XXXXXX";

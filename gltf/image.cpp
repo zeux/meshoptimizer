@@ -5,10 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef __EMSCRIPTEN__
-#include <emscripten.h>
-#endif
-
 struct BasisSettings
 {
 	int etc1s_l;
@@ -108,22 +104,16 @@ static const char* mimeExtension(const char* mime_type)
 	return ".raw";
 }
 
-#ifdef __EMSCRIPTEN__
-EM_JS(int, execute, (const char* cmd, bool ignore_stdout, bool ignore_stderr), {
-	var cp = require('child_process');
-	var stdio = [ 'ignore', ignore_stdout ? 'ignore' : 'inherit', ignore_stderr ? 'ignore' : 'inherit' ];
-	var ret = cp.spawnSync(UTF8ToString(cmd), [], {shell:true, stdio:stdio });
-	return ret.status == null ? 256 : ret.status;
-});
+#if defined(__wasi__)
+static int execute(const char* cmd_, bool ignore_stdout, bool ignore_stderr)
+{
+	return -1;
+}
 
-EM_JS(const char*, readenv, (const char* name), {
-	var val = process.env[UTF8ToString(name)];
-	if (!val)
-		return 0;
-	var ret = _malloc(lengthBytesUTF8(val) + 1);
-	stringToUTF8(val, ret, lengthBytesUTF8(val) + 1);
-	return ret;
-});
+static const char* readenv(const char* name)
+{
+	return getenv(name);
+}
 #else
 static int execute(const char* cmd_, bool ignore_stdout, bool ignore_stderr)
 {
