@@ -1,4 +1,5 @@
 var fs = require('fs');
+var cp = require('child_process');
 
 var WASI_EBADF = 8;
 var WASI_EINVAL = 28;
@@ -19,6 +20,7 @@ var fds = {
 };
 
 var args = process.argv.slice(1);
+var env = Object.keys(process.env).map(function (key) { return key + '=' + process.env[key] });
 
 function nextFd() {
 	for (var i = 0; ; ++i) {
@@ -83,12 +85,24 @@ var wasi = {
 			heap.setUint32(opened_fd, fd, true);
 			return 0;
 		} catch (err) {
-			return WASI_ENOSYS;
+			return WASI_EIO;
 		}
 	},
 
 	path_unlink_file: function(parent_fd, path, path_len) {
-		return WASI_EINVAL;
+		if (fds[parent_fd] !== null) {
+			return WASI_EBADF;
+		}
+
+		var heap = getHeap();
+		var path_name = Buffer.from(heap.buffer, path, path_len).toString('utf-8');
+
+		try {
+			fs.unlinkSys(path_name);
+			return 0;
+		} catch (err) {
+			return WASI_EIO;
+		}
 	},
 
 	args_sizes_get: function(argc, argv_buf_size) {
@@ -111,13 +125,13 @@ var wasi = {
 		var argp = argv_buf;
 
 		for (var i = 0; i < args.length; ++i) {
-			var au = Buffer.from(args[i], 'utf-8');
+			var item = Buffer.from(args[i], 'utf-8');
 
 			heap.setUint32(argv + i * 4, argp, true);
-			au.copy(memory, argp);
-			heap.setUint8(argp + au.length, 0);
+			item.copy(memory, argp);
+			heap.setUint8(argp + item.length, 0);
 
-			argp += au.length + 1;
+			argp += item.length + 1;
 		}
 
 		return 0;
@@ -145,12 +159,33 @@ var wasi = {
 
 	environ_sizes_get: function(environc, environ_buf_size) {
 		var heap = getHeap();
-		heap.setUint32(environc, 0, true);
-		heap.setUint32(environ_buf_size, 0, true);
+
+		var buf_size = 0;
+		for (var i = 0; i < env.length; ++i) {
+			buf_size += Buffer.from(env[i], 'utf-8').length + 1;
+		}
+
+		heap.setUint32(environc, env.length, true);
+		heap.setUint32(environ_buf_size, buf_size, true);
 		return 0;
 	},
 
 	environ_get: function(environ, environ_buf) {
+		var heap = getHeap();
+		var memory = new Uint8Array(heap.buffer);
+
+		var envp = environ_buf;
+
+		for (var i = 0; i < env.length; ++i) {
+			var item = Buffer.from(env[i], 'utf-8');
+
+			heap.setUint32(environ + i * 4, envp, true);
+			item.copy(memory, envp);
+			heap.setUint8(envp + item.length, 0);
+
+			envp += item.length + 1;
+		}
+
 		return 0;
 	},
 
@@ -232,6 +267,18 @@ var wasi = {
 
 		heap.setUint32(nwritten, written, true);
 		return 0;
+	},
+
+	path_readlink: function(fd, path, path_len, buf, buf_len, bufused) {
+		if (fd !== -1) {
+			return WASI_ENOSYS;
+		}
+
+		var heap = getHeap();
+		var command = Buffer.from(heap.buffer, path, path_len).toString('utf-8');
+
+		var ret = cp.spawnSync(command, [], {shell:true});
+		return ret.status == null ? 256 : ret.status;
 	},
 };
 

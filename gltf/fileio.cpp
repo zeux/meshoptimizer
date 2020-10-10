@@ -25,7 +25,7 @@ TempFile::TempFile(const char* suffix)
 	char ids[16];
 	sprintf(ids, "%d", id++);
 
-	path = "/tmp/gltfpack-";
+	path = "gltfpack-temp-";
 	path += ids;
 	path += suffix;
 #else

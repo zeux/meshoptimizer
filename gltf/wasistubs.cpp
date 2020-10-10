@@ -1,5 +1,6 @@
 #ifdef __wasi__
 #include <stdlib.h>
+#include <string.h>
 
 #include <wasi/api.h>
 
@@ -40,4 +41,12 @@ __wasi_errno_t __wasi_fd_seek(__wasi_fd_t fd, __wasi_filedelta_t offset, __wasi_
 	*newoffset = newoffset32;
 	return result;
 }
+
+extern "C" int system(const char* command)
+{
+	// WASI doesn't provide a system() equivalent; we highjack readlink here, the reasoning being that if we run against a real WASI implementation,
+	// the effect is more likely to be benign.
+	return  __wasi_path_readlink(-1, command, strlen(command), 0, 0, 0);
+}
+
 #endif
