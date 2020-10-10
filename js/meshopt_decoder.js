@@ -28,20 +28,13 @@ var MeshoptDecoder = (function() {
 		console.log("Warning: meshopt_decoder is using experimental SIMD support");
 	}
 
-	var instance, heap;
-
-	var env = {
-		emscripten_notify_memory_growth: function(index) {
-			heap = new Uint8Array(instance.exports.memory.buffer);
-		}
-	};
+	var instance;
 
 	var promise =
-		WebAssembly.instantiate(unpack(wasm), { env })
+		WebAssembly.instantiate(unpack(wasm), {})
 		.then(function(result) {
 			instance = result.instance;
-			instance.exports._initialize();
-			env.emscripten_notify_memory_growth(0);
+			instance.exports.__wasm_call_ctors();
 		});
 
 	function unpack(data) {
@@ -62,6 +55,7 @@ var MeshoptDecoder = (function() {
 		var count4 = (count + 3) & ~3; // pad for SIMD filter
 		var tp = sbrk(count4 * size);
 		var sp = sbrk(source.length);
+		var heap = new Uint8Array(instance.exports.memory.buffer);
 		heap.set(source, sp);
 		var res = fun(tp, count, size, sp, source.length);
 		if (res == 0 && filter) {
