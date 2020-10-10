@@ -2,6 +2,7 @@ var fs = require('fs');
 
 var WASI_EBADF = 8;
 var WASI_EINVAL = 28;
+var WASI_EIO = 29;
 var WASI_ENOSYS = 52;
 
 var instance;
@@ -37,9 +38,14 @@ var wasi = {
 			return WASI_EBADF;
 		}
 
-		fs.closeSync(fds[fd].fd);
-		fds[fd] = undefined;
-		return 0;
+		try {
+			fs.closeSync(fds[fd].fd);
+			fds[fd] = undefined;
+			return 0;
+		} catch (err) {
+			fds[fd] = undefined;
+			return WASI_EIO;
+		}
 	},
 
 	fd_fdstat_get: function(fd, stat) {
@@ -48,7 +54,6 @@ var wasi = {
 		}
 
 		var heap = getHeap();
-
 		heap.setUint8(stat + 0, fds[fd] === null ? 3 : 4); // directory
 		heap.setUint16(stat + 2, 0, true);
 		heap.setUint32(stat + 8, 0, true);
@@ -193,10 +198,14 @@ var wasi = {
 			var buf = heap.getUint32(iovs + 8 * i + 0, true);
 			var buf_len = heap.getUint32(iovs + 8 * i + 4, true);
 
-			var readi = fs.readSync(fds[fd].fd, heap, buf, buf_len, fds[fd].position);
+			try {
+				var readi = fs.readSync(fds[fd].fd, heap, buf, buf_len, fds[fd].position);
 
-			fds[fd].position += readi;
-			read += readi;
+				fds[fd].position += readi;
+				read += readi;
+			} catch (err) {
+				return WASI_EIO;
+			}
 		}
 
 		heap.setUint32(nread, read, true);
@@ -211,10 +220,14 @@ var wasi = {
 			var buf = heap.getUint32(iovs + 8 * i + 0, true);
 			var buf_len = heap.getUint32(iovs + 8 * i + 4, true);
 
-			var writei = fs.writeSync(fds[fd].fd, heap, buf, buf_len, fds[fd].position);
+			try {
+				var writei = fs.writeSync(fds[fd].fd, heap, buf, buf_len, fds[fd].position);
 
-			fds[fd].position += writei;
-			written += writei;
+				fds[fd].position += writei;
+				written += writei;
+			} catch (err) {
+				return WASI_EIO;
+			}
 		}
 
 		heap.setUint32(nwritten, written, true);
