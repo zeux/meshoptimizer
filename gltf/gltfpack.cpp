@@ -231,6 +231,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 	std::vector<NodeInfo> nodes(data->nodes_count);
 
+	markScenes(data, nodes);
 	markAnimated(data, nodes, animations);
 
 	for (size_t i = 0; i < meshes.size(); ++i)
@@ -260,6 +261,15 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		if (any_animated)
 			continue;
 
+		int scene = nodes[mesh.nodes[0] - data->nodes].scene;
+		bool any_other_scene = false;
+		for (size_t j = 0; j < mesh.nodes.size(); ++j)
+			any_other_scene |= scene != nodes[mesh.nodes[j] - data->nodes].scene;
+
+		// we only merge instances when all nodes have a single consistent scene
+		if (scene < 0 || any_other_scene)
+			continue;
+
 		// we only merge multiple instances together if requested
 		// this often makes the scenes faster to render by reducing the draw call count, but can result in larger files
 		if (mesh.nodes.size() > 1 && !settings.mesh_merge && !settings.mesh_instancing)
@@ -279,6 +289,8 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		{
 			mergeMeshInstances(mesh);
 		}
+
+		mesh.scene = scene;
 
 		assert(mesh.nodes.empty());
 	}
@@ -348,7 +360,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	std::string json_meshes;
 	std::string json_nodes;
 	std::string json_skins;
-	std::string json_roots;
+	std::vector<std::string> json_roots(data->scenes_count);
 	std::string json_animations;
 	std::string json_cameras;
 	std::string json_lights;
@@ -536,8 +548,9 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		}
 		else if (mesh.instances.size())
 		{
-			comma(json_roots);
-			append(json_roots, node_offset);
+			assert(mesh.scene >= 0);
+			comma(json_roots[mesh.scene]);
+			append(json_roots[mesh.scene], node_offset);
 
 			size_t instance_accr = writeInstances(views, json_accessors, accr_offset, mesh.instances, qp, settings);
 
@@ -548,8 +561,9 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		}
 		else
 		{
-			comma(json_roots);
-			append(json_roots, node_offset);
+			assert(mesh.scene >= 0);
+			comma(json_roots[mesh.scene]);
+			append(json_roots[mesh.scene], node_offset);
 
 			writeMeshNode(json_nodes, mesh_offset, NULL, mesh.skin, data, settings.quantize ? &qp : NULL);
 
@@ -574,18 +588,26 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 		const cgltf_node& node = data->nodes[i];
 
-		if (!node.parent)
-		{
-			comma(json_roots);
-			append(json_roots, size_t(ni.remap));
-		}
-
 		comma(json_nodes);
 		append(json_nodes, "{");
 		writeNode(json_nodes, node, nodes, data);
 		if (settings.keep_extras)
 			writeExtras(json_nodes, extras, node.extras);
 		append(json_nodes, "}");
+	}
+
+	for (size_t i = 0; i < data->scenes_count; ++i)
+	{
+		for (size_t j = 0; j < data->scenes[i].nodes_count; ++j)
+		{
+			NodeInfo& ni = nodes[data->scenes[i].nodes[j] - data->nodes];
+
+			if (ni.keep)
+			{
+				comma(json_roots[i]);
+				append(json_roots[i], size_t(ni.remap));
+			}
+		}
 	}
 
 	for (size_t i = 0; i < data->skins_count; ++i)
@@ -658,9 +680,11 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	if (!json_roots.empty())
 	{
 		append(json, ",\"scenes\":[");
-		append(json, "{\"nodes\":[");
-		append(json, json_roots);
-		append(json, "]}]");
+
+		for (size_t i = 0; i < data->scenes_count; ++i)
+			writeScene(json, data->scenes[i], json_roots[i]);
+
+		append(json, "]");
 	}
 
 	writeArray(json, "cameras", json_cameras);
@@ -671,9 +695,11 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		append(json, json_lights);
 		append(json, "]}}");
 	}
-	if (!json_roots.empty())
+
+	if (data->scene)
 	{
-		append(json, ",\"scene\":0");
+		append(json, ",\"scene\":");
+		append(json, size_t(data->scene - data->scenes));
 	}
 
 	if (settings.verbose)

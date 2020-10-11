@@ -155,6 +155,8 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 			meshes.push_back(Mesh());
 			Mesh& result = meshes.back();
 
+			result.scene = -1;
+
 			result.material = primitive.material;
 
 			result.type = primitive.type;
