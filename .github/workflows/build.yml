@@ -86,6 +86,25 @@ jobs:
       env:
         VALIDATOR: https://github.com/KhronosGroup/glTF-Validator/releases/download/2.0.0-dev.3.2/gltf_validator-2.0.0-dev.3.2-linux64.tar.xz
 
+  gltfpackjs:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - uses: actions/setup-node@v1
+      with:
+        node-version: '14.x'
+    - name: install wasi
+      run: |
+        curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sdk-$VERSION.0-linux.tar.gz | tar xz
+        curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/libclang_rt.builtins-wasm32-wasi-$VERSION.0.tar.gz | tar xz -C wasi-sdk-$VERSION.0
+        curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sysroot-$VERSION.0.tar.gz | tar xz
+      env:
+        VERSION: 11
+    - name: build
+      run: make -B WASMCC=wasi-sdk-11.0/bin/clang++ WASI_SDK=./wasi-sysroot gltf/library.wasm
+    - name: test
+      run: node gltf/cli.js -i demo/pirate.obj -o pirate.glb -v
+
   arm64:
     runs-on: ubuntu-latest
     steps:
