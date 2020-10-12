@@ -19,9 +19,6 @@ var interface = {
 	write: function (path, data) {
 		fs.writeFileSync(path, data);
 	},
-	log: function (channel, data) {
-		(channel == 2 ? process.stderr : process.stdout).write(data);
-	},
 	execute: function (command) {
 		// perform substitution of command executable with environment-specific paths
 		var pk = Object.keys(paths);
@@ -42,9 +39,11 @@ var interface = {
 
 gltfpack.init(fs.readFileSync(__dirname + '/library.wasm'));
 gltfpack.pack(args, interface)
-	.then(function () {
+	.then(function (log) {
+		process.stdout.write(log);
 		process.exit(0);
 	})
 	.catch(function (err) {
+		process.stderr.write(err.message);
 		process.exit(1);
 	});

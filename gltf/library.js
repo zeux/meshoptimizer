@@ -17,9 +17,6 @@ function init(wasm) {
 		.then(function (result) {
 			instance = result.instance;
 			instance.exports.__wasm_call_ctors();
-		})
-		.catch(function (err) {
-			console.log(err);
 		});
 }
 
@@ -33,7 +30,6 @@ function init(wasm) {
  * iface should contain the following methods:
  * read(path): Given a path, return a Uint8Array with the contents of that path
  * write(path, data): Write the specified Uint8Array to the provided path
- * log(channel, data): Log the informational message to the requested channel (1: info; 2: error)
  *
  * When texture compression is requested using external compressor such as toktx, iface must provide two additional methods:
  * execute(command): Run the requested command and return the return code
@@ -50,14 +46,21 @@ function pack(args, iface) {
 	return ready.then(function () {
 		var buf = uploadArgv(argv);
 
+		output.position = 0;
+		output.size = 0;
+
 		interface = iface;
 		var result = instance.exports.pack(argv.length, buf);
 		interface = undefined;
 
 		instance.exports.free(buf);
 
+		var log = getString(output.data.buffer, 0, output.size);
+
 		if (result != 0) {
-			throw new Error("Error while running gltfpack: " + result);
+			throw new Error(log);
+		} else {
+			return log;
 		}
 	});
 }
@@ -73,7 +76,8 @@ var instance;
 var interface;
 
 var rootfd = 3;
-var fds = {};
+var output = { data: new Uint8Array(), position: 0, size: 0 };
+var fds = { 1: output, 2: output };
 
 var wasi = {
 	proc_exit: function(rval) {
@@ -112,8 +116,10 @@ var wasi = {
 			return WASI_EBADF;
 		}
 
+		var heap = getHeap();
+
 		var file = {};
-		file.name = getString(path, path_len);
+		file.name = getString(heap.buffer, path, path_len);
 		file.position = 0;
 
 		if (oflags & 1) {
@@ -139,7 +145,6 @@ var wasi = {
 		var fd = nextFd();
 		fds[fd] = file;
 
-		var heap = getHeap();
 		heap.setUint32(opened_fd, fd, true);
 		return 0;
 	},
@@ -149,7 +154,8 @@ var wasi = {
 			return WASI_EBADF;
 		}
 
-		var name = getString(path, path_len);
+		var heap = getHeap();
+		var name = getString(heap.buffer, path, path_len);
 
 		try {
 			interface.unlink(name);
@@ -242,7 +248,7 @@ var wasi = {
 	},
 
 	fd_write: function(fd, iovs, iovs_len, nwritten) {
-		if (fd >= rootfd && !fds[fd]) {
+		if (!fds[fd]) {
 			return WASI_EBADF;
 		}
 
@@ -253,23 +259,13 @@ var wasi = {
 			var buf = heap.getUint32(iovs + 8 * i + 0, true);
 			var buf_len = heap.getUint32(iovs + 8 * i + 4, true);
 
-			if (fd < rootfd) {
-				var data = getString(buf, buf_len);
-
-				try {
-					interface.log(fd, data);
-				} catch (err) {
-					return WASI_EIO;
-				}
-			} else {
-				if (fds[fd].position + buf_len > fds[fd].data.length) {
-					fds[fd].data = growArray(fds[fd].data, fds[fd].position + buf_len);
-				}
-
-				fds[fd].data.set(new Uint8Array(heap.buffer, buf, buf_len), fds[fd].position);
-				fds[fd].position += buf_len;
-				fds[fd].size = Math.max(fds[fd].position, fds[fd].size);
+			if (fds[fd].position + buf_len > fds[fd].data.length) {
+				fds[fd].data = growArray(fds[fd].data, fds[fd].position + buf_len);
 			}
+
+			fds[fd].data.set(new Uint8Array(heap.buffer, buf, buf_len), fds[fd].position);
+			fds[fd].position += buf_len;
+			fds[fd].size = Math.max(fds[fd].position, fds[fd].size);
 
 			written += buf_len;
 		}
@@ -283,7 +279,8 @@ var wasi = {
 			return WASI_ENOSYS;
 		}
 
-		var command = getString(path, path_len);
+		var heap = getHeap();
+		var command = getString(heap.buffer, path, path_len);
 
 		try {
 			return interface.execute(command);
@@ -305,11 +302,8 @@ function getHeap() {
 	return new DataView(instance.exports.memory.buffer);
 }
 
-function getString(addr, len) {
-	var decoder = new TextDecoder();
-	var heap = getHeap();
-
-	return decoder.decode(new Uint8Array(heap.buffer, addr, len));
+function getString(buffer, offset, length) {
+	return new TextDecoder().decode(new Uint8Array(buffer, offset, length));
 }
 
 function growArray(data, len) {
