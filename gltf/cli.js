@@ -37,7 +37,6 @@ var interface = {
 	},
 };
 
-gltfpack.init(fs.readFileSync(__dirname + '/library.wasm'));
 gltfpack.pack(args, interface)
 	.then(function (log) {
 		process.stdout.write(log);

@@ -4,6 +4,8 @@
  * Initialize the library with the Wasm module (library.wasm)
  *
  * @param wasm Promise with contents of library.wasm
+ *
+ * Note: this is called automatically in node.js
  */
 function init(wasm) {
 	if (ready) {
@@ -342,6 +344,13 @@ function uploadArgv(argv) {
 	}
 
 	return buf;
+}
+
+// Automatic initialization for node.js
+if (typeof window === 'undefined' && typeof process !== 'undefined' && process.release.name === 'node') {
+	var fs = require('fs');
+
+	init(fs.readFileSync(__dirname + '/library.wasm'));
 }
 
 // UMD
