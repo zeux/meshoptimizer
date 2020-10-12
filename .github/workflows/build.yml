@@ -104,6 +104,12 @@ jobs:
       run: make -B WASMCC=wasi-sdk-11.0/bin/clang++ WASI_SDK=./wasi-sysroot gltf/library.wasm
     - name: test
       run: node gltf/cli.js -i demo/pirate.obj -o pirate.glb -v
+    - name: npm pack
+      run: cd gltf && npm pack
+    - uses: actions/upload-artifact@v2
+      with:
+        name: gltfpack-npm
+        path: gltf/gltfpack-*.tgz
 
   arm64:
     runs-on: ubuntu-latest
