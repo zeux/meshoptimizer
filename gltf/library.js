@@ -5,7 +5,7 @@
  *
  * @param wasm Promise with contents of library.wasm
  */
-exports.init = function(wasm) {
+function init(wasm) {
 	if (ready) {
 		throw new Error("init must be called once");
 	}
@@ -39,7 +39,7 @@ exports.init = function(wasm) {
  * execute(command): Run the requested command and return the return code
  * unlink(path): Remove the requested file (will be called with paths to temp files after texture compression finishes)
  */
-exports.pack = function(args, iface) {
+function pack(args, iface) {
 	if (!ready) {
 		throw new Error("init must be called before pack");
 	}
@@ -342,3 +342,16 @@ function uploadArgv(argv) {
 
 	return buf;
 }
+
+// UMD
+(function (root, factory) {
+    if (typeof define === 'function' && define.amd) {
+        define([], factory);
+    } else if (typeof module === 'object' && module.exports) {
+        module.exports = factory();
+    } else {
+        root.gltfpack = factory();
+  }
+}(typeof self !== 'undefined' ? self : this, function () {
+    return { init, pack };
+}));
