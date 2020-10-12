@@ -1210,3 +1210,10 @@ int main(int argc, char** argv)
 
 	return gltfpack(input, output, report, settings);
 }
+
+#ifdef __wasi__
+extern "C" int pack(int argc, char** argv)
+{
+	return main(argc, argv);
+}
+#endif

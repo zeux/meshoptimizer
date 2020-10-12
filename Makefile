@@ -84,11 +84,10 @@ format:
 gltfpack: $(GLTFPACK_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
 
-gltfpack.wasm: gltf/bin/gltfpack.wasm
+gltfpack.wasm: gltf/library.wasm
 
-gltf/bin/gltfpack.wasm: ${LIBRARY_SOURCES} ${GLTFPACK_SOURCES} tools/meshloader.cpp
-	@mkdir -p gltf/lib
-	$(WASMCC) $^ -o $@ -Os -DNDEBUG --target=wasm32-wasi --sysroot=$(WASI_SDK)
+gltf/library.wasm: ${LIBRARY_SOURCES} ${GLTFPACK_SOURCES} tools/meshloader.cpp
+	$(WASMCC) $^ -o $@ -Os -DNDEBUG --target=wasm32-wasi --sysroot=$(WASI_SDK) -nostartfiles -Wl,--no-entry -Wl,--export=pack -Wl,--export=malloc -Wl,--export=free -Wl,--export=__wasm_call_ctors -Wl,-s
 
 build/decoder_base.wasm: $(WASM_SOURCES)
 	@mkdir -p build

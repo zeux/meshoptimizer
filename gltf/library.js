@@ -19,7 +19,6 @@ var fds = {
 	3: null // fake fd for directory
 };
 
-var args = process.argv.slice(1);
 var env = Object.keys(process.env).map(function (key) { return key + '=' + process.env[key] });
 
 function nextFd() {
@@ -105,38 +104,6 @@ var wasi = {
 		}
 	},
 
-	args_sizes_get: function(argc, argv_buf_size) {
-		var heap = getHeap();
-
-		var buf_size = 0;
-		for (var i = 0; i < args.length; ++i) {
-			buf_size += Buffer.from(args[i], 'utf-8').length + 1;
-		}
-
-		heap.setUint32(argc, args.length, true);
-		heap.setUint32(argv_buf_size, buf_size, true);
-		return 0;
-	},
-
-	args_get: function(argv, argv_buf) {
-		var heap = getHeap();
-		var memory = new Uint8Array(heap.buffer);
-
-		var argp = argv_buf;
-
-		for (var i = 0; i < args.length; ++i) {
-			var item = Buffer.from(args[i], 'utf-8');
-
-			heap.setUint32(argv + i * 4, argp, true);
-			item.copy(memory, argp);
-			heap.setUint8(argp + item.length, 0);
-
-			argp += item.length + 1;
-		}
-
-		return 0;
-	},
-
 	fd_prestat_get: function(fd, buf) {
 		var heap = getHeap();
 
@@ -155,38 +122,6 @@ var wasi = {
 
 	path_remove_directory: function(parent_fd, path, path_len) {
 		return WASI_EINVAL;
-	},
-
-	environ_sizes_get: function(environc, environ_buf_size) {
-		var heap = getHeap();
-
-		var buf_size = 0;
-		for (var i = 0; i < env.length; ++i) {
-			buf_size += Buffer.from(env[i], 'utf-8').length + 1;
-		}
-
-		heap.setUint32(environc, env.length, true);
-		heap.setUint32(environ_buf_size, buf_size, true);
-		return 0;
-	},
-
-	environ_get: function(environ, environ_buf) {
-		var heap = getHeap();
-		var memory = new Uint8Array(heap.buffer);
-
-		var envp = environ_buf;
-
-		for (var i = 0; i < env.length; ++i) {
-			var item = Buffer.from(env[i], 'utf-8');
-
-			heap.setUint32(environ + i * 4, envp, true);
-			item.copy(memory, envp);
-			heap.setUint8(envp + item.length, 0);
-
-			envp += item.length + 1;
-		}
-
-		return 0;
 	},
 
 	fd_fdstat_set_flags: function(fd, flags) {
@@ -282,10 +217,44 @@ var wasi = {
 	},
 };
 
-var wasm = fs.readFileSync(__dirname + '/gltfpack.wasm');
+var wasm = fs.readFileSync(__dirname + '/library.wasm');
 
-WebAssembly.instantiate(wasm, { wasi_snapshot_preview1: wasi })
-.then(function (result) {
-	instance = result.instance;
-	instance.exports._start();
-});
+var ready = 
+	WebAssembly.instantiate(wasm, { wasi_snapshot_preview1: wasi })
+	.then(function (result) {
+		instance = result.instance;
+		instance.exports.__wasm_call_ctors();
+	});
+
+exports.pack = function(args) {
+	var argv = args.slice();
+	argv.unshift("gltfpack");
+
+	return ready.then(function () {
+		var buf_size = argv.length * 4;
+		for (var i = 0; i < argv.length; ++i) {
+			buf_size += Buffer.from(argv[i], 'utf-8').length + 1;
+		}
+
+		var buf = instance.exports.malloc(buf_size);
+		var argp = buf + argv.length * 4;
+
+		var heap = getHeap();
+
+		for (var i = 0; i < argv.length; ++i) {
+			var item = Buffer.from(argv[i], 'utf-8');
+
+			heap.setUint32(buf + i * 4, argp, true);
+			item.copy(new Uint8Array(heap.buffer), argp);
+			heap.setUint8(argp + item.length, 0);
+
+			argp += item.length + 1;
+		}
+
+		var result = instance.exports.pack(argv.length, buf);
+
+		instance.exports.free(buf);
+
+		return result;
+	});
+}
