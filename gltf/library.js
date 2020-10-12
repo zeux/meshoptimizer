@@ -117,7 +117,7 @@ var wasi = {
 		file.position = 0;
 
 		if (oflags & 1) {
-			file.data = new Uint8Array(1024);
+			file.data = new Uint8Array(4096);
 			file.size = 0;
 			file.close = function () {
 				interface.write(file.name, new Uint8Array(file.data.buffer, 0, file.size));
@@ -242,6 +242,10 @@ var wasi = {
 	},
 
 	fd_write: function(fd, iovs, iovs_len, nwritten) {
+		if (fd >= rootfd && !fds[fd]) {
+			return WASI_EBADF;
+		}
+
 		var heap = getHeap();
 		var written = 0;
 
@@ -258,17 +262,8 @@ var wasi = {
 					return WASI_EIO;
 				}
 			} else {
-				var req_capacity = fds[fd].position + buf_len;
-
-				if (req_capacity > fds[fd].data.length) {
-					var new_capacity = fds[fd].data.length;
-					while (req_capacity > new_capacity) {
-						new_capacity *= 2;
-					}
-
-					var new_data = new Uint8Array(new_capacity);
-					new_data.set(fds[fd].data);
-					fds[fd].data = new_data;
+				if (fds[fd].position + buf_len > fds[fd].data.length) {
+					fds[fd].data = growArray(fds[fd].data, fds[fd].position + buf_len);
 				}
 
 				fds[fd].data.set(new Uint8Array(heap.buffer, buf, buf_len), fds[fd].position);
@@ -315,6 +310,18 @@ function getString(addr, len) {
 	var heap = getHeap();
 
 	return decoder.decode(new Uint8Array(heap.buffer, addr, len));
+}
+
+function growArray(data, len) {
+	var new_length = Math.max(1, data.length);
+	while (new_length < len) {
+		new_length *= 2;
+	}
+
+	var new_data = new Uint8Array(new_length);
+	new_data.set(data);
+
+	return new_data;
 }
 
 function uploadArgv(argv) {
