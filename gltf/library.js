@@ -1,8 +1,74 @@
+// This file is part of gltfpack and is distributed under the terms of MIT License.
+
+/**
+ * Compile the Wasm library (library.wasm)
+ *
+ * @param wasm Promise with contents of library.wasm
+ */
+exports.setLibrary = function(wasm) {
+	if (ready) {
+		throw new Error("setLibrary must be called once");
+	}
+
+	ready = Promise.resolve(wasm)
+		.then(function (buffer) {
+			return WebAssembly.instantiate(buffer, { wasi_snapshot_preview1: wasi });
+		})
+		.then(function (result) {
+			instance = result.instance;
+			instance.exports.__wasm_call_ctors();
+		})
+		.catch(function (err) {
+			console.log(err);
+		});
+}
+
+/**
+ * Pack the requested glTF data using the requested command line and access interface.
+ *
+ * @param args An array of strings with the input arguments; the paths for input and output files are interpreted by the interface
+ * @param iface An interface to the system that will be used to service file requests and other system calls
+ * @return Promise that indicates completion of the operation
+ *
+ * iface should contain the following methods:
+ * read(path): Given a path, return a Uint8Array with the contents of that path
+ * write(path, data): Write the specified Uint8Array to the provided path
+ * log(channel, data): Log the informational message to the requested channel (1: info; 2: error)
+ *
+ * When texture compression is requested using external compressor such as toktx, iface must provide two additional methods:
+ * execute(command): Run the requested command and return the return code
+ * unlink(path): Remove the requested file (will be called with paths to temp files after texture compression finishes)
+ */
+exports.pack = function(args, iface) {
+	if (!ready) {
+		throw new Error("setLibrary must be called before pack");
+	}
+
+	var argv = args.slice();
+	argv.unshift("gltfpack");
+
+	return ready.then(function () {
+		var buf = uploadArgv(argv);
+
+		interface = iface;
+		var result = instance.exports.pack(argv.length, buf);
+		interface = undefined;
+
+		instance.exports.free(buf);
+
+		if (result != 0) {
+			throw new Error("Error while running gltfpack: " + result);
+		}
+	});
+}
+
+// Library implementation (here be dragons)
 var WASI_EBADF = 8;
 var WASI_EINVAL = 28;
 var WASI_EIO = 29;
 var WASI_ENOSYS = 52;
 
+var ready;
 var instance;
 var interface;
 
@@ -275,39 +341,4 @@ function uploadArgv(argv) {
 	}
 
 	return buf;
-}
-
-var wasm;
-
-{
-	var fs = require('fs');
-
-	wasm = fs.readFileSync(__dirname + '/library.wasm');
-}
-
-var ready = 
-	WebAssembly.instantiate(wasm, { wasi_snapshot_preview1: wasi })
-	.then(function (result) {
-		instance = result.instance;
-		instance.exports.__wasm_call_ctors();
-	});
-
-exports.pack = function(args, iface) {
-	var argv = args.slice();
-	argv.unshift("gltfpack");
-
-	return ready.then(function () {
-		var buf = uploadArgv(argv);
-
-		try
-		{
-			interface = iface;
-			return instance.exports.pack(argv.length, buf);
-		}
-		finally
-		{
-			instance.exports.free(buf);
-			interface = undefined;
-		}
-	});
 }

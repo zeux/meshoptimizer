@@ -68,3 +68,7 @@ The following settings are frequently used to restrict some optimizations:
 * `-kn`: keep named nodes and meshes attached to named nodes so that named nodes can be transformed externally
 * `-km`: keep named materials and disable named material merging
 * `-ke`: keep extras data
+
+## License
+
+gltfpack is available to anybody free of charge, under the terms of MIT License (see LICENSE.md).

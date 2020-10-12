@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// This file is part of gltfpack and is distributed under the terms of MIT License.
 var gltfpack = require('./library.js');
 
 var fs = require('fs');
@@ -19,7 +20,7 @@ var interface = {
 		fs.writeFileSync(path, data);
 	},
 	log: function (channel, data) {
-		(channel == 0 ? process.stdout : process.stderr).write(data);
+		(channel == 2 ? process.stderr : process.stdout).write(data);
 	},
 	execute: function (command) {
 		// perform substitution of command executable with environment-specific paths
@@ -39,6 +40,13 @@ var interface = {
 	},
 };
 
-gltfpack.pack(args, interface).then(function (result) {
-	process.exit(result);
-});
+gltfpack.setLibrary(fs.readFileSync(__dirname + '/library.wasm'));
+
+gltfpack
+	.pack(args, interface)
+	.then(function () {
+		process.exit(0);
+	})
+	.catch(function (err) {
+		process.exit(1);
+	});
