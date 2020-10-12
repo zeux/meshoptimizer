@@ -1,13 +1,13 @@
 // This file is part of gltfpack and is distributed under the terms of MIT License.
 
 /**
- * Compile the Wasm library (library.wasm)
+ * Initialize the library with the Wasm module (library.wasm)
  *
  * @param wasm Promise with contents of library.wasm
  */
-exports.setLibrary = function(wasm) {
+exports.init = function(wasm) {
 	if (ready) {
-		throw new Error("setLibrary must be called once");
+		throw new Error("init must be called once");
 	}
 
 	ready = Promise.resolve(wasm)
@@ -41,7 +41,7 @@ exports.setLibrary = function(wasm) {
  */
 exports.pack = function(args, iface) {
 	if (!ready) {
-		throw new Error("setLibrary must be called before pack");
+		throw new Error("init must be called before pack");
 	}
 
 	var argv = args.slice();

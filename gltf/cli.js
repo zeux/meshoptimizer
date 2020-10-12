@@ -40,10 +40,8 @@ var interface = {
 	},
 };
 
-gltfpack.setLibrary(fs.readFileSync(__dirname + '/library.wasm'));
-
-gltfpack
-	.pack(args, interface)
+gltfpack.init(fs.readFileSync(__dirname + '/library.wasm'));
+gltfpack.pack(args, interface)
 	.then(function () {
 		process.exit(0);
 	})
