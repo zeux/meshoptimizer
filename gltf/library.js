@@ -1,37 +1,16 @@
-var fs = require('fs');
-var cp = require('child_process');
-
 var WASI_EBADF = 8;
 var WASI_EINVAL = 28;
 var WASI_EIO = 29;
 var WASI_ENOSYS = 52;
 
 var instance;
+var interface;
 
-function getHeap() {
-	return new DataView(instance.exports.memory.buffer);
-}
-
-var fds = {
-	0: { fd: 0 },
-	1: { fd: 1 },
-	2: { fd: 2 },
-	3: null // fake fd for directory
-};
-
-var env = Object.keys(process.env).map(function (key) { return key + '=' + process.env[key] });
-
-function nextFd() {
-	for (var i = 0; ; ++i) {
-		if (fds[i] === undefined) {
-			return i;
-		}
-	}
-}
+var rootfd = 3;
+var fds = {};
 
 var wasi = {
 	proc_exit: function(rval) {
-		process.exit(rval);
 	},
 
 	fd_close: function(fd) {
@@ -40,7 +19,9 @@ var wasi = {
 		}
 
 		try {
-			fs.closeSync(fds[fd].fd);
+			if (fds[fd].close) {
+				fds[fd].close();
+			}
 			fds[fd] = undefined;
 			return 0;
 		} catch (err) {
@@ -50,12 +31,8 @@ var wasi = {
 	},
 
 	fd_fdstat_get: function(fd, stat) {
-		if (fds[fd] === undefined) {
-			return WASI_EBADF;
-		}
-
 		var heap = getHeap();
-		heap.setUint8(stat + 0, fds[fd] === null ? 3 : 4); // directory
+		heap.setUint8(stat + 0, fds[fd] === rootfd ? 3 : 4);
 		heap.setUint16(stat + 2, 0, true);
 		heap.setUint32(stat + 8, 0, true);
 		heap.setUint32(stat + 12, 0, true);
@@ -65,39 +42,51 @@ var wasi = {
 	},
 
 	path_open32: function(parent_fd, dirflags, path, path_len, oflags, fs_rights_base, fs_rights_inheriting, fdflags, opened_fd) {
-		if (fds[parent_fd] !== null) {
+		if (parent_fd != rootfd) {
 			return WASI_EBADF;
 		}
 
-		var heap = getHeap();
+		var file = {};
+		file.name = getString(path, path_len);
+		file.position = 0;
 
-		var path_name = Buffer.from(heap.buffer, path, path_len).toString('utf-8');
-		var flags = (oflags & 1) ? 'w' : 'r';
+		if (oflags & 1) {
+			file.data = new Uint8Array(1024);
+			file.size = 0;
+			file.close = function () {
+				interface.write(file.name, new Uint8Array(file.data.buffer, 0, file.size));
+			};
+		} else {
+			try {
+				file.data = interface.read(file.name);
 
-		try {
-			var real_fd = fs.openSync(path_name, flags);
-			var stat = fs.fstatSync(real_fd);
+				if (!file.data) {
+					return WASI_EIO;
+				}
 
-			var fd = nextFd();
-			fds[fd] = { fd: real_fd, position: 0, size: stat.size };
-
-			heap.setUint32(opened_fd, fd, true);
-			return 0;
-		} catch (err) {
-			return WASI_EIO;
+				file.size = file.data.length;
+			} catch (err) {
+				return WASI_EIO;
+			}
 		}
+
+		var fd = nextFd();
+		fds[fd] = file;
+
+		var heap = getHeap();
+		heap.setUint32(opened_fd, fd, true);
+		return 0;
 	},
 
 	path_unlink_file: function(parent_fd, path, path_len) {
-		if (fds[parent_fd] !== null) {
+		if (parent_fd !== rootfd) {
 			return WASI_EBADF;
 		}
 
-		var heap = getHeap();
-		var path_name = Buffer.from(heap.buffer, path, path_len).toString('utf-8');
+		var name = getString(path, path_len);
 
 		try {
-			fs.unlinkSync(path_name);
+			interface.unlink(name);
 			return 0;
 		} catch (err) {
 			return WASI_EIO;
@@ -105,15 +94,14 @@ var wasi = {
 	},
 
 	fd_prestat_get: function(fd, buf) {
-		var heap = getHeap();
-
-		if (fd == 3) {
-			heap.setUint8(buf, 0);
-			heap.setUint32(buf + 4, 0, true);
-			return 0;
-		} else {
+		if (fd != rootfd) {
 			return WASI_EBADF;
 		}
+
+		var heap = getHeap();
+		heap.setUint8(buf, 0);
+		heap.setUint32(buf + 4, 0, true);
+		return 0;
 	},
 
 	fd_prestat_dir_name: function(fd, path, path_len) {
@@ -133,26 +121,33 @@ var wasi = {
 			return WASI_EBADF;
 		}
 
-		var heap = getHeap();
+		var newposition;
 
 		switch (whence) {
 		case 0:
-			fds[fd].position = offset;
+			newposition = offset;
 			break;
 
 		case 1:
-			fds[fd].position += offset;
+			newposition = fds[fd].position + offset;
 			break;
 
 		case 2:
-			fds[fd].position = fds[fd].size;
+			newposition = fds[fd].size;
 			break;
 
 		default:
 			return WASI_EINVAL;
 		}
 
-		heap.setUint32(newoffset, fds[fd].position, true);
+		if (newposition > fds[fd].size) {
+			return WASI_EINVAL;
+		}
+
+		fds[fd].position = newposition;
+
+		var heap = getHeap();
+		heap.setUint32(newoffset, newposition, true);
 		return 0;
 	},
 
@@ -168,14 +163,12 @@ var wasi = {
 			var buf = heap.getUint32(iovs + 8 * i + 0, true);
 			var buf_len = heap.getUint32(iovs + 8 * i + 4, true);
 
-			try {
-				var readi = fs.readSync(fds[fd].fd, heap, buf, buf_len, fds[fd].position);
+			var readi = Math.min(fds[fd].size - fds[fd].position, buf_len);
 
-				fds[fd].position += readi;
-				read += readi;
-			} catch (err) {
-				return WASI_EIO;
-			}
+			new Uint8Array(heap.buffer).set(new Uint8Array(fds[fd].data.buffer, fds[fd].position, readi), buf);
+
+			fds[fd].position += readi;
+			read += readi;
 		}
 
 		heap.setUint32(nread, read, true);
@@ -190,14 +183,34 @@ var wasi = {
 			var buf = heap.getUint32(iovs + 8 * i + 0, true);
 			var buf_len = heap.getUint32(iovs + 8 * i + 4, true);
 
-			try {
-				var writei = fs.writeSync(fds[fd].fd, heap, buf, buf_len, fds[fd].position);
+			if (fd < rootfd) {
+				var data = getString(buf, buf_len);
 
-				fds[fd].position += writei;
-				written += writei;
-			} catch (err) {
-				return WASI_EIO;
+				try {
+					interface.log(fd, data);
+				} catch (err) {
+					return WASI_EIO;
+				}
+			} else {
+				var req_capacity = fds[fd].position + buf_len;
+
+				if (req_capacity > fds[fd].data.length) {
+					var new_capacity = fds[fd].data.length;
+					while (req_capacity > new_capacity) {
+						new_capacity *= 2;
+					}
+
+					var new_data = new Uint8Array(new_capacity);
+					new_data.set(fds[fd].data);
+					fds[fd].data = new_data;
+				}
+
+				fds[fd].data.set(new Uint8Array(heap.buffer, buf, buf_len), fds[fd].position);
+				fds[fd].position += buf_len;
+				fds[fd].size = Math.max(fds[fd].position, fds[fd].size);
 			}
+
+			written += buf_len;
 		}
 
 		heap.setUint32(nwritten, written, true);
@@ -209,15 +222,68 @@ var wasi = {
 			return WASI_ENOSYS;
 		}
 
-		var heap = getHeap();
-		var command = Buffer.from(heap.buffer, path, path_len).toString('utf-8');
+		var command = getString(path, path_len);
 
-		var ret = cp.spawnSync(command, [], {shell:true});
-		return ret.status == null ? 256 : ret.status;
+		try {
+			return interface.execute(command);
+		} catch (err) {
+			return WASI_ENOSYS;
+		}
 	},
 };
 
-var wasm = fs.readFileSync(__dirname + '/library.wasm');
+function nextFd() {
+	for (var i = rootfd + 1; ; ++i) {
+		if (fds[i] === undefined) {
+			return i;
+		}
+	}
+}
+
+function getHeap() {
+	return new DataView(instance.exports.memory.buffer);
+}
+
+function getString(addr, len) {
+	var decoder = new TextDecoder();
+	var heap = getHeap();
+
+	return decoder.decode(new Uint8Array(heap.buffer, addr, len));
+}
+
+function uploadArgv(argv) {
+	var encoder = new TextEncoder();
+
+	var buf_size = argv.length * 4;
+	for (var i = 0; i < argv.length; ++i) {
+		buf_size += encoder.encode(argv[i]).length + 1;
+	}
+
+	var buf = instance.exports.malloc(buf_size);
+	var argp = buf + argv.length * 4;
+
+	var heap = getHeap();
+
+	for (var i = 0; i < argv.length; ++i) {
+		var item = encoder.encode(argv[i]);
+
+		heap.setUint32(buf + i * 4, argp, true);
+		new Uint8Array(heap.buffer).set(item, argp);
+		heap.setUint8(argp + item.length, 0);
+
+		argp += item.length + 1;
+	}
+
+	return buf;
+}
+
+var wasm;
+
+{
+	var fs = require('fs');
+
+	wasm = fs.readFileSync(__dirname + '/library.wasm');
+}
 
 var ready = 
 	WebAssembly.instantiate(wasm, { wasi_snapshot_preview1: wasi })
@@ -226,37 +292,22 @@ var ready =
 		instance.exports.__wasm_call_ctors();
 	});
 
-exports.pack = function(args) {
+exports.pack = function(args, iface) {
 	var argv = args.slice();
 	argv.unshift("gltfpack");
 
 	return ready.then(function () {
-		var encoder = new TextEncoder();
+		var buf = uploadArgv(argv);
 
-		var buf_size = argv.length * 4;
-		for (var i = 0; i < argv.length; ++i) {
-			buf_size += encoder.encode(argv[i]).length + 1;
+		try
+		{
+			interface = iface;
+			return instance.exports.pack(argv.length, buf);
 		}
-
-		var buf = instance.exports.malloc(buf_size);
-		var argp = buf + argv.length * 4;
-
-		var heap = getHeap();
-
-		for (var i = 0; i < argv.length; ++i) {
-			var item = encoder.encode(argv[i]);
-
-			heap.setUint32(buf + i * 4, argp, true);
-			new Uint8Array(heap.buffer).set(item, argp);
-			heap.setUint8(argp + item.length, 0);
-
-			argp += item.length + 1;
+		finally
+		{
+			instance.exports.free(buf);
+			interface = undefined;
 		}
-
-		var result = instance.exports.pack(argv.length, buf);
-
-		instance.exports.free(buf);
-
-		return result;
 	});
 }
