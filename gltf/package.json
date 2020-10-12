@@ -6,18 +6,19 @@
 	"license": "MIT",
 	"bugs": "https://github.com/zeux/meshoptimizer/issues",
 	"homepage": "https://github.com/zeux/meshoptimizer",
-	"keywords": ["gltf"],
+	"keywords": [
+		"gltf"
+	],
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/zeux/meshoptimizer"
 	},
-	"bin": {
-		"gltfpack": "./bin/gltfpack.js"
-	},
+	"bin": "./cli.js",
+	"main": "./library.js",
 	"files": [
-		"bin/"
+		"*.js", "*.wasm"
 	],
 	"scripts": {
-		"prepublishOnly": "node bin/gltfpack.js -v"
+		"prepublishOnly": "node cli.js -v"
 	}
 }

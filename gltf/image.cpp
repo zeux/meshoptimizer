@@ -104,6 +104,17 @@ static const char* mimeExtension(const char* mime_type)
 	return ".raw";
 }
 
+#ifdef __wasi__
+static int execute(const char* cmd, bool ignore_stdout, bool ignore_stderr)
+{
+	return system(cmd);
+}
+
+static const char* readenv(const char* name)
+{
+	return NULL;
+}
+#else
 static int execute(const char* cmd_, bool ignore_stdout, bool ignore_stderr)
 {
 #ifdef _WIN32
@@ -114,12 +125,10 @@ static int execute(const char* cmd_, bool ignore_stdout, bool ignore_stderr)
 
 	std::string cmd = cmd_;
 
-#ifndef __wasi__
 	if (ignore_stdout)
 		(cmd += " >") += ignore;
 	if (ignore_stderr)
 		(cmd += " 2>") += ignore;
-#endif
 
 	return system(cmd.c_str());
 }
@@ -128,6 +137,7 @@ static const char* readenv(const char* name)
 {
 	return getenv(name);
 }
+#endif
 
 bool checkBasis(bool verbose)
 {
