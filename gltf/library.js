@@ -231,9 +231,11 @@ exports.pack = function(args) {
 	argv.unshift("gltfpack");
 
 	return ready.then(function () {
+		var encoder = new TextEncoder();
+
 		var buf_size = argv.length * 4;
 		for (var i = 0; i < argv.length; ++i) {
-			buf_size += Buffer.from(argv[i], 'utf-8').length + 1;
+			buf_size += encoder.encode(argv[i]).length + 1;
 		}
 
 		var buf = instance.exports.malloc(buf_size);
@@ -242,10 +244,10 @@ exports.pack = function(args) {
 		var heap = getHeap();
 
 		for (var i = 0; i < argv.length; ++i) {
-			var item = Buffer.from(argv[i], 'utf-8');
+			var item = encoder.encode(argv[i]);
 
 			heap.setUint32(buf + i * 4, argp, true);
-			item.copy(new Uint8Array(heap.buffer), argp);
+			new Uint8Array(heap.buffer).set(item, argp);
 			heap.setUint8(argp + item.length, 0);
 
 			argp += item.length + 1;

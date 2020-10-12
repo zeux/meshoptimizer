@@ -1214,6 +1214,8 @@ int main(int argc, char** argv)
 #ifdef __wasi__
 extern "C" int pack(int argc, char** argv)
 {
-	return main(argc, argv);
+	int result = main(argc, argv);
+	fflush(NULL);
+	return result;
 }
 #endif
