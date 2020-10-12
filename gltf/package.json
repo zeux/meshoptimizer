@@ -16,7 +16,7 @@
 	"bin": "./cli.js",
 	"main": "./library.js",
 	"files": [
-		"*.js"
+		"*.js", "*.wasm"
 	],
 	"scripts": {
 		"prepublishOnly": "node cli.js -v"
