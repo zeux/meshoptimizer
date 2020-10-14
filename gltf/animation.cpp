@@ -3,6 +3,7 @@
 
 #include <algorithm>
 
+#include <float.h>
 #include <math.h>
 #include <string.h>
 
@@ -262,7 +263,7 @@ static void getBaseTransform(Attr* result, size_t components, cgltf_animation_pa
 
 void processAnimation(Animation& animation, const Settings& settings)
 {
-	float mint = 0, maxt = 0;
+	float mint = FLT_MAX, maxt = 0;
 
 	for (size_t i = 0; i < animation.tracks.size(); ++i)
 	{
@@ -272,6 +273,8 @@ void processAnimation(Animation& animation, const Settings& settings)
 		mint = std::min(mint, track.time.front());
 		maxt = std::max(maxt, track.time.back());
 	}
+
+	mint = std::min(mint, maxt);
 
 	// round the number of frames to nearest but favor the "up" direction
 	// this means that at 10 Hz resampling, we will try to preserve the last frame <10ms
