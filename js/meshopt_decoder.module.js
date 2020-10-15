@@ -110,14 +110,4 @@ var MeshoptDecoder = (function() {
 	};
 })();
 
-// UMD-style export
-if (typeof exports === 'object' && typeof module === 'object')
-	module.exports = MeshoptDecoder;
-else if (typeof define === 'function' && define['amd'])
-	define([], function() {
-		return MeshoptDecoder;
-	});
-else if (typeof exports === 'object')
-	exports["MeshoptDecoder"] = MeshoptDecoder;
-else
-	(typeof self !== 'undefined' ? self : this).MeshoptDecoder = MeshoptDecoder;
+export { MeshoptDecoder };

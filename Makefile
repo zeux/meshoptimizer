@@ -102,6 +102,10 @@ js/meshopt_decoder.js: build/decoder_base.wasm build/decoder_simd.wasm
 	sed -i "s#\(var wasm_base = \)\".*\";#\\1\"$$(cat build/decoder_base.wasm | python3 tools/wasmpack.py)\";#" $@
 	sed -i "s#\(var wasm_simd = \)\".*\";#\\1\"$$(cat build/decoder_simd.wasm | python3 tools/wasmpack.py)\";#" $@
 
+js/meshopt_decoder.module.js: js/meshopt_decoder.js
+	sed '/UMD-style export/,$$d' <$< >$@
+	echo "export { MeshoptDecoder };" >>$@
+
 $(EXECUTABLE): $(DEMO_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
 
