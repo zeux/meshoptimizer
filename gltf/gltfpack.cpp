@@ -1057,6 +1057,10 @@ int main(int argc, char** argv)
 		{
 			settings.texture_pow2 = true;
 		}
+		else if (strcmp(arg, "-te") == 0)
+		{
+			fprintf(stderr, "Warning: -te is deprecated and will be removed in the future; gltfpack now automatically embeds textures into GLB files\n");
+		}
 		else if (strcmp(arg, "-noq") == 0)
 		{
 			settings.quantize = false;
