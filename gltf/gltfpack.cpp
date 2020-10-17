@@ -648,7 +648,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	append(json, "}");
 
 	const ExtensionInfo extensions[] = {
-	    {"KHR_mesh_quantization", settings.quantize > 1, true},
+	    {"KHR_mesh_quantization", settings.quantize > 0, true},
 	    {"EXT_meshopt_compression", settings.compress > 0, !settings.fallback},
 	    {"KHR_texture_transform", settings.quantize > 1 && !json_textures.empty(), false},
 	    {"KHR_materials_pbrSpecularGlossiness", ext_pbr_specular_glossiness, false},
