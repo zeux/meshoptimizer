@@ -118,8 +118,7 @@ struct Settings
 
 	bool quantize;
 
-	bool compress;
-	bool compressmore;
+	int compress;
 	bool fallback;
 
 	int verbose;

@@ -649,7 +649,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 	const ExtensionInfo extensions[] = {
 	    {"KHR_mesh_quantization", settings.quantize, true},
-	    {"EXT_meshopt_compression", settings.compress, !settings.fallback},
+	    {"EXT_meshopt_compression", settings.compress > 0, !settings.fallback},
 	    {"KHR_texture_transform", settings.quantize && !json_textures.empty(), false},
 	    {"KHR_materials_pbrSpecularGlossiness", ext_pbr_specular_glossiness, false},
 	    {"KHR_materials_clearcoat", ext_clearcoat, false},
@@ -1079,12 +1079,19 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-c") == 0)
 		{
-			settings.compress = true;
+			if (i + 1 < argc && isdigit(argv[i + 1][0]))
+			{
+				settings.compress = atoi(argv[++i]);
+			}
+			else
+			{
+				settings.compress = 2;
+			}
 		}
 		else if (strcmp(arg, "-cc") == 0)
 		{
-			settings.compress = true;
-			settings.compressmore = true;
+			fprintf(stderr, "Warning: -cc is deprecated and will be removed in the future; use -c instead\n");
+			settings.compress = 2;
 		}
 		else if (strcmp(arg, "-cf") == 0)
 		{
@@ -1153,7 +1160,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nBasics:\n");
 			fprintf(stderr, "\t-i file: input file to process, .obj/.gltf/.glb\n");
 			fprintf(stderr, "\t-o file: output file path, .gltf/.glb\n");
-			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc for higher compression ratio)\n");
+			fprintf(stderr, "\t-c: produce compressed gltf/glb files with optimal compression\n");
 			fprintf(stderr, "\nTextures:\n");
 			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression (using basisu/toktx executable)\n");
 			fprintf(stderr, "\t-tu: use UASTC when encoding textures (much higher quality and much larger size)\n");
@@ -1180,6 +1187,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-mm: merge instances of the same mesh together when possible\n");
 			fprintf(stderr, "\t-mi: use EXT_mesh_gpu_instancing when serializing multiple mesh instances\n");
 			fprintf(stderr, "\nMiscellaneous:\n");
+			fprintf(stderr, "\t-c N: produce compressed gltf/glb files with compression level N (N should be between 0 and 2)\n");
 			fprintf(stderr, "\t-cf: produce compressed gltf/glb files with fallback for loaders that don't support compression\n");
 			fprintf(stderr, "\t-noq: disable quantization; produces much larger glTF files with no extensions\n");
 			fprintf(stderr, "\t-v: verbose output (print version when used without other options)\n");

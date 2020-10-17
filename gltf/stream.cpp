@@ -327,7 +327,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 		if (!settings.quantize)
 			return writeVertexStreamRaw(bin, stream, cgltf_type_vec3, 3);
 
-		bool oct = settings.compressmore && stream.target == 0;
+		bool oct = settings.compress > 1 && stream.target == 0;
 		int bits = settings.nrm_bits;
 
 		StreamFormat::Filter filter = oct ? StreamFormat::Filter_Oct : StreamFormat::Filter_None;
@@ -404,7 +404,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 		if (!settings.quantize)
 			return writeVertexStreamRaw(bin, stream, cgltf_type_vec4, 4);
 
-		bool oct = settings.compressmore && stream.target == 0;
+		bool oct = settings.compress > 1 && stream.target == 0;
 		int bits = (settings.nrm_bits > 8) ? 8 : settings.nrm_bits;
 
 		StreamFormat::Filter filter = oct ? StreamFormat::Filter_Oct : StreamFormat::Filter_None;
@@ -626,7 +626,7 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 {
 	if (type == cgltf_animation_path_type_rotation)
 	{
-		StreamFormat::Filter filter = settings.compressmore ? StreamFormat::Filter_Quat : StreamFormat::Filter_None;
+		StreamFormat::Filter filter = settings.compress > 1 ? StreamFormat::Filter_Quat : StreamFormat::Filter_None;
 
 		for (size_t i = 0; i < data.size(); ++i)
 		{
@@ -667,7 +667,7 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 	}
 	else if (type == cgltf_animation_path_type_translation || type == cgltf_animation_path_type_scale)
 	{
-		StreamFormat::Filter filter = settings.compressmore ? StreamFormat::Filter_Exp : StreamFormat::Filter_None;
+		StreamFormat::Filter filter = settings.compress > 1 ? StreamFormat::Filter_Exp : StreamFormat::Filter_None;
 		int bits = (type == cgltf_animation_path_type_translation) ? settings.trn_bits : settings.scl_bits;
 
 		for (size_t i = 0; i < data.size(); ++i)

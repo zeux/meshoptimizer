@@ -745,7 +745,7 @@ void processMesh(Mesh& mesh, const Settings& settings)
 		filterTriangles(mesh);
 		if (settings.simplify_threshold < 1)
 			simplifyMesh(mesh, settings.simplify_threshold, settings.simplify_aggressive);
-		optimizeMesh(mesh, settings.compressmore);
+		optimizeMesh(mesh, settings.compress > 1);
 		break;
 
 	default:
