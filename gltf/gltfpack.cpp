@@ -419,7 +419,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 		comma(json_materials);
 		append(json_materials, "{");
-		writeMaterial(json_materials, data, material, settings.quantize ? &qt_materials[i] : NULL);
+		writeMaterial(json_materials, data, material, settings.quantize > 1 ? &qt_materials[i] : NULL);
 		if (settings.keep_extras)
 			writeExtras(json_materials, extras, material.extras);
 		append(json_materials, "}");
@@ -541,7 +541,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 				assert(ni.keep);
 				ni.meshes.push_back(node_offset);
 
-				writeMeshNode(json_nodes, mesh_offset, mesh.nodes[j], mesh.skin, data, settings.quantize ? &qp : NULL);
+				writeMeshNode(json_nodes, mesh_offset, mesh.nodes[j], mesh.skin, data, settings.quantize > 1 ? &qp : NULL);
 
 				node_offset++;
 			}
@@ -565,7 +565,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 			comma(json_roots[mesh.scene]);
 			append(json_roots[mesh.scene], node_offset);
 
-			writeMeshNode(json_nodes, mesh_offset, NULL, mesh.skin, data, settings.quantize ? &qp : NULL);
+			writeMeshNode(json_nodes, mesh_offset, NULL, mesh.skin, data, settings.quantize > 1 ? &qp : NULL);
 
 			node_offset++;
 		}
@@ -648,9 +648,9 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	append(json, "}");
 
 	const ExtensionInfo extensions[] = {
-	    {"KHR_mesh_quantization", settings.quantize, true},
+	    {"KHR_mesh_quantization", settings.quantize > 1, true},
 	    {"EXT_meshopt_compression", settings.compress > 0, !settings.fallback},
-	    {"KHR_texture_transform", settings.quantize && !json_textures.empty(), false},
+	    {"KHR_texture_transform", settings.quantize > 1 && !json_textures.empty(), false},
 	    {"KHR_materials_pbrSpecularGlossiness", ext_pbr_specular_glossiness, false},
 	    {"KHR_materials_clearcoat", ext_clearcoat, false},
 	    {"KHR_materials_transmission", ext_transmission, false},
@@ -942,7 +942,7 @@ int main(int argc, char** argv)
 	meshopt_encodeIndexVersion(1);
 
 	Settings settings = {};
-	settings.quantize = true;
+	settings.quantize = 2;
 	settings.pos_bits = 14;
 	settings.tex_bits = 12;
 	settings.nrm_bits = 8;
@@ -1061,9 +1061,14 @@ int main(int argc, char** argv)
 		{
 			fprintf(stderr, "Warning: -te is deprecated and will be removed in the future; gltfpack now automatically embeds textures into GLB files\n");
 		}
+		else if (strcmp(arg, "-q") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		{
+			settings.quantize = atoi(argv[++i]);
+		}
 		else if (strcmp(arg, "-noq") == 0)
 		{
-			settings.quantize = false;
+			fprintf(stderr, "Warning: -noq is deprecated and will be removed in the future; use -q 0 instead\n");
+			settings.quantize = 0;
 		}
 		else if (strcmp(arg, "-i") == 0 && i + 1 < argc && !input)
 		{

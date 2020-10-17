@@ -225,7 +225,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 {
 	if (stream.type == cgltf_attribute_type_position)
 	{
-		if (!settings.quantize)
+		if (settings.quantize < 2)
 			return writeVertexStreamRaw(bin, stream, cgltf_type_vec3, 3);
 
 		if (stream.target == 0)
@@ -300,7 +300,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	}
 	else if (stream.type == cgltf_attribute_type_texcoord)
 	{
-		if (!settings.quantize)
+		if (settings.quantize < 2)
 			return writeVertexStreamRaw(bin, stream, cgltf_type_vec2, 2);
 
 		float uv_rscale[2] = {
@@ -324,7 +324,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	}
 	else if (stream.type == cgltf_attribute_type_normal)
 	{
-		if (!settings.quantize)
+		if (settings.quantize == 0)
 			return writeVertexStreamRaw(bin, stream, cgltf_type_vec3, 3);
 
 		bool oct = settings.compress > 1 && stream.target == 0;
@@ -401,7 +401,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	}
 	else if (stream.type == cgltf_attribute_type_tangent)
 	{
-		if (!settings.quantize)
+		if (settings.quantize == 0)
 			return writeVertexStreamRaw(bin, stream, cgltf_type_vec4, 4);
 
 		bool oct = settings.compress > 1 && stream.target == 0;

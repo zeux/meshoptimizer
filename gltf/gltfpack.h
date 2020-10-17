@@ -116,8 +116,7 @@ struct Settings
 	float texture_scale;
 	bool texture_pow2;
 
-	bool quantize;
-
+	int quantize;
 	int compress;
 	bool fallback;
 

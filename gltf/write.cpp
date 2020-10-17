@@ -848,7 +848,7 @@ void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std:
 		{
 			float min[3] = {};
 			float max[3] = {};
-			getPositionBounds(min, max, stream, settings.quantize ? &qp : NULL);
+			getPositionBounds(min, max, stream, settings.quantize > 1 ? &qp : NULL);
 
 			writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, stream.data.size(), min, max, 3);
 		}
@@ -926,7 +926,7 @@ size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_
 			cgltf_accessor_read_float(skin.inverse_bind_matrices, j, transform, 16);
 		}
 
-		if (settings.quantize)
+		if (settings.quantize > 1)
 		{
 			float node_scale = qp.scale / float((1 << qp.bits) - 1);
 
@@ -983,7 +983,7 @@ size_t writeInstances(std::vector<BufferView>& views, std::string& json_accessor
 	{
 		decomposeTransform(position[i].f, rotation[i].f, scale[i].f, transforms[i].data);
 
-		if (settings.quantize)
+		if (settings.quantize > 1)
 		{
 			const float* transform = transforms[i].data;
 
