@@ -86,6 +86,7 @@ struct Settings
 	int pos_bits;
 	int tex_bits;
 	int nrm_bits;
+	int col_bits;
 
 	int trn_bits;
 	int rot_bits;

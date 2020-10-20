@@ -937,15 +937,14 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 	return 0;
 }
 
-int main(int argc, char** argv)
+Settings defaults()
 {
-	meshopt_encodeIndexVersion(1);
-
 	Settings settings = {};
 	settings.quantize = true;
 	settings.pos_bits = 14;
 	settings.tex_bits = 12;
 	settings.nrm_bits = 8;
+	settings.col_bits = 8;
 	settings.trn_bits = 16;
 	settings.rot_bits = 12;
 	settings.scl_bits = 16;
@@ -953,6 +952,15 @@ int main(int argc, char** argv)
 	settings.simplify_threshold = 1.f;
 	settings.texture_quality = 8;
 	settings.texture_scale = 1.f;
+
+	return settings;
+}
+
+int main(int argc, char** argv)
+{
+	meshopt_encodeIndexVersion(1);
+
+	Settings settings = defaults();
 
 	const char* input = 0;
 	const char* output = 0;
@@ -977,6 +985,10 @@ int main(int argc, char** argv)
 		else if (strcmp(arg, "-vn") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.nrm_bits = atoi(argv[++i]);
+		}
+		else if (strcmp(arg, "-vc") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		{
+			settings.col_bits = atoi(argv[++i]);
 		}
 		else if (strcmp(arg, "-at") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
@@ -1167,6 +1179,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-vp N: use N-bit quantization for positions (default: 14; N should be between 1 and 16)\n");
 			fprintf(stderr, "\t-vt N: use N-bit quantization for texture coordinates (default: 12; N should be between 1 and 16)\n");
 			fprintf(stderr, "\t-vn N: use N-bit quantization for normals and tangents (default: 8; N should be between 1 and 16)\n");
+			fprintf(stderr, "\t-vc N: use N-bit quantization for colors (default: 8; N should be between 1 and 16)\n");
 			fprintf(stderr, "\nAnimations:\n");
 			fprintf(stderr, "\t-at N: use N-bit quantization for translations (default: 16; N should be between 1 and 24)\n");
 			fprintf(stderr, "\t-ar N: use N-bit quantization for rotations (default: 12; N should be between 4 and 16)\n");

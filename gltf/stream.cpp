@@ -221,6 +221,16 @@ static StreamFormat writeVertexStreamRaw(std::string& bin, const Stream& stream,
 	return format;
 }
 
+static int quantizeColor(float v, int bytebits, int bits)
+{
+	int result = meshopt_quantizeUnorm(v, bytebits);
+
+	// replicate the top bit into the low significant bits
+	const int mask = (1 << (bytebits - bits)) - 1;
+
+	return (result & ~mask) | (mask & -(result >> (bytebits - 1)));
+}
+
 StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings)
 {
 	if (stream.type == cgltf_attribute_type_position)
@@ -445,20 +455,42 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	}
 	else if (stream.type == cgltf_attribute_type_color)
 	{
+		int bits = settings.col_bits;
+
 		for (size_t i = 0; i < stream.data.size(); ++i)
 		{
 			const Attr& a = stream.data[i];
 
-			uint8_t v[4] = {
-			    uint8_t(meshopt_quantizeUnorm(a.f[0], 8)),
-			    uint8_t(meshopt_quantizeUnorm(a.f[1], 8)),
-			    uint8_t(meshopt_quantizeUnorm(a.f[2], 8)),
-			    uint8_t(meshopt_quantizeUnorm(a.f[3], 8))};
-			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+			if (bits > 8)
+			{
+				uint16_t v[4] = {
+				    uint16_t(quantizeColor(a.f[0], 16, bits)),
+				    uint16_t(quantizeColor(a.f[1], 16, bits)),
+				    uint16_t(quantizeColor(a.f[2], 16, bits)),
+				    uint16_t(quantizeColor(a.f[3], 16, bits))};
+				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+			}
+			else
+			{
+				uint8_t v[4] = {
+				    uint8_t(quantizeColor(a.f[0], 8, bits)),
+				    uint8_t(quantizeColor(a.f[1], 8, bits)),
+				    uint8_t(quantizeColor(a.f[2], 8, bits)),
+				    uint8_t(quantizeColor(a.f[3], 8, bits))};
+				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+			}
 		}
 
-		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_8u, true, 4};
-		return format;
+		if (bits > 8)
+		{
+			StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16u, true, 8};
+			return format;
+		}
+		else
+		{
+			StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_8u, true, 4};
+			return format;
+		}
 	}
 	else if (stream.type == cgltf_attribute_type_weights)
 	{
