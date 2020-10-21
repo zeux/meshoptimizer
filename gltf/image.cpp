@@ -70,6 +70,14 @@ void analyzeImages(cgltf_data* data, std::vector<ImageInfo>& images)
 				images[specular.specular_texture.texture->image - data->images].srgb = true;
 		}
 
+		if (material.has_sheen)
+		{
+			const cgltf_sheen& sheen = material.sheen;
+
+			if (sheen.sheen_color_texture.texture && sheen.sheen_color_texture.texture->image)
+				images[sheen.sheen_color_texture.texture->image - data->images].srgb = true;
+		}
+
 		if (material.emissive_texture.texture && material.emissive_texture.texture->image)
 			images[material.emissive_texture.texture->image - data->images].srgb = true;
 

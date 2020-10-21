@@ -372,6 +372,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	bool ext_transmission = false;
 	bool ext_ior = false;
 	bool ext_specular = false;
+	bool ext_sheen = false;
 	bool ext_unlit = false;
 	bool ext_instancing = false;
 
@@ -432,6 +433,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		ext_transmission = ext_transmission || material.has_transmission;
 		ext_ior = ext_ior || material.has_ior;
 		ext_specular = ext_specular || material.has_specular;
+		ext_sheen = ext_sheen || material.has_sheen;
 		ext_unlit = ext_unlit || material.unlit;
 	}
 
@@ -656,6 +658,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	    {"KHR_materials_transmission", ext_transmission, false},
 	    {"KHR_materials_ior", ext_ior, false},
 	    {"KHR_materials_specular", ext_specular, false},
+	    {"KHR_materials_sheen", ext_sheen, false},
 	    {"KHR_materials_unlit", ext_unlit, false},
 	    {"KHR_lights_punctual", data->lights_count > 0, false},
 	    {"KHR_texture_basisu", !json_textures.empty() && settings.texture_ktx2, true},
