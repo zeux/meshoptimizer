@@ -1225,10 +1225,10 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 	{
 		const Track& track = *tracks[j];
 
-		bool tc = track.data.size() == track.components;
+		assert(track.data.size() == track.components * (track.constant ? 1 : animation.frames));
 
-		needs_time = needs_time || !tc;
-		needs_pose = needs_pose || tc;
+		needs_time = needs_time || !track.constant;
+		needs_pose = needs_pose || track.constant;
 	}
 
 	size_t time_accr = needs_time ? writeAnimationTime(views, json_accessors, accr_offset, animation.start, animation.frames, settings) : 0;
@@ -1242,8 +1242,6 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 	for (size_t j = 0; j < tracks.size(); ++j)
 	{
 		const Track& track = *tracks[j];
-
-		bool tc = track.data.size() == track.components;
 
 		std::string scratch;
 		StreamFormat format = writeKeyframeStream(scratch, track.path, track.data, settings);
@@ -1260,7 +1258,7 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 
 		comma(json_samplers);
 		append(json_samplers, "{\"input\":");
-		append(json_samplers, tc ? pose_accr : time_accr);
+		append(json_samplers, track.constant ? pose_accr : time_accr);
 		append(json_samplers, ",\"output\":");
 		append(json_samplers, data_accr);
 		append(json_samplers, "}");

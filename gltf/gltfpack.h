@@ -61,6 +61,7 @@ struct Track
 	cgltf_node* node;
 	cgltf_animation_path_type path;
 
+	bool constant;
 	bool dummy;
 
 	size_t components; // 1 unless path is cgltf_animation_path_type_weights
