@@ -12,7 +12,7 @@
 #include <stddef.h>
 
 /* Version macro; major * 1000 + minor * 10 + patch */
-#define MESHOPTIMIZER_VERSION 140
+#define MESHOPTIMIZER_VERSION 150 /* 0.15 */
 
 /* If no API is defined, assume default */
 #ifndef MESHOPTIMIZER_API
