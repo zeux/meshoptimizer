@@ -1,5 +1,5 @@
 /**
- * meshoptimizer - version 0.14
+ * meshoptimizer - version 0.15
  *
  * Copyright (C) 2016-2020, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
  * Report bugs and download new versions at https://github.com/zeux/meshoptimizer

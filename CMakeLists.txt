@@ -9,7 +9,7 @@ if (NOT CMAKE_VERSION VERSION_LESS 3.15)
     cmake_policy(SET CMP0092 NEW) # Enables clean /W4 override for MSVC
 endif()
 
-project(meshoptimizer VERSION 0.14 LANGUAGES CXX)
+project(meshoptimizer VERSION 0.15 LANGUAGES CXX)
 
 option(MESHOPT_BUILD_DEMO "Build demo" OFF)
 option(MESHOPT_BUILD_GLTFPACK "Build gltfpack" OFF)
