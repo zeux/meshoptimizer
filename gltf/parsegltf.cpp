@@ -482,6 +482,10 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 		*error = "file requires Draco mesh compression support";
 	else if (requiresExtension(data, "EXT_meshopt_compression"))
 		*error = "file has already been compressed using gltfpack";
+	else if (requiresExtension(data, "KHR_texture_basisu"))
+		*error = "file requires BasisU texture support";
+	else if (requiresExtension(data, "EXT_mesh_gpu_instancing"))
+		*error = "file requires mesh instancing support";
 	else if (needsDummyBuffers(data))
 		*error = "buffer has no data";
 
@@ -490,6 +494,9 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 		cgltf_free(data);
 		return 0;
 	}
+
+	if (requiresExtension(data, "KHR_mesh_quantization"))
+		fprintf(stderr, "Warning: file uses quantized geometry; repacking may result in increased quantization error\n");
 
 	std::vector<std::pair<size_t, size_t> > mesh_remap;
 
