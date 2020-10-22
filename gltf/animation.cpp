@@ -299,6 +299,7 @@ void processAnimation(Animation& animation, const Settings& settings)
 		if (isTrackEqual(track.data, track.path, frames, &track.data[0], track.components))
 		{
 			// track is constant (equal to first keyframe), we only need the first keyframe
+			track.constant = true;
 			track.data.resize(track.components);
 
 			// track.dummy is true iff track redundantly sets up the value to be equal to default node transform
