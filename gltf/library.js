@@ -239,7 +239,7 @@ var wasi = {
 
 			var readi = Math.min(fds[fd].size - fds[fd].position, buf_len);
 
-			new Uint8Array(heap.buffer).set(new Uint8Array(fds[fd].data.buffer, fds[fd].position, readi), buf);
+			new Uint8Array(heap.buffer).set(fds[fd].data.subarray(fds[fd].position, fds[fd].position + readi), buf);
 
 			fds[fd].position += readi;
 			read += readi;
