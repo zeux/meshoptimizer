@@ -26,7 +26,7 @@ When using `-c` option, gltfpack outputs compressed `.glb`/`.gltf` files that us
 
 For better compression, you can use `-cc` option which applies additional compression; additionally make sure that your content delivery method is configured to use deflate (gzip) - meshoptimizer codecs are designed to produce output that can be compressed further with general purpose compressors.
 
-gltfpack can also compress textures using Basis Universal format, either storing .basis images directly (`-tb` flag, supported by three.js) or using KTX2 container (`-tc` flag, requires support for `KHR_image_ktx2`). Compression is performed using `basisu` executable that must be available in `PATH`; alternatively the path to the executable can be specified via `BASISU_PATH` environment variable. Textures can also be embedded into `.bin`/`.glb` output using `-te` flag.
+gltfpack can also compress textures using Basis Universal format, either storing .basis images directly (`-tb` flag, supported by three.js) or using KTX2 container (`-tc` flag, requires support for `KHR_texture_basisu`). Compression is performed using `basisu` executable that must be available in `PATH`; alternatively the path to the executable can be specified via `BASISU_PATH` environment variable. Textures can also be embedded into `.bin`/`.glb` output using `-te` flag.
 
 ## Decompression
 
@@ -59,7 +59,7 @@ By default gltfpack makes certain assumptions when optimizing the scenes, for ex
 The following settings are frequently used to reduce the resulting data size:
 
 * `-cc`: produce compressed gltf/glb files (requires `EXT_meshopt_compression`)
-* `-tc`: convert all textures to KTX2 with BasisU supercompression (using toktx or basisu executable; requires `KHR_image_basisu`, and may require `-tp` flag for compatibility with WebGL 1)
+* `-tc`: convert all textures to KTX2 with BasisU supercompression (using toktx or basisu executable; requires `KHR_texture_basisu`, and may require `-tp` flag for compatibility with WebGL 1)
 * `-mi`: use mesh instancing when serializing references to the same meshes (requires `EXT_mesh_gpu_instancing`)
 * `-si R`: simplify meshes to achieve the ratio R (default: 1; R should be between 0 and 1)
 
