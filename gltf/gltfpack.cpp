@@ -153,7 +153,7 @@ static void printAttributeStats(const std::vector<BufferView>& views, BufferView
 	}
 }
 
-static void printReport(const char* path, cgltf_data* data, const std::vector<BufferView>& views, const std::vector<Mesh>& meshes, size_t node_count, size_t mesh_count, size_t material_count, size_t animation_count, size_t json_size, size_t bin_size)
+static bool printReport(const char* path, cgltf_data* data, const std::vector<BufferView>& views, const std::vector<Mesh>& meshes, size_t node_count, size_t mesh_count, size_t material_count, size_t animation_count, size_t json_size, size_t bin_size)
 {
 	size_t bytes[BufferView::Kind_Count] = {};
 
@@ -180,10 +180,7 @@ static void printReport(const char* path, cgltf_data* data, const std::vector<Bu
 
 	FILE* out = fopen(path, "wb");
 	if (!out)
-	{
-		fprintf(stderr, "Warning: cannot save report to %s\n", path);
-		return;
-	}
+		return false;
 
 	fprintf(out, "{\n");
 	fprintf(out, "\t\"generator\": \"gltfpack %s\",\n", getVersion().c_str());
@@ -212,7 +209,8 @@ static void printReport(const char* path, cgltf_data* data, const std::vector<Bu
 	fprintf(out, "\t}\n");
 	fprintf(out, "}\n");
 
-	fclose(out);
+	int rc = fclose(out);
+	return rc == 0;
 }
 
 static void process(cgltf_data* data, const char* input_path, const char* output_path, const char* report_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const std::string& extras, const Settings& settings, std::string& json, std::string& bin, std::string& fallback, size_t& fallback_size)
@@ -721,7 +719,10 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 	if (report_path)
 	{
-		printReport(report_path, data, views, meshes, node_offset, mesh_offset, material_offset, animations.size(), json.size(), bin.size());
+		if (!printReport(report_path, data, views, meshes, node_offset, mesh_offset, material_offset, animations.size(), json.size(), bin.size()))
+		{
+			fprintf(stderr, "Warning: cannot save report to %s\n", report_path);
+		}
 	}
 }
 
@@ -883,10 +884,17 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 		if (settings.fallback)
 			fwrite(fallback.c_str(), fallback.size(), 1, outfb);
 
-		fclose(outjson);
-		fclose(outbin);
+		int rc = 0;
+		rc |= fclose(outjson);
+		rc |= fclose(outbin);
 		if (outfb)
-			fclose(outfb);
+			rc |= fclose(outfb);
+
+		if (rc)
+		{
+			fprintf(stderr, "Error saving %s\n", output);
+			return 4;
+		}
 	}
 	else if (oext && (strcmp(oext, ".glb") == 0 || strcmp(oext, ".GLB") == 0))
 	{
@@ -927,9 +935,16 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 		if (settings.fallback)
 			fwrite(fallback.c_str(), fallback.size(), 1, outfb);
 
-		fclose(out);
+		int rc = 0;
+		rc |= fclose(out);
 		if (outfb)
-			fclose(outfb);
+			rc |= fclose(outfb);
+
+		if (rc)
+		{
+			fprintf(stderr, "Error saving %s\n", output);
+			return 4;
+		}
 	}
 	else
 	{

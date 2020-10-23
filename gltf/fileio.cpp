@@ -89,9 +89,9 @@ bool readFile(const char* path, std::string& data)
 
 	data.resize(length);
 	size_t result = fread(&data[0], 1, data.size(), file);
-	fclose(file);
+	int rc = fclose(file);
 
-	return result == data.size();
+	return rc == 0 && result == data.size();
 }
 
 bool writeFile(const char* path, const std::string& data)
@@ -101,7 +101,7 @@ bool writeFile(const char* path, const std::string& data)
 		return false;
 
 	size_t result = fwrite(&data[0], 1, data.size(), file);
-	fclose(file);
+	int rc = fclose(file);
 
-	return result == data.size();
+	return rc == 0 && result == data.size();
 }
