@@ -66,7 +66,7 @@ std::vector<unsigned int> remap(index_count); // allocate temporary memory for t
 size_t vertex_count = meshopt_generateVertexRemap(&remap[0], NULL, index_count, &unindexed_vertices[0], index_count, sizeof(Vertex));
 ```
 
-Note that in this case we only have an unindexed vertex buffer; the remap table is generated based on binary equivalence of the input vertices, so the resulting mesh will render the same way.
+Note that in this case we only have an unindexed vertex buffer; the remap table is generated based on binary equivalence of the input vertices, so the resulting mesh will render the same way. Binary equivalence considers all input bytes, including padding which should be zero-initialized if the vertex structure has gaps.
 
 After generating the remap table, you can allocate space for the target vertex buffer (`vertex_count` elements) and index buffer (`index_count` elements) and generate them:
 
