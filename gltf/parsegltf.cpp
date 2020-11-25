@@ -124,6 +124,16 @@ static void fixupIndices(std::vector<unsigned int>& indices, cgltf_primitive_typ
 		indices.swap(result);
 		type = cgltf_primitive_type_triangles;
 	}
+	else if (type == cgltf_primitive_type_lines)
+	{
+		// glTF files don't require that line index count is divisible by 2, but it is obviously critical for scenes to render
+		indices.resize(indices.size() / 2 * 2);
+	}
+	else if (type == cgltf_primitive_type_triangles)
+	{
+		// glTF files don't require that triangle index count is divisible by 3, but it is obviously critical for scenes to render
+		indices.resize(indices.size() / 3 * 3);
+	}
 }
 
 static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::vector<std::pair<size_t, size_t> >& mesh_remap)
