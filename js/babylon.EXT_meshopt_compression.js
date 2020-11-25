@@ -1,4 +1,5 @@
 /* Babylon.js extension for EXT_meshopt_compression; requires Babylon.js 4.1 */
+/* Note: this is obsolete since Babylon.js 5.0 which provides extension support by default */
 /* BABYLON.GLTF2.GLTFLoader.RegisterExtension("EXT_meshopt_compression", (loader) => new EXT_meshopt_compression(loader, MeshoptDecoder)); */
 var EXT_meshopt_compression = /** @class */ (function () {
     /** @hidden */

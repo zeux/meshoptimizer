@@ -22,7 +22,7 @@ gltfpack substantially changes the glTF data by optimizing the meshes for vertex
 
 By default gltfpack outputs regular `.glb`/`.gltf` files that have been optimized for GPU consumption using various cache optimizers and quantization. These files can be loaded by GLTF loaders that support `KHR_mesh_quantization` extension such as [three.js](https://threejs.org/) (r111+) and [Babylon.js](https://www.babylonjs.com/) (4.1+).
 
-When using `-c` option, gltfpack outputs compressed `.glb`/`.gltf` files that use meshoptimizer codecs to reduce the download size further. Loading these files requires extending GLTF loaders with support for `EXT_meshopt_compression` extension; plugins for three.js r118 ([js/THREE.EXT_meshopt_compression.js](https://github.com/zeux/meshoptimizer/blob/master/js/THREE.EXT_meshopt_compression.js)) and Babylon.js ([js/babylon.EXT_meshopt_compression.js](https://github.com/zeux/meshoptimizer/blob/master/js/babylon.EXT_meshopt_compression.js)) are provided.
+When using `-c` option, gltfpack outputs compressed `.glb`/`.gltf` files that use meshoptimizer codecs to reduce the download size further. Loading these files requires extending GLTF loaders with support for `EXT_meshopt_compression` extension; three.js supports it in r122+ (requires calling `GLTFLoader.setMeshoptDecoder`), Babylon.js supports it in 5.0+ without further setup. Plugins for older versions of [three.js](https://github.com/zeux/meshoptimizer/blob/master/js/THREE.EXT_meshopt_compression.js) and [Babylon.js](https://github.com/zeux/meshoptimizer/blob/master/js/babylon.EXT_meshopt_compression.js) are provided as well.
 
 For better compression, you can use `-cc` option which applies additional compression; additionally make sure that your content delivery method is configured to use deflate (gzip) - meshoptimizer codecs are designed to produce output that can be compressed further with general purpose compressors.
 
@@ -30,27 +30,19 @@ gltfpack can also compress textures using Basis Universal format, either storing
 
 ## Decompression
 
-When using compressed files, [js/meshopt_decoder.js](https://github.com/zeux/meshoptimizer/blob/master/js/meshopt_decoder.js) needs to be loaded to provide the WebAssembly decoder module like this:
+When using compressed files, [js/meshopt_decoder.js](https://github.com/zeux/meshoptimizer/blob/master/js/meshopt_decoder.js) or `js/meshopt_decoder.module.js` needs to be loaded to provide the WebAssembly decoder module like this:
 
 ```js
-import './meshopt_decoder.js'; // imports MeshoptDecoder global
+import { MeshoptDecoder } from './meshopt_decoder.module.js';
 
 ...
 
 var loader = new GLTFLoader();
-loader.register(function (parser) { return new EXT_meshopt_compression(parser, MeshoptDecoder); });
+loader.setMeshoptDecoder(MeshoptDecoder);
 loader.load('pirate.glb', function (gltf) { scene.add(gltf.scene); });
 ```
 
-Note that `meshopt_decoder.js` assumes that WebAssembly is supported. This is the case for all modern browsers; if support for legacy browsers such as Internet Explorer 11 is desired, it's recommended to use `-cf` flag when creating the glTF content and to  conditionally register the decoder plugin as follows:
-
-```js
-if (MeshoptDecoder.supported) {
-    loader.register(function (parser) { return new EXT_meshopt_compression(parser, MeshoptDecoder); });
-}
-```
-
-This will create and load fallback uncompressed buffers, but only on browsers that don't support WebAssembly.
+Note that `meshopt_decoder` assumes that WebAssembly is supported. This is the case for all modern browsers; if support for legacy browsers such as Internet Explorer 11 is desired, it's recommended to use `-cf` flag when creating the glTF content. This will create and load fallback uncompressed buffers, but only on browsers that don't support WebAssembly.
 
 ## Options
 

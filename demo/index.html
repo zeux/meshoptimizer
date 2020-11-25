@@ -31,10 +31,9 @@
 		</div>
 
 		<script type="module">
-			import * as THREE from 'https://unpkg.com/three@0.118.0/build/three.module.js';
-			import { GLTFLoader } from 'https://unpkg.com/three@0.118.0/examples/jsm/loaders/GLTFLoader.js';
-			import { EXT_meshopt_compression } from '../js/THREE.EXT_meshopt_compression.js';
-			import '../js/meshopt_decoder.js'; // imports MeshoptDecoder global
+			import * as THREE from 'https://unpkg.com/three@0.122.0/build/three.module.js';
+			import { GLTFLoader } from 'https://unpkg.com/three@0.122.0/examples/jsm/loaders/GLTFLoader.js';
+			import { MeshoptDecoder } from '../js/meshopt_decoder.module.js';
 
 			var container;
 
@@ -72,7 +71,7 @@
 				};
 
 				var loader = new GLTFLoader();
-				loader.register(function (parser) { return new EXT_meshopt_compression(parser, MeshoptDecoder); });
+				loader.setMeshoptDecoder(MeshoptDecoder);
 				loader.load('pirate.glb', function (gltf) {
 					var bbox = new THREE.Box3().setFromObject(gltf.scene);
 					var scale = 2 / (bbox.max.y - bbox.min.y);

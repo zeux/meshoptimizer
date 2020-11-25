@@ -1,4 +1,5 @@
 /* three.js extension for EXT_meshopt_compression; requires three.js r118 */
+/* Note: this is obsolete since three.js r122 which provides extension support by default when setMeshoptDecoder is called */
 /* loader.register(function (parser) { return new EXT_meshopt_compression(parser, MeshoptDecoder); }); */
 var EXT_meshopt_compression = (function () {
     function EXT_meshopt_compression(parser, decoder) {

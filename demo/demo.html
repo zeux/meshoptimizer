@@ -8,9 +8,6 @@
         <script src="https://preview.babylonjs.com/babylon.js"></script>
         <script src="https://preview.babylonjs.com/loaders/babylon.glTF2FileLoader.js"></script>
 
-        <script src="../js/babylon.EXT_meshopt_compression.js"></script>
-        <script src="../js/meshopt_decoder.js"></script>
-
         <style>
             html, body {
                 overflow: hidden;
@@ -30,9 +27,10 @@
 <body>
     <canvas id="renderCanvas"></canvas>
     <script>
-        var canvas = document.getElementById("renderCanvas");
+        // Optional - by default Babylon.JS will use bundled decoder module
+        BABYLON.GLTF2.Loader.Extensions.EXT_meshopt_compression.DecoderPath = '../js/meshopt_decoder.module.js';
 
-        BABYLON.GLTF2.GLTFLoader.RegisterExtension("EXT_meshopt_compression", (loader) => new EXT_meshopt_compression(loader, MeshoptDecoder));
+        var canvas = document.getElementById("renderCanvas");
 
         var createScene = function () {
             var scene = new BABYLON.Scene(engine);
