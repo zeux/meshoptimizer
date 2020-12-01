@@ -2,9 +2,10 @@
 
 #include <vector>
 
-#include <time.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
+#include <time.h>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -53,7 +54,7 @@ uint32_t murmur3(uint32_t h)
 	return h;
 }
 
-void benchCodecs(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, double& bestvd, double& bestid)
+void benchCodecs(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, double& bestvd, double& bestid, bool verbose)
 {
 	std::vector<Vertex> vb(vertices.size());
 	std::vector<unsigned int> ib(indices.size());
@@ -61,9 +62,10 @@ void benchCodecs(const std::vector<Vertex>& vertices, const std::vector<unsigned
 	std::vector<unsigned char> vc(meshopt_encodeVertexBufferBound(vertices.size(), sizeof(Vertex)));
 	std::vector<unsigned char> ic(meshopt_encodeIndexBufferBound(indices.size(), vertices.size()));
 
-	printf("source: vertex data %d bytes, index data %d bytes\n", int(vertices.size() * sizeof(Vertex)), int(indices.size() * 4));
+	if (verbose)
+		printf("source: vertex data %d bytes, index data %d bytes\n", int(vertices.size() * sizeof(Vertex)), int(indices.size() * 4));
 
-	for (int pass = 0; pass < 2; ++pass)
+	for (int pass = 0; pass < (verbose ? 2 : 1); ++pass)
 	{
 		if (pass == 1)
 			meshopt_optimizeVertexCacheStrip(&ib[0], &indices[0], indices.size(), vertices.size());
@@ -78,7 +80,8 @@ void benchCodecs(const std::vector<Vertex>& vertices, const std::vector<unsigned
 		ic.resize(ic.capacity());
 		ic.resize(meshopt_encodeIndexBuffer(&ic[0], ic.size(), &ib[0], indices.size()));
 
-		printf("pass %d: vertex data %d bytes, index data %d bytes\n", pass, int(vc.size()), int(ic.size()));
+		if (verbose)
+			printf("pass %d: vertex data %d bytes, index data %d bytes\n", pass, int(vc.size()), int(ic.size()));
 
 		for (int attempt = 0; attempt < 10; ++attempt)
 		{
@@ -98,9 +101,10 @@ void benchCodecs(const std::vector<Vertex>& vertices, const std::vector<unsigned
 
 			double GB = 1024 * 1024 * 1024;
 
-			printf("decode: vertex %.2f ms (%.2f GB/sec), index %.2f ms (%.2f GB/sec)\n",
-				(t1 - t0) * 1000, double(vertices.size() * sizeof(Vertex)) / GB / (t1 - t0),
-				(t2 - t1) * 1000, double(indices.size() * 4) / GB / (t2 - t1));
+			if (verbose)
+				printf("decode: vertex %.2f ms (%.2f GB/sec), index %.2f ms (%.2f GB/sec)\n",
+				       (t1 - t0) * 1000, double(vertices.size() * sizeof(Vertex)) / GB / (t1 - t0),
+				       (t2 - t1) * 1000, double(indices.size() * 4) / GB / (t2 - t1));
 
 			if (pass == 0)
 			{
@@ -111,14 +115,15 @@ void benchCodecs(const std::vector<Vertex>& vertices, const std::vector<unsigned
 	}
 }
 
-void benchFilters(size_t count, double& besto8, double& besto12, double& bestq12, double& bestexp)
+void benchFilters(size_t count, double& besto8, double& besto12, double& bestq12, double& bestexp, bool verbose)
 {
 	// note: the filters are branchless so we just run them on runs of zeroes
 	size_t count4 = (count + 3) & ~3;
 	std::vector<unsigned char> d4(count4 * 4);
 	std::vector<unsigned char> d8(count4 * 8);
 
-	printf("filters: oct8 data %d bytes, oct12/quat12 data %d bytes\n", int(d4.size()), int(d8.size()));
+	if (verbose)
+		printf("filters: oct8 data %d bytes, oct12/quat12 data %d bytes\n", int(d4.size()), int(d8.size()));
 
 	for (int attempt = 0; attempt < 10; ++attempt)
 	{
@@ -142,22 +147,29 @@ void benchFilters(size_t count, double& besto8, double& besto12, double& bestq12
 
 		double GB = 1024 * 1024 * 1024;
 
-		printf("filter: oct8 %.2f ms (%.2f GB/sec), oct12 %.2f ms (%.2f GB/sec), quat12 %.2f ms (%.2f GB/sec), exp %.2f ms (%.2f GB/sec)\n",
-			(t1 - t0) * 1000, double(d4.size()) / GB / (t1 - t0),
-			(t2 - t1) * 1000, double(d8.size()) / GB / (t2 - t1),
-			(t3 - t2) * 1000, double(d8.size()) / GB / (t3 - t2),
-			(t4 - t3) * 1000, double(d8.size()) / GB / (t4 - t3));
+		if (verbose)
+			printf("filter: oct8 %.2f ms (%.2f GB/sec), oct12 %.2f ms (%.2f GB/sec), quat12 %.2f ms (%.2f GB/sec), exp %.2f ms (%.2f GB/sec)\n",
+			       (t1 - t0) * 1000, double(d4.size()) / GB / (t1 - t0),
+			       (t2 - t1) * 1000, double(d8.size()) / GB / (t2 - t1),
+			       (t3 - t2) * 1000, double(d8.size()) / GB / (t3 - t2),
+			       (t4 - t3) * 1000, double(d8.size()) / GB / (t4 - t3));
 
 		besto8 = std::max(besto8, double(d4.size()) / GB / (t1 - t0));
 		besto12 = std::max(besto12, double(d8.size()) / GB / (t2 - t1));
-		bestq12 = std::max(bestq12,double(d8.size()) / GB / (t3 - t2));
+		bestq12 = std::max(bestq12, double(d8.size()) / GB / (t3 - t2));
 		bestexp = std::max(bestexp, double(d8.size()) / GB / (t4 - t3));
 	}
 }
 
-int main()
+int main(int argc, char** argv)
 {
 	meshopt_encodeIndexVersion(1);
+
+	bool verbose = false;
+
+	for (int i = 1; i < argc; ++i)
+		if (strcmp(argv[i], "-v") == 0)
+			verbose = true;
 
 	const int N = 1000;
 
@@ -176,7 +188,7 @@ int main()
 
 				// use random k-bit sequence for each word to test all encoding types
 				// note: this doesn't stress the sentinel logic too much but it's all branchless so it's probably fine?
-				v.data[k] = h & ((1 << k) - 1);
+				v.data[k] = h & ((1 << (k + 1)) - 1);
 			}
 
 			vertices.push_back(v);
@@ -201,12 +213,12 @@ int main()
 	}
 
 	double bestvd = 0, bestid = 0;
-	benchCodecs(vertices, indices, bestvd, bestid);
+	benchCodecs(vertices, indices, bestvd, bestid, verbose);
 
 	double besto8 = 0, besto12 = 0, bestq12 = 0, bestexp = 0;
-	benchFilters(8 * N * N, besto8, besto12, bestq12, bestexp);
+	benchFilters(8 * N * N, besto8, besto12, bestq12, bestexp, verbose);
 
-	printf("Algorithm   : vtxdec\tidxdec\toct8\toct12\tquat12\texp\n");
-	printf("Score (GB/s): %.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n",
-		bestvd, bestid, besto8, besto12, bestq12, bestexp);
+	printf("Algorithm   :\tvtx\tidx\toct8\toct12\tquat12\texp\n");
+	printf("Score (GB/s):\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n",
+	       bestvd, bestid, besto8, besto12, bestq12, bestexp);
 }
