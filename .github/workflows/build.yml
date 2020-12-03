@@ -98,18 +98,27 @@ jobs:
         curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sdk-$VERSION.0-linux.tar.gz | tar xz
         curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/libclang_rt.builtins-wasm32-wasi-$VERSION.0.tar.gz | tar xz -C wasi-sdk-$VERSION.0
         curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sysroot-$VERSION.0.tar.gz | tar xz
+        mv wasi-sdk-$VERSION.0 wasi-sdk
       env:
-        VERSION: 11
+        VERSION: 12
     - name: build
-      run: make -B WASMCC=wasi-sdk-11.0/bin/clang++ WASI_SDK=./wasi-sysroot gltf/library.wasm
+      run: |
+        make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot gltf/library.wasm
+        make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot js/meshopt_decoder.js js/meshopt_decoder.module.js
     - name: test
-      run: node gltf/cli.js -i demo/pirate.obj -o pirate.glb -v
+      run: |
+        node gltf/cli.js -i demo/pirate.obj -o pirate.glb -v
+        node js/meshopt_decoder.test.js
     - name: npm pack
       run: cd gltf && npm pack
     - uses: actions/upload-artifact@v2
       with:
         name: gltfpack-npm
         path: gltf/gltfpack-*.tgz
+    - uses: actions/upload-artifact@v2
+      with:
+        name: meshopt_decoder
+        path: js/meshopt_decoder*.js
 
   arm64:
     runs-on: ubuntu-latest
