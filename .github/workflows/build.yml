@@ -107,7 +107,9 @@ jobs:
       env:
         VERSION: 12
     - name: test
-      run: node gltf/cli.js -i demo/pirate.obj -o pirate.glb -v
+      run: |
+        node gltf/cli.js -i demo/pirate.obj -o pirate.glb -v
+        node js/meshopt_decoder.test.js
     - name: npm pack
       run: cd gltf && npm pack
     - uses: actions/upload-artifact@v2
