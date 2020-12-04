@@ -349,6 +349,13 @@ function uploadArgv(argv) {
 // Automatic initialization for node.js
 if (typeof window === 'undefined' && typeof process !== 'undefined' && process.release.name === 'node') {
 	var fs = require('fs');
+	var util = require('util');
+
+	// Node versions before v12 don't support TextEncoder/TextDecoder natively, but util. provides compatible replacements
+	if (typeof TextEncoder === 'undefined' && typeof TextDecoder === 'undefined') {
+		TextEncoder = util.TextEncoder;
+		TextDecoder = util.TextDecoder;
+	}
 
 	init(fs.readFileSync(__dirname + '/library.wasm'));
 }
