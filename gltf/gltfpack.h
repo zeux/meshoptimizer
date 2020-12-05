@@ -39,6 +39,7 @@ struct Transform
 
 struct Mesh
 {
+	const char* name;
 	int scene;
 	std::vector<cgltf_node*> nodes;
 	std::vector<Transform> instances;
@@ -54,6 +55,8 @@ struct Mesh
 	size_t targets;
 	std::vector<float> target_weights;
 	std::vector<const char*> target_names;
+
+	std::string extras;
 };
 
 struct Track
@@ -125,6 +128,8 @@ struct Settings
 	bool fallback;
 
 	int verbose;
+	
+	bool vrm;
 };
 
 struct QuantizationPosition

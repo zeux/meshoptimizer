@@ -136,6 +136,16 @@ static void fixupIndices(std::vector<unsigned int>& indices, cgltf_primitive_typ
 	}
 }
 
+static void evacuateExtras(cgltf_data* data, std::string& extras, cgltf_extras& item)
+{
+	size_t offset = extras.size();
+
+	extras.append(data->json + item.start_offset, item.end_offset - item.start_offset);
+
+	item.start_offset = offset;
+	item.end_offset = extras.size();
+}
+
 static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::vector<std::pair<size_t, size_t> >& mesh_remap)
 {
 	size_t total_primitives = 0;
@@ -154,7 +164,7 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 
 		for (size_t pi = 0; pi < mesh.primitives_count; ++pi)
 		{
-			const cgltf_primitive& primitive = mesh.primitives[pi];
+			cgltf_primitive& primitive = mesh.primitives[pi];
 
 			if (primitive.type == cgltf_primitive_type_points && primitive.indices)
 			{
@@ -164,6 +174,8 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 
 			meshes.push_back(Mesh());
 			Mesh& result = meshes.back();
+
+			result.name = mesh.name;
 
 			result.scene = -1;
 
@@ -244,6 +256,7 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 			result.targets = primitive.targets_count;
 			result.target_weights.assign(mesh.weights, mesh.weights + mesh.weights_count);
 			result.target_names.assign(mesh.target_names, mesh.target_names + mesh.target_names_count);
+			evacuateExtras(data, result.extras, primitive.extras);
 		}
 
 		mesh_remap[mi] = std::make_pair(remap_offset, meshes.size());
@@ -376,16 +389,6 @@ static bool needsDummyBuffers(cgltf_data* data)
 	}
 
 	return false;
-}
-
-static void evacuateExtras(cgltf_data* data, std::string& extras, cgltf_extras& item)
-{
-	size_t offset = extras.size();
-
-	extras.append(data->json + item.start_offset, item.end_offset - item.start_offset);
-
-	item.start_offset = offset;
-	item.end_offset = extras.size();
 }
 
 static void evacuateExtras(cgltf_data* data, std::string& extras)

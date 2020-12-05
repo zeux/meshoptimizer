@@ -357,6 +357,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	std::string json_accessors;
 	std::string json_meshes;
 	std::string json_nodes;
+	std::string json_extensions;
 	std::string json_skins;
 	std::vector<std::string> json_roots(data->scenes_count);
 	std::string json_animations;
@@ -440,7 +441,15 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		const Mesh& mesh = meshes[i];
 
 		comma(json_meshes);
-		append(json_meshes, "{\"primitives\":[");
+		append(json_meshes, "{");
+		if (mesh.name)
+		{
+			append(json_meshes, "\"name\":\"");
+			append(json_meshes, mesh.name);
+			append(json_meshes, "\"");
+			comma(json_meshes);
+		}
+		append(json_meshes, "\"primitives\":[");
 
 		size_t pi = i;
 		for (; pi < meshes.size(); ++pi)
@@ -462,7 +471,8 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 			const QuantizationTexture& qt = prim.material ? qt_materials[prim.material - data->materials] : qt_dummy;
 
 			comma(json_meshes);
-			append(json_meshes, "{\"attributes\":{");
+			append(json_meshes, "{");
+			append(json_meshes, "\"attributes\":{");
 			writeMeshAttributes(json_meshes, views, json_accessors, accr_offset, prim, 0, qp, qt, settings);
 			append(json_meshes, "}");
 			append(json_meshes, ",\"mode\":");
@@ -487,6 +497,11 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 				append(json_meshes, ",\"indices\":");
 				append(json_meshes, index_accr);
+			}
+			if (settings.keep_extras && !prim.extras.empty())
+			{
+				append(json_meshes, ",\"extras\":");
+				append(json_meshes, prim.extras);
 			}
 
 			if (prim.material)
@@ -592,7 +607,9 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		append(json_nodes, "{");
 		writeNode(json_nodes, node, nodes, data);
 		if (settings.keep_extras)
+		{
 			writeExtras(json_nodes, extras, node.extras);
+		}
 		append(json_nodes, "}");
 	}
 
@@ -661,9 +678,38 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	    {"KHR_lights_punctual", data->lights_count > 0, false},
 	    {"KHR_texture_basisu", !json_textures.empty() && settings.texture_ktx2, true},
 	    {"EXT_mesh_gpu_instancing", ext_instancing, true},
+	    {"VRM", settings.vrm, false},
 	};
 
 	writeExtensions(json, extensions, sizeof(extensions) / sizeof(extensions[0]));
+
+	comma(json_extensions);
+	append(json_extensions, "\"extensions\":{");
+	if (settings.vrm)
+	{
+
+		std::string extension_vrm;
+		extension_vrm.assign("VRM");
+		for (size_t i = 0; i < data->data_extensions_count; ++i)
+		{
+			cgltf_extension extension = data->data_extensions[i];
+			if (!extension.name)
+			{
+				continue;
+			}
+			std::string extension_tested;
+			extension_tested.assign(extension.name);
+			if (extension_vrm != extension_tested)
+			{
+				break;
+			}
+			append(json_extensions, "\"");
+			append(json_extensions, extension.name);
+			append(json_extensions, "\":");
+			append(json_extensions, extension.data);
+		}
+	}
+	append(json_extensions, "}");
 
 	std::string json_views;
 	finalizeBufferViews(json_views, views, bin, settings.fallback ? &fallback : NULL, fallback_size);
@@ -676,6 +722,8 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	writeArray(json, "meshes", json_meshes);
 	writeArray(json, "skins", json_skins);
 	writeArray(json, "animations", json_animations);
+	comma(json);
+	append(json, json_extensions);
 	writeArray(json, "nodes", json_nodes);
 
 	if (!json_roots.empty())
@@ -790,8 +838,12 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 
 	const char* iext = strrchr(input, '.');
 	const char* oext = output ? strrchr(output, '.') : NULL;
+	
+	if (iext && (strcmp(iext, ".vrm") == 0 || strcmp(iext, ".VRM") == 0)) {
+		settings.vrm = true;
+	}
 
-	if (iext && (strcmp(iext, ".gltf") == 0 || strcmp(iext, ".GLTF") == 0 || strcmp(iext, ".glb") == 0 || strcmp(iext, ".GLB") == 0))
+	if (iext && (strcmp(iext, ".vrm") == 0 || strcmp(iext, ".VRM") == 0 || strcmp(iext, ".gltf") == 0 || strcmp(iext, ".GLTF") == 0 || strcmp(iext, ".glb") == 0 || strcmp(iext, ".GLB") == 0))
 	{
 		const char* error = 0;
 		data = parseGltf(input, meshes, animations, extras, &error);
@@ -841,6 +893,16 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 	if (oext && (strcmp(oext, ".glb") == 0 || strcmp(oext, ".GLB") == 0))
 	{
 		settings.texture_embed = true;
+	}
+
+	if (oext && (strcmp(oext, ".vrm") == 0 || strcmp(oext, ".VRM") == 0))
+	{
+		settings.vrm = true;
+		settings.keep_extras = true;
+		settings.keep_materials = true;
+		settings.mesh_merge = false;
+		settings.keep_nodes = true;
+		settings.quantize = false;
 	}
 
 	std::string json, bin, fallback;
@@ -896,7 +958,7 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 			return 4;
 		}
 	}
-	else if (oext && (strcmp(oext, ".glb") == 0 || strcmp(oext, ".GLB") == 0))
+	else if (oext && (strcmp(oext, ".vrm") == 0 || strcmp(oext, ".VRM") == 0 || strcmp(oext, ".glb") == 0 || strcmp(oext, ".GLB") == 0))
 	{
 		std::string fbpath = output;
 		fbpath.replace(fbpath.size() - 4, 4, ".fallback.bin");
