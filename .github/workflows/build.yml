@@ -84,7 +84,7 @@ jobs:
         curl -sL $VALIDATOR | tar xJ
         find glTF-Sample-Models/2.0/ -name *.gltfpack.gltf | xargs -L 1 ./gltf_validator -r -a
       env:
-        VALIDATOR: https://github.com/KhronosGroup/glTF-Validator/releases/download/2.0.0-dev.3.2/gltf_validator-2.0.0-dev.3.2-linux64.tar.xz
+        VALIDATOR: https://github.com/KhronosGroup/glTF-Validator/releases/download/2.0.0-dev.3.3/gltf_validator-2.0.0-dev.3.3-linux64.tar.xz
 
   gltfpackjs:
     runs-on: ubuntu-latest
