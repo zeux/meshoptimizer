@@ -318,6 +318,12 @@ bool usesTextureSet(const cgltf_material& material, int set)
 	{
 		if (usesTextureSet(material.clearcoat.clearcoat_texture, set))
 			return true;
+
+		if (usesTextureSet(material.clearcoat.clearcoat_roughness_texture, set))
+			return true;
+
+		if (usesTextureSet(material.clearcoat.clearcoat_normal_texture, set))
+			return true;
 	}
 
 	if (material.has_transmission)
