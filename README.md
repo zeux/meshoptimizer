@@ -18,6 +18,22 @@ git clone -b v0.14 https://github.com/zeux/meshoptimizer.git
 
 Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v0.14.zip).
 
+The library is also available as a package ([ArchLinux](https://aur.archlinux.org/packages/meshoptimizer/), [Vcpkg](https://github.com/microsoft/vcpkg/tree/master/ports/meshoptimizer)).
+
+### Installing gltfpack
+
+`gltfpack` is a CLI tool for optimizing meshes using meshoptimizer.
+
+You can download a pre-built binary for gltfpack on [Releases page](https://github.com/zeux/meshoptimizer/releases), or install [npm package](https://www.npmjs.com/package/gltfpack) as follows:
+
+```
+npm install -g gltfpack
+```
+
+You can also find prebuilt binaries of `gltfpack` built from master on [Actions page](https://github.com/zeux/meshoptimizer/actions).
+
+[Learn more about gltfpack](./gltf/README.md)
+
 ## Building
 
 meshoptimizer is distributed as a set of C++ source files. To include it into your project, you can use one of the two options:
@@ -50,7 +66,7 @@ std::vector<unsigned int> remap(index_count); // allocate temporary memory for t
 size_t vertex_count = meshopt_generateVertexRemap(&remap[0], NULL, index_count, &unindexed_vertices[0], index_count, sizeof(Vertex));
 ```
 
-Note that in this case we only have an unindexed vertex buffer; the remap table is generated based on binary equivalence of the input vertices, so the resulting mesh will render the same way.
+Note that in this case we only have an unindexed vertex buffer; the remap table is generated based on binary equivalence of the input vertices, so the resulting mesh will render the same way. Binary equivalence considers all input bytes, including padding which should be zero-initialized if the vertex structure has gaps.
 
 After generating the remap table, you can allocate space for the target vertex buffer (`vertex_count` elements) and index buffer (`index_count` elements) and generate them:
 
@@ -152,6 +168,11 @@ Decoding functions are heavily optimized and can directly target write-combined 
 
 Index buffer codec only supports triangle list topology; when encoding triangle strips or line lists, use `meshopt_encodeIndexSequence`/`meshopt_decodeIndexSequence` instead. This codec typically encodes indices into ~1 byte per index, but compressing the results further with a general purpose compressor can improve the results to 1-3 bits per index.
 
+The following guarantees on data compatibility are provided for point releases (*no* guarantees are given for development branch):
+
+- Data encoded with older versions of the library can always be decoded with newer versions;
+- Data encoded with newer versions of the library can be decoded with older versions, provided that encoding versions are set correctly; if binary stability of encoded data is important, use `meshopt_encodeVertexVersion` and `meshopt_encodeIndexVersion` to 'pin' the data versions.
+
 Due to a very high decoding performance and compatibility with general purpose lossless compressors, the compression is a good fit for the use on the web. To that end, meshoptimizer provides both vertex and index decoders compiled into WebAssembly and wrapped into a module with JavaScript-friendly interface, `js/meshopt_decoder.js`, that you can use to decode meshes that were encoded offline:
 
 ```js
@@ -164,6 +185,22 @@ MeshoptDecoder.decodeIndexBuffer(indexBuffer, indexCount, indexSize, indexData);
 ```
 
 [Usage example](https://meshoptimizer.org/demo/) is available, with source in `demo/index.html`; this example uses .GLB files encoded using `gltfpack`.
+
+## Point cloud compression
+
+The vertex encoding algorithms can be used to compress arbitrary streams of attribute data; one other use case besides triangle meshes is point cloud data. Typically point clouds come with position, color and possibly other attributes but don't have an implied point order.
+
+To compress point clouds efficiently, it's recommended to first preprocess the points by sorting them using the spatial sort algorithm:
+
+```c++
+std::vector<unsigned int> remap(point_count);
+meshopt_spatialSortRemap(&remap[0], positions, point_count, sizeof(vec3));
+
+// for each attribute stream
+meshopt_remapVertexBuffer(positions, positions, point_count, sizeof(vec3), &remap[0]);
+```
+
+After this the resulting arrays should be quantized (e.g. using 16-bit fixed point numbers for positions and 8-bit color components), and the result can be compressed using `meshopt_encodeVertexBuffer` as described in the previous section. To decompress, `meshopt_decodeVertexBuffer` will recover the quantized data that can be used directly or converted back to original floating-point data. The compression ratio depends on the nature of source data, for colored points it's typical to get 35-40 bits per point as a result.
 
 ## Triangle strip conversion
 
@@ -265,7 +302,7 @@ meshopt_setAllocator(malloc, free);
 
 > Note that the library expects the allocation function to either throw in case of out-of-memory (in which case the exception will propagate to the caller) or abort, so technically the use of `malloc` above isn't safe. If you want to handle out-of-memory errors without using C++ exceptions, you can use `setjmp`/`longjmp` instead.
 
-Vertex and index decoders (`meshopt_decodeVertexBuffer` and `meshopt_decodeIndexBuffer`) do not allocate memory and work completely within the buffer space provided via arguments.
+Vertex and index decoders (`meshopt_decodeVertexBuffer`, `meshopt_decodeIndexBuffer`, `meshopt_decodeIndexSequence`) do not allocate memory and work completely within the buffer space provided via arguments.
 
 All functions have bounded stack usage that does not exceed 32 KB for any algorithms.
 

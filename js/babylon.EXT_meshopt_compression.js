@@ -1,23 +1,24 @@
-/* Babylon.js extension for MESHOPT_compression; requires Babylon.js 4.1 */
-var NAME = "MESHOPT_compression";
-var MESHOPT_compression = /** @class */ (function () {
+/* Babylon.js extension for EXT_meshopt_compression; requires Babylon.js 4.1 */
+/* Note: this is obsolete since Babylon.js 5.0 which provides extension support by default */
+/* BABYLON.GLTF2.GLTFLoader.RegisterExtension("EXT_meshopt_compression", (loader) => new EXT_meshopt_compression(loader, MeshoptDecoder)); */
+var EXT_meshopt_compression = /** @class */ (function () {
     /** @hidden */
-    function MESHOPT_compression(loader, decoder) {
+    function EXT_meshopt_compression(loader, decoder) {
         /** The name of this extension. */
-        this.name = NAME;
+        this.name = "EXT_meshopt_compression";
         /** Defines whether this extension is enabled. */
         this.enabled = true;
         this._loader = loader;
         this._decoder = decoder;
     }
     /** @hidden */
-    MESHOPT_compression.prototype.dispose = function () {
+    EXT_meshopt_compression.prototype.dispose = function () {
         delete this._loader;
     };
     /** @hidden */
-    MESHOPT_compression.prototype.loadBufferViewAsync = function (context, bufferView) {
-        if (bufferView.extensions && bufferView.extensions[NAME]) {
-            var extensionDef = bufferView.extensions[NAME];
+    EXT_meshopt_compression.prototype.loadBufferViewAsync = function (context, bufferView) {
+        if (bufferView.extensions && bufferView.extensions[this.name]) {
+            var extensionDef = bufferView.extensions[this.name];
             if (extensionDef._decoded) {
                 return extensionDef._decoded;
             }
@@ -36,6 +37,5 @@ var MESHOPT_compression = /** @class */ (function () {
             return null;
         }
     };
-    return MESHOPT_compression;
+    return EXT_meshopt_compression;
 }());
-/* BABYLON.GLTF2.GLTFLoader.RegisterExtension("MESHOPT_compression", (loader) => new MESHOPT_compression(loader, MeshoptDecoder)); */

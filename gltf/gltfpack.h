@@ -32,9 +32,16 @@ struct Stream
 	std::vector<Attr> data;
 };
 
+struct Transform
+{
+	float data[16];
+};
+
 struct Mesh
 {
-	cgltf_node* node;
+	int scene;
+	std::vector<cgltf_node*> nodes;
+	std::vector<Transform> instances;
 
 	cgltf_material* material;
 	cgltf_skin* skin;
@@ -54,6 +61,7 @@ struct Track
 	cgltf_node* node;
 	cgltf_animation_path_type path;
 
+	bool constant;
 	bool dummy;
 
 	size_t components; // 1 unless path is cgltf_animation_path_type_weights
@@ -79,6 +87,7 @@ struct Settings
 	int pos_bits;
 	int tex_bits;
 	int nrm_bits;
+	int col_bits;
 
 	int trn_bits;
 	int rot_bits;
@@ -87,18 +96,27 @@ struct Settings
 	int anim_freq;
 	bool anim_const;
 
-	bool keep_named;
+	bool keep_nodes;
+	bool keep_materials;
 	bool keep_extras;
+
+	bool mesh_merge;
+	bool mesh_instancing;
 
 	float simplify_threshold;
 	bool simplify_aggressive;
+	float simplify_debug;
 
-	bool texture_embed;
-	bool texture_basis;
+	int meshlet_debug;
+
 	bool texture_ktx2;
 	bool texture_uastc;
+	bool texture_embed;
+	bool texture_toktx;
 
 	int texture_quality;
+	float texture_scale;
+	bool texture_pow2;
 
 	bool quantize;
 
@@ -142,6 +160,8 @@ struct StreamFormat
 
 struct NodeInfo
 {
+	int scene;
+
 	bool keep;
 	bool animated;
 
@@ -181,6 +201,7 @@ struct BufferView
 		Kind_Skin,
 		Kind_Time,
 		Kind_Keyframe,
+		Kind_Instance,
 		Kind_Image,
 		Kind_Count
 	};
@@ -219,29 +240,37 @@ bool readFile(const char* path, std::string& data);
 bool writeFile(const char* path, const std::string& data);
 
 cgltf_data* parseObj(const char* path, std::vector<Mesh>& meshes, const char** error);
-cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error);
+cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, std::string& extras, const char** error);
 
 void processAnimation(Animation& animation, const Settings& settings);
 void processMesh(Mesh& mesh, const Settings& settings);
 
-void transformMesh(Mesh& mesh, const cgltf_node* node);
+void debugSimplify(const Mesh& mesh, Mesh& kinds, Mesh& loops, float ratio);
+void debugMeshlets(const Mesh& mesh, Mesh& meshlets, Mesh& bounds, int max_vertices);
+
 bool compareMeshTargets(const Mesh& lhs, const Mesh& rhs);
+bool compareMeshNodes(const Mesh& lhs, const Mesh& rhs);
+void mergeMeshInstances(Mesh& mesh);
 void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings);
 void filterEmptyMeshes(std::vector<Mesh>& meshes);
 
 bool usesTextureSet(const cgltf_material& material, int set);
 void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings);
-void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes);
+void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes, const Settings& settings);
 
 void analyzeImages(cgltf_data* data, std::vector<ImageInfo>& images);
 const char* inferMimeType(const char* path);
-bool checkBasis();
-bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, bool uastc);
+bool checkBasis(bool verbose);
+bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, float scale, bool pow2, bool uastc, bool verbose);
 std::string basisToKtx(const std::string& data, bool srgb, bool uastc);
+bool checkKtx(bool verbose);
+bool encodeKtx(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, float scale, bool pow2, bool uastc, bool verbose);
 
+void markScenes(cgltf_data* data, std::vector<NodeInfo>& nodes);
 void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Animation>& animations);
 void markNeededNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Mesh>& meshes, const std::vector<Animation>& animations, const Settings& settings);
 void remapNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, size_t& node_offset);
+void decomposeTransform(float translation[3], float rotation[4], float scale[3], const float* transform);
 
 QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes, const Settings& settings);
 void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTexture>& result, const std::vector<Mesh>& meshes, const Settings& settings);
@@ -275,7 +304,9 @@ void writeTexture(std::string& json, const cgltf_texture& texture, cgltf_data* d
 void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, int target, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings);
 size_t writeMeshIndices(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, const Settings& settings);
 size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const cgltf_skin& skin, const QuantizationPosition& qp, const Settings& settings);
-void writeMeshNode(std::string& json, size_t mesh_offset, const Mesh& mesh, cgltf_data* data, const QuantizationPosition* qp);
+size_t writeInstances(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const std::vector<Transform>& transforms, const QuantizationPosition& qp, const Settings& settings);
+void writeMeshNode(std::string& json, size_t mesh_offset, cgltf_node* node, cgltf_skin* skin, cgltf_data* data, const QuantizationPosition* qp);
+void writeMeshNodeInstanced(std::string& json, size_t mesh_offset, size_t accr_offset);
 void writeSkin(std::string& json, const cgltf_skin& skin, size_t matrix_accr, const std::vector<NodeInfo>& nodes, cgltf_data* data);
 void writeNode(std::string& json, const cgltf_node& node, const std::vector<NodeInfo>& nodes, cgltf_data* data);
 void writeAnimation(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Animation& animation, size_t i, cgltf_data* data, const std::vector<NodeInfo>& nodes, const Settings& settings);
@@ -283,7 +314,8 @@ void writeCamera(std::string& json, const cgltf_camera& camera);
 void writeLight(std::string& json, const cgltf_light& light);
 void writeArray(std::string& json, const char* name, const std::string& contents);
 void writeExtensions(std::string& json, const ExtensionInfo* extensions, size_t count);
-void writeExtras(std::string& json, const cgltf_data* data, const cgltf_extras& extras);
+void writeExtras(std::string& json, const std::string& data, const cgltf_extras& extras);
+void writeScene(std::string& json, const cgltf_scene& scene, const std::string& roots);
 
 /**
  * Copyright (c) 2016-2020 Arseny Kapoulkine

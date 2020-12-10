@@ -9,12 +9,16 @@ if (NOT CMAKE_VERSION VERSION_LESS 3.15)
     cmake_policy(SET CMP0092 NEW) # Enables clean /W4 override for MSVC
 endif()
 
-project(meshoptimizer VERSION 0.14 LANGUAGES CXX)
+project(meshoptimizer VERSION 0.15 LANGUAGES CXX)
 
 option(MESHOPT_BUILD_DEMO "Build demo" OFF)
-option(MESHOPT_BUILD_TOOLS "Build tools" OFF)
+option(MESHOPT_BUILD_GLTFPACK "Build gltfpack" OFF)
 option(MESHOPT_BUILD_SHARED_LIBS "Build shared libraries" OFF)
-set(MESHOPT_BUILD_TOOLS_GLFW_FOLDER_NAME "" CACHE STRING "Custom folder to look for GLFW")
+
+# add_library() needs BUILD_SHARED_LIBS set to decide between static and
+# shared. This also sets it back to OFF in case parent project has
+# BUILD_SHARED_LIBS but wants MESHOPT_BUILD_SHARED_LIBS to be OFF.
+set(BUILD_SHARED_LIBS ${MESHOPT_BUILD_SHARED_LIBS})
 
 set(SOURCES
     src/meshoptimizer.h
@@ -79,7 +83,7 @@ if(MESHOPT_BUILD_DEMO)
     target_link_libraries(demo meshoptimizer)
 endif()
 
-if(MESHOPT_BUILD_TOOLS)
+if(MESHOPT_BUILD_GLTFPACK)
     add_executable(gltfpack ${GLTF_SOURCES} tools/meshloader.cpp)
     target_link_libraries(gltfpack meshoptimizer)
     list(APPEND TARGETS gltfpack)
@@ -87,24 +91,6 @@ if(MESHOPT_BUILD_TOOLS)
     if(MESHOPT_BUILD_SHARED_LIBS)
         string(CONCAT RPATH "$ORIGIN/../" ${CMAKE_INSTALL_LIBDIR})
         set_target_properties(gltfpack PROPERTIES INSTALL_RPATH ${RPATH})
-    endif()
-
-    if(NOT (MESHOPT_BUILD_TOOLS_GLFW_FOLDER_NAME STREQUAL ""))
-        message(STATUS "Using GLFW3 from: ${MESHOPT_BUILD_TOOLS_GLFW_FOLDER_NAME}")
-        set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "")
-        set(GLFW_BUILD_TESTS OFF CACHE BOOL "")
-        set(GLFW_BUILD_DOCS OFF CACHE BOOL "")
-        set(GLFW_INSTALL OFF CACHE BOOL "")
-        add_subdirectory(${MESHOPT_BUILD_TOOLS_GLFW_FOLDER_NAME})
-        set(glfw3_FOUND TRUE)
-        set(glfw3_LIBRARY glfw)
-    else()
-        find_package(glfw3 3.3 QUIET)
-    endif()
-
-    if (glfw3_FOUND)
-        add_executable(lodviewer tools/lodviewer.cpp tools/meshloader.cpp)
-        target_link_libraries(lodviewer ${glfw3_LIBRARY} meshoptimizer)
     endif()
 endif()
 

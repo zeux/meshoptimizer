@@ -14,11 +14,19 @@
 TempFile::TempFile(const char* suffix)
     : fd(-1)
 {
-#ifdef _WIN32
+#if defined(_WIN32)
 	const char* temp_dir = getenv("TEMP");
 	path = temp_dir ? temp_dir : ".";
 	path += "\\gltfpack-XXXXXX";
 	(void)_mktemp(&path[0]);
+	path += suffix;
+#elif defined(__wasi__)
+	static int id = 0;
+	char ids[16];
+	sprintf(ids, "%d", id++);
+
+	path = "gltfpack-temp-";
+	path += ids;
 	path += suffix;
 #else
 	path = "/tmp/gltfpack-XXXXXX";
@@ -81,9 +89,9 @@ bool readFile(const char* path, std::string& data)
 
 	data.resize(length);
 	size_t result = fread(&data[0], 1, data.size(), file);
-	fclose(file);
+	int rc = fclose(file);
 
-	return result == data.size();
+	return rc == 0 && result == data.size();
 }
 
 bool writeFile(const char* path, const std::string& data)
@@ -93,7 +101,7 @@ bool writeFile(const char* path, const std::string& data)
 		return false;
 
 	size_t result = fwrite(&data[0], 1, data.size(), file);
-	fclose(file);
+	int rc = fclose(file);
 
-	return result == data.size();
+	return rc == 0 && result == data.size();
 }

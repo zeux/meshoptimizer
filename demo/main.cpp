@@ -59,7 +59,8 @@ struct Mesh
 	std::vector<unsigned int> indices;
 };
 
-union Triangle {
+union Triangle
+{
 	Vertex v[3];
 	char data[sizeof(Vertex) * 3];
 };

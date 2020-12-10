@@ -86,6 +86,9 @@ static cgltf_data* parseSceneObj(fastObjMesh* obj)
 		}
 	}
 
+	data->scenes = (cgltf_scene*)calloc(1, sizeof(cgltf_scene));
+	data->scenes_count = 1;
+
 	return data;
 }
 
@@ -114,7 +117,6 @@ static void parseMeshesObj(fastObjMesh* obj, cgltf_data* data, std::vector<Mesh>
 		mesh_index[mi] = meshes.size();
 
 		meshes.push_back(Mesh());
-
 		Mesh& mesh = meshes.back();
 
 		if (data->materials_count)

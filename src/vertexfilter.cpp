@@ -143,7 +143,8 @@ static void decodeFilterExp(unsigned int* data, size_t count)
 		int m = int(v << 8) >> 8;
 		int e = int(v) >> 24;
 
-		union {
+		union
+		{
 			float f;
 			unsigned int ui;
 		} u;
@@ -162,7 +163,9 @@ inline uint64_t rotateleft64(uint64_t v, int x)
 {
 #if defined(_MSC_VER) && !defined(__clang__)
 	return _rotl64(v, x);
-#elif defined(__clang__) && __clang_major__ >= 8
+// Apple's Clang 8 is actually vanilla Clang 3.9, there we need to look for
+// version 11 instead: https://en.wikipedia.org/wiki/Xcode#Toolchain_versions
+#elif defined(__clang__) && ((!defined(__apple_build_version__) && __clang_major__ >= 8) || __clang_major__ >= 11)
 	return __builtin_rotateleft64(v, x);
 #else
 	return (v << (x & 63)) | (v >> ((64 - x) & 63));
@@ -620,7 +623,7 @@ static void decodeFilterOctSimd(signed char* data, size_t count)
 static void decodeFilterOctSimd(short* data, size_t count)
 {
 	const v128_t sign = wasm_f32x4_splat(-0.f);
-	volatile v128_t zmask = wasm_i32x4_splat(0x7fff); // TODO: volatile works around LLVM shuffle "optimizations"
+	const v128_t zmask = wasm_i32x4_splat(0x7fff);
 
 	for (size_t i = 0; i < count; i += 4)
 	{
@@ -732,7 +735,8 @@ static void decodeFilterQuatSimd(short* data, size_t count)
 		v128_t res_1 = wasmx_unpackhi_v16x8(wyr, xzr);
 
 		// compute component index shifted left by 4 (and moved into i32x4 slot)
-		v128_t cm = wasm_i32x4_shl(cf, 4);
+		// TODO: volatile here works around LLVM mis-optimizing code; https://github.com/emscripten-core/emscripten/issues/11449
+		volatile v128_t cm = wasm_i32x4_shl(cf, 4);
 
 		// rotate and store
 		uint64_t* out = reinterpret_cast<uint64_t*>(&data[i * 4]);

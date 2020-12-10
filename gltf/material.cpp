@@ -109,6 +109,56 @@ static bool areMaterialComponentsEqual(const cgltf_clearcoat& lhs, const cgltf_c
 	return true;
 }
 
+static bool areMaterialComponentsEqual(const cgltf_transmission& lhs, const cgltf_transmission& rhs)
+{
+	if (!areTextureViewsEqual(lhs.transmission_texture, rhs.transmission_texture))
+		return false;
+
+	if (lhs.transmission_factor != rhs.transmission_factor)
+		return false;
+
+	return true;
+}
+
+static bool areMaterialComponentsEqual(const cgltf_ior& lhs, const cgltf_ior& rhs)
+{
+	if (lhs.ior != rhs.ior)
+		return false;
+
+	return true;
+}
+
+static bool areMaterialComponentsEqual(const cgltf_specular& lhs, const cgltf_specular& rhs)
+{
+	if (!areTextureViewsEqual(lhs.specular_texture, rhs.specular_texture))
+		return false;
+
+	if (memcmp(lhs.specular_color_factor, rhs.specular_color_factor, sizeof(cgltf_float) * 3) != 0)
+		return false;
+
+	if (lhs.specular_factor != rhs.specular_factor)
+		return false;
+
+	return true;
+}
+
+static bool areMaterialComponentsEqual(const cgltf_sheen& lhs, const cgltf_sheen& rhs)
+{
+	if (!areTextureViewsEqual(lhs.sheen_color_texture, rhs.sheen_color_texture))
+		return false;
+
+	if (memcmp(lhs.sheen_color_factor, rhs.sheen_color_factor, sizeof(cgltf_float) * 3) != 0)
+		return false;
+
+	if (!areTextureViewsEqual(lhs.sheen_roughness_texture, rhs.sheen_roughness_texture))
+		return false;
+
+	if (lhs.sheen_roughness_factor != rhs.sheen_roughness_factor)
+		return false;
+
+	return true;
+}
+
 static bool areMaterialsEqual(cgltf_data* data, const cgltf_material& lhs, const cgltf_material& rhs, const Settings& settings)
 {
 	if (lhs.has_pbr_metallic_roughness != rhs.has_pbr_metallic_roughness)
@@ -127,6 +177,30 @@ static bool areMaterialsEqual(cgltf_data* data, const cgltf_material& lhs, const
 		return false;
 
 	if (lhs.has_clearcoat && !areMaterialComponentsEqual(lhs.clearcoat, rhs.clearcoat))
+		return false;
+
+	if (lhs.has_transmission != rhs.has_transmission)
+		return false;
+
+	if (lhs.has_transmission && !areMaterialComponentsEqual(lhs.transmission, rhs.transmission))
+		return false;
+
+	if (lhs.has_ior != rhs.has_ior)
+		return false;
+
+	if (lhs.has_ior && !areMaterialComponentsEqual(lhs.ior, rhs.ior))
+		return false;
+
+	if (lhs.has_specular != rhs.has_specular)
+		return false;
+
+	if (lhs.has_specular && !areMaterialComponentsEqual(lhs.specular, rhs.specular))
+		return false;
+
+	if (lhs.has_sheen != rhs.has_sheen)
+		return false;
+
+	if (lhs.has_sheen && !areMaterialComponentsEqual(lhs.sheen, rhs.sheen))
 		return false;
 
 	if (!areTextureViewsEqual(lhs.normal_texture, rhs.normal_texture))
@@ -168,8 +242,14 @@ void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Setti
 		if (!mesh.material)
 			continue;
 
+		if (settings.keep_materials && mesh.material->name && *mesh.material->name)
+			continue;
+
 		for (int j = 0; j < mesh.material - data->materials; ++j)
 		{
+			if (settings.keep_materials && data->materials[j].name && *data->materials[j].name)
+				continue;
+
 			if (areMaterialsEqual(data, *mesh.material, data->materials[j], settings))
 			{
 				mesh.material = &data->materials[j];
@@ -179,7 +259,7 @@ void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Setti
 	}
 }
 
-void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes)
+void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes, const Settings& settings)
 {
 	// mark all used materials as kept
 	for (size_t i = 0; i < meshes.size(); ++i)
@@ -193,39 +273,87 @@ void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials,
 			mi.keep = true;
 		}
 	}
+
+	// mark all named materials as kept if requested
+	if (settings.keep_materials)
+	{
+		for (size_t i = 0; i < data->materials_count; ++i)
+		{
+			cgltf_material& material = data->materials[i];
+
+			if (material.name && *material.name)
+			{
+				materials[i].keep = true;
+			}
+		}
+	}
+}
+
+static bool usesTextureSet(const cgltf_texture_view& view, int set)
+{
+	return view.texture && view.texcoord == set;
 }
 
 bool usesTextureSet(const cgltf_material& material, int set)
 {
 	if (material.has_pbr_metallic_roughness)
 	{
-		const cgltf_pbr_metallic_roughness& pbr = material.pbr_metallic_roughness;
-
-		if (pbr.base_color_texture.texture && pbr.base_color_texture.texcoord == set)
+		if (usesTextureSet(material.pbr_metallic_roughness.base_color_texture, set))
 			return true;
 
-		if (pbr.metallic_roughness_texture.texture && pbr.metallic_roughness_texture.texcoord == set)
+		if (usesTextureSet(material.pbr_metallic_roughness.metallic_roughness_texture, set))
 			return true;
 	}
 
 	if (material.has_pbr_specular_glossiness)
 	{
-		const cgltf_pbr_specular_glossiness& pbr = material.pbr_specular_glossiness;
-
-		if (pbr.diffuse_texture.texture && pbr.diffuse_texture.texcoord == set)
+		if (usesTextureSet(material.pbr_specular_glossiness.diffuse_texture, set))
 			return true;
 
-		if (pbr.specular_glossiness_texture.texture && pbr.specular_glossiness_texture.texcoord == set)
+		if (usesTextureSet(material.pbr_specular_glossiness.specular_glossiness_texture, set))
 			return true;
 	}
 
-	if (material.normal_texture.texture && material.normal_texture.texcoord == set)
+	if (material.has_clearcoat)
+	{
+		if (usesTextureSet(material.clearcoat.clearcoat_texture, set))
+			return true;
+
+		if (usesTextureSet(material.clearcoat.clearcoat_roughness_texture, set))
+			return true;
+
+		if (usesTextureSet(material.clearcoat.clearcoat_normal_texture, set))
+			return true;
+	}
+
+	if (material.has_transmission)
+	{
+		if (usesTextureSet(material.transmission.transmission_texture, set))
+			return true;
+	}
+
+	if (material.has_specular)
+	{
+		if (usesTextureSet(material.specular.specular_texture, set))
+			return true;
+	}
+
+	if (material.has_sheen)
+	{
+		if (usesTextureSet(material.sheen.sheen_color_texture, set))
+			return true;
+
+		if (usesTextureSet(material.sheen.sheen_roughness_texture, set))
+			return true;
+	}
+
+	if (usesTextureSet(material.normal_texture, set))
 		return true;
 
-	if (material.occlusion_texture.texture && material.occlusion_texture.texcoord == set)
+	if (usesTextureSet(material.occlusion_texture, set))
 		return true;
 
-	if (material.emissive_texture.texture && material.emissive_texture.texcoord == set)
+	if (usesTextureSet(material.emissive_texture, set))
 		return true;
 
 	return false;

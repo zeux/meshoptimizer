@@ -132,9 +132,16 @@ typedef struct
 
 } fastObjMesh;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 fastObjMesh*                    fast_obj_read(const char* path);
 void                            fast_obj_destroy(fastObjMesh* mesh);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 
@@ -398,6 +405,11 @@ int is_whitespace(char c)
     return (c == ' ' || c == '\t' || c == '\r');
 }
 
+static
+int is_end_of_name(char c)
+{
+    return (c == '\t' || c == '\r' || c == '\n');
+}
 
 static
 int is_newline(char c)
@@ -715,7 +727,7 @@ const char* parse_group(fastObjData* data, const char* ptr)
     ptr = skip_whitespace(ptr);
 
     s = ptr;
-    while (!is_whitespace(*ptr) && !is_newline(*ptr))
+    while (!is_end_of_name(*ptr))
         ptr++;
 
     e = ptr;
@@ -796,7 +808,7 @@ const char* parse_usemtl(fastObjData* data, const char* ptr)
 
     /* Parse the material name */
     s = ptr;
-    while (!is_whitespace(*ptr) && !is_newline(*ptr))
+    while (!is_end_of_name(*ptr))
         ptr++;
 
     e = ptr;
@@ -894,7 +906,7 @@ const char* read_map(fastObjData* data, const char* ptr, fastObjTexture* map)
 
     /* Read name */
     s = ptr;
-    while (!is_whitespace(*ptr) && !is_newline(*ptr))
+    while (!is_end_of_name(*ptr))
         ptr++;
 
     e = ptr;
@@ -970,7 +982,7 @@ int read_mtllib(fastObjData* data, void* file)
                     p++;
 
                 s = p;
-                while (!is_whitespace(*p) && !is_newline(*p))
+                while (!is_end_of_name(*p))
                     p++;
 
                 mtl.name = string_copy(s, p);
@@ -1113,7 +1125,7 @@ const char* parse_mtllib(fastObjData* data, const char* ptr)
     ptr = skip_whitespace(ptr);
 
     s = ptr;
-    while (!is_whitespace(*ptr) && !is_newline(*ptr))
+    while (!is_end_of_name(*ptr))
         ptr++;
 
     e = ptr;
@@ -1397,4 +1409,3 @@ fastObjMesh* fast_obj_read(const char* path)
 }
 
 #endif
-
