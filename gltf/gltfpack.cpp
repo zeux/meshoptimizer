@@ -899,10 +899,6 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 	{
 		settings.vrm = true;
 		settings.keep_extras = true;
-		settings.keep_materials = true;
-		settings.mesh_merge = false;
-		settings.keep_nodes = true;
-		settings.quantize = false;
 	}
 
 	std::string json, bin, fallback;

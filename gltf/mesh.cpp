@@ -726,8 +726,9 @@ static void sortPointMesh(Mesh& mesh)
 
 void processMesh(Mesh& mesh, const Settings& settings)
 {
-	filterStreams(mesh);
-
+	if (!settings.vrm) {
+		filterStreams(mesh);	
+	}
 	switch (mesh.type)
 	{
 	case cgltf_primitive_type_points:

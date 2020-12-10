@@ -39,7 +39,7 @@ struct Transform
 
 struct Mesh
 {
-	const char* name;
+	std::string name;
 	int scene;
 	std::vector<cgltf_node*> nodes;
 	std::vector<Transform> instances;
