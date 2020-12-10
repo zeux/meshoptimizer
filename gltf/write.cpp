@@ -739,14 +739,6 @@ static std::string decodeUri(const char* uri)
 
 void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const char* output_path, const Settings& settings)
 {
-	if (image.name)
-	{
-		append(json, "\"name\":");
-		append(json, "\"");
-		append(json, image.name);
-		append(json, "\"");
-		comma(json);
-	}
 	std::string img_data;
 	std::string mime_type;
 
@@ -1328,8 +1320,7 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 
 		comma(json_samplers);
 		append(json_samplers, "{\"input\":");
-		append(json_samplers, range ? range_accr : track.constant ? pose_accr
-		                                                          : time_accr);
+		append(json_samplers, range ? range_accr : track.constant ? pose_accr : time_accr);
 		append(json_samplers, ",\"output\":");
 		append(json_samplers, data_accr);
 		append(json_samplers, "}");
