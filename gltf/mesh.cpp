@@ -725,10 +725,9 @@ static void sortPointMesh(Mesh& mesh)
 }
 
 void processMesh(Mesh& mesh, const Settings& settings)
-{
-	if (!settings.vrm) {
-		filterStreams(mesh);	
-	}
+{	
+	filterStreams(mesh);	
+
 	switch (mesh.type)
 	{
 	case cgltf_primitive_type_points:
@@ -766,9 +765,7 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio)
 
 	// note: it's important to follow the same pipeline as processMesh
 	// otherwise the result won't match
-	if (!settings.vrm) {
-		filterStreams(mesh);	
-	}
+	filterStreams(mesh);	
 	filterBones(mesh);
 	reindexMesh(mesh);
 	filterTriangles(mesh);

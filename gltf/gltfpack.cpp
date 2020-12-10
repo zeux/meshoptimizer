@@ -442,7 +442,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 		comma(json_meshes);
 		append(json_meshes, "{");
-		if (mesh.name)
+		if (!mesh.name.empty())
 		{
 			append(json_meshes, "\"name\":\"");
 			append(json_meshes, mesh.name);
