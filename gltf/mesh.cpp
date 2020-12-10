@@ -766,7 +766,9 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio)
 
 	// note: it's important to follow the same pipeline as processMesh
 	// otherwise the result won't match
-	filterStreams(mesh);
+	if (!settings.vrm) {
+		filterStreams(mesh);	
+	}
 	filterBones(mesh);
 	reindexMesh(mesh);
 	filterTriangles(mesh);
