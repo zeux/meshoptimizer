@@ -838,8 +838,9 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 
 	const char* iext = strrchr(input, '.');
 	const char* oext = output ? strrchr(output, '.') : NULL;
-	
-	if (iext && (strcmp(iext, ".vrm") == 0 || strcmp(iext, ".VRM") == 0)) {
+
+	if (iext && (strcmp(iext, ".vrm") == 0 || strcmp(iext, ".VRM") == 0))
+	{
 		settings.vrm = true;
 	}
 

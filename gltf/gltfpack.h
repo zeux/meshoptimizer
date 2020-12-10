@@ -128,7 +128,7 @@ struct Settings
 	bool fallback;
 
 	int verbose;
-	
+
 	bool vrm;
 };
 
