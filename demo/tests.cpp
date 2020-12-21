@@ -500,14 +500,12 @@ static void encodeVertexEmpty()
 
 static void decodeFilterOct8()
 {
-	unsigned char data[4 * 4] = {
+	const unsigned char data[4 * 4] = {
 	    0, 1, 127, 0,
 	    0, 187, 127, 1,
 	    255, 1, 127, 0,
 	    14, 130, 127, 1, // clang-format :-/
 	};
-
-	meshopt_decodeFilterOct(data, 4, 4);
 
 	const unsigned char expected[4 * 4] = {
 	    0, 1, 127, 0,
@@ -516,19 +514,27 @@ static void decodeFilterOct8()
 	    1, 130, 241, 1, // clang-format :-/
 	};
 
-	assert(memcmp(data, expected, sizeof(data)) == 0);
+	// Aligned by 4
+	unsigned char full[4 * 4];
+	memcpy(full, data, sizeof(full));
+	meshopt_decodeFilterOct(full, 4, 4);
+	assert(memcmp(full, expected, sizeof(full)) == 0);
+
+	// Tail processing for unaligned data
+	unsigned char tail[3 * 4];
+	memcpy(tail, data, sizeof(tail));
+	meshopt_decodeFilterOct(tail, 3, 4);
+	assert(memcmp(tail, expected, sizeof(tail)) == 0);
 }
 
 static void decodeFilterOct12()
 {
-	unsigned short data[4 * 4] = {
+	const unsigned short data[4 * 4] = {
 	    0, 1, 2047, 0,
 	    0, 1870, 2047, 1,
 	    2017, 1, 2047, 0,
 	    14, 1300, 2047, 1, // clang-format :-/
 	};
-
-	meshopt_decodeFilterOct(data, 4, 8);
 
 	const unsigned short expected[4 * 4] = {
 	    0, 16, 32767, 0,
@@ -537,19 +543,27 @@ static void decodeFilterOct12()
 	    307, 28541, 16093, 1, // clang-format :-/
 	};
 
-	assert(memcmp(data, expected, sizeof(data)) == 0);
+	// Aligned by 4
+	unsigned short full[4 * 4];
+	memcpy(full, data, sizeof(full));
+	meshopt_decodeFilterOct(full, 4, 8);
+	assert(memcmp(full, expected, sizeof(full)) == 0);
+
+	// Tail processing for unaligned data
+	unsigned short tail[3 * 4];
+	memcpy(tail, data, sizeof(tail));
+	meshopt_decodeFilterOct(tail, 3, 8);
+	assert(memcmp(tail, expected, sizeof(tail)) == 0);
 }
 
 static void decodeFilterQuat12()
 {
-	unsigned short data[4 * 4] = {
+	const unsigned short data[4 * 4] = {
 	    0, 1, 0, 0x7fc,
 	    0, 1870, 0, 0x7fd,
 	    2017, 1, 0, 0x7fe,
 	    14, 1300, 0, 0x7ff, // clang-format :-/
 	};
-
-	meshopt_decodeFilterQuat(data, 4, 8);
 
 	const unsigned short expected[4 * 4] = {
 	    32767, 0, 11, 0,
@@ -558,19 +572,27 @@ static void decodeFilterQuat12()
 	    158, 14715, 0, 29277, // clang-format :-/
 	};
 
-	assert(memcmp(data, expected, sizeof(data)) == 0);
+	// Aligned by 4
+	unsigned short full[4 * 4];
+	memcpy(full, data, sizeof(full));
+	meshopt_decodeFilterQuat(full, 4, 8);
+	assert(memcmp(full, expected, sizeof(full)) == 0);
+
+	// Tail processing for unaligned data
+	unsigned short tail[3 * 4];
+	memcpy(tail, data, sizeof(tail));
+	meshopt_decodeFilterQuat(tail, 3, 8);
+	assert(memcmp(tail, expected, sizeof(tail)) == 0);
 }
 
 static void decodeFilterExp()
 {
-	unsigned int data[4] = {
+	const unsigned int data[4] = {
 	    0,
 	    0xff000003,
 	    0x02fffff7,
 	    0xfe7fffff, // clang-format :-/
 	};
-
-	meshopt_decodeFilterExp(data, 4, 4);
 
 	const unsigned int expected[4] = {
 	    0,
@@ -579,7 +601,17 @@ static void decodeFilterExp()
 	    0x49fffffe, // clang-format :-/
 	};
 
-	assert(memcmp(data, expected, sizeof(data)) == 0);
+	// Aligned by 4
+	unsigned int full[4];
+	memcpy(full, data, sizeof(full));
+	meshopt_decodeFilterExp(full, 4, 4);
+	assert(memcmp(full, expected, sizeof(full)) == 0);
+
+	// Tail processing for unaligned data
+	unsigned int tail[3];
+	memcpy(tail, data, sizeof(tail));
+	meshopt_decodeFilterExp(tail, 3, 4);
+	assert(memcmp(tail, expected, sizeof(tail)) == 0);
 }
 
 static void clusterBoundsDegenerate()
