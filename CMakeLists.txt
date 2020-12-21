@@ -15,11 +15,6 @@ option(MESHOPT_BUILD_DEMO "Build demo" OFF)
 option(MESHOPT_BUILD_GLTFPACK "Build gltfpack" OFF)
 option(MESHOPT_BUILD_SHARED_LIBS "Build shared libraries" OFF)
 
-# add_library() needs BUILD_SHARED_LIBS set to decide between static and
-# shared. This also sets it back to OFF in case parent project has
-# BUILD_SHARED_LIBS but wants MESHOPT_BUILD_SHARED_LIBS to be OFF.
-set(BUILD_SHARED_LIBS ${MESHOPT_BUILD_SHARED_LIBS})
-
 set(SOURCES
     src/meshoptimizer.h
     src/allocator.cpp
@@ -61,7 +56,12 @@ else()
     add_compile_options(-Wall -Wextra -Wshadow -Wno-missing-field-initializers -Werror)
 endif()
 
-add_library(meshoptimizer ${SOURCES})
+if(MESHOPT_BUILD_SHARED_LIBS)
+    add_library(meshoptimizer SHARED ${SOURCES})
+else()
+    add_library(meshoptimizer STATIC ${SOURCES})
+endif()
+
 target_include_directories(meshoptimizer INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>")
 
 if(MESHOPT_BUILD_SHARED_LIBS)
