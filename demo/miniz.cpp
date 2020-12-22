@@ -1,5 +1,6 @@
 /* This is miniz.c with removal of all zlib/zip like functionality - only tdefl/tinfl APIs are left
-   For maximum compatibility unaligned load/store and 64-bit register paths have been removed so this is slower than miniz.c
+   For maximum compatibility unaligned load/store and 64-bit register paths have been removed so this is slower than
+   miniz.c
 
    miniz.c v1.15 - public domain deflate/inflate, zlib-subset, ZIP reading/writing/appending, PNG writing
    See "unlicense" statement at the end of this file.

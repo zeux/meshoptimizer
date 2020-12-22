@@ -33,8 +33,8 @@ static const unsigned int kTriangleIndexOrder[3][3] = {
 };
 
 static const unsigned char kCodeAuxEncodingTable[16] = {
-    0x00, 0x76, 0x87, 0x56, 0x67, 0x78, 0xa9, 0x86, 0x65, 0x89, 0x68, 0x98, 0x01, 0x69,
-    0, 0, // last two entries aren't used for encoding
+    0x00, 0x76, 0x87, 0x56, 0x67, 0x78, 0xa9, 0x86, 0x65, 0x89, 0x68, 0x98, 0x01, 0x69, 0,
+    0, // last two entries aren't used for encoding
 };
 
 static int rotateTriangle(unsigned int a, unsigned int b, unsigned int c, unsigned int next)
@@ -151,7 +151,8 @@ static int getCodeAuxIndex(unsigned char v, const unsigned char* table)
 	return -1;
 }
 
-static void writeTriangle(void* destination, size_t offset, size_t index_size, unsigned int a, unsigned int b, unsigned int c)
+static void writeTriangle(
+    void* destination, size_t offset, size_t index_size, unsigned int a, unsigned int b, unsigned int c)
 {
 	if (index_size == 2)
 	{
@@ -201,7 +202,8 @@ static size_t sortTop16(unsigned char dest[16], size_t stats[256])
 
 } // namespace meshopt
 
-size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, const unsigned int* indices, size_t index_count)
+size_t meshopt_encodeIndexBuffer(
+    unsigned char* buffer, size_t buffer_size, const unsigned int* indices, size_t index_count)
 {
 	using namespace meshopt;
 
@@ -239,7 +241,8 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 	int fecmax = version >= 1 ? 13 : 15;
 
 	// use static encoding table; it's possible to pack the result and then build an optimal table and repack
-	// for now we keep it simple and use the table that has been generated based on symbol frequency on a training mesh set
+	// for now we keep it simple and use the table that has been generated based on symbol frequency on a training mesh
+	// set
 	const unsigned char* codeaux_table = kCodeAuxEncodingTable;
 
 	for (size_t i = 0; i < index_count; i += 3)
@@ -359,7 +362,8 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 			if (fec == 0 || fec == 15)
 				pushVertexFifo(vertexfifo, c, vertexfifooffset);
 
-			// all three edges aren't in the fifo; pushing all of them is important so that we can match them for later triangles
+			// all three edges aren't in the fifo; pushing all of them is important so that we can match them for later
+			// triangles
 			pushEdgeFifo(edgefifo, b, a, edgefifooffset);
 			pushEdgeFifo(edgefifo, c, b, edgefifooffset);
 			pushEdgeFifo(edgefifo, a, c, edgefifooffset);
@@ -381,7 +385,8 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 		*data++ = codeaux_table[i];
 	}
 
-	// since we encode restarts as codeaux without a table reference, we need to make sure 00 is encoded as a table reference
+	// since we encode restarts as codeaux without a table reference, we need to make sure 00 is encoded as a table
+	// reference
 	assert(codeaux_table[0] == 0);
 
 	assert(data >= buffer + index_count / 3 + 16);
@@ -405,9 +410,11 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 		acccode += codestats[codetop[i]];
 		acccodeaux += codeauxstats[codeauxtop[i]];
 
-		printf("%2d: %02x = %d (%.1f%% ..%.1f%%)\t\t%2d: %02x = %d (%.1f%% ..%.1f%%)\n",
-		       int(i), codetop[i], int(codestats[codetop[i]]), double(codestats[codetop[i]]) / double(sumcode) * 100, double(acccode) / double(sumcode) * 100,
-		       int(i), codeauxtop[i], int(codeauxstats[codeauxtop[i]]), double(codeauxstats[codeauxtop[i]]) / double(sumcodeaux) * 100, double(acccodeaux) / double(sumcodeaux) * 100);
+		printf("%2d: %02x = %d (%.1f%% ..%.1f%%)\t\t%2d: %02x = %d (%.1f%% ..%.1f%%)\n", int(i), codetop[i],
+		    int(codestats[codetop[i]]), double(codestats[codetop[i]]) / double(sumcode) * 100,
+		    double(acccode) / double(sumcode) * 100, int(i), codeauxtop[i], int(codeauxstats[codeauxtop[i]]),
+		    double(codeauxstats[codeauxtop[i]]) / double(sumcodeaux) * 100,
+		    double(acccodeaux) / double(sumcodeaux) * 100);
 	}
 #endif
 
@@ -437,7 +444,8 @@ void meshopt_encodeIndexVersion(int version)
 	meshopt::gEncodeIndexVersion = version;
 }
 
-int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t index_size, const unsigned char* buffer, size_t buffer_size)
+int meshopt_decodeIndexBuffer(
+    void* destination, size_t index_count, size_t index_size, const unsigned char* buffer, size_t buffer_size)
 {
 	using namespace meshopt;
 
@@ -510,7 +518,8 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 				// output triangle
 				writeTriangle(destination, i, index_size, a, b, c);
 
-				// push vertex/edge fifo must match the encoding step *exactly* otherwise the data will not be decoded correctly
+				// push vertex/edge fifo must match the encoding step *exactly* otherwise the data will not be decoded
+				// correctly
 				pushVertexFifo(vertexfifo, c, vertexfifooffset, fec0);
 
 				pushEdgeFifo(edgefifo, c, b, edgefifooffset);
@@ -527,7 +536,8 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 				// output triangle
 				writeTriangle(destination, i, index_size, a, b, c);
 
-				// push vertex/edge fifo must match the encoding step *exactly* otherwise the data will not be decoded correctly
+				// push vertex/edge fifo must match the encoding step *exactly* otherwise the data will not be decoded
+				// correctly
 				pushVertexFifo(vertexfifo, c, vertexfifooffset);
 
 				pushEdgeFifo(edgefifo, c, b, edgefifooffset);
@@ -546,7 +556,8 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 				int fec = codeaux & 15;
 
 				// fifo reads are wrapped around 16 entry buffer
-				// also note that we increment next for all three vertices before decoding indices - this matches encoder behavior
+				// also note that we increment next for all three vertices before decoding indices - this matches
+				// encoder behavior
 				unsigned int a = next++;
 
 				unsigned int bf = vertexfifo[(vertexfifooffset - feb) & 15];
@@ -564,7 +575,8 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 				// output triangle
 				writeTriangle(destination, i, index_size, a, b, c);
 
-				// push vertex/edge fifo must match the encoding step *exactly* otherwise the data will not be decoded correctly
+				// push vertex/edge fifo must match the encoding step *exactly* otherwise the data will not be decoded
+				// correctly
 				pushVertexFifo(vertexfifo, a, vertexfifooffset);
 				pushVertexFifo(vertexfifo, b, vertexfifooffset, feb0);
 				pushVertexFifo(vertexfifo, c, vertexfifooffset, fec0);
@@ -587,7 +599,8 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 					next = 0;
 
 				// fifo reads are wrapped around 16 entry buffer
-				// also note that we increment next for all three vertices before decoding indices - this matches encoder behavior
+				// also note that we increment next for all three vertices before decoding indices - this matches
+				// encoder behavior
 				unsigned int a = (fea == 0) ? next++ : 0;
 				unsigned int b = (feb == 0) ? next++ : vertexfifo[(vertexfifooffset - feb) & 15];
 				unsigned int c = (fec == 0) ? next++ : vertexfifo[(vertexfifooffset - fec) & 15];
@@ -605,7 +618,8 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 				// output triangle
 				writeTriangle(destination, i, index_size, a, b, c);
 
-				// push vertex/edge fifo must match the encoding step *exactly* otherwise the data will not be decoded correctly
+				// push vertex/edge fifo must match the encoding step *exactly* otherwise the data will not be decoded
+				// correctly
 				pushVertexFifo(vertexfifo, a, vertexfifooffset);
 				pushVertexFifo(vertexfifo, b, vertexfifooffset, (feb == 0) | (feb == 15));
 				pushVertexFifo(vertexfifo, c, vertexfifooffset, (fec == 0) | (fec == 15));
@@ -624,7 +638,8 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 	return 0;
 }
 
-size_t meshopt_encodeIndexSequence(unsigned char* buffer, size_t buffer_size, const unsigned int* indices, size_t index_count)
+size_t meshopt_encodeIndexSequence(
+    unsigned char* buffer, size_t buffer_size, const unsigned int* indices, size_t index_count)
 {
 	using namespace meshopt;
 
@@ -693,7 +708,8 @@ size_t meshopt_encodeIndexSequenceBound(size_t index_count, size_t vertex_count)
 	return 1 + index_count * vertex_groups + 4;
 }
 
-int meshopt_decodeIndexSequence(void* destination, size_t index_count, size_t index_size, const unsigned char* buffer, size_t buffer_size)
+int meshopt_decodeIndexSequence(
+    void* destination, size_t index_count, size_t index_size, const unsigned char* buffer, size_t buffer_size)
 {
 	using namespace meshopt;
 

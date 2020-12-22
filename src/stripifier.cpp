@@ -10,7 +10,8 @@
 namespace meshopt
 {
 
-static unsigned int findStripFirst(const unsigned int buffer[][3], unsigned int buffer_size, const unsigned int* valence)
+static unsigned int findStripFirst(
+    const unsigned int buffer[][3], unsigned int buffer_size, const unsigned int* valence)
 {
 	unsigned int index = 0;
 	unsigned int iv = ~0u;
@@ -49,7 +50,8 @@ static int findStripNext(const unsigned int buffer[][3], unsigned int buffer_siz
 
 } // namespace meshopt
 
-size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int restart_index)
+size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count,
+    unsigned int restart_index)
 {
 	assert(destination != indices);
 	assert(index_count % 3 == 0);
@@ -163,14 +165,15 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 			valence[b]--;
 			valence[c]--;
 
-			// we need to pre-rotate the triangle so that we will find a match in the existing buffer on the next iteration
+			// we need to pre-rotate the triangle so that we will find a match in the existing buffer on the next
+			// iteration
 			int ea = findStripNext(buffer, buffer_size, c, b);
 			int eb = findStripNext(buffer, buffer_size, a, c);
 			int ec = findStripNext(buffer, buffer_size, b, a);
 
-			// in some cases we can have several matching edges; since we can pick any edge, we pick the one with the smallest
-			// triangle index in the buffer. this reduces the effect of stripification on ACMR and additionally - for unclear
-			// reasons - slightly improves the stripification efficiency
+			// in some cases we can have several matching edges; since we can pick any edge, we pick the one with the
+			// smallest triangle index in the buffer. this reduces the effect of stripification on ACMR and additionally
+			// - for unclear reasons - slightly improves the stripification efficiency
 			int mine = INT_MAX;
 			mine = (ea >= 0 && mine > ea) ? ea : mine;
 			mine = (eb >= 0 && mine > eb) ? eb : mine;
@@ -249,7 +252,8 @@ size_t meshopt_stripifyBound(size_t index_count)
 	return (index_count / 3) * 5;
 }
 
-size_t meshopt_unstripify(unsigned int* destination, const unsigned int* indices, size_t index_count, unsigned int restart_index)
+size_t meshopt_unstripify(
+    unsigned int* destination, const unsigned int* indices, size_t index_count, unsigned int restart_index)
 {
 	assert(destination != indices);
 

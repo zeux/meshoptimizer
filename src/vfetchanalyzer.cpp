@@ -4,7 +4,8 @@
 #include <assert.h>
 #include <string.h>
 
-meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(
+    const unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
 	assert(index_count % 3 == 0);
 	assert(vertex_size > 0 && vertex_size <= 256);
@@ -19,7 +20,8 @@ meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const unsigned int* ind
 	const size_t kCacheLine = 64;
 	const size_t kCacheSize = 128 * 1024;
 
-	// simple direct mapped cache; on typical mesh data this is close to 4-way cache, and this model is a gross approximation anyway
+	// simple direct mapped cache; on typical mesh data this is close to 4-way cache, and this model is a gross
+	// approximation anyway
 	size_t cache[kCacheSize / kCacheLine] = {};
 
 	for (size_t i = 0; i < index_count; ++i)
@@ -52,7 +54,8 @@ meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const unsigned int* ind
 	for (size_t i = 0; i < vertex_count; ++i)
 		unique_vertex_count += vertex_visited[i];
 
-	result.overfetch = unique_vertex_count == 0 ? 0 : float(result.bytes_fetched) / float(unique_vertex_count * vertex_size);
+	result.overfetch =
+	    unique_vertex_count == 0 ? 0 : float(result.bytes_fetched) / float(unique_vertex_count * vertex_size);
 
 	return result;
 }

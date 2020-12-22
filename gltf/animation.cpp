@@ -75,7 +75,8 @@ static Attr interpolateLinear(const Attr& l, const Attr& r, float t, cgltf_anima
 		    l.f[3] * t0 + r.f[3] * t1,
 		}};
 
-		float len = sqrtf(lerp.f[0] * lerp.f[0] + lerp.f[1] * lerp.f[1] + lerp.f[2] * lerp.f[2] + lerp.f[3] * lerp.f[3]);
+		float len =
+		    sqrtf(lerp.f[0] * lerp.f[0] + lerp.f[1] * lerp.f[1] + lerp.f[2] * lerp.f[2] + lerp.f[3] * lerp.f[3]);
 
 		if (len > 0.f)
 		{
@@ -100,7 +101,8 @@ static Attr interpolateLinear(const Attr& l, const Attr& r, float t, cgltf_anima
 	}
 }
 
-static Attr interpolateHermite(const Attr& v0, const Attr& t0, const Attr& v1, const Attr& t1, float t, float dt, cgltf_animation_path_type type)
+static Attr interpolateHermite(
+    const Attr& v0, const Attr& t0, const Attr& v1, const Attr& t1, float t, float dt, cgltf_animation_path_type type)
 {
 	float s0 = 1 + t * t * (2 * t - 3);
 	float s1 = t + t * t * (t - 2);
@@ -119,7 +121,8 @@ static Attr interpolateHermite(const Attr& v0, const Attr& t0, const Attr& v1, c
 
 	if (type == cgltf_animation_path_type_rotation)
 	{
-		float len = sqrtf(lerp.f[0] * lerp.f[0] + lerp.f[1] * lerp.f[1] + lerp.f[2] * lerp.f[2] + lerp.f[3] * lerp.f[3]);
+		float len =
+		    sqrtf(lerp.f[0] * lerp.f[0] + lerp.f[1] * lerp.f[1] + lerp.f[2] * lerp.f[2] + lerp.f[3] * lerp.f[3]);
 
 		if (len > 0.f)
 		{
@@ -133,7 +136,9 @@ static Attr interpolateHermite(const Attr& v0, const Attr& t0, const Attr& v1, c
 	return lerp;
 }
 
-static void resampleKeyframes(std::vector<Attr>& data, const std::vector<float>& input, const std::vector<Attr>& output, cgltf_animation_path_type type, cgltf_interpolation_type interpolation, size_t components, int frames, float mint, int freq)
+static void resampleKeyframes(std::vector<Attr>& data, const std::vector<float>& input, const std::vector<Attr>& output,
+    cgltf_animation_path_type type, cgltf_interpolation_type interpolation, size_t components, int frames, float mint,
+    int freq)
 {
 	size_t cursor = 0;
 
@@ -207,7 +212,8 @@ static void resampleKeyframes(std::vector<Attr>& data, const std::vector<float>&
 	}
 }
 
-static bool isTrackEqual(const std::vector<Attr>& data, cgltf_animation_path_type type, int frames, const Attr* value, size_t components)
+static bool isTrackEqual(
+    const std::vector<Attr>& data, cgltf_animation_path_type type, int frames, const Attr* value, size_t components)
 {
 	assert(data.size() == frames * components);
 
@@ -291,7 +297,8 @@ void processAnimation(Animation& animation, const Settings& settings)
 		Track& track = animation.tracks[i];
 
 		std::vector<Attr> result;
-		resampleKeyframes(result, track.time, track.data, track.path, track.interpolation, track.components, frames, mint, settings.anim_freq);
+		resampleKeyframes(result, track.time, track.data, track.path, track.interpolation, track.components, frames,
+		    mint, settings.anim_freq);
 
 		track.time.clear();
 		track.data.swap(result);

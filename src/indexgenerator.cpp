@@ -121,7 +121,8 @@ static T* hashLookup(T* table, size_t buckets, const Hash& hash, const T& key, c
 
 } // namespace meshopt
 
-size_t meshopt_generateVertexRemap(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)
+size_t meshopt_generateVertexRemap(unsigned int* destination, const unsigned int* indices, size_t index_count,
+    const void* vertices, size_t vertex_count, size_t vertex_size)
 {
 	using namespace meshopt;
 
@@ -170,7 +171,8 @@ size_t meshopt_generateVertexRemap(unsigned int* destination, const unsigned int
 	return next_vertex;
 }
 
-size_t meshopt_generateVertexRemapMulti(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, const struct meshopt_Stream* streams, size_t stream_count)
+size_t meshopt_generateVertexRemapMulti(unsigned int* destination, const unsigned int* indices, size_t index_count,
+    size_t vertex_count, const struct meshopt_Stream* streams, size_t stream_count)
 {
 	using namespace meshopt;
 
@@ -225,7 +227,8 @@ size_t meshopt_generateVertexRemapMulti(unsigned int* destination, const unsigne
 	return next_vertex;
 }
 
-void meshopt_remapVertexBuffer(void* destination, const void* vertices, size_t vertex_count, size_t vertex_size, const unsigned int* remap)
+void meshopt_remapVertexBuffer(
+    void* destination, const void* vertices, size_t vertex_count, size_t vertex_size, const unsigned int* remap)
 {
 	assert(vertex_size > 0 && vertex_size <= 256);
 
@@ -245,12 +248,14 @@ void meshopt_remapVertexBuffer(void* destination, const void* vertices, size_t v
 		{
 			assert(remap[i] < vertex_count);
 
-			memcpy(static_cast<unsigned char*>(destination) + remap[i] * vertex_size, static_cast<const unsigned char*>(vertices) + i * vertex_size, vertex_size);
+			memcpy(static_cast<unsigned char*>(destination) + remap[i] * vertex_size,
+			    static_cast<const unsigned char*>(vertices) + i * vertex_size, vertex_size);
 		}
 	}
 }
 
-void meshopt_remapIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count, const unsigned int* remap)
+void meshopt_remapIndexBuffer(
+    unsigned int* destination, const unsigned int* indices, size_t index_count, const unsigned int* remap)
 {
 	assert(index_count % 3 == 0);
 
@@ -263,7 +268,8 @@ void meshopt_remapIndexBuffer(unsigned int* destination, const unsigned int* ind
 	}
 }
 
-void meshopt_generateShadowIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t vertex_stride)
+void meshopt_generateShadowIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count,
+    const void* vertices, size_t vertex_count, size_t vertex_size, size_t vertex_stride)
 {
 	using namespace meshopt;
 
@@ -302,7 +308,8 @@ void meshopt_generateShadowIndexBuffer(unsigned int* destination, const unsigned
 	}
 }
 
-void meshopt_generateShadowIndexBufferMulti(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, const struct meshopt_Stream* streams, size_t stream_count)
+void meshopt_generateShadowIndexBufferMulti(unsigned int* destination, const unsigned int* indices, size_t index_count,
+    size_t vertex_count, const struct meshopt_Stream* streams, size_t stream_count)
 {
 	using namespace meshopt;
 

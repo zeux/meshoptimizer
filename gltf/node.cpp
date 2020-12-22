@@ -59,14 +59,16 @@ void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vec
 	}
 }
 
-void markNeededNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Mesh>& meshes, const std::vector<Animation>& animations, const Settings& settings)
+void markNeededNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Mesh>& meshes,
+    const std::vector<Animation>& animations, const Settings& settings)
 {
 	// mark all joints as kept
 	for (size_t i = 0; i < data->skins_count; ++i)
 	{
 		const cgltf_skin& skin = data->skins[i];
 
-		// for now we keep all joints directly referenced by the skin and the entire ancestry tree; we keep names for joints as well
+		// for now we keep all joints directly referenced by the skin and the entire ancestry tree; we keep names for
+		// joints as well
 		for (size_t j = 0; j < skin.joints_count; ++j)
 		{
 			NodeInfo& ni = nodes[skin.joints[j] - data->nodes];
@@ -169,10 +171,8 @@ void decomposeTransform(float translation[3], float rotation[4], float scale[3],
 	translation[2] = m[3][2];
 
 	// compute determinant to determine handedness
-	float det =
-	    m[0][0] * (m[1][1] * m[2][2] - m[2][1] * m[1][2]) -
-	    m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
-	    m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+	float det = m[0][0] * (m[1][1] * m[2][2] - m[2][1] * m[1][2]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+	            m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
 
 	float sign = (det < 0.f) ? -1.f : 1.f;
 

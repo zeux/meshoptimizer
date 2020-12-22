@@ -10,7 +10,8 @@
 namespace meshopt
 {
 
-static void calculateSortData(float* sort_data, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_positions_stride, const unsigned int* clusters, size_t cluster_count)
+static void calculateSortData(float* sort_data, const unsigned int* indices, size_t index_count,
+    const float* vertex_positions, size_t vertex_positions_stride, const unsigned int* clusters, size_t cluster_count)
 {
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
@@ -69,20 +70,25 @@ static void calculateSortData(float* sort_data, const unsigned int* indices, siz
 		cluster_centroid[1] *= inv_cluster_area;
 		cluster_centroid[2] *= inv_cluster_area;
 
-		float cluster_normal_length = sqrtf(cluster_normal[0] * cluster_normal[0] + cluster_normal[1] * cluster_normal[1] + cluster_normal[2] * cluster_normal[2]);
+		float cluster_normal_length =
+		    sqrtf(cluster_normal[0] * cluster_normal[0] + cluster_normal[1] * cluster_normal[1] +
+		          cluster_normal[2] * cluster_normal[2]);
 		float inv_cluster_normal_length = cluster_normal_length == 0 ? 0 : 1 / cluster_normal_length;
 
 		cluster_normal[0] *= inv_cluster_normal_length;
 		cluster_normal[1] *= inv_cluster_normal_length;
 		cluster_normal[2] *= inv_cluster_normal_length;
 
-		float centroid_vector[3] = {cluster_centroid[0] - mesh_centroid[0], cluster_centroid[1] - mesh_centroid[1], cluster_centroid[2] - mesh_centroid[2]};
+		float centroid_vector[3] = {cluster_centroid[0] - mesh_centroid[0], cluster_centroid[1] - mesh_centroid[1],
+		    cluster_centroid[2] - mesh_centroid[2]};
 
-		sort_data[cluster] = centroid_vector[0] * cluster_normal[0] + centroid_vector[1] * cluster_normal[1] + centroid_vector[2] * cluster_normal[2];
+		sort_data[cluster] = centroid_vector[0] * cluster_normal[0] + centroid_vector[1] * cluster_normal[1] +
+		                     centroid_vector[2] * cluster_normal[2];
 	}
 }
 
-static void calculateSortOrderRadix(unsigned int* sort_order, const float* sort_data, unsigned short* sort_keys, size_t cluster_count)
+static void calculateSortOrderRadix(
+    unsigned int* sort_order, const float* sort_data, unsigned short* sort_keys, size_t cluster_count)
 {
 	// compute sort data bounds and renormalize, using fixed point snorm
 	float sort_data_max = 1e-3f;
@@ -132,7 +138,8 @@ static void calculateSortOrderRadix(unsigned int* sort_order, const float* sort_
 	}
 }
 
-static unsigned int updateCache(unsigned int a, unsigned int b, unsigned int c, unsigned int cache_size, unsigned int* cache_timestamps, unsigned int& timestamp)
+static unsigned int updateCache(unsigned int a, unsigned int b, unsigned int c, unsigned int cache_size,
+    unsigned int* cache_timestamps, unsigned int& timestamp)
 {
 	unsigned int cache_misses = 0;
 
@@ -158,7 +165,8 @@ static unsigned int updateCache(unsigned int a, unsigned int b, unsigned int c, 
 	return cache_misses;
 }
 
-static size_t generateHardBoundaries(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int* cache_timestamps)
+static size_t generateHardBoundaries(unsigned int* destination, const unsigned int* indices, size_t index_count,
+    size_t vertex_count, unsigned int cache_size, unsigned int* cache_timestamps)
 {
 	memset(cache_timestamps, 0, vertex_count * sizeof(unsigned int));
 
@@ -170,12 +178,13 @@ static size_t generateHardBoundaries(unsigned int* destination, const unsigned i
 
 	for (size_t i = 0; i < face_count; ++i)
 	{
-		unsigned int m = updateCache(indices[i * 3 + 0], indices[i * 3 + 1], indices[i * 3 + 2], cache_size, &cache_timestamps[0], timestamp);
+		unsigned int m = updateCache(
+		    indices[i * 3 + 0], indices[i * 3 + 1], indices[i * 3 + 2], cache_size, &cache_timestamps[0], timestamp);
 
-		// when all three vertices are not in the cache it's usually relatively safe to assume that this is a new patch in the mesh
-		// that is disjoint from previous vertices; sometimes it might come back to reference existing vertices but that frequently
-		// suggests an inefficiency in the vertex cache optimization algorithm
-		// usually the first triangle has 3 misses unless it's degenerate - thus we make sure the first cluster always starts with 0
+		// when all three vertices are not in the cache it's usually relatively safe to assume that this is a new patch
+		// in the mesh that is disjoint from previous vertices; sometimes it might come back to reference existing
+		// vertices but that frequently suggests an inefficiency in the vertex cache optimization algorithm usually the
+		// first triangle has 3 misses unless it's degenerate - thus we make sure the first cluster always starts with 0
 		if (i == 0 || m == 3)
 		{
 			destination[result++] = unsigned(i);
@@ -187,7 +196,9 @@ static size_t generateHardBoundaries(unsigned int* destination, const unsigned i
 	return result;
 }
 
-static size_t generateSoftBoundaries(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, const unsigned int* clusters, size_t cluster_count, unsigned int cache_size, float threshold, unsigned int* cache_timestamps)
+static size_t generateSoftBoundaries(unsigned int* destination, const unsigned int* indices, size_t index_count,
+    size_t vertex_count, const unsigned int* clusters, size_t cluster_count, unsigned int cache_size, float threshold,
+    unsigned int* cache_timestamps)
 {
 	memset(cache_timestamps, 0, vertex_count * sizeof(unsigned int));
 
@@ -209,7 +220,8 @@ static size_t generateSoftBoundaries(unsigned int* destination, const unsigned i
 
 		for (size_t i = start; i < end; ++i)
 		{
-			unsigned int m = updateCache(indices[i * 3 + 0], indices[i * 3 + 1], indices[i * 3 + 2], cache_size, &cache_timestamps[0], timestamp);
+			unsigned int m = updateCache(indices[i * 3 + 0], indices[i * 3 + 1], indices[i * 3 + 2], cache_size,
+			    &cache_timestamps[0], timestamp);
 
 			cluster_misses += m;
 		}
@@ -227,16 +239,17 @@ static size_t generateSoftBoundaries(unsigned int* destination, const unsigned i
 
 		for (size_t i = start; i < end; ++i)
 		{
-			unsigned int m = updateCache(indices[i * 3 + 0], indices[i * 3 + 1], indices[i * 3 + 2], cache_size, &cache_timestamps[0], timestamp);
+			unsigned int m = updateCache(indices[i * 3 + 0], indices[i * 3 + 1], indices[i * 3 + 2], cache_size,
+			    &cache_timestamps[0], timestamp);
 
 			running_misses += m;
 			running_faces += 1;
 
 			if (float(running_misses) / float(running_faces) <= cluster_threshold)
 			{
-				// we have reached the target ACMR with the current triangle so we need to start a new cluster on the next one
-				// note that this may mean that we add 'end` to destination for the last triangle, which will imply that the last
-				// cluster is empty; however, the 'pop_back' after the loop will clean it up
+				// we have reached the target ACMR with the current triangle so we need to start a new cluster on the
+				// next one note that this may mean that we add 'end` to destination for the last triangle, which will
+				// imply that the last cluster is empty; however, the 'pop_back' after the loop will clean it up
 				destination[result++] = unsigned(i + 1);
 
 				// reset cache
@@ -248,11 +261,12 @@ static size_t generateSoftBoundaries(unsigned int* destination, const unsigned i
 		}
 
 		// each time we reach the target ACMR we flush the cluster
-		// this means that the last cluster is by definition not very good - there are frequent cases where we are left with a few triangles
-		// in the last cluster, producing a very bad ACMR and significantly penalizing the overall results
-		// thus we remove the last cluster boundary, merging the last complete cluster with the last incomplete one
-		// there are sometimes cases when the last cluster is actually good enough - in which case the code above would have added 'end'
-		// to the cluster boundary array which we need to remove anyway - this code will do that automatically
+		// this means that the last cluster is by definition not very good - there are frequent cases where we are left
+		// with a few triangles in the last cluster, producing a very bad ACMR and significantly penalizing the overall
+		// results thus we remove the last cluster boundary, merging the last complete cluster with the last incomplete
+		// one there are sometimes cases when the last cluster is actually good enough - in which case the code above
+		// would have added 'end' to the cluster boundary array which we need to remove anyway - this code will do that
+		// automatically
 		if (destination[result - 1] != start)
 		{
 			result--;
@@ -267,7 +281,8 @@ static size_t generateSoftBoundaries(unsigned int* destination, const unsigned i
 
 } // namespace meshopt
 
-void meshopt_optimizeOverdraw(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, float threshold)
+void meshopt_optimizeOverdraw(unsigned int* destination, const unsigned int* indices, size_t index_count,
+    const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, float threshold)
 {
 	using namespace meshopt;
 
@@ -295,18 +310,21 @@ void meshopt_optimizeOverdraw(unsigned int* destination, const unsigned int* ind
 
 	// generate hard boundaries from full-triangle cache misses
 	unsigned int* hard_clusters = allocator.allocate<unsigned int>(index_count / 3);
-	size_t hard_cluster_count = generateHardBoundaries(hard_clusters, indices, index_count, vertex_count, cache_size, cache_timestamps);
+	size_t hard_cluster_count =
+	    generateHardBoundaries(hard_clusters, indices, index_count, vertex_count, cache_size, cache_timestamps);
 
 	// generate soft boundaries
 	unsigned int* soft_clusters = allocator.allocate<unsigned int>(index_count / 3 + 1);
-	size_t soft_cluster_count = generateSoftBoundaries(soft_clusters, indices, index_count, vertex_count, hard_clusters, hard_cluster_count, cache_size, threshold, cache_timestamps);
+	size_t soft_cluster_count = generateSoftBoundaries(soft_clusters, indices, index_count, vertex_count, hard_clusters,
+	    hard_cluster_count, cache_size, threshold, cache_timestamps);
 
 	const unsigned int* clusters = soft_clusters;
 	size_t cluster_count = soft_cluster_count;
 
 	// fill sort data
 	float* sort_data = allocator.allocate<float>(cluster_count);
-	calculateSortData(sort_data, indices, index_count, vertex_positions, vertex_positions_stride, clusters, cluster_count);
+	calculateSortData(
+	    sort_data, indices, index_count, vertex_positions, vertex_positions_stride, clusters, cluster_count);
 
 	// sort clusters using sort data
 	unsigned short* sort_keys = allocator.allocate<unsigned short>(cluster_count);

@@ -40,7 +40,8 @@ static void computeBoundingSphere(float result[4], const float points[][3], size
 		const float* p1 = points[pmin[axis]];
 		const float* p2 = points[pmax[axis]];
 
-		float d2 = (p2[0] - p1[0]) * (p2[0] - p1[0]) + (p2[1] - p1[1]) * (p2[1] - p1[1]) + (p2[2] - p1[2]) * (p2[2] - p1[2]);
+		float d2 =
+		    (p2[0] - p1[0]) * (p2[0] - p1[0]) + (p2[1] - p1[1]) * (p2[1] - p1[1]) + (p2[2] - p1[2]) * (p2[2] - p1[2]);
 
 		if (d2 > paxisd2)
 		{
@@ -60,7 +61,8 @@ static void computeBoundingSphere(float result[4], const float points[][3], size
 	for (size_t i = 0; i < count; ++i)
 	{
 		const float* p = points[i];
-		float d2 = (p[0] - center[0]) * (p[0] - center[0]) + (p[1] - center[1]) * (p[1] - center[1]) + (p[2] - center[2]) * (p[2] - center[2]);
+		float d2 = (p[0] - center[0]) * (p[0] - center[0]) + (p[1] - center[1]) * (p[1] - center[1]) +
+		           (p[2] - center[2]) * (p[2] - center[2]);
 
 		if (d2 > radius * radius)
 		{
@@ -92,7 +94,8 @@ size_t meshopt_buildMeshletsBound(size_t index_count, size_t max_vertices, size_
 
 	// meshlet construction is limited by max vertices and max triangles per meshlet
 	// the worst case is that the input is an unindexed stream since this equally stresses both limits
-	// note that we assume that in the worst case, we leave 2 vertices unpacked in each meshlet - if we have space for 3 we can pack any triangle
+	// note that we assume that in the worst case, we leave 2 vertices unpacked in each meshlet - if we have space for 3
+	// we can pack any triangle
 	size_t max_vertices_conservative = max_vertices - 2;
 	size_t meshlet_limit_vertices = (index_count + max_vertices_conservative - 1) / max_vertices_conservative;
 	size_t meshlet_limit_triangles = (index_count / 3 + max_triangles - 1) / max_triangles;
@@ -100,7 +103,8 @@ size_t meshopt_buildMeshletsBound(size_t index_count, size_t max_vertices, size_
 	return meshlet_limit_vertices > meshlet_limit_triangles ? meshlet_limit_vertices : meshlet_limit_triangles;
 }
 
-size_t meshopt_buildMeshlets(meshopt_Meshlet* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, size_t max_vertices, size_t max_triangles)
+size_t meshopt_buildMeshlets(meshopt_Meshlet* destination, const unsigned int* indices, size_t index_count,
+    size_t vertex_count, size_t max_vertices, size_t max_triangles)
 {
 	assert(index_count % 3 == 0);
 	assert(max_vertices >= 3);
@@ -173,7 +177,8 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* destination, const unsigned int* i
 	return offset;
 }
 
-meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t index_count,
+    const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	using namespace meshopt;
 
@@ -236,7 +241,8 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 
 	float center[3] = {psphere[0], psphere[1], psphere[2]};
 
-	// treating triangle normals as points, find the bounding sphere - the sphere center determines the optimal cone axis
+	// treating triangle normals as points, find the bounding sphere - the sphere center determines the optimal cone
+	// axis
 	float nsphere[4] = {};
 	computeBoundingSphere(nsphere, normals, triangles);
 
@@ -327,7 +333,8 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 	return bounds;
 }
 
-meshopt_Bounds meshopt_computeMeshletBounds(const meshopt_Meshlet* meshlet, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+meshopt_Bounds meshopt_computeMeshletBounds(
+    const meshopt_Meshlet* meshlet, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	assert(vertex_positions_stride > 0 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
@@ -347,5 +354,6 @@ meshopt_Bounds meshopt_computeMeshletBounds(const meshopt_Meshlet* meshlet, cons
 		indices[i * 3 + 2] = c;
 	}
 
-	return meshopt_computeClusterBounds(indices, meshlet->triangle_count * 3, vertex_positions, vertex_count, vertex_positions_stride);
+	return meshopt_computeClusterBounds(
+	    indices, meshlet->triangle_count * 3, vertex_positions, vertex_count, vertex_positions_stride);
 }

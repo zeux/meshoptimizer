@@ -69,7 +69,8 @@ static bool areMaterialComponentsEqual(const cgltf_pbr_metallic_roughness& lhs, 
 	return true;
 }
 
-static bool areMaterialComponentsEqual(const cgltf_pbr_specular_glossiness& lhs, const cgltf_pbr_specular_glossiness& rhs)
+static bool areMaterialComponentsEqual(
+    const cgltf_pbr_specular_glossiness& lhs, const cgltf_pbr_specular_glossiness& rhs)
 {
 	if (!areTextureViewsEqual(lhs.diffuse_texture, rhs.diffuse_texture))
 		return false;
@@ -159,18 +160,21 @@ static bool areMaterialComponentsEqual(const cgltf_sheen& lhs, const cgltf_sheen
 	return true;
 }
 
-static bool areMaterialsEqual(cgltf_data* data, const cgltf_material& lhs, const cgltf_material& rhs, const Settings& settings)
+static bool areMaterialsEqual(
+    cgltf_data* data, const cgltf_material& lhs, const cgltf_material& rhs, const Settings& settings)
 {
 	if (lhs.has_pbr_metallic_roughness != rhs.has_pbr_metallic_roughness)
 		return false;
 
-	if (lhs.has_pbr_metallic_roughness && !areMaterialComponentsEqual(lhs.pbr_metallic_roughness, rhs.pbr_metallic_roughness))
+	if (lhs.has_pbr_metallic_roughness &&
+	    !areMaterialComponentsEqual(lhs.pbr_metallic_roughness, rhs.pbr_metallic_roughness))
 		return false;
 
 	if (lhs.has_pbr_specular_glossiness != rhs.has_pbr_specular_glossiness)
 		return false;
 
-	if (lhs.has_pbr_specular_glossiness && !areMaterialComponentsEqual(lhs.pbr_specular_glossiness, rhs.pbr_specular_glossiness))
+	if (lhs.has_pbr_specular_glossiness &&
+	    !areMaterialComponentsEqual(lhs.pbr_specular_glossiness, rhs.pbr_specular_glossiness))
 		return false;
 
 	if (lhs.has_clearcoat != rhs.has_clearcoat)
@@ -259,7 +263,8 @@ void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Setti
 	}
 }
 
-void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes, const Settings& settings)
+void markNeededMaterials(
+    cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes, const Settings& settings)
 {
 	// mark all used materials as kept
 	for (size_t i = 0; i < meshes.size(); ++i)

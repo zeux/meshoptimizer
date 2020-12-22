@@ -23,16 +23,16 @@ struct PV
 static const unsigned int kIndexBuffer[] = {0, 1, 2, 2, 1, 3, 4, 6, 5, 7, 8, 9};
 
 static const unsigned char kIndexDataV0[] = {
-    0xe0, 0xf0, 0x10, 0xfe, 0xff, 0xf0, 0x0c, 0xff, 0x02, 0x02, 0x02, 0x00, 0x76, 0x87, 0x56, 0x67,
-    0x78, 0xa9, 0x86, 0x65, 0x89, 0x68, 0x98, 0x01, 0x69, 0x00, 0x00, // clang-format :-/
+    0xe0, 0xf0, 0x10, 0xfe, 0xff, 0xf0, 0x0c, 0xff, 0x02, 0x02, 0x02, 0x00, 0x76, 0x87, 0x56, 0x67, 0x78, 0xa9, 0x86,
+    0x65, 0x89, 0x68, 0x98, 0x01, 0x69, 0x00, 0x00, // clang-format :-/
 };
 
 // note: this exercises two features of v1 format, restarts (0 1 2) and last
 static const unsigned int kIndexBufferTricky[] = {0, 1, 2, 2, 1, 3, 0, 1, 2, 2, 1, 5, 2, 1, 4};
 
 static const unsigned char kIndexDataV1[] = {
-    0xe1, 0xf0, 0x10, 0xfe, 0x1f, 0x3d, 0x00, 0x0a, 0x00, 0x76, 0x87, 0x56, 0x67, 0x78, 0xa9, 0x86,
-    0x65, 0x89, 0x68, 0x98, 0x01, 0x69, 0x00, 0x00, // clang-format :-/
+    0xe1, 0xf0, 0x10, 0xfe, 0x1f, 0x3d, 0x00, 0x0a, 0x00, 0x76, 0x87, 0x56, 0x67, 0x78, 0xa9, 0x86, 0x65, 0x89, 0x68,
+    0x98, 0x01, 0x69, 0x00, 0x00, // clang-format :-/
 };
 
 static const unsigned int kIndexSequence[] = {0, 1, 51, 2, 49, 1000};
@@ -49,12 +49,11 @@ static const PV kVertexBuffer[] = {
 };
 
 static const unsigned char kVertexDataV0[] = {
-    0xa0, 0x01, 0x3f, 0x00, 0x00, 0x00, 0x58, 0x57, 0x58, 0x01, 0x26, 0x00, 0x00, 0x00, 0x01,
-    0x0c, 0x00, 0x00, 0x00, 0x58, 0x01, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
-    0x3f, 0x00, 0x00, 0x00, 0x17, 0x18, 0x17, 0x01, 0x26, 0x00, 0x00, 0x00, 0x01, 0x0c, 0x00,
-    0x00, 0x00, 0x17, 0x01, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // clang-format :-/
+    0xa0, 0x01, 0x3f, 0x00, 0x00, 0x00, 0x58, 0x57, 0x58, 0x01, 0x26, 0x00, 0x00, 0x00, 0x01, 0x0c, 0x00, 0x00, 0x00,
+    0x58, 0x01, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x3f, 0x00, 0x00, 0x00, 0x17, 0x18, 0x17, 0x01,
+    0x26, 0x00, 0x00, 0x00, 0x01, 0x0c, 0x00, 0x00, 0x00, 0x17, 0x01, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // clang-format :-/
 };
 
 static void decodeIndexV0()
@@ -102,7 +101,8 @@ static void encodeIndexMemorySafe()
 	std::vector<unsigned char> buffer(meshopt_encodeIndexBufferBound(index_count, vertex_count));
 	buffer.resize(meshopt_encodeIndexBuffer(&buffer[0], buffer.size(), kIndexBuffer, index_count));
 
-	// check that encode is memory-safe; note that we reallocate the buffer for each try to make sure ASAN can verify buffer access
+	// check that encode is memory-safe; note that we reallocate the buffer for each try to make sure ASAN can verify
+	// buffer access
 	for (size_t i = 0; i <= buffer.size(); ++i)
 	{
 		std::vector<unsigned char> shortbuffer(i);
@@ -123,7 +123,8 @@ static void decodeIndexMemorySafe()
 	std::vector<unsigned char> buffer(meshopt_encodeIndexBufferBound(index_count, vertex_count));
 	buffer.resize(meshopt_encodeIndexBuffer(&buffer[0], buffer.size(), kIndexBuffer, index_count));
 
-	// check that decode is memory-safe; note that we reallocate the buffer for each try to make sure ASAN can verify buffer access
+	// check that decode is memory-safe; note that we reallocate the buffer for each try to make sure ASAN can verify
+	// buffer access
 	unsigned int decoded[index_count];
 
 	for (size_t i = 0; i <= buffer.size(); ++i)
@@ -241,7 +242,8 @@ static void encodeIndexSequenceMemorySafe()
 	std::vector<unsigned char> buffer(meshopt_encodeIndexSequenceBound(index_count, vertex_count));
 	buffer.resize(meshopt_encodeIndexSequence(&buffer[0], buffer.size(), kIndexSequence, index_count));
 
-	// check that encode is memory-safe; note that we reallocate the buffer for each try to make sure ASAN can verify buffer access
+	// check that encode is memory-safe; note that we reallocate the buffer for each try to make sure ASAN can verify
+	// buffer access
 	for (size_t i = 0; i <= buffer.size(); ++i)
 	{
 		std::vector<unsigned char> shortbuffer(i);
@@ -262,7 +264,8 @@ static void decodeIndexSequenceMemorySafe()
 	std::vector<unsigned char> buffer(meshopt_encodeIndexSequenceBound(index_count, vertex_count));
 	buffer.resize(meshopt_encodeIndexSequence(&buffer[0], buffer.size(), kIndexSequence, index_count));
 
-	// check that decode is memory-safe; note that we reallocate the buffer for each try to make sure ASAN can verify buffer access
+	// check that decode is memory-safe; note that we reallocate the buffer for each try to make sure ASAN can verify
+	// buffer access
 	unsigned int decoded[index_count];
 
 	for (size_t i = 0; i <= buffer.size(); ++i)
@@ -351,11 +354,13 @@ static void encodeVertexMemorySafe()
 	std::vector<unsigned char> buffer(meshopt_encodeVertexBufferBound(vertex_count, sizeof(PV)));
 	buffer.resize(meshopt_encodeVertexBuffer(&buffer[0], buffer.size(), kVertexBuffer, vertex_count, sizeof(PV)));
 
-	// check that encode is memory-safe; note that we reallocate the buffer for each try to make sure ASAN can verify buffer access
+	// check that encode is memory-safe; note that we reallocate the buffer for each try to make sure ASAN can verify
+	// buffer access
 	for (size_t i = 0; i <= buffer.size(); ++i)
 	{
 		std::vector<unsigned char> shortbuffer(i);
-		size_t result = meshopt_encodeVertexBuffer(i == 0 ? 0 : &shortbuffer[0], i, kVertexBuffer, vertex_count, sizeof(PV));
+		size_t result =
+		    meshopt_encodeVertexBuffer(i == 0 ? 0 : &shortbuffer[0], i, kVertexBuffer, vertex_count, sizeof(PV));
 
 		if (i == buffer.size())
 			assert(result == buffer.size());
@@ -371,7 +376,8 @@ static void decodeVertexMemorySafe()
 	std::vector<unsigned char> buffer(meshopt_encodeVertexBufferBound(vertex_count, sizeof(PV)));
 	buffer.resize(meshopt_encodeVertexBuffer(&buffer[0], buffer.size(), kVertexBuffer, vertex_count, sizeof(PV)));
 
-	// check that decode is memory-safe; note that we reallocate the buffer for each try to make sure ASAN can verify buffer access
+	// check that decode is memory-safe; note that we reallocate the buffer for each try to make sure ASAN can verify
+	// buffer access
 	PV decoded[vertex_count];
 
 	for (size_t i = 0; i <= buffer.size(); ++i)
@@ -501,19 +507,13 @@ static void encodeVertexEmpty()
 static void decodeFilterOct8()
 {
 	unsigned char data[4 * 4] = {
-	    0, 1, 127, 0,
-	    0, 187, 127, 1,
-	    255, 1, 127, 0,
-	    14, 130, 127, 1, // clang-format :-/
+	    0, 1, 127, 0, 0, 187, 127, 1, 255, 1, 127, 0, 14, 130, 127, 1, // clang-format :-/
 	};
 
 	meshopt_decodeFilterOct(data, 4, 4);
 
 	const unsigned char expected[4 * 4] = {
-	    0, 1, 127, 0,
-	    0, 159, 82, 1,
-	    255, 1, 127, 0,
-	    1, 130, 241, 1, // clang-format :-/
+	    0, 1, 127, 0, 0, 159, 82, 1, 255, 1, 127, 0, 1, 130, 241, 1, // clang-format :-/
 	};
 
 	assert(memcmp(data, expected, sizeof(data)) == 0);
@@ -522,19 +522,13 @@ static void decodeFilterOct8()
 static void decodeFilterOct12()
 {
 	unsigned short data[4 * 4] = {
-	    0, 1, 2047, 0,
-	    0, 1870, 2047, 1,
-	    2017, 1, 2047, 0,
-	    14, 1300, 2047, 1, // clang-format :-/
+	    0, 1, 2047, 0, 0, 1870, 2047, 1, 2017, 1, 2047, 0, 14, 1300, 2047, 1, // clang-format :-/
 	};
 
 	meshopt_decodeFilterOct(data, 4, 8);
 
 	const unsigned short expected[4 * 4] = {
-	    0, 16, 32767, 0,
-	    0, 32621, 3088, 1,
-	    32764, 16, 471, 0,
-	    307, 28541, 16093, 1, // clang-format :-/
+	    0, 16, 32767, 0, 0, 32621, 3088, 1, 32764, 16, 471, 0, 307, 28541, 16093, 1, // clang-format :-/
 	};
 
 	assert(memcmp(data, expected, sizeof(data)) == 0);
@@ -543,19 +537,13 @@ static void decodeFilterOct12()
 static void decodeFilterQuat12()
 {
 	unsigned short data[4 * 4] = {
-	    0, 1, 0, 0x7fc,
-	    0, 1870, 0, 0x7fd,
-	    2017, 1, 0, 0x7fe,
-	    14, 1300, 0, 0x7ff, // clang-format :-/
+	    0, 1, 0, 0x7fc, 0, 1870, 0, 0x7fd, 2017, 1, 0, 0x7fe, 14, 1300, 0, 0x7ff, // clang-format :-/
 	};
 
 	meshopt_decodeFilterQuat(data, 4, 8);
 
 	const unsigned short expected[4 * 4] = {
-	    32767, 0, 11, 0,
-	    0, 25013, 0, 21166,
-	    11, 0, 23504, 22830,
-	    158, 14715, 0, 29277, // clang-format :-/
+	    32767, 0, 11, 0, 0, 25013, 0, 21166, 11, 0, 23504, 22830, 158, 14715, 0, 29277, // clang-format :-/
 	};
 
 	assert(memcmp(data, expected, sizeof(data)) == 0);
@@ -564,18 +552,14 @@ static void decodeFilterQuat12()
 static void decodeFilterExp()
 {
 	unsigned int data[4] = {
-	    0,
-	    0xff000003,
-	    0x02fffff7,
+	    0, 0xff000003, 0x02fffff7,
 	    0xfe7fffff, // clang-format :-/
 	};
 
 	meshopt_decodeFilterExp(data, 4, 4);
 
 	const unsigned int expected[4] = {
-	    0,
-	    0x3fc00000,
-	    0xc2100000,
+	    0, 0x3fc00000, 0xc2100000,
 	    0x49fffffe, // clang-format :-/
 	};
 
@@ -588,7 +572,8 @@ static void clusterBoundsDegenerate()
 	const unsigned int ibd[] = {0, 0, 0};
 	const unsigned int ib1[] = {0, 1, 2};
 
-	// all of the bounds below are degenerate as they use 0 triangles, one topology-degenerate triangle and one position-degenerate triangle respectively
+	// all of the bounds below are degenerate as they use 0 triangles, one topology-degenerate triangle and one
+	// position-degenerate triangle respectively
 	meshopt_Bounds bounds0 = meshopt_computeClusterBounds(0, 0, 0, 0, 12);
 	meshopt_Bounds boundsd = meshopt_computeClusterBounds(ibd, 3, vbd, 3, 12);
 	meshopt_Bounds bounds1 = meshopt_computeClusterBounds(ib1, 3, vbd, 3, 12);
@@ -780,7 +765,8 @@ void runTests()
 {
 	runTestsOnce();
 
-#if !(defined(__AVX__) || defined(__SSSE3__)) && (defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__))
+#if !(defined(__AVX__) || defined(__SSSE3__)) && \
+    (defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__))
 	// When SSSE3/AVX support isn't enabled unconditionally, we use a cpuid-based fallback
 	// It's useful to be able to test scalar code in this case, so we temporarily fake the feature bits
 	// and restore them later

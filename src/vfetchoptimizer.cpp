@@ -4,7 +4,8 @@
 #include <assert.h>
 #include <string.h>
 
-size_t meshopt_optimizeVertexFetchRemap(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count)
+size_t meshopt_optimizeVertexFetchRemap(
+    unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count)
 {
 	assert(index_count % 3 == 0);
 
@@ -28,7 +29,8 @@ size_t meshopt_optimizeVertexFetchRemap(unsigned int* destination, const unsigne
 	return next_vertex;
 }
 
-size_t meshopt_optimizeVertexFetch(void* destination, unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)
+size_t meshopt_optimizeVertexFetch(void* destination, unsigned int* indices, size_t index_count, const void* vertices,
+    size_t vertex_count, size_t vertex_size)
 {
 	assert(index_count % 3 == 0);
 	assert(vertex_size > 0 && vertex_size <= 256);
@@ -59,7 +61,8 @@ size_t meshopt_optimizeVertexFetch(void* destination, unsigned int* indices, siz
 		if (remap == ~0u) // vertex was not added to destination VB
 		{
 			// add vertex
-			memcpy(static_cast<unsigned char*>(destination) + next_vertex * vertex_size, static_cast<const unsigned char*>(vertices) + index * vertex_size, vertex_size);
+			memcpy(static_cast<unsigned char*>(destination) + next_vertex * vertex_size,
+			    static_cast<const unsigned char*>(vertices) + index * vertex_size, vertex_size);
 
 			remap = next_vertex++;
 		}

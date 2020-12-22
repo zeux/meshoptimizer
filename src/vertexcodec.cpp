@@ -12,20 +12,25 @@
 #define SIMD_SSE
 #endif
 
-// An experimental implementation using AVX512 instructions; it's only enabled when AVX512 is enabled through compiler settings
+// An experimental implementation using AVX512 instructions; it's only enabled when AVX512 is enabled through compiler
+// settings
 #if defined(__AVX512VBMI2__) && defined(__AVX512VBMI__) && defined(__AVX512VL__) && defined(__POPCNT__)
 #undef SIMD_SSE
 #define SIMD_AVX
 #endif
 
 // MSVC supports compiling SSSE3 code regardless of compile options; we use a cpuid-based scalar fallback
-#if !defined(SIMD_SSE) && !defined(SIMD_AVX) && defined(_MSC_VER) && !defined(__clang__) && (defined(_M_IX86) || defined(_M_X64))
+#if !defined(SIMD_SSE) && !defined(SIMD_AVX) && defined(_MSC_VER) && !defined(__clang__) && \
+    (defined(_M_IX86) || defined(_M_X64))
 #define SIMD_SSE
 #define SIMD_FALLBACK
 #endif
 
 // GCC 4.9+ and clang 3.8+ support targeting SIMD ISA from individual functions; we use a cpuid-based scalar fallback
-#if !defined(SIMD_SSE) && !defined(SIMD_AVX) && ((defined(__clang__) && __clang_major__ * 100 + __clang_minor__ >= 308) || (defined(__GNUC__) && __GNUC__ * 100 + __GNUC_MINOR__ >= 409)) && (defined(__i386__) || defined(__x86_64__))
+#if !defined(SIMD_SSE) && !defined(SIMD_AVX) && \
+    ((defined(__clang__) && __clang_major__ * 100 + __clang_minor__ >= 308) || \
+        (defined(__GNUC__) && __GNUC__ * 100 + __GNUC_MINOR__ >= 409)) && \
+    (defined(__i386__) || defined(__x86_64__))
 #define SIMD_SSE
 #define SIMD_FALLBACK
 #define SIMD_TARGET __attribute__((target("ssse3")))
@@ -91,7 +96,8 @@
 #ifdef SIMD_WASM
 #define wasmx_splat_v32x4(v, i) wasm_v32x4_shuffle(v, v, i, i, i, i)
 #define wasmx_unpacklo_v8x16(a, b) wasm_v8x16_shuffle(a, b, 0, 16, 1, 17, 2, 18, 3, 19, 4, 20, 5, 21, 6, 22, 7, 23)
-#define wasmx_unpackhi_v8x16(a, b) wasm_v8x16_shuffle(a, b, 8, 24, 9, 25, 10, 26, 11, 27, 12, 28, 13, 29, 14, 30, 15, 31)
+#define wasmx_unpackhi_v8x16(a, b) \
+	wasm_v8x16_shuffle(a, b, 8, 24, 9, 25, 10, 26, 11, 27, 12, 28, 13, 29, 14, 30, 15, 31)
 #define wasmx_unpacklo_v16x8(a, b) wasm_v16x8_shuffle(a, b, 0, 8, 1, 9, 2, 10, 3, 11)
 #define wasmx_unpackhi_v16x8(a, b) wasm_v16x8_shuffle(a, b, 4, 12, 5, 13, 6, 14, 7, 15)
 #define wasmx_unpacklo_v64x2(a, b) wasm_v64x2_shuffle(a, b, 0, 2)
@@ -221,7 +227,8 @@ static unsigned char* encodeBytesGroup(unsigned char* data, const unsigned char*
 	return data;
 }
 
-static unsigned char* encodeBytes(unsigned char* data, unsigned char* data_end, const unsigned char* buffer, size_t buffer_size)
+static unsigned char* encodeBytes(
+    unsigned char* data, unsigned char* data_end, const unsigned char* buffer, size_t buffer_size)
 {
 	assert(buffer_size % kByteGroupSize == 0);
 
@@ -281,7 +288,8 @@ static unsigned char* encodeBytes(unsigned char* data, unsigned char* data_end, 
 	return data;
 }
 
-static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data_end, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
+static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data_end, const unsigned char* vertex_data,
+    size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 
@@ -330,7 +338,9 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned char* buffer, int bitslog2)
 {
 #define READ() byte = *data++
-#define NEXT(bits) enc = byte >> (8 - bits), byte <<= bits, encv = *data_var, *buffer++ = (enc == (1 << bits) - 1) ? encv : enc, data_var += (enc == (1 << bits) - 1)
+#define NEXT(bits) \
+	enc = byte >> (8 - bits), byte <<= bits, encv = *data_var, *buffer++ = (enc == (1 << bits) - 1) ? encv : enc, \
+	data_var += (enc == (1 << bits) - 1)
 
 	unsigned char byte, enc, encv;
 	const unsigned char* data_var;
@@ -376,7 +386,8 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 #undef NEXT
 }
 
-static const unsigned char* decodeBytes(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size)
+static const unsigned char* decodeBytes(
+    const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size)
 {
 	assert(buffer_size % kByteGroupSize == 0);
 
@@ -405,7 +416,8 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 	return data;
 }
 
-static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
+static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end,
+    unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 
@@ -918,7 +930,8 @@ static v128_t unzigzag8(v128_t v)
 
 #if defined(SIMD_SSE) || defined(SIMD_AVX) || defined(SIMD_NEON) || defined(SIMD_WASM)
 SIMD_TARGET
-static const unsigned char* decodeBytesSimd(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size)
+static const unsigned char* decodeBytesSimd(
+    const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size)
 {
 	assert(buffer_size % kByteGroupSize == 0);
 	assert(kByteGroupSize == 16);
@@ -936,7 +949,8 @@ static const unsigned char* decodeBytesSimd(const unsigned char* data, const uns
 	size_t i = 0;
 
 	// fast-path: process 4 groups at a time, do a shared bounds check - each group reads <=24b
-	for (; i + kByteGroupSize * 4 <= buffer_size && size_t(data_end - data) >= kByteGroupDecodeLimit * 4; i += kByteGroupSize * 4)
+	for (; i + kByteGroupSize * 4 <= buffer_size && size_t(data_end - data) >= kByteGroupDecodeLimit * 4;
+	     i += kByteGroupSize * 4)
 	{
 		size_t header_offset = i / kByteGroupSize;
 		unsigned char header_byte = header[header_offset / 4];
@@ -964,7 +978,8 @@ static const unsigned char* decodeBytesSimd(const unsigned char* data, const uns
 }
 
 SIMD_TARGET
-static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
+static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, const unsigned char* data_end,
+    unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 
@@ -986,16 +1001,21 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 #define TEMP __m128i
 #define PREP() __m128i pi = _mm_cvtsi32_si128(*reinterpret_cast<const int*>(last_vertex + k))
 #define LOAD(i) __m128i r##i = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + i * vertex_count_aligned))
-#define GRP4(i) t0 = _mm_shuffle_epi32(r##i, 0), t1 = _mm_shuffle_epi32(r##i, 1), t2 = _mm_shuffle_epi32(r##i, 2), t3 = _mm_shuffle_epi32(r##i, 3)
+#define GRP4(i) \
+	t0 = _mm_shuffle_epi32(r##i, 0), t1 = _mm_shuffle_epi32(r##i, 1), t2 = _mm_shuffle_epi32(r##i, 2), \
+	t3 = _mm_shuffle_epi32(r##i, 3)
 #define FIXD(i) t##i = pi = _mm_add_epi8(pi, t##i)
 #define SAVE(i) *reinterpret_cast<int*>(savep) = _mm_cvtsi128_si32(t##i), savep += vertex_size
 #endif
 
 #ifdef SIMD_NEON
 #define TEMP uint8x8_t
-#define PREP() uint8x8_t pi = vreinterpret_u8_u32(vld1_lane_u32(reinterpret_cast<uint32_t*>(last_vertex + k), vdup_n_u32(0), 0))
+#define PREP() \
+	uint8x8_t pi = vreinterpret_u8_u32(vld1_lane_u32(reinterpret_cast<uint32_t*>(last_vertex + k), vdup_n_u32(0), 0))
 #define LOAD(i) uint8x16_t r##i = vld1q_u8(buffer + j + i * vertex_count_aligned)
-#define GRP4(i) t0 = vget_low_u8(r##i), t1 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t0), 1)), t2 = vget_high_u8(r##i), t3 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t2), 1))
+#define GRP4(i) \
+	t0 = vget_low_u8(r##i), t1 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t0), 1)), \
+	t2 = vget_high_u8(r##i), t3 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t2), 1))
 #define FIXD(i) t##i = pi = vadd_u8(pi, t##i)
 #define SAVE(i) vst1_lane_u32(reinterpret_cast<uint32_t*>(savep), vreinterpret_u32_u8(t##i), 0), savep += vertex_size
 #endif
@@ -1004,7 +1024,9 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 #define TEMP v128_t
 #define PREP() v128_t pi = wasm_v128_load(last_vertex + k)
 #define LOAD(i) v128_t r##i = wasm_v128_load(buffer + j + i * vertex_count_aligned)
-#define GRP4(i) t0 = wasmx_splat_v32x4(r##i, 0), t1 = wasmx_splat_v32x4(r##i, 1), t2 = wasmx_splat_v32x4(r##i, 2), t3 = wasmx_splat_v32x4(r##i, 3)
+#define GRP4(i) \
+	t0 = wasmx_splat_v32x4(r##i, 0), t1 = wasmx_splat_v32x4(r##i, 1), t2 = wasmx_splat_v32x4(r##i, 2), \
+	t3 = wasmx_splat_v32x4(r##i, 3)
 #define FIXD(i) t##i = pi = wasm_i8x16_add(pi, t##i)
 #define SAVE(i) *reinterpret_cast<int*>(savep) = wasm_i32x4_extract_lane(t##i, 0), savep += vertex_size
 #endif
@@ -1079,7 +1101,8 @@ unsigned int cpuid = getCpuFeatures();
 
 } // namespace meshopt
 
-size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, const void* vertices, size_t vertex_count, size_t vertex_size)
+size_t meshopt_encodeVertexBuffer(
+    unsigned char* buffer, size_t buffer_size, const void* vertices, size_t vertex_count, size_t vertex_size)
 {
 	using namespace meshopt;
 
@@ -1115,9 +1138,11 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 
 	while (vertex_offset < vertex_count)
 	{
-		size_t block_size = (vertex_offset + vertex_block_size < vertex_count) ? vertex_block_size : vertex_count - vertex_offset;
+		size_t block_size =
+		    (vertex_offset + vertex_block_size < vertex_count) ? vertex_block_size : vertex_count - vertex_offset;
 
-		data = encodeVertexBlock(data, data_end, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, last_vertex);
+		data = encodeVertexBlock(
+		    data, data_end, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, last_vertex);
 		if (!data)
 			return 0;
 
@@ -1129,7 +1154,8 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	if (size_t(data_end - data) < tail_size)
 		return 0;
 
-	// write first vertex to the end of the stream and pad it to 32 bytes; this is important to simplify bounds checks in decoder
+	// write first vertex to the end of the stream and pad it to 32 bytes; this is important to simplify bounds checks
+	// in decoder
 	if (vertex_size < kTailMaxSize)
 	{
 		memset(data, 0, kTailMaxSize - vertex_size);
@@ -1149,15 +1175,13 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	{
 		const Stats& vsk = vertexstats[k];
 
-		printf("%2d: %d bytes\t%.1f%%\t%.1f bpv", int(k), int(vsk.size), double(vsk.size) / double(total_size) * 100, double(vsk.size) / double(vertex_count) * 8);
+		printf("%2d: %d bytes\t%.1f%%\t%.1f bpv", int(k), int(vsk.size), double(vsk.size) / double(total_size) * 100,
+		    double(vsk.size) / double(vertex_count) * 8);
 
 #if TRACE > 1
 		printf("\t\thdr %d bytes\tbit0 %d (%d bytes)\tbit1 %d (%d bytes)\tbit2 %d (%d bytes)\tbit3 %d (%d bytes)",
-		       int(vsk.header),
-		       int(vsk.bitg[0]), int(vsk.bitb[0]),
-		       int(vsk.bitg[1]), int(vsk.bitb[1]),
-		       int(vsk.bitg[2]), int(vsk.bitb[2]),
-		       int(vsk.bitg[3]), int(vsk.bitb[3]));
+		    int(vsk.header), int(vsk.bitg[0]), int(vsk.bitb[0]), int(vsk.bitg[1]), int(vsk.bitb[1]), int(vsk.bitg[2]),
+		    int(vsk.bitb[2]), int(vsk.bitg[3]), int(vsk.bitb[3]));
 #endif
 
 		printf("\n");
@@ -1192,14 +1216,16 @@ void meshopt_encodeVertexVersion(int version)
 	meshopt::gEncodeVertexVersion = version;
 }
 
-int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t vertex_size, const unsigned char* buffer, size_t buffer_size)
+int meshopt_decodeVertexBuffer(
+    void* destination, size_t vertex_count, size_t vertex_size, const unsigned char* buffer, size_t buffer_size)
 {
 	using namespace meshopt;
 
 	assert(vertex_size > 0 && vertex_size <= 256);
 	assert(vertex_size % 4 == 0);
 
-	const unsigned char* (*decode)(const unsigned char*, const unsigned char*, unsigned char*, size_t, size_t, unsigned char[256]) = 0;
+	const unsigned char* (*decode)(
+	    const unsigned char*, const unsigned char*, unsigned char*, size_t, size_t, unsigned char[256]) = 0;
 
 #if defined(SIMD_SSE) && defined(SIMD_FALLBACK)
 	decode = (cpuid & (1 << 9)) ? decodeVertexBlockSimd : decodeVertexBlock;
@@ -1240,7 +1266,8 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 
 	while (vertex_offset < vertex_count)
 	{
-		size_t block_size = (vertex_offset + vertex_block_size < vertex_count) ? vertex_block_size : vertex_count - vertex_offset;
+		size_t block_size =
+		    (vertex_offset + vertex_block_size < vertex_count) ? vertex_block_size : vertex_count - vertex_offset;
 
 		data = decode(data, data_end, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, last_vertex);
 		if (!data)

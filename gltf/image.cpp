@@ -161,7 +161,8 @@ bool checkBasis(bool verbose)
 	return rc == 0;
 }
 
-bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, float scale, bool pow2, bool uastc, bool verbose)
+bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb,
+    int quality, float scale, bool pow2, bool uastc, bool verbose)
 {
 	(void)scale;
 	(void)pow2;
@@ -315,7 +316,8 @@ static int roundPow2(int value)
 	while (result < value)
 		result <<= 1;
 
-	// to prevent odd texture sizes from increasing the size too much, we round to nearest power of 2 above a certain size
+	// to prevent odd texture sizes from increasing the size too much, we round to nearest power of 2 above a certain
+	// size
 	if (value > 128 && result * 3 / 4 > value)
 		result >>= 1;
 
@@ -333,7 +335,8 @@ static int roundBlock(int value, bool pow2)
 	return (value + 3) & ~3;
 }
 
-bool encodeKtx(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, float scale, bool pow2, bool uastc, bool verbose)
+bool encodeKtx(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb,
+    int quality, float scale, bool pow2, bool uastc, bool verbose)
 {
 	int width = 0, height = 0;
 	if (!getDimensions(data, mime_type, width, height))
