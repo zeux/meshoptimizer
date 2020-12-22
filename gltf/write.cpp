@@ -949,10 +949,10 @@ size_t writeMeshIndices(std::vector<BufferView>& views, std::string& json_access
 {
 	std::string scratch;
 	StreamFormat format = writeIndexStream(scratch, mesh.indices);
-	BufferView::Compression compression =
-	    settings.compress ? (mesh.type == cgltf_primitive_type_triangles ? BufferView::Compression_Index
-	                                                                     : BufferView::Compression_IndexSequence)
-	                      : BufferView::Compression_None;
+	BufferView::Compression compression = settings.compress
+	    ? (mesh.type == cgltf_primitive_type_triangles ? BufferView::Compression_Index
+	                                                   : BufferView::Compression_IndexSequence)
+	    : BufferView::Compression_None;
 
 	size_t view = getBufferView(views, BufferView::Kind_Index, StreamFormat::Filter_None, compression, format.stride);
 	size_t offset = views[view].data.size();
@@ -1337,9 +1337,9 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 	                              : 0;
 	size_t pose_accr =
 	    needs_pose ? writeAnimationTime(views, json_accessors, accr_offset, animation.start, 1, 0.f, settings) : 0;
-	size_t range_accr = needs_range ? writeAnimationTime(views, json_accessors, accr_offset, animation.start, 2,
-	                                      animation_length, settings)
-	                                : 0;
+	size_t range_accr = needs_range
+	    ? writeAnimationTime(views, json_accessors, accr_offset, animation.start, 2, animation_length, settings)
+	    : 0;
 
 	std::string json_samplers;
 	std::string json_channels;
@@ -1363,8 +1363,8 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 		}
 
 		BufferView::Compression compression = settings.compress && track.path != cgltf_animation_path_type_weights
-		                                          ? BufferView::Compression_Attribute
-		                                          : BufferView::Compression_None;
+		    ? BufferView::Compression_Attribute
+		    : BufferView::Compression_None;
 
 		size_t view =
 		    getBufferView(views, BufferView::Kind_Keyframe, format.filter, compression, format.stride, track.path);

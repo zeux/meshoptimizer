@@ -395,8 +395,8 @@ void simplify(const Mesh& mesh, float threshold = 0.2f)
 	    mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error));
 
 	lod.vertices.resize(lod.indices.size() < mesh.vertices.size()
-	                        ? lod.indices.size()
-	                        : mesh.vertices.size()); // note: this is just to reduce the cost of resize()
+	        ? lod.indices.size()
+	        : mesh.vertices.size()); // note: this is just to reduce the cost of resize()
 	lod.vertices.resize(meshopt_optimizeVertexFetch(&lod.vertices[0], &lod.indices[0], lod.indices.size(),
 	    &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex)));
 
@@ -420,8 +420,8 @@ void simplifySloppy(const Mesh& mesh, float threshold = 0.2f)
 	    &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count));
 
 	lod.vertices.resize(lod.indices.size() < mesh.vertices.size()
-	                        ? lod.indices.size()
-	                        : mesh.vertices.size()); // note: this is just to reduce the cost of resize()
+	        ? lod.indices.size()
+	        : mesh.vertices.size()); // note: this is just to reduce the cost of resize()
 	lod.vertices.resize(meshopt_optimizeVertexFetch(&lod.vertices[0], &lod.indices[0], lod.indices.size(),
 	    &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex)));
 
@@ -620,10 +620,10 @@ void encodeIndex(const Mesh& mesh, char desc)
 	{
 		assert((result[i + 0] == mesh.indices[i + 0] && result[i + 1] == mesh.indices[i + 1] &&
 		           result[i + 2] == mesh.indices[i + 2]) ||
-		       (result[i + 1] == mesh.indices[i + 0] && result[i + 2] == mesh.indices[i + 1] &&
-		           result[i + 0] == mesh.indices[i + 2]) ||
-		       (result[i + 2] == mesh.indices[i + 0] && result[i + 0] == mesh.indices[i + 1] &&
-		           result[i + 1] == mesh.indices[i + 2]));
+		    (result[i + 1] == mesh.indices[i + 0] && result[i + 2] == mesh.indices[i + 1] &&
+		        result[i + 0] == mesh.indices[i + 2]) ||
+		    (result[i + 2] == mesh.indices[i + 0] && result[i + 0] == mesh.indices[i + 1] &&
+		        result[i + 1] == mesh.indices[i + 2]));
 	}
 
 	printf("IdxCodec%c: %.1f bits/triangle (post-deflate %.1f bits/triangle); encode %.2f msec, decode %.2f msec (%.2f "
@@ -829,10 +829,10 @@ void meshlets(const Mesh& mesh)
 		float mviewlength = sqrtf(mview[0] * mview[0] + mview[1] * mview[1] + mview[2] * mview[2]);
 
 		rejected += mview[0] * bounds.cone_axis[0] + mview[1] * bounds.cone_axis[1] + mview[2] * bounds.cone_axis[2] >=
-		            bounds.cone_cutoff * mviewlength;
+		    bounds.cone_cutoff * mviewlength;
 		rejected_s8 += mview[0] * (bounds.cone_axis_s8[0] / 127.f) + mview[1] * (bounds.cone_axis_s8[1] / 127.f) +
-		                   mview[2] * (bounds.cone_axis_s8[2] / 127.f) >=
-		               (bounds.cone_cutoff_s8 / 127.f) * mviewlength;
+		        mview[2] * (bounds.cone_axis_s8[2] / 127.f) >=
+		    (bounds.cone_cutoff_s8 / 127.f) * mviewlength;
 
 		// alternative formulation for perspective projection that doesn't use apex (and uses cluster bounding sphere
 		// instead): dot(normalize(center - camera_position), cone_axis) > cone_cutoff + radius / length(center -
@@ -844,8 +844,8 @@ void meshlets(const Mesh& mesh)
 		    cview[0] * bounds.cone_axis[0] + cview[1] * bounds.cone_axis[1] + cview[2] * bounds.cone_axis[2] >=
 		    bounds.cone_cutoff * cviewlength + bounds.radius;
 		rejected_alt_s8 += cview[0] * (bounds.cone_axis_s8[0] / 127.f) + cview[1] * (bounds.cone_axis_s8[1] / 127.f) +
-		                       cview[2] * (bounds.cone_axis_s8[2] / 127.f) >=
-		                   (bounds.cone_cutoff_s8 / 127.f) * cviewlength + bounds.radius;
+		        cview[2] * (bounds.cone_axis_s8[2] / 127.f) >=
+		    (bounds.cone_cutoff_s8 / 127.f) * cviewlength + bounds.radius;
 	}
 	double endc = timestamp();
 

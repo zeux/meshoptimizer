@@ -333,8 +333,8 @@ static void parseAnimationsGltf(cgltf_data* data, std::vector<Animation>& animat
 			track.path = channel.target_path;
 
 			track.components = (channel.target_path == cgltf_animation_path_type_weights)
-			                       ? track.node->mesh->primitives[0].targets_count
-			                       : 1;
+			    ? track.node->mesh->primitives[0].targets_count
+			    : 1;
 
 			track.interpolation = channel.sampler->interpolation;
 

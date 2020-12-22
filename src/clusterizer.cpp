@@ -62,7 +62,7 @@ static void computeBoundingSphere(float result[4], const float points[][3], size
 	{
 		const float* p = points[i];
 		float d2 = (p[0] - center[0]) * (p[0] - center[0]) + (p[1] - center[1]) * (p[1] - center[1]) +
-		           (p[2] - center[2]) * (p[2] - center[2]);
+		    (p[2] - center[2]) * (p[2] - center[2]);
 
 		if (d2 > radius * radius)
 		{

@@ -70,9 +70,8 @@ static void calculateSortData(float* sort_data, const unsigned int* indices, siz
 		cluster_centroid[1] *= inv_cluster_area;
 		cluster_centroid[2] *= inv_cluster_area;
 
-		float cluster_normal_length =
-		    sqrtf(cluster_normal[0] * cluster_normal[0] + cluster_normal[1] * cluster_normal[1] +
-		          cluster_normal[2] * cluster_normal[2]);
+		float cluster_normal_length = sqrtf(cluster_normal[0] * cluster_normal[0] +
+		    cluster_normal[1] * cluster_normal[1] + cluster_normal[2] * cluster_normal[2]);
 		float inv_cluster_normal_length = cluster_normal_length == 0 ? 0 : 1 / cluster_normal_length;
 
 		cluster_normal[0] *= inv_cluster_normal_length;
@@ -83,7 +82,7 @@ static void calculateSortData(float* sort_data, const unsigned int* indices, siz
 		    cluster_centroid[2] - mesh_centroid[2]};
 
 		sort_data[cluster] = centroid_vector[0] * cluster_normal[0] + centroid_vector[1] * cluster_normal[1] +
-		                     centroid_vector[2] * cluster_normal[2];
+		    centroid_vector[2] * cluster_normal[2];
 	}
 }
 

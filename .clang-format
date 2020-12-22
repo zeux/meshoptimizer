@@ -12,3 +12,4 @@ NamespaceIndentation: None
 AlignEscapedNewlines: DontAlign
 AllowShortFunctionsOnASingleLine: false
 AlignAfterOpenBracket: DontAlign
+AlignOperands: DontAlign

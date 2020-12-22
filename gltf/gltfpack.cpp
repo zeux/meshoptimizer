@@ -803,8 +803,9 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 	const char* iext = strrchr(input, '.');
 	const char* oext = output ? strrchr(output, '.') : NULL;
 
-	if (iext && (strcmp(iext, ".gltf") == 0 || strcmp(iext, ".GLTF") == 0 || strcmp(iext, ".glb") == 0 ||
-	                strcmp(iext, ".GLB") == 0))
+	if (iext &&
+	    (strcmp(iext, ".gltf") == 0 || strcmp(iext, ".GLTF") == 0 || strcmp(iext, ".glb") == 0 ||
+	        strcmp(iext, ".GLB") == 0))
 	{
 		const char* error = 0;
 		data = parseGltf(input, meshes, animations, extras, &error);
@@ -1104,8 +1105,9 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-te") == 0)
 		{
-			fprintf(stderr, "Warning: -te is deprecated and will be removed in the future; gltfpack now automatically "
-			                "embeds textures into GLB files\n");
+			fprintf(stderr,
+			    "Warning: -te is deprecated and will be removed in the future; gltfpack now automatically "
+			    "embeds textures into GLB files\n");
 		}
 		else if (strcmp(arg, "-noq") == 0)
 		{
@@ -1215,10 +1217,12 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nVertices:\n");
 			fprintf(
 			    stderr, "\t-vp N: use N-bit quantization for positions (default: 14; N should be between 1 and 16)\n");
-			fprintf(stderr, "\t-vt N: use N-bit quantization for texture coordinates (default: 12; N should be between "
-			                "1 and 16)\n");
-			fprintf(stderr, "\t-vn N: use N-bit quantization for normals and tangents (default: 8; N should be between "
-			                "1 and 16)\n");
+			fprintf(stderr,
+			    "\t-vt N: use N-bit quantization for texture coordinates (default: 12; N should be between "
+			    "1 and 16)\n");
+			fprintf(stderr,
+			    "\t-vn N: use N-bit quantization for normals and tangents (default: 8; N should be between "
+			    "1 and 16)\n");
 			fprintf(stderr, "\t-vc N: use N-bit quantization for colors (default: 8; N should be between 1 and 16)\n");
 			fprintf(stderr, "\nAnimations:\n");
 			fprintf(stderr,
@@ -1229,8 +1233,9 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-af N: resample animations at N Hz (default: 30)\n");
 			fprintf(stderr, "\t-ac: keep constant animation tracks even if they don't modify the node transform\n");
 			fprintf(stderr, "\nScene:\n");
-			fprintf(stderr, "\t-kn: keep named nodes and meshes attached to named nodes so that named nodes can be "
-			                "transformed externally\n");
+			fprintf(stderr,
+			    "\t-kn: keep named nodes and meshes attached to named nodes so that named nodes can be "
+			    "transformed externally\n");
 			fprintf(stderr, "\t-km: keep named materials and disable named material merging\n");
 			fprintf(stderr, "\t-ke: keep extras data\n");
 			fprintf(stderr, "\t-mm: merge instances of the same mesh together when possible\n");

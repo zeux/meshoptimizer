@@ -79,8 +79,8 @@ static cgltf_data* parseSceneObj(fastObjMesh* obj)
 			gm.pbr_metallic_roughness.base_color_texture.scale = 1.0f;
 
 			gm.alpha_mode = (om.illum == 4 || om.illum == 6 || om.illum == 7 || om.illum == 9)
-			                    ? cgltf_alpha_mode_mask
-			                    : cgltf_alpha_mode_opaque;
+			    ? cgltf_alpha_mode_mask
+			    : cgltf_alpha_mode_opaque;
 		}
 
 		if (om.map_d.name)

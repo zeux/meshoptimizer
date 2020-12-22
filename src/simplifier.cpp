@@ -1268,8 +1268,8 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		const float kPassErrorBound = 1.5f;
 
 		float error_goal = edge_collapse_goal < edge_collapse_count
-		                       ? edge_collapses[collapse_order[edge_collapse_goal]].error * kPassErrorBound
-		                       : FLT_MAX;
+		    ? edge_collapses[collapse_order[edge_collapse_goal]].error * kPassErrorBound
+		    : FLT_MAX;
 
 		for (size_t i = 0; i < vertex_count; ++i)
 			collapse_remap[i] = unsigned(i);
@@ -1388,9 +1388,9 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 
 #if TRACE
 		printf("pass %d (%s): grid size %d, triangles %d, %s\n", pass,
-		    (pass == 0)                      ? "guess"
-		    : (pass <= kInterpolationPasses) ? "lerp"
-		                                     : "binary",
+		    (pass == 0)                          ? "guess"
+		        : (pass <= kInterpolationPasses) ? "lerp"
+		                                         : "binary",
 		    grid_size, int(triangles), (triangles <= target_index_count / 3) ? "under" : "over");
 #endif
 
@@ -1514,9 +1514,9 @@ size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_pos
 
 #if TRACE
 		printf("pass %d (%s): grid size %d, vertices %d, %s\n", pass,
-		    (pass == 0)                      ? "guess"
-		    : (pass <= kInterpolationPasses) ? "lerp"
-		                                     : "binary",
+		    (pass == 0)                          ? "guess"
+		        : (pass <= kInterpolationPasses) ? "lerp"
+		                                         : "binary",
 		    grid_size, int(vertices), (vertices <= target_vertex_count) ? "under" : "over");
 #endif
 

@@ -232,8 +232,8 @@ std::string basisToKtx(const std::string& data, bool srgb, bool uastc)
 	if (basis)
 	{
 		size_t bgd_size = sizeof(Ktx2BasisGlobalHeader) + sizeof(Ktx2BasisImageDesc) * levels +
-		                  basis_header.m_endpoint_cb_file_size + basis_header.m_selector_cb_file_size +
-		                  basis_header.m_tables_file_size;
+		    basis_header.m_endpoint_cb_file_size + basis_header.m_selector_cb_file_size +
+		    basis_header.m_tables_file_size;
 
 		ktx_header.sgdByteOffset = (header_size + dfd_size + kvp_size + 7) & ~7;
 		ktx_header.sgdByteLength = bgd_size;
