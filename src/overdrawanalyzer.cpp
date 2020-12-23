@@ -26,8 +26,7 @@ struct OverdrawBuffer
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #endif
 
-static float computeDepthGradients(
-    float& dzdx, float& dzdy, float x1, float y1, float z1, float x2, float y2, float z2, float x3, float y3, float z3)
+static float computeDepthGradients(float& dzdx, float& dzdy, float x1, float y1, float z1, float x2, float y2, float z2, float x3, float y3, float z3)
 {
 	// z2 = z1 + dzdx * (x2 - x1) + dzdy * (y2 - y1)
 	// z3 = z1 + dzdx * (x3 - x1) + dzdy * (y3 - y1)
@@ -44,8 +43,7 @@ static float computeDepthGradients(
 }
 
 // half-space fixed point triangle rasterizer
-static void rasterize(OverdrawBuffer* buffer, float v1x, float v1y, float v1z, float v2x, float v2y, float v2z,
-    float v3x, float v3y, float v3z)
+static void rasterize(OverdrawBuffer* buffer, float v1x, float v1y, float v1z, float v2x, float v2y, float v2z, float v3x, float v3y, float v3z)
 {
 	// compute depth gradients
 	float DZx, DZy;
@@ -144,8 +142,8 @@ static void rasterize(OverdrawBuffer* buffer, float v1x, float v1y, float v1z, f
 
 } // namespace meshopt
 
-meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, size_t index_count,
-    const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+meshopt_OverdrawStatistics meshopt_analyzeOverdraw(
+    const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	using namespace meshopt;
 

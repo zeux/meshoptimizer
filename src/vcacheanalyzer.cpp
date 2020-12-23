@@ -4,8 +4,8 @@
 #include <assert.h>
 #include <string.h>
 
-meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* indices, size_t index_count,
-    size_t vertex_count, unsigned int cache_size, unsigned int warp_size, unsigned int primgroup_size)
+meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(
+    const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int warp_size, unsigned int primgroup_size)
 {
 	assert(index_count % 3 == 0);
 	assert(cache_size >= 3);
@@ -33,8 +33,7 @@ meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* ind
 		bool cc = (timestamp - cache_timestamps[c]) > cache_size;
 
 		// flush cache if triangle doesn't fit into warp or into the primitive buffer
-		if ((primgroup_size && primgroup_offset == primgroup_size) ||
-		    (warp_size && warp_offset + ac + bc + cc > warp_size))
+		if ((primgroup_size && primgroup_offset == primgroup_size) || (warp_size && warp_offset + ac + bc + cc > warp_size))
 		{
 			result.warps_executed += warp_offset > 0;
 

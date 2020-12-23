@@ -99,8 +99,7 @@ QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes
 	return result;
 }
 
-void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTexture>& result,
-    const std::vector<Mesh>& meshes, const Settings& settings)
+void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTexture>& result, const std::vector<Mesh>& meshes, const Settings& settings)
 {
 	std::vector<Bounds> bounds(result.size());
 
@@ -167,10 +166,8 @@ void getPositionBounds(float min[3], float max[3], const Stream& stream, const Q
 			}
 			else
 			{
-				min[k] =
-				    (min[k] >= 0.f ? 1.f : -1.f) * float(meshopt_quantizeUnorm(fabsf(min[k]) * pos_rscale, qp->bits));
-				max[k] =
-				    (max[k] >= 0.f ? 1.f : -1.f) * float(meshopt_quantizeUnorm(fabsf(max[k]) * pos_rscale, qp->bits));
+				min[k] = (min[k] >= 0.f ? 1.f : -1.f) * float(meshopt_quantizeUnorm(fabsf(min[k]) * pos_rscale, qp->bits));
+				max[k] = (max[k] >= 0.f ? 1.f : -1.f) * float(meshopt_quantizeUnorm(fabsf(max[k]) * pos_rscale, qp->bits));
 			}
 		}
 	}
@@ -234,8 +231,7 @@ static int quantizeColor(float v, int bytebits, int bits)
 	return (result & ~mask) | (mask & -(result >> (bytebits - 1)));
 }
 
-StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp,
-    const QuantizationTexture& qt, const Settings& settings)
+StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings)
 {
 	if (stream.type == cgltf_attribute_type_position)
 	{
@@ -280,11 +276,9 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 				{
 					const Attr& a = stream.data[i];
 
-					int8_t v[4] = {
-					    int8_t((a.f[0] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[0]) * pos_rscale, qp.bits)),
+					int8_t v[4] = {int8_t((a.f[0] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[0]) * pos_rscale, qp.bits)),
 					    int8_t((a.f[1] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[1]) * pos_rscale, qp.bits)),
-					    int8_t((a.f[2] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[2]) * pos_rscale, qp.bits)),
-					    0};
+					    int8_t((a.f[2] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[2]) * pos_rscale, qp.bits)), 0};
 					bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 				}
 
@@ -297,11 +291,9 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 				{
 					const Attr& a = stream.data[i];
 
-					int16_t v[4] = {
-					    int16_t((a.f[0] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[0]) * pos_rscale, qp.bits)),
+					int16_t v[4] = {int16_t((a.f[0] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[0]) * pos_rscale, qp.bits)),
 					    int16_t((a.f[1] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[1]) * pos_rscale, qp.bits)),
-					    int16_t((a.f[2] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[2]) * pos_rscale, qp.bits)),
-					    0};
+					    int16_t((a.f[2] >= 0.f ? 1 : -1) * meshopt_quantizeUnorm(fabsf(a.f[2]) * pos_rscale, qp.bits)), 0};
 					bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 				}
 
@@ -471,8 +463,8 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 			}
 			else
 			{
-				uint8_t v[4] = {uint8_t(quantizeColor(a.f[0], 8, bits)), uint8_t(quantizeColor(a.f[1], 8, bits)),
-				    uint8_t(quantizeColor(a.f[2], 8, bits)), uint8_t(quantizeColor(a.f[3], 8, bits))};
+				uint8_t v[4] = {uint8_t(quantizeColor(a.f[0], 8, bits)), uint8_t(quantizeColor(a.f[1], 8, bits)), uint8_t(quantizeColor(a.f[2], 8, bits)),
+				    uint8_t(quantizeColor(a.f[3], 8, bits))};
 				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 			}
 		}
@@ -497,9 +489,8 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 			float ws = a.f[0] + a.f[1] + a.f[2] + a.f[3];
 			float wsi = (ws == 0.f) ? 0.f : 1.f / ws;
 
-			uint8_t v[4] = {uint8_t(meshopt_quantizeUnorm(a.f[0] * wsi, 8)),
-			    uint8_t(meshopt_quantizeUnorm(a.f[1] * wsi, 8)), uint8_t(meshopt_quantizeUnorm(a.f[2] * wsi, 8)),
-			    uint8_t(meshopt_quantizeUnorm(a.f[3] * wsi, 8))};
+			uint8_t v[4] = {uint8_t(meshopt_quantizeUnorm(a.f[0] * wsi, 8)), uint8_t(meshopt_quantizeUnorm(a.f[1] * wsi, 8)),
+			    uint8_t(meshopt_quantizeUnorm(a.f[2] * wsi, 8)), uint8_t(meshopt_quantizeUnorm(a.f[3] * wsi, 8))};
 
 			if (wsi != 0.f)
 				renormalizeWeights(v);
@@ -640,8 +631,7 @@ static void encodeExpShared(uint32_t v[3], const Attr& a, int bits)
 	v[2] = (mz & mmask) | (unsigned(exp) << 24);
 }
 
-StreamFormat writeKeyframeStream(
-    std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data, const Settings& settings)
+StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data, const Settings& settings)
 {
 	if (type == cgltf_animation_path_type_rotation)
 	{
@@ -744,11 +734,9 @@ void compressIndexStream(std::string& bin, const std::string& data, size_t count
 	size_t size = 0;
 
 	if (stride == 2)
-		size = meshopt_encodeIndexBuffer(
-		    &compressed[0], compressed.size(), reinterpret_cast<const uint16_t*>(data.c_str()), count);
+		size = meshopt_encodeIndexBuffer(&compressed[0], compressed.size(), reinterpret_cast<const uint16_t*>(data.c_str()), count);
 	else
-		size = meshopt_encodeIndexBuffer(
-		    &compressed[0], compressed.size(), reinterpret_cast<const uint32_t*>(data.c_str()), count);
+		size = meshopt_encodeIndexBuffer(&compressed[0], compressed.size(), reinterpret_cast<const uint32_t*>(data.c_str()), count);
 
 	bin.append(reinterpret_cast<const char*>(&compressed[0]), size);
 }
@@ -762,11 +750,9 @@ void compressIndexSequence(std::string& bin, const std::string& data, size_t cou
 	size_t size = 0;
 
 	if (stride == 2)
-		size = meshopt_encodeIndexSequence(
-		    &compressed[0], compressed.size(), reinterpret_cast<const uint16_t*>(data.c_str()), count);
+		size = meshopt_encodeIndexSequence(&compressed[0], compressed.size(), reinterpret_cast<const uint16_t*>(data.c_str()), count);
 	else
-		size = meshopt_encodeIndexSequence(
-		    &compressed[0], compressed.size(), reinterpret_cast<const uint32_t*>(data.c_str()), count);
+		size = meshopt_encodeIndexSequence(&compressed[0], compressed.size(), reinterpret_cast<const uint32_t*>(data.c_str()), count);
 
 	bin.append(reinterpret_cast<const char*>(&compressed[0]), size);
 }

@@ -31,8 +31,7 @@ struct EdgeAdjacency
 	unsigned int* data;
 };
 
-static void buildEdgeAdjacency(EdgeAdjacency& adjacency, const unsigned int* indices, size_t index_count,
-    size_t vertex_count, meshopt_Allocator& allocator)
+static void buildEdgeAdjacency(EdgeAdjacency& adjacency, const unsigned int* indices, size_t index_count, size_t vertex_count, meshopt_Allocator& allocator)
 {
 	size_t face_count = index_count / 3;
 
@@ -96,8 +95,7 @@ struct PositionHasher
 
 	bool equal(unsigned int lhs, unsigned int rhs) const
 	{
-		return memcmp(vertex_positions + lhs * vertex_stride_float, vertex_positions + rhs * vertex_stride_float,
-		           sizeof(float) * 3) == 0;
+		return memcmp(vertex_positions + lhs * vertex_stride_float, vertex_positions + rhs * vertex_stride_float, sizeof(float) * 3) == 0;
 	}
 };
 
@@ -110,8 +108,7 @@ static size_t hashBuckets2(size_t count)
 	return buckets;
 }
 
-template <typename T, typename Hash>
-static T* hashLookup2(T* table, size_t buckets, const Hash& hash, const T& key, const T& empty)
+template <typename T, typename Hash> static T* hashLookup2(T* table, size_t buckets, const Hash& hash, const T& key, const T& empty)
 {
 	assert(buckets > 0);
 	assert((buckets & (buckets - 1)) == 0);
@@ -137,8 +134,8 @@ static T* hashLookup2(T* table, size_t buckets, const Hash& hash, const T& key, 
 	return 0;
 }
 
-static void buildPositionRemap(unsigned int* remap, unsigned int* wedge, const float* vertex_positions_data,
-    size_t vertex_count, size_t vertex_positions_stride, meshopt_Allocator& allocator)
+static void buildPositionRemap(unsigned int* remap, unsigned int* wedge, const float* vertex_positions_data, size_t vertex_count,
+    size_t vertex_positions_stride, meshopt_Allocator& allocator)
 {
 	PositionHasher hasher = {vertex_positions_data, vertex_positions_stride / sizeof(float)};
 
@@ -221,8 +218,8 @@ static bool hasEdge(const EdgeAdjacency& adjacency, unsigned int a, unsigned int
 	return false;
 }
 
-static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned int* loopback, size_t vertex_count,
-    const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* wedge)
+static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned int* loopback, size_t vertex_count, const EdgeAdjacency& adjacency,
+    const unsigned int* remap, const unsigned int* wedge)
 {
 	memset(loop, -1, vertex_count * sizeof(unsigned int));
 	memset(loopback, -1, vertex_count * sizeof(unsigned int));
@@ -294,8 +291,7 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 
 				// seam should have one open half-edge for each vertex, and the edges need to "connect" - point to the
 				// same vertex post-remap
-				if (openiv != ~0u && openiv != i && openov != ~0u && openov != i && openiw != ~0u && openiw != w &&
-				    openow != ~0u && openow != w)
+				if (openiv != ~0u && openiv != i && openov != ~0u && openov != i && openiw != ~0u && openiw != w && openow != ~0u && openow != w)
 				{
 					if (remap[openiv] == remap[openow] && remap[openov] == remap[openiw])
 					{
@@ -329,8 +325,8 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 	}
 
 #if TRACE
-	printf("locked: many open edges %d, disconnected seam %d, many seam edges %d, many wedges %d\n",
-	    int(lockedstats[0]), int(lockedstats[1]), int(lockedstats[2]), int(lockedstats[3]));
+	printf("locked: many open edges %d, disconnected seam %d, many seam edges %d, many wedges %d\n", int(lockedstats[0]), int(lockedstats[1]),
+	    int(lockedstats[2]), int(lockedstats[3]));
 #endif
 }
 
@@ -339,8 +335,7 @@ struct Vector3
 	float x, y, z;
 };
 
-static void rescalePositions(
-    Vector3* result, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride)
+static void rescalePositions(Vector3* result, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride)
 {
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
@@ -528,8 +523,8 @@ static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3
 	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, length * weight);
 }
 
-static void fillFaceQuadrics(Quadric* vertex_quadrics, const unsigned int* indices, size_t index_count,
-    const Vector3* vertex_positions, const unsigned int* remap)
+static void fillFaceQuadrics(
+    Quadric* vertex_quadrics, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const unsigned int* remap)
 {
 	for (size_t i = 0; i < index_count; i += 3)
 	{
@@ -546,9 +541,8 @@ static void fillFaceQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 	}
 }
 
-static void fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* indices, size_t index_count,
-    const Vector3* vertex_positions, const unsigned int* remap, const unsigned char* vertex_kind,
-    const unsigned int* loop, const unsigned int* loopback)
+static void fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions,
+    const unsigned int* remap, const unsigned char* vertex_kind, const unsigned int* loop, const unsigned int* loopback)
 {
 	for (size_t i = 0; i < index_count; i += 3)
 	{
@@ -597,8 +591,8 @@ static void fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 	}
 }
 
-static size_t pickEdgeCollapses(Collapse* collapses, const unsigned int* indices, size_t index_count,
-    const unsigned int* remap, const unsigned char* vertex_kind, const unsigned int* loop)
+static size_t pickEdgeCollapses(
+    Collapse* collapses, const unsigned int* indices, size_t index_count, const unsigned int* remap, const unsigned char* vertex_kind, const unsigned int* loop)
 {
 	size_t collapse_count = 0;
 
@@ -656,8 +650,8 @@ static size_t pickEdgeCollapses(Collapse* collapses, const unsigned int* indices
 	return collapse_count;
 }
 
-static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const Vector3* vertex_positions,
-    const Quadric* vertex_quadrics, const unsigned int* remap)
+static void rankEdgeCollapses(
+    Collapse* collapses, size_t collapse_count, const Vector3* vertex_positions, const Quadric* vertex_quadrics, const unsigned int* remap)
 {
 	for (size_t i = 0; i < collapse_count; ++i)
 	{
@@ -777,9 +771,8 @@ static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapse
 	}
 }
 
-static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked,
-    Quadric* vertex_quadrics, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order,
-    const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind,
+static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, const Collapse* collapses,
+    size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind,
     size_t triangle_collapse_goal, float error_goal, float error_limit)
 {
 	size_t edge_collapses = 0;
@@ -959,8 +952,7 @@ struct TriangleHasher
 	}
 };
 
-static void computeVertexIds(
-    unsigned int* vertex_ids, const Vector3* vertex_positions, size_t vertex_count, int grid_size)
+static void computeVertexIds(unsigned int* vertex_ids, const Vector3* vertex_positions, size_t vertex_count, int grid_size)
 {
 	assert(grid_size >= 1 && grid_size <= 1024);
 	float cell_scale = float(grid_size - 1);
@@ -993,8 +985,7 @@ static size_t countTriangles(const unsigned int* vertex_ids, const unsigned int*
 	return result;
 }
 
-static size_t fillVertexCells(unsigned int* table, size_t table_size, unsigned int* vertex_cells,
-    const unsigned int* vertex_ids, size_t vertex_count)
+static size_t fillVertexCells(unsigned int* table, size_t table_size, unsigned int* vertex_cells, const unsigned int* vertex_ids, size_t vertex_count)
 {
 	CellHasher hasher = {vertex_ids};
 
@@ -1020,8 +1011,7 @@ static size_t fillVertexCells(unsigned int* table, size_t table_size, unsigned i
 	return result;
 }
 
-static size_t countVertexCells(
-    unsigned int* table, size_t table_size, const unsigned int* vertex_ids, size_t vertex_count)
+static size_t countVertexCells(unsigned int* table, size_t table_size, const unsigned int* vertex_ids, size_t vertex_count)
 {
 	IdHasher hasher;
 
@@ -1041,8 +1031,8 @@ static size_t countVertexCells(
 	return result;
 }
 
-static void fillCellQuadrics(Quadric* cell_quadrics, const unsigned int* indices, size_t index_count,
-    const Vector3* vertex_positions, const unsigned int* vertex_cells)
+static void fillCellQuadrics(
+    Quadric* cell_quadrics, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const unsigned int* vertex_cells)
 {
 	for (size_t i = 0; i < index_count; i += 3)
 	{
@@ -1057,8 +1047,7 @@ static void fillCellQuadrics(Quadric* cell_quadrics, const unsigned int* indices
 		bool single_cell = (c0 == c1) & (c0 == c2);
 
 		Quadric Q;
-		quadricFromTriangle(
-		    Q, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2], single_cell ? 3.f : 1.f);
+		quadricFromTriangle(Q, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2], single_cell ? 3.f : 1.f);
 
 		if (single_cell)
 		{
@@ -1073,8 +1062,7 @@ static void fillCellQuadrics(Quadric* cell_quadrics, const unsigned int* indices
 	}
 }
 
-static void fillCellQuadrics(
-    Quadric* cell_quadrics, const Vector3* vertex_positions, size_t vertex_count, const unsigned int* vertex_cells)
+static void fillCellQuadrics(Quadric* cell_quadrics, const Vector3* vertex_positions, size_t vertex_count, const unsigned int* vertex_cells)
 {
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
@@ -1088,9 +1076,8 @@ static void fillCellQuadrics(
 	}
 }
 
-static void fillCellRemap(unsigned int* cell_remap, float* cell_errors, size_t cell_count,
-    const unsigned int* vertex_cells, const Quadric* cell_quadrics, const Vector3* vertex_positions,
-    size_t vertex_count)
+static void fillCellRemap(unsigned int* cell_remap, float* cell_errors, size_t cell_count, const unsigned int* vertex_cells, const Quadric* cell_quadrics,
+    const Vector3* vertex_positions, size_t vertex_count)
 {
 	memset(cell_remap, -1, cell_count * sizeof(unsigned int));
 
@@ -1107,8 +1094,8 @@ static void fillCellRemap(unsigned int* cell_remap, float* cell_errors, size_t c
 	}
 }
 
-static size_t filterTriangles(unsigned int* destination, unsigned int* tritable, size_t tritable_size,
-    const unsigned int* indices, size_t index_count, const unsigned int* vertex_cells, const unsigned int* cell_remap)
+static size_t filterTriangles(unsigned int* destination, unsigned int* tritable, size_t tritable_size, const unsigned int* indices, size_t index_count,
+    const unsigned int* vertex_cells, const unsigned int* cell_remap)
 {
 	TriangleHasher hasher = {destination};
 
@@ -1169,9 +1156,8 @@ unsigned int* meshopt_simplifyDebugLoop = 0;
 unsigned int* meshopt_simplifyDebugLoopBack = 0;
 #endif
 
-size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count,
-    const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count,
-    float target_error)
+size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count,
+    size_t vertex_positions_stride, size_t target_index_count, float target_error)
 {
 	using namespace meshopt;
 
@@ -1210,8 +1196,8 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	for (size_t i = 0; i < vertex_count; ++i)
 		kinds[vertex_kind[i]] += remap[i] == i;
 
-	printf("kinds: manifold %d, border %d, seam %d, complex %d, locked %d\n", int(kinds[Kind_Manifold]),
-	    int(kinds[Kind_Border]), int(kinds[Kind_Seam]), int(kinds[Kind_Complex]), int(kinds[Kind_Locked]));
+	printf("kinds: manifold %d, border %d, seam %d, complex %d, locked %d\n", int(kinds[Kind_Manifold]), int(kinds[Kind_Border]), int(kinds[Kind_Seam]),
+	    int(kinds[Kind_Complex]), int(kinds[Kind_Locked]));
 #endif
 
 	Vector3* vertex_positions = allocator.allocate<Vector3>(vertex_count);
@@ -1267,18 +1253,15 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		// by this factor
 		const float kPassErrorBound = 1.5f;
 
-		float error_goal = edge_collapse_goal < edge_collapse_count
-		    ? edge_collapses[collapse_order[edge_collapse_goal]].error * kPassErrorBound
-		    : FLT_MAX;
+		float error_goal = edge_collapse_goal < edge_collapse_count ? edge_collapses[collapse_order[edge_collapse_goal]].error * kPassErrorBound : FLT_MAX;
 
 		for (size_t i = 0; i < vertex_count; ++i)
 			collapse_remap[i] = unsigned(i);
 
 		memset(collapse_locked, 0, vertex_count);
 
-		size_t collapses =
-		    performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, edge_collapses, edge_collapse_count,
-		        collapse_order, remap, wedge, vertex_kind, triangle_collapse_goal, error_goal, error_limit);
+		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, edge_collapses, edge_collapse_count, collapse_order, remap,
+		    wedge, vertex_kind, triangle_collapse_goal, error_goal, error_limit);
 
 		// no edges can be collapsed any more due to hitting the error limit or triangle collapse limit
 		if (collapses == 0)
@@ -1303,9 +1286,8 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		pass_count++;
 		worst_error = (worst_error < pass_error) ? pass_error : worst_error;
 
-		printf("pass %d: triangles: %d -> %d, collapses: %d/%d (goal: %d), error: %e (limit %e goal %e)\n",
-		    int(pass_count), int(result_count / 3), int(new_count / 3), int(collapses), int(edge_collapse_count),
-		    int(edge_collapse_goal), pass_error, error_limit, error_goal);
+		printf("pass %d: triangles: %d -> %d, collapses: %d/%d (goal: %d), error: %e (limit %e goal %e)\n", int(pass_count), int(result_count / 3),
+		    int(new_count / 3), int(collapses), int(edge_collapse_count), int(edge_collapse_goal), pass_error, error_limit, error_goal);
 #endif
 
 		result_count = new_count;
@@ -1333,8 +1315,8 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	return result_count;
 }
 
-size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* indices, size_t index_count,
-    const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count)
+size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data,
+    size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count)
 {
 	using namespace meshopt;
 
@@ -1394,8 +1376,8 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 		    grid_size, int(triangles), (triangles <= target_index_count / 3) ? "under" : "over");
 #endif
 
-		float tip = interpolate(float(target_index_count / 3), float(min_grid), float(min_triangles), float(grid_size),
-		    float(triangles), float(max_grid), float(max_triangles));
+		float tip = interpolate(
+		    float(target_index_count / 3), float(min_grid), float(min_triangles), float(grid_size), float(triangles), float(max_grid), float(max_triangles));
 
 		if (triangles <= target_index_count / 3)
 		{
@@ -1447,8 +1429,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	size_t tritable_size = hashBuckets2(min_triangles);
 	unsigned int* tritable = allocator.allocate<unsigned int>(tritable_size);
 
-	size_t write =
-	    filterTriangles(destination, tritable, tritable_size, indices, index_count, vertex_cells, cell_remap);
+	size_t write = filterTriangles(destination, tritable, tritable_size, indices, index_count, vertex_cells, cell_remap);
 	assert(write <= target_index_count);
 
 #if TRACE
@@ -1458,8 +1439,8 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	return write;
 }
 
-size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_positions_data, size_t vertex_count,
-    size_t vertex_positions_stride, size_t target_vertex_count)
+size_t meshopt_simplifyPoints(
+    unsigned int* destination, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_vertex_count)
 {
 	using namespace meshopt;
 
@@ -1520,8 +1501,8 @@ size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_pos
 		    grid_size, int(vertices), (vertices <= target_vertex_count) ? "under" : "over");
 #endif
 
-		float tip = interpolate(float(target_vertex_count), float(min_grid), float(min_vertices), float(grid_size),
-		    float(vertices), float(max_grid), float(max_vertices));
+		float tip = interpolate(
+		    float(target_vertex_count), float(min_grid), float(min_vertices), float(grid_size), float(vertices), float(max_grid), float(max_vertices));
 
 		if (vertices <= target_vertex_count)
 		{

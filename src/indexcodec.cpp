@@ -151,8 +151,7 @@ static int getCodeAuxIndex(unsigned char v, const unsigned char* table)
 	return -1;
 }
 
-static void writeTriangle(
-    void* destination, size_t offset, size_t index_size, unsigned int a, unsigned int b, unsigned int c)
+static void writeTriangle(void* destination, size_t offset, size_t index_size, unsigned int a, unsigned int b, unsigned int c)
 {
 	if (index_size == 2)
 	{
@@ -202,8 +201,7 @@ static size_t sortTop16(unsigned char dest[16], size_t stats[256])
 
 } // namespace meshopt
 
-size_t meshopt_encodeIndexBuffer(
-    unsigned char* buffer, size_t buffer_size, const unsigned int* indices, size_t index_count)
+size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, const unsigned int* indices, size_t index_count)
 {
 	using namespace meshopt;
 
@@ -410,11 +408,9 @@ size_t meshopt_encodeIndexBuffer(
 		acccode += codestats[codetop[i]];
 		acccodeaux += codeauxstats[codeauxtop[i]];
 
-		printf("%2d: %02x = %d (%.1f%% ..%.1f%%)\t\t%2d: %02x = %d (%.1f%% ..%.1f%%)\n", int(i), codetop[i],
-		    int(codestats[codetop[i]]), double(codestats[codetop[i]]) / double(sumcode) * 100,
-		    double(acccode) / double(sumcode) * 100, int(i), codeauxtop[i], int(codeauxstats[codeauxtop[i]]),
-		    double(codeauxstats[codeauxtop[i]]) / double(sumcodeaux) * 100,
-		    double(acccodeaux) / double(sumcodeaux) * 100);
+		printf("%2d: %02x = %d (%.1f%% ..%.1f%%)\t\t%2d: %02x = %d (%.1f%% ..%.1f%%)\n", int(i), codetop[i], int(codestats[codetop[i]]),
+		    double(codestats[codetop[i]]) / double(sumcode) * 100, double(acccode) / double(sumcode) * 100, int(i), codeauxtop[i],
+		    int(codeauxstats[codeauxtop[i]]), double(codeauxstats[codeauxtop[i]]) / double(sumcodeaux) * 100, double(acccodeaux) / double(sumcodeaux) * 100);
 	}
 #endif
 
@@ -444,8 +440,7 @@ void meshopt_encodeIndexVersion(int version)
 	meshopt::gEncodeIndexVersion = version;
 }
 
-int meshopt_decodeIndexBuffer(
-    void* destination, size_t index_count, size_t index_size, const unsigned char* buffer, size_t buffer_size)
+int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t index_size, const unsigned char* buffer, size_t buffer_size)
 {
 	using namespace meshopt;
 
@@ -638,8 +633,7 @@ int meshopt_decodeIndexBuffer(
 	return 0;
 }
 
-size_t meshopt_encodeIndexSequence(
-    unsigned char* buffer, size_t buffer_size, const unsigned int* indices, size_t index_count)
+size_t meshopt_encodeIndexSequence(unsigned char* buffer, size_t buffer_size, const unsigned int* indices, size_t index_count)
 {
 	using namespace meshopt;
 
@@ -708,8 +702,7 @@ size_t meshopt_encodeIndexSequenceBound(size_t index_count, size_t vertex_count)
 	return 1 + index_count * vertex_groups + 4;
 }
 
-int meshopt_decodeIndexSequence(
-    void* destination, size_t index_count, size_t index_size, const unsigned char* buffer, size_t buffer_size)
+int meshopt_decodeIndexSequence(void* destination, size_t index_count, size_t index_size, const unsigned char* buffer, size_t buffer_size)
 {
 	using namespace meshopt;
 

@@ -161,8 +161,7 @@ static const char* compressionFilter(StreamFormat::Filter filter)
 	}
 }
 
-static void writeTextureInfo(std::string& json, const cgltf_data* data, const cgltf_texture_view& view,
-    const QuantizationTexture* qt, const char* scale = NULL)
+static void writeTextureInfo(std::string& json, const cgltf_data* data, const cgltf_texture_view& view, const QuantizationTexture* qt, const char* scale = NULL)
 {
 	assert(view.texture);
 
@@ -221,8 +220,7 @@ static void writeTextureInfo(std::string& json, const cgltf_data* data, const cg
 static const float white[4] = {1, 1, 1, 1};
 static const float black[4] = {0, 0, 0, 0};
 
-static void writeMaterialComponent(
-    std::string& json, const cgltf_data* data, const cgltf_pbr_metallic_roughness& pbr, const QuantizationTexture* qt)
+static void writeMaterialComponent(std::string& json, const cgltf_data* data, const cgltf_pbr_metallic_roughness& pbr, const QuantizationTexture* qt)
 {
 	comma(json);
 	append(json, "\"pbrMetallicRoughness\":{");
@@ -266,8 +264,7 @@ static void writeMaterialComponent(
 	append(json, "}");
 }
 
-static void writeMaterialComponent(
-    std::string& json, const cgltf_data* data, const cgltf_pbr_specular_glossiness& pbr, const QuantizationTexture* qt)
+static void writeMaterialComponent(std::string& json, const cgltf_data* data, const cgltf_pbr_specular_glossiness& pbr, const QuantizationTexture* qt)
 {
 	comma(json);
 	append(json, "\"KHR_materials_pbrSpecularGlossiness\":{");
@@ -316,8 +313,7 @@ static void writeMaterialComponent(
 	append(json, "}");
 }
 
-static void writeMaterialComponent(
-    std::string& json, const cgltf_data* data, const cgltf_clearcoat& cc, const QuantizationTexture* qt)
+static void writeMaterialComponent(std::string& json, const cgltf_data* data, const cgltf_clearcoat& cc, const QuantizationTexture* qt)
 {
 	comma(json);
 	append(json, "\"KHR_materials_clearcoat\":{");
@@ -354,8 +350,7 @@ static void writeMaterialComponent(
 	append(json, "}");
 }
 
-static void writeMaterialComponent(
-    std::string& json, const cgltf_data* data, const cgltf_transmission& tm, const QuantizationTexture* qt)
+static void writeMaterialComponent(std::string& json, const cgltf_data* data, const cgltf_transmission& tm, const QuantizationTexture* qt)
 {
 	comma(json);
 	append(json, "\"KHR_materials_transmission\":{");
@@ -374,8 +369,7 @@ static void writeMaterialComponent(
 	append(json, "}");
 }
 
-static void writeMaterialComponent(
-    std::string& json, const cgltf_data* data, const cgltf_ior& tm, const QuantizationTexture* qt)
+static void writeMaterialComponent(std::string& json, const cgltf_data* data, const cgltf_ior& tm, const QuantizationTexture* qt)
 {
 	(void)data;
 	(void)qt;
@@ -387,8 +381,7 @@ static void writeMaterialComponent(
 	append(json, "}");
 }
 
-static void writeMaterialComponent(
-    std::string& json, const cgltf_data* data, const cgltf_specular& tm, const QuantizationTexture* qt)
+static void writeMaterialComponent(std::string& json, const cgltf_data* data, const cgltf_specular& tm, const QuantizationTexture* qt)
 {
 	comma(json);
 	append(json, "\"KHR_materials_specular\":{");
@@ -418,8 +411,7 @@ static void writeMaterialComponent(
 	append(json, "}");
 }
 
-static void writeMaterialComponent(
-    std::string& json, const cgltf_data* data, const cgltf_sheen& tm, const QuantizationTexture* qt)
+static void writeMaterialComponent(std::string& json, const cgltf_data* data, const cgltf_sheen& tm, const QuantizationTexture* qt)
 {
 	comma(json);
 	append(json, "\"KHR_materials_sheen\":{");
@@ -455,8 +447,7 @@ static void writeMaterialComponent(
 	append(json, "}");
 }
 
-void writeMaterial(
-    std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationTexture* qt)
+void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationTexture* qt)
 {
 	if (material.name && *material.name)
 	{
@@ -525,8 +516,8 @@ void writeMaterial(
 		append(json, "\"doubleSided\":true");
 	}
 
-	if (material.has_pbr_specular_glossiness || material.has_clearcoat || material.has_transmission ||
-	    material.has_ior || material.has_specular || material.has_sheen || material.unlit)
+	if (material.has_pbr_specular_glossiness || material.has_clearcoat || material.has_transmission || material.has_ior || material.has_specular ||
+	    material.has_sheen || material.unlit)
 	{
 		comma(json);
 		append(json, "\"extensions\":{");
@@ -571,8 +562,8 @@ void writeMaterial(
 	}
 }
 
-size_t getBufferView(std::vector<BufferView>& views, BufferView::Kind kind, StreamFormat::Filter filter,
-    BufferView::Compression compression, size_t stride, int variant)
+size_t getBufferView(
+    std::vector<BufferView>& views, BufferView::Kind kind, StreamFormat::Filter filter, BufferView::Compression compression, size_t stride, int variant)
 {
 	if (variant >= 0)
 	{
@@ -580,8 +571,7 @@ size_t getBufferView(std::vector<BufferView>& views, BufferView::Kind kind, Stre
 		{
 			BufferView& v = views[i];
 
-			if (v.kind == kind && v.filter == filter && v.compression == compression && v.stride == stride &&
-			    v.variant == variant)
+			if (v.kind == kind && v.filter == filter && v.compression == compression && v.stride == stride && v.variant == variant)
 				return i;
 		}
 	}
@@ -592,9 +582,8 @@ size_t getBufferView(std::vector<BufferView>& views, BufferView::Kind kind, Stre
 	return views.size() - 1;
 }
 
-void writeBufferView(std::string& json, BufferView::Kind kind, StreamFormat::Filter filter, size_t count, size_t stride,
-    size_t bin_offset, size_t bin_size, BufferView::Compression compression, size_t compressed_offset,
-    size_t compressed_size)
+void writeBufferView(std::string& json, BufferView::Kind kind, StreamFormat::Filter filter, size_t count, size_t stride, size_t bin_offset, size_t bin_size,
+    BufferView::Compression compression, size_t compressed_offset, size_t compressed_size)
 {
 	assert(bin_size == count * stride);
 
@@ -645,9 +634,8 @@ void writeBufferView(std::string& json, BufferView::Kind kind, StreamFormat::Fil
 	append(json, "}");
 }
 
-static void writeAccessor(std::string& json, size_t view, size_t offset, cgltf_type type,
-    cgltf_component_type component_type, bool normalized, size_t count, const float* min = 0, const float* max = 0,
-    size_t numminmax = 0)
+static void writeAccessor(std::string& json, size_t view, size_t offset, cgltf_type type, cgltf_component_type component_type, bool normalized, size_t count,
+    const float* min = 0, const float* max = 0, size_t numminmax = 0)
 {
 	append(json, "{\"bufferView\":");
 	append(json, view);
@@ -726,11 +714,9 @@ static bool parseDataUri(const char* uri, std::string& mime_type, std::string& r
 	return false;
 }
 
-static void writeEmbeddedImage(
-    std::string& json, std::vector<BufferView>& views, const char* data, size_t size, const char* mime_type)
+static void writeEmbeddedImage(std::string& json, std::vector<BufferView>& views, const char* data, size_t size, const char* mime_type)
 {
-	size_t view =
-	    getBufferView(views, BufferView::Kind_Image, StreamFormat::Filter_None, BufferView::Compression_None, 1, -1);
+	size_t view = getBufferView(views, BufferView::Kind_Image, StreamFormat::Filter_None, BufferView::Compression_None, 1, -1);
 
 	assert(views[view].data.empty());
 	views[view].data.assign(data, size);
@@ -755,8 +741,8 @@ static std::string decodeUri(const char* uri)
 	return result;
 }
 
-void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info,
-    size_t index, const char* input_path, const char* output_path, const Settings& settings)
+void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path,
+    const char* output_path, const Settings& settings)
 {
 	std::string img_data;
 	std::string mime_type;
@@ -789,9 +775,8 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 	if (image.mime_type)
 		mime_type = image.mime_type;
 
-	bool (*encodeImage)(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb,
-	    int quality, float scale, bool pow2, bool uastc, bool verbose) =
-	    settings.texture_toktx ? encodeKtx : encodeBasis;
+	bool (*encodeImage)(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, float scale, bool pow2,
+	    bool uastc, bool verbose) = settings.texture_toktx ? encodeKtx : encodeBasis;
 
 	if (!img_data.empty())
 	{
@@ -799,14 +784,13 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 		{
 			std::string encoded;
 
-			if (encodeImage(img_data, mime_type.c_str(), encoded, info.normal_map, info.srgb, settings.texture_quality,
-			        settings.texture_scale, settings.texture_pow2, settings.texture_uastc, settings.verbose > 1))
+			if (encodeImage(img_data, mime_type.c_str(), encoded, info.normal_map, info.srgb, settings.texture_quality, settings.texture_scale,
+			        settings.texture_pow2, settings.texture_uastc, settings.verbose > 1))
 			{
 				if (!settings.texture_toktx)
 					encoded = basisToKtx(encoded, info.srgb, settings.texture_uastc);
 
-				writeEmbeddedImage(
-				    json, views, encoded.c_str(), encoded.size(), settings.texture_ktx2 ? "image/ktx2" : "image/basis");
+				writeEmbeddedImage(json, views, encoded.c_str(), encoded.size(), settings.texture_ktx2 ? "image/ktx2" : "image/basis");
 			}
 			else
 			{
@@ -830,9 +814,8 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 			{
 				std::string encoded;
 
-				if (encodeImage(img_data, mime_type.c_str(), encoded, info.normal_map, info.srgb,
-				        settings.texture_quality, settings.texture_scale, settings.texture_pow2, settings.texture_uastc,
-				        settings.verbose > 1))
+				if (encodeImage(img_data, mime_type.c_str(), encoded, info.normal_map, info.srgb, settings.texture_quality, settings.texture_scale,
+				        settings.texture_pow2, settings.texture_uastc, settings.verbose > 1))
 				{
 					if (!settings.texture_toktx)
 						encoded = basisToKtx(encoded, info.srgb, settings.texture_uastc);
@@ -889,9 +872,8 @@ void writeTexture(std::string& json, const cgltf_texture& texture, cgltf_data* d
 	}
 }
 
-void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std::string& json_accessors,
-    size_t& accr_offset, const Mesh& mesh, int target, const QuantizationPosition& qp, const QuantizationTexture& qt,
-    const Settings& settings)
+void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, int target,
+    const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings)
 {
 	std::string scratch;
 
@@ -904,11 +886,9 @@ void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std:
 
 		scratch.clear();
 		StreamFormat format = writeVertexStream(scratch, stream, qp, qt, settings);
-		BufferView::Compression compression =
-		    settings.compress ? BufferView::Compression_Attribute : BufferView::Compression_None;
+		BufferView::Compression compression = settings.compress ? BufferView::Compression_Attribute : BufferView::Compression_None;
 
-		size_t view =
-		    getBufferView(views, BufferView::Kind_Vertex, format.filter, compression, format.stride, stream.type);
+		size_t view = getBufferView(views, BufferView::Kind_Vertex, format.filter, compression, format.stride, stream.type);
 		size_t offset = views[view].data.size();
 		views[view].data += scratch;
 
@@ -919,13 +899,11 @@ void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std:
 			float max[3] = {};
 			getPositionBounds(min, max, stream, settings.quantize ? &qp : NULL);
 
-			writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized,
-			    stream.data.size(), min, max, 3);
+			writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, stream.data.size(), min, max, 3);
 		}
 		else
 		{
-			writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized,
-			    stream.data.size());
+			writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, stream.data.size());
 		}
 
 		size_t vertex_accr = accr_offset++;
@@ -933,8 +911,7 @@ void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std:
 		comma(json);
 		append(json, "\"");
 		append(json, attributeType(stream.type));
-		if (stream.type != cgltf_attribute_type_position && stream.type != cgltf_attribute_type_normal &&
-		    stream.type != cgltf_attribute_type_tangent)
+		if (stream.type != cgltf_attribute_type_position && stream.type != cgltf_attribute_type_normal && stream.type != cgltf_attribute_type_tangent)
 		{
 			append(json, "_");
 			append(json, size_t(stream.index));
@@ -944,14 +921,12 @@ void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std:
 	}
 }
 
-size_t writeMeshIndices(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset,
-    const Mesh& mesh, const Settings& settings)
+size_t writeMeshIndices(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, const Settings& settings)
 {
 	std::string scratch;
 	StreamFormat format = writeIndexStream(scratch, mesh.indices);
 	BufferView::Compression compression = settings.compress
-	    ? (mesh.type == cgltf_primitive_type_triangles ? BufferView::Compression_Index
-	                                                   : BufferView::Compression_IndexSequence)
+	    ? (mesh.type == cgltf_primitive_type_triangles ? BufferView::Compression_Index : BufferView::Compression_IndexSequence)
 	    : BufferView::Compression_None;
 
 	size_t view = getBufferView(views, BufferView::Kind_Index, StreamFormat::Filter_None, compression, format.stride);
@@ -959,16 +934,15 @@ size_t writeMeshIndices(std::vector<BufferView>& views, std::string& json_access
 	views[view].data += scratch;
 
 	comma(json_accessors);
-	writeAccessor(
-	    json_accessors, view, offset, format.type, format.component_type, format.normalized, mesh.indices.size());
+	writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, mesh.indices.size());
 
 	size_t index_accr = accr_offset++;
 
 	return index_accr;
 }
 
-static size_t writeAnimationTime(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset,
-    float mint, int frames, float period, const Settings& settings)
+static size_t writeAnimationTime(
+    std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, float mint, int frames, float period, const Settings& settings)
 {
 	std::vector<float> time(frames);
 
@@ -977,24 +951,22 @@ static size_t writeAnimationTime(std::vector<BufferView>& views, std::string& js
 
 	std::string scratch;
 	StreamFormat format = writeTimeStream(scratch, time);
-	BufferView::Compression compression =
-	    settings.compress ? BufferView::Compression_Attribute : BufferView::Compression_None;
+	BufferView::Compression compression = settings.compress ? BufferView::Compression_Attribute : BufferView::Compression_None;
 
 	size_t view = getBufferView(views, BufferView::Kind_Time, StreamFormat::Filter_None, compression, format.stride);
 	size_t offset = views[view].data.size();
 	views[view].data += scratch;
 
 	comma(json_accessors);
-	writeAccessor(json_accessors, view, offset, cgltf_type_scalar, format.component_type, format.normalized, frames,
-	    &time.front(), &time.back(), 1);
+	writeAccessor(json_accessors, view, offset, cgltf_type_scalar, format.component_type, format.normalized, frames, &time.front(), &time.back(), 1);
 
 	size_t time_accr = accr_offset++;
 
 	return time_accr;
 }
 
-size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset,
-    const cgltf_skin& skin, const QuantizationPosition& qp, const Settings& settings)
+size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const cgltf_skin& skin,
+    const QuantizationPosition& qp, const Settings& settings)
 {
 	std::string scratch;
 
@@ -1024,8 +996,7 @@ size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_
 		scratch.append(reinterpret_cast<const char*>(transform), sizeof(transform));
 	}
 
-	BufferView::Compression compression =
-	    settings.compress ? BufferView::Compression_Attribute : BufferView::Compression_None;
+	BufferView::Compression compression = settings.compress ? BufferView::Compression_Attribute : BufferView::Compression_None;
 
 	size_t view = getBufferView(views, BufferView::Kind_Skin, StreamFormat::Filter_None, compression, 64);
 	size_t offset = views[view].data.size();
@@ -1039,11 +1010,10 @@ size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_
 	return matrix_accr;
 }
 
-static void writeInstanceData(std::vector<BufferView>& views, std::string& json_accessors,
-    cgltf_animation_path_type type, const std::vector<Attr>& data, const Settings& settings)
+static void writeInstanceData(
+    std::vector<BufferView>& views, std::string& json_accessors, cgltf_animation_path_type type, const std::vector<Attr>& data, const Settings& settings)
 {
-	BufferView::Compression compression =
-	    settings.compress ? BufferView::Compression_Attribute : BufferView::Compression_None;
+	BufferView::Compression compression = settings.compress ? BufferView::Compression_Attribute : BufferView::Compression_None;
 
 	std::string scratch;
 	StreamFormat format = writeKeyframeStream(scratch, type, data, settings);
@@ -1056,8 +1026,8 @@ static void writeInstanceData(std::vector<BufferView>& views, std::string& json_
 	writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, data.size());
 }
 
-size_t writeInstances(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset,
-    const std::vector<Transform>& transforms, const QuantizationPosition& qp, const Settings& settings)
+size_t writeInstances(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const std::vector<Transform>& transforms,
+    const QuantizationPosition& qp, const Settings& settings)
 {
 	std::vector<Attr> position, rotation, scale;
 	position.resize(transforms.size());
@@ -1077,8 +1047,7 @@ size_t writeInstances(std::vector<BufferView>& views, std::string& json_accessor
 			// pos_offset has to be applied first, thus it results in an offset rotated by the instance matrix
 			position[i].f[0] += qp.offset[0] * transform[0] + qp.offset[1] * transform[4] + qp.offset[2] * transform[8];
 			position[i].f[1] += qp.offset[0] * transform[1] + qp.offset[1] * transform[5] + qp.offset[2] * transform[9];
-			position[i].f[2] +=
-			    qp.offset[0] * transform[2] + qp.offset[1] * transform[6] + qp.offset[2] * transform[10];
+			position[i].f[2] += qp.offset[0] * transform[2] + qp.offset[1] * transform[6] + qp.offset[2] * transform[10];
 
 			// node_scale will be applied before the rotation/scale from transform
 			scale[i].f[0] *= node_scale;
@@ -1096,8 +1065,7 @@ size_t writeInstances(std::vector<BufferView>& views, std::string& json_accessor
 	return result;
 }
 
-void writeMeshNode(std::string& json, size_t mesh_offset, cgltf_node* node, cgltf_skin* skin, cgltf_data* data,
-    const QuantizationPosition* qp)
+void writeMeshNode(std::string& json, size_t mesh_offset, cgltf_node* node, cgltf_skin* skin, cgltf_data* data, const QuantizationPosition* qp)
 {
 	comma(json);
 	append(json, "{\"mesh\":");
@@ -1162,8 +1130,7 @@ void writeMeshNodeInstanced(std::string& json, size_t mesh_offset, size_t accr_o
 	append(json, "}");
 }
 
-void writeSkin(
-    std::string& json, const cgltf_skin& skin, size_t matrix_accr, const std::vector<NodeInfo>& nodes, cgltf_data* data)
+void writeSkin(std::string& json, const cgltf_skin& skin, size_t matrix_accr, const std::vector<NodeInfo>& nodes, cgltf_data* data)
 {
 	comma(json);
 	append(json, "{");
@@ -1278,9 +1245,8 @@ void writeNode(std::string& json, const cgltf_node& node, const std::vector<Node
 	}
 }
 
-void writeAnimation(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset,
-    const Animation& animation, size_t i, cgltf_data* data, const std::vector<NodeInfo>& nodes,
-    const Settings& settings)
+void writeAnimation(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Animation& animation, size_t i,
+    cgltf_data* data, const std::vector<NodeInfo>& nodes, const Settings& settings)
 {
 	std::vector<const Track*> tracks;
 
@@ -1332,14 +1298,9 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 	float animation_period = 1.f / float(settings.anim_freq);
 	float animation_length = float(animation.frames - 1) * animation_period;
 
-	size_t time_accr = needs_time ? writeAnimationTime(views, json_accessors, accr_offset, animation.start,
-	                                    animation.frames, animation_period, settings)
-	                              : 0;
-	size_t pose_accr =
-	    needs_pose ? writeAnimationTime(views, json_accessors, accr_offset, animation.start, 1, 0.f, settings) : 0;
-	size_t range_accr = needs_range
-	    ? writeAnimationTime(views, json_accessors, accr_offset, animation.start, 2, animation_length, settings)
-	    : 0;
+	size_t time_accr = needs_time ? writeAnimationTime(views, json_accessors, accr_offset, animation.start, animation.frames, animation_period, settings) : 0;
+	size_t pose_accr = needs_pose ? writeAnimationTime(views, json_accessors, accr_offset, animation.start, 1, 0.f, settings) : 0;
+	size_t range_accr = needs_range ? writeAnimationTime(views, json_accessors, accr_offset, animation.start, 2, animation_length, settings) : 0;
 
 	std::string json_samplers;
 	std::string json_channels;
@@ -1362,18 +1323,15 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 			scratch += scratch;
 		}
 
-		BufferView::Compression compression = settings.compress && track.path != cgltf_animation_path_type_weights
-		    ? BufferView::Compression_Attribute
-		    : BufferView::Compression_None;
+		BufferView::Compression compression =
+		    settings.compress && track.path != cgltf_animation_path_type_weights ? BufferView::Compression_Attribute : BufferView::Compression_None;
 
-		size_t view =
-		    getBufferView(views, BufferView::Kind_Keyframe, format.filter, compression, format.stride, track.path);
+		size_t view = getBufferView(views, BufferView::Kind_Keyframe, format.filter, compression, format.stride, track.path);
 		size_t offset = views[view].data.size();
 		views[view].data += scratch;
 
 		comma(json_accessors);
-		writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized,
-		    track.data.size() * range_size);
+		writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, track.data.size() * range_size);
 
 		size_t data_accr = accr_offset++;
 

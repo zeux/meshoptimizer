@@ -138,8 +138,7 @@ static void fixupIndices(std::vector<unsigned int>& indices, cgltf_primitive_typ
 	}
 }
 
-static void parseMeshesGltf(
-    cgltf_data* data, std::vector<Mesh>& meshes, std::vector<std::pair<size_t, size_t> >& mesh_remap)
+static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::vector<std::pair<size_t, size_t> >& mesh_remap)
 {
 	size_t total_primitives = 0;
 
@@ -161,8 +160,7 @@ static void parseMeshesGltf(
 
 			if (primitive.type == cgltf_primitive_type_points && primitive.indices)
 			{
-				fprintf(stderr, "Warning: ignoring primitive %d of mesh %d because indexed points are not supported\n",
-				    int(pi), int(mi));
+				fprintf(stderr, "Warning: ignoring primitive %d of mesh %d because indexed points are not supported\n", int(pi), int(mi));
 				continue;
 			}
 
@@ -201,8 +199,7 @@ static void parseMeshesGltf(
 
 				if (attr.type == cgltf_attribute_type_invalid)
 				{
-					fprintf(stderr, "Warning: ignoring unknown attribute %s in primitive %d of mesh %d\n", attr.name,
-					    int(pi), int(mi));
+					fprintf(stderr, "Warning: ignoring unknown attribute %s in primitive %d of mesh %d\n", attr.name, int(pi), int(mi));
 					continue;
 				}
 
@@ -231,9 +228,8 @@ static void parseMeshesGltf(
 
 					if (attr.type == cgltf_attribute_type_invalid)
 					{
-						fprintf(stderr,
-						    "Warning: ignoring unknown attribute %s in morph target %d of primitive %d of mesh %d\n",
-						    attr.name, int(ti), int(pi), int(mi));
+						fprintf(stderr, "Warning: ignoring unknown attribute %s in morph target %d of primitive %d of mesh %d\n", attr.name, int(ti), int(pi),
+						    int(mi));
 						continue;
 					}
 
@@ -257,8 +253,7 @@ static void parseMeshesGltf(
 	}
 }
 
-static void parseMeshNodesGltf(
-    cgltf_data* data, std::vector<Mesh>& meshes, const std::vector<std::pair<size_t, size_t> >& mesh_remap)
+static void parseMeshNodesGltf(cgltf_data* data, std::vector<Mesh>& meshes, const std::vector<std::pair<size_t, size_t> >& mesh_remap)
 {
 	for (size_t i = 0; i < data->nodes_count; ++i)
 	{
@@ -321,8 +316,7 @@ static void parseAnimationsGltf(cgltf_data* data, std::vector<Animation>& animat
 
 			if (!channel.target_node)
 			{
-				fprintf(stderr, "Warning: ignoring channel %d of animation %d because it has no target node\n", int(j),
-				    int(i));
+				fprintf(stderr, "Warning: ignoring channel %d of animation %d because it has no target node\n", int(j), int(i));
 				continue;
 			}
 
@@ -332,9 +326,7 @@ static void parseAnimationsGltf(cgltf_data* data, std::vector<Animation>& animat
 			track.node = channel.target_node;
 			track.path = channel.target_path;
 
-			track.components = (channel.target_path == cgltf_animation_path_type_weights)
-			    ? track.node->mesh->primitives[0].targets_count
-			    : 1;
+			track.components = (channel.target_path == cgltf_animation_path_type_weights) ? track.node->mesh->primitives[0].targets_count : 1;
 
 			track.interpolation = channel.sampler->interpolation;
 
@@ -478,8 +470,7 @@ static bool freeUnusedBuffers(cgltf_data* data)
 	return free_bin;
 }
 
-cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations,
-    std::string& extras, const char** error)
+cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, std::string& extras, const char** error)
 {
 	cgltf_data* data = 0;
 
@@ -519,8 +510,7 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 	}
 
 	if (requiresExtension(data, "KHR_mesh_quantization"))
-		fprintf(
-		    stderr, "Warning: file uses quantized geometry; repacking may result in increased quantization error\n");
+		fprintf(stderr, "Warning: file uses quantized geometry; repacking may result in increased quantization error\n");
 
 	std::vector<std::pair<size_t, size_t> > mesh_remap;
 

@@ -203,8 +203,7 @@ static bool canMergeMeshes(const Mesh& lhs, const Mesh& rhs, const Settings& set
 		return false;
 
 	for (size_t i = 0; i < lhs.streams.size(); ++i)
-		if (lhs.streams[i].type != rhs.streams[i].type || lhs.streams[i].index != rhs.streams[i].index ||
-		    lhs.streams[i].target != rhs.streams[i].target)
+		if (lhs.streams[i].type != rhs.streams[i].type || lhs.streams[i].index != rhs.streams[i].index || lhs.streams[i].target != rhs.streams[i].target)
 			return false;
 
 	return true;
@@ -218,8 +217,7 @@ static void mergeMeshes(Mesh& target, const Mesh& mesh)
 	size_t index_offset = target.indices.size();
 
 	for (size_t i = 0; i < target.streams.size(); ++i)
-		target.streams[i].data.insert(
-		    target.streams[i].data.end(), mesh.streams[i].data.begin(), mesh.streams[i].data.end());
+		target.streams[i].data.insert(target.streams[i].data.end(), mesh.streams[i].data.begin(), mesh.streams[i].data.end());
 
 	target.indices.resize(target.indices.size() + mesh.indices.size());
 
@@ -394,8 +392,7 @@ static void filterStreams(Mesh& mesh)
 			morph_tangent = morph_tangent || (stream.type == cgltf_attribute_type_tangent && hasDeltas(stream.data));
 		}
 
-		if (stream.type == cgltf_attribute_type_texcoord && mesh.material &&
-		    usesTextureSet(*mesh.material, stream.index))
+		if (stream.type == cgltf_attribute_type_texcoord && mesh.material && usesTextureSet(*mesh.material, stream.index))
 		{
 			keep_texture_set = std::max(keep_texture_set, stream.index);
 		}
@@ -456,8 +453,7 @@ static void reindexMesh(Mesh& mesh)
 	}
 
 	std::vector<unsigned int> remap(total_vertices);
-	size_t unique_vertices = meshopt_generateVertexRemapMulti(
-	    &remap[0], &mesh.indices[0], total_indices, total_vertices, &streams[0], streams.size());
+	size_t unique_vertices = meshopt_generateVertexRemapMulti(&remap[0], &mesh.indices[0], total_indices, total_vertices, &streams[0], streams.size());
 	assert(unique_vertices <= total_vertices);
 
 	meshopt_remapIndexBuffer(&mesh.indices[0], &mesh.indices[0], total_indices, &remap[0]);
@@ -466,8 +462,7 @@ static void reindexMesh(Mesh& mesh)
 	{
 		assert(mesh.streams[i].data.size() == total_vertices);
 
-		meshopt_remapVertexBuffer(
-		    &mesh.streams[i].data[0], &mesh.streams[i].data[0], total_vertices, sizeof(Attr), &remap[0]);
+		meshopt_remapVertexBuffer(&mesh.streams[i].data[0], &mesh.streams[i].data[0], total_vertices, sizeof(Attr), &remap[0]);
 		mesh.streams[i].data.resize(unique_vertices);
 	}
 }
@@ -523,8 +518,8 @@ static void simplifyMesh(Mesh& mesh, float threshold, bool aggressive)
 		return;
 
 	std::vector<unsigned int> indices(mesh.indices.size());
-	indices.resize(meshopt_simplify(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f,
-	    vertex_count, sizeof(Attr), target_index_count, target_error));
+	indices.resize(meshopt_simplify(
+	    &indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count, target_error));
 	mesh.indices.swap(indices);
 
 	// Note: if the simplifier got stuck, we can try to reindex without normals/tangents and retry
@@ -534,8 +529,8 @@ static void simplifyMesh(Mesh& mesh, float threshold, bool aggressive)
 	// simplifier which is guaranteed to reach the target count
 	if (aggressive && target_index_count > 50 * 3 && mesh.indices.size() > target_index_count)
 	{
-		indices.resize(meshopt_simplifySloppy(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f,
-		    vertex_count, sizeof(Attr), target_index_count));
+		indices.resize(
+		    meshopt_simplifySloppy(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count));
 		mesh.indices.swap(indices);
 	}
 }
@@ -552,8 +547,7 @@ static void optimizeMesh(Mesh& mesh, bool compressmore)
 		meshopt_optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), vertex_count);
 
 	std::vector<unsigned int> remap(vertex_count);
-	size_t unique_vertices =
-	    meshopt_optimizeVertexFetchRemap(&remap[0], &mesh.indices[0], mesh.indices.size(), vertex_count);
+	size_t unique_vertices = meshopt_optimizeVertexFetchRemap(&remap[0], &mesh.indices[0], mesh.indices.size(), vertex_count);
 	assert(unique_vertices <= vertex_count);
 
 	meshopt_remapIndexBuffer(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &remap[0]);
@@ -562,8 +556,7 @@ static void optimizeMesh(Mesh& mesh, bool compressmore)
 	{
 		assert(mesh.streams[i].data.size() == vertex_count);
 
-		meshopt_remapVertexBuffer(
-		    &mesh.streams[i].data[0], &mesh.streams[i].data[0], vertex_count, sizeof(Attr), &remap[0]);
+		meshopt_remapVertexBuffer(&mesh.streams[i].data[0], &mesh.streams[i].data[0], vertex_count, sizeof(Attr), &remap[0]);
 		mesh.streams[i].data.resize(unique_vertices);
 	}
 }
@@ -694,8 +687,7 @@ static void simplifyPointMesh(Mesh& mesh, float threshold)
 		return;
 
 	std::vector<unsigned int> indices(target_vertex_count);
-	indices.resize(
-	    meshopt_simplifyPoints(&indices[0], positions->data[0].f, vertex_count, sizeof(Attr), target_vertex_count));
+	indices.resize(meshopt_simplifyPoints(&indices[0], positions->data[0].f, vertex_count, sizeof(Attr), target_vertex_count));
 
 	std::vector<Attr> scratch(indices.size());
 
@@ -729,8 +721,7 @@ static void sortPointMesh(Mesh& mesh)
 	{
 		assert(mesh.streams[i].data.size() == vertex_count);
 
-		meshopt_remapVertexBuffer(
-		    &mesh.streams[i].data[0], &mesh.streams[i].data[0], vertex_count, sizeof(Attr), &remap[0]);
+		meshopt_remapVertexBuffer(&mesh.streams[i].data[0], &mesh.streams[i].data[0], vertex_count, sizeof(Attr), &remap[0]);
 	}
 }
 
@@ -823,8 +814,7 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio)
 		const Stream& stream = mesh.streams[i];
 
 		if (stream.target == 0 &&
-		    (stream.type == cgltf_attribute_type_position || stream.type == cgltf_attribute_type_joints ||
-		        stream.type == cgltf_attribute_type_weights))
+		    (stream.type == cgltf_attribute_type_position || stream.type == cgltf_attribute_type_joints || stream.type == cgltf_attribute_type_weights))
 		{
 			kinds.streams.push_back(stream);
 			loops.streams.push_back(stream);
@@ -881,8 +871,7 @@ void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_ver
 	const size_t max_triangles = 126;
 
 	std::vector<meshopt_Meshlet> mr(meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles));
-	mr.resize(meshopt_buildMeshlets(
-	    &mr[0], &mesh.indices[0], mesh.indices.size(), positions->data.size(), max_vertices, max_triangles));
+	mr.resize(meshopt_buildMeshlets(&mr[0], &mesh.indices[0], mesh.indices.size(), positions->data.size(), max_vertices, max_triangles));
 
 	// generate meshlet meshes, using unique colors
 	meshlets.nodes = mesh.nodes;
@@ -931,8 +920,7 @@ void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_ver
 	{
 		const meshopt_Meshlet& ml = mr[i];
 
-		meshopt_Bounds mb =
-		    meshopt_computeMeshletBounds(&ml, positions->data[0].f, positions->data.size(), sizeof(Attr));
+		meshopt_Bounds mb = meshopt_computeMeshletBounds(&ml, positions->data[0].f, positions->data.size(), sizeof(Attr));
 
 		unsigned int h = unsigned(i);
 		h ^= h >> 13;
@@ -959,8 +947,7 @@ void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_ver
 				float fy = sinv * sinu;
 				float fz = cosv;
 
-				Attr p = {
-				    {mb.center[0] + mb.radius * fx, mb.center[1] + mb.radius * fy, mb.center[2] + mb.radius * fz, 1.f}};
+				Attr p = {{mb.center[0] + mb.radius * fx, mb.center[1] + mb.radius * fy, mb.center[2] + mb.radius * fz, 1.f}};
 
 				bv.data.push_back(p);
 				bc.data.push_back(c);

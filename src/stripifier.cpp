@@ -10,8 +10,7 @@
 namespace meshopt
 {
 
-static unsigned int findStripFirst(
-    const unsigned int buffer[][3], unsigned int buffer_size, const unsigned int* valence)
+static unsigned int findStripFirst(const unsigned int buffer[][3], unsigned int buffer_size, const unsigned int* valence)
 {
 	unsigned int index = 0;
 	unsigned int iv = ~0u;
@@ -50,8 +49,7 @@ static int findStripNext(const unsigned int buffer[][3], unsigned int buffer_siz
 
 } // namespace meshopt
 
-size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count,
-    unsigned int restart_index)
+size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int restart_index)
 {
 	assert(destination != indices);
 	assert(index_count % 3 == 0);
@@ -252,8 +250,7 @@ size_t meshopt_stripifyBound(size_t index_count)
 	return (index_count / 3) * 5;
 }
 
-size_t meshopt_unstripify(
-    unsigned int* destination, const unsigned int* indices, size_t index_count, unsigned int restart_index)
+size_t meshopt_unstripify(unsigned int* destination, const unsigned int* indices, size_t index_count, unsigned int restart_index)
 {
 	assert(destination != indices);
 

@@ -4,8 +4,7 @@
 #include <assert.h>
 #include <string.h>
 
-meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(
-    const unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
 	assert(index_count % 3 == 0);
 	assert(vertex_size > 0 && vertex_size <= 256);
@@ -54,8 +53,7 @@ meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(
 	for (size_t i = 0; i < vertex_count; ++i)
 		unique_vertex_count += vertex_visited[i];
 
-	result.overfetch =
-	    unique_vertex_count == 0 ? 0 : float(result.bytes_fetched) / float(unique_vertex_count * vertex_size);
+	result.overfetch = unique_vertex_count == 0 ? 0 : float(result.bytes_fetched) / float(unique_vertex_count * vertex_size);
 
 	return result;
 }

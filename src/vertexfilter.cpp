@@ -304,8 +304,7 @@ static void decodeFilterQuatSimd(short* data, size_t count)
 		__m128 z = _mm_mul_ps(_mm_cvtepi32_ps(zf), ss);
 
 		// reconstruct w as a square root; we clamp to 0.f to avoid NaN due to precision errors
-		__m128 ww =
-		    _mm_sub_ps(_mm_set1_ps(1.f), _mm_add_ps(_mm_mul_ps(x, x), _mm_add_ps(_mm_mul_ps(y, y), _mm_mul_ps(z, z))));
+		__m128 ww = _mm_sub_ps(_mm_set1_ps(1.f), _mm_add_ps(_mm_mul_ps(x, x), _mm_add_ps(_mm_mul_ps(y, y), _mm_mul_ps(z, z))));
 		__m128 w = _mm_sqrt_ps(_mm_max_ps(ww, _mm_setzero_ps()));
 
 		__m128 s = _mm_set1_ps(32767.f);
@@ -400,10 +399,8 @@ static void decodeFilterOctSimd(signed char* data, size_t count)
 		// fixup octahedral coordinates for z<0
 		float32x4_t t = vminq_f32(z, vdupq_n_f32(0.f));
 
-		x = vaddq_f32(
-		    x, vreinterpretq_f32_s32(veorq_s32(vreinterpretq_s32_f32(t), vandq_s32(vreinterpretq_s32_f32(x), sign))));
-		y = vaddq_f32(
-		    y, vreinterpretq_f32_s32(veorq_s32(vreinterpretq_s32_f32(t), vandq_s32(vreinterpretq_s32_f32(y), sign))));
+		x = vaddq_f32(x, vreinterpretq_f32_s32(veorq_s32(vreinterpretq_s32_f32(t), vandq_s32(vreinterpretq_s32_f32(x), sign))));
+		y = vaddq_f32(y, vreinterpretq_f32_s32(veorq_s32(vreinterpretq_s32_f32(t), vandq_s32(vreinterpretq_s32_f32(y), sign))));
 
 		// compute normal length & scale
 		float32x4_t ll = vaddq_f32(vmulq_f32(x, x), vaddq_f32(vmulq_f32(y, y), vmulq_f32(z, z)));
@@ -457,10 +454,8 @@ static void decodeFilterOctSimd(short* data, size_t count)
 		// fixup octahedral coordinates for z<0
 		float32x4_t t = vminq_f32(z, vdupq_n_f32(0.f));
 
-		x = vaddq_f32(
-		    x, vreinterpretq_f32_s32(veorq_s32(vreinterpretq_s32_f32(t), vandq_s32(vreinterpretq_s32_f32(x), sign))));
-		y = vaddq_f32(
-		    y, vreinterpretq_f32_s32(veorq_s32(vreinterpretq_s32_f32(t), vandq_s32(vreinterpretq_s32_f32(y), sign))));
+		x = vaddq_f32(x, vreinterpretq_f32_s32(veorq_s32(vreinterpretq_s32_f32(t), vandq_s32(vreinterpretq_s32_f32(x), sign))));
+		y = vaddq_f32(y, vreinterpretq_f32_s32(veorq_s32(vreinterpretq_s32_f32(t), vandq_s32(vreinterpretq_s32_f32(y), sign))));
 
 		// compute normal length & scale
 		float32x4_t ll = vaddq_f32(vmulq_f32(x, x), vaddq_f32(vmulq_f32(y, y), vmulq_f32(z, z)));
@@ -482,10 +477,8 @@ static void decodeFilterOctSimd(short* data, size_t count)
 		int32x4_t y0r = vandq_s32(yr, vdupq_n_s32(0xffff));
 
 		// pack x/y/z using 16-bit unpacks; note that this has 0 where we should have .w
-		int32x4_t res_0 =
-		    vreinterpretq_s32_s16(vzipq_s16(vreinterpretq_s16_s32(xzr), vreinterpretq_s16_s32(y0r)).val[0]);
-		int32x4_t res_1 =
-		    vreinterpretq_s32_s16(vzipq_s16(vreinterpretq_s16_s32(xzr), vreinterpretq_s16_s32(y0r)).val[1]);
+		int32x4_t res_0 = vreinterpretq_s32_s16(vzipq_s16(vreinterpretq_s16_s32(xzr), vreinterpretq_s16_s32(y0r)).val[0]);
+		int32x4_t res_1 = vreinterpretq_s32_s16(vzipq_s16(vreinterpretq_s16_s32(xzr), vreinterpretq_s16_s32(y0r)).val[1]);
 
 		// patch in .w
 		res_0 = vbslq_s32(vreinterpretq_u32_u64(vdupq_n_u64(0xffff000000000000)), n4_0, res_0);
@@ -525,8 +518,7 @@ static void decodeFilterQuatSimd(short* data, size_t count)
 		float32x4_t z = vmulq_f32(vcvtq_f32_s32(zf), ss);
 
 		// reconstruct w as a square root; we clamp to 0.f to avoid NaN due to precision errors
-		float32x4_t ww =
-		    vsubq_f32(vdupq_n_f32(1.f), vaddq_f32(vmulq_f32(x, x), vaddq_f32(vmulq_f32(y, y), vmulq_f32(z, z))));
+		float32x4_t ww = vsubq_f32(vdupq_n_f32(1.f), vaddq_f32(vmulq_f32(x, x), vaddq_f32(vmulq_f32(y, y), vmulq_f32(z, z))));
 		float32x4_t w = vsqrtq_f32(vmaxq_f32(ww, vdupq_n_f32(0.f)));
 
 		float32x4_t s = vdupq_n_f32(32767.f);
@@ -546,10 +538,8 @@ static void decodeFilterQuatSimd(short* data, size_t count)
 		int32x4_t wyr = vorrq_s32(vandq_s32(wr, vdupq_n_s32(0xffff)), vshlq_n_s32(yr, 16));
 
 		// pack x/y/z/w using 16-bit unpacks; we pack wxyz by default (for qc=0)
-		int32x4_t res_0 =
-		    vreinterpretq_s32_s16(vzipq_s16(vreinterpretq_s16_s32(wyr), vreinterpretq_s16_s32(xzr)).val[0]);
-		int32x4_t res_1 =
-		    vreinterpretq_s32_s16(vzipq_s16(vreinterpretq_s16_s32(wyr), vreinterpretq_s16_s32(xzr)).val[1]);
+		int32x4_t res_0 = vreinterpretq_s32_s16(vzipq_s16(vreinterpretq_s16_s32(wyr), vreinterpretq_s16_s32(xzr)).val[0]);
+		int32x4_t res_1 = vreinterpretq_s32_s16(vzipq_s16(vreinterpretq_s16_s32(wyr), vreinterpretq_s16_s32(xzr)).val[1]);
 
 		// rotate and store
 		uint64_t* out = (uint64_t*)&data[i * 4];
@@ -726,8 +716,7 @@ static void decodeFilterQuatSimd(short* data, size_t count)
 
 		// reconstruct w as a square root; we clamp to 0.f to avoid NaN due to precision errors
 		// note: i32x4_max with 0 is equivalent to f32x4_max
-		v128_t ww = wasm_f32x4_sub(wasm_f32x4_splat(1.f),
-		    wasm_f32x4_add(wasm_f32x4_mul(x, x), wasm_f32x4_add(wasm_f32x4_mul(y, y), wasm_f32x4_mul(z, z))));
+		v128_t ww = wasm_f32x4_sub(wasm_f32x4_splat(1.f), wasm_f32x4_add(wasm_f32x4_mul(x, x), wasm_f32x4_add(wasm_f32x4_mul(y, y), wasm_f32x4_mul(z, z))));
 		v128_t w = wasm_f32x4_sqrt(wasm_i32x4_max(ww, wasm_i32x4_splat(0)));
 
 		v128_t s = wasm_f32x4_splat(32767.f);

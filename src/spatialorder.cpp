@@ -21,8 +21,7 @@ inline unsigned int part1By2(unsigned int x)
 	return x;
 }
 
-static void computeOrder(
-    unsigned int* result, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride)
+static void computeOrder(unsigned int* result, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride)
 {
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
@@ -96,8 +95,7 @@ static void computeHistogram(unsigned int (&hist)[1024][3], const unsigned int* 
 	assert(sumx == count && sumy == count && sumz == count);
 }
 
-static void radixPass(unsigned int* destination, const unsigned int* source, const unsigned int* keys, size_t count,
-    unsigned int (&hist)[1024][3], int pass)
+static void radixPass(unsigned int* destination, const unsigned int* source, const unsigned int* keys, size_t count, unsigned int (&hist)[1024][3], int pass)
 {
 	int bitoff = pass * 10;
 
@@ -111,8 +109,7 @@ static void radixPass(unsigned int* destination, const unsigned int* source, con
 
 } // namespace meshopt
 
-void meshopt_spatialSortRemap(
-    unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+void meshopt_spatialSortRemap(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	using namespace meshopt;
 
@@ -142,8 +139,8 @@ void meshopt_spatialSortRemap(
 		destination[scratch[i]] = unsigned(i);
 }
 
-void meshopt_spatialSortTriangles(unsigned int* destination, const unsigned int* indices, size_t index_count,
-    const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+void meshopt_spatialSortTriangles(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions,
+    size_t vertex_count, size_t vertex_positions_stride)
 {
 	using namespace meshopt;
 
