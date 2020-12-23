@@ -121,6 +121,9 @@ codecbench.js codecbench.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
 codecbench-simd.js codecbench-simd.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
 	emcc $^ -O3 -g -DNDEBUG -s TOTAL_MEMORY=268435456 -msimd128 -o $@
 
+codecfuzz: tools/codecfuzz.cpp src/vertexcodec.cpp src/indexcodec.cpp
+	$(CXX) $^ -fsanitize=fuzzer,address,undefined -O1 -g -o $@
+
 $(LIBRARY): $(LIBRARY_OBJECTS)
 	ar rcs $@ $^
 
