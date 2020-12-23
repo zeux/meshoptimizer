@@ -239,7 +239,6 @@ MESHOPTIMIZER_API int meshopt_decodeVertexBuffer(void* destination, size_t verte
 /**
  * Vertex buffer filters
  * These functions can be used to filter output of meshopt_decodeVertexBuffer in-place.
- * count must be aligned by 4 and stride is fixed for each function to facilitate SIMD implementation.
  *
  * meshopt_decodeFilterOct decodes octahedral encoding of a unit vector with K-bit (K <= 16) signed X/Y as an input; Z must store 1.0f.
  * Each component is stored as an 8-bit or 16-bit normalized integer; stride must be equal to 4 or 8. W is preserved as is.
