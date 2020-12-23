@@ -1,6 +1,8 @@
 #include "../src/meshoptimizer.h"
 #include "../extern/fast_obj.h"
-#include "../demo/miniz.h"
+
+#define SDEFL_IMPLEMENTATION
+#include "../extern/sdefl.h"
 
 #include <algorithm>
 #include <functional>
@@ -194,11 +196,11 @@ Mesh objmesh(const char* path)
 }
 
 template <typename T>
-size_t compress(const std::vector<T>& data, int level = MZ_DEFAULT_LEVEL)
+size_t compress(const std::vector<T>& data, int level = SDEFL_LVL_DEF)
 {
-	std::vector<unsigned char> cbuf(tdefl_compress_bound(data.size() * sizeof(T)));
-	unsigned int flags = tdefl_create_comp_flags_from_zip_params(level, 15, MZ_DEFAULT_STRATEGY);
-	return tdefl_compress_mem_to_mem(&cbuf[0], cbuf.size(), &data[0], data.size() * sizeof(T), flags);
+	std::vector<unsigned char> cbuf(sdefl_bound(int(data.size() * sizeof(T))));
+	sdefl s = {};
+	return sdeflate(&s, &cbuf[0], reinterpret_cast<const unsigned char*>(&data[0]), int(data.size() * sizeof(T)), level);
 }
 
 void compute_metric(const State* state, const Mesh& mesh, float result[Profile_Count])
