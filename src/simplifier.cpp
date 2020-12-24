@@ -31,7 +31,7 @@ namespace meshopt
 // 1: prevent flips by discarding edges during collapse
 // 2: prevent flips by penalizing edges that flip (single direction)
 // 3: prevent flips by penalizing edges that flip (both directions)
-const int kPreventFlips = 1;
+const int kPreventFlips = 3;
 
 struct EdgeAdjacency
 {
@@ -133,9 +133,9 @@ static void updateTriangleAdjacency(TriangleAdjacency& adjacency, const unsigned
 	{
 		unsigned int a = remap[indices[i * 3 + 0]], b = remap[indices[i * 3 + 1]], c = remap[indices[i * 3 + 2]];
 
-		adjacency.data[adjacency.offsets[a]++] = unsigned(i);
-		adjacency.data[adjacency.offsets[b]++] = unsigned(i);
-		adjacency.data[adjacency.offsets[c]++] = unsigned(i);
+		adjacency.data[adjacency.offsets[a]++] = unsigned(i << 2) | 0;
+		adjacency.data[adjacency.offsets[b]++] = unsigned(i << 2) | 1;
+		adjacency.data[adjacency.offsets[c]++] = unsigned(i << 2) | 2;
 	}
 
 	// fix offsets that have been disturbed by the previous pass
@@ -671,42 +671,30 @@ bool hasTriangleFlips(const TriangleAdjacency& passadjacency, const unsigned int
 {
 	assert(remap[i0] == i0 && remap[i1] == i1);
 
+	const Vector3& v0 = vertex_positions[i0];
+	const Vector3& v1 = vertex_positions[i1];
+
 	const unsigned int* triangles = &passadjacency.data[passadjacency.offsets[i0]];
 	size_t triangle_count = passadjacency.counts[i0];
 
 	for (size_t ti = 0; ti < triangle_count; ++ti)
 	{
-		unsigned int a = indices[triangles[ti] * 3 + 0];
-		unsigned int b = indices[triangles[ti] * 3 + 1];
-		unsigned int c = indices[triangles[ti] * 3 + 2];
+		static const int next[] = { 1, 2, 0, 1, 2 };
+
+		unsigned int triangle = triangles[ti] >> 2;
+		unsigned int corner = triangles[ti] & 3;
+
+		unsigned int a = indices[triangle * 3 + next[corner + 0]];
+		unsigned int b = indices[triangle * 3 + next[corner + 1]];
+
+		assert(remap[indices[triangle * 3 + corner]] == i0);
 
 		// skip triangles that get collapsed
-		if (remap[a] == i1 || remap[b] == i1 || remap[c] == i1)
+		if (remap[a] == i1 || remap[b] == i1)
 			continue;
 
-		// rotate triangle so that c matches i0
-		assert(remap[a] == i0 || remap[b] == i0 || remap[c] == i0);
-
-		if (remap[a] == i0)
-		{
-			// a b c => b c a
-			unsigned int t = a;
-			a = b;
-			b = c;
-			c = t;
-		}
-		else if (remap[b] == i0)
-		{
-			// a b c => c a b
-			unsigned int t = c;
-			c = b;
-			b = a;
-			a = t;
-		}
-
-		assert(remap[c] == i0);
-
-		if (hasTriangleFlip(vertex_positions[a], vertex_positions[b], vertex_positions[c], vertex_positions[i1]))
+		// early-out when at least one triangle flips due to a collapse
+		if (hasTriangleFlip(vertex_positions[a], vertex_positions[b], v0, v1))
 			return true;
 	}
 
