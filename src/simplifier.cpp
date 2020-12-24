@@ -23,7 +23,11 @@
 namespace meshopt
 {
 
-const bool kPreventFlips = true;
+// 0: don't prevent flips
+// 1: prevent flips by discarding edges during collapse
+// 2: prevent flips by penalizing edges that flip (single direction)
+// 3: prevent flips by penalizing edges that flip (both directions)
+const int kPreventFlips = 1;
 
 struct EdgeAdjacency
 {
@@ -649,9 +653,9 @@ static void fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 // does triangle ABC flip when C is replaced with D?
 bool hasTriangleFlip(const Vector3& a, const Vector3& b, const Vector3& c, const Vector3& d)
 {
-	Vector3 eb = { b.x - a.x, b.y - a.y, b.z - a.z };
-	Vector3 ec = { c.x - a.x, c.y - a.y, c.z - b.z };
-	Vector3 ed = { d.x - a.x, d.y - a.y, d.z - d.z };
+	Vector3 eb = {b.x - a.x, b.y - a.y, b.z - a.z};
+	Vector3 ec = {c.x - a.x, c.y - a.y, c.z - b.z};
+	Vector3 ed = {d.x - a.x, d.y - a.y, d.z - d.z};
 
 	Vector3 nbc = {eb.y * ec.z - eb.z * ec.y, eb.z * ec.x - eb.x * ec.z, eb.x * ec.y - eb.y * ec.x};
 	Vector3 nbd = {eb.y * ed.z - eb.z * ed.y, eb.z * ed.x - eb.x * ed.z, eb.x * ed.y - eb.y * ed.x};
@@ -763,7 +767,7 @@ static size_t pickEdgeCollapses(Collapse* collapses, const unsigned int* indices
 	return collapse_count;
 }
 
-static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const Vector3* vertex_positions, const Quadric* vertex_quadrics, const unsigned int* remap)
+static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const Vector3* vertex_positions, const Quadric* vertex_quadrics, const unsigned int* remap, const TriangleAdjacency& passadjacency, const unsigned int* indices)
 {
 	for (size_t i = 0; i < collapse_count; ++i)
 	{
@@ -787,6 +791,24 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 		c.v0 = ei <= ej ? i0 : j0;
 		c.v1 = ei <= ej ? i1 : j1;
 		c.error = ei <= ej ? ei : ej;
+
+		if (kPreventFlips == 2 && hasTriangleFlips(passadjacency, indices, vertex_positions, remap, remap[c.v0], remap[c.v1]))
+			c.error = FLT_MAX;
+
+		if (kPreventFlips == 3 && hasTriangleFlips(passadjacency, indices, vertex_positions, remap, remap[c.v0], remap[c.v1]))
+		{
+			if (c.bidi && !hasTriangleFlips(passadjacency, indices, vertex_positions, remap, remap[c.v1], remap[c.v0]))
+			{
+				// flip collapse
+				c.v0 = ei > ej ? i0 : j0;
+				c.v1 = ei > ej ? i1 : j1;
+				c.error = ei > ej ? ei : ej;
+			}
+			else
+			{
+				c.error = FLT_MAX;
+			}
+		}
 	}
 }
 
@@ -888,6 +910,11 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 	size_t edge_collapses = 0;
 	size_t triangle_collapses = 0;
 
+#if TRACE
+	size_t blocked_collapses_lock = 0;
+	size_t blocked_collapses_flip = 0;
+#endif
+
 	for (size_t i = 0; i < collapse_count; ++i)
 	{
 		const Collapse& c = collapses[collapse_order[i]];
@@ -911,10 +938,20 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		// it's important to not move the vertices twice since it complicates the tracking/remapping logic
 		// it's important to not move other vertices towards a moved vertex to preserve error since we don't re-rank collapses mid-pass
 		if (collapse_locked[r0] | collapse_locked[r1])
+		{
+#if TRACE
+			blocked_collapses_lock++;
+#endif
 			continue;
+		}
 
-		if (kPreventFlips && hasTriangleFlips(passadjacency, indices, vertex_positions, remap, r0, r1))
+		if (kPreventFlips == 1 && hasTriangleFlips(passadjacency, indices, vertex_positions, remap, r0, r1))
+		{
+#if TRACE
+			blocked_collapses_flip++;
+#endif
 			continue;
+		}
 
 		assert(collapse_remap[r0] == r0);
 		assert(collapse_remap[r1] == r1);
@@ -957,6 +994,10 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		triangle_collapses += (vertex_kind[i0] == Kind_Border) ? 1 : 2;
 		edge_collapses++;
 	}
+
+#if TRACE
+	printf("blocked collapses: lock %d, flip %d\n", int(blocked_collapses_lock), int(blocked_collapses_flip));
+#endif
 
 	return edge_collapses;
 }
@@ -1350,7 +1391,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		if (edge_collapse_count == 0)
 			break;
 
-		rankEdgeCollapses(edge_collapses, edge_collapse_count, vertex_positions, vertex_quadrics, remap);
+		rankEdgeCollapses(edge_collapses, edge_collapse_count, vertex_positions, vertex_quadrics, remap, passadjacency, result);
 
 #if TRACE > 1
 		dumpEdgeCollapses(edge_collapses, edge_collapse_count, vertex_kind);
