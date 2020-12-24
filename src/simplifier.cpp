@@ -779,6 +779,7 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 
 		unsigned int i0 = c.v0;
 		unsigned int i1 = c.v1;
+		unsigned int bidi = c.bidi;
 
 		// most edges are bidirectional which means we need to evaluate errors for two collapses
 		// to keep this code branchless we just use the same edge for unidirectional edges
@@ -801,15 +802,16 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 
 		if (kPreventFlips == 3 && hasTriangleFlips(passadjacency, indices, vertex_positions, remap, remap[c.v0], remap[c.v1]))
 		{
-			if (c.bidi && !hasTriangleFlips(passadjacency, indices, vertex_positions, remap, remap[c.v1], remap[c.v0]))
+			if (bidi && !hasTriangleFlips(passadjacency, indices, vertex_positions, remap, remap[c.v1], remap[c.v0]))
 			{
 				// flip collapse
-				c.v0 = ei > ej ? i0 : j0;
-				c.v1 = ei > ej ? i1 : j1;
-				c.error = ei > ej ? ei : ej;
+				c.v0 = ei <= ej ? j0 : i0;
+				c.v1 = ei <= ej ? j1 : i1;
+				c.error = ei <= ej ? ej : ei;
 			}
 			else
 			{
+				// both directions are broken, kill collapse
 				c.error = FLT_MAX;
 			}
 		}
