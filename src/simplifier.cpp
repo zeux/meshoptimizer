@@ -23,6 +23,10 @@
 namespace meshopt
 {
 
+#ifdef _MSC_VER
+#pragma warning(disable: 4127) // conditional expression is constant; TODO remove this when kPreventFlips stops being int
+#endif
+
 // 0: don't prevent flips
 // 1: prevent flips by discarding edges during collapse
 // 2: prevent flips by penalizing edges that flip (single direction)
@@ -654,8 +658,8 @@ static void fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 bool hasTriangleFlip(const Vector3& a, const Vector3& b, const Vector3& c, const Vector3& d)
 {
 	Vector3 eb = {b.x - a.x, b.y - a.y, b.z - a.z};
-	Vector3 ec = {c.x - a.x, c.y - a.y, c.z - b.z};
-	Vector3 ed = {d.x - a.x, d.y - a.y, d.z - d.z};
+	Vector3 ec = {c.x - a.x, c.y - a.y, c.z - a.z};
+	Vector3 ed = {d.x - a.x, d.y - a.y, d.z - a.z};
 
 	Vector3 nbc = {eb.y * ec.z - eb.z * ec.y, eb.z * ec.x - eb.x * ec.z, eb.x * ec.y - eb.y * ec.x};
 	Vector3 nbd = {eb.y * ed.z - eb.z * ed.y, eb.z * ed.x - eb.x * ed.z, eb.x * ed.y - eb.y * ed.x};
