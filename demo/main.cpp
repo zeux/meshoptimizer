@@ -1069,25 +1069,8 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	Mesh copy = mesh;
-	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
-	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
-
-	Mesh copystrip = mesh;
-	meshopt_optimizeVertexCacheStrip(&copystrip.indices[0], &copystrip.indices[0], copystrip.indices.size(), copystrip.vertices.size());
-	meshopt_optimizeVertexFetch(&copystrip.vertices[0], &copystrip.indices[0], copystrip.indices.size(), &copystrip.vertices[0], copystrip.vertices.size(), sizeof(Vertex));
-
-	encodeIndex(copy, ' ');
-	encodeIndex(copystrip, 'S');
-
-	std::vector<unsigned int> strip(meshopt_stripifyBound(copystrip.indices.size()));
-	strip.resize(meshopt_stripify(&strip[0], &copystrip.indices[0], copystrip.indices.size(), copystrip.vertices.size(), 0));
-
-	encodeIndexSequence(strip, copystrip.vertices.size(), 'D');
-
-	packVertex<PackedVertex>(copy, "");
-	encodeVertex<PackedVertex>(copy, "");
-	encodeVertex<PackedVertexOct>(copy, "O");
+	simplify(mesh);
+	simplifySloppy(mesh);
 }
 
 int main(int argc, char** argv)
