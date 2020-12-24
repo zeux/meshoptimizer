@@ -79,7 +79,7 @@ endif()
 set(TARGETS meshoptimizer)
 
 if(MESHOPT_BUILD_DEMO)
-    add_executable(demo demo/main.cpp demo/miniz.cpp demo/tests.cpp tools/meshloader.cpp)
+    add_executable(demo demo/main.cpp demo/tests.cpp tools/meshloader.cpp)
     target_link_libraries(demo meshoptimizer)
 endif()
 
