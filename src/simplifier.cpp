@@ -24,15 +24,10 @@ namespace meshopt
 {
 
 #ifdef _MSC_VER
-#pragma warning(disable: 4127) // conditional expression is constant; TODO remove this when kPreventFlips stops being int
+#pragma warning(disable: 4127) // conditional expression is constant; TODO remove this with kPreventFlips
 #endif
 
-// 0: don't prevent flips
-// 1: prevent flips by discarding edges during collapse
-// 2: prevent flips by penalizing edges that flip (single direction)
-// 3: prevent flips by penalizing edges that flip (both directions)
-const int kPreventFlips = 3;
-const bool kPreventFlipsAggressive = true;
+const bool kPreventFlips = true;
 
 struct EdgeAdjacency
 {
@@ -634,8 +629,11 @@ static bool hasTriangleFlip(const Vector3& a, const Vector3& b, const Vector3& c
 	return nbc.x * nbd.x + nbc.y * nbd.y + nbc.z * nbd.z < 0;
 }
 
-static bool hasTriangleFlips(const EdgeAdjacency& adjacency, const Vector3* vertex_positions, unsigned int i0, unsigned int i1)
+static bool hasTriangleFlips(const EdgeAdjacency& adjacency, const Vector3* vertex_positions, const unsigned int* collapse_remap, unsigned int i0, unsigned int i1)
 {
+	assert(collapse_remap[i0] == i0);
+	assert(collapse_remap[i1] == i1);
+
 	const Vector3& v0 = vertex_positions[i0];
 	const Vector3& v1 = vertex_positions[i1];
 
@@ -644,8 +642,8 @@ static bool hasTriangleFlips(const EdgeAdjacency& adjacency, const Vector3* vert
 
 	for (size_t i = 0; i < count; ++i)
 	{
-		unsigned int a = edges[i].next;
-		unsigned int b = edges[i].prev;
+		unsigned int a = collapse_remap[edges[i].next];
+		unsigned int b = collapse_remap[edges[i].prev];
 
 		// skip triangles that get collapsed
 		// note: this is mathematically redundant as if either of these is true, the dot product should be 0
@@ -659,21 +657,6 @@ static bool hasTriangleFlips(const EdgeAdjacency& adjacency, const Vector3* vert
 	}
 
 	return false;
-}
-
-static void lockRing(unsigned char* collapse_locked, const EdgeAdjacency& adjacency, unsigned int v)
-{
-	const EdgeAdjacency::Edge* edges = &adjacency.data[adjacency.offsets[v]];
-	size_t count = adjacency.counts[v];
-
-	for (size_t i = 0; i < count; ++i)
-	{
-		unsigned int a = edges[i].next;
-		unsigned int b = edges[i].prev;
-
-		collapse_locked[a] = 1;
-		collapse_locked[b] = 1; // TODO we probably don't need this?
-	}
 }
 
 static size_t pickEdgeCollapses(Collapse* collapses, const unsigned int* indices, size_t index_count, const unsigned int* remap, const unsigned char* vertex_kind, const unsigned int* loop)
@@ -734,7 +717,7 @@ static size_t pickEdgeCollapses(Collapse* collapses, const unsigned int* indices
 	return collapse_count;
 }
 
-static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const Vector3* vertex_positions, const Quadric* vertex_quadrics, const unsigned int* remap, const EdgeAdjacency& adjacency)
+static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const Vector3* vertex_positions, const Quadric* vertex_quadrics, const unsigned int* remap)
 {
 	for (size_t i = 0; i < collapse_count; ++i)
 	{
@@ -742,7 +725,6 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 
 		unsigned int i0 = c.v0;
 		unsigned int i1 = c.v1;
-		unsigned int bidi = c.bidi;
 
 		// most edges are bidirectional which means we need to evaluate errors for two collapses
 		// to keep this code branchless we just use the same edge for unidirectional edges
@@ -759,25 +741,6 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 		c.v0 = ei <= ej ? i0 : j0;
 		c.v1 = ei <= ej ? i1 : j1;
 		c.error = ei <= ej ? ei : ej;
-
-		if (kPreventFlips == 2 && hasTriangleFlips(adjacency, vertex_positions, remap[c.v0], remap[c.v1]))
-			c.error = FLT_MAX;
-
-		if (kPreventFlips == 3 && hasTriangleFlips(adjacency, vertex_positions, remap[c.v0], remap[c.v1]))
-		{
-			if (bidi && !hasTriangleFlips(adjacency, vertex_positions, remap[c.v1], remap[c.v0]))
-			{
-				// flip collapse
-				c.v0 = ei <= ej ? j0 : i0;
-				c.v1 = ei <= ej ? j1 : i1;
-				c.error = ei <= ej ? ej : ei;
-			}
-			else
-			{
-				// both directions are broken, kill collapse
-				c.error = FLT_MAX;
-			}
-		}
 	}
 }
 
@@ -914,18 +877,12 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 			continue;
 		}
 
-		if (kPreventFlips == 1 && hasTriangleFlips(adjacency, vertex_positions, r0, r1))
+		if (kPreventFlips && hasTriangleFlips(adjacency, vertex_positions, collapse_remap, r0, r1))
 		{
 #if TRACE
 			blocked_collapses_flip++;
 #endif
 			continue;
-		}
-
-		if (kPreventFlipsAggressive)
-		{
-			lockRing(collapse_locked, adjacency, r0);
-			lockRing(collapse_locked, adjacency, r1);
 		}
 
 		assert(collapse_remap[r0] == r0);
@@ -1363,7 +1320,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		if (edge_collapse_count == 0)
 			break;
 
-		rankEdgeCollapses(edge_collapses, edge_collapse_count, vertex_positions, vertex_quadrics, remap, adjacency);
+		rankEdgeCollapses(edge_collapses, edge_collapse_count, vertex_positions, vertex_quadrics, remap);
 
 #if TRACE > 1
 		dumpEdgeCollapses(edge_collapses, edge_collapse_count, vertex_kind);
