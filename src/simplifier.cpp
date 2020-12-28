@@ -23,12 +23,6 @@
 namespace meshopt
 {
 
-#ifdef _MSC_VER
-#pragma warning(disable: 4127) // conditional expression is constant; TODO remove this with kPreventFlips
-#endif
-
-const bool kPreventFlips = true;
-
 struct EdgeAdjacency
 {
 	struct Edge
@@ -646,12 +640,11 @@ static bool hasTriangleFlips(const EdgeAdjacency& adjacency, const Vector3* vert
 		unsigned int b = collapse_remap[edges[i].prev];
 
 		// skip triangles that get collapsed
-		// note: this is mathematically redundant as if either of these is true, the dot product should be 0
+		// note: this is mathematically redundant as if either of these is true, the dot product in hasTriangleFlip should be 0
 		if (a == i1 || b == i1)
 			continue;
 
 		// early-out when at least one triangle flips due to a collapse
-		// note: since we generally don't expect flips it's not clear if this is better than branchless |=
 		if (hasTriangleFlip(vertex_positions[a], vertex_positions[b], v0, v1))
 			return true;
 	}
@@ -893,7 +886,7 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 			continue;
 		}
 
-		if (kPreventFlips && hasTriangleFlips(adjacency, vertex_positions, collapse_remap, r0, r1))
+		if (hasTriangleFlips(adjacency, vertex_positions, collapse_remap, r0, r1))
 		{
 			// adjust collapse goal since this collapse is invalid and shouldn't factor into error goal
 			edge_collapse_goal++;
@@ -1329,8 +1322,8 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 	while (result_count > target_index_count)
 	{
-		if (kPreventFlips)
-			updateEdgeAdjacency(adjacency, result, result_count, vertex_count, remap);
+		// note: throughout the simplification process adjacency structure reflects welded topology for result-in-progress
+		updateEdgeAdjacency(adjacency, result, result_count, vertex_count, remap);
 
 		size_t edge_collapse_count = pickEdgeCollapses(edge_collapses, result, result_count, remap, vertex_kind, loop);
 
