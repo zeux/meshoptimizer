@@ -755,6 +755,53 @@ static void simplifyPointsStuck()
 	assert(meshopt_simplifyPoints(0, vb, 3, 12, 0) == 0);
 }
 
+static void simplifyFlip()
+{
+	// this mesh has been constructed by taking a tessellated irregular grid with a square cutout
+	// and progressively collapsing edges until the only ones left violate border or flip constraints.
+	// there is only one valid non-flip collapse, so we validate that we take it; when flips are allowed,
+	// the wrong collapse is picked instead.
+	float vb[] = {
+	    1.000000f, 1.000000f, -1.000000f,
+	    1.000000f, 1.000000f, 1.000000f,
+	    1.000000f, -1.000000f, 1.000000f,
+	    1.000000f, -0.200000f, -0.200000f,
+	    1.000000f, 0.200000f, -0.200000f,
+	    1.000000f, -0.200000f, 0.200000f,
+	    1.000000f, 0.200000f, 0.200000f,
+	    1.000000f, 0.500000f, -0.500000f,
+	    1.000000f, -1.000000f, 0.000000f, // clang-format :-/
+	};
+
+	// the collapse we expect is 7 -> 0
+	unsigned int ib[] = {
+	    7, 4, 3,
+	    1, 2, 5,
+	    7, 1, 6,
+	    7, 8, 0, // gets removed
+	    7, 6, 4,
+	    8, 5, 2,
+	    8, 7, 3,
+	    8, 3, 5,
+	    5, 6, 1,
+	    7, 0, 1, // gets removed
+	};
+
+	unsigned int expected[] = {
+	    0, 4, 3,
+	    1, 2, 5,
+	    0, 1, 6,
+	    0, 6, 4,
+	    8, 5, 2,
+	    8, 0, 3,
+	    8, 3, 5,
+	    5, 6, 1, // clang-format :-/
+	};
+
+	assert(meshopt_simplify(ib, ib, 30, vb, 9, 12, 3, 1e-3f) == 24);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+}
+
 static void runTestsOnce()
 {
 	decodeIndexV0();
@@ -801,6 +848,7 @@ static void runTestsOnce()
 	simplifyStuck();
 	simplifySloppyStuck();
 	simplifyPointsStuck();
+	simplifyFlip();
 }
 
 namespace meshopt

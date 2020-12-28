@@ -25,28 +25,37 @@ namespace meshopt
 
 struct EdgeAdjacency
 {
+	struct Edge
+	{
+		unsigned int next;
+		unsigned int prev;
+	};
+
 	unsigned int* counts;
 	unsigned int* offsets;
-	unsigned int* data;
+	Edge* data;
 };
 
-static void buildEdgeAdjacency(EdgeAdjacency& adjacency, const unsigned int* indices, size_t index_count, size_t vertex_count, meshopt_Allocator& allocator)
+static void prepareEdgeAdjacency(EdgeAdjacency& adjacency, size_t index_count, size_t vertex_count, meshopt_Allocator& allocator)
 {
-	size_t face_count = index_count / 3;
-
-	// allocate arrays
 	adjacency.counts = allocator.allocate<unsigned int>(vertex_count);
 	adjacency.offsets = allocator.allocate<unsigned int>(vertex_count);
-	adjacency.data = allocator.allocate<unsigned int>(index_count);
+	adjacency.data = allocator.allocate<EdgeAdjacency::Edge>(index_count);
+}
+
+static void updateEdgeAdjacency(EdgeAdjacency& adjacency, const unsigned int* indices, size_t index_count, size_t vertex_count, const unsigned int* remap)
+{
+	size_t face_count = index_count / 3;
 
 	// fill edge counts
 	memset(adjacency.counts, 0, vertex_count * sizeof(unsigned int));
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
-		assert(indices[i] < vertex_count);
+		unsigned int v = remap ? remap[indices[i]] : indices[i];
+		assert(v < vertex_count);
 
-		adjacency.counts[indices[i]]++;
+		adjacency.counts[v]++;
 	}
 
 	// fill offset table
@@ -65,9 +74,24 @@ static void buildEdgeAdjacency(EdgeAdjacency& adjacency, const unsigned int* ind
 	{
 		unsigned int a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
 
-		adjacency.data[adjacency.offsets[a]++] = b;
-		adjacency.data[adjacency.offsets[b]++] = c;
-		adjacency.data[adjacency.offsets[c]++] = a;
+		if (remap)
+		{
+			a = remap[a];
+			b = remap[b];
+			c = remap[c];
+		}
+
+		adjacency.data[adjacency.offsets[a]].next = b;
+		adjacency.data[adjacency.offsets[a]].prev = c;
+		adjacency.offsets[a]++;
+
+		adjacency.data[adjacency.offsets[b]].next = c;
+		adjacency.data[adjacency.offsets[b]].prev = a;
+		adjacency.offsets[b]++;
+
+		adjacency.data[adjacency.offsets[c]].next = a;
+		adjacency.data[adjacency.offsets[c]].prev = b;
+		adjacency.offsets[c]++;
 	}
 
 	// fix offsets that have been disturbed by the previous pass
@@ -208,10 +232,10 @@ const unsigned char kHasOpposite[Kind_Count][Kind_Count] = {
 static bool hasEdge(const EdgeAdjacency& adjacency, unsigned int a, unsigned int b)
 {
 	unsigned int count = adjacency.counts[a];
-	const unsigned int* data = adjacency.data + adjacency.offsets[a];
+	const EdgeAdjacency::Edge* edges = adjacency.data + adjacency.offsets[a];
 
 	for (size_t i = 0; i < count; ++i)
-		if (data[i] == b)
+		if (edges[i].next == b)
 			return true;
 
 	return false;
@@ -233,11 +257,11 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 		unsigned int vertex = unsigned(i);
 
 		unsigned int count = adjacency.counts[vertex];
-		const unsigned int* data = adjacency.data + adjacency.offsets[vertex];
+		const EdgeAdjacency::Edge* edges = adjacency.data + adjacency.offsets[vertex];
 
 		for (size_t j = 0; j < count; ++j)
 		{
-			unsigned int target = data[j];
+			unsigned int target = edges[j].next;
 
 			if (!hasEdge(adjacency, target, vertex))
 			{
@@ -586,6 +610,48 @@ static void fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 	}
 }
 
+// does triangle ABC flip when C is replaced with D?
+static bool hasTriangleFlip(const Vector3& a, const Vector3& b, const Vector3& c, const Vector3& d)
+{
+	Vector3 eb = {b.x - a.x, b.y - a.y, b.z - a.z};
+	Vector3 ec = {c.x - a.x, c.y - a.y, c.z - a.z};
+	Vector3 ed = {d.x - a.x, d.y - a.y, d.z - a.z};
+
+	Vector3 nbc = {eb.y * ec.z - eb.z * ec.y, eb.z * ec.x - eb.x * ec.z, eb.x * ec.y - eb.y * ec.x};
+	Vector3 nbd = {eb.y * ed.z - eb.z * ed.y, eb.z * ed.x - eb.x * ed.z, eb.x * ed.y - eb.y * ed.x};
+
+	return nbc.x * nbd.x + nbc.y * nbd.y + nbc.z * nbd.z < 0;
+}
+
+static bool hasTriangleFlips(const EdgeAdjacency& adjacency, const Vector3* vertex_positions, const unsigned int* collapse_remap, unsigned int i0, unsigned int i1)
+{
+	assert(collapse_remap[i0] == i0);
+	assert(collapse_remap[i1] == i1);
+
+	const Vector3& v0 = vertex_positions[i0];
+	const Vector3& v1 = vertex_positions[i1];
+
+	const EdgeAdjacency::Edge* edges = &adjacency.data[adjacency.offsets[i0]];
+	size_t count = adjacency.counts[i0];
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		unsigned int a = collapse_remap[edges[i].next];
+		unsigned int b = collapse_remap[edges[i].prev];
+
+		// skip triangles that get collapsed
+		// note: this is mathematically redundant as if either of these is true, the dot product in hasTriangleFlip should be 0
+		if (a == i1 || b == i1)
+			continue;
+
+		// early-out when at least one triangle flips due to a collapse
+		if (hasTriangleFlip(vertex_positions[a], vertex_positions[b], v0, v1))
+			return true;
+	}
+
+	return false;
+}
+
 static size_t pickEdgeCollapses(Collapse* collapses, const unsigned int* indices, size_t index_count, const unsigned int* remap, const unsigned char* vertex_kind, const unsigned int* loop)
 {
 	size_t collapse_count = 0;
@@ -764,10 +830,19 @@ static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapse
 	}
 }
 
-static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, size_t triangle_collapse_goal, float error_goal, float error_limit)
+static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, const Vector3* vertex_positions, const EdgeAdjacency& adjacency, size_t triangle_collapse_goal, float error_limit)
 {
 	size_t edge_collapses = 0;
 	size_t triangle_collapses = 0;
+
+	// most collapses remove 2 triangles; use this to establish a bound on the pass in terms of error limit
+	// note that edge_collapse_goal is an estimate; triangle_collapse_goal will be used to actually limit collapses
+	size_t edge_collapse_goal = triangle_collapse_goal / 2;
+
+#if TRACE
+	size_t blocked_collapses_lock = 0;
+	size_t blocked_collapses_flip = 0;
+#endif
 
 	for (size_t i = 0; i < collapse_count; ++i)
 	{
@@ -776,11 +851,23 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		if (c.error > error_limit)
 			break;
 
-		if (c.error > error_goal && triangle_collapses > triangle_collapse_goal / 10)
-			break;
-
 		if (triangle_collapses >= triangle_collapse_goal)
 			break;
+
+		// we limit the error in each pass based on the error of optimal last collapse; since many collapses will be locked
+		// as they will share vertices with other successfull collapses, we need to increase the acceptable error by some factor
+		float error_goal = edge_collapse_goal < collapse_count ? 1.5f * collapses[collapse_order[edge_collapse_goal]].error : FLT_MAX;
+
+		// on average, each collapse is expected to lock 6 other collapses; to avoid degenerate passes on meshes with odd
+		// topology, we only abort if we got over 1/6 collapses accordingly.
+		if (c.error > error_goal && triangle_collapses > triangle_collapse_goal / 6)
+		{
+#if TRACE
+			printf("pass abort; collapsed %d out of %d triangles. error goal was %e (collapse %d x penalty) which is smaller than %e (collapse %d)\n",
+				int(triangle_collapses), int(triangle_collapse_goal), error_goal, int(edge_collapse_goal), c.error, int(i));
+#endif
+			break;
+		}
 
 		unsigned int i0 = c.v0;
 		unsigned int i1 = c.v1;
@@ -792,7 +879,22 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		// it's important to not move the vertices twice since it complicates the tracking/remapping logic
 		// it's important to not move other vertices towards a moved vertex to preserve error since we don't re-rank collapses mid-pass
 		if (collapse_locked[r0] | collapse_locked[r1])
+		{
+#if TRACE
+			blocked_collapses_lock++;
+#endif
 			continue;
+		}
+
+		if (hasTriangleFlips(adjacency, vertex_positions, collapse_remap, r0, r1))
+		{
+			// adjust collapse goal since this collapse is invalid and shouldn't factor into error goal
+			edge_collapse_goal++;
+#if TRACE
+			blocked_collapses_flip++;
+#endif
+			continue;
+		}
 
 		assert(collapse_remap[r0] == r0);
 		assert(collapse_remap[r1] == r1);
@@ -835,6 +937,10 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		triangle_collapses += (vertex_kind[i0] == Kind_Border) ? 1 : 2;
 		edge_collapses++;
 	}
+
+#if TRACE
+	printf("blocked collapses: lock %d, flip %d\n", int(blocked_collapses_lock), int(blocked_collapses_flip));
+#endif
 
 	return edge_collapses;
 }
@@ -1158,7 +1264,8 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 	// build adjacency information
 	EdgeAdjacency adjacency = {};
-	buildEdgeAdjacency(adjacency, indices, index_count, vertex_count, allocator);
+	prepareEdgeAdjacency(adjacency, index_count, vertex_count, allocator);
+	updateEdgeAdjacency(adjacency, indices, index_count, vertex_count, NULL);
 
 	// build position remap that maps each vertex to the one with identical position
 	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
@@ -1215,6 +1322,9 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 	while (result_count > target_index_count)
 	{
+		// note: throughout the simplification process adjacency structure reflects welded topology for result-in-progress
+		updateEdgeAdjacency(adjacency, result, result_count, vertex_count, remap);
+
 		size_t edge_collapse_count = pickEdgeCollapses(edge_collapses, result, result_count, remap, vertex_kind, loop);
 
 		// no edges can be collapsed any more due to topology restrictions
@@ -1229,23 +1339,14 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 		sortEdgeCollapses(collapse_order, edge_collapses, edge_collapse_count);
 
-		// most collapses remove 2 triangles; use this to establish a bound on the pass in terms of error limit
-		// note that edge_collapse_goal is an estimate; triangle_collapse_goal will be used to actually limit collapses
 		size_t triangle_collapse_goal = (result_count - target_index_count) / 3;
-		size_t edge_collapse_goal = triangle_collapse_goal / 2;
-
-		// we limit the error in each pass based on the error of optimal last collapse; since many collapses will be locked
-		// as they will share vertices with other successfull collapses, we need to increase the acceptable error by this factor
-		const float kPassErrorBound = 1.5f;
-
-		float error_goal = edge_collapse_goal < edge_collapse_count ? edge_collapses[collapse_order[edge_collapse_goal]].error * kPassErrorBound : FLT_MAX;
 
 		for (size_t i = 0; i < vertex_count; ++i)
 			collapse_remap[i] = unsigned(i);
 
 		memset(collapse_locked, 0, vertex_count);
 
-		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, triangle_collapse_goal, error_goal, error_limit);
+		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, vertex_positions, adjacency, triangle_collapse_goal, error_limit);
 
 		// no edges can be collapsed any more due to hitting the error limit or triangle collapse limit
 		if (collapses == 0)
@@ -1270,7 +1371,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		pass_count++;
 		worst_error = (worst_error < pass_error) ? pass_error : worst_error;
 
-		printf("pass %d: triangles: %d -> %d, collapses: %d/%d (goal: %d), error: %e (limit %e goal %e)\n", int(pass_count), int(result_count / 3), int(new_count / 3), int(collapses), int(edge_collapse_count), int(edge_collapse_goal), pass_error, error_limit, error_goal);
+		printf("pass %d: triangles: %d -> %d, collapses: %d/%d, error: %e (limit %e)\n", int(pass_count), int(result_count / 3), int(new_count / 3), int(collapses), int(edge_collapse_count), pass_error, error_limit);
 #endif
 
 		result_count = new_count;
