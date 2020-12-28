@@ -32,6 +32,7 @@ namespace meshopt
 // 2: prevent flips by penalizing edges that flip (single direction)
 // 3: prevent flips by penalizing edges that flip (both directions)
 const int kPreventFlips = 3;
+const bool kPreventFlipsAggressive = true;
 
 struct EdgeAdjacency
 {
@@ -660,6 +661,21 @@ static bool hasTriangleFlips(const EdgeAdjacency& adjacency, const Vector3* vert
 	return false;
 }
 
+static void lockRing(unsigned char* collapse_locked, const EdgeAdjacency& adjacency, unsigned int v)
+{
+	const EdgeAdjacency::Edge* edges = &adjacency.data[adjacency.offsets[v]];
+	size_t count = adjacency.counts[v];
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		unsigned int a = edges[i].next;
+		unsigned int b = edges[i].prev;
+
+		collapse_locked[a] = 1;
+		collapse_locked[b] = 1; // TODO we probably don't need this?
+	}
+}
+
 static size_t pickEdgeCollapses(Collapse* collapses, const unsigned int* indices, size_t index_count, const unsigned int* remap, const unsigned char* vertex_kind, const unsigned int* loop)
 {
 	size_t collapse_count = 0;
@@ -904,6 +920,12 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 			blocked_collapses_flip++;
 #endif
 			continue;
+		}
+
+		if (kPreventFlipsAggressive)
+		{
+			lockRing(collapse_locked, adjacency, r0);
+			lockRing(collapse_locked, adjacency, r1);
 		}
 
 		assert(collapse_remap[r0] == r0);

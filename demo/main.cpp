@@ -138,6 +138,69 @@ Mesh parseObj(const char* path, double& reindex)
 	return result;
 }
 
+void dumpObj(const Mesh& mesh, bool recomputeNormals = false)
+{
+	std::vector<float> normals;
+
+	if (recomputeNormals)
+	{
+		normals.resize(mesh.vertices.size() * 3);
+
+		for (size_t i = 0; i < mesh.indices.size(); i += 3)
+		{
+			unsigned int a = mesh.indices[i], b = mesh.indices[i + 1], c = mesh.indices[i + 2];
+
+			const Vertex& va = mesh.vertices[a];
+			const Vertex& vb = mesh.vertices[b];
+			const Vertex& vc = mesh.vertices[c];
+
+			float nx = (vb.py - va.py) * (vc.pz - va.pz) - (vb.pz - va.pz) * (vc.py - va.py);
+			float ny = (vb.pz - va.pz) * (vc.px - va.px) - (vb.px - va.px) * (vc.pz - va.pz);
+			float nz = (vb.px - va.px) * (vc.py - va.py) - (vb.py - va.py) * (vc.px - va.px);
+
+			for (int k = 0; k < 3; ++k)
+			{
+				unsigned int index = mesh.indices[i + k];
+
+				normals[index * 3 + 0] += nx;
+				normals[index * 3 + 1] += ny;
+				normals[index * 3 + 2] += nz;
+			}
+		}
+	}
+
+	for (size_t i = 0; i < mesh.vertices.size(); ++i)
+	{
+		const Vertex& v = mesh.vertices[i];
+
+		float nx = v.nx, ny = v.ny, nz = v.nz;
+
+		if (recomputeNormals)
+		{
+			nx = normals[i * 3 + 0];
+			ny = normals[i * 3 + 1];
+			nz = normals[i * 3 + 2];
+
+			float l = sqrtf(nx * nx + ny * ny + nz * nz);
+			float s = l == 0.f ? 0.f : 1.f / l;
+
+			nx *= s;
+			ny *= s;
+			nz *= s;
+		}
+
+		fprintf(stderr, "v %f %f %f\n", v.px, v.py, v.pz);
+		fprintf(stderr, "vn %f %f %f\n", nx, ny, nz);
+	}
+
+	for (size_t i = 0; i < mesh.indices.size(); i += 3)
+	{
+		unsigned int a = mesh.indices[i], b = mesh.indices[i + 1], c = mesh.indices[i + 2];
+
+		fprintf(stderr, "f %d %d %d\n", a + 1, b + 1, c + 1);
+	}
+}
+
 bool isMeshValid(const Mesh& mesh)
 {
 	size_t index_count = mesh.indices.size();
@@ -392,6 +455,10 @@ void simplify(const Mesh& mesh, float threshold = 0.2f)
 	lod.vertices.resize(meshopt_optimizeVertexFetch(&lod.vertices[0], &lod.indices[0], lod.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex)));
 
 	double end = timestamp();
+
+#if TRACE
+	dumpObj(lod, /* recomputeNormals= */ true);
+#endif
 
 	printf("%-9s: %d triangles => %d triangles in %.2f msec\n",
 	       "Simplify",
