@@ -124,9 +124,6 @@ codecbench-simd.js codecbench-simd.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
 codecfuzz: tools/codecfuzz.cpp src/vertexcodec.cpp src/indexcodec.cpp
 	$(CXX) $^ -fsanitize=fuzzer,address,undefined -O1 -g -o $@
 
-ossfuzz: tools/codecfuzz.cpp src/vertexcodec.cpp src/indexcodec.cpp
-	$(CXX) $^ -o "${OUT}/codecfuzzer" ${LIB_FUZZING_ENGINE}
-
 $(LIBRARY): $(LIBRARY_OBJECTS)
 	ar rcs $@ $^
 
