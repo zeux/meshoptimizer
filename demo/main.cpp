@@ -456,10 +456,6 @@ void simplify(const Mesh& mesh, float threshold = 0.2f)
 
 	double end = timestamp();
 
-#if TRACE
-	dumpObj(lod, /* recomputeNormals= */ true);
-#endif
-
 	printf("%-9s: %d triangles => %d triangles in %.2f msec\n",
 	       "Simplify",
 	       int(mesh.indices.size() / 3), int(lod.indices.size() / 3), (end - start) * 1000);

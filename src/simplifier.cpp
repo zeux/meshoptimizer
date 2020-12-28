@@ -837,10 +837,14 @@ static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapse
 	}
 }
 
-static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, const Vector3* vertex_positions, const EdgeAdjacency& adjacency, size_t triangle_collapse_goal, float error_goal, float error_limit)
+static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, const Vector3* vertex_positions, const EdgeAdjacency& adjacency, size_t triangle_collapse_goal, float error_limit)
 {
 	size_t edge_collapses = 0;
 	size_t triangle_collapses = 0;
+
+	// most collapses remove 2 triangles; use this to establish a bound on the pass in terms of error limit
+	// note that edge_collapse_goal is an estimate; triangle_collapse_goal will be used to actually limit collapses
+	size_t edge_collapse_goal = triangle_collapse_goal / 2;
 
 #if TRACE
 	size_t blocked_collapses_lock = 0;
@@ -854,11 +858,23 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		if (c.error > error_limit)
 			break;
 
-		if (c.error > error_goal && triangle_collapses > triangle_collapse_goal / 10)
-			break;
-
 		if (triangle_collapses >= triangle_collapse_goal)
 			break;
+
+		// we limit the error in each pass based on the error of optimal last collapse; since many collapses will be locked
+		// as they will share vertices with other successfull collapses, we need to increase the acceptable error by some factor
+		float error_goal = edge_collapse_goal < collapse_count ? 1.5f * collapses[collapse_order[edge_collapse_goal]].error : FLT_MAX;
+
+		// on average, each collapse is expected to lock 6 other collapses; to avoid degenerate passes on meshes with odd
+		// topology, we only abort if we got over 1/6 collapses accordingly.
+		if (c.error > error_goal && triangle_collapses > triangle_collapse_goal / 6)
+		{
+#if TRACE
+			printf("pass abort; collapsed %d out of %d triangles. error goal was %e (collapse %d x penalty) which is smaller than %e (collapse %d)\n",
+				int(triangle_collapses), int(triangle_collapse_goal), error_goal, int(edge_collapse_goal), c.error, int(i));
+#endif
+			break;
+		}
 
 		unsigned int i0 = c.v0;
 		unsigned int i1 = c.v1;
@@ -879,6 +895,8 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 
 		if (kPreventFlips && hasTriangleFlips(adjacency, vertex_positions, collapse_remap, r0, r1))
 		{
+			// adjust collapse goal since this collapse is invalid and shouldn't factor into error goal
+			edge_collapse_goal++;
 #if TRACE
 			blocked_collapses_flip++;
 #endif
@@ -1328,23 +1346,14 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 		sortEdgeCollapses(collapse_order, edge_collapses, edge_collapse_count);
 
-		// most collapses remove 2 triangles; use this to establish a bound on the pass in terms of error limit
-		// note that edge_collapse_goal is an estimate; triangle_collapse_goal will be used to actually limit collapses
 		size_t triangle_collapse_goal = (result_count - target_index_count) / 3;
-		size_t edge_collapse_goal = triangle_collapse_goal / 2;
-
-		// we limit the error in each pass based on the error of optimal last collapse; since many collapses will be locked
-		// as they will share vertices with other successfull collapses, we need to increase the acceptable error by this factor
-		const float kPassErrorBound = 1.5f;
-
-		float error_goal = edge_collapse_goal < edge_collapse_count ? edge_collapses[collapse_order[edge_collapse_goal]].error * kPassErrorBound : FLT_MAX;
 
 		for (size_t i = 0; i < vertex_count; ++i)
 			collapse_remap[i] = unsigned(i);
 
 		memset(collapse_locked, 0, vertex_count);
 
-		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, vertex_positions, adjacency, triangle_collapse_goal, error_goal, error_limit);
+		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, vertex_positions, adjacency, triangle_collapse_goal, error_limit);
 
 		// no edges can be collapsed any more due to hitting the error limit or triangle collapse limit
 		if (collapses == 0)
@@ -1369,7 +1378,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		pass_count++;
 		worst_error = (worst_error < pass_error) ? pass_error : worst_error;
 
-		printf("pass %d: triangles: %d -> %d, collapses: %d/%d (goal: %d), error: %e (limit %e goal %e)\n", int(pass_count), int(result_count / 3), int(new_count / 3), int(collapses), int(edge_collapse_count), int(edge_collapse_goal), pass_error, error_limit, error_goal);
+		printf("pass %d: triangles: %d -> %d, collapses: %d/%d, error: %e (limit %e)\n", int(pass_count), int(result_count / 3), int(new_count / 3), int(collapses), int(edge_collapse_count), pass_error, error_limit);
 #endif
 
 		result_count = new_count;
