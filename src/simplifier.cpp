@@ -830,7 +830,7 @@ static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapse
 	}
 }
 
-static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, const Vector3* vertex_positions, const EdgeAdjacency& adjacency, size_t triangle_collapse_goal, float error_limit)
+static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, const Vector3* vertex_positions, const EdgeAdjacency& adjacency, size_t triangle_collapse_goal, float error_limit, float& result_error)
 {
 	size_t edge_collapses = 0;
 	size_t triangle_collapses = 0;
@@ -936,6 +936,8 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		// border edges collapse 1 triangle, other edges collapse 2 or more
 		triangle_collapses += (vertex_kind[i0] == Kind_Border) ? 1 : 2;
 		edge_collapses++;
+
+		result_error = result_error < c.error ? c.error : result_error;
 	}
 
 #if TRACE
@@ -1249,7 +1251,7 @@ unsigned int* meshopt_simplifyDebugLoop = 0;
 unsigned int* meshopt_simplifyDebugLoopBack = 0;
 #endif
 
-size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error)
+size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, float* out_result_error)
 {
 	using namespace meshopt;
 
@@ -1316,6 +1318,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	unsigned char* collapse_locked = allocator.allocate<unsigned char>(vertex_count);
 
 	size_t result_count = index_count;
+	float result_error = 0;
 
 	// target_error input is linear; we need to adjust it to match quadricError units
 	float error_limit = target_error * target_error;
@@ -1346,7 +1349,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 		memset(collapse_locked, 0, vertex_count);
 
-		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, vertex_positions, adjacency, triangle_collapse_goal, error_limit);
+		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, vertex_positions, adjacency, triangle_collapse_goal, error_limit, result_error);
 
 		// no edges can be collapsed any more due to hitting the error limit or triangle collapse limit
 		if (collapses == 0)
@@ -1378,7 +1381,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	}
 
 #if TRACE
-	printf("passes: %d, worst error: %e\n", int(pass_count), worst_error);
+	printf("passes: %d, worst error: %e, result error: %e\n", int(pass_count), worst_error, result_error);
 #endif
 
 #if TRACE > 1
@@ -1395,6 +1398,10 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	if (meshopt_simplifyDebugLoopBack)
 		memcpy(meshopt_simplifyDebugLoopBack, loopback, vertex_count * sizeof(unsigned int));
 #endif
+
+	// result_error is quadratic; we need to remap it back to linear
+	if (out_result_error)
+		*out_result_error = sqrtf(result_error);
 
 	return result_count;
 }
