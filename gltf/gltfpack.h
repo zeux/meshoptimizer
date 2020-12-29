@@ -236,6 +236,8 @@ struct TempFile
 
 std::string getFullPath(const char* path, const char* base_path);
 std::string getFileName(const char* path);
+std::string getExtension(const char* path);
+
 bool readFile(const char* path, std::string& data);
 bool writeFile(const char* path, const std::string& data);
 

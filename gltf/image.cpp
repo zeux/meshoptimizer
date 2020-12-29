@@ -88,16 +88,10 @@ void analyzeImages(cgltf_data* data, std::vector<ImageInfo>& images)
 
 const char* inferMimeType(const char* path)
 {
-	const char* ext = strrchr(path, '.');
-	if (!ext)
-		return "";
-
-	std::string extl = ext;
-	for (size_t i = 0; i < extl.length(); ++i)
-		extl[i] = char(tolower(extl[i]));
+	std::string ext = getExtension(path);
 
 	for (size_t i = 0; i < sizeof(kMimeTypes) / sizeof(kMimeTypes[0]); ++i)
-		if (extl == kMimeTypes[i][1])
+		if (ext == kMimeTypes[i][1])
 			return kMimeTypes[i][0];
 
 	return "";

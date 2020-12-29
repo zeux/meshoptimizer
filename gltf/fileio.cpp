@@ -71,6 +71,25 @@ std::string getFileName(const char* path)
 	return result;
 }
 
+std::string getExtension(const char* path)
+{
+	std::string result = path;
+
+	std::string::size_type slash = result.find_last_of("/\\");
+	std::string::size_type dot = result.find_last_of('.');
+
+	if (slash != std::string::npos && dot != std::string::npos && dot < slash)
+		dot = std::string::npos;
+
+	result.erase(0, dot);
+
+	for (size_t i = 0; i < result.length(); ++i)
+		if (unsigned(result[i] - 'A') < 26)
+			result[i] = (result[i] - 'A') + 'a';
+
+	return result;
+}
+
 bool readFile(const char* path, std::string& data)
 {
 	FILE* file = fopen(path, "rb");

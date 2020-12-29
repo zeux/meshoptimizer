@@ -796,10 +796,10 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 	std::vector<Animation> animations;
 	std::string extras;
 
-	const char* iext = strrchr(input, '.');
-	const char* oext = output ? strrchr(output, '.') : NULL;
+	std::string iext = getExtension(input);
+	std::string oext = output ? getExtension(output) : "";
 
-	if (iext && (strcmp(iext, ".gltf") == 0 || strcmp(iext, ".GLTF") == 0 || strcmp(iext, ".glb") == 0 || strcmp(iext, ".GLB") == 0))
+	if (iext == ".gltf" || iext == ".glb")
 	{
 		const char* error = 0;
 		data = parseGltf(input, meshes, animations, extras, &error);
@@ -810,7 +810,7 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 			return 2;
 		}
 	}
-	else if (iext && (strcmp(iext, ".obj") == 0 || strcmp(iext, ".OBJ") == 0))
+	else if (iext == ".obj")
 	{
 		const char* error = 0;
 		data = parseObj(input, meshes, &error);
@@ -846,7 +846,7 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 		}
 	}
 
-	if (oext && (strcmp(oext, ".glb") == 0 || strcmp(oext, ".GLB") == 0))
+	if (oext == ".glb")
 	{
 		settings.texture_embed = true;
 	}
@@ -862,7 +862,7 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 		return 0;
 	}
 
-	if (oext && (strcmp(oext, ".gltf") == 0 || strcmp(oext, ".GLTF") == 0))
+	if (oext == ".gltf")
 	{
 		std::string binpath = output;
 		binpath.replace(binpath.size() - 5, 5, ".bin");
@@ -904,7 +904,7 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 			return 4;
 		}
 	}
-	else if (oext && (strcmp(oext, ".glb") == 0 || strcmp(oext, ".GLB") == 0))
+	else if (oext == ".glb")
 	{
 		std::string fbpath = output;
 		fbpath.replace(fbpath.size() - 4, 4, ".fallback.bin");
