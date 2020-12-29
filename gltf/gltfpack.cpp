@@ -361,7 +361,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	std::vector<std::string> json_roots(data->scenes_count);
 	std::string json_animations;
 	std::string json_cameras;
-	std::string json_lights;
+	std::string json_extensions;
 
 	std::vector<BufferView> views;
 
@@ -633,11 +633,19 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		writeCamera(json_cameras, camera);
 	}
 
-	for (size_t i = 0; i < data->lights_count; ++i)
+	if (data->lights_count > 0)
 	{
-		const cgltf_light& light = data->lights[i];
+		comma(json_extensions);
+		append(json_extensions, "\"KHR_lights_punctual\":{\"lights\":[");
 
-		writeLight(json_lights, light);
+		for (size_t i = 0; i < data->lights_count; ++i)
+		{
+			const cgltf_light& light = data->lights[i];
+
+			writeLight(json_extensions, light);
+		}
+
+		append(json_extensions, "]}");
 	}
 
 	append(json, "\"asset\":{");
@@ -690,17 +698,17 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 	writeArray(json, "cameras", json_cameras);
 
-	if (!json_lights.empty())
-	{
-		append(json, ",\"extensions\":{\"KHR_lights_punctual\":{\"lights\":[");
-		append(json, json_lights);
-		append(json, "]}}");
-	}
-
 	if (data->scene)
 	{
 		append(json, ",\"scene\":");
 		append(json, size_t(data->scene - data->scenes));
+	}
+
+	if (!json_extensions.empty())
+	{
+		append(json, ",\"extensions\":{");
+		append(json, json_extensions);
+		append(json, "}");
 	}
 
 	if (settings.verbose)
