@@ -295,6 +295,14 @@ MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifySloppy(unsigned int* destinati
 MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_vertex_count);
 
 /**
+ * Experimental: Returns the error scaling factor used by the simplifier to convert between absolute and relative extents
+ * 
+ * Absolute error must be *divided* by the scaling factor before passing it to meshopt_simplify as target_error
+ * Relative error returned by meshopt_simplify via result_error must be *multiplied* by the scaling factor to get absolute error.
+ */
+MESHOPTIMIZER_EXPERIMENTAL float meshopt_simplifyScale(const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
+
+/**
  * Mesh stripifier
  * Converts a previously vertex cache optimized triangle list to triangle strip, stitching strips using restart index or degenerate triangles
  * Returns the number of indices in the resulting strip, with destination containing new index data

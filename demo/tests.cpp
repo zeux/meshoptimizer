@@ -802,6 +802,13 @@ static void simplifyFlip()
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 }
 
+static void simplifyScale()
+{
+	const float vb[] = {0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3};
+
+	assert(meshopt_simplifyScale(vb, 4, 12) == 3.f);
+}
+
 static void runTestsOnce()
 {
 	decodeIndexV0();
@@ -849,6 +856,7 @@ static void runTestsOnce()
 	simplifySloppyStuck();
 	simplifyPointsStuck();
 	simplifyFlip();
+	simplifyScale();
 }
 
 namespace meshopt

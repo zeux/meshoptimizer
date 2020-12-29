@@ -357,7 +357,7 @@ struct Vector3
 	float x, y, z;
 };
 
-static void rescalePositions(Vector3* result, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride)
+static float rescalePositions(Vector3* result, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride)
 {
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
@@ -368,9 +368,12 @@ static void rescalePositions(Vector3* result, const float* vertex_positions_data
 	{
 		const float* v = vertex_positions_data + i * vertex_stride_float;
 
-		result[i].x = v[0];
-		result[i].y = v[1];
-		result[i].z = v[2];
+		if (result)
+		{
+			result[i].x = v[0];
+			result[i].y = v[1];
+			result[i].z = v[2];
+		}
 
 		for (int j = 0; j < 3; ++j)
 		{
@@ -387,14 +390,19 @@ static void rescalePositions(Vector3* result, const float* vertex_positions_data
 	extent = (maxv[1] - minv[1]) < extent ? extent : (maxv[1] - minv[1]);
 	extent = (maxv[2] - minv[2]) < extent ? extent : (maxv[2] - minv[2]);
 
-	float scale = extent == 0 ? 0.f : 1.f / extent;
-
-	for (size_t i = 0; i < vertex_count; ++i)
+	if (result)
 	{
-		result[i].x = (result[i].x - minv[0]) * scale;
-		result[i].y = (result[i].y - minv[1]) * scale;
-		result[i].z = (result[i].z - minv[2]) * scale;
+		float scale = extent == 0 ? 0.f : 1.f / extent;
+
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			result[i].x = (result[i].x - minv[0]) * scale;
+			result[i].y = (result[i].y - minv[1]) * scale;
+			result[i].z = (result[i].z - minv[2]) * scale;
+		}
 	}
+
+	return extent;
 }
 
 struct Quadric
@@ -1634,4 +1642,16 @@ size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_pos
 #endif
 
 	return cell_count;
+}
+
+float meshopt_simplifyScale(const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+{
+	using namespace meshopt;
+
+	assert(vertex_positions_stride > 0 && vertex_positions_stride <= 256);
+	assert(vertex_positions_stride % sizeof(float) == 0);
+
+	float extent = rescalePositions(NULL, vertex_positions, vertex_count, vertex_positions_stride);
+
+	return extent;
 }
