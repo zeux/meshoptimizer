@@ -42,7 +42,7 @@ ifeq ($(config),iphone)
 endif
 
 ifeq ($(config),trace)
-	CXXFLAGS+=-DTRACE=2
+	CXXFLAGS+=-DTRACE=1
 endif
 
 ifeq ($(config),scalar)
