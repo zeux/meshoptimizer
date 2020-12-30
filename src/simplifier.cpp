@@ -948,7 +948,7 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 
 	printf("removed %d triangles, error %e (goal %e); evaluated %d/%d collapses (done %d, skipped %d, invalid %d)\n",
 		int(triangle_collapses), sqrtf(result_error), sqrtf(error_goal_perfect),
-		int(stats[0]), int(edge_collapses), int(collapse_count), int(stats[1]), int(stats[2]));
+		int(stats[0]), int(collapse_count), int(edge_collapses), int(stats[1]), int(stats[2]));
 #endif
 
 	return edge_collapses;
