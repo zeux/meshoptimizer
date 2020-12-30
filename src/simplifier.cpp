@@ -14,6 +14,12 @@
 #include <stdio.h>
 #endif
 
+#if TRACE
+#define TRACESTATS(i) stats[i]++;
+#else
+#define TRACESTATS(i) (void)0
+#endif
+
 // This work is based on:
 // Michael Garland and Paul S. Heckbert. Surface simplification using quadric error metrics. 1997
 // Michael Garland. Quadric-based polygonal surface simplification. 1999
@@ -272,10 +278,7 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 	}
 
 #if TRACE
-	size_t lockedstats[4] = {};
-#define TRACELOCKED(i) lockedstats[i]++;
-#else
-#define TRACELOCKED(i) (void)0
+	size_t stats[4] = {};
 #endif
 
 	for (size_t i = 0; i < vertex_count; ++i)
@@ -301,7 +304,7 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 				else
 				{
 					result[i] = Kind_Locked;
-					TRACELOCKED(0);
+					TRACESTATS(0);
 				}
 			}
 			else if (wedge[wedge[i]] == i)
@@ -322,20 +325,20 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 					else
 					{
 						result[i] = Kind_Locked;
-						TRACELOCKED(1);
+						TRACESTATS(1);
 					}
 				}
 				else
 				{
 					result[i] = Kind_Locked;
-					TRACELOCKED(2);
+					TRACESTATS(2);
 				}
 			}
 			else
 			{
 				// more than one vertex maps to this one; we don't have classification available
 				result[i] = Kind_Locked;
-				TRACELOCKED(3);
+				TRACESTATS(3);
 			}
 		}
 		else
@@ -348,7 +351,7 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 
 #if TRACE
 	printf("locked: many open edges %d, disconnected seam %d, many seam edges %d, many wedges %d\n",
-	       int(lockedstats[0]), int(lockedstats[1]), int(lockedstats[2]), int(lockedstats[3]));
+	       int(stats[0]), int(stats[1]), int(stats[2]), int(stats[3]));
 #endif
 }
 
@@ -357,7 +360,7 @@ struct Vector3
 	float x, y, z;
 };
 
-static void rescalePositions(Vector3* result, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride)
+static float rescalePositions(Vector3* result, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride)
 {
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
@@ -368,9 +371,12 @@ static void rescalePositions(Vector3* result, const float* vertex_positions_data
 	{
 		const float* v = vertex_positions_data + i * vertex_stride_float;
 
-		result[i].x = v[0];
-		result[i].y = v[1];
-		result[i].z = v[2];
+		if (result)
+		{
+			result[i].x = v[0];
+			result[i].y = v[1];
+			result[i].z = v[2];
+		}
 
 		for (int j = 0; j < 3; ++j)
 		{
@@ -387,14 +393,19 @@ static void rescalePositions(Vector3* result, const float* vertex_positions_data
 	extent = (maxv[1] - minv[1]) < extent ? extent : (maxv[1] - minv[1]);
 	extent = (maxv[2] - minv[2]) < extent ? extent : (maxv[2] - minv[2]);
 
-	float scale = extent == 0 ? 0.f : 1.f / extent;
-
-	for (size_t i = 0; i < vertex_count; ++i)
+	if (result)
 	{
-		result[i].x = (result[i].x - minv[0]) * scale;
-		result[i].y = (result[i].y - minv[1]) * scale;
-		result[i].z = (result[i].z - minv[2]) * scale;
+		float scale = extent == 0 ? 0.f : 1.f / extent;
+
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			result[i].x = (result[i].x - minv[0]) * scale;
+			result[i].y = (result[i].y - minv[1]) * scale;
+			result[i].z = (result[i].z - minv[2]) * scale;
+		}
 	}
+
+	return extent;
 }
 
 struct Quadric
@@ -762,7 +773,7 @@ static void dumpEdgeCollapses(const Collapse* collapses, size_t collapse_count, 
 	for (int k0 = 0; k0 < Kind_Count; ++k0)
 		for (int k1 = 0; k1 < Kind_Count; ++k1)
 			if (ckinds[k0][k1])
-				printf("collapses %d -> %d: %d, min error %e\n", k0, k1, int(ckinds[k0][k1]), cerrors[k0][k1]);
+				printf("collapses %d -> %d: %d, min error %e\n", k0, k1, int(ckinds[k0][k1]), ckinds[k0][k1] ? sqrtf(cerrors[k0][k1]) : 0.f);
 }
 
 static void dumpLockedCollapses(const unsigned int* indices, size_t index_count, const unsigned char* vertex_kind)
@@ -830,7 +841,7 @@ static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapse
 	}
 }
 
-static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, const Vector3* vertex_positions, const EdgeAdjacency& adjacency, size_t triangle_collapse_goal, float error_limit)
+static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, const Vector3* vertex_positions, const EdgeAdjacency& adjacency, size_t triangle_collapse_goal, float error_limit, float& result_error)
 {
 	size_t edge_collapses = 0;
 	size_t triangle_collapses = 0;
@@ -840,13 +851,14 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 	size_t edge_collapse_goal = triangle_collapse_goal / 2;
 
 #if TRACE
-	size_t blocked_collapses_lock = 0;
-	size_t blocked_collapses_flip = 0;
+	size_t stats[4] = {};
 #endif
 
 	for (size_t i = 0; i < collapse_count; ++i)
 	{
 		const Collapse& c = collapses[collapse_order[i]];
+
+		TRACESTATS(0);
 
 		if (c.error > error_limit)
 			break;
@@ -861,13 +873,7 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		// on average, each collapse is expected to lock 6 other collapses; to avoid degenerate passes on meshes with odd
 		// topology, we only abort if we got over 1/6 collapses accordingly.
 		if (c.error > error_goal && triangle_collapses > triangle_collapse_goal / 6)
-		{
-#if TRACE
-			printf("pass abort; collapsed %d out of %d triangles. error goal was %e (collapse %d x penalty) which is smaller than %e (collapse %d)\n",
-				int(triangle_collapses), int(triangle_collapse_goal), error_goal, int(edge_collapse_goal), c.error, int(i));
-#endif
 			break;
-		}
 
 		unsigned int i0 = c.v0;
 		unsigned int i1 = c.v1;
@@ -880,9 +886,7 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		// it's important to not move other vertices towards a moved vertex to preserve error since we don't re-rank collapses mid-pass
 		if (collapse_locked[r0] | collapse_locked[r1])
 		{
-#if TRACE
-			blocked_collapses_lock++;
-#endif
+			TRACESTATS(1);
 			continue;
 		}
 
@@ -890,9 +894,8 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		{
 			// adjust collapse goal since this collapse is invalid and shouldn't factor into error goal
 			edge_collapse_goal++;
-#if TRACE
-			blocked_collapses_flip++;
-#endif
+
+			TRACESTATS(2);
 			continue;
 		}
 
@@ -936,10 +939,16 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		// border edges collapse 1 triangle, other edges collapse 2 or more
 		triangle_collapses += (vertex_kind[i0] == Kind_Border) ? 1 : 2;
 		edge_collapses++;
+
+		result_error = result_error < c.error ? c.error : result_error;
 	}
 
 #if TRACE
-	printf("blocked collapses: lock %d, flip %d\n", int(blocked_collapses_lock), int(blocked_collapses_flip));
+	float error_goal_perfect = edge_collapse_goal < collapse_count ? collapses[collapse_order[edge_collapse_goal]].error : 0.f;
+
+	printf("removed %d triangles, error %e (goal %e); evaluated %d/%d collapses (done %d, skipped %d, invalid %d)\n",
+		int(triangle_collapses), sqrtf(result_error), sqrtf(error_goal_perfect),
+		int(stats[0]), int(edge_collapses), int(collapse_count), int(stats[1]), int(stats[2]));
 #endif
 
 	return edge_collapses;
@@ -1249,7 +1258,7 @@ unsigned int* meshopt_simplifyDebugLoop = 0;
 unsigned int* meshopt_simplifyDebugLoopBack = 0;
 #endif
 
-size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error)
+size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, float* out_result_error)
 {
 	using namespace meshopt;
 
@@ -1307,7 +1316,6 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 #if TRACE
 	size_t pass_count = 0;
-	float worst_error = 0;
 #endif
 
 	Collapse* edge_collapses = allocator.allocate<Collapse>(index_count);
@@ -1316,6 +1324,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	unsigned char* collapse_locked = allocator.allocate<unsigned char>(vertex_count);
 
 	size_t result_count = index_count;
+	float result_error = 0;
 
 	// target_error input is linear; we need to adjust it to match quadricError units
 	float error_limit = target_error * target_error;
@@ -1346,7 +1355,11 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 
 		memset(collapse_locked, 0, vertex_count);
 
-		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, vertex_positions, adjacency, triangle_collapse_goal, error_limit);
+#if TRACE
+		printf("pass %d: ", int(pass_count++));
+#endif
+
+		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, vertex_positions, adjacency, triangle_collapse_goal, error_limit, result_error);
 
 		// no edges can be collapsed any more due to hitting the error limit or triangle collapse limit
 		if (collapses == 0)
@@ -1358,27 +1371,11 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		size_t new_count = remapIndexBuffer(result, result_count, collapse_remap);
 		assert(new_count < result_count);
 
-#if TRACE
-		float pass_error = 0.f;
-		for (size_t i = 0; i < edge_collapse_count; ++i)
-		{
-			Collapse& c = edge_collapses[collapse_order[i]];
-
-			if (collapse_remap[c.v0] == c.v1)
-				pass_error = c.error;
-		}
-
-		pass_count++;
-		worst_error = (worst_error < pass_error) ? pass_error : worst_error;
-
-		printf("pass %d: triangles: %d -> %d, collapses: %d/%d, error: %e (limit %e)\n", int(pass_count), int(result_count / 3), int(new_count / 3), int(collapses), int(edge_collapse_count), pass_error, error_limit);
-#endif
-
 		result_count = new_count;
 	}
 
 #if TRACE
-	printf("passes: %d, worst error: %e\n", int(pass_count), worst_error);
+	printf("result: %d triangles, error: %e; total %d passes\n", int(result_count), sqrtf(result_error), int(pass_count));
 #endif
 
 #if TRACE > 1
@@ -1395,6 +1392,10 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	if (meshopt_simplifyDebugLoopBack)
 		memcpy(meshopt_simplifyDebugLoopBack, loopback, vertex_count * sizeof(unsigned int));
 #endif
+
+	// result_error is quadratic; we need to remap it back to linear
+	if (out_result_error)
+		*out_result_error = sqrtf(result_error);
 
 	return result_count;
 }
@@ -1627,4 +1628,16 @@ size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_pos
 #endif
 
 	return cell_count;
+}
+
+float meshopt_simplifyScale(const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+{
+	using namespace meshopt;
+
+	assert(vertex_positions_stride > 0 && vertex_positions_stride <= 256);
+	assert(vertex_positions_stride % sizeof(float) == 0);
+
+	float extent = rescalePositions(NULL, vertex_positions, vertex_count, vertex_positions_stride);
+
+	return extent;
 }
