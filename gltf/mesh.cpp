@@ -515,6 +515,7 @@ static void simplifyMesh(Mesh& mesh, float threshold, bool aggressive)
 
 	size_t target_index_count = size_t(double(mesh.indices.size() / 3) * threshold) * 3;
 	float target_error = 1e-2f;
+	float target_error_aggressive = 1e-1f;
 
 	if (target_index_count < 1)
 		return;
@@ -526,10 +527,10 @@ static void simplifyMesh(Mesh& mesh, float threshold, bool aggressive)
 	// Note: if the simplifier got stuck, we can try to reindex without normals/tangents and retry
 	// For now we simply fall back to aggressive simplifier instead
 
-	// if the mesh is complex enough and the precise simplifier got "stuck", we'll try to simplify using the sloppy simplifier which is guaranteed to reach the target count
-	if (aggressive && target_index_count > 50 * 3 && mesh.indices.size() > target_index_count)
+	// if the precise simplifier got "stuck", we'll try to simplify using the sloppy simplifier; this is only used when aggressive simplification is enabled as it breaks attribute discontinuities
+	if (aggressive && mesh.indices.size() > target_index_count)
 	{
-		indices.resize(meshopt_simplifySloppy(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count));
+		indices.resize(meshopt_simplifySloppy(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count, target_error_aggressive));
 		mesh.indices.swap(indices);
 	}
 }
