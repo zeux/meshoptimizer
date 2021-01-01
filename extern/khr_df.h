@@ -1,25 +1,7 @@
 /* The Khronos Data Format Specification (version 1.3) */
 /*
-** Copyright (c) 2015-19 The Khronos Group Inc.
-**
-** Permission is hereby granted, free of charge, to any person obtaining a
-** copy of this software and/or associated documentation files (the
-** "Materials"), to deal in the Materials without restriction, including
-** without limitation the rights to use, copy, modify, merge, publish,
-** distribute, sublicense, and/or sell copies of the Materials, and to
-** permit persons to whom the Materials are furnished to do so, subject to
-** the following conditions:
-**
-** The above copyright notice and this permission notice shall be included
-** in all copies or substantial portions of the Materials.
-**
-** THE MATERIALS ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-** EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-** MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-** IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-** CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-** TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-** MATERIALS OR THE USE OR OTHER DEALINGS IN THE MATERIALS.
+** Copyright 2015-2020 The Khronos Group Inc.
+** SPDX-License-Identifier: Apache-2.0
 */
 
 /* This header defines a structure that can describe the layout of image
@@ -316,7 +298,7 @@ typedef enum _khr_df_model_e {
     KHR_DF_MODEL_ETC2          = 161U,
     /* Adaptive Scalable Texture Compression */
     /* ASTC HDR vs LDR is determined by the float flag in the channel */
-    /* ASTC block size can be distinguished by texel block size */ 
+    /* ASTC block size can be distinguished by texel block size */
     KHR_DF_MODEL_ASTC          = 162U,
     /* ETC1S is a simplified subset of ETC1 */
     KHR_DF_MODEL_ETC1S         = 163U,
@@ -584,7 +566,7 @@ typedef enum _khr_df_transfer_e {
     KHR_DF_TRANSFER_LINEAR      = 1U,
     /* Perceptually-linear transfer function of sRGH (~2.4) */
     KHR_DF_TRANSFER_SRGB        = 2U,
-    /* Perceptually-linear transfer function of ITU non-HDR specifications (~1/.45) */
+    /* Perceptually-linear transfer function of ITU BT.601, BT.709 and BT.2020 (~1/.45) */
     KHR_DF_TRANSFER_ITU         = 3U,
     /* SMTPE170M (digital NTSC) defines an alias for the ITU transfer function (~1/.45) */
     KHR_DF_TRANSFER_SMTPE170M   = 3U,
