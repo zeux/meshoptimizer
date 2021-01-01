@@ -740,11 +740,13 @@ static void simplifySloppyStuck()
 	const float vb[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 	const unsigned int ib[] = {0, 1, 2, 0, 1, 2};
 
+	unsigned int* target = NULL;
+
 	// simplifying down to 0 triangles results in 0 immediately
-	assert(meshopt_simplifySloppy(0, ib, 3, vb, 3, 12, 0) == 0);
+	assert(meshopt_simplifySloppy(target, ib, 3, vb, 3, 12, 0, 0.f) == 0);
 
 	// simplifying down to 2 triangles given that all triangles are degenerate results in 0 as well
-	assert(meshopt_simplifySloppy(0, ib, 6, vb, 3, 12, 6) == 0);
+	assert(meshopt_simplifySloppy(target, ib, 6, vb, 3, 12, 6, 0.f) == 0);
 }
 
 static void simplifyPointsStuck()

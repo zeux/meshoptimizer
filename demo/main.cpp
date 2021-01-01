@@ -471,18 +471,22 @@ void simplifySloppy(const Mesh& mesh, float threshold = 0.2f)
 	double start = timestamp();
 
 	size_t target_index_count = size_t(mesh.indices.size() * threshold);
+	float target_error = 1e-1f;
+	float result_error = 0;
 
-	lod.indices.resize(target_index_count); // note: simplifySloppy, unlike simplify, is guaranteed to output results that don't exceed the requested target_index_count
-	lod.indices.resize(meshopt_simplifySloppy(&lod.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count));
+	lod.indices.resize(mesh.indices.size()); // note: simplify needs space for index_count elements in the destination array, not target_index_count
+	lod.indices.resize(meshopt_simplifySloppy(&lod.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error, &result_error));
 
 	lod.vertices.resize(lod.indices.size() < mesh.vertices.size() ? lod.indices.size() : mesh.vertices.size()); // note: this is just to reduce the cost of resize()
 	lod.vertices.resize(meshopt_optimizeVertexFetch(&lod.vertices[0], &lod.indices[0], lod.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex)));
 
 	double end = timestamp();
 
-	printf("%-9s: %d triangles => %d triangles in %.2f msec\n",
+	printf("%-9s: %d triangles => %d triangles (%.2f%% deviation) in %.2f msec\n",
 	       "SimplifyS",
-	       int(mesh.indices.size() / 3), int(lod.indices.size() / 3), (end - start) * 1000);
+	       int(mesh.indices.size() / 3), int(lod.indices.size() / 3),
+	       result_error * 100,
+	       (end - start) * 1000);
 }
 
 void simplifyPoints(const Mesh& mesh, float threshold = 0.2f)
