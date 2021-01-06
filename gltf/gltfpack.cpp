@@ -321,7 +321,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		{
 			Mesh meshlets = {};
 			Mesh bounds = {};
-			debugMeshlets(meshes[i], meshlets, bounds, settings.meshlet_debug);
+			debugMeshlets(meshes[i], meshlets, bounds, settings.meshlet_debug, /* scan= */ false);
 			debug_meshes.push_back(meshlets);
 			debug_meshes.push_back(bounds);
 		}
