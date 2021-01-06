@@ -377,6 +377,31 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 		{
 			unsigned int best_vertex = ~0u;
 
+		#if 1
+			for (size_t i = 0; i < vertex_count; ++i)
+			{
+				unsigned int index = unsigned(i);
+
+				if (live_triangles[index] > 0)
+				{
+					const float* pos = vertex_positions + vertex_stride_float * index;
+
+					float distance =
+					    (pos[0] - meshlet_center[0]) *
+					        (pos[0] - meshlet_center[0]) +
+					    (pos[1] - meshlet_center[1]) *
+					        (pos[1] - meshlet_center[1]) +
+					    (pos[2] - meshlet_center[2]) *
+					        (pos[2] - meshlet_center[2]);
+
+					if (distance < best_distance)
+					{
+						best_vertex = index;
+						best_distance = distance;
+					}
+				}
+			}
+		#else
 			for (size_t i = 0; i < meshlet.vertex_count; ++i)
 			{
 				unsigned int index = meshlet.vertices[i];
@@ -408,11 +433,13 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 					index = wedge[index];
 				}
 			}
+		#endif
 
 			if (best_vertex != ~0u)
 			{
 				unsigned int* neighbours = &adjacency.data[0] + adjacency.offsets[best_vertex];
 				size_t neighbours_size = adjacency.counts[best_vertex];
+				(void)neighbours_size;
 
 				assert(neighbours_size > 0);
 				assert(!emitted_flags[neighbours[0]]);
