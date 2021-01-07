@@ -186,6 +186,19 @@ static void decodeIndexRejectInvalidVersion()
 	assert(meshopt_decodeIndexBuffer(decoded, index_count, &brokenbuffer[0], brokenbuffer.size()) < 0);
 }
 
+static void decodeIndexMalformedVByte()
+{
+	const unsigned char input[] = {
+	    0xe1, 0x20, 0x20, 0x20, 0xff, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
+	    0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
+	    0xff, 0xff, 0xff, 0xff, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
+	    0x20, 0x20, 0x20, // clang-format :-/
+	};
+
+	unsigned int decoded[66];
+	assert(meshopt_decodeIndexBuffer(decoded, 66, input, sizeof(input)) < 0);
+}
+
 static void roundtripIndexTricky()
 {
 	const size_t index_count = sizeof(kIndexBufferTricky) / sizeof(kIndexBufferTricky[0]);
@@ -821,6 +834,7 @@ static void runTestsOnce()
 	decodeIndexRejectExtraBytes();
 	decodeIndexRejectMalformedHeaders();
 	decodeIndexRejectInvalidVersion();
+	decodeIndexMalformedVByte();
 	roundtripIndexTricky();
 	encodeIndexEmpty();
 
