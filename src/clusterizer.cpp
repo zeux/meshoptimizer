@@ -138,65 +138,6 @@ static void computeBoundingSphere(float result[4], const float points[][3], size
 	result[3] = radius;
 }
 
-static size_t hashBuckets3(size_t count)
-{
-	size_t buckets = 1;
-	while (buckets < count)
-		buckets *= 2;
-
-	return buckets;
-}
-
-static void buildWedges(unsigned int* wedge, const float* vertex_positions, size_t vertex_stride_float, size_t vertex_count, meshopt_Allocator& allocator)
-{
-	memset(wedge, -1, vertex_count * sizeof(unsigned int));
-
-	size_t table_size = hashBuckets3(vertex_count);
-	unsigned int* table = allocator.allocate<unsigned int>(table_size);
-	memset(table, -1, table_size * sizeof(unsigned int));
-
-	for (size_t i = 0; i < vertex_count; ++i)
-	{
-		// MurmurHash2
-		const unsigned int m = 0x5bd1e995;
-		const int r = 24;
-
-		unsigned int h = 0;
-		const unsigned int* key = reinterpret_cast<const unsigned int*>(vertex_positions + i * vertex_stride_float);
-
-		for (size_t j = 0; j < 3; ++j)
-		{
-			unsigned int k = key[j];
-
-			k *= m;
-			k ^= k >> r;
-			k *= m;
-
-			h *= m;
-			h ^= k;
-		}
-
-		unsigned int& next = table[h & (table_size - 1)];
-
-		wedge[i] = next;
-		next = unsigned(i);
-	}
-
-	for (size_t i = 0; i < table_size; ++i)
-	{
-		if (table[i] == ~0u)
-			continue;
-
-		unsigned int start = table[i];
-		unsigned int end = start;
-
-		while (wedge[end] != ~0u)
-			end = wedge[end];
-
-		wedge[end] = start;
-	}
-}
-
 } // namespace meshopt
 
 size_t meshopt_buildMeshletsBound(size_t index_count, size_t max_vertices, size_t max_triangles)
@@ -238,9 +179,6 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 
 	TriangleAdjacency adjacency = {};
 	buildTriangleAdjacency(adjacency, indices, index_count, vertex_count, allocator);
-
-	unsigned int* wedge = allocator.allocate<unsigned int>(vertex_count);
-	buildWedges(wedge, vertex_positions, vertex_stride_float, vertex_count, allocator);
 
 	unsigned int* live_triangles = allocator.allocate<unsigned int>(vertex_count);
 	memcpy(live_triangles, adjacency.counts, vertex_count * sizeof(unsigned int));
@@ -377,7 +315,6 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 		{
 			unsigned int best_vertex = ~0u;
 
-		#if 1
 			for (size_t i = 0; i < vertex_count; ++i)
 			{
 				unsigned int index = unsigned(i);
@@ -401,39 +338,6 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 					}
 				}
 			}
-		#else
-			for (size_t i = 0; i < meshlet.vertex_count; ++i)
-			{
-				unsigned int index = meshlet.vertices[i];
-
-				for (;;)
-				{
-					if (live_triangles[index] > 0)
-					{
-						const float* pos = vertex_positions + vertex_stride_float * index;
-
-						float distance =
-						    (pos[0] - meshlet_center[0]) *
-						        (pos[0] - meshlet_center[0]) +
-						    (pos[1] - meshlet_center[1]) *
-						        (pos[1] - meshlet_center[1]) +
-						    (pos[2] - meshlet_center[2]) *
-						        (pos[2] - meshlet_center[2]);
-
-						if (distance < best_distance)
-						{
-							best_vertex = index;
-							best_distance = distance;
-						}
-					}
-
-					if (wedge[index] == meshlet.vertices[i])
-						break;
-
-					index = wedge[index];
-				}
-			}
-		#endif
 
 			if (best_vertex != ~0u)
 			{
