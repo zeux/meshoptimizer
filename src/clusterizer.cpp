@@ -139,12 +139,80 @@ static void computeBoundingSphere(float result[4], const float points[][3], size
 	result[3] = radius;
 }
 
+struct Cone
+{
+	float px, py, pz;
+	float nx, ny, nz;
+};
+
 static float getMeshletScore(float distance2, float spread, float cone_weight, float expected_radius)
 {
 	float cone = 1.f - spread * cone_weight;
 	float cone_clamped = cone < 1e-3f ? 1e-3f : cone;
 
 	return (1 + sqrtf(distance2) / expected_radius * (1 - cone_weight)) * cone_clamped;
+}
+
+static Cone getMeshletCone(const Cone& acc, unsigned int triangle_count)
+{
+	Cone result = acc;
+
+	float center_scale = triangle_count == 0 ? 0.f : 1.f / float(triangle_count);
+
+	result.px *= center_scale;
+	result.py *= center_scale;
+	result.pz *= center_scale;
+
+	float axis_length = result.nx * result.nx + result.ny * result.ny + result.nz * result.nz;
+	float axis_scale = axis_length == 0.f ? 0.f : 1.f / sqrtf(axis_length);
+
+	result.nx *= axis_scale;
+	result.ny *= axis_scale;
+	result.nz *= axis_scale;
+
+	return result;
+}
+
+static float computeTriangleCones(Cone* triangles, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+{
+	(void)vertex_count;
+
+	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
+	size_t face_count = index_count / 3;
+
+	float mesh_area = 0;
+
+	for (size_t i = 0; i < face_count; ++i)
+	{
+		unsigned int a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
+		assert(a < vertex_count && b < vertex_count && c < vertex_count);
+
+		const float* p0 = vertex_positions + vertex_stride_float * a;
+		const float* p1 = vertex_positions + vertex_stride_float * b;
+		const float* p2 = vertex_positions + vertex_stride_float * c;
+
+		float p10[3] = {p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]};
+		float p20[3] = {p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]};
+
+		float normalx = p10[1] * p20[2] - p10[2] * p20[1];
+		float normaly = p10[2] * p20[0] - p10[0] * p20[2];
+		float normalz = p10[0] * p20[1] - p10[1] * p20[0];
+
+		float area = sqrtf(normalx * normalx + normaly * normaly + normalz * normalz);
+		float invarea = (area == 0.f) ? 0.f : 1.f / area;
+
+		triangles[i].px = (p0[0] + p1[0] + p2[0]) / 3.f;
+		triangles[i].py = (p0[1] + p1[1] + p2[1]) / 3.f;
+		triangles[i].pz = (p0[2] + p1[2] + p2[2]) / 3.f;
+
+		triangles[i].nx = normalx * invarea;
+		triangles[i].ny = normaly * invarea;
+		triangles[i].nz = normalz * invarea;
+
+		mesh_area += area;
+	}
+
+	return mesh_area;
 }
 
 } // namespace meshopt
@@ -197,39 +265,9 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 	unsigned char* emitted_flags = allocator.allocate<unsigned char>(face_count);
 	memset(emitted_flags, 0, face_count);
 
-	float* triangle_data = allocator.allocate<float>(face_count * 6);
-
-	float mesh_area = 0.f;
-
-	for (size_t i = 0; i < face_count; ++i)
-	{
-		unsigned int a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
-		assert(a < vertex_count && b < vertex_count && c < vertex_count);
-
-		const float* p0 = vertex_positions + vertex_stride_float * a;
-		const float* p1 = vertex_positions + vertex_stride_float * b;
-		const float* p2 = vertex_positions + vertex_stride_float * c;
-
-		float p10[3] = {p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]};
-		float p20[3] = {p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]};
-
-		float normalx = p10[1] * p20[2] - p10[2] * p20[1];
-		float normaly = p10[2] * p20[0] - p10[0] * p20[2];
-		float normalz = p10[0] * p20[1] - p10[1] * p20[0];
-
-		float area = sqrtf(normalx * normalx + normaly * normaly + normalz * normalz);
-		float invarea = (area == 0.f) ? 0.f : 1.f / area;
-
-		triangle_data[i * 6 + 0] = (p0[0] + p1[0] + p2[0]) / 3.f;
-		triangle_data[i * 6 + 1] = (p0[1] + p1[1] + p2[1]) / 3.f;
-		triangle_data[i * 6 + 2] = (p0[2] + p1[2] + p2[2]) / 3.f;
-
-		triangle_data[i * 6 + 3] = normalx * invarea;
-		triangle_data[i * 6 + 4] = normaly * invarea;
-		triangle_data[i * 6 + 5] = normalz * invarea;
-
-		mesh_area += area;
-	}
+	// for each triangle, precompute centroid & normal to use for scoring
+	Cone* triangles = allocator.allocate<Cone>(face_count);
+	float mesh_area = computeTriangleCones(triangles, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride);
 
 	// assuming each meshlet is a square patch, expected radius is sqrt(expected area)
 	float triangle_area_avg = face_count == 0 ? 0.f : mesh_area / float(face_count) * 0.5f;
@@ -242,7 +280,7 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 	size_t offset = 0;
 	unsigned int input_cursor = 0;
 
-	float meshlet_data[6] = {};
+	Cone meshlet_cone_acc = {};
 
 	while (input_cursor < face_count)
 	{
@@ -250,15 +288,7 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 		unsigned int best_extra = 4;
 		float best_score = FLT_MAX;
 
-		float meshlet_center_scale = meshlet.triangle_count == 0 ? 0.f : 1.f / float(meshlet.triangle_count);
-
-		float meshlet_center[3];
-		meshlet_center[0] = meshlet_data[0] * meshlet_center_scale;
-		meshlet_center[1] = meshlet_data[1] * meshlet_center_scale;
-		meshlet_center[2] = meshlet_data[2] * meshlet_center_scale;
-
-		float meshlet_axis = meshlet_data[3] * meshlet_data[3] + meshlet_data[4] * meshlet_data[4] + meshlet_data[5] * meshlet_data[5];
-		float meshlet_axis_scale = meshlet_axis == 0.f ? 0.f : 1.f / sqrtf(meshlet_axis);
+		Cone meshlet_cone = getMeshletCone(meshlet_cone_acc, meshlet.triangle_count);
 
 		for (size_t i = 0; i < meshlet.vertex_count; ++i)
 		{
@@ -293,18 +323,14 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 				if (extra > best_extra)
 					continue;
 
-				float distance2 =
-				    (triangle_data[triangle * 6 + 0] - meshlet_center[0]) *
-				        (triangle_data[triangle * 6 + 0] - meshlet_center[0]) +
-				    (triangle_data[triangle * 6 + 1] - meshlet_center[1]) *
-				        (triangle_data[triangle * 6 + 1] - meshlet_center[1]) +
-				    (triangle_data[triangle * 6 + 2] - meshlet_center[2]) *
-				        (triangle_data[triangle * 6 + 2] - meshlet_center[2]);
+				const Cone& tri_cone = triangles[triangle];
 
-				float spread = meshlet_axis_scale *
-				               (triangle_data[triangle * 6 + 3] * meshlet_data[3] +
-				                triangle_data[triangle * 6 + 4] * meshlet_data[4] +
-				                triangle_data[triangle * 6 + 5] * meshlet_data[5]);
+				float distance2 =
+				    (tri_cone.px - meshlet_cone.px) * (tri_cone.px - meshlet_cone.px) +
+				    (tri_cone.py - meshlet_cone.py) * (tri_cone.py - meshlet_cone.py) +
+				    (tri_cone.pz - meshlet_cone.pz) * (tri_cone.pz - meshlet_cone.pz);
+
+				float spread = tri_cone.nx * meshlet_cone.nx + tri_cone.ny * meshlet_cone.ny + tri_cone.nz * meshlet_cone.nz;
 
 				float score = getMeshletScore(distance2, spread, cone_weight, meshlet_expected_radius);
 
@@ -335,12 +361,9 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 					const float* pos = vertex_positions + vertex_stride_float * index;
 
 					float distance2 =
-					    (pos[0] - meshlet_center[0]) *
-					        (pos[0] - meshlet_center[0]) +
-					    (pos[1] - meshlet_center[1]) *
-					        (pos[1] - meshlet_center[1]) +
-					    (pos[2] - meshlet_center[2]) *
-					        (pos[2] - meshlet_center[2]);
+					    (pos[0] - meshlet_cone.px) * (pos[0] - meshlet_cone.px) +
+					    (pos[1] - meshlet_cone.py) * (pos[1] - meshlet_cone.py) +
+					    (pos[2] - meshlet_cone.pz) * (pos[2] - meshlet_cone.pz);
 
 					if (distance2 < best_distance2)
 					{
@@ -396,7 +419,7 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 				used[meshlet.vertices[j]] = 0xff;
 
 			memset(&meshlet, 0, sizeof(meshlet));
-			memset(meshlet_data, 0, sizeof(meshlet_data));
+			memset(&meshlet_cone_acc, 0, sizeof(meshlet_cone_acc));
 		}
 
 		if (av == 0xff)
@@ -448,12 +471,13 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 			}
 		}
 
-		meshlet_data[0] += triangle_data[best_triangle * 6 + 0];
-		meshlet_data[1] += triangle_data[best_triangle * 6 + 1];
-		meshlet_data[2] += triangle_data[best_triangle * 6 + 2];
-		meshlet_data[3] += triangle_data[best_triangle * 6 + 3];
-		meshlet_data[4] += triangle_data[best_triangle * 6 + 4];
-		meshlet_data[5] += triangle_data[best_triangle * 6 + 5];
+		// update aggregated meshlet cone data for scoring subsequent triangles
+		meshlet_cone_acc.px += triangles[best_triangle].px;
+		meshlet_cone_acc.py += triangles[best_triangle].py;
+		meshlet_cone_acc.pz += triangles[best_triangle].pz;
+		meshlet_cone_acc.nx += triangles[best_triangle].nx;
+		meshlet_cone_acc.ny += triangles[best_triangle].ny;
+		meshlet_cone_acc.nz += triangles[best_triangle].nz;
 
 		emitted_flags[best_triangle] = 1;
 	}
