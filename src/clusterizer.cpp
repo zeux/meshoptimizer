@@ -2,6 +2,7 @@
 #include "meshoptimizer.h"
 
 #include <assert.h>
+#include <float.h>
 #include <math.h>
 #include <string.h>
 
@@ -138,6 +139,14 @@ static void computeBoundingSphere(float result[4], const float points[][3], size
 	result[3] = radius;
 }
 
+static float getMeshletScore(float distance2, float spread, float cone_weight, float expected_radius)
+{
+	float cone = 1.f - spread * cone_weight;
+	float cone_clamped = cone < 1e-3f ? 1e-3f : cone;
+
+	return (1 + sqrtf(distance2) / expected_radius * (1 - cone_weight)) * cone_clamped;
+}
+
 } // namespace meshopt
 
 size_t meshopt_buildMeshletsBound(size_t index_count, size_t max_vertices, size_t max_triangles)
@@ -156,7 +165,7 @@ size_t meshopt_buildMeshletsBound(size_t index_count, size_t max_vertices, size_
 	return meshlet_limit_vertices > meshlet_limit_triangles ? meshlet_limit_vertices : meshlet_limit_triangles;
 }
 
-size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t max_triangles)
+size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t max_triangles, float cone_weight)
 {
 	using namespace meshopt;
 
@@ -190,6 +199,8 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 
 	float* triangle_data = allocator.allocate<float>(face_count * 6);
 
+	float mesh_area = 0.f;
+
 	for (size_t i = 0; i < face_count; ++i)
 	{
 		unsigned int a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
@@ -216,7 +227,13 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 		triangle_data[i * 6 + 3] = normalx * invarea;
 		triangle_data[i * 6 + 4] = normaly * invarea;
 		triangle_data[i * 6 + 5] = normalz * invarea;
+
+		mesh_area += area;
 	}
+
+	// assuming each meshlet is a square patch, expected radius is sqrt(expected area)
+	float triangle_area_avg = face_count == 0 ? 0.f : mesh_area / float(face_count) * 0.5f;
+	float meshlet_expected_radius = sqrtf(triangle_area_avg * max_triangles) * 0.5f;
 
 	// index of the vertex in the meshlet, 0xff if the vertex isn't used
 	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
@@ -230,9 +247,8 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 	while (input_cursor < face_count)
 	{
 		unsigned int best_triangle = ~0u;
-		unsigned int best_extra = 3;
-		float best_distance = 1e+35f; // TODO FLT_MAX
-		float best_spread = -1.f;
+		unsigned int best_extra = 4;
+		float best_score = FLT_MAX;
 
 		float meshlet_center_scale = meshlet.triangle_count == 0 ? 0.f : 1.f / float(meshlet.triangle_count);
 
@@ -277,7 +293,7 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 				if (extra > best_extra)
 					continue;
 
-				float distance =
+				float distance2 =
 				    (triangle_data[triangle * 6 + 0] - meshlet_center[0]) *
 				        (triangle_data[triangle * 6 + 0] - meshlet_center[0]) +
 				    (triangle_data[triangle * 6 + 1] - meshlet_center[1]) *
@@ -290,19 +306,13 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 				                triangle_data[triangle * 6 + 4] * meshlet_data[4] +
 				                triangle_data[triangle * 6 + 5] * meshlet_data[5]);
 
-				(void)best_distance;
-				(void)best_spread;
+				float score = getMeshletScore(distance2, spread, cone_weight, meshlet_expected_radius);
 
-#if 0
-				if (extra < best_extra || spread > best_spread)
-#else
-				if (extra < best_extra || distance < best_distance)
-#endif
+				if (extra < best_extra || score < best_score)
 				{
 					best_triangle = triangle;
 					best_extra = extra;
-					best_distance = distance;
-					best_spread = spread;
+					best_score = score;
 				}
 
 				// TODO: early out when best extra is 0
@@ -314,6 +324,7 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 		if (best_triangle == ~0u)
 		{
 			unsigned int best_vertex = ~0u;
+			float best_distance2 = FLT_MAX;
 
 			for (size_t i = 0; i < vertex_count; ++i)
 			{
@@ -323,7 +334,7 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 				{
 					const float* pos = vertex_positions + vertex_stride_float * index;
 
-					float distance =
+					float distance2 =
 					    (pos[0] - meshlet_center[0]) *
 					        (pos[0] - meshlet_center[0]) +
 					    (pos[1] - meshlet_center[1]) *
@@ -331,10 +342,10 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 					    (pos[2] - meshlet_center[2]) *
 					        (pos[2] - meshlet_center[2]);
 
-					if (distance < best_distance)
+					if (distance2 < best_distance2)
 					{
 						best_vertex = index;
-						best_distance = distance;
+						best_distance2 = distance2;
 					}
 				}
 			}
