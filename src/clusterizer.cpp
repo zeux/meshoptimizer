@@ -215,6 +215,54 @@ static float computeTriangleCones(Cone* triangles, const unsigned int* indices, 
 	return mesh_area;
 }
 
+static bool appendMeshlet(meshopt_Meshlet& meshlet, unsigned int a, unsigned int b, unsigned int c, unsigned char* used, meshopt_Meshlet* destination, size_t offset, size_t max_vertices, size_t max_triangles)
+{
+	unsigned char& av = used[a];
+	unsigned char& bv = used[b];
+	unsigned char& cv = used[c];
+
+	bool result = false;
+
+	unsigned int used_extra = (av == 0xff) + (bv == 0xff) + (cv == 0xff);
+
+	if (meshlet.vertex_count + used_extra > max_vertices || meshlet.triangle_count >= max_triangles)
+	{
+		destination[offset] = meshlet;
+
+		for (size_t j = 0; j < meshlet.vertex_count; ++j)
+			used[meshlet.vertices[j]] = 0xff;
+
+		memset(&meshlet, 0, sizeof(meshlet));
+
+		result = true;
+	}
+
+	if (av == 0xff)
+	{
+		av = meshlet.vertex_count;
+		meshlet.vertices[meshlet.vertex_count++] = a;
+	}
+
+	if (bv == 0xff)
+	{
+		bv = meshlet.vertex_count;
+		meshlet.vertices[meshlet.vertex_count++] = b;
+	}
+
+	if (cv == 0xff)
+	{
+		cv = meshlet.vertex_count;
+		meshlet.vertices[meshlet.vertex_count++] = c;
+	}
+
+	meshlet.indices[meshlet.triangle_count][0] = av;
+	meshlet.indices[meshlet.triangle_count][1] = bv;
+	meshlet.indices[meshlet.triangle_count][2] = cv;
+	meshlet.triangle_count++;
+
+	return result;
+}
+
 } // namespace meshopt
 
 size_t meshopt_buildMeshletsBound(size_t index_count, size_t max_vertices, size_t max_triangles)
@@ -405,45 +453,12 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 		unsigned int a = indices[best_triangle * 3 + 0], b = indices[best_triangle * 3 + 1], c = indices[best_triangle * 3 + 2];
 		assert(a < vertex_count && b < vertex_count && c < vertex_count);
 
-		unsigned char& av = used[a];
-		unsigned char& bv = used[b];
-		unsigned char& cv = used[c];
-
-		unsigned int used_extra = (av == 0xff) + (bv == 0xff) + (cv == 0xff);
-
-		if (meshlet.vertex_count + used_extra > max_vertices || meshlet.triangle_count >= max_triangles)
+		// add meshlet to the output; when the current meshlet is full we reset the accumulated bounds
+		if (appendMeshlet(meshlet, a, b, c, used, destination, offset, max_vertices, max_triangles))
 		{
-			destination[offset++] = meshlet;
-
-			for (size_t j = 0; j < meshlet.vertex_count; ++j)
-				used[meshlet.vertices[j]] = 0xff;
-
-			memset(&meshlet, 0, sizeof(meshlet));
+			offset++;
 			memset(&meshlet_cone_acc, 0, sizeof(meshlet_cone_acc));
 		}
-
-		if (av == 0xff)
-		{
-			av = meshlet.vertex_count;
-			meshlet.vertices[meshlet.vertex_count++] = a;
-		}
-
-		if (bv == 0xff)
-		{
-			bv = meshlet.vertex_count;
-			meshlet.vertices[meshlet.vertex_count++] = b;
-		}
-
-		if (cv == 0xff)
-		{
-			cv = meshlet.vertex_count;
-			meshlet.vertices[meshlet.vertex_count++] = c;
-		}
-
-		meshlet.indices[meshlet.triangle_count][0] = av;
-		meshlet.indices[meshlet.triangle_count][1] = bv;
-		meshlet.indices[meshlet.triangle_count][2] = cv;
-		meshlet.triangle_count++;
 
 		live_triangles[a]--;
 		live_triangles[b]--;
@@ -492,6 +507,8 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 
 size_t meshopt_buildMeshletsScan(meshopt_Meshlet* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, size_t max_vertices, size_t max_triangles)
 {
+	using namespace meshopt;
+
 	assert(index_count % 3 == 0);
 	assert(max_vertices >= 3);
 	assert(max_triangles >= 1);
@@ -516,44 +533,8 @@ size_t meshopt_buildMeshletsScan(meshopt_Meshlet* destination, const unsigned in
 		unsigned int a = indices[i + 0], b = indices[i + 1], c = indices[i + 2];
 		assert(a < vertex_count && b < vertex_count && c < vertex_count);
 
-		unsigned char& av = used[a];
-		unsigned char& bv = used[b];
-		unsigned char& cv = used[c];
-
-		unsigned int used_extra = (av == 0xff) + (bv == 0xff) + (cv == 0xff);
-
-		if (meshlet.vertex_count + used_extra > max_vertices || meshlet.triangle_count >= max_triangles)
-		{
-			destination[offset++] = meshlet;
-
-			for (size_t j = 0; j < meshlet.vertex_count; ++j)
-				used[meshlet.vertices[j]] = 0xff;
-
-			memset(&meshlet, 0, sizeof(meshlet));
-		}
-
-		if (av == 0xff)
-		{
-			av = meshlet.vertex_count;
-			meshlet.vertices[meshlet.vertex_count++] = a;
-		}
-
-		if (bv == 0xff)
-		{
-			bv = meshlet.vertex_count;
-			meshlet.vertices[meshlet.vertex_count++] = b;
-		}
-
-		if (cv == 0xff)
-		{
-			cv = meshlet.vertex_count;
-			meshlet.vertices[meshlet.vertex_count++] = c;
-		}
-
-		meshlet.indices[meshlet.triangle_count][0] = av;
-		meshlet.indices[meshlet.triangle_count][1] = bv;
-		meshlet.indices[meshlet.triangle_count][2] = cv;
-		meshlet.triangle_count++;
+		// appends triangle to the meshlet and writes previous meshlet to the output if full
+		offset += appendMeshlet(meshlet, a, b, c, used, destination, offset, max_vertices, max_triangles);
 	}
 
 	if (meshlet.triangle_count)
