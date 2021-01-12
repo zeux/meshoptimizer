@@ -378,23 +378,13 @@ void kdtreeNearest(KDNode* nodes, unsigned int root, const Cone* triangles, cons
 	}
 
 	float delta = position[node.axis] - node.split;
-	unsigned int left = node.children * 2 - 1;
-	unsigned int right = node.children * 2;
+	unsigned int first = node.children * 2 - (delta <= 0);
+	unsigned int second = ((first + 1) ^ 1) - 1;
 
-	if (delta <= 0)
-	{
-		kdtreeNearest(nodes, left, triangles, emitted_flags, position, result, limit);
+	kdtreeNearest(nodes, first, triangles, emitted_flags, position, result, limit);
 
-		if (delta >= -limit)
-			kdtreeNearest(nodes, right, triangles, emitted_flags, position, result, limit);
-	}
-	else
-	{
-		kdtreeNearest(nodes, right, triangles, emitted_flags, position, result, limit);
-
-		if (delta <= limit)
-			kdtreeNearest(nodes, left, triangles, emitted_flags, position, result, limit);
-	}
+	if (fabsf(delta) <= limit)
+		kdtreeNearest(nodes, second, triangles, emitted_flags, position, result, limit);
 }
 
 } // namespace meshopt
