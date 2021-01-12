@@ -1178,11 +1178,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	Mesh copy = mesh;
-	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
-
-	meshlets(copy, false);
-	meshlets(copy, true);
+	meshlets(mesh, false);
 }
 
 int main(int argc, char** argv)

@@ -6,6 +6,8 @@
 #include <math.h>
 #include <string.h>
 
+#include <algorithm>
+
 // This work is based on:
 // Graham Wihlidal. Optimizing the Graphics Pipeline with Compute. 2016
 // Matthaeus Chajdas. GeometryFX 1.2 - Cluster Culling. 2016
@@ -263,6 +265,125 @@ static bool appendMeshlet(meshopt_Meshlet& meshlet, unsigned int a, unsigned int
 	return result;
 }
 
+struct KDNode
+{
+	union {
+		float split;
+		unsigned int index;
+	};
+
+	unsigned int axis: 2; // 3 = leaf
+	unsigned int children: 30; // *2-1, *2
+};
+
+struct KDTreeSorter
+{
+	const Cone* data;
+	unsigned int axis;
+
+	bool operator()(unsigned int l, unsigned int r) const
+	{
+		return (&data[l].px)[axis] < (&data[r].px)[axis];
+	}
+};
+
+size_t kdtreeBuild(KDNode& result, KDNode* nodes, size_t next_node, const Cone* data, unsigned int* indices, size_t count)
+{
+	assert(count > 0);
+	assert(next_node % 2 == 1);
+
+	if (count == 1)
+	{
+		result.index = indices[0];
+		result.axis = 3;
+		result.children = 0;
+		return next_node;
+	}
+
+	float minv[3] = {FLT_MAX, FLT_MAX, FLT_MAX};
+	float maxv[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		unsigned int index = indices[i];
+		float v[3] = { data[index].px, data[index].py, data[index].pz };
+
+		for (int j = 0; j < 3; ++j)
+		{
+			float vj = v[j];
+
+			minv[j] = minv[j] > vj ? vj : minv[j];
+			maxv[j] = maxv[j] < vj ? vj : maxv[j];
+		}
+	}
+
+	float sizev[3] = { maxv[0] - minv[0], maxv[1] - minv[1], maxv[2] - minv[2] };
+	unsigned int axis = sizev[0] >= sizev[1] && sizev[0] >= sizev[2] ? 0 : sizev[1] >= sizev[2] ? 1 : 2;
+
+	KDTreeSorter sorter = { data, axis };
+	std::sort(indices, indices + count, sorter);
+
+	size_t middle = count / 2;
+
+	result.split = (&data[indices[middle]].px)[axis];
+	result.axis = axis;
+	result.children = unsigned((next_node + 1) / 2);
+
+	size_t children = next_node;
+	next_node += 2;
+
+	next_node = kdtreeBuild(nodes[children + 0], nodes, next_node, data, indices, middle);
+	next_node = kdtreeBuild(nodes[children + 1], nodes, next_node, data, indices + middle, count - middle);
+
+	return next_node;
+}
+
+void kdtreeNearest(KDNode* nodes, unsigned int root, const Cone* triangles, const unsigned char* emitted_flags, const float* position, unsigned int& result, float& limit)
+{
+	const KDNode& node = nodes[root];
+
+	if (node.axis == 3)
+	{
+		if (emitted_flags[node.index])
+			return;
+
+		const Cone& triangle = triangles[node.index];
+
+		float distance2 =
+			(triangle.px - position[0]) * (triangle.px - position[0]) +
+			(triangle.py - position[1]) * (triangle.py - position[1]) +
+			(triangle.pz - position[2]) * (triangle.pz - position[2]);
+		float distance = sqrtf(distance2);
+
+		if (distance < limit)
+		{
+			result = node.index;
+			limit = distance;
+		}
+
+		return;
+	}
+
+	float delta = position[node.axis] - node.split;
+	unsigned int left = node.children * 2 - 1;
+	unsigned int right = node.children * 2;
+
+	if (delta <= 0)
+	{
+		kdtreeNearest(nodes, left, triangles, emitted_flags, position, result, limit);
+
+		if (delta >= -limit)
+			kdtreeNearest(nodes, right, triangles, emitted_flags, position, result, limit);
+	}
+	else
+	{
+		kdtreeNearest(nodes, right, triangles, emitted_flags, position, result, limit);
+
+		if (delta <= limit)
+			kdtreeNearest(nodes, left, triangles, emitted_flags, position, result, limit);
+	}
+}
+
 } // namespace meshopt
 
 size_t meshopt_buildMeshletsBound(size_t index_count, size_t max_vertices, size_t max_triangles)
@@ -292,6 +413,7 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 	assert(vertex_positions_stride % sizeof(float) == 0);
 
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
+	(void)vertex_stride_float; // TODO
 
 	meshopt_Allocator allocator;
 
@@ -320,6 +442,16 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 	// assuming each meshlet is a square patch, expected radius is sqrt(expected area)
 	float triangle_area_avg = face_count == 0 ? 0.f : mesh_area / float(face_count) * 0.5f;
 	float meshlet_expected_radius = sqrtf(triangle_area_avg * max_triangles) * 0.5f;
+
+	// build a kd-tree for nearest neighbor lookup
+	unsigned int* kdindices = allocator.allocate<unsigned int>(face_count);
+	for (size_t i = 0; i < face_count; ++i)
+		kdindices[i] = unsigned(i);
+
+	KDNode* nodes = allocator.allocate<KDNode>(face_count * 2);
+	size_t kdnodes = kdtreeBuild(nodes[0], nodes, 1, triangles, kdindices, face_count);
+	assert(kdnodes <= face_count * 2);
+	(void)kdnodes;
 
 	// index of the vertex in the meshlet, 0xff if the vertex isn't used
 	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
@@ -397,6 +529,7 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 
 		if (best_triangle == ~0u)
 		{
+		#if 0
 			unsigned int best_vertex = ~0u;
 			float best_distance2 = FLT_MAX;
 
@@ -431,6 +564,12 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 				assert(!emitted_flags[neighbours[0]]);
 				best_triangle = neighbours[0];
 			}
+		#else
+			float position[3] = { meshlet_cone.px, meshlet_cone.py, meshlet_cone.pz };
+			float limit = FLT_MAX;
+
+			kdtreeNearest(nodes, 0, triangles, emitted_flags, position, best_triangle, limit);
+		#endif
 		}
 
 		if (best_triangle == ~0u)
