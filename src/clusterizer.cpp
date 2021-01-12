@@ -280,6 +280,12 @@ struct KDTreeSorter
 {
 	const Cone* data;
 	unsigned int axis;
+	float split;
+
+	bool operator()(unsigned int i) const
+	{
+		return (&data[i].px)[axis] < split;
+	}
 
 	bool operator()(unsigned int l, unsigned int r) const
 	{
@@ -320,12 +326,19 @@ size_t kdtreeBuild(KDNode& result, KDNode* nodes, size_t next_node, const Cone* 
 	float sizev[3] = { maxv[0] - minv[0], maxv[1] - minv[1], maxv[2] - minv[2] };
 	unsigned int axis = sizev[0] >= sizev[1] && sizev[0] >= sizev[2] ? 0 : sizev[1] >= sizev[2] ? 1 : 2;
 
-	KDTreeSorter sorter = { data, axis };
-	std::sort(indices, indices + count, sorter);
+	float split = (maxv[axis] + minv[axis]) * 0.5f;
+	KDTreeSorter sorter = { data, axis, split };
+	size_t middle = std::partition(indices, indices + count, sorter) - indices;
 
-	size_t middle = count / 2;
+	if (middle <= count / 4 || count - middle <= count / 4)
+	{
+		std::sort(indices, indices + count, sorter);
 
-	result.split = (&data[indices[middle]].px)[axis];
+		middle = count / 2;
+		split = (&data[indices[middle]].px)[axis];
+	}
+
+	result.split = split;
 	result.axis = axis;
 	result.children = unsigned((next_node + 1) / 2);
 
