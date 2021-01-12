@@ -308,6 +308,7 @@ size_t kdtreeBuild(KDNode& result, KDNode* nodes, size_t next_node, const Cone* 
 
 	float minv[3] = {FLT_MAX, FLT_MAX, FLT_MAX};
 	float maxv[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+	float avgv[3] = {};
 
 	for (size_t i = 0; i < count; ++i)
 	{
@@ -320,13 +321,14 @@ size_t kdtreeBuild(KDNode& result, KDNode* nodes, size_t next_node, const Cone* 
 
 			minv[j] = minv[j] > vj ? vj : minv[j];
 			maxv[j] = maxv[j] < vj ? vj : maxv[j];
+			avgv[j] += vj;
 		}
 	}
 
 	float sizev[3] = { maxv[0] - minv[0], maxv[1] - minv[1], maxv[2] - minv[2] };
 	unsigned int axis = sizev[0] >= sizev[1] && sizev[0] >= sizev[2] ? 0 : sizev[1] >= sizev[2] ? 1 : 2;
 
-	float split = (maxv[axis] + minv[axis]) * 0.5f;
+	float split = avgv[axis] / float(count);
 	KDTreeSorter sorter = { data, axis, split };
 	size_t middle = std::partition(indices, indices + count, sorter) - indices;
 
