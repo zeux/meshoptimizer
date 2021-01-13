@@ -383,9 +383,11 @@ struct meshopt_Meshlet
  * Experimental: Meshlet builder
  * Splits the mesh into a set of meshlets where each meshlet has a micro index buffer indexing into meshlet vertices that refer to the original vertex buffer
  * The resulting data can be used to render meshes using NVidia programmable mesh shading pipeline, or in other cluster-based renderers.
- * For maximum efficiency the index buffer being converted has to be optimized for vertex cache first.
+ * When using buildMeshlets, vertex positions need to be provided to minimize the size of the resulting clusters.
+ * When using buildMeshletsScan, for maximum efficiency the index buffer being converted has to be optimized for vertex cache first.
  *
  * destination must contain enough space for all meshlets, worst case size can be computed with meshopt_buildMeshletsBound
+ * vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
  * max_vertices and max_triangles can't exceed limits statically declared in meshopt_Meshlet (max_vertices <= 64, max_triangles <= 126)
  * cone_weight should be set to 0 when cone culling is not used, and a value between 0 and 1 otherwise to balance between cluster size and cone culling efficiency
  */
