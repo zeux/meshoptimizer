@@ -293,7 +293,7 @@ struct KDTreeSorter
 	}
 };
 
-size_t kdtreeBuild(KDNode& result, KDNode* nodes, size_t next_node, const Cone* data, unsigned int* indices, size_t count)
+static size_t kdtreeBuild(KDNode& result, KDNode* nodes, size_t node_count, size_t next_node, const Cone* data, unsigned int* indices, size_t count)
 {
 	assert(count > 0);
 	assert(next_node % 2 == 1);
@@ -325,35 +325,38 @@ size_t kdtreeBuild(KDNode& result, KDNode* nodes, size_t next_node, const Cone* 
 		}
 	}
 
+	// split axis is one where the dimension is largest
 	float sizev[3] = { maxv[0] - minv[0], maxv[1] - minv[1], maxv[2] - minv[2] };
 	unsigned int axis = sizev[0] >= sizev[1] && sizev[0] >= sizev[2] ? 0 : sizev[1] >= sizev[2] ? 1 : 2;
 
+	// we prefer splitting using the average as it results in more balanced trees
+	// sometimes the average is outside of the min..max range due to floating point precision issues
+	// in these cases we fall back to midpoint
 	float split = avgv[axis] / float(count);
+	if (split <= minv[axis] || split >= maxv[axis])
+		split = minv[axis] + sizev[axis] * 0.5f;
+
 	KDTreeSorter sorter = { data, axis, split };
 	size_t middle = std::partition(indices, indices + count, sorter) - indices;
 
-	if (middle <= count / 4 || count - middle <= count / 4)
-	{
-		std::sort(indices, indices + count, sorter);
-
-		middle = count / 2;
-		split = (&data[indices[middle]].px)[axis];
-	}
+	// when the partition is degenerate, make sure we chop off at least one point
+	middle = (middle == 0) ? 1 : (middle == count) ? count - 1 : middle;
 
 	result.split = split;
 	result.axis = axis;
-	result.children = unsigned((next_node + 1) / 2);
+	result.children = unsigned((next_node + 1) / 2); // next node is odd so we can save space by storing offset/2
 
 	size_t children = next_node;
 	next_node += 2;
+	assert(next_node <= node_count);
 
-	next_node = kdtreeBuild(nodes[children + 0], nodes, next_node, data, indices, middle);
-	next_node = kdtreeBuild(nodes[children + 1], nodes, next_node, data, indices + middle, count - middle);
+	next_node = kdtreeBuild(nodes[children + 0], nodes, node_count, next_node, data, indices, middle);
+	next_node = kdtreeBuild(nodes[children + 1], nodes, node_count, next_node, data, indices + middle, count - middle);
 
 	return next_node;
 }
 
-void kdtreeNearest(KDNode* nodes, unsigned int root, const Cone* triangles, const unsigned char* emitted_flags, const float* position, unsigned int& result, float& limit)
+static void kdtreeNearest(KDNode* nodes, unsigned int root, const Cone* triangles, const unsigned char* emitted_flags, const float* position, unsigned int& result, float& limit)
 {
 	const KDNode& node = nodes[root];
 
@@ -454,9 +457,7 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 		kdindices[i] = unsigned(i);
 
 	KDNode* nodes = allocator.allocate<KDNode>(face_count * 2);
-	size_t kdnodes = kdtreeBuild(nodes[0], nodes, 1, triangles, kdindices, face_count);
-	assert(kdnodes <= face_count * 2);
-	(void)kdnodes;
+	kdtreeBuild(nodes[0], nodes, face_count * 2, 1, triangles, kdindices, face_count);
 
 	// index of the vertex in the meshlet, 0xff if the vertex isn't used
 	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
