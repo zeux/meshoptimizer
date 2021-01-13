@@ -265,13 +265,16 @@ static bool appendMeshlet(meshopt_Meshlet& meshlet, unsigned int a, unsigned int
 
 struct KDNode
 {
-	union {
+	union
+	{
 		float split;
 		unsigned int index;
 	};
 
-	unsigned int axis: 2; // 3 = leaf
-	unsigned int children : 30; // skip 1 to get to left subtree and 1+children to get to right subtree
+	// leaves: axis = 3, children = number of extra points after this one (0 if 'index' is the only point)
+	// branches: axis != 3, left subtree = skip 1, right subtree = skip 1+children
+	unsigned int axis : 2;
+	unsigned int children : 30;
 };
 
 static size_t kdtreePartition(unsigned int* indices, size_t count, const float* points, size_t stride, unsigned int axis, float pivot)
@@ -303,19 +306,29 @@ static size_t kdtreePartition(unsigned int* indices, size_t count, const float* 
 	return l;
 }
 
-static size_t kdtreeBuild(size_t offset, KDNode* nodes, size_t node_count, const float* points, size_t stride, unsigned int* indices, size_t count)
+static size_t kdtreeBuild(size_t offset, KDNode* nodes, size_t node_count, const float* points, size_t stride, unsigned int* indices, size_t count, size_t leaf_size)
 {
 	assert(count > 0);
 	assert(offset < node_count);
 
 	KDNode& result = nodes[offset];
 
-	if (count == 1)
+	if (count <= leaf_size)
 	{
 		result.index = indices[0];
 		result.axis = 3;
-		result.children = 0;
-		return offset + 1;
+		result.children = unsigned(count - 1);
+
+		for (size_t i = 1; i < count; ++i)
+		{
+			KDNode& tail = nodes[offset + i];
+
+			tail.index = indices[i];
+			tail.axis = 3;
+			tail.children = ~0u >> 2;
+		}
+
+		return offset + count;
 	}
 
 	float minv[3] = {FLT_MAX, FLT_MAX, FLT_MAX};
@@ -337,7 +350,7 @@ static size_t kdtreeBuild(size_t offset, KDNode* nodes, size_t node_count, const
 	}
 
 	// split axis is one where the dimension is largest
-	float sizev[3] = { maxv[0] - minv[0], maxv[1] - minv[1], maxv[2] - minv[2] };
+	float sizev[3] = {maxv[0] - minv[0], maxv[1] - minv[1], maxv[2] - minv[2]};
 	unsigned int axis = sizev[0] >= sizev[1] && sizev[0] >= sizev[2] ? 0 : sizev[1] >= sizev[2] ? 1 : 2;
 
 	// we prefer splitting using the average as it results in more balanced trees
@@ -356,12 +369,12 @@ static size_t kdtreeBuild(size_t offset, KDNode* nodes, size_t node_count, const
 	result.axis = axis;
 
 	// left subtree is right after our node
-	size_t next_offset = kdtreeBuild(offset + 1, nodes, node_count, points, stride, indices, middle);
+	size_t next_offset = kdtreeBuild(offset + 1, nodes, node_count, points, stride, indices, middle, leaf_size);
 
 	// distance to the right subtree is represented explicitly
 	result.children = unsigned(next_offset - offset - 1);
 
-	return kdtreeBuild(next_offset, nodes, node_count, points, stride, indices + middle, count - middle);
+	return kdtreeBuild(next_offset, nodes, node_count, points, stride, indices + middle, count - middle, leaf_size);
 }
 
 static void kdtreeNearest(KDNode* nodes, unsigned int root, const Cone* points, const unsigned char* emitted_flags, const float* position, unsigned int& result, float& limit)
@@ -370,21 +383,26 @@ static void kdtreeNearest(KDNode* nodes, unsigned int root, const Cone* points, 
 
 	if (node.axis == 3)
 	{
-		if (emitted_flags[node.index])
-			return;
-
-		const Cone& point = points[node.index];
-
-		float distance2 =
-			(point.px - position[0]) * (point.px - position[0]) +
-			(point.py - position[1]) * (point.py - position[1]) +
-			(point.pz - position[2]) * (point.pz - position[2]);
-		float distance = sqrtf(distance2);
-
-		if (distance < limit)
+		for (unsigned int i = 0; i <= node.children; ++i)
 		{
-			result = node.index;
-			limit = distance;
+			unsigned int index = nodes[root + i].index;
+
+			if (emitted_flags[index])
+				continue;
+
+			const Cone& point = points[index];
+
+			float distance2 =
+			    (point.px - position[0]) * (point.px - position[0]) +
+			    (point.py - position[1]) * (point.py - position[1]) +
+			    (point.pz - position[2]) * (point.pz - position[2]);
+			float distance = sqrtf(distance2);
+
+			if (distance < limit)
+			{
+				result = index;
+				limit = distance;
+			}
 		}
 
 		return;
@@ -462,7 +480,7 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 		kdindices[i] = unsigned(i);
 
 	KDNode* nodes = allocator.allocate<KDNode>(face_count * 2);
-	kdtreeBuild(0, nodes, face_count * 2, &triangles[0].px, sizeof(Cone) / sizeof(float), kdindices, face_count);
+	kdtreeBuild(0, nodes, face_count * 2, &triangles[0].px, sizeof(Cone) / sizeof(float), kdindices, face_count, /* leaf_size= */ 8);
 
 	// index of the vertex in the meshlet, 0xff if the vertex isn't used
 	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
@@ -535,7 +553,7 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 
 		if (best_triangle == ~0u)
 		{
-			float position[3] = { meshlet_cone.px, meshlet_cone.py, meshlet_cone.pz };
+			float position[3] = {meshlet_cone.px, meshlet_cone.py, meshlet_cone.pz};
 			unsigned int index = ~0u;
 			float limit = FLT_MAX;
 
