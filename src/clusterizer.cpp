@@ -13,14 +13,14 @@
 namespace meshopt
 {
 
-struct TriangleAdjacency
+struct TriangleAdjacency2
 {
 	unsigned int* counts;
 	unsigned int* offsets;
 	unsigned int* data;
 };
 
-static void buildTriangleAdjacency(TriangleAdjacency& adjacency, const unsigned int* indices, size_t index_count, size_t vertex_count, meshopt_Allocator& allocator)
+static void buildTriangleAdjacency(TriangleAdjacency2& adjacency, const unsigned int* indices, size_t index_count, size_t vertex_count, meshopt_Allocator& allocator)
 {
 	size_t face_count = index_count / 3;
 
@@ -469,7 +469,7 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* destination, const unsigned int* i
 	assert(max_vertices <= 255);
 	assert(max_triangles <= sizeof(meshlet.indices) / 3);
 
-	TriangleAdjacency adjacency = {};
+	TriangleAdjacency2 adjacency = {};
 	buildTriangleAdjacency(adjacency, indices, index_count, vertex_count, allocator);
 
 	unsigned int* live_triangles = allocator.allocate<unsigned int>(vertex_count);
