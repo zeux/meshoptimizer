@@ -271,7 +271,7 @@ struct KDNode
 	};
 
 	unsigned int axis: 2; // 3 = leaf
-	unsigned int children: 30; // *2-1, *2
+	unsigned int children : 30; // skip 1 to get to left subtree and 1+children to get to right subtree
 };
 
 static size_t kdtreePartition(unsigned int* indices, size_t count, const float* points, size_t stride, unsigned int axis, float pivot)
@@ -303,16 +303,19 @@ static size_t kdtreePartition(unsigned int* indices, size_t count, const float* 
 	return l;
 }
 
-static size_t kdtreeBuild(KDNode& result, KDNode* nodes, size_t node_count, size_t next_node, const float* points, size_t stride, unsigned int* indices, size_t count)
+static size_t kdtreeBuild(size_t offset, KDNode* nodes, size_t node_count, const float* points, size_t stride, unsigned int* indices, size_t count)
 {
 	assert(count > 0);
+	assert(offset < node_count);
+
+	KDNode& result = nodes[offset];
 
 	if (count == 1)
 	{
 		result.index = indices[0];
 		result.axis = 3;
 		result.children = 0;
-		return next_node;
+		return offset + 1;
 	}
 
 	float minv[3] = {FLT_MAX, FLT_MAX, FLT_MAX};
@@ -352,17 +355,13 @@ static size_t kdtreeBuild(KDNode& result, KDNode* nodes, size_t node_count, size
 	result.split = split;
 	result.axis = axis;
 
-	assert(next_node % 2 == 1);
-	result.children = unsigned((next_node + 1) / 2); // next node is odd so we can save space by storing offset/2
+	// left subtree is right after our node
+	size_t next_offset = kdtreeBuild(offset + 1, nodes, node_count, points, stride, indices, middle);
 
-	size_t children = next_node;
-	next_node += 2;
-	assert(next_node <= node_count);
+	// distance to the right subtree is represented explicitly
+	result.children = unsigned(next_offset - offset - 1);
 
-	next_node = kdtreeBuild(nodes[children + 0], nodes, node_count, next_node, points, stride, indices, middle);
-	next_node = kdtreeBuild(nodes[children + 1], nodes, node_count, next_node, points, stride, indices + middle, count - middle);
-
-	return next_node;
+	return kdtreeBuild(next_offset, nodes, node_count, points, stride, indices + middle, count - middle);
 }
 
 static void kdtreeNearest(KDNode* nodes, unsigned int root, const Cone* points, const unsigned char* emitted_flags, const float* position, unsigned int& result, float& limit)
@@ -392,13 +391,13 @@ static void kdtreeNearest(KDNode* nodes, unsigned int root, const Cone* points, 
 	}
 
 	float delta = position[node.axis] - node.split;
-	unsigned int first = node.children * 2 - (delta <= 0);
-	unsigned int second = ((first + 1) ^ 1) - 1;
+	unsigned int first = (delta <= 0) ? 0 : node.children;
+	unsigned int second = first ^ node.children;
 
-	kdtreeNearest(nodes, first, points, emitted_flags, position, result, limit);
+	kdtreeNearest(nodes, root + 1 + first, points, emitted_flags, position, result, limit);
 
 	if (fabsf(delta) <= limit)
-		kdtreeNearest(nodes, second, points, emitted_flags, position, result, limit);
+		kdtreeNearest(nodes, root + 1 + second, points, emitted_flags, position, result, limit);
 }
 
 } // namespace meshopt
@@ -463,7 +462,7 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 		kdindices[i] = unsigned(i);
 
 	KDNode* nodes = allocator.allocate<KDNode>(face_count * 2);
-	kdtreeBuild(nodes[0], nodes, face_count * 2, 1, &triangles[0].px, sizeof(Cone) / sizeof(float), kdindices, face_count);
+	kdtreeBuild(0, nodes, face_count * 2, &triangles[0].px, sizeof(Cone) / sizeof(float), kdindices, face_count);
 
 	// index of the vertex in the meshlet, 0xff if the vertex isn't used
 	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
