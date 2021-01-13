@@ -282,25 +282,28 @@ static size_t kdtreePartition(unsigned int* indices, size_t count, const float* 
 	assert(count > 0);
 
 	size_t l = 0;
-	size_t r = count - 1;
+	size_t r = count;
 
-	while (l < r)
+	while (l != r)
 	{
 		while (points[indices[l] * stride + axis] < pivot)
+		{
 			l++;
+			if (l == r) return l;
+		}
 
-		while (points[indices[r] * stride + axis] > pivot)
+		do
+		{
 			r--;
-
-		if (l >= r)
-			break;
+			if (l == r) return l;
+		}
+		while (points[indices[r] * stride + axis] > pivot);
 
 		unsigned int t = indices[l];
 		indices[l] = indices[r];
 		indices[r] = t;
 
 		l++;
-		r--;
 	}
 
 	return l;
