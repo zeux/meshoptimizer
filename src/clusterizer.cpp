@@ -284,14 +284,18 @@ static size_t kdtreePartition(unsigned int* indices, size_t count, const float* 
 	size_t l = 0;
 	size_t r = count;
 
+	// invariant: all elements before l are less than or equal to pivot
+	// invariant: all elements at or after r are greater than pivot
 	while (l != r)
 	{
+		// preserves invariant l, makes sure the leftover range is not empty
 		while (points[indices[l] * stride + axis] < pivot)
 		{
 			l++;
 			if (l == r) return l;
 		}
 
+		// preserves invariant r until loop exit, makes sure the leftover range is not empty
 		do
 		{
 			r--;
@@ -299,6 +303,8 @@ static size_t kdtreePartition(unsigned int* indices, size_t count, const float* 
 		}
 		while (points[indices[r] * stride + axis] > pivot);
 
+		// per invariants above we have at least one element remaining
+		// element at index r is now <= pivot, swapping it restores loop invariants
 		unsigned int t = indices[l];
 		indices[l] = indices[r];
 		indices[r] = t;
@@ -322,13 +328,14 @@ static size_t kdtreeBuild(size_t offset, KDNode* nodes, size_t node_count, const
 		result.axis = 3;
 		result.children = unsigned(count - 1);
 
+		// all remaining points are stored in nodes immediately following the leaf
 		for (size_t i = 1; i < count; ++i)
 		{
 			KDNode& tail = nodes[offset + i];
 
 			tail.index = indices[i];
 			tail.axis = 3;
-			tail.children = ~0u >> 2;
+			tail.children = ~0u >> 2; // bogus value to prevent misuse
 		}
 
 		return offset + count;
@@ -338,6 +345,7 @@ static size_t kdtreeBuild(size_t offset, KDNode* nodes, size_t node_count, const
 	float maxv[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
 	float avgv[3] = {};
 
+	// gather statistics on the points in the subtree
 	for (size_t i = 0; i < count; ++i)
 	{
 		unsigned int index = indices[i];
@@ -380,10 +388,11 @@ static size_t kdtreeBuild(size_t offset, KDNode* nodes, size_t node_count, const
 	return kdtreeBuild(next_offset, nodes, node_count, points, stride, indices + middle, count - middle, leaf_size);
 }
 
-static void kdtreeNearest(KDNode* nodes, unsigned int root, const Cone* points, const unsigned char* emitted_flags, const float* position, unsigned int& result, float& limit)
+static void kdtreeNearest(KDNode* nodes, unsigned int root, const float* points, size_t stride, const unsigned char* emitted_flags, const float* position, unsigned int& result, float& limit)
 {
 	const KDNode& node = nodes[root];
 
+	// leaf
 	if (node.axis == 3)
 	{
 		for (unsigned int i = 0; i <= node.children; ++i)
@@ -393,12 +402,12 @@ static void kdtreeNearest(KDNode* nodes, unsigned int root, const Cone* points, 
 			if (emitted_flags[index])
 				continue;
 
-			const Cone& point = points[index];
+			const float* point = points + index * stride;
 
 			float distance2 =
-			    (point.px - position[0]) * (point.px - position[0]) +
-			    (point.py - position[1]) * (point.py - position[1]) +
-			    (point.pz - position[2]) * (point.pz - position[2]);
+			    (point[0] - position[0]) * (point[0] - position[0]) +
+			    (point[1] - position[1]) * (point[1] - position[1]) +
+			    (point[2] - position[2]) * (point[2] - position[2]);
 			float distance = sqrtf(distance2);
 
 			if (distance < limit)
@@ -411,14 +420,16 @@ static void kdtreeNearest(KDNode* nodes, unsigned int root, const Cone* points, 
 		return;
 	}
 
+	// branch; we order recursion to process the node that search position is in first
 	float delta = position[node.axis] - node.split;
 	unsigned int first = (delta <= 0) ? 0 : node.children;
 	unsigned int second = first ^ node.children;
 
-	kdtreeNearest(nodes, root + 1 + first, points, emitted_flags, position, result, limit);
+	kdtreeNearest(nodes, root + 1 + first, points, stride, emitted_flags, position, result, limit);
 
+	// only process the other node if it can have a match based on closest distance so far
 	if (fabsf(delta) <= limit)
-		kdtreeNearest(nodes, root + 1 + second, points, emitted_flags, position, result, limit);
+		kdtreeNearest(nodes, root + 1 + second, points, stride, emitted_flags, position, result, limit);
 }
 
 } // namespace meshopt
@@ -560,7 +571,7 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* destination, const unsigned int* i
 			unsigned int index = ~0u;
 			float limit = FLT_MAX;
 
-			kdtreeNearest(nodes, 0, triangles, emitted_flags, position, index, limit);
+			kdtreeNearest(nodes, 0, &triangles[0].px, sizeof(Cone) / sizeof(float), emitted_flags, position, index, limit);
 
 			best_triangle = index;
 		}
