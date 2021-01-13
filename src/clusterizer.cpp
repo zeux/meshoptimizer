@@ -274,7 +274,7 @@ struct KDNode
 	unsigned int children: 30; // *2-1, *2
 };
 
-static size_t kdtreePartition(unsigned int* indices, size_t count, const Cone* data, unsigned int axis, float pivot)
+static size_t kdtreePartition(unsigned int* indices, size_t count, const float* points, size_t stride, unsigned int axis, float pivot)
 {
 	assert(count > 0);
 
@@ -283,10 +283,10 @@ static size_t kdtreePartition(unsigned int* indices, size_t count, const Cone* d
 
 	while (l < r)
 	{
-		while ((&data[indices[l]].px)[axis] < pivot)
+		while (points[indices[l] * stride + axis] < pivot)
 			l++;
 
-		while ((&data[indices[r]].px)[axis] > pivot)
+		while (points[indices[r] * stride + axis] > pivot)
 			r--;
 
 		if (l >= r)
@@ -303,10 +303,9 @@ static size_t kdtreePartition(unsigned int* indices, size_t count, const Cone* d
 	return l;
 }
 
-static size_t kdtreeBuild(KDNode& result, KDNode* nodes, size_t node_count, size_t next_node, const Cone* data, unsigned int* indices, size_t count)
+static size_t kdtreeBuild(KDNode& result, KDNode* nodes, size_t node_count, size_t next_node, const float* points, size_t stride, unsigned int* indices, size_t count)
 {
 	assert(count > 0);
-	assert(next_node % 2 == 1);
 
 	if (count == 1)
 	{
@@ -323,11 +322,10 @@ static size_t kdtreeBuild(KDNode& result, KDNode* nodes, size_t node_count, size
 	for (size_t i = 0; i < count; ++i)
 	{
 		unsigned int index = indices[i];
-		float v[3] = { data[index].px, data[index].py, data[index].pz };
 
 		for (int j = 0; j < 3; ++j)
 		{
-			float vj = v[j];
+			float vj = points[index * stride + j];
 
 			minv[j] = minv[j] > vj ? vj : minv[j];
 			maxv[j] = maxv[j] < vj ? vj : maxv[j];
@@ -346,26 +344,28 @@ static size_t kdtreeBuild(KDNode& result, KDNode* nodes, size_t node_count, size
 	if (split <= minv[axis] || split >= maxv[axis])
 		split = minv[axis] + sizev[axis] * 0.5f;
 
-	size_t middle = kdtreePartition(indices, count, data, axis, split);
+	size_t middle = kdtreePartition(indices, count, points, stride, axis, split);
 
 	// when the partition is degenerate, make sure we chop off at least one point
 	middle = (middle == 0) ? 1 : (middle == count) ? count - 1 : middle;
 
 	result.split = split;
 	result.axis = axis;
+
+	assert(next_node % 2 == 1);
 	result.children = unsigned((next_node + 1) / 2); // next node is odd so we can save space by storing offset/2
 
 	size_t children = next_node;
 	next_node += 2;
 	assert(next_node <= node_count);
 
-	next_node = kdtreeBuild(nodes[children + 0], nodes, node_count, next_node, data, indices, middle);
-	next_node = kdtreeBuild(nodes[children + 1], nodes, node_count, next_node, data, indices + middle, count - middle);
+	next_node = kdtreeBuild(nodes[children + 0], nodes, node_count, next_node, points, stride, indices, middle);
+	next_node = kdtreeBuild(nodes[children + 1], nodes, node_count, next_node, points, stride, indices + middle, count - middle);
 
 	return next_node;
 }
 
-static void kdtreeNearest(KDNode* nodes, unsigned int root, const Cone* triangles, const unsigned char* emitted_flags, const float* position, unsigned int& result, float& limit)
+static void kdtreeNearest(KDNode* nodes, unsigned int root, const Cone* points, const unsigned char* emitted_flags, const float* position, unsigned int& result, float& limit)
 {
 	const KDNode& node = nodes[root];
 
@@ -374,12 +374,12 @@ static void kdtreeNearest(KDNode* nodes, unsigned int root, const Cone* triangle
 		if (emitted_flags[node.index])
 			return;
 
-		const Cone& triangle = triangles[node.index];
+		const Cone& point = points[node.index];
 
 		float distance2 =
-			(triangle.px - position[0]) * (triangle.px - position[0]) +
-			(triangle.py - position[1]) * (triangle.py - position[1]) +
-			(triangle.pz - position[2]) * (triangle.pz - position[2]);
+			(point.px - position[0]) * (point.px - position[0]) +
+			(point.py - position[1]) * (point.py - position[1]) +
+			(point.pz - position[2]) * (point.pz - position[2]);
 		float distance = sqrtf(distance2);
 
 		if (distance < limit)
@@ -395,10 +395,10 @@ static void kdtreeNearest(KDNode* nodes, unsigned int root, const Cone* triangle
 	unsigned int first = node.children * 2 - (delta <= 0);
 	unsigned int second = ((first + 1) ^ 1) - 1;
 
-	kdtreeNearest(nodes, first, triangles, emitted_flags, position, result, limit);
+	kdtreeNearest(nodes, first, points, emitted_flags, position, result, limit);
 
 	if (fabsf(delta) <= limit)
-		kdtreeNearest(nodes, second, triangles, emitted_flags, position, result, limit);
+		kdtreeNearest(nodes, second, points, emitted_flags, position, result, limit);
 }
 
 } // namespace meshopt
@@ -428,9 +428,6 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 	assert(max_triangles >= 1);
 	assert(vertex_positions_stride > 0 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
-
-	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
-	(void)vertex_stride_float; // TODO
 
 	meshopt_Allocator allocator;
 
@@ -466,21 +463,20 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 		kdindices[i] = unsigned(i);
 
 	KDNode* nodes = allocator.allocate<KDNode>(face_count * 2);
-	kdtreeBuild(nodes[0], nodes, face_count * 2, 1, triangles, kdindices, face_count);
+	kdtreeBuild(nodes[0], nodes, face_count * 2, 1, &triangles[0].px, sizeof(Cone) / sizeof(float), kdindices, face_count);
 
 	// index of the vertex in the meshlet, 0xff if the vertex isn't used
 	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
 	memset(used, -1, vertex_count);
 
 	size_t offset = 0;
-	unsigned int input_cursor = 0;
 
 	Cone meshlet_cone_acc = {};
 
-	while (input_cursor < face_count)
+	for (;;)
 	{
 		unsigned int best_triangle = ~0u;
-		unsigned int best_extra = 4;
+		unsigned int best_extra = 5;
 		float best_score = FLT_MAX;
 
 		Cone meshlet_cone = getMeshletCone(meshlet_cone_acc, meshlet.triangle_count);
@@ -502,19 +498,17 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 
 				unsigned int extra = (used[a] == 0xff) + (used[b] == 0xff) + (used[c] == 0xff);
 
-				// TODO: early out when extra == 0
+				// triangles that don't add new vertices to meshlets are max. priority
+				if (extra != 0)
+				{
+					// artificially increase the priority of dangling triangles as they're expensive to add to new meshlets
+					if (live_triangles[a] == 1 || live_triangles[b] == 1 || live_triangles[c] == 1)
+						extra = 0;
 
-				if (extra != 0 && (live_triangles[a] == 1 || live_triangles[b] == 1 || live_triangles[c] == 1))
-				{
-					// best_triangle = triangle;
-					// goto done;
-					extra = 1;
-				}
-				else if (extra != 0)
-				{
 					extra++;
 				}
 
+				// since topology-based priority is always more important than the score, we can skip scoring in some cases
 				if (extra > best_extra)
 					continue;
 
@@ -529,76 +523,26 @@ size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned
 
 				float score = getMeshletScore(distance2, spread, cone_weight, meshlet_expected_radius);
 
+				// note that topology-based priority is always more important than the score
+				// this helps maintain reasonable effectiveness of meshlet data and reduces scoring cost
 				if (extra < best_extra || score < best_score)
 				{
 					best_triangle = triangle;
 					best_extra = extra;
 					best_score = score;
 				}
-
-				// TODO: early out when best extra is 0
 			}
-
-        // done:;
 		}
 
 		if (best_triangle == ~0u)
 		{
-		#if 0
-			unsigned int best_vertex = ~0u;
-			float best_distance2 = FLT_MAX;
-
-			for (size_t i = 0; i < vertex_count; ++i)
-			{
-				unsigned int index = unsigned(i);
-
-				if (live_triangles[index] > 0)
-				{
-					const float* pos = vertex_positions + vertex_stride_float * index;
-
-					float distance2 =
-					    (pos[0] - meshlet_cone.px) * (pos[0] - meshlet_cone.px) +
-					    (pos[1] - meshlet_cone.py) * (pos[1] - meshlet_cone.py) +
-					    (pos[2] - meshlet_cone.pz) * (pos[2] - meshlet_cone.pz);
-
-					if (distance2 < best_distance2)
-					{
-						best_vertex = index;
-						best_distance2 = distance2;
-					}
-				}
-			}
-
-			if (best_vertex != ~0u)
-			{
-				unsigned int* neighbours = &adjacency.data[0] + adjacency.offsets[best_vertex];
-				size_t neighbours_size = adjacency.counts[best_vertex];
-				(void)neighbours_size;
-
-				assert(neighbours_size > 0);
-				assert(!emitted_flags[neighbours[0]]);
-				best_triangle = neighbours[0];
-			}
-		#else
 			float position[3] = { meshlet_cone.px, meshlet_cone.py, meshlet_cone.pz };
+			unsigned int index = ~0u;
 			float limit = FLT_MAX;
 
-			kdtreeNearest(nodes, 0, triangles, emitted_flags, position, best_triangle, limit);
-		#endif
-		}
+			kdtreeNearest(nodes, 0, triangles, emitted_flags, position, index, limit);
 
-		if (best_triangle == ~0u)
-		{
-			while (input_cursor < face_count)
-			{
-				unsigned int triangle = input_cursor++;
-
-				if (!emitted_flags[triangle])
-				{
-					best_triangle = triangle;
-					break;
-				}
-			}
+			best_triangle = index;
 		}
 
 		if (best_triangle == ~0u)

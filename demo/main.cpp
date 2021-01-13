@@ -1179,6 +1179,7 @@ void processDev(const char* path)
 		return;
 
 	meshlets(mesh, false);
+	meshlets(mesh, true);
 }
 
 int main(int argc, char** argv)
