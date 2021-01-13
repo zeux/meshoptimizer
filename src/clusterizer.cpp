@@ -6,8 +6,6 @@
 #include <math.h>
 #include <string.h>
 
-#include <algorithm>
-
 // This work is based on:
 // Graham Wihlidal. Optimizing the Graphics Pipeline with Compute. 2016
 // Matthaeus Chajdas. GeometryFX 1.2 - Cluster Culling. 2016
@@ -276,22 +274,34 @@ struct KDNode
 	unsigned int children: 30; // *2-1, *2
 };
 
-struct KDTreeSorter
+static size_t kdtreePartition(unsigned int* indices, size_t count, const Cone* data, unsigned int axis, float pivot)
 {
-	const Cone* data;
-	unsigned int axis;
-	float split;
+	assert(count > 0);
 
-	bool operator()(unsigned int i) const
+	size_t l = 0;
+	size_t r = count - 1;
+
+	while (l < r)
 	{
-		return (&data[i].px)[axis] < split;
+		while ((&data[indices[l]].px)[axis] < pivot)
+			l++;
+
+		while ((&data[indices[r]].px)[axis] > pivot)
+			r--;
+
+		if (l >= r)
+			break;
+
+		unsigned int t = indices[l];
+		indices[l] = indices[r];
+		indices[r] = t;
+
+		l++;
+		r--;
 	}
 
-	bool operator()(unsigned int l, unsigned int r) const
-	{
-		return (&data[l].px)[axis] < (&data[r].px)[axis];
-	}
-};
+	return l;
+}
 
 static size_t kdtreeBuild(KDNode& result, KDNode* nodes, size_t node_count, size_t next_node, const Cone* data, unsigned int* indices, size_t count)
 {
@@ -336,8 +346,7 @@ static size_t kdtreeBuild(KDNode& result, KDNode* nodes, size_t node_count, size
 	if (split <= minv[axis] || split >= maxv[axis])
 		split = minv[axis] + sizev[axis] * 0.5f;
 
-	KDTreeSorter sorter = { data, axis, split };
-	size_t middle = std::partition(indices, indices + count, sorter) - indices;
+	size_t middle = kdtreePartition(indices, count, data, axis, split);
 
 	// when the partition is degenerate, make sure we chop off at least one point
 	middle = (middle == 0) ? 1 : (middle == count) ? count - 1 : middle;
