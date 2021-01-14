@@ -347,30 +347,27 @@ static size_t kdtreeBuild(size_t offset, KDNode* nodes, size_t node_count, const
 	if (count <= leaf_size)
 		return kdtreeBuildLeaf(offset, nodes, node_count, indices, count);
 
-	float minv[3] = {FLT_MAX, FLT_MAX, FLT_MAX};
-	float maxv[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
-	float avgv[3] = {};
+	float mean[3] = {};
+	float vars[3] = {};
+	float runc = 1;
 
-	// gather statistics on the points in the subtree
-	for (size_t i = 0; i < count; ++i)
+	// gather statistics on the points in the subtree using Welford's algorithm
+	for (size_t i = 0; i < count; ++i, runc += 1.f)
 	{
-		unsigned int index = indices[i];
+		const float* point = points + indices[i] * stride;
 
-		for (int j = 0; j < 3; ++j)
+		for (int k = 0; k < 3; ++k)
 		{
-			float vj = points[index * stride + j];
-
-			minv[j] = minv[j] > vj ? vj : minv[j];
-			maxv[j] = maxv[j] < vj ? vj : maxv[j];
-			avgv[j] += vj;
+			float delta = point[k] - mean[k];
+			mean[k] += delta / runc;
+			vars[k] += delta * (point[k] - mean[k]);
 		}
 	}
 
-	// split axis is one where the dimension is largest
-	float sizev[3] = {maxv[0] - minv[0], maxv[1] - minv[1], maxv[2] - minv[2]};
-	unsigned int axis = sizev[0] >= sizev[1] && sizev[0] >= sizev[2] ? 0 : sizev[1] >= sizev[2] ? 1 : 2;
+	// split axis is one where the variance is largest
+	unsigned int axis = vars[0] >= vars[1] && vars[0] >= vars[2] ? 0 : vars[1] >= vars[2] ? 1 : 2;
 
-	float split = avgv[axis] / float(count);
+	float split = mean[axis];
 	size_t middle = kdtreePartition(indices, count, points, stride, axis, split);
 
 	// when the partition is degenerate simply consolidate the points into a single node
