@@ -375,9 +375,9 @@ static void kdtreeNearest(KDNode* nodes, unsigned int root, const float* points,
 {
 	const KDNode& node = nodes[root];
 
-	// leaf
 	if (node.axis == 3)
 	{
+		// leaf
 		for (unsigned int i = 0; i <= node.children; ++i)
 		{
 			unsigned int index = nodes[root + i].index;
@@ -399,20 +399,20 @@ static void kdtreeNearest(KDNode* nodes, unsigned int root, const float* points,
 				limit = distance;
 			}
 		}
-
-		return;
 	}
+	else
+	{
+		// branch; we order recursion to process the node that search position is in first
+		float delta = position[node.axis] - node.split;
+		unsigned int first = (delta <= 0) ? 0 : node.children;
+		unsigned int second = first ^ node.children;
 
-	// branch; we order recursion to process the node that search position is in first
-	float delta = position[node.axis] - node.split;
-	unsigned int first = (delta <= 0) ? 0 : node.children;
-	unsigned int second = first ^ node.children;
+		kdtreeNearest(nodes, root + 1 + first, points, stride, emitted_flags, position, result, limit);
 
-	kdtreeNearest(nodes, root + 1 + first, points, stride, emitted_flags, position, result, limit);
-
-	// only process the other node if it can have a match based on closest distance so far
-	if (fabsf(delta) <= limit)
-		kdtreeNearest(nodes, root + 1 + second, points, stride, emitted_flags, position, result, limit);
+		// only process the other node if it can have a match based on closest distance so far
+		if (fabsf(delta) <= limit)
+			kdtreeNearest(nodes, root + 1 + second, points, stride, emitted_flags, position, result, limit);
+	}
 }
 
 } // namespace meshopt
