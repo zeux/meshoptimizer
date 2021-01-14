@@ -332,17 +332,17 @@ static size_t kdtreeBuild(size_t offset, KDNode* nodes, size_t node_count, const
 
 	float mean[3] = {};
 	float vars[3] = {};
-	float runc = 1;
+	float runc = 1, runs = 1;
 
 	// gather statistics on the points in the subtree using Welford's algorithm
-	for (size_t i = 0; i < count; ++i, runc += 1.f)
+	for (size_t i = 0; i < count; ++i, runc += 1.f, runs = 1.f / runc)
 	{
 		const float* point = points + indices[i] * stride;
 
 		for (int k = 0; k < 3; ++k)
 		{
 			float delta = point[k] - mean[k];
-			mean[k] += delta / runc;
+			mean[k] += delta * runs;
 			vars[k] += delta * (point[k] - mean[k]);
 		}
 	}
