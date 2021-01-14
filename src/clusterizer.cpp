@@ -279,40 +279,23 @@ struct KDNode
 
 static size_t kdtreePartition(unsigned int* indices, size_t count, const float* points, size_t stride, unsigned int axis, float pivot)
 {
-	assert(count > 0);
+	size_t m = 0;
 
-	size_t l = 0;
-	size_t r = count;
-
-	// invariant: all elements before l are less than or equal to pivot
-	// invariant: all elements at or after r are greater than pivot
-	while (l != r)
+	// invariant: elements in range [0, m) are < pivot, elements in range [m, i) are >= pivot
+	for (size_t i = 0; i < count; ++i)
 	{
-		// preserves invariant l, makes sure the leftover range is not empty
-		while (points[indices[l] * stride + axis] < pivot)
-		{
-			l++;
-			if (l == r) return l;
-		}
+		float v = points[indices[i] * stride + axis];
 
-		// preserves invariant r until loop exit, makes sure the leftover range is not empty
-		do
-		{
-			r--;
-			if (l == r) return l;
-		}
-		while (points[indices[r] * stride + axis] > pivot);
+		// swap(m, i) unconditionally
+		unsigned int t = indices[m];
+		indices[m] = indices[i];
+		indices[i] = t;
 
-		// per invariants above we have at least one element remaining
-		// element at index r is now <= pivot, swapping it restores loop invariants
-		unsigned int t = indices[l];
-		indices[l] = indices[r];
-		indices[r] = t;
-
-		l++;
+		// when v >= pivot, we swap i with m without advancing it, preserving invariants
+		m += v < pivot;
 	}
 
-	return l;
+	return m;
 }
 
 static size_t kdtreeBuildLeaf(size_t offset, KDNode* nodes, size_t node_count, unsigned int* indices, size_t count)
