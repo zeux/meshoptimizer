@@ -315,31 +315,37 @@ static size_t kdtreePartition(unsigned int* indices, size_t count, const float* 
 	return l;
 }
 
+static size_t kdtreeBuildLeaf(size_t offset, KDNode* nodes, size_t node_count, unsigned int* indices, size_t count)
+{
+	assert(offset + count <= node_count);
+	(void)node_count;
+
+	KDNode& result = nodes[offset];
+
+	result.index = indices[0];
+	result.axis = 3;
+	result.children = unsigned(count - 1);
+
+	// all remaining points are stored in nodes immediately following the leaf
+	for (size_t i = 1; i < count; ++i)
+	{
+		KDNode& tail = nodes[offset + i];
+
+		tail.index = indices[i];
+		tail.axis = 3;
+		tail.children = ~0u >> 2; // bogus value to prevent misuse
+	}
+
+	return offset + count;
+}
+
 static size_t kdtreeBuild(size_t offset, KDNode* nodes, size_t node_count, const float* points, size_t stride, unsigned int* indices, size_t count, size_t leaf_size)
 {
 	assert(count > 0);
 	assert(offset < node_count);
 
-	KDNode& result = nodes[offset];
-
 	if (count <= leaf_size)
-	{
-		result.index = indices[0];
-		result.axis = 3;
-		result.children = unsigned(count - 1);
-
-		// all remaining points are stored in nodes immediately following the leaf
-		for (size_t i = 1; i < count; ++i)
-		{
-			KDNode& tail = nodes[offset + i];
-
-			tail.index = indices[i];
-			tail.axis = 3;
-			tail.children = ~0u >> 2; // bogus value to prevent misuse
-		}
-
-		return offset + count;
-	}
+		return kdtreeBuildLeaf(offset, nodes, node_count, indices, count);
 
 	float minv[3] = {FLT_MAX, FLT_MAX, FLT_MAX};
 	float maxv[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
@@ -364,17 +370,14 @@ static size_t kdtreeBuild(size_t offset, KDNode* nodes, size_t node_count, const
 	float sizev[3] = {maxv[0] - minv[0], maxv[1] - minv[1], maxv[2] - minv[2]};
 	unsigned int axis = sizev[0] >= sizev[1] && sizev[0] >= sizev[2] ? 0 : sizev[1] >= sizev[2] ? 1 : 2;
 
-	// we prefer splitting using the average as it results in more balanced trees
-	// sometimes the average is outside of the min..max range due to floating point precision issues
-	// in these cases we fall back to midpoint
 	float split = avgv[axis] / float(count);
-	if (split <= minv[axis] || split >= maxv[axis])
-		split = minv[axis] + sizev[axis] * 0.5f;
-
 	size_t middle = kdtreePartition(indices, count, points, stride, axis, split);
 
-	// when the partition is degenerate, make sure we chop off at least one point
-	middle = (middle == 0) ? 1 : (middle == count) ? count - 1 : middle;
+	// when the partition is degenerate simply consolidate the points into a single node
+	if (middle <= leaf_size / 2 || middle >= count - leaf_size / 2)
+		return kdtreeBuildLeaf(offset, nodes, node_count, indices, count);
+
+	KDNode& result = nodes[offset];
 
 	result.split = split;
 	result.axis = axis;
