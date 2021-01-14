@@ -856,21 +856,27 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio)
 		}
 }
 
-void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_vertices)
+void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_vertices, bool scan)
 {
 	Mesh mesh = source;
 	assert(mesh.type == cgltf_primitive_type_triangles);
 
 	reindexMesh(mesh);
-	optimizeMesh(mesh, false);
+
+	if (scan)
+		optimizeMesh(mesh, false);
 
 	const Stream* positions = getStream(mesh, cgltf_attribute_type_position);
 	assert(positions);
 
 	const size_t max_triangles = 126;
+	const float cone_weight = 0.f;
 
 	std::vector<meshopt_Meshlet> mr(meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles));
-	mr.resize(meshopt_buildMeshlets(&mr[0], &mesh.indices[0], mesh.indices.size(), positions->data.size(), max_vertices, max_triangles));
+	if (scan)
+		mr.resize(meshopt_buildMeshletsScan(&mr[0], &mesh.indices[0], mesh.indices.size(), positions->data.size(), max_vertices, max_triangles));
+	else
+		mr.resize(meshopt_buildMeshlets(&mr[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, positions->data.size(), sizeof(Attr), max_vertices, max_triangles, cone_weight));
 
 	// generate meshlet meshes, using unique colors
 	meshlets.nodes = mesh.nodes;

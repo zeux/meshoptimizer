@@ -820,15 +820,21 @@ void shadow(const Mesh& mesh)
 	       (end - start) * 1000);
 }
 
-void meshlets(const Mesh& mesh)
+void meshlets(const Mesh& mesh, bool scan)
 {
 	const size_t max_vertices = 64;
 	const size_t max_triangles = 126;
+	const float cone_weight = 0.5f; // note: should be set to 0 unless cone culling is used at runtime!
 
 	// note: input mesh is assumed to be optimized for vertex cache and vertex fetch
 	double start = timestamp();
 	std::vector<meshopt_Meshlet> meshlets(meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles));
-	meshlets.resize(meshopt_buildMeshlets(&meshlets[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), max_vertices, max_triangles));
+
+	if (scan)
+		meshlets.resize(meshopt_buildMeshletsScan(&meshlets[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), max_vertices, max_triangles));
+	else
+		meshlets.resize(meshopt_buildMeshlets(&meshlets[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, max_triangles, cone_weight));
+
 	double end = timestamp();
 
 	double avg_vertices = 0;
@@ -847,7 +853,8 @@ void meshlets(const Mesh& mesh)
 	avg_vertices /= double(meshlets.size());
 	avg_triangles /= double(meshlets.size());
 
-	printf("Meshlets : %d meshlets (avg vertices %.1f, avg triangles %.1f, not full %d) in %.2f msec\n",
+	printf("Meshlets%c: %d meshlets (avg vertices %.1f, avg triangles %.1f, not full %d) in %.2f msec\n",
+	       scan ? 'S' : ' ',
 	       int(meshlets.size()), avg_vertices, avg_triangles, int(not_full), (end - start) * 1000);
 
 	float camera[3] = {100, 100, 100};
@@ -859,10 +866,14 @@ void meshlets(const Mesh& mesh)
 	size_t accepted = 0;
 	size_t accepted_s8 = 0;
 
+	std::vector<float> radii(meshlets.size());
+
 	double startc = timestamp();
 	for (size_t i = 0; i < meshlets.size(); ++i)
 	{
 		meshopt_Bounds bounds = meshopt_computeMeshletBounds(&meshlets[i], &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
+
+		radii[i] = bounds.radius;
 
 		// trivial accept: we can't ever backface cull this meshlet
 		accepted += (bounds.cone_cutoff >= 1);
@@ -884,6 +895,32 @@ void meshlets(const Mesh& mesh)
 		rejected_alt_s8 += cview[0] * (bounds.cone_axis_s8[0] / 127.f) + cview[1] * (bounds.cone_axis_s8[1] / 127.f) + cview[2] * (bounds.cone_axis_s8[2] / 127.f) >= (bounds.cone_cutoff_s8 / 127.f) * cviewlength + bounds.radius;
 	}
 	double endc = timestamp();
+
+	double radius_mean = 0;
+
+	for (size_t i = 0; i < meshlets.size(); ++i)
+		radius_mean += radii[i];
+
+	radius_mean /= double(meshlets.size());
+
+	double radius_variance = 0;
+
+	for (size_t i = 0; i < meshlets.size(); ++i)
+		radius_variance += (radii[i] - radius_mean) * (radii[i] - radius_mean);
+
+	radius_variance /= double(meshlets.size() - 1);
+
+	double radius_stddev = sqrt(radius_variance);
+
+	size_t meshlets_std = 0;
+
+	for (size_t i = 0; i < meshlets.size(); ++i)
+		meshlets_std += radii[i] < radius_mean + radius_stddev;
+
+	printf("BoundDist: mean %f stddev %f; %.1f%% meshlets are under mean+stddev\n",
+	       radius_mean,
+	       radius_stddev,
+	       double(meshlets_std) / double(meshlets.size()) * 100);
 
 	printf("ConeCull : rejected apex %d (%.1f%%) / center %d (%.1f%%), trivially accepted %d (%.1f%%) in %.2f msec\n",
 	       int(rejected), double(rejected) / double(meshlets.size()) * 100,
@@ -1106,7 +1143,9 @@ void process(const char* path)
 	stripify(copy, true, 'R');
 	stripify(copystrip, true, 'S');
 
-	meshlets(copy);
+	meshlets(copy, false);
+	meshlets(copy, true);
+
 	shadow(copy);
 
 	encodeIndex(copy, ' ');
@@ -1139,8 +1178,11 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	simplify(mesh);
-	simplifySloppy(mesh);
+	Mesh copy = mesh;
+	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
+
+	meshlets(copy, false);
+	meshlets(copy, true);
 }
 
 int main(int argc, char** argv)
