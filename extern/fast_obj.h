@@ -374,27 +374,6 @@ int string_equal(const char* a, const char* s, const char* e)
 
 
 static
-int string_find_last(const char* s, char c, size_t* p)
-{
-    const char* e;
-
-    e = s + strlen(s);
-    while (e > s)
-    {
-        e--;
-
-        if (*e == c)
-        {
-            *p = (size_t)(e - s);
-            return 1;
-        }
-    }
-
-    return 0;
-}
-
-
-static
 void string_fix_separators(char* s)
 {
     while (*s)
@@ -1289,7 +1268,6 @@ fastObjMesh* fast_obj_read(const char* path)
     char*        end;
     char*        last;
     fastObjUInt  read;
-    size_t       sep;
     fastObjUInt  bytes;
 
 
@@ -1336,13 +1314,16 @@ fastObjMesh* fast_obj_read(const char* path)
 
 
     /* Find base path for materials/textures */
-    if (string_find_last(path, FAST_OBJ_SEPARATOR, &sep))
-        data.base = string_substr(path, 0, sep + 1);
-#ifdef _WIN32
-    /* Check for the other direction slash on windows too, but not linux/mac where it's a valid char */
-    else if (string_find_last(path, FAST_OBJ_OTHER_SEP, &sep))
-        data.base = string_substr(path, 0, sep + 1);
-#endif
+    {
+        const char* sep1 = strrchr(path, FAST_OBJ_SEPARATOR);
+        const char* sep2 = strrchr(path, FAST_OBJ_OTHER_SEP);
+
+        /* Use the last separator in the path */
+        const char* sep = sep2 && (!sep1 || sep1 < sep2) ? sep2 : sep1;
+
+        if (sep)
+            data.base = string_substr(path, 0, sep - path + 1);
+    }
 
 
     /* Create buffer for reading file */
