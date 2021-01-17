@@ -77,9 +77,8 @@ var ready;
 var instance;
 var interface;
 
-var rootfd = 3;
 var output = { data: new Uint8Array(), position: 0, size: 0 };
-var fds = { 1: output, 2: output };
+var fds = { 1: output, 2: output, 3: { mount: "/", path: "/" }, 4: { mount: "/gltfpack-$pwd", path: "" } };
 
 var wasi = {
 	proc_exit: function(rval) {
@@ -103,8 +102,12 @@ var wasi = {
 	},
 
 	fd_fdstat_get: function(fd, stat) {
+		if (!fds[fd]) {
+			return WASI_EBADF;
+		}
+
 		var heap = getHeap();
-		heap.setUint8(stat + 0, fds[fd] === rootfd ? 3 : 4);
+		heap.setUint8(stat + 0, fds[fd].path !== undefined ? 3 : 4);
 		heap.setUint16(stat + 2, 0, true);
 		heap.setUint32(stat + 8, 0, true);
 		heap.setUint32(stat + 12, 0, true);
@@ -114,14 +117,14 @@ var wasi = {
 	},
 
 	path_open32: function(parent_fd, dirflags, path, path_len, oflags, fs_rights_base, fs_rights_inheriting, fdflags, opened_fd) {
-		if (parent_fd != rootfd) {
+		if (!fds[parent_fd] || fds[parent_fd].path === undefined) {
 			return WASI_EBADF;
 		}
 
 		var heap = getHeap();
 
 		var file = {};
-		file.name = getString(heap.buffer, path, path_len);
+		file.name = fds[parent_fd].path + getString(heap.buffer, path, path_len);
 		file.position = 0;
 
 		if (oflags & 1) {
@@ -152,12 +155,12 @@ var wasi = {
 	},
 
 	path_unlink_file: function(parent_fd, path, path_len) {
-		if (parent_fd !== rootfd) {
+		if (!fds[parent_fd] || fds[parent_fd].path === undefined) {
 			return WASI_EBADF;
 		}
 
 		var heap = getHeap();
-		var name = getString(heap.buffer, path, path_len);
+		var name = fds[parent_fd].path + getString(heap.buffer, path, path_len);
 
 		try {
 			interface.unlink(name);
@@ -167,18 +170,48 @@ var wasi = {
 		}
 	},
 
-	fd_prestat_get: function(fd, buf) {
-		if (fd != rootfd) {
+	path_filestat_get: function(parent_fd, flags, path, path_len, buf) {
+		if (!fds[parent_fd] || fds[parent_fd].path === undefined) {
 			return WASI_EBADF;
 		}
 
 		var heap = getHeap();
+		var name = getString(heap.buffer, path, path_len);
+
+		var heap = getHeap();
+		for (var i = 0; i < 64; ++i)
+			heap.setUint8(buf + i, 0);
+
+		heap.setUint8(buf + 16, name == "." ? 3 : 4);
+		return 0;
+	},
+
+	fd_prestat_get: function(fd, buf) {
+		if (!fds[fd] || fds[fd].path === undefined) {
+			return WASI_EBADF;
+		}
+
+		var path_buf = stringBuffer(fds[fd].mount);
+
+		var heap = getHeap();
 		heap.setUint8(buf, 0);
-		heap.setUint32(buf + 4, 0, true);
+		heap.setUint32(buf + 4, path_buf.length, true);
 		return 0;
 	},
 
 	fd_prestat_dir_name: function(fd, path, path_len) {
+		if (!fds[fd] || fds[fd].path === undefined) {
+			return WASI_EBADF;
+		}
+
+		var path_buf = stringBuffer(fds[fd].mount);
+
+		if (path_len != path_buf.length) {
+			return WASI_EINVAL;
+		}
+
+		var heap = getHeap();
+		new Uint8Array(heap.buffer).set(path_buf, path);
 		return 0;
 	},
 
@@ -293,7 +326,7 @@ var wasi = {
 };
 
 function nextFd() {
-	for (var i = rootfd + 1; ; ++i) {
+	for (var i = 1; ; ++i) {
 		if (fds[i] === undefined) {
 			return i;
 		}
@@ -306,6 +339,10 @@ function getHeap() {
 
 function getString(buffer, offset, length) {
 	return new TextDecoder().decode(new Uint8Array(buffer, offset, length));
+}
+
+function stringBuffer(string) {
+	return new TextEncoder().encode(string);
 }
 
 function growArray(data, len) {
@@ -321,11 +358,9 @@ function growArray(data, len) {
 }
 
 function uploadArgv(argv) {
-	var encoder = new TextEncoder();
-
 	var buf_size = argv.length * 4;
 	for (var i = 0; i < argv.length; ++i) {
-		buf_size += encoder.encode(argv[i]).length + 1;
+		buf_size += stringBuffer(argv[i]).length + 1;
 	}
 
 	var buf = instance.exports.malloc(buf_size);
@@ -334,7 +369,7 @@ function uploadArgv(argv) {
 	var heap = getHeap();
 
 	for (var i = 0; i < argv.length; ++i) {
-		var item = encoder.encode(argv[i]);
+		var item = stringBuffer(argv[i]);
 
 		heap.setUint32(buf + i * 4, argp, true);
 		new Uint8Array(heap.buffer).set(item, argp);
