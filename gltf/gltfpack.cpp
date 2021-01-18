@@ -8,6 +8,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef __wasi__
+#include <unistd.h>
+#endif
+
 #include "../src/meshoptimizer.h"
 
 std::string getVersion()
@@ -1257,6 +1261,8 @@ int main(int argc, char** argv)
 #ifdef __wasi__
 extern "C" int pack(int argc, char** argv)
 {
+	chdir("/gltfpack-$pwd");
+
 	int result = main(argc, argv);
 	fflush(NULL);
 	return result;
