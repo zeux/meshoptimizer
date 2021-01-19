@@ -261,7 +261,8 @@ size_t target_index_count = size_t(index_count * threshold);
 float target_error = 1e-2f;
 
 std::vector<unsigned int> lod(index_count);
-lod.resize(meshopt_simplify(&lod[0], indices, index_count, &vertices[0].x, vertex_count, sizeof(Vertex), target_index_count, target_error));
+float lod_error = 0.f;
+lod.resize(meshopt_simplify(&lod[0], indices, index_count, &vertices[0].x, vertex_count, sizeof(Vertex), target_index_count, target_error, &lod_error));
 ```
 
 Target error is an approximate measure of the deviation from the original mesh using distance normalized to 0..1 (so 1e-2f means that simplifier will try to maintain the error to be below 1% of the mesh extents). Note that because of topological restrictions and error bounds simplifier isn't guaranteed to reach the target index count and can stop earlier.
@@ -271,14 +272,18 @@ The second simplification algorithm, `meshopt_simplifySloppy`, doesn't follow th
 ```c++
 float threshold = 0.2f;
 size_t target_index_count = size_t(index_count * threshold);
+float target_error = 1e-1f;
 
-std::vector<unsigned int> lod(target_index_count);
-lod.resize(meshopt_simplifySloppy(&lod[0], indices, index_count, &vertices[0].x, vertex_count, sizeof(Vertex), target_index_count));
+std::vector<unsigned int> lod(index_count);
+float lod_error = 0.f;
+lod.resize(meshopt_simplifySloppy(&lod[0], indices, index_count, &vertices[0].x, vertex_count, sizeof(Vertex), target_index_count, target_error, &lod_error));
 ```
 
-This algorithm is guaranteed to return a result at or below the target index count. It is 5-6x faster than `meshopt_simplify` when simplification ratio is large, and is able to reach ~20M triangles/sec on a desktop CPU (`meshopt_simplify` works at ~3M triangles/sec).
+This algorithm will not stop early due to topology restrictions but can still do so if target index count can't be reached without introducing an error larger than target. It is 5-6x faster than `meshopt_simplify` when simplification ratio is large, and is able to reach ~20M triangles/sec on a desktop CPU (`meshopt_simplify` works at ~3M triangles/sec).
 
 When a sequence of LOD meshes is generated that all use the original vertex buffer, care must be taken to order vertices optimally to not penalize mobile GPU architectures that are only capable of transforming a sequential vertex buffer range. It's recommended in this case to first optimize each LOD for vertex cache, then assemble all LODs in one large index buffer starting from the coarsest LOD (the one with fewest triangles), and call `meshopt_optimizeVertexFetch` on the final large index buffer. This will make sure that coarser LODs require a smaller vertex range and are efficient wrt vertex fetch and transform.
+
+Both algorithms can also return the resulting normalized deviation that can be used to choose the correct level of detail based on screen size or solid angle; the error can be converted to world space by multiplying by the scaling factor returned by `meshopt_simplifyScale`.
 
 ## Mesh shading
 
