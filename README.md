@@ -262,7 +262,8 @@ float target_error = 1e-2f;
 
 std::vector<unsigned int> lod(index_count);
 float lod_error = 0.f;
-lod.resize(meshopt_simplify(&lod[0], indices, index_count, &vertices[0].x, vertex_count, sizeof(Vertex), target_index_count, target_error, &lod_error));
+lod.resize(meshopt_simplify(&lod[0], indices, index_count, &vertices[0].x, vertex_count, sizeof(Vertex),
+    target_index_count, target_error, &lod_error));
 ```
 
 Target error is an approximate measure of the deviation from the original mesh using distance normalized to 0..1 (so 1e-2f means that simplifier will try to maintain the error to be below 1% of the mesh extents). Note that because of topological restrictions and error bounds simplifier isn't guaranteed to reach the target index count and can stop earlier.
@@ -276,7 +277,8 @@ float target_error = 1e-1f;
 
 std::vector<unsigned int> lod(index_count);
 float lod_error = 0.f;
-lod.resize(meshopt_simplifySloppy(&lod[0], indices, index_count, &vertices[0].x, vertex_count, sizeof(Vertex), target_index_count, target_error, &lod_error));
+lod.resize(meshopt_simplifySloppy(&lod[0], indices, index_count, &vertices[0].x, vertex_count, sizeof(Vertex),
+    target_index_count, target_error, &lod_error));
 ```
 
 This algorithm will not stop early due to topology restrictions but can still do so if target index count can't be reached without introducing an error larger than target. It is 5-6x faster than `meshopt_simplify` when simplification ratio is large, and is able to reach ~20M triangles/sec on a desktop CPU (`meshopt_simplify` works at ~3M triangles/sec).
@@ -306,7 +308,7 @@ std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
 std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
 
 size_t meshlet_count = meshopt_buildMeshlets(meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), indices.data(),
-	indices.size(), &vertices[0].x, vertices.size(), sizeof(Vertex), max_vertices, max_triangles, cone_weight);
+    indices.size(), &vertices[0].x, vertices.size(), sizeof(Vertex), max_vertices, max_triangles, cone_weight);
 ```
 
 To generate the meshlet data, `max_vertices` and `max_triangles` need to be set within limits supported by the hardware; for NVidia the values of 64 and 124 are recommended. `cone_weight` should be left as 0 if cluster cone culling is not used, and set to a value between 0 and 1 to balance cone culling efficiency with other forms of culling like frustum or occlusion culling.
@@ -327,7 +329,7 @@ After generating the meshlet data, it's also possible to generate extra data for
 
 ```c++
 meshopt_Bounds bounds = meshopt_computeMeshletBounds(&meshlet_vertices[m.vertex_offset], &meshlet_triangles[m.triangle_offset],
-	m.triangle_count, &vertices[0].x, vertices.size(), sizeof(Vertex));
+    m.triangle_count, &vertices[0].x, vertices.size(), sizeof(Vertex));
 ```
 
 The resulting `bounds` values can be used to perform frustum or occlusion culling using the bounding sphere, or cone culling using the cone axis/angle (which will reject the entire meshlet if all triangles are guaranteed to be back-facing from the camera point of view):
