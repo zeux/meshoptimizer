@@ -221,6 +221,15 @@ static float computeTriangleCones(Cone* triangles, const unsigned int* indices, 
 	return mesh_area;
 }
 
+static void finishMeshlet(meshopt_Meshlet& meshlet, unsigned char* meshlet_triangles)
+{
+	size_t offset = meshlet.triangle_offset + meshlet.triangle_count * 3;
+
+	// fill 4b padding with 0
+	while (offset & 3)
+		meshlet_triangles[offset++] = 0;
+}
+
 static bool appendMeshlet(meshopt_Meshlet& meshlet, unsigned int a, unsigned int b, unsigned int c, unsigned char* used, meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, size_t meshlet_offset, size_t max_vertices, size_t max_triangles)
 {
 	unsigned char& av = used[a];
@@ -238,8 +247,10 @@ static bool appendMeshlet(meshopt_Meshlet& meshlet, unsigned int a, unsigned int
 		for (size_t j = 0; j < meshlet.vertex_count; ++j)
 			used[meshlet_vertices[meshlet.vertex_offset + j]] = 0xff;
 
+		finishMeshlet(meshlet, meshlet_triangles);
+
 		meshlet.vertex_offset += meshlet.vertex_count;
-		meshlet.triangle_offset += (meshlet.triangle_count * 3 + 3) & ~3; // 4b alignment for index data
+		meshlet.triangle_offset += (meshlet.triangle_count * 3 + 3) & ~3; // 4b padding
 		meshlet.vertex_count = 0;
 		meshlet.triangle_count = 0;
 
@@ -622,7 +633,11 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* meshlet_ve
 	}
 
 	if (meshlet.triangle_count)
+	{
+		finishMeshlet(meshlet, meshlet_triangles);
+
 		meshlets[meshlet_offset++] = meshlet;
+	}
 
 	assert(meshlet_offset <= meshopt_buildMeshletsBound(index_count, max_vertices, max_triangles));
 	return meshlet_offset;
@@ -657,7 +672,11 @@ size_t meshopt_buildMeshletsScan(meshopt_Meshlet* meshlets, unsigned int* meshle
 	}
 
 	if (meshlet.triangle_count)
+	{
+		finishMeshlet(meshlet, meshlet_triangles);
+
 		meshlets[meshlet_offset++] = meshlet;
+	}
 
 	assert(meshlet_offset <= meshopt_buildMeshletsBound(index_count, max_vertices, max_triangles));
 	return meshlet_offset;
