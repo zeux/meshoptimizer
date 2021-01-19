@@ -248,19 +248,19 @@ static bool appendMeshlet(meshopt_Meshlet& meshlet, unsigned int a, unsigned int
 
 	if (av == 0xff)
 	{
-		av = meshlet.vertex_count;
+		av = (unsigned char)meshlet.vertex_count;
 		meshlet_vertices[meshlet.vertex_offset + meshlet.vertex_count++] = a;
 	}
 
 	if (bv == 0xff)
 	{
-		bv = meshlet.vertex_count;
+		bv = (unsigned char)meshlet.vertex_count;
 		meshlet_vertices[meshlet.vertex_offset + meshlet.vertex_count++] = b;
 	}
 
 	if (cv == 0xff)
 	{
-		cv = meshlet.vertex_count;
+		cv = (unsigned char)meshlet.vertex_count;
 		meshlet_vertices[meshlet.vertex_offset + meshlet.vertex_count++] = c;
 	}
 
@@ -435,6 +435,9 @@ size_t meshopt_buildMeshletsBound(size_t index_count, size_t max_vertices, size_
 	assert(max_vertices >= 3 && max_vertices <= kMeshletMaxVertices);
 	assert(max_triangles >= 1 && max_triangles <= kMeshletMaxTriangles);
 	assert(max_triangles % 4 == 0); // ensures the caller will compute output space properly as index data is 4b aligned
+
+	(void)kMeshletMaxVertices;
+	(void)kMeshletMaxTriangles;
 
 	// meshlet construction is limited by max vertices and max triangles per meshlet
 	// the worst case is that the input is an unindexed stream since this equally stresses both limits
