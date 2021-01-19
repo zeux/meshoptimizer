@@ -930,7 +930,7 @@ void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_ver
 	{
 		const meshopt_Meshlet& m = ml[i];
 
-		meshopt_Bounds mb = meshopt_computeMeshletBounds(&mlv[m.vertex_offset], &mlt[m.triangle_offset], m.triangle_count * 3, positions->data[0].f, positions->data.size(), sizeof(Attr));
+		meshopt_Bounds mb = meshopt_computeMeshletBounds(&mlv[m.vertex_offset], &mlt[m.triangle_offset], m.triangle_count, positions->data[0].f, positions->data.size(), sizeof(Attr));
 
 		unsigned int h = unsigned(i);
 		h ^= h >> 13;

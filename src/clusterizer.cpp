@@ -816,18 +816,17 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 	return bounds;
 }
 
-meshopt_Bounds meshopt_computeMeshletBounds(const unsigned int* meshlet_vertices, const unsigned char* meshlet_triangles, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+meshopt_Bounds meshopt_computeMeshletBounds(const unsigned int* meshlet_vertices, const unsigned char* meshlet_triangles, size_t triangle_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	using namespace meshopt;
 
-	assert(index_count % 3 == 0);
-	assert(index_count / 3 <= kMeshletMaxTriangles);
+	assert(triangle_count <= kMeshletMaxTriangles);
 	assert(vertex_positions_stride > 0 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
 
 	unsigned int indices[kMeshletMaxTriangles * 3];
 
-	for (size_t i = 0; i < index_count; ++i)
+	for (size_t i = 0; i < triangle_count * 3; ++i)
 	{
 		unsigned int index = meshlet_vertices[meshlet_triangles[i]];
 		assert(index < vertex_count);
@@ -835,5 +834,5 @@ meshopt_Bounds meshopt_computeMeshletBounds(const unsigned int* meshlet_vertices
 		indices[i] = index;
 	}
 
-	return meshopt_computeClusterBounds(indices, index_count, vertex_positions, vertex_count, vertex_positions_stride);
+	return meshopt_computeClusterBounds(indices, triangle_count * 3, vertex_positions, vertex_count, vertex_positions_stride);
 }
