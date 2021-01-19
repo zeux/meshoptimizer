@@ -876,12 +876,12 @@ void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_ver
 
 	std::vector<meshopt_Meshlet> ml(max_meshlets);
 	std::vector<unsigned int> mlv(max_meshlets * max_vertices);
-	std::vector<unsigned char> mli(max_meshlets * max_triangles * 3);
+	std::vector<unsigned char> mlt(max_meshlets * max_triangles * 3);
 
 	if (scan)
-		ml.resize(meshopt_buildMeshletsScan(&ml[0], &mlv[0], &mli[0], &mesh.indices[0], mesh.indices.size(), positions->data.size(), max_vertices, max_triangles));
+		ml.resize(meshopt_buildMeshletsScan(&ml[0], &mlv[0], &mlt[0], &mesh.indices[0], mesh.indices.size(), positions->data.size(), max_vertices, max_triangles));
 	else
-		ml.resize(meshopt_buildMeshlets(&ml[0], &mlv[0], &mli[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, positions->data.size(), sizeof(Attr), max_vertices, max_triangles, cone_weight));
+		ml.resize(meshopt_buildMeshlets(&ml[0], &mlv[0], &mlt[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, positions->data.size(), sizeof(Attr), max_vertices, max_triangles, cone_weight));
 
 	// generate meshlet meshes, using unique colors
 	meshlets.nodes = mesh.nodes;
@@ -910,9 +910,9 @@ void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_ver
 
 		for (size_t j = 0; j < m.triangle_count; ++j)
 		{
-			meshlets.indices.push_back(offset + mli[m.index_offset + j * 3 + 0]);
-			meshlets.indices.push_back(offset + mli[m.index_offset + j * 3 + 1]);
-			meshlets.indices.push_back(offset + mli[m.index_offset + j * 3 + 2]);
+			meshlets.indices.push_back(offset + mlt[m.triangle_offset + j * 3 + 0]);
+			meshlets.indices.push_back(offset + mlt[m.triangle_offset + j * 3 + 1]);
+			meshlets.indices.push_back(offset + mlt[m.triangle_offset + j * 3 + 2]);
 		}
 	}
 
@@ -930,7 +930,7 @@ void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_ver
 	{
 		const meshopt_Meshlet& m = ml[i];
 
-		meshopt_Bounds mb = meshopt_computeMeshletBounds(&mli[m.index_offset], &mlv[m.vertex_offset], m.triangle_count * 3, positions->data[0].f, positions->data.size(), sizeof(Attr));
+		meshopt_Bounds mb = meshopt_computeMeshletBounds(&mlv[m.vertex_offset], &mlt[m.triangle_offset], m.triangle_count * 3, positions->data[0].f, positions->data.size(), sizeof(Attr));
 
 		unsigned int h = unsigned(i);
 		h ^= h >> 13;
