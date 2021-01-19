@@ -823,7 +823,7 @@ void shadow(const Mesh& mesh)
 void meshlets(const Mesh& mesh, bool scan)
 {
 	const size_t max_vertices = 64;
-	const size_t max_triangles = 128;
+	const size_t max_triangles = 124; // NVidia-recommended 126, rounded down to a multiple of 4
 	const float cone_weight = 0.5f; // note: should be set to 0 unless cone culling is used at runtime!
 
 	// note: input mesh is assumed to be optimized for vertex cache and vertex fetch
