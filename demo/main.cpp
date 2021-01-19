@@ -823,17 +823,29 @@ void shadow(const Mesh& mesh)
 void meshlets(const Mesh& mesh, bool scan)
 {
 	const size_t max_vertices = 64;
-	const size_t max_triangles = 126;
+	const size_t max_triangles = 128;
 	const float cone_weight = 0.5f; // note: should be set to 0 unless cone culling is used at runtime!
 
 	// note: input mesh is assumed to be optimized for vertex cache and vertex fetch
 	double start = timestamp();
-	std::vector<meshopt_Meshlet> meshlets(meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles));
+	size_t max_meshlets = meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles);
+	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
+	std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
+	std::vector<unsigned char> meshlet_indices(max_meshlets * max_triangles * 3);
 
 	if (scan)
-		meshlets.resize(meshopt_buildMeshletsScan(&meshlets[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), max_vertices, max_triangles));
+		meshlets.resize(meshopt_buildMeshletsScan(&meshlets[0], &meshlet_vertices[0], &meshlet_indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), max_vertices, max_triangles));
 	else
-		meshlets.resize(meshopt_buildMeshlets(&meshlets[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, max_triangles, cone_weight));
+		meshlets.resize(meshopt_buildMeshlets(&meshlets[0], &meshlet_vertices[0], &meshlet_indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, max_triangles, cone_weight));
+
+	if (meshlets.size())
+	{
+		const meshopt_Meshlet& last = meshlets.back();
+
+		// this is an example of how to trim the vertex/index arrays when copying data out to GPU storage
+		meshlet_vertices.resize(last.vertex_offset + last.vertex_count);
+		meshlet_indices.resize(last.index_offset + last.triangle_count * 3);
+	}
 
 	double end = timestamp();
 
@@ -871,7 +883,7 @@ void meshlets(const Mesh& mesh, bool scan)
 	double startc = timestamp();
 	for (size_t i = 0; i < meshlets.size(); ++i)
 	{
-		meshopt_Bounds bounds = meshopt_computeMeshletBounds(&meshlets[i], &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
+		meshopt_Bounds bounds = meshopt_computeMeshletBounds(&meshlet_indices[meshlets[i].index_offset], &meshlet_vertices[meshlets[i].vertex_offset], meshlets[i].triangle_count * 3, &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
 
 		radii[i] = bounds.radius;
 

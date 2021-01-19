@@ -373,10 +373,10 @@ MESHOPTIMIZER_API struct meshopt_VertexFetchStatistics meshopt_analyzeVertexFetc
 
 struct meshopt_Meshlet
 {
-	unsigned int vertices[64];
-	unsigned char indices[126][3];
-	unsigned char triangle_count;
-	unsigned char vertex_count;
+	unsigned int vertex_offset;
+	unsigned int index_offset;
+	unsigned int triangle_count;
+	unsigned int vertex_count;
 };
 
 /**
@@ -391,8 +391,8 @@ struct meshopt_Meshlet
  * max_vertices and max_triangles can't exceed limits statically declared in meshopt_Meshlet (max_vertices <= 64, max_triangles <= 126)
  * cone_weight should be set to 0 when cone culling is not used, and a value between 0 and 1 otherwise to balance between cluster size and cone culling efficiency
  */
-MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_buildMeshlets(struct meshopt_Meshlet* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t max_triangles, float cone_weight);
-MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_buildMeshletsScan(struct meshopt_Meshlet* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, size_t max_vertices, size_t max_triangles);
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_buildMeshlets(struct meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_indices, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t max_triangles, float cone_weight);
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_buildMeshletsScan(struct meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_indices, const unsigned int* indices, size_t index_count, size_t vertex_count, size_t max_vertices, size_t max_triangles);
 MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_buildMeshletsBound(size_t index_count, size_t max_vertices, size_t max_triangles);
 
 struct meshopt_Bounds
@@ -433,7 +433,7 @@ struct meshopt_Bounds
  * index_count should be less than or equal to 256*3 (the function assumes clusters of limited size)
  */
 MESHOPTIMIZER_EXPERIMENTAL struct meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
-MESHOPTIMIZER_EXPERIMENTAL struct meshopt_Bounds meshopt_computeMeshletBounds(const struct meshopt_Meshlet* meshlet, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
+MESHOPTIMIZER_EXPERIMENTAL struct meshopt_Bounds meshopt_computeMeshletBounds(const unsigned char* meshlet_indices, const unsigned int* meshlet_vertices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 
 /**
  * Experimental: Spatial sorter
@@ -551,9 +551,9 @@ inline meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const T* indices, size
 template <typename T>
 inline meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const T* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
 template <typename T>
-inline size_t meshopt_buildMeshlets(meshopt_Meshlet* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t max_triangles, float cone_weight);
+inline size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_indices, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t max_triangles, float cone_weight);
 template <typename T>
-inline size_t meshopt_buildMeshletsScan(meshopt_Meshlet* destination, const T* indices, size_t index_count, size_t vertex_count, size_t max_vertices, size_t max_triangles);
+inline size_t meshopt_buildMeshletsScan(meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_indices, const T* indices, size_t index_count, size_t vertex_count, size_t max_vertices, size_t max_triangles);
 template <typename T>
 inline meshopt_Bounds meshopt_computeClusterBounds(const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 template <typename T>
@@ -914,19 +914,19 @@ inline meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const T* indices
 }
 
 template <typename T>
-inline size_t meshopt_buildMeshlets(meshopt_Meshlet* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t max_triangles, float cone_weight)
+inline size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_indices, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t max_triangles, float cone_weight)
 {
 	meshopt_IndexAdapter<T> in(0, indices, index_count);
 
-	return meshopt_buildMeshlets(destination, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride, max_vertices, max_triangles, cone_weight);
+	return meshopt_buildMeshlets(meshlets, meshlet_vertices, meshlet_indices, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride, max_vertices, max_triangles, cone_weight);
 }
 
 template <typename T>
-inline size_t meshopt_buildMeshletsScan(meshopt_Meshlet* destination, const T* indices, size_t index_count, size_t vertex_count, size_t max_vertices, size_t max_triangles)
+inline size_t meshopt_buildMeshletsScan(meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_indices, const T* indices, size_t index_count, size_t vertex_count, size_t max_vertices, size_t max_triangles)
 {
 	meshopt_IndexAdapter<T> in(0, indices, index_count);
 
-	return meshopt_buildMeshletsScan(destination, in.data, index_count, vertex_count, max_vertices, max_triangles);
+	return meshopt_buildMeshletsScan(meshlets, meshlet_vertices, meshlet_indices, in.data, index_count, vertex_count, max_vertices, max_triangles);
 }
 
 template <typename T>
