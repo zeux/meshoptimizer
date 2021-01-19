@@ -844,7 +844,7 @@ void meshlets(const Mesh& mesh, bool scan)
 
 		// this is an example of how to trim the vertex/triangle arrays when copying data out to GPU storage
 		meshlet_vertices.resize(last.vertex_offset + last.vertex_count);
-		meshlet_triangles.resize(last.triangle_offset + last.triangle_count * 3);
+		meshlet_triangles.resize(last.triangle_offset + ((last.triangle_count * 3 + 3) & ~3));
 	}
 
 	double end = timestamp();
