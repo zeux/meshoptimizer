@@ -869,14 +869,19 @@ void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_ver
 	const Stream* positions = getStream(mesh, cgltf_attribute_type_position);
 	assert(positions);
 
-	const size_t max_triangles = 126;
 	const float cone_weight = 0.f;
 
-	std::vector<meshopt_Meshlet> mr(meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles));
+	size_t max_triangles = (max_vertices * 2 + 3) & ~3;
+	size_t max_meshlets = meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles);
+
+	std::vector<meshopt_Meshlet> ml(max_meshlets);
+	std::vector<unsigned int> mlv(max_meshlets * max_vertices);
+	std::vector<unsigned char> mlt(max_meshlets * max_triangles * 3);
+
 	if (scan)
-		mr.resize(meshopt_buildMeshletsScan(&mr[0], &mesh.indices[0], mesh.indices.size(), positions->data.size(), max_vertices, max_triangles));
+		ml.resize(meshopt_buildMeshletsScan(&ml[0], &mlv[0], &mlt[0], &mesh.indices[0], mesh.indices.size(), positions->data.size(), max_vertices, max_triangles));
 	else
-		mr.resize(meshopt_buildMeshlets(&mr[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, positions->data.size(), sizeof(Attr), max_vertices, max_triangles, cone_weight));
+		ml.resize(meshopt_buildMeshlets(&ml[0], &mlv[0], &mlt[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, positions->data.size(), sizeof(Attr), max_vertices, max_triangles, cone_weight));
 
 	// generate meshlet meshes, using unique colors
 	meshlets.nodes = mesh.nodes;
@@ -884,9 +889,9 @@ void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_ver
 	Stream mv = {cgltf_attribute_type_position};
 	Stream mc = {cgltf_attribute_type_color};
 
-	for (size_t i = 0; i < mr.size(); ++i)
+	for (size_t i = 0; i < ml.size(); ++i)
 	{
-		const meshopt_Meshlet& ml = mr[i];
+		const meshopt_Meshlet& m = ml[i];
 
 		unsigned int h = unsigned(i);
 		h ^= h >> 13;
@@ -897,17 +902,17 @@ void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_ver
 
 		unsigned int offset = unsigned(mv.data.size());
 
-		for (size_t j = 0; j < ml.vertex_count; ++j)
+		for (size_t j = 0; j < m.vertex_count; ++j)
 		{
-			mv.data.push_back(positions->data[ml.vertices[j]]);
+			mv.data.push_back(positions->data[mlv[m.vertex_offset + j]]);
 			mc.data.push_back(c);
 		}
 
-		for (size_t j = 0; j < ml.triangle_count; ++j)
+		for (size_t j = 0; j < m.triangle_count; ++j)
 		{
-			meshlets.indices.push_back(offset + ml.indices[j][0]);
-			meshlets.indices.push_back(offset + ml.indices[j][1]);
-			meshlets.indices.push_back(offset + ml.indices[j][2]);
+			meshlets.indices.push_back(offset + mlt[m.triangle_offset + j * 3 + 0]);
+			meshlets.indices.push_back(offset + mlt[m.triangle_offset + j * 3 + 1]);
+			meshlets.indices.push_back(offset + mlt[m.triangle_offset + j * 3 + 2]);
 		}
 	}
 
@@ -921,11 +926,11 @@ void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_ver
 	Stream bv = {cgltf_attribute_type_position};
 	Stream bc = {cgltf_attribute_type_color};
 
-	for (size_t i = 0; i < mr.size(); ++i)
+	for (size_t i = 0; i < ml.size(); ++i)
 	{
-		const meshopt_Meshlet& ml = mr[i];
+		const meshopt_Meshlet& m = ml[i];
 
-		meshopt_Bounds mb = meshopt_computeMeshletBounds(&ml, positions->data[0].f, positions->data.size(), sizeof(Attr));
+		meshopt_Bounds mb = meshopt_computeMeshletBounds(&mlv[m.vertex_offset], &mlt[m.triangle_offset], m.triangle_count, positions->data[0].f, positions->data.size(), sizeof(Attr));
 
 		unsigned int h = unsigned(i);
 		h ^= h >> 13;
