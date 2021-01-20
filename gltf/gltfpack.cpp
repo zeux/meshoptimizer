@@ -373,6 +373,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	bool ext_sheen = false;
 	bool ext_unlit = false;
 	bool ext_instancing = false;
+	bool ext_texture_transform = false;
 
 	size_t accr_offset = 0;
 	size_t node_offset = 0;
@@ -433,6 +434,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		ext_specular = ext_specular || material.has_specular;
 		ext_sheen = ext_sheen || material.has_sheen;
 		ext_unlit = ext_unlit || material.unlit;
+		ext_texture_transform = ext_texture_transform || usesTextureTransform(material);
 	}
 
 	for (size_t i = 0; i < meshes.size(); ++i)
@@ -658,7 +660,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	const ExtensionInfo extensions[] = {
 	    {"KHR_mesh_quantization", settings.quantize, true},
 	    {"EXT_meshopt_compression", settings.compress, !settings.fallback},
-	    {"KHR_texture_transform", settings.quantize && !json_textures.empty(), false},
+	    {"KHR_texture_transform", (settings.quantize && !json_textures.empty()) || ext_texture_transform, false},
 	    {"KHR_materials_pbrSpecularGlossiness", ext_pbr_specular_glossiness, false},
 	    {"KHR_materials_clearcoat", ext_clearcoat, false},
 	    {"KHR_materials_transmission", ext_transmission, false},

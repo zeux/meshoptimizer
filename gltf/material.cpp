@@ -358,3 +358,73 @@ bool usesTextureSet(const cgltf_material& material, int set)
 
 	return false;
 }
+
+static bool usesTextureTransform(const cgltf_texture_view& view)
+{
+	return view.has_transform;
+}
+
+bool usesTextureTransform(const cgltf_material& material)
+{
+	if (material.has_pbr_metallic_roughness)
+	{
+		if (usesTextureTransform(material.pbr_metallic_roughness.base_color_texture))
+			return true;
+
+		if (usesTextureTransform(material.pbr_metallic_roughness.metallic_roughness_texture))
+			return true;
+	}
+
+	if (material.has_pbr_specular_glossiness)
+	{
+		if (usesTextureTransform(material.pbr_specular_glossiness.diffuse_texture))
+			return true;
+
+		if (usesTextureTransform(material.pbr_specular_glossiness.specular_glossiness_texture))
+			return true;
+	}
+
+	if (material.has_clearcoat)
+	{
+		if (usesTextureTransform(material.clearcoat.clearcoat_texture))
+			return true;
+
+		if (usesTextureTransform(material.clearcoat.clearcoat_roughness_texture))
+			return true;
+
+		if (usesTextureTransform(material.clearcoat.clearcoat_normal_texture))
+			return true;
+	}
+
+	if (material.has_transmission)
+	{
+		if (usesTextureTransform(material.transmission.transmission_texture))
+			return true;
+	}
+
+	if (material.has_specular)
+	{
+		if (usesTextureTransform(material.specular.specular_texture))
+			return true;
+	}
+
+	if (material.has_sheen)
+	{
+		if (usesTextureTransform(material.sheen.sheen_color_texture))
+			return true;
+
+		if (usesTextureTransform(material.sheen.sheen_roughness_texture))
+			return true;
+	}
+
+	if (usesTextureTransform(material.normal_texture))
+		return true;
+
+	if (usesTextureTransform(material.occlusion_texture))
+		return true;
+
+	if (usesTextureTransform(material.emissive_texture))
+		return true;
+
+	return false;
+}
