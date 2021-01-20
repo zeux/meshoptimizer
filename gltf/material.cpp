@@ -289,72 +289,98 @@ void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials,
 	}
 }
 
-static bool usesTextureSet(const cgltf_texture_view& view, int set)
-{
-	return view.texture && view.texcoord == set;
-}
-
-bool usesTextureSet(const cgltf_material& material, int set)
+template <typename Pred>
+static bool materialHasProperty(const cgltf_material& material, Pred pred)
 {
 	if (material.has_pbr_metallic_roughness)
 	{
-		if (usesTextureSet(material.pbr_metallic_roughness.base_color_texture, set))
+		if (pred(material.pbr_metallic_roughness.base_color_texture))
 			return true;
 
-		if (usesTextureSet(material.pbr_metallic_roughness.metallic_roughness_texture, set))
+		if (pred(material.pbr_metallic_roughness.metallic_roughness_texture))
 			return true;
 	}
 
 	if (material.has_pbr_specular_glossiness)
 	{
-		if (usesTextureSet(material.pbr_specular_glossiness.diffuse_texture, set))
+		if (pred(material.pbr_specular_glossiness.diffuse_texture))
 			return true;
 
-		if (usesTextureSet(material.pbr_specular_glossiness.specular_glossiness_texture, set))
+		if (pred(material.pbr_specular_glossiness.specular_glossiness_texture))
 			return true;
 	}
 
 	if (material.has_clearcoat)
 	{
-		if (usesTextureSet(material.clearcoat.clearcoat_texture, set))
+		if (pred(material.clearcoat.clearcoat_texture))
 			return true;
 
-		if (usesTextureSet(material.clearcoat.clearcoat_roughness_texture, set))
+		if (pred(material.clearcoat.clearcoat_roughness_texture))
 			return true;
 
-		if (usesTextureSet(material.clearcoat.clearcoat_normal_texture, set))
+		if (pred(material.clearcoat.clearcoat_normal_texture))
 			return true;
 	}
 
 	if (material.has_transmission)
 	{
-		if (usesTextureSet(material.transmission.transmission_texture, set))
+		if (pred(material.transmission.transmission_texture))
 			return true;
 	}
 
 	if (material.has_specular)
 	{
-		if (usesTextureSet(material.specular.specular_texture, set))
+		if (pred(material.specular.specular_texture))
 			return true;
 	}
 
 	if (material.has_sheen)
 	{
-		if (usesTextureSet(material.sheen.sheen_color_texture, set))
+		if (pred(material.sheen.sheen_color_texture))
 			return true;
 
-		if (usesTextureSet(material.sheen.sheen_roughness_texture, set))
+		if (pred(material.sheen.sheen_roughness_texture))
 			return true;
 	}
 
-	if (usesTextureSet(material.normal_texture, set))
+	if (pred(material.normal_texture))
 		return true;
 
-	if (usesTextureSet(material.occlusion_texture, set))
+	if (pred(material.occlusion_texture))
 		return true;
 
-	if (usesTextureSet(material.emissive_texture, set))
+	if (pred(material.emissive_texture))
 		return true;
 
 	return false;
+}
+
+struct UsesTextureSet
+{
+	int set;
+
+	bool operator()(const cgltf_texture_view& view) const
+	{
+		return view.texture && view.texcoord == set;
+	}
+};
+
+bool usesTextureSet(const cgltf_material& material, int set)
+{
+	UsesTextureSet pred = {set};
+
+	return materialHasProperty(material, pred);
+}
+
+struct UsesTextureTransform
+{
+	bool operator()(const cgltf_texture_view& view) const
+	{
+		return view.has_transform;
+	}
+};
+
+bool usesTextureTransform(const cgltf_material& material)
+{
+	return materialHasProperty(material, UsesTextureTransform());
 }
