@@ -18,7 +18,7 @@ git clone -b v0.15 https://github.com/zeux/meshoptimizer.git
 
 Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v0.15.zip).
 
-The library is also available as a package ([ArchLinux](https://aur.archlinux.org/packages/meshoptimizer/), [Vcpkg](https://github.com/microsoft/vcpkg/tree/master/ports/meshoptimizer)).
+The library is also available as a package ([ArchLinux](https://aur.archlinux.org/packages/meshoptimizer/), [Debian](https://packages.debian.org/libmeshoptimizer), [Ubuntu](https://packages.ubuntu.com/libmeshoptimizer), [Vcpkg](https://github.com/microsoft/vcpkg/tree/master/ports/meshoptimizer)).
 
 ### Installing gltfpack
 
