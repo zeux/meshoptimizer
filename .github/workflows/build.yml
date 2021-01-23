@@ -76,13 +76,13 @@ jobs:
     - name: make
       run: make -j2 config=sanitize gltfpack
     - name: test
-      run: find glTF-Sample-Models/2.0/ -name *.gltf -or -name *.glb | xargs ./gltfpack -cc -test
+      run: find glTF-Sample-Models/2.0/ -name *.gltf -or -name *.glb | xargs -d '\n' ./gltfpack -cc -test
     - name: pack
-      run: find glTF-Sample-Models/2.0/ -name *.gltf | grep -v glTF-Draco | xargs -I '{}' ./gltfpack -i '{}' -o '{}pack.gltf'
+      run: find glTF-Sample-Models/2.0/ -name *.gltf | grep -v glTF-Draco | xargs -d '\n' -I '{}' ./gltfpack -i '{}' -o '{}pack.gltf'
     - name: validate
       run: |
         curl -sL $VALIDATOR | tar xJ
-        find glTF-Sample-Models/2.0/ -name *.gltfpack.gltf | xargs -L 1 ./gltf_validator -r -a
+        find glTF-Sample-Models/2.0/ -name *.gltfpack.gltf | xargs -d '\n' -L 1 ./gltf_validator -r -a
       env:
         VALIDATOR: https://github.com/KhronosGroup/glTF-Validator/releases/download/2.0.0-dev.3.3/gltf_validator-2.0.0-dev.3.3-linux64.tar.xz
 
