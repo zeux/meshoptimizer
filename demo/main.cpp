@@ -1010,6 +1010,19 @@ void spatialSortTriangles(const Mesh& mesh)
 	       (end - start) * 1000);
 }
 
+void tessellation(const Mesh& mesh)
+{
+	double start = timestamp();
+
+	// 12 indices per input triangle
+	std::vector<unsigned int> patchib(mesh.indices.size() * 4);
+	meshopt_generateTessellationIndexBuffer(&patchib[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
+
+	double end = timestamp();
+
+	printf("Tesselltn: %d patches in %.2f msec\n", int(mesh.indices.size() / 3), (end - start) * 1000);
+}
+
 bool loadMesh(Mesh& mesh, const char* path)
 {
 	double start = timestamp();
@@ -1161,6 +1174,7 @@ void process(const char* path)
 	meshlets(copy, true);
 
 	shadow(copy);
+	tessellation(copy);
 
 	encodeIndex(copy, ' ');
 	encodeIndex(copystrip, 'S');
@@ -1192,11 +1206,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	Mesh copy = mesh;
-	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
-
-	meshlets(copy, false);
-	meshlets(copy, true);
+	tessellation(mesh);
 }
 
 int main(int argc, char** argv)
