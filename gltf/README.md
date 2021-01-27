@@ -42,6 +42,8 @@ loader.setMeshoptDecoder(MeshoptDecoder);
 loader.load('pirate.glb', function (gltf) { scene.add(gltf.scene); });
 ```
 
+When using Three.js, this module can be imported from three.js repository from `examples/jsm/libs/meshopt_decoder.module.js`.
+
 Note that `meshopt_decoder` assumes that WebAssembly is supported. This is the case for all modern browsers; if support for legacy browsers such as Internet Explorer 11 is desired, it's recommended to use `-cf` flag when creating the glTF content. This will create and load fallback uncompressed buffers, but only on browsers that don't support WebAssembly.
 
 ## Options
