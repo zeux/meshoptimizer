@@ -98,6 +98,22 @@ MESHOPTIMIZER_API void meshopt_generateShadowIndexBuffer(unsigned int* destinati
 MESHOPTIMIZER_API void meshopt_generateShadowIndexBufferMulti(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, const struct meshopt_Stream* streams, size_t stream_count);
 
 /**
+ * Generate index buffer that can be used for PN-AEN tessellation with crack-free displacement
+ * Each triangle is converted into a 12-vertex patch with the following layout:
+ * - 0, 1, 2: original triangle vertices
+ * - 3, 4: opposing edge for edge 0, 1
+ * - 5, 6: opposing edge for edge 1, 2
+ * - 7, 8: opposing edge for edge 2, 0
+ * - 9, 10, 11: dominant vertices for corners 0, 1, 2
+ * The resulting patch can be rendered with hardware tessellation using PN-AEN and displacement mapping.
+ * See "Tessellation on Any Budget" (John McDonald, GDC 2011) for implementation details.
+ *
+ * destination must contain enough space for the resulting index buffer (index_count*4 elements)
+ * vertex_positions should have float3 position in the first 12 bytes of each vertex - similar to glVertexPointer
+ */
+MESHOPTIMIZER_EXPERIMENTAL void meshopt_generateTessellationIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
+
+/**
  * Vertex transform cache optimizer
  * Reorders indices to reduce the number of GPU vertex shader invocations
  * If index buffer contains multiple ranges for multiple draw calls, this functions needs to be called on each range individually.
@@ -522,6 +538,8 @@ inline void meshopt_generateShadowIndexBuffer(T* destination, const T* indices, 
 template <typename T>
 inline void meshopt_generateShadowIndexBufferMulti(T* destination, const T* indices, size_t index_count, size_t vertex_count, const meshopt_Stream* streams, size_t stream_count);
 template <typename T>
+inline void meshopt_generateTessellationIndexBuffer(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
+template <typename T>
 inline void meshopt_optimizeVertexCache(T* destination, const T* indices, size_t index_count, size_t vertex_count);
 template <typename T>
 inline void meshopt_optimizeVertexCacheStrip(T* destination, const T* indices, size_t index_count, size_t vertex_count);
@@ -770,6 +788,15 @@ inline void meshopt_generateShadowIndexBufferMulti(T* destination, const T* indi
 	meshopt_IndexAdapter<T> out(destination, 0, index_count);
 
 	meshopt_generateShadowIndexBufferMulti(out.data, in.data, index_count, vertex_count, streams, stream_count);
+}
+
+template <typename T>
+inline void meshopt_generateTessellationIndexBuffer(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+{
+	meshopt_IndexAdapter<T> in(0, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, 0, index_count * 4);
+
+	meshopt_generateTessellationIndexBuffer(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride);
 }
 
 template <typename T>

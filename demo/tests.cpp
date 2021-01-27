@@ -824,6 +824,37 @@ static void simplifyScale()
 	assert(meshopt_simplifyScale(vb, 4, 12) == 3.f);
 }
 
+static void tessellation()
+{
+	// 0 1/4
+	// 2/5 3
+	const float vb[] = {0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0};
+	const unsigned int ib[] = {0, 1, 2, 5, 4, 3};
+
+	unsigned int tessib[24];
+	meshopt_generateTessellationIndexBuffer(tessib, ib, 6, vb, 6, 12);
+
+	unsigned int expected[] = {
+	    // patch 0
+	    0, 1, 2,
+	    0, 1,
+	    4, 5,
+	    2, 0,
+	    0, 1, 2,
+
+	    // patch 1
+	    5, 4, 3,
+	    2, 1,
+	    4, 3,
+	    3, 5,
+	    2, 1, 3,
+
+	    // clang-format :-/
+	};
+
+	assert(memcmp(tessib, expected, sizeof(expected)) == 0);
+}
+
 static void runTestsOnce()
 {
 	decodeIndexV0();
@@ -873,6 +904,8 @@ static void runTestsOnce()
 	simplifyPointsStuck();
 	simplifyFlip();
 	simplifyScale();
+
+	tessellation();
 }
 
 namespace meshopt
