@@ -824,7 +824,7 @@ void meshlets(const Mesh& mesh, bool scan)
 {
 	const size_t max_vertices = 64;
 	const size_t max_triangles = 124; // NVidia-recommended 126, rounded down to a multiple of 4
-	const float cone_weight = 0.5f; // note: should be set to 0 unless cone culling is used at runtime!
+	const float cone_weight = 0.5f;   // note: should be set to 0 unless cone culling is used at runtime!
 
 	// note: input mesh is assumed to be optimized for vertex cache and vertex fetch
 	double start = timestamp();
@@ -1010,17 +1010,24 @@ void spatialSortTriangles(const Mesh& mesh)
 	       (end - start) * 1000);
 }
 
-void tessellation(const Mesh& mesh)
+void tessellationAdjacency(const Mesh& mesh)
 {
 	double start = timestamp();
 
 	// 12 indices per input triangle
-	std::vector<unsigned int> patchib(mesh.indices.size() * 4);
-	meshopt_generateTessellationIndexBuffer(&patchib[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
+	std::vector<unsigned int> tessib(mesh.indices.size() * 4);
+	meshopt_generateTessellationIndexBuffer(&tessib[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
+
+	double middle = timestamp();
+
+	// 6 indices per input triangle
+	std::vector<unsigned int> adjib(mesh.indices.size() * 2);
+	meshopt_generateAdjacencyIndexBuffer(&adjib[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
 
 	double end = timestamp();
 
-	printf("Tesselltn: %d patches in %.2f msec\n", int(mesh.indices.size() / 3), (end - start) * 1000);
+	printf("Tesselltn: %d patches in %.2f msec\n", int(mesh.indices.size() / 3), (middle - start) * 1000);
+	printf("Adjacency: %d patches in %.2f msec\n", int(mesh.indices.size() / 3), (end - middle) * 1000);
 }
 
 bool loadMesh(Mesh& mesh, const char* path)
@@ -1174,7 +1181,7 @@ void process(const char* path)
 	meshlets(copy, true);
 
 	shadow(copy);
-	tessellation(copy);
+	tessellationAdjacency(copy);
 
 	encodeIndex(copy, ' ');
 	encodeIndex(copystrip, 'S');
@@ -1206,7 +1213,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	tessellation(mesh);
+	tessellationAdjacency(mesh);
 }
 
 int main(int argc, char** argv)
