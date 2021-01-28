@@ -160,6 +160,26 @@ static T* hashLookup(T* table, size_t buckets, const Hash& hash, const T& key, c
 	return 0;
 }
 
+static void buildPositionRemap(unsigned int* remap, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, meshopt_Allocator& allocator)
+{
+	VertexHasher vertex_hasher = {reinterpret_cast<const unsigned char*>(vertex_positions), 3 * sizeof(float), vertex_positions_stride};
+
+	size_t vertex_table_size = hashBuckets(vertex_count);
+	unsigned int* vertex_table = allocator.allocate<unsigned int>(vertex_table_size);
+	memset(vertex_table, -1, vertex_table_size * sizeof(unsigned int));
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		unsigned int index = unsigned(i);
+		unsigned int* entry = hashLookup(vertex_table, vertex_table_size, vertex_hasher, index, ~0u);
+
+		if (*entry == ~0u)
+			*entry = index;
+
+		remap[index] = *entry;
+	}
+}
+
 } // namespace meshopt
 
 size_t meshopt_generateVertexRemap(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)
@@ -399,25 +419,9 @@ void meshopt_generateAdjacencyIndexBuffer(unsigned int* destination, const unsig
 
 	static const int next[4] = {1, 2, 0, 1};
 
-	VertexHasher vertex_hasher = {reinterpret_cast<const unsigned char*>(vertex_positions), 3 * sizeof(float), vertex_positions_stride};
-
-	size_t vertex_table_size = hashBuckets(vertex_count);
-	unsigned int* vertex_table = allocator.allocate<unsigned int>(vertex_table_size);
-	memset(vertex_table, -1, vertex_table_size * sizeof(unsigned int));
-
 	// build position remap: for each vertex, which other (canonical) vertex does it map to?
 	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
-
-	for (size_t i = 0; i < vertex_count; ++i)
-	{
-		unsigned int index = unsigned(i);
-		unsigned int* entry = hashLookup(vertex_table, vertex_table_size, vertex_hasher, index, ~0u);
-
-		if (*entry == ~0u)
-			*entry = index;
-
-		remap[index] = *entry;
-	}
+	buildPositionRemap(remap, vertex_positions, vertex_count, vertex_positions_stride, allocator);
 
 	// build edge set; this stores all triangle edges but we can look these up by any other wedge
 	EdgeHasher edge_hasher = {remap};
@@ -486,25 +490,9 @@ void meshopt_generateTessellationIndexBuffer(unsigned int* destination, const un
 
 	static const int next[3] = {1, 2, 0};
 
-	VertexHasher vertex_hasher = {reinterpret_cast<const unsigned char*>(vertex_positions), 3 * sizeof(float), vertex_positions_stride};
-
-	size_t vertex_table_size = hashBuckets(vertex_count);
-	unsigned int* vertex_table = allocator.allocate<unsigned int>(vertex_table_size);
-	memset(vertex_table, -1, vertex_table_size * sizeof(unsigned int));
-
 	// build position remap: for each vertex, which other (canonical) vertex does it map to?
 	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
-
-	for (size_t i = 0; i < vertex_count; ++i)
-	{
-		unsigned int index = unsigned(i);
-		unsigned int* entry = hashLookup(vertex_table, vertex_table_size, vertex_hasher, index, ~0u);
-
-		if (*entry == ~0u)
-			*entry = index;
-
-		remap[index] = *entry;
-	}
+	buildPositionRemap(remap, vertex_positions, vertex_count, vertex_positions_stride, allocator);
 
 	// build edge set; this stores all triangle edges but we can look these up by any other wedge
 	EdgeHasher edge_hasher = {remap};
