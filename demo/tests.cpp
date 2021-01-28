@@ -824,6 +824,33 @@ static void simplifyScale()
 	assert(meshopt_simplifyScale(vb, 4, 12) == 3.f);
 }
 
+static void adjacency()
+{
+	// 0 1/4
+	// 2/5 3
+	const float vb[] = {0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0};
+	const unsigned int ib[] = {0, 1, 2, 5, 4, 3};
+
+	unsigned int adjib[12];
+	meshopt_generateAdjacencyIndexBuffer(adjib, ib, 6, vb, 6, 12);
+
+	unsigned int expected[] = {
+	    // patch 0
+	    0, 0,
+	    1, 3,
+	    2, 2,
+
+	    // patch 1
+	    5, 0,
+	    4, 4,
+	    3, 3,
+
+	    // clang-format :-/
+	};
+
+	assert(memcmp(adjib, expected, sizeof(expected)) == 0);
+}
+
 static void tessellation()
 {
 	// 0 1/4
@@ -905,6 +932,7 @@ static void runTestsOnce()
 	simplifyFlip();
 	simplifyScale();
 
+	adjacency();
 	tessellation();
 }
 
