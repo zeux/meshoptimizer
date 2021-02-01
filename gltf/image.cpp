@@ -32,60 +32,6 @@ static const BasisSettings kBasisSettings[10] = {
     {1, 255, 2, 0.f},
 };
 
-void analyzeImages(cgltf_data* data, std::vector<ImageInfo>& images)
-{
-	for (size_t i = 0; i < data->materials_count; ++i)
-	{
-		const cgltf_material& material = data->materials[i];
-
-		if (material.has_pbr_metallic_roughness)
-		{
-			const cgltf_pbr_metallic_roughness& pbr = material.pbr_metallic_roughness;
-
-			if (pbr.base_color_texture.texture && pbr.base_color_texture.texture->image)
-				images[pbr.base_color_texture.texture->image - data->images].srgb = true;
-		}
-
-		if (material.has_pbr_specular_glossiness)
-		{
-			const cgltf_pbr_specular_glossiness& pbr = material.pbr_specular_glossiness;
-
-			if (pbr.diffuse_texture.texture && pbr.diffuse_texture.texture->image)
-				images[pbr.diffuse_texture.texture->image - data->images].srgb = true;
-		}
-
-		if (material.has_clearcoat)
-		{
-			const cgltf_clearcoat& clearcoat = material.clearcoat;
-
-			if (clearcoat.clearcoat_normal_texture.texture && clearcoat.clearcoat_normal_texture.texture->image)
-				images[clearcoat.clearcoat_normal_texture.texture->image - data->images].normal_map = true;
-		}
-
-		if (material.has_specular)
-		{
-			const cgltf_specular& specular = material.specular;
-
-			if (specular.specular_texture.texture && specular.specular_texture.texture->image)
-				images[specular.specular_texture.texture->image - data->images].srgb = true;
-		}
-
-		if (material.has_sheen)
-		{
-			const cgltf_sheen& sheen = material.sheen;
-
-			if (sheen.sheen_color_texture.texture && sheen.sheen_color_texture.texture->image)
-				images[sheen.sheen_color_texture.texture->image - data->images].srgb = true;
-		}
-
-		if (material.emissive_texture.texture && material.emissive_texture.texture->image)
-			images[material.emissive_texture.texture->image - data->images].srgb = true;
-
-		if (material.normal_texture.texture && material.normal_texture.texture->image)
-			images[material.normal_texture.texture->image - data->images].normal_map = true;
-	}
-}
-
 const char* inferMimeType(const char* path)
 {
 	std::string ext = getExtension(path);
