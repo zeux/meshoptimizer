@@ -301,7 +301,7 @@ enum TextureKind
 
 static void analyzeMaterialTexture(const cgltf_texture_view& view, TextureKind kind, MaterialInfo& mi, cgltf_data* data, std::vector<ImageInfo>& images)
 {
-	mi.usesTextureTransform |= view.has_transform;
+	mi.usesTextureTransform |= bool(view.has_transform);
 
 	if (view.texture && view.texture->image)
 	{
