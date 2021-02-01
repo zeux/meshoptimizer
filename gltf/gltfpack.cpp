@@ -304,7 +304,9 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	markNeededNodes(data, nodes, meshes, animations, settings);
 
 	std::vector<MaterialInfo> materials(data->materials_count);
+	std::vector<ImageInfo> images(data->images_count);
 
+	analyzeMaterials(data, materials, images);
 	markNeededMaterials(data, materials, meshes, settings);
 
 #ifndef NDEBUG
@@ -312,11 +314,15 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
+		const Mesh& mesh = meshes[i];
+
 		if (settings.simplify_debug > 0)
 		{
+			MaterialInfo mi = mesh.material ? materials[mesh.material - data->materials] : MaterialInfo();
+
 			Mesh kinds = {};
 			Mesh loops = {};
-			debugSimplify(meshes[i], kinds, loops, settings.simplify_debug);
+			debugSimplify(mesh, mi, kinds, loops, settings.simplify_debug);
 			debug_meshes.push_back(kinds);
 			debug_meshes.push_back(loops);
 		}
@@ -325,7 +331,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		{
 			Mesh meshlets = {};
 			Mesh bounds = {};
-			debugMeshlets(meshes[i], meshlets, bounds, settings.meshlet_debug, /* scan= */ false);
+			debugMeshlets(mesh, meshlets, bounds, settings.meshlet_debug, /* scan= */ false);
 			debug_meshes.push_back(meshlets);
 			debug_meshes.push_back(bounds);
 		}
@@ -334,7 +340,10 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
-		processMesh(meshes[i], settings);
+		Mesh& mesh = meshes[i];
+		MaterialInfo mi = mesh.material ? materials[mesh.material - data->materials] : MaterialInfo();
+
+		processMesh(mesh, mi, settings);
 	}
 
 #ifndef NDEBUG
@@ -342,10 +351,6 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 #endif
 
 	filterEmptyMeshes(meshes); // some meshes may become empty after processing
-
-	std::vector<ImageInfo> images(data->images_count);
-
-	analyzeImages(data, images);
 
 	QuantizationPosition qp = prepareQuantizationPosition(meshes, settings);
 
@@ -438,7 +443,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		ext_specular = ext_specular || material.has_specular;
 		ext_sheen = ext_sheen || material.has_sheen;
 		ext_unlit = ext_unlit || material.unlit;
-		ext_texture_transform = ext_texture_transform || usesTextureTransform(material);
+		ext_texture_transform = ext_texture_transform || mi.usesTextureTransform;
 	}
 
 	for (size_t i = 0; i < meshes.size(); ++i)
