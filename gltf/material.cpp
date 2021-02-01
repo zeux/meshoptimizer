@@ -133,10 +133,13 @@ static bool areMaterialComponentsEqual(const cgltf_specular& lhs, const cgltf_sp
 	if (!areTextureViewsEqual(lhs.specular_texture, rhs.specular_texture))
 		return false;
 
-	if (memcmp(lhs.specular_color_factor, rhs.specular_color_factor, sizeof(cgltf_float) * 3) != 0)
+	if (!areTextureViewsEqual(lhs.specular_color_texture, rhs.specular_color_texture))
 		return false;
 
 	if (lhs.specular_factor != rhs.specular_factor)
+		return false;
+
+	if (memcmp(lhs.specular_color_factor, rhs.specular_color_factor, sizeof(cgltf_float) * 3) != 0)
 		return false;
 
 	return true;
@@ -331,6 +334,9 @@ static bool materialHasProperty(const cgltf_material& material, Pred pred)
 	if (material.has_specular)
 	{
 		if (pred(material.specular.specular_texture))
+			return true;
+
+		if (pred(material.specular.specular_color_texture))
 			return true;
 	}
 

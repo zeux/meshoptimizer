@@ -66,8 +66,8 @@ void analyzeImages(cgltf_data* data, std::vector<ImageInfo>& images)
 		{
 			const cgltf_specular& specular = material.specular;
 
-			if (specular.specular_texture.texture && specular.specular_texture.texture->image)
-				images[specular.specular_texture.texture->image - data->images].srgb = true;
+			if (specular.specular_color_texture.texture && specular.specular_color_texture.texture->image)
+				images[specular.specular_color_texture.texture->image - data->images].srgb = true;
 		}
 
 		if (material.has_sheen)

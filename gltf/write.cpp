@@ -391,6 +391,18 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 		append(json, "\"specularTexture\":");
 		writeTextureInfo(json, data, tm.specular_texture, qt);
 	}
+	if (tm.specular_color_texture.texture)
+	{
+		comma(json);
+		append(json, "\"specularColorTexture\":");
+		writeTextureInfo(json, data, tm.specular_color_texture, qt);
+	}
+	if (tm.specular_factor != 1)
+	{
+		comma(json);
+		append(json, "\"specularFactor\":");
+		append(json, tm.specular_factor);
+	}
 	if (memcmp(tm.specular_color_factor, white, 16) != 0)
 	{
 		comma(json);
@@ -401,12 +413,6 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 		append(json, ",");
 		append(json, tm.specular_color_factor[2]);
 		append(json, "]");
-	}
-	if (tm.specular_factor != 1)
-	{
-		comma(json);
-		append(json, "\"specularFactor\":");
-		append(json, tm.specular_factor);
 	}
 	append(json, "}");
 }

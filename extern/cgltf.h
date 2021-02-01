@@ -439,6 +439,7 @@ typedef struct cgltf_ior
 typedef struct cgltf_specular
 {
 	cgltf_texture_view specular_texture;
+	cgltf_texture_view specular_color_texture;
 	cgltf_float specular_color_factor[3];
 	cgltf_float specular_factor;
 } cgltf_specular;
@@ -1768,6 +1769,7 @@ void cgltf_free(cgltf_data* data)
 		if(data->materials[i].has_specular)
 		{
 			cgltf_free_extensions(data, data->materials[i].specular.specular_texture.extensions, data->materials[i].specular.specular_texture.extensions_count);
+			cgltf_free_extensions(data, data->materials[i].specular.specular_color_texture.extensions, data->materials[i].specular.specular_color_texture.extensions_count);
 		}
 		if(data->materials[i].has_transmission)
 		{
@@ -3466,6 +3468,10 @@ static int cgltf_parse_json_specular(cgltf_options* options, jsmntok_t const* to
 		else if (cgltf_json_strcmp(tokens+i, json_chunk, "specularTexture") == 0)
 		{
 			i = cgltf_parse_json_texture_view(options, tokens, i + 1, json_chunk, &out_specular->specular_texture);
+		}
+		else if (cgltf_json_strcmp(tokens + i, json_chunk, "specularColorTexture") == 0)
+		{
+			i = cgltf_parse_json_texture_view(options, tokens, i + 1, json_chunk, &out_specular->specular_color_texture);
 		}
 		else
 		{
@@ -5594,6 +5600,7 @@ static int cgltf_fixup_pointers(cgltf_data* data)
 		CGLTF_PTRFIXUP(data->materials[i].clearcoat.clearcoat_normal_texture.texture, data->textures, data->textures_count);
 
 		CGLTF_PTRFIXUP(data->materials[i].specular.specular_texture.texture, data->textures, data->textures_count);
+		CGLTF_PTRFIXUP(data->materials[i].specular.specular_color_texture.texture, data->textures, data->textures_count);
 
 		CGLTF_PTRFIXUP(data->materials[i].transmission.transmission_texture.texture, data->textures, data->textures_count);
 
