@@ -162,6 +162,23 @@ static bool areMaterialComponentsEqual(const cgltf_sheen& lhs, const cgltf_sheen
 	return true;
 }
 
+static bool areMaterialComponentsEqual(const cgltf_volume& lhs, const cgltf_volume& rhs)
+{
+	if (!areTextureViewsEqual(lhs.thickness_texture, rhs.thickness_texture))
+		return false;
+
+	if (lhs.thickness_factor != rhs.thickness_factor)
+		return false;
+
+	if (memcmp(lhs.attenuation_color, rhs.attenuation_color, sizeof(cgltf_float) * 3) != 0)
+		return false;
+
+	if (lhs.attenuation_distance != rhs.attenuation_distance)
+		return false;
+
+	return true;
+}
+
 static bool areMaterialsEqual(cgltf_data* data, const cgltf_material& lhs, const cgltf_material& rhs, const Settings& settings)
 {
 	if (lhs.has_pbr_metallic_roughness != rhs.has_pbr_metallic_roughness)
@@ -204,6 +221,12 @@ static bool areMaterialsEqual(cgltf_data* data, const cgltf_material& lhs, const
 		return false;
 
 	if (lhs.has_sheen && !areMaterialComponentsEqual(lhs.sheen, rhs.sheen))
+		return false;
+
+	if (lhs.has_volume != rhs.has_volume)
+		return false;
+
+	if (lhs.has_volume && !areMaterialComponentsEqual(lhs.volume, rhs.volume))
 		return false;
 
 	if (!areTextureViewsEqual(lhs.normal_texture, rhs.normal_texture))
@@ -349,6 +372,11 @@ static void analyzeMaterial(const cgltf_material& material, MaterialInfo& mi, cg
 	{
 		analyzeMaterialTexture(material.sheen.sheen_color_texture, TextureKind_Color, mi, data, images);
 		analyzeMaterialTexture(material.sheen.sheen_roughness_texture, TextureKind_Generic, mi, data, images);
+	}
+
+	if (material.has_volume)
+	{
+		analyzeMaterialTexture(material.volume.thickness_texture, TextureKind_Generic, mi, data, images);
 	}
 
 	analyzeMaterialTexture(material.normal_texture, TextureKind_Normal, mi, data, images);

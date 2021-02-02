@@ -1,6 +1,7 @@
 // This file is part of gltfpack; see gltfpack.h for version/license details
 #include "gltfpack.h"
 
+#include <float.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -403,7 +404,7 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 		append(json, "\"specularFactor\":");
 		append(json, tm.specular_factor);
 	}
-	if (memcmp(tm.specular_color_factor, white, 16) != 0)
+	if (memcmp(tm.specular_color_factor, white, 12) != 0)
 	{
 		comma(json);
 		append(json, "\"specularColorFactor\":[");
@@ -444,11 +445,47 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 		append(json, tm.sheen_color_factor[2]);
 		append(json, "]");
 	}
-	if (tm.sheen_roughness_factor != 0.f)
+	if (tm.sheen_roughness_factor != 0)
 	{
 		comma(json);
 		append(json, "\"sheenRoughnessFactor\":");
 		append(json, tm.sheen_roughness_factor);
+	}
+	append(json, "}");
+}
+
+static void writeMaterialComponent(std::string& json, const cgltf_data* data, const cgltf_volume& tm, const QuantizationTexture* qt)
+{
+	comma(json);
+	append(json, "\"KHR_materials_volume\":{");
+	if (tm.thickness_texture.texture)
+	{
+		comma(json);
+		append(json, "\"thicknessTexture\":");
+		writeTextureInfo(json, data, tm.thickness_texture, qt);
+	}
+	if (tm.thickness_factor != 0)
+	{
+		comma(json);
+		append(json, "\"thicknessFactor\":");
+		append(json, tm.thickness_factor);
+	}
+	if (memcmp(tm.attenuation_color, white, 12) != 0)
+	{
+		comma(json);
+		append(json, "\"attenuationColor\":[");
+		append(json, tm.attenuation_color[0]);
+		append(json, ",");
+		append(json, tm.attenuation_color[1]);
+		append(json, ",");
+		append(json, tm.attenuation_color[2]);
+		append(json, "]");
+	}
+	if (tm.attenuation_distance != FLT_MAX)
+	{
+		comma(json);
+		append(json, "\"attenuationDistance\":");
+		append(json, tm.attenuation_distance);
 	}
 	append(json, "}");
 }
@@ -522,7 +559,7 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 		append(json, "\"doubleSided\":true");
 	}
 
-	if (material.has_pbr_specular_glossiness || material.has_clearcoat || material.has_transmission || material.has_ior || material.has_specular || material.has_sheen || material.unlit)
+	if (material.has_pbr_specular_glossiness || material.has_clearcoat || material.has_transmission || material.has_ior || material.has_specular || material.has_sheen || material.has_volume || material.unlit)
 	{
 		comma(json);
 		append(json, "\"extensions\":{");
@@ -555,6 +592,11 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 		if (material.has_sheen)
 		{
 			writeMaterialComponent(json, data, material.sheen, qt);
+		}
+
+		if (material.has_volume)
+		{
+			writeMaterialComponent(json, data, material.volume, qt);
 		}
 
 		if (material.unlit)
