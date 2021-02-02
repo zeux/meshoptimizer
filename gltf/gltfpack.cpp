@@ -511,6 +511,26 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 				append(json_meshes, size_t(mi.remap));
 			}
 
+			if (mesh.variants.size())
+			{
+				append(json_meshes, ",\"extensions\":{\"KHR_materials_variants\":{\"mappings\":[");
+
+				for (size_t j = 0; j < mesh.variants.size(); ++j)
+				{
+					MaterialInfo& mi = materials[mesh.variants[j].material - data->materials];
+
+					assert(mi.keep);
+					comma(json_meshes);
+					append(json_meshes, "{\"material\":");
+					append(json_meshes, size_t(mi.remap));
+					append(json_meshes, ",\"variants\":[");
+					append(json_meshes, size_t(mesh.variants[j].variant));
+					append(json_meshes, "]}");
+				}
+
+				append(json_meshes, "]}}");
+			}
+
 			append(json_meshes, "}");
 		}
 
@@ -661,6 +681,24 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		append(json_extensions, "]}");
 	}
 
+	if (data->variants_count > 0)
+	{
+		comma(json_extensions);
+		append(json_extensions, "\"KHR_materials_variants\":{\"variants\":[");
+
+		for (size_t i = 0; i < data->variants_count; ++i)
+		{
+			const cgltf_material_variant& variant = data->variants[i];
+
+			comma(json_extensions);
+			append(json_extensions, "{\"name\":\"");
+			append(json_extensions, variant.name);
+			append(json_extensions, "\"}");
+		}
+
+		append(json_extensions, "]}");
+	}
+
 	append(json, "\"asset\":{");
 	append(json, "\"version\":\"2.0\",\"generator\":\"gltfpack ");
 	append(json, getVersion());
@@ -680,6 +718,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	    {"KHR_materials_sheen", ext_sheen, false},
 	    {"KHR_materials_volume", ext_volume, false},
 	    {"KHR_materials_unlit", ext_unlit, false},
+	    {"KHR_materials_variants", data->variants_count > 0, false},
 	    {"KHR_lights_punctual", data->lights_count > 0, false},
 	    {"KHR_texture_basisu", !json_textures.empty() && settings.texture_ktx2, true},
 	    {"EXT_mesh_gpu_instancing", ext_instancing, true},

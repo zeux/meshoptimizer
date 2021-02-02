@@ -114,6 +114,7 @@ void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTextur
 		assert(mi < bounds.size());
 
 		updateAttributeBounds(mesh, cgltf_attribute_type_texcoord, bounds[mi]);
+		// TODO: variants
 	}
 
 	for (size_t i = 0; i < result.size(); ++i)

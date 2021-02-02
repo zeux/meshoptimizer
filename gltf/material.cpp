@@ -282,6 +282,9 @@ void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Setti
 				break;
 			}
 		}
+
+		// TODO: merge variants
+		// TODO: clip useless variants
 	}
 }
 
@@ -295,6 +298,13 @@ void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials,
 		if (mesh.material)
 		{
 			MaterialInfo& mi = materials[mesh.material - data->materials];
+
+			mi.keep = true;
+		}
+
+		for (size_t j = 0; j < mesh.variants.size(); ++j)
+		{
+			MaterialInfo& mi = materials[mesh.variants[j].material - data->materials];
 
 			mi.keep = true;
 		}

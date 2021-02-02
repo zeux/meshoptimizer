@@ -244,6 +244,8 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 			result.targets = primitive.targets_count;
 			result.target_weights.assign(mesh.weights, mesh.weights + mesh.weights_count);
 			result.target_names.assign(mesh.target_names, mesh.target_names + mesh.target_names_count);
+
+			result.variants.assign(primitive.mappings, primitive.mappings + primitive.mappings_count);
 		}
 
 		mesh_remap[mi] = std::make_pair(remap_offset, meshes.size());

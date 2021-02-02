@@ -54,6 +54,8 @@ struct Mesh
 	size_t targets;
 	std::vector<float> target_weights;
 	std::vector<const char*> target_names;
+
+	std::vector<cgltf_material_mapping> variants;
 };
 
 struct Track
@@ -255,7 +257,9 @@ void debugSimplify(const Mesh& mesh, const MaterialInfo& mi, Mesh& kinds, Mesh& 
 void debugMeshlets(const Mesh& mesh, Mesh& meshlets, Mesh& bounds, int max_vertices, bool scan);
 
 bool compareMeshTargets(const Mesh& lhs, const Mesh& rhs);
+bool compareMeshVariants(const Mesh& lhs, const Mesh& rhs);
 bool compareMeshNodes(const Mesh& lhs, const Mesh& rhs);
+
 void mergeMeshInstances(Mesh& mesh);
 void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings);
 void filterEmptyMeshes(std::vector<Mesh>& meshes);

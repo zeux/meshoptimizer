@@ -131,6 +131,23 @@ bool compareMeshTargets(const Mesh& lhs, const Mesh& rhs)
 	return true;
 }
 
+bool compareMeshVariants(const Mesh& lhs, const Mesh& rhs)
+{
+	if (lhs.variants.size() != rhs.variants.size())
+		return false;
+
+	for (size_t i = 0; i < lhs.variants.size(); ++i)
+	{
+		if (lhs.variants[i].variant != rhs.variants[i].variant)
+			return false;
+
+		if (lhs.variants[i].material != rhs.variants[i].material)
+			return false;
+	}
+
+	return true;
+}
+
 bool compareMeshNodes(const Mesh& lhs, const Mesh& rhs)
 {
 	if (lhs.nodes.size() != rhs.nodes.size())
@@ -196,6 +213,9 @@ static bool canMergeMeshes(const Mesh& lhs, const Mesh& rhs, const Settings& set
 		return false;
 
 	if (!compareMeshTargets(lhs, rhs))
+		return false;
+
+	if (!compareMeshVariants(lhs, rhs))
 		return false;
 
 	if (lhs.indices.empty() != rhs.indices.empty())
