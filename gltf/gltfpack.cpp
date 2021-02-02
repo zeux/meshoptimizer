@@ -342,6 +342,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	{
 		Mesh& mesh = meshes[i];
 		MaterialInfo mi = mesh.material ? materials[mesh.material - data->materials] : MaterialInfo();
+		// TODO: variants
 
 		processMesh(mesh, mi, settings);
 	}
@@ -473,6 +474,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 				break;
 
 			const QuantizationTexture& qt = prim.material ? qt_materials[prim.material - data->materials] : qt_dummy;
+			// TODO: variants
 
 			comma(json_meshes);
 			append(json_meshes, "{\"attributes\":{");
@@ -511,20 +513,21 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 				append(json_meshes, size_t(mi.remap));
 			}
 
-			if (mesh.variants.size())
+			if (prim.variants.size())
 			{
 				append(json_meshes, ",\"extensions\":{\"KHR_materials_variants\":{\"mappings\":[");
 
-				for (size_t j = 0; j < mesh.variants.size(); ++j)
+				for (size_t j = 0; j < prim.variants.size(); ++j)
 				{
-					MaterialInfo& mi = materials[mesh.variants[j].material - data->materials];
+					const cgltf_material_mapping& variant = prim.variants[j];
+					MaterialInfo& mi = materials[variant.material - data->materials];
 
 					assert(mi.keep);
 					comma(json_meshes);
 					append(json_meshes, "{\"material\":");
 					append(json_meshes, size_t(mi.remap));
 					append(json_meshes, ",\"variants\":[");
-					append(json_meshes, size_t(mesh.variants[j].variant));
+					append(json_meshes, size_t(variant.variant));
 					append(json_meshes, "]}");
 				}
 
