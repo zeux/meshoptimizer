@@ -24,6 +24,15 @@ struct Bounds
 	{
 		return min.f[0] <= max.f[0] && min.f[1] <= max.f[1] && min.f[2] <= max.f[2] && min.f[3] <= max.f[3];
 	}
+
+	void merge(const Bounds& other)
+	{
+		for (int k = 0; k < 4; ++k)
+		{
+			min.f[k] = min.f[k] < other.min.f[k] ? min.f[k] : other.min.f[k];
+			max.f[k] = max.f[k] > other.max.f[k] ? max.f[k] : other.max.f[k];
+		}
+	}
 };
 
 static void updateAttributeBounds(const Mesh& mesh, cgltf_attribute_type type, Bounds& b)
@@ -107,14 +116,14 @@ void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTextur
 	{
 		const Mesh& mesh = meshes[i];
 
-		if (!mesh.material)
-			continue;
+		Bounds uvb;
+		updateAttributeBounds(mesh, cgltf_attribute_type_texcoord, uvb);
 
-		size_t mi = mesh.material - data->materials;
-		assert(mi < bounds.size());
+		if (mesh.material)
+			bounds[mesh.material - data->materials].merge(uvb);
 
-		updateAttributeBounds(mesh, cgltf_attribute_type_texcoord, bounds[mi]);
-		// TODO: variants
+		for (size_t j = 0; j < mesh.variants.size(); ++j)
+			bounds[mesh.variants[j].material - data->materials].merge(uvb);
 	}
 
 	for (size_t i = 0; i < result.size(); ++i)

@@ -342,7 +342,15 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	{
 		Mesh& mesh = meshes[i];
 		MaterialInfo mi = mesh.material ? materials[mesh.material - data->materials] : MaterialInfo();
-		// TODO: variants
+
+		// merge material requirements across all variants
+		for (size_t j = 0; j < mesh.variants.size(); ++j)
+		{
+			MaterialInfo vi = materials[mesh.variants[j].material - data->materials];
+
+			mi.needsTangents |= vi.needsTangents;
+			mi.textureSetMask |= vi.textureSetMask;
+		}
 
 		processMesh(mesh, mi, settings);
 	}
