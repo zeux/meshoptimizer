@@ -261,30 +261,37 @@ static bool areMaterialsEqual(cgltf_data* data, const cgltf_material& lhs, const
 
 void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings)
 {
-	for (size_t i = 0; i < meshes.size(); ++i)
+	std::vector<cgltf_material*> material_remap(data->materials_count);
+
+	for (size_t i = 0; i < data->materials_count; ++i)
 	{
-		Mesh& mesh = meshes[i];
+		material_remap[i] = &data->materials[i];
 
-		if (!mesh.material)
+		if (settings.keep_materials && data->materials[i].name && *data->materials[i].name)
 			continue;
 
-		if (settings.keep_materials && mesh.material->name && *mesh.material->name)
-			continue;
-
-		for (int j = 0; j < mesh.material - data->materials; ++j)
+		for (size_t j = 0; j < i; ++j)
 		{
 			if (settings.keep_materials && data->materials[j].name && *data->materials[j].name)
 				continue;
 
-			if (areMaterialsEqual(data, *mesh.material, data->materials[j], settings))
+			if (areMaterialsEqual(data, data->materials[i], data->materials[j], settings))
 			{
-				mesh.material = &data->materials[j];
+				material_remap[i] = &data->materials[j];
 				break;
 			}
 		}
+	}
 
-		// TODO: merge variants
-		// TODO: clip useless variants
+	for (size_t i = 0; i < meshes.size(); ++i)
+	{
+		Mesh& mesh = meshes[i];
+
+		if (mesh.material)
+			mesh.material = material_remap[mesh.material - data->materials];
+
+		for (size_t j = 0; j < mesh.variants.size(); ++j)
+			mesh.variants[j].material = material_remap[mesh.variants[j].material - data->materials];
 	}
 }
 
