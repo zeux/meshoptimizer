@@ -24,15 +24,6 @@ struct Bounds
 	{
 		return min.f[0] <= max.f[0] && min.f[1] <= max.f[1] && min.f[2] <= max.f[2] && min.f[3] <= max.f[3];
 	}
-
-	void merge(const Bounds& other)
-	{
-		for (int k = 0; k < 4; ++k)
-		{
-			min.f[k] = min.f[k] < other.min.f[k] ? min.f[k] : other.min.f[k];
-			max.f[k] = max.f[k] > other.max.f[k] ? max.f[k] : other.max.f[k];
-		}
-	}
 };
 
 static void updateAttributeBounds(const Mesh& mesh, cgltf_attribute_type type, Bounds& b)
@@ -108,31 +99,69 @@ QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes
 	return result;
 }
 
-void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTexture>& result, const std::vector<Mesh>& meshes, const Settings& settings)
+static size_t follow(std::vector<size_t>& parents, size_t index)
 {
+	while (index != parents[index])
+	{
+		size_t parent = parents[index];
+
+		parents[index] = parents[parent];
+		index = parent;
+	}
+
+	return index;
+}
+
+void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTexture>& result, std::vector<size_t>& indices, const std::vector<Mesh>& meshes, const Settings& settings)
+{
+	// use union-find to associate each material with a canonical material
+	// this is necessary because any set of materials that are used on the same mesh must use the same quantization
+	std::vector<size_t> parents(result.size());
+
+	for (size_t i = 0; i < parents.size(); ++i)
+		parents[i] = i;
+
+	for (size_t i = 0; i < meshes.size(); ++i)
+	{
+		const Mesh& mesh = meshes[i];
+
+		if (!mesh.material && mesh.variants.empty())
+			continue;
+
+		size_t root = follow(parents, (mesh.material ? mesh.material : mesh.variants[0].material) - data->materials);
+
+		for (size_t j = 0; j < mesh.variants.size(); ++j)
+		{
+			size_t var = follow(parents, mesh.variants[j].material - data->materials);
+
+			parents[var] = root;
+		}
+
+		indices[i] = root;
+	}
+
+	// compute canonical material bounds based on meshes that use them
 	std::vector<Bounds> bounds(result.size());
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
 		const Mesh& mesh = meshes[i];
 
-		Bounds uvb;
-		updateAttributeBounds(mesh, cgltf_attribute_type_texcoord, uvb);
+		if (!mesh.material && mesh.variants.empty())
+			continue;
 
-		if (mesh.material)
-			bounds[mesh.material - data->materials].merge(uvb);
-
-		for (size_t j = 0; j < mesh.variants.size(); ++j)
-			bounds[mesh.variants[j].material - data->materials].merge(uvb);
+		indices[i] = follow(parents, indices[i]);
+		updateAttributeBounds(mesh, cgltf_attribute_type_texcoord, bounds[indices[i]]);
 	}
 
+	// update all material data using canonical bounds
 	for (size_t i = 0; i < result.size(); ++i)
 	{
 		QuantizationTexture& qt = result[i];
 
 		qt.bits = settings.tex_bits;
 
-		const Bounds& b = bounds[i];
+		const Bounds& b = bounds[follow(parents, i)];
 
 		if (b.isValid())
 		{

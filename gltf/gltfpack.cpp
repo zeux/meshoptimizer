@@ -364,7 +364,8 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	QuantizationPosition qp = prepareQuantizationPosition(meshes, settings);
 
 	std::vector<QuantizationTexture> qt_materials(materials.size());
-	prepareQuantizationTexture(data, qt_materials, meshes, settings);
+	std::vector<size_t> qt_meshes(meshes.size(), size_t(-1));
+	prepareQuantizationTexture(data, qt_materials, qt_meshes, meshes, settings);
 
 	QuantizationTexture qt_dummy = {};
 	qt_dummy.bits = settings.tex_bits;
@@ -481,8 +482,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 			if (!compareMeshTargets(mesh, prim))
 				break;
 
-			const QuantizationTexture& qt = prim.material ? qt_materials[prim.material - data->materials] : qt_dummy;
-			// TODO: variants
+			const QuantizationTexture& qt = qt_meshes[pi] == size_t(-1) ? qt_dummy : qt_materials[qt_meshes[pi]];
 
 			comma(json_meshes);
 			append(json_meshes, "{\"attributes\":{");
