@@ -54,6 +54,8 @@ struct Mesh
 	size_t targets;
 	std::vector<float> target_weights;
 	std::vector<const char*> target_names;
+
+	std::vector<cgltf_material_mapping> variants;
 };
 
 struct Track
@@ -255,7 +257,9 @@ void debugSimplify(const Mesh& mesh, const MaterialInfo& mi, Mesh& kinds, Mesh& 
 void debugMeshlets(const Mesh& mesh, Mesh& meshlets, Mesh& bounds, int max_vertices, bool scan);
 
 bool compareMeshTargets(const Mesh& lhs, const Mesh& rhs);
+bool compareMeshVariants(const Mesh& lhs, const Mesh& rhs);
 bool compareMeshNodes(const Mesh& lhs, const Mesh& rhs);
+
 void mergeMeshInstances(Mesh& mesh);
 void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings);
 void filterEmptyMeshes(std::vector<Mesh>& meshes);
@@ -279,7 +283,7 @@ void remapNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, size_t& node_off
 void decomposeTransform(float translation[3], float rotation[4], float scale[3], const float* transform);
 
 QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes, const Settings& settings);
-void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTexture>& result, const std::vector<Mesh>& meshes, const Settings& settings);
+void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTexture>& result, std::vector<size_t>& indices, const std::vector<Mesh>& meshes, const Settings& settings);
 void getPositionBounds(float min[3], float max[3], const Stream& stream, const QuantizationPosition* qp);
 
 StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings);

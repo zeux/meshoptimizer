@@ -343,6 +343,15 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		Mesh& mesh = meshes[i];
 		MaterialInfo mi = mesh.material ? materials[mesh.material - data->materials] : MaterialInfo();
 
+		// merge material requirements across all variants
+		for (size_t j = 0; j < mesh.variants.size(); ++j)
+		{
+			MaterialInfo vi = materials[mesh.variants[j].material - data->materials];
+
+			mi.needsTangents |= vi.needsTangents;
+			mi.textureSetMask |= vi.textureSetMask;
+		}
+
 		processMesh(mesh, mi, settings);
 	}
 
@@ -355,7 +364,8 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	QuantizationPosition qp = prepareQuantizationPosition(meshes, settings);
 
 	std::vector<QuantizationTexture> qt_materials(materials.size());
-	prepareQuantizationTexture(data, qt_materials, meshes, settings);
+	std::vector<size_t> qt_meshes(meshes.size(), size_t(-1));
+	prepareQuantizationTexture(data, qt_materials, qt_meshes, meshes, settings);
 
 	QuantizationTexture qt_dummy = {};
 	qt_dummy.bits = settings.tex_bits;
@@ -472,7 +482,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 			if (!compareMeshTargets(mesh, prim))
 				break;
 
-			const QuantizationTexture& qt = prim.material ? qt_materials[prim.material - data->materials] : qt_dummy;
+			const QuantizationTexture& qt = qt_meshes[pi] == size_t(-1) ? qt_dummy : qt_materials[qt_meshes[pi]];
 
 			comma(json_meshes);
 			append(json_meshes, "{\"attributes\":{");
@@ -509,6 +519,27 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 				assert(mi.keep);
 				append(json_meshes, ",\"material\":");
 				append(json_meshes, size_t(mi.remap));
+			}
+
+			if (prim.variants.size())
+			{
+				append(json_meshes, ",\"extensions\":{\"KHR_materials_variants\":{\"mappings\":[");
+
+				for (size_t j = 0; j < prim.variants.size(); ++j)
+				{
+					const cgltf_material_mapping& variant = prim.variants[j];
+					MaterialInfo& mi = materials[variant.material - data->materials];
+
+					assert(mi.keep);
+					comma(json_meshes);
+					append(json_meshes, "{\"material\":");
+					append(json_meshes, size_t(mi.remap));
+					append(json_meshes, ",\"variants\":[");
+					append(json_meshes, size_t(variant.variant));
+					append(json_meshes, "]}");
+				}
+
+				append(json_meshes, "]}}");
 			}
 
 			append(json_meshes, "}");
@@ -661,6 +692,24 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		append(json_extensions, "]}");
 	}
 
+	if (data->variants_count > 0)
+	{
+		comma(json_extensions);
+		append(json_extensions, "\"KHR_materials_variants\":{\"variants\":[");
+
+		for (size_t i = 0; i < data->variants_count; ++i)
+		{
+			const cgltf_material_variant& variant = data->variants[i];
+
+			comma(json_extensions);
+			append(json_extensions, "{\"name\":\"");
+			append(json_extensions, variant.name);
+			append(json_extensions, "\"}");
+		}
+
+		append(json_extensions, "]}");
+	}
+
 	append(json, "\"asset\":{");
 	append(json, "\"version\":\"2.0\",\"generator\":\"gltfpack ");
 	append(json, getVersion());
@@ -680,6 +729,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	    {"KHR_materials_sheen", ext_sheen, false},
 	    {"KHR_materials_volume", ext_volume, false},
 	    {"KHR_materials_unlit", ext_unlit, false},
+	    {"KHR_materials_variants", data->variants_count > 0, false},
 	    {"KHR_lights_punctual", data->lights_count > 0, false},
 	    {"KHR_texture_basisu", !json_textures.empty() && settings.texture_ktx2, true},
 	    {"EXT_mesh_gpu_instancing", ext_instancing, true},
