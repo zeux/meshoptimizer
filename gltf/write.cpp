@@ -795,8 +795,6 @@ void writeSampler(std::string& json, const cgltf_sampler& sampler)
 	append(json, size_t(sampler.wrap_s));
 	append(json, ",\"wrapT\":");
 	append(json, size_t(sampler.wrap_t));
-
-	append(json, ",\"extensions\":{}");
 }
 
 void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const char* output_path, const Settings& settings)
