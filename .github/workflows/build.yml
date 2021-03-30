@@ -139,6 +139,7 @@ jobs:
         find . -type f -name '*.gcno' -exec gcov -p {} +
         sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
         bash <(curl -s https://codecov.io/bash) -f 'src#*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
+      continue-on-error: true
 
   iphone:
     runs-on: macos-latest
