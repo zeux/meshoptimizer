@@ -26,7 +26,7 @@ and the API of the library without including the implementation of the library.
 
 Implementation mode:
 If you define `SDEFL_IMPLEMENTATION` before including this file, it will
-compile the implementation of the JSON parser. Make sure that you only include
+compile the implementation . Make sure that you only include
 this file implementation in *one* C or C++ file to prevent collisions.
 
 ### Benchmark
@@ -51,7 +51,7 @@ this file implementation in *one* C or C++ file to prevent collisions.
 ### Compression
 Results on the [Silesia compression corpus](http://sun.aei.polsl.pl/~sdeor/index.php?page=silesia):
 
-| File    |   Original | `sdefl 0`  	| `sdefl 5` 	| `sdefl 7` |
+| File    |   Original | `sdefl 0`    | `sdefl 5`   | `sdefl 7` |
 | :------ | ---------: | -----------------: | ---------: | ----------: |
 | dickens | 10.192.446 |  4,260,187|  3,845,261|   3,833,657 |
 | mozilla | 51.220.480 | 20,774,706 | 19,607,009 |  19,565,867 |
@@ -156,7 +156,7 @@ struct sdefl_seqt {
   int off, len;
 };
 struct sdefl {
-  int bits, cnt;
+  int bits, bitcnt;
   int tbl[SDEFL_HASH_SIZ];
   int prv[SDEFL_WIN_SIZ];
 
@@ -231,13 +231,13 @@ sdefl_hash32(const void *p) {
 }
 static void
 sdefl_put(unsigned char **dst, struct sdefl *s, int code, int bitcnt) {
-  s->bits |= (code << s->cnt);
-  s->cnt += bitcnt;
-  while (s->cnt >= 8) {
+  s->bits |= (code << s->bitcnt);
+  s->bitcnt += bitcnt;
+  while (s->bitcnt >= 8) {
     unsigned char *tar = *dst;
     *tar = (unsigned char)(s->bits & 0xFF);
     s->bits >>= 8;
-    s->cnt -= 8;
+    s->bitcnt -= 8;
     *dst = *dst + 1;
   }
 }
@@ -379,15 +379,31 @@ sdefl_huff(unsigned char *lens, unsigned *codes, unsigned *freqs,
     codes[c] = sdefl_rev(codes[c], lens[c]);
   }
 }
+struct sdefl_symcnt {
+  int items;
+  int lit;
+  int off;
+};
 static void
-sdefl_precode(unsigned *freqs, unsigned *items, unsigned *item_cnt,
-              const unsigned char *lens, const unsigned cnt) {
+sdefl_precode(struct sdefl_symcnt *cnt, unsigned *freqs, unsigned *items,
+              const unsigned char *litlen, const unsigned char *offlen) {
   unsigned *at = items;
   unsigned run_start = 0;
+
+  unsigned total = 0;
+  unsigned char lens[SDEFL_SYM_MAX + SDEFL_OFF_MAX];
+  for (cnt->lit = SDEFL_SYM_MAX; cnt->lit > 257; cnt->lit--)
+    if (litlen[cnt->lit - 1]) break;
+  for (cnt->off = SDEFL_OFF_MAX; cnt->off > 1; cnt->off--)
+    if (offlen[cnt->off - 1]) break;
+
+  total = (unsigned)(cnt->lit + cnt->off);
+  memcpy(lens, litlen, sizeof(unsigned char) * cnt->lit);
+  memcpy(lens + cnt->lit, offlen, sizeof(unsigned char) * cnt->off);
   do {
     unsigned len = lens[run_start];
     unsigned run_end = run_start;
-    do run_end++; while (run_end != cnt && len == lens[run_end]);
+    do run_end++; while (run_end != total && len == lens[run_end]);
     if (!len) {
       while ((run_end - run_start) >= 11) {
         unsigned n = (run_end - run_start) - 11;
@@ -420,11 +436,15 @@ sdefl_precode(unsigned *freqs, unsigned *items, unsigned *item_cnt,
       *at++ = len;
       run_start++;
     }
-  } while (run_start != cnt);
-  *item_cnt = (unsigned)(at - items);
+  } while (run_start != total);
+  cnt->items = (int)(at - items);
 }
+struct sdefl_match_codest {
+  int ls, lc;
+  int dc, dx;
+};
 static void
-sdefl_match_codes(int *ls, int *lc, int *dx, int *dc, int dist, int len) {
+sdefl_match_codes(struct sdefl_match_codest *cod, int dist, int len) {
   static const short dxmax[] = {0,6,12,24,48,96,192,384,768,1536,3072,6144,12288,24576};
   static const unsigned char lslot[258+1] = {
     0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 12,
@@ -443,10 +463,10 @@ sdefl_match_codes(int *ls, int *lc, int *dx, int *dc, int dist, int len) {
     27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
     27, 27, 28
   };
-  *ls = lslot[len];
-  *lc = 257 + *ls;
-  *dx = sdefl_ilog2(sdefl_npow2(dist) >> 2);
-  *dc = *dx ? ((*dx + 1) << 1) + (dist > dxmax[*dx]) : dist-1;
+  cod->ls = lslot[len];
+  cod->lc = 257 + cod->ls;
+  cod->dx = sdefl_ilog2(sdefl_npow2(dist) >> 2);
+  cod->dc = cod->dx ? ((cod->dx + 1) << 1) + (dist > dxmax[cod->dx]) : dist-1;
 }
 static void
 sdefl_match(unsigned char **dst, struct sdefl *s, int dist, int len) {
@@ -456,18 +476,18 @@ sdefl_match(unsigned char **dst, struct sdefl *s, int dist, int len) {
   static const short dmin[] = {1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,
       385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577};
 
-  int ls, lc, dx, dc;
-  sdefl_match_codes(&ls, &lc, &dx, &dc, dist, len);
-  sdefl_put(dst, s, (int)s->cod.word.lit[lc], s->cod.len.lit[lc]);
-  sdefl_put(dst, s, len - lmin[ls], lxn[ls]);
-  sdefl_put(dst, s, (int)s->cod.word.off[dc], s->cod.len.off[dc]);
-  sdefl_put(dst, s, dist - dmin[dc], dx);
+  struct sdefl_match_codest cod;
+  sdefl_match_codes(&cod, dist, len);
+  sdefl_put(dst, s, (int)s->cod.word.lit[cod.lc], s->cod.len.lit[cod.lc]);
+  sdefl_put(dst, s, len - lmin[cod.ls], lxn[cod.ls]);
+  sdefl_put(dst, s, (int)s->cod.word.off[cod.dc], s->cod.len.off[cod.dc]);
+  sdefl_put(dst, s, dist - dmin[cod.dc], cod.dx);
 }
 static void
 sdefl_flush(unsigned char **dst, struct sdefl *s, int is_last,
             const unsigned char *in) {
-  int j, n = 0;
-  unsigned i, item_cnt = 0;
+  int j, i = 0, item_cnt = 0;
+  struct sdefl_symcnt symcnt = {0};
   unsigned codes[SDEFL_PRE_MAX];
   unsigned char lens[SDEFL_PRE_MAX];
   unsigned freqs[SDEFL_PRE_MAX] = {0};
@@ -479,18 +499,20 @@ sdefl_flush(unsigned char **dst, struct sdefl *s, int is_last,
   s->freq.lit[SDEFL_EOB]++;
   sdefl_huff(s->cod.len.lit, s->cod.word.lit, s->freq.lit, SDEFL_SYM_MAX, SDEFL_LIT_LEN_CODES);
   sdefl_huff(s->cod.len.off, s->cod.word.off, s->freq.off, SDEFL_OFF_MAX, SDEFL_OFF_CODES);
-  sdefl_precode(freqs, items, &item_cnt, s->cod.len.lit, SDEFL_SYM_MAX+SDEFL_OFF_MAX);
+  sdefl_precode(&symcnt, freqs, items, s->cod.len.lit, s->cod.len.off);
   sdefl_huff(lens, codes, freqs, SDEFL_PRE_MAX, SDEFL_PRE_CODES);
-
+  for (item_cnt = SDEFL_PRE_MAX; item_cnt > 4; item_cnt--) {
+    if (lens[perm[item_cnt - 1]]) break;
+  }
   /* block header */
   sdefl_put(dst, s, is_last ? 0x01 : 0x00, 1); /* block */
   sdefl_put(dst, s, 0x02, 2); /* dynamic huffman */
-  sdefl_put(dst, s, SDEFL_SYM_MAX - 257, 5);
-  sdefl_put(dst, s, SDEFL_OFF_MAX - 1, 5);
-  sdefl_put(dst, s, SDEFL_PRE_MAX - 4, 4);
-  for (i = 0; i < SDEFL_PRE_MAX; ++i)
+  sdefl_put(dst, s, symcnt.lit - 257, 5);
+  sdefl_put(dst, s, symcnt.off - 1, 5);
+  sdefl_put(dst, s, item_cnt - 4, 4);
+  for (i = 0; i < item_cnt; ++i)
     sdefl_put(dst, s, lens[perm[i]], 3);
-  for (i = 0; i < item_cnt; ++i) {
+  for (i = 0; i < symcnt.items; ++i) {
     unsigned sym = items[i] & 0x1F;
     sdefl_put(dst, s, (int)codes[sym], lens[sym]);
     if (sym < 16) continue;
@@ -499,13 +521,13 @@ sdefl_flush(unsigned char **dst, struct sdefl *s, int is_last,
     else sdefl_put(dst, s, items[i] >> 5, 7);
   }
   /* block sequences */
-  for (n = 0; n < s->seq_cnt; ++n) {
-    if (s->seq[n].off >= 0)
-      for (j = 0; j < s->seq[n].len; ++j) {
-        int c = in[s->seq[n].off + j];
+  for (i = 0; i < s->seq_cnt; ++i) {
+    if (s->seq[i].off >= 0)
+      for (j = 0; j < s->seq[i].len; ++j) {
+        int c = in[s->seq[i].off + j];
         sdefl_put(dst, s, (int)s->cod.word.lit[c], s->cod.len.lit[c]);
       }
-    else sdefl_match(dst, s, -s->seq[n].off, s->seq[n].len);
+    else sdefl_match(dst, s, -s->seq[i].off, s->seq[i].len);
   }
   sdefl_put(dst, s, (int)(s)->cod.word.lit[SDEFL_EOB], (s)->cod.len.lit[SDEFL_EOB]);
   memset(&s->freq, 0, sizeof(s->freq));
@@ -520,10 +542,10 @@ sdefl_seq(struct sdefl *s, int off, int len) {
 }
 static void
 sdefl_reg_match(struct sdefl *s, int off, int len) {
-  int ls, lc, dx, dc;
-  sdefl_match_codes(&ls, &lc, &dx, &dc, off, len);
-  s->freq.lit[lc]++;
-  s->freq.off[dc]++;
+  struct sdefl_match_codest cod;
+  sdefl_match_codes(&cod, off, len);
+  s->freq.lit[cod.lc]++;
+  s->freq.off[cod.dc]++;
 }
 struct sdefl_match {
   int off;
@@ -553,7 +575,7 @@ sdefl_compr(struct sdefl *s, unsigned char *out, const unsigned char *in,
             int in_len, int lvl) {
   unsigned char *q = out;
   static const unsigned char pref[] = {8,10,14,24,30,48,65,96,130};
-  int max_chain = (lvl < 8) ? (1<<(lvl+1)): (1<<13);
+  int max_chain = (lvl < 8) ? (1 << (lvl + 1)): (1 << 13);
   int n, i = 0, litlen = 0;
   for (n = 0; n < SDEFL_HASH_SIZ; ++n) {
     s->tbl[n] = SDEFL_NIL;
@@ -606,13 +628,13 @@ sdefl_compr(struct sdefl *s, unsigned char *out, const unsigned char *in,
     sdefl_flush(&q, s, blk_end == in_len, in);
   } while (i < in_len);
 
-  if (s->cnt)
-    sdefl_put(&q, s, 0x00, 8 - s->cnt);
+  if (s->bitcnt)
+    sdefl_put(&q, s, 0x00, 8 - s->bitcnt);
   return (int)(q - out);
 }
 extern int
 sdeflate(struct sdefl *s, void *out, const void *in, int n, int lvl) {
-  s->bits = s->cnt = 0;
+  s->bits = s->bitcnt = 0;
   return sdefl_compr(s, (unsigned char*)out, (const unsigned char*)in, n, lvl);
 }
 static unsigned
@@ -652,7 +674,7 @@ zsdeflate(struct sdefl *s, void *out, const void *in, int n, int lvl) {
   unsigned a = 0;
   unsigned char *q = (unsigned char*)out;
 
-  s->bits = s->cnt = 0;
+  s->bits = s->bitcnt = 0;
   sdefl_put(&q, s, 0x78, 8); /* deflate, 32k window */
   sdefl_put(&q, s, 0x01, 8); /* fast compression */
   q += sdefl_compr(s, q, (const unsigned char*)in, n, lvl);
