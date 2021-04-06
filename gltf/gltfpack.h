@@ -251,9 +251,9 @@ cgltf_data* parseObj(const char* path, std::vector<Mesh>& meshes, const char** e
 cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, std::string& extras, const char** error);
 
 void processAnimation(Animation& animation, const Settings& settings);
-void processMesh(Mesh& mesh, const MaterialInfo& mi, const Settings& settings);
+void processMesh(Mesh& mesh, const Settings& settings);
 
-void debugSimplify(const Mesh& mesh, const MaterialInfo& mi, Mesh& kinds, Mesh& loops, float ratio);
+void debugSimplify(const Mesh& mesh, Mesh& kinds, Mesh& loops, float ratio);
 void debugMeshlets(const Mesh& mesh, Mesh& meshlets, Mesh& bounds, int max_vertices, bool scan);
 
 bool compareMeshTargets(const Mesh& lhs, const Mesh& rhs);
@@ -263,6 +263,7 @@ bool compareMeshNodes(const Mesh& lhs, const Mesh& rhs);
 void mergeMeshInstances(Mesh& mesh);
 void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings);
 void filterEmptyMeshes(std::vector<Mesh>& meshes);
+void filterStreams(Mesh& mesh, const MaterialInfo& mi);
 
 void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings);
 void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes, const Settings& settings);

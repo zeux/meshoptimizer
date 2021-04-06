@@ -297,16 +297,35 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		assert(mesh.nodes.empty());
 	}
 
+	// material information is required for mesh and image processing
+	std::vector<MaterialInfo> materials(data->materials_count);
+	std::vector<ImageInfo> images(data->images_count);
+
+	analyzeMaterials(data, materials, images);
+
+	// streams need to be filtered before mesh merging (or processing) to make sure we can merge meshes with redundant streams
+	for (size_t i = 0; i < meshes.size(); ++i)
+	{
+		Mesh& mesh = meshes[i];
+		MaterialInfo mi = mesh.material ? materials[mesh.material - data->materials] : MaterialInfo();
+
+		// merge material requirements across all variants
+		for (size_t j = 0; j < mesh.variants.size(); ++j)
+		{
+			MaterialInfo vi = materials[mesh.variants[j].material - data->materials];
+
+			mi.needsTangents |= vi.needsTangents;
+			mi.textureSetMask |= vi.textureSetMask;
+		}
+
+		filterStreams(mesh, mi);
+	}
+
 	mergeMeshMaterials(data, meshes, settings);
 	mergeMeshes(meshes, settings);
 	filterEmptyMeshes(meshes);
 
 	markNeededNodes(data, nodes, meshes, animations, settings);
-
-	std::vector<MaterialInfo> materials(data->materials_count);
-	std::vector<ImageInfo> images(data->images_count);
-
-	analyzeMaterials(data, materials, images);
 	markNeededMaterials(data, materials, meshes, settings);
 
 #ifndef NDEBUG
@@ -318,11 +337,9 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 		if (settings.simplify_debug > 0)
 		{
-			MaterialInfo mi = mesh.material ? materials[mesh.material - data->materials] : MaterialInfo();
-
 			Mesh kinds = {};
 			Mesh loops = {};
-			debugSimplify(mesh, mi, kinds, loops, settings.simplify_debug);
+			debugSimplify(mesh, kinds, loops, settings.simplify_debug);
 			debug_meshes.push_back(kinds);
 			debug_meshes.push_back(loops);
 		}
@@ -340,19 +357,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
-		Mesh& mesh = meshes[i];
-		MaterialInfo mi = mesh.material ? materials[mesh.material - data->materials] : MaterialInfo();
-
-		// merge material requirements across all variants
-		for (size_t j = 0; j < mesh.variants.size(); ++j)
-		{
-			MaterialInfo vi = materials[mesh.variants[j].material - data->materials];
-
-			mi.needsTangents |= vi.needsTangents;
-			mi.textureSetMask |= vi.textureSetMask;
-		}
-
-		processMesh(mesh, mi, settings);
+		processMesh(meshes[i], settings);
 	}
 
 #ifndef NDEBUG

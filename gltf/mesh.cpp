@@ -398,7 +398,7 @@ static bool hasDeltas(const std::vector<Attr>& data)
 	return false;
 }
 
-static void filterStreams(Mesh& mesh, const MaterialInfo& mi)
+void filterStreams(Mesh& mesh, const MaterialInfo& mi)
 {
 	bool morph_normal = false;
 	bool morph_tangent = false;
@@ -473,6 +473,9 @@ static void reindexMesh(Mesh& mesh)
 		meshopt_Stream stream = {&mesh.streams[i].data[0], sizeof(Attr), sizeof(Attr)};
 		streams.push_back(stream);
 	}
+
+	if (streams.empty())
+		return;
 
 	std::vector<unsigned int> remap(total_vertices);
 	size_t unique_vertices = meshopt_generateVertexRemapMulti(&remap[0], &mesh.indices[0], total_indices, total_vertices, &streams[0], streams.size());
@@ -745,10 +748,8 @@ static void sortPointMesh(Mesh& mesh)
 	}
 }
 
-void processMesh(Mesh& mesh, const MaterialInfo& mi, const Settings& settings)
+void processMesh(Mesh& mesh, const Settings& settings)
 {
-	filterStreams(mesh, mi);
-
 	switch (mesh.type)
 	{
 	case cgltf_primitive_type_points:
@@ -779,14 +780,13 @@ extern unsigned char* meshopt_simplifyDebugKind;
 extern unsigned int* meshopt_simplifyDebugLoop;
 extern unsigned int* meshopt_simplifyDebugLoopBack;
 
-void debugSimplify(const Mesh& source, const MaterialInfo& mi, Mesh& kinds, Mesh& loops, float ratio)
+void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio)
 {
 	Mesh mesh = source;
 	assert(mesh.type == cgltf_primitive_type_triangles);
 
 	// note: it's important to follow the same pipeline as processMesh
 	// otherwise the result won't match
-	filterStreams(mesh, mi);
 	filterBones(mesh);
 	reindexMesh(mesh);
 	filterTriangles(mesh);
