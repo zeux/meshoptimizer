@@ -94,7 +94,7 @@ bool checkBasis(bool verbose)
 
 	cmd += " -version";
 
-	int rc = execute(cmd.c_str(), /* ignore_stdout= */ true, /* ignore_stderr= */ true);
+	int rc = execute(cmd.c_str(), /* ignore_stdout= */ !verbose, /* ignore_stderr= */ !verbose);
 	if (verbose)
 		printf("%s => %d\n", cmd.c_str(), rc);
 
@@ -165,7 +165,7 @@ bool checkKtx(bool verbose)
 
 	cmd += " --version";
 
-	int rc = execute(cmd.c_str(), /* ignore_stdout= */ true, /* ignore_stderr= */ true);
+	int rc = execute(cmd.c_str(), /* ignore_stdout= */ !verbose, /* ignore_stderr= */ !verbose);
 	if (verbose)
 		printf("%s => %d\n", cmd.c_str(), rc);
 
