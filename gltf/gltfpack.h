@@ -1,5 +1,5 @@
 /**
- * gltfpack - version 0.15
+ * gltfpack - version 0.16
  *
  * Copyright (C) 2016-2021, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
  * Report bugs and download new versions at https://github.com/zeux/meshoptimizer
@@ -329,7 +329,7 @@ void writeExtras(std::string& json, const std::string& data, const cgltf_extras&
 void writeScene(std::string& json, const cgltf_scene& scene, const std::string& roots);
 
 /**
- * Copyright (c) 2016-2020 Arseny Kapoulkine
+ * Copyright (c) 2016-2021 Arseny Kapoulkine
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
