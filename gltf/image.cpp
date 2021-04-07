@@ -58,9 +58,9 @@ static int execute(const char* cmd, bool ignore_stdout, bool ignore_stderr)
 	return system(cmd);
 }
 
-static const char* readenv(const char* name)
+static std::string getExecutable(const char* name, const char* env)
 {
-	return NULL;
+	return name;
 }
 #else
 static int execute(const char* cmd_, bool ignore_stdout, bool ignore_stderr)
@@ -81,16 +81,24 @@ static int execute(const char* cmd_, bool ignore_stdout, bool ignore_stderr)
 	return system(cmd.c_str());
 }
 
-static const char* readenv(const char* name)
+static std::string getExecutable(const char* name, const char* env)
 {
-	return getenv(name);
+	const char* path = getenv(env);
+	path = path ? path : name;
+
+#ifdef _WIN32
+	// when the executable path contains a space, we need to quote the path ourselves
+	if (path[0] != '"' && strchr(path, ' '))
+		return '"' + std::string(path) + '"';
+#endif
+
+	return path;
 }
 #endif
 
 bool checkBasis(bool verbose)
 {
-	const char* basisu_path = readenv("BASISU_PATH");
-	std::string cmd = basisu_path ? basisu_path : "basisu";
+	std::string cmd = getExecutable("basisu", "BASISU_PATH");
 
 	cmd += " -version";
 
@@ -112,8 +120,7 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 	if (!writeFile(temp_input.path.c_str(), data))
 		return false;
 
-	const char* basisu_path = readenv("BASISU_PATH");
-	std::string cmd = basisu_path ? basisu_path : "basisu";
+	std::string cmd = getExecutable("basisu", "BASISU_PATH");
 
 	const BasisSettings& bs = kBasisSettings[quality <= 0 ? 0 : quality > 9 ? 9 : quality - 1];
 
@@ -160,8 +167,7 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 
 bool checkKtx(bool verbose)
 {
-	const char* toktx_path = readenv("TOKTX_PATH");
-	std::string cmd = toktx_path ? toktx_path : "toktx";
+	std::string cmd = getExecutable("toktx", "TOKTX_PATH");
 
 	cmd += " --version";
 
@@ -285,8 +291,7 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 	if (!writeFile(temp_input.path.c_str(), data))
 		return false;
 
-	const char* toktx_path = readenv("TOKTX_PATH");
-	std::string cmd = toktx_path ? toktx_path : "toktx";
+	std::string cmd = getExecutable("toktx", "TOKTX_PATH");
 
 	const BasisSettings& bs = kBasisSettings[quality <= 0 ? 0 : quality > 9 ? 9 : quality - 1];
 
