@@ -20,16 +20,13 @@ var interface = {
 		fs.writeFileSync(path, data);
 	},
 	execute: function (command) {
-		// perform substitution of command executable with environment-specific paths
-		var pk = Object.keys(paths);
-		for (var pi = 0; pi < pk.length; ++pi) {
-			if (command.startsWith(pk[pi] + " ")) {
-				command = paths[pk[pi]] + command.substr(pk[pi].length);
-				break;
-			}
-		}
+		var arg = command.split(' ');
+		var exe = arg.shift();
 
-		var ret = cp.spawnSync(command, [], {shell:true});
+		// perform substitution of command executable with environment-specific paths
+		exe = paths[exe] || exe;
+
+		var ret = cp.spawnSync(exe, arg);
 		return ret.status == null ? 256 : ret.status;
 	},
 	unlink: function (path) {

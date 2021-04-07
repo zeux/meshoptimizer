@@ -905,6 +905,7 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 		else if (!checkBasis(settings.verbose > 1))
 		{
 			fprintf(stderr, "Error: toktx is not present in PATH or TOKTX_PATH is not set\n");
+			fprintf(stderr, "Note: toktx must be installed manually from https://github.com/KhronosGroup/KTX-Software/releases\n");
 			return 3;
 		}
 
