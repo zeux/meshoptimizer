@@ -139,7 +139,13 @@ static void createDfd(std::vector<uint32_t>& result, bool alpha, bool srgb, bool
 		KHR_DFDSETSVAL(dfd, 0, CHANNELID, KHR_DF_CHANNEL_ETC1S_RGB);
 
 		if (alpha)
+		{
 			KHR_DFDSETSVAL(dfd, 1, CHANNELID, KHR_DF_CHANNEL_ETC1S_AAA);
+
+			// Every decoded alpha block is 8 bytes = 64 bits (encoded as 63)
+			KHR_DFDSETSVAL(dfd, 1, BITLENGTH, 63);
+			KHR_DFDSETSVAL(dfd, 1, BITOFFSET, 64);
+		}
 	}
 
 	for (int i = 0; i < sample_count; ++i)
