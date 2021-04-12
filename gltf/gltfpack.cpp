@@ -914,6 +914,12 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 			fprintf(stderr, "Error: -ts option is only supported by toktx\n");
 			return 3;
 		}
+
+		if (settings.texture_pow2 && !settings.texture_toktx)
+		{
+			fprintf(stderr, "Error: -tp option is only supported by toktx\n");
+			return 3;
+		}
 	}
 
 	if (oext == ".glb")
