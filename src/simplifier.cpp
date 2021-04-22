@@ -118,8 +118,13 @@ struct PositionHasher
 	{
 		const unsigned int* key = reinterpret_cast<const unsigned int*>(vertex_positions + index * vertex_stride_float);
 
+		// scramble bits to make sure that integer coordinates have entropy in lower bits
+		unsigned int x = key[0] ^ (key[0] >> 17);
+		unsigned int y = key[1] ^ (key[1] >> 17);
+		unsigned int z = key[2] ^ (key[2] >> 17);
+
 		// Optimized Spatial Hashing for Collision Detection of Deformable Objects
-		return (key[0] * 73856093) ^ (key[1] * 19349663) ^ (key[2] * 83492791);
+		return (x * 73856093) ^ (y * 19349663) ^ (z * 83492791);
 	}
 
 	bool equal(unsigned int lhs, unsigned int rhs) const
@@ -1038,7 +1043,7 @@ struct IdHasher
 
 struct TriangleHasher
 {
-	unsigned int* indices;
+	const unsigned int* indices;
 
 	size_t hash(unsigned int i) const
 	{
