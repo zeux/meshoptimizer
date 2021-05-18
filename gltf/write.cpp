@@ -911,18 +911,22 @@ void writeTexture(std::string& json, const cgltf_texture& texture, cgltf_data* d
 {
 	if (texture.image)
 	{
-		append(json, "\"sampler\":");
-		append(json, size_t(texture.sampler - data->samplers));
+		if (texture.sampler)
+		{
+			append(json, "\"sampler\":");
+			append(json, size_t(texture.sampler - data->samplers));
+			append(json, ",");
+		}
 
 		if (settings.texture_ktx2)
 		{
-			append(json, ",\"extensions\":{\"KHR_texture_basisu\":{\"source\":");
+			append(json, "\"extensions\":{\"KHR_texture_basisu\":{\"source\":");
 			append(json, size_t(texture.image - data->images));
 			append(json, "}}");
 		}
 		else
 		{
-			append(json, ",\"source\":");
+			append(json, "\"source\":");
 			append(json, size_t(texture.image - data->images));
 		}
 	}
