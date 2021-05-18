@@ -413,8 +413,6 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		comma(json_samplers);
 		append(json_samplers, "{");
 		writeSampler(json_samplers, sampler);
-		if (settings.keep_extras)
-			writeExtras(json_samplers, extras, sampler.extras);
 		append(json_samplers, "}");
 	}
 
