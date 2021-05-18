@@ -406,7 +406,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	size_t mesh_offset = 0;
 	size_t material_offset = 0;
 
-	for (size_t i = 0u; i < data->samplers_count; ++i)
+	for (size_t i = 0; i < data->samplers_count; ++i)
 	{
 		const cgltf_sampler& sampler = data->samplers[i];
 
