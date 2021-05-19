@@ -4737,6 +4737,8 @@ static int cgltf_parse_json_light(cgltf_options* options, jsmntok_t const* token
 {
 	CGLTF_CHECK_TOKTYPE(tokens[i], JSMN_OBJECT);
 
+	out_light->intensity = 1.f;
+
 	int size = tokens[i].size;
 	++i;
 
