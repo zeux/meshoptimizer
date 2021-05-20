@@ -785,6 +785,18 @@ static std::string decodeUri(const char* uri)
 	return result;
 }
 
+void writeSampler(std::string& json, const cgltf_sampler& sampler)
+{
+	append(json, "\"magFilter\":");
+	append(json, size_t(sampler.mag_filter));
+	append(json, ",\"minFilter\":");
+	append(json, size_t(sampler.min_filter));
+	append(json, ",\"wrapS\":");
+	append(json, size_t(sampler.wrap_s));
+	append(json, ",\"wrapT\":");
+	append(json, size_t(sampler.wrap_t));
+}
+
 void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const char* output_path, const Settings& settings)
 {
 	std::string img_data;
@@ -899,6 +911,13 @@ void writeTexture(std::string& json, const cgltf_texture& texture, cgltf_data* d
 {
 	if (texture.image)
 	{
+		if (texture.sampler)
+		{
+			append(json, "\"sampler\":");
+			append(json, size_t(texture.sampler - data->samplers));
+			append(json, ",");
+		}
+
 		if (settings.texture_ktx2)
 		{
 			append(json, "\"extensions\":{\"KHR_texture_basisu\":{\"source\":");

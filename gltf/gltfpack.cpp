@@ -376,6 +376,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	qt_dummy.bits = settings.tex_bits;
 
 	std::string json_images;
+	std::string json_samplers;
 	std::string json_textures;
 	std::string json_materials;
 	std::string json_accessors;
@@ -404,6 +405,16 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	size_t node_offset = 0;
 	size_t mesh_offset = 0;
 	size_t material_offset = 0;
+
+	for (size_t i = 0; i < data->samplers_count; ++i)
+	{
+		const cgltf_sampler& sampler = data->samplers[i];
+
+		comma(json_samplers);
+		append(json_samplers, "{");
+		writeSampler(json_samplers, sampler);
+		append(json_samplers, "}");
+	}
 
 	for (size_t i = 0; i < data->images_count; ++i)
 	{
@@ -747,6 +758,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 	writeArray(json, "bufferViews", json_views);
 	writeArray(json, "accessors", json_accessors);
+	writeArray(json, "samplers", json_samplers);
 	writeArray(json, "images", json_images);
 	writeArray(json, "textures", json_textures);
 	writeArray(json, "materials", json_materials);
