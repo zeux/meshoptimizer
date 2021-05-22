@@ -830,7 +830,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 	if (image.mime_type)
 		mime_type = image.mime_type;
 
-	bool (*encodeImage)(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, float scale, bool pow2, bool uastc, bool verbose) =
+	bool (*encodeImage)(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings) =
 	    settings.texture_toktx ? encodeKtx : encodeBasis;
 
 	if (!img_data.empty())
@@ -839,7 +839,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 		{
 			std::string encoded;
 
-			if (encodeImage(img_data, mime_type.c_str(), encoded, info.normal_map, info.srgb, settings.texture_quality, settings.texture_scale, settings.texture_pow2, settings.texture_uastc, settings.verbose > 1))
+			if (encodeImage(img_data, mime_type.c_str(), encoded, info, settings))
 			{
 				if (!settings.texture_toktx)
 					encoded = basisToKtx(encoded, info.srgb, settings.texture_uastc);
@@ -868,7 +868,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 			{
 				std::string encoded;
 
-				if (encodeImage(img_data, mime_type.c_str(), encoded, info.normal_map, info.srgb, settings.texture_quality, settings.texture_scale, settings.texture_pow2, settings.texture_uastc, settings.verbose > 1))
+				if (encodeImage(img_data, mime_type.c_str(), encoded, info, settings))
 				{
 					if (!settings.texture_toktx)
 						encoded = basisToKtx(encoded, info.srgb, settings.texture_uastc);
