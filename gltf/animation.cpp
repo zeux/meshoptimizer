@@ -207,11 +207,9 @@ static void resampleKeyframes(std::vector<Attr>& data, const std::vector<float>&
 	}
 }
 
-static bool isTrackEqual(const std::vector<Attr>& data, cgltf_animation_path_type type, int frames, const Attr* value, size_t components)
+static bool isTrackEqual(const std::vector<Attr>& data, cgltf_animation_path_type type, int frames, const Attr* value, size_t components, float tolerance)
 {
 	assert(data.size() == frames * components);
-
-	float tolerance = getDeltaTolerance(type);
 
 	for (int i = 0; i < frames; ++i)
 	{
@@ -261,6 +259,20 @@ static void getBaseTransform(Attr* result, size_t components, cgltf_animation_pa
 	}
 }
 
+static float getWorldScale(cgltf_node* node)
+{
+	float transform[16];
+	cgltf_node_transform_world(node, transform);
+
+	// 3x3 determinant computes scale^3
+	float a0 = transform[5] * transform[10] - transform[6] * transform[9];
+	float a1 = transform[4] * transform[10] - transform[6] * transform[8];
+	float a2 = transform[4] * transform[9] - transform[5] * transform[8];
+	float det = transform[0] * a0 - transform[1] * a1 + transform[2] * a2;
+
+	return powf(fabsf(det), 1.f / 3.f);
+}
+
 void processAnimation(Animation& animation, const Settings& settings)
 {
 	float mint = FLT_MAX, maxt = 0;
@@ -296,7 +308,16 @@ void processAnimation(Animation& animation, const Settings& settings)
 		track.time.clear();
 		track.data.swap(result);
 
-		if (isTrackEqual(track.data, track.path, frames, &track.data[0], track.components))
+		float tolerance = getDeltaTolerance(track.path);
+
+		// translation tracks use world space tolerance; in the future, we should compute all errors as linear using hierarchy
+		if (track.node && track.path == cgltf_animation_path_type_translation)
+		{
+			float scale = getWorldScale(track.node);
+			tolerance /= scale == 0.f ? 1.f : scale;
+		}
+
+		if (isTrackEqual(track.data, track.path, frames, &track.data[0], track.components, tolerance))
 		{
 			// track is constant (equal to first keyframe), we only need the first keyframe
 			track.constant = true;
@@ -306,7 +327,7 @@ void processAnimation(Animation& animation, const Settings& settings)
 			base.resize(track.components);
 			getBaseTransform(&base[0], track.components, track.path, track.node);
 
-			track.dummy = isTrackEqual(track.data, track.path, 1, &base[0], track.components);
+			track.dummy = isTrackEqual(track.data, track.path, 1, &base[0], track.components, tolerance);
 		}
 	}
 }
