@@ -1258,9 +1258,10 @@ static float interpolate(float y, float x0, float y0, float x1, float y1, float 
 } // namespace meshopt
 
 #ifndef NDEBUG
-unsigned char* meshopt_simplifyDebugKind = 0;
-unsigned int* meshopt_simplifyDebugLoop = 0;
-unsigned int* meshopt_simplifyDebugLoopBack = 0;
+// Note: this is only exposed for debug visualization purposes; do *not* use these in debug builds
+MESHOPTIMIZER_API unsigned char* meshopt_simplifyDebugKind = 0;
+MESHOPTIMIZER_API unsigned int* meshopt_simplifyDebugLoop = 0;
+MESHOPTIMIZER_API unsigned int* meshopt_simplifyDebugLoopBack = 0;
 #endif
 
 size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, float* out_result_error)
