@@ -1070,6 +1070,12 @@ Settings defaults()
 	return settings;
 }
 
+template <typename T>
+T clamp(T v, T min, T max)
+{
+	return v < min ? min : v > max ? max : v;
+}
+
 int main(int argc, char** argv)
 {
 	meshopt_encodeIndexVersion(1);
@@ -1090,35 +1096,35 @@ int main(int argc, char** argv)
 
 		if (strcmp(arg, "-vp") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.pos_bits = atoi(argv[++i]);
+			settings.pos_bits = clamp(atoi(argv[++i]), 1, 16);
 		}
 		else if (strcmp(arg, "-vt") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.tex_bits = atoi(argv[++i]);
+			settings.tex_bits = clamp(atoi(argv[++i]), 1, 16);
 		}
 		else if (strcmp(arg, "-vn") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.nrm_bits = atoi(argv[++i]);
+			settings.nrm_bits = clamp(atoi(argv[++i]), 1, 16);
 		}
 		else if (strcmp(arg, "-vc") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.col_bits = atoi(argv[++i]);
+			settings.col_bits = clamp(atoi(argv[++i]), 1, 16);
 		}
 		else if (strcmp(arg, "-at") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.trn_bits = atoi(argv[++i]);
+			settings.trn_bits = clamp(atoi(argv[++i]), 1, 24);
 		}
 		else if (strcmp(arg, "-ar") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.rot_bits = atoi(argv[++i]);
+			settings.rot_bits = clamp(atoi(argv[++i]), 4, 16);
 		}
 		else if (strcmp(arg, "-as") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.scl_bits = atoi(argv[++i]);
+			settings.scl_bits = clamp(atoi(argv[++i]), 1, 24);
 		}
 		else if (strcmp(arg, "-af") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.anim_freq = atoi(argv[++i]);
+			settings.anim_freq = clamp(atoi(argv[++i]), 1, 100);
 		}
 		else if (strcmp(arg, "-ac") == 0)
 		{
@@ -1146,7 +1152,7 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-si") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.simplify_threshold = float(atof(argv[++i]));
+			settings.simplify_threshold = clamp(float(atof(argv[++i])), 0.f, 1.f);
 		}
 		else if (strcmp(arg, "-sa") == 0)
 		{
@@ -1155,11 +1161,11 @@ int main(int argc, char** argv)
 #ifndef NDEBUG
 		else if (strcmp(arg, "-sd") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.simplify_debug = float(atof(argv[++i]));
+			settings.simplify_debug = clamp(float(atof(argv[++i])), 0.f, 1.f);
 		}
 		else if (strcmp(arg, "-md") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.meshlet_debug = atoi(argv[++i]);
+			settings.meshlet_debug = clamp(atoi(argv[++i]), 3, 255);
 		}
 #endif
 		else if (strcmp(arg, "-tu") == 0)
@@ -1173,11 +1179,11 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-tq") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.texture_quality = atoi(argv[++i]);
+			settings.texture_quality = clamp(atoi(argv[++i]), 1, 10);
 		}
 		else if (strcmp(arg, "-ts") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.texture_scale = float(atof(argv[++i]));
+			settings.texture_scale = clamp(float(atof(argv[++i])), 0.f, 1.f);
 		}
 		else if (strcmp(arg, "-tp") == 0)
 		{
