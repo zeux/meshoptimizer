@@ -119,6 +119,7 @@ struct Settings
 	int texture_quality;
 	float texture_scale;
 	bool texture_pow2;
+	bool texture_flipy;
 
 	bool quantize;
 

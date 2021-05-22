@@ -124,6 +124,9 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 
 	cmd += " -mipmap";
 
+	if (settings.texture_flipy)
+		cmd += " -y_flip";
+
 	if (info.normal_map)
 	{
 		cmd += " -normal_map";
@@ -307,6 +310,9 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 		sprintf(wh, " --resize %dx%d", newWidth, newHeight);
 		cmd += wh;
 	}
+
+	if (settings.texture_flipy)
+		cmd += " --lower_left_maps_to_s0t0";
 
 	if (settings.texture_uastc)
 	{

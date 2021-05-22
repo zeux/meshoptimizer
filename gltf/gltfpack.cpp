@@ -1189,6 +1189,10 @@ int main(int argc, char** argv)
 		{
 			settings.texture_pow2 = true;
 		}
+		else if (strcmp(arg, "-tfy") == 0)
+		{
+			settings.texture_flipy = true;
+		}
 		else if (strcmp(arg, "-te") == 0)
 		{
 			fprintf(stderr, "Warning: -te is deprecated and will be removed in the future; gltfpack now automatically embeds textures into GLB files\n");
@@ -1292,6 +1296,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-tq N: set texture encoding quality (default: 8; N should be between 1 and 10\n");
 			fprintf(stderr, "\t-ts R: scale texture dimensions by the ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\t-tp: resize textures to nearest power of 2 to conform to WebGL1 restrictions\n");
+			fprintf(stderr, "\t-tfy: flip textures along Y axis during BasisU supercompression\n");
 			fprintf(stderr, "\nSimplification:\n");
 			fprintf(stderr, "\t-si R: simplify meshes to achieve the ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\t-sa: aggressively simplify to the target ratio disregarding quality\n");
@@ -1342,6 +1347,12 @@ int main(int argc, char** argv)
 	if (settings.texture_pow2 && !settings.texture_ktx2)
 	{
 		fprintf(stderr, "Option -tp is only supported when -tc is set as well\n");
+		return 1;
+	}
+
+	if (settings.texture_flipy && !settings.texture_ktx2)
+	{
+		fprintf(stderr, "Option -tfy is only supported when -tc is set as well\n");
 		return 1;
 	}
 
