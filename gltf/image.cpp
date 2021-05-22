@@ -109,11 +109,9 @@ bool checkBasis(bool verbose)
 	return rc == 0;
 }
 
-bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, float scale, bool pow2, bool uastc, bool verbose)
+bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings)
 {
-	(void)scale;
-	(void)pow2;
-
+	// TODO: Support texture_scale and texture_pow2 via new -resample switch from https://github.com/BinomialLLC/basis_universal/pull/226
 	TempFile temp_input(mimeExtension(mime_type));
 	TempFile temp_output(".basis");
 
@@ -122,35 +120,35 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 
 	std::string cmd = getExecutable("basisu", "BASISU_PATH");
 
-	const BasisSettings& bs = kBasisSettings[quality <= 0 ? 0 : quality > 9 ? 9 : quality - 1];
+	const BasisSettings& bs = kBasisSettings[settings.texture_quality - 1];
 
 	cmd += " -mipmap";
 
-	if (normal_map)
+	if (info.normal_map)
 	{
 		cmd += " -normal_map";
 		// for optimal quality we should specify seperate_rg_to_color_alpha but this requires renderer awareness
 	}
-	else if (!srgb)
+	else if (!info.srgb)
 	{
 		cmd += " -linear";
 	}
 
-	if (uastc)
+	if (settings.texture_uastc)
 	{
-		char settings[128];
-		sprintf(settings, " -uastc_level %d -uastc_rdo_q %.2f", bs.uastc_l, bs.uastc_q);
+		char cs[128];
+		sprintf(cs, " -uastc_level %d -uastc_rdo_q %.2f", bs.uastc_l, bs.uastc_q);
 
 		cmd += " -uastc";
-		cmd += settings;
+		cmd += cs;
 		cmd += " -uastc_rdo_d 1024";
 	}
 	else
 	{
-		char settings[128];
-		sprintf(settings, " -comp_level %d -q %d", bs.etc1s_l, bs.etc1s_q);
+		char cs[128];
+		sprintf(cs, " -comp_level %d -q %d", bs.etc1s_l, bs.etc1s_q);
 
-		cmd += settings;
+		cmd += cs;
 	}
 
 	cmd += " -file ";
@@ -159,7 +157,7 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 	cmd += temp_output.path;
 
 	int rc = execute(cmd.c_str(), /* ignore_stdout= */ true, /* ignore_stderr= */ false);
-	if (verbose)
+	if (settings.verbose > 1)
 		printf("%s => %d\n", cmd.c_str(), rc);
 
 	return rc == 0 && readFile(temp_output.path.c_str(), result);
@@ -279,7 +277,7 @@ static int roundBlock(int value, bool pow2)
 	return (value + 3) & ~3;
 }
 
-bool encodeKtx(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, float scale, bool pow2, bool uastc, bool verbose)
+bool encodeKtx(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings)
 {
 	int width = 0, height = 0;
 	if (!getDimensions(data, mime_type, width, height))
@@ -293,15 +291,15 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 
 	std::string cmd = getExecutable("toktx", "TOKTX_PATH");
 
-	const BasisSettings& bs = kBasisSettings[quality <= 0 ? 0 : quality > 9 ? 9 : quality - 1];
+	const BasisSettings& bs = kBasisSettings[settings.texture_quality - 1];
 
 	cmd += " --t2";
 	cmd += " --2d";
 	cmd += " --genmipmap";
 	cmd += " --nowarn";
 
-	int newWidth = roundBlock(int(width * scale), pow2);
-	int newHeight = roundBlock(int(height * scale), pow2);
+	int newWidth = roundBlock(int(width * settings.texture_scale), settings.texture_pow2);
+	int newHeight = roundBlock(int(height * settings.texture_scale), settings.texture_pow2);
 
 	if (newWidth != width || newHeight != height)
 	{
@@ -310,30 +308,30 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 		cmd += wh;
 	}
 
-	if (uastc)
+	if (settings.texture_uastc)
 	{
-		char settings[128];
-		sprintf(settings, " %d --uastc_rdo_q %.2f", bs.uastc_l, bs.uastc_q);
+		char cs[128];
+		sprintf(cs, " %d --uastc_rdo_q %.2f", bs.uastc_l, bs.uastc_q);
 
 		cmd += " --uastc";
-		cmd += settings;
+		cmd += cs;
 		cmd += " --uastc_rdo_d 1024";
 		cmd += " --zcmp 9";
 	}
 	else
 	{
-		char settings[128];
-		sprintf(settings, " --clevel %d --qlevel %d", bs.etc1s_l, bs.etc1s_q);
+		char cs[128];
+		sprintf(cs, " --clevel %d --qlevel %d", bs.etc1s_l, bs.etc1s_q);
 
 		cmd += " --bcmp";
-		cmd += settings;
+		cmd += cs;
 
 		// for optimal quality we should specify separate_rg_to_color_alpha but this requires renderer awareness
-		if (normal_map)
+		if (info.normal_map)
 			cmd += " --normal_map";
 	}
 
-	if (srgb)
+	if (info.srgb)
 		cmd += " --srgb";
 	else
 		cmd += " --linear";
@@ -344,7 +342,7 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 	cmd += temp_input.path;
 
 	int rc = execute(cmd.c_str(), /* ignore_stdout= */ false, /* ignore_stderr= */ false);
-	if (verbose)
+	if (settings.verbose > 1)
 		printf("%s => %d\n", cmd.c_str(), rc);
 
 	return rc == 0 && readFile(temp_output.path.c_str(), result);
