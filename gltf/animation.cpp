@@ -312,7 +312,10 @@ void processAnimation(Animation& animation, const Settings& settings)
 
 		// translation tracks use world space tolerance; in the future, we should compute all errors as linear using hierarchy
 		if (track.node && track.path == cgltf_animation_path_type_translation)
-			tolerance /= getWorldScale(track.node);
+		{
+			float scale = getWorldScale(track.node);
+			tolerance /= scale == 0.f ? 1.f : scale;
+		}
 
 		if (isTrackEqual(track.data, track.path, frames, &track.data[0], track.components, tolerance))
 		{
