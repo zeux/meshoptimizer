@@ -1262,7 +1262,12 @@ void writeNode(std::string& json, const cgltf_node& node, const std::vector<Node
 		}
 		append(json, "]");
 	}
-	if (node.children_count || !ni.meshes.empty())
+
+	bool has_children = !ni.meshes.empty();
+	for (size_t j = 0; j < node.children_count; ++j)
+		has_children |= nodes[node.children[j] - data->nodes].keep;
+
+	if (has_children)
 	{
 		comma(json);
 		append(json, "\"children\":[");
