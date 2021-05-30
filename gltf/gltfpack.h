@@ -84,6 +84,14 @@ struct Animation
 	std::vector<Track> tracks;
 };
 
+enum TextureKind
+{
+	TextureKind_Generic,
+	TextureKind_Color,
+	TextureKind_Normal,
+	TextureKind_Attrib,
+};
+
 struct Settings
 {
 	int pos_bits;
@@ -187,6 +195,7 @@ struct MaterialInfo
 
 struct ImageInfo
 {
+	TextureKind kind;
 	bool normal_map;
 	bool srgb;
 };
