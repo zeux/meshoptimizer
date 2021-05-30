@@ -157,6 +157,29 @@ static void printAttributeStats(const std::vector<BufferView>& views, BufferView
 	}
 }
 
+static void printImageStats(const std::vector<BufferView>& views, TextureKind kind, const char* name)
+{
+	size_t bytes = 0;
+	size_t count = 0;
+
+	for (size_t i = 0; i < views.size(); ++i)
+	{
+		const BufferView& view = views[i];
+
+		if (view.kind != BufferView::Kind_Image)
+			continue;
+
+		if (view.variant != -1 - kind)
+			continue;
+
+		count += 1;
+		bytes += view.data.size();
+	}
+
+	if (count)
+		printf("stats: image %s: %d bytes in %d images\n", name, int(bytes), int(count));
+}
+
 static bool printReport(const char* path, cgltf_data* data, const std::vector<BufferView>& views, const std::vector<Mesh>& meshes, size_t node_count, size_t mesh_count, size_t material_count, size_t animation_count, size_t json_size, size_t bin_size)
 {
 	size_t bytes[BufferView::Kind_Count] = {};
@@ -804,6 +827,11 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		printAttributeStats(views, BufferView::Kind_Index, "index");
 		printAttributeStats(views, BufferView::Kind_Keyframe, "keyframe");
 		printAttributeStats(views, BufferView::Kind_Instance, "instance");
+
+		printImageStats(views, TextureKind_Generic, "generic");
+		printImageStats(views, TextureKind_Color, "color");
+		printImageStats(views, TextureKind_Normal, "normal");
+		printImageStats(views, TextureKind_Attrib, "attrib");
 	}
 
 	if (report_path)

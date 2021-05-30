@@ -758,9 +758,9 @@ static bool parseDataUri(const char* uri, std::string& mime_type, std::string& r
 	return false;
 }
 
-static void writeEmbeddedImage(std::string& json, std::vector<BufferView>& views, const char* data, size_t size, const char* mime_type)
+static void writeEmbeddedImage(std::string& json, std::vector<BufferView>& views, const char* data, size_t size, const char* mime_type, TextureKind kind)
 {
-	size_t view = getBufferView(views, BufferView::Kind_Image, StreamFormat::Filter_None, BufferView::Compression_None, 1, -1);
+	size_t view = getBufferView(views, BufferView::Kind_Image, StreamFormat::Filter_None, BufferView::Compression_None, 1, -1 - kind);
 
 	assert(views[view].data.empty());
 	views[view].data.assign(data, size);
@@ -844,7 +844,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 				if (!settings.texture_toktx)
 					encoded = basisToKtx(encoded, info.srgb, settings.texture_uastc);
 
-				writeEmbeddedImage(json, views, encoded.c_str(), encoded.size(), "image/ktx2");
+				writeEmbeddedImage(json, views, encoded.c_str(), encoded.size(), "image/ktx2", info.kind);
 			}
 			else
 			{
@@ -853,7 +853,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 		}
 		else
 		{
-			writeEmbeddedImage(json, views, img_data.c_str(), img_data.size(), mime_type.c_str());
+			writeEmbeddedImage(json, views, img_data.c_str(), img_data.size(), mime_type.c_str(), info.kind);
 		}
 	}
 	else if (image.uri)
