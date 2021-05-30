@@ -1064,8 +1064,9 @@ Settings defaults()
 	settings.scl_bits = 16;
 	settings.anim_freq = 30;
 	settings.simplify_threshold = 1.f;
-	settings.texture_quality = 8;
 	settings.texture_scale = 1.f;
+	for (int kind = 0; kind < TextureKind__Count; ++kind)
+		settings.texture_quality[kind] = 8;
 
 	return settings;
 }
@@ -1074,6 +1075,30 @@ template <typename T>
 T clamp(T v, T min, T max)
 {
 	return v < min ? min : v > max ? max : v;
+}
+
+unsigned int textureMask(const char* arg)
+{
+	unsigned int result = 0;
+
+	while (arg)
+	{
+		const char* comma = strchr(arg, ',');
+		size_t seg = comma ? comma - arg - 1 : strlen(arg);
+
+		if (strncmp(arg, "color", seg) == 0)
+			result |= 1 << TextureKind_Color;
+		else if (strncmp(arg, "normal", seg) == 0)
+			result |= 1 << TextureKind_Normal;
+		else if (strncmp(arg, "attrib", seg) == 0)
+			result |= 1 << TextureKind_Attrib;
+		else
+			fprintf(stderr, "Warning: unrecognized texture class %.*s\n", int(seg), arg);
+
+		arg = comma ? comma + 1 : NULL;
+	}
+
+	return result;
 }
 
 int main(int argc, char** argv)
@@ -1171,7 +1196,14 @@ int main(int argc, char** argv)
 		else if (strcmp(arg, "-tu") == 0)
 		{
 			settings.texture_ktx2 = true;
-			settings.texture_uastc = true;
+
+			unsigned int mask = ~0u;
+			if (i + 1 < argc && isalpha(argv[i + 1][0]))
+				mask = textureMask(argv[++i]);
+
+			for (int kind = 0; kind < TextureKind__Count; ++kind)
+				if (mask & (1 << kind))
+					settings.texture_uastc[kind] = true;
 		}
 		else if (strcmp(arg, "-tc") == 0)
 		{
@@ -1179,7 +1211,18 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-tq") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.texture_quality = clamp(atoi(argv[++i]), 1, 10);
+			int quality = clamp(atoi(argv[++i]), 1, 10);
+			for (int kind = 0; kind < TextureKind__Count; ++kind)
+				settings.texture_quality[kind] = quality;
+		}
+		else if (strcmp(arg, "-tq") == 0 && i + 2 < argc && isalpha(argv[i + 1][0]) && isdigit(argv[i + 2][0]))
+		{
+			unsigned int mask = textureMask(argv[++i]);
+			int quality = clamp(atoi(argv[++i]), 1, 10);
+
+			for (int kind = 0; kind < TextureKind__Count; ++kind)
+				if (mask & (1 << kind))
+					settings.texture_quality[kind] = quality;
 		}
 		else if (strcmp(arg, "-ts") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
@@ -1297,6 +1340,10 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-ts R: scale texture dimensions by the ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\t-tp: resize textures to nearest power of 2 to conform to WebGL1 restrictions\n");
 			fprintf(stderr, "\t-tfy: flip textures along Y axis during BasisU supercompression\n");
+			fprintf(stderr, "\tTexture classes:\n");
+			fprintf(stderr, "\t-tu C: use UASTC when encoding textures of class C\n");
+			fprintf(stderr, "\t-tq C N: set texture encoding quality for class C\n");
+			fprintf(stderr, "\t... where C is a comma-separated list (no spaces) with valid values color,normal,attrib\n");
 			fprintf(stderr, "\nSimplification:\n");
 			fprintf(stderr, "\t-si R: simplify meshes to achieve the ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\t-sa: aggressively simplify to the target ratio disregarding quality\n");

@@ -120,7 +120,10 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 
 	std::string cmd = getExecutable("basisu", "BASISU_PATH");
 
-	const BasisSettings& bs = kBasisSettings[settings.texture_quality - 1];
+	int quality = settings.texture_quality[info.kind];
+	bool uastc = settings.texture_uastc[info.kind];
+
+	const BasisSettings& bs = kBasisSettings[quality - 1];
 
 	cmd += " -mipmap";
 
@@ -137,7 +140,7 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 		cmd += " -linear";
 	}
 
-	if (settings.texture_uastc)
+	if (uastc)
 	{
 		char cs[128];
 		sprintf(cs, " -uastc_level %d -uastc_rdo_q %.2f", bs.uastc_l, bs.uastc_q);
@@ -294,7 +297,10 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 
 	std::string cmd = getExecutable("toktx", "TOKTX_PATH");
 
-	const BasisSettings& bs = kBasisSettings[settings.texture_quality - 1];
+	int quality = settings.texture_quality[info.kind];
+	bool uastc = settings.texture_uastc[info.kind];
+
+	const BasisSettings& bs = kBasisSettings[quality - 1];
 
 	cmd += " --t2";
 	cmd += " --2d";
@@ -314,7 +320,7 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 	if (settings.texture_flipy)
 		cmd += " --lower_left_maps_to_s0t0";
 
-	if (settings.texture_uastc)
+	if (uastc)
 	{
 		char cs[128];
 		sprintf(cs, " %d --uastc_rdo_q %.2f", bs.uastc_l, bs.uastc_q);

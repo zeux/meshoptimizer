@@ -90,6 +90,8 @@ enum TextureKind
 	TextureKind_Color,
 	TextureKind_Normal,
 	TextureKind_Attrib,
+
+	TextureKind__Count
 };
 
 struct Settings
@@ -120,14 +122,15 @@ struct Settings
 	int meshlet_debug;
 
 	bool texture_ktx2;
-	bool texture_uastc;
 	bool texture_embed;
 	bool texture_toktx;
 
-	int texture_quality;
-	float texture_scale;
 	bool texture_pow2;
 	bool texture_flipy;
+	float texture_scale;
+
+	bool texture_uastc[TextureKind__Count];
+	int texture_quality[TextureKind__Count];
 
 	bool quantize;
 
