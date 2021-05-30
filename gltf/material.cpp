@@ -332,24 +332,24 @@ void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials,
 	}
 }
 
-enum TextureKind
-{
-	TextureKind_Generic,
-	TextureKind_Color,
-	TextureKind_Normal,
-};
-
 static void analyzeMaterialTexture(const cgltf_texture_view& view, TextureKind kind, MaterialInfo& mi, cgltf_data* data, std::vector<ImageInfo>& images)
 {
 	mi.usesTextureTransform |= bool(view.has_transform);
 
 	if (view.texture && view.texture->image)
 	{
+		ImageInfo& info = images[view.texture->image - data->images];
+
 		mi.textureSetMask |= 1u << view.texcoord;
 		mi.needsTangents |= (kind == TextureKind_Normal);
 
-		images[view.texture->image - data->images].srgb |= (kind == TextureKind_Color);
-		images[view.texture->image - data->images].normal_map |= (kind == TextureKind_Normal);
+		if (info.kind == TextureKind_Generic)
+			info.kind = kind;
+		else if (info.kind > kind) // this is useful to keep color textures that have attrib data in alpha tagged as color
+			info.kind = kind;
+
+		info.normal_map |= (kind == TextureKind_Normal);
+		info.srgb |= (kind == TextureKind_Color);
 	}
 }
 
@@ -358,46 +358,46 @@ static void analyzeMaterial(const cgltf_material& material, MaterialInfo& mi, cg
 	if (material.has_pbr_metallic_roughness)
 	{
 		analyzeMaterialTexture(material.pbr_metallic_roughness.base_color_texture, TextureKind_Color, mi, data, images);
-		analyzeMaterialTexture(material.pbr_metallic_roughness.metallic_roughness_texture, TextureKind_Generic, mi, data, images);
+		analyzeMaterialTexture(material.pbr_metallic_roughness.metallic_roughness_texture, TextureKind_Attrib, mi, data, images);
 	}
 
 	if (material.has_pbr_specular_glossiness)
 	{
 		analyzeMaterialTexture(material.pbr_specular_glossiness.diffuse_texture, TextureKind_Color, mi, data, images);
-		analyzeMaterialTexture(material.pbr_specular_glossiness.specular_glossiness_texture, TextureKind_Generic, mi, data, images);
+		analyzeMaterialTexture(material.pbr_specular_glossiness.specular_glossiness_texture, TextureKind_Attrib, mi, data, images);
 	}
 
 	if (material.has_clearcoat)
 	{
-		analyzeMaterialTexture(material.clearcoat.clearcoat_texture, TextureKind_Generic, mi, data, images);
-		analyzeMaterialTexture(material.clearcoat.clearcoat_roughness_texture, TextureKind_Generic, mi, data, images);
+		analyzeMaterialTexture(material.clearcoat.clearcoat_texture, TextureKind_Attrib, mi, data, images);
+		analyzeMaterialTexture(material.clearcoat.clearcoat_roughness_texture, TextureKind_Attrib, mi, data, images);
 		analyzeMaterialTexture(material.clearcoat.clearcoat_normal_texture, TextureKind_Normal, mi, data, images);
 	}
 
 	if (material.has_transmission)
 	{
-		analyzeMaterialTexture(material.transmission.transmission_texture, TextureKind_Generic, mi, data, images);
+		analyzeMaterialTexture(material.transmission.transmission_texture, TextureKind_Attrib, mi, data, images);
 	}
 
 	if (material.has_specular)
 	{
-		analyzeMaterialTexture(material.specular.specular_texture, TextureKind_Generic, mi, data, images);
+		analyzeMaterialTexture(material.specular.specular_texture, TextureKind_Attrib, mi, data, images);
 		analyzeMaterialTexture(material.specular.specular_color_texture, TextureKind_Color, mi, data, images);
 	}
 
 	if (material.has_sheen)
 	{
 		analyzeMaterialTexture(material.sheen.sheen_color_texture, TextureKind_Color, mi, data, images);
-		analyzeMaterialTexture(material.sheen.sheen_roughness_texture, TextureKind_Generic, mi, data, images);
+		analyzeMaterialTexture(material.sheen.sheen_roughness_texture, TextureKind_Attrib, mi, data, images);
 	}
 
 	if (material.has_volume)
 	{
-		analyzeMaterialTexture(material.volume.thickness_texture, TextureKind_Generic, mi, data, images);
+		analyzeMaterialTexture(material.volume.thickness_texture, TextureKind_Attrib, mi, data, images);
 	}
 
 	analyzeMaterialTexture(material.normal_texture, TextureKind_Normal, mi, data, images);
-	analyzeMaterialTexture(material.occlusion_texture, TextureKind_Generic, mi, data, images);
+	analyzeMaterialTexture(material.occlusion_texture, TextureKind_Attrib, mi, data, images);
 	analyzeMaterialTexture(material.emissive_texture, TextureKind_Color, mi, data, images);
 }
 
