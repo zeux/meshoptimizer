@@ -113,7 +113,7 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 {
 	// TODO: Support texture_scale and texture_pow2 via new -resample switch from https://github.com/BinomialLLC/basis_universal/pull/226
 	TempFile temp_input(mimeExtension(mime_type));
-	TempFile temp_output(".basis");
+	TempFile temp_output(".ktx2");
 
 	if (!writeFile(temp_input.path.c_str(), data))
 		return false;
