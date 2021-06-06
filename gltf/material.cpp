@@ -431,7 +431,22 @@ static float getAlphaFactor(const cgltf_material& material)
 	return 1.f;
 }
 
-void optimizeMaterials(cgltf_data* data, const std::vector<ImageInfo>& images)
+static int getChannels(const cgltf_image& image, ImageInfo& info, const char* input_path)
+{
+	if (info.channels)
+		return info.channels;
+
+	std::string img_data;
+	std::string mime_type;
+	if (readImage(image, input_path, img_data, mime_type))
+		info.channels = hasAlpha(img_data, mime_type.c_str()) ? 4 : 3;
+	else
+		info.channels = -1;
+
+	return info.channels;
+}
+
+void optimizeMaterials(cgltf_data* data, const char* input_path, std::vector<ImageInfo>& images)
 {
 	for (size_t i = 0; i < data->materials_count; ++i)
 	{
@@ -441,7 +456,7 @@ void optimizeMaterials(cgltf_data* data, const std::vector<ImageInfo>& images)
 			const cgltf_texture_view* color = getColorTexture(data->materials[i]);
 			float alpha = getAlphaFactor(data->materials[i]);
 
-			if (alpha == 1.f && !(color && color->texture && color->texture->image && images[color->texture->image - data->images].alpha))
+			if (alpha == 1.f && !(color && color->texture && color->texture->image && getChannels(*color->texture->image, images[color->texture->image - data->images], input_path) == 4))
 			{
 				data->materials[i].alpha_mode = cgltf_alpha_mode_opaque;
 			}

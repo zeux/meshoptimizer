@@ -222,27 +222,12 @@ static bool hasTransparencyPng(const std::string& data)
 	return false;
 }
 
-void analyzeImages(const cgltf_data* data, const char* input_path, std::vector<ImageInfo>& images)
+bool hasAlpha(const std::string& data, const char* mime_type)
 {
-	for (size_t i = 0; i < data->images_count; ++i)
-	{
-		std::string img_data, mime_type;
-		if (!readImage(data->images[i], input_path, img_data, mime_type))
-			continue;
-
-		ImageInfo& info = images[i];
-
-		if (mime_type == "image/png")
-		{
-			getDimensionsPng(img_data, info.width, info.height);
-			info.alpha = hasTransparencyPng(img_data);
-		}
-		else if (mime_type == "image/jpeg")
-		{
-			getDimensionsJpeg(img_data, info.width, info.height);
-			info.alpha = false;
-		}
-	}
+	if (strcmp(mime_type, "image/png") == 0)
+		return hasTransparencyPng(data);
+	else
+		return false;
 }
 
 static const char* mimeExtension(const char* mime_type)
