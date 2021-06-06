@@ -201,6 +201,9 @@ struct ImageInfo
 	TextureKind kind;
 	bool normal_map;
 	bool srgb;
+
+	int width, height;
+	bool alpha;
 };
 
 struct ExtensionInfo
@@ -282,8 +285,10 @@ void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Setti
 void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes, const Settings& settings);
 
 void analyzeMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, std::vector<ImageInfo>& images);
+void optimizeMaterials(cgltf_data* data, const std::vector<ImageInfo>& images);
 
 bool readImage(const cgltf_image& image, const char* input_path, std::string& data, std::string& mime_type);
+void analyzeImages(const cgltf_data* data, const char* input_path, std::vector<ImageInfo>& images);
 
 bool checkBasis(bool verbose);
 bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings);

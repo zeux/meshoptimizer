@@ -112,6 +112,139 @@ bool readImage(const cgltf_image& image, const char* input_path, std::string& da
 	}
 }
 
+static int readInt16(const std::string& data, size_t offset)
+{
+	return (unsigned char)data[offset] * 256 + (unsigned char)data[offset + 1];
+}
+
+static int readInt32(const std::string& data, size_t offset)
+{
+	return
+		((unsigned)(unsigned char)data[offset] << 24) |
+		((unsigned)(unsigned char)data[offset + 1] << 16) |
+		((unsigned)(unsigned char)data[offset + 2] << 8) |
+		(unsigned)(unsigned char)data[offset + 3];
+}
+
+static bool getDimensionsPng(const std::string& data, int& width, int& height)
+{
+	if (data.size() < 8 + 8 + 13 + 4)
+		return false;
+
+	const char* signature = "\x89\x50\x4e\x47\x0d\x0a\x1a\x0a";
+	if (data.compare(0, 8, signature) != 0)
+		return false;
+
+	if (data.compare(12, 4, "IHDR") != 0)
+		return false;
+
+	width = readInt16(data, 18);
+	height = readInt16(data, 22);
+
+	return true;
+}
+
+static bool getDimensionsJpeg(const std::string& data, int& width, int& height)
+{
+	size_t offset = 0;
+
+	// note, this can stop parsing before reaching the end but we stop at SOF anyway
+	while (offset + 4 <= data.size())
+	{
+		if (data[offset] != '\xff')
+			return false;
+
+		char marker = data[offset + 1];
+
+		if (marker == '\xff')
+		{
+			offset++;
+			continue; // padding
+		}
+
+		// d0..d9 correspond to SOI, RSTn, EOI
+		if (marker == 0 || unsigned(marker - '\xd0') <= 9)
+		{
+			offset += 2;
+			continue; // no payload
+		}
+
+		// c0..c1 correspond to SOF0, SOF1
+		if (marker == '\xc0' || marker == '\xc2')
+		{
+			if (offset + 10 > data.size())
+				return false;
+
+			width = readInt16(data, offset + 7);
+			height = readInt16(data, offset + 5);
+
+			return true;
+		}
+
+		offset += 2 + readInt16(data, offset + 2);
+	}
+
+	return false;
+}
+
+static bool hasTransparencyPng(const std::string& data)
+{
+	if (data.size() < 8 + 8 + 13 + 4)
+		return false;
+
+	const char* signature = "\x89\x50\x4e\x47\x0d\x0a\x1a\x0a";
+	if (data.compare(0, 8, signature) != 0)
+		return false;
+
+	if (data.compare(12, 4, "IHDR") != 0)
+		return false;
+
+	int ctype = data[27];
+
+	if (ctype != 3)
+		return ctype == 4 || ctype == 6;
+
+	size_t offset = 8; // reparse IHDR chunk for simplicity
+
+	while (offset + 12 <= data.size())
+	{
+		int length = readInt32(data, offset);
+
+		if (length < 0)
+			return false;
+
+		if (data.compare(offset + 4, 4, "tRNS") == 0)
+			return true;
+
+		offset += 12 + length;
+	}
+
+	return false;
+}
+
+void analyzeImages(const cgltf_data* data, const char* input_path, std::vector<ImageInfo>& images)
+{
+	for (size_t i = 0; i < data->images_count; ++i)
+	{
+		std::string img_data, mime_type;
+		if (!readImage(data->images[i], input_path, img_data, mime_type))
+			continue;
+
+		ImageInfo& info = images[i];
+
+		if (mime_type == "image/png")
+		{
+			getDimensionsPng(img_data, info.width, info.height);
+			info.alpha = hasTransparencyPng(img_data);
+		}
+		else if (mime_type == "image/jpeg")
+		{
+			getDimensionsJpeg(img_data, info.width, info.height);
+			info.alpha = false;
+		}
+	}
+}
+
 static const char* mimeExtension(const char* mime_type)
 {
 	for (size_t i = 0; i < sizeof(kMimeTypes) / sizeof(kMimeTypes[0]); ++i)
@@ -119,6 +252,16 @@ static const char* mimeExtension(const char* mime_type)
 			return kMimeTypes[i][1];
 
 	return ".raw";
+}
+
+static bool getDimensions(const std::string& data, const char* mime_type, int& width, int& height)
+{
+	if (strcmp(mime_type, "image/png") == 0)
+		return getDimensionsPng(data, width, height);
+	if (strcmp(mime_type, "image/jpeg") == 0)
+		return getDimensionsJpeg(data, width, height);
+
+	return false;
 }
 
 #ifdef __wasi__
@@ -254,82 +397,6 @@ bool checkKtx(bool verbose)
 		printf("%s => %d\n", cmd.c_str(), rc);
 
 	return rc == 0;
-}
-
-static int readInt16(const std::string& data, size_t offset)
-{
-	return (unsigned char)data[offset] * 256 + (unsigned char)data[offset + 1];
-}
-
-static bool getDimensionsPng(const std::string& data, int& width, int& height)
-{
-	if (data.size() < 8 + 8 + 13 + 4)
-		return false;
-
-	const char* signature = "\x89\x50\x4e\x47\x0d\x0a\x1a\x0a";
-	if (data.compare(0, 8, signature) != 0)
-		return false;
-
-	if (data.compare(12, 4, "IHDR") != 0)
-		return false;
-
-	width = readInt16(data, 18);
-	height = readInt16(data, 22);
-
-	return true;
-}
-
-static bool getDimensionsJpeg(const std::string& data, int& width, int& height)
-{
-	size_t offset = 0;
-
-	// note, this can stop parsing before reaching the end but we stop at SOF anyway
-	while (offset + 4 <= data.size())
-	{
-		if (data[offset] != '\xff')
-			return false;
-
-		char marker = data[offset + 1];
-
-		if (marker == '\xff')
-		{
-			offset++;
-			continue; // padding
-		}
-
-		// d0..d9 correspond to SOI, RSTn, EOI
-		if (marker == 0 || unsigned(marker - '\xd0') <= 9)
-		{
-			offset += 2;
-			continue; // no payload
-		}
-
-		// c0..c1 correspond to SOF0, SOF1
-		if (marker == '\xc0' || marker == '\xc2')
-		{
-			if (offset + 10 > data.size())
-				return false;
-
-			width = readInt16(data, offset + 7);
-			height = readInt16(data, offset + 5);
-
-			return true;
-		}
-
-		offset += 2 + readInt16(data, offset + 2);
-	}
-
-	return false;
-}
-
-static bool getDimensions(const std::string& data, const char* mime_type, int& width, int& height)
-{
-	if (strcmp(mime_type, "image/png") == 0)
-		return getDimensionsPng(data, width, height);
-	if (strcmp(mime_type, "image/jpeg") == 0)
-		return getDimensionsJpeg(data, width, height);
-
-	return false;
 }
 
 static int roundPow2(int value)

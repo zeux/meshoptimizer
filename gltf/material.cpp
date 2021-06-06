@@ -408,3 +408,43 @@ void analyzeMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, st
 		analyzeMaterial(data->materials[i], materials[i], data, images);
 	}
 }
+
+static const cgltf_texture_view* getColorTexture(const cgltf_material& material)
+{
+	if (material.has_pbr_metallic_roughness)
+		return &material.pbr_metallic_roughness.base_color_texture;
+
+	if (material.has_pbr_specular_glossiness)
+		return &material.pbr_specular_glossiness.diffuse_texture;
+
+	return NULL;
+}
+
+static float getAlphaFactor(const cgltf_material& material)
+{
+	if (material.has_pbr_metallic_roughness)
+		return material.pbr_metallic_roughness.base_color_factor[3];
+
+	if (material.has_pbr_specular_glossiness)
+		return material.pbr_specular_glossiness.diffuse_factor[3];
+
+	return 1.f;
+}
+
+void optimizeMaterials(cgltf_data* data, const std::vector<ImageInfo>& images)
+{
+	for (size_t i = 0; i < data->materials_count; ++i)
+	{
+		// remove BLEND/MASK from materials that don't have alpha information
+		if (data->materials[i].alpha_mode != cgltf_alpha_mode_opaque)
+		{
+			const cgltf_texture_view* color = getColorTexture(data->materials[i]);
+			float alpha = getAlphaFactor(data->materials[i]);
+
+			if (alpha == 1.f && !(color && color->texture && color->texture->image && images[color->texture->image - data->images].alpha))
+			{
+				data->materials[i].alpha_mode = cgltf_alpha_mode_opaque;
+			}
+		}
+	}
+}

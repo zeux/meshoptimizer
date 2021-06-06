@@ -324,7 +324,10 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	std::vector<MaterialInfo> materials(data->materials_count);
 	std::vector<ImageInfo> images(data->images_count);
 
+	analyzeImages(data, input_path, images);
 	analyzeMaterials(data, materials, images);
+
+	optimizeMaterials(data, images);
 
 	// streams need to be filtered before mesh merging (or processing) to make sure we can merge meshes with redundant streams
 	for (size_t i = 0; i < meshes.size(); ++i)
