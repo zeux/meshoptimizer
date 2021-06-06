@@ -32,7 +32,7 @@ static const BasisSettings kBasisSettings[10] = {
     {1, 255, 2, 0.f},
 };
 
-const char* inferMimeType(const char* path)
+static const char* inferMimeType(const char* path)
 {
 	std::string ext = getExtension(path);
 
@@ -41,6 +41,75 @@ const char* inferMimeType(const char* path)
 			return kMimeTypes[i][0];
 
 	return "";
+}
+
+static bool parseDataUri(const char* uri, std::string& mime_type, std::string& result)
+{
+	if (strncmp(uri, "data:", 5) == 0)
+	{
+		const char* comma = strchr(uri, ',');
+
+		if (comma && comma - uri >= 7 && strncmp(comma - 7, ";base64", 7) == 0)
+		{
+			const char* base64 = comma + 1;
+			size_t base64_size = strlen(base64);
+			size_t size = base64_size - base64_size / 4;
+
+			if (base64_size >= 2)
+			{
+				size -= base64[base64_size - 2] == '=';
+				size -= base64[base64_size - 1] == '=';
+			}
+
+			void* data = 0;
+
+			cgltf_options options = {};
+			cgltf_result res = cgltf_load_buffer_base64(&options, size, base64, &data);
+
+			if (res != cgltf_result_success)
+				return false;
+
+			mime_type = std::string(uri + 5, comma - 7);
+			result = std::string(static_cast<const char*>(data), size);
+
+			free(data);
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool readImage(const cgltf_image& image, const char* input_path, std::string& data, std::string& mime_type)
+{
+	if (image.uri && parseDataUri(image.uri, mime_type, data))
+	{
+		return true;
+	}
+	else if (image.buffer_view && image.buffer_view->buffer->data && image.mime_type)
+	{
+		const cgltf_buffer_view* view = image.buffer_view;
+
+		data.assign(static_cast<const char*>(view->buffer->data) + view->offset, view->size);
+		mime_type = image.mime_type;
+		return true;
+	}
+	else if (image.uri && *image.uri)
+	{
+		std::string path = image.uri;
+
+		cgltf_decode_uri(&path[0]);
+		path.resize(strlen(&path[0]));
+
+		mime_type = image.mime_type ? image.mime_type : inferMimeType(path.c_str());
+
+		return readFile(getFullPath(path.c_str(), input_path).c_str(), data);
+	}
+	else
+	{
+		return false;
+	}
 }
 
 static const char* mimeExtension(const char* mime_type)
