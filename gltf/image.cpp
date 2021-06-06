@@ -143,7 +143,7 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 	if (uastc)
 	{
 		char cs[128];
-		sprintf(cs, " -uastc_level %d -uastc_rdo_q %.2f", bs.uastc_l, bs.uastc_q);
+		sprintf(cs, " -uastc_level %d -uastc_rdo_l %.2f", bs.uastc_l, bs.uastc_q);
 
 		cmd += " -uastc";
 		cmd += cs;
@@ -156,6 +156,11 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 
 		cmd += cs;
 	}
+
+	cmd += " -ktx2";
+
+	if (uastc)
+		cmd += " -ktx2_zstandard_level 9";
 
 	cmd += " -file ";
 	cmd += temp_input.path;
@@ -323,7 +328,7 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 	if (uastc)
 	{
 		char cs[128];
-		sprintf(cs, " %d --uastc_rdo_q %.2f", bs.uastc_l, bs.uastc_q);
+		sprintf(cs, " %d --uastc_rdo_l %.2f", bs.uastc_l, bs.uastc_q);
 
 		cmd += " --uastc";
 		cmd += cs;
