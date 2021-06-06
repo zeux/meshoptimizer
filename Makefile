@@ -69,6 +69,12 @@ ifeq ($(config),analyze)
 	CXXFLAGS+=--analyze
 endif
 
+ifdef BASISU
+    $(GLTFPACK_OBJECTS): CXXFLAGS+=-DWITH_BASISU
+    $(BUILD)/gltf/basisenc.cpp.o: CXXFLAGS+=-I$(BASISU) -std=c++11 -Wno-all -Wno-extra -Wno-shadow
+    gltfpack: LDFLAGS+=-lpthread
+endif
+
 all: $(EXECUTABLE)
 
 test: $(EXECUTABLE)
