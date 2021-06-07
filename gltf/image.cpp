@@ -119,11 +119,10 @@ static int readInt16(const std::string& data, size_t offset)
 
 static int readInt32(const std::string& data, size_t offset)
 {
-	return
-		((unsigned)(unsigned char)data[offset] << 24) |
-		((unsigned)(unsigned char)data[offset + 1] << 16) |
-		((unsigned)(unsigned char)data[offset + 2] << 8) |
-		(unsigned)(unsigned char)data[offset + 3];
+	return (unsigned((unsigned char)data[offset]) << 24) |
+	       (unsigned((unsigned char)data[offset + 1]) << 16) |
+	       (unsigned((unsigned char)data[offset + 2]) << 8) |
+	       unsigned((unsigned char)data[offset + 3]);
 }
 
 static bool getDimensionsPng(const std::string& data, int& width, int& height)
@@ -138,8 +137,8 @@ static bool getDimensionsPng(const std::string& data, int& width, int& height)
 	if (data.compare(12, 4, "IHDR") != 0)
 		return false;
 
-	width = readInt16(data, 18);
-	height = readInt16(data, 22);
+	width = readInt32(data, 18);
+	height = readInt32(data, 22);
 
 	return true;
 }
