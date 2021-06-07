@@ -16,7 +16,7 @@ project(meshoptimizer VERSION 0.16 LANGUAGES CXX)
 option(MESHOPT_BUILD_DEMO "Build demo" OFF)
 option(MESHOPT_BUILD_GLTFPACK "Build gltfpack" OFF)
 option(MESHOPT_BUILD_SHARED_LIBS "Build shared libraries" OFF)
-option(MESHOPT_BASISU_PATH "Basis Universal source path" "")
+set(MESHOPT_BASISU_PATH "" CACHE STRING "")
 
 set(SOURCES
     src/meshoptimizer.h
