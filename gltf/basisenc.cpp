@@ -6,9 +6,11 @@
 
 #ifdef __GNUC__
 #pragma GCC diagnostic ignored "-Wclass-memaccess"
+#pragma GCC diagnostic ignored "-Wdeprecated-copy"
 #pragma GCC diagnostic ignored "-Wextra"
 #pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
 #pragma GCC diagnostic ignored "-Wmisleading-indentation"
+#pragma GCC diagnostic ignored "-Wparentheses"
 #pragma GCC diagnostic ignored "-Wshadow"
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #pragma GCC diagnostic ignored "-Wunused-value"
@@ -21,7 +23,11 @@
 
 #define BASISU_NO_ITERATOR_DEBUG_LEVEL
 
-#if defined(__SSE2__) || (defined(_MSC_VER) && !defined(__clang__) && (defined(_M_IX86) || defined(_M_X64)))
+#if defined(_MSC_VER) && !defined(__clang__) && (defined(_M_IX86) || defined(_M_X64))
+#define BASISU_SUPPORT_SSE 1
+#endif
+
+#if defined(__SSE4_1__)
 #define BASISU_SUPPORT_SSE 1
 #endif
 

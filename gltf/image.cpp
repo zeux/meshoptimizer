@@ -419,6 +419,10 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 
 bool checkKtx(bool verbose)
 {
+#ifdef WITH_BASISU
+	(void)verbose;
+	return false;
+#else
 	std::string cmd = getExecutable("toktx", "TOKTX_PATH");
 
 	cmd += " --version";
@@ -428,6 +432,7 @@ bool checkKtx(bool verbose)
 		printf("%s => %d\n", cmd.c_str(), rc);
 
 	return rc == 0;
+#endif
 }
 
 bool encodeKtx(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings)
