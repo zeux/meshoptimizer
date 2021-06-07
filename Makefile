@@ -24,6 +24,8 @@ CFLAGS=-g -Wall -Wextra -Werror -std=c89
 CXXFLAGS=-g -Wall -Wextra -Wshadow -Wno-missing-field-initializers -Werror -std=c++98
 LDFLAGS=
 
+$(GLTFPACK_OBJECTS): CXXFLAGS+=-std=c++11
+
 WASMCC=clang++
 WASI_SDK=
 
