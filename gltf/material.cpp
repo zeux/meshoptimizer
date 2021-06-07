@@ -408,3 +408,58 @@ void analyzeMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, st
 		analyzeMaterial(data->materials[i], materials[i], data, images);
 	}
 }
+
+static const cgltf_texture_view* getColorTexture(const cgltf_material& material)
+{
+	if (material.has_pbr_metallic_roughness)
+		return &material.pbr_metallic_roughness.base_color_texture;
+
+	if (material.has_pbr_specular_glossiness)
+		return &material.pbr_specular_glossiness.diffuse_texture;
+
+	return NULL;
+}
+
+static float getAlphaFactor(const cgltf_material& material)
+{
+	if (material.has_pbr_metallic_roughness)
+		return material.pbr_metallic_roughness.base_color_factor[3];
+
+	if (material.has_pbr_specular_glossiness)
+		return material.pbr_specular_glossiness.diffuse_factor[3];
+
+	return 1.f;
+}
+
+static int getChannels(const cgltf_image& image, ImageInfo& info, const char* input_path)
+{
+	if (info.channels)
+		return info.channels;
+
+	std::string img_data;
+	std::string mime_type;
+	if (readImage(image, input_path, img_data, mime_type))
+		info.channels = hasAlpha(img_data, mime_type.c_str()) ? 4 : 3;
+	else
+		info.channels = -1;
+
+	return info.channels;
+}
+
+void optimizeMaterials(cgltf_data* data, const char* input_path, std::vector<ImageInfo>& images)
+{
+	for (size_t i = 0; i < data->materials_count; ++i)
+	{
+		// remove BLEND/MASK from materials that don't have alpha information
+		if (data->materials[i].alpha_mode != cgltf_alpha_mode_opaque)
+		{
+			const cgltf_texture_view* color = getColorTexture(data->materials[i]);
+			float alpha = getAlphaFactor(data->materials[i]);
+
+			if (alpha == 1.f && !(color && color->texture && color->texture->image && getChannels(*color->texture->image, images[color->texture->image - data->images], input_path) == 4))
+			{
+				data->materials[i].alpha_mode = cgltf_alpha_mode_opaque;
+			}
+		}
+	}
+}

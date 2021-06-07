@@ -160,7 +160,8 @@ static void decodeFilterExp(unsigned int* data, size_t count)
 #endif
 
 #if defined(SIMD_SSE) || defined(SIMD_NEON) || defined(SIMD_WASM)
-template <typename T> static void dispatchSimd(void (*process)(T*, size_t), T* data, size_t count, size_t stride)
+template <typename T>
+static void dispatchSimd(void (*process)(T*, size_t), T* data, size_t count, size_t stride)
 {
 	assert(stride <= 4);
 

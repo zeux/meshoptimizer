@@ -326,6 +326,8 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 	analyzeMaterials(data, materials, images);
 
+	optimizeMaterials(data, input_path, images);
+
 	// streams need to be filtered before mesh merging (or processing) to make sure we can merge meshes with redundant streams
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
