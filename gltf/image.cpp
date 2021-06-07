@@ -248,6 +248,31 @@ static bool getDimensions(const std::string& data, const char* mime_type, int& w
 	return false;
 }
 
+static int roundPow2(int value)
+{
+	int result = 1;
+
+	while (result < value)
+		result <<= 1;
+
+	// to prevent odd texture sizes from increasing the size too much, we round to nearest power of 2 above a certain size
+	if (value > 128 && result * 3 / 4 > value)
+		result >>= 1;
+
+	return result;
+}
+
+static int roundBlock(int value, bool pow2)
+{
+	if (value == 0)
+		return 4;
+
+	if (pow2 && value > 4)
+		return roundPow2(value);
+
+	return (value + 3) & ~3;
+}
+
 #ifdef __wasi__
 static int execute(const char* cmd, bool ignore_stdout, bool ignore_stderr)
 {
@@ -381,31 +406,6 @@ bool checkKtx(bool verbose)
 		printf("%s => %d\n", cmd.c_str(), rc);
 
 	return rc == 0;
-}
-
-static int roundPow2(int value)
-{
-	int result = 1;
-
-	while (result < value)
-		result <<= 1;
-
-	// to prevent odd texture sizes from increasing the size too much, we round to nearest power of 2 above a certain size
-	if (value > 128 && result * 3 / 4 > value)
-		result >>= 1;
-
-	return result;
-}
-
-static int roundBlock(int value, bool pow2)
-{
-	if (value == 0)
-		return 4;
-
-	if (pow2 && value > 4)
-		return roundPow2(value);
-
-	return (value + 3) & ~3;
 }
 
 bool encodeKtx(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings)
