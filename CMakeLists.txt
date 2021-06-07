@@ -86,6 +86,7 @@ endif()
 
 if(MESHOPT_BUILD_GLTFPACK)
     add_executable(gltfpack ${GLTF_SOURCES} tools/meshloader.cpp)
+    set_target_properties(gltfpack PROPERTIES CXX_STANDARD 11)
     target_link_libraries(gltfpack meshoptimizer)
     list(APPEND TARGETS gltfpack)
 
