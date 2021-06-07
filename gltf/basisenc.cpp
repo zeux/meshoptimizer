@@ -1,5 +1,29 @@
 #ifdef WITH_BASISU
-// TODO: Enable BASISU_SUPPORT_SSE conditionally
+
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wunknown-warning-option"
+#endif
+
+#ifdef __GNUC__
+#pragma GCC diagnostic ignored "-Wclass-memaccess"
+#pragma GCC diagnostic ignored "-Wextra"
+#pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
+#pragma GCC diagnostic ignored "-Wmisleading-indentation"
+#pragma GCC diagnostic ignored "-Wshadow"
+#pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma GCC diagnostic ignored "-Wunused-value"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#endif
+
+#ifdef _MSC_VER
+#pragma warning(disable: 4702) // unreachable code
+#endif
+
+#define BASISU_NO_ITERATOR_DEBUG_LEVEL
+
+#if defined(__SSE2__) || (defined(_MSC_VER) && !defined(__clang__) && (defined(_M_IX86) || defined(_M_X64)))
+#define BASISU_SUPPORT_SSE 1
+#endif
 
 #include "encoder/apg_bmp.c"
 #include "encoder/basisu_astc_decomp.cpp"
