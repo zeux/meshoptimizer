@@ -137,8 +137,8 @@ static bool getDimensionsPng(const std::string& data, int& width, int& height)
 	if (data.compare(12, 4, "IHDR") != 0)
 		return false;
 
-	width = readInt32(data, 18);
-	height = readInt32(data, 22);
+	width = readInt32(data, 16);
+	height = readInt32(data, 20);
 
 	return true;
 }
