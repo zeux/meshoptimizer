@@ -97,8 +97,8 @@ static void printMeshStats(const std::vector<Mesh>& meshes, const char* name)
 	}
 
 	printf("%s: %d mesh primitives (%d triangles, %d vertices); %d draw calls (%d instances, %lld triangles)\n", name,
-	       int(meshes.size()), int(mesh_triangles), int(mesh_vertices),
-	       int(total_draws), int(total_instances), (long long)total_triangles);
+	    int(meshes.size()), int(mesh_triangles), int(mesh_vertices),
+	    int(total_draws), int(total_instances), (long long)total_triangles);
 }
 
 static void printSceneStats(const std::vector<BufferView>& views, const std::vector<Mesh>& meshes, size_t node_offset, size_t mesh_offset, size_t material_offset, size_t json_size, size_t bin_size)
@@ -114,9 +114,9 @@ static void printSceneStats(const std::vector<BufferView>& views, const std::vec
 	printf("output: %d nodes, %d meshes (%d primitives), %d materials\n", int(node_offset), int(mesh_offset), int(meshes.size()), int(material_offset));
 	printf("output: JSON %d bytes, buffers %d bytes\n", int(json_size), int(bin_size));
 	printf("output: buffers: vertex %d bytes, index %d bytes, skin %d bytes, time %d bytes, keyframe %d bytes, instance %d bytes, image %d bytes\n",
-	       int(bytes[BufferView::Kind_Vertex]), int(bytes[BufferView::Kind_Index]), int(bytes[BufferView::Kind_Skin]),
-	       int(bytes[BufferView::Kind_Time]), int(bytes[BufferView::Kind_Keyframe]), int(bytes[BufferView::Kind_Instance]),
-	       int(bytes[BufferView::Kind_Image]));
+	    int(bytes[BufferView::Kind_Vertex]), int(bytes[BufferView::Kind_Index]), int(bytes[BufferView::Kind_Skin]),
+	    int(bytes[BufferView::Kind_Time]), int(bytes[BufferView::Kind_Keyframe]), int(bytes[BufferView::Kind_Instance]),
+	    int(bytes[BufferView::Kind_Image]));
 }
 
 static void printAttributeStats(const std::vector<BufferView>& views, BufferView::Kind kind, const char* name)
@@ -151,9 +151,9 @@ static void printAttributeStats(const std::vector<BufferView>& views, BufferView
 		size_t count = view.data.size() / view.stride;
 
 		printf("stats: %s %s: compressed %d bytes (%.1f bits), raw %d bytes (%d bits)\n",
-		       name, variant,
-		       int(view.bytes), double(view.bytes) / double(count) * 8,
-		       int(view.data.size()), int(view.stride * 8));
+		    name, variant,
+		    int(view.bytes), double(view.bytes) / double(count) * 8,
+		    int(view.data.size()), int(view.stride * 8));
 	}
 }
 
@@ -245,7 +245,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	if (settings.verbose)
 	{
 		printf("input: %d nodes, %d meshes (%d primitives), %d materials, %d skins, %d animations\n",
-		       int(data->nodes_count), int(data->meshes_count), int(meshes.size()), int(data->materials_count), int(data->skins_count), int(animations.size()));
+		    int(data->nodes_count), int(data->meshes_count), int(meshes.size()), int(data->materials_count), int(data->skins_count), int(animations.size()));
 		printMeshStats(meshes, "input");
 	}
 
