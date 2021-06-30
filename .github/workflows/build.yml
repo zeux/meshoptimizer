@@ -130,19 +130,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
-    - uses: docker://multiarch/ubuntu-core:arm64-bionic
+    - uses: docker://multiarch/ubuntu-core:arm64-focal
       with:
         args: 'uname -a'
     - uses: actions/checkout@v1
     - name: make test
-      uses: docker://multiarch/ubuntu-core:arm64-bionic
+      uses: docker://multiarch/ubuntu-core:arm64-focal
       with:
         args: 'bash -c "apt-get update && apt-get install -y build-essential && make -j2 config=coverage test"'
     - name: upload coverage
       run: |
         find . -type f -name '*.gcno' -exec gcov -p {} +
         sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
-        bash <(curl -s https://codecov.io/bash) -f 'src#*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
+        bash <(curl -s https://codecov.io/bash) -f './src*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
       continue-on-error: true
 
   iphone:
