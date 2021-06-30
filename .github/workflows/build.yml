@@ -29,6 +29,7 @@ jobs:
       run: |
         find . -type f -name '*.gcno' -exec gcov -p {} +
         sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
+        ls -la src#*.gcov
         bash <(curl -s https://codecov.io/bash) -f 'src#*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
     - uses: actions/upload-artifact@v1
       with:
