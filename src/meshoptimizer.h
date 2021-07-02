@@ -295,17 +295,13 @@ MESHOPTIMIZER_EXPERIMENTAL void meshopt_decodeFilterExp(void* buffer, size_t cou
  * Input data must contain 4 floats for every quaternion (count*4 total).
  * 
  * meshopt_encodeFilterExp encodes arbitrary (finite) floating-point data with 8-bit exponent and K-bit integer mantissa (1 <= K <= 24).
- * Each component is encoded in isolation; stride must be divisible by 4.
- * Input data must contain stride/4 floats for every vector (count*stride/4 total).
- * 
- * meshopt_encodeFilterExpShared encodes arbitrary (finite) floating-point data with 8-bit exponent and K-bit integer mantissa (1 <= K <= 24).
  * Mantissa is shared between all components of a given vector as defined by stride; stride must be divisible by 4.
  * Input data must contain stride/4 floats for every vector (count*stride/4 total).
+ * When individual (scalar) encoding is desired, simply pass stride=4 and adjust count accordingly.
  */
 MESHOPTIMIZER_EXPERIMENTAL void meshopt_encodeFilterOct(void* destination, size_t count, size_t stride, int bits, const float* data);
 MESHOPTIMIZER_EXPERIMENTAL void meshopt_encodeFilterQuat(void* destination, size_t count, size_t stride, int bits, const float* data);
 MESHOPTIMIZER_EXPERIMENTAL void meshopt_encodeFilterExp(void* destination, size_t count, size_t stride, int bits, const float* data);
-MESHOPTIMIZER_EXPERIMENTAL void meshopt_encodeFilterExpShared(void* destination, size_t count, size_t stride, int bits, const float* data);
 
 /**
  * Experimental: Mesh simplifier

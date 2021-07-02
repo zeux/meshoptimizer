@@ -921,31 +921,6 @@ void meshopt_encodeFilterExp(void* destination_, size_t count, size_t stride, in
 	assert(bits >= 1 && bits <= 24);
 
 	unsigned int* destination = static_cast<unsigned int*>(destination_);
-
-	for (size_t i = 0; i < count * stride; ++i)
-	{
-		float v = data[i];
-
-		int exp;
-		frexp(v, &exp);
-
-		// note that we additionally scale the mantissa to make it a K-bit signed integer (K-1 bits for magnitude)
-		exp -= (bits - 1);
-
-		// compute renormalized rounded mantissa and encode it
-		int m = int(ldexp(v, -exp) + (v >= 0 ? 0.5f : -0.5f));
-		int mmask = (1 << 24) - 1;
-
-		destination[i] = (m & mmask) | (unsigned(exp) << 24);
-	}
-}
-
-void meshopt_encodeFilterExpShared(void* destination_, size_t count, size_t stride, int bits, const float* data)
-{
-	assert(stride > 0 && stride % 4 == 0);
-	assert(bits >= 1 && bits <= 24);
-
-	unsigned int* destination = static_cast<unsigned int*>(destination_);
 	size_t stride_float = stride / sizeof(float);
 
 	for (size_t i = 0; i < count; ++i)
