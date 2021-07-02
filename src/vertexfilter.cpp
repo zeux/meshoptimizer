@@ -929,7 +929,7 @@ void meshopt_encodeFilterExp(void* destination_, size_t count, size_t stride, in
 		unsigned int* d = &destination[i * stride_float];
 
 		// use maximum exponent to encode values; this guarantess that mantissa is [-1, 1]
-		int exp = -256;
+		int exp = -100;
 
 		for (size_t j = 0; j < stride_float; ++j)
 		{
