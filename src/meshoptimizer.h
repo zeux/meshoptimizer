@@ -290,7 +290,7 @@ MESHOPTIMIZER_EXPERIMENTAL void meshopt_decodeFilterExp(void* buffer, size_t cou
  * Each component is stored as an 8-bit or 16-bit normalized integer; stride must be equal to 4 or 8. W is preserved as is.
  * Input data must contain 4 floats for every vector (count*4 total).
  * 
- * meshopt_encodeFilterQuad encodes unit quaternions with K-bit (4 <= K <= 16) component encoding.
+ * meshopt_encodeFilterQuat encodes unit quaternions with K-bit (4 <= K <= 16) component encoding.
  * Each component is stored as an 16-bit integer; stride must be equal to 8.
  * Input data must contain 4 floats for every quaternion (count*4 total).
  * 
@@ -321,7 +321,7 @@ MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplify(unsigned int* destination, co
 
 /**
  * Experimental: Mesh simplifier (sloppy)
- * Reduces the number of triangles in the mesh, sacrificing mesh apperance for simplification performance
+ * Reduces the number of triangles in the mesh, sacrificing mesh appearance for simplification performance
  * The algorithm doesn't preserve mesh topology but can stop short of the target goal based on target error.
  * Returns the number of indices after simplification, with destination containing new index data
  * The resulting index buffer references vertices from the original vertex buffer.
