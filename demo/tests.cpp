@@ -1,6 +1,7 @@
 #include "../src/meshoptimizer.h"
 
 #include <assert.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -627,6 +628,92 @@ static void decodeFilterExp()
 	assert(memcmp(tail, expected, sizeof(tail)) == 0);
 }
 
+void encodeFilterOct8()
+{
+	const float data[4 * 4] = {
+	    1, 0, 0, 0,
+	    0, -1, 0, 0,
+	    0.7071068f, 0, 0.707168f, 1,
+	    -0.7071068f, 0, -0.707168f, 1, // clang-format :-/
+	};
+
+	const unsigned char expected[4 * 4] = {
+	    0x7f, 0, 0x7f, 0,
+	    0, 0x81, 0x7f, 0,
+	    0x3f, 0, 0x7f, 0x7f,
+	    0x81, 0x40, 0x7f, 0x7f, // clang-format :-/
+	};
+
+	unsigned char encoded[4 * 4];
+	meshopt_encodeFilterOct(encoded, 4, 4, 8, data);
+
+	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+}
+
+void encodeFilterOct12()
+{
+	const float data[4 * 4] = {
+	    1, 0, 0, 0,
+	    0, -1, 0, 0,
+	    0.7071068f, 0, 0.707168f, 1,
+	    -0.7071068f, 0, -0.707168f, 1, // clang-format :-/
+	};
+
+	const unsigned short expected[4 * 4] = {
+	    0x7ff, 0, 0x7ff, 0,
+	    0x0, 0xf801, 0x7ff, 0,
+	    0x3ff, 0, 0x7ff, 0x7ff,
+	    0xf801, 0x400, 0x7ff, 0x7ff, // clang-format :-/
+	};
+
+	unsigned short encoded[4 * 4];
+	meshopt_encodeFilterOct(encoded, 4, 8, 12, data);
+
+	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+}
+
+void encodeFilterQuat12()
+{
+	const float data[4 * 4] = {
+	    1, 0, 0, 0,
+	    0, -1, 0, 0,
+	    0.7071068f, 0, 0, 0.707168f,
+	    -0.7071068f, 0, 0, -0.707168f, // clang-format :-/
+	};
+
+	const unsigned short expected[4 * 4] = {
+	    0, 0, 0, 0x7fc,
+	    0, 0, 0, 0x7fd,
+	    0x7ff, 0, 0, 0x7ff,
+	    0x7ff, 0, 0, 0x7ff, // clang-format :-/
+	};
+
+	unsigned short encoded[4 * 4];
+	meshopt_encodeFilterQuat(encoded, 4, 8, 12, data);
+
+	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+}
+
+void encodeFilterExp()
+{
+	const float data[3] = {
+	    1,
+	    -23.4f,
+	    -0.1f,
+	};
+
+	const unsigned int expected[3] = {
+	    0xf7000200,
+	    0xf7ffd133,
+	    0xf7ffffcd,
+	};
+
+	unsigned int encoded[3];
+	meshopt_encodeFilterExp(encoded, 1, 12, 15, data);
+
+	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+}
+
 static void clusterBoundsDegenerate()
 {
 	const float vbd[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -919,6 +1006,11 @@ static void runTestsOnce()
 	decodeFilterOct12();
 	decodeFilterQuat12();
 	decodeFilterExp();
+
+	encodeFilterOct8();
+	encodeFilterOct12();
+	encodeFilterQuat12();
+	encodeFilterExp();
 
 	clusterBoundsDegenerate();
 
