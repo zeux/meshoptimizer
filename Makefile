@@ -1,5 +1,4 @@
 MAKEFLAGS+=-r -j
-COMMA=,
 
 config=debug
 files=demo/pirate.obj
@@ -29,12 +28,13 @@ $(GLTFPACK_OBJECTS): CXXFLAGS+=-std=c++11
 WASMCC=clang++
 WASI_SDK=
 
-WASM_SOURCES=src/vertexcodec.cpp src/indexcodec.cpp src/vertexfilter.cpp tools/wasmstubs.cpp
-WASM_EXPORTS=meshopt_decodeVertexBuffer meshopt_decodeIndexBuffer meshopt_decodeIndexSequence meshopt_decodeFilterOct meshopt_decodeFilterQuat meshopt_decodeFilterExp sbrk __wasm_call_ctors
 WASM_FLAGS=--target=wasm32-wasi --sysroot=$(WASI_SDK)
-WASM_FLAGS+=$(patsubst %,-Wl$(COMMA)--export=%,$(WASM_EXPORTS))
 WASM_FLAGS+=-O3 -DNDEBUG -nostartfiles -nostdlib -Wl,--no-entry -Wl,-s
 WASM_FLAGS+=-Wl,-z -Wl,stack-size=24576 -Wl,--initial-memory=65536
+WASM_EXPORT_PREFIX=-Wl,--export
+
+WASM_DECODER_SOURCES=src/vertexcodec.cpp src/indexcodec.cpp src/vertexfilter.cpp tools/wasmstubs.cpp
+WASM_DECODER_EXPORTS=meshopt_decodeVertexBuffer meshopt_decodeIndexBuffer meshopt_decodeIndexSequence meshopt_decodeFilterOct meshopt_decodeFilterQuat meshopt_decodeFilterExp sbrk __wasm_call_ctors
 
 ifeq ($(config),iphone)
 	IPHONESDK=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk
@@ -83,6 +83,8 @@ dev: $(EXECUTABLE)
 format:
 	clang-format -i $(LIBRARY_SOURCES) $(DEMO_SOURCES) $(GLTFPACK_SOURCES)
 
+js: js/meshopt_decoder.js js/meshopt_decoder.module.js
+
 gltfpack: $(GLTFPACK_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
 
@@ -91,13 +93,13 @@ gltfpack.wasm: gltf/library.wasm
 gltf/library.wasm: ${LIBRARY_SOURCES} ${GLTFPACK_SOURCES} tools/meshloader.cpp
 	$(WASMCC) $^ -o $@ -Os -DNDEBUG --target=wasm32-wasi --sysroot=$(WASI_SDK) -nostartfiles -Wl,--no-entry -Wl,--export=pack -Wl,--export=malloc -Wl,--export=free -Wl,--export=__wasm_call_ctors -Wl,-s -Wl,--allow-undefined-file=gltf/wasistubs.txt
 
-build/decoder_base.wasm: $(WASM_SOURCES)
+build/decoder_base.wasm: $(WASM_DECODER_SOURCES)
 	@mkdir -p build
-	$(WASMCC) $^ $(WASM_FLAGS) -o $@
+	$(WASMCC) $^ $(WASM_FLAGS) $(patsubst %,$(WASM_EXPORT_PREFIX)=%,$(WASM_DECODER_EXPORTS)) -o $@
 
-build/decoder_simd.wasm: $(WASM_SOURCES)
+build/decoder_simd.wasm: $(WASM_DECODER_SOURCES)
 	@mkdir -p build
-	$(WASMCC) $^ $(WASM_FLAGS) -o $@ -msimd128 -mbulk-memory
+	$(WASMCC) $^ $(WASM_FLAGS) $(patsubst %,$(WASM_EXPORT_PREFIX)=%,$(WASM_DECODER_EXPORTS)) -o $@ -msimd128 -mbulk-memory
 
 js/meshopt_decoder.js: build/decoder_base.wasm build/decoder_simd.wasm
 	sed -i "s#Built with clang.*#Built with $$($(WASMCC) --version | head -n 1)#" $@
