@@ -648,6 +648,13 @@ void encodeFilterOct8()
 	meshopt_encodeFilterOct(encoded, 4, 4, 8, data);
 
 	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+
+	char decoded[4 * 4];
+	memcpy(decoded, encoded, sizeof(decoded));
+	meshopt_decodeFilterOct(decoded, 4, 4);
+
+	for (size_t i = 0; i < 4 * 4; ++i)
+		assert(fabsf(decoded[i] / 127.f - data[i]) < 1e-2f);
 }
 
 void encodeFilterOct12()
@@ -662,14 +669,21 @@ void encodeFilterOct12()
 	const unsigned short expected[4 * 4] = {
 	    0x7ff, 0, 0x7ff, 0,
 	    0x0, 0xf801, 0x7ff, 0,
-	    0x3ff, 0, 0x7ff, 0x7ff,
-	    0xf801, 0x400, 0x7ff, 0x7ff, // clang-format :-/
+	    0x3ff, 0, 0x7ff, 0x7fff,
+	    0xf801, 0x400, 0x7ff, 0x7fff, // clang-format :-/
 	};
 
 	unsigned short encoded[4 * 4];
 	meshopt_encodeFilterOct(encoded, 4, 8, 12, data);
 
 	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+
+	short decoded[4 * 4];
+	memcpy(decoded, encoded, sizeof(decoded));
+	meshopt_decodeFilterOct(decoded, 4, 8);
+
+	for (size_t i = 0; i < 4 * 4; ++i)
+		assert(fabsf(decoded[i] / 32767.f - data[i]) < 1e-3f);
 }
 
 void encodeFilterQuat12()
@@ -692,6 +706,26 @@ void encodeFilterQuat12()
 	meshopt_encodeFilterQuat(encoded, 4, 8, 12, data);
 
 	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+
+	short decoded[4 * 4];
+	memcpy(decoded, encoded, sizeof(decoded));
+	meshopt_decodeFilterQuat(decoded, 4, 8);
+
+	for (size_t i = 0; i < 4; ++i)
+	{
+		float dx = decoded[i * 4 + 0] / 32767.f;
+		float dy = decoded[i * 4 + 1] / 32767.f;
+		float dz = decoded[i * 4 + 2] / 32767.f;
+		float dw = decoded[i * 4 + 3] / 32767.f;
+
+		float dp =
+		    data[i * 4 + 0] * dx +
+		    data[i * 4 + 1] * dy +
+		    data[i * 4 + 2] * dz +
+		    data[i * 4 + 3] * dw;
+
+		assert(fabsf(fabsf(dp) - 1.f) < 1e-4f);
+	}
 }
 
 void encodeFilterExp()

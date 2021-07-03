@@ -846,6 +846,8 @@ void meshopt_encodeFilterOct(void* destination, size_t count, size_t stride, int
 	char* d8 = static_cast<char*>(destination);
 	short* d16 = static_cast<short*>(destination);
 
+	int bytebits = int(stride * 2);
+
 	for (size_t i = 0; i < count; ++i)
 	{
 		const float* n = &data[i * 4];
@@ -864,7 +866,7 @@ void meshopt_encodeFilterOct(void* destination, size_t count, size_t stride, int
 		int fu = meshopt_quantizeSnorm(u, bits);
 		int fv = meshopt_quantizeSnorm(v, bits);
 		int fo = meshopt_quantizeSnorm(1.f, bits);
-		int fw = meshopt_quantizeSnorm(nw, bits);
+		int fw = meshopt_quantizeSnorm(nw, bytebits);
 
 		if (stride == 4)
 		{
