@@ -39,6 +39,9 @@ WASM_DECODER_EXPORTS=meshopt_decodeVertexBuffer meshopt_decodeIndexBuffer meshop
 WASM_ENCODER_SOURCES=src/vertexcodec.cpp src/indexcodec.cpp src/vertexfilter.cpp src/vcacheoptimizer.cpp src/vfetchoptimizer.cpp tools/wasmstubs.cpp
 WASM_ENCODER_EXPORTS=meshopt_encodeVertexBuffer meshopt_encodeVertexBufferBound meshopt_encodeIndexBuffer meshopt_encodeIndexBufferBound meshopt_encodeIndexSequence meshopt_encodeIndexSequenceBound meshopt_encodeFilterOct meshopt_encodeFilterQuat meshopt_encodeFilterExp meshopt_optimizeVertexCache meshopt_optimizeVertexCacheStrip meshopt_optimizeVertexFetchRemap sbrk __wasm_call_ctors
 
+WASM_SIMPLIFIER_SOURCES=src/simplifier.cpp tools/wasmstubs.cpp
+WASM_SIMPLIFIER_EXPORTS=meshopt_simplify meshopt_simplifySloppy meshopt_simplifyPoints sbrk __wasm_call_ctors
+
 ifeq ($(config),iphone)
 	IPHONESDK=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk
 	CFLAGS+=-arch armv7 -arch arm64 -isysroot $(IPHONESDK)
@@ -86,7 +89,7 @@ dev: $(EXECUTABLE)
 format:
 	clang-format -i $(LIBRARY_SOURCES) $(DEMO_SOURCES) $(GLTFPACK_SOURCES)
 
-js: js/meshopt_decoder.js js/meshopt_decoder.module.js js/meshopt_encoder.js js/meshopt_encoder.module.js
+js: js/meshopt_decoder.js js/meshopt_decoder.module.js js/meshopt_encoder.js js/meshopt_encoder.module.js js/meshopt_simplifier.js js/meshopt_simplifier.module.js
 
 gltfpack: $(GLTFPACK_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
@@ -124,6 +127,18 @@ js/meshopt_encoder.js: build/encoder.wasm
 js/meshopt_encoder.module.js: js/meshopt_encoder.js
 	sed '/UMD-style export/,$$d' <$< >$@
 	echo "export { MeshoptEncoder };" >>$@
+
+build/simplifier.wasm: $(WASM_SIMPLIFIER_SOURCES)
+	@mkdir -p build
+	$(WASMCC) $^ $(WASM_FLAGS) $(patsubst %,$(WASM_EXPORT_PREFIX)=%,$(WASM_SIMPLIFIER_EXPORTS)) -lc -o $@
+
+js/meshopt_simplifier.js: build/simplifier.wasm
+	sed -i "s#Built with clang.*#Built with $$($(WASMCC) --version | head -n 1)#" $@
+	sed -i "s#\(var wasm = \)\".*\";#\\1\"$$(cat build/simplifier.wasm | python3 tools/wasmpack.py)\";#" $@
+
+js/meshopt_simplifier.module.js: js/meshopt_simplifier.js
+	sed '/UMD-style export/,$$d' <$< >$@
+	echo "export { MeshoptSimplifier };" >>$@
 
 $(EXECUTABLE): $(DEMO_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
