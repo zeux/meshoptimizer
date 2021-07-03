@@ -649,7 +649,7 @@ void encodeFilterOct8()
 
 	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
 
-	char decoded[4 * 4];
+	signed char decoded[4 * 4];
 	memcpy(decoded, encoded, sizeof(decoded));
 	meshopt_decodeFilterOct(decoded, 4, 4);
 

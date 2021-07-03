@@ -843,7 +843,7 @@ void meshopt_encodeFilterOct(void* destination, size_t count, size_t stride, int
 	assert(stride == 4 || stride == 8);
 	assert(bits >= 1 && bits <= 16);
 
-	char* d8 = static_cast<char*>(destination);
+	signed char* d8 = static_cast<signed char*>(destination);
 	short* d16 = static_cast<short*>(destination);
 
 	int bytebits = int(stride * 2);
@@ -870,10 +870,10 @@ void meshopt_encodeFilterOct(void* destination, size_t count, size_t stride, int
 
 		if (stride == 4)
 		{
-			d8[i * 4 + 0] = char(fu);
-			d8[i * 4 + 1] = char(fv);
-			d8[i * 4 + 2] = char(fo);
-			d8[i * 4 + 3] = char(fw);
+			d8[i * 4 + 0] = (signed char)(fu);
+			d8[i * 4 + 1] = (signed char)(fv);
+			d8[i * 4 + 2] = (signed char)(fo);
+			d8[i * 4 + 3] = (signed char)(fw);
 		}
 		else
 		{
