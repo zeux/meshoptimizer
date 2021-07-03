@@ -36,6 +36,9 @@ WASM_EXPORT_PREFIX=-Wl,--export
 WASM_DECODER_SOURCES=src/vertexcodec.cpp src/indexcodec.cpp src/vertexfilter.cpp tools/wasmstubs.cpp
 WASM_DECODER_EXPORTS=meshopt_decodeVertexBuffer meshopt_decodeIndexBuffer meshopt_decodeIndexSequence meshopt_decodeFilterOct meshopt_decodeFilterQuat meshopt_decodeFilterExp sbrk __wasm_call_ctors
 
+WASM_ENCODER_SOURCES=src/vertexcodec.cpp src/indexcodec.cpp src/vertexfilter.cpp src/vcacheoptimizer.cpp src/vfetchoptimizer.cpp tools/wasmstubs.cpp
+WASM_ENCODER_EXPORTS=meshopt_encodeVertexBuffer meshopt_encodeVertexBufferBound meshopt_encodeIndexBuffer meshopt_encodeIndexBufferBound meshopt_encodeIndexSequence meshopt_encodeIndexSequenceBound meshopt_encodeFilterOct meshopt_encodeFilterQuat meshopt_encodeFilterExp meshopt_optimizeVertexCache meshopt_optimizeVertexCacheStrip meshopt_optimizeVertexFetchRemap sbrk __wasm_call_ctors
+
 ifeq ($(config),iphone)
 	IPHONESDK=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk
 	CFLAGS+=-arch armv7 -arch arm64 -isysroot $(IPHONESDK)
@@ -83,7 +86,7 @@ dev: $(EXECUTABLE)
 format:
 	clang-format -i $(LIBRARY_SOURCES) $(DEMO_SOURCES) $(GLTFPACK_SOURCES)
 
-js: js/meshopt_decoder.js js/meshopt_decoder.module.js
+js: js/meshopt_decoder.js js/meshopt_decoder.module.js js/meshopt_encoder.js js/meshopt_encoder.module.js
 
 gltfpack: $(GLTFPACK_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
@@ -109,6 +112,18 @@ js/meshopt_decoder.js: build/decoder_base.wasm build/decoder_simd.wasm
 js/meshopt_decoder.module.js: js/meshopt_decoder.js
 	sed '/UMD-style export/,$$d' <$< >$@
 	echo "export { MeshoptDecoder };" >>$@
+
+build/encoder.wasm: $(WASM_ENCODER_SOURCES)
+	@mkdir -p build
+	$(WASMCC) $^ $(WASM_FLAGS) $(patsubst %,$(WASM_EXPORT_PREFIX)=%,$(WASM_ENCODER_EXPORTS)) -lc -o $@
+
+js/meshopt_encoder.js: build/encoder.wasm
+	sed -i "s#Built with clang.*#Built with $$($(WASMCC) --version | head -n 1)#" $@
+	sed -i "s#\(var wasm = \)\".*\";#\\1\"$$(cat build/encoder.wasm | python3 tools/wasmpack.py)\";#" $@
+
+js/meshopt_encoder.module.js: js/meshopt_encoder.js
+	sed '/UMD-style export/,$$d' <$< >$@
+	echo "export { MeshoptEncoder };" >>$@
 
 $(EXECUTABLE): $(DEMO_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
