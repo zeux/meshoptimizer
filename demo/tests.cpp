@@ -746,6 +746,13 @@ void encodeFilterExp()
 	meshopt_encodeFilterExp(encoded, 1, 12, 15, data);
 
 	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+
+	float decoded[3];
+	memcpy(decoded, encoded, sizeof(decoded));
+	meshopt_decodeFilterExp(decoded, 3, 4);
+
+	for (size_t i = 0; i < 3; ++i)
+		assert(fabsf(decoded[i] - data[i]) < 1e-3f);
 }
 
 static void clusterBoundsDegenerate()
