@@ -101,6 +101,8 @@ static void transformMesh(Mesh& target, const Mesh& mesh, const cgltf_node* node
 		}
 	}
 
+	// copy indicies as cannot assume the target values are unmodified
+	target.indices = mesh.indices;
 	if (det < 0 && mesh.type == cgltf_primitive_type_triangles)
 	{
 		// negative scale means we need to flip face winding
