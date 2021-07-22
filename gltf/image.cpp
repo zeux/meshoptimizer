@@ -198,7 +198,7 @@ static bool hasTransparencyPng(const std::string& data)
 	if (data.compare(12, 4, "IHDR") != 0)
 		return false;
 
-	int ctype = data[27];
+	int ctype = data[25];
 
 	if (ctype != 3)
 		return ctype == 4 || ctype == 6;
