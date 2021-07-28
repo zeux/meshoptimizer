@@ -5,6 +5,6 @@ export const MeshoptEncoder: {
     ready: Promise<void>;
     
     encodeVertexBuffer: (source: Uint8Array, count: number, size: number) => Uint8Array;
-    encodeIndexBuffer: (source: Uint32Array, count: number) => Uint8Array;
-    encodeIndexSequence: (source: Uint32Array, count: number) => Uint8Array;
+    encodeIndexBuffer: (source: Uint32Array | Uint16Array, count: number) => Uint8Array;
+    encodeIndexSequence: (source: Uint32Array | Uint16Array, count: number) => Uint8Array;
 };
