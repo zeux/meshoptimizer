@@ -41,6 +41,30 @@ var MeshoptEncoder = (function() {
 		return result.buffer.slice(0, write);
 	}
 
+	function reorder(indices, vertices, optf) {
+		var sbrk = instance.exports.sbrk;
+		var ip = sbrk(indices.length * 4);
+		var rp = sbrk(vertices * 4);
+		var heap = new Uint8Array(instance.exports.memory.buffer);
+		var indices8 =new Uint8Array(indices.buffer, indices.byteOffset, indices.byteLength);
+		heap.set(indices8, ip);
+		if (optf) {
+			optf(ip, ip, indices.length, vertices);
+		}
+		var unique = instance.exports.meshopt_optimizeVertexFetchRemap(rp, ip, indices.length, vertices);
+		// heap may have grown
+		heap = new Uint8Array(instance.exports.memory.buffer);
+		var remap = new Uint32Array(vertices);
+		new Uint8Array(remap.buffer).set(heap.subarray(rp, rp + vertices * 4));
+		indices8.set(heap.subarray(ip, ip + indices.length * 4));
+		sbrk(ip - sbrk(0));
+
+		for (var i = 0; i < indices.length; ++i)
+			indices[i] = remap[indices[i]];
+
+		return [remap, unique];
+	}
+
 	function encode(fun, bound, source, count, size) {
 		var sbrk = instance.exports.sbrk;
 		var tp = sbrk(bound);
@@ -90,6 +114,10 @@ var MeshoptEncoder = (function() {
 	return {
 		ready: promise,
 		supported: true,
+		reorderMesh: function(indices, triangles, optsize) {
+			var optf = triangles ? (optsize ? instance.exports.meshopt_optimizeVertexCacheStrip : instance.exports.meshopt_optimizeVertexCache) : undefined;
+			return reorder(indices, maxindex(indices) + 1, optf);
+		},
 		encodeVertexBuffer: function(source, count, size) {
 			var bound = instance.exports.meshopt_encodeVertexBufferBound(count, size);
 			return encode(instance.exports.meshopt_encodeVertexBuffer, bound, source, count, size);

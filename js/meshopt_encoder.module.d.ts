@@ -3,6 +3,8 @@
 export const MeshoptEncoder: {
     supported: boolean;
     ready: Promise<void>;
+
+    reorderMesh: (indices: Uint32Array, triangles: boolean, optsize: boolean) => [Uint32Array, number];
     
     encodeVertexBuffer: (source: Uint8Array, count: number, size: number) => Uint8Array;
     encodeIndexBuffer: (source: Uint32Array | Uint16Array, count: number) => Uint8Array;

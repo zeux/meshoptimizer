@@ -8,6 +8,31 @@ process.on('unhandledRejection', error => {
 });
 
 var tests = {
+	reorderMesh: function() {
+		var indices = new Uint32Array([
+			4, 2, 5,
+			3, 1, 4,
+			0, 1, 3,
+			1, 2, 4,
+		]);
+
+		var expected = new Uint32Array([
+			0, 1, 2,
+			3, 1, 0,
+			4, 3, 0,
+			5, 3, 4,
+		]);
+
+		var remap = new Uint32Array([
+			5, 3, 1, 4, 0, 2
+		]);
+
+		var res = encoder.reorderMesh(indices, /* triangles= */ true, /* optsize= */ true);
+		assert.deepEqual(indices, expected);
+		assert.deepEqual(res[0], remap);
+		assert.equal(res[1], 6); // unique
+	},
+
 	roundtripVertexBuffer: function() {
 		var data = new Uint8Array(16 * 4);
 
