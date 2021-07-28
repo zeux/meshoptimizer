@@ -7,4 +7,8 @@ export const MeshoptEncoder: {
     encodeVertexBuffer: (source: Uint8Array, count: number, size: number) => Uint8Array;
     encodeIndexBuffer: (source: Uint32Array | Uint16Array, count: number) => Uint8Array;
     encodeIndexSequence: (source: Uint32Array | Uint16Array, count: number) => Uint8Array;
+
+    encodeFilterOct: (source: Float32Array, count: number, stride: number, bits: number) => Uint8Array;
+    encodeFilterQuat: (source: Float32Array, count: number, stride: number, bits: number) => Uint8Array;
+    encodeFilterExp: (source: Float32Array, count: number, stride: number, bits: number) => Uint8Array;
 };

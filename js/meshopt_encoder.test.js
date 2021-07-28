@@ -66,6 +66,84 @@ var tests = {
 
 		assert.deepEqual(decoded, data);
 	},
+
+	encodeFilterOct8: function() {
+		var data = new Float32Array([
+		    1, 0, 0, 0,
+		    0, -1, 0, 0,
+		    0.7071068, 0, 0.707168, 1,
+		    -0.7071068, 0, -0.707168, 1,
+		]);
+
+		var expected = new Uint8Array([
+		    0x7f, 0, 0x7f, 0,
+		    0, 0x81, 0x7f, 0,
+		    0x3f, 0, 0x7f, 0x7f,
+		    0x81, 0x40, 0x7f, 0x7f,
+		]);
+
+		// 4 vectors, encode each vector into 4 bytes with 8 bits of precision/component
+		var encoded = encoder.encodeFilterOct(data, 4, 4, 8);
+		assert.deepEqual(encoded, expected);
+	},
+
+	encodeFilterOct12: function() {
+		var data = new Float32Array([
+		    1, 0, 0, 0,
+		    0, -1, 0, 0,
+		    0.7071068, 0, 0.707168, 1,
+		    -0.7071068, 0, -0.707168, 1,
+		]);
+
+		var expected = new Uint16Array([
+		    0x7ff, 0, 0x7ff, 0,
+		    0x0, 0xf801, 0x7ff, 0,
+		    0x3ff, 0, 0x7ff, 0x7fff,
+		    0xf801, 0x400, 0x7ff, 0x7fff,
+		]);
+
+		// 4 vectors, encode each vector into 8 bytes with 12 bits of precision/component
+		var encoded = encoder.encodeFilterOct(data, 4, 8, 12);
+		assert.deepEqual(encoded, new Uint8Array(expected.buffer, expected.byteOffset, expected.byteLength));
+	},
+
+	encodeFilterQuat12: function() {
+		var data = new Float32Array([
+		    1, 0, 0, 0,
+		    0, -1, 0, 0,
+		    0.7071068, 0, 0, 0.707168,
+		    -0.7071068, 0, 0, -0.707168,
+		]);
+
+		var expected = new Uint16Array([
+		    0, 0, 0, 0x7fc,
+		    0, 0, 0, 0x7fd,
+		    0x7ff, 0, 0, 0x7ff,
+		    0x7ff, 0, 0, 0x7ff,
+		]);
+
+		// 4 quaternions, encode each quaternion into 8 bytes with 12 bits of precision/component
+		var encoded = encoder.encodeFilterQuat(data, 4, 8, 12);
+		assert.deepEqual(encoded, new Uint8Array(expected.buffer, expected.byteOffset, expected.byteLength));
+	},
+
+	encodeFilterExp: function() {
+		var data = new Float32Array([
+		    1,
+		    -23.4,
+		    -0.1,
+		]);
+
+		var expected = new Uint32Array([
+		    0xf7000200,
+		    0xf7ffd133,
+		    0xf7ffffcd,
+		]);
+
+		// 1 vector with 3 components (12 bytes), encode each vector into 12 bytes with 15 bits of precision/component
+		var encoded = encoder.encodeFilterExp(data, 1, 12, 15);
+		assert.deepEqual(encoded, new Uint8Array(expected.buffer, expected.byteOffset, expected.byteLength));
+	},
 };
 
 Promise.all([encoder.ready, decoder.ready]).then(() => {

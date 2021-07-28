@@ -52,7 +52,7 @@ var MeshoptEncoder = (function() {
 		target.set(heap.subarray(tp, tp + res));
 		sbrk(tp - sbrk(0));
 		return target;
-	};
+	}
 
 	function maxindex(source) {
 		var result = 0;
@@ -74,6 +74,19 @@ var MeshoptEncoder = (function() {
 		return result;
 	}
 
+	function filter(fun, source, count, stride, bits, insize) {
+		var sbrk = instance.exports.sbrk;
+		var tp = sbrk(count * stride);
+		var sp = sbrk(count * insize);
+		var heap = new Uint8Array(instance.exports.memory.buffer);
+		heap.set(new Uint8Array(source.buffer, source.byteOffset, source.byteLength), sp);
+		fun(tp, count, stride, bits, sp);
+		var target = new Uint8Array(count * stride);
+		target.set(heap.subarray(tp, tp + count * stride));
+		sbrk(tp - sbrk(0));
+		return target;
+	}
+
 	return {
 		ready: promise,
 		supported: true,
@@ -88,6 +101,15 @@ var MeshoptEncoder = (function() {
 		encodeIndexSequence: function(source, count) {
 			var bound = instance.exports.meshopt_encodeIndexSequenceBound(count, maxindex(source) + 1);
 			return encode(instance.exports.meshopt_encodeIndexSequence, bound, index32(source), count, 4);
+		},
+		encodeFilterOct: function(source, count, stride, bits) {
+			return filter(instance.exports.meshopt_encodeFilterOct, source, count, stride, bits, 4);
+		},
+		encodeFilterQuat: function(source, count, stride, bits) {
+			return filter(instance.exports.meshopt_encodeFilterQuat, source, count, stride, bits, 4);
+		},
+		encodeFilterExp: function(source, count, stride, bits) {
+			return filter(instance.exports.meshopt_encodeFilterExp, source, count, stride, bits, stride/4);
 		},
 	};
 })();
