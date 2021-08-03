@@ -7,6 +7,10 @@ process.on('unhandledRejection', error => {
 	process.exit(1);
 });
 
+function bytes(view) {
+	return new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+}
+
 var tests = {
 	reorderMesh: function() {
 		var indices = new Uint32Array([
@@ -129,7 +133,7 @@ var tests = {
 
 		// 4 vectors, encode each vector into 8 bytes with 12 bits of precision/component
 		var encoded = encoder.encodeFilterOct(data, 4, 8, 12);
-		assert.deepEqual(encoded, new Uint8Array(expected.buffer, expected.byteOffset, expected.byteLength));
+		assert.deepEqual(encoded, bytes(expected));
 	},
 
 	encodeFilterQuat12: function() {
@@ -149,7 +153,7 @@ var tests = {
 
 		// 4 quaternions, encode each quaternion into 8 bytes with 12 bits of precision/component
 		var encoded = encoder.encodeFilterQuat(data, 4, 8, 12);
-		assert.deepEqual(encoded, new Uint8Array(expected.buffer, expected.byteOffset, expected.byteLength));
+		assert.deepEqual(encoded, bytes(expected));
 	},
 
 	encodeFilterExp: function() {
@@ -167,7 +171,7 @@ var tests = {
 
 		// 1 vector with 3 components (12 bytes), encode each vector into 12 bytes with 15 bits of precision/component
 		var encoded = encoder.encodeFilterExp(data, 1, 12, 15);
-		assert.deepEqual(encoded, new Uint8Array(expected.buffer, expected.byteOffset, expected.byteLength));
+		assert.deepEqual(encoded, bytes(expected));
 	},
 };
 

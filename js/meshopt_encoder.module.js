@@ -41,6 +41,12 @@ var MeshoptEncoder = (function() {
 		return result.buffer.slice(0, write);
 	}
 
+	function assert(cond) {
+		if (!cond) {
+	        throw new Error("Assertion failed");
+		}
+	}
+
 	function reorder(indices, vertices, optf) {
 		var sbrk = instance.exports.sbrk;
 		var ip = sbrk(indices.length * 4);
@@ -119,6 +125,8 @@ var MeshoptEncoder = (function() {
 			return reorder(indices, maxindex(indices) + 1, optf);
 		},
 		encodeVertexBuffer: function(source, count, size) {
+			assert(size > 0 && size <= 256);
+			assert(size % 4 == 0);
 			var bound = instance.exports.meshopt_encodeVertexBufferBound(count, size);
 			return encode(instance.exports.meshopt_encodeVertexBuffer, bound, source, count, size);
 		},
@@ -131,12 +139,18 @@ var MeshoptEncoder = (function() {
 			return encode(instance.exports.meshopt_encodeIndexSequence, bound, index32(source), count, 4);
 		},
 		encodeFilterOct: function(source, count, stride, bits) {
+			assert(stride == 4 || stride == 8);
+			assert(bits >= 1 && bits <= 16);
 			return filter(instance.exports.meshopt_encodeFilterOct, source, count, stride, bits, 4);
 		},
 		encodeFilterQuat: function(source, count, stride, bits) {
+			assert(stride == 8);
+			assert(bits >= 4 && bits <= 16);
 			return filter(instance.exports.meshopt_encodeFilterQuat, source, count, stride, bits, 4);
 		},
 		encodeFilterExp: function(source, count, stride, bits) {
+			assert(stride > 0 && stride % 4 == 0);
+			assert(bits >= 1 && bits <= 24);
 			return filter(instance.exports.meshopt_encodeFilterExp, source, count, stride, bits, stride/4);
 		},
 	};
