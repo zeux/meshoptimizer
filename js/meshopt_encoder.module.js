@@ -43,7 +43,7 @@ var MeshoptEncoder = (function() {
 
 	function assert(cond) {
 		if (!cond) {
-	        throw new Error("Assertion failed");
+			throw new Error("Assertion failed");
 		}
 	}
 
@@ -93,15 +93,14 @@ var MeshoptEncoder = (function() {
 		return result;
 	}
 
-	function index32(source) {
-		if (source instanceof Uint32Array || source instanceof Int32Array) {
-			return source;
+	function index32(source, size) {
+		assert(size == 2 || size == 4);
+		if (size == 4) {
+			return new Uint32Array(source.buffer, source.byteOffset, source.byteLength / 4);
+		} else {
+			var view = new Uint16Array(source.buffer, source.byteOffset, source.byteLength / 2);
+			return new Uint32Array(view); // copies each element
 		}
-		var result = new Uint32Array(source.length);
-		for (var i = 0; i < source.length; ++i) {
-			result[i] = source[i];
-		}
-		return result;
 	}
 
 	function filter(fun, source, count, stride, bits, insize) {
@@ -130,13 +129,17 @@ var MeshoptEncoder = (function() {
 			var bound = instance.exports.meshopt_encodeVertexBufferBound(count, size);
 			return encode(instance.exports.meshopt_encodeVertexBuffer, bound, source, count, size);
 		},
-		encodeIndexBuffer: function(source, count) {
-			var bound = instance.exports.meshopt_encodeIndexBufferBound(count, maxindex(source) + 1);
-			return encode(instance.exports.meshopt_encodeIndexBuffer, bound, index32(source), count, 4);
+		encodeIndexBuffer: function(source, count, size) {
+			assert(size == 2 || size == 4);
+			var indices = index32(source, size);
+			var bound = instance.exports.meshopt_encodeIndexBufferBound(count, maxindex(indices) + 1);
+			return encode(instance.exports.meshopt_encodeIndexBuffer, bound, indices, count, 4);
 		},
-		encodeIndexSequence: function(source, count) {
-			var bound = instance.exports.meshopt_encodeIndexSequenceBound(count, maxindex(source) + 1);
-			return encode(instance.exports.meshopt_encodeIndexSequence, bound, index32(source), count, 4);
+		encodeIndexSequence: function(source, count, size) {
+			assert(size == 2 || size == 4);
+			var indices = index32(source, size);
+			var bound = instance.exports.meshopt_encodeIndexSequenceBound(count, maxindex(indices) + 1);
+			return encode(instance.exports.meshopt_encodeIndexSequence, bound, indices, count, 4);
 		},
 		encodeFilterOct: function(source, count, stride, bits) {
 			assert(stride == 4 || stride == 8);

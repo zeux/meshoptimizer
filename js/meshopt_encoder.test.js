@@ -59,9 +59,9 @@ var tests = {
 	roundtripIndexBuffer: function() {
 		var data = new Uint32Array([0, 1, 2, 2, 1, 3, 4, 6, 5, 7, 8, 9]);
 
-		var encoded = encoder.encodeIndexBuffer(data, data.length);
+		var encoded = encoder.encodeIndexBuffer(bytes(data), data.length, 4);
 		var decoded = new Uint32Array(data.length);
-		decoder.decodeIndexBuffer(new Uint8Array(decoded.buffer), data.length, 4, encoded);
+		decoder.decodeIndexBuffer(bytes(decoded), data.length, 4, encoded);
 
 		assert.deepEqual(decoded, data);
 	},
@@ -69,9 +69,9 @@ var tests = {
 	roundtripIndexBuffer16: function() {
 		var data = new Uint16Array([0, 1, 2, 2, 1, 3, 4, 6, 5, 7, 8, 9]);
 
-		var encoded = encoder.encodeIndexBuffer(data, data.length);
+		var encoded = encoder.encodeIndexBuffer(bytes(data), data.length, 2);
 		var decoded = new Uint16Array(data.length);
-		decoder.decodeIndexBuffer(new Uint8Array(decoded.buffer), data.length, 2, encoded);
+		decoder.decodeIndexBuffer(bytes(decoded), data.length, 2, encoded);
 
 		assert.deepEqual(decoded, data);
 	},
@@ -79,9 +79,9 @@ var tests = {
 	roundtripIndexSequence: function() {
 		var data = new Uint32Array([0, 1, 51, 2, 49, 1000]);
 
-		var encoded = encoder.encodeIndexSequence(data, data.length);
+		var encoded = encoder.encodeIndexSequence(bytes(data), data.length, 4);
 		var decoded = new Uint32Array(data.length);
-		decoder.decodeIndexSequence(new Uint8Array(decoded.buffer), data.length, 4, encoded);
+		decoder.decodeIndexSequence(bytes(decoded), data.length, 4, encoded);
 
 		assert.deepEqual(decoded, data);
 	},
@@ -89,9 +89,9 @@ var tests = {
 	roundtripIndexSequence16: function() {
 		var data = new Uint16Array([0, 1, 51, 2, 49, 1000]);
 
-		var encoded = encoder.encodeIndexSequence(data, data.length);
+		var encoded = encoder.encodeIndexSequence(bytes(data), data.length, 2);
 		var decoded = new Uint16Array(data.length);
-		decoder.decodeIndexSequence(new Uint8Array(decoded.buffer), data.length, 2, encoded);
+		decoder.decodeIndexSequence(bytes(decoded), data.length, 2, encoded);
 
 		assert.deepEqual(decoded, data);
 	},
