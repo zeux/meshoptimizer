@@ -52,7 +52,7 @@ var MeshoptEncoder = (function() {
 		var ip = sbrk(indices.length * 4);
 		var rp = sbrk(vertices * 4);
 		var heap = new Uint8Array(instance.exports.memory.buffer);
-		var indices8 =new Uint8Array(indices.buffer, indices.byteOffset, indices.byteLength);
+		var indices8 = new Uint8Array(indices.buffer, indices.byteOffset, indices.byteLength);
 		heap.set(indices8, ip);
 		if (optf) {
 			optf(ip, ip, indices.length, vertices);
@@ -142,7 +142,11 @@ var MeshoptEncoder = (function() {
 			return encode(instance.exports.meshopt_encodeIndexSequence, bound, indices, count, 4);
 		},
 		encodeGltfBuffer: function(source, count, size, mode) {
-			var table = { ATTRIBUTES: this.encodeVertexBuffer, TRIANGLES: this.encodeIndexBuffer, INDICES: this.encodeIndexSequence };
+			var table = {
+				ATTRIBUTES: this.encodeVertexBuffer,
+				TRIANGLES: this.encodeIndexBuffer,
+				INDICES: this.encodeIndexSequence,
+			};
 			assert(table[mode]);
 			return table[mode](source, count, size);
 		},
