@@ -141,6 +141,11 @@ var MeshoptEncoder = (function() {
 			var bound = instance.exports.meshopt_encodeIndexSequenceBound(count, maxindex(indices) + 1);
 			return encode(instance.exports.meshopt_encodeIndexSequence, bound, indices, count, 4);
 		},
+		encodeGltfBuffer: function(source, count, size, mode) {
+			var table = { ATTRIBUTES: this.encodeVertexBuffer, TRIANGLES: this.encodeIndexBuffer, INDICES: this.encodeIndexSequence };
+			assert(table[mode]);
+			return table[mode](source, count, size);
+		},
 		encodeFilterOct: function(source, count, stride, bits) {
 			assert(stride == 4 || stride == 8);
 			assert(bits >= 1 && bits <= 16);

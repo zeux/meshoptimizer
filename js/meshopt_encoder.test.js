@@ -173,6 +173,16 @@ var tests = {
 		var encoded = encoder.encodeFilterExp(data, 1, 12, 15);
 		assert.deepEqual(encoded, bytes(expected));
 	},
+
+	encodeGltfBuffer: function() {
+		var data = new Uint32Array([0, 1, 2, 2, 1, 3, 4, 6, 5, 7, 8, 9]);
+
+		var encoded = encoder.encodeGltfBuffer(bytes(data), data.length, 4, 'TRIANGLES');
+		var decoded = new Uint32Array(data.length);
+		decoder.decodeGltfBuffer(bytes(decoded), data.length, 4, encoded, 'TRIANGLES');
+
+		assert.deepEqual(decoded, data);
+	},
 };
 
 Promise.all([encoder.ready, decoder.ready]).then(() => {
