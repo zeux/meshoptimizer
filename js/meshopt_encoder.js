@@ -131,6 +131,7 @@ var MeshoptEncoder = (function() {
 		},
 		encodeIndexBuffer: function(source, count, size) {
 			assert(size == 2 || size == 4);
+			assert(count % 3 == 0);
 			var indices = index32(source, size);
 			var bound = instance.exports.meshopt_encodeIndexBufferBound(count, maxindex(indices) + 1);
 			return encode(instance.exports.meshopt_encodeIndexBuffer, bound, indices, count, 4);
