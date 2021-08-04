@@ -104,3 +104,7 @@ encodeGltfBuffer: (source: Uint8Array, count: number, size: number, mode: string
 Note that the source is specified as byte arrays; for example, to quantize a position stream encoded using 16-bit integers with 5 vertices, `source` must have length of `5 * 8 = 40` bytes (8 bytes for each position - 3\*2 bytes of data and 2 bytes of padding to conform to alignment requirements), `count` must be 5 and `size` must be 8. When padding data to the alignment boundary make sure to use 0 as padding bytes for optimal compression.
 
 When interleaved vertex data is compressed, `encodeVertexBuffer` can be called with the full size of a single interleaved vertex; however, when compressing deinterleaved data, note that `encodeVertexBuffer` should be called on each component individually if the strides of different streams are different.
+
+## License
+
+This library is available to anybody free of charge, under the terms of MIT License (see LICENSE.md).
