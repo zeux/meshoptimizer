@@ -15,7 +15,7 @@
 		"url": "https://github.com/zeux/meshoptimizer"
 	},
 	"files": [
-		"meshopt_*.js"
+		"*.js", "*.ts"
 	],
 	"scripts": {
 		"test": "node meshopt_encoder.test.js && node meshopt_decoder.test.js",
