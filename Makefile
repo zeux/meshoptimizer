@@ -17,7 +17,7 @@ GLTFPACK_OBJECTS=$(GLTFPACK_SOURCES:%=$(BUILD)/%.o)
 OBJECTS=$(LIBRARY_OBJECTS) $(DEMO_OBJECTS) $(GLTFPACK_OBJECTS)
 
 LIBRARY=$(BUILD)/libmeshoptimizer.a
-EXECUTABLE=$(BUILD)/meshoptimizer
+DEMO=$(BUILD)/meshoptimizer
 
 CFLAGS=-g -Wall -Wextra -Werror -std=c89
 CXXFLAGS=-g -Wall -Wextra -Wshadow -Wno-missing-field-initializers -Werror -std=c++98
@@ -75,23 +75,26 @@ ifeq ($(config),analyze)
 	CXXFLAGS+=--analyze
 endif
 
-all: $(EXECUTABLE)
+all: $(DEMO) gltfpack
 
-test: $(EXECUTABLE)
-	$(EXECUTABLE) $(files)
+test: $(DEMO)
+	$(DEMO) $(files)
 
-check: $(EXECUTABLE)
-	$(EXECUTABLE)
+check: $(DEMO)
+	$(DEMO)
 
-dev: $(EXECUTABLE)
-	$(EXECUTABLE) -d $(files)
+dev: $(DEMO)
+	$(DEMO) -d $(files)
 
 format:
 	clang-format -i $(LIBRARY_SOURCES) $(DEMO_SOURCES) $(GLTFPACK_SOURCES)
 
 js: js/meshopt_decoder.js js/meshopt_decoder.module.js js/meshopt_encoder.js js/meshopt_encoder.module.js js/meshopt_simplifier.js js/meshopt_simplifier.module.js
 
-gltfpack: $(GLTFPACK_OBJECTS) $(LIBRARY)
+gltfpack: $(BUILD)/gltfpack
+	cp $^ $@
+
+$(BUILD)/gltfpack: $(GLTFPACK_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
 
 gltfpack.wasm: gltf/library.wasm
@@ -132,7 +135,7 @@ js/%.module.js: js/%.js
 	sed '/UMD-style export/,$$d' <$< >$@
 	sed -n "s#\s*module.exports = \(.*\);#export { \\1 };#p" <$< >>$@
 
-$(EXECUTABLE): $(DEMO_OBJECTS) $(LIBRARY)
+$(DEMO): $(DEMO_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
 
 vcachetuner: tools/vcachetuner.cpp $(BUILD)/tools/meshloader.cpp.o $(BUILD)/demo/miniz.cpp.o $(LIBRARY)
