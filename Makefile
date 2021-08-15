@@ -75,7 +75,7 @@ ifeq ($(config),analyze)
 	CXXFLAGS+=--analyze
 endif
 
-all: $(DEMO) gltfpack
+all: $(DEMO)
 
 test: $(DEMO)
 	$(DEMO) $(files)
