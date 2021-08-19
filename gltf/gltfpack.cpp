@@ -240,6 +240,15 @@ static bool printReport(const char* path, cgltf_data* data, const std::vector<Bu
 	return rc == 0;
 }
 
+static bool canTransformMesh(const Mesh& mesh)
+{
+	// volume thickness is specified in mesh coordinate space; to avoid modifying materials we prohibit transforming meshes with volume materials
+	if (mesh.material && mesh.material->has_volume && mesh.material->volume.thickness_factor > 0.f)
+		return false;
+
+	return true;
+}
+
 static void process(cgltf_data* data, const char* input_path, const char* output_path, const char* report_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const std::string& extras, const Settings& settings, std::string& json, std::string& bin, std::string& fallback, size_t& fallback_size)
 {
 	if (settings.verbose)
@@ -309,15 +318,15 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 				cgltf_node_transform_world(mesh.nodes[j], mesh.instances[j].data);
 
 			mesh.nodes.clear();
+			mesh.scene = scene;
 		}
-		else
+		else if (canTransformMesh(mesh))
 		{
 			mergeMeshInstances(mesh);
+
+			assert(mesh.nodes.empty());
+			mesh.scene = scene;
 		}
-
-		mesh.scene = scene;
-
-		assert(mesh.nodes.empty());
 	}
 
 	// material information is required for mesh and image processing
@@ -480,7 +489,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 		comma(json_materials);
 		append(json_materials, "{");
-		writeMaterial(json_materials, data, material, settings.quantize ? &qt_materials[i] : NULL);
+		writeMaterial(json_materials, data, material, settings.quantize ? &qp : NULL, settings.quantize ? &qt_materials[i] : NULL);
 		if (settings.keep_extras)
 			writeExtras(json_materials, extras, material.extras);
 		append(json_materials, "}");
