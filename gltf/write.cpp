@@ -454,7 +454,7 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 	append(json, "}");
 }
 
-static void writeMaterialComponent(std::string& json, const cgltf_data* data, const cgltf_volume& tm, const QuantizationTexture* qt)
+static void writeMaterialComponent(std::string& json, const cgltf_data* data, const cgltf_volume& tm, const QuantizationPosition* qp, const QuantizationTexture* qt)
 {
 	comma(json);
 	append(json, "\"KHR_materials_volume\":{");
@@ -466,9 +466,12 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 	}
 	if (tm.thickness_factor != 0)
 	{
+		// thickness is in mesh coordinate space which is rescaled by quantization
+		float node_scale = qp ? qp->scale / float((1 << qp->bits) - 1) : 1.f;
+
 		comma(json);
 		append(json, "\"thicknessFactor\":");
-		append(json, tm.thickness_factor);
+		append(json, tm.thickness_factor / node_scale);
 	}
 	if (memcmp(tm.attenuation_color, white, 12) != 0)
 	{
@@ -490,7 +493,7 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 	append(json, "}");
 }
 
-void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationTexture* qt)
+void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationPosition* qp, const QuantizationTexture* qt)
 {
 	if (material.name && *material.name)
 	{
@@ -596,7 +599,7 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 
 		if (material.has_volume)
 		{
-			writeMaterialComponent(json, data, material.volume, qt);
+			writeMaterialComponent(json, data, material.volume, qp, qt);
 		}
 
 		if (material.unlit)
