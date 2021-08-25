@@ -107,7 +107,6 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
     // Filters - only applied if filter isn't undefined or NONE
     if (filter === 'OCTAHEDRAL') {
         assert(byteStride === 4 || byteStride === 8);
-        assert(elementCount % 4 === 0);
 
         let values, intmax;
         if (byteStride === 4) {
@@ -134,7 +133,6 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
         }
     } else if (filter === 'QUATERNION') {
         assert(byteStride === 8);
-        assert(elementCount % 4 === 0);
 
         const values = new Int16Array(target.buffer);
 
