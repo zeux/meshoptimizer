@@ -24,18 +24,13 @@ function copysign(mag, sign) {
 }
 
 MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, filter) => {
-    if (source[0] !== 0xA0) {
-        // Invalid header byte; maybe emit warning?
-        return;
-    }
+    assert(source[0] === 0xA0);
 
-    const attrBlockMaxElementCount = Math.min((0x2000 / byteStride) & ~0x000F, 0x100);
+    const maxBlockElements = Math.min((0x2000 / byteStride) & ~0x000F, 0x100);
 
     const deltas = new Uint8Array(0x10);
 
-    // XXX(jstpierre): Not sure how best to calculate location of tail -- best I can come up with is source.byteLength,
-    // but it's possible we want the user to pass an explicit stream length here?
-    const tailDataOffs = source.byteLength - byteStride;
+    const tailDataOffs = source.length - byteStride;
 
     // what deltas are stored relative to
     const tempData = source.slice(tailDataOffs, tailDataOffs + byteStride);
@@ -43,8 +38,8 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
     let srcOffs = 0x01;
 
     // Attribute Blocks
-    for (let dstElemBase = 0; dstElemBase < elementCount; dstElemBase += attrBlockMaxElementCount) {
-        const attrBlockElementCount = Math.min(elementCount - dstElemBase, attrBlockMaxElementCount);
+    for (let dstElemBase = 0; dstElemBase < elementCount; dstElemBase += maxBlockElements) {
+        const attrBlockElementCount = Math.min(elementCount - dstElemBase, maxBlockElements);
         const groupCount = ((attrBlockElementCount + 0x0F) & ~0x0F) >>> 4;
         const headerByteCount = ((groupCount + 0x03) & ~0x03) >>> 2;
 
@@ -109,7 +104,11 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
         }
     }
 
+    // Filters - only applied if filter isn't undefined or NONE
     if (filter === 'OCTAHEDRAL') {
+        assert(byteStride === 4 || byteStride === 8);
+        assert(elementCount % 4 === 0);
+
         let values, intmax;
         if (byteStride === 4) {
             values = new Int8Array(target.buffer);
@@ -131,10 +130,11 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
             values[i + 0] = Math.round(x * h);
             values[i + 1] = Math.round(y * h);
             values[i + 2] = Math.round(z * h);
+            // keep values[i + 3] as is
         }
     } else if (filter === 'QUATERNION') {
-        if (byteStride !== 8)
-            return;
+        assert(byteStride === 8);
+        assert(elementCount % 4 === 0);
 
         const values = new Int16Array(target.buffer);
 
@@ -152,13 +152,14 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
             values[i + (maxc + 0) % 4] = Math.round(w * 32767);
         }
     } else if (filter === 'EXPONENTIAL') {
-        if (byteStride !== 16)
-            return;
+        assert(byteStride % 4 === 0);
 
         const input = new Int32Array(target.buffer);
         const output = new Float32Array(target.buffer);
-        for (let i = 0; i < (byteStride * elementCount) / 4; i++) {
-            const v = input[i], e = v >> 24, m = (v << 8) >> 8;
+        for (let i = 0; i < elementCount * (byteStride / 4); i++) {
+            const v = input[i];
+            const e = v >> 24;
+            const m = (v << 8) >> 8;
             output[i] = 2.0**e * m;
         }
     }
@@ -171,26 +172,21 @@ function pushfifo(fifo, n) {
 }
 
 MeshoptDecoder.decodeIndexBuffer = (target, count, byteStride, source) => {
-    if (source[0] !== 0xE1) {
-        // Invalid header byte; maybe emit warning?
-        return;
-    }
-
-    if (count % 3 !== 0)
-        return;
+    assert(source[0] === 0xE1);
+    assert(count % 3 === 0);
+    assert(byteStride === 2 || byteStride === 4);
 
     let dst;
     if (byteStride === 2)
         dst = new Uint16Array(target.buffer);
-    else if (byteStride === 4)
-        dst = new Uint32Array(target.buffer);
     else
-        return;
+        dst = new Uint32Array(target.buffer);
 
     const triCount = count / 3;
+
     let codeOffs = 0x01;
     let dataOffs = codeOffs + triCount;
-    let codeauxOffs = source.byteLength - 0x10;
+    let codeauxOffs = source.length - 0x10;
 
     function readLEB128() {
         let n = 0;
@@ -204,7 +200,8 @@ MeshoptDecoder.decodeIndexBuffer = (target, count, byteStride, source) => {
     }
 
     let next = 0, last = 0;
-    const edgefifo = new Uint32Array(32), vertexfifo = new Uint32Array(16);
+    const edgefifo = new Uint32Array(32);
+    const vertexfifo = new Uint32Array(16);
 
     function decodeIndex(v) {
         return (last += dezig(v));
@@ -311,18 +308,14 @@ MeshoptDecoder.decodeIndexBuffer = (target, count, byteStride, source) => {
 };
 
 MeshoptDecoder.decodeIndexSequence = (target, count, byteStride, source) => {
-    if (source[0] !== 0xD1) {
-        // Invalid header byte; maybe emit warning?
-        return;
-    }
+    assert(source[0] === 0xD1);
+    assert(byteStride === 2 || byteStride === 4);
 
     let dst;
     if (byteStride === 2)
         dst = new Uint16Array(target.buffer);
-    else if (byteStride === 4)
-        dst = new Uint32Array(target.buffer);
     else
-        return;
+        dst = new Uint32Array(target.buffer);
 
     let dataOffs = 0x01;
 
@@ -353,6 +346,7 @@ MeshoptDecoder.decodeGltfBuffer = (target, count, size, source, mode, filter) =>
         TRIANGLES: MeshoptDecoder.decodeIndexBuffer,
         INDICES: MeshoptDecoder.decodeIndexSequence,
     };
+    assert(table[mode] !== undefined);
     table[mode](target, count, size, source, filter);
 };
 
