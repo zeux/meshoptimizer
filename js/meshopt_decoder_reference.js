@@ -352,7 +352,5 @@ MeshoptDecoder.decodeGltfBuffer = (target, count, size, source, mode, filter) =>
 
 // node.js interface:
 // for (let k in MeshoptDecoder) { exports[k] = MeshoptDecoder[k]; }
-// ES module interface:
-// export { MeshoptDecoder };
 
-for (let k in MeshoptDecoder) { exports[k] = MeshoptDecoder[k]; }
+export { MeshoptDecoder };
