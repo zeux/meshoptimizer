@@ -34,16 +34,16 @@ static float getDeltaTolerance(cgltf_animation_path_type type)
 	switch (type)
 	{
 	case cgltf_animation_path_type_translation:
-		return 0.001f; // linear
+		return 0.0001f; // 0.1mm linear
 
 	case cgltf_animation_path_type_rotation:
-		return 0.1f * (3.1415926f / 180.f); // 0.1 degrees delta
+		return 0.1f * (3.1415926f / 180.f); // 0.1 degrees
 
 	case cgltf_animation_path_type_scale:
-		return 0.001f; // 0.1% delta (ratio)
+		return 0.001f; // 0.1% ratio
 
 	case cgltf_animation_path_type_weights:
-		return 0.001f; // 0.1% delta (linear)
+		return 0.001f; // 0.1% linear
 
 	default:
 		assert(!"Uknown animation path");
