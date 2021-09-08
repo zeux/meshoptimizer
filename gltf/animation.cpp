@@ -37,13 +37,13 @@ static float getDeltaTolerance(cgltf_animation_path_type type)
 		return 0.001f; // linear
 
 	case cgltf_animation_path_type_rotation:
-		return 0.001f; // radians
+		return 0.1f * (3.1415926f / 180.f); // 0.1 degrees delta
 
 	case cgltf_animation_path_type_scale:
-		return 0.001f; // ratio
+		return 0.001f; // 0.1% delta (ratio)
 
 	case cgltf_animation_path_type_weights:
-		return 0.001f; // linear
+		return 0.001f; // 0.1% delta (linear)
 
 	default:
 		assert(!"Uknown animation path");
@@ -207,9 +207,11 @@ static void resampleKeyframes(std::vector<Attr>& data, const std::vector<float>&
 	}
 }
 
-static bool isTrackEqual(const std::vector<Attr>& data, cgltf_animation_path_type type, int frames, const Attr* value, size_t components, float tolerance)
+static float getMaxDelta(const std::vector<Attr>& data, cgltf_animation_path_type type, int frames, const Attr* value, size_t components)
 {
 	assert(data.size() == frames * components);
+
+	float result = 0;
 
 	for (int i = 0; i < frames; ++i)
 	{
@@ -217,12 +219,11 @@ static bool isTrackEqual(const std::vector<Attr>& data, cgltf_animation_path_typ
 		{
 			float delta = getDelta(value[j], data[i * components + j], type);
 
-			if (delta > tolerance)
-				return false;
+			result = (result < delta) ? delta : result;
 		}
 	}
 
-	return true;
+	return result;
 }
 
 static void getBaseTransform(Attr* result, size_t components, cgltf_animation_path_type type, cgltf_node* node)
@@ -317,7 +318,9 @@ void processAnimation(Animation& animation, const Settings& settings)
 			tolerance /= scale == 0.f ? 1.f : scale;
 		}
 
-		if (isTrackEqual(track.data, track.path, frames, &track.data[0], track.components, tolerance))
+		float deviation = getMaxDelta(track.data, track.path, frames, &track.data[0], track.components);
+
+		if (deviation <= tolerance)
 		{
 			// track is constant (equal to first keyframe), we only need the first keyframe
 			track.constant = true;
@@ -327,7 +330,7 @@ void processAnimation(Animation& animation, const Settings& settings)
 			base.resize(track.components);
 			getBaseTransform(&base[0], track.components, track.path, track.node);
 
-			track.dummy = isTrackEqual(track.data, track.path, 1, &base[0], track.components, tolerance);
+			track.dummy = getMaxDelta(track.data, track.path, 1, &base[0], track.components) <= tolerance;
 		}
 	}
 }
