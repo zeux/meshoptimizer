@@ -77,6 +77,8 @@
 #endif
 
 #ifdef SIMD_WASM
+#undef __DEPRECATED
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #include <wasm_simd128.h>
 #endif
 
