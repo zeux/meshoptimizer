@@ -145,10 +145,10 @@ codecbench: tools/codecbench.cpp $(LIBRARY)
 	$(CXX) $^ $(CXXFLAGS) $(LDFLAGS) -o $@
 
 codecbench.js: tools/codecbench.cpp ${LIBRARY_SOURCES}
-	emcc $^ -O3 -g -DNDEBUG -s TOTAL_MEMORY=268435456 -o $@
+	emcc $^ -O3 -g -DNDEBUG -s TOTAL_MEMORY=268435456 -s SINGLE_FILE=1 -o $@
 
 codecbench-simd.js: tools/codecbench.cpp ${LIBRARY_SOURCES}
-	emcc $^ -O3 -g -DNDEBUG -s TOTAL_MEMORY=268435456 -msimd128 -o $@
+	emcc $^ -O3 -g -DNDEBUG -s TOTAL_MEMORY=268435456 -s SINGLE_FILE=1 -msimd128 -o $@
 
 codecbench.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
 	$(WASMCC) $^ -fno-exceptions --target=wasm32-wasi --sysroot=$(WASI_SDK) -lc++ -lc++abi -O3 -g -DNDEBUG -o $@
