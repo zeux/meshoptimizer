@@ -144,11 +144,17 @@ vcachetuner: tools/vcachetuner.cpp $(BUILD)/tools/meshloader.cpp.o $(BUILD)/demo
 codecbench: tools/codecbench.cpp $(LIBRARY)
 	$(CXX) $^ $(CXXFLAGS) $(LDFLAGS) -o $@
 
-codecbench.js codecbench.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
-	emcc $^ -O3 -g -DNDEBUG -s TOTAL_MEMORY=268435456 -o $@
+codecbench.js: tools/codecbench.cpp ${LIBRARY_SOURCES}
+	emcc $^ -O3 -g -DNDEBUG -s TOTAL_MEMORY=268435456 -s SINGLE_FILE=1 -o $@
 
-codecbench-simd.js codecbench-simd.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
-	emcc $^ -O3 -g -DNDEBUG -s TOTAL_MEMORY=268435456 -msimd128 -o $@
+codecbench-simd.js: tools/codecbench.cpp ${LIBRARY_SOURCES}
+	emcc $^ -O3 -g -DNDEBUG -s TOTAL_MEMORY=268435456 -s SINGLE_FILE=1 -msimd128 -o $@
+
+codecbench.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
+	$(WASMCC) $^ -fno-exceptions --target=wasm32-wasi --sysroot=$(WASI_SDK) -lc++ -lc++abi -O3 -g -DNDEBUG -o $@
+
+codecbench-simd.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
+	$(WASMCC) $^ -fno-exceptions --target=wasm32-wasi --sysroot=$(WASI_SDK) -lc++ -lc++abi -O3 -g -DNDEBUG -msimd128 -o $@
 
 codecfuzz: tools/codecfuzz.cpp src/vertexcodec.cpp src/indexcodec.cpp
 	$(CXX) $^ -fsanitize=fuzzer,address,undefined -O1 -g -o $@
