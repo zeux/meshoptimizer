@@ -529,7 +529,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 			append(json_meshes, "{\"attributes\":{");
 			writeMeshAttributes(json_meshes, views, json_accessors, accr_offset, prim, 0, qp, qt, settings);
 			append(json_meshes, "}");
-			if (prim.type != 4)
+			if (prim.type != cgltf_primitive_type_triangles)
 			{
 				append(json_meshes, ",\"mode\":");
 				append(json_meshes, size_t(prim.type));
