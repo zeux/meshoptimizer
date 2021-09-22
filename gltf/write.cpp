@@ -187,8 +187,11 @@ static void writeTextureInfo(std::string& json, const cgltf_data* data, const cg
 
 	append(json, "{\"index\":");
 	append(json, size_t(view.texture - data->textures));
-	append(json, ",\"texCoord\":");
-	append(json, size_t(view.texcoord));
+	if (view.texcoord != 0)
+	{
+		append(json, ",\"texCoord\":");
+		append(json, size_t(view.texcoord));
+	}
 	if (scale && view.scale != 1)
 	{
 		append(json, ",\"");
