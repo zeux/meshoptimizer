@@ -332,21 +332,28 @@ void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials,
 	}
 }
 
-static void analyzeMaterialTexture(cgltf_texture_view& view, TextureKind kind, MaterialInfo& mi, cgltf_data* data, std::vector<ImageInfo>& images)
+bool hasValidTransform(const cgltf_texture_view& view)
 {
-	// if the texture transform is just the default values, disable
-	if (view.has_transform &&
-		view.transform.offset[0] == 0.0f &&
-		view.transform.offset[1] == 0.0f &&
-		view.transform.scale[0] == 1.0f &&
-		view.transform.scale[1] == 1.0f &&
-		view.transform.rotation == 0.0f &&
-		view.transform.texcoord == view.texcoord)
+	if (view.has_transform)
 	{
-		view.has_transform = 0;
+		if (view.transform.offset[0] != 0.0f ||
+			view.transform.offset[1] != 0.0f ||
+			view.transform.scale[0] != 1.0f ||
+			view.transform.scale[1] != 1.0f ||
+			view.transform.rotation != 0.0f)
+			return true;
+
+		if (view.transform.has_texcoord &&
+			view.transform.texcoord != view.texcoord)
+			return true;
 	}
 
-	mi.usesTextureTransform |= bool(view.has_transform);
+	return false;
+}
+
+static void analyzeMaterialTexture(const cgltf_texture_view& view, TextureKind kind, MaterialInfo& mi, cgltf_data* data, std::vector<ImageInfo>& images)
+{
+	mi.usesTextureTransform |= hasValidTransform(view);
 
 	if (view.texture && view.texture->image)
 	{
@@ -365,7 +372,7 @@ static void analyzeMaterialTexture(cgltf_texture_view& view, TextureKind kind, M
 	}
 }
 
-static void analyzeMaterial(cgltf_material& material, MaterialInfo& mi, cgltf_data* data, std::vector<ImageInfo>& images)
+static void analyzeMaterial(const cgltf_material& material, MaterialInfo& mi, cgltf_data* data, std::vector<ImageInfo>& images)
 {
 	if (material.has_pbr_metallic_roughness)
 	{
