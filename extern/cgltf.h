@@ -1,7 +1,7 @@
 /**
  * cgltf - a single-file glTF 2.0 parser written in C99.
  *
- * Version: 1.10
+ * Version: 1.11
  *
  * Website: https://github.com/jkuhlmann/cgltf
  *
@@ -234,6 +234,12 @@ typedef enum cgltf_light_type {
 	cgltf_light_type_spot,
 } cgltf_light_type;
 
+typedef enum cgltf_data_free_method {
+	cgltf_data_free_method_none,
+	cgltf_data_free_method_file_release,
+	cgltf_data_free_method_memory_free,
+} cgltf_data_free_method;
+
 typedef struct cgltf_extras {
 	cgltf_size start_offset;
 	cgltf_size end_offset;
@@ -250,6 +256,7 @@ typedef struct cgltf_buffer
 	cgltf_size size;
 	char* uri;
 	void* data; /* loaded by cgltf_load_buffers */
+	cgltf_data_free_method data_free_method;
 	cgltf_extras extras;
 	cgltf_size extensions_count;
 	cgltf_extension* extensions;
@@ -384,6 +391,7 @@ typedef struct cgltf_texture_transform
 	cgltf_float offset[2];
 	cgltf_float rotation;
 	cgltf_float scale[2];
+	cgltf_bool has_texcoord;
 	cgltf_int texcoord;
 } cgltf_texture_transform;
 
@@ -1131,8 +1139,8 @@ cgltf_result cgltf_parse_file(const cgltf_options* options, const char* path, cg
 		return cgltf_result_invalid_options;
 	}
 
-	void (*memory_free)(void*, void*) = options->memory.free ? options->memory.free : &cgltf_default_free;
 	cgltf_result (*file_read)(const struct cgltf_memory_options*, const struct cgltf_file_options*, const char*, cgltf_size*, void**) = options->file.read ? options->file.read : &cgltf_default_file_read;
+	void (*file_release)(const struct cgltf_memory_options*, const struct cgltf_file_options*, void* data) = options->file.release ? options->file.release : cgltf_default_file_release;
 
 	void* file_data = NULL;
 	cgltf_size file_size = 0;
@@ -1146,7 +1154,7 @@ cgltf_result cgltf_parse_file(const cgltf_options* options, const char* path, cg
 
 	if (result != cgltf_result_success)
 	{
-		memory_free(options->memory.user_data, file_data);
+		file_release(&options->memory, &options->file, file_data);
 		return result;
 	}
 
@@ -1302,6 +1310,7 @@ cgltf_result cgltf_load_buffers(const cgltf_options* options, cgltf_data* data, 
 		}
 
 		data->buffers[0].data = (void*)data->bin;
+		data->buffers[0].data_free_method = cgltf_data_free_method_none;
 	}
 
 	for (cgltf_size i = 0; i < data->buffers_count; ++i)
@@ -1325,6 +1334,7 @@ cgltf_result cgltf_load_buffers(const cgltf_options* options, cgltf_data* data, 
 			if (comma && comma - uri >= 7 && strncmp(comma - 7, ";base64", 7) == 0)
 			{
 				cgltf_result res = cgltf_load_buffer_base64(options, data->buffers[i].size, comma + 1, &data->buffers[i].data);
+				data->buffers[i].data_free_method = cgltf_data_free_method_memory_free;
 
 				if (res != cgltf_result_success)
 				{
@@ -1339,6 +1349,7 @@ cgltf_result cgltf_load_buffers(const cgltf_options* options, cgltf_data* data, 
 		else if (strstr(uri, "://") == NULL && gltf_path)
 		{
 			cgltf_result res = cgltf_load_buffer_file(options, data->buffers[i].size, uri, gltf_path, &data->buffers[i].data);
+			data->buffers[i].data_free_method = cgltf_data_free_method_file_release;
 
 			if (res != cgltf_result_success)
 			{
@@ -1666,10 +1677,15 @@ void cgltf_free(cgltf_data* data)
 	{
 		data->memory.free(data->memory.user_data, data->buffers[i].name);
 
-		if (data->buffers[i].data != data->bin)
+		if (data->buffers[i].data_free_method == cgltf_data_free_method_file_release)
 		{
 			file_release(&data->memory, &data->file, data->buffers[i].data);
 		}
+		else if (data->buffers[i].data_free_method == cgltf_data_free_method_memory_free)
+		{
+			data->memory.free(data->memory.user_data, data->buffers[i].data);
+		}
+
 		data->memory.free(data->memory.user_data, data->buffers[i].uri);
 
 		cgltf_free_extensions(data, data->buffers[i].extensions, data->buffers[i].extensions_count);
@@ -3290,6 +3306,7 @@ static int cgltf_parse_json_texture_transform(jsmntok_t const* tokens, int i, co
 		else if (cgltf_json_strcmp(tokens + i, json_chunk, "texCoord") == 0)
 		{
 			++i;
+			out_texture_transform->has_texcoord = 1;
 			out_texture_transform->texcoord = cgltf_json_to_int(tokens + i, json_chunk);
 			++i;
 		}
@@ -6395,7 +6412,7 @@ static void jsmn_init(jsmn_parser *parser) {
 
 /* cgltf is distributed under MIT license:
  *
- * Copyright (c) 2018 Johannes Kuhlmann
+ * Copyright (c) 2018-2021 Johannes Kuhlmann
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
