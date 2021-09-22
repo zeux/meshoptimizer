@@ -641,11 +641,8 @@ void writeBufferView(std::string& json, BufferView::Kind kind, StreamFormat::Fil
 
 	append(json, "{\"buffer\":");
 	append(json, buffer);
-	if (bin_offset != 0)
-	{
-		append(json, ",\"byteOffset\":");
-		append(json, bin_offset);
-	}
+	append(json, ",\"byteOffset\":");
+	append(json, bin_offset);
 	append(json, ",\"byteLength\":");
 	append(json, bin_size);
 	if (kind == BufferView::Kind_Vertex)
@@ -689,11 +686,8 @@ static void writeAccessor(std::string& json, size_t view, size_t offset, cgltf_t
 {
 	append(json, "{\"bufferView\":");
 	append(json, view);
-	if (offset != 0)
-	{
-		append(json, ",\"byteOffset\":");
-		append(json, offset);
-	}
+	append(json, ",\"byteOffset\":");
+	append(json, offset);
 	append(json, ",\"componentType\":");
 	append(json, componentType(component_type));
 	append(json, ",\"count\":");
