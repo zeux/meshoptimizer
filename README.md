@@ -48,11 +48,12 @@ The source files are organized in such a way that you don't need to change your 
 When optimizing a mesh, you should typically feed it through a set of optimizations (the order is important!):
 
 1. Indexing
-2. Vertex cache optimization
-3. Overdraw optimization
-4. Vertex fetch optimization
-5. Vertex quantization
-6. (optional) Vertex/index buffer compression
+2. (optional, discussed last) Simplification
+3. Vertex cache optimization
+4. Overdraw optimization
+5. Vertex fetch optimization
+6. Vertex quantization
+7. (optional) Vertex/index buffer compression
 
 ## Indexing
 
