@@ -143,6 +143,8 @@ Alternatively you can use general purpose compression libraries like zstd or Ood
 
 To that end, this library provides algorithms to "encode" vertex and index data. The result of the encoding is generally significantly smaller than initial data, and remains compressible with general purpose compressors - so you can either store encoded data directly (for modest compression ratios and maximum decoding performance), or further compress it with zstd/Oodle to maximize compression ratio.
 
+> Note: this compression scheme is available as a glTF extension [EXT_meshopt_compression](https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Vendor/EXT_meshopt_compression/README.md).
+
 To encode, you need to allocate target buffers (preferably using the worst case bound) and call encoding functions:
 
 ```c++
