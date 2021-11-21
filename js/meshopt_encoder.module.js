@@ -154,17 +154,17 @@ var MeshoptEncoder = (function() {
 		encodeFilterOct: function(source, count, stride, bits) {
 			assert(stride == 4 || stride == 8);
 			assert(bits >= 1 && bits <= 16);
-			return filter(instance.exports.meshopt_encodeFilterOct, source, count, stride, bits, 4);
+			return filter(instance.exports.meshopt_encodeFilterOct, source, count, stride, bits, 16);
 		},
 		encodeFilterQuat: function(source, count, stride, bits) {
 			assert(stride == 8);
 			assert(bits >= 4 && bits <= 16);
-			return filter(instance.exports.meshopt_encodeFilterQuat, source, count, stride, bits, 4);
+			return filter(instance.exports.meshopt_encodeFilterQuat, source, count, stride, bits, 16);
 		},
 		encodeFilterExp: function(source, count, stride, bits) {
 			assert(stride > 0 && stride % 4 == 0);
 			assert(bits >= 1 && bits <= 24);
-			return filter(instance.exports.meshopt_encodeFilterExp, source, count, stride, bits, stride/4);
+			return filter(instance.exports.meshopt_encodeFilterExp, source, count, stride, bits, stride);
 		},
 	};
 })();
