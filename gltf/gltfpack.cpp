@@ -3,6 +3,7 @@
 
 #include <algorithm>
 
+#include <locale.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1144,6 +1145,7 @@ unsigned int textureMask(const char* arg)
 
 int main(int argc, char** argv)
 {
+	setlocale(LC_ALL, "C"); // disable locale specific convention for number parsing/printing
 	meshopt_encodeIndexVersion(1);
 
 	Settings settings = defaults();
