@@ -201,7 +201,7 @@ MESHOPTIMIZER_API size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t
 MESHOPTIMIZER_API size_t meshopt_encodeIndexBufferBound(size_t index_count, size_t vertex_count);
 
 /**
- * Experimental: Set index encoder format version
+ * Set index encoder format version
  * version must specify the data format version to encode; valid values are 0 (decodable by all library versions) and 1 (decodable by 0.14+)
  */
 MESHOPTIMIZER_API void meshopt_encodeIndexVersion(int version);
@@ -217,7 +217,7 @@ MESHOPTIMIZER_API void meshopt_encodeIndexVersion(int version);
 MESHOPTIMIZER_API int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t index_size, const unsigned char* buffer, size_t buffer_size);
 
 /**
- * Experimental: Index sequence encoder
+ * Index sequence encoder
  * Encodes index sequence into an array of bytes that is generally smaller and compresses better compared to original.
  * Input index sequence can represent arbitrary topology; for triangle lists meshopt_encodeIndexBuffer is likely to be better.
  * Returns encoded data size on success, 0 on error; the only error condition is if buffer doesn't have enough space
@@ -250,7 +250,7 @@ MESHOPTIMIZER_API size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_
 MESHOPTIMIZER_API size_t meshopt_encodeVertexBufferBound(size_t vertex_count, size_t vertex_size);
 
 /**
- * Experimental: Set vertex encoder format version
+ * Set vertex encoder format version
  * version must specify the data format version to encode; valid values are 0 (decodable by all library versions)
  */
 MESHOPTIMIZER_API void meshopt_encodeVertexVersion(int version);
@@ -433,7 +433,7 @@ struct meshopt_Meshlet
 };
 
 /**
- * Experimental: Meshlet builder
+ * Meshlet builder
  * Splits the mesh into a set of meshlets where each meshlet has a micro index buffer indexing into meshlet vertices that refer to the original vertex buffer
  * The resulting data can be used to render meshes using NVidia programmable mesh shading pipeline, or in other cluster-based renderers.
  * When using buildMeshlets, vertex positions need to be provided to minimize the size of the resulting clusters.
@@ -467,7 +467,7 @@ struct meshopt_Bounds
 };
 
 /**
- * Experimental: Cluster bounds generator
+ * Cluster bounds generator
  * Creates bounding volumes that can be used for frustum, backface and occlusion culling.
  *
  * For backface culling with orthographic projection, use the following formula to reject backfacing clusters:
