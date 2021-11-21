@@ -336,15 +336,12 @@ bool hasValidTransform(const cgltf_texture_view& view)
 {
 	if (view.has_transform)
 	{
-		if (view.transform.offset[0] != 0.0f ||
-			view.transform.offset[1] != 0.0f ||
-			view.transform.scale[0] != 1.0f ||
-			view.transform.scale[1] != 1.0f ||
-			view.transform.rotation != 0.0f)
+		if (view.transform.offset[0] != 0.0f || view.transform.offset[1] != 0.0f ||
+		    view.transform.scale[0] != 1.0f || view.transform.scale[1] != 1.0f ||
+		    view.transform.rotation != 0.0f)
 			return true;
 
-		if (view.transform.has_texcoord &&
-			view.transform.texcoord != view.texcoord)
+		if (view.transform.has_texcoord && view.transform.texcoord != view.texcoord)
 			return true;
 	}
 
