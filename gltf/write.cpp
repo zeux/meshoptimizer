@@ -1330,6 +1330,8 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 		append(json_samplers, range ? range_accr : track.constant ? pose_accr : time_accr);
 		append(json_samplers, ",\"output\":");
 		append(json_samplers, data_accr);
+		if (track.interpolation == cgltf_interpolation_type_step)
+			append(json_samplers, ",\"interpolation\":\"STEP\"");
 		append(json_samplers, "}");
 
 		const NodeInfo& tni = nodes[track.node - data->nodes];
