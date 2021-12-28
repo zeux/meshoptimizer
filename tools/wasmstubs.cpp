@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <stdint.h>
+#include <assert.h>
 
 extern unsigned char __heap_base;
 static intptr_t sbrkp = intptr_t(&__heap_base);
@@ -95,4 +96,17 @@ extern "C" void* memset(void* ptr, int value, size_t num)
 	}
 
 	return ptr;
+}
+
+void* operator new(size_t size)
+{
+	return sbrk(size);
+}
+
+void operator delete(void* ptr) throw()
+{
+	void* brk = sbrk(0);
+	assert(ptr <= brk);
+
+	sbrk((char*)ptr - (char*)brk);
 }

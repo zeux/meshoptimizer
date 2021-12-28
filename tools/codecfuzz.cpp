@@ -38,18 +38,5 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 	fuzzDecoder(data, size, 24, meshopt_decodeVertexBuffer);
 	fuzzDecoder(data, size, 32, meshopt_decodeVertexBuffer);
 
-#if !(defined(__AVX__) || defined(__SSSE3__)) && (defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__))
-	// When SSSE3/AVX support isn't enabled unconditionally, we use a cpuid-based fallback
-	// It's useful to be able to test scalar code in this case, so we temporarily fake the feature bits
-	// and restore them later
-	unsigned int cpuid = meshopt::cpuid;
-	meshopt::cpuid = 0;
-
-	// Note that scalar code doesn't have odd edge conditions around 16b vertices so we could just test it for one stride
-	fuzzDecoder(data, size, 4, meshopt_decodeVertexBuffer);
-
-	meshopt::cpuid = cpuid;
-#endif
-
 	return 0;
 }

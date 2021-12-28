@@ -13,7 +13,7 @@ The library provides a C and C++ interface for all algorithms; you can use it fr
 meshoptimizer is hosted on GitHub; you can download the latest release using git:
 
 ```
-git clone -b v0.16 https://github.com/zeux/meshoptimizer.git
+git clone -b v0.17 https://github.com/zeux/meshoptimizer.git
 ```
 
 Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v0.15.zip).
@@ -48,11 +48,12 @@ The source files are organized in such a way that you don't need to change your 
 When optimizing a mesh, you should typically feed it through a set of optimizations (the order is important!):
 
 1. Indexing
-2. Vertex cache optimization
-3. Overdraw optimization
-4. Vertex fetch optimization
-5. Vertex quantization
-6. (optional) Vertex/index buffer compression
+2. (optional, discussed last) Simplification
+3. Vertex cache optimization
+4. Overdraw optimization
+5. Vertex fetch optimization
+6. Vertex quantization
+7. (optional) Vertex/index buffer compression
 
 ## Indexing
 
@@ -141,6 +142,8 @@ In case storage size or transmission bandwidth is of importance, you might want 
 Alternatively you can use general purpose compression libraries like zstd or Oodle to compress vertex/index data - however these compressors aren't designed to exploit redundancies in vertex/index data and as such compression rates can be unsatisfactory.
 
 To that end, this library provides algorithms to "encode" vertex and index data. The result of the encoding is generally significantly smaller than initial data, and remains compressible with general purpose compressors - so you can either store encoded data directly (for modest compression ratios and maximum decoding performance), or further compress it with zstd/Oodle to maximize compression ratio.
+
+> Note: this compression scheme is available as a glTF extension [EXT_meshopt_compression](https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Vendor/EXT_meshopt_compression/README.md).
 
 To encode, you need to allocate target buffers (preferably using the worst case bound) and call encoding functions:
 

@@ -458,10 +458,10 @@ void simplify(const Mesh& mesh, float threshold = 0.2f)
 	double end = timestamp();
 
 	printf("%-9s: %d triangles => %d triangles (%.2f%% deviation) in %.2f msec\n",
-	       "Simplify",
-	       int(mesh.indices.size() / 3), int(lod.indices.size() / 3),
-	       result_error * 100,
-	       (end - start) * 1000);
+	    "Simplify",
+	    int(mesh.indices.size() / 3), int(lod.indices.size() / 3),
+	    result_error * 100,
+	    (end - start) * 1000);
 }
 
 void simplifySloppy(const Mesh& mesh, float threshold = 0.2f)
@@ -483,10 +483,10 @@ void simplifySloppy(const Mesh& mesh, float threshold = 0.2f)
 	double end = timestamp();
 
 	printf("%-9s: %d triangles => %d triangles (%.2f%% deviation) in %.2f msec\n",
-	       "SimplifyS",
-	       int(mesh.indices.size() / 3), int(lod.indices.size() / 3),
-	       result_error * 100,
-	       (end - start) * 1000);
+	    "SimplifyS",
+	    int(mesh.indices.size() / 3), int(lod.indices.size() / 3),
+	    result_error * 100,
+	    (end - start) * 1000);
 }
 
 void simplifyPoints(const Mesh& mesh, float threshold = 0.2f)
@@ -501,8 +501,8 @@ void simplifyPoints(const Mesh& mesh, float threshold = 0.2f)
 	double end = timestamp();
 
 	printf("%-9s: %d points => %d points in %.2f msec\n",
-	       "SimplifyP",
-	       int(mesh.vertices.size()), int(indices.size()), (end - start) * 1000);
+	    "SimplifyP",
+	    int(mesh.vertices.size()), int(indices.size()), (end - start) * 1000);
 }
 
 void simplifyComplete(const Mesh& mesh)
@@ -582,9 +582,9 @@ void simplifyComplete(const Mesh& mesh)
 	double end = timestamp();
 
 	printf("%-9s: %d triangles => %d LOD levels down to %d triangles in %.2f msec, optimized in %.2f msec\n",
-	       "SimplifyC",
-	       int(lod_index_counts[0]) / 3, int(lod_count), int(lod_index_counts[lod_count - 1]) / 3,
-	       (middle - start) * 1000, (end - middle) * 1000);
+	    "SimplifyC",
+	    int(lod_index_counts[0]) / 3, int(lod_count), int(lod_index_counts[lod_count - 1]) / 3,
+	    (middle - start) * 1000, (end - middle) * 1000);
 
 	// for using LOD data at runtime, in addition to vertices and indices you have to save lod_index_offsets/lod_index_counts.
 
@@ -606,10 +606,10 @@ void simplifyComplete(const Mesh& mesh)
 		ibuf.resize(meshopt_encodeIndexBuffer(&ibuf[0], ibuf.size(), &indices[0], indices.size()));
 
 		printf("%-9s  ACMR %f...%f Overfetch %f..%f Codec VB %.1f bits/vertex IB %.1f bits/triangle\n",
-		       "",
-		       vcs0.acmr, vcsN.acmr, vfs0.overfetch, vfsN.overfetch,
-		       double(vbuf.size()) / double(vertices.size()) * 8,
-		       double(ibuf.size()) / double(indices.size() / 3) * 8);
+		    "",
+		    vcs0.acmr, vcsN.acmr, vfs0.overfetch, vfsN.overfetch,
+		    double(vbuf.size()) / double(vertices.size()) * 8,
+		    double(ibuf.size()) / double(indices.size() / 3) * 8);
 	}
 }
 
@@ -672,12 +672,12 @@ void encodeIndex(const Mesh& mesh, char desc)
 	}
 
 	printf("IdxCodec%c: %.1f bits/triangle (post-deflate %.1f bits/triangle); encode %.2f msec, decode %.2f msec (%.2f GB/s)\n",
-	       desc,
-	       double(buffer.size() * 8) / double(mesh.indices.size() / 3),
-	       double(csize * 8) / double(mesh.indices.size() / 3),
-	       (middle - start) * 1000,
-	       (end - middle) * 1000,
-	       (double(result.size() * 4) / (1 << 30)) / (end - middle));
+	    desc,
+	    double(buffer.size() * 8) / double(mesh.indices.size() / 3),
+	    double(csize * 8) / double(mesh.indices.size() / 3),
+	    (middle - start) * 1000,
+	    (end - middle) * 1000,
+	    (double(result.size() * 4) / (1 << 30)) / (end - middle));
 }
 
 void encodeIndexSequence(const std::vector<unsigned int>& data, size_t vertex_count, char desc)
@@ -703,12 +703,12 @@ void encodeIndexSequence(const std::vector<unsigned int>& data, size_t vertex_co
 	assert(memcmp(&data[0], &result[0], data.size() * sizeof(unsigned int)) == 0);
 
 	printf("IdxCodec%c: %.1f bits/index (post-deflate %.1f bits/index); encode %.2f msec, decode %.2f msec (%.2f GB/s)\n",
-	       desc,
-	       double(buffer.size() * 8) / double(data.size()),
-	       double(csize * 8) / double(data.size()),
-	       (middle - start) * 1000,
-	       (end - middle) * 1000,
-	       (double(result.size() * 4) / (1 << 30)) / (end - middle));
+	    desc,
+	    double(buffer.size() * 8) / double(data.size()),
+	    double(csize * 8) / double(data.size()),
+	    (middle - start) * 1000,
+	    (end - middle) * 1000,
+	    (double(result.size() * 4) / (1 << 30)) / (end - middle));
 }
 
 template <typename PV>
@@ -720,8 +720,8 @@ void packVertex(const Mesh& mesh, const char* pvn)
 	size_t csize = compress(pv);
 
 	printf("VtxPack%s  : %.1f bits/vertex (post-deflate %.1f bits/vertex)\n", pvn,
-	       double(pv.size() * sizeof(PV) * 8) / double(mesh.vertices.size()),
-	       double(csize * 8) / double(mesh.vertices.size()));
+	    double(pv.size() * sizeof(PV) * 8) / double(mesh.vertices.size()),
+	    double(csize * 8) / double(mesh.vertices.size()));
 }
 
 template <typename PV>
@@ -751,11 +751,11 @@ void encodeVertex(const Mesh& mesh, const char* pvn)
 	size_t csize = compress(vbuf);
 
 	printf("VtxCodec%1s: %.1f bits/vertex (post-deflate %.1f bits/vertex); encode %.2f msec, decode %.2f msec (%.2f GB/s)\n", pvn,
-	       double(vbuf.size() * 8) / double(mesh.vertices.size()),
-	       double(csize * 8) / double(mesh.vertices.size()),
-	       (middle - start) * 1000,
-	       (end - middle) * 1000,
-	       (double(result.size() * sizeof(PV)) / (1 << 30)) / (end - middle));
+	    double(vbuf.size() * 8) / double(mesh.vertices.size()),
+	    double(csize * 8) / double(mesh.vertices.size()),
+	    (middle - start) * 1000,
+	    (end - middle) * 1000,
+	    (double(result.size() * sizeof(PV)) / (1 << 30)) / (end - middle));
 }
 
 void stripify(const Mesh& mesh, bool use_restart, char desc)
@@ -781,10 +781,10 @@ void stripify(const Mesh& mesh, bool use_restart, char desc)
 	meshopt_VertexCacheStatistics vcs_intel = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), 128, 0, 0);
 
 	printf("Stripify%c: ACMR %f ATVR %f (NV %f AMD %f Intel %f); %d strip indices (%.1f%%) in %.2f msec\n",
-	       desc,
-	       vcs.acmr, vcs.atvr, vcs_nv.atvr, vcs_amd.atvr, vcs_intel.atvr,
-	       int(strip.size()), double(strip.size()) / double(mesh.indices.size()) * 100,
-	       (end - start) * 1000);
+	    desc,
+	    vcs.acmr, vcs.atvr, vcs_nv.atvr, vcs_amd.atvr, vcs_intel.atvr,
+	    int(strip.size()), double(strip.size()) / double(mesh.indices.size()) * 100,
+	    (end - start) * 1000);
 }
 
 void shadow(const Mesh& mesh)
@@ -815,9 +815,9 @@ void shadow(const Mesh& mesh)
 	}
 
 	printf("ShadowIB : ACMR %f (%.2fx improvement); %d shadow vertices (%.2fx improvement) in %.2f msec\n",
-	       vcss.acmr, double(vcs.vertices_transformed) / double(vcss.vertices_transformed),
-	       int(shadow_vertices), double(mesh.vertices.size()) / double(shadow_vertices),
-	       (end - start) * 1000);
+	    vcss.acmr, double(vcs.vertices_transformed) / double(vcss.vertices_transformed),
+	    int(shadow_vertices), double(mesh.vertices.size()) / double(shadow_vertices),
+	    (end - start) * 1000);
 }
 
 void meshlets(const Mesh& mesh, bool scan)
@@ -866,8 +866,8 @@ void meshlets(const Mesh& mesh, bool scan)
 	avg_triangles /= double(meshlets.size());
 
 	printf("Meshlets%c: %d meshlets (avg vertices %.1f, avg triangles %.1f, not full %d) in %.2f msec\n",
-	       scan ? 'S' : ' ',
-	       int(meshlets.size()), avg_vertices, avg_triangles, int(not_full), (end - start) * 1000);
+	    scan ? 'S' : ' ',
+	    int(meshlets.size()), avg_vertices, avg_triangles, int(not_full), (end - start) * 1000);
 
 	float camera[3] = {100, 100, 100};
 
@@ -932,20 +932,20 @@ void meshlets(const Mesh& mesh, bool scan)
 		meshlets_std += radii[i] < radius_mean + radius_stddev;
 
 	printf("BoundDist: mean %f stddev %f; %.1f%% meshlets are under mean+stddev\n",
-	       radius_mean,
-	       radius_stddev,
-	       double(meshlets_std) / double(meshlets.size()) * 100);
+	    radius_mean,
+	    radius_stddev,
+	    double(meshlets_std) / double(meshlets.size()) * 100);
 
 	printf("ConeCull : rejected apex %d (%.1f%%) / center %d (%.1f%%), trivially accepted %d (%.1f%%) in %.2f msec\n",
-	       int(rejected), double(rejected) / double(meshlets.size()) * 100,
-	       int(rejected_alt), double(rejected_alt) / double(meshlets.size()) * 100,
-	       int(accepted), double(accepted) / double(meshlets.size()) * 100,
-	       (endc - startc) * 1000);
+	    int(rejected), double(rejected) / double(meshlets.size()) * 100,
+	    int(rejected_alt), double(rejected_alt) / double(meshlets.size()) * 100,
+	    int(accepted), double(accepted) / double(meshlets.size()) * 100,
+	    (endc - startc) * 1000);
 	printf("ConeCull8: rejected apex %d (%.1f%%) / center %d (%.1f%%), trivially accepted %d (%.1f%%) in %.2f msec\n",
-	       int(rejected_s8), double(rejected_s8) / double(meshlets.size()) * 100,
-	       int(rejected_alt_s8), double(rejected_alt_s8) / double(meshlets.size()) * 100,
-	       int(accepted_s8), double(accepted_s8) / double(meshlets.size()) * 100,
-	       (endc - startc) * 1000);
+	    int(rejected_s8), double(rejected_s8) / double(meshlets.size()) * 100,
+	    int(rejected_alt_s8), double(rejected_alt_s8) / double(meshlets.size()) * 100,
+	    int(accepted_s8), double(accepted_s8) / double(meshlets.size()) * 100,
+	    (endc - startc) * 1000);
 }
 
 void spatialSort(const Mesh& mesh)
@@ -970,9 +970,9 @@ void spatialSort(const Mesh& mesh)
 	size_t csize = compress(vbuf);
 
 	printf("Spatial  : %.1f bits/vertex (post-deflate %.1f bits/vertex); sort %.2f msec\n",
-	       double(vbuf.size() * 8) / double(mesh.vertices.size()),
-	       double(csize * 8) / double(mesh.vertices.size()),
-	       (end - start) * 1000);
+	    double(vbuf.size() * 8) / double(mesh.vertices.size()),
+	    double(csize * 8) / double(mesh.vertices.size()),
+	    (end - start) * 1000);
 }
 
 void spatialSortTriangles(const Mesh& mesh)
@@ -1003,11 +1003,11 @@ void spatialSortTriangles(const Mesh& mesh)
 	size_t csizei = compress(ibuf);
 
 	printf("SpatialT : %.1f bits/vertex (post-deflate %.1f bits/vertex); %.1f bits/triangle (post-deflate %.1f bits/triangle); sort %.2f msec\n",
-	       double(vbuf.size() * 8) / double(mesh.vertices.size()),
-	       double(csizev * 8) / double(mesh.vertices.size()),
-	       double(ibuf.size() * 8) / double(mesh.indices.size() / 3),
-	       double(csizei * 8) / double(mesh.indices.size() / 3),
-	       (end - start) * 1000);
+	    double(vbuf.size() * 8) / double(mesh.vertices.size()),
+	    double(csizev * 8) / double(mesh.vertices.size()),
+	    double(ibuf.size() * 8) / double(mesh.indices.size() / 3),
+	    double(csizei * 8) / double(mesh.indices.size() / 3),
+	    (end - start) * 1000);
 }
 
 void tessellationAdjacency(const Mesh& mesh)
@@ -1146,7 +1146,7 @@ void processDeinterleaved(const char* path)
 	double shadow = timestamp();
 
 	printf("Deintrlvd: %d vertices, reindexed in %.2f msec, optimized in %.2f msec, generated & optimized shadow indices in %.2f msec\n",
-	       int(total_vertices), (reindex - start) * 1000, (optimize - reindex) * 1000, (shadow - optimize) * 1000);
+	    int(total_vertices), (reindex - start) * 1000, (optimize - reindex) * 1000, (shadow - optimize) * 1000);
 }
 
 void process(const char* path)
