@@ -16,6 +16,7 @@ project(meshoptimizer VERSION 0.17 LANGUAGES CXX)
 option(MESHOPT_BUILD_DEMO "Build demo" OFF)
 option(MESHOPT_BUILD_GLTFPACK "Build gltfpack" OFF)
 option(MESHOPT_BUILD_SHARED_LIBS "Build shared libraries" OFF)
+set(MESHOPT_BASISU_PATH "" CACHE STRING "")
 
 set(SOURCES
     src/meshoptimizer.h
@@ -38,6 +39,8 @@ set(SOURCES
 
 set(GLTF_SOURCES
     gltf/animation.cpp
+    gltf/basisenc.cpp
+    gltf/basislib.cpp
     gltf/fileio.cpp
     gltf/gltfpack.cpp
     gltf/image.cpp
@@ -93,6 +96,21 @@ if(MESHOPT_BUILD_GLTFPACK)
     if(MESHOPT_BUILD_SHARED_LIBS)
         string(CONCAT RPATH "$ORIGIN/../" ${CMAKE_INSTALL_LIBDIR})
         set_target_properties(gltfpack PROPERTIES INSTALL_RPATH ${RPATH})
+    endif()
+
+    if(NOT MESHOPT_BASISU_PATH STREQUAL "")
+        get_filename_component(BASISU_PATH ${MESHOPT_BASISU_PATH} ABSOLUTE)
+
+        target_compile_definitions(gltfpack PRIVATE WITH_BASISU)
+        set_source_files_properties(gltf/basisenc.cpp gltf/basislib.cpp PROPERTIES INCLUDE_DIRECTORIES ${BASISU_PATH})
+
+        if(NOT MSVC AND CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "x86_64")
+            set_source_files_properties(gltf/basislib.cpp PROPERTIES COMPILE_OPTIONS -msse4.1)
+        endif()
+
+        if(UNIX)
+            target_link_libraries(gltfpack pthread)
+        endif()
     endif()
 endif()
 
