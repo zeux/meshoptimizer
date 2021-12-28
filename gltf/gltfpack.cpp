@@ -1286,6 +1286,10 @@ int main(int argc, char** argv)
 		{
 			fprintf(stderr, "Warning: -te is deprecated and will be removed in the future; gltfpack now automatically embeds textures into GLB files\n");
 		}
+		else if (strcmp(arg, "-tj") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		{
+			settings.texture_jobs = clamp(atoi(argv[++i]), 0, 128);
+		}
 		else if (strcmp(arg, "-noq") == 0)
 		{
 			settings.quantize = false;
@@ -1386,6 +1390,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-ts R: scale texture dimensions by the ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\t-tp: resize textures to nearest power of 2 to conform to WebGL1 restrictions\n");
 			fprintf(stderr, "\t-tfy: flip textures along Y axis during BasisU supercompression\n");
+			fprintf(stderr, "\t-tj N: use N threads when compressing textures\n");
 			fprintf(stderr, "\tTexture classes:\n");
 			fprintf(stderr, "\t-tu C: use UASTC when encoding textures of class C\n");
 			fprintf(stderr, "\t-tq C N: set texture encoding quality for class C\n");
@@ -1448,6 +1453,11 @@ int main(int argc, char** argv)
 		fprintf(stderr, "Option -tfy is only supported when -tc is set as well\n");
 		return 1;
 	}
+
+#ifdef WITH_BASISU
+	if (settings.texture_ktx2)
+		encodeBasisInit(settings.texture_jobs);
+#endif
 
 	return gltfpack(input, output, report, settings);
 }
