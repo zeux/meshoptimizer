@@ -2,6 +2,7 @@
 
 #ifdef __clang__
 #pragma GCC diagnostic ignored "-Wunknown-warning-option"
+#pragma GCC diagnostic ignored "-Wuninitialized-const-reference"
 #endif
 
 #ifdef __GNUC__
