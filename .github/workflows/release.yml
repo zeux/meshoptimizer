@@ -1,0 +1,35 @@
+name: release
+
+on:
+  push:
+    branches:
+      - 'master'
+  pull_request:
+
+jobs:
+  gltfpack:
+    strategy:
+      matrix:
+        os: [windows, ubuntu, macos]
+    name: gltfpack-${{matrix.os}}
+    runs-on: ${{matrix.os}}-latest
+    steps:
+    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
+      with:
+        repository: BinomialLLC/basis_universal
+        path: basis_universal
+    - name: cmake configure
+      run: cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_BASISU_PATH=$(pwd)/basis_universal -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded" -DCMAKE_BUILD_TYPE=Release
+    - name: cmake build
+      run: cmake --build . --target gltfpack --config Release
+    - uses: actions/upload-artifact@v1
+      with:
+        name: gltfpack-windows
+        path: Release/gltfpack.exe
+      if: matrix.os == 'windows'
+    - uses: actions/upload-artifact@v1
+      with:
+        name: gltfpack-${{matrix.os}}
+        path: gltfpack
+      if: matrix.os != 'windows'
