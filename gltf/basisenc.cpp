@@ -2,6 +2,15 @@
 
 #define BASISU_NO_ITERATOR_DEBUG_LEVEL
 
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wunknown-warning-option"
+#endif
+
+#ifdef __GNUC__
+#pragma GCC diagnostic ignored "-Wclass-memaccess"
+#pragma GCC diagnostic ignored "-Wunused-value"
+#endif
+
 #include "encoder/basisu_comp.h"
 
 bool encodeBasisInternal(const char* input, const char* output, bool yflip, bool normal_map, bool linear, bool uastc, int uastc_l, float uastc_q, int etc1s_l, int etc1s_q, int zstd_l, int width, int height)
