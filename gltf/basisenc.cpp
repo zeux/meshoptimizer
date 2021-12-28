@@ -15,6 +15,8 @@
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #pragma GCC diagnostic ignored "-Wunused-value"
 #pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#pragma GCC diagnostic ignored "-Wstrict-aliasing" // TODO: https://github.com/BinomialLLC/basis_universal/pull/275
 #endif
 
 #ifdef _MSC_VER
