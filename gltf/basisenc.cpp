@@ -13,25 +13,33 @@
 
 #include "encoder/basisu_comp.h"
 
+static std::unique_ptr<basisu::job_pool> gJobPool;
+
+void encodeBasisInit(int jobs)
+{
+	using namespace basisu;
+
+	basisu_encoder_init();
+
+	uint32_t num_threads = jobs == 0 ? std::thread::hardware_concurrency() : jobs;
+	if (num_threads < 1)
+		num_threads = 1;
+
+	gJobPool.reset(new job_pool(num_threads));
+}
+
 bool encodeBasisInternal(const char* input, const char* output, bool yflip, bool normal_map, bool linear, bool uastc, int uastc_l, float uastc_q, int etc1s_l, int etc1s_q, int zstd_l, int width, int height)
 {
 	using namespace basisu;
 
-	static int once = (basisu_encoder_init(), 0);
-	(void)once;
+	assert(gJobPool);
 
 	basist::etc1_global_selector_codebook sel_codebook(basist::g_global_selector_cb_size, basist::g_global_selector_cb);
 
-	uint32_t num_threads = std::thread::hardware_concurrency();
-	if (num_threads < 1)
-		num_threads = 1;
-
-	job_pool jpool(num_threads);
-
 	basis_compressor_params params;
 
-	params.m_multithreading = num_threads > 1;
-	params.m_pJob_pool = &jpool;
+	params.m_multithreading = gJobPool->get_total_threads() > 1;
+	params.m_pJob_pool = gJobPool.get();
 
 	if (uastc)
 	{

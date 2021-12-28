@@ -404,6 +404,9 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 	if (uastc)
 		cmd += " -ktx2_zstandard_level 9";
 
+	if (settings.texture_jobs == 1)
+		cmd += " -no_multithreading";
+
 	cmd += " -file ";
 	cmd += temp_input.path;
 	cmd += " -output_file ";
@@ -499,6 +502,14 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 		cmd += " --srgb";
 	else
 		cmd += " --linear";
+
+	if (settings.texture_jobs)
+	{
+		char cs[128];
+		sprintf(cs, " --threads %d", settings.texture_jobs);
+
+		cmd += cs;
+	}
 
 	cmd += " -- ";
 	cmd += temp_output.path;
