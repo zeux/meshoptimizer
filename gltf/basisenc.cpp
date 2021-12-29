@@ -23,10 +23,13 @@ void encodeBasisInit(int jobs)
 	basisu_encoder_init();
 
 	uint32_t num_threads = jobs == 0 ? std::thread::hardware_concurrency() : jobs;
-	uint32_t num_threads_enc = num_threads * 3 / 4;
+	uint32_t num_threads_enc = num_threads * 2 / 3;
 
-	gJobPool.reset(new job_pool(std::max(1u, num_threads - num_threads_enc)));
-	gEncPool.reset(new job_pool(std::max(1u, num_threads_enc)));
+	// This is a little difficult to reason about. We want to distribute the pool capacity so that it adds up to num_threads.
+	// We don't really know what the ratio of J:E work is (it's dependent on the mode among other things), but also encoding
+	// work uses job threads as helpers if necessary, which is where "1+" is coming from.
+	gJobPool.reset(new job_pool(num_threads - num_threads_enc));
+	gEncPool.reset(new job_pool(1 + num_threads_enc));
 }
 
 bool encodeBasisInternal(const char* input, const char* output, bool yflip, bool normal_map, bool linear, bool uastc, int uastc_l, float uastc_q, int etc1s_l, int etc1s_q, int zstd_l, int width, int height)
