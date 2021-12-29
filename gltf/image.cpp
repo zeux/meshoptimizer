@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <functional>
+
 struct BasisSettings
 {
 	int etc1s_l;
@@ -301,6 +303,30 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 	bool ok = encodeBasisInternal(temp_input.path.c_str(), temp_output.path.c_str(), settings.texture_flipy, info.normal_map, !info.srgb, uastc, bs.uastc_l, bs.uastc_q, bs.etc1s_l, bs.etc1s_q, zstd, newWidth, newHeight);
 
 	return ok && readFile(temp_output.path.c_str(), result);
+}
+
+void encodePush(const std::function<void()>& job);
+void encodeWait();
+
+void encodeImageAsync(std::string& encoded, const cgltf_image& image, const ImageInfo& info, const char* input_path, const Settings& settings)
+{
+	std::string img_data;
+	std::string mime_type;
+	if (!readImage(image, input_path, img_data, mime_type))
+	{
+		encoded.clear();
+		return;
+	}
+
+	encodePush([&encoded, img_data, mime_type, info, settings]() {
+		if (!encodeBasis(img_data, mime_type.c_str(), encoded, info, settings))
+			encoded.clear();
+	});
+}
+
+void encodeImageWait()
+{
+	encodeWait();
 }
 #endif
 
