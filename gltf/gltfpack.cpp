@@ -950,6 +950,7 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 		return 2;
 	}
 
+#ifndef WITH_BASISU
 	if (data->images_count && settings.texture_ktx2)
 	{
 		if (checkKtx(settings.verbose > 1))
@@ -975,6 +976,7 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 			return 3;
 		}
 	}
+#endif
 
 	if (oext == ".glb")
 	{

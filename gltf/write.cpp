@@ -802,34 +802,19 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 		return;
 	}
 
-	bool (*encodeImage)(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings) = settings.texture_toktx ? encodeKtx : encodeBasis;
+#ifdef WITH_BASISU
+	bool (*encode)(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings) = encodeBasis;
+#else
+	bool (*encode)(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings) = settings.texture_toktx ? encodeKtx : encodeBasis;
+#endif
 
 	if (settings.texture_ktx2)
 	{
 		std::string encoded;
 
-		if (encodeImage(img_data, mime_type.c_str(), encoded, info, settings))
+		if (encode(img_data, mime_type.c_str(), encoded, info, settings))
 		{
-			if (!settings.texture_embed && image.uri && !dataUri)
-			{
-				std::string ktx_uri = getFileName(image.uri) + ".ktx2";
-				std::string ktx_full_path = getFullPath(decodeUri(ktx_uri.c_str()).c_str(), output_path);
-
-				if (writeFile(ktx_full_path.c_str(), encoded))
-				{
-					append(json, "\"uri\":\"");
-					append(json, ktx_uri);
-					append(json, "\"");
-				}
-				else
-				{
-					fprintf(stderr, "Warning: unable to save encoded image %s, skipping\n", image.uri);
-				}
-			}
-			else
-			{
-				writeEmbeddedImage(json, views, encoded.c_str(), encoded.size(), "image/ktx2", info.kind);
-			}
+			writeEncodedImage(json, views, image, encoded, info, output_path, settings);
 		}
 		else
 		{
@@ -839,6 +824,32 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 	else
 	{
 		writeEmbeddedImage(json, views, img_data.c_str(), img_data.size(), mime_type.c_str(), info.kind);
+	}
+}
+
+void writeEncodedImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const std::string& encoded, const ImageInfo& info, const char* output_path, const Settings& settings)
+{
+	bool dataUri = image.uri && strncmp(image.uri, "data:", 5) == 0;
+
+	if (!settings.texture_embed && image.uri && !dataUri)
+	{
+		std::string ktx_uri = getFileName(image.uri) + ".ktx2";
+		std::string ktx_full_path = getFullPath(decodeUri(ktx_uri.c_str()).c_str(), output_path);
+
+		if (writeFile(ktx_full_path.c_str(), encoded))
+		{
+			append(json, "\"uri\":\"");
+			append(json, ktx_uri);
+			append(json, "\"");
+		}
+		else
+		{
+			fprintf(stderr, "Warning: unable to save encoded image %s, skipping\n", image.uri);
+		}
+	}
+	else
+	{
+		writeEmbeddedImage(json, views, encoded.c_str(), encoded.size(), "image/ktx2", info.kind);
 	}
 }
 

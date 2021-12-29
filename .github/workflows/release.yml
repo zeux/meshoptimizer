@@ -17,7 +17,8 @@ jobs:
     - uses: actions/checkout@v1
     - uses: actions/checkout@v2
       with:
-        repository: BinomialLLC/basis_universal
+        repository: zeux/basis_universal
+        ref: gltfpack
         path: basis_universal
     - name: cmake configure
       run: cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_BASISU_PATH=basis_universal -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded" -DCMAKE_BUILD_TYPE=Release

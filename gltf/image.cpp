@@ -273,6 +273,40 @@ static int roundBlock(int value, bool pow2)
 	return (value + 3) & ~3;
 }
 
+#ifdef WITH_BASISU
+bool encodeBasisInternal(const char* input, const char* output, bool yflip, bool normal_map, bool linear, bool uastc, int uastc_l, float uastc_q, int etc1s_l, int etc1s_q, int zstd_l, int width, int height);
+
+bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings)
+{
+	TempFile temp_input(mimeExtension(mime_type));
+	TempFile temp_output(".ktx2");
+
+	if (!writeFile(temp_input.path.c_str(), data))
+		return false;
+
+	int quality = settings.texture_quality[info.kind];
+	bool uastc = settings.texture_uastc[info.kind];
+
+	const BasisSettings& bs = kBasisSettings[quality - 1];
+
+	int width = 0, height = 0;
+	if (!getDimensions(data, mime_type, width, height))
+		return false;
+
+	int newWidth = roundBlock(int(width * settings.texture_scale), settings.texture_pow2);
+	int newHeight = roundBlock(int(height * settings.texture_scale), settings.texture_pow2);
+
+	int zstd = uastc ? 9 : 0;
+
+	bool ok = encodeBasisInternal(temp_input.path.c_str(), temp_output.path.c_str(), settings.texture_flipy, info.normal_map, !info.srgb, uastc, bs.uastc_l, bs.uastc_q, bs.etc1s_l, bs.etc1s_q, zstd, newWidth, newHeight);
+
+	return ok && readFile(temp_output.path.c_str(), result);
+}
+#endif
+
+// All code below relies on command-line execution of basisu or toktx
+#ifndef WITH_BASISU
+
 #ifdef __wasi__
 static int execute(const char* cmd, bool ignore_stdout, bool ignore_stderr)
 {
@@ -319,10 +353,6 @@ static std::string getExecutable(const char* name, const char* env)
 
 bool checkBasis(bool verbose)
 {
-#ifdef WITH_BASISU
-	(void)verbose;
-	return true;
-#else
 	std::string cmd = getExecutable("basisu", "BASISU_PATH");
 
 	cmd += " -version";
@@ -332,14 +362,10 @@ bool checkBasis(bool verbose)
 		printf("%s => %d\n", cmd.c_str(), rc);
 
 	return rc == 0;
-#endif
 }
-
-bool encodeBasisInternal(const char* input, const char* output, bool yflip, bool normal_map, bool linear, bool uastc, int uastc_l, float uastc_q, int etc1s_l, int etc1s_q, int zstd_l, int width, int height);
 
 bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings)
 {
-	// TODO: Support texture_scale and texture_pow2 via new -resample switch from https://github.com/BinomialLLC/basis_universal/pull/226
 	TempFile temp_input(mimeExtension(mime_type));
 	TempFile temp_output(".ktx2");
 
@@ -351,20 +377,7 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 
 	const BasisSettings& bs = kBasisSettings[quality - 1];
 
-#ifdef WITH_BASISU
-	int width = 0, height = 0;
-	if (!getDimensions(data, mime_type, width, height))
-		return false;
-
-	int newWidth = roundBlock(int(width * settings.texture_scale), settings.texture_pow2);
-	int newHeight = roundBlock(int(height * settings.texture_scale), settings.texture_pow2);
-
-	int zstd = uastc ? 9 : 0;
-
-	bool ok = encodeBasisInternal(temp_input.path.c_str(), temp_output.path.c_str(), settings.texture_flipy, info.normal_map, !info.srgb, uastc, bs.uastc_l, bs.uastc_q, bs.etc1s_l, bs.etc1s_q, zstd, newWidth, newHeight);
-
-	return ok && readFile(temp_output.path.c_str(), result);
-#else
+	// TODO: Support texture_scale and texture_pow2 via new -resample switch from https://github.com/BinomialLLC/basis_universal/pull/226
 	std::string cmd = getExecutable("basisu", "BASISU_PATH");
 
 	cmd += " -mipmap";
@@ -417,15 +430,10 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 		printf("%s => %d\n", cmd.c_str(), rc);
 
 	return rc == 0 && readFile(temp_output.path.c_str(), result);
-#endif
 }
 
 bool checkKtx(bool verbose)
 {
-#ifdef WITH_BASISU
-	(void)verbose;
-	return false;
-#else
 	std::string cmd = getExecutable("toktx", "TOKTX_PATH");
 
 	cmd += " --version";
@@ -435,7 +443,6 @@ bool checkKtx(bool verbose)
 		printf("%s => %d\n", cmd.c_str(), rc);
 
 	return rc == 0;
-#endif
 }
 
 bool encodeKtx(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings)
@@ -522,3 +529,5 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 
 	return rc == 0 && readFile(temp_output.path.c_str(), result);
 }
+
+#endif // !WITH_BASISU
