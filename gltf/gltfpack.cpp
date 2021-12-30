@@ -451,10 +451,25 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		append(json_samplers, "}");
 	}
 
+	std::vector<std::string> encoded_images;
+
+#ifdef WITH_BASISU
+	if (data->images_count && settings.texture_ktx2)
+	{
+		encoded_images.resize(data->images_count);
+
+		for (size_t i = 0; i < data->images_count; ++i)
+			encodeImageAsync(encoded_images[i], data->images[i], images[i], input_path, settings);
+
+		encodeImageWait();
+	}
+#endif
+
 	for (size_t i = 0; i < data->images_count; ++i)
 	{
 		const cgltf_image& image = data->images[i];
 
+#ifndef WITH_BASISU
 		if (settings.verbose == 1 && settings.texture_ktx2)
 		{
 			const char* uri = image.uri;
@@ -462,10 +477,23 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 			printf("image %d (%s) is being encoded with %s\n", int(i), embedded ? "embedded" : uri, settings.texture_toktx ? "toktx" : "basisu");
 		}
+#endif
 
 		comma(json_images);
 		append(json_images, "{");
-		writeImage(json_images, views, image, images[i], i, input_path, output_path, settings);
+		if (encoded_images.size())
+		{
+			if (encoded_images[i].empty())
+				fprintf(stderr, "Warning: unable to encode image %d (%s), skipping\n", int(i), image.uri ? image.uri : "?");
+			else
+				writeEncodedImage(json_images, views, image, encoded_images[i], images[i], output_path, settings);
+
+			encoded_images[i] = std::string(); // reclaim memory early
+		}
+		else
+		{
+			writeImage(json_images, views, image, images[i], i, input_path, output_path, settings);
+		}
 		append(json_images, "}");
 	}
 
