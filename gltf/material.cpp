@@ -179,6 +179,14 @@ static bool areMaterialComponentsEqual(const cgltf_volume& lhs, const cgltf_volu
 	return true;
 }
 
+static bool areMaterialComponentsEqual(const cgltf_emissive_strength& lhs, const cgltf_emissive_strength& rhs)
+{
+	if (lhs.emissive_strength != rhs.emissive_strength)
+		return false;
+
+	return true;
+}
+
 static bool areMaterialsEqual(cgltf_data* data, const cgltf_material& lhs, const cgltf_material& rhs, const Settings& settings)
 {
 	if (lhs.has_pbr_metallic_roughness != rhs.has_pbr_metallic_roughness)
@@ -227,6 +235,12 @@ static bool areMaterialsEqual(cgltf_data* data, const cgltf_material& lhs, const
 		return false;
 
 	if (lhs.has_volume && !areMaterialComponentsEqual(lhs.volume, rhs.volume))
+		return false;
+
+	if (lhs.has_emissive_strength != rhs.has_emissive_strength)
+		return false;
+
+	if (lhs.has_emissive_strength && !areMaterialComponentsEqual(lhs.emissive_strength, rhs.emissive_strength))
 		return false;
 
 	if (!areTextureViewsEqual(lhs.normal_texture, rhs.normal_texture))
