@@ -63,7 +63,7 @@ jobs:
     - uses: actions/checkout@v1
     - uses: actions/setup-node@v1
       with:
-        node-version: '14.6'
+        node-version: '16'
     - name: test decoder
       run: node js/meshopt_decoder.test.js
     - name: test simd decoder
@@ -106,7 +106,7 @@ jobs:
         curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sysroot-$VERSION.0.tar.gz | tar xz
         mv wasi-sdk-$VERSION.0 wasi-sdk
       env:
-        VERSION: 12
+        VERSION: 14
     - name: build
       run: |
         make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot gltf/library.wasm

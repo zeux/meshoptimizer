@@ -40,6 +40,7 @@ WASI_SDK=
 
 WASM_FLAGS=--target=wasm32-wasi --sysroot=$(WASI_SDK)
 WASM_FLAGS+=-O3 -DNDEBUG -nostartfiles -nostdlib -Wl,--no-entry -Wl,-s
+WASM_FLAGS+=-fno-slp-vectorize -fno-vectorize -fno-unroll-loops
 WASM_FLAGS+=-Wl,-z -Wl,stack-size=24576 -Wl,--initial-memory=65536
 WASM_EXPORT_PREFIX=-Wl,--export
 
