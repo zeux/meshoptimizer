@@ -30,10 +30,6 @@ jobs:
         find . -type f -name '*.gcno' -exec gcov -p {} +
         sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
         bash <(curl -s https://codecov.io/bash) -f './src*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
-    - uses: actions/upload-artifact@v1
-      with:
-        name: gltfpack-${{matrix.os}}
-        path: gltfpack
 
   windows:
     runs-on: windows-latest
@@ -51,11 +47,6 @@ jobs:
         Debug/demo.exe demo/pirate.obj
         cmake --build . -- -property:Configuration=Release -verbosity:minimal
         Release/demo.exe demo/pirate.obj
-    - uses: actions/upload-artifact@v1
-      with:
-        name: gltfpack-windows
-        path: Release/gltfpack.exe
-      if: matrix.arch == 'x64'
 
   nodejs:
     runs-on: ubuntu-latest
