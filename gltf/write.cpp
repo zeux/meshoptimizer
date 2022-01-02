@@ -828,7 +828,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 	bool (*encode)(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings) = settings.texture_toktx ? encodeKtx : encodeBasis;
 #endif
 
-	if (settings.texture_ktx2)
+	if (settings.texture_ktx2 && mime_type != "image/ktx2")
 	{
 		std::string encoded;
 
@@ -838,7 +838,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 		}
 		else
 		{
-			fprintf(stderr, "Warning: unable to encode image %d, skipping\n", int(index));
+			fprintf(stderr, "Warning: unable to encode image %d (%s), skipping\n", int(index), image.uri ? image.uri : "?");
 		}
 	}
 	else

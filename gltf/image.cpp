@@ -368,12 +368,16 @@ void encodeImages(std::string* encoded, const cgltf_data* data, const std::vecto
 		encodePush([=]() {
 			std::string img_data;
 			std::string mime_type;
+
+			if (!readImage(image, input_path, img_data, mime_type))
+				return;
+
 			std::string result;
 
-			if (readImage(image, input_path, img_data, mime_type) && encodeBasis(img_data, mime_type.c_str(), result, info, settings))
-			{
+			if (mime_type == "image/ktx2")
+				encoded[i].swap(img_data);
+			else if (encodeBasis(img_data, mime_type.c_str(), result, info, settings))
 				encoded[i].swap(result);
-			}
 		});
 	}
 
