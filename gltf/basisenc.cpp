@@ -96,7 +96,7 @@ bool encodeBasisInternal(const char* input, const char* output, bool yflip, bool
 	params.m_out_filename = output;
 
 	params.m_status_output = false;
-		
+
 	basis_compressor c;
 
 	if (!c.init(params))
