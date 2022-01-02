@@ -436,6 +436,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	bool ext_unlit = false;
 	bool ext_instancing = false;
 	bool ext_texture_transform = false;
+	bool ext_texture_basisu = false;
 
 	size_t accr_offset = 0;
 	size_t node_offset = 0;
@@ -503,6 +504,8 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		append(json_textures, "{");
 		writeTexture(json_textures, texture, data, settings);
 		append(json_textures, "}");
+
+		ext_texture_basisu = ext_texture_basisu || texture.has_basisu;
 	}
 
 	for (size_t i = 0; i < data->materials_count; ++i)
@@ -812,7 +815,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	    {"KHR_materials_unlit", ext_unlit, false},
 	    {"KHR_materials_variants", data->variants_count > 0, false},
 	    {"KHR_lights_punctual", data->lights_count > 0, false},
-	    {"KHR_texture_basisu", !json_textures.empty() && settings.texture_ktx2, true},
+	    {"KHR_texture_basisu", ext_texture_basisu || (!json_textures.empty() && settings.texture_ktx2), true},
 	    {"EXT_mesh_gpu_instancing", ext_instancing, true},
 	};
 

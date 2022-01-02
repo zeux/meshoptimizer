@@ -494,8 +494,6 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 		*error = "file requires Draco mesh compression support";
 	else if (requiresExtension(data, "EXT_meshopt_compression"))
 		*error = "file has already been compressed using gltfpack";
-	else if (requiresExtension(data, "KHR_texture_basisu"))
-		*error = "file requires BasisU texture support";
 	else if (requiresExtension(data, "EXT_mesh_gpu_instancing"))
 		*error = "file requires mesh instancing support";
 	else if (needsDummyBuffers(data))

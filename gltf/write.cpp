@@ -875,26 +875,35 @@ void writeEncodedImage(std::string& json, std::vector<BufferView>& views, const 
 
 void writeTexture(std::string& json, const cgltf_texture& texture, cgltf_data* data, const Settings& settings)
 {
+	if (texture.sampler)
+	{
+		append(json, "\"sampler\":");
+		append(json, size_t(texture.sampler - data->samplers));
+	}
+
 	if (texture.image)
 	{
-		if (texture.sampler)
-		{
-			append(json, "\"sampler\":");
-			append(json, size_t(texture.sampler - data->samplers));
-			append(json, ",");
-		}
-
 		if (settings.texture_ktx2)
 		{
+			comma(json);
 			append(json, "\"extensions\":{\"KHR_texture_basisu\":{\"source\":");
 			append(json, size_t(texture.image - data->images));
 			append(json, "}}");
 		}
 		else
 		{
+			comma(json);
 			append(json, "\"source\":");
 			append(json, size_t(texture.image - data->images));
 		}
+	}
+
+	if (texture.has_basisu)
+	{
+		comma(json);
+		append(json, "\"extensions\":{\"KHR_texture_basisu\":{\"source\":");
+		append(json, size_t(texture.basisu_image - data->images));
+		append(json, "}}");
 	}
 }
 

@@ -19,6 +19,7 @@ static const char* kMimeTypes[][2] = {
     {"image/jpeg", ".jpg"},
     {"image/jpeg", ".jpeg"},
     {"image/png", ".png"},
+    {"image/ktx2", ".ktx2"},
 };
 
 static const BasisSettings kBasisSettings[10] = {
@@ -223,10 +224,24 @@ static bool hasTransparencyPng(const std::string& data)
 	return false;
 }
 
+static bool hasTransparencyKtx2(const std::string& data)
+{
+	if (data.size() < 12 + 17 * 4)
+		return false;
+
+	const char* signature = "\xabKTX 20\xbb\r\n\x1a\n";
+	if (data.compare(0, 12, signature) != 0)
+		return false;
+
+	return false;
+}
+
 bool hasAlpha(const std::string& data, const char* mime_type)
 {
 	if (strcmp(mime_type, "image/png") == 0)
 		return hasTransparencyPng(data);
+	else if (strcmp(mime_type, "image/ktx2") == 0)
+		return hasTransparencyKtx2(data);
 	else
 		return false;
 }
