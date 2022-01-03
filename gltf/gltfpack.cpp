@@ -459,10 +459,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	{
 		encoded_images.resize(data->images_count);
 
-		for (size_t i = 0; i < data->images_count; ++i)
-			encodeImageAsync(encoded_images[i], data->images[i], images[i], input_path, settings);
-
-		encodeImageWait();
+		encodeImages(encoded_images.data(), data, images, input_path, settings);
 	}
 #endif
 
