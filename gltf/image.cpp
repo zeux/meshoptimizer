@@ -308,24 +308,27 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 void encodePush(const std::function<void()>& job);
 void encodeWait();
 
-void encodeImageAsync(std::string& encoded, const cgltf_image& image, const ImageInfo& info, const char* input_path, const Settings& settings)
+void encodeImages(std::string* encoded, const cgltf_data* data, const std::vector<ImageInfo>& images, const char* input_path, const Settings& settings)
 {
-	std::string img_data;
-	std::string mime_type;
-	if (!readImage(image, input_path, img_data, mime_type))
+	for (size_t i = 0; i < data->images_count; ++i)
 	{
-		encoded.clear();
-		return;
+		const cgltf_image& image = data->images[i];
+		ImageInfo info = images[i];
+
+		encoded[i].clear();
+
+		encodePush([=]() {
+			std::string img_data;
+			std::string mime_type;
+			std::string result;
+
+			if (readImage(image, input_path, img_data, mime_type) && encodeBasis(img_data, mime_type.c_str(), result, info, settings))
+			{
+				encoded[i].swap(result);
+			}
+		});
 	}
 
-	encodePush([&encoded, img_data, mime_type, info, settings]() {
-		if (!encodeBasis(img_data, mime_type.c_str(), encoded, info, settings))
-			encoded.clear();
-	});
-}
-
-void encodeImageWait()
-{
 	encodeWait();
 }
 #endif

@@ -296,8 +296,7 @@ bool hasAlpha(const std::string& data, const char* mime_type);
 #ifdef WITH_BASISU
 void encodeBasisInit(int jobs);
 bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings);
-void encodeImageAsync(std::string& encoded, const cgltf_image& image, const ImageInfo& info, const char* input_path, const Settings& settings);
-void encodeImageWait();
+void encodeImages(std::string* encoded, const cgltf_data* data, const std::vector<ImageInfo>& images, const char* input_path, const Settings& settings);
 #else
 bool checkBasis(bool verbose);
 bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings);

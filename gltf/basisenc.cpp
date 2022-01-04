@@ -14,7 +14,6 @@
 #include "encoder/basisu_comp.h"
 
 static std::unique_ptr<basisu::job_pool> gJobPool;
-static std::unique_ptr<basisu::job_pool> gEncPool;
 
 void encodeBasisInit(int jobs)
 {
@@ -23,13 +22,8 @@ void encodeBasisInit(int jobs)
 	basisu_encoder_init();
 
 	uint32_t num_threads = jobs == 0 ? std::thread::hardware_concurrency() : jobs;
-	uint32_t num_threads_enc = num_threads * 2 / 3;
 
-	// This is a little difficult to reason about. We want to distribute the pool capacity so that it adds up to num_threads.
-	// We don't really know what the ratio of J:E work is (it's dependent on the mode among other things), but also encoding
-	// work uses job threads as helpers if necessary, which is where "1+" is coming from.
-	gJobPool.reset(new job_pool(num_threads - num_threads_enc));
-	gEncPool.reset(new job_pool(1 + num_threads_enc));
+	gJobPool.reset(new job_pool(num_threads));
 }
 
 bool encodeBasisInternal(const char* input, const char* output, bool yflip, bool normal_map, bool linear, bool uastc, int uastc_l, float uastc_q, int etc1s_l, int etc1s_q, int zstd_l, int width, int height)
@@ -40,8 +34,8 @@ bool encodeBasisInternal(const char* input, const char* output, bool yflip, bool
 
 	basis_compressor_params params;
 
-	params.m_multithreading = gEncPool->get_total_threads() > 1;
-	params.m_pJob_pool = gEncPool.get();
+	params.m_multithreading = gJobPool->get_total_threads() > 1;
+	params.m_pJob_pool = gJobPool.get();
 
 	if (uastc)
 	{
@@ -109,7 +103,7 @@ void encodePush(const std::function<void()>& job)
 {
 	assert(gJobPool);
 
-	gJobPool->add_job(job);
+	gJobPool->add_job(job, nullptr); // explicitly pass token to make sure we're using thread-safe job_pool implementation
 }
 
 void encodeWait()
