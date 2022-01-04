@@ -851,7 +851,7 @@ void writeEncodedImage(std::string& json, std::vector<BufferView>& views, const 
 {
 	bool dataUri = image.uri && strncmp(image.uri, "data:", 5) == 0;
 
-	if (!settings.texture_embed && image.uri && !dataUri)
+	if (!settings.texture_embed && image.uri && !dataUri && output_path)
 	{
 		std::string ktx_uri = getFileName(image.uri) + ".ktx2";
 		std::string ktx_full_path = getFullPath(decodeUri(ktx_uri.c_str()).c_str(), output_path);

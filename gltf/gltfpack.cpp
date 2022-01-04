@@ -1389,6 +1389,11 @@ int main(int argc, char** argv)
 		return 0;
 	}
 
+#ifdef WITH_BASISU
+	if (settings.texture_ktx2)
+		encodeBasisInit(settings.texture_jobs);
+#endif
+
 	if (test)
 	{
 		for (size_t i = 0; i < testinputs.size(); ++i)
@@ -1483,11 +1488,6 @@ int main(int argc, char** argv)
 		fprintf(stderr, "Option -tfy is only supported when -tc is set as well\n");
 		return 1;
 	}
-
-#ifdef WITH_BASISU
-	if (settings.texture_ktx2)
-		encodeBasisInit(settings.texture_jobs);
-#endif
 
 	return gltfpack(input, output, report, settings);
 }
