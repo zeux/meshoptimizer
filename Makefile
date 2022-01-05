@@ -103,7 +103,7 @@ format:
 js: js/meshopt_decoder.js js/meshopt_decoder.module.js js/meshopt_encoder.js js/meshopt_encoder.module.js js/meshopt_simplifier.js js/meshopt_simplifier.module.js
 
 gltfpack: $(BUILD)/gltfpack
-	cp $^ $@
+	ln -fs $^ $@
 
 $(BUILD)/gltfpack: $(GLTFPACK_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
