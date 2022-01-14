@@ -159,7 +159,7 @@ You can then either serialize `vbuf`/`ibuf` as is, or compress them further. To 
 
 ```c++
 int resvb = meshopt_decodeVertexBuffer(vertices, vertex_count, sizeof(Vertex), &vbuf[0], vbuf.size());
-int resib = meshopt_decodeIndexBuffer(indices, index_count, &buffer[0], buffer.size());
+int resib = meshopt_decodeIndexBuffer(indices, index_count, &ibuf[0], ibuf.size());
 assert(resvb == 0 && resib == 0);
 ```
 
