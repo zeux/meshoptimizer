@@ -275,6 +275,23 @@ static int roundBlock(int value, bool pow2)
 	return (value + 3) & ~3;
 }
 
+static void adjustDimensions(int& width, int& height, const Settings& settings)
+{
+	width = int(width * settings.texture_scale);
+	height = int(height * settings.texture_scale);
+
+	if (settings.texture_limit && (width > settings.texture_limit || height > settings.texture_limit))
+	{
+		float limit_scale = float(settings.texture_limit) / float(width > height ? width : height);
+
+		width = int(width * limit_scale);
+		height = int(height * limit_scale);
+	}
+
+	width = roundBlock(width, settings.texture_pow2);
+	height = roundBlock(height, settings.texture_pow2);
+}
+
 #ifdef WITH_BASISU
 bool encodeBasisInternal(const char* input, const char* output, bool yflip, bool normal_map, bool linear, bool uastc, int uastc_l, float uastc_q, int etc1s_l, int etc1s_q, int zstd_l, int width, int height);
 
@@ -295,12 +312,11 @@ bool encodeBasis(const std::string& data, const char* mime_type, std::string& re
 	if (!getDimensions(data, mime_type, width, height))
 		return false;
 
-	int newWidth = roundBlock(int(width * settings.texture_scale), settings.texture_pow2);
-	int newHeight = roundBlock(int(height * settings.texture_scale), settings.texture_pow2);
+	adjustDimensions(width, height, settings);
 
 	int zstd = uastc ? 9 : 0;
 
-	bool ok = encodeBasisInternal(temp_input.path.c_str(), temp_output.path.c_str(), settings.texture_flipy, info.normal_map, !info.srgb, uastc, bs.uastc_l, bs.uastc_q, bs.etc1s_l, bs.etc1s_q, zstd, newWidth, newHeight);
+	bool ok = encodeBasisInternal(temp_input.path.c_str(), temp_output.path.c_str(), settings.texture_flipy, info.normal_map, !info.srgb, uastc, bs.uastc_l, bs.uastc_q, bs.etc1s_l, bs.etc1s_q, zstd, width, height);
 
 	return ok && readFile(temp_output.path.c_str(), result);
 }
@@ -498,8 +514,8 @@ bool encodeKtx(const std::string& data, const char* mime_type, std::string& resu
 	cmd += " --genmipmap";
 	cmd += " --nowarn";
 
-	int newWidth = roundBlock(int(width * settings.texture_scale), settings.texture_pow2);
-	int newHeight = roundBlock(int(height * settings.texture_scale), settings.texture_pow2);
+	int newWidth = width, newHeight = height;
+	adjustDimensions(newWidth, newHeight, settings);
 
 	if (newWidth != width || newHeight != height)
 	{
