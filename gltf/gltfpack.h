@@ -128,6 +128,7 @@ struct Settings
 	bool texture_pow2;
 	bool texture_flipy;
 	float texture_scale;
+	int texture_limit;
 
 	bool texture_uastc[TextureKind__Count];
 	int texture_quality[TextureKind__Count];

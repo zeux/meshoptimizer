@@ -992,6 +992,12 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 			return 3;
 		}
 
+		if (settings.texture_limit && !settings.texture_toktx)
+		{
+			fprintf(stderr, "Error: -tl option is only supported by toktx\n");
+			return 3;
+		}
+
 		if (settings.texture_scale < 1 && !settings.texture_toktx)
 		{
 			fprintf(stderr, "Error: -ts option is only supported by toktx\n");
@@ -1304,6 +1310,10 @@ int main(int argc, char** argv)
 		{
 			settings.texture_scale = clamp(float(atof(argv[++i])), 0.f, 1.f);
 		}
+		else if (strcmp(arg, "-tl") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		{
+			settings.texture_limit = atoi(argv[++i]);
+		}
 		else if (strcmp(arg, "-tp") == 0)
 		{
 			settings.texture_pow2 = true;
@@ -1423,6 +1433,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-tu: use UASTC when encoding textures (much higher quality and much larger size)\n");
 			fprintf(stderr, "\t-tq N: set texture encoding quality (default: 8; N should be between 1 and 10\n");
 			fprintf(stderr, "\t-ts R: scale texture dimensions by the ratio R (default: 1; R should be between 0 and 1)\n");
+			fprintf(stderr, "\t-tl N: limit texture dimensions to N pixels (default: 0 = no limit)\n");
 			fprintf(stderr, "\t-tp: resize textures to nearest power of 2 to conform to WebGL1 restrictions\n");
 			fprintf(stderr, "\t-tfy: flip textures along Y axis during BasisU supercompression\n");
 			fprintf(stderr, "\t-tj N: use N threads when compressing textures\n");
@@ -1468,6 +1479,18 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nRun gltfpack -h to display a full list of options\n");
 		}
 
+		return 1;
+	}
+
+	if (settings.texture_limit && !settings.texture_ktx2)
+	{
+		fprintf(stderr, "Option -tl is only supported when -tc is set as well\n");
+		return 1;
+	}
+
+	if (settings.texture_pow2 && (settings.texture_limit & (settings.texture_limit - 1)) != 0)
+	{
+		fprintf(stderr, "Option -tp requires the limit specified via -tl to be a power of 2\n");
 		return 1;
 	}
 
