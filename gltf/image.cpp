@@ -282,7 +282,7 @@ static void adjustDimensions(int& width, int& height, const Settings& settings)
 
 	if (settings.texture_limit && (width > settings.texture_limit || height > settings.texture_limit))
 	{
-		float limit_scale = float(settings.texture_limit) / (width > height ? width : height);
+		float limit_scale = float(settings.texture_limit) / float(width > height ? width : height);
 
 		width = int(width * limit_scale);
 		height = int(height * limit_scale);
