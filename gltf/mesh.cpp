@@ -593,14 +593,6 @@ struct BoneInfluence
 	float w;
 };
 
-struct BoneInfluenceIndexPredicate
-{
-	bool operator()(const BoneInfluence& lhs, const BoneInfluence& rhs) const
-	{
-		return lhs.i < rhs.i;
-	}
-};
-
 struct BoneInfluenceWeightPredicate
 {
 	bool operator()(const BoneInfluence& lhs, const BoneInfluence& rhs) const
@@ -657,11 +649,8 @@ static void filterBones(Mesh& mesh)
 				}
 		}
 
-		// pick top 4 influences - could use partial_sort but it is slower on small sets
+		// pick top 4 influences; this also sorts resulting influences by weight which helps renderers that use influence subset in shader LODs
 		std::sort(inf, inf + count, BoneInfluenceWeightPredicate());
-
-		// now sort top 4 influences by bone index - this improves compression ratio
-		std::sort(inf, inf + std::min(4, count), BoneInfluenceIndexPredicate());
 
 		// copy the top 4 influences back into stream 0 - we will remove other streams at the end
 		Attr& ja = groups[0].first->data[i];
