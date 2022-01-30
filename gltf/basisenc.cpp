@@ -30,8 +30,6 @@ bool encodeBasisInternal(const char* input, const char* output, bool yflip, bool
 {
 	using namespace basisu;
 
-	basist::etc1_global_selector_codebook sel_codebook(basist::g_global_selector_cb_size, basist::g_global_selector_cb);
-
 	basis_compressor_params params;
 
 	params.m_multithreading = gJobPool->get_total_threads() > 1;
@@ -82,7 +80,6 @@ bool encodeBasisInternal(const char* input, const char* output, bool yflip, bool
 
 	params.m_read_source_images = true;
 	params.m_write_output_basis_files = true;
-	params.m_pSel_codebook = &sel_codebook;
 
 	params.m_source_filenames.resize(1);
 	params.m_source_filenames[0] = input;
