@@ -511,6 +511,49 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 	append(json, "}");
 }
 
+static void writeMaterialComponent(std::string& json, const cgltf_data* data, const cgltf_iridescence& tm, const QuantizationTexture* qt)
+{
+	comma(json);
+	append(json, "\"KHR_materials_iridescence\":{");
+	if (tm.iridescence_factor != 0)
+	{
+		comma(json);
+		append(json, "\"iridescenceFactor\":");
+		append(json, tm.iridescence_factor);
+	}
+	if (tm.iridescence_texture.texture)
+	{
+		comma(json);
+		append(json, "\"iridescenceTexture\":");
+		writeTextureInfo(json, data, tm.iridescence_texture, qt);
+	}
+	if (tm.iridescence_ior != 1.3f)
+	{
+		comma(json);
+		append(json, "\"iridescenceIor\":");
+		append(json, tm.iridescence_ior);
+	}
+	if (tm.iridescence_thickness_min != 100.f)
+	{
+		comma(json);
+		append(json, "\"iridescenceThicknessMinimum\":");
+		append(json, tm.iridescence_thickness_min);
+	}
+	if (tm.iridescence_thickness_max != 400.f)
+	{
+		comma(json);
+		append(json, "\"iridescenceThicknessMaximum\":");
+		append(json, tm.iridescence_thickness_max);
+	}
+	if (tm.iridescence_thickness_texture.texture)
+	{
+		comma(json);
+		append(json, "\"iridescenceThicknessTexture\":");
+		writeTextureInfo(json, data, tm.iridescence_thickness_texture, qt);
+	}
+	append(json, "}");
+}
+
 void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationPosition* qp, const QuantizationTexture* qt)
 {
 	if (material.name && *material.name)
@@ -580,7 +623,7 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 		append(json, "\"doubleSided\":true");
 	}
 
-	if (material.has_pbr_specular_glossiness || material.has_clearcoat || material.has_transmission || material.has_ior || material.has_specular || material.has_sheen || material.has_volume || material.has_emissive_strength || material.unlit)
+	if (material.has_pbr_specular_glossiness || material.has_clearcoat || material.has_transmission || material.has_ior || material.has_specular || material.has_sheen || material.has_volume || material.has_emissive_strength || material.has_iridescence || material.unlit)
 	{
 		comma(json);
 		append(json, "\"extensions\":{");
@@ -623,6 +666,11 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 		if (material.has_emissive_strength)
 		{
 			writeMaterialComponent(json, data, material.emissive_strength);
+		}
+
+		if (material.has_iridescence)
+		{
+			writeMaterialComponent(json, data, material.iridescence, qt);
 		}
 
 		if (material.unlit)
