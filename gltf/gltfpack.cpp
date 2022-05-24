@@ -468,16 +468,6 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	{
 		const cgltf_image& image = data->images[i];
 
-#ifndef WITH_BASISU
-		if (settings.verbose == 1 && settings.texture_ktx2)
-		{
-			const char* uri = image.uri;
-			bool embedded = !uri || strncmp(uri, "data:", 5) == 0;
-
-			printf("image %d (%s) is being encoded with %s\n", int(i), embedded ? "embedded" : uri, settings.texture_toktx ? "toktx" : "basisu");
-		}
-#endif
-
 		comma(json_images);
 		append(json_images, "{");
 		if (encoded_images.size())
@@ -491,7 +481,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		}
 		else
 		{
-			writeImage(json_images, views, image, images[i], i, input_path, output_path, settings);
+			writeImage(json_images, views, image, images[i], i, input_path, settings);
 		}
 		append(json_images, "}");
 	}
@@ -984,34 +974,11 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 #ifndef WITH_BASISU
 	if (data->images_count && settings.texture_ktx2)
 	{
-		if (checkKtx(settings.verbose > 1))
-		{
-			settings.texture_toktx = true;
-		}
-		else if (!checkBasis(settings.verbose > 1))
-		{
-			fprintf(stderr, "Error: toktx is not present in PATH or TOKTX_PATH is not set\n");
-			fprintf(stderr, "Note: toktx must be installed manually from https://github.com/KhronosGroup/KTX-Software/releases\n");
-			return 3;
-		}
-
-		if (settings.texture_limit && !settings.texture_toktx)
-		{
-			fprintf(stderr, "Error: -tl option is only supported by toktx\n");
-			return 3;
-		}
-
-		if (settings.texture_scale < 1 && !settings.texture_toktx)
-		{
-			fprintf(stderr, "Error: -ts option is only supported by toktx\n");
-			return 3;
-		}
-
-		if (settings.texture_pow2 && !settings.texture_toktx)
-		{
-			fprintf(stderr, "Error: -tp option is only supported by toktx\n");
-			return 3;
-		}
+		fprintf(stderr, "Error: gltfpack was built without BasisU support, texture compression is not available\n");
+#ifdef __wasi__
+		fprintf(stderr, "Note: node.js builds do not support BasisU due to lack of platform features; download a native build from https://github.com/zeux/meshoptimizer/releases\n");
+#endif
+		return 3;
 	}
 #endif
 

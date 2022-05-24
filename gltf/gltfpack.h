@@ -123,7 +123,6 @@ struct Settings
 
 	bool texture_ktx2;
 	bool texture_embed;
-	bool texture_toktx;
 
 	bool texture_pow2;
 	bool texture_flipy;
@@ -293,16 +292,12 @@ void optimizeMaterials(cgltf_data* data, const char* input_path, std::vector<Ima
 
 bool readImage(const cgltf_image& image, const char* input_path, std::string& data, std::string& mime_type);
 bool hasAlpha(const std::string& data, const char* mime_type);
+bool getDimensions(const std::string& data, const char* mime_type, int& width, int& height);
 
 #ifdef WITH_BASISU
 void encodeBasisInit(int jobs);
 bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings);
 void encodeImages(std::string* encoded, const cgltf_data* data, const std::vector<ImageInfo>& images, const char* input_path, const Settings& settings);
-#else
-bool checkBasis(bool verbose);
-bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings);
-bool checkKtx(bool verbose);
-bool encodeKtx(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings);
 #endif
 
 void markScenes(cgltf_data* data, std::vector<NodeInfo>& nodes);
@@ -339,7 +334,7 @@ const char* animationPath(cgltf_animation_path_type type);
 void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationPosition* qp, const QuantizationTexture* qt);
 void writeBufferView(std::string& json, BufferView::Kind kind, StreamFormat::Filter filter, size_t count, size_t stride, size_t bin_offset, size_t bin_size, BufferView::Compression compression, size_t compressed_offset, size_t compressed_size);
 void writeSampler(std::string& json, const cgltf_sampler& sampler);
-void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const char* output_path, const Settings& settings);
+void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const Settings& settings);
 void writeEncodedImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const std::string& encoded, const ImageInfo& info, const char* output_path, const Settings& settings);
 void writeTexture(std::string& json, const cgltf_texture& texture, cgltf_data* data, const Settings& settings);
 void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, int target, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings);

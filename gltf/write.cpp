@@ -849,7 +849,7 @@ void writeSampler(std::string& json, const cgltf_sampler& sampler)
 	}
 }
 
-void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const char* output_path, const Settings& settings)
+void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const Settings& settings)
 {
 	bool dataUri = image.uri && strncmp(image.uri, "data:", 5) == 0;
 
@@ -870,29 +870,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 		return;
 	}
 
-#ifdef WITH_BASISU
-	bool (*encode)(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings) = encodeBasis;
-#else
-	bool (*encode)(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings) = settings.texture_toktx ? encodeKtx : encodeBasis;
-#endif
-
-	if (settings.texture_ktx2)
-	{
-		std::string encoded;
-
-		if (encode(img_data, mime_type.c_str(), encoded, info, settings))
-		{
-			writeEncodedImage(json, views, image, encoded, info, output_path, settings);
-		}
-		else
-		{
-			fprintf(stderr, "Warning: unable to encode image %d, skipping\n", int(index));
-		}
-	}
-	else
-	{
-		writeEmbeddedImage(json, views, img_data.c_str(), img_data.size(), mime_type.c_str(), info.kind);
-	}
+	writeEmbeddedImage(json, views, img_data.c_str(), img_data.size(), mime_type.c_str(), info.kind);
 }
 
 void writeEncodedImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const std::string& encoded, const ImageInfo& info, const char* output_path, const Settings& settings)
