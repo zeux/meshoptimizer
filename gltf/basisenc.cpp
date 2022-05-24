@@ -60,7 +60,7 @@ static bool encodeInternal(const char* input, const char* output, bool yflip, bo
 
 	if (uastc)
 	{
-		static const uint32_t s_level_flags[TOTAL_PACK_UASTC_LEVELS] = { cPackUASTCLevelFastest, cPackUASTCLevelFaster, cPackUASTCLevelDefault, cPackUASTCLevelSlower, cPackUASTCLevelVerySlow };
+		static const uint32_t s_level_flags[TOTAL_PACK_UASTC_LEVELS] = {cPackUASTCLevelFastest, cPackUASTCLevelFaster, cPackUASTCLevelDefault, cPackUASTCLevelSlower, cPackUASTCLevelVerySlow};
 
 		params.m_uastc = true;
 
