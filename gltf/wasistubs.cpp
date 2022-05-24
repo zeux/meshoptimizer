@@ -42,11 +42,4 @@ extern "C" int32_t __imported_wasi_snapshot_preview1_clock_time_get(int32_t arg0
 	return __WASI_ERRNO_NOSYS;
 }
 
-extern "C" int system(const char* command)
-{
-	// WASI doesn't provide a system() equivalent; we highjack readlink here, the reasoning being that if we run against a real WASI implementation,
-	// the effect is more likely to be benign.
-	return __wasi_path_readlink(-1, command, 0, 0, 0);
-}
-
 #endif
