@@ -1371,7 +1371,7 @@ int main(int argc, char** argv)
 
 #ifdef WITH_BASISU
 	if (settings.texture_ktx2)
-		encodeBasisInit(settings.texture_jobs);
+		encodeInit(settings.texture_jobs);
 #endif
 
 	if (test)

@@ -3,33 +3,10 @@
 
 #include <string.h>
 
-#include <functional>
-
-struct BasisSettings
-{
-	int etc1s_l;
-	int etc1s_q;
-	int uastc_l;
-	float uastc_q;
-};
-
 static const char* kMimeTypes[][2] = {
     {"image/jpeg", ".jpg"},
     {"image/jpeg", ".jpeg"},
     {"image/png", ".png"},
-};
-
-static const BasisSettings kBasisSettings[10] = {
-    {1, 1, 0, 1.5f},
-    {1, 6, 0, 1.f},
-    {1, 20, 1, 1.0f},
-    {1, 50, 1, 0.75f},
-    {1, 90, 1, 0.5f},
-    {1, 128, 1, 0.4f},
-    {1, 160, 1, 0.34f},
-    {1, 192, 1, 0.29f}, // default
-    {1, 224, 2, 0.26f},
-    {1, 255, 2, 0.f},
 };
 
 static const char* inferMimeType(const char* path)
@@ -239,7 +216,6 @@ bool getDimensions(const std::string& data, const char* mime_type, int& width, i
 	return false;
 }
 
-#ifdef WITH_BASISU
 static int roundPow2(int value)
 {
 	int result = 1;
@@ -265,7 +241,7 @@ static int roundBlock(int value, bool pow2)
 	return (value + 3) & ~3;
 }
 
-static void adjustDimensions(int& width, int& height, const Settings& settings)
+void adjustDimensions(int& width, int& height, const Settings& settings)
 {
 	width = int(width * settings.texture_scale);
 	height = int(height * settings.texture_scale);
@@ -282,7 +258,7 @@ static void adjustDimensions(int& width, int& height, const Settings& settings)
 	height = roundBlock(height, settings.texture_pow2);
 }
 
-static const char* mimeExtension(const char* mime_type)
+const char* mimeExtension(const char* mime_type)
 {
 	for (size_t i = 0; i < sizeof(kMimeTypes) / sizeof(kMimeTypes[0]); ++i)
 		if (strcmp(kMimeTypes[i][0], mime_type) == 0)
@@ -290,59 +266,3 @@ static const char* mimeExtension(const char* mime_type)
 
 	return ".raw";
 }
-
-bool encodeBasisInternal(const char* input, const char* output, bool yflip, bool normal_map, bool linear, bool uastc, int uastc_l, float uastc_q, int etc1s_l, int etc1s_q, int zstd_l, int width, int height);
-
-bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings)
-{
-	TempFile temp_input(mimeExtension(mime_type));
-	TempFile temp_output(".ktx2");
-
-	if (!writeFile(temp_input.path.c_str(), data))
-		return false;
-
-	int quality = settings.texture_quality[info.kind];
-	bool uastc = settings.texture_uastc[info.kind];
-
-	const BasisSettings& bs = kBasisSettings[quality - 1];
-
-	int width = 0, height = 0;
-	if (!getDimensions(data, mime_type, width, height))
-		return false;
-
-	adjustDimensions(width, height, settings);
-
-	int zstd = uastc ? 9 : 0;
-
-	bool ok = encodeBasisInternal(temp_input.path.c_str(), temp_output.path.c_str(), settings.texture_flipy, info.normal_map, !info.srgb, uastc, bs.uastc_l, bs.uastc_q, bs.etc1s_l, bs.etc1s_q, zstd, width, height);
-
-	return ok && readFile(temp_output.path.c_str(), result);
-}
-
-void encodePush(const std::function<void()>& job);
-void encodeWait();
-
-void encodeImages(std::string* encoded, const cgltf_data* data, const std::vector<ImageInfo>& images, const char* input_path, const Settings& settings)
-{
-	for (size_t i = 0; i < data->images_count; ++i)
-	{
-		const cgltf_image& image = data->images[i];
-		ImageInfo info = images[i];
-
-		encoded[i].clear();
-
-		encodePush([=]() {
-			std::string img_data;
-			std::string mime_type;
-			std::string result;
-
-			if (readImage(image, input_path, img_data, mime_type) && encodeBasis(img_data, mime_type.c_str(), result, info, settings))
-			{
-				encoded[i].swap(result);
-			}
-		});
-	}
-
-	encodeWait();
-}
-#endif

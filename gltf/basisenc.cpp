@@ -13,9 +13,32 @@
 
 #include "encoder/basisu_comp.h"
 
+#include "gltfpack.h"
+
+struct BasisSettings
+{
+	int etc1s_l;
+	int etc1s_q;
+	int uastc_l;
+	float uastc_q;
+};
+
+static const BasisSettings kBasisSettings[10] = {
+    {1, 1, 0, 1.5f},
+    {1, 6, 0, 1.f},
+    {1, 20, 1, 1.0f},
+    {1, 50, 1, 0.75f},
+    {1, 90, 1, 0.5f},
+    {1, 128, 1, 0.4f},
+    {1, 160, 1, 0.34f},
+    {1, 192, 1, 0.29f}, // default
+    {1, 224, 2, 0.26f},
+    {1, 255, 2, 0.f},
+};
+
 static std::unique_ptr<basisu::job_pool> gJobPool;
 
-void encodeBasisInit(int jobs)
+void encodeInit(int jobs)
 {
 	using namespace basisu;
 
@@ -26,7 +49,7 @@ void encodeBasisInit(int jobs)
 	gJobPool.reset(new job_pool(num_threads));
 }
 
-bool encodeBasisInternal(const char* input, const char* output, bool yflip, bool normal_map, bool linear, bool uastc, int uastc_l, float uastc_q, int etc1s_l, int etc1s_q, int zstd_l, int width, int height)
+static bool encodeInternal(const char* input, const char* output, bool yflip, bool normal_map, bool linear, bool uastc, int uastc_l, float uastc_q, int etc1s_l, int etc1s_q, int zstd_l, int width, int height)
 {
 	using namespace basisu;
 
@@ -96,16 +119,54 @@ bool encodeBasisInternal(const char* input, const char* output, bool yflip, bool
 	return c.process() == basis_compressor::cECSuccess;
 }
 
-void encodePush(const std::function<void()>& job)
+static bool encodeImage(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings)
 {
-	assert(gJobPool);
+	TempFile temp_input(mimeExtension(mime_type));
+	TempFile temp_output(".ktx2");
 
-	gJobPool->add_job(job, nullptr); // explicitly pass token to make sure we're using thread-safe job_pool implementation
+	if (!writeFile(temp_input.path.c_str(), data))
+		return false;
+
+	int quality = settings.texture_quality[info.kind];
+	bool uastc = settings.texture_uastc[info.kind];
+
+	const BasisSettings& bs = kBasisSettings[quality - 1];
+
+	int width = 0, height = 0;
+	if (!getDimensions(data, mime_type, width, height))
+		return false;
+
+	adjustDimensions(width, height, settings);
+
+	int zstd = uastc ? 9 : 0;
+
+	bool ok = encodeInternal(temp_input.path.c_str(), temp_output.path.c_str(), settings.texture_flipy, info.normal_map, !info.srgb, uastc, bs.uastc_l, bs.uastc_q, bs.etc1s_l, bs.etc1s_q, zstd, width, height);
+
+	return ok && readFile(temp_output.path.c_str(), result);
 }
 
-void encodeWait()
+void encodeImages(std::string* encoded, const cgltf_data* data, const std::vector<ImageInfo>& images, const char* input_path, const Settings& settings)
 {
 	assert(gJobPool);
+
+	for (size_t i = 0; i < data->images_count; ++i)
+	{
+		const cgltf_image& image = data->images[i];
+		ImageInfo info = images[i];
+
+		encoded[i].clear();
+
+		gJobPool->add_job([=]() {
+			std::string img_data;
+			std::string mime_type;
+			std::string result;
+
+			if (readImage(image, input_path, img_data, mime_type) && encodeImage(img_data, mime_type.c_str(), result, info, settings))
+			{
+				encoded[i].swap(result);
+			}
+		}, nullptr); // explicitly pass token to make sure we're using thread-safe job_pool implementation
+	}
 
 	gJobPool->wait_for_all();
 }
