@@ -23,6 +23,7 @@
 
 #ifdef _MSC_VER
 #pragma warning(disable : 4702) // unreachable code
+#pragma warning(disable : 4005) // macro redefinition
 #endif
 
 #define BASISU_NO_ITERATOR_DEBUG_LEVEL
@@ -33,6 +34,11 @@
 
 #if defined(__SSE4_1__)
 #define BASISU_SUPPORT_SSE 1
+#endif
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #endif
 
 #include "encoder/basisu_backend.cpp"
