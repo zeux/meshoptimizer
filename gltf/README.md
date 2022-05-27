@@ -4,11 +4,7 @@ gltfpack is a tool that can automatically optimize glTF files to reduce the down
 
 ## Installation
 
-You can download a pre-built binary for gltfpack on [Releases page](https://github.com/zeux/meshoptimizer/releases), or install [npm package](https://www.npmjs.com/package/gltfpack) as follows:
-
-```
-npm install -g gltfpack
-```
+You can download a pre-built binary for gltfpack on [Releases page](https://github.com/zeux/meshoptimizer/releases), or install [npm package](https://www.npmjs.com/package/gltfpack). Native binaries are recommended over npm since they can work with larger files, run faster, and support texture compression.
 
 ## Usage
 

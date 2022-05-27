@@ -18,10 +18,12 @@
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #pragma GCC diagnostic ignored "-Wstrict-aliasing" // TODO: https://github.com/BinomialLLC/basis_universal/pull/275
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
 #endif
 
 #ifdef _MSC_VER
-#pragma warning(disable: 4702) // unreachable code
+#pragma warning(disable : 4702) // unreachable code
+#pragma warning(disable : 4005) // macro redefinition
 #endif
 
 #define BASISU_NO_ITERATOR_DEBUG_LEVEL
@@ -34,23 +36,28 @@
 #define BASISU_SUPPORT_SSE 1
 #endif
 
-#include "encoder/basisu_etc.cpp"
-#include "encoder/basisu_resample_filters.cpp"
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#endif
+
 #include "encoder/basisu_backend.cpp"
-#include "encoder/basisu_frontend.cpp"
-#include "encoder/basisu_resampler.cpp"
 #include "encoder/basisu_basis_file.cpp"
 #include "encoder/basisu_bc7enc.cpp"
-#include "encoder/basisu_ssim.cpp"
-#include "encoder/basisu_gpu_texture.cpp"
-#include "encoder/basisu_uastc_enc.cpp"
 #include "encoder/basisu_comp.cpp"
+#include "encoder/basisu_enc.cpp"
+#include "encoder/basisu_etc.cpp"
+#include "encoder/basisu_frontend.cpp"
+#include "encoder/basisu_gpu_texture.cpp"
 #include "encoder/basisu_kernels_sse.cpp"
 #include "encoder/basisu_opencl.cpp"
+#include "encoder/basisu_pvrtc1_4.cpp"
+#include "encoder/basisu_resample_filters.cpp"
+#include "encoder/basisu_resampler.cpp"
+#include "encoder/basisu_ssim.cpp"
+#include "encoder/basisu_uastc_enc.cpp"
 #include "encoder/jpgd.cpp"
 #include "encoder/pvpngreader.cpp"
-#include "encoder/basisu_enc.cpp"
-#include "encoder/basisu_pvrtc1_4.cpp"
 #include "transcoder/basisu_transcoder.cpp"
 
 #undef CLAMP
