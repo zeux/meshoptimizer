@@ -952,6 +952,39 @@ static void simplifyScale()
 	assert(meshopt_simplifyScale(vb, 4, 12) == 3.f);
 }
 
+static void simplifyDegenerate()
+{
+	float vb[] = {
+	    0.000000f, 0.000000f, 0.000000f,
+	    0.000000f, 1.000000f, 0.000000f,
+	    0.000000f, 2.000000f, 0.000000f,
+	    1.000000f, 0.000000f, 0.000000f,
+	    2.000000f, 0.000000f, 0.000000f,
+	    1.000000f, 1.000000f, 0.000000f, // clang-format :-/
+	};
+
+	// 0 1 2
+	// 3 5
+	// 4
+
+	unsigned int ib[] = {
+	    0, 1, 3,
+	    3, 1, 5,
+	    1, 2, 5,
+	    3, 5, 4,
+	    1, 0, 1, // these two degenerate triangles create a fake reverse edge
+	    0, 3, 0, // which breaks border classification
+	};
+
+	unsigned int expected[] = {
+		0, 1, 4,
+		4, 1, 2, // clang-format :-/
+	};
+
+	assert(meshopt_simplify(ib, ib, 18, vb, 6, 12, 3, 1e-3f) == 6);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+}
+
 static void adjacency()
 {
 	// 0 1/4
@@ -1064,6 +1097,7 @@ void runTests()
 	simplifyPointsStuck();
 	simplifyFlip();
 	simplifyScale();
+	simplifyDegenerate();
 
 	adjacency();
 	tessellation();
