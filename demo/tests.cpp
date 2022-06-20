@@ -977,11 +977,53 @@ static void simplifyDegenerate()
 	};
 
 	unsigned int expected[] = {
-		0, 1, 4,
-		4, 1, 2, // clang-format :-/
+	    0, 1, 4,
+	    4, 1, 2, // clang-format :-/
 	};
 
 	assert(meshopt_simplify(ib, ib, 18, vb, 6, 12, 3, 1e-3f) == 6);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+}
+
+static void simplifyLockBorder()
+{
+	float vb[] = {
+	    0.000000f, 0.000000f, 0.000000f,
+	    0.000000f, 1.000000f, 0.000000f,
+	    0.000000f, 2.000000f, 0.000000f,
+	    1.000000f, 0.000000f, 0.000000f,
+	    1.000000f, 1.000000f, 0.000000f,
+	    1.000000f, 2.000000f, 0.000000f,
+	    2.000000f, 0.000000f, 0.000000f,
+	    2.000000f, 1.000000f, 0.000000f,
+	    2.000000f, 2.000000f, 0.000000f, // clang-format :-/
+	};
+
+	// 0 1 2
+	// 3 4 5
+	// 6 7 8
+
+	unsigned int ib[] = {
+	    0, 1, 3,
+	    3, 1, 4,
+	    1, 2, 4,
+	    4, 2, 5,
+	    3, 4, 6,
+	    6, 4, 7,
+	    4, 5, 7,
+	    7, 5, 8, // clang-format :-/
+	};
+
+	unsigned int expected[] = {
+	    0, 1, 3,
+	    1, 2, 3,
+	    3, 2, 5,
+	    6, 3, 7,
+	    3, 5, 7,
+	    7, 5, 8, // clang-format :-/
+	};
+
+	assert(meshopt_simplify(ib, ib, 24, vb, 9, 12, 3, 1e-3f, meshopt_SimplifyLockBorder) == 18);
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 }
 
@@ -1098,6 +1140,7 @@ void runTests()
 	simplifyFlip();
 	simplifyScale();
 	simplifyDegenerate();
+	simplifyLockBorder();
 
 	adjacency();
 	tessellation();
