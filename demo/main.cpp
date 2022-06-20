@@ -450,7 +450,7 @@ void simplify(const Mesh& mesh, float threshold = 0.2f)
 	float result_error = 0;
 
 	lod.indices.resize(mesh.indices.size()); // note: simplify needs space for index_count elements in the destination array, not target_index_count
-	lod.indices.resize(meshopt_simplify(&lod.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error, &result_error));
+	lod.indices.resize(meshopt_simplify(&lod.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error, 0, &result_error));
 
 	lod.vertices.resize(lod.indices.size() < mesh.vertices.size() ? lod.indices.size() : mesh.vertices.size()); // note: this is just to reduce the cost of resize()
 	lod.vertices.resize(meshopt_optimizeVertexFetch(&lod.vertices[0], &lod.indices[0], lod.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex)));
