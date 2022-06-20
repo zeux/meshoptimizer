@@ -117,20 +117,21 @@ endif()
 include(GNUInstallDirs)
 
 install(TARGETS ${TARGETS} EXPORT meshoptimizerTargets
+    COMPONENT meshoptimizer
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
-install(FILES src/meshoptimizer.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-install(EXPORT meshoptimizerTargets DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/meshoptimizer NAMESPACE meshoptimizer::)
+install(FILES src/meshoptimizer.h COMPONENT meshoptimizer DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(EXPORT meshoptimizerTargets COMPONENT meshoptimizer DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/meshoptimizer NAMESPACE meshoptimizer::)
 
 # TARGET_PDB_FILE is available since 3.1
 if(MSVC AND NOT (CMAKE_VERSION VERSION_LESS "3.1"))
     foreach(TARGET ${TARGETS})
         get_target_property(TARGET_TYPE ${TARGET} TYPE)
         if(NOT ${TARGET_TYPE} STREQUAL "STATIC_LIBRARY")
-            install(FILES $<TARGET_PDB_FILE:${TARGET}> DESTINATION ${CMAKE_INSTALL_BINDIR} OPTIONAL)
+            install(FILES $<TARGET_PDB_FILE:${TARGET}> COMPONENT meshoptimizer DESTINATION ${CMAKE_INSTALL_BINDIR} OPTIONAL)
         endif()
     endforeach(TARGET)
 endif()
@@ -146,4 +147,5 @@ write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfig
 install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfig.cmake
     ${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfigVersion.cmake
+    COMPONENT meshoptimizer
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/meshoptimizer)
