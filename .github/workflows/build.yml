@@ -111,18 +111,6 @@ jobs:
         wc -c pirate.glb pirate-repack.glb
         node js/meshopt_decoder.test.js
         node js/meshopt_encoder.test.js
-    - name: npm pack
-      run: |
-        cd gltf && npm pack && cd ..
-        cd js && npm pack && cd ..
-    - uses: actions/upload-artifact@v2
-      with:
-        name: gltfpack-npm
-        path: gltf/gltfpack-*.tgz
-    - uses: actions/upload-artifact@v2
-      with:
-        name: meshoptimizer-npm
-        path: js/meshoptimizer-*.tgz
 
   arm64:
     runs-on: ubuntu-latest
