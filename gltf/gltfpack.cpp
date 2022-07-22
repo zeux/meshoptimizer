@@ -356,7 +356,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		filterStreams(mesh, mi);
 	}
 
-	mergeMeshMaterials(data, meshes, settings);
+	mergeMeshMaterials(data, extras, meshes, settings);
 	mergeMeshes(meshes, settings);
 	filterEmptyMeshes(meshes);
 
