@@ -94,6 +94,13 @@ enum TextureKind
 	TextureKind__Count
 };
 
+enum TextureMode
+{
+	TextureMode_Raw,
+	TextureMode_ETC1S,
+	TextureMode_UASTC,
+};
+
 struct Settings
 {
 	int pos_bits;
@@ -129,7 +136,7 @@ struct Settings
 	float texture_scale;
 	int texture_limit;
 
-	bool texture_uastc[TextureKind__Count];
+	TextureMode texture_mode[TextureKind__Count];
 	int texture_quality[TextureKind__Count];
 
 	int texture_jobs;
@@ -338,7 +345,7 @@ void writeBufferView(std::string& json, BufferView::Kind kind, StreamFormat::Fil
 void writeSampler(std::string& json, const cgltf_sampler& sampler);
 void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const Settings& settings);
 void writeEncodedImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const std::string& encoded, const ImageInfo& info, const char* output_path, const Settings& settings);
-void writeTexture(std::string& json, const cgltf_texture& texture, cgltf_data* data, const Settings& settings);
+void writeTexture(std::string& json, const cgltf_texture& texture, const ImageInfo* info, cgltf_data* data, const Settings& settings);
 void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, int target, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings);
 size_t writeMeshIndices(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, const Settings& settings);
 size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const cgltf_skin& skin, const QuantizationPosition& qp, const Settings& settings);

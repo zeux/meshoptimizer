@@ -853,7 +853,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 {
 	bool dataUri = image.uri && strncmp(image.uri, "data:", 5) == 0;
 
-	if (image.uri && !dataUri && !settings.texture_embed && !settings.texture_ktx2)
+	if (image.uri && !dataUri && !settings.texture_embed)
 	{
 		// fast-path: we don't need to read the image to memory
 		append(json, "\"uri\":\"");
@@ -899,7 +899,7 @@ void writeEncodedImage(std::string& json, std::vector<BufferView>& views, const 
 	}
 }
 
-void writeTexture(std::string& json, const cgltf_texture& texture, cgltf_data* data, const Settings& settings)
+void writeTexture(std::string& json, const cgltf_texture& texture, const ImageInfo* info, cgltf_data* data, const Settings& settings)
 {
 	if (texture.image)
 	{
@@ -910,7 +910,7 @@ void writeTexture(std::string& json, const cgltf_texture& texture, cgltf_data* d
 			append(json, ",");
 		}
 
-		if (settings.texture_ktx2)
+		if (info && settings.texture_mode[info->kind] != TextureMode_Raw)
 		{
 			append(json, "\"extensions\":{\"KHR_texture_basisu\":{\"source\":");
 			append(json, size_t(texture.image - data->images));

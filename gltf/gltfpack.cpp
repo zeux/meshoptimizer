@@ -470,10 +470,10 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 		comma(json_images);
 		append(json_images, "{");
-		if (encoded_images.size())
+		if (encoded_images.size() && !encoded_images[i].empty())
 		{
-			if (encoded_images[i].empty())
-				fprintf(stderr, "Warning: unable to encode image %d (%s), skipping\n", int(i), image.uri ? image.uri : "?");
+			if (encoded_images[i].compare(0, 5, "error") == 0)
+				fprintf(stderr, "Warning: unable to encode image %d (%s), skipping (%s)\n", int(i), image.uri ? image.uri : "?", encoded_images[i].c_str());
 			else
 				writeEncodedImage(json_images, views, image, encoded_images[i], images[i], output_path, settings);
 
@@ -492,7 +492,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 		comma(json_textures);
 		append(json_textures, "{");
-		writeTexture(json_textures, texture, data, settings);
+		writeTexture(json_textures, texture, texture.image ? &images[texture.image - data->images] : NULL, data, settings);
 		append(json_textures, "}");
 	}
 
@@ -1255,11 +1255,19 @@ int main(int argc, char** argv)
 
 			for (int kind = 0; kind < TextureKind__Count; ++kind)
 				if (mask & (1 << kind))
-					settings.texture_uastc[kind] = true;
+					settings.texture_mode[kind] = TextureMode_UASTC;
 		}
 		else if (strcmp(arg, "-tc") == 0)
 		{
 			settings.texture_ktx2 = true;
+
+			unsigned int mask = ~0u;
+			if (i + 1 < argc && isalpha(argv[i + 1][0]))
+				mask = textureMask(argv[++i]);
+
+			for (int kind = 0; kind < TextureKind__Count; ++kind)
+				if (mask & (1 << kind))
+					settings.texture_mode[kind] = TextureMode_ETC1S;
 		}
 		else if (strcmp(arg, "-tq") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
@@ -1408,6 +1416,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-tfy: flip textures along Y axis during BasisU supercompression\n");
 			fprintf(stderr, "\t-tj N: use N threads when compressing textures\n");
 			fprintf(stderr, "\tTexture classes:\n");
+			fprintf(stderr, "\t-tc C: use ETC1S when encoding textures of class C\n");
 			fprintf(stderr, "\t-tu C: use UASTC when encoding textures of class C\n");
 			fprintf(stderr, "\t-tq C N: set texture encoding quality for class C\n");
 			fprintf(stderr, "\t... where C is a comma-separated list (no spaces) with valid values color,normal,attrib\n");
