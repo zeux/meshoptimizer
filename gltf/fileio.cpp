@@ -23,7 +23,7 @@ TempFile::TempFile(const char* suffix)
 #elif defined(__wasi__)
 	static int id = 0;
 	char ids[16];
-	sprintf(ids, "%d", id++);
+	snprintf(ids, sizeof(ids), "%d", id++);
 
 	path = "gltfpack-temp-";
 	path += ids;

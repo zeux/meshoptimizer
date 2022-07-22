@@ -18,7 +18,7 @@
 std::string getVersion()
 {
 	char result[32];
-	sprintf(result, "%d.%d", MESHOPTIMIZER_VERSION / 1000, (MESHOPTIMIZER_VERSION % 1000) / 10);
+	snprintf(result, sizeof(result), "%d.%d", MESHOPTIMIZER_VERSION / 1000, (MESHOPTIMIZER_VERSION % 1000) / 10);
 	return result;
 }
 

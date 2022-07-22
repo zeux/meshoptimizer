@@ -14,14 +14,14 @@ void comma(std::string& s)
 void append(std::string& s, size_t v)
 {
 	char buf[32];
-	sprintf(buf, "%zu", v);
+	snprintf(buf, sizeof(buf), "%zu", v);
 	s += buf;
 }
 
 void append(std::string& s, float v)
 {
-	char buf[512];
-	sprintf(buf, "%.9g", v);
+	char buf[64];
+	snprintf(buf, sizeof(buf), "%.9g", v);
 	s += buf;
 }
 
