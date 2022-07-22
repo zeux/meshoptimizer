@@ -472,8 +472,8 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		append(json_images, "{");
 		if (encoded_images.size() && !encoded_images[i].empty())
 		{
-			if (encoded_images[i].compare(0, 6, "ERROR:") == 0)
-				fprintf(stderr, "Warning: unable to encode image %d (%s), skipping (%s)\n", int(i), image.uri ? image.uri : "?", encoded_images[i].c_str() + 6);
+			if (encoded_images[i].compare(0, 5, "error") == 0)
+				fprintf(stderr, "Warning: unable to encode image %d (%s), skipping (%s)\n", int(i), image.uri ? image.uri : "?", encoded_images[i].c_str());
 			else
 				writeEncodedImage(json_images, views, image, encoded_images[i], images[i], output_path, settings);
 

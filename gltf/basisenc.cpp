@@ -119,13 +119,13 @@ static bool encodeInternal(const char* input, const char* output, bool yflip, bo
 	return c.process() == basis_compressor::cECSuccess;
 }
 
-static bool encodeImage(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings)
+static const char* encodeImage(const std::string& data, const char* mime_type, std::string& result, const ImageInfo& info, const Settings& settings)
 {
 	TempFile temp_input(mimeExtension(mime_type));
 	TempFile temp_output(".ktx2");
 
 	if (!writeFile(temp_input.path.c_str(), data))
-		return false;
+		return "error writing temporary file";
 
 	int quality = settings.texture_quality[info.kind];
 	bool uastc = settings.texture_mode[info.kind] == TextureMode_UASTC;
@@ -134,15 +134,19 @@ static bool encodeImage(const std::string& data, const char* mime_type, std::str
 
 	int width = 0, height = 0;
 	if (!getDimensions(data, mime_type, width, height))
-		return false;
+		return "error parsing image header";
 
 	adjustDimensions(width, height, settings);
 
 	int zstd = uastc ? 9 : 0;
 
-	bool ok = encodeInternal(temp_input.path.c_str(), temp_output.path.c_str(), settings.texture_flipy, info.normal_map, !info.srgb, uastc, bs.uastc_l, bs.uastc_q, bs.etc1s_l, bs.etc1s_q, zstd, width, height);
+	if (!encodeInternal(temp_input.path.c_str(), temp_output.path.c_str(), settings.texture_flipy, info.normal_map, !info.srgb, uastc, bs.uastc_l, bs.uastc_q, bs.etc1s_l, bs.etc1s_q, zstd, width, height))
+		return "error encoding image";
 
-	return ok && readFile(temp_output.path.c_str(), result);
+	if (!readFile(temp_output.path.c_str(), result))
+		return "error reading temporary file";
+
+	return nullptr;
 }
 
 void encodeImages(std::string* encoded, const cgltf_data* data, const std::vector<ImageInfo>& images, const char* input_path, const Settings& settings)
@@ -157,17 +161,17 @@ void encodeImages(std::string* encoded, const cgltf_data* data, const std::vecto
 		if (settings.texture_mode[info.kind] == TextureMode_Raw)
 			continue;
 
-		encoded[i] = "ERROR:";
-
 		gJobPool->add_job([=]() {
 			std::string img_data;
 			std::string mime_type;
 			std::string result;
 
-			if (readImage(image, input_path, img_data, mime_type) && encodeImage(img_data, mime_type.c_str(), result, info, settings))
-			{
+			if (!readImage(image, input_path, img_data, mime_type))
+				encoded[i] = "error reading source file";
+			else if (const char* error = encodeImage(img_data, mime_type.c_str(), result, info, settings))
+				encoded[i] = error;
+			else
 				encoded[i].swap(result);
-			}
 		}, nullptr); // explicitly pass token to make sure we're using thread-safe job_pool implementation
 	}
 
