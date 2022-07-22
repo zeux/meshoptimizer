@@ -128,7 +128,7 @@ static bool encodeImage(const std::string& data, const char* mime_type, std::str
 		return false;
 
 	int quality = settings.texture_quality[info.kind];
-	bool uastc = settings.texture_uastc[info.kind];
+	bool uastc = settings.texture_mode[info.kind] == TextureMode_UASTC;
 
 	const BasisSettings& bs = kBasisSettings[quality - 1];
 
@@ -154,7 +154,10 @@ void encodeImages(std::string* encoded, const cgltf_data* data, const std::vecto
 		const cgltf_image& image = data->images[i];
 		ImageInfo info = images[i];
 
-		encoded[i].clear();
+		if (settings.texture_mode[info.kind] == TextureMode_Raw)
+			continue;
+
+		encoded[i] = "ERROR:";
 
 		gJobPool->add_job([=]() {
 			std::string img_data;
