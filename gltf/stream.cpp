@@ -368,7 +368,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
 
-		StreamFormat format = {cgltf_type_vec2, cgltf_component_type_r_16u, false, 4};
+		StreamFormat format = {cgltf_type_vec2, cgltf_component_type_r_16u, true, 4};
 		return format;
 	}
 	else if (stream.type == cgltf_attribute_type_normal)

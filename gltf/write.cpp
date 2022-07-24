@@ -178,10 +178,13 @@ static void writeTextureInfo(std::string& json, const cgltf_data* data, const cg
 
 	if (qt)
 	{
+		// UV streams use normalized unsigned 16-bit data, so we need to cancel division by 65535 and apply current bitcount we use
+		const float kRescale = 65535.f / float((1 << qt->bits) - 1);
+
 		transform.offset[0] += qt->offset[0];
 		transform.offset[1] += qt->offset[1];
-		transform.scale[0] *= qt->scale[0] / float((1 << qt->bits) - 1);
-		transform.scale[1] *= qt->scale[1] / float((1 << qt->bits) - 1);
+		transform.scale[0] *= qt->scale[0] * kRescale;
+		transform.scale[1] *= qt->scale[1] * kRescale;
 		has_transform = true;
 	}
 
