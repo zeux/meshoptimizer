@@ -25,7 +25,7 @@ static int textureIndex(const std::vector<std::string>& textures, const char* na
 static cgltf_data* parseSceneObj(fastObjMesh* obj)
 {
 	cgltf_data* data = (cgltf_data*)calloc(1, sizeof(cgltf_data));
-	data->memory.free = defaultFree;
+	data->memory.free_func = defaultFree;
 
 	std::vector<std::string> textures;
 
