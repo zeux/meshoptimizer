@@ -173,7 +173,7 @@ void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTextur
 	}
 }
 
-void getPositionBounds(float min[3], float max[3], const Stream& stream, const QuantizationPosition* qp)
+void getPositionBounds(float min[3], float max[3], const Stream& stream, const QuantizationPosition* qp, const Settings& settings)
 {
 	assert(stream.type == cgltf_attribute_type_position);
 	assert(stream.data.size() > 0);
@@ -194,7 +194,7 @@ void getPositionBounds(float min[3], float max[3], const Stream& stream, const Q
 
 	if (qp)
 	{
-		float pos_rscale = qp->scale == 0.f ? 0.f : 1.f / qp->scale;
+		float pos_rscale = qp->scale == 0.f ? 0.f : 1.f / qp->scale * (stream.target > 0 && settings.pos_normalized ? 32767.f / 65535.f : 1.f);
 
 		for (int k = 0; k < 3; ++k)
 		{
@@ -293,12 +293,12 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 			}
 
-			StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_16u, false, 8};
+			StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_16u, settings.pos_normalized, 8};
 			return format;
 		}
 		else
 		{
-			float pos_rscale = qp.scale == 0.f ? 0.f : 1.f / qp.scale;
+			float pos_rscale = qp.scale == 0.f ? 0.f : 1.f / qp.scale * (settings.pos_normalized ? 32767.f / 65535.f : 1.f);
 
 			int maxv = 0;
 
@@ -311,7 +311,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 				maxv = std::max(maxv, meshopt_quantizeUnorm(fabsf(a.f[2]) * pos_rscale, qp.bits));
 			}
 
-			if (maxv <= 127)
+			if (maxv <= 127 && !settings.pos_normalized)
 			{
 				for (size_t i = 0; i < stream.data.size(); ++i)
 				{
@@ -342,7 +342,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 					bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 				}
 
-				StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_16, false, 8};
+				StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_16, settings.pos_normalized, 8};
 				return format;
 			}
 		}
