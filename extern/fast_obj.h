@@ -1,11 +1,11 @@
 /*
  * fast_obj
  *
- * Version 1.1
+ * Version 1.2
  *
  * MIT License
  *
- * Copyright (c) 2018-2020 Richard Knight
+ * Copyright (c) 2018-2021 Richard Knight
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -31,7 +31,7 @@
 #define FAST_OBJ_HDR
 
 #define FAST_OBJ_VERSION_MAJOR  1
-#define FAST_OBJ_VERSION_MINOR  1
+#define FAST_OBJ_VERSION_MINOR  2
 #define FAST_OBJ_VERSION        ((FAST_OBJ_VERSION_MAJOR << 8) | FAST_OBJ_VERSION_MINOR)
 
 #include <stdlib.h>
@@ -129,13 +129,18 @@ typedef struct
     unsigned int*               face_materials;
 
     /* Index data: one element for each face vertex */
+    unsigned int                index_count;
     fastObjIndex*               indices;
 
     /* Materials */
     unsigned int                material_count;
     fastObjMaterial*            materials;
 
-    /* Mesh groups */
+    /* Mesh objects ('o' tag in .obj file) */
+    unsigned int                object_count;
+    fastObjGroup*               objects;
+
+    /* Mesh groups ('g' tag in .obj file) */
     unsigned int                group_count;
     fastObjGroup*               groups;
 
@@ -197,7 +202,8 @@ typedef struct
     /* Final mesh */
     fastObjMesh*                mesh;
 
-    /* Current group */
+    /* Current object/group */
+    fastObjGroup                object;
     fastObjGroup                group;
 
     /* Current material index */
@@ -453,6 +459,44 @@ const char* skip_line(const char* ptr)
 
 
 static
+fastObjGroup object_default(void)
+{
+    fastObjGroup object;
+
+    object.name         = 0;
+    object.face_count   = 0;
+    object.face_offset  = 0;
+    object.index_offset = 0;
+
+    return object;
+}
+
+
+static
+void object_clean(fastObjGroup* object)
+{
+    memory_dealloc(object->name);
+}
+
+
+static
+void flush_object(fastObjData* data)
+{
+    /* Add object if not empty */
+    if (data->object.face_count > 0)
+        array_push(data->mesh->objects, data->object);
+    else
+        object_clean(&data->object);
+
+    /* Reset for more data */
+    data->object = object_default();
+    data->object.face_offset  = array_size(data->mesh->face_vertices);
+    data->object.index_offset = array_size(data->mesh->indices);
+}
+
+
+
+static
 fastObjGroup group_default(void)
 {
     fastObjGroup group;
@@ -474,7 +518,7 @@ void group_clean(fastObjGroup* group)
 
 
 static
-void flush_output(fastObjData* data)
+void flush_group(fastObjData* data)
 {
     /* Add group if not empty */
     if (data->group.face_count > 0)
@@ -484,7 +528,7 @@ void flush_output(fastObjData* data)
 
     /* Reset for more data */
     data->group = group_default();
-    data->group.face_offset = array_size(data->mesh->face_vertices);
+    data->group.face_offset  = array_size(data->mesh->face_vertices);
     data->group.index_offset = array_size(data->mesh->indices);
 }
 
@@ -523,7 +567,7 @@ const char* parse_float(const char* ptr, float* val)
     double        num;
     double        fra;
     double        div;
-    int           eval;
+    unsigned int  eval;
     const double* powers;
 
 
@@ -712,6 +756,29 @@ const char* parse_face(fastObjData* data, const char* ptr)
     array_push(data->mesh->face_materials, data->material);
 
     data->group.face_count++;
+    data->object.face_count++;
+
+    return ptr;
+}
+
+
+static
+const char* parse_object(fastObjData* data, const char* ptr)
+{
+    const char* s;
+    const char* e;
+
+
+    ptr = skip_whitespace(ptr);
+
+    s = ptr;
+    while (!is_end_of_name(*ptr))
+        ptr++;
+
+    e = ptr;
+
+    flush_object(data);
+    data->object.name = string_copy(s, e);
 
     return ptr;
 }
@@ -732,7 +799,7 @@ const char* parse_group(fastObjData* data, const char* ptr)
 
     e = ptr;
 
-    flush_output(data);
+    flush_group(data);
     data->group.name = string_copy(s, e);
 
     return ptr;
@@ -1200,6 +1267,21 @@ void parse_buffer(fastObjData* data, const char* ptr, const char* end, const fas
             }
             break;
 
+        case 'o':
+            p++;
+
+            switch (*p++)
+            {
+            case ' ':
+            case '\t':
+                p = parse_object(data, p);
+                break;
+
+            default:
+                p--; /* roll p++ back in case *p was a newline */
+            }
+            break;
+
         case 'g':
             p++;
 
@@ -1253,6 +1335,9 @@ void fast_obj_destroy(fastObjMesh* m)
     unsigned int ii;
 
 
+    for (ii = 0; ii < array_size(m->objects); ii++)
+        object_clean(&m->objects[ii]);
+
     for (ii = 0; ii < array_size(m->groups); ii++)
         group_clean(&m->groups[ii]);
 
@@ -1265,6 +1350,7 @@ void fast_obj_destroy(fastObjMesh* m)
     array_clean(m->face_vertices);
     array_clean(m->face_materials);
     array_clean(m->indices);
+    array_clean(m->objects);
     array_clean(m->groups);
     array_clean(m->materials);
 
@@ -1319,6 +1405,7 @@ fastObjMesh* fast_obj_read_with_callbacks(const char* path, const fastObjCallbac
     m->face_materials = 0;
     m->indices        = 0;
     m->materials      = 0;
+    m->objects        = 0;
     m->groups         = 0;
 
 
@@ -1337,6 +1424,7 @@ fastObjMesh* fast_obj_read_with_callbacks(const char* path, const fastObjCallbac
 
     /* Data needed during parsing */
     data.mesh     = m;
+    data.object   = object_default();
     data.group    = group_default();
     data.material = 0;
     data.line     = 1;
@@ -1410,15 +1498,20 @@ fastObjMesh* fast_obj_read_with_callbacks(const char* path, const fastObjCallbac
     }
 
 
-    /* Flush final group */
-    flush_output(&data);
+    /* Flush final object/group */
+    flush_object(&data);
+    object_clean(&data.object);
+
+    flush_group(&data);
     group_clean(&data.group);
 
     m->position_count = array_size(m->positions) / 3;
     m->texcoord_count = array_size(m->texcoords) / 2;
     m->normal_count   = array_size(m->normals) / 3;
     m->face_count     = array_size(m->face_vertices);
+    m->index_count    = array_size(m->indices);
     m->material_count = array_size(m->materials);
+    m->object_count   = array_size(m->objects);
     m->group_count    = array_size(m->groups);
 
 
