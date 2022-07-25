@@ -81,13 +81,12 @@
 			animate();
 
 			function simplifyGeometry(geo) {
-				var positions = new Float32Array(geo.attributes.position.array);
 				if (!geo.index.original) {
 					geo.index.original = geo.index.array;
 				}
 
-				var indices = (geo.index.original instanceof Uint16Array) ? new Uint32Array(geo.index.original) : geo.index.original;
-
+				var positions = new Float32Array(geo.attributes.position.array);
+				var indices = geo.index.original;
 				var target = Math.floor(indices.length * settings.ratio / 3) * 3;
 
 				var flags = [];
@@ -98,7 +97,7 @@
 				var stride = (geo.attributes.position instanceof THREE.InterleavedBufferAttribute) ? geo.attributes.position.data.stride : 3;
 				var res = MeshoptSimplifier.simplify(indices, positions, stride, target, threshold, flags);
 
-				geo.index.array = (geo.index.original instanceof Uint16Array) ? new Uint16Array(res[0]) : res[0];
+				geo.index.array = res[0];
 				geo.index.count = res[0].length;
 				geo.index.needsUpdate = true;
 			}

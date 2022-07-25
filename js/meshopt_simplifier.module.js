@@ -79,7 +79,7 @@ var MeshoptSimplifier = (function() {
 		return result;
 	}
 
-    function simplify(fun, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride, target_index_count, target_error, options) {
+	function simplify(fun, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride, target_index_count, target_error, options) {
 		var sbrk = instance.exports.sbrk;
 		var te = sbrk(4);
 		var ti = sbrk(index_count * 4);
@@ -99,7 +99,7 @@ var MeshoptSimplifier = (function() {
 		return [target, error[0]];
 	}
 
-    function simplifyScale(fun, vertex_positions, vertex_count, vertex_positions_stride) {
+	function simplifyScale(fun, vertex_positions, vertex_count, vertex_positions_stride) {
 		var sbrk = instance.exports.sbrk;
 		var sp = sbrk(vertex_count * vertex_positions_stride);
 		var heap = new Uint8Array(instance.exports.memory.buffer);
@@ -117,35 +117,40 @@ var MeshoptSimplifier = (function() {
 		ready: promise,
 		supported: true,
 
-	    compactMesh: function(indices) {
-	    	assert(indices instanceof Uint32Array);
-	    	assert(indices.length % 3 == 0);
+		compactMesh: function(indices) {
+			assert(indices instanceof Uint32Array || indices instanceof Int32Array || indices instanceof Uint16Array || indices instanceof Int16Array);
+			assert(indices.length % 3 == 0);
 
-			return reorder(indices, maxindex(indices) + 1);
-	    },
+			var indices32 = indices.BYTES_PER_ELEMENT == 4 ? indices : new Uint32Array(indices);
+			return reorder(indices32, maxindex(indices) + 1);
+		},
 
-	    simplify: function(indices, vertex_positions, vertex_positions_stride, target_index_count, target_error, flags) {
-	    	assert(indices instanceof Uint32Array);
-	    	assert(indices.length % 3 == 0);
-	    	assert(vertex_positions instanceof Float32Array);
-	    	assert(vertex_positions.length % vertex_positions_stride == 0);
-	    	assert(vertex_positions_stride >= 3);
-	    	assert(target_index_count % 3 == 0);
+		simplify: function(indices, vertex_positions, vertex_positions_stride, target_index_count, target_error, flags) {
+			assert(indices instanceof Uint32Array || indices instanceof Int32Array || indices instanceof Uint16Array || indices instanceof Int16Array);
+			assert(indices.length % 3 == 0);
+			assert(vertex_positions instanceof Float32Array);
+			assert(vertex_positions.length % vertex_positions_stride == 0);
+			assert(vertex_positions_stride >= 3);
+			assert(target_index_count % 3 == 0);
 
-	    	var options = 0;
-    		for (var i = 0; i < (flags ? flags.length : 0); ++i) {
-    			options |= simplifyOptions[flags[i]];
-	    	}
+			var options = 0;
+			for (var i = 0; i < (flags ? flags.length : 0); ++i) {
+				options |= simplifyOptions[flags[i]];
+			}
 
-	    	return simplify(instance.exports.meshopt_simplify, indices, indices.length, vertex_positions, vertex_positions.length, vertex_positions_stride * 4, target_index_count, target_error, options);
-	    },
+			var indices32 = indices.BYTES_PER_ELEMENT == 4 ? indices : new Uint32Array(indices);
+			var result = simplify(instance.exports.meshopt_simplify, indices32, indices.length, vertex_positions, vertex_positions.length, vertex_positions_stride * 4, target_index_count, target_error, options);
+			result[0] = (indices instanceof Uint32Array) ? result[0] : new indices.constructor(result[0]);
 
-	    getScale: function(vertex_positions, vertex_positions_stride) {
-	    	assert(vertex_positions instanceof Float32Array);
-	    	assert(vertex_positions.length % vertex_positions_stride == 0);
+			return result;
+		},
 
-	    	return simplifyScale(instance.exports.meshopt_simplifyScale, vertex_positions, vertex_positions.length, vertex_positions_stride * 4);
-	    },
+		getScale: function(vertex_positions, vertex_positions_stride) {
+			assert(vertex_positions instanceof Float32Array);
+			assert(vertex_positions.length % vertex_positions_stride == 0);
+
+			return simplifyScale(instance.exports.meshopt_simplifyScale, vertex_positions, vertex_positions.length, vertex_positions_stride * 4);
+		},
 	};
 })();
 
