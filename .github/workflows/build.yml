@@ -61,6 +61,8 @@ jobs:
       run: node --experimental-wasm-simd js/meshopt_decoder.test.js
     - name: test encoder
       run: node js/meshopt_encoder.test.js
+    - name: test simplifier
+      run: node js/meshopt_simplifier.test.js
 
   gltfpack:
     runs-on: ubuntu-latest
@@ -103,6 +105,7 @@ jobs:
         make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot gltf/library.wasm
         make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot js/meshopt_decoder.js js/meshopt_decoder.module.js
         make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot js/meshopt_encoder.js js/meshopt_encoder.module.js
+        make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot js/meshopt_simplifier.js js/meshopt_simplifier.module.js
         git status
     - name: test
       run: |
@@ -111,6 +114,7 @@ jobs:
         wc -c pirate.glb pirate-repack.glb
         node js/meshopt_decoder.test.js
         node js/meshopt_encoder.test.js
+        node js/meshopt_simplifier.test.js
 
   arm64:
     runs-on: ubuntu-latest

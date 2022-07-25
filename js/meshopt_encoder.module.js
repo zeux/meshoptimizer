@@ -47,12 +47,16 @@ var MeshoptEncoder = (function() {
 		}
 	}
 
+	function bytes(view) {
+		return new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+	}
+
 	function reorder(indices, vertices, optf) {
 		var sbrk = instance.exports.sbrk;
 		var ip = sbrk(indices.length * 4);
 		var rp = sbrk(vertices * 4);
 		var heap = new Uint8Array(instance.exports.memory.buffer);
-		var indices8 = new Uint8Array(indices.buffer, indices.byteOffset, indices.byteLength);
+		var indices8 = bytes(indices);
 		heap.set(indices8, ip);
 		if (optf) {
 			optf(ip, ip, indices.length, vertices);
@@ -76,7 +80,7 @@ var MeshoptEncoder = (function() {
 		var tp = sbrk(bound);
 		var sp = sbrk(count * size);
 		var heap = new Uint8Array(instance.exports.memory.buffer);
-		heap.set(new Uint8Array(source.buffer, source.byteOffset, source.byteLength), sp);
+		heap.set(bytes(source), sp);
 		var res = fun(tp, bound, sp, count, size);
 		var target = new Uint8Array(res);
 		target.set(heap.subarray(tp, tp + res));
@@ -108,7 +112,7 @@ var MeshoptEncoder = (function() {
 		var tp = sbrk(count * stride);
 		var sp = sbrk(count * insize);
 		var heap = new Uint8Array(instance.exports.memory.buffer);
-		heap.set(new Uint8Array(source.buffer, source.byteOffset, source.byteLength), sp);
+		heap.set(bytes(source), sp);
 		fun(tp, count, stride, bits, sp);
 		var target = new Uint8Array(count * stride);
 		target.set(heap.subarray(tp, tp + count * stride));
