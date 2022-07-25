@@ -33,20 +33,30 @@
 		<script type="module">
 			import * as THREE from 'https://unpkg.com/three@0.122.0/build/three.module.js';
 			import { GLTFLoader } from 'https://unpkg.com/three@0.122.0/examples/jsm/loaders/GLTFLoader.js';
+			import { OrbitControls } from 'https://unpkg.com/three@0.122.0/examples/jsm/controls/OrbitControls.js';
 			import { MeshoptDecoder } from '../js/meshopt_decoder.module.js';
 			import { MeshoptSimplifier } from '../js/meshopt_simplifier.module.js';
-			import { GUI } from 'https://unpkg.com/dat.gui@0.7.9/build/dat.gui.module.js';
+			import { GUI } from 'https://unpkg.com/lil-gui@0.17.0/dist/lil-gui.esm.js';
 
 			var container;
 
-			var camera, scene, renderer, mixer, clock;
+			var camera, scene, renderer, mixer, clock, controls;
 
 			var settings = {
-				ratio: 1.0
+				wireframe: false,
+				ratio: 1.0,
+				lockBorder: false,
+				errorThresholdLog10: 2,
 			};
 
-			var gui = new GUI();
-			gui.add(settings, 'ratio', 0, 1, 0.01).onChange(simplify);
+			var gui = new GUI({ width: 300 });
+			var guiDisplay = gui.addFolder('Display');
+			guiDisplay.add(settings, 'wireframe').onChange(update);
+
+			var guiSimplify = gui.addFolder('Simplify');
+			guiSimplify.add(settings, 'ratio', 0, 1, 0.01).onChange(simplify);
+			guiSimplify.add(settings, 'lockBorder').onChange(simplify);
+			guiSimplify.add(settings, 'errorThresholdLog10', 0, 3, 0.1).onChange(simplify);
 
 			var windowHalfX = window.innerWidth / 2;
 			var windowHalfY = window.innerHeight / 2;
@@ -63,7 +73,13 @@
 				var indices = (geo.index.original instanceof Uint16Array) ? new Uint32Array(geo.index.original) : geo.index.original;
 
 				var target = Math.floor(indices.length * settings.ratio / 3) * 3;
-				var res = MeshoptSimplifier.simplify(indices, positions, geo.attributes.position.data.stride, target, 0.1);
+
+				var flags = [];
+				if (settings.lockBorder)
+					flags.push("LockBorder");
+
+				var threshold = Math.pow(10, -settings.errorThresholdLog10);
+				var res = MeshoptSimplifier.simplify(indices, positions, geo.attributes.position.data.stride, target, threshold, flags);
 
 				geo.index.array = (geo.index.original instanceof Uint16Array) ? new Uint16Array(res[0]) : res[0];
 				geo.index.count = res[0].length;
@@ -80,14 +96,33 @@
 				});
 			}
 
+			function update()
+			{
+				scene.traverse(function(child) {
+					if (child.isMesh) {
+						child.material.wireframe = settings.wireframe;
+					}
+				});
+			}
+
 			function init()
 			{
 				container = document.createElement('div');
 				document.body.appendChild(container);
 
+				renderer = new THREE.WebGLRenderer();
+				renderer.setPixelRatio(window.devicePixelRatio);
+				renderer.setSize(window.innerWidth, window.innerHeight);
+				container.appendChild(renderer.domElement);
+
+				window.addEventListener('resize', onWindowResize, false);
+
 				camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 100);
 				camera.position.y = 1.0;
 				camera.position.z = 3.0;
+
+				controls = new OrbitControls(camera, renderer.domElement);
+				controls.target = new THREE.Vector3(0, 1, 0);
 
 				scene = new THREE.Scene();
 				scene.background = new THREE.Color(0x300a24);
@@ -123,13 +158,6 @@
 					}
 				}, onProgress, onError);
 
-				renderer = new THREE.WebGLRenderer();
-				renderer.setPixelRatio(window.devicePixelRatio);
-				renderer.setSize(window.innerWidth, window.innerHeight);
-				container.appendChild(renderer.domElement);
-
-				window.addEventListener('resize', onWindowResize, false);
-
 				clock = new THREE.Clock();
 			}
 
@@ -151,11 +179,7 @@
 				}
 
 				requestAnimationFrame(animate);
-				render();
-			}
-
-			function render()
-			{
+				controls.update();
 				renderer.render(scene, camera);
 			}
 		</script>
