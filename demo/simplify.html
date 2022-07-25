@@ -40,13 +40,25 @@
 
 			var container;
 
-			var camera, scene, renderer, mixer, clock, controls;
+			var camera, scene, renderer, mixer, clock, controls, model;
 
 			var settings = {
 				wireframe: false,
 				ratio: 1.0,
 				lockBorder: false,
 				errorThresholdLog10: 2,
+
+				loadFile: function() {
+					var input = document.createElement('input');
+					input.type = 'file';
+					input.onchange = function() {
+						var uri = URL.createObjectURL(input.files[0]);
+
+						load(uri);
+						controls.reset();
+					};
+					input.click();
+				}
 			};
 
 			var gui = new GUI({ width: 300 });
@@ -58,10 +70,14 @@
 			guiSimplify.add(settings, 'lockBorder').onChange(simplify);
 			guiSimplify.add(settings, 'errorThresholdLog10', 0, 3, 0.1).onChange(simplify);
 
+			var guiLoad = gui.addFolder('Load');
+			guiLoad.add(settings, 'loadFile');
+
 			var windowHalfX = window.innerWidth / 2;
 			var windowHalfY = window.innerHeight / 2;
 
 			init();
+			load('pirate.glb');
 			animate();
 
 			function simplifyGeometry(geo) {
@@ -79,7 +95,8 @@
 					flags.push("LockBorder");
 
 				var threshold = Math.pow(10, -settings.errorThresholdLog10);
-				var res = MeshoptSimplifier.simplify(indices, positions, geo.attributes.position.data.stride, target, threshold, flags);
+				var stride = (geo.attributes.position instanceof THREE.InterleavedBufferAttribute) ? geo.attributes.position.data.stride : 3;
+				var res = MeshoptSimplifier.simplify(indices, positions, stride, target, threshold, flags);
 
 				geo.index.array = (geo.index.original instanceof Uint16Array) ? new Uint16Array(res[0]) : res[0];
 				geo.index.count = res[0].length;
@@ -105,6 +122,42 @@
 				});
 			}
 
+			function load(path)
+			{
+				if (model)
+				{
+					scene.remove(model);
+					model = undefined;
+				}
+
+				var onProgress = function (xhr) {};
+				var onError = function (e) {
+					console.log(e);
+				};
+
+				var loader = new GLTFLoader();
+				loader.setMeshoptDecoder(MeshoptDecoder);
+				loader.load(path, function (gltf) {
+					model = gltf.scene;
+
+					var bbox = new THREE.Box3().setFromObject(model);
+					var scale = 2 / (bbox.max.y - bbox.min.y);
+					var offset = -(bbox.min.y + bbox.max.y) / 2 * scale;
+
+					console.log(model.scale);
+					model.scale.set(scale, scale, scale);
+					model.position.set(0, offset, 0);
+
+					scene.add(model);
+
+					mixer = new THREE.AnimationMixer(model);
+
+					if (gltf.animations.length) {
+						mixer.clipAction(gltf.animations[gltf.animations.length - 1]).play();
+					}
+				}, onProgress, onError);
+			}
+
 			function init()
 			{
 				container = document.createElement('div');
@@ -122,7 +175,6 @@
 				camera.position.z = 3.0;
 
 				controls = new OrbitControls(camera, renderer.domElement);
-				controls.target = new THREE.Vector3(0, 1, 0);
 
 				scene = new THREE.Scene();
 				scene.background = new THREE.Color(0x300a24);
@@ -134,29 +186,6 @@
 				pointLight.position.set(3, 3, 0);
 				camera.add(pointLight);
 				scene.add(camera);
-
-				var onProgress = function (xhr) {};
-				var onError = function (e) {
-					console.log(e);
-				};
-
-				var loader = new GLTFLoader();
-				loader.setMeshoptDecoder(MeshoptDecoder);
-				loader.load('pirate.glb', function (gltf) {
-					var bbox = new THREE.Box3().setFromObject(gltf.scene);
-					var scale = 2 / (bbox.max.y - bbox.min.y);
-
-					gltf.scene.scale.set(scale, scale, scale);
-					gltf.scene.position.set(0, 0, 0);
-
-					scene.add(gltf.scene);
-
-					mixer = new THREE.AnimationMixer(gltf.scene);
-
-					if (gltf.animations.length) {
-						mixer.clipAction(gltf.animations[gltf.animations.length - 1]).play();
-					}
-				}, onProgress, onError);
 
 				clock = new THREE.Clock();
 			}
