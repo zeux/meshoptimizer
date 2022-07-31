@@ -178,13 +178,10 @@ static void writeTextureInfo(std::string& json, const cgltf_data* data, const cg
 
 	if (qt)
 	{
-		// UV streams use normalized unsigned 16-bit data, so we need to cancel division by 65535 and apply current bitcount we use
-		const float kRescale = 65535.f / float((1 << qt->bits) - 1);
-
 		transform.offset[0] += qt->offset[0];
 		transform.offset[1] += qt->offset[1];
-		transform.scale[0] *= qt->scale[0] * kRescale;
-		transform.scale[1] *= qt->scale[1] * kRescale;
+		transform.scale[0] *= qt->scale[0] / float((1 << qt->bits) - 1) * (qt->normalized ? 65535.f : 1.f);
+		transform.scale[1] *= qt->scale[1] / float((1 << qt->bits) - 1) * (qt->normalized ? 65535.f : 1.f);
 		has_transform = true;
 	}
 
@@ -473,8 +470,7 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 	if (tm.thickness_factor != 0)
 	{
 		// thickness is in mesh coordinate space which is rescaled by quantization
-		// TODO: account for pos_normalized
-		float node_scale = qp ? qp->scale / float((1 << qp->bits) - 1) : 1.f;
+		float node_scale = qp ? qp->scale / float((1 << qp->bits) - 1) * (qp->normalized ? 65535.f : 1.f) : 1.f;
 
 		comma(json);
 		append(json, "\"thicknessFactor\":");
@@ -952,7 +948,7 @@ void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std:
 		{
 			float min[3] = {};
 			float max[3] = {};
-			getPositionBounds(min, max, stream, settings.quantize ? &qp : NULL, settings);
+			getPositionBounds(min, max, stream, settings.quantize ? &qp : NULL);
 
 			writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, stream.data.size(), min, max, 3);
 		}
@@ -1032,7 +1028,7 @@ size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_
 
 		if (settings.quantize)
 		{
-			float node_scale = qp.scale / float((1 << qp.bits) - 1) * (settings.pos_normalized ? 65535.f : 1.f);
+			float node_scale = qp.scale / float((1 << qp.bits) - 1) * (qp.normalized ? 65535.f : 1.f);
 
 			// pos_offset has to be applied first, thus it results in an offset rotated by the bind matrix
 			transform[12] += qp.offset[0] * transform[0] + qp.offset[1] * transform[4] + qp.offset[2] * transform[8];
@@ -1091,7 +1087,7 @@ size_t writeInstances(std::vector<BufferView>& views, std::string& json_accessor
 		{
 			const float* transform = transforms[i].data;
 
-			float node_scale = qp.scale / float((1 << qp.bits) - 1) * (settings.pos_normalized ? 65535.f : 1.f);
+			float node_scale = qp.scale / float((1 << qp.bits) - 1) * (qp.normalized ? 65535.f : 1.f);
 
 			// pos_offset has to be applied first, thus it results in an offset rotated by the instance matrix
 			position[i].f[0] += qp.offset[0] * transform[0] + qp.offset[1] * transform[4] + qp.offset[2] * transform[8];
@@ -1114,7 +1110,7 @@ size_t writeInstances(std::vector<BufferView>& views, std::string& json_accessor
 	return result;
 }
 
-void writeMeshNode(std::string& json, size_t mesh_offset, cgltf_node* node, cgltf_skin* skin, cgltf_data* data, const QuantizationPosition* qp, const Settings& settings)
+void writeMeshNode(std::string& json, size_t mesh_offset, cgltf_node* node, cgltf_skin* skin, cgltf_data* data, const QuantizationPosition* qp)
 {
 	comma(json);
 	append(json, "{\"mesh\":");
@@ -1127,7 +1123,7 @@ void writeMeshNode(std::string& json, size_t mesh_offset, cgltf_node* node, cglt
 	}
 	if (qp)
 	{
-		float node_scale = qp->scale / float((1 << qp->bits) - 1) * (settings.pos_normalized ? 65535.f : 1.f);
+		float node_scale = qp->scale / float((1 << qp->bits) - 1) * (qp->normalized ? 65535.f : 1.f);
 
 		append(json, ",\"translation\":[");
 		append(json, qp->offset[0]);

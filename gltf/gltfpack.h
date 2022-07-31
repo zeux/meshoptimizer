@@ -157,6 +157,7 @@ struct QuantizationPosition
 	float offset[3];
 	float scale;
 	int bits;
+	bool normalized;
 };
 
 struct QuantizationTexture
@@ -164,6 +165,7 @@ struct QuantizationTexture
 	float offset[2];
 	float scale[2];
 	int bits;
+	bool normalized;
 };
 
 struct StreamFormat
@@ -319,7 +321,7 @@ void decomposeTransform(float translation[3], float rotation[4], float scale[3],
 
 QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes, const Settings& settings);
 void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTexture>& result, std::vector<size_t>& indices, const std::vector<Mesh>& meshes, const Settings& settings);
-void getPositionBounds(float min[3], float max[3], const Stream& stream, const QuantizationPosition* qp, const Settings& settings);
+void getPositionBounds(float min[3], float max[3], const Stream& stream, const QuantizationPosition* qp);
 
 StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings);
 StreamFormat writeIndexStream(std::string& bin, const std::vector<unsigned int>& stream);
@@ -352,7 +354,7 @@ void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std:
 size_t writeMeshIndices(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, const Settings& settings);
 size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const cgltf_skin& skin, const QuantizationPosition& qp, const Settings& settings);
 size_t writeInstances(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const std::vector<Transform>& transforms, const QuantizationPosition& qp, const Settings& settings);
-void writeMeshNode(std::string& json, size_t mesh_offset, cgltf_node* node, cgltf_skin* skin, cgltf_data* data, const QuantizationPosition* qp, const Settings& settings);
+void writeMeshNode(std::string& json, size_t mesh_offset, cgltf_node* node, cgltf_skin* skin, cgltf_data* data, const QuantizationPosition* qp);
 void writeMeshNodeInstanced(std::string& json, size_t mesh_offset, size_t accr_offset);
 void writeSkin(std::string& json, const cgltf_skin& skin, size_t matrix_accr, const std::vector<NodeInfo>& nodes, cgltf_data* data);
 void writeNode(std::string& json, const cgltf_node& node, const std::vector<NodeInfo>& nodes, cgltf_data* data);
