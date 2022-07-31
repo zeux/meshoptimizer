@@ -105,6 +105,38 @@ Note that the source is specified as byte arrays; for example, to quantize a pos
 
 When interleaved vertex data is compressed, `encodeVertexBuffer` can be called with the full size of a single interleaved vertex; however, when compressing deinterleaved data, note that `encodeVertexBuffer` should be called on each component individually if the strides of different streams are different.
 
+## Simplifier
+
+`MeshoptSimplifier` (`meshopt_simplifier.js`) implements mesh simplification, producing a mesh with fewer triangles/points that resembles the original mesh in its appearance. The simplification algorithms are lossy and may result in significant change in appearance, but can often be used without visible visual degradation on high poly input meshes or for level of detail variants far away.
+
+To simplify the mesh, the following function needs to be called first:
+
+```ts
+simplify(indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, target_index_count: number, target_error: number, flags?: [Flags]) => [Uint32Array, number];
+```
+
+Given an input triangle mesh represented by an index buffer and a position buffer, the algorithm tries to simplify the mesh down to the target index count while maintaining the appearance error below acceptable error. `target_error` is the maximum acceptable deviation in relative units: for example, using target error of `0.01` instructs the simplifier to limit the change in the simplified mesh to 1% of the overall mesh radius. Note that the error adjustment is approximate.
+
+The algorithm uses position data stored in a strided array; `vertex_positions_stride` represents the distance between subsequent positions in `Float32` units and should typically be set to 3. If the input position data is quantized, it's necessary to dequantize it so that the algorithm can estimate the position error correctly. While the algorithm doesn't use other attributes like normals/texture coordinates, it automatically recognizes and preserves attribute discontinuities based on index data. Because of this, for the algorithm to function well, the mesh vertices should be unique (de-duplicated).
+
+Upon completion, the function returns the new index buffer as well as the resulting appearance error. The index buffer can be used to render the simplified mesh with the same vertex buffer(s) as the original one, including non-positional attributes. For example, `simplify` can be called multiple times with different target counts/errors, and the application can select the appropriate index buffer to render for the mesh at runtime to implement level of detail.
+
+To control behavior of the algorithm more precisely, `flags` may specify an array of strings that enable various additional options:
+
+- `"LockBorder"` locks the vertices that lie on the topological border of the mesh in place such that they don't move during simplification. This can be valuable to simplify independent chunks of a mesh, for example terrain, to ensure that individual levels of detail can be stitched together later without gaps.
+
+When the resulting mesh is stored, it might be desireable to remove the redundant vertices from the attribute buffers instead of simply using the original vertex data with the smaller index buffer. For that purpose, the simplifier module provides the `compactMesh` function, which is similar to `reorderMesh` function that the encoder provides, but doesn't perform extra optimizations and merely prepares a new vertex order that can be used to create new, smaller, vertex buffers:
+
+```ts
+compactMesh: (indices: Uint32Array) => [Uint32Array, number];
+```
+
+The simplification algorithm uses relative errors for input and output; to convert these errors to absolute units, they need to be multiplied by the scaling factor which depends on the mesh geometry and can be computed by calling the following function with the position data:
+
+```ts
+getScale: (vertex_positions: Float32Array, vertex_positions_stride: number) => number;
+```
+
 ## License
 
 This library is available to anybody free of charge, under the terms of MIT License (see LICENSE.md).

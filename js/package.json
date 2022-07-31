@@ -21,7 +21,7 @@
 	"module": "index.module.js",
 	"types": "index.module.d.ts",
 	"scripts": {
-		"test": "node meshopt_encoder.test.js && node meshopt_decoder.test.js",
+		"test": "node meshopt_encoder.test.js && node meshopt_decoder.test.js && node meshopt_simplifier.test.js",
 		"prepublishOnly": "npm test"
 	}
 }
