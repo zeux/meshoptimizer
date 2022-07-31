@@ -2,8 +2,7 @@
 #include "gltfpack.h"
 
 #include "../extern/fast_obj.h"
-
-#include <algorithm>
+#include "../src/meshoptimizer.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -92,29 +91,99 @@ static cgltf_data* parseSceneObj(fastObjMesh* obj)
 	return data;
 }
 
-static void parseMeshesObj(fastObjMesh* obj, cgltf_data* data, std::vector<Mesh>& meshes)
+static void parseMeshObj(fastObjMesh* obj, unsigned int face_offset, unsigned int face_vertex_offset, unsigned int face_count, unsigned int face_vertex_count, unsigned int index_count, Mesh& mesh)
 {
-	unsigned int material_count = std::max(obj->material_count, 1u);
+	std::vector<unsigned int> remap(face_vertex_count);
+	size_t unique_vertices = meshopt_generateVertexRemap(remap.data(), nullptr, face_vertex_count, &obj->indices[face_vertex_offset], face_vertex_count, sizeof(fastObjIndex));
 
-	std::vector<size_t> vertex_count(material_count);
-	std::vector<size_t> index_count(material_count);
+	int pos_stream = 0;
+	int nrm_stream = obj->normal_count > 1 ? 1 : -1;
+	int tex_stream = obj->texcoord_count > 1 ? 1 + (nrm_stream >= 0) : -1;
 
-	for (unsigned int fi = 0; fi < obj->face_count; ++fi)
+	mesh.streams.resize(1 + (nrm_stream >= 0) + (tex_stream >= 0));
+
+	mesh.streams[pos_stream].type = cgltf_attribute_type_position;
+	mesh.streams[pos_stream].data.resize(unique_vertices);
+
+	if (nrm_stream >= 0)
 	{
-		unsigned int mi = obj->face_materials[fi];
-
-		vertex_count[mi] += obj->face_vertices[fi];
-		index_count[mi] += (obj->face_vertices[fi] - 2) * 3;
+		mesh.streams[nrm_stream].type = cgltf_attribute_type_normal;
+		mesh.streams[nrm_stream].data.resize(unique_vertices);
 	}
 
-	std::vector<size_t> mesh_index(material_count);
-
-	for (unsigned int mi = 0; mi < material_count; ++mi)
+	if (tex_stream >= 0)
 	{
-		if (index_count[mi] == 0)
-			continue;
+		mesh.streams[tex_stream].type = cgltf_attribute_type_texcoord;
+		mesh.streams[tex_stream].data.resize(unique_vertices);
+	}
 
-		mesh_index[mi] = meshes.size();
+	mesh.indices.resize(index_count);
+
+	for (unsigned int vi = 0; vi < face_vertex_count; ++vi)
+	{
+		unsigned int target = remap[vi];
+		// TODO: this fills every target vertex multiple times
+
+		fastObjIndex ii = obj->indices[face_vertex_offset + vi];
+
+		Attr p = {{obj->positions[ii.p * 3 + 0], obj->positions[ii.p * 3 + 1], obj->positions[ii.p * 3 + 2]}};
+		mesh.streams[pos_stream].data[target] = p;
+
+		if (nrm_stream >= 0)
+		{
+			Attr n = {{obj->normals[ii.n * 3 + 0], obj->normals[ii.n * 3 + 1], obj->normals[ii.n * 3 + 2]}};
+			mesh.streams[nrm_stream].data[target] = n;
+		}
+
+		if (tex_stream >= 0)
+		{
+			Attr t = {{obj->texcoords[ii.t * 2 + 0], 1.f - obj->texcoords[ii.t * 2 + 1]}};
+			mesh.streams[tex_stream].data[target] = t;
+		}
+	}
+
+	unsigned int vertex_offset = 0;
+	unsigned int index_offset = 0;
+
+	for (unsigned int fi = 0; fi < face_count; ++fi)
+	{
+		unsigned int face_vertices = obj->face_vertices[face_offset + fi];
+
+		for (unsigned int vi = 2; vi < face_vertices; ++vi)
+		{
+			size_t to = index_offset + (vi - 2) * 3;
+
+			mesh.indices[to + 0] = remap[vertex_offset];
+			mesh.indices[to + 1] = remap[vertex_offset + vi - 1];
+			mesh.indices[to + 2] = remap[vertex_offset + vi];
+		}
+
+		vertex_offset += face_vertices;
+		index_offset += (face_vertices - 2) * 3;
+	}
+
+	assert(vertex_offset == face_vertex_count);
+	assert(index_offset == index_count);
+}
+
+static void parseMeshesObj(fastObjMesh* obj, cgltf_data* data, std::vector<Mesh>& meshes)
+{
+	unsigned int face_vertex_offset = 0;
+
+	for (unsigned int face_offset = 0; face_offset < obj->face_count; )
+	{
+		unsigned int mi = obj->face_materials[face_offset];
+
+		unsigned int face_count = 0;
+		unsigned int face_vertex_count = 0;
+		unsigned int index_count = 0;
+
+		for (unsigned int fj = face_offset; fj < obj->face_count && obj->face_materials[fj] == mi; ++fj)
+		{
+			face_count += 1;
+			face_vertex_count += obj->face_vertices[fj];
+			index_count += (obj->face_vertices[fj] - 2) * 3;
+		}
 
 		meshes.push_back(Mesh());
 		Mesh& mesh = meshes.back();
@@ -126,77 +195,12 @@ static void parseMeshesObj(fastObjMesh* obj, cgltf_data* data, std::vector<Mesh>
 		}
 
 		mesh.type = cgltf_primitive_type_triangles;
-
-		mesh.streams.resize(3);
-		mesh.streams[0].type = cgltf_attribute_type_position;
-		mesh.streams[0].data.resize(vertex_count[mi]);
-		mesh.streams[1].type = cgltf_attribute_type_normal;
-		mesh.streams[1].data.resize(vertex_count[mi]);
-		mesh.streams[2].type = cgltf_attribute_type_texcoord;
-		mesh.streams[2].data.resize(vertex_count[mi]);
-		mesh.indices.resize(index_count[mi]);
 		mesh.targets = 0;
-	}
 
-	std::vector<char> mesh_normals(meshes.size());
-	std::vector<char> mesh_texcoords(meshes.size());
+		parseMeshObj(obj, face_offset, face_vertex_offset, face_count, face_vertex_count, index_count, mesh);
 
-	std::vector<size_t> vertex_offset(material_count);
-	std::vector<size_t> index_offset(material_count);
-
-	size_t group_offset = 0;
-
-	for (unsigned int fi = 0; fi < obj->face_count; ++fi)
-	{
-		unsigned int mi = obj->face_materials[fi];
-		Mesh& mesh = meshes[mesh_index[mi]];
-
-		size_t vo = vertex_offset[mi];
-		size_t io = index_offset[mi];
-
-		for (unsigned int vi = 0; vi < obj->face_vertices[fi]; ++vi)
-		{
-			fastObjIndex ii = obj->indices[group_offset + vi];
-
-			Attr p = {{obj->positions[ii.p * 3 + 0], obj->positions[ii.p * 3 + 1], obj->positions[ii.p * 3 + 2]}};
-			Attr n = {{obj->normals[ii.n * 3 + 0], obj->normals[ii.n * 3 + 1], obj->normals[ii.n * 3 + 2]}};
-			Attr t = {{obj->texcoords[ii.t * 2 + 0], 1.f - obj->texcoords[ii.t * 2 + 1]}};
-
-			mesh.streams[0].data[vo + vi] = p;
-			mesh.streams[1].data[vo + vi] = n;
-			mesh.streams[2].data[vo + vi] = t;
-
-			mesh_normals[mesh_index[mi]] |= ii.n > 0;
-			mesh_texcoords[mesh_index[mi]] |= ii.t > 0;
-		}
-
-		for (unsigned int vi = 2; vi < obj->face_vertices[fi]; ++vi)
-		{
-			size_t to = io + (vi - 2) * 3;
-
-			mesh.indices[to + 0] = unsigned(vo);
-			mesh.indices[to + 1] = unsigned(vo + vi - 1);
-			mesh.indices[to + 2] = unsigned(vo + vi);
-		}
-
-		vertex_offset[mi] += obj->face_vertices[fi];
-		index_offset[mi] += (obj->face_vertices[fi] - 2) * 3;
-		group_offset += obj->face_vertices[fi];
-	}
-
-	for (size_t i = 0; i < meshes.size(); ++i)
-	{
-		Mesh& mesh = meshes[i];
-
-		assert(mesh.streams.size() == 3);
-		assert(mesh.streams[1].type == cgltf_attribute_type_normal);
-		assert(mesh.streams[2].type == cgltf_attribute_type_texcoord);
-
-		if (!mesh_texcoords[i])
-			mesh.streams.erase(mesh.streams.begin() + 2);
-
-		if (!mesh_normals[i])
-			mesh.streams.erase(mesh.streams.begin() + 1);
+		face_offset += face_count;
+		face_vertex_offset += face_vertex_count;
 	}
 }
 
@@ -211,6 +215,7 @@ cgltf_data* parseObj(const char* path, std::vector<Mesh>& meshes, const char** e
 	}
 
 	cgltf_data* data = parseSceneObj(obj);
+
 	parseMeshesObj(obj, data, meshes);
 
 	fast_obj_destroy(obj);
