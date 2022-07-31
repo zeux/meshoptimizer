@@ -180,8 +180,8 @@ static void writeTextureInfo(std::string& json, const cgltf_data* data, const cg
 	{
 		transform.offset[0] += qt->offset[0];
 		transform.offset[1] += qt->offset[1];
-		transform.scale[0] *= qt->scale[0] / float((1 << qt->bits) - 1);
-		transform.scale[1] *= qt->scale[1] / float((1 << qt->bits) - 1);
+		transform.scale[0] *= qt->scale[0] / float((1 << qt->bits) - 1) * (qt->normalized ? 65535.f : 1.f);
+		transform.scale[1] *= qt->scale[1] / float((1 << qt->bits) - 1) * (qt->normalized ? 65535.f : 1.f);
 		has_transform = true;
 	}
 
@@ -470,7 +470,7 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 	if (tm.thickness_factor != 0)
 	{
 		// thickness is in mesh coordinate space which is rescaled by quantization
-		float node_scale = qp ? qp->scale / float((1 << qp->bits) - 1) : 1.f;
+		float node_scale = qp ? qp->scale / float((1 << qp->bits) - 1) * (qp->normalized ? 65535.f : 1.f) : 1.f;
 
 		comma(json);
 		append(json, "\"thicknessFactor\":");
@@ -1028,7 +1028,7 @@ size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_
 
 		if (settings.quantize)
 		{
-			float node_scale = qp.scale / float((1 << qp.bits) - 1);
+			float node_scale = qp.scale / float((1 << qp.bits) - 1) * (qp.normalized ? 65535.f : 1.f);
 
 			// pos_offset has to be applied first, thus it results in an offset rotated by the bind matrix
 			transform[12] += qp.offset[0] * transform[0] + qp.offset[1] * transform[4] + qp.offset[2] * transform[8];
@@ -1087,7 +1087,7 @@ size_t writeInstances(std::vector<BufferView>& views, std::string& json_accessor
 		{
 			const float* transform = transforms[i].data;
 
-			float node_scale = qp.scale / float((1 << qp.bits) - 1);
+			float node_scale = qp.scale / float((1 << qp.bits) - 1) * (qp.normalized ? 65535.f : 1.f);
 
 			// pos_offset has to be applied first, thus it results in an offset rotated by the instance matrix
 			position[i].f[0] += qp.offset[0] * transform[0] + qp.offset[1] * transform[4] + qp.offset[2] * transform[8];
@@ -1123,7 +1123,7 @@ void writeMeshNode(std::string& json, size_t mesh_offset, cgltf_node* node, cglt
 	}
 	if (qp)
 	{
-		float node_scale = qp->scale / float((1 << qp->bits) - 1);
+		float node_scale = qp->scale / float((1 << qp->bits) - 1) * (qp->normalized ? 65535.f : 1.f);
 
 		append(json, ",\"translation\":[");
 		append(json, qp->offset[0]);

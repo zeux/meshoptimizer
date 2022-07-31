@@ -108,6 +108,8 @@ struct Settings
 	int nrm_bits;
 	int col_bits;
 
+	bool pos_normalized;
+
 	int trn_bits;
 	int rot_bits;
 	int scl_bits;
@@ -155,6 +157,7 @@ struct QuantizationPosition
 	float offset[3];
 	float scale;
 	int bits;
+	bool normalized;
 };
 
 struct QuantizationTexture
@@ -162,6 +165,7 @@ struct QuantizationTexture
 	float offset[2];
 	float scale[2];
 	int bits;
+	bool normalized;
 };
 
 struct StreamFormat
