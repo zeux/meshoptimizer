@@ -59,6 +59,16 @@ The following settings are frequently used to restrict some optimizations:
 * `-km`: keep named materials and disable named material merging
 * `-ke`: keep extras data
 
+## Building
+
+gltfpack can be built from source using CMake or Make. To build a full version of gltfpack that supports texture compression, CMake configuration needs to specify the path to https://github.com/zeux/basis_universal fork (branch gltfpack) via `MESHOPT_BASISU_PATH` variable:
+
+```
+git clone -b gltfpack https://github.com/zeux/basis_universal
+cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_BASISU_PATH=basis_universal -DCMAKE_BUILD_TYPE=Release
+cmake --build . --target gltfpack --config Release
+```
+
 ## License
 
 gltfpack is available to anybody free of charge, under the terms of MIT License (see LICENSE.md).
