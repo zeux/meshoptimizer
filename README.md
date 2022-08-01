@@ -13,7 +13,7 @@ The library provides a C and C++ interface for all algorithms; you can use it fr
 meshoptimizer is hosted on GitHub; you can download the latest release using git:
 
 ```
-git clone -b v0.17 https://github.com/zeux/meshoptimizer.git
+git clone -b v0.18 https://github.com/zeux/meshoptimizer.git
 ```
 
 Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v0.15.zip).

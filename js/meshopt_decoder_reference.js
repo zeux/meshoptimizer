@@ -1,5 +1,5 @@
 // This file is part of meshoptimizer library and is distributed under the terms of MIT License.
-// Copyright (C) 2016-2021, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
+// Copyright (C) 2016-2022, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
 
 // This is the reference decoder implementation by Jasper St. Pierre.
 // It follows the decoder interface and should be a drop-in replacement for the actual decoder from meshopt_decoder.js
