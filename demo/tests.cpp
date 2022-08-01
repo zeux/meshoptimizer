@@ -1,6 +1,7 @@
 #include "../src/meshoptimizer.h"
 
 #include <assert.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -184,6 +185,19 @@ static void decodeIndexRejectInvalidVersion()
 
 	unsigned int decoded[index_count];
 	assert(meshopt_decodeIndexBuffer(decoded, index_count, &brokenbuffer[0], brokenbuffer.size()) < 0);
+}
+
+static void decodeIndexMalformedVByte()
+{
+	const unsigned char input[] = {
+	    0xe1, 0x20, 0x20, 0x20, 0xff, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
+	    0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
+	    0xff, 0xff, 0xff, 0xff, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
+	    0x20, 0x20, 0x20, // clang-format :-/
+	};
+
+	unsigned int decoded[66];
+	assert(meshopt_decodeIndexBuffer(decoded, 66, input, sizeof(input)) < 0);
 }
 
 static void roundtripIndexTricky()
@@ -500,14 +514,12 @@ static void encodeVertexEmpty()
 
 static void decodeFilterOct8()
 {
-	unsigned char data[4 * 4] = {
+	const unsigned char data[4 * 4] = {
 	    0, 1, 127, 0,
 	    0, 187, 127, 1,
 	    255, 1, 127, 0,
 	    14, 130, 127, 1, // clang-format :-/
 	};
-
-	meshopt_decodeFilterOct(data, 4, 4);
 
 	const unsigned char expected[4 * 4] = {
 	    0, 1, 127, 0,
@@ -516,19 +528,27 @@ static void decodeFilterOct8()
 	    1, 130, 241, 1, // clang-format :-/
 	};
 
-	assert(memcmp(data, expected, sizeof(data)) == 0);
+	// Aligned by 4
+	unsigned char full[4 * 4];
+	memcpy(full, data, sizeof(full));
+	meshopt_decodeFilterOct(full, 4, 4);
+	assert(memcmp(full, expected, sizeof(full)) == 0);
+
+	// Tail processing for unaligned data
+	unsigned char tail[3 * 4];
+	memcpy(tail, data, sizeof(tail));
+	meshopt_decodeFilterOct(tail, 3, 4);
+	assert(memcmp(tail, expected, sizeof(tail)) == 0);
 }
 
 static void decodeFilterOct12()
 {
-	unsigned short data[4 * 4] = {
+	const unsigned short data[4 * 4] = {
 	    0, 1, 2047, 0,
 	    0, 1870, 2047, 1,
 	    2017, 1, 2047, 0,
 	    14, 1300, 2047, 1, // clang-format :-/
 	};
-
-	meshopt_decodeFilterOct(data, 4, 8);
 
 	const unsigned short expected[4 * 4] = {
 	    0, 16, 32767, 0,
@@ -537,19 +557,27 @@ static void decodeFilterOct12()
 	    307, 28541, 16093, 1, // clang-format :-/
 	};
 
-	assert(memcmp(data, expected, sizeof(data)) == 0);
+	// Aligned by 4
+	unsigned short full[4 * 4];
+	memcpy(full, data, sizeof(full));
+	meshopt_decodeFilterOct(full, 4, 8);
+	assert(memcmp(full, expected, sizeof(full)) == 0);
+
+	// Tail processing for unaligned data
+	unsigned short tail[3 * 4];
+	memcpy(tail, data, sizeof(tail));
+	meshopt_decodeFilterOct(tail, 3, 8);
+	assert(memcmp(tail, expected, sizeof(tail)) == 0);
 }
 
 static void decodeFilterQuat12()
 {
-	unsigned short data[4 * 4] = {
+	const unsigned short data[4 * 4] = {
 	    0, 1, 0, 0x7fc,
 	    0, 1870, 0, 0x7fd,
 	    2017, 1, 0, 0x7fe,
 	    14, 1300, 0, 0x7ff, // clang-format :-/
 	};
-
-	meshopt_decodeFilterQuat(data, 4, 8);
 
 	const unsigned short expected[4 * 4] = {
 	    32767, 0, 11, 0,
@@ -558,19 +586,27 @@ static void decodeFilterQuat12()
 	    158, 14715, 0, 29277, // clang-format :-/
 	};
 
-	assert(memcmp(data, expected, sizeof(data)) == 0);
+	// Aligned by 4
+	unsigned short full[4 * 4];
+	memcpy(full, data, sizeof(full));
+	meshopt_decodeFilterQuat(full, 4, 8);
+	assert(memcmp(full, expected, sizeof(full)) == 0);
+
+	// Tail processing for unaligned data
+	unsigned short tail[3 * 4];
+	memcpy(tail, data, sizeof(tail));
+	meshopt_decodeFilterQuat(tail, 3, 8);
+	assert(memcmp(tail, expected, sizeof(tail)) == 0);
 }
 
 static void decodeFilterExp()
 {
-	unsigned int data[4] = {
+	const unsigned int data[4] = {
 	    0,
 	    0xff000003,
 	    0x02fffff7,
 	    0xfe7fffff, // clang-format :-/
 	};
-
-	meshopt_decodeFilterExp(data, 4, 4);
 
 	const unsigned int expected[4] = {
 	    0,
@@ -579,7 +615,144 @@ static void decodeFilterExp()
 	    0x49fffffe, // clang-format :-/
 	};
 
-	assert(memcmp(data, expected, sizeof(data)) == 0);
+	// Aligned by 4
+	unsigned int full[4];
+	memcpy(full, data, sizeof(full));
+	meshopt_decodeFilterExp(full, 4, 4);
+	assert(memcmp(full, expected, sizeof(full)) == 0);
+
+	// Tail processing for unaligned data
+	unsigned int tail[3];
+	memcpy(tail, data, sizeof(tail));
+	meshopt_decodeFilterExp(tail, 3, 4);
+	assert(memcmp(tail, expected, sizeof(tail)) == 0);
+}
+
+void encodeFilterOct8()
+{
+	const float data[4 * 4] = {
+	    1, 0, 0, 0,
+	    0, -1, 0, 0,
+	    0.7071068f, 0, 0.707168f, 1,
+	    -0.7071068f, 0, -0.707168f, 1, // clang-format :-/
+	};
+
+	const unsigned char expected[4 * 4] = {
+	    0x7f, 0, 0x7f, 0,
+	    0, 0x81, 0x7f, 0,
+	    0x3f, 0, 0x7f, 0x7f,
+	    0x81, 0x40, 0x7f, 0x7f, // clang-format :-/
+	};
+
+	unsigned char encoded[4 * 4];
+	meshopt_encodeFilterOct(encoded, 4, 4, 8, data);
+
+	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+
+	signed char decoded[4 * 4];
+	memcpy(decoded, encoded, sizeof(decoded));
+	meshopt_decodeFilterOct(decoded, 4, 4);
+
+	for (size_t i = 0; i < 4 * 4; ++i)
+		assert(fabsf(decoded[i] / 127.f - data[i]) < 1e-2f);
+}
+
+void encodeFilterOct12()
+{
+	const float data[4 * 4] = {
+	    1, 0, 0, 0,
+	    0, -1, 0, 0,
+	    0.7071068f, 0, 0.707168f, 1,
+	    -0.7071068f, 0, -0.707168f, 1, // clang-format :-/
+	};
+
+	const unsigned short expected[4 * 4] = {
+	    0x7ff, 0, 0x7ff, 0,
+	    0x0, 0xf801, 0x7ff, 0,
+	    0x3ff, 0, 0x7ff, 0x7fff,
+	    0xf801, 0x400, 0x7ff, 0x7fff, // clang-format :-/
+	};
+
+	unsigned short encoded[4 * 4];
+	meshopt_encodeFilterOct(encoded, 4, 8, 12, data);
+
+	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+
+	short decoded[4 * 4];
+	memcpy(decoded, encoded, sizeof(decoded));
+	meshopt_decodeFilterOct(decoded, 4, 8);
+
+	for (size_t i = 0; i < 4 * 4; ++i)
+		assert(fabsf(decoded[i] / 32767.f - data[i]) < 1e-3f);
+}
+
+void encodeFilterQuat12()
+{
+	const float data[4 * 4] = {
+	    1, 0, 0, 0,
+	    0, -1, 0, 0,
+	    0.7071068f, 0, 0, 0.707168f,
+	    -0.7071068f, 0, 0, -0.707168f, // clang-format :-/
+	};
+
+	const unsigned short expected[4 * 4] = {
+	    0, 0, 0, 0x7fc,
+	    0, 0, 0, 0x7fd,
+	    0x7ff, 0, 0, 0x7ff,
+	    0x7ff, 0, 0, 0x7ff, // clang-format :-/
+	};
+
+	unsigned short encoded[4 * 4];
+	meshopt_encodeFilterQuat(encoded, 4, 8, 12, data);
+
+	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+
+	short decoded[4 * 4];
+	memcpy(decoded, encoded, sizeof(decoded));
+	meshopt_decodeFilterQuat(decoded, 4, 8);
+
+	for (size_t i = 0; i < 4; ++i)
+	{
+		float dx = decoded[i * 4 + 0] / 32767.f;
+		float dy = decoded[i * 4 + 1] / 32767.f;
+		float dz = decoded[i * 4 + 2] / 32767.f;
+		float dw = decoded[i * 4 + 3] / 32767.f;
+
+		float dp =
+		    data[i * 4 + 0] * dx +
+		    data[i * 4 + 1] * dy +
+		    data[i * 4 + 2] * dz +
+		    data[i * 4 + 3] * dw;
+
+		assert(fabsf(fabsf(dp) - 1.f) < 1e-4f);
+	}
+}
+
+void encodeFilterExp()
+{
+	const float data[3] = {
+	    1,
+	    -23.4f,
+	    -0.1f,
+	};
+
+	const unsigned int expected[3] = {
+	    0xf7000200,
+	    0xf7ffd133,
+	    0xf7ffffcd,
+	};
+
+	unsigned int encoded[3];
+	meshopt_encodeFilterExp(encoded, 1, 12, 15, data);
+
+	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+
+	float decoded[3];
+	memcpy(decoded, encoded, sizeof(decoded));
+	meshopt_decodeFilterExp(decoded, 3, 4);
+
+	for (size_t i = 0; i < 3; ++i)
+		assert(fabsf(decoded[i] - data[i]) < 1e-3f);
 }
 
 static void clusterBoundsDegenerate()
@@ -708,11 +881,13 @@ static void simplifySloppyStuck()
 	const float vb[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 	const unsigned int ib[] = {0, 1, 2, 0, 1, 2};
 
+	unsigned int* target = NULL;
+
 	// simplifying down to 0 triangles results in 0 immediately
-	assert(meshopt_simplifySloppy(0, ib, 3, vb, 3, 12, 0) == 0);
+	assert(meshopt_simplifySloppy(target, ib, 3, vb, 3, 12, 0, 0.f) == 0);
 
 	// simplifying down to 2 triangles given that all triangles are degenerate results in 0 as well
-	assert(meshopt_simplifySloppy(0, ib, 6, vb, 3, 12, 6) == 0);
+	assert(meshopt_simplifySloppy(target, ib, 6, vb, 3, 12, 6, 0.f) == 0);
 }
 
 static void simplifyPointsStuck()
@@ -723,7 +898,194 @@ static void simplifyPointsStuck()
 	assert(meshopt_simplifyPoints(0, vb, 3, 12, 0) == 0);
 }
 
-static void runTestsOnce()
+static void simplifyFlip()
+{
+	// this mesh has been constructed by taking a tessellated irregular grid with a square cutout
+	// and progressively collapsing edges until the only ones left violate border or flip constraints.
+	// there is only one valid non-flip collapse, so we validate that we take it; when flips are allowed,
+	// the wrong collapse is picked instead.
+	float vb[] = {
+	    1.000000f, 1.000000f, -1.000000f,
+	    1.000000f, 1.000000f, 1.000000f,
+	    1.000000f, -1.000000f, 1.000000f,
+	    1.000000f, -0.200000f, -0.200000f,
+	    1.000000f, 0.200000f, -0.200000f,
+	    1.000000f, -0.200000f, 0.200000f,
+	    1.000000f, 0.200000f, 0.200000f,
+	    1.000000f, 0.500000f, -0.500000f,
+	    1.000000f, -1.000000f, 0.000000f, // clang-format :-/
+	};
+
+	// the collapse we expect is 7 -> 0
+	unsigned int ib[] = {
+	    7, 4, 3,
+	    1, 2, 5,
+	    7, 1, 6,
+	    7, 8, 0, // gets removed
+	    7, 6, 4,
+	    8, 5, 2,
+	    8, 7, 3,
+	    8, 3, 5,
+	    5, 6, 1,
+	    7, 0, 1, // gets removed
+	};
+
+	unsigned int expected[] = {
+	    0, 4, 3,
+	    1, 2, 5,
+	    0, 1, 6,
+	    0, 6, 4,
+	    8, 5, 2,
+	    8, 0, 3,
+	    8, 3, 5,
+	    5, 6, 1, // clang-format :-/
+	};
+
+	assert(meshopt_simplify(ib, ib, 30, vb, 9, 12, 3, 1e-3f) == 24);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+}
+
+static void simplifyScale()
+{
+	const float vb[] = {0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3};
+
+	assert(meshopt_simplifyScale(vb, 4, 12) == 3.f);
+}
+
+static void simplifyDegenerate()
+{
+	float vb[] = {
+	    0.000000f, 0.000000f, 0.000000f,
+	    0.000000f, 1.000000f, 0.000000f,
+	    0.000000f, 2.000000f, 0.000000f,
+	    1.000000f, 0.000000f, 0.000000f,
+	    2.000000f, 0.000000f, 0.000000f,
+	    1.000000f, 1.000000f, 0.000000f, // clang-format :-/
+	};
+
+	// 0 1 2
+	// 3 5
+	// 4
+
+	unsigned int ib[] = {
+	    0, 1, 3,
+	    3, 1, 5,
+	    1, 2, 5,
+	    3, 5, 4,
+	    1, 0, 1, // these two degenerate triangles create a fake reverse edge
+	    0, 3, 0, // which breaks border classification
+	};
+
+	unsigned int expected[] = {
+	    0, 1, 4,
+	    4, 1, 2, // clang-format :-/
+	};
+
+	assert(meshopt_simplify(ib, ib, 18, vb, 6, 12, 3, 1e-3f) == 6);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+}
+
+static void simplifyLockBorder()
+{
+	float vb[] = {
+	    0.000000f, 0.000000f, 0.000000f,
+	    0.000000f, 1.000000f, 0.000000f,
+	    0.000000f, 2.000000f, 0.000000f,
+	    1.000000f, 0.000000f, 0.000000f,
+	    1.000000f, 1.000000f, 0.000000f,
+	    1.000000f, 2.000000f, 0.000000f,
+	    2.000000f, 0.000000f, 0.000000f,
+	    2.000000f, 1.000000f, 0.000000f,
+	    2.000000f, 2.000000f, 0.000000f, // clang-format :-/
+	};
+
+	// 0 1 2
+	// 3 4 5
+	// 6 7 8
+
+	unsigned int ib[] = {
+	    0, 1, 3,
+	    3, 1, 4,
+	    1, 2, 4,
+	    4, 2, 5,
+	    3, 4, 6,
+	    6, 4, 7,
+	    4, 5, 7,
+	    7, 5, 8, // clang-format :-/
+	};
+
+	unsigned int expected[] = {
+	    0, 1, 3,
+	    1, 2, 3,
+	    3, 2, 5,
+	    6, 3, 7,
+	    3, 5, 7,
+	    7, 5, 8, // clang-format :-/
+	};
+
+	assert(meshopt_simplify(ib, ib, 24, vb, 9, 12, 3, 1e-3f, meshopt_SimplifyLockBorder) == 18);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+}
+
+static void adjacency()
+{
+	// 0 1/4
+	// 2/5 3
+	const float vb[] = {0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0};
+	const unsigned int ib[] = {0, 1, 2, 5, 4, 3};
+
+	unsigned int adjib[12];
+	meshopt_generateAdjacencyIndexBuffer(adjib, ib, 6, vb, 6, 12);
+
+	unsigned int expected[] = {
+	    // patch 0
+	    0, 0,
+	    1, 3,
+	    2, 2,
+
+	    // patch 1
+	    5, 0,
+	    4, 4,
+	    3, 3,
+
+	    // clang-format :-/
+	};
+
+	assert(memcmp(adjib, expected, sizeof(expected)) == 0);
+}
+
+static void tessellation()
+{
+	// 0 1/4
+	// 2/5 3
+	const float vb[] = {0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0};
+	const unsigned int ib[] = {0, 1, 2, 5, 4, 3};
+
+	unsigned int tessib[24];
+	meshopt_generateTessellationIndexBuffer(tessib, ib, 6, vb, 6, 12);
+
+	unsigned int expected[] = {
+	    // patch 0
+	    0, 1, 2,
+	    0, 1,
+	    4, 5,
+	    2, 0,
+	    0, 1, 2,
+
+	    // patch 1
+	    5, 4, 3,
+	    2, 1,
+	    4, 3,
+	    3, 5,
+	    2, 1, 3,
+
+	    // clang-format :-/
+	};
+
+	assert(memcmp(tessib, expected, sizeof(expected)) == 0);
+}
+
+void runTests()
 {
 	decodeIndexV0();
 	decodeIndexV1();
@@ -733,6 +1095,7 @@ static void runTestsOnce()
 	decodeIndexRejectExtraBytes();
 	decodeIndexRejectMalformedHeaders();
 	decodeIndexRejectInvalidVersion();
+	decodeIndexMalformedVByte();
 	roundtripIndexTricky();
 	encodeIndexEmpty();
 
@@ -760,6 +1123,11 @@ static void runTestsOnce()
 	decodeFilterQuat12();
 	decodeFilterExp();
 
+	encodeFilterOct8();
+	encodeFilterOct12();
+	encodeFilterQuat12();
+	encodeFilterExp();
+
 	clusterBoundsDegenerate();
 
 	customAllocator();
@@ -769,26 +1137,11 @@ static void runTestsOnce()
 	simplifyStuck();
 	simplifySloppyStuck();
 	simplifyPointsStuck();
-}
+	simplifyFlip();
+	simplifyScale();
+	simplifyDegenerate();
+	simplifyLockBorder();
 
-namespace meshopt
-{
-extern unsigned int cpuid;
-}
-
-void runTests()
-{
-	runTestsOnce();
-
-#if !(defined(__AVX__) || defined(__SSSE3__)) && (defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__))
-	// When SSSE3/AVX support isn't enabled unconditionally, we use a cpuid-based fallback
-	// It's useful to be able to test scalar code in this case, so we temporarily fake the feature bits
-	// and restore them later
-	unsigned int cpuid = meshopt::cpuid;
-	meshopt::cpuid = 0;
-
-	runTestsOnce();
-
-	meshopt::cpuid = cpuid;
-#endif
+	adjacency();
+	tessellation();
 }

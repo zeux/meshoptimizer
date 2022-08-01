@@ -1,17 +1,7 @@
 // This file is part of gltfpack; see gltfpack.h for version/license details
 #include "gltfpack.h"
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-
-struct BasisSettings
-{
-	int etc1s_l;
-	int etc1s_q;
-	int uastc_l;
-	float uastc_q;
-};
 
 static const char* kMimeTypes[][2] = {
     {"image/jpeg", ".jpg"},
@@ -19,222 +9,97 @@ static const char* kMimeTypes[][2] = {
     {"image/png", ".png"},
 };
 
-static const BasisSettings kBasisSettings[10] = {
-    {1, 1, 0, 1.5f},
-    {1, 6, 0, 1.f},
-    {1, 20, 1, 1.0f},
-    {1, 50, 1, 0.75f},
-    {1, 90, 1, 0.5f},
-    {1, 128, 1, 0.4f},
-    {1, 160, 1, 0.34f},
-    {1, 192, 1, 0.29f}, // default
-    {1, 224, 2, 0.26f},
-    {1, 255, 2, 0.f},
-};
-
-void analyzeImages(cgltf_data* data, std::vector<ImageInfo>& images)
+static const char* inferMimeType(const char* path)
 {
-	for (size_t i = 0; i < data->materials_count; ++i)
-	{
-		const cgltf_material& material = data->materials[i];
-
-		if (material.has_pbr_metallic_roughness)
-		{
-			const cgltf_pbr_metallic_roughness& pbr = material.pbr_metallic_roughness;
-
-			if (pbr.base_color_texture.texture && pbr.base_color_texture.texture->image)
-				images[pbr.base_color_texture.texture->image - data->images].srgb = true;
-		}
-
-		if (material.has_pbr_specular_glossiness)
-		{
-			const cgltf_pbr_specular_glossiness& pbr = material.pbr_specular_glossiness;
-
-			if (pbr.diffuse_texture.texture && pbr.diffuse_texture.texture->image)
-				images[pbr.diffuse_texture.texture->image - data->images].srgb = true;
-		}
-
-		if (material.has_clearcoat)
-		{
-			const cgltf_clearcoat& clearcoat = material.clearcoat;
-
-			if (clearcoat.clearcoat_normal_texture.texture && clearcoat.clearcoat_normal_texture.texture->image)
-				images[clearcoat.clearcoat_normal_texture.texture->image - data->images].normal_map = true;
-		}
-
-		if (material.has_specular)
-		{
-			const cgltf_specular& specular = material.specular;
-
-			if (specular.specular_texture.texture && specular.specular_texture.texture->image)
-				images[specular.specular_texture.texture->image - data->images].srgb = true;
-		}
-
-		if (material.has_sheen)
-		{
-			const cgltf_sheen& sheen = material.sheen;
-
-			if (sheen.sheen_color_texture.texture && sheen.sheen_color_texture.texture->image)
-				images[sheen.sheen_color_texture.texture->image - data->images].srgb = true;
-		}
-
-		if (material.emissive_texture.texture && material.emissive_texture.texture->image)
-			images[material.emissive_texture.texture->image - data->images].srgb = true;
-
-		if (material.normal_texture.texture && material.normal_texture.texture->image)
-			images[material.normal_texture.texture->image - data->images].normal_map = true;
-	}
-}
-
-const char* inferMimeType(const char* path)
-{
-	const char* ext = strrchr(path, '.');
-	if (!ext)
-		return "";
-
-	std::string extl = ext;
-	for (size_t i = 0; i < extl.length(); ++i)
-		extl[i] = char(tolower(extl[i]));
+	std::string ext = getExtension(path);
 
 	for (size_t i = 0; i < sizeof(kMimeTypes) / sizeof(kMimeTypes[0]); ++i)
-		if (extl == kMimeTypes[i][1])
+		if (ext == kMimeTypes[i][1])
 			return kMimeTypes[i][0];
 
 	return "";
 }
 
-static const char* mimeExtension(const char* mime_type)
+static bool parseDataUri(const char* uri, std::string& mime_type, std::string& result)
 {
-	for (size_t i = 0; i < sizeof(kMimeTypes) / sizeof(kMimeTypes[0]); ++i)
-		if (strcmp(kMimeTypes[i][0], mime_type) == 0)
-			return kMimeTypes[i][1];
-
-	return ".raw";
-}
-
-#ifdef __wasi__
-static int execute(const char* cmd, bool ignore_stdout, bool ignore_stderr)
-{
-	return system(cmd);
-}
-
-static const char* readenv(const char* name)
-{
-	return NULL;
-}
-#else
-static int execute(const char* cmd_, bool ignore_stdout, bool ignore_stderr)
-{
-#ifdef _WIN32
-	std::string ignore = "nul";
-#else
-	std::string ignore = "/dev/null";
-#endif
-
-	std::string cmd = cmd_;
-
-	if (ignore_stdout)
-		(cmd += " >") += ignore;
-	if (ignore_stderr)
-		(cmd += " 2>") += ignore;
-
-	return system(cmd.c_str());
-}
-
-static const char* readenv(const char* name)
-{
-	return getenv(name);
-}
-#endif
-
-bool checkBasis(bool verbose)
-{
-	const char* basisu_path = readenv("BASISU_PATH");
-	std::string cmd = basisu_path ? basisu_path : "basisu";
-
-	cmd += " -version";
-
-	int rc = execute(cmd.c_str(), /* ignore_stdout= */ true, /* ignore_stderr= */ true);
-	if (verbose)
-		printf("%s => %d\n", cmd.c_str(), rc);
-
-	return rc == 0;
-}
-
-bool encodeBasis(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, float scale, bool pow2, bool uastc, bool verbose)
-{
-	(void)scale;
-	(void)pow2;
-
-	TempFile temp_input(mimeExtension(mime_type));
-	TempFile temp_output(".basis");
-
-	if (!writeFile(temp_input.path.c_str(), data))
-		return false;
-
-	const char* basisu_path = readenv("BASISU_PATH");
-	std::string cmd = basisu_path ? basisu_path : "basisu";
-
-	const BasisSettings& bs = kBasisSettings[quality <= 0 ? 0 : quality > 9 ? 9 : quality - 1];
-
-	cmd += " -mipmap";
-
-	if (normal_map)
+	if (strncmp(uri, "data:", 5) == 0)
 	{
-		cmd += " -normal_map";
-		// for optimal quality we should specify seperate_rg_to_color_alpha but this requires renderer awareness
-	}
-	else if (!srgb)
-	{
-		cmd += " -linear";
+		const char* comma = strchr(uri, ',');
+
+		if (comma && comma - uri >= 7 && strncmp(comma - 7, ";base64", 7) == 0)
+		{
+			const char* base64 = comma + 1;
+			size_t base64_size = strlen(base64);
+			size_t size = base64_size - base64_size / 4;
+
+			if (base64_size >= 2)
+			{
+				size -= base64[base64_size - 2] == '=';
+				size -= base64[base64_size - 1] == '=';
+			}
+
+			void* data = 0;
+
+			cgltf_options options = {};
+			cgltf_result res = cgltf_load_buffer_base64(&options, size, base64, &data);
+
+			if (res != cgltf_result_success)
+				return false;
+
+			mime_type = std::string(uri + 5, comma - 7);
+			result = std::string(static_cast<const char*>(data), size);
+
+			free(data);
+
+			return true;
+		}
 	}
 
-	if (uastc)
-	{
-		char settings[128];
-		sprintf(settings, " -uastc_level %d -uastc_rdo_q %.2f", bs.uastc_l, bs.uastc_q);
+	return false;
+}
 
-		cmd += " -uastc";
-		cmd += settings;
-		cmd += " -uastc_rdo_d 1024";
+bool readImage(const cgltf_image& image, const char* input_path, std::string& data, std::string& mime_type)
+{
+	if (image.uri && parseDataUri(image.uri, mime_type, data))
+	{
+		return true;
+	}
+	else if (image.buffer_view && image.buffer_view->buffer->data && image.mime_type)
+	{
+		const cgltf_buffer_view* view = image.buffer_view;
+
+		data.assign(static_cast<const char*>(view->buffer->data) + view->offset, view->size);
+		mime_type = image.mime_type;
+		return true;
+	}
+	else if (image.uri && *image.uri)
+	{
+		std::string path = image.uri;
+
+		cgltf_decode_uri(&path[0]);
+		path.resize(strlen(&path[0]));
+
+		mime_type = image.mime_type ? image.mime_type : inferMimeType(path.c_str());
+
+		return readFile(getFullPath(path.c_str(), input_path).c_str(), data);
 	}
 	else
 	{
-		char settings[128];
-		sprintf(settings, " -comp_level %d -q %d", bs.etc1s_l, bs.etc1s_q);
-
-		cmd += settings;
+		return false;
 	}
-
-	cmd += " -file ";
-	cmd += temp_input.path;
-	cmd += " -output_file ";
-	cmd += temp_output.path;
-
-	int rc = execute(cmd.c_str(), /* ignore_stdout= */ true, /* ignore_stderr= */ false);
-	if (verbose)
-		printf("%s => %d\n", cmd.c_str(), rc);
-
-	return rc == 0 && readFile(temp_output.path.c_str(), result);
-}
-
-bool checkKtx(bool verbose)
-{
-	const char* toktx_path = readenv("TOKTX_PATH");
-	std::string cmd = toktx_path ? toktx_path : "toktx";
-
-	cmd += " --version";
-
-	int rc = execute(cmd.c_str(), /* ignore_stdout= */ true, /* ignore_stderr= */ true);
-	if (verbose)
-		printf("%s => %d\n", cmd.c_str(), rc);
-
-	return rc == 0;
 }
 
 static int readInt16(const std::string& data, size_t offset)
 {
 	return (unsigned char)data[offset] * 256 + (unsigned char)data[offset + 1];
+}
+
+static int readInt32(const std::string& data, size_t offset)
+{
+	return (unsigned((unsigned char)data[offset]) << 24) |
+	       (unsigned((unsigned char)data[offset + 1]) << 16) |
+	       (unsigned((unsigned char)data[offset + 2]) << 8) |
+	       unsigned((unsigned char)data[offset + 3]);
 }
 
 static bool getDimensionsPng(const std::string& data, int& width, int& height)
@@ -249,8 +114,8 @@ static bool getDimensionsPng(const std::string& data, int& width, int& height)
 	if (data.compare(12, 4, "IHDR") != 0)
 		return false;
 
-	width = readInt16(data, 18);
-	height = readInt16(data, 22);
+	width = readInt32(data, 16);
+	height = readInt32(data, 20);
 
 	return true;
 }
@@ -298,7 +163,50 @@ static bool getDimensionsJpeg(const std::string& data, int& width, int& height)
 	return false;
 }
 
-static bool getDimensions(const std::string& data, const char* mime_type, int& width, int& height)
+static bool hasTransparencyPng(const std::string& data)
+{
+	if (data.size() < 8 + 8 + 13 + 4)
+		return false;
+
+	const char* signature = "\x89\x50\x4e\x47\x0d\x0a\x1a\x0a";
+	if (data.compare(0, 8, signature) != 0)
+		return false;
+
+	if (data.compare(12, 4, "IHDR") != 0)
+		return false;
+
+	int ctype = data[25];
+
+	if (ctype != 3)
+		return ctype == 4 || ctype == 6;
+
+	size_t offset = 8; // reparse IHDR chunk for simplicity
+
+	while (offset + 12 <= data.size())
+	{
+		int length = readInt32(data, offset);
+
+		if (length < 0)
+			return false;
+
+		if (data.compare(offset + 4, 4, "tRNS") == 0)
+			return true;
+
+		offset += 12 + length;
+	}
+
+	return false;
+}
+
+bool hasAlpha(const std::string& data, const char* mime_type)
+{
+	if (strcmp(mime_type, "image/png") == 0)
+		return hasTransparencyPng(data);
+	else
+		return false;
+}
+
+bool getDimensions(const std::string& data, const char* mime_type, int& width, int& height)
 {
 	if (strcmp(mime_type, "image/png") == 0)
 		return getDimensionsPng(data, width, height);
@@ -333,74 +241,28 @@ static int roundBlock(int value, bool pow2)
 	return (value + 3) & ~3;
 }
 
-bool encodeKtx(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, float scale, bool pow2, bool uastc, bool verbose)
+void adjustDimensions(int& width, int& height, const Settings& settings)
 {
-	int width = 0, height = 0;
-	if (!getDimensions(data, mime_type, width, height))
-		return false;
+	width = int(width * settings.texture_scale);
+	height = int(height * settings.texture_scale);
 
-	TempFile temp_input(mimeExtension(mime_type));
-	TempFile temp_output(".ktx2");
-
-	if (!writeFile(temp_input.path.c_str(), data))
-		return false;
-
-	const char* toktx_path = readenv("TOKTX_PATH");
-	std::string cmd = toktx_path ? toktx_path : "toktx";
-
-	const BasisSettings& bs = kBasisSettings[quality <= 0 ? 0 : quality > 9 ? 9 : quality - 1];
-
-	cmd += " --t2";
-	cmd += " --2d";
-	cmd += " --genmipmap";
-	cmd += " --nowarn";
-
-	int newWidth = roundBlock(int(width * scale), pow2);
-	int newHeight = roundBlock(int(height * scale), pow2);
-
-	if (newWidth != width || newHeight != height)
+	if (settings.texture_limit && (width > settings.texture_limit || height > settings.texture_limit))
 	{
-		char wh[128];
-		sprintf(wh, " --resize %dx%d", newWidth, newHeight);
-		cmd += wh;
+		float limit_scale = float(settings.texture_limit) / float(width > height ? width : height);
+
+		width = int(width * limit_scale);
+		height = int(height * limit_scale);
 	}
 
-	if (uastc)
-	{
-		char settings[128];
-		sprintf(settings, " %d --uastc_rdo_q %.2f", bs.uastc_l, bs.uastc_q);
+	width = roundBlock(width, settings.texture_pow2);
+	height = roundBlock(height, settings.texture_pow2);
+}
 
-		cmd += " --uastc";
-		cmd += settings;
-		cmd += " --uastc_rdo_d 1024";
-		cmd += " --zcmp 9";
-	}
-	else
-	{
-		char settings[128];
-		sprintf(settings, " --clevel %d --qlevel %d", bs.etc1s_l, bs.etc1s_q);
+const char* mimeExtension(const char* mime_type)
+{
+	for (size_t i = 0; i < sizeof(kMimeTypes) / sizeof(kMimeTypes[0]); ++i)
+		if (strcmp(kMimeTypes[i][0], mime_type) == 0)
+			return kMimeTypes[i][1];
 
-		cmd += " --bcmp";
-		cmd += settings;
-
-		// for optimal quality we should specify separate_rg_to_color_alpha but this requires renderer awareness
-		if (normal_map)
-			cmd += " --normal_map";
-	}
-
-	if (srgb)
-		cmd += " --srgb";
-	else
-		cmd += " --linear";
-
-	cmd += " -- ";
-	cmd += temp_output.path;
-	cmd += " ";
-	cmd += temp_input.path;
-
-	int rc = execute(cmd.c_str(), /* ignore_stdout= */ false, /* ignore_stderr= */ false);
-	if (verbose)
-		printf("%s => %d\n", cmd.c_str(), rc);
-
-	return rc == 0 && readFile(temp_output.path.c_str(), result);
+	return ".raw";
 }

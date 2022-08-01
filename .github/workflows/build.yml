@@ -1,6 +1,10 @@
 name: build
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - 'master'
+  pull_request:
 
 jobs:
   unix:
@@ -25,11 +29,7 @@ jobs:
       run: |
         find . -type f -name '*.gcno' -exec gcov -p {} +
         sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
-        bash <(curl -s https://codecov.io/bash) -f 'src#*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
-    - uses: actions/upload-artifact@v1
-      with:
-        name: gltfpack-${{matrix.os}}
-        path: gltfpack
+        bash <(curl -s https://codecov.io/bash) -f './src*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
 
   windows:
     runs-on: windows-latest
@@ -47,11 +47,6 @@ jobs:
         Debug/demo.exe demo/pirate.obj
         cmake --build . -- -property:Configuration=Release -verbosity:minimal
         Release/demo.exe demo/pirate.obj
-    - uses: actions/upload-artifact@v1
-      with:
-        name: gltfpack-windows
-        path: Release/gltfpack.exe
-      if: matrix.arch == 'x64'
 
   nodejs:
     runs-on: ubuntu-latest
@@ -59,11 +54,15 @@ jobs:
     - uses: actions/checkout@v1
     - uses: actions/setup-node@v1
       with:
-        node-version: '14.6'
-    - name: test
+        node-version: '16'
+    - name: test decoder
       run: node js/meshopt_decoder.test.js
-    - name: test simd
+    - name: test simd decoder
       run: node --experimental-wasm-simd js/meshopt_decoder.test.js
+    - name: test encoder
+      run: node js/meshopt_encoder.test.js
+    - name: test simplifier
+      run: node js/meshopt_simplifier.test.js
 
   gltfpack:
     runs-on: ubuntu-latest
@@ -76,13 +75,13 @@ jobs:
     - name: make
       run: make -j2 config=sanitize gltfpack
     - name: test
-      run: find glTF-Sample-Models/2.0/ -name *.gltf -or -name *.glb | xargs ./gltfpack -cc -test
+      run: find glTF-Sample-Models/2.0/ -name *.gltf -or -name *.glb | xargs -d '\n' ./gltfpack -cc -test
     - name: pack
-      run: find glTF-Sample-Models/2.0/ -name *.gltf | grep -v glTF-Draco | xargs -I '{}' ./gltfpack -i '{}' -o '{}pack.gltf'
+      run: find glTF-Sample-Models/2.0/ -name *.gltf | grep -v glTF-Draco | grep -v glTF-KTX-BasisU | xargs -d '\n' -I '{}' ./gltfpack -i '{}' -o '{}pack.gltf'
     - name: validate
       run: |
         curl -sL $VALIDATOR | tar xJ
-        find glTF-Sample-Models/2.0/ -name *.gltfpack.gltf | xargs -L 1 ./gltf_validator -r -a
+        find glTF-Sample-Models/2.0/ -name *.gltfpack.gltf | xargs -d '\n' -L 1 ./gltf_validator -r -a
       env:
         VALIDATOR: https://github.com/KhronosGroup/glTF-Validator/releases/download/2.0.0-dev.3.3/gltf_validator-2.0.0-dev.3.3-linux64.tar.xz
 
@@ -100,43 +99,40 @@ jobs:
         curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sysroot-$VERSION.0.tar.gz | tar xz
         mv wasi-sdk-$VERSION.0 wasi-sdk
       env:
-        VERSION: 12
+        VERSION: 16
     - name: build
       run: |
         make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot gltf/library.wasm
         make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot js/meshopt_decoder.js js/meshopt_decoder.module.js
+        make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot js/meshopt_encoder.js js/meshopt_encoder.module.js
+        make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot js/meshopt_simplifier.js js/meshopt_simplifier.module.js
+        git status
     - name: test
       run: |
         node gltf/cli.js -i demo/pirate.obj -o pirate.glb -v
+        node gltf/cli.js -i `pwd`/pirate.glb -o pirate-repack.glb -cc -v
+        wc -c pirate.glb pirate-repack.glb
         node js/meshopt_decoder.test.js
-    - name: npm pack
-      run: cd gltf && npm pack
-    - uses: actions/upload-artifact@v2
-      with:
-        name: gltfpack-npm
-        path: gltf/gltfpack-*.tgz
-    - uses: actions/upload-artifact@v2
-      with:
-        name: meshopt_decoder
-        path: js/meshopt_decoder*.js
+        node js/meshopt_encoder.test.js
+        node js/meshopt_simplifier.test.js
 
   arm64:
     runs-on: ubuntu-latest
     steps:
     - run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
-    - uses: docker://multiarch/ubuntu-core:arm64-bionic
+    - uses: docker://multiarch/ubuntu-core:arm64-focal
       with:
         args: 'uname -a'
     - uses: actions/checkout@v1
     - name: make test
-      uses: docker://multiarch/ubuntu-core:arm64-bionic
+      uses: docker://multiarch/ubuntu-core:arm64-focal
       with:
         args: 'bash -c "apt-get update && apt-get install -y build-essential && make -j2 config=coverage test"'
     - name: upload coverage
       run: |
         find . -type f -name '*.gcno' -exec gcov -p {} +
         sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
-        bash <(curl -s https://codecov.io/bash) -f 'src#*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
+        bash <(curl -s https://codecov.io/bash) -f './src*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
 
   iphone:
     runs-on: macos-latest

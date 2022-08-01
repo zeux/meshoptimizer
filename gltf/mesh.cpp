@@ -101,6 +101,9 @@ static void transformMesh(Mesh& target, const Mesh& mesh, const cgltf_node* node
 		}
 	}
 
+	// copy indices so that we can modify them below
+	target.indices = mesh.indices;
+
 	if (det < 0 && mesh.type == cgltf_primitive_type_triangles)
 	{
 		// negative scale means we need to flip face winding
@@ -127,6 +130,23 @@ bool compareMeshTargets(const Mesh& lhs, const Mesh& rhs)
 	for (size_t i = 0; i < lhs.target_names.size(); ++i)
 		if (strcmp(lhs.target_names[i], rhs.target_names[i]) != 0)
 			return false;
+
+	return true;
+}
+
+bool compareMeshVariants(const Mesh& lhs, const Mesh& rhs)
+{
+	if (lhs.variants.size() != rhs.variants.size())
+		return false;
+
+	for (size_t i = 0; i < lhs.variants.size(); ++i)
+	{
+		if (lhs.variants[i].variant != rhs.variants[i].variant)
+			return false;
+
+		if (lhs.variants[i].material != rhs.variants[i].material)
+			return false;
+	}
 
 	return true;
 }
@@ -196,6 +216,9 @@ static bool canMergeMeshes(const Mesh& lhs, const Mesh& rhs, const Settings& set
 		return false;
 
 	if (!compareMeshTargets(lhs, rhs))
+		return false;
+
+	if (!compareMeshVariants(lhs, rhs))
 		return false;
 
 	if (lhs.indices.empty() != rhs.indices.empty())
@@ -378,7 +401,7 @@ static bool hasDeltas(const std::vector<Attr>& data)
 	return false;
 }
 
-static void filterStreams(Mesh& mesh)
+void filterStreams(Mesh& mesh, const MaterialInfo& mi)
 {
 	bool morph_normal = false;
 	bool morph_tangent = false;
@@ -394,7 +417,7 @@ static void filterStreams(Mesh& mesh)
 			morph_tangent = morph_tangent || (stream.type == cgltf_attribute_type_tangent && hasDeltas(stream.data));
 		}
 
-		if (stream.type == cgltf_attribute_type_texcoord && mesh.material && usesTextureSet(*mesh.material, stream.index))
+		if (stream.type == cgltf_attribute_type_texcoord && (mi.textureSetMask & (1u << stream.index)) != 0)
 		{
 			keep_texture_set = std::max(keep_texture_set, stream.index);
 		}
@@ -409,7 +432,7 @@ static void filterStreams(Mesh& mesh)
 		if (stream.type == cgltf_attribute_type_texcoord && stream.index > keep_texture_set)
 			continue;
 
-		if (stream.type == cgltf_attribute_type_tangent && (!mesh.material || !mesh.material->normal_texture.texture))
+		if (stream.type == cgltf_attribute_type_tangent && !mi.needsTangents)
 			continue;
 
 		if ((stream.type == cgltf_attribute_type_joints || stream.type == cgltf_attribute_type_weights) && !mesh.skin)
@@ -453,6 +476,9 @@ static void reindexMesh(Mesh& mesh)
 		meshopt_Stream stream = {&mesh.streams[i].data[0], sizeof(Attr), sizeof(Attr)};
 		streams.push_back(stream);
 	}
+
+	if (streams.empty())
+		return;
 
 	std::vector<unsigned int> remap(total_vertices);
 	size_t unique_vertices = meshopt_generateVertexRemapMulti(&remap[0], &mesh.indices[0], total_indices, total_vertices, &streams[0], streams.size());
@@ -515,6 +541,7 @@ static void simplifyMesh(Mesh& mesh, float threshold, bool aggressive)
 
 	size_t target_index_count = size_t(double(mesh.indices.size() / 3) * threshold) * 3;
 	float target_error = 1e-2f;
+	float target_error_aggressive = 1e-1f;
 
 	if (target_index_count < 1)
 		return;
@@ -526,10 +553,10 @@ static void simplifyMesh(Mesh& mesh, float threshold, bool aggressive)
 	// Note: if the simplifier got stuck, we can try to reindex without normals/tangents and retry
 	// For now we simply fall back to aggressive simplifier instead
 
-	// if the mesh is complex enough and the precise simplifier got "stuck", we'll try to simplify using the sloppy simplifier which is guaranteed to reach the target count
-	if (aggressive && target_index_count > 50 * 3 && mesh.indices.size() > target_index_count)
+	// if the precise simplifier got "stuck", we'll try to simplify using the sloppy simplifier; this is only used when aggressive simplification is enabled as it breaks attribute discontinuities
+	if (aggressive && mesh.indices.size() > target_index_count)
 	{
-		indices.resize(meshopt_simplifySloppy(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count));
+		indices.resize(meshopt_simplifySloppy(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count, target_error_aggressive));
 		mesh.indices.swap(indices);
 	}
 }
@@ -564,14 +591,6 @@ struct BoneInfluence
 {
 	float i;
 	float w;
-};
-
-struct BoneInfluenceIndexPredicate
-{
-	bool operator()(const BoneInfluence& lhs, const BoneInfluence& rhs) const
-	{
-		return lhs.i < rhs.i;
-	}
 };
 
 struct BoneInfluenceWeightPredicate
@@ -630,11 +649,8 @@ static void filterBones(Mesh& mesh)
 				}
 		}
 
-		// pick top 4 influences - could use partial_sort but it is slower on small sets
+		// pick top 4 influences; this also sorts resulting influences by weight which helps renderers that use influence subset in shader LODs
 		std::sort(inf, inf + count, BoneInfluenceWeightPredicate());
-
-		// now sort top 4 influences by bone index - this improves compression ratio
-		std::sort(inf, inf + std::min(4, count), BoneInfluenceIndexPredicate());
 
 		// copy the top 4 influences back into stream 0 - we will remove other streams at the end
 		Attr& ja = groups[0].first->data[i];
@@ -726,8 +742,6 @@ static void sortPointMesh(Mesh& mesh)
 
 void processMesh(Mesh& mesh, const Settings& settings)
 {
-	filterStreams(mesh);
-
 	switch (mesh.type)
 	{
 	case cgltf_primitive_type_points:
@@ -754,9 +768,9 @@ void processMesh(Mesh& mesh, const Settings& settings)
 }
 
 #ifndef NDEBUG
-extern unsigned char* meshopt_simplifyDebugKind;
-extern unsigned int* meshopt_simplifyDebugLoop;
-extern unsigned int* meshopt_simplifyDebugLoopBack;
+extern MESHOPTIMIZER_API unsigned char* meshopt_simplifyDebugKind;
+extern MESHOPTIMIZER_API unsigned int* meshopt_simplifyDebugLoop;
+extern MESHOPTIMIZER_API unsigned int* meshopt_simplifyDebugLoopBack;
 
 void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio)
 {
@@ -765,7 +779,6 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio)
 
 	// note: it's important to follow the same pipeline as processMesh
 	// otherwise the result won't match
-	filterStreams(mesh);
 	filterBones(mesh);
 	reindexMesh(mesh);
 	filterTriangles(mesh);
@@ -855,21 +868,32 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio)
 		}
 }
 
-void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_vertices)
+void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_vertices, bool scan)
 {
 	Mesh mesh = source;
 	assert(mesh.type == cgltf_primitive_type_triangles);
 
 	reindexMesh(mesh);
-	optimizeMesh(mesh, false);
+
+	if (scan)
+		optimizeMesh(mesh, false);
 
 	const Stream* positions = getStream(mesh, cgltf_attribute_type_position);
 	assert(positions);
 
-	const size_t max_triangles = 126;
+	const float cone_weight = 0.f;
 
-	std::vector<meshopt_Meshlet> mr(meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles));
-	mr.resize(meshopt_buildMeshlets(&mr[0], &mesh.indices[0], mesh.indices.size(), positions->data.size(), max_vertices, max_triangles));
+	size_t max_triangles = (max_vertices * 2 + 3) & ~3;
+	size_t max_meshlets = meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles);
+
+	std::vector<meshopt_Meshlet> ml(max_meshlets);
+	std::vector<unsigned int> mlv(max_meshlets * max_vertices);
+	std::vector<unsigned char> mlt(max_meshlets * max_triangles * 3);
+
+	if (scan)
+		ml.resize(meshopt_buildMeshletsScan(&ml[0], &mlv[0], &mlt[0], &mesh.indices[0], mesh.indices.size(), positions->data.size(), max_vertices, max_triangles));
+	else
+		ml.resize(meshopt_buildMeshlets(&ml[0], &mlv[0], &mlt[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, positions->data.size(), sizeof(Attr), max_vertices, max_triangles, cone_weight));
 
 	// generate meshlet meshes, using unique colors
 	meshlets.nodes = mesh.nodes;
@@ -877,9 +901,9 @@ void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_ver
 	Stream mv = {cgltf_attribute_type_position};
 	Stream mc = {cgltf_attribute_type_color};
 
-	for (size_t i = 0; i < mr.size(); ++i)
+	for (size_t i = 0; i < ml.size(); ++i)
 	{
-		const meshopt_Meshlet& ml = mr[i];
+		const meshopt_Meshlet& m = ml[i];
 
 		unsigned int h = unsigned(i);
 		h ^= h >> 13;
@@ -890,17 +914,17 @@ void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_ver
 
 		unsigned int offset = unsigned(mv.data.size());
 
-		for (size_t j = 0; j < ml.vertex_count; ++j)
+		for (size_t j = 0; j < m.vertex_count; ++j)
 		{
-			mv.data.push_back(positions->data[ml.vertices[j]]);
+			mv.data.push_back(positions->data[mlv[m.vertex_offset + j]]);
 			mc.data.push_back(c);
 		}
 
-		for (size_t j = 0; j < ml.triangle_count; ++j)
+		for (size_t j = 0; j < m.triangle_count; ++j)
 		{
-			meshlets.indices.push_back(offset + ml.indices[j][0]);
-			meshlets.indices.push_back(offset + ml.indices[j][1]);
-			meshlets.indices.push_back(offset + ml.indices[j][2]);
+			meshlets.indices.push_back(offset + mlt[m.triangle_offset + j * 3 + 0]);
+			meshlets.indices.push_back(offset + mlt[m.triangle_offset + j * 3 + 1]);
+			meshlets.indices.push_back(offset + mlt[m.triangle_offset + j * 3 + 2]);
 		}
 	}
 
@@ -914,11 +938,11 @@ void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_ver
 	Stream bv = {cgltf_attribute_type_position};
 	Stream bc = {cgltf_attribute_type_color};
 
-	for (size_t i = 0; i < mr.size(); ++i)
+	for (size_t i = 0; i < ml.size(); ++i)
 	{
-		const meshopt_Meshlet& ml = mr[i];
+		const meshopt_Meshlet& m = ml[i];
 
-		meshopt_Bounds mb = meshopt_computeMeshletBounds(&ml, positions->data[0].f, positions->data.size(), sizeof(Attr));
+		meshopt_Bounds mb = meshopt_computeMeshletBounds(&mlv[m.vertex_offset], &mlt[m.triangle_offset], m.triangle_count, positions->data[0].f, positions->data.size(), sizeof(Attr));
 
 		unsigned int h = unsigned(i);
 		h ^= h >> 13;

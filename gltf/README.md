@@ -4,11 +4,7 @@ gltfpack is a tool that can automatically optimize glTF files to reduce the down
 
 ## Installation
 
-You can download a pre-built binary for gltfpack on [Releases page](https://github.com/zeux/meshoptimizer/releases), or install [npm package](https://www.npmjs.com/package/gltfpack) as follows:
-
-```
-npm install -g gltfpack
-```
+You can download a pre-built binary for gltfpack on [Releases page](https://github.com/zeux/meshoptimizer/releases), or install [npm package](https://www.npmjs.com/package/gltfpack). Native binaries are recommended over npm since they can work with larger files, run faster, and support texture compression.
 
 ## Usage
 
@@ -22,11 +18,11 @@ gltfpack substantially changes the glTF data by optimizing the meshes for vertex
 
 By default gltfpack outputs regular `.glb`/`.gltf` files that have been optimized for GPU consumption using various cache optimizers and quantization. These files can be loaded by GLTF loaders that support `KHR_mesh_quantization` extension such as [three.js](https://threejs.org/) (r111+) and [Babylon.js](https://www.babylonjs.com/) (4.1+).
 
-When using `-c` option, gltfpack outputs compressed `.glb`/`.gltf` files that use meshoptimizer codecs to reduce the download size further. Loading these files requires extending GLTF loaders with support for `EXT_meshopt_compression` extension; three.js supports it in r122+ (requires calling `GLTFLoader.setMeshoptDecoder`), Babylon.js supports it in 5.0+ without further setup. Plugins for older versions of [three.js](https://github.com/zeux/meshoptimizer/blob/master/js/THREE.EXT_meshopt_compression.js) and [Babylon.js](https://github.com/zeux/meshoptimizer/blob/master/js/babylon.EXT_meshopt_compression.js) are provided as well.
+When using `-c` option, gltfpack outputs compressed `.glb`/`.gltf` files that use meshoptimizer codecs to reduce the download size further. Loading these files requires extending GLTF loaders with support for [EXT_meshopt_compression](https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Vendor/EXT_meshopt_compression/README.md) extension; three.js supports it in r122+ (requires calling `GLTFLoader.setMeshoptDecoder`), Babylon.js supports it in 5.0+ without further setup.
 
 For better compression, you can use `-cc` option which applies additional compression; additionally make sure that your content delivery method is configured to use deflate (gzip) - meshoptimizer codecs are designed to produce output that can be compressed further with general purpose compressors.
 
-gltfpack can also compress textures using Basis Universal format, either storing .basis images directly (`-tb` flag, supported by three.js) or using KTX2 container (`-tc` flag, requires support for `KHR_texture_basisu`). Compression is performed using `basisu` executable that must be available in `PATH`; alternatively the path to the executable can be specified via `BASISU_PATH` environment variable. Textures can also be embedded into `.bin`/`.glb` output using `-te` flag.
+gltfpack can also compress textures using Basis Universal format stored in a KTX2 container (`-tc` flag, requires support for `KHR_texture_basisu`). Textures can also be embedded into `.bin`/`.glb` output using `-te` flag.
 
 ## Decompression
 
@@ -42,6 +38,8 @@ loader.setMeshoptDecoder(MeshoptDecoder);
 loader.load('pirate.glb', function (gltf) { scene.add(gltf.scene); });
 ```
 
+When using Three.js, this module can be imported from three.js repository from `examples/jsm/libs/meshopt_decoder.module.js`.
+
 Note that `meshopt_decoder` assumes that WebAssembly is supported. This is the case for all modern browsers; if support for legacy browsers such as Internet Explorer 11 is desired, it's recommended to use `-cf` flag when creating the glTF content. This will create and load fallback uncompressed buffers, but only on browsers that don't support WebAssembly.
 
 ## Options
@@ -51,9 +49,9 @@ By default gltfpack makes certain assumptions when optimizing the scenes, for ex
 The following settings are frequently used to reduce the resulting data size:
 
 * `-cc`: produce compressed gltf/glb files (requires `EXT_meshopt_compression`)
-* `-tc`: convert all textures to KTX2 with BasisU supercompression (using toktx or basisu executable; requires `KHR_texture_basisu`, and may require `-tp` flag for compatibility with WebGL 1)
+* `-tc`: convert all textures to KTX2 with BasisU supercompression (requires `KHR_texture_basisu` and may require `-tp` flag for compatibility with WebGL 1)
 * `-mi`: use mesh instancing when serializing references to the same meshes (requires `EXT_mesh_gpu_instancing`)
-* `-si R`: simplify meshes to achieve the ratio R (default: 1; R should be between 0 and 1)
+* `-si R`: simplify meshes targeting triangle count ratio R (default: 1; R should be between 0 and 1)
 
 The following settings are frequently used to restrict some optimizations:
 

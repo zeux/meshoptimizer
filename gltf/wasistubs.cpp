@@ -14,36 +14,32 @@ extern "C" void* __cxa_allocate_exception(size_t thrown_size)
 	abort();
 }
 
-extern "C" __wasi_errno_t __wasi_path_open32(__wasi_fd_t fd, __wasi_lookupflags_t dirflags, const char* path, size_t path_len, __wasi_oflags_t oflags, uint32_t fs_rights_base, uint32_t fs_rights_inherting, __wasi_fdflags_t fdflags, __wasi_fd_t* opened_fd)
+extern "C" int32_t __wasi_path_open32(int32_t arg0, int32_t arg1, int32_t arg2, int32_t arg3, int32_t arg4, int32_t arg5, int32_t arg6, int32_t arg7, int32_t arg8)
     __attribute__((
         __import_module__("wasi_snapshot_preview1"),
         __import_name__("path_open32"),
         __warn_unused_result__));
 
-__wasi_errno_t __wasi_path_open(__wasi_fd_t fd, __wasi_lookupflags_t dirflags, const char* path, size_t path_len, __wasi_oflags_t oflags, __wasi_rights_t fs_rights_base, __wasi_rights_t fs_rights_inherting, __wasi_fdflags_t fdflags, __wasi_fd_t* opened_fd)
+extern "C" int32_t __imported_wasi_snapshot_preview1_path_open(int32_t arg0, int32_t arg1, int32_t arg2, int32_t arg3, int32_t arg4, int64_t arg5, int64_t arg6, int32_t arg7, int32_t arg8)
 {
-	return __wasi_path_open32(fd, dirflags, path, path_len, oflags, fs_rights_base, fs_rights_inherting, fdflags, opened_fd);
+	return __wasi_path_open32(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
 }
 
-extern "C" __wasi_errno_t __wasi_fd_seek32(__wasi_fd_t fd, int32_t offset, __wasi_whence_t whence, int32_t* newoffset)
+extern "C" int32_t __wasi_fd_seek32(int32_t arg0, int32_t arg1, int32_t arg2, int32_t arg3)
     __attribute__((
         __import_module__("wasi_snapshot_preview1"),
         __import_name__("fd_seek32"),
         __warn_unused_result__));
 
-__wasi_errno_t __wasi_fd_seek(__wasi_fd_t fd, __wasi_filedelta_t offset, __wasi_whence_t whence, __wasi_filesize_t* newoffset)
+extern "C" int32_t __imported_wasi_snapshot_preview1_fd_seek(int32_t arg0, int64_t arg1, int32_t arg2, int32_t arg3)
 {
-	int32_t newoffset32 = 0;
-	__wasi_errno_t result = __wasi_fd_seek32(fd, int32_t(offset), whence, &newoffset32);
-	*newoffset = newoffset32;
-	return result;
+	*(uint64_t*)arg3 = 0;
+	return __wasi_fd_seek32(arg0, arg1, arg2, arg3);
 }
 
-extern "C" int system(const char* command)
+extern "C" int32_t __imported_wasi_snapshot_preview1_clock_time_get(int32_t arg0, int64_t arg1, int32_t arg2)
 {
-	// WASI doesn't provide a system() equivalent; we highjack readlink here, the reasoning being that if we run against a real WASI implementation,
-	// the effect is more likely to be benign.
-	return __wasi_path_readlink(-1, command, strlen(command), 0, 0, 0);
+	return __WASI_ERRNO_NOSYS;
 }
 
 #endif

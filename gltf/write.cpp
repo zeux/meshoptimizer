@@ -1,6 +1,7 @@
 // This file is part of gltfpack; see gltfpack.h for version/license details
 #include "gltfpack.h"
 
+#include <float.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -165,29 +166,32 @@ static void writeTextureInfo(std::string& json, const cgltf_data* data, const cg
 {
 	assert(view.texture);
 
+	bool has_transform = false;
 	cgltf_texture_transform transform = {};
+	transform.scale[0] = transform.scale[1] = 1.f;
 
-	if (view.has_transform)
+	if (hasValidTransform(view))
 	{
 		transform = view.transform;
-	}
-	else
-	{
-		transform.scale[0] = transform.scale[1] = 1.f;
+		has_transform = true;
 	}
 
 	if (qt)
 	{
 		transform.offset[0] += qt->offset[0];
 		transform.offset[1] += qt->offset[1];
-		transform.scale[0] *= qt->scale[0] / float((1 << qt->bits) - 1);
-		transform.scale[1] *= qt->scale[1] / float((1 << qt->bits) - 1);
+		transform.scale[0] *= qt->scale[0] / float((1 << qt->bits) - 1) * (qt->normalized ? 65535.f : 1.f);
+		transform.scale[1] *= qt->scale[1] / float((1 << qt->bits) - 1) * (qt->normalized ? 65535.f : 1.f);
+		has_transform = true;
 	}
 
 	append(json, "{\"index\":");
 	append(json, size_t(view.texture - data->textures));
-	append(json, ",\"texCoord\":");
-	append(json, size_t(view.texcoord));
+	if (view.texcoord != 0)
+	{
+		append(json, ",\"texCoord\":");
+		append(json, size_t(view.texcoord));
+	}
 	if (scale && view.scale != 1)
 	{
 		append(json, ",\"");
@@ -195,7 +199,7 @@ static void writeTextureInfo(std::string& json, const cgltf_data* data, const cg
 		append(json, "\":");
 		append(json, view.scale);
 	}
-	if (view.has_transform || qt)
+	if (has_transform)
 	{
 		append(json, ",\"extensions\":{\"KHR_texture_transform\":{");
 		append(json, "\"offset\":[");
@@ -391,7 +395,19 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 		append(json, "\"specularTexture\":");
 		writeTextureInfo(json, data, tm.specular_texture, qt);
 	}
-	if (memcmp(tm.specular_color_factor, white, 16) != 0)
+	if (tm.specular_color_texture.texture)
+	{
+		comma(json);
+		append(json, "\"specularColorTexture\":");
+		writeTextureInfo(json, data, tm.specular_color_texture, qt);
+	}
+	if (tm.specular_factor != 1)
+	{
+		comma(json);
+		append(json, "\"specularFactor\":");
+		append(json, tm.specular_factor);
+	}
+	if (memcmp(tm.specular_color_factor, white, 12) != 0)
 	{
 		comma(json);
 		append(json, "\"specularColorFactor\":[");
@@ -401,12 +417,6 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 		append(json, ",");
 		append(json, tm.specular_color_factor[2]);
 		append(json, "]");
-	}
-	if (tm.specular_factor != 1)
-	{
-		comma(json);
-		append(json, "\"specularFactor\":");
-		append(json, tm.specular_factor);
 	}
 	append(json, "}");
 }
@@ -438,7 +448,7 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 		append(json, tm.sheen_color_factor[2]);
 		append(json, "]");
 	}
-	if (tm.sheen_roughness_factor != 0.f)
+	if (tm.sheen_roughness_factor != 0)
 	{
 		comma(json);
 		append(json, "\"sheenRoughnessFactor\":");
@@ -447,7 +457,104 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 	append(json, "}");
 }
 
-void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationTexture* qt)
+static void writeMaterialComponent(std::string& json, const cgltf_data* data, const cgltf_volume& tm, const QuantizationPosition* qp, const QuantizationTexture* qt)
+{
+	comma(json);
+	append(json, "\"KHR_materials_volume\":{");
+	if (tm.thickness_texture.texture)
+	{
+		comma(json);
+		append(json, "\"thicknessTexture\":");
+		writeTextureInfo(json, data, tm.thickness_texture, qt);
+	}
+	if (tm.thickness_factor != 0)
+	{
+		// thickness is in mesh coordinate space which is rescaled by quantization
+		float node_scale = qp ? qp->scale / float((1 << qp->bits) - 1) * (qp->normalized ? 65535.f : 1.f) : 1.f;
+
+		comma(json);
+		append(json, "\"thicknessFactor\":");
+		append(json, tm.thickness_factor / node_scale);
+	}
+	if (memcmp(tm.attenuation_color, white, 12) != 0)
+	{
+		comma(json);
+		append(json, "\"attenuationColor\":[");
+		append(json, tm.attenuation_color[0]);
+		append(json, ",");
+		append(json, tm.attenuation_color[1]);
+		append(json, ",");
+		append(json, tm.attenuation_color[2]);
+		append(json, "]");
+	}
+	if (tm.attenuation_distance != FLT_MAX)
+	{
+		comma(json);
+		append(json, "\"attenuationDistance\":");
+		append(json, tm.attenuation_distance);
+	}
+	append(json, "}");
+}
+
+static void writeMaterialComponent(std::string& json, const cgltf_data* data, const cgltf_emissive_strength& tm)
+{
+	(void)data;
+
+	comma(json);
+	append(json, "\"KHR_materials_emissive_strength\":{");
+	if (tm.emissive_strength != 1)
+	{
+		comma(json);
+		append(json, "\"emissiveStrength\":");
+		append(json, tm.emissive_strength);
+	}
+	append(json, "}");
+}
+
+static void writeMaterialComponent(std::string& json, const cgltf_data* data, const cgltf_iridescence& tm, const QuantizationTexture* qt)
+{
+	comma(json);
+	append(json, "\"KHR_materials_iridescence\":{");
+	if (tm.iridescence_factor != 0)
+	{
+		comma(json);
+		append(json, "\"iridescenceFactor\":");
+		append(json, tm.iridescence_factor);
+	}
+	if (tm.iridescence_texture.texture)
+	{
+		comma(json);
+		append(json, "\"iridescenceTexture\":");
+		writeTextureInfo(json, data, tm.iridescence_texture, qt);
+	}
+	if (tm.iridescence_ior != 1.3f)
+	{
+		comma(json);
+		append(json, "\"iridescenceIor\":");
+		append(json, tm.iridescence_ior);
+	}
+	if (tm.iridescence_thickness_min != 100.f)
+	{
+		comma(json);
+		append(json, "\"iridescenceThicknessMinimum\":");
+		append(json, tm.iridescence_thickness_min);
+	}
+	if (tm.iridescence_thickness_max != 400.f)
+	{
+		comma(json);
+		append(json, "\"iridescenceThicknessMaximum\":");
+		append(json, tm.iridescence_thickness_max);
+	}
+	if (tm.iridescence_thickness_texture.texture)
+	{
+		comma(json);
+		append(json, "\"iridescenceThicknessTexture\":");
+		writeTextureInfo(json, data, tm.iridescence_thickness_texture, qt);
+	}
+	append(json, "}");
+}
+
+void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationPosition* qp, const QuantizationTexture* qt)
 {
 	if (material.name && *material.name)
 	{
@@ -516,7 +623,7 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 		append(json, "\"doubleSided\":true");
 	}
 
-	if (material.has_pbr_specular_glossiness || material.has_clearcoat || material.has_transmission || material.has_ior || material.has_specular || material.has_sheen || material.unlit)
+	if (material.has_pbr_specular_glossiness || material.has_clearcoat || material.has_transmission || material.has_ior || material.has_specular || material.has_sheen || material.has_volume || material.has_emissive_strength || material.has_iridescence || material.unlit)
 	{
 		comma(json);
 		append(json, "\"extensions\":{");
@@ -549,6 +656,21 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 		if (material.has_sheen)
 		{
 			writeMaterialComponent(json, data, material.sheen, qt);
+		}
+
+		if (material.has_volume)
+		{
+			writeMaterialComponent(json, data, material.volume, qp, qt);
+		}
+
+		if (material.has_emissive_strength)
+		{
+			writeMaterialComponent(json, data, material.emissive_strength);
+		}
+
+		if (material.has_iridescence)
+		{
+			writeMaterialComponent(json, data, material.iridescence, qt);
 		}
 
 		if (material.unlit)
@@ -672,47 +794,9 @@ static void writeAccessor(std::string& json, size_t view, size_t offset, cgltf_t
 	append(json, "}");
 }
 
-static bool parseDataUri(const char* uri, std::string& mime_type, std::string& result)
+static void writeEmbeddedImage(std::string& json, std::vector<BufferView>& views, const char* data, size_t size, const char* mime_type, TextureKind kind)
 {
-	if (strncmp(uri, "data:", 5) == 0)
-	{
-		const char* comma = strchr(uri, ',');
-
-		if (comma && comma - uri >= 7 && strncmp(comma - 7, ";base64", 7) == 0)
-		{
-			const char* base64 = comma + 1;
-			size_t base64_size = strlen(base64);
-			size_t size = base64_size - base64_size / 4;
-
-			if (base64_size >= 2)
-			{
-				size -= base64[base64_size - 2] == '=';
-				size -= base64[base64_size - 1] == '=';
-			}
-
-			void* data = 0;
-
-			cgltf_options options = {};
-			cgltf_result res = cgltf_load_buffer_base64(&options, size, base64, &data);
-
-			if (res != cgltf_result_success)
-				return false;
-
-			mime_type = std::string(uri + 5, comma - 7);
-			result = std::string(static_cast<const char*>(data), size);
-
-			free(data);
-
-			return true;
-		}
-	}
-
-	return false;
-}
-
-static void writeEmbeddedImage(std::string& json, std::vector<BufferView>& views, const char* data, size_t size, const char* mime_type)
-{
-	size_t view = getBufferView(views, BufferView::Kind_Image, StreamFormat::Filter_None, BufferView::Compression_None, 1, -1);
+	size_t view = getBufferView(views, BufferView::Kind_Image, StreamFormat::Filter_None, BufferView::Compression_None, 1, -1 - kind);
 
 	assert(views[view].data.empty());
 	views[view].data.assign(data, size);
@@ -737,121 +821,96 @@ static std::string decodeUri(const char* uri)
 	return result;
 }
 
-void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const char* output_path, const Settings& settings)
+void writeSampler(std::string& json, const cgltf_sampler& sampler)
 {
+	if (sampler.mag_filter != 0)
+	{
+		comma(json);
+		append(json, "\"magFilter\":");
+		append(json, size_t(sampler.mag_filter));
+	}
+	if (sampler.min_filter != 0)
+	{
+		comma(json);
+		append(json, "\"minFilter\":");
+		append(json, size_t(sampler.min_filter));
+	}
+	if (sampler.wrap_s != 10497)
+	{
+		comma(json);
+		append(json, "\"wrapS\":");
+		append(json, size_t(sampler.wrap_s));
+	}
+	if (sampler.wrap_t != 10497)
+	{
+		comma(json);
+		append(json, "\"wrapT\":");
+		append(json, size_t(sampler.wrap_t));
+	}
+}
+
+void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const Settings& settings)
+{
+	bool dataUri = image.uri && strncmp(image.uri, "data:", 5) == 0;
+
+	if (image.uri && !dataUri && !settings.texture_embed)
+	{
+		// fast-path: we don't need to read the image to memory
+		append(json, "\"uri\":\"");
+		append(json, image.uri);
+		append(json, "\"");
+		return;
+	}
+
 	std::string img_data;
 	std::string mime_type;
-
-	if (image.uri && parseDataUri(image.uri, mime_type, img_data))
+	if (!readImage(image, input_path, img_data, mime_type))
 	{
-		// we will re-embed img_data below
-	}
-	else if (image.buffer_view && image.buffer_view->buffer->data)
-	{
-		const cgltf_buffer_view* view = image.buffer_view;
-
-		img_data.assign(static_cast<const char*>(view->buffer->data) + view->offset, view->size);
-	}
-	else if (image.uri)
-	{
-		if (settings.texture_embed)
-		{
-			std::string full_path = getFullPath(decodeUri(image.uri).c_str(), input_path);
-
-			if (!readFile(full_path.c_str(), img_data))
-			{
-				fprintf(stderr, "Warning: unable to read image %s, skipping\n", image.uri);
-			}
-		}
-
-		mime_type = inferMimeType(image.uri);
+		fprintf(stderr, "Warning: unable to read image %d (%s), skipping\n", int(index), image.uri ? image.uri : "?");
+		return;
 	}
 
-	if (image.mime_type)
-		mime_type = image.mime_type;
+	writeEmbeddedImage(json, views, img_data.c_str(), img_data.size(), mime_type.c_str(), info.kind);
+}
 
-	bool (*encodeImage)(const std::string& data, const char* mime_type, std::string& result, bool normal_map, bool srgb, int quality, float scale, bool pow2, bool uastc, bool verbose) =
-	    settings.texture_toktx ? encodeKtx : encodeBasis;
+void writeEncodedImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const std::string& encoded, const ImageInfo& info, const char* output_path, const Settings& settings)
+{
+	bool dataUri = image.uri && strncmp(image.uri, "data:", 5) == 0;
 
-	if (!img_data.empty())
+	if (!settings.texture_embed && image.uri && !dataUri && output_path)
 	{
-		if (settings.texture_ktx2)
-		{
-			std::string encoded;
+		std::string ktx_uri = getFileName(image.uri) + ".ktx2";
+		std::string ktx_full_path = getFullPath(decodeUri(ktx_uri.c_str()).c_str(), output_path);
 
-			if (encodeImage(img_data, mime_type.c_str(), encoded, info.normal_map, info.srgb, settings.texture_quality, settings.texture_scale, settings.texture_pow2, settings.texture_uastc, settings.verbose > 1))
-			{
-				if (!settings.texture_toktx)
-					encoded = basisToKtx(encoded, info.srgb, settings.texture_uastc);
-
-				writeEmbeddedImage(json, views, encoded.c_str(), encoded.size(), settings.texture_ktx2 ? "image/ktx2" : "image/basis");
-			}
-			else
-			{
-				fprintf(stderr, "Warning: unable to encode image %d, skipping\n", int(index));
-			}
-		}
-		else
-		{
-			writeEmbeddedImage(json, views, img_data.c_str(), img_data.size(), mime_type.c_str());
-		}
-	}
-	else if (image.uri)
-	{
-		if (settings.texture_ktx2)
-		{
-			std::string full_path = getFullPath(decodeUri(image.uri).c_str(), input_path);
-			std::string basis_uri = getFileName(image.uri) + (settings.texture_ktx2 ? ".ktx2" : ".basis");
-			std::string basis_full_path = getFullPath(decodeUri(basis_uri.c_str()).c_str(), output_path);
-
-			if (readFile(full_path.c_str(), img_data))
-			{
-				std::string encoded;
-
-				if (encodeImage(img_data, mime_type.c_str(), encoded, info.normal_map, info.srgb, settings.texture_quality, settings.texture_scale, settings.texture_pow2, settings.texture_uastc, settings.verbose > 1))
-				{
-					if (!settings.texture_toktx)
-						encoded = basisToKtx(encoded, info.srgb, settings.texture_uastc);
-
-					if (writeFile(basis_full_path.c_str(), encoded))
-					{
-						append(json, "\"uri\":\"");
-						append(json, basis_uri);
-						append(json, "\"");
-					}
-					else
-					{
-						fprintf(stderr, "Warning: unable to save encoded image %s, skipping\n", image.uri);
-					}
-				}
-				else
-				{
-					fprintf(stderr, "Warning: unable to encode image %s, skipping\n", image.uri);
-				}
-			}
-			else
-			{
-				fprintf(stderr, "Warning: unable to read image %s, skipping\n", image.uri);
-			}
-		}
-		else
+		if (writeFile(ktx_full_path.c_str(), encoded))
 		{
 			append(json, "\"uri\":\"");
-			append(json, image.uri);
+			append(json, ktx_uri);
 			append(json, "\"");
+		}
+		else
+		{
+			fprintf(stderr, "Warning: unable to save encoded image %s, skipping\n", image.uri);
 		}
 	}
 	else
 	{
-		fprintf(stderr, "Warning: ignoring image %d since it has no URI and no valid buffer data\n", int(index));
+		writeEmbeddedImage(json, views, encoded.c_str(), encoded.size(), "image/ktx2", info.kind);
 	}
 }
 
-void writeTexture(std::string& json, const cgltf_texture& texture, cgltf_data* data, const Settings& settings)
+void writeTexture(std::string& json, const cgltf_texture& texture, const ImageInfo* info, cgltf_data* data, const Settings& settings)
 {
 	if (texture.image)
 	{
-		if (settings.texture_ktx2)
+		if (texture.sampler)
+		{
+			append(json, "\"sampler\":");
+			append(json, size_t(texture.sampler - data->samplers));
+			append(json, ",");
+		}
+
+		if (info && settings.texture_mode[info->kind] != TextureMode_Raw)
 		{
 			append(json, "\"extensions\":{\"KHR_texture_basisu\":{\"source\":");
 			append(json, size_t(texture.image - data->images));
@@ -969,7 +1028,7 @@ size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_
 
 		if (settings.quantize)
 		{
-			float node_scale = qp.scale / float((1 << qp.bits) - 1);
+			float node_scale = qp.scale / float((1 << qp.bits) - 1) * (qp.normalized ? 65535.f : 1.f);
 
 			// pos_offset has to be applied first, thus it results in an offset rotated by the bind matrix
 			transform[12] += qp.offset[0] * transform[0] + qp.offset[1] * transform[4] + qp.offset[2] * transform[8];
@@ -1028,7 +1087,7 @@ size_t writeInstances(std::vector<BufferView>& views, std::string& json_accessor
 		{
 			const float* transform = transforms[i].data;
 
-			float node_scale = qp.scale / float((1 << qp.bits) - 1);
+			float node_scale = qp.scale / float((1 << qp.bits) - 1) * (qp.normalized ? 65535.f : 1.f);
 
 			// pos_offset has to be applied first, thus it results in an offset rotated by the instance matrix
 			position[i].f[0] += qp.offset[0] * transform[0] + qp.offset[1] * transform[4] + qp.offset[2] * transform[8];
@@ -1064,7 +1123,7 @@ void writeMeshNode(std::string& json, size_t mesh_offset, cgltf_node* node, cglt
 	}
 	if (qp)
 	{
-		float node_scale = qp->scale / float((1 << qp->bits) - 1);
+		float node_scale = qp->scale / float((1 << qp->bits) - 1) * (qp->normalized ? 65535.f : 1.f);
 
 		append(json, ",\"translation\":[");
 		append(json, qp->offset[0]);
@@ -1195,7 +1254,12 @@ void writeNode(std::string& json, const cgltf_node& node, const std::vector<Node
 		}
 		append(json, "]");
 	}
-	if (node.children_count || !ni.meshes.empty())
+
+	bool has_children = !ni.meshes.empty();
+	for (size_t j = 0; j < node.children_count; ++j)
+		has_children |= nodes[node.children[j] - data->nodes].keep;
+
+	if (has_children)
 	{
 		comma(json);
 		append(json, "\"children\":[");
@@ -1253,7 +1317,7 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 	if (tracks.empty())
 	{
 		char index[16];
-		sprintf(index, "%d", int(i));
+		snprintf(index, sizeof(index), "%d", int(i));
 
 		fprintf(stderr, "Warning: ignoring animation %s because it has no tracks with motion; use -ac to override\n", animation.name && *animation.name ? animation.name : index);
 		return;
@@ -1323,6 +1387,8 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 		append(json_samplers, range ? range_accr : track.constant ? pose_accr : time_accr);
 		append(json_samplers, ",\"output\":");
 		append(json_samplers, data_accr);
+		if (track.interpolation == cgltf_interpolation_type_step)
+			append(json_samplers, ",\"interpolation\":\"STEP\"");
 		append(json_samplers, "}");
 
 		const NodeInfo& tni = nodes[track.node - data->nodes];

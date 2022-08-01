@@ -1,0 +1,73 @@
+name: release
+
+on:
+  push:
+    branches:
+      - 'master'
+  pull_request:
+
+jobs:
+  gltfpack:
+    strategy:
+      matrix:
+        os: [windows, ubuntu, macos]
+    name: gltfpack-${{matrix.os}}
+    runs-on: ${{matrix.os}}-latest
+    steps:
+    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
+      with:
+        repository: zeux/basis_universal
+        ref: gltfpack
+        path: basis_universal
+    - name: cmake configure
+      run: cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_BASISU_PATH=basis_universal -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded" -DCMAKE_BUILD_TYPE=Release
+    - name: cmake build
+      run: cmake --build . --target gltfpack --config Release
+    - uses: actions/upload-artifact@v1
+      with:
+        name: gltfpack-windows
+        path: Release/gltfpack.exe
+      if: matrix.os == 'windows'
+    - uses: actions/upload-artifact@v1
+      with:
+        name: gltfpack-${{matrix.os}}
+        path: gltfpack
+      if: matrix.os != 'windows'
+
+  nodejs:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - uses: actions/setup-node@v1
+      with:
+        node-version: '14.x'
+    - name: install wasi
+      run: |
+        curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sdk-$VERSION.0-linux.tar.gz | tar xz
+        curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/libclang_rt.builtins-wasm32-wasi-$VERSION.0.tar.gz | tar xz -C wasi-sdk-$VERSION.0
+        curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sysroot-$VERSION.0.tar.gz | tar xz
+        mv wasi-sdk-$VERSION.0 wasi-sdk
+      env:
+        VERSION: 16
+    - name: build
+      run: |
+        make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot gltf/library.wasm
+        make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot js/meshopt_decoder.js js/meshopt_decoder.module.js
+        make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot js/meshopt_encoder.js js/meshopt_encoder.module.js
+        make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot js/meshopt_simplifier.js js/meshopt_simplifier.module.js
+        git status
+    - name: npm pack
+      run: |
+        cp LICENSE.md gltf/
+        cp LICENSE.md js/
+        cd gltf && npm pack && cd ..
+        cd js && npm pack && cd ..
+    - uses: actions/upload-artifact@v2
+      with:
+        name: gltfpack-npm
+        path: gltf/gltfpack-*.tgz
+    - uses: actions/upload-artifact@v2
+      with:
+        name: meshoptimizer-npm
+        path: js/meshoptimizer-*.tgz

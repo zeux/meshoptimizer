@@ -10,3 +10,4 @@ PointerAlignment: Left
 BreakConstructorInitializersBeforeComma: true
 NamespaceIndentation: None
 AlignEscapedNewlines: DontAlign
+AlignAfterOpenBracket: DontAlign

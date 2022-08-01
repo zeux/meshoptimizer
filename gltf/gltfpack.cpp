@@ -3,17 +3,22 @@
 
 #include <algorithm>
 
+#include <locale.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef __wasi__
+#include <unistd.h>
+#endif
 
 #include "../src/meshoptimizer.h"
 
 std::string getVersion()
 {
 	char result[32];
-	sprintf(result, "%d.%d", MESHOPTIMIZER_VERSION / 1000, (MESHOPTIMIZER_VERSION % 1000) / 10);
+	snprintf(result, sizeof(result), "%d.%d", MESHOPTIMIZER_VERSION / 1000, (MESHOPTIMIZER_VERSION % 1000) / 10);
 	return result;
 }
 
@@ -93,8 +98,8 @@ static void printMeshStats(const std::vector<Mesh>& meshes, const char* name)
 	}
 
 	printf("%s: %d mesh primitives (%d triangles, %d vertices); %d draw calls (%d instances, %lld triangles)\n", name,
-	       int(meshes.size()), int(mesh_triangles), int(mesh_vertices),
-	       int(total_draws), int(total_instances), (long long)total_triangles);
+	    int(meshes.size()), int(mesh_triangles), int(mesh_vertices),
+	    int(total_draws), int(total_instances), (long long)total_triangles);
 }
 
 static void printSceneStats(const std::vector<BufferView>& views, const std::vector<Mesh>& meshes, size_t node_offset, size_t mesh_offset, size_t material_offset, size_t json_size, size_t bin_size)
@@ -110,9 +115,9 @@ static void printSceneStats(const std::vector<BufferView>& views, const std::vec
 	printf("output: %d nodes, %d meshes (%d primitives), %d materials\n", int(node_offset), int(mesh_offset), int(meshes.size()), int(material_offset));
 	printf("output: JSON %d bytes, buffers %d bytes\n", int(json_size), int(bin_size));
 	printf("output: buffers: vertex %d bytes, index %d bytes, skin %d bytes, time %d bytes, keyframe %d bytes, instance %d bytes, image %d bytes\n",
-	       int(bytes[BufferView::Kind_Vertex]), int(bytes[BufferView::Kind_Index]), int(bytes[BufferView::Kind_Skin]),
-	       int(bytes[BufferView::Kind_Time]), int(bytes[BufferView::Kind_Keyframe]), int(bytes[BufferView::Kind_Instance]),
-	       int(bytes[BufferView::Kind_Image]));
+	    int(bytes[BufferView::Kind_Vertex]), int(bytes[BufferView::Kind_Index]), int(bytes[BufferView::Kind_Skin]),
+	    int(bytes[BufferView::Kind_Time]), int(bytes[BufferView::Kind_Keyframe]), int(bytes[BufferView::Kind_Instance]),
+	    int(bytes[BufferView::Kind_Image]));
 }
 
 static void printAttributeStats(const std::vector<BufferView>& views, BufferView::Kind kind, const char* name)
@@ -147,10 +152,33 @@ static void printAttributeStats(const std::vector<BufferView>& views, BufferView
 		size_t count = view.data.size() / view.stride;
 
 		printf("stats: %s %s: compressed %d bytes (%.1f bits), raw %d bytes (%d bits)\n",
-		       name, variant,
-		       int(view.bytes), double(view.bytes) / double(count) * 8,
-		       int(view.data.size()), int(view.stride * 8));
+		    name, variant,
+		    int(view.bytes), double(view.bytes) / double(count) * 8,
+		    int(view.data.size()), int(view.stride * 8));
 	}
+}
+
+static void printImageStats(const std::vector<BufferView>& views, TextureKind kind, const char* name)
+{
+	size_t bytes = 0;
+	size_t count = 0;
+
+	for (size_t i = 0; i < views.size(); ++i)
+	{
+		const BufferView& view = views[i];
+
+		if (view.kind != BufferView::Kind_Image)
+			continue;
+
+		if (view.variant != -1 - kind)
+			continue;
+
+		count += 1;
+		bytes += view.data.size();
+	}
+
+	if (count)
+		printf("stats: image %s: %d bytes in %d images\n", name, int(bytes), int(count));
 }
 
 static bool printReport(const char* path, cgltf_data* data, const std::vector<BufferView>& views, const std::vector<Mesh>& meshes, size_t node_count, size_t mesh_count, size_t material_count, size_t animation_count, size_t json_size, size_t bin_size)
@@ -213,12 +241,21 @@ static bool printReport(const char* path, cgltf_data* data, const std::vector<Bu
 	return rc == 0;
 }
 
+static bool canTransformMesh(const Mesh& mesh)
+{
+	// volume thickness is specified in mesh coordinate space; to avoid modifying materials we prohibit transforming meshes with volume materials
+	if (mesh.material && mesh.material->has_volume && mesh.material->volume.thickness_factor > 0.f)
+		return false;
+
+	return true;
+}
+
 static void process(cgltf_data* data, const char* input_path, const char* output_path, const char* report_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const std::string& extras, const Settings& settings, std::string& json, std::string& bin, std::string& fallback, size_t& fallback_size)
 {
 	if (settings.verbose)
 	{
 		printf("input: %d nodes, %d meshes (%d primitives), %d materials, %d skins, %d animations\n",
-		       int(data->nodes_count), int(data->meshes_count), int(meshes.size()), int(data->materials_count), int(data->skins_count), int(animations.size()));
+		    int(data->nodes_count), int(data->meshes_count), int(meshes.size()), int(data->materials_count), int(data->skins_count), int(animations.size()));
 		printMeshStats(meshes, "input");
 	}
 
@@ -282,25 +319,48 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 				cgltf_node_transform_world(mesh.nodes[j], mesh.instances[j].data);
 
 			mesh.nodes.clear();
+			mesh.scene = scene;
 		}
-		else
+		else if (canTransformMesh(mesh))
 		{
 			mergeMeshInstances(mesh);
+
+			assert(mesh.nodes.empty());
+			mesh.scene = scene;
 		}
-
-		mesh.scene = scene;
-
-		assert(mesh.nodes.empty());
 	}
 
-	mergeMeshMaterials(data, meshes, settings);
+	// material information is required for mesh and image processing
+	std::vector<MaterialInfo> materials(data->materials_count);
+	std::vector<ImageInfo> images(data->images_count);
+
+	analyzeMaterials(data, materials, images);
+
+	optimizeMaterials(data, input_path, images);
+
+	// streams need to be filtered before mesh merging (or processing) to make sure we can merge meshes with redundant streams
+	for (size_t i = 0; i < meshes.size(); ++i)
+	{
+		Mesh& mesh = meshes[i];
+		MaterialInfo mi = mesh.material ? materials[mesh.material - data->materials] : MaterialInfo();
+
+		// merge material requirements across all variants
+		for (size_t j = 0; j < mesh.variants.size(); ++j)
+		{
+			MaterialInfo vi = materials[mesh.variants[j].material - data->materials];
+
+			mi.needsTangents |= vi.needsTangents;
+			mi.textureSetMask |= vi.textureSetMask;
+		}
+
+		filterStreams(mesh, mi);
+	}
+
+	mergeMeshMaterials(data, extras, meshes, settings);
 	mergeMeshes(meshes, settings);
 	filterEmptyMeshes(meshes);
 
 	markNeededNodes(data, nodes, meshes, animations, settings);
-
-	std::vector<MaterialInfo> materials(data->materials_count);
-
 	markNeededMaterials(data, materials, meshes, settings);
 
 #ifndef NDEBUG
@@ -308,11 +368,13 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
+		const Mesh& mesh = meshes[i];
+
 		if (settings.simplify_debug > 0)
 		{
 			Mesh kinds = {};
 			Mesh loops = {};
-			debugSimplify(meshes[i], kinds, loops, settings.simplify_debug);
+			debugSimplify(mesh, kinds, loops, settings.simplify_debug);
 			debug_meshes.push_back(kinds);
 			debug_meshes.push_back(loops);
 		}
@@ -321,7 +383,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		{
 			Mesh meshlets = {};
 			Mesh bounds = {};
-			debugMeshlets(meshes[i], meshlets, bounds, settings.meshlet_debug);
+			debugMeshlets(mesh, meshlets, bounds, settings.meshlet_debug, /* scan= */ false);
 			debug_meshes.push_back(meshlets);
 			debug_meshes.push_back(bounds);
 		}
@@ -339,19 +401,17 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 	filterEmptyMeshes(meshes); // some meshes may become empty after processing
 
-	std::vector<ImageInfo> images(data->images_count);
-
-	analyzeImages(data, images);
-
 	QuantizationPosition qp = prepareQuantizationPosition(meshes, settings);
 
 	std::vector<QuantizationTexture> qt_materials(materials.size());
-	prepareQuantizationTexture(data, qt_materials, meshes, settings);
+	std::vector<size_t> qt_meshes(meshes.size(), size_t(-1));
+	prepareQuantizationTexture(data, qt_materials, qt_meshes, meshes, settings);
 
 	QuantizationTexture qt_dummy = {};
 	qt_dummy.bits = settings.tex_bits;
 
 	std::string json_images;
+	std::string json_samplers;
 	std::string json_textures;
 	std::string json_materials;
 	std::string json_accessors;
@@ -361,7 +421,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	std::vector<std::string> json_roots(data->scenes_count);
 	std::string json_animations;
 	std::string json_cameras;
-	std::string json_lights;
+	std::string json_extensions;
 
 	std::vector<BufferView> views;
 
@@ -371,29 +431,58 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	bool ext_ior = false;
 	bool ext_specular = false;
 	bool ext_sheen = false;
+	bool ext_volume = false;
+	bool ext_emissive_strength = false;
+	bool ext_iridescence = false;
 	bool ext_unlit = false;
 	bool ext_instancing = false;
+	bool ext_texture_transform = false;
 
 	size_t accr_offset = 0;
 	size_t node_offset = 0;
 	size_t mesh_offset = 0;
 	size_t material_offset = 0;
 
+	for (size_t i = 0; i < data->samplers_count; ++i)
+	{
+		const cgltf_sampler& sampler = data->samplers[i];
+
+		comma(json_samplers);
+		append(json_samplers, "{");
+		writeSampler(json_samplers, sampler);
+		append(json_samplers, "}");
+	}
+
+	std::vector<std::string> encoded_images;
+
+#ifdef WITH_BASISU
+	if (data->images_count && settings.texture_ktx2)
+	{
+		encoded_images.resize(data->images_count);
+
+		encodeImages(encoded_images.data(), data, images, input_path, settings);
+	}
+#endif
+
 	for (size_t i = 0; i < data->images_count; ++i)
 	{
 		const cgltf_image& image = data->images[i];
 
-		if (settings.verbose == 1 && settings.texture_ktx2)
-		{
-			const char* uri = image.uri;
-			bool embedded = !uri || strncmp(uri, "data:", 5) == 0;
-
-			printf("image %d (%s) is being encoded with %s\n", int(i), embedded ? "embedded" : uri, settings.texture_toktx ? "toktx" : "basisu");
-		}
-
 		comma(json_images);
 		append(json_images, "{");
-		writeImage(json_images, views, image, images[i], i, input_path, output_path, settings);
+		if (encoded_images.size() && !encoded_images[i].empty())
+		{
+			if (encoded_images[i].compare(0, 5, "error") == 0)
+				fprintf(stderr, "Warning: unable to encode image %d (%s), skipping (%s)\n", int(i), image.uri ? image.uri : "?", encoded_images[i].c_str());
+			else
+				writeEncodedImage(json_images, views, image, encoded_images[i], images[i], output_path, settings);
+
+			encoded_images[i] = std::string(); // reclaim memory early
+		}
+		else
+		{
+			writeImage(json_images, views, image, images[i], i, input_path, settings);
+		}
 		append(json_images, "}");
 	}
 
@@ -403,7 +492,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 		comma(json_textures);
 		append(json_textures, "{");
-		writeTexture(json_textures, texture, data, settings);
+		writeTexture(json_textures, texture, texture.image ? &images[texture.image - data->images] : NULL, data, settings);
 		append(json_textures, "}");
 	}
 
@@ -418,7 +507,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 		comma(json_materials);
 		append(json_materials, "{");
-		writeMaterial(json_materials, data, material, settings.quantize ? &qt_materials[i] : NULL);
+		writeMaterial(json_materials, data, material, settings.quantize ? &qp : NULL, settings.quantize ? &qt_materials[i] : NULL);
 		if (settings.keep_extras)
 			writeExtras(json_materials, extras, material.extras);
 		append(json_materials, "}");
@@ -432,7 +521,11 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		ext_ior = ext_ior || material.has_ior;
 		ext_specular = ext_specular || material.has_specular;
 		ext_sheen = ext_sheen || material.has_sheen;
+		ext_volume = ext_volume || material.has_volume;
+		ext_emissive_strength = ext_emissive_strength || material.has_emissive_strength;
+		ext_iridescence = ext_iridescence || material.has_iridescence;
 		ext_unlit = ext_unlit || material.unlit;
+		ext_texture_transform = ext_texture_transform || mi.usesTextureTransform;
 	}
 
 	for (size_t i = 0; i < meshes.size(); ++i)
@@ -459,15 +552,17 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 			if (!compareMeshTargets(mesh, prim))
 				break;
 
-			const QuantizationTexture& qt = prim.material ? qt_materials[prim.material - data->materials] : qt_dummy;
+			const QuantizationTexture& qt = qt_meshes[pi] == size_t(-1) ? qt_dummy : qt_materials[qt_meshes[pi]];
 
 			comma(json_meshes);
 			append(json_meshes, "{\"attributes\":{");
 			writeMeshAttributes(json_meshes, views, json_accessors, accr_offset, prim, 0, qp, qt, settings);
 			append(json_meshes, "}");
-			append(json_meshes, ",\"mode\":");
-			append(json_meshes, size_t(prim.type));
-
+			if (prim.type != cgltf_primitive_type_triangles)
+			{
+				append(json_meshes, ",\"mode\":");
+				append(json_meshes, size_t(prim.type));
+			}
 			if (mesh.targets)
 			{
 				append(json_meshes, ",\"targets\":[");
@@ -496,6 +591,27 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 				assert(mi.keep);
 				append(json_meshes, ",\"material\":");
 				append(json_meshes, size_t(mi.remap));
+			}
+
+			if (prim.variants.size())
+			{
+				append(json_meshes, ",\"extensions\":{\"KHR_materials_variants\":{\"mappings\":[");
+
+				for (size_t j = 0; j < prim.variants.size(); ++j)
+				{
+					const cgltf_material_mapping& variant = prim.variants[j];
+					MaterialInfo& mi = materials[variant.material - data->materials];
+
+					assert(mi.keep);
+					comma(json_meshes);
+					append(json_meshes, "{\"material\":");
+					append(json_meshes, size_t(mi.remap));
+					append(json_meshes, ",\"variants\":[");
+					append(json_meshes, size_t(variant.variant));
+					append(json_meshes, "]}");
+				}
+
+				append(json_meshes, "]}}");
 			}
 
 			append(json_meshes, "}");
@@ -633,11 +749,37 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		writeCamera(json_cameras, camera);
 	}
 
-	for (size_t i = 0; i < data->lights_count; ++i)
+	if (data->lights_count > 0)
 	{
-		const cgltf_light& light = data->lights[i];
+		comma(json_extensions);
+		append(json_extensions, "\"KHR_lights_punctual\":{\"lights\":[");
 
-		writeLight(json_lights, light);
+		for (size_t i = 0; i < data->lights_count; ++i)
+		{
+			const cgltf_light& light = data->lights[i];
+
+			writeLight(json_extensions, light);
+		}
+
+		append(json_extensions, "]}");
+	}
+
+	if (data->variants_count > 0)
+	{
+		comma(json_extensions);
+		append(json_extensions, "\"KHR_materials_variants\":{\"variants\":[");
+
+		for (size_t i = 0; i < data->variants_count; ++i)
+		{
+			const cgltf_material_variant& variant = data->variants[i];
+
+			comma(json_extensions);
+			append(json_extensions, "{\"name\":\"");
+			append(json_extensions, variant.name);
+			append(json_extensions, "\"}");
+		}
+
+		append(json_extensions, "]}");
 	}
 
 	append(json, "\"asset\":{");
@@ -650,14 +792,18 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	const ExtensionInfo extensions[] = {
 	    {"KHR_mesh_quantization", settings.quantize, true},
 	    {"EXT_meshopt_compression", settings.compress, !settings.fallback},
-	    {"KHR_texture_transform", settings.quantize && !json_textures.empty(), false},
+	    {"KHR_texture_transform", (settings.quantize && !json_textures.empty()) || ext_texture_transform, false},
 	    {"KHR_materials_pbrSpecularGlossiness", ext_pbr_specular_glossiness, false},
 	    {"KHR_materials_clearcoat", ext_clearcoat, false},
 	    {"KHR_materials_transmission", ext_transmission, false},
 	    {"KHR_materials_ior", ext_ior, false},
 	    {"KHR_materials_specular", ext_specular, false},
 	    {"KHR_materials_sheen", ext_sheen, false},
+	    {"KHR_materials_volume", ext_volume, false},
+	    {"KHR_materials_emissive_strength", ext_emissive_strength, false},
+	    {"KHR_materials_iridescence", ext_iridescence, false},
 	    {"KHR_materials_unlit", ext_unlit, false},
+	    {"KHR_materials_variants", data->variants_count > 0, false},
 	    {"KHR_lights_punctual", data->lights_count > 0, false},
 	    {"KHR_texture_basisu", !json_textures.empty() && settings.texture_ktx2, true},
 	    {"EXT_mesh_gpu_instancing", ext_instancing, true},
@@ -670,6 +816,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 	writeArray(json, "bufferViews", json_views);
 	writeArray(json, "accessors", json_accessors);
+	writeArray(json, "samplers", json_samplers);
 	writeArray(json, "images", json_images);
 	writeArray(json, "textures", json_textures);
 	writeArray(json, "materials", json_materials);
@@ -690,17 +837,17 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 	writeArray(json, "cameras", json_cameras);
 
-	if (!json_lights.empty())
-	{
-		append(json, ",\"extensions\":{\"KHR_lights_punctual\":{\"lights\":[");
-		append(json, json_lights);
-		append(json, "]}}");
-	}
-
 	if (data->scene)
 	{
 		append(json, ",\"scene\":");
 		append(json, size_t(data->scene - data->scenes));
+	}
+
+	if (!json_extensions.empty())
+	{
+		append(json, ",\"extensions\":{");
+		append(json, json_extensions);
+		append(json, "}");
 	}
 
 	if (settings.verbose)
@@ -715,6 +862,11 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		printAttributeStats(views, BufferView::Kind_Index, "index");
 		printAttributeStats(views, BufferView::Kind_Keyframe, "keyframe");
 		printAttributeStats(views, BufferView::Kind_Instance, "instance");
+
+		printImageStats(views, TextureKind_Generic, "generic");
+		printImageStats(views, TextureKind_Color, "color");
+		printImageStats(views, TextureKind_Normal, "normal");
+		printImageStats(views, TextureKind_Attrib, "attrib");
 	}
 
 	if (report_path)
@@ -788,10 +940,10 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 	std::vector<Animation> animations;
 	std::string extras;
 
-	const char* iext = strrchr(input, '.');
-	const char* oext = output ? strrchr(output, '.') : NULL;
+	std::string iext = getExtension(input);
+	std::string oext = output ? getExtension(output) : "";
 
-	if (iext && (strcmp(iext, ".gltf") == 0 || strcmp(iext, ".GLTF") == 0 || strcmp(iext, ".glb") == 0 || strcmp(iext, ".GLB") == 0))
+	if (iext == ".gltf" || iext == ".glb")
 	{
 		const char* error = 0;
 		data = parseGltf(input, meshes, animations, extras, &error);
@@ -802,7 +954,7 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 			return 2;
 		}
 	}
-	else if (iext && (strcmp(iext, ".obj") == 0 || strcmp(iext, ".OBJ") == 0))
+	else if (iext == ".obj")
 	{
 		const char* error = 0;
 		data = parseObj(input, meshes, &error);
@@ -819,26 +971,18 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 		return 2;
 	}
 
+#ifndef WITH_BASISU
 	if (data->images_count && settings.texture_ktx2)
 	{
-		if (checkKtx(settings.verbose > 1))
-		{
-			settings.texture_toktx = true;
-		}
-		else if (!checkBasis(settings.verbose > 1))
-		{
-			fprintf(stderr, "Error: toktx is not present in PATH or TOKTX_PATH is not set\n");
-			return 3;
-		}
-
-		if (settings.texture_scale < 1 && !settings.texture_toktx)
-		{
-			fprintf(stderr, "Error: -ts option is only supported by toktx\n");
-			return 3;
-		}
+		fprintf(stderr, "Error: gltfpack was built without BasisU support, texture compression is not available\n");
+#ifdef __wasi__
+		fprintf(stderr, "Note: node.js builds do not support BasisU due to lack of platform features; download a native build from https://github.com/zeux/meshoptimizer/releases\n");
+#endif
+		return 3;
 	}
+#endif
 
-	if (oext && (strcmp(oext, ".glb") == 0 || strcmp(oext, ".GLB") == 0))
+	if (oext == ".glb")
 	{
 		settings.texture_embed = true;
 	}
@@ -854,7 +998,7 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 		return 0;
 	}
 
-	if (oext && (strcmp(oext, ".gltf") == 0 || strcmp(oext, ".GLTF") == 0))
+	if (oext == ".gltf")
 	{
 		std::string binpath = output;
 		binpath.replace(binpath.size() - 5, 5, ".bin");
@@ -896,7 +1040,7 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 			return 4;
 		}
 	}
-	else if (oext && (strcmp(oext, ".glb") == 0 || strcmp(oext, ".GLB") == 0))
+	else if (oext == ".glb")
 	{
 		std::string fbpath = output;
 		fbpath.replace(fbpath.size() - 4, 4, ".fallback.bin");
@@ -968,14 +1112,49 @@ Settings defaults()
 	settings.scl_bits = 16;
 	settings.anim_freq = 30;
 	settings.simplify_threshold = 1.f;
-	settings.texture_quality = 8;
 	settings.texture_scale = 1.f;
+	for (int kind = 0; kind < TextureKind__Count; ++kind)
+		settings.texture_quality[kind] = 8;
 
 	return settings;
 }
 
+template <typename T>
+T clamp(T v, T min, T max)
+{
+	return v < min ? min : v > max ? max : v;
+}
+
+unsigned int textureMask(const char* arg)
+{
+	unsigned int result = 0;
+
+	while (arg)
+	{
+		const char* comma = strchr(arg, ',');
+		size_t seg = comma ? comma - arg - 1 : strlen(arg);
+
+		if (strncmp(arg, "color", seg) == 0)
+			result |= 1 << TextureKind_Color;
+		else if (strncmp(arg, "normal", seg) == 0)
+			result |= 1 << TextureKind_Normal;
+		else if (strncmp(arg, "attrib", seg) == 0)
+			result |= 1 << TextureKind_Attrib;
+		else
+			fprintf(stderr, "Warning: unrecognized texture class %.*s\n", int(seg), arg);
+
+		arg = comma ? comma + 1 : NULL;
+	}
+
+	return result;
+}
+
 int main(int argc, char** argv)
 {
+#ifndef __wasi__
+	setlocale(LC_ALL, "C"); // disable locale specific convention for number parsing/printing
+#endif
+
 	meshopt_encodeIndexVersion(1);
 
 	Settings settings = defaults();
@@ -994,35 +1173,39 @@ int main(int argc, char** argv)
 
 		if (strcmp(arg, "-vp") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.pos_bits = atoi(argv[++i]);
+			settings.pos_bits = clamp(atoi(argv[++i]), 1, 16);
 		}
 		else if (strcmp(arg, "-vt") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.tex_bits = atoi(argv[++i]);
+			settings.tex_bits = clamp(atoi(argv[++i]), 1, 16);
 		}
 		else if (strcmp(arg, "-vn") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.nrm_bits = atoi(argv[++i]);
+			settings.nrm_bits = clamp(atoi(argv[++i]), 1, 16);
 		}
 		else if (strcmp(arg, "-vc") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.col_bits = atoi(argv[++i]);
+			settings.col_bits = clamp(atoi(argv[++i]), 1, 16);
+		}
+		else if (strcmp(arg, "-vpn") == 0)
+		{
+			settings.pos_normalized = true;
 		}
 		else if (strcmp(arg, "-at") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.trn_bits = atoi(argv[++i]);
+			settings.trn_bits = clamp(atoi(argv[++i]), 1, 24);
 		}
 		else if (strcmp(arg, "-ar") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.rot_bits = atoi(argv[++i]);
+			settings.rot_bits = clamp(atoi(argv[++i]), 4, 16);
 		}
 		else if (strcmp(arg, "-as") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.scl_bits = atoi(argv[++i]);
+			settings.scl_bits = clamp(atoi(argv[++i]), 1, 24);
 		}
 		else if (strcmp(arg, "-af") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.anim_freq = atoi(argv[++i]);
+			settings.anim_freq = clamp(atoi(argv[++i]), 1, 100);
 		}
 		else if (strcmp(arg, "-ac") == 0)
 		{
@@ -1050,7 +1233,7 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-si") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.simplify_threshold = float(atof(argv[++i]));
+			settings.simplify_threshold = clamp(float(atof(argv[++i])), 0.f, 1.f);
 		}
 		else if (strcmp(arg, "-sa") == 0)
 		{
@@ -1059,37 +1242,75 @@ int main(int argc, char** argv)
 #ifndef NDEBUG
 		else if (strcmp(arg, "-sd") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.simplify_debug = float(atof(argv[++i]));
+			settings.simplify_debug = clamp(float(atof(argv[++i])), 0.f, 1.f);
 		}
 		else if (strcmp(arg, "-md") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.meshlet_debug = atoi(argv[++i]);
+			settings.meshlet_debug = clamp(atoi(argv[++i]), 3, 255);
 		}
 #endif
 		else if (strcmp(arg, "-tu") == 0)
 		{
 			settings.texture_ktx2 = true;
-			settings.texture_uastc = true;
+
+			unsigned int mask = ~0u;
+			if (i + 1 < argc && isalpha(argv[i + 1][0]))
+				mask = textureMask(argv[++i]);
+
+			for (int kind = 0; kind < TextureKind__Count; ++kind)
+				if (mask & (1 << kind))
+					settings.texture_mode[kind] = TextureMode_UASTC;
 		}
 		else if (strcmp(arg, "-tc") == 0)
 		{
 			settings.texture_ktx2 = true;
+
+			unsigned int mask = ~0u;
+			if (i + 1 < argc && isalpha(argv[i + 1][0]))
+				mask = textureMask(argv[++i]);
+
+			for (int kind = 0; kind < TextureKind__Count; ++kind)
+				if (mask & (1 << kind))
+					settings.texture_mode[kind] = TextureMode_ETC1S;
 		}
 		else if (strcmp(arg, "-tq") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.texture_quality = atoi(argv[++i]);
+			int quality = clamp(atoi(argv[++i]), 1, 10);
+			for (int kind = 0; kind < TextureKind__Count; ++kind)
+				settings.texture_quality[kind] = quality;
+		}
+		else if (strcmp(arg, "-tq") == 0 && i + 2 < argc && isalpha(argv[i + 1][0]) && isdigit(argv[i + 2][0]))
+		{
+			unsigned int mask = textureMask(argv[++i]);
+			int quality = clamp(atoi(argv[++i]), 1, 10);
+
+			for (int kind = 0; kind < TextureKind__Count; ++kind)
+				if (mask & (1 << kind))
+					settings.texture_quality[kind] = quality;
 		}
 		else if (strcmp(arg, "-ts") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.texture_scale = float(atof(argv[++i]));
+			settings.texture_scale = clamp(float(atof(argv[++i])), 0.f, 1.f);
+		}
+		else if (strcmp(arg, "-tl") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		{
+			settings.texture_limit = atoi(argv[++i]);
 		}
 		else if (strcmp(arg, "-tp") == 0)
 		{
 			settings.texture_pow2 = true;
 		}
+		else if (strcmp(arg, "-tfy") == 0)
+		{
+			settings.texture_flipy = true;
+		}
 		else if (strcmp(arg, "-te") == 0)
 		{
 			fprintf(stderr, "Warning: -te is deprecated and will be removed in the future; gltfpack now automatically embeds textures into GLB files\n");
+		}
+		else if (strcmp(arg, "-tj") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		{
+			settings.texture_jobs = clamp(atoi(argv[++i]), 0, 128);
 		}
 		else if (strcmp(arg, "-noq") == 0)
 		{
@@ -1160,6 +1381,11 @@ int main(int argc, char** argv)
 		return 0;
 	}
 
+#ifdef WITH_BASISU
+	if (settings.texture_ktx2)
+		encodeInit(settings.texture_jobs);
+#endif
+
 	if (test)
 	{
 		for (size_t i = 0; i < testinputs.size(); ++i)
@@ -1185,19 +1411,28 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-o file: output file path, .gltf/.glb\n");
 			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc for higher compression ratio)\n");
 			fprintf(stderr, "\nTextures:\n");
-			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression (using basisu/toktx executable)\n");
+			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression\n");
 			fprintf(stderr, "\t-tu: use UASTC when encoding textures (much higher quality and much larger size)\n");
 			fprintf(stderr, "\t-tq N: set texture encoding quality (default: 8; N should be between 1 and 10\n");
 			fprintf(stderr, "\t-ts R: scale texture dimensions by the ratio R (default: 1; R should be between 0 and 1)\n");
+			fprintf(stderr, "\t-tl N: limit texture dimensions to N pixels (default: 0 = no limit)\n");
 			fprintf(stderr, "\t-tp: resize textures to nearest power of 2 to conform to WebGL1 restrictions\n");
+			fprintf(stderr, "\t-tfy: flip textures along Y axis during BasisU supercompression\n");
+			fprintf(stderr, "\t-tj N: use N threads when compressing textures\n");
+			fprintf(stderr, "\tTexture classes:\n");
+			fprintf(stderr, "\t-tc C: use ETC1S when encoding textures of class C\n");
+			fprintf(stderr, "\t-tu C: use UASTC when encoding textures of class C\n");
+			fprintf(stderr, "\t-tq C N: set texture encoding quality for class C\n");
+			fprintf(stderr, "\t... where C is a comma-separated list (no spaces) with valid values color,normal,attrib\n");
 			fprintf(stderr, "\nSimplification:\n");
-			fprintf(stderr, "\t-si R: simplify meshes to achieve the ratio R (default: 1; R should be between 0 and 1)\n");
+			fprintf(stderr, "\t-si R: simplify meshes targeting triangle count ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\t-sa: aggressively simplify to the target ratio disregarding quality\n");
 			fprintf(stderr, "\nVertices:\n");
 			fprintf(stderr, "\t-vp N: use N-bit quantization for positions (default: 14; N should be between 1 and 16)\n");
 			fprintf(stderr, "\t-vt N: use N-bit quantization for texture coordinates (default: 12; N should be between 1 and 16)\n");
 			fprintf(stderr, "\t-vn N: use N-bit quantization for normals and tangents (default: 8; N should be between 1 and 16)\n");
 			fprintf(stderr, "\t-vc N: use N-bit quantization for colors (default: 8; N should be between 1 and 16)\n");
+			fprintf(stderr, "\t-vpn: use normalized attributes for positions instead of using integers\n");
 			fprintf(stderr, "\nAnimations:\n");
 			fprintf(stderr, "\t-at N: use N-bit quantization for translations (default: 16; N should be between 1 and 24)\n");
 			fprintf(stderr, "\t-ar N: use N-bit quantization for rotations (default: 12; N should be between 4 and 16)\n");
@@ -1223,11 +1458,23 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-i file: input file to process, .obj/.gltf/.glb\n");
 			fprintf(stderr, "\t-o file: output file path, .gltf/.glb\n");
 			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc for higher compression ratio)\n");
-			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression (using basisu/toktx executable)\n");
-			fprintf(stderr, "\t-si R: simplify meshes to achieve the ratio R (default: 1; R should be between 0 and 1)\n");
+			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression\n");
+			fprintf(stderr, "\t-si R: simplify meshes targeting triangle count ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\nRun gltfpack -h to display a full list of options\n");
 		}
 
+		return 1;
+	}
+
+	if (settings.texture_limit && !settings.texture_ktx2)
+	{
+		fprintf(stderr, "Option -tl is only supported when -tc is set as well\n");
+		return 1;
+	}
+
+	if (settings.texture_pow2 && (settings.texture_limit & (settings.texture_limit - 1)) != 0)
+	{
+		fprintf(stderr, "Option -tp requires the limit specified via -tl to be a power of 2\n");
 		return 1;
 	}
 
@@ -1243,12 +1490,20 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
+	if (settings.texture_flipy && !settings.texture_ktx2)
+	{
+		fprintf(stderr, "Option -tfy is only supported when -tc is set as well\n");
+		return 1;
+	}
+
 	return gltfpack(input, output, report, settings);
 }
 
 #ifdef __wasi__
 extern "C" int pack(int argc, char** argv)
 {
+	chdir("/gltfpack-$pwd");
+
 	int result = main(argc, argv);
 	fflush(NULL);
 	return result;

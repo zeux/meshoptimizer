@@ -1,5 +1,4 @@
 MAKEFLAGS+=-r -j
-COMMA=,
 
 config=debug
 files=demo/pirate.obj
@@ -18,21 +17,41 @@ GLTFPACK_OBJECTS=$(GLTFPACK_SOURCES:%=$(BUILD)/%.o)
 OBJECTS=$(LIBRARY_OBJECTS) $(DEMO_OBJECTS) $(GLTFPACK_OBJECTS)
 
 LIBRARY=$(BUILD)/libmeshoptimizer.a
-EXECUTABLE=$(BUILD)/meshoptimizer
+DEMO=$(BUILD)/meshoptimizer
 
 CFLAGS=-g -Wall -Wextra -Werror -std=c89
 CXXFLAGS=-g -Wall -Wextra -Wshadow -Wno-missing-field-initializers -Werror -std=c++98
 LDFLAGS=
 
+$(GLTFPACK_OBJECTS): CXXFLAGS+=-std=c++11
+
+ifdef BASISU
+    $(GLTFPACK_OBJECTS): CXXFLAGS+=-DWITH_BASISU
+    $(BUILD)/gltf/basis%.cpp.o: CXXFLAGS+=-I$(BASISU)
+    gltfpack: LDFLAGS+=-lpthread
+
+    ifeq ($(HOSTTYPE),x86_64)
+        $(BUILD)/gltf/basislib.cpp.o: CXXFLAGS+=-msse4.1
+    endif
+endif
+
 WASMCC=clang++
 WASI_SDK=
 
-WASM_SOURCES=src/vertexcodec.cpp src/indexcodec.cpp src/vertexfilter.cpp tools/wasmstubs.cpp
-WASM_EXPORTS=meshopt_decodeVertexBuffer meshopt_decodeIndexBuffer meshopt_decodeIndexSequence meshopt_decodeFilterOct meshopt_decodeFilterQuat meshopt_decodeFilterExp sbrk __wasm_call_ctors
 WASM_FLAGS=--target=wasm32-wasi --sysroot=$(WASI_SDK)
-WASM_FLAGS+=$(patsubst %,-Wl$(COMMA)--export=%,$(WASM_EXPORTS))
 WASM_FLAGS+=-O3 -DNDEBUG -nostartfiles -nostdlib -Wl,--no-entry -Wl,-s
+WASM_FLAGS+=-fno-slp-vectorize -fno-vectorize -fno-unroll-loops
 WASM_FLAGS+=-Wl,-z -Wl,stack-size=24576 -Wl,--initial-memory=65536
+WASM_EXPORT_PREFIX=-Wl,--export
+
+WASM_DECODER_SOURCES=src/vertexcodec.cpp src/indexcodec.cpp src/vertexfilter.cpp tools/wasmstubs.cpp
+WASM_DECODER_EXPORTS=meshopt_decodeVertexBuffer meshopt_decodeIndexBuffer meshopt_decodeIndexSequence meshopt_decodeFilterOct meshopt_decodeFilterQuat meshopt_decodeFilterExp sbrk __wasm_call_ctors
+
+WASM_ENCODER_SOURCES=src/vertexcodec.cpp src/indexcodec.cpp src/vertexfilter.cpp src/vcacheoptimizer.cpp src/vfetchoptimizer.cpp tools/wasmstubs.cpp
+WASM_ENCODER_EXPORTS=meshopt_encodeVertexBuffer meshopt_encodeVertexBufferBound meshopt_encodeIndexBuffer meshopt_encodeIndexBufferBound meshopt_encodeIndexSequence meshopt_encodeIndexSequenceBound meshopt_encodeVertexVersion meshopt_encodeIndexVersion meshopt_encodeFilterOct meshopt_encodeFilterQuat meshopt_encodeFilterExp meshopt_optimizeVertexCache meshopt_optimizeVertexCacheStrip meshopt_optimizeVertexFetchRemap sbrk __wasm_call_ctors
+
+WASM_SIMPLIFIER_SOURCES=src/simplifier.cpp src/vfetchoptimizer.cpp tools/wasmstubs.cpp
+WASM_SIMPLIFIER_EXPORTS=meshopt_simplify meshopt_simplifyScale meshopt_optimizeVertexFetchRemap sbrk __wasm_call_ctors
 
 ifeq ($(config),iphone)
 	IPHONESDK=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk
@@ -42,7 +61,7 @@ ifeq ($(config),iphone)
 endif
 
 ifeq ($(config),trace)
-	CXXFLAGS+=-DTRACE=2
+	CXXFLAGS+=-DTRACE=1
 endif
 
 ifeq ($(config),scalar)
@@ -67,21 +86,26 @@ ifeq ($(config),analyze)
 	CXXFLAGS+=--analyze
 endif
 
-all: $(EXECUTABLE)
+all: $(DEMO)
 
-test: $(EXECUTABLE)
-	$(EXECUTABLE) $(files)
+test: $(DEMO)
+	$(DEMO) $(files)
 
-check: $(EXECUTABLE)
-	$(EXECUTABLE)
+check: $(DEMO)
+	$(DEMO)
 
-dev: $(EXECUTABLE)
-	$(EXECUTABLE) -d $(files)
+dev: $(DEMO)
+	$(DEMO) -d $(files)
 
 format:
 	clang-format -i $(LIBRARY_SOURCES) $(DEMO_SOURCES) $(GLTFPACK_SOURCES)
 
-gltfpack: $(GLTFPACK_OBJECTS) $(LIBRARY)
+js: js/meshopt_decoder.js js/meshopt_decoder.module.js js/meshopt_encoder.js js/meshopt_encoder.module.js js/meshopt_simplifier.js js/meshopt_simplifier.module.js
+
+gltfpack: $(BUILD)/gltfpack
+	ln -fs $^ $@
+
+$(BUILD)/gltfpack: $(GLTFPACK_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
 
 gltfpack.wasm: gltf/library.wasm
@@ -89,24 +113,40 @@ gltfpack.wasm: gltf/library.wasm
 gltf/library.wasm: ${LIBRARY_SOURCES} ${GLTFPACK_SOURCES} tools/meshloader.cpp
 	$(WASMCC) $^ -o $@ -Os -DNDEBUG --target=wasm32-wasi --sysroot=$(WASI_SDK) -nostartfiles -Wl,--no-entry -Wl,--export=pack -Wl,--export=malloc -Wl,--export=free -Wl,--export=__wasm_call_ctors -Wl,-s -Wl,--allow-undefined-file=gltf/wasistubs.txt
 
-build/decoder_base.wasm: $(WASM_SOURCES)
+build/decoder_base.wasm: $(WASM_DECODER_SOURCES)
 	@mkdir -p build
-	$(WASMCC) $^ $(WASM_FLAGS) -o $@
+	$(WASMCC) $^ $(WASM_FLAGS) $(patsubst %,$(WASM_EXPORT_PREFIX)=%,$(WASM_DECODER_EXPORTS)) -o $@
 
-build/decoder_simd.wasm: $(WASM_SOURCES)
+build/decoder_simd.wasm: $(WASM_DECODER_SOURCES)
 	@mkdir -p build
-	$(WASMCC) $^ $(WASM_FLAGS) -o $@ -msimd128 -mbulk-memory
+	$(WASMCC) $^ $(WASM_FLAGS) $(patsubst %,$(WASM_EXPORT_PREFIX)=%,$(WASM_DECODER_EXPORTS)) -o $@ -msimd128 -mbulk-memory
 
 js/meshopt_decoder.js: build/decoder_base.wasm build/decoder_simd.wasm
 	sed -i "s#Built with clang.*#Built with $$($(WASMCC) --version | head -n 1)#" $@
 	sed -i "s#\(var wasm_base = \)\".*\";#\\1\"$$(cat build/decoder_base.wasm | python3 tools/wasmpack.py)\";#" $@
 	sed -i "s#\(var wasm_simd = \)\".*\";#\\1\"$$(cat build/decoder_simd.wasm | python3 tools/wasmpack.py)\";#" $@
 
-js/meshopt_decoder.module.js: js/meshopt_decoder.js
-	sed '/UMD-style export/,$$d' <$< >$@
-	echo "export { MeshoptDecoder };" >>$@
+build/encoder.wasm: $(WASM_ENCODER_SOURCES)
+	@mkdir -p build
+	$(WASMCC) $^ $(WASM_FLAGS) $(patsubst %,$(WASM_EXPORT_PREFIX)=%,$(WASM_ENCODER_EXPORTS)) -lc -o $@
 
-$(EXECUTABLE): $(DEMO_OBJECTS) $(LIBRARY)
+js/meshopt_encoder.js: build/encoder.wasm
+	sed -i "s#Built with clang.*#Built with $$($(WASMCC) --version | head -n 1)#" $@
+	sed -i "s#\(var wasm = \)\".*\";#\\1\"$$(cat build/encoder.wasm | python3 tools/wasmpack.py)\";#" $@
+
+build/simplifier.wasm: $(WASM_SIMPLIFIER_SOURCES)
+	@mkdir -p build
+	$(WASMCC) $^ $(WASM_FLAGS) $(patsubst %,$(WASM_EXPORT_PREFIX)=%,$(WASM_SIMPLIFIER_EXPORTS)) -lc -o $@
+
+js/meshopt_simplifier.js: build/simplifier.wasm
+	sed -i "s#Built with clang.*#Built with $$($(WASMCC) --version | head -n 1)#" $@
+	sed -i "s#\(var wasm = \)\".*\";#\\1\"$$(cat build/simplifier.wasm | python3 tools/wasmpack.py)\";#" $@
+
+js/%.module.js: js/%.js
+	sed '/UMD-style export/,$$d' <$< >$@
+	sed -n "s#\s*module.exports = \(.*\);#export { \\1 };#p" <$< >>$@
+
+$(DEMO): $(DEMO_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
 
 vcachetuner: tools/vcachetuner.cpp $(BUILD)/tools/meshloader.cpp.o $(BUILD)/demo/miniz.cpp.o $(LIBRARY)
@@ -115,11 +155,20 @@ vcachetuner: tools/vcachetuner.cpp $(BUILD)/tools/meshloader.cpp.o $(BUILD)/demo
 codecbench: tools/codecbench.cpp $(LIBRARY)
 	$(CXX) $^ $(CXXFLAGS) $(LDFLAGS) -o $@
 
-codecbench.js codecbench.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
-	emcc $^ -O3 -g -DNDEBUG -s TOTAL_MEMORY=268435456 -o $@
+codecbench.js: tools/codecbench.cpp ${LIBRARY_SOURCES}
+	emcc $^ -O3 -g -DNDEBUG -s TOTAL_MEMORY=268435456 -s SINGLE_FILE=1 -o $@
 
-codecbench-simd.js codecbench-simd.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
-	emcc $^ -O3 -g -DNDEBUG -s TOTAL_MEMORY=268435456 -msimd128 -o $@
+codecbench-simd.js: tools/codecbench.cpp ${LIBRARY_SOURCES}
+	emcc $^ -O3 -g -DNDEBUG -s TOTAL_MEMORY=268435456 -s SINGLE_FILE=1 -msimd128 -o $@
+
+codecbench.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
+	$(WASMCC) $^ -fno-exceptions --target=wasm32-wasi --sysroot=$(WASI_SDK) -lc++ -lc++abi -O3 -g -DNDEBUG -o $@
+
+codecbench-simd.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
+	$(WASMCC) $^ -fno-exceptions --target=wasm32-wasi --sysroot=$(WASI_SDK) -lc++ -lc++abi -O3 -g -DNDEBUG -msimd128 -o $@
+
+codecfuzz: tools/codecfuzz.cpp src/vertexcodec.cpp src/indexcodec.cpp
+	$(CXX) $^ -fsanitize=fuzzer,address,undefined -O1 -g -o $@
 
 $(LIBRARY): $(LIBRARY_OBJECTS)
 	ar rcs $@ $^
@@ -137,4 +186,4 @@ $(BUILD)/%.c.o: %.c
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all clean format
+.PHONY: all clean format js
