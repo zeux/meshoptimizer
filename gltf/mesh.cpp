@@ -533,6 +533,9 @@ static void simplifyMesh(Mesh& mesh, float threshold, bool aggressive)
 {
 	assert(mesh.type == cgltf_primitive_type_triangles);
 
+	if (mesh.indices.empty())
+		return;
+
 	const Stream* positions = getStream(mesh, cgltf_attribute_type_position);
 	if (!positions)
 		return;
@@ -564,6 +567,9 @@ static void simplifyMesh(Mesh& mesh, float threshold, bool aggressive)
 static void optimizeMesh(Mesh& mesh, bool compressmore)
 {
 	assert(mesh.type == cgltf_primitive_type_triangles);
+
+	if (mesh.indices.empty())
+		return;
 
 	size_t vertex_count = mesh.streams[0].data.size();
 
