@@ -36,33 +36,8 @@ static const BasisSettings kBasisSettings[10] = {
     {1, 255, 2, 0.f},
 };
 
-static const char* prepareEncode(basisu::basis_compressor_params& params, const cgltf_image& image, const char* input_path, const ImageInfo& info, const Settings& settings, TempFile& temp_input, TempFile& temp_output)
+static void fillParams(basisu::basis_compressor_params& params, const char* input, const char* output, bool uastc, int width, int height, const BasisSettings& bs, const ImageInfo& info, const Settings& settings)
 {
-	std::string img_data;
-	std::string mime_type;
-	std::string result;
-
-	if (!readImage(image, input_path, img_data, mime_type))
-		return "error reading source file";
-
-	int width = 0, height = 0;
-	if (!getDimensions(img_data, mime_type.c_str(), width, height))
-		return "error parsing image header";
-
-	adjustDimensions(width, height, settings);
-
-	temp_input.create(mimeExtension(mime_type.c_str()));
-	temp_output.create(".ktx2");
-
-	if (!writeFile(temp_input.path.c_str(), img_data))
-		return "error writing temporary file";
-
-	int quality = settings.texture_quality[info.kind];
-	bool uastc = settings.texture_mode[info.kind] == TextureMode_UASTC;
-	int zstd = uastc ? 9 : 0;
-
-	const BasisSettings& bs = kBasisSettings[quality - 1];
-
 	if (uastc)
 	{
 		static const uint32_t s_level_flags[basisu::TOTAL_PACK_UASTC_LEVELS] = {basisu::cPackUASTCLevelFastest, basisu::cPackUASTCLevelFaster, basisu::cPackUASTCLevelDefault, basisu::cPackUASTCLevelSlower, basisu::cPackUASTCLevelVerySlow};
@@ -100,21 +75,50 @@ static const char* prepareEncode(basisu::basis_compressor_params& params, const 
 	params.m_create_ktx2_file = true;
 	params.m_ktx2_srgb_transfer_func = info.srgb;
 
-	if (zstd)
+	if (uastc)
 	{
 		params.m_ktx2_uastc_supercompression = basist::KTX2_SS_ZSTANDARD;
-		params.m_ktx2_zstd_supercompression_level = zstd;
+		params.m_ktx2_zstd_supercompression_level = 9;
 	}
 
 	params.m_read_source_images = true;
 	params.m_write_output_basis_files = true;
 
 	params.m_source_filenames.resize(1);
-	params.m_source_filenames[0] = temp_input.path;
+	params.m_source_filenames[0] = input;
 
-	params.m_out_filename = temp_output.path;
+	params.m_out_filename = output;
 
 	params.m_status_output = false;
+}
+
+static const char* prepareEncode(basisu::basis_compressor_params& params, const cgltf_image& image, const char* input_path, const ImageInfo& info, const Settings& settings, TempFile& temp_input, TempFile& temp_output)
+{
+	std::string img_data;
+	std::string mime_type;
+	std::string result;
+
+	if (!readImage(image, input_path, img_data, mime_type))
+		return "error reading source file";
+
+	int width = 0, height = 0;
+	if (!getDimensions(img_data, mime_type.c_str(), width, height))
+		return "error parsing image header";
+
+	adjustDimensions(width, height, settings);
+
+	temp_input.create(mimeExtension(mime_type.c_str()));
+	temp_output.create(".ktx2");
+
+	if (!writeFile(temp_input.path.c_str(), img_data))
+		return "error writing temporary file";
+
+	int quality = settings.texture_quality[info.kind];
+	bool uastc = settings.texture_mode[info.kind] == TextureMode_UASTC;
+
+	const BasisSettings& bs = kBasisSettings[quality - 1];
+
+	fillParams(params, temp_input.path.c_str(),temp_output.path.c_str(), uastc, width, height, bs, info, settings);
 
 	return nullptr;
 }
