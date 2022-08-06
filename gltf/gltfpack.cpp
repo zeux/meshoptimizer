@@ -1381,11 +1381,6 @@ int main(int argc, char** argv)
 		return 0;
 	}
 
-#ifdef WITH_BASISU
-	if (settings.texture_ktx2)
-		encodeInit(settings.texture_jobs);
-#endif
-
 	if (test)
 	{
 		for (size_t i = 0; i < testinputs.size(); ++i)
