@@ -47,6 +47,8 @@ void encodeInit(int jobs)
 	uint32_t num_threads = jobs == 0 ? std::thread::hardware_concurrency() : jobs;
 
 	gJobPool.reset(new job_pool(num_threads));
+
+	interval_timer::init(); // make sure interval_timer globals are initialized from main thread
 }
 
 static bool encodeInternal(const char* input, const char* output, bool yflip, bool normal_map, bool linear, bool uastc, int uastc_l, float uastc_q, int etc1s_l, int etc1s_q, int zstd_l, int width, int height)
