@@ -91,9 +91,72 @@ var MeshoptDecoder = (function() {
 		INDICES: "meshopt_decodeIndexSequence",
 	};
 
+	var workers = [];
+	var requestId = 0;
+
 	return {
 		ready: promise,
 		supported: true,
+		useWorkers: function(count) {
+			var source = `
+var wasm = new Uint8Array([${new Uint8Array(unpack(wasm)).toString()}]);
+var instance;
+
+var promise =
+	WebAssembly.instantiate(wasm, {})
+	.then(function(result) {
+		instance = result.instance;
+		instance.exports.__wasm_call_ctors();
+	});
+
+${decode.toString()}
+
+self.onmessage = function(event) {
+	var data = event.data;
+	var target = new Uint8Array(data.count * data.size);
+
+	promise.then(function() {
+		try {
+			decode(instance.exports[data.mode], target, data.count, data.size, data.source, instance.exports[data.filter]);
+			self.postMessage({ id: data.id, target }, [ target.buffer ]);
+		} catch (error) {
+			self.postMessage({ id: data.id, error });
+		}
+	});
+};
+`;
+
+			var blob = new Blob([source], {type: 'text/javascript'});
+			var url = URL.createObjectURL(blob);
+
+			for (var i = 0; i < count; ++i) {
+				var wid = i;
+				let worker = {
+					worker: new Worker(url),
+					pending: 0,
+					requests: {}
+				};
+
+				worker.worker.onmessage = function(event) {
+					var data = event.data;
+
+					worker.pending--;
+
+					if (data.error) {
+						console.log(data.error);
+						worker.requests[data.id].reject(data.error);
+					} else {
+						worker.requests[data.id].resolve(data.target);
+					}
+
+					worker.requests[data.id] = undefined;
+				};
+
+				workers[i] = worker;
+			}
+
+			URL.revokeObjectURL(url);
+		},
 		decodeVertexBuffer: function(target, count, size, source, filter) {
 			decode(instance.exports.meshopt_decodeVertexBuffer, target, count, size, source, instance.exports[filters[filter]]);
 		},
@@ -105,6 +168,33 @@ var MeshoptDecoder = (function() {
 		},
 		decodeGltfBuffer: function(target, count, size, source, mode, filter) {
 			decode(instance.exports[decoders[mode]], target, count, size, source, instance.exports[filters[filter]]);
+		},
+		decodeGltfBufferAsync: function(count, size, source, mode, filter) {
+			if (workers.length == 0) {
+				return promise.then(function() {
+					var target = new Uint8Array(count * size);
+					decode(instance.exports[decoders[mode]], target, count, size, source, instance.exports[filters[filter]]);
+					return target;
+				});
+			} else {
+				var id = 0;
+
+				for (var i = 1; i < workers.length; ++i) {
+					if (workers[i].pending < workers[id].pending) {
+						id = i;
+					}
+				}
+
+				var req = requestId++;
+				workers[id].pending++;
+
+				var data = new Uint8Array(source);
+
+				return new Promise(function (resolve, reject) {
+					workers[id].requests[req] = { resolve, reject };
+					workers[id].worker.postMessage({ id: req, count, size, source: data, mode: decoders[mode], filter: filters[filter] }, [ data.buffer ]);
+				});
+			}
 		}
 	};
 })();
