@@ -8,7 +8,7 @@ export const MeshoptSimplifier: {
     
     compactMesh: (indices: Uint32Array) => [Uint32Array, number];
     
-    simplify(indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, target_index_count: number, target_error: number, flags?: [Flags]) => [Uint32Array, number];
+    simplify: (indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, target_index_count: number, target_error: number, flags?: Flags[]) => [Uint32Array, number];
 
     getScale: (vertex_positions: Float32Array, vertex_positions_stride: number) => number;
 };
