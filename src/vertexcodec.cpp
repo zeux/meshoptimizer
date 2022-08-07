@@ -607,7 +607,7 @@ static void neonMoveMask(uint8x16_t mask, unsigned char& mask0, unsigned char& m
 	// magic constant found using z3 SMT assuming mask has 8 groups of 0xff or 0x00
 	const uint64_t magic = 0x000103070f1f3f80ull;
 
-	uint64x2_t mask2 = vreinterpretq_u8_u64(mask);
+	uint64x2_t mask2 = vreinterpretq_u64_u8(mask);
 
 	mask0 = uint8_t((vgetq_lane_u64(mask2, 0) * magic) >> 56);
 	mask1 = uint8_t((vgetq_lane_u64(mask2, 1) * magic) >> 56);
