@@ -94,11 +94,8 @@ var MeshoptDecoder = (function() {
 	var workers = [];
 	var requestId = 0;
 
-	return {
-		ready: promise,
-		supported: true,
-		useWorkers: function(count) {
-			var source = `
+	function initWorkers(count) {
+		var source = `
 var wasm = new Uint8Array([${new Uint8Array(unpack(wasm)).toString()}]);
 var instance;
 
@@ -118,44 +115,49 @@ self.onmessage = function(event) {
 	promise.then(function() {
 		try {
 			decode(instance.exports[data.mode], target, data.count, data.size, data.source, instance.exports[data.filter]);
-			self.postMessage({ id: data.id, target }, [ target.buffer ]);
+			self.postMessage({ id: data.id, count: data.count, target }, [ target.buffer ]);
 		} catch (error) {
-			self.postMessage({ id: data.id, error });
+			self.postMessage({ id: data.id, count: data.count, error });
 		}
 	});
 };
 `;
 
-			var blob = new Blob([source], {type: 'text/javascript'});
-			var url = URL.createObjectURL(blob);
+		var blob = new Blob([source], {type: 'text/javascript'});
+		var url = URL.createObjectURL(blob);
 
-			for (var i = 0; i < count; ++i) {
-				var wid = i;
-				let worker = {
-					worker: new Worker(url),
-					pending: 0,
-					requests: {}
-				};
+		for (var i = 0; i < count; ++i) {
+			let worker = {
+				worker: new Worker(url),
+				pending: 0,
+				requests: {}
+			};
 
-				worker.worker.onmessage = function(event) {
-					var data = event.data;
+			worker.worker.onmessage = function(event) {
+				var data = event.data;
 
-					worker.pending--;
+				worker.pending -= data.count;
 
-					if (data.error) {
-						console.log(data.error);
-						worker.requests[data.id].reject(data.error);
-					} else {
-						worker.requests[data.id].resolve(data.target);
-					}
+				if (data.error) {
+					worker.requests[data.id].reject(data.error);
+				} else {
+					worker.requests[data.id].resolve(data.target);
+				}
 
-					worker.requests[data.id] = undefined;
-				};
+				delete worker.requests[data.id];
+			};
 
-				workers[i] = worker;
-			}
+			workers[i] = worker;
+		}
 
-			URL.revokeObjectURL(url);
+		URL.revokeObjectURL(url);
+	}
+
+	return {
+		ready: promise,
+		supported: true,
+		useWorkers: function(count) {
+			initWorkers(count);
 		},
 		decodeVertexBuffer: function(target, count, size, source, filter) {
 			decode(instance.exports.meshopt_decodeVertexBuffer, target, count, size, source, instance.exports[filters[filter]]);
@@ -177,22 +179,22 @@ self.onmessage = function(event) {
 					return target;
 				});
 			} else {
-				var id = 0;
+				var worker = workers[0];
 
 				for (var i = 1; i < workers.length; ++i) {
-					if (workers[i].pending < workers[id].pending) {
-						id = i;
+					if (workers[i].pending < worker.pending) {
+						worker = workers[i];
 					}
 				}
 
-				var req = requestId++;
-				workers[id].pending++;
+				var id = requestId++;
+				worker.pending += count;
 
 				var data = new Uint8Array(source);
 
 				return new Promise(function (resolve, reject) {
-					workers[id].requests[req] = { resolve, reject };
-					workers[id].worker.postMessage({ id: req, count, size, source: data, mode: decoders[mode], filter: filters[filter] }, [ data.buffer ]);
+					worker.requests[id] = { resolve, reject };
+					worker.worker.postMessage({ id, count, size, source: data, mode: decoders[mode], filter: filters[filter] }, [ data.buffer ]);
 				});
 			}
 		}
