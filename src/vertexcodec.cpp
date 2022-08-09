@@ -604,24 +604,13 @@ static uint8x16_t shuffleBytes(unsigned char mask0, unsigned char mask1, uint8x8
 
 static void neonMoveMask(uint8x16_t mask, unsigned char& mask0, unsigned char& mask1)
 {
-	static const unsigned char byte_mask_data[16] = {1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128};
+	// magic constant found using z3 SMT assuming mask has 8 groups of 0xff or 0x00
+	const uint64_t magic = 0x000103070f1f3f80ull;
 
-	uint8x16_t byte_mask = vld1q_u8(byte_mask_data);
-	uint8x16_t masked = vandq_u8(mask, byte_mask);
+	uint64x2_t mask2 = vreinterpretq_u64_u8(mask);
 
-#ifdef __aarch64__
-	// aarch64 has horizontal sums; MSVC doesn't expose this via arm64_neon.h so this path is exclusive to clang/gcc
-	mask0 = vaddv_u8(vget_low_u8(masked));
-	mask1 = vaddv_u8(vget_high_u8(masked));
-#else
-	// we need horizontal sums of each half of masked, which can be done in 3 steps (yielding sums of sizes 2, 4, 8)
-	uint8x8_t sum1 = vpadd_u8(vget_low_u8(masked), vget_high_u8(masked));
-	uint8x8_t sum2 = vpadd_u8(sum1, sum1);
-	uint8x8_t sum3 = vpadd_u8(sum2, sum2);
-
-	mask0 = vget_lane_u8(sum3, 0);
-	mask1 = vget_lane_u8(sum3, 1);
-#endif
+	mask0 = uint8_t((vgetq_lane_u64(mask2, 0) * magic) >> 56);
+	mask1 = uint8_t((vgetq_lane_u64(mask2, 1) * magic) >> 56);
 }
 
 static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int bitslog2)
@@ -715,7 +704,6 @@ static void wasmMoveMask(v128_t mask, unsigned char& mask0, unsigned char& mask1
 	// magic constant found using z3 SMT assuming mask has 8 groups of 0xff or 0x00
 	const uint64_t magic = 0x000103070f1f3f80ull;
 
-	// TODO: This can use v8x16_bitmask in the future
 	mask0 = uint8_t((wasm_i64x2_extract_lane(mask, 0) * magic) >> 56);
 	mask1 = uint8_t((wasm_i64x2_extract_lane(mask, 1) * magic) >> 56);
 }
