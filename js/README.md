@@ -40,6 +40,14 @@ To simplify the decoding further, a wrapper function is provided that automatica
 decodeGltfBuffer: (target: Uint8Array, count: number, size: number, source: Uint8Array, mode: string, filter?: string) => void;
 ```
 
+Note that all functions above run synchronously; sometimes decoding large buffers takes time, so this library provides support for asynchronous decoding
+using WebWorkers via the following API; `useWorkers` must be called once at startup to create the desired number of workers:
+
+```ts
+useWorkers: (count: number) => void;
+decodeGltfBufferAsync: (count: number, size: number, source: Uint8Array, mode: string, filter?: string) => Promise<Uint8Array>;
+```
+
 ## Encoder
 
 `MeshoptEncoder` (`meshopt_encoder.js`) implements data preprocessing and compression of attribute and index buffers. It can be used to compress data that can be decompressed using the decoder module - note that the encoding process is more complicated and nuanced. It is typically split into three steps:
