@@ -65,7 +65,7 @@ var MeshoptDecoder = (function() {
 		if (res != 0) {
 			throw new Error("Malformed buffer data: " + res);
 		}
-	};
+	}
 
 	var filters = {
 		// legacy index-based enums for glTF
@@ -94,6 +94,30 @@ var MeshoptDecoder = (function() {
 	var workers = [];
 	var requestId = 0;
 
+	function createWorker(url) {
+		var worker = {
+			worker: new Worker(url),
+			pending: 0,
+			requests: {}
+		};
+
+		worker.worker.onmessage = function(event) {
+			var data = event.data;
+
+			worker.pending -= data.count;
+
+			if (data.error) {
+				worker.requests[data.id].reject(data.error);
+			} else {
+				worker.requests[data.id].resolve(data.target);
+			}
+
+			delete worker.requests[data.id];
+		};
+
+		return worker;
+	}
+
 	function initWorkers(count) {
 		var source = `
 var wasm = new Uint8Array([${new Uint8Array(unpack(wasm)).toString()}]);
@@ -107,50 +131,53 @@ var promise =
 	});
 
 ${decode.toString()}
+${processWorker.toString()}
 
-self.onmessage = function(event) {
-	var data = event.data;
-	var target = new Uint8Array(data.count * data.size);
-
-	promise.then(function() {
-		try {
-			decode(instance.exports[data.mode], target, data.count, data.size, data.source, instance.exports[data.filter]);
-			self.postMessage({ id: data.id, count: data.count, target }, [ target.buffer ]);
-		} catch (error) {
-			self.postMessage({ id: data.id, count: data.count, error });
-		}
-	});
-};
+self.onmessage = processWorker;
 `;
 
 		var blob = new Blob([source], {type: 'text/javascript'});
 		var url = URL.createObjectURL(blob);
 
 		for (var i = 0; i < count; ++i) {
-			let worker = {
-				worker: new Worker(url),
-				pending: 0,
-				requests: {}
-			};
-
-			worker.worker.onmessage = function(event) {
-				var data = event.data;
-
-				worker.pending -= data.count;
-
-				if (data.error) {
-					worker.requests[data.id].reject(data.error);
-				} else {
-					worker.requests[data.id].resolve(data.target);
-				}
-
-				delete worker.requests[data.id];
-			};
-
-			workers[i] = worker;
+			workers[i] = createWorker(url);
 		}
 
 		URL.revokeObjectURL(url);
+	}
+
+	function decodeWorker(count, size, source, mode, filter) {
+		var worker = workers[0];
+
+		for (var i = 1; i < workers.length; ++i) {
+			if (workers[i].pending < worker.pending) {
+				worker = workers[i];
+			}
+		}
+
+		var id = requestId++;
+		worker.pending += count;
+
+		var data = new Uint8Array(source);
+
+		return new Promise(function (resolve, reject) {
+			worker.requests[id] = { resolve, reject };
+			worker.worker.postMessage({ id, count, size, source: data, mode, filter }, [ data.buffer ]);
+		});
+	}
+
+	function processWorker(event) {
+		var data = event.data;
+		var target = new Uint8Array(data.count * data.size);
+
+		promise.then(function() {
+			try {
+				decode(instance.exports[data.mode], target, data.count, data.size, data.source, instance.exports[data.filter]);
+				self.postMessage({ id: data.id, count: data.count, target }, [ target.buffer ]);
+			} catch (error) {
+				self.postMessage({ id: data.id, count: data.count, error });
+			}
+		});
 	}
 
 	return {
@@ -172,31 +199,15 @@ self.onmessage = function(event) {
 			decode(instance.exports[decoders[mode]], target, count, size, source, instance.exports[filters[filter]]);
 		},
 		decodeGltfBufferAsync: function(count, size, source, mode, filter) {
-			if (workers.length == 0) {
-				return promise.then(function() {
-					var target = new Uint8Array(count * size);
-					decode(instance.exports[decoders[mode]], target, count, size, source, instance.exports[filters[filter]]);
-					return target;
-				});
-			} else {
-				var worker = workers[0];
-
-				for (var i = 1; i < workers.length; ++i) {
-					if (workers[i].pending < worker.pending) {
-						worker = workers[i];
-					}
-				}
-
-				var id = requestId++;
-				worker.pending += count;
-
-				var data = new Uint8Array(source);
-
-				return new Promise(function (resolve, reject) {
-					worker.requests[id] = { resolve, reject };
-					worker.worker.postMessage({ id, count, size, source: data, mode: decoders[mode], filter: filters[filter] }, [ data.buffer ]);
-				});
+			if (workers.length > 0) {
+				return decodeWorker(count, size, source, decoders[mode], filters[filter]);
 			}
+
+			return promise.then(function() {
+				var target = new Uint8Array(count * size);
+				decode(instance.exports[decoders[mode]], target, count, size, source, instance.exports[filters[filter]]);
+				return target;
+			});
 		}
 	};
 })();
