@@ -119,22 +119,11 @@ var MeshoptDecoder = (function() {
 	}
 
 	function initWorkers(count) {
-		var source = `
-var wasm = new Uint8Array([${new Uint8Array(unpack(wasm)).toString()}]);
-var instance;
-
-var promise =
-	WebAssembly.instantiate(wasm, {})
-	.then(function(result) {
-		instance = result.instance;
-		instance.exports.__wasm_call_ctors();
-	});
-
-${decode.toString()}
-${processWorker.toString()}
-
-self.onmessage = processWorker;
-`;
+		var source =
+			"var instance; var promise = WebAssembly.instantiate(new Uint8Array([" + new Uint8Array(unpack(wasm)) + "]), {})" +
+			".then(function(result) { instance = result.instance; instance.exports.__wasm_call_ctors(); });" +
+			"self.onmessage = processWorker;" +
+			decode.toString() + processWorker.toString();
 
 		var blob = new Blob([source], {type: 'text/javascript'});
 		var url = URL.createObjectURL(blob);
@@ -161,8 +150,8 @@ self.onmessage = processWorker;
 		var data = new Uint8Array(source);
 
 		return new Promise(function (resolve, reject) {
-			worker.requests[id] = { resolve, reject };
-			worker.worker.postMessage({ id, count, size, source: data, mode, filter }, [ data.buffer ]);
+			worker.requests[id] = { resolve: resolve, reject: reject };
+			worker.worker.postMessage({ id: id, count: count, size: size, source: data, mode: mode, filter: filter }, [ data.buffer ]);
 		});
 	}
 
@@ -173,9 +162,9 @@ self.onmessage = processWorker;
 		promise.then(function() {
 			try {
 				decode(instance.exports[data.mode], target, data.count, data.size, data.source, instance.exports[data.filter]);
-				self.postMessage({ id: data.id, count: data.count, target }, [ target.buffer ]);
+				self.postMessage({ id: data.id, count: data.count, target: target }, [ target.buffer ]);
 			} catch (error) {
-				self.postMessage({ id: data.id, count: data.count, error });
+				self.postMessage({ id: data.id, count: data.count, error: error });
 			}
 		});
 	}
