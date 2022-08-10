@@ -105,12 +105,7 @@ var MeshoptDecoder = (function() {
 			var data = event.data;
 
 			worker.pending -= data.count;
-
-			if (data.error) {
-				worker.requests[data.id].reject(data.error);
-			} else {
-				worker.requests[data.id].resolve(data.target);
-			}
+			worker.requests[data.id][data.action](data.value);
 
 			delete worker.requests[data.id];
 		};
@@ -122,8 +117,8 @@ var MeshoptDecoder = (function() {
 		var source =
 			"var instance; var promise = WebAssembly.instantiate(new Uint8Array([" + new Uint8Array(unpack(wasm)) + "]), {})" +
 			".then(function(result) { instance = result.instance; instance.exports.__wasm_call_ctors(); });" +
-			"self.onmessage = processWorker;" +
-			decode.toString() + processWorker.toString();
+			"self.onmessage = workerProcess;" +
+			decode.toString() + workerProcess.toString();
 
 		var blob = new Blob([source], {type: 'text/javascript'});
 		var url = URL.createObjectURL(blob);
@@ -155,16 +150,15 @@ var MeshoptDecoder = (function() {
 		});
 	}
 
-	function processWorker(event) {
-		var data = event.data;
-		var target = new Uint8Array(data.count * data.size);
-
+	function workerProcess(event) {
 		promise.then(function() {
+			var data = event.data;
 			try {
+				var target = new Uint8Array(data.count * data.size);
 				decode(instance.exports[data.mode], target, data.count, data.size, data.source, instance.exports[data.filter]);
-				self.postMessage({ id: data.id, count: data.count, target: target }, [ target.buffer ]);
+				self.postMessage({ id: data.id, count: data.count, action: "resolve", value: target }, [ target.buffer ]);
 			} catch (error) {
-				self.postMessage({ id: data.id, count: data.count, error: error });
+				self.postMessage({ id: data.id, count: data.count, action: "reject", value: error });
 			}
 		});
 	}
