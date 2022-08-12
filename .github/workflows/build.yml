@@ -96,16 +96,13 @@ jobs:
       run: |
         curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sdk-$VERSION.0-linux.tar.gz | tar xz
         curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/libclang_rt.builtins-wasm32-wasi-$VERSION.0.tar.gz | tar xz -C wasi-sdk-$VERSION.0
-        curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sysroot-$VERSION.0.tar.gz | tar xz
+        curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sysroot-$VERSION.0.tar.gz | tar xz -C wasi-sdk-$VERSION.0/share
         mv wasi-sdk-$VERSION.0 wasi-sdk
       env:
         VERSION: 16
     - name: build
       run: |
-        make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot gltf/library.wasm
-        make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot js/meshopt_decoder.js js/meshopt_decoder.module.js
-        make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot js/meshopt_encoder.js js/meshopt_encoder.module.js
-        make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot js/meshopt_simplifier.js js/meshopt_simplifier.module.js
+        make -B WASI_SDK=wasi-sdk gltf/library.wasm js
         git status
     - name: test
       run: |

@@ -35,10 +35,10 @@ ifdef BASISU
     endif
 endif
 
-WASMCC=clang++
-WASI_SDK=
+WASMCC?=$(WASI_SDK)/bin/clang++
+WASIROOT?=$(WASI_SDK)/share/wasi-sysroot
 
-WASM_FLAGS=--target=wasm32-wasi --sysroot=$(WASI_SDK)
+WASM_FLAGS=--target=wasm32-wasi --sysroot=$(WASIROOT)
 WASM_FLAGS+=-O3 -DNDEBUG -nostartfiles -nostdlib -Wl,--no-entry -Wl,-s
 WASM_FLAGS+=-fno-slp-vectorize -fno-vectorize -fno-unroll-loops
 WASM_FLAGS+=-Wl,-z -Wl,stack-size=24576 -Wl,--initial-memory=65536
@@ -111,7 +111,7 @@ $(BUILD)/gltfpack: $(GLTFPACK_OBJECTS) $(LIBRARY)
 gltfpack.wasm: gltf/library.wasm
 
 gltf/library.wasm: ${LIBRARY_SOURCES} ${GLTFPACK_SOURCES} tools/meshloader.cpp
-	$(WASMCC) $^ -o $@ -Os -DNDEBUG --target=wasm32-wasi --sysroot=$(WASI_SDK) -nostartfiles -Wl,--no-entry -Wl,--export=pack -Wl,--export=malloc -Wl,--export=free -Wl,--export=__wasm_call_ctors -Wl,-s -Wl,--allow-undefined-file=gltf/wasistubs.txt
+	$(WASMCC) $^ -o $@ -Os -DNDEBUG --target=wasm32-wasi --sysroot=$(WASIROOT) -nostartfiles -Wl,--no-entry -Wl,--export=pack -Wl,--export=malloc -Wl,--export=free -Wl,--export=__wasm_call_ctors -Wl,-s -Wl,--allow-undefined-file=gltf/wasistubs.txt
 
 build/decoder_base.wasm: $(WASM_DECODER_SOURCES)
 	@mkdir -p build
@@ -162,10 +162,10 @@ codecbench-simd.js: tools/codecbench.cpp ${LIBRARY_SOURCES}
 	emcc $^ -O3 -g -DNDEBUG -s TOTAL_MEMORY=268435456 -s SINGLE_FILE=1 -msimd128 -o $@
 
 codecbench.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
-	$(WASMCC) $^ -fno-exceptions --target=wasm32-wasi --sysroot=$(WASI_SDK) -lc++ -lc++abi -O3 -g -DNDEBUG -o $@
+	$(WASMCC) $^ -fno-exceptions --target=wasm32-wasi --sysroot=$(WASIROOT) -lc++ -lc++abi -O3 -g -DNDEBUG -o $@
 
 codecbench-simd.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
-	$(WASMCC) $^ -fno-exceptions --target=wasm32-wasi --sysroot=$(WASI_SDK) -lc++ -lc++abi -O3 -g -DNDEBUG -msimd128 -o $@
+	$(WASMCC) $^ -fno-exceptions --target=wasm32-wasi --sysroot=$(WASIROOT) -lc++ -lc++abi -O3 -g -DNDEBUG -msimd128 -o $@
 
 codecfuzz: tools/codecfuzz.cpp src/vertexcodec.cpp src/indexcodec.cpp
 	$(CXX) $^ -fsanitize=fuzzer,address,undefined -O1 -g -o $@
