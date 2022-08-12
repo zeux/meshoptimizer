@@ -5,7 +5,7 @@ import sys
 # regenerate with wasmpack.py generate
 table = [32, 0, 65, 2, 1, 106, 34, 33, 3, 128, 11, 4, 13, 64, 6, 253, 10, 7, 15, 116, 127, 5, 8, 12, 40, 16, 19, 54, 20, 9, 27, 255, 113, 17, 42, 67, 24, 23, 146, 148, 18, 14, 22, 45, 70, 69, 56, 114, 101, 21, 25, 63, 75, 136, 108, 28, 118, 29, 73, 115]
 
-base64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+palette = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:;";
 
 def encode(buffer):
 	result = ''
@@ -13,10 +13,10 @@ def encode(buffer):
 	for ch in buffer.read():
 		if ch in table:
 			index = table.index(ch)
-			result += base64[index]
+			result += palette[index]
 		else:
-			result += base64[60 + ch // 64]
-			result += base64[ch % 64]
+			result += palette[60 + ch // 64]
+			result += palette[ch % 64]
 
 	return result
 
