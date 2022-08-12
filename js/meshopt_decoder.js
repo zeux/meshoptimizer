@@ -21,7 +21,7 @@ var MeshoptDecoder = (function() {
 
 	var instance;
 
-	var promise =
+	var ready =
 		WebAssembly.instantiate(unpack(wasm), {})
 		.then(function(result) {
 			instance = result.instance;
@@ -96,7 +96,7 @@ var MeshoptDecoder = (function() {
 
 	function initWorkers(count) {
 		var source =
-			"var instance; var promise = WebAssembly.instantiate(new Uint8Array([" + new Uint8Array(unpack(wasm)) + "]), {})" +
+			"var instance; var ready = WebAssembly.instantiate(new Uint8Array([" + new Uint8Array(unpack(wasm)) + "]), {})" +
 			".then(function(result) { instance = result.instance; instance.exports.__wasm_call_ctors(); });" +
 			"self.onmessage = workerProcess;" +
 			decode.toString() + workerProcess.toString();
@@ -131,7 +131,7 @@ var MeshoptDecoder = (function() {
 	}
 
 	function workerProcess(event) {
-		promise.then(function() {
+		ready.then(function() {
 			var data = event.data;
 			try {
 				var target = new Uint8Array(data.count * data.size);
@@ -144,7 +144,7 @@ var MeshoptDecoder = (function() {
 	}
 
 	return {
-		ready: promise,
+		ready: ready,
 		supported: true,
 		useWorkers: function(count) {
 			initWorkers(count);
@@ -166,7 +166,7 @@ var MeshoptDecoder = (function() {
 				return decodeWorker(count, size, source, decoders[mode], filters[filter]);
 			}
 
-			return promise.then(function() {
+			return ready.then(function() {
 				var target = new Uint8Array(count * size);
 				decode(instance.exports[decoders[mode]], target, count, size, source, instance.exports[filters[filter]]);
 				return target;
