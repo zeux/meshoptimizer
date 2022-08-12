@@ -122,7 +122,7 @@ build/decoder_simd.wasm: $(WASM_DECODER_SOURCES)
 	$(WASMCC) $^ $(WASM_FLAGS) $(patsubst %,$(WASM_EXPORT_PREFIX)=%,$(WASM_DECODER_EXPORTS)) -o $@ -msimd128 -mbulk-memory
 
 js/meshopt_decoder.js: build/decoder_base.wasm build/decoder_simd.wasm
-	sed -i "s#Built with clang.*#Built with $$($(WASMCC) --version | head -n 1)#" $@
+	sed -i "s#Built with clang.*#Built with $$($(WASMCC) --version | head -n 1 | sed 's/\s\+(.*//')#" $@
 	sed -i "s#\(var wasm_base = \)\".*\";#\\1\"$$(cat build/decoder_base.wasm | python3 tools/wasmpack.py)\";#" $@
 	sed -i "s#\(var wasm_simd = \)\".*\";#\\1\"$$(cat build/decoder_simd.wasm | python3 tools/wasmpack.py)\";#" $@
 
@@ -131,7 +131,7 @@ build/encoder.wasm: $(WASM_ENCODER_SOURCES)
 	$(WASMCC) $^ $(WASM_FLAGS) $(patsubst %,$(WASM_EXPORT_PREFIX)=%,$(WASM_ENCODER_EXPORTS)) -lc -o $@
 
 js/meshopt_encoder.js: build/encoder.wasm
-	sed -i "s#Built with clang.*#Built with $$($(WASMCC) --version | head -n 1)#" $@
+	sed -i "s#Built with clang.*#Built with $$($(WASMCC) --version | head -n 1 | sed 's/\s\+(.*//')#" $@
 	sed -i "s#\(var wasm = \)\".*\";#\\1\"$$(cat build/encoder.wasm | python3 tools/wasmpack.py)\";#" $@
 
 build/simplifier.wasm: $(WASM_SIMPLIFIER_SOURCES)
@@ -139,7 +139,7 @@ build/simplifier.wasm: $(WASM_SIMPLIFIER_SOURCES)
 	$(WASMCC) $^ $(WASM_FLAGS) $(patsubst %,$(WASM_EXPORT_PREFIX)=%,$(WASM_SIMPLIFIER_EXPORTS)) -lc -o $@
 
 js/meshopt_simplifier.js: build/simplifier.wasm
-	sed -i "s#Built with clang.*#Built with $$($(WASMCC) --version | head -n 1)#" $@
+	sed -i "s#Built with clang.*#Built with $$($(WASMCC) --version | head -n 1 | sed 's/\s\+(.*//')#" $@
 	sed -i "s#\(var wasm = \)\".*\";#\\1\"$$(cat build/simplifier.wasm | python3 tools/wasmpack.py)\";#" $@
 
 js/%.module.js: js/%.js
