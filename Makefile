@@ -35,7 +35,7 @@ ifdef BASISU
     endif
 endif
 
-WASMCC?=$(WASI_SDK)/bin/clang
+WASMCC?=$(WASI_SDK)/bin/clang++
 WASIROOT?=$(WASI_SDK)/share/wasi-sysroot
 
 WASM_FLAGS=--target=wasm32-wasi --sysroot=$(WASIROOT)
