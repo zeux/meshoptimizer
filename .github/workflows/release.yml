@@ -52,10 +52,10 @@ jobs:
         VERSION: 16
     - name: build
       run: |
-        make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot gltf/library.wasm
-        make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot js/meshopt_decoder.js js/meshopt_decoder.module.js
-        make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot js/meshopt_encoder.js js/meshopt_encoder.module.js
-        make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot js/meshopt_simplifier.js js/meshopt_simplifier.module.js
+        make -B WASMCC=wasi-sdk/bin/clang++ WASIROOT=./wasi-sysroot gltf/library.wasm
+        make -B WASMCC=wasi-sdk/bin/clang++ WASIROOT=./wasi-sysroot js/meshopt_decoder.js js/meshopt_decoder.module.js
+        make -B WASMCC=wasi-sdk/bin/clang++ WASIROOT=./wasi-sysroot js/meshopt_encoder.js js/meshopt_encoder.module.js
+        make -B WASMCC=wasi-sdk/bin/clang++ WASIROOT=./wasi-sysroot js/meshopt_simplifier.js js/meshopt_simplifier.module.js
         git status
     - name: npm pack
       run: |
