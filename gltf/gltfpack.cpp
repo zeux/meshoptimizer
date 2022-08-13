@@ -1304,10 +1304,6 @@ int main(int argc, char** argv)
 		{
 			settings.texture_flipy = true;
 		}
-		else if (strcmp(arg, "-te") == 0)
-		{
-			fprintf(stderr, "Warning: -te is deprecated and will be removed in the future; gltfpack now automatically embeds textures into GLB files\n");
-		}
 		else if (strcmp(arg, "-tj") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.texture_jobs = clamp(atoi(argv[++i]), 0, 128);
