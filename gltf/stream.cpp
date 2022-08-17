@@ -292,7 +292,23 @@ static void encodeExpShared(uint32_t v[3], const Attr& a, int bits)
 	v[2] = (mz & mmask) | (unsigned(exp) << 24);
 }
 
+static uint32_t encodeExpOne(float v, int bits)
+{
+	// extract exponent
+	int e;
+	frexp(v, &e);
 
+	// scale the mantissa to make it a K-bit signed integer (K-1 bits for magnitude)
+	int exp = e - (bits - 1);
+
+	// compute renormalized rounded mantissa
+	int m = int(ldexp(v, -exp) + (v >= 0 ? 0.5f : -0.5f));
+
+	int mmask = (1 << 24) - 1;
+
+	// encode exponent & mantissa
+	return (m & mmask) | (unsigned(exp) << 24);
+}
 
 static StreamFormat writeVertexStreamRaw(std::string& bin, const Stream& stream, cgltf_type type, size_t components)
 {
@@ -328,7 +344,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 
 		if (settings.pos_float)
 		{
-			StreamFormat::Filter filter = settings.compressmore ? StreamFormat::Filter_Exp : StreamFormat::Filter_None;
+			StreamFormat::Filter filter = settings.compress ? StreamFormat::Filter_Exp : StreamFormat::Filter_None;
 
 			for (size_t i = 0; i < stream.data.size(); ++i)
 			{
@@ -337,7 +353,16 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 				if (filter == StreamFormat::Filter_Exp)
 				{
 					uint32_t v[3];
-					encodeExpShared(v, a, qp.bits);
+					if (settings.compressmore)
+					{
+						encodeExpShared(v, a, qp.bits + 1);
+					}
+					else
+					{
+						v[0] = encodeExpOne(a.f[0], qp.bits + 1);
+						v[1] = encodeExpOne(a.f[1], qp.bits + 1);
+						v[2] = encodeExpOne(a.f[2], qp.bits + 1);
+					}
 					bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 				}
 				else
