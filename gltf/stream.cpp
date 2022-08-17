@@ -346,32 +346,81 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 		{
 			StreamFormat::Filter filter = settings.compress ? StreamFormat::Filter_Exp : StreamFormat::Filter_None;
 
-			for (size_t i = 0; i < stream.data.size(); ++i)
+			// one exp for all!
+			if (settings.compressmore && 1)
 			{
-				const Attr& a = stream.data[i];
+				int expx = -128, expy = -128, expz = -128;
 
-				if (filter == StreamFormat::Filter_Exp)
+				for (size_t i = 0; i < stream.data.size(); ++i)
 				{
+					const Attr& a = stream.data[i];
+
+					int ex, ey, ez;
+					frexp(a.f[0], &ex);
+					frexp(a.f[1], &ey);
+					frexp(a.f[2], &ez);
+
+					expx = std::max(expx, ex);
+					expy = std::max(expy, ey);
+					expz = std::max(expz, ez);
+				}
+
+				int bits = qp.bits + 1;
+
+				// scale the mantissa to make it a K-bit signed integer (K-1 bits for magnitude)
+				expx -= (bits - 1);
+				expy -= (bits - 1);
+				expz -= (bits - 1);
+
+				for (size_t i = 0; i < stream.data.size(); ++i)
+				{
+					const Attr& a = stream.data[i];
+
+					// compute renormalized rounded mantissas
+					int mx = int(ldexp(a.f[0], -expx) + (a.f[0] >= 0 ? 0.5f : -0.5f));
+					int my = int(ldexp(a.f[1], -expy) + (a.f[1] >= 0 ? 0.5f : -0.5f));
+					int mz = int(ldexp(a.f[2], -expz) + (a.f[2] >= 0 ? 0.5f : -0.5f));
+
+					int mmask = (1 << 24) - 1;
+
+					// encode exponent & mantissa
 					uint32_t v[3];
-					if (settings.compressmore)
+					v[0] = (mx & mmask) | (unsigned(expx) << 24);
+					v[1] = (my & mmask) | (unsigned(expy) << 24);
+					v[2] = (mz & mmask) | (unsigned(expz) << 24);
+
+					bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+				}
+			}
+			else
+			{
+				for (size_t i = 0; i < stream.data.size(); ++i)
+				{
+					const Attr& a = stream.data[i];
+
+					if (filter == StreamFormat::Filter_Exp)
 					{
-						encodeExpShared(v, a, qp.bits + 1);
+						uint32_t v[3];
+						if (settings.compressmore)
+						{
+							encodeExpShared(v, a, qp.bits + 1);
+						}
+						else
+						{
+							v[0] = encodeExpOne(a.f[0], qp.bits + 1);
+							v[1] = encodeExpOne(a.f[1], qp.bits + 1);
+							v[2] = encodeExpOne(a.f[2], qp.bits + 1);
+						}
+						bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 					}
 					else
 					{
-						v[0] = encodeExpOne(a.f[0], qp.bits + 1);
-						v[1] = encodeExpOne(a.f[1], qp.bits + 1);
-						v[2] = encodeExpOne(a.f[2], qp.bits + 1);
+						float v[3] = {
+						    meshopt_quantizeFloat(a.f[0], qp.bits),
+						    meshopt_quantizeFloat(a.f[1], qp.bits),
+						    meshopt_quantizeFloat(a.f[2], qp.bits)};
+						bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 					}
-					bin.append(reinterpret_cast<const char*>(v), sizeof(v));
-				}
-				else
-				{
-					float v[3] = {
-					    meshopt_quantizeFloat(a.f[0], qp.bits),
-					    meshopt_quantizeFloat(a.f[1], qp.bits),
-					    meshopt_quantizeFloat(a.f[2], qp.bits)};
-					bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 				}
 			}
 
