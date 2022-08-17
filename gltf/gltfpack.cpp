@@ -507,7 +507,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 		comma(json_materials);
 		append(json_materials, "{");
-		writeMaterial(json_materials, data, material, settings.quantize ? &qp : NULL, settings.quantize ? &qt_materials[i] : NULL);
+		writeMaterial(json_materials, data, material, settings.quantize && !settings.pos_float ? &qp : NULL, settings.quantize ? &qt_materials[i] : NULL);
 		if (settings.keep_extras)
 			writeExtras(json_materials, extras, material.extras);
 		append(json_materials, "}");
@@ -657,7 +657,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 				assert(ni.keep);
 				ni.meshes.push_back(node_offset);
 
-				writeMeshNode(json_nodes, mesh_offset, mesh.nodes[j], mesh.skin, data, settings.quantize ? &qp : NULL);
+				writeMeshNode(json_nodes, mesh_offset, mesh.nodes[j], mesh.skin, data, settings.quantize && !settings.pos_float ? &qp : NULL);
 
 				node_offset++;
 			}
@@ -681,7 +681,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 			comma(json_roots[mesh.scene]);
 			append(json_roots[mesh.scene], node_offset);
 
-			writeMeshNode(json_nodes, mesh_offset, NULL, mesh.skin, data, settings.quantize ? &qp : NULL);
+			writeMeshNode(json_nodes, mesh_offset, NULL, mesh.skin, data, settings.quantize && !settings.pos_float ? &qp : NULL);
 
 			node_offset++;
 		}
@@ -1191,6 +1191,10 @@ int main(int argc, char** argv)
 		{
 			settings.pos_normalized = true;
 		}
+		else if (strcmp(arg, "-vpf") == 0)
+		{
+			settings.pos_float = true;
+		}
 		else if (strcmp(arg, "-at") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.trn_bits = clamp(atoi(argv[++i]), 1, 24);
@@ -1424,6 +1428,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-vn N: use N-bit quantization for normals and tangents (default: 8; N should be between 1 and 16)\n");
 			fprintf(stderr, "\t-vc N: use N-bit quantization for colors (default: 8; N should be between 1 and 16)\n");
 			fprintf(stderr, "\t-vpn: use normalized attributes for positions instead of using integers\n");
+			fprintf(stderr, "\t-vpf: use floating point attributes for positions instead of using quantization\n");
 			fprintf(stderr, "\nAnimations:\n");
 			fprintf(stderr, "\t-at N: use N-bit quantization for translations (default: 16; N should be between 1 and 24)\n");
 			fprintf(stderr, "\t-ar N: use N-bit quantization for rotations (default: 12; N should be between 4 and 16)\n");
