@@ -196,7 +196,12 @@ struct NodeInfo
 	unsigned int animated_paths;
 
 	int remap;
-	std::vector<size_t> meshes;
+
+	std::vector<size_t> mesh_nodes;
+
+	bool has_mesh;
+	size_t mesh_index;
+	cgltf_skin* mesh_skin;
 };
 
 struct MaterialInfo

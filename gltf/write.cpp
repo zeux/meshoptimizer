@@ -1255,7 +1255,7 @@ void writeNode(std::string& json, const cgltf_node& node, const std::vector<Node
 		append(json, "]");
 	}
 
-	bool has_children = !ni.meshes.empty();
+	bool has_children = !ni.mesh_nodes.empty();
 	for (size_t j = 0; j < node.children_count; ++j)
 		has_children |= nodes[node.children[j] - data->nodes].keep;
 
@@ -1273,12 +1273,33 @@ void writeNode(std::string& json, const cgltf_node& node, const std::vector<Node
 				append(json, size_t(ci.remap));
 			}
 		}
-		for (size_t j = 0; j < ni.meshes.size(); ++j)
+		for (size_t j = 0; j < ni.mesh_nodes.size(); ++j)
 		{
 			comma(json);
-			append(json, ni.meshes[j]);
+			append(json, ni.mesh_nodes[j]);
 		}
 		append(json, "]");
+	}
+	if (ni.has_mesh)
+	{
+		comma(json);
+		append(json, "\"mesh\":");
+		append(json, ni.mesh_index);
+		if (ni.mesh_skin)
+		{
+			append(json, ",\"skin\":");
+			append(json, size_t(ni.mesh_skin - data->skins));
+		}
+		if (node.weights_count)
+		{
+			append(json, ",\"weights\":[");
+			for (size_t j = 0; j < node.weights_count; ++j)
+			{
+				comma(json);
+				append(json, node.weights[j]);
+			}
+			append(json, "]");
+		}
 	}
 	if (node.camera)
 	{
@@ -1394,11 +1415,9 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 		const NodeInfo& tni = nodes[track.node - data->nodes];
 		size_t target_node = size_t(tni.remap);
 
-		if (track.path == cgltf_animation_path_type_weights)
-		{
-			assert(tni.meshes.size() == 1);
-			target_node = tni.meshes[0];
-		}
+		// when animating morph weights, quantization may move mesh assignments to a mesh node in which case we need to move the animation output
+		if (track.path == cgltf_animation_path_type_weights && tni.mesh_nodes.size() == 1)
+			target_node = tni.mesh_nodes[0];
 
 		comma(json_channels);
 		append(json_channels, "{\"sampler\":");

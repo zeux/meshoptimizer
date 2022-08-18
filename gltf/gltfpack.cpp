@@ -653,13 +653,23 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 			for (size_t j = 0; j < mesh.nodes.size(); ++j)
 			{
 				NodeInfo& ni = nodes[mesh.nodes[j] - data->nodes];
-
 				assert(ni.keep);
-				ni.meshes.push_back(node_offset);
 
-				writeMeshNode(json_nodes, mesh_offset, mesh.nodes[j], mesh.skin, data, settings.quantize && !settings.pos_float ? &qp : NULL);
+				// if we don't use position quantization, prefer attaching the mesh to its node directly
+				if (!ni.has_mesh && (!settings.quantize || settings.pos_float))
+				{
+					ni.has_mesh = true;
+					ni.mesh_index = mesh_offset;
+					ni.mesh_skin = mesh.skin;
+				}
+				else
+				{
+					ni.mesh_nodes.push_back(node_offset);
 
-				node_offset++;
+					writeMeshNode(json_nodes, mesh_offset, mesh.nodes[j], mesh.skin, data, settings.quantize && !settings.pos_float ? &qp : NULL);
+
+					node_offset++;
+				}
 			}
 		}
 		else if (mesh.instances.size())
