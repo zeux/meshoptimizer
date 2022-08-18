@@ -1492,6 +1492,18 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
+	if (settings.fallback && settings.compressmore)
+	{
+		fprintf(stderr, "Option -cf can not be used together with -cc\n");
+		return 1;
+	}
+
+	if (settings.fallback && settings.pos_float)
+	{
+		fprintf(stderr, "Option -cf can not be used together with -vpf\n");
+		return 1;
+	}
+
 	return gltfpack(input, output, report, settings);
 }
 
