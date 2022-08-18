@@ -275,7 +275,7 @@ static void encodeExpShared(uint32_t v[3], const Attr& a, int bits)
 	frexp(a.f[1], &ey);
 	frexp(a.f[2], &ez);
 
-	// use maximum exponent to encode values; this guarantess that mantissa is [-1, 1]
+	// use maximum exponent to encode values; this guarantees that mantissa is [-1, 1]
 	// note that we additionally scale the mantissa to make it a K-bit signed integer (K-1 bits for magnitude)
 	int exp = std::max(ex, std::max(ey, ez)) - (bits - 1);
 
@@ -308,6 +308,52 @@ static uint32_t encodeExpOne(float v, int bits)
 
 	// encode exponent & mantissa
 	return (m & mmask) | (unsigned(exp) << 24);
+}
+
+static void encodeExpParallel(std::string& bin, const Attr* data, size_t count, int bits)
+{
+	int expx = -128, expy = -128, expz = -128;
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		const Attr& a = data[i];
+
+		// get exponents from all components
+		int ex, ey, ez;
+		frexp(a.f[0], &ex);
+		frexp(a.f[1], &ey);
+		frexp(a.f[2], &ez);
+
+		// use maximum exponent to encode values; this guarantees that mantissa is [-1, 1]
+		expx = std::max(expx, ex);
+		expy = std::max(expy, ey);
+		expz = std::max(expz, ez);
+	}
+
+	// scale the mantissa to make it a K-bit signed integer (K-1 bits for magnitude)
+	expx -= (bits - 1);
+	expy -= (bits - 1);
+	expz -= (bits - 1);
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		const Attr& a = data[i];
+
+		// compute renormalized rounded mantissas
+		int mx = int(ldexp(a.f[0], -expx) + (a.f[0] >= 0 ? 0.5f : -0.5f));
+		int my = int(ldexp(a.f[1], -expy) + (a.f[1] >= 0 ? 0.5f : -0.5f));
+		int mz = int(ldexp(a.f[2], -expz) + (a.f[2] >= 0 ? 0.5f : -0.5f));
+
+		int mmask = (1 << 24) - 1;
+
+		// encode exponent & mantissa
+		uint32_t v[3];
+		v[0] = (mx & mmask) | (unsigned(expx) << 24);
+		v[1] = (my & mmask) | (unsigned(expy) << 24);
+		v[2] = (mz & mmask) | (unsigned(expz) << 24);
+
+		bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+	}
 }
 
 static StreamFormat writeVertexStreamRaw(std::string& bin, const Stream& stream, cgltf_type type, size_t components)
@@ -346,51 +392,9 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 		{
 			StreamFormat::Filter filter = settings.compress ? StreamFormat::Filter_Exp : StreamFormat::Filter_None;
 
-			// one exp for all!
-			if (settings.compressmore && 1)
+			if (settings.compressmore)
 			{
-				int expx = -128, expy = -128, expz = -128;
-
-				for (size_t i = 0; i < stream.data.size(); ++i)
-				{
-					const Attr& a = stream.data[i];
-
-					int ex, ey, ez;
-					frexp(a.f[0], &ex);
-					frexp(a.f[1], &ey);
-					frexp(a.f[2], &ez);
-
-					expx = std::max(expx, ex);
-					expy = std::max(expy, ey);
-					expz = std::max(expz, ez);
-				}
-
-				int bits = qp.bits + 1;
-
-				// scale the mantissa to make it a K-bit signed integer (K-1 bits for magnitude)
-				expx -= (bits - 1);
-				expy -= (bits - 1);
-				expz -= (bits - 1);
-
-				for (size_t i = 0; i < stream.data.size(); ++i)
-				{
-					const Attr& a = stream.data[i];
-
-					// compute renormalized rounded mantissas
-					int mx = int(ldexp(a.f[0], -expx) + (a.f[0] >= 0 ? 0.5f : -0.5f));
-					int my = int(ldexp(a.f[1], -expy) + (a.f[1] >= 0 ? 0.5f : -0.5f));
-					int mz = int(ldexp(a.f[2], -expz) + (a.f[2] >= 0 ? 0.5f : -0.5f));
-
-					int mmask = (1 << 24) - 1;
-
-					// encode exponent & mantissa
-					uint32_t v[3];
-					v[0] = (mx & mmask) | (unsigned(expx) << 24);
-					v[1] = (my & mmask) | (unsigned(expy) << 24);
-					v[2] = (mz & mmask) | (unsigned(expz) << 24);
-
-					bin.append(reinterpret_cast<const char*>(v), sizeof(v));
-				}
+				encodeExpParallel(bin, &stream.data[0], stream.data.size(), qp.bits + 1);
 			}
 			else
 			{
@@ -401,16 +405,9 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 					if (filter == StreamFormat::Filter_Exp)
 					{
 						uint32_t v[3];
-						if (settings.compressmore)
-						{
-							encodeExpShared(v, a, qp.bits + 1);
-						}
-						else
-						{
-							v[0] = encodeExpOne(a.f[0], qp.bits + 1);
-							v[1] = encodeExpOne(a.f[1], qp.bits + 1);
-							v[2] = encodeExpOne(a.f[2], qp.bits + 1);
-						}
+						v[0] = encodeExpOne(a.f[0], qp.bits + 1);
+						v[1] = encodeExpOne(a.f[1], qp.bits + 1);
+						v[2] = encodeExpOne(a.f[2], qp.bits + 1);
 						bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 					}
 					else
