@@ -109,6 +109,7 @@ struct Settings
 	int col_bits;
 
 	bool pos_normalized;
+	bool pos_float;
 
 	int trn_bits;
 	int rot_bits;
@@ -322,7 +323,7 @@ void decomposeTransform(float translation[3], float rotation[4], float scale[3],
 
 QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes, const Settings& settings);
 void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTexture>& result, std::vector<size_t>& indices, const std::vector<Mesh>& meshes, const Settings& settings);
-void getPositionBounds(float min[3], float max[3], const Stream& stream, const QuantizationPosition* qp);
+void getPositionBounds(float min[3], float max[3], const Stream& stream, const QuantizationPosition& qp, const Settings& settings);
 
 StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings);
 StreamFormat writeIndexStream(std::string& bin, const std::vector<unsigned int>& stream);
