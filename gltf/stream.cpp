@@ -175,7 +175,7 @@ void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTextur
 	}
 }
 
-void getPositionBounds(float min[3], float max[3], const Stream& stream, const QuantizationPosition* qp)
+void getPositionBounds(float min[3], float max[3], const Stream& stream, const QuantizationPosition& qp, const Settings& settings)
 {
 	assert(stream.type == cgltf_attribute_type_position);
 	assert(stream.data.size() > 0);
@@ -194,21 +194,32 @@ void getPositionBounds(float min[3], float max[3], const Stream& stream, const Q
 		}
 	}
 
-	if (qp)
+	if (settings.quantize)
 	{
-		float pos_rscale = qp->scale == 0.f ? 0.f : 1.f / qp->scale * (stream.target > 0 && qp->normalized ? 32767.f / 65535.f : 1.f);
-
-		for (int k = 0; k < 3; ++k)
+		if (settings.pos_float)
 		{
-			if (stream.target == 0)
+			for (int k = 0; k < 3; ++k)
 			{
-				min[k] = float(meshopt_quantizeUnorm((min[k] - qp->offset[k]) * pos_rscale, qp->bits));
-				max[k] = float(meshopt_quantizeUnorm((max[k] - qp->offset[k]) * pos_rscale, qp->bits));
+				min[k] = meshopt_quantizeFloat(min[k], qp.bits);
+				max[k] = meshopt_quantizeFloat(max[k], qp.bits);
 			}
-			else
+		}
+		else
+		{
+			float pos_rscale = qp.scale == 0.f ? 0.f : 1.f / qp.scale * (stream.target > 0 && qp.normalized ? 32767.f / 65535.f : 1.f);
+
+			for (int k = 0; k < 3; ++k)
 			{
-				min[k] = (min[k] >= 0.f ? 1.f : -1.f) * float(meshopt_quantizeUnorm(fabsf(min[k]) * pos_rscale, qp->bits));
-				max[k] = (max[k] >= 0.f ? 1.f : -1.f) * float(meshopt_quantizeUnorm(fabsf(max[k]) * pos_rscale, qp->bits));
+				if (stream.target == 0)
+				{
+					min[k] = float(meshopt_quantizeUnorm((min[k] - qp.offset[k]) * pos_rscale, qp.bits));
+					max[k] = float(meshopt_quantizeUnorm((max[k] - qp.offset[k]) * pos_rscale, qp.bits));
+				}
+				else
+				{
+					min[k] = (min[k] >= 0.f ? 1.f : -1.f) * float(meshopt_quantizeUnorm(fabsf(min[k]) * pos_rscale, qp.bits));
+					max[k] = (max[k] >= 0.f ? 1.f : -1.f) * float(meshopt_quantizeUnorm(fabsf(max[k]) * pos_rscale, qp.bits));
+				}
 			}
 		}
 	}
