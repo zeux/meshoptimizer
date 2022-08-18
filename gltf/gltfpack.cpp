@@ -1314,6 +1314,7 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-noq") == 0)
 		{
+			// TODO: Warn if -noq is used and suggest -vpf instead; use -noqq to silence
 			settings.quantize = false;
 		}
 		else if (strcmp(arg, "-i") == 0 && i + 1 < argc && !input)
@@ -1428,7 +1429,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-vn N: use N-bit quantization for normals and tangents (default: 8; N should be between 1 and 16)\n");
 			fprintf(stderr, "\t-vc N: use N-bit quantization for colors (default: 8; N should be between 1 and 16)\n");
 			fprintf(stderr, "\t-vpn: use normalized attributes for positions instead of using integers\n");
-			fprintf(stderr, "\t-vpf: use floating point attributes for positions instead of using quantization\n");
+			fprintf(stderr, "\t-vpf: use floating point attributes for positions instead of using integers\n");
 			fprintf(stderr, "\nAnimations:\n");
 			fprintf(stderr, "\t-at N: use N-bit quantization for translations (default: 16; N should be between 1 and 24)\n");
 			fprintf(stderr, "\t-ar N: use N-bit quantization for rotations (default: 12; N should be between 4 and 16)\n");
