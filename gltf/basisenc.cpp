@@ -127,8 +127,6 @@ void encodeImages(std::string* encoded, const cgltf_data* data, const std::vecto
 {
 	basisu::basisu_encoder_init();
 
-	basisu::interval_timer::init(); // make sure interval_timer globals are initialized from main thread
-
 	basisu::vector<basisu::basis_compressor_params> params(data->images_count);
 	basisu::vector<basisu::parallel_results> results(data->images_count);
 
