@@ -37,6 +37,20 @@ meshoptimizer is distributed as a set of C++ source files. To include it into yo
 
 The source files are organized in such a way that you don't need to change your build-system settings, and you only need to add the files for the algorithms you use.
 
+## Installing from vcpkg
+
+The meshoptimizer port in vcpkg is kept up to date by Microsoft team members and community contributors. The url of vcpkg is: https://github.com/Microsoft/vcpkg . You can download and install meshoptimizer using the vcpkg dependency manager:
+
+```shell
+git clone https://github.com/Microsoft/vcpkg.git
+cd vcpkg
+./bootstrap-vcpkg.sh  # ./bootstrap-vcpkg.bat for Windows
+./vcpkg integrate install
+./vcpkg install meshoptimizer
+```
+
+If the version is out of date, please [create an issue or pull request](https://github.com/Microsoft/vcpkg) on the vcpkg repository.
+
 ## Pipeline
 
 When optimizing a mesh, you should typically feed it through a set of optimizations (the order is important!):
