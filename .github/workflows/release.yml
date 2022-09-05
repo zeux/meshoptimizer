@@ -4,7 +4,8 @@ on:
   push:
     branches:
       - 'master'
-  pull_request:
+    paths-ignore:
+      - '*.md'
 
 jobs:
   gltfpack:
@@ -23,7 +24,7 @@ jobs:
     - name: cmake configure
       run: cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_BASISU_PATH=basis_universal -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded" -DCMAKE_BUILD_TYPE=Release
     - name: cmake build
-      run: cmake --build . --target gltfpack --config Release
+      run: cmake --build . --target gltfpack --config Release -j 2
     - uses: actions/upload-artifact@v1
       with:
         name: gltfpack-windows
@@ -52,7 +53,7 @@ jobs:
         VERSION: 16
     - name: build
       run: |
-        make -B WASI_SDK=wasi-sdk gltf/library.wasm js
+        make -j2 -B WASI_SDK=wasi-sdk gltf/library.wasm js
         git status
     - name: npm pack
       run: |

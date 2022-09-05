@@ -4,7 +4,11 @@ on:
   push:
     branches:
       - 'master'
+    paths-ignore:
+      - '*.md'
   pull_request:
+    paths-ignore:
+      - '*.md'
 
 jobs:
   unix:
@@ -85,7 +89,7 @@ jobs:
       env:
         VALIDATOR: https://github.com/KhronosGroup/glTF-Validator/releases/download/2.0.0-dev.3.3/gltf_validator-2.0.0-dev.3.3-linux64.tar.xz
 
-  gltfpackjs:
+  gltfpack-js:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
@@ -102,7 +106,7 @@ jobs:
         VERSION: 16
     - name: build
       run: |
-        make -B WASI_SDK=wasi-sdk gltf/library.wasm js
+        make -j2 -B WASI_SDK=wasi-sdk gltf/library.wasm js
         git status
     - name: test
       run: |
@@ -112,6 +116,18 @@ jobs:
         node js/meshopt_decoder.test.js
         node js/meshopt_encoder.test.js
         node js/meshopt_simplifier.test.js
+
+  gltfpack-basis:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
+      with:
+        repository: zeux/basis_universal
+        ref: gltfpack
+        path: basis_universal
+    - name: make gltfpack
+      run: make -j2 BASISU=basis_universal gltfpack
 
   arm64:
     runs-on: ubuntu-latest
