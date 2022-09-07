@@ -10,6 +10,7 @@
 
 #include <assert.h>
 #include <stddef.h>
+#include <stdint.h>
 
 /* Version macro; major * 1000 + minor * 10 + patch */
 #define MESHOPTIMIZER_VERSION 180 /* 0.18 */
@@ -736,7 +737,7 @@ public:
 	template <typename T> T* allocate(size_t size)
 	{
 		assert(count < sizeof(blocks) / sizeof(blocks[0]));
-		T* result = static_cast<T*>(Storage::allocate(size > size_t(-1) / sizeof(T) ? size_t(-1) : size * sizeof(T)));
+		T* result = static_cast<T*>(Storage::allocate(size > PTRDIFF_MAX / sizeof(T) ? PTRDIFF_MAX : size * sizeof(T)));
 		blocks[count++] = result;
 		return result;
 	}
