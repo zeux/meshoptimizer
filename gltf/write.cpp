@@ -1589,17 +1589,14 @@ void writeExtensions(std::string& json, const ExtensionInfo* extensions, size_t 
 	}
 }
 
-void writeExtras(std::string& json, const std::string& data, const cgltf_extras& extras)
+void writeExtras(std::string& json, const cgltf_extras& extras)
 {
-	if (extras.start_offset == extras.end_offset)
+	if (!extras.data)
 		return;
-
-	assert(extras.start_offset < data.size());
-	assert(extras.end_offset <= data.size());
 
 	comma(json);
 	append(json, "\"extras\":");
-	appendJson(json, data.c_str() + extras.start_offset, data.c_str() + extras.end_offset);
+	appendJson(json, extras.data);
 }
 
 void writeScene(std::string& json, const cgltf_scene& scene, const std::string& roots)

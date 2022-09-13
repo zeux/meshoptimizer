@@ -38,15 +38,12 @@ static bool areTextureViewsEqual(const cgltf_texture_view& lhs, const cgltf_text
 	return true;
 }
 
-static bool areExtrasEqual(const std::string& extras, const cgltf_extras& lhs, const cgltf_extras& rhs)
+static bool areExtrasEqual(const cgltf_extras& lhs, const cgltf_extras& rhs)
 {
-	if (lhs.end_offset - lhs.start_offset != rhs.end_offset - rhs.start_offset)
-		return false;
-
-	if (memcmp(extras.c_str() + lhs.start_offset, extras.c_str() + rhs.start_offset, lhs.end_offset - lhs.start_offset) != 0)
-		return false;
-
-	return true;
+	if (lhs.data && rhs.data)
+		return strcmp(lhs.data, rhs.data) == 0;
+	else
+		return lhs.data == rhs.data;
 }
 
 static bool areMaterialComponentsEqual(const cgltf_pbr_metallic_roughness& lhs, const cgltf_pbr_metallic_roughness& rhs)
@@ -210,7 +207,7 @@ static bool areMaterialComponentsEqual(const cgltf_iridescence& lhs, const cgltf
 	return true;
 }
 
-static bool areMaterialsEqual(const std::string& extras, const cgltf_material& lhs, const cgltf_material& rhs, const Settings& settings)
+static bool areMaterialsEqual(const cgltf_material& lhs, const cgltf_material& rhs, const Settings& settings)
 {
 	if (lhs.has_pbr_metallic_roughness != rhs.has_pbr_metallic_roughness)
 		return false;
@@ -296,13 +293,13 @@ static bool areMaterialsEqual(const std::string& extras, const cgltf_material& l
 	if (lhs.unlit != rhs.unlit)
 		return false;
 
-	if (settings.keep_extras && !areExtrasEqual(extras, lhs.extras, rhs.extras))
+	if (settings.keep_extras && !areExtrasEqual(lhs.extras, rhs.extras))
 		return false;
 
 	return true;
 }
 
-void mergeMeshMaterials(cgltf_data* data, const std::string& extras, std::vector<Mesh>& meshes, const Settings& settings)
+void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings)
 {
 	std::vector<cgltf_material*> material_remap(data->materials_count);
 
@@ -318,7 +315,7 @@ void mergeMeshMaterials(cgltf_data* data, const std::string& extras, std::vector
 			if (settings.keep_materials && data->materials[j].name && *data->materials[j].name)
 				continue;
 
-			if (areMaterialsEqual(extras, data->materials[i], data->materials[j], settings))
+			if (areMaterialsEqual(data->materials[i], data->materials[j], settings))
 			{
 				material_remap[i] = &data->materials[j];
 				break;
