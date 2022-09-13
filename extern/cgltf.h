@@ -920,12 +920,15 @@ static int jsmn_parse(jsmn_parser *parser, const char *js, size_t len, jsmntok_t
  */
 
 
+#ifndef CGLTF_CONSTS
 static const cgltf_size GlbHeaderSize = 12;
 static const cgltf_size GlbChunkHeaderSize = 8;
 static const uint32_t GlbVersion = 2;
 static const uint32_t GlbMagic = 0x46546C67;
 static const uint32_t GlbMagicJsonChunk = 0x4E4F534A;
 static const uint32_t GlbMagicBinChunk = 0x004E4942;
+#define CGLTF_CONSTS
+#endif
 
 #ifndef CGLTF_MALLOC
 #define CGLTF_MALLOC(size) malloc(size)
@@ -1716,7 +1719,7 @@ cgltf_result cgltf_validate(cgltf_data* data)
 cgltf_result cgltf_copy_extras_json(const cgltf_data* data, const cgltf_extras* extras, char* dest, cgltf_size* dest_size)
 {
 	(void)data;
-	cgltf_size json_size = strlen(extras->data);
+	cgltf_size json_size = extras->data ? strlen(extras->data) : 0;
 
 	if (!dest)
 	{
@@ -1735,7 +1738,8 @@ cgltf_result cgltf_copy_extras_json(const cgltf_data* data, const cgltf_extras* 
 	}
 	else
 	{
-		strncpy(dest, extras->data, json_size);
+		if (json_size)
+			strncpy(dest, extras->data, json_size);
 		dest[json_size] = 0;
 	}
 
@@ -2740,8 +2744,9 @@ static int cgltf_parse_json_extras(cgltf_options* options, jsmntok_t const* toke
 		return CGLTF_ERROR_JSON;
 	}
 
-
-
+	/* fill deprecated fields for now, this will be removed in the future */
+	out_extras->start_offset = tokens[i].start;
+	out_extras->end_offset = tokens[i].end;
 
 	size_t start = tokens[i].start;
 	size_t size = tokens[i].end - start;
