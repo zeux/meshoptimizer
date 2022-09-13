@@ -837,6 +837,7 @@ cgltf_size cgltf_num_components(cgltf_type type);
 
 cgltf_size cgltf_accessor_unpack_floats(const cgltf_accessor* accessor, cgltf_float* out, cgltf_size float_count);
 
+/* this function is deprecated and will be removed in the future; use cgltf_extras::data instead */
 cgltf_result cgltf_copy_extras_json(const cgltf_data* data, const cgltf_extras* extras, char* dest, cgltf_size* dest_size);
 
 #ifdef __cplusplus
@@ -1718,8 +1719,7 @@ cgltf_result cgltf_validate(cgltf_data* data)
 
 cgltf_result cgltf_copy_extras_json(const cgltf_data* data, const cgltf_extras* extras, char* dest, cgltf_size* dest_size)
 {
-	(void)data;
-	cgltf_size json_size = extras->data ? strlen(extras->data) : 0;
+	cgltf_size json_size = extras->end_offset - extras->start_offset;
 
 	if (!dest)
 	{
@@ -1733,13 +1733,12 @@ cgltf_result cgltf_copy_extras_json(const cgltf_data* data, const cgltf_extras* 
 
 	if (*dest_size + 1 < json_size)
 	{
-		strncpy(dest, extras->data, *dest_size - 1);
+		strncpy(dest, data->json + extras->start_offset, *dest_size - 1);
 		dest[*dest_size - 1] = 0;
 	}
 	else
 	{
-		if (json_size)
-			strncpy(dest, extras->data, json_size);
+		strncpy(dest, data->json + extras->start_offset, json_size);
 		dest[json_size] = 0;
 	}
 
