@@ -2024,6 +2024,16 @@ void cgltf_free(cgltf_data* data)
 		data->memory.free_func(data->memory.user_data, data->nodes[i].children);
 		data->memory.free_func(data->memory.user_data, data->nodes[i].weights);
 
+		if (data->nodes[i].has_mesh_gpu_instancing)
+		{
+			for (cgltf_size j = 0; j < data->nodes[i].mesh_gpu_instancing.attributes_count; ++j)
+			{
+				data->memory.free_func(data->memory.user_data, data->nodes[i].mesh_gpu_instancing.attributes[j].name);
+			}
+
+			data->memory.free_func(data->memory.user_data, data->nodes[i].mesh_gpu_instancing.attributes);
+		}
+
 		cgltf_free_extensions(data, data->nodes[i].extensions, data->nodes[i].extensions_count);
 		cgltf_free_extras(data, &data->nodes[i].extras);
 	}
@@ -2911,7 +2921,7 @@ static int cgltf_parse_json_material_mapping_data(cgltf_options* options, jsmnto
 
 		int material = -1;
 		int variants_tok = -1;
-		cgltf_extras extras = {0, 0, NULL};
+		int extras_tok = -1;
 
 		for (int k = 0; k < obj_size; ++k)
 		{
@@ -2932,7 +2942,8 @@ static int cgltf_parse_json_material_mapping_data(cgltf_options* options, jsmnto
 			}
 			else if (cgltf_json_strcmp(tokens + i, json_chunk, "extras") == 0)
 			{
-				i = cgltf_parse_json_extras(options, tokens, i + 1, json_chunk, &extras);
+				extras_tok = i + 1;
+				i = cgltf_skip_json(tokens, extras_tok);
 			}
 			else
 			{
@@ -2960,7 +2971,13 @@ static int cgltf_parse_json_material_mapping_data(cgltf_options* options, jsmnto
 
 				out_mappings[*offset].material = CGLTF_PTRINDEX(cgltf_material, material);
 				out_mappings[*offset].variant = variant;
-				out_mappings[*offset].extras = extras;
+
+				if (extras_tok >= 0)
+				{
+					int e = cgltf_parse_json_extras(options, tokens, extras_tok, json_chunk, &out_mappings[*offset].extras);
+					if (e < 0)
+						return e;
+				}
 
 				(*offset)++;
 			}
@@ -5016,19 +5033,6 @@ static int cgltf_parse_json_camera(cgltf_options* options, jsmntok_t const* toke
 		{
 			i = cgltf_parse_json_string(options, tokens, i + 1, json_chunk, &out_camera->name);
 		}
-		else if (cgltf_json_strcmp(tokens+i, json_chunk, "type") == 0)
-		{
-			++i;
-			if (cgltf_json_strcmp(tokens + i, json_chunk, "perspective") == 0)
-			{
-				out_camera->type = cgltf_camera_type_perspective;
-			}
-			else if (cgltf_json_strcmp(tokens + i, json_chunk, "orthographic") == 0)
-			{
-				out_camera->type = cgltf_camera_type_orthographic;
-			}
-			++i;
-		}
 		else if (cgltf_json_strcmp(tokens+i, json_chunk, "perspective") == 0)
 		{
 			++i;
@@ -5037,6 +5041,11 @@ static int cgltf_parse_json_camera(cgltf_options* options, jsmntok_t const* toke
 
 			int data_size = tokens[i].size;
 			++i;
+
+			if (out_camera->type != cgltf_camera_type_invalid)
+			{
+				return CGLTF_ERROR_JSON;
+			}
 
 			out_camera->type = cgltf_camera_type_perspective;
 
@@ -5093,6 +5102,11 @@ static int cgltf_parse_json_camera(cgltf_options* options, jsmntok_t const* toke
 
 			int data_size = tokens[i].size;
 			++i;
+
+			if (out_camera->type != cgltf_camera_type_invalid)
+			{
+				return CGLTF_ERROR_JSON;
+			}
 
 			out_camera->type = cgltf_camera_type_orthographic;
 
