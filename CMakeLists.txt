@@ -57,7 +57,7 @@ set(GLTF_SOURCES
 if(MSVC)
     add_compile_options(/W4 /WX)
 else()
-    add_compile_options(-Wall -Wextra -Wshadow -Wno-missing-field-initializers -Werror)
+    add_compile_options(-Wall -Wextra -Wshadow -Wno-missing-field-initializers)
 endif()
 
 if(MESHOPT_BUILD_SHARED_LIBS)
