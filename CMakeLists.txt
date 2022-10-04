@@ -16,6 +16,7 @@ project(meshoptimizer VERSION 0.18 LANGUAGES CXX)
 option(MESHOPT_BUILD_DEMO "Build demo" OFF)
 option(MESHOPT_BUILD_GLTFPACK "Build gltfpack" OFF)
 option(MESHOPT_BUILD_SHARED_LIBS "Build shared libraries" OFF)
+option(MESHOPT_WERROR "Treat warnings as errors" OFF)
 set(MESHOPT_BASISU_PATH "" CACHE STRING "")
 
 set(SOURCES
@@ -55,9 +56,17 @@ set(GLTF_SOURCES
 )
 
 if(MSVC)
-    add_compile_options(/W4 /WX)
+    add_compile_options(/W4)
 else()
     add_compile_options(-Wall -Wextra -Wshadow -Wno-missing-field-initializers)
+endif()
+
+if(MESHOPT_WERROR)
+    if(MSVC)
+        add_compile_options(/WX)
+    else()
+        add_compile_options(-Werror)
+    endif()
 endif()
 
 if(MESHOPT_BUILD_SHARED_LIBS)

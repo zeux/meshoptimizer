@@ -22,7 +22,7 @@ jobs:
         ref: gltfpack
         path: basis_universal
     - name: cmake configure
-      run: cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_BASISU_PATH=basis_universal -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded" -DCMAKE_BUILD_TYPE=Release
+      run: cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_BASISU_PATH=basis_universal -DMESHOPT_WERROR=ON -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded" -DCMAKE_BUILD_TYPE=Release
     - name: cmake build
       run: cmake --build . --target gltfpack --config Release -j 2
     - uses: actions/upload-artifact@v1
