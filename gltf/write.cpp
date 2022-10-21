@@ -1179,6 +1179,12 @@ void writeSkin(std::string& json, const cgltf_skin& skin, size_t matrix_accr, co
 {
 	comma(json);
 	append(json, "{");
+	if (skin.name && *skin.name)
+	{
+		append(json, "\"name\":\"");
+		append(json, skin.name);
+		append(json, "\",");
+	}
 	append(json, "\"joints\":[");
 	for (size_t j = 0; j < skin.joints_count; ++j)
 	{
