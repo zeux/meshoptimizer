@@ -538,7 +538,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		size_t pi = i;
 		for (; pi < meshes.size(); ++pi)
 		{
-			const Mesh& prim = meshes[pi];
+			Mesh& prim = meshes[pi];
 
 			if (prim.skin != mesh.skin || prim.targets != mesh.targets)
 				break;

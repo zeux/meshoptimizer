@@ -924,13 +924,13 @@ void writeTexture(std::string& json, const cgltf_texture& texture, const ImageIn
 	}
 }
 
-void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, int target, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings)
+void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, Mesh& mesh, int target, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings)
 {
 	std::string scratch;
 
 	for (size_t j = 0; j < mesh.streams.size(); ++j)
 	{
-		const Stream& stream = mesh.streams[j];
+		Stream& stream = mesh.streams[j];
 
 		if (stream.target != target)
 			continue;
@@ -946,11 +946,18 @@ void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std:
 		comma(json_accessors);
 		if (stream.type == cgltf_attribute_type_position)
 		{
-			float min[3] = {};
-			float max[3] = {};
-			getPositionBounds(min, max, stream, qp, settings);
+			getPositionBounds(stream.min, stream.max, stream, qp, settings);
 
-			writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, stream.data.size(), min, max, 3);
+			if (target != 0)
+			{
+				for (auto k = 0; k < 3; ++k)
+				{
+					stream.min[k] += mesh.streams[0].min[k];
+					stream.max[k] += mesh.streams[0].max[k];
+				}
+			}
+
+			writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, stream.data.size(), stream.min, stream.max, 3);
 		}
 		else
 		{
