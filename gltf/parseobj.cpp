@@ -28,7 +28,7 @@ static cgltf_data* parseSceneObj(fastObjMesh* obj)
 
 	std::vector<std::string> textures;
 
-	for (unsigned int mi = 0; mi < obj->material_count; ++mi)
+	for (datatype_t mi = 0; mi < obj->material_count; ++mi)
 	{
 		fastObjMaterial& om = obj->materials[mi];
 
@@ -56,7 +56,7 @@ static cgltf_data* parseSceneObj(fastObjMesh* obj)
 	data->materials = (cgltf_material*)calloc(obj->material_count, sizeof(cgltf_material));
 	data->materials_count = obj->material_count;
 
-	for (unsigned int mi = 0; mi < obj->material_count; ++mi)
+	for (datatype_t mi = 0; mi < obj->material_count; ++mi)
 	{
 		cgltf_material& gm = data->materials[mi];
 		fastObjMaterial& om = obj->materials[mi];
@@ -91,9 +91,9 @@ static cgltf_data* parseSceneObj(fastObjMesh* obj)
 	return data;
 }
 
-static void parseMeshObj(fastObjMesh* obj, unsigned int face_offset, unsigned int face_vertex_offset, unsigned int face_count, unsigned int face_vertex_count, unsigned int index_count, Mesh& mesh)
+static void parseMeshObj(fastObjMesh* obj, datatype_t face_offset, datatype_t face_vertex_offset, datatype_t face_count, datatype_t face_vertex_count, datatype_t index_count, Mesh& mesh)
 {
-	std::vector<unsigned int> remap(face_vertex_count);
+	std::vector<datatype_t> remap(face_vertex_count);
 	size_t unique_vertices = meshopt_generateVertexRemap(remap.data(), nullptr, face_vertex_count, &obj->indices[face_vertex_offset], face_vertex_count, sizeof(fastObjIndex));
 
 	int pos_stream = 0;
@@ -119,9 +119,9 @@ static void parseMeshObj(fastObjMesh* obj, unsigned int face_offset, unsigned in
 
 	mesh.indices.resize(index_count);
 
-	for (unsigned int vi = 0; vi < face_vertex_count; ++vi)
+	for (datatype_t vi = 0; vi < face_vertex_count; ++vi)
 	{
-		unsigned int target = remap[vi];
+		datatype_t target = remap[vi];
 		// TODO: this fills every target vertex multiple times
 
 		fastObjIndex ii = obj->indices[face_vertex_offset + vi];
@@ -142,14 +142,14 @@ static void parseMeshObj(fastObjMesh* obj, unsigned int face_offset, unsigned in
 		}
 	}
 
-	unsigned int vertex_offset = 0;
-	unsigned int index_offset = 0;
+	datatype_t vertex_offset = 0;
+	datatype_t index_offset = 0;
 
-	for (unsigned int fi = 0; fi < face_count; ++fi)
+	for (datatype_t fi = 0; fi < face_count; ++fi)
 	{
-		unsigned int face_vertices = obj->face_vertices[face_offset + fi];
+		datatype_t face_vertices = obj->face_vertices[face_offset + fi];
 
-		for (unsigned int vi = 2; vi < face_vertices; ++vi)
+		for (datatype_t vi = 2; vi < face_vertices; ++vi)
 		{
 			size_t to = index_offset + (vi - 2) * 3;
 
@@ -168,17 +168,17 @@ static void parseMeshObj(fastObjMesh* obj, unsigned int face_offset, unsigned in
 
 static void parseMeshesObj(fastObjMesh* obj, cgltf_data* data, std::vector<Mesh>& meshes)
 {
-	unsigned int face_vertex_offset = 0;
+	datatype_t face_vertex_offset = 0;
 
-	for (unsigned int face_offset = 0; face_offset < obj->face_count; )
+	for (datatype_t face_offset = 0; face_offset < obj->face_count; )
 	{
-		unsigned int mi = obj->face_materials[face_offset];
+		datatype_t mi = obj->face_materials[face_offset];
 
-		unsigned int face_count = 0;
-		unsigned int face_vertex_count = 0;
-		unsigned int index_count = 0;
+		datatype_t face_count = 0;
+		datatype_t face_vertex_count = 0;
+		datatype_t index_count = 0;
 
-		for (unsigned int fj = face_offset; fj < obj->face_count && obj->face_materials[fj] == mi; ++fj)
+		for (datatype_t fj = face_offset; fj < obj->face_count && obj->face_materials[fj] == mi; ++fj)
 		{
 			face_count += 1;
 			face_vertex_count += obj->face_vertices[fj];

@@ -1134,9 +1134,9 @@ T clamp(T v, T min, T max)
 	return v < min ? min : v > max ? max : v;
 }
 
-unsigned int textureMask(const char* arg)
+datatype_t textureMask(const char* arg)
 {
-	unsigned int result = 0;
+	datatype_t result = 0;
 
 	while (arg)
 	{
@@ -1272,7 +1272,7 @@ int main(int argc, char** argv)
 		{
 			settings.texture_ktx2 = true;
 
-			unsigned int mask = ~0u;
+			datatype_t mask = ~0u;
 			if (i + 1 < argc && isalpha(argv[i + 1][0]))
 				mask = textureMask(argv[++i]);
 
@@ -1284,7 +1284,7 @@ int main(int argc, char** argv)
 		{
 			settings.texture_ktx2 = true;
 
-			unsigned int mask = ~0u;
+			datatype_t mask = ~0u;
 			if (i + 1 < argc && isalpha(argv[i + 1][0]))
 				mask = textureMask(argv[++i]);
 
@@ -1300,7 +1300,7 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-tq") == 0 && i + 2 < argc && isalpha(argv[i + 1][0]) && isdigit(argv[i + 2][0]))
 		{
-			unsigned int mask = textureMask(argv[++i]);
+			datatype_t mask = textureMask(argv[++i]);
 			int quality = clamp(atoi(argv[++i]), 1, 10);
 
 			for (int kind = 0; kind < TextureKind__Count; ++kind)

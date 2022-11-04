@@ -4,7 +4,7 @@
 #include <assert.h>
 #include <string.h>
 
-meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int warp_size, unsigned int primgroup_size)
+meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const datatype_t* indices, size_t index_count, size_t vertex_count, datatype_t cache_size, datatype_t warp_size, datatype_t primgroup_size)
 {
 	assert(index_count % 3 == 0);
 	assert(cache_size >= 3);
@@ -14,17 +14,17 @@ meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* ind
 
 	meshopt_VertexCacheStatistics result = {};
 
-	unsigned int warp_offset = 0;
-	unsigned int primgroup_offset = 0;
+	datatype_t warp_offset = 0;
+	datatype_t primgroup_offset = 0;
 
-	unsigned int* cache_timestamps = allocator.allocate<unsigned int>(vertex_count);
-	memset(cache_timestamps, 0, vertex_count * sizeof(unsigned int));
+	datatype_t* cache_timestamps = allocator.allocate<datatype_t>(vertex_count);
+	memset(cache_timestamps, 0, vertex_count * sizeof(datatype_t));
 
-	unsigned int timestamp = cache_size + 1;
+	datatype_t timestamp = cache_size + 1;
 
 	for (size_t i = 0; i < index_count; i += 3)
 	{
-		unsigned int a = indices[i + 0], b = indices[i + 1], c = indices[i + 2];
+		datatype_t a = indices[i + 0], b = indices[i + 1], c = indices[i + 2];
 		assert(a < vertex_count && b < vertex_count && c < vertex_count);
 
 		bool ac = (timestamp - cache_timestamps[a]) > cache_size;
@@ -46,7 +46,7 @@ meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* ind
 		// update cache and add vertices to warp
 		for (int j = 0; j < 3; ++j)
 		{
-			unsigned int index = indices[i + j];
+			datatype_t index = indices[i + j];
 
 			if (timestamp - cache_timestamps[index] > cache_size)
 			{

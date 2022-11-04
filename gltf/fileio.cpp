@@ -98,7 +98,7 @@ std::string getExtension(const char* path)
 	result.erase(0, dot);
 
 	for (size_t i = 0; i < result.length(); ++i)
-		if (unsigned(result[i] - 'A') < 26)
+		if (datatype_t(result[i] - 'A') < 26)
 			result[i] = (result[i] - 'A') + 'a';
 
 	return result;

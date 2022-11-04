@@ -4,17 +4,17 @@
 #include <assert.h>
 #include <string.h>
 
-size_t meshopt_optimizeVertexFetchRemap(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count)
+size_t meshopt_optimizeVertexFetchRemap(datatype_t* destination, const datatype_t* indices, size_t index_count, size_t vertex_count)
 {
 	assert(index_count % 3 == 0);
 
-	memset(destination, -1, vertex_count * sizeof(unsigned int));
+	memset(destination, -1, vertex_count * sizeof(datatype_t));
 
-	unsigned int next_vertex = 0;
+	datatype_t next_vertex = 0;
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
-		unsigned int index = indices[i];
+		datatype_t index = indices[i];
 		assert(index < vertex_count);
 
 		if (destination[index] == ~0u)
@@ -28,7 +28,7 @@ size_t meshopt_optimizeVertexFetchRemap(unsigned int* destination, const unsigne
 	return next_vertex;
 }
 
-size_t meshopt_optimizeVertexFetch(void* destination, unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)
+size_t meshopt_optimizeVertexFetch(void* destination, datatype_t* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)
 {
 	assert(index_count % 3 == 0);
 	assert(vertex_size > 0 && vertex_size <= 256);
@@ -44,17 +44,17 @@ size_t meshopt_optimizeVertexFetch(void* destination, unsigned int* indices, siz
 	}
 
 	// build vertex remap table
-	unsigned int* vertex_remap = allocator.allocate<unsigned int>(vertex_count);
-	memset(vertex_remap, -1, vertex_count * sizeof(unsigned int));
+	datatype_t* vertex_remap = allocator.allocate<datatype_t>(vertex_count);
+	memset(vertex_remap, -1, vertex_count * sizeof(datatype_t));
 
-	unsigned int next_vertex = 0;
+	datatype_t next_vertex = 0;
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
-		unsigned int index = indices[i];
+		datatype_t index = indices[i];
 		assert(index < vertex_count);
 
-		unsigned int& remap = vertex_remap[index];
+		datatype_t& remap = vertex_remap[index];
 
 		if (remap == ~0u) // vertex was not added to destination VB
 		{

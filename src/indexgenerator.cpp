@@ -9,15 +9,15 @@
 namespace meshopt
 {
 
-static unsigned int hashUpdate4(unsigned int h, const unsigned char* key, size_t len)
+static datatype_t hashUpdate4(datatype_t h, const unsigned char* key, size_t len)
 {
 	// MurmurHash2
-	const unsigned int m = 0x5bd1e995;
+	const datatype_t m = 0x5bd1e995;
 	const int r = 24;
 
 	while (len >= 4)
 	{
-		unsigned int k = *reinterpret_cast<const unsigned int*>(key);
+		datatype_t k = *reinterpret_cast<const datatype_t*>(key);
 
 		k *= m;
 		k ^= k >> r;
@@ -39,12 +39,12 @@ struct VertexHasher
 	size_t vertex_size;
 	size_t vertex_stride;
 
-	size_t hash(unsigned int index) const
+	size_t hash(datatype_t index) const
 	{
 		return hashUpdate4(0, vertices + index * vertex_stride, vertex_size);
 	}
 
-	bool equal(unsigned int lhs, unsigned int rhs) const
+	bool equal(datatype_t lhs, datatype_t rhs) const
 	{
 		return memcmp(vertices + lhs * vertex_stride, vertices + rhs * vertex_stride, vertex_size) == 0;
 	}
@@ -55,9 +55,9 @@ struct VertexStreamHasher
 	const meshopt_Stream* streams;
 	size_t stream_count;
 
-	size_t hash(unsigned int index) const
+	size_t hash(datatype_t index) const
 	{
-		unsigned int h = 0;
+		datatype_t h = 0;
 
 		for (size_t i = 0; i < stream_count; ++i)
 		{
@@ -70,7 +70,7 @@ struct VertexStreamHasher
 		return h;
 	}
 
-	bool equal(unsigned int lhs, unsigned int rhs) const
+	bool equal(datatype_t lhs, datatype_t rhs) const
 	{
 		for (size_t i = 0; i < stream_count; ++i)
 		{
@@ -87,17 +87,17 @@ struct VertexStreamHasher
 
 struct EdgeHasher
 {
-	const unsigned int* remap;
+	const datatype_t* remap;
 
 	size_t hash(unsigned long long edge) const
 	{
-		unsigned int e0 = unsigned(edge >> 32);
-		unsigned int e1 = unsigned(edge);
+		datatype_t e0 = datatype_t(edge >> 32);
+		datatype_t e1 = datatype_t(edge);
 
-		unsigned int h1 = remap[e0];
-		unsigned int h2 = remap[e1];
+		datatype_t h1 = remap[e0];
+		datatype_t h2 = remap[e1];
 
-		const unsigned int m = 0x5bd1e995;
+		const datatype_t m = 0x5bd1e995;
 
 		// MurmurHash64B finalizer
 		h1 ^= h2 >> 18;
@@ -114,11 +114,11 @@ struct EdgeHasher
 
 	bool equal(unsigned long long lhs, unsigned long long rhs) const
 	{
-		unsigned int l0 = unsigned(lhs >> 32);
-		unsigned int l1 = unsigned(lhs);
+		datatype_t l0 = datatype_t(lhs >> 32);
+		datatype_t l1 = datatype_t(lhs);
 
-		unsigned int r0 = unsigned(rhs >> 32);
-		unsigned int r1 = unsigned(rhs);
+		datatype_t r0 = datatype_t(rhs >> 32);
+		datatype_t r1 = datatype_t(rhs);
 
 		return remap[l0] == remap[r0] && remap[l1] == remap[r1];
 	}
@@ -160,18 +160,18 @@ static T* hashLookup(T* table, size_t buckets, const Hash& hash, const T& key, c
 	return 0;
 }
 
-static void buildPositionRemap(unsigned int* remap, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, meshopt_Allocator& allocator)
+static void buildPositionRemap(datatype_t* remap, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, meshopt_Allocator& allocator)
 {
 	VertexHasher vertex_hasher = {reinterpret_cast<const unsigned char*>(vertex_positions), 3 * sizeof(float), vertex_positions_stride};
 
 	size_t vertex_table_size = hashBuckets(vertex_count);
-	unsigned int* vertex_table = allocator.allocate<unsigned int>(vertex_table_size);
-	memset(vertex_table, -1, vertex_table_size * sizeof(unsigned int));
+	datatype_t* vertex_table = allocator.allocate<datatype_t>(vertex_table_size);
+	memset(vertex_table, -1, vertex_table_size * sizeof(datatype_t));
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		unsigned int index = unsigned(i);
-		unsigned int* entry = hashLookup(vertex_table, vertex_table_size, vertex_hasher, index, ~0u);
+		datatype_t index = datatype_t(i);
+		datatype_t* entry = hashLookup(vertex_table, vertex_table_size, vertex_hasher, index, ~0u);
 
 		if (*entry == ~0u)
 			*entry = index;
@@ -182,7 +182,7 @@ static void buildPositionRemap(unsigned int* remap, const float* vertex_position
 
 } // namespace meshopt
 
-size_t meshopt_generateVertexRemap(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)
+size_t meshopt_generateVertexRemap(datatype_t* destination, const datatype_t* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)
 {
 	using namespace meshopt;
 
@@ -192,24 +192,24 @@ size_t meshopt_generateVertexRemap(unsigned int* destination, const unsigned int
 
 	meshopt_Allocator allocator;
 
-	memset(destination, -1, vertex_count * sizeof(unsigned int));
+	memset(destination, -1, vertex_count * sizeof(datatype_t));
 
 	VertexHasher hasher = {static_cast<const unsigned char*>(vertices), vertex_size, vertex_size};
 
 	size_t table_size = hashBuckets(vertex_count);
-	unsigned int* table = allocator.allocate<unsigned int>(table_size);
-	memset(table, -1, table_size * sizeof(unsigned int));
+	datatype_t* table = allocator.allocate<datatype_t>(table_size);
+	memset(table, -1, table_size * sizeof(datatype_t));
 
-	unsigned int next_vertex = 0;
+	datatype_t next_vertex = 0;
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
-		unsigned int index = indices ? indices[i] : unsigned(i);
+		datatype_t index = indices ? indices[i] : datatype_t(i);
 		assert(index < vertex_count);
 
 		if (destination[index] == ~0u)
 		{
-			unsigned int* entry = hashLookup(table, table_size, hasher, index, ~0u);
+			datatype_t* entry = hashLookup(table, table_size, hasher, index, ~0u);
 
 			if (*entry == ~0u)
 			{
@@ -231,7 +231,7 @@ size_t meshopt_generateVertexRemap(unsigned int* destination, const unsigned int
 	return next_vertex;
 }
 
-size_t meshopt_generateVertexRemapMulti(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, const struct meshopt_Stream* streams, size_t stream_count)
+size_t meshopt_generateVertexRemapMulti(datatype_t* destination, const datatype_t* indices, size_t index_count, size_t vertex_count, const struct meshopt_Stream* streams, size_t stream_count)
 {
 	using namespace meshopt;
 
@@ -247,24 +247,24 @@ size_t meshopt_generateVertexRemapMulti(unsigned int* destination, const unsigne
 
 	meshopt_Allocator allocator;
 
-	memset(destination, -1, vertex_count * sizeof(unsigned int));
+	memset(destination, -1, vertex_count * sizeof(datatype_t));
 
 	VertexStreamHasher hasher = {streams, stream_count};
 
 	size_t table_size = hashBuckets(vertex_count);
-	unsigned int* table = allocator.allocate<unsigned int>(table_size);
-	memset(table, -1, table_size * sizeof(unsigned int));
+	datatype_t* table = allocator.allocate<datatype_t>(table_size);
+	memset(table, -1, table_size * sizeof(datatype_t));
 
-	unsigned int next_vertex = 0;
+	datatype_t next_vertex = 0;
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
-		unsigned int index = indices ? indices[i] : unsigned(i);
+		datatype_t index = indices ? indices[i] : datatype_t(i);
 		assert(index < vertex_count);
 
 		if (destination[index] == ~0u)
 		{
-			unsigned int* entry = hashLookup(table, table_size, hasher, index, ~0u);
+			datatype_t* entry = hashLookup(table, table_size, hasher, index, ~0u);
 
 			if (*entry == ~0u)
 			{
@@ -286,7 +286,7 @@ size_t meshopt_generateVertexRemapMulti(unsigned int* destination, const unsigne
 	return next_vertex;
 }
 
-void meshopt_remapVertexBuffer(void* destination, const void* vertices, size_t vertex_count, size_t vertex_size, const unsigned int* remap)
+void meshopt_remapVertexBuffer(void* destination, const void* vertices, size_t vertex_count, size_t vertex_size, const datatype_t* remap)
 {
 	assert(vertex_size > 0 && vertex_size <= 256);
 
@@ -311,20 +311,20 @@ void meshopt_remapVertexBuffer(void* destination, const void* vertices, size_t v
 	}
 }
 
-void meshopt_remapIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count, const unsigned int* remap)
+void meshopt_remapIndexBuffer(datatype_t* destination, const datatype_t* indices, size_t index_count, const datatype_t* remap)
 {
 	assert(index_count % 3 == 0);
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
-		unsigned int index = indices ? indices[i] : unsigned(i);
+		datatype_t index = indices ? indices[i] : datatype_t(i);
 		assert(remap[index] != ~0u);
 
 		destination[i] = remap[index];
 	}
 }
 
-void meshopt_generateShadowIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t vertex_stride)
+void meshopt_generateShadowIndexBuffer(datatype_t* destination, const datatype_t* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t vertex_stride)
 {
 	using namespace meshopt;
 
@@ -335,23 +335,23 @@ void meshopt_generateShadowIndexBuffer(unsigned int* destination, const unsigned
 
 	meshopt_Allocator allocator;
 
-	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
-	memset(remap, -1, vertex_count * sizeof(unsigned int));
+	datatype_t* remap = allocator.allocate<datatype_t>(vertex_count);
+	memset(remap, -1, vertex_count * sizeof(datatype_t));
 
 	VertexHasher hasher = {static_cast<const unsigned char*>(vertices), vertex_size, vertex_stride};
 
 	size_t table_size = hashBuckets(vertex_count);
-	unsigned int* table = allocator.allocate<unsigned int>(table_size);
-	memset(table, -1, table_size * sizeof(unsigned int));
+	datatype_t* table = allocator.allocate<datatype_t>(table_size);
+	memset(table, -1, table_size * sizeof(datatype_t));
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
-		unsigned int index = indices[i];
+		datatype_t index = indices[i];
 		assert(index < vertex_count);
 
 		if (remap[index] == ~0u)
 		{
-			unsigned int* entry = hashLookup(table, table_size, hasher, index, ~0u);
+			datatype_t* entry = hashLookup(table, table_size, hasher, index, ~0u);
 
 			if (*entry == ~0u)
 				*entry = index;
@@ -363,7 +363,7 @@ void meshopt_generateShadowIndexBuffer(unsigned int* destination, const unsigned
 	}
 }
 
-void meshopt_generateShadowIndexBufferMulti(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, const struct meshopt_Stream* streams, size_t stream_count)
+void meshopt_generateShadowIndexBufferMulti(datatype_t* destination, const datatype_t* indices, size_t index_count, size_t vertex_count, const struct meshopt_Stream* streams, size_t stream_count)
 {
 	using namespace meshopt;
 
@@ -379,23 +379,23 @@ void meshopt_generateShadowIndexBufferMulti(unsigned int* destination, const uns
 
 	meshopt_Allocator allocator;
 
-	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
-	memset(remap, -1, vertex_count * sizeof(unsigned int));
+	datatype_t* remap = allocator.allocate<datatype_t>(vertex_count);
+	memset(remap, -1, vertex_count * sizeof(datatype_t));
 
 	VertexStreamHasher hasher = {streams, stream_count};
 
 	size_t table_size = hashBuckets(vertex_count);
-	unsigned int* table = allocator.allocate<unsigned int>(table_size);
-	memset(table, -1, table_size * sizeof(unsigned int));
+	datatype_t* table = allocator.allocate<datatype_t>(table_size);
+	memset(table, -1, table_size * sizeof(datatype_t));
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
-		unsigned int index = indices[i];
+		datatype_t index = indices[i];
 		assert(index < vertex_count);
 
 		if (remap[index] == ~0u)
 		{
-			unsigned int* entry = hashLookup(table, table_size, hasher, index, ~0u);
+			datatype_t* entry = hashLookup(table, table_size, hasher, index, ~0u);
 
 			if (*entry == ~0u)
 				*entry = index;
@@ -407,7 +407,7 @@ void meshopt_generateShadowIndexBufferMulti(unsigned int* destination, const uns
 	}
 }
 
-void meshopt_generateAdjacencyIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+void meshopt_generateAdjacencyIndexBuffer(datatype_t* destination, const datatype_t* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	using namespace meshopt;
 
@@ -420,7 +420,7 @@ void meshopt_generateAdjacencyIndexBuffer(unsigned int* destination, const unsig
 	static const int next[4] = {1, 2, 0, 1};
 
 	// build position remap: for each vertex, which other (canonical) vertex does it map to?
-	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
+	datatype_t* remap = allocator.allocate<datatype_t>(vertex_count);
 	buildPositionRemap(remap, vertex_positions, vertex_count, vertex_positions_stride, allocator);
 
 	// build edge set; this stores all triangle edges but we can look these up by any other wedge
@@ -428,18 +428,18 @@ void meshopt_generateAdjacencyIndexBuffer(unsigned int* destination, const unsig
 
 	size_t edge_table_size = hashBuckets(index_count);
 	unsigned long long* edge_table = allocator.allocate<unsigned long long>(edge_table_size);
-	unsigned int* edge_vertex_table = allocator.allocate<unsigned int>(edge_table_size);
+	datatype_t* edge_vertex_table = allocator.allocate<datatype_t>(edge_table_size);
 
 	memset(edge_table, -1, edge_table_size * sizeof(unsigned long long));
-	memset(edge_vertex_table, -1, edge_table_size * sizeof(unsigned int));
+	memset(edge_vertex_table, -1, edge_table_size * sizeof(datatype_t));
 
 	for (size_t i = 0; i < index_count; i += 3)
 	{
 		for (int e = 0; e < 3; ++e)
 		{
-			unsigned int i0 = indices[i + e];
-			unsigned int i1 = indices[i + next[e]];
-			unsigned int i2 = indices[i + next[e + 1]];
+			datatype_t i0 = indices[i + e];
+			datatype_t i1 = indices[i + next[e]];
+			datatype_t i2 = indices[i + next[e + 1]];
 			assert(i0 < vertex_count && i1 < vertex_count && i2 < vertex_count);
 
 			unsigned long long edge = ((unsigned long long)i0 << 32) | i1;
@@ -458,12 +458,12 @@ void meshopt_generateAdjacencyIndexBuffer(unsigned int* destination, const unsig
 	// build resulting index buffer: 6 indices for each input triangle
 	for (size_t i = 0; i < index_count; i += 3)
 	{
-		unsigned int patch[6];
+		datatype_t patch[6];
 
 		for (int e = 0; e < 3; ++e)
 		{
-			unsigned int i0 = indices[i + e];
-			unsigned int i1 = indices[i + next[e]];
+			datatype_t i0 = indices[i + e];
+			datatype_t i1 = indices[i + next[e]];
 			assert(i0 < vertex_count && i1 < vertex_count);
 
 			// note: this refers to the opposite edge!
@@ -478,7 +478,7 @@ void meshopt_generateAdjacencyIndexBuffer(unsigned int* destination, const unsig
 	}
 }
 
-void meshopt_generateTessellationIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+void meshopt_generateTessellationIndexBuffer(datatype_t* destination, const datatype_t* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	using namespace meshopt;
 
@@ -491,7 +491,7 @@ void meshopt_generateTessellationIndexBuffer(unsigned int* destination, const un
 	static const int next[3] = {1, 2, 0};
 
 	// build position remap: for each vertex, which other (canonical) vertex does it map to?
-	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
+	datatype_t* remap = allocator.allocate<datatype_t>(vertex_count);
 	buildPositionRemap(remap, vertex_positions, vertex_count, vertex_positions_stride, allocator);
 
 	// build edge set; this stores all triangle edges but we can look these up by any other wedge
@@ -505,8 +505,8 @@ void meshopt_generateTessellationIndexBuffer(unsigned int* destination, const un
 	{
 		for (int e = 0; e < 3; ++e)
 		{
-			unsigned int i0 = indices[i + e];
-			unsigned int i1 = indices[i + next[e]];
+			datatype_t i0 = indices[i + e];
+			datatype_t i1 = indices[i + next[e]];
 			assert(i0 < vertex_count && i1 < vertex_count);
 
 			unsigned long long edge = ((unsigned long long)i0 << 32) | i1;
@@ -520,12 +520,12 @@ void meshopt_generateTessellationIndexBuffer(unsigned int* destination, const un
 	// build resulting index buffer: 12 indices for each input triangle
 	for (size_t i = 0; i < index_count; i += 3)
 	{
-		unsigned int patch[12];
+		datatype_t patch[12];
 
 		for (int e = 0; e < 3; ++e)
 		{
-			unsigned int i0 = indices[i + e];
-			unsigned int i1 = indices[i + next[e]];
+			datatype_t i0 = indices[i + e];
+			datatype_t i1 = indices[i + next[e]];
 			assert(i0 < vertex_count && i1 < vertex_count);
 
 			// note: this refers to the opposite edge!
@@ -539,8 +539,8 @@ void meshopt_generateTessellationIndexBuffer(unsigned int* destination, const un
 			patch[e] = i0;
 
 			// opposite edge (3, 4; 5, 6; 7, 8)
-			patch[3 + e * 2 + 0] = unsigned(oppe);
-			patch[3 + e * 2 + 1] = unsigned(oppe >> 32);
+			patch[3 + e * 2 + 0] = datatype_t(oppe);
+			patch[3 + e * 2 + 1] = datatype_t(oppe >> 32);
 
 			// dominant vertex (9, 10, 11)
 			patch[9 + e] = remap[i0];

@@ -135,11 +135,11 @@ static void decodeFilterQuat(short* data, size_t count)
 	}
 }
 
-static void decodeFilterExp(unsigned int* data, size_t count)
+static void decodeFilterExp(datatype_t* data, size_t count)
 {
 	for (size_t i = 0; i < count; ++i)
 	{
-		unsigned int v = data[i];
+		datatype_t v = data[i];
 
 		// decode mantissa and exponent
 		int m = int(v << 8) >> 8;
@@ -148,11 +148,11 @@ static void decodeFilterExp(unsigned int* data, size_t count)
 		union
 		{
 			float f;
-			unsigned int ui;
+			datatype_t ui;
 		} u;
 
 		// optimized version of ldexp(float(m), e)
-		u.ui = unsigned(e + 127) << 23;
+		u.ui = datatype_t(e + 127) << 23;
 		u.f = u.f * float(m);
 
 		data[i] = u.ui;
@@ -361,7 +361,7 @@ static void decodeFilterQuatSimd(short* data, size_t count)
 	}
 }
 
-static void decodeFilterExpSimd(unsigned int* data, size_t count)
+static void decodeFilterExpSimd(datatype_t* data, size_t count)
 {
 	for (size_t i = 0; i < count; i += 4)
 	{
@@ -571,7 +571,7 @@ static void decodeFilterQuatSimd(short* data, size_t count)
 	}
 }
 
-static void decodeFilterExpSimd(unsigned int* data, size_t count)
+static void decodeFilterExpSimd(datatype_t* data, size_t count)
 {
 	for (size_t i = 0; i < count; i += 4)
 	{
@@ -770,7 +770,7 @@ static void decodeFilterQuatSimd(short* data, size_t count)
 	}
 }
 
-static void decodeFilterExpSimd(unsigned int* data, size_t count)
+static void decodeFilterExpSimd(datatype_t* data, size_t count)
 {
 	for (size_t i = 0; i < count; i += 4)
 	{
@@ -833,9 +833,9 @@ void meshopt_decodeFilterExp(void* buffer, size_t count, size_t stride)
 	assert(stride > 0 && stride % 4 == 0);
 
 #if defined(SIMD_SSE) || defined(SIMD_NEON) || defined(SIMD_WASM)
-	dispatchSimd(decodeFilterExpSimd, static_cast<unsigned int*>(buffer), count * (stride / 4), 1);
+	dispatchSimd(decodeFilterExpSimd, static_cast<datatype_t*>(buffer), count * (stride / 4), 1);
 #else
-	decodeFilterExp(static_cast<unsigned int*>(buffer), count * (stride / 4));
+	decodeFilterExp(static_cast<datatype_t*>(buffer), count * (stride / 4));
 #endif
 }
 
@@ -923,13 +923,13 @@ void meshopt_encodeFilterExp(void* destination_, size_t count, size_t stride, in
 	assert(stride > 0 && stride % 4 == 0);
 	assert(bits >= 1 && bits <= 24);
 
-	unsigned int* destination = static_cast<unsigned int*>(destination_);
+	datatype_t* destination = static_cast<datatype_t*>(destination_);
 	size_t stride_float = stride / sizeof(float);
 
 	for (size_t i = 0; i < count; ++i)
 	{
 		const float* v = &data[i * stride_float];
-		unsigned int* d = &destination[i * stride_float];
+		datatype_t* d = &destination[i * stride_float];
 
 		// use maximum exponent to encode values; this guarantees that mantissa is [-1, 1]
 		int exp = -100;
@@ -952,7 +952,7 @@ void meshopt_encodeFilterExp(void* destination_, size_t count, size_t stride, in
 		{
 			int m = int(ldexp(v[j], -exp) + (v[j] >= 0 ? 0.5f : -0.5f));
 
-			d[j] = (m & mmask) | (unsigned(exp) << 24);
+			d[j] = (m & mmask) | (datatype_t(exp) << 24);
 		}
 	}
 }

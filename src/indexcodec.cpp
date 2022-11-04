@@ -15,10 +15,10 @@ const unsigned char kSequenceHeader = 0xd0;
 
 static int gEncodeIndexVersion = 0;
 
-typedef unsigned int VertexFifo[16];
-typedef unsigned int EdgeFifo[16][2];
+typedef datatype_t VertexFifo[16];
+typedef datatype_t EdgeFifo[16][2];
 
-static const unsigned int kTriangleIndexOrder[3][3] = {
+static const datatype_t kTriangleIndexOrder[3][3] = {
     {0, 1, 2},
     {1, 2, 0},
     {2, 0, 1},
@@ -29,21 +29,21 @@ static const unsigned char kCodeAuxEncodingTable[16] = {
     0, 0, // last two entries aren't used for encoding
 };
 
-static int rotateTriangle(unsigned int a, unsigned int b, unsigned int c, unsigned int next)
+static int rotateTriangle(datatype_t a, datatype_t b, datatype_t c, datatype_t next)
 {
 	(void)a;
 
 	return (b == next) ? 1 : (c == next) ? 2 : 0;
 }
 
-static int getEdgeFifo(EdgeFifo fifo, unsigned int a, unsigned int b, unsigned int c, size_t offset)
+static int getEdgeFifo(EdgeFifo fifo, datatype_t a, datatype_t b, datatype_t c, size_t offset)
 {
 	for (int i = 0; i < 16; ++i)
 	{
 		size_t index = (offset - 1 - i) & 15;
 
-		unsigned int e0 = fifo[index][0];
-		unsigned int e1 = fifo[index][1];
+		datatype_t e0 = fifo[index][0];
+		datatype_t e1 = fifo[index][1];
 
 		if (e0 == a && e1 == b)
 			return (i << 2) | 0;
@@ -56,14 +56,14 @@ static int getEdgeFifo(EdgeFifo fifo, unsigned int a, unsigned int b, unsigned i
 	return -1;
 }
 
-static void pushEdgeFifo(EdgeFifo fifo, unsigned int a, unsigned int b, size_t& offset)
+static void pushEdgeFifo(EdgeFifo fifo, datatype_t a, datatype_t b, size_t& offset)
 {
 	fifo[offset][0] = a;
 	fifo[offset][1] = b;
 	offset = (offset + 1) & 15;
 }
 
-static int getVertexFifo(VertexFifo fifo, unsigned int v, size_t offset)
+static int getVertexFifo(VertexFifo fifo, datatype_t v, size_t offset)
 {
 	for (int i = 0; i < 16; ++i)
 	{
@@ -76,13 +76,13 @@ static int getVertexFifo(VertexFifo fifo, unsigned int v, size_t offset)
 	return -1;
 }
 
-static void pushVertexFifo(VertexFifo fifo, unsigned int v, size_t& offset, int cond = 1)
+static void pushVertexFifo(VertexFifo fifo, datatype_t v, size_t& offset, int cond = 1)
 {
 	fifo[offset] = v;
 	offset = (offset + cond) & 15;
 }
 
-static void encodeVByte(unsigned char*& data, unsigned int v)
+static void encodeVByte(unsigned char*& data, datatype_t v)
 {
 	// encode 32-bit value in up to 5 7-bit groups
 	do
@@ -92,7 +92,7 @@ static void encodeVByte(unsigned char*& data, unsigned int v)
 	} while (v);
 }
 
-static unsigned int decodeVByte(const unsigned char*& data)
+static datatype_t decodeVByte(const unsigned char*& data)
 {
 	unsigned char lead = *data++;
 
@@ -102,13 +102,13 @@ static unsigned int decodeVByte(const unsigned char*& data)
 
 	// slow path: up to 4 extra bytes
 	// note that this loop always terminates, which is important for malformed data
-	unsigned int result = lead & 127;
-	unsigned int shift = 7;
+	datatype_t result = lead & 127;
+	datatype_t shift = 7;
 
 	for (int i = 0; i < 4; ++i)
 	{
 		unsigned char group = *data++;
-		result |= unsigned(group & 127) << shift;
+		result |= datatype_t(group & 127) << shift;
 		shift += 7;
 
 		if (group < 128)
@@ -118,18 +118,18 @@ static unsigned int decodeVByte(const unsigned char*& data)
 	return result;
 }
 
-static void encodeIndex(unsigned char*& data, unsigned int index, unsigned int last)
+static void encodeIndex(unsigned char*& data, datatype_t index, datatype_t last)
 {
-	unsigned int d = index - last;
-	unsigned int v = (d << 1) ^ (int(d) >> 31);
+	datatype_t d = index - last;
+	datatype_t v = (d << 1) ^ (int(d) >> 31);
 
 	encodeVByte(data, v);
 }
 
-static unsigned int decodeIndex(const unsigned char*& data, unsigned int last)
+static datatype_t decodeIndex(const unsigned char*& data, datatype_t last)
 {
-	unsigned int v = decodeVByte(data);
-	unsigned int d = (v >> 1) ^ -int(v & 1);
+	datatype_t v = decodeVByte(data);
+	datatype_t d = (v >> 1) ^ -int(v & 1);
 
 	return last + d;
 }
@@ -143,7 +143,7 @@ static int getCodeAuxIndex(unsigned char v, const unsigned char* table)
 	return -1;
 }
 
-static void writeTriangle(void* destination, size_t offset, size_t index_size, unsigned int a, unsigned int b, unsigned int c)
+static void writeTriangle(void* destination, size_t offset, size_t index_size, datatype_t a, datatype_t b, datatype_t c)
 {
 	if (index_size == 2)
 	{
@@ -153,15 +153,15 @@ static void writeTriangle(void* destination, size_t offset, size_t index_size, u
 	}
 	else
 	{
-		static_cast<unsigned int*>(destination)[offset + 0] = a;
-		static_cast<unsigned int*>(destination)[offset + 1] = b;
-		static_cast<unsigned int*>(destination)[offset + 2] = c;
+		static_cast<datatype_t*>(destination)[offset + 0] = a;
+		static_cast<datatype_t*>(destination)[offset + 1] = b;
+		static_cast<datatype_t*>(destination)[offset + 2] = c;
 	}
 }
 
 } // namespace meshopt
 
-size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, const unsigned int* indices, size_t index_count)
+size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, const datatype_t* indices, size_t index_count)
 {
 	using namespace meshopt;
 
@@ -184,8 +184,8 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 	size_t edgefifooffset = 0;
 	size_t vertexfifooffset = 0;
 
-	unsigned int next = 0;
-	unsigned int last = 0;
+	datatype_t next = 0;
+	datatype_t last = 0;
 
 	unsigned char* code = buffer + 1;
 	unsigned char* data = code + index_count / 3;
@@ -209,9 +209,9 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 
 		if (fer >= 0 && (fer >> 2) < 15)
 		{
-			const unsigned int* order = kTriangleIndexOrder[fer & 3];
+			const datatype_t* order = kTriangleIndexOrder[fer & 3];
 
-			unsigned int a = indices[i + order[0]], b = indices[i + order[1]], c = indices[i + order[2]];
+			datatype_t a = indices[i + order[0]], b = indices[i + order[1]], c = indices[i + order[2]];
 
 			// encode edge index and vertex fifo index, next or free index
 			int fe = fer >> 2;
@@ -245,9 +245,9 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 		else
 		{
 			int rotation = rotateTriangle(indices[i + 0], indices[i + 1], indices[i + 2], next);
-			const unsigned int* order = kTriangleIndexOrder[rotation];
+			const datatype_t* order = kTriangleIndexOrder[rotation];
 
-			unsigned int a = indices[i + order[0]], b = indices[i + order[1]], c = indices[i + order[2]];
+			datatype_t a = indices[i + order[0]], b = indices[i + order[1]], c = indices[i + order[2]];
 
 			// if a/b/c are 0/1/2, we emit a reset code
 			bool reset = false;
@@ -341,20 +341,20 @@ size_t meshopt_encodeIndexBufferBound(size_t index_count, size_t vertex_count)
 	assert(index_count % 3 == 0);
 
 	// compute number of bits required for each index
-	unsigned int vertex_bits = 1;
+	datatype_t vertex_bits = 1;
 
 	while (vertex_bits < 32 && vertex_count > size_t(1) << vertex_bits)
 		vertex_bits++;
 
 	// worst-case encoding is 2 header bytes + 3 varint-7 encoded index deltas
-	unsigned int vertex_groups = (vertex_bits + 1 + 6) / 7;
+	datatype_t vertex_groups = (vertex_bits + 1 + 6) / 7;
 
 	return 1 + (index_count / 3) * (2 + 3 * vertex_groups) + 16;
 }
 
 void meshopt_encodeIndexVersion(int version)
 {
-	assert(unsigned(version) <= 1);
+	assert(datatype_t(version) <= 1);
 
 	meshopt::gEncodeIndexVersion = version;
 }
@@ -386,8 +386,8 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 	size_t edgefifooffset = 0;
 	size_t vertexfifooffset = 0;
 
-	unsigned int next = 0;
-	unsigned int last = 0;
+	datatype_t next = 0;
+	datatype_t last = 0;
 
 	int fecmax = version >= 1 ? 13 : 15;
 
@@ -413,8 +413,8 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 			int fe = codetri >> 4;
 
 			// fifo reads are wrapped around 16 entry buffer
-			unsigned int a = edgefifo[(edgefifooffset - 1 - fe) & 15][0];
-			unsigned int b = edgefifo[(edgefifooffset - 1 - fe) & 15][1];
+			datatype_t a = edgefifo[(edgefifooffset - 1 - fe) & 15][0];
+			datatype_t b = edgefifo[(edgefifooffset - 1 - fe) & 15][1];
 
 			int fec = codetri & 15;
 
@@ -423,8 +423,8 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 			if (fec < fecmax)
 			{
 				// fifo reads are wrapped around 16 entry buffer
-				unsigned int cf = vertexfifo[(vertexfifooffset - 1 - fec) & 15];
-				unsigned int c = (fec == 0) ? next : cf;
+				datatype_t cf = vertexfifo[(vertexfifooffset - 1 - fec) & 15];
+				datatype_t c = (fec == 0) ? next : cf;
 
 				int fec0 = fec == 0;
 				next += fec0;
@@ -440,7 +440,7 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 			}
 			else
 			{
-				unsigned int c = 0;
+				datatype_t c = 0;
 
 				// fec - (fec ^ 3) decodes 13, 14 into -1, 1
 				// note that we need to update the last index since free indices are delta-encoded
@@ -469,16 +469,16 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 
 				// fifo reads are wrapped around 16 entry buffer
 				// also note that we increment next for all three vertices before decoding indices - this matches encoder behavior
-				unsigned int a = next++;
+				datatype_t a = next++;
 
-				unsigned int bf = vertexfifo[(vertexfifooffset - feb) & 15];
-				unsigned int b = (feb == 0) ? next : bf;
+				datatype_t bf = vertexfifo[(vertexfifooffset - feb) & 15];
+				datatype_t b = (feb == 0) ? next : bf;
 
 				int feb0 = feb == 0;
 				next += feb0;
 
-				unsigned int cf = vertexfifo[(vertexfifooffset - fec) & 15];
-				unsigned int c = (fec == 0) ? next : cf;
+				datatype_t cf = vertexfifo[(vertexfifooffset - fec) & 15];
+				datatype_t c = (fec == 0) ? next : cf;
 
 				int fec0 = fec == 0;
 				next += fec0;
@@ -510,9 +510,9 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 
 				// fifo reads are wrapped around 16 entry buffer
 				// also note that we increment next for all three vertices before decoding indices - this matches encoder behavior
-				unsigned int a = (fea == 0) ? next++ : 0;
-				unsigned int b = (feb == 0) ? next++ : vertexfifo[(vertexfifooffset - feb) & 15];
-				unsigned int c = (fec == 0) ? next++ : vertexfifo[(vertexfifooffset - fec) & 15];
+				datatype_t a = (fea == 0) ? next++ : 0;
+				datatype_t b = (feb == 0) ? next++ : vertexfifo[(vertexfifooffset - feb) & 15];
+				datatype_t c = (fec == 0) ? next++ : vertexfifo[(vertexfifooffset - fec) & 15];
 
 				// note that we need to update the last index since free indices are delta-encoded
 				if (fea == 15)
@@ -546,7 +546,7 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 	return 0;
 }
 
-size_t meshopt_encodeIndexSequence(unsigned char* buffer, size_t buffer_size, const unsigned int* indices, size_t index_count)
+size_t meshopt_encodeIndexSequence(unsigned char* buffer, size_t buffer_size, const datatype_t* indices, size_t index_count)
 {
 	using namespace meshopt;
 
@@ -558,8 +558,8 @@ size_t meshopt_encodeIndexSequence(unsigned char* buffer, size_t buffer_size, co
 
 	buffer[0] = (unsigned char)(kSequenceHeader | version);
 
-	unsigned int last[2] = {};
-	unsigned int current = 0;
+	datatype_t last[2] = {};
+	datatype_t current = 0;
 
 	unsigned char* data = buffer + 1;
 	unsigned char* data_safe_end = buffer + buffer_size - 4;
@@ -572,7 +572,7 @@ size_t meshopt_encodeIndexSequence(unsigned char* buffer, size_t buffer_size, co
 		if (data >= data_safe_end)
 			return 0;
 
-		unsigned int index = indices[i];
+		datatype_t index = indices[i];
 
 		// this is a heuristic that switches between baselines when the delta grows too large
 		// we want the encoded delta to fit into one byte (7 bits), but 2 bits are used for sign and baseline index
@@ -581,8 +581,8 @@ size_t meshopt_encodeIndexSequence(unsigned char* buffer, size_t buffer_size, co
 		current ^= ((cd < 0 ? -cd : cd) >= 30);
 
 		// encode delta from the last index
-		unsigned int d = index - last[current];
-		unsigned int v = (d << 1) ^ (int(d) >> 31);
+		datatype_t d = index - last[current];
+		datatype_t v = (d << 1) ^ (int(d) >> 31);
 
 		// note: low bit encodes the index of the last baseline which will be used for reconstruction
 		encodeVByte(data, (v << 1) | current);
@@ -604,13 +604,13 @@ size_t meshopt_encodeIndexSequence(unsigned char* buffer, size_t buffer_size, co
 size_t meshopt_encodeIndexSequenceBound(size_t index_count, size_t vertex_count)
 {
 	// compute number of bits required for each index
-	unsigned int vertex_bits = 1;
+	datatype_t vertex_bits = 1;
 
 	while (vertex_bits < 32 && vertex_count > size_t(1) << vertex_bits)
 		vertex_bits++;
 
 	// worst-case encoding is 1 varint-7 encoded index delta for a K bit value and an extra bit
-	unsigned int vertex_groups = (vertex_bits + 1 + 1 + 6) / 7;
+	datatype_t vertex_groups = (vertex_bits + 1 + 1 + 6) / 7;
 
 	return 1 + index_count * vertex_groups + 4;
 }
@@ -633,7 +633,7 @@ int meshopt_decodeIndexSequence(void* destination, size_t index_count, size_t in
 	const unsigned char* data = buffer + 1;
 	const unsigned char* data_safe_end = buffer + buffer_size - 4;
 
-	unsigned int last[2] = {};
+	datatype_t last[2] = {};
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
@@ -643,15 +643,15 @@ int meshopt_decodeIndexSequence(void* destination, size_t index_count, size_t in
 		if (data >= data_safe_end)
 			return -2;
 
-		unsigned int v = decodeVByte(data);
+		datatype_t v = decodeVByte(data);
 
 		// decode the index of the last baseline
-		unsigned int current = v & 1;
+		datatype_t current = v & 1;
 		v >>= 1;
 
 		// reconstruct index as a delta
-		unsigned int d = (v >> 1) ^ -int(v & 1);
-		unsigned int index = last[current] + d;
+		datatype_t d = (v >> 1) ^ -int(v & 1);
+		datatype_t index = last[current] + d;
 
 		// update last for the next iteration that uses it
 		last[current] = index;
@@ -662,7 +662,7 @@ int meshopt_decodeIndexSequence(void* destination, size_t index_count, size_t in
 		}
 		else
 		{
-			static_cast<unsigned int*>(destination)[i] = index;
+			static_cast<datatype_t*>(destination)[i] = index;
 		}
 	}
 

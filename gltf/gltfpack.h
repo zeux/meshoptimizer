@@ -49,7 +49,7 @@ struct Mesh
 	cgltf_primitive_type type;
 
 	std::vector<Stream> streams;
-	std::vector<unsigned int> indices;
+	std::vector<datatype_t> indices;
 
 	size_t targets;
 	std::vector<float> target_weights;
@@ -193,7 +193,7 @@ struct NodeInfo
 	bool keep;
 	bool animated;
 
-	unsigned int animated_paths;
+	datatype_t animated_paths;
 
 	int remap;
 
@@ -210,7 +210,7 @@ struct MaterialInfo
 
 	bool usesTextureTransform;
 	bool needsTangents;
-	unsigned int textureSetMask;
+	datatype_t textureSetMask;
 
 	int remap;
 };
@@ -331,7 +331,7 @@ void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTextur
 void getPositionBounds(float min[3], float max[3], const Stream& stream, const QuantizationPosition& qp, const Settings& settings);
 
 StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings);
-StreamFormat writeIndexStream(std::string& bin, const std::vector<unsigned int>& stream);
+StreamFormat writeIndexStream(std::string& bin, const std::vector<datatype_t>& stream);
 StreamFormat writeTimeStream(std::string& bin, const std::vector<float>& data);
 StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data, const Settings& settings);
 

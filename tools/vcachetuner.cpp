@@ -25,7 +25,7 @@ namespace meshopt
 	};
 } // namespace meshopt
 
-void meshopt_optimizeVertexCacheTable(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, const meshopt::VertexScoreTable* table);
+void meshopt_optimizeVertexCacheTable(datatype_t* destination, const datatype_t* indices, size_t index_count, size_t vertex_count, const meshopt::VertexScoreTable* table);
 
 struct Profile
 {
@@ -89,12 +89,12 @@ struct Mesh
 	const char* name;
 
 	size_t vertex_count;
-	std::vector<unsigned int> indices;
+	std::vector<datatype_t> indices;
 
 	float metric_base[Profile_Count];
 };
 
-Mesh gridmesh(unsigned int N)
+Mesh gridmesh(datatype_t N)
 {
 	Mesh result;
 
@@ -103,8 +103,8 @@ Mesh gridmesh(unsigned int N)
 	result.vertex_count = (N + 1) * (N + 1);
 	result.indices.reserve(N * N * 6);
 
-	for (unsigned int y = 0; y < N; ++y)
-		for (unsigned int x = 0; x < N; ++x)
+	for (datatype_t y = 0; y < N; ++y)
+		for (datatype_t x = 0; x < N; ++x)
 		{
 			result.indices.push_back((y + 0) * (N + 1) + (x + 0));
 			result.indices.push_back((y + 0) * (N + 1) + (x + 1));
@@ -129,7 +129,7 @@ Mesh objmesh(const char* path)
 
 	size_t total_indices = 0;
 
-	for (unsigned int i = 0; i < obj->face_count; ++i)
+	for (datatype_t i = 0; i < obj->face_count; ++i)
 		total_indices += 3 * (obj->face_vertices[i] - 2);
 
 	struct Vertex
@@ -144,9 +144,9 @@ Mesh objmesh(const char* path)
 	size_t vertex_offset = 0;
 	size_t index_offset = 0;
 
-	for (unsigned int i = 0; i < obj->face_count; ++i)
+	for (datatype_t i = 0; i < obj->face_count; ++i)
 	{
-		for (unsigned int j = 0; j < obj->face_vertices[i]; ++j)
+		for (datatype_t j = 0; j < obj->face_vertices[i]; ++j)
 		{
 			fastObjIndex gi = obj->indices[index_offset + j];
 
@@ -183,7 +183,7 @@ Mesh objmesh(const char* path)
 
 	result.name = path;
 
-	std::vector<unsigned int> remap(total_indices);
+	std::vector<datatype_t> remap(total_indices);
 
 	size_t total_vertices = meshopt_generateVertexRemap(&remap[0], NULL, total_indices, &vertices[0], total_indices, sizeof(Vertex));
 
@@ -205,7 +205,7 @@ size_t compress(const std::vector<T>& data, int level = SDEFL_LVL_DEF)
 
 void compute_metric(const State* state, const Mesh& mesh, float result[Profile_Count])
 {
-	std::vector<unsigned int> indices(mesh.indices.size());
+	std::vector<datatype_t> indices(mesh.indices.size());
 
 	if (state)
 	{

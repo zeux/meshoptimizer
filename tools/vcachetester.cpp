@@ -17,7 +17,7 @@
 #pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "dxgi.lib")
 
-void stripGen(std::vector<unsigned int>& indices, int x0, int x1, int y0, int y1, int width, bool prefetch)
+void stripGen(std::vector<datatype_t>& indices, int x0, int x1, int y0, int y1, int width, bool prefetch)
 {
 	if (prefetch)
 	{
@@ -44,7 +44,7 @@ void stripGen(std::vector<unsigned int>& indices, int x0, int x1, int y0, int y1
 	}
 }
 
-void gridGen(std::vector<unsigned int>& indices, int x0, int x1, int y0, int y1, int width, int cacheSize, bool prefetch)
+void gridGen(std::vector<datatype_t>& indices, int x0, int x1, int y0, int y1, int width, int cacheSize, bool prefetch)
 {
 	if (x1 - x0 + 1 < cacheSize)
 	{
@@ -60,7 +60,7 @@ void gridGen(std::vector<unsigned int>& indices, int x0, int x1, int y0, int y1,
 	}
 }
 
-unsigned int queryVSInvocations(ID3D11Device* device, ID3D11DeviceContext* context, const unsigned int* indices, size_t index_count)
+datatype_t queryVSInvocations(ID3D11Device* device, ID3D11DeviceContext* context, const datatype_t* indices, size_t index_count)
 {
 	if (index_count == 0)
 		return 0;
@@ -132,31 +132,31 @@ void setupShaders(ID3D11Device* device, ID3D11DeviceContext* context)
 template <typename Cache>
 void inspectCache(Cache cache)
 {
-	unsigned int max_cache_size = 200;
-	unsigned int grid_size = 100;
+	datatype_t max_cache_size = 200;
+	datatype_t grid_size = 100;
 
-	for (unsigned int cache_size = 3; cache_size <= max_cache_size; cache_size += 1)
+	for (datatype_t cache_size = 3; cache_size <= max_cache_size; cache_size += 1)
 	{
-		std::vector<unsigned int> grid1;
+		std::vector<datatype_t> grid1;
 		gridGen(grid1, 0, grid_size, 0, grid_size, grid_size, cache_size, true);
 
-		std::vector<unsigned int> grid2;
+		std::vector<datatype_t> grid2;
 		gridGen(grid2, 0, grid_size, 0, grid_size, grid_size, cache_size, false);
 
-		std::vector<unsigned int> grid3;
+		std::vector<datatype_t> grid3;
 		gridGen(grid3, 0, grid_size, 0, grid_size, grid_size, grid_size * 4, false); // this generates a simple indexed grid without striping/degenerate triangles
 		meshopt_optimizeVertexCacheFifo(&grid3[0], &grid3[0], grid3.size(), (grid_size + 1) * (grid_size + 1), cache_size);
 
-		std::vector<unsigned int> grid4;
+		std::vector<datatype_t> grid4;
 		gridGen(grid4, 0, grid_size, 0, grid_size, grid_size, grid_size * 4, false); // this generates a simple indexed grid without striping/degenerate triangles
 		meshopt_optimizeVertexCache(&grid4[0], &grid4[0], grid4.size(), (grid_size + 1) * (grid_size + 1));
 
-		unsigned int invocations1 = cache(&grid1[0], grid1.size());
-		unsigned int invocations2 = cache(&grid2[0], grid2.size());
-		unsigned int invocations3 = cache(&grid3[0], grid3.size());
-		unsigned int invocations4 = cache(&grid4[0], grid4.size());
+		datatype_t invocations1 = cache(&grid1[0], grid1.size());
+		datatype_t invocations2 = cache(&grid2[0], grid2.size());
+		datatype_t invocations3 = cache(&grid3[0], grid3.size());
+		datatype_t invocations4 = cache(&grid4[0], grid4.size());
 
-		unsigned int ideal_invocations = (grid_size + 1) * (grid_size + 1);
+		datatype_t ideal_invocations = (grid_size + 1) * (grid_size + 1);
 
 		printf("%d, %f, %f, %f, %f\n", cache_size,
 		       double(invocations1) / double(ideal_invocations),
@@ -174,7 +174,7 @@ void testCache(IDXGIAdapter* adapter)
 
 	setupShaders(device, context);
 
-	inspectCache([&](const unsigned int* indices, size_t index_count) { return queryVSInvocations(device, context, indices, index_count); });
+	inspectCache([&](const datatype_t* indices, size_t index_count) { return queryVSInvocations(device, context, indices, index_count); });
 }
 
 void testCacheSequence(IDXGIAdapter* adapter, int argc, char** argv)
@@ -185,7 +185,7 @@ void testCacheSequence(IDXGIAdapter* adapter, int argc, char** argv)
 
 	setupShaders(device, context);
 
-	std::vector<unsigned int> ib;
+	std::vector<datatype_t> ib;
 
 	for (int i = 2; i < argc; ++i)
 	{
@@ -256,8 +256,8 @@ void testCacheSequence(IDXGIAdapter* adapter, int argc, char** argv)
 
 	for (size_t i = 0; i < ib.size(); i += 3)
 	{
-		unsigned int inv0 = i == 0 ? 0 : queryVSInvocations(device, context, ib.data(), i);
-		unsigned int inv1 = queryVSInvocations(device, context, ib.data(), i + 3);
+		datatype_t inv0 = i == 0 ? 0 : queryVSInvocations(device, context, ib.data(), i);
+		datatype_t inv1 = queryVSInvocations(device, context, ib.data(), i + 3);
 
 		assert(inv0 <= inv1);
 		assert(inv0 + 3 >= inv1);
@@ -275,18 +275,18 @@ void testCacheSequence(IDXGIAdapter* adapter, int argc, char** argv)
 		case 1:
 		case 2:
 		{
-			unsigned int a = ib[i + 0];
-			unsigned int b = ib[i + 1];
-			unsigned int c = ib[i + 2];
+			datatype_t a = ib[i + 0];
+			datatype_t b = ib[i + 1];
+			datatype_t c = ib[i + 2];
 
 			ib[i + 0] = ib[i + 1] = ib[i + 2] = a;
-			unsigned int inva = queryVSInvocations(device, context, ib.data(), i + 3);
+			datatype_t inva = queryVSInvocations(device, context, ib.data(), i + 3);
 
 			ib[i + 1] = ib[i + 2] = b;
-			unsigned int invb = queryVSInvocations(device, context, ib.data(), i + 3);
+			datatype_t invb = queryVSInvocations(device, context, ib.data(), i + 3);
 
 			ib[i + 2] = c;
-			unsigned int invc = queryVSInvocations(device, context, ib.data(), i + 3);
+			datatype_t invc = queryVSInvocations(device, context, ib.data(), i + 3);
 
 			assert(inv0 <= inva && inva <= inv1);
 			assert(inv0 <= invb && invb <= inv1);
@@ -312,7 +312,7 @@ void testCacheSequence(IDXGIAdapter* adapter, int argc, char** argv)
 		}
 	}
 
-	unsigned int xformed_total = 0;
+	datatype_t xformed_total = 0;
 
 	for (size_t i = 0; i < ib.size(); ++i)
 		xformed_total += xformed[i];
@@ -334,18 +334,18 @@ void testCacheSequence(IDXGIAdapter* adapter, int argc, char** argv)
 
 	printf("\n");
 
-	std::vector<unsigned int> cached;
+	std::vector<datatype_t> cached;
 
 	for (size_t i = 0; i < ib.size(); ++i)
 	{
-		unsigned int index = ib[i];
-		unsigned int inv0 = queryVSInvocations(device, context, ib.data(), ib.size());
+		datatype_t index = ib[i];
+		datatype_t inv0 = queryVSInvocations(device, context, ib.data(), ib.size());
 
 		ib.push_back(index);
 		ib.push_back(index);
 		ib.push_back(index);
 
-		unsigned int inv1 = queryVSInvocations(device, context, ib.data(), ib.size());
+		datatype_t inv1 = queryVSInvocations(device, context, ib.data(), ib.size());
 
 		ib.resize(ib.size() - 3);
 
@@ -363,7 +363,7 @@ void testCacheSequence(IDXGIAdapter* adapter, int argc, char** argv)
 
 	printf(" (%d)\n", int(cached.size()));
 
-	unsigned int invocations = queryVSInvocations(device, context, ib.data(), ib.size());
+	datatype_t invocations = queryVSInvocations(device, context, ib.data(), ib.size());
 
 	printf("// Invocations: %d\n", invocations);
 
@@ -383,8 +383,8 @@ void testCacheMeshes(IDXGIAdapter* adapter, int argc, char** argv)
 	double atvr_sum = 0;
 	double atvr_count = 0;
 
-	unsigned int total_invocations = 0;
-	unsigned int total_vertices = 0;
+	datatype_t total_invocations = 0;
+	datatype_t total_vertices = 0;
 
 	for (int i = 1; i < argc; ++i)
 	{
@@ -403,21 +403,21 @@ void testCacheMeshes(IDXGIAdapter* adapter, int argc, char** argv)
 			continue;
 		}
 
-		std::vector<unsigned int> ib1;
+		std::vector<datatype_t> ib1;
 
 		size_t index_offset = 0;
 
-		for (unsigned int i = 0; i < obj->face_count; ++i)
+		for (datatype_t i = 0; i < obj->face_count; ++i)
 		{
-			for (unsigned int j = 0; j < obj->face_vertices[i]; ++j)
+			for (datatype_t j = 0; j < obj->face_vertices[i]; ++j)
 			{
 				fastObjIndex gi = obj->indices[index_offset + j];
 
 				// triangulate polygon on the fly; offset-3 is always the first polygon vertex
 				if (j >= 3)
 				{
-					unsigned int i0 = ib1[ib1.size() - 3];
-					unsigned int i1 = ib1[ib1.size() - 1];
+					datatype_t i0 = ib1[ib1.size() - 3];
+					datatype_t i1 = ib1[ib1.size() - 1];
 
 					ib1.push_back(i0);
 					ib1.push_back(i1);
@@ -429,17 +429,17 @@ void testCacheMeshes(IDXGIAdapter* adapter, int argc, char** argv)
 			index_offset += obj->face_vertices[i];
 		}
 
-		unsigned int vertex_count = obj->position_count;
-		unsigned int index_count = ib1.size();
+		datatype_t vertex_count = obj->position_count;
+		datatype_t index_count = ib1.size();
 
-		unsigned int invocations1 = queryVSInvocations(device, context, ib1.data(), index_count);
+		datatype_t invocations1 = queryVSInvocations(device, context, ib1.data(), index_count);
 
 		if (stat)
 		{
-			std::vector<unsigned int> ib2(ib1.size());
+			std::vector<datatype_t> ib2(ib1.size());
 			meshopt_optimizeVertexCache(&ib2[0], &ib1[0], ib1.size(), vertex_count);
 
-			unsigned int invocations = queryVSInvocations(device, context, ib2.data(), index_count);
+			datatype_t invocations = queryVSInvocations(device, context, ib2.data(), index_count);
 
 			atvr_sum += double(invocations) / double(vertex_count);
 			atvr_count += 1;
@@ -451,19 +451,19 @@ void testCacheMeshes(IDXGIAdapter* adapter, int argc, char** argv)
 		{
 			printf("%s: baseline    %f\n", path, double(invocations1) / double(vertex_count));
 
-			std::vector<unsigned int> ib3(ib1.size());
+			std::vector<datatype_t> ib3(ib1.size());
 			meshopt_optimizeVertexCache(&ib3[0], &ib1[0], ib1.size(), vertex_count);
 
-			unsigned int invocations3 = queryVSInvocations(device, context, ib3.data(), index_count);
+			datatype_t invocations3 = queryVSInvocations(device, context, ib3.data(), index_count);
 
 			printf("%s: forsyth     %f\n", path, double(invocations3) / double(vertex_count));
 
-			for (unsigned int cache_size = 12; cache_size <= 24; ++cache_size)
+			for (datatype_t cache_size = 12; cache_size <= 24; ++cache_size)
 			{
-				std::vector<unsigned int> ib2(ib1.size());
+				std::vector<datatype_t> ib2(ib1.size());
 				meshopt_optimizeVertexCacheFifo(&ib2[0], &ib1[0], ib1.size(), vertex_count, cache_size);
 
-				unsigned int invocations2 = queryVSInvocations(device, context, ib2.data(), index_count);
+				datatype_t invocations2 = queryVSInvocations(device, context, ib2.data(), index_count);
 
 				printf("%s: tipsify(%d) %f\n", path, cache_size, double(invocations2) / double(vertex_count));
 			}
@@ -482,7 +482,7 @@ int main(int argc, char** argv)
 	CreateDXGIFactory1(__uuidof(IDXGIFactory1), (void**)&factory);
 
 	IDXGIAdapter* adapter = NULL;
-	for (unsigned int index = 0; SUCCEEDED(factory->EnumAdapters(index, &adapter)); ++index)
+	for (datatype_t index = 0; SUCCEEDED(factory->EnumAdapters(index, &adapter)); ++index)
 	{
 		DXGI_ADAPTER_DESC ad = {};
 		adapter->GetDesc(&ad);

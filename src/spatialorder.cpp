@@ -11,7 +11,7 @@ namespace meshopt
 {
 
 // "Insert" two 0 bits after each of the 10 low bits of x
-inline unsigned int part1By2(unsigned int x)
+inline datatype_t part1By2(datatype_t x)
 {
 	x &= 0x000003ff;                  // x = ---- ---- ---- ---- ---- --98 7654 3210
 	x = (x ^ (x << 16)) & 0xff0000ff; // x = ---- --98 ---- ---- ---- ---- 7654 3210
@@ -21,7 +21,7 @@ inline unsigned int part1By2(unsigned int x)
 	return x;
 }
 
-static void computeOrder(unsigned int* result, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride)
+static void computeOrder(datatype_t* result, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride)
 {
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
@@ -62,26 +62,26 @@ static void computeOrder(unsigned int* result, const float* vertex_positions_dat
 	}
 }
 
-static void computeHistogram(unsigned int (&hist)[1024][3], const unsigned int* data, size_t count)
+static void computeHistogram(datatype_t (&hist)[1024][3], const datatype_t* data, size_t count)
 {
 	memset(hist, 0, sizeof(hist));
 
 	// compute 3 10-bit histograms in parallel
 	for (size_t i = 0; i < count; ++i)
 	{
-		unsigned int id = data[i];
+		datatype_t id = data[i];
 
 		hist[(id >> 0) & 1023][0]++;
 		hist[(id >> 10) & 1023][1]++;
 		hist[(id >> 20) & 1023][2]++;
 	}
 
-	unsigned int sumx = 0, sumy = 0, sumz = 0;
+	datatype_t sumx = 0, sumy = 0, sumz = 0;
 
 	// replace histogram data with prefix histogram sums in-place
 	for (int i = 0; i < 1024; ++i)
 	{
-		unsigned int hx = hist[i][0], hy = hist[i][1], hz = hist[i][2];
+		datatype_t hx = hist[i][0], hy = hist[i][1], hz = hist[i][2];
 
 		hist[i][0] = sumx;
 		hist[i][1] = sumy;
@@ -95,13 +95,13 @@ static void computeHistogram(unsigned int (&hist)[1024][3], const unsigned int* 
 	assert(sumx == count && sumy == count && sumz == count);
 }
 
-static void radixPass(unsigned int* destination, const unsigned int* source, const unsigned int* keys, size_t count, unsigned int (&hist)[1024][3], int pass)
+static void radixPass(datatype_t* destination, const datatype_t* source, const datatype_t* keys, size_t count, datatype_t (&hist)[1024][3], int pass)
 {
 	int bitoff = pass * 10;
 
 	for (size_t i = 0; i < count; ++i)
 	{
-		unsigned int id = (keys[source[i]] >> bitoff) & 1023;
+		datatype_t id = (keys[source[i]] >> bitoff) & 1023;
 
 		destination[hist[id][pass]++] = source[i];
 	}
@@ -109,7 +109,7 @@ static void radixPass(unsigned int* destination, const unsigned int* source, con
 
 } // namespace meshopt
 
-void meshopt_spatialSortRemap(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+void meshopt_spatialSortRemap(datatype_t* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	using namespace meshopt;
 
@@ -118,16 +118,16 @@ void meshopt_spatialSortRemap(unsigned int* destination, const float* vertex_pos
 
 	meshopt_Allocator allocator;
 
-	unsigned int* keys = allocator.allocate<unsigned int>(vertex_count);
+	datatype_t* keys = allocator.allocate<datatype_t>(vertex_count);
 	computeOrder(keys, vertex_positions, vertex_count, vertex_positions_stride);
 
-	unsigned int hist[1024][3];
+	datatype_t hist[1024][3];
 	computeHistogram(hist, keys, vertex_count);
 
-	unsigned int* scratch = allocator.allocate<unsigned int>(vertex_count);
+	datatype_t* scratch = allocator.allocate<datatype_t>(vertex_count);
 
 	for (size_t i = 0; i < vertex_count; ++i)
-		destination[i] = unsigned(i);
+		destination[i] = datatype_t(i);
 
 	// 3-pass radix sort computes the resulting order into scratch
 	radixPass(scratch, destination, keys, vertex_count, hist, 0);
@@ -136,10 +136,10 @@ void meshopt_spatialSortRemap(unsigned int* destination, const float* vertex_pos
 
 	// since our remap table is mapping old=>new, we need to reverse it
 	for (size_t i = 0; i < vertex_count; ++i)
-		destination[scratch[i]] = unsigned(i);
+		destination[scratch[i]] = datatype_t(i);
 }
 
-void meshopt_spatialSortTriangles(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+void meshopt_spatialSortTriangles(datatype_t* destination, const datatype_t* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	using namespace meshopt;
 
@@ -158,7 +158,7 @@ void meshopt_spatialSortTriangles(unsigned int* destination, const unsigned int*
 
 	for (size_t i = 0; i < face_count; ++i)
 	{
-		unsigned int a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
+		datatype_t a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
 		assert(a < vertex_count && b < vertex_count && c < vertex_count);
 
 		const float* va = vertex_positions + a * vertex_stride_float;
@@ -170,22 +170,22 @@ void meshopt_spatialSortTriangles(unsigned int* destination, const unsigned int*
 		centroids[i * 3 + 2] = (va[2] + vb[2] + vc[2]) / 3.f;
 	}
 
-	unsigned int* remap = allocator.allocate<unsigned int>(face_count);
+	datatype_t* remap = allocator.allocate<datatype_t>(face_count);
 
 	meshopt_spatialSortRemap(remap, centroids, face_count, sizeof(float) * 3);
 
 	// support in-order remap
 	if (destination == indices)
 	{
-		unsigned int* indices_copy = allocator.allocate<unsigned int>(index_count);
-		memcpy(indices_copy, indices, index_count * sizeof(unsigned int));
+		datatype_t* indices_copy = allocator.allocate<datatype_t>(index_count);
+		memcpy(indices_copy, indices, index_count * sizeof(datatype_t));
 		indices = indices_copy;
 	}
 
 	for (size_t i = 0; i < face_count; ++i)
 	{
-		unsigned int a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
-		unsigned int r = remap[i];
+		datatype_t a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
+		datatype_t r = remap[i];
 
 		destination[r * 3 + 0] = a;
 		destination[r * 3 + 1] = b;

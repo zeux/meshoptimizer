@@ -298,9 +298,9 @@ static void encodeExpShared(uint32_t v[3], const Attr& a, int bits)
 	int mmask = (1 << 24) - 1;
 
 	// encode exponent & mantissa into each resulting value
-	v[0] = (mx & mmask) | (unsigned(exp) << 24);
-	v[1] = (my & mmask) | (unsigned(exp) << 24);
-	v[2] = (mz & mmask) | (unsigned(exp) << 24);
+	v[0] = (mx & mmask) | (datatype_t(exp) << 24);
+	v[1] = (my & mmask) | (datatype_t(exp) << 24);
+	v[2] = (mz & mmask) | (datatype_t(exp) << 24);
 }
 
 static uint32_t encodeExpOne(float v, int bits)
@@ -318,7 +318,7 @@ static uint32_t encodeExpOne(float v, int bits)
 	int mmask = (1 << 24) - 1;
 
 	// encode exponent & mantissa
-	return (m & mmask) | (unsigned(exp) << 24);
+	return (m & mmask) | (datatype_t(exp) << 24);
 }
 
 static void encodeExpParallel(std::string& bin, const Attr* data, size_t count, int bits)
@@ -359,9 +359,9 @@ static void encodeExpParallel(std::string& bin, const Attr* data, size_t count, 
 
 		// encode exponent & mantissa
 		uint32_t v[3];
-		v[0] = (mx & mmask) | (unsigned(expx) << 24);
-		v[1] = (my & mmask) | (unsigned(expy) << 24);
-		v[2] = (mz & mmask) | (unsigned(expz) << 24);
+		v[0] = (mx & mmask) | (datatype_t(expx) << 24);
+		v[1] = (my & mmask) | (datatype_t(expy) << 24);
+		v[2] = (mz & mmask) | (datatype_t(expz) << 24);
 
 		bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 	}
@@ -716,10 +716,10 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	}
 	else if (stream.type == cgltf_attribute_type_joints)
 	{
-		unsigned int maxj = 0;
+		datatype_t maxj = 0;
 
 		for (size_t i = 0; i < stream.data.size(); ++i)
-			maxj = std::max(maxj, unsigned(stream.data[i].f[0]));
+			maxj = std::max(maxj, datatype_t(stream.data[i].f[0]));
 
 		assert(maxj <= 65535);
 
@@ -764,9 +764,9 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	}
 }
 
-StreamFormat writeIndexStream(std::string& bin, const std::vector<unsigned int>& stream)
+StreamFormat writeIndexStream(std::string& bin, const std::vector<datatype_t>& stream)
 {
-	unsigned int maxi = 0;
+	datatype_t maxi = 0;
 	for (size_t i = 0; i < stream.size(); ++i)
 		maxi = std::max(maxi, stream[i]);
 

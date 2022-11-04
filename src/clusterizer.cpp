@@ -2,7 +2,7 @@
 #include "meshoptimizer.h"
 
 #include <assert.h>
-#include <float.h>
+#include <limits>
 #include <math.h>
 #include <string.h>
 
@@ -21,22 +21,22 @@ const size_t kMeshletMaxTriangles = 512;
 
 struct TriangleAdjacency2
 {
-	unsigned int* counts;
-	unsigned int* offsets;
-	unsigned int* data;
+	datatype_t* counts;
+	datatype_t* offsets;
+	datatype_t* data;
 };
 
-static void buildTriangleAdjacency(TriangleAdjacency2& adjacency, const unsigned int* indices, size_t index_count, size_t vertex_count, meshopt_Allocator& allocator)
+static void buildTriangleAdjacency(TriangleAdjacency2& adjacency, const datatype_t* indices, size_t index_count, size_t vertex_count, meshopt_Allocator& allocator)
 {
 	size_t face_count = index_count / 3;
 
 	// allocate arrays
-	adjacency.counts = allocator.allocate<unsigned int>(vertex_count);
-	adjacency.offsets = allocator.allocate<unsigned int>(vertex_count);
-	adjacency.data = allocator.allocate<unsigned int>(index_count);
+	adjacency.counts = allocator.allocate<datatype_t>(vertex_count);
+	adjacency.offsets = allocator.allocate<datatype_t>(vertex_count);
+	adjacency.data = allocator.allocate<datatype_t>(index_count);
 
 	// fill triangle counts
-	memset(adjacency.counts, 0, vertex_count * sizeof(unsigned int));
+	memset(adjacency.counts, 0, vertex_count * sizeof(datatype_t));
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
@@ -46,7 +46,7 @@ static void buildTriangleAdjacency(TriangleAdjacency2& adjacency, const unsigned
 	}
 
 	// fill offset table
-	unsigned int offset = 0;
+	datatype_t offset = 0;
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
@@ -59,11 +59,13 @@ static void buildTriangleAdjacency(TriangleAdjacency2& adjacency, const unsigned
 	// fill triangle data
 	for (size_t i = 0; i < face_count; ++i)
 	{
-		unsigned int a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
+		datatype_t a = indices[i * 3 + 0];
+		datatype_t b = indices[i * 3 + 1];
+		datatype_t c = indices[i * 3 + 2];
 
-		adjacency.data[adjacency.offsets[a]++] = unsigned(i);
-		adjacency.data[adjacency.offsets[b]++] = unsigned(i);
-		adjacency.data[adjacency.offsets[c]++] = unsigned(i);
+		adjacency.data[adjacency.offsets[a]++] = i;
+		adjacency.data[adjacency.offsets[b]++] = i;
+		adjacency.data[adjacency.offsets[c]++] = i;
 	}
 
 	// fix offsets that have been disturbed by the previous pass
@@ -75,7 +77,7 @@ static void buildTriangleAdjacency(TriangleAdjacency2& adjacency, const unsigned
 	}
 }
 
-static void computeBoundingSphere(float result[4], const float points[][3], size_t count)
+static void computeBoundingSphere(real_t result[4], const real_t points[][3], size_t count)
 {
 	assert(count > 0);
 
@@ -85,7 +87,7 @@ static void computeBoundingSphere(float result[4], const float points[][3], size
 
 	for (size_t i = 0; i < count; ++i)
 	{
-		const float* p = points[i];
+		const real_t* p = points[i];
 
 		for (int axis = 0; axis < 3; ++axis)
 		{
@@ -95,15 +97,15 @@ static void computeBoundingSphere(float result[4], const float points[][3], size
 	}
 
 	// find the pair of points with largest distance
-	float paxisd2 = 0;
+	real_t paxisd2 = 0;
 	int paxis = 0;
 
 	for (int axis = 0; axis < 3; ++axis)
 	{
-		const float* p1 = points[pmin[axis]];
-		const float* p2 = points[pmax[axis]];
+		const real_t* p1 = points[pmin[axis]];
+		const real_t* p2 = points[pmax[axis]];
 
-		float d2 = (p2[0] - p1[0]) * (p2[0] - p1[0]) + (p2[1] - p1[1]) * (p2[1] - p1[1]) + (p2[2] - p1[2]) * (p2[2] - p1[2]);
+		real_t d2 = (p2[0] - p1[0]) * (p2[0] - p1[0]) + (p2[1] - p1[1]) * (p2[1] - p1[1]) + (p2[2] - p1[2]) * (p2[2] - p1[2]);
 
 		if (d2 > paxisd2)
 		{
@@ -113,24 +115,24 @@ static void computeBoundingSphere(float result[4], const float points[][3], size
 	}
 
 	// use the longest segment as the initial sphere diameter
-	const float* p1 = points[pmin[paxis]];
-	const float* p2 = points[pmax[paxis]];
+	const real_t* p1 = points[pmin[paxis]];
+	const real_t* p2 = points[pmax[paxis]];
 
-	float center[3] = {(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, (p1[2] + p2[2]) / 2};
-	float radius = sqrtf(paxisd2) / 2;
+	real_t center[3] = {(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, (p1[2] + p2[2]) / 2};
+	real_t radius = sqrtf(paxisd2) / 2;
 
 	// iteratively adjust the sphere up until all points fit
 	for (size_t i = 0; i < count; ++i)
 	{
-		const float* p = points[i];
-		float d2 = (p[0] - center[0]) * (p[0] - center[0]) + (p[1] - center[1]) * (p[1] - center[1]) + (p[2] - center[2]) * (p[2] - center[2]);
+		const real_t* p = points[i];
+		real_t d2 = (p[0] - center[0]) * (p[0] - center[0]) + (p[1] - center[1]) * (p[1] - center[1]) + (p[2] - center[2]) * (p[2] - center[2]);
 
 		if (d2 > radius * radius)
 		{
-			float d = sqrtf(d2);
+			real_t d = sqrtf(d2);
 			assert(d > 0);
 
-			float k = 0.5f + (radius / d) / 2;
+			real_t k = 0.5f + (radius / d) / 2;
 
 			center[0] = center[0] * k + p[0] * (1 - k);
 			center[1] = center[1] * k + p[1] * (1 - k);
@@ -147,30 +149,30 @@ static void computeBoundingSphere(float result[4], const float points[][3], size
 
 struct Cone
 {
-	float px, py, pz;
-	float nx, ny, nz;
+	real_t px, py, pz;
+	real_t nx, ny, nz;
 };
 
-static float getMeshletScore(float distance2, float spread, float cone_weight, float expected_radius)
+static real_t getMeshletScore(real_t distance2, real_t spread, real_t cone_weight, real_t expected_radius)
 {
-	float cone = 1.f - spread * cone_weight;
-	float cone_clamped = cone < 1e-3f ? 1e-3f : cone;
+	real_t cone = 1.f - spread * cone_weight;
+	real_t cone_clamped = cone < 1e-3f ? 1e-3f : cone;
 
 	return (1 + sqrtf(distance2) / expected_radius * (1 - cone_weight)) * cone_clamped;
 }
 
-static Cone getMeshletCone(const Cone& acc, unsigned int triangle_count)
+static Cone getMeshletCone(const Cone& acc, datatype_t triangle_count)
 {
 	Cone result = acc;
 
-	float center_scale = triangle_count == 0 ? 0.f : 1.f / float(triangle_count);
+	real_t center_scale = triangle_count == 0 ? 0.f : 1.f / real_t(triangle_count);
 
 	result.px *= center_scale;
 	result.py *= center_scale;
 	result.pz *= center_scale;
 
-	float axis_length = result.nx * result.nx + result.ny * result.ny + result.nz * result.nz;
-	float axis_scale = axis_length == 0.f ? 0.f : 1.f / sqrtf(axis_length);
+	real_t axis_length = result.nx * result.nx + result.ny * result.ny + result.nz * result.nz;
+	real_t axis_scale = axis_length == 0.f ? 0.f : 1.f / sqrtf(axis_length);
 
 	result.nx *= axis_scale;
 	result.ny *= axis_scale;
@@ -179,33 +181,33 @@ static Cone getMeshletCone(const Cone& acc, unsigned int triangle_count)
 	return result;
 }
 
-static float computeTriangleCones(Cone* triangles, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+static real_t computeTriangleCones(Cone* triangles, const datatype_t* indices, size_t index_count, const real_t* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	(void)vertex_count;
 
-	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
+	size_t vertex_stride_float = vertex_positions_stride / sizeof(real_t);
 	size_t face_count = index_count / 3;
 
-	float mesh_area = 0;
+	real_t mesh_area = 0;
 
 	for (size_t i = 0; i < face_count; ++i)
 	{
-		unsigned int a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
+		datatype_t a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
 		assert(a < vertex_count && b < vertex_count && c < vertex_count);
 
-		const float* p0 = vertex_positions + vertex_stride_float * a;
-		const float* p1 = vertex_positions + vertex_stride_float * b;
-		const float* p2 = vertex_positions + vertex_stride_float * c;
+		const real_t* p0 = vertex_positions + vertex_stride_float * a;
+		const real_t* p1 = vertex_positions + vertex_stride_float * b;
+		const real_t* p2 = vertex_positions + vertex_stride_float * c;
 
-		float p10[3] = {p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]};
-		float p20[3] = {p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]};
+		real_t p10[3] = {p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]};
+		real_t p20[3] = {p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]};
 
-		float normalx = p10[1] * p20[2] - p10[2] * p20[1];
-		float normaly = p10[2] * p20[0] - p10[0] * p20[2];
-		float normalz = p10[0] * p20[1] - p10[1] * p20[0];
+		real_t normalx = p10[1] * p20[2] - p10[2] * p20[1];
+		real_t normaly = p10[2] * p20[0] - p10[0] * p20[2];
+		real_t normalz = p10[0] * p20[1] - p10[1] * p20[0];
 
-		float area = sqrtf(normalx * normalx + normaly * normaly + normalz * normalz);
-		float invarea = (area == 0.f) ? 0.f : 1.f / area;
+		real_t area = sqrtf(normalx * normalx + normaly * normaly + normalz * normalz);
+		real_t invarea = (area == 0.f) ? 0.f : 1.f / area;
 
 		triangles[i].px = (p0[0] + p1[0] + p2[0]) / 3.f;
 		triangles[i].py = (p0[1] + p1[1] + p2[1]) / 3.f;
@@ -230,7 +232,7 @@ static void finishMeshlet(meshopt_Meshlet& meshlet, unsigned char* meshlet_trian
 		meshlet_triangles[offset++] = 0;
 }
 
-static bool appendMeshlet(meshopt_Meshlet& meshlet, unsigned int a, unsigned int b, unsigned int c, unsigned char* used, meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, size_t meshlet_offset, size_t max_vertices, size_t max_triangles)
+static bool appendMeshlet(meshopt_Meshlet& meshlet, datatype_t a, datatype_t b, datatype_t c, unsigned char* used, meshopt_Meshlet* meshlets, datatype_t* meshlet_vertices, unsigned char* meshlet_triangles, size_t meshlet_offset, size_t max_vertices, size_t max_triangles)
 {
 	unsigned char& av = used[a];
 	unsigned char& bv = used[b];
@@ -238,7 +240,7 @@ static bool appendMeshlet(meshopt_Meshlet& meshlet, unsigned int a, unsigned int
 
 	bool result = false;
 
-	unsigned int used_extra = (av == 0xff) + (bv == 0xff) + (cv == 0xff);
+	datatype_t used_extra = (av == 0xff) + (bv == 0xff) + (cv == 0xff);
 
 	if (meshlet.vertex_count + used_extra > max_vertices || meshlet.triangle_count >= max_triangles)
 	{
@@ -287,27 +289,27 @@ struct KDNode
 {
 	union
 	{
-		float split;
-		unsigned int index;
+		real_t split;
+		datatype_t index;
 	};
 
 	// leaves: axis = 3, children = number of extra points after this one (0 if 'index' is the only point)
 	// branches: axis != 3, left subtree = skip 1, right subtree = skip 1+children
-	unsigned int axis : 2;
-	unsigned int children : 30;
+	datatype_t axis : 2;
+	datatype_t children : 30;
 };
 
-static size_t kdtreePartition(unsigned int* indices, size_t count, const float* points, size_t stride, unsigned int axis, float pivot)
+static size_t kdtreePartition(datatype_t* indices, size_t count, const real_t* points, size_t stride, datatype_t axis, real_t pivot)
 {
 	size_t m = 0;
 
 	// invariant: elements in range [0, m) are < pivot, elements in range [m, i) are >= pivot
 	for (size_t i = 0; i < count; ++i)
 	{
-		float v = points[indices[i] * stride + axis];
+		real_t v = points[indices[i] * stride + axis];
 
 		// swap(m, i) unconditionally
-		unsigned int t = indices[m];
+		datatype_t t = indices[m];
 		indices[m] = indices[i];
 		indices[i] = t;
 
@@ -318,7 +320,7 @@ static size_t kdtreePartition(unsigned int* indices, size_t count, const float* 
 	return m;
 }
 
-static size_t kdtreeBuildLeaf(size_t offset, KDNode* nodes, size_t node_count, unsigned int* indices, size_t count)
+static size_t kdtreeBuildLeaf(size_t offset, KDNode* nodes, size_t node_count, datatype_t* indices, size_t count)
 {
 	assert(offset + count <= node_count);
 	(void)node_count;
@@ -327,7 +329,7 @@ static size_t kdtreeBuildLeaf(size_t offset, KDNode* nodes, size_t node_count, u
 
 	result.index = indices[0];
 	result.axis = 3;
-	result.children = unsigned(count - 1);
+	result.children = count - 1;
 
 	// all remaining points are stored in nodes immediately following the leaf
 	for (size_t i = 1; i < count; ++i)
@@ -342,7 +344,7 @@ static size_t kdtreeBuildLeaf(size_t offset, KDNode* nodes, size_t node_count, u
 	return offset + count;
 }
 
-static size_t kdtreeBuild(size_t offset, KDNode* nodes, size_t node_count, const float* points, size_t stride, unsigned int* indices, size_t count, size_t leaf_size)
+static size_t kdtreeBuild(size_t offset, KDNode* nodes, size_t node_count, const real_t* points, size_t stride, datatype_t* indices, size_t count, size_t leaf_size)
 {
 	assert(count > 0);
 	assert(offset < node_count);
@@ -350,27 +352,27 @@ static size_t kdtreeBuild(size_t offset, KDNode* nodes, size_t node_count, const
 	if (count <= leaf_size)
 		return kdtreeBuildLeaf(offset, nodes, node_count, indices, count);
 
-	float mean[3] = {};
-	float vars[3] = {};
-	float runc = 1, runs = 1;
+	real_t mean[3] = {};
+	real_t vars[3] = {};
+	real_t runc = 1, runs = 1;
 
 	// gather statistics on the points in the subtree using Welford's algorithm
 	for (size_t i = 0; i < count; ++i, runc += 1.f, runs = 1.f / runc)
 	{
-		const float* point = points + indices[i] * stride;
+		const real_t* point = points + indices[i] * stride;
 
 		for (int k = 0; k < 3; ++k)
 		{
-			float delta = point[k] - mean[k];
+			real_t delta = point[k] - mean[k];
 			mean[k] += delta * runs;
 			vars[k] += delta * (point[k] - mean[k]);
 		}
 	}
 
 	// split axis is one where the variance is largest
-	unsigned int axis = vars[0] >= vars[1] && vars[0] >= vars[2] ? 0 : vars[1] >= vars[2] ? 1 : 2;
+	datatype_t axis = vars[0] >= vars[1] && vars[0] >= vars[2] ? 0 : vars[1] >= vars[2] ? 1 : 2;
 
-	float split = mean[axis];
+	real_t split = mean[axis];
 	size_t middle = kdtreePartition(indices, count, points, stride, axis, split);
 
 	// when the partition is degenerate simply consolidate the points into a single node
@@ -386,32 +388,32 @@ static size_t kdtreeBuild(size_t offset, KDNode* nodes, size_t node_count, const
 	size_t next_offset = kdtreeBuild(offset + 1, nodes, node_count, points, stride, indices, middle, leaf_size);
 
 	// distance to the right subtree is represented explicitly
-	result.children = unsigned(next_offset - offset - 1);
+	result.children = next_offset - offset - 1;
 
 	return kdtreeBuild(next_offset, nodes, node_count, points, stride, indices + middle, count - middle, leaf_size);
 }
 
-static void kdtreeNearest(KDNode* nodes, unsigned int root, const float* points, size_t stride, const unsigned char* emitted_flags, const float* position, unsigned int& result, float& limit)
+static void kdtreeNearest(KDNode* nodes, datatype_t root, const real_t* points, size_t stride, const unsigned char* emitted_flags, const real_t* position, datatype_t& result, real_t& limit)
 {
 	const KDNode& node = nodes[root];
 
 	if (node.axis == 3)
 	{
 		// leaf
-		for (unsigned int i = 0; i <= node.children; ++i)
+		for (datatype_t i = 0; i <= node.children; ++i)
 		{
-			unsigned int index = nodes[root + i].index;
+			datatype_t index = nodes[root + i].index;
 
 			if (emitted_flags[index])
 				continue;
 
-			const float* point = points + index * stride;
+			const real_t* point = points + index * stride;
 
-			float distance2 =
+			real_t distance2 =
 			    (point[0] - position[0]) * (point[0] - position[0]) +
 			    (point[1] - position[1]) * (point[1] - position[1]) +
 			    (point[2] - position[2]) * (point[2] - position[2]);
-			float distance = sqrtf(distance2);
+			real_t distance = sqrtf(distance2);
 
 			if (distance < limit)
 			{
@@ -423,9 +425,9 @@ static void kdtreeNearest(KDNode* nodes, unsigned int root, const float* points,
 	else
 	{
 		// branch; we order recursion to process the node that search position is in first
-		float delta = position[node.axis] - node.split;
-		unsigned int first = (delta <= 0) ? 0 : node.children;
-		unsigned int second = first ^ node.children;
+		real_t delta = position[node.axis] - node.split;
+		datatype_t first = (delta <= 0) ? 0 : node.children;
+		datatype_t second = first ^ node.children;
 
 		kdtreeNearest(nodes, root + 1 + first, points, stride, emitted_flags, position, result, limit);
 
@@ -459,13 +461,13 @@ size_t meshopt_buildMeshletsBound(size_t index_count, size_t max_vertices, size_
 	return meshlet_limit_vertices > meshlet_limit_triangles ? meshlet_limit_vertices : meshlet_limit_triangles;
 }
 
-size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t max_triangles, float cone_weight)
+size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, datatype_t* meshlet_vertices, unsigned char* meshlet_triangles, const datatype_t* indices, size_t index_count, const real_t* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t max_triangles, real_t cone_weight)
 {
 	using namespace meshopt;
 
 	assert(index_count % 3 == 0);
 	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
-	assert(vertex_positions_stride % sizeof(float) == 0);
+	assert(vertex_positions_stride % sizeof(real_t) == 0);
 
 	assert(max_vertices >= 3 && max_vertices <= kMeshletMaxVertices);
 	assert(max_triangles >= 1 && max_triangles <= kMeshletMaxTriangles);
@@ -476,8 +478,8 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* meshlet_ve
 	TriangleAdjacency2 adjacency = {};
 	buildTriangleAdjacency(adjacency, indices, index_count, vertex_count, allocator);
 
-	unsigned int* live_triangles = allocator.allocate<unsigned int>(vertex_count);
-	memcpy(live_triangles, adjacency.counts, vertex_count * sizeof(unsigned int));
+	datatype_t* live_triangles = allocator.allocate<datatype_t>(vertex_count);
+	memcpy(live_triangles, adjacency.counts, vertex_count * sizeof(datatype_t));
 
 	size_t face_count = index_count / 3;
 
@@ -486,19 +488,19 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* meshlet_ve
 
 	// for each triangle, precompute centroid & normal to use for scoring
 	Cone* triangles = allocator.allocate<Cone>(face_count);
-	float mesh_area = computeTriangleCones(triangles, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride);
+	real_t mesh_area = computeTriangleCones(triangles, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride);
 
 	// assuming each meshlet is a square patch, expected radius is sqrt(expected area)
-	float triangle_area_avg = face_count == 0 ? 0.f : mesh_area / float(face_count) * 0.5f;
-	float meshlet_expected_radius = sqrtf(triangle_area_avg * max_triangles) * 0.5f;
+	real_t triangle_area_avg = face_count == 0 ? 0.f : mesh_area / real_t(face_count) * 0.5f;
+	real_t meshlet_expected_radius = sqrtf(triangle_area_avg * max_triangles) * 0.5f;
 
 	// build a kd-tree for nearest neighbor lookup
-	unsigned int* kdindices = allocator.allocate<unsigned int>(face_count);
+	datatype_t* kdindices = allocator.allocate<datatype_t>(face_count);
 	for (size_t i = 0; i < face_count; ++i)
-		kdindices[i] = unsigned(i);
+		kdindices[i] = i;
 
 	KDNode* nodes = allocator.allocate<KDNode>(face_count * 2);
-	kdtreeBuild(0, nodes, face_count * 2, &triangles[0].px, sizeof(Cone) / sizeof(float), kdindices, face_count, /* leaf_size= */ 8);
+	kdtreeBuild(0, nodes, face_count * 2, &triangles[0].px, sizeof(Cone) / sizeof(real_t), kdindices, face_count, /* leaf_size= */ 8);
 
 	// index of the vertex in the meshlet, 0xff if the vertex isn't used
 	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
@@ -511,28 +513,28 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* meshlet_ve
 
 	for (;;)
 	{
-		unsigned int best_triangle = ~0u;
-		unsigned int best_extra = 5;
-		float best_score = FLT_MAX;
+		datatype_t best_triangle = ~0u;
+		datatype_t best_extra = 5;
+		real_t best_score = std::numeric_limits<real_t>::max();
 
 		Cone meshlet_cone = getMeshletCone(meshlet_cone_acc, meshlet.triangle_count);
 
 		for (size_t i = 0; i < meshlet.vertex_count; ++i)
 		{
-			unsigned int index = meshlet_vertices[meshlet.vertex_offset + i];
+			datatype_t index = meshlet_vertices[meshlet.vertex_offset + i];
 
-			unsigned int* neighbours = &adjacency.data[0] + adjacency.offsets[index];
+			datatype_t* neighbours = &adjacency.data[0] + adjacency.offsets[index];
 			size_t neighbours_size = adjacency.counts[index];
 
 			for (size_t j = 0; j < neighbours_size; ++j)
 			{
-				unsigned int triangle = neighbours[j];
+				datatype_t triangle = neighbours[j];
 				assert(!emitted_flags[triangle]);
 
-				unsigned int a = indices[triangle * 3 + 0], b = indices[triangle * 3 + 1], c = indices[triangle * 3 + 2];
+				datatype_t a = indices[triangle * 3 + 0], b = indices[triangle * 3 + 1], c = indices[triangle * 3 + 2];
 				assert(a < vertex_count && b < vertex_count && c < vertex_count);
 
-				unsigned int extra = (used[a] == 0xff) + (used[b] == 0xff) + (used[c] == 0xff);
+				datatype_t extra = (used[a] == 0xff) + (used[b] == 0xff) + (used[c] == 0xff);
 
 				// triangles that don't add new vertices to meshlets are max. priority
 				if (extra != 0)
@@ -550,14 +552,14 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* meshlet_ve
 
 				const Cone& tri_cone = triangles[triangle];
 
-				float distance2 =
+				real_t distance2 =
 				    (tri_cone.px - meshlet_cone.px) * (tri_cone.px - meshlet_cone.px) +
 				    (tri_cone.py - meshlet_cone.py) * (tri_cone.py - meshlet_cone.py) +
 				    (tri_cone.pz - meshlet_cone.pz) * (tri_cone.pz - meshlet_cone.pz);
 
-				float spread = tri_cone.nx * meshlet_cone.nx + tri_cone.ny * meshlet_cone.ny + tri_cone.nz * meshlet_cone.nz;
+				real_t spread = tri_cone.nx * meshlet_cone.nx + tri_cone.ny * meshlet_cone.ny + tri_cone.nz * meshlet_cone.nz;
 
-				float score = getMeshletScore(distance2, spread, cone_weight, meshlet_expected_radius);
+				real_t score = getMeshletScore(distance2, spread, cone_weight, meshlet_expected_radius);
 
 				// note that topology-based priority is always more important than the score
 				// this helps maintain reasonable effectiveness of meshlet data and reduces scoring cost
@@ -572,11 +574,11 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* meshlet_ve
 
 		if (best_triangle == ~0u)
 		{
-			float position[3] = {meshlet_cone.px, meshlet_cone.py, meshlet_cone.pz};
-			unsigned int index = ~0u;
-			float limit = FLT_MAX;
+			real_t position[3] = {meshlet_cone.px, meshlet_cone.py, meshlet_cone.pz};
+			datatype_t index = ~0u;
+			real_t limit = std::numeric_limits<real_t>::max();
 
-			kdtreeNearest(nodes, 0, &triangles[0].px, sizeof(Cone) / sizeof(float), emitted_flags, position, index, limit);
+			kdtreeNearest(nodes, 0, &triangles[0].px, sizeof(Cone) / sizeof(real_t), emitted_flags, position, index, limit);
 
 			best_triangle = index;
 		}
@@ -584,7 +586,7 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* meshlet_ve
 		if (best_triangle == ~0u)
 			break;
 
-		unsigned int a = indices[best_triangle * 3 + 0], b = indices[best_triangle * 3 + 1], c = indices[best_triangle * 3 + 2];
+		datatype_t a = indices[best_triangle * 3 + 0], b = indices[best_triangle * 3 + 1], c = indices[best_triangle * 3 + 2];
 		assert(a < vertex_count && b < vertex_count && c < vertex_count);
 
 		// add meshlet to the output; when the current meshlet is full we reset the accumulated bounds
@@ -602,14 +604,14 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* meshlet_ve
 		// this makes sure that we spend less time traversing these lists on subsequent iterations
 		for (size_t k = 0; k < 3; ++k)
 		{
-			unsigned int index = indices[best_triangle * 3 + k];
+			datatype_t index = indices[best_triangle * 3 + k];
 
-			unsigned int* neighbours = &adjacency.data[0] + adjacency.offsets[index];
+			datatype_t* neighbours = &adjacency.data[0] + adjacency.offsets[index];
 			size_t neighbours_size = adjacency.counts[index];
 
 			for (size_t i = 0; i < neighbours_size; ++i)
 			{
-				unsigned int tri = neighbours[i];
+				datatype_t tri = neighbours[i];
 
 				if (tri == best_triangle)
 				{
@@ -642,7 +644,7 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* meshlet_ve
 	return meshlet_offset;
 }
 
-size_t meshopt_buildMeshletsScan(meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, const unsigned int* indices, size_t index_count, size_t vertex_count, size_t max_vertices, size_t max_triangles)
+size_t meshopt_buildMeshletsScan(meshopt_Meshlet* meshlets, datatype_t* meshlet_vertices, unsigned char* meshlet_triangles, const datatype_t* indices, size_t index_count, size_t vertex_count, size_t max_vertices, size_t max_triangles)
 {
 	using namespace meshopt;
 
@@ -663,7 +665,9 @@ size_t meshopt_buildMeshletsScan(meshopt_Meshlet* meshlets, unsigned int* meshle
 
 	for (size_t i = 0; i < index_count; i += 3)
 	{
-		unsigned int a = indices[i + 0], b = indices[i + 1], c = indices[i + 2];
+		datatype_t a = indices[i + 0];
+		datatype_t b = indices[i + 1];
+		datatype_t c = indices[i + 2];
 		assert(a < vertex_count && b < vertex_count && c < vertex_count);
 
 		// appends triangle to the meshlet and writes previous meshlet to the output if full
@@ -681,41 +685,43 @@ size_t meshopt_buildMeshletsScan(meshopt_Meshlet* meshlets, unsigned int* meshle
 	return meshlet_offset;
 }
 
-meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+meshopt_Bounds meshopt_computeClusterBounds(const datatype_t* indices, size_t index_count, const real_t* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	using namespace meshopt;
 
 	assert(index_count % 3 == 0);
 	assert(index_count / 3 <= kMeshletMaxTriangles);
 	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
-	assert(vertex_positions_stride % sizeof(float) == 0);
+	assert(vertex_positions_stride % sizeof(real_t) == 0);
 
 	(void)vertex_count;
 
-	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
+	size_t vertex_stride_float = vertex_positions_stride / sizeof(real_t);
 
 	// compute triangle normals and gather triangle corners
-	float normals[kMeshletMaxTriangles][3];
-	float corners[kMeshletMaxTriangles][3][3];
+	real_t normals[kMeshletMaxTriangles][3];
+	real_t corners[kMeshletMaxTriangles][3][3];
 	size_t triangles = 0;
 
 	for (size_t i = 0; i < index_count; i += 3)
 	{
-		unsigned int a = indices[i + 0], b = indices[i + 1], c = indices[i + 2];
+		datatype_t a = indices[i + 0];
+		datatype_t b = indices[i + 1];
+		datatype_t c = indices[i + 2];
 		assert(a < vertex_count && b < vertex_count && c < vertex_count);
 
-		const float* p0 = vertex_positions + vertex_stride_float * a;
-		const float* p1 = vertex_positions + vertex_stride_float * b;
-		const float* p2 = vertex_positions + vertex_stride_float * c;
+		const real_t* p0 = vertex_positions + vertex_stride_float * a;
+		const real_t* p1 = vertex_positions + vertex_stride_float * b;
+		const real_t* p2 = vertex_positions + vertex_stride_float * c;
 
-		float p10[3] = {p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]};
-		float p20[3] = {p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]};
+		real_t p10[3] = {p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]};
+		real_t p20[3] = {p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]};
 
-		float normalx = p10[1] * p20[2] - p10[2] * p20[1];
-		float normaly = p10[2] * p20[0] - p10[0] * p20[2];
-		float normalz = p10[0] * p20[1] - p10[1] * p20[0];
+		real_t normalx = p10[1] * p20[2] - p10[2] * p20[1];
+		real_t normaly = p10[2] * p20[0] - p10[0] * p20[2];
+		real_t normalz = p10[0] * p20[1] - p10[1] * p20[0];
 
-		float area = sqrtf(normalx * normalx + normaly * normaly + normalz * normalz);
+		real_t area = sqrtf(normalx * normalx + normaly * normaly + normalz * normalz);
 
 		// no need to include degenerate triangles - they will be invisible anyway
 		if (area == 0.f)
@@ -725,9 +731,9 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 		normals[triangles][0] = normalx / area;
 		normals[triangles][1] = normaly / area;
 		normals[triangles][2] = normalz / area;
-		memcpy(corners[triangles][0], p0, 3 * sizeof(float));
-		memcpy(corners[triangles][1], p1, 3 * sizeof(float));
-		memcpy(corners[triangles][2], p2, 3 * sizeof(float));
+		memcpy(corners[triangles][0], p0, 3 * sizeof(real_t));
+		memcpy(corners[triangles][1], p1, 3 * sizeof(real_t));
+		memcpy(corners[triangles][2], p2, 3 * sizeof(real_t));
 		triangles++;
 	}
 
@@ -738,29 +744,29 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 		return bounds;
 
 	// compute cluster bounding sphere; we'll use the center to determine normal cone apex as well
-	float psphere[4] = {};
+	real_t psphere[4] = {};
 	computeBoundingSphere(psphere, corners[0], triangles * 3);
 
-	float center[3] = {psphere[0], psphere[1], psphere[2]};
+	real_t center[3] = {psphere[0], psphere[1], psphere[2]};
 
 	// treating triangle normals as points, find the bounding sphere - the sphere center determines the optimal cone axis
-	float nsphere[4] = {};
+	real_t nsphere[4] = {};
 	computeBoundingSphere(nsphere, normals, triangles);
 
-	float axis[3] = {nsphere[0], nsphere[1], nsphere[2]};
-	float axislength = sqrtf(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]);
-	float invaxislength = axislength == 0.f ? 0.f : 1.f / axislength;
+	real_t axis[3] = {nsphere[0], nsphere[1], nsphere[2]};
+	real_t axislength = sqrtf(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]);
+	real_t invaxislength = axislength == 0.f ? 0.f : 1.f / axislength;
 
 	axis[0] *= invaxislength;
 	axis[1] *= invaxislength;
 	axis[2] *= invaxislength;
 
 	// compute a tight cone around all normals, mindp = cos(angle/2)
-	float mindp = 1.f;
+	real_t mindp = 1.f;
 
 	for (size_t i = 0; i < triangles; ++i)
 	{
-		float dp = normals[i][0] * axis[0] + normals[i][1] * axis[1] + normals[i][2] * axis[2];
+		real_t dp = normals[i][0] * axis[0] + normals[i][1] * axis[1] + normals[i][2] * axis[2];
 
 		mindp = (dp < mindp) ? dp : mindp;
 	}
@@ -781,23 +787,23 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 		return bounds;
 	}
 
-	float maxt = 0;
+	real_t maxt = 0;
 
 	// we need to find the point on center-t*axis ray that lies in negative half-space of all triangles
 	for (size_t i = 0; i < triangles; ++i)
 	{
 		// dot(center-t*axis-corner, trinormal) = 0
 		// dot(center-corner, trinormal) - t * dot(axis, trinormal) = 0
-		float cx = center[0] - corners[i][0][0];
-		float cy = center[1] - corners[i][0][1];
-		float cz = center[2] - corners[i][0][2];
+		real_t cx = center[0] - corners[i][0][0];
+		real_t cy = center[1] - corners[i][0][1];
+		real_t cz = center[2] - corners[i][0][2];
 
-		float dc = cx * normals[i][0] + cy * normals[i][1] + cz * normals[i][2];
-		float dn = axis[0] * normals[i][0] + axis[1] * normals[i][1] + axis[2] * normals[i][2];
+		real_t dc = cx * normals[i][0] + cy * normals[i][1] + cz * normals[i][2];
+		real_t dn = axis[0] * normals[i][0] + axis[1] * normals[i][1] + axis[2] * normals[i][2];
 
 		// dn should be larger than mindp cutoff above
 		assert(dn > 0.f);
-		float t = dc / dn;
+		real_t t = dc / dn;
 
 		maxt = (t > maxt) ? t : maxt;
 	}
@@ -822,9 +828,9 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 	bounds.cone_axis_s8[2] = (signed char)(meshopt_quantizeSnorm(bounds.cone_axis[2], 8));
 
 	// for the 8-bit test to be conservative, we need to adjust the cutoff by measuring the max. error
-	float cone_axis_s8_e0 = fabsf(bounds.cone_axis_s8[0] / 127.f - bounds.cone_axis[0]);
-	float cone_axis_s8_e1 = fabsf(bounds.cone_axis_s8[1] / 127.f - bounds.cone_axis[1]);
-	float cone_axis_s8_e2 = fabsf(bounds.cone_axis_s8[2] / 127.f - bounds.cone_axis[2]);
+	real_t cone_axis_s8_e0 = fabsf(bounds.cone_axis_s8[0] / 127.f - bounds.cone_axis[0]);
+	real_t cone_axis_s8_e1 = fabsf(bounds.cone_axis_s8[1] / 127.f - bounds.cone_axis[1]);
+	real_t cone_axis_s8_e2 = fabsf(bounds.cone_axis_s8[2] / 127.f - bounds.cone_axis[2]);
 
 	// note that we need to round this up instead of rounding to nearest, hence +1
 	int cone_cutoff_s8 = int(127 * (bounds.cone_cutoff + cone_axis_s8_e0 + cone_axis_s8_e1 + cone_axis_s8_e2) + 1);
@@ -834,19 +840,19 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 	return bounds;
 }
 
-meshopt_Bounds meshopt_computeMeshletBounds(const unsigned int* meshlet_vertices, const unsigned char* meshlet_triangles, size_t triangle_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+meshopt_Bounds meshopt_computeMeshletBounds(const datatype_t* meshlet_vertices, const unsigned char* meshlet_triangles, size_t triangle_count, const real_t* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	using namespace meshopt;
 
 	assert(triangle_count <= kMeshletMaxTriangles);
 	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
-	assert(vertex_positions_stride % sizeof(float) == 0);
+	assert(vertex_positions_stride % sizeof(real_t) == 0);
 
-	unsigned int indices[kMeshletMaxTriangles * 3];
+	datatype_t indices[kMeshletMaxTriangles * 3];
 
 	for (size_t i = 0; i < triangle_count * 3; ++i)
 	{
-		unsigned int index = meshlet_vertices[meshlet_triangles[i]];
+		datatype_t index = meshlet_vertices[meshlet_triangles[i]];
 		assert(index < vertex_count);
 
 		indices[i] = index;

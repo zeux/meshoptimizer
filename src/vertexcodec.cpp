@@ -479,7 +479,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 #endif
 
 #ifdef SIMD_LATENCYOPT
-		unsigned int data32;
+		datatype_t data32;
 		memcpy(&data32, data, 4);
 		data32 &= data32 >> 1;
 
@@ -665,7 +665,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	case 1:
 	{
 #ifdef SIMD_LATENCYOPT
-		unsigned int data32;
+		datatype_t data32;
 		memcpy(&data32, data, 4);
 		data32 &= data32 >> 1;
 
@@ -1073,7 +1073,7 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 #endif
 
 #if defined(SIMD_SSE) && defined(SIMD_FALLBACK)
-static unsigned int getCpuFeatures()
+static datatype_t getCpuFeatures()
 {
 	int cpuinfo[4] = {};
 #ifdef _MSC_VER
@@ -1084,7 +1084,7 @@ static unsigned int getCpuFeatures()
 	return cpuinfo[2];
 }
 
-static unsigned int cpuid = getCpuFeatures();
+static datatype_t cpuid = getCpuFeatures();
 #endif
 
 } // namespace meshopt
@@ -1171,7 +1171,7 @@ size_t meshopt_encodeVertexBufferBound(size_t vertex_count, size_t vertex_size)
 
 void meshopt_encodeVertexVersion(int version)
 {
-	assert(unsigned(version) <= 0);
+	assert(datatype_t(version) <= 0);
 
 	meshopt::gEncodeVertexVersion = version;
 }

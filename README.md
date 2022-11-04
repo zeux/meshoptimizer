@@ -61,7 +61,7 @@ First, generate a remap table from your existing vertex (and, optionally, index)
 
 ```c++
 size_t index_count = face_count * 3;
-std::vector<unsigned int> remap(index_count); // allocate temporary memory for the remap table
+std::vector<datatype_t> remap(index_count); // allocate temporary memory for the remap table
 size_t vertex_count = meshopt_generateVertexRemap(&remap[0], NULL, index_count, &unindexed_vertices[0], index_count, sizeof(Vertex));
 ```
 
@@ -119,7 +119,7 @@ Quantization is usually domain specific; it's common to quantize normals using 3
 The number of possible combinations here is very large but this library does provide the building blocks, specifically functions to quantize floating point values to normalized integers, as well as half-precision floats. For example, here's how you can quantize a normal:
 
 ```c++
-unsigned int normal =
+datatype_t normal =
 	(meshopt_quantizeUnorm(v.nx, 10) << 20) |
 	(meshopt_quantizeUnorm(v.ny, 10) << 10) |
 	 meshopt_quantizeUnorm(v.nz, 10);
@@ -194,7 +194,7 @@ The vertex encoding algorithms can be used to compress arbitrary streams of attr
 To compress point clouds efficiently, it's recommended to first preprocess the points by sorting them using the spatial sort algorithm:
 
 ```c++
-std::vector<unsigned int> remap(point_count);
+std::vector<datatype_t> remap(point_count);
 meshopt_spatialSortRemap(&remap[0], positions, point_count, sizeof(vec3));
 
 // for each attribute stream
@@ -213,8 +213,8 @@ On most hardware, indexed triangle lists are the most efficient way to drive the
 This library provides an algorithm for converting a vertex cache optimized triangle list to a triangle strip:
 
 ```c++
-std::vector<unsigned int> strip(meshopt_stripifyBound(index_count));
-unsigned int restart_index = ~0u;
+std::vector<datatype_t> strip(meshopt_stripifyBound(index_count));
+datatype_t restart_index = ~0u;
 size_t strip_size = meshopt_stripify(&strip[0], indices, index_count, vertex_count, restart_index);
 ```
 
@@ -238,7 +238,7 @@ meshopt_Stream streams[] = {
     {&unindexed_uv[0], sizeof(float) * 2, sizeof(float) * 2},
 };
 
-std::vector<unsigned int> remap(index_count);
+std::vector<datatype_t> remap(index_count);
 size_t vertex_count = meshopt_generateVertexRemapMulti(&remap[0], NULL, index_count, index_count, streams, sizeof(streams) / sizeof(streams[0]));
 ```
 
@@ -261,7 +261,7 @@ float threshold = 0.2f;
 size_t target_index_count = size_t(index_count * threshold);
 float target_error = 1e-2f;
 
-std::vector<unsigned int> lod(index_count);
+std::vector<datatype_t> lod(index_count);
 float lod_error = 0.f;
 lod.resize(meshopt_simplify(&lod[0], indices, index_count, &vertices[0].x, vertex_count, sizeof(Vertex),
     target_index_count, target_error, &lod_error));
@@ -276,7 +276,7 @@ float threshold = 0.2f;
 size_t target_index_count = size_t(index_count * threshold);
 float target_error = 1e-1f;
 
-std::vector<unsigned int> lod(index_count);
+std::vector<datatype_t> lod(index_count);
 float lod_error = 0.f;
 lod.resize(meshopt_simplifySloppy(&lod[0], indices, index_count, &vertices[0].x, vertex_count, sizeof(Vertex),
     target_index_count, target_error, &lod_error));
@@ -305,7 +305,7 @@ const float cone_weight = 0.0f;
 
 size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), max_vertices, max_triangles);
 std::vector<meshopt_Meshlet> meshlets(max_meshlets);
-std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
+std::vector<datatype_t> meshlet_vertices(max_meshlets * max_vertices);
 std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
 
 size_t meshlet_count = meshopt_buildMeshlets(meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), indices.data(),

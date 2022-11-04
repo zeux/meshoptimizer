@@ -80,7 +80,7 @@ typedef struct
 
 /* Allows user override to bigger indexable array */
 #ifndef FAST_OBJ_UINT_TYPE
-#define FAST_OBJ_UINT_TYPE unsigned int
+#define FAST_OBJ_UINT_TYPE datatype_t
 #endif
 
 typedef FAST_OBJ_UINT_TYPE fastObjUInt;
@@ -100,13 +100,13 @@ typedef struct
     char*                       name;
 
     /* Number of faces */
-    unsigned int                face_count;
+    datatype_t                face_count;
 
     /* First face in fastObjMesh face_* arrays */
-    unsigned int                face_offset;
+    datatype_t                face_offset;
 
     /* First index in fastObjMesh indices array */
-    unsigned int                index_offset;
+    datatype_t                index_offset;
 
 } fastObjGroup;
 
@@ -114,34 +114,34 @@ typedef struct
 typedef struct
 {
     /* Vertex data */
-    unsigned int                position_count;
+    datatype_t                position_count;
     float*                      positions;
 
-    unsigned int                texcoord_count;
+    datatype_t                texcoord_count;
     float*                      texcoords;
 
-    unsigned int                normal_count;
+    datatype_t                normal_count;
     float*                      normals;
 
     /* Face data: one element for each face */
-    unsigned int                face_count;
-    unsigned int*               face_vertices;
-    unsigned int*               face_materials;
+    datatype_t                face_count;
+    datatype_t*               face_vertices;
+    datatype_t*               face_materials;
 
     /* Index data: one element for each face vertex */
-    unsigned int                index_count;
+    datatype_t                index_count;
     fastObjIndex*               indices;
 
     /* Materials */
-    unsigned int                material_count;
+    datatype_t                material_count;
     fastObjMaterial*            materials;
 
     /* Mesh objects ('o' tag in .obj file) */
-    unsigned int                object_count;
+    datatype_t                object_count;
     fastObjGroup*               objects;
 
     /* Mesh groups ('g' tag in .obj file) */
-    unsigned int                group_count;
+    datatype_t                group_count;
     fastObjGroup*               groups;
 
 } fastObjMesh;
@@ -207,10 +207,10 @@ typedef struct
     fastObjGroup                group;
 
     /* Current material index */
-    unsigned int                material;
+    datatype_t                material;
 
     /* Current line in file */
-    unsigned int                line;
+    datatype_t                line;
 
     /* Base path for materials/textures */
     char*                       base;
@@ -297,7 +297,7 @@ void file_close(void* file, void* user_data)
 {
     FILE* f;
     (void)(user_data);
-    
+
     f = (FILE*)(file);
     fclose(f);
 }
@@ -308,7 +308,7 @@ size_t file_read(void* file, void* dst, size_t bytes, void* user_data)
 {
     FILE* f;
     (void)(user_data);
-    
+
     f = (FILE*)(file);
     return fread(dst, 1, bytes, f);
 }
@@ -321,7 +321,7 @@ unsigned long file_size(void* file, void* user_data)
     long p;
     long n;
     (void)(user_data);
-    
+
     f = (FILE*)(file);
 
     p = ftell(f);
@@ -341,7 +341,7 @@ char* string_copy(const char* s, const char* e)
 {
     size_t n;
     char*  p;
-        
+
     n = (size_t)(e - s);
     p = (char*)(memory_realloc(0, n + 1));
     if (p)
@@ -367,7 +367,7 @@ char* string_concat(const char* a, const char* s, const char* e)
     size_t an;
     size_t sn;
     char*  p;
-        
+
     an = a ? strlen(a) : 0;
     sn = (size_t)(e - s);
     p = (char*)(memory_realloc(0, an + sn + 1));
@@ -567,7 +567,7 @@ const char* parse_float(const char* ptr, float* val)
     double        num;
     double        fra;
     double        div;
-    unsigned int  eval;
+    datatype_t  eval;
     const double* powers;
 
 
@@ -646,7 +646,7 @@ const char* parse_float(const char* ptr, float* val)
 static
 const char* parse_vertex(fastObjData* data, const char* ptr)
 {
-    unsigned int ii;
+    datatype_t ii;
     float        v;
 
 
@@ -663,7 +663,7 @@ const char* parse_vertex(fastObjData* data, const char* ptr)
 static
 const char* parse_texcoord(fastObjData* data, const char* ptr)
 {
-    unsigned int ii;
+    datatype_t ii;
     float        v;
 
 
@@ -680,7 +680,7 @@ const char* parse_texcoord(fastObjData* data, const char* ptr)
 static
 const char* parse_normal(fastObjData* data, const char* ptr)
 {
-    unsigned int ii;
+    datatype_t ii;
     float        v;
 
 
@@ -697,7 +697,7 @@ const char* parse_normal(fastObjData* data, const char* ptr)
 static
 const char* parse_face(fastObjData* data, const char* ptr)
 {
-    unsigned int count;
+    datatype_t count;
     fastObjIndex vn;
     int          v;
     int          t;
@@ -867,7 +867,7 @@ const char* parse_usemtl(fastObjData* data, const char* ptr)
 {
     const char*      s;
     const char*      e;
-    unsigned int     idx;
+    datatype_t     idx;
     fastObjMaterial* mtl;
 
 
@@ -1220,8 +1220,8 @@ static
 void parse_buffer(fastObjData* data, const char* ptr, const char* end, const fastObjCallbacks* callbacks, void* user_data)
 {
     const char* p;
-    
-    
+
+
     p = ptr;
     while (p != end)
     {
@@ -1332,7 +1332,7 @@ void parse_buffer(fastObjData* data, const char* ptr, const char* end, const fas
 
 void fast_obj_destroy(fastObjMesh* m)
 {
-    unsigned int ii;
+    datatype_t ii;
 
 
     for (ii = 0; ii < array_size(m->objects); ii++)

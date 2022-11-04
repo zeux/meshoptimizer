@@ -15,7 +15,7 @@ const int kViewport = 256;
 struct OverdrawBuffer
 {
 	float z[kViewport][kViewport][2];
-	unsigned int overdraw[kViewport][kViewport][2];
+	datatype_t overdraw[kViewport][kViewport][2];
 };
 
 #ifndef min
@@ -126,23 +126,23 @@ static void rasterize(OverdrawBuffer* buffer, float v1x, float v1y, float v1z, f
 			}
 
 			// signed left shift is UB for negative numbers so use unsigned-signed casts
-			CX1 -= int(unsigned(DY12) << 4);
-			CX2 -= int(unsigned(DY23) << 4);
-			CX3 -= int(unsigned(DY31) << 4);
+			CX1 -= int(datatype_t(DY12) << 4);
+			CX2 -= int(datatype_t(DY23) << 4);
+			CX3 -= int(datatype_t(DY31) << 4);
 			ZX += DZx;
 		}
 
 		// signed left shift is UB for negative numbers so use unsigned-signed casts
-		CY1 += int(unsigned(DX12) << 4);
-		CY2 += int(unsigned(DX23) << 4);
-		CY3 += int(unsigned(DX31) << 4);
+		CY1 += int(datatype_t(DX12) << 4);
+		CY2 += int(datatype_t(DX23) << 4);
+		CY3 += int(datatype_t(DX31) << 4);
 		ZY += DZy;
 	}
 }
 
 } // namespace meshopt
 
-meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const datatype_t* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	using namespace meshopt;
 
@@ -177,7 +177,7 @@ meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, 
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
-		unsigned int index = indices[i];
+		datatype_t index = indices[i];
 		assert(index < vertex_count);
 
 		const float* v = vertex_positions + index * vertex_stride_float;
@@ -217,7 +217,7 @@ meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, 
 			for (int x = 0; x < kViewport; ++x)
 				for (int s = 0; s < 2; ++s)
 				{
-					unsigned int overdraw = buffer->overdraw[y][x][s];
+					datatype_t overdraw = buffer->overdraw[y][x][s];
 
 					result.pixels_covered += overdraw > 0;
 					result.pixels_shaded += overdraw;

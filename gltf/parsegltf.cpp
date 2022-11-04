@@ -62,11 +62,11 @@ static void readAccessor(std::vector<Attr>& data, const cgltf_accessor* accessor
 	}
 }
 
-static void fixupIndices(std::vector<unsigned int>& indices, cgltf_primitive_type& type)
+static void fixupIndices(std::vector<datatype_t>& indices, cgltf_primitive_type& type)
 {
 	if (type == cgltf_primitive_type_line_loop)
 	{
-		std::vector<unsigned int> result;
+		std::vector<datatype_t> result;
 		result.reserve(indices.size() * 2 + 2);
 
 		for (size_t i = 1; i <= indices.size(); ++i)
@@ -80,7 +80,7 @@ static void fixupIndices(std::vector<unsigned int>& indices, cgltf_primitive_typ
 	}
 	else if (type == cgltf_primitive_type_line_strip)
 	{
-		std::vector<unsigned int> result;
+		std::vector<datatype_t> result;
 		result.reserve(indices.size() * 2);
 
 		for (size_t i = 1; i < indices.size(); ++i)
@@ -94,7 +94,7 @@ static void fixupIndices(std::vector<unsigned int>& indices, cgltf_primitive_typ
 	}
 	else if (type == cgltf_primitive_type_triangle_strip)
 	{
-		std::vector<unsigned int> result;
+		std::vector<datatype_t> result;
 		result.reserve(indices.size() * 3);
 
 		for (size_t i = 2; i < indices.size(); ++i)
@@ -111,7 +111,7 @@ static void fixupIndices(std::vector<unsigned int>& indices, cgltf_primitive_typ
 	}
 	else if (type == cgltf_primitive_type_triangle_fan)
 	{
-		std::vector<unsigned int> result;
+		std::vector<datatype_t> result;
 		result.reserve(indices.size() * 3);
 
 		for (size_t i = 2; i < indices.size(); ++i)
@@ -177,7 +177,7 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 			{
 				result.indices.resize(primitive.indices->count);
 				for (size_t i = 0; i < primitive.indices->count; ++i)
-					result.indices[i] = unsigned(cgltf_accessor_read_index(primitive.indices, i));
+					result.indices[i] = datatype_t(cgltf_accessor_read_index(primitive.indices, i));
 			}
 			else if (primitive.type != cgltf_primitive_type_points)
 			{
@@ -186,7 +186,7 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 				// note, while we could generate a good index buffer, reindexMesh will take care of this
 				result.indices.resize(count);
 				for (size_t i = 0; i < count; ++i)
-					result.indices[i] = unsigned(i);
+					result.indices[i] = datatype_t(i);
 			}
 
 			fixupIndices(result.indices, result.type);

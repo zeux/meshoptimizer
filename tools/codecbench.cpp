@@ -54,10 +54,10 @@ uint32_t murmur3(uint32_t h)
 	return h;
 }
 
-void benchCodecs(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, double& bestvd, double& bestid, bool verbose)
+void benchCodecs(const std::vector<Vertex>& vertices, const std::vector<datatype_t>& indices, double& bestvd, double& bestid, bool verbose)
 {
 	std::vector<Vertex> vb(vertices.size());
-	std::vector<unsigned int> ib(indices.size());
+	std::vector<datatype_t> ib(indices.size());
 
 	std::vector<unsigned char> vc(meshopt_encodeVertexBufferBound(vertices.size(), sizeof(Vertex)));
 	std::vector<unsigned char> ic(meshopt_encodeIndexBufferBound(indices.size(), vertices.size()));
@@ -195,7 +195,7 @@ int main(int argc, char** argv)
 		}
 	}
 
-	std::vector<unsigned int> indices;
+	std::vector<datatype_t> indices;
 	indices.reserve(N * N * 6);
 
 	for (int x = 0; x < N; ++x)
