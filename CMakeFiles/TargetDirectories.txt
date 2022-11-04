@@ -1,0 +1,7 @@
+/home/betto/src/meshoptimizer/CMakeFiles/meshoptimizer.dir
+/home/betto/src/meshoptimizer/CMakeFiles/edit_cache.dir
+/home/betto/src/meshoptimizer/CMakeFiles/rebuild_cache.dir
+/home/betto/src/meshoptimizer/CMakeFiles/list_install_components.dir
+/home/betto/src/meshoptimizer/CMakeFiles/install.dir
+/home/betto/src/meshoptimizer/CMakeFiles/install/local.dir
+/home/betto/src/meshoptimizer/CMakeFiles/install/strip.dir

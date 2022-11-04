@@ -38,7 +38,7 @@ extern "C" {
 #endif
 
 
-#ifdef MESHOPT_64BIT
+#ifdef MESHOPTIMIZER_64BIT
 using datatype_t =  uint64_t;
 using real_t     =  double;
 #else
