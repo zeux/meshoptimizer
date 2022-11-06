@@ -3,6 +3,7 @@
 #ifdef __clang__
 #pragma GCC diagnostic ignored "-Wunknown-warning-option"
 #pragma GCC diagnostic ignored "-Wuninitialized-const-reference"
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations" // TODO: https://github.com/BinomialLLC/basis_universal/pull/333
 #endif
 
 #ifdef __GNUC__
