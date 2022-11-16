@@ -130,6 +130,7 @@ var MeshoptSimplifier = (function() {
 			assert(vertex_positions.length % vertex_positions_stride == 0);
 			assert(vertex_positions_stride >= 3);
 			assert(target_index_count % 3 == 0);
+			assert(target_error >= 0 && target_error <= 1);
 
 			var options = 0;
 			for (var i = 0; i < (flags ? flags.length : 0); ++i) {
