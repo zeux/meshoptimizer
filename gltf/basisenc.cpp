@@ -4,6 +4,7 @@
 
 #ifdef __clang__
 #pragma GCC diagnostic ignored "-Wunknown-warning-option"
+#pragma GCC diagnostic ignored "-Warray-bounds"
 #endif
 
 #ifdef __GNUC__
@@ -92,7 +93,7 @@ static void fillParams(basisu::basis_compressor_params& params, const char* inpu
 	params.m_status_output = false;
 }
 
-static const char* prepareEncode(basisu::basis_compressor_params& params, const cgltf_image& image, const char* input_path, const ImageInfo& info, const Settings& settings, TempFile& temp_input, TempFile& temp_output)
+static const char* prepareEncode(basisu::basis_compressor_params& params, const cgltf_image& image, const char* input_path, const ImageInfo& info, const Settings& settings, const std::string& temp_prefix, std::string& temp_input, std::string& temp_output)
 {
 	std::string img_data;
 	std::string mime_type;
@@ -107,10 +108,10 @@ static const char* prepareEncode(basisu::basis_compressor_params& params, const 
 
 	adjustDimensions(width, height, settings);
 
-	temp_input.create(mimeExtension(mime_type.c_str()));
-	temp_output.create(".ktx2");
+	temp_input = temp_prefix + mimeExtension(mime_type.c_str());
+	temp_output = temp_prefix + ".ktx2";
 
-	if (!writeFile(temp_input.path.c_str(), img_data))
+	if (!writeFile(temp_input.c_str(), img_data))
 		return "error writing temporary file";
 
 	int quality = settings.texture_quality[info.kind];
@@ -118,7 +119,7 @@ static const char* prepareEncode(basisu::basis_compressor_params& params, const 
 
 	const BasisSettings& bs = kBasisSettings[quality - 1];
 
-	fillParams(params, temp_input.path.c_str(),temp_output.path.c_str(), uastc, width, height, bs, info, settings);
+	fillParams(params, temp_input.c_str(), temp_output.c_str(), uastc, width, height, bs, info, settings);
 
 	return nullptr;
 }
@@ -130,8 +131,10 @@ void encodeImages(std::string* encoded, const cgltf_data* data, const std::vecto
 	basisu::vector<basisu::basis_compressor_params> params(data->images_count);
 	basisu::vector<basisu::parallel_results> results(data->images_count);
 
-	std::vector<TempFile> temp_inputs(data->images_count);
-	std::vector<TempFile> temp_outputs(data->images_count);
+	std::string temp_prefix = getTempPrefix();
+
+	std::vector<std::string> temp_inputs(data->images_count);
+	std::vector<std::string> temp_outputs(data->images_count);
 
 	for (size_t i = 0; i < data->images_count; ++i)
 	{
@@ -141,7 +144,7 @@ void encodeImages(std::string* encoded, const cgltf_data* data, const std::vecto
 		if (settings.texture_mode[info.kind] == TextureMode_Raw)
 			continue;
 
-		if (const char* error = prepareEncode(params[i], image, input_path, info, settings, temp_inputs[i], temp_outputs[i]))
+		if (const char* error = prepareEncode(params[i], image, input_path, info, settings, temp_prefix + "-" + std::to_string(i), temp_inputs[i], temp_outputs[i]))
 			encoded[i] = error;
 
 		// image is ready to encode in parallel
@@ -159,8 +162,16 @@ void encodeImages(std::string* encoded, const cgltf_data* data, const std::vecto
 			encoded[i] = "error decoding source image";
 		else if (results[i].m_error_code != basisu::basis_compressor::cECSuccess)
 			encoded[i] = "error encoding image";
-		else if (!readFile(temp_outputs[i].path.c_str(), encoded[i]))
+		else if (!readFile(temp_outputs[i].c_str(), encoded[i]))
 			encoded[i] = "error reading temporary file";
+	}
+
+	for (size_t i = 0; i < data->images_count; ++i)
+	{
+		if (!temp_inputs[i].empty())
+			removeFile(temp_inputs[i].c_str());
+		if (!temp_outputs[i].empty())
+			removeFile(temp_outputs[i].c_str());
 	}
 }
 #endif

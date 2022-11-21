@@ -265,17 +265,7 @@ struct BufferView
 	size_t bytes;
 };
 
-struct TempFile
-{
-	std::string path;
-	int fd;
-
-	TempFile();
-	TempFile(const char* suffix);
-	~TempFile();
-
-	void create(const char* suffix);
-};
+std::string getTempPrefix();
 
 std::string getFullPath(const char* path, const char* base_path);
 std::string getFileName(const char* path);
@@ -283,6 +273,7 @@ std::string getExtension(const char* path);
 
 bool readFile(const char* path, std::string& data);
 bool writeFile(const char* path, const std::string& data);
+void removeFile(const char* path);
 
 cgltf_data* parseObj(const char* path, std::vector<Mesh>& meshes, const char** error);
 cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error);
