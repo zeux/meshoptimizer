@@ -6,55 +6,25 @@
 #include <string.h>
 
 #ifdef _WIN32
-#include <io.h>
+#include <process.h>
 #else
 #include <unistd.h>
 #endif
 
-TempFile::TempFile()
-	: fd(-1)
+std::string getTempPrefix()
 {
-}
-
-TempFile::TempFile(const char* suffix)
-    : fd(-1)
-{
-	create(suffix);
-}
-
-TempFile::~TempFile()
-{
-	if (!path.empty())
-		remove(path.c_str());
-
-#ifndef _WIN32
-	if (fd >= 0)
-		close(fd);
-#endif
-}
-
-void TempFile::create(const char* suffix)
-{
-	assert(fd < 0 && path.empty());
-
 #if defined(_WIN32)
 	const char* temp_dir = getenv("TEMP");
-	path = temp_dir ? temp_dir : ".";
-	path += "\\gltfpack-XXXXXX";
-	(void)_mktemp(&path[0]);
-	path += suffix;
+	std::string path = temp_dir ? temp_dir : ".";
+	path += "\\gltfpack-temp";
+	path += std::to_string(_getpid());
+	return path;
 #elif defined(__wasi__)
-	static int id = 0;
-	char ids[16];
-	snprintf(ids, sizeof(ids), "%d", id++);
-
-	path = "gltfpack-temp-";
-	path += ids;
-	path += suffix;
+	return "gltfpack-temp";
 #else
-	path = "/tmp/gltfpack-XXXXXX";
-	path += suffix;
-	fd = mkstemps(&path[0], strlen(suffix));
+	std::string path = "/tmp/gltfpack-temp";
+	path += std::to_string(getpid());
+	return path;
 #endif
 }
 
@@ -137,4 +107,9 @@ bool writeFile(const char* path, const std::string& data)
 	int rc = fclose(file);
 
 	return rc == 0 && result == data.size();
+}
+
+void removeFile(const char* path)
+{
+	remove(path);
 }
