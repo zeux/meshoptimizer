@@ -283,6 +283,67 @@ static bool appendMeshlet(meshopt_Meshlet& meshlet, unsigned int a, unsigned int
 	return result;
 }
 
+static unsigned int getNeighborTriangle(const meshopt_Meshlet& meshlet, const Cone& meshlet_cone, unsigned int* meshlet_vertices, const unsigned int* indices, const TriangleAdjacency2& adjacency, const Cone* triangles, const unsigned int* live_triangles, const unsigned char* used, float meshlet_expected_radius, float cone_weight, unsigned int* out_extra)
+{
+	unsigned int best_triangle = ~0u;
+	unsigned int best_extra = 5;
+	float best_score = FLT_MAX;
+
+	for (size_t i = 0; i < meshlet.vertex_count; ++i)
+	{
+		unsigned int index = meshlet_vertices[meshlet.vertex_offset + i];
+
+		unsigned int* neighbours = &adjacency.data[0] + adjacency.offsets[index];
+		size_t neighbours_size = adjacency.counts[index];
+
+		for (size_t j = 0; j < neighbours_size; ++j)
+		{
+			unsigned int triangle = neighbours[j];
+			unsigned int a = indices[triangle * 3 + 0], b = indices[triangle * 3 + 1], c = indices[triangle * 3 + 2];
+
+			unsigned int extra = (used[a] == 0xff) + (used[b] == 0xff) + (used[c] == 0xff);
+
+			// triangles that don't add new vertices to meshlets are max. priority
+			if (extra != 0)
+			{
+				// artificially increase the priority of dangling triangles as they're expensive to add to new meshlets
+				if (live_triangles[a] == 1 || live_triangles[b] == 1 || live_triangles[c] == 1)
+					extra = 0;
+
+				extra++;
+			}
+
+			// since topology-based priority is always more important than the score, we can skip scoring in some cases
+			if (extra > best_extra)
+				continue;
+
+			const Cone& tri_cone = triangles[triangle];
+
+			float distance2 =
+			    (tri_cone.px - meshlet_cone.px) * (tri_cone.px - meshlet_cone.px) +
+			    (tri_cone.py - meshlet_cone.py) * (tri_cone.py - meshlet_cone.py) +
+			    (tri_cone.pz - meshlet_cone.pz) * (tri_cone.pz - meshlet_cone.pz);
+
+			float spread = tri_cone.nx * meshlet_cone.nx + tri_cone.ny * meshlet_cone.ny + tri_cone.nz * meshlet_cone.nz;
+
+			float score = getMeshletScore(distance2, spread, cone_weight, meshlet_expected_radius);
+
+			// note that topology-based priority is always more important than the score
+			// this helps maintain reasonable effectiveness of meshlet data and reduces scoring cost
+			if (extra < best_extra || score < best_score)
+			{
+				best_triangle = triangle;
+				best_extra = extra;
+				best_score = score;
+			}
+		}
+	}
+
+	*out_extra = best_extra;
+
+	return best_triangle;
+}
+
 struct KDNode
 {
 	union
@@ -511,64 +572,10 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* meshlet_ve
 
 	for (;;)
 	{
-		unsigned int best_triangle = ~0u;
-		unsigned int best_extra = 5;
-		float best_score = FLT_MAX;
-
 		Cone meshlet_cone = getMeshletCone(meshlet_cone_acc, meshlet.triangle_count);
 
-		for (size_t i = 0; i < meshlet.vertex_count; ++i)
-		{
-			unsigned int index = meshlet_vertices[meshlet.vertex_offset + i];
-
-			unsigned int* neighbours = &adjacency.data[0] + adjacency.offsets[index];
-			size_t neighbours_size = adjacency.counts[index];
-
-			for (size_t j = 0; j < neighbours_size; ++j)
-			{
-				unsigned int triangle = neighbours[j];
-				assert(!emitted_flags[triangle]);
-
-				unsigned int a = indices[triangle * 3 + 0], b = indices[triangle * 3 + 1], c = indices[triangle * 3 + 2];
-				assert(a < vertex_count && b < vertex_count && c < vertex_count);
-
-				unsigned int extra = (used[a] == 0xff) + (used[b] == 0xff) + (used[c] == 0xff);
-
-				// triangles that don't add new vertices to meshlets are max. priority
-				if (extra != 0)
-				{
-					// artificially increase the priority of dangling triangles as they're expensive to add to new meshlets
-					if (live_triangles[a] == 1 || live_triangles[b] == 1 || live_triangles[c] == 1)
-						extra = 0;
-
-					extra++;
-				}
-
-				// since topology-based priority is always more important than the score, we can skip scoring in some cases
-				if (extra > best_extra)
-					continue;
-
-				const Cone& tri_cone = triangles[triangle];
-
-				float distance2 =
-				    (tri_cone.px - meshlet_cone.px) * (tri_cone.px - meshlet_cone.px) +
-				    (tri_cone.py - meshlet_cone.py) * (tri_cone.py - meshlet_cone.py) +
-				    (tri_cone.pz - meshlet_cone.pz) * (tri_cone.pz - meshlet_cone.pz);
-
-				float spread = tri_cone.nx * meshlet_cone.nx + tri_cone.ny * meshlet_cone.ny + tri_cone.nz * meshlet_cone.nz;
-
-				float score = getMeshletScore(distance2, spread, cone_weight, meshlet_expected_radius);
-
-				// note that topology-based priority is always more important than the score
-				// this helps maintain reasonable effectiveness of meshlet data and reduces scoring cost
-				if (extra < best_extra || score < best_score)
-				{
-					best_triangle = triangle;
-					best_extra = extra;
-					best_score = score;
-				}
-			}
-		}
+		unsigned int best_extra = 0;
+		unsigned int best_triangle = getNeighborTriangle(meshlet, meshlet_cone, meshlet_vertices, indices, adjacency, triangles, live_triangles, used, meshlet_expected_radius, cone_weight, &best_extra);
 
 		if (best_triangle == ~0u)
 		{

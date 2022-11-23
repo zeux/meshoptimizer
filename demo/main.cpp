@@ -1213,7 +1213,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	tessellationAdjacency(mesh);
+	meshlets(mesh, false);
 }
 
 int main(int argc, char** argv)
