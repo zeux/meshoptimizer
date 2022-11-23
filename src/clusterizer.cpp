@@ -283,7 +283,7 @@ static bool appendMeshlet(meshopt_Meshlet& meshlet, unsigned int a, unsigned int
 	return result;
 }
 
-static unsigned int getNeighborTriangle(const meshopt_Meshlet& meshlet, const Cone& meshlet_cone, unsigned int* meshlet_vertices, const unsigned int* indices, const TriangleAdjacency2& adjacency, const Cone* triangles, const unsigned int* live_triangles, const unsigned char* used, float meshlet_expected_radius, float cone_weight, unsigned int* out_extra)
+static unsigned int getNeighborTriangle(const meshopt_Meshlet& meshlet, const Cone* meshlet_cone, unsigned int* meshlet_vertices, const unsigned int* indices, const TriangleAdjacency2& adjacency, const Cone* triangles, const unsigned int* live_triangles, const unsigned char* used, float meshlet_expected_radius, float cone_weight, unsigned int* out_extra)
 {
 	unsigned int best_triangle = ~0u;
 	unsigned int best_extra = 5;
@@ -317,16 +317,27 @@ static unsigned int getNeighborTriangle(const meshopt_Meshlet& meshlet, const Co
 			if (extra > best_extra)
 				continue;
 
-			const Cone& tri_cone = triangles[triangle];
+			float score = 0;
 
-			float distance2 =
-			    (tri_cone.px - meshlet_cone.px) * (tri_cone.px - meshlet_cone.px) +
-			    (tri_cone.py - meshlet_cone.py) * (tri_cone.py - meshlet_cone.py) +
-			    (tri_cone.pz - meshlet_cone.pz) * (tri_cone.pz - meshlet_cone.pz);
+			// caller selects one of two scoring functions: geometrical (based on meshlet cone) or topological (based on remaining triangles)
+			if (meshlet_cone)
+			{
+				const Cone& tri_cone = triangles[triangle];
 
-			float spread = tri_cone.nx * meshlet_cone.nx + tri_cone.ny * meshlet_cone.ny + tri_cone.nz * meshlet_cone.nz;
+				float distance2 =
+				    (tri_cone.px - meshlet_cone->px) * (tri_cone.px - meshlet_cone->px) +
+				    (tri_cone.py - meshlet_cone->py) * (tri_cone.py - meshlet_cone->py) +
+				    (tri_cone.pz - meshlet_cone->pz) * (tri_cone.pz - meshlet_cone->pz);
 
-			float score = getMeshletScore(distance2, spread, cone_weight, meshlet_expected_radius);
+				float spread = tri_cone.nx * meshlet_cone->nx + tri_cone.ny * meshlet_cone->ny + tri_cone.nz * meshlet_cone->nz;
+
+				score = getMeshletScore(distance2, spread, cone_weight, meshlet_expected_radius);
+			}
+			else
+			{
+				// each live_triangles entry is >= 1 since it includes the current triangle we're processing
+				score = float(live_triangles[a] + live_triangles[b] + live_triangles[c] - 3);
+			}
 
 			// note that topology-based priority is always more important than the score
 			// this helps maintain reasonable effectiveness of meshlet data and reduces scoring cost
@@ -339,7 +350,8 @@ static unsigned int getNeighborTriangle(const meshopt_Meshlet& meshlet, const Co
 		}
 	}
 
-	*out_extra = best_extra;
+	if (out_extra)
+		*out_extra = best_extra;
 
 	return best_triangle;
 }
@@ -532,6 +544,8 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* meshlet_ve
 	assert(max_triangles >= 1 && max_triangles <= kMeshletMaxTriangles);
 	assert(max_triangles % 4 == 0); // ensures the caller will compute output space properly as index data is 4b aligned
 
+	assert(cone_weight >= 0 && cone_weight <= 1);
+
 	meshopt_Allocator allocator;
 
 	TriangleAdjacency2 adjacency = {};
@@ -575,8 +589,15 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* meshlet_ve
 		Cone meshlet_cone = getMeshletCone(meshlet_cone_acc, meshlet.triangle_count);
 
 		unsigned int best_extra = 0;
-		unsigned int best_triangle = getNeighborTriangle(meshlet, meshlet_cone, meshlet_vertices, indices, adjacency, triangles, live_triangles, used, meshlet_expected_radius, cone_weight, &best_extra);
+		unsigned int best_triangle = getNeighborTriangle(meshlet, &meshlet_cone, meshlet_vertices, indices, adjacency, triangles, live_triangles, used, meshlet_expected_radius, cone_weight, &best_extra);
 
+		// if the best triangle doesn't fit into current meshlet, the spatial scoring we've used is not very meaningful, so we re-select using topological scoring
+		if (best_triangle != ~0u && (meshlet.vertex_count + best_extra > max_vertices || meshlet.triangle_count >= max_triangles))
+		{
+			best_triangle = getNeighborTriangle(meshlet, NULL, meshlet_vertices, indices, adjacency, triangles, live_triangles, used, meshlet_expected_radius, 0.f, NULL);
+		}
+
+		// when we run out of neighboring triangles we need to switch to spatial search; we currently just pick the closest triangle irrespective of connectivity
 		if (best_triangle == ~0u)
 		{
 			float position[3] = {meshlet_cone.px, meshlet_cone.py, meshlet_cone.pz};
