@@ -293,12 +293,12 @@ static unsigned int getNeighborTriangle(const meshopt_Meshlet& meshlet, const Co
 	{
 		unsigned int index = meshlet_vertices[meshlet.vertex_offset + i];
 
-		unsigned int* neighbours = &adjacency.data[0] + adjacency.offsets[index];
-		size_t neighbours_size = adjacency.counts[index];
+		unsigned int* neighbors = &adjacency.data[0] + adjacency.offsets[index];
+		size_t neighbors_size = adjacency.counts[index];
 
-		for (size_t j = 0; j < neighbours_size; ++j)
+		for (size_t j = 0; j < neighbors_size; ++j)
 		{
-			unsigned int triangle = neighbours[j];
+			unsigned int triangle = neighbors[j];
 			unsigned int a = indices[triangle * 3 + 0], b = indices[triangle * 3 + 1], c = indices[triangle * 3 + 2];
 
 			unsigned int extra = (used[a] == 0xff) + (used[b] == 0xff) + (used[c] == 0xff);
@@ -632,16 +632,16 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* meshlet_ve
 		{
 			unsigned int index = indices[best_triangle * 3 + k];
 
-			unsigned int* neighbours = &adjacency.data[0] + adjacency.offsets[index];
-			size_t neighbours_size = adjacency.counts[index];
+			unsigned int* neighbors = &adjacency.data[0] + adjacency.offsets[index];
+			size_t neighbors_size = adjacency.counts[index];
 
-			for (size_t i = 0; i < neighbours_size; ++i)
+			for (size_t i = 0; i < neighbors_size; ++i)
 			{
-				unsigned int tri = neighbours[i];
+				unsigned int tri = neighbors[i];
 
 				if (tri == best_triangle)
 				{
-					neighbours[i] = neighbours[neighbours_size - 1];
+					neighbors[i] = neighbors[neighbors_size - 1];
 					adjacency.counts[index]--;
 					break;
 				}
