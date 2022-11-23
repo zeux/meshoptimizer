@@ -15,7 +15,7 @@ jobs:
       uses: google/oss-fuzz/infra/cifuzz/actions/run_fuzzers@master
       with:
         oss-fuzz-project-name: 'meshoptimizer'
-        fuzz-seconds: 300
+        fuzz-seconds: 30
         dry-run: false
         language: c++
     - name: Upload Crash
