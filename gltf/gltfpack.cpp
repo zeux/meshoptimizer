@@ -254,8 +254,8 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 {
 	if (settings.verbose)
 	{
-		printf("input: %d nodes, %d meshes (%d primitives), %d materials, %d skins, %d animations\n",
-		    int(data->nodes_count), int(data->meshes_count), int(meshes.size()), int(data->materials_count), int(data->skins_count), int(animations.size()));
+		printf("input: %d nodes, %d meshes (%d primitives), %d materials, %d skins, %d animations, %d images\n",
+		    int(data->nodes_count), int(data->meshes_count), int(meshes.size()), int(data->materials_count), int(data->skins_count), int(animations.size()), int(data->images_count));
 		printMeshStats(meshes, "input");
 	}
 
