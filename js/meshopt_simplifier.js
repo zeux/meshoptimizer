@@ -138,7 +138,7 @@ var MeshoptSimplifier = (function() {
 			}
 
 			var indices32 = indices.BYTES_PER_ELEMENT == 4 ? indices : new Uint32Array(indices);
-			var result = simplify(instance.exports.meshopt_simplify, indices32, indices.length, vertex_positions, vertex_positions.length, vertex_positions_stride * 4, target_index_count, target_error, options);
+			var result = simplify(instance.exports.meshopt_simplify, indices32, indices.length, vertex_positions, vertex_positions.length / vertex_positions_stride, vertex_positions_stride * 4, target_index_count, target_error, options);
 			result[0] = (indices instanceof Uint32Array) ? result[0] : new indices.constructor(result[0]);
 
 			return result;
@@ -148,7 +148,7 @@ var MeshoptSimplifier = (function() {
 			assert(vertex_positions instanceof Float32Array);
 			assert(vertex_positions.length % vertex_positions_stride == 0);
 
-			return simplifyScale(instance.exports.meshopt_simplifyScale, vertex_positions, vertex_positions.length, vertex_positions_stride * 4);
+			return simplifyScale(instance.exports.meshopt_simplifyScale, vertex_positions, vertex_positions.length / vertex_positions_stride, vertex_positions_stride * 4);
 		},
 	};
 })();
