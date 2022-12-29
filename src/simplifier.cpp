@@ -1425,10 +1425,9 @@ size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned 
 	assert(vertex_positions_stride % sizeof(float) == 0);
 	assert(target_index_count <= index_count);
 	assert((options & ~(meshopt_SimplifyLockBorder)) == 0);
-	assert(vertex_attributes_stride > 0 && vertex_attributes_stride <= 256);
+	assert(vertex_attributes_stride >= attribute_count * sizeof(float) && vertex_attributes_stride <= 256);
 	assert(vertex_attributes_stride % sizeof(float) == 0);
 	assert(attribute_count <= ATTRIBUTES);
-	assert(vertex_attributes_stride >= attribute_count * sizeof(float));
 
 	size_t vertex_attributes_stride_float = vertex_attributes_stride / sizeof(float);
 
