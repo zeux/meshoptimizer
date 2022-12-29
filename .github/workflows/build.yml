@@ -103,7 +103,7 @@ jobs:
         curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sysroot-$VERSION.0.tar.gz | tar xz -C wasi-sdk-$VERSION.0/share
         mv wasi-sdk-$VERSION.0 wasi-sdk
       env:
-        VERSION: 16
+        VERSION: 17
     - name: build
       run: |
         make -j2 -B WASI_SDK=wasi-sdk gltf/library.wasm js
