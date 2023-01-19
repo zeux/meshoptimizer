@@ -68,6 +68,8 @@ const char* attributeType(cgltf_attribute_type type)
 		return "JOINTS";
 	case cgltf_attribute_type_weights:
 		return "WEIGHTS";
+	case cgltf_attribute_type_custom:
+		return "CUSTOM";
 	default:
 		return "ATTRIBUTE";
 	}
