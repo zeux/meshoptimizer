@@ -165,6 +165,11 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 			meshes.push_back(Mesh());
 			Mesh& result = meshes.back();
 
+			if (mesh.name)
+				result.name = mesh.name;
+			else
+				result.name = std::string("Mesh_") + std::to_string(mi);
+
 			result.scene = -1;
 
 			result.material = primitive.material;
@@ -195,7 +200,7 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 			{
 				const cgltf_attribute& attr = primitive.attributes[ai];
 
-				if (attr.type == cgltf_attribute_type_invalid || attr.type == cgltf_attribute_type_custom)
+				if (attr.type == cgltf_attribute_type_invalid)
 				{
 					fprintf(stderr, "Warning: ignoring %s attribute %s in primitive %d of mesh %d\n", attr.type == cgltf_attribute_type_invalid ? "unknown" : "custom", attr.name, int(pi), int(mi));
 					continue;
@@ -206,6 +211,9 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 
 				s.type = attr.type;
 				s.index = attr.index;
+
+				if (attr.name)
+					s.name = attr.name;
 
 				readAccessor(s.data, attr.data);
 
@@ -224,7 +232,7 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 				{
 					const cgltf_attribute& attr = target.attributes[ai];
 
-					if (attr.type == cgltf_attribute_type_invalid || attr.type == cgltf_attribute_type_custom)
+					if (attr.type == cgltf_attribute_type_invalid)
 					{
 						fprintf(stderr, "Warning: ignoring %s attribute %s in morph target %d of primitive %d of mesh %d\n", attr.type == cgltf_attribute_type_invalid ? "unknown" : "custom", attr.name, int(ti), int(pi), int(mi));
 						continue;

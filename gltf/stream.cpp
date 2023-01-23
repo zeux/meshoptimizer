@@ -758,6 +758,10 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 			return format;
 		}
 	}
+	else if (stream.type == cgltf_attribute_type_custom)
+	{
+		return writeVertexStreamRaw(bin, stream, cgltf_type_scalar, 1);
+	}
 	else
 	{
 		return writeVertexStreamRaw(bin, stream, cgltf_type_vec4, 4);

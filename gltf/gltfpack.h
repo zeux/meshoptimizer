@@ -29,6 +29,8 @@ struct Stream
 	int index;
 	int target; // 0 = base mesh, 1+ = morph target
 
+	std::string name;
+
 	std::vector<Attr> data;
 };
 
@@ -40,6 +42,7 @@ struct Transform
 struct Mesh
 {
 	int scene;
+	std::string name;
 	std::vector<cgltf_node*> nodes;
 	std::vector<Transform> instances;
 
