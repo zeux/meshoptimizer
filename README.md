@@ -103,7 +103,7 @@ After the final triangle order has been established, we still can optimize the v
 To optimize the index/vertex buffers for vertex fetch efficiency, call:
 
 ```c++
-meshopt_optimizeVertexFetch(vertices, indices, index_count, vertices, vertex_count, sizeof(Vertex));
+meshopt_optimizeVertexFetch(indices, indices, index_count, vertices, vertex_count, sizeof(Vertex));
 ```
 
 This will reorder the vertices in the vertex buffer to try to improve the locality of reference, and rewrite the indices in place to match; if the vertex data is stored using multiple streams, you should use `meshopt_optimizeVertexFetchRemap` instead. This optimization has to be performed on the final index buffer since the optimal vertex order depends on the triangle order.
