@@ -794,6 +794,23 @@ void encodeFilterExp()
 	}
 }
 
+void encodeFilterExpZero()
+{
+	const float data = 0.f;
+	const unsigned int expected = 0xf2000000;
+
+	unsigned int encoded;
+	meshopt_encodeFilterExp(&encoded, 1, 4, 15, &data, meshopt_EncodeExpSeparate);
+
+	assert(encoded == expected);
+
+	float decoded;
+	memcpy(&decoded, &encoded, sizeof(decoded));
+	meshopt_decodeFilterExp(&decoded, 1, 4);
+
+	assert(decoded == data);
+}
+
 static void clusterBoundsDegenerate()
 {
 	const float vbd[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -1166,6 +1183,7 @@ void runTests()
 	encodeFilterOct12();
 	encodeFilterQuat12();
 	encodeFilterExp();
+	encodeFilterExpZero();
 
 	clusterBoundsDegenerate();
 

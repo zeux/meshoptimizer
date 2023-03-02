@@ -793,6 +793,33 @@ static void decodeFilterExpSimd(unsigned int* data, size_t count)
 }
 #endif
 
+// optimized variant of frexp
+inline int optlog2(float v)
+{
+	union
+	{
+		float f;
+		unsigned int ui;
+	} u;
+
+	u.f = v;
+	// +1 accounts for implicit 1. in mantissa; denormalized numbers will end up clamped to min_exp by calling code
+	return u.ui == 0 ? 0 : int((u.ui >> 23) & 0xff) - 127 + 1;
+}
+
+// optimized variant of ldexp
+inline float optexp2(int e)
+{
+	union
+	{
+		float f;
+		unsigned int ui;
+	} u;
+
+	u.ui = unsigned(e + 127) << 23;
+	return u.f;
+}
+
 } // namespace meshopt
 
 void meshopt_decodeFilterOct(void* buffer, size_t count, size_t stride)
@@ -922,6 +949,8 @@ void meshopt_encodeFilterQuat(void* destination_, size_t count, size_t stride, i
 
 void meshopt_encodeFilterExp(void* destination_, size_t count, size_t stride, int bits, const float* data, enum meshopt_EncodeExpMode mode)
 {
+	using namespace meshopt;
+
 	assert(stride > 0 && stride % 4 == 0 && stride <= 256);
 	assert(bits >= 1 && bits <= 24);
 
@@ -945,8 +974,7 @@ void meshopt_encodeFilterExp(void* destination_, size_t count, size_t stride, in
 			// use maximum exponent to encode values; this guarantees that mantissa is [-1, 1]
 			for (size_t j = 0; j < stride_float; ++j)
 			{
-				int e;
-				frexp(v[j], &e);
+				int e = optlog2(v[j]);
 
 				component_exp[j] = (component_exp[j] < e) ? e : component_exp[j];
 			}
@@ -965,8 +993,7 @@ void meshopt_encodeFilterExp(void* destination_, size_t count, size_t stride, in
 			// use maximum exponent to encode values; this guarantees that mantissa is [-1, 1]
 			for (size_t j = 0; j < stride_float; ++j)
 			{
-				int e;
-				frexp(v[j], &e);
+				int e = optlog2(v[j]);
 
 				vector_exp = (vector_exp < e) ? e : vector_exp;
 			}
@@ -975,8 +1002,7 @@ void meshopt_encodeFilterExp(void* destination_, size_t count, size_t stride, in
 		{
 			for (size_t j = 0; j < stride_float; ++j)
 			{
-				int e;
-				frexp(v[j], &e);
+				int e = optlog2(v[j]);
 
 				component_exp[j] = (min_exp < e) ? e : min_exp;
 			}
@@ -992,7 +1018,7 @@ void meshopt_encodeFilterExp(void* destination_, size_t count, size_t stride, in
 			// compute renormalized rounded mantissa for each component
 			int mmask = (1 << 24) - 1;
 
-			int m = int(ldexp(v[j], -exp) + (v[j] >= 0 ? 0.5f : -0.5f));
+			int m = int(v[j] * optexp2(-exp) + (v[j] >= 0 ? 0.5f : -0.5f));
 
 			d[j] = (m & mmask) | (unsigned(exp) << 24);
 		}
