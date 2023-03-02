@@ -730,29 +730,68 @@ void encodeFilterQuat12()
 
 void encodeFilterExp()
 {
-	const float data[3] = {
+	const float data[4] = {
 	    1,
 	    -23.4f,
 	    -0.1f,
+	    11.0f,
 	};
 
-	const unsigned int expected[3] = {
+	// separate exponents: each component gets its own value
+	const unsigned int expected1[4] = {
+		0xf3002000,
+		0xf7ffd133,
+		0xefffcccd,
+		0xf6002c00,
+	};
+
+	// shared exponents (vector): all components of each vector get the same value
+	const unsigned int expected2[4] = {
 	    0xf7000200,
 	    0xf7ffd133,
-	    0xf7ffffcd,
+	    0xf6ffff9a,
+	    0xf6002c00,
 	};
 
-	unsigned int encoded[3];
-	meshopt_encodeFilterExp(encoded, 1, 12, 15, data);
+	// shared exponents (component): each component gets the same value across all vectors
+	const unsigned int expected3[4] = {
+		0xf3002000,
+		0xf7ffd133,
+		0xf3fffccd,
+		0xf7001600,
+	};
 
-	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+	unsigned int encoded1[4];
+	meshopt_encodeFilterExp(encoded1, 2, 8, 15, data, meshopt_EncodeExpSeparate);
 
-	float decoded[3];
-	memcpy(decoded, encoded, sizeof(decoded));
-	meshopt_decodeFilterExp(decoded, 3, 4);
+	unsigned int encoded2[4];
+	meshopt_encodeFilterExp(encoded2, 2, 8, 15, data, meshopt_EncodeExpSharedVector);
 
-	for (size_t i = 0; i < 3; ++i)
-		assert(fabsf(decoded[i] - data[i]) < 1e-3f);
+	unsigned int encoded3[4];
+	meshopt_encodeFilterExp(encoded3, 2, 8, 15, data, meshopt_EncodeExpSharedComponent);
+
+	assert(memcmp(encoded1, expected1, sizeof(expected1)) == 0);
+	assert(memcmp(encoded2, expected2, sizeof(expected2)) == 0);
+	assert(memcmp(encoded3, expected3, sizeof(expected3)) == 0);
+
+	float decoded1[4];
+	memcpy(decoded1, encoded1, sizeof(decoded1));
+	meshopt_decodeFilterExp(decoded1, 2, 8);
+
+	float decoded2[4];
+	memcpy(decoded2, encoded2, sizeof(decoded2));
+	meshopt_decodeFilterExp(decoded2, 2, 8);
+
+	float decoded3[4];
+	memcpy(decoded3, encoded3, sizeof(decoded3));
+	meshopt_decodeFilterExp(decoded3, 2, 8);
+
+	for (size_t i = 0; i < 4; ++i)
+	{
+		assert(fabsf(decoded1[i] - data[i]) < 1e-3f);
+		assert(fabsf(decoded2[i] - data[i]) < 1e-3f);
+		assert(fabsf(decoded3[i] - data[i]) < 1e-3f);
+	}
 }
 
 static void clusterBoundsDegenerate()

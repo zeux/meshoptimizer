@@ -920,38 +920,78 @@ void meshopt_encodeFilterQuat(void* destination_, size_t count, size_t stride, i
 	}
 }
 
-void meshopt_encodeFilterExp(void* destination_, size_t count, size_t stride, int bits, const float* data)
+void meshopt_encodeFilterExp(void* destination_, size_t count, size_t stride, int bits, const float* data, enum meshopt_EncodeExpMode mode)
 {
-	assert(stride > 0 && stride % 4 == 0);
+	assert(stride > 0 && stride % 4 == 0 && stride <= 256);
 	assert(bits >= 1 && bits <= 24);
 
 	unsigned int* destination = static_cast<unsigned int*>(destination_);
 	size_t stride_float = stride / sizeof(float);
+
+	int component_exp[64];
+	assert(stride_float <= sizeof(component_exp) / sizeof(int));
+
+	const int min_exp = -100;
+
+	if (mode == meshopt_EncodeExpSharedComponent)
+	{
+		for (size_t j = 0; j < stride_float; ++j)
+			component_exp[j] = min_exp;
+
+		for (size_t i = 0; i < count; ++i)
+		{
+			const float* v = &data[i * stride_float];
+
+			// use maximum exponent to encode values; this guarantees that mantissa is [-1, 1]
+			for (size_t j = 0; j < stride_float; ++j)
+			{
+				int e;
+				frexp(v[j], &e);
+
+				component_exp[j] = (component_exp[j] < e) ? e : component_exp[j];
+			}
+		}
+	}
 
 	for (size_t i = 0; i < count; ++i)
 	{
 		const float* v = &data[i * stride_float];
 		unsigned int* d = &destination[i * stride_float];
 
-		// use maximum exponent to encode values; this guarantees that mantissa is [-1, 1]
-		int exp = -100;
+		int vector_exp = min_exp;
 
-		for (size_t j = 0; j < stride_float; ++j)
+		if (mode == meshopt_EncodeExpSharedVector)
 		{
-			int e;
-			frexp(v[j], &e);
+			// use maximum exponent to encode values; this guarantees that mantissa is [-1, 1]
+			for (size_t j = 0; j < stride_float; ++j)
+			{
+				int e;
+				frexp(v[j], &e);
 
-			exp = (exp < e) ? e : exp;
+				vector_exp = (vector_exp < e) ? e : vector_exp;
+			}
+		}
+		else if (mode == meshopt_EncodeExpSeparate)
+		{
+			for (size_t j = 0; j < stride_float; ++j)
+			{
+				int e;
+				frexp(v[j], &e);
+
+				component_exp[j] = (min_exp < e) ? e : min_exp;
+			}
 		}
 
-		// note that we additionally scale the mantissa to make it a K-bit signed integer (K-1 bits for magnitude)
-		exp -= (bits - 1);
-
-		// compute renormalized rounded mantissa for each component
-		int mmask = (1 << 24) - 1;
-
 		for (size_t j = 0; j < stride_float; ++j)
 		{
+			int exp = (mode == meshopt_EncodeExpSharedVector) ? vector_exp : component_exp[j];
+
+			// note that we additionally scale the mantissa to make it a K-bit signed integer (K-1 bits for magnitude)
+			exp -= (bits - 1);
+
+			// compute renormalized rounded mantissa for each component
+			int mmask = (1 << 24) - 1;
+
 			int m = int(ldexp(v[j], -exp) + (v[j] >= 0 ? 0.5f : -0.5f));
 
 			d[j] = (m & mmask) | (unsigned(exp) << 24);
