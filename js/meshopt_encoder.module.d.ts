@@ -14,5 +14,5 @@ export const MeshoptEncoder: {
 
     encodeFilterOct: (source: Float32Array, count: number, stride: number, bits: number) => Uint8Array;
     encodeFilterQuat: (source: Float32Array, count: number, stride: number, bits: number) => Uint8Array;
-    encodeFilterExp: (source: Float32Array, count: number, stride: number, bits: number) => Uint8Array;
+    encodeFilterExp: (source: Float32Array, count: number, stride: number, bits: number, mode?: "Separate" | "SharedVector" | "SharedComponent") => Uint8Array;
 };
