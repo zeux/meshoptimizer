@@ -488,10 +488,10 @@ static int getChannels(const cgltf_image& image, ImageInfo& info, const char* in
 
 static bool shouldKeepAlpha(const cgltf_texture_view* color, float alpha, cgltf_data* data, const char* input_path, std::vector<ImageInfo>& images)
 {
-	if (alpha == 1.f)
+	if (alpha != 1.f)
 		return true;
 
-	return (color && color->texture && color->texture->image && getChannels(*color->texture->image, images[color->texture->image - data->images], input_path) == 4);
+	return color && color->texture && color->texture->image && getChannels(*color->texture->image, images[color->texture->image - data->images], input_path) == 4;
 }
 
 void optimizeMaterials(cgltf_data* data, const char* input_path, std::vector<ImageInfo>& images)
