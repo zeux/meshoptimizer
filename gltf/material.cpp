@@ -486,12 +486,12 @@ static int getChannels(const cgltf_image& image, ImageInfo& info, const char* in
 	return info.channels;
 }
 
-static bool shouldKeepAlpha(const cgltf_texture_view* color, float alpha, cgltf_data* data, const char* input_path, std::vector<ImageInfo>& images)
+static bool shouldKeepAlpha(const cgltf_texture_view& color, float alpha, cgltf_data* data, const char* input_path, std::vector<ImageInfo>& images)
 {
 	if (alpha != 1.f)
 		return true;
 
-	return color && color->texture && color->texture->image && getChannels(*color->texture->image, images[color->texture->image - data->images], input_path) == 4;
+	return color.texture && color.texture->image && getChannels(*color.texture->image, images[color.texture->image - data->images], input_path) == 4;
 }
 
 void optimizeMaterials(cgltf_data* data, const char* input_path, std::vector<ImageInfo>& images)
@@ -500,14 +500,13 @@ void optimizeMaterials(cgltf_data* data, const char* input_path, std::vector<Ima
 	{
 		// remove BLEND/MASK from materials that don't have alpha information
 		cgltf_material& material = data->materials[i];
+
 		if (material.alpha_mode != cgltf_alpha_mode_opaque)
 		{
-			// XXX must check both base texture and diffuse texture, since the
-			// material might have a fallback to the metallic-roughness model
-			if (material.has_pbr_metallic_roughness && shouldKeepAlpha(&material.pbr_metallic_roughness.base_color_texture, material.pbr_metallic_roughness.base_color_factor[3], data, input_path, images))
+			if (material.has_pbr_metallic_roughness && shouldKeepAlpha(material.pbr_metallic_roughness.base_color_texture, material.pbr_metallic_roughness.base_color_factor[3], data, input_path, images))
 				continue;
 
-			if (material.has_pbr_specular_glossiness && shouldKeepAlpha(&material.pbr_specular_glossiness.diffuse_texture, material.pbr_specular_glossiness.diffuse_factor[3], data, input_path, images))
+			if (material.has_pbr_specular_glossiness && shouldKeepAlpha(material.pbr_specular_glossiness.diffuse_texture, material.pbr_specular_glossiness.diffuse_factor[3], data, input_path, images))
 				continue;
 
 			material.alpha_mode = cgltf_alpha_mode_opaque;
