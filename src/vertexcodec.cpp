@@ -83,9 +83,22 @@
 #endif
 
 #ifdef SIMD_WASM
+// WASM simd updated some macros
+// ie: 'wasm_v32x4_shuffle' is deprecated
+// https://emscripten.org/docs/porting/simd.html
+// https://github.com/llvm/llvm-project/blob/main/clang/lib/Headers/wasm_simd128.h
 #undef __DEPRECATED
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#pragma clang diagnostic ignored "-W#pragma-messages"
+// byte, enc, encv, data_var
+#pragma clang diagnostic ignored "-Wunused-variable"
+// decodeVertexBlock
+#pragma clang diagnostic ignored "-Wunused-function"
 #include <wasm_simd128.h>
+// Prevent compiling other variant when wasm simd compilation is active
+#undef SIMD_NEON
+#undef SIMD_SSE
+#undef SIMD_AVX
 #endif
 
 #ifdef SIMD_WASM
