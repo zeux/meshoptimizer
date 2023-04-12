@@ -44,6 +44,10 @@
 // When targeting Wasm SIMD we can't use runtime cpuid checks so we unconditionally enable SIMD
 #if defined(__wasm_simd128__)
 #define SIMD_WASM
+// Prevent compiling other variant when wasm simd compilation is active
+#undef SIMD_NEON
+#undef SIMD_SSE
+#undef SIMD_AVX
 #endif
 
 #ifndef SIMD_TARGET
@@ -92,13 +96,7 @@
 #pragma clang diagnostic ignored "-W#pragma-messages"
 // byte, enc, encv, data_var
 #pragma clang diagnostic ignored "-Wunused-variable"
-// decodeVertexBlock
-#pragma clang diagnostic ignored "-Wunused-function"
 #include <wasm_simd128.h>
-// Prevent compiling other variant when wasm simd compilation is active
-#undef SIMD_NEON
-#undef SIMD_SSE
-#undef SIMD_AVX
 #endif
 
 #ifdef SIMD_WASM
@@ -307,7 +305,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 	return data;
 }
 
-#if defined(SIMD_FALLBACK) || (!defined(SIMD_SSE) && !defined(SIMD_NEON) && !defined(SIMD_AVX))
+#if defined(SIMD_FALLBACK) || (!defined(SIMD_SSE) && !defined(SIMD_NEON) && !defined(SIMD_AVX) && !defined(SIMD_WASM))
 static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned char* buffer, int bitslog2)
 {
 #define READ() byte = *data++
