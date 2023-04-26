@@ -525,10 +525,12 @@ MESHOPTIMIZER_API struct meshopt_Bounds meshopt_computeMeshletBounds(const unsig
  *
  * Each group of 32 triangles is assigned a 32-bit mask for each of 6 frustum slices; each bit in the mask corresponds to a triangle in the group.
  * The bit is set if the triangle is visible from any camera position in the frustum slice; the slices are in +X, +Y, +Z, -X, -Y, -Z order (i.e. +X is a slice where X > 0, abs(X) >= abs(Y), abs(X) >= abs(Z)).
+ * To increase culling efficiency, frustum slices are considered cut off at the given radius; if max(abs(X), abs(Y), abs(Z)) <= radius, all triangles should be considered visible.
  *
  * triangle_masks should have ceil(triangle_count / 32) * 6 elements; masks are written in frustum order, then frustum order. In each mask, first triangle corresponds to the least significant bit.
  */
-MESHOPTIMIZER_EXPERIMENTAL void meshopt_computeMeshletTriangleMasks(unsigned int* triangle_masks, const float* meshlet_center, float meshlet_radius, const unsigned int* meshlet_vertices, const unsigned char* meshlet_triangles, size_t triangle_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
+MESHOPTIMIZER_EXPERIMENTAL void meshopt_computeClusterTriangleMasks(unsigned int* triangle_masks, const float* center, float radius, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
+MESHOPTIMIZER_EXPERIMENTAL void meshopt_computeMeshletTriangleMasks(unsigned int* triangle_masks, const float* center, float radius, const unsigned int* meshlet_vertices, const unsigned char* meshlet_triangles, size_t triangle_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 
 /**
  * Experimental: Spatial sorter

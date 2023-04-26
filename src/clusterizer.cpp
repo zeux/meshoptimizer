@@ -884,17 +884,19 @@ meshopt_Bounds meshopt_computeMeshletBounds(const unsigned int* meshlet_vertices
 	return meshopt_computeClusterBounds(indices, triangle_count * 3, vertex_positions, vertex_count, vertex_positions_stride);
 }
 
-void meshopt_computeMeshletTriangleMasks(unsigned int* triangle_masks, const float* meshlet_center, float meshlet_radius, const unsigned int* meshlet_vertices, const unsigned char* meshlet_triangles, size_t triangle_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+void meshopt_computeClusterTriangleMasks(unsigned int* triangle_masks, const float* center, float radius, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	using namespace meshopt;
 
-	assert(triangle_count <= kMeshletMaxTriangles);
+	assert(index_count % 3 == 0);
+	assert(index_count / 3 <= kMeshletMaxTriangles);
 	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
 
 	(void)vertex_count;
 
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
+	size_t triangle_count = index_count / 3;
 	size_t mask_groups_per_side = (triangle_count + 31) / 32;
 
 	for (size_t i = 0; i < triangle_count; i += 32)
@@ -902,13 +904,14 @@ void meshopt_computeMeshletTriangleMasks(unsigned int* triangle_masks, const flo
 		for (size_t j = 0; j < 6; ++j)
 			triangle_masks[mask_groups_per_side * j + i / 32] = 0;
 
-		// no need to include triangles of degenerate meshes - they will be invisible anyway
-		if (meshlet_radius == 0.f)
+		// no need to include triangles of degenerate clusters - they will be invisible anyway
+		// TODO: alternatively, let the computation of bound happen, and figure out if infinity signs will be correct?
+		if (radius == 0.f)
 			continue;
 
 		for (size_t j = 0; j < 32 && i + j < triangle_count; ++j)
 		{
-			unsigned int a = meshlet_vertices[meshlet_triangles[i + 0]], b = meshlet_vertices[meshlet_triangles[i + 1]], c = meshlet_vertices[meshlet_triangles[i + 2]];
+			unsigned int a = indices[i + 0], b = indices[i + 1], c = indices[i + 2];
 			assert(a < vertex_count && b < vertex_count && c < vertex_count);
 
 			// compute triangle normal
@@ -929,17 +932,17 @@ void meshopt_computeMeshletTriangleMasks(unsigned int* triangle_masks, const flo
 			if (area == 0.f)
 				continue;
 
-			// build triangle plane equation (Ax + By + Cz + D = 0) relative to meshlet center
+			// build triangle plane equation (Ax + By + Cz + D = 0) relative to cluster center
 			float A = normalx / area;
 			float B = normaly / area;
 			float C = normalz / area;
-			float D = A * (meshlet_center[0] - p0[0]) + B * (meshlet_center[1] - p0[1]) + C * (meshlet_center[2] - p0[2]);
+			float D = A * (center[0] - p0[0]) + B * (center[1] - p0[1]) + C * (center[2] - p0[2]);
 
 			// each frustum diagonal edge is a ray where abs(X) = abs(Y) = abs(Z)
-			// a point on this ray is given by P(t) = (+-t, +-t, +-t), where t >= meshlet_radius (assuming we ignore points inside a box with half extents of meshlet_radius)
-			// a triangle is back-facing if all points on all diagonal edges are in negative half-space of the triangle, so (+-At +- Bt +- Ct + D) <= 0 for all t >= meshlet_radius
-			// this is equivalent to (+-A +- B +- C) <= -D / t for all t >= meshlet_radius, which is equivalent to (+-A +- B +- C) <= min(0, -D / meshlet_radius)
-			float bound = D > 0.f ? -D / meshlet_radius : 0.f;
+			// a point on this ray is given by P(t) = (+-t, +-t, +-t), where t >= radius (assuming we ignore points inside a box with half extents of radius)
+			// a triangle is back-facing if all points on all diagonal edges are in negative half-space of the triangle, so (+-At +- Bt +- Ct + D) <= 0 for all t >= radius
+			// this is equivalent to (+-A +- B +- C) <= -D / t for all t >= radius, which is equivalent to (+-A +- B +- C) <= min(0, -D / radius)
+			float bound = D > 0.f ? -D / radius : 0.f;
 
 			// note: we compute the inverse of the above, that is, whether the triangle is visible from any points on a given ray
 			bool in000 = +A + B + C > bound;
@@ -963,4 +966,25 @@ void meshopt_computeMeshletTriangleMasks(unsigned int* triangle_masks, const flo
 			triangle_masks[mask_groups_per_side * 5 + mask_offset] |= unsigned(in001 | in011 | in101 | in111) << mask_bit; // -Z
 		}
 	}
+}
+
+void meshopt_computeMeshletTriangleMasks(unsigned int* triangle_masks, const float* center, float radius, const unsigned int* meshlet_vertices, const unsigned char* meshlet_triangles, size_t triangle_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+{
+	using namespace meshopt;
+
+	assert(triangle_count <= kMeshletMaxTriangles);
+	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
+	assert(vertex_positions_stride % sizeof(float) == 0);
+
+	unsigned int indices[kMeshletMaxTriangles * 3];
+
+	for (size_t i = 0; i < triangle_count * 3; ++i)
+	{
+		unsigned int index = meshlet_vertices[meshlet_triangles[i]];
+		assert(index < vertex_count);
+
+		indices[i] = index;
+	}
+
+	meshopt_computeClusterTriangleMasks(triangle_masks, center, radius, indices, triangle_count * 3, vertex_positions, vertex_count, vertex_positions_stride);
 }
