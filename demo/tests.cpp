@@ -1141,6 +1141,23 @@ static void tessellation()
 	assert(memcmp(tessib, expected, sizeof(expected)) == 0);
 }
 
+static void meshletMasks()
+{
+	const float vb[] = { 1, 1, 0, 1, 0, 1, 1, 0, 0 };
+	const unsigned int mvb[] = { 0, 1, 2 };
+	const unsigned char mib[] = { 0, 1, 2 };
+
+	const float mc[] = { 0, 0, 0 };
+	float mr = 1;
+
+	unsigned int masks[6];
+	meshopt_computeMeshletTriangleMasks(masks, mc, mr, mvb, mib, 1, vb, 3, 3 * sizeof(float));
+
+	// the triangle is visible from +X, invisible from -X, and the other masks should be 1 because the triangle is visible from some points and invisible from others
+	for (int k = 0; k < 6; ++k)
+		assert(masks[k] == (k == 3 ? 0 : 1));
+}
+
 void runTests()
 {
 	decodeIndexV0();
@@ -1201,4 +1218,6 @@ void runTests()
 
 	adjacency();
 	tessellation();
+
+	meshletMasks();
 }

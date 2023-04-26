@@ -7,6 +7,7 @@
 #include <string.h>
 
 // This work is based on:
+// Ulrich Haar, Sebastian Aaltonen. GPU-Driven Rendering Pipelines. 2015
 // Graham Wihlidal. Optimizing the Graphics Pipeline with Compute. 2016
 // Matthaeus Chajdas. GeometryFX 1.2 - Cluster Culling. 2016
 // Jack Ritter. An Efficient Bounding Sphere. 1990
@@ -881,4 +882,85 @@ meshopt_Bounds meshopt_computeMeshletBounds(const unsigned int* meshlet_vertices
 	}
 
 	return meshopt_computeClusterBounds(indices, triangle_count * 3, vertex_positions, vertex_count, vertex_positions_stride);
+}
+
+void meshopt_computeMeshletTriangleMasks(unsigned int* triangle_masks, const float* meshlet_center, float meshlet_radius, const unsigned int* meshlet_vertices, const unsigned char* meshlet_triangles, size_t triangle_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+{
+	using namespace meshopt;
+
+	assert(triangle_count <= kMeshletMaxTriangles);
+	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
+	assert(vertex_positions_stride % sizeof(float) == 0);
+
+	(void)vertex_count;
+
+	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
+	size_t mask_groups_per_side = (triangle_count + 31) / 32;
+
+	for (size_t i = 0; i < triangle_count; i += 32)
+	{
+		for (size_t j = 0; j < 6; ++j)
+			triangle_masks[mask_groups_per_side * j + i / 32] = 0;
+
+		// no need to include triangles of degenerate meshes - they will be invisible anyway
+		if (meshlet_radius == 0.f)
+			continue;
+
+		for (size_t j = 0; j < 32 && i + j < triangle_count; ++j)
+		{
+			unsigned int a = meshlet_vertices[meshlet_triangles[i + 0]], b = meshlet_vertices[meshlet_triangles[i + 1]], c = meshlet_vertices[meshlet_triangles[i + 2]];
+			assert(a < vertex_count && b < vertex_count && c < vertex_count);
+
+			// compute triangle normal
+			const float* p0 = vertex_positions + vertex_stride_float * a;
+			const float* p1 = vertex_positions + vertex_stride_float * b;
+			const float* p2 = vertex_positions + vertex_stride_float * c;
+
+			float p10[3] = {p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]};
+			float p20[3] = {p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]};
+
+			float normalx = p10[1] * p20[2] - p10[2] * p20[1];
+			float normaly = p10[2] * p20[0] - p10[0] * p20[2];
+			float normalz = p10[0] * p20[1] - p10[1] * p20[0];
+
+			float area = sqrtf(normalx * normalx + normaly * normaly + normalz * normalz);
+
+			// no need to include degenerate triangles - they will be invisible anyway
+			if (area == 0.f)
+				continue;
+
+			// build triangle plane equation (Ax + By + Cz + D = 0) relative to meshlet center
+			float A = normalx / area;
+			float B = normaly / area;
+			float C = normalz / area;
+			float D = A * (meshlet_center[0] - p0[0]) + B * (meshlet_center[1] - p0[1]) + C * (meshlet_center[2] - p0[2]);
+
+			// each frustum diagonal edge is a ray where abs(X) = abs(Y) = abs(Z)
+			// a point on this ray is given by P(t) = (+-t, +-t, +-t), where t >= meshlet_radius (assuming we ignore points inside a box with half extents of meshlet_radius)
+			// a triangle is back-facing if all points on all diagonal edges are in negative half-space of the triangle, so (+-At +- Bt +- Ct + D) <= 0 for all t >= meshlet_radius
+			// this is equivalent to (+-A +- B +- C) <= -D / t for all t >= meshlet_radius, which is equivalent to (+-A +- B +- C) <= min(0, -D / meshlet_radius)
+			float bound = D > 0.f ? -D / meshlet_radius : 0.f;
+
+			// note: we compute the inverse of the above, that is, whether the triangle is visible from any points on a given ray
+			bool in000 = +A + B + C > bound;
+			bool in001 = +A + B - C > bound;
+			bool in010 = +A - B + C > bound;
+			bool in011 = +A - B - C > bound;
+			bool in100 = -A + B + C > bound;
+			bool in101 = -A + B - C > bound;
+			bool in110 = -A - B + C > bound;
+			bool in111 = -A - B - C > bound;
+
+			// each triangle is visible iff at least one of the points on the frustum edges is in positive half-space of the triangle
+			size_t mask_offset = i / 32;
+			int mask_bit = int(j);
+
+			triangle_masks[mask_groups_per_side * 0 + mask_offset] |= unsigned(in000 | in001 | in010 | in011) << mask_bit; // +X
+			triangle_masks[mask_groups_per_side * 1 + mask_offset] |= unsigned(in000 | in001 | in100 | in101) << mask_bit; // +Y
+			triangle_masks[mask_groups_per_side * 2 + mask_offset] |= unsigned(in000 | in010 | in100 | in110) << mask_bit; // +Z
+			triangle_masks[mask_groups_per_side * 3 + mask_offset] |= unsigned(in100 | in101 | in110 | in111) << mask_bit; // -X
+			triangle_masks[mask_groups_per_side * 4 + mask_offset] |= unsigned(in010 | in011 | in110 | in111) << mask_bit; // -Y
+			triangle_masks[mask_groups_per_side * 5 + mask_offset] |= unsigned(in001 | in011 | in101 | in111) << mask_bit; // -Z
+		}
+	}
 }

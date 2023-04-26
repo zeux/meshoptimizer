@@ -520,6 +520,17 @@ MESHOPTIMIZER_API struct meshopt_Bounds meshopt_computeClusterBounds(const unsig
 MESHOPTIMIZER_API struct meshopt_Bounds meshopt_computeMeshletBounds(const unsigned int* meshlet_vertices, const unsigned char* meshlet_triangles, size_t triangle_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 
 /**
+ * Experimental: Triangle mask generator
+ * Computes triangle masks that can be used for backface culling.
+ *
+ * Each group of 32 triangles is assigned a 32-bit mask for each of 6 frustum slices; each bit in the mask corresponds to a triangle in the group.
+ * The bit is set if the triangle is visible from any camera position in the frustum slice; the slices are in +X, +Y, +Z, -X, -Y, -Z order (i.e. +X is a slice where X > 0, abs(X) >= abs(Y), abs(X) >= abs(Z)).
+ *
+ * triangle_masks should have ceil(triangle_count / 32) * 6 elements; masks are written in frustum order, then frustum order. In each mask, first triangle corresponds to the least significant bit.
+ */
+MESHOPTIMIZER_EXPERIMENTAL void meshopt_computeMeshletTriangleMasks(unsigned int* triangle_masks, const float* meshlet_center, float meshlet_radius, const unsigned int* meshlet_vertices, const unsigned char* meshlet_triangles, size_t triangle_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
+
+/**
  * Experimental: Spatial sorter
  * Generates a remap table that can be used to reorder points for spatial locality.
  * Resulting remap table maps old vertices to new vertices and can be used in meshopt_remapVertexBuffer.

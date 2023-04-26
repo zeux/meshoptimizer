@@ -879,6 +879,7 @@ void meshlets(const Mesh& mesh, bool scan)
 	size_t accepted_s8 = 0;
 
 	std::vector<float> radii(meshlets.size());
+	std::vector<float> centers(meshlets.size() * 3);
 
 	double startc = timestamp();
 	for (size_t i = 0; i < meshlets.size(); ++i)
@@ -888,6 +889,9 @@ void meshlets(const Mesh& mesh, bool scan)
 		meshopt_Bounds bounds = meshopt_computeMeshletBounds(&meshlet_vertices[m.vertex_offset], &meshlet_triangles[m.triangle_offset], m.triangle_count, &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
 
 		radii[i] = bounds.radius;
+		centers[i * 3 + 0] = bounds.center[0];
+		centers[i * 3 + 1] = bounds.center[1];
+		centers[i * 3 + 2] = bounds.center[2];
 
 		// trivial accept: we can't ever backface cull this meshlet
 		accepted += (bounds.cone_cutoff >= 1);
@@ -946,6 +950,49 @@ void meshlets(const Mesh& mesh, bool scan)
 	    int(rejected_alt_s8), double(rejected_alt_s8) / double(meshlets.size()) * 100,
 	    int(accepted_s8), double(accepted_s8) / double(meshlets.size()) * 100,
 	    (endc - startc) * 1000);
+
+	std::vector<unsigned int> triangle_masks(6 * ((max_triangles + 31) / 32));
+	unsigned int rejected_mc[6] = {};
+	unsigned int rejected_mt[6] = {};
+
+	double startm = timestamp();
+	for (size_t i = 0; i < meshlets.size(); ++i)
+	{
+		const meshopt_Meshlet& m = meshlets[i];
+
+		meshopt_computeMeshletTriangleMasks(&triangle_masks[0], &centers[i * 3], radii[i], &meshlet_vertices[m.vertex_offset], &meshlet_triangles[m.triangle_offset], m.triangle_count, &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
+
+		for (int k = 0; k < 6; ++k)
+		{
+			bool visc = false;
+			int vist = 0;
+
+			for (size_t j = 0; j < m.triangle_count; j += 32)
+			{
+				unsigned int mask = triangle_masks[k * ((m.triangle_count + 31) / 32) + j / 32];
+
+				visc |= mask != 0;
+
+				for (size_t l = 0; l < 32 && j + l < m.triangle_count; ++l)
+					vist += (mask >> l) & 1;
+			}
+
+			rejected_mc[k] += !visc;
+			rejected_mt[k] += m.triangle_count - vist;
+		}
+	}
+	double endm = timestamp();
+
+	for (int k = 0; k < 6; ++k)
+	{
+		const char axes[6] = {'x', 'y', 'z', 'X', 'Y', 'Z'};
+
+		printf("MaskCull%c: rejected %d clusters (%.1f%%), %d triangles (%.1f%%) in %.2f msec\n",
+		    axes[k],
+		    int(rejected_mc[k]), double(rejected_mc[k]) / double(meshlets.size()) * 100,
+		    int(rejected_mt[k]), double(rejected_mt[k]) / double(mesh.indices.size() / 3) * 100,
+		    (endm - startm) * 1000);
+	}
 }
 
 void spatialSort(const Mesh& mesh)
