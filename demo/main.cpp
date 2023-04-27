@@ -952,8 +952,10 @@ void meshlets(const Mesh& mesh, bool scan)
 	    (endc - startc) * 1000);
 
 	std::vector<unsigned int> triangle_masks(6 * ((max_triangles + 31) / 32));
-	unsigned int rejected_mc[6] = {};
-	unsigned int rejected_mt[6] = {};
+	unsigned int rejected_mc = 0;
+	unsigned int rejected_mt = 0;
+
+	int camera_side = 0;
 
 	double startm = timestamp();
 	for (size_t i = 0; i < meshlets.size(); ++i)
@@ -962,37 +964,28 @@ void meshlets(const Mesh& mesh, bool scan)
 
 		meshopt_computeMeshletTriangleMasks(&triangle_masks[0], &centers[i * 3], radii[i], &meshlet_vertices[m.vertex_offset], &meshlet_triangles[m.triangle_offset], m.triangle_count, &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
 
-		for (int k = 0; k < 6; ++k)
+		bool visc = false;
+		int vist = 0;
+
+		for (size_t j = 0; j < m.triangle_count; j += 32)
 		{
-			bool visc = false;
-			int vist = 0;
+			unsigned int mask = triangle_masks[camera_side * ((m.triangle_count + 31) / 32) + j / 32];
 
-			for (size_t j = 0; j < m.triangle_count; j += 32)
-			{
-				unsigned int mask = triangle_masks[k * ((m.triangle_count + 31) / 32) + j / 32];
+			visc |= mask != 0;
 
-				visc |= mask != 0;
-
-				for (size_t l = 0; l < 32 && j + l < m.triangle_count; ++l)
-					vist += (mask >> l) & 1;
-			}
-
-			rejected_mc[k] += !visc;
-			rejected_mt[k] += m.triangle_count - vist;
+			for (size_t l = 0; l < 32 && j + l < m.triangle_count; ++l)
+				vist += (mask >> l) & 1;
 		}
+
+		rejected_mc += !visc;
+		rejected_mt += m.triangle_count - vist;
 	}
 	double endm = timestamp();
 
-	for (int k = 0; k < 6; ++k)
-	{
-		const char axes[6] = {'x', 'y', 'z', 'X', 'Y', 'Z'};
-
-		printf("MaskCull%c: rejected %d clusters (%.1f%%), %d triangles (%.1f%%) in %.2f msec\n",
-		    axes[k],
-		    int(rejected_mc[k]), double(rejected_mc[k]) / double(meshlets.size()) * 100,
-		    int(rejected_mt[k]), double(rejected_mt[k]) / double(mesh.indices.size() / 3) * 100,
-		    (endm - startm) * 1000);
-	}
+	printf("MaskCull6: rejected %d clusters (%.1f%%), %d triangles (%.1f%%) in %.2f msec\n",
+		int(rejected_mc), double(rejected_mc) / double(meshlets.size()) * 100,
+		int(rejected_mt), double(rejected_mt) / double(mesh.indices.size() / 3) * 100,
+		(endm - startm) * 1000);
 }
 
 void spatialSort(const Mesh& mesh)

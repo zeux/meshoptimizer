@@ -1155,7 +1155,7 @@ static void meshletMasks()
 
 	// the triangle is visible from +X, invisible from -X, and the other masks should be 1 because the triangle is visible from some points and invisible from others
 	for (int k = 0; k < 6; ++k)
-		assert(masks[k] == (k == 3 ? 0 : 1));
+		assert(masks[k] == unsigned(k == 3 ? 0 : 1));
 }
 
 void runTests()

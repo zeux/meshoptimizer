@@ -933,10 +933,8 @@ void meshopt_computeClusterTriangleMasks(unsigned int* triangle_masks, const flo
 				continue;
 
 			// build triangle plane equation (Ax + By + Cz + D = 0) relative to cluster center
-			float A = normalx / area;
-			float B = normaly / area;
-			float C = normalz / area;
-			float D = A * (center[0] - p0[0]) + B * (center[1] - p0[1]) + C * (center[2] - p0[2]);
+			float ABC[3] = {normalx / area, normaly / area, normalz / area};
+			float D = ABC[0] * (center[0] - p0[0]) + ABC[1] * (center[1] - p0[1]) + ABC[2] * (center[2] - p0[2]);
 
 			// each frustum diagonal edge is a ray where abs(X) = abs(Y) = abs(Z)
 			// a point on this ray is given by P(t) = (+-t, +-t, +-t), where t >= radius (assuming we ignore points inside a box with half extents of radius)
@@ -944,26 +942,21 @@ void meshopt_computeClusterTriangleMasks(unsigned int* triangle_masks, const flo
 			// this is equivalent to (+-A +- B +- C) <= -D / t for all t >= radius, which is equivalent to (+-A +- B +- C) <= min(0, -D / radius)
 			float bound = D > 0.f ? -D / radius : 0.f;
 
-			// note: we compute the inverse of the above, that is, whether the triangle is visible from any points on a given ray
-			bool in000 = +A + B + C > bound;
-			bool in001 = +A + B - C > bound;
-			bool in010 = +A - B + C > bound;
-			bool in011 = +A - B - C > bound;
-			bool in100 = -A + B + C > bound;
-			bool in101 = -A + B - C > bound;
-			bool in110 = -A - B + C > bound;
-			bool in111 = -A - B - C > bound;
+			for (int side = 0; side < 6; ++side)
+			{
+				// note: we compute the inverse of the above, that is, whether the triangle is visible from any points on a given ray
+				float U = ABC[side % 3] * (side < 3 ? 1.f : -1.f);
+				float V = ABC[(side + 1) % 3];
+				float W = ABC[(side + 2) % 3];
 
-			// each triangle is visible iff at least one of the points on the frustum edges is in positive half-space of the triangle
-			size_t mask_offset = i / 32;
-			int mask_bit = int(j);
+				bool in00 = U + V + W > bound;
+				bool in10 = U - V + W > bound;
+				bool in01 = U + V - W > bound;
+				bool in11 = U - V - W > bound;
 
-			triangle_masks[mask_groups_per_side * 0 + mask_offset] |= unsigned(in000 | in001 | in010 | in011) << mask_bit; // +X
-			triangle_masks[mask_groups_per_side * 1 + mask_offset] |= unsigned(in000 | in001 | in100 | in101) << mask_bit; // +Y
-			triangle_masks[mask_groups_per_side * 2 + mask_offset] |= unsigned(in000 | in010 | in100 | in110) << mask_bit; // +Z
-			triangle_masks[mask_groups_per_side * 3 + mask_offset] |= unsigned(in100 | in101 | in110 | in111) << mask_bit; // -X
-			triangle_masks[mask_groups_per_side * 4 + mask_offset] |= unsigned(in010 | in011 | in110 | in111) << mask_bit; // -Y
-			triangle_masks[mask_groups_per_side * 5 + mask_offset] |= unsigned(in001 | in011 | in101 | in111) << mask_bit; // -Z
+				// each triangle is visible iff at least one of the points on the frustum edges is in positive half-space of the triangle
+				triangle_masks[mask_groups_per_side * side + i / 32] |= unsigned(in00 | in01 | in10 | in11) << j;
+			}
 		}
 	}
 }
