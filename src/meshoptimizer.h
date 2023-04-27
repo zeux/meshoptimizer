@@ -1057,6 +1057,14 @@ inline meshopt_Bounds meshopt_computeClusterBounds(const T* indices, size_t inde
 }
 
 template <typename T>
+inline void meshopt_computeClusterTriangleMasks(unsigned int* triangle_masks, const float* center, float radius, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+{
+	meshopt_IndexAdapter<T> in(0, indices, index_count);
+
+	meshopt_computeClusterTriangleMasks(triangle_masks, center, radius, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride);
+}
+
+template <typename T>
 inline void meshopt_spatialSortTriangles(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	meshopt_IndexAdapter<T> in(0, indices, index_count);

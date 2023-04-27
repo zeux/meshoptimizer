@@ -899,64 +899,62 @@ void meshopt_computeClusterTriangleMasks(unsigned int* triangle_masks, const flo
 	size_t triangle_count = index_count / 3;
 	size_t mask_groups_per_side = (triangle_count + 31) / 32;
 
-	for (size_t i = 0; i < triangle_count; i += 32)
-	{
-		for (size_t j = 0; j < 6; ++j)
-			triangle_masks[mask_groups_per_side * j + i / 32] = 0;
+	for (int side = 0; side < 6; ++side)
+		for (size_t i = 0; i < triangle_count; i += 32)
+			triangle_masks[mask_groups_per_side * side + i / 32] = 0;
 
-		// no need to include triangles of degenerate clusters - they will be invisible anyway
-		// TODO: alternatively, let the computation of bound happen, and figure out if infinity signs will be correct?
-		if (radius == 0.f)
+	// no need to include triangles of degenerate clusters - they will be invisible anyway
+	// TODO: alternatively, let the computation of bound happen, and figure out if infinity signs will be correct?
+	if (radius == 0.f)
+		return;
+
+	for (size_t i = 0; i < triangle_count; ++i)
+	{
+		unsigned int a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
+		assert(a < vertex_count && b < vertex_count && c < vertex_count);
+
+		// compute triangle normal
+		const float* p0 = vertex_positions + vertex_stride_float * a;
+		const float* p1 = vertex_positions + vertex_stride_float * b;
+		const float* p2 = vertex_positions + vertex_stride_float * c;
+
+		float p10[3] = {p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]};
+		float p20[3] = {p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]};
+
+		float normalx = p10[1] * p20[2] - p10[2] * p20[1];
+		float normaly = p10[2] * p20[0] - p10[0] * p20[2];
+		float normalz = p10[0] * p20[1] - p10[1] * p20[0];
+
+		float area = sqrtf(normalx * normalx + normaly * normaly + normalz * normalz);
+
+		// no need to include degenerate triangles - they will be invisible anyway
+		if (area == 0.f)
 			continue;
 
-		for (size_t j = 0; j < 32 && i + j < triangle_count; ++j)
+		// build triangle plane equation (Ax + By + Cz + D = 0) relative to cluster center
+		float ABC[3] = {normalx / area, normaly / area, normalz / area};
+		float D = ABC[0] * (center[0] - p0[0]) + ABC[1] * (center[1] - p0[1]) + ABC[2] * (center[2] - p0[2]);
+
+		// each frustum diagonal edge is a ray where abs(X) = abs(Y) = abs(Z)
+		// a point on this ray is given by P(t) = (+-t, +-t, +-t), where t >= radius (assuming we ignore points inside a box with half extents of radius)
+		// a triangle is back-facing if all points on all diagonal edges are in negative half-space of the triangle, so (+-At +- Bt +- Ct + D) <= 0 for all t >= radius
+		// this is equivalent to (+-A +- B +- C) <= -D / t for all t >= radius, which is equivalent to (+-A +- B +- C) <= min(0, -D / radius)
+		float bound = D > 0.f ? -D / radius : 0.f;
+
+		for (int side = 0; side < 6; ++side)
 		{
-			unsigned int a = indices[i + 0], b = indices[i + 1], c = indices[i + 2];
-			assert(a < vertex_count && b < vertex_count && c < vertex_count);
+			// note: we compute the inverse of the above, that is, whether the triangle is visible from any points on a given ray
+			float U = ABC[side % 3] * (side < 3 ? 1.f : -1.f);
+			float V = ABC[(side + 1) % 3];
+			float W = ABC[(side + 2) % 3];
 
-			// compute triangle normal
-			const float* p0 = vertex_positions + vertex_stride_float * a;
-			const float* p1 = vertex_positions + vertex_stride_float * b;
-			const float* p2 = vertex_positions + vertex_stride_float * c;
+			bool in00 = U + V + W > bound;
+			bool in10 = U - V + W > bound;
+			bool in01 = U + V - W > bound;
+			bool in11 = U - V - W > bound;
 
-			float p10[3] = {p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]};
-			float p20[3] = {p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]};
-
-			float normalx = p10[1] * p20[2] - p10[2] * p20[1];
-			float normaly = p10[2] * p20[0] - p10[0] * p20[2];
-			float normalz = p10[0] * p20[1] - p10[1] * p20[0];
-
-			float area = sqrtf(normalx * normalx + normaly * normaly + normalz * normalz);
-
-			// no need to include degenerate triangles - they will be invisible anyway
-			if (area == 0.f)
-				continue;
-
-			// build triangle plane equation (Ax + By + Cz + D = 0) relative to cluster center
-			float ABC[3] = {normalx / area, normaly / area, normalz / area};
-			float D = ABC[0] * (center[0] - p0[0]) + ABC[1] * (center[1] - p0[1]) + ABC[2] * (center[2] - p0[2]);
-
-			// each frustum diagonal edge is a ray where abs(X) = abs(Y) = abs(Z)
-			// a point on this ray is given by P(t) = (+-t, +-t, +-t), where t >= radius (assuming we ignore points inside a box with half extents of radius)
-			// a triangle is back-facing if all points on all diagonal edges are in negative half-space of the triangle, so (+-At +- Bt +- Ct + D) <= 0 for all t >= radius
-			// this is equivalent to (+-A +- B +- C) <= -D / t for all t >= radius, which is equivalent to (+-A +- B +- C) <= min(0, -D / radius)
-			float bound = D > 0.f ? -D / radius : 0.f;
-
-			for (int side = 0; side < 6; ++side)
-			{
-				// note: we compute the inverse of the above, that is, whether the triangle is visible from any points on a given ray
-				float U = ABC[side % 3] * (side < 3 ? 1.f : -1.f);
-				float V = ABC[(side + 1) % 3];
-				float W = ABC[(side + 2) % 3];
-
-				bool in00 = U + V + W > bound;
-				bool in10 = U - V + W > bound;
-				bool in01 = U + V - W > bound;
-				bool in11 = U - V - W > bound;
-
-				// each triangle is visible iff at least one of the points on the frustum edges is in positive half-space of the triangle
-				triangle_masks[mask_groups_per_side * side + i / 32] |= unsigned(in00 | in01 | in10 | in11) << j;
-			}
+			// each triangle is visible iff at least one of the points on the frustum edges is in positive half-space of the triangle
+			triangle_masks[mask_groups_per_side * side + i / 32] |= unsigned(in00 | in01 | in10 | in11) << (i % 32);
 		}
 	}
 }
