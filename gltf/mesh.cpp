@@ -734,6 +734,10 @@ static void sortPointMesh(Mesh& mesh)
 	if (!positions)
 		return;
 
+	// skip spatial sort in presence of custom attributes, since when they refer to mesh features their order is more important to preserve for compression efficiency
+	if (getStream(mesh, cgltf_attribute_type_custom))
+		return;
+
 	size_t vertex_count = mesh.streams[0].data.size();
 
 	std::vector<unsigned int> remap(vertex_count);
