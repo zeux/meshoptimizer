@@ -529,8 +529,8 @@ MESHOPTIMIZER_API struct meshopt_Bounds meshopt_computeMeshletBounds(const unsig
  *
  * triangle_masks should have ceil(triangle_count / 32) * 6 elements; masks are written in frustum order, then frustum order. In each mask, first triangle corresponds to the least significant bit.
  */
-MESHOPTIMIZER_EXPERIMENTAL void meshopt_computeClusterTriangleMasks(unsigned int* triangle_masks, const float* center, float radius, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
-MESHOPTIMIZER_EXPERIMENTAL void meshopt_computeMeshletTriangleMasks(unsigned int* triangle_masks, const float* center, float radius, const unsigned int* meshlet_vertices, const unsigned char* meshlet_triangles, size_t triangle_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
+MESHOPTIMIZER_EXPERIMENTAL void meshopt_computeClusterTriangleMasks(unsigned int* triangle_masks, size_t sides, const float* center, float radius, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
+MESHOPTIMIZER_EXPERIMENTAL void meshopt_computeMeshletTriangleMasks(unsigned int* triangle_masks, size_t sides, const float* center, float radius, const unsigned int* meshlet_vertices, const unsigned char* meshlet_triangles, size_t triangle_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 
 /**
  * Experimental: Spatial sorter
@@ -1057,11 +1057,11 @@ inline meshopt_Bounds meshopt_computeClusterBounds(const T* indices, size_t inde
 }
 
 template <typename T>
-inline void meshopt_computeClusterTriangleMasks(unsigned int* triangle_masks, const float* center, float radius, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+inline void meshopt_computeClusterTriangleMasks(unsigned int* triangle_masks, size_t sides, const float* center, float radius, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	meshopt_IndexAdapter<T> in(0, indices, index_count);
 
-	meshopt_computeClusterTriangleMasks(triangle_masks, center, radius, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride);
+	meshopt_computeClusterTriangleMasks(triangle_masks, sides, center, radius, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride);
 }
 
 template <typename T>

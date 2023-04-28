@@ -951,7 +951,8 @@ void meshlets(const Mesh& mesh, bool scan)
 	    int(accepted_s8), double(accepted_s8) / double(meshlets.size()) * 100,
 	    (endc - startc) * 1000);
 
-	std::vector<unsigned int> triangle_masks(6 * ((max_triangles + 31) / 32));
+	size_t triangle_sides = 6;
+	std::vector<unsigned int> triangle_masks(triangle_sides * ((max_triangles + 31) / 32));
 	unsigned int rejected_mc = 0;
 	unsigned int rejected_mt = 0;
 
@@ -962,7 +963,7 @@ void meshlets(const Mesh& mesh, bool scan)
 	{
 		const meshopt_Meshlet& m = meshlets[i];
 
-		meshopt_computeMeshletTriangleMasks(&triangle_masks[0], &centers[i * 3], radii[i], &meshlet_vertices[m.vertex_offset], &meshlet_triangles[m.triangle_offset], m.triangle_count, &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
+		meshopt_computeMeshletTriangleMasks(&triangle_masks[0], triangle_sides, &centers[i * 3], radii[i], &meshlet_vertices[m.vertex_offset], &meshlet_triangles[m.triangle_offset], m.triangle_count, &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
 
 		bool visc = false;
 		int vist = 0;

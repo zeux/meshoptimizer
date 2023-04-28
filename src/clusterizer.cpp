@@ -884,7 +884,7 @@ meshopt_Bounds meshopt_computeMeshletBounds(const unsigned int* meshlet_vertices
 	return meshopt_computeClusterBounds(indices, triangle_count * 3, vertex_positions, vertex_count, vertex_positions_stride);
 }
 
-void meshopt_computeClusterTriangleMasks(unsigned int* triangle_masks, const float* center, float radius, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+void meshopt_computeClusterTriangleMasks(unsigned int* triangle_masks, size_t sides, const float* center, float radius, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	using namespace meshopt;
 
@@ -892,6 +892,7 @@ void meshopt_computeClusterTriangleMasks(unsigned int* triangle_masks, const flo
 	assert(index_count / 3 <= kMeshletMaxTriangles);
 	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
+	assert(sides == 6 || sides == 8 || sides == 24);
 
 	(void)vertex_count;
 
@@ -899,7 +900,7 @@ void meshopt_computeClusterTriangleMasks(unsigned int* triangle_masks, const flo
 	size_t triangle_count = index_count / 3;
 	size_t mask_groups_per_side = (triangle_count + 31) / 32;
 
-	for (int side = 0; side < 6; ++side)
+	for (size_t side = 0; side < sides; ++side)
 		for (size_t i = 0; i < triangle_count; i += 32)
 			triangle_masks[mask_groups_per_side * side + i / 32] = 0;
 
@@ -941,25 +942,65 @@ void meshopt_computeClusterTriangleMasks(unsigned int* triangle_masks, const flo
 		// this is equivalent to (+-A +- B +- C) <= -D / t for all t >= radius, which is equivalent to (+-A +- B +- C) <= min(0, -D / radius)
 		float bound = D > 0.f ? -D / radius : 0.f;
 
-		for (int side = 0; side < 6; ++side)
+		if (sides == 6)
 		{
-			// note: we compute the inverse of the above, that is, whether the triangle is visible from any points on a given ray
-			float U = ABC[side % 3] * (side < 3 ? 1.f : -1.f);
-			float V = ABC[(side + 1) % 3];
-			float W = ABC[(side + 2) % 3];
+			for (int side = 0; side < 6; ++side)
+			{
+				// note: we compute the inverse of the above, that is, whether the triangle is visible from any points on a given ray
+				float U = ABC[side % 3] * (side < 3 ? 1.f : -1.f);
+				float V = ABC[(side + 1) % 3];
+				float W = ABC[(side + 2) % 3];
 
-			bool in00 = U + V + W > bound;
-			bool in10 = U - V + W > bound;
-			bool in01 = U + V - W > bound;
-			bool in11 = U - V - W > bound;
+				bool in00 = U + V + W > bound;
+				bool in10 = U - V + W > bound;
+				bool in01 = U + V - W > bound;
+				bool in11 = U - V - W > bound;
 
-			// each triangle is visible iff at least one of the points on the frustum edges is in positive half-space of the triangle
-			triangle_masks[mask_groups_per_side * side + i / 32] |= unsigned(in00 | in01 | in10 | in11) << (i % 32);
+				// each triangle is visible iff at least one of the points on the frustum edges is in positive half-space of the triangle
+				triangle_masks[mask_groups_per_side * side + i / 32] |= unsigned(in00 | in01 | in10 | in11) << (i % 32);
+			}
+		}
+		else if (sides == 8)
+		{
+			for (int side = 0; side < 8; ++side)
+			{
+				// note: we compute the inverse of the above, that is, whether the triangle is visible from any points on a given ray
+				float U = ABC[0] * (side & 1 ? -1.f : 1.f);
+				float V = ABC[1] * (side & 2 ? -1.f : 1.f);
+				float W = ABC[2] * (side & 4 ? -1.f : 1.f);
+
+				bool in00 = U > bound;
+				bool in10 = V > bound;
+				bool in01 = W > bound;
+
+				// each triangle is visible iff at least one of the points on the frustum edges is in positive half-space of the triangle
+				triangle_masks[mask_groups_per_side * side + i / 32] |= unsigned(in00 | in01 | in10) << (i % 32);
+			}
+		}
+		else // sides == 24
+		{
+			for (int side = 0; side < 24; ++side)
+			{
+				int sector = (side / 8); // X, Y, Z
+
+				// note: we compute the inverse of the above, that is, whether the triangle is visible from any points on a given ray
+				float U = ABC[sector] * (side & (1 << sector) ? -1.f : 1.f);
+				float V = ABC[(sector + 1) % 3] * (side & (1 << ((sector + 1) % 3)) ? -1.f : 1.f);
+				float W = ABC[(sector + 2) % 3] * (side & (1 << ((sector + 2) % 3)) ? -1.f : 1.f);
+
+				bool in00 = U > bound;
+				bool in10 = U + V > bound;
+				bool in01 = U + W > bound;
+				bool in11 = U + V + W > bound;
+
+				// each triangle is visible iff at least one of the points on the frustum edges is in positive half-space of the triangle
+				triangle_masks[mask_groups_per_side * side + i / 32] |= unsigned(in00 | in01 | in10 | in11) << (i % 32);
+			}
 		}
 	}
 }
 
-void meshopt_computeMeshletTriangleMasks(unsigned int* triangle_masks, const float* center, float radius, const unsigned int* meshlet_vertices, const unsigned char* meshlet_triangles, size_t triangle_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+void meshopt_computeMeshletTriangleMasks(unsigned int* triangle_masks, size_t sides, const float* center, float radius, const unsigned int* meshlet_vertices, const unsigned char* meshlet_triangles, size_t triangle_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	using namespace meshopt;
 
@@ -977,5 +1018,5 @@ void meshopt_computeMeshletTriangleMasks(unsigned int* triangle_masks, const flo
 		indices[i] = index;
 	}
 
-	meshopt_computeClusterTriangleMasks(triangle_masks, center, radius, indices, triangle_count * 3, vertex_positions, vertex_count, vertex_positions_stride);
+	meshopt_computeClusterTriangleMasks(triangle_masks, sides, center, radius, indices, triangle_count * 3, vertex_positions, vertex_count, vertex_positions_stride);
 }

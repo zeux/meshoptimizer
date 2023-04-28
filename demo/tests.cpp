@@ -1151,7 +1151,7 @@ static void meshletMasks()
 	float mr = 1;
 
 	unsigned int masks[6];
-	meshopt_computeMeshletTriangleMasks(masks, mc, mr, mvb, mib, 1, vb, 3, 3 * sizeof(float));
+	meshopt_computeMeshletTriangleMasks(masks, 6, mc, mr, mvb, mib, 1, vb, 3, 3 * sizeof(float));
 
 	// the triangle is visible from +X, invisible from -X, and the other masks should be 1 because the triangle is visible from some points and invisible from others
 	for (int k = 0; k < 6; ++k)
