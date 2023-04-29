@@ -25,12 +25,12 @@ jobs:
       run: cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_BASISU_PATH=basis_universal -DMESHOPT_WERROR=ON -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded" -DCMAKE_BUILD_TYPE=Release
     - name: cmake build
       run: cmake --build . --target gltfpack --config Release -j 2
-    - uses: actions/upload-artifact@v1
+    - uses: actions/upload-artifact@v3
       with:
         name: gltfpack-windows
         path: Release/gltfpack.exe
       if: matrix.os == 'windows'
-    - uses: actions/upload-artifact@v1
+    - uses: actions/upload-artifact@v3
       with:
         name: gltfpack-${{matrix.os}}
         path: gltfpack
@@ -40,7 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
-    - uses: actions/setup-node@v1
+    - uses: actions/setup-node@v3
       with:
         node-version: '14.x'
     - name: install wasi
@@ -61,11 +61,11 @@ jobs:
         cp LICENSE.md js/
         cd gltf && npm pack && cd ..
         cd js && npm pack && cd ..
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: gltfpack-npm
         path: gltf/gltfpack-*.tgz
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: meshoptimizer-npm
         path: js/meshoptimizer-*.tgz
