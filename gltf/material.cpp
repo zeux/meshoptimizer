@@ -207,6 +207,20 @@ static bool areMaterialComponentsEqual(const cgltf_iridescence& lhs, const cgltf
 	return true;
 }
 
+static bool areMaterialComponentsEqual(const cgltf_anisotropy& lhs, const cgltf_anisotropy& rhs)
+{
+	if (lhs.anisotropy_strength != rhs.anisotropy_strength)
+		return false;
+
+	if (lhs.anisotropy_rotation != rhs.anisotropy_rotation)
+		return false;
+
+	if (!areTextureViewsEqual(lhs.anisotropy_texture, rhs.anisotropy_texture))
+		return false;
+
+	return true;
+}
+
 static bool areMaterialsEqual(const cgltf_material& lhs, const cgltf_material& rhs, const Settings& settings)
 {
 	if (lhs.has_pbr_metallic_roughness != rhs.has_pbr_metallic_roughness)
@@ -267,6 +281,12 @@ static bool areMaterialsEqual(const cgltf_material& lhs, const cgltf_material& r
 		return false;
 
 	if (lhs.has_iridescence && !areMaterialComponentsEqual(lhs.iridescence, rhs.iridescence))
+		return false;
+
+	if (lhs.has_anisotropy != rhs.has_anisotropy)
+		return false;
+
+	if (lhs.has_anisotropy && !areMaterialComponentsEqual(lhs.anisotropy, rhs.anisotropy))
 		return false;
 
 	if (!areTextureViewsEqual(lhs.normal_texture, rhs.normal_texture))
@@ -456,6 +476,11 @@ static void analyzeMaterial(const cgltf_material& material, MaterialInfo& mi, cg
 	{
 		analyzeMaterialTexture(material.iridescence.iridescence_texture, TextureKind_Attrib, mi, data, images);
 		analyzeMaterialTexture(material.iridescence.iridescence_thickness_texture, TextureKind_Attrib, mi, data, images);
+	}
+
+	if (material.has_anisotropy)
+	{
+		analyzeMaterialTexture(material.anisotropy.anisotropy_texture, TextureKind_Attrib, mi, data, images);
 	}
 
 	analyzeMaterialTexture(material.normal_texture, TextureKind_Normal, mi, data, images);
