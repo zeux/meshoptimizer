@@ -557,7 +557,6 @@ typedef struct cgltf_draco_mesh_compression {
 } cgltf_draco_mesh_compression;
 
 typedef struct cgltf_mesh_gpu_instancing {
-	cgltf_buffer_view* buffer_view;
 	cgltf_attribute* attributes;
 	cgltf_size attributes_count;
 } cgltf_mesh_gpu_instancing;
@@ -2888,11 +2887,9 @@ static int cgltf_parse_json_mesh_gpu_instancing(cgltf_options* options, jsmntok_
 		{
 			i = cgltf_parse_json_attribute_list(options, tokens, i + 1, json_chunk, &out_mesh_gpu_instancing->attributes, &out_mesh_gpu_instancing->attributes_count);
 		}
-		else if (cgltf_json_strcmp(tokens + i, json_chunk, "bufferView") == 0)
+		else
 		{
-			++i;
-			out_mesh_gpu_instancing->buffer_view = CGLTF_PTRINDEX(cgltf_buffer_view, cgltf_json_to_int(tokens + i, json_chunk));
-			++i;
+			i = cgltf_skip_json(tokens, i+1);
 		}
 
 		if (i < 0)
@@ -6410,7 +6407,6 @@ static int cgltf_fixup_pointers(cgltf_data* data)
 
 		if (data->nodes[i].has_mesh_gpu_instancing)
 		{
-			CGLTF_PTRFIXUP_REQ(data->nodes[i].mesh_gpu_instancing.buffer_view, data->buffer_views, data->buffer_views_count);
 			for (cgltf_size m = 0; m < data->nodes[i].mesh_gpu_instancing.attributes_count; ++m)
 			{
 				CGLTF_PTRFIXUP_REQ(data->nodes[i].mesh_gpu_instancing.attributes[m].data, data->accessors, data->accessors_count);
