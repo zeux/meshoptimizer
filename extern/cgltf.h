@@ -1944,6 +1944,10 @@ void cgltf_free(cgltf_data* data)
 			cgltf_free_texture_view(data, &data->materials[i].iridescence.iridescence_texture);
 			cgltf_free_texture_view(data, &data->materials[i].iridescence.iridescence_thickness_texture);
 		}
+		if(data->materials[i].has_anisotropy)
+		{
+			cgltf_free_texture_view(data, &data->materials[i].anisotropy.anisotropy_texture);
+		}
 
 		cgltf_free_texture_view(data, &data->materials[i].normal_texture);
 		cgltf_free_texture_view(data, &data->materials[i].occlusion_texture);
