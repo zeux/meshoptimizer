@@ -480,7 +480,7 @@ static void analyzeMaterial(const cgltf_material& material, MaterialInfo& mi, cg
 
 	if (material.has_anisotropy)
 	{
-		analyzeMaterialTexture(material.anisotropy.anisotropy_texture, TextureKind_Attrib, mi, data, images);
+		analyzeMaterialTexture(material.anisotropy.anisotropy_texture, TextureKind_Normal, mi, data, images);
 	}
 
 	analyzeMaterialTexture(material.normal_texture, TextureKind_Normal, mi, data, images);
