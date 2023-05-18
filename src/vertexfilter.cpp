@@ -31,8 +31,6 @@
 #if defined(__wasm_simd128__)
 #define SIMD_WASM
 // Prevent compiling other variant when wasm simd compilation is active
-// This was previously missing here and caused this not to compile with Emscripten
-// Without this it mistakenly assumes it also has to compile the SSE functions
 #undef SIMD_NEON
 #undef SIMD_SSE
 #endif
