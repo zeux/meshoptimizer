@@ -844,6 +844,7 @@ cgltf_size cgltf_accessor_read_index(const cgltf_accessor* accessor, cgltf_size 
 cgltf_size cgltf_num_components(cgltf_type type);
 
 cgltf_size cgltf_accessor_unpack_floats(const cgltf_accessor* accessor, cgltf_float* out, cgltf_size float_count);
+cgltf_size cgltf_accessor_unpack_indices(const cgltf_accessor* accessor, cgltf_uint* out, cgltf_size index_count);
 
 /* this function is deprecated and will be removed in the future; use cgltf_extras::data instead */
 cgltf_result cgltf_copy_extras_json(const cgltf_data* data, const cgltf_extras* extras, char* dest, cgltf_size* dest_size);
@@ -2201,6 +2202,10 @@ static cgltf_ssize cgltf_component_read_integer(const void* in, cgltf_component_
 {
 	switch (component_type)
 	{
+		case cgltf_component_type_r_8:
+			return *((const int8_t*) in);
+		case cgltf_component_type_r_8u:
+			return *((const uint8_t*) in);
 		case cgltf_component_type_r_16:
 			return *((const int16_t*) in);
 		case cgltf_component_type_r_16u:
@@ -2209,10 +2214,6 @@ static cgltf_ssize cgltf_component_read_integer(const void* in, cgltf_component_
 			return *((const uint32_t*) in);
 		case cgltf_component_type_r_32f:
 			return (cgltf_ssize)*((const float*) in);
-		case cgltf_component_type_r_8:
-			return *((const int8_t*) in);
-		case cgltf_component_type_r_8u:
-			return *((const uint8_t*) in);
 		default:
 			return 0;
 	}
@@ -2222,14 +2223,14 @@ static cgltf_size cgltf_component_read_index(const void* in, cgltf_component_typ
 {
 	switch (component_type)
 	{
+		case cgltf_component_type_r_8u:
+			return *((const uint8_t*) in);
 		case cgltf_component_type_r_16u:
 			return *((const uint16_t*) in);
 		case cgltf_component_type_r_32u:
 			return *((const uint32_t*) in);
 		case cgltf_component_type_r_32f:
 			return (cgltf_size)*((const float*) in);
-		case cgltf_component_type_r_8u:
-			return *((const uint8_t*) in);
 		default:
 			return 0;
 	}
@@ -2367,21 +2368,41 @@ cgltf_size cgltf_accessor_unpack_floats(const cgltf_accessor* accessor, cgltf_fl
 	cgltf_size element_count = float_count / floats_per_element;
 
 	// First pass: convert each element in the base accessor.
-	cgltf_float* dest = out;
-	cgltf_accessor dense = *accessor;
-	dense.is_sparse = 0;
-	for (cgltf_size index = 0; index < element_count; index++, dest += floats_per_element)
+	if (accessor->buffer_view == NULL)
 	{
-		if (!cgltf_accessor_read_float(&dense, index, dest, floats_per_element))
+		memset(out, 0, element_count * floats_per_element * sizeof(cgltf_float));
+	}
+	else
+	{
+		const uint8_t* element = cgltf_buffer_view_data(accessor->buffer_view);
+		if (element == NULL)
 		{
 			return 0;
+		}
+		element += accessor->offset;
+
+		if (accessor->component_type == cgltf_component_type_r_32f && accessor->stride == floats_per_element * sizeof(cgltf_float))
+		{
+			memcpy(out, element, element_count * floats_per_element * sizeof(cgltf_float));
+		}
+		else
+		{
+			cgltf_float* dest = out;
+
+			for (cgltf_size index = 0; index < element_count; index++, dest += floats_per_element, element += accessor->stride)
+			{
+				if (!cgltf_element_read_float(element, accessor->type, accessor->component_type, accessor->normalized, dest, floats_per_element))
+				{
+					return 0;
+				}
+			}
 		}
 	}
 
 	// Second pass: write out each element in the sparse accessor.
 	if (accessor->is_sparse)
 	{
-		const cgltf_accessor_sparse* sparse = &dense.sparse;
+		const cgltf_accessor_sparse* sparse = &accessor->sparse;
 
 		const uint8_t* index_data = cgltf_buffer_view_data(sparse->indices_buffer_view);
 		const uint8_t* reader_head = cgltf_buffer_view_data(sparse->values_buffer_view);
@@ -2395,17 +2416,15 @@ cgltf_size cgltf_accessor_unpack_floats(const cgltf_accessor* accessor, cgltf_fl
 		reader_head += sparse->values_byte_offset;
 
 		cgltf_size index_stride = cgltf_component_size(sparse->indices_component_type);
-		for (cgltf_size reader_index = 0; reader_index < sparse->count; reader_index++, index_data += index_stride)
+		for (cgltf_size reader_index = 0; reader_index < sparse->count; reader_index++, index_data += index_stride, reader_head += accessor->stride)
 		{
 			size_t writer_index = cgltf_component_read_index(index_data, sparse->indices_component_type);
 			float* writer_head = out + writer_index * floats_per_element;
 
-			if (!cgltf_element_read_float(reader_head, dense.type, dense.component_type, dense.normalized, writer_head, floats_per_element))
+			if (!cgltf_element_read_float(reader_head, accessor->type, accessor->component_type, accessor->normalized, writer_head, floats_per_element))
 			{
 				return 0;
 			}
-
-			reader_head += dense.stride;
 		}
 	}
 
@@ -2497,6 +2516,47 @@ cgltf_size cgltf_accessor_read_index(const cgltf_accessor* accessor, cgltf_size 
 	}
 	element += accessor->offset + accessor->stride * index;
 	return cgltf_component_read_index(element, accessor->component_type);
+}
+
+cgltf_size cgltf_accessor_unpack_indices(const cgltf_accessor* accessor, cgltf_uint* out, cgltf_size index_count)
+{
+	if (out == NULL)
+	{
+		return accessor->count;
+	}
+
+	index_count = accessor->count < index_count ? accessor->count : index_count;
+
+	if (accessor->is_sparse)
+	{
+		return 0;
+	}
+	if (accessor->buffer_view == NULL)
+	{
+		return 0;
+	}
+	const uint8_t* element = cgltf_buffer_view_data(accessor->buffer_view);
+	if (element == NULL)
+	{
+		return 0;
+	}
+	element += accessor->offset;
+
+	if (accessor->component_type == cgltf_component_type_r_32u && accessor->stride == sizeof(cgltf_uint))
+	{
+		memcpy(out, element, index_count * sizeof(cgltf_uint));
+	}
+	else
+	{
+		cgltf_uint* dest = out;
+
+		for (cgltf_size index = 0; index < index_count; index++, dest++, element += accessor->stride)
+		{
+			*dest = (cgltf_uint)cgltf_component_read_index(element, accessor->component_type);
+		}
+	}
+
+	return index_count;
 }
 
 #define CGLTF_ERROR_JSON -1

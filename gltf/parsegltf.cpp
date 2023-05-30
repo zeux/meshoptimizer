@@ -176,8 +176,7 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 			if (primitive.indices)
 			{
 				result.indices.resize(primitive.indices->count);
-				for (size_t i = 0; i < primitive.indices->count; ++i)
-					result.indices[i] = unsigned(cgltf_accessor_read_index(primitive.indices, i));
+				cgltf_accessor_unpack_indices(primitive.indices, &result.indices[0], result.indices.size());
 			}
 			else if (primitive.type != cgltf_primitive_type_points)
 			{
