@@ -65,7 +65,8 @@
  *
  * `cgltf_num_components` is a tiny utility that tells you the dimensionality of
  * a certain accessor type. This can be used before `cgltf_accessor_unpack_floats` to help allocate
- * the necessary amount of memory.
+ * the necessary amount of memory. `cgltf_component_size` and `cgltf_calc_size` exist for 
+ * similar purposes.
  *
  * `cgltf_accessor_read_float` reads a certain element from a non-sparse accessor and converts it to
  * floating point, assuming that `cgltf_load_buffers` has already been called. The passed-in element
@@ -89,6 +90,7 @@
 #define CGLTF_H_INCLUDED__
 
 #include <stddef.h>
+#include <stdint.h> /* For uint8_t, uint32_t */
 
 #ifdef __cplusplus
 extern "C" {
@@ -837,17 +839,38 @@ void cgltf_free(cgltf_data* data);
 void cgltf_node_transform_local(const cgltf_node* node, cgltf_float* out_matrix);
 void cgltf_node_transform_world(const cgltf_node* node, cgltf_float* out_matrix);
 
+const uint8_t* cgltf_buffer_view_data(const cgltf_buffer_view* view);
+
 cgltf_bool cgltf_accessor_read_float(const cgltf_accessor* accessor, cgltf_size index, cgltf_float* out, cgltf_size element_size);
 cgltf_bool cgltf_accessor_read_uint(const cgltf_accessor* accessor, cgltf_size index, cgltf_uint* out, cgltf_size element_size);
 cgltf_size cgltf_accessor_read_index(const cgltf_accessor* accessor, cgltf_size index);
 
 cgltf_size cgltf_num_components(cgltf_type type);
+cgltf_size cgltf_component_size(cgltf_component_type component_type);
+cgltf_size cgltf_calc_size(cgltf_type type, cgltf_component_type component_type);
 
 cgltf_size cgltf_accessor_unpack_floats(const cgltf_accessor* accessor, cgltf_float* out, cgltf_size float_count);
 cgltf_size cgltf_accessor_unpack_indices(const cgltf_accessor* accessor, cgltf_uint* out, cgltf_size index_count);
 
 /* this function is deprecated and will be removed in the future; use cgltf_extras::data instead */
 cgltf_result cgltf_copy_extras_json(const cgltf_data* data, const cgltf_extras* extras, char* dest, cgltf_size* dest_size);
+
+cgltf_size cgltf_mesh_index(const cgltf_data* data, const cgltf_mesh* object);
+cgltf_size cgltf_material_index(const cgltf_data* data, const cgltf_material* object);
+cgltf_size cgltf_accessor_index(const cgltf_data* data, const cgltf_accessor* object);
+cgltf_size cgltf_buffer_view_index(const cgltf_data* data, const cgltf_buffer_view* object);
+cgltf_size cgltf_buffer_index(const cgltf_data* data, const cgltf_buffer* object);
+cgltf_size cgltf_image_index(const cgltf_data* data, const cgltf_image* object);
+cgltf_size cgltf_texture_index(const cgltf_data* data, const cgltf_texture* object);
+cgltf_size cgltf_sampler_index(const cgltf_data* data, const cgltf_sampler* object);
+cgltf_size cgltf_skin_index(const cgltf_data* data, const cgltf_skin* object);
+cgltf_size cgltf_camera_index(const cgltf_data* data, const cgltf_camera* object);
+cgltf_size cgltf_light_index(const cgltf_data* data, const cgltf_light* object);
+cgltf_size cgltf_node_index(const cgltf_data* data, const cgltf_node* object);
+cgltf_size cgltf_scene_index(const cgltf_data* data, const cgltf_scene* object);
+cgltf_size cgltf_animation_index(const cgltf_data* data, const cgltf_animation* object);
+cgltf_size cgltf_animation_sampler_index(const cgltf_animation* animation, const cgltf_animation_sampler* object);
+cgltf_size cgltf_animation_channel_index(const cgltf_animation* animation, const cgltf_animation_channel* object);
 
 #ifdef __cplusplus
 }
@@ -869,7 +892,7 @@ cgltf_result cgltf_copy_extras_json(const cgltf_data* data, const cgltf_extras* 
 
 #ifdef CGLTF_IMPLEMENTATION
 
-#include <stdint.h> /* For uint8_t, uint32_t */
+#include <assert.h> /* For assert */
 #include <string.h> /* For strncpy */
 #include <stdio.h>  /* For fopen */
 #include <limits.h> /* For UINT_MAX etc */
@@ -877,10 +900,6 @@ cgltf_result cgltf_copy_extras_json(const cgltf_data* data, const cgltf_extras* 
 
 #if !defined(CGLTF_MALLOC) || !defined(CGLTF_FREE) || !defined(CGLTF_ATOI) || !defined(CGLTF_ATOF) || !defined(CGLTF_ATOLL)
 #include <stdlib.h> /* For malloc, free, atoi, atof */
-#endif
-
-#if CGLTF_VALIDATE_ENABLE_ASSERTS
-#include <assert.h>
 #endif
 
 /* JSMN_PARENT_LINKS is necessary to make parsing large structures linear in input size */
@@ -911,15 +930,15 @@ enum jsmnerr {
 };
 typedef struct {
 	jsmntype_t type;
-	int start;
-	int end;
+	ptrdiff_t start;
+	ptrdiff_t end;
 	int size;
 #ifdef JSMN_PARENT_LINKS
 	int parent;
 #endif
 } jsmntok_t;
 typedef struct {
-	unsigned int pos; /* offset in the JSON string */
+	size_t pos; /* offset in the JSON string */
 	unsigned int toknext; /* next token to allocate */
 	int toksuper; /* superior token node, e.g parent object or array */
 } jsmn_parser;
@@ -1495,8 +1514,6 @@ cgltf_result cgltf_load_buffers(const cgltf_options* options, cgltf_data* data, 
 	return cgltf_result_success;
 }
 
-static cgltf_size cgltf_calc_size(cgltf_type type, cgltf_component_type component_type);
-
 static cgltf_size cgltf_calc_index_bound(cgltf_buffer_view* buffer_view, cgltf_size offset, cgltf_component_type component_type, cgltf_size count)
 {
 	char* data = (char*)buffer_view->buffer->data + offset + buffer_view->offset;
@@ -1945,7 +1962,7 @@ void cgltf_free(cgltf_data* data)
 			cgltf_free_texture_view(data, &data->materials[i].iridescence.iridescence_texture);
 			cgltf_free_texture_view(data, &data->materials[i].iridescence.iridescence_thickness_texture);
 		}
-		if(data->materials[i].has_anisotropy)
+		if (data->materials[i].has_anisotropy)
 		{
 			cgltf_free_texture_view(data, &data->materials[i].anisotropy.anisotropy_texture);
 		}
@@ -2202,10 +2219,6 @@ static cgltf_ssize cgltf_component_read_integer(const void* in, cgltf_component_
 {
 	switch (component_type)
 	{
-		case cgltf_component_type_r_8:
-			return *((const int8_t*) in);
-		case cgltf_component_type_r_8u:
-			return *((const uint8_t*) in);
 		case cgltf_component_type_r_16:
 			return *((const int16_t*) in);
 		case cgltf_component_type_r_16u:
@@ -2214,6 +2227,10 @@ static cgltf_ssize cgltf_component_read_integer(const void* in, cgltf_component_
 			return *((const uint32_t*) in);
 		case cgltf_component_type_r_32f:
 			return (cgltf_ssize)*((const float*) in);
+		case cgltf_component_type_r_8:
+			return *((const int8_t*) in);
+		case cgltf_component_type_r_8u:
+			return *((const uint8_t*) in);
 		default:
 			return 0;
 	}
@@ -2223,14 +2240,14 @@ static cgltf_size cgltf_component_read_index(const void* in, cgltf_component_typ
 {
 	switch (component_type)
 	{
-		case cgltf_component_type_r_8u:
-			return *((const uint8_t*) in);
 		case cgltf_component_type_r_16u:
 			return *((const uint16_t*) in);
 		case cgltf_component_type_r_32u:
 			return *((const uint32_t*) in);
 		case cgltf_component_type_r_32f:
-			return (cgltf_size)*((const float*) in);
+			return (cgltf_size)((cgltf_ssize)*((const float*) in));
+		case cgltf_component_type_r_8u:
+			return *((const uint8_t*) in);
 		default:
 			return 0;
 	}
@@ -2263,8 +2280,6 @@ static cgltf_float cgltf_component_read_float(const void* in, cgltf_component_ty
 
 	return (cgltf_float)cgltf_component_read_integer(in, component_type);
 }
-
-static cgltf_size cgltf_component_size(cgltf_component_type component_type);
 
 static cgltf_bool cgltf_element_read_float(const uint8_t* element, cgltf_type type, cgltf_component_type component_type, cgltf_bool normalized, cgltf_float* out, cgltf_size element_size)
 {
@@ -2518,6 +2533,102 @@ cgltf_size cgltf_accessor_read_index(const cgltf_accessor* accessor, cgltf_size 
 	return cgltf_component_read_index(element, accessor->component_type);
 }
 
+cgltf_size cgltf_mesh_index(const cgltf_data* data, const cgltf_mesh* object)
+{
+	assert(object && (cgltf_size)(object - data->meshes) < data->meshes_count);
+	return (cgltf_size)(object - data->meshes);
+}
+
+cgltf_size cgltf_material_index(const cgltf_data* data, const cgltf_material* object)
+{
+	assert(object && (cgltf_size)(object - data->materials) < data->materials_count);
+	return (cgltf_size)(object - data->materials);
+}
+
+cgltf_size cgltf_accessor_index(const cgltf_data* data, const cgltf_accessor* object)
+{
+	assert(object && (cgltf_size)(object - data->accessors) < data->accessors_count);
+	return (cgltf_size)(object - data->accessors);
+}
+
+cgltf_size cgltf_buffer_view_index(const cgltf_data* data, const cgltf_buffer_view* object)
+{
+	assert(object && (cgltf_size)(object - data->buffer_views) < data->buffer_views_count);
+	return (cgltf_size)(object - data->buffer_views);
+}
+
+cgltf_size cgltf_buffer_index(const cgltf_data* data, const cgltf_buffer* object)
+{
+	assert(object && (cgltf_size)(object - data->buffers) < data->buffers_count);
+	return (cgltf_size)(object - data->buffers);
+}
+
+cgltf_size cgltf_image_index(const cgltf_data* data, const cgltf_image* object)
+{
+	assert(object && (cgltf_size)(object - data->images) < data->images_count);
+	return (cgltf_size)(object - data->images);
+}
+
+cgltf_size cgltf_texture_index(const cgltf_data* data, const cgltf_texture* object)
+{
+	assert(object && (cgltf_size)(object - data->textures) < data->textures_count);
+	return (cgltf_size)(object - data->textures);
+}
+
+cgltf_size cgltf_sampler_index(const cgltf_data* data, const cgltf_sampler* object)
+{
+	assert(object && (cgltf_size)(object - data->samplers) < data->samplers_count);
+	return (cgltf_size)(object - data->samplers);
+}
+
+cgltf_size cgltf_skin_index(const cgltf_data* data, const cgltf_skin* object)
+{
+	assert(object && (cgltf_size)(object - data->skins) < data->skins_count);
+	return (cgltf_size)(object - data->skins);
+}
+
+cgltf_size cgltf_camera_index(const cgltf_data* data, const cgltf_camera* object)
+{
+	assert(object && (cgltf_size)(object - data->cameras) < data->cameras_count);
+	return (cgltf_size)(object - data->cameras);
+}
+
+cgltf_size cgltf_light_index(const cgltf_data* data, const cgltf_light* object)
+{
+	assert(object && (cgltf_size)(object - data->lights) < data->lights_count);
+	return (cgltf_size)(object - data->lights);
+}
+
+cgltf_size cgltf_node_index(const cgltf_data* data, const cgltf_node* object)
+{
+	assert(object && (cgltf_size)(object - data->nodes) < data->nodes_count);
+	return (cgltf_size)(object - data->nodes);
+}
+
+cgltf_size cgltf_scene_index(const cgltf_data* data, const cgltf_scene* object)
+{
+	assert(object && (cgltf_size)(object - data->scenes) < data->scenes_count);
+	return (cgltf_size)(object - data->scenes);
+}
+
+cgltf_size cgltf_animation_index(const cgltf_data* data, const cgltf_animation* object)
+{
+	assert(object && (cgltf_size)(object - data->animations) < data->animations_count);
+	return (cgltf_size)(object - data->animations);
+}
+
+cgltf_size cgltf_animation_sampler_index(const cgltf_animation* animation, const cgltf_animation_sampler* object)
+{
+	assert(object && (cgltf_size)(object - animation->samplers) < animation->samplers_count);
+	return (cgltf_size)(object - animation->samplers);
+}
+
+cgltf_size cgltf_animation_channel_index(const cgltf_animation* animation, const cgltf_animation_channel* object)
+{
+	assert(object && (cgltf_size)(object - animation->channels) < animation->channels_count);
+	return (cgltf_size)(object - animation->channels);
+}
+
 cgltf_size cgltf_accessor_unpack_indices(const cgltf_accessor* accessor, cgltf_uint* out, cgltf_size index_count)
 {
 	if (out == NULL)
@@ -2575,7 +2686,7 @@ static int cgltf_json_strcmp(jsmntok_t const* tok, const uint8_t* json_chunk, co
 {
 	CGLTF_CHECK_TOKTYPE(*tok, JSMN_STRING);
 	size_t const str_len = strlen(str);
-	size_t const name_length = tok->end - tok->start;
+	size_t const name_length = (size_t)(tok->end - tok->start);
 	return (str_len == name_length) ? strncmp((const char*)json_chunk + tok->start, str, str_len) : 128;
 }
 
@@ -2583,7 +2694,7 @@ static int cgltf_json_to_int(jsmntok_t const* tok, const uint8_t* json_chunk)
 {
 	CGLTF_CHECK_TOKTYPE(*tok, JSMN_PRIMITIVE);
 	char tmp[128];
-	int size = (cgltf_size)(tok->end - tok->start) < sizeof(tmp) ? tok->end - tok->start : (int)(sizeof(tmp) - 1);
+	int size = (size_t)(tok->end - tok->start) < sizeof(tmp) ? (int)(tok->end - tok->start) : (int)(sizeof(tmp) - 1);
 	strncpy(tmp, (const char*)json_chunk + tok->start, size);
 	tmp[size] = 0;
 	return CGLTF_ATOI(tmp);
@@ -2593,7 +2704,7 @@ static cgltf_size cgltf_json_to_size(jsmntok_t const* tok, const uint8_t* json_c
 {
 	CGLTF_CHECK_TOKTYPE_RETTYPE(*tok, JSMN_PRIMITIVE, cgltf_size);
 	char tmp[128];
-	int size = (cgltf_size)(tok->end - tok->start) < sizeof(tmp) ? tok->end - tok->start : (int)(sizeof(tmp) - 1);
+	int size = (size_t)(tok->end - tok->start) < sizeof(tmp) ? (int)(tok->end - tok->start) : (int)(sizeof(tmp) - 1);
 	strncpy(tmp, (const char*)json_chunk + tok->start, size);
 	tmp[size] = 0;
 	return (cgltf_size)CGLTF_ATOLL(tmp);
@@ -2603,7 +2714,7 @@ static cgltf_float cgltf_json_to_float(jsmntok_t const* tok, const uint8_t* json
 {
 	CGLTF_CHECK_TOKTYPE(*tok, JSMN_PRIMITIVE);
 	char tmp[128];
-	int size = (cgltf_size)(tok->end - tok->start) < sizeof(tmp) ? tok->end - tok->start : (int)(sizeof(tmp) - 1);
+	int size = (size_t)(tok->end - tok->start) < sizeof(tmp) ? (int)(tok->end - tok->start) : (int)(sizeof(tmp) - 1);
 	strncpy(tmp, (const char*)json_chunk + tok->start, size);
 	tmp[size] = 0;
 	return (cgltf_float)CGLTF_ATOF(tmp);
@@ -2611,7 +2722,7 @@ static cgltf_float cgltf_json_to_float(jsmntok_t const* tok, const uint8_t* json
 
 static cgltf_bool cgltf_json_to_bool(jsmntok_t const* tok, const uint8_t* json_chunk)
 {
-	int size = tok->end - tok->start;
+	int size = (int)(tok->end - tok->start);
 	return size == 4 && memcmp(json_chunk + tok->start, "true", 4) == 0;
 }
 
@@ -2677,7 +2788,7 @@ static int cgltf_parse_json_string(cgltf_options* options, jsmntok_t const* toke
 	{
 		return CGLTF_ERROR_JSON;
 	}
-	int size = tokens[i].end - tokens[i].start;
+	int size = (int)(tokens[i].end - tokens[i].start);
 	char* result = (char*)options->memory.alloc_func(options->memory.user_data, size + 1);
 	if (!result)
 	{
@@ -2934,6 +3045,10 @@ static int cgltf_parse_json_draco_mesh_compression(cgltf_options* options, jsmnt
 			++i;
 			out_draco_mesh_compression->buffer_view = CGLTF_PTRINDEX(cgltf_buffer_view, cgltf_json_to_int(tokens + i, json_chunk));
 			++i;
+		}
+		else
+		{
+			i = cgltf_skip_json(tokens, i+1);
 		}
 
 		if (i < 0)
@@ -4203,9 +4318,6 @@ static int cgltf_parse_json_anisotropy(cgltf_options* options, jsmntok_t const* 
 	int size = tokens[i].size;
 	++i;
 
-	// Default
-	out_anisotropy->anisotropy_strength = 0.f;
-	out_anisotropy->anisotropy_rotation = 0.f;
 
 	for (int j = 0; j < size; ++j)
 	{
@@ -6082,7 +6194,7 @@ cgltf_size cgltf_num_components(cgltf_type type) {
 	}
 }
 
-static cgltf_size cgltf_component_size(cgltf_component_type component_type) {
+cgltf_size cgltf_component_size(cgltf_component_type component_type) {
 	switch (component_type)
 	{
 	case cgltf_component_type_r_8:
@@ -6100,7 +6212,7 @@ static cgltf_size cgltf_component_size(cgltf_component_type component_type) {
 	}
 }
 
-static cgltf_size cgltf_calc_size(cgltf_type type, cgltf_component_type component_type)
+cgltf_size cgltf_calc_size(cgltf_type type, cgltf_component_type component_type)
 {
 	cgltf_size component_size = cgltf_component_size(component_type);
 	if (type == cgltf_type_mat2 && component_size == 1)
@@ -6619,7 +6731,7 @@ static jsmntok_t *jsmn_alloc_token(jsmn_parser *parser,
  * Fills token type and boundaries.
  */
 static void jsmn_fill_token(jsmntok_t *token, jsmntype_t type,
-				int start, int end) {
+				ptrdiff_t start, ptrdiff_t end) {
 	token->type = type;
 	token->start = start;
 	token->end = end;
@@ -6632,7 +6744,7 @@ static void jsmn_fill_token(jsmntok_t *token, jsmntype_t type,
 static int jsmn_parse_primitive(jsmn_parser *parser, const char *js,
 				size_t len, jsmntok_t *tokens, size_t num_tokens) {
 	jsmntok_t *token;
-	int start;
+	ptrdiff_t start;
 
 	start = parser->pos;
 
@@ -6682,7 +6794,7 @@ static int jsmn_parse_string(jsmn_parser *parser, const char *js,
 				 size_t len, jsmntok_t *tokens, size_t num_tokens) {
 	jsmntok_t *token;
 
-	int start = parser->pos;
+	ptrdiff_t start = parser->pos;
 
 	parser->pos++;
 
