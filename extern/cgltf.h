@@ -2202,6 +2202,10 @@ static cgltf_ssize cgltf_component_read_integer(const void* in, cgltf_component_
 {
 	switch (component_type)
 	{
+		case cgltf_component_type_r_8:
+			return *((const int8_t*) in);
+		case cgltf_component_type_r_8u:
+			return *((const uint8_t*) in);
 		case cgltf_component_type_r_16:
 			return *((const int16_t*) in);
 		case cgltf_component_type_r_16u:
@@ -2210,10 +2214,6 @@ static cgltf_ssize cgltf_component_read_integer(const void* in, cgltf_component_
 			return *((const uint32_t*) in);
 		case cgltf_component_type_r_32f:
 			return (cgltf_ssize)*((const float*) in);
-		case cgltf_component_type_r_8:
-			return *((const int8_t*) in);
-		case cgltf_component_type_r_8u:
-			return *((const uint8_t*) in);
 		default:
 			return 0;
 	}
@@ -2223,14 +2223,14 @@ static cgltf_size cgltf_component_read_index(const void* in, cgltf_component_typ
 {
 	switch (component_type)
 	{
+		case cgltf_component_type_r_8u:
+			return *((const uint8_t*) in);
 		case cgltf_component_type_r_16u:
 			return *((const uint16_t*) in);
 		case cgltf_component_type_r_32u:
 			return *((const uint32_t*) in);
 		case cgltf_component_type_r_32f:
 			return (cgltf_size)*((const float*) in);
-		case cgltf_component_type_r_8u:
-			return *((const uint8_t*) in);
 		default:
 			return 0;
 	}
@@ -2375,7 +2375,7 @@ cgltf_size cgltf_accessor_unpack_floats(const cgltf_accessor* accessor, cgltf_fl
 	else
 	{
 		const uint8_t* element = cgltf_buffer_view_data(accessor->buffer_view);
-		if (!element)
+		if (element == NULL)
 		{
 			return 0;
 		}
@@ -2552,7 +2552,7 @@ cgltf_size cgltf_accessor_unpack_indices(const cgltf_accessor* accessor, cgltf_u
 
 		for (cgltf_size index = 0; index < index_count; index++, dest++, element += accessor->stride)
 		{
-			*dest = cgltf_component_read_index(element, accessor->component_type);
+			*dest = (cgltf_uint)cgltf_component_read_index(element, accessor->component_type);
 		}
 	}
 
