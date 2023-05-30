@@ -68,6 +68,8 @@ const char* attributeType(cgltf_attribute_type type)
 		return "JOINTS";
 	case cgltf_attribute_type_weights:
 		return "WEIGHTS";
+	case cgltf_attribute_type_custom:
+		return "CUSTOM";
 	default:
 		return "ATTRIBUTE";
 	}
@@ -554,6 +556,31 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 	append(json, "}");
 }
 
+static void writeMaterialComponent(std::string& json, const cgltf_data* data, const cgltf_anisotropy& tm, const QuantizationTexture* qt)
+{
+	comma(json);
+	append(json, "\"KHR_materials_anisotropy\":{");
+	if (tm.anisotropy_strength != 0)
+	{
+		comma(json);
+		append(json, "\"anisotropyStrength\":");
+		append(json, tm.anisotropy_strength);
+	}
+	if (tm.anisotropy_rotation != 0)
+	{
+		comma(json);
+		append(json, "\"anisotropyRotation\":");
+		append(json, tm.anisotropy_rotation);
+	}
+	if (tm.anisotropy_texture.texture)
+	{
+		comma(json);
+		append(json, "\"anisotropyTexture\":");
+		writeTextureInfo(json, data, tm.anisotropy_texture, qt);
+	}
+	append(json, "}");
+}
+
 void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationPosition* qp, const QuantizationTexture* qt)
 {
 	if (material.name && *material.name)
@@ -623,7 +650,7 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 		append(json, "\"doubleSided\":true");
 	}
 
-	if (material.has_pbr_specular_glossiness || material.has_clearcoat || material.has_transmission || material.has_ior || material.has_specular || material.has_sheen || material.has_volume || material.has_emissive_strength || material.has_iridescence || material.unlit)
+	if (material.has_pbr_specular_glossiness || material.has_clearcoat || material.has_transmission || material.has_ior || material.has_specular || material.has_sheen || material.has_volume || material.has_emissive_strength || material.has_iridescence || material.has_anisotropy || material.unlit)
 	{
 		comma(json);
 		append(json, "\"extensions\":{");
@@ -671,6 +698,11 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 		if (material.has_iridescence)
 		{
 			writeMaterialComponent(json, data, material.iridescence, qt);
+		}
+
+		if (material.has_anisotropy)
+		{
+			writeMaterialComponent(json, data, material.anisotropy, qt);
 		}
 
 		if (material.unlit)

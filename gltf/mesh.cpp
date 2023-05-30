@@ -529,7 +529,7 @@ static Stream* getStream(Mesh& mesh, cgltf_attribute_type type, int index = 0)
 	return 0;
 }
 
-static void simplifyMesh(Mesh& mesh, float threshold, bool aggressive)
+static void simplifyMesh(Mesh& mesh, float threshold, bool aggressive, bool lock_borders)
 {
 	assert(mesh.type == cgltf_primitive_type_triangles);
 
@@ -545,12 +545,13 @@ static void simplifyMesh(Mesh& mesh, float threshold, bool aggressive)
 	size_t target_index_count = size_t(double(mesh.indices.size() / 3) * threshold) * 3;
 	float target_error = 1e-2f;
 	float target_error_aggressive = 1e-1f;
+	unsigned int options = lock_borders ? meshopt_SimplifyLockBorder : 0;
 
 	if (target_index_count < 1)
 		return;
 
 	std::vector<unsigned int> indices(mesh.indices.size());
-	indices.resize(meshopt_simplify(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count, target_error));
+	indices.resize(meshopt_simplify(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count, target_error, options));
 	mesh.indices.swap(indices);
 
 	// Note: if the simplifier got stuck, we can try to reindex without normals/tangents and retry
@@ -733,6 +734,10 @@ static void sortPointMesh(Mesh& mesh)
 	if (!positions)
 		return;
 
+	// skip spatial sort in presence of custom attributes, since when they refer to mesh features their order is more important to preserve for compression efficiency
+	if (getStream(mesh, cgltf_attribute_type_custom))
+		return;
+
 	size_t vertex_count = mesh.streams[0].data.size();
 
 	std::vector<unsigned int> remap(vertex_count);
@@ -764,7 +769,7 @@ void processMesh(Mesh& mesh, const Settings& settings)
 		reindexMesh(mesh);
 		filterTriangles(mesh);
 		if (settings.simplify_threshold < 1)
-			simplifyMesh(mesh, settings.simplify_threshold, settings.simplify_aggressive);
+			simplifyMesh(mesh, settings.simplify_threshold, settings.simplify_aggressive, settings.simplify_lock_borders);
 		optimizeMesh(mesh, settings.compressmore);
 		break;
 
@@ -801,7 +806,7 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio)
 	meshopt_simplifyDebugLoop = &loop[0];
 	meshopt_simplifyDebugLoopBack = &loopback[0];
 
-	simplifyMesh(mesh, ratio, /* aggressive= */ false);
+	simplifyMesh(mesh, ratio, /* aggressive= */ false, /* lock_borders= */ false);
 
 	meshopt_simplifyDebugKind = 0;
 	meshopt_simplifyDebugLoop = 0;

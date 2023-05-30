@@ -56,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
-    - uses: actions/setup-node@v1
+    - uses: actions/setup-node@v3
       with:
         node-version: '16'
     - name: test decoder
@@ -72,7 +72,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         repository: KhronosGroup/glTF-Sample-Models
         path: glTF-Sample-Models
@@ -81,7 +81,7 @@ jobs:
     - name: test
       run: find glTF-Sample-Models/2.0/ -name *.gltf -or -name *.glb | xargs -d '\n' ./gltfpack -cc -test
     - name: pack
-      run: find glTF-Sample-Models/2.0/ -name *.gltf | grep -v glTF-Draco | grep -v glTF-KTX-BasisU | xargs -d '\n' -I '{}' ./gltfpack -i '{}' -o '{}pack.gltf'
+      run: find glTF-Sample-Models/2.0/ -name *.gltf | grep -v 'glTF-Draco\|glTF-KTX-BasisU\|glTF-Meshopt' | xargs -d '\n' -I '{}' ./gltfpack -i '{}' -o '{}pack.gltf'
     - name: validate
       run: |
         curl -sL $VALIDATOR | tar xJ
@@ -93,7 +93,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
-    - uses: actions/setup-node@v1
+    - uses: actions/setup-node@v3
       with:
         node-version: '14.x'
     - name: install wasi
@@ -121,7 +121,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         repository: zeux/basis_universal
         ref: gltfpack

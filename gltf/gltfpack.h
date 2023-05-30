@@ -1,7 +1,7 @@
 /**
- * gltfpack - version 0.18
+ * gltfpack - version 0.19
  *
- * Copyright (C) 2016-2022, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
+ * Copyright (C) 2016-2023, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
  * Report bugs and download new versions at https://github.com/zeux/meshoptimizer
  *
  * This application is distributed under the MIT License. See notice at the end of this file.
@@ -127,6 +127,7 @@ struct Settings
 
 	float simplify_threshold;
 	bool simplify_aggressive;
+	bool simplify_lock_borders;
 	float simplify_debug;
 
 	int meshlet_debug;
@@ -365,7 +366,7 @@ void writeExtras(std::string& json, const cgltf_extras& extras);
 void writeScene(std::string& json, const cgltf_scene& scene, const std::string& roots);
 
 /**
- * Copyright (c) 2016-2022 Arseny Kapoulkine
+ * Copyright (c) 2016-2023 Arseny Kapoulkine
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation

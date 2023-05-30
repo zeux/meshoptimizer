@@ -58,6 +58,7 @@ The following settings are frequently used to restrict some optimizations:
 * `-kn`: keep named nodes and meshes attached to named nodes so that named nodes can be transformed externally
 * `-km`: keep named materials and disable named material merging
 * `-ke`: keep extras data
+* `-vpf`: use floating-point position quantization instead of the default fixed-point (this results in larger position data, but does not insert new nodes with dequantization transforms; when using this option, `-cc` is recommended as well)
 
 ## Building
 

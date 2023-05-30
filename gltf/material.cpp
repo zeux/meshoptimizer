@@ -207,6 +207,20 @@ static bool areMaterialComponentsEqual(const cgltf_iridescence& lhs, const cgltf
 	return true;
 }
 
+static bool areMaterialComponentsEqual(const cgltf_anisotropy& lhs, const cgltf_anisotropy& rhs)
+{
+	if (lhs.anisotropy_strength != rhs.anisotropy_strength)
+		return false;
+
+	if (lhs.anisotropy_rotation != rhs.anisotropy_rotation)
+		return false;
+
+	if (!areTextureViewsEqual(lhs.anisotropy_texture, rhs.anisotropy_texture))
+		return false;
+
+	return true;
+}
+
 static bool areMaterialsEqual(const cgltf_material& lhs, const cgltf_material& rhs, const Settings& settings)
 {
 	if (lhs.has_pbr_metallic_roughness != rhs.has_pbr_metallic_roughness)
@@ -267,6 +281,12 @@ static bool areMaterialsEqual(const cgltf_material& lhs, const cgltf_material& r
 		return false;
 
 	if (lhs.has_iridescence && !areMaterialComponentsEqual(lhs.iridescence, rhs.iridescence))
+		return false;
+
+	if (lhs.has_anisotropy != rhs.has_anisotropy)
+		return false;
+
+	if (lhs.has_anisotropy && !areMaterialComponentsEqual(lhs.anisotropy, rhs.anisotropy))
 		return false;
 
 	if (!areTextureViewsEqual(lhs.normal_texture, rhs.normal_texture))
@@ -458,6 +478,11 @@ static void analyzeMaterial(const cgltf_material& material, MaterialInfo& mi, cg
 		analyzeMaterialTexture(material.iridescence.iridescence_thickness_texture, TextureKind_Attrib, mi, data, images);
 	}
 
+	if (material.has_anisotropy)
+	{
+		analyzeMaterialTexture(material.anisotropy.anisotropy_texture, TextureKind_Normal, mi, data, images);
+	}
+
 	analyzeMaterialTexture(material.normal_texture, TextureKind_Normal, mi, data, images);
 	analyzeMaterialTexture(material.occlusion_texture, TextureKind_Attrib, mi, data, images);
 	analyzeMaterialTexture(material.emissive_texture, TextureKind_Color, mi, data, images);
@@ -469,28 +494,6 @@ void analyzeMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, st
 	{
 		analyzeMaterial(data->materials[i], materials[i], data, images);
 	}
-}
-
-static const cgltf_texture_view* getColorTexture(const cgltf_material& material)
-{
-	if (material.has_pbr_metallic_roughness)
-		return &material.pbr_metallic_roughness.base_color_texture;
-
-	if (material.has_pbr_specular_glossiness)
-		return &material.pbr_specular_glossiness.diffuse_texture;
-
-	return NULL;
-}
-
-static float getAlphaFactor(const cgltf_material& material)
-{
-	if (material.has_pbr_metallic_roughness)
-		return material.pbr_metallic_roughness.base_color_factor[3];
-
-	if (material.has_pbr_specular_glossiness)
-		return material.pbr_specular_glossiness.diffuse_factor[3];
-
-	return 1.f;
 }
 
 static int getChannels(const cgltf_image& image, ImageInfo& info, const char* input_path)
@@ -508,20 +511,30 @@ static int getChannels(const cgltf_image& image, ImageInfo& info, const char* in
 	return info.channels;
 }
 
+static bool shouldKeepAlpha(const cgltf_texture_view& color, float alpha, cgltf_data* data, const char* input_path, std::vector<ImageInfo>& images)
+{
+	if (alpha != 1.f)
+		return true;
+
+	return color.texture && color.texture->image && getChannels(*color.texture->image, images[color.texture->image - data->images], input_path) == 4;
+}
+
 void optimizeMaterials(cgltf_data* data, const char* input_path, std::vector<ImageInfo>& images)
 {
 	for (size_t i = 0; i < data->materials_count; ++i)
 	{
 		// remove BLEND/MASK from materials that don't have alpha information
-		if (data->materials[i].alpha_mode != cgltf_alpha_mode_opaque)
-		{
-			const cgltf_texture_view* color = getColorTexture(data->materials[i]);
-			float alpha = getAlphaFactor(data->materials[i]);
+		cgltf_material& material = data->materials[i];
 
-			if (alpha == 1.f && !(color && color->texture && color->texture->image && getChannels(*color->texture->image, images[color->texture->image - data->images], input_path) == 4))
-			{
-				data->materials[i].alpha_mode = cgltf_alpha_mode_opaque;
-			}
+		if (material.alpha_mode != cgltf_alpha_mode_opaque)
+		{
+			if (material.has_pbr_metallic_roughness && shouldKeepAlpha(material.pbr_metallic_roughness.base_color_texture, material.pbr_metallic_roughness.base_color_factor[3], data, input_path, images))
+				continue;
+
+			if (material.has_pbr_specular_glossiness && shouldKeepAlpha(material.pbr_specular_glossiness.diffuse_texture, material.pbr_specular_glossiness.diffuse_factor[3], data, input_path, images))
+				continue;
+
+			material.alpha_mode = cgltf_alpha_mode_opaque;
 		}
 	}
 }

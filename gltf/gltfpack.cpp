@@ -434,6 +434,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	bool ext_volume = false;
 	bool ext_emissive_strength = false;
 	bool ext_iridescence = false;
+	bool ext_anisotropy = false;
 	bool ext_unlit = false;
 	bool ext_instancing = false;
 	bool ext_texture_transform = false;
@@ -524,6 +525,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		ext_volume = ext_volume || material.has_volume;
 		ext_emissive_strength = ext_emissive_strength || material.has_emissive_strength;
 		ext_iridescence = ext_iridescence || material.has_iridescence;
+		ext_anisotropy = ext_anisotropy || material.has_anisotropy;
 		ext_unlit = ext_unlit || material.unlit;
 		ext_texture_transform = ext_texture_transform || mi.usesTextureTransform;
 	}
@@ -812,6 +814,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	    {"KHR_materials_volume", ext_volume, false},
 	    {"KHR_materials_emissive_strength", ext_emissive_strength, false},
 	    {"KHR_materials_iridescence", ext_iridescence, false},
+	    {"KHR_materials_anisotropy", ext_anisotropy, false},
 	    {"KHR_materials_unlit", ext_unlit, false},
 	    {"KHR_materials_variants", data->variants_count > 0, false},
 	    {"KHR_lights_punctual", data->lights_count > 0, false},
@@ -1258,6 +1261,10 @@ int main(int argc, char** argv)
 		{
 			settings.simplify_aggressive = true;
 		}
+		else if (strcmp(arg, "-slb") == 0)
+		{
+			settings.simplify_lock_borders = true;
+		}
 #ifndef NDEBUG
 		else if (strcmp(arg, "-sd") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
@@ -1438,6 +1445,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nSimplification:\n");
 			fprintf(stderr, "\t-si R: simplify meshes targeting triangle count ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\t-sa: aggressively simplify to the target ratio disregarding quality\n");
+			fprintf(stderr, "\t-slb: lock border vertices during simplification to avoid gaps on connected meshes\n");
 			fprintf(stderr, "\nVertices:\n");
 			fprintf(stderr, "\t-vp N: use N-bit quantization for positions (default: 14; N should be between 1 and 16)\n");
 			fprintf(stderr, "\t-vt N: use N-bit quantization for texture coordinates (default: 12; N should be between 1 and 16)\n");
