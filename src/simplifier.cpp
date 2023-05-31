@@ -515,8 +515,7 @@ static float quadricError(const Quadric& Q, const Vector3& v)
 	r += ry * v.y;
 	r += rz * v.z;
 
-	// TODO: weight normalization is breaking attribute error somehow
-	float s = 1;// Q.w == 0.f ? 0.f : 1.f / Q.w;
+	float s = Q.w == 0.f ? 0.f : 1.f / Q.w;
 
 	return fabsf(r) * s;
 }
