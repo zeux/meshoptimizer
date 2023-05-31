@@ -628,7 +628,7 @@ static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3
 	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, length * weight);
 }
 
-static void quadricFromAttributes(Quadric& Q, QuadricGrad* G, const Vector3& p0, const Vector3& p1, const Vector3& p2, const float* va0, const float* va1, const float* va2, size_t attribute_count, float w)
+static void quadricFromAttributes(Quadric& Q, QuadricGrad* G, const Vector3& p0, const Vector3& p1, const Vector3& p2, const float* va0, const float* va1, const float* va2, size_t attribute_count)
 {
 	// for each attribute we want to encode the following function into the quadric:
 	// (eval(pos) - attr)^2
@@ -637,6 +637,11 @@ static void quadricFromAttributes(Quadric& Q, QuadricGrad* G, const Vector3& p0,
 	// where gx/gy/gz/gw are gradients
 	Vector3 p10 = {p1.x - p0.x, p1.y - p0.y, p1.z - p0.z};
 	Vector3 p20 = {p2.x - p0.x, p2.y - p0.y, p2.z - p0.z};
+
+	// weight is scaled linearly with edge length
+	Vector3 normal = {p10.y * p20.z - p10.z * p20.y, p10.z * p20.x - p10.x * p20.z, p10.x * p20.y - p10.y * p20.x};
+	float area = sqrtf(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
+	float w = sqrtf(area);
 
 	// we compute gradients using barycentric coordinates; barycentric coordinates can be computed as follows:
 	// v = (d11 * d20 - d01 * d21) / denom
@@ -708,8 +713,7 @@ static void quadricFromAttributes(Quadric& Q, QuadricGrad* G, const Vector3& p0,
 	}
 }
 
-static void fillFaceQuadrics(Quadric* vertex_quadrics, Quadric* attribute_quadrics, QuadricGrad* attribute_gradients,
-	const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const float* vertex_attributes, size_t attribute_count, const unsigned int* remap)
+static void fillFaceQuadrics(Quadric* vertex_quadrics, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const unsigned int* remap)
 {
 	for (size_t i = 0; i < index_count; i += 3)
 	{
@@ -723,25 +727,6 @@ static void fillFaceQuadrics(Quadric* vertex_quadrics, Quadric* attribute_quadri
 		quadricAdd(vertex_quadrics[remap[i0]], Q);
 		quadricAdd(vertex_quadrics[remap[i1]], Q);
 		quadricAdd(vertex_quadrics[remap[i2]], Q);
-
-		if (attribute_count)
-		{
-			Quadric QA;
-			QuadricGrad G[kMaxAttributes];
-			quadricFromAttributes(QA, G, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2], &vertex_attributes[i0 * attribute_count], &vertex_attributes[i1 * attribute_count], &vertex_attributes[i2 * attribute_count], attribute_count, Q.w);
-
-			// TODO: This blends together attribute weights across attribute discontinuities, which is probably not a great idea
-			quadricAdd(attribute_quadrics[remap[i0]], QA);
-			quadricAdd(attribute_quadrics[remap[i1]], QA);
-			quadricAdd(attribute_quadrics[remap[i2]], QA);
-
-			for (size_t k = 0; k < attribute_count; ++k)
-			{
-				quadricAdd(attribute_gradients[remap[i0] * attribute_count + k], G[k]);
-				quadricAdd(attribute_gradients[remap[i1] * attribute_count + k], G[k]);
-				quadricAdd(attribute_gradients[remap[i2] * attribute_count + k], G[k]);
-			}
-		}
 	}
 }
 
@@ -789,6 +774,32 @@ static void fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 
 			quadricAdd(vertex_quadrics[remap[i0]], Q);
 			quadricAdd(vertex_quadrics[remap[i1]], Q);
+		}
+	}
+}
+
+static void fillAttributeQuadrics(Quadric* attribute_quadrics, QuadricGrad* attribute_gradients, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const float* vertex_attributes, size_t attribute_count, const unsigned int* remap)
+{
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		unsigned int i0 = indices[i + 0];
+		unsigned int i1 = indices[i + 1];
+		unsigned int i2 = indices[i + 2];
+
+		Quadric QA;
+		QuadricGrad G[kMaxAttributes];
+		quadricFromAttributes(QA, G, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2], &vertex_attributes[i0 * attribute_count], &vertex_attributes[i1 * attribute_count], &vertex_attributes[i2 * attribute_count], attribute_count);
+
+		// TODO: This blends together attribute weights across attribute discontinuities, which is probably not a great idea
+		quadricAdd(attribute_quadrics[remap[i0]], QA);
+		quadricAdd(attribute_quadrics[remap[i1]], QA);
+		quadricAdd(attribute_quadrics[remap[i2]], QA);
+
+		for (size_t k = 0; k < attribute_count; ++k)
+		{
+			quadricAdd(attribute_gradients[remap[i0] * attribute_count + k], G[k]);
+			quadricAdd(attribute_gradients[remap[i1] * attribute_count + k], G[k]);
+			quadricAdd(attribute_gradients[remap[i2] * attribute_count + k], G[k]);
 		}
 	}
 }
@@ -1535,8 +1546,11 @@ size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned 
 		memset(attribute_gradients, 0, vertex_count * attribute_count * sizeof(QuadricGrad));
 	}
 
-	fillFaceQuadrics(vertex_quadrics, attribute_quadrics, attribute_gradients, indices, index_count, vertex_positions, vertex_attributes, attribute_count, remap);
+	fillFaceQuadrics(vertex_quadrics, indices, index_count, vertex_positions, remap);
 	fillEdgeQuadrics(vertex_quadrics, indices, index_count, vertex_positions, remap, vertex_kind, loop, loopback);
+
+	if (attribute_count)
+		fillAttributeQuadrics(attribute_quadrics, attribute_gradients, indices, index_count, vertex_positions, vertex_attributes, attribute_count, remap);
 
 	if (result != indices)
 		memcpy(result, indices, index_count * sizeof(unsigned int));
