@@ -546,7 +546,7 @@ static float quadricError(const Quadric& Q, const QuadricGrad* G, size_t attribu
 	r += ry * v.y;
 	r += rz * v.z;
 
-	// see quadricUpdateAttributes for general derivation; here we need to add the parts of (eval(pos) - attr)^2 that depend on attr
+	// see quadricFromAttributes for general derivation; here we need to add the parts of (eval(pos) - attr)^2 that depend on attr
 	for (size_t k = 0; k < attribute_count; ++k)
 	{
 		float a = va[k];
@@ -644,7 +644,7 @@ static void quadricFromAttributes(Quadric& Q, QuadricGrad* G, const Vector3& p0,
 	// weight is scaled linearly with edge length
 	Vector3 normal = {p10.y * p20.z - p10.z * p20.y, p10.z * p20.x - p10.x * p20.z, p10.x * p20.y - p10.y * p20.x};
 	float area = sqrtf(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
-	float w = sqrtf(area);
+	float w = sqrtf(area); // TODO this needs more experimentation
 
 	// we compute gradients using barycentric coordinates; barycentric coordinates can be computed as follows:
 	// v = (d11 * d20 - d01 * d21) / denom
