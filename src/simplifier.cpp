@@ -484,12 +484,15 @@ static void quadricAdd(Quadric& Q, const Quadric& R)
 	Q.w += R.w;
 }
 
-static void quadricAdd(QuadricGrad& G, const QuadricGrad& R)
+static void quadricAdd(QuadricGrad* G, const QuadricGrad* R, size_t attribute_count)
 {
-	G.gx += R.gx;
-	G.gy += R.gy;
-	G.gz += R.gz;
-	G.gw += R.gw;
+	for (size_t k = 0; k < attribute_count; ++k)
+	{
+		G[k].gx += R[k].gx;
+		G[k].gy += R[k].gy;
+		G[k].gz += R[k].gz;
+		G[k].gw += R[k].gw;
+	}
 }
 
 static float quadricError(const Quadric& Q, const Vector3& v)
@@ -701,15 +704,6 @@ static void quadricFromAttributes(Quadric& Q, QuadricGrad* G, const Vector3& p0,
 		G[k].gy = w * gy;
 		G[k].gz = w * gz;
 		G[k].gw = w * gw;
-
-#if TRACE > 2
-		printf("attr%d: %e %e %e\n",
-			k,
-			(gx * p0.x + gy * p0.y + gz * p0.z + gw - a0),
-			(gx * p1.x + gy * p1.y + gz * p1.z + gw - a1),
-			(gx * p2.x + gy * p2.y + gz * p2.z + gw - a2)
-			);
-#endif
 	}
 }
 
@@ -795,12 +789,9 @@ static void fillAttributeQuadrics(Quadric* attribute_quadrics, QuadricGrad* attr
 		quadricAdd(attribute_quadrics[remap[i1]], QA);
 		quadricAdd(attribute_quadrics[remap[i2]], QA);
 
-		for (size_t k = 0; k < attribute_count; ++k)
-		{
-			quadricAdd(attribute_gradients[remap[i0] * attribute_count + k], G[k]);
-			quadricAdd(attribute_gradients[remap[i1] * attribute_count + k], G[k]);
-			quadricAdd(attribute_gradients[remap[i2] * attribute_count + k], G[k]);
-		}
+		quadricAdd(&attribute_gradients[remap[i0] * attribute_count], G, attribute_count);
+		quadricAdd(&attribute_gradients[remap[i1] * attribute_count], G, attribute_count);
+		quadricAdd(&attribute_gradients[remap[i2] * attribute_count], G, attribute_count);
 	}
 }
 
@@ -1093,9 +1084,7 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		if (attribute_count)
 		{
 			quadricAdd(attribute_quadrics[r1], attribute_quadrics[r0]);
-
-			for (size_t k = 0; k < attribute_count; ++k)
-				quadricAdd(attribute_gradients[r1 * attribute_count + k], attribute_gradients[r0 * attribute_count + k]);
+			quadricAdd(&attribute_gradients[r1 * attribute_count], &attribute_gradients[r0 * attribute_count], attribute_count);
 		}
 
 		if (vertex_kind[i0] == Kind_Complex)
