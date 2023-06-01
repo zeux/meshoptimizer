@@ -1444,11 +1444,11 @@ MESHOPTIMIZER_API unsigned int* meshopt_simplifyDebugLoopBack = 0;
 
 size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, unsigned int options, float* out_result_error)
 {
-	return meshopt_simplifyWithAttributes(destination, indices, index_count, vertex_positions_data, vertex_count, vertex_positions_stride, NULL, 0, target_index_count, target_error, options, out_result_error, NULL, 0);
+	return meshopt_simplifyWithAttributes(destination, indices, index_count, vertex_positions_data, vertex_count, vertex_positions_stride, NULL, 0, NULL, 0, target_index_count, target_error, options, out_result_error);
 }
 
 // TODO: In presence of attributes, target_error and out_result_error are no longer distance based; we may need to compute distance error separately if only to produce a linear distance cutoff
-size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes, size_t vertex_attributes_stride, size_t target_index_count, float target_error, unsigned int options, float* out_result_error, const float* attribute_weights, size_t attribute_count)
+size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes_data, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, size_t target_index_count, float target_error, unsigned int options, float* out_result_error)
 {
 	using namespace meshopt;
 
@@ -1460,8 +1460,6 @@ size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned 
 	assert(vertex_attributes_stride >= attribute_count * sizeof(float) && vertex_attributes_stride <= 256);
 	assert(vertex_attributes_stride % sizeof(float) == 0);
 	assert(attribute_count <= kMaxAttributes);
-
-	size_t vertex_attributes_stride_float = vertex_attributes_stride / sizeof(float);
 
 	meshopt_Allocator allocator;
 
@@ -1501,23 +1499,24 @@ size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned 
 	Vector3* vertex_positions = allocator.allocate<Vector3>(vertex_count);
 	rescalePositions(vertex_positions, vertex_positions_data, vertex_count, vertex_positions_stride);
 
+	float* vertex_attributes = NULL;
+
 	if (attribute_count)
 	{
-		float* vertex_attributes_copy = allocator.allocate<float>(vertex_count * attribute_count);
+		size_t vertex_attributes_stride_float = vertex_attributes_stride / sizeof(float);
+
+		vertex_attributes = allocator.allocate<float>(vertex_count * attribute_count);
 
 		for (size_t i = 0; i < vertex_count; ++i)
 		{
 			for (size_t k = 0; k < attribute_count; ++k)
 			{
-				float a = vertex_attributes[i * vertex_attributes_stride_float + k];
+				float a = vertex_attributes_data[i * vertex_attributes_stride_float + k];
 
 				// TODO: does it really make sense that we pre-scale inputs by weight instead of incorporating the weight into quadric update?
-				vertex_attributes_copy[i * attribute_count + k] = a * attribute_weights[k];
+				vertex_attributes[i * attribute_count + k] = a * attribute_weights[k];
 			}
 		}
-
-		// TODO: ideally we would have a separate variable here
-		vertex_attributes = vertex_attributes_copy;
 	}
 
 	Quadric* vertex_quadrics = allocator.allocate<Quadric>(vertex_count);

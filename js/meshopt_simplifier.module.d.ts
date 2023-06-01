@@ -10,7 +10,7 @@ export const MeshoptSimplifier: {
     
     simplify: (indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, target_index_count: number, target_error: number, flags?: Flags[]) => [Uint32Array, number];
 
-    simplifyWithAttributes: (indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, vertex_attributes: Float32Array, vertex_attributes_stride: number, target_index_count: number, target_error: number, attribute_weights: Float32Array, flags?: Flags[]) => [Uint32Array, number];
+    simplifyWithAttributes: (indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, vertex_attributes: Float32Array, vertex_attributes_stride: number, attribute_weights: Float32Array, target_index_count: number, target_error: number, flags?: Flags[]) => [Uint32Array, number];
 
     getScale: (vertex_positions: Float32Array, vertex_positions_stride: number) => number;
 };

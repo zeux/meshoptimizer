@@ -1120,7 +1120,7 @@ static void simplifyAttr()
 		}
 	}
 
-	float attr_weights[] = { 0.01f, 0.01f, 0.01f };
+	float attr_weights[3] = { 0.01f, 0.01f, 0.01f };
 
 	unsigned int expected[3][6] =
 	{
@@ -1129,7 +1129,7 @@ static void simplifyAttr()
 		{ 12, 14, 21, 21, 14, 23 },
 	};
 
-	assert(meshopt_simplifyWithAttributes(ib[0], ib[0], 7*2*6, vb[0], 8*3, 6*sizeof(float), vb[0] + 3, 6*sizeof(float), 6*3, 1e-2f, 0, NULL, attr_weights, 3) == 18);
+	assert(meshopt_simplifyWithAttributes(ib[0], ib[0], 7*2*6, vb[0], 8*3, 6*sizeof(float), vb[0] + 3, 6*sizeof(float), attr_weights, 3, 6*3, 1e-2f, 0, NULL) == 18);
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 }
 
