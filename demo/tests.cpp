@@ -916,19 +916,21 @@ static void simplify()
 	};
 
 	float vb[] = {
-		0, 2, 0,
+		0, 4, 0,
 		0, 1, 0,
-		1, 1, 0,
+		2, 2, 0,
 		0, 0, 0,
 		1, 0, 0,
-		2, 0, 0,
+		4, 0, 0,
 	};
 
 	unsigned int expected[] = {
 		0, 5, 3,
 	};
 
-	assert(meshopt_simplify(ib, ib, 12, vb, 6, 12, 3, 1e-2f) == 3);
+	float error;
+	assert(meshopt_simplify(ib, ib, 12, vb, 6, 12, 3, 1e-2f, 0, &error) == 3);
+	assert(error == 0.f);
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 }
 

@@ -42,12 +42,12 @@ var tests = {
 		]);
 
 		var positions = new Float32Array([
-			0, 2, 0,
+			0, 4, 0,
 			0, 1, 0,
-			1, 1, 0,
+			2, 2, 0,
 			0, 0, 0,
 			1, 0, 0,
-			2, 0, 0,
+			4, 0, 0,
 		]);
 
 		var res = simplifier.simplify(indices, positions, 3, /* target indices */ 3, /* target error */ 0.01);
@@ -72,12 +72,12 @@ var tests = {
 		]);
 
 		var positions = new Float32Array([
-			0, 2, 0,
+			0, 4, 0,
 			0, 1, 0,
-			1, 1, 0,
+			2, 2, 0,
 			0, 0, 0,
 			1, 0, 0,
-			2, 0, 0,
+			4, 0, 0,
 		]);
 
 		var res = simplifier.simplify(indices, positions, 3, /* target indices */ 3, /* target error */ 0.01);
