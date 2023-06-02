@@ -903,6 +903,35 @@ static void emptyMesh()
 	meshopt_optimizeOverdraw(0, 0, 0, 0, 0, 12, 1.f);
 }
 
+static void simplify()
+{
+	// 0
+	// 1 2
+	// 3 4 5
+	unsigned int ib[] = {
+		0, 2, 1,
+		1, 2, 3,
+		3, 2, 4,
+		2, 5, 4,
+	};
+
+	float vb[] = {
+		0, 2, 0,
+		0, 1, 0,
+		1, 1, 0,
+		0, 0, 0,
+		1, 0, 0,
+		2, 0, 0,
+	};
+
+	unsigned int expected[] = {
+		0, 5, 3,
+	};
+
+	assert(meshopt_simplify(ib, ib, 12, vb, 6, 12, 3, 1e-2f) == 3);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+}
+
 static void simplifyStuck()
 {
 	// tetrahedron can't be simplified due to collapse error restrictions
@@ -1191,6 +1220,7 @@ void runTests()
 
 	emptyMesh();
 
+	simplify();
 	simplifyStuck();
 	simplifySloppyStuck();
 	simplifyPointsStuck();
