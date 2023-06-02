@@ -97,7 +97,6 @@ var MeshoptSimplifier = (function() {
 		return [target, error[0]];
 	}
 
-	// TODO: unify this and simplify
 	function simplifyAttr(fun, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride, vertex_attributes, vertex_attributes_stride, attribute_weights, target_index_count, target_error, options) {
 		var sbrk = instance.exports.sbrk;
 		var te = sbrk(4);
@@ -180,7 +179,7 @@ var MeshoptSimplifier = (function() {
 			assert(vertex_attributes_stride >= 0);
 			assert(target_index_count % 3 == 0);
 			assert(target_error >= 0 && target_error <= 1);
-			assert(attribute_weights instanceof Float32Array); // TODO: allow regular arrays?
+			assert(Array.isArray(attribute_weights));
 			assert(vertex_attributes_stride >= attribute_weights.length);
 
 			var options = 0;
@@ -189,7 +188,7 @@ var MeshoptSimplifier = (function() {
 			}
 
 			var indices32 = indices.BYTES_PER_ELEMENT == 4 ? indices : new Uint32Array(indices);
-			var result = simplifyAttr(instance.exports.meshopt_simplifyWithAttributes, indices32, indices.length, vertex_positions, vertex_positions.length / vertex_positions_stride, vertex_positions_stride * 4, vertex_attributes, vertex_attributes_stride * 4, attribute_weights, target_index_count, target_error, options);
+			var result = simplifyAttr(instance.exports.meshopt_simplifyWithAttributes, indices32, indices.length, vertex_positions, vertex_positions.length / vertex_positions_stride, vertex_positions_stride * 4, vertex_attributes, vertex_attributes_stride * 4, new Float32Array(attribute_weights), target_index_count, target_error, options);
 			result[0] = (indices instanceof Uint32Array) ? result[0] : new indices.constructor(result[0]);
 
 			return result;
