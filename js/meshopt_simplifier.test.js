@@ -42,18 +42,18 @@ var tests = {
 		]);
 
 		var positions = new Float32Array([
-			0, 2, 0,
+			0, 4, 0,
 			0, 1, 0,
-			1, 1, 0,
+			2, 2, 0,
 			0, 0, 0,
 			1, 0, 0,
-			2, 0, 0,
+			4, 0, 0,
 		]);
 
 		var res = simplifier.simplify(indices, positions, 3, /* target indices */ 3, /* target error */ 0.01);
 
 		var expected = new Uint32Array([
-			3, 0, 5,
+			0, 5, 3,
 		]);
 
 		assert.deepEqual(res[0], expected);
@@ -72,18 +72,18 @@ var tests = {
 		]);
 
 		var positions = new Float32Array([
-			0, 2, 0,
+			0, 4, 0,
 			0, 1, 0,
-			1, 1, 0,
+			2, 2, 0,
 			0, 0, 0,
 			1, 0, 0,
-			2, 0, 0,
+			4, 0, 0,
 		]);
 
 		var res = simplifier.simplify(indices, positions, 3, /* target indices */ 3, /* target error */ 0.01);
 
 		var expected = new Uint16Array([
-			3, 0, 5,
+			0, 5, 3,
 		]);
 
 		assert.deepEqual(res[0], expected);

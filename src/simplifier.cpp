@@ -805,7 +805,7 @@ static bool hasTriangleFlip(const Vector3& a, const Vector3& b, const Vector3& c
 	Vector3 nbc = {eb.y * ec.z - eb.z * ec.y, eb.z * ec.x - eb.x * ec.z, eb.x * ec.y - eb.y * ec.x};
 	Vector3 nbd = {eb.y * ed.z - eb.z * ed.y, eb.z * ed.x - eb.x * ed.z, eb.x * ed.y - eb.y * ed.x};
 
-	return nbc.x * nbd.x + nbc.y * nbd.y + nbc.z * nbd.z < 0;
+	return nbc.x * nbd.x + nbc.y * nbd.y + nbc.z * nbd.z <= 0;
 }
 
 static bool hasTriangleFlips(const EdgeAdjacency& adjacency, const Vector3* vertex_positions, const unsigned int* collapse_remap, unsigned int i0, unsigned int i1)
@@ -825,7 +825,6 @@ static bool hasTriangleFlips(const EdgeAdjacency& adjacency, const Vector3* vert
 		unsigned int b = collapse_remap[edges[i].prev];
 
 		// skip triangles that get collapsed
-		// note: this is mathematically redundant as if either of these is true, the dot product in hasTriangleFlip should be 0
 		if (a == i1 || b == i1)
 			continue;
 
