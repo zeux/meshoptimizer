@@ -1157,7 +1157,7 @@ static void simplifyAttr()
 	{
 		{ 0, 2, 9, 9, 2, 11 },
 		{ 9, 11, 12, 12, 11, 14 },
-		{ 12, 14, 21, 21, 14, 23 },
+		{ 21, 12, 23, 12, 14, 23 },
 	};
 
 	assert(meshopt_simplifyWithAttributes(ib[0], ib[0], 7*2*6, vb[0], 8*3, 6*sizeof(float), vb[0] + 3, 6*sizeof(float), attr_weights, 3, 6*3, 1e-2f) == 18);
