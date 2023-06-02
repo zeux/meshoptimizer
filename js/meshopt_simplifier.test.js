@@ -53,7 +53,7 @@ var tests = {
 		var res = simplifier.simplify(indices, positions, 3, /* target indices */ 3, /* target error */ 0.01);
 
 		var expected = new Uint32Array([
-			3, 0, 5,
+			0, 5, 3,
 		]);
 
 		assert.deepEqual(res[0], expected);
