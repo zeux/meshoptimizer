@@ -1447,7 +1447,6 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	return meshopt_simplifyWithAttributes(destination, indices, index_count, vertex_positions_data, vertex_count, vertex_positions_stride, NULL, 0, NULL, 0, target_index_count, target_error, options, out_result_error);
 }
 
-// TODO: In presence of attributes, target_error and out_result_error are no longer distance based; we may need to compute distance error separately if only to produce a linear distance cutoff
 size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes_data, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, size_t target_index_count, float target_error, unsigned int options, float* out_result_error)
 {
 	using namespace meshopt;
@@ -1513,7 +1512,6 @@ size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned 
 			{
 				float a = vertex_attributes_data[i * vertex_attributes_stride_float + k];
 
-				// TODO: does it really make sense that we pre-scale inputs by weight instead of incorporating the weight into quadric update?
 				vertex_attributes[i * attribute_count + k] = a * attribute_weights[k];
 			}
 		}
