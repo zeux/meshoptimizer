@@ -47,9 +47,9 @@ function pack(args, iface) {
 		output.position = 0;
 		output.size = 0;
 
-		interface = iface;
+		fs_interface = iface;
 		var result = instance.exports.pack(argv.length, buf);
-		interface = undefined;
+		fs_interface = undefined;
 
 		instance.exports.free(buf);
 
@@ -71,7 +71,7 @@ var WASI_ENOSYS = 52;
 
 var ready;
 var instance;
-var interface;
+var fs_interface;
 
 var output = { data: new Uint8Array(), position: 0, size: 0 };
 var fds = { 1: output, 2: output, 3: { mount: "/", path: "/" }, 4: { mount: "/gltfpack-$pwd", path: "" } };
@@ -127,11 +127,11 @@ var wasi = {
 			file.data = new Uint8Array(4096);
 			file.size = 0;
 			file.close = function () {
-				interface.write(file.name, new Uint8Array(file.data.buffer, 0, file.size));
+				fs_interface.write(file.name, new Uint8Array(file.data.buffer, 0, file.size));
 			};
 		} else {
 			try {
-				file.data = interface.read(file.name);
+				file.data = fs_interface.read(file.name);
 
 				if (!file.data) {
 					return WASI_EIO;
