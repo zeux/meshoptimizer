@@ -26,6 +26,7 @@
 // Peter Lindstrom. Out-of-Core Simplification of Large Polygonal Models. 2000
 // Matthias Teschner, Bruno Heidelberger, Matthias Mueller, Danat Pomeranets, Markus Gross. Optimized Spatial Hashing for Collision Detection of Deformable Objects. 2003
 // Peter Van Sandt, Yannis Chronis, Jignesh M. Patel. Efficiently Searching In-Memory Sorted Arrays: Revenge of the Interpolation Search? 2019
+// Hugues Hoppe. New Quadric Metric for Simplifying Meshes with Appearance Attributes. 1999
 namespace meshopt
 {
 
@@ -426,12 +427,19 @@ static float rescalePositions(Vector3* result, const float* vertex_positions_dat
 	return extent;
 }
 
+static const size_t kMaxAttributes = 16;
+
 struct Quadric
 {
 	float a00, a11, a22;
 	float a10, a20, a21;
 	float b0, b1, b2, c;
 	float w;
+};
+
+struct QuadricGrad
+{
+	float gx, gy, gz, gw;
 };
 
 struct Collapse
@@ -476,6 +484,17 @@ static void quadricAdd(Quadric& Q, const Quadric& R)
 	Q.w += R.w;
 }
 
+static void quadricAdd(QuadricGrad* G, const QuadricGrad* R, size_t attribute_count)
+{
+	for (size_t k = 0; k < attribute_count; ++k)
+	{
+		G[k].gx += R[k].gx;
+		G[k].gy += R[k].gy;
+		G[k].gz += R[k].gz;
+		G[k].gw += R[k].gw;
+	}
+}
+
 static float quadricError(const Quadric& Q, const Vector3& v)
 {
 	float rx = Q.b0;
@@ -500,6 +519,45 @@ static float quadricError(const Quadric& Q, const Vector3& v)
 	r += rz * v.z;
 
 	float s = Q.w == 0.f ? 0.f : 1.f / Q.w;
+
+	return fabsf(r) * s;
+}
+
+static float quadricError(const Quadric& Q, const QuadricGrad* G, size_t attribute_count, const Vector3& v, const float* va)
+{
+	float rx = Q.b0;
+	float ry = Q.b1;
+	float rz = Q.b2;
+
+	rx += Q.a10 * v.y;
+	ry += Q.a21 * v.z;
+	rz += Q.a20 * v.x;
+
+	rx *= 2;
+	ry *= 2;
+	rz *= 2;
+
+	rx += Q.a00 * v.x;
+	ry += Q.a11 * v.y;
+	rz += Q.a22 * v.z;
+
+	float r = Q.c;
+	r += rx * v.x;
+	r += ry * v.y;
+	r += rz * v.z;
+
+	// see quadricFromAttributes for general derivation; here we need to add the parts of (eval(pos) - attr)^2 that depend on attr
+	for (size_t k = 0; k < attribute_count; ++k)
+	{
+		float a = va[k];
+		float g = v.x * G[k].gx + v.y * G[k].gy + v.z * G[k].gz + G[k].gw;
+
+		r += a * a * Q.w;
+		r -= 2 * a * g;
+	}
+
+	// TODO: weight normalization is breaking attribute error somehow
+	float s = 1;// Q.w == 0.f ? 0.f : 1.f / Q.w;
 
 	return fabsf(r) * s;
 }
@@ -574,6 +632,82 @@ static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3
 	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, length * weight);
 }
 
+static void quadricFromAttributes(Quadric& Q, QuadricGrad* G, const Vector3& p0, const Vector3& p1, const Vector3& p2, const float* va0, const float* va1, const float* va2, size_t attribute_count)
+{
+	// for each attribute we want to encode the following function into the quadric:
+	// (eval(pos) - attr)^2
+	// where eval(pos) interpolates attribute across the triangle like so:
+	// eval(pos) = pos.x * gx + pos.y * gy + pos.z * gz + gw
+	// where gx/gy/gz/gw are gradients
+	Vector3 p10 = {p1.x - p0.x, p1.y - p0.y, p1.z - p0.z};
+	Vector3 p20 = {p2.x - p0.x, p2.y - p0.y, p2.z - p0.z};
+
+	// weight is scaled linearly with edge length
+	Vector3 normal = {p10.y * p20.z - p10.z * p20.y, p10.z * p20.x - p10.x * p20.z, p10.x * p20.y - p10.y * p20.x};
+	float area = sqrtf(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
+	float w = sqrtf(area); // TODO this needs more experimentation
+
+	// we compute gradients using barycentric coordinates; barycentric coordinates can be computed as follows:
+	// v = (d11 * d20 - d01 * d21) / denom
+	// w = (d00 * d21 - d01 * d20) / denom
+	// u = 1 - v - w
+	// here v0, v1 are triangle edge vectors, v2 is a vector from point to triangle corner, and dij = dot(vi, vj)
+	const Vector3& v0 = p10;
+	const Vector3& v1 = p20;
+	float d00 = v0.x * v0.x + v0.y * v0.y + v0.z * v0.z;
+	float d01 = v0.x * v1.x + v0.y * v1.y + v0.z * v1.z;
+	float d11 = v1.x * v1.x + v1.y * v1.y + v1.z * v1.z;
+	float denom = d00 * d11 - d01 * d01;
+	float denomr = denom == 0 ? 0.f : 1.f / denom;
+
+	// precompute gradient factors
+	// these are derived by directly computing derivative of eval(pos) = a0 * u + a1 * v + a2 * w and factoring out common factors that are shared between attributes
+	float gx1 = (d11 * v0.x - d01 * v1.x) * denomr;
+	float gx2 = (d00 * v1.x - d01 * v0.x) * denomr;
+	float gy1 = (d11 * v0.y - d01 * v1.y) * denomr;
+	float gy2 = (d00 * v1.y - d01 * v0.y) * denomr;
+	float gz1 = (d11 * v0.z - d01 * v1.z) * denomr;
+	float gz2 = (d00 * v1.z - d01 * v0.z) * denomr;
+
+	memset(&Q, 0, sizeof(Quadric));
+
+	Q.w = w;
+
+	for (size_t k = 0; k < attribute_count; ++k)
+	{
+		float a0 = va0[k], a1 = va1[k], a2 = va2[k];
+
+		// compute gradient of eval(pos) for x/y/z/w
+		// the formulas below are obtained by directly computing derivative of eval(pos) = a0 * u + a1 * v + a2 * w
+		float gx = gx1 * (a1 - a0) + gx2 * (a2 - a0);
+		float gy = gy1 * (a1 - a0) + gy2 * (a2 - a0);
+		float gz = gz1 * (a1 - a0) + gz2 * (a2 - a0);
+		float gw = a0 - p0.x * gx - p0.y * gy - p0.z * gz;
+
+		// quadric encodes (eval(pos)-attr)^2; this means that the resulting expansion needs to compute, for example, pos.x * pos.y * K
+		// since quadrics already encode factors for pos.x * pos.y, we can accumulate almost everything in basic quadric fields
+		Q.a00 += w * (gx * gx);
+		Q.a11 += w * (gy * gy);
+		Q.a22 += w * (gz * gz);
+
+		Q.a10 += w * (gy * gx);
+		Q.a20 += w * (gz * gx);
+		Q.a21 += w * (gz * gy);
+
+		Q.b0 += w * (gx * gw);
+		Q.b1 += w * (gy * gw);
+		Q.b2 += w * (gz * gw);
+
+		Q.c += w * (gw * gw);
+
+		// the only remaining sum components are ones that depend on attr; these will be addded during error evaluation, see quadricError
+		G[k].gx = w * gx;
+		G[k].gy = w * gy;
+		G[k].gz = w * gz;
+		G[k].gw = w * gw;
+	}
+}
+
 static void fillFaceQuadrics(Quadric* vertex_quadrics, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const unsigned int* remap)
 {
 	for (size_t i = 0; i < index_count; i += 3)
@@ -636,6 +770,29 @@ static void fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 			quadricAdd(vertex_quadrics[remap[i0]], Q);
 			quadricAdd(vertex_quadrics[remap[i1]], Q);
 		}
+	}
+}
+
+static void fillAttributeQuadrics(Quadric* attribute_quadrics, QuadricGrad* attribute_gradients, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const float* vertex_attributes, size_t attribute_count, const unsigned int* remap)
+{
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		unsigned int i0 = indices[i + 0];
+		unsigned int i1 = indices[i + 1];
+		unsigned int i2 = indices[i + 2];
+
+		Quadric QA;
+		QuadricGrad G[kMaxAttributes];
+		quadricFromAttributes(QA, G, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2], &vertex_attributes[i0 * attribute_count], &vertex_attributes[i1 * attribute_count], &vertex_attributes[i2 * attribute_count], attribute_count);
+
+		// TODO: This blends together attribute weights across attribute discontinuities, which is probably not a great idea
+		quadricAdd(attribute_quadrics[remap[i0]], QA);
+		quadricAdd(attribute_quadrics[remap[i1]], QA);
+		quadricAdd(attribute_quadrics[remap[i2]], QA);
+
+		quadricAdd(&attribute_gradients[remap[i0] * attribute_count], G, attribute_count);
+		quadricAdd(&attribute_gradients[remap[i1] * attribute_count], G, attribute_count);
+		quadricAdd(&attribute_gradients[remap[i2] * attribute_count], G, attribute_count);
 	}
 }
 
@@ -738,7 +895,7 @@ static size_t pickEdgeCollapses(Collapse* collapses, const unsigned int* indices
 	return collapse_count;
 }
 
-static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const Vector3* vertex_positions, const Quadric* vertex_quadrics, const unsigned int* remap)
+static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const Vector3* vertex_positions, const float* vertex_attributes, const Quadric* vertex_quadrics, const Quadric* attribute_quadrics, const QuadricGrad* attribute_gradients, size_t attribute_count, const unsigned int* remap)
 {
 	for (size_t i = 0; i < collapse_count; ++i)
 	{
@@ -752,11 +909,14 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 		unsigned int j0 = c.bidi ? i1 : i0;
 		unsigned int j1 = c.bidi ? i0 : i1;
 
-		const Quadric& qi = vertex_quadrics[remap[i0]];
-		const Quadric& qj = vertex_quadrics[remap[j0]];
+		float ei = quadricError(vertex_quadrics[remap[i0]], vertex_positions[i1]);
+		float ej = quadricError(vertex_quadrics[remap[j0]], vertex_positions[j1]);
 
-		float ei = quadricError(qi, vertex_positions[i1]);
-		float ej = quadricError(qj, vertex_positions[j1]);
+		if (attribute_count)
+		{
+			ei += quadricError(attribute_quadrics[remap[i0]], &attribute_gradients[remap[i0] * attribute_count], attribute_count, vertex_positions[i1], &vertex_attributes[i1 * attribute_count]);
+			ej += quadricError(attribute_quadrics[remap[j0]], &attribute_gradients[remap[j0] * attribute_count], attribute_count, vertex_positions[j1], &vertex_attributes[j1 * attribute_count]);
+		}
 
 		// pick edge direction with minimal error
 		c.v0 = ei <= ej ? i0 : j0;
@@ -858,7 +1018,7 @@ static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapse
 	}
 }
 
-static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, const Vector3* vertex_positions, const EdgeAdjacency& adjacency, size_t triangle_collapse_goal, float error_limit, float& result_error)
+static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, Quadric* attribute_quadrics, QuadricGrad* attribute_gradients, size_t attribute_count, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, const Vector3* vertex_positions, const EdgeAdjacency& adjacency, size_t triangle_collapse_goal, float error_limit, float& result_error)
 {
 	size_t edge_collapses = 0;
 	size_t triangle_collapses = 0;
@@ -920,6 +1080,12 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		assert(collapse_remap[r1] == r1);
 
 		quadricAdd(vertex_quadrics[r1], vertex_quadrics[r0]);
+
+		if (attribute_count)
+		{
+			quadricAdd(attribute_quadrics[r1], attribute_quadrics[r0]);
+			quadricAdd(&attribute_gradients[r1 * attribute_count], &attribute_gradients[r0 * attribute_count], attribute_count);
+		}
 
 		if (vertex_kind[i0] == Kind_Complex)
 		{
@@ -1278,6 +1444,11 @@ MESHOPTIMIZER_API unsigned int* meshopt_simplifyDebugLoopBack = 0;
 
 size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, unsigned int options, float* out_result_error)
 {
+	return meshopt_simplifyWithAttributes(destination, indices, index_count, vertex_positions_data, vertex_count, vertex_positions_stride, NULL, 0, NULL, 0, target_index_count, target_error, options, out_result_error);
+}
+
+size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes_data, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, size_t target_index_count, float target_error, unsigned int options, float* out_result_error)
+{
 	using namespace meshopt;
 
 	assert(index_count % 3 == 0);
@@ -1285,6 +1456,9 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	assert(vertex_positions_stride % sizeof(float) == 0);
 	assert(target_index_count <= index_count);
 	assert((options & ~(meshopt_SimplifyLockBorder)) == 0);
+	assert(vertex_attributes_stride >= attribute_count * sizeof(float) && vertex_attributes_stride <= 256);
+	assert(vertex_attributes_stride % sizeof(float) == 0);
+	assert(attribute_count <= kMaxAttributes);
 
 	meshopt_Allocator allocator;
 
@@ -1324,11 +1498,45 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 	Vector3* vertex_positions = allocator.allocate<Vector3>(vertex_count);
 	rescalePositions(vertex_positions, vertex_positions_data, vertex_count, vertex_positions_stride);
 
+	float* vertex_attributes = NULL;
+
+	if (attribute_count)
+	{
+		size_t vertex_attributes_stride_float = vertex_attributes_stride / sizeof(float);
+
+		vertex_attributes = allocator.allocate<float>(vertex_count * attribute_count);
+
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			for (size_t k = 0; k < attribute_count; ++k)
+			{
+				float a = vertex_attributes_data[i * vertex_attributes_stride_float + k];
+
+				vertex_attributes[i * attribute_count + k] = a * attribute_weights[k];
+			}
+		}
+	}
+
 	Quadric* vertex_quadrics = allocator.allocate<Quadric>(vertex_count);
 	memset(vertex_quadrics, 0, vertex_count * sizeof(Quadric));
 
+	Quadric* attribute_quadrics = NULL;
+	QuadricGrad* attribute_gradients = NULL;
+
+	if (attribute_count)
+	{
+		attribute_quadrics = allocator.allocate<Quadric>(vertex_count);
+		memset(attribute_quadrics, 0, vertex_count * sizeof(Quadric));
+
+		attribute_gradients = allocator.allocate<QuadricGrad>(vertex_count * attribute_count);
+		memset(attribute_gradients, 0, vertex_count * attribute_count * sizeof(QuadricGrad));
+	}
+
 	fillFaceQuadrics(vertex_quadrics, indices, index_count, vertex_positions, remap);
 	fillEdgeQuadrics(vertex_quadrics, indices, index_count, vertex_positions, remap, vertex_kind, loop, loopback);
+
+	if (attribute_count)
+		fillAttributeQuadrics(attribute_quadrics, attribute_gradients, indices, index_count, vertex_positions, vertex_attributes, attribute_count, remap);
 
 	if (result != indices)
 		memcpy(result, indices, index_count * sizeof(unsigned int));
@@ -1359,7 +1567,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		if (edge_collapse_count == 0)
 			break;
 
-		rankEdgeCollapses(edge_collapses, edge_collapse_count, vertex_positions, vertex_quadrics, remap);
+		rankEdgeCollapses(edge_collapses, edge_collapse_count, vertex_positions, vertex_attributes, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, remap);
 
 #if TRACE > 1
 		dumpEdgeCollapses(edge_collapses, edge_collapse_count, vertex_kind);
@@ -1378,7 +1586,7 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 		printf("pass %d: ", int(pass_count++));
 #endif
 
-		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, vertex_positions, adjacency, triangle_collapse_goal, error_limit, result_error);
+		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, vertex_positions, adjacency, triangle_collapse_goal, error_limit, result_error);
 
 		// no edges can be collapsed any more due to hitting the error limit or triangle collapse limit
 		if (collapses == 0)

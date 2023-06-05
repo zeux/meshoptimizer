@@ -1114,6 +1114,56 @@ static void simplifyLockBorder()
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 }
 
+static void simplifyAttr()
+{
+	float vb[8*3][6];
+
+	for (int y = 0; y < 8; ++y)
+	{
+		// first four rows are a blue gradient, next four rows are a yellow gradient
+		float r = (y < 4) ? 0.8f + y * 0.05f : 0.f;
+		float g = (y < 4) ? 0.8f + y * 0.05f : 0.f;
+		float b = (y < 4) ? 0.f : 0.8f + (7 - y) * 0.05f;
+
+		for (int x = 0; x < 3; ++x)
+		{
+			vb[y*3+x][0] = float(x);
+			vb[y*3+x][1] = float(y);
+			vb[y*3+x][2] = 0.f;
+			vb[y*3+x][3] = r;
+			vb[y*3+x][4] = g;
+			vb[y*3+x][5] = b;
+		}
+	}
+
+	unsigned int ib[7*2][6];
+
+	for (int y = 0; y < 7; ++y)
+	{
+		for (int x = 0; x < 2; ++x)
+		{
+			ib[y*2+x][0] = (y + 0) * 3 + (x + 0);
+			ib[y*2+x][1] = (y + 0) * 3 + (x + 1);
+			ib[y*2+x][2] = (y + 1) * 3 + (x + 0);
+			ib[y*2+x][3] = (y + 1) * 3 + (x + 0);
+			ib[y*2+x][4] = (y + 0) * 3 + (x + 1);
+			ib[y*2+x][5] = (y + 1) * 3 + (x + 1);
+		}
+	}
+
+	float attr_weights[3] = { 0.01f, 0.01f, 0.01f };
+
+	unsigned int expected[3][6] =
+	{
+		{ 0, 2, 9, 9, 2, 11 },
+		{ 9, 11, 12, 12, 11, 14 },
+		{ 21, 12, 23, 12, 14, 23 },
+	};
+
+	assert(meshopt_simplifyWithAttributes(ib[0], ib[0], 7*2*6, vb[0], 8*3, 6*sizeof(float), vb[0] + 3, 6*sizeof(float), attr_weights, 3, 6*3, 1e-2f) == 18);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+}
+
 static void adjacency()
 {
 	// 0 1/4
@@ -1230,6 +1280,7 @@ void runTests()
 	simplifyScale();
 	simplifyDegenerate();
 	simplifyLockBorder();
+	simplifyAttr();
 
 	adjacency();
 	tessellation();
