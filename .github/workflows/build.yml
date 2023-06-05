@@ -4,7 +4,11 @@ on:
   push:
     branches:
       - 'master'
+    paths-ignore:
+      - '*.md'
   pull_request:
+    paths-ignore:
+      - '*.md'
 
 jobs:
   unix:
@@ -39,7 +43,7 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: cmake configure
-      run: cmake . -DMESHOPT_BUILD_DEMO=ON -DMESHOPT_BUILD_GLTFPACK=ON -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>" -A ${{matrix.arch}}
+      run: cmake . -DMESHOPT_BUILD_DEMO=ON -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_WERROR=ON -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>" -A ${{matrix.arch}}
     - name: cmake test
       shell: bash # necessary for fail-fast
       run: |
@@ -52,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
-    - uses: actions/setup-node@v1
+    - uses: actions/setup-node@v3
       with:
         node-version: '16'
     - name: test decoder
@@ -68,7 +72,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         repository: KhronosGroup/glTF-Sample-Models
         path: glTF-Sample-Models
@@ -77,7 +81,7 @@ jobs:
     - name: test
       run: find glTF-Sample-Models/2.0/ -name *.gltf -or -name *.glb | xargs -d '\n' ./gltfpack -cc -test
     - name: pack
-      run: find glTF-Sample-Models/2.0/ -name *.gltf | grep -v glTF-Draco | grep -v glTF-KTX-BasisU | xargs -d '\n' -I '{}' ./gltfpack -i '{}' -o '{}pack.gltf'
+      run: find glTF-Sample-Models/2.0/ -name *.gltf | grep -v 'glTF-Draco\|glTF-KTX-BasisU\|glTF-Meshopt' | xargs -d '\n' -I '{}' ./gltfpack -i '{}' -o '{}pack.gltf'
     - name: validate
       run: |
         curl -sL $VALIDATOR | tar xJ
@@ -85,27 +89,24 @@ jobs:
       env:
         VALIDATOR: https://github.com/KhronosGroup/glTF-Validator/releases/download/2.0.0-dev.3.3/gltf_validator-2.0.0-dev.3.3-linux64.tar.xz
 
-  gltfpackjs:
+  gltfpack-js:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
-    - uses: actions/setup-node@v1
+    - uses: actions/setup-node@v3
       with:
         node-version: '14.x'
     - name: install wasi
       run: |
         curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sdk-$VERSION.0-linux.tar.gz | tar xz
         curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/libclang_rt.builtins-wasm32-wasi-$VERSION.0.tar.gz | tar xz -C wasi-sdk-$VERSION.0
-        curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sysroot-$VERSION.0.tar.gz | tar xz
+        curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sysroot-$VERSION.0.tar.gz | tar xz -C wasi-sdk-$VERSION.0/share
         mv wasi-sdk-$VERSION.0 wasi-sdk
       env:
-        VERSION: 16
+        VERSION: 17
     - name: build
       run: |
-        make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot gltf/library.wasm
-        make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot js/meshopt_decoder.js js/meshopt_decoder.module.js
-        make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot js/meshopt_encoder.js js/meshopt_encoder.module.js
-        make -B WASMCC=wasi-sdk/bin/clang++ WASI_SDK=./wasi-sysroot js/meshopt_simplifier.js js/meshopt_simplifier.module.js
+        make -j2 -B WASI_SDK=wasi-sdk gltf/library.wasm js
         git status
     - name: test
       run: |
@@ -115,6 +116,18 @@ jobs:
         node js/meshopt_decoder.test.js
         node js/meshopt_encoder.test.js
         node js/meshopt_simplifier.test.js
+
+  gltfpack-basis:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - uses: actions/checkout@v3
+      with:
+        repository: zeux/basis_universal
+        ref: gltfpack
+        path: basis_universal
+    - name: make gltfpack
+      run: make -j2 BASISU=basis_universal gltfpack
 
   arm64:
     runs-on: ubuntu-latest

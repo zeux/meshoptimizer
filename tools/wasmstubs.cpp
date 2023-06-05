@@ -100,7 +100,7 @@ extern "C" void* memset(void* ptr, int value, size_t num)
 
 void* operator new(size_t size)
 {
-	return sbrk(size);
+	return sbrk((size + 7) & ~7);
 }
 
 void operator delete(void* ptr) throw()

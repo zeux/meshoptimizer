@@ -58,6 +58,17 @@ The following settings are frequently used to restrict some optimizations:
 * `-kn`: keep named nodes and meshes attached to named nodes so that named nodes can be transformed externally
 * `-km`: keep named materials and disable named material merging
 * `-ke`: keep extras data
+* `-vpf`: use floating-point position quantization instead of the default fixed-point (this results in larger position data, but does not insert new nodes with dequantization transforms; when using this option, `-cc` is recommended as well)
+
+## Building
+
+gltfpack can be built from source using CMake or Make. To build a full version of gltfpack that supports texture compression, CMake configuration needs to specify the path to https://github.com/zeux/basis_universal fork (branch gltfpack) via `MESHOPT_BASISU_PATH` variable:
+
+```
+git clone -b gltfpack https://github.com/zeux/basis_universal
+cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_BASISU_PATH=basis_universal -DCMAKE_BUILD_TYPE=Release
+cmake --build . --target gltfpack --config Release
+```
 
 ## License
 

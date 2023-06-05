@@ -40,6 +40,14 @@ To simplify the decoding further, a wrapper function is provided that automatica
 decodeGltfBuffer: (target: Uint8Array, count: number, size: number, source: Uint8Array, mode: string, filter?: string) => void;
 ```
 
+Note that all functions above run synchronously; sometimes decoding large buffers takes time, so this library provides support for asynchronous decoding
+using WebWorkers via the following API; `useWorkers` must be called once at startup to create the desired number of workers:
+
+```ts
+useWorkers: (count: number) => void;
+decodeGltfBufferAsync: (count: number, size: number, source: Uint8Array, mode: string, filter?: string) => Promise<Uint8Array>;
+```
+
 ## Encoder
 
 `MeshoptEncoder` (`meshopt_encoder.js`) implements data preprocessing and compression of attribute and index buffers. It can be used to compress data that can be decompressed using the decoder module - note that the encoding process is more complicated and nuanced. It is typically split into three steps:
@@ -115,7 +123,9 @@ To simplify the mesh, the following function needs to be called first:
 simplify(indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, target_index_count: number, target_error: number, flags?: [Flags]) => [Uint32Array, number];
 ```
 
-Given an input triangle mesh represented by an index buffer and a position buffer, the algorithm tries to simplify the mesh down to the target index count while maintaining the appearance error below acceptable error. `target_error` is the maximum acceptable deviation in relative units: for example, using target error of `0.01` instructs the simplifier to limit the change in the simplified mesh to 1% of the overall mesh radius. Note that the error adjustment is approximate.
+Given an input triangle mesh represented by an index buffer and a position buffer, the algorithm tries to simplify the mesh down to the target index count while maintaining the appearance. For meshes with inconsistent topology or many seams, such as faceted meshes, it can result in simplifier getting "stuck" and not being able to simplify the mesh fully. Therefore it's critical that identical vertices are "welded" together, that is, the input vertex buffer does not contain duplicates. Additionally, it may be possible to preprocess the index buffer to discard any vertex attributes that aren't critical and can be rebuilt later.
+
+Target error is an approximate measure of the deviation from the original mesh using distance normalized to `[0..1]` range (e.g. `1e-2f` means that simplifier will try to maintain the error to be below 1% of the mesh extents). Note that the simplifier attempts to produce the requested number of indices at minimal error, but because of topological restrictions and error limit it is not guaranteed to reach the target index count and can stop earlier.
 
 The algorithm uses position data stored in a strided array; `vertex_positions_stride` represents the distance between subsequent positions in `Float32` units and should typically be set to 3. If the input position data is quantized, it's necessary to dequantize it so that the algorithm can estimate the position error correctly. While the algorithm doesn't use other attributes like normals/texture coordinates, it automatically recognizes and preserves attribute discontinuities based on index data. Because of this, for the algorithm to function well, the mesh vertices should be unique (de-duplicated).
 

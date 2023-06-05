@@ -175,7 +175,7 @@ void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTextur
 	}
 }
 
-void getPositionBounds(float min[3], float max[3], const Stream& stream, const QuantizationPosition* qp)
+void getPositionBounds(float min[3], float max[3], const Stream& stream, const QuantizationPosition& qp, const Settings& settings)
 {
 	assert(stream.type == cgltf_attribute_type_position);
 	assert(stream.data.size() > 0);
@@ -194,21 +194,32 @@ void getPositionBounds(float min[3], float max[3], const Stream& stream, const Q
 		}
 	}
 
-	if (qp)
+	if (settings.quantize)
 	{
-		float pos_rscale = qp->scale == 0.f ? 0.f : 1.f / qp->scale * (stream.target > 0 && qp->normalized ? 32767.f / 65535.f : 1.f);
-
-		for (int k = 0; k < 3; ++k)
+		if (settings.pos_float)
 		{
-			if (stream.target == 0)
+			for (int k = 0; k < 3; ++k)
 			{
-				min[k] = float(meshopt_quantizeUnorm((min[k] - qp->offset[k]) * pos_rscale, qp->bits));
-				max[k] = float(meshopt_quantizeUnorm((max[k] - qp->offset[k]) * pos_rscale, qp->bits));
+				min[k] = meshopt_quantizeFloat(min[k], qp.bits);
+				max[k] = meshopt_quantizeFloat(max[k], qp.bits);
 			}
-			else
+		}
+		else
+		{
+			float pos_rscale = qp.scale == 0.f ? 0.f : 1.f / qp.scale * (stream.target > 0 && qp.normalized ? 32767.f / 65535.f : 1.f);
+
+			for (int k = 0; k < 3; ++k)
 			{
-				min[k] = (min[k] >= 0.f ? 1.f : -1.f) * float(meshopt_quantizeUnorm(fabsf(min[k]) * pos_rscale, qp->bits));
-				max[k] = (max[k] >= 0.f ? 1.f : -1.f) * float(meshopt_quantizeUnorm(fabsf(max[k]) * pos_rscale, qp->bits));
+				if (stream.target == 0)
+				{
+					min[k] = float(meshopt_quantizeUnorm((min[k] - qp.offset[k]) * pos_rscale, qp.bits));
+					max[k] = float(meshopt_quantizeUnorm((max[k] - qp.offset[k]) * pos_rscale, qp.bits));
+				}
+				else
+				{
+					min[k] = (min[k] >= 0.f ? 1.f : -1.f) * float(meshopt_quantizeUnorm(fabsf(min[k]) * pos_rscale, qp.bits));
+					max[k] = (max[k] >= 0.f ? 1.f : -1.f) * float(meshopt_quantizeUnorm(fabsf(max[k]) * pos_rscale, qp.bits));
+				}
 			}
 		}
 	}
@@ -247,6 +258,115 @@ static void encodeOct(int& fu, int& fv, float nx, float ny, float nz, int bits)
 	fv = meshopt_quantizeSnorm(v, bits);
 }
 
+static void encodeQuat(int16_t v[4], const Attr& a, int bits)
+{
+	const float scaler = sqrtf(2.f);
+
+	// establish maximum quaternion component
+	int qc = 0;
+	qc = fabsf(a.f[1]) > fabsf(a.f[qc]) ? 1 : qc;
+	qc = fabsf(a.f[2]) > fabsf(a.f[qc]) ? 2 : qc;
+	qc = fabsf(a.f[3]) > fabsf(a.f[qc]) ? 3 : qc;
+
+	// we use double-cover properties to discard the sign
+	float sign = a.f[qc] < 0.f ? -1.f : 1.f;
+
+	// note: we always encode a cyclical swizzle to be able to recover the order via rotation
+	v[0] = int16_t(meshopt_quantizeSnorm(a.f[(qc + 1) & 3] * scaler * sign, bits));
+	v[1] = int16_t(meshopt_quantizeSnorm(a.f[(qc + 2) & 3] * scaler * sign, bits));
+	v[2] = int16_t(meshopt_quantizeSnorm(a.f[(qc + 3) & 3] * scaler * sign, bits));
+	v[3] = int16_t((meshopt_quantizeSnorm(1.f, bits) & ~3) | qc);
+}
+
+static void encodeExpShared(uint32_t v[3], const Attr& a, int bits)
+{
+	// get exponents from all components
+	int ex, ey, ez;
+	frexp(a.f[0], &ex);
+	frexp(a.f[1], &ey);
+	frexp(a.f[2], &ez);
+
+	// use maximum exponent to encode values; this guarantees that mantissa is [-1, 1]
+	// note that we additionally scale the mantissa to make it a K-bit signed integer (K-1 bits for magnitude)
+	int exp = std::max(ex, std::max(ey, ez)) - (bits - 1);
+
+	// compute renormalized rounded mantissas for each component
+	int mx = int(ldexp(a.f[0], -exp) + (a.f[0] >= 0 ? 0.5f : -0.5f));
+	int my = int(ldexp(a.f[1], -exp) + (a.f[1] >= 0 ? 0.5f : -0.5f));
+	int mz = int(ldexp(a.f[2], -exp) + (a.f[2] >= 0 ? 0.5f : -0.5f));
+
+	int mmask = (1 << 24) - 1;
+
+	// encode exponent & mantissa into each resulting value
+	v[0] = (mx & mmask) | (unsigned(exp) << 24);
+	v[1] = (my & mmask) | (unsigned(exp) << 24);
+	v[2] = (mz & mmask) | (unsigned(exp) << 24);
+}
+
+static uint32_t encodeExpOne(float v, int bits)
+{
+	// extract exponent
+	int e;
+	frexp(v, &e);
+
+	// scale the mantissa to make it a K-bit signed integer (K-1 bits for magnitude)
+	int exp = e - (bits - 1);
+
+	// compute renormalized rounded mantissa
+	int m = int(ldexp(v, -exp) + (v >= 0 ? 0.5f : -0.5f));
+
+	int mmask = (1 << 24) - 1;
+
+	// encode exponent & mantissa
+	return (m & mmask) | (unsigned(exp) << 24);
+}
+
+static void encodeExpParallel(std::string& bin, const Attr* data, size_t count, int bits)
+{
+	int expx = -128, expy = -128, expz = -128;
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		const Attr& a = data[i];
+
+		// get exponents from all components
+		int ex, ey, ez;
+		frexp(a.f[0], &ex);
+		frexp(a.f[1], &ey);
+		frexp(a.f[2], &ez);
+
+		// use maximum exponent to encode values; this guarantees that mantissa is [-1, 1]
+		expx = std::max(expx, ex);
+		expy = std::max(expy, ey);
+		expz = std::max(expz, ez);
+	}
+
+	// scale the mantissa to make it a K-bit signed integer (K-1 bits for magnitude)
+	expx -= (bits - 1);
+	expy -= (bits - 1);
+	expz -= (bits - 1);
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		const Attr& a = data[i];
+
+		// compute renormalized rounded mantissas
+		int mx = int(ldexp(a.f[0], -expx) + (a.f[0] >= 0 ? 0.5f : -0.5f));
+		int my = int(ldexp(a.f[1], -expy) + (a.f[1] >= 0 ? 0.5f : -0.5f));
+		int mz = int(ldexp(a.f[2], -expz) + (a.f[2] >= 0 ? 0.5f : -0.5f));
+
+		int mmask = (1 << 24) - 1;
+
+		// encode exponent & mantissa
+		uint32_t v[3];
+		v[0] = (mx & mmask) | (unsigned(expx) << 24);
+		v[1] = (my & mmask) | (unsigned(expy) << 24);
+		v[2] = (mz & mmask) | (unsigned(expz) << 24);
+
+		bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+	}
+}
+
 static StreamFormat writeVertexStreamRaw(std::string& bin, const Stream& stream, cgltf_type type, size_t components)
 {
 	assert(components >= 1 && components <= 4);
@@ -278,6 +398,43 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	{
 		if (!settings.quantize)
 			return writeVertexStreamRaw(bin, stream, cgltf_type_vec3, 3);
+
+		if (settings.pos_float)
+		{
+			StreamFormat::Filter filter = settings.compress ? StreamFormat::Filter_Exp : StreamFormat::Filter_None;
+
+			if (settings.compressmore)
+			{
+				encodeExpParallel(bin, &stream.data[0], stream.data.size(), qp.bits + 1);
+			}
+			else
+			{
+				for (size_t i = 0; i < stream.data.size(); ++i)
+				{
+					const Attr& a = stream.data[i];
+
+					if (filter == StreamFormat::Filter_Exp)
+					{
+						uint32_t v[3];
+						v[0] = encodeExpOne(a.f[0], qp.bits + 1);
+						v[1] = encodeExpOne(a.f[1], qp.bits + 1);
+						v[2] = encodeExpOne(a.f[2], qp.bits + 1);
+						bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+					}
+					else
+					{
+						float v[3] = {
+						    meshopt_quantizeFloat(a.f[0], qp.bits),
+						    meshopt_quantizeFloat(a.f[1], qp.bits),
+						    meshopt_quantizeFloat(a.f[2], qp.bits)};
+						bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+					}
+				}
+			}
+
+			StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_32f, false, 12, filter};
+			return format;
+		}
 
 		if (stream.target == 0)
 		{
@@ -648,51 +805,6 @@ StreamFormat writeTimeStream(std::string& bin, const std::vector<float>& data)
 
 	StreamFormat format = {cgltf_type_scalar, cgltf_component_type_r_32f, false, 4};
 	return format;
-}
-
-static void encodeQuat(int16_t v[4], const Attr& a, int bits)
-{
-	const float scaler = sqrtf(2.f);
-
-	// establish maximum quaternion component
-	int qc = 0;
-	qc = fabsf(a.f[1]) > fabsf(a.f[qc]) ? 1 : qc;
-	qc = fabsf(a.f[2]) > fabsf(a.f[qc]) ? 2 : qc;
-	qc = fabsf(a.f[3]) > fabsf(a.f[qc]) ? 3 : qc;
-
-	// we use double-cover properties to discard the sign
-	float sign = a.f[qc] < 0.f ? -1.f : 1.f;
-
-	// note: we always encode a cyclical swizzle to be able to recover the order via rotation
-	v[0] = int16_t(meshopt_quantizeSnorm(a.f[(qc + 1) & 3] * scaler * sign, bits));
-	v[1] = int16_t(meshopt_quantizeSnorm(a.f[(qc + 2) & 3] * scaler * sign, bits));
-	v[2] = int16_t(meshopt_quantizeSnorm(a.f[(qc + 3) & 3] * scaler * sign, bits));
-	v[3] = int16_t((meshopt_quantizeSnorm(1.f, bits) & ~3) | qc);
-}
-
-static void encodeExpShared(uint32_t v[3], const Attr& a, int bits)
-{
-	// get exponents from all components
-	int ex, ey, ez;
-	frexp(a.f[0], &ex);
-	frexp(a.f[1], &ey);
-	frexp(a.f[2], &ez);
-
-	// use maximum exponent to encode values; this guarantess that mantissa is [-1, 1]
-	// note that we additionally scale the mantissa to make it a K-bit signed integer (K-1 bits for magnitude)
-	int exp = std::max(ex, std::max(ey, ez)) - (bits - 1);
-
-	// compute renormalized rounded mantissas for each component
-	int mx = int(ldexp(a.f[0], -exp) + (a.f[0] >= 0 ? 0.5f : -0.5f));
-	int my = int(ldexp(a.f[1], -exp) + (a.f[1] >= 0 ? 0.5f : -0.5f));
-	int mz = int(ldexp(a.f[2], -exp) + (a.f[2] >= 0 ? 0.5f : -0.5f));
-
-	int mmask = (1 << 24) - 1;
-
-	// encode exponent & mantissa into each resulting value
-	v[0] = (mx & mmask) | (unsigned(exp) << 24);
-	v[1] = (my & mmask) | (unsigned(exp) << 24);
-	v[2] = (mz & mmask) | (unsigned(exp) << 24);
 }
 
 StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data, const Settings& settings)

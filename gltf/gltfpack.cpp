@@ -250,12 +250,12 @@ static bool canTransformMesh(const Mesh& mesh)
 	return true;
 }
 
-static void process(cgltf_data* data, const char* input_path, const char* output_path, const char* report_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const std::string& extras, const Settings& settings, std::string& json, std::string& bin, std::string& fallback, size_t& fallback_size)
+static void process(cgltf_data* data, const char* input_path, const char* output_path, const char* report_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const Settings& settings, std::string& json, std::string& bin, std::string& fallback, size_t& fallback_size)
 {
 	if (settings.verbose)
 	{
-		printf("input: %d nodes, %d meshes (%d primitives), %d materials, %d skins, %d animations\n",
-		    int(data->nodes_count), int(data->meshes_count), int(meshes.size()), int(data->materials_count), int(data->skins_count), int(animations.size()));
+		printf("input: %d nodes, %d meshes (%d primitives), %d materials, %d skins, %d animations, %d images\n",
+		    int(data->nodes_count), int(data->meshes_count), int(meshes.size()), int(data->materials_count), int(data->skins_count), int(animations.size()), int(data->images_count));
 		printMeshStats(meshes, "input");
 	}
 
@@ -356,7 +356,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		filterStreams(mesh, mi);
 	}
 
-	mergeMeshMaterials(data, extras, meshes, settings);
+	mergeMeshMaterials(data, meshes, settings);
 	mergeMeshes(meshes, settings);
 	filterEmptyMeshes(meshes);
 
@@ -434,6 +434,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	bool ext_volume = false;
 	bool ext_emissive_strength = false;
 	bool ext_iridescence = false;
+	bool ext_anisotropy = false;
 	bool ext_unlit = false;
 	bool ext_instancing = false;
 	bool ext_texture_transform = false;
@@ -507,9 +508,9 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 		comma(json_materials);
 		append(json_materials, "{");
-		writeMaterial(json_materials, data, material, settings.quantize ? &qp : NULL, settings.quantize ? &qt_materials[i] : NULL);
+		writeMaterial(json_materials, data, material, settings.quantize && !settings.pos_float ? &qp : NULL, settings.quantize ? &qt_materials[i] : NULL);
 		if (settings.keep_extras)
-			writeExtras(json_materials, extras, material.extras);
+			writeExtras(json_materials, material.extras);
 		append(json_materials, "}");
 
 		mi.remap = int(material_offset);
@@ -524,6 +525,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		ext_volume = ext_volume || material.has_volume;
 		ext_emissive_strength = ext_emissive_strength || material.has_emissive_strength;
 		ext_iridescence = ext_iridescence || material.has_iridescence;
+		ext_anisotropy = ext_anisotropy || material.has_anisotropy;
 		ext_unlit = ext_unlit || material.unlit;
 		ext_texture_transform = ext_texture_transform || mi.usesTextureTransform;
 	}
@@ -653,13 +655,23 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 			for (size_t j = 0; j < mesh.nodes.size(); ++j)
 			{
 				NodeInfo& ni = nodes[mesh.nodes[j] - data->nodes];
-
 				assert(ni.keep);
-				ni.meshes.push_back(node_offset);
 
-				writeMeshNode(json_nodes, mesh_offset, mesh.nodes[j], mesh.skin, data, settings.quantize ? &qp : NULL);
+				// if we don't use position quantization, prefer attaching the mesh to its node directly
+				if (!ni.has_mesh && (!settings.quantize || settings.pos_float))
+				{
+					ni.has_mesh = true;
+					ni.mesh_index = mesh_offset;
+					ni.mesh_skin = mesh.skin;
+				}
+				else
+				{
+					ni.mesh_nodes.push_back(node_offset);
 
-				node_offset++;
+					writeMeshNode(json_nodes, mesh_offset, mesh.nodes[j], mesh.skin, data, settings.quantize && !settings.pos_float ? &qp : NULL);
+
+					node_offset++;
+				}
 			}
 		}
 		else if (mesh.instances.size())
@@ -681,7 +693,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 			comma(json_roots[mesh.scene]);
 			append(json_roots[mesh.scene], node_offset);
 
-			writeMeshNode(json_nodes, mesh_offset, NULL, mesh.skin, data, settings.quantize ? &qp : NULL);
+			writeMeshNode(json_nodes, mesh_offset, NULL, mesh.skin, data, settings.quantize && !settings.pos_float ? &qp : NULL);
 
 			node_offset++;
 		}
@@ -708,7 +720,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		append(json_nodes, "{");
 		writeNode(json_nodes, node, nodes, data);
 		if (settings.keep_extras)
-			writeExtras(json_nodes, extras, node.extras);
+			writeExtras(json_nodes, node.extras);
 		append(json_nodes, "}");
 	}
 
@@ -786,7 +798,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	append(json, "\"version\":\"2.0\",\"generator\":\"gltfpack ");
 	append(json, getVersion());
 	append(json, "\"");
-	writeExtras(json, extras, data->asset.extras);
+	writeExtras(json, data->asset.extras);
 	append(json, "}");
 
 	const ExtensionInfo extensions[] = {
@@ -802,6 +814,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	    {"KHR_materials_volume", ext_volume, false},
 	    {"KHR_materials_emissive_strength", ext_emissive_strength, false},
 	    {"KHR_materials_iridescence", ext_iridescence, false},
+	    {"KHR_materials_anisotropy", ext_anisotropy, false},
 	    {"KHR_materials_unlit", ext_unlit, false},
 	    {"KHR_materials_variants", data->variants_count > 0, false},
 	    {"KHR_lights_punctual", data->lights_count > 0, false},
@@ -938,7 +951,6 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 	cgltf_data* data = 0;
 	std::vector<Mesh> meshes;
 	std::vector<Animation> animations;
-	std::string extras;
 
 	std::string iext = getExtension(input);
 	std::string oext = output ? getExtension(output) : "";
@@ -946,7 +958,7 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 	if (iext == ".gltf" || iext == ".glb")
 	{
 		const char* error = 0;
-		data = parseGltf(input, meshes, animations, extras, &error);
+		data = parseGltf(input, meshes, animations, &error);
 
 		if (error)
 		{
@@ -989,7 +1001,7 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 
 	std::string json, bin, fallback;
 	size_t fallback_size = 0;
-	process(data, input, output, report, meshes, animations, extras, settings, json, bin, fallback, fallback_size);
+	process(data, input, output, report, meshes, animations, settings, json, bin, fallback, fallback_size);
 
 	cgltf_free(data);
 
@@ -1187,9 +1199,19 @@ int main(int argc, char** argv)
 		{
 			settings.col_bits = clamp(atoi(argv[++i]), 1, 16);
 		}
+		else if (strcmp(arg, "-vpi") == 0)
+		{
+			settings.pos_float = false;
+			settings.pos_normalized = false;
+		}
 		else if (strcmp(arg, "-vpn") == 0)
 		{
+			settings.pos_float = false;
 			settings.pos_normalized = true;
+		}
+		else if (strcmp(arg, "-vpf") == 0)
+		{
+			settings.pos_float = true;
 		}
 		else if (strcmp(arg, "-at") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
@@ -1238,6 +1260,10 @@ int main(int argc, char** argv)
 		else if (strcmp(arg, "-sa") == 0)
 		{
 			settings.simplify_aggressive = true;
+		}
+		else if (strcmp(arg, "-slb") == 0)
+		{
+			settings.simplify_lock_borders = true;
 		}
 #ifndef NDEBUG
 		else if (strcmp(arg, "-sd") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
@@ -1304,16 +1330,13 @@ int main(int argc, char** argv)
 		{
 			settings.texture_flipy = true;
 		}
-		else if (strcmp(arg, "-te") == 0)
-		{
-			fprintf(stderr, "Warning: -te is deprecated and will be removed in the future; gltfpack now automatically embeds textures into GLB files\n");
-		}
 		else if (strcmp(arg, "-tj") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.texture_jobs = clamp(atoi(argv[++i]), 0, 128);
 		}
 		else if (strcmp(arg, "-noq") == 0)
 		{
+			// TODO: Warn if -noq is used and suggest -vpf instead; use -noqq to silence
 			settings.quantize = false;
 		}
 		else if (strcmp(arg, "-i") == 0 && i + 1 < argc && !input)
@@ -1381,11 +1404,6 @@ int main(int argc, char** argv)
 		return 0;
 	}
 
-#ifdef WITH_BASISU
-	if (settings.texture_ktx2)
-		encodeInit(settings.texture_jobs);
-#endif
-
 	if (test)
 	{
 		for (size_t i = 0; i < testinputs.size(); ++i)
@@ -1427,12 +1445,16 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nSimplification:\n");
 			fprintf(stderr, "\t-si R: simplify meshes targeting triangle count ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\t-sa: aggressively simplify to the target ratio disregarding quality\n");
+			fprintf(stderr, "\t-slb: lock border vertices during simplification to avoid gaps on connected meshes\n");
 			fprintf(stderr, "\nVertices:\n");
 			fprintf(stderr, "\t-vp N: use N-bit quantization for positions (default: 14; N should be between 1 and 16)\n");
 			fprintf(stderr, "\t-vt N: use N-bit quantization for texture coordinates (default: 12; N should be between 1 and 16)\n");
 			fprintf(stderr, "\t-vn N: use N-bit quantization for normals and tangents (default: 8; N should be between 1 and 16)\n");
 			fprintf(stderr, "\t-vc N: use N-bit quantization for colors (default: 8; N should be between 1 and 16)\n");
-			fprintf(stderr, "\t-vpn: use normalized attributes for positions instead of using integers\n");
+			fprintf(stderr, "\nVertex positions:\n");
+			fprintf(stderr, "\t-vpi: use integer attributes for positions (default)\n");
+			fprintf(stderr, "\t-vpn: use normalized attributes for positions\n");
+			fprintf(stderr, "\t-vpf: use floating point attributes for positions\n");
 			fprintf(stderr, "\nAnimations:\n");
 			fprintf(stderr, "\t-at N: use N-bit quantization for translations (default: 16; N should be between 1 and 24)\n");
 			fprintf(stderr, "\t-ar N: use N-bit quantization for rotations (default: 12; N should be between 4 and 16)\n");
@@ -1493,6 +1515,18 @@ int main(int argc, char** argv)
 	if (settings.texture_flipy && !settings.texture_ktx2)
 	{
 		fprintf(stderr, "Option -tfy is only supported when -tc is set as well\n");
+		return 1;
+	}
+
+	if (settings.fallback && settings.compressmore)
+	{
+		fprintf(stderr, "Option -cf can not be used together with -cc\n");
+		return 1;
+	}
+
+	if (settings.fallback && settings.pos_float)
+	{
+		fprintf(stderr, "Option -cf can not be used together with -vpf\n");
 		return 1;
 	}
 

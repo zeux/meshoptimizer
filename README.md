@@ -13,10 +13,10 @@ The library provides a C and C++ interface for all algorithms; you can use it fr
 meshoptimizer is hosted on GitHub; you can download the latest release using git:
 
 ```
-git clone -b v0.18 https://github.com/zeux/meshoptimizer.git
+git clone -b v0.19 https://github.com/zeux/meshoptimizer.git
 ```
 
-Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v0.15.zip).
+Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v0.18.zip).
 
 The library is also available as a package ([ArchLinux](https://aur.archlinux.org/packages/meshoptimizer/), [Debian](https://packages.debian.org/libmeshoptimizer), [Ubuntu](https://packages.ubuntu.com/libmeshoptimizer), [Vcpkg](https://github.com/microsoft/vcpkg/tree/master/ports/meshoptimizer)).
 
@@ -24,13 +24,7 @@ The library is also available as a package ([ArchLinux](https://aur.archlinux.or
 
 `gltfpack` is a CLI tool for optimizing meshes using meshoptimizer.
 
-You can download a pre-built binary for gltfpack on [Releases page](https://github.com/zeux/meshoptimizer/releases), or install [npm package](https://www.npmjs.com/package/gltfpack) as follows:
-
-```
-npm install -g gltfpack
-```
-
-You can also find prebuilt binaries of `gltfpack` built from master on [Actions page](https://github.com/zeux/meshoptimizer/actions).
+You can download a pre-built binary for gltfpack on [Releases page](https://github.com/zeux/meshoptimizer/releases), or install [npm package](https://www.npmjs.com/package/gltfpack). Native binaries are recommended over npm since they can work with larger files, run faster, and support texture compression.
 
 [Learn more about gltfpack](./gltf/README.md)
 
@@ -42,6 +36,10 @@ meshoptimizer is distributed as a set of C++ source files. To include it into yo
 * Add source files to your project's build system
 
 The source files are organized in such a way that you don't need to change your build-system settings, and you only need to add the files for the algorithms you use.
+
+## Installing from vcpkg
+
+The meshoptimizer port in [vcpkg](https://github.com/Microsoft/vcpkg) is kept up to date by Microsoft team members and community contributors. You can download and install meshoptimizer using the vcpkg dependency manager, [Getting Started](https://github.com/microsoft/vcpkg#getting-started).
 
 ## Pipeline
 
@@ -256,7 +254,7 @@ All algorithms presented so far don't affect visual appearance at all, with the 
 
 This library provides two simplification algorithms that reduce the number of triangles in the mesh. Given a vertex and an index buffer, they generate a second index buffer that uses existing vertices in the vertex buffer. This index buffer can be used directly for rendering with the original vertex buffer (preferably after vertex cache optimization), or a new compact vertex/index buffer can be generated using `meshopt_optimizeVertexFetch` that uses the optimal number and order of vertices.
 
-The first simplification algorithm, `meshopt_simplify`, follows the topology of the original mesh in an attempt to preserve attribute seams, borders and overall appearance. For meshes with inconsistent topology or many seams, such as faceted meshes, it can result in simplifier getting "stuck" and not being able to simplify the mesh fully; it's recommended to preprocess the index buffer with `meshopt_generateShadowIndexBuffer` to discard any vertex attributes that aren't critical and can be rebuilt later such as normals.
+The first simplification algorithm, `meshopt_simplify`, follows the topology of the original mesh in an attempt to preserve attribute seams, borders and overall appearance. For meshes with inconsistent topology or many seams, such as faceted meshes, it can result in simplifier getting "stuck" and not being able to simplify the mesh fully. Therefore it's critical that identical vertices are "welded" together, that is, the input vertex buffer does not contain duplicates. Additionally, it may be possible to preprocess the index buffer (e.g. with `meshopt_generateShadowIndexBuffer`) to discard any vertex attributes that aren't critical and can be rebuilt later.
 
 ```c++
 float threshold = 0.2f;
@@ -269,7 +267,7 @@ lod.resize(meshopt_simplify(&lod[0], indices, index_count, &vertices[0].x, verte
     target_index_count, target_error, &lod_error));
 ```
 
-Target error is an approximate measure of the deviation from the original mesh using distance normalized to 0..1 (so 1e-2f means that simplifier will try to maintain the error to be below 1% of the mesh extents). Note that because of topological restrictions and error bounds simplifier isn't guaranteed to reach the target index count and can stop earlier.
+Target error is an approximate measure of the deviation from the original mesh using distance normalized to `[0..1]` range (e.g. `1e-2f` means that simplifier will try to maintain the error to be below 1% of the mesh extents). Note that the simplifier attempts to produce the requested number of indices at minimal error, but because of topological restrictions and error limit it is not guaranteed to reach the target index count and can stop earlier.
 
 The second simplification algorithm, `meshopt_simplifySloppy`, doesn't follow the topology of the original mesh. This means that it doesn't preserve attribute seams or borders, but it can collapse internal details that are too small to matter better because it can merge mesh features that are topologically disjoint but spatially close.
 

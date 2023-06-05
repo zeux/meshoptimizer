@@ -35,7 +35,7 @@ void append(std::string& s, const std::string& v)
 	s += v;
 }
 
-void appendJson(std::string& s, const char* begin, const char* end)
+void appendJson(std::string& s, const char* data)
 {
 	enum State
 	{
@@ -44,7 +44,7 @@ void appendJson(std::string& s, const char* begin, const char* end)
 		Quoted
 	} state = None;
 
-	for (const char* it = begin; it != end; ++it)
+	for (const char* it = data; *it; ++it)
 	{
 		char ch = *it;
 

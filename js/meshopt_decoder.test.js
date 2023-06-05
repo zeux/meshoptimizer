@@ -184,7 +184,7 @@ var tests = {
 		]);
 
 		var result = new Uint8Array(expected.length);
-		decoder.decodeVertexBuffer(new Uint8Array(result.buffer), 4, 4, encoded, /* filter= */ 1);
+		decoder.decodeVertexBuffer(new Uint8Array(result.buffer), 4, 4, encoded, /* filter= */ "OCTAHEDRAL");
 
 		assert.deepStrictEqual(result, expected);
 	},
@@ -206,7 +206,7 @@ var tests = {
 		]);
 
 		var result = new Uint16Array(expected.length);
-		decoder.decodeVertexBuffer(new Uint8Array(result.buffer), 4, 8, encoded, /* filter= */ 1);
+		decoder.decodeVertexBuffer(new Uint8Array(result.buffer), 4, 8, encoded, /* filter= */ "OCTAHEDRAL");
 
 		assert.deepStrictEqual(result, expected);
 	},
@@ -228,7 +228,7 @@ var tests = {
 		]);
 
 		var result = new Uint16Array(expected.length);
-		decoder.decodeVertexBuffer(new Uint8Array(result.buffer), 4, 8, encoded, /* filter= */ 2);
+		decoder.decodeVertexBuffer(new Uint8Array(result.buffer), 4, 8, encoded, /* filter= */ "QUATERNION");
 
 		assert.deepStrictEqual(result, expected);
 	},
@@ -249,7 +249,7 @@ var tests = {
 		]);
 
 		var result = new Uint32Array(expected.length);
-		decoder.decodeVertexBuffer(new Uint8Array(result.buffer), 1, 16, encoded, /* filter= */ 3);
+		decoder.decodeVertexBuffer(new Uint8Array(result.buffer), 1, 16, encoded, /* filter= */ "EXPONENTIAL");
 
 		assert.deepStrictEqual(result, expected);
 	},

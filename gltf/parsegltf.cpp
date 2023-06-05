@@ -176,8 +176,7 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 			if (primitive.indices)
 			{
 				result.indices.resize(primitive.indices->count);
-				for (size_t i = 0; i < primitive.indices->count; ++i)
-					result.indices[i] = unsigned(cgltf_accessor_read_index(primitive.indices, i));
+				cgltf_accessor_unpack_indices(primitive.indices, &result.indices[0], result.indices.size());
 			}
 			else if (primitive.type != cgltf_primitive_type_points)
 			{
@@ -195,9 +194,9 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 			{
 				const cgltf_attribute& attr = primitive.attributes[ai];
 
-				if (attr.type == cgltf_attribute_type_invalid)
+				if (attr.type == cgltf_attribute_type_invalid || attr.type == cgltf_attribute_type_custom)
 				{
-					fprintf(stderr, "Warning: ignoring unknown attribute %s in primitive %d of mesh %d\n", attr.name, int(pi), int(mi));
+					fprintf(stderr, "Warning: ignoring %s attribute %s in primitive %d of mesh %d\n", attr.type == cgltf_attribute_type_invalid ? "unknown" : "custom", attr.name, int(pi), int(mi));
 					continue;
 				}
 
@@ -224,9 +223,9 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 				{
 					const cgltf_attribute& attr = target.attributes[ai];
 
-					if (attr.type == cgltf_attribute_type_invalid)
+					if (attr.type == cgltf_attribute_type_invalid || attr.type == cgltf_attribute_type_custom)
 					{
-						fprintf(stderr, "Warning: ignoring unknown attribute %s in morph target %d of primitive %d of mesh %d\n", attr.name, int(ti), int(pi), int(mi));
+						fprintf(stderr, "Warning: ignoring %s attribute %s in morph target %d of primitive %d of mesh %d\n", attr.type == cgltf_attribute_type_invalid ? "unknown" : "custom", attr.name, int(ti), int(pi), int(mi));
 						continue;
 					}
 
@@ -380,39 +379,6 @@ static bool needsDummyBuffers(cgltf_data* data)
 	return false;
 }
 
-static void evacuateExtras(cgltf_data* data, std::string& extras, cgltf_extras& item)
-{
-	size_t offset = extras.size();
-
-	extras.append(data->json + item.start_offset, item.end_offset - item.start_offset);
-
-	item.start_offset = offset;
-	item.end_offset = extras.size();
-}
-
-static void evacuateExtras(cgltf_data* data, std::string& extras)
-{
-	size_t size = 0;
-
-	size += data->asset.extras.end_offset - data->asset.extras.start_offset;
-
-	for (size_t i = 0; i < data->materials_count; ++i)
-		size += data->materials[i].extras.end_offset - data->materials[i].extras.start_offset;
-
-	for (size_t i = 0; i < data->nodes_count; ++i)
-		size += data->nodes[i].extras.end_offset - data->nodes[i].extras.start_offset;
-
-	extras.reserve(size);
-
-	evacuateExtras(data, extras, data->asset.extras);
-
-	for (size_t i = 0; i < data->materials_count; ++i)
-		evacuateExtras(data, extras, data->materials[i].extras);
-
-	for (size_t i = 0; i < data->nodes_count; ++i)
-		evacuateExtras(data, extras, data->nodes[i].extras);
-}
-
 static void freeFile(cgltf_data* data)
 {
 	data->json = NULL;
@@ -468,20 +434,15 @@ static bool freeUnusedBuffers(cgltf_data* data)
 	return free_bin;
 }
 
-cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, std::string& extras, const char** error)
+cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error)
 {
 	cgltf_data* data = 0;
 
 	cgltf_options options = {};
 	cgltf_result result = cgltf_parse_file(&options, path, &data);
 
-	if (data)
-	{
-		evacuateExtras(data, extras);
-
-		if (!data->bin)
-			freeFile(data);
-	}
+	if (data && !data->bin)
+		freeFile(data);
 
 	result = (result == cgltf_result_success) ? cgltf_load_buffers(&options, data, path) : result;
 	result = (result == cgltf_result_success) ? cgltf_validate(data) : result;

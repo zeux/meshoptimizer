@@ -730,29 +730,85 @@ void encodeFilterQuat12()
 
 void encodeFilterExp()
 {
-	const float data[3] = {
+	const float data[4] = {
 	    1,
 	    -23.4f,
 	    -0.1f,
+	    11.0f,
 	};
 
-	const unsigned int expected[3] = {
+	// separate exponents: each component gets its own value
+	const unsigned int expected1[4] = {
+		0xf3002000,
+		0xf7ffd133,
+		0xefffcccd,
+		0xf6002c00,
+	};
+
+	// shared exponents (vector): all components of each vector get the same value
+	const unsigned int expected2[4] = {
 	    0xf7000200,
 	    0xf7ffd133,
-	    0xf7ffffcd,
+	    0xf6ffff9a,
+	    0xf6002c00,
 	};
 
-	unsigned int encoded[3];
-	meshopt_encodeFilterExp(encoded, 1, 12, 15, data);
+	// shared exponents (component): each component gets the same value across all vectors
+	const unsigned int expected3[4] = {
+		0xf3002000,
+		0xf7ffd133,
+		0xf3fffccd,
+		0xf7001600,
+	};
 
-	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+	unsigned int encoded1[4];
+	meshopt_encodeFilterExp(encoded1, 2, 8, 15, data, meshopt_EncodeExpSeparate);
 
-	float decoded[3];
-	memcpy(decoded, encoded, sizeof(decoded));
-	meshopt_decodeFilterExp(decoded, 3, 4);
+	unsigned int encoded2[4];
+	meshopt_encodeFilterExp(encoded2, 2, 8, 15, data, meshopt_EncodeExpSharedVector);
 
-	for (size_t i = 0; i < 3; ++i)
-		assert(fabsf(decoded[i] - data[i]) < 1e-3f);
+	unsigned int encoded3[4];
+	meshopt_encodeFilterExp(encoded3, 2, 8, 15, data, meshopt_EncodeExpSharedComponent);
+
+	assert(memcmp(encoded1, expected1, sizeof(expected1)) == 0);
+	assert(memcmp(encoded2, expected2, sizeof(expected2)) == 0);
+	assert(memcmp(encoded3, expected3, sizeof(expected3)) == 0);
+
+	float decoded1[4];
+	memcpy(decoded1, encoded1, sizeof(decoded1));
+	meshopt_decodeFilterExp(decoded1, 2, 8);
+
+	float decoded2[4];
+	memcpy(decoded2, encoded2, sizeof(decoded2));
+	meshopt_decodeFilterExp(decoded2, 2, 8);
+
+	float decoded3[4];
+	memcpy(decoded3, encoded3, sizeof(decoded3));
+	meshopt_decodeFilterExp(decoded3, 2, 8);
+
+	for (size_t i = 0; i < 4; ++i)
+	{
+		assert(fabsf(decoded1[i] - data[i]) < 1e-3f);
+		assert(fabsf(decoded2[i] - data[i]) < 1e-3f);
+		assert(fabsf(decoded3[i] - data[i]) < 1e-3f);
+	}
+}
+
+void encodeFilterExpZero()
+{
+	const float data = 0.f;
+	const unsigned int expected = 0xf2000000;
+
+	unsigned int encoded;
+	meshopt_encodeFilterExp(&encoded, 1, 4, 15, &data, meshopt_EncodeExpSeparate);
+
+	assert(encoded == expected);
+
+	float decoded;
+	memcpy(&decoded, &encoded, sizeof(decoded));
+	meshopt_decodeFilterExp(&decoded, 1, 4);
+
+	assert(decoded == data);
 }
 
 static void clusterBoundsDegenerate()
@@ -845,6 +901,37 @@ static void emptyMesh()
 	meshopt_optimizeVertexCache(0, 0, 0, 0);
 	meshopt_optimizeVertexCacheFifo(0, 0, 0, 0, 16);
 	meshopt_optimizeOverdraw(0, 0, 0, 0, 0, 12, 1.f);
+}
+
+static void simplify()
+{
+	// 0
+	// 1 2
+	// 3 4 5
+	unsigned int ib[] = {
+		0, 2, 1,
+		1, 2, 3,
+		3, 2, 4,
+		2, 5, 4,
+	};
+
+	float vb[] = {
+		0, 4, 0,
+		0, 1, 0,
+		2, 2, 0,
+		0, 0, 0,
+		1, 0, 0,
+		4, 0, 0,
+	};
+
+	unsigned int expected[] = {
+		0, 5, 3,
+	};
+
+	float error;
+	assert(meshopt_simplify(ib, ib, 12, vb, 6, 12, 3, 1e-2f, 0, &error) == 3);
+	assert(error == 0.f);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 }
 
 static void simplifyStuck()
@@ -1027,6 +1114,56 @@ static void simplifyLockBorder()
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 }
 
+static void simplifyAttr()
+{
+	float vb[8*3][6];
+
+	for (int y = 0; y < 8; ++y)
+	{
+		// first four rows are a blue gradient, next four rows are a yellow gradient
+		float r = (y < 4) ? 0.8f + y * 0.05f : 0.f;
+		float g = (y < 4) ? 0.8f + y * 0.05f : 0.f;
+		float b = (y < 4) ? 0.f : 0.8f + (7 - y) * 0.05f;
+
+		for (int x = 0; x < 3; ++x)
+		{
+			vb[y*3+x][0] = float(x);
+			vb[y*3+x][1] = float(y);
+			vb[y*3+x][2] = 0.f;
+			vb[y*3+x][3] = r;
+			vb[y*3+x][4] = g;
+			vb[y*3+x][5] = b;
+		}
+	}
+
+	unsigned int ib[7*2][6];
+
+	for (int y = 0; y < 7; ++y)
+	{
+		for (int x = 0; x < 2; ++x)
+		{
+			ib[y*2+x][0] = (y + 0) * 3 + (x + 0);
+			ib[y*2+x][1] = (y + 0) * 3 + (x + 1);
+			ib[y*2+x][2] = (y + 1) * 3 + (x + 0);
+			ib[y*2+x][3] = (y + 1) * 3 + (x + 0);
+			ib[y*2+x][4] = (y + 0) * 3 + (x + 1);
+			ib[y*2+x][5] = (y + 1) * 3 + (x + 1);
+		}
+	}
+
+	float attr_weights[3] = { 0.01f, 0.01f, 0.01f };
+
+	unsigned int expected[3][6] =
+	{
+		{ 0, 2, 9, 9, 2, 11 },
+		{ 9, 11, 12, 12, 11, 14 },
+		{ 21, 12, 23, 12, 14, 23 },
+	};
+
+	assert(meshopt_simplifyWithAttributes(ib[0], ib[0], 7*2*6, vb[0], 8*3, 6*sizeof(float), vb[0] + 3, 6*sizeof(float), attr_weights, 3, 6*3, 1e-2f) == 18);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+}
+
 static void adjacency()
 {
 	// 0 1/4
@@ -1127,6 +1264,7 @@ void runTests()
 	encodeFilterOct12();
 	encodeFilterQuat12();
 	encodeFilterExp();
+	encodeFilterExpZero();
 
 	clusterBoundsDegenerate();
 
@@ -1134,6 +1272,7 @@ void runTests()
 
 	emptyMesh();
 
+	simplify();
 	simplifyStuck();
 	simplifySloppyStuck();
 	simplifyPointsStuck();
@@ -1141,6 +1280,7 @@ void runTests()
 	simplifyScale();
 	simplifyDegenerate();
 	simplifyLockBorder();
+	simplifyAttr();
 
 	adjacency();
 	tessellation();

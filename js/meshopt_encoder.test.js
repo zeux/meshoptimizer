@@ -174,6 +174,26 @@ var tests = {
 		assert.deepEqual(encoded, bytes(expected));
 	},
 
+	encodeFilterExpMode: function() {
+		var data = new Float32Array([
+		    1,
+		    -23.4,
+		    -0.1,
+		    11.0,
+		]);
+
+		var expected = new Uint32Array([
+			0xf3002000,
+			0xf7ffd133,
+			0xf3fffccd,
+			0xf7001600,
+		]);
+
+		// 2 vectors with 2 components (8 bytes), encode each vector into 8 bytes with 15 bits of precision/component
+		var encoded = encoder.encodeFilterExp(data, 2, 8, 15, "SharedComponent");
+		assert.deepEqual(encoded, bytes(expected));
+	},
+
 	encodeGltfBuffer: function() {
 		var data = new Uint32Array([0, 1, 2, 2, 1, 3, 4, 6, 5, 7, 8, 9]);
 
