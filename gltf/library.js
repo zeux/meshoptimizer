@@ -346,6 +346,12 @@ function uploadArgv(argv) {
 	return buf;
 }
 
+export {
+	init,
+	pack,
+};
+
+/*
 // Automatic initialization for node.js
 if (typeof window === 'undefined' && typeof process !== 'undefined' && process.release.name === 'node') {
 	var fs = require('fs');
@@ -372,3 +378,4 @@ if (typeof window === 'undefined' && typeof process !== 'undefined' && process.r
 }(typeof self !== 'undefined' ? self : this, function () {
     return { init, pack };
 }));
+*/
