@@ -139,8 +139,8 @@
 
 				var res =
 					settings.useAttributes
-					? MeshoptSimplifier.simplifyWithAttributes(indices, positions, pos_stride, attrib, attributes, attrib_weights, target, threshold, flags)
-					: MeshoptSimplifier.simplify(indices, positions, pos_stride, target, threshold, flags);
+					? MeshoptSimplifier.simplifyWithAttributes(indices, positions, stride, attrib, attributes, attrib_weights, target, threshold, flags)
+					: MeshoptSimplifier.simplify(indices, positions, stride, target, threshold, flags);
 
 				console.timeEnd('simplify');
 
