@@ -825,8 +825,8 @@ static bool hasTriangleFlips(const EdgeAdjacency& adjacency, const Vector3* vert
 		unsigned int a = collapse_remap[edges[i].next];
 		unsigned int b = collapse_remap[edges[i].prev];
 
-		// skip triangles that get collapsed
-		if (a == i1 || b == i1)
+		// skip triangles that will get collapsed by i0->i1 collapse or already got collapsed previously
+		if (a == i1 || b == i1 || a == b)
 			continue;
 
 		// early-out when at least one triangle flips due to a collapse
