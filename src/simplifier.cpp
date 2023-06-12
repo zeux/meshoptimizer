@@ -427,6 +427,21 @@ static float rescalePositions(Vector3* result, const float* vertex_positions_dat
 	return extent;
 }
 
+static void rescaleAttributes(float* result, const float* vertex_attributes_data, size_t vertex_count, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count)
+{
+	size_t vertex_attributes_stride_float = vertex_attributes_stride / sizeof(float);
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		for (size_t k = 0; k < attribute_count; ++k)
+		{
+			float a = vertex_attributes_data[i * vertex_attributes_stride_float + k];
+
+			result[i * attribute_count + k] = a * attribute_weights[k];
+		}
+	}
+}
+
 static const size_t kMaxAttributes = 16;
 
 struct Quadric
@@ -925,61 +940,6 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 	}
 }
 
-#if TRACE > 1
-static void dumpEdgeCollapses(const Collapse* collapses, size_t collapse_count, const unsigned char* vertex_kind)
-{
-	size_t ckinds[Kind_Count][Kind_Count] = {};
-	float cerrors[Kind_Count][Kind_Count] = {};
-
-	for (int k0 = 0; k0 < Kind_Count; ++k0)
-		for (int k1 = 0; k1 < Kind_Count; ++k1)
-			cerrors[k0][k1] = FLT_MAX;
-
-	for (size_t i = 0; i < collapse_count; ++i)
-	{
-		unsigned int i0 = collapses[i].v0;
-		unsigned int i1 = collapses[i].v1;
-
-		unsigned char k0 = vertex_kind[i0];
-		unsigned char k1 = vertex_kind[i1];
-
-		ckinds[k0][k1]++;
-		cerrors[k0][k1] = (collapses[i].error < cerrors[k0][k1]) ? collapses[i].error : cerrors[k0][k1];
-	}
-
-	for (int k0 = 0; k0 < Kind_Count; ++k0)
-		for (int k1 = 0; k1 < Kind_Count; ++k1)
-			if (ckinds[k0][k1])
-				printf("collapses %d -> %d: %d, min error %e\n", k0, k1, int(ckinds[k0][k1]), ckinds[k0][k1] ? sqrtf(cerrors[k0][k1]) : 0.f);
-}
-
-static void dumpLockedCollapses(const unsigned int* indices, size_t index_count, const unsigned char* vertex_kind)
-{
-	size_t locked_collapses[Kind_Count][Kind_Count] = {};
-
-	for (size_t i = 0; i < index_count; i += 3)
-	{
-		static const int next[3] = {1, 2, 0};
-
-		for (int e = 0; e < 3; ++e)
-		{
-			unsigned int i0 = indices[i + e];
-			unsigned int i1 = indices[i + next[e]];
-
-			unsigned char k0 = vertex_kind[i0];
-			unsigned char k1 = vertex_kind[i1];
-
-			locked_collapses[k0][k1] += !kCanCollapse[k0][k1] && !kCanCollapse[k1][k0];
-		}
-	}
-
-	for (int k0 = 0; k0 < Kind_Count; ++k0)
-		for (int k1 = 0; k1 < Kind_Count; ++k1)
-			if (locked_collapses[k0][k1])
-				printf("locked collapses %d -> %d: %d\n", k0, k1, int(locked_collapses[k0][k1]));
-}
-#endif
-
 static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapses, size_t collapse_count)
 {
 	const int sort_bits = 11;
@@ -1442,12 +1402,7 @@ MESHOPTIMIZER_API unsigned int* meshopt_simplifyDebugLoop = 0;
 MESHOPTIMIZER_API unsigned int* meshopt_simplifyDebugLoopBack = 0;
 #endif
 
-size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, unsigned int options, float* out_result_error)
-{
-	return meshopt_simplifyWithAttributes(destination, indices, index_count, vertex_positions_data, vertex_count, vertex_positions_stride, NULL, 0, NULL, 0, target_index_count, target_error, options, out_result_error);
-}
-
-size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes_data, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, size_t target_index_count, float target_error, unsigned int options, float* out_result_error)
+size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes_data, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, size_t target_index_count, float target_error, unsigned int options, float* out_result_error)
 {
 	using namespace meshopt;
 
@@ -1502,19 +1457,8 @@ size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned 
 
 	if (attribute_count)
 	{
-		size_t vertex_attributes_stride_float = vertex_attributes_stride / sizeof(float);
-
 		vertex_attributes = allocator.allocate<float>(vertex_count * attribute_count);
-
-		for (size_t i = 0; i < vertex_count; ++i)
-		{
-			for (size_t k = 0; k < attribute_count; ++k)
-			{
-				float a = vertex_attributes_data[i * vertex_attributes_stride_float + k];
-
-				vertex_attributes[i * attribute_count + k] = a * attribute_weights[k];
-			}
-		}
+		rescaleAttributes(vertex_attributes, vertex_attributes_data, vertex_count, vertex_attributes_stride, attribute_weights, attribute_count);
 	}
 
 	Quadric* vertex_quadrics = allocator.allocate<Quadric>(vertex_count);
@@ -1569,10 +1513,6 @@ size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned 
 
 		rankEdgeCollapses(edge_collapses, edge_collapse_count, vertex_positions, vertex_attributes, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, remap);
 
-#if TRACE > 1
-		dumpEdgeCollapses(edge_collapses, edge_collapse_count, vertex_kind);
-#endif
-
 		sortEdgeCollapses(collapse_order, edge_collapses, edge_collapse_count);
 
 		size_t triangle_collapse_goal = (result_count - target_index_count) / 3;
@@ -1605,10 +1545,6 @@ size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned 
 	printf("result: %d triangles, error: %e; total %d passes\n", int(result_count), sqrtf(result_error), int(pass_count));
 #endif
 
-#if TRACE > 1
-	dumpLockedCollapses(result, result_count, vertex_kind);
-#endif
-
 #ifndef NDEBUG
 	if (meshopt_simplifyDebugKind)
 		memcpy(meshopt_simplifyDebugKind, vertex_kind, vertex_count);
@@ -1625,6 +1561,16 @@ size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned 
 		*out_result_error = sqrtf(result_error);
 
 	return result_count;
+}
+
+size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, unsigned int options, float* out_result_error)
+{
+	return meshopt_simplifyEdge(destination, indices, index_count, vertex_positions_data, vertex_count, vertex_positions_stride, NULL, 0, NULL, 0, target_index_count, target_error, options, out_result_error);
+}
+
+size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes_data, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, size_t target_index_count, float target_error, unsigned int options, float* out_result_error)
+{
+	return meshopt_simplifyEdge(destination, indices, index_count, vertex_positions_data, vertex_count, vertex_positions_stride, vertex_attributes_data, vertex_attributes_stride, attribute_weights, attribute_count, target_index_count, target_error, options, out_result_error);
 }
 
 size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, float* out_result_error)
