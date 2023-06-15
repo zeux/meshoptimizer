@@ -265,15 +265,14 @@ static void* array_realloc(void* ptr, fastObjUInt n, fastObjUInt b)
     fastObjUInt sz = array_size(ptr);
     fastObjUInt nsz = sz + n;
     fastObjUInt cap = array_capacity(ptr);
-    fastObjUInt ncap = 3 * cap / 2;
+    fastObjUInt ncap = cap + cap / 2;
     fastObjUInt* r;
-
 
     if (ncap < nsz)
         ncap = nsz;
     ncap = (ncap + 15) & ~15u;
 
-    r = (fastObjUInt*)(memory_realloc(ptr ? _array_header(ptr) : 0, b * ncap + 2 * sizeof(fastObjUInt)));
+    r = (fastObjUInt*)(memory_realloc(ptr ? _array_header(ptr) : 0, (size_t)b * ncap + 2 * sizeof(fastObjUInt)));
     if (!r)
         return 0;
 
