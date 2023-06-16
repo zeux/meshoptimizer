@@ -849,13 +849,35 @@ static bool hasTriangleFlips(const EdgeAdjacency& adjacency, const Vector3* vert
 	return false;
 }
 
-static size_t pickEdgeCollapses(Collapse* collapses, const unsigned int* indices, size_t index_count, const unsigned int* remap, const unsigned char* vertex_kind, const unsigned int* loop)
+static size_t boundEdgeCollapses(const EdgeAdjacency& adjacency, size_t vertex_count, size_t index_count, unsigned char* vertex_kind)
+{
+	size_t dual_count = 0;
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		unsigned char k = vertex_kind[i];
+		unsigned int e = adjacency.offsets[i + 1] - adjacency.offsets[i];
+
+		dual_count += (k == Kind_Manifold || k == Kind_Seam) ? e : 0;
+	}
+
+	assert(dual_count <= index_count);
+
+	// pad capacity by 3 so that we can check for overflow once per triangle instead of once per edge
+	return (index_count - dual_count / 2) + 3;
+}
+
+static size_t pickEdgeCollapses(Collapse* collapses, size_t collapse_capacity, const unsigned int* indices, size_t index_count, const unsigned int* remap, const unsigned char* vertex_kind, const unsigned int* loop)
 {
 	size_t collapse_count = 0;
 
 	for (size_t i = 0; i < index_count; i += 3)
 	{
 		static const int next[3] = {1, 2, 0};
+
+		// this should never happen as boundEdgeCollapses should give an upper bound for the collapse count, but in an unlikely event it does we can just drop extra collapses
+		if (collapse_count + 3 > collapse_capacity)
+			break;
 
 		for (int e = 0; e < 3; ++e)
 		{
@@ -1486,8 +1508,10 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	size_t pass_count = 0;
 #endif
 
-	Collapse* edge_collapses = allocator.allocate<Collapse>(index_count);
-	unsigned int* collapse_order = allocator.allocate<unsigned int>(index_count);
+	size_t collapse_capacity = boundEdgeCollapses(adjacency, vertex_count, index_count, vertex_kind);
+
+	Collapse* edge_collapses = allocator.allocate<Collapse>(collapse_capacity);
+	unsigned int* collapse_order = allocator.allocate<unsigned int>(collapse_capacity);
 	unsigned int* collapse_remap = allocator.allocate<unsigned int>(vertex_count);
 	unsigned char* collapse_locked = allocator.allocate<unsigned char>(vertex_count);
 
@@ -1502,7 +1526,8 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 		// note: throughout the simplification process adjacency structure reflects welded topology for result-in-progress
 		updateEdgeAdjacency(adjacency, result, result_count, vertex_count, remap);
 
-		size_t edge_collapse_count = pickEdgeCollapses(edge_collapses, result, result_count, remap, vertex_kind, loop);
+		size_t edge_collapse_count = pickEdgeCollapses(edge_collapses, collapse_capacity, result, result_count, remap, vertex_kind, loop);
+		assert(edge_collapse_count <= collapse_capacity);
 
 		// no edges can be collapsed any more due to topology restrictions
 		if (edge_collapse_count == 0)
