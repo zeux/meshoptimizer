@@ -38,31 +38,31 @@ struct EdgeAdjacency
 		unsigned int prev;
 	};
 
-	unsigned int* counts;
 	unsigned int* offsets;
 	Edge* data;
 };
 
 static void prepareEdgeAdjacency(EdgeAdjacency& adjacency, size_t index_count, size_t vertex_count, meshopt_Allocator& allocator)
 {
-	adjacency.counts = allocator.allocate<unsigned int>(vertex_count);
-	adjacency.offsets = allocator.allocate<unsigned int>(vertex_count);
+	adjacency.offsets = allocator.allocate<unsigned int>(vertex_count + 1);
 	adjacency.data = allocator.allocate<EdgeAdjacency::Edge>(index_count);
 }
 
 static void updateEdgeAdjacency(EdgeAdjacency& adjacency, const unsigned int* indices, size_t index_count, size_t vertex_count, const unsigned int* remap)
 {
 	size_t face_count = index_count / 3;
+	unsigned int* offsets = adjacency.offsets + 1;
+	EdgeAdjacency::Edge* data = adjacency.data;
 
 	// fill edge counts
-	memset(adjacency.counts, 0, vertex_count * sizeof(unsigned int));
+	memset(offsets, 0, vertex_count * sizeof(unsigned int));
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
 		unsigned int v = remap ? remap[indices[i]] : indices[i];
 		assert(v < vertex_count);
 
-		adjacency.counts[v]++;
+		offsets[v]++;
 	}
 
 	// fill offset table
@@ -70,8 +70,9 @@ static void updateEdgeAdjacency(EdgeAdjacency& adjacency, const unsigned int* in
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		adjacency.offsets[i] = offset;
-		offset += adjacency.counts[i];
+		unsigned int count = offsets[i];
+		offsets[i] = offset;
+		offset += count;
 	}
 
 	assert(offset == index_count);
@@ -88,26 +89,22 @@ static void updateEdgeAdjacency(EdgeAdjacency& adjacency, const unsigned int* in
 			c = remap[c];
 		}
 
-		adjacency.data[adjacency.offsets[a]].next = b;
-		adjacency.data[adjacency.offsets[a]].prev = c;
-		adjacency.offsets[a]++;
+		data[offsets[a]].next = b;
+		data[offsets[a]].prev = c;
+		offsets[a]++;
 
-		adjacency.data[adjacency.offsets[b]].next = c;
-		adjacency.data[adjacency.offsets[b]].prev = a;
-		adjacency.offsets[b]++;
+		data[offsets[b]].next = c;
+		data[offsets[b]].prev = a;
+		offsets[b]++;
 
-		adjacency.data[adjacency.offsets[c]].next = a;
-		adjacency.data[adjacency.offsets[c]].prev = b;
-		adjacency.offsets[c]++;
+		data[offsets[c]].next = a;
+		data[offsets[c]].prev = b;
+		offsets[c]++;
 	}
 
-	// fix offsets that have been disturbed by the previous pass
-	for (size_t i = 0; i < vertex_count; ++i)
-	{
-		assert(adjacency.offsets[i] >= adjacency.counts[i]);
-
-		adjacency.offsets[i] -= adjacency.counts[i];
-	}
+	// finalize offsets
+	adjacency.offsets[0] = 0;
+	assert(adjacency.offsets[vertex_count] == index_count);
 }
 
 struct PositionHasher
@@ -243,7 +240,7 @@ const unsigned char kHasOpposite[Kind_Count][Kind_Count] = {
 
 static bool hasEdge(const EdgeAdjacency& adjacency, unsigned int a, unsigned int b)
 {
-	unsigned int count = adjacency.counts[a];
+	unsigned int count = adjacency.offsets[a + 1] - adjacency.offsets[a];
 	const EdgeAdjacency::Edge* edges = adjacency.data + adjacency.offsets[a];
 
 	for (size_t i = 0; i < count; ++i)
@@ -268,7 +265,7 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 	{
 		unsigned int vertex = unsigned(i);
 
-		unsigned int count = adjacency.counts[vertex];
+		unsigned int count = adjacency.offsets[vertex + 1] - adjacency.offsets[vertex];
 		const EdgeAdjacency::Edge* edges = adjacency.data + adjacency.offsets[vertex];
 
 		for (size_t j = 0; j < count; ++j)
@@ -833,7 +830,7 @@ static bool hasTriangleFlips(const EdgeAdjacency& adjacency, const Vector3* vert
 	const Vector3& v1 = vertex_positions[i1];
 
 	const EdgeAdjacency::Edge* edges = &adjacency.data[adjacency.offsets[i0]];
-	size_t count = adjacency.counts[i0];
+	size_t count = adjacency.offsets[i0 + 1] - adjacency.offsets[i0];
 
 	for (size_t i = 0; i < count; ++i)
 	{
