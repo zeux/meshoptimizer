@@ -760,7 +760,31 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	}
 	else if (stream.type == cgltf_attribute_type_custom)
 	{
-		return writeVertexStreamRaw(bin, stream, cgltf_type_scalar, 1);
+		// note: _custom is equivalent to _ID, as such the data contains scalar integers
+		if (!settings.compressmore)
+			return writeVertexStreamRaw(bin, stream, cgltf_type_scalar, 1);
+
+		unsigned int maxv = 0;
+
+		for (size_t i = 0; i < stream.data.size(); ++i)
+			maxv = std::max(maxv, unsigned(stream.data[i].f[0]));
+
+		// exp encoding uses a signed mantissa with only 23 significant bits; input glTF encoding may encode indices losslessly up to 2^24
+		if (maxv >= (1 << 23))
+			return writeVertexStreamRaw(bin, stream, cgltf_type_scalar, 1);
+
+		for (size_t i = 0; i < stream.data.size(); ++i)
+		{
+			const Attr& a = stream.data[i];
+
+			uint32_t id = uint32_t(a.f[0]);
+			uint32_t v = id; // exp encoding of integers in [0..2^23-1] range is equivalent to the integer itself
+
+			bin.append(reinterpret_cast<const char*>(&v), sizeof(v));
+		}
+
+		StreamFormat format = {cgltf_type_scalar, cgltf_component_type_r_32f, false, 4, StreamFormat::Filter_Exp};
+		return format;
 	}
 	else
 	{
