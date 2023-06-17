@@ -993,9 +993,13 @@ void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std:
 
 		comma(json);
 		append(json, "\"");
-		append(json, attributeType(stream.type));
-		if (stream.type != cgltf_attribute_type_position && stream.type != cgltf_attribute_type_normal && stream.type != cgltf_attribute_type_tangent)
+		if (stream.type == cgltf_attribute_type_custom)
+			append(json, stream.custom_name);
+		else if (stream.type == cgltf_attribute_type_position || stream.type == cgltf_attribute_type_normal || stream.type == cgltf_attribute_type_tangent)
+			append(json, attributeType(stream.type));
+		else
 		{
+			append(json, attributeType(stream.type));
 			append(json, "_");
 			append(json, size_t(stream.index));
 		}
