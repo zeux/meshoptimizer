@@ -29,6 +29,8 @@ struct Stream
 	int index;
 	int target; // 0 = base mesh, 1+ = morph target
 
+	const char* custom_name; // only valid for cgltf_attribute_type_custom
+
 	std::vector<Attr> data;
 };
 

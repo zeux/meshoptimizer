@@ -136,6 +136,14 @@ static void fixupIndices(std::vector<unsigned int>& indices, cgltf_primitive_typ
 	}
 }
 
+static bool isIdAttribute(const char* name)
+{
+	return
+		strcmp(name, "_ID") == 0 ||
+		strcmp(name, "_BATCHID") == 0 ||
+		strncmp(name, "_FEATURE_ID_", 12) == 0;
+}
+
 static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::vector<std::pair<size_t, size_t> >& mesh_remap)
 {
 	size_t total_primitives = 0;
@@ -194,7 +202,7 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 			{
 				const cgltf_attribute& attr = primitive.attributes[ai];
 
-				if (attr.type == cgltf_attribute_type_invalid || attr.type == cgltf_attribute_type_custom)
+				if (attr.type == cgltf_attribute_type_invalid || (attr.type == cgltf_attribute_type_custom && !isIdAttribute(attr.name)))
 				{
 					fprintf(stderr, "Warning: ignoring %s attribute %s in primitive %d of mesh %d\n", attr.type == cgltf_attribute_type_invalid ? "unknown" : "custom", attr.name, int(pi), int(mi));
 					continue;
@@ -205,6 +213,9 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 
 				s.type = attr.type;
 				s.index = attr.index;
+
+				if (attr.type == cgltf_attribute_type_custom)
+					s.custom_name = attr.name;
 
 				readAccessor(s.data, attr.data);
 
