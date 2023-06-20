@@ -764,6 +764,13 @@ public:
 		return result;
 	}
 
+	void deallocate(void* ptr)
+	{
+		assert(count > 0 && blocks[count - 1] == ptr);
+		Storage::deallocate(ptr);
+		count--;
+	}
+
 private:
 	void* blocks[24];
 	size_t count;

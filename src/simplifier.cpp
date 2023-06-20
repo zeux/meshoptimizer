@@ -201,6 +201,8 @@ static void buildPositionRemap(unsigned int* remap, unsigned int* wedge, const f
 			wedge[i] = wedge[r];
 			wedge[r] = unsigned(i);
 		}
+
+	allocator.deallocate(table);
 }
 
 enum VertexKind

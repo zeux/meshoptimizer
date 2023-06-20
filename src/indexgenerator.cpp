@@ -178,6 +178,8 @@ static void buildPositionRemap(unsigned int* remap, const float* vertex_position
 
 		remap[index] = *entry;
 	}
+
+	allocator.deallocate(vertex_table);
 }
 
 template <size_t BlockSize>
