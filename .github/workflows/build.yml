@@ -102,7 +102,7 @@ jobs:
     - name: test
       run: find glTF-Sample-Assets -name *.gltf -or -name *.glb | xargs -d '\n' ./gltfpack -cc -test
     - name: pack
-      run: find glTF-Sample-Assets -name *.gltf | grep -v 'glTF-Draco\|glTF-KTX-BasisU\|glTF-Meshopt' | xargs -d '\n' -I '{}' ./gltfpack -i '{}' -o '{}pack.gltf'
+      run: find glTF-Sample-Assets -name *.gltf | grep -v 'glTF-Draco\|glTF-KTX2-BasisU\|glTF-Meshopt' | xargs -d '\n' -I '{}' ./gltfpack -i '{}' -o '{}pack.gltf'
     - name: validate
       run: |
         curl -sL $VALIDATOR | tar xJ
