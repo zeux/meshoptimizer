@@ -24,8 +24,6 @@ For better compression, you can use `-cc` option which applies additional compre
 
 gltfpack can also compress textures using Basis Universal format stored in a KTX2 container (`-tc` flag, requires support for `KHR_texture_basisu`). 
 
-Textures are automatically embedded into the `.bin`/`.glb` output.
-
 ## Decompression
 
 When using compressed files, [js/meshopt_decoder.js](https://github.com/zeux/meshoptimizer/blob/master/js/meshopt_decoder.js) or `js/meshopt_decoder.module.js` needs to be loaded to provide the WebAssembly decoder module like this:
