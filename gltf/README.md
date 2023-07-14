@@ -22,7 +22,9 @@ When using `-c` option, gltfpack outputs compressed `.glb`/`.gltf` files that us
 
 For better compression, you can use `-cc` option which applies additional compression; additionally make sure that your content delivery method is configured to use deflate (gzip) - meshoptimizer codecs are designed to produce output that can be compressed further with general purpose compressors.
 
-gltfpack can also compress textures using Basis Universal format stored in a KTX2 container (`-tc` flag, requires support for `KHR_texture_basisu`). Textures can also be embedded into `.bin`/`.glb` output using `-te` flag.
+gltfpack can also compress textures using Basis Universal format stored in a KTX2 container (`-tc` flag, requires support for `KHR_texture_basisu`). 
+
+Textures are automatically embedded into the `.bin`/`.glb` output.
 
 ## Decompression
 
