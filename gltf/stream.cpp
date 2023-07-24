@@ -303,11 +303,14 @@ static void encodeExpShared(uint32_t v[3], const Attr& a, int bits)
 	v[2] = (mz & mmask) | (unsigned(exp) << 24);
 }
 
-static uint32_t encodeExpOne(float v, int bits)
+static uint32_t encodeExpOne(float v, int bits, int min_exp = -100)
 {
 	// extract exponent
 	int e;
 	frexp(v, &e);
+
+	// clamp exponent to ensure it's valid after bias
+	e = std::max(e, min_exp);
 
 	// scale the mantissa to make it a K-bit signed integer (K-1 bits for magnitude)
 	int exp = e - (bits - 1);
@@ -513,9 +516,14 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 		{
 			StreamFormat::Filter filter = settings.compress ? StreamFormat::Filter_Exp : StreamFormat::Filter_None;
 
+			// expand the encoded range to ensure it covers [0..1) interval
+			// this can slightly reduce precision but we should not need more precision inside 0..1, and this significantly
+			// improves compressed size when using encodeExpOne
+			const int min_exp = 0;
+
 			if (settings.compressmore)
 			{
-				encodeExpParallel(bin, &stream.data[0], stream.data.size(), 2, qt.bits + 1);
+				encodeExpParallel(bin, &stream.data[0], stream.data.size(), 2, qt.bits + 1, min_exp);
 			}
 			else
 			{
@@ -526,8 +534,8 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 					if (filter == StreamFormat::Filter_Exp)
 					{
 						uint32_t v[2];
-						v[0] = encodeExpOne(a.f[0], qt.bits + 1);
-						v[1] = encodeExpOne(a.f[1], qt.bits + 1);
+						v[0] = encodeExpOne(a.f[0], qt.bits + 1, min_exp);
+						v[1] = encodeExpOne(a.f[1], qt.bits + 1, min_exp);
 						bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 					}
 					else
