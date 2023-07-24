@@ -321,90 +321,47 @@ static uint32_t encodeExpOne(float v, int bits)
 	return (m & mmask) | (unsigned(exp) << 24);
 }
 
-static void encodeExpParallel3(std::string& bin, const Attr* data, size_t count, int bits)
+static void encodeExpParallel(std::string& bin, const Attr* data, size_t count, int channels, int bits, int min_exp = -100)
 {
-	int expx = -128, expy = -128, expz = -128;
+	int exp[4] = {};
+
+	for (int k = 0; k < channels; ++k)
+		exp[k] = min_exp;
 
 	for (size_t i = 0; i < count; ++i)
 	{
 		const Attr& a = data[i];
 
-		// get exponents from all components
-		int ex, ey, ez;
-		frexp(a.f[0], &ex);
-		frexp(a.f[1], &ey);
-		frexp(a.f[2], &ez);
-
 		// use maximum exponent to encode values; this guarantees that mantissa is [-1, 1]
-		expx = std::max(expx, ex);
-		expy = std::max(expy, ey);
-		expz = std::max(expz, ez);
+		for (int k = 0; k < channels; ++k)
+		{
+			int e;
+			frexp(a.f[k], &e);
+			exp[k] = std::max(exp[k], e);
+		}
 	}
 
 	// scale the mantissa to make it a K-bit signed integer (K-1 bits for magnitude)
-	expx -= (bits - 1);
-	expy -= (bits - 1);
-	expz -= (bits - 1);
+	for (int k = 0; k < channels; ++k)
+		exp[k] -= (bits - 1);
 
 	for (size_t i = 0; i < count; ++i)
 	{
 		const Attr& a = data[i];
 
-		// compute renormalized rounded mantissas
-		int mx = int(ldexp(a.f[0], -expx) + (a.f[0] >= 0 ? 0.5f : -0.5f));
-		int my = int(ldexp(a.f[1], -expy) + (a.f[1] >= 0 ? 0.5f : -0.5f));
-		int mz = int(ldexp(a.f[2], -expz) + (a.f[2] >= 0 ? 0.5f : -0.5f));
+		uint32_t v[4];
 
-		int mmask = (1 << 24) - 1;
+		for (int k = 0; k < channels; ++k)
+		{
+			// compute renormalized rounded mantissas
+			int m = int(ldexp(a.f[k], -exp[k]) + (a.f[k] >= 0 ? 0.5f : -0.5f));
 
-		// encode exponent & mantissa
-		uint32_t v[3];
-		v[0] = (mx & mmask) | (unsigned(expx) << 24);
-		v[1] = (my & mmask) | (unsigned(expy) << 24);
-		v[2] = (mz & mmask) | (unsigned(expz) << 24);
+			// encode exponent & mantissa
+			int mmask = (1 << 24) - 1;
+			v[k] = (m & mmask) | (unsigned(exp[k]) << 24);
+		}
 
-		bin.append(reinterpret_cast<const char*>(v), sizeof(v));
-	}
-}
-
-static void encodeExpParallel2(std::string& bin, const Attr* data, size_t count, int bits)
-{
-	int expx = -128, expy = -128;
-
-	for (size_t i = 0; i < count; ++i)
-	{
-		const Attr& a = data[i];
-
-		// get exponents from all components
-		int ex, ey;
-		frexp(a.f[0], &ex);
-		frexp(a.f[1], &ey);
-
-		// use maximum exponent to encode values; this guarantees that mantissa is [-1, 1]
-		expx = std::max(expx, ex);
-		expy = std::max(expy, ey);
-	}
-
-	// scale the mantissa to make it a K-bit signed integer (K-1 bits for magnitude)
-	expx -= (bits - 1);
-	expy -= (bits - 1);
-
-	for (size_t i = 0; i < count; ++i)
-	{
-		const Attr& a = data[i];
-
-		// compute renormalized rounded mantissas
-		int mx = int(ldexp(a.f[0], -expx) + (a.f[0] >= 0 ? 0.5f : -0.5f));
-		int my = int(ldexp(a.f[1], -expy) + (a.f[1] >= 0 ? 0.5f : -0.5f));
-
-		int mmask = (1 << 24) - 1;
-
-		// encode exponent & mantissa
-		uint32_t v[2];
-		v[0] = (mx & mmask) | (unsigned(expx) << 24);
-		v[1] = (my & mmask) | (unsigned(expy) << 24);
-
-		bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+		bin.append(reinterpret_cast<const char*>(v), sizeof(uint32_t) * channels);
 	}
 }
 
@@ -446,7 +403,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 
 			if (settings.compressmore)
 			{
-				encodeExpParallel3(bin, &stream.data[0], stream.data.size(), qp.bits + 1);
+				encodeExpParallel(bin, &stream.data[0], stream.data.size(), 3, qp.bits + 1);
 			}
 			else
 			{
@@ -558,7 +515,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 
 			if (settings.compressmore)
 			{
-				encodeExpParallel2(bin, &stream.data[0], stream.data.size(), qt.bits + 1);
+				encodeExpParallel(bin, &stream.data[0], stream.data.size(), 2, qt.bits + 1);
 			}
 			else
 			{
