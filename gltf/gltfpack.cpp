@@ -508,7 +508,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 		comma(json_materials);
 		append(json_materials, "{");
-		writeMaterial(json_materials, data, material, settings.quantize && !settings.pos_float ? &qp : NULL, settings.quantize ? &qt_materials[i] : NULL);
+		writeMaterial(json_materials, data, material, settings.quantize && !settings.pos_float ? &qp : NULL, settings.quantize && !settings.tex_float ? &qt_materials[i] : NULL);
 		if (settings.keep_extras)
 			writeExtras(json_materials, material.extras);
 		append(json_materials, "}");
@@ -804,7 +804,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	const ExtensionInfo extensions[] = {
 	    {"KHR_mesh_quantization", settings.quantize, true},
 	    {"EXT_meshopt_compression", settings.compress, !settings.fallback},
-	    {"KHR_texture_transform", (settings.quantize && !json_textures.empty()) || ext_texture_transform, false},
+	    {"KHR_texture_transform", (settings.quantize && !settings.tex_float && !json_textures.empty()) || ext_texture_transform, false},
 	    {"KHR_materials_pbrSpecularGlossiness", ext_pbr_specular_glossiness, false},
 	    {"KHR_materials_clearcoat", ext_clearcoat, false},
 	    {"KHR_materials_transmission", ext_transmission, false},
@@ -1213,6 +1213,14 @@ int main(int argc, char** argv)
 		{
 			settings.pos_float = true;
 		}
+		else if (strcmp(arg, "-vtn") == 0)
+		{
+			settings.tex_float = false;
+		}
+		else if (strcmp(arg, "-vtf") == 0)
+		{
+			settings.tex_float = true;
+		}
 		else if (strcmp(arg, "-at") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.trn_bits = clamp(atoi(argv[++i]), 1, 24);
@@ -1455,6 +1463,9 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-vpi: use integer attributes for positions (default)\n");
 			fprintf(stderr, "\t-vpn: use normalized attributes for positions\n");
 			fprintf(stderr, "\t-vpf: use floating point attributes for positions\n");
+			fprintf(stderr, "\nTexture coordinates:\n");
+			fprintf(stderr, "\t-vtn: use normalized attributes for texture coordinates (default)\n");
+			fprintf(stderr, "\t-vtf: use floating point attributes for texture coordinates\n");
 			fprintf(stderr, "\nAnimations:\n");
 			fprintf(stderr, "\t-at N: use N-bit quantization for translations (default: 16; N should be between 1 and 24)\n");
 			fprintf(stderr, "\t-ar N: use N-bit quantization for rotations (default: 12; N should be between 4 and 16)\n");
@@ -1524,9 +1535,9 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
-	if (settings.fallback && settings.pos_float)
+	if (settings.fallback && (settings.pos_float || settings.tex_float))
 	{
-		fprintf(stderr, "Option -cf can not be used together with -vpf\n");
+		fprintf(stderr, "Option -cf can not be used together with -vpf or -tpf\n");
 		return 1;
 	}
 

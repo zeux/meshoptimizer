@@ -321,7 +321,7 @@ static uint32_t encodeExpOne(float v, int bits)
 	return (m & mmask) | (unsigned(exp) << 24);
 }
 
-static void encodeExpParallel(std::string& bin, const Attr* data, size_t count, int bits)
+static void encodeExpParallel3(std::string& bin, const Attr* data, size_t count, int bits)
 {
 	int expx = -128, expy = -128, expz = -128;
 
@@ -367,6 +367,47 @@ static void encodeExpParallel(std::string& bin, const Attr* data, size_t count, 
 	}
 }
 
+static void encodeExpParallel2(std::string& bin, const Attr* data, size_t count, int bits)
+{
+	int expx = -128, expy = -128;
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		const Attr& a = data[i];
+
+		// get exponents from all components
+		int ex, ey;
+		frexp(a.f[0], &ex);
+		frexp(a.f[1], &ey);
+
+		// use maximum exponent to encode values; this guarantees that mantissa is [-1, 1]
+		expx = std::max(expx, ex);
+		expy = std::max(expy, ey);
+	}
+
+	// scale the mantissa to make it a K-bit signed integer (K-1 bits for magnitude)
+	expx -= (bits - 1);
+	expy -= (bits - 1);
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		const Attr& a = data[i];
+
+		// compute renormalized rounded mantissas
+		int mx = int(ldexp(a.f[0], -expx) + (a.f[0] >= 0 ? 0.5f : -0.5f));
+		int my = int(ldexp(a.f[1], -expy) + (a.f[1] >= 0 ? 0.5f : -0.5f));
+
+		int mmask = (1 << 24) - 1;
+
+		// encode exponent & mantissa
+		uint32_t v[2];
+		v[0] = (mx & mmask) | (unsigned(expx) << 24);
+		v[1] = (my & mmask) | (unsigned(expy) << 24);
+
+		bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+	}
+}
+
 static StreamFormat writeVertexStreamRaw(std::string& bin, const Stream& stream, cgltf_type type, size_t components)
 {
 	assert(components >= 1 && components <= 4);
@@ -405,7 +446,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 
 			if (settings.compressmore)
 			{
-				encodeExpParallel(bin, &stream.data[0], stream.data.size(), qp.bits + 1);
+				encodeExpParallel3(bin, &stream.data[0], stream.data.size(), qp.bits + 1);
 			}
 			else
 			{
@@ -511,24 +552,61 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 		if (!settings.quantize)
 			return writeVertexStreamRaw(bin, stream, cgltf_type_vec2, 2);
 
-		float uv_rscale[2] = {
-		    qt.scale[0] == 0.f ? 0.f : 1.f / qt.scale[0],
-		    qt.scale[1] == 0.f ? 0.f : 1.f / qt.scale[1],
-		};
-
-		for (size_t i = 0; i < stream.data.size(); ++i)
+		if (settings.tex_float)
 		{
-			const Attr& a = stream.data[i];
+			StreamFormat::Filter filter = settings.compress ? StreamFormat::Filter_Exp : StreamFormat::Filter_None;
 
-			uint16_t v[2] = {
-			    uint16_t(meshopt_quantizeUnorm((a.f[0] - qt.offset[0]) * uv_rscale[0], qt.bits)),
-			    uint16_t(meshopt_quantizeUnorm((a.f[1] - qt.offset[1]) * uv_rscale[1], qt.bits)),
-			};
-			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+			if (settings.compressmore)
+			{
+				encodeExpParallel2(bin, &stream.data[0], stream.data.size(), qt.bits + 1);
+			}
+			else
+			{
+				for (size_t i = 0; i < stream.data.size(); ++i)
+				{
+					const Attr& a = stream.data[i];
+
+					if (filter == StreamFormat::Filter_Exp)
+					{
+						uint32_t v[2];
+						v[0] = encodeExpOne(a.f[0], qt.bits + 1);
+						v[1] = encodeExpOne(a.f[1], qt.bits + 1);
+						bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+					}
+					else
+					{
+						float v[2] = {
+						    meshopt_quantizeFloat(a.f[0], qt.bits),
+						    meshopt_quantizeFloat(a.f[1], qt.bits)};
+						bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+					}
+				}
+			}
+
+			StreamFormat format = {cgltf_type_vec2, cgltf_component_type_r_32f, false, 8, filter};
+			return format;
 		}
+		else
+		{
+			float uv_rscale[2] = {
+			    qt.scale[0] == 0.f ? 0.f : 1.f / qt.scale[0],
+			    qt.scale[1] == 0.f ? 0.f : 1.f / qt.scale[1],
+			};
 
-		StreamFormat format = {cgltf_type_vec2, cgltf_component_type_r_16u, qt.normalized, 4};
-		return format;
+			for (size_t i = 0; i < stream.data.size(); ++i)
+			{
+				const Attr& a = stream.data[i];
+
+				uint16_t v[2] = {
+				    uint16_t(meshopt_quantizeUnorm((a.f[0] - qt.offset[0]) * uv_rscale[0], qt.bits)),
+				    uint16_t(meshopt_quantizeUnorm((a.f[1] - qt.offset[1]) * uv_rscale[1], qt.bits)),
+				};
+				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+			}
+
+			StreamFormat format = {cgltf_type_vec2, cgltf_component_type_r_16u, qt.normalized, 4};
+			return format;
+		}
 	}
 	else if (stream.type == cgltf_attribute_type_normal)
 	{
