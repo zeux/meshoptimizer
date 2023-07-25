@@ -112,6 +112,7 @@ struct Settings
 
 	bool pos_normalized;
 	bool pos_float;
+	bool tex_float;
 
 	int trn_bits;
 	int rot_bits;
