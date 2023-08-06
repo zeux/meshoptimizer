@@ -123,6 +123,9 @@ typedef struct
     unsigned int                normal_count;
     float*                      normals;
 
+    unsigned int                color_count;
+    float*                      colors;
+
     /* Face data: one element for each face */
     unsigned int                face_count;
     unsigned int*               face_vertices;
@@ -653,6 +656,23 @@ const char* parse_vertex(fastObjData* data, const char* ptr)
     {
         ptr = parse_float(ptr, &v);
         array_push(data->mesh->positions, v);
+    }
+
+
+    ptr = skip_whitespace(ptr);
+    if (!is_newline(*ptr))
+    {
+        /* Fill the colors array until it matches the size of the positions array */
+        for (ii = array_size(data->mesh->colors); ii < array_size(data->mesh->positions) - 3; ++ii)
+        {
+            array_push(data->mesh->colors, 1.0f);
+        }
+
+        for (ii = 0; ii < 3; ++ii)
+        {
+            ptr = parse_float(ptr, &v);
+            array_push(data->mesh->colors, v);
+        }
     }
 
     return ptr;
@@ -1326,6 +1346,15 @@ void parse_buffer(fastObjData* data, const char* ptr, const char* end, const fas
 
         data->line++;
     }
+    if (array_size(data->mesh->colors) > 0)
+    {
+        /* Fill the remaining slots in the colors array */
+        unsigned int ii;
+        for (ii = array_size(data->mesh->colors); ii < array_size(data->mesh->positions); ++ii)
+        {
+            array_push(data->mesh->colors, 1.0f);
+        }
+    }
 }
 
 
@@ -1346,6 +1375,7 @@ void fast_obj_destroy(fastObjMesh* m)
     array_clean(m->positions);
     array_clean(m->texcoords);
     array_clean(m->normals);
+    array_clean(m->colors);
     array_clean(m->face_vertices);
     array_clean(m->face_materials);
     array_clean(m->indices);
@@ -1400,6 +1430,7 @@ fastObjMesh* fast_obj_read_with_callbacks(const char* path, const fastObjCallbac
     m->positions      = 0;
     m->texcoords      = 0;
     m->normals        = 0;
+    m->colors         = 0;
     m->face_vertices  = 0;
     m->face_materials = 0;
     m->indices        = 0;
@@ -1507,6 +1538,7 @@ fastObjMesh* fast_obj_read_with_callbacks(const char* path, const fastObjCallbac
     m->position_count = array_size(m->positions) / 3;
     m->texcoord_count = array_size(m->texcoords) / 2;
     m->normal_count   = array_size(m->normals) / 3;
+    m->color_count    = array_size(m->colors) / 3;
     m->face_count     = array_size(m->face_vertices);
     m->index_count    = array_size(m->indices);
     m->material_count = array_size(m->materials);
