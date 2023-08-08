@@ -99,8 +99,9 @@ static void parseMeshObj(fastObjMesh* obj, unsigned int face_offset, unsigned in
 	int pos_stream = 0;
 	int nrm_stream = obj->normal_count > 1 ? 1 : -1;
 	int tex_stream = obj->texcoord_count > 1 ? 1 + (nrm_stream >= 0) : -1;
+	int col_stream = obj->color_count > 1 ? 1 + (nrm_stream >= 0) + (tex_stream >= 0) : -1;
 
-	mesh.streams.resize(1 + (nrm_stream >= 0) + (tex_stream >= 0));
+	mesh.streams.resize(1 + (nrm_stream >= 0) + (tex_stream >= 0) + (col_stream >= 0));
 
 	mesh.streams[pos_stream].type = cgltf_attribute_type_position;
 	mesh.streams[pos_stream].data.resize(unique_vertices);
@@ -115,6 +116,12 @@ static void parseMeshObj(fastObjMesh* obj, unsigned int face_offset, unsigned in
 	{
 		mesh.streams[tex_stream].type = cgltf_attribute_type_texcoord;
 		mesh.streams[tex_stream].data.resize(unique_vertices);
+	}
+
+	if (col_stream >= 0)
+	{
+		mesh.streams[col_stream].type = cgltf_attribute_type_color;
+		mesh.streams[col_stream].data.resize(unique_vertices);
 	}
 
 	mesh.indices.resize(index_count);
@@ -139,6 +146,12 @@ static void parseMeshObj(fastObjMesh* obj, unsigned int face_offset, unsigned in
 		{
 			Attr t = {{obj->texcoords[ii.t * 2 + 0], 1.f - obj->texcoords[ii.t * 2 + 1]}};
 			mesh.streams[tex_stream].data[target] = t;
+		}
+
+		if (col_stream >= 0)
+		{
+			Attr c = {{obj->colors[ii.p * 3 + 0], obj->colors[ii.p * 3 + 1], obj->colors[ii.p * 3 + 2]}};
+			mesh.streams[col_stream].data[target] = c;
 		}
 	}
 
