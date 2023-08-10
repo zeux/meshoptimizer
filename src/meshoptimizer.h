@@ -512,7 +512,7 @@ struct meshopt_Bounds
  * For backface culling with orthographic projection, use the following formula to reject backfacing clusters:
  *   dot(view, cone_axis) >= cone_cutoff
  *
- * For perspective projection, you can the formula that needs cone apex in addition to axis & cutoff:
+ * For perspective projection, you can use the formula that needs cone apex in addition to axis & cutoff:
  *   dot(normalize(cone_apex - camera_position), cone_axis) >= cone_cutoff
  *
  * Alternatively, you can use the formula that doesn't need cone apex and uses bounding sphere instead:
