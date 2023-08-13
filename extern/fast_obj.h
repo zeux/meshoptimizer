@@ -411,12 +411,6 @@ int is_whitespace(char c)
 }
 
 static
-int is_end_of_name(char c)
-{
-    return (c == '\t' || c == '\r' || c == '\n');
-}
-
-static
 int is_newline(char c)
 {
     return (c == '\n');
@@ -434,6 +428,21 @@ static
 int is_exponent(char c)
 {
     return (c == 'e' || c == 'E');
+}
+
+
+static
+const char* skip_name(const char* ptr)
+{
+    const char* s = ptr;
+
+    while (!is_newline(*ptr))
+        ptr++;
+
+    while (ptr > s && is_whitespace(*(ptr - 1)))
+        ptr--;
+
+    return ptr;
 }
 
 
@@ -771,9 +780,7 @@ const char* parse_object(fastObjData* data, const char* ptr)
     ptr = skip_whitespace(ptr);
 
     s = ptr;
-    while (!is_end_of_name(*ptr))
-        ptr++;
-
+    ptr = skip_name(ptr);
     e = ptr;
 
     flush_object(data);
@@ -793,9 +800,7 @@ const char* parse_group(fastObjData* data, const char* ptr)
     ptr = skip_whitespace(ptr);
 
     s = ptr;
-    while (!is_end_of_name(*ptr))
-        ptr++;
-
+    ptr = skip_name(ptr);
     e = ptr;
 
     flush_group(data);
@@ -874,9 +879,7 @@ const char* parse_usemtl(fastObjData* data, const char* ptr)
 
     /* Parse the material name */
     s = ptr;
-    while (!is_end_of_name(*ptr))
-        ptr++;
-
+    ptr = skip_name(ptr);
     e = ptr;
 
     /* Find an existing material with the same name */
@@ -972,9 +975,7 @@ const char* read_map(fastObjData* data, const char* ptr, fastObjTexture* map)
 
     /* Read name */
     s = ptr;
-    while (!is_end_of_name(*ptr))
-        ptr++;
-
+    ptr = skip_name(ptr);
     e = ptr;
 
     name = string_copy(s, e);
@@ -1048,8 +1049,7 @@ int read_mtllib(fastObjData* data, void* file, const fastObjCallbacks* callbacks
                     p++;
 
                 s = p;
-                while (!is_end_of_name(*p))
-                    p++;
+                p = skip_name(p);
 
                 mtl.name = string_copy(s, p);
             }
@@ -1191,9 +1191,7 @@ const char* parse_mtllib(fastObjData* data, const char* ptr, const fastObjCallba
     ptr = skip_whitespace(ptr);
 
     s = ptr;
-    while (!is_end_of_name(*ptr))
-        ptr++;
-
+    ptr = skip_name(ptr);
     e = ptr;
 
     lib = string_concat(data->base, s, e);
