@@ -61,11 +61,12 @@ First, generate a remap table from your existing vertex (and, optionally, index)
 
 ```c++
 size_t index_count = face_count * 3;
+size_t unindexed_vertex_count = face_count * 3;
 std::vector<unsigned int> remap(index_count); // allocate temporary memory for the remap table
-size_t vertex_count = meshopt_generateVertexRemap(&remap[0], NULL, index_count, &unindexed_vertices[0], index_count, sizeof(Vertex));
+size_t vertex_count = meshopt_generateVertexRemap(&remap[0], NULL, index_count, &unindexed_vertices[0], unindexed_vertex_count, sizeof(Vertex));
 ```
 
-Note that in this case we only have an unindexed vertex buffer; the remap table is generated based on binary equivalence of the input vertices, so the resulting mesh will render the same way. Binary equivalence considers all input bytes, including padding which should be zero-initialized if the vertex structure has gaps.
+Note that in this case we only have an unindexed vertex buffer; when input mesh has an index buffer, it will need to be passed to `meshopt_generateVertexRemap` instead of `NULL`, along with the correct source vertex count. In either case, the remap table is generated based on binary equivalence of the input vertices, so the resulting mesh will render the same way. Binary equivalence considers all input bytes, including padding which should be zero-initialized if the vertex structure has gaps.
 
 After generating the remap table, you can allocate space for the target vertex buffer (`vertex_count` elements) and index buffer (`index_count` elements) and generate them:
 
@@ -120,9 +121,9 @@ The number of possible combinations here is very large but this library does pro
 
 ```c++
 unsigned int normal =
-	(meshopt_quantizeUnorm(v.nx, 10) << 20) |
-	(meshopt_quantizeUnorm(v.ny, 10) << 10) |
-	 meshopt_quantizeUnorm(v.nz, 10);
+    (meshopt_quantizeUnorm(v.nx, 10) << 20) |
+    (meshopt_quantizeUnorm(v.ny, 10) << 10) |
+     meshopt_quantizeUnorm(v.nz, 10);
 ```
 
 and here's how you can quantize a position:
