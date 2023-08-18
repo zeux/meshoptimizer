@@ -24,6 +24,8 @@ For better compression, you can use `-cc` option which applies additional compre
 
 gltfpack can also compress textures using Basis Universal format stored in a KTX2 container (`-tc` flag, requires support for `KHR_texture_basisu`). Textures can also be embedded into `.bin`/`.glb` output using `-te` flag.
 
+When working with glTF files that contain point clouds, gltfpack automatically processes the point cloud data to reduce the download size to the extent possible. In addition to aforementioned compression options (either `-c` or `-cc` are recommended), gltfpack can also prune point clouds to provide a more uniform density when `-si` option is used.
+
 ## Decompression
 
 When using compressed files, [js/meshopt_decoder.js](https://github.com/zeux/meshoptimizer/blob/master/js/meshopt_decoder.js) or `js/meshopt_decoder.module.js` needs to be loaded to provide the WebAssembly decoder module like this:
@@ -51,7 +53,7 @@ The following settings are frequently used to reduce the resulting data size:
 * `-cc`: produce compressed gltf/glb files (requires `EXT_meshopt_compression`)
 * `-tc`: convert all textures to KTX2 with BasisU supercompression (requires `KHR_texture_basisu` and may require `-tp` flag for compatibility with WebGL 1)
 * `-mi`: use mesh instancing when serializing references to the same meshes (requires `EXT_mesh_gpu_instancing`)
-* `-si R`: simplify meshes targeting triangle count ratio R (default: 1; R should be between 0 and 1)
+* `-si R`: simplify meshes targeting triangle/point count ratio R (default: 1; R should be between 0 and 1)
 
 The following settings are frequently used to restrict some optimizations:
 
