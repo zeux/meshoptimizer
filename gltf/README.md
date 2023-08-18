@@ -62,6 +62,36 @@ The following settings are frequently used to restrict some optimizations:
 * `-ke`: keep extras data
 * `-vpf`: use floating-point position quantization instead of the default fixed-point (this results in larger position data, but does not insert new nodes with dequantization transforms; when using this option, `-cc` is recommended as well)
 
+## Extensions
+
+gltfpack supports most Khronos extensions and some vendor extensions in the input scenes, with newer extensions added regularly. The following extensions are fully supported:
+
+- KHR_lights_punctual
+- KHR_materials_anisotropy
+- KHR_materials_clearcoat
+- KHR_materials_emissive_strength
+- KHR_materials_ior
+- KHR_materials_iridescence
+- KHR_materials_pbrSpecularGlossiness
+- KHR_materials_sheen
+- KHR_materials_specular
+- KHR_materials_transmission
+- KHR_materials_unlit
+- KHR_materials_variants
+- KHR_materials_volume
+- KHR_mesh_quantization
+- KHR_texture_transform
+
+Even if the source file does not use extensions, gltfpack may use some extensions in the output file either by default or when certain options are used:
+
+- KHR_mesh_quantization (used by default unless disabled via `-noq`)
+- KHR_texture_transform (used by default when textures are present, unless disabled via `-noq` or `-vtf`)
+- KHR_texture_basisu (used when requested via `-tc`)
+- EXT_meshopt_compression (used when requested via `-c` or `-cc`)
+- EXT_mesh_gpu_instancing (used when requested via `-mi`)
+
+gltfpack does not support vendor-specific extensions or custom extensions, including ones defined in [Khronos glTF repository](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor). Unknown extension nodes are discarded from the output.
+
 ## Building
 
 gltfpack can be built from source using CMake or Make. To build a full version of gltfpack that supports texture compression, CMake configuration needs to specify the path to https://github.com/zeux/basis_universal fork (branch gltfpack) via `MESHOPT_BASISU_PATH` variable:
