@@ -64,7 +64,7 @@ The following settings are frequently used to restrict some optimizations:
 
 ## Extensions
 
-gltfpack supports most Khronos extensions and some vendor extensions in the input scenes, with newer extensions added regularly. The following extensions are fully supported:
+gltfpack supports most Khronos extensions and some multi-vendor extensions in the input scenes, with newer extensions added regularly. The following extensions are fully supported:
 
 - KHR_lights_punctual
 - KHR_materials_anisotropy
