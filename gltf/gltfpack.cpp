@@ -1451,7 +1451,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-tq C N: set texture encoding quality for class C\n");
 			fprintf(stderr, "\t... where C is a comma-separated list (no spaces) with valid values color,normal,attrib\n");
 			fprintf(stderr, "\nSimplification:\n");
-			fprintf(stderr, "\t-si R: simplify meshes targeting triangle count ratio R (default: 1; R should be between 0 and 1)\n");
+			fprintf(stderr, "\t-si R: simplify meshes targeting triangle/point count ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\t-sa: aggressively simplify to the target ratio disregarding quality\n");
 			fprintf(stderr, "\t-slb: lock border vertices during simplification to avoid gaps on connected meshes\n");
 			fprintf(stderr, "\nVertices:\n");
@@ -1492,7 +1492,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-o file: output file path, .gltf/.glb\n");
 			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc for higher compression ratio)\n");
 			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression\n");
-			fprintf(stderr, "\t-si R: simplify meshes targeting triangle count ratio R (default: 1; R should be between 0 and 1)\n");
+			fprintf(stderr, "\t-si R: simplify meshes targeting triangle/point count ratio R (between 0 and 1)\n");
 			fprintf(stderr, "\nRun gltfpack -h to display a full list of options\n");
 		}
 
