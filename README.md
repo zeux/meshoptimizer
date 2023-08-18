@@ -72,7 +72,7 @@ After generating the remap table, you can allocate space for the target vertex b
 
 ```c++
 meshopt_remapIndexBuffer(indices, NULL, index_count, &remap[0]);
-meshopt_remapVertexBuffer(vertices, &unindexed_vertices[0], index_count, sizeof(Vertex), &remap[0]);
+meshopt_remapVertexBuffer(vertices, &unindexed_vertices[0], unindexed_vertex_count, sizeof(Vertex), &remap[0]);
 ```
 
 You can then further optimize the resulting buffers by calling the other functions on them in-place.
