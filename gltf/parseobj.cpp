@@ -58,14 +58,16 @@ static cgltf_data* parseSceneObj(fastObjMesh* obj)
 
 	for (unsigned int mi = 0; mi < obj->material_count; ++mi)
 	{
+		const fastObjMaterial& om = obj->materials[mi];
 		cgltf_material& gm = data->materials[mi];
-		fastObjMaterial& om = obj->materials[mi];
 
 		gm.has_pbr_metallic_roughness = true;
-		gm.pbr_metallic_roughness.base_color_factor[0] = 1.0f;
-		gm.pbr_metallic_roughness.base_color_factor[1] = 1.0f;
-		gm.pbr_metallic_roughness.base_color_factor[2] = 1.0f;
-		gm.pbr_metallic_roughness.base_color_factor[3] = 1.0f;
+
+		gm.pbr_metallic_roughness.base_color_factor[0] = om.Kd[0];
+		gm.pbr_metallic_roughness.base_color_factor[1] = om.Kd[1];
+		gm.pbr_metallic_roughness.base_color_factor[2] = om.Kd[2];
+		gm.pbr_metallic_roughness.base_color_factor[3] = om.d;
+
 		gm.pbr_metallic_roughness.metallic_factor = 0.0f;
 		gm.pbr_metallic_roughness.roughness_factor = 1.0f;
 
@@ -80,6 +82,14 @@ static cgltf_data* parseSceneObj(fastObjMesh* obj)
 		}
 
 		if (om.map_d.name)
+		{
+			if (om.map_Kd.name && strcmp(om.map_Kd.name, om.map_d.name) != 0)
+				fprintf(stderr, "Warning: material has different diffuse and alpha textures (Kd: %s, d: %s) and might not render correctly\n", om.map_Kd.name, om.map_d.name);
+
+			gm.alpha_mode = cgltf_alpha_mode_blend;
+		}
+
+		if (om.d < 1.0f)
 		{
 			gm.alpha_mode = cgltf_alpha_mode_blend;
 		}
