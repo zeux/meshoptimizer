@@ -61,6 +61,9 @@ static cgltf_data* parseSceneObj(fastObjMesh* obj)
 		const fastObjMaterial& om = obj->materials[mi];
 		cgltf_material& gm = data->materials[mi];
 
+		if (om.name)
+			gm.name = strdup(om.name);
+
 		gm.has_pbr_metallic_roughness = true;
 
 		gm.pbr_metallic_roughness.base_color_factor[0] = om.Kd[0];
