@@ -118,6 +118,8 @@ static void parseNodesObj(fastObjMesh* obj, cgltf_data* data)
 	data->scenes = (cgltf_scene*)calloc(1, sizeof(cgltf_scene));
 	data->scenes_count = 1;
 
+	data->scene = data->scenes;
+
 	data->scenes->nodes = (cgltf_node**)calloc(obj->object_count, sizeof(cgltf_node*));
 	data->scenes->nodes_count = obj->object_count;
 
