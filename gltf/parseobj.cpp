@@ -21,11 +21,8 @@ static int textureIndex(const std::vector<std::string>& textures, const char* na
 	return -1;
 }
 
-static cgltf_data* parseSceneObj(fastObjMesh* obj)
+static void parseMaterialsObj(fastObjMesh* obj, cgltf_data* data)
 {
-	cgltf_data* data = (cgltf_data*)calloc(1, sizeof(cgltf_data));
-	data->memory.free_func = defaultFree;
-
 	std::vector<std::string> textures;
 
 	for (unsigned int mi = 0; mi < obj->material_count; ++mi)
@@ -97,15 +94,12 @@ static cgltf_data* parseSceneObj(fastObjMesh* obj)
 			gm.alpha_mode = cgltf_alpha_mode_blend;
 		}
 	}
+}
 
+static void parseNodesObj(fastObjMesh* obj, cgltf_data* data)
+{
 	data->nodes = (cgltf_node*)calloc(obj->object_count, sizeof(cgltf_node));
 	data->nodes_count = obj->object_count;
-
-	data->scenes = (cgltf_scene*)calloc(1, sizeof(cgltf_scene));
-	data->scenes_count = 1;
-
-	data->scenes->nodes = (cgltf_node**)calloc(obj->object_count, sizeof(cgltf_node*));
-	data->scenes->nodes_count = obj->object_count;
 
 	for (unsigned int oi = 0; oi < obj->object_count; ++oi)
 	{
@@ -119,11 +113,16 @@ static cgltf_data* parseSceneObj(fastObjMesh* obj)
 		node->scale[0] = 1.0f;
 		node->scale[1] = 1.0f;
 		node->scale[2] = 1.0f;
-
-		data->scenes->nodes[oi] = node;
 	}
 
-	return data;
+	data->scenes = (cgltf_scene*)calloc(1, sizeof(cgltf_scene));
+	data->scenes_count = 1;
+
+	data->scenes->nodes = (cgltf_node**)calloc(obj->object_count, sizeof(cgltf_node*));
+	data->scenes->nodes_count = obj->object_count;
+
+	for (unsigned int oi = 0; oi < obj->object_count; ++oi)
+		data->scenes->nodes[oi] = &data->nodes[oi];
 }
 
 static void parseMeshObj(fastObjMesh* obj, unsigned int face_offset, unsigned int face_vertex_offset, unsigned int face_count, unsigned int face_vertex_count, unsigned int index_count, Mesh& mesh)
@@ -214,49 +213,45 @@ static void parseMeshObj(fastObjMesh* obj, unsigned int face_offset, unsigned in
 	assert(index_offset == index_count);
 }
 
-static void parseMeshesObj(fastObjMesh* obj, cgltf_data* data, std::vector<Mesh>& meshes)
+static void parseMeshGroupObj(fastObjMesh* obj, const fastObjGroup& og, cgltf_data* data, cgltf_node* node, std::vector<Mesh>& meshes)
 {
-	for (unsigned int oi = 0; oi < obj->object_count; ++oi)
+	unsigned int face_vertex_offset = og.index_offset;
+	unsigned int face_end_offset = og.face_offset + og.face_count;
+
+	for (unsigned int face_offset = og.face_offset; face_offset < face_end_offset; )
 	{
-		const fastObjGroup& og = obj->objects[oi];
+		unsigned int mi = obj->face_materials[face_offset];
 
-		unsigned int face_vertex_offset = og.index_offset;
-		unsigned int face_end_offset = og.face_offset + og.face_count;
+		unsigned int face_count = 0;
+		unsigned int face_vertex_count = 0;
+		unsigned int index_count = 0;
 
-		for (unsigned int face_offset = og.face_offset; face_offset < face_end_offset; )
+		for (unsigned int fj = face_offset; fj < face_end_offset && obj->face_materials[fj] == mi; ++fj)
 		{
-			unsigned int mi = obj->face_materials[face_offset];
-
-			unsigned int face_count = 0;
-			unsigned int face_vertex_count = 0;
-			unsigned int index_count = 0;
-
-			for (unsigned int fj = face_offset; fj < face_end_offset && obj->face_materials[fj] == mi; ++fj)
-			{
-				face_count += 1;
-				face_vertex_count += obj->face_vertices[fj];
-				index_count += (obj->face_vertices[fj] - 2) * 3;
-			}
-
-			meshes.push_back(Mesh());
-			Mesh& mesh = meshes.back();
-
-			if (data->materials_count)
-			{
-				assert(mi < data->materials_count);
-				mesh.material = &data->materials[mi];
-			}
-
-			mesh.type = cgltf_primitive_type_triangles;
-			mesh.targets = 0;
-
-			mesh.nodes.push_back(&data->nodes[oi]);
-
-			parseMeshObj(obj, face_offset, face_vertex_offset, face_count, face_vertex_count, index_count, mesh);
-
-			face_offset += face_count;
-			face_vertex_offset += face_vertex_count;
+			face_count += 1;
+			face_vertex_count += obj->face_vertices[fj];
+			index_count += (obj->face_vertices[fj] - 2) * 3;
 		}
+
+		meshes.push_back(Mesh());
+		Mesh& mesh = meshes.back();
+
+		if (data->materials_count)
+		{
+			assert(mi < data->materials_count);
+			mesh.material = &data->materials[mi];
+		}
+
+		mesh.type = cgltf_primitive_type_triangles;
+		mesh.targets = 0;
+
+		if (node)
+			mesh.nodes.push_back(node);
+
+		parseMeshObj(obj, face_offset, face_vertex_offset, face_count, face_vertex_count, index_count, mesh);
+
+		face_offset += face_count;
+		face_vertex_offset += face_vertex_count;
 	}
 }
 
@@ -270,9 +265,16 @@ cgltf_data* parseObj(const char* path, std::vector<Mesh>& meshes, const char** e
 		return 0;
 	}
 
-	cgltf_data* data = parseSceneObj(obj);
+	cgltf_data* data = (cgltf_data*)calloc(1, sizeof(cgltf_data));
+	data->memory.free_func = defaultFree;
 
-	parseMeshesObj(obj, data, meshes);
+	parseMaterialsObj(obj, data);
+
+	parseNodesObj(obj, data);
+	assert(data->nodes_count == obj->object_count);
+
+	for (unsigned int oi = 0; oi < obj->object_count; ++oi)
+		parseMeshGroupObj(obj, obj->objects[oi], data, &data->nodes[oi], meshes);
 
 	fast_obj_destroy(obj);
 
