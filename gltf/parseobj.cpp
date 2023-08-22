@@ -21,6 +21,14 @@ static int textureIndex(const std::vector<std::string>& textures, const char* na
 	return -1;
 }
 
+static void fixupUri(char* uri)
+{
+	// Some .obj paths come with back slashes, that are invalid as URI separators and won't open on macOS/Linux when embedding textures
+	for (char* s = uri; *s; ++s)
+		if (*s == '\\')
+			*s = '/';
+}
+
 static void parseMaterialsObj(fastObjMesh* obj, cgltf_data* data)
 {
 	std::vector<std::string> textures;
@@ -38,8 +46,8 @@ static void parseMaterialsObj(fastObjMesh* obj, cgltf_data* data)
 
 	for (size_t i = 0; i < textures.size(); ++i)
 	{
-		data->images[i].uri = (char*)malloc(textures[i].size() + 1);
-		strcpy(data->images[i].uri, textures[i].c_str());
+		data->images[i].uri = strdup(textures[i].c_str());
+		fixupUri(data->images[i].uri);
 	}
 
 	data->textures = (cgltf_texture*)calloc(textures.size(), sizeof(cgltf_texture));
