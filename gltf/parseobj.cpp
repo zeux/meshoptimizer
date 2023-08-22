@@ -71,10 +71,10 @@ static void parseMaterialsObj(fastObjMesh* obj, cgltf_data* data)
 
 		gm.has_pbr_metallic_roughness = true;
 
-		gm.pbr_metallic_roughness.base_color_factor[0] = om.Kd[0];
-		gm.pbr_metallic_roughness.base_color_factor[1] = om.Kd[1];
-		gm.pbr_metallic_roughness.base_color_factor[2] = om.Kd[2];
-		gm.pbr_metallic_roughness.base_color_factor[3] = om.d;
+		gm.pbr_metallic_roughness.base_color_factor[0] = 1.0f;
+		gm.pbr_metallic_roughness.base_color_factor[1] = 1.0f;
+		gm.pbr_metallic_roughness.base_color_factor[2] = 1.0f;
+		gm.pbr_metallic_roughness.base_color_factor[3] = 1.0f;
 
 		gm.pbr_metallic_roughness.metallic_factor = 0.0f;
 		gm.pbr_metallic_roughness.roughness_factor = 1.0f;
@@ -88,6 +88,12 @@ static void parseMaterialsObj(fastObjMesh* obj, cgltf_data* data)
 
 			gm.alpha_mode = (om.illum == 4 || om.illum == 6 || om.illum == 7 || om.illum == 9) ? cgltf_alpha_mode_mask : cgltf_alpha_mode_opaque;
 		}
+		else
+		{
+			gm.pbr_metallic_roughness.base_color_factor[0] = om.Kd[0];
+			gm.pbr_metallic_roughness.base_color_factor[1] = om.Kd[1];
+			gm.pbr_metallic_roughness.base_color_factor[2] = om.Kd[2];
+		}
 
 		if (om.map_d.name)
 		{
@@ -96,9 +102,10 @@ static void parseMaterialsObj(fastObjMesh* obj, cgltf_data* data)
 
 			gm.alpha_mode = cgltf_alpha_mode_blend;
 		}
-
-		if (om.d < 1.0f)
+		else if (om.d < 1.0f)
 		{
+			gm.pbr_metallic_roughness.base_color_factor[3] = om.d;
+
 			gm.alpha_mode = cgltf_alpha_mode_blend;
 		}
 	}
