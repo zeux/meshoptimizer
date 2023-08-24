@@ -1224,6 +1224,8 @@ static void tessellation()
 
 static void quantizeFloat()
 {
+	volatile float zero = 0.f; // avoids div-by-zero warnings
+
 	assert(meshopt_quantizeFloat(1.2345f, 23) == 1.2345f);
 
 	assert(meshopt_quantizeFloat(1.2345f, 16) == 1.2344971f);
@@ -1233,15 +1235,17 @@ static void quantizeFloat()
 
 	assert(meshopt_quantizeFloat(1.f, 0) == 1.0f);
 
-	assert(meshopt_quantizeFloat(1.f / 0.f, 0) == 1.f / 0.f);
-	assert(meshopt_quantizeFloat(-1.f / 0.f, 0) == -1.f / 0.f);
+	assert(meshopt_quantizeFloat(1.f / zero, 0) == 1.f / zero);
+	assert(meshopt_quantizeFloat(-1.f / zero, 0) == -1.f / zero);
 
-	float nanf = meshopt_quantizeFloat(0.f / 0.f, 8);
+	float nanf = meshopt_quantizeFloat(zero / zero, 8);
 	assert(nanf != nanf);
 }
 
 static void quantizeHalf()
 {
+	volatile float zero = 0.f; // avoids div-by-zero warnings
+
 	// normal
 	assert(meshopt_quantizeHalf(1.2345f) == 0x3cf0);
 
@@ -1274,16 +1278,18 @@ static void quantizeHalf()
 	assert(meshopt_quantizeHalf(-1e20f) == 0xfc00);
 
 	// inf
-	assert(meshopt_quantizeHalf(1.f / 0.f) == 0x7c00);
-	assert(meshopt_quantizeHalf(-1.f / 0.f) == 0xfc00);
+	assert(meshopt_quantizeHalf(1.f / zero) == 0x7c00);
+	assert(meshopt_quantizeHalf(-1.f / zero) == 0xfc00);
 
 	// nan
-	unsigned short nanh = meshopt_quantizeHalf(0.f / 0.f);
+	unsigned short nanh = meshopt_quantizeHalf(zero / zero);
 	assert(nanh == 0x7e00 || nanh == 0xfe00);
 }
 
 static void dequantizeHalf()
 {
+	volatile float zero = 0.f; // avoids div-by-zero warnings
+
 	// normal
 	assert(meshopt_dequantizeHalf(0x3cf0) == 1.234375f);
 
@@ -1302,11 +1308,11 @@ static void dequantizeHalf()
 	// denormal
 	assert(meshopt_dequantizeHalf(0x00ff) == 0.f);
 	assert(meshopt_dequantizeHalf(0x80ff) == 0.f); // actually this is -0.f
-	assert(1.f / meshopt_dequantizeHalf(0x80ff) == -1.f / 0.f);
+	assert(1.f / meshopt_dequantizeHalf(0x80ff) == -1.f / zero);
 
 	// inf
-	assert(meshopt_dequantizeHalf(0x7c00) == 1.f / 0.f);
-	assert(meshopt_dequantizeHalf(0xfc00) == -1.f / 0.f);
+	assert(meshopt_dequantizeHalf(0x7c00) == 1.f / zero);
+	assert(meshopt_dequantizeHalf(0xfc00) == -1.f / zero);
 
 	// nan
 	float nanf = meshopt_dequantizeHalf(0x7e00);
