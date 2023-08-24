@@ -1231,7 +1231,13 @@ static void quantizeFloat()
 	assert(meshopt_quantizeFloat(1.2345f, 4) == 1.25f);
 	assert(meshopt_quantizeFloat(1.2345f, 1) == 1.0);
 
-	assert(meshopt_quantizeFloat(1.0f, 0) == 1.0f);
+	assert(meshopt_quantizeFloat(1.f, 0) == 1.0f);
+
+	assert(meshopt_quantizeFloat(1.f / 0.f, 0) == 1.f / 0.f);
+	assert(meshopt_quantizeFloat(-1.f / 0.f, 0) == -1.f / 0.f);
+
+	float nanf = meshopt_quantizeFloat(0.f / 0.f, 8);
+	assert(nanf != nanf);
 }
 
 static void quantizeHalf()
@@ -1266,6 +1272,14 @@ static void quantizeHalf()
 	// exponent overflow
 	assert(meshopt_quantizeHalf(1e20f) == 0x7c00);
 	assert(meshopt_quantizeHalf(-1e20f) == 0xfc00);
+
+	// inf
+	assert(meshopt_quantizeHalf(1.f / 0.f) == 0x7c00);
+	assert(meshopt_quantizeHalf(-1.f / 0.f) == 0xfc00);
+
+	// nan
+	unsigned short nanh = meshopt_quantizeHalf(0.f / 0.f);
+	assert(nanh == 0x7e00 || nanh == 0xfe00);
 }
 
 void runTests()
