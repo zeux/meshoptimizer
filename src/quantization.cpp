@@ -48,3 +48,23 @@ float meshopt_quantizeFloat(float v, int N)
 	u.ui = ui;
 	return u.f;
 }
+
+float meshopt_dequantizeHalf(unsigned short h)
+{
+	unsigned int s = unsigned(h & 0x8000) << 16;
+	int em = h & 0x7fff;
+
+	// bias exponent and pad mantissa with 0; 112 is relative exponent bias (127-15)
+	int r = (em + (112 << 10)) << 13;
+
+	// denormal: flush to zero
+	r = (em < (1 << 10)) ? 0 : r;
+
+	// infinity/NaN; note that we preserve NaN payload as a byproduct of unifying inf/nan cases
+	// 112 is an exponent bias fixup; since we already applied it once, applying it twice converts 31 to 255
+	r += (em >= (31 << 10)) ? (112 << 23) : 0;
+
+	union { float f; unsigned int ui; } u;
+	u.ui = s | r;
+	return u.f;
+}

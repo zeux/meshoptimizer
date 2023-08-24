@@ -577,7 +577,7 @@ inline int meshopt_quantizeUnorm(float v, int N);
 inline int meshopt_quantizeSnorm(float v, int N);
 
 /**
- * Quantize a float into half-precision floating point value
+ * Quantize a float into half-precision (as defined by IEEE-754 fp16) floating point value
  * Generates +-inf for overflow, preserves NaN, flushes denormals to zero, rounds to nearest
  * Representable magnitude range: [6e-5; 65504]
  * Maximum relative reconstruction error: 5e-4
@@ -590,6 +590,12 @@ MESHOPTIMIZER_API unsigned short meshopt_quantizeHalf(float v);
  * Assumes N is in a valid mantissa precision range, which is 1..23
  */
 MESHOPTIMIZER_API float meshopt_quantizeFloat(float v, int N);
+
+/**
+ * Reverse quantization of a half-precision (as defined by IEEE-754 fp16) floating point value
+ * Preserves Inf/NaN, flushes denormals to zero
+ */
+MESHOPTIMIZER_API float meshopt_dequantizeHalf(unsigned short h);
 #endif
 
 /**

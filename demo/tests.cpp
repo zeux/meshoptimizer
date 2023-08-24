@@ -1282,6 +1282,37 @@ static void quantizeHalf()
 	assert(nanh == 0x7e00 || nanh == 0xfe00);
 }
 
+static void dequantizeHalf()
+{
+	// normal
+	assert(meshopt_dequantizeHalf(0x3cf0) == 1.234375f);
+
+	// large
+	assert(meshopt_dequantizeHalf(0x7bef) == 64992.f);
+	assert(meshopt_dequantizeHalf(0xfbef) == -64992.f);
+
+	// small
+	assert(meshopt_dequantizeHalf(0x3000) == 0.125f);
+	assert(meshopt_dequantizeHalf(0xb000) == -0.125f);
+
+	// very small
+	assert(meshopt_dequantizeHalf(0x068e) == 1.00016594e-4f);
+	assert(meshopt_dequantizeHalf(0x868e) == -1.00016594e-4f);
+
+	// denormal
+	assert(meshopt_dequantizeHalf(0x00ff) == 0.f);
+	assert(meshopt_dequantizeHalf(0x80ff) == 0.f); // actually this is -0.f
+	assert(1.f / meshopt_dequantizeHalf(0x80ff) == -1.f / 0.f);
+
+	// inf
+	assert(meshopt_dequantizeHalf(0x7c00) == 1.f / 0.f);
+	assert(meshopt_dequantizeHalf(0xfc00) == -1.f / 0.f);
+
+	// nan
+	float nanf = meshopt_dequantizeHalf(0x7e00);
+	assert(nanf != nanf);
+}
+
 void runTests()
 {
 	decodeIndexV0();
@@ -1347,4 +1378,5 @@ void runTests()
 
 	quantizeFloat();
 	quantizeHalf();
+	dequantizeHalf();
 }
