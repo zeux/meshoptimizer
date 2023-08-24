@@ -1222,6 +1222,52 @@ static void tessellation()
 	assert(memcmp(tessib, expected, sizeof(expected)) == 0);
 }
 
+static void quantizeFloat()
+{
+	assert(meshopt_quantizeFloat(1.2345f, 23) == 1.2345f);
+
+	assert(meshopt_quantizeFloat(1.2345f, 16) == 1.2344971f);
+	assert(meshopt_quantizeFloat(1.2345f, 8) == 1.2343750f);
+	assert(meshopt_quantizeFloat(1.2345f, 4) == 1.25f);
+	assert(meshopt_quantizeFloat(1.2345f, 1) == 1.0);
+
+	assert(meshopt_quantizeFloat(1.0f, 0) == 1.0f);
+}
+
+static void quantizeHalf()
+{
+	// normal
+	assert(meshopt_quantizeHalf(1.2345f) == 0x3cf0);
+
+	// overflow
+	assert(meshopt_quantizeHalf(65535.f) == 0x7c00);
+	assert(meshopt_quantizeHalf(-65535.f) == 0xfc00);
+
+	// large
+	assert(meshopt_quantizeHalf(65000.f) == 0x7bef);
+	assert(meshopt_quantizeHalf(-65000.f) == 0xfbef);
+
+	// small
+	assert(meshopt_quantizeHalf(0.125f) == 0x3000);
+	assert(meshopt_quantizeHalf(-0.125f) == 0xb000);
+
+	// very small
+	assert(meshopt_quantizeHalf(1e-4f) == 0x068e);
+	assert(meshopt_quantizeHalf(-1e-4f) == 0x868e);
+
+	// underflow
+	assert(meshopt_quantizeHalf(1e-5f) == 0x0000);
+	assert(meshopt_quantizeHalf(-1e-5f) == 0x8000);
+
+	// exponent underflow
+	assert(meshopt_quantizeHalf(1e-20f) == 0x0000);
+	assert(meshopt_quantizeHalf(-1e-20f) == 0x8000);
+
+	// exponent overflow
+	assert(meshopt_quantizeHalf(1e20f) == 0x7c00);
+	assert(meshopt_quantizeHalf(-1e20f) == 0xfc00);
+}
+
 void runTests()
 {
 	decodeIndexV0();
@@ -1284,4 +1330,7 @@ void runTests()
 
 	adjacency();
 	tessellation();
+
+	quantizeFloat();
+	quantizeHalf();
 }
