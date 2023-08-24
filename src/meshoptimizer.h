@@ -585,7 +585,7 @@ inline int meshopt_quantizeSnorm(float v, int N);
 MESHOPTIMIZER_API unsigned short meshopt_quantizeHalf(float v);
 
 /**
- * Quantize a float into a floating point value with a limited number of significant mantissa bits
+ * Quantize a float into a floating point value with a limited number of significant mantissa bits, preserving the IEEE-754 fp32 binary representation
  * Generates +-inf for overflow, preserves NaN, flushes denormals to zero, rounds to nearest
  * Assumes N is in a valid mantissa precision range, which is 1..23
  */
