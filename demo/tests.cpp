@@ -1222,6 +1222,103 @@ static void tessellation()
 	assert(memcmp(tessib, expected, sizeof(expected)) == 0);
 }
 
+static void quantizeFloat()
+{
+	volatile float zero = 0.f; // avoids div-by-zero warnings
+
+	assert(meshopt_quantizeFloat(1.2345f, 23) == 1.2345f);
+
+	assert(meshopt_quantizeFloat(1.2345f, 16) == 1.2344971f);
+	assert(meshopt_quantizeFloat(1.2345f, 8) == 1.2343750f);
+	assert(meshopt_quantizeFloat(1.2345f, 4) == 1.25f);
+	assert(meshopt_quantizeFloat(1.2345f, 1) == 1.0);
+
+	assert(meshopt_quantizeFloat(1.f, 0) == 1.0f);
+
+	assert(meshopt_quantizeFloat(1.f / zero, 0) == 1.f / zero);
+	assert(meshopt_quantizeFloat(-1.f / zero, 0) == -1.f / zero);
+
+	float nanf = meshopt_quantizeFloat(zero / zero, 8);
+	assert(nanf != nanf);
+}
+
+static void quantizeHalf()
+{
+	volatile float zero = 0.f; // avoids div-by-zero warnings
+
+	// normal
+	assert(meshopt_quantizeHalf(1.2345f) == 0x3cf0);
+
+	// overflow
+	assert(meshopt_quantizeHalf(65535.f) == 0x7c00);
+	assert(meshopt_quantizeHalf(-65535.f) == 0xfc00);
+
+	// large
+	assert(meshopt_quantizeHalf(65000.f) == 0x7bef);
+	assert(meshopt_quantizeHalf(-65000.f) == 0xfbef);
+
+	// small
+	assert(meshopt_quantizeHalf(0.125f) == 0x3000);
+	assert(meshopt_quantizeHalf(-0.125f) == 0xb000);
+
+	// very small
+	assert(meshopt_quantizeHalf(1e-4f) == 0x068e);
+	assert(meshopt_quantizeHalf(-1e-4f) == 0x868e);
+
+	// underflow
+	assert(meshopt_quantizeHalf(1e-5f) == 0x0000);
+	assert(meshopt_quantizeHalf(-1e-5f) == 0x8000);
+
+	// exponent underflow
+	assert(meshopt_quantizeHalf(1e-20f) == 0x0000);
+	assert(meshopt_quantizeHalf(-1e-20f) == 0x8000);
+
+	// exponent overflow
+	assert(meshopt_quantizeHalf(1e20f) == 0x7c00);
+	assert(meshopt_quantizeHalf(-1e20f) == 0xfc00);
+
+	// inf
+	assert(meshopt_quantizeHalf(1.f / zero) == 0x7c00);
+	assert(meshopt_quantizeHalf(-1.f / zero) == 0xfc00);
+
+	// nan
+	unsigned short nanh = meshopt_quantizeHalf(zero / zero);
+	assert(nanh == 0x7e00 || nanh == 0xfe00);
+}
+
+static void dequantizeHalf()
+{
+	volatile float zero = 0.f; // avoids div-by-zero warnings
+
+	// normal
+	assert(meshopt_dequantizeHalf(0x3cf0) == 1.234375f);
+
+	// large
+	assert(meshopt_dequantizeHalf(0x7bef) == 64992.f);
+	assert(meshopt_dequantizeHalf(0xfbef) == -64992.f);
+
+	// small
+	assert(meshopt_dequantizeHalf(0x3000) == 0.125f);
+	assert(meshopt_dequantizeHalf(0xb000) == -0.125f);
+
+	// very small
+	assert(meshopt_dequantizeHalf(0x068e) == 1.00016594e-4f);
+	assert(meshopt_dequantizeHalf(0x868e) == -1.00016594e-4f);
+
+	// denormal
+	assert(meshopt_dequantizeHalf(0x00ff) == 0.f);
+	assert(meshopt_dequantizeHalf(0x80ff) == 0.f); // actually this is -0.f
+	assert(1.f / meshopt_dequantizeHalf(0x80ff) == -1.f / zero);
+
+	// inf
+	assert(meshopt_dequantizeHalf(0x7c00) == 1.f / zero);
+	assert(meshopt_dequantizeHalf(0xfc00) == -1.f / zero);
+
+	// nan
+	float nanf = meshopt_dequantizeHalf(0x7e00);
+	assert(nanf != nanf);
+}
+
 void runTests()
 {
 	decodeIndexV0();
@@ -1284,4 +1381,8 @@ void runTests()
 
 	adjacency();
 	tessellation();
+
+	quantizeFloat();
+	quantizeHalf();
+	dequantizeHalf();
 }
