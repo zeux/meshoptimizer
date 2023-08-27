@@ -1,3 +1,7 @@
+#ifndef __wasi__
+#error This file contains libc stubs for WASI SDK and should only be used in non-Emscripten WebAssembly builds
+#endif
+
 #include <stddef.h>
 #include <stdint.h>
 #include <assert.h>
