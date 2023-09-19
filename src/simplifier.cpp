@@ -252,7 +252,7 @@ static bool hasEdge(const EdgeAdjacency& adjacency, unsigned int a, unsigned int
 	return false;
 }
 
-static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned int* loopback, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* wedge, unsigned int options)
+static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned int* loopback, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* wedge, const unsigned int* locked_vertices, size_t locked_vertex_count, unsigned int options)
 {
 	memset(loop, -1, vertex_count * sizeof(unsigned int));
 	memset(loopback, -1, vertex_count * sizeof(unsigned int));
@@ -361,6 +361,9 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 			result[i] = result[remap[i]];
 		}
 	}
+
+	for (size_t i = 0; i < locked_vertex_count; i++)
+		result[remap[locked_vertices[i]]] = Kind_Locked;
 
 	if (options & meshopt_SimplifyLockBorder)
 		for (size_t i = 0; i < vertex_count; ++i)
@@ -1468,7 +1471,7 @@ MESHOPTIMIZER_API unsigned int* meshopt_simplifyDebugLoop = NULL;
 MESHOPTIMIZER_API unsigned int* meshopt_simplifyDebugLoopBack = NULL;
 #endif
 
-size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes_data, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, size_t target_index_count, float target_error, unsigned int options, float* out_result_error)
+size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes_data, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, const unsigned int* locked_vertices, size_t locked_vertex_count, size_t target_index_count, float target_error, unsigned int options, float* out_result_error)
 {
 	using namespace meshopt;
 
@@ -1499,7 +1502,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	unsigned char* vertex_kind = allocator.allocate<unsigned char>(vertex_count);
 	unsigned int* loop = allocator.allocate<unsigned int>(vertex_count);
 	unsigned int* loopback = allocator.allocate<unsigned int>(vertex_count);
-	classifyVertices(vertex_kind, loop, loopback, vertex_count, adjacency, remap, wedge, options);
+	classifyVertices(vertex_kind, loop, loopback, vertex_count, adjacency, remap, wedge, locked_vertices, locked_vertex_count, options);
 
 #if TRACE
 	size_t unique_positions = 0;
@@ -1634,12 +1637,17 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 
 size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, unsigned int options, float* out_result_error)
 {
-	return meshopt_simplifyEdge(destination, indices, index_count, vertex_positions_data, vertex_count, vertex_positions_stride, NULL, 0, NULL, 0, target_index_count, target_error, options, out_result_error);
+	return meshopt_simplifyEdge(destination, indices, index_count, vertex_positions_data, vertex_count, vertex_positions_stride, NULL, 0, NULL, 0, NULL, 0, target_index_count, target_error, options, out_result_error);
 }
 
-size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes_data, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, size_t target_index_count, float target_error, unsigned int options, float* out_result_error)
+size_t meshopt_simplifyWithLocks(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const unsigned int* locked_vertices, size_t locked_vertex_count, size_t target_index_count, float target_error, unsigned int options, float* out_result_error)
 {
-	return meshopt_simplifyEdge(destination, indices, index_count, vertex_positions_data, vertex_count, vertex_positions_stride, vertex_attributes_data, vertex_attributes_stride, attribute_weights, attribute_count, target_index_count, target_error, options, out_result_error);
+	return meshopt_simplifyEdge(destination, indices, index_count, vertex_positions_data, vertex_count, vertex_positions_stride, NULL, 0, NULL, 0, locked_vertices, locked_vertex_count, target_index_count, target_error, options, out_result_error);
+}
+
+size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes_data, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, const unsigned int* locked_vertices, size_t locked_vertex_count, size_t target_index_count, float target_error, unsigned int options, float* out_result_error)
+{
+	return meshopt_simplifyEdge(destination, indices, index_count, vertex_positions_data, vertex_count, vertex_positions_stride, vertex_attributes_data, vertex_attributes_stride, attribute_weights, attribute_count, locked_vertices, locked_vertex_count, target_index_count, target_error, options, out_result_error);
 }
 
 size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, float* out_result_error)
@@ -1692,14 +1700,16 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 
 		// we clamp the prediction of the grid size to make sure that the search converges
 		int grid_size = next_grid_size;
-		grid_size = (grid_size <= min_grid) ? min_grid + 1 : (grid_size >= max_grid) ? max_grid - 1 : grid_size;
+		grid_size = (grid_size <= min_grid) ? min_grid + 1 : (grid_size >= max_grid) ? max_grid - 1
+		                                                                             : grid_size;
 
 		computeVertexIds(vertex_ids, vertex_positions, vertex_count, grid_size);
 		size_t triangles = countTriangles(vertex_ids, indices, index_count);
 
 #if TRACE
 		printf("pass %d (%s): grid size %d, triangles %d, %s\n",
-		    pass, (pass == 0) ? "guess" : (pass <= kInterpolationPasses) ? "lerp" : "binary",
+		    pass, (pass == 0) ? "guess" : (pass <= kInterpolationPasses) ? "lerp"
+		                                                                 : "binary",
 		    grid_size, int(triangles),
 		    (triangles <= target_index_count / 3) ? "under" : "over");
 #endif
@@ -1824,14 +1834,16 @@ size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_pos
 
 		// we clamp the prediction of the grid size to make sure that the search converges
 		int grid_size = next_grid_size;
-		grid_size = (grid_size <= min_grid) ? min_grid + 1 : (grid_size >= max_grid) ? max_grid - 1 : grid_size;
+		grid_size = (grid_size <= min_grid) ? min_grid + 1 : (grid_size >= max_grid) ? max_grid - 1
+		                                                                             : grid_size;
 
 		computeVertexIds(vertex_ids, vertex_positions, vertex_count, grid_size);
 		size_t vertices = countVertexCells(table, table_size, vertex_ids, vertex_count);
 
 #if TRACE
 		printf("pass %d (%s): grid size %d, vertices %d, %s\n",
-		    pass, (pass == 0) ? "guess" : (pass <= kInterpolationPasses) ? "lerp" : "binary",
+		    pass, (pass == 0) ? "guess" : (pass <= kInterpolationPasses) ? "lerp"
+		                                                                 : "binary",
 		    grid_size, int(vertices),
 		    (vertices <= target_vertex_count) ? "under" : "over");
 #endif
