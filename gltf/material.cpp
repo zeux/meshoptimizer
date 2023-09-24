@@ -559,22 +559,22 @@ void mergeTextures(cgltf_data* data, std::vector<TextureInfo>& textures)
 
 	for (size_t i = 0; i < textures.size(); ++i)
 	{
-		if (!textures[i].keep)
+		TextureInfo& info = textures[i];
+
+		if (!info.keep)
 			continue;
 
 		for (size_t j = 0; j < i; ++j)
-		{
 			if (textures[j].keep && areTexturesEqual(data->textures[i], data->textures[j]))
 			{
-				textures[i].keep = false;
-				textures[i].remap = textures[j].remap;
+				info.keep = false;
+				info.remap = textures[j].remap;
 				break;
 			}
-		}
 
-		if (textures[i].keep)
+		if (info.keep)
 		{
-			textures[i].remap = int(offset);
+			info.remap = int(offset);
 			offset++;
 		}
 	}

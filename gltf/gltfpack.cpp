@@ -181,7 +181,7 @@ static void printImageStats(const std::vector<BufferView>& views, TextureKind ki
 		printf("stats: image %s: %d bytes in %d images\n", name, int(bytes), int(count));
 }
 
-static bool printReport(const char* path, cgltf_data* data, const std::vector<BufferView>& views, const std::vector<Mesh>& meshes, size_t node_count, size_t mesh_count, size_t material_count, size_t animation_count, size_t json_size, size_t bin_size)
+static bool printReport(const char* path, const std::vector<BufferView>& views, const std::vector<Mesh>& meshes, size_t node_count, size_t mesh_count, size_t texture_count, size_t material_count, size_t animation_count, size_t json_size, size_t bin_size)
 {
 	size_t bytes[BufferView::Kind_Count] = {};
 
@@ -216,7 +216,7 @@ static bool printReport(const char* path, cgltf_data* data, const std::vector<Bu
 	fprintf(out, "\t\t\"nodeCount\": %d,\n", int(node_count));
 	fprintf(out, "\t\t\"meshCount\": %d,\n", int(mesh_count));
 	fprintf(out, "\t\t\"materialCount\": %d,\n", int(material_count));
-	fprintf(out, "\t\t\"textureCount\": %d,\n", int(data->textures_count));
+	fprintf(out, "\t\t\"textureCount\": %d,\n", int(texture_count));
 	fprintf(out, "\t\t\"animationCount\": %d\n", int(animation_count));
 	fprintf(out, "\t},\n");
 	fprintf(out, "\t\"render\": {\n");
@@ -894,7 +894,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 	if (report_path)
 	{
-		if (!printReport(report_path, data, views, meshes, node_offset, mesh_offset, material_offset, animations.size(), json.size(), bin.size()))
+		if (!printReport(report_path, views, meshes, node_offset, mesh_offset, texture_offset, material_offset, animations.size(), json.size(), bin.size()))
 		{
 			fprintf(stderr, "Warning: cannot save report to %s\n", report_path);
 		}
