@@ -5,6 +5,7 @@
 #ifdef __clang__
 #pragma GCC diagnostic ignored "-Wunknown-warning-option"
 #pragma GCC diagnostic ignored "-Warray-bounds"
+#pragma GCC diagnostic ignored "-Wdeprecated-builtins"
 #endif
 
 #ifdef __GNUC__
