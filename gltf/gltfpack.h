@@ -223,6 +223,13 @@ struct MaterialInfo
 	int remap;
 };
 
+struct TextureInfo
+{
+	bool keep;
+
+	int remap;
+};
+
 struct ImageInfo
 {
 	TextureKind kind;
@@ -304,9 +311,11 @@ void filterStreams(Mesh& mesh, const MaterialInfo& mi);
 void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings);
 void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes, const Settings& settings);
 
+void mergeTextures(cgltf_data* data, std::vector<TextureInfo>& textures);
+
 bool hasValidTransform(const cgltf_texture_view& view);
 
-void analyzeMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, std::vector<ImageInfo>& images);
+void analyzeMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, std::vector<TextureInfo>& textures, std::vector<ImageInfo>& images);
 void optimizeMaterials(cgltf_data* data, const char* input_path, std::vector<ImageInfo>& images);
 
 bool readImage(const cgltf_image& image, const char* input_path, std::string& data, std::string& mime_type);
@@ -350,7 +359,7 @@ void appendJson(std::string& s, const char* data);
 const char* attributeType(cgltf_attribute_type type);
 const char* animationPath(cgltf_animation_path_type type);
 
-void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationPosition* qp, const QuantizationTexture* qt);
+void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationPosition* qp, const QuantizationTexture* qt, std::vector<TextureInfo>& textures);
 void writeBufferView(std::string& json, BufferView::Kind kind, StreamFormat::Filter filter, size_t count, size_t stride, size_t bin_offset, size_t bin_size, BufferView::Compression compression, size_t compressed_offset, size_t compressed_size);
 void writeSampler(std::string& json, const cgltf_sampler& sampler);
 void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const Settings& settings);
