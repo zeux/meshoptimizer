@@ -181,7 +181,7 @@ static void printImageStats(const std::vector<BufferView>& views, TextureKind ki
 		printf("stats: image %s: %d bytes in %d images\n", name, int(bytes), int(count));
 }
 
-static bool printReport(const char* path, cgltf_data* data, const std::vector<BufferView>& views, const std::vector<Mesh>& meshes, size_t node_count, size_t mesh_count, size_t material_count, size_t animation_count, size_t json_size, size_t bin_size)
+static bool printReport(const char* path, const std::vector<BufferView>& views, const std::vector<Mesh>& meshes, size_t node_count, size_t mesh_count, size_t texture_count, size_t material_count, size_t animation_count, size_t json_size, size_t bin_size)
 {
 	size_t bytes[BufferView::Kind_Count] = {};
 
@@ -216,7 +216,7 @@ static bool printReport(const char* path, cgltf_data* data, const std::vector<Bu
 	fprintf(out, "\t\t\"nodeCount\": %d,\n", int(node_count));
 	fprintf(out, "\t\t\"meshCount\": %d,\n", int(mesh_count));
 	fprintf(out, "\t\t\"materialCount\": %d,\n", int(material_count));
-	fprintf(out, "\t\t\"textureCount\": %d,\n", int(data->textures_count));
+	fprintf(out, "\t\t\"textureCount\": %d,\n", int(texture_count));
 	fprintf(out, "\t\t\"animationCount\": %d\n", int(animation_count));
 	fprintf(out, "\t},\n");
 	fprintf(out, "\t\"render\": {\n");
@@ -332,9 +332,12 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 	// material information is required for mesh and image processing
 	std::vector<MaterialInfo> materials(data->materials_count);
+	std::vector<TextureInfo> textures(data->textures_count);
 	std::vector<ImageInfo> images(data->images_count);
 
-	analyzeMaterials(data, materials, images);
+	analyzeMaterials(data, materials, textures, images);
+
+	mergeTextures(data, textures);
 
 	optimizeMaterials(data, input_path, images);
 
@@ -442,6 +445,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	size_t accr_offset = 0;
 	size_t node_offset = 0;
 	size_t mesh_offset = 0;
+	size_t texture_offset = 0;
 	size_t material_offset = 0;
 
 	for (size_t i = 0; i < data->samplers_count; ++i)
@@ -491,10 +495,16 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	{
 		const cgltf_texture& texture = data->textures[i];
 
+		if (!textures[i].keep)
+			continue;
+
 		comma(json_textures);
 		append(json_textures, "{");
 		writeTexture(json_textures, texture, texture.image ? &images[texture.image - data->images] : NULL, data, settings);
 		append(json_textures, "}");
+
+		assert(textures[i].remap == int(texture_offset));
+		texture_offset++;
 	}
 
 	for (size_t i = 0; i < data->materials_count; ++i)
@@ -508,7 +518,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 		comma(json_materials);
 		append(json_materials, "{");
-		writeMaterial(json_materials, data, material, settings.quantize && !settings.pos_float ? &qp : NULL, settings.quantize && !settings.tex_float ? &qt_materials[i] : NULL);
+		writeMaterial(json_materials, data, material, settings.quantize && !settings.pos_float ? &qp : NULL, settings.quantize && !settings.tex_float ? &qt_materials[i] : NULL, textures);
 		if (settings.keep_extras)
 			writeExtras(json_materials, material.extras);
 		append(json_materials, "}");
@@ -884,7 +894,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 	if (report_path)
 	{
-		if (!printReport(report_path, data, views, meshes, node_offset, mesh_offset, material_offset, animations.size(), json.size(), bin.size()))
+		if (!printReport(report_path, views, meshes, node_offset, mesh_offset, texture_offset, material_offset, animations.size(), json.size(), bin.size()))
 		{
 			fprintf(stderr, "Warning: cannot save report to %s\n", report_path);
 		}
