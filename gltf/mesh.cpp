@@ -163,6 +163,11 @@ bool compareMeshNodes(const Mesh& lhs, const Mesh& rhs)
 	return true;
 }
 
+static bool compareTransforms(const Transform& lhs, const Transform& rhs)
+{
+	return memcmp(&lhs, &rhs, sizeof(Transform)) == 0;
+}
+
 static bool canMergeMeshNodes(cgltf_node* lhs, cgltf_node* rhs, const Settings& settings)
 {
 	if (lhs == rhs)
@@ -203,8 +208,12 @@ static bool canMergeMeshes(const Mesh& lhs, const Mesh& rhs, const Settings& set
 		if (!canMergeMeshNodes(lhs.nodes[i], rhs.nodes[i], settings))
 			return false;
 
-	if (lhs.instances.size() || rhs.instances.size())
+	if (lhs.instances.size() != rhs.instances.size())
 		return false;
+
+	for (size_t i = 0; i < lhs.instances.size(); ++i)
+		if (!compareTransforms(lhs.instances[i], rhs.instances[i]))
+			return false;
 
 	if (lhs.material != rhs.material)
 		return false;
