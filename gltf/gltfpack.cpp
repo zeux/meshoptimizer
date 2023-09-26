@@ -1551,6 +1551,11 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
+	if (settings.keep_nodes && (settings.mesh_merge || settings.mesh_instancing))
+	{
+		fprintf(stderr, "Warning: option -kn disables mesh merge (-mm) and mesh instancing (-mi) optimizations\n");
+	}
+
 	return gltfpack(input, output, report, settings);
 }
 
