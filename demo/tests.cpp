@@ -1151,7 +1151,7 @@ static void simplifyAttr()
 		{
 			vb[y * 3 + x][0] = float(x);
 			vb[y * 3 + x][1] = float(y);
-			vb[y * 3 + x][2] = 0.f;
+			vb[y * 3 + x][2] = 0.03f * x;
 			vb[y * 3 + x][3] = r;
 			vb[y * 3 + x][4] = g;
 			vb[y * 3 + x][5] = b;
@@ -1175,12 +1175,11 @@ static void simplifyAttr()
 
 	float attr_weights[3] = {0.01f, 0.01f, 0.01f};
 
-	unsigned int expected[3][6] =
-	    {
-	        {0, 2, 9, 9, 2, 11},
-	        {9, 11, 12, 12, 11, 14},
-	        {12, 14, 21, 21, 14, 23},
-	    };
+	unsigned int expected[3][6] = {
+	    {0, 2, 9, 9, 2, 11},
+	    {9, 11, 12, 12, 11, 14},
+	    {12, 14, 21, 21, 14, 23},
+	};
 
 	assert(meshopt_simplifyWithAttributes(ib[0], ib[0], 7 * 2 * 6, vb[0], 8 * 3, 6 * sizeof(float), vb[0] + 3, 6 * sizeof(float), attr_weights, 3, 6 * 3, 1e-2f) == 18);
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);

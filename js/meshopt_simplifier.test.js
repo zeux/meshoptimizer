@@ -138,7 +138,7 @@ var tests = {
 			{
 				vb_pos[(y * 3 + x) * 3 + 0] = x;
 				vb_pos[(y * 3 + x) * 3 + 1] = y;
-				vb_pos[(y * 3 + x) * 3 + 2] = 0;
+				vb_pos[(y * 3 + x) * 3 + 2] = 0.03 * x;
 				vb_att[(y * 3 + x) * 3 + 0] = r;
 				vb_att[(y * 3 + x) * 3 + 1] = g;
 				vb_att[(y * 3 + x) * 3 + 2] = b;
