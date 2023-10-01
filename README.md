@@ -303,7 +303,7 @@ To generate meshlet data, this library provides two algorithms - `meshopt_buildM
 
 ```c++
 const size_t max_vertices = 64;
-const size_t max_triangles = 124;
+const size_t max_triangles = 126;
 const float cone_weight = 0.0f;
 
 size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), max_vertices, max_triangles);
@@ -315,7 +315,7 @@ size_t meshlet_count = meshopt_buildMeshlets(meshlets.data(), meshlet_vertices.d
     indices.size(), &vertices[0].x, vertices.size(), sizeof(Vertex), max_vertices, max_triangles, cone_weight);
 ```
 
-To generate the meshlet data, `max_vertices` and `max_triangles` need to be set within limits supported by the hardware; for NVidia the values of 64 and 124 are recommended. `cone_weight` should be left as 0 if cluster cone culling is not used, and set to a value between 0 and 1 to balance cone culling efficiency with other forms of culling like frustum or occlusion culling.
+To generate the meshlet data, `max_vertices` and `max_triangles` need to be set within limits supported by the hardware; for NVidia the values of 64 and 126 are recommended. `cone_weight` should be left as 0 if cluster cone culling is not used, and set to a value between 0 and 1 to balance cone culling efficiency with other forms of culling like frustum or occlusion culling.
 
 Each resulting meshlet refers to a portion of `meshlet_vertices` and `meshlet_triangles` arrays; this data can be uploaded to GPU and used directly after trimming:
 
