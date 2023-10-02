@@ -486,7 +486,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		}
 		else
 		{
-			writeImage(json_images, views, image, images[i], i, input_path, settings);
+			writeImage(json_images, views, image, images[i], i, input_path, output_path, settings);
 		}
 		append(json_images, "}");
 	}
@@ -1347,6 +1347,10 @@ int main(int argc, char** argv)
 		else if (strcmp(arg, "-tfy") == 0)
 		{
 			settings.texture_flipy = true;
+		}
+		else if (strcmp(arg, "-tcp") == 0)
+		{
+			settings.texture_copy = true;
 		}
 		else if (strcmp(arg, "-tj") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{

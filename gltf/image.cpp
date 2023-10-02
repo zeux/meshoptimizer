@@ -7,6 +7,7 @@ static const char* kMimeTypes[][2] = {
     {"image/jpeg", ".jpg"},
     {"image/jpeg", ".jpeg"},
     {"image/png", ".png"},
+    {"image/ktx2", ".ktx2"},
 };
 
 static const char* inferMimeType(const char* path)

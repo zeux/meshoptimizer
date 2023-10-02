@@ -880,11 +880,37 @@ void writeSampler(std::string& json, const cgltf_sampler& sampler)
 	}
 }
 
-void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const Settings& settings)
+static void writeImageData(std::string& json, std::vector<BufferView>& views, const char* uri, const char* mime_type, const std::string& contents, const char* output_path, TextureKind kind, bool embed)
+{
+	bool dataUri = uri && strncmp(uri, "data:", 5) == 0;
+
+	if (!embed && uri && !dataUri && output_path)
+	{
+		std::string file_name = getFileName(uri) + mimeExtension(mime_type);
+		std::string file_path = getFullPath(decodeUri(file_name.c_str()).c_str(), output_path);
+
+		if (writeFile(file_path.c_str(), contents))
+		{
+			append(json, "\"uri\":\"");
+			append(json, file_name);
+			append(json, "\"");
+		}
+		else
+		{
+			fprintf(stderr, "Warning: unable to save image %s to %s, skipping\n", uri, file_path.c_str());
+		}
+	}
+	else
+	{
+		writeEmbeddedImage(json, views, contents.c_str(), contents.size(), mime_type, kind);
+	}
+}
+
+void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const char* output_path, const Settings& settings)
 {
 	bool dataUri = image.uri && strncmp(image.uri, "data:", 5) == 0;
 
-	if (image.uri && !dataUri && !settings.texture_embed)
+	if (image.uri && !dataUri && !settings.texture_embed && !settings.texture_copy)
 	{
 		// fast-path: we don't need to read the image to memory
 		append(json, "\"uri\":\"");
@@ -901,33 +927,12 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 		return;
 	}
 
-	writeEmbeddedImage(json, views, img_data.c_str(), img_data.size(), mime_type.c_str(), info.kind);
+	writeImageData(json, views, image.uri, mime_type.c_str(), img_data, output_path, info.kind, settings.texture_embed);
 }
 
 void writeEncodedImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const std::string& encoded, const ImageInfo& info, const char* output_path, const Settings& settings)
 {
-	bool dataUri = image.uri && strncmp(image.uri, "data:", 5) == 0;
-
-	if (!settings.texture_embed && image.uri && !dataUri && output_path)
-	{
-		std::string ktx_uri = getFileName(image.uri) + ".ktx2";
-		std::string ktx_full_path = getFullPath(decodeUri(ktx_uri.c_str()).c_str(), output_path);
-
-		if (writeFile(ktx_full_path.c_str(), encoded))
-		{
-			append(json, "\"uri\":\"");
-			append(json, ktx_uri);
-			append(json, "\"");
-		}
-		else
-		{
-			fprintf(stderr, "Warning: unable to save encoded image %s, skipping\n", image.uri);
-		}
-	}
-	else
-	{
-		writeEmbeddedImage(json, views, encoded.c_str(), encoded.size(), "image/ktx2", info.kind);
-	}
+	writeImageData(json, views, image.uri, "image/ktx2", encoded, output_path, info.kind, settings.texture_embed);
 }
 
 void writeTexture(std::string& json, const cgltf_texture& texture, const ImageInfo* info, cgltf_data* data, const Settings& settings)
