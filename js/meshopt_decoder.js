@@ -41,7 +41,7 @@ var MeshoptDecoder = (function() {
 		return result.buffer.slice(0, write);
 	}
 
-	function decode(fun, target, count, size, source, filter) {
+	function decode(instance, fun, target, count, size, source, filter) {
 		var sbrk = instance.exports.sbrk;
 		var count4 = (count + 3) & ~3;
 		var tp = sbrk(count4 * size);
@@ -96,10 +96,9 @@ var MeshoptDecoder = (function() {
 
 	function initWorkers(count) {
 		var source =
-			"var instance; var ready = WebAssembly.instantiate(new Uint8Array([" + new Uint8Array(unpack(wasm)) + "]), {})" +
-			".then(function(result) { instance = result.instance; instance.exports.__wasm_call_ctors(); });" +
-			"self.onmessage = workerProcess;" +
-			decode.toString() + workerProcess.toString();
+			"self.ready = WebAssembly.instantiate(new Uint8Array([" + new Uint8Array(unpack(wasm)) + "]), {})" +
+			".then(function(result) { result.instance.exports.__wasm_call_ctors(); return result.instance; });" +
+			"self.onmessage = " + workerProcess.name + ";" + decode.toString() + workerProcess.toString();
 
 		var blob = new Blob([source], {type: 'text/javascript'});
 		var url = URL.createObjectURL(blob);
@@ -131,11 +130,11 @@ var MeshoptDecoder = (function() {
 	}
 
 	function workerProcess(event) {
-		ready.then(function() {
+		self.ready.then(function(instance) {
 			var data = event.data;
 			try {
 				var target = new Uint8Array(data.count * data.size);
-				decode(instance.exports[data.mode], target, data.count, data.size, data.source, instance.exports[data.filter]);
+				decode(instance, instance.exports[data.mode], target, data.count, data.size, data.source, instance.exports[data.filter]);
 				self.postMessage({ id: data.id, count: data.count, action: "resolve", value: target }, [ target.buffer ]);
 			} catch (error) {
 				self.postMessage({ id: data.id, count: data.count, action: "reject", value: error });
@@ -150,16 +149,16 @@ var MeshoptDecoder = (function() {
 			initWorkers(count);
 		},
 		decodeVertexBuffer: function(target, count, size, source, filter) {
-			decode(instance.exports.meshopt_decodeVertexBuffer, target, count, size, source, instance.exports[filters[filter]]);
+			decode(instance, instance.exports.meshopt_decodeVertexBuffer, target, count, size, source, instance.exports[filters[filter]]);
 		},
 		decodeIndexBuffer: function(target, count, size, source) {
-			decode(instance.exports.meshopt_decodeIndexBuffer, target, count, size, source);
+			decode(instance, instance.exports.meshopt_decodeIndexBuffer, target, count, size, source);
 		},
 		decodeIndexSequence: function(target, count, size, source) {
-			decode(instance.exports.meshopt_decodeIndexSequence, target, count, size, source);
+			decode(instance, instance.exports.meshopt_decodeIndexSequence, target, count, size, source);
 		},
 		decodeGltfBuffer: function(target, count, size, source, mode, filter) {
-			decode(instance.exports[decoders[mode]], target, count, size, source, instance.exports[filters[filter]]);
+			decode(instance, instance.exports[decoders[mode]], target, count, size, source, instance.exports[filters[filter]]);
 		},
 		decodeGltfBufferAsync: function(count, size, source, mode, filter) {
 			if (workers.length > 0) {
@@ -168,7 +167,7 @@ var MeshoptDecoder = (function() {
 
 			return ready.then(function() {
 				var target = new Uint8Array(count * size);
-				decode(instance.exports[decoders[mode]], target, count, size, source, instance.exports[filters[filter]]);
+				decode(instance, instance.exports[decoders[mode]], target, count, size, source, instance.exports[filters[filter]]);
 				return target;
 			});
 		}
