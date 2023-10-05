@@ -1348,9 +1348,9 @@ int main(int argc, char** argv)
 		{
 			settings.texture_flipy = true;
 		}
-		else if (strcmp(arg, "-tcp") == 0)
+		else if (strcmp(arg, "-tr") == 0)
 		{
-			settings.texture_copy = true;
+			settings.texture_ref = true;
 		}
 		else if (strcmp(arg, "-tj") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
@@ -1459,6 +1459,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-tp: resize textures to nearest power of 2 to conform to WebGL1 restrictions\n");
 			fprintf(stderr, "\t-tfy: flip textures along Y axis during BasisU supercompression\n");
 			fprintf(stderr, "\t-tj N: use N threads when compressing textures\n");
+			fprintf(stderr, "\t-tr: keep referring to original texture paths instead of copying/embedding images\n");
 			fprintf(stderr, "\tTexture classes:\n");
 			fprintf(stderr, "\t-tc C: use ETC1S when encoding textures of class C\n");
 			fprintf(stderr, "\t-tu C: use UASTC when encoding textures of class C\n");
@@ -1540,6 +1541,12 @@ int main(int argc, char** argv)
 	if (settings.texture_flipy && !settings.texture_ktx2)
 	{
 		fprintf(stderr, "Option -tfy is only supported when -tc is set as well\n");
+		return 1;
+	}
+
+	if (settings.texture_ref && settings.texture_ktx2)
+	{
+		fprintf(stderr, "Option -tr currently can not be used together with -tc\n");
 		return 1;
 	}
 

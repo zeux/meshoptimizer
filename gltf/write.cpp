@@ -910,7 +910,7 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 {
 	bool dataUri = image.uri && strncmp(image.uri, "data:", 5) == 0;
 
-	if (image.uri && !dataUri && !settings.texture_embed && !settings.texture_copy)
+	if (image.uri && !dataUri && settings.texture_ref)
 	{
 		// fast-path: we don't need to read the image to memory
 		append(json, "\"uri\":\"");

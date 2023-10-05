@@ -141,7 +141,7 @@ struct Settings
 
 	bool texture_ktx2;
 	bool texture_embed;
-	bool texture_copy;
+	bool texture_ref;
 
 	bool texture_pow2;
 	bool texture_flipy;
