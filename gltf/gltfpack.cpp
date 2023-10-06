@@ -1009,6 +1009,29 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 		settings.texture_embed = true;
 	}
 
+	if (data->images_count && !settings.texture_ref && !settings.texture_embed)
+	{
+		for (size_t i = 0; i < data->images_count; ++i)
+		{
+			const char* uri = data->images[i].uri;
+			if (!uri || strncmp(uri, "data:", 5) == 0)
+				continue;
+
+			for (size_t j = 0; j < i; ++j)
+			{
+				const char* urj = data->images[j].uri;
+				if (!urj || strncmp(urj, "data:", 5) == 0)
+					continue;
+
+				if (strcmp(uri, urj) != 0 && strcmp(getBaseName(uri), getBaseName(urj)) == 0)
+				{
+					fprintf(stderr, "Warning: images %s and %s share the same base name and will overwrite each other\n", uri, urj);
+					break;
+				}
+			}
+		}
+	}
+
 	std::string json, bin, fallback;
 	size_t fallback_size = 0;
 	process(data, input, output, report, meshes, animations, settings, json, bin, fallback, fallback_size);
