@@ -133,10 +133,15 @@ jobs:
     - uses: actions/checkout@v1
     - uses: actions/checkout@v3
       with:
+        repository: zeux/basis_universal
+        ref: gltfpack
+        path: basis_universal
+    - uses: actions/checkout@v3
+      with:
         repository: KhronosGroup/glTF-Sample-Assets
         path: glTF-Sample-Assets
     - name: make
-      run: make -j2 config=coverage gltfpack
+      run: make -j2 config=coverage BASISU=basis_universal gltfpack
     - name: test
       run: |
         find glTF-Sample-Assets -name *.gltf -or -name *.glb | xargs -d '\n' ./gltfpack -cc -test
@@ -145,6 +150,7 @@ jobs:
         ./gltfpack -test glTF-Sample-Assets/Models/ABeautifulGame/glTF/ABeautifulGame.gltf -mi -c
         ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -c
         ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -cc
+        ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tc
     - name: test output
       run: |
         ./gltfpack || true
