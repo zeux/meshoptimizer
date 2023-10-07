@@ -52,6 +52,7 @@ set(GLTF_SOURCES
     gltf/mesh.cpp
     gltf/node.cpp
     gltf/parseobj.cpp
+    gltf/parselib.cpp
     gltf/parsegltf.cpp
     gltf/stream.cpp
     gltf/write.cpp
@@ -94,12 +95,12 @@ endif()
 set(TARGETS meshoptimizer)
 
 if(MESHOPT_BUILD_DEMO)
-    add_executable(demo demo/main.cpp demo/tests.cpp tools/meshloader.cpp)
+    add_executable(demo demo/main.cpp demo/tests.cpp tools/objloader.cpp)
     target_link_libraries(demo meshoptimizer)
 endif()
 
 if(MESHOPT_BUILD_GLTFPACK)
-    add_executable(gltfpack ${GLTF_SOURCES} tools/meshloader.cpp)
+    add_executable(gltfpack ${GLTF_SOURCES})
     set_target_properties(gltfpack PROPERTIES CXX_STANDARD 11)
     target_link_libraries(gltfpack meshoptimizer)
     list(APPEND TARGETS gltfpack)
