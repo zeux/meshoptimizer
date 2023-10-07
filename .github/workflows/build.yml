@@ -139,15 +139,18 @@ jobs:
       run: make -j2 config=coverage gltfpack
     - name: test
       run: |
+        find glTF-Sample-Assets -name *.gltf -or -name *.glb | xargs -d '\n' ./gltfpack -cc -test
+        ./gltfpack -test demo/pirate.obj -si 0.5 -sd 0.5 -md 64
+        ./gltfpack -test demo/pirate.obj -sd 0.5 -md 64
+        ./gltfpack -test glTF-Sample-Assets/Models/ABeautifulGame/glTF/ABeautifulGame.gltf -mi -c
+        ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -c
+        ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -cc
+    - name: test output
+      run: |
         ./gltfpack || true
         ./gltfpack -h || true
         ./gltfpack -i demo/pirate.obj -o pirate.glb -v
         ./gltfpack -i demo/pirate.obj -o pirate.gltf -vv -r /dev/tty
-        find glTF-Sample-Assets -name *.gltf -or -name *.glb | xargs -d '\n' ./gltfpack -cc -test
-        ./gltfpack -test demo/pirate.obj -si 0.5 -sd 0.5 -md 64
-        ./gltfpack -test glTF-Sample-Assets/Models/ABeautifulGame/glTF/ABeautifulGame.gltf -mi -c
-        ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -c
-        ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -cc
     - name: upload coverage
       run: |
         find . -type f -name '*.gcno' -exec gcov -p {} +
