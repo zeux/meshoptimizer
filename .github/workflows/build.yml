@@ -149,7 +149,7 @@ jobs:
       run: |
         ./gltfpack || true
         ./gltfpack -h || true
-        ./gltfpack -i glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -o box.glb -vv -r /dev/tty
+        ./gltfpack -i glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -o box.glb -vv -r box.json
         ./gltfpack -i glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -o box.gltf
     - name: upload coverage
       run: |
