@@ -141,8 +141,9 @@ jobs:
       run: |
         ./gltfpack || true
         ./gltfpack -h || true
-        ./gltfpack -i demo/pirate.obj -o pirate.glb -vv -r /dev/tty
         find glTF-Sample-Assets -name *.gltf -or -name *.glb | xargs -d '\n' ./gltfpack -cc -test
+        ./gltfpack -i demo/pirate.obj -o pirate.glb -vv -r /dev/tty
+        ./gltfpack -i demo/pirate.obj -o pirate-debug.glb -si 0.5 -sd 0.5 -md 64
         ./gltfpack -i glTF-Sample-Assets/Models/ABeautifulGame/glTF/ABeautifulGame.gltf -o game.glb -mi -c
     - name: upload coverage
       run: |
