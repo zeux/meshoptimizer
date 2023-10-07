@@ -26,9 +26,7 @@ jobs:
         make -j2 config=release test
         make -j2 config=coverage test
     - name: make gltfpack
-      run: |
-        make -j2 config=release gltfpack
-        strip gltfpack
+      run: make -j2 config=release gltfpack
     - name: upload coverage
       run: |
         find . -type f -name '*.gcno' -exec gcov -p {} +
@@ -128,6 +126,43 @@ jobs:
         path: basis_universal
     - name: make gltfpack
       run: make -j2 BASISU=basis_universal gltfpack
+
+  gltfpack-coverage:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - uses: actions/checkout@v3
+      with:
+        repository: zeux/basis_universal
+        ref: gltfpack
+        path: basis_universal
+    - uses: actions/checkout@v3
+      with:
+        repository: KhronosGroup/glTF-Sample-Assets
+        path: glTF-Sample-Assets
+    - name: make
+      run: make -j2 config=coverage BASISU=basis_universal gltfpack
+    - name: test
+      run: |
+        find glTF-Sample-Assets -name *.gltf -or -name *.glb | xargs -d '\n' ./gltfpack -cc -test
+        ./gltfpack -test demo/pirate.obj -si 0.5
+        ./gltfpack -test demo/pirate.obj -sd 0.5 -md 64
+        ./gltfpack -test glTF-Sample-Assets/Models/ABeautifulGame/glTF/ABeautifulGame.gltf -mi -c
+        ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -c
+        ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -cc
+        ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tc
+        ./gltfpack -test glTF-Sample-Assets/Models/CesiumMan/glTF/CesiumMan.gltf -tu -ts 0.6 -tp
+    - name: test output
+      run: |
+        ./gltfpack || true
+        ./gltfpack -h || true
+        ./gltfpack -i glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -o box.glb -vv -r box.json
+        ./gltfpack -i glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -o box.gltf -cf
+    - name: upload coverage
+      run: |
+        find . -type f -name '*.gcno' -exec gcov -p {} +
+        sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
+        bash <(curl -s https://codecov.io/bash) -f './gltf*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
 
   arm64:
     runs-on: ubuntu-latest
