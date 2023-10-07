@@ -150,7 +150,7 @@ jobs:
         ./gltfpack || true
         ./gltfpack -h || true
         ./gltfpack -i glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -o box.glb -vv -r box.json
-        ./gltfpack -i glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -o box.gltf
+        ./gltfpack -i glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -o box.gltf -cf
     - name: upload coverage
       run: |
         find . -type f -name '*.gcno' -exec gcov -p {} +
