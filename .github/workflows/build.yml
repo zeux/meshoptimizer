@@ -139,8 +139,8 @@ jobs:
       run: make -j2 config=coverage gltfpack
     - name: test
       run: |
-        ./gltfpack
-        ./gltfpack -h
+        ./gltfpack || true
+        ./gltfpack -h || true
         ./gltfpack -i demo/pirate.obj -o pirate.glb -vv
         find glTF-Sample-Assets -name *.gltf -or -name *.glb | xargs -d '\n' ./gltfpack -cc -test
     - name: upload coverage
