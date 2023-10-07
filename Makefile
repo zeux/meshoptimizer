@@ -8,10 +8,10 @@ BUILD=build/$(config)
 LIBRARY_SOURCES=$(wildcard src/*.cpp)
 LIBRARY_OBJECTS=$(LIBRARY_SOURCES:%=$(BUILD)/%.o)
 
-DEMO_SOURCES=$(wildcard demo/*.c demo/*.cpp) tools/meshloader.cpp
+DEMO_SOURCES=$(wildcard demo/*.c demo/*.cpp) tools/objloader.cpp
 DEMO_OBJECTS=$(DEMO_SOURCES:%=$(BUILD)/%.o)
 
-GLTFPACK_SOURCES=$(wildcard gltf/*.cpp) tools/meshloader.cpp
+GLTFPACK_SOURCES=$(wildcard gltf/*.cpp)
 GLTFPACK_OBJECTS=$(GLTFPACK_SOURCES:%=$(BUILD)/%.o)
 
 OBJECTS=$(LIBRARY_OBJECTS) $(DEMO_OBJECTS) $(GLTFPACK_OBJECTS)
@@ -110,7 +110,7 @@ $(BUILD)/gltfpack: $(GLTFPACK_OBJECTS) $(LIBRARY)
 
 gltfpack.wasm: gltf/library.wasm
 
-gltf/library.wasm: ${LIBRARY_SOURCES} ${GLTFPACK_SOURCES} tools/meshloader.cpp
+gltf/library.wasm: ${LIBRARY_SOURCES} ${GLTFPACK_SOURCES}
 	$(WASMCC) $^ -o $@ -Os -DNDEBUG --target=wasm32-wasi --sysroot=$(WASIROOT) -nostartfiles -Wl,--no-entry -Wl,--export=pack -Wl,--export=malloc -Wl,--export=free -Wl,--export=__wasm_call_ctors -Wl,-s -Wl,--allow-undefined-file=gltf/wasistubs.txt
 
 build/decoder_base.wasm: $(WASM_DECODER_SOURCES)
@@ -152,7 +152,7 @@ js/%.module.js: js/%.js
 $(DEMO): $(DEMO_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
 
-vcachetuner: tools/vcachetuner.cpp $(BUILD)/tools/meshloader.cpp.o $(BUILD)/demo/miniz.cpp.o $(LIBRARY)
+vcachetuner: tools/vcachetuner.cpp tools/objloader.cpp $(LIBRARY)
 	$(CXX) $^ -fopenmp $(CXXFLAGS) -std=c++11 $(LDFLAGS) -o $@
 
 codecbench: tools/codecbench.cpp $(LIBRARY)
