@@ -86,15 +86,6 @@ jobs:
         find glTF-Sample-Assets -name *.gltfpack.gltf | xargs -d '\n' -L 1 ./gltf_validator -r -a
       env:
         VALIDATOR: https://github.com/KhronosGroup/glTF-Validator/releases/download/2.0.0-dev.3.8/gltf_validator-2.0.0-dev.3.8-linux64.tar.xz
-    - name: coverage
-      run: |
-        make -j2 config=coverage gltfpack
-        find glTF-Sample-Assets -name *.gltf -or -name *.glb | xargs -d '\n' ./gltfpack -cc -test
-    - name: upload coverage
-      run: |
-        find . -type f -name '*.gcno' -exec gcov -p {} +
-        sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
-        bash <(curl -s https://codecov.io/bash) -f './gltf*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
 
   gltfpack-js:
     runs-on: ubuntu-latest
@@ -135,6 +126,28 @@ jobs:
         path: basis_universal
     - name: make gltfpack
       run: make -j2 BASISU=basis_universal gltfpack
+
+  gltfpack-coverage:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - uses: actions/checkout@v3
+      with:
+        repository: KhronosGroup/glTF-Sample-Assets
+        path: glTF-Sample-Assets
+    - name: make
+      run: make -j2 config=coverage gltfpack
+    - name: test
+      run: |
+        ./gltfpack
+        ./gltfpack -h
+        ./gltfpack -i demo/pirate.obj -o pirate.glb -vv
+        find glTF-Sample-Assets -name *.gltf -or -name *.glb | xargs -d '\n' ./gltfpack -cc -test
+    - name: upload coverage
+      run: |
+        find . -type f -name '*.gcno' -exec gcov -p {} +
+        sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
+        bash <(curl -s https://codecov.io/bash) -f './gltf*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
 
   arm64:
     runs-on: ubuntu-latest
