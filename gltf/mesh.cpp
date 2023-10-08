@@ -380,34 +380,17 @@ void filterEmptyMeshes(std::vector<Mesh>& meshes)
 	meshes.resize(write);
 }
 
-static bool hasColors(const std::vector<Attr>& data)
+static bool isConstant(const std::vector<Attr>& data, const Attr& value, float tolerance = 0.01f)
 {
-	const float threshold = 0.99f;
-
 	for (size_t i = 0; i < data.size(); ++i)
 	{
 		const Attr& a = data[i];
 
-		if (a.f[0] < threshold || a.f[1] < threshold || a.f[2] < threshold || a.f[3] < threshold)
-			return true;
+		if (fabsf(a.f[0] - value.f[0]) > tolerance || fabsf(a.f[1] - value.f[1]) > tolerance || fabsf(a.f[2] - value.f[2]) > tolerance || fabsf(a.f[3] - value.f[3]) > tolerance)
+			return false;
 	}
 
-	return false;
-}
-
-static bool hasDeltas(const std::vector<Attr>& data)
-{
-	const float threshold = 0.01f;
-
-	for (size_t i = 0; i < data.size(); ++i)
-	{
-		const Attr& a = data[i];
-
-		if (fabsf(a.f[0]) > threshold || fabsf(a.f[1]) > threshold || fabsf(a.f[2]) > threshold)
-			return true;
-	}
-
-	return false;
+	return true;
 }
 
 void filterStreams(Mesh& mesh, const MaterialInfo& mi)
@@ -422,8 +405,8 @@ void filterStreams(Mesh& mesh, const MaterialInfo& mi)
 
 		if (stream.target)
 		{
-			morph_normal = morph_normal || (stream.type == cgltf_attribute_type_normal && hasDeltas(stream.data));
-			morph_tangent = morph_tangent || (stream.type == cgltf_attribute_type_tangent && hasDeltas(stream.data));
+			morph_normal = morph_normal || (stream.type == cgltf_attribute_type_normal && !isConstant(stream.data, { 0, 0, 0, 0 }));
+			morph_tangent = morph_tangent || (stream.type == cgltf_attribute_type_tangent && !isConstant(stream.data, { 0, 0, 0, 0 }));
 		}
 
 		if (stream.type == cgltf_attribute_type_texcoord && (mi.textureSetMask & (1u << stream.index)) != 0)
@@ -447,7 +430,7 @@ void filterStreams(Mesh& mesh, const MaterialInfo& mi)
 		if ((stream.type == cgltf_attribute_type_joints || stream.type == cgltf_attribute_type_weights) && !mesh.skin)
 			continue;
 
-		if (stream.type == cgltf_attribute_type_color && !hasColors(stream.data))
+		if (stream.type == cgltf_attribute_type_color && isConstant(stream.data, { 1, 1, 1, 1 }))
 			continue;
 
 		if (stream.target && stream.type == cgltf_attribute_type_normal && !morph_normal)
