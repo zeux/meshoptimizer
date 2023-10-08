@@ -312,9 +312,9 @@ void processAnimation(Animation& animation, const Settings& settings)
 		float tolerance = getDeltaTolerance(track.path);
 
 		// translation tracks use world space tolerance; in the future, we should compute all errors as linear using hierarchy
-		if (track.node && track.path == cgltf_animation_path_type_translation)
+		if (track.node && track.node->parent && track.path == cgltf_animation_path_type_translation)
 		{
-			float scale = getWorldScale(track.node);
+			float scale = getWorldScale(track.node->parent);
 			tolerance /= scale == 0.f ? 1.f : scale;
 		}
 
