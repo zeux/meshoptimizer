@@ -439,6 +439,9 @@ void filterStreams(Mesh& mesh, const MaterialInfo& mi)
 		if (stream.target && stream.type == cgltf_attribute_type_tangent && !morph_tangent)
 			continue;
 
+		if (mesh.type == cgltf_primitive_type_points && stream.type == cgltf_attribute_type_normal && !stream.data.empty() && isConstant(stream.data, stream.data[0]))
+			continue;
+
 		// the following code is roughly equivalent to streams[write] = std::move(stream)
 		std::vector<Attr> data;
 		data.swap(stream.data);
