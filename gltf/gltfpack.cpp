@@ -486,7 +486,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		}
 		else
 		{
-			writeImage(json_images, views, image, images[i], i, input_path, settings);
+			writeImage(json_images, views, image, images[i], i, input_path, output_path, settings);
 		}
 		append(json_images, "}");
 	}
@@ -1009,6 +1009,29 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 		settings.texture_embed = true;
 	}
 
+	if (data->images_count && !settings.texture_ref && !settings.texture_embed)
+	{
+		for (size_t i = 0; i < data->images_count; ++i)
+		{
+			const char* uri = data->images[i].uri;
+			if (!uri || strncmp(uri, "data:", 5) == 0)
+				continue;
+
+			for (size_t j = 0; j < i; ++j)
+			{
+				const char* urj = data->images[j].uri;
+				if (!urj || strncmp(urj, "data:", 5) == 0)
+					continue;
+
+				if (strcmp(uri, urj) != 0 && strcmp(getBaseName(uri), getBaseName(urj)) == 0)
+				{
+					fprintf(stderr, "Warning: images %s and %s share the same base name and will overwrite each other\n", uri, urj);
+					break;
+				}
+			}
+		}
+	}
+
 	std::string json, bin, fallback;
 	size_t fallback_size = 0;
 	process(data, input, output, report, meshes, animations, settings, json, bin, fallback, fallback_size);
@@ -1348,6 +1371,10 @@ int main(int argc, char** argv)
 		{
 			settings.texture_flipy = true;
 		}
+		else if (strcmp(arg, "-tr") == 0)
+		{
+			settings.texture_ref = true;
+		}
 		else if (strcmp(arg, "-tj") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.texture_jobs = clamp(atoi(argv[++i]), 0, 128);
@@ -1455,6 +1482,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-tp: resize textures to nearest power of 2 to conform to WebGL1 restrictions\n");
 			fprintf(stderr, "\t-tfy: flip textures along Y axis during BasisU supercompression\n");
 			fprintf(stderr, "\t-tj N: use N threads when compressing textures\n");
+			fprintf(stderr, "\t-tr: keep referring to original texture paths instead of copying/embedding images\n");
 			fprintf(stderr, "\tTexture classes:\n");
 			fprintf(stderr, "\t-tc C: use ETC1S when encoding textures of class C\n");
 			fprintf(stderr, "\t-tu C: use UASTC when encoding textures of class C\n");
@@ -1536,6 +1564,12 @@ int main(int argc, char** argv)
 	if (settings.texture_flipy && !settings.texture_ktx2)
 	{
 		fprintf(stderr, "Option -tfy is only supported when -tc is set as well\n");
+		return 1;
+	}
+
+	if (settings.texture_ref && settings.texture_ktx2)
+	{
+		fprintf(stderr, "Option -tr currently can not be used together with -tc\n");
 		return 1;
 	}
 
