@@ -1835,7 +1835,13 @@ size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_pos
 	memcpy(destination, cell_remap, sizeof(unsigned int) * cell_count);
 
 #if TRACE
-	printf("result: %d cells\n", int(cell_count));
+	// compute error
+	float result_error = 0.f;
+
+	for (size_t i = 0; i < cell_count; ++i)
+		result_error = result_error < cell_errors[i] ? cell_errors[i] : result_error;
+
+	printf("result: %d cells, %e error\n", int(cell_count), sqrtf(result_error));
 #endif
 
 	return cell_count;
