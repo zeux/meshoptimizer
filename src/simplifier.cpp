@@ -445,6 +445,7 @@ static const size_t kMaxAttributes = 16;
 
 struct Quadric
 {
+	// a00*x^2 + a11*y^2 + a22*z^2 + 2*(a10*xy + a20*xz + a21*yz) + b0*x + b1*y + b2*z + c
 	float a00, a11, a22;
 	float a10, a20, a21;
 	float b0, b1, b2, c;
@@ -453,6 +454,7 @@ struct Quadric
 
 struct QuadricGrad
 {
+	// gx*x + gy*y + gz*z + gw
 	float gx, gy, gz, gw;
 };
 
@@ -605,9 +607,9 @@ static void quadricFromPoint(Quadric& Q, float x, float y, float z, float w)
 	Q.a10 = 0.f;
 	Q.a20 = 0.f;
 	Q.a21 = 0.f;
-	Q.b0 = -2.f * x * w;
-	Q.b1 = -2.f * y * w;
-	Q.b2 = -2.f * z * w;
+	Q.b0 = -x * w;
+	Q.b1 = -y * w;
+	Q.b2 = -z * w;
 	Q.c = (x * x + y * y + z * z) * w;
 	Q.w = w;
 }
