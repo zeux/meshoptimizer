@@ -458,6 +458,12 @@ struct QuadricGrad
 	float gx, gy, gz, gw;
 };
 
+struct Reservoir
+{
+	float x, y, z;
+	float w;
+};
+
 struct Collapse
 {
 	unsigned int v0;
@@ -595,22 +601,6 @@ static void quadricFromPlane(Quadric& Q, float a, float b, float c, float d, flo
 	Q.b1 = b * dw;
 	Q.b2 = c * dw;
 	Q.c = d * dw;
-	Q.w = w;
-}
-
-static void quadricFromPoint(Quadric& Q, float x, float y, float z, float w)
-{
-	// we need to encode (x - X) ^ 2 + (y - Y)^2 + (z - Z)^2 into the quadric
-	Q.a00 = w;
-	Q.a11 = w;
-	Q.a22 = w;
-	Q.a10 = 0.f;
-	Q.a20 = 0.f;
-	Q.a21 = 0.f;
-	Q.b0 = -x * w;
-	Q.b1 = -y * w;
-	Q.b2 = -z * w;
-	Q.c = (x * x + y * y + z * z) * w;
 	Q.w = w;
 }
 
@@ -1332,17 +1322,31 @@ static void fillCellQuadrics(Quadric* cell_quadrics, const unsigned int* indices
 	}
 }
 
-static void fillCellQuadrics(Quadric* cell_quadrics, const Vector3* vertex_positions, size_t vertex_count, const unsigned int* vertex_cells)
+static void fillCellReservoirs(Reservoir* cell_reservoirs, size_t cell_count, const Vector3* vertex_positions, size_t vertex_count, const unsigned int* vertex_cells)
 {
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		unsigned int c = vertex_cells[i];
+		unsigned int cell = vertex_cells[i];
 		const Vector3& v = vertex_positions[i];
+		Reservoir& r = cell_reservoirs[cell];
 
-		Quadric Q;
-		quadricFromPoint(Q, v.x, v.y, v.z, 1.f);
+		float w = 1.f;
 
-		quadricAdd(cell_quadrics[c], Q);
+		r.x += v.x * w;
+		r.y += v.y * w;
+		r.z += v.z * w;
+		r.w += w;
+	}
+
+	for (size_t i = 0; i < cell_count; ++i)
+	{
+		Reservoir& r = cell_reservoirs[i];
+
+		float iw = r.w == 0.f ? 0.f : 1.f / r.w;
+
+		r.x *= iw;
+		r.y *= iw;
+		r.z *= iw;
 	}
 }
 
@@ -1354,6 +1358,26 @@ static void fillCellRemap(unsigned int* cell_remap, float* cell_errors, size_t c
 	{
 		unsigned int cell = vertex_cells[i];
 		float error = quadricError(cell_quadrics[cell], vertex_positions[i]);
+
+		if (cell_remap[cell] == ~0u || cell_errors[cell] > error)
+		{
+			cell_remap[cell] = unsigned(i);
+			cell_errors[cell] = error;
+		}
+	}
+}
+
+static void fillCellRemap(unsigned int* cell_remap, float* cell_errors, size_t cell_count, const unsigned int* vertex_cells, const Reservoir* cell_reservoirs, const Vector3* vertex_positions, size_t vertex_count)
+{
+	memset(cell_remap, -1, cell_count * sizeof(unsigned int));
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		unsigned int cell = vertex_cells[i];
+		const Vector3& v = vertex_positions[i];
+		const Reservoir& r = cell_reservoirs[cell];
+
+		float error = (v.x - r.x) * (v.x - r.x) + (v.y - r.y) * (v.y - r.y) + (v.z - r.z) * (v.z - r.z);
 
 		if (cell_remap[cell] == ~0u || cell_errors[cell] > error)
 		{
@@ -1820,17 +1844,17 @@ size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_pos
 	computeVertexIds(vertex_ids, vertex_positions, vertex_count, min_grid);
 	size_t cell_count = fillVertexCells(table, table_size, vertex_cells, vertex_ids, vertex_count);
 
-	// build a quadric for each target cell
-	Quadric* cell_quadrics = allocator.allocate<Quadric>(cell_count);
-	memset(cell_quadrics, 0, cell_count * sizeof(Quadric));
+	// accumulate points into a reservoir for each target cell
+	Reservoir* cell_reservoirs = allocator.allocate<Reservoir>(cell_count);
+	memset(cell_reservoirs, 0, cell_count * sizeof(Reservoir));
 
-	fillCellQuadrics(cell_quadrics, vertex_positions, vertex_count, vertex_cells);
+	fillCellReservoirs(cell_reservoirs, cell_count, vertex_positions, vertex_count, vertex_cells);
 
 	// for each target cell, find the vertex with the minimal error
 	unsigned int* cell_remap = allocator.allocate<unsigned int>(cell_count);
 	float* cell_errors = allocator.allocate<float>(cell_count);
 
-	fillCellRemap(cell_remap, cell_errors, cell_count, vertex_cells, cell_quadrics, vertex_positions, vertex_count);
+	fillCellRemap(cell_remap, cell_errors, cell_count, vertex_cells, cell_reservoirs, vertex_positions, vertex_count);
 
 	// copy results to the output
 	assert(cell_count <= target_vertex_count);
