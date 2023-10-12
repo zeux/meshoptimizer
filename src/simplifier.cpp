@@ -461,6 +461,7 @@ struct QuadricGrad
 struct Reservoir
 {
 	float x, y, z;
+	float r, g, b;
 	float w;
 };
 
@@ -1322,19 +1323,28 @@ static void fillCellQuadrics(Quadric* cell_quadrics, const unsigned int* indices
 	}
 }
 
-static void fillCellReservoirs(Reservoir* cell_reservoirs, size_t cell_count, const Vector3* vertex_positions, size_t vertex_count, const unsigned int* vertex_cells)
+static void fillCellReservoirs(Reservoir* cell_reservoirs, size_t cell_count, const Vector3* vertex_positions, const float* vertex_colors, size_t vertex_colors_stride, size_t vertex_count, const unsigned int* vertex_cells)
 {
+	static const float dummy_color[] = { 0.f, 0.f, 0.f, 1.f };
+
+	size_t vertex_colors_stride_float = vertex_colors_stride / sizeof(float);
+
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
 		unsigned int cell = vertex_cells[i];
 		const Vector3& v = vertex_positions[i];
 		Reservoir& r = cell_reservoirs[cell];
 
-		float w = 1.f;
+		const float* color = vertex_colors ? &vertex_colors[i * vertex_colors_stride_float] : dummy_color;
+
+		float w = color[3];
 
 		r.x += v.x * w;
 		r.y += v.y * w;
 		r.z += v.z * w;
+		r.r += color[0] * w;
+		r.g += color[1] * w;
+		r.b += color[2] * w;
 		r.w += w;
 	}
 
@@ -1347,6 +1357,9 @@ static void fillCellReservoirs(Reservoir* cell_reservoirs, size_t cell_count, co
 		r.x *= iw;
 		r.y *= iw;
 		r.z *= iw;
+		r.r *= iw;
+		r.g *= iw;
+		r.b *= iw;
 	}
 }
 
@@ -1367,8 +1380,12 @@ static void fillCellRemap(unsigned int* cell_remap, float* cell_errors, size_t c
 	}
 }
 
-static void fillCellRemap(unsigned int* cell_remap, float* cell_errors, size_t cell_count, const unsigned int* vertex_cells, const Reservoir* cell_reservoirs, const Vector3* vertex_positions, size_t vertex_count)
+static void fillCellRemap(unsigned int* cell_remap, float* cell_errors, size_t cell_count, const unsigned int* vertex_cells, const Reservoir* cell_reservoirs, const Vector3* vertex_positions, const float* vertex_colors, size_t vertex_colors_stride, float color_weight, size_t vertex_count)
 {
+	static const float dummy_color[] = { 0.f, 0.f, 0.f, 1.f };
+
+	size_t vertex_colors_stride_float = vertex_colors_stride / sizeof(float);
+
 	memset(cell_remap, -1, cell_count * sizeof(unsigned int));
 
 	for (size_t i = 0; i < vertex_count; ++i)
@@ -1377,7 +1394,11 @@ static void fillCellRemap(unsigned int* cell_remap, float* cell_errors, size_t c
 		const Vector3& v = vertex_positions[i];
 		const Reservoir& r = cell_reservoirs[cell];
 
-		float error = (v.x - r.x) * (v.x - r.x) + (v.y - r.y) * (v.y - r.y) + (v.z - r.z) * (v.z - r.z);
+		const float* color = vertex_colors ? &vertex_colors[i * vertex_colors_stride_float] : dummy_color;
+
+		float pos_error = (v.x - r.x) * (v.x - r.x) + (v.y - r.y) * (v.y - r.y) + (v.z - r.z) * (v.z - r.z);
+		float col_error = (color[0] - r.r) * (color[0] - r.r) + (color[1] - r.g) * (color[1] - r.g) + (color[2] - r.b) * (color[2] - r.b);
+		float error = pos_error + color_weight * col_error;
 
 		if (cell_remap[cell] == ~0u || cell_errors[cell] > error)
 		{
@@ -1755,12 +1776,15 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	return write;
 }
 
-size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, size_t target_vertex_count)
+size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_colors, size_t vertex_colors_stride, float color_weight, size_t target_vertex_count)
 {
 	using namespace meshopt;
 
 	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
+	assert(vertex_colors_stride == 0 || (vertex_colors_stride >= 16 && vertex_colors_stride <= 256));
+	assert(vertex_colors_stride % sizeof(float) == 0);
+	assert(vertex_colors == NULL || vertex_colors_stride != 0);
 	assert(target_vertex_count <= vertex_count);
 
 	size_t target_cell_count = target_vertex_count;
@@ -1848,13 +1872,13 @@ size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_pos
 	Reservoir* cell_reservoirs = allocator.allocate<Reservoir>(cell_count);
 	memset(cell_reservoirs, 0, cell_count * sizeof(Reservoir));
 
-	fillCellReservoirs(cell_reservoirs, cell_count, vertex_positions, vertex_count, vertex_cells);
+	fillCellReservoirs(cell_reservoirs, cell_count, vertex_positions, vertex_colors, vertex_colors_stride, vertex_count, vertex_cells);
 
 	// for each target cell, find the vertex with the minimal error
 	unsigned int* cell_remap = allocator.allocate<unsigned int>(cell_count);
 	float* cell_errors = allocator.allocate<float>(cell_count);
 
-	fillCellRemap(cell_remap, cell_errors, cell_count, vertex_cells, cell_reservoirs, vertex_positions, vertex_count);
+	fillCellRemap(cell_remap, cell_errors, cell_count, vertex_cells, cell_reservoirs, vertex_positions, vertex_colors, vertex_colors_stride, color_weight * color_weight, vertex_count);
 
 	// copy results to the output
 	assert(cell_count <= target_vertex_count);

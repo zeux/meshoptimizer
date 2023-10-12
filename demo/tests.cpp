@@ -1004,7 +1004,7 @@ static void simplifyPointsStuck()
 	const float vb[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 	// simplifying down to 0 points results in 0 immediately
-	assert(meshopt_simplifyPoints(0, vb, 3, 12, 0) == 0);
+	assert(meshopt_simplifyPoints(0, vb, 3, 12, 0, 0, 0, 0) == 0);
 }
 
 static void simplifyFlip()
