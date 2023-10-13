@@ -643,11 +643,11 @@ inline size_t meshopt_encodeIndexSequence(unsigned char* buffer, size_t buffer_s
 template <typename T>
 inline int meshopt_decodeIndexSequence(T* destination, size_t index_count, const unsigned char* buffer, size_t buffer_size);
 template <typename T>
-inline size_t meshopt_simplify(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, unsigned int options = 0, float* result_error = 0);
+inline size_t meshopt_simplify(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, unsigned int options = 0, float* result_error = NULL);
 template <typename T>
-inline size_t meshopt_simplifyWithAttributes(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, size_t target_index_count, float target_error, unsigned int options = 0, float* result_error = 0);
+inline size_t meshopt_simplifyWithAttributes(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, size_t target_index_count, float target_error, unsigned int options = 0, float* result_error = NULL);
 template <typename T>
-inline size_t meshopt_simplifySloppy(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, float* result_error = 0);
+inline size_t meshopt_simplifySloppy(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, float* result_error = NULL);
 template <typename T>
 inline size_t meshopt_stripify(T* destination, const T* indices, size_t index_count, size_t vertex_count, T restart_index);
 template <typename T>
@@ -758,7 +758,7 @@ struct meshopt_IndexAdapter<T, false>
 
 	meshopt_IndexAdapter(T* result_, const T* input, size_t count_)
 	    : result(result_)
-	    , data(0)
+	    , data(NULL)
 	    , count(count_)
 	{
 		size_t size = count > size_t(-1) / sizeof(unsigned int) ? size_t(-1) : count * sizeof(unsigned int);
@@ -798,33 +798,33 @@ struct meshopt_IndexAdapter<T, true>
 template <typename T>
 inline size_t meshopt_generateVertexRemap(unsigned int* destination, const T* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size)
 {
-	meshopt_IndexAdapter<T> in(0, indices, indices ? index_count : 0);
+	meshopt_IndexAdapter<T> in(NULL, indices, indices ? index_count : 0);
 
-	return meshopt_generateVertexRemap(destination, indices ? in.data : 0, index_count, vertices, vertex_count, vertex_size);
+	return meshopt_generateVertexRemap(destination, indices ? in.data : NULL, index_count, vertices, vertex_count, vertex_size);
 }
 
 template <typename T>
 inline size_t meshopt_generateVertexRemapMulti(unsigned int* destination, const T* indices, size_t index_count, size_t vertex_count, const meshopt_Stream* streams, size_t stream_count)
 {
-	meshopt_IndexAdapter<T> in(0, indices, indices ? index_count : 0);
+	meshopt_IndexAdapter<T> in(NULL, indices, indices ? index_count : 0);
 
-	return meshopt_generateVertexRemapMulti(destination, indices ? in.data : 0, index_count, vertex_count, streams, stream_count);
+	return meshopt_generateVertexRemapMulti(destination, indices ? in.data : NULL, index_count, vertex_count, streams, stream_count);
 }
 
 template <typename T>
 inline void meshopt_remapIndexBuffer(T* destination, const T* indices, size_t index_count, const unsigned int* remap)
 {
-	meshopt_IndexAdapter<T> in(0, indices, indices ? index_count : 0);
+	meshopt_IndexAdapter<T> in(NULL, indices, indices ? index_count : 0);
 	meshopt_IndexAdapter<T> out(destination, 0, index_count);
 
-	meshopt_remapIndexBuffer(out.data, indices ? in.data : 0, index_count, remap);
+	meshopt_remapIndexBuffer(out.data, indices ? in.data : NULL, index_count, remap);
 }
 
 template <typename T>
 inline void meshopt_generateShadowIndexBuffer(T* destination, const T* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t vertex_stride)
 {
-	meshopt_IndexAdapter<T> in(0, indices, index_count);
-	meshopt_IndexAdapter<T> out(destination, 0, index_count);
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, NULL, index_count);
 
 	meshopt_generateShadowIndexBuffer(out.data, in.data, index_count, vertices, vertex_count, vertex_size, vertex_stride);
 }
@@ -832,8 +832,8 @@ inline void meshopt_generateShadowIndexBuffer(T* destination, const T* indices, 
 template <typename T>
 inline void meshopt_generateShadowIndexBufferMulti(T* destination, const T* indices, size_t index_count, size_t vertex_count, const meshopt_Stream* streams, size_t stream_count)
 {
-	meshopt_IndexAdapter<T> in(0, indices, index_count);
-	meshopt_IndexAdapter<T> out(destination, 0, index_count);
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, NULL, index_count);
 
 	meshopt_generateShadowIndexBufferMulti(out.data, in.data, index_count, vertex_count, streams, stream_count);
 }
@@ -841,8 +841,8 @@ inline void meshopt_generateShadowIndexBufferMulti(T* destination, const T* indi
 template <typename T>
 inline void meshopt_generateAdjacencyIndexBuffer(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
-	meshopt_IndexAdapter<T> in(0, indices, index_count);
-	meshopt_IndexAdapter<T> out(destination, 0, index_count * 2);
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, NULL, index_count * 2);
 
 	meshopt_generateAdjacencyIndexBuffer(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride);
 }
@@ -850,8 +850,8 @@ inline void meshopt_generateAdjacencyIndexBuffer(T* destination, const T* indice
 template <typename T>
 inline void meshopt_generateTessellationIndexBuffer(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
-	meshopt_IndexAdapter<T> in(0, indices, index_count);
-	meshopt_IndexAdapter<T> out(destination, 0, index_count * 4);
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, NULL, index_count * 4);
 
 	meshopt_generateTessellationIndexBuffer(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride);
 }
@@ -859,8 +859,8 @@ inline void meshopt_generateTessellationIndexBuffer(T* destination, const T* ind
 template <typename T>
 inline void meshopt_optimizeVertexCache(T* destination, const T* indices, size_t index_count, size_t vertex_count)
 {
-	meshopt_IndexAdapter<T> in(0, indices, index_count);
-	meshopt_IndexAdapter<T> out(destination, 0, index_count);
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, NULL, index_count);
 
 	meshopt_optimizeVertexCache(out.data, in.data, index_count, vertex_count);
 }
@@ -868,8 +868,8 @@ inline void meshopt_optimizeVertexCache(T* destination, const T* indices, size_t
 template <typename T>
 inline void meshopt_optimizeVertexCacheStrip(T* destination, const T* indices, size_t index_count, size_t vertex_count)
 {
-	meshopt_IndexAdapter<T> in(0, indices, index_count);
-	meshopt_IndexAdapter<T> out(destination, 0, index_count);
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, NULL, index_count);
 
 	meshopt_optimizeVertexCacheStrip(out.data, in.data, index_count, vertex_count);
 }
@@ -877,8 +877,8 @@ inline void meshopt_optimizeVertexCacheStrip(T* destination, const T* indices, s
 template <typename T>
 inline void meshopt_optimizeVertexCacheFifo(T* destination, const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size)
 {
-	meshopt_IndexAdapter<T> in(0, indices, index_count);
-	meshopt_IndexAdapter<T> out(destination, 0, index_count);
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, NULL, index_count);
 
 	meshopt_optimizeVertexCacheFifo(out.data, in.data, index_count, vertex_count, cache_size);
 }
@@ -886,8 +886,8 @@ inline void meshopt_optimizeVertexCacheFifo(T* destination, const T* indices, si
 template <typename T>
 inline void meshopt_optimizeOverdraw(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, float threshold)
 {
-	meshopt_IndexAdapter<T> in(0, indices, index_count);
-	meshopt_IndexAdapter<T> out(destination, 0, index_count);
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, NULL, index_count);
 
 	meshopt_optimizeOverdraw(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride, threshold);
 }
@@ -895,7 +895,7 @@ inline void meshopt_optimizeOverdraw(T* destination, const T* indices, size_t in
 template <typename T>
 inline size_t meshopt_optimizeVertexFetchRemap(unsigned int* destination, const T* indices, size_t index_count, size_t vertex_count)
 {
-	meshopt_IndexAdapter<T> in(0, indices, index_count);
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
 
 	return meshopt_optimizeVertexFetchRemap(destination, in.data, index_count, vertex_count);
 }
@@ -911,7 +911,7 @@ inline size_t meshopt_optimizeVertexFetch(void* destination, T* indices, size_t 
 template <typename T>
 inline size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, const T* indices, size_t index_count)
 {
-	meshopt_IndexAdapter<T> in(0, indices, index_count);
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
 
 	return meshopt_encodeIndexBuffer(buffer, buffer_size, in.data, index_count);
 }
@@ -928,7 +928,7 @@ inline int meshopt_decodeIndexBuffer(T* destination, size_t index_count, const u
 template <typename T>
 inline size_t meshopt_encodeIndexSequence(unsigned char* buffer, size_t buffer_size, const T* indices, size_t index_count)
 {
-	meshopt_IndexAdapter<T> in(0, indices, index_count);
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
 
 	return meshopt_encodeIndexSequence(buffer, buffer_size, in.data, index_count);
 }
@@ -945,8 +945,8 @@ inline int meshopt_decodeIndexSequence(T* destination, size_t index_count, const
 template <typename T>
 inline size_t meshopt_simplify(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, unsigned int options, float* result_error)
 {
-	meshopt_IndexAdapter<T> in(0, indices, index_count);
-	meshopt_IndexAdapter<T> out(destination, 0, index_count);
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, NULL, index_count);
 
 	return meshopt_simplify(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride, target_index_count, target_error, options, result_error);
 }
@@ -954,8 +954,8 @@ inline size_t meshopt_simplify(T* destination, const T* indices, size_t index_co
 template <typename T>
 inline size_t meshopt_simplifyWithAttributes(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, size_t target_index_count, float target_error, unsigned int options, float* result_error)
 {
-    meshopt_IndexAdapter<T> in(0, indices, index_count);
-    meshopt_IndexAdapter<T> out(destination, 0, index_count);
+    meshopt_IndexAdapter<T> in(NULL, indices, index_count);
+    meshopt_IndexAdapter<T> out(destination, NULL, index_count);
 
     return meshopt_simplifyWithAttributes(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride, vertex_attributes, vertex_attributes_stride, attribute_weights, attribute_count, target_index_count, target_error, options, result_error);
 }
@@ -963,8 +963,8 @@ inline size_t meshopt_simplifyWithAttributes(T* destination, const T* indices, s
 template <typename T>
 inline size_t meshopt_simplifySloppy(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, float* result_error)
 {
-	meshopt_IndexAdapter<T> in(0, indices, index_count);
-	meshopt_IndexAdapter<T> out(destination, 0, index_count);
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, NULL, index_count);
 
 	return meshopt_simplifySloppy(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride, target_index_count, target_error, result_error);
 }
@@ -972,8 +972,8 @@ inline size_t meshopt_simplifySloppy(T* destination, const T* indices, size_t in
 template <typename T>
 inline size_t meshopt_stripify(T* destination, const T* indices, size_t index_count, size_t vertex_count, T restart_index)
 {
-	meshopt_IndexAdapter<T> in(0, indices, index_count);
-	meshopt_IndexAdapter<T> out(destination, 0, (index_count / 3) * 5);
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, NULL, (index_count / 3) * 5);
 
 	return meshopt_stripify(out.data, in.data, index_count, vertex_count, unsigned(restart_index));
 }
@@ -981,8 +981,8 @@ inline size_t meshopt_stripify(T* destination, const T* indices, size_t index_co
 template <typename T>
 inline size_t meshopt_unstripify(T* destination, const T* indices, size_t index_count, T restart_index)
 {
-	meshopt_IndexAdapter<T> in(0, indices, index_count);
-	meshopt_IndexAdapter<T> out(destination, 0, (index_count - 2) * 3);
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, NULL, (index_count - 2) * 3);
 
 	return meshopt_unstripify(out.data, in.data, index_count, unsigned(restart_index));
 }
@@ -990,7 +990,7 @@ inline size_t meshopt_unstripify(T* destination, const T* indices, size_t index_
 template <typename T>
 inline meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int warp_size, unsigned int buffer_size)
 {
-	meshopt_IndexAdapter<T> in(0, indices, index_count);
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
 
 	return meshopt_analyzeVertexCache(in.data, index_count, vertex_count, cache_size, warp_size, buffer_size);
 }
@@ -998,7 +998,7 @@ inline meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const T* indices
 template <typename T>
 inline meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
-	meshopt_IndexAdapter<T> in(0, indices, index_count);
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
 
 	return meshopt_analyzeOverdraw(in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride);
 }
@@ -1006,7 +1006,7 @@ inline meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const T* indices, size
 template <typename T>
 inline meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
 {
-	meshopt_IndexAdapter<T> in(0, indices, index_count);
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
 
 	return meshopt_analyzeVertexFetch(in.data, index_count, vertex_count, vertex_size);
 }
@@ -1014,7 +1014,7 @@ inline meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const T* indices
 template <typename T>
 inline size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t max_triangles, float cone_weight)
 {
-	meshopt_IndexAdapter<T> in(0, indices, index_count);
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
 
 	return meshopt_buildMeshlets(meshlets, meshlet_vertices, meshlet_triangles, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride, max_vertices, max_triangles, cone_weight);
 }
@@ -1022,7 +1022,7 @@ inline size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* mes
 template <typename T>
 inline size_t meshopt_buildMeshletsScan(meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, const T* indices, size_t index_count, size_t vertex_count, size_t max_vertices, size_t max_triangles)
 {
-	meshopt_IndexAdapter<T> in(0, indices, index_count);
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
 
 	return meshopt_buildMeshletsScan(meshlets, meshlet_vertices, meshlet_triangles, in.data, index_count, vertex_count, max_vertices, max_triangles);
 }
@@ -1030,7 +1030,7 @@ inline size_t meshopt_buildMeshletsScan(meshopt_Meshlet* meshlets, unsigned int*
 template <typename T>
 inline meshopt_Bounds meshopt_computeClusterBounds(const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
-	meshopt_IndexAdapter<T> in(0, indices, index_count);
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
 
 	return meshopt_computeClusterBounds(in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride);
 }
@@ -1038,8 +1038,8 @@ inline meshopt_Bounds meshopt_computeClusterBounds(const T* indices, size_t inde
 template <typename T>
 inline void meshopt_spatialSortTriangles(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
-	meshopt_IndexAdapter<T> in(0, indices, index_count);
-	meshopt_IndexAdapter<T> out(destination, 0, index_count);
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, NULL, index_count);
 
 	meshopt_spatialSortTriangles(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride);
 }
