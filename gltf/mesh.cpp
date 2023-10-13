@@ -696,6 +696,8 @@ static void simplifyPointMesh(Mesh& mesh, float threshold)
 	if (!positions)
 		return;
 
+	const Stream* colors = getStream(mesh, cgltf_attribute_type_color);
+
 	size_t vertex_count = mesh.streams[0].data.size();
 
 	size_t target_vertex_count = size_t(double(vertex_count) * threshold);
@@ -703,8 +705,10 @@ static void simplifyPointMesh(Mesh& mesh, float threshold)
 	if (target_vertex_count < 1)
 		return;
 
+	const float color_weight = 1e-2f;
+
 	std::vector<unsigned int> indices(target_vertex_count);
-	indices.resize(meshopt_simplifyPoints(&indices[0], positions->data[0].f, vertex_count, sizeof(Attr), target_vertex_count));
+	indices.resize(meshopt_simplifyPoints(&indices[0], positions->data[0].f, vertex_count, sizeof(Attr), colors ? colors->data[0].f : NULL, sizeof(Attr), color_weight, target_vertex_count));
 
 	std::vector<Attr> scratch(indices.size());
 

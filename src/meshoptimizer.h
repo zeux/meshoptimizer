@@ -382,8 +382,9 @@ MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifySloppy(unsigned int* destinati
  *
  * destination must contain enough space for the target index buffer (target_vertex_count elements)
  * vertex_positions should have float3 position in the first 12 bytes of each vertex
+ * vertex_colors should can be NULL; when it's not NULL, it should have float3 color in the first 12 bytes of each vertex
  */
-MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_vertex_count);
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_colors, size_t vertex_colors_stride, float color_weight, size_t target_vertex_count);
 
 /**
  * Returns the error scaling factor used by the simplifier to convert between absolute and relative extents

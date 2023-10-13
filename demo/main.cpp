@@ -524,7 +524,7 @@ void simplifyPoints(const Mesh& mesh, float threshold = 0.2f)
 	size_t target_vertex_count = size_t(mesh.vertices.size() * threshold);
 
 	std::vector<unsigned int> indices(target_vertex_count);
-	indices.resize(meshopt_simplifyPoints(&indices[0], &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_vertex_count));
+	indices.resize(meshopt_simplifyPoints(&indices[0], &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), NULL, 0, 0, target_vertex_count));
 
 	double end = timestamp();
 
