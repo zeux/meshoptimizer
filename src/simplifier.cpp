@@ -1325,7 +1325,7 @@ static void fillCellQuadrics(Quadric* cell_quadrics, const unsigned int* indices
 
 static void fillCellReservoirs(Reservoir* cell_reservoirs, size_t cell_count, const Vector3* vertex_positions, const float* vertex_colors, size_t vertex_colors_stride, size_t vertex_count, const unsigned int* vertex_cells)
 {
-	static const float dummy_color[] = { 0.f, 0.f, 0.f, 1.f };
+	static const float dummy_color[] = { 0.f, 0.f, 0.f };
 
 	size_t vertex_colors_stride_float = vertex_colors_stride / sizeof(float);
 
@@ -1337,15 +1337,13 @@ static void fillCellReservoirs(Reservoir* cell_reservoirs, size_t cell_count, co
 
 		const float* color = vertex_colors ? &vertex_colors[i * vertex_colors_stride_float] : dummy_color;
 
-		float w = color[3];
-
-		r.x += v.x * w;
-		r.y += v.y * w;
-		r.z += v.z * w;
-		r.r += color[0] * w;
-		r.g += color[1] * w;
-		r.b += color[2] * w;
-		r.w += w;
+		r.x += v.x;
+		r.y += v.y;
+		r.z += v.z;
+		r.r += color[0];
+		r.g += color[1];
+		r.b += color[2];
+		r.w += 1.f;
 	}
 
 	for (size_t i = 0; i < cell_count; ++i)
@@ -1382,7 +1380,7 @@ static void fillCellRemap(unsigned int* cell_remap, float* cell_errors, size_t c
 
 static void fillCellRemap(unsigned int* cell_remap, float* cell_errors, size_t cell_count, const unsigned int* vertex_cells, const Reservoir* cell_reservoirs, const Vector3* vertex_positions, const float* vertex_colors, size_t vertex_colors_stride, float color_weight, size_t vertex_count)
 {
-	static const float dummy_color[] = { 0.f, 0.f, 0.f, 1.f };
+	static const float dummy_color[] = { 0.f, 0.f, 0.f };
 
 	size_t vertex_colors_stride_float = vertex_colors_stride / sizeof(float);
 
@@ -1782,7 +1780,7 @@ size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_pos
 
 	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
-	assert(vertex_colors_stride == 0 || (vertex_colors_stride >= 16 && vertex_colors_stride <= 256));
+	assert(vertex_colors_stride == 0 || (vertex_colors_stride >= 12 && vertex_colors_stride <= 256));
 	assert(vertex_colors_stride % sizeof(float) == 0);
 	assert(vertex_colors == NULL || vertex_colors_stride != 0);
 	assert(target_vertex_count <= vertex_count);
