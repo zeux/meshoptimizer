@@ -1200,6 +1200,7 @@ int main(int argc, char** argv)
 	setlocale(LC_ALL, "C"); // disable locale specific convention for number parsing/printing
 #endif
 
+	meshopt_encodeVertexVersion(0);
 	meshopt_encodeIndexVersion(1);
 
 	Settings settings = defaults();
