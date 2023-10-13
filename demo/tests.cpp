@@ -107,7 +107,7 @@ static void encodeIndexMemorySafe()
 	for (size_t i = 0; i <= buffer.size(); ++i)
 	{
 		std::vector<unsigned char> shortbuffer(i);
-		size_t result = meshopt_encodeIndexBuffer(i == 0 ? 0 : &shortbuffer[0], i, kIndexBuffer, index_count);
+		size_t result = meshopt_encodeIndexBuffer(i == 0 ? NULL : &shortbuffer[0], i, kIndexBuffer, index_count);
 
 		if (i == buffer.size())
 			assert(result == buffer.size());
@@ -130,7 +130,7 @@ static void decodeIndexMemorySafe()
 	for (size_t i = 0; i <= buffer.size(); ++i)
 	{
 		std::vector<unsigned char> shortbuffer(buffer.begin(), buffer.begin() + i);
-		int result = meshopt_decodeIndexBuffer(decoded, index_count, i == 0 ? 0 : &shortbuffer[0], i);
+		int result = meshopt_decodeIndexBuffer(decoded, index_count, i == 0 ? NULL : &shortbuffer[0], i);
 
 		if (i == buffer.size())
 			assert(result == 0);
@@ -259,7 +259,7 @@ static void encodeIndexSequenceMemorySafe()
 	for (size_t i = 0; i <= buffer.size(); ++i)
 	{
 		std::vector<unsigned char> shortbuffer(i);
-		size_t result = meshopt_encodeIndexSequence(i == 0 ? 0 : &shortbuffer[0], i, kIndexSequence, index_count);
+		size_t result = meshopt_encodeIndexSequence(i == 0 ? NULL : &shortbuffer[0], i, kIndexSequence, index_count);
 
 		if (i == buffer.size())
 			assert(result == buffer.size());
@@ -282,7 +282,7 @@ static void decodeIndexSequenceMemorySafe()
 	for (size_t i = 0; i <= buffer.size(); ++i)
 	{
 		std::vector<unsigned char> shortbuffer(buffer.begin(), buffer.begin() + i);
-		int result = meshopt_decodeIndexSequence(decoded, index_count, i == 0 ? 0 : &shortbuffer[0], i);
+		int result = meshopt_decodeIndexSequence(decoded, index_count, i == 0 ? NULL : &shortbuffer[0], i);
 
 		if (i == buffer.size())
 			assert(result == 0);
@@ -369,7 +369,7 @@ static void encodeVertexMemorySafe()
 	for (size_t i = 0; i <= buffer.size(); ++i)
 	{
 		std::vector<unsigned char> shortbuffer(i);
-		size_t result = meshopt_encodeVertexBuffer(i == 0 ? 0 : &shortbuffer[0], i, kVertexBuffer, vertex_count, sizeof(PV));
+		size_t result = meshopt_encodeVertexBuffer(i == 0 ? NULL : &shortbuffer[0], i, kVertexBuffer, vertex_count, sizeof(PV));
 
 		if (i == buffer.size())
 			assert(result == buffer.size());
@@ -391,7 +391,7 @@ static void decodeVertexMemorySafe()
 	for (size_t i = 0; i <= buffer.size(); ++i)
 	{
 		std::vector<unsigned char> shortbuffer(buffer.begin(), buffer.begin() + i);
-		int result = meshopt_decodeVertexBuffer(decoded, vertex_count, sizeof(PV), i == 0 ? 0 : &shortbuffer[0], i);
+		int result = meshopt_decodeVertexBuffer(decoded, vertex_count, sizeof(PV), i == 0 ? NULL : &shortbuffer[0], i);
 		(void)result;
 
 		if (i == buffer.size())
@@ -818,7 +818,7 @@ static void clusterBoundsDegenerate()
 	const unsigned int ib1[] = {0, 1, 2};
 
 	// all of the bounds below are degenerate as they use 0 triangles, one topology-degenerate triangle and one position-degenerate triangle respectively
-	meshopt_Bounds bounds0 = meshopt_computeClusterBounds(0, 0, 0, 0, 12);
+	meshopt_Bounds bounds0 = meshopt_computeClusterBounds(NULL, 0, NULL, 0, 12);
 	meshopt_Bounds boundsd = meshopt_computeClusterBounds(ibd, 3, vbd, 3, 12);
 	meshopt_Bounds bounds1 = meshopt_computeClusterBounds(ib1, 3, vbd, 3, 12);
 
@@ -898,9 +898,9 @@ static void customAllocator()
 
 static void emptyMesh()
 {
-	meshopt_optimizeVertexCache(0, 0, 0, 0);
-	meshopt_optimizeVertexCacheFifo(0, 0, 0, 0, 16);
-	meshopt_optimizeOverdraw(0, 0, 0, 0, 0, 12, 1.f);
+	meshopt_optimizeVertexCache(NULL, NULL, 0, 0);
+	meshopt_optimizeVertexCacheFifo(NULL, NULL, 0, 0, 16);
+	meshopt_optimizeOverdraw(NULL, NULL, 0, NULL, 0, 12, 1.f);
 }
 
 static void simplify()
@@ -1004,7 +1004,7 @@ static void simplifyPointsStuck()
 	const float vb[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 	// simplifying down to 0 points results in 0 immediately
-	assert(meshopt_simplifyPoints(0, vb, 3, 12, 0, 0, 0, 0) == 0);
+	assert(meshopt_simplifyPoints(NULL, vb, 3, 12, NULL, 0, 0, 0) == 0);
 }
 
 static void simplifyFlip()
