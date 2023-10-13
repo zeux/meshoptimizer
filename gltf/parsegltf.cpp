@@ -447,7 +447,7 @@ static bool freeUnusedBuffers(cgltf_data* data)
 
 cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error)
 {
-	cgltf_data* data = 0;
+	cgltf_data* data = NULL;
 
 	cgltf_options options = {};
 	cgltf_result result = cgltf_parse_file(&options, path, &data);
@@ -476,7 +476,7 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 	if (*error)
 	{
 		cgltf_free(data);
-		return 0;
+		return NULL;
 	}
 
 	if (requiresExtension(data, "KHR_mesh_quantization"))

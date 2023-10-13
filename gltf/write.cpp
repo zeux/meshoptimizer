@@ -784,7 +784,7 @@ void writeBufferView(std::string& json, BufferView::Kind kind, StreamFormat::Fil
 	append(json, "}");
 }
 
-static void writeAccessor(std::string& json, size_t view, size_t offset, cgltf_type type, cgltf_component_type component_type, bool normalized, size_t count, const float* min = 0, const float* max = 0, size_t numminmax = 0)
+static void writeAccessor(std::string& json, size_t view, size_t offset, cgltf_type type, cgltf_component_type component_type, bool normalized, size_t count, const float* min = NULL, const float* max = NULL, size_t numminmax = 0)
 {
 	append(json, "{\"bufferView\":");
 	append(json, view);
