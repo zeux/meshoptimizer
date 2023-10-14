@@ -77,6 +77,14 @@ for (let i = 0; i < oldvertices.length; ++i)
 	newvertices[remap[i]] = oldvertices[i];
 ```
 
+When the input is a point cloud and not a triangle mesh, it is recommended to reorder the points using a specialized function that performs spatial sorting that can result in significant improvements in compression ratio by the subsequent processing:
+
+```ts
+reorderPoints: (positions: Float32Array, positions_stride: number) => Uint32Array;
+```
+
+This function returns a remap array just like `reorderMesh`, so the vertices need to be reordered accordingly for every vertex stream - the `positions` input is not modified. Note that it assumes no index buffer is provided, as it is redundant for point clouds.
+
 To quantize the attribute data (whether it represents a mesh component or something else like a rotation quaternion for a bone), typically some data-specific analysis should be performed to determine the optimal quantization strategy. For linear data such as positions or texture coordinates remapping the input range to 0..1 and quantizing the resulting integer using fixed-point encoding with a given number of bits stored in a 16-bit or 8-bit integer is recommended; however, this is not always best for compression ratio for data with complex cross-component dependencies.
 
 To that end, three filter encoders are provided: octahedral (optimal for normal or tangent data), quaternion (optimal for unit-length quaternions) and exponential (optimal for compressing floating-point vectors). The last two are recommended for use for animation data, and exponential filter can additionally be used to quantize any floating-point vertex attribute for which integer quantization is not sufficiently precise.
