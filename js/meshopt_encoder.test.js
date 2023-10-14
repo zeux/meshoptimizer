@@ -37,6 +37,22 @@ var tests = {
 		assert.equal(res[1], 6); // unique
 	},
 
+	reorderPoints: function() {
+		var points = new Float32Array([
+			1, 1, 1,
+			11, 11, 11,
+			2, 2, 2,
+			12, 12, 12,
+		]);
+
+		var expected = new Uint32Array([
+			0, 2, 1, 3
+		]);
+
+		var remap = encoder.reorderPoints(points, 3);
+		assert.deepEqual(remap, expected);
+	},
+
 	roundtripVertexBuffer: function() {
 		var data = new Uint8Array(16 * 4);
 
