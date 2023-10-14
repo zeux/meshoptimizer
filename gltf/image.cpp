@@ -39,7 +39,7 @@ static bool parseDataUri(const char* uri, std::string& mime_type, std::string& r
 				size -= base64[base64_size - 1] == '=';
 			}
 
-			void* data = 0;
+			void* data = NULL;
 
 			cgltf_options options = {};
 			cgltf_result res = cgltf_load_buffer_base64(&options, size, base64, &data);

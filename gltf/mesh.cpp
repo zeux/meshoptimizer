@@ -521,7 +521,7 @@ static Stream* getStream(Mesh& mesh, cgltf_attribute_type type, int index = 0)
 		if (mesh.streams[i].type == type && mesh.streams[i].index == index)
 			return &mesh.streams[i];
 
-	return 0;
+	return NULL;
 }
 
 static void simplifyMesh(Mesh& mesh, float threshold, bool aggressive, bool lock_borders)
@@ -807,9 +807,9 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio)
 
 	simplifyMesh(mesh, ratio, /* aggressive= */ false, /* lock_borders= */ false);
 
-	meshopt_simplifyDebugKind = 0;
-	meshopt_simplifyDebugLoop = 0;
-	meshopt_simplifyDebugLoopBack = 0;
+	meshopt_simplifyDebugKind = NULL;
+	meshopt_simplifyDebugLoop = NULL;
+	meshopt_simplifyDebugLoopBack = NULL;
 
 	// fill out live info
 	for (size_t i = 0; i < mesh.indices.size(); ++i)

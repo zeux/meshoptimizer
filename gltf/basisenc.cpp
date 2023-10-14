@@ -122,7 +122,7 @@ static const char* prepareEncode(basisu::basis_compressor_params& params, const 
 
 	fillParams(params, temp_input.c_str(), temp_output.c_str(), uastc, width, height, bs, info, settings);
 
-	return nullptr;
+	return NULL;
 }
 
 void encodeImages(std::string* encoded, const cgltf_data* data, const std::vector<ImageInfo>& images, const char* input_path, const Settings& settings)

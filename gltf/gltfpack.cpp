@@ -958,7 +958,7 @@ static std::string getBufferSpec(const char* bin_path, size_t bin_size, const ch
 
 int gltfpack(const char* input, const char* output, const char* report, Settings settings)
 {
-	cgltf_data* data = 0;
+	cgltf_data* data = NULL;
 	std::vector<Mesh> meshes;
 	std::vector<Animation> animations;
 
@@ -967,7 +967,7 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 
 	if (iext == ".gltf" || iext == ".glb")
 	{
-		const char* error = 0;
+		const char* error = NULL;
 		data = parseGltf(input, meshes, animations, &error);
 
 		if (error)
@@ -978,7 +978,7 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 	}
 	else if (iext == ".obj")
 	{
-		const char* error = 0;
+		const char* error = NULL;
 		data = parseObj(input, meshes, &error);
 
 		if (!data)
@@ -1205,9 +1205,9 @@ int main(int argc, char** argv)
 
 	Settings settings = defaults();
 
-	const char* input = 0;
-	const char* output = 0;
-	const char* report = 0;
+	const char* input = NULL;
+	const char* output = NULL;
+	const char* report = NULL;
 	bool help = false;
 	bool test = false;
 
