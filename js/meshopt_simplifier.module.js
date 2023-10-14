@@ -222,7 +222,7 @@ var MeshoptSimplifier = (function() {
 			return simplifyScale(instance.exports.meshopt_simplifyScale, vertex_positions, vertex_positions.length / vertex_positions_stride, vertex_positions_stride * 4);
 		},
 
-		simplifyPoints: function(vertex_positions, vertex_positions_stride, vertex_colors, vertex_colors_stride, color_weight, target_vertex_count) {
+		simplifyPoints: function(vertex_positions, vertex_positions_stride, target_vertex_count, vertex_colors, vertex_colors_stride, color_weight) {
 			assert(vertex_positions instanceof Float32Array);
 			assert(vertex_positions.length % vertex_positions_stride == 0);
 			assert(vertex_positions_stride >= 3);
