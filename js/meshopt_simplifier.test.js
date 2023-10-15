@@ -180,6 +180,33 @@ var tests = {
 
 		assert(simplifier.getScale(positions, 3) == 3.0);
 	},
+
+	simplifyPoints: function() {
+		var positions = new Float32Array([
+			0, 0, 0, 100, 0, 0, 100, 1, 1, 110, 0, 0,
+		]);
+		var colors = new Float32Array([
+			1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+		]);
+
+		var expected = new Uint32Array([
+			0, 1
+		]);
+
+		var expectedC = new Uint32Array([
+			0, 2
+		]);
+
+		var res = simplifier.simplifyPoints(positions, 3, 2);
+		assert.deepEqual(res, expected);
+
+		// note: recommended value for color_weight is 1e-2 but here we push color weight to be very high to bias candidate selection for testing
+		var resC1 = simplifier.simplifyPoints(positions, 3, 2, colors, 3, 1e-1);
+		assert.deepEqual(resC1, expectedC);
+
+		var resC2 = simplifier.simplifyPoints(positions, 3, 2, colors, 3, 1e-2);
+		assert.deepEqual(resC2, expected);
+	}
 };
 
 Promise.all([simplifier.ready]).then(() => {

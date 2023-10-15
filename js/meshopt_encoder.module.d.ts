@@ -5,6 +5,7 @@ export const MeshoptEncoder: {
     ready: Promise<void>;
 
     reorderMesh: (indices: Uint32Array, triangles: boolean, optsize: boolean) => [Uint32Array, number];
+    reorderPoints: (positions: Float32Array, positions_stride: number) => Uint32Array;
     
     encodeVertexBuffer: (source: Uint8Array, count: number, size: number) => Uint8Array;
     encodeIndexBuffer: (source: Uint8Array, count: number, size: number) => Uint8Array;
