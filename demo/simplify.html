@@ -136,13 +136,14 @@
 
 					var attrib_weights = [
 						settings.normalWeight, settings.normalWeight, settings.normalWeight,
-						settings.colorWeight / 255, settings.colorWeight / 255, settings.colorWeight / 255,
+						settings.colorWeight, settings.colorWeight, settings.colorWeight,
 					];
 				}
 
 				var flags = [];
-				if (settings.lockBorder)
+				if (settings.lockBorder) {
 					flags.push("LockBorder");
+				}
 
 				var threshold = Math.pow(10, -settings.errorThresholdLog10);
 				var stride = (geo.attributes.position instanceof THREE.InterleavedBufferAttribute) ? geo.attributes.position.data.stride : 3;
@@ -176,9 +177,12 @@
 				var pos_stride = (geo.attributes.position instanceof THREE.InterleavedBufferAttribute) ? geo.attributes.position.data.stride : 3;
 				var col_stride = (geo.attributes.color instanceof THREE.InterleavedBufferAttribute) ? geo.attributes.color.data.stride : geo.attributes.color.itemSize;
 
+				// note: we are converting source color array without normalization; if the color data is quantized, we need to divide by 255 to normalize it
+				var colorScale = geo.attributes.color && geo.attributes.color.normalized ? 255 : 1;
+
 				console.time('simplify');
 
-				var res = MeshoptSimplifier.simplifyPoints(positions, pos_stride, target, colors, col_stride, settings.colorWeight);
+				var res = MeshoptSimplifier.simplifyPoints(positions, pos_stride, target, colors, col_stride, settings.colorWeight / colorScale);
 
 				console.timeEnd('simplify');
 
@@ -191,10 +195,12 @@
 			{
 				MeshoptSimplifier.ready.then(function() {
 					scene.traverse(function (object) {
-						if (object.isMesh)
+						if (object.isMesh) {
 							simplifyMesh(object.geometry);
-						if (object.isPoints)
+						}
+						if (object.isPoints) {
 							simplifyPoints(object.geometry);
+						}
 					});
 				});
 			}
@@ -225,8 +231,7 @@
 
 			function load(path)
 			{
-				if (model)
-				{
+				if (model) {
 					scene.remove(model);
 					model = undefined;
 				}
