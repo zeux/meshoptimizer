@@ -181,18 +181,21 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 
 			result.streams.reserve(primitive.attributes_count);
 
+			size_t vertex_count = primitive.attributes_count ? primitive.attributes[0].data->count : 0;
+
 			if (primitive.indices)
 			{
 				result.indices.resize(primitive.indices->count);
 				cgltf_accessor_unpack_indices(primitive.indices, &result.indices[0], result.indices.size());
+
+				for (size_t i = 0; i < result.indices.size(); ++i)
+					assert(result.indices[i] < vertex_count);
 			}
 			else if (primitive.type != cgltf_primitive_type_points)
 			{
-				size_t count = primitive.attributes ? primitive.attributes[0].data->count : 0;
-
 				// note, while we could generate a good index buffer, reindexMesh will take care of this
-				result.indices.resize(count);
-				for (size_t i = 0; i < count; ++i)
+				result.indices.resize(vertex_count);
+				for (size_t i = 0; i < vertex_count; ++i)
 					result.indices[i] = unsigned(i);
 			}
 
