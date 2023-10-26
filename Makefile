@@ -112,6 +112,13 @@ js: js/meshopt_decoder.js js/meshopt_decoder.module.js js/meshopt_encoder.js js/
 gltfpack: $(BUILD)/gltfpack
 	ln -fs $^ $@
 
+ifeq ($(config),fuzz)
+gltffuzz: $(BUILD)/gltfpack
+	cp $^ $@
+	mkdir -p /tmp/gltffuzz
+	./gltffuzz /tmp/gltffuzz -fork=16 -dict=gltf/fuzz.dict -ignore_crashes=1 -max_len=32768
+endif
+
 $(BUILD)/gltfpack: $(GLTFPACK_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
 
