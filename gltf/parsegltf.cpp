@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+static const size_t kMaxStreams = 16;
+
 static const char* getError(cgltf_result result, cgltf_data* data)
 {
 	switch (result)
@@ -208,6 +210,12 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 				if (attr.type == cgltf_attribute_type_invalid || (attr.type == cgltf_attribute_type_custom && !isIdAttribute(attr.name)))
 				{
 					fprintf(stderr, "Warning: ignoring %s attribute %s in primitive %d of mesh %d\n", attr.type == cgltf_attribute_type_invalid ? "unknown" : "custom", attr.name, int(pi), int(mi));
+					continue;
+				}
+
+				if (result.streams.size() == kMaxStreams)
+				{
+					fprintf(stderr, "Warning: ignoring attribute %s in primitive %d of mesh %d (limit %d reached)\n", attr.name, int(pi), int(mi), int(kMaxStreams));
 					continue;
 				}
 
