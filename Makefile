@@ -78,12 +78,19 @@ ifeq ($(config),coverage)
 endif
 
 ifeq ($(config),sanitize)
-	CXXFLAGS+=-fsanitize=address,undefined -fno-sanitize-recover=all
+	CXXFLAGS+=-fsanitize=address,undefined -fsanitize-undefined-trap-on-error
 	LDFLAGS+=-fsanitize=address,undefined
 endif
 
 ifeq ($(config),analyze)
 	CXXFLAGS+=--analyze
+endif
+
+ifeq ($(config),fuzz)
+    CXXFLAGS+=-O1 -fsanitize=address,fuzzer
+    LDFLAGS+=-fsanitize=address,fuzzer
+
+    $(GLTFPACK_OBJECTS): CXXFLAGS+=-DGLTFFUZZ
 endif
 
 all: $(DEMO)
@@ -104,6 +111,13 @@ js: js/meshopt_decoder.js js/meshopt_decoder.module.js js/meshopt_encoder.js js/
 
 gltfpack: $(BUILD)/gltfpack
 	ln -fs $^ $@
+
+ifeq ($(config),fuzz)
+gltffuzz: $(BUILD)/gltfpack
+	cp $^ $@
+	mkdir -p /tmp/gltffuzz
+	./gltffuzz /tmp/gltffuzz -fork=16 -dict=gltf/fuzz.dict -ignore_crashes=1 -max_len=32768
+endif
 
 $(BUILD)/gltfpack: $(GLTFPACK_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@

@@ -1194,6 +1194,7 @@ unsigned int textureMask(const char* arg)
 	return result;
 }
 
+#ifndef GLTFFUZZ
 int main(int argc, char** argv)
 {
 #ifndef __wasi__
@@ -1593,6 +1594,7 @@ int main(int argc, char** argv)
 
 	return gltfpack(input, output, report, settings);
 }
+#endif
 
 #ifdef __wasi__
 extern "C" int pack(int argc, char** argv)
@@ -1602,5 +1604,36 @@ extern "C" int pack(int argc, char** argv)
 	int result = main(argc, argv);
 	fflush(NULL);
 	return result;
+}
+#endif
+
+#ifdef GLTFFUZZ
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t* buffer, size_t size)
+{
+	Settings settings = defaults();
+
+	settings.texture_embed = true;
+
+	std::vector<Mesh> meshes;
+	std::vector<Animation> animations;
+
+	const char* error = NULL;
+	cgltf_data* data = parseGlb(buffer, size, meshes, animations, &error);
+
+	// this is a difficult tradeoff
+	// returning 0 on files that fail to parse means that fuzzing is more incremental: files with errors are put into the corpus,
+	// and the subsequent mutations may lead to discovering more interesting inputs, including valid ones that are difficult to find otherwise.
+	// however, this leads to most of the corpus being invalid, and we very rarely get useful coverage for actual gltfpack processing.
+	// for now we just focus on valid files, as we expect cgltf parser itself to be bulletproof as it's fuzzed separately.
+	if (error)
+		return -1;
+
+	std::string json, bin, fallback;
+	size_t fallback_size = 0;
+	process(data, NULL, NULL, NULL, meshes, animations, settings, json, bin, fallback, fallback_size);
+
+	cgltf_free(data);
+
+	return 0;
 }
 #endif
