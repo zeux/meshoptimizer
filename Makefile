@@ -78,12 +78,19 @@ ifeq ($(config),coverage)
 endif
 
 ifeq ($(config),sanitize)
-	CXXFLAGS+=-fsanitize=address,undefined -fno-sanitize-recover=all
+	CXXFLAGS+=-fsanitize=address,undefined -fsanitize-undefined-trap-on-error
 	LDFLAGS+=-fsanitize=address,undefined
 endif
 
 ifeq ($(config),analyze)
 	CXXFLAGS+=--analyze
+endif
+
+ifeq ($(config),fuzz)
+    CXXFLAGS+=-O1 -fsanitize=address,fuzzer
+    LDFLAGS+=-fsanitize=address,fuzzer
+
+    $(GLTFPACK_OBJECTS): CXXFLAGS+=-DGLTFFUZZ
 endif
 
 all: $(DEMO)

@@ -73,7 +73,7 @@ bool readImage(const cgltf_image& image, const char* input_path, std::string& da
 		mime_type = image.mime_type;
 		return true;
 	}
-	else if (image.uri && *image.uri)
+	else if (image.uri && *image.uri && input_path)
 	{
 		std::string path = image.uri;
 

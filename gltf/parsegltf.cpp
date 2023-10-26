@@ -445,19 +445,8 @@ static bool freeUnusedBuffers(cgltf_data* data)
 	return free_bin;
 }
 
-cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error)
+static cgltf_data* parseGltf(cgltf_data* data, cgltf_result result, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error)
 {
-	cgltf_data* data = NULL;
-
-	cgltf_options options = {};
-	cgltf_result result = cgltf_parse_file(&options, path, &data);
-
-	if (data && !data->bin)
-		freeFile(data);
-
-	result = (result == cgltf_result_success) ? cgltf_load_buffers(&options, data, path) : result;
-	result = (result == cgltf_result_success) ? cgltf_validate(data) : result;
-
 	*error = NULL;
 
 	if (result != cgltf_result_success)
@@ -494,4 +483,35 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 		freeFile(data);
 
 	return data;
+}
+
+cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error)
+{
+	cgltf_data* data = NULL;
+
+	cgltf_options options = {};
+	cgltf_result result = cgltf_parse_file(&options, path, &data);
+
+	if (data && !data->bin)
+		freeFile(data);
+
+	result = (result == cgltf_result_success) ? cgltf_load_buffers(&options, data, path) : result;
+	result = (result == cgltf_result_success) ? cgltf_validate(data) : result;
+
+	return parseGltf(data, result, meshes, animations, error);
+}
+
+cgltf_data* parseGlb(const void* buffer, size_t size, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error)
+{
+	cgltf_data* data = NULL;
+
+	cgltf_options options = {};
+	options.type = cgltf_file_type_glb;
+
+	cgltf_result result = cgltf_parse(&options, buffer, size, &data);
+
+	result = (result == cgltf_result_success) ? cgltf_load_buffers(&options, data, NULL) : result;
+	result = (result == cgltf_result_success) ? cgltf_validate(data) : result;
+
+	return parseGltf(data, result, meshes, animations, error);
 }
