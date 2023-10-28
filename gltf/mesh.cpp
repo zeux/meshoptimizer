@@ -409,7 +409,7 @@ void filterStreams(Mesh& mesh, const MaterialInfo& mi)
 			morph_tangent = morph_tangent || (stream.type == cgltf_attribute_type_tangent && !isConstant(stream.data, { 0, 0, 0, 0 }));
 		}
 
-		if (stream.type == cgltf_attribute_type_texcoord && (mi.textureSetMask & (1u << stream.index)) != 0)
+		if (stream.type == cgltf_attribute_type_texcoord && stream.index < 32 && (mi.textureSetMask & (1u << stream.index)) != 0)
 		{
 			keep_texture_set = std::max(keep_texture_set, stream.index);
 		}
