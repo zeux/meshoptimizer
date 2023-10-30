@@ -162,6 +162,7 @@ js/meshopt_simplifier.js: build/simplifier.wasm tools/wasmpack.py
 
 js/%.module.js: js/%.js
 	sed '/UMD-style export/,$$d' <$< >$@
+	sed -i "/\"use strict\";/d" $@
 	sed -n "s#\s*module.exports = \(.*\);#export { \\1 };#p" <$< >>$@
 
 $(DEMO): $(DEMO_OBJECTS) $(LIBRARY)
