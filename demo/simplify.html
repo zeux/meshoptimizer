@@ -193,6 +193,8 @@
 
 			function simplify()
 			{
+				MeshoptSimplifier.useExperimentalFeatures = true;
+
 				MeshoptSimplifier.ready.then(function() {
 					scene.traverse(function (object) {
 						if (object.isMesh) {
