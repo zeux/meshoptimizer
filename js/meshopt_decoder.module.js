@@ -85,7 +85,6 @@ var MeshoptDecoder = (function() {
 
 			worker.pending -= data.count;
 			worker.requests[data.id][data.action](data.value);
-
 			delete worker.requests[data.id];
 		};
 
@@ -101,9 +100,15 @@ var MeshoptDecoder = (function() {
 		var blob = new Blob([source], {type: 'text/javascript'});
 		var url = URL.createObjectURL(blob);
 
-		for (var i = 0; i < count; ++i) {
+		for (var i = workers.length; i < count; ++i) {
 			workers[i] = createWorker(url);
 		}
+
+		for (var i = count; i < workers.length; ++i) {
+			workers[i].object.postMessage({});
+		}
+
+		workers.length = count;
 
 		URL.revokeObjectURL(url);
 	}
@@ -119,7 +124,7 @@ var MeshoptDecoder = (function() {
 
 		return new Promise(function (resolve, reject) {
 			var data = new Uint8Array(source);
-			var id = requestId++;
+			var id = ++requestId;
 
 			worker.pending += count;
 			worker.requests[id] = { resolve: resolve, reject: reject };
@@ -128,8 +133,11 @@ var MeshoptDecoder = (function() {
 	}
 
 	function workerProcess(event) {
+		var data = event.data;
+		if (!data.id) {
+			return self.close();
+		}
 		self.ready.then(function(instance) {
-			var data = event.data;
 			try {
 				var target = new Uint8Array(data.count * data.size);
 				decode(instance, instance.exports[data.mode], target, data.count, data.size, data.source, instance.exports[data.filter]);
