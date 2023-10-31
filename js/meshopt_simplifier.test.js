@@ -6,6 +6,8 @@ process.on('unhandledRejection', error => {
 	process.exit(1);
 });
 
+simplifier.useExperimentalFeatures = true;
+
 var tests = {
 	compactMesh: function() {
 		var indices = new Uint32Array([
