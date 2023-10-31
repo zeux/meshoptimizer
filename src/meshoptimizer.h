@@ -67,6 +67,7 @@ MESHOPTIMIZER_API size_t meshopt_generateVertexRemap(unsigned int* destination, 
  *
  * destination must contain enough space for the resulting remap table (vertex_count elements)
  * indices can be NULL if the input is unindexed
+ * stream_count must be <= 16
  */
 MESHOPTIMIZER_API size_t meshopt_generateVertexRemapMulti(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, const struct meshopt_Stream* streams, size_t stream_count);
 
@@ -103,6 +104,7 @@ MESHOPTIMIZER_API void meshopt_generateShadowIndexBuffer(unsigned int* destinati
  * Note that binary equivalence considers all size bytes in each stream, including padding which should be zero-initialized.
  *
  * destination must contain enough space for the resulting index buffer (index_count elements)
+ * stream_count must be <= 16
  */
 MESHOPTIMIZER_API void meshopt_generateShadowIndexBufferMulti(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, const struct meshopt_Stream* streams, size_t stream_count);
 
@@ -354,6 +356,7 @@ MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsig
  *
  * vertex_attributes should have attribute_count floats for each vertex
  * attribute_weights should have attribute_count floats in total; the weights determine relative priority of attributes between each other and wrt position. The recommended weight range is [1e-3..1e-1], assuming attribute data is in [0..1] range.
+ * attribute_count must be <= 16
  * TODO target_error/result_error currently use combined distance+attribute error; this may change in the future
  */
 MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, size_t target_index_count, float target_error, unsigned int options, float* result_error);
