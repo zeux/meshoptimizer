@@ -206,6 +206,7 @@ var MeshoptSimplifier = (function() {
 			assert(target_error >= 0 && target_error <= 1);
 			assert(Array.isArray(attribute_weights));
 			assert(vertex_attributes_stride >= attribute_weights.length);
+			assert(attribute_weights.length <= 16);
 
 			var options = 0;
 			for (var i = 0; i < (flags ? flags.length : 0); ++i) {
