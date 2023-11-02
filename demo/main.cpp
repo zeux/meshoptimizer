@@ -475,7 +475,7 @@ void simplifyAttr(const Mesh& mesh, float threshold = 0.2f)
 	float result_error = 0;
 
 	const float nrm_weight = 0.01f;
-	const float attr_weights[3] = { nrm_weight, nrm_weight, nrm_weight };
+	const float attr_weights[3] = {nrm_weight, nrm_weight, nrm_weight};
 
 	lod.indices.resize(mesh.indices.size()); // note: simplify needs space for index_count elements in the destination array, not target_index_count
 	lod.indices.resize(meshopt_simplifyWithAttributes(&lod.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), &mesh.vertices[0].nx, sizeof(Vertex), attr_weights, 3, target_index_count, target_error, 0, &result_error));
@@ -524,7 +524,7 @@ void simplifyPoints(const Mesh& mesh, float threshold = 0.2f)
 	size_t target_vertex_count = size_t(mesh.vertices.size() * threshold);
 
 	std::vector<unsigned int> indices(target_vertex_count);
-	indices.resize(meshopt_simplifyPoints(&indices[0], &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_vertex_count));
+	indices.resize(meshopt_simplifyPoints(&indices[0], &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), NULL, 0, 0, target_vertex_count));
 
 	double end = timestamp();
 

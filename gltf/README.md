@@ -24,6 +24,8 @@ For better compression, you can use `-cc` option which applies additional compre
 
 gltfpack can also compress textures using Basis Universal format stored in a KTX2 container (`-tc` flag, requires support for `KHR_texture_basisu`). 
 
+When working with glTF files that contain point clouds, gltfpack automatically processes the point cloud data to reduce the download size to the extent possible. In addition to aforementioned compression options (either `-c` or `-cc` are recommended), gltfpack can also prune point clouds to provide a more uniform density when `-si` option is used.
+
 ## Decompression
 
 When using compressed files, [js/meshopt_decoder.js](https://github.com/zeux/meshoptimizer/blob/master/js/meshopt_decoder.js) or `js/meshopt_decoder.module.js` needs to be loaded to provide the WebAssembly decoder module like this:
@@ -51,7 +53,7 @@ The following settings are frequently used to reduce the resulting data size:
 * `-cc`: produce compressed gltf/glb files (requires `EXT_meshopt_compression`)
 * `-tc`: convert all textures to KTX2 with BasisU supercompression (requires `KHR_texture_basisu` and may require `-tp` flag for compatibility with WebGL 1)
 * `-mi`: use mesh instancing when serializing references to the same meshes (requires `EXT_mesh_gpu_instancing`)
-* `-si R`: simplify meshes targeting triangle count ratio R (default: 1; R should be between 0 and 1)
+* `-si R`: simplify meshes targeting triangle/point count ratio R (default: 1; R should be between 0 and 1)
 
 The following settings are frequently used to restrict some optimizations:
 
@@ -59,6 +61,36 @@ The following settings are frequently used to restrict some optimizations:
 * `-km`: keep named materials and disable named material merging
 * `-ke`: keep extras data
 * `-vpf`: use floating-point position quantization instead of the default fixed-point (this results in larger position data, but does not insert new nodes with dequantization transforms; when using this option, `-cc` is recommended as well)
+
+## Extensions
+
+gltfpack supports most Khronos extensions and some multi-vendor extensions in the input scenes, with newer extensions added regularly. The following extensions are fully supported:
+
+- KHR_lights_punctual
+- KHR_materials_anisotropy
+- KHR_materials_clearcoat
+- KHR_materials_emissive_strength
+- KHR_materials_ior
+- KHR_materials_iridescence
+- KHR_materials_pbrSpecularGlossiness
+- KHR_materials_sheen
+- KHR_materials_specular
+- KHR_materials_transmission
+- KHR_materials_unlit
+- KHR_materials_variants
+- KHR_materials_volume
+- KHR_mesh_quantization
+- KHR_texture_transform
+
+Even if the source file does not use extensions, gltfpack may use some extensions in the output file either by default or when certain options are used:
+
+- KHR_mesh_quantization (used by default unless disabled via `-noq`)
+- KHR_texture_transform (used by default when textures are present, unless disabled via `-noq` or `-vtf`)
+- KHR_texture_basisu (used when requested via `-tc`)
+- EXT_meshopt_compression (used when requested via `-c` or `-cc`)
+- EXT_mesh_gpu_instancing (used when requested via `-mi`)
+
+gltfpack does not support vendor-specific extensions or custom extensions, including ones defined in [Khronos glTF repository](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor). Unknown extension nodes are discarded from the output.
 
 ## Building
 

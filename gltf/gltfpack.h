@@ -1,5 +1,5 @@
 /**
- * gltfpack - version 0.19
+ * gltfpack - version 0.20
  *
  * Copyright (C) 2016-2023, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
  * Report bugs and download new versions at https://github.com/zeux/meshoptimizer
@@ -9,6 +9,10 @@
 
 #ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
+#endif
+
+#ifndef _CRT_NONSTDC_NO_WARNINGS
+#define _CRT_NONSTDC_NO_WARNINGS
 #endif
 
 #include "../extern/cgltf.h"
@@ -28,6 +32,8 @@ struct Stream
 	cgltf_attribute_type type;
 	int index;
 	int target; // 0 = base mesh, 1+ = morph target
+
+	const char* custom_name; // only valid for cgltf_attribute_type_custom
 
 	std::vector<Attr> data;
 };
@@ -110,6 +116,7 @@ struct Settings
 
 	bool pos_normalized;
 	bool pos_float;
+	bool tex_float;
 
 	int trn_bits;
 	int rot_bits;
@@ -134,6 +141,7 @@ struct Settings
 
 	bool texture_ktx2;
 	bool texture_embed;
+	bool texture_ref;
 
 	bool texture_pow2;
 	bool texture_flipy;
@@ -216,6 +224,13 @@ struct MaterialInfo
 	int remap;
 };
 
+struct TextureInfo
+{
+	bool keep;
+
+	int remap;
+};
+
 struct ImageInfo
 {
 	TextureKind kind;
@@ -279,6 +294,8 @@ void removeFile(const char* path);
 cgltf_data* parseObj(const char* path, std::vector<Mesh>& meshes, const char** error);
 cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error);
 
+cgltf_data* parseGlb(const void* buffer, size_t size, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error);
+
 void processAnimation(Animation& animation, const Settings& settings);
 void processMesh(Mesh& mesh, const Settings& settings);
 
@@ -297,9 +314,11 @@ void filterStreams(Mesh& mesh, const MaterialInfo& mi);
 void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings);
 void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes, const Settings& settings);
 
+void mergeTextures(cgltf_data* data, std::vector<TextureInfo>& textures);
+
 bool hasValidTransform(const cgltf_texture_view& view);
 
-void analyzeMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, std::vector<ImageInfo>& images);
+void analyzeMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, std::vector<TextureInfo>& textures, std::vector<ImageInfo>& images);
 void optimizeMaterials(cgltf_data* data, const char* input_path, std::vector<ImageInfo>& images);
 
 bool readImage(const cgltf_image& image, const char* input_path, std::string& data, std::string& mime_type);
@@ -343,10 +362,10 @@ void appendJson(std::string& s, const char* data);
 const char* attributeType(cgltf_attribute_type type);
 const char* animationPath(cgltf_animation_path_type type);
 
-void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationPosition* qp, const QuantizationTexture* qt);
+void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationPosition* qp, const QuantizationTexture* qt, std::vector<TextureInfo>& textures);
 void writeBufferView(std::string& json, BufferView::Kind kind, StreamFormat::Filter filter, size_t count, size_t stride, size_t bin_offset, size_t bin_size, BufferView::Compression compression, size_t compressed_offset, size_t compressed_size);
 void writeSampler(std::string& json, const cgltf_sampler& sampler);
-void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const Settings& settings);
+void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const char* output_path, const Settings& settings);
 void writeEncodedImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const std::string& encoded, const ImageInfo& info, const char* output_path, const Settings& settings);
 void writeTexture(std::string& json, const cgltf_texture& texture, const ImageInfo* info, cgltf_data* data, const Settings& settings);
 void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, int target, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings);

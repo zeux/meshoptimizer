@@ -157,7 +157,7 @@ static T* hashLookup(T* table, size_t buckets, const Hash& hash, const T& key, c
 	}
 
 	assert(false && "Hash table is full"); // unreachable
-	return 0;
+	return NULL;
 }
 
 static void buildPositionRemap(unsigned int* remap, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, meshopt_Allocator& allocator)
@@ -178,6 +178,8 @@ static void buildPositionRemap(unsigned int* remap, const float* vertex_position
 
 		remap[index] = *entry;
 	}
+
+	allocator.deallocate(vertex_table);
 }
 
 template <size_t BlockSize>

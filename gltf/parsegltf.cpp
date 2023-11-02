@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+static const size_t kMaxStreams = 16;
+
 static const char* getError(cgltf_result result, cgltf_data* data)
 {
 	switch (result)
@@ -136,6 +138,14 @@ static void fixupIndices(std::vector<unsigned int>& indices, cgltf_primitive_typ
 	}
 }
 
+static bool isIdAttribute(const char* name)
+{
+	return
+		strcmp(name, "_ID") == 0 ||
+		strcmp(name, "_BATCHID") == 0 ||
+		strncmp(name, "_FEATURE_ID_", 12) == 0;
+}
+
 static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::vector<std::pair<size_t, size_t> >& mesh_remap)
 {
 	size_t total_primitives = 0;
@@ -173,18 +183,22 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 
 			result.streams.reserve(primitive.attributes_count);
 
+			size_t vertex_count = primitive.attributes_count ? primitive.attributes[0].data->count : 0;
+
 			if (primitive.indices)
 			{
 				result.indices.resize(primitive.indices->count);
-				cgltf_accessor_unpack_indices(primitive.indices, &result.indices[0], result.indices.size());
+				if (!result.indices.empty())
+					cgltf_accessor_unpack_indices(primitive.indices, &result.indices[0], result.indices.size());
+
+				for (size_t i = 0; i < result.indices.size(); ++i)
+					assert(result.indices[i] < vertex_count);
 			}
 			else if (primitive.type != cgltf_primitive_type_points)
 			{
-				size_t count = primitive.attributes ? primitive.attributes[0].data->count : 0;
-
 				// note, while we could generate a good index buffer, reindexMesh will take care of this
-				result.indices.resize(count);
-				for (size_t i = 0; i < count; ++i)
+				result.indices.resize(vertex_count);
+				for (size_t i = 0; i < vertex_count; ++i)
 					result.indices[i] = unsigned(i);
 			}
 
@@ -194,9 +208,15 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 			{
 				const cgltf_attribute& attr = primitive.attributes[ai];
 
-				if (attr.type == cgltf_attribute_type_invalid || attr.type == cgltf_attribute_type_custom)
+				if (attr.type == cgltf_attribute_type_invalid || (attr.type == cgltf_attribute_type_custom && !isIdAttribute(attr.name)))
 				{
 					fprintf(stderr, "Warning: ignoring %s attribute %s in primitive %d of mesh %d\n", attr.type == cgltf_attribute_type_invalid ? "unknown" : "custom", attr.name, int(pi), int(mi));
+					continue;
+				}
+
+				if (result.streams.size() == kMaxStreams)
+				{
+					fprintf(stderr, "Warning: ignoring attribute %s in primitive %d of mesh %d (limit %d reached)\n", attr.name, int(pi), int(mi), int(kMaxStreams));
 					continue;
 				}
 
@@ -205,6 +225,9 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 
 				s.type = attr.type;
 				s.index = attr.index;
+
+				if (attr.type == cgltf_attribute_type_custom)
+					s.custom_name = attr.name;
 
 				readAccessor(s.data, attr.data);
 
@@ -434,19 +457,8 @@ static bool freeUnusedBuffers(cgltf_data* data)
 	return free_bin;
 }
 
-cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error)
+static cgltf_data* parseGltf(cgltf_data* data, cgltf_result result, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error)
 {
-	cgltf_data* data = 0;
-
-	cgltf_options options = {};
-	cgltf_result result = cgltf_parse_file(&options, path, &data);
-
-	if (data && !data->bin)
-		freeFile(data);
-
-	result = (result == cgltf_result_success) ? cgltf_load_buffers(&options, data, path) : result;
-	result = (result == cgltf_result_success) ? cgltf_validate(data) : result;
-
 	*error = NULL;
 
 	if (result != cgltf_result_success)
@@ -465,7 +477,7 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 	if (*error)
 	{
 		cgltf_free(data);
-		return 0;
+		return NULL;
 	}
 
 	if (requiresExtension(data, "KHR_mesh_quantization"))
@@ -483,4 +495,35 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 		freeFile(data);
 
 	return data;
+}
+
+cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error)
+{
+	cgltf_data* data = NULL;
+
+	cgltf_options options = {};
+	cgltf_result result = cgltf_parse_file(&options, path, &data);
+
+	if (data && !data->bin)
+		freeFile(data);
+
+	result = (result == cgltf_result_success) ? cgltf_load_buffers(&options, data, path) : result;
+	result = (result == cgltf_result_success) ? cgltf_validate(data) : result;
+
+	return parseGltf(data, result, meshes, animations, error);
+}
+
+cgltf_data* parseGlb(const void* buffer, size_t size, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error)
+{
+	cgltf_data* data = NULL;
+
+	cgltf_options options = {};
+	options.type = cgltf_file_type_glb;
+
+	cgltf_result result = cgltf_parse(&options, buffer, size, &data);
+
+	result = (result == cgltf_result_success) ? cgltf_load_buffers(&options, data, NULL) : result;
+	result = (result == cgltf_result_success) ? cgltf_validate(data) : result;
+
+	return parseGltf(data, result, meshes, animations, error);
 }

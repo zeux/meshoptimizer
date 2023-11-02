@@ -8,10 +8,10 @@ BUILD=build/$(config)
 LIBRARY_SOURCES=$(wildcard src/*.cpp)
 LIBRARY_OBJECTS=$(LIBRARY_SOURCES:%=$(BUILD)/%.o)
 
-DEMO_SOURCES=$(wildcard demo/*.c demo/*.cpp) tools/meshloader.cpp
+DEMO_SOURCES=$(wildcard demo/*.c demo/*.cpp) tools/objloader.cpp
 DEMO_OBJECTS=$(DEMO_SOURCES:%=$(BUILD)/%.o)
 
-GLTFPACK_SOURCES=$(wildcard gltf/*.cpp) tools/meshloader.cpp
+GLTFPACK_SOURCES=$(wildcard gltf/*.cpp)
 GLTFPACK_OBJECTS=$(GLTFPACK_SOURCES:%=$(BUILD)/%.o)
 
 OBJECTS=$(LIBRARY_OBJECTS) $(DEMO_OBJECTS) $(GLTFPACK_OBJECTS)
@@ -47,11 +47,11 @@ WASM_EXPORT_PREFIX=-Wl,--export
 WASM_DECODER_SOURCES=src/vertexcodec.cpp src/indexcodec.cpp src/vertexfilter.cpp tools/wasmstubs.cpp
 WASM_DECODER_EXPORTS=meshopt_decodeVertexBuffer meshopt_decodeIndexBuffer meshopt_decodeIndexSequence meshopt_decodeFilterOct meshopt_decodeFilterQuat meshopt_decodeFilterExp sbrk __wasm_call_ctors
 
-WASM_ENCODER_SOURCES=src/vertexcodec.cpp src/indexcodec.cpp src/vertexfilter.cpp src/vcacheoptimizer.cpp src/vfetchoptimizer.cpp tools/wasmstubs.cpp
-WASM_ENCODER_EXPORTS=meshopt_encodeVertexBuffer meshopt_encodeVertexBufferBound meshopt_encodeIndexBuffer meshopt_encodeIndexBufferBound meshopt_encodeIndexSequence meshopt_encodeIndexSequenceBound meshopt_encodeVertexVersion meshopt_encodeIndexVersion meshopt_encodeFilterOct meshopt_encodeFilterQuat meshopt_encodeFilterExp meshopt_optimizeVertexCache meshopt_optimizeVertexCacheStrip meshopt_optimizeVertexFetchRemap sbrk __wasm_call_ctors
+WASM_ENCODER_SOURCES=src/vertexcodec.cpp src/indexcodec.cpp src/vertexfilter.cpp src/vcacheoptimizer.cpp src/vfetchoptimizer.cpp src/spatialorder.cpp tools/wasmstubs.cpp
+WASM_ENCODER_EXPORTS=meshopt_encodeVertexBuffer meshopt_encodeVertexBufferBound meshopt_encodeIndexBuffer meshopt_encodeIndexBufferBound meshopt_encodeIndexSequence meshopt_encodeIndexSequenceBound meshopt_encodeVertexVersion meshopt_encodeIndexVersion meshopt_encodeFilterOct meshopt_encodeFilterQuat meshopt_encodeFilterExp meshopt_optimizeVertexCache meshopt_optimizeVertexCacheStrip meshopt_optimizeVertexFetchRemap meshopt_spatialSortRemap sbrk __wasm_call_ctors
 
 WASM_SIMPLIFIER_SOURCES=src/simplifier.cpp src/vfetchoptimizer.cpp tools/wasmstubs.cpp
-WASM_SIMPLIFIER_EXPORTS=meshopt_simplify meshopt_simplifyWithAttributes meshopt_simplifyScale meshopt_optimizeVertexFetchRemap sbrk __wasm_call_ctors
+WASM_SIMPLIFIER_EXPORTS=meshopt_simplify meshopt_simplifyWithAttributes meshopt_simplifyScale meshopt_simplifyPoints meshopt_optimizeVertexFetchRemap sbrk __wasm_call_ctors
 
 ifeq ($(config),iphone)
 	IPHONESDK=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk
@@ -78,12 +78,19 @@ ifeq ($(config),coverage)
 endif
 
 ifeq ($(config),sanitize)
-	CXXFLAGS+=-fsanitize=address,undefined -fno-sanitize-recover=all
+	CXXFLAGS+=-fsanitize=address,undefined -fsanitize-undefined-trap-on-error
 	LDFLAGS+=-fsanitize=address,undefined
 endif
 
 ifeq ($(config),analyze)
 	CXXFLAGS+=--analyze
+endif
+
+ifeq ($(config),fuzz)
+    CXXFLAGS+=-O1 -fsanitize=address,fuzzer
+    LDFLAGS+=-fsanitize=address,fuzzer
+
+    $(GLTFPACK_OBJECTS): CXXFLAGS+=-DGLTFFUZZ
 endif
 
 all: $(DEMO)
@@ -105,12 +112,20 @@ js: js/meshopt_decoder.js js/meshopt_decoder.module.js js/meshopt_encoder.js js/
 gltfpack: $(BUILD)/gltfpack
 	ln -fs $^ $@
 
+ifeq ($(config),fuzz)
+gltffuzz: $(BUILD)/gltfpack
+	cp $^ $@
+	mkdir -p /tmp/gltffuzz
+	cp gltf/fuzz.glb /tmp/gltffuzz/
+	./gltffuzz /tmp/gltffuzz -fork=16 -dict=gltf/fuzz.dict -ignore_crashes=1 -max_len=32768
+endif
+
 $(BUILD)/gltfpack: $(GLTFPACK_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
 
 gltfpack.wasm: gltf/library.wasm
 
-gltf/library.wasm: ${LIBRARY_SOURCES} ${GLTFPACK_SOURCES} tools/meshloader.cpp
+gltf/library.wasm: ${LIBRARY_SOURCES} ${GLTFPACK_SOURCES}
 	$(WASMCC) $^ -o $@ -Os -DNDEBUG --target=wasm32-wasi --sysroot=$(WASIROOT) -nostartfiles -Wl,--no-entry -Wl,--export=pack -Wl,--export=malloc -Wl,--export=free -Wl,--export=__wasm_call_ctors -Wl,-s -Wl,--allow-undefined-file=gltf/wasistubs.txt
 
 build/decoder_base.wasm: $(WASM_DECODER_SOURCES)
@@ -147,12 +162,13 @@ js/meshopt_simplifier.js: build/simplifier.wasm tools/wasmpack.py
 
 js/%.module.js: js/%.js
 	sed '/UMD-style export/,$$d' <$< >$@
+	sed -i "/\"use strict\";/d" $@
 	sed -n "s#\s*module.exports = \(.*\);#export { \\1 };#p" <$< >>$@
 
 $(DEMO): $(DEMO_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
 
-vcachetuner: tools/vcachetuner.cpp $(BUILD)/tools/meshloader.cpp.o $(BUILD)/demo/miniz.cpp.o $(LIBRARY)
+vcachetuner: tools/vcachetuner.cpp tools/objloader.cpp $(LIBRARY)
 	$(CXX) $^ -fopenmp $(CXXFLAGS) -std=c++11 $(LDFLAGS) -o $@
 
 codecbench: tools/codecbench.cpp $(LIBRARY)

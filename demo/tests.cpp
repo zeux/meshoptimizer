@@ -107,7 +107,7 @@ static void encodeIndexMemorySafe()
 	for (size_t i = 0; i <= buffer.size(); ++i)
 	{
 		std::vector<unsigned char> shortbuffer(i);
-		size_t result = meshopt_encodeIndexBuffer(i == 0 ? 0 : &shortbuffer[0], i, kIndexBuffer, index_count);
+		size_t result = meshopt_encodeIndexBuffer(i == 0 ? NULL : &shortbuffer[0], i, kIndexBuffer, index_count);
 
 		if (i == buffer.size())
 			assert(result == buffer.size());
@@ -130,7 +130,7 @@ static void decodeIndexMemorySafe()
 	for (size_t i = 0; i <= buffer.size(); ++i)
 	{
 		std::vector<unsigned char> shortbuffer(buffer.begin(), buffer.begin() + i);
-		int result = meshopt_decodeIndexBuffer(decoded, index_count, i == 0 ? 0 : &shortbuffer[0], i);
+		int result = meshopt_decodeIndexBuffer(decoded, index_count, i == 0 ? NULL : &shortbuffer[0], i);
 
 		if (i == buffer.size())
 			assert(result == 0);
@@ -259,7 +259,7 @@ static void encodeIndexSequenceMemorySafe()
 	for (size_t i = 0; i <= buffer.size(); ++i)
 	{
 		std::vector<unsigned char> shortbuffer(i);
-		size_t result = meshopt_encodeIndexSequence(i == 0 ? 0 : &shortbuffer[0], i, kIndexSequence, index_count);
+		size_t result = meshopt_encodeIndexSequence(i == 0 ? NULL : &shortbuffer[0], i, kIndexSequence, index_count);
 
 		if (i == buffer.size())
 			assert(result == buffer.size());
@@ -282,7 +282,7 @@ static void decodeIndexSequenceMemorySafe()
 	for (size_t i = 0; i <= buffer.size(); ++i)
 	{
 		std::vector<unsigned char> shortbuffer(buffer.begin(), buffer.begin() + i);
-		int result = meshopt_decodeIndexSequence(decoded, index_count, i == 0 ? 0 : &shortbuffer[0], i);
+		int result = meshopt_decodeIndexSequence(decoded, index_count, i == 0 ? NULL : &shortbuffer[0], i);
 
 		if (i == buffer.size())
 			assert(result == 0);
@@ -369,7 +369,7 @@ static void encodeVertexMemorySafe()
 	for (size_t i = 0; i <= buffer.size(); ++i)
 	{
 		std::vector<unsigned char> shortbuffer(i);
-		size_t result = meshopt_encodeVertexBuffer(i == 0 ? 0 : &shortbuffer[0], i, kVertexBuffer, vertex_count, sizeof(PV));
+		size_t result = meshopt_encodeVertexBuffer(i == 0 ? NULL : &shortbuffer[0], i, kVertexBuffer, vertex_count, sizeof(PV));
 
 		if (i == buffer.size())
 			assert(result == buffer.size());
@@ -391,7 +391,7 @@ static void decodeVertexMemorySafe()
 	for (size_t i = 0; i <= buffer.size(); ++i)
 	{
 		std::vector<unsigned char> shortbuffer(buffer.begin(), buffer.begin() + i);
-		int result = meshopt_decodeVertexBuffer(decoded, vertex_count, sizeof(PV), i == 0 ? 0 : &shortbuffer[0], i);
+		int result = meshopt_decodeVertexBuffer(decoded, vertex_count, sizeof(PV), i == 0 ? NULL : &shortbuffer[0], i);
 		(void)result;
 
 		if (i == buffer.size())
@@ -739,10 +739,10 @@ void encodeFilterExp()
 
 	// separate exponents: each component gets its own value
 	const unsigned int expected1[4] = {
-		0xf3002000,
-		0xf7ffd133,
-		0xefffcccd,
-		0xf6002c00,
+	    0xf3002000,
+	    0xf7ffd133,
+	    0xefffcccd,
+	    0xf6002c00,
 	};
 
 	// shared exponents (vector): all components of each vector get the same value
@@ -755,10 +755,10 @@ void encodeFilterExp()
 
 	// shared exponents (component): each component gets the same value across all vectors
 	const unsigned int expected3[4] = {
-		0xf3002000,
-		0xf7ffd133,
-		0xf3fffccd,
-		0xf7001600,
+	    0xf3002000,
+	    0xf7ffd133,
+	    0xf3fffccd,
+	    0xf7001600,
 	};
 
 	unsigned int encoded1[4];
@@ -818,7 +818,7 @@ static void clusterBoundsDegenerate()
 	const unsigned int ib1[] = {0, 1, 2};
 
 	// all of the bounds below are degenerate as they use 0 triangles, one topology-degenerate triangle and one position-degenerate triangle respectively
-	meshopt_Bounds bounds0 = meshopt_computeClusterBounds(0, 0, 0, 0, 12);
+	meshopt_Bounds bounds0 = meshopt_computeClusterBounds(NULL, 0, NULL, 0, 12);
 	meshopt_Bounds boundsd = meshopt_computeClusterBounds(ibd, 3, vbd, 3, 12);
 	meshopt_Bounds bounds1 = meshopt_computeClusterBounds(ib1, 3, vbd, 3, 12);
 
@@ -898,9 +898,9 @@ static void customAllocator()
 
 static void emptyMesh()
 {
-	meshopt_optimizeVertexCache(0, 0, 0, 0);
-	meshopt_optimizeVertexCacheFifo(0, 0, 0, 0, 16);
-	meshopt_optimizeOverdraw(0, 0, 0, 0, 0, 12, 1.f);
+	meshopt_optimizeVertexCache(NULL, NULL, 0, 0);
+	meshopt_optimizeVertexCacheFifo(NULL, NULL, 0, 0, 16);
+	meshopt_optimizeOverdraw(NULL, NULL, 0, NULL, 0, 12, 1.f);
 }
 
 static void simplify()
@@ -909,23 +909,45 @@ static void simplify()
 	// 1 2
 	// 3 4 5
 	unsigned int ib[] = {
-		0, 2, 1,
-		1, 2, 3,
-		3, 2, 4,
-		2, 5, 4,
+	    0,
+	    2,
+	    1,
+	    1,
+	    2,
+	    3,
+	    3,
+	    2,
+	    4,
+	    2,
+	    5,
+	    4,
 	};
 
 	float vb[] = {
-		0, 4, 0,
-		0, 1, 0,
-		2, 2, 0,
-		0, 0, 0,
-		1, 0, 0,
-		4, 0, 0,
+	    0,
+	    4,
+	    0,
+	    0,
+	    1,
+	    0,
+	    2,
+	    2,
+	    0,
+	    0,
+	    0,
+	    0,
+	    1,
+	    0,
+	    0,
+	    4,
+	    0,
+	    0,
 	};
 
 	unsigned int expected[] = {
-		0, 5, 3,
+	    0,
+	    5,
+	    3,
 	};
 
 	float error;
@@ -982,7 +1004,7 @@ static void simplifyPointsStuck()
 	const float vb[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 	// simplifying down to 0 points results in 0 immediately
-	assert(meshopt_simplifyPoints(0, vb, 3, 12, 0) == 0);
+	assert(meshopt_simplifyPoints(NULL, vb, 3, 12, NULL, 0, 0, 0) == 0);
 }
 
 static void simplifyFlip()
@@ -1116,7 +1138,7 @@ static void simplifyLockBorder()
 
 static void simplifyAttr()
 {
-	float vb[8*3][6];
+	float vb[8 * 3][6];
 
 	for (int y = 0; y < 8; ++y)
 	{
@@ -1127,40 +1149,39 @@ static void simplifyAttr()
 
 		for (int x = 0; x < 3; ++x)
 		{
-			vb[y*3+x][0] = float(x);
-			vb[y*3+x][1] = float(y);
-			vb[y*3+x][2] = 0.f;
-			vb[y*3+x][3] = r;
-			vb[y*3+x][4] = g;
-			vb[y*3+x][5] = b;
+			vb[y * 3 + x][0] = float(x);
+			vb[y * 3 + x][1] = float(y);
+			vb[y * 3 + x][2] = 0.03f * x;
+			vb[y * 3 + x][3] = r;
+			vb[y * 3 + x][4] = g;
+			vb[y * 3 + x][5] = b;
 		}
 	}
 
-	unsigned int ib[7*2][6];
+	unsigned int ib[7 * 2][6];
 
 	for (int y = 0; y < 7; ++y)
 	{
 		for (int x = 0; x < 2; ++x)
 		{
-			ib[y*2+x][0] = (y + 0) * 3 + (x + 0);
-			ib[y*2+x][1] = (y + 0) * 3 + (x + 1);
-			ib[y*2+x][2] = (y + 1) * 3 + (x + 0);
-			ib[y*2+x][3] = (y + 1) * 3 + (x + 0);
-			ib[y*2+x][4] = (y + 0) * 3 + (x + 1);
-			ib[y*2+x][5] = (y + 1) * 3 + (x + 1);
+			ib[y * 2 + x][0] = (y + 0) * 3 + (x + 0);
+			ib[y * 2 + x][1] = (y + 0) * 3 + (x + 1);
+			ib[y * 2 + x][2] = (y + 1) * 3 + (x + 0);
+			ib[y * 2 + x][3] = (y + 1) * 3 + (x + 0);
+			ib[y * 2 + x][4] = (y + 0) * 3 + (x + 1);
+			ib[y * 2 + x][5] = (y + 1) * 3 + (x + 1);
 		}
 	}
 
-	float attr_weights[3] = { 0.01f, 0.01f, 0.01f };
+	float attr_weights[3] = {0.01f, 0.01f, 0.01f};
 
-	unsigned int expected[3][6] =
-	{
-		{ 0, 2, 9, 9, 2, 11 },
-		{ 9, 11, 12, 12, 11, 14 },
-		{ 21, 12, 23, 12, 14, 23 },
+	unsigned int expected[3][6] = {
+	    {0, 2, 9, 9, 2, 11},
+	    {9, 11, 12, 12, 11, 14},
+	    {12, 14, 21, 21, 14, 23},
 	};
 
-	assert(meshopt_simplifyWithAttributes(ib[0], ib[0], 7*2*6, vb[0], 8*3, 6*sizeof(float), vb[0] + 3, 6*sizeof(float), attr_weights, 3, 6*3, 1e-2f) == 18);
+	assert(meshopt_simplifyWithAttributes(ib[0], ib[0], 7 * 2 * 6, vb[0], 8 * 3, 6 * sizeof(float), vb[0] + 3, 6 * sizeof(float), attr_weights, 3, 6 * 3, 1e-2f) == 18);
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 }
 
@@ -1220,6 +1241,103 @@ static void tessellation()
 	};
 
 	assert(memcmp(tessib, expected, sizeof(expected)) == 0);
+}
+
+static void quantizeFloat()
+{
+	volatile float zero = 0.f; // avoids div-by-zero warnings
+
+	assert(meshopt_quantizeFloat(1.2345f, 23) == 1.2345f);
+
+	assert(meshopt_quantizeFloat(1.2345f, 16) == 1.2344971f);
+	assert(meshopt_quantizeFloat(1.2345f, 8) == 1.2343750f);
+	assert(meshopt_quantizeFloat(1.2345f, 4) == 1.25f);
+	assert(meshopt_quantizeFloat(1.2345f, 1) == 1.0);
+
+	assert(meshopt_quantizeFloat(1.f, 0) == 1.0f);
+
+	assert(meshopt_quantizeFloat(1.f / zero, 0) == 1.f / zero);
+	assert(meshopt_quantizeFloat(-1.f / zero, 0) == -1.f / zero);
+
+	float nanf = meshopt_quantizeFloat(zero / zero, 8);
+	assert(nanf != nanf);
+}
+
+static void quantizeHalf()
+{
+	volatile float zero = 0.f; // avoids div-by-zero warnings
+
+	// normal
+	assert(meshopt_quantizeHalf(1.2345f) == 0x3cf0);
+
+	// overflow
+	assert(meshopt_quantizeHalf(65535.f) == 0x7c00);
+	assert(meshopt_quantizeHalf(-65535.f) == 0xfc00);
+
+	// large
+	assert(meshopt_quantizeHalf(65000.f) == 0x7bef);
+	assert(meshopt_quantizeHalf(-65000.f) == 0xfbef);
+
+	// small
+	assert(meshopt_quantizeHalf(0.125f) == 0x3000);
+	assert(meshopt_quantizeHalf(-0.125f) == 0xb000);
+
+	// very small
+	assert(meshopt_quantizeHalf(1e-4f) == 0x068e);
+	assert(meshopt_quantizeHalf(-1e-4f) == 0x868e);
+
+	// underflow
+	assert(meshopt_quantizeHalf(1e-5f) == 0x0000);
+	assert(meshopt_quantizeHalf(-1e-5f) == 0x8000);
+
+	// exponent underflow
+	assert(meshopt_quantizeHalf(1e-20f) == 0x0000);
+	assert(meshopt_quantizeHalf(-1e-20f) == 0x8000);
+
+	// exponent overflow
+	assert(meshopt_quantizeHalf(1e20f) == 0x7c00);
+	assert(meshopt_quantizeHalf(-1e20f) == 0xfc00);
+
+	// inf
+	assert(meshopt_quantizeHalf(1.f / zero) == 0x7c00);
+	assert(meshopt_quantizeHalf(-1.f / zero) == 0xfc00);
+
+	// nan
+	unsigned short nanh = meshopt_quantizeHalf(zero / zero);
+	assert(nanh == 0x7e00 || nanh == 0xfe00);
+}
+
+static void dequantizeHalf()
+{
+	volatile float zero = 0.f; // avoids div-by-zero warnings
+
+	// normal
+	assert(meshopt_dequantizeHalf(0x3cf0) == 1.234375f);
+
+	// large
+	assert(meshopt_dequantizeHalf(0x7bef) == 64992.f);
+	assert(meshopt_dequantizeHalf(0xfbef) == -64992.f);
+
+	// small
+	assert(meshopt_dequantizeHalf(0x3000) == 0.125f);
+	assert(meshopt_dequantizeHalf(0xb000) == -0.125f);
+
+	// very small
+	assert(meshopt_dequantizeHalf(0x068e) == 1.00016594e-4f);
+	assert(meshopt_dequantizeHalf(0x868e) == -1.00016594e-4f);
+
+	// denormal
+	assert(meshopt_dequantizeHalf(0x00ff) == 0.f);
+	assert(meshopt_dequantizeHalf(0x80ff) == 0.f); // actually this is -0.f
+	assert(1.f / meshopt_dequantizeHalf(0x80ff) == -1.f / zero);
+
+	// inf
+	assert(meshopt_dequantizeHalf(0x7c00) == 1.f / zero);
+	assert(meshopt_dequantizeHalf(0xfc00) == -1.f / zero);
+
+	// nan
+	float nanf = meshopt_dequantizeHalf(0x7e00);
+	assert(nanf != nanf);
 }
 
 void runTests()
@@ -1284,4 +1402,8 @@ void runTests()
 
 	adjacency();
 	tessellation();
+
+	quantizeFloat();
+	quantizeHalf();
+	dequantizeHalf();
 }

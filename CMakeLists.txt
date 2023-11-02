@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.5)
 
 if(POLICY CMP0077)
     cmake_policy(SET CMP0077 NEW) # Enables override of options from parent CMakeLists.txt
@@ -7,11 +7,12 @@ endif()
 if(POLICY CMP0091)
     cmake_policy(SET CMP0091 NEW) # Enables use of MSVC_RUNTIME_LIBRARY
 endif()
+
 if(POLICY CMP0092)
     cmake_policy(SET CMP0092 NEW) # Enables clean /W4 override for MSVC
 endif()
 
-project(meshoptimizer VERSION 0.19 LANGUAGES CXX)
+project(meshoptimizer VERSION 0.20 LANGUAGES CXX)
 
 option(MESHOPT_BUILD_DEMO "Build demo" OFF)
 option(MESHOPT_BUILD_GLTFPACK "Build gltfpack" OFF)
@@ -27,6 +28,7 @@ set(SOURCES
     src/indexgenerator.cpp
     src/overdrawanalyzer.cpp
     src/overdrawoptimizer.cpp
+    src/quantization.cpp
     src/simplifier.cpp
     src/spatialorder.cpp
     src/stripifier.cpp
@@ -50,6 +52,7 @@ set(GLTF_SOURCES
     gltf/mesh.cpp
     gltf/node.cpp
     gltf/parseobj.cpp
+    gltf/parselib.cpp
     gltf/parsegltf.cpp
     gltf/stream.cpp
     gltf/write.cpp
@@ -92,12 +95,12 @@ endif()
 set(TARGETS meshoptimizer)
 
 if(MESHOPT_BUILD_DEMO)
-    add_executable(demo demo/main.cpp demo/tests.cpp tools/meshloader.cpp)
+    add_executable(demo demo/main.cpp demo/tests.cpp tools/objloader.cpp)
     target_link_libraries(demo meshoptimizer)
 endif()
 
 if(MESHOPT_BUILD_GLTFPACK)
-    add_executable(gltfpack ${GLTF_SOURCES} tools/meshloader.cpp)
+    add_executable(gltfpack ${GLTF_SOURCES})
     set_target_properties(gltfpack PROPERTIES CXX_STANDARD 11)
     target_link_libraries(gltfpack meshoptimizer)
     list(APPEND TARGETS gltfpack)

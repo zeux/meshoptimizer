@@ -7,6 +7,7 @@ static const char* kMimeTypes[][2] = {
     {"image/jpeg", ".jpg"},
     {"image/jpeg", ".jpeg"},
     {"image/png", ".png"},
+    {"image/ktx2", ".ktx2"},
 };
 
 static const char* inferMimeType(const char* path)
@@ -38,7 +39,7 @@ static bool parseDataUri(const char* uri, std::string& mime_type, std::string& r
 				size -= base64[base64_size - 1] == '=';
 			}
 
-			void* data = 0;
+			void* data = NULL;
 
 			cgltf_options options = {};
 			cgltf_result res = cgltf_load_buffer_base64(&options, size, base64, &data);
@@ -72,7 +73,7 @@ bool readImage(const cgltf_image& image, const char* input_path, std::string& da
 		mime_type = image.mime_type;
 		return true;
 	}
-	else if (image.uri && *image.uri)
+	else if (image.uri && *image.uri && input_path)
 	{
 		std::string path = image.uri;
 

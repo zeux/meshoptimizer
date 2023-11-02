@@ -163,6 +163,11 @@ bool compareMeshNodes(const Mesh& lhs, const Mesh& rhs)
 	return true;
 }
 
+static bool compareTransforms(const Transform& lhs, const Transform& rhs)
+{
+	return memcmp(&lhs, &rhs, sizeof(Transform)) == 0;
+}
+
 static bool canMergeMeshNodes(cgltf_node* lhs, cgltf_node* rhs, const Settings& settings)
 {
 	if (lhs == rhs)
@@ -203,8 +208,12 @@ static bool canMergeMeshes(const Mesh& lhs, const Mesh& rhs, const Settings& set
 		if (!canMergeMeshNodes(lhs.nodes[i], rhs.nodes[i], settings))
 			return false;
 
-	if (lhs.instances.size() || rhs.instances.size())
+	if (lhs.instances.size() != rhs.instances.size())
 		return false;
+
+	for (size_t i = 0; i < lhs.instances.size(); ++i)
+		if (!compareTransforms(lhs.instances[i], rhs.instances[i]))
+			return false;
 
 	if (lhs.material != rhs.material)
 		return false;
@@ -371,34 +380,17 @@ void filterEmptyMeshes(std::vector<Mesh>& meshes)
 	meshes.resize(write);
 }
 
-static bool hasColors(const std::vector<Attr>& data)
+static bool isConstant(const std::vector<Attr>& data, const Attr& value, float tolerance = 0.01f)
 {
-	const float threshold = 0.99f;
-
 	for (size_t i = 0; i < data.size(); ++i)
 	{
 		const Attr& a = data[i];
 
-		if (a.f[0] < threshold || a.f[1] < threshold || a.f[2] < threshold || a.f[3] < threshold)
-			return true;
+		if (fabsf(a.f[0] - value.f[0]) > tolerance || fabsf(a.f[1] - value.f[1]) > tolerance || fabsf(a.f[2] - value.f[2]) > tolerance || fabsf(a.f[3] - value.f[3]) > tolerance)
+			return false;
 	}
 
-	return false;
-}
-
-static bool hasDeltas(const std::vector<Attr>& data)
-{
-	const float threshold = 0.01f;
-
-	for (size_t i = 0; i < data.size(); ++i)
-	{
-		const Attr& a = data[i];
-
-		if (fabsf(a.f[0]) > threshold || fabsf(a.f[1]) > threshold || fabsf(a.f[2]) > threshold)
-			return true;
-	}
-
-	return false;
+	return true;
 }
 
 void filterStreams(Mesh& mesh, const MaterialInfo& mi)
@@ -413,11 +405,11 @@ void filterStreams(Mesh& mesh, const MaterialInfo& mi)
 
 		if (stream.target)
 		{
-			morph_normal = morph_normal || (stream.type == cgltf_attribute_type_normal && hasDeltas(stream.data));
-			morph_tangent = morph_tangent || (stream.type == cgltf_attribute_type_tangent && hasDeltas(stream.data));
+			morph_normal = morph_normal || (stream.type == cgltf_attribute_type_normal && !isConstant(stream.data, { 0, 0, 0, 0 }));
+			morph_tangent = morph_tangent || (stream.type == cgltf_attribute_type_tangent && !isConstant(stream.data, { 0, 0, 0, 0 }));
 		}
 
-		if (stream.type == cgltf_attribute_type_texcoord && (mi.textureSetMask & (1u << stream.index)) != 0)
+		if (stream.type == cgltf_attribute_type_texcoord && stream.index < 32 && (mi.textureSetMask & (1u << stream.index)) != 0)
 		{
 			keep_texture_set = std::max(keep_texture_set, stream.index);
 		}
@@ -438,13 +430,16 @@ void filterStreams(Mesh& mesh, const MaterialInfo& mi)
 		if ((stream.type == cgltf_attribute_type_joints || stream.type == cgltf_attribute_type_weights) && !mesh.skin)
 			continue;
 
-		if (stream.type == cgltf_attribute_type_color && !hasColors(stream.data))
+		if (stream.type == cgltf_attribute_type_color && isConstant(stream.data, { 1, 1, 1, 1 }))
 			continue;
 
 		if (stream.target && stream.type == cgltf_attribute_type_normal && !morph_normal)
 			continue;
 
 		if (stream.target && stream.type == cgltf_attribute_type_tangent && !morph_tangent)
+			continue;
+
+		if (mesh.type == cgltf_primitive_type_points && stream.type == cgltf_attribute_type_normal && !stream.data.empty() && isConstant(stream.data, stream.data[0]))
 			continue;
 
 		// the following code is roughly equivalent to streams[write] = std::move(stream)
@@ -526,7 +521,7 @@ static Stream* getStream(Mesh& mesh, cgltf_attribute_type type, int index = 0)
 		if (mesh.streams[i].type == type && mesh.streams[i].index == index)
 			return &mesh.streams[i];
 
-	return 0;
+	return NULL;
 }
 
 static void simplifyMesh(Mesh& mesh, float threshold, bool aggressive, bool lock_borders)
@@ -701,6 +696,8 @@ static void simplifyPointMesh(Mesh& mesh, float threshold)
 	if (!positions)
 		return;
 
+	const Stream* colors = getStream(mesh, cgltf_attribute_type_color);
+
 	size_t vertex_count = mesh.streams[0].data.size();
 
 	size_t target_vertex_count = size_t(double(vertex_count) * threshold);
@@ -708,8 +705,10 @@ static void simplifyPointMesh(Mesh& mesh, float threshold)
 	if (target_vertex_count < 1)
 		return;
 
+	const float color_weight = 1e-2f;
+
 	std::vector<unsigned int> indices(target_vertex_count);
-	indices.resize(meshopt_simplifyPoints(&indices[0], positions->data[0].f, vertex_count, sizeof(Attr), target_vertex_count));
+	indices.resize(meshopt_simplifyPoints(&indices[0], positions->data[0].f, vertex_count, sizeof(Attr), colors ? colors->data[0].f : NULL, sizeof(Attr), color_weight, target_vertex_count));
 
 	std::vector<Attr> scratch(indices.size());
 
@@ -808,9 +807,9 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio)
 
 	simplifyMesh(mesh, ratio, /* aggressive= */ false, /* lock_borders= */ false);
 
-	meshopt_simplifyDebugKind = 0;
-	meshopt_simplifyDebugLoop = 0;
-	meshopt_simplifyDebugLoopBack = 0;
+	meshopt_simplifyDebugKind = NULL;
+	meshopt_simplifyDebugLoop = NULL;
+	meshopt_simplifyDebugLoopBack = NULL;
 
 	// fill out live info
 	for (size_t i = 0; i < mesh.indices.size(); ++i)
