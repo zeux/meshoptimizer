@@ -1611,7 +1611,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	}
 
 #if TRACE
-	printf("result: %d triangles, error: %e; total %d passes\n", int(result_count), sqrtf(result_error), int(pass_count));
+	printf("result: %d triangles, error: %e; total %d passes\n", int(result_count / 3), sqrtf(result_error), int(pass_count));
 #endif
 
 #ifndef NDEBUG
