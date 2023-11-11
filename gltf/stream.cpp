@@ -383,6 +383,43 @@ static StreamFormat writeVertexStreamRaw(std::string& bin, const Stream& stream,
 	return format;
 }
 
+static StreamFormat writeVertexStreamFloat(std::string& bin, const Stream& stream, cgltf_type type, int components, const Settings& settings, int bits, int min_exp = -100)
+{
+	assert(components >= 1 && components <= 4);
+
+	StreamFormat::Filter filter = settings.compress ? StreamFormat::Filter_Exp : StreamFormat::Filter_None;
+
+	if (settings.compressmore)
+	{
+		encodeExpParallel(bin, &stream.data[0], stream.data.size(), components, bits + 1, min_exp);
+	}
+	else
+	{
+		for (size_t i = 0; i < stream.data.size(); ++i)
+		{
+			const Attr& a = stream.data[i];
+
+			if (filter == StreamFormat::Filter_Exp)
+			{
+				uint32_t v[4];
+				for (int k = 0; k < components; ++k)
+					v[k] = encodeExpOne(a.f[k], bits + 1, min_exp);
+				bin.append(reinterpret_cast<const char*>(v), sizeof(uint32_t) * components);
+			}
+			else
+			{
+				float v[4];
+				for (int k = 0; k < components; ++k)
+				    v[k] = meshopt_quantizeFloat(a.f[k], bits);
+				bin.append(reinterpret_cast<const char*>(v), sizeof(float) * components);
+			}
+		}
+	}
+
+	StreamFormat format = {type, cgltf_component_type_r_32f, false, sizeof(float) * components, filter};
+	return format;
+}
+
 static int quantizeColor(float v, int bytebits, int bits)
 {
 	int result = meshopt_quantizeUnorm(v, bytebits);
@@ -401,41 +438,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 			return writeVertexStreamRaw(bin, stream, cgltf_type_vec3, 3);
 
 		if (settings.pos_float)
-		{
-			StreamFormat::Filter filter = settings.compress ? StreamFormat::Filter_Exp : StreamFormat::Filter_None;
-
-			if (settings.compressmore)
-			{
-				encodeExpParallel(bin, &stream.data[0], stream.data.size(), 3, qp.bits + 1);
-			}
-			else
-			{
-				for (size_t i = 0; i < stream.data.size(); ++i)
-				{
-					const Attr& a = stream.data[i];
-
-					if (filter == StreamFormat::Filter_Exp)
-					{
-						uint32_t v[3];
-						v[0] = encodeExpOne(a.f[0], qp.bits + 1);
-						v[1] = encodeExpOne(a.f[1], qp.bits + 1);
-						v[2] = encodeExpOne(a.f[2], qp.bits + 1);
-						bin.append(reinterpret_cast<const char*>(v), sizeof(v));
-					}
-					else
-					{
-						float v[3] = {
-						    meshopt_quantizeFloat(a.f[0], qp.bits),
-						    meshopt_quantizeFloat(a.f[1], qp.bits),
-						    meshopt_quantizeFloat(a.f[2], qp.bits)};
-						bin.append(reinterpret_cast<const char*>(v), sizeof(v));
-					}
-				}
-			}
-
-			StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_32f, false, 12, filter};
-			return format;
-		}
+			return writeVertexStreamFloat(bin, stream, cgltf_type_vec3, 3, settings, qp.bits);
 
 		if (stream.target == 0)
 		{
@@ -512,66 +515,29 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 		if (!settings.quantize)
 			return writeVertexStreamRaw(bin, stream, cgltf_type_vec2, 2);
 
+		// expand the encoded range to ensure it covers [0..1) interval
+		// this can slightly reduce precision but we should not need more precision inside 0..1, and this significantly improves compressed size when using encodeExpOne
 		if (settings.tex_float)
+			return writeVertexStreamFloat(bin, stream, cgltf_type_vec2, 2, settings, qt.bits, /* min_exp= */ 0);
+
+		float uv_rscale[2] = {
+		    qt.scale[0] == 0.f ? 0.f : 1.f / qt.scale[0],
+		    qt.scale[1] == 0.f ? 0.f : 1.f / qt.scale[1],
+		};
+
+		for (size_t i = 0; i < stream.data.size(); ++i)
 		{
-			StreamFormat::Filter filter = settings.compress ? StreamFormat::Filter_Exp : StreamFormat::Filter_None;
+			const Attr& a = stream.data[i];
 
-			// expand the encoded range to ensure it covers [0..1) interval
-			// this can slightly reduce precision but we should not need more precision inside 0..1, and this significantly
-			// improves compressed size when using encodeExpOne
-			const int min_exp = 0;
-
-			if (settings.compressmore)
-			{
-				encodeExpParallel(bin, &stream.data[0], stream.data.size(), 2, qt.bits + 1, min_exp);
-			}
-			else
-			{
-				for (size_t i = 0; i < stream.data.size(); ++i)
-				{
-					const Attr& a = stream.data[i];
-
-					if (filter == StreamFormat::Filter_Exp)
-					{
-						uint32_t v[2];
-						v[0] = encodeExpOne(a.f[0], qt.bits + 1, min_exp);
-						v[1] = encodeExpOne(a.f[1], qt.bits + 1, min_exp);
-						bin.append(reinterpret_cast<const char*>(v), sizeof(v));
-					}
-					else
-					{
-						float v[2] = {
-						    meshopt_quantizeFloat(a.f[0], qt.bits),
-						    meshopt_quantizeFloat(a.f[1], qt.bits)};
-						bin.append(reinterpret_cast<const char*>(v), sizeof(v));
-					}
-				}
-			}
-
-			StreamFormat format = {cgltf_type_vec2, cgltf_component_type_r_32f, false, 8, filter};
-			return format;
-		}
-		else
-		{
-			float uv_rscale[2] = {
-			    qt.scale[0] == 0.f ? 0.f : 1.f / qt.scale[0],
-			    qt.scale[1] == 0.f ? 0.f : 1.f / qt.scale[1],
+			uint16_t v[2] = {
+			    uint16_t(meshopt_quantizeUnorm((a.f[0] - qt.offset[0]) * uv_rscale[0], qt.bits)),
+			    uint16_t(meshopt_quantizeUnorm((a.f[1] - qt.offset[1]) * uv_rscale[1], qt.bits)),
 			};
-
-			for (size_t i = 0; i < stream.data.size(); ++i)
-			{
-				const Attr& a = stream.data[i];
-
-				uint16_t v[2] = {
-				    uint16_t(meshopt_quantizeUnorm((a.f[0] - qt.offset[0]) * uv_rscale[0], qt.bits)),
-				    uint16_t(meshopt_quantizeUnorm((a.f[1] - qt.offset[1]) * uv_rscale[1], qt.bits)),
-				};
-				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
-			}
-
-			StreamFormat format = {cgltf_type_vec2, cgltf_component_type_r_16u, qt.normalized, 4};
-			return format;
+			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
+
+		StreamFormat format = {cgltf_type_vec2, cgltf_component_type_r_16u, qt.normalized, 4};
+		return format;
 	}
 	else if (stream.type == cgltf_attribute_type_normal)
 	{
