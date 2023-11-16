@@ -424,6 +424,9 @@ void filterStreams(Mesh& mesh, const MaterialInfo& mi)
 		if (stream.type == cgltf_attribute_type_texcoord && stream.index > keep_texture_set)
 			continue;
 
+		if (stream.type == cgltf_attribute_type_normal && mi.unlit)
+			continue;
+
 		if (stream.type == cgltf_attribute_type_tangent && !mi.needsTangents)
 			continue;
 

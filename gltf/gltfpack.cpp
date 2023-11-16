@@ -354,6 +354,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 			mi.needsTangents |= vi.needsTangents;
 			mi.textureSetMask |= vi.textureSetMask;
+			mi.unlit &= vi.unlit;
 		}
 
 		filterStreams(mesh, mi);
