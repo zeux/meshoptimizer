@@ -1256,6 +1256,10 @@ int main(int argc, char** argv)
 		{
 			settings.tex_float = true;
 		}
+		else if (strcmp(arg, "-vnf") == 0)
+		{
+			settings.nrm_float = true;
+		}
 		else if (strcmp(arg, "-at") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.trn_bits = clamp(atoi(argv[++i]), 1, 24);
@@ -1581,9 +1585,9 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
-	if (settings.fallback && (settings.pos_float || settings.tex_float))
+	if (settings.fallback && (settings.pos_float || settings.tex_float || settings.nrm_float))
 	{
-		fprintf(stderr, "Option -cf can not be used together with -vpf or -tpf\n");
+		fprintf(stderr, "Option -cf can not be used together with -vpf, -vtf or -vnf\n");
 		return 1;
 	}
 
