@@ -544,6 +544,10 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 		if (!settings.quantize)
 			return writeVertexStreamRaw(bin, stream, cgltf_type_vec3, 3);
 
+		// expand the encoded range to ensure it covers [0..1) interval
+		if (settings.nrm_float)
+			return writeVertexStreamFloat(bin, stream, cgltf_type_vec3, 3, settings, settings.nrm_bits, /* min_exp= */ 0);
+
 		bool oct = settings.compressmore && stream.target == 0;
 		int bits = settings.nrm_bits;
 
