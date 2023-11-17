@@ -500,6 +500,9 @@ static void analyzeMaterial(const cgltf_material& material, MaterialInfo& mi, cg
 	analyzeMaterialTexture(material.normal_texture, TextureKind_Normal, mi, data, textures, images);
 	analyzeMaterialTexture(material.occlusion_texture, TextureKind_Attrib, mi, data, textures, images);
 	analyzeMaterialTexture(material.emissive_texture, TextureKind_Color, mi, data, textures, images);
+
+	if (material.unlit)
+		mi.unlit = true;
 }
 
 void analyzeMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, std::vector<TextureInfo>& textures, std::vector<ImageInfo>& images)

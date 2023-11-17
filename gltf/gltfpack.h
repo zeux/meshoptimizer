@@ -219,6 +219,8 @@ struct MaterialInfo
 
 	bool usesTextureTransform;
 	bool needsTangents;
+	bool unlit;
+
 	unsigned int textureSetMask;
 
 	int remap;
