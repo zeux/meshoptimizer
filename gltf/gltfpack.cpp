@@ -1249,10 +1249,6 @@ int main(int argc, char** argv)
 		{
 			settings.pos_float = true;
 		}
-		else if (strcmp(arg, "-vtn") == 0)
-		{
-			settings.tex_float = false;
-		}
 		else if (strcmp(arg, "-vtf") == 0)
 		{
 			settings.tex_float = true;
@@ -1499,7 +1495,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-si R: simplify meshes targeting triangle/point count ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\t-sa: aggressively simplify to the target ratio disregarding quality\n");
 			fprintf(stderr, "\t-slb: lock border vertices during simplification to avoid gaps on connected meshes\n");
-			fprintf(stderr, "\nVertices:\n");
+			fprintf(stderr, "\nVertex precision:\n");
 			fprintf(stderr, "\t-vp N: use N-bit quantization for positions (default: 14; N should be between 1 and 16)\n");
 			fprintf(stderr, "\t-vt N: use N-bit quantization for texture coordinates (default: 12; N should be between 1 and 16)\n");
 			fprintf(stderr, "\t-vn N: use N-bit quantization for normals and tangents (default: 8; N should be between 1 and 16)\n");
@@ -1508,9 +1504,9 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-vpi: use integer attributes for positions (default)\n");
 			fprintf(stderr, "\t-vpn: use normalized attributes for positions\n");
 			fprintf(stderr, "\t-vpf: use floating point attributes for positions\n");
-			fprintf(stderr, "\nTexture coordinates:\n");
-			fprintf(stderr, "\t-vtn: use normalized attributes for texture coordinates (default)\n");
+			fprintf(stderr, "\nVertex attributes:\n");
 			fprintf(stderr, "\t-vtf: use floating point attributes for texture coordinates\n");
+			fprintf(stderr, "\t-vnf: use floating point attributes for normals\n");
 			fprintf(stderr, "\nAnimations:\n");
 			fprintf(stderr, "\t-at N: use N-bit quantization for translations (default: 16; N should be between 1 and 24)\n");
 			fprintf(stderr, "\t-ar N: use N-bit quantization for rotations (default: 12; N should be between 4 and 16)\n");
