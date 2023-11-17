@@ -235,7 +235,7 @@ static void parseMeshGroupObj(fastObjMesh* obj, const fastObjGroup& og, cgltf_da
 	unsigned int face_vertex_offset = og.index_offset;
 	unsigned int face_end_offset = og.face_offset + og.face_count;
 
-	for (unsigned int face_offset = og.face_offset; face_offset < face_end_offset; )
+	for (unsigned int face_offset = og.face_offset; face_offset < face_end_offset;)
 	{
 		unsigned int mi = obj->face_materials[face_offset];
 

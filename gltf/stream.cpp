@@ -410,7 +410,7 @@ static StreamFormat writeVertexStreamFloat(std::string& bin, const Stream& strea
 			{
 				float v[4];
 				for (int k = 0; k < components; ++k)
-				    v[k] = meshopt_quantizeFloat(a.f[k], bits);
+					v[k] = meshopt_quantizeFloat(a.f[k], bits);
 				bin.append(reinterpret_cast<const char*>(v), sizeof(float) * components);
 			}
 		}

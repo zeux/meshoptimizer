@@ -140,10 +140,9 @@ static void fixupIndices(std::vector<unsigned int>& indices, cgltf_primitive_typ
 
 static bool isIdAttribute(const char* name)
 {
-	return
-		strcmp(name, "_ID") == 0 ||
-		strcmp(name, "_BATCHID") == 0 ||
-		strncmp(name, "_FEATURE_ID_", 12) == 0;
+	return strcmp(name, "_ID") == 0 ||
+	       strcmp(name, "_BATCHID") == 0 ||
+	       strncmp(name, "_FEATURE_ID_", 12) == 0;
 }
 
 static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::vector<std::pair<size_t, size_t> >& mesh_remap)

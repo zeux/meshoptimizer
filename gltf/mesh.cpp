@@ -405,8 +405,8 @@ void filterStreams(Mesh& mesh, const MaterialInfo& mi)
 
 		if (stream.target)
 		{
-			morph_normal = morph_normal || (stream.type == cgltf_attribute_type_normal && !isConstant(stream.data, { 0, 0, 0, 0 }));
-			morph_tangent = morph_tangent || (stream.type == cgltf_attribute_type_tangent && !isConstant(stream.data, { 0, 0, 0, 0 }));
+			morph_normal = morph_normal || (stream.type == cgltf_attribute_type_normal && !isConstant(stream.data, {0, 0, 0, 0}));
+			morph_tangent = morph_tangent || (stream.type == cgltf_attribute_type_tangent && !isConstant(stream.data, {0, 0, 0, 0}));
 		}
 
 		if (stream.type == cgltf_attribute_type_texcoord && stream.index < 32 && (mi.textureSetMask & (1u << stream.index)) != 0)
@@ -430,7 +430,7 @@ void filterStreams(Mesh& mesh, const MaterialInfo& mi)
 		if ((stream.type == cgltf_attribute_type_joints || stream.type == cgltf_attribute_type_weights) && !mesh.skin)
 			continue;
 
-		if (stream.type == cgltf_attribute_type_color && isConstant(stream.data, { 1, 1, 1, 1 }))
+		if (stream.type == cgltf_attribute_type_color && isConstant(stream.data, {1, 1, 1, 1}))
 			continue;
 
 		if (stream.target && stream.type == cgltf_attribute_type_normal && !morph_normal)
