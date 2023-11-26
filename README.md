@@ -263,7 +263,7 @@ The first simplification algorithm, `meshopt_simplify`, follows the topology of 
 float threshold = 0.2f;
 size_t target_index_count = size_t(index_count * threshold);
 float target_error = 1e-2f;
-unsigned int options = 0; //meshopt_SimplifyX flags, 0 is a safe default
+unsigned int options = 0; // meshopt_SimplifyX flags, 0 is a safe default
 
 std::vector<unsigned int> lod(index_count);
 float lod_error = 0.f;
