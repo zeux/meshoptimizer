@@ -263,11 +263,12 @@ The first simplification algorithm, `meshopt_simplify`, follows the topology of 
 float threshold = 0.2f;
 size_t target_index_count = size_t(index_count * threshold);
 float target_error = 1e-2f;
+unsigned int options = 0; // meshopt_SimplifyX flags, 0 is a safe default
 
 std::vector<unsigned int> lod(index_count);
 float lod_error = 0.f;
 lod.resize(meshopt_simplify(&lod[0], indices, index_count, &vertices[0].x, vertex_count, sizeof(Vertex),
-    target_index_count, target_error, &lod_error));
+    target_index_count, target_error, options, &lod_error));
 ```
 
 Target error is an approximate measure of the deviation from the original mesh using distance normalized to `[0..1]` range (e.g. `1e-2f` means that simplifier will try to maintain the error to be below 1% of the mesh extents). Note that the simplifier attempts to produce the requested number of indices at minimal error, but because of topological restrictions and error limit it is not guaranteed to reach the target index count and can stop earlier.
