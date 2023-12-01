@@ -188,7 +188,7 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 			{
 				result.indices.resize(primitive.indices->count);
 				if (!result.indices.empty())
-					cgltf_accessor_unpack_indices(primitive.indices, &result.indices[0], result.indices.size());
+					cgltf_accessor_unpack_indices(primitive.indices, &result.indices[0], sizeof(unsigned int), result.indices.size());
 
 				for (size_t i = 0; i < result.indices.size(); ++i)
 					assert(result.indices[i] < vertex_count);
