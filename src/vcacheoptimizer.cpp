@@ -195,6 +195,9 @@ void meshopt_optimizeVertexCacheTable(unsigned int* destination, const unsigned 
 	TriangleAdjacency adjacency = {};
 	buildTriangleAdjacency(adjacency, indices, index_count, vertex_count, allocator);
 
+	// live triangle counts
+	unsigned int* live_triangles = adjacency.counts;
+
 	// emitted flags
 	unsigned char* emitted_flags = allocator.allocate<unsigned char>(face_count);
 	memset(emitted_flags, 0, face_count);
@@ -203,7 +206,7 @@ void meshopt_optimizeVertexCacheTable(unsigned int* destination, const unsigned 
 	float* vertex_scores = allocator.allocate<float>(vertex_count);
 
 	for (size_t i = 0; i < vertex_count; ++i)
-		vertex_scores[i] = vertexScore(table, -1, adjacency.counts[i]);
+		vertex_scores[i] = vertexScore(table, -1, live_triangles[i]);
 
 	// compute triangle scores
 	float* triangle_scores = allocator.allocate<float>(face_count);
@@ -266,6 +269,7 @@ void meshopt_optimizeVertexCacheTable(unsigned int* destination, const unsigned 
 
 		// remove emitted triangle from adjacency data
 		// this makes sure that we spend less time traversing these lists on subsequent iterations
+		// live triangle counts are updated as a byproduct of these adjustments
 		for (size_t k = 0; k < 3; ++k)
 		{
 			unsigned int index = indices[current_triangle * 3 + k];
@@ -301,7 +305,7 @@ void meshopt_optimizeVertexCacheTable(unsigned int* destination, const unsigned 
 			int cache_position = i >= cache_size ? -1 : int(i);
 
 			// update vertex score
-			float score = vertexScore(table, cache_position, adjacency.counts[index]);
+			float score = vertexScore(table, cache_position, live_triangles[index]);
 			float score_diff = score - vertex_scores[index];
 
 			vertex_scores[index] = score;
