@@ -195,7 +195,7 @@ void meshopt_optimizeVertexCacheTable(unsigned int* destination, const unsigned 
 	TriangleAdjacency adjacency = {};
 	buildTriangleAdjacency(adjacency, indices, index_count, vertex_count, allocator);
 
-	// live triangle counts
+	// live triangle counts; note, we alias adjacency.counts as we remove triangles after emitting them so the counts always match
 	unsigned int* live_triangles = adjacency.counts;
 
 	// emitted flags
