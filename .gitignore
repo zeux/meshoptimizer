@@ -1,5 +1,12 @@
-/build/
-/data/
-/gltf/library.wasm
+# IDE integrations
 /.idea/
+/.vs/
+
+# Build files
+/build/
 /cmake-build-*/
+/out/
+/gltf/library.wasm
+
+# Test files
+/data/
