@@ -260,7 +260,7 @@ void meshopt_optimizeVertexCacheTable(unsigned int* destination, const unsigned 
 			unsigned int index = cache[i];
 
 			cache_new[cache_write] = index;
-			cache_write += (index != a && index != b && index != c);
+			cache_write += (index != a) & (index != b) & (index != c);
 		}
 
 		unsigned int* cache_temp = cache;
