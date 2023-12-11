@@ -1,6 +1,7 @@
 # IDE integrations
 /.idea/
 /.vs/
+/.vscode/
 
 # Build files
 /build/
