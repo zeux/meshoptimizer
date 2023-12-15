@@ -282,6 +282,13 @@ cgltf_data* parseObj(const char* path, std::vector<Mesh>& meshes, const char** e
 		return NULL;
 	}
 
+	int fallback_materials = 0;
+	for (unsigned int mi = 0; mi < obj->material_count; ++mi)
+		fallback_materials += obj->materials[mi].fallback;
+
+	if (fallback_materials)
+		fprintf(stderr, "Warning: %d/%d materials could not be loaded from mtllib\n", fallback_materials, obj->material_count);
+
 	cgltf_data* data = (cgltf_data*)calloc(1, sizeof(cgltf_data));
 	data->memory.free_func = defaultFree;
 

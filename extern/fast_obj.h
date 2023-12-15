@@ -65,6 +65,9 @@ typedef struct
     float                       d;      /* Disolve (alpha) */
     int                         illum;  /* Illumination model */
 
+    /* Set for materials that don't come from the associated mtllib */
+    int                         fallback;
+
     /* Texture maps */
     fastObjTexture              map_Ka;
     fastObjTexture              map_Kd;
@@ -872,6 +875,8 @@ fastObjMaterial mtl_default(void)
     mtl.d     = 1.0;
     mtl.illum = 1;
 
+    mtl.fallback = 0;
+
     mtl.map_Ka   = map_default();
     mtl.map_Kd   = map_default();
     mtl.map_Ks   = map_default();
@@ -919,6 +924,7 @@ const char* parse_usemtl(fastObjData* data, const char* ptr)
     {
         fastObjMaterial new_mtl = mtl_default();
         new_mtl.name = string_copy(s, e);
+        new_mtl.fallback = 1;
         array_push(data->mesh->materials, new_mtl);
     }
 
