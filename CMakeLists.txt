@@ -84,6 +84,11 @@ if(MESHOPT_BUILD_SHARED_LIBS)
     set_target_properties(meshoptimizer PROPERTIES CXX_VISIBILITY_PRESET hidden)
     set_target_properties(meshoptimizer PROPERTIES VISIBILITY_INLINES_HIDDEN ON)
 
+    # soversion may be requested via -DMESHOPT_SOVERSION=n; note that experimental APIs (marked with MESHOPTIMIZER_EXPERIMENTAL) are not ABI-stable
+    if(MESHOPT_SOVERSION)
+        set_target_properties(meshoptimizer PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${MESHOPT_SOVERSION})
+    endif()
+
     if(WIN32)
         target_compile_definitions(meshoptimizer INTERFACE "MESHOPTIMIZER_API=__declspec(dllimport)")
         target_compile_definitions(meshoptimizer PRIVATE "MESHOPTIMIZER_API=__declspec(dllexport)")
