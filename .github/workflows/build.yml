@@ -33,6 +33,24 @@ jobs:
         sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
         bash <(curl -s https://codecov.io/bash) -f './src*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
 
+  macos-arm:
+    runs-on: macos-14
+    steps:
+    - uses: actions/checkout@v1
+    - name: make test
+      run: |
+        make -j2 config=sanitize test
+        make -j2 config=debug test
+        make -j2 config=release test
+        make -j2 config=coverage test
+    - name: make gltfpack
+      run: make -j2 config=release gltfpack
+    - name: upload coverage
+      run: |
+        find . -type f -name '*.gcno' -exec gcov -p {} +
+        sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
+        bash <(curl -s https://codecov.io/bash) -f './src*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
+
   windows:
     runs-on: windows-latest
     strategy:
@@ -164,45 +182,9 @@ jobs:
         sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
         bash <(curl -s https://codecov.io/bash) -f './gltf*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
 
-  arm64:
-    runs-on: ubuntu-latest
-    steps:
-    - run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
-    - uses: docker://multiarch/ubuntu-core:arm64-focal
-      with:
-        args: 'uname -a'
-    - uses: actions/checkout@v1
-    - name: make test
-      uses: docker://multiarch/ubuntu-core:arm64-focal
-      with:
-        args: 'bash -c "apt-get update && apt-get install -y build-essential && make -j2 config=coverage test"'
-    - name: upload coverage
-      run: |
-        find . -type f -name '*.gcno' -exec gcov -p {} +
-        sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
-        bash <(curl -s https://codecov.io/bash) -f './src*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
-
   iphone:
     runs-on: macos-latest
     steps:
     - uses: actions/checkout@v1
     - name: make
       run: make -j2 config=iphone
-
-  apple:
-    runs-on: macos-14
-    steps:
-    - uses: actions/checkout@v1
-    - name: make test
-      run: |
-        make -j2 config=sanitize test
-        make -j2 config=debug test
-        make -j2 config=release test
-        make -j2 config=coverage test
-    - name: make gltfpack
-      run: make -j2 config=release gltfpack
-    - name: upload coverage
-      run: |
-        find . -type f -name '*.gcno' -exec gcov -p {} +
-        sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
-        bash <(curl -s https://codecov.io/bash) -f './src*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
