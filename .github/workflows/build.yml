@@ -33,24 +33,6 @@ jobs:
         sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
         bash <(curl -s https://codecov.io/bash) -f './src*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
 
-  macos-arm:
-    runs-on: macos-14
-    steps:
-    - uses: actions/checkout@v1
-    - name: make test
-      run: |
-        make -j3 config=sanitize test
-        make -j3 config=debug test
-        make -j3 config=release test
-        make -j3 config=coverage test
-    - name: make gltfpack
-      run: make -j3 config=release gltfpack
-    - name: upload coverage
-      run: |
-        find . -type f -name '*.gcno' -exec gcov -p {} +
-        sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
-        bash <(curl -s https://codecov.io/bash) -f './src*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
-
   windows:
     runs-on: windows-latest
     strategy:
