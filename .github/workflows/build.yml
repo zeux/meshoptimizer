@@ -14,9 +14,9 @@ jobs:
   unix:
     strategy:
       matrix:
-        os: [ubuntu, macos]
-    name: ${{matrix.os}}
-    runs-on: ${{matrix.os}}-latest
+        os: [{name: ubuntu, version: ubuntu-latest}, {name: macos, version: macos-latest}, {name: macos-arm, version: macos-14}]
+    name: ${{matrix.os.name}}
+    runs-on: ${{matrix.os.version}}
     steps:
     - uses: actions/checkout@v1
     - name: make test
