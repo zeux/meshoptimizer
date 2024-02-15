@@ -18,7 +18,7 @@ jobs:
     name: ${{matrix.os.name}}
     runs-on: ${{matrix.os.version}}
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
     - name: make test
       run: |
         make -j2 config=sanitize test
@@ -39,7 +39,7 @@ jobs:
       matrix:
         arch: [Win32, x64]
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
     - name: cmake configure
       run: cmake . -DMESHOPT_BUILD_DEMO=ON -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_WERROR=ON -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>" -A ${{matrix.arch}}
     - name: cmake test
@@ -53,8 +53,8 @@ jobs:
   nodejs:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
-    - uses: actions/setup-node@v3
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
       with:
         node-version: '16'
     - name: test decoder
@@ -69,8 +69,8 @@ jobs:
   gltfpack:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
       with:
         repository: KhronosGroup/glTF-Sample-Assets
         path: glTF-Sample-Assets
@@ -90,8 +90,8 @@ jobs:
   gltfpack-js:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
-    - uses: actions/setup-node@v3
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
       with:
         node-version: '14.x'
     - name: install wasi
@@ -118,8 +118,8 @@ jobs:
   gltfpack-basis:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
       with:
         repository: zeux/basis_universal
         ref: gltfpack
@@ -130,13 +130,13 @@ jobs:
   gltfpack-coverage:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
       with:
         repository: zeux/basis_universal
         ref: gltfpack
         path: basis_universal
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         repository: KhronosGroup/glTF-Sample-Assets
         path: glTF-Sample-Assets
@@ -167,6 +167,6 @@ jobs:
   iphone:
     runs-on: macos-latest
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
     - name: make
       run: make -j2 config=iphone
