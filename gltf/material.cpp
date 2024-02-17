@@ -232,6 +232,14 @@ static bool areMaterialComponentsEqual(const cgltf_anisotropy& lhs, const cgltf_
 	return true;
 }
 
+static bool areMaterialComponentsEqual(const cgltf_dispersion& lhs, const cgltf_dispersion& rhs)
+{
+	if (lhs.dispersion != rhs.dispersion)
+		return false;
+
+	return true;
+}
+
 static bool areMaterialsEqual(const cgltf_material& lhs, const cgltf_material& rhs, const Settings& settings)
 {
 	if (lhs.has_pbr_metallic_roughness != rhs.has_pbr_metallic_roughness)
@@ -298,6 +306,12 @@ static bool areMaterialsEqual(const cgltf_material& lhs, const cgltf_material& r
 		return false;
 
 	if (lhs.has_anisotropy && !areMaterialComponentsEqual(lhs.anisotropy, rhs.anisotropy))
+		return false;
+
+	if (lhs.has_dispersion != rhs.has_dispersion)
+		return false;
+
+	if (lhs.has_dispersion && !areMaterialComponentsEqual(lhs.dispersion, rhs.dispersion))
 		return false;
 
 	if (!areTextureViewsEqual(lhs.normal_texture, rhs.normal_texture))
