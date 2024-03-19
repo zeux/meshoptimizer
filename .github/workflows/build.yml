@@ -19,6 +19,9 @@ jobs:
     runs-on: ${{matrix.os.version}}
     steps:
     - uses: actions/checkout@v4
+    - name: work around ASLR+ASAN compatibility
+      run: sudo sysctl -w vm.mmap_rnd_bits=28
+      if: matrix.os.name == 'ubuntu'
     - name: make test
       run: |
         make -j2 config=sanitize test
@@ -74,6 +77,8 @@ jobs:
       with:
         repository: KhronosGroup/glTF-Sample-Assets
         path: glTF-Sample-Assets
+    - name: work around ASLR+ASAN compatibility
+      run: sudo sysctl -w vm.mmap_rnd_bits=28
     - name: make
       run: make -j2 config=sanitize gltfpack
     - name: test
