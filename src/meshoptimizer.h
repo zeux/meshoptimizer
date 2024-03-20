@@ -350,6 +350,15 @@ enum
 MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, unsigned int options, float* result_error);
 
 /**
+ * Mesh simplifier which locks a given list of vertices
+ * Works like meshopt_simplify, but accept a list of vertices not allowed to collapse. Other vertices are still allowed to collapse onto locked vertices.
+ *
+ * locked_vertices points to an array of vertex indices, denoting which vertices are to be locked. Can be NULL if locked_vertex_count is 0.
+ * locked_vertex_count number of elements in the locked_vertices array.
+ */
+MESHOPTIMIZER_API size_t meshopt_simplifyWithLocks(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const unsigned int* locked_vertices, size_t locked_vertex_count, size_t target_index_count, float target_error, unsigned int options, float* result_error);
+
+/**
  * Experimental: Mesh simplifier with attribute metric
  * The algorithm ehnahces meshopt_simplify by incorporating attribute values into the error metric used to prioritize simplification order; see meshopt_simplify documentation for details.
  * Note that the number of attributes affects memory requirements and running time; this algorithm requires ~1.5x more memory and time compared to meshopt_simplify when using 4 scalar attributes.
@@ -359,7 +368,7 @@ MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsig
  * attribute_count must be <= 16
  * TODO target_error/result_error currently use combined distance+attribute error; this may change in the future
  */
-MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, size_t target_index_count, float target_error, unsigned int options, float* result_error);
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, const unsigned int* locked_vertices, size_t locked_vertex_count, size_t target_index_count, float target_error, unsigned int options, float* result_error);
 
 /**
  * Experimental: Mesh simplifier (sloppy)
