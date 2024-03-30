@@ -961,7 +961,7 @@ void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* mesh
 
 		if (r == 0xff)
 		{
-			r = unsigned(vertex_offset);
+			r = (unsigned char)(vertex_offset);
 			newv[vertex_offset] = vertices[indices[i]];
 			vertex_offset++;
 		}
