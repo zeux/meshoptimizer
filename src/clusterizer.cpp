@@ -882,3 +882,81 @@ meshopt_Bounds meshopt_computeMeshletBounds(const unsigned int* meshlet_vertices
 
 	return meshopt_computeClusterBounds(indices, triangle_count * 3, vertex_positions, vertex_count, vertex_positions_stride);
 }
+
+void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, size_t triangle_count, size_t vertex_count)
+{
+	using namespace meshopt;
+
+	assert(triangle_count <= kMeshletMaxTriangles);
+	assert(vertex_count <= kMeshletMaxVertices);
+
+	unsigned char* indices = meshlet_triangles;
+	unsigned int* vertices = meshlet_vertices;
+
+	unsigned char result[kMeshletMaxTriangles * 3];
+
+	unsigned char visited[kMeshletMaxTriangles];
+	memset(visited, 0, triangle_count);
+
+	unsigned char lasta = 0, lastb = 0, lastc = 0;
+
+	for (size_t i = 0; i < triangle_count; ++i)
+	{
+		int next = -1;
+
+		for (int pass = 2; pass >= 0; pass--)
+		{
+			for (size_t j = 0; j < triangle_count; ++j)
+			{
+				if (visited[j])
+					continue;
+
+				unsigned char a = indices[j * 3 + 0], b = indices[j * 3 + 1], c = indices[j * 3 + 2];
+
+				int aok = (a == lasta || a == lastb || a == lastc);
+				int bok = (b == lasta || b == lastb || b == lastc);
+				int cok = (c == lasta || c == lastb || c == lastc);
+
+				if (aok + bok + cok >= pass)
+				{
+					next = (int)j;
+					break;
+				}
+			}
+
+			if (next >= 0)
+				break;
+		}
+
+		assert(next >= 0);
+		visited[next] = 1;
+		result[i * 3 + 0] = lasta = indices[next * 3 + 0];
+		result[i * 3 + 1] = lastb = indices[next * 3 + 1];
+		result[i * 3 + 2] = lastc = indices[next * 3 + 2];
+	}
+
+	memcpy(indices, result, triangle_count * 3);
+
+	unsigned int newv[kMeshletMaxVertices];
+
+	unsigned char remap[kMeshletMaxVertices];
+	memset(remap, -1, vertex_count);
+
+	size_t vertex_offset = 0;
+
+	for (size_t i = 0; i < triangle_count * 3; ++i)
+	{
+		unsigned char& r = remap[indices[i]];
+
+		if (r == 0xff)
+		{
+			r = unsigned(vertex_offset);
+			newv[vertex_offset] = vertices[indices[i]];
+			vertex_offset++;
+		}
+
+		indices[i] = r;
+	}
+
+	memcpy(vertices, newv, vertex_offset * sizeof(unsigned int));
+}
