@@ -903,29 +903,27 @@ void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* mesh
 	for (size_t i = 0; i < triangle_count; ++i)
 	{
 		int next = -1;
+		int next_match = -1;
 
-		for (int pass = 2; pass >= 0; pass--)
+		for (size_t j = 0; j < triangle_count; ++j)
 		{
-			for (size_t j = 0; j < triangle_count; ++j)
+			if (visited[j])
+				continue;
+
+			unsigned char a = indices[j * 3 + 0], b = indices[j * 3 + 1], c = indices[j * 3 + 2];
+
+			int aok = (a == lasta || a == lastb || a == lastc);
+			int bok = (b == lasta || b == lastb || b == lastc);
+			int cok = (c == lasta || c == lastb || c == lastc);
+
+			if (aok + bok + cok > next_match)
 			{
-				if (visited[j])
-					continue;
+				next = (int)j;
+				next_match = aok + bok + cok;
 
-				unsigned char a = indices[j * 3 + 0], b = indices[j * 3 + 1], c = indices[j * 3 + 2];
-
-				int aok = (a == lasta || a == lastb || a == lastc);
-				int bok = (b == lasta || b == lastb || b == lastc);
-				int cok = (c == lasta || c == lastb || c == lastc);
-
-				if (aok + bok + cok >= pass)
-				{
-					next = (int)j;
+				if (next_match == 2)
 					break;
-				}
 			}
-
-			if (next >= 0)
-				break;
 		}
 
 		assert(next >= 0);
