@@ -893,11 +893,6 @@ void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* mesh
 	unsigned char* indices = meshlet_triangles;
 	unsigned int* vertices = meshlet_vertices;
 
-	unsigned char result[kMeshletMaxTriangles * 3];
-
-	unsigned char visited[kMeshletMaxTriangles];
-	memset(visited, 0, triangle_count);
-
 	unsigned char cache[kMeshletMaxVertices];
 	memset(cache, 0, vertex_count);
 
@@ -909,11 +904,8 @@ void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* mesh
 		int next = -1;
 		int next_match = -1;
 
-		for (size_t j = 0; j < triangle_count; ++j)
+		for (size_t j = i; j < triangle_count; ++j)
 		{
-			if (visited[j])
-				continue;
-
 			unsigned char a = indices[j * 3 + 0], b = indices[j * 3 + 1], c = indices[j * 3 + 2];
 			assert(a < vertex_count && b < vertex_count && c < vertex_count);
 
@@ -932,21 +924,20 @@ void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* mesh
 		}
 
 		assert(next >= 0);
-		visited[next] = 1;
 
 		unsigned char a = indices[next * 3 + 0], b = indices[next * 3 + 1], c = indices[next * 3 + 2];
 
-		result[i * 3 + 0] = a;
-		result[i * 3 + 1] = b;
-		result[i * 3 + 2] = c;
+		memmove(indices + (i + 1) * 3, indices + i * 3, (next - i) * 3 * sizeof(unsigned char));
+
+		indices[i * 3 + 0] = a;
+		indices[i * 3 + 1] = b;
+		indices[i * 3 + 2] = c;
 
 		cache_last++;
 		cache[a] = cache_last;
 		cache[b] = cache_last;
 		cache[c] = cache_last;
 	}
-
-	memcpy(indices, result, triangle_count * 3);
 
 	unsigned int newv[kMeshletMaxVertices];
 
