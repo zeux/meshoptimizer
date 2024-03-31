@@ -893,11 +893,13 @@ void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* mesh
 	unsigned char* indices = meshlet_triangles;
 	unsigned int* vertices = meshlet_vertices;
 
+	// cache tracks vertex timestamps (corresponding to triangle index! all 3 vertices are added at the same time and never removed)
 	unsigned char cache[kMeshletMaxVertices];
 	memset(cache, 0, vertex_count);
 
+	// note that we start from a value that means all vertices aren't in cache
 	unsigned char cache_last = 128;
-	const unsigned char cache_cutoff = 3;
+	const unsigned char cache_cutoff = 3; // 3 triangles = ~5..9 vertices depending on reuse
 
 	for (size_t i = 0; i < triangle_count; ++i)
 	{
@@ -909,6 +911,8 @@ void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* mesh
 			unsigned char a = indices[j * 3 + 0], b = indices[j * 3 + 1], c = indices[j * 3 + 2];
 			assert(a < vertex_count && b < vertex_count && c < vertex_count);
 
+			// score each triangle by how many vertices are in cache
+			// note: the distance is computed using unsigned 8-bit values, so cache timestamp overflow is handled gracefully
 			int aok = (unsigned char)(cache_last - cache[a]) < cache_cutoff;
 			int bok = (unsigned char)(cache_last - cache[b]) < cache_cutoff;
 			int cok = (unsigned char)(cache_last - cache[c]) < cache_cutoff;
@@ -918,6 +922,7 @@ void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* mesh
 				next = (int)j;
 				next_match = aok + bok + cok;
 
+				// note that we could end up with all 3 vertices in the cache, but 2 is enough for ~strip traversal
 				if (next_match >= 2)
 					break;
 			}
@@ -927,19 +932,23 @@ void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* mesh
 
 		unsigned char a = indices[next * 3 + 0], b = indices[next * 3 + 1], c = indices[next * 3 + 2];
 
+		// shift triangles before the next one forward so that we always keep an ordered partition
+		// note: this could have swapped triangles [i] and [next] but that distorts the order and may skew the output sequence
 		memmove(indices + (i + 1) * 3, indices + i * 3, (next - i) * 3 * sizeof(unsigned char));
 
 		indices[i * 3 + 0] = a;
 		indices[i * 3 + 1] = b;
 		indices[i * 3 + 2] = c;
 
+		// cache timestamp is the same between all vertices of each triangle to reduce overflow
 		cache_last++;
 		cache[a] = cache_last;
 		cache[b] = cache_last;
 		cache[c] = cache_last;
 	}
 
-	unsigned int newv[kMeshletMaxVertices];
+	// reorder meshlet vertices for access locality assuming index buffer is scanned sequentially
+	unsigned int order[kMeshletMaxVertices];
 
 	unsigned char remap[kMeshletMaxVertices];
 	memset(remap, -1, vertex_count);
@@ -953,12 +962,13 @@ void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* mesh
 		if (r == 0xff)
 		{
 			r = (unsigned char)(vertex_offset);
-			newv[vertex_offset] = vertices[indices[i]];
+			order[vertex_offset] = vertices[indices[i]];
 			vertex_offset++;
 		}
 
 		indices[i] = r;
 	}
 
-	memcpy(vertices, newv, vertex_offset * sizeof(unsigned int));
+	assert(vertex_offset <= vertex_count);
+	memcpy(vertices, order, vertex_offset * sizeof(unsigned int));
 }
