@@ -330,6 +330,12 @@ meshlets.resize(meshlet_count);
 
 However depending on the application other strategies of storing the data can be useful; for example, `meshlet_vertices` serves as indices into the original vertex buffer but it might be worthwhile to generate a mini vertex buffer for each meshlet to remove the extra indirection when accessing vertex data, or it might be desirable to compress vertex data as vertices in each meshlet are likely to be very spatially coherent.
 
+For optimal performance, it is recommended to further optimize each meshlet in isolation for better triangle and vertex locality by calling `meshopt_optimizeMeshlet` on vertex and index data like so:
+
+```c++
+meshopt_optimizeMeshlet(&meshlet_vertices[m.vertex_offset], &meshlet_triangles[m.triangle_offset], m.triangle_count, m.vertex_count);
+```
+
 After generating the meshlet data, it's also possible to generate extra data for each meshlet that can be saved and used at runtime to perform cluster culling, where each meshlet can be discarded if it's guaranteed to be invisible. To generate the data, `meshlet_computeMeshletBounds` can be used:
 
 ```c++
