@@ -866,6 +866,9 @@ void meshlets(const Mesh& mesh, bool scan)
 	else
 		meshlets.resize(meshopt_buildMeshlets(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, max_triangles, cone_weight));
 
+	for (size_t i = 0; i < meshlets.size(); ++i)
+		meshopt_optimizeMeshlet(&meshlet_vertices[meshlets[i].vertex_offset], &meshlet_triangles[meshlets[i].triangle_offset], meshlets[i].triangle_count, meshlets[i].vertex_count);
+
 	if (meshlets.size())
 	{
 		const meshopt_Meshlet& last = meshlets.back();
