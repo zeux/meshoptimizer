@@ -1185,6 +1185,55 @@ static void simplifyAttr()
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 }
 
+static void simplifyLockFlags()
+{
+	float vb[] = {
+	    0.000000f, 0.000000f, 0.000000f,
+	    0.000000f, 1.000000f, 0.000000f,
+	    0.000000f, 2.000000f, 0.000000f,
+	    1.000000f, 0.000000f, 0.000000f,
+	    1.000000f, 1.000000f, 0.000000f,
+	    1.000000f, 2.000000f, 0.000000f,
+	    2.000000f, 0.000000f, 0.000000f,
+	    2.000000f, 1.000000f, 0.000000f,
+	    2.000000f, 2.000000f, 0.000000f, // clang-format :-/
+	};
+
+	unsigned char lock[9] = {
+		1, 1, 1,
+		1, 0, 1,
+		1, 1, 1, // clang-format :-/
+	};
+
+	// 0 1 2
+	// 3 4 5
+	// 6 7 8
+
+	unsigned int ib[] = {
+	    0, 1, 3,
+	    3, 1, 4,
+	    1, 2, 4,
+	    4, 2, 5,
+	    3, 4, 6,
+	    6, 4, 7,
+	    4, 5, 7,
+	    7, 5, 8, // clang-format :-/
+	};
+
+	unsigned int expected[] = {
+	    0, 1, 3,
+	    1, 2, 3,
+	    3, 2, 5,
+	    6, 3, 7,
+	    3, 5, 7,
+	    7, 5, 8, // clang-format :-/
+	};
+
+	assert(meshopt_simplifyWithAttributes(ib, ib, 24, vb, 9, 12, NULL, 0, NULL, 0, lock, 3, 1e-3f, 0) == 18);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+}
+
+
 static void adjacency()
 {
 	// 0 1/4
@@ -1399,6 +1448,7 @@ void runTests()
 	simplifyDegenerate();
 	simplifyLockBorder();
 	simplifyAttr();
+	simplifyLockFlags();
 
 	adjacency();
 	tessellation();
