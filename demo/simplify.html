@@ -152,7 +152,7 @@
 
 				var res =
 					settings.useAttributes
-					? MeshoptSimplifier.simplifyWithAttributes(indices, positions, stride, attrib, attributes, attrib_weights, target, threshold, flags)
+					? MeshoptSimplifier.simplifyWithAttributes(indices, positions, stride, attrib, attributes, attrib_weights, null, target, threshold, flags)
 					: MeshoptSimplifier.simplify(indices, positions, stride, target, threshold, flags);
 
 				console.timeEnd('simplify');

@@ -217,6 +217,9 @@ var MeshoptSimplifier = (function () {
 				options |= simplifyOptions[flags[i]];
 			}
 
+			if (vertex_lock)
+				vertex_lock = new Uint8Array(vertex_lock);
+
 			var indices32 = indices.BYTES_PER_ELEMENT == 4 ? indices : new Uint32Array(indices);
 			var result = simplifyAttr(instance.exports.meshopt_simplifyWithAttributes, indices32, indices.length, vertex_positions, vertex_positions.length / vertex_positions_stride, vertex_positions_stride * 4, vertex_attributes, vertex_attributes_stride * 4, new Float32Array(attribute_weights), vertex_lock, target_index_count, target_error, options);
 			result[0] = (indices instanceof Uint32Array) ? result[0] : new indices.constructor(result[0]);
