@@ -164,7 +164,7 @@ var tests = {
 
 		var attr_weights = [0.01, 0.01, 0.01];
 
-		var res = simplifier.simplifyWithAttributes(ib, vb_pos, 3, vb_att, 3, attr_weights, 6 * 3, 1e-2);
+		var res = simplifier.simplifyWithAttributes(ib, vb_pos, 3, vb_att, 3, attr_weights, null, 6 * 3, 1e-2);
 
 		var expected = new Uint32Array([
 			0, 2, 9, 9, 2, 11,
