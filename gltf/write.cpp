@@ -948,7 +948,9 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 
 void writeImageError(std::string& json, const char* action, size_t index, const char* uri, const char* reason)
 {
-	(void)json;
+	append(json, "\"uri\":\"");
+	append(json, "data:image/png;base64,ERR/");
+	append(json, "\"");
 
 	fprintf(stderr, "Warning: unable to %s image %d (%s), skipping%s%s%s\n", action, int(index), uri ? uri : "embedded", reason ? " (" : "", reason ? reason : "", reason ? ")" : "");
 }
