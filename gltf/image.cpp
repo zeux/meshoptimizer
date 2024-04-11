@@ -59,10 +59,22 @@ static bool parseDataUri(const char* uri, std::string& mime_type, std::string& r
 	return false;
 }
 
+static std::string fixupMimeType(const std::string& data, const std::string& mime_type)
+{
+	if (mime_type == "image/jpeg" && data.compare(0, 8, "\x89\x50\x4e\x47\x0d\x0a\x1a\x0a") == 0)
+		return "image/png";
+
+	if (mime_type == "image/png" && data.compare(0, 3, "\xff\xd8\xff") == 0)
+		return "image/jpeg";
+
+	return mime_type;
+}
+
 bool readImage(const cgltf_image& image, const char* input_path, std::string& data, std::string& mime_type)
 {
 	if (image.uri && parseDataUri(image.uri, mime_type, data))
 	{
+		mime_type = fixupMimeType(data, mime_type);
 		return true;
 	}
 	else if (image.buffer_view && image.buffer_view->buffer->data && image.mime_type)
@@ -70,7 +82,9 @@ bool readImage(const cgltf_image& image, const char* input_path, std::string& da
 		const cgltf_buffer_view* view = image.buffer_view;
 
 		data.assign(static_cast<const char*>(view->buffer->data) + view->offset, view->size);
+
 		mime_type = image.mime_type;
+		mime_type = fixupMimeType(data, image.mime_type);
 		return true;
 	}
 	else if (image.uri && *image.uri && input_path)
@@ -80,9 +94,12 @@ bool readImage(const cgltf_image& image, const char* input_path, std::string& da
 		cgltf_decode_uri(&path[0]);
 		path.resize(strlen(&path[0]));
 
-		mime_type = image.mime_type ? image.mime_type : inferMimeType(path.c_str());
+		if (!readFile(getFullPath(path.c_str(), input_path).c_str(), data))
+			return false;
 
-		return readFile(getFullPath(path.c_str(), input_path).c_str(), data);
+		mime_type = image.mime_type ? image.mime_type : inferMimeType(path.c_str());
+		mime_type = fixupMimeType(data, mime_type);
+		return true;
 	}
 	else
 	{
