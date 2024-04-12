@@ -1501,7 +1501,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nVertex precision:\n");
 			fprintf(stderr, "\t-vp N: use N-bit quantization for positions (default: 14; N should be between 1 and 16)\n");
 			fprintf(stderr, "\t-vt N: use N-bit quantization for texture coordinates (default: 12; N should be between 1 and 16)\n");
-			fprintf(stderr, "\t-vn N: use N-bit quantization for normals and tangents (default: 8; N should be between 1 and 16)\n");
+			fprintf(stderr, "\t-vn N: use N-bit quantization for normals (default: 8; N should be between 1 and 16) and tangents (up to 8-bit)\n");
 			fprintf(stderr, "\t-vc N: use N-bit quantization for colors (default: 8; N should be between 1 and 16)\n");
 			fprintf(stderr, "\nVertex positions:\n");
 			fprintf(stderr, "\t-vpi: use integer attributes for positions (default)\n");
