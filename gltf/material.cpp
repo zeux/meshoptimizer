@@ -355,6 +355,8 @@ void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Setti
 		if (settings.keep_materials && data->materials[i].name && *data->materials[i].name)
 			continue;
 
+		assert(areMaterialsEqual(data->materials[i], data->materials[i], settings));
+
 		for (size_t j = 0; j < i; ++j)
 		{
 			if (settings.keep_materials && data->materials[j].name && *data->materials[j].name)
