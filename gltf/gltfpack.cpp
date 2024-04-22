@@ -250,6 +250,15 @@ static bool canTransformMesh(const Mesh& mesh)
 	return true;
 }
 
+static bool isExtensionSupported(const ExtensionInfo* extensions, size_t count, const char* name)
+{
+	for (size_t i = 0; i < count; ++i)
+		if (strcmp(extensions[i].name, name) == 0)
+			return true;
+
+	return false;
+}
+
 static void process(cgltf_data* data, const char* input_path, const char* output_path, const char* report_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const Settings& settings, std::string& json, std::string& bin, std::string& fallback, size_t& fallback_size)
 {
 	if (settings.verbose)
@@ -835,6 +844,16 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	    {"KHR_texture_basisu", !json_textures.empty() && settings.texture_ktx2, true},
 	    {"EXT_mesh_gpu_instancing", ext_instancing, true},
 	};
+
+	for (size_t i = 0; i < data->extensions_required_count; ++i)
+	{
+		const char* ext = data->extensions_required[i];
+
+		if (!isExtensionSupported(extensions, sizeof(extensions) / sizeof(extensions[0]), ext))
+		{
+			fprintf(stderr, "Warning: required extension %s is not supported and will be skipped\n", ext);
+		}
+	}
 
 	writeExtensions(json, extensions, sizeof(extensions) / sizeof(extensions[0]));
 
