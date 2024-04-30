@@ -484,22 +484,15 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	{
 		const cgltf_image& image = data->images[i];
 
+		std::string* encoded = (encoded_images.size() && !encoded_images[i].empty()) ? &encoded_images[i] : NULL;
+
 		comma(json_images);
 		append(json_images, "{");
-		if (encoded_images.size() && !encoded_images[i].empty())
-		{
-			if (encoded_images[i].compare(0, 5, "error") == 0)
-				writeImageError(json_images, "encode", int(i), image.uri, encoded_images[i].c_str());
-			else
-				writeEncodedImage(json_images, views, image, encoded_images[i], images[i], i, output_path, settings);
-
-			encoded_images[i] = std::string(); // reclaim memory early
-		}
-		else
-		{
-			writeImage(json_images, views, image, images[i], i, input_path, output_path, settings);
-		}
+		writeImage(json_images, views, image, images[i], encoded, i, input_path, output_path, settings);
 		append(json_images, "}");
+
+		if (encoded)
+			*encoded = std::string(); // reclaim memory early
 	}
 
 	for (size_t i = 0; i < data->textures_count; ++i)

@@ -896,6 +896,15 @@ void writeSampler(std::string& json, const cgltf_sampler& sampler)
 	}
 }
 
+static void writeImageError(std::string& json, const char* action, size_t index, const char* uri, const char* reason)
+{
+	append(json, "\"uri\":\"");
+	append(json, "data:image/png;base64,ERR/");
+	append(json, "\"");
+
+	fprintf(stderr, "Warning: unable to %s image %d (%s), skipping%s%s%s\n", action, int(index), uri ? uri : "embedded", reason ? " (" : "", reason ? reason : "", reason ? ")" : "");
+}
+
 static void writeImageData(std::string& json, std::vector<BufferView>& views, size_t index, const char* uri, const char* mime_type, const std::string& contents, const char* output_path, TextureKind kind, bool embed)
 {
 	bool dataUri = uri && strncmp(uri, "data:", 5) == 0;
@@ -922,8 +931,18 @@ static void writeImageData(std::string& json, std::vector<BufferView>& views, si
 	}
 }
 
-void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, size_t index, const char* input_path, const char* output_path, const Settings& settings)
+void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, const std::string* encoded, size_t index, const char* input_path, const char* output_path, const Settings& settings)
 {
+	if (encoded)
+	{
+		// image was pre-encoded via encodeImages (which might have failed!)
+		if (encoded->compare(0, 5, "error") == 0)
+			writeImageError(json, "encode", int(index), image.uri, encoded->c_str());
+		else
+			writeImageData(json, views, index, image.uri, "image/ktx2", *encoded, output_path, info.kind, settings.texture_embed);
+		return;
+	}
+
 	bool dataUri = image.uri && strncmp(image.uri, "data:", 5) == 0;
 
 	if (image.uri && !dataUri && settings.texture_ref)
@@ -939,25 +958,11 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 	std::string mime_type;
 	if (!readImage(image, input_path, img_data, mime_type))
 	{
-		writeImageError(json, "read", index, image.uri);
+		writeImageError(json, "read", index, image.uri, NULL);
 		return;
 	}
 
 	writeImageData(json, views, index, image.uri, mime_type.c_str(), img_data, output_path, info.kind, settings.texture_embed);
-}
-
-void writeImageError(std::string& json, const char* action, size_t index, const char* uri, const char* reason)
-{
-	append(json, "\"uri\":\"");
-	append(json, "data:image/png;base64,ERR/");
-	append(json, "\"");
-
-	fprintf(stderr, "Warning: unable to %s image %d (%s), skipping%s%s%s\n", action, int(index), uri ? uri : "embedded", reason ? " (" : "", reason ? reason : "", reason ? ")" : "");
-}
-
-void writeEncodedImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const std::string& encoded, const ImageInfo& info, size_t index, const char* output_path, const Settings& settings)
-{
-	writeImageData(json, views, index, image.uri, "image/ktx2", encoded, output_path, info.kind, settings.texture_embed);
 }
 
 void writeTexture(std::string& json, const cgltf_texture& texture, const ImageInfo* info, cgltf_data* data, const Settings& settings)
