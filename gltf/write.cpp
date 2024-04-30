@@ -933,6 +933,13 @@ static void writeImageData(std::string& json, std::vector<BufferView>& views, si
 
 void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_image& image, const ImageInfo& info, const std::string* encoded, size_t index, const char* input_path, const char* output_path, const Settings& settings)
 {
+	if (image.name && *image.name)
+	{
+		append(json, "\"name\":\"");
+		append(json, image.name);
+		append(json, "\",");
+	}
+
 	if (encoded)
 	{
 		// image was pre-encoded via encodeImages (which might have failed!)
