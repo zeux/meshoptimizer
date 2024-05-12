@@ -21,6 +21,8 @@ If you are shipping an engine that is using meshoptimizer, listing the library i
 - [Bevy](https://bevyengine.org/)
 - [The Forge](https://theforge.dev/)
 - [Godot](https://godotengine.org/)
+- [HypeHype](https://hypehype.com/en)
+- [Roblox](https://www.roblox.com/)
 - [Unigine](https://unigine.com/)
 
 # Web
