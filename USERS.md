@@ -4,7 +4,7 @@ For brevity, the projects listed below are limited to commercial software or ope
 
 # Games
 
-If you are shipping a game that is using meshoptimizer, listing the library in the credits or documentation would be appreciated (attribution is technically required by the MIT license).
+If you are shipping a game that is using meshoptimizer, listing the library in the credits or documentation would be appreciated!
 
 - [Alan Wake 2 (2023)](https://www.remedygames.com/games/alan-wake-2)
 - [Baldur's Gate 3 (2023)](https://baldursgate3.game/)
@@ -21,7 +21,7 @@ If you are shipping a game that is using meshoptimizer, listing the library in t
 
 # Engines
 
-If you are shipping an engine that is using meshoptimizer, listing the library in the documentation would be appreciated (attribution is technically required by the MIT license).
+If you are shipping an engine that is using meshoptimizer, listing the library in the documentation would be appreciated!
 
 - [Bevy](https://bevyengine.org/)
 - [The Forge](https://theforge.dev/)
