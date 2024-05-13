@@ -6,12 +6,17 @@ For brevity, the projects listed below are limited to commercial software or ope
 
 If you are shipping a game that is using meshoptimizer, listing the library in the credits or documentation would be appreciated (attribution is technically required by the MIT license).
 
-- [Baldur's Gate 3 (2023)](https://en.wikipedia.org/wiki/Baldur%27s_Gate_3)
-- [Cities: Skylines II (2023)](https://en.wikipedia.org/wiki/Cities:_Skylines_II)
-- [Counter-Strike 2 (2023)](https://en.wikipedia.org/wiki/Counter-Strike_2)
-- [The Legend of Zelda: Tears of the Kingdom (2023)](https://en.wikipedia.org/wiki/The_Legend_of_Zelda:_Tears_of_the_Kingdom)
-- [Manifold Garden (2019)](https://en.wikipedia.org/wiki/Manifold_Garden)
-- [The Settlers: New Allies (2023)](https://en.wikipedia.org/wiki/The_Settlers:_New_Allies)
+- [Alan Wake 2 (2023)](https://www.remedygames.com/games/alan-wake-2)
+- [Baldur's Gate 3 (2023)](https://baldursgate3.game/)
+- [Cities: Skylines II (2023)](https://www.paradoxinteractive.com/games/cities-skylines-ii/about)
+- [Counter-Strike 2 (2023)](https://www.counter-strike.net/cs2)
+- [Jagged Alliance 3](https://jaggedalliance3.thqnordic.com/)
+- [The Legend of Zelda: Tears of the Kingdom (2023)](https://zelda.nintendo.com/tears-of-the-kingdom/)
+- [Manifold Garden (2019)](https://manifold.garden)
+- [Monaco 2](https://store.steampowered.com/app/1063030/Monaco_2/)
+- [Ravenswatch](https://store.steampowered.com/app/2071280/Ravenswatch/)
+- [The Settlers: New Allies (2023)](https://www.ubisoft.com/en-us/game/the-settlers/new-allies)
+- [Stranded: Alien Dawn (2023)](https://www.strandedaliendawn.com/en-US)
 - [Tunnet (2023)](https://store.steampowered.com/app/2286390/Tunnet/)
 
 # Engines
@@ -24,6 +29,8 @@ If you are shipping an engine that is using meshoptimizer, listing the library i
 - [HypeHype](https://hypehype.com/en)
 - [Roblox](https://www.roblox.com/)
 - [Unigine](https://unigine.com/)
+
+meshoptimizer is also used in [Waymo](https://waymo.com/) internal stack.
 
 # Web
 
