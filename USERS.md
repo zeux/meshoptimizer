@@ -29,6 +29,7 @@ If you are shipping an engine that is using meshoptimizer, listing the library i
 - [HypeHype](https://hypehype.com/en)
 - [Roblox](https://www.roblox.com/)
 - [Unigine](https://unigine.com/)
+- [Wonderland Engine](https://wonderlandengine.com/)
 
 meshoptimizer is also used in [Waymo](https://waymo.com/) internal stack.
 
