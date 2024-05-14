@@ -578,7 +578,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 			if (prim.type != cgltf_primitive_type_triangles)
 			{
 				append(json_meshes, ",\"mode\":");
-				append(json_meshes, size_t(prim.type));
+				append(json_meshes, size_t(prim.type - cgltf_primitive_type_points));
 			}
 			if (mesh.targets)
 			{
