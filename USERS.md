@@ -24,12 +24,13 @@ If you are shipping a game that is using meshoptimizer, listing the library in t
 If you are shipping an engine that is using meshoptimizer, listing the library in the documentation would be appreciated!
 
 - [Bevy](https://bevyengine.org/)
+- [bgfx](https://github.com/bkaradzic/bgfx)
+- [filament](https://github.com/google/filament)
 - [The Forge](https://theforge.dev/)
 - [Godot](https://godotengine.org/)
 - [HypeHype](https://hypehype.com/en)
 - [Roblox](https://www.roblox.com/)
 - [Unigine](https://unigine.com/)
-- [Wonderland Engine](https://wonderlandengine.com/)
 
 meshoptimizer is also used in [Waymo](https://waymo.com/) internal stack.
 
@@ -40,6 +41,9 @@ For projects in the glTF ecosystem, [gltfpack](https://github.com/zeux/meshoptim
 
 This list contains a small selection of popular projects in the web ecosystem that use meshoptimizer; see also [a list of projects that depend on meshoptimizer through NPM](https://github.com/zeux/meshoptimizer/network/dependents).
 
+- [aframe](https://aframe.io/)
 - [Babylon.js](https://www.babylonjs.com/)
 - [CesiumJS](https://cesium.com/platform/cesiumjs/)
 - [three.js](https://threejs.org/)
+- [glTF-Transform](https://gltf-transform.dev/)
+- [Wonderland Engine](https://wonderlandengine.com/)
