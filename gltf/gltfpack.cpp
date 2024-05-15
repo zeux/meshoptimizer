@@ -1324,6 +1324,10 @@ int main(int argc, char** argv)
 		{
 			settings.simplify_lock_borders = true;
 		}
+		else if (strcmp(arg, "-sv") == 0)
+		{
+			settings.simplify_attributes = true;
+		}
 #ifndef NDEBUG
 		else if (strcmp(arg, "-sd") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
@@ -1509,6 +1513,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nSimplification:\n");
 			fprintf(stderr, "\t-si R: simplify meshes targeting triangle/point count ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\t-sa: aggressively simplify to the target ratio disregarding quality\n");
+			fprintf(stderr, "\t-sv: take vertex attributes into account when simplifying meshes\n");
 			fprintf(stderr, "\t-slb: lock border vertices during simplification to avoid gaps on connected meshes\n");
 			fprintf(stderr, "\nVertex precision:\n");
 			fprintf(stderr, "\t-vp N: use N-bit quantization for positions (default: 14; N should be between 1 and 16)\n");

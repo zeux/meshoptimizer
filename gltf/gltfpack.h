@@ -136,6 +136,7 @@ struct Settings
 	float simplify_threshold;
 	bool simplify_aggressive;
 	bool simplify_lock_borders;
+	bool simplify_attributes;
 	float simplify_debug;
 
 	int meshlet_debug;
