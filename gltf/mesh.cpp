@@ -791,7 +791,7 @@ extern MESHOPTIMIZER_API unsigned char* meshopt_simplifyDebugKind;
 extern MESHOPTIMIZER_API unsigned int* meshopt_simplifyDebugLoop;
 extern MESHOPTIMIZER_API unsigned int* meshopt_simplifyDebugLoopBack;
 
-void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio)
+void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio, bool attributes)
 {
 	Mesh mesh = source;
 	assert(mesh.type == cgltf_primitive_type_triangles);
@@ -814,7 +814,7 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio)
 	meshopt_simplifyDebugLoop = &loop[0];
 	meshopt_simplifyDebugLoopBack = &loopback[0];
 
-	simplifyMesh(mesh, ratio, /* attributes= */ false, /* aggressive= */ false, /* lock_borders= */ false);
+	simplifyMesh(mesh, ratio, attributes, /* aggressive= */ false, /* lock_borders= */ false);
 
 	meshopt_simplifyDebugKind = NULL;
 	meshopt_simplifyDebugLoop = NULL;
