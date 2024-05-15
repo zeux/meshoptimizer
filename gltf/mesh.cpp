@@ -548,12 +548,14 @@ static void simplifyMesh(Mesh& mesh, float threshold, bool attributes, bool aggr
 	if (target_index_count < 1)
 		return;
 
-	const Stream* colors = getStream(mesh, cgltf_attribute_type_color);
-	const float colw[3] = {1e-2, 1e-2, 1e-2};
+	const Stream* attr = getStream(mesh, cgltf_attribute_type_color);
+	attr = attr ? attr : getStream(mesh, cgltf_attribute_type_normal);
+
+	const float attrw[3] = {1e-2, 1e-2, 1e-2};
 
 	std::vector<unsigned int> indices(mesh.indices.size());
-	if (attributes && colors)
-		indices.resize(meshopt_simplifyWithAttributes(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), colors->data[0].f, sizeof(Attr), colw, 3, NULL, target_index_count, target_error, options));
+	if (attributes && attr)
+		indices.resize(meshopt_simplifyWithAttributes(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), attr->data[0].f, sizeof(Attr), attrw, 3, NULL, target_index_count, target_error, options));
 	else
 		indices.resize(meshopt_simplify(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count, target_error, options));
 	mesh.indices.swap(indices);
