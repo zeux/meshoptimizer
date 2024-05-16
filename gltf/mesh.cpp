@@ -527,7 +527,7 @@ static Stream* getStream(Mesh& mesh, cgltf_attribute_type type, int index = 0)
 	return NULL;
 }
 
-static void simplifyMesh(Mesh& mesh, float threshold, bool aggressive, bool lock_borders)
+static void simplifyMesh(Mesh& mesh, float threshold, bool attributes, bool aggressive, bool lock_borders)
 {
 	assert(mesh.type == cgltf_primitive_type_triangles);
 
@@ -548,8 +548,16 @@ static void simplifyMesh(Mesh& mesh, float threshold, bool aggressive, bool lock
 	if (target_index_count < 1)
 		return;
 
+	const Stream* attr = getStream(mesh, cgltf_attribute_type_color);
+	attr = attr ? attr : getStream(mesh, cgltf_attribute_type_normal);
+
+	const float attrw[3] = {1e-2f, 1e-2f, 1e-2f};
+
 	std::vector<unsigned int> indices(mesh.indices.size());
-	indices.resize(meshopt_simplify(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count, target_error, options));
+	if (attributes && attr)
+		indices.resize(meshopt_simplifyWithAttributes(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), attr->data[0].f, sizeof(Attr), attrw, 3, NULL, target_index_count, target_error, options));
+	else
+		indices.resize(meshopt_simplify(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count, target_error, options));
 	mesh.indices.swap(indices);
 
 	// Note: if the simplifier got stuck, we can try to reindex without normals/tangents and retry
@@ -771,7 +779,7 @@ void processMesh(Mesh& mesh, const Settings& settings)
 		reindexMesh(mesh);
 		filterTriangles(mesh);
 		if (settings.simplify_threshold < 1)
-			simplifyMesh(mesh, settings.simplify_threshold, settings.simplify_aggressive, settings.simplify_lock_borders);
+			simplifyMesh(mesh, settings.simplify_threshold, settings.simplify_attributes, settings.simplify_aggressive, settings.simplify_lock_borders);
 		optimizeMesh(mesh, settings.compressmore);
 		break;
 
@@ -785,7 +793,7 @@ extern MESHOPTIMIZER_API unsigned char* meshopt_simplifyDebugKind;
 extern MESHOPTIMIZER_API unsigned int* meshopt_simplifyDebugLoop;
 extern MESHOPTIMIZER_API unsigned int* meshopt_simplifyDebugLoopBack;
 
-void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio)
+void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio, bool attributes)
 {
 	Mesh mesh = source;
 	assert(mesh.type == cgltf_primitive_type_triangles);
@@ -808,7 +816,7 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio)
 	meshopt_simplifyDebugLoop = &loop[0];
 	meshopt_simplifyDebugLoopBack = &loopback[0];
 
-	simplifyMesh(mesh, ratio, /* aggressive= */ false, /* lock_borders= */ false);
+	simplifyMesh(mesh, ratio, attributes, /* aggressive= */ false, /* lock_borders= */ false);
 
 	meshopt_simplifyDebugKind = NULL;
 	meshopt_simplifyDebugLoop = NULL;
