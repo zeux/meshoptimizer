@@ -545,9 +545,6 @@ static void simplifyMesh(Mesh& mesh, float threshold, bool attributes, bool aggr
 	float target_error_aggressive = 1e-1f;
 	unsigned int options = lock_borders ? meshopt_SimplifyLockBorder : 0;
 
-	if (target_index_count < 1)
-		return;
-
 	const Stream* attr = getStream(mesh, cgltf_attribute_type_color);
 	attr = attr ? attr : getStream(mesh, cgltf_attribute_type_normal);
 
@@ -713,13 +710,11 @@ static void simplifyPointMesh(Mesh& mesh, float threshold)
 
 	size_t target_vertex_count = size_t(double(vertex_count) * threshold);
 
-	if (target_vertex_count < 1)
-		return;
-
 	const float color_weight = 1e-2f;
 
 	std::vector<unsigned int> indices(target_vertex_count);
-	indices.resize(meshopt_simplifyPoints(&indices[0], positions->data[0].f, vertex_count, sizeof(Attr), colors ? colors->data[0].f : NULL, sizeof(Attr), color_weight, target_vertex_count));
+	if (target_vertex_count)
+		indices.resize(meshopt_simplifyPoints(&indices[0], positions->data[0].f, vertex_count, sizeof(Attr), colors ? colors->data[0].f : NULL, sizeof(Attr), color_weight, target_vertex_count));
 
 	std::vector<Attr> scratch(indices.size());
 
