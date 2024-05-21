@@ -14,7 +14,7 @@ jobs:
   unix:
     strategy:
       matrix:
-        os: [{name: ubuntu, version: ubuntu-latest}, {name: macos, version: macos-latest}, {name: macos-arm, version: macos-14}]
+        os: [{name: ubuntu, version: ubuntu-latest}, {name: macos-intel, version: macos-13}, {name: macos-arm, version: macos-14}]
     name: ${{matrix.os.name}}
     runs-on: ${{matrix.os.version}}
     steps:
