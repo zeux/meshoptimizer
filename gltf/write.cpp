@@ -952,26 +952,34 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 
 void writeTexture(std::string& json, const cgltf_texture& texture, const ImageInfo* info, cgltf_data* data, const Settings& settings)
 {
+	if (texture.sampler)
+	{
+		append(json, "\"sampler\":");
+		append(json, size_t(texture.sampler - data->samplers));
+	}
+
 	if (texture.image)
 	{
-		if (texture.sampler)
-		{
-			append(json, "\"sampler\":");
-			append(json, size_t(texture.sampler - data->samplers));
-			append(json, ",");
-		}
-
 		if (info && settings.texture_mode[info->kind] != TextureMode_Raw)
 		{
+			comma(json);
 			append(json, "\"extensions\":{\"KHR_texture_basisu\":{\"source\":");
 			append(json, size_t(texture.image - data->images));
 			append(json, "}}");
 		}
 		else
 		{
+			comma(json);
 			append(json, "\"source\":");
 			append(json, size_t(texture.image - data->images));
 		}
+	}
+	else if (texture.has_basisu)
+	{
+		comma(json);
+		append(json, "\"extensions\":{\"KHR_texture_basisu\":{\"source\":");
+		append(json, size_t(texture.basisu_image - data->images));
+		append(json, "}}");
 	}
 }
 
