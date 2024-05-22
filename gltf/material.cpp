@@ -11,6 +11,12 @@ static bool areTexturesEqual(const cgltf_texture& lhs, const cgltf_texture& rhs)
 	if (lhs.sampler != rhs.sampler)
 		return false;
 
+	if (lhs.has_basisu != rhs.has_basisu)
+		return false;
+
+	if (lhs.basisu_image != rhs.basisu_image)
+		return false;
+
 	return true;
 }
 
