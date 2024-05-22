@@ -666,59 +666,37 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 		append(json, "\"extensions\":{");
 
 		if (material.has_pbr_specular_glossiness)
-		{
 			writeMaterialComponent(json, data, material.pbr_specular_glossiness, qt, textures);
-		}
 
 		if (material.has_clearcoat)
-		{
 			writeMaterialComponent(json, data, material.clearcoat, qt, textures);
-		}
 
 		if (material.has_transmission)
-		{
 			writeMaterialComponent(json, data, material.transmission, qt, textures);
-		}
 
 		if (material.has_ior)
-		{
 			writeMaterialComponent(json, data, material.ior);
-		}
 
 		if (material.has_specular)
-		{
 			writeMaterialComponent(json, data, material.specular, qt, textures);
-		}
 
 		if (material.has_sheen)
-		{
 			writeMaterialComponent(json, data, material.sheen, qt, textures);
-		}
 
 		if (material.has_volume)
-		{
 			writeMaterialComponent(json, data, material.volume, qp, qt, textures);
-		}
 
 		if (material.has_emissive_strength)
-		{
 			writeMaterialComponent(json, data, material.emissive_strength);
-		}
 
 		if (material.has_iridescence)
-		{
 			writeMaterialComponent(json, data, material.iridescence, qt, textures);
-		}
 
 		if (material.has_anisotropy)
-		{
 			writeMaterialComponent(json, data, material.anisotropy, qt, textures);
-		}
 
 		if (material.has_dispersion)
-		{
 			writeMaterialComponent(json, data, material.dispersion);
-		}
 
 		if (material.unlit)
 		{
