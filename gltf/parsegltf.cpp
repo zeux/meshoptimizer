@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../src/meshoptimizer.h"
+
 static const size_t kMaxStreams = 16;
 
 static const char* getError(cgltf_result result, cgltf_data* data)
@@ -376,7 +378,7 @@ static bool needsDummyBuffers(cgltf_data* data)
 	{
 		cgltf_accessor* accessor = &data->accessors[i];
 
-		if (accessor->buffer_view && accessor->buffer_view->buffer->data == NULL)
+		if (accessor->buffer_view && accessor->buffer_view->data == NULL && accessor->buffer_view->buffer->data == NULL)
 			return true;
 
 		if (accessor->is_sparse)
@@ -456,6 +458,70 @@ static bool freeUnusedBuffers(cgltf_data* data)
 	return free_bin;
 }
 
+static cgltf_result decompressMeshopt(cgltf_data* data)
+{
+	for (size_t i = 0; i < data->buffer_views_count; ++i)
+	{
+		if (!data->buffer_views[i].has_meshopt_compression)
+			continue;
+		cgltf_meshopt_compression* mc = &data->buffer_views[i].meshopt_compression;
+
+		const unsigned char* source = (const unsigned char*)mc->buffer->data;
+		if (!source)
+			return cgltf_result_invalid_gltf;
+		source += mc->offset;
+
+		void* result = malloc(mc->count * mc->stride);
+		if (!result)
+			return cgltf_result_out_of_memory;
+
+		int rc = -1;
+
+		switch (mc->mode)
+		{
+		case cgltf_meshopt_compression_mode_attributes:
+			rc = meshopt_decodeVertexBuffer(result, mc->count, mc->stride, source, mc->size);
+			break;
+
+		case cgltf_meshopt_compression_mode_triangles:
+			rc = meshopt_decodeIndexBuffer(result, mc->count, mc->stride, source, mc->size);
+			break;
+
+		case cgltf_meshopt_compression_mode_indices:
+			rc = meshopt_decodeIndexSequence(result, mc->count, mc->stride, source, mc->size);
+			break;
+
+		default:
+			return cgltf_result_invalid_gltf;
+		}
+
+		if (rc != 0)
+			return cgltf_result_io_error;
+
+		switch (mc->filter)
+		{
+		case cgltf_meshopt_compression_filter_octahedral:
+			meshopt_decodeFilterOct(result, mc->count, mc->stride);
+			break;
+
+		case cgltf_meshopt_compression_filter_quaternion:
+			meshopt_decodeFilterQuat(result, mc->count, mc->stride);
+			break;
+
+		case cgltf_meshopt_compression_filter_exponential:
+			meshopt_decodeFilterExp(result, mc->count, mc->stride);
+			break;
+
+		default:
+			break;
+		}
+
+		data->buffer_views[i].data = result;
+	}
+
+	return cgltf_result_success;
+}
+
 static cgltf_data* parseGltf(cgltf_data* data, cgltf_result result, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error)
 {
 	*error = NULL;
@@ -464,8 +530,6 @@ static cgltf_data* parseGltf(cgltf_data* data, cgltf_result result, std::vector<
 		*error = getError(result, data);
 	else if (requiresExtension(data, "KHR_draco_mesh_compression"))
 		*error = "file requires Draco mesh compression support";
-	else if (requiresExtension(data, "EXT_meshopt_compression"))
-		*error = "file has already been compressed using gltfpack";
 	else if (requiresExtension(data, "KHR_texture_basisu"))
 		*error = "file requires BasisU texture support";
 	else if (requiresExtension(data, "EXT_mesh_gpu_instancing"))
@@ -507,6 +571,7 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 		freeFile(data);
 
 	result = (result == cgltf_result_success) ? cgltf_load_buffers(&options, data, path) : result;
+	result = (result == cgltf_result_success) ? decompressMeshopt(data) : result;
 	result = (result == cgltf_result_success) ? cgltf_validate(data) : result;
 
 	return parseGltf(data, result, meshes, animations, error);
@@ -522,6 +587,7 @@ cgltf_data* parseGlb(const void* buffer, size_t size, std::vector<Mesh>& meshes,
 	cgltf_result result = cgltf_parse(&options, buffer, size, &data);
 
 	result = (result == cgltf_result_success) ? cgltf_load_buffers(&options, data, NULL) : result;
+	result = (result == cgltf_result_success) ? decompressMeshopt(data) : result;
 	result = (result == cgltf_result_success) ? cgltf_validate(data) : result;
 
 	return parseGltf(data, result, meshes, animations, error);
