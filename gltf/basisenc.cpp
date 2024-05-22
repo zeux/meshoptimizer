@@ -98,10 +98,12 @@ static const char* prepareEncode(basisu::basis_compressor_params& params, const 
 {
 	std::string img_data;
 	std::string mime_type;
-	std::string result;
 
 	if (!readImage(image, input_path, img_data, mime_type))
 		return "error reading source file";
+
+	if (mime_type != "image/png" && mime_type != "image/jpeg")
+		return NULL;
 
 	int width = 0, height = 0;
 	if (!getDimensions(img_data, mime_type.c_str(), width, height))
