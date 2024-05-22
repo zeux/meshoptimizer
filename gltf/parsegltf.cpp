@@ -571,8 +571,8 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 		freeFile(data);
 
 	result = (result == cgltf_result_success) ? cgltf_load_buffers(&options, data, path) : result;
-	result = (result == cgltf_result_success) ? decompressMeshopt(data) : result;
 	result = (result == cgltf_result_success) ? cgltf_validate(data) : result;
+	result = (result == cgltf_result_success) ? decompressMeshopt(data) : result;
 
 	return parseGltf(data, result, meshes, animations, error);
 }
@@ -587,8 +587,8 @@ cgltf_data* parseGlb(const void* buffer, size_t size, std::vector<Mesh>& meshes,
 	cgltf_result result = cgltf_parse(&options, buffer, size, &data);
 
 	result = (result == cgltf_result_success) ? cgltf_load_buffers(&options, data, NULL) : result;
-	result = (result == cgltf_result_success) ? decompressMeshopt(data) : result;
 	result = (result == cgltf_result_success) ? cgltf_validate(data) : result;
+	result = (result == cgltf_result_success) ? decompressMeshopt(data) : result;
 
 	return parseGltf(data, result, meshes, animations, error);
 }
