@@ -107,17 +107,25 @@ bool readImage(const cgltf_image& image, const char* input_path, std::string& da
 	}
 }
 
-static int readInt16(const std::string& data, size_t offset)
+static int readInt16BE(const std::string& data, size_t offset)
 {
 	return (unsigned char)data[offset] * 256 + (unsigned char)data[offset + 1];
 }
 
-static int readInt32(const std::string& data, size_t offset)
+static int readInt32BE(const std::string& data, size_t offset)
 {
 	return (unsigned((unsigned char)data[offset]) << 24) |
 	       (unsigned((unsigned char)data[offset + 1]) << 16) |
 	       (unsigned((unsigned char)data[offset + 2]) << 8) |
 	       unsigned((unsigned char)data[offset + 3]);
+}
+
+static int readInt32LE(const std::string& data, size_t offset)
+{
+	return unsigned((unsigned char)data[offset]) |
+	       (unsigned((unsigned char)data[offset + 1]) << 8) |
+	       (unsigned((unsigned char)data[offset + 2]) << 16) |
+	       (unsigned((unsigned char)data[offset + 3]) << 24);
 }
 
 static bool getDimensionsPng(const std::string& data, int& width, int& height)
@@ -132,8 +140,8 @@ static bool getDimensionsPng(const std::string& data, int& width, int& height)
 	if (data.compare(12, 4, "IHDR") != 0)
 		return false;
 
-	width = readInt32(data, 16);
-	height = readInt32(data, 20);
+	width = readInt32BE(data, 16);
+	height = readInt32BE(data, 20);
 
 	return true;
 }
@@ -169,13 +177,13 @@ static bool getDimensionsJpeg(const std::string& data, int& width, int& height)
 			if (offset + 10 > data.size())
 				return false;
 
-			width = readInt16(data, offset + 7);
-			height = readInt16(data, offset + 5);
+			width = readInt16BE(data, offset + 7);
+			height = readInt16BE(data, offset + 5);
 
 			return true;
 		}
 
-		offset += 2 + readInt16(data, offset + 2);
+		offset += 2 + readInt16BE(data, offset + 2);
 	}
 
 	return false;
@@ -202,7 +210,7 @@ static bool hasTransparencyPng(const std::string& data)
 
 	while (offset + 12 <= data.size())
 	{
-		int length = readInt32(data, offset);
+		int length = readInt32BE(data, offset);
 
 		if (length < 0)
 			return false;
@@ -216,10 +224,49 @@ static bool hasTransparencyPng(const std::string& data)
 	return false;
 }
 
+static bool hasTransparencyKtx2(const std::string& data)
+{
+	if (data.size() < 12 + 17 * 4)
+		return false;
+
+	const char* signature = "\xabKTX 20\xbb\r\n\x1a\n";
+	if (data.compare(0, 12, signature) != 0)
+		return false;
+
+	int dfdOffset = readInt32LE(data, 48);
+	int dfdLength = readInt32LE(data, 52);
+
+	if (dfdLength < 4 + 24 + 16 || unsigned(dfdOffset) > data.size() || unsigned(dfdLength) > data.size() - dfdOffset)
+		return false;
+
+	const int KDF_DF_MODEL_ETC1S = 163;
+	const int KDF_DF_MODEL_UASTC = 166;
+	const int KHR_DF_CHANNEL_UASTC_RGBA = 3;
+	const int KHR_DF_CHANNEL_ETC1S_RGB = 0;
+	const int KHR_DF_CHANNEL_ETC1S_AAA = 15;
+
+	int colorModel = readInt32LE(data, dfdOffset + 12) & 0xff;
+	int channelType1 = (readInt32LE(data, dfdOffset + 28) >> 24) & 0xf;
+	int channelType2 = dfdLength >= 4 + 24 + 16 * 2 ? (readInt32LE(data, dfdOffset + 44) >> 24) & 0xf : channelType1;
+
+	if (colorModel == KDF_DF_MODEL_ETC1S)
+	{
+		return channelType1 == KHR_DF_CHANNEL_ETC1S_RGB && channelType2 == KHR_DF_CHANNEL_ETC1S_AAA;
+	}
+	else if (colorModel == KDF_DF_MODEL_UASTC)
+	{
+		return channelType1 == KHR_DF_CHANNEL_UASTC_RGBA;
+	}
+
+	return false;
+}
+
 bool hasAlpha(const std::string& data, const char* mime_type)
 {
 	if (strcmp(mime_type, "image/png") == 0)
 		return hasTransparencyPng(data);
+	else if (strcmp(mime_type, "image/ktx2") == 0)
+		return hasTransparencyKtx2(data);
 	else
 		return false;
 }
