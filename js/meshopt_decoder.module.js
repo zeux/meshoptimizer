@@ -15,12 +15,12 @@ var MeshoptDecoder = (function() {
 		};
 	}
 
-	var wasm = WebAssembly.validate(detector) ? wasm_simd : wasm_base;
+	var wasm = WebAssembly.validate(detector) ? unpack(wasm_simd) : unpack(wasm_base);
 
 	var instance;
 
 	var ready =
-		WebAssembly.instantiate(unpack(wasm), {})
+		WebAssembly.instantiate(wasm, {})
 		.then(function(result) {
 			instance = result.instance;
 			instance.exports.__wasm_call_ctors();
@@ -93,7 +93,7 @@ var MeshoptDecoder = (function() {
 
 	function initWorkers(count) {
 		var source =
-			"self.ready = WebAssembly.instantiate(new Uint8Array([" + new Uint8Array(unpack(wasm)) + "]), {})" +
+			"self.ready = WebAssembly.instantiate(new Uint8Array([" + new Uint8Array(wasm) + "]), {})" +
 			".then(function(result) { result.instance.exports.__wasm_call_ctors(); return result.instance; });" +
 			"self.onmessage = " + workerProcess.name + ";" + decode.toString() + workerProcess.toString();
 
