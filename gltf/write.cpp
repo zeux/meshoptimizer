@@ -966,6 +966,8 @@ void writeTexture(std::string& json, const cgltf_texture& texture, const ImageIn
 			append(json, "\"extensions\":{\"KHR_texture_basisu\":{\"source\":");
 			append(json, size_t(texture.image - data->images));
 			append(json, "}}");
+
+			return; // skip input basisu image if present, as we replace it with the one we encoded
 		}
 		else
 		{
@@ -974,7 +976,8 @@ void writeTexture(std::string& json, const cgltf_texture& texture, const ImageIn
 			append(json, size_t(texture.image - data->images));
 		}
 	}
-	else if (texture.has_basisu)
+
+	if (texture.has_basisu && texture.basisu_image)
 	{
 		comma(json);
 		append(json, "\"extensions\":{\"KHR_texture_basisu\":{\"source\":");

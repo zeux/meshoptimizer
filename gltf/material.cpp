@@ -443,7 +443,13 @@ bool hasValidTransform(const cgltf_texture_view& view)
 
 static const cgltf_image* getTextureImage(const cgltf_texture* texture)
 {
-       return texture ? (texture->has_basisu ? texture->basisu_image : texture->image) : NULL;
+	if (texture && texture->image)
+		return texture->image;
+
+	if (texture && texture->has_basisu && texture->basisu_image)
+		return texture->basisu_image;
+
+	return NULL;
 }
 
 static void analyzeMaterialTexture(const cgltf_texture_view& view, TextureKind kind, MaterialInfo& mi, cgltf_data* data, std::vector<TextureInfo>& textures, std::vector<ImageInfo>& images)
