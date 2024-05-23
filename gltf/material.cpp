@@ -11,6 +11,12 @@ static bool areTexturesEqual(const cgltf_texture& lhs, const cgltf_texture& rhs)
 	if (lhs.sampler != rhs.sampler)
 		return false;
 
+	if (lhs.has_basisu != rhs.has_basisu)
+		return false;
+
+	if (lhs.basisu_image != rhs.basisu_image)
+		return false;
+
 	return true;
 }
 
@@ -435,6 +441,17 @@ bool hasValidTransform(const cgltf_texture_view& view)
 	return false;
 }
 
+static const cgltf_image* getTextureImage(const cgltf_texture* texture)
+{
+	if (texture && texture->image)
+		return texture->image;
+
+	if (texture && texture->has_basisu && texture->basisu_image)
+		return texture->basisu_image;
+
+	return NULL;
+}
+
 static void analyzeMaterialTexture(const cgltf_texture_view& view, TextureKind kind, MaterialInfo& mi, cgltf_data* data, std::vector<TextureInfo>& textures, std::vector<ImageInfo>& images)
 {
 	mi.usesTextureTransform |= hasValidTransform(view);
@@ -442,9 +459,9 @@ static void analyzeMaterialTexture(const cgltf_texture_view& view, TextureKind k
 	if (view.texture)
 		textures[view.texture - data->textures].keep = true;
 
-	if (view.texture && view.texture->image)
+	if (const cgltf_image* image = getTextureImage(view.texture))
 	{
-		ImageInfo& info = images[view.texture->image - data->images];
+		ImageInfo& info = images[image - data->images];
 
 		mi.textureSetMask |= 1u << view.texcoord;
 		mi.needsTangents |= (kind == TextureKind_Normal);
@@ -549,7 +566,9 @@ static bool shouldKeepAlpha(const cgltf_texture_view& color, float alpha, cgltf_
 	if (alpha != 1.f)
 		return true;
 
-	return color.texture && color.texture->image && getChannels(*color.texture->image, images[color.texture->image - data->images], input_path) == 4;
+	const cgltf_image* image = getTextureImage(color.texture);
+
+	return image && getChannels(*image, images[image - data->images], input_path) == 4;
 }
 
 void optimizeMaterials(cgltf_data* data, const char* input_path, std::vector<ImageInfo>& images)

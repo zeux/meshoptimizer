@@ -81,6 +81,7 @@ gltfpack supports most Khronos extensions and some multi-vendor extensions in th
 - KHR_materials_variants
 - KHR_materials_volume
 - KHR_mesh_quantization
+- KHR_texture_basisu
 - KHR_texture_transform
 - EXT_meshopt_compression
 
