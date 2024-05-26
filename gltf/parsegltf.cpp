@@ -275,7 +275,7 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 	}
 }
 
-static void parseMeshInstancesGltf(cgltf_data* data, std::vector<Transform>& instances, cgltf_node* node)
+static void parseMeshInstancesGltf(std::vector<Transform>& instances, cgltf_node* node)
 {
 	cgltf_accessor* translation = NULL;
 	cgltf_accessor* rotation = NULL;
@@ -293,14 +293,7 @@ static void parseMeshInstancesGltf(cgltf_data* data, std::vector<Transform>& ins
 			scale = attr.data;
 	}
 
-	size_t count = translation ? translation->count : (rotation ? rotation->count : (scale ? scale->count : 0));
-
-	// todo move to cgltf?
-	if (count == 0 || (translation && translation->count != count) || (rotation && rotation->count != count) || (scale && scale->count != count))
-	{
-		fprintf(stderr, "Warning: ignoring instancing data in node %d as no transforms are present\n", int(node - data->nodes));
-		return;
-	}
+	size_t count = node->mesh_gpu_instancing.attributes[0].data->count;
 
 	instances.reserve(instances.size() + count);
 
@@ -358,7 +351,7 @@ static void parseMeshNodesGltf(cgltf_data* data, std::vector<Mesh>& meshes, cons
 			if (node.has_mesh_gpu_instancing)
 			{
 				mesh->scene = 0; // TODO
-				parseMeshInstancesGltf(data, mesh->instances, &node);
+				parseMeshInstancesGltf(mesh->instances, &node);
 			}
 			else
 				mesh->nodes.push_back(&node);
