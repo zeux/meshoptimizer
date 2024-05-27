@@ -275,6 +275,54 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 	}
 }
 
+static void parseMeshInstancesGltf(std::vector<Transform>& instances, cgltf_node* node)
+{
+	cgltf_accessor* translation = NULL;
+	cgltf_accessor* rotation = NULL;
+	cgltf_accessor* scale = NULL;
+
+	for (size_t i = 0; i < node->mesh_gpu_instancing.attributes_count; ++i)
+	{
+		cgltf_attribute& attr = node->mesh_gpu_instancing.attributes[i];
+
+		if (strcmp(attr.name, "TRANSLATION") == 0 && attr.data->type == cgltf_type_vec3)
+			translation = attr.data;
+		else if (strcmp(attr.name, "ROTATION") == 0 && attr.data->type == cgltf_type_vec4)
+			rotation = attr.data;
+		else if (strcmp(attr.name, "SCALE") == 0 && attr.data->type == cgltf_type_vec3)
+			scale = attr.data;
+	}
+
+	size_t count = node->mesh_gpu_instancing.attributes[0].data->count;
+
+	instances.reserve(instances.size() + count);
+
+	cgltf_node instance = {};
+	instance.parent = node;
+	instance.has_translation = translation != NULL;
+	instance.has_rotation = rotation != NULL;
+	instance.has_scale = scale != NULL;
+	instance.rotation[3] = 1.f;
+	instance.scale[0] = 1.f;
+	instance.scale[1] = 1.f;
+	instance.scale[2] = 1.f;
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		if (translation)
+			cgltf_accessor_read_float(translation, i, instance.translation, sizeof(float));
+		if (rotation)
+			cgltf_accessor_read_float(rotation, i, instance.rotation, sizeof(float));
+		if (scale)
+			cgltf_accessor_read_float(scale, i, instance.scale, sizeof(float));
+
+		Transform xf;
+		cgltf_node_transform_world(&instance, xf.data);
+
+		instances.push_back(xf);
+	}
+}
+
 static void parseMeshNodesGltf(cgltf_data* data, std::vector<Mesh>& meshes, const std::vector<std::pair<size_t, size_t> >& mesh_remap)
 {
 	for (size_t i = 0; i < data->nodes_count; ++i)
@@ -289,7 +337,7 @@ static void parseMeshNodesGltf(cgltf_data* data, std::vector<Mesh>& meshes, cons
 		{
 			Mesh* mesh = &meshes[mi];
 
-			if (!mesh->nodes.empty() && mesh->skin != node.skin)
+			if (mesh->skin != node.skin && (!mesh->nodes.empty() || !mesh->instances.empty()))
 			{
 				// this should be extremely rare - if the same mesh is used with different skins, we need to duplicate it
 				// in this case we don't spend any effort on keeping the number of duplicates to the minimum, because this
@@ -298,8 +346,16 @@ static void parseMeshNodesGltf(cgltf_data* data, std::vector<Mesh>& meshes, cons
 				mesh = &meshes.back();
 			}
 
-			mesh->nodes.push_back(&node);
-			mesh->skin = node.skin;
+			if (node.has_mesh_gpu_instancing)
+			{
+				mesh->scene = 0; // we need to assign scene index since instances are attached to a scene; for now we assume 0
+				parseMeshInstancesGltf(mesh->instances, &node);
+			}
+			else
+			{
+				mesh->skin = node.skin;
+				mesh->nodes.push_back(&node);
+			}
 		}
 	}
 
@@ -308,7 +364,7 @@ static void parseMeshNodesGltf(cgltf_data* data, std::vector<Mesh>& meshes, cons
 		Mesh& mesh = meshes[i];
 
 		// because the rest of gltfpack assumes that empty nodes array = world-space mesh, we need to filter unused meshes
-		if (mesh.nodes.empty())
+		if (mesh.nodes.empty() && mesh.instances.empty())
 		{
 			mesh.streams.clear();
 			mesh.indices.clear();
@@ -530,8 +586,6 @@ static cgltf_data* parseGltf(cgltf_data* data, cgltf_result result, std::vector<
 		*error = getError(result, data);
 	else if (requiresExtension(data, "KHR_draco_mesh_compression"))
 		*error = "file requires Draco mesh compression support";
-	else if (requiresExtension(data, "EXT_mesh_gpu_instancing"))
-		*error = "file requires mesh instancing support";
 	else if (needsDummyBuffers(data))
 		*error = "buffer has no data";
 
@@ -543,6 +597,8 @@ static cgltf_data* parseGltf(cgltf_data* data, cgltf_result result, std::vector<
 
 	if (requiresExtension(data, "KHR_mesh_quantization"))
 		fprintf(stderr, "Warning: file uses quantized geometry; repacking may result in increased quantization error\n");
+	if (requiresExtension(data, "EXT_mesh_gpu_instancing") && data->scenes_count > 1)
+		fprintf(stderr, "Warning: file uses instancing and has more than one scene; results may be incorrect\n");
 
 	std::vector<std::pair<size_t, size_t> > mesh_remap;
 

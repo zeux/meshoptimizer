@@ -281,7 +281,10 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
 		Mesh& mesh = meshes[i];
-		assert(mesh.instances.empty());
+
+		// mesh is already instanced, skip
+		if (!mesh.instances.empty())
+			continue;
 
 		// mesh is already world space, skip
 		if (mesh.nodes.empty())
@@ -664,9 +667,6 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 		append(json_meshes, "}");
 
-		assert(mesh.nodes.empty() || mesh.instances.empty());
-		ext_instancing = ext_instancing || !mesh.instances.empty();
-
 		if (mesh.nodes.size())
 		{
 			for (size_t j = 0; j < mesh.nodes.size(); ++j)
@@ -691,7 +691,8 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 				}
 			}
 		}
-		else if (mesh.instances.size())
+
+		if (mesh.instances.size())
 		{
 			assert(mesh.scene >= 0);
 			comma(json_roots[mesh.scene]);
@@ -704,7 +705,8 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 			node_offset++;
 		}
-		else
+
+		if (mesh.nodes.empty() && mesh.instances.empty())
 		{
 			assert(mesh.scene >= 0);
 			comma(json_roots[mesh.scene]);
@@ -716,6 +718,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		}
 
 		mesh_offset++;
+		ext_instancing = ext_instancing || !mesh.instances.empty();
 
 		// skip all meshes that we've written in this iteration
 		assert(pi > i);
