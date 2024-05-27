@@ -457,14 +457,17 @@ static void analyzeMaterialTexture(const cgltf_texture_view& view, TextureKind k
 	mi.usesTextureTransform |= hasValidTransform(view);
 
 	if (view.texture)
+	{
 		textures[view.texture - data->textures].keep = true;
+
+		mi.textureSetMask |= 1u << view.texcoord;
+		mi.needsTangents |= (kind == TextureKind_Normal);
+	}
 
 	if (const cgltf_image* image = getTextureImage(view.texture))
 	{
 		ImageInfo& info = images[image - data->images];
 
-		mi.textureSetMask |= 1u << view.texcoord;
-		mi.needsTangents |= (kind == TextureKind_Normal);
 
 		if (info.kind == TextureKind_Generic)
 			info.kind = kind;
