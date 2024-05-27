@@ -346,15 +346,16 @@ static void parseMeshNodesGltf(cgltf_data* data, std::vector<Mesh>& meshes, cons
 				mesh = &meshes.back();
 			}
 
-			mesh->skin = node.skin;
-
 			if (node.has_mesh_gpu_instancing)
 			{
-				mesh->scene = 0; // TODO
+				mesh->scene = 0; // TODO: we need to assign scene index since instances are attached to a scene; for now we assume 0
 				parseMeshInstancesGltf(mesh->instances, &node);
 			}
 			else
+			{
+				mesh->skin = node.skin;
 				mesh->nodes.push_back(&node);
+			}
 		}
 	}
 
