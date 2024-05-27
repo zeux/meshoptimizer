@@ -348,7 +348,7 @@ static void parseMeshNodesGltf(cgltf_data* data, std::vector<Mesh>& meshes, cons
 
 			if (node.has_mesh_gpu_instancing)
 			{
-				mesh->scene = 0; // TODO: we need to assign scene index since instances are attached to a scene; for now we assume 0
+				mesh->scene = 0; // we need to assign scene index since instances are attached to a scene; for now we assume 0
 				parseMeshInstancesGltf(mesh->instances, &node);
 			}
 			else
@@ -597,6 +597,8 @@ static cgltf_data* parseGltf(cgltf_data* data, cgltf_result result, std::vector<
 
 	if (requiresExtension(data, "KHR_mesh_quantization"))
 		fprintf(stderr, "Warning: file uses quantized geometry; repacking may result in increased quantization error\n");
+	if (requiresExtension(data, "EXT_mesh_gpu_instancing") && data->scenes_count > 1)
+		fprintf(stderr, "Warning: file uses instancing and has more than one scene; results may be incorrect\n");
 
 	std::vector<std::pair<size_t, size_t> > mesh_remap;
 
