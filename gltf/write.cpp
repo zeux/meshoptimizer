@@ -471,11 +471,9 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 	if (tm.thickness_factor != 0)
 	{
 		// thickness is in mesh coordinate space which is rescaled by quantization
-		float node_scale = qp ? qp->scale / float((1 << qp->bits) - 1) * (qp->normalized ? 65535.f : 1.f) : 1.f;
-
 		comma(json);
 		append(json, "\"thicknessFactor\":");
-		append(json, tm.thickness_factor / node_scale);
+		append(json, tm.thickness_factor / (qp ? qp->node_scale : 1.f));
 	}
 	if (memcmp(tm.attenuation_color, white, 12) != 0)
 	{
@@ -1097,8 +1095,6 @@ size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_
 
 		if (settings.quantize && !settings.pos_float)
 		{
-			float node_scale = qp.scale / float((1 << qp.bits) - 1) * (qp.normalized ? 65535.f : 1.f);
-
 			// pos_offset has to be applied first, thus it results in an offset rotated by the bind matrix
 			transform[12] += qp.offset[0] * transform[0] + qp.offset[1] * transform[4] + qp.offset[2] * transform[8];
 			transform[13] += qp.offset[0] * transform[1] + qp.offset[1] * transform[5] + qp.offset[2] * transform[9];
@@ -1106,7 +1102,7 @@ size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_
 
 			// node_scale will be applied before the rotation/scale from transform
 			for (int k = 0; k < 12; ++k)
-				transform[k] *= node_scale;
+				transform[k] *= qp.node_scale;
 		}
 
 		scratch.append(reinterpret_cast<const char*>(transform), sizeof(transform));
@@ -1156,17 +1152,15 @@ size_t writeInstances(std::vector<BufferView>& views, std::string& json_accessor
 		{
 			const float* transform = transforms[i].data;
 
-			float node_scale = qp.scale / float((1 << qp.bits) - 1) * (qp.normalized ? 65535.f : 1.f);
-
 			// pos_offset has to be applied first, thus it results in an offset rotated by the instance matrix
 			position[i].f[0] += qp.offset[0] * transform[0] + qp.offset[1] * transform[4] + qp.offset[2] * transform[8];
 			position[i].f[1] += qp.offset[0] * transform[1] + qp.offset[1] * transform[5] + qp.offset[2] * transform[9];
 			position[i].f[2] += qp.offset[0] * transform[2] + qp.offset[1] * transform[6] + qp.offset[2] * transform[10];
 
 			// node_scale will be applied before the rotation/scale from transform
-			scale[i].f[0] *= node_scale;
-			scale[i].f[1] *= node_scale;
-			scale[i].f[2] *= node_scale;
+			scale[i].f[0] *= qp.node_scale;
+			scale[i].f[1] *= qp.node_scale;
+			scale[i].f[2] *= qp.node_scale;
 		}
 	}
 
@@ -1186,14 +1180,11 @@ void writeMeshNode(std::string& json, size_t mesh_offset, cgltf_node* node, cglt
 	append(json, mesh_offset);
 	if (skin)
 	{
-		comma(json);
-		append(json, "\"skin\":");
+		append(json, ",\"skin\":");
 		append(json, size_t(skin - data->skins));
 	}
 	if (qp)
 	{
-		float node_scale = qp->scale / float((1 << qp->bits) - 1) * (qp->normalized ? 65535.f : 1.f);
-
 		append(json, ",\"translation\":[");
 		append(json, qp->offset[0]);
 		append(json, ",");
@@ -1201,11 +1192,11 @@ void writeMeshNode(std::string& json, size_t mesh_offset, cgltf_node* node, cglt
 		append(json, ",");
 		append(json, qp->offset[2]);
 		append(json, "],\"scale\":[");
-		append(json, node_scale);
+		append(json, qp->node_scale);
 		append(json, ",");
-		append(json, node_scale);
+		append(json, qp->node_scale);
 		append(json, ",");
-		append(json, node_scale);
+		append(json, qp->node_scale);
 		append(json, "]");
 	}
 	if (node && node->weights_count)

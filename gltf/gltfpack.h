@@ -170,6 +170,8 @@ struct QuantizationPosition
 	float scale;
 	int bits;
 	bool normalized;
+
+	float node_scale; // computed from scale/bits/normalized
 };
 
 struct QuantizationTexture

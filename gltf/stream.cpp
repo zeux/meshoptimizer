@@ -97,6 +97,8 @@ QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes
 		result.scale = std::max(b.max.f[0] - b.min.f[0], std::max(b.max.f[1] - b.min.f[1], b.max.f[2] - b.min.f[2]));
 	}
 
+	result.node_scale = result.scale / float((1 << result.bits) - 1) * (result.normalized ? 65535.f : 1.f);
+
 	return result;
 }
 

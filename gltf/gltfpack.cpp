@@ -675,7 +675,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 				assert(ni.keep);
 
 				// if we don't use position quantization, prefer attaching the mesh to its node directly
-				if (!ni.has_mesh && (!settings.quantize || settings.pos_float))
+				if (!ni.has_mesh && (!settings.quantize || settings.pos_float || (qp.offset[0] == 0.f && qp.offset[1] == 0.f && qp.offset[2] == 0 && qp.node_scale == 1.f)))
 				{
 					ni.has_mesh = true;
 					ni.mesh_index = mesh_offset;
