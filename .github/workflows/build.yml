@@ -84,7 +84,7 @@ jobs:
     - name: test
       run: find glTF-Sample-Assets -name *.gltf -or -name *.glb | xargs -d '\n' ./gltfpack -cc -test
     - name: pack
-      run: find glTF-Sample-Assets -name *.gltf | grep -v 'glTF-Draco\|DiffuseTransmissionPlant' | xargs -d '\n' -I '{}' ./gltfpack -i '{}' -o '{}pack.gltf'
+      run: find glTF-Sample-Assets -name *.gltf | grep -v 'glTF-Draco' | xargs -d '\n' -I '{}' ./gltfpack -i '{}' -o '{}pack.gltf'
     - name: validate
       run: |
         curl -sL $VALIDATOR | tar xJ
