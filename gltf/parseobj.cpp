@@ -37,8 +37,8 @@ static void parseMaterialsObj(fastObjMesh* obj, cgltf_data* data)
 	{
 		fastObjMaterial& om = obj->materials[mi];
 
-		if (om.map_Kd.name && textureIndex(textures, om.map_Kd.name) < 0)
-			textures.push_back(om.map_Kd.name);
+		if (obj->textures[om.map_Kd].name && textureIndex(textures, obj->textures[om.map_Kd].name) < 0)
+			textures.push_back(obj->textures[om.map_Kd].name);
 	}
 
 	data->images = (cgltf_image*)calloc(textures.size(), sizeof(cgltf_image));
@@ -81,9 +81,9 @@ static void parseMaterialsObj(fastObjMesh* obj, cgltf_data* data)
 
 		gm.alpha_cutoff = 0.5f;
 
-		if (om.map_Kd.name)
+		if (obj->textures[om.map_Kd].name)
 		{
-			gm.pbr_metallic_roughness.base_color_texture.texture = &data->textures[textureIndex(textures, om.map_Kd.name)];
+			gm.pbr_metallic_roughness.base_color_texture.texture = &data->textures[textureIndex(textures, obj->textures[om.map_Kd].name)];
 			gm.pbr_metallic_roughness.base_color_texture.scale = 1.0f;
 
 			gm.alpha_mode = (om.illum == 4 || om.illum == 6 || om.illum == 7 || om.illum == 9) ? cgltf_alpha_mode_mask : cgltf_alpha_mode_opaque;
@@ -95,10 +95,10 @@ static void parseMaterialsObj(fastObjMesh* obj, cgltf_data* data)
 			gm.pbr_metallic_roughness.base_color_factor[2] = om.Kd[2];
 		}
 
-		if (om.map_d.name)
+		if (obj->textures[om.map_d].name)
 		{
-			if (om.map_Kd.name && strcmp(om.map_Kd.name, om.map_d.name) != 0)
-				fprintf(stderr, "Warning: material has different diffuse and alpha textures (Kd: %s, d: %s) and might not render correctly\n", om.map_Kd.name, om.map_d.name);
+			if (obj->textures[om.map_Kd].name && strcmp(obj->textures[om.map_Kd].name, obj->textures[om.map_d].name) != 0)
+				fprintf(stderr, "Warning: material has different diffuse and alpha textures (Kd: %s, d: %s) and might not render correctly\n", obj->textures[om.map_Kd].name, obj->textures[om.map_d].name);
 
 			gm.alpha_mode = cgltf_alpha_mode_blend;
 		}
