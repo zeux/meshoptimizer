@@ -1,7 +1,7 @@
 /*
  * fast_obj
  *
- * Version 1.2
+ * Version 1.3
  *
  * MIT License
  *
@@ -31,7 +31,7 @@
 #define FAST_OBJ_HDR
 
 #define FAST_OBJ_VERSION_MAJOR  1
-#define FAST_OBJ_VERSION_MINOR  2
+#define FAST_OBJ_VERSION_MINOR  3
 #define FAST_OBJ_VERSION        ((FAST_OBJ_VERSION_MAJOR << 8) | FAST_OBJ_VERSION_MINOR)
 
 #include <stdlib.h>
@@ -68,16 +68,16 @@ typedef struct
     /* Set for materials that don't come from the associated mtllib */
     int                         fallback;
 
-    /* Texture maps */
-    fastObjTexture              map_Ka;
-    fastObjTexture              map_Kd;
-    fastObjTexture              map_Ks;
-    fastObjTexture              map_Ke;
-    fastObjTexture              map_Kt;
-    fastObjTexture              map_Ns;
-    fastObjTexture              map_Ni;
-    fastObjTexture              map_d;
-    fastObjTexture              map_bump;
+    /* Texture map indices in fastObjMesh textures array */
+    unsigned int                map_Ka;
+    unsigned int                map_Kd;
+    unsigned int                map_Ks;
+    unsigned int                map_Ke;
+    unsigned int                map_Kt;
+    unsigned int                map_Ns;
+    unsigned int                map_Ni;
+    unsigned int                map_d;
+    unsigned int                map_bump;
 
 } fastObjMaterial;
 
@@ -114,6 +114,10 @@ typedef struct
 } fastObjGroup;
 
 
+/* Note: a dummy zero-initialized value is added to the first index
+   of the positions, texcoords, normals and textures arrays. Hence,
+   valid indices into these arrays start from 1, with an index of 0
+   indicating that the attribute is not present. */
 typedef struct
 {
     /* Vertex data */
@@ -141,6 +145,10 @@ typedef struct
     /* Materials */
     unsigned int                material_count;
     fastObjMaterial*            materials;
+
+    /* Texture maps */
+    unsigned int                texture_count;
+    fastObjTexture*             textures;
 
     /* Mesh objects ('o' tag in .obj file) */
     unsigned int                object_count;
@@ -326,7 +334,7 @@ unsigned long file_size(void* file, void* user_data)
     long p;
     long n;
     (void)(user_data);
-    
+
     f = (FILE*)(file);
 
     p = ftell(f);
@@ -760,8 +768,10 @@ const char* parse_face(fastObjData* data, const char* ptr)
 
         if (v < 0)
             vn.p = (array_size(data->mesh->positions) / 3) - (fastObjUInt)(-v);
-        else
+        else if (v > 0)
             vn.p = (fastObjUInt)(v);
+        else
+            return ptr; /* Skip lines with no valid vertex index */
 
         if (t < 0)
             vn.t = (array_size(data->mesh->texcoords) / 2) - (fastObjUInt)(-t);
@@ -877,15 +887,15 @@ fastObjMaterial mtl_default(void)
 
     mtl.fallback = 0;
 
-    mtl.map_Ka   = map_default();
-    mtl.map_Kd   = map_default();
-    mtl.map_Ks   = map_default();
-    mtl.map_Ke   = map_default();
-    mtl.map_Kt   = map_default();
-    mtl.map_Ns   = map_default();
-    mtl.map_Ni   = map_default();
-    mtl.map_d    = map_default();
-    mtl.map_bump = map_default();
+    mtl.map_Ka   = 0;
+    mtl.map_Kd   = 0;
+    mtl.map_Ks   = 0;
+    mtl.map_Ke   = 0;
+    mtl.map_Kt   = 0;
+    mtl.map_Ns   = 0;
+    mtl.map_Ni   = 0;
+    mtl.map_d    = 0;
+    mtl.map_bump = 0;
 
     return mtl;
 }
@@ -918,8 +928,8 @@ const char* parse_usemtl(fastObjData* data, const char* ptr)
         idx++;
     }
 
-    /* If doesn't exists, create a default one with this name
-    Note: this case happens when OBJ doesn't have its MTL */
+    /* If doesn't exist, create a default one with this name
+       Note: this case happens when OBJ doesn't have its MTL */
     if (idx == array_size(data->mesh->materials))
     {
         fastObjMaterial new_mtl = mtl_default();
@@ -945,16 +955,6 @@ void map_clean(fastObjTexture* map)
 static
 void mtl_clean(fastObjMaterial* mtl)
 {
-    map_clean(&mtl->map_Ka);
-    map_clean(&mtl->map_Kd);
-    map_clean(&mtl->map_Ks);
-    map_clean(&mtl->map_Ke);
-    map_clean(&mtl->map_Kt);
-    map_clean(&mtl->map_Ns);
-    map_clean(&mtl->map_Ni);
-    map_clean(&mtl->map_d);
-    map_clean(&mtl->map_bump);
-
     memory_dealloc(mtl->name);
 }
 
@@ -985,12 +985,12 @@ const char* read_mtl_triple(const char* p, float v[3])
 
 
 static
-const char* read_map(fastObjData* data, const char* ptr, fastObjTexture* map)
+const char* read_map(fastObjData* data, const char* ptr, unsigned int* idx)
 {
-    const char* s;
-    const char* e;
-    char*       name;
-    char*       path;
+    const char*     s;
+    const char*     e;
+    fastObjTexture* map;
+
 
     ptr = skip_whitespace(ptr);
 
@@ -1004,13 +1004,26 @@ const char* read_map(fastObjData* data, const char* ptr, fastObjTexture* map)
     ptr = skip_name(ptr);
     e = ptr;
 
-    name = string_copy(s, e);
+    /* Try to find an existing texture map with the same name */
+    *idx = 1; /* skip dummy at index 0 */
+    while (*idx < array_size(data->mesh->textures))
+    {
+        map = &data->mesh->textures[*idx];
+        if (map->name && string_equal(map->name, s, e))
+            break;
 
-    path = string_concat(data->base, s, e);
-    string_fix_separators(path);
+        (*idx)++;
+    }
 
-    map->name = name;
-    map->path = path;
+    /* Add it to the texture array if it didn't already exist */
+    if (*idx == array_size(data->mesh->textures))
+    {
+        fastObjTexture new_map = map_default();
+        new_map.name = string_copy(s, e);
+        new_map.path = string_concat(data->base, s, e);
+        string_fix_separators(new_map.path);
+        array_push(data->mesh->textures, new_map);
+    }
 
     return e;
 }
@@ -1376,6 +1389,9 @@ void fast_obj_destroy(fastObjMesh* m)
     for (ii = 0; ii < array_size(m->materials); ii++)
         mtl_clean(&m->materials[ii]);
 
+    for (ii = 0; ii < array_size(m->textures); ii++)
+        map_clean(&m->textures[ii]);
+
     array_clean(m->positions);
     array_clean(m->texcoords);
     array_clean(m->normals);
@@ -1386,6 +1402,7 @@ void fast_obj_destroy(fastObjMesh* m)
     array_clean(m->objects);
     array_clean(m->groups);
     array_clean(m->materials);
+    array_clean(m->textures);
 
     memory_dealloc(m);
 }
@@ -1439,11 +1456,12 @@ fastObjMesh* fast_obj_read_with_callbacks(const char* path, const fastObjCallbac
     m->face_materials = 0;
     m->indices        = 0;
     m->materials      = 0;
+    m->textures       = 0;
     m->objects        = 0;
     m->groups         = 0;
 
 
-    /* Add dummy position/texcoord/normal */
+    /* Add dummy position/texcoord/normal/texture */
     array_push(m->positions, 0.0f);
     array_push(m->positions, 0.0f);
     array_push(m->positions, 0.0f);
@@ -1454,6 +1472,8 @@ fastObjMesh* fast_obj_read_with_callbacks(const char* path, const fastObjCallbac
     array_push(m->normals, 0.0f);
     array_push(m->normals, 0.0f);
     array_push(m->normals, 1.0f);
+
+    array_push(m->textures, map_default());
 
 
     /* Data needed during parsing */
@@ -1546,6 +1566,7 @@ fastObjMesh* fast_obj_read_with_callbacks(const char* path, const fastObjCallbac
     m->face_count     = array_size(m->face_vertices);
     m->index_count    = array_size(m->indices);
     m->material_count = array_size(m->materials);
+    m->texture_count  = array_size(m->textures);
     m->object_count   = array_size(m->objects);
     m->group_count    = array_size(m->groups);
 
