@@ -454,20 +454,19 @@ static const cgltf_image* getTextureImage(const cgltf_texture* texture)
 
 static void analyzeMaterialTexture(const cgltf_texture_view& view, TextureKind kind, MaterialInfo& mi, cgltf_data* data, std::vector<TextureInfo>& textures, std::vector<ImageInfo>& images)
 {
-	mi.usesTextureTransform |= hasValidTransform(view);
+	mi.uses_texture_transform |= hasValidTransform(view);
 
 	if (view.texture)
 	{
 		textures[view.texture - data->textures].keep = true;
 
-		mi.textureSetMask |= 1u << view.texcoord;
-		mi.needsTangents |= (kind == TextureKind_Normal);
+		mi.texture_set_mask |= 1u << view.texcoord;
+		mi.needs_tangents |= (kind == TextureKind_Normal);
 	}
 
 	if (const cgltf_image* image = getTextureImage(view.texture))
 	{
 		ImageInfo& info = images[image - data->images];
-
 
 		if (info.kind == TextureKind_Generic)
 			info.kind = kind;

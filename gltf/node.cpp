@@ -45,7 +45,7 @@ void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vec
 			{
 				NodeInfo& ni = nodes[track.node - data->nodes];
 
-				ni.animated_paths |= (1 << track.path);
+				ni.animated_path_mask |= (1 << track.path);
 			}
 		}
 	}
@@ -55,7 +55,7 @@ void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vec
 		NodeInfo& ni = nodes[i];
 
 		for (cgltf_node* node = &data->nodes[i]; node; node = node->parent)
-			ni.animated |= nodes[node - data->nodes].animated_paths != 0;
+			ni.animated |= nodes[node - data->nodes].animated_path_mask != 0;
 	}
 }
 

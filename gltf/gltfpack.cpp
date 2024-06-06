@@ -364,8 +364,8 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		{
 			MaterialInfo vi = materials[mesh.variants[j].material - data->materials];
 
-			mi.needsTangents |= vi.needsTangents;
-			mi.textureSetMask |= vi.textureSetMask;
+			mi.needs_tangents |= vi.needs_tangents;
+			mi.texture_set_mask |= vi.texture_set_mask;
 			mi.unlit &= vi.unlit;
 		}
 
@@ -547,7 +547,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		ext_anisotropy = ext_anisotropy || material.has_anisotropy;
 		ext_dispersion = ext_dispersion || material.has_dispersion;
 		ext_unlit = ext_unlit || material.unlit;
-		ext_texture_transform = ext_texture_transform || mi.usesTextureTransform;
+		ext_texture_transform = ext_texture_transform || mi.uses_texture_transform;
 	}
 
 	for (size_t i = 0; i < meshes.size(); ++i)
@@ -848,9 +848,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		const char* ext = data->extensions_required[i];
 
 		if (!isExtensionSupported(extensions, sizeof(extensions) / sizeof(extensions[0]), ext))
-		{
 			fprintf(stderr, "Warning: required extension %s is not supported and will be skipped\n", ext);
-		}
 	}
 
 	writeExtensions(json, extensions, sizeof(extensions) / sizeof(extensions[0]));

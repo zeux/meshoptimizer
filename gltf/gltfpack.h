@@ -206,7 +206,7 @@ struct NodeInfo
 	bool keep;
 	bool animated;
 
-	unsigned int animated_paths;
+	unsigned int animated_path_mask;
 
 	int remap;
 
@@ -221,11 +221,11 @@ struct MaterialInfo
 {
 	bool keep;
 
-	bool usesTextureTransform;
-	bool needsTangents;
+	bool uses_texture_transform;
+	bool needs_tangents;
 	bool unlit;
 
-	unsigned int textureSetMask;
+	unsigned int texture_set_mask;
 
 	int remap;
 };

@@ -1395,7 +1395,7 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 		if (!ni.keep)
 			continue;
 
-		if (!settings.anim_const && (ni.animated_paths & (1 << track.path)) == 0)
+		if (!settings.anim_const && (ni.animated_path_mask & (1 << track.path)) == 0)
 			continue;
 
 		tracks.push_back(&track);
