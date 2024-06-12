@@ -76,66 +76,66 @@ Mesh parseObj(const char* path, double& reindex)
 		return Mesh();
 	}
 
+	reindex = timestamp();
+
 	size_t total_indices = 0;
 
 	for (unsigned int i = 0; i < obj->face_count; ++i)
 		total_indices += 3 * (obj->face_vertices[i] - 2);
 
-	std::vector<Vertex> vertices(total_indices);
+	size_t face_vertex_count = obj->index_count;
+
+	std::vector<unsigned int> remap(face_vertex_count);
+	size_t unique_vertices = meshopt_generateVertexRemap(&remap[0], NULL, face_vertex_count, obj->indices, face_vertex_count, sizeof(fastObjIndex));
+
+	Mesh mesh;
+	mesh.vertices.resize(unique_vertices);
+	mesh.indices.resize(total_indices);
+
+	for (unsigned int vi = 0; vi < face_vertex_count; ++vi)
+	{
+		unsigned int target = remap[vi];
+		// TODO: this fills every target vertex multiple times
+
+		fastObjIndex ii = obj->indices[vi];
+
+		Vertex v = {
+		    obj->positions[ii.p * 3 + 0],
+		    obj->positions[ii.p * 3 + 1],
+		    obj->positions[ii.p * 3 + 2],
+		    obj->normals[ii.n * 3 + 0],
+		    obj->normals[ii.n * 3 + 1],
+		    obj->normals[ii.n * 3 + 2],
+		    obj->texcoords[ii.t * 2 + 0],
+		    obj->texcoords[ii.t * 2 + 1],
+		};
+
+		mesh.vertices[target] = v;
+	}
 
 	size_t vertex_offset = 0;
 	size_t index_offset = 0;
 
-	for (unsigned int i = 0; i < obj->face_count; ++i)
+	for (unsigned int fi = 0; fi < obj->face_count; ++fi)
 	{
-		for (unsigned int j = 0; j < obj->face_vertices[i]; ++j)
+		unsigned int face_vertices = obj->face_vertices[fi];
+
+		for (unsigned int vi = 2; vi < face_vertices; ++vi)
 		{
-			fastObjIndex gi = obj->indices[index_offset + j];
+			size_t to = index_offset + (vi - 2) * 3;
 
-			Vertex v =
-			    {
-			        obj->positions[gi.p * 3 + 0],
-			        obj->positions[gi.p * 3 + 1],
-			        obj->positions[gi.p * 3 + 2],
-			        obj->normals[gi.n * 3 + 0],
-			        obj->normals[gi.n * 3 + 1],
-			        obj->normals[gi.n * 3 + 2],
-			        obj->texcoords[gi.t * 2 + 0],
-			        obj->texcoords[gi.t * 2 + 1],
-			    };
-
-			// triangulate polygon on the fly; offset-3 is always the first polygon vertex
-			if (j >= 3)
-			{
-				vertices[vertex_offset + 0] = vertices[vertex_offset - 3];
-				vertices[vertex_offset + 1] = vertices[vertex_offset - 1];
-				vertex_offset += 2;
-			}
-
-			vertices[vertex_offset] = v;
-			vertex_offset++;
+			mesh.indices[to + 0] = remap[vertex_offset];
+			mesh.indices[to + 1] = remap[vertex_offset + vi - 1];
+			mesh.indices[to + 2] = remap[vertex_offset + vi];
 		}
 
-		index_offset += obj->face_vertices[i];
+		vertex_offset += face_vertices;
+		index_offset += (face_vertices - 2) * 3;
 	}
 
 	fast_obj_destroy(obj);
 
-	reindex = timestamp();
-
-	Mesh result;
-
-	std::vector<unsigned int> remap(total_indices);
-
-	size_t total_vertices = meshopt_generateVertexRemap(&remap[0], NULL, total_indices, &vertices[0], total_indices, sizeof(Vertex));
-
-	result.indices.resize(total_indices);
-	meshopt_remapIndexBuffer(&result.indices[0], NULL, total_indices, &remap[0]);
-
-	result.vertices.resize(total_vertices);
-	meshopt_remapVertexBuffer(&result.vertices[0], &vertices[0], total_indices, sizeof(Vertex), &remap[0]);
-
-	return result;
+	return mesh;
 }
 
 void dumpObj(const Mesh& mesh, bool recomputeNormals = false)

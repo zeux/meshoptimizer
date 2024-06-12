@@ -1200,9 +1200,9 @@ static void simplifyLockFlags()
 	};
 
 	unsigned char lock[9] = {
-		1, 1, 1,
-		1, 0, 1,
-		1, 1, 1, // clang-format :-/
+	    1, 1, 1,
+	    1, 0, 1,
+	    1, 1, 1, // clang-format :-/
 	};
 
 	// 0 1 2
@@ -1232,7 +1232,6 @@ static void simplifyLockFlags()
 	assert(meshopt_simplifyWithAttributes(ib, ib, 24, vb, 9, 12, NULL, 0, NULL, 0, lock, 3, 1e-3f, 0) == 18);
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 }
-
 
 static void adjacency()
 {
