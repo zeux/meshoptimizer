@@ -884,7 +884,7 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio, bo
 		}
 }
 
-void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_vertices, bool scan)
+void debugMeshlets(const Mesh& source, Mesh& meshlets, int max_vertices, bool scan)
 {
 	Mesh mesh = source;
 	assert(mesh.type == cgltf_primitive_type_triangles);
@@ -947,66 +947,5 @@ void debugMeshlets(const Mesh& source, Mesh& meshlets, Mesh& bounds, int max_ver
 	meshlets.type = cgltf_primitive_type_triangles;
 	meshlets.streams.push_back(mv);
 	meshlets.streams.push_back(mc);
-
-	// generate bounds meshes, using a sphere per meshlet
-	bounds.nodes = mesh.nodes;
-
-	Stream bv = {cgltf_attribute_type_position};
-	Stream bc = {cgltf_attribute_type_color};
-
-	for (size_t i = 0; i < ml.size(); ++i)
-	{
-		const meshopt_Meshlet& m = ml[i];
-
-		meshopt_Bounds mb = meshopt_computeMeshletBounds(&mlv[m.vertex_offset], &mlt[m.triangle_offset], m.triangle_count, positions->data[0].f, positions->data.size(), sizeof(Attr));
-
-		unsigned int h = unsigned(i);
-		h ^= h >> 13;
-		h *= 0x5bd1e995;
-		h ^= h >> 15;
-
-		Attr c = {{float(h & 0xff) / 255.f, float((h >> 8) & 0xff) / 255.f, float((h >> 16) & 0xff) / 255.f, 0.1f}};
-
-		unsigned int offset = unsigned(bv.data.size());
-
-		const int N = 10;
-
-		for (int y = 0; y <= N; ++y)
-		{
-			float u = (y == N) ? 0 : float(y) / N * 2 * 3.1415926f;
-			float sinu = sinf(u), cosu = cosf(u);
-
-			for (int x = 0; x <= N; ++x)
-			{
-				float v = float(x) / N * 3.1415926f;
-				float sinv = sinf(v), cosv = cosf(v);
-
-				float fx = sinv * cosu;
-				float fy = sinv * sinu;
-				float fz = cosv;
-
-				Attr p = {{mb.center[0] + mb.radius * fx, mb.center[1] + mb.radius * fy, mb.center[2] + mb.radius * fz, 1.f}};
-
-				bv.data.push_back(p);
-				bc.data.push_back(c);
-			}
-		}
-
-		for (int y = 0; y < N; ++y)
-			for (int x = 0; x < N; ++x)
-			{
-				bounds.indices.push_back(offset + (N + 1) * (y + 0) + (x + 0));
-				bounds.indices.push_back(offset + (N + 1) * (y + 0) + (x + 1));
-				bounds.indices.push_back(offset + (N + 1) * (y + 1) + (x + 0));
-
-				bounds.indices.push_back(offset + (N + 1) * (y + 1) + (x + 0));
-				bounds.indices.push_back(offset + (N + 1) * (y + 0) + (x + 1));
-				bounds.indices.push_back(offset + (N + 1) * (y + 1) + (x + 1));
-			}
-	}
-
-	bounds.type = cgltf_primitive_type_triangles;
-	bounds.streams.push_back(bv);
-	bounds.streams.push_back(bc);
 }
 #endif
