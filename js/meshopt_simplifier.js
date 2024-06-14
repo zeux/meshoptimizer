@@ -155,6 +155,8 @@ var MeshoptSimplifier = (function() {
 
 	var simplifyOptions = {
 		LockBorder: 1,
+		Sparse: 2,
+		ErrorAbsolute: 4,
 	};
 
 	return {
