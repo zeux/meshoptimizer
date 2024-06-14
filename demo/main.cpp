@@ -670,7 +670,7 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 		for (size_t j = 0; j < m.triangle_count * 3; ++j)
 			lod.push_back(meshlet_vertices[m.vertex_offset + meshlet_triangles[m.triangle_offset + j]]);
 
-		unsigned int options = meshopt_SimplifyLockBorder;
+		unsigned int options = meshopt_SimplifyLockBorder | meshopt_SimplifySparse;
 
 		size_t cluster_target = size_t(float(m.triangle_count) * threshold) * 3;
 		size_t cluster_size = meshopt_simplify(&lod[cluster_offset], &lod[cluster_offset], m.triangle_count * 3, &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), cluster_target, threshold, options, 0);
