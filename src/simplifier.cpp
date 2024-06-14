@@ -212,15 +212,18 @@ static void buildPositionRemap(unsigned int* remap, unsigned int* wedge, const f
 
 static unsigned int* buildSparseRemap(unsigned int* indices, size_t index_count, size_t vertex_count, size_t* out_vertex_count, meshopt_Allocator& allocator)
 {
-	unsigned char* filter = allocator.allocate<unsigned char>(vertex_count);
-	memset(filter, 0, vertex_count);
+	// use a bit set to compute the precise number of unique vertices
+	unsigned char* filter = allocator.allocate<unsigned char>((vertex_count + 7) / 8);
+	memset(filter, 0, (vertex_count + 7) / 8);
 
 	size_t unique = 0;
 	for (size_t i = 0; i < index_count; ++i)
 	{
-		assert(indices[i] < vertex_count);
-		unique += filter[indices[i]] == 0;
-		filter[indices[i]] = 1;
+		unsigned int index = indices[i];
+		assert(index < vertex_count);
+
+		unique += (filter[index / 8] & (1 << (index % 8))) == 0;
+		filter[index / 8] |= 1 << (index % 8);
 	}
 
 	unsigned int* remap = allocator.allocate<unsigned int>(unique);
@@ -229,16 +232,18 @@ static unsigned int* buildSparseRemap(unsigned int* indices, size_t index_count,
 	// temporary map dense => sparse; we allocate it last so that we can deallocate it
 	unsigned int* revremap = allocator.allocate<unsigned int>(vertex_count);
 
+	// fill remap, using revremap as a helper, and rewrite indices in the same pass
+	// note: we use filter[] here to avoid initializing revremap for performance
 	for (size_t i = 0; i < index_count; ++i)
 	{
 		unsigned int index = indices[i];
 
-		if (filter[index] == 1)
+		if ((filter[index / 8] & (1 << (index % 8))) != 0)
 		{
 			remap[offset] = indices[i];
 			revremap[index] = unsigned(offset);
 			indices[i] = unsigned(offset);
-			filter[index] = 0;
+			filter[index / 8] &= ~(1 << (index % 8));
 			offset++;
 		}
 		else
