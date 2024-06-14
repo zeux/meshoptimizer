@@ -1188,15 +1188,15 @@ static void simplifyAttr()
 static void simplifyLockFlags()
 {
 	float vb[] = {
-	    0.000000f, 0.000000f, 0.000000f,
-	    0.000000f, 1.000000f, 0.000000f,
-	    0.000000f, 2.000000f, 0.000000f,
-	    1.000000f, 0.000000f, 0.000000f,
-	    1.000000f, 1.000000f, 0.000000f,
-	    1.000000f, 2.000000f, 0.000000f,
-	    2.000000f, 0.000000f, 0.000000f,
-	    2.000000f, 1.000000f, 0.000000f,
-	    2.000000f, 2.000000f, 0.000000f, // clang-format :-/
+	    0, 0, 0,
+	    0, 1, 0,
+	    0, 2, 0,
+	    1, 0, 0,
+	    1, 1, 0,
+	    1, 2, 0,
+	    2, 0, 0,
+	    2, 1, 0,
+	    2, 2, 0, // clang-format :-/
 	};
 
 	unsigned char lock[9] = {
@@ -1231,6 +1231,40 @@ static void simplifyLockFlags()
 
 	assert(meshopt_simplifyWithAttributes(ib, ib, 24, vb, 9, 12, NULL, 0, NULL, 0, lock, 3, 1e-3f, 0) == 18);
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+}
+
+static void simplifyErrorAbsolute()
+{
+	float vb[] = {
+	    0, 0, 0,
+	    0, 1, 0,
+	    0, 2, 0,
+	    1, 0, 0,
+	    1, 1, 1,
+	    1, 2, 0,
+	    2, 0, 0,
+	    2, 1, 0,
+	    2, 2, 0, // clang-format :-/
+	};
+
+	// 0 1 2
+	// 3 4 5
+	// 6 7 8
+
+	unsigned int ib[] = {
+	    0, 1, 3,
+	    3, 1, 4,
+	    1, 2, 4,
+	    4, 2, 5,
+	    3, 4, 6,
+	    6, 4, 7,
+	    4, 5, 7,
+	    7, 5, 8, // clang-format :-/
+	};
+
+	float error = 0.f;
+	assert(meshopt_simplify(ib, ib, 24, vb, 9, 12, 18, 2.f, meshopt_SimplifyLockBorder | meshopt_SimplifyErrorAbsolute, &error) == 18);
+	assert(fabsf(error - 0.85f) < 0.01f);
 }
 
 static void adjacency()
@@ -1448,6 +1482,7 @@ void runTests()
 	simplifyLockBorder();
 	simplifyAttr();
 	simplifyLockFlags();
+	simplifyErrorAbsolute();
 
 	adjacency();
 	tessellation();
