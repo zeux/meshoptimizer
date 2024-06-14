@@ -442,7 +442,7 @@ static float rescalePositions(Vector3* result, const float* vertex_positions_dat
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		unsigned int ri = sparse_remap ? sparse_remap[i] : i;
+		unsigned int ri = sparse_remap ? sparse_remap[i] : unsigned(i);
 		const float* v = vertex_positions_data + ri * vertex_stride_float;
 
 		if (result)
