@@ -1539,7 +1539,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
 	assert(target_index_count <= index_count);
-	assert((options & ~(meshopt_SimplifyLockBorder | meshopt_SimplifySparse)) == 0);
+	assert((options & ~(meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute)) == 0);
 	assert(vertex_attributes_stride >= attribute_count * sizeof(float) && vertex_attributes_stride <= 256);
 	assert(vertex_attributes_stride % sizeof(float) == 0);
 	assert(attribute_count <= kMaxAttributes);
@@ -1588,7 +1588,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 #endif
 
 	Vector3* vertex_positions = allocator.allocate<Vector3>(vertex_count);
-	rescalePositions(vertex_positions, vertex_positions_data, vertex_count, vertex_positions_stride, sparse_remap);
+	float vertex_scale = rescalePositions(vertex_positions, vertex_positions_data, vertex_count, vertex_positions_stride, sparse_remap);
 
 	float* vertex_attributes = NULL;
 
@@ -1634,7 +1634,8 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	float result_error = 0;
 
 	// target_error input is linear; we need to adjust it to match quadricError units
-	float error_limit = target_error * target_error;
+	float error_scale = (options & meshopt_SimplifyErrorAbsolute) ? vertex_scale : 1.f;
+	float error_limit = (target_error * target_error) / (error_scale * error_scale);
 
 	while (result_count > target_index_count)
 	{
@@ -1700,7 +1701,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 
 	// result_error is quadratic; we need to remap it back to linear
 	if (out_result_error)
-		*out_result_error = sqrtf(result_error);
+		*out_result_error = sqrtf(result_error) * error_scale;
 
 	return result_count;
 }

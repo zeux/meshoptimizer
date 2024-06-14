@@ -332,6 +332,8 @@ enum
     meshopt_SimplifyLockBorder = 1 << 0,
     /* Improve simplification performance assuming input indices are a sparse subset of the mesh. Note that error becomes relative to subset extents. */
     meshopt_SimplifySparse = 1 << 1,
+    /* Treat error limit and resulting error as absolute instead of relative to mesh extents. */
+    meshopt_SimplifyErrorAbsolute = 1 << 2,
 };
 
 /**
