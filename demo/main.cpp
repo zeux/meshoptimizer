@@ -658,8 +658,12 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 
 	double middle = timestamp();
 
+	float scale = meshopt_simplifyScale(&mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
+
 	std::vector<unsigned int> lod;
 	lod.reserve(mesh.indices.size());
+
+	float error = 0.f;
 
 	for (size_t i = 0; i < meshlets.size(); ++i)
 	{
@@ -670,10 +674,14 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 		for (size_t j = 0; j < m.triangle_count * 3; ++j)
 			lod.push_back(meshlet_vertices[m.vertex_offset + meshlet_triangles[m.triangle_offset + j]]);
 
-		unsigned int options = meshopt_SimplifyLockBorder | meshopt_SimplifySparse;
+		unsigned int options = meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute;
 
+		float cluster_target_error = 1e-2f * scale;
 		size_t cluster_target = size_t(float(m.triangle_count) * threshold) * 3;
-		size_t cluster_size = meshopt_simplify(&lod[cluster_offset], &lod[cluster_offset], m.triangle_count * 3, &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), cluster_target, threshold, options, 0);
+		float cluster_error = 0.f;
+		size_t cluster_size = meshopt_simplify(&lod[cluster_offset], &lod[cluster_offset], m.triangle_count * 3, &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), cluster_target, cluster_target_error, options, &cluster_error);
+
+		error = cluster_error > error ? cluster_error : error;
 
 		// simplified cluster is available in lod[cluster_offset..cluster_offset + cluster_size]
 		lod.resize(cluster_offset + cluster_size);
@@ -681,9 +689,10 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 
 	double end = timestamp();
 
-	printf("%-9s: %d triangles => %d triangles in %.2f msec, clusterized in %.2f msec\n",
+	printf("%-9s: %d triangles => %d triangles (%.2f%% deviation) in %.2f msec, clusterized in %.2f msec\n",
 	    "SimplifyN", // N for Nanite
 	    int(mesh.indices.size() / 3), int(lod.size() / 3),
+	    error / scale * 100,
 	    (end - middle) * 1000, (middle - start) * 1000);
 }
 
@@ -1291,6 +1300,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
+	simplify(mesh);
 	simplifyClusters(mesh);
 }
 
