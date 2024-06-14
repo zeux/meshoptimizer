@@ -307,7 +307,7 @@ static bool hasEdge(const EdgeAdjacency& adjacency, unsigned int a, unsigned int
 	return false;
 }
 
-static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned int* loopback, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_lock, unsigned int options)
+static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned int* loopback, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_lock, const unsigned int* sparse_remap, unsigned int options)
 {
 	memset(loop, -1, vertex_count * sizeof(unsigned int));
 	memset(loopback, -1, vertex_count * sizeof(unsigned int));
@@ -353,7 +353,7 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 	{
 		if (remap[i] == i)
 		{
-			if (vertex_lock && vertex_lock[i])
+			if (vertex_lock && vertex_lock[sparse_remap ? sparse_remap[i] : i])
 			{
 				// vertex is explicitly locked
 				result[i] = Kind_Locked;
@@ -1570,7 +1570,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	unsigned char* vertex_kind = allocator.allocate<unsigned char>(vertex_count);
 	unsigned int* loop = allocator.allocate<unsigned int>(vertex_count);
 	unsigned int* loopback = allocator.allocate<unsigned int>(vertex_count);
-	classifyVertices(vertex_kind, loop, loopback, vertex_count, adjacency, remap, wedge, vertex_lock, options);
+	classifyVertices(vertex_kind, loop, loopback, vertex_count, adjacency, remap, wedge, vertex_lock, sparse_remap, options);
 
 #if TRACE
 	size_t unique_positions = 0;
