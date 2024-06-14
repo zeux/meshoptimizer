@@ -1233,6 +1233,77 @@ static void simplifyLockFlags()
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 }
 
+static void simplifySparse()
+{
+	float vb[] = {
+	    0, 0, 100,
+	    0, 1, 0,
+	    0, 2, 100,
+	    1, 0, 0.1f,
+	    1, 1, 0.1f,
+	    1, 2, 0.1f,
+	    2, 0, 100,
+	    2, 1, 0,
+	    2, 2, 100, // clang-format :-/
+	};
+
+	float vba[] = {
+	    100,
+	    0.5f,
+	    100,
+	    0.5f,
+	    0.5f,
+	    0,
+	    100,
+	    0.5f,
+	    100, // clang-format :-/
+	};
+
+	float aw[] = {
+	    0.2f};
+
+	unsigned char lock[9] = {
+	    8, 1, 8,
+	    1, 0, 1,
+	    8, 1, 8, // clang-format :-/
+	};
+
+	//   1
+	// 3 4 5
+	//   7
+
+	unsigned int ib[] = {
+	    3, 1, 4,
+	    1, 5, 4,
+	    3, 4, 7,
+	    4, 5, 7, // clang-format :-/
+	};
+
+	unsigned int res[12];
+
+	// vertices 3-4-5 are slightly elevated along Z which guides the collapses when only using geometry
+	unsigned int expected[] = {
+	    1, 5, 3,
+	    3, 5, 7, // clang-format :-/
+	};
+
+	assert(meshopt_simplify(res, ib, 12, vb, 9, 12, 6, 1e-3f, meshopt_SimplifySparse) == 6);
+	assert(memcmp(res, expected, sizeof(expected)) == 0);
+
+	// vertices 1-4-7 have a crease in the attribute value which guides the collapses the opposite way when weighing attributes sufficiently
+	unsigned int expecteda[] = {
+	    3, 1, 7,
+	    1, 5, 7, // clang-format :-/
+	};
+
+	assert(meshopt_simplifyWithAttributes(res, ib, 12, vb, 9, 12, vba, sizeof(float), aw, 1, lock, 6, 1e-1f, meshopt_SimplifySparse) == 6);
+	assert(memcmp(res, expecteda, sizeof(expecteda)) == 0);
+
+	// a final test validates that destination can alias when using sparsity
+	assert(meshopt_simplify(ib, ib, 12, vb, 9, 12, 6, 1e-3f, meshopt_SimplifySparse) == 6);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+}
+
 static void simplifyErrorAbsolute()
 {
 	float vb[] = {
@@ -1482,6 +1553,7 @@ void runTests()
 	simplifyLockBorder();
 	simplifyAttr();
 	simplifyLockFlags();
+	simplifySparse();
 	simplifyErrorAbsolute();
 
 	adjacency();
