@@ -641,6 +641,52 @@ void simplifyComplete(const Mesh& mesh)
 	}
 }
 
+void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
+{
+	// note: we use clusters that are larger than normal to give simplifier room to work; in practice you'd use cluster groups merged from smaller clusters and build a cluster DAG
+	const size_t max_vertices = 255;
+	const size_t max_triangles = 512;
+
+	double start = timestamp();
+
+	size_t max_meshlets = meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles);
+	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
+	std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
+	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
+
+	meshlets.resize(meshopt_buildMeshlets(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, max_triangles, 0.f));
+
+	double middle = timestamp();
+
+	std::vector<unsigned int> lod;
+	lod.reserve(mesh.indices.size());
+
+	for (size_t i = 0; i < meshlets.size(); ++i)
+	{
+		const meshopt_Meshlet& m = meshlets[i];
+
+		size_t cluster_offset = lod.size();
+
+		for (size_t j = 0; j < m.triangle_count * 3; ++j)
+			lod.push_back(meshlet_vertices[m.vertex_offset + meshlet_triangles[m.triangle_offset + j]]);
+
+		unsigned int options = meshopt_SimplifyLockBorder;
+
+		size_t cluster_target = size_t(float(m.triangle_count) * threshold) * 3;
+		size_t cluster_size = meshopt_simplify(&lod[cluster_offset], &lod[cluster_offset], m.triangle_count * 3, &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), cluster_target, threshold, options, 0);
+
+		// simplified cluster is available in lod[cluster_offset..cluster_offset + cluster_size]
+		lod.resize(cluster_offset + cluster_size);
+	}
+
+	double end = timestamp();
+
+	printf("%-9s: %d triangles => %d triangles in %.2f msec, clusterized in %.2f msec\n",
+	    "SimplifyN", // N for Nanite
+	    int(mesh.indices.size() / 3), int(lod.size() / 3),
+	    (end - middle) * 1000, (middle - start) * 1000);
+}
+
 void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
 {
 	Mesh copy = mesh;
@@ -1245,7 +1291,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	simplify(mesh);
+	simplifyClusters(mesh);
 }
 
 int main(int argc, char** argv)
