@@ -223,27 +223,35 @@ static unsigned int* buildSparseRemap(unsigned int* indices, size_t index_count,
 		filter[indices[i]] = 1;
 	}
 
-	unsigned int* revremap = allocator.allocate<unsigned int>(vertex_count);
-
 	unsigned int* remap = allocator.allocate<unsigned int>(unique);
 	size_t offset = 0;
+
+	// temporary map dense => sparse; we allocate it last so that we can deallocate it
+	unsigned int* revremap = allocator.allocate<unsigned int>(vertex_count);
+
 	for (size_t i = 0; i < index_count; ++i)
 	{
-		if (filter[indices[i]] == 1)
+		unsigned int index = indices[i];
+
+		if (filter[index] == 1)
 		{
 			remap[offset] = indices[i];
-			filter[indices[i]] = 0;
-			revremap[indices[i]] = unsigned(offset);
+			revremap[index] = unsigned(offset);
 			indices[i] = unsigned(offset);
+			filter[index] = 0;
 			offset++;
 		}
 		else
 		{
-			indices[i] = revremap[indices[i]];
+			indices[i] = revremap[index];
 		}
 	}
 
+	allocator.deallocate(revremap);
+
+	assert(offset == unique);
 	*out_vertex_count = unique;
+
 	return remap;
 }
 
