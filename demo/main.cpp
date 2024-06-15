@@ -522,6 +522,8 @@ void simplifyPoints(const Mesh& mesh, float threshold = 0.2f)
 	double start = timestamp();
 
 	size_t target_vertex_count = size_t(mesh.vertices.size() * threshold);
+	if (target_vertex_count == 0)
+		return;
 
 	std::vector<unsigned int> indices(target_vertex_count);
 	indices.resize(meshopt_simplifyPoints(&indices[0], &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), NULL, 0, 0, target_vertex_count));
@@ -1286,6 +1288,7 @@ void process(const char* path)
 	simplifySloppy(mesh);
 	simplifyComplete(mesh);
 	simplifyPoints(mesh);
+	simplifyClusters(mesh);
 
 	spatialSort(mesh);
 	spatialSortTriangles(mesh);
