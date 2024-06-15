@@ -136,6 +136,21 @@ struct PositionHasher
 	}
 };
 
+struct RemapHasher
+{
+	unsigned int* remap;
+
+	size_t hash(unsigned int id) const
+	{
+		return id * 0x5bd1e995;
+	}
+
+	bool equal(unsigned int lhs, unsigned int rhs) const
+	{
+		return remap[lhs] == rhs;
+	}
+};
+
 static size_t hashBuckets2(size_t count)
 {
 	size_t buckets = 1;
@@ -230,26 +245,27 @@ static unsigned int* buildSparseRemap(unsigned int* indices, size_t index_count,
 	size_t offset = 0;
 
 	// temporary map dense => sparse; we allocate it last so that we can deallocate it
-	unsigned int* revremap = allocator.allocate<unsigned int>(vertex_count);
+	size_t revremap_size = hashBuckets2(unique);
+	unsigned int* revremap = allocator.allocate<unsigned int>(revremap_size);
+	memset(revremap, -1, revremap_size * sizeof(unsigned int));
 
 	// fill remap, using revremap as a helper, and rewrite indices in the same pass
-	// note: we use filter[] here to avoid initializing revremap for performance
+	RemapHasher hasher = {remap};
+
 	for (size_t i = 0; i < index_count; ++i)
 	{
 		unsigned int index = indices[i];
 
-		if ((filter[index / 8] & (1 << (index % 8))) != 0)
+		unsigned int* entry = hashLookup2(revremap, revremap_size, hasher, index, ~0u);
+
+		if (*entry == ~0u)
 		{
-			remap[offset] = indices[i];
-			revremap[index] = unsigned(offset);
-			indices[i] = unsigned(offset);
-			filter[index / 8] &= ~(1 << (index % 8));
+			remap[offset] = index;
+			*entry = unsigned(offset);
 			offset++;
 		}
-		else
-		{
-			indices[i] = revremap[index];
-		}
+
+		indices[i] = *entry;
 	}
 
 	allocator.deallocate(revremap);
