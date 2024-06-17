@@ -1782,14 +1782,14 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 
 		// we clamp the prediction of the grid size to make sure that the search converges
 		int grid_size = next_grid_size;
-		grid_size = (grid_size <= min_grid) ? min_grid + 1 : (grid_size >= max_grid) ? max_grid - 1 : grid_size;
+		grid_size = (grid_size <= min_grid) ? min_grid + 1 : (grid_size >= max_grid ? max_grid - 1 : grid_size);
 
 		computeVertexIds(vertex_ids, vertex_positions, vertex_count, grid_size);
 		size_t triangles = countTriangles(vertex_ids, indices, index_count);
 
 #if TRACE
 		printf("pass %d (%s): grid size %d, triangles %d, %s\n",
-		    pass, (pass == 0) ? "guess" : (pass <= kInterpolationPasses) ? "lerp" : "binary",
+		    pass, (pass == 0) ? "guess" : (pass <= kInterpolationPasses ? "lerp" : "binary"),
 		    grid_size, int(triangles),
 		    (triangles <= target_index_count / 3) ? "under" : "over");
 #endif
@@ -1914,14 +1914,14 @@ size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_pos
 
 		// we clamp the prediction of the grid size to make sure that the search converges
 		int grid_size = next_grid_size;
-		grid_size = (grid_size <= min_grid) ? min_grid + 1 : (grid_size >= max_grid) ? max_grid - 1 : grid_size;
+		grid_size = (grid_size <= min_grid) ? min_grid + 1 : (grid_size >= max_grid ? max_grid - 1 : grid_size);
 
 		computeVertexIds(vertex_ids, vertex_positions, vertex_count, grid_size);
 		size_t vertices = countVertexCells(table, table_size, vertex_ids, vertex_count);
 
 #if TRACE
 		printf("pass %d (%s): grid size %d, vertices %d, %s\n",
-		    pass, (pass == 0) ? "guess" : (pass <= kInterpolationPasses) ? "lerp" : "binary",
+		    pass, (pass == 0) ? "guess" : (pass <= kInterpolationPasses ? "lerp" : "binary"),
 		    grid_size, int(vertices),
 		    (vertices <= target_vertex_count) ? "under" : "over");
 #endif

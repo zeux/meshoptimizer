@@ -1471,7 +1471,7 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 
 		comma(json_samplers);
 		append(json_samplers, "{\"input\":");
-		append(json_samplers, range ? range_accr : track.constant ? pose_accr : time_accr);
+		append(json_samplers, range ? range_accr : (track.constant ? pose_accr : time_accr));
 		append(json_samplers, ",\"output\":");
 		append(json_samplers, data_accr);
 		if (track.interpolation == cgltf_interpolation_type_step)
