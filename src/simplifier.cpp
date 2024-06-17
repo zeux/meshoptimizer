@@ -111,10 +111,12 @@ struct PositionHasher
 {
 	const float* vertex_positions;
 	size_t vertex_stride_float;
+	const unsigned int* sparse_remap;
 
 	size_t hash(unsigned int index) const
 	{
-		const unsigned int* key = reinterpret_cast<const unsigned int*>(vertex_positions + index * vertex_stride_float);
+		unsigned int ri = sparse_remap ? sparse_remap[index] : index;
+		const unsigned int* key = reinterpret_cast<const unsigned int*>(vertex_positions + ri * vertex_stride_float);
 
 		// scramble bits to make sure that integer coordinates have entropy in lower bits
 		unsigned int x = key[0] ^ (key[0] >> 17);
@@ -127,7 +129,25 @@ struct PositionHasher
 
 	bool equal(unsigned int lhs, unsigned int rhs) const
 	{
-		return memcmp(vertex_positions + lhs * vertex_stride_float, vertex_positions + rhs * vertex_stride_float, sizeof(float) * 3) == 0;
+		unsigned int li = sparse_remap ? sparse_remap[lhs] : lhs;
+		unsigned int ri = sparse_remap ? sparse_remap[rhs] : rhs;
+
+		return memcmp(vertex_positions + li * vertex_stride_float, vertex_positions + ri * vertex_stride_float, sizeof(float) * 3) == 0;
+	}
+};
+
+struct RemapHasher
+{
+	unsigned int* remap;
+
+	size_t hash(unsigned int id) const
+	{
+		return id * 0x5bd1e995;
+	}
+
+	bool equal(unsigned int lhs, unsigned int rhs) const
+	{
+		return remap[lhs] == rhs;
 	}
 };
 
@@ -167,9 +187,9 @@ static T* hashLookup2(T* table, size_t buckets, const Hash& hash, const T& key, 
 	return NULL;
 }
 
-static void buildPositionRemap(unsigned int* remap, unsigned int* wedge, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, meshopt_Allocator& allocator)
+static void buildPositionRemap(unsigned int* remap, unsigned int* wedge, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const unsigned int* sparse_remap, meshopt_Allocator& allocator)
 {
-	PositionHasher hasher = {vertex_positions_data, vertex_positions_stride / sizeof(float)};
+	PositionHasher hasher = {vertex_positions_data, vertex_positions_stride / sizeof(float), sparse_remap};
 
 	size_t table_size = hashBuckets2(vertex_count);
 	unsigned int* table = allocator.allocate<unsigned int>(table_size);
@@ -203,6 +223,57 @@ static void buildPositionRemap(unsigned int* remap, unsigned int* wedge, const f
 		}
 
 	allocator.deallocate(table);
+}
+
+static unsigned int* buildSparseRemap(unsigned int* indices, size_t index_count, size_t vertex_count, size_t* out_vertex_count, meshopt_Allocator& allocator)
+{
+	// use a bit set to compute the precise number of unique vertices
+	unsigned char* filter = allocator.allocate<unsigned char>((vertex_count + 7) / 8);
+	memset(filter, 0, (vertex_count + 7) / 8);
+
+	size_t unique = 0;
+	for (size_t i = 0; i < index_count; ++i)
+	{
+		unsigned int index = indices[i];
+		assert(index < vertex_count);
+
+		unique += (filter[index / 8] & (1 << (index % 8))) == 0;
+		filter[index / 8] |= 1 << (index % 8);
+	}
+
+	unsigned int* remap = allocator.allocate<unsigned int>(unique);
+	size_t offset = 0;
+
+	// temporary map dense => sparse; we allocate it last so that we can deallocate it
+	size_t revremap_size = hashBuckets2(unique);
+	unsigned int* revremap = allocator.allocate<unsigned int>(revremap_size);
+	memset(revremap, -1, revremap_size * sizeof(unsigned int));
+
+	// fill remap, using revremap as a helper, and rewrite indices in the same pass
+	RemapHasher hasher = {remap};
+
+	for (size_t i = 0; i < index_count; ++i)
+	{
+		unsigned int index = indices[i];
+
+		unsigned int* entry = hashLookup2(revremap, revremap_size, hasher, index, ~0u);
+
+		if (*entry == ~0u)
+		{
+			remap[offset] = index;
+			*entry = unsigned(offset);
+			offset++;
+		}
+
+		indices[i] = *entry;
+	}
+
+	allocator.deallocate(revremap);
+
+	assert(offset == unique);
+	*out_vertex_count = unique;
+
+	return remap;
 }
 
 enum VertexKind
@@ -252,7 +323,7 @@ static bool hasEdge(const EdgeAdjacency& adjacency, unsigned int a, unsigned int
 	return false;
 }
 
-static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned int* loopback, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_lock, unsigned int options)
+static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned int* loopback, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_lock, const unsigned int* sparse_remap, unsigned int options)
 {
 	memset(loop, -1, vertex_count * sizeof(unsigned int));
 	memset(loopback, -1, vertex_count * sizeof(unsigned int));
@@ -298,7 +369,7 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 	{
 		if (remap[i] == i)
 		{
-			if (vertex_lock && vertex_lock[i])
+			if (vertex_lock && vertex_lock[sparse_remap ? sparse_remap[i] : i])
 			{
 				// vertex is explicitly locked
 				result[i] = Kind_Locked;
@@ -383,7 +454,7 @@ struct Vector3
 	float x, y, z;
 };
 
-static float rescalePositions(Vector3* result, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride)
+static float rescalePositions(Vector3* result, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const unsigned int* sparse_remap = NULL)
 {
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
@@ -392,7 +463,8 @@ static float rescalePositions(Vector3* result, const float* vertex_positions_dat
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		const float* v = vertex_positions_data + i * vertex_stride_float;
+		unsigned int ri = sparse_remap ? sparse_remap[i] : unsigned(i);
+		const float* v = vertex_positions_data + ri * vertex_stride_float;
 
 		if (result)
 		{
@@ -431,15 +503,17 @@ static float rescalePositions(Vector3* result, const float* vertex_positions_dat
 	return extent;
 }
 
-static void rescaleAttributes(float* result, const float* vertex_attributes_data, size_t vertex_count, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count)
+static void rescaleAttributes(float* result, const float* vertex_attributes_data, size_t vertex_count, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, const unsigned int* sparse_remap)
 {
 	size_t vertex_attributes_stride_float = vertex_attributes_stride / sizeof(float);
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
+		unsigned int ri = sparse_remap ? sparse_remap[i] : unsigned(i);
+
 		for (size_t k = 0; k < attribute_count; ++k)
 		{
-			float a = vertex_attributes_data[i * vertex_attributes_stride_float + k];
+			float a = vertex_attributes_data[ri * vertex_attributes_stride_float + k];
 
 			result[i * attribute_count + k] = a * attribute_weights[k];
 		}
@@ -1481,7 +1555,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
 	assert(target_index_count <= index_count);
-	assert((options & ~(meshopt_SimplifyLockBorder)) == 0);
+	assert((options & ~(meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute)) == 0);
 	assert(vertex_attributes_stride >= attribute_count * sizeof(float) && vertex_attributes_stride <= 256);
 	assert(vertex_attributes_stride % sizeof(float) == 0);
 	assert(attribute_count <= kMaxAttributes);
@@ -1489,22 +1563,30 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	meshopt_Allocator allocator;
 
 	unsigned int* result = destination;
+	if (result != indices)
+		memcpy(result, indices, index_count * sizeof(unsigned int));
+
+	// build an index remap and update indices/vertex_count to minimize the subsequent work
+	// note: as a consequence, errors will be computed relative to the subset extent
+	unsigned int* sparse_remap = NULL;
+	if (options & meshopt_SimplifySparse)
+		sparse_remap = buildSparseRemap(result, index_count, vertex_count, &vertex_count, allocator);
 
 	// build adjacency information
 	EdgeAdjacency adjacency = {};
 	prepareEdgeAdjacency(adjacency, index_count, vertex_count, allocator);
-	updateEdgeAdjacency(adjacency, indices, index_count, vertex_count, NULL);
+	updateEdgeAdjacency(adjacency, result, index_count, vertex_count, NULL);
 
 	// build position remap that maps each vertex to the one with identical position
 	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
 	unsigned int* wedge = allocator.allocate<unsigned int>(vertex_count);
-	buildPositionRemap(remap, wedge, vertex_positions_data, vertex_count, vertex_positions_stride, allocator);
+	buildPositionRemap(remap, wedge, vertex_positions_data, vertex_count, vertex_positions_stride, sparse_remap, allocator);
 
 	// classify vertices; vertex kind determines collapse rules, see kCanCollapse
 	unsigned char* vertex_kind = allocator.allocate<unsigned char>(vertex_count);
 	unsigned int* loop = allocator.allocate<unsigned int>(vertex_count);
 	unsigned int* loopback = allocator.allocate<unsigned int>(vertex_count);
-	classifyVertices(vertex_kind, loop, loopback, vertex_count, adjacency, remap, wedge, vertex_lock, options);
+	classifyVertices(vertex_kind, loop, loopback, vertex_count, adjacency, remap, wedge, vertex_lock, sparse_remap, options);
 
 #if TRACE
 	size_t unique_positions = 0;
@@ -1522,14 +1604,14 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 #endif
 
 	Vector3* vertex_positions = allocator.allocate<Vector3>(vertex_count);
-	rescalePositions(vertex_positions, vertex_positions_data, vertex_count, vertex_positions_stride);
+	float vertex_scale = rescalePositions(vertex_positions, vertex_positions_data, vertex_count, vertex_positions_stride, sparse_remap);
 
 	float* vertex_attributes = NULL;
 
 	if (attribute_count)
 	{
 		vertex_attributes = allocator.allocate<float>(vertex_count * attribute_count);
-		rescaleAttributes(vertex_attributes, vertex_attributes_data, vertex_count, vertex_attributes_stride, attribute_weights, attribute_count);
+		rescaleAttributes(vertex_attributes, vertex_attributes_data, vertex_count, vertex_attributes_stride, attribute_weights, attribute_count, sparse_remap);
 	}
 
 	Quadric* vertex_quadrics = allocator.allocate<Quadric>(vertex_count);
@@ -1547,14 +1629,11 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 		memset(attribute_gradients, 0, vertex_count * attribute_count * sizeof(QuadricGrad));
 	}
 
-	fillFaceQuadrics(vertex_quadrics, indices, index_count, vertex_positions, remap);
-	fillEdgeQuadrics(vertex_quadrics, indices, index_count, vertex_positions, remap, vertex_kind, loop, loopback);
+	fillFaceQuadrics(vertex_quadrics, result, index_count, vertex_positions, remap);
+	fillEdgeQuadrics(vertex_quadrics, result, index_count, vertex_positions, remap, vertex_kind, loop, loopback);
 
 	if (attribute_count)
-		fillAttributeQuadrics(attribute_quadrics, attribute_gradients, indices, index_count, vertex_positions, vertex_attributes, attribute_count, remap);
-
-	if (result != indices)
-		memcpy(result, indices, index_count * sizeof(unsigned int));
+		fillAttributeQuadrics(attribute_quadrics, attribute_gradients, result, index_count, vertex_positions, vertex_attributes, attribute_count, remap);
 
 #if TRACE
 	size_t pass_count = 0;
@@ -1571,7 +1650,8 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	float result_error = 0;
 
 	// target_error input is linear; we need to adjust it to match quadricError units
-	float error_limit = target_error * target_error;
+	float error_scale = (options & meshopt_SimplifyErrorAbsolute) ? vertex_scale : 1.f;
+	float error_limit = (target_error * target_error) / (error_scale * error_scale);
 
 	while (result_count > target_index_count)
 	{
@@ -1630,9 +1710,14 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 		memcpy(meshopt_simplifyDebugLoopBack, loopback, vertex_count * sizeof(unsigned int));
 #endif
 
+	// convert resulting indices back into the dense space of the larger mesh
+	if (sparse_remap)
+		for (size_t i = 0; i < result_count; ++i)
+			result[i] = sparse_remap[result[i]];
+
 	// result_error is quadratic; we need to remap it back to linear
 	if (out_result_error)
-		*out_result_error = sqrtf(result_error);
+		*out_result_error = sqrtf(result_error) * error_scale;
 
 	return result_count;
 }

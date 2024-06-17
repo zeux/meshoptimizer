@@ -330,6 +330,10 @@ enum
 {
     /* Do not move vertices that are located on the topological border (vertices on triangle edges that don't have a paired triangle). Useful for simplifying portions of the larger mesh. */
     meshopt_SimplifyLockBorder = 1 << 0,
+    /* Improve simplification performance assuming input indices are a sparse subset of the mesh. Note that error becomes relative to subset extents. */
+    meshopt_SimplifySparse = 1 << 1,
+    /* Treat error limit and resulting error as absolute instead of relative to mesh extents. */
+    meshopt_SimplifyErrorAbsolute = 1 << 2,
 };
 
 /**

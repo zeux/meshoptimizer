@@ -522,6 +522,8 @@ void simplifyPoints(const Mesh& mesh, float threshold = 0.2f)
 	double start = timestamp();
 
 	size_t target_vertex_count = size_t(mesh.vertices.size() * threshold);
+	if (target_vertex_count == 0)
+		return;
 
 	std::vector<unsigned int> indices(target_vertex_count);
 	indices.resize(meshopt_simplifyPoints(&indices[0], &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), NULL, 0, 0, target_vertex_count));
@@ -639,6 +641,61 @@ void simplifyComplete(const Mesh& mesh)
 		    double(vbuf.size()) / double(vertices.size()) * 8,
 		    double(ibuf.size()) / double(indices.size() / 3) * 8);
 	}
+}
+
+void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
+{
+	// note: we use clusters that are larger than normal to give simplifier room to work; in practice you'd use cluster groups merged from smaller clusters and build a cluster DAG
+	const size_t max_vertices = 255;
+	const size_t max_triangles = 512;
+
+	double start = timestamp();
+
+	size_t max_meshlets = meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles);
+	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
+	std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
+	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
+
+	meshlets.resize(meshopt_buildMeshlets(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, max_triangles, 0.f));
+
+	double middle = timestamp();
+
+	float scale = meshopt_simplifyScale(&mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
+
+	std::vector<unsigned int> lod;
+	lod.reserve(mesh.indices.size());
+
+	float error = 0.f;
+
+	for (size_t i = 0; i < meshlets.size(); ++i)
+	{
+		const meshopt_Meshlet& m = meshlets[i];
+
+		size_t cluster_offset = lod.size();
+
+		for (size_t j = 0; j < m.triangle_count * 3; ++j)
+			lod.push_back(meshlet_vertices[m.vertex_offset + meshlet_triangles[m.triangle_offset + j]]);
+
+		unsigned int options = meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute;
+
+		float cluster_target_error = 1e-2f * scale;
+		size_t cluster_target = size_t(float(m.triangle_count) * threshold) * 3;
+		float cluster_error = 0.f;
+		size_t cluster_size = meshopt_simplify(&lod[cluster_offset], &lod[cluster_offset], m.triangle_count * 3, &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), cluster_target, cluster_target_error, options, &cluster_error);
+
+		error = cluster_error > error ? cluster_error : error;
+
+		// simplified cluster is available in lod[cluster_offset..cluster_offset + cluster_size]
+		lod.resize(cluster_offset + cluster_size);
+	}
+
+	double end = timestamp();
+
+	printf("%-9s: %d triangles => %d triangles (%.2f%% deviation) in %.2f msec, clusterized in %.2f msec\n",
+	    "SimplifyN", // N for Nanite
+	    int(mesh.indices.size() / 3), int(lod.size() / 3),
+	    error / scale * 100,
+	    (end - middle) * 1000, (middle - start) * 1000);
 }
 
 void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
@@ -1231,6 +1288,7 @@ void process(const char* path)
 	simplifySloppy(mesh);
 	simplifyComplete(mesh);
 	simplifyPoints(mesh);
+	simplifyClusters(mesh);
 
 	spatialSort(mesh);
 	spatialSortTriangles(mesh);
@@ -1246,6 +1304,7 @@ void processDev(const char* path)
 		return;
 
 	simplify(mesh);
+	simplifyClusters(mesh);
 }
 
 int main(int argc, char** argv)
