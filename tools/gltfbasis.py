@@ -26,7 +26,7 @@ def compress(path, flags):
 
     return {'path': path, 'bpp': bytes * 8 / pixels, 'rms': rms, 'psnr': psnr}
 
-def uastc_stats(path):
+def stats(path):
     results = []
     for rdo_l in range(0, 20):
         flags = ["-uastc", "-uastc_level", "1", "-uastc_rdo_l", str(rdo_l / 5), "-uastc_rdo_d", "1024"]
@@ -35,31 +35,25 @@ def uastc_stats(path):
         results.append(res)
     return results
 
-plt.figure(figsize=(15, 5))
+fields = ['bpp', 'rms', 'psnr']
+fig, axs = plt.subplots(1, len(fields), layout='constrained')
+fig.set_figwidth(5 * len(fields))
+lines = []
 
 for path in args.files:
     print('Processing', path)
-    results = uastc_stats(path)
+    results = stats(path)
     etcbase = compress(path, ["-q", "192"])
-    name = os.path.basename(path)
-    plt.subplot(1, 3, 1)
-    line, = plt.plot([r['rdo_l'] for r in results], [r['bpp'] for r in results], label=name)
-    plt.axhline(etcbase['bpp'], color=line.get_color(), linestyle='dotted')
-    plt.subplot(1, 3, 2)
-    line, = plt.plot([r['rdo_l'] for r in results], [r['rms'] for r in results], label=name)
-    plt.axhline(etcbase['rms'], color=line.get_color(), linestyle='dotted')
-    plt.subplot(1, 3, 3)
-    line, = plt.plot([r['rdo_l'] for r in results], [r['psnr'] for r in results], label=name)
-    plt.axhline(etcbase['psnr'], color=line.get_color(), linestyle='dotted')
 
-plt.subplot(1, 3, 1)
-plt.title('bpp')
-plt.legend()
-plt.subplot(1, 3, 2)
-plt.title('rms')
-plt.legend()
-plt.subplot(1, 3, 3)
-plt.title('psnr')
-plt.legend()
+    for idx, field in enumerate(fields):
+        line, = axs[idx].plot([r['rdo_l'] for r in results], [r[field] for r in results])
+        axs[idx].axhline(etcbase[field], color=line.get_color(), linestyle='dotted')
+        if idx == 0:
+            lines.append(line)
+
+for idx, field in enumerate(fields):
+    axs[idx].set_title(field)
+
+fig.legend(lines, [os.path.basename(path) for path in args.files], loc='outside right upper')
 
 plt.savefig('basisu.png')
