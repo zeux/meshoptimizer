@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import argparse
+import concurrent.futures
 import matplotlib.pyplot as plt
 import os
 import os.path
@@ -27,13 +28,19 @@ def compress(path, flags):
     return {'path': path, 'bpp': bytes * 8 / pixels, 'rms': rms, 'psnr': psnr}
 
 def stats(path):
-    results = []
-    for rdo_l in range(0, 20):
-        flags = ["-uastc", "-uastc_level", "1", "-uastc_rdo_l", str(rdo_l / 5), "-uastc_rdo_d", "1024"]
-        res = compress(path, flags)
-        res['rdo_l'] = rdo_l / 5
-        results.append(res)
-    return results
+    with concurrent.futures.ThreadPoolExecutor(16) as executor:
+        futures = []
+        for i in range(0, 30):
+            rdo_l = i / 5
+            flags = ["-uastc", "-uastc_level", "1", "-uastc_rdo_l", str(rdo_l), "-uastc_rdo_d", "1024"]
+            futures.append((executor.submit(compress, path, flags), rdo_l))
+        concurrent.futures.wait([f for (f, r) in futures])
+        results = []
+        for future, rdo_l in futures:
+            res = future.result()
+            res['rdo_l'] = rdo_l
+            results.append(res)
+        return results
 
 fields = ['bpp', 'rms', 'psnr']
 fig, axs = plt.subplots(1, len(fields), layout='constrained')
