@@ -37,15 +37,19 @@ def stats(path):
             futures.append((executor.submit(compress, path, flags), rdo_l))
         concurrent.futures.wait([f for (f, r) in futures])
         results = []
+        bppbase = 0
         for future, rdo_l in futures:
             res = future.result()
+            if rdo_l == 0:
+                bppbase = res['bpp']
             res['rdo_l'] = rdo_l
+            res['ratio'] = res['bpp'] / bppbase
             results.append(res)
         return results
 
-fields = ['bpp', 'rms', 'psnr']
-fig, axs = plt.subplots(1, len(fields), layout='constrained')
-fig.set_figwidth(5 * len(fields))
+fields = ['bpp', 'rms', 'psnr', 'ratio']
+fig, axs = plt.subplots(1, len(fields) + 1, layout='constrained')
+fig.set_figwidth(5 * (len(fields) + 1))
 lines = []
 
 for path in args.files:
@@ -55,12 +59,17 @@ for path in args.files:
 
     for idx, field in enumerate(fields):
         line, = axs[idx].plot([r['rdo_l'] for r in results], [r[field] for r in results])
-        axs[idx].axhline(etcbase[field], color=line.get_color(), linestyle='dotted')
+        if field in etcbase:
+            axs[idx].axhline(etcbase[field], color=line.get_color(), linestyle='dotted')
         if idx == 0:
             lines.append(line)
 
+    axs[len(fields)].scatter([r['ratio'] for r in results], [r['psnr'] for r in results], color=line.get_color())
+
 for idx, field in enumerate(fields):
     axs[idx].set_title(field)
+
+axs[len(fields)].set_title('psnr vs ratio')
 
 fig.legend(lines, [os.path.basename(path) for path in args.files], loc='outside right upper')
 
