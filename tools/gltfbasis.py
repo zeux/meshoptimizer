@@ -10,6 +10,7 @@ import subprocess
 
 argp = argparse.ArgumentParser()
 argp.add_argument('--basisu', type=str, required=True)
+argp.add_argument('--graph', type=str, default="basisu.png")
 argp.add_argument('files', type=str, nargs='+')
 args = argp.parse_args()
 
@@ -30,7 +31,7 @@ def compress(path, flags):
 def stats(path):
     with concurrent.futures.ThreadPoolExecutor(16) as executor:
         futures = []
-        for i in range(0, 30):
+        for i in range(0, 26):
             rdo_l = i / 5
             flags = ["-uastc", "-uastc_level", "1", "-uastc_rdo_l", str(rdo_l), "-uastc_rdo_d", "1024"]
             futures.append((executor.submit(compress, path, flags), rdo_l))
@@ -63,4 +64,4 @@ for idx, field in enumerate(fields):
 
 fig.legend(lines, [os.path.basename(path) for path in args.files], loc='outside right upper')
 
-plt.savefig('basisu.png')
+plt.savefig(args.graph)
