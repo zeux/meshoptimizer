@@ -129,6 +129,7 @@ static int readInt32LE(const std::string& data, size_t offset)
 	       (unsigned((unsigned char)data[offset + 3]) << 24);
 }
 
+// https://en.wikipedia.org/wiki/PNG#File_format
 static bool getDimensionsPng(const std::string& data, int& width, int& height)
 {
 	if (data.size() < 8 + 8 + 13 + 4)
@@ -147,6 +148,7 @@ static bool getDimensionsPng(const std::string& data, int& width, int& height)
 	return true;
 }
 
+// https://en.wikipedia.org/wiki/JPEG_File_Interchange_Format#File_format_structure
 static bool getDimensionsJpeg(const std::string& data, int& width, int& height)
 {
 	size_t offset = 0;
@@ -190,6 +192,7 @@ static bool getDimensionsJpeg(const std::string& data, int& width, int& height)
 	return false;
 }
 
+// https://en.wikipedia.org/wiki/PNG#File_format
 static bool hasTransparencyPng(const std::string& data)
 {
 	if (data.size() < 8 + 8 + 13 + 4)
@@ -225,6 +228,7 @@ static bool hasTransparencyPng(const std::string& data)
 	return false;
 }
 
+// https://github.khronos.org/KTX-Specification/ktxspec.v2.html
 static bool hasTransparencyKtx2(const std::string& data)
 {
 	if (data.size() < 12 + 17 * 4)
@@ -262,6 +266,7 @@ static bool hasTransparencyKtx2(const std::string& data)
 	return false;
 }
 
+// https://developers.google.com/speed/webp/docs/riff_container
 static bool hasTransparencyWebP(const std::string& data)
 {
 	if (data.size() < 12 + 4 + 12)
