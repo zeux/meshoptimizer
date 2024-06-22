@@ -10,6 +10,8 @@ If you are shipping a game that is using meshoptimizer, listing the library in t
 - [Baldur's Gate 3 (2023)](https://baldursgate3.game/)
 - [Cities: Skylines II (2023)](https://www.paradoxinteractive.com/games/cities-skylines-ii/about)
 - [Counter-Strike 2 (2023)](https://www.counter-strike.net/cs2)
+- [Dota 2 (2013)](https://www.dota2.com/home)
+- [Half-Life: Alyx (2020)](https://store.steampowered.com/app/546560/HalfLife_Alyx/)
 - [Jagged Alliance 3 (2023)](https://jaggedalliance3.thqnordic.com/)
 - [The Legend of Zelda: Tears of the Kingdom (2023)](https://zelda.nintendo.com/tears-of-the-kingdom/)
 - [Manifold Garden (2019)](https://manifold.garden)
