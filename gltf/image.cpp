@@ -262,12 +262,44 @@ static bool hasTransparencyKtx2(const std::string& data)
 	return false;
 }
 
+static bool hasTransparencyWebP(const std::string& data)
+{
+	if (data.size() < 12 + 4 + 12)
+		return false;
+
+	if (data.compare(0, 4, "RIFF") != 0)
+		return false;
+	if (data.compare(8, 4, "WEBP") != 0)
+		return false;
+
+	// WebP data may use VP8L, VP8X or VP8 format, but VP8 does not support transparency
+	if (data.compare(12, 4, "VP8L") == 0)
+	{
+		if (unsigned(data[20]) != 0x2f)
+			return false;
+
+		// width (14) | height (14) | alpha_is_used (1) | version_number(3)
+		unsigned int header = readInt32LE(data, 21);
+		return (header & (1 << 28)) != 0;
+	}
+	else if (data.compare(12, 4, "VP8X") == 0)
+	{
+		// zero (2) | icc (1) | alpha (1) | exif (1) | xmp (1) | animation (1) | zero (1)
+		unsigned char header = data[20];
+		return (header & (1 << 4)) != 0;
+	}
+
+	return false;
+}
+
 bool hasAlpha(const std::string& data, const char* mime_type)
 {
 	if (strcmp(mime_type, "image/png") == 0)
 		return hasTransparencyPng(data);
 	else if (strcmp(mime_type, "image/ktx2") == 0)
 		return hasTransparencyKtx2(data);
+	else if (strcmp(mime_type, "image/webp") == 0)
+		return hasTransparencyWebP(data);
 	else
 		return false;
 }
