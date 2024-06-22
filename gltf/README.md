@@ -85,6 +85,7 @@ gltfpack supports most Khronos extensions and some multi-vendor extensions in th
 - KHR_texture_transform
 - EXT_mesh_gpu_instancing
 - EXT_meshopt_compression
+- EXT_texture_webp
 
 Even if the source file does not use extensions, gltfpack may use some extensions in the output file either by default or when certain options are used:
 
