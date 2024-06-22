@@ -975,11 +975,18 @@ void writeTexture(std::string& json, const cgltf_texture& texture, const ImageIn
 		}
 	}
 
-	if (texture.has_basisu && texture.basisu_image)
+	if (texture.basisu_image)
 	{
 		comma(json);
 		append(json, "\"extensions\":{\"KHR_texture_basisu\":{\"source\":");
 		append(json, size_t(texture.basisu_image - data->images));
+		append(json, "}}");
+	}
+	else if (texture.webp_image)
+	{
+		comma(json);
+		append(json, "\"extensions\":{\"EXT_texture_webp\":{\"source\":");
+		append(json, size_t(texture.webp_image - data->images));
 		append(json, "}}");
 	}
 }

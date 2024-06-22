@@ -454,6 +454,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	bool ext_instancing = false;
 	bool ext_texture_transform = false;
 	bool ext_texture_basisu = false;
+	bool ext_texture_webp = false;
 
 	size_t accr_offset = 0;
 	size_t node_offset = 0;
@@ -512,6 +513,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		assert(textures[i].remap == int(texture_offset));
 		texture_offset++;
 		ext_texture_basisu = ext_texture_basisu || texture.has_basisu;
+		ext_texture_webp = ext_texture_webp || texture.has_webp;
 	}
 
 	for (size_t i = 0; i < data->materials_count; ++i)
@@ -838,6 +840,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	    {"KHR_materials_variants", data->variants_count > 0, false},
 	    {"KHR_lights_punctual", data->lights_count > 0, false},
 	    {"KHR_texture_basisu", (!json_textures.empty() && settings.texture_ktx2) || ext_texture_basisu, true},
+	    {"EXT_texture_webp", ext_texture_webp, true},
 	    {"EXT_mesh_gpu_instancing", ext_instancing, true},
 	};
 
