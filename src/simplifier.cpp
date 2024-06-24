@@ -892,7 +892,13 @@ static bool hasTriangleFlip(const Vector3& a, const Vector3& b, const Vector3& c
 	Vector3 nbc = {eb.y * ec.z - eb.z * ec.y, eb.z * ec.x - eb.x * ec.z, eb.x * ec.y - eb.y * ec.x};
 	Vector3 nbd = {eb.y * ed.z - eb.z * ed.y, eb.z * ed.x - eb.x * ed.z, eb.x * ed.y - eb.y * ed.x};
 
-	return nbc.x * nbd.x + nbc.y * nbd.y + nbc.z * nbd.z <= 0;
+	float ndp = nbc.x * nbd.x + nbc.y * nbd.y + nbc.z * nbd.z;
+	float abc = nbc.x * nbc.x + nbc.y * nbc.y + nbc.z * nbc.z;
+	float abd = nbd.x * nbd.x + nbd.y * nbd.y + nbd.z * nbd.z;
+
+	// scale is cos(angle); somewhat arbitrarily set to ~75 degrees
+	// note that the "pure" check is ndp <= 0 (90 degree cutoff) but that allows flipping through a series of close-to-90 collapses
+	return ndp <= 0.25f * sqrtf(abc * abd);
 }
 
 static bool hasTriangleFlips(const EdgeAdjacency& adjacency, const Vector3* vertex_positions, const unsigned int* collapse_remap, unsigned int i0, unsigned int i1)
