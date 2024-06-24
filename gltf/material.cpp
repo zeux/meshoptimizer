@@ -11,10 +11,10 @@ static bool areTexturesEqual(const cgltf_texture& lhs, const cgltf_texture& rhs)
 	if (lhs.sampler != rhs.sampler)
 		return false;
 
-	if (lhs.has_basisu != rhs.has_basisu)
+	if (lhs.basisu_image != rhs.basisu_image)
 		return false;
 
-	if (lhs.basisu_image != rhs.basisu_image)
+	if (lhs.webp_image != rhs.webp_image)
 		return false;
 
 	return true;
@@ -446,8 +446,11 @@ static const cgltf_image* getTextureImage(const cgltf_texture* texture)
 	if (texture && texture->image)
 		return texture->image;
 
-	if (texture && texture->has_basisu && texture->basisu_image)
+	if (texture && texture->basisu_image)
 		return texture->basisu_image;
+
+	if (texture && texture->webp_image)
+		return texture->webp_image;
 
 	return NULL;
 }
