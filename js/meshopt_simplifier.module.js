@@ -182,10 +182,11 @@ var MeshoptSimplifier = (function() {
 			assert(vertex_positions_stride >= 3);
 			assert(target_index_count >= 0 && target_index_count <= indices.length);
 			assert(target_index_count % 3 == 0);
-			assert(target_error >= 0 && target_error <= 1);
+			assert(target_error >= 0);
 
 			var options = 0;
 			for (var i = 0; i < (flags ? flags.length : 0); ++i) {
+				assert(flags[i] in simplifyOptions);
 				options |= simplifyOptions[flags[i]];
 			}
 
@@ -209,13 +210,14 @@ var MeshoptSimplifier = (function() {
 			assert(vertex_lock == null || vertex_lock.length == vertex_positions.length);
 			assert(target_index_count >= 0 && target_index_count <= indices.length);
 			assert(target_index_count % 3 == 0);
-			assert(target_error >= 0 && target_error <= 1);
+			assert(target_error >= 0);
 			assert(Array.isArray(attribute_weights));
 			assert(vertex_attributes_stride >= attribute_weights.length);
 			assert(attribute_weights.length <= 16);
 
 			var options = 0;
 			for (var i = 0; i < (flags ? flags.length : 0); ++i) {
+				assert(flags[i] in simplifyOptions);
 				options |= simplifyOptions[flags[i]];
 			}
 
