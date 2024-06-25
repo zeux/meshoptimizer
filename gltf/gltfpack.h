@@ -1,5 +1,5 @@
 /**
- * gltfpack - version 0.20
+ * gltfpack - version 0.21
  *
  * Copyright (C) 2016-2024, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
  * Report bugs and download new versions at https://github.com/zeux/meshoptimizer
