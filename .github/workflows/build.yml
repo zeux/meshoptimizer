@@ -14,11 +14,14 @@ jobs:
   unix:
     strategy:
       matrix:
-        os: [ubuntu, macos]
-    name: ${{matrix.os}}
-    runs-on: ${{matrix.os}}-latest
+        os: [{name: ubuntu, version: ubuntu-latest}, {name: macos-intel, version: macos-13}, {name: macos-arm, version: macos-14}]
+    name: ${{matrix.os.name}}
+    runs-on: ${{matrix.os.version}}
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
+    - name: work around ASLR+ASAN compatibility
+      run: sudo sysctl -w vm.mmap_rnd_bits=28
+      if: matrix.os.name == 'ubuntu'
     - name: make test
       run: |
         make -j2 config=sanitize test
@@ -39,7 +42,7 @@ jobs:
       matrix:
         arch: [Win32, x64]
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
     - name: cmake configure
       run: cmake . -DMESHOPT_BUILD_DEMO=ON -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_WERROR=ON -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>" -A ${{matrix.arch}}
     - name: cmake test
@@ -53,8 +56,8 @@ jobs:
   nodejs:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
-    - uses: actions/setup-node@v3
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
       with:
         node-version: '16'
     - name: test decoder
@@ -69,17 +72,19 @@ jobs:
   gltfpack:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
       with:
         repository: KhronosGroup/glTF-Sample-Assets
         path: glTF-Sample-Assets
+    - name: work around ASLR+ASAN compatibility
+      run: sudo sysctl -w vm.mmap_rnd_bits=28
     - name: make
       run: make -j2 config=sanitize gltfpack
     - name: test
       run: find glTF-Sample-Assets -name *.gltf -or -name *.glb | xargs -d '\n' ./gltfpack -cc -test
     - name: pack
-      run: find glTF-Sample-Assets -name *.gltf | grep -v 'glTF-Draco\|glTF-KTX\|glTF-Meshopt' | xargs -d '\n' -I '{}' ./gltfpack -i '{}' -o '{}pack.gltf'
+      run: find glTF-Sample-Assets -name *.gltf | grep -v 'glTF-Draco' | xargs -d '\n' -I '{}' ./gltfpack -i '{}' -o '{}pack.gltf'
     - name: validate
       run: |
         curl -sL $VALIDATOR | tar xJ
@@ -90,10 +95,10 @@ jobs:
   gltfpack-js:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
-    - uses: actions/setup-node@v3
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
       with:
-        node-version: '14.x'
+        node-version: '16'
     - name: install wasi
       run: |
         curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sdk-$VERSION.0-linux.tar.gz | tar xz
@@ -101,7 +106,7 @@ jobs:
         curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sysroot-$VERSION.0.tar.gz | tar xz -C wasi-sdk-$VERSION.0/share
         mv wasi-sdk-$VERSION.0 wasi-sdk
       env:
-        VERSION: 20
+        VERSION: 22
     - name: build
       run: |
         make -j2 -B WASI_SDK=wasi-sdk gltf/library.wasm js
@@ -118,8 +123,8 @@ jobs:
   gltfpack-basis:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
       with:
         repository: zeux/basis_universal
         ref: gltfpack
@@ -130,13 +135,13 @@ jobs:
   gltfpack-coverage:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
       with:
         repository: zeux/basis_universal
         ref: gltfpack
         path: basis_universal
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         repository: KhronosGroup/glTF-Sample-Assets
         path: glTF-Sample-Assets
@@ -164,27 +169,9 @@ jobs:
         sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
         bash <(curl -s https://codecov.io/bash) -f './gltf*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
 
-  arm64:
-    runs-on: ubuntu-latest
-    steps:
-    - run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
-    - uses: docker://multiarch/ubuntu-core:arm64-focal
-      with:
-        args: 'uname -a'
-    - uses: actions/checkout@v1
-    - name: make test
-      uses: docker://multiarch/ubuntu-core:arm64-focal
-      with:
-        args: 'bash -c "apt-get update && apt-get install -y build-essential && make -j2 config=coverage test"'
-    - name: upload coverage
-      run: |
-        find . -type f -name '*.gcno' -exec gcov -p {} +
-        sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
-        bash <(curl -s https://codecov.io/bash) -f './src*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
-
   iphone:
     runs-on: macos-latest
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4
     - name: make
       run: make -j2 config=iphone

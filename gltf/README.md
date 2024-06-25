@@ -69,6 +69,7 @@ gltfpack supports most Khronos extensions and some multi-vendor extensions in th
 - KHR_lights_punctual
 - KHR_materials_anisotropy
 - KHR_materials_clearcoat
+- KHR_materials_dispersion
 - KHR_materials_emissive_strength
 - KHR_materials_ior
 - KHR_materials_iridescence
@@ -80,7 +81,11 @@ gltfpack supports most Khronos extensions and some multi-vendor extensions in th
 - KHR_materials_variants
 - KHR_materials_volume
 - KHR_mesh_quantization
+- KHR_texture_basisu
 - KHR_texture_transform
+- EXT_mesh_gpu_instancing
+- EXT_meshopt_compression
+- EXT_texture_webp
 
 Even if the source file does not use extensions, gltfpack may use some extensions in the output file either by default or when certain options are used:
 

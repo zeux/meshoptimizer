@@ -62,6 +62,44 @@ var tests = {
 
 		return { encodeIndex: t1 - t0, decodeIndex: t2 - t1, bytes: N * 12 };
 	},
+
+	decodeGltf: function() {
+		var N = 1024*1024;
+		var data = new Uint8Array(N * 16);
+
+		for (var i = 0; i < N * 16; i += 4)
+		{
+			data[i + 0] = 0;
+			data[i + 1] = (i % 16) * 1;
+			data[i + 2] = (i % 16) * 2;
+			data[i + 3] = (i % 16) * 8;
+		}
+
+		var decoded = new Uint8Array(N * 16);
+
+		var filters = [
+			{ name: "none", filter: "NONE", stride: 16 },
+			{ name: "oct4", filter: "OCTAHEDRAL", stride: 4 },
+			{ name: "oct12", filter: "OCTAHEDRAL", stride: 8 },
+			{ name: "quat12", filter: "QUATERNION", stride: 8 },
+			{ name: "exp", filter: "EXPONENTIAL", stride: 16 },
+			];
+
+		var results = { bytes: N * 16 };
+
+		for (var i = 0; i < filters.length; ++i) {
+			var f = filters[i];
+			var encoded = encoder.encodeVertexBuffer(data, N * 16 / f.stride, f.stride);
+
+			var t0 = performance.now();
+			decoder.decodeGltfBuffer(decoded, N * 16 / f.stride, f.stride, encoded, "ATTRIBUTES", f.filter);
+			var t1 = performance.now();
+
+			results[f.name] = t1 - t0;
+		}
+
+		return results;
+	},
 };
 
 Promise.all([encoder.ready, decoder.ready]).then(() => {

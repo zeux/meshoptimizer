@@ -290,7 +290,7 @@ void processAnimation(Animation& animation, const Settings& settings)
 	mint = std::min(mint, maxt);
 
 	// round the number of frames to nearest but favor the "up" direction
-	// this means that at 10 Hz resampling, we will try to preserve the last frame <10ms
+	// this means that at 100 Hz resampling, we will try to preserve the last frame <10ms
 	// but if the last frame is <2ms we favor just removing this data
 	int frames = 1 + int((maxt - mint) * settings.anim_freq + 0.8f);
 

@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../src/meshoptimizer.h"
+
 static const size_t kMaxStreams = 16;
 
 static const char* getError(cgltf_result result, cgltf_data* data)
@@ -140,10 +142,9 @@ static void fixupIndices(std::vector<unsigned int>& indices, cgltf_primitive_typ
 
 static bool isIdAttribute(const char* name)
 {
-	return
-		strcmp(name, "_ID") == 0 ||
-		strcmp(name, "_BATCHID") == 0 ||
-		strncmp(name, "_FEATURE_ID_", 12) == 0;
+	return strcmp(name, "_ID") == 0 ||
+	       strcmp(name, "_BATCHID") == 0 ||
+	       strncmp(name, "_FEATURE_ID_", 12) == 0;
 }
 
 static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::vector<std::pair<size_t, size_t> >& mesh_remap)
@@ -189,7 +190,7 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 			{
 				result.indices.resize(primitive.indices->count);
 				if (!result.indices.empty())
-					cgltf_accessor_unpack_indices(primitive.indices, &result.indices[0], result.indices.size());
+					cgltf_accessor_unpack_indices(primitive.indices, &result.indices[0], sizeof(unsigned int), result.indices.size());
 
 				for (size_t i = 0; i < result.indices.size(); ++i)
 					assert(result.indices[i] < vertex_count);
@@ -274,6 +275,54 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 	}
 }
 
+static void parseMeshInstancesGltf(std::vector<Transform>& instances, cgltf_node* node)
+{
+	cgltf_accessor* translation = NULL;
+	cgltf_accessor* rotation = NULL;
+	cgltf_accessor* scale = NULL;
+
+	for (size_t i = 0; i < node->mesh_gpu_instancing.attributes_count; ++i)
+	{
+		cgltf_attribute& attr = node->mesh_gpu_instancing.attributes[i];
+
+		if (strcmp(attr.name, "TRANSLATION") == 0 && attr.data->type == cgltf_type_vec3)
+			translation = attr.data;
+		else if (strcmp(attr.name, "ROTATION") == 0 && attr.data->type == cgltf_type_vec4)
+			rotation = attr.data;
+		else if (strcmp(attr.name, "SCALE") == 0 && attr.data->type == cgltf_type_vec3)
+			scale = attr.data;
+	}
+
+	size_t count = node->mesh_gpu_instancing.attributes[0].data->count;
+
+	instances.reserve(instances.size() + count);
+
+	cgltf_node instance = {};
+	instance.parent = node;
+	instance.has_translation = translation != NULL;
+	instance.has_rotation = rotation != NULL;
+	instance.has_scale = scale != NULL;
+	instance.rotation[3] = 1.f;
+	instance.scale[0] = 1.f;
+	instance.scale[1] = 1.f;
+	instance.scale[2] = 1.f;
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		if (translation)
+			cgltf_accessor_read_float(translation, i, instance.translation, sizeof(float));
+		if (rotation)
+			cgltf_accessor_read_float(rotation, i, instance.rotation, sizeof(float));
+		if (scale)
+			cgltf_accessor_read_float(scale, i, instance.scale, sizeof(float));
+
+		Transform xf;
+		cgltf_node_transform_world(&instance, xf.data);
+
+		instances.push_back(xf);
+	}
+}
+
 static void parseMeshNodesGltf(cgltf_data* data, std::vector<Mesh>& meshes, const std::vector<std::pair<size_t, size_t> >& mesh_remap)
 {
 	for (size_t i = 0; i < data->nodes_count; ++i)
@@ -288,7 +337,7 @@ static void parseMeshNodesGltf(cgltf_data* data, std::vector<Mesh>& meshes, cons
 		{
 			Mesh* mesh = &meshes[mi];
 
-			if (!mesh->nodes.empty() && mesh->skin != node.skin)
+			if (mesh->skin != node.skin && (!mesh->nodes.empty() || !mesh->instances.empty()))
 			{
 				// this should be extremely rare - if the same mesh is used with different skins, we need to duplicate it
 				// in this case we don't spend any effort on keeping the number of duplicates to the minimum, because this
@@ -297,8 +346,16 @@ static void parseMeshNodesGltf(cgltf_data* data, std::vector<Mesh>& meshes, cons
 				mesh = &meshes.back();
 			}
 
-			mesh->nodes.push_back(&node);
-			mesh->skin = node.skin;
+			if (node.has_mesh_gpu_instancing)
+			{
+				mesh->scene = 0; // we need to assign scene index since instances are attached to a scene; for now we assume 0
+				parseMeshInstancesGltf(mesh->instances, &node);
+			}
+			else
+			{
+				mesh->skin = node.skin;
+				mesh->nodes.push_back(&node);
+			}
 		}
 	}
 
@@ -307,7 +364,7 @@ static void parseMeshNodesGltf(cgltf_data* data, std::vector<Mesh>& meshes, cons
 		Mesh& mesh = meshes[i];
 
 		// because the rest of gltfpack assumes that empty nodes array = world-space mesh, we need to filter unused meshes
-		if (mesh.nodes.empty())
+		if (mesh.nodes.empty() && mesh.instances.empty())
 		{
 			mesh.streams.clear();
 			mesh.indices.clear();
@@ -377,7 +434,7 @@ static bool needsDummyBuffers(cgltf_data* data)
 	{
 		cgltf_accessor* accessor = &data->accessors[i];
 
-		if (accessor->buffer_view && accessor->buffer_view->buffer->data == NULL)
+		if (accessor->buffer_view && accessor->buffer_view->data == NULL && accessor->buffer_view->buffer->data == NULL)
 			return true;
 
 		if (accessor->is_sparse)
@@ -457,6 +514,70 @@ static bool freeUnusedBuffers(cgltf_data* data)
 	return free_bin;
 }
 
+static cgltf_result decompressMeshopt(cgltf_data* data)
+{
+	for (size_t i = 0; i < data->buffer_views_count; ++i)
+	{
+		if (!data->buffer_views[i].has_meshopt_compression)
+			continue;
+		cgltf_meshopt_compression* mc = &data->buffer_views[i].meshopt_compression;
+
+		const unsigned char* source = (const unsigned char*)mc->buffer->data;
+		if (!source)
+			return cgltf_result_invalid_gltf;
+		source += mc->offset;
+
+		void* result = malloc(mc->count * mc->stride);
+		if (!result)
+			return cgltf_result_out_of_memory;
+
+		int rc = -1;
+
+		switch (mc->mode)
+		{
+		case cgltf_meshopt_compression_mode_attributes:
+			rc = meshopt_decodeVertexBuffer(result, mc->count, mc->stride, source, mc->size);
+			break;
+
+		case cgltf_meshopt_compression_mode_triangles:
+			rc = meshopt_decodeIndexBuffer(result, mc->count, mc->stride, source, mc->size);
+			break;
+
+		case cgltf_meshopt_compression_mode_indices:
+			rc = meshopt_decodeIndexSequence(result, mc->count, mc->stride, source, mc->size);
+			break;
+
+		default:
+			return cgltf_result_invalid_gltf;
+		}
+
+		if (rc != 0)
+			return cgltf_result_io_error;
+
+		switch (mc->filter)
+		{
+		case cgltf_meshopt_compression_filter_octahedral:
+			meshopt_decodeFilterOct(result, mc->count, mc->stride);
+			break;
+
+		case cgltf_meshopt_compression_filter_quaternion:
+			meshopt_decodeFilterQuat(result, mc->count, mc->stride);
+			break;
+
+		case cgltf_meshopt_compression_filter_exponential:
+			meshopt_decodeFilterExp(result, mc->count, mc->stride);
+			break;
+
+		default:
+			break;
+		}
+
+		data->buffer_views[i].data = result;
+	}
+
+	return cgltf_result_success;
+}
+
 static cgltf_data* parseGltf(cgltf_data* data, cgltf_result result, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error)
 {
 	*error = NULL;
@@ -465,12 +586,6 @@ static cgltf_data* parseGltf(cgltf_data* data, cgltf_result result, std::vector<
 		*error = getError(result, data);
 	else if (requiresExtension(data, "KHR_draco_mesh_compression"))
 		*error = "file requires Draco mesh compression support";
-	else if (requiresExtension(data, "EXT_meshopt_compression"))
-		*error = "file has already been compressed using gltfpack";
-	else if (requiresExtension(data, "KHR_texture_basisu"))
-		*error = "file requires BasisU texture support";
-	else if (requiresExtension(data, "EXT_mesh_gpu_instancing"))
-		*error = "file requires mesh instancing support";
 	else if (needsDummyBuffers(data))
 		*error = "buffer has no data";
 
@@ -482,6 +597,8 @@ static cgltf_data* parseGltf(cgltf_data* data, cgltf_result result, std::vector<
 
 	if (requiresExtension(data, "KHR_mesh_quantization"))
 		fprintf(stderr, "Warning: file uses quantized geometry; repacking may result in increased quantization error\n");
+	if (requiresExtension(data, "EXT_mesh_gpu_instancing") && data->scenes_count > 1)
+		fprintf(stderr, "Warning: file uses instancing and has more than one scene; results may be incorrect\n");
 
 	std::vector<std::pair<size_t, size_t> > mesh_remap;
 
@@ -509,6 +626,7 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 
 	result = (result == cgltf_result_success) ? cgltf_load_buffers(&options, data, path) : result;
 	result = (result == cgltf_result_success) ? cgltf_validate(data) : result;
+	result = (result == cgltf_result_success) ? decompressMeshopt(data) : result;
 
 	return parseGltf(data, result, meshes, animations, error);
 }
@@ -524,6 +642,7 @@ cgltf_data* parseGlb(const void* buffer, size_t size, std::vector<Mesh>& meshes,
 
 	result = (result == cgltf_result_success) ? cgltf_load_buffers(&options, data, NULL) : result;
 	result = (result == cgltf_result_success) ? cgltf_validate(data) : result;
+	result = (result == cgltf_result_success) ? decompressMeshopt(data) : result;
 
 	return parseGltf(data, result, meshes, animations, error);
 }

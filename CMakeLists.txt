@@ -12,7 +12,7 @@ if(POLICY CMP0092)
     cmake_policy(SET CMP0092 NEW) # Enables clean /W4 override for MSVC
 endif()
 
-project(meshoptimizer VERSION 0.20 LANGUAGES CXX)
+project(meshoptimizer VERSION 0.21 LANGUAGES CXX)
 
 option(MESHOPT_BUILD_DEMO "Build demo" OFF)
 option(MESHOPT_BUILD_GLTFPACK "Build gltfpack" OFF)
@@ -83,6 +83,11 @@ target_include_directories(meshoptimizer INTERFACE "$<BUILD_INTERFACE:${CMAKE_CU
 if(MESHOPT_BUILD_SHARED_LIBS)
     set_target_properties(meshoptimizer PROPERTIES CXX_VISIBILITY_PRESET hidden)
     set_target_properties(meshoptimizer PROPERTIES VISIBILITY_INLINES_HIDDEN ON)
+
+    # soversion may be requested via -DMESHOPT_SOVERSION=n; note that experimental APIs (marked with MESHOPTIMIZER_EXPERIMENTAL) are not ABI-stable
+    if(MESHOPT_SOVERSION)
+        set_target_properties(meshoptimizer PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${MESHOPT_SOVERSION})
+    endif()
 
     if(WIN32)
         target_compile_definitions(meshoptimizer INTERFACE "MESHOPTIMIZER_API=__declspec(dllimport)")

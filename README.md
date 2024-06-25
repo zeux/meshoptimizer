@@ -13,10 +13,10 @@ The library provides a C and C++ interface for all algorithms; you can use it fr
 meshoptimizer is hosted on GitHub; you can download the latest release using git:
 
 ```
-git clone -b v0.20 https://github.com/zeux/meshoptimizer.git
+git clone -b v0.21 https://github.com/zeux/meshoptimizer.git
 ```
 
-Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v0.20.zip).
+Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v0.21.zip).
 
 The library is also available as a package ([ArchLinux](https://aur.archlinux.org/packages/meshoptimizer/), [Debian](https://packages.debian.org/libmeshoptimizer), [Ubuntu](https://packages.ubuntu.com/libmeshoptimizer), [Vcpkg](https://github.com/microsoft/vcpkg/tree/master/ports/meshoptimizer)).
 
@@ -263,11 +263,12 @@ The first simplification algorithm, `meshopt_simplify`, follows the topology of 
 float threshold = 0.2f;
 size_t target_index_count = size_t(index_count * threshold);
 float target_error = 1e-2f;
+unsigned int options = 0; // meshopt_SimplifyX flags, 0 is a safe default
 
 std::vector<unsigned int> lod(index_count);
 float lod_error = 0.f;
 lod.resize(meshopt_simplify(&lod[0], indices, index_count, &vertices[0].x, vertex_count, sizeof(Vertex),
-    target_index_count, target_error, &lod_error));
+    target_index_count, target_error, options, &lod_error));
 ```
 
 Target error is an approximate measure of the deviation from the original mesh using distance normalized to `[0..1]` range (e.g. `1e-2f` means that simplifier will try to maintain the error to be below 1% of the mesh extents). Note that the simplifier attempts to produce the requested number of indices at minimal error, but because of topological restrictions and error limit it is not guaranteed to reach the target index count and can stop earlier.
@@ -315,7 +316,7 @@ size_t meshlet_count = meshopt_buildMeshlets(meshlets.data(), meshlet_vertices.d
     indices.size(), &vertices[0].x, vertices.size(), sizeof(Vertex), max_vertices, max_triangles, cone_weight);
 ```
 
-To generate the meshlet data, `max_vertices` and `max_triangles` need to be set within limits supported by the hardware; for NVidia the values of 64 and 124 are recommended. `cone_weight` should be left as 0 if cluster cone culling is not used, and set to a value between 0 and 1 to balance cone culling efficiency with other forms of culling like frustum or occlusion culling.
+To generate the meshlet data, `max_vertices` and `max_triangles` need to be set within limits supported by the hardware; for NVidia the values of 64 and 124 are recommended (`max_triangles` must be divisible by 4 so 124 is the value closest to official NVidia's recommended 126). `cone_weight` should be left as 0 if cluster cone culling is not used, and set to a value between 0 and 1 to balance cone culling efficiency with other forms of culling like frustum or occlusion culling.
 
 Each resulting meshlet refers to a portion of `meshlet_vertices` and `meshlet_triangles` arrays; this data can be uploaded to GPU and used directly after trimming:
 
@@ -328,6 +329,12 @@ meshlets.resize(meshlet_count);
 ```
 
 However depending on the application other strategies of storing the data can be useful; for example, `meshlet_vertices` serves as indices into the original vertex buffer but it might be worthwhile to generate a mini vertex buffer for each meshlet to remove the extra indirection when accessing vertex data, or it might be desirable to compress vertex data as vertices in each meshlet are likely to be very spatially coherent.
+
+For optimal performance, it is recommended to further optimize each meshlet in isolation for better triangle and vertex locality by calling `meshopt_optimizeMeshlet` on vertex and index data like so:
+
+```c++
+meshopt_optimizeMeshlet(&meshlet_vertices[m.vertex_offset], &meshlet_triangles[m.triangle_offset], m.triangle_count, m.vertex_count);
+```
 
 After generating the meshlet data, it's also possible to generate extra data for each meshlet that can be saved and used at runtime to perform cluster culling, where each meshlet can be discarded if it's guaranteed to be invisible. To generate the data, `meshlet_computeMeshletBounds` can be used:
 

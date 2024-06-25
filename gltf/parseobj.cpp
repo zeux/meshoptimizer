@@ -12,7 +12,7 @@ static void defaultFree(void*, void* p)
 	free(p);
 }
 
-static int textureIndex(const std::vector<std::string>& textures, const char* name)
+static int textureIndex(const std::vector<unsigned int>& textures, unsigned int name)
 {
 	for (size_t i = 0; i < textures.size(); ++i)
 		if (textures[i] == name)
@@ -31,14 +31,16 @@ static void fixupUri(char* uri)
 
 static void parseMaterialsObj(fastObjMesh* obj, cgltf_data* data)
 {
-	std::vector<std::string> textures;
+	// every texture in obj has a unique id (1+); we convert it to a 0-based index
+	// this effectively extracts only used textures out of the obj, as we don't remove unused textures later in the processing
+	std::vector<unsigned int> textures;
 
 	for (unsigned int mi = 0; mi < obj->material_count; ++mi)
 	{
 		fastObjMaterial& om = obj->materials[mi];
 
-		if (om.map_Kd.name && textureIndex(textures, om.map_Kd.name) < 0)
-			textures.push_back(om.map_Kd.name);
+		if (om.map_Kd && textureIndex(textures, om.map_Kd) < 0)
+			textures.push_back(om.map_Kd);
 	}
 
 	data->images = (cgltf_image*)calloc(textures.size(), sizeof(cgltf_image));
@@ -46,7 +48,8 @@ static void parseMaterialsObj(fastObjMesh* obj, cgltf_data* data)
 
 	for (size_t i = 0; i < textures.size(); ++i)
 	{
-		data->images[i].uri = strdup(textures[i].c_str());
+		unsigned int id = textures[i];
+		data->images[i].uri = strdup(obj->textures[id].name);
 		fixupUri(data->images[i].uri);
 	}
 
@@ -81,9 +84,9 @@ static void parseMaterialsObj(fastObjMesh* obj, cgltf_data* data)
 
 		gm.alpha_cutoff = 0.5f;
 
-		if (om.map_Kd.name)
+		if (om.map_Kd)
 		{
-			gm.pbr_metallic_roughness.base_color_texture.texture = &data->textures[textureIndex(textures, om.map_Kd.name)];
+			gm.pbr_metallic_roughness.base_color_texture.texture = &data->textures[textureIndex(textures, om.map_Kd)];
 			gm.pbr_metallic_roughness.base_color_texture.scale = 1.0f;
 
 			gm.alpha_mode = (om.illum == 4 || om.illum == 6 || om.illum == 7 || om.illum == 9) ? cgltf_alpha_mode_mask : cgltf_alpha_mode_opaque;
@@ -95,10 +98,10 @@ static void parseMaterialsObj(fastObjMesh* obj, cgltf_data* data)
 			gm.pbr_metallic_roughness.base_color_factor[2] = om.Kd[2];
 		}
 
-		if (om.map_d.name)
+		if (om.map_d)
 		{
-			if (om.map_Kd.name && strcmp(om.map_Kd.name, om.map_d.name) != 0)
-				fprintf(stderr, "Warning: material has different diffuse and alpha textures (Kd: %s, d: %s) and might not render correctly\n", om.map_Kd.name, om.map_d.name);
+			if (om.map_Kd && strcmp(obj->textures[om.map_Kd].name, obj->textures[om.map_d].name) != 0)
+				fprintf(stderr, "Warning: material has different diffuse and alpha textures (Kd: %s, d: %s) and might not render correctly\n", obj->textures[om.map_Kd].name, obj->textures[om.map_d].name);
 
 			gm.alpha_mode = cgltf_alpha_mode_blend;
 		}
@@ -235,7 +238,7 @@ static void parseMeshGroupObj(fastObjMesh* obj, const fastObjGroup& og, cgltf_da
 	unsigned int face_vertex_offset = og.index_offset;
 	unsigned int face_end_offset = og.face_offset + og.face_count;
 
-	for (unsigned int face_offset = og.face_offset; face_offset < face_end_offset; )
+	for (unsigned int face_offset = og.face_offset; face_offset < face_end_offset;)
 	{
 		unsigned int mi = obj->face_materials[face_offset];
 
@@ -281,6 +284,13 @@ cgltf_data* parseObj(const char* path, std::vector<Mesh>& meshes, const char** e
 		*error = "file not found";
 		return NULL;
 	}
+
+	int fallback_materials = 0;
+	for (unsigned int mi = 0; mi < obj->material_count; ++mi)
+		fallback_materials += obj->materials[mi].fallback;
+
+	if (fallback_materials)
+		fprintf(stderr, "Warning: %d/%d materials could not be loaded from mtllib\n", fallback_materials, obj->material_count);
 
 	cgltf_data* data = (cgltf_data*)calloc(1, sizeof(cgltf_data));
 	data->memory.free_func = defaultFree;
