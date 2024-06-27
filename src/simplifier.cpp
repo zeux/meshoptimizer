@@ -1011,9 +1011,10 @@ static size_t pickEdgeCollapses(Collapse* collapses, size_t collapse_capacity, c
 
 static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const Vector3* vertex_positions, const float* vertex_attributes, const Quadric* vertex_quadrics, const Quadric* attribute_quadrics, const QuadricGrad* attribute_gradients, size_t attribute_count, const unsigned int* remap)
 {
+	Collapse& c = collapses[0];
 	for (size_t i = 0; i < collapse_count; ++i)
 	{
-		Collapse& c = collapses[i];
+		c = collapses[i];
 
 		unsigned int i0 = c.v0;
 		unsigned int i1 = c.v1;
