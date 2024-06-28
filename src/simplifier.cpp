@@ -1011,17 +1011,18 @@ static size_t pickEdgeCollapses(Collapse* collapses, size_t collapse_capacity, c
 
 static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const Vector3* vertex_positions, const float* vertex_attributes, const Quadric* vertex_quadrics, const Quadric* attribute_quadrics, const QuadricGrad* attribute_gradients, size_t attribute_count, const unsigned int* remap)
 {
+	Collapse* c = &collapses[0];
 	for (size_t i = 0; i < collapse_count; ++i)
 	{
-		Collapse& c = collapses[i];
+		c = &collapses[i];
 
-		unsigned int i0 = c.v0;
-		unsigned int i1 = c.v1;
+		unsigned int i0 = c->v0;
+		unsigned int i1 = c->v1;
 
 		// most edges are bidirectional which means we need to evaluate errors for two collapses
 		// to keep this code branchless we just use the same edge for unidirectional edges
-		unsigned int j0 = c.bidi ? i1 : i0;
-		unsigned int j1 = c.bidi ? i0 : i1;
+		unsigned int j0 = c->bidi ? i1 : i0;
+		unsigned int j1 = c->bidi ? i0 : i1;
 
 		float ei = quadricError(vertex_quadrics[remap[i0]], vertex_positions[i1]);
 		float ej = quadricError(vertex_quadrics[remap[j0]], vertex_positions[j1]);
@@ -1033,9 +1034,9 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 		}
 
 		// pick edge direction with minimal error
-		c.v0 = ei <= ej ? i0 : j0;
-		c.v1 = ei <= ej ? i1 : j1;
-		c.error = ei <= ej ? ei : ej;
+		c->v0 = ei <= ej ? i0 : j0;
+		c->v1 = ei <= ej ? i1 : j1;
+		c->error = ei <= ej ? ei : ej;
 	}
 }
 
