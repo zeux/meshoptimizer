@@ -29,7 +29,9 @@
 #endif
 
 /* Experimental APIs have unstable interface and might have implementation that's not fully tested or optimized */
+#ifndef MESHOPTIMIZER_EXPERIMENTAL
 #define MESHOPTIMIZER_EXPERIMENTAL MESHOPTIMIZER_API
+#endif
 
 /* C interface */
 #ifdef __cplusplus
