@@ -11,18 +11,18 @@ MeshoptDecoder.ready = Promise.resolve();
 
 function assert(cond) {
 	if (!cond) {
-		throw new Error("Assertion failed");
+		throw new Error('Assertion failed');
 	}
 }
 
 function dezig(v) {
-	return ((v & 1) !== 0) ? ~(v >>> 1) : v >>> 1;
+	return (v & 1) !== 0 ? ~(v >>> 1) : v >>> 1;
 }
 
 MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, filter) => {
-	assert(source[0] === 0xA0);
+	assert(source[0] === 0xa0);
 
-	const maxBlockElements = Math.min((0x2000 / byteStride) & ~0x000F, 0x100);
+	const maxBlockElements = Math.min((0x2000 / byteStride) & ~0x000f, 0x100);
 
 	const deltas = new Uint8Array(0x10);
 
@@ -36,7 +36,7 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 	// Attribute Blocks
 	for (let dstElemBase = 0; dstElemBase < elementCount; dstElemBase += maxBlockElements) {
 		const attrBlockElementCount = Math.min(elementCount - dstElemBase, maxBlockElements);
-		const groupCount = ((attrBlockElementCount + 0x0F) & ~0x0F) >>> 4;
+		const groupCount = ((attrBlockElementCount + 0x0f) & ~0x0f) >>> 4;
 		const headerByteCount = ((groupCount + 0x03) & ~0x03) >>> 2;
 
 		// Data blocks
@@ -47,8 +47,7 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 			for (let group = 0; group < groupCount; group++) {
 				const mode = (source[headerBitsOffs] >>> ((group & 0x03) << 1)) & 0x03;
 				// If this is the last group, move to the next byte of header bits.
-				if ((group & 0x03) === 0x03)
-					headerBitsOffs++;
+				if ((group & 0x03) === 0x03) headerBitsOffs++;
 
 				const dstElemGroup = dstElemBase + (group << 4);
 
@@ -61,10 +60,9 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 					srcOffs += 0x04;
 					for (let m = 0; m < 0x10; m++) {
 						// 0 = >>> 6, 1 = >>> 4, 2 = >>> 2, 3 = >>> 0
-						const shift = (6 - ((m & 0x03) << 1));
+						const shift = 6 - ((m & 0x03) << 1);
 						let delta = (source[srcBase + (m >>> 2)] >>> shift) & 0x03;
-						if (delta === 3)
-							delta = source[srcOffs++];
+						if (delta === 3) delta = source[srcOffs++];
 						deltas[m] = delta;
 					}
 				} else if (mode === 2) {
@@ -73,10 +71,9 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 					srcOffs += 0x08;
 					for (let m = 0; m < 0x10; m++) {
 						// 0 = >>> 6, 1 = >>> 4, 2 = >>> 2, 3 = >>> 0
-						const shift = (m & 0x01) ? 0 : 4;
+						const shift = m & 0x01 ? 0 : 4;
 						let delta = (source[srcBase + (m >>> 1)] >>> shift) & 0x0f;
-						if (delta === 0xf)
-							delta = source[srcOffs++];
+						if (delta === 0xf) delta = source[srcOffs++];
 						deltas[m] = delta;
 					}
 				} else {
@@ -88,12 +85,11 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 				// Go through and apply deltas to data
 				for (let m = 0; m < 0x10; m++) {
 					const dstElem = dstElemGroup + m;
-					if (dstElem >= elementCount)
-						break;
+					if (dstElem >= elementCount) break;
 
 					const delta = dezig(deltas[m]);
 					const dstOffs = dstElem * byteStride + byte;
-					target[dstOffs] = (tempData[byte] += delta);
+					target[dstOffs] = tempData[byte] += delta;
 				}
 			}
 		}
@@ -113,13 +109,15 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 		}
 
 		for (let i = 0; i < 4 * elementCount; i += 4) {
-			let x = dst[i + 0], y = dst[i + 1], one = dst[i + 2];
+			let x = dst[i + 0],
+				y = dst[i + 1],
+				one = dst[i + 2];
 			x /= one;
 			y /= one;
 			const z = 1.0 - Math.abs(x) - Math.abs(y);
 			const t = Math.max(-z, 0.0);
-			x -= (x >= 0) ? t : -t;
-			y -= (y >= 0) ? t : -t;
+			x -= x >= 0 ? t : -t;
+			y -= y >= 0 ? t : -t;
 			const h = maxInt / Math.hypot(x, y, z);
 			dst[i + 0] = Math.round(x * h);
 			dst[i + 1] = Math.round(y * h);
@@ -138,11 +136,11 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 			let x = dst[i + 0] * s;
 			let y = dst[i + 1] * s;
 			let z = dst[i + 2] * s;
-			let w = Math.sqrt(Math.max(0.0, 1.0 - x**2 - y**2 - z**2));
-			dst[i + (maxComponent + 1) % 4] = Math.round(x * 32767);
-			dst[i + (maxComponent + 2) % 4] = Math.round(y * 32767);
-			dst[i + (maxComponent + 3) % 4] = Math.round(z * 32767);
-			dst[i + (maxComponent + 0) % 4] = Math.round(w * 32767);
+			let w = Math.sqrt(Math.max(0.0, 1.0 - x ** 2 - y ** 2 - z ** 2));
+			dst[i + ((maxComponent + 1) % 4)] = Math.round(x * 32767);
+			dst[i + ((maxComponent + 2) % 4)] = Math.round(y * 32767);
+			dst[i + ((maxComponent + 3) % 4)] = Math.round(z * 32767);
+			dst[i + ((maxComponent + 0) % 4)] = Math.round(w * 32767);
 		}
 	} else if (filter === 'EXPONENTIAL') {
 		assert((byteStride & 0x03) === 0x00);
@@ -150,28 +148,27 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 		const src = new Int32Array(target.buffer);
 		const dst = new Float32Array(target.buffer);
 		for (let i = 0; i < (byteStride * elementCount) / 4; i++) {
-			const v = src[i], exp = v >> 24, mantissa = (v << 8) >> 8;
-			dst[i] = 2.0**exp * mantissa;
+			const v = src[i],
+				exp = v >> 24,
+				mantissa = (v << 8) >> 8;
+			dst[i] = 2.0 ** exp * mantissa;
 		}
 	}
 };
 
 function pushfifo(fifo, n) {
-	for (let i = fifo.length - 1; i > 0; i--)
-		fifo[i] = fifo[i - 1];
+	for (let i = fifo.length - 1; i > 0; i--) fifo[i] = fifo[i - 1];
 	fifo[0] = n;
 }
 
 MeshoptDecoder.decodeIndexBuffer = (target, count, byteStride, source) => {
-	assert(source[0] === 0xE1);
+	assert(source[0] === 0xe1);
 	assert(count % 3 === 0);
 	assert(byteStride === 2 || byteStride === 4);
 
 	let dst;
-	if (byteStride === 2)
-		dst = new Uint16Array(target.buffer);
-	else
-		dst = new Uint32Array(target.buffer);
+	if (byteStride === 2) dst = new Uint16Array(target.buffer);
+	else dst = new Uint32Array(target.buffer);
 
 	const triCount = count / 3;
 
@@ -183,14 +180,14 @@ MeshoptDecoder.decodeIndexBuffer = (target, count, byteStride, source) => {
 		let n = 0;
 		for (let i = 0; ; i += 7) {
 			const b = source[dataOffs++];
-			n |= (b & 0x7F) << i;
+			n |= (b & 0x7f) << i;
 
-			if (b < 0x80)
-				return n;
+			if (b < 0x80) return n;
 		}
 	}
 
-	let next = 0, last = 0;
+	let next = 0,
+		last = 0;
 	const edgefifo = new Uint32Array(32);
 	const vertexfifo = new Uint32Array(16);
 
@@ -201,96 +198,91 @@ MeshoptDecoder.decodeIndexBuffer = (target, count, byteStride, source) => {
 	let dstOffs = 0;
 	for (let i = 0; i < triCount; i++) {
 		const code = source[codeOffs++];
-		const b0 = code >>> 4, b1 = code & 0x0F;
+		const b0 = code >>> 4,
+			b1 = code & 0x0f;
 
-		if (b0 < 0x0F) {
-			const a = edgefifo[(b0 << 1) + 0], b = edgefifo[(b0 << 1) + 1];
+		if (b0 < 0x0f) {
+			const a = edgefifo[(b0 << 1) + 0],
+				b = edgefifo[(b0 << 1) + 1];
 			let c = -1;
 
 			if (b1 === 0x00) {
 				c = next++;
 				pushfifo(vertexfifo, c);
-			} else if (b1 < 0x0D) {
+			} else if (b1 < 0x0d) {
 				c = vertexfifo[b1];
-			} else if (b1 === 0x0D) {
+			} else if (b1 === 0x0d) {
 				c = --last;
 				pushfifo(vertexfifo, c);
-			} else if (b1 === 0x0E) {
+			} else if (b1 === 0x0e) {
 				c = ++last;
 				pushfifo(vertexfifo, c);
-			} else if (b1 === 0x0F) {
+			} else if (b1 === 0x0f) {
 				const v = readLEB128();
 				c = decodeIndex(v);
 				pushfifo(vertexfifo, c);
 			}
 
 			// fifo pushes happen backwards
-			pushfifo(edgefifo, b); pushfifo(edgefifo, c);
-			pushfifo(edgefifo, c); pushfifo(edgefifo, a);
+			pushfifo(edgefifo, b);
+			pushfifo(edgefifo, c);
+			pushfifo(edgefifo, c);
+			pushfifo(edgefifo, a);
 
 			dst[dstOffs++] = a;
 			dst[dstOffs++] = b;
 			dst[dstOffs++] = c;
-		} else { // b0 === 0x0F
-			let a = -1, b = -1, c = -1;
+		} else {
+			// b0 === 0x0F
+			let a = -1,
+				b = -1,
+				c = -1;
 
-			if (b1 < 0x0E) {
+			if (b1 < 0x0e) {
 				const e = source[codeauxOffs + b1];
-				const z = e >>> 4, w = e & 0x0F;
+				const z = e >>> 4,
+					w = e & 0x0f;
 
 				a = next++;
 
-				if (z === 0x00)
-					b = next++;
-				else
-					b = vertexfifo[z - 1];
+				if (z === 0x00) b = next++;
+				else b = vertexfifo[z - 1];
 
-				if (w === 0x00)
-					c = next++;
-				else
-					c = vertexfifo[w - 1];
+				if (w === 0x00) c = next++;
+				else c = vertexfifo[w - 1];
 
 				pushfifo(vertexfifo, a);
-				if (z === 0x00)
-					pushfifo(vertexfifo, b);
-				if (w === 0x00)
-					pushfifo(vertexfifo, c);
+				if (z === 0x00) pushfifo(vertexfifo, b);
+				if (w === 0x00) pushfifo(vertexfifo, c);
 			} else {
 				const e = source[dataOffs++];
-				if (e === 0x00)
-					next = 0;
+				if (e === 0x00) next = 0;
 
-				const z = e >>> 4, w = e & 0x0F;
+				const z = e >>> 4,
+					w = e & 0x0f;
 
-				if (b1 === 0x0E)
-					a = next++;
-				else
-					a = decodeIndex(readLEB128());
+				if (b1 === 0x0e) a = next++;
+				else a = decodeIndex(readLEB128());
 
-				if (z === 0x00)
-					b = next++;
-				else if (z === 0x0F)
-					b = decodeIndex(readLEB128());
-				else
-					b = vertexfifo[z - 1];
+				if (z === 0x00) b = next++;
+				else if (z === 0x0f) b = decodeIndex(readLEB128());
+				else b = vertexfifo[z - 1];
 
-				if (w === 0x00)
-					c = next++;
-				else if (w === 0x0F)
-					c = decodeIndex(readLEB128());
-				else
-					c = vertexfifo[w - 1];
+				if (w === 0x00) c = next++;
+				else if (w === 0x0f) c = decodeIndex(readLEB128());
+				else c = vertexfifo[w - 1];
 
 				pushfifo(vertexfifo, a);
-				if (z === 0x00 || z === 0x0F)
-					pushfifo(vertexfifo, b);
-				if (w === 0x00 || w === 0x0F)
-					pushfifo(vertexfifo, c);
+				if (z === 0x00 || z === 0x0f) pushfifo(vertexfifo, b);
+				if (w === 0x00 || w === 0x0f) pushfifo(vertexfifo, c);
 			}
 
-			pushfifo(edgefifo, a); pushfifo(edgefifo, b);
-			pushfifo(edgefifo, b); pushfifo(edgefifo, c);
-			pushfifo(edgefifo, c); pushfifo(edgefifo, a);
+			pushfifo(edgefifo, a);
+			pushfifo(edgefifo, b);
+			pushfifo(edgefifo, b);
+			pushfifo(edgefifo, c);
+			pushfifo(edgefifo, c);
+			pushfifo(edgefifo, a);
 
 			dst[dstOffs++] = a;
 			dst[dstOffs++] = b;
@@ -300,14 +292,12 @@ MeshoptDecoder.decodeIndexBuffer = (target, count, byteStride, source) => {
 };
 
 MeshoptDecoder.decodeIndexSequence = (target, count, byteStride, source) => {
-	assert(source[0] === 0xD1);
+	assert(source[0] === 0xd1);
 	assert(byteStride === 2 || byteStride === 4);
 
 	let dst;
-	if (byteStride === 2)
-		dst = new Uint16Array(target.buffer);
-	else
-		dst = new Uint32Array(target.buffer);
+	if (byteStride === 2) dst = new Uint16Array(target.buffer);
+	else dst = new Uint32Array(target.buffer);
 
 	let dataOffs = 0x01;
 
@@ -315,10 +305,9 @@ MeshoptDecoder.decodeIndexSequence = (target, count, byteStride, source) => {
 		let n = 0;
 		for (let i = 0; ; i += 7) {
 			const b = source[dataOffs++];
-			n |= (b & 0x7F) << i;
+			n |= (b & 0x7f) << i;
 
-			if (b < 0x80)
-				return n;
+			if (b < 0x80) return n;
 		}
 	}
 
@@ -326,9 +315,9 @@ MeshoptDecoder.decodeIndexSequence = (target, count, byteStride, source) => {
 
 	for (let i = 0; i < count; i++) {
 		const v = readLEB128();
-		const b = (v & 0x01);
+		const b = v & 0x01;
 		const delta = dezig(v >>> 1);
-		dst[i] = (last[b] += delta);
+		dst[i] = last[b] += delta;
 	}
 };
 

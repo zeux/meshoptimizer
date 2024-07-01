@@ -1,13 +1,14 @@
 var assert = require('assert').strict;
 var decoder = require('./meshopt_decoder.js');
 
-process.on('unhandledRejection', error => {
+process.on('unhandledRejection', (error) => {
 	console.log('unhandledRejection', error);
 	process.exit(1);
 });
 
 var tests = {
-	decodeVertexBuffer: function() {
+	decodeVertexBuffer: function () {
+		// prettier-ignore
 		var encoded = new Uint8Array([
 			0xa0, 0x01, 0x3f, 0x00, 0x00, 0x00, 0x58, 0x57, 0x58, 0x01, 0x26, 0x00, 0x00, 0x00, 0x01,
 			0x0c, 0x00, 0x00, 0x00, 0x58, 0x01, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
@@ -17,6 +18,7 @@ var tests = {
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		]);
 
+		// prettier-ignore
 		var expected = new Uint8Array([
 			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 			44, 1, 0, 0, 0, 0, 0, 0, 244, 1, 0, 0,
@@ -30,7 +32,8 @@ var tests = {
 		assert.deepStrictEqual(result, expected);
 	},
 
-	decodeVertexBuffer_More: function() {
+	decodeVertexBuffer_More: function () {
+		// prettier-ignore
 		var encoded = new Uint8Array([
 			0xa0, 0x00, 0x01, 0x2a, 0xaa, 0xaa, 0xaa, 0x02, 0x04, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44,
 			0x44, 0x03, 0x00, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10,
@@ -39,6 +42,7 @@ var tests = {
 			0x00, 0x00, 0x00, 0x00, 0x00,
 		]);
 
+		// prettier-ignore
 		var expected = new Uint8Array([
 			0, 0, 0, 0, 0, 1, 2, 8, 0, 2, 4, 16, 0, 3, 6, 24,
 			0, 4, 8, 32, 0, 5, 10, 40, 0, 6, 12, 48, 0, 7, 14, 56,
@@ -52,7 +56,8 @@ var tests = {
 		assert.deepStrictEqual(result, expected);
 	},
 
-	decodeVertexBuffer_Mode2: function() {
+	decodeVertexBuffer_Mode2: function () {
+		// prettier-ignore
 		var encoded = new Uint8Array([
 			0xa0, 0x02, 0x08, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x02, 0x0a, 0xaa, 0xaa, 0xaa,
 			0xaa, 0xaa, 0xaa, 0xaa, 0x02, 0x0c, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0x02, 0x0e,
@@ -61,6 +66,7 @@ var tests = {
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		]);
 
+		// prettier-ignore
 		var expected = new Uint8Array([
 			0, 0, 0, 0, 4, 5, 6, 7, 8, 10, 12, 14, 12, 15, 18, 21,
 			16, 20, 24, 28, 20, 25, 30, 35, 24, 30, 36, 42, 28, 35, 42, 49,
@@ -74,12 +80,14 @@ var tests = {
 		assert.deepStrictEqual(result, expected);
 	},
 
-	decodeIndexBuffer16: function() {
+	decodeIndexBuffer16: function () {
+		// prettier-ignore
 		var encoded = new Uint8Array([
 			0xe0, 0xf0, 0x10, 0xfe, 0xff, 0xf0, 0x0c, 0xff, 0x02, 0x02, 0x02, 0x00, 0x76, 0x87, 0x56, 0x67,
 			0x78, 0xa9, 0x86, 0x65, 0x89, 0x68, 0x98, 0x01, 0x69, 0x00, 0x00,
 		]);
 
+		// prettier-ignore
 		var expected = new Uint16Array([
 			0, 1, 2, 2, 1, 3, 4, 6, 5, 7, 8, 9
 		]);
@@ -90,12 +98,14 @@ var tests = {
 		assert.deepEqual(result, expected);
 	},
 
-	decodeIndexBuffer32: function() {
+	decodeIndexBuffer32: function () {
+		// prettier-ignore
 		var encoded = new Uint8Array([
 			0xe0, 0xf0, 0x10, 0xfe, 0xff, 0xf0, 0x0c, 0xff, 0x02, 0x02, 0x02, 0x00, 0x76, 0x87, 0x56, 0x67,
 			0x78, 0xa9, 0x86, 0x65, 0x89, 0x68, 0x98, 0x01, 0x69, 0x00, 0x00,
 		]);
 
+		// prettier-ignore
 		var expected = new Uint32Array([
 			0, 1, 2, 2, 1, 3, 4, 6, 5, 7, 8, 9
 		]);
@@ -106,12 +116,14 @@ var tests = {
 		assert.deepStrictEqual(result, expected);
 	},
 
-	decodeIndexBufferV1: function() {
+	decodeIndexBufferV1: function () {
+		// prettier-ignore
 		var encoded = new Uint8Array([
 			0xe1, 0xf0, 0x10, 0xfe, 0x1f, 0x3d, 0x00, 0x0a, 0x00, 0x76, 0x87, 0x56, 0x67, 0x78, 0xa9, 0x86,
 			0x65, 0x89, 0x68, 0x98, 0x01, 0x69, 0x00, 0x00,
 		]);
 
+		// prettier-ignore
 		var expected = new Uint32Array([
 			0, 1, 2, 2, 1, 3, 0, 1, 2, 2, 1, 5, 2, 1, 4
 		]);
@@ -122,12 +134,14 @@ var tests = {
 		assert.deepStrictEqual(result, expected);
 	},
 
-	decodeIndexBufferV1_More: function() {
+	decodeIndexBufferV1_More: function () {
+		// prettier-ignore
 		var encoded = new Uint8Array([
 			0xe1, 0xf0, 0x10, 0xfe, 0xff, 0xf0, 0x0c, 0xff, 0x02, 0x02, 0x02, 0x00, 0x76, 0x87, 0x56, 0x67,
 			0x78, 0xa9, 0x86, 0x65, 0x89, 0x68, 0x98, 0x01, 0x69, 0x00, 0x00,
 		]);
 
+		// prettier-ignore
 		var expected = new Uint32Array([
 			0, 1, 2, 2, 1, 3, 4, 6, 5, 7, 8, 9
 		]);
@@ -138,11 +152,13 @@ var tests = {
 		assert.deepStrictEqual(result, expected);
 	},
 
-	decodeIndexBufferV1_3Edges: function() {
+	decodeIndexBufferV1_3Edges: function () {
+		// prettier-ignore
 		var encoded = new Uint8Array([
 			0xe1, 0xf0, 0x20, 0x30, 0x40, 0x00, 0x76, 0x87, 0x56, 0x67, 0x78, 0xa9, 0x86, 0x65, 0x89,
 			0x68, 0x98, 0x01, 0x69, 0x00, 0x00,
 		]);
+		// prettier-ignore
 		var expected = new Uint32Array([
 			0, 1, 2, 1, 0, 3, 2, 1, 4, 0, 2, 5
 		]);
@@ -153,14 +169,10 @@ var tests = {
 		assert.deepStrictEqual(result, expected);
 	},
 
-	decodeIndexSequence: function() {
-		var encoded = new Uint8Array([
-		    0xd1, 0x00, 0x04, 0xcd, 0x01, 0x04, 0x07, 0x98, 0x1f, 0x00, 0x00, 0x00, 0x00,
-		]);
+	decodeIndexSequence: function () {
+		var encoded = new Uint8Array([0xd1, 0x00, 0x04, 0xcd, 0x01, 0x04, 0x07, 0x98, 0x1f, 0x00, 0x00, 0x00, 0x00]);
 
-		var expected = new Uint32Array([
-			0, 1, 51, 2, 49, 1000
-		]);
+		var expected = new Uint32Array([0, 1, 51, 2, 49, 1000]);
 
 		var result = new Uint32Array(expected.length);
 		decoder.decodeIndexSequence(new Uint8Array(result.buffer), 6, 4, encoded);
@@ -168,7 +180,8 @@ var tests = {
 		assert.deepStrictEqual(result, expected);
 	},
 
-	decodeFilterOct8: function() {
+	decodeFilterOct8: function () {
+		// prettier-ignore
 		var encoded = new Uint8Array([
 			0xa0, 0x01, 0x07, 0x00, 0x00, 0x00, 0x1e, 0x01, 0x3f, 0x00, 0x00, 0x00, 0x8b, 0x8c, 0xfd, 0x00,
 			0x01, 0x26, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -176,6 +189,7 @@ var tests = {
 			0x00, 0x00, 0x01, 0x7f, 0x00,
 		]);
 
+		// prettier-ignore
 		var expected = new Uint8Array([
 			0, 1, 127, 0,
 			0, 159, 82, 1,
@@ -184,12 +198,13 @@ var tests = {
 		]);
 
 		var result = new Uint8Array(expected.length);
-		decoder.decodeVertexBuffer(new Uint8Array(result.buffer), 4, 4, encoded, /* filter= */ "OCTAHEDRAL");
+		decoder.decodeVertexBuffer(new Uint8Array(result.buffer), 4, 4, encoded, /* filter= */ 'OCTAHEDRAL');
 
 		assert.deepStrictEqual(result, expected);
 	},
 
-	decodeFilterOct12: function() {
+	decodeFilterOct12: function () {
+		// prettier-ignore
 		var encoded = new Uint8Array([
 			0xa0, 0x01, 0x0f, 0x00, 0x00, 0x00, 0x3d, 0x5a, 0x01, 0x0f, 0x00, 0x00, 0x00, 0x0e, 0x0d, 0x01,
 			0x3f, 0x00, 0x00, 0x00, 0x9a, 0x99, 0x26, 0x01, 0x3f, 0x00, 0x00, 0x00, 0x0e, 0x0d, 0x0a, 0x00,
@@ -198,6 +213,7 @@ var tests = {
 			0x00, 0x01, 0x00, 0xff, 0x07, 0x00, 0x00,
 		]);
 
+		// prettier-ignore
 		var expected = new Uint16Array([
 			0, 16, 32767, 0,
 			0, 32621, 3088, 1,
@@ -206,12 +222,13 @@ var tests = {
 		]);
 
 		var result = new Uint16Array(expected.length);
-		decoder.decodeVertexBuffer(new Uint8Array(result.buffer), 4, 8, encoded, /* filter= */ "OCTAHEDRAL");
+		decoder.decodeVertexBuffer(new Uint8Array(result.buffer), 4, 8, encoded, /* filter= */ 'OCTAHEDRAL');
 
 		assert.deepStrictEqual(result, expected);
 	},
 
-	decodeFilterQuat12: function() {
+	decodeFilterQuat12: function () {
+		// prettier-ignore
 		var encoded = new Uint8Array([
 			0xa0, 0x01, 0x0f, 0x00, 0x00, 0x00, 0x3d, 0x5a, 0x01, 0x0f, 0x00, 0x00, 0x00, 0x0e, 0x0d, 0x01,
 			0x3f, 0x00, 0x00, 0x00, 0x9a, 0x99, 0x26, 0x01, 0x3f, 0x00, 0x00, 0x00, 0x0e, 0x0d, 0x0a, 0x00,
@@ -220,6 +237,7 @@ var tests = {
 			0x00, 0x01, 0x00, 0x00, 0x00, 0xfc, 0x07,
 		]);
 
+		// prettier-ignore
 		var expected = new Uint16Array([
 			32767, 0, 11, 0,
 			0, 25013, 0, 21166,
@@ -228,12 +246,13 @@ var tests = {
 		]);
 
 		var result = new Uint16Array(expected.length);
-		decoder.decodeVertexBuffer(new Uint8Array(result.buffer), 4, 8, encoded, /* filter= */ "QUATERNION");
+		decoder.decodeVertexBuffer(new Uint8Array(result.buffer), 4, 8, encoded, /* filter= */ 'QUATERNION');
 
 		assert.deepStrictEqual(result, expected);
 	},
 
-	decodeFilterExp: function() {
+	decodeFilterExp: function () {
+		// prettier-ignore
 		var encoded = new Uint8Array([
 			0xa0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -241,6 +260,7 @@ var tests = {
 			0xfe,
 		]);
 
+		// prettier-ignore
 		var expected = new Uint32Array([
 			0,
 			0x3fc00000,
@@ -249,12 +269,13 @@ var tests = {
 		]);
 
 		var result = new Uint32Array(expected.length);
-		decoder.decodeVertexBuffer(new Uint8Array(result.buffer), 1, 16, encoded, /* filter= */ "EXPONENTIAL");
+		decoder.decodeVertexBuffer(new Uint8Array(result.buffer), 1, 16, encoded, /* filter= */ 'EXPONENTIAL');
 
 		assert.deepStrictEqual(result, expected);
 	},
 
-	decodeGltfBuffer: function() {
+	decodeGltfBuffer: function () {
+		// prettier-ignore
 		var encoded = new Uint8Array([
 			0xa0, 0x01, 0x3f, 0x00, 0x00, 0x00, 0x58, 0x57, 0x58, 0x01, 0x26, 0x00, 0x00, 0x00, 0x01,
 			0x0c, 0x00, 0x00, 0x00, 0x58, 0x01, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
@@ -264,6 +285,7 @@ var tests = {
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		]);
 
+		// prettier-ignore
 		var expected = new Uint8Array([
 			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 			44, 1, 0, 0, 0, 0, 0, 0, 244, 1, 0, 0,
@@ -272,11 +294,12 @@ var tests = {
 		]);
 
 		var result = new Uint8Array(expected.length);
-		decoder.decodeGltfBuffer(result, 4, 12, encoded, /* mode= */ "ATTRIBUTES");
+		decoder.decodeGltfBuffer(result, 4, 12, encoded, /* mode= */ 'ATTRIBUTES');
 		assert.deepStrictEqual(result, expected);
 	},
 
-	decodeGltfBufferAsync: function() {
+	decodeGltfBufferAsync: function () {
+		// prettier-ignore
 		var encoded = new Uint8Array([
 			0xa0, 0x01, 0x3f, 0x00, 0x00, 0x00, 0x58, 0x57, 0x58, 0x01, 0x26, 0x00, 0x00, 0x00, 0x01,
 			0x0c, 0x00, 0x00, 0x00, 0x58, 0x01, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
@@ -286,6 +309,7 @@ var tests = {
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		]);
 
+		// prettier-ignore
 		var expected = new Uint8Array([
 			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 			44, 1, 0, 0, 0, 0, 0, 0, 244, 1, 0, 0,
@@ -293,7 +317,7 @@ var tests = {
 			44, 1, 44, 1, 0, 0, 0, 0, 244, 1, 244, 1
 		]);
 
-		decoder.decodeGltfBufferAsync(4, 12, encoded, /* mode= */ "ATTRIBUTES").then(function (result) {
+		decoder.decodeGltfBufferAsync(4, 12, encoded, /* mode= */ 'ATTRIBUTES').then(function (result) {
 			assert.deepStrictEqual(result, expected);
 		});
 	},
