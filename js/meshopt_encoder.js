@@ -196,7 +196,7 @@ var MeshoptEncoder = (function() {
 	};
 })();
 
-// UMD-style export for MeshoptEncoder
+// export! MeshoptEncoder
 if (typeof exports === 'object' && typeof module === 'object')
 	module.exports = MeshoptEncoder;
 else if (typeof define === 'function' && define['amd'])

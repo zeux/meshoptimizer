@@ -181,7 +181,7 @@ var MeshoptDecoder = (function() {
 	};
 })();
 
-// UMD-style export
+// export! MeshoptDecoder
 if (typeof exports === 'object' && typeof module === 'object')
 	module.exports = MeshoptDecoder;
 else if (typeof define === 'function' && define['amd'])

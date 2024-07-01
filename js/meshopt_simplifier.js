@@ -255,7 +255,7 @@ var MeshoptSimplifier = (function() {
 	};
 })();
 
-// UMD-style export for MeshoptSimplifier
+// export! MeshoptSimplifier
 if (typeof exports === 'object' && typeof module === 'object')
 	module.exports = MeshoptSimplifier;
 else if (typeof define === 'function' && define['amd'])

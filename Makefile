@@ -161,9 +161,9 @@ js/meshopt_simplifier.js: build/simplifier.wasm tools/wasmpack.py
 	sed -i "s#\(var wasm = \)\".*\";#\\1\"$$(cat build/simplifier.wasm | python3 tools/wasmpack.py)\";#" $@
 
 js/%.module.js: js/%.js
-	sed '/UMD-style export/,$$d' <$< >$@
+	sed '\#// export!#q' <$< >$@
 	sed -i "/\"use strict\";/d" $@
-	sed -n "s#\s*module.exports = \(.*\);#export { \\1 };#p" <$< >>$@
+	sed -i "s#// export! \(.*\)#export { \\1 };#" $@
 
 $(DEMO): $(DEMO_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
