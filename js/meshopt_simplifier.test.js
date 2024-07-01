@@ -64,7 +64,9 @@ var tests = {
 
 		var positions = new Float32Array([0, 2, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 2, 0, 0]);
 
-		var res = simplifier.simplify(indices, positions, 3, /* target indices */ 3, /* target error */ 0.01, ['LockBorder']);
+		var res = simplifier.simplify(indices, positions, 3, /* target indices */ 3, /* target error */ 0.01, [
+			'LockBorder',
+		]);
 
 		var expected = new Uint32Array([0, 2, 1, 1, 2, 3, 3, 2, 4, 2, 5, 4]);
 

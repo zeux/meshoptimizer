@@ -8,8 +8,21 @@ export const MeshoptDecoder: {
 	decodeIndexBuffer: (target: Uint8Array, count: number, size: number, source: Uint8Array) => void;
 	decodeIndexSequence: (target: Uint8Array, count: number, size: number, source: Uint8Array) => void;
 
-	decodeGltfBuffer: (target: Uint8Array, count: number, size: number, source: Uint8Array, mode: string, filter?: string) => void;
+	decodeGltfBuffer: (
+		target: Uint8Array,
+		count: number,
+		size: number,
+		source: Uint8Array,
+		mode: string,
+		filter?: string,
+	) => void;
 
 	useWorkers: (count: number) => void;
-	decodeGltfBufferAsync: (count: number, size: number, source: Uint8Array, mode: string, filter?: string) => Promise<Uint8Array>;
+	decodeGltfBufferAsync: (
+		count: number,
+		size: number,
+		source: Uint8Array,
+		mode: string,
+		filter?: string,
+	) => Promise<Uint8Array>;
 };

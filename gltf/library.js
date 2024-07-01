@@ -111,7 +111,17 @@ var wasi = {
 		return 0;
 	},
 
-	path_open32: function (parent_fd, dirflags, path, path_len, oflags, fs_rights_base, fs_rights_inheriting, fdflags, opened_fd) {
+	path_open32: function (
+		parent_fd,
+		dirflags,
+		path,
+		path_len,
+		oflags,
+		fs_rights_base,
+		fs_rights_inheriting,
+		fdflags,
+		opened_fd,
+	) {
 		if (!fds[parent_fd] || fds[parent_fd].path === undefined) {
 			return WASI_EBADF;
 		}

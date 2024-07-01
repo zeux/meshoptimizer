@@ -154,7 +154,10 @@
 				}
 
 				var threshold = Math.pow(10, -settings.errorThresholdLog10);
-				var stride = geo.attributes.position instanceof THREE.InterleavedBufferAttribute ? geo.attributes.position.data.stride : 3;
+				var stride =
+					geo.attributes.position instanceof THREE.InterleavedBufferAttribute
+						? geo.attributes.position.data.stride
+						: 3;
 
 				console.time('simplify');
 
@@ -192,7 +195,10 @@
 					colors = new Float32Array(geo.attributes.color.array);
 				}
 
-				var pos_stride = geo.attributes.position instanceof THREE.InterleavedBufferAttribute ? geo.attributes.position.data.stride : 3;
+				var pos_stride =
+					geo.attributes.position instanceof THREE.InterleavedBufferAttribute
+						? geo.attributes.position.data.stride
+						: 3;
 				var col_stride =
 					geo.attributes.color instanceof THREE.InterleavedBufferAttribute
 						? geo.attributes.color.data.stride
@@ -203,7 +209,14 @@
 
 				console.time('simplify');
 
-				var res = MeshoptSimplifier.simplifyPoints(positions, pos_stride, target, colors, col_stride, settings.colorWeight / colorScale);
+				var res = MeshoptSimplifier.simplifyPoints(
+					positions,
+					pos_stride,
+					target,
+					colors,
+					col_stride,
+					settings.colorWeight / colorScale,
+				);
 
 				console.timeEnd('simplify');
 

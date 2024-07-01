@@ -95,7 +95,9 @@ var tests = {
 	encodeFilterOct8: function () {
 		var data = new Float32Array([1, 0, 0, 0, 0, -1, 0, 0, 0.7071068, 0, 0.707168, 1, -0.7071068, 0, -0.707168, 1]);
 
-		var expected = new Uint8Array([0x7f, 0, 0x7f, 0, 0, 0x81, 0x7f, 0, 0x3f, 0, 0x7f, 0x7f, 0x81, 0x40, 0x7f, 0x7f]);
+		var expected = new Uint8Array([
+			0x7f, 0, 0x7f, 0, 0, 0x81, 0x7f, 0, 0x3f, 0, 0x7f, 0x7f, 0x81, 0x40, 0x7f, 0x7f,
+		]);
 
 		// 4 vectors, encode each vector into 4 bytes with 8 bits of precision/component
 		var encoded = encoder.encodeFilterOct(data, 4, 4, 8);
@@ -105,7 +107,9 @@ var tests = {
 	encodeFilterOct12: function () {
 		var data = new Float32Array([1, 0, 0, 0, 0, -1, 0, 0, 0.7071068, 0, 0.707168, 1, -0.7071068, 0, -0.707168, 1]);
 
-		var expected = new Uint16Array([0x7ff, 0, 0x7ff, 0, 0x0, 0xf801, 0x7ff, 0, 0x3ff, 0, 0x7ff, 0x7fff, 0xf801, 0x400, 0x7ff, 0x7fff]);
+		var expected = new Uint16Array([
+			0x7ff, 0, 0x7ff, 0, 0x0, 0xf801, 0x7ff, 0, 0x3ff, 0, 0x7ff, 0x7fff, 0xf801, 0x400, 0x7ff, 0x7fff,
+		]);
 
 		// 4 vectors, encode each vector into 8 bytes with 12 bits of precision/component
 		var encoded = encoder.encodeFilterOct(data, 4, 8, 12);
