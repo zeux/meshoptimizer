@@ -125,7 +125,7 @@ $(BUILD)/gltfpack: $(GLTFPACK_OBJECTS) $(LIBRARY)
 
 gltfpack.wasm: gltf/library.wasm
 
-gltf/library.wasm: ${LIBRARY_SOURCES} ${GLTFPACK_SOURCES}
+gltf/library.wasm: $(LIBRARY_SOURCES) $(GLTFPACK_SOURCES)
 	$(WASMCC) $^ -o $@ -Os -DNDEBUG --target=wasm32-wasi --sysroot=$(WASIROOT) -nostartfiles -Wl,--no-entry -Wl,--export=pack -Wl,--export=malloc -Wl,--export=free -Wl,--export=__wasm_call_ctors -Wl,-s -Wl,--allow-undefined-file=gltf/wasistubs.txt
 
 build/decoder_base.wasm: $(WASM_DECODER_SOURCES)
@@ -174,16 +174,16 @@ vcachetuner: tools/vcachetuner.cpp tools/objloader.cpp $(LIBRARY)
 codecbench: tools/codecbench.cpp $(LIBRARY)
 	$(CXX) $^ $(CXXFLAGS) $(LDFLAGS) -o $@
 
-codecbench.js: tools/codecbench.cpp ${LIBRARY_SOURCES}
+codecbench.js: tools/codecbench.cpp $(LIBRARY_SOURCES)
 	emcc $^ -O3 -g -DNDEBUG -s TOTAL_MEMORY=268435456 -s SINGLE_FILE=1 -o $@
 
-codecbench-simd.js: tools/codecbench.cpp ${LIBRARY_SOURCES}
+codecbench-simd.js: tools/codecbench.cpp $(LIBRARY_SOURCES)
 	emcc $^ -O3 -g -DNDEBUG -s TOTAL_MEMORY=268435456 -s SINGLE_FILE=1 -msimd128 -o $@
 
-codecbench.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
+codecbench.wasm: tools/codecbench.cpp $(LIBRARY_SOURCES)
 	$(WASMCC) $^ -fno-exceptions --target=wasm32-wasi --sysroot=$(WASIROOT) -lc++ -lc++abi -O3 -g -DNDEBUG -o $@
 
-codecbench-simd.wasm: tools/codecbench.cpp ${LIBRARY_SOURCES}
+codecbench-simd.wasm: tools/codecbench.cpp $(LIBRARY_SOURCES)
 	$(WASMCC) $^ -fno-exceptions --target=wasm32-wasi --sysroot=$(WASIROOT) -lc++ -lc++abi -O3 -g -DNDEBUG -msimd128 -o $@
 
 codecfuzz: tools/codecfuzz.cpp src/vertexcodec.cpp src/indexcodec.cpp
