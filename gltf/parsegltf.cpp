@@ -621,7 +621,7 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 	cgltf_options options = {};
 	cgltf_result result = cgltf_parse_file(&options, path, &data);
 
-	if (data && !data->bin)
+	if (result == cgltf_result_success && !data->bin)
 		freeFile(data);
 
 	result = (result == cgltf_result_success) ? cgltf_load_buffers(&options, data, path) : result;
