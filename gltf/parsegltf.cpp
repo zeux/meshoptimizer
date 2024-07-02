@@ -531,6 +531,8 @@ static cgltf_result decompressMeshopt(cgltf_data* data)
 		if (!result)
 			return cgltf_result_out_of_memory;
 
+		data->buffer_views[i].data = result;
+
 		int rc = -1;
 
 		switch (mc->mode)
@@ -571,8 +573,6 @@ static cgltf_result decompressMeshopt(cgltf_data* data)
 		default:
 			break;
 		}
-
-		data->buffer_views[i].data = result;
 	}
 
 	return cgltf_result_success;
