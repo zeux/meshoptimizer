@@ -1,6 +1,6 @@
 meshoptimizer is widely used in the games industry as well as in many pipelines for processing 3D content for real-time rendering. This document contains a small selection of projects that rely on meshoptimizer.
 
-For brevity, the projects listed below are limited to commercial software or open source software that has 100+ stars on GitHub. Please feel free to contribute additions via pull requests.
+For brevity, the projects listed below are limited to commercial software or open source software that has 1000+ stars on GitHub. Please feel free to contribute additions via pull requests.
 
 # Games
 
