@@ -109,6 +109,9 @@ format:
 
 js: js/meshopt_decoder.js js/meshopt_decoder.module.js js/meshopt_encoder.js js/meshopt_encoder.module.js js/meshopt_simplifier.js js/meshopt_simplifier.module.js
 
+symbols: $(BUILD)/amalgamated.so
+	nm $< -U -g
+
 gltfpack: $(BUILD)/gltfpack
 	ln -fs $^ $@
 
@@ -191,6 +194,10 @@ codecfuzz: tools/codecfuzz.cpp src/vertexcodec.cpp src/indexcodec.cpp
 
 $(LIBRARY): $(LIBRARY_OBJECTS)
 	ar rcs $@ $^
+
+$(BUILD)/amalgamated.so: $(LIBRARY_SOURCES)
+	@mkdir -p $(dir $@)
+	cat $^ | $(CXX) $(CXXFLAGS) -x c++ - -I src/ -o $@ -shared -fPIC
 
 $(BUILD)/%.cpp.o: %.cpp
 	@mkdir -p $(dir $@)
