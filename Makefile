@@ -20,7 +20,7 @@ LIBRARY=$(BUILD)/libmeshoptimizer.a
 DEMO=$(BUILD)/meshoptimizer
 
 CFLAGS=-g -Wall -Wextra -Werror -std=c89
-CXXFLAGS=-g -Wall -Wextra -Wshadow -Wno-missing-field-initializers -Werror -std=c++98
+CXXFLAGS=-g -Wall -Wextra -Wshadow -Wno-missing-field-initializers -Werror -std=gnu++98
 LDFLAGS=
 
 $(GLTFPACK_OBJECTS): CXXFLAGS+=-std=c++11
