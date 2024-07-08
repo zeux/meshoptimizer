@@ -369,7 +369,8 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 			mi.unlit &= vi.unlit;
 		}
 
-		filterStreams(mesh, mi);
+		if (!settings.keep_attributes)
+			filterStreams(mesh, mi);
 	}
 
 	mergeMeshMaterials(data, meshes, settings);
@@ -1308,6 +1309,10 @@ int main(int argc, char** argv)
 		{
 			settings.keep_extras = true;
 		}
+		else if (strcmp(arg, "-kv") == 0)
+		{
+			settings.keep_attributes = true;
+		}
 		else if (strcmp(arg, "-mm") == 0)
 		{
 			settings.mesh_merge = true;
@@ -1531,6 +1536,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nVertex attributes:\n");
 			fprintf(stderr, "\t-vtf: use floating point attributes for texture coordinates\n");
 			fprintf(stderr, "\t-vnf: use floating point attributes for normals\n");
+			fprintf(stderr, "\t-kv: keep source vertex attributes even if they aren't used\n");
 			fprintf(stderr, "\nAnimations:\n");
 			fprintf(stderr, "\t-at N: use N-bit quantization for translations (default: 16; N should be between 1 and 24)\n");
 			fprintf(stderr, "\t-ar N: use N-bit quantization for rotations (default: 12; N should be between 4 and 16)\n");
