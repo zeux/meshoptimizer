@@ -527,8 +527,13 @@ static Stream* getStream(Mesh& mesh, cgltf_attribute_type type, int index = 0)
 	return NULL;
 }
 
-static void simplifyMesh(Mesh& mesh, float threshold, bool attributes, bool aggressive, bool lock_borders)
+static void simplifyMesh(Mesh& mesh, float threshold, bool attributes, bool aggressive, bool lock_borders, bool debug = false)
 {
+	enum
+	{
+		meshopt_SimplifyInternalDebug = 1 << 30
+	};
+
 	assert(mesh.type == cgltf_primitive_type_triangles);
 
 	if (mesh.indices.empty())
@@ -543,7 +548,11 @@ static void simplifyMesh(Mesh& mesh, float threshold, bool attributes, bool aggr
 	size_t target_index_count = size_t(double(mesh.indices.size() / 3) * threshold) * 3;
 	float target_error = 1e-2f;
 	float target_error_aggressive = 1e-1f;
-	unsigned int options = lock_borders ? meshopt_SimplifyLockBorder : 0;
+	unsigned int options = 0;
+	if (lock_borders)
+		options |= meshopt_SimplifyLockBorder;
+	if (debug)
+		options |= meshopt_SimplifyInternalDebug;
 
 	const Stream* attr = getStream(mesh, cgltf_attribute_type_color);
 	attr = attr ? attr : getStream(mesh, cgltf_attribute_type_normal);
@@ -784,10 +793,6 @@ void processMesh(Mesh& mesh, const Settings& settings)
 }
 
 #ifndef NDEBUG
-extern MESHOPTIMIZER_API unsigned char* meshopt_simplifyDebugKind;
-extern MESHOPTIMIZER_API unsigned int* meshopt_simplifyDebugLoop;
-extern MESHOPTIMIZER_API unsigned int* meshopt_simplifyDebugLoopBack;
-
 void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio, bool attributes)
 {
 	Mesh mesh = source;
@@ -799,27 +804,9 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio, bo
 	reindexMesh(mesh);
 	filterTriangles(mesh);
 
-	// before simplification we need to setup target kind/loop arrays
 	size_t vertex_count = mesh.streams[0].data.size();
 
-	std::vector<unsigned char> kind(vertex_count);
-	std::vector<unsigned int> loop(vertex_count);
-	std::vector<unsigned int> loopback(vertex_count);
-	std::vector<unsigned char> live(vertex_count);
-
-	meshopt_simplifyDebugKind = &kind[0];
-	meshopt_simplifyDebugLoop = &loop[0];
-	meshopt_simplifyDebugLoopBack = &loopback[0];
-
-	simplifyMesh(mesh, ratio, attributes, /* aggressive= */ false, /* lock_borders= */ false);
-
-	meshopt_simplifyDebugKind = NULL;
-	meshopt_simplifyDebugLoop = NULL;
-	meshopt_simplifyDebugLoopBack = NULL;
-
-	// fill out live info
-	for (size_t i = 0; i < mesh.indices.size(); ++i)
-		live[mesh.indices[i]] = true;
+	simplifyMesh(mesh, ratio, attributes, /* aggressive= */ false, /* lock_borders= */ false, /* debug= */ true);
 
 	// color palette for display
 	static const Attr kPalette[] = {
@@ -850,38 +837,37 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio, bo
 
 	// transform kind/loop data into lines & points
 	Stream colors = {cgltf_attribute_type_color};
-	colors.data.resize(vertex_count);
-
-	for (size_t i = 0; i < vertex_count; ++i)
-		colors.data[i] = kPalette[kind[i]];
+	colors.data.resize(vertex_count, kPalette[0]);
 
 	kinds.type = cgltf_primitive_type_points;
-
-	kinds.streams.push_back(colors);
-
-	for (size_t i = 0; i < vertex_count; ++i)
-		if (live[i] && kind[i] != 0)
-			kinds.indices.push_back(unsigned(i));
-
 	loops.type = cgltf_primitive_type_lines;
 
-	loops.streams.push_back(colors);
-
-	for (size_t i = 0; i < vertex_count; ++i)
-		if (live[i] && (kind[i] == 1 || kind[i] == 2))
+	for (size_t i = 0; i < mesh.indices.size(); i += 3)
+	{
+		for (int k = 0; k < 3; ++k)
 		{
-			if (loop[i] != ~0u && live[loop[i]])
+			const unsigned int mask = (1 << 28) - 1;
+			unsigned int v = mesh.indices[i + k];
+			unsigned int next = mesh.indices[i + (k + 1) % 3];
+			unsigned int vk = (v >> 28) & 7;
+			unsigned int vl = v >> 31;
+
+			if (vk)
 			{
-				loops.indices.push_back(unsigned(i));
-				loops.indices.push_back(loop[i]);
+				colors.data[v & mask] = kPalette[vk];
+				kinds.indices.push_back(v & mask);
 			}
 
-			if (loopback[i] != ~0u && live[loopback[i]])
+			if (vl)
 			{
-				loops.indices.push_back(loopback[i]);
-				loops.indices.push_back(unsigned(i));
+				loops.indices.push_back(v & mask);
+				loops.indices.push_back(next & mask);
 			}
 		}
+	}
+
+	kinds.streams.push_back(colors);
+	loops.streams.push_back(colors);
 }
 
 void debugMeshlets(const Mesh& source, Mesh& meshlets, int max_vertices, bool scan)
