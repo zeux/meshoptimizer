@@ -1546,8 +1546,13 @@ static float interpolate(float y, float x0, float y0, float x1, float y1, float 
 
 } // namespace meshopt
 
+// Note: this is only exposed for debug visualization purposes; do *not* use
+enum
+{
+	meshopt_SimplifyInternalDebug = 1 << 30
+};
+
 #ifndef NDEBUG
-// Note: this is only exposed for debug visualization purposes; do *not* use these in debug builds
 MESHOPTIMIZER_API unsigned char* meshopt_simplifyDebugKind = NULL;
 MESHOPTIMIZER_API unsigned int* meshopt_simplifyDebugLoop = NULL;
 MESHOPTIMIZER_API unsigned int* meshopt_simplifyDebugLoopBack = NULL;
@@ -1561,7 +1566,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
 	assert(target_index_count <= index_count);
-	assert((options & ~(meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute)) == 0);
+	assert((options & ~(meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute | meshopt_SimplifyInternalDebug)) == 0);
 	assert(vertex_attributes_stride >= attribute_count * sizeof(float) && vertex_attributes_stride <= 256);
 	assert(vertex_attributes_stride % sizeof(float) == 0);
 	assert(attribute_count <= kMaxAttributes);
@@ -1704,6 +1709,21 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 #if TRACE
 	printf("result: %d triangles, error: %e; total %d passes\n", int(result_count / 3), sqrtf(result_error), int(pass_count));
 #endif
+
+	// if debug visualization data is requested, fill it instead of index data; for simplicity, this doesn't work with sparsity
+	if ((options & meshopt_SimplifyInternalDebug) && !sparse_remap)
+	{
+		assert(Kind_Count <= 8 && vertex_count < (1 << 28)); // 3 bit kind, 1 bit loop
+
+		for (size_t i = 0; i < result_count; i += 3)
+		{
+			unsigned int a = result[i + 0], b = result[i + 1], c = result[i + 2];
+
+			result[i + 0] |= (vertex_kind[a] << 28) | (unsigned(loop[a] == b || loopback[b] == a) << 31);
+			result[i + 1] |= (vertex_kind[b] << 28) | (unsigned(loop[b] == c || loopback[c] == b) << 31);
+			result[i + 2] |= (vertex_kind[c] << 28) | (unsigned(loop[c] == a || loopback[a] == c) << 31);
+		}
+	}
 
 #ifndef NDEBUG
 	if (meshopt_simplifyDebugKind)
