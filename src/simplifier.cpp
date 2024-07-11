@@ -1552,12 +1552,6 @@ enum
 	meshopt_SimplifyInternalDebug = 1 << 30
 };
 
-#ifndef NDEBUG
-MESHOPTIMIZER_API unsigned char* meshopt_simplifyDebugKind = NULL;
-MESHOPTIMIZER_API unsigned int* meshopt_simplifyDebugLoop = NULL;
-MESHOPTIMIZER_API unsigned int* meshopt_simplifyDebugLoopBack = NULL;
-#endif
-
 size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes_data, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, const unsigned char* vertex_lock, size_t target_index_count, float target_error, unsigned int options, float* out_result_error)
 {
 	using namespace meshopt;
@@ -1724,17 +1718,6 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 			result[i + 2] |= (vertex_kind[c] << 28) | (unsigned(loop[c] == a || loopback[a] == c) << 31);
 		}
 	}
-
-#ifndef NDEBUG
-	if (meshopt_simplifyDebugKind)
-		memcpy(meshopt_simplifyDebugKind, vertex_kind, vertex_count);
-
-	if (meshopt_simplifyDebugLoop)
-		memcpy(meshopt_simplifyDebugLoop, loop, vertex_count * sizeof(unsigned int));
-
-	if (meshopt_simplifyDebugLoopBack)
-		memcpy(meshopt_simplifyDebugLoopBack, loopback, vertex_count * sizeof(unsigned int));
-#endif
 
 	// convert resulting indices back into the dense space of the larger mesh
 	if (sparse_remap)
