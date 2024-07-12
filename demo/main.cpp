@@ -1303,8 +1303,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	simplify(mesh);
-	simplifyClusters(mesh);
+	simplifyAttr(mesh);
 }
 
 int main(int argc, char** argv)
