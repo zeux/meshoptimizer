@@ -521,7 +521,7 @@ static void rescaleAttributes(float* result, const float* vertex_attributes_data
 	}
 }
 
-static const size_t kMaxAttributes = 16;
+static const size_t kMaxAttributes = 32;
 
 struct Quadric
 {
