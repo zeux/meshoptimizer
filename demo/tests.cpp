@@ -1136,7 +1136,7 @@ static void simplifyLockBorder()
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 }
 
-static void simplifyAttr()
+static void simplifyAttr(bool skip_g)
 {
 	float vb[8 * 3][6];
 
@@ -1173,7 +1173,7 @@ static void simplifyAttr()
 		}
 	}
 
-	float attr_weights[3] = {0.01f, 0.01f, 0.01f};
+	float attr_weights[3] = {0.01f, skip_g ? 0.f : 0.01f, 0.01f};
 
 	unsigned int expected[3][6] = {
 	    {0, 2, 9, 9, 2, 11},
@@ -1551,7 +1551,8 @@ void runTests()
 	simplifyScale();
 	simplifyDegenerate();
 	simplifyLockBorder();
-	simplifyAttr();
+	simplifyAttr(/* skip_g= */ false);
+	simplifyAttr(/* skip_g= */ true);
 	simplifyLockFlags();
 	simplifySparse();
 	simplifyErrorAbsolute();

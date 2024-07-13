@@ -503,7 +503,7 @@ static float rescalePositions(Vector3* result, const float* vertex_positions_dat
 	return extent;
 }
 
-static void rescaleAttributes(float* result, const float* vertex_attributes_data, size_t vertex_count, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, const unsigned int* sparse_remap)
+static void rescaleAttributes(float* result, const float* vertex_attributes_data, size_t vertex_count, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, const unsigned int* attribute_remap, const unsigned int* sparse_remap)
 {
 	size_t vertex_attributes_stride_float = vertex_attributes_stride / sizeof(float);
 
@@ -513,14 +513,15 @@ static void rescaleAttributes(float* result, const float* vertex_attributes_data
 
 		for (size_t k = 0; k < attribute_count; ++k)
 		{
-			float a = vertex_attributes_data[ri * vertex_attributes_stride_float + k];
+			unsigned int rk = attribute_remap[k];
+			float a = vertex_attributes_data[ri * vertex_attributes_stride_float + rk];
 
-			result[i * attribute_count + k] = a * attribute_weights[k];
+			result[i * attribute_count + k] = a * attribute_weights[rk];
 		}
 	}
 }
 
-static const size_t kMaxAttributes = 16;
+static const size_t kMaxAttributes = 32;
 
 struct Quadric
 {
@@ -1560,10 +1561,13 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
 	assert(target_index_count <= index_count);
+	assert(target_error >= 0);
 	assert((options & ~(meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute | meshopt_SimplifyInternalDebug)) == 0);
 	assert(vertex_attributes_stride >= attribute_count * sizeof(float) && vertex_attributes_stride <= 256);
 	assert(vertex_attributes_stride % sizeof(float) == 0);
 	assert(attribute_count <= kMaxAttributes);
+	for (size_t i = 0; i < attribute_count; ++i)
+		assert(attribute_weights[i] >= 0);
 
 	meshopt_Allocator allocator;
 
@@ -1615,8 +1619,17 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 
 	if (attribute_count)
 	{
+		unsigned int attribute_remap[kMaxAttributes];
+
+		// remap attributes to only include ones with weight > 0 to minimize memory/compute overhead for quadrics
+		size_t attributes_used = 0;
+		for (size_t i = 0; i < attribute_count; ++i)
+			if (attribute_weights[i] > 0)
+				attribute_remap[attributes_used++] = unsigned(i);
+
+		attribute_count = attributes_used;
 		vertex_attributes = allocator.allocate<float>(vertex_count * attribute_count);
-		rescaleAttributes(vertex_attributes, vertex_attributes_data, vertex_count, vertex_attributes_stride, attribute_weights, attribute_count, sparse_remap);
+		rescaleAttributes(vertex_attributes, vertex_attributes_data, vertex_count, vertex_attributes_stride, attribute_weights, attribute_count, attribute_remap, sparse_remap);
 	}
 
 	Quadric* vertex_quadrics = allocator.allocate<Quadric>(vertex_count);
