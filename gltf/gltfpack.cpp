@@ -560,7 +560,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		{
 			const Mesh& prim = meshes[pi];
 
-			if (prim.skin != mesh.skin || prim.targets != mesh.targets)
+			if (prim.scene != mesh.scene || prim.skin != mesh.skin || prim.targets != mesh.targets)
 				break;
 
 			if (pi > i && (mesh.instances.size() || prim.instances.size()))
