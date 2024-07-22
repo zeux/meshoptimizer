@@ -1,5 +1,7 @@
 // This file is part of meshoptimizer library and is distributed under the terms of MIT License.
 // Copyright (C) 2016-2024, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
+export type ExpMode = 'Separate' | 'SharedVector' | 'SharedComponent';
+
 export const MeshoptEncoder: {
 	supported: boolean;
 	ready: Promise<void>;
@@ -15,5 +17,5 @@ export const MeshoptEncoder: {
 
 	encodeFilterOct: (source: Float32Array, count: number, stride: number, bits: number) => Uint8Array;
 	encodeFilterQuat: (source: Float32Array, count: number, stride: number, bits: number) => Uint8Array;
-	encodeFilterExp: (source: Float32Array, count: number, stride: number, bits: number, mode?: "Separate" | "SharedVector" | "SharedComponent") => Uint8Array;
+	encodeFilterExp: (source: Float32Array, count: number, stride: number, bits: number, mode?: ExpMode) => Uint8Array;
 };

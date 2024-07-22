@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 	<head>
 		<title>meshoptimizer - demo</title>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
 		<style>
 			body {
 				font-family: Monospace;
@@ -19,9 +19,15 @@
 				width: 100%;
 				text-align: center;
 				z-index: 100;
-				display:block;
+				display: block;
 			}
-			#info a, .button { color: #f00; font-weight: bold; text-decoration: underline; cursor: pointer }
+			#info a,
+			.button {
+				color: #f00;
+				font-weight: bold;
+				text-decoration: underline;
+				cursor: pointer;
+			}
 		</style>
 
 		<script async src="https://unpkg.com/es-module-shims@1.3.6/dist/es-module-shims.js"></script>
@@ -37,7 +43,7 @@
 
 	<body>
 		<div id="info">
-		<a href="https://github.com/zeux/meshoptimizer" target="_blank" rel="noopener">meshoptimizer</a>
+			<a href="https://github.com/zeux/meshoptimizer" target="_blank" rel="noopener">meshoptimizer</a>
 		</div>
 
 		<script type="module">
@@ -62,10 +68,10 @@
 				normalWeight: 0.01,
 				colorWeight: 0.01,
 
-				loadFile: function() {
+				loadFile: function () {
 					var input = document.createElement('input');
 					input.type = 'file';
-					input.onchange = function() {
+					input.onchange = function () {
 						var uri = URL.createObjectURL(input.files[0]);
 
 						load(uri);
@@ -74,10 +80,10 @@
 					input.click();
 				},
 
-				updateModule: function() {
+				updateModule: function () {
 					reload();
 					simplify();
-				}
+				},
 			};
 
 			var gui = new GUI({ width: 300 });
@@ -113,46 +119,58 @@
 
 				var positions = new Float32Array(geo.attributes.position.array);
 				var indices = geo.index.original;
-				var target = Math.floor(indices.length * settings.ratio / 3) * 3;
+				var target = Math.floor((indices.length * settings.ratio) / 3) * 3;
 
-				if (settings.useAttributes)
-				{
+				if (settings.useAttributes) {
 					var attrib = new Float32Array(geo.attributes.position.count * attributes);
 
-					for (var i = 0, e = geo.attributes.position.count; i < e; ++i)
-					{
+					for (var i = 0, e = geo.attributes.position.count; i < e; ++i) {
 						if (geo.attributes.normal) {
-							attrib[i*attributes+0] = geo.attributes.normal.getX(i);
-							attrib[i*attributes+1] = geo.attributes.normal.getY(i);
-							attrib[i*attributes+2] = geo.attributes.normal.getZ(i);
+							attrib[i * attributes + 0] = geo.attributes.normal.getX(i);
+							attrib[i * attributes + 1] = geo.attributes.normal.getY(i);
+							attrib[i * attributes + 2] = geo.attributes.normal.getZ(i);
 						}
 
 						if (geo.attributes.color) {
-							attrib[i*attributes+3] = geo.attributes.color.getX(i);
-							attrib[i*attributes+4] = geo.attributes.color.getY(i);
-							attrib[i*attributes+5] = geo.attributes.color.getZ(i);
+							attrib[i * attributes + 3] = geo.attributes.color.getX(i);
+							attrib[i * attributes + 4] = geo.attributes.color.getY(i);
+							attrib[i * attributes + 5] = geo.attributes.color.getZ(i);
 						}
 					}
 
 					var attrib_weights = [
-						settings.normalWeight, settings.normalWeight, settings.normalWeight,
-						settings.colorWeight, settings.colorWeight, settings.colorWeight,
+						settings.normalWeight,
+						settings.normalWeight,
+						settings.normalWeight,
+						settings.colorWeight,
+						settings.colorWeight,
+						settings.colorWeight,
 					];
 				}
 
 				var flags = [];
 				if (settings.lockBorder) {
-					flags.push("LockBorder");
+					flags.push('LockBorder');
 				}
 
 				var threshold = Math.pow(10, -settings.errorThresholdLog10);
-				var stride = (geo.attributes.position instanceof THREE.InterleavedBufferAttribute) ? geo.attributes.position.data.stride : 3;
+				var stride = geo.attributes.position instanceof THREE.InterleavedBufferAttribute ? geo.attributes.position.data.stride : 3;
 
 				console.time('simplify');
 
-				var res =
-					settings.useAttributes
-					? MeshoptSimplifier.simplifyWithAttributes(indices, positions, stride, attrib, attributes, attrib_weights, null, target, threshold, flags)
+				var res = settings.useAttributes
+					? MeshoptSimplifier.simplifyWithAttributes(
+							indices,
+							positions,
+							stride,
+							attrib,
+							attributes,
+							attrib_weights,
+							null,
+							target,
+							threshold,
+							flags,
+						)
 					: MeshoptSimplifier.simplify(indices, positions, stride, target, threshold, flags);
 
 				console.timeEnd('simplify');
@@ -174,8 +192,11 @@
 					colors = new Float32Array(geo.attributes.color.array);
 				}
 
-				var pos_stride = (geo.attributes.position instanceof THREE.InterleavedBufferAttribute) ? geo.attributes.position.data.stride : 3;
-				var col_stride = (geo.attributes.color instanceof THREE.InterleavedBufferAttribute) ? geo.attributes.color.data.stride : geo.attributes.color.itemSize;
+				var pos_stride = geo.attributes.position instanceof THREE.InterleavedBufferAttribute ? geo.attributes.position.data.stride : 3;
+				var col_stride =
+					geo.attributes.color instanceof THREE.InterleavedBufferAttribute
+						? geo.attributes.color.data.stride
+						: geo.attributes.color.itemSize;
 
 				// note: we are converting source color array without normalization; if the color data is quantized, we need to divide by 255 to normalize it
 				var colorScale = geo.attributes.color && geo.attributes.color.normalized ? 255 : 1;
@@ -191,11 +212,10 @@
 				geo.index = new THREE.BufferAttribute(res, 1);
 			}
 
-			function simplify()
-			{
+			function simplify() {
 				MeshoptSimplifier.useExperimentalFeatures = true;
 
-				MeshoptSimplifier.ready.then(function() {
+				MeshoptSimplifier.ready.then(function () {
 					scene.traverse(function (object) {
 						if (object.isMesh) {
 							simplifyMesh(object.geometry);
@@ -207,21 +227,19 @@
 				});
 			}
 
-			function reload()
-			{
+			function reload() {
 				var simp = import('/js/meshopt_simplifier.module.js?x=' + Date.now());
 				MeshoptSimplifier.ready = simp.then(function (s) {
 					return s.MeshoptSimplifier.ready.then(function () {
 						for (var prop in s.MeshoptSimplifier) {
 							MeshoptSimplifier[prop] = s.MeshoptSimplifier[prop];
 						}
-					})
+					});
 				});
 			}
 
-			function update()
-			{
-				scene.traverse(function(child) {
+			function update() {
+				scene.traverse(function (child) {
 					if (child.isMesh) {
 						child.material.wireframe = settings.wireframe;
 					}
@@ -231,8 +249,7 @@
 				});
 			}
 
-			function load(path)
-			{
+			function load(path) {
 				if (model) {
 					scene.remove(model);
 					model = undefined;
@@ -245,28 +262,32 @@
 
 				var loader = new GLTFLoader();
 				loader.setMeshoptDecoder(MeshoptDecoder);
-				loader.load(path, function (gltf) {
-					model = gltf.scene;
+				loader.load(
+					path,
+					function (gltf) {
+						model = gltf.scene;
 
-					var bbox = new THREE.Box3().setFromObject(model);
-					var scale = 2 / (bbox.max.y - bbox.min.y);
-					var offset = -(bbox.min.y + bbox.max.y) / 2 * scale;
+						var bbox = new THREE.Box3().setFromObject(model);
+						var scale = 2 / (bbox.max.y - bbox.min.y);
+						var offset = (-(bbox.min.y + bbox.max.y) / 2) * scale;
 
-					model.scale.set(scale, scale, scale);
-					model.position.set(0, offset, 0);
+						model.scale.set(scale, scale, scale);
+						model.position.set(0, offset, 0);
 
-					scene.add(model);
+						scene.add(model);
 
-					mixer = new THREE.AnimationMixer(model);
+						mixer = new THREE.AnimationMixer(model);
 
-					if (gltf.animations.length) {
-						mixer.clipAction(gltf.animations[gltf.animations.length - 1]).play();
-					}
-				}, onProgress, onError);
+						if (gltf.animations.length) {
+							mixer.clipAction(gltf.animations[gltf.animations.length - 1]).play();
+						}
+					},
+					onProgress,
+					onError,
+				);
 			}
 
-			function init()
-			{
+			function init() {
 				container = document.createElement('div');
 				document.body.appendChild(container);
 
@@ -297,8 +318,7 @@
 				clock = new THREE.Clock();
 			}
 
-			function onWindowResize()
-			{
+			function onWindowResize() {
 				windowHalfX = window.innerWidth / 2;
 				windowHalfY = window.innerHeight / 2;
 
@@ -308,8 +328,7 @@
 				renderer.setSize(window.innerWidth, window.innerHeight);
 			}
 
-			function animate()
-			{
+			function animate() {
 				if (mixer) {
 					mixer.update(clock.getDelta());
 				}

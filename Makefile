@@ -107,6 +107,9 @@ dev: $(DEMO)
 format:
 	clang-format -i $(LIBRARY_SOURCES) $(DEMO_SOURCES) $(GLTFPACK_SOURCES)
 
+formatjs:
+	prettier -w js/*.js gltf/*.js demo/*.html js/*.ts
+
 js: js/meshopt_decoder.js js/meshopt_decoder.module.js js/meshopt_encoder.js js/meshopt_encoder.module.js js/meshopt_simplifier.js js/meshopt_simplifier.module.js
 
 symbols: $(BUILD)/amalgamated.so
@@ -165,7 +168,7 @@ js/meshopt_simplifier.js: build/simplifier.wasm tools/wasmpack.py
 
 js/%.module.js: js/%.js
 	sed '\#// export!#q' <$< >$@
-	sed -i "/\"use strict\";/d" $@
+	sed -i "/use strict.;/d" $@
 	sed -i "s#// export! \(.*\)#export { \\1 };#" $@
 
 $(DEMO): $(DEMO_OBJECTS) $(LIBRARY)
