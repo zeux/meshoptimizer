@@ -2,7 +2,7 @@ var encoder = require('./meshopt_encoder.js');
 var decoder = require('./meshopt_decoder.js');
 var { performance } = require('perf_hooks');
 
-process.on('unhandledRejection', error => {
+process.on('unhandledRejection', (error) => {
 	console.log('unhandledRejection', error);
 	process.exit(1);
 });
@@ -12,12 +12,11 @@ function bytes(view) {
 }
 
 var tests = {
-	roundtripVertexBuffer: function() {
-		var N = 1024*1024;
+	roundtripVertexBuffer: function () {
+		var N = 1024 * 1024;
 		var data = new Uint8Array(N * 16);
 
-		for (var i = 0; i < N * 16; i += 4)
-		{
+		for (var i = 0; i < N * 16; i += 4) {
 			data[i + 0] = 0;
 			data[i + 1] = (i % 16) * 1;
 			data[i + 2] = (i % 16) * 2;
@@ -35,12 +34,11 @@ var tests = {
 		return { encodeVertex: t1 - t0, decodeVertex: t2 - t1, bytes: N * 16 };
 	},
 
-	roundtripIndexBuffer: function() {
-		var N = 1024*1024;
+	roundtripIndexBuffer: function () {
+		var N = 1024 * 1024;
 		var data = new Uint32Array(N * 3);
 
-		for (var i = 0; i < N * 3; i += 6)
-		{
+		for (var i = 0; i < N * 3; i += 6) {
 			var v = i / 6;
 
 			data[i + 0] = v;
@@ -63,12 +61,11 @@ var tests = {
 		return { encodeIndex: t1 - t0, decodeIndex: t2 - t1, bytes: N * 12 };
 	},
 
-	decodeGltf: function() {
-		var N = 1024*1024;
+	decodeGltf: function () {
+		var N = 1024 * 1024;
 		var data = new Uint8Array(N * 16);
 
-		for (var i = 0; i < N * 16; i += 4)
-		{
+		for (var i = 0; i < N * 16; i += 4) {
 			data[i + 0] = 0;
 			data[i + 1] = (i % 16) * 1;
 			data[i + 2] = (i % 16) * 2;
@@ -78,21 +75,21 @@ var tests = {
 		var decoded = new Uint8Array(N * 16);
 
 		var filters = [
-			{ name: "none", filter: "NONE", stride: 16 },
-			{ name: "oct4", filter: "OCTAHEDRAL", stride: 4 },
-			{ name: "oct12", filter: "OCTAHEDRAL", stride: 8 },
-			{ name: "quat12", filter: "QUATERNION", stride: 8 },
-			{ name: "exp", filter: "EXPONENTIAL", stride: 16 },
-			];
+			{ name: 'none', filter: 'NONE', stride: 16 },
+			{ name: 'oct4', filter: 'OCTAHEDRAL', stride: 4 },
+			{ name: 'oct12', filter: 'OCTAHEDRAL', stride: 8 },
+			{ name: 'quat12', filter: 'QUATERNION', stride: 8 },
+			{ name: 'exp', filter: 'EXPONENTIAL', stride: 16 },
+		];
 
 		var results = { bytes: N * 16 };
 
 		for (var i = 0; i < filters.length; ++i) {
 			var f = filters[i];
-			var encoded = encoder.encodeVertexBuffer(data, N * 16 / f.stride, f.stride);
+			var encoded = encoder.encodeVertexBuffer(data, (N * 16) / f.stride, f.stride);
 
 			var t0 = performance.now();
-			decoder.decodeGltfBuffer(decoded, N * 16 / f.stride, f.stride, encoded, "ATTRIBUTES", f.filter);
+			decoder.decodeGltfBuffer(decoded, (N * 16) / f.stride, f.stride, encoded, 'ATTRIBUTES', f.filter);
 			var t1 = performance.now();
 
 			results[f.name] = t1 - t0;
@@ -104,7 +101,7 @@ var tests = {
 
 Promise.all([encoder.ready, decoder.ready]).then(() => {
 	var reps = 10;
-	var data = {}
+	var data = {};
 
 	for (var key in tests) {
 		data[key] = tests[key]();
@@ -123,17 +120,17 @@ Promise.all([encoder.ready, decoder.ready]).then(() => {
 
 	for (var key in tests) {
 		var rep = key;
-		rep += ":\n";
+		rep += ':\n';
 
 		for (var idx in data[key]) {
-			if (idx != "bytes") {
+			if (idx != 'bytes') {
 				rep += idx;
-				rep += " ";
+				rep += ' ';
 				rep += data[key][idx];
-				rep += " ms (";
-				rep += data[key].bytes / 1024 / 1024 / 1024 / data[key][idx] * 1000;
-				rep += " GB/s)";
-				rep += "\n";
+				rep += ' ms (';
+				rep += (data[key].bytes / 1024 / 1024 / 1024 / data[key][idx]) * 1000;
+				rep += ' GB/s)';
+				rep += '\n';
 			}
 		}
 
