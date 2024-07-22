@@ -29,7 +29,7 @@
 		<canvas id="renderCanvas"></canvas>
 		<script>
 			// Optional - by default Babylon.JS will use bundled decoder module
-			BABYLON.GLTF2.Loader.Extensions.EXT_meshopt_compression.DecoderPath = '../js/meshopt_decoder.module.js';
+			BABYLON.MeshoptCompression.Configuration.decoder.url = '../js/meshopt_decoder.js';
 
 			var canvas = document.getElementById('renderCanvas');
 
