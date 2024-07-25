@@ -471,6 +471,13 @@ struct meshopt_VertexFetchStatistics
  */
 MESHOPTIMIZER_API struct meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
 
+/**
+ * Meshlet is a small mesh cluster (subset) that consists of:
+ * - triangles, an 8-bit micro triangle (index) buffer, that for each triangle specifies three local vertices to use;
+ * - vertices, a 32-bit vertex indirection buffer, that for each local vertex specifies which mesh vertex to fetch vertex attributes from.
+ *
+ * For efficiency, meshlet triangles and vertices are packed into two large arrays; this structure contains offsets and counts to access the data.
+ */
 struct meshopt_Meshlet
 {
 	/* offsets within meshlet_vertices and meshlet_triangles arrays with meshlet data */
@@ -486,6 +493,7 @@ struct meshopt_Meshlet
  * Meshlet builder
  * Splits the mesh into a set of meshlets where each meshlet has a micro index buffer indexing into meshlet vertices that refer to the original vertex buffer
  * The resulting data can be used to render meshes using NVidia programmable mesh shading pipeline, or in other cluster-based renderers.
+ * When targeting mesh shading hardware, for maximum efficiency meshlets should be further optimized using meshopt_optimizeMeshlet.
  * When using buildMeshlets, vertex positions need to be provided to minimize the size of the resulting clusters.
  * When using buildMeshletsScan, for maximum efficiency the index buffer being converted has to be optimized for vertex cache first.
  *
