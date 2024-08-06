@@ -21,7 +21,18 @@ inline unsigned int part1By2(unsigned int x)
 	return x;
 }
 
-static void computeOrder(unsigned int* result, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride)
+inline unsigned long long int part1By2_64(unsigned long long int x)
+{
+	x &= 0x000fffffull;                          // x = ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- jihg fedc ba98 7654 3210
+	x = (x ^ (x << 32)) & 0x000f00000000ffffull; // x = ---- ---- ---- jihg ---- ---- ---- ---- ---- ---- ---- ---- fedc ba98 7654 3210
+	x = (x ^ (x << 16)) & 0x000f0000ff0000ffull; // x = ---- ---- ---- jihg ---- ---- ---- ---- fedc ba98 ---- ---- ---- ---- 7654 3210
+	x = (x ^ (x <<  8)) & 0x000f00f00f00f00full; // x = ---- ---- ---- jihg ---- ---- fedc ---- ---- ba98 ---- ---- 7654 ---- ---- 3210
+	x = (x ^ (x <<  4)) & 0x00c30c30c30c30c3ull; // x = ---- ---- ji-- --hg ---- fe-- --dc ---- ba-- --98 ---- 76-- --54 ---- 32-- --10
+	x = (x ^ (x <<  2)) & 0x0249249249249249ull; // x = ---- --j- -i-- h--g --f- -e-- d--c --b- -a-- 9--8 --7- -6-- 5--4 --3- -2-- 1--0
+	return x;
+}
+
+static void computeOrder(unsigned int *result_hi, unsigned int* result, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride)
 {
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
@@ -50,15 +61,34 @@ static void computeOrder(unsigned int* result, const float* vertex_positions_dat
 	float scale = extent == 0 ? 0.f : 1.f / extent;
 
 	// generate Morton order based on the position inside a unit cube
-	for (size_t i = 0; i < vertex_count; ++i)
+	if (result_hi)
 	{
-		const float* v = vertex_positions_data + i * vertex_stride_float;
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			const float* v = vertex_positions_data + i * vertex_stride_float;
 
-		int x = int((v[0] - minv[0]) * scale * 1023.f + 0.5f);
-		int y = int((v[1] - minv[1]) * scale * 1023.f + 0.5f);
-		int z = int((v[2] - minv[2]) * scale * 1023.f + 0.5f);
+			int x = int((v[0] - minv[0]) * scale * 1048575.f + 0.5f);
+			int y = int((v[1] - minv[1]) * scale * 1048575.f + 0.5f);
+			int z = int((v[2] - minv[2]) * scale * 1048575.f + 0.5f);
 
-		result[i] = part1By2(x) | (part1By2(y) << 1) | (part1By2(z) << 2);
+			unsigned long long int r = part1By2_64(x) | (part1By2_64(y) << 1) | (part1By2_64(z) << 2);
+
+			result[i] = (unsigned int)(r & 0x3fffffffull);
+			result_hi[i] = (unsigned int)((r >> 30) & 0x3fffffffull);
+		}
+	}
+	else
+	{
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			const float* v = vertex_positions_data + i * vertex_stride_float;
+
+			int x = int((v[0] - minv[0]) * scale * 1023.f + 0.5f);
+			int y = int((v[1] - minv[1]) * scale * 1023.f + 0.5f);
+			int z = int((v[2] - minv[2]) * scale * 1023.f + 0.5f);
+
+			result[i] = part1By2(x) | (part1By2(y) << 1) | (part1By2(z) << 2);
+		}
 	}
 }
 
@@ -107,24 +137,28 @@ static void radixPass(unsigned int* destination, const unsigned int* source, con
 	}
 }
 
-} // namespace meshopt
-
-void meshopt_spatialSortRemap(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+static void spatialSortRemap(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, unsigned int is64Bit)
 {
-	using namespace meshopt;
-
 	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
 
 	meshopt_Allocator allocator;
 
-	unsigned int* keys = allocator.allocate<unsigned int>(vertex_count);
-	computeOrder(keys, vertex_positions, vertex_count, vertex_positions_stride);
+	unsigned int* keys = allocator.allocate<unsigned int>(vertex_count << is64Bit);
+	unsigned int* keys_hi = is64Bit ? keys + vertex_count : NULL;
+	computeOrder(keys_hi, keys, vertex_positions, vertex_count, vertex_positions_stride);
 
 	unsigned int hist[1024][3];
 	computeHistogram(hist, keys, vertex_count);
 
 	unsigned int* scratch = allocator.allocate<unsigned int>(vertex_count);
+
+	if (is64Bit)
+	{
+		unsigned int* t = scratch;
+		scratch = destination;
+		destination = t;
+	}
 
 	for (size_t i = 0; i < vertex_count; ++i)
 		destination[i] = unsigned(i);
@@ -134,9 +168,37 @@ void meshopt_spatialSortRemap(unsigned int* destination, const float* vertex_pos
 	radixPass(destination, scratch, keys, vertex_count, hist, 1);
 	radixPass(scratch, destination, keys, vertex_count, hist, 2);
 
+	if (is64Bit)
+	{
+		unsigned int* t = scratch;
+		scratch = destination;
+		destination = t;
+
+		computeHistogram(hist, keys_hi, vertex_count);
+
+		// additional 3-pass radix sort computes the resulting order into scratch
+		radixPass(scratch, destination, keys_hi, vertex_count, hist, 0);
+		radixPass(destination, scratch, keys_hi, vertex_count, hist, 1);
+		radixPass(scratch, destination, keys_hi, vertex_count, hist, 2);
+	}
+
 	// since our remap table is mapping old=>new, we need to reverse it
 	for (size_t i = 0; i < vertex_count; ++i)
 		destination[scratch[i]] = unsigned(i);
+}
+
+} // namespace meshopt
+
+void meshopt_spatialSortRemap(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+{
+	using namespace meshopt;
+	spatialSortRemap(destination, vertex_positions, vertex_count, vertex_positions_stride, 0);
+}
+
+void meshopt_spatialSortRemap64(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+{
+	using namespace meshopt;
+	spatialSortRemap(destination, vertex_positions, vertex_count, vertex_positions_stride, 1);
 }
 
 void meshopt_spatialSortTriangles(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
