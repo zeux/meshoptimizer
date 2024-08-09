@@ -213,9 +213,9 @@
 			}
 
 			function simplify() {
-				MeshoptSimplifier.useExperimentalFeatures = true;
-
 				MeshoptSimplifier.ready.then(function () {
+					MeshoptSimplifier.useExperimentalFeatures = true;
+
 					scene.traverse(function (object) {
 						if (object.isMesh) {
 							simplifyMesh(object.geometry);
