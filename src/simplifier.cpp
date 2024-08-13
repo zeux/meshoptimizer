@@ -729,9 +729,11 @@ static void quadricFromAttributes(Quadric& Q, QuadricGrad* G, const Vector3& p0,
 	Vector3 p10 = {p1.x - p0.x, p1.y - p0.y, p1.z - p0.z};
 	Vector3 p20 = {p2.x - p0.x, p2.y - p0.y, p2.z - p0.z};
 
-	// weight is scaled linearly with edge length
+	// normal = cross(p1 - p0, p2 - p0)
 	Vector3 normal = {p10.y * p20.z - p10.z * p20.y, p10.z * p20.x - p10.x * p20.z, p10.x * p20.y - p10.y * p20.x};
-	float area = sqrtf(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
+	float area = sqrtf(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z) * 0.5f;
+
+	// weight is scaled linearly with edge length
 	float w = sqrtf(area); // TODO this needs more experimentation
 
 	// we compute gradients using barycentric coordinates; barycentric coordinates can be computed as follows:
