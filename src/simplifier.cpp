@@ -741,6 +741,7 @@ static void quadricFromAttributes(Quadric& Q, QuadricGrad* G, const Vector3& p0,
 	// w = (d00 * d21 - d01 * d20) / denom
 	// u = 1 - v - w
 	// here v0, v1 are triangle edge vectors, v2 is a vector from point to triangle corner, and dij = dot(vi, vj)
+	// note: v2 and d20/d21 can not be evaluated here as v2 is effectively an unknown variable; we need these only as variables for derivation of gradients
 	const Vector3& v0 = p10;
 	const Vector3& v1 = p20;
 	float d00 = v0.x * v0.x + v0.y * v0.y + v0.z * v0.z;
@@ -750,7 +751,7 @@ static void quadricFromAttributes(Quadric& Q, QuadricGrad* G, const Vector3& p0,
 	float denomr = denom == 0 ? 0.f : 1.f / denom;
 
 	// precompute gradient factors
-	// these are derived by directly computing derivative of eval(pos) = a0 * u + a1 * v + a2 * w and factoring out common factors that are shared between attributes
+	// these are derived by directly computing derivative of eval(pos) = a0 * u + a1 * v + a2 * w and factoring out expressions that are shared between attributes
 	float gx1 = (d11 * v0.x - d01 * v1.x) * denomr;
 	float gx2 = (d00 * v1.x - d01 * v0.x) * denomr;
 	float gy1 = (d11 * v0.y - d01 * v1.y) * denomr;
@@ -775,6 +776,7 @@ static void quadricFromAttributes(Quadric& Q, QuadricGrad* G, const Vector3& p0,
 
 		// quadric encodes (eval(pos)-attr)^2; this means that the resulting expansion needs to compute, for example, pos.x * pos.y * K
 		// since quadrics already encode factors for pos.x * pos.y, we can accumulate almost everything in basic quadric fields
+		// note: for simplicity we scale all factors by weight here instead of outside the loop
 		Q.a00 += w * (gx * gx);
 		Q.a11 += w * (gy * gy);
 		Q.a22 += w * (gz * gz);
