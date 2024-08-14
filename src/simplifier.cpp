@@ -642,8 +642,7 @@ static float quadricError(const Quadric& Q, const QuadricGrad* G, size_t attribu
 		float a = va[k];
 		float g = v.x * G[k].gx + v.y * G[k].gy + v.z * G[k].gz + G[k].gw;
 
-		r += a * a * Q.w;
-		r -= 2 * a * g;
+		r += a * (a * Q.w - 2 * g);
 	}
 
 	// TODO: weight normalization is breaking attribute error somehow
