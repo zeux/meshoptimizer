@@ -1260,7 +1260,7 @@ static void simplifySparse()
 	};
 
 	float aw[] = {
-	    0.2f};
+	    0.5f};
 
 	unsigned char lock[9] = {
 	    8, 1, 8,

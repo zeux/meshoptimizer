@@ -474,7 +474,7 @@ void simplifyAttr(const Mesh& mesh, float threshold = 0.2f)
 	float target_error = 1e-2f;
 	float result_error = 0;
 
-	const float nrm_weight = 0.01f;
+	const float nrm_weight = 0.5f;
 	const float attr_weights[3] = {nrm_weight, nrm_weight, nrm_weight};
 
 	lod.indices.resize(mesh.indices.size()); // note: simplify needs space for index_count elements in the destination array, not target_index_count
