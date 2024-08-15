@@ -65,8 +65,8 @@
 				lockBorder: false,
 				useAttributes: false,
 				errorThresholdLog10: 1,
-				normalWeight: 0.01,
-				colorWeight: 0.01,
+				normalWeight: 0.5,
+				colorWeight: 1.0,
 
 				loadFile: function () {
 					var input = document.createElement('input');
@@ -96,8 +96,8 @@
 			guiSimplify.add(settings, 'lockBorder').onChange(simplify);
 			guiSimplify.add(settings, 'errorThresholdLog10', 0, 3, 0.1).onChange(simplify);
 			guiSimplify.add(settings, 'useAttributes').onChange(simplify);
-			guiSimplify.add(settings, 'normalWeight', 0, 0.1, 0.001).onChange(simplify);
-			guiSimplify.add(settings, 'colorWeight', 0, 0.1, 0.001).onChange(simplify);
+			guiSimplify.add(settings, 'normalWeight', 0, 2, 0.01).onChange(simplify);
+			guiSimplify.add(settings, 'colorWeight', 0, 2, 0.01).onChange(simplify);
 
 			var guiLoad = gui.addFolder('Load');
 			guiLoad.add(settings, 'loadFile');
@@ -175,7 +175,7 @@
 
 				console.timeEnd('simplify');
 
-				console.log('simplified to', res[0].length / 3);
+				console.log('simplified to', res[0].length / 3, 'with error', res[1]);
 
 				geo.index.array = res[0];
 				geo.index.count = res[0].length;
