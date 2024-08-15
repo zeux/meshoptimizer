@@ -598,7 +598,7 @@ static void quadricAdd(QuadricGrad* G, const QuadricGrad* R, size_t attribute_co
 	}
 }
 
-static float quadricError(const Quadric& Q, const Vector3& v)
+static float quadricEval(const Quadric& Q, const Vector3& v)
 {
 	float rx = Q.b0;
 	float ry = Q.b1;
@@ -621,6 +621,12 @@ static float quadricError(const Quadric& Q, const Vector3& v)
 	r += ry * v.y;
 	r += rz * v.z;
 
+	return r;
+}
+
+static float quadricError(const Quadric& Q, const Vector3& v)
+{
+	float r = quadricEval(Q, v);
 	float s = Q.w == 0.f ? 0.f : 1.f / Q.w;
 
 	return fabsf(r) * s;
@@ -628,26 +634,7 @@ static float quadricError(const Quadric& Q, const Vector3& v)
 
 static float quadricError(const Quadric& Q, const QuadricGrad* G, size_t attribute_count, const Vector3& v, const float* va)
 {
-	float rx = Q.b0;
-	float ry = Q.b1;
-	float rz = Q.b2;
-
-	rx += Q.a10 * v.y;
-	ry += Q.a21 * v.z;
-	rz += Q.a20 * v.x;
-
-	rx *= 2;
-	ry *= 2;
-	rz *= 2;
-
-	rx += Q.a00 * v.x;
-	ry += Q.a11 * v.y;
-	rz += Q.a22 * v.z;
-
-	float r = Q.c;
-	r += rx * v.x;
-	r += ry * v.y;
-	r += rz * v.z;
+	float r = quadricEval(Q, v);
 
 	// see quadricFromAttributes for general derivation; here we need to add the parts of (eval(pos) - attr)^2 that depend on attr
 	for (size_t k = 0; k < attribute_count; ++k)
@@ -655,14 +642,11 @@ static float quadricError(const Quadric& Q, const QuadricGrad* G, size_t attribu
 		float a = va[k];
 		float g = v.x * G[k].gx + v.y * G[k].gy + v.z * G[k].gz + G[k].gw;
 
-		r += a * a * Q.w;
-		r -= 2 * a * g;
+		r += a * (a * Q.w - 2 * g);
 	}
 
-	// TODO: weight normalization is breaking attribute error somehow
-	float s = 1; // Q.w == 0.f ? 0.f : 1.f / Q.w;
-
-	return fabsf(r) * s;
+	// note: unlike position error, we do not normalize by Q.w to retain edge scaling as described in quadricFromAttributes
+	return fabsf(r);
 }
 
 static void quadricFromPlane(Quadric& Q, float a, float b, float c, float d, float w)
@@ -729,16 +713,21 @@ static void quadricFromAttributes(Quadric& Q, QuadricGrad* G, const Vector3& p0,
 	Vector3 p10 = {p1.x - p0.x, p1.y - p0.y, p1.z - p0.z};
 	Vector3 p20 = {p2.x - p0.x, p2.y - p0.y, p2.z - p0.z};
 
-	// weight is scaled linearly with edge length
+	// normal = cross(p1 - p0, p2 - p0)
 	Vector3 normal = {p10.y * p20.z - p10.z * p20.y, p10.z * p20.x - p10.x * p20.z, p10.x * p20.y - p10.y * p20.x};
-	float area = sqrtf(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
-	float w = sqrtf(area); // TODO this needs more experimentation
+	float area = sqrtf(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z) * 0.5f;
+
+	// quadric is weighted with the square of edge length (= area)
+	// this equalizes the units with the positional error (which, after normalization, is a square of distance)
+	// as a result, a change in weighted attribute of 1 along distance d is approximately equivalent to a change in position of d
+	float w = area;
 
 	// we compute gradients using barycentric coordinates; barycentric coordinates can be computed as follows:
 	// v = (d11 * d20 - d01 * d21) / denom
 	// w = (d00 * d21 - d01 * d20) / denom
 	// u = 1 - v - w
 	// here v0, v1 are triangle edge vectors, v2 is a vector from point to triangle corner, and dij = dot(vi, vj)
+	// note: v2 and d20/d21 can not be evaluated here as v2 is effectively an unknown variable; we need these only as variables for derivation of gradients
 	const Vector3& v0 = p10;
 	const Vector3& v1 = p20;
 	float d00 = v0.x * v0.x + v0.y * v0.y + v0.z * v0.z;
@@ -748,7 +737,7 @@ static void quadricFromAttributes(Quadric& Q, QuadricGrad* G, const Vector3& p0,
 	float denomr = denom == 0 ? 0.f : 1.f / denom;
 
 	// precompute gradient factors
-	// these are derived by directly computing derivative of eval(pos) = a0 * u + a1 * v + a2 * w and factoring out common factors that are shared between attributes
+	// these are derived by directly computing derivative of eval(pos) = a0 * u + a1 * v + a2 * w and factoring out expressions that are shared between attributes
 	float gx1 = (d11 * v0.x - d01 * v1.x) * denomr;
 	float gx2 = (d00 * v1.x - d01 * v0.x) * denomr;
 	float gy1 = (d11 * v0.y - d01 * v1.y) * denomr;
@@ -773,6 +762,7 @@ static void quadricFromAttributes(Quadric& Q, QuadricGrad* G, const Vector3& p0,
 
 		// quadric encodes (eval(pos)-attr)^2; this means that the resulting expansion needs to compute, for example, pos.x * pos.y * K
 		// since quadrics already encode factors for pos.x * pos.y, we can accumulate almost everything in basic quadric fields
+		// note: for simplicity we scale all factors by weight here instead of outside the loop
 		Q.a00 += w * (gx * gx);
 		Q.a11 += w * (gy * gy);
 		Q.a22 += w * (gz * gz);
