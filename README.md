@@ -255,18 +255,17 @@ All algorithms presented so far don't affect visual appearance at all, with the 
 
 This library provides two simplification algorithms that reduce the number of triangles in the mesh. Given a vertex and an index buffer, they generate a second index buffer that uses existing vertices in the vertex buffer. This index buffer can be used directly for rendering with the original vertex buffer (preferably after vertex cache optimization), or a new compact vertex/index buffer can be generated using `meshopt_optimizeVertexFetch` that uses the optimal number and order of vertices.
 
-The first simplification algorithm, `meshopt_simplify`, follows the topology of the original mesh in an attempt to preserve attribute seams, borders and overall appearance. For meshes with inconsistent topology or many seams, such as faceted meshes, it can result in simplifier getting "stuck" and not being able to simplify the mesh fully. Therefore it's critical that identical vertices are "welded" together, that is, the input vertex buffer does not contain duplicates. Additionally, it may be possible to preprocess the index buffer (e.g. with `meshopt_generateShadowIndexBuffer`) to discard any vertex attributes that aren't critical and can be rebuilt later.
+The first simplification algorithm, `meshopt_simplify`, follows the topology of the original mesh in an attempt to preserve attribute seams, borders and overall appearance. For meshes with inconsistent topology or many seams, such as faceted meshes, it can result in simplifier getting "stuck" and not being able to simplify the mesh fully. Therefore it's critical that identical vertices are "welded" together, that is, the input vertex buffer does not contain duplicates. Additionally, it may be possible to preprocess the index buffer (e.g. with `meshopt_generateShadowIndexBuffer`) to weld the vertices without taking into account vertex attributes that aren't critical and can be rebuilt later.
 
 ```c++
 float threshold = 0.2f;
 size_t target_index_count = size_t(index_count * threshold);
 float target_error = 1e-2f;
-unsigned int options = 0; // meshopt_SimplifyX flags, 0 is a safe default
 
 std::vector<unsigned int> lod(index_count);
 float lod_error = 0.f;
 lod.resize(meshopt_simplify(&lod[0], indices, index_count, &vertices[0].x, vertex_count, sizeof(Vertex),
-    target_index_count, target_error, options, &lod_error));
+    target_index_count, target_error, /* options= */ 0, &lod_error));
 ```
 
 Target error is an approximate measure of the deviation from the original mesh using distance normalized to `[0..1]` range (e.g. `1e-2f` means that simplifier will try to maintain the error to be below 1% of the mesh extents). Note that the simplifier attempts to produce the requested number of indices at minimal error, but because of topological restrictions and error limit it is not guaranteed to reach the target index count and can stop earlier.
@@ -289,6 +288,35 @@ This algorithm will not stop early due to topology restrictions but can still do
 When a sequence of LOD meshes is generated that all use the original vertex buffer, care must be taken to order vertices optimally to not penalize mobile GPU architectures that are only capable of transforming a sequential vertex buffer range. It's recommended in this case to first optimize each LOD for vertex cache, then assemble all LODs in one large index buffer starting from the coarsest LOD (the one with fewest triangles), and call `meshopt_optimizeVertexFetch` on the final large index buffer. This will make sure that coarser LODs require a smaller vertex range and are efficient wrt vertex fetch and transform.
 
 Both algorithms can also return the resulting normalized deviation that can be used to choose the correct level of detail based on screen size or solid angle; the error can be converted to world space by multiplying by the scaling factor returned by `meshopt_simplifyScale`.
+
+## Advanced simplification
+
+The main simplification algorithm, `meshopt_simplify`, exposes additional options and functions that can be used to control the simplification process in more detail.
+
+For basic customization, a number of options can be passed via `options` bitmask that adjust the behavior of the simplifier:
+
+- `meshopt_SimplifyLockBorder` restricts the simplifier from collapsing edges that are on the border of the mesh. This can be useful for simplifying mesh subsets independently, so that the LODs can be combined without introducing cracks.
+- `meshopt_SimplifyErrorAbsolute` changes the error metric from relative to absolute both for the input error limit as well as for the resulting error. This can be used instead of `meshopt_simplifyScale`.
+- `meshopt_SimplifySparse` improves simplification performance assuming input indices are a sparse subset of the mesh. This can be useful when simplifying small mesh subsets independently, and is intended to be used for meshlet simplification. For consistency, it is recommended to use absolute errors when sparse simplification is desired, as this flag changes the meaning of the relative errors.
+
+While `meshopt_simplify` is aware of attribute discontinuities by default (and infers them through the supplied index buffer) and tries to preserve them, it can be useful to provide information about attribute values. This allows the simplifier to take attribute error into account which can improve shading (by using vertex normals), texture deformation (by using texture coordinates), and may be necessary to preserve vertex colors when textures are not used in the first place. This can be done by using a variant of the simplification function that takes attribute values and weight factors, `meshopt_simplifyWithAttributes`:
+
+```c++
+const float nrm_weight = 0.5f;
+const float attr_weights[3] = {nrm_weight, nrm_weight, nrm_weight};
+
+std::vector<unsigned int> lod(index_count);
+float lod_error = 0.f;
+lod.resize(meshopt_simplifyWithAttributes(&lod[0], indices, index_count, &vertices[0].x, vertex_count, sizeof(Vertex),
+    &vertices[0].nx, sizeof(Vertex), attr_weights, 3, /* vertex_lock= */ NULL,
+    target_index_count, target_error, /* options= */ 0, &lod_error));
+```
+
+The attributes are passed as a separate buffer (in the example above it's a subset of the same vertex buffer) and should be stored as consecutive floats; attribute weights are used to control the importance of each attribute in the simplification process.
+
+When using `meshopt_simplifyWithAttributes`, it is also possible to lock certain vertices by providing a `vertex_lock` array that contains a boolean value for each vertex in the mesh. This can be useful to preserve certain vertices, such as the boundary of the mesh, with more control than `meshopt_SimplifyLockBorder` option provides.
+
+Simplification currently assumes that the input mesh is using the same material for all triangles. If the mesh uses multiple materials, it is possible to split the mesh into subsets based on the material and simplify each subset independently, using `meshopt_SimplifyLockBorder` or `vertex_lock` to preserve material boundaries; however, this limits the collapses and as a result may reduce the resulting quality. An alternative approach is to encode information about the material into the vertex buffer, ensuring that all three vertices referencing the same triangle have the same material ID; this may require duplicating vertices on the boundary between materials. After this, simplification can be performed as usual, and after simplification per-triangle material information can be computed from the vertex material IDs. There is no need to inform the simplifier of the value of the material ID: the implicit boundaries created by duplicating vertices with conflicting material IDs will be preserved automatically.
 
 ## Mesh shading
 
