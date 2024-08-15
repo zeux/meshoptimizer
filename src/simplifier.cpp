@@ -645,10 +645,8 @@ static float quadricError(const Quadric& Q, const QuadricGrad* G, size_t attribu
 		r += a * (a * Q.w - 2 * g);
 	}
 
-	// TODO: weight normalization is breaking attribute error somehow
-	float s = 1; // Q.w == 0.f ? 0.f : 1.f / Q.w;
-
-	return fabsf(r) * s;
+	// note: unlike position error, we do not normalize by Q.w to retain edge scaling as described in quadricFromAttributes
+	return fabsf(r);
 }
 
 static void quadricFromPlane(Quadric& Q, float a, float b, float c, float d, float w)
@@ -719,8 +717,10 @@ static void quadricFromAttributes(Quadric& Q, QuadricGrad* G, const Vector3& p0,
 	Vector3 normal = {p10.y * p20.z - p10.z * p20.y, p10.z * p20.x - p10.x * p20.z, p10.x * p20.y - p10.y * p20.x};
 	float area = sqrtf(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z) * 0.5f;
 
-	// weight is scaled linearly with edge length
-	float w = sqrtf(area); // TODO this needs more experimentation
+	// quadric is weighted with the square of edge length (= area)
+	// this equalizes the units with the positional error (which, after normalization, is a square of distance)
+	// as a result, a change in weighted attribute of 1 along distance d is approximately equivalent to a change in position of d
+	float w = area;
 
 	// we compute gradients using barycentric coordinates; barycentric coordinates can be computed as follows:
 	// v = (d11 * d20 - d01 * d21) / denom
