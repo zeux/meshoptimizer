@@ -18,7 +18,7 @@ git clone -b v0.21 https://github.com/zeux/meshoptimizer.git
 
 Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v0.21.zip).
 
-The library is also available as a Linux package in several distributions ([ArchLinux](https://aur.archlinux.org/packages/meshoptimizer/), [Debian](https://packages.debian.org/libmeshoptimizer), [Ubuntu](https://packages.ubuntu.com/libmeshoptimizer)), as well as a [Vcpkg port](https://github.com/microsoft/vcpkg/tree/master/ports/meshoptimizer) (see [installation instructions](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started)).
+The library is also available as a Linux package in several distributions ([ArchLinux](https://aur.archlinux.org/packages/meshoptimizer/), [Debian](https://packages.debian.org/libmeshoptimizer), [Ubuntu](https://packages.ubuntu.com/libmeshoptimizer)), as well as a [Vcpkg port](https://github.com/microsoft/vcpkg/tree/master/ports/meshoptimizer) (see [installation instructions](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started)) and a [Conan package](https://conan.io/center/recipes/meshoptimizer?version=0.21).
 
 ### Installing gltfpack
 
@@ -35,7 +35,7 @@ meshoptimizer is distributed as a set of C++ source files. To include it into yo
 * Use CMake to build the library (either as a standalone project or as part of your project)
 * Add source files to your project's build system
 
-The source files are organized in such a way that you don't need to change your build-system settings, and you only need to add the files for the algorithms you use.
+The source files are organized in such a way that you don't need to change your build-system settings, and you only need to add the source files for the algorithms you use. They should build without warnings or special compilation options on all major compilers.
 
 ## Pipeline
 
