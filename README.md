@@ -20,11 +20,7 @@ Alternatively you can [download the .zip archive from GitHub](https://github.com
 
 The library is also available as a Linux package in several distributions ([ArchLinux](https://aur.archlinux.org/packages/meshoptimizer/), [Debian](https://packages.debian.org/libmeshoptimizer), [FreeBSD](https://www.freshports.org/misc/meshoptimizer/), [Nix](https://mynixos.com/nixpkgs/package/meshoptimizer), [Ubuntu](https://packages.ubuntu.com/libmeshoptimizer)), as well as a [Vcpkg port](https://github.com/microsoft/vcpkg/tree/master/ports/meshoptimizer) (see [installation instructions](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started)) and a [Conan package](https://conan.io/center/recipes/meshoptimizer?version=0.21).
 
-### Installing gltfpack
-
-[gltfpack](./gltf/README.md) is a CLI tool for optimizing meshes using meshoptimizer.
-
-You can download a pre-built binary for gltfpack on [Releases page](https://github.com/zeux/meshoptimizer/releases), or install [npm package](https://www.npmjs.com/package/gltfpack). Native binaries are recommended over npm since they can work with larger files, run faster, and support texture compression.
+[gltfpack](./gltf/README.md) is available as a pre-built binary on [Releases page](https://github.com/zeux/meshoptimizer/releases) or via [npm package](https://www.npmjs.com/package/gltfpack). Native binaries are recommended since they are more efficient and support texture compression.
 
 ## Building
 
