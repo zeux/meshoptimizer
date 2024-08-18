@@ -557,7 +557,7 @@ static void simplifyMesh(Mesh& mesh, float threshold, bool attributes, bool aggr
 	const Stream* attr = getStream(mesh, cgltf_attribute_type_color);
 	attr = attr ? attr : getStream(mesh, cgltf_attribute_type_normal);
 
-	const float attrw[3] = {1e-2f, 1e-2f, 1e-2f};
+	const float attrw[3] = {0.5f, 0.5f, 0.5f};
 
 	std::vector<unsigned int> indices(mesh.indices.size());
 	if (attributes && attr)
