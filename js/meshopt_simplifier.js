@@ -197,6 +197,7 @@ var MeshoptSimplifier = (function () {
 		LockBorder: 1,
 		Sparse: 2,
 		ErrorAbsolute: 4,
+		_InternalDebug: 1 << 30,
 	};
 
 	return {
