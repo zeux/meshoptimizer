@@ -68,6 +68,12 @@
 				normalWeight: 0.5,
 				colorWeight: 1.0,
 
+				stats: {
+					triangles: 0,
+					vertices: 0,
+					error: '0',
+				},
+
 				loadFile: function () {
 					var input = document.createElement('input');
 					input.type = 'file';
@@ -103,8 +109,10 @@
 			guiLoad.add(settings, 'loadFile');
 			guiLoad.add(settings, 'updateModule');
 
-			var windowHalfX = window.innerWidth / 2;
-			var windowHalfY = window.innerHeight / 2;
+			var guiStats = gui.addFolder('Stats');
+			guiStats.add(settings.stats, 'triangles').listen();
+			guiStats.add(settings.stats, 'vertices').listen();
+			guiStats.add(settings.stats, 'error').listen();
 
 			init();
 			load('pirate.glb');
@@ -180,6 +188,8 @@
 				geo.index.array = res[0];
 				geo.index.count = res[0].length;
 				geo.index.needsUpdate = true;
+
+				return res[1];
 			}
 
 			function simplifyPoints(geo) {
@@ -216,14 +226,28 @@
 				MeshoptSimplifier.ready.then(function () {
 					MeshoptSimplifier.useExperimentalFeatures = true;
 
+					var triangles = 0;
+					var vertices = 0;
+					var error = 0;
+
 					scene.traverse(function (object) {
 						if (object.isMesh) {
-							simplifyMesh(object.geometry);
+							var err = simplifyMesh(object.geometry);
+
+							error = Math.max(error, err); // note: we are ignoring the possibility of different mesh scales atm
+							triangles += object.geometry.index.count / 3;
+							vertices += object.geometry.attributes.position.count;
 						}
 						if (object.isPoints) {
 							simplifyPoints(object.geometry);
+
+							vertices += object.geometry.attributes.position.count;
 						}
 					});
+
+					settings.stats.triangles = triangles;
+					settings.stats.vertices = vertices;
+					settings.stats.error = error.toExponential(3);
 				});
 			}
 
@@ -319,9 +343,6 @@
 			}
 
 			function onWindowResize() {
-				windowHalfX = window.innerWidth / 2;
-				windowHalfY = window.innerHeight / 2;
-
 				camera.aspect = window.innerWidth / window.innerHeight;
 				camera.updateProjectionMatrix();
 
