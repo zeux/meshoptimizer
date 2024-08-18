@@ -119,14 +119,10 @@
 			animate();
 
 			function simplifyMesh(geo) {
-				if (!geo.index.original) {
-					geo.index.original = geo.index.array;
-				}
-
 				var attributes = 6; // 3 color, 3 normal
 
 				var positions = new Float32Array(geo.attributes.position.array);
-				var indices = geo.index.original;
+				var indices = geo.index.array;
 				var target = Math.floor((indices.length * settings.ratio) / 3) * 3;
 
 				if (settings.useAttributes) {
@@ -185,11 +181,14 @@
 
 				console.log('simplified to', res[0].length / 3, 'with error', res[1]);
 
-				geo.index.array = res[0];
-				geo.index.count = res[0].length;
-				geo.index.needsUpdate = true;
+				var dind = Array.from(res[0]);
 
-				return res[1];
+				var rgeo = geo.clone();
+				rgeo.index.array = new Uint32Array(dind);
+				rgeo.index.count = dind.length;
+				rgeo.index.needsUpdate = true;
+
+				return [rgeo, res[1]];
 			}
 
 			function simplifyPoints(geo) {
@@ -232,7 +231,13 @@
 
 					scene.traverse(function (object) {
 						if (object.isMesh) {
-							var err = simplifyMesh(object.geometry);
+							if (!object.original) {
+								object.original = object.geometry.clone();
+							}
+
+							var [geo, err] = simplifyMesh(object.original);
+
+							object.geometry = geo;
 
 							error = Math.max(error, err); // note: we are ignoring the possibility of different mesh scales atm
 							triangles += object.geometry.index.count / 3;
