@@ -272,6 +272,12 @@
 						if (object.isMesh) {
 							if (!object.original) {
 								object.original = object.geometry.clone();
+
+								// use small depth offset to avoid overlay z-fighting with the original mesh
+								// has to be done on the main material as overlays use lines that don't support depth offset
+								object.material.polygonOffset = true;
+								object.material.polygonOffsetUnits = 16;
+
 								object.material = [
 									object.material,
 									new THREE.MeshBasicMaterial({ color: 0x0000ff, wireframe: true }), // border
