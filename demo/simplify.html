@@ -50,6 +50,7 @@
 			import * as THREE from 'three';
 			import { GLTFLoader } from 'three-examples/loaders/GLTFLoader.js';
 			import { OrbitControls } from 'three-examples/controls/OrbitControls.js';
+			import { mergeVertices } from 'three-examples/utils/BufferGeometryUtils.js';
 			import { MeshoptDecoder } from '../js/meshopt_decoder.module.js';
 			import { MeshoptSimplifier } from '../js/meshopt_simplifier.module.js';
 			import { GUI } from 'https://unpkg.com/lil-gui@0.17.0/dist/lil-gui.esm.js';
@@ -62,7 +63,9 @@
 				wireframe: false,
 				pointSize: 1.0,
 				ratio: 1.0,
+				debugOverlay: false,
 				lockBorder: false,
+				weldVertices: false,
 				useAttributes: false,
 				errorThresholdLog10: 1,
 				normalWeight: 0.5,
@@ -90,16 +93,20 @@
 					reload();
 					simplify();
 				},
+				autoUpdate: false,
+				autoUpdateStatus: '',
 			};
 
 			var gui = new GUI({ width: 300 });
 			var guiDisplay = gui.addFolder('Display');
 			guiDisplay.add(settings, 'wireframe').onChange(update);
 			guiDisplay.add(settings, 'pointSize', 1, 16).onChange(update);
+			guiDisplay.add(settings, 'debugOverlay').onChange(simplify); // requires debug data rebuild
 
 			var guiSimplify = gui.addFolder('Simplify');
 			guiSimplify.add(settings, 'ratio', 0, 1, 0.01).onChange(simplify);
 			guiSimplify.add(settings, 'lockBorder').onChange(simplify);
+			guiSimplify.add(settings, 'weldVertices').onChange(simplify);
 			guiSimplify.add(settings, 'errorThresholdLog10', 0, 3, 0.1).onChange(simplify);
 			guiSimplify.add(settings, 'useAttributes').onChange(simplify);
 			guiSimplify.add(settings, 'normalWeight', 0, 2, 0.01).onChange(simplify);
@@ -108,6 +115,8 @@
 			var guiLoad = gui.addFolder('Load');
 			guiLoad.add(settings, 'loadFile');
 			guiLoad.add(settings, 'updateModule');
+			guiLoad.add(settings, 'autoUpdate').onChange(autoReload);
+			guiLoad.add(settings, 'autoUpdateStatus').listen();
 
 			var guiStats = gui.addFolder('Stats');
 			guiStats.add(settings.stats, 'triangles').listen();
@@ -119,14 +128,16 @@
 			animate();
 
 			function simplifyMesh(geo) {
-				if (!geo.index.original) {
-					geo.index.original = geo.index.array;
+				if (settings.weldVertices) {
+					// pre-welding is important for some meshes that have very close normals in adjacent face corners
+					// for now we use the welder from three.js; this is not as performant as it could be
+					geo = mergeVertices(geo, 1e-2);
 				}
 
 				var attributes = 6; // 3 color, 3 normal
 
 				var positions = new Float32Array(geo.attributes.position.array);
-				var indices = geo.index.original;
+				var indices = new Uint32Array(geo.index.array); // needed for _InternalDebug to work
 				var target = Math.floor((indices.length * settings.ratio) / 3) * 3;
 
 				if (settings.useAttributes) {
@@ -166,30 +177,68 @@
 
 				console.time('simplify');
 
-				var res = settings.useAttributes
-					? MeshoptSimplifier.simplifyWithAttributes(
-							indices,
-							positions,
-							stride,
-							attrib,
-							attributes,
-							attrib_weights,
-							null,
-							target,
-							threshold,
-							flags,
-						)
-					: MeshoptSimplifier.simplify(indices, positions, stride, target, threshold, flags);
+				function run() {
+					var S = MeshoptSimplifier; // to avoid line breaks below...
+					return settings.useAttributes
+						? S.simplifyWithAttributes(indices, positions, stride, attrib, attributes, attrib_weights, null, target, threshold, flags)
+						: MeshoptSimplifier.simplify(indices, positions, stride, target, threshold, flags);
+				}
+
+				var res = run();
+
+				if (settings.debugOverlay) {
+					flags.push('_InternalDebug');
+					var dres = run();
+				}
 
 				console.timeEnd('simplify');
 
-				console.log('simplified to', res[0].length / 3, 'with error', res[1]);
+				var rgeo = geo.clone();
 
-				geo.index.array = res[0];
-				geo.index.count = res[0].length;
-				geo.index.needsUpdate = true;
+				var dind = res[0];
 
-				return res[1];
+				if (settings.debugOverlay) {
+					// we need extra indices for debug overlay
+					dind = Array.from(res[0]);
+
+					for (var kind = 1; kind <= 4; ++kind) {
+						var offset = dind.length;
+
+						for (var i = 0; i < dres[0].length; i += 3) {
+							var mask = (1 << 28) - 1;
+
+							for (var e = 0; e < 3; ++e) {
+								var a = dres[0][i + e],
+									b = dres[0][i + ((e + 1) % 3)];
+
+								if (a >> 31 != 0 && ((a >> 28) & 7) == kind) {
+									// loop of current kind
+									dind.push(a & mask);
+									dind.push(a & mask);
+									dind.push(b & mask);
+								} else if (kind == 4 && ((a >> 28) & 7) == kind && ((b >> 28) & 7) == kind) {
+									// locked edge (may not be marked as a loop)
+									dind.push(a & mask);
+									dind.push(a & mask);
+									dind.push(b & mask);
+								}
+							}
+						}
+
+						if (offset != dind.length) {
+							rgeo.addGroup(offset, dind.length - offset, kind);
+							offset = dind.length;
+						}
+					}
+				}
+
+				rgeo.index.array = new Uint32Array(dind);
+				rgeo.index.count = dind.length;
+				rgeo.index.needsUpdate = true;
+
+				rgeo.addGroup(0, res[0].length, 0);
+
+				return [rgeo, res[0].length / 3, res[1]];
 			}
 
 			function simplifyPoints(geo) {
@@ -232,10 +281,29 @@
 
 					scene.traverse(function (object) {
 						if (object.isMesh) {
-							var err = simplifyMesh(object.geometry);
+							if (!object.original) {
+								object.original = object.geometry.clone();
+
+								// use small depth offset to avoid overlay z-fighting with the original mesh
+								// has to be done on the main material as overlays use lines that don't support depth offset
+								object.material.polygonOffset = true;
+								object.material.polygonOffsetUnits = 16;
+
+								object.material = [
+									object.material,
+									new THREE.MeshBasicMaterial({ color: 0x0000ff, wireframe: true }), // border
+									new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true }), // seam
+									new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true }), // complex
+									new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true }), // locked
+								];
+							}
+
+							var [geo, tri, err] = simplifyMesh(object.original);
+
+							object.geometry = geo;
 
 							error = Math.max(error, err); // note: we are ignoring the possibility of different mesh scales atm
-							triangles += object.geometry.index.count / 3;
+							triangles += tri;
 							vertices += object.geometry.attributes.position.count;
 						}
 						if (object.isPoints) {
@@ -262,10 +330,37 @@
 				});
 			}
 
+			var moduleLastModified = 0;
+
+			function autoReload() {
+				if (!settings.autoUpdate) return;
+
+				fetch('/js/meshopt_simplifier.module.js?x=' + Date.now(), { method: 'HEAD' })
+					.then(function (r) {
+						var last = r.headers.get('Last-Modified');
+						if (last != moduleLastModified) {
+							moduleLastModified = last;
+							reload();
+							simplify();
+						}
+
+						settings.autoUpdateStatus = new Date(last).toLocaleTimeString();
+						setTimeout(autoReload, 1000);
+					})
+					.catch(function (e) {
+						settings.autoUpdateStatus = 'error';
+						setTimeout(autoReload, 5000);
+					});
+			}
+
 			function update() {
 				scene.traverse(function (child) {
 					if (child.isMesh) {
-						child.material.wireframe = settings.wireframe;
+						if (Array.isArray(child.material)) {
+							child.material[0].wireframe = settings.wireframe;
+						} else {
+							child.material.wireframe = settings.wireframe;
+						}
 					}
 					if (child.isPoints) {
 						child.material.size = settings.pointSize;
