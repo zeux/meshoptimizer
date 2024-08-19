@@ -91,6 +91,7 @@
 					reload();
 					simplify();
 				},
+				autoUpdate: false,
 			};
 
 			var gui = new GUI({ width: 300 });
@@ -110,6 +111,7 @@
 			var guiLoad = gui.addFolder('Load');
 			guiLoad.add(settings, 'loadFile');
 			guiLoad.add(settings, 'updateModule');
+			guiLoad.add(settings, 'autoUpdate').onChange(autoReload);
 
 			var guiStats = gui.addFolder('Stats');
 			guiStats.add(settings.stats, 'triangles').listen();
@@ -291,6 +293,24 @@
 							MeshoptSimplifier[prop] = s.MeshoptSimplifier[prop];
 						}
 					});
+				});
+			}
+
+			var moduleLastModified = 0;
+
+			function autoReload() {
+				if (!settings.autoUpdate) return;
+
+				var simph = fetch('/js/meshopt_simplifier.module.js?x=' + Date.now(), { method: 'HEAD' });
+				simph.then(function (r) {
+					var last = r.headers.get('Last-Modified');
+					if (last != moduleLastModified) {
+						moduleLastModified = last;
+						reload();
+						simplify();
+					}
+
+					setTimeout(autoReload, 1000);
 				});
 			}
 
