@@ -94,6 +94,7 @@
 					simplify();
 				},
 				autoUpdate: false,
+				autoUpdateStatus: '',
 			};
 
 			var gui = new GUI({ width: 300 });
@@ -115,6 +116,7 @@
 			guiLoad.add(settings, 'loadFile');
 			guiLoad.add(settings, 'updateModule');
 			guiLoad.add(settings, 'autoUpdate').onChange(autoReload);
+			guiLoad.add(settings, 'autoUpdateStatus').listen();
 
 			var guiStats = gui.addFolder('Stats');
 			guiStats.add(settings.stats, 'triangles').listen();
@@ -333,17 +335,22 @@
 			function autoReload() {
 				if (!settings.autoUpdate) return;
 
-				var simph = fetch('/js/meshopt_simplifier.module.js?x=' + Date.now(), { method: 'HEAD' });
-				simph.then(function (r) {
-					var last = r.headers.get('Last-Modified');
-					if (last != moduleLastModified) {
-						moduleLastModified = last;
-						reload();
-						simplify();
-					}
+				fetch('/js/meshopt_simplifier.module.js?x=' + Date.now(), { method: 'HEAD' })
+					.then(function (r) {
+						var last = r.headers.get('Last-Modified');
+						if (last != moduleLastModified) {
+							moduleLastModified = last;
+							reload();
+							simplify();
+						}
 
-					setTimeout(autoReload, 1000);
-				});
+						settings.autoUpdateStatus = new Date(last).toLocaleTimeString();
+						setTimeout(autoReload, 1000);
+					})
+					.catch(function (e) {
+						settings.autoUpdateStatus = 'error';
+						setTimeout(autoReload, 5000);
+					});
 			}
 
 			function update() {
