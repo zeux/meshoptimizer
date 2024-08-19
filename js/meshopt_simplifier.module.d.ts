@@ -16,7 +16,7 @@ export const MeshoptSimplifier: {
 		vertex_positions_stride: number,
 		target_index_count: number,
 		target_error: number,
-		flags?: Flags[],
+		flags?: Flags[]
 	) => [Uint32Array, number];
 
 	// Experimental; requires useExperimentalFeatures to be set to true
@@ -30,7 +30,7 @@ export const MeshoptSimplifier: {
 		vertex_lock: boolean[] | null,
 		target_index_count: number,
 		target_error: number,
-		flags?: Flags[],
+		flags?: Flags[]
 	) => [Uint32Array, number];
 
 	getScale: (vertex_positions: Float32Array, vertex_positions_stride: number) => number;
@@ -42,6 +42,6 @@ export const MeshoptSimplifier: {
 		target_vertex_count: number,
 		vertex_colors?: Float32Array,
 		vertex_colors_stride?: number,
-		color_weight?: number,
+		color_weight?: number
 	) => Uint32Array;
 };
