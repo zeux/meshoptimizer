@@ -914,7 +914,13 @@ static bool hasTriangleFlips(const EdgeAdjacency& adjacency, const Vector3* vert
 
 		// early-out when at least one triangle flips due to a collapse
 		if (hasTriangleFlip(vertex_positions[a], vertex_positions[b], v0, v1))
+		{
+#if TRACE >= 2
+			printf("edge block %d -> %d: flip welded %d %d %d\n", i0, i1, a, i0, b);
+#endif
+
 			return true;
+		}
 	}
 
 	return false;
@@ -1017,6 +1023,10 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 		float ei = quadricError(vertex_quadrics[remap[i0]], vertex_positions[i1]);
 		float ej = quadricError(vertex_quadrics[remap[j0]], vertex_positions[j1]);
 
+#if TRACE >= 2
+		float di = ei, dj = ej;
+#endif
+
 		if (attribute_count)
 		{
 			ei += quadricError(attribute_quadrics[remap[i0]], &attribute_gradients[remap[i0] * attribute_count], attribute_count, vertex_positions[i1], &vertex_attributes[i1 * attribute_count]);
@@ -1027,6 +1037,16 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 		c.v0 = ei <= ej ? i0 : j0;
 		c.v1 = ei <= ej ? i1 : j1;
 		c.error = ei <= ej ? ei : ej;
+
+#if TRACE >= 2
+		if (i0 == j0) // c.bidi has been overwritten
+			printf("edge eval %d -> %d: error %f (pos %f, attr %f)\n", c.v0, c.v1,
+				sqrtf(c.error), sqrtf(ei <= ej ? di : dj), sqrtf(ei <= ej ? ei - di : ej - dj));
+		else
+			printf("edge eval %d -> %d: error %f (pos %f, attr %f); reverse %f (pos %f, attr %f)\n", c.v0, c.v1,
+				sqrtf(ei <= ej ? ei : ej), sqrtf(ei <= ej ? di : dj), sqrtf(ei <= ej ? ei - di : ej - dj),
+				sqrtf(ei <= ej ? ej : ei), sqrtf(ei <= ej ? dj : di), sqrtf(ei <= ej ? ej - dj : ei - di));
+#endif
 	}
 }
 
@@ -1125,6 +1145,10 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 			TRACESTATS(2);
 			continue;
 		}
+
+#if TRACE >= 2
+		printf("edge commit %d -> %d: kind %d->%d, error %f\n", i0, i1, vertex_kind[i0], vertex_kind[i1], sqrtf(c.error));
+#endif
 
 		assert(collapse_remap[r0] == r0);
 		assert(collapse_remap[r1] == r1);
@@ -1673,6 +1697,10 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 		if (edge_collapse_count == 0)
 			break;
 
+#if TRACE
+		printf("pass %d:%c", int(pass_count++), TRACE >= 2 ? '\n' : ' ');
+#endif
+
 		rankEdgeCollapses(edge_collapses, edge_collapse_count, vertex_positions, vertex_attributes, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, remap);
 
 		sortEdgeCollapses(collapse_order, edge_collapses, edge_collapse_count);
@@ -1683,10 +1711,6 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 			collapse_remap[i] = unsigned(i);
 
 		memset(collapse_locked, 0, vertex_count);
-
-#if TRACE
-		printf("pass %d: ", int(pass_count++));
-#endif
 
 		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, vertex_positions, adjacency, triangle_collapse_goal, error_limit, result_error);
 
