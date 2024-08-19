@@ -50,6 +50,7 @@
 			import * as THREE from 'three';
 			import { GLTFLoader } from 'three-examples/loaders/GLTFLoader.js';
 			import { OrbitControls } from 'three-examples/controls/OrbitControls.js';
+			import { mergeVertices } from 'three-examples/utils/BufferGeometryUtils.js';
 			import { MeshoptDecoder } from '../js/meshopt_decoder.module.js';
 			import { MeshoptSimplifier } from '../js/meshopt_simplifier.module.js';
 			import { GUI } from 'https://unpkg.com/lil-gui@0.17.0/dist/lil-gui.esm.js';
@@ -64,6 +65,7 @@
 				ratio: 1.0,
 				debugOverlay: false,
 				lockBorder: false,
+				weldVertices: false,
 				useAttributes: false,
 				errorThresholdLog10: 1,
 				normalWeight: 0.5,
@@ -103,6 +105,7 @@
 			var guiSimplify = gui.addFolder('Simplify');
 			guiSimplify.add(settings, 'ratio', 0, 1, 0.01).onChange(simplify);
 			guiSimplify.add(settings, 'lockBorder').onChange(simplify);
+			guiSimplify.add(settings, 'weldVertices').onChange(simplify);
 			guiSimplify.add(settings, 'errorThresholdLog10', 0, 3, 0.1).onChange(simplify);
 			guiSimplify.add(settings, 'useAttributes').onChange(simplify);
 			guiSimplify.add(settings, 'normalWeight', 0, 2, 0.01).onChange(simplify);
@@ -123,6 +126,12 @@
 			animate();
 
 			function simplifyMesh(geo) {
+				if (settings.weldVertices) {
+					// pre-welding is important for some meshes that have very close normals in adjacent face corners
+					// for now we use the welder from three.js; this is not as performant as it could be
+					geo = mergeVertices(geo, 1e-2);
+				}
+
 				var attributes = 6; // 3 color, 3 normal
 
 				var positions = new Float32Array(geo.attributes.position.array);
