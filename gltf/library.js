@@ -368,5 +368,5 @@ if (typeof window === 'undefined' && typeof process !== 'undefined' && process.r
 		root.gltfpack = factory();
 	}
 })(typeof self !== 'undefined' ? self : this, function () {
-	return { init, pack };
+	return { init: init, pack: pack };
 });

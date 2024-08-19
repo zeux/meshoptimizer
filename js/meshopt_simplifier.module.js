@@ -109,7 +109,7 @@ var MeshoptSimplifier = (function () {
 		vertex_lock,
 		target_index_count,
 		target_error,
-		options,
+		options
 	) {
 		var sbrk = instance.exports.sbrk;
 		var te = sbrk(4);
@@ -142,7 +142,7 @@ var MeshoptSimplifier = (function () {
 			target_index_count,
 			target_error,
 			options,
-			te,
+			te
 		);
 		// heap may have grown
 		heap = new Uint8Array(instance.exports.memory.buffer);
@@ -172,7 +172,7 @@ var MeshoptSimplifier = (function () {
 		vertex_colors,
 		vertex_colors_stride,
 		color_weight,
-		target_vertex_count,
+		target_vertex_count
 	) {
 		var sbrk = instance.exports.sbrk;
 		var ti = sbrk(target_vertex_count * 4);
@@ -209,7 +209,7 @@ var MeshoptSimplifier = (function () {
 
 		compactMesh: function (indices) {
 			assert(
-				indices instanceof Uint32Array || indices instanceof Int32Array || indices instanceof Uint16Array || indices instanceof Int16Array,
+				indices instanceof Uint32Array || indices instanceof Int32Array || indices instanceof Uint16Array || indices instanceof Int16Array
 			);
 			assert(indices.length % 3 == 0);
 
@@ -219,7 +219,7 @@ var MeshoptSimplifier = (function () {
 
 		simplify: function (indices, vertex_positions, vertex_positions_stride, target_index_count, target_error, flags) {
 			assert(
-				indices instanceof Uint32Array || indices instanceof Int32Array || indices instanceof Uint16Array || indices instanceof Int16Array,
+				indices instanceof Uint32Array || indices instanceof Int32Array || indices instanceof Uint16Array || indices instanceof Int16Array
 			);
 			assert(indices.length % 3 == 0);
 			assert(vertex_positions instanceof Float32Array);
@@ -245,7 +245,7 @@ var MeshoptSimplifier = (function () {
 				vertex_positions_stride * 4,
 				target_index_count,
 				target_error,
-				options,
+				options
 			);
 			result[0] = indices instanceof Uint32Array ? result[0] : new indices.constructor(result[0]);
 
@@ -262,11 +262,11 @@ var MeshoptSimplifier = (function () {
 			vertex_lock,
 			target_index_count,
 			target_error,
-			flags,
+			flags
 		) {
 			assert(this.useExperimentalFeatures); // set useExperimentalFeatures to use this; note that this function is experimental and may change interface in a way that will require revising calling code
 			assert(
-				indices instanceof Uint32Array || indices instanceof Int32Array || indices instanceof Uint16Array || indices instanceof Int16Array,
+				indices instanceof Uint32Array || indices instanceof Int32Array || indices instanceof Uint16Array || indices instanceof Int16Array
 			);
 			assert(indices.length % 3 == 0);
 			assert(vertex_positions instanceof Float32Array);
@@ -306,7 +306,7 @@ var MeshoptSimplifier = (function () {
 				vertex_lock ? new Uint8Array(vertex_lock) : null,
 				target_index_count,
 				target_error,
-				options,
+				options
 			);
 			result[0] = indices instanceof Uint32Array ? result[0] : new indices.constructor(result[0]);
 
@@ -321,7 +321,7 @@ var MeshoptSimplifier = (function () {
 				instance.exports.meshopt_simplifyScale,
 				vertex_positions,
 				vertex_positions.length / vertex_positions_stride,
-				vertex_positions_stride * 4,
+				vertex_positions_stride * 4
 			);
 		},
 
@@ -344,7 +344,7 @@ var MeshoptSimplifier = (function () {
 					vertex_colors,
 					vertex_colors_stride * 4,
 					color_weight,
-					target_vertex_count,
+					target_vertex_count
 				);
 			} else {
 				return simplifyPoints(
@@ -355,7 +355,7 @@ var MeshoptSimplifier = (function () {
 					undefined,
 					0,
 					0,
-					target_vertex_count,
+					target_vertex_count
 				);
 			}
 		},
