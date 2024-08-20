@@ -1347,12 +1347,12 @@ static void simplifySeam()
 	    0, 1, 0, 1,
 	    0, 2, 0, 1,
 	    1, 0, 0, 0,
-	    1, 1, 1, 0,
-	    1, 1, 1, 1,
+	    1, 1, 0.3f, 0,
+	    1, 1, 0.3f, 1,
 	    1, 2, 0, 1,
 	    2, 0, 0, 0,
-	    2, 1, 0, 0,
-	    2, 1, 0, 1,
+	    2, 1, 0.1f, 0,
+	    2, 1, 0.1f, 1,
 	    2, 2, 0, 1,
 	    3, 0, 0, 0,
 	    3, 1, 0, 0,
@@ -1402,12 +1402,12 @@ static void simplifySeam()
 
 	assert(meshopt_simplify(res, ib, 36, vb, 16, 16, 18, 1.f, 0, &error) == 18);
 	assert(memcmp(res, expected, sizeof(expected)) == 0);
-	assert(fabsf(error - 0.22f) < 0.01f); // TODO: this is higher than normal due to border errors?
+	assert(fabsf(error - 0.04f) < 0.01f); // note: the error is not zero because there is a small difference in height between the seam vertices
 
 	float aw = 1;
 	assert(meshopt_simplifyWithAttributes(res, ib, 36, vb, 16, 16, vb + 3, 16, &aw, 1, NULL, 18, 2.f, 0, &error) == 18);
 	assert(memcmp(res, expected, sizeof(expected)) == 0);
-	assert(fabsf(error - 0.22f) < 0.01f); // note: this is the same error as above because the attribute is constant on either side of the seam
+	assert(fabsf(error - 0.04f) < 0.01f); // note: this is the same error as above because the attribute is constant on either side of the seam
 }
 
 static void adjacency()
