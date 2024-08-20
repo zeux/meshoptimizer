@@ -850,7 +850,7 @@ static void fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 	}
 }
 
-static void fillAttributeQuadrics(Quadric* attribute_quadrics, QuadricGrad* attribute_gradients, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const float* vertex_attributes, size_t attribute_count, const unsigned int* remap)
+static void fillAttributeQuadrics(Quadric* attribute_quadrics, QuadricGrad* attribute_gradients, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const float* vertex_attributes, size_t attribute_count)
 {
 	for (size_t i = 0; i < index_count; i += 3)
 	{
@@ -862,14 +862,13 @@ static void fillAttributeQuadrics(Quadric* attribute_quadrics, QuadricGrad* attr
 		QuadricGrad G[kMaxAttributes];
 		quadricFromAttributes(QA, G, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2], &vertex_attributes[i0 * attribute_count], &vertex_attributes[i1 * attribute_count], &vertex_attributes[i2 * attribute_count], attribute_count);
 
-		// TODO: This blends together attribute weights across attribute discontinuities, which is probably not a great idea
-		quadricAdd(attribute_quadrics[remap[i0]], QA);
-		quadricAdd(attribute_quadrics[remap[i1]], QA);
-		quadricAdd(attribute_quadrics[remap[i2]], QA);
+		quadricAdd(attribute_quadrics[i0], QA);
+		quadricAdd(attribute_quadrics[i1], QA);
+		quadricAdd(attribute_quadrics[i2], QA);
 
-		quadricAdd(&attribute_gradients[remap[i0] * attribute_count], G, attribute_count);
-		quadricAdd(&attribute_gradients[remap[i1] * attribute_count], G, attribute_count);
-		quadricAdd(&attribute_gradients[remap[i2] * attribute_count], G, attribute_count);
+		quadricAdd(&attribute_gradients[i0 * attribute_count], G, attribute_count);
+		quadricAdd(&attribute_gradients[i1 * attribute_count], G, attribute_count);
+		quadricAdd(&attribute_gradients[i2 * attribute_count], G, attribute_count);
 	}
 }
 
@@ -1029,8 +1028,9 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 
 		if (attribute_count)
 		{
-			ei += quadricError(attribute_quadrics[remap[i0]], &attribute_gradients[remap[i0] * attribute_count], attribute_count, vertex_positions[i1], &vertex_attributes[i1 * attribute_count]);
-			ej += quadricError(attribute_quadrics[remap[j0]], &attribute_gradients[remap[j0] * attribute_count], attribute_count, vertex_positions[j1], &vertex_attributes[j1 * attribute_count]);
+			// note: ideally we would evaluate max/avg of attribute errors for seam edges, but it's not clear if it's worth the extra cost
+			ei += quadricError(attribute_quadrics[i0], &attribute_gradients[i0 * attribute_count], attribute_count, vertex_positions[i1], &vertex_attributes[i1 * attribute_count]);
+			ej += quadricError(attribute_quadrics[j0], &attribute_gradients[j0 * attribute_count], attribute_count, vertex_positions[j1], &vertex_attributes[j1 * attribute_count]);
 		}
 
 		// pick edge direction with minimal error
@@ -1157,8 +1157,16 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 
 		if (attribute_count)
 		{
-			quadricAdd(attribute_quadrics[r1], attribute_quadrics[r0]);
-			quadricAdd(&attribute_gradients[r1 * attribute_count], &attribute_gradients[r0 * attribute_count], attribute_count);
+			quadricAdd(attribute_quadrics[i1], attribute_quadrics[i0]);
+			quadricAdd(&attribute_gradients[i1 * attribute_count], &attribute_gradients[i0 * attribute_count], attribute_count);
+
+			if (vertex_kind[i0] == Kind_Seam)
+			{
+				unsigned int s0 = wedge[i0], s1 = wedge[i1];
+
+				quadricAdd(attribute_quadrics[s1], attribute_quadrics[s0]);
+				quadricAdd(&attribute_gradients[s1 * attribute_count], &attribute_gradients[s0 * attribute_count], attribute_count);
+			}
 		}
 
 		if (vertex_kind[i0] == Kind_Complex)
@@ -1174,9 +1182,7 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		else if (vertex_kind[i0] == Kind_Seam)
 		{
 			// remap v0 to v1 and seam pair of v0 to seam pair of v1
-			unsigned int s0 = wedge[i0];
-			unsigned int s1 = wedge[i1];
-
+			unsigned int s0 = wedge[i0], s1 = wedge[i1];
 			assert(s0 != i0 && s1 != i1);
 			assert(wedge[s0] == i0 && wedge[s1] == i1);
 
@@ -1665,7 +1671,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	fillEdgeQuadrics(vertex_quadrics, result, index_count, vertex_positions, remap, vertex_kind, loop, loopback);
 
 	if (attribute_count)
-		fillAttributeQuadrics(attribute_quadrics, attribute_gradients, result, index_count, vertex_positions, vertex_attributes, attribute_count, remap);
+		fillAttributeQuadrics(attribute_quadrics, attribute_gradients, result, index_count, vertex_positions, vertex_attributes, attribute_count);
 
 #if TRACE
 	size_t pass_count = 0;

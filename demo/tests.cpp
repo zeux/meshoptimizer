@@ -1407,7 +1407,7 @@ static void simplifySeam()
 	float aw = 1;
 	assert(meshopt_simplifyWithAttributes(res, ib, 36, vb, 16, 16, vb + 3, 16, &aw, 1, NULL, 18, 2.f, 0, &error) == 18);
 	assert(memcmp(res, expected, sizeof(expected)) == 0);
-	assert(fabsf(error - 0.49f) < 0.01f); // TODO: this is higher than normal due to merged attributes?
+	assert(fabsf(error - 0.22f) < 0.01f); // note: this is the same error as above because the attribute is constant on either side of the seam
 }
 
 static void adjacency()
