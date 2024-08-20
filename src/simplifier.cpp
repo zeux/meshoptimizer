@@ -1128,6 +1128,8 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		unsigned int r0 = remap[i0];
 		unsigned int r1 = remap[i1];
 
+		unsigned char kind = vertex_kind[i0];
+
 		// we don't collapse vertices that had source or target vertex involved in a collapse
 		// it's important to not move the vertices twice since it complicates the tracking/remapping logic
 		// it's important to not move other vertices towards a moved vertex to preserve error since we don't re-rank collapses mid-pass
@@ -1160,8 +1162,10 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 			quadricAdd(attribute_quadrics[i1], attribute_quadrics[i0]);
 			quadricAdd(&attribute_gradients[i1 * attribute_count], &attribute_gradients[i0 * attribute_count], attribute_count);
 
-			if (vertex_kind[i0] == Kind_Seam)
+			// note: this is intentionally missing handling for Kind_Complex; we assume that complex vertices have similar attribute values so just using the primary vertex is fine
+			if (kind == Kind_Seam)
 			{
+				// seam collapses involve two edges so we need to update attribute quadrics for both target vertices; position quadrics are shared
 				unsigned int s0 = wedge[i0], s1 = wedge[i1];
 
 				quadricAdd(attribute_quadrics[s1], attribute_quadrics[s0]);
@@ -1169,17 +1173,18 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 			}
 		}
 
-		if (vertex_kind[i0] == Kind_Complex)
+		if (kind == Kind_Complex)
 		{
+			// remap all vertices in the complex to the target vertex
 			unsigned int v = i0;
 
 			do
 			{
-				collapse_remap[v] = r1;
+				collapse_remap[v] = i1;
 				v = wedge[v];
 			} while (v != i0);
 		}
-		else if (vertex_kind[i0] == Kind_Seam)
+		else if (kind == Kind_Seam)
 		{
 			// remap v0 to v1 and seam pair of v0 to seam pair of v1
 			unsigned int s0 = wedge[i0], s1 = wedge[i1];
@@ -1200,7 +1205,7 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		collapse_locked[r1] = 1;
 
 		// border edges collapse 1 triangle, other edges collapse 2 or more
-		triangle_collapses += (vertex_kind[i0] == Kind_Border) ? 1 : 2;
+		triangle_collapses += (kind == Kind_Border) ? 1 : 2;
 		edge_collapses++;
 
 		result_error = result_error < c.error ? c.error : result_error;
