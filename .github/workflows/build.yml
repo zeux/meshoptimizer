@@ -68,11 +68,13 @@ jobs:
       run: node js/meshopt_encoder.test.js
     - name: test simplifier
       run: node js/meshopt_simplifier.test.js
+    - name: test clusterizer
+      run: node js/meshopt_clusterizer.test.js
     - name: check es5
       run: |
         npm install -g es-check
-        npx es-check es5 js/meshopt_decoder.js js/meshopt_encoder.js js/meshopt_simplifier.js
-        npx es-check --module es5 js/meshopt_decoder.module.js js/meshopt_encoder.module.js js/meshopt_simplifier.module.js
+        npx es-check es5 js/meshopt_decoder.js js/meshopt_encoder.js js/meshopt_simplifier.js js/meshopt_clusterizer.js
+        npx es-check --module es5 js/meshopt_decoder.module.js js/meshopt_encoder.module.js js/meshopt_simplifier.module.js js/meshopt_clusterizer.module.js
         npx es-check es5 gltf/library.js
 
   gltfpack:
@@ -125,6 +127,7 @@ jobs:
         node js/meshopt_decoder.test.js
         node js/meshopt_encoder.test.js
         node js/meshopt_simplifier.test.js
+        node js/meshopt_clusterizer.test.js
 
   gltfpack-basis:
     runs-on: ubuntu-latest
