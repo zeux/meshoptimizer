@@ -42,7 +42,7 @@ WASM_FLAGS=--target=wasm32-wasi --sysroot=$(WASIROOT)
 WASM_FLAGS+=-O3 -DNDEBUG -nostartfiles -nostdlib -Wl,--no-entry -Wl,-s
 WASM_FLAGS+=-mcpu=mvp # make sure clang doesn't use post-MVP features like sign extension
 WASM_FLAGS+=-fno-slp-vectorize -fno-vectorize -fno-unroll-loops
-WASM_FLAGS+=-Wl,-z -Wl,stack-size=24576 -Wl,--initial-memory=65536
+WASM_FLAGS+=-Wl,-z -Wl,stack-size=36864 -Wl,--initial-memory=65536
 WASM_EXPORT_PREFIX=-Wl,--export
 
 WASM_DECODER_SOURCES=src/vertexcodec.cpp src/indexcodec.cpp src/vertexfilter.cpp tools/wasmstubs.cpp
@@ -53,6 +53,9 @@ WASM_ENCODER_EXPORTS=meshopt_encodeVertexBuffer meshopt_encodeVertexBufferBound 
 
 WASM_SIMPLIFIER_SOURCES=src/simplifier.cpp src/vfetchoptimizer.cpp tools/wasmstubs.cpp
 WASM_SIMPLIFIER_EXPORTS=meshopt_simplify meshopt_simplifyWithAttributes meshopt_simplifyScale meshopt_simplifyPoints meshopt_optimizeVertexFetchRemap sbrk __wasm_call_ctors
+
+WASM_CLUSTERIZER_SOURCES=src/clusterizer.cpp tools/wasmstubs.cpp
+WASM_CLUSTERIZER_EXPORTS=meshopt_buildMeshletsBound meshopt_buildMeshlets meshopt_computeClusterBounds meshopt_computeMeshletBounds meshopt_optimizeMeshlet sbrk __wasm_call_ctors
 
 ifeq ($(config),iphone)
 	IPHONESDK=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk
@@ -111,7 +114,7 @@ format:
 formatjs:
 	prettier -w js/*.js gltf/*.js demo/*.html js/*.ts
 
-js: js/meshopt_decoder.js js/meshopt_decoder.module.js js/meshopt_encoder.js js/meshopt_encoder.module.js js/meshopt_simplifier.js js/meshopt_simplifier.module.js
+js: js/meshopt_decoder.js js/meshopt_decoder.module.js js/meshopt_encoder.js js/meshopt_encoder.module.js js/meshopt_simplifier.js js/meshopt_simplifier.module.js js/meshopt_clusterizer.js js/meshopt_clusterizer.module.js
 
 symbols: $(BUILD)/amalgamated.so
 	nm $< -U -g
@@ -151,6 +154,10 @@ build/simplifier.wasm: $(WASM_SIMPLIFIER_SOURCES)
 	@mkdir -p build
 	$(WASMCC) $^ $(WASM_FLAGS) $(patsubst %,$(WASM_EXPORT_PREFIX)=%,$(WASM_SIMPLIFIER_EXPORTS)) -lc -o $@
 
+build/clusterizer.wasm: $(WASM_CLUSTERIZER_SOURCES)
+	@mkdir -p build
+	$(WASMCC) $^ $(WASM_FLAGS) $(patsubst %,$(WASM_EXPORT_PREFIX)=%,$(WASM_CLUSTERIZER_EXPORTS)) -lc -o $@
+
 js/meshopt_decoder.js: build/decoder_base.wasm build/decoder_simd.wasm tools/wasmpack.py
 	sed -i "s#Built with clang.*#Built with $$($(WASMCC) --version | head -n 1 | sed 's/\s\+(.*//')#" $@
 	sed -i "s#Built from meshoptimizer .*#Built from meshoptimizer $$(cat src/meshoptimizer.h | grep -Po '(?<=version )[0-9.]+')#" $@
@@ -166,6 +173,11 @@ js/meshopt_simplifier.js: build/simplifier.wasm tools/wasmpack.py
 	sed -i "s#Built with clang.*#Built with $$($(WASMCC) --version | head -n 1 | sed 's/\s\+(.*//')#" $@
 	sed -i "s#Built from meshoptimizer .*#Built from meshoptimizer $$(cat src/meshoptimizer.h | grep -Po '(?<=version )[0-9.]+')#" $@
 	sed -i "s#\([\"']\).*\(;\s*//\s*embed! wasm\)#\\1$$(cat build/simplifier.wasm | python3 tools/wasmpack.py)\\1\\2#" $@
+
+js/meshopt_clusterizer.js: build/clusterizer.wasm tools/wasmpack.py
+	sed -i "s#Built with clang.*#Built with $$($(WASMCC) --version | head -n 1 | sed 's/\s\+(.*//')#" $@
+	sed -i "s#Built from meshoptimizer .*#Built from meshoptimizer $$(cat src/meshoptimizer.h | grep -Po '(?<=version )[0-9.]+')#" $@
+	sed -i "s#\([\"']\).*\(;\s*//\s*embed! wasm\)#\\1$$(cat build/clusterizer.wasm | python3 tools/wasmpack.py)\\1\\2#" $@
 
 js/%.module.js: js/%.js
 	sed '\#// export!#q' <$< >$@
