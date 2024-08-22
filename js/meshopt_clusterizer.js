@@ -113,17 +113,18 @@ var MeshoptClusterizer = (function () {
 			);
 		}
 
-		var used_vertices = meshlets[(count - 1) * 4 + 0] + meshlets[(count - 1) * 4 + 2];
-		var used_triangles = meshlets[(count - 1) * 4 + 1] + meshlets[(count - 1) * 4 + 3];
+		var last_vertex_offset = meshlets[(count - 1) * 4 + 0];
+		var last_triangle_offset = meshlets[(count - 1) * 4 + 1];
+		var last_vertex_count = meshlets[(count - 1) * 4 + 2];
+		var last_triangle_count = meshlets[(count - 1) * 4 + 3];
 
-		var result_vertices = heap.subarray(meshlet_verticesp, meshlet_verticesp + used_vertices * 4);
-		var result_triangles = heap.subarray(meshlet_trianglesp, meshlet_trianglesp + ((used_triangles * 3 + 3) & ~3) * 3);
+		var used_vertices = last_vertex_offset + last_vertex_count;
+		var used_triangles = last_triangle_offset + ((last_triangle_count * 3 + 3) & ~3);
 
-		// populate result arrays
 		var result = {
 			meshlets: meshlets,
-			vertices: new Uint32Array(result_vertices.buffer, result_vertices.byteOffset, result_vertices.byteLength / 4).slice(),
-			triangles: new Uint8Array(result_triangles.buffer, result_triangles.byteOffset, result_triangles.byteLength).slice(),
+			vertices: new Uint32Array(heap.buffer, meshlet_verticesp, used_vertices).slice(),
+			triangles: new Uint8Array(heap.buffer, meshlet_trianglesp, used_triangles * 3).slice(),
 			meshletCount: count,
 		};
 
@@ -226,7 +227,10 @@ var MeshoptClusterizer = (function () {
 		ready: ready,
 		supported: true,
 		buildMeshlets: function (indices, vertex_positions, vertex_positions_stride, max_vertices, max_triangles, cone_weight) {
+			assert(indices.length % 3 == 0);
+			assert(vertex_positions instanceof Float32Array);
 			assert(vertex_positions.length % vertex_positions_stride == 0);
+			assert(vertex_positions_stride >= 3);
 			assert(max_vertices <= 255 || max_vertices > 0);
 			assert(max_triangles <= 512);
 			assert(max_triangles % 4 == 0);
@@ -239,9 +243,11 @@ var MeshoptClusterizer = (function () {
 			return buildMeshlets(indices32, vertex_count, max_vertices, max_triangles, cone_weight, vertex_positions, vertex_positions_stride * 4);
 		},
 		computeClusterBounds: function (indices, vertex_positions, vertex_positions_stride) {
-			assert(vertex_positions.length % vertex_positions_stride == 0);
-			assert(indices.length / 3 <= 512);
 			assert(indices.length % 3 == 0);
+			assert(indices.length / 3 <= 512);
+			assert(vertex_positions instanceof Float32Array);
+			assert(vertex_positions.length % vertex_positions_stride == 0);
+			assert(vertex_positions_stride >= 3);
 
 			var indices32 = indices.BYTES_PER_ELEMENT == 4 ? indices : new Uint32Array(indices);
 
@@ -249,7 +255,9 @@ var MeshoptClusterizer = (function () {
 		},
 		computeMeshletBounds: function (buffers, vertex_positions, vertex_positions_stride) {
 			assert(buffers.meshletCount != 0);
+			assert(vertex_positions instanceof Float32Array);
 			assert(vertex_positions.length % vertex_positions_stride == 0);
+			assert(vertex_positions_stride >= 3);
 
 			return computeMeshletBounds(buffers, vertex_positions, vertex_positions_stride * 4);
 		},
