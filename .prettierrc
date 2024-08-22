@@ -5,4 +5,12 @@
 	"singleQuote": true,
 	"printWidth": 150,
 	"trailingComma": "es5",
+	"overrides": [
+		{
+			"files": "*.yml",
+			"options": {
+				"tabWidth": 2
+			}
+		},
+	]
 }
