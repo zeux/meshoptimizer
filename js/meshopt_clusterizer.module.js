@@ -47,49 +47,29 @@ var MeshoptClusterizer = (function () {
 		return new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
 	}
 
-	function index32(source) {
-		var size = source.BYTES_PER_ELEMENT;
-		assert(size === 2 || size === 4);
-		if (size === 4) {
-			return new Uint32Array(source.buffer, source.byteOffset, source.byteLength / 4);
-		} else {
-			var view = new Uint16Array(source.buffer, source.byteOffset, source.byteLength / 2);
-			return new Uint32Array(view); // copies each element
-		}
-	}
-
 	var BOUNDS_SIZE = 48;
-	var MESHLET_VERTEX_SIZE = Uint32Array.BYTES_PER_ELEMENT;
-
-	function buildMeshletsBound(index_count, max_vertices, max_triangles) {
-		return instance.exports.meshopt_buildMeshletsBound(index_count, max_vertices, max_triangles);
-	}
+	var MESHLET_SIZE = 16;
 
 	function extractMeshlet(buffers, index) {
-		var meshletOffset = index * 4;
-		var vertexOffset = buffers.meshlets[meshletOffset];
-		var triangleOffset = buffers.meshlets[meshletOffset + 1];
-		var vertexCount = buffers.meshlets[meshletOffset + 2];
-		var triangleCount = buffers.meshlets[meshletOffset + 3];
+		var vertex_offset = buffers.meshlets[index * 4 + 0];
+		var triangle_offset = buffers.meshlets[index * 4 + 1];
+		var vertex_count = buffers.meshlets[index * 4 + 2];
+		var triangle_count = buffers.meshlets[index * 4 + 3];
 
 		return {
-			vertices: buffers.vertices.subarray(vertexOffset, vertexOffset + vertexCount),
-			triangles: buffers.triangles.subarray(triangleOffset, triangleOffset + triangleCount * 3),
+			vertices: buffers.vertices.subarray(vertex_offset, vertex_offset + vertex_count),
+			triangles: buffers.triangles.subarray(triangle_offset, triangle_offset + triangle_count * 3),
 		};
 	}
 
 	function buildMeshlets(indices, vertex_count, max_vertices, max_triangles, cone_weight, vertex_positions, vertex_positions_stride) {
-		var max_meshlets = buildMeshletsBound(indices.length, max_vertices, max_triangles);
-
+		var max_meshlets = instance.exports.meshopt_buildMeshletsBound(indices.length, max_vertices, max_triangles);
 		var sbrk = instance.exports.sbrk;
 
-		var meshletSize = 4 * Uint32Array.BYTES_PER_ELEMENT;
-		var meshletTriangleSize = 3;
-
 		// allocate memory
-		var meshletsp = sbrk(max_meshlets * meshletSize);
-		var meshlet_verticesp = sbrk(max_meshlets * max_vertices * MESHLET_VERTEX_SIZE);
-		var meshlet_trianglesp = sbrk(max_meshlets * max_triangles * meshletTriangleSize);
+		var meshletsp = sbrk(max_meshlets * MESHLET_SIZE);
+		var meshlet_verticesp = sbrk(max_meshlets * max_vertices * 4);
+		var meshlet_trianglesp = sbrk(max_meshlets * max_triangles * 3);
 
 		var indicesp = sbrk(indices.byteLength);
 		var verticesp = sbrk(vertex_positions.byteLength);
@@ -99,7 +79,7 @@ var MeshoptClusterizer = (function () {
 		heap.set(bytes(indices), indicesp);
 		heap.set(bytes(vertex_positions), verticesp);
 
-		var meshletCount = instance.exports.meshopt_buildMeshlets(
+		var count = instance.exports.meshopt_buildMeshlets(
 			meshletsp,
 			meshlet_verticesp,
 			meshlet_trianglesp,
@@ -116,44 +96,35 @@ var MeshoptClusterizer = (function () {
 		// heap might (will?) have grown -> re-acquire
 		heap = new Uint8Array(instance.exports.memory.buffer);
 
-		var meshletBytes = heap.subarray(meshletsp, meshletsp + meshletCount * meshletSize);
-		var meshlets = new Uint32Array(meshletBytes.buffer, meshletBytes.byteOffset, meshletBytes.byteLength / Uint32Array.BYTES_PER_ELEMENT).slice();
+		var meshletBytes = heap.subarray(meshletsp, meshletsp + count * MESHLET_SIZE);
+		var meshlets = new Uint32Array(meshletBytes.buffer, meshletBytes.byteOffset, meshletBytes.byteLength / 4).slice();
 
-		for (var i = 0; i < meshletCount; ++i) {
-			var meshletOffset = i * 4;
-			var vertexOffset = meshlets[meshletOffset];
-			var triangleOffset = meshlets[meshletOffset + 1];
-			var vertexCount = meshlets[meshletOffset + 2];
-			var triangleCount = meshlets[meshletOffset + 3];
+		for (var i = 0; i < count; ++i) {
+			var vertex_offset = meshlets[i * 4 + 0];
+			var triangle_offset = meshlets[i * 4 + 1];
+			var vertex_count = meshlets[i * 4 + 2];
+			var triangle_count = meshlets[i * 4 + 3];
 
 			instance.exports.meshopt_optimizeMeshlet(
-				meshlet_verticesp + vertexOffset * Uint32Array.BYTES_PER_ELEMENT,
-				meshlet_trianglesp + triangleOffset,
-				triangleCount,
-				vertexCount
+				meshlet_verticesp + vertex_offset * 4,
+				meshlet_trianglesp + triangle_offset,
+				triangle_count,
+				vertex_count
 			);
 		}
 
-		// heap might have grown? -> re-acquire
-		heap = new Uint8Array(instance.exports.memory.buffer);
+		var used_vertices = meshlets[(count - 1) * 4 + 0] + meshlets[(count - 1) * 4 + 2];
+		var used_triangles = meshlets[(count - 1) * 4 + 1] + meshlets[(count - 1) * 4 + 3];
 
-		var lastMeshletIndex = (meshletCount - 1) * 4;
-		var meshletVertexCount = meshlets[lastMeshletIndex] + meshlets[lastMeshletIndex + 2];
-		var meshletTriangleCount = meshlets[lastMeshletIndex + 1] + meshlets[lastMeshletIndex + 3];
-
-		var meshletVerticesBytes = heap.subarray(meshlet_verticesp, meshlet_verticesp + meshletVertexCount * MESHLET_VERTEX_SIZE);
-		var meshletTriangles = heap.subarray(meshlet_trianglesp, meshlet_trianglesp + ((meshletTriangleCount * 3 + 3) & ~3) * meshletTriangleSize);
+		var result_vertices = heap.subarray(meshlet_verticesp, meshlet_verticesp + used_vertices * 4);
+		var result_triangles = heap.subarray(meshlet_trianglesp, meshlet_trianglesp + ((used_triangles * 3 + 3) & ~3) * 3);
 
 		// populate result arrays
 		var result = {
 			meshlets: meshlets,
-			vertices: new Uint32Array(
-				meshletVerticesBytes.buffer,
-				meshletVerticesBytes.byteOffset,
-				meshletVerticesBytes.byteLength / Uint32Array.BYTES_PER_ELEMENT
-			).slice(),
-			triangles: new Uint8Array(meshletTriangles.buffer, meshletTriangles.byteOffset, meshletTriangles.byteLength).slice(),
-			meshletCount: meshletCount,
+			vertices: new Uint32Array(result_vertices.buffer, result_vertices.byteOffset, result_vertices.byteLength / 4).slice(),
+			triangles: new Uint8Array(result_triangles.buffer, result_triangles.byteOffset, result_triangles.byteLength).slice(),
+			meshletCount: count,
 		};
 
 		// reset memory
@@ -165,28 +136,25 @@ var MeshoptClusterizer = (function () {
 	function extractBounds(boundsp) {
 		var heap = new Uint8Array(instance.exports.memory.buffer);
 
-		var s8DataSize = 4;
-		var boundsBytes = heap.subarray(boundsp, boundsp + BOUNDS_SIZE - s8DataSize);
-		var boundsFloats = new Float32Array(boundsBytes.buffer, boundsBytes.byteOffset, 11);
+		var bounds_bytes = heap.subarray(boundsp, boundsp + BOUNDS_SIZE);
+		var bounds_floats = new Float32Array(bounds_bytes.buffer, bounds_bytes.byteOffset, 11);
 
 		return {
-			centerX: boundsFloats[0],
-			centerY: boundsFloats[1],
-			centerZ: boundsFloats[2],
-			radius: boundsFloats[3],
-			coneApexX: boundsFloats[4],
-			coneApexY: boundsFloats[5],
-			coneApexZ: boundsFloats[6],
-			coneAxisX: boundsFloats[7],
-			coneAxisY: boundsFloats[8],
-			coneAxisZ: boundsFloats[9],
-			coneCutoff: boundsFloats[10],
+			centerX: bounds_floats[0],
+			centerY: bounds_floats[1],
+			centerZ: bounds_floats[2],
+			radius: bounds_floats[3],
+			coneApexX: bounds_floats[4],
+			coneApexY: bounds_floats[5],
+			coneApexZ: bounds_floats[6],
+			coneAxisX: bounds_floats[7],
+			coneAxisY: bounds_floats[8],
+			coneAxisZ: bounds_floats[9],
+			coneCutoff: bounds_floats[10],
 		};
 	}
 
 	function computeMeshletBounds(buffers, vertex_positions, vertex_positions_stride) {
-		assert(buffers.meshletCount !== 0);
-		assert(vertex_positions.byteLength % vertex_positions_stride === 0);
 		var vertex_count = vertex_positions.byteLength / vertex_positions_stride;
 
 		var sbrk = instance.exports.sbrk;
@@ -206,16 +174,15 @@ var MeshoptClusterizer = (function () {
 		heap.set(bytes(buffers.triangles), meshlet_trianglesp);
 
 		for (var i = 0; i < buffers.meshletCount; ++i) {
-			var meshletOffset = i * 4;
-			var vertexOffset = buffers.meshlets[meshletOffset];
-			var triangleOffset = buffers.meshlets[meshletOffset + 1];
-			var triangleCount = buffers.meshlets[meshletOffset + 3];
+			var vertex_offset = buffers.meshlets[i * 4 + 0];
+			var triangle_offset = buffers.meshlets[i * 4 + 0 + 1];
+			var triangle_count = buffers.meshlets[i * 4 + 0 + 3];
 
 			instance.exports.meshopt_computeMeshletBounds(
 				resultp,
-				meshlet_verticesp + vertexOffset * Uint32Array.BYTES_PER_ELEMENT,
-				meshlet_trianglesp + triangleOffset,
-				triangleCount,
+				meshlet_verticesp + vertex_offset * 4,
+				meshlet_trianglesp + triangle_offset,
+				triangle_count,
 				verticesp,
 				vertex_count,
 				vertex_positions_stride
@@ -231,7 +198,6 @@ var MeshoptClusterizer = (function () {
 	}
 
 	function computeClusterBounds(indices, vertex_positions, vertex_positions_stride) {
-		assert(vertex_positions.byteLength % vertex_positions_stride === 0);
 		var vertex_count = vertex_positions.byteLength / vertex_positions_stride;
 
 		var sbrk = instance.exports.sbrk;
@@ -260,39 +226,36 @@ var MeshoptClusterizer = (function () {
 		ready: ready,
 		supported: true,
 		buildMeshlets: function (indices, vertex_positions, vertex_positions_stride, max_vertices, max_triangles, cone_weight) {
-			assert(vertex_positions.length % vertex_positions_stride === 0);
+			assert(vertex_positions.length % vertex_positions_stride == 0);
 			assert(max_vertices <= 255 || max_vertices > 0);
 			assert(max_triangles <= 512);
-			assert(max_triangles % 4 === 0);
+			assert(max_triangles % 4 == 0);
 
-			var vertex_count = vertex_positions.length / vertex_positions_stride;
 			cone_weight = cone_weight || 0.0;
 
-			return buildMeshlets(
-				index32(indices),
-				vertex_count,
-				max_vertices,
-				max_triangles,
-				cone_weight,
-				vertex_positions,
-				vertex_positions_stride * Float32Array.BYTES_PER_ELEMENT
-			);
+			var vertex_count = vertex_positions.length / vertex_positions_stride;
+			var indices32 = indices.BYTES_PER_ELEMENT == 4 ? indices : new Uint32Array(indices);
+
+			return buildMeshlets(indices32, vertex_count, max_vertices, max_triangles, cone_weight, vertex_positions, vertex_positions_stride * 4);
 		},
 		computeClusterBounds: function (indices, vertex_positions, vertex_positions_stride) {
-			assert(vertex_positions.length % vertex_positions_stride === 0);
+			assert(vertex_positions.length % vertex_positions_stride == 0);
+			assert(indices.length / 3 <= 512);
+			assert(indices.length % 3 == 0);
 
-			var ind32 = index32(indices);
+			var indices32 = indices.BYTES_PER_ELEMENT == 4 ? indices : new Uint32Array(indices);
 
-			assert(ind32.length / 3 <= 512);
-			assert(ind32.length % 3 === 0);
-
-			return computeClusterBounds(index32(indices), vertex_positions, vertex_positions_stride * Float32Array.BYTES_PER_ELEMENT);
+			return computeClusterBounds(indices32, vertex_positions, vertex_positions_stride * 4);
 		},
 		computeMeshletBounds: function (buffers, vertex_positions, vertex_positions_stride) {
-			return computeMeshletBounds(buffers, vertex_positions, vertex_positions_stride * Float32Array.BYTES_PER_ELEMENT);
+			assert(buffers.meshletCount != 0);
+			assert(vertex_positions.length % vertex_positions_stride == 0);
+
+			return computeMeshletBounds(buffers, vertex_positions, vertex_positions_stride * 4);
 		},
 		extractMeshlet: function (buffers, index) {
 			assert(index >= 0 && index < buffers.meshletCount);
+
 			return extractMeshlet(buffers, index);
 		},
 	};
