@@ -40,6 +40,6 @@ export const MeshoptClusterizer: {
 		cone_weight?: number
 	) => MeshletBuffers;
 	computeClusterBounds: (indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number) => Bounds;
-	computeMeshletBounds: (buffers: MeshletBuffers, vertex_positions: Float32Array, vertex_positions_stride: number) => Bounds | Bounds[];
+	computeMeshletBounds: (buffers: MeshletBuffers, vertex_positions: Float32Array, vertex_positions_stride: number) => Bounds[];
 	extractMeshlet: (buffers: MeshletBuffers, index: number) => Meshlet;
 };

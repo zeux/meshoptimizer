@@ -194,7 +194,7 @@ var MeshoptClusterizer = (function () {
 		// reset memory
 		sbrk(verticesp - sbrk(0));
 
-		return results.length > 1 ? results : results[0];
+		return results;
 	}
 
 	function computeClusterBounds(indices, vertex_positions, vertex_positions_stride) {
