@@ -259,6 +259,8 @@ static void mergeMeshes(Mesh& target, const Mesh& mesh)
 
 	for (size_t i = 0; i < index_count; ++i)
 		target.indices[index_offset + i] = unsigned(vertex_offset + mesh.indices[i]);
+
+	printf("mergeMeshes %s into %s, from index %lu to index %lu\n", mesh.identifier, target.identifier, index_offset, index_offset+index_count-1);
 }
 
 void mergeMeshInstances(Mesh& mesh)
@@ -303,6 +305,7 @@ void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings)
 
 		if (target.streams.empty())
 			continue;
+		printf("mergeMeshes target mesh index %lu\n", i);
 
 		size_t target_vertices = target.streams[0].data.size();
 		size_t target_indices = target.indices.size();

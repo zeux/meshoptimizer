@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <map>
 
 #include "../src/meshoptimizer.h"
 
@@ -149,6 +150,21 @@ static bool isIdAttribute(const char* name)
 
 static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::vector<std::pair<size_t, size_t> >& mesh_remap)
 {
+	std::map<cgltf_mesh*, char *> * mapmap = new std::map<cgltf_mesh*, char *>();
+
+	for (size_t i = 0; i < data->nodes_count; ++i) {
+		cgltf_node* node = &data->nodes[i];
+		if (node->name) {
+			for (size_t j = 0; j < node->children_count; ++j) {
+				cgltf_node* child_node = *(&node->children[j]);
+				if (child_node->mesh != nullptr) {
+					mapmap->insert(std::pair<cgltf_mesh*, char *>(child_node->mesh, node->name));
+				}
+			}
+		}
+	}
+	//
+
 	size_t total_primitives = 0;
 
 	for (size_t mi = 0; mi < data->meshes_count; ++mi)
@@ -183,6 +199,16 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 			result.type = primitive.type;
 
 			result.streams.reserve(primitive.attributes_count);
+
+ 			std::map<cgltf_mesh*, char *>::iterator it = mapmap->find(const_cast<cgltf_mesh*>(&mesh));
+			if (it != mapmap->end()) {
+				char * name = it->second;
+				printf(">> FOUND name %s\n", name);
+
+				char* copied_name = new char[strlen(name) + 1];
+				strcpy(copied_name, name);
+				result.identifier = copied_name;
+			}
 
 			size_t vertex_count = primitive.attributes_count ? primitive.attributes[0].data->count : 0;
 

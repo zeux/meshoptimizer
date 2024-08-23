@@ -62,6 +62,7 @@ struct Mesh
 	std::vector<const char*> target_names;
 
 	std::vector<cgltf_material_mapping> variants;
+	char * identifier;
 };
 
 struct Track
