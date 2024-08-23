@@ -1151,7 +1151,7 @@ static void simplifyAttr(bool skip_g)
 		{
 			vb[y * 3 + x][0] = float(x);
 			vb[y * 3 + x][1] = float(y);
-			vb[y * 3 + x][2] = 0.03f * x;
+			vb[y * 3 + x][2] = 0.03f * x + 0.03f * (y % 2);
 			vb[y * 3 + x][3] = r;
 			vb[y * 3 + x][4] = g;
 			vb[y * 3 + x][5] = b;
@@ -1173,12 +1173,20 @@ static void simplifyAttr(bool skip_g)
 		}
 	}
 
-	float attr_weights[3] = {0.01f, skip_g ? 0.f : 0.01f, 0.01f};
+	float attr_weights[3] = {0.5f, skip_g ? 0.f : 0.5f, 0.5f};
 
+	// *0  1   *2
+	//  3  4    5
+	//  6  7    8
+	// *9  10 *11
+	// *12 13 *14
+	//  15 16  17
+	//  18 19  20
+	// *21 22 *23
 	unsigned int expected[3][6] = {
-	    {0, 2, 9, 9, 2, 11},
+	    {0, 2, 11, 0, 11, 9},
 	    {9, 11, 12, 12, 11, 14},
-	    {12, 14, 21, 21, 14, 23},
+	    {12, 14, 23, 12, 23, 21},
 	};
 
 	assert(meshopt_simplifyWithAttributes(ib[0], ib[0], 7 * 2 * 6, vb[0], 8 * 3, 6 * sizeof(float), vb[0] + 3, 6 * sizeof(float), attr_weights, 3, NULL, 6 * 3, 1e-2f) == 18);

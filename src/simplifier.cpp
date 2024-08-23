@@ -687,20 +687,24 @@ static void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1
 static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2, float weight)
 {
 	Vector3 p10 = {p1.x - p0.x, p1.y - p0.y, p1.z - p0.z};
-	float length = normalize(p10);
 
-	// p20p = length of projection of p2-p0 onto normalize(p1 - p0)
+	// edge length; keep squared length around for projection correction
+	float lengthsq = p10.x * p10.x + p10.y * p10.y + p10.z * p10.z;
+	float length = sqrtf(lengthsq);
+
+	// p20p = length of projection of p2-p0 onto p1-p0; note that p10 is unnormalized so we need to correct it later
 	Vector3 p20 = {p2.x - p0.x, p2.y - p0.y, p2.z - p0.z};
 	float p20p = p20.x * p10.x + p20.y * p10.y + p20.z * p10.z;
 
-	// normal = altitude of triangle from point p2 onto edge p1-p0
-	Vector3 normal = {p20.x - p10.x * p20p, p20.y - p10.y * p20p, p20.z - p10.z * p20p};
-	normalize(normal);
+	// perp = perpendicular vector from p2 to line segment p1-p0
+	// note: since p10 is unnormalized we need to correct the projection; we scale p20 instead to take advantage of normalize below
+	Vector3 perp = {p20.x * lengthsq - p10.x * p20p, p20.y * lengthsq - p10.y * p20p, p20.z * lengthsq - p10.z * p20p};
+	normalize(perp);
 
-	float distance = normal.x * p0.x + normal.y * p0.y + normal.z * p0.z;
+	float distance = perp.x * p0.x + perp.y * p0.y + perp.z * p0.z;
 
 	// note: the weight is scaled linearly with edge length; this has to match the triangle weight
-	quadricFromPlane(Q, normal.x, normal.y, normal.z, -distance, length * weight);
+	quadricFromPlane(Q, perp.x, perp.y, perp.z, -distance, length * weight);
 }
 
 static void quadricFromAttributes(Quadric& Q, QuadricGrad* G, const Vector3& p0, const Vector3& p1, const Vector3& p2, const float* va0, const float* va1, const float* va2, size_t attribute_count)
