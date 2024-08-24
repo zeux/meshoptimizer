@@ -334,7 +334,7 @@ size_t meshlet_count = meshopt_buildMeshlets(meshlets.data(), meshlet_vertices.d
 
 To generate the meshlet data, `max_vertices` and `max_triangles` need to be set within limits supported by the hardware; for NVidia the values of 64 and 124 are recommended (`max_triangles` must be divisible by 4 so 124 is the value closest to official NVidia's recommended 126). `cone_weight` should be left as 0 if cluster cone culling is not used, and set to a value between 0 and 1 to balance cone culling efficiency with other forms of culling like frustum or occlusion culling.
 
-Each resulting meshlet refers to a portion of `meshlet_vertices` and `meshlet_triangles` arrays; this data can be uploaded to GPU and used directly after trimming:
+Each resulting meshlet refers to a portion of `meshlet_vertices` and `meshlet_triangles` arrays; the arrays are overallocated for the worst case so it's recommended to trim them before saving them as an asset / uploading them to the GPU:
 
 ```c++
 const meshopt_Meshlet& last = meshlets[meshlet_count - 1];
@@ -350,6 +350,30 @@ For optimal performance, it is recommended to further optimize each meshlet in i
 
 ```c++
 meshopt_optimizeMeshlet(&meshlet_vertices[m.vertex_offset], &meshlet_triangles[m.triangle_offset], m.triangle_count, m.vertex_count);
+```
+
+Different applications will choose different strategies for rendering meshlets; on a GPU capable of mesh shading, meshlets can be rendered directly; for example, a basic GLSL shader for `VK_EXT_mesh_shader` extension could look like this (parts omitted for brevity):
+
+```glsl
+layout(binding = 0) readonly buffer Meshlets { Meshlet meshlets[]; };
+layout(binding = 1) readonly buffer MeshletVertices { uint meshlet_vertices[]; };
+layout(binding = 2) readonly buffer MeshletTriangles { uint8_t meshlet_triangles[]; };
+
+void main() {
+    Meshlet meshlet = meshlets[gl_WorkGroupID.x];
+    SetMeshOutputsEXT(meshlet.vertex_count, meshlet.triangle_count);
+
+    for (uint i = gl_LocalInvocationIndex; i < meshlet.vertex_count; i += gl_WorkGroupSize.x) {
+        uint index = meshlet_vertices[meshlet.vertex_offset + i];
+        gl_MeshVerticesEXT[i].gl_Position = world_view_projection * vec4(vertex_positions[index], 1);
+    }
+
+    for (uint i = gl_LocalInvocationIndex; i < meshlet.triangle_count; i += gl_WorkGroupSize.x) {
+        uint offset = meshlet.triangle_offset + i * 3;
+        gl_PrimitiveTriangleIndicesEXT[i] = uvec3(
+            meshlet_triangles[offset], meshlet_triangles[offset + 1], meshlet_triangles[offset + 2]);
+    }
+}
 ```
 
 After generating the meshlet data, it's also possible to generate extra data for each meshlet that can be saved and used at runtime to perform cluster culling, where each meshlet can be discarded if it's guaranteed to be invisible. To generate the data, `meshlet_computeMeshletBounds` can be used:
