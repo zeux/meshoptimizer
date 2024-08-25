@@ -553,7 +553,8 @@ struct meshopt_Bounds
  * Real-Time Rendering 4th Edition, section 19.3).
  *
  * vertex_positions should have float3 position in the first 12 bytes of each vertex
- * index_count/3 should be less than or equal to 512 (the function assumes clusters of limited size)
+ * vertex_count should specify the number of vertices in the entire mesh, not cluster or meshlet
+ * index_count/3 and triangle_count must not exceed implementation limits (<= 512)
  */
 MESHOPTIMIZER_API struct meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 MESHOPTIMIZER_API struct meshopt_Bounds meshopt_computeMeshletBounds(const unsigned int* meshlet_vertices, const unsigned char* meshlet_triangles, size_t triangle_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
