@@ -393,7 +393,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		{
 			Mesh kinds = {};
 			Mesh loops = {};
-			debugSimplify(mesh, kinds, loops, settings.simplify_debug, settings.simplify_attributes);
+			debugSimplify(mesh, kinds, loops, settings.simplify_debug, settings.simplify_error, settings.simplify_attributes);
 			debug_meshes.push_back(kinds);
 			debug_meshes.push_back(loops);
 		}
@@ -1177,7 +1177,7 @@ Settings defaults()
 	settings.rot_bits = 12;
 	settings.scl_bits = 16;
 	settings.anim_freq = 30;
-	settings.simplify_threshold = 1.f;
+	settings.simplify_ratio = 1.f;
 	settings.texture_scale = 1.f;
 	for (int kind = 0; kind < TextureKind__Count; ++kind)
 		settings.texture_quality[kind] = 8;
@@ -1323,7 +1323,11 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-si") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.simplify_threshold = clamp(float(atof(argv[++i])), 0.f, 1.f);
+			settings.simplify_ratio = clamp(float(atof(argv[++i])), 0.f, 1.f);
+		}
+		else if (strcmp(arg, "-se") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		{
+			settings.simplify_error = clamp(float(atof(argv[++i])), 1e-4f, 1.f);
 		}
 		else if (strcmp(arg, "-sa") == 0)
 		{
@@ -1521,6 +1525,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t... where C is a comma-separated list (no spaces) with valid values color,normal,attrib\n");
 			fprintf(stderr, "\nSimplification:\n");
 			fprintf(stderr, "\t-si R: simplify meshes targeting triangle/point count ratio R (default: 1; R should be between 0 and 1)\n");
+			fprintf(stderr, "\t-se E: limit simplification error to E (E should be between 0 and 1; 0.01 means 1%% deviation)\n");
 			fprintf(stderr, "\t-sa: aggressively simplify to the target ratio disregarding quality\n");
 			fprintf(stderr, "\t-sv: take vertex attributes into account when simplifying meshes\n");
 			fprintf(stderr, "\t-slb: lock border vertices during simplification to avoid gaps on connected meshes\n");

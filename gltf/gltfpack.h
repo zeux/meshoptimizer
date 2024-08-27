@@ -134,7 +134,8 @@ struct Settings
 	bool mesh_merge;
 	bool mesh_instancing;
 
-	float simplify_threshold;
+	float simplify_ratio;
+	float simplify_error;
 	bool simplify_aggressive;
 	bool simplify_lock_borders;
 	bool simplify_attributes;
@@ -306,7 +307,7 @@ cgltf_data* parseGlb(const void* buffer, size_t size, std::vector<Mesh>& meshes,
 void processAnimation(Animation& animation, const Settings& settings);
 void processMesh(Mesh& mesh, const Settings& settings);
 
-void debugSimplify(const Mesh& mesh, Mesh& kinds, Mesh& loops, float ratio, bool attributes);
+void debugSimplify(const Mesh& mesh, Mesh& kinds, Mesh& loops, float ratio, float error, bool attributes);
 void debugMeshlets(const Mesh& mesh, Mesh& meshlets, int max_vertices, bool scan);
 
 bool compareMeshTargets(const Mesh& lhs, const Mesh& rhs);

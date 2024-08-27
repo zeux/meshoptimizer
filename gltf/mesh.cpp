@@ -527,7 +527,7 @@ static Stream* getStream(Mesh& mesh, cgltf_attribute_type type, int index = 0)
 	return NULL;
 }
 
-static void simplifyMesh(Mesh& mesh, float threshold, bool attributes, bool aggressive, bool lock_borders, bool debug = false)
+static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attributes, bool aggressive, bool lock_borders, bool debug = false)
 {
 	enum
 	{
@@ -546,8 +546,8 @@ static void simplifyMesh(Mesh& mesh, float threshold, bool attributes, bool aggr
 	size_t vertex_count = mesh.streams[0].data.size();
 
 	size_t target_index_count = size_t(double(mesh.indices.size() / 3) * threshold) * 3;
-	float target_error = 1e-2f;
-	float target_error_aggressive = 1e-1f;
+	float target_error = error == 0 ? 1e-2f : error;
+	float target_error_aggressive = error == 0 ? 1e-1f : error;
 	unsigned int options = 0;
 	if (lock_borders)
 		options |= meshopt_SimplifyLockBorder;
@@ -771,7 +771,7 @@ void processMesh(Mesh& mesh, const Settings& settings)
 	{
 	case cgltf_primitive_type_points:
 		assert(mesh.indices.empty());
-		simplifyPointMesh(mesh, settings.simplify_threshold);
+		simplifyPointMesh(mesh, settings.simplify_ratio);
 		sortPointMesh(mesh);
 		break;
 
@@ -782,8 +782,8 @@ void processMesh(Mesh& mesh, const Settings& settings)
 		filterBones(mesh);
 		reindexMesh(mesh);
 		filterTriangles(mesh);
-		if (settings.simplify_threshold < 1)
-			simplifyMesh(mesh, settings.simplify_threshold, settings.simplify_attributes, settings.simplify_aggressive, settings.simplify_lock_borders);
+		if (settings.simplify_ratio < 1)
+			simplifyMesh(mesh, settings.simplify_ratio, settings.simplify_error, settings.simplify_attributes, settings.simplify_aggressive, settings.simplify_lock_borders);
 		optimizeMesh(mesh, settings.compressmore);
 		break;
 
@@ -793,7 +793,7 @@ void processMesh(Mesh& mesh, const Settings& settings)
 }
 
 #ifndef NDEBUG
-void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio, bool attributes)
+void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio, float error, bool attributes)
 {
 	Mesh mesh = source;
 	assert(mesh.type == cgltf_primitive_type_triangles);
@@ -806,7 +806,7 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio, bo
 
 	size_t vertex_count = mesh.streams[0].data.size();
 
-	simplifyMesh(mesh, ratio, attributes, /* aggressive= */ false, /* lock_borders= */ false, /* debug= */ true);
+	simplifyMesh(mesh, ratio, error, attributes, /* aggressive= */ false, /* lock_borders= */ false, /* debug= */ true);
 
 	// color palette for display
 	static const Attr kPalette[] = {
