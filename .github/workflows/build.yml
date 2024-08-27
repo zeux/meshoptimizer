@@ -160,12 +160,16 @@ jobs:
       run: |
         find glTF-Sample-Assets -name '*.gltf' -or -name '*.glb' | xargs -P 2 -L 16 -d '\n' ./gltfpack -cc -test
         ./gltfpack -test demo/pirate.obj -si 0.5
+        ./gltfpack -test demo/pirate.obj -si 0.1 -sv -sa
         ./gltfpack -test demo/pirate.obj -sd 0.5 -md 64
         ./gltfpack -test glTF-Sample-Assets/Models/ABeautifulGame/glTF/ABeautifulGame.gltf -mi -c
         ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -c
         ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -cc
         ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tc
+        ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tc -tq color 10
         ./gltfpack -test glTF-Sample-Assets/Models/CesiumMan/glTF/CesiumMan.gltf -tu -ts 0.6 -tp
+        ./gltfpack -test glTF-Sample-Assets/Models/PrimitiveModeNormalsTest/glTF/PrimitiveModeNormalsTest.gltf -si 0.5
+        ./gltfpack -test glTF-Sample-Assets/Models/SimpleMeshes/glTF/SimpleMeshes.gltf -mm
     - name: test output
       run: |
         ./gltfpack || true
