@@ -90,13 +90,13 @@ jobs:
     - name: make
       run: make -j2 config=sanitize gltfpack
     - name: test
-      run: find glTF-Sample-Assets -name *.gltf -or -name *.glb | xargs -d '\n' ./gltfpack -cc -test
+      run: find glTF-Sample-Assets -name '*.gltf' -or -name '*.glb' | xargs -P 2 -L 16 -d '\n' ./gltfpack -cc -test
     - name: pack
-      run: find glTF-Sample-Assets -name *.gltf | grep -v 'glTF-Draco' | xargs -d '\n' -I '{}' ./gltfpack -i '{}' -o '{}pack.gltf'
+      run: find glTF-Sample-Assets -name '*.gltf' | grep -v 'glTF-Draco' | xargs -P 2 -L 16 -d '\n' -I '{}' ./gltfpack -i '{}' -o '{}pack.gltf'
     - name: validate
       run: |
         curl -sL $VALIDATOR | tar xJ
-        find glTF-Sample-Assets -name *.gltfpack.gltf | xargs -d '\n' -L 1 ./gltf_validator -r -a
+        find glTF-Sample-Assets -name '*.gltfpack.gltf' | xargs -P 2 -L 1 -d '\n' ./gltf_validator -r -a
       env:
         VALIDATOR: https://github.com/KhronosGroup/glTF-Validator/releases/download/2.0.0-dev.3.8/gltf_validator-2.0.0-dev.3.8-linux64.tar.xz
 
@@ -158,7 +158,7 @@ jobs:
       run: make -j2 config=coverage BASISU=basis_universal gltfpack
     - name: test
       run: |
-        find glTF-Sample-Assets -name *.gltf -or -name *.glb | xargs -d '\n' ./gltfpack -cc -test
+        find glTF-Sample-Assets -name '*.gltf' -or -name '*.glb' | xargs -P 2 -L 16 -d '\n' ./gltfpack -cc -test
         ./gltfpack -test demo/pirate.obj -si 0.5
         ./gltfpack -test demo/pirate.obj -sd 0.5 -md 64
         ./gltfpack -test glTF-Sample-Assets/Models/ABeautifulGame/glTF/ABeautifulGame.gltf -mi -c
