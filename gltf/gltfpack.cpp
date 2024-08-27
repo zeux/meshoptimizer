@@ -1178,6 +1178,7 @@ Settings defaults()
 	settings.scl_bits = 16;
 	settings.anim_freq = 30;
 	settings.simplify_ratio = 1.f;
+	settings.simplify_error = 1e-2f;
 	settings.texture_scale = 1.f;
 	for (int kind = 0; kind < TextureKind__Count; ++kind)
 		settings.texture_quality[kind] = 8;
@@ -1327,7 +1328,7 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-se") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.simplify_error = clamp(float(atof(argv[++i])), 1e-4f, 1.f);
+			settings.simplify_error = clamp(float(atof(argv[++i])), 0.f, 1.f);
 		}
 		else if (strcmp(arg, "-sa") == 0)
 		{
@@ -1525,7 +1526,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t... where C is a comma-separated list (no spaces) with valid values color,normal,attrib\n");
 			fprintf(stderr, "\nSimplification:\n");
 			fprintf(stderr, "\t-si R: simplify meshes targeting triangle/point count ratio R (default: 1; R should be between 0 and 1)\n");
-			fprintf(stderr, "\t-se E: limit simplification error to E (E should be between 0 and 1; 0.01 means 1%% deviation)\n");
+			fprintf(stderr, "\t-se E: limit simplification error to E (default: 0.01 = 1%% deviation; E should be between 0 and 1)\n");
 			fprintf(stderr, "\t-sa: aggressively simplify to the target ratio disregarding quality\n");
 			fprintf(stderr, "\t-sv: take vertex attributes into account when simplifying meshes\n");
 			fprintf(stderr, "\t-slb: lock border vertices during simplification to avoid gaps on connected meshes\n");
