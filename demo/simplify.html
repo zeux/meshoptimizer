@@ -70,6 +70,7 @@
 				errorThresholdLog10: 1,
 				normalWeight: 0.5,
 				colorWeight: 1.0,
+				textureWeight: 0.0,
 
 				stats: {
 					triangles: 0,
@@ -111,6 +112,7 @@
 			guiSimplify.add(settings, 'useAttributes').onChange(simplify);
 			guiSimplify.add(settings, 'normalWeight', 0, 2, 0.01).onChange(simplify);
 			guiSimplify.add(settings, 'colorWeight', 0, 2, 0.01).onChange(simplify);
+			guiSimplify.add(settings, 'textureWeight', 0, 100, 0.1).onChange(simplify);
 
 			var guiLoad = gui.addFolder('Load');
 			guiLoad.add(settings, 'loadFile');
@@ -134,7 +136,7 @@
 					geo = mergeVertices(geo, 1e-2);
 				}
 
-				var attributes = 6; // 3 color, 3 normal
+				var attributes = 8; // 3 color, 3 normal, 2 uv
 
 				var positions = new Float32Array(geo.attributes.position.array);
 				var indices = new Uint32Array(geo.index.array); // needed for _InternalDebug to work
@@ -155,6 +157,11 @@
 							attrib[i * attributes + 4] = geo.attributes.color.getY(i);
 							attrib[i * attributes + 5] = geo.attributes.color.getZ(i);
 						}
+
+						if (geo.attributes.uv) {
+							attrib[i * attributes + 6] = geo.attributes.uv.getX(i);
+							attrib[i * attributes + 7] = geo.attributes.uv.getY(i);
+						}
 					}
 
 					var attrib_weights = [
@@ -164,6 +171,8 @@
 						settings.colorWeight,
 						settings.colorWeight,
 						settings.colorWeight,
+						settings.textureWeight,
+						settings.textureWeight,
 					];
 				}
 
