@@ -527,6 +527,44 @@ static Stream* getStream(Mesh& mesh, cgltf_attribute_type type, int index = 0)
 	return NULL;
 }
 
+static void simplifyAttributes(std::vector<float>& attrs, float* attrw, size_t stride, Mesh& mesh)
+{
+	assert(stride >= 6); // normal + color
+
+	size_t vertex_count = mesh.streams[0].data.size();
+
+	attrs.resize(vertex_count * stride);
+	float* data = attrs.data();
+
+	if (const Stream* attr = getStream(mesh, cgltf_attribute_type_normal))
+	{
+		const Attr* a = attr->data.data();
+
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			data[i * stride + 0] = a[i].f[0];
+			data[i * stride + 1] = a[i].f[1];
+			data[i * stride + 2] = a[i].f[2];
+		}
+
+		attrw[0] = attrw[1] = attrw[2] = 0.5f;
+	}
+
+	if (const Stream* attr = getStream(mesh, cgltf_attribute_type_color))
+	{
+		const Attr* a = attr->data.data();
+
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			data[i * stride + 3] = a[i].f[0] * a[i].f[3];
+			data[i * stride + 4] = a[i].f[1] * a[i].f[3];
+			data[i * stride + 5] = a[i].f[2] * a[i].f[3];
+		}
+
+		attrw[3] = attrw[4] = attrw[5] = 1.0f;
+	}
+}
+
 static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attributes, bool aggressive, bool lock_borders, bool debug = false)
 {
 	enum
@@ -554,16 +592,21 @@ static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attribut
 	if (debug)
 		options |= meshopt_SimplifyInternalDebug;
 
-	const Stream* attr = getStream(mesh, cgltf_attribute_type_color);
-	attr = attr ? attr : getStream(mesh, cgltf_attribute_type_normal);
-
-	const float attrw[3] = {0.5f, 0.5f, 0.5f};
-
 	std::vector<unsigned int> indices(mesh.indices.size());
-	if (attributes && attr)
-		indices.resize(meshopt_simplifyWithAttributes(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), attr->data[0].f, sizeof(Attr), attrw, 3, NULL, target_index_count, target_error, options));
+
+	if (attributes)
+	{
+		float attrw[6] = {};
+		std::vector<float> attrs;
+		simplifyAttributes(attrs, attrw, sizeof(attrw) / sizeof(attrw[0]), mesh);
+
+		indices.resize(meshopt_simplifyWithAttributes(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), attrs.data(), sizeof(attrw), attrw, sizeof(attrw) / sizeof(attrw[0]), NULL, target_index_count, target_error, options));
+	}
 	else
+	{
 		indices.resize(meshopt_simplify(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count, target_error, options));
+	}
+
 	mesh.indices.swap(indices);
 
 	// Note: if the simplifier got stuck, we can try to reindex without normals/tangents and retry
