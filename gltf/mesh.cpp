@@ -344,6 +344,7 @@ void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings)
 			}
 		}
 
+		printf("TARGET %s\n", target.identifier);
 		assert(target.streams[0].data.size() == target_vertices);
 		assert(target.indices.size() == target_indices);
 	}
@@ -356,6 +357,10 @@ void filterEmptyMeshes(std::vector<Mesh>& meshes)
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
 		Mesh& mesh = meshes[i];
+		printf("filterEmptyMeshes mesh %s, empty %s, data.empty %s, indices.empty %s\n", mesh.identifier,
+		    mesh.streams.empty() ? "t" : "f",
+		    mesh.streams[0].data.empty() ? "t" : "f",
+		    mesh.type != cgltf_primitive_type_points && mesh.indices.empty() ? "t" : "f");
 
 		if (mesh.streams.empty())
 			continue;

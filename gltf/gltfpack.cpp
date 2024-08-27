@@ -376,8 +376,11 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	}
 
 	mergeMeshMaterials(data, meshes, settings);
+	printf("BEFORE meshes %lu\n", meshes.size());
 	mergeMeshes(meshes, settings);
+	printf("IN meshes %lu\n", meshes.size());
 	filterEmptyMeshes(meshes);
+	printf("AFTER meshes %lu\n", meshes.size());
 
 	markNeededNodes(data, nodes, meshes, animations, settings);
 	markNeededMaterials(data, materials, meshes, settings);
@@ -415,6 +418,8 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 #endif
 
 	filterEmptyMeshes(meshes); // some meshes may become empty after processing
+	printf("AFTER 2nd filter meshes %lu\n", meshes.size());
+
 
 	QuantizationPosition qp = prepareQuantizationPosition(meshes, settings);
 
@@ -551,19 +556,21 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		ext_texture_transform = ext_texture_transform || mi.uses_texture_transform;
 	}
 
+	printf("NOW 2nd filter meshes %lu\n", meshes.size());
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
 		const Mesh& mesh = meshes[i];
+		printf("PRIM %s\n", mesh.identifier);
 
 		comma(json_meshes);
 		append(json_meshes, "{\"primitives\":[");
 
 		size_t pi = i;
-		for (; pi < meshes.size(); ++pi)
-		{
+//		for (; pi < meshes.size(); ++pi)
+//		{
 			const Mesh& prim = meshes[pi];
 
-			if (prim.scene != mesh.scene || prim.skin != mesh.skin || prim.targets != mesh.targets)
+			/*if (prim.scene != mesh.scene || prim.skin != mesh.skin || prim.targets != mesh.targets)
 				break;
 
 			if (pi > i && (mesh.instances.size() || prim.instances.size()))
@@ -573,7 +580,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 				break;
 
 			if (!compareMeshTargets(mesh, prim))
-				break;
+				break;*/
 
 			const QuantizationTexture& qt = qt_meshes[pi] == size_t(-1) ? qt_dummy : qt_materials[qt_meshes[pi]];
 
@@ -638,7 +645,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 			}
 
 			append(json_meshes, "}");
-		}
+		//}
 
 		append(json_meshes, "]");
 
@@ -722,8 +729,8 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		ext_instancing = ext_instancing || !mesh.instances.empty();
 
 		// skip all meshes that we've written in this iteration
-		assert(pi > i);
-		i = pi - 1;
+		//assert(pi > i);
+		//i = pi - 1;
 	}
 
 	remapNodes(data, nodes, node_offset);
