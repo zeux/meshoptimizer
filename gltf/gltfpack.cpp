@@ -686,7 +686,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 				{
 					ni.mesh_nodes.push_back(node_offset);
 
-					writeMeshNode(json_nodes, mesh_offset, mesh.nodes[j], mesh.skin, data, settings.quantize && !settings.pos_float ? &qp : NULL);
+					writeMeshNode(json_nodes, mesh.identifier, mesh_offset, mesh.nodes[j], mesh.skin, data, settings.quantize && !settings.pos_float ? &qp : NULL);
 
 					node_offset++;
 				}
@@ -713,7 +713,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 			comma(json_roots[mesh.scene]);
 			append(json_roots[mesh.scene], node_offset);
 
-			writeMeshNode(json_nodes, mesh_offset, NULL, mesh.skin, data, settings.quantize && !settings.pos_float ? &qp : NULL);
+			writeMeshNode(json_nodes, mesh.identifier, mesh_offset, NULL, mesh.skin, data, settings.quantize && !settings.pos_float ? &qp : NULL);
 
 			node_offset++;
 		}
