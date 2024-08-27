@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <map>
+#include <unordered_set>
 
 #include "../src/meshoptimizer.h"
 
@@ -151,6 +152,7 @@ static bool isIdAttribute(const char* name)
 static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::vector<std::pair<size_t, size_t> >& mesh_remap)
 {
 	std::map<cgltf_mesh*, char *> * mapmap = new std::map<cgltf_mesh*, char *>();
+	std::map<cgltf_mesh*, size_t> * mapmap2 = new std::map<cgltf_mesh*, size_t>();
 
 	for (size_t i = 0; i < data->nodes_count; ++i) {
 		cgltf_node* node = &data->nodes[i];
@@ -159,6 +161,7 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 				cgltf_node* child_node = *(&node->children[j]);
 				if (child_node->mesh != nullptr) {
 					mapmap->insert(std::pair<cgltf_mesh*, char *>(child_node->mesh, node->name));
+					mapmap2->insert(std::pair<cgltf_mesh*, size_t>(child_node->mesh, j));
 				}
 			}
 		}
@@ -201,13 +204,16 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 			result.streams.reserve(primitive.attributes_count);
 
  			std::map<cgltf_mesh*, char *>::iterator it = mapmap->find(const_cast<cgltf_mesh*>(&mesh));
-			if (it != mapmap->end()) {
+ 			std::map<cgltf_mesh*, size_t>::iterator it2 = mapmap2->find(const_cast<cgltf_mesh*>(&mesh));
+			if (it != mapmap->end() && it2 != mapmap2->end()) {
 				char * name = it->second;
-				printf(">> FOUND name %s\n", name);
+				size_t index = it2->second;
+				printf(">> FOUND name %s, %lu\n", name, index);
+				result.identifier = name;
+				result.index = index;
 
-				char* copied_name = new char[strlen(name) + 1];
-				strcpy(copied_name, name);
-				result.identifier = copied_name;
+				//result.merged_mesh_start_indices.reserve(data->meshes_count);
+				//result.merged_mesh_ids.reserve(data->meshes_count); // too big but ok, resized later
 			}
 
 			size_t vertex_count = primitive.attributes_count ? primitive.attributes[0].data->count : 0;
@@ -299,6 +305,8 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 
 		mesh_remap[mi] = std::make_pair(remap_offset, meshes.size());
 	}
+
+	delete mapmap;
 }
 
 static void parseMeshInstancesGltf(std::vector<Transform>& instances, cgltf_node* node)

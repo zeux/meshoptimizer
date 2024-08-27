@@ -63,6 +63,10 @@ struct Mesh
 
 	std::vector<cgltf_material_mapping> variants;
 	char * identifier;
+	size_t index;
+
+	std::vector<unsigned int> merged_mesh_start_indices;
+	std::vector<const char *> merged_mesh_ids;
 };
 
 struct Track

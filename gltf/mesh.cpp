@@ -260,6 +260,9 @@ static void mergeMeshes(Mesh& target, const Mesh& mesh)
 	for (size_t i = 0; i < index_count; ++i)
 		target.indices[index_offset + i] = unsigned(vertex_offset + mesh.indices[i]);
 
+	target.merged_mesh_start_indices.push_back(index_offset);
+	target.merged_mesh_ids.push_back(mesh.identifier);
+
 	printf("mergeMeshes %s into %s, from index %lu to index %lu\n", mesh.identifier, target.identifier, index_offset, index_offset+index_count-1);
 }
 
@@ -305,7 +308,6 @@ void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings)
 
 		if (target.streams.empty())
 			continue;
-		printf("mergeMeshes target mesh index %lu\n", i);
 
 		size_t target_vertices = target.streams[0].data.size();
 		size_t target_indices = target.indices.size();
@@ -357,10 +359,6 @@ void filterEmptyMeshes(std::vector<Mesh>& meshes)
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
 		Mesh& mesh = meshes[i];
-		printf("filterEmptyMeshes mesh %s, empty %s, data.empty %s, indices.empty %s\n", mesh.identifier,
-		    mesh.streams.empty() ? "t" : "f",
-		    mesh.streams[0].data.empty() ? "t" : "f",
-		    mesh.type != cgltf_primitive_type_points && mesh.indices.empty() ? "t" : "f");
 
 		if (mesh.streams.empty())
 			continue;
