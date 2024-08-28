@@ -631,27 +631,19 @@ size_t meshopt_generateProvokingIndexBuffer(unsigned int* destination, unsigned 
 
 		unsigned int newidx = reorder_offset;
 
-		// now remap[a] = ~0u or all three verts are old
+		// now remap[a] = ~0u or all three vertices are old
+		// recording remap[a] makes it possible to remap future references to the same index, conserving space
 		if (remap[a] == ~0u)
-		{
 			remap[a] = newidx;
-			reorder[reorder_offset++] = a;
 
-			destination[i + 0] = newidx;
-			destination[i + 1] = b;
-			destination[i + 2] = c;
-		}
-		else
-		{
-			// all three verts are old; we need to clone one of them
-			// for now clone a
-			// TODO: predict based on valence if above isn't enough
-			reorder[reorder_offset++] = a;
+		// we need to clone the provoking vertex to get a unique index
+		// if all three are used the choice is arbitrary since no future triangle will be able to reuse any of these
+		reorder[reorder_offset++] = a;
 
-			destination[i + 0] = newidx;
-			destination[i + 1] = b;
-			destination[i + 2] = c;
-		}
+		// note: first vertex is final, the other two will be fixed up in next pass
+		destination[i + 0] = newidx;
+		destination[i + 1] = b;
+		destination[i + 2] = c;
 
 		// update vertex valences for corner heuristic
 		valence[a]--;
