@@ -589,32 +589,44 @@ size_t meshopt_generateProvokingIndexBuffer(unsigned int* destination, unsigned 
 	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
 	memset(remap, -1, vertex_count * sizeof(unsigned int));
 
+	// compute vertex valence; this is used to prioritize least used corner
+	unsigned int* valence = allocator.allocate<unsigned int>(vertex_count);
+	memset(valence, 0, vertex_count * sizeof(unsigned int));
+
+	for (size_t i = 0; i < index_count; ++i)
+	{
+		unsigned int index = indices[i];
+		assert(index < vertex_count);
+
+		valence[index]++;
+	}
+
 	unsigned int reorder_offset = 0;
 
-	// pass 1: assign provoking vertices
+	// assign provoking vertices; leave the rest for the next pass
 	for (size_t i = 0; i < index_count; i += 3)
 	{
 		unsigned int a = indices[i + 0], b = indices[i + 1], c = indices[i + 2];
 		assert(a < vertex_count && b < vertex_count && c < vertex_count);
 
-		// try to rotate such that a hasn't been seen before
-		// TODO: predict based on valence
-		if (remap[a] != ~0u)
+		// try to rotate triangle such that provoking vertex hasn't been seen before
+		// if multiple vertices are new, prioritize the one with least valence
+		// this reduces the risk that a future triangle will have all three vertices seen
+		unsigned int va = remap[a] == ~0u ? valence[a] : ~0u;
+		unsigned int vb = remap[b] == ~0u ? valence[b] : ~0u;
+		unsigned int vc = remap[c] == ~0u ? valence[c] : ~0u;
+
+		if (vb != ~0u && vb <= va && vb <= vc)
 		{
-			if (remap[b] == ~0u)
-			{
-				unsigned int t = a;
-				a = b;
-				b = c;
-				c = t;
-			}
-			else if (remap[c] == ~0u)
-			{
-				unsigned int t = c;
-				c = b;
-				b = a;
-				a = t;
-			}
+			// abc -> bca
+			unsigned int t = a;
+			a = b, b = c, c = t;
+		}
+		else if (vc != ~0u && vc <= va && vc <= vb)
+		{
+			// abc -> cab
+			unsigned int t = c;
+			c = b, b = a, a = t;
 		}
 
 		unsigned int newidx = reorder_offset;
@@ -640,6 +652,11 @@ size_t meshopt_generateProvokingIndexBuffer(unsigned int* destination, unsigned 
 			destination[i + 1] = b;
 			destination[i + 2] = c;
 		}
+
+		// update vertex valences for corner heuristic
+		valence[a]--;
+		valence[b]--;
+		valence[c]--;
 	}
 
 	// pass 2: remap non-provoking vertices
