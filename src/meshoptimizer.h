@@ -139,6 +139,17 @@ MESHOPTIMIZER_API void meshopt_generateAdjacencyIndexBuffer(unsigned int* destin
  */
 MESHOPTIMIZER_API void meshopt_generateTessellationIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 
+/**
+ * Experimental: Generate index buffer that can be used for visibility buffer rendering
+ * Each triangle's provoking vertex index is equal to primitive id; this allows passing the vertex id to the fragment shader using nointerpolate attribute.
+ * The reorder table stores the original vertex id for each vertex in the new index buffer, and needs to be used in the vertex shader.
+ * This is important for performance of visibility buffer based renderers on hardware where primitive id can't be accessed efficiently in fragment shader.
+ * Returns the size of the reorder table.
+ * The function assumes provoking vertex is the first vertex in the triangle; if this is not the case, rotate ach triangle indices before using the resulting index buffer.
+ *
+ * destination must contain enough space for the resulting index buffer (index_count elements)
+ * reorder must contain enough space for the worst case reorder table (vertex_count + index_count/3 elements)
+ */
 MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_generateProvokingIndexBuffer(unsigned int* destination, unsigned int* reorder, const unsigned int* indices, size_t index_count, size_t vertex_count);
 
 /**

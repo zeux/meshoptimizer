@@ -6,6 +6,7 @@
 
 // This work is based on:
 // John McDonald, Mark Kilgard. Crack-Free Point-Normal Triangles using Adjacent Edge Normals. 2010
+// John Hable. Variable Rate Shading with Visibility Buffer Rendering. 2024
 namespace meshopt
 {
 
