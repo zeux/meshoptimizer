@@ -1476,6 +1476,42 @@ static void tessellation()
 	assert(memcmp(tessib, expected, sizeof(expected)) == 0);
 }
 
+static void provoking()
+{
+	// 0 1 2
+	// 3 4 5
+	const unsigned int ib[] = {
+	    0, 1, 3,
+	    3, 1, 4,
+	    1, 2, 4,
+	    4, 2, 5,
+	    0, 2, 4,
+	    // clang-format :-/
+	};
+
+	unsigned int pib[15];
+	unsigned int pre[6 + 5]; // limit is vertex count + triangle count
+	size_t res = meshopt_generateProvokingIndexBuffer(pib, pre, ib, 15, 6);
+
+	unsigned int expectedib[] = {
+	    0, 5, 1,
+	    1, 4, 0,
+	    2, 4, 1,
+	    3, 4, 2,
+	    4, 5, 2,
+	    // clang-format :-/
+	};
+
+	unsigned int expectedre[] = {
+	    3, 1, 2, 5, 4, 0,
+	    // clang-format :-/
+	};
+
+	assert(res == 6);
+	assert(memcmp(pib, expectedib, sizeof(expectedib)) == 0);
+	assert(memcmp(pre, expectedre, sizeof(expectedre)) == 0);
+}
+
 static void quantizeFloat()
 {
 	volatile float zero = 0.f; // avoids div-by-zero warnings
@@ -1640,6 +1676,7 @@ void runTests()
 
 	adjacency();
 	tessellation();
+	provoking();
 
 	quantizeFloat();
 	quantizeHalf();
