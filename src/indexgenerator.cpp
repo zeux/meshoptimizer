@@ -576,3 +576,100 @@ void meshopt_generateTessellationIndexBuffer(unsigned int* destination, const un
 		memcpy(destination + i * 4, patch, sizeof(patch));
 	}
 }
+
+size_t meshopt_generateProvokingIndexBuffer(unsigned int* destination, unsigned int* reorder, const unsigned int* indices, size_t index_count, size_t vertex_count)
+{
+	using namespace meshopt;
+
+	assert(index_count % 3 == 0);
+
+	meshopt_Allocator allocator;
+
+	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
+	memset(remap, -1, vertex_count * sizeof(unsigned int));
+
+	unsigned int reorder_offset = 0;
+
+	// pass 1: assign provoking vertices
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		unsigned int a = indices[i + 0], b = indices[i + 1], c = indices[i + 2];
+		assert(a < vertex_count && b < vertex_count && c < vertex_count);
+
+		// try to rotate such that a hasn't been seen before
+		// TODO: predict based on valence
+		if (remap[a] != ~0u)
+		{
+			if (remap[b] == ~0u)
+			{
+				unsigned int t = a;
+				a = b;
+				b = c;
+				c = t;
+			}
+			else if (remap[c] == ~0u)
+			{
+				unsigned int t = c;
+				c = b;
+				b = a;
+				a = t;
+			}
+		}
+
+		unsigned int newidx = reorder_offset;
+
+		// now remap[a] = ~0u or all three verts are old
+		if (remap[a] == ~0u)
+		{
+			remap[a] = newidx;
+			reorder[reorder_offset++] = a;
+
+			destination[i + 0] = newidx;
+			destination[i + 1] = b;
+			destination[i + 2] = c;
+		}
+		else
+		{
+			// all three verts are old; we need to clone one of them
+			// for now clone a
+			// TODO: predict based on valence if above isn't enough
+			reorder[reorder_offset++] = a;
+
+			destination[i + 0] = newidx;
+			destination[i + 1] = b;
+			destination[i + 2] = c;
+		}
+	}
+
+	// pass 2: remap non-provoking vertices
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		unsigned int& rb = destination[i + 1];
+		unsigned int& rc = destination[i + 2];
+
+		if (remap[rb] == ~0u)
+		{
+			unsigned int newidx = reorder_offset;
+
+			remap[rb] = newidx;
+			reorder[reorder_offset++] = rb;
+			rb = newidx;
+		}
+		else
+			rb = remap[rb];
+
+		if (remap[rc] == ~0u)
+		{
+			unsigned int newidx = reorder_offset;
+
+			remap[rc] = newidx;
+			reorder[reorder_offset++] = rc;
+			rc = newidx;
+		}
+		else
+			rc = remap[rc];
+	}
+
+	assert(reorder_offset <= vertex_count + (index_count / 3));
+	return reorder_offset;
+}

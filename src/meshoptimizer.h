@@ -139,6 +139,8 @@ MESHOPTIMIZER_API void meshopt_generateAdjacencyIndexBuffer(unsigned int* destin
  */
 MESHOPTIMIZER_API void meshopt_generateTessellationIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_generateProvokingIndexBuffer(unsigned int* destination, unsigned int* reorder, const unsigned int* indices, size_t index_count, size_t vertex_count);
+
 /**
  * Vertex transform cache optimizer
  * Reorders indices to reduce the number of GPU vertex shader invocations
