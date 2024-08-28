@@ -200,9 +200,10 @@ static bool printMetadata(const char* path, const std::vector<Mesh>& meshes) {
 		append(json, mesh.identifier);
 		append(json, "\"");
 
-		char* last_merged_mesh_id = nullptr;
+		char* last_merged_mesh_id = (char*)key.c_str();
 		for (size_t j = 0; j < mesh.merged_mesh_start_indices.size(); ++j) {
 			const char* merged_mesh_id = mesh.merged_mesh_ids[j];
+
 			if (last_merged_mesh_id == nullptr || strcmp(merged_mesh_id, last_merged_mesh_id) != 0) {
 				comma(json);
 				append(json, "\"");
