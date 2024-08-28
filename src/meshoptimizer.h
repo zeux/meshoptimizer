@@ -666,6 +666,8 @@ inline void meshopt_generateAdjacencyIndexBuffer(T* destination, const T* indice
 template <typename T>
 inline void meshopt_generateTessellationIndexBuffer(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 template <typename T>
+inline size_t meshopt_generateProvokingIndexBuffer(T* destination, unsigned int* reorder, const T* indices, size_t index_count, size_t vertex_count);
+template <typename T>
 inline void meshopt_optimizeVertexCache(T* destination, const T* indices, size_t index_count, size_t vertex_count);
 template <typename T>
 inline void meshopt_optimizeVertexCacheStrip(T* destination, const T* indices, size_t index_count, size_t vertex_count);
@@ -900,6 +902,19 @@ inline void meshopt_generateTessellationIndexBuffer(T* destination, const T* ind
 	meshopt_IndexAdapter<T> out(destination, NULL, index_count * 4);
 
 	meshopt_generateTessellationIndexBuffer(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride);
+}
+
+template <typename T>
+inline size_t meshopt_generateProvokingIndexBuffer(T* destination, unsigned int* reorder, const T* indices, size_t index_count, size_t vertex_count)
+{
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, NULL, index_count);
+
+	size_t bound = vertex_count + (index_count / 3);
+	assert(size_t(T(bound - 1)) == bound - 1); // bound - 1 must fit in T
+	(void)bound;
+
+	return meshopt_generateProvokingIndexBuffer(out.data, reorder, in.data, index_count, vertex_count);
 }
 
 template <typename T>
