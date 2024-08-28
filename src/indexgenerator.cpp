@@ -580,8 +580,6 @@ void meshopt_generateTessellationIndexBuffer(unsigned int* destination, const un
 
 size_t meshopt_generateProvokingIndexBuffer(unsigned int* destination, unsigned int* reorder, const unsigned int* indices, size_t index_count, size_t vertex_count)
 {
-	using namespace meshopt;
-
 	assert(index_count % 3 == 0);
 
 	meshopt_Allocator allocator;
@@ -651,35 +649,26 @@ size_t meshopt_generateProvokingIndexBuffer(unsigned int* destination, unsigned 
 		valence[c]--;
 	}
 
-	// pass 2: remap non-provoking vertices
-	for (size_t i = 0; i < index_count; i += 3)
+	// remap or clone non-provoking vertices (iterating to skip provoking vertices)
+	int step = 1;
+
+	for (size_t i = 1; i < index_count; i += step, step ^= 3)
 	{
-		unsigned int& rb = destination[i + 1];
-		unsigned int& rc = destination[i + 2];
+		unsigned int index = destination[i];
 
-		if (remap[rb] == ~0u)
+		if (remap[index] == ~0u)
 		{
+			// we haven't seen the vertex before as a provoking vertex
+			// to maintain the reference to the original vertex we need to clone it
 			unsigned int newidx = reorder_offset;
 
-			remap[rb] = newidx;
-			reorder[reorder_offset++] = rb;
-			rb = newidx;
+			remap[index] = newidx;
+			reorder[reorder_offset++] = index;
 		}
-		else
-			rb = remap[rb];
 
-		if (remap[rc] == ~0u)
-		{
-			unsigned int newidx = reorder_offset;
-
-			remap[rc] = newidx;
-			reorder[reorder_offset++] = rc;
-			rc = newidx;
-		}
-		else
-			rc = remap[rc];
+		destination[i] = remap[index];
 	}
 
-	assert(reorder_offset <= vertex_count + (index_count / 3));
+	assert(reorder_offset <= vertex_count + index_count / 3);
 	return reorder_offset;
 }
