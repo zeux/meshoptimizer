@@ -588,8 +588,9 @@ size_t meshopt_generateProvokingIndexBuffer(unsigned int* destination, unsigned 
 	memset(remap, -1, vertex_count * sizeof(unsigned int));
 
 	// compute vertex valence; this is used to prioritize least used corner
-	unsigned int* valence = allocator.allocate<unsigned int>(vertex_count);
-	memset(valence, 0, vertex_count * sizeof(unsigned int));
+	// note: we use 8-bit counters for performance; for outlier vertices the valence is incorrect but that just affects the heuristic
+	unsigned char* valence = allocator.allocate<unsigned char>(vertex_count);
+	memset(valence, 0, vertex_count);
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
