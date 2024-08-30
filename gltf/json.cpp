@@ -1,6 +1,8 @@
 // This file is part of gltfpack; see gltfpack.h for version/license details
 #include "gltfpack.h"
 
+#include <float.h>
+#include <math.h>
 #include <stdio.h>
 
 void comma(std::string& s)
@@ -20,8 +22,12 @@ void append(std::string& s, size_t v)
 
 void append(std::string& s, float v)
 {
+	// sanitize +-inf to +-FLT_MAX and NaN to FLT_MAX
+	// it would be more consistent to use null for NaN but that makes JSON invalid, and 0 makes it hard to distinguish from valid values
+	float sv = fabsf(v) < FLT_MAX ? v : (v < 0 ? -FLT_MAX : FLT_MAX);
+
 	char buf[64];
-	snprintf(buf, sizeof(buf), "%.9g", v);
+	snprintf(buf, sizeof(buf), "%.9g", sv);
 	s += buf;
 }
 
