@@ -1118,6 +1118,43 @@ void tessellationAdjacency(const Mesh& mesh)
 	printf("Adjacency: %d patches in %.2f msec\n", int(mesh.indices.size() / 3), (end - middle) * 1000);
 }
 
+void provoking(const Mesh& mesh)
+{
+	double start = timestamp();
+
+	// worst case number of vertices: vertex count + triangle count
+	std::vector<unsigned int> pib(mesh.indices.size());
+	std::vector<unsigned int> reorder(mesh.vertices.size() + mesh.indices.size() / 3);
+
+	size_t pcount = meshopt_generateProvokingIndexBuffer(&pib[0], &reorder[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size());
+	reorder.resize(pcount);
+
+	double end = timestamp();
+
+	// validate invariant: pib[i] == i/3 for provoking vertices
+	for (size_t i = 0; i < mesh.indices.size(); i += 3)
+		assert(pib[i] == i / 3);
+
+	// validate invariant: reorder[pib[x]] == ib[x] modulo triangle rotation
+	// note: this is technically not promised by the interface (it may reorder triangles!), it just happens to hold right now
+	for (size_t i = 0; i < mesh.indices.size(); i += 3)
+	{
+		unsigned int a = mesh.indices[i + 0], b = mesh.indices[i + 1], c = mesh.indices[i + 2];
+		unsigned int ra = reorder[pib[i + 0]], rb = reorder[pib[i + 1]], rc = reorder[pib[i + 2]];
+
+		assert((a == ra && b == rb && c == rc) || (a == rb && b == rc && c == ra) || (a == rc && b == ra && c == rb));
+	}
+
+	// best case number of vertices: max(vertex count, triangle count), assuming non-redundant indexing (all vertices are used)
+	// note: this is a lower bound, and it's not theoretically possible on some meshes;
+	// for example, a union of a flat shaded cube (12t 24v) and a smooth shaded icosahedron (20t 12v) will have 36 vertices and 32 triangles
+	// however, the best case for that union is 44 vertices (24 cube vertices + 20 icosahedron vertices due to provoking invariant)
+	size_t bestv = mesh.vertices.size() > mesh.indices.size() / 3 ? mesh.vertices.size() : mesh.indices.size() / 3;
+
+	printf("Provoking: %d triangles / %d vertices (+%.1f%% extra) in %.2f msec\n",
+	    int(mesh.indices.size() / 3), int(pcount), double(pcount) / double(bestv) * 100.0 - 100.0, (end - start) * 1000);
+}
+
 bool loadMesh(Mesh& mesh, const char* path)
 {
 	double start = timestamp();
@@ -1270,6 +1307,7 @@ void process(const char* path)
 
 	shadow(copy);
 	tessellationAdjacency(copy);
+	provoking(copy);
 
 	encodeIndex(copy, ' ');
 	encodeIndex(copystrip, 'S');
