@@ -68,6 +68,8 @@ meshopt_remapVertexBuffer(vertices, &unindexed_vertices[0], unindexed_vertex_cou
 
 You can then further optimize the resulting buffers by calling the other functions on them in-place.
 
+`meshopt_generateVertexRemap` uses binary equivalence of vertex data, which is generally a reasonable default; however, in some cases some attributes may have floating point drift causing extra vertices to be generated. For such cases, it may be necessary to quantize some attributes (most importantly, normals and tangents) before generating the remap, or use a custom weld algorithm that supports per-attribute tolerance instead.
+
 ## Vertex cache optimization
 
 When the GPU renders the mesh, it has to run the vertex shader for each vertex; usually GPUs have a built-in fixed size cache that stores the transformed vertices (the result of running the vertex shader), and uses this cache to reduce the number of vertex shader invocations. This cache is usually small, 16-32 vertices, and can have different replacement policies; to use this cache efficiently, you have to reorder your triangles to maximize the locality of reused vertex references like so:
