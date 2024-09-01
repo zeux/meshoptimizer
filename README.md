@@ -425,6 +425,53 @@ While the only way to get precise performance data is to measure performance on 
 
 Note that all analyzers use approximate models for the relevant GPU units, so the numbers you will get as the result are only a rough approximation of the actual performance.
 
+## Specialized processing
+
+In addition to the core optimization techniques, the library provides several specialized algorithms for specific rendering techniques and pipeline optimizations that require a particular configuration of vertex and index data.
+
+### Geometry shader adjacency
+
+For algorithms that use geometry shaders and require adjacency information, this library can generate an index buffer with adjacency data:
+
+```c++
+std::vector<unsigned int> adjacency(indices.size() * 2);
+meshopt_generateAdjacencyIndexBuffer(&adjacency[0], &indices[0], indices.size(), &vertices[0].x, vertices.size(), sizeof(Vertex));
+```
+
+This creates an index buffer suitable for rendering with triangle-with-adjacency topology, providing 3 extra vertices per triangle that represent vertices opposite to each triangle's edge. This data can be used to compute silhouettes and perform other types of local geometric processing in geometry shaders. To render the mesh with adjacency data, the index buffer should be used with `D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ`/`VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY`/`GL_TRIANGLES_ADJACENCY` topology.
+
+Note that the use of geometry shaders may have a performance impact on some GPUs; in some cases alternative implementation strategies may be more efficient.
+
+### Tessellation with displacement mapping
+
+For hardware tessellation with crack-free displacement mapping, this library can generate a special index buffer that supports PN-AEN tessellation:
+
+```c++
+std::vector<unsigned int> tess(indices.size() * 4);
+meshopt_generateTessellationIndexBuffer(&tess[0], &indices[0], indices.size(), &vertices[0].x, vertices.size(), sizeof(Vertex));
+```
+
+This generates a 12-vertex patch for each input triangle, allowing the use of hardware tessellation engines to implement PN-AEN and/or displacement mapping without cracks along UV seams or normal discontinuities. For implementing the corresponding shader code, please refer to the following papers: [Crack-Free Point-Normal Triangles using Adjacent Edge Normals](https://developer.download.nvidia.com/whitepapers/2010/PN-AEN-Triangles-Whitepaper.pdf), [Tessellation on Any Budget](https://www.nvidia.com/content/pdf/gdc2011/john_mcdonald.pdf) and [My Tessellation Has Cracks!](https://developer.download.nvidia.com/assets/gamedev/files/gdc12/GDC12_DUDASH_MyTessellationHasCracks.pdf).
+
+### Visibility buffers
+
+To render geometry into visibility buffers, access to primitive index in fragment shader is required. While it is possible to use `SV_PrimitiveID`/`gl_PrimitiveID` in the fragment shader, this can result in suboptimal performance on some GPUs (notably, AMD RDNA1 and all NVidia GPUs), and may not be supported on mobile or console hardware. Using mesh shaders to generate primitive IDs is efficient but requires hardware support that is not universally available. To work around these limitations, this library provides a way to generate a special index buffer that uses provoking vertex to encode primitive IDs:
+
+```c++
+std::vector<unsigned int> provoke(indices.size());
+std::vector<unsigned int> reorder(vertices.size() + indices.size() / 3);
+reorder.resize(meshopt_generateProvokingIndexBuffer(&provoke[0], &reorder[0], &indices[0], indices.size(), vertices.size()));
+```
+
+This generates a special index buffer along with a reorder table that satisfies two constraints:
+
+- `provoke[3 * tri] == tri`
+- `reorder[provoke[x]]` refers to the original triangle vertices
+
+To render the mesh with provoking vertex data, the application should use a vertex shader that passes vertex index (`SV_VertexID`/`gl_VertexIndex`) via a `flat`/`nointerpolation` attribute to the fragment shader as a primitive index, and loads vertex data manually by computing the real vertex index based on `reorder` table (`reorder[gl_VertexIndex]`). For more details please refer to [Variable Rate Shading with Visibility Buffer Rendering](https://advances.realtimerendering.com/s2024/content/Hable/Advances_SIGGRAPH_2024_VisibilityVRS-SIGGRAPH_Advances_2024.pptx); naturally, this technique does not require VRS.
+
+Note: This assumes the provoking vertex is the first vertex of a triangle, which is true for all graphics APIs except OpenGL/WebGL. For OpenGL/WebGL, you may need to rotate each triangle (abc -> bca) in the resulting index buffer, or use the `glProvokingVertex` function (OpenGL 3.2+) or `WEBGL_provoking_vertex` extension (WebGL2) to change the provoking vertex convention. For WebGL2, this is highly recommended to avoid a variety of emulation slowdowns that happen by default if `flat` attributes are used, such as an implicit use of geometry shaders.
+
 ## Memory management
 
 Many algorithms allocate temporary memory to store intermediate results or accelerate processing. The amount of memory allocated is a function of various input parameters such as vertex count and index count. By default memory is allocated using `operator new` and `operator delete`; if these operators are overloaded by the application, the overloads will be used instead. Alternatively it's possible to specify custom allocation/deallocation functions using `meshopt_setAllocator`, e.g.
