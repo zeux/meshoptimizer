@@ -438,7 +438,7 @@ std::vector<unsigned int> adjacency(indices.size() * 2);
 meshopt_generateAdjacencyIndexBuffer(&adjacency[0], &indices[0], indices.size(), &vertices[0].x, vertices.size(), sizeof(Vertex));
 ```
 
-This creates an index buffer suitable for rendering with triangle-with-adjacency topology, providing 3 extra vertices per triangle that represent vertices opposite to each triangle's edge. This data can be used to compute silhouettes and perform other types of local geometric processing in geometry shaders. To render the mesh with adjacency data, the index buffer should be used with `D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ`/`VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY`/`GL_TRIANGLES_ADJACENCY` topology.
+This creates an index buffer suitable for rendering with triangle-with-adjacency topology, providing 3 extra vertices per triangle that represent vertices opposite to each triangle's edge. This data can be used to compute silhouettes and perform other types of local geometric processing in geometry shaders. To render the mesh with adjacency data, the index buffer should be used with `D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ`/`VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY`/`GL_TRIANGLES_ADJACENCY` topology.
 
 Note that the use of geometry shaders may have a performance impact on some GPUs; in some cases alternative implementation strategies may be more efficient.
 
@@ -451,7 +451,15 @@ std::vector<unsigned int> tess(indices.size() * 4);
 meshopt_generateTessellationIndexBuffer(&tess[0], &indices[0], indices.size(), &vertices[0].x, vertices.size(), sizeof(Vertex));
 ```
 
-This generates a 12-vertex patch for each input triangle, allowing the use of hardware tessellation engines to implement PN-AEN and/or displacement mapping without cracks along UV seams or normal discontinuities. For implementing the corresponding shader code, please refer to the following papers: [Crack-Free Point-Normal Triangles using Adjacent Edge Normals](https://developer.download.nvidia.com/whitepapers/2010/PN-AEN-Triangles-Whitepaper.pdf), [Tessellation on Any Budget](https://www.nvidia.com/content/pdf/gdc2011/john_mcdonald.pdf) and [My Tessellation Has Cracks!](https://developer.download.nvidia.com/assets/gamedev/files/gdc12/GDC12_DUDASH_MyTessellationHasCracks.pdf).
+This generates a 12-vertex patch for each input triangle with the following layout:
+
+- 0, 1, 2: original triangle vertices
+- 3, 4: opposing edge for edge 0, 1
+- 5, 6: opposing edge for edge 1, 2
+- 7, 8: opposing edge for edge 2, 0
+- 9, 10, 11: dominant vertices for corners 0, 1, 2
+
+This allows the use of hardware tessellation to implement PN-AEN and/or displacement mapping without cracks along UV seams or normal discontinuities. To render the mesh, the index buffer should be used with `D3D_PRIMITIVE_TOPOLOGY_12_CONTROL_POINT_PATCHLIST`/`VK_PRIMITIVE_TOPOLOGY_PATCH_LIST` (`patchControlPoints=12`) topology. For more details please refer to the following papers: [Crack-Free Point-Normal Triangles using Adjacent Edge Normals](https://developer.download.nvidia.com/whitepapers/2010/PN-AEN-Triangles-Whitepaper.pdf), [Tessellation on Any Budget](https://www.nvidia.com/content/pdf/gdc2011/john_mcdonald.pdf) and [My Tessellation Has Cracks!](https://developer.download.nvidia.com/assets/gamedev/files/gdc12/GDC12_DUDASH_MyTessellationHasCracks.pdf).
 
 ### Visibility buffers
 
