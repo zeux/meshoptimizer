@@ -393,7 +393,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		{
 			Mesh kinds = {};
 			Mesh loops = {};
-			debugSimplify(mesh, kinds, loops, settings.simplify_debug, settings.simplify_error, settings.simplify_attributes);
+			debugSimplify(mesh, kinds, loops, settings.simplify_debug, settings.simplify_error, settings.simplify_attributes, settings.quantize && !settings.nrm_float);
 			debug_meshes.push_back(kinds);
 			debug_meshes.push_back(loops);
 		}
