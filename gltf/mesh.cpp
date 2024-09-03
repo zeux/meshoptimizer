@@ -801,7 +801,7 @@ static void simplifyPointMesh(Mesh& mesh, float threshold)
 
 	size_t target_vertex_count = size_t(double(vertex_count) * threshold);
 
-	const float color_weight = 1e-2f;
+	const float color_weight = 1;
 
 	std::vector<unsigned int> indices(target_vertex_count);
 	if (target_vertex_count)
