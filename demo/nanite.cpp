@@ -2,6 +2,10 @@
 
 #include <vector>
 
+#ifdef METIS
+#include <metis.h>
+#endif
+
 struct Vertex
 {
 	float px, py, pz;
