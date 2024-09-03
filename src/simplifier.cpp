@@ -1045,11 +1045,11 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 #if TRACE >= 2
 		if (i0 == j0) // c.bidi has been overwritten
 			printf("edge eval %d -> %d: error %f (pos %f, attr %f)\n", c.v0, c.v1,
-				sqrtf(c.error), sqrtf(ei <= ej ? di : dj), sqrtf(ei <= ej ? ei - di : ej - dj));
+			    sqrtf(c.error), sqrtf(ei <= ej ? di : dj), sqrtf(ei <= ej ? ei - di : ej - dj));
 		else
 			printf("edge eval %d -> %d: error %f (pos %f, attr %f); reverse %f (pos %f, attr %f)\n", c.v0, c.v1,
-				sqrtf(ei <= ej ? ei : ej), sqrtf(ei <= ej ? di : dj), sqrtf(ei <= ej ? ei - di : ej - dj),
-				sqrtf(ei <= ej ? ej : ei), sqrtf(ei <= ej ? dj : di), sqrtf(ei <= ej ? ej - dj : ei - di));
+			    sqrtf(ei <= ej ? ei : ej), sqrtf(ei <= ej ? di : dj), sqrtf(ei <= ej ? ei - di : ej - dj),
+			    sqrtf(ei <= ej ? ej : ei), sqrtf(ei <= ej ? dj : di), sqrtf(ei <= ej ? ej - dj : ei - di));
 #endif
 	}
 }
@@ -2017,7 +2017,10 @@ size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_pos
 	unsigned int* cell_remap = allocator.allocate<unsigned int>(cell_count);
 	float* cell_errors = allocator.allocate<float>(cell_count);
 
-	fillCellRemap(cell_remap, cell_errors, cell_count, vertex_cells, cell_reservoirs, vertex_positions, vertex_colors, vertex_colors_stride, color_weight * color_weight, vertex_count);
+	// we scale the color weight to bring it to the same scale as position so that error addition makes sense
+	float color_weight_scaled = color_weight * (min_grid == 1 ? 1.f : 1.f / (min_grid - 1));
+
+	fillCellRemap(cell_remap, cell_errors, cell_count, vertex_cells, cell_reservoirs, vertex_positions, vertex_colors, vertex_colors_stride, color_weight_scaled * color_weight_scaled, vertex_count);
 
 	// copy results to the output
 	assert(cell_count <= target_vertex_count);
