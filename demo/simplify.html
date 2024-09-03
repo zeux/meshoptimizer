@@ -109,10 +109,12 @@
 			guiSimplify.add(settings, 'lockBorder').onChange(simplify);
 			guiSimplify.add(settings, 'weldVertices').onChange(simplify);
 			guiSimplify.add(settings, 'errorThresholdLog10', 0, 3, 0.1).onChange(simplify);
-			guiSimplify.add(settings, 'useAttributes').onChange(simplify);
-			guiSimplify.add(settings, 'normalWeight', 0, 2, 0.01).onChange(simplify);
-			guiSimplify.add(settings, 'colorWeight', 0, 2, 0.01).onChange(simplify);
-			guiSimplify.add(settings, 'textureWeight', 0, 100, 0.1).onChange(simplify);
+			guiSimplify.add(settings, 'useAttributes').onChange(simplify).onFinishChange(updateSettings);
+
+			var guiAttributes = [];
+			guiAttributes.push(guiSimplify.add(settings, 'normalWeight', 0, 2, 0.01).onChange(simplify));
+			guiAttributes.push(guiSimplify.add(settings, 'colorWeight', 0, 2, 0.01).onChange(simplify));
+			guiAttributes.push(guiSimplify.add(settings, 'textureWeight', 0, 100, 0.1).onChange(simplify));
 
 			var guiLoad = gui.addFolder('Load');
 			guiLoad.add(settings, 'loadFile');
@@ -125,9 +127,16 @@
 			guiStats.add(settings.stats, 'vertices').listen();
 			guiStats.add(settings.stats, 'error').listen();
 
+			updateSettings();
 			init();
 			load('pirate.glb');
 			animate();
+
+			function updateSettings() {
+				for (var i = 0; i < guiAttributes.length; ++i) {
+					guiAttributes[i].enable(settings.useAttributes);
+				}
+			}
 
 			function simplifyMesh(geo) {
 				if (settings.weldVertices) {
