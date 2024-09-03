@@ -1155,6 +1155,8 @@ void provoking(const Mesh& mesh)
 	    int(mesh.indices.size() / 3), int(pcount), double(pcount) / double(bestv) * 100.0 - 100.0, (end - start) * 1000);
 }
 
+void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices); // nanite.cpp
+
 bool loadMesh(Mesh& mesh, const char* path)
 {
 	double start = timestamp();
@@ -1344,6 +1346,15 @@ void processDev(const char* path)
 	simplifyAttr(mesh);
 }
 
+void processNanite(const char* path)
+{
+	Mesh mesh;
+	if (!loadMesh(mesh, path))
+		return;
+
+	nanite(mesh.vertices, mesh.indices);
+}
+
 int main(int argc, char** argv)
 {
 	void runTests();
@@ -1360,16 +1371,17 @@ int main(int argc, char** argv)
 		if (strcmp(argv[1], "-d") == 0)
 		{
 			for (int i = 2; i < argc; ++i)
-			{
 				processDev(argv[i]);
-			}
+		}
+		else if (strcmp(argv[1], "-n") == 0)
+		{
+			for (int i = 2; i < argc; ++i)
+				processNanite(argv[i]);
 		}
 		else
 		{
 			for (int i = 1; i < argc; ++i)
-			{
 				process(argv[i]);
-			}
 
 			runTests();
 		}

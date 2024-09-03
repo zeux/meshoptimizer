@@ -100,7 +100,7 @@ endif()
 set(TARGETS meshoptimizer)
 
 if(MESHOPT_BUILD_DEMO)
-    add_executable(demo demo/main.cpp demo/tests.cpp tools/objloader.cpp)
+    add_executable(demo demo/main.cpp demo/nanite.cpp demo/tests.cpp tools/objloader.cpp)
     target_link_libraries(demo meshoptimizer)
 endif()
 

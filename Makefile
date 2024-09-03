@@ -108,6 +108,9 @@ check: $(DEMO)
 dev: $(DEMO)
 	$(DEMO) -d $(files)
 
+nanite: $(DEMO)
+	$(DEMO) -n $(files)
+
 format:
 	clang-format -i $(LIBRARY_SOURCES) $(DEMO_SOURCES) $(GLTFPACK_SOURCES)
 
