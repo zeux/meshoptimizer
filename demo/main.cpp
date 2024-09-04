@@ -201,6 +201,18 @@ void dumpObj(const std::vector<Vertex>& vertices, const std::vector<unsigned int
 	}
 }
 
+void dumpObj(const char* section, const std::vector<unsigned int>& indices)
+{
+	fprintf(stderr, "o %s\n", section);
+
+	for (size_t j = 0; j < indices.size(); j += 3)
+	{
+		unsigned int a = indices[j], b = indices[j + 1], c = indices[j + 2];
+
+		fprintf(stderr, "f %d %d %d\n", a + 1, b + 1, c + 1);
+	}
+}
+
 bool isMeshValid(const Mesh& mesh)
 {
 	size_t index_count = mesh.indices.size();

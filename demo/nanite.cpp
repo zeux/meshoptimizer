@@ -262,6 +262,7 @@ static std::vector<unsigned int> simplify(const std::vector<Vertex>& vertices, c
 }
 
 void dumpObj(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, bool recomputeNormals = false);
+void dumpObj(const char* section, const std::vector<unsigned int>& indices);
 
 void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
@@ -274,6 +275,8 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		printf("ERROR: build does not have metis available\n");
 #endif
 	}
+
+	static const char* dump = getenv("DUMP");
 
 	// initial clusterization splits the original mesh
 	std::vector<Cluster> clusters = clusterize(vertices, indices);
@@ -303,6 +306,9 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		int stuck_clusters = 0;
 		int full_clusters = 0;
 
+		if (dump && depth == atoi(dump))
+			dumpObj(vertices, std::vector<unsigned int>());
+
 		// every group needs to be simplified now
 		for (size_t i = 0; i < groups.size(); ++i)
 		{
@@ -312,6 +318,9 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 			std::vector<unsigned int> merged;
 			for (size_t j = 0; j < groups[i].size(); ++j)
 				merged.insert(merged.end(), clusters[groups[i][j]].indices.begin(), clusters[groups[i][j]].indices.end());
+
+			if (dump && depth == atoi(dump))
+				dumpObj("group", merged);
 
 			if (merged.size() <= kClusterSize * 3 * 3)
 			{
@@ -387,11 +396,11 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	float maxx = 0.f, maxy = 0.f, maxz = 0.f;
 	for (size_t i = 0; i < vertices.size(); ++i)
 	{
-		maxx = std::max(maxx, vertices[i].px);
-		maxy = std::max(maxy, vertices[i].py);
-		maxz = std::max(maxz, vertices[i].pz);
+		maxx = std::max(maxx, vertices[i].px * 2);
+		maxy = std::max(maxy, vertices[i].py * 2);
+		maxz = std::max(maxz, vertices[i].pz * 2);
 	}
-	float threshold = 7e-3f;
+	float threshold = 3e-3f;
 
 	std::vector<unsigned int> cut;
 	for (size_t i = 0; i < clusters.size(); ++i)
@@ -412,5 +421,13 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 #endif
 
 	printf("cut (%.3f): %d triangles\n", threshold, int(cut.size() / 3));
-	// dumpObj(vertices, cut);
+
+	if (dump && -1 == atoi(dump))
+	{
+		dumpObj(vertices, cut);
+
+		for (size_t i = 0; i < clusters.size(); ++i)
+			if (boundsError(clusters[i].self, maxx, maxy, maxz) <= threshold && boundsError(clusters[i].parent, maxx, maxy, maxz) > threshold)
+				dumpObj("cluster", clusters[i].indices);
+	}
 }
