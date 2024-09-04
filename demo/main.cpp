@@ -138,21 +138,21 @@ Mesh parseObj(const char* path, double& reindex)
 	return result;
 }
 
-void dumpObj(const Mesh& mesh, bool recomputeNormals = false)
+void dumpObj(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, bool recomputeNormals = false)
 {
 	std::vector<float> normals;
 
 	if (recomputeNormals)
 	{
-		normals.resize(mesh.vertices.size() * 3);
+		normals.resize(vertices.size() * 3);
 
-		for (size_t i = 0; i < mesh.indices.size(); i += 3)
+		for (size_t i = 0; i < indices.size(); i += 3)
 		{
-			unsigned int a = mesh.indices[i], b = mesh.indices[i + 1], c = mesh.indices[i + 2];
+			unsigned int a = indices[i], b = indices[i + 1], c = indices[i + 2];
 
-			const Vertex& va = mesh.vertices[a];
-			const Vertex& vb = mesh.vertices[b];
-			const Vertex& vc = mesh.vertices[c];
+			const Vertex& va = vertices[a];
+			const Vertex& vb = vertices[b];
+			const Vertex& vc = vertices[c];
 
 			float nx = (vb.py - va.py) * (vc.pz - va.pz) - (vb.pz - va.pz) * (vc.py - va.py);
 			float ny = (vb.pz - va.pz) * (vc.px - va.px) - (vb.px - va.px) * (vc.pz - va.pz);
@@ -160,7 +160,7 @@ void dumpObj(const Mesh& mesh, bool recomputeNormals = false)
 
 			for (int k = 0; k < 3; ++k)
 			{
-				unsigned int index = mesh.indices[i + k];
+				unsigned int index = indices[i + k];
 
 				normals[index * 3 + 0] += nx;
 				normals[index * 3 + 1] += ny;
@@ -169,9 +169,9 @@ void dumpObj(const Mesh& mesh, bool recomputeNormals = false)
 		}
 	}
 
-	for (size_t i = 0; i < mesh.vertices.size(); ++i)
+	for (size_t i = 0; i < vertices.size(); ++i)
 	{
-		const Vertex& v = mesh.vertices[i];
+		const Vertex& v = vertices[i];
 
 		float nx = v.nx, ny = v.ny, nz = v.nz;
 
@@ -193,9 +193,9 @@ void dumpObj(const Mesh& mesh, bool recomputeNormals = false)
 		fprintf(stderr, "vn %f %f %f\n", nx, ny, nz);
 	}
 
-	for (size_t i = 0; i < mesh.indices.size(); i += 3)
+	for (size_t i = 0; i < indices.size(); i += 3)
 	{
-		unsigned int a = mesh.indices[i], b = mesh.indices[i + 1], c = mesh.indices[i + 2];
+		unsigned int a = indices[i], b = indices[i + 1], c = indices[i + 2];
 
 		fprintf(stderr, "f %d %d %d\n", a + 1, b + 1, c + 1);
 	}

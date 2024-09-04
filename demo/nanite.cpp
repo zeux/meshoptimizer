@@ -2,6 +2,7 @@
 #include "../src/meshoptimizer.h"
 
 #include <float.h>
+#include <math.h>
 #include <stdio.h>
 
 #include <vector>
@@ -49,6 +50,14 @@ static LODBounds bounds(const std::vector<Vertex>& vertices, const std::vector<u
 	result.radius = bounds.radius;
 	result.error = error;
 	return result;
+}
+
+static float boundsError(const LODBounds& bounds, float x, float y, float z)
+{
+	// note: this is *not* a production ready metric; it's a placeholder for the demo purposes
+	float dx = bounds.center[0] - x, dy = bounds.center[1] - y, dz = bounds.center[2] - z;
+	float d = sqrtf(dx * dx + dy * dy + dz * dz) - bounds.radius;
+	return d <= 0 ? bounds.error : bounds.error / d;
 }
 
 static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
@@ -121,6 +130,8 @@ static std::vector<unsigned int> simplify(const std::vector<Vertex>& vertices, c
 	return lod;
 }
 
+void dumpObj(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, bool recomputeNormals = false);
+
 void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
 	// initial clusterization splits the original mesh
@@ -173,7 +184,6 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 #if TRACE
 				printf("stuck cluster: simplified triangles %d over threshold\n", int(simplified.size() / 3));
 #endif
-
 				stuck_clusters++;
 				stuck_triangles += merged.size() / 3;
 				continue; // simplification is stuck; abandon the merge
@@ -218,4 +228,22 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 			lowest_triangles += clusters[i].indices.size() / 3;
 
 	printf("lowest lod: %d triangles\n", int(lowest_triangles));
+
+	// for testing purposes, we can compute a DAG cut from a given viewpoint and dump it as an OBJ
+	float maxx = 0.f, maxy = 0.f, maxz = 0.f;
+	for (size_t i = 0; i < vertices.size(); ++i)
+	{
+		maxx = std::max(maxx, vertices[i].px);
+		maxy = std::max(maxy, vertices[i].py);
+		maxz = std::max(maxz, vertices[i].pz);
+	}
+	float threshold = 7e-3f;
+
+	std::vector<unsigned int> cut;
+	for (size_t i = 0; i < clusters.size(); ++i)
+		if (boundsError(clusters[i].self, maxx, maxy, maxz) <= threshold && boundsError(clusters[i].parent, maxx, maxy, maxz) > threshold)
+			cut.insert(cut.end(), clusters[i].indices.begin(), clusters[i].indices.end());
+
+	printf("cut (%.3f): %d triangles\n", threshold, int(cut.size() / 3));
+	// dumpObj(vertices, cut);
 }
