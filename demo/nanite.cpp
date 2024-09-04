@@ -145,6 +145,9 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	for (size_t i = 0; i < clusters.size(); ++i)
 		pending[i] = int(i);
 
+	// for validation only
+	std::vector<std::pair<int, int> > dag_debug;
+
 	int depth = 0;
 
 	// merge and simplify clusters until we can't merge anymore
@@ -174,7 +177,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 				stuck_clusters++;
 				stuck_triangles += merged.size() / 3;
 				continue; // didn't merge enough
-				// TODO: this is very suboptimal as it leaves some edges of other clusters permanently locked.
+				          // TODO: this is very suboptimal as it leaves some edges of other clusters permanently locked.
 			}
 
 			float error = 0.f;
@@ -205,6 +208,11 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 				clusters[groups[i][j]].parent = groupb;
 			}
 
+			// record DAG edges for validation during the cut
+			for (size_t j = 0; j < groups[i].size(); ++j)
+				for (size_t k = 0; k < split.size(); ++k)
+					dag_debug.push_back(std::make_pair(groups[i][j], int(clusters.size()) + int(k)));
+
 			for (size_t j = 0; j < split.size(); ++j)
 			{
 				split[j].self = groupb;
@@ -219,7 +227,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 
 		depth++;
 		printf("lod %d: %d clusters (%d full), %d triangles (%d triangles stuck in %d clusters)\n", depth,
-			int(pending.size()), full_clusters, int(triangles), int(stuck_triangles), stuck_clusters);
+		    int(pending.size()), full_clusters, int(triangles), int(stuck_triangles), stuck_clusters);
 	}
 
 	size_t lowest_triangles = 0;
@@ -243,6 +251,20 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	for (size_t i = 0; i < clusters.size(); ++i)
 		if (boundsError(clusters[i].self, maxx, maxy, maxz) <= threshold && boundsError(clusters[i].parent, maxx, maxy, maxz) > threshold)
 			cut.insert(cut.end(), clusters[i].indices.begin(), clusters[i].indices.end());
+
+	for (size_t i = 0; i < dag_debug.size(); ++i)
+	{
+		int j = dag_debug[i].first, k = dag_debug[i].second;
+		float ej = boundsError(clusters[j].self, maxx, maxy, maxz);
+		float ejp = boundsError(clusters[j].parent, maxx, maxy, maxz);
+		float ek = boundsError(clusters[k].self, maxx, maxy, maxz);
+
+		// TODO: these should be assertions
+		if (ej > ek)
+			printf("ERROR: cluster %d is a parent of %d, but has error %e (vs %e)\n", int(k), int(j), ek, ej);
+		if (ejp < ej)
+			printf("ERROR: cluster %d has parent error %e (vs %e)\n", int(j), ejp, ej);
+	}
 
 	printf("cut (%.3f): %d triangles\n", threshold, int(cut.size() / 3));
 	// dumpObj(vertices, cut);
