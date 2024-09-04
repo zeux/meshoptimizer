@@ -21,12 +21,35 @@ struct Vertex
 	float tx, ty;
 };
 
+struct LODBounds
+{
+	float center[3];
+	float radius;
+	float error;
+};
+
 struct Cluster
 {
 	std::vector<unsigned int> indices;
+
+	LODBounds self;
+	LODBounds parent;
 };
 
 const size_t kClusterSize = 128;
+
+static LODBounds bounds(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, float error)
+{
+	meshopt_Bounds bounds = meshopt_computeClusterBounds(&indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex));
+
+	LODBounds result;
+	result.center[0] = bounds.center[0];
+	result.center[1] = bounds.center[1];
+	result.center[2] = bounds.center[2];
+	result.radius = bounds.radius;
+	result.error = error;
+	return result;
+}
 
 static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
@@ -53,6 +76,8 @@ static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, cons
 		clusters[i].indices.resize(meshlet.triangle_count * 3);
 		for (size_t j = 0; j < meshlet.triangle_count * 3; ++j)
 			clusters[i].indices[j] = meshlet_vertices[meshlet.vertex_offset + meshlet_triangles[meshlet.triangle_offset + j]];
+
+		clusters[i].parent.error = FLT_MAX;
 
 #if TRACE > 1
 		printf("cluster %d: %d triangles\n", int(i), int(meshlet.triangle_count));
@@ -83,12 +108,11 @@ static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clus
 	return result;
 }
 
-static std::vector<unsigned int> simplify(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, size_t target_count)
+static std::vector<unsigned int> simplify(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, size_t target_count, float* error = NULL)
 {
 	std::vector<unsigned int> lod(indices.size());
-	float error = 0.f;
-	unsigned int options = meshopt_SimplifyLockBorder | meshopt_SimplifySparse;
-	lod.resize(meshopt_simplify(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), target_count, FLT_MAX, options, &error));
+	unsigned int options = meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute;
+	lod.resize(meshopt_simplify(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), target_count, FLT_MAX, options, error));
 
 #if TRACE > 1
 	printf("cluster: %d => %d triangles\n", int(indices.size() / 3), int(lod.size() / 3));
@@ -101,6 +125,8 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 {
 	// initial clusterization splits the original mesh
 	std::vector<Cluster> clusters = clusterize(vertices, indices);
+	for (size_t i = 0; i < clusters.size(); ++i)
+		clusters[i].self = bounds(vertices, clusters[i].indices, 0.f);
 
 	printf("lod 0: %d clusters, %d triangles\n", int(clusters.size()), int(indices.size() / 3));
 
@@ -109,7 +135,6 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		pending[i] = int(i);
 
 	int depth = 0;
-	size_t stuck_triangles = 0;
 
 	// merge and simplify clusters until we can't merge anymore
 	while (pending.size() > 1)
@@ -118,6 +143,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		pending.clear();
 
 		size_t triangles = 0;
+		size_t stuck_triangles = 0;
 		int stuck_clusters = 0;
 		int full_clusters = 0;
 
@@ -128,7 +154,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 			for (size_t j = 0; j < groups[i].size(); ++j)
 				merged.insert(merged.end(), clusters[groups[i][j]].indices.begin(), clusters[groups[i][j]].indices.end());
 
-			if (merged.size() < kClusterSize * 3 * 3)
+			if (merged.size() <= kClusterSize * 3 * 3)
 			{
 #if TRACE
 				printf("stuck cluster: merged triangles %d under threshold\n", int(merged.size() / 3));
@@ -140,8 +166,9 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 				// TODO: this is very suboptimal as it leaves some edges of other clusters permanently locked.
 			}
 
-			std::vector<unsigned int> simplified = simplify(vertices, merged, kClusterSize * 2 * 3);
-			if (simplified.size() > kClusterSize * 3 * 3)
+			float error = 0.f;
+			std::vector<unsigned int> simplified = simplify(vertices, merged, kClusterSize * 2 * 3, &error);
+			if (simplified.size() >= kClusterSize * 3 * 3)
 			{
 #if TRACE
 				printf("stuck cluster: simplified triangles %d over threshold\n", int(simplified.size() / 3));
@@ -152,19 +179,43 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 				continue; // simplification is stuck; abandon the merge
 			}
 
+			// enforce error monotonicity
+			for (size_t j = 0; j < groups[i].size(); ++j)
+				error = std::max(error, clusters[groups[i][j]].self.error);
+
 			std::vector<Cluster> split = clusterize(vertices, simplified);
+
+			LODBounds groupb = bounds(vertices, merged, error);
+
+			// update parent bounds and error for all clusters in the group
+			// note that all clusters in the group need to switch simultaneously so they have the same bounds
+			for (size_t j = 0; j < groups[i].size(); ++j)
+			{
+				assert(clusters[groups[i][j]].parent.error == FLT_MAX);
+				clusters[groups[i][j]].parent = groupb;
+			}
+
 			for (size_t j = 0; j < split.size(); ++j)
 			{
+				split[j].self = groupb;
+
 				clusters.push_back(split[j]); // std::move
 				pending.push_back(int(clusters.size()) - 1);
+
 				triangles += split[j].indices.size() / 3;
 				full_clusters += split[j].indices.size() == kClusterSize * 3;
 			}
 		}
 
 		depth++;
-		printf("lod %d: %d clusters, %d triangles (%d clusters stuck, %d full)\n", depth, int(pending.size()), int(triangles), stuck_clusters, full_clusters);
+		printf("lod %d: %d clusters (%d full), %d triangles (%d triangles stuck in %d clusters)\n", depth,
+			int(pending.size()), full_clusters, int(triangles), int(stuck_triangles), stuck_clusters);
 	}
 
-	printf("lowest lod: %d triangles\n", int(stuck_triangles));
+	size_t lowest_triangles = 0;
+	for (size_t i = 0; i < clusters.size(); ++i)
+		if (clusters[i].parent.error == FLT_MAX)
+			lowest_triangles += clusters[i].indices.size() / 3;
+
+	printf("lowest lod: %d triangles\n", int(lowest_triangles));
 }
