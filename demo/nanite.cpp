@@ -26,10 +26,12 @@ struct Cluster
 	std::vector<unsigned int> indices;
 };
 
+const size_t kClusterSize = 128;
+
 static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
-	const size_t max_vertices = 192;
-	const size_t max_triangles = 128;
+	const size_t max_vertices = 192; // TODO: depends on kClusterSize, also may want to dial down for mesh shaders
+	const size_t max_triangles = kClusterSize;
 
 	size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), max_vertices, max_triangles);
 
@@ -102,7 +104,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		// rough merge; while clusters are approximately spatially ordered, this should use a proper partitioning algorithm
 		for (size_t i = start; i < clusters.size(); ++i)
 		{
-			if (merged.empty() || merged.back().indices.size() + clusters[i].indices.size() > 128 * 4 * 3)
+			if (merged.empty() || merged.back().indices.size() + clusters[i].indices.size() > kClusterSize * 4 * 3)
 				merged.push_back(Cluster());
 
 			merged.back().indices.insert(merged.back().indices.end(), clusters[i].indices.begin(), clusters[i].indices.end());
@@ -115,7 +117,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		// every merged cluster needs to be simplified now
 		for (size_t i = 0; i < merged.size(); ++i)
 		{
-			if (merged[i].indices.size() < 128 * 3 * 3)
+			if (merged[i].indices.size() < kClusterSize * 3 * 3)
 			{
 #if TRACE
 				printf("stuck cluster: merged triangles %d under threshold\n", int(merged[i].indices.size() / 3));
@@ -127,8 +129,8 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 				// TODO: this is very suboptimal as it leaves some edges of other clusters permanently locked.
 			}
 
-			Cluster simplified = simplify(vertices, merged[i].indices, 128 * 2 * 3);
-			if (simplified.indices.size() > 128 * 3 * 3)
+			Cluster simplified = simplify(vertices, merged[i].indices, kClusterSize * 2 * 3);
+			if (simplified.indices.size() > kClusterSize * 3 * 3)
 			{
 #if TRACE
 				printf("stuck cluster: simplified triangles %d over threshold\n", int(simplified.indices.size() / 3));
@@ -144,7 +146,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 			{
 				pending.push_back(split[j]); // std::move
 				triangles += split[j].indices.size() / 3;
-				full_clusters += split[j].indices.size() == 128 * 3;
+				full_clusters += split[j].indices.size() == kClusterSize * 3;
 			}
 		}
 
