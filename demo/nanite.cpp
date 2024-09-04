@@ -52,12 +52,50 @@ static LODBounds bounds(const std::vector<Vertex>& vertices, const std::vector<u
 	return result;
 }
 
+static LODBounds boundsMerge(const std::vector<Cluster>& clusters, const std::vector<int>& group)
+{
+	LODBounds result = {};
+
+	// we approximate merged bounds center as weighted average of cluster centers
+	float weight = 0.f;
+	for (size_t j = 0; j < group.size(); ++j)
+	{
+		result.center[0] += clusters[group[j]].self.center[0] * clusters[group[j]].self.radius;
+		result.center[1] += clusters[group[j]].self.center[1] * clusters[group[j]].self.radius;
+		result.center[2] += clusters[group[j]].self.center[2] * clusters[group[j]].self.radius;
+		weight += clusters[group[j]].self.radius;
+	}
+
+	if (weight > 0)
+	{
+		result.center[0] /= weight;
+		result.center[1] /= weight;
+		result.center[2] /= weight;
+	}
+
+	// merged bounds must strictly contain all cluster bounds
+	result.radius = 0.f;
+	for (size_t j = 0; j < group.size(); ++j)
+	{
+		float dx = clusters[group[j]].self.center[0] - result.center[0];
+		float dy = clusters[group[j]].self.center[1] - result.center[1];
+		float dz = clusters[group[j]].self.center[2] - result.center[2];
+		result.radius = std::max(result.radius, clusters[group[j]].self.radius + sqrtf(dx * dx + dy * dy + dz * dz));
+	}
+
+	// merged bounds error must be conservative wrt cluster errors
+	result.error = 0.f;
+	for (size_t j = 0; j < group.size(); ++j)
+		result.error = std::max(result.error, clusters[group[j]].self.error);
+
+	return result;
+}
+
 static float boundsError(const LODBounds& bounds, float x, float y, float z)
 {
-	// note: this is *not* a production ready metric; it's a placeholder for the demo purposes
 	float dx = bounds.center[0] - x, dy = bounds.center[1] - y, dz = bounds.center[2] - z;
 	float d = sqrtf(dx * dx + dy * dy + dz * dz) - bounds.radius;
-	return d <= 0 ? bounds.error : bounds.error / d;
+	return d <= 0 ? FLT_MAX : bounds.error / d;
 }
 
 static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
@@ -145,8 +183,9 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	for (size_t i = 0; i < clusters.size(); ++i)
 		pending[i] = int(i);
 
-	// for validation only
+#ifndef NDEBUG
 	std::vector<std::pair<int, int> > dag_debug;
+#endif
 
 	int depth = 0;
 
@@ -192,13 +231,12 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 				continue; // simplification is stuck; abandon the merge
 			}
 
-			// enforce error monotonicity
-			for (size_t j = 0; j < groups[i].size(); ++j)
-				error = std::max(error, clusters[groups[i][j]].self.error);
+			// enforce bounds and error monotonicity
+			// note: it is incorrect to use the precise bounds of the merged or simplified mesh, because this may violate monotonicity
+			LODBounds groupb = boundsMerge(clusters, groups[i]);
+			groupb.error += error; // this may overestimate the error, but we are starting from the simplified mesh so this is a little more correct
 
 			std::vector<Cluster> split = clusterize(vertices, simplified);
-
-			LODBounds groupb = bounds(vertices, merged, error);
 
 			// update parent bounds and error for all clusters in the group
 			// note that all clusters in the group need to switch simultaneously so they have the same bounds
@@ -208,10 +246,12 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 				clusters[groups[i][j]].parent = groupb;
 			}
 
+#ifndef NDEBUG
 			// record DAG edges for validation during the cut
 			for (size_t j = 0; j < groups[i].size(); ++j)
 				for (size_t k = 0; k < split.size(); ++k)
 					dag_debug.push_back(std::make_pair(groups[i][j], int(clusters.size()) + int(k)));
+#endif
 
 			for (size_t j = 0; j < split.size(); ++j)
 			{
@@ -252,6 +292,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		if (boundsError(clusters[i].self, maxx, maxy, maxz) <= threshold && boundsError(clusters[i].parent, maxx, maxy, maxz) > threshold)
 			cut.insert(cut.end(), clusters[i].indices.begin(), clusters[i].indices.end());
 
+#ifndef NDEBUG
 	for (size_t i = 0; i < dag_debug.size(); ++i)
 	{
 		int j = dag_debug[i].first, k = dag_debug[i].second;
@@ -259,12 +300,10 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		float ejp = boundsError(clusters[j].parent, maxx, maxy, maxz);
 		float ek = boundsError(clusters[k].self, maxx, maxy, maxz);
 
-		// TODO: these should be assertions
-		if (ej > ek)
-			printf("ERROR: cluster %d is a parent of %d, but has error %e (vs %e)\n", int(k), int(j), ek, ej);
-		if (ejp < ej)
-			printf("ERROR: cluster %d has parent error %e (vs %e)\n", int(j), ejp, ej);
+		assert(ej <= ek);
+		assert(ejp >= ej);
 	}
+#endif
 
 	printf("cut (%.3f): %d triangles\n", threshold, int(cut.size() / 3));
 	// dumpObj(vertices, cut);
