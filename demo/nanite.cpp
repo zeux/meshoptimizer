@@ -5,6 +5,7 @@
 #include <math.h>
 #include <stdio.h>
 
+#include <map>
 #include <vector>
 
 #ifdef METIS
@@ -134,9 +135,101 @@ static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, cons
 	return clusters;
 }
 
-static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clusters, const std::vector<int>& pending)
+#ifdef METIS
+static std::vector<std::vector<int> > partitionMetis(const std::vector<Cluster>& clusters, const std::vector<int>& pending)
 {
 	std::vector<std::vector<int> > result;
+
+	std::map<std::pair<int, int>, std::vector<int> > edges;
+
+	for (size_t i = 0; i < pending.size(); ++i)
+	{
+		const Cluster& cluster = clusters[pending[i]];
+
+		for (size_t j = 0; j < cluster.indices.size(); ++j)
+		{
+			int v0 = cluster.indices[j + 0];
+			int v1 = cluster.indices[j + (j % 3 == 2 ? -2 : 1)];
+
+			std::vector<int>& list = edges[std::make_pair(std::min(v0, v1), std::max(v0, v1))];
+			if (list.empty() || list.back() != int(i))
+				list.push_back(int(i));
+		}
+	}
+
+	std::map<std::pair<int, int>, int> adjacency;
+
+	for (std::map<std::pair<int, int>, std::vector<int> >::iterator it = edges.begin(); it != edges.end(); ++it)
+	{
+		const std::vector<int>& list = it->second;
+
+		for (size_t i = 0; i < list.size(); ++i)
+			for (size_t j = i + 1; j < list.size(); ++j)
+				adjacency[std::make_pair(std::min(list[i], list[j]), std::max(list[i], list[j]))]++;
+	}
+
+	std::vector<int> xadj(pending.size() + 1);
+	std::vector<int> adjncy;
+	std::vector<int> adjwgt;
+	std::vector<int> part(pending.size());
+
+	for (size_t i = 0; i < pending.size(); ++i)
+	{
+		for (std::map<std::pair<int, int>, int>::iterator it = adjacency.begin(); it != adjacency.end(); ++it)
+			if (it->first.first == int(i))
+			{
+				adjncy.push_back(it->first.second);
+				adjwgt.push_back(it->second);
+			}
+			else if (it->first.second == int(i))
+			{
+				adjncy.push_back(it->first.first);
+				adjwgt.push_back(it->second);
+			}
+
+		xadj[i + 1] = adjncy.size();
+	}
+
+	int options[METIS_NOPTIONS];
+	METIS_SetDefaultOptions(options);
+	options[METIS_OPTION_SEED] = 42;
+	options[METIS_OPTION_UFACTOR] = 100;
+
+	int nvtxs = int(pending.size());
+	int ncon = 1;
+	int nparts = int(pending.size() + 3) / 4;
+	int edgecut = 0;
+
+	if (nparts <= 1)
+	{
+		// not sure why this is a special case that we need to handle but okay metis
+		result.push_back(pending);
+	}
+	else
+	{
+		int r = METIS_PartGraphKway(&nvtxs, &ncon, &xadj[0], &adjncy[0], NULL, NULL, &adjwgt[0], &nparts, NULL, NULL, options, &edgecut, &part[0]);
+		(void)r;
+		assert(r == METIS_OK);
+
+		result.resize(nparts);
+		for (size_t i = 0; i < part.size(); ++i)
+			result[part[i]].push_back(pending[i]);
+	}
+
+	return result;
+}
+#endif
+
+static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clusters, const std::vector<int>& pending)
+{
+#ifdef METIS
+	static const char* metis = getenv("METIS");
+	if (metis && atoi(metis))
+		return partitionMetis(clusters, pending);
+#endif
+
+	std::vector<std::vector<int> > result;
+
 	size_t last_indices = 0;
 
 	// rough merge; while clusters are approximately spatially ordered, this should use a proper partitioning algorithm
@@ -172,6 +265,16 @@ void dumpObj(const std::vector<Vertex>& vertices, const std::vector<unsigned int
 
 void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
+	static const char* metis = getenv("METIS");
+	if (metis && atoi(metis))
+	{
+#ifdef METIS
+		printf("using metis\n");
+#else
+		printf("ERROR: build does not have metis available\n");
+#endif
+	}
+
 	// initial clusterization splits the original mesh
 	std::vector<Cluster> clusters = clusterize(vertices, indices);
 	for (size_t i = 0; i < clusters.size(); ++i)
@@ -203,6 +306,9 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		// every group needs to be simplified now
 		for (size_t i = 0; i < groups.size(); ++i)
 		{
+			if (groups[i].empty())
+				continue; // metis shortcut
+
 			std::vector<unsigned int> merged;
 			for (size_t j = 0; j < groups[i].size(); ++j)
 				merged.insert(merged.end(), clusters[groups[i][j]].indices.begin(), clusters[groups[i][j]].indices.end());
