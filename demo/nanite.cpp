@@ -26,11 +26,9 @@ struct Cluster
 	std::vector<unsigned int> indices;
 };
 
-double timestamp();
-
 static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
-	const size_t max_vertices = 255;
+	const size_t max_vertices = 192;
 	const size_t max_triangles = 128;
 
 	size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), max_vertices, max_triangles);
@@ -54,7 +52,7 @@ static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, cons
 		for (size_t j = 0; j < meshlet.triangle_count * 3; ++j)
 			clusters[i].indices[j] = meshlet_vertices[meshlet.vertex_offset + meshlet_triangles[meshlet.triangle_offset + j]];
 
-#if TRACE
+#if TRACE > 1
 		printf("cluster %d: %d triangles\n", int(i), int(meshlet.triangle_count));
 #endif
 	}
@@ -69,7 +67,7 @@ static Cluster simplify(const std::vector<Vertex>& vertices, const std::vector<u
 	unsigned int options = meshopt_SimplifyLockBorder | meshopt_SimplifySparse;
 	lod.resize(meshopt_simplify(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), target_count, FLT_MAX, options, &error));
 
-#if TRACE
+#if TRACE > 1
 	printf("cluster: %d => %d triangles\n", int(indices.size() / 3), int(lod.size() / 3));
 #endif
 
@@ -84,9 +82,11 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 
 	// initial clusterization splits the original mesh
 	std::vector<Cluster> pending = clusterize(vertices, indices);
-	printf("lod 0: %d clusters\n", int(pending.size()));
+
+	printf("lod 0: %d clusters, %d triangles\n", int(pending.size()), int(indices.size() / 3));
 
 	int depth = 0;
+	size_t stuck_triangles = 0;
 
 	// merge and simplify clusters until we can't merge anymore
 	while (!pending.empty())
@@ -108,22 +108,49 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 			merged.back().indices.insert(merged.back().indices.end(), clusters[i].indices.begin(), clusters[i].indices.end());
 		}
 
+		size_t triangles = 0;
+		int stuck_clusters = 0;
+		int full_clusters = 0;
+
 		// every merged cluster needs to be simplified now
 		for (size_t i = 0; i < merged.size(); ++i)
 		{
 			if (merged[i].indices.size() < 128 * 3 * 3)
+			{
+#if TRACE
+				printf("stuck cluster: merged triangles %d under threshold\n", int(merged[i].indices.size() / 3));
+#endif
+
+				stuck_clusters++;
+				stuck_triangles += merged[i].indices.size() / 3;
 				continue; // didn't merge enough
+				// TODO: this is very suboptimal as it leaves some edges of other clusters permanently locked.
+			}
 
 			Cluster simplified = simplify(vertices, merged[i].indices, 128 * 2 * 3);
 			if (simplified.indices.size() > 128 * 3 * 3)
+			{
+#if TRACE
+				printf("stuck cluster: simplified triangles %d over threshold\n", int(simplified.indices.size() / 3));
+#endif
+
+				stuck_clusters++;
+				stuck_triangles += merged[i].indices.size() / 3;
 				continue; // simplification is stuck; abandon the merge
+			}
 
 			std::vector<Cluster> split = clusterize(vertices, simplified.indices);
 			for (size_t j = 0; j < split.size(); ++j)
+			{
 				pending.push_back(split[j]); // std::move
+				triangles += split[j].indices.size() / 3;
+				full_clusters += split[j].indices.size() == 128 * 3;
+			}
 		}
 
 		depth++;
-		printf("lod %d: %d clusters\n", depth, int(pending.size()));
+		printf("lod %d: %d clusters, %d triangles (%d clusters stuck, %d full)\n", depth, int(pending.size()), int(triangles), stuck_clusters, full_clusters);
 	}
+
+	printf("lowest lod: %d triangles\n", int(stuck_triangles));
 }
