@@ -62,7 +62,28 @@ static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, cons
 	return clusters;
 }
 
-static Cluster simplify(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, size_t target_count)
+static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clusters, const std::vector<int>& pending)
+{
+	std::vector<std::vector<int> > result;
+	size_t last_indices = 0;
+
+	// rough merge; while clusters are approximately spatially ordered, this should use a proper partitioning algorithm
+	for (size_t i = 0; i < pending.size(); ++i)
+	{
+		if (result.empty() || last_indices + clusters[pending[i]].indices.size() > kClusterSize * 4 * 3)
+		{
+			result.push_back(std::vector<int>());
+			last_indices = 0;
+		}
+
+		result.back().push_back(pending[i]);
+		last_indices += clusters[pending[i]].indices.size();
+	}
+
+	return result;
+}
+
+static std::vector<unsigned int> simplify(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, size_t target_count)
 {
 	std::vector<unsigned int> lod(indices.size());
 	float error = 0.f;
@@ -73,78 +94,69 @@ static Cluster simplify(const std::vector<Vertex>& vertices, const std::vector<u
 	printf("cluster: %d => %d triangles\n", int(indices.size() / 3), int(lod.size() / 3));
 #endif
 
-	Cluster result;
-	result.indices = lod;
-	return result;
+	return lod;
 }
 
 void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
-	std::vector<Cluster> clusters;
-
 	// initial clusterization splits the original mesh
-	std::vector<Cluster> pending = clusterize(vertices, indices);
+	std::vector<Cluster> clusters = clusterize(vertices, indices);
 
-	printf("lod 0: %d clusters, %d triangles\n", int(pending.size()), int(indices.size() / 3));
+	printf("lod 0: %d clusters, %d triangles\n", int(clusters.size()), int(indices.size() / 3));
+
+	std::vector<int> pending(clusters.size());
+	for (size_t i = 0; i < clusters.size(); ++i)
+		pending[i] = int(i);
 
 	int depth = 0;
 	size_t stuck_triangles = 0;
 
 	// merge and simplify clusters until we can't merge anymore
-	while (!pending.empty())
+	while (pending.size() > 1)
 	{
-		size_t start = clusters.size();
-
-		for (size_t i = 0; i < pending.size(); ++i)
-			clusters.push_back(pending[i]); // std::move
+		std::vector<std::vector<int> > groups = partition(clusters, pending);
 		pending.clear();
-
-		std::vector<Cluster> merged;
-
-		// rough merge; while clusters are approximately spatially ordered, this should use a proper partitioning algorithm
-		for (size_t i = start; i < clusters.size(); ++i)
-		{
-			if (merged.empty() || merged.back().indices.size() + clusters[i].indices.size() > kClusterSize * 4 * 3)
-				merged.push_back(Cluster());
-
-			merged.back().indices.insert(merged.back().indices.end(), clusters[i].indices.begin(), clusters[i].indices.end());
-		}
 
 		size_t triangles = 0;
 		int stuck_clusters = 0;
 		int full_clusters = 0;
 
-		// every merged cluster needs to be simplified now
-		for (size_t i = 0; i < merged.size(); ++i)
+		// every group needs to be simplified now
+		for (size_t i = 0; i < groups.size(); ++i)
 		{
-			if (merged[i].indices.size() < kClusterSize * 3 * 3)
+			std::vector<unsigned int> merged;
+			for (size_t j = 0; j < groups[i].size(); ++j)
+				merged.insert(merged.end(), clusters[groups[i][j]].indices.begin(), clusters[groups[i][j]].indices.end());
+
+			if (merged.size() < kClusterSize * 3 * 3)
 			{
 #if TRACE
-				printf("stuck cluster: merged triangles %d under threshold\n", int(merged[i].indices.size() / 3));
+				printf("stuck cluster: merged triangles %d under threshold\n", int(merged.size() / 3));
 #endif
 
 				stuck_clusters++;
-				stuck_triangles += merged[i].indices.size() / 3;
+				stuck_triangles += merged.size() / 3;
 				continue; // didn't merge enough
 				// TODO: this is very suboptimal as it leaves some edges of other clusters permanently locked.
 			}
 
-			Cluster simplified = simplify(vertices, merged[i].indices, kClusterSize * 2 * 3);
-			if (simplified.indices.size() > kClusterSize * 3 * 3)
+			std::vector<unsigned int> simplified = simplify(vertices, merged, kClusterSize * 2 * 3);
+			if (simplified.size() > kClusterSize * 3 * 3)
 			{
 #if TRACE
-				printf("stuck cluster: simplified triangles %d over threshold\n", int(simplified.indices.size() / 3));
+				printf("stuck cluster: simplified triangles %d over threshold\n", int(simplified.size() / 3));
 #endif
 
 				stuck_clusters++;
-				stuck_triangles += merged[i].indices.size() / 3;
+				stuck_triangles += merged.size() / 3;
 				continue; // simplification is stuck; abandon the merge
 			}
 
-			std::vector<Cluster> split = clusterize(vertices, simplified.indices);
+			std::vector<Cluster> split = clusterize(vertices, simplified);
 			for (size_t j = 0; j < split.size(); ++j)
 			{
-				pending.push_back(split[j]); // std::move
+				clusters.push_back(split[j]); // std::move
+				pending.push_back(int(clusters.size()) - 1);
 				triangles += split[j].indices.size() / 3;
 				full_clusters += split[j].indices.size() == kClusterSize * 3;
 			}
