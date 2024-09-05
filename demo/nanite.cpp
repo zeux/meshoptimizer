@@ -1,3 +1,9 @@
+// This is a playground for experimenting with algorithms necessary for Nanite like hierarchical clustering
+// The code is not optimized, not robust, and not intended for production use.
+// It optionally supports METIS for clustering and partitioning, with an eventual goal of removing this code
+// in favor of meshopt algorithms.
+
+// For reference, see the original Nanite paper:
 // Brian Karis. Nanite: A Deep Dive. 2021
 #include "../src/meshoptimizer.h"
 
@@ -58,6 +64,7 @@ static LODBounds boundsMerge(const std::vector<Cluster>& clusters, const std::ve
 	LODBounds result = {};
 
 	// we approximate merged bounds center as weighted average of cluster centers
+	// (could also use bounds() center, but we can't use bounds() radius so might as well just merge manually)
 	float weight = 0.f;
 	for (size_t j = 0; j < group.size(); ++j)
 	{
