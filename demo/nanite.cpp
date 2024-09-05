@@ -448,6 +448,9 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 				printf("stuck cluster: singleton with %d triangles\n", int(clusters[groups[i][0]].indices.size() / 3));
 #endif
 
+				if (dump && depth == atoi(dump))
+					dumpObj("cluster", clusters[groups[i][0]].indices);
+
 				stuck_clusters++;
 				stuck_triangles += clusters[groups[i][0]].indices.size() / 3;
 				retry.push_back(groups[i][0]);
