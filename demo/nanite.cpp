@@ -5,6 +5,11 @@
 
 // For reference, see the original Nanite paper:
 // Brian Karis. Nanite: A Deep Dive. 2021
+
+#ifndef _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+
 #include "../src/meshoptimizer.h"
 
 #include <float.h>
