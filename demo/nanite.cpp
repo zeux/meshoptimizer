@@ -226,7 +226,6 @@ static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, cons
 		return clusterizeMetis(vertices, indices);
 #endif
 
-
 	const size_t max_vertices = 192; // TODO: depends on kClusterSize, also may want to dial down for mesh shaders
 	const size_t max_triangles = kClusterSize;
 
@@ -427,6 +426,8 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		std::vector<std::vector<int> > groups = partition(clusters, pending);
 		pending.clear();
 
+		std::vector<int> retry;
+
 		size_t triangles = 0;
 		size_t stuck_triangles = 0;
 		int stuck_clusters = 0;
@@ -456,19 +457,23 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 
 				stuck_clusters++;
 				stuck_triangles += merged.size() / 3;
+				for (size_t j = 0; j < groups[i].size(); ++j)
+					retry.push_back(groups[i][j]);
 				continue; // didn't merge enough
 				          // TODO: this is very suboptimal as it leaves some edges of other clusters permanently locked.
 			}
 
 			float error = 0.f;
 			std::vector<unsigned int> simplified = simplify(vertices, merged, kClusterSize * 2 * 3, &error);
-			if (simplified.size() >= kClusterSize * 3 * 3)
+			if (simplified.size() > kClusterSize * 3 * 3)
 			{
 #if TRACE
 				printf("stuck cluster: simplified triangles %d over threshold\n", int(simplified.size() / 3));
 #endif
 				stuck_clusters++;
 				stuck_triangles += merged.size() / 3;
+				for (size_t j = 0; j < groups[i].size(); ++j)
+					retry.push_back(groups[i][j]);
 				continue; // simplification is stuck; abandon the merge
 			}
 
@@ -507,8 +512,13 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		}
 
 		depth++;
-		printf("lod %d: %d clusters (%d full), %d triangles (%d triangles stuck in %d clusters)\n", depth,
-		    int(pending.size()), full_clusters, int(triangles), int(stuck_triangles), stuck_clusters);
+		printf("lod %d: simplified %d clusters (%d full), %d triangles; stuck %d clusters, %d triangles\n", depth,
+		    int(pending.size()), full_clusters, int(triangles), stuck_clusters, int(stuck_triangles));
+
+		if (triangles < stuck_triangles / 3)
+			break;
+
+		pending.insert(pending.end(), retry.begin(), retry.end());
 	}
 
 	size_t lowest_triangles = 0;
