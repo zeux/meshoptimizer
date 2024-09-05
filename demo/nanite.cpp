@@ -135,14 +135,18 @@ static void clusterizeMetisRec(std::vector<Cluster>& result, const std::vector<u
 	int options[METIS_NOPTIONS];
 	METIS_SetDefaultOptions(options);
 	options[METIS_OPTION_SEED] = 42;
-	options[METIS_OPTION_UFACTOR] = triidx.size() > 8 * kClusterSize ? 100 : 10;
+	options[METIS_OPTION_UFACTOR] = triidx.size() > 8 * kClusterSize ? 100 : 1;
 
 	int nvtxs = int(triidx.size());
 	int ncon = 1;
 	int nparts = 2;
 	int edgecut = 0;
 
-	int r = METIS_PartGraphRecursive(&nvtxs, &ncon, &xadj[0], &adjncy[0], NULL, NULL, NULL, &nparts, NULL, NULL, options, &edgecut, &part[0]);
+	int nvtxspad = (nvtxs + kClusterSize - 1) / kClusterSize * kClusterSize;
+	int idealcut = ((nvtxspad / kClusterSize) / 2) * kClusterSize;
+	float partw[2] = {idealcut / float(nvtxspad), 1.f - idealcut / float(nvtxspad)};
+
+	int r = METIS_PartGraphRecursive(&nvtxs, &ncon, &xadj[0], &adjncy[0], NULL, NULL, NULL, &nparts, partw, NULL, options, &edgecut, &part[0]);
 	assert(r == METIS_OK);
 	(void)r;
 
@@ -179,7 +183,9 @@ static void clusterizeMetisRec(std::vector<Cluster>& result, const std::vector<u
 
 static std::vector<Cluster> clusterizeMetis(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
-	(void)vertices; // for now
+	std::vector<unsigned int> remap(vertices.size());
+	meshopt_Stream stream = {&vertices[0].px, sizeof(float) * 3, sizeof(Vertex)};
+	meshopt_generateVertexRemapMulti(&remap[0], NULL, vertices.size(), vertices.size(), &stream, 1);
 
 	std::map<std::pair<unsigned int, unsigned int>, unsigned int> edges;
 
@@ -187,6 +193,8 @@ static std::vector<Cluster> clusterizeMetis(const std::vector<Vertex>& vertices,
 	{
 		unsigned int v0 = indices[i + 0];
 		unsigned int v1 = indices[i + (i % 3 == 2 ? -2 : 1)];
+		v0 = remap[v0];
+		v1 = remap[v1];
 
 		// we don't track adjacency fully on non-manifold edges for now
 		edges[std::make_pair(v0, v1)] = unsigned(i / 3);
@@ -197,6 +205,9 @@ static std::vector<Cluster> clusterizeMetis(const std::vector<Vertex>& vertices,
 	for (size_t i = 0; i < indices.size(); i += 3)
 	{
 		unsigned int v0 = indices[i + 0], v1 = indices[i + 1], v2 = indices[i + 2];
+		v0 = remap[v0];
+		v1 = remap[v1];
+		v2 = remap[v2];
 
 		std::map<std::pair<unsigned int, unsigned int>, unsigned int>::iterator oab = edges.find(std::make_pair(v1, v0));
 		std::map<std::pair<unsigned int, unsigned int>, unsigned int>::iterator obc = edges.find(std::make_pair(v2, v1));
@@ -222,7 +233,7 @@ static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, cons
 {
 #ifdef METIS
 	static const char* metis = getenv("METIS");
-	if (metis && atoi(metis))
+	if (metis && atoi(metis) >= 2)
 		return clusterizeMetis(vertices, indices);
 #endif
 
@@ -349,7 +360,7 @@ static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clus
 {
 #ifdef METIS
 	static const char* metis = getenv("METIS");
-	if (metis && atoi(metis))
+	if (metis && atoi(metis) >= 1)
 		return partitionMetis(clusters, pending);
 #endif
 
@@ -395,7 +406,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	if (metis && atoi(metis))
 	{
 #ifdef METIS
-		printf("using metis\n");
+		printf("using metis for %s\n", atoi(metis) >= 2 ? "both clustering and partition" : "partition only");
 #else
 		printf("ERROR: build does not have metis available\n");
 #endif
