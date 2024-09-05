@@ -262,10 +262,6 @@ static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, cons
 			clusters[i].indices[j] = meshlet_vertices[meshlet.vertex_offset + meshlet_triangles[meshlet.triangle_offset + j]];
 
 		clusters[i].parent.error = FLT_MAX;
-
-#if TRACE > 1
-		printf("cluster %d: %d triangles\n", int(i), int(meshlet.triangle_count));
-#endif
 	}
 
 	return clusters;
@@ -386,13 +382,12 @@ static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clus
 
 static std::vector<unsigned int> simplify(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, size_t target_count, float* error = NULL)
 {
+	if (target_count > indices.size())
+		return indices;
+
 	std::vector<unsigned int> lod(indices.size());
 	unsigned int options = meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute;
 	lod.resize(meshopt_simplify(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), target_count, FLT_MAX, options, error));
-
-#if TRACE > 1
-	printf("cluster: %d => %d triangles\n", int(indices.size() / 3), int(lod.size() / 3));
-#endif
 
 	return lod;
 }
@@ -453,6 +448,18 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 			if (groups[i].empty())
 				continue; // metis shortcut
 
+			if (groups[i].size() == 1)
+			{
+#if TRACE
+				printf("stuck cluster: singleton with %d triangles\n", int(clusters[groups[i][0]].indices.size() / 3));
+#endif
+
+				stuck_clusters++;
+				stuck_triangles += clusters[groups[i][0]].indices.size() / 3;
+				retry.push_back(groups[i][0]);
+				continue;
+			}
+
 			std::vector<unsigned int> merged;
 			for (size_t j = 0; j < groups[i].size(); ++j)
 				merged.insert(merged.end(), clusters[groups[i][j]].indices.begin(), clusters[groups[i][j]].indices.end());
@@ -460,26 +467,12 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 			if (dump && depth == atoi(dump))
 				dumpObj("group", merged);
 
-			if (merged.size() <= kClusterSize * 3 * 3)
-			{
-#if TRACE
-				printf("stuck cluster: merged triangles %d under threshold\n", int(merged.size() / 3));
-#endif
-
-				stuck_clusters++;
-				stuck_triangles += merged.size() / 3;
-				for (size_t j = 0; j < groups[i].size(); ++j)
-					retry.push_back(groups[i][j]);
-				continue; // didn't merge enough
-				          // TODO: this is very suboptimal as it leaves some edges of other clusters permanently locked.
-			}
-
 			float error = 0.f;
 			std::vector<unsigned int> simplified = simplify(vertices, merged, kClusterSize * 2 * 3, &error);
-			if (simplified.size() > kClusterSize * 3 * 3)
+			if (simplified.size() > merged.size() * 0.85f || simplified.size() > kClusterSize * 3 * 3)
 			{
 #if TRACE
-				printf("stuck cluster: simplified triangles %d over threshold\n", int(simplified.size() / 3));
+				printf("stuck cluster: simplified %d => %d over threshold\n", int(merged.size() / 3), int(simplified.size() / 3));
 #endif
 				stuck_clusters++;
 				stuck_triangles += merged.size() / 3;
