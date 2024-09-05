@@ -183,18 +183,15 @@ static void clusterizeMetisRec(std::vector<Cluster>& result, const std::vector<u
 
 static std::vector<Cluster> clusterizeMetis(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
-	std::vector<unsigned int> remap(vertices.size());
-	meshopt_Stream stream = {&vertices[0].px, sizeof(float) * 3, sizeof(Vertex)};
-	meshopt_generateVertexRemapMulti(&remap[0], NULL, vertices.size(), vertices.size(), &stream, 1);
+	std::vector<unsigned int> shadowib(indices.size());
+	meshopt_generateShadowIndexBuffer(&shadowib[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(float) * 3, sizeof(Vertex));
 
 	std::map<std::pair<unsigned int, unsigned int>, unsigned int> edges;
 
 	for (size_t i = 0; i < indices.size(); ++i)
 	{
-		unsigned int v0 = indices[i + 0];
-		unsigned int v1 = indices[i + (i % 3 == 2 ? -2 : 1)];
-		v0 = remap[v0];
-		v1 = remap[v1];
+		unsigned int v0 = shadowib[i + 0];
+		unsigned int v1 = shadowib[i + (i % 3 == 2 ? -2 : 1)];
 
 		// we don't track adjacency fully on non-manifold edges for now
 		edges[std::make_pair(v0, v1)] = unsigned(i / 3);
@@ -204,10 +201,7 @@ static std::vector<Cluster> clusterizeMetis(const std::vector<Vertex>& vertices,
 
 	for (size_t i = 0; i < indices.size(); i += 3)
 	{
-		unsigned int v0 = indices[i + 0], v1 = indices[i + 1], v2 = indices[i + 2];
-		v0 = remap[v0];
-		v1 = remap[v1];
-		v2 = remap[v2];
+		unsigned int v0 = shadowib[i + 0], v1 = shadowib[i + 1], v2 = shadowib[i + 2];
 
 		std::map<std::pair<unsigned int, unsigned int>, unsigned int>::iterator oab = edges.find(std::make_pair(v1, v0));
 		std::map<std::pair<unsigned int, unsigned int>, unsigned int>::iterator obc = edges.find(std::make_pair(v2, v1));
