@@ -917,6 +917,18 @@ void shadow(const Mesh& mesh)
 	    (end - start) * 1000);
 }
 
+static int follow(int* parents, int index)
+{
+	while (index != parents[index])
+	{
+		int parent = parents[index];
+		parents[index] = parents[parent];
+		index = parent;
+	}
+
+	return index;
+}
+
 void meshlets(const Mesh& mesh, bool scan)
 {
 	const size_t max_vertices = 64;
@@ -952,6 +964,7 @@ void meshlets(const Mesh& mesh, bool scan)
 	double avg_vertices = 0;
 	double avg_triangles = 0;
 	size_t not_full = 0;
+	size_t not_connected = 0;
 
 	for (size_t i = 0; i < meshlets.size(); ++i)
 	{
@@ -960,14 +973,37 @@ void meshlets(const Mesh& mesh, bool scan)
 		avg_vertices += m.vertex_count;
 		avg_triangles += m.triangle_count;
 		not_full += m.vertex_count < max_vertices;
+
+		// union-find vertices to check if the meshlet is connected
+		int parents[max_vertices];
+		for (unsigned int j = 0; j < m.vertex_count; ++j)
+			parents[j] = int(j);
+
+		for (unsigned int j = 0; j < m.triangle_count * 3; ++j)
+		{
+			int v0 = meshlet_triangles[m.triangle_offset + j];
+			int v1 = meshlet_triangles[m.triangle_offset + j + (j % 3 == 2 ? -2 : 1)];
+
+			v0 = follow(parents, v0);
+			v1 = follow(parents, v1);
+
+			parents[v0] = v1;
+		}
+
+		int roots = 0;
+		for (unsigned int j = 0; j < m.vertex_count; ++j)
+			roots += follow(parents, j) == int(j);
+
+		assert(roots != 0);
+		not_connected += roots > 1;
 	}
 
 	avg_vertices /= double(meshlets.size());
 	avg_triangles /= double(meshlets.size());
 
-	printf("Meshlets%c: %d meshlets (avg vertices %.1f, avg triangles %.1f, not full %d) in %.2f msec\n",
+	printf("Meshlets%c: %d meshlets (avg vertices %.1f, avg triangles %.1f, not full %d, not connected %d) in %.2f msec\n",
 	    scan ? 'S' : ' ',
-	    int(meshlets.size()), avg_vertices, avg_triangles, int(not_full), (end - start) * 1000);
+	    int(meshlets.size()), avg_vertices, avg_triangles, int(not_full), int(not_connected), (end - start) * 1000);
 
 	float camera[3] = {100, 100, 100};
 
