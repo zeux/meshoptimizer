@@ -442,6 +442,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 
 		size_t triangles = 0;
 		size_t stuck_triangles = 0;
+		int single_clusters = 0;
 		int stuck_clusters = 0;
 		int full_clusters = 0;
 
@@ -463,6 +464,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 				if (dump && depth == atoi(dump))
 					dumpObj("cluster", clusters[groups[i][0]].indices);
 
+				single_clusters++;
 				stuck_clusters++;
 				stuck_triangles += clusters[groups[i][0]].indices.size() / 3;
 				retry.push_back(groups[i][0]);
@@ -525,8 +527,8 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		}
 
 		depth++;
-		printf("lod %d: simplified %d clusters (%d full), %d triangles; stuck %d clusters, %d triangles\n", depth,
-		    int(pending.size()), full_clusters, int(triangles), stuck_clusters, int(stuck_triangles));
+		printf("lod %d: simplified %d clusters (%d full, %.1f tri/cl), %d triangles; stuck %d clusters (%d single), %d triangles\n", depth,
+		    int(pending.size()), full_clusters, pending.empty() ? 0 : double(triangles) / double(pending.size()), int(triangles), stuck_clusters, single_clusters, int(stuck_triangles));
 
 		if (triangles < stuck_triangles / 3)
 			break;
