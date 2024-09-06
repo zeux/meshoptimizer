@@ -1,6 +1,6 @@
 meshoptimizer is widely used in the games industry as well as in many pipelines for processing 3D content for real-time rendering. This document contains a small selection of projects that rely on meshoptimizer.
 
-For brevity, the projects listed below are limited to commercial software or open source software that has 1000+ stars on GitHub. Please feel free to contribute additions via pull requests.
+For brevity, the projects listed below are limited to commercial software or open source software that has 5000+ stars on GitHub. Please feel free to contribute additions via pull requests.
 
 # Games
 
@@ -10,6 +10,7 @@ If you are shipping a game that is using meshoptimizer, listing the library in t
 - [Baldur's Gate 3 (2023)](https://baldursgate3.game/)
 - [Cities: Skylines II (2023)](https://www.paradoxinteractive.com/games/cities-skylines-ii/about)
 - [Counter-Strike 2 (2023)](https://www.counter-strike.net/cs2)
+- [Deadlock](https://store.steampowered.com/app/1422450/Deadlock/)
 - [Dota 2 (2013)](https://www.dota2.com/home)
 - [Half-Life: Alyx (2020)](https://store.steampowered.com/app/546560/HalfLife_Alyx/)
 - [Jagged Alliance 3 (2023)](https://jaggedalliance3.thqnordic.com/)
@@ -18,6 +19,7 @@ If you are shipping a game that is using meshoptimizer, listing the library in t
 - [Monaco 2](https://store.steampowered.com/app/1063030/Monaco_2/)
 - [Ravenswatch (2023)](https://store.steampowered.com/app/2071280/Ravenswatch/)
 - [The Settlers: New Allies (2023)](https://www.ubisoft.com/en-us/game/the-settlers/new-allies)
+- [Sky: Children of the Light (2019)](https://www.thatskygame.com/)
 - [Stranded: Alien Dawn (2023)](https://www.strandedaliendawn.com/en-US)
 - [Tunnet (2023)](https://store.steampowered.com/app/2286390/Tunnet/)
 
@@ -28,6 +30,7 @@ If you are shipping an engine that is using meshoptimizer, listing the library i
 - [Bevy](https://bevyengine.org/)
 - [bgfx](https://github.com/bkaradzic/bgfx)
 - [filament](https://github.com/google/filament)
+- [Flax Engine](https://flaxengine.com/)
 - [The Forge](https://theforge.dev/)
 - [Godot](https://godotengine.org/)
 - [HypeHype](https://hypehype.com/en)
