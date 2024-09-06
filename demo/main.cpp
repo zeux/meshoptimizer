@@ -138,21 +138,21 @@ Mesh parseObj(const char* path, double& reindex)
 	return result;
 }
 
-void dumpObj(const Mesh& mesh, bool recomputeNormals = false)
+void dumpObj(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, bool recomputeNormals = false)
 {
 	std::vector<float> normals;
 
 	if (recomputeNormals)
 	{
-		normals.resize(mesh.vertices.size() * 3);
+		normals.resize(vertices.size() * 3);
 
-		for (size_t i = 0; i < mesh.indices.size(); i += 3)
+		for (size_t i = 0; i < indices.size(); i += 3)
 		{
-			unsigned int a = mesh.indices[i], b = mesh.indices[i + 1], c = mesh.indices[i + 2];
+			unsigned int a = indices[i], b = indices[i + 1], c = indices[i + 2];
 
-			const Vertex& va = mesh.vertices[a];
-			const Vertex& vb = mesh.vertices[b];
-			const Vertex& vc = mesh.vertices[c];
+			const Vertex& va = vertices[a];
+			const Vertex& vb = vertices[b];
+			const Vertex& vc = vertices[c];
 
 			float nx = (vb.py - va.py) * (vc.pz - va.pz) - (vb.pz - va.pz) * (vc.py - va.py);
 			float ny = (vb.pz - va.pz) * (vc.px - va.px) - (vb.px - va.px) * (vc.pz - va.pz);
@@ -160,7 +160,7 @@ void dumpObj(const Mesh& mesh, bool recomputeNormals = false)
 
 			for (int k = 0; k < 3; ++k)
 			{
-				unsigned int index = mesh.indices[i + k];
+				unsigned int index = indices[i + k];
 
 				normals[index * 3 + 0] += nx;
 				normals[index * 3 + 1] += ny;
@@ -169,9 +169,9 @@ void dumpObj(const Mesh& mesh, bool recomputeNormals = false)
 		}
 	}
 
-	for (size_t i = 0; i < mesh.vertices.size(); ++i)
+	for (size_t i = 0; i < vertices.size(); ++i)
 	{
-		const Vertex& v = mesh.vertices[i];
+		const Vertex& v = vertices[i];
 
 		float nx = v.nx, ny = v.ny, nz = v.nz;
 
@@ -193,9 +193,21 @@ void dumpObj(const Mesh& mesh, bool recomputeNormals = false)
 		fprintf(stderr, "vn %f %f %f\n", nx, ny, nz);
 	}
 
-	for (size_t i = 0; i < mesh.indices.size(); i += 3)
+	for (size_t i = 0; i < indices.size(); i += 3)
 	{
-		unsigned int a = mesh.indices[i], b = mesh.indices[i + 1], c = mesh.indices[i + 2];
+		unsigned int a = indices[i], b = indices[i + 1], c = indices[i + 2];
+
+		fprintf(stderr, "f %d %d %d\n", a + 1, b + 1, c + 1);
+	}
+}
+
+void dumpObj(const char* section, const std::vector<unsigned int>& indices)
+{
+	fprintf(stderr, "o %s\n", section);
+
+	for (size_t j = 0; j < indices.size(); j += 3)
+	{
+		unsigned int a = indices[j], b = indices[j + 1], c = indices[j + 2];
 
 		fprintf(stderr, "f %d %d %d\n", a + 1, b + 1, c + 1);
 	}
@@ -905,6 +917,18 @@ void shadow(const Mesh& mesh)
 	    (end - start) * 1000);
 }
 
+static int follow(int* parents, int index)
+{
+	while (index != parents[index])
+	{
+		int parent = parents[index];
+		parents[index] = parents[parent];
+		index = parent;
+	}
+
+	return index;
+}
+
 void meshlets(const Mesh& mesh, bool scan)
 {
 	const size_t max_vertices = 64;
@@ -940,6 +964,7 @@ void meshlets(const Mesh& mesh, bool scan)
 	double avg_vertices = 0;
 	double avg_triangles = 0;
 	size_t not_full = 0;
+	size_t not_connected = 0;
 
 	for (size_t i = 0; i < meshlets.size(); ++i)
 	{
@@ -948,14 +973,37 @@ void meshlets(const Mesh& mesh, bool scan)
 		avg_vertices += m.vertex_count;
 		avg_triangles += m.triangle_count;
 		not_full += m.vertex_count < max_vertices;
+
+		// union-find vertices to check if the meshlet is connected
+		int parents[max_vertices];
+		for (unsigned int j = 0; j < m.vertex_count; ++j)
+			parents[j] = int(j);
+
+		for (unsigned int j = 0; j < m.triangle_count * 3; ++j)
+		{
+			int v0 = meshlet_triangles[m.triangle_offset + j];
+			int v1 = meshlet_triangles[m.triangle_offset + j + (j % 3 == 2 ? -2 : 1)];
+
+			v0 = follow(parents, v0);
+			v1 = follow(parents, v1);
+
+			parents[v0] = v1;
+		}
+
+		int roots = 0;
+		for (unsigned int j = 0; j < m.vertex_count; ++j)
+			roots += follow(parents, j) == int(j);
+
+		assert(roots != 0);
+		not_connected += roots > 1;
 	}
 
 	avg_vertices /= double(meshlets.size());
 	avg_triangles /= double(meshlets.size());
 
-	printf("Meshlets%c: %d meshlets (avg vertices %.1f, avg triangles %.1f, not full %d) in %.2f msec\n",
+	printf("Meshlets%c: %d meshlets (avg vertices %.1f, avg triangles %.1f, not full %d, not connected %d) in %.2f msec\n",
 	    scan ? 'S' : ' ',
-	    int(meshlets.size()), avg_vertices, avg_triangles, int(not_full), (end - start) * 1000);
+	    int(meshlets.size()), avg_vertices, avg_triangles, int(not_full), int(not_connected), (end - start) * 1000);
 
 	float camera[3] = {100, 100, 100};
 
@@ -1155,6 +1203,8 @@ void provoking(const Mesh& mesh)
 	    int(mesh.indices.size() / 3), int(pcount), double(pcount) / double(bestv) * 100.0 - 100.0, (end - start) * 1000);
 }
 
+void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices); // nanite.cpp
+
 bool loadMesh(Mesh& mesh, const char* path)
 {
 	double start = timestamp();
@@ -1344,6 +1394,15 @@ void processDev(const char* path)
 	simplifyAttr(mesh);
 }
 
+void processNanite(const char* path)
+{
+	Mesh mesh;
+	if (!loadMesh(mesh, path))
+		return;
+
+	nanite(mesh.vertices, mesh.indices);
+}
+
 int main(int argc, char** argv)
 {
 	void runTests();
@@ -1360,16 +1419,17 @@ int main(int argc, char** argv)
 		if (strcmp(argv[1], "-d") == 0)
 		{
 			for (int i = 2; i < argc; ++i)
-			{
 				processDev(argv[i]);
-			}
+		}
+		else if (strcmp(argv[1], "-n") == 0)
+		{
+			for (int i = 2; i < argc; ++i)
+				processNanite(argv[i]);
 		}
 		else
 		{
 			for (int i = 1; i < argc; ++i)
-			{
 				process(argv[i]);
-			}
 
 			runTests();
 		}

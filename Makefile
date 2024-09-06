@@ -35,6 +35,11 @@ ifdef BASISU
     endif
 endif
 
+ifdef METIS
+    $(DEMO_OBJECTS): CXXFLAGS+=-DMETIS
+    $(DEMO): LDFLAGS+=-lmetis
+endif
+
 WASMCC?=$(WASI_SDK)/bin/clang++
 WASIROOT?=$(WASI_SDK)/share/wasi-sysroot
 
@@ -107,6 +112,9 @@ check: $(DEMO)
 
 dev: $(DEMO)
 	$(DEMO) -d $(files)
+
+nanite: $(DEMO)
+	$(DEMO) -n $(files)
 
 format:
 	clang-format -i $(LIBRARY_SOURCES) $(DEMO_SOURCES) $(GLTFPACK_SOURCES)
