@@ -44,6 +44,7 @@
 	<body>
 		<div id="info">
 			<a href="https://github.com/zeux/meshoptimizer" target="_blank" rel="noopener">meshoptimizer</a>
+			<div id="ratio"></div>
 		</div>
 
 		<script type="module">
@@ -298,6 +299,9 @@
 				MeshoptSimplifier.ready.then(function () {
 					MeshoptSimplifier.useExperimentalFeatures = true;
 
+					var rnum = 0;
+					var rden = 0;
+
 					var triangles = 0;
 					var vertices = 0;
 					var error = 0;
@@ -305,9 +309,11 @@
 					var threshold = Math.pow(10, -settings.errorThresholdLog10);
 
 					if (settings.autoLod) {
-						// subtract 1 because we assume model radius is 1.0, so this is a distance-to-sphere
-						// ideally this should actually use the real radius :) but we rescale the model to fit a unit box
-						var distance = Math.max(camera.position.distanceTo(model.position) - 1, 0);
+						// compute distance to model sphere
+						// ideally this should actually use the real radius and center :) but we rescale/center the model when loading
+						var center = new THREE.Vector3();
+						var radius = 1;
+						var distance = Math.max(camera.position.distanceTo(center) - radius, 0);
 						var loderrortarget = 1e-3; // ~1 pixel at 1k x 1k
 
 						// note: we are currently cutting corners wrt handling the actual mesh scale
@@ -343,17 +349,23 @@
 							error = Math.max(error, err); // note: we are ignoring the possibility of different mesh scales atm
 							triangles += tri;
 							vertices += object.geometry.attributes.position.count;
+							rnum += tri;
+							rden += object.original.index.count / 3;
 						}
 						if (object.isPoints) {
 							simplifyPoints(object.geometry);
 
-							vertices += object.geometry.attributes.position.count;
+							vertices += object.geometry.index.count;
+							rnum += object.geometry.index.count;
+							rden += object.geometry.attributes.position.count;
 						}
 					});
 
 					settings.stats.triangles = triangles;
 					settings.stats.vertices = vertices;
 					settings.stats.error = error.toExponential(3);
+
+					document.getElementById('ratio').innerText = ((rnum / rden) * 100).toFixed(1) + '%';
 				});
 			}
 
@@ -460,7 +472,12 @@
 				camera.position.z = 3.0;
 
 				controls = new OrbitControls(camera, renderer.domElement);
-				controls.addEventListener('change', simplify);
+
+				controls.addEventListener('change', function () {
+					if (settings.autoLod) {
+						simplify();
+					}
+				});
 
 				scene = new THREE.Scene();
 				scene.background = new THREE.Color(0x300a24);
