@@ -71,6 +71,8 @@
 				normalWeight: 0.5,
 				colorWeight: 1.0,
 				textureWeight: 0.0,
+				autoLod: false,
+				autoLodFactor: 1.0,
 
 				stats: {
 					triangles: 0,
@@ -116,6 +118,10 @@
 			guiAttributes.push(guiSimplify.add(settings, 'colorWeight', 0, 2, 0.01).onChange(simplify));
 			guiAttributes.push(guiSimplify.add(settings, 'textureWeight', 0, 100, 0.1).onChange(simplify));
 
+			var guiLod = gui.addFolder('LOD');
+			guiLod.add(settings, 'autoLod').onChange(simplify);
+			guiLod.add(settings, 'autoLodFactor', 0, 10, 0.01).onChange(simplify);
+
 			var guiLoad = gui.addFolder('Load');
 			guiLoad.add(settings, 'loadFile');
 			guiLoad.add(settings, 'updateModule');
@@ -138,7 +144,7 @@
 				}
 			}
 
-			function simplifyMesh(geo) {
+			function simplifyMesh(geo, threshold) {
 				if (settings.weldVertices) {
 					// pre-welding is important for some meshes that have very close normals in adjacent face corners
 					// for now we use the welder from three.js; this is not as performant as it could be
@@ -149,7 +155,7 @@
 
 				var positions = new Float32Array(geo.attributes.position.array);
 				var indices = new Uint32Array(geo.index.array); // needed for _InternalDebug to work
-				var target = Math.floor((indices.length * settings.ratio) / 3) * 3;
+				var target = settings.autoLod ? 0 : Math.floor((indices.length * settings.ratio) / 3) * 3;
 
 				if (settings.useAttributes) {
 					var attrib = new Float32Array(geo.attributes.position.count * attributes);
@@ -190,7 +196,6 @@
 					flags.push('LockBorder');
 				}
 
-				var threshold = Math.pow(10, -settings.errorThresholdLog10);
 				var stride = geo.attributes.position instanceof THREE.InterleavedBufferAttribute ? geo.attributes.position.data.stride : 3;
 
 				console.time('simplify');
@@ -297,6 +302,21 @@
 					var vertices = 0;
 					var error = 0;
 
+					var threshold = Math.pow(10, -settings.errorThresholdLog10);
+
+					if (settings.autoLod) {
+						// subtract 1 because we assume model radius is 1.0, so this is a distance-to-sphere
+						// ideally this should actually use the real radius :) but we rescale the model to fit a unit box
+						var distance = Math.max(camera.position.distanceTo(model.position) - 1, 0);
+						var loderrortarget = 1e-3; // ~1 pixel at 1k x 1k
+
+						// note: we are currently cutting corners wrt handling the actual mesh scale
+						// since we rescale the entire scene to fit a unit box, we can directly feed the threshold
+						// this works correctly if there's just one mesh or scales match; ideally we tweak this to compute
+						// threshold per mesh based on relative scale between mesh and scene.
+						threshold = distance * loderrortarget * settings.autoLodFactor;
+					}
+
 					scene.traverse(function (object) {
 						if (object.isMesh) {
 							if (!object.original) {
@@ -316,7 +336,7 @@
 								];
 							}
 
-							var [geo, tri, err] = simplifyMesh(object.original);
+							var [geo, tri, err] = simplifyMesh(object.original, threshold);
 
 							object.geometry = geo;
 
@@ -405,11 +425,11 @@
 						model = gltf.scene;
 
 						var bbox = new THREE.Box3().setFromObject(model);
-						var scale = 2 / (bbox.max.y - bbox.min.y);
-						var offset = (-(bbox.min.y + bbox.max.y) / 2) * scale;
+						var scale = 2 / Math.max(bbox.max.x - bbox.min.x, bbox.max.y - bbox.min.y, bbox.max.z - bbox.min.z);
+						var offset = new THREE.Vector3().addVectors(bbox.max, bbox.min).multiplyScalar(scale / 2);
 
 						model.scale.set(scale, scale, scale);
-						model.position.set(0, offset, 0);
+						model.position.set(-offset.x, -offset.y, -offset.z);
 
 						scene.add(model);
 
@@ -435,11 +455,12 @@
 
 				window.addEventListener('resize', onWindowResize, false);
 
-				camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 100);
+				camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
 				camera.position.y = 1.0;
 				camera.position.z = 3.0;
 
 				controls = new OrbitControls(camera, renderer.domElement);
+				controls.addEventListener('change', simplify);
 
 				scene = new THREE.Scene();
 				scene.background = new THREE.Color(0x300a24);
