@@ -286,6 +286,8 @@ lod.resize(meshopt_simplify(&lod[0], indices, index_count, &vertices[0].x, verte
 
 Target error is an approximate measure of the deviation from the original mesh using distance normalized to `[0..1]` range (e.g. `1e-2f` means that simplifier will try to maintain the error to be below 1% of the mesh extents). Note that the simplifier attempts to produce the requested number of indices at minimal error, but because of topological restrictions and error limit it is not guaranteed to reach the target index count and can stop earlier.
 
+To disable the error limit, `target_error` can be set to `FLT_MAX`. This makes it more likely that the simplifier will reach the target index count, but it may produce a mesh that looks significantly different from the original, so using the resulting error to control viewing distance would be required. Conversely, setting `target_index_count` to 0 will simplify the input mesh as much as possible within the specified error limit; this can be useful for generating LODs that should look good at a given viewing distance.
+
 The second simplification algorithm, `meshopt_simplifySloppy`, doesn't follow the topology of the original mesh. This means that it doesn't preserve attribute seams or borders, but it can collapse internal details that are too small to matter better because it can merge mesh features that are topologically disjoint but spatially close.
 
 ```c++
@@ -301,9 +303,15 @@ lod.resize(meshopt_simplifySloppy(&lod[0], indices, index_count, &vertices[0].x,
 
 This algorithm will not stop early due to topology restrictions but can still do so if target index count can't be reached without introducing an error larger than target. It is 5-6x faster than `meshopt_simplify` when simplification ratio is large, and is able to reach ~20M triangles/sec on a desktop CPU (`meshopt_simplify` works at ~3M triangles/sec).
 
-When a sequence of LOD meshes is generated that all use the original vertex buffer, care must be taken to order vertices optimally to not penalize mobile GPU architectures that are only capable of transforming a sequential vertex buffer range. It's recommended in this case to first optimize each LOD for vertex cache, then assemble all LODs in one large index buffer starting from the coarsest LOD (the one with fewest triangles), and call `meshopt_optimizeVertexFetch` on the final large index buffer. This will make sure that coarser LODs require a smaller vertex range and are efficient wrt vertex fetch and transform.
+Both algorithms can also return the resulting normalized deviation that can be used to choose the correct level of detail based on screen size or solid angle; the error can be converted to object space by multiplying by the scaling factor returned by `meshopt_simplifyScale`. For example, given a mesh with a precomputed LOD and a prescaled error, the screen-space normalized error can be computed and used for LOD selection:
 
-Both algorithms can also return the resulting normalized deviation that can be used to choose the correct level of detail based on screen size or solid angle; the error can be converted to world space by multiplying by the scaling factor returned by `meshopt_simplifyScale`.
+```c++
+float d = max(0, distance(camera_position, mesh_center) - mesh_radius);
+float e = d * (tan(camera_fovy / 2) * 2 / 1000); // assume ~1000 px vertical resolution
+bool lod_ok = e * lod_factor >= lod_error; // lod_factor can be 1 or can be adjusted for more or less aggressive LOD selection
+```
+
+When a sequence of LOD meshes is generated that all use the original vertex buffer, care must be taken to order vertices optimally to not penalize mobile GPU architectures that are only capable of transforming a sequential vertex buffer range. It's recommended in this case to first optimize each LOD for vertex cache, then assemble all LODs in one large index buffer starting from the coarsest LOD (the one with fewest triangles), and call `meshopt_optimizeVertexFetch` on the final large index buffer. This will make sure that coarser LODs require a smaller vertex range and are efficient wrt vertex fetch and transform.
 
 ## Advanced simplification
 
