@@ -84,7 +84,12 @@ static void fillParams(basisu::basis_compressor_params& params, const char* inpu
 	}
 
 	params.m_read_source_images = true;
+
+#if BASISU_LIB_VERSION >= 150
+	params.m_write_output_basis_or_ktx2_files = true;
+#else
 	params.m_write_output_basis_files = true;
+#endif
 
 	params.m_source_filenames.resize(1);
 	params.m_source_filenames[0] = input;

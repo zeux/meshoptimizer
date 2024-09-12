@@ -45,6 +45,15 @@
 #define NOMINMAX
 #endif
 
+#include "transcoder/basisu_transcoder.cpp"
+
+#if BASISD_LIB_VERSION >= 150
+#include "encoder/3rdparty/android_astc_decomp.cpp"
+#include "encoder/3rdparty/tinyexr.cpp"
+#include "encoder/basisu_astc_hdr_enc.cpp"
+#undef MINIZ_HEADER_FILE_ONLY // to avoid redefinition warnings
+#endif
+
 #include "encoder/basisu_backend.cpp"
 #include "encoder/basisu_basis_file.cpp"
 #include "encoder/basisu_bc7enc.cpp"
@@ -62,7 +71,6 @@
 #include "encoder/basisu_uastc_enc.cpp"
 #include "encoder/jpgd.cpp"
 #include "encoder/pvpngreader.cpp"
-#include "transcoder/basisu_transcoder.cpp"
 
 #undef CLAMP
 #include "zstd/zstd.c"
