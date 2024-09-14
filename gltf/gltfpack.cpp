@@ -1217,12 +1217,8 @@ unsigned int textureMask(const char* arg)
 }
 
 #ifndef GLTFFUZZ
-int main(int argc, char** argv)
+int run(int argc, char** argv)
 {
-#ifndef __wasi__
-	setlocale(LC_ALL, "C"); // disable locale specific convention for number parsing/printing
-#endif
-
 	meshopt_encodeVertexVersion(0);
 	meshopt_encodeIndexVersion(1);
 
@@ -1633,12 +1629,43 @@ int main(int argc, char** argv)
 }
 #endif
 
+#if !defined(_WIN32) && !defined(__wasi__)
+int main(int argc, char** argv)
+{
+	setlocale(LC_ALL, "C"); // disable locale specific convention for number parsing/printing
+	return run(argc, argv);
+}
+#endif
+
+#ifdef _WIN32
+int wmain(int argc, wchar_t* argv[])
+{
+	setlocale(LC_ALL, "en_us.utf8"); // use utf8 as ansi codepage
+
+	std::vector<char*> args;
+	for (int i = 0; i < argc; ++i)
+	{
+		std::mbstate_t state = {};
+		const wchar_t* argw = argv[i];
+		size_t len = wcsrtombs(NULL, &argw, 0, &state);
+		if (len == size_t(-1))
+			return -1;
+
+		char* argu = new char[len + 1];
+		wcsrtombs(argu, &argw, len + 1, &state);
+		args.push_back(argu);
+	}
+
+	return run(int(args.size()), args.data());
+}
+#endif
+
 #ifdef __wasi__
 extern "C" int pack(int argc, char** argv)
 {
 	chdir("/gltfpack-$pwd");
 
-	int result = main(argc, argv);
+	int result = run(argc, argv);
 	fflush(NULL);
 	return result;
 }
