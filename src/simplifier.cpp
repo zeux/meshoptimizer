@@ -1102,7 +1102,7 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 	size_t edge_collapse_goal = triangle_collapse_goal / 2;
 
 #if TRACE
-	size_t stats[4] = {};
+	size_t stats[7] = {};
 #endif
 
 	for (size_t i = 0; i < collapse_count; ++i)
@@ -1112,10 +1112,16 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		TRACESTATS(0);
 
 		if (c.error > error_limit)
+		{
+			TRACESTATS(4);
 			break;
+		}
 
 		if (triangle_collapses >= triangle_collapse_goal)
+		{
+			TRACESTATS(5);
 			break;
+		}
 
 		// we limit the error in each pass based on the error of optimal last collapse; since many collapses will be locked
 		// as they will share vertices with other successfull collapses, we need to increase the acceptable error by some factor
@@ -1124,7 +1130,10 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		// on average, each collapse is expected to lock 6 other collapses; to avoid degenerate passes on meshes with odd
 		// topology, we only abort if we got over 1/6 collapses accordingly.
 		if (c.error > error_goal && triangle_collapses > triangle_collapse_goal / 6)
+		{
+			TRACESTATS(6);
 			break;
+		}
 
 		unsigned int i0 = c.v0;
 		unsigned int i1 = c.v1;
@@ -1216,11 +1225,13 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 	}
 
 #if TRACE
-	float error_goal_perfect = edge_collapse_goal < collapse_count ? collapses[collapse_order[edge_collapse_goal]].error : 0.f;
+	float error_goal_last = edge_collapse_goal < collapse_count ? 1.5f * collapses[collapse_order[edge_collapse_goal]].error : FLT_MAX;
+	float error_goal_limit = error_goal_last < error_limit ? error_goal_last : error_limit;
 
-	printf("removed %d triangles, error %e (goal %e); evaluated %d/%d collapses (done %d, skipped %d, invalid %d)\n",
-	    int(triangle_collapses), sqrtf(result_error), sqrtf(error_goal_perfect),
-	    int(stats[0]), int(collapse_count), int(edge_collapses), int(stats[1]), int(stats[2]));
+	printf("removed %d triangles, error %e (goal %e); evaluated %d/%d collapses (done %d, skipped %d, invalid %d); %s\n",
+	    int(triangle_collapses), sqrtf(result_error), sqrtf(error_goal_limit),
+	    int(stats[0]), int(collapse_count), int(edge_collapses), int(stats[1]), int(stats[2]),
+	    stats[4] ? "error limit" : (stats[5] ? "count limit" : (stats[6] ? "error goal" : "out of collapses")));
 #endif
 
 	return edge_collapses;
