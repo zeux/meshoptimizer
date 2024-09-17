@@ -1151,7 +1151,7 @@ static void simplifyAttr(bool skip_g)
 		{
 			vb[y * 3 + x][0] = float(x);
 			vb[y * 3 + x][1] = float(y);
-			vb[y * 3 + x][2] = 0.03f * x + 0.03f * (y % 2);
+			vb[y * 3 + x][2] = 0.03f * x + 0.03f * (y % 2) + (x == 2 && y == 7) * 0.03f;
 			vb[y * 3 + x][3] = r;
 			vb[y * 3 + x][4] = g;
 			vb[y * 3 + x][5] = b;

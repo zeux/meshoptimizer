@@ -1056,16 +1056,22 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 
 static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapses, size_t collapse_count)
 {
-	const int sort_bits = 11;
+	// we use counting sort to order collapses by error; since the exact sort order is not as critical,
+	// only top 12 bits of exponent+mantissa (8 bits of exponent and 4 bits of mantissa) are used.
+	// to avoid excessive stack usage, we clamp the exponent range as collapses with errors much higher than 1 are not useful.
+	const unsigned int sort_bits = 12;
+	const unsigned int sort_bins = 2048 + 512; // exponent range [-127, 32)
 
 	// fill histogram for counting sort
-	unsigned int histogram[1 << sort_bits];
+	unsigned int histogram[sort_bins];
 	memset(histogram, 0, sizeof(histogram));
 
 	for (size_t i = 0; i < collapse_count; ++i)
 	{
 		// skip sign bit since error is non-negative
-		unsigned int key = (collapses[i].errorui << 1) >> (32 - sort_bits);
+		unsigned int error = collapses[i].errorui;
+		unsigned int key = (error << 1) >> (32 - sort_bits);
+		key = key < sort_bins ? key : sort_bins - 1;
 
 		histogram[key]++;
 	}
@@ -1073,7 +1079,7 @@ static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapse
 	// compute offsets based on histogram data
 	size_t histogram_sum = 0;
 
-	for (size_t i = 0; i < 1 << sort_bits; ++i)
+	for (size_t i = 0; i < sort_bins; ++i)
 	{
 		size_t count = histogram[i];
 		histogram[i] = unsigned(histogram_sum);
@@ -1086,7 +1092,9 @@ static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapse
 	for (size_t i = 0; i < collapse_count; ++i)
 	{
 		// skip sign bit since error is non-negative
-		unsigned int key = (collapses[i].errorui << 1) >> (32 - sort_bits);
+		unsigned int error = collapses[i].errorui;
+		unsigned int key = (error << 1) >> (32 - sort_bits);
+		key = key < sort_bins ? key : sort_bins - 1;
 
 		sort_order[histogram[key]++] = unsigned(i);
 	}
@@ -1102,7 +1110,7 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 	size_t edge_collapse_goal = triangle_collapse_goal / 2;
 
 #if TRACE
-	size_t stats[4] = {};
+	size_t stats[7] = {};
 #endif
 
 	for (size_t i = 0; i < collapse_count; ++i)
@@ -1112,10 +1120,16 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		TRACESTATS(0);
 
 		if (c.error > error_limit)
+		{
+			TRACESTATS(4);
 			break;
+		}
 
 		if (triangle_collapses >= triangle_collapse_goal)
+		{
+			TRACESTATS(5);
 			break;
+		}
 
 		// we limit the error in each pass based on the error of optimal last collapse; since many collapses will be locked
 		// as they will share vertices with other successfull collapses, we need to increase the acceptable error by some factor
@@ -1123,8 +1137,11 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 
 		// on average, each collapse is expected to lock 6 other collapses; to avoid degenerate passes on meshes with odd
 		// topology, we only abort if we got over 1/6 collapses accordingly.
-		if (c.error > error_goal && triangle_collapses > triangle_collapse_goal / 6)
+		if (c.error > error_goal && c.error > result_error && triangle_collapses > triangle_collapse_goal / 6)
+		{
+			TRACESTATS(6);
 			break;
+		}
 
 		unsigned int i0 = c.v0;
 		unsigned int i1 = c.v1;
@@ -1216,11 +1233,13 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 	}
 
 #if TRACE
-	float error_goal_perfect = edge_collapse_goal < collapse_count ? collapses[collapse_order[edge_collapse_goal]].error : 0.f;
+	float error_goal_last = edge_collapse_goal < collapse_count ? 1.5f * collapses[collapse_order[edge_collapse_goal]].error : FLT_MAX;
+	float error_goal_limit = error_goal_last < error_limit ? error_goal_last : error_limit;
 
-	printf("removed %d triangles, error %e (goal %e); evaluated %d/%d collapses (done %d, skipped %d, invalid %d)\n",
-	    int(triangle_collapses), sqrtf(result_error), sqrtf(error_goal_perfect),
-	    int(stats[0]), int(collapse_count), int(edge_collapses), int(stats[1]), int(stats[2]));
+	printf("removed %d triangles, error %e (goal %e); evaluated %d/%d collapses (done %d, skipped %d, invalid %d); %s\n",
+	    int(triangle_collapses), sqrtf(result_error), sqrtf(error_goal_limit),
+	    int(stats[0]), int(collapse_count), int(edge_collapses), int(stats[1]), int(stats[2]),
+	    stats[4] ? "error limit" : (stats[5] ? "count limit" : (stats[6] ? "error goal" : "out of collapses")));
 #endif
 
 	return edge_collapses;
