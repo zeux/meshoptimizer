@@ -1129,7 +1129,7 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 
 		// on average, each collapse is expected to lock 6 other collapses; to avoid degenerate passes on meshes with odd
 		// topology, we only abort if we got over 1/6 collapses accordingly.
-		if (c.error > error_goal && triangle_collapses > triangle_collapse_goal / 6)
+		if (c.error > error_goal && c.error > result_error && triangle_collapses > triangle_collapse_goal / 6)
 		{
 			TRACESTATS(6);
 			break;
