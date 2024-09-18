@@ -1276,13 +1276,19 @@ static void remapEdgeLoops(unsigned int* loop, size_t vertex_count, const unsign
 {
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
+		// note: this is a no-op for vertices that were remapped
+		// ideally we would clear the loop entries for those for consistency, even though they aren't going to be used
+		// however, the remapping process needs loop information for remapped vertices, so this would require a separate pass
 		if (loop[i] != ~0u)
 		{
 			unsigned int l = loop[i];
 			unsigned int r = collapse_remap[l];
 
 			// i == r is a special case when the seam edge is collapsed in a direction opposite to where loop goes
-			loop[i] = (i == r) ? loop[l] : r;
+			if (i == r)
+				loop[i] = (loop[l] != ~0u) ? collapse_remap[loop[l]] : ~0u;
+			else
+				loop[i] = r;
 		}
 	}
 }
