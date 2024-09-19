@@ -294,7 +294,7 @@ enum VertexKind
 // for example, while we could collapse Complex into Manifold, this would mean the target vertex isn't Manifold anymore
 const unsigned char kCanCollapse[Kind_Count][Kind_Count] = {
     {1, 1, 1, 1, 1},
-    {0, 1, 0, 0, 0},
+    {0, 1, 0, 0, 1},
     {0, 0, 1, 0, 0},
     {0, 0, 0, 1, 1},
     {0, 0, 0, 0, 0},
@@ -947,7 +947,7 @@ static size_t boundEdgeCollapses(const EdgeAdjacency& adjacency, size_t vertex_c
 	return (index_count - dual_count / 2) + 3;
 }
 
-static size_t pickEdgeCollapses(Collapse* collapses, size_t collapse_capacity, const unsigned int* indices, size_t index_count, const unsigned int* remap, const unsigned char* vertex_kind, const unsigned int* loop)
+static size_t pickEdgeCollapses(Collapse* collapses, size_t collapse_capacity, const unsigned int* indices, size_t index_count, const unsigned int* remap, const unsigned char* vertex_kind, const unsigned int* loop, const unsigned int* loopback)
 {
 	size_t collapse_count = 0;
 
@@ -986,6 +986,16 @@ static size_t pickEdgeCollapses(Collapse* collapses, size_t collapse_capacity, c
 			// loop[] tracks half edges so we only need to check i0->i1
 			if (k0 == k1 && (k0 == Kind_Border || k0 == Kind_Seam) && loop[i0] != i1)
 				continue;
+
+			if (k0 == Kind_Locked || k1 == Kind_Locked)
+			{
+				// the same check as above, but for border/seam -> locked collapses
+				// loop[] and loopback[] track half edges so we only need to check one of them
+				if ((k0 == Kind_Border || k0 == Kind_Seam) && loop[i0] != i1)
+					continue;
+				if ((k1 == Kind_Border || k1 == Kind_Seam) && loopback[i1] != i0)
+					continue;
+			}
 
 			// edge can be collapsed in either direction - we will pick the one with minimum error
 			// note: we evaluate error later during collapse ranking, here we just tag the edge as bidirectional
@@ -1730,7 +1740,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 		// note: throughout the simplification process adjacency structure reflects welded topology for result-in-progress
 		updateEdgeAdjacency(adjacency, result, result_count, vertex_count, remap);
 
-		size_t edge_collapse_count = pickEdgeCollapses(edge_collapses, collapse_capacity, result, result_count, remap, vertex_kind, loop);
+		size_t edge_collapse_count = pickEdgeCollapses(edge_collapses, collapse_capacity, result, result_count, remap, vertex_kind, loop, loopback);
 		assert(edge_collapse_count <= collapse_capacity);
 
 		// no edges can be collapsed any more due to topology restrictions
