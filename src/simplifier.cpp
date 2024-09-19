@@ -1202,6 +1202,9 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 				assert(s0 != i0 && wedge[s0] == i0);
 				assert(s1 != ~0u && remap[s1] == r1);
 
+				// note: this should never happen due to the assertion above, but when disabled if we ever hit this case we'll get a memory safety issue; for now play it safe
+				s1 = s1 != ~0u ? s1 : wedge[i1];
+
 				quadricAdd(attribute_quadrics[s1], attribute_quadrics[s0]);
 				quadricAdd(&attribute_gradients[s1 * attribute_count], &attribute_gradients[s0 * attribute_count], attribute_count);
 			}
@@ -1230,6 +1233,9 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 			assert(kind != vertex_kind[i1] || s1 == wedge[i1]);
 			assert(loop[i0] == i1 || loopback[i0] == i1);
 			assert(loop[s0] == s1 || loopback[s0] == s1);
+
+			// note: this should never happen due to the assertion above, but when disabled if we ever hit this case we'll get a memory safety issue; for now play it safe
+			s1 = s1 != ~0u ? s1 : wedge[i1];
 
 			collapse_remap[i0] = i1;
 			collapse_remap[s0] = s1;
