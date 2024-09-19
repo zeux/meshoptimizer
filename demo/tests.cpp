@@ -1418,6 +1418,24 @@ static void simplifySeam()
 	assert(fabsf(error - 0.04f) < 0.01f); // note: this is the same error as above because the attribute is constant on either side of the seam
 }
 
+static void simplifySeamFake()
+{
+	// xyz+attr
+	float vb[] = {
+	    0, 0, 0, 0,
+	    1, 0, 0, 1,
+	    1, 0, 0, 2,
+	    0, 0, 0, 3, // clang-format :-/
+	};
+
+	unsigned int ib[] = {
+	    0, 1, 2,
+	    2, 1, 3, // clang-format :-/
+	};
+
+	assert(meshopt_simplify(ib, ib, 6, vb, 4, 16, 0, 1.f, 0, NULL) == 6);
+}
+
 static void adjacency()
 {
 	// 0 1/4
@@ -1673,6 +1691,7 @@ void runTests()
 	simplifySparse();
 	simplifyErrorAbsolute();
 	simplifySeam();
+	simplifySeamFake();
 
 	adjacency();
 	tessellation();

@@ -407,7 +407,7 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 				if (openiv != ~0u && openiv != i && openov != ~0u && openov != i &&
 				    openiw != ~0u && openiw != w && openow != ~0u && openow != w)
 				{
-					if (remap[openiv] == remap[openow] && remap[openov] == remap[openiw])
+					if (remap[openiv] == remap[openow] && remap[openov] == remap[openiw] && remap[openiv] != remap[openov])
 					{
 						result[i] = Kind_Seam;
 					}
