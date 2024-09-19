@@ -216,6 +216,9 @@ codecbench-simd.wasm: tools/codecbench.cpp $(LIBRARY_SOURCES)
 codecfuzz: tools/codecfuzz.cpp src/vertexcodec.cpp src/indexcodec.cpp
 	$(CXX) $^ -fsanitize=fuzzer,address,undefined -O1 -g -o $@
 
+simplifyfuzz: tools/simplifyfuzz.cpp src/simplifier.cpp
+	$(CXX) $^ -fsanitize=fuzzer,address,undefined -O1 -g -o $@
+
 $(LIBRARY): $(LIBRARY_OBJECTS)
 	ar rcs $@ $^
 
