@@ -295,7 +295,7 @@ enum VertexKind
 const unsigned char kCanCollapse[Kind_Count][Kind_Count] = {
     {1, 1, 1, 1, 1},
     {0, 1, 0, 0, 1},
-    {0, 0, 1, 0, 0},
+    {0, 0, 1, 0, 1},
     {0, 0, 0, 1, 1},
     {0, 0, 0, 0, 0},
 };
@@ -1110,7 +1110,7 @@ static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapse
 	}
 }
 
-static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, Quadric* attribute_quadrics, QuadricGrad* attribute_gradients, size_t attribute_count, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, const Vector3* vertex_positions, const EdgeAdjacency& adjacency, size_t triangle_collapse_goal, float error_limit, float& result_error)
+static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, Quadric* attribute_quadrics, QuadricGrad* attribute_gradients, size_t attribute_count, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, const unsigned int* loop, const unsigned int* loopback, const Vector3* vertex_positions, const EdgeAdjacency& adjacency, size_t triangle_collapse_goal, float error_limit, float& result_error)
 {
 	size_t edge_collapses = 0;
 	size_t triangle_collapses = 0;
@@ -1197,7 +1197,10 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 			if (kind == Kind_Seam)
 			{
 				// seam collapses involve two edges so we need to update attribute quadrics for both target vertices; position quadrics are shared
-				unsigned int s0 = wedge[i0], s1 = wedge[i1];
+				unsigned int s0 = wedge[i0];
+				unsigned int s1 = loop[i0] == i1 ? loopback[s0] : loop[s0];
+				assert(s0 != i0 && wedge[s0] == i0);
+				assert(s1 != ~0u && remap[s1] == r1);
 
 				quadricAdd(attribute_quadrics[s1], attribute_quadrics[s0]);
 				quadricAdd(&attribute_gradients[s1 * attribute_count], &attribute_gradients[s0 * attribute_count], attribute_count);
@@ -1218,9 +1221,15 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		else if (kind == Kind_Seam)
 		{
 			// remap v0 to v1 and seam pair of v0 to seam pair of v1
-			unsigned int s0 = wedge[i0], s1 = wedge[i1];
-			assert(s0 != i0 && s1 != i1);
-			assert(wedge[s0] == i0 && wedge[s1] == i1);
+			unsigned int s0 = wedge[i0];
+			unsigned int s1 = loop[i0] == i1 ? loopback[s0] : loop[s0];
+			assert(s0 != i0 && wedge[s0] == i0);
+			assert(s1 != ~0u && remap[s1] == r1);
+
+			// additional asserts to verify that the seam pair is consistent
+			assert(kind != vertex_kind[i1] || s1 == wedge[i1]);
+			assert(loop[i0] == i1 || loopback[i0] == i1);
+			assert(loop[s0] == s1 || loopback[s0] == s1);
 
 			collapse_remap[i0] = i1;
 			collapse_remap[s0] = s1;
@@ -1762,7 +1771,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 
 		memset(collapse_locked, 0, vertex_count);
 
-		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, vertex_positions, adjacency, triangle_collapse_goal, error_limit, result_error);
+		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, loop, loopback, vertex_positions, adjacency, triangle_collapse_goal, error_limit, result_error);
 
 		// no edges can be collapsed any more due to hitting the error limit or triangle collapse limit
 		if (collapses == 0)
