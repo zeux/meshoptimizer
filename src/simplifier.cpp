@@ -1186,6 +1186,25 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		assert(collapse_remap[r0] == r0);
 		assert(collapse_remap[r1] == r1);
 
+		unsigned int sx = i1;
+
+		// for seam collapses we need to move the seam pair together; this is a bit tricky to compute since we need to rely on edge loops as target vertex may be locked (and thus have more than two wedges)
+		if (kind == Kind_Seam)
+		{
+			unsigned int s0 = wedge[i0];
+			unsigned int s1 = loop[i0] == i1 ? loopback[s0] : loop[s0];
+			assert(s0 != i0 && wedge[s0] == i0);
+			assert(s1 != ~0u && remap[s1] == r1);
+
+			// additional asserts to verify that the seam pair is consistent
+			assert(kind != vertex_kind[i1] || s1 == wedge[i1]);
+			assert(loop[i0] == i1 || loopback[i0] == i1);
+			assert(loop[s0] == s1 || loopback[s0] == s1);
+
+			// note: this should never happen due to the assertion above, but when disabled if we ever hit this case we'll get a memory safety issue; for now play it safe
+			sx = (s1 != ~0u) ? s1 : wedge[i1];
+		}
+
 		quadricAdd(vertex_quadrics[r1], vertex_quadrics[r0]);
 
 		if (attribute_count)
@@ -1197,13 +1216,7 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 			if (kind == Kind_Seam)
 			{
 				// seam collapses involve two edges so we need to update attribute quadrics for both target vertices; position quadrics are shared
-				unsigned int s0 = wedge[i0];
-				unsigned int s1 = loop[i0] == i1 ? loopback[s0] : loop[s0];
-				assert(s0 != i0 && wedge[s0] == i0);
-				assert(s1 != ~0u && remap[s1] == r1);
-
-				// note: this should never happen due to the assertion above, but when disabled if we ever hit this case we'll get a memory safety issue; for now play it safe
-				s1 = s1 != ~0u ? s1 : wedge[i1];
+				unsigned int s0 = wedge[i0], s1 = sx;
 
 				quadricAdd(attribute_quadrics[s1], attribute_quadrics[s0]);
 				quadricAdd(&attribute_gradients[s1 * attribute_count], &attribute_gradients[s0 * attribute_count], attribute_count);
@@ -1224,18 +1237,9 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		else if (kind == Kind_Seam)
 		{
 			// remap v0 to v1 and seam pair of v0 to seam pair of v1
-			unsigned int s0 = wedge[i0];
-			unsigned int s1 = loop[i0] == i1 ? loopback[s0] : loop[s0];
+			unsigned int s0 = wedge[i0], s1 = sx;
 			assert(s0 != i0 && wedge[s0] == i0);
-			assert(s1 != ~0u && remap[s1] == r1);
-
-			// additional asserts to verify that the seam pair is consistent
-			assert(kind != vertex_kind[i1] || s1 == wedge[i1]);
-			assert(loop[i0] == i1 || loopback[i0] == i1);
-			assert(loop[s0] == s1 || loopback[s0] == s1);
-
-			// note: this should never happen due to the assertion above, but when disabled if we ever hit this case we'll get a memory safety issue; for now play it safe
-			s1 = s1 != ~0u ? s1 : wedge[i1];
+			assert(remap[s1] == r1);
 
 			collapse_remap[i0] = i1;
 			collapse_remap[s0] = s1;
