@@ -1389,33 +1389,46 @@ static void simplifySeam()
 	};
 
 	// note: vertices 1-2 and 13-14 are classified as locked, because they are on a seam & a border
-	// since seam->locked collapses are restriced, we only get to 3 triangles on each side as the seam is simplified to 3 vertices
-
-	// so we get this structure initially, and then one of the internal seam vertices is collapsed to the other one:
 	// 0   1-2   3
 	//     5-6
 	//     9-10
 	// 12 13-14 15
 	unsigned int expected[] = {
-	    0, 1, 5,
-	    2, 3, 6,
-	    0, 5, 12,
-	    12, 5, 13,
-	    6, 3, 14,
+	    0, 1, 13,
+	    2, 3, 14,
+	    0, 13, 12,
 	    14, 3, 15, // clang-format :-/
 	};
 
 	unsigned int res[36];
 	float error = 0.f;
 
-	assert(meshopt_simplify(res, ib, 36, vb, 16, 16, 18, 1.f, 0, &error) == 18);
+	assert(meshopt_simplify(res, ib, 36, vb, 16, 16, 12, 1.f, 0, &error) == 12);
 	assert(memcmp(res, expected, sizeof(expected)) == 0);
-	assert(fabsf(error - 0.04f) < 0.01f); // note: the error is not zero because there is a small difference in height between the seam vertices
+	assert(fabsf(error - 0.09f) < 0.01f); // note: the error is not zero because there is a difference in height between the seam vertices
 
 	float aw = 1;
-	assert(meshopt_simplifyWithAttributes(res, ib, 36, vb, 16, 16, vb + 3, 16, &aw, 1, NULL, 18, 2.f, 0, &error) == 18);
+	assert(meshopt_simplifyWithAttributes(res, ib, 36, vb, 16, 16, vb + 3, 16, &aw, 1, NULL, 12, 2.f, 0, &error) == 12);
 	assert(memcmp(res, expected, sizeof(expected)) == 0);
-	assert(fabsf(error - 0.04f) < 0.01f); // note: this is the same error as above because the attribute is constant on either side of the seam
+	assert(fabsf(error - 0.09f) < 0.01f); // note: this is the same error as above because the attribute is constant on either side of the seam
+}
+
+static void simplifySeamFake()
+{
+	// xyz+attr
+	float vb[] = {
+	    0, 0, 0, 0,
+	    1, 0, 0, 1,
+	    1, 0, 0, 2,
+	    0, 0, 0, 3, // clang-format :-/
+	};
+
+	unsigned int ib[] = {
+	    0, 1, 2,
+	    2, 1, 3, // clang-format :-/
+	};
+
+	assert(meshopt_simplify(ib, ib, 6, vb, 4, 16, 0, 1.f, 0, NULL) == 6);
 }
 
 static void adjacency()
@@ -1673,6 +1686,7 @@ void runTests()
 	simplifySparse();
 	simplifyErrorAbsolute();
 	simplifySeam();
+	simplifySeamFake();
 
 	adjacency();
 	tessellation();

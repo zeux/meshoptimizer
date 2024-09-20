@@ -288,14 +288,14 @@ enum VertexKind
 };
 
 // manifold vertices can collapse onto anything
-// border/seam vertices can only be collapsed onto border/seam respectively
+// border/seam vertices can collapse onto border/seam respectively, or locked
 // complex vertices can collapse onto complex/locked
 // a rule of thumb is that collapsing kind A into kind B preserves the kind B in the target vertex
 // for example, while we could collapse Complex into Manifold, this would mean the target vertex isn't Manifold anymore
 const unsigned char kCanCollapse[Kind_Count][Kind_Count] = {
     {1, 1, 1, 1, 1},
-    {0, 1, 0, 0, 0},
-    {0, 0, 1, 0, 0},
+    {0, 1, 0, 0, 1},
+    {0, 0, 1, 0, 1},
     {0, 0, 0, 1, 1},
     {0, 0, 0, 0, 0},
 };
@@ -407,7 +407,7 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 				if (openiv != ~0u && openiv != i && openov != ~0u && openov != i &&
 				    openiw != ~0u && openiw != w && openow != ~0u && openow != w)
 				{
-					if (remap[openiv] == remap[openow] && remap[openov] == remap[openiw])
+					if (remap[openiv] == remap[openow] && remap[openov] == remap[openiw] && remap[openiv] != remap[openov])
 					{
 						result[i] = Kind_Seam;
 					}
@@ -947,7 +947,7 @@ static size_t boundEdgeCollapses(const EdgeAdjacency& adjacency, size_t vertex_c
 	return (index_count - dual_count / 2) + 3;
 }
 
-static size_t pickEdgeCollapses(Collapse* collapses, size_t collapse_capacity, const unsigned int* indices, size_t index_count, const unsigned int* remap, const unsigned char* vertex_kind, const unsigned int* loop)
+static size_t pickEdgeCollapses(Collapse* collapses, size_t collapse_capacity, const unsigned int* indices, size_t index_count, const unsigned int* remap, const unsigned char* vertex_kind, const unsigned int* loop, const unsigned int* loopback)
 {
 	size_t collapse_count = 0;
 
@@ -986,6 +986,16 @@ static size_t pickEdgeCollapses(Collapse* collapses, size_t collapse_capacity, c
 			// loop[] tracks half edges so we only need to check i0->i1
 			if (k0 == k1 && (k0 == Kind_Border || k0 == Kind_Seam) && loop[i0] != i1)
 				continue;
+
+			if (k0 == Kind_Locked || k1 == Kind_Locked)
+			{
+				// the same check as above, but for border/seam -> locked collapses
+				// loop[] and loopback[] track half edges so we only need to check one of them
+				if ((k0 == Kind_Border || k0 == Kind_Seam) && loop[i0] != i1)
+					continue;
+				if ((k1 == Kind_Border || k1 == Kind_Seam) && loopback[i1] != i0)
+					continue;
+			}
 
 			// edge can be collapsed in either direction - we will pick the one with minimum error
 			// note: we evaluate error later during collapse ranking, here we just tag the edge as bidirectional
@@ -1100,7 +1110,7 @@ static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapse
 	}
 }
 
-static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, Quadric* attribute_quadrics, QuadricGrad* attribute_gradients, size_t attribute_count, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, const Vector3* vertex_positions, const EdgeAdjacency& adjacency, size_t triangle_collapse_goal, float error_limit, float& result_error)
+static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, Quadric* attribute_quadrics, QuadricGrad* attribute_gradients, size_t attribute_count, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, const unsigned int* loop, const unsigned int* loopback, const Vector3* vertex_positions, const EdgeAdjacency& adjacency, size_t triangle_collapse_goal, float error_limit, float& result_error)
 {
 	size_t edge_collapses = 0;
 	size_t triangle_collapses = 0;
@@ -1176,6 +1186,25 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		assert(collapse_remap[r0] == r0);
 		assert(collapse_remap[r1] == r1);
 
+		unsigned int sx = i1;
+
+		// for seam collapses we need to move the seam pair together; this is a bit tricky to compute since we need to rely on edge loops as target vertex may be locked (and thus have more than two wedges)
+		if (kind == Kind_Seam)
+		{
+			unsigned int s0 = wedge[i0];
+			unsigned int s1 = loop[i0] == i1 ? loopback[s0] : loop[s0];
+			assert(s0 != i0 && wedge[s0] == i0);
+			assert(s1 != ~0u && remap[s1] == r1);
+
+			// additional asserts to verify that the seam pair is consistent
+			assert(kind != vertex_kind[i1] || s1 == wedge[i1]);
+			assert(loop[i0] == i1 || loopback[i0] == i1);
+			assert(loop[s0] == s1 || loopback[s0] == s1);
+
+			// note: this should never happen due to the assertion above, but when disabled if we ever hit this case we'll get a memory safety issue; for now play it safe
+			sx = (s1 != ~0u) ? s1 : wedge[i1];
+		}
+
 		quadricAdd(vertex_quadrics[r1], vertex_quadrics[r0]);
 
 		if (attribute_count)
@@ -1187,7 +1216,7 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 			if (kind == Kind_Seam)
 			{
 				// seam collapses involve two edges so we need to update attribute quadrics for both target vertices; position quadrics are shared
-				unsigned int s0 = wedge[i0], s1 = wedge[i1];
+				unsigned int s0 = wedge[i0], s1 = sx;
 
 				quadricAdd(attribute_quadrics[s1], attribute_quadrics[s0]);
 				quadricAdd(&attribute_gradients[s1 * attribute_count], &attribute_gradients[s0 * attribute_count], attribute_count);
@@ -1208,9 +1237,9 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		else if (kind == Kind_Seam)
 		{
 			// remap v0 to v1 and seam pair of v0 to seam pair of v1
-			unsigned int s0 = wedge[i0], s1 = wedge[i1];
-			assert(s0 != i0 && s1 != i1);
-			assert(wedge[s0] == i0 && wedge[s1] == i1);
+			unsigned int s0 = wedge[i0], s1 = sx;
+			assert(s0 != i0 && wedge[s0] == i0);
+			assert(remap[s1] == r1);
 
 			collapse_remap[i0] = i1;
 			collapse_remap[s0] = s1;
@@ -1276,13 +1305,19 @@ static void remapEdgeLoops(unsigned int* loop, size_t vertex_count, const unsign
 {
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
+		// note: this is a no-op for vertices that were remapped
+		// ideally we would clear the loop entries for those for consistency, even though they aren't going to be used
+		// however, the remapping process needs loop information for remapped vertices, so this would require a separate pass
 		if (loop[i] != ~0u)
 		{
 			unsigned int l = loop[i];
 			unsigned int r = collapse_remap[l];
 
 			// i == r is a special case when the seam edge is collapsed in a direction opposite to where loop goes
-			loop[i] = (i == r) ? loop[l] : r;
+			if (i == r)
+				loop[i] = (loop[l] != ~0u) ? collapse_remap[loop[l]] : ~0u;
+			else
+				loop[i] = r;
 		}
 	}
 }
@@ -1724,7 +1759,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 		// note: throughout the simplification process adjacency structure reflects welded topology for result-in-progress
 		updateEdgeAdjacency(adjacency, result, result_count, vertex_count, remap);
 
-		size_t edge_collapse_count = pickEdgeCollapses(edge_collapses, collapse_capacity, result, result_count, remap, vertex_kind, loop);
+		size_t edge_collapse_count = pickEdgeCollapses(edge_collapses, collapse_capacity, result, result_count, remap, vertex_kind, loop, loopback);
 		assert(edge_collapse_count <= collapse_capacity);
 
 		// no edges can be collapsed any more due to topology restrictions
@@ -1746,7 +1781,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 
 		memset(collapse_locked, 0, vertex_count);
 
-		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, vertex_positions, adjacency, triangle_collapse_goal, error_limit, result_error);
+		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, loop, loopback, vertex_positions, adjacency, triangle_collapse_goal, error_limit, result_error);
 
 		// no edges can be collapsed any more due to hitting the error limit or triangle collapse limit
 		if (collapses == 0)
