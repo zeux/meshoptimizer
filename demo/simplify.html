@@ -50,6 +50,7 @@
 		<script type="module">
 			import * as THREE from 'three';
 			import { GLTFLoader } from 'three-examples/loaders/GLTFLoader.js';
+			import { OBJLoader } from 'three-examples/loaders/OBJLoader.js';
 			import { OrbitControls } from 'three-examples/controls/OrbitControls.js';
 			import { mergeVertices } from 'three-examples/utils/BufferGeometryUtils.js';
 			import { MeshoptDecoder } from '../js/meshopt_decoder.module.js';
@@ -85,9 +86,11 @@
 					var input = document.createElement('input');
 					input.type = 'file';
 					input.onchange = function () {
-						var uri = URL.createObjectURL(input.files[0]);
+						var file = input.files[0];
+						var uri = URL.createObjectURL(file);
+						var ext = file.name.split('.').pop().toLowerCase();
 
-						load(uri);
+						load(uri, ext);
 						controls.reset();
 					};
 					input.click();
@@ -136,7 +139,7 @@
 
 			updateSettings();
 			init();
-			load('pirate.glb');
+			load('pirate.glb', 'glb');
 			animate();
 
 			function updateSettings() {
@@ -418,7 +421,7 @@
 				});
 			}
 
-			function load(path) {
+			function load(path, ext) {
 				if (model) {
 					scene.remove(model);
 					model = undefined;
@@ -429,31 +432,62 @@
 					console.log(e);
 				};
 
-				var loader = new GLTFLoader();
-				loader.setMeshoptDecoder(MeshoptDecoder);
-				loader.load(
-					path,
-					function (gltf) {
-						model = gltf.scene;
+				function center(model) {
+					var bbox = new THREE.Box3().setFromObject(model);
+					var scale = 2 / Math.max(bbox.max.x - bbox.min.x, bbox.max.y - bbox.min.y, bbox.max.z - bbox.min.z);
+					var offset = new THREE.Vector3().addVectors(bbox.max, bbox.min).multiplyScalar(scale / 2);
 
-						var bbox = new THREE.Box3().setFromObject(model);
-						var scale = 2 / Math.max(bbox.max.x - bbox.min.x, bbox.max.y - bbox.min.y, bbox.max.z - bbox.min.z);
-						var offset = new THREE.Vector3().addVectors(bbox.max, bbox.min).multiplyScalar(scale / 2);
+					model.scale.set(scale, scale, scale);
+					model.position.set(-offset.x, -offset.y, -offset.z);
+				}
 
-						model.scale.set(scale, scale, scale);
-						model.position.set(-offset.x, -offset.y, -offset.z);
+				if (ext == 'gltf' || ext == 'glb') {
+					var loader = new GLTFLoader();
+					loader.setMeshoptDecoder(MeshoptDecoder);
+					loader.load(
+						path,
+						function (gltf) {
+							model = gltf.scene;
+							center(model);
+							scene.add(model);
 
-						scene.add(model);
+							mixer = new THREE.AnimationMixer(model);
 
-						mixer = new THREE.AnimationMixer(model);
+							if (gltf.animations.length) {
+								mixer.clipAction(gltf.animations[gltf.animations.length - 1]).play();
+							}
+						},
+						onProgress,
+						onError
+					);
+				} else if (ext == 'obj') {
+					var loader = new OBJLoader();
+					loader.load(
+						path,
+						function (obj) {
+							obj.traverse(function (node) {
+								if (node.isMesh) {
+									// obj loader does not index the geometry, so we need to do it ourselves
+									node.geometry = mergeVertices(node.geometry, 0.0);
 
-						if (gltf.animations.length) {
-							mixer.clipAction(gltf.animations[gltf.animations.length - 1]).play();
-						}
-					},
-					onProgress,
-					onError
-				);
+									// we use groups and multiple materials for debug visualization, so merge all of the source ones for now
+									if (Array.isArray(node.material)) {
+										node.material = node.material[0];
+										node.geometry.clearGroups();
+									}
+								}
+							});
+
+							model = obj;
+							center(model);
+							scene.add(model);
+						},
+						onProgress,
+						onError
+					);
+				} else {
+					console.error('Unsupported file format');
+				}
 			}
 
 			function init() {
