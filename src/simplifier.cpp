@@ -1322,6 +1322,67 @@ static void remapEdgeLoops(unsigned int* loop, size_t vertex_count, const unsign
 	}
 }
 
+static unsigned int follow(unsigned int* parents, unsigned int index)
+{
+	while (index != parents[index])
+	{
+		unsigned int parent = parents[index];
+		parents[index] = parents[parent];
+		index = parent;
+	}
+
+	return index;
+}
+
+static size_t buildComponents(unsigned int* components, size_t vertex_count, const unsigned int* indices, size_t index_count, const unsigned int* remap)
+{
+	for (size_t i = 0; i < vertex_count; ++i)
+		components[i] = unsigned(i);
+
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		static const int next[4] = {1, 2, 0, 1};
+
+		for (int e = 0; e < 3; ++e)
+		{
+			unsigned int i0 = indices[i + e];
+			unsigned int i1 = indices[i + next[e]];
+
+			unsigned int r0 = remap[i0];
+			unsigned int r1 = remap[i1];
+
+			r0 = follow(components, r0);
+			r1 = follow(components, r1);
+
+			if (r0 != r1)
+				components[r0 < r1 ? r1 : r0] = r0 < r1 ? r0 : r1;
+		}
+	}
+
+	for (size_t i = 0; i < vertex_count; ++i)
+		if (remap[i] == i)
+			components[i] = follow(components, i);
+
+	unsigned int next_component = 0;
+
+	for (size_t i = 0; i < vertex_count; ++i)
+		if (remap[i] == i)
+		{
+			assert(components[i] <= i);
+			if (components[i] == i)
+				components[i] = next_component++;
+			else
+				components[i] = components[components[i]];
+		}
+		else
+		{
+			assert(remap[i] <= i);
+			components[i] = components[remap[i]];
+		}
+
+	return next_component;
+}
+
 struct CellHasher
 {
 	const unsigned int* vertex_ids;
@@ -1735,6 +1796,19 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 
 	if (attribute_count)
 		fillAttributeQuadrics(attribute_quadrics, attribute_gradients, result, index_count, vertex_positions, vertex_attributes, attribute_count);
+
+	unsigned int* components = NULL;
+
+	if (options & meshopt_SimplifyPrune)
+	{
+		components = allocator.allocate<unsigned int>(vertex_count);
+		unsigned int cc = buildComponents(components, vertex_count, indices, index_count, remap);
+		(void)cc;
+
+#if TRACE
+		printf("components: %d\n", int(cc));
+#endif
+	}
 
 #if TRACE
 	size_t pass_count = 0;
