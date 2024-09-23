@@ -1339,6 +1339,7 @@ static size_t buildComponents(unsigned int* components, size_t vertex_count, con
 	for (size_t i = 0; i < vertex_count; ++i)
 		components[i] = unsigned(i);
 
+	// compute a unique (but not sequential!) index for each component via union-find
 	for (size_t i = 0; i < index_count; i += 3)
 	{
 		static const int next[4] = {1, 2, 0, 1};
@@ -1354,31 +1355,37 @@ static size_t buildComponents(unsigned int* components, size_t vertex_count, con
 			r0 = follow(components, r0);
 			r1 = follow(components, r1);
 
+			// merge components with larger indices into components with smaller indices
+			// this guarantees that the root of the component is always the one with the smallest index
 			if (r0 != r1)
 				components[r0 < r1 ? r1 : r0] = r0 < r1 ? r0 : r1;
 		}
 	}
 
+	// make sure each element points to the component root *before* we renumber the components
 	for (size_t i = 0; i < vertex_count; ++i)
 		if (remap[i] == i)
 			components[i] = follow(components, i);
 
 	unsigned int next_component = 0;
 
+	// renumber components using sequential indices
+	// a sequential pass is sufficient because component root always has the smallest index
+	// note: it is unsafe to use follow() in this pass because we're replacing component links with sequential indices inplace
 	for (size_t i = 0; i < vertex_count; ++i)
+	{
 		if (remap[i] == i)
 		{
-			assert(components[i] <= i);
-			if (components[i] == i)
-				components[i] = next_component++;
-			else
-				components[i] = components[components[i]];
+			unsigned int root = components[i];
+			assert(root <= i); // make sure we already computed the component for non-roots
+			components[i] = (root == i) ? next_component++ : components[root];
 		}
 		else
 		{
-			assert(remap[i] <= i);
+			assert(remap[i] < i); // make sure we already computed the component
 			components[i] = components[remap[i]];
 		}
+	}
 
 	return next_component;
 }
