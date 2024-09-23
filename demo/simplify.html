@@ -67,6 +67,7 @@
 				ratio: 1.0,
 				debugOverlay: false,
 				lockBorder: false,
+				prune: false,
 				weldVertices: false,
 				useAttributes: false,
 				errorThresholdLog10: 1,
@@ -113,6 +114,7 @@
 			var guiSimplify = gui.addFolder('Simplify');
 			guiSimplify.add(settings, 'ratio', 0, 1, 0.01).onChange(simplify);
 			guiSimplify.add(settings, 'lockBorder').onChange(simplify);
+			guiSimplify.add(settings, 'prune').onChange(simplify);
 			guiSimplify.add(settings, 'weldVertices').onChange(simplify);
 			guiSimplify.add(settings, 'errorThresholdLog10', 0, 3, 0.1).onChange(simplify);
 			guiSimplify.add(settings, 'useAttributes').onChange(simplify).onFinishChange(updateSettings);
@@ -198,6 +200,9 @@
 				var flags = [];
 				if (settings.lockBorder) {
 					flags.push('LockBorder');
+				}
+				if (settings.prune) {
+					flags.push('_Prune');
 				}
 
 				var stride = geo.attributes.position instanceof THREE.InterleavedBufferAttribute ? geo.attributes.position.data.stride : 3;

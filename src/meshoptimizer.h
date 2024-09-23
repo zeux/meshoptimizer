@@ -349,6 +349,8 @@ enum
 	meshopt_SimplifySparse = 1 << 1,
 	/* Treat error limit and resulting error as absolute instead of relative to mesh extents. */
 	meshopt_SimplifyErrorAbsolute = 1 << 2,
+	/* Experimental: remove disconnected parts of the mesh during simplification incrementally, regardless of the topological restrictions inside components. */
+	meshopt_SimplifyPrune = 1 << 3,
 };
 
 /**
