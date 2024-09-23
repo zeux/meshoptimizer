@@ -1424,12 +1424,38 @@ static void measureComponents(float* component_errors, size_t component_count, c
 		float ez = component_errors[i * 6 + 5] - component_errors[i * 6 + 2];
 
 		// note: we keep the squared error to make it match quadric error metric
-		component_errors[i] = ex * ex + ey * ey + ez * ez;
+		component_errors[i] = (ex * ex + ey * ey + ez * ez) * 0.25f;
 
 #if TRACE > 1
 		printf("component %d (%f %f %f) => %f\n", int(i), ex, ey, ez, sqrtf(component_errors[i]));
 #endif
 	}
+}
+
+static size_t pruneComponents(unsigned int* indices, size_t index_count, const unsigned int* components, const float* component_errors, float error_cutoff)
+{
+	size_t write = 0;
+
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		unsigned int c = components[indices[i]];
+		assert(c == components[indices[i + 1]] && c == components[indices[i + 2]]);
+
+		if (component_errors[c] > error_cutoff)
+		{
+			indices[write + 0] = indices[i + 0];
+			indices[write + 1] = indices[i + 1];
+			indices[write + 2] = indices[i + 2];
+			write += 3;
+		}
+	}
+
+#if TRACE
+	if (write < index_count)
+		printf("pruned %d / %d triangles (error <= %e)\n", int((index_count - write) / 3), int(index_count / 3), sqrtf(error_cutoff));
+#endif
+
+	return write;
 }
 
 struct CellHasher
@@ -1848,17 +1874,22 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 
 	unsigned int* components = NULL;
 	float* component_errors = NULL;
+	size_t component_count = 0;
 
 	if (options & meshopt_SimplifyPrune)
 	{
 		components = allocator.allocate<unsigned int>(vertex_count);
-		size_t component_count = buildComponents(components, vertex_count, indices, index_count, remap);
+		component_count = buildComponents(components, vertex_count, indices, index_count, remap);
 
 		component_errors = allocator.allocate<float>(component_count * 6); // overallocate for temporary use inside measureComponents
 		measureComponents(component_errors, component_count, components, vertex_positions, vertex_count);
 
 #if TRACE
-		printf("components: %d\n", int(component_count));
+		float component_minerror = FLT_MAX;
+		for (size_t i = 0; i < component_count; ++i)
+			component_minerror = component_minerror > component_errors[i] ? component_errors[i] : component_minerror;
+
+		printf("components: %d (min error %e)\n", int(component_count), sqrtf(component_minerror));
 #endif
 	}
 
@@ -1920,7 +1951,13 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 		assert(new_count < result_count);
 
 		result_count = new_count;
+
+		if ((options & meshopt_SimplifyPrune) && result_count > target_index_count)
+			result_count = pruneComponents(result, result_count, components, component_errors, result_error);
 	}
+
+	if ((options & meshopt_SimplifyPrune) && result_count > target_index_count)
+		result_count = pruneComponents(result, result_count, components, component_errors, result_error);
 
 #if TRACE
 	printf("result: %d triangles, error: %e; total %d passes\n", int(result_count / 3), sqrtf(result_error), int(pass_count));
