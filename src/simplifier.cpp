@@ -1390,6 +1390,48 @@ static size_t buildComponents(unsigned int* components, size_t vertex_count, con
 	return next_component;
 }
 
+static void measureComponents(float* component_errors, size_t component_count, const unsigned int* components, const Vector3* vertex_positions, size_t vertex_count)
+{
+	for (size_t i = 0; i < component_count; ++i)
+	{
+		component_errors[i * 6 + 0] = FLT_MAX;
+		component_errors[i * 6 + 1] = FLT_MAX;
+		component_errors[i * 6 + 2] = FLT_MAX;
+
+		component_errors[i * 6 + 3] = -FLT_MAX;
+		component_errors[i * 6 + 4] = -FLT_MAX;
+		component_errors[i * 6 + 5] = -FLT_MAX;
+	}
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		unsigned int c = components[i];
+		assert(c < component_count);
+
+		for (int k = 0; k < 3; ++k)
+		{
+			float v = (&vertex_positions[i].x)[k];
+
+			component_errors[c * 6 + k + 0] = component_errors[c * 6 + k + 0] > v ? v : component_errors[c * 6 + k + 0];
+			component_errors[c * 6 + k + 3] = component_errors[c * 6 + k + 3] < v ? v : component_errors[c * 6 + k + 3];
+		}
+	}
+
+	for (size_t i = 0; i < component_count; ++i)
+	{
+		float ex = component_errors[i * 6 + 3] - component_errors[i * 6 + 0];
+		float ey = component_errors[i * 6 + 4] - component_errors[i * 6 + 1];
+		float ez = component_errors[i * 6 + 5] - component_errors[i * 6 + 2];
+
+		// note: we keep the squared error to make it match quadric error metric
+		component_errors[i] = ex * ex + ey * ey + ez * ez;
+
+#if TRACE > 1
+		printf("component %d (%f %f %f) => %f\n", int(i), ex, ey, ez, sqrtf(component_errors[i]));
+#endif
+	}
+}
+
 struct CellHasher
 {
 	const unsigned int* vertex_ids;
@@ -1805,15 +1847,18 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 		fillAttributeQuadrics(attribute_quadrics, attribute_gradients, result, index_count, vertex_positions, vertex_attributes, attribute_count);
 
 	unsigned int* components = NULL;
+	float* component_errors = NULL;
 
 	if (options & meshopt_SimplifyPrune)
 	{
 		components = allocator.allocate<unsigned int>(vertex_count);
-		unsigned int cc = buildComponents(components, vertex_count, indices, index_count, remap);
-		(void)cc;
+		size_t component_count = buildComponents(components, vertex_count, indices, index_count, remap);
+
+		component_errors = allocator.allocate<float>(component_count * 6); // overallocate for temporary use inside measureComponents
+		measureComponents(component_errors, component_count, components, vertex_positions, vertex_count);
 
 #if TRACE
-		printf("components: %d\n", int(cc));
+		printf("components: %d\n", int(component_count));
 #endif
 	}
 
