@@ -1,6 +1,6 @@
 // This file is part of meshoptimizer library and is distributed under the terms of MIT License.
 // Copyright (C) 2016-2024, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
-export type Flags = 'LockBorder' | 'Sparse' | 'ErrorAbsolute';
+export type Flags = 'LockBorder' | 'Sparse' | 'ErrorAbsolute' | 'Prune';
 
 export const MeshoptSimplifier: {
 	supported: boolean;

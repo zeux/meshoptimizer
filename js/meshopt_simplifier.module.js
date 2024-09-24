@@ -196,7 +196,7 @@ var MeshoptSimplifier = (function () {
 		LockBorder: 1,
 		Sparse: 2,
 		ErrorAbsolute: 4,
-		_Prune: 8, // experimental
+		Prune: 8,
 		_InternalDebug: 1 << 30, // internal, don't use!
 	};
 
@@ -233,6 +233,7 @@ var MeshoptSimplifier = (function () {
 			var options = 0;
 			for (var i = 0; i < (flags ? flags.length : 0); ++i) {
 				assert(flags[i] in simplifyOptions);
+				assert(this.useExperimentalFeatures || flags[i] != 'Prune'); // set useExperimentalFeatures to use experimental flags like Prune
 				options |= simplifyOptions[flags[i]];
 			}
 
