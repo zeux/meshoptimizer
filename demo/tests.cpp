@@ -909,39 +909,19 @@ static void simplify()
 	// 1 2
 	// 3 4 5
 	unsigned int ib[] = {
-	    0,
-	    2,
-	    1,
-	    1,
-	    2,
-	    3,
-	    3,
-	    2,
-	    4,
-	    2,
-	    5,
-	    4,
+	    0, 2, 1,
+	    1, 2, 3,
+	    3, 2, 4,
+	    2, 5, 4, // clang-format :-/
 	};
 
 	float vb[] = {
-	    0,
-	    4,
-	    0,
-	    0,
-	    1,
-	    0,
-	    2,
-	    2,
-	    0,
-	    0,
-	    0,
-	    0,
-	    1,
-	    0,
-	    0,
-	    4,
-	    0,
-	    0,
+	    0, 4, 0,
+	    0, 1, 0,
+	    2, 2, 0,
+	    0, 0, 0,
+	    1, 0, 0,
+	    4, 0, 0, // clang-format :-/
 	};
 
 	unsigned int expected[] = {
@@ -1431,6 +1411,41 @@ static void simplifySeamFake()
 	assert(meshopt_simplify(ib, ib, 6, vb, 4, 16, 0, 1.f, 0, NULL) == 6);
 }
 
+static void simplifyDebug()
+{
+	// 0
+	// 1 2
+	// 3 4 5
+	unsigned int ib[] = {
+	    0, 2, 1,
+	    1, 2, 3,
+	    3, 2, 4,
+	    2, 5, 4, // clang-format :-/
+	};
+
+	float vb[] = {
+	    0, 4, 0,
+	    0, 1, 0,
+	    2, 2, 0,
+	    0, 0, 0,
+	    1, 0, 0,
+	    4, 0, 0, // clang-format :-/
+	};
+
+	unsigned int expected[] = {
+	    0 | (9u << 28),
+	    5 | (9u << 28),
+	    3 | (9u << 28),
+	};
+
+	const unsigned int meshopt_SimplifyInternalDebug = 1 << 30;
+
+	float error;
+	assert(meshopt_simplify(ib, ib, 12, vb, 6, 12, 3, 1e-2f, meshopt_SimplifyInternalDebug, &error) == 3);
+	assert(error == 0.f);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+}
+
 static void adjacency()
 {
 	// 0 1/4
@@ -1687,6 +1702,7 @@ void runTests()
 	simplifyErrorAbsolute();
 	simplifySeam();
 	simplifySeamFake();
+	simplifyDebug();
 
 	adjacency();
 	tessellation();
