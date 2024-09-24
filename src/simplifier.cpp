@@ -1879,7 +1879,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	if (options & meshopt_SimplifyPrune)
 	{
 		components = allocator.allocate<unsigned int>(vertex_count);
-		component_count = buildComponents(components, vertex_count, indices, index_count, remap);
+		component_count = buildComponents(components, vertex_count, result, index_count, remap);
 
 		component_errors = allocator.allocate<float>(component_count * 6); // overallocate for temporary use inside measureComponents
 		measureComponents(component_errors, component_count, components, vertex_positions, vertex_count);
