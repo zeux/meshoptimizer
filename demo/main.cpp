@@ -451,7 +451,7 @@ void packMesh(std::vector<PackedVertexOct>& pv, const std::vector<Vertex>& verti
 	}
 }
 
-void simplify(const Mesh& mesh, float threshold = 0.2f)
+void simplify(const Mesh& mesh, float threshold = 0.2f, unsigned int options = 0)
 {
 	Mesh lod;
 
@@ -462,7 +462,7 @@ void simplify(const Mesh& mesh, float threshold = 0.2f)
 	float result_error = 0;
 
 	lod.indices.resize(mesh.indices.size()); // note: simplify needs space for index_count elements in the destination array, not target_index_count
-	lod.indices.resize(meshopt_simplify(&lod.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error, 0, &result_error));
+	lod.indices.resize(meshopt_simplify(&lod.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_index_count, target_error, options, &result_error));
 
 	lod.vertices.resize(lod.indices.size() < mesh.vertices.size() ? lod.indices.size() : mesh.vertices.size()); // note: this is just to reduce the cost of resize()
 	lod.vertices.resize(meshopt_optimizeVertexFetch(&lod.vertices[0], &lod.indices[0], lod.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex)));
@@ -476,7 +476,7 @@ void simplify(const Mesh& mesh, float threshold = 0.2f)
 	    (end - start) * 1000);
 }
 
-void simplifyAttr(const Mesh& mesh, float threshold = 0.2f)
+void simplifyAttr(const Mesh& mesh, float threshold = 0.2f, unsigned int options = 0)
 {
 	Mesh lod;
 
@@ -490,7 +490,7 @@ void simplifyAttr(const Mesh& mesh, float threshold = 0.2f)
 	const float attr_weights[3] = {nrm_weight, nrm_weight, nrm_weight};
 
 	lod.indices.resize(mesh.indices.size()); // note: simplify needs space for index_count elements in the destination array, not target_index_count
-	lod.indices.resize(meshopt_simplifyWithAttributes(&lod.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), &mesh.vertices[0].nx, sizeof(Vertex), attr_weights, 3, NULL, target_index_count, target_error, 0, &result_error));
+	lod.indices.resize(meshopt_simplifyWithAttributes(&lod.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), &mesh.vertices[0].nx, sizeof(Vertex), attr_weights, 3, NULL, target_index_count, target_error, options, &result_error));
 
 	lod.vertices.resize(lod.indices.size() < mesh.vertices.size() ? lod.indices.size() : mesh.vertices.size()); // note: this is just to reduce the cost of resize()
 	lod.vertices.resize(meshopt_optimizeVertexFetch(&lod.vertices[0], &lod.indices[0], lod.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex)));
@@ -1372,6 +1372,7 @@ void process(const char* path)
 	encodeVertex<PackedVertexOct>(copy, "O");
 
 	simplify(mesh);
+	simplify(mesh, 0.1f, meshopt_SimplifyPrune);
 	simplifyAttr(mesh);
 	simplifySloppy(mesh);
 	simplifyComplete(mesh);
@@ -1391,7 +1392,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	simplifyAttr(mesh);
+	simplifyAttr(mesh, 0.1f, meshopt_SimplifyPrune);
 }
 
 void processNanite(const char* path)
