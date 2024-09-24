@@ -1392,43 +1392,56 @@ static size_t buildComponents(unsigned int* components, size_t vertex_count, con
 
 static void measureComponents(float* component_errors, size_t component_count, const unsigned int* components, const Vector3* vertex_positions, size_t vertex_count)
 {
-	for (size_t i = 0; i < component_count; ++i)
-	{
-		component_errors[i * 6 + 0] = FLT_MAX;
-		component_errors[i * 6 + 1] = FLT_MAX;
-		component_errors[i * 6 + 2] = FLT_MAX;
+	memset(component_errors, 0, component_count * 4 * sizeof(float));
 
-		component_errors[i * 6 + 3] = -FLT_MAX;
-		component_errors[i * 6 + 4] = -FLT_MAX;
-		component_errors[i * 6 + 5] = -FLT_MAX;
-	}
-
+	// compute approximate sphere center for each component as an average
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
 		unsigned int c = components[i];
-		assert(c < component_count);
+		assert(components[i] < component_count);
 
-		for (int k = 0; k < 3; ++k)
-		{
-			float v = (&vertex_positions[i].x)[k];
+		Vector3 v = vertex_positions[i]; // copy avoids aliasing issues
 
-			component_errors[c * 6 + k + 0] = component_errors[c * 6 + k + 0] > v ? v : component_errors[c * 6 + k + 0];
-			component_errors[c * 6 + k + 3] = component_errors[c * 6 + k + 3] < v ? v : component_errors[c * 6 + k + 3];
-		}
+		component_errors[c * 4 + 0] += v.x;
+		component_errors[c * 4 + 1] += v.y;
+		component_errors[c * 4 + 2] += v.z;
+		component_errors[c * 4 + 3] += 1; // weight
 	}
 
+	// complete the center computation, and reinitialize [3] as a radius
 	for (size_t i = 0; i < component_count; ++i)
 	{
-		float ex = component_errors[i * 6 + 3] - component_errors[i * 6 + 0];
-		float ey = component_errors[i * 6 + 4] - component_errors[i * 6 + 1];
-		float ez = component_errors[i * 6 + 5] - component_errors[i * 6 + 2];
+		float w = component_errors[i * 4 + 3];
+		float iw = w == 0.f ? 0.f : 1.f / w;
 
-		// note: we keep the squared error to make it match quadric error metric
-		component_errors[i] = (ex * ex + ey * ey + ez * ez) * 0.25f;
+		component_errors[i * 4 + 0] *= iw;
+		component_errors[i * 4 + 1] *= iw;
+		component_errors[i * 4 + 2] *= iw;
+		component_errors[i * 4 + 3] = 0; // radius
+	}
 
+	// compute squared radius for each component
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		unsigned int c = components[i];
+
+		float dx = vertex_positions[i].x - component_errors[c * 4 + 0];
+		float dy = vertex_positions[i].y - component_errors[c * 4 + 1];
+		float dz = vertex_positions[i].z - component_errors[c * 4 + 2];
+		float r = dx * dx + dy * dy + dz * dz;
+
+		component_errors[c * 4 + 3] = component_errors[c * 4 + 3] < r ? r : component_errors[c * 4 + 3];
+	}
+
+	// we've used the output buffer as scratch space, so we need to move the results to proper indices
+	for (size_t i = 0; i < component_count; ++i)
+	{
 #if TRACE > 1
-		printf("component %d (%f %f %f) => %f\n", int(i), ex, ey, ez, sqrtf(component_errors[i]));
+		printf("component %d: center %f %f %f, error %e\n", int(i),
+		    component_errors[i * 4 + 0], component_errors[i * 4 + 1], component_errors[i * 4 + 2], sqrtf(component_errors[i * 4 + 3]));
 #endif
+		// note: we keep the squared error to make it match quadric error metric
+		component_errors[i] = component_errors[i * 4 + 3];
 	}
 }
 
@@ -1881,7 +1894,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 		components = allocator.allocate<unsigned int>(vertex_count);
 		component_count = buildComponents(components, vertex_count, result, index_count, remap);
 
-		component_errors = allocator.allocate<float>(component_count * 6); // overallocate for temporary use inside measureComponents
+		component_errors = allocator.allocate<float>(component_count * 4); // overallocate for temporary use inside measureComponents
 		measureComponents(component_errors, component_count, components, vertex_positions, vertex_count);
 
 #if TRACE
