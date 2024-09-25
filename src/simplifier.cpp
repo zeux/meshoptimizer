@@ -1445,7 +1445,7 @@ static void measureComponents(float* component_errors, size_t component_count, c
 	}
 }
 
-static size_t pruneComponents(unsigned int* indices, size_t index_count, const unsigned int* components, const float* component_errors, float error_cutoff)
+static size_t pruneComponents(unsigned int* indices, size_t index_count, const unsigned int* components, const float* component_errors, size_t component_count, float error_cutoff, float& nexterror)
 {
 	size_t write = 0;
 
@@ -1462,6 +1462,11 @@ static size_t pruneComponents(unsigned int* indices, size_t index_count, const u
 			write += 3;
 		}
 	}
+
+	nexterror = FLT_MAX;
+	for (size_t i = 0; i < component_count; ++i)
+		if (component_errors[i] > error_cutoff)
+			nexterror = nexterror > component_errors[i] ? component_errors[i] : nexterror;
 
 #if TRACE
 	if (write < index_count)
@@ -1888,6 +1893,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	unsigned int* components = NULL;
 	float* component_errors = NULL;
 	size_t component_count = 0;
+	float component_nexterror = 0;
 
 	if (options & meshopt_SimplifyPrune)
 	{
@@ -1897,12 +1903,12 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 		component_errors = allocator.allocate<float>(component_count * 4); // overallocate for temporary use inside measureComponents
 		measureComponents(component_errors, component_count, components, vertex_positions, vertex_count);
 
-#if TRACE
-		float component_minerror = FLT_MAX;
+		component_nexterror = FLT_MAX;
 		for (size_t i = 0; i < component_count; ++i)
-			component_minerror = component_minerror > component_errors[i] ? component_errors[i] : component_minerror;
+			component_nexterror = component_nexterror > component_errors[i] ? component_errors[i] : component_nexterror;
 
-		printf("components: %d (min error %e)\n", int(component_count), sqrtf(component_minerror));
+#if TRACE
+		printf("components: %d (min error %e)\n", int(component_count), sqrtf(component_nexterror));
 #endif
 	}
 
@@ -1965,24 +1971,16 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 
 		result_count = new_count;
 
-		if ((options & meshopt_SimplifyPrune) && result_count > target_index_count)
-			result_count = pruneComponents(result, result_count, components, component_errors, result_error);
+		if ((options & meshopt_SimplifyPrune) && result_count > target_index_count && component_nexterror <= result_error)
+			result_count = pruneComponents(result, result_count, components, component_errors, component_count, result_error, component_nexterror);
 	}
 
-	if ((options & meshopt_SimplifyPrune) && result_count > target_index_count)
-		result_count = pruneComponents(result, result_count, components, component_errors, result_error);
+	if ((options & meshopt_SimplifyPrune) && result_count > target_index_count && component_nexterror <= result_error)
+		result_count = pruneComponents(result, result_count, components, component_errors, component_count, result_error, component_nexterror);
 
 	// we're done with the regular simplification but we're still short of the target; try pruning more aggressively towards error_limit
-	while ((options & meshopt_SimplifyPrune) && result_count > target_index_count)
+	while ((options & meshopt_SimplifyPrune) && result_count > target_index_count && component_nexterror <= error_limit)
 	{
-		float component_nexterror = FLT_MAX;
-		for (size_t i = 0; i < component_count; ++i)
-			if (component_errors[i] > result_error && component_errors[i] < component_nexterror)
-				component_nexterror = component_errors[i];
-
-		if (component_nexterror == FLT_MAX || component_nexterror > error_limit)
-			break;
-
 #if TRACE
 		printf("pass %d: pruning remaining components\n", int(pass_count++));
 #endif
@@ -1994,7 +1992,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 			if (component_errors[i] > component_maxerror && component_errors[i] <= component_cutoff)
 				component_maxerror = component_errors[i];
 
-		size_t new_count = pruneComponents(result, result_count, components, component_errors, component_cutoff);
+		size_t new_count = pruneComponents(result, result_count, components, component_errors, component_count, component_cutoff, component_nexterror);
 		if (new_count == result_count)
 			break;
 
