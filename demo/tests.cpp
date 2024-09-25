@@ -1490,6 +1490,38 @@ static void simplifyPrune()
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 }
 
+static void simplifyPruneCleanup()
+{
+	unsigned int ib[] = {
+	    0, 1, 2,
+	    3, 4, 5,
+	    6, 7, 8, // clang-format :-/
+	};
+
+	float vb[] = {
+	    0, 0, 0,
+	    0, 1, 0,
+	    1, 0, 0,
+	    0, 0, 1,
+	    0, 2, 1,
+	    2, 0, 1,
+	    0, 0, 2,
+	    0, 4, 2,
+	    4, 0, 2, // clang-format :-/
+	};
+
+	unsigned int expected[] = {
+	    6,
+	    7,
+	    8,
+	};
+
+	float error;
+	assert(meshopt_simplify(ib, ib, 9, vb, 9, 12, 3, 1.f, meshopt_SimplifyLockBorder | meshopt_SimplifyPrune, &error) == 3);
+	assert(fabsf(error - 0.37f) < 0.01f);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+}
+
 static void adjacency()
 {
 	// 0 1/4
@@ -1748,6 +1780,7 @@ void runTests()
 	simplifySeamFake();
 	simplifyDebug();
 	simplifyPrune();
+	simplifyPruneCleanup();
 
 	adjacency();
 	tessellation();
