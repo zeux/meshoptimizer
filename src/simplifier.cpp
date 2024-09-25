@@ -1365,7 +1365,7 @@ static size_t buildComponents(unsigned int* components, size_t vertex_count, con
 	// make sure each element points to the component root *before* we renumber the components
 	for (size_t i = 0; i < vertex_count; ++i)
 		if (remap[i] == i)
-			components[i] = follow(components, i);
+			components[i] = follow(components, unsigned(i));
 
 	unsigned int next_component = 0;
 
