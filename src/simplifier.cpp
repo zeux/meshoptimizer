@@ -1972,6 +1972,36 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	if ((options & meshopt_SimplifyPrune) && result_count > target_index_count)
 		result_count = pruneComponents(result, result_count, components, component_errors, result_error);
 
+	// we're done with the regular simplification but we're still short of the target; try pruning more aggressively towards error_limit
+	while ((options & meshopt_SimplifyPrune) && result_count > target_index_count)
+	{
+		float component_nexterror = FLT_MAX;
+		for (size_t i = 0; i < component_count; ++i)
+			if (component_errors[i] > result_error && component_errors[i] < component_nexterror)
+				component_nexterror = component_errors[i];
+
+		if (component_nexterror == FLT_MAX || component_nexterror > error_limit)
+			break;
+
+#if TRACE
+		printf("pass %d: pruning remaining components\n", int(pass_count++));
+#endif
+
+		float component_cutoff = component_nexterror * 1.5f < error_limit ? component_nexterror * 1.5f : error_limit;
+
+		float component_maxerror = 0;
+		for (size_t i = 0; i < component_count; ++i)
+			if (component_errors[i] > component_maxerror && component_errors[i] <= component_cutoff)
+				component_maxerror = component_errors[i];
+
+		size_t new_count = pruneComponents(result, result_count, components, component_errors, component_cutoff);
+		if (new_count == result_count)
+			break;
+
+		result_count = new_count;
+		result_error = result_error < component_maxerror ? component_maxerror : result_error;
+	}
+
 #if TRACE
 	printf("result: %d triangles, error: %e; total %d passes\n", int(result_count / 3), sqrtf(result_error), int(pass_count));
 #endif
