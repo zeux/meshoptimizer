@@ -1463,15 +1463,19 @@ static size_t pruneComponents(unsigned int* indices, size_t index_count, const u
 		}
 	}
 
+#if TRACE
+	size_t pruned_components = 0;
+	for (size_t i = 0; i < component_count; ++i)
+		pruned_components += (component_errors[i] >= nexterror && component_errors[i] <= error_cutoff);
+
+	printf("pruned %d triangles in %d components (goal %e)\n", int((index_count - write) / 3), int(pruned_components), sqrtf(error_cutoff));
+#endif
+
+	// update next error with the smallest error of the remaining components for future pruning
 	nexterror = FLT_MAX;
 	for (size_t i = 0; i < component_count; ++i)
 		if (component_errors[i] > error_cutoff)
 			nexterror = nexterror > component_errors[i] ? component_errors[i] : nexterror;
-
-#if TRACE
-	if (write < index_count)
-		printf("pruned %d / %d triangles (error <= %e)\n", int((index_count - write) / 3), int(index_count / 3), sqrtf(error_cutoff));
-#endif
 
 	return write;
 }
@@ -1982,11 +1986,12 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	while ((options & meshopt_SimplifyPrune) && result_count > target_index_count && component_nexterror <= error_limit)
 	{
 #if TRACE
-		printf("pass %d: pruning remaining components\n", int(pass_count++));
+		printf("pass %d: cleanup; ", int(pass_count++));
 #endif
 
 		float component_cutoff = component_nexterror * 1.5f < error_limit ? component_nexterror * 1.5f : error_limit;
 
+		// track maximum error in eligible components as we are increasing resulting error
 		float component_maxerror = 0;
 		for (size_t i = 0; i < component_count; ++i)
 			if (component_errors[i] > component_maxerror && component_errors[i] <= component_cutoff)
