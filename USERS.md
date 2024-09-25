@@ -34,6 +34,7 @@ If you are shipping an engine that is using meshoptimizer, listing the library i
 - [The Forge](https://theforge.dev/)
 - [Godot](https://godotengine.org/)
 - [HypeHype](https://hypehype.com/en)
+- [LightweightVK](https://github.com/corporateshark/lightweightvk)
 - [Roblox](https://www.roblox.com/)
 - [Unigine](https://unigine.com/)
 - [Wicked Engine](https://wickedengine.net/)
