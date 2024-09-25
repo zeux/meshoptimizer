@@ -1979,9 +1979,6 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 			result_count = pruneComponents(result, result_count, components, component_errors, component_count, result_error, component_nexterror);
 	}
 
-	if ((options & meshopt_SimplifyPrune) && result_count > target_index_count && component_nexterror <= result_error)
-		result_count = pruneComponents(result, result_count, components, component_errors, component_count, result_error, component_nexterror);
-
 	// we're done with the regular simplification but we're still short of the target; try pruning more aggressively towards error_limit
 	while ((options & meshopt_SimplifyPrune) && result_count > target_index_count && component_nexterror <= error_limit)
 	{
