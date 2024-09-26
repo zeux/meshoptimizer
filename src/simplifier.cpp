@@ -1322,6 +1322,164 @@ static void remapEdgeLoops(unsigned int* loop, size_t vertex_count, const unsign
 	}
 }
 
+static unsigned int follow(unsigned int* parents, unsigned int index)
+{
+	while (index != parents[index])
+	{
+		unsigned int parent = parents[index];
+		parents[index] = parents[parent];
+		index = parent;
+	}
+
+	return index;
+}
+
+static size_t buildComponents(unsigned int* components, size_t vertex_count, const unsigned int* indices, size_t index_count, const unsigned int* remap)
+{
+	for (size_t i = 0; i < vertex_count; ++i)
+		components[i] = unsigned(i);
+
+	// compute a unique (but not sequential!) index for each component via union-find
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		static const int next[4] = {1, 2, 0, 1};
+
+		for (int e = 0; e < 3; ++e)
+		{
+			unsigned int i0 = indices[i + e];
+			unsigned int i1 = indices[i + next[e]];
+
+			unsigned int r0 = remap[i0];
+			unsigned int r1 = remap[i1];
+
+			r0 = follow(components, r0);
+			r1 = follow(components, r1);
+
+			// merge components with larger indices into components with smaller indices
+			// this guarantees that the root of the component is always the one with the smallest index
+			if (r0 != r1)
+				components[r0 < r1 ? r1 : r0] = r0 < r1 ? r0 : r1;
+		}
+	}
+
+	// make sure each element points to the component root *before* we renumber the components
+	for (size_t i = 0; i < vertex_count; ++i)
+		if (remap[i] == i)
+			components[i] = follow(components, unsigned(i));
+
+	unsigned int next_component = 0;
+
+	// renumber components using sequential indices
+	// a sequential pass is sufficient because component root always has the smallest index
+	// note: it is unsafe to use follow() in this pass because we're replacing component links with sequential indices inplace
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		if (remap[i] == i)
+		{
+			unsigned int root = components[i];
+			assert(root <= i); // make sure we already computed the component for non-roots
+			components[i] = (root == i) ? next_component++ : components[root];
+		}
+		else
+		{
+			assert(remap[i] < i); // make sure we already computed the component
+			components[i] = components[remap[i]];
+		}
+	}
+
+	return next_component;
+}
+
+static void measureComponents(float* component_errors, size_t component_count, const unsigned int* components, const Vector3* vertex_positions, size_t vertex_count)
+{
+	memset(component_errors, 0, component_count * 4 * sizeof(float));
+
+	// compute approximate sphere center for each component as an average
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		unsigned int c = components[i];
+		assert(components[i] < component_count);
+
+		Vector3 v = vertex_positions[i]; // copy avoids aliasing issues
+
+		component_errors[c * 4 + 0] += v.x;
+		component_errors[c * 4 + 1] += v.y;
+		component_errors[c * 4 + 2] += v.z;
+		component_errors[c * 4 + 3] += 1; // weight
+	}
+
+	// complete the center computation, and reinitialize [3] as a radius
+	for (size_t i = 0; i < component_count; ++i)
+	{
+		float w = component_errors[i * 4 + 3];
+		float iw = w == 0.f ? 0.f : 1.f / w;
+
+		component_errors[i * 4 + 0] *= iw;
+		component_errors[i * 4 + 1] *= iw;
+		component_errors[i * 4 + 2] *= iw;
+		component_errors[i * 4 + 3] = 0; // radius
+	}
+
+	// compute squared radius for each component
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		unsigned int c = components[i];
+
+		float dx = vertex_positions[i].x - component_errors[c * 4 + 0];
+		float dy = vertex_positions[i].y - component_errors[c * 4 + 1];
+		float dz = vertex_positions[i].z - component_errors[c * 4 + 2];
+		float r = dx * dx + dy * dy + dz * dz;
+
+		component_errors[c * 4 + 3] = component_errors[c * 4 + 3] < r ? r : component_errors[c * 4 + 3];
+	}
+
+	// we've used the output buffer as scratch space, so we need to move the results to proper indices
+	for (size_t i = 0; i < component_count; ++i)
+	{
+#if TRACE > 1
+		printf("component %d: center %f %f %f, error %e\n", int(i),
+		    component_errors[i * 4 + 0], component_errors[i * 4 + 1], component_errors[i * 4 + 2], sqrtf(component_errors[i * 4 + 3]));
+#endif
+		// note: we keep the squared error to make it match quadric error metric
+		component_errors[i] = component_errors[i * 4 + 3];
+	}
+}
+
+static size_t pruneComponents(unsigned int* indices, size_t index_count, const unsigned int* components, const float* component_errors, size_t component_count, float error_cutoff, float& nexterror)
+{
+	size_t write = 0;
+
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		unsigned int c = components[indices[i]];
+		assert(c == components[indices[i + 1]] && c == components[indices[i + 2]]);
+
+		if (component_errors[c] > error_cutoff)
+		{
+			indices[write + 0] = indices[i + 0];
+			indices[write + 1] = indices[i + 1];
+			indices[write + 2] = indices[i + 2];
+			write += 3;
+		}
+	}
+
+#if TRACE
+	size_t pruned_components = 0;
+	for (size_t i = 0; i < component_count; ++i)
+		pruned_components += (component_errors[i] >= nexterror && component_errors[i] <= error_cutoff);
+
+	printf("pruned %d triangles in %d components (goal %e)\n", int((index_count - write) / 3), int(pruned_components), sqrtf(error_cutoff));
+#endif
+
+	// update next error with the smallest error of the remaining components for future pruning
+	nexterror = FLT_MAX;
+	for (size_t i = 0; i < component_count; ++i)
+		if (component_errors[i] > error_cutoff)
+			nexterror = nexterror > component_errors[i] ? component_errors[i] : nexterror;
+
+	return write;
+}
+
 struct CellHasher
 {
 	const unsigned int* vertex_ids;
@@ -1645,7 +1803,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	assert(vertex_positions_stride % sizeof(float) == 0);
 	assert(target_index_count <= index_count);
 	assert(target_error >= 0);
-	assert((options & ~(meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute | meshopt_SimplifyInternalDebug)) == 0);
+	assert((options & ~(meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute | meshopt_SimplifyPrune | meshopt_SimplifyInternalDebug)) == 0);
 	assert(vertex_attributes_stride >= attribute_count * sizeof(float) && vertex_attributes_stride <= 256);
 	assert(vertex_attributes_stride % sizeof(float) == 0);
 	assert(attribute_count <= kMaxAttributes);
@@ -1736,6 +1894,28 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	if (attribute_count)
 		fillAttributeQuadrics(attribute_quadrics, attribute_gradients, result, index_count, vertex_positions, vertex_attributes, attribute_count);
 
+	unsigned int* components = NULL;
+	float* component_errors = NULL;
+	size_t component_count = 0;
+	float component_nexterror = 0;
+
+	if (options & meshopt_SimplifyPrune)
+	{
+		components = allocator.allocate<unsigned int>(vertex_count);
+		component_count = buildComponents(components, vertex_count, result, index_count, remap);
+
+		component_errors = allocator.allocate<float>(component_count * 4); // overallocate for temporary use inside measureComponents
+		measureComponents(component_errors, component_count, components, vertex_positions, vertex_count);
+
+		component_nexterror = FLT_MAX;
+		for (size_t i = 0; i < component_count; ++i)
+			component_nexterror = component_nexterror > component_errors[i] ? component_errors[i] : component_nexterror;
+
+#if TRACE
+		printf("components: %d (min error %e)\n", int(component_count), sqrtf(component_nexterror));
+#endif
+	}
+
 #if TRACE
 	size_t pass_count = 0;
 #endif
@@ -1794,6 +1974,32 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 		assert(new_count < result_count);
 
 		result_count = new_count;
+
+		if ((options & meshopt_SimplifyPrune) && result_count > target_index_count && component_nexterror <= result_error)
+			result_count = pruneComponents(result, result_count, components, component_errors, component_count, result_error, component_nexterror);
+	}
+
+	// we're done with the regular simplification but we're still short of the target; try pruning more aggressively towards error_limit
+	while ((options & meshopt_SimplifyPrune) && result_count > target_index_count && component_nexterror <= error_limit)
+	{
+#if TRACE
+		printf("pass %d: cleanup; ", int(pass_count++));
+#endif
+
+		float component_cutoff = component_nexterror * 1.5f < error_limit ? component_nexterror * 1.5f : error_limit;
+
+		// track maximum error in eligible components as we are increasing resulting error
+		float component_maxerror = 0;
+		for (size_t i = 0; i < component_count; ++i)
+			if (component_errors[i] > component_maxerror && component_errors[i] <= component_cutoff)
+				component_maxerror = component_errors[i];
+
+		size_t new_count = pruneComponents(result, result_count, components, component_errors, component_count, component_cutoff, component_nexterror);
+		if (new_count == result_count)
+			break;
+
+		result_count = new_count;
+		result_error = result_error < component_maxerror ? component_maxerror : result_error;
 	}
 
 #if TRACE

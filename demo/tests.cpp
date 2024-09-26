@@ -909,39 +909,19 @@ static void simplify()
 	// 1 2
 	// 3 4 5
 	unsigned int ib[] = {
-	    0,
-	    2,
-	    1,
-	    1,
-	    2,
-	    3,
-	    3,
-	    2,
-	    4,
-	    2,
-	    5,
-	    4,
+	    0, 2, 1,
+	    1, 2, 3,
+	    3, 2, 4,
+	    2, 5, 4, // clang-format :-/
 	};
 
 	float vb[] = {
-	    0,
-	    4,
-	    0,
-	    0,
-	    1,
-	    0,
-	    2,
-	    2,
-	    0,
-	    0,
-	    0,
-	    0,
-	    1,
-	    0,
-	    0,
-	    4,
-	    0,
-	    0,
+	    0, 4, 0,
+	    0, 1, 0,
+	    2, 2, 0,
+	    0, 0, 0,
+	    1, 0, 0,
+	    4, 0, 0, // clang-format :-/
 	};
 
 	unsigned int expected[] = {
@@ -1431,6 +1411,117 @@ static void simplifySeamFake()
 	assert(meshopt_simplify(ib, ib, 6, vb, 4, 16, 0, 1.f, 0, NULL) == 6);
 }
 
+static void simplifyDebug()
+{
+	// 0
+	// 1 2
+	// 3 4 5
+	unsigned int ib[] = {
+	    0, 2, 1,
+	    1, 2, 3,
+	    3, 2, 4,
+	    2, 5, 4, // clang-format :-/
+	};
+
+	float vb[] = {
+	    0, 4, 0,
+	    0, 1, 0,
+	    2, 2, 0,
+	    0, 0, 0,
+	    1, 0, 0,
+	    4, 0, 0, // clang-format :-/
+	};
+
+	unsigned int expected[] = {
+	    0 | (9u << 28),
+	    5 | (9u << 28),
+	    3 | (9u << 28),
+	};
+
+	const unsigned int meshopt_SimplifyInternalDebug = 1 << 30;
+
+	float error;
+	assert(meshopt_simplify(ib, ib, 12, vb, 6, 12, 3, 1e-2f, meshopt_SimplifyInternalDebug, &error) == 3);
+	assert(error == 0.f);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+}
+
+static void simplifyPrune()
+{
+	// 0
+	// 1 2
+	// 3 4 5
+	// +
+	// 6 7 8 (same position)
+	unsigned int ib[] = {
+	    0, 2, 1,
+	    1, 2, 3,
+	    3, 2, 4,
+	    2, 5, 4,
+	    6, 7, 8, // clang-format :-/
+	};
+
+	float vb[] = {
+	    0, 4, 0,
+	    0, 1, 0,
+	    2, 2, 0,
+	    0, 0, 0,
+	    1, 0, 0,
+	    4, 0, 0,
+	    1, 1, 1,
+	    1, 1, 1,
+	    1, 1, 1, // clang-format :-/
+	};
+
+	unsigned int expected[] = {
+	    0,
+	    5,
+	    3,
+	};
+
+	float error;
+	assert(meshopt_simplify(ib, ib, 15, vb, 9, 12, 3, 1e-2f, meshopt_SimplifyPrune, &error) == 3);
+	assert(error == 0.f);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+
+	// re-run prune with and without sparsity on a small subset to make sure the component code correctly handles sparse subsets
+	assert(meshopt_simplify(ib, ib, 3, vb, 9, 12, 3, 1e-2f, meshopt_SimplifyPrune, &error) == 3);
+	assert(meshopt_simplify(ib, ib, 3, vb, 9, 12, 3, 1e-2f, meshopt_SimplifyPrune | meshopt_SimplifySparse, &error) == 3);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+}
+
+static void simplifyPruneCleanup()
+{
+	unsigned int ib[] = {
+	    0, 1, 2,
+	    3, 4, 5,
+	    6, 7, 8, // clang-format :-/
+	};
+
+	float vb[] = {
+	    0, 0, 0,
+	    0, 1, 0,
+	    1, 0, 0,
+	    0, 0, 1,
+	    0, 2, 1,
+	    2, 0, 1,
+	    0, 0, 2,
+	    0, 4, 2,
+	    4, 0, 2, // clang-format :-/
+	};
+
+	unsigned int expected[] = {
+	    6,
+	    7,
+	    8,
+	};
+
+	float error;
+	assert(meshopt_simplify(ib, ib, 9, vb, 9, 12, 3, 1.f, meshopt_SimplifyLockBorder | meshopt_SimplifyPrune, &error) == 3);
+	assert(fabsf(error - 0.37f) < 0.01f);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+}
+
 static void adjacency()
 {
 	// 0 1/4
@@ -1687,6 +1778,9 @@ void runTests()
 	simplifyErrorAbsolute();
 	simplifySeam();
 	simplifySeamFake();
+	simplifyDebug();
+	simplifyPrune();
+	simplifyPruneCleanup();
 
 	adjacency();
 	tessellation();

@@ -33,6 +33,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* buffer, size_t size)
 	meshopt_simplify(res, ib, indices, vb[0], 100, sizeof(float) * 4, 0, FLT_MAX, 0, NULL);
 	meshopt_simplify(res, ib, indices, vb[0], 100, sizeof(float) * 4, 0, FLT_MAX, meshopt_SimplifyLockBorder, NULL);
 	meshopt_simplify(res, ib, indices, vb[0], 100, sizeof(float) * 4, 0, FLT_MAX, meshopt_SimplifySparse, NULL);
+	meshopt_simplify(res, ib, indices, vb[0], 100, sizeof(float) * 4, 0, FLT_MAX, meshopt_SimplifyPrune, NULL);
 
 	return 0;
 }
