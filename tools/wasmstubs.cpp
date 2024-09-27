@@ -20,7 +20,7 @@ extern "C" void* sbrk(intptr_t increment)
 
 	size_t heap_size = __builtin_wasm_memory_size(0) * WASM_PAGE_SIZE;
 
-	if (sbrkp > heap_size)
+	if (size_t(sbrkp) > heap_size)
 	{
 		size_t diff = (sbrkp - heap_size + WASM_PAGE_SIZE - 1) / WASM_PAGE_SIZE;
 
