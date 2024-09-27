@@ -1036,7 +1036,7 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 		float ei = quadricError(vertex_quadrics[remap[i0]], vertex_positions[i1]);
 		float ej = quadricError(vertex_quadrics[remap[j0]], vertex_positions[j1]);
 
-#if TRACE >= 2
+#if TRACE >= 3
 		float di = ei, dj = ej;
 #endif
 
@@ -1052,7 +1052,7 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 		c.v1 = ei <= ej ? i1 : j1;
 		c.error = ei <= ej ? ei : ej;
 
-#if TRACE >= 2
+#if TRACE >= 3
 		if (i0 == j0) // c.bidi has been overwritten
 			printf("edge eval %d -> %d: error %f (pos %f, attr %f)\n", c.v0, c.v1,
 			    sqrtf(c.error), sqrtf(ei <= ej ? di : dj), sqrtf(ei <= ej ? ei - di : ej - dj));
@@ -1436,7 +1436,7 @@ static void measureComponents(float* component_errors, size_t component_count, c
 	// we've used the output buffer as scratch space, so we need to move the results to proper indices
 	for (size_t i = 0; i < component_count; ++i)
 	{
-#if TRACE > 1
+#if TRACE >= 2
 		printf("component %d: center %f %f %f, error %e\n", int(i),
 		    component_errors[i * 4 + 0], component_errors[i * 4 + 1], component_errors[i * 4 + 2], sqrtf(component_errors[i * 4 + 3]));
 #endif
