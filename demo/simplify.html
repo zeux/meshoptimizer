@@ -339,6 +339,7 @@
 								// use small depth offset to avoid overlay z-fighting with the original mesh
 								// has to be done on the main material as overlays use lines that don't support depth offset
 								object.material.polygonOffset = true;
+								object.material.polygonOffsetFactor = 0.5;
 								object.material.polygonOffsetUnits = 16;
 
 								object.material = [
