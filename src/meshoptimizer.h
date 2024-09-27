@@ -269,6 +269,7 @@ MESHOPTIMIZER_API int meshopt_decodeIndexSequence(void* destination, size_t inde
  * Returns encoded data size on success, 0 on error; the only error condition is if buffer doesn't have enough space
  * This function works for a single vertex stream; for multiple vertex streams, call meshopt_encodeVertexBuffer for each stream.
  * Note that all vertex_size bytes of each vertex are encoded verbatim, including padding which should be zero-initialized.
+ * For maximum efficiency the vertex buffer being encoded has to be quantized and optimized for locality of reference (cache/fetch) first.
  *
  * buffer must contain enough space for the encoded vertex buffer (use meshopt_encodeVertexBufferBound to compute worst case size)
  */
