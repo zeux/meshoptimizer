@@ -213,6 +213,9 @@ codecbench.wasm: tools/codecbench.cpp $(LIBRARY_SOURCES)
 codecbench-simd.wasm: tools/codecbench.cpp $(LIBRARY_SOURCES)
 	$(WASMCC) $^ -fno-exceptions --target=wasm32-wasi --sysroot=$(WASIROOT) -lc++ -lc++abi -O3 -g -DNDEBUG -msimd128 -o $@
 
+codectest: tools/codectest.cpp $(LIBRARY)
+	$(CXX) $^ $(CXXFLAGS) $(LDFLAGS) -o $@
+
 codecfuzz: tools/codecfuzz.cpp src/vertexcodec.cpp src/indexcodec.cpp
 	$(CXX) $^ -fsanitize=fuzzer,address,undefined -O1 -g -o $@
 
