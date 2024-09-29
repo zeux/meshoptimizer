@@ -1251,6 +1251,8 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 			collapse_remap[i0] = i1;
 		}
 
+		// note: we technically don't need to lock r1 if it's a locked vertex, as it can't move and its quadric won't be used
+		// however, this results in slightly worse error on some meshes because the locked collapses get an unfair advantage wrt scheduling
 		collapse_locked[r0] = 1;
 		collapse_locked[r1] = 1;
 
