@@ -15,6 +15,7 @@
 #include <float.h>
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 
 #include <map>
 #include <vector>
@@ -50,6 +51,7 @@ struct Cluster
 };
 
 const size_t kClusterSize = 128;
+const bool kUseLocks = false;
 
 static LODBounds bounds(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, float error)
 {
@@ -386,15 +388,40 @@ static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clus
 	return result;
 }
 
-static std::vector<unsigned int> simplify(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, size_t target_count, float* error = NULL)
+static void lockBoundary(std::vector<unsigned char>& locks, const std::vector<std::vector<int> >& groups, const std::vector<Cluster>& clusters)
+{
+	std::vector<int> groupmap(locks.size(), -1);
+
+	memset(&locks[0], 0, locks.size());
+
+	for (size_t i = 0; i < groups.size(); ++i)
+		for (size_t j = 0; j < groups[i].size(); ++j)
+		{
+			const Cluster& cluster = clusters[groups[i][j]];
+
+			for (size_t k = 0; k < cluster.indices.size(); ++k)
+			{
+				unsigned int v = cluster.indices[k];
+
+				if (groupmap[v] == -1 || groupmap[v] == int(i))
+					groupmap[v] = int(i);
+				else
+					locks[v] = 1;
+			}
+		}
+}
+
+static std::vector<unsigned int> simplify(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, const std::vector<unsigned char>* locks, size_t target_count, float* error = NULL)
 {
 	if (target_count > indices.size())
 		return indices;
 
 	std::vector<unsigned int> lod(indices.size());
-	unsigned int options = meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute;
-	lod.resize(meshopt_simplify(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), target_count, FLT_MAX, options, error));
-
+	unsigned int options = meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute;
+	if (locks)
+		lod.resize(meshopt_simplifyWithAttributes(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), NULL, 0, NULL, 0, &(*locks)[0], target_count, FLT_MAX, options, error));
+	else
+		lod.resize(meshopt_simplify(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), target_count, FLT_MAX, options | meshopt_SimplifyLockBorder, error));
 	return lod;
 }
 
@@ -431,6 +458,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 #endif
 
 	int depth = 0;
+	std::vector<unsigned char> locks(vertices.size());
 
 	// merge and simplify clusters until we can't merge anymore
 	while (pending.size() > 1)
@@ -448,6 +476,9 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 
 		if (dump && depth == atoi(dump))
 			dumpObj(vertices, std::vector<unsigned int>());
+
+		if (kUseLocks)
+			lockBoundary(locks, groups, clusters);
 
 		// every group needs to be simplified now
 		for (size_t i = 0; i < groups.size(); ++i)
@@ -479,7 +510,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 				dumpObj("group", merged);
 
 			float error = 0.f;
-			std::vector<unsigned int> simplified = simplify(vertices, merged, kClusterSize * 2 * 3, &error);
+			std::vector<unsigned int> simplified = simplify(vertices, merged, kUseLocks ? &locks : NULL, kClusterSize * 2 * 3, &error);
 			if (simplified.size() > merged.size() * 0.85f || simplified.size() > kClusterSize * 3 * 3)
 			{
 #if TRACE
