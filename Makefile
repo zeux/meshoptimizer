@@ -19,8 +19,8 @@ OBJECTS=$(LIBRARY_OBJECTS) $(DEMO_OBJECTS) $(GLTFPACK_OBJECTS)
 LIBRARY=$(BUILD)/libmeshoptimizer.a
 DEMO=$(BUILD)/meshoptimizer
 
-CFLAGS=-g -Wall -Wextra -Werror -std=c89
-CXXFLAGS=-g -Wall -Wextra -Wshadow -Wno-missing-field-initializers -Werror -std=gnu++98
+CFLAGS=-g -Wall -Wextra -std=c89
+CXXFLAGS=-g -Wall -Wextra -Wshadow -Wno-missing-field-initializers -std=gnu++98
 LDFLAGS=
 
 $(GLTFPACK_OBJECTS): CXXFLAGS+=-std=c++11
@@ -62,6 +62,11 @@ WASM_SIMPLIFIER_EXPORTS=meshopt_simplify meshopt_simplifyWithAttributes meshopt_
 
 WASM_CLUSTERIZER_SOURCES=src/clusterizer.cpp tools/wasmstubs.cpp
 WASM_CLUSTERIZER_EXPORTS=meshopt_buildMeshletsBound meshopt_buildMeshlets meshopt_computeClusterBounds meshopt_computeMeshletBounds meshopt_optimizeMeshlet sbrk __wasm_call_ctors
+
+ifneq ($(werror),)
+	CFLAGS+=-Werror
+	CXXFLAGS+=-Werror
+endif
 
 ifeq ($(config),iphone)
 	IPHONESDK=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk
