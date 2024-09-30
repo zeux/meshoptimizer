@@ -17,6 +17,8 @@ jobs:
         os: [{ name: ubuntu, version: ubuntu-latest }, { name: macos-intel, version: macos-13 }, { name: macos-arm, version: macos-14 }]
     name: ${{matrix.os.name}}
     runs-on: ${{matrix.os.version}}
+    env:
+      werror: 1
     steps:
       - uses: actions/checkout@v4
       - name: work around ASLR+ASAN compatibility
@@ -131,6 +133,8 @@ jobs:
 
   gltfpack-basis:
     runs-on: ubuntu-latest
+    env:
+      werror: 1
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
