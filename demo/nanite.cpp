@@ -51,7 +51,7 @@ struct Cluster
 };
 
 const size_t kClusterSize = 128;
-const bool kUseLocks = false;
+const bool kUseLocks = true;
 
 static LODBounds bounds(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, float error)
 {
@@ -276,7 +276,7 @@ static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, cons
 }
 
 #ifdef METIS
-static std::vector<std::vector<int> > partitionMetis(const std::vector<Cluster>& clusters, const std::vector<int>& pending)
+static std::vector<std::vector<int> > partitionMetis(const std::vector<Cluster>& clusters, const std::vector<int>& pending, const std::vector<unsigned int>& remap)
 {
 	std::vector<std::vector<int> > result;
 
@@ -288,8 +288,8 @@ static std::vector<std::vector<int> > partitionMetis(const std::vector<Cluster>&
 
 		for (size_t j = 0; j < cluster.indices.size(); ++j)
 		{
-			int v0 = cluster.indices[j + 0];
-			int v1 = cluster.indices[j + (j % 3 == 2 ? -2 : 1)];
+			int v0 = remap[cluster.indices[j + 0]];
+			int v1 = remap[cluster.indices[j + (j % 3 == 2 ? -2 : 1)]];
 
 			std::vector<int>& list = edges[std::make_pair(std::min(v0, v1), std::max(v0, v1))];
 			if (list.empty() || list.back() != int(i))
@@ -360,13 +360,15 @@ static std::vector<std::vector<int> > partitionMetis(const std::vector<Cluster>&
 }
 #endif
 
-static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clusters, const std::vector<int>& pending)
+static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clusters, const std::vector<int>& pending, const std::vector<unsigned int>& remap)
 {
 #ifdef METIS
 	static const char* metis = getenv("METIS");
 	if (metis && atoi(metis) >= 1)
-		return partitionMetis(clusters, pending);
+		return partitionMetis(clusters, pending, remap);
 #endif
+
+	(void)remap;
 
 	std::vector<std::vector<int> > result;
 
@@ -388,11 +390,9 @@ static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clus
 	return result;
 }
 
-static void lockBoundary(std::vector<unsigned char>& locks, const std::vector<std::vector<int> >& groups, const std::vector<Cluster>& clusters)
+static void lockBoundary(std::vector<unsigned char>& locks, const std::vector<std::vector<int> >& groups, const std::vector<Cluster>& clusters, const std::vector<unsigned int>& remap)
 {
 	std::vector<int> groupmap(locks.size(), -1);
-
-	memset(&locks[0], 0, locks.size());
 
 	for (size_t i = 0; i < groups.size(); ++i)
 		for (size_t j = 0; j < groups[i].size(); ++j)
@@ -402,13 +402,22 @@ static void lockBoundary(std::vector<unsigned char>& locks, const std::vector<st
 			for (size_t k = 0; k < cluster.indices.size(); ++k)
 			{
 				unsigned int v = cluster.indices[k];
+				unsigned int r = remap[v];
 
-				if (groupmap[v] == -1 || groupmap[v] == int(i))
-					groupmap[v] = int(i);
+				if (groupmap[r] == -1 || groupmap[r] == int(i))
+					groupmap[r] = int(i);
 				else
-					locks[v] = 1;
+					groupmap[r] = -2;
 			}
 		}
+
+	// note: we need to consistently lock all vertices with the same position to avoid holes
+	for (size_t i = 0; i < locks.size(); ++i)
+	{
+		unsigned int r = remap[i];
+
+		locks[i] = (groupmap[r] == -2);
+	}
 }
 
 static std::vector<unsigned int> simplify(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, const std::vector<unsigned char>* locks, size_t target_count, float* error = NULL)
@@ -460,10 +469,16 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	int depth = 0;
 	std::vector<unsigned char> locks(vertices.size());
 
+	// for cluster connectivity, we need a position-only remap that maps vertices with the same position to the same index
+	// it's more efficient to build it once; unfortunately, meshopt_generateVertexRemap doesn't support stride so we need to use *Multi version
+	std::vector<unsigned int> remap(vertices.size());
+	meshopt_Stream position = {&vertices[0].px, sizeof(float) * 3, sizeof(Vertex)};
+	meshopt_generateVertexRemapMulti(&remap[0], &indices[0], indices.size(), vertices.size(), &position, 1);
+
 	// merge and simplify clusters until we can't merge anymore
 	while (pending.size() > 1)
 	{
-		std::vector<std::vector<int> > groups = partition(clusters, pending);
+		std::vector<std::vector<int> > groups = partition(clusters, pending, remap);
 		pending.clear();
 
 		std::vector<int> retry;
@@ -478,7 +493,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 			dumpObj(vertices, std::vector<unsigned int>());
 
 		if (kUseLocks)
-			lockBoundary(locks, groups, clusters);
+			lockBoundary(locks, groups, clusters, remap);
 
 		// every group needs to be simplified now
 		for (size_t i = 0; i < groups.size(); ++i)
