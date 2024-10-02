@@ -567,11 +567,16 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		pending.insert(pending.end(), retry.begin(), retry.end());
 	}
 
+	size_t total_triangles = 0;
 	size_t lowest_triangles = 0;
 	for (size_t i = 0; i < clusters.size(); ++i)
+	{
+		total_triangles += clusters[i].indices.size() / 3;
 		if (clusters[i].parent.error == FLT_MAX)
 			lowest_triangles += clusters[i].indices.size() / 3;
+	}
 
+	printf("total: %d triangles in %d clusters\n", int(total_triangles), int(clusters.size()));
 	printf("lowest lod: %d triangles\n", int(lowest_triangles));
 
 	// for testing purposes, we can compute a DAG cut from a given viewpoint and dump it as an OBJ
