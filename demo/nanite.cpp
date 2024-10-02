@@ -279,8 +279,7 @@ static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, cons
 static std::vector<std::vector<int> > partitionMetis(const std::vector<Cluster>& clusters, const std::vector<int>& pending, const std::vector<unsigned int>& remap)
 {
 	std::vector<std::vector<int> > result;
-
-	std::map<std::pair<int, int>, std::vector<int> > edges;
+	std::vector<std::vector<int> > vertices(remap.size());
 
 	for (size_t i = 0; i < pending.size(); ++i)
 	{
@@ -288,10 +287,9 @@ static std::vector<std::vector<int> > partitionMetis(const std::vector<Cluster>&
 
 		for (size_t j = 0; j < cluster.indices.size(); ++j)
 		{
-			int v0 = remap[cluster.indices[j + 0]];
-			int v1 = remap[cluster.indices[j + (j % 3 == 2 ? -2 : 1)]];
+			int v = remap[cluster.indices[j]];
 
-			std::vector<int>& list = edges[std::make_pair(std::min(v0, v1), std::max(v0, v1))];
+			std::vector<int>& list = vertices[v];
 			if (list.empty() || list.back() != int(i))
 				list.push_back(int(i));
 		}
@@ -299,9 +297,9 @@ static std::vector<std::vector<int> > partitionMetis(const std::vector<Cluster>&
 
 	std::map<std::pair<int, int>, int> adjacency;
 
-	for (std::map<std::pair<int, int>, std::vector<int> >::iterator it = edges.begin(); it != edges.end(); ++it)
+	for (size_t v = 0; v < vertices.size(); ++v)
 	{
-		const std::vector<int>& list = it->second;
+		const std::vector<int>& list = vertices[v];
 
 		for (size_t i = 0; i < list.size(); ++i)
 			for (size_t j = i + 1; j < list.size(); ++j)
