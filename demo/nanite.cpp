@@ -51,6 +51,7 @@ struct Cluster
 };
 
 const size_t kClusterSize = 128;
+const size_t kGroupSize = 8;
 const bool kUseLocks = true;
 
 static LODBounds bounds(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, float error)
@@ -335,7 +336,7 @@ static std::vector<std::vector<int> > partitionMetis(const std::vector<Cluster>&
 
 	int nvtxs = int(pending.size());
 	int ncon = 1;
-	int nparts = int(pending.size() + 3) / 4;
+	int nparts = int(pending.size() + kGroupSize - 1) / kGroupSize;
 	int edgecut = 0;
 
 	if (nparts <= 1)
@@ -375,7 +376,7 @@ static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clus
 	// rough merge; while clusters are approximately spatially ordered, this should use a proper partitioning algorithm
 	for (size_t i = 0; i < pending.size(); ++i)
 	{
-		if (result.empty() || last_indices + clusters[pending[i]].indices.size() > kClusterSize * 4 * 3)
+		if (result.empty() || last_indices + clusters[pending[i]].indices.size() > kClusterSize * kGroupSize * 3)
 		{
 			result.push_back(std::vector<int>());
 			last_indices = 0;
@@ -527,9 +528,10 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 				dumpObj("group", merged);
 			}
 
+			size_t target_size = ((groups[i].size() + 1) / 2) * kClusterSize * 3;
 			float error = 0.f;
-			std::vector<unsigned int> simplified = simplify(vertices, merged, kUseLocks ? &locks : NULL, kClusterSize * 2 * 3, &error);
-			if (simplified.size() > merged.size() * 0.85f || simplified.size() > kClusterSize * 3 * 3)
+			std::vector<unsigned int> simplified = simplify(vertices, merged, kUseLocks ? &locks : NULL, target_size, &error);
+			if (simplified.size() > merged.size() * 0.85f || simplified.size() / (kClusterSize * 3) >= merged.size() / (kClusterSize * 3))
 			{
 #if TRACE
 				printf("stuck cluster: simplified %d => %d over threshold\n", int(merged.size() / 3), int(simplified.size() / 3));
