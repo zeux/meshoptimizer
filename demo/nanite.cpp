@@ -507,7 +507,12 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 				merged.insert(merged.end(), clusters[groups[i][j]].indices.begin(), clusters[groups[i][j]].indices.end());
 
 			if (dump && depth == atoi(dump))
+			{
+				for (size_t j = 0; j < groups[i].size(); ++j)
+					dumpObj("cluster", clusters[groups[i][j]].indices);
+
 				dumpObj("group", merged);
+			}
 
 			float error = 0.f;
 			std::vector<unsigned int> simplified = simplify(vertices, merged, kUseLocks ? &locks : NULL, kClusterSize * 2 * 3, &error);
