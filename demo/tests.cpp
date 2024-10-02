@@ -1221,6 +1221,78 @@ static void simplifyLockFlags()
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 }
 
+static void simplifyLockFlagsSeam()
+{
+	float vb[] = {
+	    0, 0, 0,
+	    0, 1, 0,
+	    0, 1, 0,
+	    0, 2, 0,
+	    1, 0, 0,
+	    1, 1, 0,
+	    1, 1, 0,
+	    1, 2, 0,
+	    2, 0, 0,
+	    2, 1, 0,
+	    2, 1, 0,
+	    2, 2, 0, // clang-format :-/
+	};
+
+	unsigned char lock0[12] = {
+	    1, 0, 0, 1,
+	    0, 0, 0, 0,
+	    1, 0, 0, 1, // clang-format :-/
+	};
+
+	unsigned char lock1[12] = {
+	    1, 0, 0, 1,
+	    1, 0, 0, 1,
+	    1, 0, 0, 1, // clang-format :-/
+	};
+
+	unsigned char lock2[12] = {
+	    1, 0, 1, 1,
+	    1, 0, 1, 1,
+	    1, 0, 1, 1, // clang-format :-/
+	};
+
+	unsigned char lock3[12] = {
+	    1, 1, 0, 1,
+	    1, 1, 0, 1,
+	    1, 1, 0, 1, // clang-format :-/
+	};
+
+	// 0 1-2 3
+	// 4 5-6 7
+	// 8 9-10 11
+
+	unsigned int ib[] = {
+	    0, 1, 4,
+	    4, 1, 5,
+	    4, 5, 8,
+	    8, 5, 9,
+	    2, 3, 6,
+	    6, 3, 7,
+	    6, 7, 10,
+	    10, 7, 11, // clang-format :-/
+	};
+
+	unsigned int res[24];
+	// with no locks, we should be able to collapse the entire mesh (vertices 1-2 and 9-10 are locked but others can move towards them)
+	assert(meshopt_simplifyWithAttributes(res, ib, 24, vb, 12, 12, NULL, 0, NULL, 0, NULL, 0, 1.f, 0) == 0);
+
+	// with corners locked, we should get two quads
+	assert(meshopt_simplifyWithAttributes(res, ib, 24, vb, 12, 12, NULL, 0, NULL, 0, lock0, 0, 1.f, 0) == 12);
+
+	// with both sides locked, we can only collapse the seam spine
+	assert(meshopt_simplifyWithAttributes(res, ib, 24, vb, 12, 12, NULL, 0, NULL, 0, lock1, 0, 1.f, 0) == 18);
+
+	// with seam spine locked, we can collapse nothing; note that we intentionally test two different lock configurations
+	// they each lock only one side of the seam spine, which should be equivalent
+	assert(meshopt_simplifyWithAttributes(res, ib, 24, vb, 12, 12, NULL, 0, NULL, 0, lock2, 0, 1.f, 0) == 24);
+	assert(meshopt_simplifyWithAttributes(res, ib, 24, vb, 12, 12, NULL, 0, NULL, 0, lock3, 0, 1.f, 0) == 24);
+}
+
 static void simplifySparse()
 {
 	float vb[] = {
@@ -1774,6 +1846,7 @@ void runTests()
 	simplifyAttr(/* skip_g= */ false);
 	simplifyAttr(/* skip_g= */ true);
 	simplifyLockFlags();
+	simplifyLockFlagsSeam();
 	simplifySparse();
 	simplifyErrorAbsolute();
 	simplifySeam();
