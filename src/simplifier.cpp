@@ -369,12 +369,7 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 	{
 		if (remap[i] == i)
 		{
-			if (vertex_lock && vertex_lock[sparse_remap ? sparse_remap[i] : i])
-			{
-				// vertex is explicitly locked
-				result[i] = Kind_Locked;
-			}
-			else if (wedge[i] == i)
+			if (wedge[i] == i)
 			{
 				// no attribute seam, need to check if it's manifold
 				unsigned int openi = openinc[i], openo = openout[i];
@@ -436,6 +431,18 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 
 			result[i] = result[remap[i]];
 		}
+	}
+
+	if (vertex_lock)
+	{
+		// vertex_lock may lock any wedge, not just the primary vertex, so we need to lock the primary vertex and relock any wedges
+		for (size_t i = 0; i < vertex_count; ++i)
+			if (vertex_lock[sparse_remap ? sparse_remap[i] : i])
+				result[remap[i]] = Kind_Locked;
+
+		for (size_t i = 0; i < vertex_count; ++i)
+			if (result[remap[i]] == Kind_Locked)
+				result[i] = Kind_Locked;
 	}
 
 	if (options & meshopt_SimplifyLockBorder)
