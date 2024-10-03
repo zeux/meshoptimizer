@@ -147,13 +147,12 @@ inline unsigned char unzigzag8(unsigned char v)
 struct Stats
 {
 	size_t size;
-	size_t header;
-	size_t bitg[4];
-	size_t bitb[4];
+	size_t header;  // bytes for header
+	size_t bitg[4]; // bytes for bit groups
 };
 
-Stats* bytestats;
-Stats vertexstats[256];
+static Stats* bytestats = NULL;
+static Stats vertexstats[256];
 #endif
 
 static bool encodeBytesGroupZero(const unsigned char* buffer)
@@ -278,13 +277,12 @@ static unsigned char* encodeBytes(unsigned char* data, unsigned char* data_end, 
 		assert(data + best_size == next);
 		data = next;
 
-#if TRACE > 1
-		bytestats->bitg[bitslog2]++;
-		bytestats->bitb[bitslog2] += best_size;
+#if TRACE
+		bytestats->bitg[bitslog2] += best_size;
 #endif
 	}
 
-#if TRACE > 1
+#if TRACE
 	bytestats->header += header_size;
 #endif
 
@@ -326,7 +324,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 			return NULL;
 
 #if TRACE
-		bytestats = 0;
+		bytestats = NULL;
 		vertexstats[k].size += data - olddata;
 #endif
 	}
@@ -1201,15 +1199,14 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 
 		printf("%2d: %d bytes\t%.1f%%\t%.1f bpv", int(k), int(vsk.size), double(vsk.size) / double(total_size) * 100, double(vsk.size) / double(vertex_count) * 8);
 
-#if TRACE > 1
-		printf("\t\thdr %d bytes\tbit0 %d (%d bytes)\tbit1 %d (%d bytes)\tbit2 %d (%d bytes)\tbit3 %d (%d bytes)",
-		       int(vsk.header),
-		       int(vsk.bitg[0]), int(vsk.bitb[0]),
-		       int(vsk.bitg[1]), int(vsk.bitb[1]),
-		       int(vsk.bitg[2]), int(vsk.bitb[2]),
-		       int(vsk.bitg[3]), int(vsk.bitb[3]));
-#endif
+		size_t total_k = vsk.header + vsk.bitg[0] + vsk.bitg[1] + vsk.bitg[2] + vsk.bitg[3];
 
+		printf("\t\thdr %5.1f%%; bitg 0 [%4.1f%%] 1 [%4.1f%%] 2 [%4.1f%%] 3 [%4.1f%%]",
+		    double(vsk.header) / double(total_k) * 100,
+		    double(vsk.bitg[0]) / double(total_k) * 100,
+		    double(vsk.bitg[1]) / double(total_k) * 100,
+		    double(vsk.bitg[2]) / double(total_k) * 100,
+		    double(vsk.bitg[3]) / double(total_k) * 100);
 		printf("\n");
 	}
 #endif
