@@ -1214,12 +1214,11 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 
 		size_t total_k = vsk.header + vsk.bitg[0] + vsk.bitg[1] + vsk.bitg[2] + vsk.bitg[3];
 
-		printf("\t\thdr %5.1f%%; bitg 0 [%4.1f%%] 1 [%4.1f%%] 2 [%4.1f%%] 3 [%4.1f%%]",
-		    double(vsk.header) / double(total_k) * 100,
-		    double(vsk.bitg[0]) / double(total_k) * 100, double(vsk.bitg[1]) / double(total_k) * 100,
+		printf(" |\thdr [%5.1f%%] bitg 1-3 [%4.1f%% %4.1f%% %4.1f%%]",
+		    double(vsk.header) / double(total_k) * 100, double(vsk.bitg[1]) / double(total_k) * 100,
 		    double(vsk.bitg[2]) / double(total_k) * 100, double(vsk.bitg[3]) / double(total_k) * 100);
 
-		printf("\tbitc [%4.0f%% %4.0f%% %4.0f%% %4.0f%% %4.0f%% %4.0f%% %4.0f%% %4.0f%%]",
+		printf(" |\tbitc [%3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%%]",
 		    double(vsk.bitc[0]) / double(vertex_count) * 100, double(vsk.bitc[1]) / double(vertex_count) * 100,
 		    double(vsk.bitc[2]) / double(vertex_count) * 100, double(vsk.bitc[3]) / double(vertex_count) * 100,
 		    double(vsk.bitc[4]) / double(vertex_count) * 100, double(vsk.bitc[5]) / double(vertex_count) * 100,
