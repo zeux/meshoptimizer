@@ -149,6 +149,7 @@ struct Stats
 	size_t size;
 	size_t header;  // bytes for header
 	size_t bitg[4]; // bytes for bit groups
+	size_t bitc[8]; // bit consistency: how many bits are shared between all bytes in a group
 };
 
 static Stats* bytestats = NULL;
@@ -317,6 +318,18 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 #if TRACE
 		const unsigned char* olddata = data;
 		bytestats = &vertexstats[k];
+
+		for (size_t ig = 0; ig < vertex_count; ig += kByteGroupSize)
+		{
+			unsigned char last = (ig == 0) ? last_vertex[k] : vertex_data[vertex_size * (ig - 1) + k];
+			unsigned char delta = 0xff;
+
+			for (size_t i = ig; i < ig + kByteGroupSize && i < vertex_count; ++i)
+				delta &= ~(vertex_data[vertex_size * i + k] ^ last);
+
+			for (int j = 0; j < 8; ++j)
+				bytestats->bitc[j] += (vertex_count - ig < kByteGroupSize ? vertex_count - ig : kByteGroupSize) * ((delta >> j) & 1);
+		}
 #endif
 
 		data = encodeBytes(data, data_end, buffer, (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1));
@@ -1203,10 +1216,14 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 
 		printf("\t\thdr %5.1f%%; bitg 0 [%4.1f%%] 1 [%4.1f%%] 2 [%4.1f%%] 3 [%4.1f%%]",
 		    double(vsk.header) / double(total_k) * 100,
-		    double(vsk.bitg[0]) / double(total_k) * 100,
-		    double(vsk.bitg[1]) / double(total_k) * 100,
-		    double(vsk.bitg[2]) / double(total_k) * 100,
-		    double(vsk.bitg[3]) / double(total_k) * 100);
+		    double(vsk.bitg[0]) / double(total_k) * 100, double(vsk.bitg[1]) / double(total_k) * 100,
+		    double(vsk.bitg[2]) / double(total_k) * 100, double(vsk.bitg[3]) / double(total_k) * 100);
+
+		printf("\tbitc [%4.0f%% %4.0f%% %4.0f%% %4.0f%% %4.0f%% %4.0f%% %4.0f%% %4.0f%%]",
+		    double(vsk.bitc[0]) / double(vertex_count) * 100, double(vsk.bitc[1]) / double(vertex_count) * 100,
+		    double(vsk.bitc[2]) / double(vertex_count) * 100, double(vsk.bitc[3]) / double(vertex_count) * 100,
+		    double(vsk.bitc[4]) / double(vertex_count) * 100, double(vsk.bitc[5]) / double(vertex_count) * 100,
+		    double(vsk.bitc[6]) / double(vertex_count) * 100, double(vsk.bitc[7]) / double(vertex_count) * 100);
 		printf("\n");
 	}
 #endif
