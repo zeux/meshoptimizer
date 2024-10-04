@@ -1210,7 +1210,7 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	{
 		const Stats& vsk = vertexstats[k];
 
-		printf("%2d: %d bytes\t%.1f%%\t%.1f bpv", int(k), int(vsk.size), double(vsk.size) / double(total_size) * 100, double(vsk.size) / double(vertex_count) * 8);
+		printf("%2d: %7d bytes [%4.1f%%] %.1f bpv", int(k), int(vsk.size), double(vsk.size) / double(total_size) * 100, double(vsk.size) / double(vertex_count) * 8);
 
 		size_t total_k = vsk.header + vsk.bitg[0] + vsk.bitg[1] + vsk.bitg[2] + vsk.bitg[3];
 
