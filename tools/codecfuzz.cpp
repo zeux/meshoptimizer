@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 void fuzzDecoder(const uint8_t* data, size_t size, size_t stride, int (*decode)(void*, size_t, size_t, const unsigned char*, size_t))
 {
@@ -16,9 +17,25 @@ void fuzzDecoder(const uint8_t* data, size_t size, size_t stride, int (*decode)(
 	free(destination);
 }
 
-namespace meshopt
+void fuzzRoundtrip(const uint8_t* data, size_t size, size_t stride)
 {
-extern unsigned int cpuid;
+	size_t count = size / stride;
+
+	size_t bound = meshopt_encodeVertexBufferBound(count, stride);
+	void* encoded = malloc(bound);
+	void* decoded = malloc(count * stride);
+	assert(encoded && decoded);
+
+	size_t res = meshopt_encodeVertexBuffer(static_cast<unsigned char*>(encoded), bound, data, count, stride);
+	assert(res <= bound);
+
+	int rc = meshopt_decodeVertexBuffer(decoded, count, stride, static_cast<unsigned char*>(encoded), res);
+	assert(rc == 0);
+
+	assert(memcmp(data, decoded, count * stride) == 0);
+
+	free(decoded);
+	free(encoded);
 }
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
@@ -37,6 +54,12 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 	fuzzDecoder(data, size, 16, meshopt_decodeVertexBuffer);
 	fuzzDecoder(data, size, 24, meshopt_decodeVertexBuffer);
 	fuzzDecoder(data, size, 32, meshopt_decodeVertexBuffer);
+
+	// encodeVertexBuffer/decodeVertexBuffer should roundtrip for any stride, check a few with different alignment mod 16
+	fuzzRoundtrip(data, size, 4);
+	fuzzRoundtrip(data, size, 16);
+	fuzzRoundtrip(data, size, 24);
+	fuzzRoundtrip(data, size, 32);
 
 	return 0;
 }
