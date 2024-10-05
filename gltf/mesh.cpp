@@ -262,6 +262,86 @@ static void mergeMeshes(Mesh& target, const Mesh& mesh)
 		target.indices[index_offset + i] = unsigned(vertex_offset + mesh.indices[i]);
 }
 
+static void hashUpdate(uint64_t hash[2], const void* data, size_t size)
+{
+#define ROTL64(x, r) (((x) << (r)) | ((x) >> (64 - (r))))
+
+	// MurMurHash3 128-bit
+	const uint64_t c1 = 0x87c37b91114253d5ull;
+	const uint64_t c2 = 0x4cf5ad432745937full;
+
+	uint64_t h1 = hash[0], h2 = hash[1];
+
+	size_t offset = 0;
+
+	// body
+	for (; offset + 16 <= size; offset += 16)
+	{
+		uint64_t k1, k2;
+		memcpy(&k1, static_cast<const char*>(data) + offset + 0, 8);
+		memcpy(&k2, static_cast<const char*>(data) + offset + 8, 8);
+
+		k1 *= c1, k1 = ROTL64(k1, 31), k1 *= c2;
+		h1 ^= k1, h1 = ROTL64(h1, 27), h1 += h2;
+		h1 = h1 * 5 + 0x52dce729;
+		k2 *= c2, k2 = ROTL64(k2, 33), k2 *= c1;
+		h2 ^= k2, h2 = ROTL64(h2, 31), h2 += h1;
+		h2 = h2 * 5 + 0x38495ab5;
+	}
+
+	// tail
+	if (offset < size)
+	{
+		uint64_t tail[2] = {};
+		memcpy(tail, static_cast<const char*>(data) + offset, size - offset);
+
+		uint64_t k1 = tail[0], k2 = tail[1];
+
+		k1 *= c1, k1 = ROTL64(k1, 31), k1 *= c2;
+		h1 ^= k1;
+		k2 *= c2, k2 = ROTL64(k2, 33), k2 *= c1;
+		h2 ^= k2;
+	}
+
+	h1 ^= size;
+	h2 ^= size;
+
+	hash[0] = h1;
+	hash[1] = h2;
+
+#undef ROTL64
+}
+
+static void hashMesh(Mesh& mesh)
+{
+	mesh.geometry_hash[0] = mesh.geometry_hash[1] = 41;
+
+	for (size_t i = 0; i < mesh.streams.size(); ++i)
+	{
+		const Stream& stream = mesh.streams[i];
+
+		int meta[3] = {stream.type, stream.index, stream.target};
+		hashUpdate(mesh.geometry_hash, meta, sizeof(meta));
+
+		if (stream.custom_name)
+			hashUpdate(mesh.geometry_hash, stream.custom_name, strlen(stream.custom_name));
+
+		hashUpdate(mesh.geometry_hash, stream.data.data(), stream.data.size() * sizeof(Attr));
+	}
+
+	if (!mesh.indices.empty())
+		hashUpdate(mesh.geometry_hash, mesh.indices.data(), mesh.indices.size() * sizeof(unsigned int));
+
+	int meta[4] = {int(mesh.streams.size()), mesh.streams.empty() ? 0 : int(mesh.streams[0].data.size()), int(mesh.indices.size()), mesh.type};
+	hashUpdate(mesh.geometry_hash, meta, sizeof(meta));
+}
+
+void dedupMeshes(std::vector<Mesh>& meshes)
+{
+	for (size_t i = 0; i < meshes.size(); ++i)
+		hashMesh(meshes[i]);
+}
+
 void mergeMeshInstances(Mesh& mesh)
 {
 	if (mesh.nodes.empty())

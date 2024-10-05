@@ -56,6 +56,7 @@ struct Mesh
 
 	std::vector<Stream> streams;
 	std::vector<unsigned int> indices;
+	uint64_t geometry_hash[2];
 
 	size_t targets;
 	std::vector<float> target_weights;
@@ -314,6 +315,7 @@ bool compareMeshTargets(const Mesh& lhs, const Mesh& rhs);
 bool compareMeshVariants(const Mesh& lhs, const Mesh& rhs);
 bool compareMeshNodes(const Mesh& lhs, const Mesh& rhs);
 
+void dedupMeshes(std::vector<Mesh>& meshes);
 void mergeMeshInstances(Mesh& mesh);
 void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings);
 void filterEmptyMeshes(std::vector<Mesh>& meshes);

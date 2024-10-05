@@ -341,6 +341,8 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	markScenes(data, nodes);
 	markAnimated(data, nodes, animations);
 
+	dedupMeshes(meshes);
+
 	for (size_t i = 0; i < meshes.size(); ++i)
 		detachMesh(meshes[i], data, nodes, settings);
 
