@@ -336,10 +336,62 @@ static void hashMesh(Mesh& mesh)
 	hashUpdate(mesh.geometry_hash, meta, sizeof(meta));
 }
 
+static bool canDedupMesh(const Mesh& mesh)
+{
+	// empty mesh
+	if (mesh.streams.empty())
+		return false;
+
+	// world-space mesh
+	if (mesh.nodes.empty() && mesh.instances.empty())
+		return false;
+
+	// to simplify dedup we ignore complex target setups for now
+	if (!mesh.target_weights.empty() || !mesh.target_names.empty() || !mesh.variants.empty())
+		return false;
+
+	return true;
+}
+
 void dedupMeshes(std::vector<Mesh>& meshes)
 {
 	for (size_t i = 0; i < meshes.size(); ++i)
 		hashMesh(meshes[i]);
+
+	for (size_t i = 0; i < meshes.size(); ++i)
+	{
+		Mesh& target = meshes[i];
+
+		if (!canDedupMesh(target))
+			continue;
+
+		for (size_t j = i + 1; j < meshes.size(); ++j)
+		{
+			Mesh& mesh = meshes[j];
+
+			if (mesh.geometry_hash[0] != target.geometry_hash[0] || mesh.geometry_hash[1] != target.geometry_hash[1])
+				continue;
+
+			if (!canDedupMesh(mesh))
+				continue;
+
+			if (mesh.scene != target.scene || mesh.material != target.material || mesh.skin != target.skin)
+				continue;
+
+			// basic sanity test; these should be included in geometry hash
+			assert(mesh.streams.size() == target.streams.size());
+			assert(mesh.streams[0].data.size() == target.streams[0].data.size());
+			assert(mesh.indices.size() == target.indices.size());
+
+			target.nodes.insert(target.nodes.end(), mesh.nodes.begin(), mesh.nodes.end());
+			target.instances.insert(target.instances.end(), mesh.instances.begin(), mesh.instances.end());
+
+			mesh.streams.clear();
+			mesh.indices.clear();
+			mesh.nodes.clear();
+			mesh.instances.clear();
+		}
+	}
 }
 
 void mergeMeshInstances(Mesh& mesh)
