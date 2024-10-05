@@ -341,6 +341,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	markScenes(data, nodes);
 	markAnimated(data, nodes, animations);
 
+	mergeMeshMaterials(data, meshes, settings);
 	dedupMeshes(meshes);
 
 	for (size_t i = 0; i < meshes.size(); ++i)
@@ -377,7 +378,6 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 			filterStreams(mesh, mi);
 	}
 
-	mergeMeshMaterials(data, meshes, settings);
 	mergeMeshes(meshes, settings);
 	filterEmptyMeshes(meshes);
 
