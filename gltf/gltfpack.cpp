@@ -2,6 +2,7 @@
 #include "gltfpack.h"
 
 #include <algorithm>
+#include <map>
 
 #include <locale.h>
 #include <stdint.h>
@@ -416,6 +417,9 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	meshes.insert(meshes.end(), debug_meshes.begin(), debug_meshes.end());
 #endif
 
+	for (size_t i = 0; i < meshes.size(); ++i)
+		hashMesh(meshes[i]);
+
 	filterEmptyMeshes(meshes); // some meshes may become empty after processing
 
 	QuantizationPosition qp = prepareQuantizationPosition(meshes, settings);
@@ -553,6 +557,8 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		ext_texture_transform = ext_texture_transform || mi.uses_texture_transform;
 	}
 
+	std::map<std::pair<uint64_t, uint64_t>, std::pair<size_t, size_t> > primitive_cache;
+
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
 		const Mesh& mesh = meshes[i];
@@ -579,9 +585,20 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 			const QuantizationTexture& qt = qt_meshes[pi] == size_t(-1) ? qt_dummy : qt_materials[qt_meshes[pi]];
 
+			std::pair<size_t, size_t>& primitive_json = primitive_cache[std::make_pair(prim.geometry_hash[0], prim.geometry_hash[1])];
+
 			comma(json_meshes);
 
-			writeMeshGeometry(json_meshes, views, json_accessors, accr_offset, prim, qp, qt, settings);
+			if (primitive_json.second > 0)
+			{
+				json_meshes.append(json_meshes, primitive_json.first, primitive_json.second);
+			}
+			else
+			{
+				primitive_json.first = json_meshes.size();
+				writeMeshGeometry(json_meshes, views, json_accessors, accr_offset, prim, qp, qt, settings);
+				primitive_json.second = json_meshes.size() - primitive_json.first;
+			}
 
 			if (prim.material)
 			{

@@ -312,7 +312,7 @@ static void hashUpdate(uint64_t hash[2], const void* data, size_t size)
 #undef ROTL64
 }
 
-static void hashMesh(Mesh& mesh)
+void hashMesh(Mesh& mesh)
 {
 	mesh.geometry_hash[0] = mesh.geometry_hash[1] = 41;
 
