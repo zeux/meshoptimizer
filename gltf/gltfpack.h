@@ -134,6 +134,7 @@ struct Settings
 	bool keep_extras;
 	bool keep_attributes;
 
+	bool mesh_dedup;
 	bool mesh_merge;
 	bool mesh_instancing;
 

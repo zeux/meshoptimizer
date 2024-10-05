@@ -347,7 +347,8 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	markAnimated(data, nodes, animations);
 
 	mergeMeshMaterials(data, meshes, settings);
-	dedupMeshes(meshes);
+	if (settings.mesh_dedup)
+		dedupMeshes(meshes);
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 		detachMesh(meshes[i], data, nodes, settings);
@@ -426,7 +427,6 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 #ifndef NDEBUG
 	meshes.insert(meshes.end(), debug_meshes.begin(), debug_meshes.end());
 #endif
-
 
 	filterEmptyMeshes(meshes); // some meshes may become empty after processing
 
@@ -1186,6 +1186,7 @@ Settings defaults()
 	settings.rot_bits = 12;
 	settings.scl_bits = 16;
 	settings.anim_freq = 30;
+	settings.mesh_dedup = true;
 	settings.simplify_ratio = 1.f;
 	settings.simplify_error = 1e-2f;
 	settings.texture_scale = 1.f;
@@ -1322,6 +1323,11 @@ int main(int argc, char** argv)
 		else if (strcmp(arg, "-kv") == 0)
 		{
 			settings.keep_attributes = true;
+		}
+		else if (strcmp(arg, "-mdd") == 0)
+		{
+			fprintf(stderr, "Warning: option -mdd disables mesh deduplication and is only provided as a safety measure; it will be removed in the future\n");
+			settings.mesh_dedup = false;
 		}
 		else if (strcmp(arg, "-mm") == 0)
 		{
