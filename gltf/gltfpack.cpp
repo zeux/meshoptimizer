@@ -296,6 +296,10 @@ static void detachMesh(Mesh& mesh, cgltf_data* data, const std::vector<NodeInfo>
 	if (mesh.nodes.size() > 1 && !settings.mesh_merge && !settings.mesh_instancing)
 		return;
 
+	// mesh has duplicate geometry; detaching it would increase the size due to unique world-space transforms
+	if (mesh.nodes.size() == 1 && mesh.geometry_duplicate && !settings.mesh_merge)
+		return;
+
 	// prefer instancing if possible, use merging otherwise
 	if (mesh.nodes.size() > 1 && settings.mesh_instancing)
 	{
