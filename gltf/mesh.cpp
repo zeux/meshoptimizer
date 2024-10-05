@@ -376,7 +376,12 @@ void dedupMeshes(std::vector<Mesh>& meshes)
 				continue;
 
 			if (mesh.scene != target.scene || mesh.material != target.material || mesh.skin != target.skin)
+			{
+				// mark both meshes as having duplicate geometry; we don't use this in dedupMeshes but it's useful later in the pipeline
+				target.geometry_duplicate = true;
+				mesh.geometry_duplicate = true;
 				continue;
+			}
 
 			// basic sanity test; these should be included in geometry hash
 			assert(mesh.streams.size() == target.streams.size());

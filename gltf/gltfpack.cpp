@@ -411,14 +411,18 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 #endif
 
 	for (size_t i = 0; i < meshes.size(); ++i)
-		processMesh(meshes[i], settings);
+	{
+		Mesh& mesh = meshes[i];
+		processMesh(mesh, settings);
+
+		if (mesh.geometry_duplicate)
+			hashMesh(mesh);
+	}
 
 #ifndef NDEBUG
 	meshes.insert(meshes.end(), debug_meshes.begin(), debug_meshes.end());
 #endif
 
-	for (size_t i = 0; i < meshes.size(); ++i)
-		hashMesh(meshes[i]);
 
 	filterEmptyMeshes(meshes); // some meshes may become empty after processing
 
@@ -585,19 +589,27 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 			const QuantizationTexture& qt = qt_meshes[pi] == size_t(-1) ? qt_dummy : qt_materials[qt_meshes[pi]];
 
-			std::pair<size_t, size_t>& primitive_json = primitive_cache[std::make_pair(prim.geometry_hash[0], prim.geometry_hash[1])];
-
 			comma(json_meshes);
 
-			if (primitive_json.second > 0)
+			if (prim.geometry_duplicate)
 			{
-				json_meshes.append(json_meshes, primitive_json.first, primitive_json.second);
+				std::pair<size_t, size_t>& primitive_json = primitive_cache[std::make_pair(prim.geometry_hash[0], prim.geometry_hash[1])];
+
+				if (primitive_json.second)
+				{
+					// reuse previously written accessors
+					json_meshes.append(json_meshes, primitive_json.first, primitive_json.second);
+				}
+				else
+				{
+					primitive_json.first = json_meshes.size();
+					writeMeshGeometry(json_meshes, views, json_accessors, accr_offset, prim, qp, qt, settings);
+					primitive_json.second = json_meshes.size() - primitive_json.first;
+				}
 			}
 			else
 			{
-				primitive_json.first = json_meshes.size();
 				writeMeshGeometry(json_meshes, views, json_accessors, accr_offset, prim, qp, qt, settings);
-				primitive_json.second = json_meshes.size() - primitive_json.first;
 			}
 
 			if (prim.material)

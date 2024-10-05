@@ -56,6 +56,8 @@ struct Mesh
 
 	std::vector<Stream> streams;
 	std::vector<unsigned int> indices;
+
+	bool geometry_duplicate;
 	uint64_t geometry_hash[2];
 
 	size_t targets;
