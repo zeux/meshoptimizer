@@ -580,34 +580,8 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 			const QuantizationTexture& qt = qt_meshes[pi] == size_t(-1) ? qt_dummy : qt_materials[qt_meshes[pi]];
 
 			comma(json_meshes);
-			append(json_meshes, "{\"attributes\":{");
-			writeMeshAttributes(json_meshes, views, json_accessors, accr_offset, prim, 0, qp, qt, settings);
-			append(json_meshes, "}");
-			if (prim.type != cgltf_primitive_type_triangles)
-			{
-				append(json_meshes, ",\"mode\":");
-				append(json_meshes, size_t(prim.type - cgltf_primitive_type_points));
-			}
-			if (mesh.targets)
-			{
-				append(json_meshes, ",\"targets\":[");
-				for (size_t j = 0; j < mesh.targets; ++j)
-				{
-					comma(json_meshes);
-					append(json_meshes, "{");
-					writeMeshAttributes(json_meshes, views, json_accessors, accr_offset, prim, int(1 + j), qp, qt, settings);
-					append(json_meshes, "}");
-				}
-				append(json_meshes, "]");
-			}
 
-			if (!prim.indices.empty())
-			{
-				size_t index_accr = writeMeshIndices(views, json_accessors, accr_offset, prim, settings);
-
-				append(json_meshes, ",\"indices\":");
-				append(json_meshes, index_accr);
-			}
+			writeMeshGeometry(json_meshes, views, json_accessors, accr_offset, prim, qp, qt, settings);
 
 			if (prim.material)
 			{
