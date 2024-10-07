@@ -40,6 +40,18 @@
 #define BASISU_SUPPORT_SSE 1
 #endif
 
+// disable as many transcoder formats as possible to save code size
+#define BASISD_SUPPORT_ASTC 0
+#define BASISD_SUPPORT_ATC 0
+#define BASISD_SUPPORT_BC7_MODE5 0
+#define BASISD_SUPPORT_DXT1 0
+#define BASISD_SUPPORT_DXT5A 0
+#define BASISD_SUPPORT_ETC2_EAC_A8 0
+#define BASISD_SUPPORT_ETC2_EAC_RG11 0
+#define BASISD_SUPPORT_FXT1 0
+#define BASISD_SUPPORT_PVRTC1 0
+#define BASISD_SUPPORT_PVRTC2 0
+
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
