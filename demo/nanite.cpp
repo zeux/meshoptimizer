@@ -107,11 +107,15 @@ static LODBounds boundsMerge(const std::vector<Cluster>& clusters, const std::ve
 	return result;
 }
 
-static float boundsError(const LODBounds& bounds, float x, float y, float z)
+// computes approximate (perspective) projection error of a cluster in screen space (0..1; multiply by screen height to get pixels)
+// camera_proj is projection[1][1], or cot(fovy/2); camera_znear is *positive* near plane distance
+// for DAG cut to be valid, boundsError must be monotonic: it must return a larger error for parent cluster
+// for simplicity, we ignore perspective distortion and use rotationally invariant projection size estimation
+static float boundsError(const LODBounds& bounds, float camera_x, float camera_y, float camera_z, float camera_proj, float camera_znear)
 {
-	float dx = bounds.center[0] - x, dy = bounds.center[1] - y, dz = bounds.center[2] - z;
+	float dx = bounds.center[0] - camera_x, dy = bounds.center[1] - camera_y, dz = bounds.center[2] - camera_z;
 	float d = sqrtf(dx * dx + dy * dy + dz * dz) - bounds.radius;
-	return d <= 0 ? FLT_MAX : bounds.error / d;
+	return bounds.error / (d > camera_znear ? d : camera_znear) * (camera_proj * 0.5f);
 }
 
 #ifdef METIS
@@ -607,20 +611,24 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		maxy = std::max(maxy, vertices[i].py * 2);
 		maxz = std::max(maxz, vertices[i].pz * 2);
 	}
-	float threshold = 3e-3f;
+
+	float threshold = 2e-3f; // 2 pixels at 1080p
+	float fovy = 60.f;
+	float znear = 1e-2f;
+	float proj = 1.f / tanf(fovy * 3.1415926f / 180.f * 0.5f);
 
 	std::vector<unsigned int> cut;
 	for (size_t i = 0; i < clusters.size(); ++i)
-		if (boundsError(clusters[i].self, maxx, maxy, maxz) <= threshold && boundsError(clusters[i].parent, maxx, maxy, maxz) > threshold)
+		if (boundsError(clusters[i].self, maxx, maxy, maxz, proj, znear) <= threshold && boundsError(clusters[i].parent, maxx, maxy, maxz, proj, znear) > threshold)
 			cut.insert(cut.end(), clusters[i].indices.begin(), clusters[i].indices.end());
 
 #ifndef NDEBUG
 	for (size_t i = 0; i < dag_debug.size(); ++i)
 	{
 		int j = dag_debug[i].first, k = dag_debug[i].second;
-		float ej = boundsError(clusters[j].self, maxx, maxy, maxz);
-		float ejp = boundsError(clusters[j].parent, maxx, maxy, maxz);
-		float ek = boundsError(clusters[k].self, maxx, maxy, maxz);
+		float ej = boundsError(clusters[j].self, maxx, maxy, maxz, proj, znear);
+		float ejp = boundsError(clusters[j].parent, maxx, maxy, maxz, proj, znear);
+		float ek = boundsError(clusters[k].self, maxx, maxy, maxz, proj, znear);
 
 		assert(ej <= ek);
 		assert(ejp >= ej);
@@ -634,7 +642,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		dumpObj(vertices, cut);
 
 		for (size_t i = 0; i < clusters.size(); ++i)
-			if (boundsError(clusters[i].self, maxx, maxy, maxz) <= threshold && boundsError(clusters[i].parent, maxx, maxy, maxz) > threshold)
+			if (boundsError(clusters[i].self, maxx, maxy, maxz, proj, znear) <= threshold && boundsError(clusters[i].parent, maxx, maxy, maxz, proj, znear) > threshold)
 				dumpObj("cluster", clusters[i].indices);
 	}
 }
