@@ -53,6 +53,7 @@ struct Cluster
 const size_t kClusterSize = 128;
 const size_t kGroupSize = 8;
 const bool kUseLocks = true;
+const bool kUseNormals = true;
 
 static LODBounds bounds(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, float error)
 {
@@ -430,7 +431,10 @@ static std::vector<unsigned int> simplify(const std::vector<Vertex>& vertices, c
 
 	std::vector<unsigned int> lod(indices.size());
 	unsigned int options = meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute;
-	if (locks)
+	float normal_weights[3] = {0.5f, 0.5f, 0.5f};
+	if (kUseNormals)
+		lod.resize(meshopt_simplifyWithAttributes(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), &vertices[0].nx, sizeof(Vertex), normal_weights, 3, locks ? &(*locks)[0] : NULL, target_count, FLT_MAX, options, error));
+	else if (locks)
 		lod.resize(meshopt_simplifyWithAttributes(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), NULL, 0, NULL, 0, &(*locks)[0], target_count, FLT_MAX, options, error));
 	else
 		lod.resize(meshopt_simplify(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), target_count, FLT_MAX, options | meshopt_SimplifyLockBorder, error));
