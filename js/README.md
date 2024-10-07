@@ -69,12 +69,13 @@ reorderMesh: (indices: Uint32Array, triangles: boolean, optsize: boolean) => [Ui
 
 The function optimizes the input array for locality of reference (make sure to pass `triangles=true` for triangle lists, and `false` otherwise). `optsize` can choose whether the order should be optimal for transmission size (recommended for Web) or for GPU rendering performance. The function changes the `indices` array in place and returns an additional remap array and the total number of unique vertices.
 
-After this function returns, to maintain correct rendering the application should reorder all vertex streams - including morph targets if applicable - according to the remap array. For each original index, remap array contains the new location for that index, so the remapping pseudocode looks like this:
+After this function returns, to maintain correct rendering the application should reorder all vertex streams - including morph targets if applicable - according to the remap array. For each original index, remap array contains the new location for that index (or `0xffffffff` if the value is unused), so the remapping pseudocode looks like this:
 
 ```ts
 let newvertices = new VertexArray(unique); // unique is returned by reorderMesh
 for (let i = 0; i < oldvertices.length; ++i)
-	newvertices[remap[i]] = oldvertices[i];
+    if (remap[i] != 0xffffffff)
+        newvertices[remap[i]] = oldvertices[i];
 ```
 
 When the input is a point cloud and not a triangle mesh, it is recommended to reorder the points using a specialized function that performs spatial sorting that can result in significant improvements in compression ratio by the subsequent processing:
