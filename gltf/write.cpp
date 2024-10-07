@@ -1046,22 +1046,54 @@ void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std:
 	}
 }
 
-size_t writeMeshIndices(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, const Settings& settings)
+size_t writeMeshIndices(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const std::vector<unsigned int>& indices, cgltf_primitive_type type, const Settings& settings)
 {
 	std::string scratch;
-	StreamFormat format = writeIndexStream(scratch, mesh.indices);
-	BufferView::Compression compression = settings.compress ? (mesh.type == cgltf_primitive_type_triangles ? BufferView::Compression_Index : BufferView::Compression_IndexSequence) : BufferView::Compression_None;
+	StreamFormat format = writeIndexStream(scratch, indices);
+	BufferView::Compression compression = settings.compress ? (type == cgltf_primitive_type_triangles ? BufferView::Compression_Index : BufferView::Compression_IndexSequence) : BufferView::Compression_None;
 
 	size_t view = getBufferView(views, BufferView::Kind_Index, StreamFormat::Filter_None, compression, format.stride);
 	size_t offset = views[view].data.size();
 	views[view].data += scratch;
 
 	comma(json_accessors);
-	writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, mesh.indices.size());
+	writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, indices.size());
 
 	size_t index_accr = accr_offset++;
 
 	return index_accr;
+}
+
+void writeMeshGeometry(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings)
+{
+	append(json, "{\"attributes\":{");
+	writeMeshAttributes(json, views, json_accessors, accr_offset, mesh, 0, qp, qt, settings);
+	append(json, "}");
+	if (mesh.type != cgltf_primitive_type_triangles)
+	{
+		append(json, ",\"mode\":");
+		append(json, size_t(mesh.type - cgltf_primitive_type_points));
+	}
+	if (mesh.targets)
+	{
+		append(json, ",\"targets\":[");
+		for (size_t j = 0; j < mesh.targets; ++j)
+		{
+			comma(json);
+			append(json, "{");
+			writeMeshAttributes(json, views, json_accessors, accr_offset, mesh, int(1 + j), qp, qt, settings);
+			append(json, "}");
+		}
+		append(json, "]");
+	}
+
+	if (!mesh.indices.empty())
+	{
+		size_t index_accr = writeMeshIndices(views, json_accessors, accr_offset, mesh.indices, mesh.type, settings);
+
+		append(json, ",\"indices\":");
+		append(json, index_accr);
+	}
 }
 
 static size_t writeAnimationTime(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, float mint, int frames, float period, const Settings& settings)
