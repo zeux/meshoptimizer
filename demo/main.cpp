@@ -197,7 +197,7 @@ void dumpObj(const std::vector<Vertex>& vertices, const std::vector<unsigned int
 	{
 		unsigned int a = indices[i], b = indices[i + 1], c = indices[i + 2];
 
-		fprintf(stderr, "f %d %d %d\n", a + 1, b + 1, c + 1);
+		fprintf(stderr, "f %d//%d %d//%d %d//%d\n", a + 1, a + 1, b + 1, b + 1, c + 1, c + 1);
 	}
 }
 
@@ -209,7 +209,7 @@ void dumpObj(const char* section, const std::vector<unsigned int>& indices)
 	{
 		unsigned int a = indices[j], b = indices[j + 1], c = indices[j + 2];
 
-		fprintf(stderr, "f %d %d %d\n", a + 1, b + 1, c + 1);
+		fprintf(stderr, "f %d//%d %d//%d %d//%d\n", a + 1, a + 1, b + 1, b + 1, c + 1, c + 1);
 	}
 }
 
