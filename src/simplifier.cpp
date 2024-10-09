@@ -1117,7 +1117,7 @@ static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapse
 	}
 }
 
-static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, Quadric* attribute_quadrics, QuadricGrad* attribute_gradients, size_t attribute_count, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, const unsigned int* loop, const unsigned int* loopback, const Vector3* vertex_positions, const EdgeAdjacency& adjacency, size_t triangle_collapse_goal, float error_limit, float& result_error)
+static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, Quadric* attribute_quadrics, QuadricGrad* attribute_gradients, size_t attribute_count, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, const unsigned int* loop, const unsigned int* loopback, const Vector3* vertex_positions, const EdgeAdjacency& adjacency, size_t triangle_collapse_goal, float error_limit, float& result_error, float& vertex_error)
 {
 	size_t edge_collapses = 0;
 	size_t triangle_collapses = 0;
@@ -1267,7 +1267,11 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		triangle_collapses += (kind == Kind_Border) ? 1 : 2;
 		edge_collapses++;
 
+		// when attributes are used, distance error needs to be recomputed as collapses don't track it; it is safe to do this after the quadric adjustment
+		float derr = attribute_count == 0 ? c.error : quadricError(vertex_quadrics[r0], vertex_positions[r1]);
+
 		result_error = result_error < c.error ? c.error : result_error;
+		vertex_error = vertex_error < derr ? derr : vertex_error;
 	}
 
 #if TRACE
@@ -1938,6 +1942,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 
 	size_t result_count = index_count;
 	float result_error = 0;
+	float vertex_error = 0;
 
 	// target_error input is linear; we need to adjust it to match quadricError units
 	float error_scale = (options & meshopt_SimplifyErrorAbsolute) ? vertex_scale : 1.f;
@@ -1970,7 +1975,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 
 		memset(collapse_locked, 0, vertex_count);
 
-		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, loop, loopback, vertex_positions, adjacency, triangle_collapse_goal, error_limit, result_error);
+		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, loop, loopback, vertex_positions, adjacency, triangle_collapse_goal, error_limit, result_error, vertex_error);
 
 		// no edges can be collapsed any more due to hitting the error limit or triangle collapse limit
 		if (collapses == 0)
@@ -1984,8 +1989,8 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 
 		result_count = new_count;
 
-		if ((options & meshopt_SimplifyPrune) && result_count > target_index_count && component_nexterror <= result_error)
-			result_count = pruneComponents(result, result_count, components, component_errors, component_count, result_error, component_nexterror);
+		if ((options & meshopt_SimplifyPrune) && result_count > target_index_count && component_nexterror <= vertex_error)
+			result_count = pruneComponents(result, result_count, components, component_errors, component_count, vertex_error, component_nexterror);
 	}
 
 	// we're done with the regular simplification but we're still short of the target; try pruning more aggressively towards error_limit
@@ -2009,6 +2014,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 
 		result_count = new_count;
 		result_error = result_error < component_maxerror ? component_maxerror : result_error;
+		vertex_error = vertex_error < component_maxerror ? component_maxerror : vertex_error;
 	}
 
 #if TRACE
