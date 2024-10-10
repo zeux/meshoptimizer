@@ -1117,7 +1117,7 @@ static void sortEdgeCollapses(unsigned int* sort_order, const Collapse* collapse
 	}
 }
 
-static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, Quadric* vertex_quadrics, size_t attribute_count, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, const unsigned int* loop, const unsigned int* loopback, const Vector3* vertex_positions, const EdgeAdjacency& adjacency, size_t triangle_collapse_goal, float error_limit, float& result_error, float& vertex_error)
+static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* collapse_locked, const Collapse* collapses, size_t collapse_count, const unsigned int* collapse_order, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, const unsigned int* loop, const unsigned int* loopback, const Vector3* vertex_positions, const EdgeAdjacency& adjacency, size_t triangle_collapse_goal, float error_limit, float& result_error)
 {
 	size_t edge_collapses = 0;
 	size_t triangle_collapses = 0;
@@ -1249,11 +1249,8 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		triangle_collapses += (kind == Kind_Border) ? 1 : 2;
 		edge_collapses++;
 
-		// when attributes are used, distance error needs to be recomputed as collapses don't track it; it is safe to do this after the quadric adjustment
-		float derr = attribute_count == 0 ? c.error : quadricError(vertex_quadrics[r0], vertex_positions[r1]);
 
 		result_error = result_error < c.error ? c.error : result_error;
-		vertex_error = vertex_error < derr ? derr : vertex_error;
 	}
 
 #if TRACE
@@ -1269,7 +1266,7 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 	return edge_collapses;
 }
 
-static void updateQuadrics(const unsigned int* collapse_remap, size_t vertex_count, Quadric* vertex_quadrics, Quadric* attribute_quadrics, QuadricGrad* attribute_gradients, size_t attribute_count, const unsigned int* remap)
+static void updateQuadrics(const unsigned int* collapse_remap, size_t vertex_count, Quadric* vertex_quadrics, Quadric* attribute_quadrics, QuadricGrad* attribute_gradients, size_t attribute_count, const Vector3* vertex_positions, const unsigned int* remap, float& vertex_error)
 {
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
@@ -1282,6 +1279,7 @@ static void updateQuadrics(const unsigned int* collapse_remap, size_t vertex_cou
 		unsigned int r0 = remap[i0];
 		unsigned int r1 = remap[i1];
 
+		// ensure we only update vertex_quadrics once: primary vertex must be moved if any wedge is moved
 		if (i0 == r0)
 			quadricAdd(vertex_quadrics[r1], vertex_quadrics[r0]);
 
@@ -1289,6 +1287,13 @@ static void updateQuadrics(const unsigned int* collapse_remap, size_t vertex_cou
 		{
 			quadricAdd(attribute_quadrics[i1], attribute_quadrics[i0]);
 			quadricAdd(&attribute_gradients[i1 * attribute_count], &attribute_gradients[i0 * attribute_count], attribute_count);
+
+			if (i0 == r0)
+			{
+				// when attributes are used, distance error needs to be recomputed as collapses don't track it; it is safe to do this after the quadric adjustment
+				float derr = quadricError(vertex_quadrics[r0], vertex_positions[r1]);
+				vertex_error = vertex_error < derr ? derr : vertex_error;
+			}
 		}
 	}
 }
@@ -1981,13 +1986,16 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 
 		memset(collapse_locked, 0, vertex_count);
 
-		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, vertex_quadrics, attribute_count, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, loop, loopback, vertex_positions, adjacency, triangle_collapse_goal, error_limit, result_error, vertex_error);
+		size_t collapses = performEdgeCollapses(collapse_remap, collapse_locked, edge_collapses, edge_collapse_count, collapse_order, remap, wedge, vertex_kind, loop, loopback, vertex_positions, adjacency, triangle_collapse_goal, error_limit, result_error);
 
 		// no edges can be collapsed any more due to hitting the error limit or triangle collapse limit
 		if (collapses == 0)
 			break;
 
-		updateQuadrics(collapse_remap, vertex_count, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, remap);
+		updateQuadrics(collapse_remap, vertex_count, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, vertex_positions, remap, vertex_error);
+
+		// updateQuadrics will update vertex error if we use attributes, but if we don't then result_error and vertex_error are equivalent
+		vertex_error = attribute_count == 0 ? result_error : vertex_error;
 
 		remapEdgeLoops(loop, vertex_count, collapse_remap);
 		remapEdgeLoops(loopback, vertex_count, collapse_remap);
