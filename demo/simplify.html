@@ -324,7 +324,7 @@
 						var center = new THREE.Vector3();
 						var radius = 1;
 						var distance = Math.max(camera.position.distanceTo(center) - radius, 0);
-						var loderrortarget = 1e-3 * Math.tan(camera.fov * 0.5 * (Math.PI / 180)); // ~1 pixel at 1k x 1k
+						var loderrortarget = 1e-3 * (2 * Math.tan(camera.fov * 0.5 * (Math.PI / 180))); // ~1 pixel at 1k x 1k
 
 						// note: we are currently cutting corners wrt handling the actual mesh scale
 						// since we rescale the entire scene to fit a unit box, we can directly feed the threshold
