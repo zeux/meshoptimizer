@@ -306,9 +306,10 @@ This algorithm will not stop early due to topology restrictions but can still do
 Both algorithms can also return the resulting normalized deviation that can be used to choose the correct level of detail based on screen size or solid angle; the error can be converted to object space by multiplying by the scaling factor returned by `meshopt_simplifyScale`. For example, given a mesh with a precomputed LOD and a prescaled error, the screen-space normalized error can be computed and used for LOD selection:
 
 ```c++
+// lod_factor can be 1 or can be adjusted for more or less aggressive LOD selection
 float d = max(0, distance(camera_position, mesh_center) - mesh_radius);
-float e = d * (tan(camera_fovy / 2) * 2 / 1000); // assume ~1000 px vertical resolution
-bool lod_ok = e * lod_factor >= lod_error; // lod_factor can be 1 or can be adjusted for more or less aggressive LOD selection
+float e = d * (tan(camera_fovy / 2) * 2 / screen_height); // 1px in mesh space
+bool lod_ok = e * lod_factor >= lod_error;
 ```
 
 When a sequence of LOD meshes is generated that all use the original vertex buffer, care must be taken to order vertices optimally to not penalize mobile GPU architectures that are only capable of transforming a sequential vertex buffer range. It's recommended in this case to first optimize each LOD for vertex cache, then assemble all LODs in one large index buffer starting from the coarsest LOD (the one with fewest triangles), and call `meshopt_optimizeVertexFetch` on the final large index buffer. This will make sure that coarser LODs require a smaller vertex range and are efficient wrt vertex fetch and transform.
