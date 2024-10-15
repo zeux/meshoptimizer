@@ -929,7 +929,7 @@ static int follow(int* parents, int index)
 	return index;
 }
 
-void meshlets(const Mesh& mesh, bool scan)
+void meshlets(const Mesh& mesh, bool scan = false)
 {
 	const size_t max_vertices = 64;
 	const size_t max_triangles = 124; // NVidia-recommended 126, rounded down to a multiple of 4
@@ -963,8 +963,19 @@ void meshlets(const Mesh& mesh, bool scan)
 
 	double avg_vertices = 0;
 	double avg_triangles = 0;
+	double avg_boundary = 0;
 	size_t not_full = 0;
 	size_t not_connected = 0;
+
+	std::vector<int> boundary(mesh.vertices.size());
+
+	for (size_t i = 0; i < meshlets.size(); ++i)
+	{
+		const meshopt_Meshlet& m = meshlets[i];
+
+		for (unsigned int j = 0; j < m.vertex_count; ++j)
+			boundary[meshlet_vertices[m.vertex_offset + j]]++;
+	}
 
 	for (size_t i = 0; i < meshlets.size(); ++i)
 	{
@@ -973,6 +984,10 @@ void meshlets(const Mesh& mesh, bool scan)
 		avg_vertices += m.vertex_count;
 		avg_triangles += m.triangle_count;
 		not_full += m.vertex_count < max_vertices;
+
+		for (unsigned int j = 0; j < m.vertex_count; ++j)
+			if (boundary[meshlet_vertices[m.vertex_offset + j]] > 1)
+				avg_boundary += 1;
 
 		// union-find vertices to check if the meshlet is connected
 		int parents[max_vertices];
@@ -1000,10 +1015,11 @@ void meshlets(const Mesh& mesh, bool scan)
 
 	avg_vertices /= double(meshlets.size());
 	avg_triangles /= double(meshlets.size());
+	avg_boundary /= double(meshlets.size());
 
-	printf("Meshlets%c: %d meshlets (avg vertices %.1f, avg triangles %.1f, not full %d, not connected %d) in %.2f msec\n",
+	printf("Meshlets%c: %d meshlets (avg vertices %.1f, avg triangles %.1f, avg boundary %.1f, not full %d, not connected %d) in %.2f msec\n",
 	    scan ? 'S' : ' ',
-	    int(meshlets.size()), avg_vertices, avg_triangles, int(not_full), int(not_connected), (end - start) * 1000);
+	    int(meshlets.size()), avg_vertices, avg_triangles, avg_boundary, int(not_full), int(not_connected), (end - start) * 1000);
 
 	float camera[3] = {100, 100, 100};
 
@@ -1015,6 +1031,7 @@ void meshlets(const Mesh& mesh, bool scan)
 	size_t accepted_s8 = 0;
 
 	std::vector<float> radii(meshlets.size());
+	std::vector<float> cones(meshlets.size());
 
 	double startc = timestamp();
 	for (size_t i = 0; i < meshlets.size(); ++i)
@@ -1024,6 +1041,7 @@ void meshlets(const Mesh& mesh, bool scan)
 		meshopt_Bounds bounds = meshopt_computeMeshletBounds(&meshlet_vertices[m.vertex_offset], &meshlet_triangles[m.triangle_offset], m.triangle_count, &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
 
 		radii[i] = bounds.radius;
+		cones[i] = 90.f - acosf(bounds.cone_cutoff) * (180.f / 3.1415926f);
 
 		// trivial accept: we can't ever backface cull this meshlet
 		accepted += (bounds.cone_cutoff >= 1);
@@ -1047,11 +1065,16 @@ void meshlets(const Mesh& mesh, bool scan)
 	double endc = timestamp();
 
 	double radius_mean = 0;
+	double cone_mean = 0;
 
 	for (size_t i = 0; i < meshlets.size(); ++i)
+	{
 		radius_mean += radii[i];
+		cone_mean += cones[i];
+	}
 
 	radius_mean /= double(meshlets.size());
+	cone_mean /= double(meshlets.size());
 
 	double radius_variance = 0;
 
@@ -1067,10 +1090,10 @@ void meshlets(const Mesh& mesh, bool scan)
 	for (size_t i = 0; i < meshlets.size(); ++i)
 		meshlets_std += radii[i] < radius_mean + radius_stddev;
 
-	printf("BoundDist: mean %f stddev %f; %.1f%% meshlets are under mean+stddev\n",
-	    radius_mean,
-	    radius_stddev,
-	    double(meshlets_std) / double(meshlets.size()) * 100);
+	printf("Bounds   : radius mean %f stddev %f; %.1f%% meshlets are under mean+stddev; cone mean half angle %.1f\n",
+	    radius_mean, radius_stddev,
+	    double(meshlets_std) / double(meshlets.size()) * 100,
+	    cone_mean);
 
 	printf("ConeCull : rejected apex %d (%.1f%%) / center %d (%.1f%%), trivially accepted %d (%.1f%%) in %.2f msec\n",
 	    int(rejected), double(rejected) / double(meshlets.size()) * 100,
@@ -1392,7 +1415,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	simplifyAttr(mesh, 0.1f, meshopt_SimplifyPrune);
+	meshlets(mesh);
 }
 
 void processNanite(const char* path)
