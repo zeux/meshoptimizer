@@ -180,8 +180,6 @@ assert(resvb == 0 && resib == 0);
 
 Note that vertex encoding assumes that vertex buffer was optimized for vertex fetch, and that vertices are quantized; index encoding assumes that the vertex/index buffers were optimized for vertex cache and vertex fetch. Feeding unoptimized data into the encoders will produce poor compression ratios. Both codecs are lossless - the only lossy step is quantization that happens before encoding.
 
-To reduce the data size further, it's recommended to use `meshopt_optimizeVertexCacheStrip` instead of `meshopt_optimizeVertexCache` when optimizing for vertex cache, and to use new index codec version (`meshopt_encodeIndexVersion(1)`). This trades off some efficiency in vertex transform for smaller vertex and index data.
-
 Decoding functions are heavily optimized and can directly target write-combined memory; you can expect both decoders to run at 1-3 GB/s on modern desktop CPUs. Compression ratios depend on the data; vertex data compression ratio is typically around 2-4x (compared to already quantized data), index data compression ratio is around 5-6x (compared to raw 16-bit index data). General purpose lossless compressors can further improve on these results.
 
 Index buffer codec only supports triangle list topology; when encoding triangle strips or line lists, use `meshopt_encodeIndexSequence`/`meshopt_decodeIndexSequence` instead. This codec typically encodes indices into ~1 byte per index, but compressing the results further with a general purpose compressor can improve the results to 1-3 bits per index.
@@ -219,6 +217,38 @@ meshopt_remapVertexBuffer(positions, positions, point_count, sizeof(vec3), &rema
 ```
 
 After this the resulting arrays should be quantized (e.g. using 16-bit fixed point numbers for positions and 8-bit color components), and the result can be compressed using `meshopt_encodeVertexBuffer` as described in the previous section. To decompress, `meshopt_decodeVertexBuffer` will recover the quantized data that can be used directly or converted back to original floating-point data. The compression ratio depends on the nature of source data, for colored points it's typical to get 35-40 bits per point as a result.
+
+## Advanced compression
+
+Both vertex and index codecs are designed to be used in a three-stage pipeline:
+
+- Preparation (quantization, filtering, ordering)
+- Encoding (`meshopt_encodeVertexBuffer`/`meshopt_encodeIndexBuffer`)
+- Optional compression (LZ4/zlib/zstd/Oodle)
+
+The preparation stage is crucial for achieving good compression ratios; this section will cover some techniques that can be used to improve the results.
+
+Index codec targets 1 byte per triangle as a best case; on real-world data it's typical to get 1-1.2 bytes per triangle. To achieve this, the data needs to be optimized for vertex cache and vertex fetch. Optimizations that do not disrupt triangle locality (such as overdraw) are safe to use in between.
+To reduce the data size further, it's possible to use `meshopt_optimizeVertexCacheStrip` instead of `meshopt_optimizeVertexCache` when optimizing for vertex cache. This trades off some efficiency in vertex transform for smaller vertex and index data.
+
+When referenced vertex indices are not sequential, index codec will use around 2 bytes per index. This can happen when the referenced vertices are a sparse subset of the vertex buffer, such as when encoding LODs. General purpose compression can be especially helpful in this case.
+
+Vertex codec tries to take advantage of the inherent locality of sequential vertices, and identify bit patterns that repeat in consecutive vertices. Typically, vertex cache + vertex fetch provides a reasonably local vertex traversal order; without an index buffer it is recommended to sort vertices spatially to improve the compression ratio.
+It is crucial to correctly specify the stride when encoding vertex data; however, it does not matter whether the vertices are interleaved or deinterleaved, as the codecs perform full byte deinterleaving internally.
+
+For optimal compression results the values must be quantized to small integers; it can be valuable to use bit counts that are not multiples of 8, for example instead of using 16 bits to represent texture coordinates, use 12 bit integers and divide by 4095 in the shader. Alternatively, using half precision floats can often achieve good results.
+For single precision floating point data, it's recommended to use `meshopt_quantizeFloat` to remove entropy from the lower bits of the mantissa; due to current limitations of the codec, the bit count needs to be 15 (23-8) for good results (7 can be used for more extreme compression).
+For normal or tangent vectors, using octahedral encoding is recommended over three components as it reduces redundancy; similarly to other quantized values, consider using 10-12 bits per component instead of 16.
+
+> Note: vertex codec v0 is limited to taking advantage of redundancy in high bits of each byte; because of this, packing multiple 10-bit values into 32 bits will reduce compression ratio, and when storing a 12-bit value in 16 bits, high bits should be zeroed out. This limitation may be lifted in future versions of the codec.
+
+To take further advantage of inherent structure of some data, preparation stage can use filters that encode and decode the data in a lossy manner; this is similar to quantization, but can be used without having to change the shader code. After decoding, the filter transformation needs to be reversed. This library provides three filters:
+
+- Octahedral filter (`meshopt_encodeFilterOct`/`meshopt_decodeFilterOct`) encodes quantized (snorm) normal or tangent vectors using octahedral encoding. Any number of bits <= 16 can be used with 4 bytes or 8 bytes per vector.
+- Quaternion filter (`meshopt_encodeFilterQuat`/`meshopt_decodeFilterQuat`) encodes quantized (snorm) quaternion vectors; this can be used to encode rotations or tangent frames. Any number of bits between 4 and 16 can be used with 8 bytes per vector.
+- Exponential filter (`meshopt_encodeFilterExp`/`meshopt_decodeFilterExp`) encodes single precision floating point vectors; this can be used to encode arbitrary floating point data more efficiently. In addition to an arbitrary bit count (<= 24), the filter takes a "mode" parameter that allows to specify how the exponent sharing is performed; `meshopt_EncodeExpSeparate` does not share exponents and results in largest output, `meshopt_EncodeExpSharedVector` shares exponents between different components of the same vector, `meshopt_EncodeExpSharedComponent` shares exponents between the same component in different vectors. The mode allows to trade off compression ratio and quality.
+
+Note that all filters are lossy and require the data to be deinterleaved with one attribute per stream; this faciliates efficient SIMD implementation of filter decoders, allowing the overall decompression speed to be close to that of the raw codec.
 
 ## Triangle strip conversion
 
