@@ -123,7 +123,7 @@ nanite: $(DEMO)
 	$(DEMO) -n $(files)
 
 format:
-	clang-format -i $(LIBRARY_SOURCES) $(DEMO_SOURCES) $(GLTFPACK_SOURCES)
+	clang-format -i src/*.h src/*.cpp demo/*.cpp gltf/*.h gltf/*.cpp
 
 formatjs:
 	prettier -w js/*.js gltf/*.js demo/*.html js/*.ts

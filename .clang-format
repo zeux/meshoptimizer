@@ -11,3 +11,5 @@ BreakConstructorInitializersBeforeComma: true
 NamespaceIndentation: None
 AlignEscapedNewlines: DontAlign
 AlignAfterOpenBracket: DontAlign
+IndentExternBlock: NoIndent
+Macros: [MESHOPTIMIZER_ALLOC_CALLCONV=&_&]
