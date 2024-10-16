@@ -2,6 +2,7 @@
 #include "gltfpack.h"
 
 #include <algorithm>
+#include <unordered_map>
 
 #include <math.h>
 #include <stdint.h>
@@ -355,14 +356,24 @@ static bool canDedupMesh(const Mesh& mesh)
 
 void dedupMeshes(std::vector<Mesh>& meshes)
 {
+	std::unordered_map<uint64_t, int> hashes;
+
 	for (size_t i = 0; i < meshes.size(); ++i)
-		hashMesh(meshes[i]);
+	{
+		Mesh& mesh = meshes[i];
+
+		hashMesh(mesh);
+		hashes[mesh.geometry_hash[0] ^ mesh.geometry_hash[1]]++;
+	}
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
 		Mesh& target = meshes[i];
 
 		if (!canDedupMesh(target))
+			continue;
+
+		if (hashes[target.geometry_hash[0] ^ target.geometry_hash[1]] <= 1)
 			continue;
 
 		for (size_t j = i + 1; j < meshes.size(); ++j)
