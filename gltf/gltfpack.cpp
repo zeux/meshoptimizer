@@ -2,7 +2,7 @@
 #include "gltfpack.h"
 
 #include <algorithm>
-#include <map>
+#include <unordered_map>
 
 #include <locale.h>
 #include <stdint.h>
@@ -329,6 +329,18 @@ static bool isExtensionSupported(const ExtensionInfo* extensions, size_t count, 
 	return false;
 }
 
+namespace std
+{
+template <>
+struct hash<std::pair<uint64_t, uint64_t> >
+{
+	size_t operator()(const std::pair<uint64_t, uint64_t>& x) const
+	{
+		return std::hash<uint64_t>()(x.first ^ x.second);
+	}
+};
+} // namespace std
+
 static void process(cgltf_data* data, const char* input_path, const char* output_path, const char* report_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const Settings& settings, std::string& json, std::string& bin, std::string& fallback, size_t& fallback_size)
 {
 	if (settings.verbose)
@@ -565,7 +577,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		ext_texture_transform = ext_texture_transform || mi.uses_texture_transform;
 	}
 
-	std::map<std::pair<uint64_t, uint64_t>, std::pair<size_t, size_t> > primitive_cache;
+	std::unordered_map<std::pair<uint64_t, uint64_t>, std::pair<size_t, size_t> > primitive_cache;
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
