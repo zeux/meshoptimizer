@@ -2,6 +2,7 @@
 #include "gltfpack.h"
 
 #include <algorithm>
+#include <unordered_map>
 
 #include <math.h>
 #include <stdint.h>
@@ -355,14 +356,24 @@ static bool canDedupMesh(const Mesh& mesh)
 
 void dedupMeshes(std::vector<Mesh>& meshes)
 {
+	std::unordered_map<uint64_t, int> hashes;
+
 	for (size_t i = 0; i < meshes.size(); ++i)
-		hashMesh(meshes[i]);
+	{
+		Mesh& mesh = meshes[i];
+
+		hashMesh(mesh);
+		hashes[mesh.geometry_hash[0] ^ mesh.geometry_hash[1]]++;
+	}
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
 		Mesh& target = meshes[i];
 
 		if (!canDedupMesh(target))
+			continue;
+
+		if (hashes[target.geometry_hash[0] ^ target.geometry_hash[1]] <= 1)
 			continue;
 
 		for (size_t j = i + 1; j < meshes.size(); ++j)
@@ -396,6 +407,16 @@ void dedupMeshes(std::vector<Mesh>& meshes)
 			mesh.nodes.clear();
 			mesh.instances.clear();
 		}
+	}
+
+	for (size_t i = 0; i < meshes.size(); ++i)
+	{
+		Mesh& target = meshes[i];
+		if (target.nodes.size() <= 1)
+			continue;
+
+		std::sort(target.nodes.begin(), target.nodes.end());
+		target.nodes.erase(std::unique(target.nodes.begin(), target.nodes.end()), target.nodes.end());
 	}
 }
 
@@ -759,7 +780,7 @@ static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attribut
 
 	size_t vertex_count = mesh.streams[0].data.size();
 
-	size_t target_index_count = size_t(double(mesh.indices.size() / 3) * threshold) * 3;
+	size_t target_index_count = size_t(double(size_t(mesh.indices.size() / 3)) * threshold) * 3;
 	float target_error = error;
 	float target_error_aggressive = 1e-1f;
 
