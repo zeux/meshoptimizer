@@ -408,6 +408,16 @@ void dedupMeshes(std::vector<Mesh>& meshes)
 			mesh.instances.clear();
 		}
 	}
+
+	for (size_t i = 0; i < meshes.size(); ++i)
+	{
+		Mesh& target = meshes[i];
+		if (target.nodes.size() <= 1)
+			continue;
+
+		std::sort(target.nodes.begin(), target.nodes.end());
+		target.nodes.erase(std::unique(target.nodes.begin(), target.nodes.end()), target.nodes.end());
+	}
 }
 
 void mergeMeshInstances(Mesh& mesh)
