@@ -780,7 +780,7 @@ static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attribut
 
 	size_t vertex_count = mesh.streams[0].data.size();
 
-	size_t target_index_count = size_t(double(mesh.indices.size() / 3) * threshold) * 3;
+	size_t target_index_count = size_t(double(size_t(mesh.indices.size() / 3)) * threshold) * 3;
 	float target_error = error;
 	float target_error_aggressive = 1e-1f;
 
