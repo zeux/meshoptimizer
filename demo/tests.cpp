@@ -811,6 +811,56 @@ void encodeFilterExpZero()
 	assert(decoded == data);
 }
 
+void encodeFilterExpAlias()
+{
+	const float data[4] = {
+	    1,
+	    -23.4f,
+	    -0.1f,
+	    11.0f,
+	};
+
+	// separate exponents: each component gets its own value
+	const unsigned int expected1[4] = {
+	    0xf3002000,
+	    0xf7ffd133,
+	    0xefffcccd,
+	    0xf6002c00,
+	};
+
+	// shared exponents (vector): all components of each vector get the same value
+	const unsigned int expected2[4] = {
+	    0xf7000200,
+	    0xf7ffd133,
+	    0xf6ffff9a,
+	    0xf6002c00,
+	};
+
+	// shared exponents (component): each component gets the same value across all vectors
+	const unsigned int expected3[4] = {
+	    0xf3002000,
+	    0xf7ffd133,
+	    0xf3fffccd,
+	    0xf7001600,
+	};
+
+	unsigned int encoded1[4];
+	memcpy(encoded1, data, sizeof(data));
+	meshopt_encodeFilterExp(encoded1, 2, 8, 15, reinterpret_cast<float*>(encoded1), meshopt_EncodeExpSeparate);
+
+	unsigned int encoded2[4];
+	memcpy(encoded2, data, sizeof(data));
+	meshopt_encodeFilterExp(encoded2, 2, 8, 15, reinterpret_cast<float*>(encoded2), meshopt_EncodeExpSharedVector);
+
+	unsigned int encoded3[4];
+	memcpy(encoded3, data, sizeof(data));
+	meshopt_encodeFilterExp(encoded3, 2, 8, 15, reinterpret_cast<float*>(encoded3), meshopt_EncodeExpSharedComponent);
+
+	assert(memcmp(encoded1, expected1, sizeof(expected1)) == 0);
+	assert(memcmp(encoded2, expected2, sizeof(expected2)) == 0);
+	assert(memcmp(encoded3, expected3, sizeof(expected3)) == 0);
+}
+
 static void clusterBoundsDegenerate()
 {
 	const float vbd[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -1828,6 +1878,7 @@ void runTests()
 	encodeFilterQuat12();
 	encodeFilterExp();
 	encodeFilterExpZero();
+	encodeFilterExpAlias();
 
 	clusterBoundsDegenerate();
 
