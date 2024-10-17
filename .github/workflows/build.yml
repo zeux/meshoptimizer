@@ -168,6 +168,7 @@ jobs:
           ./gltfpack -test demo/pirate.obj -sd 0.5 -md 64
           ./gltfpack -test demo/pirate.obj -noq
           ./gltfpack -test demo/pirate.obj -vp 16 -vt 16 -vn 16 -vc 16
+          ./gltfpack -test demo/pirate.obj -vpf -vtf -vnf
           ./gltfpack -test glTF-Sample-Assets/Models/ABeautifulGame/glTF/ABeautifulGame.gltf -mi -c
           ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -c
           ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -cc
@@ -179,6 +180,11 @@ jobs:
           ./gltfpack -test glTF-Sample-Assets/Models/PrimitiveModeNormalsTest/glTF/PrimitiveModeNormalsTest.gltf -si 0.5
           ./gltfpack -test glTF-Sample-Assets/Models/VertexColorTest/glTF/VertexColorTest.gltf -si 0.5 -sv
           ./gltfpack -test glTF-Sample-Assets/Models/SimpleMeshes/glTF/SimpleMeshes.gltf -mm
+          ./gltfpack -test glTF-Sample-Assets/Models/SimpleMeshes/glTF/SimpleMeshes.gltf -kn
+          echo newmtl Leather > demo/pirate.mtl
+          echo map_Kd leather.jpg >> demo/pirate.mtl
+          echo map_d leather.jpg >> demo/pirate.mtl
+          ./gltfpack -test demo/pirate.obj
       - name: test output
         run: |
           ./gltfpack || true
