@@ -142,6 +142,17 @@ var tests = {
 		assert.deepEqual(encoded, bytes(expected));
 	},
 
+	encodeFilterExpClamp: function () {
+		var data = new Float32Array([1, -23.4, -0.1]);
+
+		var expected = new Uint32Array([0xf3002000, 0xf7ffd133, 0xf2fff99a]);
+
+		// 1 vector with 3 components (12 bytes), encode each vector into 12 bytes with 15 bits of precision/component
+		// exponents are separate but clamped to 0
+		var encoded = encoder.encodeFilterExp(data, 1, 12, 15, 'Clamped');
+		assert.deepEqual(encoded, bytes(expected));
+	},
+
 	encodeGltfBuffer: function () {
 		var data = new Uint32Array([0, 1, 2, 2, 1, 3, 4, 6, 5, 7, 8, 9]);
 
