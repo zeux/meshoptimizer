@@ -279,71 +279,6 @@ static void encodeSnorm(void* destination, size_t count, size_t stride, int bits
 	}
 }
 
-static uint32_t encodeExpOne(float v, int bits, int min_exp = -100)
-{
-	// extract exponent
-	int e;
-	frexp(v, &e);
-
-	// clamp exponent to ensure it's valid after bias
-	e = std::max(e, min_exp);
-
-	// scale the mantissa to make it a K-bit signed integer (K-1 bits for magnitude)
-	int exp = e - (bits - 1);
-
-	// compute renormalized rounded mantissa
-	int m = int(ldexp(v, -exp) + (v >= 0 ? 0.5f : -0.5f));
-
-	int mmask = (1 << 24) - 1;
-
-	// encode exponent & mantissa
-	return (m & mmask) | (unsigned(exp) << 24);
-}
-
-static void encodeExpParallel(std::string& bin, const Attr* data, size_t count, int channels, int bits, int min_exp = -100)
-{
-	int exp[4] = {};
-
-	for (int k = 0; k < channels; ++k)
-		exp[k] = min_exp;
-
-	for (size_t i = 0; i < count; ++i)
-	{
-		const Attr& a = data[i];
-
-		// use maximum exponent to encode values; this guarantees that mantissa is [-1, 1]
-		for (int k = 0; k < channels; ++k)
-		{
-			int e;
-			frexp(a.f[k], &e);
-			exp[k] = std::max(exp[k], e);
-		}
-	}
-
-	// scale the mantissa to make it a K-bit signed integer (K-1 bits for magnitude)
-	for (int k = 0; k < channels; ++k)
-		exp[k] -= (bits - 1);
-
-	for (size_t i = 0; i < count; ++i)
-	{
-		const Attr& a = data[i];
-
-		uint32_t v[4];
-
-		for (int k = 0; k < channels; ++k)
-		{
-			// compute renormalized rounded mantissas
-			int m = int(ldexp(a.f[k], -exp[k]) + (a.f[k] >= 0 ? 0.5f : -0.5f));
-
-			// encode exponent & mantissa
-			int mmask = (1 << 24) - 1;
-			v[k] = (m & mmask) | (unsigned(exp[k]) << 24);
-		}
-
-		bin.append(reinterpret_cast<const char*>(v), sizeof(uint32_t) * channels);
-	}
-}
-
 static StreamFormat writeVertexStreamRaw(std::string& bin, const Stream& stream, cgltf_type type, size_t components)
 {
 	assert(components >= 1 && components <= 4);
@@ -359,15 +294,20 @@ static StreamFormat writeVertexStreamRaw(std::string& bin, const Stream& stream,
 	return format;
 }
 
-static StreamFormat writeVertexStreamFloat(std::string& bin, const Stream& stream, cgltf_type type, int components, const Settings& settings, int bits, int min_exp = -100)
+static StreamFormat writeVertexStreamFloat(std::string& bin, const Stream& stream, cgltf_type type, int components, const Settings& settings, int bits, meshopt_EncodeExpMode mode)
 {
 	assert(components >= 1 && components <= 4);
 
 	StreamFormat::Filter filter = settings.compress ? StreamFormat::Filter_Exp : StreamFormat::Filter_None;
 
-	if (settings.compressmore)
+	if (filter == StreamFormat::Filter_Exp)
 	{
-		encodeExpParallel(bin, &stream.data[0], stream.data.size(), components, bits + 1, min_exp);
+		size_t offset = bin.size();
+		size_t stride = sizeof(float) * components;
+		for (size_t i = 0; i < stream.data.size(); ++i)
+			bin.append(reinterpret_cast<const char*>(stream.data[i].f), stride);
+
+		meshopt_encodeFilterExp(&bin[offset], stream.data.size(), stride, bits + 1, reinterpret_cast<const float*>(&bin[offset]), mode);
 	}
 	else
 	{
@@ -375,20 +315,10 @@ static StreamFormat writeVertexStreamFloat(std::string& bin, const Stream& strea
 		{
 			const Attr& a = stream.data[i];
 
-			if (filter == StreamFormat::Filter_Exp)
-			{
-				uint32_t v[4];
-				for (int k = 0; k < components; ++k)
-					v[k] = encodeExpOne(a.f[k], bits + 1, min_exp);
-				bin.append(reinterpret_cast<const char*>(v), sizeof(uint32_t) * components);
-			}
-			else
-			{
-				float v[4];
-				for (int k = 0; k < components; ++k)
-					v[k] = meshopt_quantizeFloat(a.f[k], bits);
-				bin.append(reinterpret_cast<const char*>(v), sizeof(float) * components);
-			}
+			float v[4];
+			for (int k = 0; k < components; ++k)
+				v[k] = meshopt_quantizeFloat(a.f[k], bits);
+			bin.append(reinterpret_cast<const char*>(v), sizeof(float) * components);
 		}
 	}
 
@@ -414,7 +344,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 			return writeVertexStreamRaw(bin, stream, cgltf_type_vec3, 3);
 
 		if (settings.pos_float)
-			return writeVertexStreamFloat(bin, stream, cgltf_type_vec3, 3, settings, qp.bits);
+			return writeVertexStreamFloat(bin, stream, cgltf_type_vec3, 3, settings, qp.bits, settings.compressmore ? meshopt_EncodeExpSharedComponent : meshopt_EncodeExpSeparate);
 
 		if (stream.target == 0)
 		{
@@ -494,7 +424,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 		// expand the encoded range to ensure it covers [0..1) interval
 		// this can slightly reduce precision but we should not need more precision inside 0..1, and this significantly improves compressed size when using encodeExpOne
 		if (settings.tex_float)
-			return writeVertexStreamFloat(bin, stream, cgltf_type_vec2, 2, settings, qt.bits, /* min_exp= */ 0);
+			return writeVertexStreamFloat(bin, stream, cgltf_type_vec2, 2, settings, qt.bits, settings.compressmore ? meshopt_EncodeExpSharedComponent : meshopt_EncodeExpClamped);
 
 		float uv_rscale[2] = {
 		    qt.scale[0] == 0.f ? 0.f : 1.f / qt.scale[0],
@@ -522,7 +452,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 
 		// expand the encoded range to ensure it covers [0..1) interval
 		if (settings.nrm_float)
-			return writeVertexStreamFloat(bin, stream, cgltf_type_vec3, 3, settings, settings.nrm_bits, /* min_exp= */ 0);
+			return writeVertexStreamFloat(bin, stream, cgltf_type_vec3, 3, settings, settings.nrm_bits, settings.compressmore ? meshopt_EncodeExpSharedComponent : meshopt_EncodeExpClamped);
 
 		bool oct = settings.compressmore && stream.target == 0;
 		int bits = settings.nrm_bits;
