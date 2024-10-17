@@ -245,31 +245,6 @@ static void renormalizeWeights(uint8_t (&w)[4])
 	w[max] += uint8_t(255 - sum);
 }
 
-static void encodeExpShared(uint32_t v[3], const Attr& a, int bits)
-{
-	// get exponents from all components
-	int ex, ey, ez;
-	frexp(a.f[0], &ex);
-	frexp(a.f[1], &ey);
-	frexp(a.f[2], &ez);
-
-	// use maximum exponent to encode values; this guarantees that mantissa is [-1, 1]
-	// note that we additionally scale the mantissa to make it a K-bit signed integer (K-1 bits for magnitude)
-	int exp = std::max(ex, std::max(ey, ez)) - (bits - 1);
-
-	// compute renormalized rounded mantissas for each component
-	int mx = int(ldexp(a.f[0], -exp) + (a.f[0] >= 0 ? 0.5f : -0.5f));
-	int my = int(ldexp(a.f[1], -exp) + (a.f[1] >= 0 ? 0.5f : -0.5f));
-	int mz = int(ldexp(a.f[2], -exp) + (a.f[2] >= 0 ? 0.5f : -0.5f));
-
-	int mmask = (1 << 24) - 1;
-
-	// encode exponent & mantissa into each resulting value
-	v[0] = (mx & mmask) | (unsigned(exp) << 24);
-	v[1] = (my & mmask) | (unsigned(exp) << 24);
-	v[2] = (mz & mmask) | (unsigned(exp) << 24);
-}
-
 static uint32_t encodeExpOne(float v, int bits, int min_exp = -100)
 {
 	// extract exponent
@@ -839,22 +814,18 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 		StreamFormat::Filter filter = settings.compressmore ? StreamFormat::Filter_Exp : StreamFormat::Filter_None;
 		int bits = (type == cgltf_animation_path_type_translation) ? settings.trn_bits : settings.scl_bits;
 
+		size_t offset = bin.size();
+
 		for (size_t i = 0; i < data.size(); ++i)
 		{
 			const Attr& a = data[i];
 
-			if (filter == StreamFormat::Filter_Exp)
-			{
-				uint32_t v[3];
-				encodeExpShared(v, a, bits);
-				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
-			}
-			else
-			{
-				float v[3] = {a.f[0], a.f[1], a.f[2]};
-				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
-			}
+			float v[3] = {a.f[0], a.f[1], a.f[2]};
+			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
 		}
+
+		if (filter == StreamFormat::Filter_Exp)
+			meshopt_encodeFilterExp(&bin[offset], data.size(), 12, bits, reinterpret_cast<const float*>(&bin[offset]), meshopt_EncodeExpSharedVector);
 
 		StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_32f, false, 12, filter};
 		return format;
