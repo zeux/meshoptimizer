@@ -245,6 +245,40 @@ static void renormalizeWeights(uint8_t (&w)[4])
 	w[max] += uint8_t(255 - sum);
 }
 
+static void encodeSnorm(void* destination, size_t count, size_t stride, int bits, const float* data)
+{
+	assert(stride == 4 || stride == 8);
+	assert(bits >= 1 && bits <= 16);
+
+	signed char* d8 = static_cast<signed char*>(destination);
+	short* d16 = static_cast<short*>(destination);
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		const float* v = &data[i * 4];
+
+		int fx = meshopt_quantizeSnorm(v[0], bits);
+		int fy = meshopt_quantizeSnorm(v[1], bits);
+		int fz = meshopt_quantizeSnorm(v[2], bits);
+		int fw = meshopt_quantizeSnorm(v[3], bits);
+
+		if (stride == 4)
+		{
+			d8[i * 4 + 0] = (signed char)(fx);
+			d8[i * 4 + 1] = (signed char)(fy);
+			d8[i * 4 + 2] = (signed char)(fz);
+			d8[i * 4 + 3] = (signed char)(fw);
+		}
+		else
+		{
+			d16[i * 4 + 0] = short(fx);
+			d16[i * 4 + 1] = short(fy);
+			d16[i * 4 + 2] = short(fz);
+			d16[i * 4 + 3] = short(fw);
+		}
+	}
+}
+
 static uint32_t encodeExpOne(float v, int bits, int min_exp = -100)
 {
 	// extract exponent
@@ -495,52 +529,18 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 
 		StreamFormat::Filter filter = oct ? StreamFormat::Filter_Oct : StreamFormat::Filter_None;
 
+		size_t offset = bin.size();
+		size_t stride = bits > 8 ? 8 : 4;
+		bin.resize(bin.size() + stream.data.size() * stride);
+
 		if (oct)
-		{
-			size_t offset = bin.size();
-			size_t stride = bits > 8 ? 8 : 4;
-			bin.resize(bin.size() + stream.data.size() * stride);
 			meshopt_encodeFilterOct(&bin[offset], stream.data.size(), stride, bits, stream.data[0].f);
-		}
 		else
-		{
-			for (size_t i = 0; i < stream.data.size(); ++i)
-			{
-				const Attr& a = stream.data[i];
+			encodeSnorm(&bin[offset], stream.data.size(), stride, bits, stream.data[0].f);
 
-				float nx = a.f[0], ny = a.f[1], nz = a.f[2];
-
-				if (bits > 8)
-				{
-					int16_t v[4] = {
-					    int16_t(meshopt_quantizeSnorm(nx, bits)),
-					    int16_t(meshopt_quantizeSnorm(ny, bits)),
-					    int16_t(meshopt_quantizeSnorm(nz, bits)),
-					    0};
-					bin.append(reinterpret_cast<const char*>(v), sizeof(v));
-				}
-				else
-				{
-					int8_t v[4] = {
-					    int8_t(meshopt_quantizeSnorm(nx, bits)),
-					    int8_t(meshopt_quantizeSnorm(ny, bits)),
-					    int8_t(meshopt_quantizeSnorm(nz, bits)),
-					    0};
-					bin.append(reinterpret_cast<const char*>(v), sizeof(v));
-				}
-			}
-		}
-
-		if (bits > 8)
-		{
-			StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_16, true, 8, filter};
-			return format;
-		}
-		else
-		{
-			StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_8, true, 4, filter};
-			return format;
-		}
+		cgltf_component_type component_type = bits > 8 ? cgltf_component_type_r_16 : cgltf_component_type_r_8;
+		StreamFormat format = {cgltf_type_vec3, component_type, true, stride, filter};
+		return format;
 	}
 	else if (stream.type == cgltf_attribute_type_tangent)
 	{
@@ -552,32 +552,16 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 
 		StreamFormat::Filter filter = oct ? StreamFormat::Filter_Oct : StreamFormat::Filter_None;
 
+		size_t offset = bin.size();
+		size_t stride = 4;
+		bin.resize(bin.size() + stream.data.size() * stride);
+
 		if (oct)
-		{
-			size_t offset = bin.size();
-			size_t stride = 4;
-			bin.resize(bin.size() + stream.data.size() * stride);
 			meshopt_encodeFilterOct(&bin[offset], stream.data.size(), stride, bits, stream.data[0].f);
-		}
 		else
-		{
-			for (size_t i = 0; i < stream.data.size(); ++i)
-			{
-				const Attr& a = stream.data[i];
-
-				float nx = a.f[0], ny = a.f[1], nz = a.f[2], nw = a.f[3];
-
-				int8_t v[4] = {
-				    int8_t(meshopt_quantizeSnorm(nx, bits)),
-				    int8_t(meshopt_quantizeSnorm(ny, bits)),
-				    int8_t(meshopt_quantizeSnorm(nz, bits)),
-				    int8_t(meshopt_quantizeSnorm(nw, bits))};
-				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
-			}
-		}
+			encodeSnorm(&bin[offset], stream.data.size(), stride, bits, stream.data[0].f);
 
 		cgltf_type type = (stream.target == 0) ? cgltf_type_vec4 : cgltf_type_vec3;
-
 		StreamFormat format = {type, cgltf_component_type_r_8, true, 4, filter};
 		return format;
 	}
@@ -771,27 +755,14 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 	{
 		StreamFormat::Filter filter = settings.compressmore ? StreamFormat::Filter_Quat : StreamFormat::Filter_None;
 
-		if (filter == StreamFormat::Filter_Quat)
-		{
-			size_t offset = bin.size();
-			size_t stride = 8;
-			bin.resize(bin.size() + data.size() * stride);
-			meshopt_encodeFilterQuat(&bin[offset], data.size(), stride, settings.rot_bits, data[0].f);
-		}
-		else
-		{
-			for (size_t i = 0; i < data.size(); ++i)
-			{
-				const Attr& a = data[i];
+		size_t offset = bin.size();
+		size_t stride = 8;
+		bin.resize(bin.size() + data.size() * stride);
 
-				int16_t v[4] = {
-				    int16_t(meshopt_quantizeSnorm(a.f[0], 16)),
-				    int16_t(meshopt_quantizeSnorm(a.f[1], 16)),
-				    int16_t(meshopt_quantizeSnorm(a.f[2], 16)),
-				    int16_t(meshopt_quantizeSnorm(a.f[3], 16))};
-				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
-			}
-		}
+		if (filter == StreamFormat::Filter_Quat)
+			meshopt_encodeFilterQuat(&bin[offset], data.size(), stride, settings.rot_bits, data[0].f);
+		else
+			encodeSnorm(&bin[offset], data.size(), stride, 16, data[0].f);
 
 		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16, true, 8, filter};
 		return format;
