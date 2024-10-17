@@ -1010,6 +1010,15 @@ void meshopt_encodeFilterExp(void* destination_, size_t count, size_t stride, in
 				component_exp[j] = (min_exp < e) ? e : min_exp;
 			}
 		}
+		else if (mode == meshopt_EncodeExpClamped)
+		{
+			for (size_t j = 0; j < stride_float; ++j)
+			{
+				int e = optlog2(v[j]);
+
+				component_exp[j] = (0 < e) ? e : 0;
+			}
+		}
 		else
 		{
 			// the code below assumes component_exp is initialized outside of the loop
