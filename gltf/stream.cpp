@@ -245,26 +245,6 @@ static void renormalizeWeights(uint8_t (&w)[4])
 	w[max] += uint8_t(255 - sum);
 }
 
-static void encodeQuat(int16_t v[4], const Attr& a, int bits)
-{
-	const float scaler = sqrtf(2.f);
-
-	// establish maximum quaternion component
-	int qc = 0;
-	qc = fabsf(a.f[1]) > fabsf(a.f[qc]) ? 1 : qc;
-	qc = fabsf(a.f[2]) > fabsf(a.f[qc]) ? 2 : qc;
-	qc = fabsf(a.f[3]) > fabsf(a.f[qc]) ? 3 : qc;
-
-	// we use double-cover properties to discard the sign
-	float sign = a.f[qc] < 0.f ? -1.f : 1.f;
-
-	// note: we always encode a cyclical swizzle to be able to recover the order via rotation
-	v[0] = int16_t(meshopt_quantizeSnorm(a.f[(qc + 1) & 3] * scaler * sign, bits));
-	v[1] = int16_t(meshopt_quantizeSnorm(a.f[(qc + 2) & 3] * scaler * sign, bits));
-	v[2] = int16_t(meshopt_quantizeSnorm(a.f[(qc + 3) & 3] * scaler * sign, bits));
-	v[3] = int16_t((meshopt_quantizeSnorm(1.f, bits) & ~3) | qc);
-}
-
 static void encodeExpShared(uint32_t v[3], const Attr& a, int bits)
 {
 	// get exponents from all components
@@ -816,25 +796,26 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 	{
 		StreamFormat::Filter filter = settings.compressmore ? StreamFormat::Filter_Quat : StreamFormat::Filter_None;
 
-		for (size_t i = 0; i < data.size(); ++i)
+		if (filter == StreamFormat::Filter_Quat)
 		{
-			const Attr& a = data[i];
-
-			int16_t v[4];
-
-			if (filter == StreamFormat::Filter_Quat)
+			size_t offset = bin.size();
+			size_t stride = 8;
+			bin.resize(bin.size() + data.size() * stride);
+			meshopt_encodeFilterQuat(&bin[offset], data.size(), stride, settings.rot_bits, data[0].f);
+		}
+		else
+		{
+			for (size_t i = 0; i < data.size(); ++i)
 			{
-				encodeQuat(v, a, settings.rot_bits);
-			}
-			else
-			{
-				v[0] = int16_t(meshopt_quantizeSnorm(a.f[0], 16));
-				v[1] = int16_t(meshopt_quantizeSnorm(a.f[1], 16));
-				v[2] = int16_t(meshopt_quantizeSnorm(a.f[2], 16));
-				v[3] = int16_t(meshopt_quantizeSnorm(a.f[3], 16));
-			}
+				const Attr& a = data[i];
 
-			bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+				int16_t v[4] = {
+				    int16_t(meshopt_quantizeSnorm(a.f[0], 16)),
+				    int16_t(meshopt_quantizeSnorm(a.f[1], 16)),
+				    int16_t(meshopt_quantizeSnorm(a.f[2], 16)),
+				    int16_t(meshopt_quantizeSnorm(a.f[3], 16))};
+				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
+			}
 		}
 
 		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16, true, 8, filter};
