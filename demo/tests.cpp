@@ -628,7 +628,7 @@ static void decodeFilterExp()
 	assert(memcmp(tail, expected, sizeof(tail)) == 0);
 }
 
-void encodeFilterOct8()
+static void encodeFilterOct8()
 {
 	const float data[4 * 4] = {
 	    1, 0, 0, 0,
@@ -657,7 +657,7 @@ void encodeFilterOct8()
 		assert(fabsf(decoded[i] / 127.f - data[i]) < 1e-2f);
 }
 
-void encodeFilterOct12()
+static void encodeFilterOct12()
 {
 	const float data[4 * 4] = {
 	    1, 0, 0, 0,
@@ -686,7 +686,7 @@ void encodeFilterOct12()
 		assert(fabsf(decoded[i] / 32767.f - data[i]) < 1e-3f);
 }
 
-void encodeFilterQuat12()
+static void encodeFilterQuat12()
 {
 	const float data[4 * 4] = {
 	    1, 0, 0, 0,
@@ -728,7 +728,7 @@ void encodeFilterQuat12()
 	}
 }
 
-void encodeFilterExp()
+static void encodeFilterExp()
 {
 	const float data[4] = {
 	    1,
@@ -794,21 +794,113 @@ void encodeFilterExp()
 	}
 }
 
-void encodeFilterExpZero()
+static void encodeFilterExpZero()
 {
-	const float data = 0.f;
-	const unsigned int expected = 0xf2000000;
+	const float data[4] = {
+	    0.f,
+	    -0.f,
+	    1.1754944e-38f,
+	    -1.1754944e-38f,
+	};
+	const unsigned int expected[4] = {
+	    0xf2000000,
+	    0xf2000000,
+	    0x8e000000,
+	    0x8e000000,
+	};
 
-	unsigned int encoded;
-	meshopt_encodeFilterExp(&encoded, 1, 4, 15, &data, meshopt_EncodeExpSeparate);
+	unsigned int encoded[4];
+	meshopt_encodeFilterExp(encoded, 4, 4, 15, data, meshopt_EncodeExpSeparate);
 
-	assert(encoded == expected);
+	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
 
-	float decoded;
-	memcpy(&decoded, &encoded, sizeof(decoded));
-	meshopt_decodeFilterExp(&decoded, 1, 4);
+	float decoded[4];
+	memcpy(decoded, encoded, sizeof(decoded));
+	meshopt_decodeFilterExp(&decoded, 4, 4);
 
-	assert(decoded == data);
+	for (size_t i = 0; i < 4; ++i)
+		assert(decoded[i] == 0);
+}
+
+static void encodeFilterExpAlias()
+{
+	const float data[4] = {
+	    1,
+	    -23.4f,
+	    -0.1f,
+	    11.0f,
+	};
+
+	// separate exponents: each component gets its own value
+	const unsigned int expected1[4] = {
+	    0xf3002000,
+	    0xf7ffd133,
+	    0xefffcccd,
+	    0xf6002c00,
+	};
+
+	// shared exponents (vector): all components of each vector get the same value
+	const unsigned int expected2[4] = {
+	    0xf7000200,
+	    0xf7ffd133,
+	    0xf6ffff9a,
+	    0xf6002c00,
+	};
+
+	// shared exponents (component): each component gets the same value across all vectors
+	const unsigned int expected3[4] = {
+	    0xf3002000,
+	    0xf7ffd133,
+	    0xf3fffccd,
+	    0xf7001600,
+	};
+
+	unsigned int encoded1[4];
+	memcpy(encoded1, data, sizeof(data));
+	meshopt_encodeFilterExp(encoded1, 2, 8, 15, reinterpret_cast<float*>(encoded1), meshopt_EncodeExpSeparate);
+
+	unsigned int encoded2[4];
+	memcpy(encoded2, data, sizeof(data));
+	meshopt_encodeFilterExp(encoded2, 2, 8, 15, reinterpret_cast<float*>(encoded2), meshopt_EncodeExpSharedVector);
+
+	unsigned int encoded3[4];
+	memcpy(encoded3, data, sizeof(data));
+	meshopt_encodeFilterExp(encoded3, 2, 8, 15, reinterpret_cast<float*>(encoded3), meshopt_EncodeExpSharedComponent);
+
+	assert(memcmp(encoded1, expected1, sizeof(expected1)) == 0);
+	assert(memcmp(encoded2, expected2, sizeof(expected2)) == 0);
+	assert(memcmp(encoded3, expected3, sizeof(expected3)) == 0);
+}
+
+static void encodeFilterExpClamp()
+{
+	const float data[4] = {
+	    1,
+	    -23.4f,
+	    -0.1f,
+	    11.0f,
+	};
+
+	// separate exponents: each component gets its own value
+	// note: third value is exponent clamped
+	const unsigned int expected[4] = {
+	    0xf3002000,
+	    0xf7ffd133,
+	    0xf2fff99a,
+	    0xf6002c00,
+	};
+
+	unsigned int encoded[4];
+	meshopt_encodeFilterExp(encoded, 2, 8, 15, data, meshopt_EncodeExpClamped);
+
+	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+
+	float decoded[4];
+	memcpy(decoded, encoded, sizeof(decoded));
+	meshopt_decodeFilterExp(decoded, 2, 8);
+
+	for (size_t i = 0; i < 4; ++i)
+		assert(fabsf(decoded[i] - data[i]) < 1e-3f);
 }
 
 static void clusterBoundsDegenerate()
@@ -1828,6 +1920,8 @@ void runTests()
 	encodeFilterQuat12();
 	encodeFilterExp();
 	encodeFilterExpZero();
+	encodeFilterExpAlias();
+	encodeFilterExpClamp();
 
 	clusterBoundsDegenerate();
 
