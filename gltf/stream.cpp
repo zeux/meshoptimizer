@@ -452,7 +452,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 
 		// expand the encoded range to ensure it covers [0..1) interval
 		if (settings.nrm_float)
-			return writeVertexStreamFloat(bin, stream, cgltf_type_vec3, 3, settings, settings.nrm_bits, settings.compressmore ? meshopt_EncodeExpSharedComponent : meshopt_EncodeExpClamped);
+			return writeVertexStreamFloat(bin, stream, cgltf_type_vec3, 3, settings, settings.nrm_bits, settings.compressmore || stream.target ? meshopt_EncodeExpSharedComponent : meshopt_EncodeExpClamped);
 
 		bool oct = settings.compressmore && stream.target == 0;
 		int bits = settings.nrm_bits;
