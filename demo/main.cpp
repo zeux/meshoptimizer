@@ -865,6 +865,10 @@ void stripify(const Mesh& mesh, bool use_restart, char desc)
 	strip.resize(meshopt_stripify(&strip[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), restart_index));
 	double end = timestamp();
 
+	size_t restarts = 0;
+	for (size_t i = 0; i < strip.size(); ++i)
+		restarts += use_restart && strip[i] == restart_index;
+
 	Mesh copy = mesh;
 	copy.indices.resize(meshopt_unstripify(&copy.indices[0], &strip[0], strip.size(), restart_index));
 	assert(copy.indices.size() <= meshopt_unstripifyBound(strip.size()));
@@ -877,9 +881,10 @@ void stripify(const Mesh& mesh, bool use_restart, char desc)
 	meshopt_VertexCacheStatistics vcs_amd = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), 14, 64, 128);
 	meshopt_VertexCacheStatistics vcs_intel = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), 128, 0, 0);
 
-	printf("Stripify%c: ACMR %f ATVR %f (NV %f AMD %f Intel %f); %d strip indices (%.1f%%) in %.2f msec\n",
+	printf("Stripify%c: ACMR %f ATVR %f (NV %f AMD %f Intel %f); %.1f run avg, %d strip indices (%.1f%%) in %.2f msec\n",
 	    desc,
 	    vcs.acmr, vcs.atvr, vcs_nv.atvr, vcs_amd.atvr, vcs_intel.atvr,
+	    use_restart ? double(strip.size() - restarts) / double(restarts + 1) : 0,
 	    int(strip.size()), double(strip.size()) / double(mesh.indices.size()) * 100,
 	    (end - start) * 1000);
 }
