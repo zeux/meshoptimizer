@@ -251,6 +251,7 @@ To further leverage the inherent structure of some data, the preparation stage c
     - `meshopt_EncodeExpSeparate` does not share exponents and results in the largest output
     - `meshopt_EncodeExpSharedVector` shares exponents between different components of the same vector
     - `meshopt_EncodeExpSharedComponent` shares exponents between the same component in different vectors
+    - `meshopt_EncodeExpClamped` does not share exponents but clamps the exponent range to reduce exponent entropy
 
 Note that all filters are lossy and require the data to be deinterleaved with one attribute per stream; this faciliates efficient SIMD implementation of filter decoders, allowing the overall decompression speed to be close to that of the raw codec.
 
