@@ -796,19 +796,30 @@ static void encodeFilterExp()
 
 static void encodeFilterExpZero()
 {
-	const float data = 0.f;
-	const unsigned int expected = 0xf2000000;
+	const float data[4] = {
+	    0.f,
+	    -0.f,
+	    1.1754944e-38f,
+	    -1.1754944e-38f,
+	};
+	const unsigned int expected[4] = {
+	    0xf2000000,
+	    0xf2000000,
+	    0x8e000000,
+	    0x8e000000,
+	};
 
-	unsigned int encoded;
-	meshopt_encodeFilterExp(&encoded, 1, 4, 15, &data, meshopt_EncodeExpSeparate);
+	unsigned int encoded[4];
+	meshopt_encodeFilterExp(encoded, 4, 4, 15, data, meshopt_EncodeExpSeparate);
 
-	assert(encoded == expected);
+	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
 
-	float decoded;
-	memcpy(&decoded, &encoded, sizeof(decoded));
-	meshopt_decodeFilterExp(&decoded, 1, 4);
+	float decoded[4];
+	memcpy(decoded, encoded, sizeof(decoded));
+	meshopt_decodeFilterExp(&decoded, 4, 4);
 
-	assert(decoded == data);
+	for (size_t i = 0; i < 4; ++i)
+		assert(decoded[i] == 0);
 }
 
 static void encodeFilterExpAlias()

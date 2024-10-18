@@ -807,7 +807,7 @@ inline int optlog2(float v)
 
 	u.f = v;
 	// +1 accounts for implicit 1. in mantissa; denormalized numbers will end up clamped to min_exp by calling code
-	return u.ui == 0 ? 0 : int((u.ui >> 23) & 0xff) - 127 + 1;
+	return v == 0 ? 0 : int((u.ui >> 23) & 0xff) - 127 + 1;
 }
 
 // optimized variant of ldexp
