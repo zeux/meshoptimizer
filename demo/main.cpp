@@ -992,7 +992,7 @@ void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false)
 
 		avg_vertices += m.vertex_count;
 		avg_triangles += m.triangle_count;
-		not_full += m.vertex_count < max_vertices;
+		not_full += uniform ? m.triangle_count < max_triangles : m.vertex_count < max_vertices;
 
 		for (unsigned int j = 0; j < m.vertex_count; ++j)
 			if (boundary[meshlet_vertices[m.vertex_offset + j]] > 1)
