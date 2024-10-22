@@ -312,8 +312,12 @@ static unsigned int getNeighborTriangle(const meshopt_Meshlet& meshlet, const Co
 			// artificially increase the priority of dangling triangles as they're expensive to add to new meshlets
 			else if (live_triangles[a] == 1 || live_triangles[b] == 1 || live_triangles[c] == 1)
 				priority = 1;
+			// if two vertices have live count of 2, removing this triangle will make another triangle dangling which is good for overall flow
+			else if ((live_triangles[a] == 2) + (live_triangles[b] == 2) + (live_triangles[c] == 2) >= 2)
+				priority = 2;
+			// otherwise adjust priority to be after the above cases, 3 or 4 based on used[] count
 			else
-				priority = 1 + extra;
+				priority = 2 + extra;
 
 			// since topology-based priority is always more important than the score, we can skip scoring in some cases
 			if (priority > best_priority)
