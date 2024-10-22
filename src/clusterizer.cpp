@@ -314,7 +314,7 @@ static unsigned int getNeighborTriangle(const meshopt_Meshlet& meshlet, const Co
 				priority = 1;
 			// if two vertices have live count of 2, removing this triangle will make another triangle dangling which is good for overall flow
 			else if ((live_triangles[a] == 2) + (live_triangles[b] == 2) + (live_triangles[c] == 2) >= 2)
-				priority = 2;
+				priority = 1 + extra;
 			// otherwise adjust priority to be after the above cases, 3 or 4 based on used[] count
 			else
 				priority = 2 + extra;
