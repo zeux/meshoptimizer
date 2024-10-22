@@ -286,7 +286,7 @@ static bool appendMeshlet(meshopt_Meshlet& meshlet, unsigned int a, unsigned int
 static unsigned int getNeighborTriangle(const meshopt_Meshlet& meshlet, const Cone* meshlet_cone, unsigned int* meshlet_vertices, const unsigned int* indices, const TriangleAdjacency2& adjacency, const Cone* triangles, const unsigned int* live_triangles, const unsigned char* used, float meshlet_expected_radius, float cone_weight)
 {
 	unsigned int best_triangle = ~0u;
-	int best_extra = 5;
+	int best_priority = 5;
 	float best_score = FLT_MAX;
 
 	for (size_t i = 0; i < meshlet.vertex_count; ++i)
@@ -304,18 +304,19 @@ static unsigned int getNeighborTriangle(const meshopt_Meshlet& meshlet, const Co
 			int extra = (used[a] == 0xff) + (used[b] == 0xff) + (used[c] == 0xff);
 			assert(extra <= 2);
 
-			// triangles that don't add new vertices to meshlets are max. priority
-			if (extra != 0)
-			{
-				// artificially increase the priority of dangling triangles as they're expensive to add to new meshlets
-				if (live_triangles[a] == 1 || live_triangles[b] == 1 || live_triangles[c] == 1)
-					extra = 0;
+			int priority = -1;
 
-				extra++;
-			}
+			// triangles that don't add new vertices to meshlets are max. priority
+			if (extra == 0)
+				priority = 0;
+			// artificially increase the priority of dangling triangles as they're expensive to add to new meshlets
+			else if (live_triangles[a] == 1 || live_triangles[b] == 1 || live_triangles[c] == 1)
+				priority = 1;
+			else
+				priority = 1 + extra;
 
 			// since topology-based priority is always more important than the score, we can skip scoring in some cases
-			if (extra > best_extra)
+			if (priority > best_priority)
 				continue;
 
 			float score = 0;
@@ -342,10 +343,10 @@ static unsigned int getNeighborTriangle(const meshopt_Meshlet& meshlet, const Co
 
 			// note that topology-based priority is always more important than the score
 			// this helps maintain reasonable effectiveness of meshlet data and reduces scoring cost
-			if (extra < best_extra || score < best_score)
+			if (priority < best_priority || score < best_score)
 			{
 				best_triangle = triangle;
-				best_extra = extra;
+				best_priority = priority;
 				best_score = score;
 			}
 		}
