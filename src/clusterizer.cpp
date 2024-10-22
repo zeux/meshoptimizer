@@ -238,7 +238,7 @@ static bool appendMeshlet(meshopt_Meshlet& meshlet, unsigned int a, unsigned int
 
 	bool result = false;
 
-	unsigned int used_extra = (av == 0xff) + (bv == 0xff) + (cv == 0xff);
+	int used_extra = (av == 0xff) + (bv == 0xff) + (cv == 0xff);
 
 	if (meshlet.vertex_count + used_extra > max_vertices || meshlet.triangle_count >= max_triangles)
 	{
@@ -283,10 +283,10 @@ static bool appendMeshlet(meshopt_Meshlet& meshlet, unsigned int a, unsigned int
 	return result;
 }
 
-static unsigned int getNeighborTriangle(const meshopt_Meshlet& meshlet, const Cone* meshlet_cone, unsigned int* meshlet_vertices, const unsigned int* indices, const TriangleAdjacency2& adjacency, const Cone* triangles, const unsigned int* live_triangles, const unsigned char* used, float meshlet_expected_radius, float cone_weight, unsigned int* out_extra)
+static unsigned int getNeighborTriangle(const meshopt_Meshlet& meshlet, const Cone* meshlet_cone, unsigned int* meshlet_vertices, const unsigned int* indices, const TriangleAdjacency2& adjacency, const Cone* triangles, const unsigned int* live_triangles, const unsigned char* used, float meshlet_expected_radius, float cone_weight)
 {
 	unsigned int best_triangle = ~0u;
-	unsigned int best_extra = 5;
+	int best_extra = 5;
 	float best_score = FLT_MAX;
 
 	for (size_t i = 0; i < meshlet.vertex_count; ++i)
@@ -301,7 +301,8 @@ static unsigned int getNeighborTriangle(const meshopt_Meshlet& meshlet, const Co
 			unsigned int triangle = neighbors[j];
 			unsigned int a = indices[triangle * 3 + 0], b = indices[triangle * 3 + 1], c = indices[triangle * 3 + 2];
 
-			unsigned int extra = (used[a] == 0xff) + (used[b] == 0xff) + (used[c] == 0xff);
+			int extra = (used[a] == 0xff) + (used[b] == 0xff) + (used[c] == 0xff);
+			assert(extra <= 2);
 
 			// triangles that don't add new vertices to meshlets are max. priority
 			if (extra != 0)
@@ -349,9 +350,6 @@ static unsigned int getNeighborTriangle(const meshopt_Meshlet& meshlet, const Co
 			}
 		}
 	}
-
-	if (out_extra)
-		*out_extra = best_extra;
 
 	return best_triangle;
 }
@@ -588,13 +586,13 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* meshlet_ve
 	{
 		Cone meshlet_cone = getMeshletCone(meshlet_cone_acc, meshlet.triangle_count);
 
-		unsigned int best_extra = 0;
-		unsigned int best_triangle = getNeighborTriangle(meshlet, &meshlet_cone, meshlet_vertices, indices, adjacency, triangles, live_triangles, used, meshlet_expected_radius, cone_weight, &best_extra);
+		unsigned int best_triangle = getNeighborTriangle(meshlet, &meshlet_cone, meshlet_vertices, indices, adjacency, triangles, live_triangles, used, meshlet_expected_radius, cone_weight);
+		int best_extra = best_triangle == ~0u ? -1 : (used[indices[best_triangle * 3 + 0]] == 0xff) + (used[indices[best_triangle * 3 + 1]] == 0xff) + (used[indices[best_triangle * 3 + 2]] == 0xff);
 
 		// if the best triangle doesn't fit into current meshlet, the spatial scoring we've used is not very meaningful, so we re-select using topological scoring
 		if (best_triangle != ~0u && (meshlet.vertex_count + best_extra > max_vertices || meshlet.triangle_count >= max_triangles))
 		{
-			best_triangle = getNeighborTriangle(meshlet, NULL, meshlet_vertices, indices, adjacency, triangles, live_triangles, used, meshlet_expected_radius, 0.f, NULL);
+			best_triangle = getNeighborTriangle(meshlet, NULL, meshlet_vertices, indices, adjacency, triangles, live_triangles, used, meshlet_expected_radius, 0.f);
 		}
 
 		// when we run out of neighboring triangles we need to switch to spatial search; we currently just pick the closest triangle irrespective of connectivity
