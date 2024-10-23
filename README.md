@@ -13,12 +13,12 @@ The library provides a C and C++ interface for all algorithms; you can use it fr
 meshoptimizer is hosted on GitHub; you can download the latest release using git:
 
 ```
-git clone -b v0.21 https://github.com/zeux/meshoptimizer.git
+git clone -b v0.22 https://github.com/zeux/meshoptimizer.git
 ```
 
-Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v0.21.zip).
+Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v0.22.zip).
 
-The library is also available as a Linux package in several distributions ([ArchLinux](https://aur.archlinux.org/packages/meshoptimizer/), [Debian](https://packages.debian.org/libmeshoptimizer), [FreeBSD](https://www.freshports.org/misc/meshoptimizer/), [Nix](https://mynixos.com/nixpkgs/package/meshoptimizer), [Ubuntu](https://packages.ubuntu.com/libmeshoptimizer)), as well as a [Vcpkg port](https://github.com/microsoft/vcpkg/tree/master/ports/meshoptimizer) (see [installation instructions](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started)) and a [Conan package](https://conan.io/center/recipes/meshoptimizer?version=0.21).
+The library is also available as a Linux package in several distributions ([ArchLinux](https://aur.archlinux.org/packages/meshoptimizer/), [Debian](https://packages.debian.org/libmeshoptimizer), [FreeBSD](https://www.freshports.org/misc/meshoptimizer/), [Nix](https://mynixos.com/nixpkgs/package/meshoptimizer), [Ubuntu](https://packages.ubuntu.com/libmeshoptimizer)), as well as a [Vcpkg port](https://github.com/microsoft/vcpkg/tree/master/ports/meshoptimizer) (see [installation instructions](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started)) and a [Conan package](https://conan.io/center/recipes/meshoptimizer).
 
 [gltfpack](./gltf/README.md) is available as a pre-built binary on [Releases page](https://github.com/zeux/meshoptimizer/releases) or via [npm package](https://www.npmjs.com/package/gltfpack). Native binaries are recommended since they are more efficient and support texture compression.
 
