@@ -934,11 +934,15 @@ static int follow(int* parents, int index)
 	return index;
 }
 
-void meshlets(const Mesh& mesh, bool scan = false)
+void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false)
 {
+	// NVidia-recommends 64/126; we round 126 down to a multiple of 4
+	// alternatively we also test uniform configuration with 64/64 which is better for AMD
 	const size_t max_vertices = 64;
-	const size_t max_triangles = 124; // NVidia-recommended 126, rounded down to a multiple of 4
-	const float cone_weight = 0.5f;   // note: should be set to 0 unless cone culling is used at runtime!
+	const size_t max_triangles = uniform ? 64 : 124;
+
+	// note: should be set to 0 unless cone culling is used at runtime!
+	const float cone_weight = 0.5f;
 
 	// note: input mesh is assumed to be optimized for vertex cache and vertex fetch
 	double start = timestamp();
@@ -988,7 +992,7 @@ void meshlets(const Mesh& mesh, bool scan = false)
 
 		avg_vertices += m.vertex_count;
 		avg_triangles += m.triangle_count;
-		not_full += m.vertex_count < max_vertices;
+		not_full += uniform ? m.triangle_count < max_triangles : m.vertex_count < max_vertices;
 
 		for (unsigned int j = 0; j < m.vertex_count; ++j)
 			if (boundary[meshlet_vertices[m.vertex_offset + j]] > 1)
@@ -1023,17 +1027,15 @@ void meshlets(const Mesh& mesh, bool scan = false)
 	avg_boundary /= double(meshlets.size());
 
 	printf("Meshlets%c: %d meshlets (avg vertices %.1f, avg triangles %.1f, avg boundary %.1f, not full %d, not connected %d) in %.2f msec\n",
-	    scan ? 'S' : ' ',
+	    scan ? 'S' : (uniform ? 'U' : ' '),
 	    int(meshlets.size()), avg_vertices, avg_triangles, avg_boundary, int(not_full), int(not_connected), (end - start) * 1000);
 
 	float camera[3] = {100, 100, 100};
 
 	size_t rejected = 0;
-	size_t rejected_s8 = 0;
-	size_t rejected_alt = 0;
-	size_t rejected_alt_s8 = 0;
 	size_t accepted = 0;
-	size_t accepted_s8 = 0;
+	double radius_mean = 0;
+	double cone_mean = 0;
 
 	std::vector<float> radii(meshlets.size());
 	std::vector<float> cones(meshlets.size());
@@ -1048,35 +1050,21 @@ void meshlets(const Mesh& mesh, bool scan = false)
 		radii[i] = bounds.radius;
 		cones[i] = 90.f - acosf(bounds.cone_cutoff) * (180.f / 3.1415926f);
 
+		radius_mean += radii[i];
+		cone_mean += cones[i];
+
 		// trivial accept: we can't ever backface cull this meshlet
 		accepted += (bounds.cone_cutoff >= 1);
-		accepted_s8 += (bounds.cone_cutoff_s8 >= 127);
 
 		// perspective projection: dot(normalize(cone_apex - camera_position), cone_axis) > cone_cutoff
-		float mview[3] = {bounds.cone_apex[0] - camera[0], bounds.cone_apex[1] - camera[1], bounds.cone_apex[2] - camera[2]};
-		float mviewlength = sqrtf(mview[0] * mview[0] + mview[1] * mview[1] + mview[2] * mview[2]);
-
-		rejected += mview[0] * bounds.cone_axis[0] + mview[1] * bounds.cone_axis[1] + mview[2] * bounds.cone_axis[2] >= bounds.cone_cutoff * mviewlength;
-		rejected_s8 += mview[0] * (bounds.cone_axis_s8[0] / 127.f) + mview[1] * (bounds.cone_axis_s8[1] / 127.f) + mview[2] * (bounds.cone_axis_s8[2] / 127.f) >= (bounds.cone_cutoff_s8 / 127.f) * mviewlength;
-
 		// alternative formulation for perspective projection that doesn't use apex (and uses cluster bounding sphere instead):
 		// dot(normalize(center - camera_position), cone_axis) > cone_cutoff + radius / length(center - camera_position)
 		float cview[3] = {bounds.center[0] - camera[0], bounds.center[1] - camera[1], bounds.center[2] - camera[2]};
 		float cviewlength = sqrtf(cview[0] * cview[0] + cview[1] * cview[1] + cview[2] * cview[2]);
 
-		rejected_alt += cview[0] * bounds.cone_axis[0] + cview[1] * bounds.cone_axis[1] + cview[2] * bounds.cone_axis[2] >= bounds.cone_cutoff * cviewlength + bounds.radius;
-		rejected_alt_s8 += cview[0] * (bounds.cone_axis_s8[0] / 127.f) + cview[1] * (bounds.cone_axis_s8[1] / 127.f) + cview[2] * (bounds.cone_axis_s8[2] / 127.f) >= (bounds.cone_cutoff_s8 / 127.f) * cviewlength + bounds.radius;
+		rejected += cview[0] * bounds.cone_axis[0] + cview[1] * bounds.cone_axis[1] + cview[2] * bounds.cone_axis[2] >= bounds.cone_cutoff * cviewlength + bounds.radius;
 	}
 	double endc = timestamp();
-
-	double radius_mean = 0;
-	double cone_mean = 0;
-
-	for (size_t i = 0; i < meshlets.size(); ++i)
-	{
-		radius_mean += radii[i];
-		cone_mean += cones[i];
-	}
 
 	radius_mean /= double(meshlets.size());
 	cone_mean /= double(meshlets.size());
@@ -1095,20 +1083,10 @@ void meshlets(const Mesh& mesh, bool scan = false)
 	for (size_t i = 0; i < meshlets.size(); ++i)
 		meshlets_std += radii[i] < radius_mean + radius_stddev;
 
-	printf("Bounds   : radius mean %f stddev %f; %.1f%% meshlets are under mean+stddev; cone mean half angle %.1f\n",
+	printf("Bounds   : radius mean %f stddev %f; %.1f%% meshlets under 1σ; cone angle %.1f°; cone reject %.1f%% trivial accept %.1f%% in %.2f msec\n",
 	    radius_mean, radius_stddev,
 	    double(meshlets_std) / double(meshlets.size()) * 100,
-	    cone_mean);
-
-	printf("ConeCull : rejected apex %d (%.1f%%) / center %d (%.1f%%), trivially accepted %d (%.1f%%) in %.2f msec\n",
-	    int(rejected), double(rejected) / double(meshlets.size()) * 100,
-	    int(rejected_alt), double(rejected_alt) / double(meshlets.size()) * 100,
-	    int(accepted), double(accepted) / double(meshlets.size()) * 100,
-	    (endc - startc) * 1000);
-	printf("ConeCull8: rejected apex %d (%.1f%%) / center %d (%.1f%%), trivially accepted %d (%.1f%%) in %.2f msec\n",
-	    int(rejected_s8), double(rejected_s8) / double(meshlets.size()) * 100,
-	    int(rejected_alt_s8), double(rejected_alt_s8) / double(meshlets.size()) * 100,
-	    int(accepted_s8), double(accepted_s8) / double(meshlets.size()) * 100,
+	    cone_mean, double(rejected) / double(meshlets.size()) * 100, double(accepted) / double(meshlets.size()) * 100,
 	    (endc - startc) * 1000);
 }
 
@@ -1421,6 +1399,7 @@ void processDev(const char* path)
 		return;
 
 	meshlets(mesh);
+	meshlets(mesh, /* scan= */ false, /* uniform= */ true);
 }
 
 void processNanite(const char* path)
