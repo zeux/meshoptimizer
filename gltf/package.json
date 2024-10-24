@@ -1,6 +1,6 @@
 {
 	"name": "gltfpack",
-	"version": "0.21.0",
+	"version": "0.22.0",
 	"description": "A command-line tool that can optimize glTF files for size and speed",
 	"author": "Arseny Kapoulkine",
 	"license": "MIT",
@@ -16,7 +16,8 @@
 	"bin": "./cli.js",
 	"main": "./library.js",
 	"files": [
-		"*.js", "*.wasm"
+		"*.js",
+		"*.wasm"
 	],
 	"scripts": {
 		"prepublishOnly": "node cli.js -v"

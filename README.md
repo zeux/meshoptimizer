@@ -13,12 +13,12 @@ The library provides a C and C++ interface for all algorithms; you can use it fr
 meshoptimizer is hosted on GitHub; you can download the latest release using git:
 
 ```
-git clone -b v0.21 https://github.com/zeux/meshoptimizer.git
+git clone -b v0.22 https://github.com/zeux/meshoptimizer.git
 ```
 
-Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v0.21.zip).
+Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v0.22.zip).
 
-The library is also available as a Linux package in several distributions ([ArchLinux](https://aur.archlinux.org/packages/meshoptimizer/), [Debian](https://packages.debian.org/libmeshoptimizer), [FreeBSD](https://www.freshports.org/misc/meshoptimizer/), [Nix](https://mynixos.com/nixpkgs/package/meshoptimizer), [Ubuntu](https://packages.ubuntu.com/libmeshoptimizer)), as well as a [Vcpkg port](https://github.com/microsoft/vcpkg/tree/master/ports/meshoptimizer) (see [installation instructions](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started)) and a [Conan package](https://conan.io/center/recipes/meshoptimizer?version=0.21).
+The library is also available as a Linux package in several distributions ([ArchLinux](https://aur.archlinux.org/packages/meshoptimizer/), [Debian](https://packages.debian.org/libmeshoptimizer), [FreeBSD](https://www.freshports.org/misc/meshoptimizer/), [Nix](https://mynixos.com/nixpkgs/package/meshoptimizer), [Ubuntu](https://packages.ubuntu.com/libmeshoptimizer)), as well as a [Vcpkg port](https://github.com/microsoft/vcpkg/tree/master/ports/meshoptimizer) (see [installation instructions](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started)) and a [Conan package](https://conan.io/center/recipes/meshoptimizer).
 
 [gltfpack](./gltf/README.md) is available as a pre-built binary on [Releases page](https://github.com/zeux/meshoptimizer/releases) or via [npm package](https://www.npmjs.com/package/gltfpack). Native binaries are recommended since they are more efficient and support texture compression.
 
@@ -130,11 +130,8 @@ Since quantized vertex attributes often need to remain in their compact represen
 ## Shadow indexing
 
 Many rendering pipelines require meshes to be rendered to depth-only targets, such as shadow maps or during a depth pre-pass, in addition to color/G-buffer targets. While using the same geometry data for both cases is possible, reducing the number of unique vertices for depth-only rendering can be beneficial, especially when the source geometry has many attribute seams due to faceted shading or lightmap texture seams.
+
 To achieve this, this library provides the `meshopt_generateShadowIndexBuffer` algorithm, which generates a second (shadow) index buffer that can be used with the original vertex data:
-
-
-
-This is possible to achieve using `meshopt_generateShadowIndexBuffer` algorithm, which will generate a second (shadow) index buffer that can be used with the original vertex data. Because the vertex data is shared, this should be done after other optimizations of the vertex/index data, but it is possible (and recommended) to optimize the resulting index buffer for vertex cache at the end:
 
 ```c++
 std::vector<unsigned int> shadow_indices(index_count);
