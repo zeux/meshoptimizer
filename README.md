@@ -130,11 +130,8 @@ Since quantized vertex attributes often need to remain in their compact represen
 ## Shadow indexing
 
 Many rendering pipelines require meshes to be rendered to depth-only targets, such as shadow maps or during a depth pre-pass, in addition to color/G-buffer targets. While using the same geometry data for both cases is possible, reducing the number of unique vertices for depth-only rendering can be beneficial, especially when the source geometry has many attribute seams due to faceted shading or lightmap texture seams.
+
 To achieve this, this library provides the `meshopt_generateShadowIndexBuffer` algorithm, which generates a second (shadow) index buffer that can be used with the original vertex data:
-
-
-
-This is possible to achieve using `meshopt_generateShadowIndexBuffer` algorithm, which will generate a second (shadow) index buffer that can be used with the original vertex data. Because the vertex data is shared, this should be done after other optimizations of the vertex/index data, but it is possible (and recommended) to optimize the resulting index buffer for vertex cache at the end:
 
 ```c++
 std::vector<unsigned int> shadow_indices(index_count);
