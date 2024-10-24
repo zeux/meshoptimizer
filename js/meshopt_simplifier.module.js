@@ -277,7 +277,8 @@ var MeshoptSimplifier = (function () {
 			assert(vertex_attributes instanceof Float32Array);
 			assert(vertex_attributes.length % vertex_attributes_stride == 0);
 			assert(vertex_attributes_stride >= 0);
-			assert(vertex_lock == null || vertex_lock.length == vertex_positions.length);
+			assert(vertex_lock == null || vertex_lock instanceof Uint8Array);
+			assert(vertex_lock == null || vertex_lock.length == vertex_positions.length / vertex_positions_stride);
 			assert(target_index_count >= 0 && target_index_count <= indices.length);
 			assert(target_index_count % 3 == 0);
 			assert(target_error >= 0);

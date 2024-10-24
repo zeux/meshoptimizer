@@ -114,6 +114,23 @@ var tests = {
 		assert.deepEqual(res[0], expected);
 	},
 
+	simplifyLockFlags: function () {
+		// 0
+		// 1 2
+		// 3 4 5
+		var indices = new Uint32Array([0, 2, 1, 1, 2, 3, 3, 2, 4, 2, 5, 4]);
+
+		var positions = new Float32Array([0, 2, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 2, 0, 0]);
+		var locks = new Uint8Array([1, 1, 1, 1, 0, 1]); // only vertex 4 can move
+
+		var res = simplifier.simplifyWithAttributes(indices, positions, 3, new Float32Array(), 1, [], locks, 3, 0.01);
+
+		var expected = new Uint32Array([0, 2, 1, 1, 2, 3, 2, 5, 3]);
+
+		assert.deepEqual(res[0], expected);
+		assert.equal(res[1], 0); // error
+	},
+
 	getScale: function () {
 		var positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3]);
 

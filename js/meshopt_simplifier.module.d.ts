@@ -27,7 +27,7 @@ export const MeshoptSimplifier: {
 		vertex_attributes: Float32Array,
 		vertex_attributes_stride: number,
 		attribute_weights: number[],
-		vertex_lock: boolean[] | null,
+		vertex_lock: Uint8Array | null,
 		target_index_count: number,
 		target_error: number,
 		flags?: Flags[]
