@@ -942,7 +942,7 @@ void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false)
 	const size_t max_triangles = uniform ? 64 : 124;
 
 	// note: should be set to 0 unless cone culling is used at runtime!
-	const float cone_weight = 0.5f;
+	const float cone_weight = 0.25f;
 
 	// note: input mesh is assumed to be optimized for vertex cache and vertex fetch
 	double start = timestamp();
