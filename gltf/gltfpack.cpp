@@ -1242,6 +1242,14 @@ unsigned int textureMask(const char* arg)
 	return result;
 }
 
+template <typename T>
+void applySetting(T (&data)[TextureKind__Count], T value, unsigned int mask = ~0u)
+{
+	for (int kind = 0; kind < TextureKind__Count; ++kind)
+		if (mask & (1 << kind))
+			data[kind] = value;
+}
+
 #ifndef GLTFFUZZ
 int main(int argc, char** argv)
 {
@@ -1392,9 +1400,7 @@ int main(int argc, char** argv)
 			if (i + 1 < argc && isalpha(argv[i + 1][0]))
 				mask = textureMask(argv[++i]);
 
-			for (int kind = 0; kind < TextureKind__Count; ++kind)
-				if (mask & (1 << kind))
-					settings.texture_mode[kind] = TextureMode_UASTC;
+			applySetting(settings.texture_mode, TextureMode_UASTC, mask);
 		}
 		else if (strcmp(arg, "-tc") == 0)
 		{
@@ -1404,17 +1410,14 @@ int main(int argc, char** argv)
 			if (i + 1 < argc && isalpha(argv[i + 1][0]))
 				mask = textureMask(argv[++i]);
 
-			for (int kind = 0; kind < TextureKind__Count; ++kind)
-				if (mask & (1 << kind))
-					settings.texture_mode[kind] = TextureMode_ETC1S;
+			applySetting(settings.texture_mode, TextureMode_ETC1S, mask);
 		}
 		else if (strcmp(arg, "-tq") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			require_ktx2 = true;
 
 			int quality = clamp(atoi(argv[++i]), 1, 10);
-			for (int kind = 0; kind < TextureKind__Count; ++kind)
-				settings.texture_quality[kind] = quality;
+			applySetting(settings.texture_quality, quality);
 		}
 		else if (strcmp(arg, "-tq") == 0 && i + 2 < argc && isalpha(argv[i + 1][0]) && isdigit(argv[i + 2][0]))
 		{
@@ -1422,18 +1425,14 @@ int main(int argc, char** argv)
 
 			unsigned int mask = textureMask(argv[++i]);
 			int quality = clamp(atoi(argv[++i]), 1, 10);
-
-			for (int kind = 0; kind < TextureKind__Count; ++kind)
-				if (mask & (1 << kind))
-					settings.texture_quality[kind] = quality;
+			applySetting(settings.texture_quality, quality, mask);
 		}
 		else if (strcmp(arg, "-ts") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			require_ktx2 = true;
 
 			float scale = clamp(float(atof(argv[++i])), 0.f, 1.f);
-			for (int kind = 0; kind < TextureKind__Count; ++kind)
-				settings.texture_scale[kind] = scale;
+			applySetting(settings.texture_scale, scale);
 		}
 		else if (strcmp(arg, "-ts") == 0 && i + 2 < argc && isalpha(argv[i + 1][0]) && isdigit(argv[i + 2][0]))
 		{
@@ -1441,16 +1440,22 @@ int main(int argc, char** argv)
 
 			unsigned int mask = textureMask(argv[++i]);
 			float scale = clamp(float(atof(argv[++i])), 0.f, 1.f);
-
-			for (int kind = 0; kind < TextureKind__Count; ++kind)
-				if (mask & (1 << kind))
-					settings.texture_scale[kind] = scale;
+			applySetting(settings.texture_scale, scale, mask);
 		}
 		else if (strcmp(arg, "-tl") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			require_ktx2 = true;
 
-			settings.texture_limit = atoi(argv[++i]);
+			int limit = atoi(argv[++i]);
+			applySetting(settings.texture_limit, limit);
+		}
+		else if (strcmp(arg, "-tl") == 0 && i + 2 < argc && isalpha(argv[i + 1][0]) && isdigit(argv[i + 2][0]))
+		{
+			require_ktx2 = true;
+
+			unsigned int mask = textureMask(argv[++i]);
+			int limit = atoi(argv[++i]);
+			applySetting(settings.texture_limit, limit, mask);
 		}
 		else if (strcmp(arg, "-tp") == 0)
 		{
@@ -1581,6 +1586,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-tu C: use UASTC when encoding textures of class C\n");
 			fprintf(stderr, "\t-tq C N: set texture encoding quality for class C\n");
 			fprintf(stderr, "\t-ts C R: scale texture dimensions for class C\n");
+			fprintf(stderr, "\t-tl C N: limit texture dimensions for class C\n");
 			fprintf(stderr, "\t... where C is a comma-separated list (no spaces) with valid values color,normal,attrib\n");
 			fprintf(stderr, "\nSimplification:\n");
 			fprintf(stderr, "\t-si R: simplify meshes targeting triangle/point count ratio R (default: 1; R should be between 0 and 1)\n");
@@ -1631,12 +1637,6 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nRun gltfpack -h to display a full list of options\n");
 		}
 
-		return 1;
-	}
-
-	if (settings.texture_pow2 && (settings.texture_limit & (settings.texture_limit - 1)) != 0)
-	{
-		fprintf(stderr, "Option -tp requires the limit specified via -tl to be a power of 2\n");
 		return 1;
 	}
 

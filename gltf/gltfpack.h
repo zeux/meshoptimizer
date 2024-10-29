@@ -154,7 +154,7 @@ struct Settings
 	bool texture_pow2;
 	bool texture_flipy;
 	float texture_scale[TextureKind__Count];
-	int texture_limit;
+	int texture_limit[TextureKind__Count];
 
 	TextureMode texture_mode[TextureKind__Count];
 	int texture_quality[TextureKind__Count];
