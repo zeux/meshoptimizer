@@ -371,6 +371,7 @@ void append(std::string& s, size_t v);
 void append(std::string& s, float v);
 void append(std::string& s, const char* v);
 void append(std::string& s, const std::string& v);
+void append(std::string& s, const float* data, size_t count);
 void appendJson(std::string& s, const char* data);
 
 const char* attributeType(cgltf_attribute_type type);

@@ -204,15 +204,10 @@ static void writeTextureInfo(std::string& json, const cgltf_data* data, const cg
 	if (has_transform)
 	{
 		append(json, ",\"extensions\":{\"KHR_texture_transform\":{");
-		append(json, "\"offset\":[");
-		append(json, transform.offset[0]);
-		append(json, ",");
-		append(json, transform.offset[1]);
-		append(json, "],\"scale\":[");
-		append(json, transform.scale[0]);
-		append(json, ",");
-		append(json, transform.scale[1]);
-		append(json, "]");
+		append(json, "\"offset\":");
+		append(json, transform.offset, 2);
+		append(json, ",\"scale\":");
+		append(json, transform.scale, 2);
 		if (transform.rotation != 0.f)
 		{
 			append(json, ",\"rotation\":");
@@ -233,15 +228,8 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 	if (memcmp(pbr.base_color_factor, white, 16) != 0)
 	{
 		comma(json);
-		append(json, "\"baseColorFactor\":[");
-		append(json, pbr.base_color_factor[0]);
-		append(json, ",");
-		append(json, pbr.base_color_factor[1]);
-		append(json, ",");
-		append(json, pbr.base_color_factor[2]);
-		append(json, ",");
-		append(json, pbr.base_color_factor[3]);
-		append(json, "]");
+		append(json, "\"baseColorFactor\":");
+		append(json, pbr.base_color_factor, 4);
 	}
 	if (pbr.base_color_texture.texture)
 	{
@@ -289,26 +277,14 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 	if (memcmp(pbr.diffuse_factor, white, 16) != 0)
 	{
 		comma(json);
-		append(json, "\"diffuseFactor\":[");
-		append(json, pbr.diffuse_factor[0]);
-		append(json, ",");
-		append(json, pbr.diffuse_factor[1]);
-		append(json, ",");
-		append(json, pbr.diffuse_factor[2]);
-		append(json, ",");
-		append(json, pbr.diffuse_factor[3]);
-		append(json, "]");
+		append(json, "\"diffuseFactor\":");
+		append(json, pbr.diffuse_factor, 4);
 	}
 	if (memcmp(pbr.specular_factor, white, 12) != 0)
 	{
 		comma(json);
-		append(json, "\"specularFactor\":[");
-		append(json, pbr.specular_factor[0]);
-		append(json, ",");
-		append(json, pbr.specular_factor[1]);
-		append(json, ",");
-		append(json, pbr.specular_factor[2]);
-		append(json, "]");
+		append(json, "\"specularFactor\":");
+		append(json, pbr.specular_factor, 3);
 	}
 	if (pbr.glossiness_factor != 1)
 	{
@@ -411,13 +387,8 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 	if (memcmp(tm.specular_color_factor, white, 12) != 0)
 	{
 		comma(json);
-		append(json, "\"specularColorFactor\":[");
-		append(json, tm.specular_color_factor[0]);
-		append(json, ",");
-		append(json, tm.specular_color_factor[1]);
-		append(json, ",");
-		append(json, tm.specular_color_factor[2]);
-		append(json, "]");
+		append(json, "\"specularColorFactor\":");
+		append(json, tm.specular_color_factor, 3);
 	}
 	append(json, "}");
 }
@@ -441,13 +412,8 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 	if (memcmp(tm.sheen_color_factor, black, 12) != 0)
 	{
 		comma(json);
-		append(json, "\"sheenColorFactor\":[");
-		append(json, tm.sheen_color_factor[0]);
-		append(json, ",");
-		append(json, tm.sheen_color_factor[1]);
-		append(json, ",");
-		append(json, tm.sheen_color_factor[2]);
-		append(json, "]");
+		append(json, "\"sheenColorFactor\":");
+		append(json, tm.sheen_color_factor, 3);
 	}
 	if (tm.sheen_roughness_factor != 0)
 	{
@@ -478,13 +444,8 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 	if (memcmp(tm.attenuation_color, white, 12) != 0)
 	{
 		comma(json);
-		append(json, "\"attenuationColor\":[");
-		append(json, tm.attenuation_color[0]);
-		append(json, ",");
-		append(json, tm.attenuation_color[1]);
-		append(json, ",");
-		append(json, tm.attenuation_color[2]);
-		append(json, "]");
+		append(json, "\"attenuationColor\":");
+		append(json, tm.attenuation_color, 3);
 	}
 	if (tm.attenuation_distance != FLT_MAX)
 	{
@@ -628,13 +589,8 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 	if (memcmp(material.emissive_factor, black, 12) != 0)
 	{
 		comma(json);
-		append(json, "\"emissiveFactor\":[");
-		append(json, material.emissive_factor[0]);
-		append(json, ",");
-		append(json, material.emissive_factor[1]);
-		append(json, ",");
-		append(json, material.emissive_factor[2]);
-		append(json, "]");
+		append(json, "\"emissiveFactor\":");
+		append(json, material.emissive_factor, 3);
 	}
 
 	if (material.alpha_mode != cgltf_alpha_mode_opaque)
@@ -799,19 +755,10 @@ static void writeAccessor(std::string& json, size_t view, size_t offset, cgltf_t
 	{
 		assert(numminmax);
 
-		append(json, ",\"min\":[");
-		for (size_t k = 0; k < numminmax; ++k)
-		{
-			comma(json);
-			append(json, min[k]);
-		}
-		append(json, "],\"max\":[");
-		for (size_t k = 0; k < numminmax; ++k)
-		{
-			comma(json);
-			append(json, max[k]);
-		}
-		append(json, "]");
+		append(json, ",\"min\":");
+		append(json, min, numminmax);
+		append(json, ",\"max\":");
+		append(json, max, numminmax);
 	}
 
 	append(json, "}");
@@ -1224,13 +1171,9 @@ void writeMeshNode(std::string& json, size_t mesh_offset, cgltf_node* node, cglt
 	}
 	if (qp)
 	{
-		append(json, ",\"translation\":[");
-		append(json, qp->offset[0]);
-		append(json, ",");
-		append(json, qp->offset[1]);
-		append(json, ",");
-		append(json, qp->offset[2]);
-		append(json, "],\"scale\":[");
+		append(json, ",\"translation\":");
+		append(json, qp->offset, 3);
+		append(json, ",\"scale\":[");
 		append(json, qp->node_scale);
 		append(json, ",");
 		append(json, qp->node_scale);
@@ -1240,13 +1183,8 @@ void writeMeshNode(std::string& json, size_t mesh_offset, cgltf_node* node, cglt
 	}
 	if (node && node->weights_count)
 	{
-		append(json, ",\"weights\":[");
-		for (size_t j = 0; j < node->weights_count; ++j)
-		{
-			comma(json);
-			append(json, node->weights[j]);
-		}
-		append(json, "]");
+		append(json, ",\"weights\":");
+		append(json, node->weights, node->weights_count);
 	}
 	append(json, "}");
 }
@@ -1316,48 +1254,26 @@ void writeNode(std::string& json, const cgltf_node& node, const std::vector<Node
 	if (node.has_translation)
 	{
 		comma(json);
-		append(json, "\"translation\":[");
-		append(json, node.translation[0]);
-		append(json, ",");
-		append(json, node.translation[1]);
-		append(json, ",");
-		append(json, node.translation[2]);
-		append(json, "]");
+		append(json, "\"translation\":");
+		append(json, node.translation, 3);
 	}
 	if (node.has_rotation)
 	{
 		comma(json);
-		append(json, "\"rotation\":[");
-		append(json, node.rotation[0]);
-		append(json, ",");
-		append(json, node.rotation[1]);
-		append(json, ",");
-		append(json, node.rotation[2]);
-		append(json, ",");
-		append(json, node.rotation[3]);
-		append(json, "]");
+		append(json, "\"rotation\":");
+		append(json, node.rotation, 4);
 	}
 	if (node.has_scale)
 	{
 		comma(json);
-		append(json, "\"scale\":[");
-		append(json, node.scale[0]);
-		append(json, ",");
-		append(json, node.scale[1]);
-		append(json, ",");
-		append(json, node.scale[2]);
-		append(json, "]");
+		append(json, "\"scale\":");
+		append(json, node.scale, 3);
 	}
 	if (node.has_matrix)
 	{
 		comma(json);
-		append(json, "\"matrix\":[");
-		for (int k = 0; k < 16; ++k)
-		{
-			comma(json);
-			append(json, node.matrix[k]);
-		}
-		append(json, "]");
+		append(json, "\"matrix\":");
+		append(json, node.matrix, 16);
 	}
 
 	bool has_children = !ni.mesh_nodes.empty();
@@ -1397,13 +1313,8 @@ void writeNode(std::string& json, const cgltf_node& node, const std::vector<Node
 		}
 		if (node.weights_count)
 		{
-			append(json, ",\"weights\":[");
-			for (size_t j = 0; j < node.weights_count; ++j)
-			{
-				comma(json);
-				append(json, node.weights[j]);
-			}
-			append(json, "]");
+			append(json, ",\"weights\":");
+			append(json, node.weights, node.weights_count);
 		}
 	}
 	if (node.camera)
@@ -1606,13 +1517,8 @@ void writeLight(std::string& json, const cgltf_light& light)
 	if (memcmp(light.color, white, 12) != 0)
 	{
 		comma(json);
-		append(json, "\"color\":[");
-		append(json, light.color[0]);
-		append(json, ",");
-		append(json, light.color[1]);
-		append(json, ",");
-		append(json, light.color[2]);
-		append(json, "]");
+		append(json, "\"color\":");
+		append(json, light.color, 3);
 	}
 	if (light.intensity != 1.f)
 	{

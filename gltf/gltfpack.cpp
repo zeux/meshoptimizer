@@ -665,13 +665,8 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 		if (mesh.target_weights.size())
 		{
-			append(json_meshes, ",\"weights\":[");
-			for (size_t j = 0; j < mesh.target_weights.size(); ++j)
-			{
-				comma(json_meshes);
-				append(json_meshes, mesh.target_weights[j]);
-			}
-			append(json_meshes, "]");
+			append(json_meshes, ",\"weights\":");
+			append(json_meshes, mesh.target_weights.data(), mesh.target_weights.size());
 		}
 
 		if (mesh.target_names.size())
