@@ -30,6 +30,7 @@ jobs:
           make -j2 config=debug test
           make -j2 config=release test
           make -j2 config=coverage test
+          make -j2 config=coverage-scalar test
       - name: make gltfpack
         run: make -j2 config=release gltfpack
       - name: upload coverage

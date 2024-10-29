@@ -79,16 +79,21 @@ ifeq ($(config),trace)
 	CXXFLAGS+=-DTRACE=1
 endif
 
-ifeq ($(config),scalar)
-	CXXFLAGS+=-O3 -DNDEBUG -DMESHOPTIMIZER_NO_SIMD
-endif
-
 ifeq ($(config),release)
 	CXXFLAGS+=-O3 -DNDEBUG
 endif
 
 ifeq ($(config),coverage)
 	CXXFLAGS+=-coverage
+	LDFLAGS+=-coverage
+endif
+
+ifeq ($(config),release-scalar)
+	CXXFLAGS+=-O3 -DNDEBUG -DMESHOPTIMIZER_NO_SIMD
+endif
+
+ifeq ($(config),coverage-scalar)
+	CXXFLAGS+=-coverage -DMESHOPTIMIZER_NO_SIMD
 	LDFLAGS+=-coverage
 endif
 
