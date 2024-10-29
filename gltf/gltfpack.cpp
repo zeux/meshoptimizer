@@ -1242,6 +1242,14 @@ unsigned int textureMask(const char* arg)
 	return result;
 }
 
+template <typename T>
+void applySetting(T (&data)[TextureKind__Count], T value, unsigned int mask = ~0u)
+{
+	for (int kind = 0; kind < TextureKind__Count; ++kind)
+		if (mask & (1 << kind))
+			data[kind] = value;
+}
+
 #ifndef GLTFFUZZ
 int main(int argc, char** argv)
 {
@@ -1392,9 +1400,7 @@ int main(int argc, char** argv)
 			if (i + 1 < argc && isalpha(argv[i + 1][0]))
 				mask = textureMask(argv[++i]);
 
-			for (int kind = 0; kind < TextureKind__Count; ++kind)
-				if (mask & (1 << kind))
-					settings.texture_mode[kind] = TextureMode_UASTC;
+			applySetting(settings.texture_mode, TextureMode_UASTC, mask);
 		}
 		else if (strcmp(arg, "-tc") == 0)
 		{
@@ -1404,17 +1410,14 @@ int main(int argc, char** argv)
 			if (i + 1 < argc && isalpha(argv[i + 1][0]))
 				mask = textureMask(argv[++i]);
 
-			for (int kind = 0; kind < TextureKind__Count; ++kind)
-				if (mask & (1 << kind))
-					settings.texture_mode[kind] = TextureMode_ETC1S;
+			applySetting(settings.texture_mode, TextureMode_ETC1S, mask);
 		}
 		else if (strcmp(arg, "-tq") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			require_ktx2 = true;
 
 			int quality = clamp(atoi(argv[++i]), 1, 10);
-			for (int kind = 0; kind < TextureKind__Count; ++kind)
-				settings.texture_quality[kind] = quality;
+			applySetting(settings.texture_quality, quality);
 		}
 		else if (strcmp(arg, "-tq") == 0 && i + 2 < argc && isalpha(argv[i + 1][0]) && isdigit(argv[i + 2][0]))
 		{
@@ -1422,18 +1425,14 @@ int main(int argc, char** argv)
 
 			unsigned int mask = textureMask(argv[++i]);
 			int quality = clamp(atoi(argv[++i]), 1, 10);
-
-			for (int kind = 0; kind < TextureKind__Count; ++kind)
-				if (mask & (1 << kind))
-					settings.texture_quality[kind] = quality;
+			applySetting(settings.texture_quality, quality, mask);
 		}
 		else if (strcmp(arg, "-ts") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			require_ktx2 = true;
 
 			float scale = clamp(float(atof(argv[++i])), 0.f, 1.f);
-			for (int kind = 0; kind < TextureKind__Count; ++kind)
-				settings.texture_scale[kind] = scale;
+			applySetting(settings.texture_scale, scale);
 		}
 		else if (strcmp(arg, "-ts") == 0 && i + 2 < argc && isalpha(argv[i + 1][0]) && isdigit(argv[i + 2][0]))
 		{
@@ -1441,18 +1440,14 @@ int main(int argc, char** argv)
 
 			unsigned int mask = textureMask(argv[++i]);
 			float scale = clamp(float(atof(argv[++i])), 0.f, 1.f);
-
-			for (int kind = 0; kind < TextureKind__Count; ++kind)
-				if (mask & (1 << kind))
-					settings.texture_scale[kind] = scale;
+			applySetting(settings.texture_scale, scale, mask);
 		}
 		else if (strcmp(arg, "-tl") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			require_ktx2 = true;
 
 			int limit = atoi(argv[++i]);
-			for (int kind = 0; kind < TextureKind__Count; ++kind)
-				settings.texture_limit[kind] = limit;
+			applySetting(settings.texture_limit, limit);
 		}
 		else if (strcmp(arg, "-tl") == 0 && i + 2 < argc && isalpha(argv[i + 1][0]) && isdigit(argv[i + 2][0]))
 		{
@@ -1460,10 +1455,7 @@ int main(int argc, char** argv)
 
 			unsigned int mask = textureMask(argv[++i]);
 			int limit = atoi(argv[++i]);
-
-			for (int kind = 0; kind < TextureKind__Count; ++kind)
-				if (mask & (1 << kind))
-					settings.texture_limit[kind] = limit;
+			applySetting(settings.texture_limit, limit, mask);
 		}
 		else if (strcmp(arg, "-tp") == 0)
 		{
