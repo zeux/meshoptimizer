@@ -1450,7 +1450,20 @@ int main(int argc, char** argv)
 		{
 			require_ktx2 = true;
 
-			settings.texture_limit = atoi(argv[++i]);
+			int limit = atoi(argv[++i]);
+			for (int kind = 0; kind < TextureKind__Count; ++kind)
+				settings.texture_limit[kind] = limit;
+		}
+		else if (strcmp(arg, "-tl") == 0 && i + 2 < argc && isalpha(argv[i + 1][0]) && isdigit(argv[i + 2][0]))
+		{
+			require_ktx2 = true;
+
+			unsigned int mask = textureMask(argv[++i]);
+			int limit = atoi(argv[++i]);
+
+			for (int kind = 0; kind < TextureKind__Count; ++kind)
+				if (mask & (1 << kind))
+					settings.texture_limit[kind] = limit;
 		}
 		else if (strcmp(arg, "-tp") == 0)
 		{
@@ -1581,6 +1594,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-tu C: use UASTC when encoding textures of class C\n");
 			fprintf(stderr, "\t-tq C N: set texture encoding quality for class C\n");
 			fprintf(stderr, "\t-ts C R: scale texture dimensions for class C\n");
+			fprintf(stderr, "\t-tl C N: limit texture dimensions for class C\n");
 			fprintf(stderr, "\t... where C is a comma-separated list (no spaces) with valid values color,normal,attrib\n");
 			fprintf(stderr, "\nSimplification:\n");
 			fprintf(stderr, "\t-si R: simplify meshes targeting triangle/point count ratio R (default: 1; R should be between 0 and 1)\n");
@@ -1631,12 +1645,6 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nRun gltfpack -h to display a full list of options\n");
 		}
 
-		return 1;
-	}
-
-	if (settings.texture_pow2 && (settings.texture_limit & (settings.texture_limit - 1)) != 0)
-	{
-		fprintf(stderr, "Option -tp requires the limit specified via -tl to be a power of 2\n");
 		return 1;
 	}
 
