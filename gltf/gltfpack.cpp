@@ -1201,9 +1201,13 @@ Settings defaults()
 	settings.mesh_dedup = true;
 	settings.simplify_ratio = 1.f;
 	settings.simplify_error = 1e-2f;
-	settings.texture_scale = 1.f;
+
 	for (int kind = 0; kind < TextureKind__Count; ++kind)
+	{
+		settings.texture_mode[kind] = TextureMode_Raw;
+		settings.texture_scale[kind] = 1.f;
 		settings.texture_quality[kind] = 8;
+	}
 
 	return settings;
 }
@@ -1255,6 +1259,7 @@ int main(int argc, char** argv)
 	const char* report = NULL;
 	bool help = false;
 	bool test = false;
+	bool require_ktx2 = false;
 
 	std::vector<const char*> testinputs;
 
@@ -1405,12 +1410,16 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-tq") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
+			require_ktx2 = true;
+
 			int quality = clamp(atoi(argv[++i]), 1, 10);
 			for (int kind = 0; kind < TextureKind__Count; ++kind)
 				settings.texture_quality[kind] = quality;
 		}
 		else if (strcmp(arg, "-tq") == 0 && i + 2 < argc && isalpha(argv[i + 1][0]) && isdigit(argv[i + 2][0]))
 		{
+			require_ktx2 = true;
+
 			unsigned int mask = textureMask(argv[++i]);
 			int quality = clamp(atoi(argv[++i]), 1, 10);
 
@@ -1420,18 +1429,39 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-ts") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.texture_scale = clamp(float(atof(argv[++i])), 0.f, 1.f);
+			require_ktx2 = true;
+
+			float scale = clamp(float(atof(argv[++i])), 0.f, 1.f);
+			for (int kind = 0; kind < TextureKind__Count; ++kind)
+				settings.texture_scale[kind] = scale;
+		}
+		else if (strcmp(arg, "-ts") == 0 && i + 2 < argc && isalpha(argv[i + 1][0]) && isdigit(argv[i + 2][0]))
+		{
+			require_ktx2 = true;
+
+			unsigned int mask = textureMask(argv[++i]);
+			float scale = clamp(float(atof(argv[++i])), 0.f, 1.f);
+
+			for (int kind = 0; kind < TextureKind__Count; ++kind)
+				if (mask & (1 << kind))
+					settings.texture_scale[kind] = scale;
 		}
 		else if (strcmp(arg, "-tl") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
+			require_ktx2 = true;
+
 			settings.texture_limit = atoi(argv[++i]);
 		}
 		else if (strcmp(arg, "-tp") == 0)
 		{
+			require_ktx2 = true;
+
 			settings.texture_pow2 = true;
 		}
 		else if (strcmp(arg, "-tfy") == 0)
 		{
+			require_ktx2 = true;
+
 			settings.texture_flipy = true;
 		}
 		else if (strcmp(arg, "-tr") == 0)
@@ -1550,6 +1580,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-tc C: use ETC1S when encoding textures of class C\n");
 			fprintf(stderr, "\t-tu C: use UASTC when encoding textures of class C\n");
 			fprintf(stderr, "\t-tq C N: set texture encoding quality for class C\n");
+			fprintf(stderr, "\t-ts C R: scale texture dimensions for class C\n");
 			fprintf(stderr, "\t... where C is a comma-separated list (no spaces) with valid values color,normal,attrib\n");
 			fprintf(stderr, "\nSimplification:\n");
 			fprintf(stderr, "\t-si R: simplify meshes targeting triangle/point count ratio R (default: 1; R should be between 0 and 1)\n");
@@ -1603,33 +1634,15 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
-	if (settings.texture_limit && !settings.texture_ktx2)
-	{
-		fprintf(stderr, "Option -tl is only supported when -tc is set as well\n");
-		return 1;
-	}
-
 	if (settings.texture_pow2 && (settings.texture_limit & (settings.texture_limit - 1)) != 0)
 	{
 		fprintf(stderr, "Option -tp requires the limit specified via -tl to be a power of 2\n");
 		return 1;
 	}
 
-	if (settings.texture_scale < 1 && !settings.texture_ktx2)
+	if (require_ktx2 && !settings.texture_ktx2)
 	{
-		fprintf(stderr, "Option -ts is only supported when -tc is set as well\n");
-		return 1;
-	}
-
-	if (settings.texture_pow2 && !settings.texture_ktx2)
-	{
-		fprintf(stderr, "Option -tp is only supported when -tc is set as well\n");
-		return 1;
-	}
-
-	if (settings.texture_flipy && !settings.texture_ktx2)
-	{
-		fprintf(stderr, "Option -tfy is only supported when -tc is set as well\n");
+		fprintf(stderr, "Texture processing is only supported when texture compression is enabled via -tc/-tu\n");
 		return 1;
 	}
 

@@ -344,21 +344,21 @@ static int roundBlock(int value, bool pow2)
 	return (value + 3) & ~3;
 }
 
-void adjustDimensions(int& width, int& height, const Settings& settings)
+void adjustDimensions(int& width, int& height, float scale, int limit, bool pow2)
 {
-	width = int(width * settings.texture_scale);
-	height = int(height * settings.texture_scale);
+	width = int(width * scale);
+	height = int(height * scale);
 
-	if (settings.texture_limit && (width > settings.texture_limit || height > settings.texture_limit))
+	if (limit && (width > limit || height > limit))
 	{
-		float limit_scale = float(settings.texture_limit) / float(width > height ? width : height);
+		float limit_scale = float(limit) / float(width > height ? width : height);
 
 		width = int(width * limit_scale);
 		height = int(height * limit_scale);
 	}
 
-	width = roundBlock(width, settings.texture_pow2);
-	height = roundBlock(height, settings.texture_pow2);
+	width = roundBlock(width, pow2);
+	height = roundBlock(height, pow2);
 }
 
 const char* mimeExtension(const char* mime_type)

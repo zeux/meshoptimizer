@@ -100,7 +100,7 @@ jobs:
           curl -sL $VALIDATOR | tar xJ
           find glTF-Sample-Assets -name '*.gltfpack.gltf' | xargs -P 2 -L 1 -d '\n' ./gltf_validator -r -a
         env:
-          VALIDATOR: https://github.com/KhronosGroup/glTF-Validator/releases/download/2.0.0-dev.3.8/gltf_validator-2.0.0-dev.3.8-linux64.tar.xz
+          VALIDATOR: https://github.com/KhronosGroup/glTF-Validator/releases/download/2.0.0-dev.3.10/gltf_validator-2.0.0-dev.3.10-linux64.tar.xz
 
   gltfpack-js:
     runs-on: ubuntu-latest
@@ -173,7 +173,7 @@ jobs:
           ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -c
           ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -cc
           ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tc
-          ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tc -tq color 10 -tu normal,attrib
+          ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tc -tq color 10 -tu normal,attrib -ts attrib 0.5
           ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tr
           ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tc -ts 0.5 -tl 64
           ./gltfpack -test glTF-Sample-Assets/Models/CesiumMan/glTF/CesiumMan.gltf -tu -ts 0.6 -tp

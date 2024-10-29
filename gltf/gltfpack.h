@@ -153,7 +153,7 @@ struct Settings
 
 	bool texture_pow2;
 	bool texture_flipy;
-	float texture_scale;
+	float texture_scale[TextureKind__Count];
 	int texture_limit;
 
 	TextureMode texture_mode[TextureKind__Count];
@@ -338,7 +338,7 @@ void optimizeMaterials(cgltf_data* data, const char* input_path, std::vector<Ima
 bool readImage(const cgltf_image& image, const char* input_path, std::string& data, std::string& mime_type);
 bool hasAlpha(const std::string& data, const char* mime_type);
 bool getDimensions(const std::string& data, const char* mime_type, int& width, int& height);
-void adjustDimensions(int& width, int& height, const Settings& settings);
+void adjustDimensions(int& width, int& height, float scale, int limit, bool pow2);
 const char* mimeExtension(const char* mime_type);
 
 #ifdef WITH_BASISU
