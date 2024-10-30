@@ -421,7 +421,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		if (settings.meshlet_debug > 0)
 		{
 			Mesh meshlets = {};
-			debugMeshlets(mesh, meshlets, settings.meshlet_debug, /* scan= */ false);
+			debugMeshlets(mesh, meshlets, settings.meshlet_debug);
 			debug_meshes.push_back(meshlets);
 		}
 	}

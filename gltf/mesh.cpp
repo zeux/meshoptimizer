@@ -1114,15 +1114,12 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio, fl
 	loops.streams.push_back(colors);
 }
 
-void debugMeshlets(const Mesh& source, Mesh& meshlets, int max_vertices, bool scan)
+void debugMeshlets(const Mesh& source, Mesh& meshlets, int max_vertices)
 {
 	Mesh mesh = source;
 	assert(mesh.type == cgltf_primitive_type_triangles);
 
 	reindexMesh(mesh, /* quantize_tbn= */ true);
-
-	if (scan)
-		optimizeMesh(mesh, false);
 
 	const Stream* positions = getStream(mesh, cgltf_attribute_type_position);
 	assert(positions);
@@ -1135,11 +1132,7 @@ void debugMeshlets(const Mesh& source, Mesh& meshlets, int max_vertices, bool sc
 	std::vector<meshopt_Meshlet> ml(max_meshlets);
 	std::vector<unsigned int> mlv(max_meshlets * max_vertices);
 	std::vector<unsigned char> mlt(max_meshlets * max_triangles * 3);
-
-	if (scan)
-		ml.resize(meshopt_buildMeshletsScan(&ml[0], &mlv[0], &mlt[0], &mesh.indices[0], mesh.indices.size(), positions->data.size(), max_vertices, max_triangles));
-	else
-		ml.resize(meshopt_buildMeshlets(&ml[0], &mlv[0], &mlt[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, positions->data.size(), sizeof(Attr), max_vertices, max_triangles, cone_weight));
+	ml.resize(meshopt_buildMeshlets(&ml[0], &mlv[0], &mlt[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, positions->data.size(), sizeof(Attr), max_vertices, max_triangles, cone_weight));
 
 	// generate meshlet meshes, using unique colors
 	meshlets.nodes = mesh.nodes;
