@@ -69,12 +69,13 @@ reorderMesh: (indices: Uint32Array, triangles: boolean, optsize: boolean) => [Ui
 
 The function optimizes the input array for locality of reference (make sure to pass `triangles=true` for triangle lists, and `false` otherwise). `optsize` can choose whether the order should be optimal for transmission size (recommended for Web) or for GPU rendering performance. The function changes the `indices` array in place and returns an additional remap array and the total number of unique vertices.
 
-After this function returns, to maintain correct rendering the application should reorder all vertex streams - including morph targets if applicable - according to the remap array. For each original index, remap array contains the new location for that index, so the remapping pseudocode looks like this:
+After this function returns, to maintain correct rendering the application should reorder all vertex streams - including morph targets if applicable - according to the remap array. For each original index, remap array contains the new location for that index (or `0xffffffff` if the value is unused), so the remapping pseudocode looks like this:
 
 ```ts
 let newvertices = new VertexArray(unique); // unique is returned by reorderMesh
 for (let i = 0; i < oldvertices.length; ++i)
-	newvertices[remap[i]] = oldvertices[i];
+    if (remap[i] != 0xffffffff)
+        newvertices[remap[i]] = oldvertices[i];
 ```
 
 When the input is a point cloud and not a triangle mesh, it is recommended to reorder the points using a specialized function that performs spatial sorting that can result in significant improvements in compression ratio by the subsequent processing:
@@ -92,7 +93,7 @@ To that end, three filter encoders are provided: octahedral (optimal for normal 
 ```ts
 encodeFilterOct: (source: Float32Array, count: number, stride: number, bits: number) => Uint8Array;
 encodeFilterQuat: (source: Float32Array, count: number, stride: number, bits: number) => Uint8Array;
-encodeFilterExp: (source: Float32Array, count: number, stride: number, bits: number) => Uint8Array;
+encodeFilterExp: (source: Float32Array, count: number, stride: number, bits: number, mode?: string) => Uint8Array;
 ```
 
 All these functions take a source floating point buffer as an input, and perform a complex transformation that, when reversed by a decoder, results in an optimally quantized decompressed output. Because of this these functions assume specific configuration of input and output data:
@@ -102,6 +103,7 @@ All these functions take a source floating point buffer as an input, and perform
 - `encodeFilterQuat` takes each 4 floats from the source array (for a total of `count` 4-vectrors), treats them as a unit quaternion, and encodes them into `stride` bytes in a way that, when decoded, the result is stored as a normalized signed 4-vector representing the same rotation as the source quaternion. `stride` must be 8 (the round-trip result is 4 16-bit normalized values). `bits` represents the desired precision of each component and must be in `[4..16]` range, although using less than 9-10 bits is likely going to lead to significant deviation in rotations.
 
 - `encodeFilterExp` takes each K floats from the source array (where `K=stride/4`, for a total of `count` K-vectors), and encodes them into `stride` bytes in a way that, when decoded, the result is stored as K single-precision floating point values. This may seem redundant but it allows to trade some precision for a higher compression ratio due to reduced precision of stored components, controlled by `bits` which must be in `[1..24]` range, and a shared exponent encoding used by the function.
+The `mode` parameter can be used to influence the exponent sharing and provides a tradeoff between compressed size and quality for various use cases, and can be one of 'Separate', 'SharedVector', 'SharedComponent' and 'Clamped' (defaulting to 'SharedVector').
 
 Note that in all cases using the highest `bits` value allowed by the output `stride` won't change the size of the output array (which is always going to be `count * stride` bytes), but it *will* reduce compression efficiency, as such the lowest acceptable `bits` value is recommended to use. When multiple parts of the data require different levels of precision, encode filters can be called multiple times and the output of the same filter called with the same `stride` can be concatenated even if `bits` are different.
 
@@ -141,7 +143,9 @@ Upon completion, the function returns the new index buffer as well as the result
 
 To control behavior of the algorithm more precisely, `flags` may specify an array of strings that enable various additional options:
 
-- `"LockBorder"` locks the vertices that lie on the topological border of the mesh in place such that they don't move during simplification. This can be valuable to simplify independent chunks of a mesh, for example terrain, to ensure that individual levels of detail can be stitched together later without gaps.
+- `'LockBorder'` locks the vertices that lie on the topological border of the mesh in place such that they don't move during simplification. This can be valuable to simplify independent chunks of a mesh, for example terrain, to ensure that individual levels of detail can be stitched together later without gaps.
+- `'ErrorAbsolute'` changes the error metric from relative to absolute both for the input error limit as well as for the resulting error. This can be used instead of `getScale`.
+- `'Sparse'` improves simplification performance assuming input indices are a sparse subset of the mesh. This can be useful when simplifying small mesh subsets independently. For consistency, it is recommended to use absolute errors when sparse simplification is desired.
 
 When the resulting mesh is stored, it might be desireable to remove the redundant vertices from the attribute buffers instead of simply using the original vertex data with the smaller index buffer. For that purpose, the simplifier module provides the `compactMesh` function, which is similar to `reorderMesh` function that the encoder provides, but doesn't perform extra optimizations and merely prepares a new vertex order that can be used to create new, smaller, vertex buffers:
 
@@ -153,6 +157,74 @@ The simplification algorithm uses relative errors for input and output; to conve
 
 ```ts
 getScale: (vertex_positions: Float32Array, vertex_positions_stride: number) => number;
+```
+
+## Clusterizer
+
+`MeshoptClusterizer` (`meshopt_clusterizer.js`) implements meshlet generation and optimization.
+
+To split a triangle mesh into clusters, call `buildMeshlets`, which tries to balance topological efficiency (by maximizing vertex reuse inside meshlets) with culling efficiency.
+
+```ts
+buildMeshlets(indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, max_vertices: number, max_triangles: number, cone_weight?: number) => MeshletBuffers;
+```
+
+The algorithm uses position data stored in a strided array; `vertex_positions_stride` represents the distance between subsequent positions in `Float32` units.
+
+The maximum number of triangles and number of vertices per meshlet can be controlled via `max_triangles` and `max_vertices` parameters. However, `max_vertices` must not be greater than 255 and `max_triangles` must not be greater than 512.
+
+Additionally, if cluster cone culling is to be used, `buildMeshlets` allows specifying a `cone_weight` as a value between 0 and 1 to balance culling efficiency with other forms of culling. By default, `cone_weight` is set to 0.
+
+All meshlets are implicitly optimized for better triangle and vertex locality by `buildMeshlets`.
+
+The algorithm returns the meshlet data as packed buffers:
+
+```ts
+const buffers = MeshoptClusterizer.buildMeshlets(indices, positions, stride, /* args */);
+
+console.log(buffers.meshlets);      // prints the raw packed Uint32Array containing the meshlet data, i.e., the indices into the vertices and triangles array
+console.log(buffers.vertices);      // prints the raw packed Uint32Array containing the indices into the original meshes vertices
+console.log(buffers.triangles);     // prints the raw packed Uint8Array containing the indices into the verices array.
+console.log(buffers.meshletCount);  // prints the number of meshlets - this is not the same as buffers.meshlets.length because each meshlet consists of 4 unsigned 32-bit integers
+```
+
+Individual meshlets can be extracted from the packed buffers using `extractMeshlet`. The memory of the returned `Meshlet` object's `vertices` and `triangles` arrays is backed by the `MeshletBuffers` object.
+
+```ts
+const buffers = MeshoptClusterizer.buildMeshlets(indices, positions, stride, /* args */);
+
+const meshlet = MeshoptClusterizer.extractMeshlet(buffers, 0);
+console.log(meshlet.vertices);  // prints the packed Uint32Array of the first meshlet's vertex indices, i.e., indices into the original meshes vertex buffer
+console.log(meshlet.triangles); // prints the packed Uint8Array of the first meshlet's indices into its own vertices array
+
+console.log(MeshoptClusterizer.extractMeshlet(buffers, 0).triangles[0] === meshlet.triangles[0]) // prints true
+
+meshlet.triangles.set([123], 0);
+console.log(MeshoptClusterizer.extractMeshlet(buffers, 0).triangles[0] === meshlet.triangles[0]) // still prints true
+```
+
+After generating the meshlet data, it's also possible to generate extra culling data for one or more meshlets:
+
+```ts
+computeMeshletBounds(buffers: MeshletBuffers, vertex_positions: Float32Array, vertex_positions_stride: number) => Bounds | Bounds[];
+```
+
+If `buffers` contains more than one meshlet, `computeMeshletBounds` returns an array of `Bounds`. Otherwise, a single `Bounds` object is returned.
+
+```ts
+const buffers = MeshoptClusterizer.buildMeshlets(indices, positions, stride, /* args */);
+const bounds = MeshoptClusterizer.computeMeshletBounds(buffers, positions, stride);
+console.log(bounds[0].centerX, bounds[0].centerY, bounds[0].centerZ);       // prints the center of the first meshlet's bounding sphere
+console.log(bounds[0].radius);                                              // prints the radius of the first meshlet's bounding sphere
+console.log(bounds[0].coneApexX, bounds[0].coneApexY, bounds[0].coneApexZ); // prints the apex of the first meshlet's normal cone
+console.log(bounds[0].coneAxisX, bounds[0].coneAxisY, bounds[0].coneAxisZ); // prints the axis of the first meshlet's normal cone
+console.log(bounds[0].coneCutoff);                                          // prins the cutoff angle of the first meshlet's normal cone
+```
+
+It is also possible to compute bounds of a vertex cluster that is not generated by `MeshoptClusterizer` using `computeClusterBounds`. Like `buildMeshlets`, this algorithm takes vertex indices and a strided vertex positions array with a vertex stride in `Float32` units as input.
+
+```ts
+computeClusterBounds(indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number) => Bounds;
 ```
 
 ## License

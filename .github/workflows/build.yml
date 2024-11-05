@@ -14,27 +14,29 @@ jobs:
   unix:
     strategy:
       matrix:
-        os: [{name: ubuntu, version: ubuntu-latest}, {name: macos-intel, version: macos-13}, {name: macos-arm, version: macos-14}]
+        os: [{ name: ubuntu, version: ubuntu-latest }, { name: macos-intel, version: macos-13 }, { name: macos-arm, version: macos-14 }]
     name: ${{matrix.os.name}}
     runs-on: ${{matrix.os.version}}
+    env:
+      werror: 1
     steps:
-    - uses: actions/checkout@v4
-    - name: work around ASLR+ASAN compatibility
-      run: sudo sysctl -w vm.mmap_rnd_bits=28
-      if: matrix.os.name == 'ubuntu'
-    - name: make test
-      run: |
-        make -j2 config=sanitize test
-        make -j2 config=debug test
-        make -j2 config=release test
-        make -j2 config=coverage test
-    - name: make gltfpack
-      run: make -j2 config=release gltfpack
-    - name: upload coverage
-      run: |
-        find . -type f -name '*.gcno' -exec gcov -p {} +
-        sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
-        bash <(curl -s https://codecov.io/bash) -f './src*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
+      - uses: actions/checkout@v4
+      - name: work around ASLR+ASAN compatibility
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+        if: matrix.os.name == 'ubuntu'
+      - name: make test
+        run: |
+          make -j2 config=sanitize test
+          make -j2 config=debug test
+          make -j2 config=release test
+          make -j2 config=coverage test
+      - name: make gltfpack
+        run: make -j2 config=release gltfpack
+      - name: upload coverage
+        run: |
+          find . -type f -name '*.gcno' -exec gcov -p {} +
+          sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
+          bash <(curl -s https://codecov.io/bash) -f './src*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
 
   windows:
     runs-on: windows-latest
@@ -42,136 +44,162 @@ jobs:
       matrix:
         arch: [Win32, x64]
     steps:
-    - uses: actions/checkout@v4
-    - name: cmake configure
-      run: cmake . -DMESHOPT_BUILD_DEMO=ON -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_WERROR=ON -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>" -A ${{matrix.arch}}
-    - name: cmake test
-      shell: bash # necessary for fail-fast
-      run: |
-        cmake --build . -- -property:Configuration=Debug -verbosity:minimal
-        Debug/demo.exe demo/pirate.obj
-        cmake --build . -- -property:Configuration=Release -verbosity:minimal
-        Release/demo.exe demo/pirate.obj
+      - uses: actions/checkout@v4
+      - name: cmake configure
+        run: cmake . -DMESHOPT_BUILD_DEMO=ON -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_WERROR=ON -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>" -A ${{matrix.arch}}
+      - name: cmake test
+        shell: bash # necessary for fail-fast
+        run: |
+          cmake --build . -- -property:Configuration=Debug -verbosity:minimal
+          Debug/demo.exe demo/pirate.obj
+          cmake --build . -- -property:Configuration=Release -verbosity:minimal
+          Release/demo.exe demo/pirate.obj
 
   nodejs:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
-      with:
-        node-version: '16'
-    - name: test decoder
-      run: node js/meshopt_decoder.test.js
-    - name: test simd decoder
-      run: node --experimental-wasm-simd js/meshopt_decoder.test.js
-    - name: test encoder
-      run: node js/meshopt_encoder.test.js
-    - name: test simplifier
-      run: node js/meshopt_simplifier.test.js
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '16'
+      - name: test decoder
+        run: node js/meshopt_decoder.test.js
+      - name: test simd decoder
+        run: node --experimental-wasm-simd js/meshopt_decoder.test.js
+      - name: test encoder
+        run: node js/meshopt_encoder.test.js
+      - name: test simplifier
+        run: node js/meshopt_simplifier.test.js
+      - name: test clusterizer
+        run: node js/meshopt_clusterizer.test.js
+      - name: check es5
+        run: |
+          npm install -g es-check
+          npx es-check es5 js/meshopt_decoder.js js/meshopt_encoder.js js/meshopt_simplifier.js js/meshopt_clusterizer.js
+          npx es-check --module es5 js/meshopt_decoder.module.js js/meshopt_encoder.module.js js/meshopt_simplifier.module.js js/meshopt_clusterizer.module.js
+          npx es-check es5 gltf/library.js
 
   gltfpack:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/checkout@v4
-      with:
-        repository: KhronosGroup/glTF-Sample-Assets
-        path: glTF-Sample-Assets
-    - name: work around ASLR+ASAN compatibility
-      run: sudo sysctl -w vm.mmap_rnd_bits=28
-    - name: make
-      run: make -j2 config=sanitize gltfpack
-    - name: test
-      run: find glTF-Sample-Assets -name *.gltf -or -name *.glb | xargs -d '\n' ./gltfpack -cc -test
-    - name: pack
-      run: find glTF-Sample-Assets -name *.gltf | grep -v 'glTF-Draco' | xargs -d '\n' -I '{}' ./gltfpack -i '{}' -o '{}pack.gltf'
-    - name: validate
-      run: |
-        curl -sL $VALIDATOR | tar xJ
-        find glTF-Sample-Assets -name *.gltfpack.gltf | xargs -d '\n' -L 1 ./gltf_validator -r -a
-      env:
-        VALIDATOR: https://github.com/KhronosGroup/glTF-Validator/releases/download/2.0.0-dev.3.8/gltf_validator-2.0.0-dev.3.8-linux64.tar.xz
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: KhronosGroup/glTF-Sample-Assets
+          path: glTF-Sample-Assets
+      - name: work around ASLR+ASAN compatibility
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+      - name: make
+        run: make -j2 config=sanitize gltfpack
+      - name: test
+        run: find glTF-Sample-Assets -name '*.gltf' -or -name '*.glb' | xargs -P 2 -L 16 -d '\n' ./gltfpack -cc -test
+      - name: pack
+        run: find glTF-Sample-Assets -name '*.gltf' | grep -v 'glTF-Draco' | xargs -P 2 -L 16 -d '\n' -I '{}' ./gltfpack -i '{}' -o '{}pack.gltf'
+      - name: validate
+        run: |
+          curl -sL $VALIDATOR | tar xJ
+          find glTF-Sample-Assets -name '*.gltfpack.gltf' | xargs -P 2 -L 1 -d '\n' ./gltf_validator -r -a
+        env:
+          VALIDATOR: https://github.com/KhronosGroup/glTF-Validator/releases/download/2.0.0-dev.3.8/gltf_validator-2.0.0-dev.3.8-linux64.tar.xz
 
   gltfpack-js:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
-      with:
-        node-version: '16'
-    - name: install wasi
-      run: |
-        curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sdk-$VERSION.0-linux.tar.gz | tar xz
-        curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/libclang_rt.builtins-wasm32-wasi-$VERSION.0.tar.gz | tar xz -C wasi-sdk-$VERSION.0
-        curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sysroot-$VERSION.0.tar.gz | tar xz -C wasi-sdk-$VERSION.0/share
-        mv wasi-sdk-$VERSION.0 wasi-sdk
-      env:
-        VERSION: 22
-    - name: build
-      run: |
-        make -j2 -B WASI_SDK=wasi-sdk gltf/library.wasm js
-        git status
-    - name: test
-      run: |
-        node gltf/cli.js -i demo/pirate.obj -o pirate.glb -v
-        node gltf/cli.js -i `pwd`/pirate.glb -o pirate-repack.glb -cc -v
-        wc -c pirate.glb pirate-repack.glb
-        node js/meshopt_decoder.test.js
-        node js/meshopt_encoder.test.js
-        node js/meshopt_simplifier.test.js
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '16'
+      - name: install wasi
+        run: |
+          curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sdk-$VERSION.0-linux.tar.gz | tar xz
+          curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/libclang_rt.builtins-wasm32-wasi-$VERSION.0.tar.gz | tar xz -C wasi-sdk-$VERSION.0
+          curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sysroot-$VERSION.0.tar.gz | tar xz -C wasi-sdk-$VERSION.0/share
+          mv wasi-sdk-$VERSION.0 wasi-sdk
+        env:
+          VERSION: 22
+      - name: build
+        run: |
+          make -j2 -B WASI_SDK=wasi-sdk gltf/library.wasm js
+          git status
+      - name: test
+        run: |
+          node gltf/cli.js -i demo/pirate.obj -o pirate.glb -v
+          node gltf/cli.js -i `pwd`/pirate.glb -o pirate-repack.glb -cc -v
+          wc -c pirate.glb pirate-repack.glb
+          node js/meshopt_decoder.test.js
+          node js/meshopt_encoder.test.js
+          node js/meshopt_simplifier.test.js
+          node js/meshopt_clusterizer.test.js
 
   gltfpack-basis:
     runs-on: ubuntu-latest
+    env:
+      werror: 1
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/checkout@v4
-      with:
-        repository: zeux/basis_universal
-        ref: gltfpack
-        path: basis_universal
-    - name: make gltfpack
-      run: make -j2 BASISU=basis_universal gltfpack
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: zeux/basis_universal
+          ref: gltfpack
+          path: basis_universal
+      - name: make gltfpack
+        run: make -j2 BASISU=basis_universal gltfpack
 
   gltfpack-coverage:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/checkout@v4
-      with:
-        repository: zeux/basis_universal
-        ref: gltfpack
-        path: basis_universal
-    - uses: actions/checkout@v4
-      with:
-        repository: KhronosGroup/glTF-Sample-Assets
-        path: glTF-Sample-Assets
-    - name: make
-      run: make -j2 config=coverage BASISU=basis_universal gltfpack
-    - name: test
-      run: |
-        find glTF-Sample-Assets -name *.gltf -or -name *.glb | xargs -d '\n' ./gltfpack -cc -test
-        ./gltfpack -test demo/pirate.obj -si 0.5
-        ./gltfpack -test demo/pirate.obj -sd 0.5 -md 64
-        ./gltfpack -test glTF-Sample-Assets/Models/ABeautifulGame/glTF/ABeautifulGame.gltf -mi -c
-        ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -c
-        ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -cc
-        ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tc
-        ./gltfpack -test glTF-Sample-Assets/Models/CesiumMan/glTF/CesiumMan.gltf -tu -ts 0.6 -tp
-    - name: test output
-      run: |
-        ./gltfpack || true
-        ./gltfpack -h || true
-        ./gltfpack -i glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -o box.glb -vv -r box.json
-        ./gltfpack -i glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -o box.gltf -cf
-    - name: upload coverage
-      run: |
-        find . -type f -name '*.gcno' -exec gcov -p {} +
-        sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
-        bash <(curl -s https://codecov.io/bash) -f './gltf*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: zeux/basis_universal
+          ref: gltfpack
+          path: basis_universal
+      - uses: actions/checkout@v4
+        with:
+          repository: KhronosGroup/glTF-Sample-Assets
+          path: glTF-Sample-Assets
+      - name: make
+        run: make -j2 config=coverage BASISU=basis_universal gltfpack
+      - name: test
+        run: |
+          find glTF-Sample-Assets -name '*.gltf' -or -name '*.glb' | xargs -P 2 -L 16 -d '\n' ./gltfpack -cc -test
+          ./gltfpack -test demo/pirate.obj -si 0.5
+          ./gltfpack -test demo/pirate.obj -si 0.1 -sv -sa
+          ./gltfpack -test demo/pirate.obj -sd 0.5 -md 64
+          ./gltfpack -test demo/pirate.obj -noq
+          ./gltfpack -test demo/pirate.obj -vp 16 -vt 16 -vn 16 -vc 16
+          ./gltfpack -test demo/pirate.obj -vpf -vtf -vnf
+          ./gltfpack -test glTF-Sample-Assets/Models/ABeautifulGame/glTF/ABeautifulGame.gltf -mi -c
+          ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -c
+          ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -cc
+          ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tc
+          ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tc -tq color 10 -tu normal,attrib
+          ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tr
+          ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tc -ts 0.5 -tl 64
+          ./gltfpack -test glTF-Sample-Assets/Models/CesiumMan/glTF/CesiumMan.gltf -tu -ts 0.6 -tp
+          ./gltfpack -test glTF-Sample-Assets/Models/PrimitiveModeNormalsTest/glTF/PrimitiveModeNormalsTest.gltf -si 0.5
+          ./gltfpack -test glTF-Sample-Assets/Models/VertexColorTest/glTF/VertexColorTest.gltf -si 0.5 -sv
+          ./gltfpack -test glTF-Sample-Assets/Models/SimpleMeshes/glTF/SimpleMeshes.gltf -mm
+          ./gltfpack -test glTF-Sample-Assets/Models/SimpleMeshes/glTF/SimpleMeshes.gltf -kn
+          echo newmtl Leather > demo/pirate.mtl
+          echo map_Kd leather.jpg >> demo/pirate.mtl
+          echo map_d leather.jpg >> demo/pirate.mtl
+          ./gltfpack -test demo/pirate.obj
+      - name: test output
+        run: |
+          ./gltfpack || true
+          ./gltfpack -h || true
+          ./gltfpack -i glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -o box.glb -vv -r box.json
+          ./gltfpack -i glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -o box.gltf -cf
+      - name: upload coverage
+        run: |
+          find . -type f -name '*.gcno' -exec gcov -p {} +
+          sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
+          bash <(curl -s https://codecov.io/bash) -f './gltf*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
 
   iphone:
     runs-on: macos-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: make
-      run: make -j2 config=iphone
+      - uses: actions/checkout@v4
+      - name: make
+        run: make -j2 config=iphone

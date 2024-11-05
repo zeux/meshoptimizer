@@ -40,9 +40,30 @@
 #define BASISU_SUPPORT_SSE 1
 #endif
 
+// disable as many transcoder formats as possible to save code size
+#define BASISD_SUPPORT_ASTC 0
+#define BASISD_SUPPORT_ATC 0
+#define BASISD_SUPPORT_BC7_MODE5 0
+#define BASISD_SUPPORT_DXT1 0
+#define BASISD_SUPPORT_DXT5A 0
+#define BASISD_SUPPORT_ETC2_EAC_A8 0
+#define BASISD_SUPPORT_ETC2_EAC_RG11 0
+#define BASISD_SUPPORT_FXT1 0
+#define BASISD_SUPPORT_PVRTC1 0
+#define BASISD_SUPPORT_PVRTC2 0
+
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
+#endif
+
+#include "transcoder/basisu_transcoder.cpp"
+
+#if BASISD_LIB_VERSION >= 150
+#include "encoder/3rdparty/android_astc_decomp.cpp"
+#include "encoder/3rdparty/tinyexr.cpp"
+#include "encoder/basisu_astc_hdr_enc.cpp"
+#undef MINIZ_HEADER_FILE_ONLY // to avoid redefinition warnings
 #endif
 
 #include "encoder/basisu_backend.cpp"
@@ -62,7 +83,6 @@
 #include "encoder/basisu_uastc_enc.cpp"
 #include "encoder/jpgd.cpp"
 #include "encoder/pvpngreader.cpp"
-#include "transcoder/basisu_transcoder.cpp"
 
 #undef CLAMP
 #include "zstd/zstd.c"

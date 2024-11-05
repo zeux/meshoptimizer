@@ -628,7 +628,7 @@ static void decodeFilterExp()
 	assert(memcmp(tail, expected, sizeof(tail)) == 0);
 }
 
-void encodeFilterOct8()
+static void encodeFilterOct8()
 {
 	const float data[4 * 4] = {
 	    1, 0, 0, 0,
@@ -657,7 +657,7 @@ void encodeFilterOct8()
 		assert(fabsf(decoded[i] / 127.f - data[i]) < 1e-2f);
 }
 
-void encodeFilterOct12()
+static void encodeFilterOct12()
 {
 	const float data[4 * 4] = {
 	    1, 0, 0, 0,
@@ -686,7 +686,7 @@ void encodeFilterOct12()
 		assert(fabsf(decoded[i] / 32767.f - data[i]) < 1e-3f);
 }
 
-void encodeFilterQuat12()
+static void encodeFilterQuat12()
 {
 	const float data[4 * 4] = {
 	    1, 0, 0, 0,
@@ -728,7 +728,7 @@ void encodeFilterQuat12()
 	}
 }
 
-void encodeFilterExp()
+static void encodeFilterExp()
 {
 	const float data[4] = {
 	    1,
@@ -794,21 +794,113 @@ void encodeFilterExp()
 	}
 }
 
-void encodeFilterExpZero()
+static void encodeFilterExpZero()
 {
-	const float data = 0.f;
-	const unsigned int expected = 0xf2000000;
+	const float data[4] = {
+	    0.f,
+	    -0.f,
+	    1.1754944e-38f,
+	    -1.1754944e-38f,
+	};
+	const unsigned int expected[4] = {
+	    0xf2000000,
+	    0xf2000000,
+	    0x8e000000,
+	    0x8e000000,
+	};
 
-	unsigned int encoded;
-	meshopt_encodeFilterExp(&encoded, 1, 4, 15, &data, meshopt_EncodeExpSeparate);
+	unsigned int encoded[4];
+	meshopt_encodeFilterExp(encoded, 4, 4, 15, data, meshopt_EncodeExpSeparate);
 
-	assert(encoded == expected);
+	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
 
-	float decoded;
-	memcpy(&decoded, &encoded, sizeof(decoded));
-	meshopt_decodeFilterExp(&decoded, 1, 4);
+	float decoded[4];
+	memcpy(decoded, encoded, sizeof(decoded));
+	meshopt_decodeFilterExp(&decoded, 4, 4);
 
-	assert(decoded == data);
+	for (size_t i = 0; i < 4; ++i)
+		assert(decoded[i] == 0);
+}
+
+static void encodeFilterExpAlias()
+{
+	const float data[4] = {
+	    1,
+	    -23.4f,
+	    -0.1f,
+	    11.0f,
+	};
+
+	// separate exponents: each component gets its own value
+	const unsigned int expected1[4] = {
+	    0xf3002000,
+	    0xf7ffd133,
+	    0xefffcccd,
+	    0xf6002c00,
+	};
+
+	// shared exponents (vector): all components of each vector get the same value
+	const unsigned int expected2[4] = {
+	    0xf7000200,
+	    0xf7ffd133,
+	    0xf6ffff9a,
+	    0xf6002c00,
+	};
+
+	// shared exponents (component): each component gets the same value across all vectors
+	const unsigned int expected3[4] = {
+	    0xf3002000,
+	    0xf7ffd133,
+	    0xf3fffccd,
+	    0xf7001600,
+	};
+
+	unsigned int encoded1[4];
+	memcpy(encoded1, data, sizeof(data));
+	meshopt_encodeFilterExp(encoded1, 2, 8, 15, reinterpret_cast<float*>(encoded1), meshopt_EncodeExpSeparate);
+
+	unsigned int encoded2[4];
+	memcpy(encoded2, data, sizeof(data));
+	meshopt_encodeFilterExp(encoded2, 2, 8, 15, reinterpret_cast<float*>(encoded2), meshopt_EncodeExpSharedVector);
+
+	unsigned int encoded3[4];
+	memcpy(encoded3, data, sizeof(data));
+	meshopt_encodeFilterExp(encoded3, 2, 8, 15, reinterpret_cast<float*>(encoded3), meshopt_EncodeExpSharedComponent);
+
+	assert(memcmp(encoded1, expected1, sizeof(expected1)) == 0);
+	assert(memcmp(encoded2, expected2, sizeof(expected2)) == 0);
+	assert(memcmp(encoded3, expected3, sizeof(expected3)) == 0);
+}
+
+static void encodeFilterExpClamp()
+{
+	const float data[4] = {
+	    1,
+	    -23.4f,
+	    -0.1f,
+	    11.0f,
+	};
+
+	// separate exponents: each component gets its own value
+	// note: third value is exponent clamped
+	const unsigned int expected[4] = {
+	    0xf3002000,
+	    0xf7ffd133,
+	    0xf2fff99a,
+	    0xf6002c00,
+	};
+
+	unsigned int encoded[4];
+	meshopt_encodeFilterExp(encoded, 2, 8, 15, data, meshopt_EncodeExpClamped);
+
+	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+
+	float decoded[4];
+	memcpy(decoded, encoded, sizeof(decoded));
+	meshopt_decodeFilterExp(decoded, 2, 8);
+
+	for (size_t i = 0; i < 4; ++i)
+		assert(fabsf(decoded[i] - data[i]) < 1e-3f);
 }
 
 static void clusterBoundsDegenerate()
@@ -909,39 +1001,19 @@ static void simplify()
 	// 1 2
 	// 3 4 5
 	unsigned int ib[] = {
-	    0,
-	    2,
-	    1,
-	    1,
-	    2,
-	    3,
-	    3,
-	    2,
-	    4,
-	    2,
-	    5,
-	    4,
+	    0, 2, 1,
+	    1, 2, 3,
+	    3, 2, 4,
+	    2, 5, 4, // clang-format :-/
 	};
 
 	float vb[] = {
-	    0,
-	    4,
-	    0,
-	    0,
-	    1,
-	    0,
-	    2,
-	    2,
-	    0,
-	    0,
-	    0,
-	    0,
-	    1,
-	    0,
-	    0,
-	    4,
-	    0,
-	    0,
+	    0, 4, 0,
+	    0, 1, 0,
+	    2, 2, 0,
+	    0, 0, 0,
+	    1, 0, 0,
+	    4, 0, 0, // clang-format :-/
 	};
 
 	unsigned int expected[] = {
@@ -1136,7 +1208,7 @@ static void simplifyLockBorder()
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 }
 
-static void simplifyAttr()
+static void simplifyAttr(bool skip_g)
 {
 	float vb[8 * 3][6];
 
@@ -1151,7 +1223,7 @@ static void simplifyAttr()
 		{
 			vb[y * 3 + x][0] = float(x);
 			vb[y * 3 + x][1] = float(y);
-			vb[y * 3 + x][2] = 0.03f * x;
+			vb[y * 3 + x][2] = 0.03f * x + 0.03f * (y % 2) + (x == 2 && y == 7) * 0.03f;
 			vb[y * 3 + x][3] = r;
 			vb[y * 3 + x][4] = g;
 			vb[y * 3 + x][5] = b;
@@ -1173,12 +1245,20 @@ static void simplifyAttr()
 		}
 	}
 
-	float attr_weights[3] = {0.01f, 0.01f, 0.01f};
+	float attr_weights[3] = {0.5f, skip_g ? 0.f : 0.5f, 0.5f};
 
+	// *0  1   *2
+	//  3  4    5
+	//  6  7    8
+	// *9  10 *11
+	// *12 13 *14
+	//  15 16  17
+	//  18 19  20
+	// *21 22 *23
 	unsigned int expected[3][6] = {
-	    {0, 2, 9, 9, 2, 11},
+	    {0, 2, 11, 0, 11, 9},
 	    {9, 11, 12, 12, 11, 14},
-	    {12, 14, 21, 21, 14, 23},
+	    {12, 14, 23, 12, 23, 21},
 	};
 
 	assert(meshopt_simplifyWithAttributes(ib[0], ib[0], 7 * 2 * 6, vb[0], 8 * 3, 6 * sizeof(float), vb[0] + 3, 6 * sizeof(float), attr_weights, 3, NULL, 6 * 3, 1e-2f) == 18);
@@ -1233,6 +1313,78 @@ static void simplifyLockFlags()
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 }
 
+static void simplifyLockFlagsSeam()
+{
+	float vb[] = {
+	    0, 0, 0,
+	    0, 1, 0,
+	    0, 1, 0,
+	    0, 2, 0,
+	    1, 0, 0,
+	    1, 1, 0,
+	    1, 1, 0,
+	    1, 2, 0,
+	    2, 0, 0,
+	    2, 1, 0,
+	    2, 1, 0,
+	    2, 2, 0, // clang-format :-/
+	};
+
+	unsigned char lock0[12] = {
+	    1, 0, 0, 1,
+	    0, 0, 0, 0,
+	    1, 0, 0, 1, // clang-format :-/
+	};
+
+	unsigned char lock1[12] = {
+	    1, 0, 0, 1,
+	    1, 0, 0, 1,
+	    1, 0, 0, 1, // clang-format :-/
+	};
+
+	unsigned char lock2[12] = {
+	    1, 0, 1, 1,
+	    1, 0, 1, 1,
+	    1, 0, 1, 1, // clang-format :-/
+	};
+
+	unsigned char lock3[12] = {
+	    1, 1, 0, 1,
+	    1, 1, 0, 1,
+	    1, 1, 0, 1, // clang-format :-/
+	};
+
+	// 0 1-2 3
+	// 4 5-6 7
+	// 8 9-10 11
+
+	unsigned int ib[] = {
+	    0, 1, 4,
+	    4, 1, 5,
+	    4, 5, 8,
+	    8, 5, 9,
+	    2, 3, 6,
+	    6, 3, 7,
+	    6, 7, 10,
+	    10, 7, 11, // clang-format :-/
+	};
+
+	unsigned int res[24];
+	// with no locks, we should be able to collapse the entire mesh (vertices 1-2 and 9-10 are locked but others can move towards them)
+	assert(meshopt_simplifyWithAttributes(res, ib, 24, vb, 12, 12, NULL, 0, NULL, 0, NULL, 0, 1.f, 0) == 0);
+
+	// with corners locked, we should get two quads
+	assert(meshopt_simplifyWithAttributes(res, ib, 24, vb, 12, 12, NULL, 0, NULL, 0, lock0, 0, 1.f, 0) == 12);
+
+	// with both sides locked, we can only collapse the seam spine
+	assert(meshopt_simplifyWithAttributes(res, ib, 24, vb, 12, 12, NULL, 0, NULL, 0, lock1, 0, 1.f, 0) == 18);
+
+	// with seam spine locked, we can collapse nothing; note that we intentionally test two different lock configurations
+	// they each lock only one side of the seam spine, which should be equivalent
+	assert(meshopt_simplifyWithAttributes(res, ib, 24, vb, 12, 12, NULL, 0, NULL, 0, lock2, 0, 1.f, 0) == 24);
+	assert(meshopt_simplifyWithAttributes(res, ib, 24, vb, 12, 12, NULL, 0, NULL, 0, lock3, 0, 1.f, 0) == 24);
+}
+
 static void simplifySparse()
 {
 	float vb[] = {
@@ -1260,7 +1412,7 @@ static void simplifySparse()
 	};
 
 	float aw[] = {
-	    0.2f};
+	    0.5f};
 
 	unsigned char lock[9] = {
 	    8, 1, 8,
@@ -1338,6 +1490,202 @@ static void simplifyErrorAbsolute()
 	assert(fabsf(error - 0.85f) < 0.01f);
 }
 
+static void simplifySeam()
+{
+	// xyz+attr
+	float vb[] = {
+	    0, 0, 0, 0,
+	    0, 1, 0, 0,
+	    0, 1, 0, 1,
+	    0, 2, 0, 1,
+	    1, 0, 0, 0,
+	    1, 1, 0.3f, 0,
+	    1, 1, 0.3f, 1,
+	    1, 2, 0, 1,
+	    2, 0, 0, 0,
+	    2, 1, 0.1f, 0,
+	    2, 1, 0.1f, 1,
+	    2, 2, 0, 1,
+	    3, 0, 0, 0,
+	    3, 1, 0, 0,
+	    3, 1, 0, 1,
+	    3, 2, 0, 1, // clang-format :-/
+	};
+
+	// 0   1-2   3
+	// 4   5-6   7
+	// 8   9-10 11
+	// 12 13-14 15
+
+	unsigned int ib[] = {
+	    0, 1, 4,
+	    4, 1, 5,
+	    2, 3, 6,
+	    6, 3, 7,
+	    4, 5, 8,
+	    8, 5, 9,
+	    6, 7, 10,
+	    10, 7, 11,
+	    8, 9, 12,
+	    12, 9, 13,
+	    10, 11, 14,
+	    14, 11, 15, // clang-format :-/
+	};
+
+	// note: vertices 1-2 and 13-14 are classified as locked, because they are on a seam & a border
+	// 0   1-2   3
+	//     5-6
+	//     9-10
+	// 12 13-14 15
+	unsigned int expected[] = {
+	    0, 1, 13,
+	    2, 3, 14,
+	    0, 13, 12,
+	    14, 3, 15, // clang-format :-/
+	};
+
+	unsigned int res[36];
+	float error = 0.f;
+
+	assert(meshopt_simplify(res, ib, 36, vb, 16, 16, 12, 1.f, 0, &error) == 12);
+	assert(memcmp(res, expected, sizeof(expected)) == 0);
+	assert(fabsf(error - 0.09f) < 0.01f); // note: the error is not zero because there is a difference in height between the seam vertices
+
+	float aw = 1;
+	assert(meshopt_simplifyWithAttributes(res, ib, 36, vb, 16, 16, vb + 3, 16, &aw, 1, NULL, 12, 2.f, 0, &error) == 12);
+	assert(memcmp(res, expected, sizeof(expected)) == 0);
+	assert(fabsf(error - 0.09f) < 0.01f); // note: this is the same error as above because the attribute is constant on either side of the seam
+}
+
+static void simplifySeamFake()
+{
+	// xyz+attr
+	float vb[] = {
+	    0, 0, 0, 0,
+	    1, 0, 0, 1,
+	    1, 0, 0, 2,
+	    0, 0, 0, 3, // clang-format :-/
+	};
+
+	unsigned int ib[] = {
+	    0, 1, 2,
+	    2, 1, 3, // clang-format :-/
+	};
+
+	assert(meshopt_simplify(ib, ib, 6, vb, 4, 16, 0, 1.f, 0, NULL) == 6);
+}
+
+static void simplifyDebug()
+{
+	// 0
+	// 1 2
+	// 3 4 5
+	unsigned int ib[] = {
+	    0, 2, 1,
+	    1, 2, 3,
+	    3, 2, 4,
+	    2, 5, 4, // clang-format :-/
+	};
+
+	float vb[] = {
+	    0, 4, 0,
+	    0, 1, 0,
+	    2, 2, 0,
+	    0, 0, 0,
+	    1, 0, 0,
+	    4, 0, 0, // clang-format :-/
+	};
+
+	unsigned int expected[] = {
+	    0 | (9u << 28),
+	    5 | (9u << 28),
+	    3 | (9u << 28),
+	};
+
+	const unsigned int meshopt_SimplifyInternalDebug = 1 << 30;
+
+	float error;
+	assert(meshopt_simplify(ib, ib, 12, vb, 6, 12, 3, 1e-2f, meshopt_SimplifyInternalDebug, &error) == 3);
+	assert(error == 0.f);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+}
+
+static void simplifyPrune()
+{
+	// 0
+	// 1 2
+	// 3 4 5
+	// +
+	// 6 7 8 (same position)
+	unsigned int ib[] = {
+	    0, 2, 1,
+	    1, 2, 3,
+	    3, 2, 4,
+	    2, 5, 4,
+	    6, 7, 8, // clang-format :-/
+	};
+
+	float vb[] = {
+	    0, 4, 0,
+	    0, 1, 0,
+	    2, 2, 0,
+	    0, 0, 0,
+	    1, 0, 0,
+	    4, 0, 0,
+	    1, 1, 1,
+	    1, 1, 1,
+	    1, 1, 1, // clang-format :-/
+	};
+
+	unsigned int expected[] = {
+	    0,
+	    5,
+	    3,
+	};
+
+	float error;
+	assert(meshopt_simplify(ib, ib, 15, vb, 9, 12, 3, 1e-2f, meshopt_SimplifyPrune, &error) == 3);
+	assert(error == 0.f);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+
+	// re-run prune with and without sparsity on a small subset to make sure the component code correctly handles sparse subsets
+	assert(meshopt_simplify(ib, ib, 3, vb, 9, 12, 3, 1e-2f, meshopt_SimplifyPrune, &error) == 3);
+	assert(meshopt_simplify(ib, ib, 3, vb, 9, 12, 3, 1e-2f, meshopt_SimplifyPrune | meshopt_SimplifySparse, &error) == 3);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+}
+
+static void simplifyPruneCleanup()
+{
+	unsigned int ib[] = {
+	    0, 1, 2,
+	    3, 4, 5,
+	    6, 7, 8, // clang-format :-/
+	};
+
+	float vb[] = {
+	    0, 0, 0,
+	    0, 1, 0,
+	    1, 0, 0,
+	    0, 0, 1,
+	    0, 2, 1,
+	    2, 0, 1,
+	    0, 0, 2,
+	    0, 4, 2,
+	    4, 0, 2, // clang-format :-/
+	};
+
+	unsigned int expected[] = {
+	    6,
+	    7,
+	    8,
+	};
+
+	float error;
+	assert(meshopt_simplify(ib, ib, 9, vb, 9, 12, 3, 1.f, meshopt_SimplifyLockBorder | meshopt_SimplifyPrune, &error) == 3);
+	assert(fabsf(error - 0.37f) < 0.01f);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+}
+
 static void adjacency()
 {
 	// 0 1/4
@@ -1394,6 +1742,42 @@ static void tessellation()
 	};
 
 	assert(memcmp(tessib, expected, sizeof(expected)) == 0);
+}
+
+static void provoking()
+{
+	// 0 1 2
+	// 3 4 5
+	const unsigned int ib[] = {
+	    0, 1, 3,
+	    3, 1, 4,
+	    1, 2, 4,
+	    4, 2, 5,
+	    0, 2, 4,
+	    // clang-format :-/
+	};
+
+	unsigned int pib[15];
+	unsigned int pre[6 + 5]; // limit is vertex count + triangle count
+	size_t res = meshopt_generateProvokingIndexBuffer(pib, pre, ib, 15, 6);
+
+	unsigned int expectedib[] = {
+	    0, 5, 1,
+	    1, 4, 0,
+	    2, 4, 1,
+	    3, 4, 2,
+	    4, 5, 2,
+	    // clang-format :-/
+	};
+
+	unsigned int expectedre[] = {
+	    3, 1, 2, 5, 4, 0,
+	    // clang-format :-/
+	};
+
+	assert(res == 6);
+	assert(memcmp(pib, expectedib, sizeof(expectedib)) == 0);
+	assert(memcmp(pre, expectedre, sizeof(expectedre)) == 0);
 }
 
 static void quantizeFloat()
@@ -1536,6 +1920,8 @@ void runTests()
 	encodeFilterQuat12();
 	encodeFilterExp();
 	encodeFilterExpZero();
+	encodeFilterExpAlias();
+	encodeFilterExpClamp();
 
 	clusterBoundsDegenerate();
 
@@ -1551,13 +1937,21 @@ void runTests()
 	simplifyScale();
 	simplifyDegenerate();
 	simplifyLockBorder();
-	simplifyAttr();
+	simplifyAttr(/* skip_g= */ false);
+	simplifyAttr(/* skip_g= */ true);
 	simplifyLockFlags();
+	simplifyLockFlagsSeam();
 	simplifySparse();
 	simplifyErrorAbsolute();
+	simplifySeam();
+	simplifySeamFake();
+	simplifyDebug();
+	simplifyPrune();
+	simplifyPruneCleanup();
 
 	adjacency();
 	tessellation();
+	provoking();
 
 	quantizeFloat();
 	quantizeHalf();

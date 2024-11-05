@@ -531,6 +531,8 @@ static cgltf_result decompressMeshopt(cgltf_data* data)
 		if (!result)
 			return cgltf_result_out_of_memory;
 
+		data->buffer_views[i].data = result;
+
 		int rc = -1;
 
 		switch (mc->mode)
@@ -571,8 +573,6 @@ static cgltf_result decompressMeshopt(cgltf_data* data)
 		default:
 			break;
 		}
-
-		data->buffer_views[i].data = result;
 	}
 
 	return cgltf_result_success;
@@ -621,7 +621,7 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 	cgltf_options options = {};
 	cgltf_result result = cgltf_parse_file(&options, path, &data);
 
-	if (data && !data->bin)
+	if (result == cgltf_result_success && !data->bin)
 		freeFile(data);
 
 	result = (result == cgltf_result_success) ? cgltf_load_buffers(&options, data, path) : result;
