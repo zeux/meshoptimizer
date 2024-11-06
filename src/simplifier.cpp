@@ -1055,11 +1055,15 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 			// note: seam edges need to aggregate attribute errors between primary and secondary edges, as attribute quadrics are separate
 			if (vertex_kind[i0] == Kind_Seam)
 			{
+				// for seam collapses we need to find the seam pair; this is a bit tricky since we need to rely on edge loops as target vertex may be locked (and thus have more than two wedges)
 				unsigned int s0 = wedge[i0];
 				unsigned int s1 = loop[i0] == i1 ? loopback[s0] : loop[s0];
 
 				assert(s0 != i0 && wedge[s0] == i0);
 				assert(s1 != ~0u && remap[s1] == remap[i1]);
+
+				// note: this should never happen due to the assertion above, but when disabled if we ever hit this case we'll get a memory safety issue; for now play it safe
+				s1 = (s1 != ~0u) ? s1 : wedge[i1];
 
 				float se = quadricError(attribute_quadrics[s0], &attribute_gradients[s0 * attribute_count], attribute_count, vertex_positions[s1], &vertex_attributes[s1 * attribute_count]);
 
@@ -1220,7 +1224,7 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		}
 		else if (kind == Kind_Seam)
 		{
-			// for seam collapses we need to move the seam pair together; this is a bit tricky to compute since we need to rely on edge loops as target vertex may be locked (and thus have more than two wedges)
+			// for seam collapses we need to move the seam pair together; this is a bit tricky since we need to rely on edge loops as target vertex may be locked (and thus have more than two wedges)
 			unsigned int s0 = wedge[i0];
 			unsigned int s1 = loop[i0] == i1 ? loopback[s0] : loop[s0];
 			assert(s0 != i0 && wedge[s0] == i0);
