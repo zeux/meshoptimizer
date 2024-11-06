@@ -1026,7 +1026,7 @@ static size_t pickEdgeCollapses(Collapse* collapses, size_t collapse_capacity, c
 	return collapse_count;
 }
 
-static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const Vector3* vertex_positions, const float* vertex_attributes, const Quadric* vertex_quadrics, const Quadric* attribute_quadrics, const QuadricGrad* attribute_gradients, size_t attribute_count, const unsigned int* remap)
+static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const Vector3* vertex_positions, const float* vertex_attributes, const Quadric* vertex_quadrics, const Quadric* attribute_quadrics, const QuadricGrad* attribute_gradients, size_t attribute_count, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, const unsigned int* loop, const unsigned int* loopback)
 {
 	for (size_t i = 0; i < collapse_count; ++i)
 	{
@@ -1049,9 +1049,27 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 
 		if (attribute_count)
 		{
-			// note: ideally we would evaluate max/avg of attribute errors for seam edges, but it's not clear if it's worth the extra cost
-			ei += quadricError(attribute_quadrics[i0], &attribute_gradients[i0 * attribute_count], attribute_count, vertex_positions[i1], &vertex_attributes[i1 * attribute_count]);
-			ej += quadricError(attribute_quadrics[j0], &attribute_gradients[j0 * attribute_count], attribute_count, vertex_positions[j1], &vertex_attributes[j1 * attribute_count]);
+			float ai = quadricError(attribute_quadrics[i0], &attribute_gradients[i0 * attribute_count], attribute_count, vertex_positions[i1], &vertex_attributes[i1 * attribute_count]);
+			float aj = quadricError(attribute_quadrics[j0], &attribute_gradients[j0 * attribute_count], attribute_count, vertex_positions[j1], &vertex_attributes[j1 * attribute_count]);
+
+			// note: seam edges use a maximum of attribute errors between primary and secondary edges, which is necessary to avoid collapses introducing hidden errors
+			if (vertex_kind[i0] == Kind_Seam)
+			{
+				unsigned int s0 = wedge[i0];
+				unsigned int s1 = loop[i0] == i1 ? loopback[s0] : loop[s0];
+
+				assert(s0 != i0 && wedge[s0] == i0);
+				assert(s1 != ~0u && remap[s1] == remap[i1]);
+
+				float si = quadricError(attribute_quadrics[s0], &attribute_gradients[s0 * attribute_count], attribute_count, vertex_positions[s1], &vertex_attributes[s1 * attribute_count]);
+				float sj = c.bidi ? quadricError(attribute_quadrics[s1], &attribute_gradients[s1 * attribute_count], attribute_count, vertex_positions[s0], &vertex_attributes[s0 * attribute_count]) : si;
+
+				ai = ai < si ? si : ai;
+				aj = aj < sj ? sj : aj;
+			}
+
+			ei += ai;
+			ej += aj;
 		}
 
 		// pick edge direction with minimal error
@@ -1964,7 +1982,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 		printf("pass %d:%c", int(pass_count++), TRACE >= 2 ? '\n' : ' ');
 #endif
 
-		rankEdgeCollapses(edge_collapses, edge_collapse_count, vertex_positions, vertex_attributes, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, remap);
+		rankEdgeCollapses(edge_collapses, edge_collapse_count, vertex_positions, vertex_attributes, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, remap, wedge, vertex_kind, loop, loopback);
 
 		sortEdgeCollapses(collapse_order, edge_collapses, edge_collapse_count);
 
