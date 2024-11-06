@@ -1049,10 +1049,10 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 
 		if (attribute_count)
 		{
-			float ai = quadricError(attribute_quadrics[i0], &attribute_gradients[i0 * attribute_count], attribute_count, vertex_positions[i1], &vertex_attributes[i1 * attribute_count]);
-			float aj = quadricError(attribute_quadrics[j0], &attribute_gradients[j0 * attribute_count], attribute_count, vertex_positions[j1], &vertex_attributes[j1 * attribute_count]);
+			ei += quadricError(attribute_quadrics[i0], &attribute_gradients[i0 * attribute_count], attribute_count, vertex_positions[i1], &vertex_attributes[i1 * attribute_count]);
+			ej += quadricError(attribute_quadrics[j0], &attribute_gradients[j0 * attribute_count], attribute_count, vertex_positions[j1], &vertex_attributes[j1 * attribute_count]);
 
-			// note: seam edges use a maximum of attribute errors between primary and secondary edges, which is necessary to avoid collapses introducing hidden errors
+			// note: seam edges need to aggregate attribute errors between primary and secondary edges, as attribute quadrics are separate
 			if (vertex_kind[i0] == Kind_Seam)
 			{
 				unsigned int s0 = wedge[i0];
@@ -1061,15 +1061,11 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 				assert(s0 != i0 && wedge[s0] == i0);
 				assert(s1 != ~0u && remap[s1] == remap[i1]);
 
-				float si = quadricError(attribute_quadrics[s0], &attribute_gradients[s0 * attribute_count], attribute_count, vertex_positions[s1], &vertex_attributes[s1 * attribute_count]);
-				float sj = c.bidi ? quadricError(attribute_quadrics[s1], &attribute_gradients[s1 * attribute_count], attribute_count, vertex_positions[s0], &vertex_attributes[s0 * attribute_count]) : si;
+				float se = quadricError(attribute_quadrics[s0], &attribute_gradients[s0 * attribute_count], attribute_count, vertex_positions[s1], &vertex_attributes[s1 * attribute_count]);
 
-				ai = ai < si ? si : ai;
-				aj = aj < sj ? sj : aj;
+				ei += se;
+				ej += c.bidi ? quadricError(attribute_quadrics[s1], &attribute_gradients[s1 * attribute_count], attribute_count, vertex_positions[s0], &vertex_attributes[s0 * attribute_count]) : se;
 			}
-
-			ei += ai;
-			ej += aj;
 		}
 
 		// pick edge direction with minimal error
