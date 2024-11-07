@@ -1575,6 +1575,61 @@ static void simplifySeamFake()
 	assert(meshopt_simplify(ib, ib, 6, vb, 4, 16, 0, 1.f, 0, NULL) == 6);
 }
 
+static void simplifySeamAttr()
+{
+	// xyz+attr
+	float vb[] = {
+	    0, 0, 0, 0,
+	    0, 1, 0, 0,
+	    0, 1, 0, 0,
+	    0, 2, 0, 0,
+	    1, 0, 0, 1,
+	    1, 1, 0, 1,
+	    1, 1, 0, 1,
+	    1, 2, 0, 1,
+	    4, 0, 0, 2,
+	    4, 1, 0, 2,
+	    4, 1, 0, 2,
+	    4, 2, 0, 2, // clang-format :-/
+	};
+
+	// 0   1-2   3
+	// 4   5-6   7
+	// 8   9-10 11
+
+	unsigned int ib[] = {
+	    0, 1, 4,
+	    4, 1, 5,
+	    2, 3, 6,
+	    6, 3, 7,
+	    4, 5, 8,
+	    8, 5, 9,
+	    6, 7, 10,
+	    10, 7, 11, // clang-format :-/
+	};
+
+	// note: vertices 1-2 and 9-10 are classified as locked, because they are on a seam & a border
+	// 0   1-2   3
+	// 4         7
+	// 8   9-10 11
+	unsigned int expected[] = {
+	    0, 1, 4,
+	    2, 3, 7,
+	    4, 1, 8,
+	    8, 1, 9,
+	    2, 7, 10,
+	    10, 7, 11, // clang-format :-/
+	};
+
+	unsigned int res[24];
+	float error = 0.f;
+
+	float aw = 1;
+	assert(meshopt_simplifyWithAttributes(res, ib, 24, vb, 12, 16, vb + 3, 16, &aw, 1, NULL, 12, 2.f, meshopt_SimplifyLockBorder, &error) == 18);
+	assert(memcmp(res, expected, sizeof(expected)) == 0);
+	assert(fabsf(error - 0.35f) < 0.01f);
+}
+
 static void simplifyDebug()
 {
 	// 0
@@ -1945,6 +2000,7 @@ void runTests()
 	simplifyErrorAbsolute();
 	simplifySeam();
 	simplifySeamFake();
+	simplifySeamAttr();
 	simplifyDebug();
 	simplifyPrune();
 	simplifyPruneCleanup();
