@@ -1041,7 +1041,7 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 		unsigned int j1 = c.bidi ? i0 : i1;
 
 		float ei = quadricError(vertex_quadrics[remap[i0]], vertex_positions[i1]);
-		float ej = quadricError(vertex_quadrics[remap[j0]], vertex_positions[j1]);
+		float ej = c.bidi ? quadricError(vertex_quadrics[remap[j0]], vertex_positions[j1]) : FLT_MAX;
 
 #if TRACE >= 3
 		float di = ei, dj = ej;
@@ -1050,7 +1050,7 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 		if (attribute_count)
 		{
 			ei += quadricError(attribute_quadrics[i0], &attribute_gradients[i0 * attribute_count], attribute_count, vertex_positions[i1], &vertex_attributes[i1 * attribute_count]);
-			ej += quadricError(attribute_quadrics[j0], &attribute_gradients[j0 * attribute_count], attribute_count, vertex_positions[j1], &vertex_attributes[j1 * attribute_count]);
+			ej += c.bidi ? quadricError(attribute_quadrics[j0], &attribute_gradients[j0 * attribute_count], attribute_count, vertex_positions[j1], &vertex_attributes[j1 * attribute_count]) : 0;
 
 			// note: seam edges need to aggregate attribute errors between primary and secondary edges, as attribute quadrics are separate
 			if (vertex_kind[i0] == Kind_Seam)
@@ -1065,10 +1065,8 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 				// note: this should never happen due to the assertion above, but when disabled if we ever hit this case we'll get a memory safety issue; for now play it safe
 				s1 = (s1 != ~0u) ? s1 : wedge[i1];
 
-				float se = quadricError(attribute_quadrics[s0], &attribute_gradients[s0 * attribute_count], attribute_count, vertex_positions[s1], &vertex_attributes[s1 * attribute_count]);
-
-				ei += se;
-				ej += c.bidi ? quadricError(attribute_quadrics[s1], &attribute_gradients[s1 * attribute_count], attribute_count, vertex_positions[s0], &vertex_attributes[s0 * attribute_count]) : se;
+				ei += quadricError(attribute_quadrics[s0], &attribute_gradients[s0 * attribute_count], attribute_count, vertex_positions[s1], &vertex_attributes[s1 * attribute_count]);
+				ej += c.bidi ? quadricError(attribute_quadrics[s1], &attribute_gradients[s1 * attribute_count], attribute_count, vertex_positions[s0], &vertex_attributes[s0 * attribute_count]) : 0;
 			}
 		}
 
