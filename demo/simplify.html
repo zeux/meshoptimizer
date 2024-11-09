@@ -47,6 +47,8 @@
 			<div id="ratio"></div>
 		</div>
 
+		<input type="file" id="fileInput" style="display: none" accept=".obj,.glb" />
+
 		<script type="module">
 			import * as THREE from 'three';
 			import { GLTFLoader } from 'three-examples/loaders/GLTFLoader.js';
@@ -85,8 +87,7 @@
 				},
 
 				loadFile: function () {
-					var input = document.createElement('input');
-					input.type = 'file';
+					var input = document.getElementById('fileInput');
 					input.onchange = function () {
 						var file = input.files[0];
 						var uri = URL.createObjectURL(file);
