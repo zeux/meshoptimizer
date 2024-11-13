@@ -52,6 +52,8 @@ struct Mesh
 	cgltf_material* material;
 	cgltf_skin* skin;
 
+	cgltf_extras extras;
+
 	cgltf_primitive_type type;
 
 	std::vector<Stream> streams;

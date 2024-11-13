@@ -238,6 +238,9 @@ static bool canMergeMeshes(const Mesh& lhs, const Mesh& rhs, const Settings& set
 	if (lhs.streams.size() != rhs.streams.size())
 		return false;
 
+	if (lhs.extras.data && rhs.extras.data && strcmp(lhs.extras.data, rhs.extras.data))
+		return false;
+
 	for (size_t i = 0; i < lhs.streams.size(); ++i)
 		if (lhs.streams[i].type != rhs.streams[i].type || lhs.streams[i].index != rhs.streams[i].index || lhs.streams[i].target != rhs.streams[i].target)
 			return false;

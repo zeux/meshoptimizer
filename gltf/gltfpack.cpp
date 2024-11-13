@@ -661,6 +661,9 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 				append(json_meshes, "]}}");
 			}
 
+			if (settings.keep_extras)
+				writeExtras(json_meshes, prim.extras);
+
 			append(json_meshes, "}");
 		}
 
