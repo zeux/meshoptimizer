@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.5...3.30)
 
 if(POLICY CMP0077)
     cmake_policy(SET CMP0077 NEW) # Enables override of options from parent CMakeLists.txt
@@ -138,19 +138,18 @@ endif()
 
 if(MESHOPT_INSTALL)
 	include(GNUInstallDirs)
-	
+
 	install(TARGETS ${TARGETS} EXPORT meshoptimizerTargets
 	    COMPONENT meshoptimizer
 	    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 	    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 	    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 	    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-	
+
 	install(FILES src/meshoptimizer.h COMPONENT meshoptimizer DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 	install(EXPORT meshoptimizerTargets COMPONENT meshoptimizer DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/meshoptimizer NAMESPACE meshoptimizer::)
-	
-	# TARGET_PDB_FILE is available since 3.1
-	if(MSVC AND NOT (CMAKE_VERSION VERSION_LESS "3.1"))
+
+	if(MSVC)
 	    foreach(TARGET ${TARGETS})
 	        get_target_property(TARGET_TYPE ${TARGET} TYPE)
 	        if(NOT ${TARGET_TYPE} STREQUAL "STATIC_LIBRARY")
@@ -158,15 +157,15 @@ if(MESHOPT_INSTALL)
 	        endif()
 	    endforeach(TARGET)
 	endif()
-	
+
 	include(CMakePackageConfigHelpers)
-	
+
 	configure_package_config_file(config.cmake.in
 	    ${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfig.cmake
 	    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/meshoptimizer NO_SET_AND_CHECK_MACRO)
-	
+
 	write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfigVersion.cmake COMPATIBILITY ExactVersion)
-	
+
 	install(FILES
 	    ${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfig.cmake
 	    ${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfigVersion.cmake
