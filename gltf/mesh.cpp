@@ -762,7 +762,7 @@ static void simplifyAttributes(std::vector<float>& attrs, float* attrw, size_t s
 	}
 }
 
-static void simplifyUvSplit(Mesh& mesh)
+static void simplifyUvSplit(Mesh& mesh, std::vector<unsigned int>& remap)
 {
 	assert(mesh.type == cgltf_primitive_type_triangles);
 	assert(!mesh.indices.empty());
@@ -798,10 +798,17 @@ static void simplifyUvSplit(Mesh& mesh)
 	std::vector<unsigned int> split(vertex_count);
 	size_t splits = 0;
 
+	remap.resize(vertex_count);
+
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
+		remap[i] = unsigned(i);
+
 		if (flipseam[i] == 3)
 		{
+			assert(remap.size() == vertex_count + splits);
+			remap.push_back(unsigned(i));
+
 			split[i] = unsigned(vertex_count + splits);
 			splits++;
 
@@ -843,8 +850,9 @@ static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attribut
 	if (!positions)
 		return;
 
+	std::vector<unsigned int> uvremap;
 	if (attributes)
-		simplifyUvSplit(mesh);
+		simplifyUvSplit(mesh, uvremap);
 
 	size_t vertex_count = mesh.streams[0].data.size();
 
@@ -887,6 +895,9 @@ static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attribut
 		indices.resize(meshopt_simplifySloppy(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count, target_error_aggressive));
 		mesh.indices.swap(indices);
 	}
+
+	if (uvremap.size() && mesh.indices.size())
+		meshopt_remapIndexBuffer(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &uvremap[0]);
 }
 
 static void optimizeMesh(Mesh& mesh, bool compressmore)
