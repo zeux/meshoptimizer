@@ -896,7 +896,7 @@ static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attribut
 		mesh.indices.swap(indices);
 	}
 
-	if (uvremap.size() && mesh.indices.size())
+	if (uvremap.size() && mesh.indices.size() && !debug)
 		meshopt_remapIndexBuffer(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &uvremap[0]);
 }
 
@@ -1127,8 +1127,6 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio, fl
 	reindexMesh(mesh, quantize_tbn);
 	filterTriangles(mesh);
 
-	size_t vertex_count = mesh.streams[0].data.size();
-
 	simplifyMesh(mesh, ratio, error, attributes, /* aggressive= */ false, /* lock_borders= */ false, /* debug= */ true);
 
 	// color palette for display
@@ -1157,6 +1155,8 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio, fl
 			loops.streams.push_back(stream);
 		}
 	}
+
+	size_t vertex_count = mesh.streams[0].data.size();
 
 	// transform kind/loop data into lines & points
 	Stream colors = {cgltf_attribute_type_color};
