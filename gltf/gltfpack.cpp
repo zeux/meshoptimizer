@@ -409,6 +409,9 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	{
 		const Mesh& mesh = meshes[i];
 
+		if (mesh.type != cgltf_primitive_type_triangles)
+			continue;
+
 		if (settings.simplify_debug > 0)
 		{
 			Mesh kinds = {};
