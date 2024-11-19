@@ -762,6 +762,78 @@ static void simplifyAttributes(std::vector<float>& attrs, float* attrw, size_t s
 	}
 }
 
+static void simplifyUvSplit(Mesh& mesh, std::vector<unsigned int>& remap)
+{
+	assert(mesh.type == cgltf_primitive_type_triangles);
+	assert(!mesh.indices.empty());
+
+	const Stream* uv = getStream(mesh, cgltf_attribute_type_texcoord);
+	if (!uv)
+		return;
+
+	size_t vertex_count = uv->data.size();
+
+	std::vector<unsigned char> uvsign(mesh.indices.size() / 3);
+	std::vector<unsigned char> flipseam(vertex_count);
+
+	for (size_t i = 0; i < mesh.indices.size(); i += 3)
+	{
+		unsigned int a = mesh.indices[i + 0];
+		unsigned int b = mesh.indices[i + 1];
+		unsigned int c = mesh.indices[i + 2];
+
+		const Attr& va = uv->data[a];
+		const Attr& vb = uv->data[b];
+		const Attr& vc = uv->data[c];
+
+		float uvarea = (vb.f[0] - va.f[0]) * (vc.f[1] - va.f[1]) - (vc.f[0] - va.f[0]) * (vb.f[1] - va.f[1]);
+		unsigned char flag = uvarea > 0 ? 1 : (uvarea < 0 ? 2 : 0);
+
+		uvsign[i / 3] = flag;
+		flipseam[a] |= flag;
+		flipseam[b] |= flag;
+		flipseam[c] |= flag;
+	}
+
+	std::vector<unsigned int> split(vertex_count);
+	size_t splits = 0;
+
+	remap.resize(vertex_count);
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		remap[i] = unsigned(i);
+
+		if (flipseam[i] == 3)
+		{
+			assert(remap.size() == vertex_count + splits);
+			remap.push_back(unsigned(i));
+
+			split[i] = unsigned(vertex_count + splits);
+			splits++;
+
+			for (size_t k = 0; k < mesh.streams.size(); ++k)
+				mesh.streams[k].data.push_back(mesh.streams[k].data[i]);
+		}
+	}
+
+	for (size_t i = 0; i < mesh.indices.size(); i += 3)
+	{
+		unsigned int a = mesh.indices[i + 0];
+		unsigned int b = mesh.indices[i + 1];
+		unsigned int c = mesh.indices[i + 2];
+
+		unsigned char sign = uvsign[i / 3];
+
+		if (flipseam[a] == 3 && sign == 2)
+			mesh.indices[i + 0] = split[a];
+		if (flipseam[b] == 3 && sign == 2)
+			mesh.indices[i + 1] = split[b];
+		if (flipseam[c] == 3 && sign == 2)
+			mesh.indices[i + 2] = split[c];
+	}
+}
+
 static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attributes, bool aggressive, bool lock_borders, bool debug = false)
 {
 	enum
@@ -777,6 +849,10 @@ static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attribut
 	const Stream* positions = getStream(mesh, cgltf_attribute_type_position);
 	if (!positions)
 		return;
+
+	std::vector<unsigned int> uvremap;
+	if (attributes)
+		simplifyUvSplit(mesh, uvremap);
 
 	size_t vertex_count = mesh.streams[0].data.size();
 
@@ -819,6 +895,9 @@ static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attribut
 		indices.resize(meshopt_simplifySloppy(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count, target_error_aggressive));
 		mesh.indices.swap(indices);
 	}
+
+	if (uvremap.size() && mesh.indices.size() && !debug)
+		meshopt_remapIndexBuffer(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &uvremap[0]);
 }
 
 static void optimizeMesh(Mesh& mesh, bool compressmore)
@@ -1048,8 +1127,6 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio, fl
 	reindexMesh(mesh, quantize_tbn);
 	filterTriangles(mesh);
 
-	size_t vertex_count = mesh.streams[0].data.size();
-
 	simplifyMesh(mesh, ratio, error, attributes, /* aggressive= */ false, /* lock_borders= */ false, /* debug= */ true);
 
 	// color palette for display
@@ -1078,6 +1155,8 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio, fl
 			loops.streams.push_back(stream);
 		}
 	}
+
+	size_t vertex_count = mesh.streams[0].data.size();
 
 	// transform kind/loop data into lines & points
 	Stream colors = {cgltf_attribute_type_color};
