@@ -269,7 +269,6 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 			result.targets = primitive.targets_count;
 			result.target_weights.assign(mesh.weights, mesh.weights + mesh.weights_count);
 			result.target_names.assign(mesh.target_names, mesh.target_names + mesh.target_names_count);
-			result.name = mesh.name;
 
 			result.variants.assign(primitive.mappings, primitive.mappings + primitive.mappings_count);
 		}

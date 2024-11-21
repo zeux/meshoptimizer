@@ -62,8 +62,6 @@ struct Mesh
 	bool geometry_duplicate;
 	uint64_t geometry_hash[2];
 
-	const char* name;
-
 	size_t targets;
 	std::vector<float> target_weights;
 	std::vector<const char*> target_names;

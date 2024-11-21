@@ -587,15 +587,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		const Mesh& mesh = meshes[i];
 
 		comma(json_meshes);
-		append(json_meshes, "{");
-		if (mesh.name && *mesh.name)
-		{
-			append(json_meshes, "\"name\":\"");
-			append(json_meshes, mesh.name);
-			append(json_meshes, "\"");
-			comma(json_meshes);
-		}
-		append(json_meshes, "\"primitives\":[");
+		append(json_meshes, "{\"primitives\":[");
 
 		size_t pi = i;
 		for (; pi < meshes.size(); ++pi)
