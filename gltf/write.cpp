@@ -1610,7 +1610,7 @@ void writeExtras(std::string& json, const cgltf_extras& extras)
 	appendJson(json, extras.data);
 }
 
-void writeScene(std::string& json, const cgltf_scene& scene, const std::string& roots)
+void writeScene(std::string& json, const cgltf_scene& scene, const std::string& roots, const Settings& settings)
 {
 	comma(json);
 	append(json, "{");
@@ -1627,5 +1627,7 @@ void writeScene(std::string& json, const cgltf_scene& scene, const std::string& 
 		append(json, roots);
 		append(json, "]");
 	}
+	if (settings.keep_extras)
+		writeExtras(json, scene.extras);
 	append(json, "}");
 }

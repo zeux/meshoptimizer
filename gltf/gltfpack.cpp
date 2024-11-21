@@ -360,7 +360,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 	mergeMeshMaterials(data, meshes, settings);
 	if (settings.mesh_dedup)
-		dedupMeshes(meshes);
+		dedupMeshes(meshes, settings);
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 		detachMesh(meshes[i], data, nodes, settings);
@@ -587,7 +587,15 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		const Mesh& mesh = meshes[i];
 
 		comma(json_meshes);
-		append(json_meshes, "{\"primitives\":[");
+		append(json_meshes, "{");
+		if (mesh.name && *mesh.name)
+		{
+			append(json_meshes, "\"name\":\"");
+			append(json_meshes, mesh.name);
+			append(json_meshes, "\"");
+			comma(json_meshes);
+		}
+		append(json_meshes, "\"primitives\":[");
 
 		size_t pi = i;
 		for (; pi < meshes.size(); ++pi)
@@ -896,7 +904,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		append(json, ",\"scenes\":[");
 
 		for (size_t i = 0; i < data->scenes_count; ++i)
-			writeScene(json, data->scenes[i], json_roots[i]);
+			writeScene(json, data->scenes[i], json_roots[i], settings);
 
 		append(json, "]");
 	}

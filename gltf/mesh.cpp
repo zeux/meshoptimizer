@@ -238,7 +238,7 @@ static bool canMergeMeshes(const Mesh& lhs, const Mesh& rhs, const Settings& set
 	if (lhs.streams.size() != rhs.streams.size())
 		return false;
 
-	if (lhs.extras.data && rhs.extras.data && strcmp(lhs.extras.data, rhs.extras.data))
+	if (settings.keep_extras && !areExtrasEqual(lhs.extras, rhs.extras))
 		return false;
 
 	for (size_t i = 0; i < lhs.streams.size(); ++i)
@@ -340,7 +340,7 @@ void hashMesh(Mesh& mesh)
 	hashUpdate(mesh.geometry_hash, meta, sizeof(meta));
 }
 
-static bool canDedupMesh(const Mesh& mesh)
+static bool canDedupMesh(const Mesh& mesh, const Settings& settings)
 {
 	// empty mesh
 	if (mesh.streams.empty())
@@ -350,6 +350,10 @@ static bool canDedupMesh(const Mesh& mesh)
 	if (mesh.nodes.empty() && mesh.instances.empty())
 		return false;
 
+	// has extras
+	if (settings.keep_extras && mesh.extras.data)
+		return false;
+
 	// to simplify dedup we ignore complex target setups for now
 	if (!mesh.target_weights.empty() || !mesh.target_names.empty() || !mesh.variants.empty())
 		return false;
@@ -357,7 +361,7 @@ static bool canDedupMesh(const Mesh& mesh)
 	return true;
 }
 
-void dedupMeshes(std::vector<Mesh>& meshes)
+void dedupMeshes(std::vector<Mesh>& meshes, const Settings& settings)
 {
 	std::unordered_map<uint64_t, int> hashes;
 
@@ -373,7 +377,7 @@ void dedupMeshes(std::vector<Mesh>& meshes)
 	{
 		Mesh& target = meshes[i];
 
-		if (!canDedupMesh(target))
+		if (!canDedupMesh(target, settings))
 			continue;
 
 		if (hashes[target.geometry_hash[0] ^ target.geometry_hash[1]] <= 1)
@@ -386,7 +390,7 @@ void dedupMeshes(std::vector<Mesh>& meshes)
 			if (mesh.geometry_hash[0] != target.geometry_hash[0] || mesh.geometry_hash[1] != target.geometry_hash[1])
 				continue;
 
-			if (!canDedupMesh(mesh))
+			if (!canDedupMesh(mesh, settings))
 				continue;
 
 			if (mesh.scene != target.scene || mesh.material != target.material || mesh.skin != target.skin)
