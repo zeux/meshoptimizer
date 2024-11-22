@@ -550,6 +550,37 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 	append(json, "}");
 }
 
+static void writeMaterialComponent(std::string& json, const cgltf_data* data, const cgltf_diffuse_transmission& tm, const QuantizationTexture* qt, std::vector<TextureInfo>& textures)
+{
+	comma(json);
+	append(json, "\"KHR_materials_diffuse_transmission\":{");
+	if (tm.diffuse_transmission_factor != 0)
+	{
+		comma(json);
+		append(json, "\"diffuseTransmissionFactor\":");
+		append(json, tm.diffuse_transmission_factor);
+	}
+	if (tm.diffuse_transmission_texture.texture)
+	{
+		comma(json);
+		append(json, "\"diffuseTransmissionTexture\":");
+		writeTextureInfo(json, data, tm.diffuse_transmission_texture, qt, textures);
+	}
+	if (memcmp(tm.diffuse_transmission_color_factor, white, sizeof(float) * 3) != 0)
+	{
+		comma(json);
+		append(json, "\"diffuseTransmissionColorFactor\":");
+		append(json, tm.diffuse_transmission_color_factor, 3);
+	}
+	if (tm.diffuse_transmission_color_texture.texture)
+	{
+		comma(json);
+		append(json, "\"diffuseTransmissionColorTexture\":");
+		writeTextureInfo(json, data, tm.diffuse_transmission_color_texture, qt, textures);
+	}
+	append(json, "}");
+}
+
 void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationPosition* qp, const QuantizationTexture* qt, std::vector<TextureInfo>& textures)
 {
 	if (material.name && *material.name)
@@ -614,7 +645,9 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 		append(json, "\"doubleSided\":true");
 	}
 
-	if (material.has_pbr_specular_glossiness || material.has_clearcoat || material.has_transmission || material.has_ior || material.has_specular || material.has_sheen || material.has_volume || material.has_emissive_strength || material.has_iridescence || material.has_anisotropy || material.has_dispersion || material.unlit)
+	if (material.has_pbr_specular_glossiness || material.has_clearcoat || material.has_transmission || material.has_ior || material.has_specular ||
+	    material.has_sheen || material.has_volume || material.has_emissive_strength || material.has_iridescence || material.has_anisotropy ||
+	    material.has_dispersion || material.has_diffuse_transmission || material.unlit)
 	{
 		comma(json);
 		append(json, "\"extensions\":{");
@@ -651,6 +684,9 @@ void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_materi
 
 		if (material.has_dispersion)
 			writeMaterialComponent(json, data, material.dispersion);
+
+		if (material.has_diffuse_transmission)
+			writeMaterialComponent(json, data, material.diffuse_transmission, qt, textures);
 
 		if (material.unlit)
 		{
