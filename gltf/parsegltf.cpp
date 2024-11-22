@@ -648,3 +648,11 @@ cgltf_data* parseGlb(const void* buffer, size_t size, std::vector<Mesh>& meshes,
 
 	return parseGltf(data, result, meshes, animations, error);
 }
+
+bool areExtrasEqual(const cgltf_extras& lhs, const cgltf_extras& rhs)
+{
+	if (lhs.data && rhs.data)
+		return strcmp(lhs.data, rhs.data) == 0;
+	else
+		return lhs.data == rhs.data;
+}

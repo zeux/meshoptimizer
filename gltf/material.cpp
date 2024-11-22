@@ -568,14 +568,6 @@ static bool shouldKeepAlpha(const cgltf_texture_view& color, float alpha, cgltf_
 	return image && getChannels(*image, images[image - data->images], input_path) == 4;
 }
 
-bool areExtrasEqual(const cgltf_extras& lhs, const cgltf_extras& rhs)
-{
-	if (lhs.data && rhs.data)
-		return strcmp(lhs.data, rhs.data) == 0;
-	else
-		return lhs.data == rhs.data;
-}
-
 void optimizeMaterials(cgltf_data* data, const char* input_path, std::vector<ImageInfo>& images)
 {
 	for (size_t i = 0; i < data->materials_count; ++i)
