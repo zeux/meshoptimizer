@@ -180,6 +180,8 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 
 			result.material = primitive.material;
 
+			result.extras = primitive.extras;
+
 			result.type = primitive.type;
 
 			result.streams.reserve(primitive.attributes_count);

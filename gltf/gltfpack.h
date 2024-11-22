@@ -52,6 +52,8 @@ struct Mesh
 	cgltf_material* material;
 	cgltf_skin* skin;
 
+	cgltf_extras extras;
+
 	cgltf_primitive_type type;
 
 	std::vector<Stream> streams;
@@ -319,12 +321,13 @@ bool compareMeshVariants(const Mesh& lhs, const Mesh& rhs);
 bool compareMeshNodes(const Mesh& lhs, const Mesh& rhs);
 
 void hashMesh(Mesh& mesh);
-void dedupMeshes(std::vector<Mesh>& meshes);
+void dedupMeshes(std::vector<Mesh>& meshes, const Settings& settings);
 void mergeMeshInstances(Mesh& mesh);
 void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings);
 void filterEmptyMeshes(std::vector<Mesh>& meshes);
 void filterStreams(Mesh& mesh, const MaterialInfo& mi);
 
+bool areExtrasEqual(const cgltf_extras& lhs, const cgltf_extras& rhs);
 void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings);
 void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes, const Settings& settings);
 
@@ -397,7 +400,7 @@ void writeLight(std::string& json, const cgltf_light& light);
 void writeArray(std::string& json, const char* name, const std::string& contents);
 void writeExtensions(std::string& json, const ExtensionInfo* extensions, size_t count);
 void writeExtras(std::string& json, const cgltf_extras& extras);
-void writeScene(std::string& json, const cgltf_scene& scene, const std::string& roots);
+void writeScene(std::string& json, const cgltf_scene& scene, const std::string& roots, const Settings& settings);
 
 /**
  * Copyright (c) 2016-2024 Arseny Kapoulkine
