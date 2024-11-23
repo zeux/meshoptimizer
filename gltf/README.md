@@ -69,6 +69,7 @@ gltfpack supports most Khronos extensions and some multi-vendor extensions in th
 - KHR_lights_punctual
 - KHR_materials_anisotropy
 - KHR_materials_clearcoat
+- KHR_materials_diffuse_transmission
 - KHR_materials_dispersion
 - KHR_materials_emissive_strength
 - KHR_materials_ior
