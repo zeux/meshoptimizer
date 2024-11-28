@@ -519,7 +519,7 @@ void testFile(const char* path, Stats* stats = 0)
 
 	const char* name0 = strchr(strchr(name, '_') + 1, '_') + 1;
 	const char* name1 = strstr(name0, "_R");
-	size_t namel = name1 ? name1 - name0 - 1 : strlen(name0);
+	size_t namel = name1 ? name1 - name0 : strlen(name0);
 	namel = namel > 25 ? 25 : namel;
 
 	// printf("%s\n", path);
