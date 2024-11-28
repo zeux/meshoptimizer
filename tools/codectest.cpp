@@ -456,10 +456,27 @@ void testFile(FILE* file, size_t count, size_t stride)
 	std::vector<unsigned char> output(decoded.size() * 4); // todo
 	output.resize(encodeV1(output.data(), output.size(), decoded.data(), count, stride));
 
-	printf("\t");
-	printf("raw %zu\tv0 %zu\tv1 %zu\t", decoded.size(), input.size(), output.size());
-	printf("lz4 %zu\tv0 %zu\tv1 %zu\t", measure_lz4(decoded), measure_lz4(input), measure_lz4(output));
-	printf("zstd %zu\tv0 %zu\tv1 %zu\t", measure_zstd(decoded), measure_zstd(input), measure_zstd(output));
+	size_t decoded_lz4 = measure_lz4(decoded);
+	size_t input_lz4 = measure_lz4(input);
+	size_t output_lz4 = measure_lz4(output);
+	size_t decoded_zstd = measure_zstd(decoded);
+	size_t input_zstd = measure_zstd(input);
+	size_t output_zstd = measure_zstd(output);
+
+	printf(" raw %zu:\t", decoded.size());
+	printf(" v0 %.2f", double(input.size()) / double(decoded.size()));
+	printf(" v1 %.2f", double(output.size()) / double(decoded.size()));
+	printf(" v1/v0 %+.1f%%", double(output.size()) / double(input.size()) * 100 - 100);
+
+	printf("\tlz4 %.2f:", double(decoded_lz4) / double(decoded.size()));
+	printf(" v0 %.2f", double(input_lz4) / double(decoded.size()));
+	printf(" v1 %.2f", double(output_lz4) / double(decoded.size()));
+	printf(" v1/v0 %+.1f%%", double(output_lz4) / double(input_lz4) * 100 - 100);
+
+	printf("\tzstd %.2f:", double(decoded_zstd) / double(decoded.size()));
+	printf(" v0 %.2f", double(input_zstd) / double(decoded.size()));
+	printf(" v1 %.2f", double(output_zstd) / double(decoded.size()));
+	printf(" v1/v0 %+.1f%%", double(output_zstd) / double(input_zstd) * 100 - 100);
 }
 
 void testFile(const char* path)
@@ -480,7 +497,7 @@ void testFile(const char* path)
 	size_t namel = name1 ? name1 - name0 - 1 : strlen(name0);
 	namel = namel > 25 ? 25 : namel;
 
-	printf("%s\n", path);
+	// printf("%s\n", path);
 	printf("%25.*s:", int(namel), name0);
 	testFile(file, vcnt, vsz);
 	printf("\n");
