@@ -418,10 +418,14 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 		if (int(k) == norm_offset)
 		{
 			// hand tweak to get best shifts
-			// 2 | 10 | 4 ||| 6 | 10
-			// best_width = 2;
-			// best_rot[0] = 2;
-			// best_rot[1] = 0;
+			// 1 | 11 | 10 | 10
+			// w1: 1 | 7 || 4 | 4 || 6 | 2 || 8
+			// w2: 1 | 11 | 4 || 6 | 10
+			best_width = 1;
+			best_rot[0] = 1;
+			best_rot[1] = 4;
+			best_rot[2] = 6;
+			best_rot[3] = 0;
 		}
 
 		data = encodeVertexBlock4(data, data_end, vertex_data, vertex_count, vertex_size, last_vertex, k, best_width, best_rot);
@@ -644,12 +648,11 @@ void testFile(const char* path, Stats* stats = 0)
 		{
 			s++;
 			int bw = atoi(s);
-			boff += bw / 8;
 
 			if (s[0] == '3' && s[1] == '2' && s[2] == '_' && s[3] == 'U')
-			{
 				norm_offset = int(boff);
-			}
+
+			boff += bw / 8;
 		}
 	}
 
