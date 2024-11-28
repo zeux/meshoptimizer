@@ -204,6 +204,7 @@ bool tune_bits = true;
 bool tune_lit = true;
 bool tune_width = true;
 bool tune_rot = false;
+int norm_offset = -1;
 
 static unsigned char* encodeVertexBlock4(unsigned char* data, unsigned char* data_end, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], size_t vertex_offset, int width, const int rot[4])
 {
@@ -291,10 +292,8 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 		int best_rot[4] = {};
 		size_t best_size = SIZE_MAX;
 
-		for (int iwidth = 1; iwidth <= (tune_width ? 4 : 1); iwidth *= 2)
+		for (int width = 1; width <= (tune_width ? 4 : 1); width *= 2)
 		{
-			int width = tune_width ? 4 / iwidth : 1;
-
 			if (tune_rot)
 			{
 				if (width == 1)
@@ -415,6 +414,15 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 		}
 
 		*data++ = (best_rot[0] << 2) | (best_width - 1); // TODO: best_rot encoding doesn't fit for width 1/2
+
+		if (int(k) == norm_offset)
+		{
+			// hand tweak to get best shifts
+			// 2 | 10 | 4 ||| 6 | 10
+			// best_width = 2;
+			// best_rot[0] = 2;
+			// best_rot[1] = 0;
+		}
 
 		data = encodeVertexBlock4(data, data_end, vertex_data, vertex_count, vertex_size, last_vertex, k, best_width, best_rot);
 	}
@@ -626,6 +634,24 @@ void testFile(const char* path, Stats* stats = 0)
 	const char* name1 = strstr(name0, "_R");
 	size_t namel = name1 ? name1 - name0 : strlen(name0);
 	namel = namel > 25 ? 25 : namel;
+
+	// parse name1 if present...
+	norm_offset = -1;
+	size_t boff = 0;
+	for (const char* s = name1; *s; ++s)
+	{
+		if (*s == 'R' || *s == 'G' || *s == 'B' || *s == 'A')
+		{
+			s++;
+			int bw = atoi(s);
+			boff += bw / 8;
+
+			if (s[0] == '3' && s[1] == '2' && s[2] == '_' && s[3] == 'U')
+			{
+				norm_offset = int(boff);
+			}
+		}
+	}
 
 	// printf("%s\n", path);
 	printf("%25.*s:", int(namel), name0);
