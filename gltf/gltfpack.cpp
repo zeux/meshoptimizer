@@ -53,7 +53,10 @@ static void dumpBufferViews(const char* input_path, const char* dump, const std:
 	for (const BufferView& view : views)
 		if (view.kind == BufferView::Kind_Vertex)
 		{
-			for (size_t i = 0; i < view.data.size(); i += view.stride)
+			assert(view.data.size() == view.stride * vertex_count);
+			assert(vertex_offset + view.stride <= vertex_stride);
+
+			for (size_t i = 0; i < view.data.size() / view.stride; ++i)
 				memcpy(&vertex_data[vertex_offset] + i * vertex_stride, view.data.data() + i * view.stride, view.stride);
 
 			vertex_offset += view.stride;
