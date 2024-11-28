@@ -399,12 +399,70 @@ size_t encodeV1(unsigned char* buffer, size_t buffer_size, const void* vertices,
 	return data - buffer;
 }
 
+void testFile(FILE* file, size_t count, size_t stride)
+{
+	std::vector<unsigned char> input;
+	unsigned char buffer[4096];
+	size_t bytes_read;
+
+	while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0)
+		input.insert(input.end(), buffer, buffer + bytes_read);
+
+	std::vector<unsigned char> decoded(count * stride);
+	int res = meshopt_decodeVertexBuffer(&decoded[0], count, stride, &input[0], input.size());
+	if (res != 0 && input.size() == decoded.size())
+	{
+		// some files are not encoded; encode them with v1 to let the rest of the flow proceed as is
+		memcpy(decoded.data(), input.data(), decoded.size());
+		input.resize(input.size() * 4);
+		input.resize(meshopt_encodeVertexBuffer(input.data(), input.size(), decoded.data(), count, stride));
+	}
+
+	std::vector<unsigned char> output(decoded.size() * 4); // todo
+	output.resize(encodeV1(output.data(), output.size(), decoded.data(), count, stride));
+
+	printf("raw %zu\tv0 %zu\tv1 %zu\t", decoded.size(), input.size(), output.size());
+}
+
+void testFile(const char* path)
+{
+	FILE* file = fopen(path, "rb");
+	if (!file)
+		return;
+
+	const char* name = strrchr(path, '/');
+	name = name ? name + 1 : path;
+
+	int vcnt, vsz;
+	int sr = sscanf(name, "v%d_s%d_", &vcnt, &vsz);
+	assert(sr == 2);
+
+	const char* name0 = strchr(strchr(name, '_') + 1, '_') + 1;
+	const char* name1 = strstr(name0, "_R");
+	size_t namel = name1 ? name1 - name0 - 1 : strlen(name0);
+	namel = namel > 25 ? 25 : namel;
+
+	printf("%s\n", path);
+	printf("%25.*s:", int(namel), name0);
+	testFile(file, vcnt, vsz);
+	printf("\n");
+
+	fclose(file);
+}
+
 int main(int argc, char** argv)
 {
 #ifdef _WIN32
 	_setmode(_fileno(stdin), _O_BINARY);
 	_setmode(_fileno(stdout), _O_BINARY);
 #endif
+
+	if (argc > 1 && strcmp(argv[1], "-test") == 0)
+	{
+		for (int i = 2; i < argc; ++i)
+			testFile(argv[i]);
+		return 0;
+	}
 
 	if (argc < 2 || argc > 3 || atoi(argv[1]) <= 0)
 	{
