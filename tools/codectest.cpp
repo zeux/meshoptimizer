@@ -196,8 +196,8 @@ static void makedelta(unsigned char* buffer, const unsigned char* vertex_data, s
 	}
 }
 
-bool tune_bits = false;
-bool tune_lit = false;
+bool tune_bits = true;
+bool tune_lit = true;
 bool tune_width = false;
 bool tune_rot = false; // tanks zstd
 
@@ -233,18 +233,17 @@ static unsigned char* encodeVertexBlock4(unsigned char* data, unsigned char* dat
 
 		size_t vertex_count_aligned = (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1);
 
-		const int encs[4][4] =
+		const int encs[3][4] =
 		    {
 		        {0, 2, 4, 8},
-		        {0, 1, 2, 4},
 		        {0, 1, 2, 8},
-		        {0, 1, 6, 8},
+		        {2, 4, 6, 8},
 		    };
 
 		int best_enc = -1;
 		size_t best_size = SIZE_MAX;
 
-		for (int enc = 0; enc < (tune_bits ? 4 : 1); ++enc)
+		for (int enc = 0; enc < (tune_bits ? 3 : 1); ++enc)
 		{
 			unsigned char* encp = encodeBytes(data, data_end, buffer, vertex_count_aligned, encs[enc][0], encs[enc][1], encs[enc][2], encs[enc][3]);
 			assert(encp);
@@ -256,16 +255,19 @@ static unsigned char* encodeVertexBlock4(unsigned char* data, unsigned char* dat
 			}
 		}
 
-		header[k / 4] |= best_enc << ((k % 4) * 2);
-
-		// literal block, todo steal one entry from best_enc
+		// literal block
 		if (best_size >= vertex_count && tune_lit)
 		{
+			header[k / 4] |= 3 << ((k % 4) * 2);
+
 			memcpy(data, buffer, vertex_count);
 			data += vertex_count;
 		}
 		else
 		{
+			assert(best_enc < 3);
+			header[k / 4] |= best_enc << ((k % 4) * 2);
+
 			data = encodeBytes(data, data_end, buffer, vertex_count_aligned, encs[best_enc][0], encs[best_enc][1], encs[best_enc][2], encs[best_enc][3]);
 			if (!data)
 				return NULL;
