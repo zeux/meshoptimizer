@@ -399,6 +399,41 @@ size_t encodeV1(unsigned char* buffer, size_t buffer_size, const void* vertices,
 	return data - buffer;
 }
 
+size_t measure(const char* cmd, const std::vector<unsigned char>& data)
+{
+	FILE* file = fopen("/tmp/codectest.in", "wb");
+	if (!file)
+		return 0;
+	fwrite(data.data(), data.size(), 1, file);
+	fclose(file);
+
+	char actualcmd[1024];
+	snprintf(actualcmd, sizeof(actualcmd), cmd, "/tmp/codectest.in", "/tmp/codectest.out");
+
+	int rc = system(actualcmd);
+	if (rc)
+		return 0;
+
+	file = fopen("/tmp/codectest.out", "rb");
+	if (!file)
+		return 0;
+	fseek(file, 0, SEEK_END);
+	long result = ftell(file);
+	fclose(file);
+
+	return result;
+}
+
+size_t measure_lz4(const std::vector<unsigned char>& data)
+{
+	return measure("lz4 -f -q %s %s", data);
+}
+
+size_t measure_zstd(const std::vector<unsigned char>& data)
+{
+	return measure("zstd -f -q %s -o %s", data);
+}
+
 void testFile(FILE* file, size_t count, size_t stride)
 {
 	std::vector<unsigned char> input;
@@ -421,7 +456,10 @@ void testFile(FILE* file, size_t count, size_t stride)
 	std::vector<unsigned char> output(decoded.size() * 4); // todo
 	output.resize(encodeV1(output.data(), output.size(), decoded.data(), count, stride));
 
+	printf("\t");
 	printf("raw %zu\tv0 %zu\tv1 %zu\t", decoded.size(), input.size(), output.size());
+	printf("lz4 %zu\tv0 %zu\tv1 %zu\t", measure_lz4(decoded), measure_lz4(input), measure_lz4(output));
+	printf("zstd %zu\tv0 %zu\tv1 %zu\t", measure_zstd(decoded), measure_zstd(input), measure_zstd(output));
 }
 
 void testFile(const char* path)
