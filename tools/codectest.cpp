@@ -291,8 +291,10 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 		int best_rot[4] = {};
 		size_t best_size = SIZE_MAX;
 
-		for (int width = 1; width <= (tune_width ? 4 : 1); width *= 2)
+		for (int iwidth = 1; iwidth <= (tune_width ? 4 : 1); iwidth *= 2)
 		{
+			int width = tune_width ? 4 / iwidth : 1;
+
 			if (tune_rot)
 			{
 				if (width == 1)
@@ -413,8 +415,6 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 		}
 
 		*data++ = (best_rot[0] << 2) | (best_width - 1); // TODO: best_rot encoding doesn't fit for width 1/2
-
-		// fprintf(stderr, "%d: width %d rot %d\n", int(k), best_width, best_rot);
 
 		data = encodeVertexBlock4(data, data_end, vertex_data, vertex_count, vertex_size, last_vertex, k, best_width, best_rot);
 	}
