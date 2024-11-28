@@ -128,6 +128,8 @@ static unsigned char* encodeBytes(unsigned char* data, unsigned char* data_end, 
 
 	memset(header, 0, header_size);
 
+	int last_bits = -1;
+
 	for (size_t i = 0; i < buffer_size; i += kByteGroupSize)
 	{
 		if (size_t(data_end - data) < kByteGroupDecodeLimit)
@@ -145,12 +147,14 @@ static unsigned char* encodeBytes(unsigned char* data, unsigned char* data_end, 
 			if (!next)
 				continue;
 
-			if (size_t(next - data) < best_size || (bits == 8 && size_t(next - data) == best_size))
+			if (size_t(next - data) < best_size || ((bits == last_bits || bits == 8) && size_t(next - data) == best_size))
 			{
 				best_bits = bits;
 				best_size = next - data;
 			}
 		}
+
+		last_bits = best_bits;
 
 		int bitsenc = (best_bits == bits0) ? 0 : (best_bits == bits1 ? 1 : (best_bits == bits2 ? 2 : 3));
 
