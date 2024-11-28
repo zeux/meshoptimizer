@@ -421,32 +421,6 @@ int main(int argc, char** argv)
 	while ((bytes_read = fread(buffer, 1, sizeof(buffer), stdin)) > 0)
 		input.insert(input.end(), buffer, buffer + bytes_read);
 
-	int vec3 = getenv("VEC3") ? atoi(getenv("VEC3")) : 0;
-	int norm = getenv("NORM") ? atoi(getenv("NORM")) : 0;
-
-	if (argc == 2 && vec3)
-	{
-		size_t vertex_count = input.size() / stride;
-		std::vector<unsigned char> inputpx;
-		for (size_t i = 0; i < vertex_count; ++i)
-			for (int k = 0; k < 12; ++k)
-				inputpx.push_back(input[i * stride + k]);
-
-		stride = 12;
-		input.swap(inputpx);
-	}
-	else if (argc == 2 && norm)
-	{
-		size_t vertex_count = input.size() / stride;
-		std::vector<unsigned char> inputpx;
-		for (size_t i = 0; i < vertex_count; ++i)
-			for (int k = 0; k < 4; ++k)
-				inputpx.push_back(input[i * stride + (stride - 4) + k]);
-
-		stride = 4;
-		input.swap(inputpx);
-	}
-
 	if (argc == 3)
 	{
 		// if count is specified, we assume input is meshopt-encoded and decode it first
