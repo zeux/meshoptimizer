@@ -434,7 +434,15 @@ size_t measure_zstd(const std::vector<unsigned char>& data)
 	return measure("zstd -f -q %s -o %s", data);
 }
 
-void testFile(FILE* file, size_t count, size_t stride)
+struct Stats
+{
+	double v10_raw;
+	double v10_lz4;
+	double v10_zstd;
+	double count;
+};
+
+void testFile(FILE* file, size_t count, size_t stride, Stats* stats = 0)
 {
 	std::vector<unsigned char> input;
 	unsigned char buffer[4096];
@@ -463,7 +471,7 @@ void testFile(FILE* file, size_t count, size_t stride)
 	size_t input_zstd = measure_zstd(input);
 	size_t output_zstd = measure_zstd(output);
 
-	printf(" raw %zu:\t", decoded.size());
+	printf(" raw %zu KB\t", decoded.size() / 1024);
 	printf(" v0 %.2f", double(input.size()) / double(decoded.size()));
 	printf(" v1 %.2f", double(output.size()) / double(decoded.size()));
 	printf(" v1/v0 %+.1f%%", double(output.size()) / double(input.size()) * 100 - 100);
@@ -477,9 +485,17 @@ void testFile(FILE* file, size_t count, size_t stride)
 	printf(" v0 %.2f", double(input_zstd) / double(decoded.size()));
 	printf(" v1 %.2f", double(output_zstd) / double(decoded.size()));
 	printf(" v1/v0 %+.1f%%", double(output_zstd) / double(input_zstd) * 100 - 100);
+
+	if (stats)
+	{
+		stats->v10_raw += double(output.size()) / double(input.size()) - 1;
+		stats->v10_lz4 += double(output_lz4) / double(input_lz4) - 1;
+		stats->v10_zstd += double(output_zstd) / double(input_zstd) - 1;
+		stats->count++;
+	}
 }
 
-void testFile(const char* path)
+void testFile(const char* path, Stats* stats = 0)
 {
 	FILE* file = fopen(path, "rb");
 	if (!file)
@@ -491,6 +507,7 @@ void testFile(const char* path)
 	int vcnt, vsz;
 	int sr = sscanf(name, "v%d_s%d_", &vcnt, &vsz);
 	assert(sr == 2);
+	(void)sr;
 
 	const char* name0 = strchr(strchr(name, '_') + 1, '_') + 1;
 	const char* name1 = strstr(name0, "_R");
@@ -499,7 +516,7 @@ void testFile(const char* path)
 
 	// printf("%s\n", path);
 	printf("%25.*s:", int(namel), name0);
-	testFile(file, vcnt, vsz);
+	testFile(file, vcnt, vsz, stats);
 	printf("\n");
 
 	fclose(file);
@@ -514,8 +531,12 @@ int main(int argc, char** argv)
 
 	if (argc > 1 && strcmp(argv[1], "-test") == 0)
 	{
+		Stats stats = {};
 		for (int i = 2; i < argc; ++i)
-			testFile(argv[i]);
+			testFile(argv[i], &stats);
+		printf("---\n");
+		printf("%d files: raw v1/v0 %+.1f%%, lz4 v1/v0 %+.1f%%, zstd v1/v0 %+.1f%%\n",
+		    int(stats.count), stats.v10_raw / stats.count * 100, stats.v10_lz4 / stats.count * 100, stats.v10_zstd / stats.count * 100);
 		return 0;
 	}
 
