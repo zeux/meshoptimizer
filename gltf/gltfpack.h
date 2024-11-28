@@ -168,6 +168,8 @@ struct Settings
 	bool fallback;
 
 	int verbose;
+
+	const char* dump_views;
 };
 
 struct QuantizationPosition

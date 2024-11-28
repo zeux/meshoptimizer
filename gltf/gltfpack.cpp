@@ -23,6 +23,71 @@ std::string getVersion()
 	return result;
 }
 
+static void dumpBufferViews(const char* input_path, const char* dump, const std::vector<BufferView>& views)
+{
+	size_t vertex_stride = 0;
+	size_t vertex_count = 0;
+	for (const BufferView& view : views)
+		if (view.kind == BufferView::Kind_Vertex)
+		{
+			vertex_stride += view.stride;
+			if (vertex_count == 0)
+				vertex_count = view.data.size() / view.stride;
+
+			if (vertex_count != view.data.size() / view.stride)
+			{
+				printf("Warning: inconsistent vertex counts in %s\n", input_path);
+				return;
+			}
+		}
+
+	if (vertex_count == 0)
+	{
+		printf("Warning: no vertex views in %s\n", input_path);
+		return;
+	}
+
+	std::string vertex_data(vertex_count * vertex_stride, 0);
+	size_t vertex_offset = 0;
+
+	for (const BufferView& view : views)
+		if (view.kind == BufferView::Kind_Vertex)
+		{
+			for (size_t i = 0; i < view.data.size(); i += view.stride)
+				memcpy(&vertex_data[vertex_offset] + i * vertex_stride, view.data.data() + i * view.stride, view.stride);
+
+			vertex_offset += view.stride;
+		}
+
+	std::string compressed;
+	compressVertexStream(compressed, vertex_data, vertex_count, vertex_stride);
+
+	const char* input_name_slash = strrchr(input_path, '/');
+	std::string input_name = input_name_slash ? input_name_slash + 1 : input_path;
+	std::string::size_type input_name_dot = input_name.find_first_of('.');
+	if (input_name_dot != std::string::npos)
+		input_name.resize(input_name_dot);
+	for (char& ch : input_name)
+		ch = tolower(ch);
+
+	std::string dump_path;
+	dump_path += "v" + std::to_string(vertex_count) + "_";
+	dump_path += "s" + std::to_string(vertex_stride) + "_";
+	dump_path += input_name;
+	dump_path += "_R_";
+	dump_path += dump;
+	dump_path += ".glv";
+
+	FILE* out = fopen(dump_path.c_str(), "wb");
+	if (!out)
+	{
+		return;
+	}
+
+	fwrite(compressed.data(), 1, compressed.size(), out);
+	fclose(out);
+}
+
 static void finalizeBufferViews(std::string& json, std::vector<BufferView>& views, std::string& bin, std::string* fallback, size_t& fallback_size)
 {
 	for (size_t i = 0; i < views.size(); ++i)
@@ -871,6 +936,9 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 	writeExtensions(json, extensions, sizeof(extensions) / sizeof(extensions[0]));
 
+	if (settings.dump_views)
+		dumpBufferViews(input_path, settings.dump_views, views);
+
 	std::string json_views;
 	finalizeBufferViews(json_views, views, bin, settings.fallback ? &fallback : NULL, fallback_size);
 
@@ -1518,6 +1586,10 @@ int main(int argc, char** argv)
 		else if (strcmp(arg, "-test") == 0)
 		{
 			test = true;
+		}
+		else if (strcmp(arg, "-dv") == 0 && i + 1 < argc)
+		{
+			settings.dump_views = argv[++i];
 		}
 		else if (arg[0] == '-')
 		{
