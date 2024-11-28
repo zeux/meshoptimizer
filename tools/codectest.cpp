@@ -417,7 +417,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 
 		*data++ = (best_rot[0] << 2) | (best_width - 1); // TODO: best_rot encoding doesn't fit for width 1/2
 
-		if (int(k) == norm_offset)
+		if (int(k) == norm_offset && 0)
 		{
 			// hand tweak to get best shifts
 			// 1 | 11 | 10 | 10
