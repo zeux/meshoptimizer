@@ -202,10 +202,10 @@ static void makedelta(unsigned char* buffer, const unsigned char* vertex_data, s
 
 bool tune_bits = true;
 bool tune_lit = true;
-bool tune_width = false;
-bool tune_rot = false; // tanks zstd
+bool tune_width = true;
+bool tune_rot = false;
 
-static unsigned char* encodeVertexBlock4(unsigned char* data, unsigned char* data_end, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], size_t vertex_offset, int width, int rot)
+static unsigned char* encodeVertexBlock4(unsigned char* data, unsigned char* data_end, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], size_t vertex_offset, int width, const int rot[4])
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 
@@ -225,13 +225,13 @@ static unsigned char* encodeVertexBlock4(unsigned char* data, unsigned char* dat
 		switch (width)
 		{
 		case 1:
-			makedelta<unsigned char, signed char>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, rot);
+			makedelta<unsigned char, signed char>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, rot[k - vertex_offset]);
 			break;
 		case 2:
-			makedelta<unsigned short, signed short>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, rot);
+			makedelta<unsigned short, signed short>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, rot[k - vertex_offset]);
 			break;
 		case 4:
-			makedelta<unsigned int, signed int>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, rot);
+			makedelta<unsigned int, signed int>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, rot[k - vertex_offset]);
 			break;
 		}
 
@@ -288,26 +288,129 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 	for (size_t k = 0; k < vertex_size; k += 4)
 	{
 		int best_width = 1;
-		int best_rot = 0;
+		int best_rot[4] = {};
 		size_t best_size = SIZE_MAX;
 
 		for (int width = 1; width <= (tune_width ? 4 : 1); width *= 2)
 		{
-			for (int rot = 0; rot < (tune_rot ? width * 8 : 1); ++rot)
+			if (tune_rot)
 			{
-				unsigned char* enc = encodeVertexBlock4(data, data_end, vertex_data, vertex_count, vertex_size, last_vertex, k, width, rot);
+				if (width == 1)
+				{
+					for (int rot = 0; rot < 8; ++rot)
+					{
+						int try_rot[4] = {rot, best_rot[1], best_rot[2], best_rot[3]};
+						unsigned char* enc = encodeVertexBlock4(data, data_end, vertex_data, vertex_count, vertex_size, last_vertex, k, width, try_rot);
+						assert(enc);
+
+						if (size_t(enc - data) < best_size)
+						{
+							best_width = width;
+							best_rot[0] = rot;
+							best_size = enc - data;
+						}
+					}
+					for (int rot = 0; rot < 8; ++rot)
+					{
+						int try_rot[4] = {best_rot[0], rot, best_rot[2], best_rot[3]};
+						unsigned char* enc = encodeVertexBlock4(data, data_end, vertex_data, vertex_count, vertex_size, last_vertex, k, width, try_rot);
+						assert(enc);
+
+						if (size_t(enc - data) < best_size)
+						{
+							best_width = width;
+							best_rot[1] = rot;
+							best_size = enc - data;
+						}
+					}
+					for (int rot = 0; rot < 8; ++rot)
+					{
+						int try_rot[4] = {best_rot[0], best_rot[1], rot, best_rot[3]};
+						unsigned char* enc = encodeVertexBlock4(data, data_end, vertex_data, vertex_count, vertex_size, last_vertex, k, width, try_rot);
+						assert(enc);
+
+						if (size_t(enc - data) < best_size)
+						{
+							best_width = width;
+							best_rot[2] = rot;
+							best_size = enc - data;
+						}
+					}
+					for (int rot = 0; rot < 8; ++rot)
+					{
+						int try_rot[4] = {best_rot[0], best_rot[1], best_rot[2], rot};
+						unsigned char* enc = encodeVertexBlock4(data, data_end, vertex_data, vertex_count, vertex_size, last_vertex, k, width, try_rot);
+						assert(enc);
+
+						if (size_t(enc - data) < best_size)
+						{
+							best_width = width;
+							best_rot[3] = rot;
+							best_size = enc - data;
+						}
+					}
+				}
+				else if (width == 2)
+				{
+					for (int rot = 0; rot < 16; ++rot)
+					{
+						int try_rot[4] = {rot, rot, best_rot[2], best_rot[3]};
+						unsigned char* enc = encodeVertexBlock4(data, data_end, vertex_data, vertex_count, vertex_size, last_vertex, k, width, try_rot);
+						assert(enc);
+
+						if (size_t(enc - data) < best_size)
+						{
+							best_width = width;
+							best_rot[0] = best_rot[1] = rot;
+							best_size = enc - data;
+						}
+					}
+
+					for (int rot = 0; rot < 16; ++rot)
+					{
+						int try_rot[4] = {best_rot[0], best_rot[1], rot, rot};
+						unsigned char* enc = encodeVertexBlock4(data, data_end, vertex_data, vertex_count, vertex_size, last_vertex, k, width, try_rot);
+						assert(enc);
+
+						if (size_t(enc - data) < best_size)
+						{
+							best_width = width;
+							best_rot[2] = best_rot[3] = rot;
+							best_size = enc - data;
+						}
+					}
+				}
+				else
+				{
+					for (int rot = 0; rot < 32; ++rot)
+					{
+						int try_rot[4] = {rot, rot, rot, rot};
+						unsigned char* enc = encodeVertexBlock4(data, data_end, vertex_data, vertex_count, vertex_size, last_vertex, k, width, try_rot);
+						assert(enc);
+
+						if (size_t(enc - data) < best_size)
+						{
+							best_width = width;
+							best_rot[0] = best_rot[1] = best_rot[2] = best_rot[3] = rot;
+							best_size = enc - data;
+						}
+					}
+				}
+			}
+			else
+			{
+				unsigned char* enc = encodeVertexBlock4(data, data_end, vertex_data, vertex_count, vertex_size, last_vertex, k, width, best_rot);
 				assert(enc);
 
 				if (size_t(enc - data) < best_size)
 				{
 					best_width = width;
-					best_rot = rot;
 					best_size = enc - data;
 				}
 			}
 		}
 
-		*data++ = (best_rot << 2) | (best_width - 1); // 5 + 2 bits
+		*data++ = (best_rot[0] << 2) | (best_width - 1); // TODO: best_rot encoding doesn't fit for width 1/2
 
 		// fprintf(stderr, "%d: width %d rot %d\n", int(k), best_width, best_rot);
 
