@@ -426,6 +426,23 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 	return data;
 }
 
+static void decodeDeltas1(const unsigned char* buffer, unsigned char* transposed, size_t vertex_count, size_t vertex_size, unsigned char last_vertex)
+{
+	size_t vertex_offset = 0;
+
+	unsigned char p = last_vertex;
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		unsigned char v = unzigzag8(buffer[i]) + p;
+
+		transposed[vertex_offset] = v;
+		p = v;
+
+		vertex_offset += vertex_size;
+	}
+}
+
 static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
@@ -442,19 +459,7 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 		if (!data)
 			return NULL;
 
-		size_t vertex_offset = k;
-
-		unsigned char p = last_vertex[k];
-
-		for (size_t i = 0; i < vertex_count; ++i)
-		{
-			unsigned char v = unzigzag8(buffer[i]) + p;
-
-			transposed[vertex_offset] = v;
-			p = v;
-
-			vertex_offset += vertex_size;
-		}
+		decodeDeltas1(buffer, transposed + k, vertex_count, vertex_size, last_vertex[k]);
 	}
 
 	memcpy(vertex_data, transposed, vertex_count * vertex_size);
@@ -1025,6 +1030,81 @@ static const unsigned char* decodeBytesSimd(const unsigned char* data, const uns
 }
 
 SIMD_TARGET
+static void decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t vertex_count_aligned, size_t vertex_size, unsigned char last_vertex[4])
+{
+#if defined(SIMD_SSE) || defined(SIMD_AVX)
+#define TEMP __m128i
+#define PREP() __m128i pi = _mm_cvtsi32_si128(*reinterpret_cast<const int*>(last_vertex))
+#define LOAD(i) __m128i r##i = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + i * vertex_count_aligned))
+#define GRP4(i) t0 = _mm_shuffle_epi32(r##i, 0), t1 = _mm_shuffle_epi32(r##i, 1), t2 = _mm_shuffle_epi32(r##i, 2), t3 = _mm_shuffle_epi32(r##i, 3)
+#define FIXD(i) t##i = pi = _mm_add_epi8(pi, t##i)
+#define SAVE(i) *reinterpret_cast<int*>(savep) = _mm_cvtsi128_si32(t##i), savep += vertex_size
+#endif
+
+#ifdef SIMD_NEON
+#define TEMP uint8x8_t
+#define PREP() uint8x8_t pi = vreinterpret_u8_u32(vld1_lane_u32(reinterpret_cast<uint32_t*>(last_vertex), vdup_n_u32(0), 0))
+#define LOAD(i) uint8x16_t r##i = vld1q_u8(buffer + j + i * vertex_count_aligned)
+#define GRP4(i) t0 = vget_low_u8(r##i), t1 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t0), 1)), t2 = vget_high_u8(r##i), t3 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t2), 1))
+#define FIXD(i) t##i = pi = vadd_u8(pi, t##i)
+#define SAVE(i) vst1_lane_u32(reinterpret_cast<uint32_t*>(savep), vreinterpret_u32_u8(t##i), 0), savep += vertex_size
+#endif
+
+#ifdef SIMD_WASM
+#define TEMP v128_t
+#define PREP() v128_t pi = wasm_v128_load(last_vertex)
+#define LOAD(i) v128_t r##i = wasm_v128_load(buffer + j + i * vertex_count_aligned)
+#define GRP4(i) t0 = wasmx_splat_v32x4(r##i, 0), t1 = wasmx_splat_v32x4(r##i, 1), t2 = wasmx_splat_v32x4(r##i, 2), t3 = wasmx_splat_v32x4(r##i, 3)
+#define FIXD(i) t##i = pi = wasm_i8x16_add(pi, t##i)
+#define SAVE(i) *reinterpret_cast<int*>(savep) = wasm_i32x4_extract_lane(t##i, 0), savep += vertex_size
+#endif
+
+	PREP();
+
+	unsigned char* savep = transposed;
+
+	for (size_t j = 0; j < vertex_count_aligned; j += 16)
+	{
+		LOAD(0);
+		LOAD(1);
+		LOAD(2);
+		LOAD(3);
+
+		r0 = unzigzag8(r0);
+		r1 = unzigzag8(r1);
+		r2 = unzigzag8(r2);
+		r3 = unzigzag8(r3);
+
+		transpose8(r0, r1, r2, r3);
+
+		TEMP t0, t1, t2, t3;
+
+		GRP4(0);
+		FIXD(0), FIXD(1), FIXD(2), FIXD(3);
+		SAVE(0), SAVE(1), SAVE(2), SAVE(3);
+
+		GRP4(1);
+		FIXD(0), FIXD(1), FIXD(2), FIXD(3);
+		SAVE(0), SAVE(1), SAVE(2), SAVE(3);
+
+		GRP4(2);
+		FIXD(0), FIXD(1), FIXD(2), FIXD(3);
+		SAVE(0), SAVE(1), SAVE(2), SAVE(3);
+
+		GRP4(3);
+		FIXD(0), FIXD(1), FIXD(2), FIXD(3);
+		SAVE(0), SAVE(1), SAVE(2), SAVE(3);
+
+#undef TEMP
+#undef PREP
+#undef LOAD
+#undef GRP4
+#undef FIXD
+#undef SAVE
+	}
+}
+
+SIMD_TARGET
 static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
@@ -1043,76 +1123,7 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 				return NULL;
 		}
 
-#if defined(SIMD_SSE) || defined(SIMD_AVX)
-#define TEMP __m128i
-#define PREP() __m128i pi = _mm_cvtsi32_si128(*reinterpret_cast<const int*>(last_vertex + k))
-#define LOAD(i) __m128i r##i = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + i * vertex_count_aligned))
-#define GRP4(i) t0 = _mm_shuffle_epi32(r##i, 0), t1 = _mm_shuffle_epi32(r##i, 1), t2 = _mm_shuffle_epi32(r##i, 2), t3 = _mm_shuffle_epi32(r##i, 3)
-#define FIXD(i) t##i = pi = _mm_add_epi8(pi, t##i)
-#define SAVE(i) *reinterpret_cast<int*>(savep) = _mm_cvtsi128_si32(t##i), savep += vertex_size
-#endif
-
-#ifdef SIMD_NEON
-#define TEMP uint8x8_t
-#define PREP() uint8x8_t pi = vreinterpret_u8_u32(vld1_lane_u32(reinterpret_cast<uint32_t*>(last_vertex + k), vdup_n_u32(0), 0))
-#define LOAD(i) uint8x16_t r##i = vld1q_u8(buffer + j + i * vertex_count_aligned)
-#define GRP4(i) t0 = vget_low_u8(r##i), t1 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t0), 1)), t2 = vget_high_u8(r##i), t3 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t2), 1))
-#define FIXD(i) t##i = pi = vadd_u8(pi, t##i)
-#define SAVE(i) vst1_lane_u32(reinterpret_cast<uint32_t*>(savep), vreinterpret_u32_u8(t##i), 0), savep += vertex_size
-#endif
-
-#ifdef SIMD_WASM
-#define TEMP v128_t
-#define PREP() v128_t pi = wasm_v128_load(last_vertex + k)
-#define LOAD(i) v128_t r##i = wasm_v128_load(buffer + j + i * vertex_count_aligned)
-#define GRP4(i) t0 = wasmx_splat_v32x4(r##i, 0), t1 = wasmx_splat_v32x4(r##i, 1), t2 = wasmx_splat_v32x4(r##i, 2), t3 = wasmx_splat_v32x4(r##i, 3)
-#define FIXD(i) t##i = pi = wasm_i8x16_add(pi, t##i)
-#define SAVE(i) *reinterpret_cast<int*>(savep) = wasm_i32x4_extract_lane(t##i, 0), savep += vertex_size
-#endif
-
-		PREP();
-
-		unsigned char* savep = transposed + k;
-
-		for (size_t j = 0; j < vertex_count_aligned; j += 16)
-		{
-			LOAD(0);
-			LOAD(1);
-			LOAD(2);
-			LOAD(3);
-
-			r0 = unzigzag8(r0);
-			r1 = unzigzag8(r1);
-			r2 = unzigzag8(r2);
-			r3 = unzigzag8(r3);
-
-			transpose8(r0, r1, r2, r3);
-
-			TEMP t0, t1, t2, t3;
-
-			GRP4(0);
-			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
-			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
-
-			GRP4(1);
-			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
-			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
-
-			GRP4(2);
-			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
-			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
-
-			GRP4(3);
-			FIXD(0), FIXD(1), FIXD(2), FIXD(3);
-			SAVE(0), SAVE(1), SAVE(2), SAVE(3);
-
-#undef TEMP
-#undef PREP
-#undef LOAD
-#undef GRP4
-#undef FIXD
-#undef SAVE
-		}
+		decodeDeltas4Simd(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k);
 	}
 
 	memcpy(vertex_data, transposed, vertex_count * vertex_size);
