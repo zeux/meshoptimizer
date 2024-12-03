@@ -1250,7 +1250,8 @@ size_t meshopt_encodeVertexBufferBound(size_t vertex_count, size_t vertex_size)
 
 void meshopt_encodeVertexVersion(int version)
 {
-	assert(unsigned(version) <= 0);
+	// note: this version is experimental and the binary format is not finalized; this should not be used in production!
+	assert(unsigned(version) <= 0 || version == 0xe);
 
 	meshopt::gEncodeVertexVersion = version;
 }
@@ -1291,7 +1292,7 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 		return -1;
 
 	int version = data_header & 0x0f;
-	if (version > 0)
+	if (version > 0 && version != 0xe)
 		return -1;
 
 	unsigned char last_vertex[256];
