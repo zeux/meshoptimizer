@@ -151,7 +151,7 @@ struct Stats
 {
 	size_t size;
 	size_t header;  // bytes for header
-	size_t bitg[4]; // bytes for bit groups
+	size_t bitg[9]; // bytes for bit groups
 	size_t bitc[8]; // bit consistency: how many bits are shared between all bytes in a group
 };
 
@@ -284,7 +284,7 @@ static unsigned char* encodeBytes(unsigned char* data, unsigned char* data_end, 
 		last_bits = best_bits;
 
 #if TRACE
-		bytestats->bitg[bitslog2] += best_size;
+		bytestats->bitg[best_bits] += best_size;
 #endif
 	}
 
@@ -1333,11 +1333,12 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 
 		printf("%2d: %7d bytes [%4.1f%%] %.1f bpv", int(k), int(vsk.size), double(vsk.size) / double(total_size) * 100, double(vsk.size) / double(vertex_count) * 8);
 
-		size_t total_k = vsk.header + vsk.bitg[0] + vsk.bitg[1] + vsk.bitg[2] + vsk.bitg[3];
+		size_t total_k = vsk.header + vsk.bitg[1] + vsk.bitg[2] + vsk.bitg[4] + vsk.bitg[8];
 
-		printf(" |\thdr [%5.1f%%] bitg 1-3 [%4.1f%% %4.1f%% %4.1f%%]",
-		    double(vsk.header) / double(total_k) * 100, double(vsk.bitg[1]) / double(total_k) * 100,
-		    double(vsk.bitg[2]) / double(total_k) * 100, double(vsk.bitg[3]) / double(total_k) * 100);
+		printf(" |\thdr [%5.1f%%] bitg [1 %4.1f%% 2 %4.1f%% 4 %4.1f%% %4.1f%%]",
+		    double(vsk.header) / double(total_k) * 100,
+		    double(vsk.bitg[1]) / double(total_k) * 100, double(vsk.bitg[2]) / double(total_k) * 100,
+		    double(vsk.bitg[4]) / double(total_k) * 100, double(vsk.bitg[8]) / double(total_k) * 100);
 
 		printf(" |\tbitc [%3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%%]",
 		    double(vsk.bitc[0]) / double(vertex_count) * 100, double(vsk.bitc[1]) / double(vertex_count) * 100,
