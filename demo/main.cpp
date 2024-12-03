@@ -822,7 +822,7 @@ void packVertex(const Mesh& mesh, const char* pvn)
 }
 
 template <typename PV>
-void encodeVertex(const Mesh& mesh, const char* pvn)
+void encodeVertex(const Mesh& mesh, const char* pvn, bool validate = true)
 {
 	std::vector<PV> pv(mesh.vertices.size());
 	packMesh(pv, mesh.vertices);
@@ -838,12 +838,12 @@ void encodeVertex(const Mesh& mesh, const char* pvn)
 	double middle = timestamp();
 
 	int res = meshopt_decodeVertexBuffer(&result[0], mesh.vertices.size(), sizeof(PV), &vbuf[0], vbuf.size());
-	assert(res == 0);
+	assert(!validate || res == 0);
 	(void)res;
 
 	double end = timestamp();
 
-	assert(memcmp(&pv[0], &result[0], pv.size() * sizeof(PV)) == 0);
+	assert(!validate || memcmp(&pv[0], &result[0], pv.size() * sizeof(PV)) == 0);
 
 	size_t csize = compress(vbuf);
 
@@ -1398,8 +1398,13 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	meshlets(mesh);
-	meshlets(mesh, /* scan= */ false, /* uniform= */ true);
+	Mesh copy = mesh;
+	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
+	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
+
+	encodeVertex<PackedVertex>(copy, "0");
+	meshopt_encodeVertexVersion(0xe);
+	encodeVertex<PackedVertex>(copy, "1", /* validate= */ false);
 }
 
 void processNanite(const char* path)

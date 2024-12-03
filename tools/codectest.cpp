@@ -75,7 +75,9 @@ void testFile(FILE* file, size_t count, size_t stride, Stats* stats = 0)
 	}
 
 	std::vector<unsigned char> output(meshopt_encodeVertexBufferBound(count, stride));
+	meshopt_encodeVertexVersion(0xe);
 	output.resize(meshopt_encodeVertexBuffer(output.data(), output.size(), decoded.data(), count, stride));
+	meshopt_encodeVertexVersion(0);
 
 	printf(" raw %zu KB\t", decoded.size() / 1024);
 	printf(" v0 %.2f", double(input.size()) / double(decoded.size()));
