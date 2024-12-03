@@ -188,6 +188,7 @@ static size_t encodeBytesGroupMeasure(const unsigned char* buffer, int bits)
 static unsigned char* encodeBytesGroup(unsigned char* data, const unsigned char* buffer, int bits)
 {
 	assert(bits >= 1 && bits <= 8);
+	assert(kByteGroupSize % 8 == 0);
 
 	if (bits == 1)
 		return data;
@@ -198,35 +199,33 @@ static unsigned char* encodeBytesGroup(unsigned char* data, const unsigned char*
 		return data + kByteGroupSize;
 	}
 
-	size_t byte_size = 8 / bits;
-	assert(kByteGroupSize % byte_size == 0);
-
 	// fixed portion: bits bits for each value
 	// variable portion: full byte for each out-of-range value (using 1...1 as sentinel)
 	unsigned char sentinel = (1 << bits) - 1;
 
-	for (size_t i = 0; i < kByteGroupSize; i += byte_size)
-	{
-		unsigned char byte = 0;
-
-		for (size_t k = 0; k < byte_size; ++k)
-		{
-			unsigned char enc = (buffer[i + k] >= sentinel) ? sentinel : buffer[i + k];
-
-			byte <<= bits;
-			byte |= enc;
-		}
-
-		*data++ = byte;
-	}
+	unsigned int accum = 0;
+	unsigned int accum_bits = 0;
 
 	for (size_t i = 0; i < kByteGroupSize; ++i)
 	{
-		if (buffer[i] >= sentinel)
+		unsigned char enc = (buffer[i] >= sentinel) ? sentinel : buffer[i];
+
+		accum <<= bits;
+		accum |= enc;
+		accum_bits += bits;
+
+		if (accum_bits >= 8)
 		{
-			*data++ = buffer[i];
+			accum_bits -= 8;
+			*data++ = (unsigned char)(accum >> accum_bits);
 		}
 	}
+
+	assert(accum_bits == 0);
+
+	for (size_t i = 0; i < kByteGroupSize; ++i)
+		if (buffer[i] >= sentinel)
+			*data++ = buffer[i];
 
 	return data;
 }
