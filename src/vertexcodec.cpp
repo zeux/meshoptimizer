@@ -167,9 +167,9 @@ static bool encodeBytesGroupZero(const unsigned char* buffer)
 
 static size_t encodeBytesGroupMeasure(const unsigned char* buffer, int bits)
 {
-	assert(bits >= 1 && bits <= 8);
+	assert(bits >= 0 && bits <= 8);
 
-	if (bits == 1)
+	if (bits == 0)
 		return encodeBytesGroupZero(buffer) ? 0 : size_t(-1);
 
 	if (bits == 8)
@@ -187,10 +187,10 @@ static size_t encodeBytesGroupMeasure(const unsigned char* buffer, int bits)
 
 static unsigned char* encodeBytesGroup(unsigned char* data, const unsigned char* buffer, int bits)
 {
-	assert(bits >= 1 && bits <= 8);
+	assert(bits >= 0 && bits <= 8);
 	assert(kByteGroupSize % 8 == 0);
 
-	if (bits == 1)
+	if (bits == 0)
 		return data;
 
 	if (bits == 8)
@@ -230,7 +230,7 @@ static unsigned char* encodeBytesGroup(unsigned char* data, const unsigned char*
 	return data;
 }
 
-static unsigned char* encodeBytes(unsigned char* data, unsigned char* data_end, const unsigned char* buffer, size_t buffer_size)
+static unsigned char* encodeBytes(unsigned char* data, unsigned char* data_end, const unsigned char* buffer, size_t buffer_size, const int bits[4])
 {
 	assert(buffer_size % kByteGroupSize == 0);
 
@@ -251,27 +251,24 @@ static unsigned char* encodeBytes(unsigned char* data, unsigned char* data_end, 
 		if (size_t(data_end - data) < kByteGroupDecodeLimit)
 			return NULL;
 
-		int best_bits = 8;
-		size_t best_size = encodeBytesGroupMeasure(buffer + i, 8);
+		int best_bitk = 3;
+		size_t best_size = encodeBytesGroupMeasure(buffer + i, bits[best_bitk]);
 
-		for (int bits = 1; bits < 8; bits *= 2)
+		for (int bitk = 0; bitk < 3; ++bitk)
 		{
-			size_t size = encodeBytesGroupMeasure(buffer + i, bits);
+			size_t size = encodeBytesGroupMeasure(buffer + i, bits[bitk]);
 
 			if (size < best_size)
 			{
-				best_bits = bits;
+				best_bitk = bitk;
 				best_size = size;
 			}
 		}
 
-		int bitslog2 = (best_bits == 1) ? 0 : (best_bits == 2 ? 1 : (best_bits == 4 ? 2 : 3));
-		assert((1 << bitslog2) == best_bits);
-
 		size_t header_offset = i / kByteGroupSize;
+		header[header_offset / 4] |= best_bitk << ((header_offset % 4) * 2);
 
-		header[header_offset / 4] |= bitslog2 << ((header_offset % 4) * 2);
-
+		int best_bits = bits[best_bitk];
 		unsigned char* next = encodeBytesGroup(data, buffer + i, best_bits);
 
 		assert(data + best_size == next);
@@ -331,7 +328,9 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 		}
 #endif
 
-		data = encodeBytes(data, data_end, buffer, (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1));
+		static const int kBitsV0[4] = {0, 2, 4, 8};
+
+		data = encodeBytes(data, data_end, buffer, (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1), kBitsV0);
 		if (!data)
 			return NULL;
 
