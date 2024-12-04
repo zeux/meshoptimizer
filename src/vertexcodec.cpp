@@ -124,8 +124,8 @@ const size_t kTailMaxSize = 32;
 static const int kBitsV0[4] = {0, 2, 4, 8};
 static const int kBitsV1[3][4] = {
     {0, 2, 4, 8},
-    {0, 1, 2, 8},
-    {2, 4, 6, 8},
+    {0, 1, 2, 4},
+    {1, 4, 6, 8},
 };
 
 static size_t getVertexBlockSize(size_t vertex_size)
