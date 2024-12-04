@@ -154,7 +154,7 @@ int main(int argc, char** argv)
 		for (int i = 2; i < argc; ++i)
 			testFile(argv[i], &stats);
 		printf("---\n");
-		printf("%d files: raw v1/v0 %+.1f%%, lz4 v1/v0 %+.1f%%, zstd v1/v0 %+.1f%%\n",
+		printf("%d files: raw v1/v0 %+.2f%%, lz4 v1/v0 %+.2f%%, zstd v1/v0 %+.2f%%\n",
 		    int(stats.count), stats.v10_raw / stats.count * 100, stats.v10_lz4 / stats.count * 100, stats.v10_zstd / stats.count * 100);
 		return 0;
 	}
