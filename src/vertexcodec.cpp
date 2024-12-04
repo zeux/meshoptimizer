@@ -307,18 +307,12 @@ static size_t encodeBytesMeasure(const unsigned char* buffer, size_t buffer_size
 
 	for (size_t i = 0; i < buffer_size; i += kByteGroupSize)
 	{
-		int best_bitk = 3;
-		size_t best_size = encodeBytesGroupMeasure(buffer + i, bits[best_bitk]);
+		size_t best_size = size_t(-1);
 
-		for (int bitk = 0; bitk < 3; ++bitk)
+		for (int bitk = 0; bitk < 4; ++bitk)
 		{
 			size_t size = encodeBytesGroupMeasure(buffer + i, bits[bitk]);
-
-			if (size < best_size)
-			{
-				best_bitk = bitk;
-				best_size = size;
-			}
+			best_size = (size < best_size) ? size : best_size;
 		}
 
 		result += best_size;
@@ -385,10 +379,10 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 
 		if (version == 0xe)
 		{
-			int best_ctrl = 0;
-			size_t best_bytes = encodeBytesMeasure(buffer, vertex_count_aligned, kBitsV1[0]);
+			int best_ctrl = 3; // literal encoding
+			size_t best_bytes = vertex_count;
 
-			for (int i = 1; i <= 2; ++i)
+			for (int i = 0; i <= 2; ++i)
 			{
 				size_t est_bytes = encodeBytesMeasure(buffer, vertex_count_aligned, kBitsV1[i]);
 
@@ -401,12 +395,24 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 
 			control[k / 4] |= best_ctrl << ((k % 4) * 2);
 
-			unsigned char* next = encodeBytes(data, data_end, buffer, vertex_count_aligned, kBitsV1[best_ctrl]);
-			if (!next)
-				return NULL;
+			if (best_ctrl == 3)
+			{
+				// literal encoding
+				if (size_t(data_end - data) < vertex_count)
+					return NULL;
 
-			assert(data + best_bytes == next);
-			data = next;
+				memcpy(data, buffer, vertex_count);
+				data += vertex_count;
+			}
+			else
+			{
+				unsigned char* next = encodeBytes(data, data_end, buffer, vertex_count_aligned, kBitsV1[best_ctrl]);
+				if (!next)
+					return NULL;
+
+				assert(data + best_bytes == next);
+				data = next;
+			}
 		}
 		else
 		{
