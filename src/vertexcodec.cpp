@@ -255,6 +255,8 @@ static unsigned char* encodeBytes(unsigned char* data, unsigned char* data_end, 
 
 	memset(header, 0, header_size);
 
+	int last_bits = -1;
+
 	for (size_t i = 0; i < buffer_size; i += kByteGroupSize)
 	{
 		if (size_t(data_end - data) < kByteGroupDecodeLimit)
@@ -267,7 +269,8 @@ static unsigned char* encodeBytes(unsigned char* data, unsigned char* data_end, 
 		{
 			size_t size = encodeBytesGroupMeasure(buffer + i, bits[bitk]);
 
-			if (size < best_size)
+			// favor consistent bit selection across groups, but never replace literals
+			if (size < best_size || (size == best_size && bits[bitk] == last_bits && bits[best_bitk] != 8))
 			{
 				best_bitk = bitk;
 				best_size = size;
@@ -282,6 +285,7 @@ static unsigned char* encodeBytes(unsigned char* data, unsigned char* data_end, 
 
 		assert(data + best_size == next);
 		data = next;
+		last_bits = best_bits;
 
 #if TRACE
 		bytestats->bitg[bitslog2] += best_size;
