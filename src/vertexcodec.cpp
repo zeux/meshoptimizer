@@ -60,6 +60,15 @@
 #define SIMD_LATENCYOPT
 #endif
 
+// In switch dispatch, marking default case as unreachable allows to remove redundant bounds checks
+#if defined(__GNUC__)
+#define SIMD_UNREACHABLE() __builtin_unreachable()
+#elif defined(__MSC_VER)
+#define SIMD_UNREACHABLE() __assume(0)
+#else
+#define SIMD_UNREACHABLE() assert(0)
+#endif
+
 #endif // !MESHOPTIMIZER_NO_SIMD
 
 #ifdef SIMD_SSE
@@ -744,7 +753,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	}
 
 	default:
-		assert(!"Unexpected bit length"); // unreachable since bitslog2 is a 2-bit value
+		SIMD_UNREACHABLE();
 		return data;
 	}
 }
@@ -803,7 +812,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	}
 
 	default:
-		assert(!"Unexpected bit length"); // unreachable since bitslog2 is a 2-bit value
+		SIMD_UNREACHABLE();
 		return data;
 	}
 }
@@ -926,7 +935,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	}
 
 	default:
-		assert(!"Unexpected bit length"); // unreachable since bitslog2 is a 2-bit value
+		SIMD_UNREACHABLE();
 		return data;
 	}
 }
@@ -1026,7 +1035,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	}
 
 	default:
-		assert(!"Unexpected bit length"); // unreachable since bitslog2 is a 2-bit value
+		SIMD_UNREACHABLE();
 		return data;
 	}
 }
