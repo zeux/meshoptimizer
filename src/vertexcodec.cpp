@@ -123,6 +123,7 @@ const size_t kTailMaxSize = 32;
 
 static const int kBitsV0[4] = {0, 2, 4, 8};
 static const int kBitsV1[3][4] = {
+    // first entry must be 0/2/4/8 to match v0
     {0, 2, 4, 8},
     {0, 1, 2, 4},
     {1, 4, 6, 8},
@@ -336,13 +337,11 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 	// we sometimes encode elements we didn't fill when rounding to kByteGroupSize
 	memset(buffer, 0, sizeof(buffer));
 
-	unsigned char* control = data;
-
 	size_t control_size = version == 0 ? 0 : vertex_size / 4;
-
 	if (size_t(data_end - data) < control_size)
 		return NULL;
 
+	unsigned char* control = data;
 	data += control_size;
 
 	memset(control, 0, control_size);
@@ -484,18 +483,16 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 #undef NEXT
 }
 
-static const unsigned char* decodeBytes(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size)
+static const unsigned char* decodeBytes(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size, const int* bits)
 {
 	assert(buffer_size % kByteGroupSize == 0);
 
-	const unsigned char* header = data;
-
 	// round number of groups to 4 to get number of header bytes
 	size_t header_size = (buffer_size / kByteGroupSize + 3) / 4;
-
 	if (size_t(data_end - data) < header_size)
 		return NULL;
 
+	const unsigned char* header = data;
 	data += header_size;
 
 	for (size_t i = 0; i < buffer_size; i += kByteGroupSize)
@@ -505,9 +502,10 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 
 		size_t header_offset = i / kByteGroupSize;
 
-		int bitslog2 = (header[header_offset / 4] >> ((header_offset % 4) * 2)) & 3;
+		int bitsk = (header[header_offset / 4] >> ((header_offset % 4) * 2)) & 3;
+		(void)bits;
 
-		data = decodeBytesGroup(data, buffer + i, bitslog2);
+		data = decodeBytesGroup(data, buffer + i, bitsk);
 	}
 
 	return data;
@@ -530,7 +528,7 @@ static void decodeDeltas1(const unsigned char* buffer, unsigned char* transposed
 	}
 }
 
-static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
+static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], int version)
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 
@@ -540,11 +538,32 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 	size_t vertex_count_aligned = (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1);
 	assert(vertex_count <= vertex_count_aligned);
 
+	size_t control_size = version == 0 ? 0 : vertex_size / 4;
+	if (size_t(data_end - data) < control_size)
+		return NULL;
+
+	const unsigned char* control = data;
+	data += control_size;
+
 	for (size_t k = 0; k < vertex_size; ++k)
 	{
-		data = decodeBytes(data, data_end, buffer, vertex_count_aligned);
-		if (!data)
-			return NULL;
+		int ctrl = version == 0 ? 0 : (control[k / 4] >> ((k % 4) * 2)) & 3;
+
+		if (ctrl == 3)
+		{
+			// literal encoding
+			if (size_t(data_end - data) < vertex_count)
+				return NULL;
+
+			memcpy(buffer, data, vertex_count);
+			data += vertex_count;
+		}
+		else
+		{
+			data = decodeBytes(data, data_end, buffer, vertex_count_aligned, kBitsV1[ctrl]);
+			if (!data)
+				return NULL;
+		}
 
 		decodeDeltas1(buffer, transposed + k, vertex_count, vertex_size, last_vertex[k]);
 	}
@@ -1076,14 +1095,12 @@ static const unsigned char* decodeBytesSimd(const unsigned char* data, const uns
 	assert(buffer_size % kByteGroupSize == 0);
 	assert(kByteGroupSize == 16);
 
-	const unsigned char* header = data;
-
 	// round number of groups to 4 to get number of header bytes
 	size_t header_size = (buffer_size / kByteGroupSize + 3) / 4;
-
 	if (size_t(data_end - data) < header_size)
 		return NULL;
 
+	const unsigned char* header = data;
 	data += header_size;
 
 	size_t i = 0;
@@ -1192,9 +1209,12 @@ static void decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transp
 }
 
 SIMD_TARGET
-static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256])
+static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], int version)
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
+	assert(version == 0);
+
+	(void)version;
 
 	unsigned char buffer[kVertexBlockMaxSize * 4];
 	unsigned char transposed[kVertexBlockSizeBytes];
@@ -1363,7 +1383,7 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 	assert(vertex_size > 0 && vertex_size <= 256);
 	assert(vertex_size % 4 == 0);
 
-	const unsigned char* (*decode)(const unsigned char*, const unsigned char*, unsigned char*, size_t, size_t, unsigned char[256]) = NULL;
+	const unsigned char* (*decode)(const unsigned char*, const unsigned char*, unsigned char*, size_t, size_t, unsigned char[256], int) = NULL;
 
 #if defined(SIMD_SSE) && defined(SIMD_FALLBACK)
 	decode = (cpuid & (1 << 9)) ? decodeVertexBlockSimd : decodeVertexBlock;
@@ -1406,7 +1426,7 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 	{
 		size_t block_size = (vertex_offset + vertex_block_size < vertex_count) ? vertex_block_size : vertex_count - vertex_offset;
 
-		data = decode(data, data_end, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, last_vertex);
+		data = decode(data, data_end, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, last_vertex, version);
 		if (!data)
 			return -2;
 
