@@ -781,8 +781,8 @@ static const unsigned char* decodeBytesGroupSimdX(const unsigned char* data, uns
 		unsigned char mask1 = data[1];
 
 		// bit reverse
-		unsigned char mask0r = ((mask0 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
-		unsigned char mask1r = ((mask1 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
+		unsigned char mask0r = (unsigned char)(((mask0 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32);
+		unsigned char mask1r = (unsigned char)(((mask1 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32);
 
 		__m128i shuf = decodeShuffleMask(mask0r, mask1r);
 
@@ -880,7 +880,7 @@ static const unsigned char* decodeBytesGroupSimdX(const unsigned char* data, uns
 		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + 12));
 
 		// 4 groups with 4 6-bit values in each 3 bytes => 4 groups with 4 6-bit values in each 4 bytes
-		__m128i sel4 = _mm_shuffle_epi8(sel6, _mm_setr_epi8(2, 1, 0, 0xff, 5, 4, 3, 0xff, 8, 7, 6, 0xff, 11, 10, 9, 0xff));
+		__m128i sel4 = _mm_shuffle_epi8(sel6, _mm_setr_epi8(2, 1, 0, -128, 5, 4, 3, -127, 8, 7, 6, -128, 11, 10, 9, -128));
 
 		// sel4 = 0x00 [6 2] [4 4] [2 6]
 		__m128i sel0 = _mm_srli_epi32(sel4, 18); // 0 0 0 0X
@@ -988,7 +988,7 @@ static const __m128i decodeBytesGroupConfigX[6][3] = {
     {_mm_setzero_si128(), _mm_setzero_si128(), _mm_setzero_si128()},                                                                                                             // 3
     {_mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7), _mm_set1_epi8(15), _mm_setr_epi8(4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56)},              // 4
     {_mm_setzero_si128(), _mm_setzero_si128(), _mm_setzero_si128()},                                                                                                             // 5
-    {_mm_setr_epi8(5, 4, 3, 2, 1, 0, 0xff, 0xff, 11, 10, 9, 8, 7, 6, 0xff, 0xff), _mm_set1_epi8(63), _mm_setr_epi8(42, 36, 30, 24, 18, 12, 6, 0, 42, 36, 30, 24, 18, 12, 6, 0)}, // 6
+    {_mm_setr_epi8(5, 4, 3, 2, 1, 0, -128, -128, 11, 10, 9, 8, 7, 6, -128, -128), _mm_set1_epi8(63), _mm_setr_epi8(42, 36, 30, 24, 18, 12, 6, 0, 42, 36, 30, 24, 18, 12, 6, 0)}, // 6
 };
 
 static const unsigned char* decodeBytesGroupSimdX(const unsigned char* data, unsigned char* buffer, int bits)
@@ -1190,8 +1190,8 @@ static const unsigned char* decodeBytesGroupSimdX(const unsigned char* data, uns
 		unsigned char mask1 = data[1];
 
 		// bit reverse
-		unsigned char mask0r = ((mask0 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
-		unsigned char mask1r = ((mask1 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
+		unsigned char mask0r = (unsigned char)(((mask0 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32);
+		unsigned char mask1r = (unsigned char)(((mask1 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32);
 
 		uint8x8_t rest0 = vld1_u8(data + 2);
 		uint8x8_t rest1 = vld1_u8(data + 2 + kDecodeBytesGroupCount[mask0]);
@@ -1455,8 +1455,8 @@ static const unsigned char* decodeBytesGroupSimdX(const unsigned char* data, uns
 		unsigned char mask1 = data[1];
 
 		// bit reverse
-		unsigned char mask0r = ((mask0 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
-		unsigned char mask1r = ((mask1 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
+		unsigned char mask0r = (unsigned char)(((mask0 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32);
+		unsigned char mask1r = (unsigned char)(((mask1 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32);
 
 		v128_t shuf = decodeShuffleMask(mask0r, mask1r);
 
