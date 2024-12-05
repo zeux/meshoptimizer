@@ -847,12 +847,53 @@ void encodeVertex(const Mesh& mesh, const char* pvn, bool validate = true)
 
 	size_t csize = compress(vbuf);
 
-	printf("VtxCodec%1s: %.1f bits/vertex (post-deflate %.1f bits/vertex); encode %.2f msec, decode %.2f msec (%.2f GB/s)\n", pvn,
+	printf("VtxCodec%1s%s: %.1f bits/vertex (post-deflate %.1f bits/vertex); encode %.2f msec, decode %.2f msec (%.2f GB/s)\n", pvn,
+	    res == 0 && memcmp(&pv[0], &result[0], pv.size() * sizeof(PV)) == 0 ? "" : "!",
 	    double(vbuf.size() * 8) / double(mesh.vertices.size()),
 	    double(csize * 8) / double(mesh.vertices.size()),
 	    (middle - start) * 1000,
 	    (end - middle) * 1000,
 	    (double(result.size() * sizeof(PV)) / (1 << 30)) / (end - middle));
+}
+
+template <typename PV>
+void benchmarkVertex(const Mesh& mesh, const char* pvn)
+{
+	std::vector<PV> pv(mesh.vertices.size());
+	packMesh(pv, mesh.vertices);
+
+	// allocate result outside of the timing loop to exclude memset() from decode timing
+	std::vector<PV> result(mesh.vertices.size());
+
+	std::vector<unsigned char> vbuf(meshopt_encodeVertexBufferBound(mesh.vertices.size(), sizeof(PV)));
+	vbuf.resize(meshopt_encodeVertexBuffer(&vbuf[0], vbuf.size(), &pv[0], mesh.vertices.size(), sizeof(PV)));
+
+	// warmup
+	meshopt_decodeVertexBuffer(&result[0], mesh.vertices.size(), sizeof(PV), &vbuf[0], vbuf.size());
+
+	double mint = 0;
+	double avgt = 0;
+	double vart = 0;
+
+	for (int i = 0; i < 100; ++i)
+	{
+		double start = timestamp();
+		meshopt_decodeVertexBuffer(&result[0], mesh.vertices.size(), sizeof(PV), &vbuf[0], vbuf.size());
+		double end = timestamp();
+
+		double time = end - start;
+
+		mint = (mint == 0 || time < mint) ? time : mint;
+
+		// Welford variance computation
+		double delta = time - avgt;
+		avgt += delta / (i + 1);
+		vart += delta * (time - avgt);
+	}
+
+	printf("VtxCodec%1s: decode best %.2f msec (%.2f GB/s); avg %.2f +- %.2f msec\n", pvn,
+	    mint * 1000, (double(result.size() * sizeof(PV)) / (1 << 30)) / mint,
+	    avgt * 1000, sqrt(vart / 100) * 1000);
 }
 
 void stripify(const Mesh& mesh, bool use_restart, char desc)
@@ -1405,6 +1446,11 @@ void processDev(const char* path)
 	encodeVertex<PackedVertex>(copy, "0");
 	meshopt_encodeVertexVersion(0xe);
 	encodeVertex<PackedVertex>(copy, "1", /* validate= */ false);
+	meshopt_encodeVertexVersion(0);
+
+	benchmarkVertex<PackedVertex>(copy, "0");
+	meshopt_encodeVertexVersion(0xe);
+	benchmarkVertex<PackedVertex>(copy, "1");
 }
 
 void processNanite(const char* path)
