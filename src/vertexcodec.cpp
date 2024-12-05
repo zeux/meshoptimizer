@@ -1360,6 +1360,134 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		return data;
 	}
 }
+
+SIMD_TARGET
+static const unsigned char* decodeBytesGroupSimdX(const unsigned char* data, unsigned char* buffer, int bits)
+{
+	switch (bits)
+	{
+	case 0:
+	{
+		v128_t result = wasm_i8x16_splat(0);
+
+		wasm_v128_store(buffer, result);
+
+		return data;
+	}
+
+	case 1:
+	{
+		v128_t rest = wasm_v128_load(data + 2);
+
+		unsigned char mask0 = data[0];
+		unsigned char mask1 = data[1];
+
+		// bit reverse
+		unsigned char mask0r = ((mask0 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
+		unsigned char mask1r = ((mask1 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
+
+		v128_t shuf = decodeShuffleMask(mask0r, mask1r);
+
+		v128_t result = wasm_i8x16_swizzle(rest, shuf);
+
+		wasm_v128_store(buffer, result);
+
+		return data + 2 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
+	}
+
+	case 2:
+	{
+		v128_t sel2 = wasm_v128_load(data);
+		v128_t rest = wasm_v128_load(data + 4);
+
+		v128_t sel22 = wasmx_unpacklo_v8x16(wasm_i16x8_shr(sel2, 4), sel2);
+		v128_t sel2222 = wasmx_unpacklo_v8x16(wasm_i16x8_shr(sel22, 2), sel22);
+		v128_t sel = wasm_v128_and(sel2222, wasm_i8x16_splat(3));
+
+		v128_t mask = wasm_i8x16_eq(sel, wasm_i8x16_splat(3));
+
+		unsigned char mask0, mask1;
+		wasmMoveMask(mask, mask0, mask1);
+
+		v128_t shuf = decodeShuffleMask(mask0, mask1);
+
+		v128_t result = wasm_v128_bitselect(wasm_i8x16_swizzle(rest, shuf), sel, mask);
+
+		wasm_v128_store(buffer, result);
+
+		return data + 4 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
+	}
+
+	case 4:
+	{
+		v128_t sel4 = wasm_v128_load(data);
+		v128_t rest = wasm_v128_load(data + 8);
+
+		v128_t sel44 = wasmx_unpacklo_v8x16(wasm_i16x8_shr(sel4, 4), sel4);
+		v128_t sel = wasm_v128_and(sel44, wasm_i8x16_splat(15));
+
+		v128_t mask = wasm_i8x16_eq(sel, wasm_i8x16_splat(15));
+
+		unsigned char mask0, mask1;
+		wasmMoveMask(mask, mask0, mask1);
+
+		v128_t shuf = decodeShuffleMask(mask0, mask1);
+
+		v128_t result = wasm_v128_bitselect(wasm_i8x16_swizzle(rest, shuf), sel, mask);
+
+		wasm_v128_store(buffer, result);
+
+		return data + 8 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
+	}
+
+	case 6:
+	{
+		v128_t sel6 = wasm_v128_load(data);
+		v128_t rest = wasm_v128_load(data + 12);
+
+		// 4 groups with 4 6-bit values in each 3 bytes => 4 groups with 4 6-bit values in each 4 bytes
+		// TODO: try wasm shuffle with mask?
+		v128_t sel4 = wasm_i8x16_swizzle(sel6, wasm_i8x16_const(2, 1, 0, 0xff, 5, 4, 3, 0xff, 8, 7, 6, 0xff, 11, 10, 9, 0xff));
+
+		// sel4 = 0x00 [6 2] [4 4] [2 6]
+		v128_t sel0 = wasm_i32x4_shr(sel4, 18); // 0 0 0 0X
+		v128_t sel1 = wasm_i32x4_shr(sel4, 4);  // 0 ? ?Y ?
+		v128_t sel2 = wasm_i32x4_shl(sel4, 10); // ? ?Z ? 0
+		v128_t sel3 = wasm_i32x4_shl(sel4, 24); // ?W 0 0 0
+
+		// utilize knowledge of zero bits to simplify combining sel0-3
+		v128_t sel02 = wasm_v128_and(wasm_v128_or(sel0, sel2), wasm_i32x4_splat(0x003f003f));
+		v128_t sel13 = wasm_v128_and(wasm_v128_or(sel1, sel3), wasm_i32x4_splat(0x3f003f00));
+		v128_t sel = wasm_v128_or(sel02, sel13);
+
+		v128_t mask = wasm_i8x16_eq(sel, wasm_i8x16_splat(0x3f));
+
+		unsigned char mask0, mask1;
+		wasmMoveMask(mask, mask0, mask1);
+
+		v128_t shuf = decodeShuffleMask(mask0, mask1);
+
+		v128_t result = wasm_v128_bitselect(wasm_i8x16_swizzle(rest, shuf), sel, mask);
+
+		wasm_v128_store(buffer, result);
+
+		return data + 12 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
+	}
+
+	case 8:
+	{
+		v128_t result = wasm_v128_load(data);
+
+		wasm_v128_store(buffer, result);
+
+		return data + 16;
+	}
+
+	default:
+		assert(!"Unexpected bit length"); // unreachable since bitslog2 is a 2-bit value
+		return data;
+	}
+}
 #endif
 
 #if defined(SIMD_SSE) || defined(SIMD_AVX)
@@ -1481,7 +1609,7 @@ static const unsigned char* decodeBytesSimd(const unsigned char* data, const uns
 	return data;
 }
 
-#if defined(SIMD_SSE) || defined(SIMD_NEON)
+#if defined(SIMD_SSE) || defined(SIMD_NEON) || defined(SIMD_WASM)
 SIMD_TARGET
 static const unsigned char* decodeBytesSimdX(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size, const int* bits)
 {
@@ -1635,7 +1763,7 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 				memcpy(buffer + j * vertex_count_aligned, data, vertex_count);
 				data += vertex_count;
 			}
-#if defined(SIMD_SSE) || defined(SIMD_NEON)
+#if defined(SIMD_SSE) || defined(SIMD_NEON) || defined(SIMD_WASM)
 			else if (version == 0xe)
 			{
 				data = decodeBytesSimdX(data, data_end, buffer + j * vertex_count_aligned, vertex_count_aligned, kBitsV1[ctrl]);
