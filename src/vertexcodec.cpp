@@ -971,6 +971,69 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		return data;
 	}
 }
+
+// [bits-1] for bits 1..6
+static const __m128i decodeBytesGroupConfigX[6][3] = {
+    {_mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7), _mm_set1_epi8(1), _mm_setr_epi8(7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8)},                      // 1
+    {_mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7), _mm_set1_epi8(3), _mm_setr_epi8(6, 4, 2, 0, 14, 12, 10, 8, 22, 20, 18, 16, 30, 28, 26, 24)},                 // 2
+    {_mm_setzero_si128(), _mm_setzero_si128(), _mm_setzero_si128()},                                                                                                             // 3
+    {_mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7), _mm_set1_epi8(15), _mm_setr_epi8(4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56)},              // 4
+    {_mm_setzero_si128(), _mm_setzero_si128(), _mm_setzero_si128()},                                                                                                             // 5
+    {_mm_setr_epi8(5, 4, 3, 2, 1, 0, 0xff, 0xff, 11, 10, 9, 8, 7, 6, 0xff, 0xff), _mm_set1_epi8(63), _mm_setr_epi8(42, 36, 30, 24, 18, 12, 6, 0, 42, 36, 30, 24, 18, 12, 6, 0)}, // 6
+};
+
+static const unsigned char* decodeBytesGroupSimdX(const unsigned char* data, unsigned char* buffer, int bits)
+{
+	switch (bits)
+	{
+	case 0:
+	{
+		__m128i result = _mm_setzero_si128();
+
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
+
+		return data;
+	}
+
+	case 1:
+	case 2:
+	case 4:
+	case 6:
+	{
+		const unsigned char* skip = data + bits * 2;
+
+		__m128i selb = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data));
+		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(skip));
+
+		__m128i shuf = decodeBytesGroupConfigX[bits - 1][0];
+		__m128i sent = decodeBytesGroupConfigX[bits - 1][1];
+		__m128i ctrl = decodeBytesGroupConfigX[bits - 1][2];
+
+		__m128i selw = _mm_shuffle_epi8(selb, shuf);
+		__m128i sel = _mm_and_si128(sent, _mm_multishift_epi64_epi8(ctrl, selw));
+		__mmask16 mask16 = _mm_cmp_epi8_mask(sel, sent, _MM_CMPINT_EQ);
+
+		__m128i result = _mm_mask_expand_epi8(sel, mask16, rest);
+
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
+
+		return skip + _mm_popcnt_u32(mask16);
+	}
+
+	case 8:
+	{
+		__m128i result = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data));
+
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
+
+		return data + 16;
+	}
+
+	default:
+		assert(!"Unexpected bit length"); // unreachable since bitslog2 is a 2-bit value
+		return data;
+	}
+}
 #endif
 
 #ifdef SIMD_NEON
@@ -1609,7 +1672,7 @@ static const unsigned char* decodeBytesSimd(const unsigned char* data, const uns
 	return data;
 }
 
-#if defined(SIMD_SSE) || defined(SIMD_NEON) || defined(SIMD_WASM)
+#if defined(SIMD_SSE) || defined(SIMD_AVX) || defined(SIMD_NEON) || defined(SIMD_WASM)
 SIMD_TARGET
 static const unsigned char* decodeBytesSimdX(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size, const int* bits)
 {
@@ -1763,7 +1826,7 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 				memcpy(buffer + j * vertex_count_aligned, data, vertex_count);
 				data += vertex_count;
 			}
-#if defined(SIMD_SSE) || defined(SIMD_NEON) || defined(SIMD_WASM)
+#if defined(SIMD_SSE) || defined(SIMD_AVX) || defined(SIMD_NEON) || defined(SIMD_WASM)
 			else if (version == 0xe)
 			{
 				data = decodeBytesSimdX(data, data_end, buffer + j * vertex_count_aligned, vertex_count_aligned, kBitsV1[ctrl]);
