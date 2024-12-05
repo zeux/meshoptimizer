@@ -974,6 +974,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 #endif
 
 #ifdef SIMD_NEON
+SIMD_TARGET
 static uint8x16_t shuffleBytes(unsigned char mask0, unsigned char mask1, uint8x8_t rest0, uint8x8_t rest1)
 {
 	uint8x8_t sm0 = vld1_u8(kDecodeBytesGroupShuffle[mask0]);
@@ -985,6 +986,7 @@ static uint8x16_t shuffleBytes(unsigned char mask0, unsigned char mask1, uint8x8
 	return vcombine_u8(r0, r1);
 }
 
+SIMD_TARGET
 static void neonMoveMask(uint8x16_t mask, unsigned char& mask0, unsigned char& mask1)
 {
 	// magic constant found using z3 SMT assuming mask has 8 groups of 0xff or 0x00
@@ -996,6 +998,7 @@ static void neonMoveMask(uint8x16_t mask, unsigned char& mask0, unsigned char& m
 	mask1 = uint8_t((vgetq_lane_u64(mask2, 1) * magic) >> 56);
 }
 
+SIMD_TARGET
 static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int bitslog2)
 {
 	switch (bitslog2)
@@ -1081,6 +1084,169 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	}
 
 	case 3:
+	{
+		uint8x16_t result = vld1q_u8(data);
+
+		vst1q_u8(buffer, result);
+
+		return data + 16;
+	}
+
+	default:
+		assert(!"Unexpected bit length"); // unreachable since bitslog2 is a 2-bit value
+		return data;
+	}
+}
+
+SIMD_TARGET
+static const unsigned char* decodeBytesGroupSimdX(const unsigned char* data, unsigned char* buffer, int bits)
+{
+	switch (bits)
+	{
+	case 0:
+	{
+		uint8x16_t result = vdupq_n_u8(0);
+
+		vst1q_u8(buffer, result);
+
+		return data;
+	}
+
+	case 1:
+	{
+		unsigned char mask0 = data[0];
+		unsigned char mask1 = data[1];
+
+		// bit reverse
+		unsigned char mask0r = ((mask0 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
+		unsigned char mask1r = ((mask1 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
+
+		uint8x8_t rest0 = vld1_u8(data + 2);
+		uint8x8_t rest1 = vld1_u8(data + 2 + kDecodeBytesGroupCount[mask0]);
+
+		uint8x16_t result = shuffleBytes(mask0r, mask1r, rest0, rest1);
+
+		vst1q_u8(buffer, result);
+
+		return data + 2 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
+	}
+	case 2:
+	{
+#ifdef SIMD_LATENCYOPT
+		unsigned int data32;
+		memcpy(&data32, data, 4);
+		data32 &= data32 >> 1;
+
+		// arrange bits such that low bits of nibbles of data64 contain all 2-bit elements of data32
+		unsigned long long data64 = ((unsigned long long)data32 << 30) | (data32 & 0x3fffffff);
+
+		// adds all 1-bit nibbles together; the sum fits in 4 bits because datacnt=16 would have used mode 3
+		int datacnt = int(((data64 & 0x1111111111111111ull) * 0x1111111111111111ull) >> 60);
+#endif
+
+		uint8x8_t sel2 = vld1_u8(data);
+		uint8x8_t sel22 = vzip_u8(vshr_n_u8(sel2, 4), sel2).val[0];
+		uint8x8x2_t sel2222 = vzip_u8(vshr_n_u8(sel22, 2), sel22);
+		uint8x16_t sel = vandq_u8(vcombine_u8(sel2222.val[0], sel2222.val[1]), vdupq_n_u8(3));
+
+		uint8x16_t mask = vceqq_u8(sel, vdupq_n_u8(3));
+		unsigned char mask0, mask1;
+		neonMoveMask(mask, mask0, mask1);
+
+		uint8x8_t rest0 = vld1_u8(data + 4);
+		uint8x8_t rest1 = vld1_u8(data + 4 + kDecodeBytesGroupCount[mask0]);
+
+		uint8x16_t result = vbslq_u8(mask, shuffleBytes(mask0, mask1, rest0, rest1), sel);
+
+		vst1q_u8(buffer, result);
+
+#ifdef SIMD_LATENCYOPT
+		return data + 4 + datacnt;
+#else
+		return data + 4 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
+#endif
+	}
+
+	case 4:
+	{
+#ifdef SIMD_LATENCYOPT
+		unsigned long long data64;
+		memcpy(&data64, data, 8);
+		data64 &= data64 >> 1;
+		data64 &= data64 >> 2;
+
+		// adds all 1-bit nibbles together; the sum fits in 4 bits because datacnt=16 would have used mode 3
+		int datacnt = int(((data64 & 0x1111111111111111ull) * 0x1111111111111111ull) >> 60);
+#endif
+
+		uint8x8_t sel4 = vld1_u8(data);
+		uint8x8x2_t sel44 = vzip_u8(vshr_n_u8(sel4, 4), vand_u8(sel4, vdup_n_u8(15)));
+		uint8x16_t sel = vcombine_u8(sel44.val[0], sel44.val[1]);
+
+		uint8x16_t mask = vceqq_u8(sel, vdupq_n_u8(15));
+		unsigned char mask0, mask1;
+		neonMoveMask(mask, mask0, mask1);
+
+		uint8x8_t rest0 = vld1_u8(data + 8);
+		uint8x8_t rest1 = vld1_u8(data + 8 + kDecodeBytesGroupCount[mask0]);
+
+		uint8x16_t result = vbslq_u8(mask, shuffleBytes(mask0, mask1, rest0, rest1), sel);
+
+		vst1q_u8(buffer, result);
+
+#ifdef SIMD_LATENCYOPT
+		return data + 8 + datacnt;
+#else
+		return data + 8 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
+#endif
+	}
+
+	case 6:
+	{
+#ifdef __aarch64__
+		uint8x16_t sel6 = vld1q_u8(data);
+
+		// 4 groups with 4 6-bit values in each 3 bytes => 4 groups with 4 6-bit values in each 4 bytes
+		const uint8x16_t selt = {2, 1, 0, 0xff, 5, 4, 3, 0xff, 8, 7, 6, 0xff, 11, 10, 9, 0xff};
+		uint8x16_t sel4b = vqtbl1q_u8(sel6, selt);
+#else
+		uint8x8_t sel6l = vld1_u8(data);
+		uint8x8_t sel6h = vld1_u8(data + 6);
+
+		const uint8x8_t selt = {2, 1, 0, 0xff, 5, 4, 3, 0xff};
+		uint8x8_t sel4l = vtbl1_u8(sel6l, selt);
+		uint8x8_t sel4h = vtbl1_u8(sel6h, selt);
+		uint8x16_t sel4b = vcombine_u8(sel4l, sel4h);
+#endif
+
+		uint32x4_t sel4 = vreinterpretq_u8_u32(sel4b);
+
+		// sel4 = 0x00 [6 2] [4 4] [2 6]
+		uint32x4_t sel0 = vshrq_n_u32(sel4, 18); // 0 0 0 0X
+		uint32x4_t sel1 = vshrq_n_u32(sel4, 4);  // 0 ? ?Y ?
+		uint32x4_t sel2 = vshlq_n_u32(sel4, 10); // ? ?Z ? 0
+		uint32x4_t sel3 = vshlq_n_u32(sel4, 24); // ?W 0 0 0
+
+		// utilize knowledge of zero bits to simplify combining sel0-3
+		uint32x4_t sel02 = vandq_u32(vorrq_u32(sel0, sel2), vdupq_n_u32(0x003f003f));
+		uint32x4_t sel13 = vandq_u32(vorrq_u32(sel1, sel3), vdupq_n_u32(0x3f003f00));
+		uint8x16_t sel = vreinterpretq_u8_u32(vorrq_u32(sel02, sel13));
+
+		uint8x16_t mask = vceqq_u8(sel, vdupq_n_u8(0x3f));
+		unsigned char mask0, mask1;
+		neonMoveMask(mask, mask0, mask1);
+
+		uint8x8_t rest0 = vld1_u8(data + 12);
+		uint8x8_t rest1 = vld1_u8(data + 12 + kDecodeBytesGroupCount[mask0]);
+
+		uint8x16_t result = vbslq_u8(mask, shuffleBytes(mask0, mask1, rest0, rest1), sel);
+
+		vst1q_u8(buffer, result);
+
+		return data + 12 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
+	}
+
+	case 8:
 	{
 		uint8x16_t result = vld1q_u8(data);
 
@@ -1315,7 +1481,7 @@ static const unsigned char* decodeBytesSimd(const unsigned char* data, const uns
 	return data;
 }
 
-#if defined(SIMD_SSE)
+#if defined(SIMD_SSE) || defined(SIMD_NEON)
 SIMD_TARGET
 static const unsigned char* decodeBytesSimdX(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size, const int* bits)
 {
@@ -1469,7 +1635,7 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 				memcpy(buffer + j * vertex_count_aligned, data, vertex_count);
 				data += vertex_count;
 			}
-#if defined(SIMD_SSE)
+#if defined(SIMD_SSE) || defined(SIMD_NEON)
 			else if (version == 0xe)
 			{
 				data = decodeBytesSimdX(data, data_end, buffer + j * vertex_count_aligned, vertex_count_aligned, kBitsV1[ctrl]);
