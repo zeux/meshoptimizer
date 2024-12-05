@@ -434,52 +434,73 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 }
 
 #if defined(SIMD_FALLBACK) || (!defined(SIMD_SSE) && !defined(SIMD_NEON) && !defined(SIMD_AVX) && !defined(SIMD_WASM))
-static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned char* buffer, int bitslog2)
+static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned char* buffer, int bits)
 {
-#define READ() byte = *data++
-#define NEXT(bits) enc = byte >> (8 - bits), byte <<= bits, encv = *data_var, *buffer++ = (enc == (1 << bits) - 1) ? encv : enc, data_var += (enc == (1 << bits) - 1)
+#define READ1() word = *data++
+#define READ3() word = (data[0] << 16) | (data[1] << 8) | data[2], data += 3
+#define NEXT(off, bits) enc = (word >> off) & ((1 << bits) - 1), encv = *data_var, *buffer++ = (enc == (1 << bits) - 1) ? encv : enc, data_var += (enc == (1 << bits) - 1)
 
-	unsigned char byte, enc, encv;
+	unsigned int word;
+	unsigned char enc, encv;
 	const unsigned char* data_var;
 
-	switch (bitslog2)
+	switch (bits)
 	{
 	case 0:
 		memset(buffer, 0, kByteGroupSize);
 		return data;
 	case 1:
-		data_var = data + 4;
+		data_var = data + 2;
 
-		// 4 groups with 4 2-bit values in each byte
-		READ(), NEXT(2), NEXT(2), NEXT(2), NEXT(2);
-		READ(), NEXT(2), NEXT(2), NEXT(2), NEXT(2);
-		READ(), NEXT(2), NEXT(2), NEXT(2), NEXT(2);
-		READ(), NEXT(2), NEXT(2), NEXT(2), NEXT(2);
+		// 2 groups with 8 1-bit values in each byte
+		READ1(), NEXT(7, 1), NEXT(6, 1), NEXT(5, 1), NEXT(4, 1), NEXT(3, 1), NEXT(2, 1), NEXT(1, 1), NEXT(0, 1);
+		READ1(), NEXT(7, 1), NEXT(6, 1), NEXT(5, 1), NEXT(4, 1), NEXT(3, 1), NEXT(2, 1), NEXT(1, 1), NEXT(0, 1);
 
 		return data_var;
 	case 2:
+		data_var = data + 4;
+
+		// 4 groups with 4 2-bit values in each byte
+		READ1(), NEXT(6, 2), NEXT(4, 2), NEXT(2, 2), NEXT(0, 2);
+		READ1(), NEXT(6, 2), NEXT(4, 2), NEXT(2, 2), NEXT(0, 2);
+		READ1(), NEXT(6, 2), NEXT(4, 2), NEXT(2, 2), NEXT(0, 2);
+		READ1(), NEXT(6, 2), NEXT(4, 2), NEXT(2, 2), NEXT(0, 2);
+
+		return data_var;
+	case 4:
 		data_var = data + 8;
 
 		// 8 groups with 2 4-bit values in each byte
-		READ(), NEXT(4), NEXT(4);
-		READ(), NEXT(4), NEXT(4);
-		READ(), NEXT(4), NEXT(4);
-		READ(), NEXT(4), NEXT(4);
-		READ(), NEXT(4), NEXT(4);
-		READ(), NEXT(4), NEXT(4);
-		READ(), NEXT(4), NEXT(4);
-		READ(), NEXT(4), NEXT(4);
+		READ1(), NEXT(4, 4), NEXT(0, 4);
+		READ1(), NEXT(4, 4), NEXT(0, 4);
+		READ1(), NEXT(4, 4), NEXT(0, 4);
+		READ1(), NEXT(4, 4), NEXT(0, 4);
+		READ1(), NEXT(4, 4), NEXT(0, 4);
+		READ1(), NEXT(4, 4), NEXT(0, 4);
+		READ1(), NEXT(4, 4), NEXT(0, 4);
+		READ1(), NEXT(4, 4), NEXT(0, 4);
 
 		return data_var;
-	case 3:
+	case 6:
+		data_var = data + 12;
+
+		// 4 groups with 4 6-bit values in each 3 bytes
+		READ3(), NEXT(18, 6), NEXT(12, 6), NEXT(6, 6), NEXT(0, 6);
+		READ3(), NEXT(18, 6), NEXT(12, 6), NEXT(6, 6), NEXT(0, 6);
+		READ3(), NEXT(18, 6), NEXT(12, 6), NEXT(6, 6), NEXT(0, 6);
+		READ3(), NEXT(18, 6), NEXT(12, 6), NEXT(6, 6), NEXT(0, 6);
+
+		return data_var;
+	case 8:
 		memcpy(buffer, data, kByteGroupSize);
 		return data + kByteGroupSize;
 	default:
-		assert(!"Unexpected bit length"); // unreachable since bitslog2 is a 2-bit value
+		assert(!"Unexpected bit length"); // unreachable since bits comes from kBitsV*
 		return data;
 	}
 
-#undef READ
+#undef READ1
+#undef READ3
 #undef NEXT
 }
 
@@ -501,11 +522,9 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 			return NULL;
 
 		size_t header_offset = i / kByteGroupSize;
-
 		int bitsk = (header[header_offset / 4] >> ((header_offset % 4) * 2)) & 3;
-		(void)bits;
 
-		data = decodeBytesGroup(data, buffer + i, bitsk);
+		data = decodeBytesGroup(data, buffer + i, bits[bitsk]);
 	}
 
 	return data;
