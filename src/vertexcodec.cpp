@@ -749,6 +749,169 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		return data;
 	}
 }
+
+SIMD_TARGET
+static const unsigned char* decodeBytesGroupSimdX(const unsigned char* data, unsigned char* buffer, int bits)
+{
+	switch (bits)
+	{
+	case 0:
+	{
+		__m128i result = _mm_setzero_si128();
+
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
+
+		return data;
+	}
+
+	case 1:
+	{
+		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + 2));
+
+		unsigned char mask0 = data[0];
+		unsigned char mask1 = data[1];
+
+		// bit reverse
+		unsigned char mask0r = ((mask0 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
+		unsigned char mask1r = ((mask1 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
+
+		__m128i shuf = decodeShuffleMask(mask0r, mask1r);
+
+		__m128i result = _mm_shuffle_epi8(rest, shuf);
+
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
+
+		return data + 2 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
+	}
+
+	case 2:
+	{
+#ifdef __GNUC__
+		typedef int __attribute__((aligned(1))) unaligned_int;
+#else
+		typedef int unaligned_int;
+#endif
+
+#ifdef SIMD_LATENCYOPT
+		unsigned int data32;
+		memcpy(&data32, data, 4);
+		data32 &= data32 >> 1;
+
+		// arrange bits such that low bits of nibbles of data64 contain all 2-bit elements of data32
+		unsigned long long data64 = ((unsigned long long)data32 << 30) | (data32 & 0x3fffffff);
+
+		// adds all 1-bit nibbles together; the sum fits in 4 bits because datacnt=16 would have used mode 3
+		int datacnt = int(((data64 & 0x1111111111111111ull) * 0x1111111111111111ull) >> 60);
+#endif
+
+		__m128i sel2 = _mm_cvtsi32_si128(*reinterpret_cast<const unaligned_int*>(data));
+		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + 4));
+
+		__m128i sel22 = _mm_unpacklo_epi8(_mm_srli_epi16(sel2, 4), sel2);
+		__m128i sel2222 = _mm_unpacklo_epi8(_mm_srli_epi16(sel22, 2), sel22);
+		__m128i sel = _mm_and_si128(sel2222, _mm_set1_epi8(3));
+
+		__m128i mask = _mm_cmpeq_epi8(sel, _mm_set1_epi8(3));
+		int mask16 = _mm_movemask_epi8(mask);
+		unsigned char mask0 = (unsigned char)(mask16 & 255);
+		unsigned char mask1 = (unsigned char)(mask16 >> 8);
+
+		__m128i shuf = decodeShuffleMask(mask0, mask1);
+
+		__m128i result = _mm_or_si128(_mm_shuffle_epi8(rest, shuf), _mm_andnot_si128(mask, sel));
+
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
+
+#ifdef SIMD_LATENCYOPT
+		return data + 4 + datacnt;
+#else
+		return data + 4 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
+#endif
+	}
+
+	case 4:
+	{
+#ifdef SIMD_LATENCYOPT
+		unsigned long long data64;
+		memcpy(&data64, data, 8);
+		data64 &= data64 >> 1;
+		data64 &= data64 >> 2;
+
+		// adds all 1-bit nibbles together; the sum fits in 4 bits because datacnt=16 would have used mode 3
+		int datacnt = int(((data64 & 0x1111111111111111ull) * 0x1111111111111111ull) >> 60);
+#endif
+
+		__m128i sel4 = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(data));
+		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + 8));
+
+		__m128i sel44 = _mm_unpacklo_epi8(_mm_srli_epi16(sel4, 4), sel4);
+		__m128i sel = _mm_and_si128(sel44, _mm_set1_epi8(15));
+
+		__m128i mask = _mm_cmpeq_epi8(sel, _mm_set1_epi8(15));
+		int mask16 = _mm_movemask_epi8(mask);
+		unsigned char mask0 = (unsigned char)(mask16 & 255);
+		unsigned char mask1 = (unsigned char)(mask16 >> 8);
+
+		__m128i shuf = decodeShuffleMask(mask0, mask1);
+
+		__m128i result = _mm_or_si128(_mm_shuffle_epi8(rest, shuf), _mm_andnot_si128(mask, sel));
+
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
+
+#ifdef SIMD_LATENCYOPT
+		return data + 8 + datacnt;
+#else
+		return data + 8 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
+#endif
+	}
+
+	case 6:
+	{
+		__m128i sel6 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data));
+		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + 12));
+
+		// 4 groups with 4 6-bit values in each 3 bytes => 4 groups with 4 6-bit values in each 4 bytes
+		__m128i sel4 = _mm_shuffle_epi8(sel6, _mm_setr_epi8(2, 1, 0, 0xff, 5, 4, 3, 0xff, 8, 7, 6, 0xff, 11, 10, 9, 0xff));
+
+		// sel4 = 0x00 [6 2] [4 4] [2 6]
+		__m128i sel0 = _mm_srli_epi32(sel4, 18); // 0 0 0 0X
+		__m128i sel1 = _mm_srli_epi32(sel4, 4);  // 0 ? ?Y ?
+		__m128i sel2 = _mm_slli_epi32(sel4, 10); // ? ?Z ? 0
+		__m128i sel3 = _mm_slli_epi32(sel4, 24); // ?W 0 0 0
+
+		// utilize knowledge of zero bits to simplify combining sel0-3
+		__m128i sel02 = _mm_and_si128(_mm_or_si128(sel0, sel2), _mm_set1_epi32(0x003f003f));
+		__m128i sel13 = _mm_and_si128(_mm_or_si128(sel1, sel3), _mm_set1_epi32(0x3f003f00));
+		__m128i sel = _mm_or_si128(sel02, sel13);
+
+		__m128i mask = _mm_cmpeq_epi8(sel, _mm_set1_epi8(0x3f));
+		int mask16 = _mm_movemask_epi8(mask);
+		unsigned char mask0 = (unsigned char)(mask16 & 255);
+		unsigned char mask1 = (unsigned char)(mask16 >> 8);
+
+		__m128i shuf = decodeShuffleMask(mask0, mask1);
+
+		__m128i result = _mm_or_si128(_mm_shuffle_epi8(rest, shuf), _mm_andnot_si128(mask, sel));
+
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
+
+		return data + 12 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
+	}
+
+	case 8:
+	{
+		__m128i result = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data));
+
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
+
+		return data + 16;
+	}
+
+	default:
+		assert(!"Unexpected bit length"); // unreachable
+		return data;
+	}
+}
 #endif
 
 #ifdef SIMD_AVX
@@ -1152,6 +1315,51 @@ static const unsigned char* decodeBytesSimd(const unsigned char* data, const uns
 	return data;
 }
 
+#if defined(SIMD_SSE)
+SIMD_TARGET
+static const unsigned char* decodeBytesSimdX(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size, const int* bits)
+{
+	assert(buffer_size % kByteGroupSize == 0);
+	assert(kByteGroupSize == 16);
+
+	// round number of groups to 4 to get number of header bytes
+	size_t header_size = (buffer_size / kByteGroupSize + 3) / 4;
+	if (size_t(data_end - data) < header_size)
+		return NULL;
+
+	const unsigned char* header = data;
+	data += header_size;
+
+	size_t i = 0;
+
+	// fast-path: process 4 groups at a time, do a shared bounds check
+	for (; i + kByteGroupSize * 4 <= buffer_size && size_t(data_end - data) >= kByteGroupDecodeLimit * 4; i += kByteGroupSize * 4)
+	{
+		size_t header_offset = i / kByteGroupSize;
+		unsigned char header_byte = header[header_offset / 4];
+
+		data = decodeBytesGroupSimdX(data, buffer + i + kByteGroupSize * 0, bits[(header_byte >> 0) & 3]);
+		data = decodeBytesGroupSimdX(data, buffer + i + kByteGroupSize * 1, bits[(header_byte >> 2) & 3]);
+		data = decodeBytesGroupSimdX(data, buffer + i + kByteGroupSize * 2, bits[(header_byte >> 4) & 3]);
+		data = decodeBytesGroupSimdX(data, buffer + i + kByteGroupSize * 3, bits[(header_byte >> 6) & 3]);
+	}
+
+	// slow-path: process remaining groups
+	for (; i < buffer_size; i += kByteGroupSize)
+	{
+		if (size_t(data_end - data) < kByteGroupDecodeLimit)
+			return NULL;
+
+		size_t header_offset = i / kByteGroupSize;
+		int bitsk = (header[header_offset / 4] >> ((header_offset % 4) * 2)) & 3;
+
+		data = decodeBytesGroupSimdX(data, buffer + i, bits[bitsk]);
+	}
+
+	return data;
+}
+#endif
+
 SIMD_TARGET
 static void decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t vertex_count_aligned, size_t vertex_size, unsigned char last_vertex[4])
 {
@@ -1231,22 +1439,50 @@ SIMD_TARGET
 static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], int version)
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
-	assert(version == 0);
-
-	(void)version;
 
 	unsigned char buffer[kVertexBlockMaxSize * 4];
 	unsigned char transposed[kVertexBlockSizeBytes];
 
 	size_t vertex_count_aligned = (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1);
 
+	size_t control_size = version == 0 ? 0 : vertex_size / 4;
+	if (size_t(data_end - data) < control_size)
+		return NULL;
+
+	const unsigned char* control = data;
+	data += control_size;
+
 	for (size_t k = 0; k < vertex_size; k += 4)
 	{
+		unsigned char ctrl_byte = version == 0 ? 0 : control[k / 4];
+
 		for (size_t j = 0; j < 4; ++j)
 		{
-			data = decodeBytesSimd(data, data_end, buffer + j * vertex_count_aligned, vertex_count_aligned);
-			if (!data)
-				return NULL;
+			int ctrl = (ctrl_byte >> (j * 2)) & 3;
+
+			if (ctrl == 3)
+			{
+				// literal encoding
+				if (size_t(data_end - data) < vertex_count)
+					return NULL;
+
+				memcpy(buffer + j * vertex_count_aligned, data, vertex_count);
+				data += vertex_count;
+			}
+#if defined(SIMD_SSE)
+			else if (version == 0xe)
+			{
+				data = decodeBytesSimdX(data, data_end, buffer + j * vertex_count_aligned, vertex_count_aligned, kBitsV1[ctrl]);
+				if (!data)
+					return NULL;
+			}
+#endif
+			else
+			{
+				data = decodeBytesSimd(data, data_end, buffer + j * vertex_count_aligned, vertex_count_aligned);
+				if (!data)
+					return NULL;
+			}
 		}
 
 		decodeDeltas4Simd(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k);
