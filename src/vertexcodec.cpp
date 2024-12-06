@@ -784,18 +784,35 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 #endif
 
 #ifdef SIMD_AVX
-static const __m128i decodeBytesGroupConfig[] = {
-    _mm_set1_epi8(3),
-    _mm_set1_epi8(15),
-    _mm_setr_epi8(6, 4, 2, 0, 14, 12, 10, 8, 22, 20, 18, 16, 30, 28, 26, 24),
-    _mm_setr_epi8(4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56),
+static const __m128i decodeBytesGroupConfig[2][8] = {
+    {
+        _mm_setzero_si128(),
+        _mm_set1_epi8(3),
+        _mm_set1_epi8(15),
+        _mm_setzero_si128(),
+        _mm_setzero_si128(),
+        _mm_set1_epi8(1),
+        _mm_set1_epi8(3),
+        _mm_set1_epi8(15),
+    },
+    {
+        _mm_setzero_si128(),
+        _mm_setr_epi8(6, 4, 2, 0, 14, 12, 10, 8, 22, 20, 18, 16, 30, 28, 26, 24),
+        _mm_setr_epi8(4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56),
+        _mm_setzero_si128(),
+        _mm_setzero_si128(),
+        _mm_setr_epi8(7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8),
+        _mm_setr_epi8(6, 4, 2, 0, 14, 12, 10, 8, 22, 20, 18, 16, 30, 28, 26, 24),
+        _mm_setr_epi8(4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56),
+    },
 };
 
-static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int bitslog2)
+static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int hbits)
 {
-	switch (bitslog2)
+	switch (hbits)
 	{
 	case 0:
+	case 4:
 	{
 		__m128i result = _mm_setzero_si128();
 
@@ -806,14 +823,17 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 
 	case 1:
 	case 2:
+	case 5:
+	case 6:
+	case 7:
 	{
-		const unsigned char* skip = data + (bitslog2 << 2);
+		const unsigned char* skip = data + (hbits < 3 ? (hbits << 2) : (1 << (hbits - 4)));
 
 		__m128i selb = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(data));
 		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(skip));
 
-		__m128i sent = decodeBytesGroupConfig[bitslog2 - 1];
-		__m128i ctrl = decodeBytesGroupConfig[bitslog2 + 1];
+		__m128i sent = decodeBytesGroupConfig[0][hbits];
+		__m128i ctrl = decodeBytesGroupConfig[1][hbits];
 
 		__m128i selw = _mm_shuffle_epi32(selb, 0x44);
 		__m128i sel = _mm_and_si128(sent, _mm_multishift_epi64_epi8(ctrl, selw));
@@ -827,6 +847,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	}
 
 	case 3:
+	case 8:
 	{
 		__m128i result = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data));
 
