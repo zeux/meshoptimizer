@@ -230,6 +230,11 @@ static unsigned char* encodeBytesGroup(unsigned char* data, const unsigned char*
 			byte |= enc;
 		}
 
+		// encode 1-bit groups in reverse bit order
+		// this makes them faster to decode alongside other groups
+		if (bits == 1)
+			byte = (unsigned char)(((byte * 0x80200802ull) & 0x0884422110ull) * 0x0101010101ull >> 32);
+
 		*data++ = byte;
 	}
 
@@ -466,9 +471,13 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 	case 1:
 		data_var = data + 2;
 
-		// 2 groups with 8 1-bit values in each byte
-		READ(), NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1);
-		READ(), NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1);
+		// 2 groups with 8 1-bit values in each byte (reversed from the order in other groups)
+		READ();
+		byte = (unsigned char)(((byte * 0x80200802ull) & 0x0884422110ull) * 0x0101010101ull >> 32);
+		NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1);
+		READ();
+		byte = (unsigned char)(((byte * 0x80200802ull) & 0x0884422110ull) * 0x0101010101ull >> 32);
+		NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1);
 
 		return data_var;
 	case 2:
@@ -763,11 +772,7 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		unsigned char mask0 = data[0];
 		unsigned char mask1 = data[1];
 
-		// bit reverse
-		unsigned char mask0r = (unsigned char)(((mask0 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32);
-		unsigned char mask1r = (unsigned char)(((mask1 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32);
-
-		__m128i shuf = decodeShuffleMask(mask0r, mask1r);
+		__m128i shuf = decodeShuffleMask(mask0, mask1);
 
 		__m128i result = _mm_shuffle_epi8(rest, shuf);
 
@@ -801,7 +806,7 @@ static const __m128i decodeBytesGroupConfig[2][8] = {
         _mm_setr_epi8(4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56),
         _mm_setzero_si128(),
         _mm_setzero_si128(),
-        _mm_setr_epi8(7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8),
+        _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15),
         _mm_setr_epi8(6, 4, 2, 0, 14, 12, 10, 8, 22, 20, 18, 16, 30, 28, 26, 24),
         _mm_setr_epi8(4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56),
     },
@@ -988,14 +993,10 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		unsigned char mask0 = data[0];
 		unsigned char mask1 = data[1];
 
-		// bit reverse
-		unsigned char mask0r = (unsigned char)(((mask0 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32);
-		unsigned char mask1r = (unsigned char)(((mask1 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32);
-
 		uint8x8_t rest0 = vld1_u8(data + 2);
 		uint8x8_t rest1 = vld1_u8(data + 2 + kDecodeBytesGroupCount[mask0]);
 
-		uint8x16_t result = shuffleBytes(mask0r, mask1r, rest0, rest1);
+		uint8x16_t result = shuffleBytes(mask0, mask1, rest0, rest1);
 
 		vst1q_u8(buffer, result);
 
@@ -1113,11 +1114,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		unsigned char mask0 = data[0];
 		unsigned char mask1 = data[1];
 
-		// bit reverse
-		unsigned char mask0r = (unsigned char)(((mask0 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32);
-		unsigned char mask1r = (unsigned char)(((mask1 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32);
-
-		v128_t shuf = decodeShuffleMask(mask0r, mask1r);
+		v128_t shuf = decodeShuffleMask(mask0, mask1);
 
 		v128_t result = wasm_i8x16_swizzle(rest, shuf);
 
