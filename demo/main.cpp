@@ -871,29 +871,32 @@ void benchmarkVertex(const Mesh& mesh, const char* pvn)
 	// warmup
 	meshopt_decodeVertexBuffer(&result[0], mesh.vertices.size(), sizeof(PV), &vbuf[0], vbuf.size());
 
-	double mint = 0;
-	double avgt = 0;
-	double vart = 0;
-
-	for (int i = 0; i < 100; ++i)
+	for (int run = 0; run < 10; ++run)
 	{
-		double start = timestamp();
-		meshopt_decodeVertexBuffer(&result[0], mesh.vertices.size(), sizeof(PV), &vbuf[0], vbuf.size());
-		double end = timestamp();
+		double mint = 0;
+		double avgt = 0;
+		double vart = 0;
 
-		double time = end - start;
+		for (int i = 0; i < 100; ++i)
+		{
+			double start = timestamp();
+			meshopt_decodeVertexBuffer(&result[0], mesh.vertices.size(), sizeof(PV), &vbuf[0], vbuf.size());
+			double end = timestamp();
 
-		mint = (mint == 0 || time < mint) ? time : mint;
+			double time = end - start;
 
-		// Welford variance computation
-		double delta = time - avgt;
-		avgt += delta / (i + 1);
-		vart += delta * (time - avgt);
+			mint = (mint == 0 || time < mint) ? time : mint;
+
+			// Welford variance computation
+			double delta = time - avgt;
+			avgt += delta / (i + 1);
+			vart += delta * (time - avgt);
+		}
+
+		printf("VtxCodec%1s: decode best %.2f msec (%.2f GB/s); avg %.2f +- %.2f msec\n", pvn,
+		    mint * 1000, (double(result.size() * sizeof(PV)) / (1 << 30)) / mint,
+		    avgt * 1000, sqrt(vart / 100) * 1000);
 	}
-
-	printf("VtxCodec%1s: decode best %.2f msec (%.2f GB/s); avg %.2f +- %.2f msec\n", pvn,
-	    mint * 1000, (double(result.size() * sizeof(PV)) / (1 << 30)) / mint,
-	    avgt * 1000, sqrt(vart / 100) * 1000);
 }
 
 void stripify(const Mesh& mesh, bool use_restart, char desc)
