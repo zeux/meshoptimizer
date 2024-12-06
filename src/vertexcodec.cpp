@@ -865,11 +865,12 @@ static void neonMoveMask(uint8x16_t mask, unsigned char& mask0, unsigned char& m
 	mask1 = uint8_t((vgetq_lane_u64(mask2, 1) * magic) >> 56);
 }
 
-static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int bitslog2)
+static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int hbits)
 {
-	switch (bitslog2)
+	switch (hbits)
 	{
 	case 0:
+	case 4:
 	{
 		uint8x16_t result = vdupq_n_u8(0);
 
@@ -879,6 +880,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	}
 
 	case 1:
+	case 6:
 	{
 #ifdef SIMD_LATENCYOPT
 		unsigned int data32;
@@ -916,6 +918,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	}
 
 	case 2:
+	case 7:
 	{
 #ifdef SIMD_LATENCYOPT
 		unsigned long long data64;
@@ -950,12 +953,32 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	}
 
 	case 3:
+	case 8:
 	{
 		uint8x16_t result = vld1q_u8(data);
 
 		vst1q_u8(buffer, result);
 
 		return data + 16;
+	}
+
+	case 5:
+	{
+		unsigned char mask0 = data[0];
+		unsigned char mask1 = data[1];
+
+		// bit reverse
+		unsigned char mask0r = ((mask0 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
+		unsigned char mask1r = ((mask1 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
+
+		uint8x8_t rest0 = vld1_u8(data + 2);
+		uint8x8_t rest1 = vld1_u8(data + 2 + kDecodeBytesGroupCount[mask0]);
+
+		uint8x16_t result = shuffleBytes(mask0r, mask1r, rest0, rest1);
+
+		vst1q_u8(buffer, result);
+
+		return data + 2 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
 	}
 
 	default:
@@ -991,11 +1014,12 @@ static void wasmMoveMask(v128_t mask, unsigned char& mask0, unsigned char& mask1
 }
 
 SIMD_TARGET
-static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int bitslog2)
+static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int hbits)
 {
-	switch (bitslog2)
+	switch (hbits)
 	{
 	case 0:
+	case 4:
 	{
 		v128_t result = wasm_i8x16_splat(0);
 
@@ -1005,6 +1029,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	}
 
 	case 1:
+	case 6:
 	{
 		v128_t sel2 = wasm_v128_load(data);
 		v128_t rest = wasm_v128_load(data + 4);
@@ -1028,6 +1053,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	}
 
 	case 2:
+	case 7:
 	{
 		v128_t sel4 = wasm_v128_load(data);
 		v128_t rest = wasm_v128_load(data + 8);
@@ -1050,12 +1076,33 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	}
 
 	case 3:
+	case 8:
 	{
 		v128_t result = wasm_v128_load(data);
 
 		wasm_v128_store(buffer, result);
 
 		return data + 16;
+	}
+
+	case 5:
+	{
+		v128_t rest = wasm_v128_load(data + 2);
+
+		unsigned char mask0 = data[0];
+		unsigned char mask1 = data[1];
+
+		// bit reverse
+		unsigned char mask0r = ((mask0 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
+		unsigned char mask1r = ((mask1 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
+
+		v128_t shuf = decodeShuffleMask(mask0r, mask1r);
+
+		v128_t result = wasm_i8x16_swizzle(rest, shuf);
+
+		wasm_v128_store(buffer, result);
+
+		return data + 2 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
 	}
 
 	default:
