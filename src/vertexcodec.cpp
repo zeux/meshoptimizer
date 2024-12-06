@@ -1291,7 +1291,7 @@ static const unsigned char* decodeBytesGroupSimdX(const unsigned char* data, uns
 		uint8x16_t sel4b = vcombine_u8(sel4l, sel4h);
 #endif
 
-		uint32x4_t sel4 = vreinterpretq_u8_u32(sel4b);
+		uint32x4_t sel4 = vreinterpretq_u32_u8(sel4b);
 
 		// sel4 = 0x00 [6 2] [4 4] [2 6]
 		uint32x4_t sel0 = vshrq_n_u32(sel4, 18); // 0 0 0 0X
