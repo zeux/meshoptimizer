@@ -127,7 +127,7 @@ static int gEncodeVertexVersion = 0;
 const size_t kVertexBlockSizeBytes = 8192;
 const size_t kVertexBlockMaxSize = 256;
 const size_t kByteGroupSize = 16;
-const size_t kByteGroupDecodeLimit = 28; // bit group 6: 12 bytes of bit data, 16 bytes of sentinel data (for invalid streams)
+const size_t kByteGroupDecodeLimit = 24;
 const size_t kTailMaxSize = 32;
 
 static const int kBitsV0[4] = {0, 2, 4, 8};
@@ -1353,17 +1353,17 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 
 			if (ctrl == 3)
 			{
-				// literal encoding
-				if (size_t(data_end - data) < vertex_count)
+				// literal encoding; safe to over-copy due to tail
+				if (size_t(data_end - data) < vertex_count_aligned)
 					return NULL;
 
-				memcpy(buffer + j * vertex_count_aligned, data, vertex_count);
+				memcpy(buffer + j * vertex_count_aligned, data, vertex_count_aligned);
 				data += vertex_count;
 			}
 			else if (ctrl == 2)
 			{
 				// zero encoding
-				memset(buffer + j * vertex_count_aligned, 0, vertex_count);
+				memset(buffer + j * vertex_count_aligned, 0, vertex_count_aligned);
 			}
 			else
 			{
