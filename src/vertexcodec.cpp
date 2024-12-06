@@ -159,9 +159,9 @@ static Stats* bytestats = NULL;
 static Stats vertexstats[256];
 #endif
 
-static bool encodeBytesGroupZero(const unsigned char* buffer)
+static bool canEncodeZero(const unsigned char* buffer, size_t buffer_size)
 {
-	for (size_t i = 0; i < kByteGroupSize; ++i)
+	for (size_t i = 0; i < buffer_size; ++i)
 		if (buffer[i])
 			return false;
 
@@ -173,7 +173,7 @@ static size_t encodeBytesGroupMeasure(const unsigned char* buffer, int bits)
 	assert(bits >= 0 && bits <= 8);
 
 	if (bits == 0)
-		return encodeBytesGroupZero(buffer) ? 0 : size_t(-1);
+		return canEncodeZero(buffer, kByteGroupSize) ? 0 : size_t(-1);
 
 	if (bits == 8)
 		return kByteGroupSize;
@@ -380,14 +380,24 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 			int best_ctrl = 3; // literal encoding
 			size_t best_bytes = vertex_count;
 
-			for (int i = 0; i < 2; ++i)
+			if (canEncodeZero(buffer, vertex_count))
 			{
-				size_t est_bytes = encodeBytesMeasure(buffer, vertex_count_aligned, kBitsV1 + i);
-
-				if (est_bytes < best_bytes)
+				// zero encoding
+				best_ctrl = 2;
+				best_bytes = 0;
+			}
+			else
+			{
+				// pick shortest control entry
+				for (int i = 0; i < 2; ++i)
 				{
-					best_ctrl = i;
-					best_bytes = est_bytes;
+					size_t est_bytes = encodeBytesMeasure(buffer, vertex_count_aligned, kBitsV1 + i);
+
+					if (est_bytes < best_bytes)
+					{
+						best_ctrl = i;
+						best_bytes = est_bytes;
+					}
 				}
 			}
 
@@ -402,7 +412,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 				memcpy(data, buffer, vertex_count);
 				data += vertex_count;
 			}
-			else
+			else if (best_ctrl != 2)
 			{
 				unsigned char* next = encodeBytes(data, data_end, buffer, vertex_count_aligned, kBitsV1 + best_ctrl);
 				if (!next)
@@ -560,6 +570,11 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 
 			memcpy(buffer, data, vertex_count);
 			data += vertex_count;
+		}
+		else if (ctrl == 2)
+		{
+			// zero encoding
+			memset(buffer, 0, vertex_count);
 		}
 		else
 		{
