@@ -122,12 +122,7 @@ const size_t kByteGroupDecodeLimit = 28; // bit group 6: 12 bytes of bit data, 1
 const size_t kTailMaxSize = 32;
 
 static const int kBitsV0[4] = {0, 2, 4, 8};
-static const int kBitsV1[3][4] = {
-    // first entry must be 0/2/4/8 to match v0
-    {0, 2, 4, 8},
-    {0, 1, 2, 8},
-    {2, 4, 6, 8},
-};
+static const int kBitsV1[5] = {0, 1, 2, 4, 8};
 
 static size_t getVertexBlockSize(size_t vertex_size)
 {
@@ -385,9 +380,9 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 			int best_ctrl = 3; // literal encoding
 			size_t best_bytes = vertex_count;
 
-			for (int i = 0; i <= 2; ++i)
+			for (int i = 0; i < 2; ++i)
 			{
-				size_t est_bytes = encodeBytesMeasure(buffer, vertex_count_aligned, kBitsV1[i]);
+				size_t est_bytes = encodeBytesMeasure(buffer, vertex_count_aligned, kBitsV1 + i);
 
 				if (est_bytes < best_bytes)
 				{
@@ -409,7 +404,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 			}
 			else
 			{
-				unsigned char* next = encodeBytes(data, data_end, buffer, vertex_count_aligned, kBitsV1[best_ctrl]);
+				unsigned char* next = encodeBytes(data, data_end, buffer, vertex_count_aligned, kBitsV1 + best_ctrl);
 				if (!next)
 					return NULL;
 
@@ -436,7 +431,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 }
 
 #if defined(SIMD_FALLBACK) || (!defined(SIMD_SSE) && !defined(SIMD_NEON) && !defined(SIMD_AVX) && !defined(SIMD_WASM))
-static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned char* buffer, int bitslog2)
+static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned char* buffer, int bits)
 {
 #define READ() byte = *data++
 #define NEXT(bits) enc = byte >> (8 - bits), byte <<= bits, encv = *data_var, *buffer++ = (enc == (1 << bits) - 1) ? encv : enc, data_var += (enc == (1 << bits) - 1)
@@ -444,12 +439,20 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 	unsigned char byte, enc, encv;
 	const unsigned char* data_var;
 
-	switch (bitslog2)
+	switch (bits)
 	{
 	case 0:
 		memset(buffer, 0, kByteGroupSize);
 		return data;
 	case 1:
+		data_var = data + 2;
+
+		// 2 groups with 8 1-bit values in each byte
+		READ(), NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1);
+		READ(), NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1), NEXT(1);
+
+		return data_var;
+	case 2:
 		data_var = data + 4;
 
 		// 4 groups with 4 2-bit values in each byte
@@ -459,7 +462,7 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 		READ(), NEXT(2), NEXT(2), NEXT(2), NEXT(2);
 
 		return data_var;
-	case 2:
+	case 4:
 		data_var = data + 8;
 
 		// 8 groups with 2 4-bit values in each byte
@@ -473,11 +476,11 @@ static const unsigned char* decodeBytesGroup(const unsigned char* data, unsigned
 		READ(), NEXT(4), NEXT(4);
 
 		return data_var;
-	case 3:
+	case 8:
 		memcpy(buffer, data, kByteGroupSize);
 		return data + kByteGroupSize;
 	default:
-		assert(!"Unexpected bit length"); // unreachable since bitslog2 is a 2-bit value
+		assert(!"Unexpected bit length"); // unreachable
 		return data;
 	}
 
@@ -503,11 +506,9 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 			return NULL;
 
 		size_t header_offset = i / kByteGroupSize;
-
 		int bitsk = (header[header_offset / 4] >> ((header_offset % 4) * 2)) & 3;
-		(void)bits;
 
-		data = decodeBytesGroup(data, buffer + i, bitsk);
+		data = decodeBytesGroup(data, buffer + i, bits[bitsk]);
 	}
 
 	return data;
@@ -562,7 +563,7 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 		}
 		else
 		{
-			data = decodeBytes(data, data_end, buffer, vertex_count_aligned, kBitsV1[ctrl]);
+			data = decodeBytes(data, data_end, buffer, vertex_count_aligned, version == 0 ? kBitsV0 : kBitsV1 + ctrl);
 			if (!data)
 				return NULL;
 		}
