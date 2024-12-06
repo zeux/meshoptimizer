@@ -760,7 +760,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 }
 
 SIMD_TARGET
-static const unsigned char* decodeBytesGroupSimdX(const unsigned char* data, unsigned char* buffer, int bits)
+inline const unsigned char* decodeBytesGroupSimdX(const unsigned char* data, unsigned char* buffer, int bits)
 {
 	switch (bits)
 	{
@@ -991,7 +991,8 @@ static const __m128i decodeBytesGroupConfigX[6][3] = {
     {_mm_setr_epi8(5, 4, 3, 2, 1, 0, -128, -128, 11, 10, 9, 8, 7, 6, -128, -128), _mm_set1_epi8(63), _mm_setr_epi8(42, 36, 30, 24, 18, 12, 6, 0, 42, 36, 30, 24, 18, 12, 6, 0)}, // 6
 };
 
-static const unsigned char* decodeBytesGroupSimdX(const unsigned char* data, unsigned char* buffer, int bits)
+SIMD_TARGET
+inline const unsigned char* decodeBytesGroupSimdX(const unsigned char* data, unsigned char* buffer, int bits)
 {
 	switch (bits)
 	{
@@ -1171,7 +1172,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 }
 
 SIMD_TARGET
-static const unsigned char* decodeBytesGroupSimdX(const unsigned char* data, unsigned char* buffer, int bits)
+inline const unsigned char* decodeBytesGroupSimdX(const unsigned char* data, unsigned char* buffer, int bits)
 {
 	switch (bits)
 	{
@@ -1434,7 +1435,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 }
 
 SIMD_TARGET
-static const unsigned char* decodeBytesGroupSimdX(const unsigned char* data, unsigned char* buffer, int bits)
+inline const unsigned char* decodeBytesGroupSimdX(const unsigned char* data, unsigned char* buffer, int bits)
 {
 	switch (bits)
 	{
