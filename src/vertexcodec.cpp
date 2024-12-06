@@ -1230,22 +1230,47 @@ SIMD_TARGET
 static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], int version)
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
-	assert(version == 0);
-
-	(void)version;
 
 	unsigned char buffer[kVertexBlockMaxSize * 4];
 	unsigned char transposed[kVertexBlockSizeBytes];
 
 	size_t vertex_count_aligned = (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1);
 
+	size_t control_size = version == 0 ? 0 : vertex_size / 4;
+	if (size_t(data_end - data) < control_size)
+		return NULL;
+
+	const unsigned char* control = data;
+	data += control_size;
+
 	for (size_t k = 0; k < vertex_size; k += 4)
 	{
+		unsigned char ctrl_byte = version == 0 ? 0 : control[k / 4];
+
 		for (size_t j = 0; j < 4; ++j)
 		{
-			data = decodeBytesSimd(data, data_end, buffer + j * vertex_count_aligned, vertex_count_aligned);
-			if (!data)
-				return NULL;
+			int ctrl = (ctrl_byte >> (j * 2)) & 3;
+
+			if (ctrl == 3)
+			{
+				// literal encoding
+				if (size_t(data_end - data) < vertex_count)
+					return NULL;
+
+				memcpy(buffer + j * vertex_count_aligned, data, vertex_count);
+				data += vertex_count;
+			}
+			else if (ctrl == 2)
+			{
+				// zero encoding
+				memset(buffer + j * vertex_count_aligned, 0, vertex_count);
+			}
+			else
+			{
+				data = decodeBytesSimd(data, data_end, buffer + j * vertex_count_aligned, vertex_count_aligned);
+				if (!data)
+					return NULL;
+			}
 		}
 
 		decodeDeltas4Simd(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k);
