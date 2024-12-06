@@ -88,6 +88,14 @@ ifeq ($(config),coverage)
 	LDFLAGS+=-coverage
 endif
 
+ifeq ($(config),release-avx)
+	CXXFLAGS+=-O3 -DNDEBUG -mavx
+endif
+
+ifeq ($(config),release-avx512)
+	CXXFLAGS+=-O3 -DNDEBUG -mavx512vl -mavx512vbmi -mavx512vbmi2
+endif
+
 ifeq ($(config),release-scalar)
 	CXXFLAGS+=-O3 -DNDEBUG -DMESHOPTIMIZER_NO_SIMD
 endif
