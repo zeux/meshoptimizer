@@ -764,8 +764,8 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		unsigned char mask1 = data[1];
 
 		// bit reverse
-		unsigned char mask0r = ((mask0 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
-		unsigned char mask1r = ((mask1 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
+		unsigned char mask0r = (unsigned char)(((mask0 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32);
+		unsigned char mask1r = (unsigned char)(((mask1 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32);
 
 		__m128i shuf = decodeShuffleMask(mask0r, mask1r);
 
@@ -989,8 +989,8 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		unsigned char mask1 = data[1];
 
 		// bit reverse
-		unsigned char mask0r = ((mask0 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
-		unsigned char mask1r = ((mask1 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
+		unsigned char mask0r = (unsigned char)(((mask0 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32);
+		unsigned char mask1r = (unsigned char)(((mask1 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32);
 
 		uint8x8_t rest0 = vld1_u8(data + 2);
 		uint8x8_t rest1 = vld1_u8(data + 2 + kDecodeBytesGroupCount[mask0]);
@@ -1114,8 +1114,8 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		unsigned char mask1 = data[1];
 
 		// bit reverse
-		unsigned char mask0r = ((mask0 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
-		unsigned char mask1r = ((mask1 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
+		unsigned char mask0r = (unsigned char)(((mask0 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32);
+		unsigned char mask1r = (unsigned char)(((mask1 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32);
 
 		v128_t shuf = decodeShuffleMask(mask0r, mask1r);
 
