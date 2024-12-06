@@ -649,11 +649,12 @@ static __m128i decodeShuffleMask(unsigned char mask0, unsigned char mask1)
 }
 
 SIMD_TARGET
-static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int bitslog2)
+inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int hbits)
 {
-	switch (bitslog2)
+	switch (hbits)
 	{
 	case 0:
+	case 4:
 	{
 		__m128i result = _mm_setzero_si128();
 
@@ -663,6 +664,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	}
 
 	case 1:
+	case 6:
 	{
 #ifdef __GNUC__
 		typedef int __attribute__((aligned(1))) unaligned_int;
@@ -708,6 +710,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	}
 
 	case 2:
+	case 7:
 	{
 #ifdef SIMD_LATENCYOPT
 		unsigned long long data64;
@@ -744,12 +747,33 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	}
 
 	case 3:
+	case 8:
 	{
 		__m128i result = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data));
 
 		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
 
 		return data + 16;
+	}
+
+	case 5:
+	{
+		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + 2));
+
+		unsigned char mask0 = data[0];
+		unsigned char mask1 = data[1];
+
+		// bit reverse
+		unsigned char mask0r = ((mask0 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
+		unsigned char mask1r = ((mask1 * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
+
+		__m128i shuf = decodeShuffleMask(mask0r, mask1r);
+
+		__m128i result = _mm_shuffle_epi8(rest, shuf);
+
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
+
+		return data + 2 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
 	}
 
 	default:
@@ -1117,7 +1141,7 @@ static v128_t unzigzag8(v128_t v)
 
 #if defined(SIMD_SSE) || defined(SIMD_AVX) || defined(SIMD_NEON) || defined(SIMD_WASM)
 SIMD_TARGET
-static const unsigned char* decodeBytesSimd(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size)
+static const unsigned char* decodeBytesSimd(const unsigned char* data, const unsigned char* data_end, unsigned char* buffer, size_t buffer_size, int hshift)
 {
 	assert(buffer_size % kByteGroupSize == 0);
 	assert(kByteGroupSize == 16);
@@ -1138,10 +1162,10 @@ static const unsigned char* decodeBytesSimd(const unsigned char* data, const uns
 		size_t header_offset = i / kByteGroupSize;
 		unsigned char header_byte = header[header_offset / 4];
 
-		data = decodeBytesGroupSimd(data, buffer + i + kByteGroupSize * 0, (header_byte >> 0) & 3);
-		data = decodeBytesGroupSimd(data, buffer + i + kByteGroupSize * 1, (header_byte >> 2) & 3);
-		data = decodeBytesGroupSimd(data, buffer + i + kByteGroupSize * 2, (header_byte >> 4) & 3);
-		data = decodeBytesGroupSimd(data, buffer + i + kByteGroupSize * 3, (header_byte >> 6) & 3);
+		data = decodeBytesGroupSimd(data, buffer + i + kByteGroupSize * 0, hshift + ((header_byte >> 0) & 3));
+		data = decodeBytesGroupSimd(data, buffer + i + kByteGroupSize * 1, hshift + ((header_byte >> 2) & 3));
+		data = decodeBytesGroupSimd(data, buffer + i + kByteGroupSize * 2, hshift + ((header_byte >> 4) & 3));
+		data = decodeBytesGroupSimd(data, buffer + i + kByteGroupSize * 3, hshift + ((header_byte >> 6) & 3));
 	}
 
 	// slow-path: process remaining groups
@@ -1151,10 +1175,9 @@ static const unsigned char* decodeBytesSimd(const unsigned char* data, const uns
 			return NULL;
 
 		size_t header_offset = i / kByteGroupSize;
+		unsigned char header_byte = header[header_offset / 4];
 
-		int bitslog2 = (header[header_offset / 4] >> ((header_offset % 4) * 2)) & 3;
-
-		data = decodeBytesGroupSimd(data, buffer + i, bitslog2);
+		data = decodeBytesGroupSimd(data, buffer + i, hshift + ((header_byte >> ((header_offset % 4) * 2)) & 3));
 	}
 
 	return data;
@@ -1276,7 +1299,10 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 			}
 			else
 			{
-				data = decodeBytesSimd(data, data_end, buffer + j * vertex_count_aligned, vertex_count_aligned);
+				// for v0, headers are mapped to 0..3; for v1, headers are mapped to 4..8
+				int hshift = version == 0 ? 0 : 4 + ctrl;
+
+				data = decodeBytesSimd(data, data_end, buffer + j * vertex_count_aligned, vertex_count_aligned, hshift);
 				if (!data)
 					return NULL;
 			}
