@@ -646,7 +646,7 @@ static bool gDecodeBytesGroupInitialized = decodeBytesGroupBuildTables();
 
 #ifdef SIMD_SSE
 SIMD_TARGET
-static __m128i decodeShuffleMask(unsigned char mask0, unsigned char mask1)
+inline __m128i decodeShuffleMask(unsigned char mask0, unsigned char mask1)
 {
 	__m128i sm0 = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(&kDecodeBytesGroupShuffle[mask0]));
 	__m128i sm1 = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(&kDecodeBytesGroupShuffle[mask1]));
@@ -812,7 +812,8 @@ static const __m128i decodeBytesGroupConfig[2][8] = {
     },
 };
 
-static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int hbits)
+SIMD_TARGET
+inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int hbits)
 {
 	switch (hbits)
 	{
@@ -869,7 +870,8 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 #endif
 
 #ifdef SIMD_NEON
-static uint8x16_t shuffleBytes(unsigned char mask0, unsigned char mask1, uint8x8_t rest0, uint8x8_t rest1)
+SIMD_TARGET
+inline uint8x16_t shuffleBytes(unsigned char mask0, unsigned char mask1, uint8x8_t rest0, uint8x8_t rest1)
 {
 	uint8x8_t sm0 = vld1_u8(kDecodeBytesGroupShuffle[mask0]);
 	uint8x8_t sm1 = vld1_u8(kDecodeBytesGroupShuffle[mask1]);
@@ -880,7 +882,8 @@ static uint8x16_t shuffleBytes(unsigned char mask0, unsigned char mask1, uint8x8
 	return vcombine_u8(r0, r1);
 }
 
-static void neonMoveMask(uint8x16_t mask, unsigned char& mask0, unsigned char& mask1)
+SIMD_TARGET
+inline void neonMoveMask(uint8x16_t mask, unsigned char& mask0, unsigned char& mask1)
 {
 	// magic constant found using z3 SMT assuming mask has 8 groups of 0xff or 0x00
 	const uint64_t magic = 0x000103070f1f3f80ull;
@@ -891,7 +894,8 @@ static void neonMoveMask(uint8x16_t mask, unsigned char& mask0, unsigned char& m
 	mask1 = uint8_t((vgetq_lane_u64(mask2, 1) * magic) >> 56);
 }
 
-static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int hbits)
+SIMD_TARGET
+inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int hbits)
 {
 	switch (hbits)
 	{
@@ -1012,7 +1016,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 
 #ifdef SIMD_WASM
 SIMD_TARGET
-static v128_t decodeShuffleMask(unsigned char mask0, unsigned char mask1)
+inline v128_t decodeShuffleMask(unsigned char mask0, unsigned char mask1)
 {
 	v128_t sm0 = wasm_v128_load(&kDecodeBytesGroupShuffle[mask0]);
 	v128_t sm1 = wasm_v128_load(&kDecodeBytesGroupShuffle[mask1]);
@@ -1026,7 +1030,7 @@ static v128_t decodeShuffleMask(unsigned char mask0, unsigned char mask1)
 }
 
 SIMD_TARGET
-static void wasmMoveMask(v128_t mask, unsigned char& mask0, unsigned char& mask1)
+inline void wasmMoveMask(v128_t mask, unsigned char& mask0, unsigned char& mask1)
 {
 	// magic constant found using z3 SMT assuming mask has 8 groups of 0xff or 0x00
 	const uint64_t magic = 0x000103070f1f3f80ull;
@@ -1036,7 +1040,7 @@ static void wasmMoveMask(v128_t mask, unsigned char& mask0, unsigned char& mask1
 }
 
 SIMD_TARGET
-static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int hbits)
+inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int hbits)
 {
 	switch (hbits)
 	{
@@ -1132,7 +1136,7 @@ static const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 
 #if defined(SIMD_SSE) || defined(SIMD_AVX)
 SIMD_TARGET
-static void transpose8(__m128i& x0, __m128i& x1, __m128i& x2, __m128i& x3)
+inline void transpose8(__m128i& x0, __m128i& x1, __m128i& x2, __m128i& x3)
 {
 	__m128i t0 = _mm_unpacklo_epi8(x0, x1);
 	__m128i t1 = _mm_unpackhi_epi8(x0, x1);
@@ -1146,7 +1150,7 @@ static void transpose8(__m128i& x0, __m128i& x1, __m128i& x2, __m128i& x3)
 }
 
 SIMD_TARGET
-static __m128i unzigzag8(__m128i v)
+inline __m128i unzigzag8(__m128i v)
 {
 	__m128i xl = _mm_sub_epi8(_mm_setzero_si128(), _mm_and_si128(v, _mm_set1_epi8(1)));
 	__m128i xr = _mm_and_si128(_mm_srli_epi16(v, 1), _mm_set1_epi8(127));
@@ -1156,7 +1160,8 @@ static __m128i unzigzag8(__m128i v)
 #endif
 
 #ifdef SIMD_NEON
-static void transpose8(uint8x16_t& x0, uint8x16_t& x1, uint8x16_t& x2, uint8x16_t& x3)
+SIMD_TARGET
+inline void transpose8(uint8x16_t& x0, uint8x16_t& x1, uint8x16_t& x2, uint8x16_t& x3)
 {
 	uint8x16x2_t t01 = vzipq_u8(x0, x1);
 	uint8x16x2_t t23 = vzipq_u8(x2, x3);
@@ -1170,7 +1175,8 @@ static void transpose8(uint8x16_t& x0, uint8x16_t& x1, uint8x16_t& x2, uint8x16_
 	x3 = vreinterpretq_u8_u16(x23.val[1]);
 }
 
-static uint8x16_t unzigzag8(uint8x16_t v)
+SIMD_TARGET
+inline uint8x16_t unzigzag8(uint8x16_t v)
 {
 	uint8x16_t xl = vreinterpretq_u8_s8(vnegq_s8(vreinterpretq_s8_u8(vandq_u8(v, vdupq_n_u8(1)))));
 	uint8x16_t xr = vshrq_n_u8(v, 1);
@@ -1181,7 +1187,7 @@ static uint8x16_t unzigzag8(uint8x16_t v)
 
 #ifdef SIMD_WASM
 SIMD_TARGET
-static void transpose8(v128_t& x0, v128_t& x1, v128_t& x2, v128_t& x3)
+inline void transpose8(v128_t& x0, v128_t& x1, v128_t& x2, v128_t& x3)
 {
 	v128_t t0 = wasmx_unpacklo_v8x16(x0, x1);
 	v128_t t1 = wasmx_unpackhi_v8x16(x0, x1);
@@ -1195,7 +1201,7 @@ static void transpose8(v128_t& x0, v128_t& x1, v128_t& x2, v128_t& x3)
 }
 
 SIMD_TARGET
-static v128_t unzigzag8(v128_t v)
+inline v128_t unzigzag8(v128_t v)
 {
 	v128_t xl = wasm_i8x16_neg(wasm_v128_and(v, wasm_i8x16_splat(1)));
 	v128_t xr = wasm_u8x16_shr(v, 1);
