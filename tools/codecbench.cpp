@@ -254,6 +254,7 @@ int main(int argc, char** argv)
 
 		printf("Algorithm   :\tvtx\tvtxe\n");
 		printf("Size (MB)   :\t%.2f\t%.2f\n", double(totalV0) / 1024 / 1024, double(totalV1) / 1024 / 1024);
+		printf("Ratio       :\t%.2f\t%.2f\n", double(totalV0) / double(totalSize), double(totalV1) / double(totalSize));
 
 		for (int l = 0; l < (loop ? 100 : 1); ++l)
 		{
