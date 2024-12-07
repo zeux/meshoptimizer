@@ -856,49 +856,6 @@ void encodeVertex(const Mesh& mesh, const char* pvn, bool validate = true)
 	    (double(result.size() * sizeof(PV)) / (1 << 30)) / (end - middle));
 }
 
-template <typename PV>
-void benchmarkVertex(const Mesh& mesh, const char* pvn)
-{
-	std::vector<PV> pv(mesh.vertices.size());
-	packMesh(pv, mesh.vertices);
-
-	// allocate result outside of the timing loop to exclude memset() from decode timing
-	std::vector<PV> result(mesh.vertices.size());
-
-	std::vector<unsigned char> vbuf(meshopt_encodeVertexBufferBound(mesh.vertices.size(), sizeof(PV)));
-	vbuf.resize(meshopt_encodeVertexBuffer(&vbuf[0], vbuf.size(), &pv[0], mesh.vertices.size(), sizeof(PV)));
-
-	// warmup
-	meshopt_decodeVertexBuffer(&result[0], mesh.vertices.size(), sizeof(PV), &vbuf[0], vbuf.size());
-
-	for (int run = 0; run < 10; ++run)
-	{
-		double mint = 0;
-		double avgt = 0;
-		double vart = 0;
-
-		for (int i = 0; i < 100; ++i)
-		{
-			double start = timestamp();
-			meshopt_decodeVertexBuffer(&result[0], mesh.vertices.size(), sizeof(PV), &vbuf[0], vbuf.size());
-			double end = timestamp();
-
-			double time = end - start;
-
-			mint = (mint == 0 || time < mint) ? time : mint;
-
-			// Welford variance computation
-			double delta = time - avgt;
-			avgt += delta / (i + 1);
-			vart += delta * (time - avgt);
-		}
-
-		printf("VtxCodec%1s: decode best %.2f msec (%.2f GB/s); avg %.2f +- %.2f msec\n", pvn,
-		    mint * 1000, (double(result.size() * sizeof(PV)) / (1 << 30)) / mint,
-		    avgt * 1000, sqrt(vart / 100) * 1000);
-	}
-}
-
 void stripify(const Mesh& mesh, bool use_restart, char desc)
 {
 	unsigned int restart_index = use_restart ? ~0u : 0;
@@ -1446,14 +1403,10 @@ void processDev(const char* path)
 	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
 	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
 
+	meshopt_encodeVertexVersion(0);
 	encodeVertex<PackedVertex>(copy, "0");
 	meshopt_encodeVertexVersion(0xe);
 	encodeVertex<PackedVertex>(copy, "1", /* validate= */ false);
-	meshopt_encodeVertexVersion(0);
-
-	benchmarkVertex<PackedVertex>(copy, "0");
-	meshopt_encodeVertexVersion(0xe);
-	benchmarkVertex<PackedVertex>(copy, "1");
 }
 
 void processNanite(const char* path)
