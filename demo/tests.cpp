@@ -1965,6 +1965,13 @@ void runTests()
 	decodeVertexLarge();
 	encodeVertexEmpty();
 
+	meshopt_encodeVertexVersion(0xe);
+	decodeVertexBitGroups();
+	decodeVertexBitGroupSentinels();
+	decodeVertexLarge();
+	encodeVertexEmpty();
+	meshopt_encodeVertexVersion(0);
+
 	decodeFilterOct8();
 	decodeFilterOct12();
 	decodeFilterQuat12();

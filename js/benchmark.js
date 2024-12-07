@@ -16,11 +16,15 @@ var tests = {
 		var N = 1024 * 1024;
 		var data = new Uint8Array(N * 16);
 
-		for (var i = 0; i < N * 16; i += 4) {
-			data[i + 0] = 0;
-			data[i + 1] = (i % 16) * 1;
-			data[i + 2] = (i % 16) * 2;
-			data[i + 3] = (i % 16) * 8;
+		var lcg = 1;
+
+		for (var i = 0; i < N * 16; ++i) {
+			// mindstd_rand
+			lcg = (lcg * 48271) % 2147483647;
+
+			var k = i % 16;
+			if (k <= 8) data[i] = lcg & ((1 << k) - 1);
+			else data[i] = i & ((1 << (k - 8)) - 1);
 		}
 
 		var decoded = new Uint8Array(N * 16);
