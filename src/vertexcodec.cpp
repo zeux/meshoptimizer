@@ -827,13 +827,13 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		return data;
 	}
 
-	case 1:
-	case 2:
-	case 5:
+	case 5: // 1-bit
+	case 1: // 2-bit
 	case 6:
+	case 2: // 4-bit
 	case 7:
 	{
-		const unsigned char* skip = data + (hbits < 3 ? (hbits << 2) : (1 << (hbits - 4)));
+		const unsigned char* skip = data + (2 << (hbits < 3 ? hbits : hbits - 5));
 
 		__m128i selb = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(data));
 		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(skip));
