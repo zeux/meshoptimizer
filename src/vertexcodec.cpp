@@ -63,10 +63,10 @@
 // In switch dispatch, marking default case as unreachable allows to remove redundant bounds checks
 #if defined(__GNUC__)
 #define SIMD_UNREACHABLE() __builtin_unreachable()
-#elif defined(__MSC_VER)
-#define SIMD_UNREACHABLE() __assume(0)
+#elif defined(_MSC_VER)
+#define SIMD_UNREACHABLE() __assume(false)
 #else
-#define SIMD_UNREACHABLE() assert(0)
+#define SIMD_UNREACHABLE() assert(!"Unreachable")
 #endif
 
 #endif // !MESHOPTIMIZER_NO_SIMD
@@ -783,7 +783,6 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 
 	default:
 		SIMD_UNREACHABLE();
-		return data;
 	}
 }
 #endif
@@ -864,7 +863,6 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 
 	default:
 		SIMD_UNREACHABLE();
-		return data;
 	}
 }
 #endif
@@ -1129,7 +1127,6 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 
 	default:
 		SIMD_UNREACHABLE();
-		return data;
 	}
 }
 #endif
