@@ -162,6 +162,7 @@ struct Stats
 	size_t header;  // bytes for header
 	size_t bitg[9]; // bytes for bit groups
 	size_t bitc[8]; // bit consistency: how many bits are shared between all bytes in a group
+	size_t ctrl[4]; // number of control groups
 };
 
 static Stats* bytestats = NULL;
@@ -416,6 +417,10 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 			}
 
 			control[k / 4] |= best_ctrl << ((k % 4) * 2);
+
+#if TRACE
+			vertexstats[k].ctrl[best_ctrl]++;
+#endif
 
 			if (best_ctrl == 3)
 			{
@@ -1477,11 +1482,21 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 		printf("%2d: %7d bytes [%4.1f%%] %.1f bpv", int(k), int(vsk.size), double(vsk.size) / double(total_size) * 100, double(vsk.size) / double(vertex_count) * 8);
 
 		size_t total_k = vsk.header + vsk.bitg[1] + vsk.bitg[2] + vsk.bitg[4] + vsk.bitg[8];
+		double total_kr = total_k ? 1.0 / double(total_k) : 0;
 
-		printf(" |\thdr [%5.1f%%] bitg [1 %4.1f%% 2 %4.1f%% 4 %4.1f%% %4.1f%%]",
-		    double(vsk.header) / double(total_k) * 100,
-		    double(vsk.bitg[1]) / double(total_k) * 100, double(vsk.bitg[2]) / double(total_k) * 100,
-		    double(vsk.bitg[4]) / double(total_k) * 100, double(vsk.bitg[8]) / double(total_k) * 100);
+		printf(" |\thdr [%5.1f%%] bitg [1 %4.1f%% 2 %4.1f%% 4 %4.1f%% 8 %4.1f%%]",
+		    double(vsk.header) * total_kr * 100,
+		    double(vsk.bitg[1]) * total_kr * 100, double(vsk.bitg[2]) * total_kr * 100,
+		    double(vsk.bitg[4]) * total_kr * 100, double(vsk.bitg[8]) * total_kr * 100);
+
+		size_t total_ctrl = vsk.ctrl[0] + vsk.ctrl[1] + vsk.ctrl[2] + vsk.ctrl[3];
+
+		if (total_ctrl)
+		{
+			printf(" |\tctrl %3.0f%% %3.0f%% %3.0f%% %3.0f%%",
+			    double(vsk.ctrl[0]) / double(total_ctrl) * 100, double(vsk.ctrl[1]) / double(total_ctrl) * 100,
+			    double(vsk.ctrl[2]) / double(total_ctrl) * 100, double(vsk.ctrl[3]) / double(total_ctrl) * 100);
+		}
 
 		printf(" |\tbitc [%3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%%]",
 		    double(vsk.bitc[0]) / double(vertex_count) * 100, double(vsk.bitc[1]) / double(vertex_count) * 100,
