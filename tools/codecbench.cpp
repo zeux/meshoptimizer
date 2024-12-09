@@ -239,22 +239,22 @@ int main(int argc, char** argv)
 			if (argv[i][0] != '-')
 				files.push_back(readFile(argv[i]));
 
-		size_t maxSize = 0;
-		size_t totalSize = 0;
-		size_t totalV0 = 0, totalV1 = 0;
+		size_t max_size = 0;
+		size_t total_size = 0;
+		size_t total_v0 = 0, total_v1 = 0;
 		for (size_t i = 0; i < files.size(); ++i)
 		{
-			maxSize = std::max(maxSize, files[i].count * files[i].stride);
-			totalSize += files[i].count * files[i].stride;
-			totalV0 += files[i].v0.size();
-			totalV1 += files[i].v1.size();
+			max_size = std::max(max_size, files[i].count * files[i].stride);
+			total_size += files[i].count * files[i].stride;
+			total_v0 += files[i].v0.size();
+			total_v1 += files[i].v1.size();
 		}
 
-		std::vector<unsigned char> buffer(maxSize);
+		std::vector<unsigned char> buffer(max_size);
 
 		printf("Algorithm   :\tvtx\tvtxe\n");
-		printf("Size (MB)   :\t%.2f\t%.2f\n", double(totalV0) / 1024 / 1024, double(totalV1) / 1024 / 1024);
-		printf("Ratio       :\t%.2f\t%.2f\n", double(totalV0) / double(totalSize), double(totalV1) / double(totalSize));
+		printf("Size (MB)   :\t%.2f\t%.2f\n", double(total_v0) / 1024 / 1024, double(total_v1) / 1024 / 1024);
+		printf("Ratio       :\t%.2f\t%.2f\n", double(total_v0) / double(total_size), double(total_v1) / double(total_size));
 
 		for (int l = 0; l < (loop ? 100 : 1); ++l)
 		{
@@ -284,8 +284,8 @@ int main(int argc, char** argv)
 
 				double GB = 1024 * 1024 * 1024;
 
-				bestvd0 = std::max(bestvd0, double(totalSize) / GB / (t1 - t0));
-				bestvd1 = std::max(bestvd1, double(totalSize) / GB / (t2 - t1));
+				bestvd0 = std::max(bestvd0, double(total_size) / GB / (t1 - t0));
+				bestvd1 = std::max(bestvd1, double(total_size) / GB / (t2 - t1));
 			}
 
 			printf("Score (GB/s):\t%.2f\t%.2f\n", bestvd0, bestvd1);
