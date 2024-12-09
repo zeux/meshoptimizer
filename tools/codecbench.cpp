@@ -161,12 +161,66 @@ void benchFilters(size_t count, double& besto8, double& besto12, double& bestq12
 	}
 }
 
+struct File
+{
+	std::vector<unsigned char> v0;
+	std::vector<unsigned char> v1;
+	size_t stride;
+	size_t count;
+};
+
+File readFile(const char* path)
+{
+	FILE* file = fopen(path, "rb");
+	assert(file);
+
+	const char* name = strrchr(path, '/');
+	name = name ? name + 1 : path;
+
+	int vcnt, vsz;
+	int sr = sscanf(name, "v%d_s%d_", &vcnt, &vsz);
+	assert(sr == 2);
+	(void)sr;
+
+	std::vector<unsigned char> input;
+	unsigned char buffer[4096];
+	size_t bytes_read;
+
+	while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0)
+		input.insert(input.end(), buffer, buffer + bytes_read);
+
+	fclose(file);
+
+	File result = {};
+	result.count = vcnt;
+	result.stride = vsz;
+
+	std::vector<unsigned char> decoded(result.count * result.stride);
+	int res = meshopt_decodeVertexBuffer(&decoded[0], result.count, result.stride, &input[0], input.size());
+	if (res != 0 && input.size() == decoded.size())
+	{
+		// some files are not encoded
+		memcpy(decoded.data(), input.data(), decoded.size());
+	}
+
+	meshopt_encodeVertexVersion(0);
+	result.v0.resize(meshopt_encodeVertexBufferBound(result.count, result.stride));
+	result.v0.resize(meshopt_encodeVertexBuffer(result.v0.data(), result.v0.size(), decoded.data(), result.count, result.stride));
+
+	meshopt_encodeVertexVersion(0xe);
+	result.v1.resize(meshopt_encodeVertexBufferBound(result.count, result.stride));
+	result.v1.resize(meshopt_encodeVertexBuffer(result.v1.data(), result.v1.size(), decoded.data(), result.count, result.stride));
+
+	return result;
+}
+
 int main(int argc, char** argv)
 {
 	meshopt_encodeIndexVersion(1);
 
 	bool verbose = false;
 	bool loop = false;
+	bool inputs = false;
 
 	for (int i = 1; i < argc; ++i)
 	{
@@ -174,6 +228,69 @@ int main(int argc, char** argv)
 			verbose = true;
 		if (strcmp(argv[i], "-l") == 0)
 			loop = true;
+		if (argv[i][0] != '-')
+			inputs = true;
+	}
+
+	if (inputs)
+	{
+		std::vector<File> files;
+		for (int i = 1; i < argc; ++i)
+			if (argv[i][0] != '-')
+				files.push_back(readFile(argv[i]));
+
+		size_t max_size = 0;
+		size_t total_size = 0;
+		size_t total_v0 = 0, total_v1 = 0;
+		for (size_t i = 0; i < files.size(); ++i)
+		{
+			max_size = std::max(max_size, files[i].count * files[i].stride);
+			total_size += files[i].count * files[i].stride;
+			total_v0 += files[i].v0.size();
+			total_v1 += files[i].v1.size();
+		}
+
+		std::vector<unsigned char> buffer(max_size);
+
+		printf("Algorithm   :\tvtx\tvtxe\n");
+		printf("Size (MB)   :\t%.2f\t%.2f\n", double(total_v0) / 1024 / 1024, double(total_v1) / 1024 / 1024);
+		printf("Ratio       :\t%.2f\t%.2f\n", double(total_v0) / double(total_size), double(total_v1) / double(total_size));
+
+		for (int l = 0; l < (loop ? 100 : 1); ++l)
+		{
+			double bestvd0 = 0, bestvd1 = 0;
+
+			for (int attempt = 0; attempt < 50; ++attempt)
+			{
+				double t0 = timestamp();
+
+				for (size_t i = 0; i < files.size(); ++i)
+				{
+					int rv = meshopt_decodeVertexBuffer(&buffer[0], files[i].count, files[i].stride, &files[i].v0[0], files[i].v0.size());
+					assert(rv == 0);
+					(void)rv;
+				}
+
+				double t1 = timestamp();
+
+				for (size_t i = 0; i < files.size(); ++i)
+				{
+					int rv = meshopt_decodeVertexBuffer(&buffer[0], files[i].count, files[i].stride, &files[i].v1[0], files[i].v1.size());
+					assert(rv == 0);
+					(void)rv;
+				}
+
+				double t2 = timestamp();
+
+				double GB = 1024 * 1024 * 1024;
+
+				bestvd0 = std::max(bestvd0, double(total_size) / GB / (t1 - t0));
+				bestvd1 = std::max(bestvd1, double(total_size) / GB / (t2 - t1));
+			}
+
+			printf("Score (GB/s):\t%.2f\t%.2f\n", bestvd0, bestvd1);
+		}
+		return 0;
 	}
 
 	const int N = 1000;
