@@ -55,6 +55,25 @@ struct Stats
 	double count;
 };
 
+inline unsigned char zigzag8(unsigned char v)
+{
+	return ((signed char)(v) >> 7) ^ (v << 1);
+}
+
+void makedeltas(unsigned char* deltas, size_t count, size_t stride, const unsigned char* vertices)
+{
+	unsigned char last[256] = {};
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		for (size_t j = 0; j < stride; ++j)
+		{
+			deltas[i * stride + j] = zigzag8(vertices[i * stride + j] - last[j]);
+			last[j] = vertices[i * stride + j];
+		}
+	}
+}
+
 void testFile(FILE* file, size_t count, size_t stride, Stats* stats = 0)
 {
 	std::vector<unsigned char> input;
@@ -75,8 +94,20 @@ void testFile(FILE* file, size_t count, size_t stride, Stats* stats = 0)
 	}
 
 	std::vector<unsigned char> output(meshopt_encodeVertexBufferBound(count, stride));
-	meshopt_encodeVertexVersion(0xe);
-	output.resize(meshopt_encodeVertexBuffer(output.data(), output.size(), decoded.data(), count, stride));
+
+	if (1)
+	{
+		meshopt_encodeVertexVersion(0xf);
+		std::vector<unsigned char> deltas(count * stride);
+		makedeltas(&deltas[0], count, stride, &decoded[0]);
+		output.resize(meshopt_encodeVertexBuffer(output.data(), output.size(), deltas.data(), count, stride));
+	}
+	else
+	{
+		meshopt_encodeVertexVersion(0xe);
+		output.resize(meshopt_encodeVertexBuffer(output.data(), output.size(), decoded.data(), count, stride));
+	}
+
 	meshopt_encodeVertexVersion(0);
 
 	printf(" raw %zu KB\t", decoded.size() / 1024);
@@ -133,7 +164,12 @@ void testFile(const char* path, Stats* stats = 0)
 	size_t namel = name1 ? name1 - name0 : strlen(name0);
 	namel = namel > 25 ? 25 : namel;
 
+#if TRACE
+	printf("%.*s: %s\n", int(namel), name0, path);
+#else
 	printf("%25.*s:", int(namel), name0);
+#endif
+
 	testFile(file, vcnt, vsz, stats);
 	printf("\n");
 

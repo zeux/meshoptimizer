@@ -366,7 +366,11 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 
 		for (size_t i = 0; i < vertex_count; ++i)
 		{
-			buffer[i] = zigzag8(vertex_data[vertex_offset] - p);
+			// HACK: disable deltas for 0xf to be able to experiment with other encoding schemes
+			if (version == 0xf)
+				buffer[i] = vertex_data[vertex_offset];
+			else
+				buffer[i] = zigzag8(vertex_data[vertex_offset] - p);
 
 			p = vertex_data[vertex_offset];
 
@@ -390,7 +394,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 		}
 #endif
 
-		if (version == 0xe)
+		if (version != 0)
 		{
 			int best_ctrl = 3; // literal encoding
 			size_t best_bytes = vertex_count;
@@ -1532,7 +1536,7 @@ size_t meshopt_encodeVertexBufferBound(size_t vertex_count, size_t vertex_size)
 void meshopt_encodeVertexVersion(int version)
 {
 	// note: this version is experimental and the binary format is not finalized; this should not be used in production!
-	assert(unsigned(version) <= 0 || version == 0xe);
+	assert(unsigned(version) <= 0 || version == 0xe || version == 0xf);
 
 	meshopt::gEncodeVertexVersion = version;
 }
