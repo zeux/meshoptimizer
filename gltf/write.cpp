@@ -113,13 +113,25 @@ static const char* alphaMode(cgltf_alpha_mode mode)
 	{
 	case cgltf_alpha_mode_opaque:
 		return "OPAQUE";
-
 	case cgltf_alpha_mode_mask:
 		return "MASK";
-
 	case cgltf_alpha_mode_blend:
 		return "BLEND";
+	default:
+		return "";
+	}
+}
 
+static const char* interpolationType(cgltf_interpolation_type type)
+{
+	switch (type)
+	{
+	case cgltf_interpolation_type_linear:
+		return "LINEAR";
+	case cgltf_interpolation_type_step:
+		return "STEP";
+	case cgltf_interpolation_type_cubic_spline:
+		return "CUBICSPLINE";
 	default:
 		return "";
 	}
@@ -1403,7 +1415,6 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 
 	bool needs_time = false;
 	bool needs_pose = false;
-	bool needs_custom_time = false;
 
 	for (size_t j = 0; j < tracks.size(); ++j)
 	{
@@ -1418,13 +1429,13 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 		}
 		else
 		{
-			assert(track.data.size() == track.components * track.time.size());
+			size_t keyframe_size = (track.interpolation == cgltf_interpolation_type_cubic_spline) ? 3 : 1;
 
-			needs_custom_time = true;
+			assert(track.data.size() == keyframe_size * track.components * track.time.size());
 		}
 	}
 
-	bool needs_range = needs_pose && !needs_time && !needs_custom_time && animation.frames > 1;
+	bool needs_range = needs_pose && !needs_time && animation.frames > 1;
 
 	needs_pose = needs_pose && !(needs_range && tracks.size() == 1);
 
@@ -1454,7 +1465,7 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 			track_time_accr = writeAnimationTime(views, json_accessors, accr_offset, track.time, settings);
 
 		std::string scratch;
-		StreamFormat format = writeKeyframeStream(scratch, track.path, track.data, settings);
+		StreamFormat format = writeKeyframeStream(scratch, track.path, track.data, settings, track.interpolation == cgltf_interpolation_type_cubic_spline);
 
 		if (range)
 		{
@@ -1478,8 +1489,12 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 		append(json_samplers, range ? range_accr : (track.constant ? pose_accr : track_time_accr));
 		append(json_samplers, ",\"output\":");
 		append(json_samplers, data_accr);
-		if (track.interpolation == cgltf_interpolation_type_step)
-			append(json_samplers, ",\"interpolation\":\"STEP\"");
+		if (track.interpolation != cgltf_interpolation_type_linear)
+		{
+			append(json_samplers, ",\"interpolation\":\"");
+			append(json_samplers, interpolationType(track.interpolation));
+			append(json_samplers, "\"");
+		}
 		append(json_samplers, "}");
 
 		const NodeInfo& tni = nodes[track.node - data->nodes];

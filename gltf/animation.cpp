@@ -308,6 +308,7 @@ void processAnimation(Animation& animation, const Settings& settings)
 
 		track.time.clear();
 		track.data.swap(result);
+		track.interpolation = track.interpolation == cgltf_interpolation_type_cubic_spline ? cgltf_interpolation_type_linear : track.interpolation;
 
 		float tolerance = getDeltaTolerance(track.path);
 
