@@ -245,8 +245,24 @@ void testFile(FILE* file, size_t count, size_t stride, Stats* stats = 0)
 		meshopt_encodeVertexVersion(0xf);
 		std::vector<unsigned char> deltas(count * stride);
 		int deltamodes[64] = {};
+
 		if (1)
 			tunedeltas(output.data(), output.size(), &deltas[0], count, stride, &decoded[0], deltamodes);
+
+#if TRACE
+		for (size_t j = 0; j < stride / 4; ++j)
+		{
+			int mode = deltamodes[j];
+
+			int mode0 = mode % 3;        // 1/2/4 bytes
+			int mode1 = (mode / 3) % 3;  // zigzag 1/2/0 times
+			int mode2 = (mode / 9) % 2;  // sub/xor
+			int mode3 = (mode / 18) % 3; // first/second order sub/xor
+
+			printf("%d: mode %d :: mode0 %d mode1 %d mode2 %d mode3 %d\n", int(j), mode, mode0, mode1, mode2, mode3);
+		}
+#endif
+
 		makedeltas(&deltas[0], count, stride, &decoded[0], deltamodes);
 		output.resize(meshopt_encodeVertexBuffer(output.data(), output.size(), deltas.data(), count, stride));
 	}
