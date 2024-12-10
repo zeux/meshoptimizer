@@ -199,7 +199,7 @@ void tunedeltas(unsigned char* output, size_t output_size, unsigned char* deltas
 
 	for (size_t j = 0; j < stride / 4; ++j)
 	{
-		for (int mode = 0; mode < 3; ++mode)
+		for (int mode = 0; mode < 3 * 3 * 2 * 3; ++mode)
 		{
 			int old_mode = modes[j];
 			modes[j] = mode;
