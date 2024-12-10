@@ -191,7 +191,7 @@ void makedeltas(unsigned char* deltas, size_t count, size_t stride, const unsign
 	}
 }
 
-void tunedeltas(unsigned char* output, size_t output_size, unsigned char* deltas, size_t count, size_t stride, const unsigned char* data, int* modes)
+void tunedeltas(unsigned char* output, size_t output_size, unsigned char* deltas, size_t count, size_t stride, const unsigned char* data, int* modes, bool (*modeok)(int) = NULL)
 {
 	memset(modes, 0, sizeof(int) * (stride / 4));
 
@@ -201,6 +201,9 @@ void tunedeltas(unsigned char* output, size_t output_size, unsigned char* deltas
 	{
 		for (int mode = 0; mode < 3 * 3 * 2 * 3; ++mode)
 		{
+			if (modeok && !modeok(mode))
+				continue;
+
 			int old_mode = modes[j];
 			modes[j] = mode;
 
@@ -247,7 +250,8 @@ void testFile(FILE* file, size_t count, size_t stride, Stats* stats = 0)
 		int deltamodes[64] = {};
 
 		if (1)
-			tunedeltas(output.data(), output.size(), &deltas[0], count, stride, &decoded[0], deltamodes);
+			tunedeltas(output.data(), output.size(), &deltas[0], count, stride, &decoded[0], deltamodes, [](int mode) -> bool
+			    { return mode == 0 || mode == 1 || mode == 2 || mode == 15; });
 
 #if TRACE
 		for (size_t j = 0; j < stride / 4; ++j)
