@@ -1420,19 +1420,15 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 	{
 		const Track& track = *tracks[j];
 
-		if (track.time.empty())
-		{
-			assert(track.data.size() == track.components * (track.constant ? 1 : animation.frames));
+#ifndef NDEBUG
+		size_t keyframe_size = (track.interpolation == cgltf_interpolation_type_cubic_spline) ? 3 : 1;
+		size_t time_size = track.constant ? 1 : (track.time.empty() ? animation.frames : track.time.size());
 
-			needs_time = needs_time || !track.constant;
-			needs_pose = needs_pose || track.constant;
-		}
-		else
-		{
-			size_t keyframe_size = (track.interpolation == cgltf_interpolation_type_cubic_spline) ? 3 : 1;
+		assert(track.data.size() == keyframe_size * track.components * time_size);
+#endif
 
-			assert(track.data.size() == keyframe_size * track.components * track.time.size());
-		}
+		needs_time = needs_time || (track.time.empty() && !track.constant);
+		needs_pose = needs_pose || track.constant;
 	}
 
 	bool needs_range = needs_pose && !needs_time && animation.frames > 1;

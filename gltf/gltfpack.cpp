@@ -1331,7 +1331,7 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-af") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.anim_freq = clamp(atoi(argv[++i]), 1, 100);
+			settings.anim_freq = clamp(atoi(argv[++i]), 0, 100);
 		}
 		else if (strcmp(arg, "-ac") == 0)
 		{
@@ -1615,7 +1615,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-at N: use N-bit quantization for translations (default: 16; N should be between 1 and 24)\n");
 			fprintf(stderr, "\t-ar N: use N-bit quantization for rotations (default: 12; N should be between 4 and 16)\n");
 			fprintf(stderr, "\t-as N: use N-bit quantization for scale (default: 16; N should be between 1 and 24)\n");
-			fprintf(stderr, "\t-af N: resample animations at N Hz (default: 30)\n");
+			fprintf(stderr, "\t-af N: resample animations at N Hz (default: 30; use 0 to disable)\n");
 			fprintf(stderr, "\t-ac: keep constant animation tracks even if they don't modify the node transform\n");
 			fprintf(stderr, "\nScene:\n");
 			fprintf(stderr, "\t-kn: keep named nodes and meshes attached to named nodes so that named nodes can be transformed externally\n");
