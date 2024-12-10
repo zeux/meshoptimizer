@@ -162,15 +162,13 @@ int bits(unsigned char v)
 	if (v == 0)
 		return 0;
 
-	int result = 0;
-	while (v)
-	{
-		v >>= 1;
-		result++;
-	}
+	if (v <= 2)
+		return 2;
 
-	// TODO
-	return result > 4 ? 8 : result;
+	if (v <= 14)
+		return 4;
+
+	return 8;
 }
 
 void pickmodes(size_t count, size_t stride, const unsigned char* data, int* modes, int maxmode = 4)
