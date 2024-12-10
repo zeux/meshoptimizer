@@ -109,6 +109,34 @@ void makedeltas(unsigned char* deltas, size_t count, size_t stride, const unsign
 	}
 }
 
+void tunedeltas(unsigned char* output, size_t output_size, unsigned char* deltas, size_t count, size_t stride, const unsigned char* data, int* modes)
+{
+	memset(modes, 0, sizeof(int) * (stride / 4));
+
+	size_t best_size = size_t(-1);
+
+	for (size_t j = 0; j < stride / 4; ++j)
+	{
+		for (int mode = 0; mode <= 2; ++mode)
+		{
+			int old_mode = modes[j];
+			modes[j] = mode;
+
+			makedeltas(deltas, count, stride, data, modes);
+			size_t size = meshopt_encodeVertexBuffer(output, output_size, deltas, count, stride);
+
+			if (size >= best_size)
+			{
+				modes[j] = old_mode;
+			}
+			else
+			{
+				best_size = size;
+			}
+		}
+	}
+}
+
 void testFile(FILE* file, size_t count, size_t stride, Stats* stats = 0)
 {
 	std::vector<unsigned char> input;
@@ -135,6 +163,8 @@ void testFile(FILE* file, size_t count, size_t stride, Stats* stats = 0)
 		meshopt_encodeVertexVersion(0xf);
 		std::vector<unsigned char> deltas(count * stride);
 		int deltamodes[64] = {};
+		if (1)
+			tunedeltas(output.data(), output.size(), &deltas[0], count, stride, &decoded[0], deltamodes);
 		makedeltas(&deltas[0], count, stride, &decoded[0], deltamodes);
 		output.resize(meshopt_encodeVertexBuffer(output.data(), output.size(), deltas.data(), count, stride));
 	}
