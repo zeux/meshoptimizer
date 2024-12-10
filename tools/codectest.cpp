@@ -73,6 +73,7 @@ inline unsigned int zigzag32(unsigned int v)
 void makedeltas(unsigned char* deltas, size_t count, size_t stride, const unsigned char* vertices, const int modes[64])
 {
 	unsigned char last[256] = {};
+	unsigned char lastd[256] = {};
 
 	for (size_t i = 0; i < count; ++i)
 	{
@@ -80,30 +81,111 @@ void makedeltas(unsigned char* deltas, size_t count, size_t stride, const unsign
 		{
 			int mode = modes[j / 4];
 
-			if (mode == 0)
+			int mode0 = mode % 3;        // 1/2/4 bytes
+			int mode1 = (mode / 3) % 3;  // zigzag 1/2/0 times
+			int mode2 = (mode / 9) % 2;  // sub/xor
+			int mode3 = (mode / 18) % 3; // first/second order sub/xor
+
+			// hardcode some values for testing
+			// mode0 = 0;
+			// mode1 = 0;
+			// mode2 = 0;
+			// mode3 = 0;
+
+			if (mode0 == 0)
 			{
 				for (size_t k = 0; k < 4; ++k)
 				{
-					deltas[i * stride + j + k] = zigzag8(vertices[i * stride + j + k] - last[j + k]);
+					unsigned char& d = deltas[i * stride + j + k];
+
+					d = vertices[i * stride + j + k];
+					if (mode2 == 0)
+						d -= last[j + k];
+					else
+						d ^= last[j + k];
+
+					if (mode3)
+					{
+						unsigned char nd = d;
+
+						if (mode3 == 1)
+							d -= lastd[j + k];
+						else
+							d ^= lastd[j + k];
+
+						lastd[j + k] = nd;
+					}
+
+					if (mode1 != 2)
+						d = zigzag8(d);
+					if (mode1 == 1)
+						d = zigzag8(d);
+
 					last[j + k] = vertices[i * stride + j + k];
 				}
 			}
-			else if (mode == 1)
+			else if (mode0 == 1)
 			{
 				for (size_t k = 0; k < 4; k += 2)
 				{
-					*(unsigned short*)&deltas[i * stride + j + k] = zigzag16(*(unsigned short*)&vertices[i * stride + j + k] - *(unsigned short*)&last[j + k]);
+					unsigned short& d = *(unsigned short*)&deltas[i * stride + j + k];
+
+					d = *(unsigned short*)&vertices[i * stride + j + k];
+
+					if (mode2 == 0)
+						d -= *(unsigned short*)&last[j + k];
+					else
+						d ^= *(unsigned short*)&last[j + k];
+
+					if (mode3)
+					{
+						unsigned short nd = d;
+
+						if (mode3)
+							d -= *(unsigned short*)&lastd[j + k];
+						else
+							d ^= *(unsigned short*)&lastd[j + k];
+
+						*(unsigned short*)&lastd[j + k] = nd;
+					}
+
+					if (mode1 != 2)
+						d = zigzag16(d);
+					if (mode1 == 1)
+						d = zigzag16(d);
+
 					*(unsigned short*)&last[j + k] = *(unsigned short*)&vertices[i * stride + j + k];
 				}
 			}
-			else if (mode == 2)
-			{
-				*(unsigned int*)&deltas[i * stride + j] = zigzag32(*(unsigned int*)&vertices[i * stride + j] - *(unsigned int*)&last[j]);
-				*(unsigned int*)&last[j] = *(unsigned int*)&vertices[i * stride + j];
-			}
 			else
 			{
-				assert(!"oops");
+				unsigned int& d = *(unsigned int*)&deltas[i * stride + j];
+
+				d = *(unsigned int*)&vertices[i * stride + j];
+
+				if (mode2 == 0)
+					d -= *(unsigned int*)&last[j];
+				else
+					d ^= *(unsigned int*)&last[j];
+
+				if (mode3)
+				{
+					unsigned int nd = d;
+
+					if (mode3 == 1)
+						d -= *(unsigned int*)&lastd[j];
+					else
+						d ^= *(unsigned int*)&lastd[j];
+
+					*(unsigned int*)&lastd[j] = nd;
+				}
+
+				if (mode1 != 2)
+					d = zigzag32(d);
+				if (mode1 == 1)
+					d = zigzag32(d);
+
+				*(unsigned int*)&last[j] = *(unsigned int*)&vertices[i * stride + j];
 			}
 		}
 	}
@@ -117,7 +199,7 @@ void tunedeltas(unsigned char* output, size_t output_size, unsigned char* deltas
 
 	for (size_t j = 0; j < stride / 4; ++j)
 	{
-		for (int mode = 0; mode <= 2; ++mode)
+		for (int mode = 0; mode < 3; ++mode)
 		{
 			int old_mode = modes[j];
 			modes[j] = mode;
