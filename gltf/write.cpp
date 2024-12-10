@@ -1449,6 +1449,9 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 
 	size_t track_offset = 0;
 
+	size_t last_track_time_accr = 0;
+	const Track* last_track_time = NULL;
+
 	for (size_t j = 0; j < tracks.size(); ++j)
 	{
 		const Track& track = *tracks[j];
@@ -1458,7 +1461,17 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 
 		size_t track_time_accr = time_accr;
 		if (!track.time.empty())
-			track_time_accr = writeAnimationTime(views, json_accessors, accr_offset, track.time, settings);
+		{
+			// reuse time accessors between consecutive tracks if possible
+			if (last_track_time && track.time == last_track_time->time)
+				track_time_accr = last_track_time_accr;
+			else
+			{
+				track_time_accr = writeAnimationTime(views, json_accessors, accr_offset, track.time, settings);
+				last_track_time_accr = track_time_accr;
+				last_track_time = &track;
+			}
+		}
 
 		std::string scratch;
 		StreamFormat format = writeKeyframeStream(scratch, track.path, track.data, settings, track.interpolation == cgltf_interpolation_type_cubic_spline);
