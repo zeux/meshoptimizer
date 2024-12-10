@@ -1079,13 +1079,8 @@ void writeMeshGeometry(std::string& json, std::vector<BufferView>& views, std::s
 	}
 }
 
-static size_t writeAnimationTime(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, float mint, int frames, float period, const Settings& settings)
+static size_t writeAnimationTime(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const std::vector<float>& time, const Settings& settings)
 {
-	std::vector<float> time(frames);
-
-	for (int j = 0; j < frames; ++j)
-		time[j] = mint + float(j) * period;
-
 	std::string scratch;
 	StreamFormat format = writeTimeStream(scratch, time);
 	BufferView::Compression compression = settings.compress ? BufferView::Compression_Attribute : BufferView::Compression_None;
@@ -1095,11 +1090,21 @@ static size_t writeAnimationTime(std::vector<BufferView>& views, std::string& js
 	views[view].data += scratch;
 
 	comma(json_accessors);
-	writeAccessor(json_accessors, view, offset, cgltf_type_scalar, format.component_type, format.normalized, frames, &time.front(), &time.back(), 1);
+	writeAccessor(json_accessors, view, offset, cgltf_type_scalar, format.component_type, format.normalized, time.size(), &time.front(), &time.back(), 1);
 
 	size_t time_accr = accr_offset++;
 
 	return time_accr;
+}
+
+static size_t writeAnimationTime(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, float mint, int frames, float period, const Settings& settings)
+{
+	std::vector<float> time(frames);
+
+	for (int j = 0; j < frames; ++j)
+		time[j] = mint + float(j) * period;
+
+	return writeAnimationTime(views, json_accessors, accr_offset, time, settings);
 }
 
 size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const cgltf_skin& skin, const QuantizationPosition& qp, const Settings& settings)
@@ -1398,19 +1403,28 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 
 	bool needs_time = false;
 	bool needs_pose = false;
+	bool needs_custom_time = false;
 
 	for (size_t j = 0; j < tracks.size(); ++j)
 	{
 		const Track& track = *tracks[j];
 
-		assert(track.time.empty());
-		assert(track.data.size() == track.components * (track.constant ? 1 : animation.frames));
+		if (track.time.empty())
+		{
+			assert(track.data.size() == track.components * (track.constant ? 1 : animation.frames));
 
-		needs_time = needs_time || !track.constant;
-		needs_pose = needs_pose || track.constant;
+			needs_time = needs_time || !track.constant;
+			needs_pose = needs_pose || track.constant;
+		}
+		else
+		{
+			assert(track.data.size() == track.components * track.time.size());
+
+			needs_custom_time = true;
+		}
 	}
 
-	bool needs_range = needs_pose && !needs_time && animation.frames > 1;
+	bool needs_range = needs_pose && !needs_time && !needs_custom_time && animation.frames > 1;
 
 	needs_pose = needs_pose && !(needs_range && tracks.size() == 1);
 
@@ -1435,6 +1449,10 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 		bool range = needs_range && j == 0;
 		int range_size = range ? 2 : 1;
 
+		size_t track_time_accr = time_accr;
+		if (!track.time.empty())
+			track_time_accr = writeAnimationTime(views, json_accessors, accr_offset, track.time, settings);
+
 		std::string scratch;
 		StreamFormat format = writeKeyframeStream(scratch, track.path, track.data, settings);
 
@@ -1457,7 +1475,7 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 
 		comma(json_samplers);
 		append(json_samplers, "{\"input\":");
-		append(json_samplers, range ? range_accr : (track.constant ? pose_accr : time_accr));
+		append(json_samplers, range ? range_accr : (track.constant ? pose_accr : track_time_accr));
 		append(json_samplers, ",\"output\":");
 		append(json_samplers, data_accr);
 		if (track.interpolation == cgltf_interpolation_type_step)
