@@ -341,7 +341,7 @@ struct hash<std::pair<uint64_t, uint64_t> >
 };
 } // namespace std
 
-static void process(cgltf_data* data, const char* input_path, const char* output_path, const char* report_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const Settings& settings, std::string& json, std::string& bin, std::string& fallback, size_t& fallback_size)
+static size_t process(cgltf_data* data, const char* input_path, const char* output_path, const char* report_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const Settings& settings, std::string& json, std::string& bin, std::string& fallback, size_t& fallback_size)
 {
 	if (settings.verbose)
 	{
@@ -880,6 +880,9 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 	writeExtensions(json, extensions, sizeof(extensions) / sizeof(extensions[0]));
 
+	// buffers[] array to be inserted by the caller
+	size_t bufferspec_pos = json.size();
+
 	std::string json_views;
 	finalizeBufferViews(json_views, views, bin, settings.fallback ? &fallback : NULL, fallback_size);
 
@@ -945,6 +948,8 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 			fprintf(stderr, "Warning: cannot save report to %s\n", report_path);
 		}
 	}
+
+	return bufferspec_pos;
 }
 
 static void writeU32(FILE* out, uint32_t data)
@@ -1080,7 +1085,10 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 
 	std::string json, bin, fallback;
 	size_t fallback_size = 0;
-	process(data, input, output, report, meshes, animations, settings, json, bin, fallback, fallback_size);
+
+	json += '{';
+	size_t bufferspec_pos = process(data, input, output, report, meshes, animations, settings, json, bin, fallback, fallback_size);
+	json += '}';
 
 	cgltf_free(data);
 
@@ -1107,13 +1115,9 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 		}
 
 		std::string bufferspec = getBufferSpec(getBaseName(binpath.c_str()), bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback_size, settings.compress);
+		json.insert(bufferspec_pos, "," + bufferspec);
 
-		fprintf(outjson, "{");
-		fwrite(bufferspec.c_str(), bufferspec.size(), 1, outjson);
-		fprintf(outjson, ",");
 		fwrite(json.c_str(), json.size(), 1, outjson);
-		fprintf(outjson, "}");
-
 		fwrite(bin.c_str(), bin.size(), 1, outbin);
 
 		if (settings.fallback)
@@ -1145,9 +1149,7 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 		}
 
 		std::string bufferspec = getBufferSpec(NULL, bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback_size, settings.compress);
-
-		json.insert(0, "{" + bufferspec + ",");
-		json.push_back('}');
+		json.insert(bufferspec_pos, "," + bufferspec);
 
 		while (json.size() % 4)
 			json.push_back(' ');
