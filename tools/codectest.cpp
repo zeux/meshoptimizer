@@ -60,16 +60,51 @@ inline unsigned char zigzag8(unsigned char v)
 	return ((signed char)(v) >> 7) ^ (v << 1);
 }
 
-void makedeltas(unsigned char* deltas, size_t count, size_t stride, const unsigned char* vertices)
+inline unsigned short zigzag16(unsigned short v)
+{
+	return ((signed short)(v) >> 15) ^ (v << 1);
+}
+
+inline unsigned int zigzag32(unsigned int v)
+{
+	return ((signed int)(v) >> 31) ^ (v << 1);
+}
+
+void makedeltas(unsigned char* deltas, size_t count, size_t stride, const unsigned char* vertices, const int modes[64])
 {
 	unsigned char last[256] = {};
 
 	for (size_t i = 0; i < count; ++i)
 	{
-		for (size_t j = 0; j < stride; ++j)
+		for (size_t j = 0; j < stride; j += 4)
 		{
-			deltas[i * stride + j] = zigzag8(vertices[i * stride + j] - last[j]);
-			last[j] = vertices[i * stride + j];
+			int mode = modes[j / 4];
+
+			if (mode == 0)
+			{
+				for (size_t k = 0; k < 4; ++k)
+				{
+					deltas[i * stride + j + k] = zigzag8(vertices[i * stride + j + k] - last[j + k]);
+					last[j + k] = vertices[i * stride + j + k];
+				}
+			}
+			else if (mode == 1)
+			{
+				for (size_t k = 0; k < 4; k += 2)
+				{
+					*(unsigned short*)&deltas[i * stride + j + k] = zigzag16(*(unsigned short*)&vertices[i * stride + j + k] - *(unsigned short*)&last[j + k]);
+					*(unsigned short*)&last[j + k] = *(unsigned short*)&vertices[i * stride + j + k];
+				}
+			}
+			else if (mode == 2)
+			{
+				*(unsigned int*)&deltas[i * stride + j] = zigzag32(*(unsigned int*)&vertices[i * stride + j] - *(unsigned int*)&last[j]);
+				*(unsigned int*)&last[j] = *(unsigned int*)&vertices[i * stride + j];
+			}
+			else
+			{
+				assert(!"oops");
+			}
 		}
 	}
 }
@@ -99,7 +134,8 @@ void testFile(FILE* file, size_t count, size_t stride, Stats* stats = 0)
 	{
 		meshopt_encodeVertexVersion(0xf);
 		std::vector<unsigned char> deltas(count * stride);
-		makedeltas(&deltas[0], count, stride, &decoded[0]);
+		int deltamodes[64] = {};
+		makedeltas(&deltas[0], count, stride, &decoded[0], deltamodes);
 		output.resize(meshopt_encodeVertexBuffer(output.data(), output.size(), deltas.data(), count, stride));
 	}
 	else
