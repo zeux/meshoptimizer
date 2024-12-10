@@ -157,6 +157,72 @@ void tunedeltas(unsigned char* output, size_t output_size, unsigned char* deltas
 	}
 }
 
+int bits(unsigned char v)
+{
+	if (v == 0)
+		return 0;
+
+	int result = 0;
+	while (v)
+	{
+		v >>= 1;
+		result++;
+	}
+
+	// TODO
+	return result > 4 ? 8 : result;
+}
+
+void pickmodes(size_t count, size_t stride, const unsigned char* data, int* modes, int maxmode = 4)
+{
+	for (size_t j = 0; j < stride; j += 4)
+	{
+		size_t sumdelta[4] = {};
+
+		for (size_t i = 1; i < count; ++i)
+		{
+			for (size_t k = 0; k < 4; ++k)
+			{
+				unsigned char d = data[i * stride + j + k] - data[(i - 1) * stride + j + k];
+				d = zigzag8(d);
+				sumdelta[0] += bits(d);
+			}
+
+			for (size_t k = 0; k < 4; k += 2)
+			{
+				unsigned short d = *(unsigned short*)&data[i * stride + j + k] - *(unsigned short*)&data[(i - 1) * stride + j + k];
+				d = zigzag16(d);
+				sumdelta[1] += bits(d & 0xff) + bits(d >> 8);
+			}
+
+			{
+				unsigned int d = *(unsigned int*)&data[i * stride + j] - *(unsigned int*)&data[(i - 1) * stride + j];
+				d = zigzag32(d);
+				sumdelta[2] += bits(d & 0xff) + bits((d >> 8) & 0xff) + bits((d >> 16) & 0xff) + bits(d >> 24);
+			}
+
+			{
+				unsigned int d = *(unsigned int*)&data[i * stride + j] ^ *(unsigned int*)&data[(i - 1) * stride + j];
+				sumdelta[3] += bits(d & 0xff) + bits((d >> 8) & 0xff) + bits((d >> 16) & 0xff) + bits(d >> 24);
+			}
+		}
+
+#if TRACE
+		printf("%zu: bits mode0 %zu mode1 %zu mode2 %zu mode3 %zu\n", j / 4, sumdelta[0], sumdelta[1], sumdelta[2], sumdelta[3]);
+#endif
+
+		int mini = 0;
+		if (maxmode > 1)
+			mini = (sumdelta[1] < sumdelta[mini]) ? 1 : mini;
+		if (maxmode > 2)
+			mini = (sumdelta[2] < sumdelta[mini]) ? 2 : mini;
+		if (maxmode > 3)
+			mini = (sumdelta[3] < sumdelta[mini]) ? 3 : mini;
+
+		modes[j / 4] = mini;
+	}
+}
+
 void testFile(FILE* file, size_t count, size_t stride, Stats* stats = 0)
 {
 	std::vector<unsigned char> input;
@@ -184,20 +250,17 @@ void testFile(FILE* file, size_t count, size_t stride, Stats* stats = 0)
 		std::vector<unsigned char> deltas(count * stride);
 		int deltamodes[64] = {};
 
+		int maxmodes = 4;
 		if (1)
-			tunedeltas(output.data(), output.size(), &deltas[0], count, stride, &decoded[0], deltamodes, 4);
+			tunedeltas(output.data(), output.size(), &deltas[0], count, stride, &decoded[0], deltamodes, maxmodes);
+		else
+			pickmodes(count, stride, &decoded[0], deltamodes, maxmodes);
 
 #if TRACE
 		for (size_t j = 0; j < stride / 4; ++j)
 		{
 			int mode = deltamodes[j];
-
-			int mode0 = mode % 3;        // 1/2/4 bytes
-			int mode1 = (mode / 3) % 3;  // zigzag 1/2/0 times
-			int mode2 = (mode / 9) % 2;  // sub/xor
-			int mode3 = (mode / 18) % 3; // first/second order sub/xor
-
-			printf("%d: mode %d :: mode0 %d mode1 %d mode2 %d mode3 %d\n", int(j), mode, mode0, mode1, mode2, mode3);
+			printf("%d: mode %d\n", int(j), mode);
 		}
 #endif
 
