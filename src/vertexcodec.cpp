@@ -128,7 +128,7 @@ const size_t kVertexBlockSizeBytes = 8192;
 const size_t kVertexBlockMaxSize = 256;
 const size_t kByteGroupSize = 16;
 const size_t kByteGroupDecodeLimit = 24;
-const size_t kTailMaxSize = 32;
+const size_t kTailMinSize = 32; // must be >= kByteGroupDecodeLimit
 
 static const int kBitsV0[4] = {0, 2, 4, 8};
 static const int kBitsV1[5] = {0, 1, 2, 4, 8};
@@ -1425,7 +1425,7 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	unsigned char* data = buffer;
 	unsigned char* data_end = buffer + buffer_size;
 
-	if (size_t(data_end - data) < 1 + vertex_size)
+	if (size_t(data_end - data) < 1)
 		return 0;
 
 	int version = gEncodeVertexVersion;
@@ -1438,6 +1438,8 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 
 	unsigned char last_vertex[256] = {};
 	memcpy(last_vertex, first_vertex, vertex_size);
+
+	unsigned char channels[64] = {};
 
 	size_t vertex_block_size = getVertexBlockSize(vertex_size);
 
@@ -1454,20 +1456,26 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 		vertex_offset += block_size;
 	}
 
-	size_t tail_size = vertex_size < kTailMaxSize ? kTailMaxSize : vertex_size;
+	size_t tail_size = vertex_size + (version == 0 ? 0 : vertex_size / 4);
+	size_t tail_size_pad = tail_size < kTailMinSize ? kTailMinSize : tail_size;
 
-	if (size_t(data_end - data) < tail_size)
+	if (size_t(data_end - data) < tail_size_pad)
 		return 0;
 
-	// write first vertex to the end of the stream and pad it to 32 bytes; this is important to simplify bounds checks in decoder
-	if (vertex_size < kTailMaxSize)
+	if (tail_size < tail_size_pad)
 	{
-		memset(data, 0, kTailMaxSize - vertex_size);
-		data += kTailMaxSize - vertex_size;
+		memset(data, 0, tail_size_pad - tail_size);
+		data += tail_size_pad - tail_size;
 	}
 
 	memcpy(data, first_vertex, vertex_size);
 	data += vertex_size;
+
+	if (version != 0)
+	{
+		memcpy(data, channels, vertex_size / 4);
+		data += vertex_size / 4;
+	}
 
 	assert(data >= buffer + tail_size);
 	assert(data <= buffer + buffer_size);
@@ -1524,9 +1532,10 @@ size_t meshopt_encodeVertexBufferBound(size_t vertex_count, size_t vertex_size)
 	size_t vertex_block_header_size = (vertex_block_size / kByteGroupSize + 3) / 4;
 	size_t vertex_block_data_size = vertex_block_size;
 
-	size_t tail_size = vertex_size < kTailMaxSize ? kTailMaxSize : vertex_size;
+	size_t tail_size = vertex_size + (vertex_size / 4);
+	size_t tail_size_pad = tail_size < kTailMinSize ? kTailMinSize : tail_size;
 
-	return 1 + vertex_block_count * vertex_size * (vertex_block_control_size + vertex_block_header_size + vertex_block_data_size) + tail_size;
+	return 1 + vertex_block_count * vertex_size * (vertex_block_control_size + vertex_block_header_size + vertex_block_data_size) + tail_size_pad;
 }
 
 void meshopt_encodeVertexVersion(int version)
@@ -1564,7 +1573,7 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 	const unsigned char* data = buffer;
 	const unsigned char* data_end = buffer + buffer_size;
 
-	if (size_t(data_end - data) < 1 + vertex_size)
+	if (size_t(data_end - data) < 1)
 		return -2;
 
 	unsigned char data_header = *data++;
@@ -1576,8 +1585,16 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 	if (version > 0 && version != 0xe)
 		return -1;
 
+	size_t tail_size = vertex_size + (version == 0 ? 0 : vertex_size / 4);
+	size_t tail_size_pad = tail_size < kTailMinSize ? kTailMinSize : tail_size;
+
+	if (size_t(data_end - data) < tail_size_pad)
+		return -2;
+
+	const unsigned char* tail = data_end - tail_size;
+
 	unsigned char last_vertex[256];
-	memcpy(last_vertex, data_end - vertex_size, vertex_size);
+	memcpy(last_vertex, tail, vertex_size);
 
 	size_t vertex_block_size = getVertexBlockSize(vertex_size);
 
@@ -1594,9 +1611,7 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 		vertex_offset += block_size;
 	}
 
-	size_t tail_size = vertex_size < kTailMaxSize ? kTailMaxSize : vertex_size;
-
-	if (size_t(data_end - data) != tail_size)
+	if (size_t(data_end - data) != tail_size_pad)
 		return -3;
 
 	return 0;
