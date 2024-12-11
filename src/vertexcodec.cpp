@@ -336,7 +336,25 @@ static size_t encodeBytesMeasure(const unsigned char* buffer, size_t buffer_size
 	return result;
 }
 
-static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data_end, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], int version)
+static void encodeDeltas(unsigned char* buffer, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned char last_vertex[256], size_t k, int channel)
+{
+	(void)channel;
+
+	size_t vertex_offset = k;
+
+	unsigned char p = last_vertex[k];
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		buffer[i] = zigzag8(vertex_data[vertex_offset] - p);
+
+		p = vertex_data[vertex_offset];
+
+		vertex_offset += vertex_size;
+	}
+}
+
+static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data_end, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], const unsigned char* channels, int version)
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 	assert(vertex_size % 4 == 0);
@@ -360,18 +378,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 
 	for (size_t k = 0; k < vertex_size; ++k)
 	{
-		size_t vertex_offset = k;
-
-		unsigned char p = last_vertex[k];
-
-		for (size_t i = 0; i < vertex_count; ++i)
-		{
-			buffer[i] = zigzag8(vertex_data[vertex_offset] - p);
-
-			p = vertex_data[vertex_offset];
-
-			vertex_offset += vertex_size;
-		}
+		encodeDeltas(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, version == 0 ? 0 : channels[k / 4]);
 
 #if TRACE
 		const unsigned char* olddata = data;
@@ -1449,7 +1456,7 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	{
 		size_t block_size = (vertex_offset + vertex_block_size < vertex_count) ? vertex_block_size : vertex_count - vertex_offset;
 
-		data = encodeVertexBlock(data, data_end, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, last_vertex, version);
+		data = encodeVertexBlock(data, data_end, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, last_vertex, channels, version);
 		if (!data)
 			return 0;
 
