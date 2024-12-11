@@ -207,17 +207,17 @@ static void resampleKeyframes(std::vector<Attr>& data, const std::vector<float>&
 	}
 }
 
-static float getMaxDelta(const std::vector<Attr>& data, cgltf_animation_path_type type, int frames, const Attr* value, size_t components)
+static float getMaxDelta(const std::vector<Attr>& data, cgltf_animation_path_type type, const Attr* value, size_t components)
 {
-	assert(data.size() == frames * components);
+	assert(data.size() % components == 0);
 
 	float result = 0;
 
-	for (int i = 0; i < frames; ++i)
+	for (size_t i = 0; i < data.size(); i += components)
 	{
 		for (size_t j = 0; j < components; ++j)
 		{
-			float delta = getDelta(value[j], data[i * components + j], type);
+			float delta = getDelta(value[j], data[i + j], type);
 
 			result = (result < delta) ? delta : result;
 		}
@@ -287,15 +287,17 @@ void processAnimation(Animation& animation, const Settings& settings)
 		maxt = std::max(maxt, track.time.back());
 	}
 
-	mint = std::min(mint, maxt);
+	animation.start = mint = std::min(mint, maxt);
 
-	// round the number of frames to nearest but favor the "up" direction
-	// this means that at 100 Hz resampling, we will try to preserve the last frame <10ms
-	// but if the last frame is <2ms we favor just removing this data
-	int frames = 1 + int((maxt - mint) * settings.anim_freq + 0.8f);
+	if (settings.anim_freq)
+	{
+		// round the number of frames to nearest but favor the "up" direction
+		// this means that at 100 Hz resampling, we will try to preserve the last frame <10ms
+		// but if the last frame is <2ms we favor just removing this data
+		int frames = 1 + int((maxt - mint) * settings.anim_freq + 0.8f);
 
-	animation.start = mint;
-	animation.frames = frames;
+		animation.frames = frames;
+	}
 
 	std::vector<Attr> base;
 
@@ -303,11 +305,19 @@ void processAnimation(Animation& animation, const Settings& settings)
 	{
 		Track& track = animation.tracks[i];
 
-		std::vector<Attr> result;
-		resampleKeyframes(result, track.time, track.data, track.path, track.interpolation, track.components, frames, mint, settings.anim_freq);
+		if (settings.anim_freq)
+		{
+			std::vector<Attr> result;
+			resampleKeyframes(result, track.time, track.data, track.path, track.interpolation, track.components, animation.frames, animation.start, settings.anim_freq);
 
-		track.time.clear();
-		track.data.swap(result);
+			track.time.clear();
+			track.data.swap(result);
+			track.interpolation = track.interpolation == cgltf_interpolation_type_cubic_spline ? cgltf_interpolation_type_linear : track.interpolation;
+		}
+
+		// getMaxDelta assumes linear/step interpolation for now
+		if (track.interpolation == cgltf_interpolation_type_cubic_spline)
+			continue;
 
 		float tolerance = getDeltaTolerance(track.path);
 
@@ -318,19 +328,20 @@ void processAnimation(Animation& animation, const Settings& settings)
 			tolerance /= scale == 0.f ? 1.f : scale;
 		}
 
-		float deviation = getMaxDelta(track.data, track.path, frames, &track.data[0], track.components);
+		float deviation = getMaxDelta(track.data, track.path, &track.data[0], track.components);
 
 		if (deviation <= tolerance)
 		{
 			// track is constant (equal to first keyframe), we only need the first keyframe
 			track.constant = true;
+			track.time.clear();
 			track.data.resize(track.components);
 
 			// track.dummy is true iff track redundantly sets up the value to be equal to default node transform
 			base.resize(track.components);
 			getBaseTransform(&base[0], track.components, track.path, track.node);
 
-			track.dummy = getMaxDelta(track.data, track.path, 1, &base[0], track.components) <= tolerance;
+			track.dummy = getMaxDelta(track.data, track.path, &base[0], track.components) <= tolerance;
 		}
 	}
 }
