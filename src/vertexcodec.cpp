@@ -133,6 +133,8 @@ const size_t kTailMinSize = 32; // must be >= kByteGroupDecodeLimit
 static const int kBitsV0[4] = {0, 2, 4, 8};
 static const int kBitsV1[5] = {0, 1, 2, 4, 8};
 
+const int kEncodeMaxChannel = 4;
+
 static size_t getVertexBlockSize(size_t vertex_size)
 {
 	// make sure the entire block fits into the scratch buffer
@@ -411,6 +413,41 @@ static void encodeDeltas(unsigned char* buffer, const unsigned char* vertex_data
 	default:
 		assert(!"Unsupported channel encoding");
 	}
+}
+
+static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, size_t k, int max_channel)
+{
+	if (vertex_count == 0 || max_channel <= 1)
+		return 0;
+
+	unsigned char block[kVertexBlockMaxSize];
+
+	unsigned char last_vertex[256] = {};
+	memcpy(last_vertex, vertex_data, vertex_size);
+
+	size_t sizes[4] = {};
+
+	const int* bits = kBitsV1 + 1;
+
+	for (size_t i = 0; i < vertex_count; i += kVertexBlockMaxSize)
+	{
+		size_t block_size = i + kVertexBlockMaxSize < vertex_count ? kVertexBlockMaxSize : vertex_count - i;
+
+		for (int channel = 0; channel < max_channel; ++channel)
+		{
+			for (size_t j = 0; j < 4; ++j)
+			{
+				encodeDeltas(block, vertex_data + i * vertex_size, block_size, vertex_size, last_vertex, k + j, channel);
+				sizes[channel] += encodeBytesMeasure(block, block_size, bits);
+			}
+		}
+	}
+
+	int best_channel = 0;
+	for (int channel = 1; channel < max_channel; ++channel)
+		best_channel = (sizes[channel] < sizes[best_channel]) ? channel : best_channel;
+
+	return best_channel;
 }
 
 static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data_end, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], const unsigned char* channels, int version)
@@ -1506,6 +1543,9 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	memcpy(last_vertex, first_vertex, vertex_size);
 
 	unsigned char channels[64] = {};
+	if (version != 0)
+		for (size_t k = 0; k < vertex_size; k += 4)
+			channels[k / 4] = estimateChannel(vertex_data, vertex_count, vertex_size, k, kEncodeMaxChannel);
 
 	size_t vertex_block_size = getVertexBlockSize(vertex_size);
 
