@@ -150,6 +150,16 @@ inline unsigned char zigzag8(unsigned char v)
 	return ((signed char)(v) >> 7) ^ (v << 1);
 }
 
+inline unsigned short zigzag16(unsigned short v)
+{
+	return ((signed short)(v) >> 15) ^ (v << 1);
+}
+
+inline unsigned int zigzag32(unsigned int v)
+{
+	return ((signed int)(v) >> 31) ^ (v << 1);
+}
+
 inline unsigned char unzigzag8(unsigned char v)
 {
 	return -(v & 1) ^ (v >> 1);
@@ -338,19 +348,68 @@ static size_t encodeBytesMeasure(const unsigned char* buffer, size_t buffer_size
 
 static void encodeDeltas(unsigned char* buffer, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned char last_vertex[256], size_t k, int channel)
 {
-	(void)channel;
-
-	size_t vertex_offset = k;
-
-	unsigned char p = last_vertex[k];
-
-	for (size_t i = 0; i < vertex_count; ++i)
+	switch (channel)
 	{
-		buffer[i] = zigzag8(vertex_data[vertex_offset] - p);
+	case 0:
+	{
+		unsigned char p = last_vertex[k];
 
-		p = vertex_data[vertex_offset];
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			unsigned char v = vertex_data[i * vertex_size + k];
 
-		vertex_offset += vertex_size;
+			buffer[i] = zigzag8(v - p);
+			p = v;
+		}
+		break;
+	}
+	case 1:
+	{
+		size_t k0 = k & ~1;
+		int ks = (k & 1) * 8;
+
+		unsigned short p = last_vertex[k0] + (last_vertex[k0 + 1] << 8);
+
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			unsigned short v = vertex_data[i * vertex_size + k0] + (vertex_data[i * vertex_size + k0 + 1] << 8);
+
+			buffer[i] = (unsigned char)(zigzag16(v - p) >> ks);
+			p = v;
+		}
+		break;
+	}
+	case 2:
+	{
+		size_t k0 = k & ~3;
+		int ks = (k & 3) * 8;
+
+		unsigned int p = last_vertex[k0] + (last_vertex[k0 + 1] << 8) + (last_vertex[k0 + 2] << 16) + (last_vertex[k0 + 3] << 24);
+
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			unsigned int v = vertex_data[i * vertex_size + k0] + (vertex_data[i * vertex_size + k0 + 1] << 8) + (vertex_data[i * vertex_size + k0 + 2] << 16) + (vertex_data[i * vertex_size + k0 + 3] << 24);
+
+			buffer[i] = (unsigned char)(zigzag32(v - p) >> ks);
+			p = v;
+		}
+		break;
+	}
+	case 3:
+	{
+		unsigned char p = last_vertex[k];
+
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			unsigned char v = vertex_data[i * vertex_size + k];
+
+			buffer[i] = v ^ p;
+			p = v;
+		}
+		break;
+	}
+	default:
+		assert(!"Unsupported channel encoding");
 	}
 }
 
