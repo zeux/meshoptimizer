@@ -667,9 +667,11 @@ static void decodeDeltas1(const unsigned char* buffer, unsigned char* transposed
 	}
 }
 
-static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], int version)
+static const unsigned char* decodeVertexBlock(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], const unsigned char* channels, int version)
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
+
+	(void)channels;
 
 	unsigned char buffer[kVertexBlockMaxSize];
 	unsigned char transposed[kVertexBlockSizeBytes];
@@ -1255,12 +1257,70 @@ inline void transpose8(__m128i& x0, __m128i& x1, __m128i& x2, __m128i& x3)
 }
 
 SIMD_TARGET
-inline __m128i unzigzag8(__m128i v)
+inline void unzigzag8(__m128i& v)
 {
 	__m128i xl = _mm_sub_epi8(_mm_setzero_si128(), _mm_and_si128(v, _mm_set1_epi8(1)));
 	__m128i xr = _mm_and_si128(_mm_srli_epi16(v, 1), _mm_set1_epi8(127));
 
-	return _mm_xor_si128(xl, xr);
+	v = _mm_xor_si128(xl, xr);
+}
+
+SIMD_TARGET
+inline void unzigzag16(__m128i& v0, __m128i& v1)
+{
+	// 16 insn
+	__m128i i0 = _mm_unpacklo_epi8(v0, v1);
+	__m128i i1 = _mm_unpackhi_epi8(v0, v1);
+
+	__m128i l0 = _mm_sub_epi16(_mm_setzero_si128(), _mm_and_si128(i0, _mm_set1_epi16(1)));
+	__m128i r0 = _mm_xor_si128(l0, _mm_srli_epi16(i0, 1));
+
+	__m128i l1 = _mm_sub_epi16(_mm_setzero_si128(), _mm_and_si128(i1, _mm_set1_epi16(1)));
+	__m128i r1 = _mm_xor_si128(l1, _mm_srli_epi16(i1, 1));
+
+	v0 = _mm_packus_epi16(_mm_and_si128(r0, _mm_set1_epi16(0xff)), _mm_and_si128(r1, _mm_set1_epi16(0xff)));
+	v1 = _mm_packus_epi16(_mm_srli_epi16(r0, 8), _mm_srli_epi16(r1, 8));
+}
+
+SIMD_TARGET
+inline void unzigzag32(__m128i& v0, __m128i& v1, __m128i& v2, __m128i& v3)
+{
+	// v >> 1 (per byte)
+	__m128i r0 = _mm_and_si128(_mm_srli_epi16(v0, 1), _mm_set1_epi8(0x7f));
+	__m128i r1 = _mm_and_si128(_mm_srli_epi16(v1, 1), _mm_set1_epi8(0x7f));
+	__m128i r2 = _mm_and_si128(_mm_srli_epi16(v2, 1), _mm_set1_epi8(0x7f));
+	__m128i r3 = _mm_and_si128(_mm_srli_epi16(v3, 1), _mm_set1_epi8(0x7f));
+
+	// v >> 1 (carry)
+	r0 = _mm_or_si128(r0, _mm_and_si128(_mm_slli_epi16(v1, 7), _mm_set1_epi8(-0x80)));
+	r1 = _mm_or_si128(r1, _mm_and_si128(_mm_slli_epi16(v2, 7), _mm_set1_epi8(-0x80)));
+	r2 = _mm_or_si128(r2, _mm_and_si128(_mm_slli_epi16(v3, 7), _mm_set1_epi8(-0x80)));
+
+	// -(v & 1)
+	__m128i mk = _mm_sub_epi8(_mm_setzero_si128(), _mm_and_si128(v0, _mm_set1_epi8(1)));
+
+	v0 = _mm_xor_si128(r0, mk);
+	v1 = _mm_xor_si128(r1, mk);
+	v2 = _mm_xor_si128(r2, mk);
+	v3 = _mm_xor_si128(r3, mk);
+}
+
+SIMD_TARGET
+inline __m128i undelta(__m128i v, __m128i p, int channel)
+{
+	switch (channel)
+	{
+	case 0:
+		return _mm_add_epi8(v, p);
+	case 1:
+		return _mm_add_epi16(v, p);
+	case 2:
+		return _mm_add_epi32(v, p);
+	case 3:
+		return _mm_xor_si128(v, p);
+	default:
+		return v;
+	}
 }
 #endif
 
@@ -1359,15 +1419,16 @@ static const unsigned char* decodeBytesSimd(const unsigned char* data, const uns
 	return data;
 }
 
-SIMD_TARGET
-static void decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t vertex_count_aligned, size_t vertex_size, unsigned char last_vertex[4])
+template <int Channel>
+SIMD_TARGET static void
+decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t vertex_count_aligned, size_t vertex_size, unsigned char last_vertex[4])
 {
 #if defined(SIMD_SSE) || defined(SIMD_AVX)
 #define TEMP __m128i
 #define PREP() __m128i pi = _mm_cvtsi32_si128(*reinterpret_cast<const int*>(last_vertex))
 #define LOAD(i) __m128i r##i = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + i * vertex_count_aligned))
 #define GRP4(i) t0 = _mm_shuffle_epi32(r##i, 0), t1 = _mm_shuffle_epi32(r##i, 1), t2 = _mm_shuffle_epi32(r##i, 2), t3 = _mm_shuffle_epi32(r##i, 3)
-#define FIXD(i) t##i = pi = _mm_add_epi8(pi, t##i)
+#define FIXD(i) t##i = pi = undelta(pi, t##i, Channel)
 #define SAVE(i) *reinterpret_cast<int*>(savep) = _mm_cvtsi128_si32(t##i), savep += vertex_size
 #endif
 
@@ -1400,10 +1461,31 @@ static void decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transp
 		LOAD(2);
 		LOAD(3);
 
+#ifdef SIMD_SSE
+		switch (Channel)
+		{
+		case 0:
+			unzigzag8(r0);
+			unzigzag8(r1);
+			unzigzag8(r2);
+			unzigzag8(r3);
+			break;
+		case 1:
+			unzigzag16(r0, r1);
+			unzigzag16(r2, r3);
+			break;
+		case 2:
+			unzigzag32(r0, r1, r2, r3);
+			break;
+		default:;
+		}
+#else
+		// no channel support atm
 		r0 = unzigzag8(r0);
 		r1 = unzigzag8(r1);
 		r2 = unzigzag8(r2);
 		r3 = unzigzag8(r3);
+#endif
 
 		transpose8(r0, r1, r2, r3);
 
@@ -1435,7 +1517,7 @@ static void decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transp
 }
 
 SIMD_TARGET
-static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], int version)
+static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, const unsigned char* data_end, unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], const unsigned char* channels, int version)
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 
@@ -1484,7 +1566,25 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 			}
 		}
 
-		decodeDeltas4Simd(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k);
+		int channel = version == 0 ? 0 : channels[k / 4];
+
+		switch (channel)
+		{
+		case 0:
+			decodeDeltas4Simd<0>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k);
+			break;
+		case 1:
+			decodeDeltas4Simd<1>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k);
+			break;
+		case 2:
+			decodeDeltas4Simd<2>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k);
+			break;
+		case 3:
+			decodeDeltas4Simd<3>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k);
+			break;
+		default:
+			return NULL;
+		}
 	}
 
 	memcpy(vertex_data, transposed, vertex_count * vertex_size);
@@ -1659,7 +1759,7 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 	assert(vertex_size > 0 && vertex_size <= 256);
 	assert(vertex_size % 4 == 0);
 
-	const unsigned char* (*decode)(const unsigned char*, const unsigned char*, unsigned char*, size_t, size_t, unsigned char[256], int) = NULL;
+	const unsigned char* (*decode)(const unsigned char*, const unsigned char*, unsigned char*, size_t, size_t, unsigned char[256], const unsigned char*, int) = NULL;
 
 #if defined(SIMD_SSE) && defined(SIMD_FALLBACK)
 	decode = (cpuid & (1 << 9)) ? decodeVertexBlockSimd : decodeVertexBlock;
@@ -1702,6 +1802,8 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 	unsigned char last_vertex[256];
 	memcpy(last_vertex, tail, vertex_size);
 
+	const unsigned char* channels = version == 0 ? NULL : tail + vertex_size;
+
 	size_t vertex_block_size = getVertexBlockSize(vertex_size);
 
 	size_t vertex_offset = 0;
@@ -1710,7 +1812,7 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 	{
 		size_t block_size = (vertex_offset + vertex_block_size < vertex_count) ? vertex_block_size : vertex_count - vertex_offset;
 
-		data = decode(data, data_end, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, last_vertex, version);
+		data = decode(data, data_end, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, last_vertex, channels, version);
 		if (!data)
 			return -2;
 
