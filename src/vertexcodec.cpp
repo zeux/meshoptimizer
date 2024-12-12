@@ -433,13 +433,18 @@ static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count
 	for (size_t i = 0; i < vertex_count; i += kVertexBlockMaxSize)
 	{
 		size_t block_size = i + kVertexBlockMaxSize < vertex_count ? kVertexBlockMaxSize : vertex_count - i;
+		size_t block_size_aligned = (block_size + kByteGroupSize - 1) & ~(kByteGroupSize - 1);
+
+		// we sometimes encode elements we didn't fill when rounding to kByteGroupSize
+		memset(block, 0, block_size_aligned);
 
 		for (int channel = 0; channel < max_channel; ++channel)
 		{
 			for (size_t j = 0; j < 4; ++j)
 			{
 				encodeDeltas(block, vertex_data + i * vertex_size, block_size, vertex_size, last_vertex, k + j, channel);
-				sizes[channel] += encodeBytesMeasure(block, block_size, bits);
+
+				sizes[channel] += encodeBytesMeasure(block, block_size_aligned, bits);
 			}
 		}
 	}
