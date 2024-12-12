@@ -162,7 +162,8 @@ inline unsigned int zigzag32(unsigned int v)
 	return ((signed int)(v) >> 31) ^ (v << 1);
 }
 
-inline unsigned char unzigzag8(unsigned char v)
+template <typename T>
+inline T unzigzag(T v)
 {
 	return -(v & 1) ^ (v >> 1);
 }
@@ -650,20 +651,39 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 	return data;
 }
 
-static void decodeDeltas1(const unsigned char* buffer, unsigned char* transposed, size_t vertex_count, size_t vertex_size, unsigned char last_vertex)
+template <typename T, bool Xor>
+static void decodeDeltas1(const unsigned char* buffer, unsigned char* transposed, size_t vertex_count, size_t vertex_size, const unsigned char* last_vertex)
 {
-	size_t vertex_offset = 0;
-
-	unsigned char p = last_vertex;
-
-	for (size_t i = 0; i < vertex_count; ++i)
+	for (size_t k = 0; k < 4; k += sizeof(T))
 	{
-		unsigned char v = unzigzag8(buffer[i]) + p;
+		size_t vertex_offset = k;
 
-		transposed[vertex_offset] = v;
-		p = v;
+		T p = last_vertex[0];
+		if (sizeof(T) > 1)
+			p |= last_vertex[1] << 8;
+		if (sizeof(T) > 2)
+			p |= (last_vertex[2] << 16) | (last_vertex[3] << 24);
 
-		vertex_offset += vertex_size;
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			T v = buffer[i];
+			if (sizeof(T) > 1)
+				v |= buffer[i + vertex_count] << 8;
+			if (sizeof(T) > 2)
+				v |= (buffer[i + vertex_count * 2] << 16) | (buffer[i + vertex_count * 3] << 24);
+
+			v = Xor ? v ^ p : unzigzag(v) + p;
+
+			for (size_t j = 0; j < sizeof(T); ++j)
+				transposed[vertex_offset + j] = (unsigned char)(v >> (j * 8));
+
+			p = v;
+
+			vertex_offset += vertex_size;
+		}
+
+		buffer += vertex_count * sizeof(T);
+		last_vertex += sizeof(T);
 	}
 }
 
@@ -671,9 +691,7 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 
-	(void)channels;
-
-	unsigned char buffer[kVertexBlockMaxSize];
+	unsigned char buffer[kVertexBlockMaxSize * 4];
 	unsigned char transposed[kVertexBlockSizeBytes];
 
 	size_t vertex_count_aligned = (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1);
@@ -686,32 +704,55 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 	const unsigned char* control = data;
 	data += control_size;
 
-	for (size_t k = 0; k < vertex_size; ++k)
+	for (size_t k = 0; k < vertex_size; k += 4)
 	{
-		int ctrl = version == 0 ? 0 : (control[k / 4] >> ((k % 4) * 2)) & 3;
+		unsigned char ctrl_byte = version == 0 ? 0 : control[k / 4];
 
-		if (ctrl == 3)
+		for (size_t j = 0; j < 4; ++j)
 		{
-			// literal encoding
-			if (size_t(data_end - data) < vertex_count)
-				return NULL;
+			int ctrl = (ctrl_byte >> (j * 2)) & 3;
 
-			memcpy(buffer, data, vertex_count);
-			data += vertex_count;
-		}
-		else if (ctrl == 2)
-		{
-			// zero encoding
-			memset(buffer, 0, vertex_count);
-		}
-		else
-		{
-			data = decodeBytes(data, data_end, buffer, vertex_count_aligned, version == 0 ? kBitsV0 : kBitsV1 + ctrl);
-			if (!data)
-				return NULL;
+			if (ctrl == 3)
+			{
+				// literal encoding
+				if (size_t(data_end - data) < vertex_count)
+					return NULL;
+
+				memcpy(buffer + j * vertex_count, data, vertex_count);
+				data += vertex_count;
+			}
+			else if (ctrl == 2)
+			{
+				// zero encoding
+				memset(buffer + j * vertex_count, 0, vertex_count);
+			}
+			else
+			{
+				data = decodeBytes(data, data_end, buffer + j * vertex_count, vertex_count_aligned, version == 0 ? kBitsV0 : kBitsV1 + ctrl);
+				if (!data)
+					return NULL;
+			}
 		}
 
-		decodeDeltas1(buffer, transposed + k, vertex_count, vertex_size, last_vertex[k]);
+		int channel = version == 0 ? 0 : channels[k / 4];
+
+		switch (channel)
+		{
+		case 0:
+			decodeDeltas1<unsigned char, false>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k);
+			break;
+		case 1:
+			decodeDeltas1<unsigned short, false>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k);
+			break;
+		case 2:
+			decodeDeltas1<unsigned int, false>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k);
+			break;
+		case 3:
+			decodeDeltas1<unsigned int, true>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k);
+			break;
+		default:
+			return NULL;
+		}
 	}
 
 	memcpy(vertex_data, transposed, vertex_count * vertex_size);
