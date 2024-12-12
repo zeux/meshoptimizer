@@ -165,7 +165,7 @@ inline unsigned int zigzag32(unsigned int v)
 template <typename T>
 inline T unzigzag(T v)
 {
-	return -(v & 1) ^ (v >> 1);
+	return (0 - (v & 1)) ^ (v >> 1);
 }
 
 #if TRACE
@@ -659,18 +659,14 @@ static void decodeDeltas1(const unsigned char* buffer, unsigned char* transposed
 		size_t vertex_offset = k;
 
 		T p = last_vertex[0];
-		if (sizeof(T) > 1)
-			p |= last_vertex[1] << 8;
-		if (sizeof(T) > 2)
-			p |= (last_vertex[2] << 16) | (last_vertex[3] << 24);
+		for (size_t j = 1; j < sizeof(T); ++j)
+			p |= last_vertex[j] << (8 * j);
 
 		for (size_t i = 0; i < vertex_count; ++i)
 		{
 			T v = buffer[i];
-			if (sizeof(T) > 1)
-				v |= buffer[i + vertex_count] << 8;
-			if (sizeof(T) > 2)
-				v |= (buffer[i + vertex_count * 2] << 16) | (buffer[i + vertex_count * 3] << 24);
+			for (size_t j = 1; j < sizeof(T); ++j)
+				v |= buffer[i + vertex_count * j] << (8 * j);
 
 			v = Xor ? v ^ p : unzigzag(v) + p;
 
@@ -1796,7 +1792,7 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	unsigned char channels[64] = {};
 	if (version != 0)
 		for (size_t k = 0; k < vertex_size; k += 4)
-			channels[k / 4] = estimateChannel(vertex_data, vertex_count, vertex_size, k, kEncodeMaxChannel);
+			channels[k / 4] = (unsigned char)estimateChannel(vertex_data, vertex_count, vertex_size, k, kEncodeMaxChannel);
 
 	size_t vertex_block_size = getVertexBlockSize(vertex_size);
 
