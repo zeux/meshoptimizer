@@ -1824,6 +1824,19 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 		size_t total_k = vsk.header + vsk.bitg[1] + vsk.bitg[2] + vsk.bitg[4] + vsk.bitg[8];
 		double total_kr = total_k ? 1.0 / double(total_k) : 0;
 
+		if (version != 0)
+		{
+			int channel = channels[k / 4];
+
+			const char* chname = ".";
+			chname = (channel == 0) ? "1" : chname;
+			chname = (channel == 1 && k % 2 == 0) ? "2" : chname;
+			chname = (channel == 2 && k % 4 == 0) ? "4" : chname;
+			chname = (channel == 3) ? "^" : chname;
+
+			printf(" | %s", chname);
+		}
+
 		printf(" |\thdr [%5.1f%%] bitg [1 %4.1f%% 2 %4.1f%% 4 %4.1f%% 8 %4.1f%%]",
 		    double(vsk.header) * total_kr * 100,
 		    double(vsk.bitg[1]) * total_kr * 100, double(vsk.bitg[2]) * total_kr * 100,
@@ -1843,6 +1856,7 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 		    double(vsk.bitc[2]) / double(vertex_count) * 100, double(vsk.bitc[3]) / double(vertex_count) * 100,
 		    double(vsk.bitc[4]) / double(vertex_count) * 100, double(vsk.bitc[5]) / double(vertex_count) * 100,
 		    double(vsk.bitc[6]) / double(vertex_count) * 100, double(vsk.bitc[7]) / double(vertex_count) * 100);
+
 		printf("\n");
 	}
 #endif
