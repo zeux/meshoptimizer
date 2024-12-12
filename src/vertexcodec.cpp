@@ -147,17 +147,17 @@ static size_t getVertexBlockSize(size_t vertex_size)
 	return (result < kVertexBlockMaxSize) ? result : kVertexBlockMaxSize;
 }
 
-inline unsigned char zigzag8(unsigned char v)
+inline unsigned char zigzag(unsigned char v)
 {
 	return ((signed char)(v) >> 7) ^ (v << 1);
 }
 
-inline unsigned short zigzag16(unsigned short v)
+inline unsigned short zigzag(unsigned short v)
 {
 	return ((signed short)(v) >> 15) ^ (v << 1);
 }
 
-inline unsigned int zigzag32(unsigned int v)
+inline unsigned int zigzag(unsigned int v)
 {
 	return ((signed int)(v) >> 31) ^ (v << 1);
 }
@@ -349,68 +349,41 @@ static size_t encodeBytesMeasure(const unsigned char* buffer, size_t buffer_size
 	return result;
 }
 
+template <typename T, bool Xor>
+static void encodeDeltas1(unsigned char* buffer, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned char last_vertex[256], size_t k)
+{
+	size_t k0 = k & ~(sizeof(T) - 1);
+	int ks = (k & (sizeof(T) - 1)) * 8;
+
+	T p = last_vertex[k0];
+	for (size_t j = 1; j < sizeof(T); ++j)
+		p |= T(last_vertex[k0 + j]) << (j * 8);
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		T v = vertex_data[i * vertex_size + k0];
+		for (size_t j = 1; j < sizeof(T); ++j)
+			v |= vertex_data[i * vertex_size + k0 + j] << (j * 8);
+
+		T d = Xor ? v ^ p : zigzag(T(v - p));
+
+		buffer[i] = (unsigned char)(d >> ks);
+		p = v;
+	}
+}
+
 static void encodeDeltas(unsigned char* buffer, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned char last_vertex[256], size_t k, int channel)
 {
 	switch (channel)
 	{
 	case 0:
-	{
-		unsigned char p = last_vertex[k];
-
-		for (size_t i = 0; i < vertex_count; ++i)
-		{
-			unsigned char v = vertex_data[i * vertex_size + k];
-
-			buffer[i] = zigzag8(v - p);
-			p = v;
-		}
-		break;
-	}
+		return encodeDeltas1<unsigned char, false>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k);
 	case 1:
-	{
-		size_t k0 = k & ~1;
-		int ks = (k & 1) * 8;
-
-		unsigned short p = last_vertex[k0] + (last_vertex[k0 + 1] << 8);
-
-		for (size_t i = 0; i < vertex_count; ++i)
-		{
-			unsigned short v = vertex_data[i * vertex_size + k0] + (vertex_data[i * vertex_size + k0 + 1] << 8);
-
-			buffer[i] = (unsigned char)(zigzag16(v - p) >> ks);
-			p = v;
-		}
-		break;
-	}
+		return encodeDeltas1<unsigned short, false>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k);
 	case 2:
-	{
-		size_t k0 = k & ~3;
-		int ks = (k & 3) * 8;
-
-		unsigned int p = last_vertex[k0] + (last_vertex[k0 + 1] << 8) + (last_vertex[k0 + 2] << 16) + (last_vertex[k0 + 3] << 24);
-
-		for (size_t i = 0; i < vertex_count; ++i)
-		{
-			unsigned int v = vertex_data[i * vertex_size + k0] + (vertex_data[i * vertex_size + k0 + 1] << 8) + (vertex_data[i * vertex_size + k0 + 2] << 16) + (vertex_data[i * vertex_size + k0 + 3] << 24);
-
-			buffer[i] = (unsigned char)(zigzag32(v - p) >> ks);
-			p = v;
-		}
-		break;
-	}
+		return encodeDeltas1<unsigned int, false>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k);
 	case 3:
-	{
-		unsigned char p = last_vertex[k];
-
-		for (size_t i = 0; i < vertex_count; ++i)
-		{
-			unsigned char v = vertex_data[i * vertex_size + k];
-
-			buffer[i] = v ^ p;
-			p = v;
-		}
-		break;
-	}
+		return encodeDeltas1<unsigned char, true>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k);
 	default:
 		assert(!"Unsupported channel encoding");
 	}
