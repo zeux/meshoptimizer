@@ -1306,17 +1306,18 @@ inline void unzigzag8(__m128i& v)
 SIMD_TARGET
 inline void unzigzag16(__m128i& v0, __m128i& v1)
 {
-	__m128i i0 = _mm_unpacklo_epi8(v0, v1);
-	__m128i i1 = _mm_unpackhi_epi8(v0, v1);
+	// v >> 1 (per byte)
+	__m128i r0 = _mm_and_si128(_mm_srli_epi16(v0, 1), _mm_set1_epi8(0x7f));
+	__m128i r1 = _mm_and_si128(_mm_srli_epi16(v1, 1), _mm_set1_epi8(0x7f));
 
-	__m128i l0 = _mm_sub_epi16(_mm_setzero_si128(), _mm_and_si128(i0, _mm_set1_epi16(1)));
-	__m128i r0 = _mm_xor_si128(l0, _mm_srli_epi16(i0, 1));
+	// v >> 1 (carry)
+	r0 = _mm_or_si128(r0, _mm_andnot_si128(_mm_set1_epi8(0x7f), _mm_slli_epi16(v1, 7)));
 
-	__m128i l1 = _mm_sub_epi16(_mm_setzero_si128(), _mm_and_si128(i1, _mm_set1_epi16(1)));
-	__m128i r1 = _mm_xor_si128(l1, _mm_srli_epi16(i1, 1));
+	// -(v & 1)
+	__m128i mk = _mm_sub_epi8(_mm_setzero_si128(), _mm_and_si128(v0, _mm_set1_epi8(1)));
 
-	v0 = _mm_packus_epi16(_mm_and_si128(r0, _mm_set1_epi16(0xff)), _mm_and_si128(r1, _mm_set1_epi16(0xff)));
-	v1 = _mm_packus_epi16(_mm_srli_epi16(r0, 8), _mm_srli_epi16(r1, 8));
+	v0 = _mm_xor_si128(r0, mk);
+	v1 = _mm_xor_si128(r1, mk);
 }
 
 SIMD_TARGET
@@ -1329,9 +1330,9 @@ inline void unzigzag32(__m128i& v0, __m128i& v1, __m128i& v2, __m128i& v3)
 	__m128i r3 = _mm_and_si128(_mm_srli_epi16(v3, 1), _mm_set1_epi8(0x7f));
 
 	// v >> 1 (carry)
-	r0 = _mm_or_si128(r0, _mm_and_si128(_mm_slli_epi16(v1, 7), _mm_set1_epi8(-0x80)));
-	r1 = _mm_or_si128(r1, _mm_and_si128(_mm_slli_epi16(v2, 7), _mm_set1_epi8(-0x80)));
-	r2 = _mm_or_si128(r2, _mm_and_si128(_mm_slli_epi16(v3, 7), _mm_set1_epi8(-0x80)));
+	r0 = _mm_or_si128(r0, _mm_andnot_si128(_mm_set1_epi8(0x7f), _mm_slli_epi16(v1, 7)));
+	r1 = _mm_or_si128(r1, _mm_andnot_si128(_mm_set1_epi8(0x7f), _mm_slli_epi16(v2, 7)));
+	r2 = _mm_or_si128(r2, _mm_andnot_si128(_mm_set1_epi8(0x7f), _mm_slli_epi16(v3, 7)));
 
 	// -(v & 1)
 	__m128i mk = _mm_sub_epi8(_mm_setzero_si128(), _mm_and_si128(v0, _mm_set1_epi8(1)));
