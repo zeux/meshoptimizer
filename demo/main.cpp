@@ -768,11 +768,12 @@ void encodeIndex(const Mesh& mesh, char desc)
 		    (result[i + 2] == mesh.indices[i + 0] && result[i + 0] == mesh.indices[i + 1] && result[i + 1] == mesh.indices[i + 2]));
 	}
 
-	printf("IdxCodec%c: %.1f bits/triangle (post-deflate %.1f bits/triangle); encode %.2f msec, decode %.2f msec (%.2f GB/s)\n",
+	printf("IdxCodec%c: %.1f bits/triangle (post-deflate %.1f bits/triangle); encode %.2f msec (%.3f GB/s), decode %.2f msec (%.2f GB/s)\n",
 	    desc,
 	    double(buffer.size() * 8) / double(mesh.indices.size() / 3),
 	    double(csize * 8) / double(mesh.indices.size() / 3),
 	    (middle - start) * 1000,
+	    (double(result.size() * 4) / (1 << 30)) / (middle - start),
 	    (end - middle) * 1000,
 	    (double(result.size() * 4) / (1 << 30)) / (end - middle));
 }
@@ -799,11 +800,12 @@ void encodeIndexSequence(const std::vector<unsigned int>& data, size_t vertex_co
 
 	assert(memcmp(&data[0], &result[0], data.size() * sizeof(unsigned int)) == 0);
 
-	printf("IdxCodec%c: %.1f bits/index (post-deflate %.1f bits/index); encode %.2f msec, decode %.2f msec (%.2f GB/s)\n",
+	printf("IdxCodec%c: %.1f bits/index (post-deflate %.1f bits/index); encode %.2f msec (%.3f GB/s), decode %.2f msec (%.2f GB/s)\n",
 	    desc,
 	    double(buffer.size() * 8) / double(data.size()),
 	    double(csize * 8) / double(data.size()),
 	    (middle - start) * 1000,
+	    (double(result.size() * 4) / (1 << 30)) / (middle - start),
 	    (end - middle) * 1000,
 	    (double(result.size() * 4) / (1 << 30)) / (end - middle));
 }
@@ -847,11 +849,12 @@ void encodeVertex(const Mesh& mesh, const char* pvn, bool validate = true)
 
 	size_t csize = compress(vbuf);
 
-	printf("VtxCodec%1s%s: %.1f bits/vertex (post-deflate %.1f bits/vertex); encode %.2f msec, decode %.2f msec (%.2f GB/s)\n", pvn,
+	printf("VtxCodec%1s%s: %.1f bits/vertex (post-deflate %.1f bits/vertex); encode %.2f msec (%.3f GB/s), decode %.2f msec (%.2f GB/s)\n", pvn,
 	    res == 0 && memcmp(&pv[0], &result[0], pv.size() * sizeof(PV)) == 0 ? "" : "!",
 	    double(vbuf.size() * 8) / double(mesh.vertices.size()),
 	    double(csize * 8) / double(mesh.vertices.size()),
 	    (middle - start) * 1000,
+	    (double(result.size() * sizeof(PV)) / (1 << 30)) / (middle - start),
 	    (end - middle) * 1000,
 	    (double(result.size() * sizeof(PV)) / (1 << 30)) / (end - middle));
 }

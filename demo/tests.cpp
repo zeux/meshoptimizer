@@ -504,6 +504,27 @@ static void decodeVertexLarge()
 	assert(memcmp(decoded, data, sizeof(data)) == 0);
 }
 
+static void decodeVertexSmall()
+{
+	unsigned char data[13 * 4];
+
+	// this tests 0/2/4/8 bit groups in one stream
+	for (size_t i = 0; i < 13; ++i)
+	{
+		data[i * 4 + 0] = 0;
+		data[i * 4 + 1] = (unsigned char)(i * 1);
+		data[i * 4 + 2] = (unsigned char)(i * 2);
+		data[i * 4 + 3] = (unsigned char)(i * 8);
+	}
+
+	std::vector<unsigned char> buffer(meshopt_encodeVertexBufferBound(13, 4));
+	buffer.resize(meshopt_encodeVertexBuffer(&buffer[0], buffer.size(), data, 13, 4));
+
+	unsigned char decoded[13 * 4];
+	assert(meshopt_decodeVertexBuffer(decoded, 13, 4, &buffer[0], buffer.size()) == 0);
+	assert(memcmp(decoded, data, sizeof(data)) == 0);
+}
+
 static void encodeVertexEmpty()
 {
 	std::vector<unsigned char> buffer(meshopt_encodeVertexBufferBound(0, 16));
@@ -1960,15 +1981,18 @@ void runTests()
 	decodeVertexMemorySafe();
 	decodeVertexRejectExtraBytes();
 	decodeVertexRejectMalformedHeaders();
+
 	decodeVertexBitGroups();
 	decodeVertexBitGroupSentinels();
 	decodeVertexLarge();
+	decodeVertexSmall();
 	encodeVertexEmpty();
 
 	meshopt_encodeVertexVersion(0xe);
 	decodeVertexBitGroups();
 	decodeVertexBitGroupSentinels();
 	decodeVertexLarge();
+	decodeVertexSmall();
 	encodeVertexEmpty();
 	meshopt_encodeVertexVersion(0);
 
