@@ -1300,6 +1300,7 @@ inline void transpose8(__m128i& x0, __m128i& x1, __m128i& x2, __m128i& x3)
 SIMD_TARGET
 inline void unzigzag8(__m128i& v)
 {
+	// -(v & 1) ^ (v >> 1)
 	__m128i xl = _mm_sub_epi8(_mm_setzero_si128(), _mm_and_si128(v, _mm_set1_epi8(1)));
 	__m128i xr = _mm_and_si128(_mm_srli_epi16(v, 1), _mm_set1_epi8(127));
 
@@ -1383,6 +1384,7 @@ inline void transpose8(uint8x16_t& x0, uint8x16_t& x1, uint8x16_t& x2, uint8x16_
 SIMD_TARGET
 inline void unzigzag8(uint8x16_t& v)
 {
+	// -(v & 1) ^ (v >> 1)
 	uint8x16_t xl = vreinterpretq_u8_s8(vnegq_s8(vreinterpretq_s8_u8(vandq_u8(v, vdupq_n_u8(1)))));
 	uint8x16_t xr = vshrq_n_u8(v, 1);
 
@@ -1464,12 +1466,71 @@ inline void transpose8(v128_t& x0, v128_t& x1, v128_t& x2, v128_t& x3)
 }
 
 SIMD_TARGET
-inline v128_t unzigzag8(v128_t v)
+inline void unzigzag8(v128_t& v)
 {
+	// -(v & 1) ^ (v >> 1)
 	v128_t xl = wasm_i8x16_neg(wasm_v128_and(v, wasm_i8x16_splat(1)));
 	v128_t xr = wasm_u8x16_shr(v, 1);
 
-	return wasm_v128_xor(xl, xr);
+	v = wasm_v128_xor(xl, xr);
+}
+
+SIMD_TARGET
+inline void unzigzag16(v128_t& v0, v128_t& v1)
+{
+	// v >> 1 (per byte)
+	v128_t r0 = wasm_u8x16_shr(v0, 1);
+	v128_t r1 = wasm_u8x16_shr(v1, 1);
+
+	// v >> 1 (carry)
+	r0 = wasm_v128_or(r0, wasm_i8x16_shl(v1, 7));
+
+	// -(v & 1)
+	v128_t mk = wasm_i8x16_neg(wasm_v128_and(v0, wasm_i8x16_splat(1)));
+
+	v0 = wasm_v128_xor(r0, mk);
+	v1 = wasm_v128_xor(r1, mk);
+}
+
+SIMD_TARGET
+inline void unzigzag32(v128_t& v0, v128_t& v1, v128_t& v2, v128_t& v3)
+{
+	// v >> 1 (per byte)
+	v128_t r0 = wasm_u8x16_shr(v0, 1);
+	v128_t r1 = wasm_u8x16_shr(v1, 1);
+	v128_t r2 = wasm_u8x16_shr(v2, 1);
+	v128_t r3 = wasm_u8x16_shr(v3, 1);
+
+	// v >> 1 (carry)
+	r0 = wasm_v128_or(r0, wasm_i8x16_shl(v1, 7));
+	r1 = wasm_v128_or(r1, wasm_i8x16_shl(v2, 7));
+	r2 = wasm_v128_or(r2, wasm_i8x16_shl(v3, 7));
+
+	// -(v & 1)
+	v128_t mk = wasm_i8x16_neg(wasm_v128_and(v0, wasm_i8x16_splat(1)));
+
+	v0 = wasm_v128_xor(r0, mk);
+	v1 = wasm_v128_xor(r1, mk);
+	v2 = wasm_v128_xor(r2, mk);
+	v3 = wasm_v128_xor(r3, mk);
+}
+
+SIMD_TARGET
+inline v128_t undelta(v128_t v, v128_t p, int channel)
+{
+	switch (channel)
+	{
+	case 0:
+		return wasm_i8x16_add(v, p);
+	case 1:
+		return wasm_i16x8_add(v, p);
+	case 2:
+		return wasm_i32x4_add(v, p);
+	case 3:
+		return wasm_v128_xor(v, p);
+	default:
+		return v;
+	}
 }
 #endif
 
@@ -1544,7 +1605,7 @@ decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t
 #define PREP() v128_t pi = wasm_v128_load(last_vertex)
 #define LOAD(i) v128_t r##i = wasm_v128_load(buffer + j + i * vertex_count_aligned)
 #define GRP4(i) t0 = wasmx_splat_v32x4(r##i, 0), t1 = wasmx_splat_v32x4(r##i, 1), t2 = wasmx_splat_v32x4(r##i, 2), t3 = wasmx_splat_v32x4(r##i, 3)
-#define FIXD(i) t##i = pi = wasm_i8x16_add(pi, t##i)
+#define FIXD(i) t##i = pi = undelta(pi, t##i, Channel)
 #define SAVE(i) *reinterpret_cast<int*>(savep) = wasm_i32x4_extract_lane(t##i, 0), savep += vertex_size
 #endif
 
@@ -1559,7 +1620,6 @@ decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t
 		LOAD(2);
 		LOAD(3);
 
-#if defined(SIMD_SSE) || defined(SIMD_NEON)
 		switch (Channel)
 		{
 		case 0:
@@ -1577,13 +1637,6 @@ decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t
 			break;
 		default:;
 		}
-#else
-		// no channel support atm
-		r0 = unzigzag8(r0);
-		r1 = unzigzag8(r1);
-		r2 = unzigzag8(r2);
-		r3 = unzigzag8(r3);
-#endif
 
 		transpose8(r0, r1, r2, r3);
 
