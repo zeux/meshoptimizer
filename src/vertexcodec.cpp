@@ -133,7 +133,7 @@ const size_t kTailMinSize = 32; // must be >= kByteGroupDecodeLimit
 static const int kBitsV0[4] = {0, 2, 4, 8};
 static const int kBitsV1[5] = {0, 1, 2, 4, 8};
 
-const int kEncodeMaxChannel = 4;
+const int kEncodeMaxChannel = 3;
 
 static size_t getVertexBlockSize(size_t vertex_size)
 {
@@ -155,11 +155,6 @@ inline unsigned char zigzag(unsigned char v)
 inline unsigned short zigzag(unsigned short v)
 {
 	return ((signed short)(v) >> 15) ^ (v << 1);
-}
-
-inline unsigned int zigzag(unsigned int v)
-{
-	return ((signed int)(v) >> 31) ^ (v << 1);
 }
 
 template <typename T>
@@ -381,8 +376,6 @@ static void encodeDeltas(unsigned char* buffer, const unsigned char* vertex_data
 	case 1:
 		return encodeDeltas1<unsigned short, false>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k);
 	case 2:
-		return encodeDeltas1<unsigned int, false>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k);
-	case 3:
 		return encodeDeltas1<unsigned char, true>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k);
 	default:
 		assert(!"Unsupported channel encoding");
@@ -719,12 +712,10 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 			decodeDeltas1<unsigned short, false>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k);
 			break;
 		case 2:
-			decodeDeltas1<unsigned int, false>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k);
-			break;
-		case 3:
 			decodeDeltas1<unsigned int, true>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k);
 			break;
 		default:
+			// invalid channel type
 			return NULL;
 		}
 	}
@@ -1297,47 +1288,6 @@ inline void unzigzag16(__m128i& v0, __m128i& v1)
 	v0 = _mm_xor_si128(r0, mk);
 	v1 = _mm_xor_si128(r1, mk);
 }
-
-SIMD_TARGET
-inline void unzigzag32(__m128i& v0, __m128i& v1, __m128i& v2, __m128i& v3)
-{
-	// v >> 1 (per byte)
-	__m128i r0 = _mm_and_si128(_mm_srli_epi16(v0, 1), _mm_set1_epi8(0x7f));
-	__m128i r1 = _mm_and_si128(_mm_srli_epi16(v1, 1), _mm_set1_epi8(0x7f));
-	__m128i r2 = _mm_and_si128(_mm_srli_epi16(v2, 1), _mm_set1_epi8(0x7f));
-	__m128i r3 = _mm_and_si128(_mm_srli_epi16(v3, 1), _mm_set1_epi8(0x7f));
-
-	// v >> 1 (carry)
-	r0 = _mm_or_si128(r0, _mm_andnot_si128(_mm_set1_epi8(0x7f), _mm_slli_epi16(v1, 7)));
-	r1 = _mm_or_si128(r1, _mm_andnot_si128(_mm_set1_epi8(0x7f), _mm_slli_epi16(v2, 7)));
-	r2 = _mm_or_si128(r2, _mm_andnot_si128(_mm_set1_epi8(0x7f), _mm_slli_epi16(v3, 7)));
-
-	// -(v & 1)
-	__m128i mk = _mm_sub_epi8(_mm_setzero_si128(), _mm_and_si128(v0, _mm_set1_epi8(1)));
-
-	v0 = _mm_xor_si128(r0, mk);
-	v1 = _mm_xor_si128(r1, mk);
-	v2 = _mm_xor_si128(r2, mk);
-	v3 = _mm_xor_si128(r3, mk);
-}
-
-SIMD_TARGET
-inline __m128i undelta(__m128i v, __m128i p, int channel)
-{
-	switch (channel)
-	{
-	case 0:
-		return _mm_add_epi8(v, p);
-	case 1:
-		return _mm_add_epi16(v, p);
-	case 2:
-		return _mm_add_epi32(v, p);
-	case 3:
-		return _mm_xor_si128(v, p);
-	default:
-		return v;
-	}
-}
 #endif
 
 #ifdef SIMD_NEON
@@ -1382,47 +1332,6 @@ inline void unzigzag16(uint8x16_t& v0, uint8x16_t& v1)
 	v0 = veorq_u8(r0, mk);
 	v1 = veorq_u8(r1, mk);
 }
-
-SIMD_TARGET
-inline void unzigzag32(uint8x16_t& v0, uint8x16_t& v1, uint8x16_t& v2, uint8x16_t& v3)
-{
-	// v >> 1 (per byte)
-	uint8x16_t r0 = vshrq_n_u8(v0, 1);
-	uint8x16_t r1 = vshrq_n_u8(v1, 1);
-	uint8x16_t r2 = vshrq_n_u8(v2, 1);
-	uint8x16_t r3 = vshrq_n_u8(v3, 1);
-
-	// v >> 1 (carry)
-	r0 = vorrq_u8(r0, vshlq_n_u8(v1, 7));
-	r1 = vorrq_u8(r1, vshlq_n_u8(v2, 7));
-	r2 = vorrq_u8(r2, vshlq_n_u8(v3, 7));
-
-	// -(v & 1)
-	uint8x16_t mk = vreinterpretq_u8_s8(vnegq_s8(vreinterpretq_s8_u8(vandq_u8(v0, vdupq_n_u8(1)))));
-
-	v0 = veorq_u8(r0, mk);
-	v1 = veorq_u8(r1, mk);
-	v2 = veorq_u8(r2, mk);
-	v3 = veorq_u8(r3, mk);
-}
-
-SIMD_TARGET
-inline uint8x8_t undelta(uint8x8_t v, uint8x8_t p, int channel)
-{
-	switch (channel)
-	{
-	case 0:
-		return vadd_u8(v, p);
-	case 1:
-		return vreinterpret_u8_u16(vadd_u16(vreinterpret_u16_u8(v), vreinterpret_u16_u8(p)));
-	case 2:
-		return vreinterpret_u8_u32(vadd_u32(vreinterpret_u32_u8(v), vreinterpret_u32_u8(p)));
-	case 3:
-		return veor_u8(v, p);
-	default:
-		return v;
-	}
-}
 #endif
 
 #ifdef SIMD_WASM
@@ -1465,29 +1374,6 @@ inline void unzigzag16(v128_t& v0, v128_t& v1)
 
 	v0 = wasm_v128_xor(r0, mk);
 	v1 = wasm_v128_xor(r1, mk);
-}
-
-SIMD_TARGET
-inline void unzigzag32(v128_t& v0, v128_t& v1, v128_t& v2, v128_t& v3)
-{
-	// v >> 1 (per byte)
-	v128_t r0 = wasm_u8x16_shr(v0, 1);
-	v128_t r1 = wasm_u8x16_shr(v1, 1);
-	v128_t r2 = wasm_u8x16_shr(v2, 1);
-	v128_t r3 = wasm_u8x16_shr(v3, 1);
-
-	// v >> 1 (carry)
-	r0 = wasm_v128_or(r0, wasm_i8x16_shl(v1, 7));
-	r1 = wasm_v128_or(r1, wasm_i8x16_shl(v2, 7));
-	r2 = wasm_v128_or(r2, wasm_i8x16_shl(v3, 7));
-
-	// -(v & 1)
-	v128_t mk = wasm_i8x16_neg(wasm_v128_and(v0, wasm_i8x16_splat(1)));
-
-	v0 = wasm_v128_xor(r0, mk);
-	v1 = wasm_v128_xor(r1, mk);
-	v2 = wasm_v128_xor(r2, mk);
-	v3 = wasm_v128_xor(r3, mk);
 }
 
 SIMD_TARGET
@@ -1562,7 +1448,7 @@ decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t
 #define PREP() __m128i pi = _mm_cvtsi32_si128(*reinterpret_cast<const int*>(last_vertex))
 #define LOAD(i) __m128i r##i = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + i * vertex_count_aligned))
 #define GRP4(i) t0 = _mm_shuffle_epi32(r##i, 0), t1 = _mm_shuffle_epi32(r##i, 1), t2 = _mm_shuffle_epi32(r##i, 2), t3 = _mm_shuffle_epi32(r##i, 3)
-#define FIXD(i) t##i = pi = undelta(pi, t##i, Channel)
+#define FIXD(i) t##i = pi = Channel == 0 ? _mm_add_epi8(pi, t##i) : (Channel == 1 ? _mm_add_epi16(pi, t##i) : _mm_xor_si128(pi, t##i))
 #define SAVE(i) *reinterpret_cast<int*>(savep) = _mm_cvtsi128_si32(t##i), savep += vertex_size
 #endif
 
@@ -1571,7 +1457,7 @@ decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t
 #define PREP() uint8x8_t pi = vreinterpret_u8_u32(vld1_lane_u32(reinterpret_cast<uint32_t*>(last_vertex), vdup_n_u32(0), 0))
 #define LOAD(i) uint8x16_t r##i = vld1q_u8(buffer + j + i * vertex_count_aligned)
 #define GRP4(i) t0 = vget_low_u8(r##i), t1 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t0), 1)), t2 = vget_high_u8(r##i), t3 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t2), 1))
-#define FIXD(i) t##i = pi = undelta(pi, t##i, Channel)
+#define FIXD(i) t##i = pi = Channel == 0 ? vadd_u8(pi, t##i) : (Channel == 1 ? vreinterpret_u8_u16(vadd_u16(vreinterpret_u16_u8(pi), vreinterpret_u16_u8(t##i))) : veor_u8(pi, t##i))
 #define SAVE(i) vst1_lane_u32(reinterpret_cast<uint32_t*>(savep), vreinterpret_u32_u8(t##i), 0), savep += vertex_size
 #endif
 
@@ -1580,7 +1466,7 @@ decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t
 #define PREP() v128_t pi = wasm_v128_load(last_vertex)
 #define LOAD(i) v128_t r##i = wasm_v128_load(buffer + j + i * vertex_count_aligned)
 #define GRP4(i) t0 = wasmx_splat_v32x4(r##i, 0), t1 = wasmx_splat_v32x4(r##i, 1), t2 = wasmx_splat_v32x4(r##i, 2), t3 = wasmx_splat_v32x4(r##i, 3)
-#define FIXD(i) t##i = pi = undelta(pi, t##i, Channel)
+#define FIXD(i) t##i = pi = Channel == 0 ? wasm_i8x16_add(pi, t##i) : (Channel == 1 ? wasm_i16x8_add(pi, t##i) : wasm_v128_xor(pi, t##i))
 #define SAVE(i) *reinterpret_cast<int*>(savep) = wasm_i32x4_extract_lane(t##i, 0), savep += vertex_size
 #endif
 
@@ -1606,9 +1492,6 @@ decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t
 		case 1:
 			unzigzag16(r0, r1);
 			unzigzag16(r2, r3);
-			break;
-		case 2:
-			unzigzag32(r0, r1, r2, r3);
 			break;
 		default:;
 		}
@@ -1705,10 +1588,8 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 		case 2:
 			decodeDeltas4Simd<2>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k);
 			break;
-		case 3:
-			decodeDeltas4Simd<3>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k);
-			break;
 		default:
+			// invalid channel type
 			return NULL;
 		}
 	}
