@@ -1375,24 +1375,6 @@ inline void unzigzag16(v128_t& v0, v128_t& v1)
 	v0 = wasm_v128_xor(r0, mk);
 	v1 = wasm_v128_xor(r1, mk);
 }
-
-SIMD_TARGET
-inline v128_t undelta(v128_t v, v128_t p, int channel)
-{
-	switch (channel)
-	{
-	case 0:
-		return wasm_i8x16_add(v, p);
-	case 1:
-		return wasm_i16x8_add(v, p);
-	case 2:
-		return wasm_i32x4_add(v, p);
-	case 3:
-		return wasm_v128_xor(v, p);
-	default:
-		return v;
-	}
-}
 #endif
 
 #if defined(SIMD_SSE) || defined(SIMD_AVX) || defined(SIMD_NEON) || defined(SIMD_WASM)
