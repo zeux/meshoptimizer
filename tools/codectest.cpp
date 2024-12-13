@@ -133,7 +133,12 @@ void testFile(const char* path, Stats* stats = 0)
 	size_t namel = name1 ? name1 - name0 : strlen(name0);
 	namel = namel > 25 ? 25 : namel;
 
+#if TRACE
+	printf("%.*s: %s\n", int(namel), name0, path);
+#else
 	printf("%25.*s:", int(namel), name0);
+#endif
+
 	testFile(file, vcnt, vsz, stats);
 	printf("\n");
 
