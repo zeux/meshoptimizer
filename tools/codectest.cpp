@@ -73,6 +73,11 @@ void testFile(FILE* file, size_t count, size_t stride, Stats* stats = 0)
 		input.resize(meshopt_encodeVertexBufferBound(count, stride));
 		input.resize(meshopt_encodeVertexBuffer(input.data(), input.size(), decoded.data(), count, stride));
 	}
+	else if (res != 0)
+	{
+		printf(" error decoding input: %d", res);
+		return;
+	}
 
 	std::vector<unsigned char> output(meshopt_encodeVertexBufferBound(count, stride));
 	meshopt_encodeVertexVersion(0xe);
