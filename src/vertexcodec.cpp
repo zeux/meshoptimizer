@@ -1745,16 +1745,13 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 		{
 			int channel = channels[k / 4];
 
-			const char* chname = ".";
-			chname = (channel == 0) ? "1" : chname;
-			chname = (channel == 1 && k % 2 == 0) ? "2" : chname;
-			chname = (channel == 2 && k % 4 == 0) ? "4" : chname;
-			chname = (channel == 3) ? "^" : chname;
-
-			printf(" | %s", chname);
+			if ((channel & 3) == 2 && k % 4 == 0)
+				printf(" | ^%2d", channel >> 3);
+			else
+				printf(" | %3s", channel == 0 ? "1" : (channel == 1 && k % 2 == 0 ? "2" : "."));
 		}
 
-		printf(" |\thdr [%5.1f%%] bitg [1 %4.1f%% 2 %4.1f%% 4 %4.1f%% 8 %4.1f%%]",
+		printf(" | hdr [%5.1f%%] bitg [1 %4.1f%% 2 %4.1f%% 4 %4.1f%% 8 %4.1f%%]",
 		    double(vsk.header) * total_kr * 100,
 		    double(vsk.bitg[1]) * total_kr * 100, double(vsk.bitg[2]) * total_kr * 100,
 		    double(vsk.bitg[4]) * total_kr * 100, double(vsk.bitg[8]) * total_kr * 100);
@@ -1763,13 +1760,13 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 
 		if (total_ctrl)
 		{
-			printf(" |\tctrl %3.0f%% %3.0f%% %3.0f%% %3.0f%%",
+			printf(" | ctrl %3.0f%% %3.0f%% %3.0f%% %3.0f%%",
 			    double(vsk.ctrl[0]) / double(total_ctrl) * 100, double(vsk.ctrl[1]) / double(total_ctrl) * 100,
 			    double(vsk.ctrl[2]) / double(total_ctrl) * 100, double(vsk.ctrl[3]) / double(total_ctrl) * 100);
 		}
 
 #if TRACE > 1
-		printf(" |\tbitc [%3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%%]",
+		printf(" | bitc [%3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%%]",
 		    double(vsk.bitc[0]) / double(vertex_count) * 100, double(vsk.bitc[1]) / double(vertex_count) * 100,
 		    double(vsk.bitc[2]) / double(vertex_count) * 100, double(vsk.bitc[3]) / double(vertex_count) * 100,
 		    double(vsk.bitc[4]) / double(vertex_count) * 100, double(vsk.bitc[5]) / double(vertex_count) * 100,
