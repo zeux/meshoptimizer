@@ -157,6 +157,16 @@ inline unsigned short zigzag(unsigned short v)
 	return ((signed short)(v) >> 15) ^ (v << 1);
 }
 
+inline unsigned int zigzag(unsigned int v)
+{
+	return ((signed int)(v) >> 31) ^ (v << 1);
+}
+
+inline unsigned int rotate(unsigned int v, int r)
+{
+	return (v << r) | (v >> (32 - r));
+}
+
 template <typename T>
 inline T unzigzag(T v)
 {
@@ -345,7 +355,7 @@ static size_t encodeBytesMeasure(const unsigned char* buffer, size_t buffer_size
 }
 
 template <typename T, bool Xor>
-static void encodeDeltas1(unsigned char* buffer, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned char last_vertex[256], size_t k)
+static void encodeDeltas1(unsigned char* buffer, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned char last_vertex[256], size_t k, int rot)
 {
 	size_t k0 = k & ~(sizeof(T) - 1);
 	int ks = (k & (sizeof(T) - 1)) * 8;
@@ -360,7 +370,7 @@ static void encodeDeltas1(unsigned char* buffer, const unsigned char* vertex_dat
 		for (size_t j = 1; j < sizeof(T); ++j)
 			v |= vertex_data[i * vertex_size + k0 + j] << (j * 8);
 
-		T d = Xor ? v ^ p : zigzag(T(v - p));
+		T d = Xor ? rotate(v ^ p, rot) : zigzag(T(v - p));
 
 		buffer[i] = (unsigned char)(d >> ks);
 		p = v;
@@ -369,20 +379,20 @@ static void encodeDeltas1(unsigned char* buffer, const unsigned char* vertex_dat
 
 static void encodeDeltas(unsigned char* buffer, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned char last_vertex[256], size_t k, int channel)
 {
-	switch (channel)
+	switch (channel & 3)
 	{
 	case 0:
-		return encodeDeltas1<unsigned char, false>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k);
+		return encodeDeltas1<unsigned char, false>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, 0);
 	case 1:
-		return encodeDeltas1<unsigned short, false>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k);
+		return encodeDeltas1<unsigned short, false>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, 0);
 	case 2:
-		return encodeDeltas1<unsigned char, true>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k);
+		return encodeDeltas1<unsigned int, true>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, channel >> 3);
 	default:
 		assert(!"Unsupported channel encoding");
 	}
 }
 
-static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, size_t k, int max_channel)
+static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, size_t k, int max_channel, int xor_rot)
 {
 	if (vertex_count == 0 || max_channel <= 1)
 		return 0;
@@ -408,7 +418,7 @@ static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count
 		{
 			for (size_t j = 0; j < 4; ++j)
 			{
-				encodeDeltas(block, vertex_data + i * vertex_size, block_size, vertex_size, last_vertex, k + j, channel);
+				encodeDeltas(block, vertex_data + i * vertex_size, block_size, vertex_size, last_vertex, k + j, channel | (xor_rot << 3));
 
 				sizes[channel] += encodeBytesMeasure(block, block_size_aligned, bits);
 			}
@@ -419,7 +429,7 @@ static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count
 	for (int channel = 1; channel < max_channel; ++channel)
 		best_channel = (sizes[channel] < sizes[best_channel]) ? channel : best_channel;
 
-	return best_channel;
+	return best_channel == 2 ? best_channel | (xor_rot << 3) : best_channel;
 }
 
 static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data_end, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], const unsigned char* channels, int version)
@@ -1610,7 +1620,7 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	unsigned char channels[64] = {};
 	if (version != 0)
 		for (size_t k = 0; k < vertex_size; k += 4)
-			channels[k / 4] = (unsigned char)estimateChannel(vertex_data, vertex_count, vertex_size, k, kEncodeMaxChannel);
+			channels[k / 4] = (unsigned char)estimateChannel(vertex_data, vertex_count, vertex_size, k, kEncodeMaxChannel, 0);
 
 	size_t vertex_block_size = getVertexBlockSize(vertex_size);
 
