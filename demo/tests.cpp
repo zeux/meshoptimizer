@@ -483,6 +483,48 @@ static void decodeVertexBitGroupSentinels()
 	assert(memcmp(decoded, data, sizeof(data)) == 0);
 }
 
+static void decodeVertexDeltas()
+{
+	unsigned short data[16 * 4];
+
+	// this forces wider deltas by using values that cross byte boundary
+	for (size_t i = 0; i < 16; ++i)
+	{
+		data[i * 4 + 0] = (unsigned short)(0xf8 + i * 1);
+		data[i * 4 + 1] = (unsigned short)(0xf8 + i * 2);
+		data[i * 4 + 2] = (unsigned short)(0xf0 + i * 3);
+		data[i * 4 + 3] = (unsigned short)(0xf0 + i * 4);
+	}
+
+	std::vector<unsigned char> buffer(meshopt_encodeVertexBufferBound(16, 8));
+	buffer.resize(meshopt_encodeVertexBuffer(&buffer[0], buffer.size(), data, 16, 8));
+
+	unsigned short decoded[16 * 4];
+	assert(meshopt_decodeVertexBuffer(decoded, 16, 8, &buffer[0], buffer.size()) == 0);
+	assert(memcmp(decoded, data, sizeof(data)) == 0);
+}
+
+static void decodeVertexBitXor()
+{
+	unsigned int data[16 * 4];
+
+	// this forces xors by using bit values at an offset
+	for (size_t i = 0; i < 16; ++i)
+	{
+		data[i * 4 + 0] = unsigned(i << 0);
+		data[i * 4 + 1] = unsigned(i << 2);
+		data[i * 4 + 2] = unsigned(i << 17);
+		data[i * 4 + 3] = unsigned(i << 28);
+	}
+
+	std::vector<unsigned char> buffer(meshopt_encodeVertexBufferBound(16, 16));
+	buffer.resize(meshopt_encodeVertexBuffer(&buffer[0], buffer.size(), data, 16, 16));
+
+	unsigned int decoded[16 * 4];
+	assert(meshopt_decodeVertexBuffer(decoded, 16, 16, &buffer[0], buffer.size()) == 0);
+	assert(memcmp(decoded, data, sizeof(data)) == 0);
+}
+
 static void decodeVertexLarge()
 {
 	unsigned char data[128 * 4];
@@ -1982,18 +2024,19 @@ void runTests()
 	decodeVertexRejectExtraBytes();
 	decodeVertexRejectMalformedHeaders();
 
-	decodeVertexBitGroups();
-	decodeVertexBitGroupSentinels();
-	decodeVertexLarge();
-	decodeVertexSmall();
-	encodeVertexEmpty();
+	for (int version = 0; version <= 1; ++version)
+	{
+		meshopt_encodeVertexVersion(version == 1 ? 0xe : version);
 
-	meshopt_encodeVertexVersion(0xe);
-	decodeVertexBitGroups();
-	decodeVertexBitGroupSentinels();
-	decodeVertexLarge();
-	decodeVertexSmall();
-	encodeVertexEmpty();
+		decodeVertexBitGroups();
+		decodeVertexBitGroupSentinels();
+		decodeVertexDeltas();
+		decodeVertexBitXor();
+		decodeVertexLarge();
+		decodeVertexSmall();
+		encodeVertexEmpty();
+	}
+
 	meshopt_encodeVertexVersion(0);
 
 	decodeFilterOct8();
