@@ -79,6 +79,10 @@ ifeq ($(config),trace)
 	CXXFLAGS+=-DTRACE=1
 endif
 
+ifeq ($(config),tracev)
+	CXXFLAGS+=-DTRACE=2
+endif
+
 ifeq ($(config),release)
 	CXXFLAGS+=-O3 -DNDEBUG
 endif

@@ -1263,30 +1263,21 @@ inline void transpose8(__m128i& x0, __m128i& x1, __m128i& x2, __m128i& x3)
 }
 
 SIMD_TARGET
-inline void unzigzag8(__m128i& v)
+inline __m128i unzigzag8(__m128i v)
 {
-	// -(v & 1) ^ (v >> 1)
 	__m128i xl = _mm_sub_epi8(_mm_setzero_si128(), _mm_and_si128(v, _mm_set1_epi8(1)));
 	__m128i xr = _mm_and_si128(_mm_srli_epi16(v, 1), _mm_set1_epi8(127));
 
-	v = _mm_xor_si128(xl, xr);
+	return _mm_xor_si128(xl, xr);
 }
 
 SIMD_TARGET
-inline void unzigzag16(__m128i& v0, __m128i& v1)
+inline __m128i unzigzag16(__m128i v)
 {
-	// v >> 1 (per byte)
-	__m128i r0 = _mm_and_si128(_mm_srli_epi16(v0, 1), _mm_set1_epi8(0x7f));
-	__m128i r1 = _mm_and_si128(_mm_srli_epi16(v1, 1), _mm_set1_epi8(0x7f));
+	__m128i xl = _mm_sub_epi16(_mm_setzero_si128(), _mm_and_si128(v, _mm_set1_epi16(1)));
+	__m128i xr = _mm_srli_epi16(v, 1);
 
-	// v >> 1 (carry)
-	r0 = _mm_or_si128(r0, _mm_andnot_si128(_mm_set1_epi8(0x7f), _mm_slli_epi16(v1, 7)));
-
-	// -(v & 1)
-	__m128i mk = _mm_sub_epi8(_mm_setzero_si128(), _mm_and_si128(v0, _mm_set1_epi8(1)));
-
-	v0 = _mm_xor_si128(r0, mk);
-	v1 = _mm_xor_si128(r1, mk);
+	return _mm_xor_si128(xl, xr);
 }
 #endif
 
@@ -1307,30 +1298,22 @@ inline void transpose8(uint8x16_t& x0, uint8x16_t& x1, uint8x16_t& x2, uint8x16_
 }
 
 SIMD_TARGET
-inline void unzigzag8(uint8x16_t& v)
+inline uint8x16_t unzigzag8(uint8x16_t v)
 {
-	// -(v & 1) ^ (v >> 1)
 	uint8x16_t xl = vreinterpretq_u8_s8(vnegq_s8(vreinterpretq_s8_u8(vandq_u8(v, vdupq_n_u8(1)))));
 	uint8x16_t xr = vshrq_n_u8(v, 1);
 
-	v = veorq_u8(xl, xr);
+	return veorq_u8(xl, xr);
 }
 
 SIMD_TARGET
-inline void unzigzag16(uint8x16_t& v0, uint8x16_t& v1)
+inline uint8x16_t unzigzag16(uint8x16_t v)
 {
-	// v >> 1 (per byte)
-	uint8x16_t r0 = vshrq_n_u8(v0, 1);
-	uint8x16_t r1 = vshrq_n_u8(v1, 1);
+	uint16x8_t vv = vreinterpretq_u16_u8(v);
+	uint8x16_t xl = vreinterpretq_u8_s16(vnegq_s16(vreinterpretq_s16_u16(vandq_u16(vv, vdupq_n_u16(1)))));
+	uint8x16_t xr = vreinterpretq_u8_u16(vshrq_n_u16(vv, 1));
 
-	// v >> 1 (carry)
-	r0 = vorrq_u8(r0, vshlq_n_u8(v1, 7));
-
-	// -(v & 1)
-	uint8x16_t mk = vreinterpretq_u8_s8(vnegq_s8(vreinterpretq_s8_u8(vandq_u8(v0, vdupq_n_u8(1)))));
-
-	v0 = veorq_u8(r0, mk);
-	v1 = veorq_u8(r1, mk);
+	return veorq_u8(xl, xr);
 }
 #endif
 
@@ -1350,30 +1333,21 @@ inline void transpose8(v128_t& x0, v128_t& x1, v128_t& x2, v128_t& x3)
 }
 
 SIMD_TARGET
-inline void unzigzag8(v128_t& v)
+inline v128_t unzigzag8(v128_t v)
 {
-	// -(v & 1) ^ (v >> 1)
 	v128_t xl = wasm_i8x16_neg(wasm_v128_and(v, wasm_i8x16_splat(1)));
 	v128_t xr = wasm_u8x16_shr(v, 1);
 
-	v = wasm_v128_xor(xl, xr);
+	return wasm_v128_xor(xl, xr);
 }
 
 SIMD_TARGET
-inline void unzigzag16(v128_t& v0, v128_t& v1)
+inline v128_t unzigzag16(v128_t v)
 {
-	// v >> 1 (per byte)
-	v128_t r0 = wasm_u8x16_shr(v0, 1);
-	v128_t r1 = wasm_u8x16_shr(v1, 1);
+	v128_t xl = wasm_i16x8_neg(wasm_v128_and(v, wasm_i16x8_splat(1)));
+	v128_t xr = wasm_u16x8_shr(v, 1);
 
-	// v >> 1 (carry)
-	r0 = wasm_v128_or(r0, wasm_i8x16_shl(v1, 7));
-
-	// -(v & 1)
-	v128_t mk = wasm_i8x16_neg(wasm_v128_and(v0, wasm_i8x16_splat(1)));
-
-	v0 = wasm_v128_xor(r0, mk);
-	v1 = wasm_v128_xor(r1, mk);
+	return wasm_v128_xor(xl, xr);
 }
 #endif
 
@@ -1463,22 +1437,24 @@ decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t
 		LOAD(2);
 		LOAD(3);
 
+		transpose8(r0, r1, r2, r3);
+
 		switch (Channel)
 		{
 		case 0:
-			unzigzag8(r0);
-			unzigzag8(r1);
-			unzigzag8(r2);
-			unzigzag8(r3);
+			r0 = unzigzag8(r0);
+			r1 = unzigzag8(r1);
+			r2 = unzigzag8(r2);
+			r3 = unzigzag8(r3);
 			break;
 		case 1:
-			unzigzag16(r0, r1);
-			unzigzag16(r2, r3);
+			r0 = unzigzag16(r0);
+			r1 = unzigzag16(r1);
+			r2 = unzigzag16(r2);
+			r3 = unzigzag16(r3);
 			break;
 		default:;
 		}
-
-		transpose8(r0, r1, r2, r3);
 
 		TEMP t0, t1, t2, t3;
 
@@ -1714,11 +1690,13 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 			    double(vsk.ctrl[2]) / double(total_ctrl) * 100, double(vsk.ctrl[3]) / double(total_ctrl) * 100);
 		}
 
+#if TRACE > 1
 		printf(" |\tbitc [%3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%%]",
 		    double(vsk.bitc[0]) / double(vertex_count) * 100, double(vsk.bitc[1]) / double(vertex_count) * 100,
 		    double(vsk.bitc[2]) / double(vertex_count) * 100, double(vsk.bitc[3]) / double(vertex_count) * 100,
 		    double(vsk.bitc[4]) / double(vertex_count) * 100, double(vsk.bitc[5]) / double(vertex_count) * 100,
 		    double(vsk.bitc[6]) / double(vertex_count) * 100, double(vsk.bitc[7]) / double(vertex_count) * 100);
+#endif
 
 		printf("\n");
 	}
