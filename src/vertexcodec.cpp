@@ -370,7 +370,7 @@ static void encodeDeltas1(unsigned char* buffer, const unsigned char* vertex_dat
 		for (size_t j = 1; j < sizeof(T); ++j)
 			v |= vertex_data[i * vertex_size + k0 + j] << (j * 8);
 
-		T d = Xor ? rotate(v ^ p, rot) : zigzag(T(v - p));
+		T d = Xor ? T(rotate(v ^ p, rot)) : zigzag(T(v - p));
 
 		buffer[i] = (unsigned char)(d >> ks);
 		p = v;
@@ -689,7 +689,7 @@ static void decodeDeltas1(const unsigned char* buffer, unsigned char* transposed
 			for (size_t j = 1; j < sizeof(T); ++j)
 				v |= buffer[i + vertex_count * j] << (8 * j);
 
-			v = Xor ? rotate(v, rot) ^ p : unzigzag(v) + p;
+			v = Xor ? T(rotate(v, rot)) ^ p : unzigzag(v) + p;
 
 			for (size_t j = 0; j < sizeof(T); ++j)
 				transposed[vertex_offset + j] = (unsigned char)(v >> (j * 8));
