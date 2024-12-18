@@ -386,7 +386,7 @@ static void encodeDeltas(unsigned char* buffer, const unsigned char* vertex_data
 	case 1:
 		return encodeDeltas1<unsigned short, false>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, 0);
 	case 2:
-		return encodeDeltas1<unsigned int, true>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, channel >> 3);
+		return encodeDeltas1<unsigned int, true>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, channel >> 2);
 	default:
 		assert(!"Unsupported channel encoding");
 	}
@@ -402,7 +402,7 @@ static int estimateRotate(const unsigned char* vertex_data, size_t vertex_count,
 	unsigned char last_vertex[256] = {};
 	memcpy(last_vertex, vertex_data, vertex_size);
 
-	size_t sizes[32] = {};
+	size_t sizes[8] = {};
 
 	const int* bits = kBitsV1 + 1;
 
@@ -414,11 +414,11 @@ static int estimateRotate(const unsigned char* vertex_data, size_t vertex_count,
 		// we sometimes encode elements we didn't fill when rounding to kByteGroupSize
 		memset(block, 0, block_size_aligned);
 
-		for (int rot = 0; rot < 32; ++rot)
+		for (int rot = 0; rot < 8; ++rot)
 		{
 			for (size_t j = 0; j < 4; ++j)
 			{
-				encodeDeltas(block, vertex_data + i * vertex_size, block_size, vertex_size, last_vertex, k + j, 2 | (rot << 3));
+				encodeDeltas(block, vertex_data + i * vertex_size, block_size, vertex_size, last_vertex, k + j, 2 | (rot << 2));
 
 				sizes[rot] += encodeBytesMeasure(block, block_size_aligned, bits);
 			}
@@ -426,7 +426,7 @@ static int estimateRotate(const unsigned char* vertex_data, size_t vertex_count,
 	}
 
 	int best_rot = 0;
-	for (int rot = 1; rot < 32; ++rot)
+	for (int rot = 1; rot < 8; ++rot)
 		best_rot = (sizes[rot] < sizes[best_rot]) ? rot : best_rot;
 
 	return best_rot;
@@ -458,7 +458,7 @@ static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count
 		{
 			for (size_t j = 0; j < 4; ++j)
 			{
-				encodeDeltas(block, vertex_data + i * vertex_size, block_size, vertex_size, last_vertex, k + j, channel | (xor_rot << 3));
+				encodeDeltas(block, vertex_data + i * vertex_size, block_size, vertex_size, last_vertex, k + j, channel | (xor_rot << 2));
 
 				sizes[channel] += encodeBytesMeasure(block, block_size_aligned, bits);
 			}
@@ -469,7 +469,7 @@ static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count
 	for (int channel = 1; channel < max_channel; ++channel)
 		best_channel = (sizes[channel] < sizes[best_channel]) ? channel : best_channel;
 
-	return best_channel == 2 ? best_channel | (xor_rot << 3) : best_channel;
+	return best_channel == 2 ? best_channel | (xor_rot << 2) : best_channel;
 }
 
 static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data_end, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], const unsigned char* channels, int version)
@@ -762,7 +762,7 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 			decodeDeltas1<unsigned short, false>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k, 0);
 			break;
 		case 2:
-			decodeDeltas1<unsigned int, true>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k, (32 - (channel >> 3)) & 31);
+			decodeDeltas1<unsigned int, true>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k, (32 - ((channel >> 2) & 7)) & 31);
 			break;
 		default:
 			// invalid channel type
@@ -1619,7 +1619,7 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 			decodeDeltas4Simd<1>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k, 0);
 			break;
 		case 2:
-			decodeDeltas4Simd<2>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k, (32 - (channel >> 3)) & 31);
+			decodeDeltas4Simd<2>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k, (32 - ((channel >> 2) & 7)) & 31);
 			break;
 		default:
 			// invalid channel type
@@ -1746,9 +1746,9 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 			int channel = channels[k / 4];
 
 			if ((channel & 3) == 2 && k % 4 == 0)
-				printf(" | ^%2d", channel >> 3);
+				printf(" | ^%d", channel >> 2);
 			else
-				printf(" | %3s", channel == 0 ? "1" : (channel == 1 && k % 2 == 0 ? "2" : "."));
+				printf(" | %2s", channel == 0 ? "1" : (channel == 1 && k % 2 == 0 ? "2" : "."));
 		}
 
 		printf(" | hdr [%5.1f%%] bitg [1 %4.1f%% 2 %4.1f%% 4 %4.1f%% 8 %4.1f%%]",
