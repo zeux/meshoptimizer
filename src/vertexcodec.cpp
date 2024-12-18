@@ -762,7 +762,7 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 			decodeDeltas1<unsigned short, false>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k, 0);
 			break;
 		case 2:
-			decodeDeltas1<unsigned int, true>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k, (32 - ((channel >> 2) & 7)) & 31);
+			decodeDeltas1<unsigned int, true>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k, (32 - (channel >> 2)) & 31);
 			break;
 		default:
 			// invalid channel type
@@ -1495,6 +1495,8 @@ decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t
 #define SAVE(i) *reinterpret_cast<int*>(savep) = wasm_i32x4_extract_lane(t##i, 0), savep += vertex_size
 #endif
 
+#define UNZR(i) r##i = Channel == 0 ? unzigzag8(r##i) : (Channel == 1 ? unzigzag16(r##i) : rotate32(r##i, rot))
+
 	PREP();
 
 	unsigned char* savep = transposed;
@@ -1508,47 +1510,29 @@ decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t
 
 		transpose8(r0, r1, r2, r3);
 
-		switch (Channel)
-		{
-		case 0:
-			r0 = unzigzag8(r0);
-			r1 = unzigzag8(r1);
-			r2 = unzigzag8(r2);
-			r3 = unzigzag8(r3);
-			break;
-		case 1:
-			r0 = unzigzag16(r0);
-			r1 = unzigzag16(r1);
-			r2 = unzigzag16(r2);
-			r3 = unzigzag16(r3);
-			break;
-		case 2:
-			r0 = rotate32(r0, rot);
-			r1 = rotate32(r1, rot);
-			r2 = rotate32(r2, rot);
-			r3 = rotate32(r3, rot);
-			break;
-		default:;
-		}
-
 		TEMP t0, t1, t2, t3;
 
+		UNZR(0);
 		GRP4(0);
 		FIXD(0), FIXD(1), FIXD(2), FIXD(3);
 		SAVE(0), SAVE(1), SAVE(2), SAVE(3);
 
+		UNZR(1);
 		GRP4(1);
 		FIXD(0), FIXD(1), FIXD(2), FIXD(3);
 		SAVE(0), SAVE(1), SAVE(2), SAVE(3);
 
+		UNZR(2);
 		GRP4(2);
 		FIXD(0), FIXD(1), FIXD(2), FIXD(3);
 		SAVE(0), SAVE(1), SAVE(2), SAVE(3);
 
+		UNZR(3);
 		GRP4(3);
 		FIXD(0), FIXD(1), FIXD(2), FIXD(3);
 		SAVE(0), SAVE(1), SAVE(2), SAVE(3);
 
+#undef UNZR
 #undef TEMP
 #undef PREP
 #undef LOAD
@@ -1619,7 +1603,7 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 			decodeDeltas4Simd<1>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k, 0);
 			break;
 		case 2:
-			decodeDeltas4Simd<2>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k, (32 - ((channel >> 2) & 7)) & 31);
+			decodeDeltas4Simd<2>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k, (32 - (channel >> 2)) & 31);
 			break;
 		default:
 			// invalid channel type
@@ -1687,7 +1671,10 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 		for (size_t k = 0; k < vertex_size; k += 4)
 		{
 			int rot = kEncodeMaxChannel >= 3 ? estimateRotate(vertex_data, vertex_count, vertex_size, k) : 0;
-			channels[k / 4] = (unsigned char)estimateChannel(vertex_data, vertex_count, vertex_size, k, kEncodeMaxChannel, rot);
+			int channel = estimateChannel(vertex_data, vertex_count, vertex_size, k, kEncodeMaxChannel, rot);
+
+			assert(unsigned(channel) < 2 || ((channel & 3) == 2 && unsigned(channel >> 2) < 8));
+			channels[k / 4] = (unsigned char)channel;
 		}
 
 	size_t vertex_block_size = getVertexBlockSize(vertex_size);
