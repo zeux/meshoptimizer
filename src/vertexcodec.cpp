@@ -1690,11 +1690,13 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 			    double(vsk.ctrl[2]) / double(total_ctrl) * 100, double(vsk.ctrl[3]) / double(total_ctrl) * 100);
 		}
 
+#if TRACE > 1
 		printf(" |\tbitc [%3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%%]",
 		    double(vsk.bitc[0]) / double(vertex_count) * 100, double(vsk.bitc[1]) / double(vertex_count) * 100,
 		    double(vsk.bitc[2]) / double(vertex_count) * 100, double(vsk.bitc[3]) / double(vertex_count) * 100,
 		    double(vsk.bitc[4]) / double(vertex_count) * 100, double(vsk.bitc[5]) / double(vertex_count) * 100,
 		    double(vsk.bitc[6]) / double(vertex_count) * 100, double(vsk.bitc[7]) / double(vertex_count) * 100);
+#endif
 
 		printf("\n");
 	}
