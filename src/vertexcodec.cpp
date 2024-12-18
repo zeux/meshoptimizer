@@ -633,7 +633,7 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 }
 
 template <typename T, bool Xor>
-static void decodeDeltas1(const unsigned char* buffer, unsigned char* transposed, size_t vertex_count, size_t vertex_size, const unsigned char* last_vertex)
+static void decodeDeltas1(const unsigned char* buffer, unsigned char* transposed, size_t vertex_count, size_t vertex_size, const unsigned char* last_vertex, int rot)
 {
 	for (size_t k = 0; k < 4; k += sizeof(T))
 	{
@@ -649,7 +649,7 @@ static void decodeDeltas1(const unsigned char* buffer, unsigned char* transposed
 			for (size_t j = 1; j < sizeof(T); ++j)
 				v |= buffer[i + vertex_count * j] << (8 * j);
 
-			v = Xor ? v ^ p : unzigzag(v) + p;
+			v = Xor ? rotate(v, rot) ^ p : unzigzag(v) + p;
 
 			for (size_t j = 0; j < sizeof(T); ++j)
 				transposed[vertex_offset + j] = (unsigned char)(v >> (j * 8));
@@ -713,16 +713,16 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 
 		int channel = version == 0 ? 0 : channels[k / 4];
 
-		switch (channel)
+		switch (channel & 3)
 		{
 		case 0:
-			decodeDeltas1<unsigned char, false>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k);
+			decodeDeltas1<unsigned char, false>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k, 0);
 			break;
 		case 1:
-			decodeDeltas1<unsigned short, false>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k);
+			decodeDeltas1<unsigned short, false>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k, 0);
 			break;
 		case 2:
-			decodeDeltas1<unsigned int, true>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k);
+			decodeDeltas1<unsigned int, true>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k, (32 - (channel >> 3)) & 31);
 			break;
 		default:
 			// invalid channel type
@@ -1289,6 +1289,12 @@ inline __m128i unzigzag16(__m128i v)
 
 	return _mm_xor_si128(xl, xr);
 }
+
+SIMD_TARGET
+inline __m128i rotate32(__m128i v, int r)
+{
+	return _mm_or_si128(_mm_slli_epi32(v, r), _mm_srli_epi32(v, 32 - r));
+}
 #endif
 
 #ifdef SIMD_NEON
@@ -1325,6 +1331,13 @@ inline uint8x16_t unzigzag16(uint8x16_t v)
 
 	return veorq_u8(xl, xr);
 }
+
+SIMD_TARGET
+inline uint8x16_t rotate32(uint8x16_t v, int r)
+{
+	uint32x4_t v32 = vreinterpretq_u32_u8(v);
+	return vreinterpretq_u8_u32(vorrq_u32(vshlq_u32(v32, vdupq_n_s32(r)), vshlq_u32(v32, vdupq_n_s32(r - 32))));
+}
 #endif
 
 #ifdef SIMD_WASM
@@ -1358,6 +1371,12 @@ inline v128_t unzigzag16(v128_t v)
 	v128_t xr = wasm_u16x8_shr(v, 1);
 
 	return wasm_v128_xor(xl, xr);
+}
+
+SIMD_TARGET
+inline v128_t rotate32(v128_t v, int r)
+{
+	return wasm_v128_or(wasm_i32x4_shl(v, r), wasm_i32x4_shr(v, 32 - r));
 }
 #endif
 
@@ -1407,7 +1426,7 @@ static const unsigned char* decodeBytesSimd(const unsigned char* data, const uns
 
 template <int Channel>
 SIMD_TARGET static void
-decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t vertex_count_aligned, size_t vertex_size, unsigned char last_vertex[4])
+decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t vertex_count_aligned, size_t vertex_size, unsigned char last_vertex[4], int rot)
 {
 #if defined(SIMD_SSE) || defined(SIMD_AVX)
 #define TEMP __m128i
@@ -1462,6 +1481,12 @@ decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t
 			r1 = unzigzag16(r1);
 			r2 = unzigzag16(r2);
 			r3 = unzigzag16(r3);
+			break;
+		case 2:
+			r0 = rotate32(r0, rot);
+			r1 = rotate32(r1, rot);
+			r2 = rotate32(r2, rot);
+			r3 = rotate32(r3, rot);
 			break;
 		default:;
 		}
@@ -1545,16 +1570,16 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 
 		int channel = version == 0 ? 0 : channels[k / 4];
 
-		switch (channel)
+		switch (channel & 3)
 		{
 		case 0:
-			decodeDeltas4Simd<0>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k);
+			decodeDeltas4Simd<0>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k, 0);
 			break;
 		case 1:
-			decodeDeltas4Simd<1>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k);
+			decodeDeltas4Simd<1>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k, 0);
 			break;
 		case 2:
-			decodeDeltas4Simd<2>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k);
+			decodeDeltas4Simd<2>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k, (32 - (channel >> 3)) & 31);
 			break;
 		default:
 			// invalid channel type
