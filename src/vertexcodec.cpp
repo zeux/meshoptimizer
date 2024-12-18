@@ -164,7 +164,7 @@ inline unsigned int zigzag(unsigned int v)
 
 inline unsigned int rotate(unsigned int v, int r)
 {
-	return (v << r) | (v >> (32 - r));
+	return (v << r) | (v >> ((32 - r) & 31));
 }
 
 template <typename T>
