@@ -392,6 +392,46 @@ static void encodeDeltas(unsigned char* buffer, const unsigned char* vertex_data
 	}
 }
 
+static int estimateRotate(const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, size_t k)
+{
+	if (vertex_count == 0)
+		return 0;
+
+	unsigned char block[kVertexBlockMaxSize];
+
+	unsigned char last_vertex[256] = {};
+	memcpy(last_vertex, vertex_data, vertex_size);
+
+	size_t sizes[32] = {};
+
+	const int* bits = kBitsV1 + 1;
+
+	for (size_t i = 0; i < vertex_count; i += kVertexBlockMaxSize)
+	{
+		size_t block_size = i + kVertexBlockMaxSize < vertex_count ? kVertexBlockMaxSize : vertex_count - i;
+		size_t block_size_aligned = (block_size + kByteGroupSize - 1) & ~(kByteGroupSize - 1);
+
+		// we sometimes encode elements we didn't fill when rounding to kByteGroupSize
+		memset(block, 0, block_size_aligned);
+
+		for (int rot = 0; rot < 32; ++rot)
+		{
+			for (size_t j = 0; j < 4; ++j)
+			{
+				encodeDeltas(block, vertex_data + i * vertex_size, block_size, vertex_size, last_vertex, k + j, 2 | (rot << 3));
+
+				sizes[rot] += encodeBytesMeasure(block, block_size_aligned, bits);
+			}
+		}
+	}
+
+	int best_rot = 0;
+	for (int rot = 1; rot < 32; ++rot)
+		best_rot = (sizes[rot] < sizes[best_rot]) ? rot : best_rot;
+
+	return best_rot;
+}
+
 static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, size_t k, int max_channel, int xor_rot)
 {
 	if (vertex_count == 0 || max_channel <= 1)
@@ -1645,7 +1685,10 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	unsigned char channels[64] = {};
 	if (version != 0)
 		for (size_t k = 0; k < vertex_size; k += 4)
-			channels[k / 4] = (unsigned char)estimateChannel(vertex_data, vertex_count, vertex_size, k, kEncodeMaxChannel, 0);
+		{
+			int rot = kEncodeMaxChannel >= 3 ? estimateRotate(vertex_data, vertex_count, vertex_size, k) : 0;
+			channels[k / 4] = (unsigned char)estimateChannel(vertex_data, vertex_count, vertex_size, k, kEncodeMaxChannel, rot);
+		}
 
 	size_t vertex_block_size = getVertexBlockSize(vertex_size);
 
