@@ -824,7 +824,7 @@ void packVertex(const Mesh& mesh, const char* pvn)
 }
 
 template <typename PV>
-void encodeVertex(const Mesh& mesh, const char* pvn, bool validate = true)
+void encodeVertex(const Mesh& mesh, const char* pvn)
 {
 	std::vector<PV> pv(mesh.vertices.size());
 	packMesh(pv, mesh.vertices);
@@ -840,17 +840,16 @@ void encodeVertex(const Mesh& mesh, const char* pvn, bool validate = true)
 	double middle = timestamp();
 
 	int res = meshopt_decodeVertexBuffer(&result[0], mesh.vertices.size(), sizeof(PV), &vbuf[0], vbuf.size());
-	assert(!validate || res == 0);
+	assert(res == 0);
 	(void)res;
 
 	double end = timestamp();
 
-	assert(!validate || memcmp(&pv[0], &result[0], pv.size() * sizeof(PV)) == 0);
+	assert(memcmp(&pv[0], &result[0], pv.size() * sizeof(PV)) == 0);
 
 	size_t csize = compress(vbuf);
 
-	printf("VtxCodec%1s%s: %.1f bits/vertex (post-deflate %.1f bits/vertex); encode %.2f msec (%.3f GB/s), decode %.2f msec (%.2f GB/s)\n", pvn,
-	    res == 0 && memcmp(&pv[0], &result[0], pv.size() * sizeof(PV)) == 0 ? "" : "!",
+	printf("VtxCodec%1s: %.1f bits/vertex (post-deflate %.1f bits/vertex); encode %.2f msec (%.3f GB/s), decode %.2f msec (%.2f GB/s)\n", pvn,
 	    double(vbuf.size() * 8) / double(mesh.vertices.size()),
 	    double(csize * 8) / double(mesh.vertices.size()),
 	    (middle - start) * 1000,
@@ -1409,7 +1408,7 @@ void processDev(const char* path)
 	meshopt_encodeVertexVersion(0);
 	encodeVertex<PackedVertex>(copy, "0");
 	meshopt_encodeVertexVersion(0xe);
-	encodeVertex<PackedVertex>(copy, "1", /* validate= */ false);
+	encodeVertex<PackedVertex>(copy, "1");
 }
 
 void processNanite(const char* path)
