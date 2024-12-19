@@ -477,35 +477,47 @@ static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count
 
 static int estimateControl(const unsigned char* buffer, size_t vertex_count, size_t vertex_count_aligned, int level)
 {
-	int best_ctrl = 3; // literal encoding
-	size_t best_bytes = vertex_count;
-
 	if (canEncodeZero(buffer, vertex_count))
 	{
 		// zero encoding
-		best_ctrl = 2;
-		best_bytes = 0;
+		return 2;
 	}
 	else if (level > 0)
 	{
-		// pick shortest control entry
-		for (int i = 0; i < 2; ++i)
-		{
-			size_t est_bytes = encodeBytesMeasure(buffer, vertex_count_aligned, kBitsV1 + i);
+		// round number of groups to 4 to get number of header bytes
+		size_t header_size = (vertex_count_aligned / kByteGroupSize + 3) / 4;
 
-			if (est_bytes < best_bytes)
-			{
-				best_ctrl = i;
-				best_bytes = est_bytes;
-			}
+		size_t est_bytes0 = header_size, est_bytes1 = header_size;
+
+		for (size_t i = 0; i < vertex_count_aligned; i += kByteGroupSize)
+		{
+			// assumes kBitsV1[] = {0, 1, 2, 4, 8} for performance
+			size_t size0 = encodeBytesGroupMeasure(buffer + i, 0);
+			size_t size1 = encodeBytesGroupMeasure(buffer + i, 1);
+			size_t size2 = encodeBytesGroupMeasure(buffer + i, 2);
+			size_t size4 = encodeBytesGroupMeasure(buffer + i, 4);
+			size_t size8 = encodeBytesGroupMeasure(buffer + i, 8);
+
+			// both control modes have access to 1/2/4 bit encoding
+			size_t size12 = size1 < size2 ? size1 : size2;
+			size_t size124 = size12 < size4 ? size12 : size4;
+
+			// each control mode has access to 0/8 bit encoding respectively
+			est_bytes0 += size124 < size0 ? size124 : size0;
+			est_bytes1 += size124 < size8 ? size124 : size8;
 		}
+
+		// pick shortest control entry but prefer literal encoding
+		if (est_bytes0 < vertex_count || est_bytes1 < vertex_count)
+			return est_bytes0 < est_bytes1 ? 0 : 1;
+		else
+			return 3;
 	}
 	else
 	{
-		best_ctrl = 1;
+		// 1248 encoding
+		return 1;
 	}
-
-	return best_ctrl;
 }
 
 static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data_end, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], const unsigned char* channels, int version, int level)
