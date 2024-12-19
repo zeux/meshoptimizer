@@ -428,7 +428,7 @@ static int estimateRotate(const unsigned char* vertex_data, size_t vertex_count,
 		{
 			unsigned int bitr = rotate(bitg, j);
 
-			sizes[j] += estimateBits(bitr >> 0) + estimateBits(bitr >> 8) + estimateBits(bitr >> 16) + estimateBits(bitr >> 24);
+			sizes[j] += estimateBits((unsigned char)(bitr >> 0)) + estimateBits((unsigned char)(bitr >> 8)) + estimateBits((unsigned char)(bitr >> 16)) + estimateBits((unsigned char)(bitr >> 24));
 		}
 	}
 
