@@ -259,10 +259,11 @@ static unsigned char* encodeBytesGroup(unsigned char* data, const unsigned char*
 
 	for (size_t i = 0; i < kByteGroupSize; ++i)
 	{
-		if (buffer[i] >= sentinel)
-		{
-			*data++ = buffer[i];
-		}
+		unsigned char v = buffer[i];
+
+		// branchless append of out-of-range values
+		*data = v;
+		data += v >= sentinel;
 	}
 
 	return data;
@@ -563,34 +564,31 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 		}
 #endif
 
+		int ctrl = 0;
+
 		if (version != 0)
 		{
-			int ctrl = estimateControl(buffer, vertex_count, vertex_count_aligned, level);
+			ctrl = estimateControl(buffer, vertex_count, vertex_count_aligned, level);
+			assert(unsigned(ctrl) < 4);
 			control[k / 4] |= ctrl << ((k % 4) * 2);
+		}
 
 #if TRACE
-			vertexstats[k].ctrl[best_ctrl]++;
+		vertexstats[k].ctrl[ctrl]++;
 #endif
 
-			if (ctrl == 3)
-			{
-				// literal encoding
-				if (size_t(data_end - data) < vertex_count)
-					return NULL;
-
-				memcpy(data, buffer, vertex_count);
-				data += vertex_count;
-			}
-			else if (ctrl != 2) // non-zero encoding
-			{
-				data = encodeBytes(data, data_end, buffer, vertex_count_aligned, kBitsV1 + ctrl);
-				if (!data)
-					return NULL;
-			}
-		}
-		else
+		if (ctrl == 3)
 		{
-			data = encodeBytes(data, data_end, buffer, vertex_count_aligned, kBitsV0);
+			// literal encoding
+			if (size_t(data_end - data) < vertex_count)
+				return NULL;
+
+			memcpy(data, buffer, vertex_count);
+			data += vertex_count;
+		}
+		else if (ctrl != 2) // non-zero encoding
+		{
+			data = encodeBytes(data, data_end, buffer, vertex_count_aligned, version == 0 ? kBitsV0 : kBitsV1 + ctrl);
 			if (!data)
 				return NULL;
 		}
