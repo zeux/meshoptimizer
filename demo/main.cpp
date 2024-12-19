@@ -824,7 +824,7 @@ void packVertex(const Mesh& mesh, const char* pvn)
 }
 
 template <typename PV>
-void encodeVertex(const Mesh& mesh, const char* pvn)
+void encodeVertex(const Mesh& mesh, const char* pvn, int level = 2)
 {
 	std::vector<PV> pv(mesh.vertices.size());
 	packMesh(pv, mesh.vertices);
@@ -835,7 +835,7 @@ void encodeVertex(const Mesh& mesh, const char* pvn)
 	double start = timestamp();
 
 	std::vector<unsigned char> vbuf(meshopt_encodeVertexBufferBound(mesh.vertices.size(), sizeof(PV)));
-	vbuf.resize(meshopt_encodeVertexBuffer(&vbuf[0], vbuf.size(), &pv[0], mesh.vertices.size(), sizeof(PV)));
+	vbuf.resize(meshopt_encodeVertexBufferLevel(&vbuf[0], vbuf.size(), &pv[0], mesh.vertices.size(), sizeof(PV), level));
 
 	double middle = timestamp();
 
@@ -1406,9 +1406,12 @@ void processDev(const char* path)
 	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
 
 	meshopt_encodeVertexVersion(0);
-	encodeVertex<PackedVertex>(copy, "0");
+	encodeVertex<PackedVertex>(copy, "L");
 	meshopt_encodeVertexVersion(0xe);
-	encodeVertex<PackedVertex>(copy, "1");
+	encodeVertex<PackedVertex>(copy, "0", 0);
+	encodeVertex<PackedVertex>(copy, "1", 1);
+	encodeVertex<PackedVertex>(copy, "2", 2);
+	encodeVertex<PackedVertex>(copy, "3", 3);
 }
 
 void processNanite(const char* path)

@@ -55,7 +55,7 @@ struct Stats
 	double count;
 };
 
-void testFile(FILE* file, size_t count, size_t stride, Stats* stats = 0)
+void testFile(FILE* file, size_t count, size_t stride, int level, Stats* stats = 0)
 {
 	std::vector<unsigned char> input;
 	unsigned char buffer[4096];
@@ -81,7 +81,7 @@ void testFile(FILE* file, size_t count, size_t stride, Stats* stats = 0)
 
 	std::vector<unsigned char> output(meshopt_encodeVertexBufferBound(count, stride));
 	meshopt_encodeVertexVersion(0xe);
-	output.resize(meshopt_encodeVertexBuffer(output.data(), output.size(), decoded.data(), count, stride));
+	output.resize(meshopt_encodeVertexBufferLevel(output.data(), output.size(), decoded.data(), count, stride, level));
 	meshopt_encodeVertexVersion(0);
 
 	printf(" raw %zu KB\t", decoded.size() / 1024);
@@ -119,7 +119,7 @@ void testFile(FILE* file, size_t count, size_t stride, Stats* stats = 0)
 	}
 }
 
-void testFile(const char* path, Stats* stats = 0)
+void testFile(const char* path, int level, Stats* stats = 0)
 {
 	FILE* file = fopen(path, "rb");
 	if (!file)
@@ -144,7 +144,7 @@ void testFile(const char* path, Stats* stats = 0)
 	printf("%25.*s:", int(namel), name0);
 #endif
 
-	testFile(file, vcnt, vsz, stats);
+	testFile(file, vcnt, vsz, level, stats);
 	printf("\n");
 
 	fclose(file);
@@ -161,8 +161,11 @@ int main(int argc, char** argv)
 	{
 		Stats stats = {};
 		stats.testz = strcmp(argv[1], "-testz") == 0;
-		for (int i = 2; i < argc; ++i)
-			testFile(argv[i], &stats);
+		int level = -1;
+		if (argc > 2 && argv[2][0] == '-' && argv[2][1] >= '0' && argv[2][1] <= '9')
+			level = atoi(argv[2] + 1);
+		for (int i = level < 0 ? 2 : 3; i < argc; ++i)
+			testFile(argv[i], level < 0 ? 2 : level, &stats);
 		printf("---\n");
 		printf("%d files: raw v1/v0 %+.2f%%, lz4 v1/v0 %+.2f%%, zstd v1/v0 %+.2f%%\n",
 		    int(stats.count), stats.v10_raw / stats.count * 100, stats.v10_lz4 / stats.count * 100, stats.v10_zstd / stats.count * 100);
