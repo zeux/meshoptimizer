@@ -413,20 +413,22 @@ static int estimateRotate(const unsigned char* vertex_data, size_t vertex_count,
 	return best_rot;
 }
 
-static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, size_t k, int max_channel, int xor_rot)
+static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, size_t k, size_t vertex_block_size, size_t block_skip, int max_channel, int xor_rot)
 {
 	unsigned char block[kVertexBlockMaxSize];
+	assert(vertex_block_size <= kVertexBlockMaxSize);
 
 	unsigned char last_vertex[256] = {};
-	memcpy(last_vertex, vertex_data, vertex_size);
 
 	size_t sizes[3] = {};
 	assert(max_channel <= 3);
 
-	for (size_t i = 0; i < vertex_count; i += kVertexBlockMaxSize)
+	for (size_t i = 0; i < vertex_count; i += vertex_block_size * block_skip)
 	{
-		size_t block_size = i + kVertexBlockMaxSize < vertex_count ? kVertexBlockMaxSize : vertex_count - i;
+		size_t block_size = i + vertex_block_size < vertex_count ? vertex_block_size : vertex_count - i;
 		size_t block_size_aligned = (block_size + kByteGroupSize - 1) & ~(kByteGroupSize - 1);
+
+		memcpy(last_vertex, vertex_data + (i == 0 ? 0 : i - 1) * vertex_size, vertex_size);
 
 		// we sometimes encode elements we didn't fill when rounding to kByteGroupSize
 		if (block_size < block_size_aligned)
@@ -452,8 +454,6 @@ static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count
 					sizes[channel] += best_size;
 				}
 			}
-
-		memcpy(last_vertex, vertex_data + (i + block_size - 1) * vertex_size, vertex_size);
 	}
 
 	int best_channel = 0;
@@ -1661,18 +1661,18 @@ size_t meshopt_encodeVertexBufferLevel(unsigned char* buffer, size_t buffer_size
 	unsigned char last_vertex[256] = {};
 	memcpy(last_vertex, first_vertex, vertex_size);
 
+	size_t vertex_block_size = getVertexBlockSize(vertex_size);
+
 	unsigned char channels[64] = {};
 	if (version != 0 && level > 1 && vertex_count > 1)
 		for (size_t k = 0; k < vertex_size; k += 4)
 		{
-			int rot = level >= 3 ? estimateRotate(vertex_data, vertex_count, vertex_size, k, 16) : 0;
-			int channel = estimateChannel(vertex_data, vertex_count, vertex_size, k, level >= 3 ? 3 : 2, rot);
+			int rot = level >= 3 ? estimateRotate(vertex_data, vertex_count, vertex_size, k, /* group_size= */ 16) : 0;
+			int channel = estimateChannel(vertex_data, vertex_count, vertex_size, k, vertex_block_size, /* block_skip= */ 3, /* max_channels= */ level >= 3 ? 3 : 2, rot);
 
 			assert(unsigned(channel) < 2 || ((channel & 3) == 2 && unsigned(channel >> 4) < 8));
 			channels[k / 4] = (unsigned char)channel;
 		}
-
-	size_t vertex_block_size = getVertexBlockSize(vertex_size);
 
 	size_t vertex_offset = 0;
 
