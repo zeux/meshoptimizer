@@ -518,7 +518,7 @@ static void decodeVertexBitXor()
 	}
 
 	std::vector<unsigned char> buffer(meshopt_encodeVertexBufferBound(16, 16));
-	buffer.resize(meshopt_encodeVertexBuffer(&buffer[0], buffer.size(), data, 16, 16));
+	buffer.resize(meshopt_encodeVertexBufferLevel(&buffer[0], buffer.size(), data, 16, 16, 2));
 
 	unsigned int decoded[16 * 4];
 	assert(meshopt_decodeVertexBuffer(decoded, 16, 16, &buffer[0], buffer.size()) == 0);
