@@ -408,6 +408,7 @@ static int estimateRotate(const unsigned char* vertex_data, size_t vertex_count,
 	{
 		unsigned int bitg = 0;
 
+		// calculate bit consistency mask for the group
 		for (size_t j = 0; j < group_size && i + j < vertex_count; ++j)
 		{
 			unsigned int v = vertex[0] | (vertex[1] << 8) | (vertex[2] << 16) | (vertex[3] << 24);
@@ -417,6 +418,10 @@ static int estimateRotate(const unsigned char* vertex_data, size_t vertex_count,
 			last = v;
 			vertex += vertex_size;
 		}
+
+		// ignore trivial groups for performance
+		if (bitg == 0 || bitg == ~0u)
+			continue;
 
 		for (int j = 0; j < 8; ++j)
 		{
