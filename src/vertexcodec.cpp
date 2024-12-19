@@ -133,7 +133,7 @@ const size_t kTailMinSize = 32; // must be >= kByteGroupDecodeLimit
 static const int kBitsV0[4] = {0, 2, 4, 8};
 static const int kBitsV1[5] = {0, 1, 2, 4, 8};
 
-const int kEncodeMaxChannel = 3;
+const int kEncodeDefaultLevel = 2;
 
 static size_t getVertexBlockSize(size_t vertex_size)
 {
@@ -472,7 +472,7 @@ static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count
 	return best_channel == 2 ? best_channel | (xor_rot << 2) : best_channel;
 }
 
-static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data_end, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], const unsigned char* channels, int version)
+static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data_end, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], const unsigned char* channels, int version, int level)
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 	assert(vertex_size % 4 == 0);
@@ -526,7 +526,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 				best_ctrl = 2;
 				best_bytes = 0;
 			}
-			else
+			else if (level > 0)
 			{
 				// pick shortest control entry
 				for (int i = 0; i < 2; ++i)
@@ -539,6 +539,10 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 						best_bytes = est_bytes;
 					}
 				}
+			}
+			else
+			{
+				best_ctrl = 1;
 			}
 
 			control[k / 4] |= best_ctrl << ((k % 4) * 2);
@@ -1636,7 +1640,7 @@ static unsigned int cpuid = getCpuFeatures();
 
 } // namespace meshopt
 
-size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, const void* vertices, size_t vertex_count, size_t vertex_size)
+size_t meshopt_encodeVertexBufferLevel(unsigned char* buffer, size_t buffer_size, const void* vertices, size_t vertex_count, size_t vertex_size, int level)
 {
 	using namespace meshopt;
 
@@ -1667,11 +1671,11 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	memcpy(last_vertex, first_vertex, vertex_size);
 
 	unsigned char channels[64] = {};
-	if (version != 0)
+	if (version != 0 && level > 1)
 		for (size_t k = 0; k < vertex_size; k += 4)
 		{
-			int rot = kEncodeMaxChannel >= 3 ? estimateRotate(vertex_data, vertex_count, vertex_size, k) : 0;
-			int channel = estimateChannel(vertex_data, vertex_count, vertex_size, k, kEncodeMaxChannel, rot);
+			int rot = level >= 3 ? estimateRotate(vertex_data, vertex_count, vertex_size, k) : 0;
+			int channel = estimateChannel(vertex_data, vertex_count, vertex_size, k, level >= 3 ? 3 : 2, rot);
 
 			assert(unsigned(channel) < 2 || ((channel & 3) == 2 && unsigned(channel >> 2) < 8));
 			channels[k / 4] = (unsigned char)channel;
@@ -1685,7 +1689,7 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	{
 		size_t block_size = (vertex_offset + vertex_block_size < vertex_count) ? vertex_block_size : vertex_count - vertex_offset;
 
-		data = encodeVertexBlock(data, data_end, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, last_vertex, channels, version);
+		data = encodeVertexBlock(data, data_end, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, last_vertex, channels, version, level);
 		if (!data)
 			return 0;
 
@@ -1765,6 +1769,11 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 #endif
 
 	return data - buffer;
+}
+
+size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, const void* vertices, size_t vertex_count, size_t vertex_size)
+{
+	return meshopt_encodeVertexBufferLevel(buffer, buffer_size, vertices, vertex_count, vertex_size, meshopt::kEncodeDefaultLevel);
 }
 
 size_t meshopt_encodeVertexBufferBound(size_t vertex_count, size_t vertex_size)
