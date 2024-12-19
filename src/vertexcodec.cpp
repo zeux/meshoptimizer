@@ -392,36 +392,40 @@ static void encodeDeltas(unsigned char* buffer, const unsigned char* vertex_data
 	}
 }
 
-static int estimateRotate(const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, size_t k)
+static int estimateBits(unsigned char v)
+{
+	return v <= 15 ? (v <= 3 ? (v == 0 ? 0 : 2) : 4) : 8;
+}
+
+static int estimateRotate(const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, size_t k, size_t group_size)
 {
 	if (vertex_count == 0)
 		return 0;
 
-	unsigned char block[kVertexBlockMaxSize];
-
-	unsigned char last_vertex[256] = {};
-	memcpy(last_vertex, vertex_data, vertex_size);
-
 	size_t sizes[8] = {};
 
-	const int* bits = kBitsV1 + 1;
+	const unsigned char* vertex = vertex_data + k;
+	unsigned int last = vertex[0] | (vertex[1] << 8) | (vertex[2] << 16) | (vertex[3] << 24);
 
-	for (size_t i = 0; i < vertex_count; i += kVertexBlockMaxSize)
+	for (size_t i = 0; i < vertex_count; i += group_size)
 	{
-		size_t block_size = i + kVertexBlockMaxSize < vertex_count ? kVertexBlockMaxSize : vertex_count - i;
-		size_t block_size_aligned = (block_size + kByteGroupSize - 1) & ~(kByteGroupSize - 1);
+		unsigned int bitg = 0;
 
-		// we sometimes encode elements we didn't fill when rounding to kByteGroupSize
-		memset(block, 0, block_size_aligned);
-
-		for (int rot = 0; rot < 8; ++rot)
+		for (size_t j = 0; j < group_size && i + j < vertex_count; ++j)
 		{
-			for (size_t j = 0; j < 4; ++j)
-			{
-				encodeDeltas(block, vertex_data + i * vertex_size, block_size, vertex_size, last_vertex, k + j, 2 | (rot << 2));
+			unsigned int v = vertex[0] | (vertex[1] << 8) | (vertex[2] << 16) | (vertex[3] << 24);
+			unsigned int d = v ^ last;
 
-				sizes[rot] += encodeBytesMeasure(block, block_size_aligned, bits);
-			}
+			bitg |= d;
+			last = v;
+			vertex += vertex_size;
+		}
+
+		for (int j = 0; j < 8; ++j)
+		{
+			unsigned int bitr = rotate(bitg, j);
+
+			sizes[j] += estimateBits(bitr >> 0) + estimateBits(bitr >> 8) + estimateBits(bitr >> 16) + estimateBits(bitr >> 24);
 		}
 	}
 
@@ -1674,7 +1678,7 @@ size_t meshopt_encodeVertexBufferLevel(unsigned char* buffer, size_t buffer_size
 	if (version != 0 && level > 1)
 		for (size_t k = 0; k < vertex_size; k += 4)
 		{
-			int rot = level >= 3 ? estimateRotate(vertex_data, vertex_count, vertex_size, k) : 0;
+			int rot = level >= 3 ? estimateRotate(vertex_data, vertex_count, vertex_size, k, 16) : 0;
 			int channel = estimateChannel(vertex_data, vertex_count, vertex_size, k, level >= 3 ? 3 : 2, rot);
 
 			assert(unsigned(channel) < 2 || ((channel & 3) == 2 && unsigned(channel >> 2) < 8));
