@@ -329,32 +329,6 @@ static unsigned char* encodeBytes(unsigned char* data, unsigned char* data_end, 
 	return data;
 }
 
-static size_t encodeBytesMeasure(const unsigned char* buffer, size_t buffer_size, const int bits[4])
-{
-	assert(buffer_size % kByteGroupSize == 0);
-
-	size_t result = 0;
-
-	// round number of groups to 4 to get number of header bytes
-	size_t header_size = (buffer_size / kByteGroupSize + 3) / 4;
-	result += header_size;
-
-	for (size_t i = 0; i < buffer_size; i += kByteGroupSize)
-	{
-		size_t best_size = size_t(-1);
-
-		for (int bitk = 0; bitk < 4; ++bitk)
-		{
-			size_t size = encodeBytesGroupMeasure(buffer + i, bits[bitk]);
-			best_size = (size < best_size) ? size : best_size;
-		}
-
-		result += best_size;
-	}
-
-	return result;
-}
-
 template <typename T, bool Xor>
 static void encodeDeltas1(unsigned char* buffer, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned char last_vertex[256], size_t k, int rot)
 {
@@ -446,9 +420,8 @@ static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count
 	unsigned char last_vertex[256] = {};
 	memcpy(last_vertex, vertex_data, vertex_size);
 
-	size_t sizes[4] = {};
-
-	const int* bits = kBitsV1 + 1;
+	size_t sizes[3] = {};
+	assert(max_channel <= 3);
 
 	for (size_t i = 0; i < vertex_count; i += kVertexBlockMaxSize)
 	{
@@ -456,17 +429,31 @@ static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count
 		size_t block_size_aligned = (block_size + kByteGroupSize - 1) & ~(kByteGroupSize - 1);
 
 		// we sometimes encode elements we didn't fill when rounding to kByteGroupSize
-		memset(block, 0, block_size_aligned);
+		if (block_size < block_size_aligned)
+			memset(block + block_size, 0, block_size_aligned - block_size);
 
 		for (int channel = 0; channel < max_channel; ++channel)
-		{
 			for (size_t j = 0; j < 4; ++j)
 			{
 				encodeDeltas(block, vertex_data + i * vertex_size, block_size, vertex_size, last_vertex, k + j, channel | (xor_rot << 4));
 
-				sizes[channel] += encodeBytesMeasure(block, block_size_aligned, bits);
+				for (size_t ig = 0; ig < block_size; ig += kByteGroupSize)
+				{
+					// to maximize encoding performance we only evaluate 1/2/4/8 bit groups
+					size_t size1 = encodeBytesGroupMeasure(block + ig, 1);
+					size_t size2 = encodeBytesGroupMeasure(block + ig, 2);
+					size_t size4 = encodeBytesGroupMeasure(block + ig, 4);
+					size_t size8 = encodeBytesGroupMeasure(block + ig, 8);
+
+					size_t best_size = size1 < size2 ? size1 : size2;
+					best_size = best_size < size4 ? best_size : size4;
+					best_size = best_size < size8 ? best_size : size8;
+
+					sizes[channel] += best_size;
+				}
 			}
-		}
+
+		memcpy(last_vertex, vertex_data + (i + block_size - 1) * vertex_size, vertex_size);
 	}
 
 	int best_channel = 0;
