@@ -387,7 +387,7 @@ static void encodeDeltas(unsigned char* buffer, const unsigned char* vertex_data
 	case 1:
 		return encodeDeltas1<unsigned short, false>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, 0);
 	case 2:
-		return encodeDeltas1<unsigned int, true>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, channel >> 2);
+		return encodeDeltas1<unsigned int, true>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, channel >> 4);
 	default:
 		assert(!"Unsupported channel encoding");
 	}
@@ -462,7 +462,7 @@ static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count
 		{
 			for (size_t j = 0; j < 4; ++j)
 			{
-				encodeDeltas(block, vertex_data + i * vertex_size, block_size, vertex_size, last_vertex, k + j, channel | (xor_rot << 2));
+				encodeDeltas(block, vertex_data + i * vertex_size, block_size, vertex_size, last_vertex, k + j, channel | (xor_rot << 4));
 
 				sizes[channel] += encodeBytesMeasure(block, block_size_aligned, bits);
 			}
@@ -473,7 +473,7 @@ static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count
 	for (int channel = 1; channel < max_channel; ++channel)
 		best_channel = (sizes[channel] < sizes[best_channel]) ? channel : best_channel;
 
-	return best_channel == 2 ? best_channel | (xor_rot << 2) : best_channel;
+	return best_channel == 2 ? best_channel | (xor_rot << 4) : best_channel;
 }
 
 static int estimateControl(const unsigned char* buffer, size_t vertex_count, size_t vertex_count_aligned, int level)
@@ -782,7 +782,7 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 			decodeDeltas1<unsigned short, false>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k, 0);
 			break;
 		case 2:
-			decodeDeltas1<unsigned int, true>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k, (32 - (channel >> 2)) & 31);
+			decodeDeltas1<unsigned int, true>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k, (32 - (channel >> 4)) & 31);
 			break;
 		default:
 			// invalid channel type
@@ -1611,7 +1611,7 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 			decodeDeltas4Simd<1>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k, 0);
 			break;
 		case 2:
-			decodeDeltas4Simd<2>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k, (32 - (channel >> 2)) & 31);
+			decodeDeltas4Simd<2>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k, (32 - (channel >> 4)) & 31);
 			break;
 		default:
 			// invalid channel type
@@ -1681,7 +1681,7 @@ size_t meshopt_encodeVertexBufferLevel(unsigned char* buffer, size_t buffer_size
 			int rot = level >= 3 ? estimateRotate(vertex_data, vertex_count, vertex_size, k, 16) : 0;
 			int channel = estimateChannel(vertex_data, vertex_count, vertex_size, k, level >= 3 ? 3 : 2, rot);
 
-			assert(unsigned(channel) < 2 || ((channel & 3) == 2 && unsigned(channel >> 2) < 8));
+			assert(unsigned(channel) < 2 || ((channel & 3) == 2 && unsigned(channel >> 4) < 8));
 			channels[k / 4] = (unsigned char)channel;
 		}
 
@@ -1741,7 +1741,7 @@ size_t meshopt_encodeVertexBufferLevel(unsigned char* buffer, size_t buffer_size
 			int channel = channels[k / 4];
 
 			if ((channel & 3) == 2 && k % 4 == 0)
-				printf(" | ^%d", channel >> 2);
+				printf(" | ^%d", channel >> 4);
 			else
 				printf(" | %2s", channel == 0 ? "1" : (channel == 1 && k % 2 == 0 ? "2" : "."));
 		}
