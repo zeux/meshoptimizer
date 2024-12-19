@@ -974,27 +974,15 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 #endif
 
 #ifdef SIMD_AVX
-static const __m128i decodeBytesGroupConfig[2][8] = {
-    {
-        _mm_setzero_si128(),
-        _mm_set1_epi8(3),
-        _mm_set1_epi8(15),
-        _mm_setzero_si128(),
-        _mm_setzero_si128(),
-        _mm_set1_epi8(1),
-        _mm_set1_epi8(3),
-        _mm_set1_epi8(15),
-    },
-    {
-        _mm_setzero_si128(),
-        _mm_setr_epi8(6, 4, 2, 0, 14, 12, 10, 8, 22, 20, 18, 16, 30, 28, 26, 24),
-        _mm_setr_epi8(4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56),
-        _mm_setzero_si128(),
-        _mm_setzero_si128(),
-        _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15),
-        _mm_setr_epi8(6, 4, 2, 0, 14, 12, 10, 8, 22, 20, 18, 16, 30, 28, 26, 24),
-        _mm_setr_epi8(4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56),
-    },
+static const __m128i kDecodeBytesGroupConfig[8][2] = {
+    {_mm_setzero_si128(), _mm_setzero_si128()},
+    {_mm_set1_epi8(3), _mm_setr_epi8(6, 4, 2, 0, 14, 12, 10, 8, 22, 20, 18, 16, 30, 28, 26, 24)},
+    {_mm_set1_epi8(15), _mm_setr_epi8(4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56)},
+    {_mm_setzero_si128(), _mm_setzero_si128()},
+    {_mm_setzero_si128(), _mm_setzero_si128()},
+    {_mm_set1_epi8(1), _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)},
+    {_mm_set1_epi8(3), _mm_setr_epi8(6, 4, 2, 0, 14, 12, 10, 8, 22, 20, 18, 16, 30, 28, 26, 24)},
+    {_mm_set1_epi8(15), _mm_setr_epi8(4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56)},
 };
 
 SIMD_TARGET
@@ -1023,8 +1011,8 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		__m128i selb = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(data));
 		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(skip));
 
-		__m128i sent = decodeBytesGroupConfig[0][hbits];
-		__m128i ctrl = decodeBytesGroupConfig[1][hbits];
+		__m128i sent = kDecodeBytesGroupConfig[hbits][0];
+		__m128i ctrl = kDecodeBytesGroupConfig[hbits][1];
 
 		__m128i selw = _mm_shuffle_epi32(selb, 0x44);
 		__m128i sel = _mm_and_si128(sent, _mm_multishift_epi64_epi8(ctrl, selw));
