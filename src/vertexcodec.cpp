@@ -399,9 +399,6 @@ static int estimateBits(unsigned char v)
 
 static int estimateRotate(const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, size_t k, size_t group_size)
 {
-	if (vertex_count == 0)
-		return 0;
-
 	size_t sizes[8] = {};
 
 	const unsigned char* vertex = vertex_data + k;
@@ -438,9 +435,6 @@ static int estimateRotate(const unsigned char* vertex_data, size_t vertex_count,
 
 static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, size_t k, int max_channel, int xor_rot)
 {
-	if (vertex_count == 0 || max_channel <= 1)
-		return 0;
-
 	unsigned char block[kVertexBlockMaxSize];
 
 	unsigned char last_vertex[256] = {};
@@ -474,6 +468,39 @@ static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count
 		best_channel = (sizes[channel] < sizes[best_channel]) ? channel : best_channel;
 
 	return best_channel == 2 ? best_channel | (xor_rot << 2) : best_channel;
+}
+
+static int estimateControl(const unsigned char* buffer, size_t vertex_count, size_t vertex_count_aligned, int level)
+{
+	int best_ctrl = 3; // literal encoding
+	size_t best_bytes = vertex_count;
+
+	if (canEncodeZero(buffer, vertex_count))
+	{
+		// zero encoding
+		best_ctrl = 2;
+		best_bytes = 0;
+	}
+	else if (level > 0)
+	{
+		// pick shortest control entry
+		for (int i = 0; i < 2; ++i)
+		{
+			size_t est_bytes = encodeBytesMeasure(buffer, vertex_count_aligned, kBitsV1 + i);
+
+			if (est_bytes < best_bytes)
+			{
+				best_ctrl = i;
+				best_bytes = est_bytes;
+			}
+		}
+	}
+	else
+	{
+		best_ctrl = 1;
+	}
+
+	return best_ctrl;
 }
 
 static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data_end, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], const unsigned char* channels, int version, int level)
@@ -519,43 +546,16 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 		}
 #endif
 
-		if (version == 0xe)
+		if (version != 0)
 		{
-			int best_ctrl = 3; // literal encoding
-			size_t best_bytes = vertex_count;
-
-			if (canEncodeZero(buffer, vertex_count))
-			{
-				// zero encoding
-				best_ctrl = 2;
-				best_bytes = 0;
-			}
-			else if (level > 0)
-			{
-				// pick shortest control entry
-				for (int i = 0; i < 2; ++i)
-				{
-					size_t est_bytes = encodeBytesMeasure(buffer, vertex_count_aligned, kBitsV1 + i);
-
-					if (est_bytes < best_bytes)
-					{
-						best_ctrl = i;
-						best_bytes = est_bytes;
-					}
-				}
-			}
-			else
-			{
-				best_ctrl = 1;
-			}
-
-			control[k / 4] |= best_ctrl << ((k % 4) * 2);
+			int ctrl = estimateControl(buffer, vertex_count, vertex_count_aligned, level);
+			control[k / 4] |= ctrl << ((k % 4) * 2);
 
 #if TRACE
 			vertexstats[k].ctrl[best_ctrl]++;
 #endif
 
-			if (best_ctrl == 3)
+			if (ctrl == 3)
 			{
 				// literal encoding
 				if (size_t(data_end - data) < vertex_count)
@@ -564,14 +564,11 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 				memcpy(data, buffer, vertex_count);
 				data += vertex_count;
 			}
-			else if (best_ctrl != 2)
+			else if (ctrl != 2) // non-zero encoding
 			{
-				unsigned char* next = encodeBytes(data, data_end, buffer, vertex_count_aligned, kBitsV1 + best_ctrl);
-				if (!next)
+				data = encodeBytes(data, data_end, buffer, vertex_count_aligned, kBitsV1 + ctrl);
+				if (!data)
 					return NULL;
-
-				assert(data + best_bytes == next);
-				data = next;
 			}
 		}
 		else
@@ -1675,7 +1672,7 @@ size_t meshopt_encodeVertexBufferLevel(unsigned char* buffer, size_t buffer_size
 	memcpy(last_vertex, first_vertex, vertex_size);
 
 	unsigned char channels[64] = {};
-	if (version != 0 && level > 1)
+	if (version != 0 && level > 1 && vertex_count > 1)
 		for (size_t k = 0; k < vertex_size; k += 4)
 		{
 			int rot = level >= 3 ? estimateRotate(vertex_data, vertex_count, vertex_size, k, 16) : 0;
