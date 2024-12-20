@@ -547,13 +547,14 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 		if (version != 0)
 		{
 			ctrl = estimateControl(buffer, vertex_count, vertex_count_aligned, level);
+
 			assert(unsigned(ctrl) < 4);
 			control[k / 4] |= ctrl << ((k % 4) * 2);
-		}
 
 #if TRACE
-		vertexstats[k].ctrl[ctrl]++;
+			vertexstats[k].ctrl[ctrl]++;
 #endif
+		}
 
 		if (ctrl == 3)
 		{
