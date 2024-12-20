@@ -1637,6 +1637,7 @@ size_t meshopt_encodeVertexBufferLevel(unsigned char* buffer, size_t buffer_size
 
 	assert(vertex_size > 0 && vertex_size <= 256);
 	assert(vertex_size % 4 == 0);
+	assert(level >= 0 && level <= 9); // only a subset of this range is used right now
 
 #if TRACE
 	memset(vertexstats, 0, sizeof(vertexstats));

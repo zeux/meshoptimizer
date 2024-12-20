@@ -279,8 +279,9 @@ MESHOPTIMIZER_API size_t meshopt_encodeVertexBufferBound(size_t vertex_count, si
 
 /**
  * Experimental: Vertex buffer encoder
- * Encodes vertex data just like meshopt_encodeVertexBuffer, but allows to specify compression level.
+ * Encodes vertex data just like meshopt_encodeVertexBuffer, but allows to override compression level.
  * For compression level to take effect, the vertex encoding version must be set to 1 via meshopt_encodeVertexVersion.
+ * The default compression level implied by meshopt_encodeVertexBuffer is 2.
  *
  * level should be in the range [0, 3] with 0 being the fastest and 3 being the slowest and producing the best compression ratio.
  */
