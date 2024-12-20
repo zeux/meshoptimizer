@@ -147,24 +147,15 @@ static size_t getVertexBlockSize(size_t vertex_size)
 	return (result < kVertexBlockMaxSize) ? result : kVertexBlockMaxSize;
 }
 
-inline unsigned char zigzag(unsigned char v)
-{
-	return ((signed char)(v) >> 7) ^ (v << 1);
-}
-
-inline unsigned short zigzag(unsigned short v)
-{
-	return ((signed short)(v) >> 15) ^ (v << 1);
-}
-
-inline unsigned int zigzag(unsigned int v)
-{
-	return ((signed int)(v) >> 31) ^ (v << 1);
-}
-
 inline unsigned int rotate(unsigned int v, int r)
 {
 	return (v << r) | (v >> ((32 - r) & 31));
+}
+
+template <typename T>
+inline T zigzag(T v)
+{
+	return (0 - (v >> (sizeof(T) * 8 - 1))) ^ (v << 1);
 }
 
 template <typename T>
