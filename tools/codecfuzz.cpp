@@ -17,7 +17,7 @@ void fuzzDecoder(const uint8_t* data, size_t size, size_t stride, int (*decode)(
 	free(destination);
 }
 
-void fuzzRoundtrip(const uint8_t* data, size_t size, size_t stride)
+void fuzzRoundtrip(const uint8_t* data, size_t size, size_t stride, int level)
 {
 	size_t count = size / stride;
 
@@ -26,7 +26,7 @@ void fuzzRoundtrip(const uint8_t* data, size_t size, size_t stride)
 	void* decoded = malloc(count * stride);
 	assert(encoded && decoded);
 
-	size_t res = meshopt_encodeVertexBuffer(static_cast<unsigned char*>(encoded), bound, data, count, stride);
+	size_t res = meshopt_encodeVertexBufferLevel(static_cast<unsigned char*>(encoded), bound, data, count, stride, level);
 	assert(res <= bound);
 
 	int rc = meshopt_decodeVertexBuffer(decoded, count, stride, static_cast<unsigned char*>(encoded), res);
@@ -56,10 +56,23 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 	fuzzDecoder(data, size, 32, meshopt_decodeVertexBuffer);
 
 	// encodeVertexBuffer/decodeVertexBuffer should roundtrip for any stride, check a few with different alignment mod 16
-	fuzzRoundtrip(data, size, 4);
-	fuzzRoundtrip(data, size, 16);
-	fuzzRoundtrip(data, size, 24);
-	fuzzRoundtrip(data, size, 32);
+	fuzzRoundtrip(data, size, 4, 0);
+	fuzzRoundtrip(data, size, 16, 0);
+	fuzzRoundtrip(data, size, 24, 0);
+	fuzzRoundtrip(data, size, 32, 0);
+
+	// repeat roundtrip testing for new encoding
+	meshopt_encodeVertexVersion(0xe);
+
+	for (int level = 0; level < 4; ++level)
+	{
+		fuzzRoundtrip(data, size, 4, level);
+		fuzzRoundtrip(data, size, 16, level);
+		fuzzRoundtrip(data, size, 24, level);
+		fuzzRoundtrip(data, size, 32, level);
+	}
+
+	meshopt_encodeVertexVersion(0);
 
 	return 0;
 }

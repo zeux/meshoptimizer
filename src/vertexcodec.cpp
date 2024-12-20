@@ -133,7 +133,7 @@ const size_t kTailMinSize = 32; // must be >= kByteGroupDecodeLimit
 static const int kBitsV0[4] = {0, 2, 4, 8};
 static const int kBitsV1[5] = {0, 1, 2, 4, 8};
 
-const int kEncodeMaxChannel = 3;
+const int kEncodeDefaultLevel = 2;
 
 static size_t getVertexBlockSize(size_t vertex_size)
 {
@@ -147,24 +147,15 @@ static size_t getVertexBlockSize(size_t vertex_size)
 	return (result < kVertexBlockMaxSize) ? result : kVertexBlockMaxSize;
 }
 
-inline unsigned char zigzag(unsigned char v)
-{
-	return ((signed char)(v) >> 7) ^ (v << 1);
-}
-
-inline unsigned short zigzag(unsigned short v)
-{
-	return ((signed short)(v) >> 15) ^ (v << 1);
-}
-
-inline unsigned int zigzag(unsigned int v)
-{
-	return ((signed int)(v) >> 31) ^ (v << 1);
-}
-
 inline unsigned int rotate(unsigned int v, int r)
 {
 	return (v << r) | (v >> ((32 - r) & 31));
+}
+
+template <typename T>
+inline T zigzag(T v)
+{
+	return (0 - (v >> (sizeof(T) * 8 - 1))) ^ (v << 1);
 }
 
 template <typename T>
@@ -259,10 +250,11 @@ static unsigned char* encodeBytesGroup(unsigned char* data, const unsigned char*
 
 	for (size_t i = 0; i < kByteGroupSize; ++i)
 	{
-		if (buffer[i] >= sentinel)
-		{
-			*data++ = buffer[i];
-		}
+		unsigned char v = buffer[i];
+
+		// branchless append of out-of-range values
+		*data = v;
+		data += v >= sentinel;
 	}
 
 	return data;
@@ -328,32 +320,6 @@ static unsigned char* encodeBytes(unsigned char* data, unsigned char* data_end, 
 	return data;
 }
 
-static size_t encodeBytesMeasure(const unsigned char* buffer, size_t buffer_size, const int bits[4])
-{
-	assert(buffer_size % kByteGroupSize == 0);
-
-	size_t result = 0;
-
-	// round number of groups to 4 to get number of header bytes
-	size_t header_size = (buffer_size / kByteGroupSize + 3) / 4;
-	result += header_size;
-
-	for (size_t i = 0; i < buffer_size; i += kByteGroupSize)
-	{
-		size_t best_size = size_t(-1);
-
-		for (int bitk = 0; bitk < 4; ++bitk)
-		{
-			size_t size = encodeBytesGroupMeasure(buffer + i, bits[bitk]);
-			best_size = (size < best_size) ? size : best_size;
-		}
-
-		result += best_size;
-	}
-
-	return result;
-}
-
 template <typename T, bool Xor>
 static void encodeDeltas1(unsigned char* buffer, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned char last_vertex[256], size_t k, int rot)
 {
@@ -386,42 +352,48 @@ static void encodeDeltas(unsigned char* buffer, const unsigned char* vertex_data
 	case 1:
 		return encodeDeltas1<unsigned short, false>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, 0);
 	case 2:
-		return encodeDeltas1<unsigned int, true>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, channel >> 2);
+		return encodeDeltas1<unsigned int, true>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, channel >> 4);
 	default:
 		assert(!"Unsupported channel encoding");
 	}
 }
 
-static int estimateRotate(const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, size_t k)
+static int estimateBits(unsigned char v)
 {
-	if (vertex_count == 0)
-		return 0;
+	return v <= 15 ? (v <= 3 ? (v == 0 ? 0 : 2) : 4) : 8;
+}
 
-	unsigned char block[kVertexBlockMaxSize];
-
-	unsigned char last_vertex[256] = {};
-	memcpy(last_vertex, vertex_data, vertex_size);
-
+static int estimateRotate(const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, size_t k, size_t group_size)
+{
 	size_t sizes[8] = {};
 
-	const int* bits = kBitsV1 + 1;
+	const unsigned char* vertex = vertex_data + k;
+	unsigned int last = vertex[0] | (vertex[1] << 8) | (vertex[2] << 16) | (vertex[3] << 24);
 
-	for (size_t i = 0; i < vertex_count; i += kVertexBlockMaxSize)
+	for (size_t i = 0; i < vertex_count; i += group_size)
 	{
-		size_t block_size = i + kVertexBlockMaxSize < vertex_count ? kVertexBlockMaxSize : vertex_count - i;
-		size_t block_size_aligned = (block_size + kByteGroupSize - 1) & ~(kByteGroupSize - 1);
+		unsigned int bitg = 0;
 
-		// we sometimes encode elements we didn't fill when rounding to kByteGroupSize
-		memset(block, 0, block_size_aligned);
-
-		for (int rot = 0; rot < 8; ++rot)
+		// calculate bit consistency mask for the group
+		for (size_t j = 0; j < group_size && i + j < vertex_count; ++j)
 		{
-			for (size_t j = 0; j < 4; ++j)
-			{
-				encodeDeltas(block, vertex_data + i * vertex_size, block_size, vertex_size, last_vertex, k + j, 2 | (rot << 2));
+			unsigned int v = vertex[0] | (vertex[1] << 8) | (vertex[2] << 16) | (vertex[3] << 24);
+			unsigned int d = v ^ last;
 
-				sizes[rot] += encodeBytesMeasure(block, block_size_aligned, bits);
-			}
+			bitg |= d;
+			last = v;
+			vertex += vertex_size;
+		}
+
+		// ignore trivial groups for performance
+		if (bitg == 0 || bitg == ~0u)
+			continue;
+
+		for (int j = 0; j < 8; ++j)
+		{
+			unsigned int bitr = rotate(bitg, j);
+
+			sizes[j] += estimateBits((unsigned char)(bitr >> 0)) + estimateBits((unsigned char)(bitr >> 8)) + estimateBits((unsigned char)(bitr >> 16)) + estimateBits((unsigned char)(bitr >> 24));
 		}
 	}
 
@@ -432,47 +404,102 @@ static int estimateRotate(const unsigned char* vertex_data, size_t vertex_count,
 	return best_rot;
 }
 
-static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, size_t k, int max_channel, int xor_rot)
+static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, size_t k, size_t vertex_block_size, size_t block_skip, int max_channel, int xor_rot)
 {
-	if (vertex_count == 0 || max_channel <= 1)
-		return 0;
-
 	unsigned char block[kVertexBlockMaxSize];
+	assert(vertex_block_size <= kVertexBlockMaxSize);
 
 	unsigned char last_vertex[256] = {};
-	memcpy(last_vertex, vertex_data, vertex_size);
 
-	size_t sizes[4] = {};
+	size_t sizes[3] = {};
+	assert(max_channel <= 3);
 
-	const int* bits = kBitsV1 + 1;
-
-	for (size_t i = 0; i < vertex_count; i += kVertexBlockMaxSize)
+	for (size_t i = 0; i < vertex_count; i += vertex_block_size * block_skip)
 	{
-		size_t block_size = i + kVertexBlockMaxSize < vertex_count ? kVertexBlockMaxSize : vertex_count - i;
+		size_t block_size = i + vertex_block_size < vertex_count ? vertex_block_size : vertex_count - i;
 		size_t block_size_aligned = (block_size + kByteGroupSize - 1) & ~(kByteGroupSize - 1);
 
+		memcpy(last_vertex, vertex_data + (i == 0 ? 0 : i - 1) * vertex_size, vertex_size);
+
 		// we sometimes encode elements we didn't fill when rounding to kByteGroupSize
-		memset(block, 0, block_size_aligned);
+		if (block_size < block_size_aligned)
+			memset(block + block_size, 0, block_size_aligned - block_size);
 
 		for (int channel = 0; channel < max_channel; ++channel)
-		{
 			for (size_t j = 0; j < 4; ++j)
 			{
-				encodeDeltas(block, vertex_data + i * vertex_size, block_size, vertex_size, last_vertex, k + j, channel | (xor_rot << 2));
+				encodeDeltas(block, vertex_data + i * vertex_size, block_size, vertex_size, last_vertex, k + j, channel | (xor_rot << 4));
 
-				sizes[channel] += encodeBytesMeasure(block, block_size_aligned, bits);
+				for (size_t ig = 0; ig < block_size; ig += kByteGroupSize)
+				{
+					// to maximize encoding performance we only evaluate 1/2/4/8 bit groups
+					size_t size1 = encodeBytesGroupMeasure(block + ig, 1);
+					size_t size2 = encodeBytesGroupMeasure(block + ig, 2);
+					size_t size4 = encodeBytesGroupMeasure(block + ig, 4);
+					size_t size8 = encodeBytesGroupMeasure(block + ig, 8);
+
+					size_t best_size = size1 < size2 ? size1 : size2;
+					best_size = best_size < size4 ? best_size : size4;
+					best_size = best_size < size8 ? best_size : size8;
+
+					sizes[channel] += best_size;
+				}
 			}
-		}
 	}
 
 	int best_channel = 0;
 	for (int channel = 1; channel < max_channel; ++channel)
 		best_channel = (sizes[channel] < sizes[best_channel]) ? channel : best_channel;
 
-	return best_channel == 2 ? best_channel | (xor_rot << 2) : best_channel;
+	return best_channel == 2 ? best_channel | (xor_rot << 4) : best_channel;
 }
 
-static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data_end, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], const unsigned char* channels, int version)
+static int estimateControl(const unsigned char* buffer, size_t vertex_count, size_t vertex_count_aligned, int level)
+{
+	if (canEncodeZero(buffer, vertex_count))
+	{
+		// zero encoding
+		return 2;
+	}
+	else if (level > 0)
+	{
+		// round number of groups to 4 to get number of header bytes
+		size_t header_size = (vertex_count_aligned / kByteGroupSize + 3) / 4;
+
+		size_t est_bytes0 = header_size, est_bytes1 = header_size;
+
+		for (size_t i = 0; i < vertex_count_aligned; i += kByteGroupSize)
+		{
+			// assumes kBitsV1[] = {0, 1, 2, 4, 8} for performance
+			size_t size0 = encodeBytesGroupMeasure(buffer + i, 0);
+			size_t size1 = encodeBytesGroupMeasure(buffer + i, 1);
+			size_t size2 = encodeBytesGroupMeasure(buffer + i, 2);
+			size_t size4 = encodeBytesGroupMeasure(buffer + i, 4);
+			size_t size8 = encodeBytesGroupMeasure(buffer + i, 8);
+
+			// both control modes have access to 1/2/4 bit encoding
+			size_t size12 = size1 < size2 ? size1 : size2;
+			size_t size124 = size12 < size4 ? size12 : size4;
+
+			// each control mode has access to 0/8 bit encoding respectively
+			est_bytes0 += size124 < size0 ? size124 : size0;
+			est_bytes1 += size124 < size8 ? size124 : size8;
+		}
+
+		// pick shortest control entry but prefer literal encoding
+		if (est_bytes0 < vertex_count || est_bytes1 < vertex_count)
+			return est_bytes0 < est_bytes1 ? 0 : 1;
+		else
+			return 3;
+	}
+	else
+	{
+		// 1248 encoding
+		return 1;
+	}
+}
+
+static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data_end, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], const unsigned char* channels, int version, int level)
 {
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 	assert(vertex_size % 4 == 0);
@@ -515,60 +542,31 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 		}
 #endif
 
-		if (version == 0xe)
+		int ctrl = 0;
+
+		if (version != 0)
 		{
-			int best_ctrl = 3; // literal encoding
-			size_t best_bytes = vertex_count;
-
-			if (canEncodeZero(buffer, vertex_count))
-			{
-				// zero encoding
-				best_ctrl = 2;
-				best_bytes = 0;
-			}
-			else
-			{
-				// pick shortest control entry
-				for (int i = 0; i < 2; ++i)
-				{
-					size_t est_bytes = encodeBytesMeasure(buffer, vertex_count_aligned, kBitsV1 + i);
-
-					if (est_bytes < best_bytes)
-					{
-						best_ctrl = i;
-						best_bytes = est_bytes;
-					}
-				}
-			}
-
-			control[k / 4] |= best_ctrl << ((k % 4) * 2);
+			ctrl = estimateControl(buffer, vertex_count, vertex_count_aligned, level);
+			assert(unsigned(ctrl) < 4);
+			control[k / 4] |= ctrl << ((k % 4) * 2);
+		}
 
 #if TRACE
-			vertexstats[k].ctrl[best_ctrl]++;
+		vertexstats[k].ctrl[ctrl]++;
 #endif
 
-			if (best_ctrl == 3)
-			{
-				// literal encoding
-				if (size_t(data_end - data) < vertex_count)
-					return NULL;
-
-				memcpy(data, buffer, vertex_count);
-				data += vertex_count;
-			}
-			else if (best_ctrl != 2)
-			{
-				unsigned char* next = encodeBytes(data, data_end, buffer, vertex_count_aligned, kBitsV1 + best_ctrl);
-				if (!next)
-					return NULL;
-
-				assert(data + best_bytes == next);
-				data = next;
-			}
-		}
-		else
+		if (ctrl == 3)
 		{
-			data = encodeBytes(data, data_end, buffer, vertex_count_aligned, kBitsV0);
+			// literal encoding
+			if (size_t(data_end - data) < vertex_count)
+				return NULL;
+
+			memcpy(data, buffer, vertex_count);
+			data += vertex_count;
+		}
+		else if (ctrl != 2) // non-zero encoding
+		{
+			data = encodeBytes(data, data_end, buffer, vertex_count_aligned, version == 0 ? kBitsV0 : kBitsV1 + ctrl);
 			if (!data)
 				return NULL;
 		}
@@ -762,7 +760,7 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 			decodeDeltas1<unsigned short, false>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k, 0);
 			break;
 		case 2:
-			decodeDeltas1<unsigned int, true>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k, (32 - (channel >> 2)) & 31);
+			decodeDeltas1<unsigned int, true>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k, (32 - (channel >> 4)) & 31);
 			break;
 		default:
 			// invalid channel type
@@ -954,27 +952,15 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 #endif
 
 #ifdef SIMD_AVX
-static const __m128i decodeBytesGroupConfig[2][8] = {
-    {
-        _mm_setzero_si128(),
-        _mm_set1_epi8(3),
-        _mm_set1_epi8(15),
-        _mm_setzero_si128(),
-        _mm_setzero_si128(),
-        _mm_set1_epi8(1),
-        _mm_set1_epi8(3),
-        _mm_set1_epi8(15),
-    },
-    {
-        _mm_setzero_si128(),
-        _mm_setr_epi8(6, 4, 2, 0, 14, 12, 10, 8, 22, 20, 18, 16, 30, 28, 26, 24),
-        _mm_setr_epi8(4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56),
-        _mm_setzero_si128(),
-        _mm_setzero_si128(),
-        _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15),
-        _mm_setr_epi8(6, 4, 2, 0, 14, 12, 10, 8, 22, 20, 18, 16, 30, 28, 26, 24),
-        _mm_setr_epi8(4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56),
-    },
+static const __m128i kDecodeBytesGroupConfig[8][2] = {
+    {_mm_setzero_si128(), _mm_setzero_si128()},
+    {_mm_set1_epi8(3), _mm_setr_epi8(6, 4, 2, 0, 14, 12, 10, 8, 22, 20, 18, 16, 30, 28, 26, 24)},
+    {_mm_set1_epi8(15), _mm_setr_epi8(4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56)},
+    {_mm_setzero_si128(), _mm_setzero_si128()},
+    {_mm_setzero_si128(), _mm_setzero_si128()},
+    {_mm_set1_epi8(1), _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)},
+    {_mm_set1_epi8(3), _mm_setr_epi8(6, 4, 2, 0, 14, 12, 10, 8, 22, 20, 18, 16, 30, 28, 26, 24)},
+    {_mm_set1_epi8(15), _mm_setr_epi8(4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56)},
 };
 
 SIMD_TARGET
@@ -1003,8 +989,8 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		__m128i selb = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(data));
 		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(skip));
 
-		__m128i sent = decodeBytesGroupConfig[0][hbits];
-		__m128i ctrl = decodeBytesGroupConfig[1][hbits];
+		__m128i sent = kDecodeBytesGroupConfig[hbits][0];
+		__m128i ctrl = kDecodeBytesGroupConfig[hbits][1];
 
 		__m128i selw = _mm_shuffle_epi32(selb, 0x44);
 		__m128i sel = _mm_and_si128(sent, _mm_multishift_epi64_epi8(ctrl, selw));
@@ -1603,7 +1589,7 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 			decodeDeltas4Simd<1>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k, 0);
 			break;
 		case 2:
-			decodeDeltas4Simd<2>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k, (32 - (channel >> 2)) & 31);
+			decodeDeltas4Simd<2>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k, (32 - (channel >> 4)) & 31);
 			break;
 		default:
 			// invalid channel type
@@ -1636,12 +1622,13 @@ static unsigned int cpuid = getCpuFeatures();
 
 } // namespace meshopt
 
-size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, const void* vertices, size_t vertex_count, size_t vertex_size)
+size_t meshopt_encodeVertexBufferLevel(unsigned char* buffer, size_t buffer_size, const void* vertices, size_t vertex_count, size_t vertex_size, int level)
 {
 	using namespace meshopt;
 
 	assert(vertex_size > 0 && vertex_size <= 256);
 	assert(vertex_size % 4 == 0);
+	assert(level >= 0 && level <= 9); // only a subset of this range is used right now
 
 #if TRACE
 	memset(vertexstats, 0, sizeof(vertexstats));
@@ -1666,18 +1653,18 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	unsigned char last_vertex[256] = {};
 	memcpy(last_vertex, first_vertex, vertex_size);
 
+	size_t vertex_block_size = getVertexBlockSize(vertex_size);
+
 	unsigned char channels[64] = {};
-	if (version != 0)
+	if (version != 0 && level > 1 && vertex_count > 1)
 		for (size_t k = 0; k < vertex_size; k += 4)
 		{
-			int rot = kEncodeMaxChannel >= 3 ? estimateRotate(vertex_data, vertex_count, vertex_size, k) : 0;
-			int channel = estimateChannel(vertex_data, vertex_count, vertex_size, k, kEncodeMaxChannel, rot);
+			int rot = level >= 3 ? estimateRotate(vertex_data, vertex_count, vertex_size, k, /* group_size= */ 16) : 0;
+			int channel = estimateChannel(vertex_data, vertex_count, vertex_size, k, vertex_block_size, /* block_skip= */ 3, /* max_channels= */ level >= 3 ? 3 : 2, rot);
 
-			assert(unsigned(channel) < 2 || ((channel & 3) == 2 && unsigned(channel >> 2) < 8));
+			assert(unsigned(channel) < 2 || ((channel & 3) == 2 && unsigned(channel >> 4) < 8));
 			channels[k / 4] = (unsigned char)channel;
 		}
-
-	size_t vertex_block_size = getVertexBlockSize(vertex_size);
 
 	size_t vertex_offset = 0;
 
@@ -1685,7 +1672,7 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 	{
 		size_t block_size = (vertex_offset + vertex_block_size < vertex_count) ? vertex_block_size : vertex_count - vertex_offset;
 
-		data = encodeVertexBlock(data, data_end, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, last_vertex, channels, version);
+		data = encodeVertexBlock(data, data_end, vertex_data + vertex_offset * vertex_size, block_size, vertex_size, last_vertex, channels, version, level);
 		if (!data)
 			return 0;
 
@@ -1733,7 +1720,7 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 			int channel = channels[k / 4];
 
 			if ((channel & 3) == 2 && k % 4 == 0)
-				printf(" | ^%d", channel >> 2);
+				printf(" | ^%d", channel >> 4);
 			else
 				printf(" | %2s", channel == 0 ? "1" : (channel == 1 && k % 2 == 0 ? "2" : "."));
 		}
@@ -1765,6 +1752,11 @@ size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, con
 #endif
 
 	return data - buffer;
+}
+
+size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, const void* vertices, size_t vertex_count, size_t vertex_size)
+{
+	return meshopt_encodeVertexBufferLevel(buffer, buffer_size, vertices, vertex_count, vertex_size, meshopt::kEncodeDefaultLevel);
 }
 
 size_t meshopt_encodeVertexBufferBound(size_t vertex_count, size_t vertex_size)
