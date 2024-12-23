@@ -354,7 +354,7 @@ static void encodeDeltas(unsigned char* buffer, const unsigned char* vertex_data
 	case 2:
 		return encodeDeltas1<unsigned int, true>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, channel >> 4);
 	default:
-		assert(!"Unsupported channel encoding");
+		assert(!"Unsupported channel encoding"); // unreachable
 	}
 }
 
@@ -764,8 +764,7 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 			decodeDeltas1<unsigned int, true>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k, (32 - (channel >> 4)) & 31);
 			break;
 		default:
-			// invalid channel type
-			return NULL;
+			return NULL; // invalid channel type
 		}
 	}
 
@@ -947,7 +946,7 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	}
 
 	default:
-		SIMD_UNREACHABLE();
+		SIMD_UNREACHABLE(); // unreachable
 	}
 }
 #endif
@@ -1015,7 +1014,7 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	}
 
 	default:
-		SIMD_UNREACHABLE();
+		SIMD_UNREACHABLE(); // unreachable
 	}
 }
 #endif
@@ -1159,8 +1158,7 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	}
 
 	default:
-		SIMD_UNREACHABLE();
-		return data;
+		SIMD_UNREACHABLE(); // unreachable
 	}
 }
 #endif
@@ -1279,7 +1277,7 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	}
 
 	default:
-		SIMD_UNREACHABLE();
+		SIMD_UNREACHABLE(); // unreachable
 	}
 }
 #endif
@@ -1593,8 +1591,7 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 			decodeDeltas4Simd<2>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k, (32 - (channel >> 4)) & 31);
 			break;
 		default:
-			// invalid channel type
-			return NULL;
+			return NULL; // invalid channel type
 		}
 	}
 
