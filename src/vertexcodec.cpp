@@ -128,7 +128,8 @@ const size_t kVertexBlockSizeBytes = 8192;
 const size_t kVertexBlockMaxSize = 256;
 const size_t kByteGroupSize = 16;
 const size_t kByteGroupDecodeLimit = 24;
-const size_t kTailMinSize = 32; // must be >= kByteGroupDecodeLimit
+const size_t kTailMinSizeV0 = 32;
+const size_t kTailMinSizeV1 = 24;
 
 static const int kBitsV0[4] = {0, 2, 4, 8};
 static const int kBitsV1[5] = {0, 1, 2, 4, 8};
@@ -1678,7 +1679,8 @@ size_t meshopt_encodeVertexBufferLevel(unsigned char* buffer, size_t buffer_size
 	}
 
 	size_t tail_size = vertex_size + (version == 0 ? 0 : vertex_size / 4);
-	size_t tail_size_pad = tail_size < kTailMinSize ? kTailMinSize : tail_size;
+	size_t tail_size_min = version == 0 ? kTailMinSizeV0 : kTailMinSizeV1;
+	size_t tail_size_pad = tail_size < tail_size_min ? tail_size_min : tail_size;
 
 	if (size_t(data_end - data) < tail_size_pad)
 		return 0;
@@ -1772,7 +1774,9 @@ size_t meshopt_encodeVertexBufferBound(size_t vertex_count, size_t vertex_size)
 	size_t vertex_block_data_size = vertex_block_size;
 
 	size_t tail_size = vertex_size + (vertex_size / 4);
-	size_t tail_size_pad = tail_size < kTailMinSize ? kTailMinSize : tail_size;
+	size_t tail_size_min = kTailMinSizeV0 > kTailMinSizeV1 ? kTailMinSizeV0 : kTailMinSizeV1;
+	size_t tail_size_pad = tail_size < tail_size_min ? tail_size_min : tail_size;
+	assert(tail_size_pad >= kByteGroupDecodeLimit);
 
 	return 1 + vertex_block_count * vertex_size * (vertex_block_control_size + vertex_block_header_size + vertex_block_data_size) + tail_size_pad;
 }
@@ -1825,7 +1829,8 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 		return -1;
 
 	size_t tail_size = vertex_size + (version == 0 ? 0 : vertex_size / 4);
-	size_t tail_size_pad = tail_size < kTailMinSize ? kTailMinSize : tail_size;
+	size_t tail_size_min = version == 0 ? kTailMinSizeV0 : kTailMinSizeV1;
+	size_t tail_size_pad = tail_size < tail_size_min ? tail_size_min : tail_size;
 
 	if (size_t(data_end - data) < tail_size_pad)
 		return -2;
