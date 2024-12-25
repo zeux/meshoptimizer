@@ -386,15 +386,12 @@ static int estimateRotate(const unsigned char* vertex_data, size_t vertex_count,
 			vertex += vertex_size;
 		}
 
-		// ignore trivial groups for performance
-		if (bitg == 0 || bitg == ~0u)
-			continue;
-
 		for (int j = 0; j < 8; ++j)
 		{
 			unsigned int bitr = rotate(bitg, j);
 
-			sizes[j] += estimateBits((unsigned char)(bitr >> 0)) + estimateBits((unsigned char)(bitr >> 8)) + estimateBits((unsigned char)(bitr >> 16)) + estimateBits((unsigned char)(bitr >> 24));
+			sizes[j] += estimateBits((unsigned char)(bitr >> 0)) + estimateBits((unsigned char)(bitr >> 8));
+			sizes[j] += estimateBits((unsigned char)(bitr >> 16)) + estimateBits((unsigned char)(bitr >> 24));
 		}
 	}
 
