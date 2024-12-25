@@ -128,7 +128,8 @@ const size_t kVertexBlockSizeBytes = 8192;
 const size_t kVertexBlockMaxSize = 256;
 const size_t kByteGroupSize = 16;
 const size_t kByteGroupDecodeLimit = 24;
-const size_t kTailMinSize = 32; // must be >= kByteGroupDecodeLimit
+const size_t kTailMinSizeV0 = 32;
+const size_t kTailMinSizeV1 = 24;
 
 static const int kBitsV0[4] = {0, 2, 4, 8};
 static const int kBitsV1[5] = {0, 1, 2, 4, 8};
@@ -354,7 +355,7 @@ static void encodeDeltas(unsigned char* buffer, const unsigned char* vertex_data
 	case 2:
 		return encodeDeltas1<unsigned int, true>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, channel >> 4);
 	default:
-		assert(!"Unsupported channel encoding");
+		assert(!"Unsupported channel encoding"); // unreachable
 	}
 }
 
@@ -385,15 +386,12 @@ static int estimateRotate(const unsigned char* vertex_data, size_t vertex_count,
 			vertex += vertex_size;
 		}
 
-		// ignore trivial groups for performance
-		if (bitg == 0 || bitg == ~0u)
-			continue;
-
 		for (int j = 0; j < 8; ++j)
 		{
 			unsigned int bitr = rotate(bitg, j);
 
-			sizes[j] += estimateBits((unsigned char)(bitr >> 0)) + estimateBits((unsigned char)(bitr >> 8)) + estimateBits((unsigned char)(bitr >> 16)) + estimateBits((unsigned char)(bitr >> 24));
+			sizes[j] += estimateBits((unsigned char)(bitr >> 0)) + estimateBits((unsigned char)(bitr >> 8));
+			sizes[j] += estimateBits((unsigned char)(bitr >> 16)) + estimateBits((unsigned char)(bitr >> 24));
 		}
 	}
 
@@ -764,8 +762,7 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 			decodeDeltas1<unsigned int, true>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k, (32 - (channel >> 4)) & 31);
 			break;
 		default:
-			// invalid channel type
-			return NULL;
+			return NULL; // invalid channel type
 		}
 	}
 
@@ -947,7 +944,7 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	}
 
 	default:
-		SIMD_UNREACHABLE();
+		SIMD_UNREACHABLE(); // unreachable
 	}
 }
 #endif
@@ -1015,7 +1012,7 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	}
 
 	default:
-		SIMD_UNREACHABLE();
+		SIMD_UNREACHABLE(); // unreachable
 	}
 }
 #endif
@@ -1159,8 +1156,7 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	}
 
 	default:
-		SIMD_UNREACHABLE();
-		return data;
+		SIMD_UNREACHABLE(); // unreachable
 	}
 }
 #endif
@@ -1279,7 +1275,7 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	}
 
 	default:
-		SIMD_UNREACHABLE();
+		SIMD_UNREACHABLE(); // unreachable
 	}
 }
 #endif
@@ -1593,8 +1589,7 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 			decodeDeltas4Simd<2>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k, (32 - (channel >> 4)) & 31);
 			break;
 		default:
-			// invalid channel type
-			return NULL;
+			return NULL; // invalid channel type
 		}
 	}
 
@@ -1681,7 +1676,8 @@ size_t meshopt_encodeVertexBufferLevel(unsigned char* buffer, size_t buffer_size
 	}
 
 	size_t tail_size = vertex_size + (version == 0 ? 0 : vertex_size / 4);
-	size_t tail_size_pad = tail_size < kTailMinSize ? kTailMinSize : tail_size;
+	size_t tail_size_min = version == 0 ? kTailMinSizeV0 : kTailMinSizeV1;
+	size_t tail_size_pad = tail_size < tail_size_min ? tail_size_min : tail_size;
 
 	if (size_t(data_end - data) < tail_size_pad)
 		return 0;
@@ -1775,7 +1771,9 @@ size_t meshopt_encodeVertexBufferBound(size_t vertex_count, size_t vertex_size)
 	size_t vertex_block_data_size = vertex_block_size;
 
 	size_t tail_size = vertex_size + (vertex_size / 4);
-	size_t tail_size_pad = tail_size < kTailMinSize ? kTailMinSize : tail_size;
+	size_t tail_size_min = kTailMinSizeV0 > kTailMinSizeV1 ? kTailMinSizeV0 : kTailMinSizeV1;
+	size_t tail_size_pad = tail_size < tail_size_min ? tail_size_min : tail_size;
+	assert(tail_size_pad >= kByteGroupDecodeLimit);
 
 	return 1 + vertex_block_count * vertex_size * (vertex_block_control_size + vertex_block_header_size + vertex_block_data_size) + tail_size_pad;
 }
@@ -1828,7 +1826,8 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 		return -1;
 
 	size_t tail_size = vertex_size + (version == 0 ? 0 : vertex_size / 4);
-	size_t tail_size_pad = tail_size < kTailMinSize ? kTailMinSize : tail_size;
+	size_t tail_size_min = version == 0 ? kTailMinSizeV0 : kTailMinSizeV1;
+	size_t tail_size_pad = tail_size < tail_size_min ? tail_size_min : tail_size;
 
 	if (size_t(data_end - data) < tail_size_pad)
 		return -2;

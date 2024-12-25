@@ -27,9 +27,14 @@ void fuzzRoundtrip(const uint8_t* data, size_t size, size_t stride, int level)
 	assert(encoded && decoded);
 
 	size_t res = meshopt_encodeVertexBufferLevel(static_cast<unsigned char*>(encoded), bound, data, count, stride, level);
-	assert(res <= bound);
+	assert(res > 0 && res <= bound);
 
-	int rc = meshopt_decodeVertexBuffer(decoded, count, stride, static_cast<unsigned char*>(encoded), res);
+	// encode again at the boundary to check for memory safety
+	// this should produce the same output because encoder is deterministic
+	size_t rese = meshopt_encodeVertexBufferLevel(static_cast<unsigned char*>(encoded) + bound - res, res, data, count, stride, level);
+	assert(rese == res);
+
+	int rc = meshopt_decodeVertexBuffer(decoded, count, stride, static_cast<unsigned char*>(encoded) + bound - res, res);
 	assert(rc == 0);
 
 	assert(memcmp(data, decoded, count * stride) == 0);
@@ -49,30 +54,24 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 	fuzzDecoder(data, size, 4, meshopt_decodeIndexSequence);
 
 	// decodeVertexBuffer supports any strides divisible by 4 in 4-256 interval
-	// It's a waste of time to check all of them, so we'll just check a few with different alignment mod 16
+	// it's a waste of time to check all of them, so we'll just check a few with different alignment mod 16
 	fuzzDecoder(data, size, 4, meshopt_decodeVertexBuffer);
 	fuzzDecoder(data, size, 16, meshopt_decodeVertexBuffer);
 	fuzzDecoder(data, size, 24, meshopt_decodeVertexBuffer);
 	fuzzDecoder(data, size, 32, meshopt_decodeVertexBuffer);
 
 	// encodeVertexBuffer/decodeVertexBuffer should roundtrip for any stride, check a few with different alignment mod 16
-	fuzzRoundtrip(data, size, 4, 0);
-	fuzzRoundtrip(data, size, 16, 0);
-	fuzzRoundtrip(data, size, 24, 0);
-	fuzzRoundtrip(data, size, 32, 0);
+	// this also checks memory safety properties of the encoder
+	// to conserve time, we only check one version/level combination, biased towards version 1
+	uint8_t data0 = size > 0 ? data[0] : 0;
+	int level = data0 % 5;
 
-	// repeat roundtrip testing for new encoding
-	meshopt_encodeVertexVersion(0xe);
+	meshopt_encodeVertexVersion(level < 4 ? 0xe : 0);
 
-	for (int level = 0; level < 4; ++level)
-	{
-		fuzzRoundtrip(data, size, 4, level);
-		fuzzRoundtrip(data, size, 16, level);
-		fuzzRoundtrip(data, size, 24, level);
-		fuzzRoundtrip(data, size, 32, level);
-	}
-
-	meshopt_encodeVertexVersion(0);
+	fuzzRoundtrip(data, size, 4, level);
+	fuzzRoundtrip(data, size, 16, level);
+	fuzzRoundtrip(data, size, 24, level);
+	fuzzRoundtrip(data, size, 32, level);
 
 	return 0;
 }
