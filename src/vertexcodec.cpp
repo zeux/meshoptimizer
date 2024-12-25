@@ -455,46 +455,39 @@ static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count
 static int estimateControl(const unsigned char* buffer, size_t vertex_count, size_t vertex_count_aligned, int level)
 {
 	if (canEncodeZero(buffer, vertex_count))
+		return 2; // zero encoding
+
+	if (level == 0)
+		return 1; // 1248 encoding in level 0 for encoding speed
+
+	// round number of groups to 4 to get number of header bytes
+	size_t header_size = (vertex_count_aligned / kByteGroupSize + 3) / 4;
+
+	size_t est_bytes0 = header_size, est_bytes1 = header_size;
+
+	for (size_t i = 0; i < vertex_count_aligned; i += kByteGroupSize)
 	{
-		// zero encoding
-		return 2;
+		// assumes kBitsV1[] = {0, 1, 2, 4, 8} for performance
+		size_t size0 = encodeBytesGroupMeasure(buffer + i, 0);
+		size_t size1 = encodeBytesGroupMeasure(buffer + i, 1);
+		size_t size2 = encodeBytesGroupMeasure(buffer + i, 2);
+		size_t size4 = encodeBytesGroupMeasure(buffer + i, 4);
+		size_t size8 = encodeBytesGroupMeasure(buffer + i, 8);
+
+		// both control modes have access to 1/2/4 bit encoding
+		size_t size12 = size1 < size2 ? size1 : size2;
+		size_t size124 = size12 < size4 ? size12 : size4;
+
+		// each control mode has access to 0/8 bit encoding respectively
+		est_bytes0 += size124 < size0 ? size124 : size0;
+		est_bytes1 += size124 < size8 ? size124 : size8;
 	}
-	else if (level > 0)
-	{
-		// round number of groups to 4 to get number of header bytes
-		size_t header_size = (vertex_count_aligned / kByteGroupSize + 3) / 4;
 
-		size_t est_bytes0 = header_size, est_bytes1 = header_size;
-
-		for (size_t i = 0; i < vertex_count_aligned; i += kByteGroupSize)
-		{
-			// assumes kBitsV1[] = {0, 1, 2, 4, 8} for performance
-			size_t size0 = encodeBytesGroupMeasure(buffer + i, 0);
-			size_t size1 = encodeBytesGroupMeasure(buffer + i, 1);
-			size_t size2 = encodeBytesGroupMeasure(buffer + i, 2);
-			size_t size4 = encodeBytesGroupMeasure(buffer + i, 4);
-			size_t size8 = encodeBytesGroupMeasure(buffer + i, 8);
-
-			// both control modes have access to 1/2/4 bit encoding
-			size_t size12 = size1 < size2 ? size1 : size2;
-			size_t size124 = size12 < size4 ? size12 : size4;
-
-			// each control mode has access to 0/8 bit encoding respectively
-			est_bytes0 += size124 < size0 ? size124 : size0;
-			est_bytes1 += size124 < size8 ? size124 : size8;
-		}
-
-		// pick shortest control entry but prefer literal encoding
-		if (est_bytes0 < vertex_count || est_bytes1 < vertex_count)
-			return est_bytes0 < est_bytes1 ? 0 : 1;
-		else
-			return 3;
-	}
+	// pick shortest control entry but prefer literal encoding
+	if (est_bytes0 < vertex_count || est_bytes1 < vertex_count)
+		return est_bytes0 < est_bytes1 ? 0 : 1;
 	else
-	{
-		// 1248 encoding
-		return 1;
-	}
+		return 3; // literal encoding
 }
 
 static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data_end, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, unsigned char last_vertex[256], const unsigned char* channels, int version, int level)
