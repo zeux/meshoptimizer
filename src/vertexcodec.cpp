@@ -153,6 +153,39 @@ inline unsigned int rotate(unsigned int v, int r)
 	return (v << r) | (v >> ((32 - r) & 31));
 }
 
+unsigned int rotxor(unsigned int v, int r)
+{
+	return (v << (16 - r)) ^ (v >> r);
+}
+
+unsigned int rotxorinv(unsigned int x, int r)
+{
+	// for r=0, rotxor is its own inverse (avoids issues with shifts-by-32 below)
+	if (r == 0)
+		return x ^ (x << 16);
+
+	// how rotxor shifts bits (r=3):
+	// v    |0123456789abcdefghijklmnoprqstuv
+	// v>>r |3456789abcdefghijklmnoprqstuv
+	// v<<ir|             0123456789abcdefghi
+	// x=^^^|
+
+	unsigned int v = 0;
+	// so, bottom 16-r bits of output should occur verbatim in v
+	// v    |   3456789abcdef
+	v |= (x & ((1 << (16 - r)) - 1)) << r;
+	// as well as top r bits, placed after 16 in v
+	// v    |   3456789abcdefghi
+	v |= (x >> (32 - r)) << 16;
+	// low r bits must xor top r bits with r bits after 16
+	// v    |0123456789abcdefghi
+	v |= ((x >> (16 - r)) & ((1 << r) - 1)) ^ (x >> (32 - r));
+	// final 16-r bits must xor
+	v |= ((x >> 16) ^ (v >> r)) << (16 + r);
+
+	return v;
+}
+
 template <typename T>
 inline T zigzag(T v)
 {
@@ -339,7 +372,7 @@ static void encodeDeltas1(unsigned char* buffer, const unsigned char* vertex_dat
 		for (size_t j = 1; j < sizeof(T); ++j)
 			v |= vertex[j] << (j * 8);
 
-		T d = Xor ? T(rotate(v ^ p, rot)) : zigzag(T(v - p));
+		T d = Xor ? T(rot >= 8 ? rotxorinv(v ^ p, rot & 7) : rotate(v ^ p, rot)) : zigzag(T(v - p));
 
 		buffer[i] = (unsigned char)(d >> ks);
 		p = v;
@@ -405,15 +438,14 @@ static int estimateRotate(const unsigned char* vertex_data, size_t vertex_count,
 	return best_rot;
 }
 
-static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, size_t k, size_t vertex_block_size, size_t block_skip, int max_channel, int xor_rot)
+static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, size_t k, size_t vertex_block_size, size_t block_skip, int channels[4])
 {
 	unsigned char block[kVertexBlockMaxSize];
 	assert(vertex_block_size <= kVertexBlockMaxSize);
 
 	unsigned char last_vertex[256] = {};
 
-	size_t sizes[3] = {};
-	assert(max_channel <= 3);
+	size_t sizes[4] = {};
 
 	for (size_t i = 0; i < vertex_count; i += vertex_block_size * block_skip)
 	{
@@ -426,10 +458,10 @@ static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count
 		if (block_size < block_size_aligned)
 			memset(block + block_size, 0, block_size_aligned - block_size);
 
-		for (int channel = 0; channel < max_channel; ++channel)
+		for (int channel = 0; channel < 4 && channels[channel] >= 0; ++channel)
 			for (size_t j = 0; j < 4; ++j)
 			{
-				encodeDeltas(block, vertex_data + i * vertex_size, block_size, vertex_size, last_vertex, k + j, channel | (xor_rot << 4));
+				encodeDeltas(block, vertex_data + i * vertex_size, block_size, vertex_size, last_vertex, k + j, channels[channel]);
 
 				for (size_t ig = 0; ig < block_size; ig += kByteGroupSize)
 				{
@@ -449,10 +481,10 @@ static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count
 	}
 
 	int best_channel = 0;
-	for (int channel = 1; channel < max_channel; ++channel)
-		best_channel = (sizes[channel] < sizes[best_channel]) ? channel : best_channel;
+	for (int channel = 1; channel < 4; ++channel)
+		best_channel = (channels[channel] >= 0 && sizes[channel] < sizes[best_channel]) ? channel : best_channel;
 
-	return best_channel == 2 ? best_channel | (xor_rot << 4) : best_channel;
+	return channels[best_channel];
 }
 
 static int estimateControl(const unsigned char* buffer, size_t vertex_count, size_t vertex_count_aligned, int level)
@@ -1652,9 +1684,15 @@ size_t meshopt_encodeVertexBufferLevel(unsigned char* buffer, size_t buffer_size
 		for (size_t k = 0; k < vertex_size; k += 4)
 		{
 			int rot = level >= 3 ? estimateRotate(vertex_data, vertex_count, vertex_size, k, /* group_size= */ 16) : 0;
-			int channel = estimateChannel(vertex_data, vertex_count, vertex_size, k, vertex_block_size, /* block_skip= */ 3, /* max_channels= */ level >= 3 ? 3 : 2, rot);
 
-			assert(unsigned(channel) < 2 || ((channel & 3) == 2 && unsigned(channel >> 4) < 8));
+			int channelopts[4] = {
+			    0, 1,
+			    level >= 3 ? 2 | rot << 4 : -1,
+			    level >= 4 ? 2 | (rot + 8) << 4 : -1};
+
+			int channel = estimateChannel(vertex_data, vertex_count, vertex_size, k, vertex_block_size, /* block_skip= */ 3, channelopts);
+
+			assert(unsigned(channel) < 2 || (channel & 3) == 2);
 			channels[k / 4] = (unsigned char)channel;
 		}
 
