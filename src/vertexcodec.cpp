@@ -331,16 +331,19 @@ static void encodeDeltas1(unsigned char* buffer, const unsigned char* vertex_dat
 	for (size_t j = 1; j < sizeof(T); ++j)
 		p |= T(last_vertex[k0 + j]) << (j * 8);
 
+	const unsigned char* vertex = vertex_data + k0;
+
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		T v = vertex_data[i * vertex_size + k0];
+		T v = vertex[0];
 		for (size_t j = 1; j < sizeof(T); ++j)
-			v |= vertex_data[i * vertex_size + k0 + j] << (j * 8);
+			v |= vertex[j] << (j * 8);
 
 		T d = Xor ? T(rotate(v ^ p, rot)) : zigzag(T(v - p));
 
 		buffer[i] = (unsigned char)(d >> ks);
 		p = v;
+		vertex += vertex_size;
 	}
 }
 
