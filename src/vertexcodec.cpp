@@ -864,7 +864,6 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		unsigned char mask1 = (unsigned char)(mask16 >> 8);
 
 		__m128i shuf = decodeShuffleMask(mask0, mask1);
-
 		__m128i result = _mm_or_si128(_mm_shuffle_epi8(rest, shuf), _mm_andnot_si128(mask, sel));
 
 		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
@@ -901,7 +900,6 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		unsigned char mask1 = (unsigned char)(mask16 >> 8);
 
 		__m128i shuf = decodeShuffleMask(mask0, mask1);
-
 		__m128i result = _mm_or_si128(_mm_shuffle_epi8(rest, shuf), _mm_andnot_si128(mask, sel));
 
 		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
@@ -931,7 +929,6 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		unsigned char mask1 = data[1];
 
 		__m128i shuf = decodeShuffleMask(mask0, mask1);
-
 		__m128i result = _mm_shuffle_epi8(rest, shuf);
 
 		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
@@ -1164,9 +1161,7 @@ inline v128_t decodeShuffleMask(unsigned char mask0, unsigned char mask1)
 	v128_t sm0 = wasm_v128_load(&kDecodeBytesGroupShuffle[mask0]);
 	v128_t sm1 = wasm_v128_load(&kDecodeBytesGroupShuffle[mask1]);
 
-	v128_t sm1off = wasm_v128_load(&kDecodeBytesGroupCount[mask0]);
-	sm1off = wasm_i8x16_shuffle(sm1off, sm1off, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-
+	v128_t sm1off = wasm_v128_load8_splat(&kDecodeBytesGroupCount[mask0]);
 	v128_t sm1r = wasm_i8x16_add(sm1, sm1off);
 
 	return wasmx_unpacklo_v64x2(sm0, sm1r);
@@ -1213,7 +1208,6 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		wasmMoveMask(mask, mask0, mask1);
 
 		v128_t shuf = decodeShuffleMask(mask0, mask1);
-
 		v128_t result = wasm_v128_bitselect(wasm_i8x16_swizzle(rest, shuf), sel, mask);
 
 		wasm_v128_store(buffer, result);
@@ -1236,7 +1230,6 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		wasmMoveMask(mask, mask0, mask1);
 
 		v128_t shuf = decodeShuffleMask(mask0, mask1);
-
 		v128_t result = wasm_v128_bitselect(wasm_i8x16_swizzle(rest, shuf), sel, mask);
 
 		wasm_v128_store(buffer, result);
@@ -1262,7 +1255,6 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		unsigned char mask1 = data[1];
 
 		v128_t shuf = decodeShuffleMask(mask0, mask1);
-
 		v128_t result = wasm_i8x16_swizzle(rest, shuf);
 
 		wasm_v128_store(buffer, result);
