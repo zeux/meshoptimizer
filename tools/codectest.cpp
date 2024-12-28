@@ -68,9 +68,10 @@ void testFile(FILE* file, size_t count, size_t stride, int level, Stats* stats =
 	int res = meshopt_decodeVertexBuffer(&decoded[0], count, stride, &input[0], input.size());
 	if (res != 0 && input.size() == decoded.size())
 	{
-		// some files are not encoded; encode them with v1 to let the rest of the flow proceed as is
+		// some files are not encoded; encode them with v0 to let the rest of the flow proceed as is
 		memcpy(decoded.data(), input.data(), decoded.size());
 		input.resize(meshopt_encodeVertexBufferBound(count, stride));
+		meshopt_encodeVertexVersion(0);
 		input.resize(meshopt_encodeVertexBuffer(input.data(), input.size(), decoded.data(), count, stride));
 	}
 	else if (res != 0)
@@ -80,9 +81,8 @@ void testFile(FILE* file, size_t count, size_t stride, int level, Stats* stats =
 	}
 
 	std::vector<unsigned char> output(meshopt_encodeVertexBufferBound(count, stride));
-	meshopt_encodeVertexVersion(0xe);
+	meshopt_encodeVertexVersion(1);
 	output.resize(meshopt_encodeVertexBufferLevel(output.data(), output.size(), decoded.data(), count, stride, level));
-	meshopt_encodeVertexVersion(0);
 
 	printf(" raw %zu KB\t", decoded.size() / 1024);
 	printf(" v0 %.2f", double(input.size()) / double(decoded.size()));
@@ -205,6 +205,7 @@ int main(int argc, char** argv)
 	}
 	else
 	{
+		meshopt_encodeVertexVersion(1);
 		size_t vertex_count = input.size() / stride;
 		std::vector<unsigned char> output(meshopt_encodeVertexBufferBound(vertex_count, stride));
 		size_t output_size = meshopt_encodeVertexBuffer(output.data(), output.size(), input.data(), vertex_count, stride);

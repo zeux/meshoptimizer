@@ -1514,15 +1514,13 @@ int main(int argc, char** argv)
 			settings.compress = true;
 			settings.fallback = true;
 		}
-#ifndef NDEBUG
 		else if (strcmp(arg, "-ce") == 0)
 		{
-			fprintf(stderr, "Warning: experimental compression will produce files that may not decode in the future!\n");
-			meshopt_encodeVertexVersion(0xe);
+			fprintf(stderr, "Warning: experimental compression will produce files that are not compliant with EXT_meshopt_compression\n");
+			meshopt_encodeVertexVersion(1);
 			settings.compress = true;
 			settings.compressmore = true;
 		}
-#endif
 		else if (strcmp(arg, "-v") == 0)
 		{
 			settings.verbose = 1;
