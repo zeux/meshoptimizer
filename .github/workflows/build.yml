@@ -180,9 +180,9 @@ jobs:
           ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tr
           ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tc -ts 0.5 -tl 64
           ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tc color -tfy -tq 4 -tj 1
-          ./gltfpack -test glTF-Sample-Assets/Models/CesiumMan/glTF/CesiumMan.gltf -tu -ts 0.6 -tp
+          ./gltfpack -test glTF-Sample-Assets/Models/CesiumMan/glTF/CesiumMan.gltf -tu -ts 0.6 -tp -ar 0
           ./gltfpack -test glTF-Sample-Assets/Models/PrimitiveModeNormalsTest/glTF/PrimitiveModeNormalsTest.gltf -si 0.5
-          ./gltfpack -test glTF-Sample-Assets/Models/VertexColorTest/glTF/VertexColorTest.gltf -si 0.5 -sv
+          ./gltfpack -test glTF-Sample-Assets/Models/VertexColorTest/glTF/VertexColorTest.gltf -si 0.5 -sv -vc 12
           ./gltfpack -test glTF-Sample-Assets/Models/SimpleMeshes/glTF/SimpleMeshes.gltf -mm
           ./gltfpack -test glTF-Sample-Assets/Models/SimpleMeshes/glTF/SimpleMeshes.gltf -kn
           echo newmtl Leather > demo/pirate.mtl
