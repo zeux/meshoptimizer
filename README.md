@@ -177,7 +177,11 @@ assert(resvb == 0 && resib == 0);
 
 Note that vertex encoding assumes that vertex buffer was optimized for vertex fetch, and that vertices are quantized; index encoding assumes that the vertex/index buffers were optimized for vertex cache and vertex fetch. Feeding unoptimized data into the encoders will produce poor compression ratios. Both codecs are lossless - the only lossy step is quantization that happens before encoding.
 
-Decoding functions are heavily optimized and can directly target write-combined memory; you can expect both decoders to run at 1-3 GB/s on modern desktop CPUs. Compression ratios depend on the data; vertex data compression ratio is typically around 2-4x (compared to already quantized data), index data compression ratio is around 5-6x (compared to raw 16-bit index data). General purpose lossless compressors can further improve on these results.
+Decoding functions are heavily optimized and can directly target write-combined memory; you can expect both decoders to run at 3-5 GB/s on modern desktop CPUs. Compression ratios depend on the data; vertex data compression ratio is typically around 2-4x (compared to already quantized data), index data compression ratio is around 5-6x (compared to raw 16-bit index data). General purpose lossless compressors can further improve on these results.
+
+For additional improvements in compression ratio and decoding performance, it is recommended to switch to vertex codec v1 (via `meshopt_encodeVertexVersion(1)`). This will result in smaller outputs that decode faster, and provide additional control over compression level - `meshopt_encodeVertexBuffer` will use compression level 2 by default, but using `meshopt_encodeVertexBufferLevel` allows to improve compression in certain cases by using level 3, or to reduce compression ratio and improve encoding speed by using level 1. Note that v1 format requires meshoptimizer v0.23 or later for decoding.
+
+When data is bit packed, using v1 vertex codec (via `meshopt_encodeVertexVersion(1)`) and specifying compression level 3 (`meshopt_encodeVertexBufferLevel`) can improve the compression further by redistributing bits between components.
 
 Index buffer codec only supports triangle list topology; when encoding triangle strips or line lists, use `meshopt_encodeIndexSequence`/`meshopt_decodeIndexSequence` instead. This codec typically encodes indices into ~1 byte per index, but compressing the results further with a general purpose compressor can improve the results to 1-3 bits per index.
 
@@ -237,7 +241,7 @@ For optimal compression results, the values must be quantized to small integers.
 For single-precision floating-point data, it's recommended to use `meshopt_quantizeFloat` to remove entropy from the lower bits of the mantissa. Due to current limitations of the codec, the bit count needs to be 15 (23-8) for good results (7 can be used for more extreme compression).
 For normal or tangent vectors, using octahedral encoding is recommended over three components as it reduces redundancy. Similarly to other quantized values, consider using 10-12 bits per component instead of 16.
 
-> Note: vertex codec v0 is limited to taking advantage of redundancy in high bits of each byte. Because of this, packing multiple 10-bit values into 32 bits will reduce compression ratio, and when storing a 12-bit value in 16 bits, high bits should be zeroed out. This limitation may be lifted in future versions of the codec.
+When data is bit packed, using v1 vertex codec (via `meshopt_encodeVertexVersion(1)`) and specifying compression level 3 (`meshopt_encodeVertexBufferLevel`) can improve the compression further by redistributing bits between components.
 
 To further leverage the inherent structure of some data, the preparation stage can use filters that encode and decode the data in a lossy manner. This is similar to quantization but can be used without having to change the shader code. After decoding, the filter transformation needs to be reversed. This library provides three filters:
 
