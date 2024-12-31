@@ -66,7 +66,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 	uint8_t data0 = size > 0 ? data[0] : 0;
 	int level = data0 % 5;
 
-	meshopt_encodeVertexVersion(level < 4 ? 0xe : 0);
+	meshopt_encodeVertexVersion(level < 4 ? 1 : 0);
 
 	fuzzRoundtrip(data, size, 4, level);
 	fuzzRoundtrip(data, size, 16, level);

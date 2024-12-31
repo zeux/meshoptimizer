@@ -1407,7 +1407,7 @@ void processDev(const char* path)
 
 	meshopt_encodeVertexVersion(0);
 	encodeVertex<PackedVertex>(copy, "L");
-	meshopt_encodeVertexVersion(0xe);
+	meshopt_encodeVertexVersion(1);
 	encodeVertex<PackedVertex>(copy, "0", 0);
 	encodeVertex<PackedVertex>(copy, "1", 1);
 	encodeVertex<PackedVertex>(copy, "2", 2);
@@ -1427,7 +1427,7 @@ int main(int argc, char** argv)
 {
 	void runTests();
 
-	meshopt_encodeVertexVersion(0);
+	meshopt_encodeVertexVersion(1);
 	meshopt_encodeIndexVersion(1);
 
 	if (argc == 1)

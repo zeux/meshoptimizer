@@ -289,7 +289,7 @@ MESHOPTIMIZER_API size_t meshopt_encodeVertexBufferLevel(unsigned char* buffer, 
 
 /**
  * Set vertex encoder format version
- * version must specify the data format version to encode; valid values are 0 (decodable by all library versions)
+ * version must specify the data format version to encode; valid values are 0 (decodable by all library versions) and 1 (decodable by 0.23+)
  */
 MESHOPTIMIZER_API void meshopt_encodeVertexVersion(int version);
 

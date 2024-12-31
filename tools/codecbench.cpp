@@ -207,7 +207,7 @@ File readFile(const char* path)
 	result.v0.resize(meshopt_encodeVertexBufferBound(result.count, result.stride));
 	result.v0.resize(meshopt_encodeVertexBuffer(result.v0.data(), result.v0.size(), decoded.data(), result.count, result.stride));
 
-	meshopt_encodeVertexVersion(0xe);
+	meshopt_encodeVertexVersion(1);
 	result.v1.resize(meshopt_encodeVertexBufferBound(result.count, result.stride));
 	result.v1.resize(meshopt_encodeVertexBuffer(result.v1.data(), result.v1.size(), decoded.data(), result.count, result.stride));
 
@@ -252,7 +252,7 @@ int main(int argc, char** argv)
 
 		std::vector<unsigned char> buffer(max_size);
 
-		printf("Algorithm   :\tvtx\tvtxe\n");
+		printf("Algorithm   :\tvtx0\tvtx1\n");
 		printf("Size (MB)   :\t%.2f\t%.2f\n", double(total_v0) / 1024 / 1024, double(total_v1) / 1024 / 1024);
 		printf("Ratio       :\t%.2f\t%.2f\n", double(total_v0) / double(total_size), double(total_v1) / double(total_size));
 
@@ -334,7 +334,7 @@ int main(int argc, char** argv)
 		}
 	}
 
-	printf("Algorithm   :\tvtx\tvtxe\tidx\toct8\toct12\tquat12\texp\n");
+	printf("Algorithm   :\tvtx0\tvtx1\tidx\toct8\toct12\tquat12\texp\n");
 
 	for (int l = 0; l < (loop ? 100 : 1); ++l)
 	{
@@ -343,7 +343,7 @@ int main(int argc, char** argv)
 		double bestvd0 = 0, bestid = 0;
 		benchCodecs(vertices, indices, bestvd0, bestid, verbose);
 
-		meshopt_encodeVertexVersion(0xe);
+		meshopt_encodeVertexVersion(1);
 
 		double bestvd1 = 0, bestidr = 0;
 		benchCodecs(vertices, indices, bestvd1, bestidr, verbose);
