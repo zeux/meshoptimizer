@@ -164,24 +164,26 @@ unsigned int rotxorinv(unsigned int x, int r)
 	if (r == 0)
 		return x ^ (x << 16);
 
-	// how rotxor shifts bits (r=3):
-	// v    |0123456789abcdefghijklmnoprqstuv
-	// v>>r |3456789abcdefghijklmnoprqstuv
-	// v<<ir|             0123456789abcdefghi
-	// x=^^^|
+	// how rotxor shifts bits (e.g. r=3):
+	// v    |0123456789abcdef|ghijklmnopqrstuv
+	// v>>r |3456789abcdefghi|jklmnopqrstuv
+	// v<<ir|             012|3456789abcdefghi
+	// x=^^^| (xor of the above two rows)
 
+	// so now given x, we need to recover v by copying & rexoring bits
 	unsigned int v = 0;
-	// so, bottom 16-r bits of output should occur verbatim in v
-	// v    |   3456789abcdef
-	v |= (x & ((1 << (16 - r)) - 1)) << r;
+	// bottom 16-r bits of output should occur verbatim in v
+	// v    |   3456789abcdef|
+	v |= (x << r) & 0xffff;
 	// as well as top r bits, placed after 16 in v
-	// v    |   3456789abcdefghi
+	// v    |   3456789abcdef|ghi
 	v |= (x >> (32 - r)) << 16;
-	// low r bits must xor top r bits with r bits after 16
-	// v    |0123456789abcdefghi
-	v |= ((x >> (16 - r)) & ((1 << r) - 1)) ^ (x >> (32 - r));
-	// final 16-r bits must xor
-	v |= ((x >> 16) ^ (v >> r)) << (16 + r);
+	// low r bits must unxor top r bits with r bits after 16
+	// v    |0123456789abcdef|ghi
+	v |= ((x << 16) ^ x) >> (32 - r);
+	// final 16-r bits must be unxored as well
+	// v    |0123456789abcdef|ghijklmnopqrstuv
+	v |= ((x >> 16) ^ x) << (16 + r);
 
 	return v;
 }
