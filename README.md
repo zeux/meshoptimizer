@@ -53,7 +53,7 @@ First, generate a remap table from your existing vertex (and, optionally, index)
 ```c++
 size_t index_count = face_count * 3;
 size_t unindexed_vertex_count = face_count * 3;
-std::vector<unsigned int> remap(index_count); // allocate temporary memory for the remap table
+std::vector<unsigned int> remap(unindexed_vertex_count); // temporary remap table
 size_t vertex_count = meshopt_generateVertexRemap(&remap[0], NULL, index_count, &unindexed_vertices[0], unindexed_vertex_count, sizeof(Vertex));
 ```
 
