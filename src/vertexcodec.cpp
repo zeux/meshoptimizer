@@ -1351,21 +1351,6 @@ inline uint8x16_t rotate32(uint8x16_t v, int r)
 }
 
 template <int Channel>
-SIMD_TARGET inline uint8x16_t undelta(uint8x16_t a, uint8x16_t b)
-{
-	return Channel == 0 ? vaddq_u8(a, b) : (Channel == 1 ? vreinterpretq_u8_u16(vaddq_u16(vreinterpretq_u16_u8(a), vreinterpretq_u16_u8(b))) : veorq_u8(a, b));
-}
-
-template <int Channel>
-SIMD_TARGET inline uint8x16_t undelta4(uint8x16_t v)
-{
-	uint8x16_t zero = vdupq_n_u8(0);
-	v = undelta<Channel>(v, vextq_u8(zero, v, 12));
-	v = undelta<Channel>(v, vextq_u8(zero, v, 8));
-	return v;
-}
-
-template <int Channel>
 SIMD_TARGET inline uint8x8_t rebase(uint8x8_t npi, uint8x16_t r0, uint8x16_t r1, uint8x16_t r2, uint8x16_t r3)
 {
 	switch (Channel)
@@ -1498,7 +1483,6 @@ decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t
 #define GRP4(i) t0 = vget_low_u8(r##i), t1 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t0), 1)), t2 = vget_high_u8(r##i), t3 = vreinterpret_u8_u32(vdup_lane_u32(vreinterpret_u32_u8(t2), 1))
 #define FIXD(i) t##i = pi = Channel == 0 ? vadd_u8(pi, t##i) : (Channel == 1 ? vreinterpret_u8_u16(vadd_u16(vreinterpret_u16_u8(pi), vreinterpret_u16_u8(t##i))) : veor_u8(pi, t##i))
 #define SAVE(i) vst1_lane_u32(reinterpret_cast<uint32_t*>(savep), vreinterpret_u32_u8(t##i), 0), savep += vertex_size
-#define STOR(i, l) vst1q_lane_u32(reinterpret_cast<uint32_t*>(savep), vreinterpretq_u32_u8(r##i), l), savep += vertex_size
 #endif
 
 #ifdef SIMD_WASM
@@ -1525,25 +1509,6 @@ decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t
 
 		transpose8(r0, r1, r2, r3);
 
-#if defined(SIMD_NEON) && 0
-		UNZR(0), UNZR(1), UNZR(2), UNZR(3);
-
-		r0 = undelta4<Channel>(r0);
-		r1 = undelta4<Channel>(r1);
-		r2 = undelta4<Channel>(r2);
-		r3 = undelta4<Channel>(r3);
-
-		r0 = undelta<Channel>(r0, vdupq_lane_u32(vreinterpret_u32_u8(pi), 0));
-		r1 = undelta<Channel>(r1, vdupq_laneq_u32(vreinterpretq_u32_u8(r0), 3));
-		r2 = undelta<Channel>(r2, vdupq_laneq_u32(vreinterpretq_u32_u8(r1), 3));
-		r3 = undelta<Channel>(r3, vdupq_laneq_u32(vreinterpretq_u32_u8(r2), 3));
-		pi = vdup_lane_u32(vget_high_u8(r3), 1);
-
-		STOR(0, 0), STOR(0, 1), STOR(0, 2), STOR(0, 3);
-		STOR(1, 0), STOR(1, 1), STOR(1, 2), STOR(1, 3);
-		STOR(2, 0), STOR(2, 1), STOR(2, 2), STOR(2, 3);
-		STOR(3, 0), STOR(3, 1), STOR(3, 2), STOR(3, 3);
-#else
 		TEMP t0, t1, t2, t3;
 		TEMP npi = pi;
 
@@ -1573,8 +1538,6 @@ decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t
 		(void)npi;
 #endif
 
-#endif
-
 #undef UNZR
 #undef TEMP
 #undef PREP
@@ -1582,7 +1545,6 @@ decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t
 #undef GRP4
 #undef FIXD
 #undef SAVE
-#undef STOR
 	}
 }
 
