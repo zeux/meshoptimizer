@@ -1443,7 +1443,7 @@ decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t
 #define TEMP __m128i
 #define PREP() __m128i pi = _mm_cvtsi32_si128(*reinterpret_cast<const int*>(last_vertex))
 #define LOAD(i) __m128i r##i = _mm_loadu_si128(reinterpret_cast<const __m128i*>(buffer + j + i * vertex_count_aligned))
-#define GRP4(i) t0 = _mm_shuffle_epi32(r##i, 0), t1 = _mm_shuffle_epi32(r##i, 1), t2 = _mm_shuffle_epi32(r##i, 2), t3 = _mm_shuffle_epi32(r##i, 3)
+#define GRP4(i) t0 = r##i, t1 = _mm_shuffle_epi32(r##i, 1), t2 = _mm_shuffle_epi32(r##i, 2), t3 = _mm_shuffle_epi32(r##i, 3)
 #define FIXD(i) t##i = pi = Channel == 0 ? _mm_add_epi8(pi, t##i) : (Channel == 1 ? _mm_add_epi16(pi, t##i) : _mm_xor_si128(pi, t##i))
 #define SAVE(i) *reinterpret_cast<int*>(savep) = _mm_cvtsi128_si32(t##i), savep += vertex_size
 #endif
@@ -1461,9 +1461,9 @@ decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t
 #define TEMP v128_t
 #define PREP() v128_t pi = wasm_v128_load(last_vertex)
 #define LOAD(i) v128_t r##i = wasm_v128_load(buffer + j + i * vertex_count_aligned)
-#define GRP4(i) t0 = wasmx_splat_v32x4(r##i, 0), t1 = wasmx_splat_v32x4(r##i, 1), t2 = wasmx_splat_v32x4(r##i, 2), t3 = wasmx_splat_v32x4(r##i, 3)
+#define GRP4(i) t0 = r##i, t1 = wasmx_splat_v32x4(r##i, 1), t2 = wasmx_splat_v32x4(r##i, 2), t3 = wasmx_splat_v32x4(r##i, 3)
 #define FIXD(i) t##i = pi = Channel == 0 ? wasm_i8x16_add(pi, t##i) : (Channel == 1 ? wasm_i16x8_add(pi, t##i) : wasm_v128_xor(pi, t##i))
-#define SAVE(i) *reinterpret_cast<int*>(savep) = wasm_i32x4_extract_lane(t##i, 0), savep += vertex_size
+#define SAVE(i) wasm_v128_store32_lane(savep, t##i, 0), savep += vertex_size
 #endif
 
 #define UNZR(i) r##i = Channel == 0 ? unzigzag8(r##i) : (Channel == 1 ? unzigzag16(r##i) : rotate32(r##i, rot))
