@@ -1349,6 +1349,34 @@ inline uint8x16_t rotate32(uint8x16_t v, int r)
 	uint32x4_t v32 = vreinterpretq_u32_u8(v);
 	return vreinterpretq_u8_u32(vorrq_u32(vshlq_u32(v32, vdupq_n_s32(r)), vshlq_u32(v32, vdupq_n_s32(r - 32))));
 }
+
+template <int Channel>
+SIMD_TARGET inline uint8x8_t rebase(uint8x8_t npi, uint8x16_t r0, uint8x16_t r1, uint8x16_t r2, uint8x16_t r3)
+{
+	switch (Channel)
+	{
+	case 0:
+	{
+		uint8x16_t rsum = vaddq_u8(vaddq_u8(r0, r1), vaddq_u8(r2, r3));
+		uint8x8_t rsumx = vadd_u8(vget_low_u8(rsum), vget_high_u8(rsum));
+		return vadd_u8(vadd_u8(npi, rsumx), vext_u8(rsumx, rsumx, 4));
+	}
+	case 1:
+	{
+		uint16x8_t rsum = vaddq_u16(vaddq_u16(vreinterpretq_u16_u8(r0), vreinterpretq_u16_u8(r1)), vaddq_u16(vreinterpretq_u16_u8(r2), vreinterpretq_u16_u8(r3)));
+		uint16x4_t rsumx = vadd_u16(vget_low_u16(rsum), vget_high_u16(rsum));
+		return vreinterpret_u8_u16(vadd_u16(vadd_u16(npi, rsumx), vext_u16(rsumx, rsumx, 2)));
+	}
+	case 2:
+	{
+		uint8x16_t rsum = veorq_u8(veorq_u8(r0, r1), veorq_u8(r2, r3));
+		uint8x8_t rsumx = veor_u8(vget_low_u8(rsum), vget_high_u8(rsum));
+		return veor_u8(veor_u8(npi, rsumx), vext_u8(rsumx, rsumx, 4));
+	}
+	default:
+		return npi;
+	}
+}
 #endif
 
 #ifdef SIMD_WASM
@@ -1482,6 +1510,7 @@ decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t
 		transpose8(r0, r1, r2, r3);
 
 		TEMP t0, t1, t2, t3;
+		TEMP npi = pi;
 
 		UNZR(0);
 		GRP4(0);
@@ -1502,6 +1531,13 @@ decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t
 		GRP4(3);
 		FIXD(0), FIXD(1), FIXD(2), FIXD(3);
 		SAVE(0), SAVE(1), SAVE(2), SAVE(3);
+
+#if defined(SIMD_LATENCYOPT) && defined(SIMD_NEON) && defined(__APPLE__)
+		// instead of relying on accumulated pi, recompute it from scratch from r0..r3; this shortens dependency between loop iterations
+		pi = rebase<Channel>(npi, r0, r1, r2, r3);
+#else
+		(void)npi;
+#endif
 
 #undef UNZR
 #undef TEMP
