@@ -1532,7 +1532,7 @@ decodeDeltas4Simd(const unsigned char* buffer, unsigned char* transposed, size_t
 		FIXD(0), FIXD(1), FIXD(2), FIXD(3);
 		SAVE(0), SAVE(1), SAVE(2), SAVE(3);
 
-#if defined(SIMD_LATENCYOPT) && defined(SIMD_NEON) && defined(__APPLE__)
+#if defined(SIMD_LATENCYOPT) && defined(SIMD_NEON) && (defined(__APPLE__) || defined(_WIN32))
 		// instead of relying on accumulated pi, recompute it from scratch from r0..r3; this shortens dependency between loop iterations
 		pi = rebase<Channel>(npi, r0, r1, r2, r3);
 #else
