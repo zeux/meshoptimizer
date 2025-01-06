@@ -45,15 +45,13 @@ jobs:
           node-version: '16'
       - name: install wasi
         run: |
-          curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sdk-$VERSION.0-linux.tar.gz | tar xz
-          curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/libclang_rt.builtins-wasm32-wasi-$VERSION.0.tar.gz | tar xz -C wasi-sdk-$VERSION.0
-          curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sysroot-$VERSION.0.tar.gz | tar xz -C wasi-sdk-$VERSION.0/share
-          mv wasi-sdk-$VERSION.0 wasi-sdk
+          curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sdk-$VERSION.0-x86_64-linux.deb > wasi-sdk.deb
+          sudo dpkg -i wasi-sdk.deb
         env:
-          VERSION: 22
+          VERSION: 25
       - name: build
         run: |
-          make -j2 -B WASI_SDK=wasi-sdk gltf/library.wasm js
+          make -j2 -B gltf/library.wasm js
           git status
       - name: npm pack
         run: |
