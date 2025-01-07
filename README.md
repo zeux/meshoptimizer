@@ -48,6 +48,8 @@ When optimizing a mesh, you should typically feed it through a set of optimizati
 
 Most algorithms in this library assume that a mesh has a vertex buffer and an index buffer. For algorithms to work well and also for GPU to render your mesh efficiently, the vertex buffer has to have no redundant vertices; you can generate an index buffer from an unindexed vertex buffer or reindex an existing (potentially redundant) index buffer as follows:
 
+> Note: meshoptimizer generally works with 32-bit (`unsigned int`) indices, however when using C++ APIs you can use any integer type for index data by using the provided template overloads. By convention, remap tables always use `unsigned int`.
+
 First, generate a remap table from your existing vertex (and, optionally, index) data:
 
 ```c++
