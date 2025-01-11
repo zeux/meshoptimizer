@@ -243,9 +243,9 @@ For optimal compression results, the values must be quantized to small integers.
 For single-precision floating-point data, it's recommended to use `meshopt_quantizeFloat` to remove entropy from the lower bits of the mantissa. Due to current limitations of the codec, the bit count needs to be 15 (23-8) for good results (7 can be used for more extreme compression).
 For normal or tangent vectors, using octahedral encoding is recommended over three components as it reduces redundancy. Similarly to other quantized values, consider using 10-12 bits per component instead of 16.
 
-When data is bit packed, using v1 vertex codec (via `meshopt_encodeVertexVersion(1)`) and specifying compression level 3 (`meshopt_encodeVertexBufferLevel`) can improve the compression further by redistributing bits between components.
+When data is bit packed, using v1 vertex codec (via `meshopt_encodeVertexVersion(1)`) and specifying compression level 3 (`meshopt_encodeVertexBufferLevel`) can improve the compression further by redistributing bits between components. Note that v1 vertex codec is recommended regardless, as it improves compression ratios and decoding performance even absent bit packing.
 
-To further leverage the inherent structure of some data, the preparation stage can use filters that encode and decode the data in a lossy manner. This is similar to quantization but can be used without having to change the shader code. After decoding, the filter transformation needs to be reversed. This library provides three filters:
+To further leverage the inherent structure of some data, the preparation stage can use filters that encode and decode the data in a lossy manner. This is similar to quantization but can be used without having to change the shader code. After decoding, the filter transformation needs to be reversed. For native game engine pipelines, it is usually more optimal to carefully prequantize and pretransform the vertex data, but sometimes (for example when serializing data in glTF format) this is not a practical option and filters are more practical. This library provides three filters:
 
 - Octahedral filter (`meshopt_encodeFilterOct`/`meshopt_decodeFilterOct`) encodes quantized (snorm) normal or tangent vectors using octahedral encoding. Any number of bits <= 16 can be used with 4 bytes or 8 bytes per vector.
 - Quaternion filter (`meshopt_encodeFilterQuat`/`meshopt_decodeFilterQuat`) encodes quantized (snorm) quaternion vectors; this can be used to encode rotations or tangent frames. Any number of bits between 4 and 16 can be used with 8 bytes per vector.
@@ -256,7 +256,7 @@ To further leverage the inherent structure of some data, the preparation stage c
     - `meshopt_EncodeExpSharedComponent` shares exponents between the same component in different vectors
     - `meshopt_EncodeExpClamped` does not share exponents but clamps the exponent range to reduce exponent entropy
 
-Note that all filters are lossy and require the data to be deinterleaved with one attribute per stream; this faciliates efficient SIMD implementation of filter decoders, allowing the overall decompression speed to be close to that of the raw codec.
+Note that all filters are lossy and require the data to be deinterleaved with one attribute per stream; this faciliates efficient SIMD implementation of filter decoders, allowing the overall decompression speed to be closer to that of the raw codec.
 
 ## Triangle strip conversion
 
