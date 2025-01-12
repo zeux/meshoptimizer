@@ -50,17 +50,14 @@ size_t measure_zstd(const std::vector<unsigned char>& data)
 struct Stats
 {
 	bool testz;
-	double v10_raw;
-	double v10_lz4;
-	double v10_zstd;
 	double count;
+	double size;
 
 	double ratio_v0;
 	double ratio_v1;
 	double ratio_v1_lz4;
 	double ratio_v1_zstd;
 
-	double total_src;
 	double total_v0;
 	double total_v1;
 	double total_v1_lz4;
@@ -97,16 +94,14 @@ void testFile(FILE* file, size_t count, size_t stride, int level, Stats* stats =
 	output.resize(meshopt_encodeVertexBufferLevel(output.data(), output.size(), decoded.data(), count, stride, level));
 
 	printf(" raw %zu KB\t", decoded.size() / 1024);
-	printf(" v0 %.2f", double(input.size()) / double(decoded.size()));
-	printf(" v1 %.2f", double(output.size()) / double(decoded.size()));
-	printf(" v1/v0 %+.1f%%", double(output.size()) / double(input.size()) * 100 - 100);
+	printf(" v0 %.3f", double(input.size()) / double(decoded.size()));
+	printf(" v1 %.3f", double(output.size()) / double(decoded.size()));
 
 	if (stats)
 	{
-		stats->v10_raw += double(output.size()) / double(input.size()) - 1;
 		stats->count++;
+		stats->size += double(decoded.size());
 
-		stats->total_src += double(decoded.size());
 		stats->total_v0 += double(input.size());
 		stats->total_v1 += double(output.size());
 
@@ -117,10 +112,8 @@ void testFile(FILE* file, size_t count, size_t stride, int level, Stats* stats =
 	if (stats && stats->testz)
 	{
 		size_t decoded_lz4 = measure_lz4(decoded);
-		size_t input_lz4 = measure_lz4(input);
 		size_t output_lz4 = measure_lz4(output);
 		size_t decoded_zstd = measure_zstd(decoded);
-		size_t input_zstd = measure_zstd(input);
 		size_t output_zstd = measure_zstd(output);
 
 		stats->total_v1_lz4 += output_lz4;
@@ -129,18 +122,11 @@ void testFile(FILE* file, size_t count, size_t stride, int level, Stats* stats =
 		stats->ratio_v1_lz4 += log(double(output_lz4) / double(decoded.size()));
 		stats->ratio_v1_zstd += log(double(output_zstd) / double(decoded.size()));
 
-		printf("\tlz4 %.2f:", double(decoded_lz4) / double(decoded.size()));
-		printf(" v0 %.2f", double(input_lz4) / double(decoded.size()));
-		printf(" v1 %.2f", double(output_lz4) / double(decoded.size()));
-		printf(" v1/v0 %+.1f%%", double(output_lz4) / double(input_lz4) * 100 - 100);
+		printf("\tlz4 %.3f", double(decoded_lz4) / double(decoded.size()));
+		printf(" v1+lz4 %.3f", double(output_lz4) / double(decoded.size()));
 
-		printf("\tzstd %.2f:", double(decoded_zstd) / double(decoded.size()));
-		printf(" v0 %.2f", double(input_zstd) / double(decoded.size()));
-		printf(" v1 %.2f", double(output_zstd) / double(decoded.size()));
-		printf(" v1/v0 %+.1f%%", double(output_zstd) / double(input_zstd) * 100 - 100);
-
-		stats->v10_lz4 += double(output_lz4) / double(input_lz4) - 1;
-		stats->v10_zstd += double(output_zstd) / double(input_zstd) - 1;
+		printf("\tzstd %.3f", double(decoded_zstd) / double(decoded.size()));
+		printf(" v1+zstd %.3f", double(output_zstd) / double(decoded.size()));
 	}
 }
 
@@ -191,15 +177,24 @@ int main(int argc, char** argv)
 			level = atoi(argv[2] + 1);
 		for (int i = level < 0 ? 2 : 3; i < argc; ++i)
 			testFile(argv[i], level < 0 ? 2 : level, &stats);
+
 		printf("---\n");
-		printf("%d files: raw v1/v0 %+.2f%%, lz4 v1/v0 %+.2f%%, zstd v1/v0 %+.2f%%\n",
-		    int(stats.count), stats.v10_raw / stats.count * 100, stats.v10_lz4 / stats.count * 100, stats.v10_zstd / stats.count * 100);
-		printf("ratio: v0 %.2f, v1 %.2f, v1+lz4 %.2f, v1+zstd %.2f\n",
-		    exp(stats.ratio_v0 / stats.count), exp(stats.ratio_v1 / stats.count),
-		    exp(stats.ratio_v1_lz4 / stats.count), exp(stats.ratio_v1_zstd / stats.count));
-		printf("total: input %.2f MB, v0 %.2f MB, v1 %.2f MB, v1+lz4 %.2f MB, v1+zstd %.2f MB\n",
-		    stats.total_src / 1024 / 1024, stats.total_v0 / 1024 / 1024, stats.total_v1 / 1024 / 1024,
-		    stats.total_v1_lz4 / 1024 / 1024, stats.total_v1_zstd / 1024 / 1024);
+		printf("%d files: v0 %.3f, v1 %.3f",
+		    int(stats.count),
+		    exp(stats.ratio_v0 / stats.count), exp(stats.ratio_v1 / stats.count));
+		if (stats.testz)
+			printf(", v1+lz4 %.3f, v1+zstd %.3f\n", exp(stats.ratio_v1_lz4 / stats.count), exp(stats.ratio_v1_zstd / stats.count));
+		else
+			printf("\n");
+
+		printf("total: %d files, raw %.2f MB, v0 %.2f MB, v1 %.2f MB",
+		    int(stats.count),
+		    stats.size / 1024 / 1024, stats.total_v0 / 1024 / 1024, stats.total_v1 / 1024 / 1024);
+		if (stats.testz)
+			printf(", v1+lz4 %.2f MB, v1+zstd %.2f MB\n", stats.total_v1_lz4 / 1024 / 1024, stats.total_v1_zstd / 1024 / 1024);
+		else
+			printf("\n");
+
 		return 0;
 	}
 
