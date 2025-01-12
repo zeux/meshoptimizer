@@ -53,6 +53,12 @@ struct Stats
 	double v10_lz4;
 	double v10_zstd;
 	double count;
+
+	double total_src;
+	double total_v0;
+	double total_v1;
+	double total_v1_lz4;
+	double total_v1_zstd;
 };
 
 void testFile(FILE* file, size_t count, size_t stride, int level, Stats* stats = 0)
@@ -93,6 +99,10 @@ void testFile(FILE* file, size_t count, size_t stride, int level, Stats* stats =
 	{
 		stats->v10_raw += double(output.size()) / double(input.size()) - 1;
 		stats->count++;
+
+		stats->total_src += double(decoded.size());
+		stats->total_v0 += double(input.size());
+		stats->total_v1 += double(output.size());
 	}
 
 	if (stats && stats->testz)
@@ -103,6 +113,9 @@ void testFile(FILE* file, size_t count, size_t stride, int level, Stats* stats =
 		size_t decoded_zstd = measure_zstd(decoded);
 		size_t input_zstd = measure_zstd(input);
 		size_t output_zstd = measure_zstd(output);
+
+		stats->total_v1_lz4 += output_lz4;
+		stats->total_v1_zstd += output_zstd;
 
 		printf("\tlz4 %.2f:", double(decoded_lz4) / double(decoded.size()));
 		printf(" v0 %.2f", double(input_lz4) / double(decoded.size()));
@@ -169,6 +182,9 @@ int main(int argc, char** argv)
 		printf("---\n");
 		printf("%d files: raw v1/v0 %+.2f%%, lz4 v1/v0 %+.2f%%, zstd v1/v0 %+.2f%%\n",
 		    int(stats.count), stats.v10_raw / stats.count * 100, stats.v10_lz4 / stats.count * 100, stats.v10_zstd / stats.count * 100);
+		printf("total: input %.2f MB, v0 %.2f MB, v1 %.2f MB, v1+lz4 %.2f MB, v1+zstd %.2f MB\n",
+		    stats.total_src / 1024 / 1024, stats.total_v0 / 1024 / 1024, stats.total_v1 / 1024 / 1024,
+		    stats.total_v1_lz4 / 1024 / 1024, stats.total_v1_zstd / 1024 / 1024);
 		return 0;
 	}
 
