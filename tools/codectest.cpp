@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -54,6 +55,11 @@ struct Stats
 	double v10_zstd;
 	double count;
 
+	double ratio_v0;
+	double ratio_v1;
+	double ratio_v1_lz4;
+	double ratio_v1_zstd;
+
 	double total_src;
 	double total_v0;
 	double total_v1;
@@ -103,6 +109,9 @@ void testFile(FILE* file, size_t count, size_t stride, int level, Stats* stats =
 		stats->total_src += double(decoded.size());
 		stats->total_v0 += double(input.size());
 		stats->total_v1 += double(output.size());
+
+		stats->ratio_v0 += log(double(input.size()) / double(decoded.size()));
+		stats->ratio_v1 += log(double(output.size()) / double(decoded.size()));
 	}
 
 	if (stats && stats->testz)
@@ -116,6 +125,9 @@ void testFile(FILE* file, size_t count, size_t stride, int level, Stats* stats =
 
 		stats->total_v1_lz4 += output_lz4;
 		stats->total_v1_zstd += output_zstd;
+
+		stats->ratio_v1_lz4 += log(double(output_lz4) / double(decoded.size()));
+		stats->ratio_v1_zstd += log(double(output_zstd) / double(decoded.size()));
 
 		printf("\tlz4 %.2f:", double(decoded_lz4) / double(decoded.size()));
 		printf(" v0 %.2f", double(input_lz4) / double(decoded.size()));
@@ -182,6 +194,9 @@ int main(int argc, char** argv)
 		printf("---\n");
 		printf("%d files: raw v1/v0 %+.2f%%, lz4 v1/v0 %+.2f%%, zstd v1/v0 %+.2f%%\n",
 		    int(stats.count), stats.v10_raw / stats.count * 100, stats.v10_lz4 / stats.count * 100, stats.v10_zstd / stats.count * 100);
+		printf("ratio: v0 %.2f, v1 %.2f, v1+lz4 %.2f, v1+zstd %.2f\n",
+		    exp(stats.ratio_v0 / stats.count), exp(stats.ratio_v1 / stats.count),
+		    exp(stats.ratio_v1_lz4 / stats.count), exp(stats.ratio_v1_zstd / stats.count));
 		printf("total: input %.2f MB, v0 %.2f MB, v1 %.2f MB, v1+lz4 %.2f MB, v1+zstd %.2f MB\n",
 		    stats.total_src / 1024 / 1024, stats.total_v0 / 1024 / 1024, stats.total_v1 / 1024 / 1024,
 		    stats.total_v1_lz4 / 1024 / 1024, stats.total_v1_zstd / 1024 / 1024);
