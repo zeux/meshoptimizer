@@ -387,6 +387,11 @@ static int estimateRotate(const unsigned char* vertex_data, size_t vertex_count,
 			vertex += vertex_size;
 		}
 
+#if TRACE
+		for (int j = 0; j < 32; ++j)
+			vertexstats[k + (j / 8)].bitc[j % 8] += (i + group_size < vertex_count ? group_size : vertex_count - i) * (1 - ((bitg >> j) & 1));
+#endif
+
 		for (int j = 0; j < 8; ++j)
 		{
 			unsigned int bitr = rotate(bitg, j);
@@ -529,18 +534,6 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 #if TRACE
 		const unsigned char* olddata = data;
 		bytestats = &vertexstats[k];
-
-		for (size_t ig = 0; ig < vertex_count; ig += kByteGroupSize)
-		{
-			unsigned char last = (ig == 0) ? last_vertex[k] : vertex_data[vertex_size * (ig - 1) + k];
-			unsigned char delta = 0xff;
-
-			for (size_t i = ig; i < ig + kByteGroupSize && i < vertex_count; ++i)
-				delta &= ~(vertex_data[vertex_size * i + k] ^ last);
-
-			for (int j = 0; j < 8; ++j)
-				bytestats->bitc[j] += (vertex_count - ig < kByteGroupSize ? vertex_count - ig : kByteGroupSize) * ((delta >> j) & 1);
-		}
 #endif
 
 		int ctrl = 0;
@@ -1767,13 +1760,12 @@ size_t meshopt_encodeVertexBufferLevel(unsigned char* buffer, size_t buffer_size
 			    double(vsk.ctrl[2]) / double(total_ctrl) * 100, double(vsk.ctrl[3]) / double(total_ctrl) * 100);
 		}
 
-#if TRACE > 1
-		printf(" | bitc [%3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%%]",
-		    double(vsk.bitc[0]) / double(vertex_count) * 100, double(vsk.bitc[1]) / double(vertex_count) * 100,
-		    double(vsk.bitc[2]) / double(vertex_count) * 100, double(vsk.bitc[3]) / double(vertex_count) * 100,
-		    double(vsk.bitc[4]) / double(vertex_count) * 100, double(vsk.bitc[5]) / double(vertex_count) * 100,
-		    double(vsk.bitc[6]) / double(vertex_count) * 100, double(vsk.bitc[7]) / double(vertex_count) * 100);
-#endif
+		if (level >= 3)
+			printf(" | bitc [%3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%% %3.0f%%]",
+			    double(vsk.bitc[0]) / double(vertex_count) * 100, double(vsk.bitc[1]) / double(vertex_count) * 100,
+			    double(vsk.bitc[2]) / double(vertex_count) * 100, double(vsk.bitc[3]) / double(vertex_count) * 100,
+			    double(vsk.bitc[4]) / double(vertex_count) * 100, double(vsk.bitc[5]) / double(vertex_count) * 100,
+			    double(vsk.bitc[6]) / double(vertex_count) * 100, double(vsk.bitc[7]) / double(vertex_count) * 100);
 
 		printf("\n");
 	}
