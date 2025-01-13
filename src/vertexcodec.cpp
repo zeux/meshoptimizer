@@ -138,12 +138,9 @@ const int kEncodeDefaultLevel = 2;
 
 static size_t getVertexBlockSize(size_t vertex_size)
 {
-	// make sure the entire block fits into the scratch buffer
-	size_t result = kVertexBlockSizeBytes / vertex_size;
-
-	// align to byte group size; we encode each byte as a byte group
-	// if vertex block is misaligned, it results in wasted bytes, so just truncate the block size
-	result &= ~(kByteGroupSize - 1);
+	// make sure the entire block fits into the scratch buffer and is aligned to byte group size
+	// note: the block size is implicitly part of the format, so we can't change it without breaking compatibility
+	size_t result = (kVertexBlockSizeBytes / vertex_size) & ~(kByteGroupSize - 1);
 
 	return (result < kVertexBlockMaxSize) ? result : kVertexBlockMaxSize;
 }
@@ -179,13 +176,14 @@ static Stats* bytestats = NULL;
 static Stats vertexstats[256];
 #endif
 
-static bool canEncodeZero(const unsigned char* buffer, size_t buffer_size)
+static bool encodeBytesGroupZero(const unsigned char* buffer)
 {
-	for (size_t i = 0; i < buffer_size; ++i)
-		if (buffer[i])
-			return false;
+	assert(kByteGroupSize == sizeof(unsigned long long) * 2);
 
-	return true;
+	unsigned long long v[2];
+	memcpy(v, buffer, sizeof(v));
+
+	return (v[0] | v[1]) == 0;
 }
 
 static size_t encodeBytesGroupMeasure(const unsigned char* buffer, int bits)
@@ -193,7 +191,7 @@ static size_t encodeBytesGroupMeasure(const unsigned char* buffer, int bits)
 	assert(bits >= 0 && bits <= 8);
 
 	if (bits == 0)
-		return canEncodeZero(buffer, kByteGroupSize) ? 0 : size_t(-1);
+		return encodeBytesGroupZero(buffer) ? 0 : size_t(-1);
 
 	if (bits == 8)
 		return kByteGroupSize;
@@ -455,9 +453,18 @@ static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count
 	return best_channel == 2 ? best_channel | (xor_rot << 4) : best_channel;
 }
 
+static bool estimateControlZero(const unsigned char* buffer, size_t vertex_count_aligned)
+{
+	for (size_t i = 0; i < vertex_count_aligned; i += kByteGroupSize)
+		if (!encodeBytesGroupZero(buffer + i))
+			return false;
+
+	return true;
+}
+
 static int estimateControl(const unsigned char* buffer, size_t vertex_count, size_t vertex_count_aligned, int level)
 {
-	if (canEncodeZero(buffer, vertex_count))
+	if (estimateControlZero(buffer, vertex_count_aligned))
 		return 2; // zero encoding
 
 	if (level == 0)
