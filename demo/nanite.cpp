@@ -70,6 +70,7 @@ const size_t kClusterSize = 128;
 const size_t kGroupSize = 8;
 const bool kUseLocks = true;
 const bool kUseNormals = true;
+const bool kUseRetry = true;
 
 static LODBounds bounds(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, float error)
 {
@@ -170,7 +171,7 @@ static void clusterizeMetisRec(std::vector<Cluster>& result, const std::vector<u
 	int options[METIS_NOPTIONS];
 	METIS_SetDefaultOptions(options);
 	options[METIS_OPTION_SEED] = 42;
-	options[METIS_OPTION_UFACTOR] = triidx.size() > 8 * kClusterSize ? 100 : 1;
+	options[METIS_OPTION_UFACTOR] = 1; // minimize partition imbalance
 
 	int nvtxs = int(triidx.size());
 	int ncon = 1;
@@ -613,10 +614,13 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		printf("lod %d: simplified %d clusters (%d full, %.1f tri/cl), %d triangles; stuck %d clusters (%d single), %d triangles\n", depth,
 		    int(pending.size()), full_clusters, pending.empty() ? 0 : double(triangles) / double(pending.size()), int(triangles), stuck_clusters, single_clusters, int(stuck_triangles));
 
-		if (triangles < stuck_triangles / 3)
-			break;
+		if (kUseRetry)
+		{
+			if (triangles < stuck_triangles / 3)
+				break;
 
-		pending.insert(pending.end(), retry.begin(), retry.end());
+			pending.insert(pending.end(), retry.begin(), retry.end());
+		}
 	}
 
 	size_t total_triangles = 0;
