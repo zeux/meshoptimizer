@@ -35,11 +35,6 @@ ifdef BASISU
     endif
 endif
 
-ifdef METIS
-    $(DEMO_OBJECTS): CXXFLAGS+=-DMETIS
-    $(DEMO): LDFLAGS+=-lmetis
-endif
-
 WASI_SDK?=/opt/wasi-sdk
 WASMCC?=$(WASI_SDK)/bin/clang++
 WASIROOT?=$(WASI_SDK)/share/wasi-sysroot

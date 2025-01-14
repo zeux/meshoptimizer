@@ -20,9 +20,25 @@
 #include <map>
 #include <vector>
 
-#ifdef METIS
-#include <metis.h>
+#ifndef _WIN32
+#include <dlfcn.h>
 #endif
+
+#define METIS_OK 1
+#define METIS_OPTION_SEED 8
+#define METIS_OPTION_UFACTOR 16
+#define METIS_NOPTIONS 40
+
+static int METIS = 0;
+static int (*METIS_SetDefaultOptions)(int* options);
+static int (*METIS_PartGraphRecursive)(int* nvtxs, int* ncon, int* xadj,
+    int* adjncy, int* vwgt, int* vsize, int* adjwgt,
+    int* nparts, float* tpwgts, float* ubvec, int* options,
+    int* edgecut, int* part);
+static int (*METIS_PartGraphKway)(int* nvtxs, int* ncon, int* xadj,
+    int* adjncy, int* vwgt, int* vsize, int* adjwgt,
+    int* nparts, float* tpwgts, float* ubvec, int* options,
+    int* edgecut, int* part);
 
 #ifndef TRACE
 #define TRACE 0
@@ -119,7 +135,6 @@ static float boundsError(const LODBounds& bounds, float camera_x, float camera_y
 	return bounds.error / (d > camera_znear ? d : camera_znear) * (camera_proj * 0.5f);
 }
 
-#ifdef METIS
 static void clusterizeMetisRec(std::vector<Cluster>& result, const std::vector<unsigned int>& indices, const std::vector<int>& triidx, const std::vector<int>& triadj)
 {
 	assert(triadj.size() == triidx.size() * 3);
@@ -241,15 +256,11 @@ static std::vector<Cluster> clusterizeMetis(const std::vector<Vertex>& vertices,
 
 	return result;
 }
-#endif
 
 static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
-#ifdef METIS
-	static const char* metis = getenv("METIS");
-	if (metis && atoi(metis) >= 2)
+	if (METIS >= 2)
 		return clusterizeMetis(vertices, indices);
-#endif
 
 	const size_t max_vertices = 192; // TODO: depends on kClusterSize, also may want to dial down for mesh shaders
 	const size_t max_triangles = kClusterSize;
@@ -281,7 +292,6 @@ static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, cons
 	return clusters;
 }
 
-#ifdef METIS
 static std::vector<std::vector<int> > partitionMetis(const std::vector<Cluster>& clusters, const std::vector<int>& pending, const std::vector<unsigned int>& remap)
 {
 	std::vector<std::vector<int> > result;
@@ -362,15 +372,11 @@ static std::vector<std::vector<int> > partitionMetis(const std::vector<Cluster>&
 
 	return result;
 }
-#endif
 
 static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clusters, const std::vector<int>& pending, const std::vector<unsigned int>& remap)
 {
-#ifdef METIS
-	static const char* metis = getenv("METIS");
-	if (metis && atoi(metis) >= 1)
+	if (METIS >= 1)
 		return partitionMetis(clusters, pending, remap);
-#endif
 
 	(void)remap;
 
@@ -441,19 +447,37 @@ static std::vector<unsigned int> simplify(const std::vector<Vertex>& vertices, c
 	return lod;
 }
 
+static bool loadMetis()
+{
+#ifdef _WIN32
+	return false;
+#else
+	void* handle = dlopen("libmetis.so", RTLD_NOW | RTLD_LOCAL);
+	if (!handle)
+		return false;
+
+	METIS_SetDefaultOptions = (int (*)(int*))dlsym(handle, "METIS_SetDefaultOptions");
+	METIS_PartGraphRecursive = (int (*)(int*, int*, int*, int*, int*, int*, int*, int*, float*, float*, int*, int*, int*))dlsym(handle, "METIS_PartGraphRecursive");
+	METIS_PartGraphKway = (int (*)(int*, int*, int*, int*, int*, int*, int*, int*, float*, float*, int*, int*, int*))dlsym(handle, "METIS_PartGraphKway");
+
+	return METIS_SetDefaultOptions && METIS_PartGraphRecursive && METIS_PartGraphKway;
+#endif
+}
+
 void dumpObj(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, bool recomputeNormals = false);
 void dumpObj(const char* section, const std::vector<unsigned int>& indices);
 
 void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
 	static const char* metis = getenv("METIS");
-	if (metis && atoi(metis))
+	METIS = metis ? atoi(metis) : 0;
+
+	if (METIS)
 	{
-#ifdef METIS
-		printf("using metis for %s\n", atoi(metis) >= 2 ? "both clustering and partition" : "partition only");
-#else
-		printf("ERROR: build does not have metis available\n");
-#endif
+		if (loadMetis())
+			printf("using metis for %s\n", METIS >= 2 ? "both clustering and partition" : "partition only");
+		else
+			printf("metis library is not available\n"), METIS = 0;
 	}
 
 	static const char* dump = getenv("DUMP");
