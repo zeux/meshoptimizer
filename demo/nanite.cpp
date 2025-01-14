@@ -71,6 +71,7 @@ const size_t kGroupSize = 8;
 const bool kUseLocks = true;
 const bool kUseNormals = true;
 const bool kUseRetry = true;
+const bool kRecMetis = true;
 
 static LODBounds bounds(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, float error)
 {
@@ -142,7 +143,7 @@ static void clusterizeMetisRec(std::vector<Cluster>& result, const std::vector<u
 
 	if (triidx.size() <= kClusterSize)
 	{
-		Cluster cluster;
+		Cluster cluster = {};
 		for (size_t i = 0; i < triidx.size(); ++i)
 		{
 			cluster.indices.push_back(indices[triidx[i] * 3 + 0]);
@@ -248,14 +249,79 @@ static std::vector<Cluster> clusterizeMetis(const std::vector<Vertex>& vertices,
 		triadj[i + 2] = oca != edges.end() ? int(oca->second) : -1;
 	}
 
-	std::vector<int> triidx(indices.size() / 3);
-	for (size_t i = 0; i < indices.size(); i += 3)
-		triidx[i / 3] = int(i / 3);
+	if (kRecMetis)
+	{
+		std::vector<int> triidx(indices.size() / 3);
+		for (size_t i = 0; i < indices.size(); i += 3)
+			triidx[i / 3] = int(i / 3);
 
-	std::vector<Cluster> result;
-	clusterizeMetisRec(result, indices, triidx, triadj);
+		std::vector<Cluster> result;
+		clusterizeMetisRec(result, indices, triidx, triadj);
+		return result;
+	}
+	else
+	{
+		std::vector<int> xadj(indices.size() / 3 + 1);
+		std::vector<int> adjncy;
+		std::vector<int> adjwgt;
+		std::vector<int> part(indices.size() / 3);
 
-	return result;
+		for (size_t i = 0; i < indices.size() / 3; ++i)
+		{
+			for (int j = 0; j < 3; ++j)
+				if (triadj[i * 3 + j] != -1)
+				{
+					adjncy.push_back(triadj[i * 3 + j]);
+					adjwgt.push_back(1);
+				}
+
+			xadj[i + 1] = adjncy.size();
+		}
+
+		int options[METIS_NOPTIONS];
+		METIS_SetDefaultOptions(options);
+		options[METIS_OPTION_SEED] = 42;
+		options[METIS_OPTION_UFACTOR] = 1; // minimize partition imbalance
+
+		int slop = 2; // since Metis can't enforce partition sizes, add a little slop to reduce the change we need to split results further
+
+		int nvtxs = int(indices.size() / 3);
+		int ncon = 1;
+		int nparts = int(indices.size() / 3 + (kClusterSize - slop) - 1) / (kClusterSize - slop);
+		int edgecut = 0;
+
+		int r = METIS_PartGraphKway(&nvtxs, &ncon, &xadj[0], &adjncy[0], NULL, NULL, &adjwgt[0], &nparts, NULL, NULL, options, &edgecut, &part[0]);
+		assert(r == METIS_OK);
+		(void)r;
+
+		std::vector<Cluster> result(nparts);
+
+		for (size_t i = 0; i < indices.size() / 3; ++i)
+		{
+			result[part[i]].indices.push_back(indices[i * 3 + 0]);
+			result[part[i]].indices.push_back(indices[i * 3 + 1]);
+			result[part[i]].indices.push_back(indices[i * 3 + 2]);
+		}
+
+		for (int i = 0; i < nparts; ++i)
+		{
+			result[i].parent.error = FLT_MAX;
+
+			// need to split the cluster further...
+			// this could use meshopt but we're trying to get a complete baseline from metis
+			if (result[i].indices.size() > kClusterSize * 3)
+			{
+				std::vector<Cluster> splits = clusterizeMetis(vertices, result[i].indices);
+				assert(splits.size() > 1);
+
+				result[i] = splits[0];
+				for (size_t j = 1; j < splits.size(); ++j)
+					result.push_back(splits[j]);
+			}
+		}
+
+		return result;
+	}
 }
 
 static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
@@ -476,7 +542,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	if (METIS)
 	{
 		if (loadMetis())
-			printf("using metis for %s\n", METIS >= 2 ? "both clustering and partition" : "partition only");
+			printf("using metis for %s\n", METIS >= 2 ? (kRecMetis ? "clustering (recursive) and partition" : "clustering (kway) and partition") : "partition only");
 		else
 			printf("metis library is not available\n"), METIS = 0;
 	}
