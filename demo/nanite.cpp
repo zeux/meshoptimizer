@@ -35,10 +35,6 @@ static int (*METIS_PartGraphRecursive)(int* nvtxs, int* ncon, int* xadj,
     int* adjncy, int* vwgt, int* vsize, int* adjwgt,
     int* nparts, float* tpwgts, float* ubvec, int* options,
     int* edgecut, int* part);
-static int (*METIS_PartGraphKway)(int* nvtxs, int* ncon, int* xadj,
-    int* adjncy, int* vwgt, int* vsize, int* adjwgt,
-    int* nparts, float* tpwgts, float* ubvec, int* options,
-    int* edgecut, int* part);
 
 #ifndef TRACE
 #define TRACE 0
@@ -72,6 +68,7 @@ const bool kUseLocks = true;
 const bool kUseNormals = true;
 const bool kUseRetry = true;
 const bool kRecMetis = true;
+const float kSimplifyThreshold = 0.85f;
 
 static LODBounds bounds(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, float error)
 {
@@ -294,7 +291,7 @@ static std::vector<Cluster> clusterizeMetis(const std::vector<Vertex>& vertices,
 		int nparts = int(indices.size() / 3 + (kClusterSize - slop) - 1) / (kClusterSize - slop);
 		int edgecut = 0;
 
-		int r = METIS_PartGraphKway(&nvtxs, &ncon, &xadj[0], &adjncy[0], NULL, NULL, &adjwgt[0], &nparts, NULL, NULL, options, &edgecut, &part[0]);
+		int r = METIS_PartGraphRecursive(&nvtxs, &ncon, &xadj[0], &adjncy[0], NULL, NULL, &adjwgt[0], &nparts, NULL, NULL, options, &edgecut, &part[0]);
 		assert(r == METIS_OK);
 		(void)r;
 
@@ -432,7 +429,7 @@ static std::vector<std::vector<int> > partitionMetis(const std::vector<Cluster>&
 	}
 	else
 	{
-		int r = METIS_PartGraphKway(&nvtxs, &ncon, &xadj[0], &adjncy[0], NULL, NULL, &adjwgt[0], &nparts, NULL, NULL, options, &edgecut, &part[0]);
+		int r = METIS_PartGraphRecursive(&nvtxs, &ncon, &xadj[0], &adjncy[0], NULL, NULL, &adjwgt[0], &nparts, NULL, NULL, options, &edgecut, &part[0]);
 		assert(r == METIS_OK);
 		(void)r;
 
@@ -529,9 +526,8 @@ static bool loadMetis()
 
 	METIS_SetDefaultOptions = (int (*)(int*))dlsym(handle, "METIS_SetDefaultOptions");
 	METIS_PartGraphRecursive = (int (*)(int*, int*, int*, int*, int*, int*, int*, int*, float*, float*, int*, int*, int*))dlsym(handle, "METIS_PartGraphRecursive");
-	METIS_PartGraphKway = (int (*)(int*, int*, int*, int*, int*, int*, int*, int*, float*, float*, int*, int*, int*))dlsym(handle, "METIS_PartGraphKway");
 
-	return METIS_SetDefaultOptions && METIS_PartGraphRecursive && METIS_PartGraphKway;
+	return METIS_SetDefaultOptions && METIS_PartGraphRecursive;
 #endif
 }
 
@@ -546,7 +542,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	if (METIS)
 	{
 		if (loadMetis())
-			printf("using metis for %s\n", METIS >= 2 ? (kRecMetis ? "clustering (recursive) and partition" : "clustering (kway) and partition") : "partition only");
+			printf("using metis for %s\n", METIS >= 2 ? (kRecMetis ? "clustering (recursive) and partition" : "clustering and partition") : "partition only");
 		else
 			printf("metis library is not available\n"), METIS = 0;
 	}
@@ -636,7 +632,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 
 			float error = 0.f;
 			std::vector<unsigned int> simplified = simplify(vertices, merged, kUseLocks ? &locks : NULL, target_size, &error);
-			if (simplified.size() > merged.size() * 0.85f || simplified.size() / (kClusterSize * 3) >= merged.size() / (kClusterSize * 3))
+			if (simplified.size() > merged.size() * kSimplifyThreshold || simplified.size() / (kClusterSize * 3) >= merged.size() / (kClusterSize * 3))
 			{
 #if TRACE
 				printf("stuck cluster: simplified %d => %d over threshold\n", int(merged.size() / 3), int(simplified.size() / 3));
