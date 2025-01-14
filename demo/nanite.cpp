@@ -164,7 +164,10 @@ static void clusterizeMetisRec(std::vector<Cluster>& result, const std::vector<u
 	{
 		for (int j = 0; j < 3; ++j)
 			if (triadj[i * 3 + j] != -1)
+			{
+				assert(triadj[i * 3 + j] != int(i));
 				adjncy.push_back(triadj[i * 3 + j]);
+			}
 
 		xadj[i + 1] = adjncy.size();
 	}
@@ -244,9 +247,9 @@ static std::vector<Cluster> clusterizeMetis(const std::vector<Vertex>& vertices,
 		std::map<std::pair<unsigned int, unsigned int>, unsigned int>::iterator obc = edges.find(std::make_pair(v2, v1));
 		std::map<std::pair<unsigned int, unsigned int>, unsigned int>::iterator oca = edges.find(std::make_pair(v0, v2));
 
-		triadj[i + 0] = oab != edges.end() ? int(oab->second) : -1;
-		triadj[i + 1] = obc != edges.end() ? int(obc->second) : -1;
-		triadj[i + 2] = oca != edges.end() ? int(oca->second) : -1;
+		triadj[i + 0] = oab != edges.end() && oab->second != i / 3 ? int(oab->second) : -1;
+		triadj[i + 1] = obc != edges.end() && obc->second != i / 3 ? int(obc->second) : -1;
+		triadj[i + 2] = oca != edges.end() && oca->second != i / 3 ? int(oca->second) : -1;
 	}
 
 	if (kRecMetis)
@@ -271,6 +274,7 @@ static std::vector<Cluster> clusterizeMetis(const std::vector<Vertex>& vertices,
 			for (int j = 0; j < 3; ++j)
 				if (triadj[i * 3 + j] != -1)
 				{
+					assert(triadj[i * 3 + j] != int(i));
 					adjncy.push_back(triadj[i * 3 + j]);
 					adjwgt.push_back(1);
 				}
