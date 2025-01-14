@@ -627,7 +627,9 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 				dumpObj("group", merged);
 			}
 
-			size_t target_size = ((groups[i].size() + 1) / 2) * kClusterSize * 3;
+			// aim to reduce group size in half
+			size_t target_size = (merged.size() / 3) / 2 * 3;
+
 			float error = 0.f;
 			std::vector<unsigned int> simplified = simplify(vertices, merged, kUseLocks ? &locks : NULL, target_size, &error);
 			if (simplified.size() > merged.size() * 0.85f || simplified.size() / (kClusterSize * 3) >= merged.size() / (kClusterSize * 3))
