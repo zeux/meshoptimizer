@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <algorithm>
 #include <map>
 #include <vector>
 
@@ -67,7 +68,7 @@ const size_t kGroupSize = 8;
 const bool kUseLocks = true;
 const bool kUseNormals = true;
 const bool kUseRetry = true;
-const bool kRecMetis = true;
+const bool kRecMetis = false;
 const float kSimplifyThreshold = 0.85f;
 
 static LODBounds bounds(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, float error)
@@ -223,34 +224,34 @@ static std::vector<Cluster> clusterizeMetis(const std::vector<Vertex>& vertices,
 	std::vector<unsigned int> shadowib(indices.size());
 	meshopt_generateShadowIndexBuffer(&shadowib[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(float) * 3, sizeof(Vertex));
 
-	std::map<std::pair<unsigned int, unsigned int>, unsigned int> edges;
-
-	for (size_t i = 0; i < indices.size(); ++i)
-	{
-		unsigned int v0 = shadowib[i + 0];
-		unsigned int v1 = shadowib[i + (i % 3 == 2 ? -2 : 1)];
-
-		// we don't track adjacency fully on non-manifold edges for now
-		edges[std::make_pair(v0, v1)] = unsigned(i / 3);
-	}
-
-	std::vector<int> triadj(indices.size(), -1);
-
-	for (size_t i = 0; i < indices.size(); i += 3)
-	{
-		unsigned int v0 = shadowib[i + 0], v1 = shadowib[i + 1], v2 = shadowib[i + 2];
-
-		std::map<std::pair<unsigned int, unsigned int>, unsigned int>::iterator oab = edges.find(std::make_pair(v1, v0));
-		std::map<std::pair<unsigned int, unsigned int>, unsigned int>::iterator obc = edges.find(std::make_pair(v2, v1));
-		std::map<std::pair<unsigned int, unsigned int>, unsigned int>::iterator oca = edges.find(std::make_pair(v0, v2));
-
-		triadj[i + 0] = oab != edges.end() && oab->second != i / 3 ? int(oab->second) : -1;
-		triadj[i + 1] = obc != edges.end() && obc->second != i / 3 ? int(obc->second) : -1;
-		triadj[i + 2] = oca != edges.end() && oca->second != i / 3 ? int(oca->second) : -1;
-	}
-
 	if (kRecMetis)
 	{
+		std::map<std::pair<unsigned int, unsigned int>, unsigned int> edges;
+
+		for (size_t i = 0; i < indices.size(); ++i)
+		{
+			unsigned int v0 = shadowib[i + 0];
+			unsigned int v1 = shadowib[i + (i % 3 == 2 ? -2 : 1)];
+
+			// we don't track adjacency fully on non-manifold edges for now
+			edges[std::make_pair(v0, v1)] = unsigned(i / 3);
+		}
+
+		std::vector<int> triadj(indices.size(), -1);
+
+		for (size_t i = 0; i < indices.size(); i += 3)
+		{
+			unsigned int v0 = shadowib[i + 0], v1 = shadowib[i + 1], v2 = shadowib[i + 2];
+
+			std::map<std::pair<unsigned int, unsigned int>, unsigned int>::iterator oab = edges.find(std::make_pair(v1, v0));
+			std::map<std::pair<unsigned int, unsigned int>, unsigned int>::iterator obc = edges.find(std::make_pair(v2, v1));
+			std::map<std::pair<unsigned int, unsigned int>, unsigned int>::iterator oca = edges.find(std::make_pair(v0, v2));
+
+			triadj[i + 0] = oab != edges.end() && oab->second != i / 3 ? int(oab->second) : -1;
+			triadj[i + 1] = obc != edges.end() && obc->second != i / 3 ? int(obc->second) : -1;
+			triadj[i + 2] = oca != edges.end() && oca->second != i / 3 ? int(oca->second) : -1;
+		}
+
 		std::vector<int> triidx(indices.size() / 3);
 		for (size_t i = 0; i < indices.size(); i += 3)
 			triidx[i / 3] = int(i / 3);
@@ -261,20 +262,44 @@ static std::vector<Cluster> clusterizeMetis(const std::vector<Vertex>& vertices,
 	}
 	else
 	{
+		std::vector<std::vector<int> > trilist(vertices.size());
+
+		for (size_t i = 0; i < indices.size(); ++i)
+			trilist[shadowib[i]].push_back(i / 3);
+
 		std::vector<int> xadj(indices.size() / 3 + 1);
 		std::vector<int> adjncy;
 		std::vector<int> adjwgt;
 		std::vector<int> part(indices.size() / 3);
 
+		std::vector<int> scratch;
+
 		for (size_t i = 0; i < indices.size() / 3; ++i)
 		{
-			for (int j = 0; j < 3; ++j)
-				if (triadj[i * 3 + j] != -1)
+			unsigned int a = shadowib[i * 3 + 0], b = shadowib[i * 3 + 1], c = shadowib[i * 3 + 2];
+
+			scratch.clear();
+			scratch.insert(scratch.end(), trilist[a].begin(), trilist[a].end());
+			scratch.insert(scratch.end(), trilist[b].begin(), trilist[b].end());
+			scratch.insert(scratch.end(), trilist[c].begin(), trilist[c].end());
+			std::sort(scratch.begin(), scratch.end());
+
+			for (size_t j = 0; j < scratch.size(); ++j)
+			{
+				if (scratch[j] == int(i))
+					continue;
+
+				if (j == 0 || scratch[j] != scratch[j - 1])
 				{
-					assert(triadj[i * 3 + j] != int(i));
-					adjncy.push_back(triadj[i * 3 + j]);
+					adjncy.push_back(scratch[j]);
 					adjwgt.push_back(1);
 				}
+				else if (j != 0)
+				{
+					assert(scratch[j] == scratch[j - 1]);
+					adjwgt.back()++;
+				}
+			}
 
 			xadj[i + 1] = adjncy.size();
 		}
