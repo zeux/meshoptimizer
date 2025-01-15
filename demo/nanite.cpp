@@ -316,9 +316,13 @@ static std::vector<Cluster> clusterizeMetis(const std::vector<Vertex>& vertices,
 		int nparts = int(indices.size() / 3 + (kClusterSize - slop) - 1) / (kClusterSize - slop);
 		int edgecut = 0;
 
-		int r = METIS_PartGraphRecursive(&nvtxs, &ncon, &xadj[0], &adjncy[0], NULL, NULL, &adjwgt[0], &nparts, NULL, NULL, options, &edgecut, &part[0]);
-		assert(r == METIS_OK);
-		(void)r;
+		// not sure why this is a special case that we need to handle but okay metis
+		if (nparts > 1)
+		{
+			int r = METIS_PartGraphRecursive(&nvtxs, &ncon, &xadj[0], &adjncy[0], NULL, NULL, &adjwgt[0], &nparts, NULL, NULL, options, &edgecut, &part[0]);
+			assert(r == METIS_OK);
+			(void)r;
+		}
 
 		std::vector<Cluster> result(nparts);
 
@@ -447,21 +451,17 @@ static std::vector<std::vector<int> > partitionMetis(const std::vector<Cluster>&
 	int nparts = int(pending.size() + kGroupSize - 1) / kGroupSize;
 	int edgecut = 0;
 
-	if (nparts <= 1)
-	{
-		// not sure why this is a special case that we need to handle but okay metis
-		result.push_back(pending);
-	}
-	else
+	// not sure why this is a special case that we need to handle but okay metis
+	if (nparts > 1)
 	{
 		int r = METIS_PartGraphRecursive(&nvtxs, &ncon, &xadj[0], &adjncy[0], NULL, NULL, &adjwgt[0], &nparts, NULL, NULL, options, &edgecut, &part[0]);
 		assert(r == METIS_OK);
 		(void)r;
-
-		result.resize(nparts);
-		for (size_t i = 0; i < part.size(); ++i)
-			result[part[i]].push_back(pending[i]);
 	}
+
+	result.resize(nparts);
+	for (size_t i = 0; i < part.size(); ++i)
+		result[part[i]].push_back(pending[i]);
 
 	return result;
 }
