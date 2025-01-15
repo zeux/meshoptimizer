@@ -17,12 +17,25 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <algorithm>
 #include <map>
 #include <vector>
 
-#ifdef METIS
-#include <metis.h>
+#ifndef _WIN32
+#include <dlfcn.h>
 #endif
+
+#define METIS_OK 1
+#define METIS_OPTION_SEED 8
+#define METIS_OPTION_UFACTOR 16
+#define METIS_NOPTIONS 40
+
+static int METIS = 0;
+static int (*METIS_SetDefaultOptions)(int* options);
+static int (*METIS_PartGraphRecursive)(int* nvtxs, int* ncon, int* xadj,
+    int* adjncy, int* vwgt, int* vsize, int* adjwgt,
+    int* nparts, float* tpwgts, float* ubvec, int* options,
+    int* edgecut, int* part);
 
 #ifndef TRACE
 #define TRACE 0
@@ -54,6 +67,9 @@ const size_t kClusterSize = 128;
 const size_t kGroupSize = 8;
 const bool kUseLocks = true;
 const bool kUseNormals = true;
+const bool kUseRetry = true;
+const bool kRecMetis = false;
+const float kSimplifyThreshold = 0.85f;
 
 static LODBounds bounds(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, float error)
 {
@@ -119,14 +135,13 @@ static float boundsError(const LODBounds& bounds, float camera_x, float camera_y
 	return bounds.error / (d > camera_znear ? d : camera_znear) * (camera_proj * 0.5f);
 }
 
-#ifdef METIS
 static void clusterizeMetisRec(std::vector<Cluster>& result, const std::vector<unsigned int>& indices, const std::vector<int>& triidx, const std::vector<int>& triadj)
 {
 	assert(triadj.size() == triidx.size() * 3);
 
 	if (triidx.size() <= kClusterSize)
 	{
-		Cluster cluster;
+		Cluster cluster = {};
 		for (size_t i = 0; i < triidx.size(); ++i)
 		{
 			cluster.indices.push_back(indices[triidx[i] * 3 + 0]);
@@ -147,15 +162,18 @@ static void clusterizeMetisRec(std::vector<Cluster>& result, const std::vector<u
 	{
 		for (int j = 0; j < 3; ++j)
 			if (triadj[i * 3 + j] != -1)
+			{
+				assert(triadj[i * 3 + j] != int(i));
 				adjncy.push_back(triadj[i * 3 + j]);
+			}
 
-		xadj[i + 1] = adjncy.size();
+		xadj[i + 1] = int(adjncy.size());
 	}
 
 	int options[METIS_NOPTIONS];
 	METIS_SetDefaultOptions(options);
 	options[METIS_OPTION_SEED] = 42;
-	options[METIS_OPTION_UFACTOR] = triidx.size() > 8 * kClusterSize ? 100 : 1;
+	options[METIS_OPTION_UFACTOR] = 1; // minimize partition imbalance
 
 	int nvtxs = int(triidx.size());
 	int ncon = 1;
@@ -206,50 +224,140 @@ static std::vector<Cluster> clusterizeMetis(const std::vector<Vertex>& vertices,
 	std::vector<unsigned int> shadowib(indices.size());
 	meshopt_generateShadowIndexBuffer(&shadowib[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(float) * 3, sizeof(Vertex));
 
-	std::map<std::pair<unsigned int, unsigned int>, unsigned int> edges;
-
-	for (size_t i = 0; i < indices.size(); ++i)
+	if (kRecMetis)
 	{
-		unsigned int v0 = shadowib[i + 0];
-		unsigned int v1 = shadowib[i + (i % 3 == 2 ? -2 : 1)];
+		std::map<std::pair<unsigned int, unsigned int>, unsigned int> edges;
 
-		// we don't track adjacency fully on non-manifold edges for now
-		edges[std::make_pair(v0, v1)] = unsigned(i / 3);
+		for (size_t i = 0; i < indices.size(); ++i)
+		{
+			unsigned int v0 = shadowib[i + 0];
+			unsigned int v1 = shadowib[i + (i % 3 == 2 ? -2 : 1)];
+
+			// we don't track adjacency fully on non-manifold edges for now
+			edges[std::make_pair(v0, v1)] = unsigned(i / 3);
+		}
+
+		std::vector<int> triadj(indices.size(), -1);
+
+		for (size_t i = 0; i < indices.size(); i += 3)
+		{
+			unsigned int v0 = shadowib[i + 0], v1 = shadowib[i + 1], v2 = shadowib[i + 2];
+
+			std::map<std::pair<unsigned int, unsigned int>, unsigned int>::iterator oab = edges.find(std::make_pair(v1, v0));
+			std::map<std::pair<unsigned int, unsigned int>, unsigned int>::iterator obc = edges.find(std::make_pair(v2, v1));
+			std::map<std::pair<unsigned int, unsigned int>, unsigned int>::iterator oca = edges.find(std::make_pair(v0, v2));
+
+			triadj[i + 0] = oab != edges.end() && oab->second != i / 3 ? int(oab->second) : -1;
+			triadj[i + 1] = obc != edges.end() && obc->second != i / 3 ? int(obc->second) : -1;
+			triadj[i + 2] = oca != edges.end() && oca->second != i / 3 ? int(oca->second) : -1;
+		}
+
+		std::vector<int> triidx(indices.size() / 3);
+		for (size_t i = 0; i < indices.size(); i += 3)
+			triidx[i / 3] = int(i / 3);
+
+		std::vector<Cluster> result;
+		clusterizeMetisRec(result, indices, triidx, triadj);
+		return result;
 	}
-
-	std::vector<int> triadj(indices.size(), -1);
-
-	for (size_t i = 0; i < indices.size(); i += 3)
+	else
 	{
-		unsigned int v0 = shadowib[i + 0], v1 = shadowib[i + 1], v2 = shadowib[i + 2];
+		std::vector<std::vector<int> > trilist(vertices.size());
 
-		std::map<std::pair<unsigned int, unsigned int>, unsigned int>::iterator oab = edges.find(std::make_pair(v1, v0));
-		std::map<std::pair<unsigned int, unsigned int>, unsigned int>::iterator obc = edges.find(std::make_pair(v2, v1));
-		std::map<std::pair<unsigned int, unsigned int>, unsigned int>::iterator oca = edges.find(std::make_pair(v0, v2));
+		for (size_t i = 0; i < indices.size(); ++i)
+			trilist[shadowib[i]].push_back(int(i / 3));
 
-		triadj[i + 0] = oab != edges.end() ? int(oab->second) : -1;
-		triadj[i + 1] = obc != edges.end() ? int(obc->second) : -1;
-		triadj[i + 2] = oca != edges.end() ? int(oca->second) : -1;
+		std::vector<int> xadj(indices.size() / 3 + 1);
+		std::vector<int> adjncy;
+		std::vector<int> adjwgt;
+		std::vector<int> part(indices.size() / 3);
+
+		std::vector<int> scratch;
+
+		for (size_t i = 0; i < indices.size() / 3; ++i)
+		{
+			unsigned int a = shadowib[i * 3 + 0], b = shadowib[i * 3 + 1], c = shadowib[i * 3 + 2];
+
+			scratch.clear();
+			scratch.insert(scratch.end(), trilist[a].begin(), trilist[a].end());
+			scratch.insert(scratch.end(), trilist[b].begin(), trilist[b].end());
+			scratch.insert(scratch.end(), trilist[c].begin(), trilist[c].end());
+			std::sort(scratch.begin(), scratch.end());
+
+			for (size_t j = 0; j < scratch.size(); ++j)
+			{
+				if (scratch[j] == int(i))
+					continue;
+
+				if (j == 0 || scratch[j] != scratch[j - 1])
+				{
+					adjncy.push_back(scratch[j]);
+					adjwgt.push_back(1);
+				}
+				else if (j != 0)
+				{
+					assert(scratch[j] == scratch[j - 1]);
+					adjwgt.back()++;
+				}
+			}
+
+			xadj[i + 1] = int(adjncy.size());
+		}
+
+		int options[METIS_NOPTIONS];
+		METIS_SetDefaultOptions(options);
+		options[METIS_OPTION_SEED] = 42;
+		options[METIS_OPTION_UFACTOR] = 1; // minimize partition imbalance
+
+		int slop = 2; // since Metis can't enforce partition sizes, add a little slop to reduce the change we need to split results further
+
+		int nvtxs = int(indices.size() / 3);
+		int ncon = 1;
+		int nparts = int(indices.size() / 3 + (kClusterSize - slop) - 1) / (kClusterSize - slop);
+		int edgecut = 0;
+
+		// not sure why this is a special case that we need to handle but okay metis
+		if (nparts > 1)
+		{
+			int r = METIS_PartGraphRecursive(&nvtxs, &ncon, &xadj[0], &adjncy[0], NULL, NULL, &adjwgt[0], &nparts, NULL, NULL, options, &edgecut, &part[0]);
+			assert(r == METIS_OK);
+			(void)r;
+		}
+
+		std::vector<Cluster> result(nparts);
+
+		for (size_t i = 0; i < indices.size() / 3; ++i)
+		{
+			result[part[i]].indices.push_back(indices[i * 3 + 0]);
+			result[part[i]].indices.push_back(indices[i * 3 + 1]);
+			result[part[i]].indices.push_back(indices[i * 3 + 2]);
+		}
+
+		for (int i = 0; i < nparts; ++i)
+		{
+			result[i].parent.error = FLT_MAX;
+
+			// need to split the cluster further...
+			// this could use meshopt but we're trying to get a complete baseline from metis
+			if (result[i].indices.size() > kClusterSize * 3)
+			{
+				std::vector<Cluster> splits = clusterizeMetis(vertices, result[i].indices);
+				assert(splits.size() > 1);
+
+				result[i] = splits[0];
+				for (size_t j = 1; j < splits.size(); ++j)
+					result.push_back(splits[j]);
+			}
+		}
+
+		return result;
 	}
-
-	std::vector<int> triidx(indices.size() / 3);
-	for (size_t i = 0; i < indices.size(); i += 3)
-		triidx[i / 3] = int(i / 3);
-
-	std::vector<Cluster> result;
-	clusterizeMetisRec(result, indices, triidx, triadj);
-
-	return result;
 }
-#endif
 
 static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
-#ifdef METIS
-	static const char* metis = getenv("METIS");
-	if (metis && atoi(metis) >= 2)
+	if (METIS >= 2)
 		return clusterizeMetis(vertices, indices);
-#endif
 
 	const size_t max_vertices = 192; // TODO: depends on kClusterSize, also may want to dial down for mesh shaders
 	const size_t max_triangles = kClusterSize;
@@ -281,7 +389,6 @@ static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, cons
 	return clusters;
 }
 
-#ifdef METIS
 static std::vector<std::vector<int> > partitionMetis(const std::vector<Cluster>& clusters, const std::vector<int>& pending, const std::vector<unsigned int>& remap)
 {
 	std::vector<std::vector<int> > result;
@@ -331,7 +438,7 @@ static std::vector<std::vector<int> > partitionMetis(const std::vector<Cluster>&
 				adjwgt.push_back(it->second);
 			}
 
-		xadj[i + 1] = adjncy.size();
+		xadj[i + 1] = int(adjncy.size());
 	}
 
 	int options[METIS_NOPTIONS];
@@ -344,33 +451,25 @@ static std::vector<std::vector<int> > partitionMetis(const std::vector<Cluster>&
 	int nparts = int(pending.size() + kGroupSize - 1) / kGroupSize;
 	int edgecut = 0;
 
-	if (nparts <= 1)
+	// not sure why this is a special case that we need to handle but okay metis
+	if (nparts > 1)
 	{
-		// not sure why this is a special case that we need to handle but okay metis
-		result.push_back(pending);
-	}
-	else
-	{
-		int r = METIS_PartGraphKway(&nvtxs, &ncon, &xadj[0], &adjncy[0], NULL, NULL, &adjwgt[0], &nparts, NULL, NULL, options, &edgecut, &part[0]);
+		int r = METIS_PartGraphRecursive(&nvtxs, &ncon, &xadj[0], &adjncy[0], NULL, NULL, &adjwgt[0], &nparts, NULL, NULL, options, &edgecut, &part[0]);
 		assert(r == METIS_OK);
 		(void)r;
-
-		result.resize(nparts);
-		for (size_t i = 0; i < part.size(); ++i)
-			result[part[i]].push_back(pending[i]);
 	}
+
+	result.resize(nparts);
+	for (size_t i = 0; i < part.size(); ++i)
+		result[part[i]].push_back(pending[i]);
 
 	return result;
 }
-#endif
 
 static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clusters, const std::vector<int>& pending, const std::vector<unsigned int>& remap)
 {
-#ifdef METIS
-	static const char* metis = getenv("METIS");
-	if (metis && atoi(metis) >= 1)
+	if (METIS >= 1)
 		return partitionMetis(clusters, pending, remap);
-#endif
 
 	(void)remap;
 
@@ -441,19 +540,36 @@ static std::vector<unsigned int> simplify(const std::vector<Vertex>& vertices, c
 	return lod;
 }
 
+static bool loadMetis()
+{
+#ifdef _WIN32
+	return false;
+#else
+	void* handle = dlopen("libmetis.so", RTLD_NOW | RTLD_LOCAL);
+	if (!handle)
+		return false;
+
+	METIS_SetDefaultOptions = (int (*)(int*))dlsym(handle, "METIS_SetDefaultOptions");
+	METIS_PartGraphRecursive = (int (*)(int*, int*, int*, int*, int*, int*, int*, int*, float*, float*, int*, int*, int*))dlsym(handle, "METIS_PartGraphRecursive");
+
+	return METIS_SetDefaultOptions && METIS_PartGraphRecursive;
+#endif
+}
+
 void dumpObj(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, bool recomputeNormals = false);
 void dumpObj(const char* section, const std::vector<unsigned int>& indices);
 
 void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
 	static const char* metis = getenv("METIS");
-	if (metis && atoi(metis))
+	METIS = metis ? atoi(metis) : 0;
+
+	if (METIS)
 	{
-#ifdef METIS
-		printf("using metis for %s\n", atoi(metis) >= 2 ? "both clustering and partition" : "partition only");
-#else
-		printf("ERROR: build does not have metis available\n");
-#endif
+		if (loadMetis())
+			printf("using metis for %s\n", METIS >= 2 ? (kRecMetis ? "clustering (recursive) and partition" : "clustering and partition") : "partition only");
+		else
+			printf("metis library is not available\n"), METIS = 0;
 	}
 
 	static const char* dump = getenv("DUMP");
@@ -536,10 +652,12 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 				dumpObj("group", merged);
 			}
 
-			size_t target_size = ((groups[i].size() + 1) / 2) * kClusterSize * 3;
+			// aim to reduce group size in half
+			size_t target_size = (merged.size() / 3) / 2 * 3;
+
 			float error = 0.f;
 			std::vector<unsigned int> simplified = simplify(vertices, merged, kUseLocks ? &locks : NULL, target_size, &error);
-			if (simplified.size() > merged.size() * 0.85f || simplified.size() / (kClusterSize * 3) >= merged.size() / (kClusterSize * 3))
+			if (simplified.size() > merged.size() * kSimplifyThreshold || simplified.size() / (kClusterSize * 3) >= merged.size() / (kClusterSize * 3))
 			{
 #if TRACE
 				printf("stuck cluster: simplified %d => %d over threshold\n", int(merged.size() / 3), int(simplified.size() / 3));
@@ -589,10 +707,13 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		printf("lod %d: simplified %d clusters (%d full, %.1f tri/cl), %d triangles; stuck %d clusters (%d single), %d triangles\n", depth,
 		    int(pending.size()), full_clusters, pending.empty() ? 0 : double(triangles) / double(pending.size()), int(triangles), stuck_clusters, single_clusters, int(stuck_triangles));
 
-		if (triangles < stuck_triangles / 3)
-			break;
+		if (kUseRetry)
+		{
+			if (triangles < stuck_triangles / 3)
+				break;
 
-		pending.insert(pending.end(), retry.begin(), retry.end());
+			pending.insert(pending.end(), retry.begin(), retry.end());
+		}
 	}
 
 	size_t total_triangles = 0;
