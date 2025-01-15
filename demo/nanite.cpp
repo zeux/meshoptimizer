@@ -167,7 +167,7 @@ static void clusterizeMetisRec(std::vector<Cluster>& result, const std::vector<u
 				adjncy.push_back(triadj[i * 3 + j]);
 			}
 
-		xadj[i + 1] = adjncy.size();
+		xadj[i + 1] = int(adjncy.size());
 	}
 
 	int options[METIS_NOPTIONS];
@@ -265,7 +265,7 @@ static std::vector<Cluster> clusterizeMetis(const std::vector<Vertex>& vertices,
 		std::vector<std::vector<int> > trilist(vertices.size());
 
 		for (size_t i = 0; i < indices.size(); ++i)
-			trilist[shadowib[i]].push_back(i / 3);
+			trilist[shadowib[i]].push_back(int(i / 3));
 
 		std::vector<int> xadj(indices.size() / 3 + 1);
 		std::vector<int> adjncy;
@@ -301,7 +301,7 @@ static std::vector<Cluster> clusterizeMetis(const std::vector<Vertex>& vertices,
 				}
 			}
 
-			xadj[i + 1] = adjncy.size();
+			xadj[i + 1] = int(adjncy.size());
 		}
 
 		int options[METIS_NOPTIONS];
@@ -438,7 +438,7 @@ static std::vector<std::vector<int> > partitionMetis(const std::vector<Cluster>&
 				adjwgt.push_back(it->second);
 			}
 
-		xadj[i + 1] = adjncy.size();
+		xadj[i + 1] = int(adjncy.size());
 	}
 
 	int options[METIS_NOPTIONS];
