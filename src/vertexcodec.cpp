@@ -1365,7 +1365,7 @@ SIMD_TARGET inline uint8x8_t rebase(uint8x8_t npi, uint8x16_t r0, uint8x16_t r1,
 	{
 		uint16x8_t rsum = vaddq_u16(vaddq_u16(vreinterpretq_u16_u8(r0), vreinterpretq_u16_u8(r1)), vaddq_u16(vreinterpretq_u16_u8(r2), vreinterpretq_u16_u8(r3)));
 		uint16x4_t rsumx = vadd_u16(vget_low_u16(rsum), vget_high_u16(rsum));
-		return vreinterpret_u8_u16(vadd_u16(vadd_u16(npi, rsumx), vext_u16(rsumx, rsumx, 2)));
+		return vreinterpret_u8_u16(vadd_u16(vadd_u16(vreinterpret_u16_u8(npi), rsumx), vext_u16(rsumx, rsumx, 2)));
 	}
 	case 2:
 	{
