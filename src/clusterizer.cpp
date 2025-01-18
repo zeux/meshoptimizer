@@ -554,8 +554,8 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* meshlet_ve
 	TriangleAdjacency2 adjacency = {};
 	buildTriangleAdjacency(adjacency, indices, index_count, vertex_count, allocator);
 
-	unsigned int* live_triangles = allocator.allocate<unsigned int>(vertex_count);
-	memcpy(live_triangles, adjacency.counts, vertex_count * sizeof(unsigned int));
+	// live triangle counts; note, we alias adjacency.counts as we remove triangles after emitting them so the counts always match
+	unsigned int* live_triangles = adjacency.counts;
 
 	size_t face_count = index_count / 3;
 
@@ -625,12 +625,9 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* meshlet_ve
 			memset(&meshlet_cone_acc, 0, sizeof(meshlet_cone_acc));
 		}
 
-		live_triangles[a]--;
-		live_triangles[b]--;
-		live_triangles[c]--;
-
 		// remove emitted triangle from adjacency data
 		// this makes sure that we spend less time traversing these lists on subsequent iterations
+		// live triangle counts are updated as a byproduct of these adjustments
 		for (size_t k = 0; k < 3; ++k)
 		{
 			unsigned int index = indices[best_triangle * 3 + k];
