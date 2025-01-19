@@ -419,6 +419,14 @@ static std::vector<std::vector<int> > partitionMetis(const std::vector<Cluster>&
 				adjacency[std::make_pair(std::min(list[i], list[j]), std::max(list[i], list[j]))]++;
 	}
 
+	std::vector<std::vector<std::pair<int, int> > > neighbors(pending.size());
+
+	for (std::map<std::pair<int, int>, int>::iterator it = adjacency.begin(); it != adjacency.end(); ++it)
+	{
+		neighbors[it->first.first].push_back(std::make_pair(it->first.second, it->second));
+		neighbors[it->first.second].push_back(std::make_pair(it->first.first, it->second));
+	}
+
 	std::vector<int> xadj(pending.size() + 1);
 	std::vector<int> adjncy;
 	std::vector<int> adjwgt;
@@ -426,17 +434,11 @@ static std::vector<std::vector<int> > partitionMetis(const std::vector<Cluster>&
 
 	for (size_t i = 0; i < pending.size(); ++i)
 	{
-		for (std::map<std::pair<int, int>, int>::iterator it = adjacency.begin(); it != adjacency.end(); ++it)
-			if (it->first.first == int(i))
-			{
-				adjncy.push_back(it->first.second);
-				adjwgt.push_back(it->second);
-			}
-			else if (it->first.second == int(i))
-			{
-				adjncy.push_back(it->first.first);
-				adjwgt.push_back(it->second);
-			}
+		for (size_t j = 0; j < neighbors[i].size(); ++j)
+		{
+			adjncy.push_back(neighbors[i][j].first);
+			adjwgt.push_back(neighbors[i][j].second);
+		}
 
 		xadj[i + 1] = int(adjncy.size());
 	}
