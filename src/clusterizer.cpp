@@ -30,6 +30,10 @@ static void buildTriangleAdjacency(TriangleAdjacency2& adjacency, const unsigned
 {
 	size_t face_count = index_count / 3;
 
+	// sparse mode can build adjacency more quickly by ignoring unused vertices
+	const unsigned int sparse_seen = 1u << 31;
+	bool sparse = vertex_count > index_count && index_count < sparse_seen;
+
 	// allocate arrays
 	adjacency.counts = allocator.allocate<unsigned int>(vertex_count);
 	adjacency.offsets = allocator.allocate<unsigned int>(vertex_count);
@@ -48,10 +52,28 @@ static void buildTriangleAdjacency(TriangleAdjacency2& adjacency, const unsigned
 	// fill offset table
 	unsigned int offset = 0;
 
-	for (size_t i = 0; i < vertex_count; ++i)
+	if (sparse)
 	{
-		adjacency.offsets[i] = offset;
-		offset += adjacency.counts[i];
+		// when using sparse mode this pass uses sparse_seen bit to tag visited vertices
+		for (size_t i = 0; i < index_count; ++i)
+		{
+			unsigned int v = indices[i];
+
+			if ((adjacency.counts[v] & sparse_seen) == 0)
+			{
+				adjacency.offsets[v] = offset;
+				offset += adjacency.counts[v];
+				adjacency.counts[v] |= sparse_seen;
+			}
+		}
+	}
+	else
+	{
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			adjacency.offsets[i] = offset;
+			offset += adjacency.counts[i];
+		}
 	}
 
 	assert(offset == index_count);
@@ -67,11 +89,29 @@ static void buildTriangleAdjacency(TriangleAdjacency2& adjacency, const unsigned
 	}
 
 	// fix offsets that have been disturbed by the previous pass
-	for (size_t i = 0; i < vertex_count; ++i)
+	if (sparse)
 	{
-		assert(adjacency.offsets[i] >= adjacency.counts[i]);
+		// when using sparse mode this pass also fixes counts (that were marked with sparse_seen)
+		for (size_t i = 0; i < index_count; ++i)
+		{
+			unsigned int v = indices[i];
 
-		adjacency.offsets[i] -= adjacency.counts[i];
+			if (adjacency.counts[v] & sparse_seen)
+			{
+				adjacency.counts[v] &= ~sparse_seen;
+
+				assert(adjacency.offsets[v] >= adjacency.counts[v]);
+				adjacency.offsets[v] -= adjacency.counts[v];
+			}
+		}
+	}
+	else
+	{
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			assert(adjacency.offsets[i] >= adjacency.counts[i]);
+			adjacency.offsets[i] -= adjacency.counts[i];
+		}
 	}
 }
 
