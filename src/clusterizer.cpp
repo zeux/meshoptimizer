@@ -30,10 +30,6 @@ static void buildTriangleAdjacency(TriangleAdjacency2& adjacency, const unsigned
 {
 	size_t face_count = index_count / 3;
 
-	// sparse mode can build adjacency more quickly by ignoring unused vertices
-	const unsigned int sparse_seen = 1u << 31;
-	bool sparse = vertex_count > index_count && index_count < sparse_seen;
-
 	// allocate arrays
 	adjacency.counts = allocator.allocate<unsigned int>(vertex_count);
 	adjacency.offsets = allocator.allocate<unsigned int>(vertex_count);
@@ -52,27 +48,68 @@ static void buildTriangleAdjacency(TriangleAdjacency2& adjacency, const unsigned
 	// fill offset table
 	unsigned int offset = 0;
 
-	if (sparse)
+	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		// when using sparse mode this pass uses sparse_seen bit to tag visited vertices
-		for (size_t i = 0; i < index_count; ++i)
-		{
-			unsigned int v = indices[i];
-
-			if ((adjacency.counts[v] & sparse_seen) == 0)
-			{
-				adjacency.offsets[v] = offset;
-				offset += adjacency.counts[v];
-				adjacency.counts[v] |= sparse_seen;
-			}
-		}
+		adjacency.offsets[i] = offset;
+		offset += adjacency.counts[i];
 	}
-	else
+
+	assert(offset == index_count);
+
+	// fill triangle data
+	for (size_t i = 0; i < face_count; ++i)
 	{
-		for (size_t i = 0; i < vertex_count; ++i)
+		unsigned int a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
+
+		adjacency.data[adjacency.offsets[a]++] = unsigned(i);
+		adjacency.data[adjacency.offsets[b]++] = unsigned(i);
+		adjacency.data[adjacency.offsets[c]++] = unsigned(i);
+	}
+
+	// fix offsets that have been disturbed by the previous pass
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		assert(adjacency.offsets[i] >= adjacency.counts[i]);
+		adjacency.offsets[i] -= adjacency.counts[i];
+	}
+}
+
+static void buildTriangleAdjacencySparse(TriangleAdjacency2& adjacency, const unsigned int* indices, size_t index_count, size_t vertex_count, meshopt_Allocator& allocator)
+{
+	size_t face_count = index_count / 3;
+
+	// sparse mode can build adjacency more quickly by ignoring unused vertices, using a bit to mark visited vertices
+	const unsigned int sparse_seen = 1u << 31;
+	assert(index_count < sparse_seen);
+
+	// allocate arrays
+	adjacency.counts = allocator.allocate<unsigned int>(vertex_count);
+	adjacency.offsets = allocator.allocate<unsigned int>(vertex_count);
+	adjacency.data = allocator.allocate<unsigned int>(index_count);
+
+	// fill triangle counts
+	for (size_t i = 0; i < index_count; ++i)
+		assert(indices[i] < vertex_count);
+
+	for (size_t i = 0; i < index_count; ++i)
+		adjacency.counts[indices[i]] = 0;
+
+	for (size_t i = 0; i < index_count; ++i)
+		adjacency.counts[indices[i]]++;
+
+	// fill offset table
+	unsigned int offset = 0;
+
+	// when using sparse mode this pass uses sparse_seen bit to tag visited vertices
+	for (size_t i = 0; i < index_count; ++i)
+	{
+		unsigned int v = indices[i];
+
+		if ((adjacency.counts[v] & sparse_seen) == 0)
 		{
-			adjacency.offsets[i] = offset;
-			offset += adjacency.counts[i];
+			adjacency.offsets[v] = offset;
+			offset += adjacency.counts[v];
+			adjacency.counts[v] |= sparse_seen;
 		}
 	}
 
@@ -89,28 +126,17 @@ static void buildTriangleAdjacency(TriangleAdjacency2& adjacency, const unsigned
 	}
 
 	// fix offsets that have been disturbed by the previous pass
-	if (sparse)
+	// when using sparse mode this pass also fixes counts (that were marked with sparse_seen)
+	for (size_t i = 0; i < index_count; ++i)
 	{
-		// when using sparse mode this pass also fixes counts (that were marked with sparse_seen)
-		for (size_t i = 0; i < index_count; ++i)
-		{
-			unsigned int v = indices[i];
+		unsigned int v = indices[i];
 
-			if (adjacency.counts[v] & sparse_seen)
-			{
-				adjacency.counts[v] &= ~sparse_seen;
-
-				assert(adjacency.offsets[v] >= adjacency.counts[v]);
-				adjacency.offsets[v] -= adjacency.counts[v];
-			}
-		}
-	}
-	else
-	{
-		for (size_t i = 0; i < vertex_count; ++i)
+		if (adjacency.counts[v] & sparse_seen)
 		{
-			assert(adjacency.offsets[i] >= adjacency.counts[i]);
-			adjacency.offsets[i] -= adjacency.counts[i];
+			adjacency.counts[v] &= ~sparse_seen;
+
+			assert(adjacency.offsets[v] >= adjacency.counts[v]);
+			adjacency.offsets[v] -= adjacency.counts[v];
 		}
 	}
 }
@@ -592,7 +618,10 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* meshlet_ve
 	meshopt_Allocator allocator;
 
 	TriangleAdjacency2 adjacency = {};
-	buildTriangleAdjacency(adjacency, indices, index_count, vertex_count, allocator);
+	if (vertex_count > index_count && index_count < (1u << 31))
+		buildTriangleAdjacencySparse(adjacency, indices, index_count, vertex_count, allocator);
+	else
+		buildTriangleAdjacency(adjacency, indices, index_count, vertex_count, allocator);
 
 	// live triangle counts; note, we alias adjacency.counts as we remove triangles after emitting them so the counts always match
 	unsigned int* live_triangles = adjacency.counts;
