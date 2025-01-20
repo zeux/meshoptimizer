@@ -1040,6 +1040,50 @@ static void clusterBoundsDegenerate()
 	assert(bounds2.center[2] - bounds2.radius <= 0 && bounds2.center[2] + bounds2.radius >= 1);
 }
 
+static void meshletsDense()
+{
+	const float vbd[4 * 3] = {};
+	const unsigned int ibd[6] = {0, 2, 1, 1, 2, 3};
+
+	meshopt_Meshlet ml[1];
+	unsigned int mv[4];
+	unsigned char mt[8];
+	size_t mc = meshopt_buildMeshlets(ml, mv, mt, ibd, 6, vbd, 4, sizeof(float) * 3, 64, 64, 0.f);
+
+	assert(mc == 1);
+	assert(ml[0].triangle_count == 2);
+	assert(ml[0].vertex_count == 4);
+
+	unsigned int tri0[3] = {mv[mt[0]], mv[mt[1]], mv[mt[2]]};
+	unsigned int tri1[3] = {mv[mt[3]], mv[mt[4]], mv[mt[5]]};
+
+	// technically triangles could also be flipped in the meshlet but for now just assume they aren't
+	assert(memcmp(tri0, ibd + 0, 3 * sizeof(unsigned int)) == 0);
+	assert(memcmp(tri1, ibd + 3, 3 * sizeof(unsigned int)) == 0);
+}
+
+static void meshletsSparse()
+{
+	const float vbd[16 * 3] = {};
+	const unsigned int ibd[6] = {0, 7, 15, 15, 7, 3};
+
+	meshopt_Meshlet ml[1];
+	unsigned int mv[4];
+	unsigned char mt[8];
+	size_t mc = meshopt_buildMeshlets(ml, mv, mt, ibd, 6, vbd, 16, sizeof(float) * 3, 64, 64, 0.f);
+
+	assert(mc == 1);
+	assert(ml[0].triangle_count == 2);
+	assert(ml[0].vertex_count == 4);
+
+	unsigned int tri0[3] = {mv[mt[0]], mv[mt[1]], mv[mt[2]]};
+	unsigned int tri1[3] = {mv[mt[3]], mv[mt[4]], mv[mt[5]]};
+
+	// technically triangles could also be flipped in the meshlet but for now just assume they aren't
+	assert(memcmp(tri0, ibd + 0, 3 * sizeof(unsigned int)) == 0);
+	assert(memcmp(tri1, ibd + 3, 3 * sizeof(unsigned int)) == 0);
+}
+
 static size_t allocCount;
 static size_t freeCount;
 
@@ -2094,6 +2138,9 @@ void runTests()
 	encodeFilterExpClamp();
 
 	clusterBoundsDegenerate();
+
+	meshletsDense();
+	meshletsSparse();
 
 	customAllocator();
 
