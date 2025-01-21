@@ -626,17 +626,6 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 
 	static const char* dump = getenv("DUMP");
 
-	// initial clusterization splits the original mesh
-	std::vector<Cluster> clusters = clusterize(vertices, indices);
-	for (size_t i = 0; i < clusters.size(); ++i)
-		clusters[i].self = bounds(vertices, clusters[i].indices, 0.f);
-
-	printf("lod 0: %d clusters, %d triangles\n", int(clusters.size()), int(indices.size() / 3));
-
-	std::vector<int> pending(clusters.size());
-	for (size_t i = 0; i < clusters.size(); ++i)
-		pending[i] = int(i);
-
 #ifndef NDEBUG
 	std::vector<std::pair<int, int> > dag_debug;
 #endif
@@ -650,6 +639,23 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	std::vector<unsigned int> remap(vertices.size());
 	meshopt_Stream position = {&vertices[0].px, sizeof(float) * 3, sizeof(Vertex)};
 	meshopt_generateVertexRemapMulti(&remap[0], &indices[0], indices.size(), vertices.size(), &position, 1);
+
+	// initial clusterization splits the original mesh
+	std::vector<Cluster> clusters = clusterize(vertices, indices);
+	for (size_t i = 0; i < clusters.size(); ++i)
+		clusters[i].self = bounds(vertices, clusters[i].indices, 0.f);
+
+	size_t components_initial = 0;
+	for (size_t i = 0; i < clusters.size(); ++i)
+		components_initial += connected(parents, clusters[i].indices, remap);
+
+	printf("lod 0: %d clusters (%.1f tri/cl, %.2f connected), %d triangles\n",
+	    int(clusters.size()), double(indices.size() / 3) / double(clusters.size()), double(components_initial) / double(clusters.size()),
+	    int(indices.size() / 3));
+
+	std::vector<int> pending(clusters.size());
+	for (size_t i = 0; i < clusters.size(); ++i)
+		pending[i] = int(i);
 
 	// merge and simplify clusters until we can't merge anymore
 	while (pending.size() > 1)
