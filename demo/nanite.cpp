@@ -793,12 +793,12 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 			}
 		}
 
+		double inv_clusters = pending.empty() ? 0 : 1.0 / double(pending.size());
+
 		depth++;
-		printf("lod %d: simplified %d clusters (%d full, %.1f tri/cl, %.1f vtx/cl, %.2f connected), %d triangles; stuck %d clusters (%d single), %d triangles\n",
-		    depth, int(pending.size()), full_clusters,
-		    pending.empty() ? 0 : double(triangles) / double(pending.size()),
-		    pending.empty() ? 0 : double(xformed_lod) / double(pending.size()),
-		    pending.empty() ? 0 : double(components_lod) / double(pending.size()),
+		printf("lod %d: simplified %d clusters (%.1f%% full, %.1f tri/cl, %.1f vtx/cl, %.2f connected), %d triangles; stuck %d clusters (%d single), %d triangles\n",
+		    depth, int(pending.size()),
+		    double(full_clusters) * inv_clusters * 100, double(triangles) * inv_clusters, double(xformed_lod) * inv_clusters, double(components_lod) * inv_clusters,
 		    int(triangles), stuck_clusters, single_clusters, int(stuck_triangles));
 
 		if (kUseRetry)
