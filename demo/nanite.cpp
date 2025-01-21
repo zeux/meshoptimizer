@@ -592,6 +592,26 @@ static int connected(std::vector<int>& parents, const std::vector<unsigned int>&
 	return roots;
 }
 
+static int xformed(std::vector<int>& used, const std::vector<unsigned int>& indices)
+{
+	for (size_t i = 0; i < indices.size(); ++i)
+	{
+		unsigned int v = indices[i];
+		used[v] = 1;
+	}
+
+	size_t vertices = 0;
+
+	for (size_t i = 0; i < indices.size(); ++i)
+	{
+		unsigned int v = indices[i];
+		vertices += used[v];
+		used[v] = 0;
+	}
+
+	return int(vertices);
+}
+
 static bool loadMetis()
 {
 #ifdef _WIN32
@@ -646,11 +666,18 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		clusters[i].self = bounds(vertices, clusters[i].indices, 0.f);
 
 	size_t components_initial = 0;
+	size_t xformed_initial = 0;
 	for (size_t i = 0; i < clusters.size(); ++i)
+	{
 		components_initial += connected(parents, clusters[i].indices, remap);
+		xformed_initial += xformed(parents, clusters[i].indices);
+	}
 
-	printf("lod 0: %d clusters (%.1f tri/cl, %.2f connected), %d triangles\n",
-	    int(clusters.size()), double(indices.size() / 3) / double(clusters.size()), double(components_initial) / double(clusters.size()),
+	printf("lod 0: %d clusters (%.1f tri/cl, %.1f vtx/cl, %.2f connected), %d triangles\n",
+	    int(clusters.size()),
+	    double(indices.size() / 3) / double(clusters.size()),
+	    double(xformed_initial) / double(clusters.size()),
+	    double(components_initial) / double(clusters.size()),
 	    int(indices.size() / 3));
 
 	std::vector<int> pending(clusters.size());
@@ -670,7 +697,8 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		int single_clusters = 0;
 		int stuck_clusters = 0;
 		int full_clusters = 0;
-		size_t components = 0;
+		size_t components_lod = 0;
+		size_t xformed_lod = 0;
 
 		if (dump && depth == atoi(dump))
 			dumpObj(vertices, std::vector<unsigned int>());
@@ -760,15 +788,17 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 
 				triangles += split[j].indices.size() / 3;
 				full_clusters += split[j].indices.size() == kClusterSize * 3;
-				components += connected(parents, split[j].indices, remap);
+				components_lod += connected(parents, split[j].indices, remap);
+				xformed_lod += xformed(parents, split[j].indices);
 			}
 		}
 
 		depth++;
-		printf("lod %d: simplified %d clusters (%d full, %.1f tri/cl, %.2f connected), %d triangles; stuck %d clusters (%d single), %d triangles\n",
+		printf("lod %d: simplified %d clusters (%d full, %.1f tri/cl, %.1f vtx/cl, %.2f connected), %d triangles; stuck %d clusters (%d single), %d triangles\n",
 		    depth, int(pending.size()), full_clusters,
 		    pending.empty() ? 0 : double(triangles) / double(pending.size()),
-		    pending.empty() ? 0 : double(components) / double(pending.size()),
+		    pending.empty() ? 0 : double(xformed_lod) / double(pending.size()),
+		    pending.empty() ? 0 : double(components_lod) / double(pending.size()),
 		    int(triangles), stuck_clusters, single_clusters, int(stuck_triangles));
 
 		if (kUseRetry)
