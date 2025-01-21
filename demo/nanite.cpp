@@ -542,6 +542,56 @@ static std::vector<unsigned int> simplify(const std::vector<Vertex>& vertices, c
 	return lod;
 }
 
+static int follow(std::vector<int>& parents, int index)
+{
+	while (index != parents[index])
+	{
+		int parent = parents[index];
+		parents[index] = parents[parent];
+		index = parent;
+	}
+
+	return index;
+}
+
+static int connected(std::vector<int>& parents, const std::vector<unsigned int>& indices, const std::vector<unsigned int>& remap)
+{
+	assert(parents.size() == remap.size());
+
+	for (size_t i = 0; i < indices.size(); ++i)
+	{
+		unsigned int v = remap[indices[i]];
+		parents[v] = v;
+	}
+
+	for (size_t i = 0; i < indices.size(); ++i)
+	{
+		int v0 = remap[indices[i]];
+		int v1 = remap[indices[i + (i % 3 == 2 ? -2 : 1)]];
+
+		v0 = follow(parents, v0);
+		v1 = follow(parents, v1);
+
+		parents[v0] = v1;
+	}
+
+	for (size_t i = 0; i < indices.size(); ++i)
+	{
+		unsigned int v = remap[indices[i]];
+		parents[v] = follow(parents, v);
+	}
+
+	int roots = 0;
+	for (size_t i = 0; i < indices.size(); ++i)
+	{
+		unsigned int v = remap[indices[i]];
+		roots += parents[v] == int(v);
+		parents[v] = -1; // make sure we only count each root once
+	}
+
+	return roots;
+}
+
 static bool loadMetis()
 {
 #ifdef _WIN32
@@ -593,6 +643,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 
 	int depth = 0;
 	std::vector<unsigned char> locks(vertices.size());
+	std::vector<int> parents(vertices.size());
 
 	// for cluster connectivity, we need a position-only remap that maps vertices with the same position to the same index
 	// it's more efficient to build it once; unfortunately, meshopt_generateVertexRemap doesn't support stride so we need to use *Multi version
@@ -613,6 +664,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		int single_clusters = 0;
 		int stuck_clusters = 0;
 		int full_clusters = 0;
+		size_t components = 0;
 
 		if (dump && depth == atoi(dump))
 			dumpObj(vertices, std::vector<unsigned int>());
@@ -702,12 +754,16 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 
 				triangles += split[j].indices.size() / 3;
 				full_clusters += split[j].indices.size() == kClusterSize * 3;
+				components += connected(parents, split[j].indices, remap);
 			}
 		}
 
 		depth++;
-		printf("lod %d: simplified %d clusters (%d full, %.1f tri/cl), %d triangles; stuck %d clusters (%d single), %d triangles\n", depth,
-		    int(pending.size()), full_clusters, pending.empty() ? 0 : double(triangles) / double(pending.size()), int(triangles), stuck_clusters, single_clusters, int(stuck_triangles));
+		printf("lod %d: simplified %d clusters (%d full, %.1f tri/cl, %.2f connected), %d triangles; stuck %d clusters (%d single), %d triangles\n",
+		    depth, int(pending.size()), full_clusters,
+		    pending.empty() ? 0 : double(triangles) / double(pending.size()),
+		    pending.empty() ? 0 : double(components) / double(pending.size()),
+		    int(triangles), stuck_clusters, single_clusters, int(stuck_triangles));
 
 		if (kUseRetry)
 		{
