@@ -976,8 +976,8 @@ void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false)
 	double avg_vertices = 0;
 	double avg_triangles = 0;
 	double avg_boundary = 0;
+	double avg_connected = 0;
 	size_t not_full = 0;
-	size_t not_connected = 0;
 
 	std::vector<int> boundary(mesh.vertices.size());
 
@@ -1022,16 +1022,17 @@ void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false)
 			roots += follow(parents, j) == int(j);
 
 		assert(roots != 0);
-		not_connected += roots > 1;
+		avg_connected += roots;
 	}
 
 	avg_vertices /= double(meshlets.size());
 	avg_triangles /= double(meshlets.size());
 	avg_boundary /= double(meshlets.size());
+	avg_connected /= double(meshlets.size());
 
-	printf("Meshlets%c: %d meshlets (avg vertices %.1f, avg triangles %.1f, avg boundary %.1f, not full %d, not connected %d) in %.2f msec\n",
+	printf("Meshlets%c: %d meshlets (avg vertices %.1f, avg triangles %.1f, avg boundary %.1f, avg connected %.2f, not full %d) in %.2f msec\n",
 	    scan ? 'S' : (uniform ? 'U' : ' '),
-	    int(meshlets.size()), avg_vertices, avg_triangles, avg_boundary, int(not_full), int(not_connected), (end - start) * 1000);
+	    int(meshlets.size()), avg_vertices, avg_triangles, avg_boundary, avg_connected, int(not_full), (end - start) * 1000);
 
 	float camera[3] = {100, 100, 100};
 
@@ -1401,17 +1402,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	Mesh copy = mesh;
-	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
-	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
-
-	meshopt_encodeVertexVersion(0);
-	encodeVertex<PackedVertex>(copy, "L");
-	meshopt_encodeVertexVersion(1);
-	encodeVertex<PackedVertex>(copy, "0", 0);
-	encodeVertex<PackedVertex>(copy, "1", 1);
-	encodeVertex<PackedVertex>(copy, "2", 2);
-	encodeVertex<PackedVertex>(copy, "3", 3);
+	meshlets(mesh);
 }
 
 void processNanite(const char* path)
