@@ -468,7 +468,7 @@ static int measureComponents(std::vector<int>& parents, const std::vector<unsign
 	return roots;
 }
 
-static int measureUnique(std::vector<int>& used, const std::vector<unsigned int>& indices)
+static int measureUnique(std::vector<int>& used, const std::vector<unsigned int>& indices, const std::vector<unsigned char>* locks = NULL)
 {
 	for (size_t i = 0; i < indices.size(); ++i)
 	{
@@ -481,7 +481,7 @@ static int measureUnique(std::vector<int>& used, const std::vector<unsigned int>
 	for (size_t i = 0; i < indices.size(); ++i)
 	{
 		unsigned int v = indices[i];
-		vertices += used[v];
+		vertices += used[v] && (!locks || !(*locks)[v]);
 		used[v] = 0;
 	}
 
@@ -575,6 +575,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		int full_clusters = 0;
 		size_t components_lod = 0;
 		size_t xformed_lod = 0;
+		size_t boundary_lod = 0;
 
 		if (dump && depth == atoi(dump))
 			dumpObj(vertices, std::vector<unsigned int>());
@@ -666,16 +667,20 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 				full_clusters += split[j].indices.size() == kClusterSize * 3;
 				components_lod += measureComponents(parents, split[j].indices, remap);
 				xformed_lod += measureUnique(parents, split[j].indices);
+				boundary_lod += kUseLocks ? measureUnique(parents, split[j].indices, &locks) : 0;
 			}
 		}
 
 		double inv_clusters = pending.empty() ? 0 : 1.0 / double(pending.size());
 
 		depth++;
-		printf("lod %d: simplified %d clusters (%.1f%% full, %.1f tri/cl, %.1f vtx/cl, %.2f connected), %d triangles; stuck %d clusters (%d single), %d triangles\n",
+		printf("lod %d: %d clusters (%.1f%% full, %.1f tri/cl, %.1f vtx/cl, %.2f connected, %.1f boundary), %d triangles",
 		    depth, int(pending.size()),
-		    double(full_clusters) * inv_clusters * 100, double(triangles) * inv_clusters, double(xformed_lod) * inv_clusters, double(components_lod) * inv_clusters,
-		    int(triangles), stuck_clusters, single_clusters, int(stuck_triangles));
+		    double(full_clusters) * inv_clusters * 100, double(triangles) * inv_clusters, double(xformed_lod) * inv_clusters, double(components_lod) * inv_clusters, double(boundary_lod) * inv_clusters,
+		    int(triangles));
+		if (stuck_clusters)
+			printf("; stuck %d clusters (%d single, %d triangles)", stuck_clusters, single_clusters, int(stuck_triangles));
+		printf("\n");
 
 		if (kUseRetry)
 		{
