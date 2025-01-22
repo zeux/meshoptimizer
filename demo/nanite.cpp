@@ -549,6 +549,8 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		xformed_initial += measureUnique(parents, clusters[i].indices);
 	}
 
+	printf("ideal lod chain: %.1f levels\n", log2(double(indices.size() / 3) / double(kClusterSize)));
+
 	printf("lod 0: %d clusters (%.1f tri/cl, %.1f vtx/cl, %.2f connected), %d triangles\n",
 	    int(clusters.size()),
 	    double(indices.size() / 3) / double(clusters.size()),
