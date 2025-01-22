@@ -430,7 +430,7 @@ static int follow(std::vector<int>& parents, int index)
 	return index;
 }
 
-static int connected(std::vector<int>& parents, const std::vector<unsigned int>& indices, const std::vector<unsigned int>& remap)
+static int measureComponents(std::vector<int>& parents, const std::vector<unsigned int>& indices, const std::vector<unsigned int>& remap)
 {
 	assert(parents.size() == remap.size());
 
@@ -468,7 +468,7 @@ static int connected(std::vector<int>& parents, const std::vector<unsigned int>&
 	return roots;
 }
 
-static int xformed(std::vector<int>& used, const std::vector<unsigned int>& indices)
+static int measureUnique(std::vector<int>& used, const std::vector<unsigned int>& indices)
 {
 	for (size_t i = 0; i < indices.size(); ++i)
 	{
@@ -545,8 +545,8 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	size_t xformed_initial = 0;
 	for (size_t i = 0; i < clusters.size(); ++i)
 	{
-		components_initial += connected(parents, clusters[i].indices, remap);
-		xformed_initial += xformed(parents, clusters[i].indices);
+		components_initial += measureComponents(parents, clusters[i].indices, remap);
+		xformed_initial += measureUnique(parents, clusters[i].indices);
 	}
 
 	printf("lod 0: %d clusters (%.1f tri/cl, %.1f vtx/cl, %.2f connected), %d triangles\n",
@@ -664,8 +664,8 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 
 				triangles += split[j].indices.size() / 3;
 				full_clusters += split[j].indices.size() == kClusterSize * 3;
-				components_lod += connected(parents, split[j].indices, remap);
-				xformed_lod += xformed(parents, split[j].indices);
+				components_lod += measureComponents(parents, split[j].indices, remap);
+				xformed_lod += measureUnique(parents, split[j].indices);
 			}
 		}
 
