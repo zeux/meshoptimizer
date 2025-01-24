@@ -183,8 +183,6 @@ Decoding functions are heavily optimized and can directly target write-combined 
 
 For additional improvements in compression ratio and decoding performance, it is recommended to switch to vertex codec v1 (via `meshopt_encodeVertexVersion(1)`). This will result in smaller outputs that decode faster, and provide additional control over compression level - `meshopt_encodeVertexBuffer` will use compression level 2 by default, but using `meshopt_encodeVertexBufferLevel` allows to improve compression in certain cases by using level 3, or to reduce compression ratio and improve encoding speed by using level 1. Note that v1 format requires meshoptimizer v0.23 or later for decoding.
 
-When data is bit packed, using v1 vertex codec (via `meshopt_encodeVertexVersion(1)`) and specifying compression level 3 (`meshopt_encodeVertexBufferLevel`) can improve the compression further by redistributing bits between components.
-
 Index buffer codec only supports triangle list topology; when encoding triangle strips or line lists, use `meshopt_encodeIndexSequence`/`meshopt_decodeIndexSequence` instead. This codec typically encodes indices into ~1 byte per index, but compressing the results further with a general purpose compressor can improve the results to 1-3 bits per index.
 
 The following guarantees on data compatibility are provided for point releases (*no* guarantees are given for development branch):
