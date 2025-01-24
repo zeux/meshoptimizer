@@ -232,7 +232,7 @@ static std::vector<Cluster> clusterizeMetis(const std::vector<Vertex>& vertices,
 
 static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
-	if (METIS >= 2)
+	if (METIS & 2)
 		return clusterizeMetis(vertices, indices);
 
 	const size_t max_vertices = 192; // TODO: depends on kClusterSize, also may want to dial down for mesh shaders
@@ -346,7 +346,7 @@ static std::vector<std::vector<int> > partitionMetis(const std::vector<Cluster>&
 
 static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clusters, const std::vector<int>& pending, const std::vector<unsigned int>& remap)
 {
-	if (METIS >= 1)
+	if (METIS & 1)
 		return partitionMetis(clusters, pending, remap);
 
 	(void)remap;
@@ -515,7 +515,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	if (METIS)
 	{
 		if (loadMetis())
-			printf("using metis for %s\n", METIS >= 2 ? "clustering and partition" : "partition only");
+			printf("using metis for %s\n", (METIS & 3) == 3 ? "clustering and partition" : ((METIS & 1) ? "partition only" : "clustering only"));
 		else
 			printf("metis library is not available\n"), METIS = 0;
 	}
