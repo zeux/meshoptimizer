@@ -841,25 +841,25 @@ static std::string decodeUri(const char* uri)
 
 void writeSampler(std::string& json, const cgltf_sampler& sampler)
 {
-	if (sampler.mag_filter != 0)
+	if (sampler.mag_filter != cgltf_filter_type_undefined)
 	{
 		comma(json);
 		append(json, "\"magFilter\":");
 		append(json, size_t(sampler.mag_filter));
 	}
-	if (sampler.min_filter != 0)
+	if (sampler.min_filter != cgltf_filter_type_undefined)
 	{
 		comma(json);
 		append(json, "\"minFilter\":");
 		append(json, size_t(sampler.min_filter));
 	}
-	if (sampler.wrap_s != 10497)
+	if (sampler.wrap_s != cgltf_wrap_mode_repeat)
 	{
 		comma(json);
 		append(json, "\"wrapS\":");
 		append(json, size_t(sampler.wrap_s));
 	}
-	if (sampler.wrap_t != 10497)
+	if (sampler.wrap_t != cgltf_wrap_mode_repeat)
 	{
 		comma(json);
 		append(json, "\"wrapT\":");
