@@ -12,6 +12,7 @@ namespace meshopt
 
 static const bool kMergeScoreExternal = false;
 static const bool kMergeScoreSmallest = false;
+static const bool kSortExternal = false;
 
 // TOOD part of prototype code, to be removed
 struct Cluster
@@ -19,6 +20,33 @@ struct Cluster
 	const unsigned int* indices;
 	size_t index_count;
 };
+
+// TODO: valence[] is only used as a seen[] buffer
+static unsigned int countTotal(const std::vector<int>& group, const std::vector<Cluster>& clusters, std::vector<unsigned int>& valence)
+{
+	unsigned int total = 0;
+
+	for (size_t i = 0; i < group.size(); ++i)
+	{
+		const Cluster& cluster = clusters[group[i]];
+
+		for (size_t j = 0; j < cluster.index_count; ++j)
+		{
+			total += 1 - (valence[cluster.indices[j]] >> 31);
+			valence[cluster.indices[j]] |= 1u << 31;
+		}
+	}
+
+	for (size_t i = 0; i < group.size(); ++i)
+	{
+		const Cluster& cluster = clusters[group[i]];
+
+		for (size_t j = 0; j < cluster.index_count; ++j)
+			valence[cluster.indices[j]] &= ~(1u << 31);
+	}
+
+	return total;
+}
 
 static unsigned int countShared(const std::vector<int>& group1, const std::vector<int>& group2, const std::vector<std::map<size_t, unsigned int> >& adjacency)
 {
@@ -149,7 +177,7 @@ static std::vector<std::vector<int> > partitionMerge(const std::vector<Cluster>&
 	{
 		std::vector<int> group;
 		group.push_back(i);
-		unsigned int ext = countExternal(group, std::vector<int>(), clusters, valence);
+		unsigned int ext = kSortExternal ? countExternal(group, std::vector<int>(), clusters, valence) : countTotal(group, clusters, valence);
 		std::multimap<unsigned int, std::vector<int> >::iterator it = groups.insert(std::make_pair(ext, group));
 		part[i] = it;
 	}
@@ -204,12 +232,12 @@ static std::vector<std::vector<int> > partitionMerge(const std::vector<Cluster>&
 			else
 			{
 				// combine and reinsert
-				unsigned int ext = countExternal(group, bestGroup->second, clusters, valence);
-
 				std::vector<int> combined;
 				combined.reserve(combined.size() + bestGroup->second.size());
 				combined.insert(combined.end(), group.begin(), group.end());
 				combined.insert(combined.end(), bestGroup->second.begin(), bestGroup->second.end());
+
+				unsigned int ext = kSortExternal ? countExternal(combined, std::vector<int>(), clusters, valence) : countTotal(combined, clusters, valence);
 
 				for (size_t i = 0; i < bestGroup->second.size(); ++i)
 					part[bestGroup->second[i]] = groups.end();
