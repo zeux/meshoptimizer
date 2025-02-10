@@ -10,6 +10,9 @@
 namespace meshopt
 {
 
+static const bool kMergeScoreExternal = false;
+static const bool kMergeScoreSmallest = false;
+
 // TOOD part of prototype code, to be removed
 struct Cluster
 {
@@ -36,29 +39,53 @@ static unsigned int countShared(const std::vector<int>& group1, const std::vecto
 	return total;
 }
 
-static unsigned int countExternal(const std::vector<int>& group, const std::vector<Cluster>& clusters, std::vector<unsigned int>& valence)
+static unsigned int countExternal(const std::vector<int>& group1, const std::vector<int>& group2, const std::vector<Cluster>& clusters, std::vector<unsigned int>& valence)
 {
 	unsigned int total = 0;
 
-	for (size_t i = 0; i < group.size(); ++i)
+	for (size_t i = 0; i < group1.size(); ++i)
 	{
-		const Cluster& cluster = clusters[group[i]];
+		const Cluster& cluster = clusters[group1[i]];
 
 		for (size_t j = 0; j < cluster.index_count; ++j)
 			valence[cluster.indices[j]]--;
 	}
 
-	for (size_t i = 0; i < group.size(); ++i)
+	for (size_t i = 0; i < group2.size(); ++i)
 	{
-		const Cluster& cluster = clusters[group[i]];
+		const Cluster& cluster = clusters[group2[i]];
+
+		for (size_t j = 0; j < cluster.index_count; ++j)
+			valence[cluster.indices[j]]--;
+	}
+
+	for (size_t i = 0; i < group1.size(); ++i)
+	{
+		const Cluster& cluster = clusters[group1[i]];
 
 		for (size_t j = 0; j < cluster.index_count; ++j)
 			total += valence[cluster.indices[j]] != 0;
 	}
 
-	for (size_t i = 0; i < group.size(); ++i)
+	for (size_t i = 0; i < group2.size(); ++i)
 	{
-		const Cluster& cluster = clusters[group[i]];
+		const Cluster& cluster = clusters[group2[i]];
+
+		for (size_t j = 0; j < cluster.index_count; ++j)
+			total += valence[cluster.indices[j]] != 0;
+	}
+
+	for (size_t i = 0; i < group1.size(); ++i)
+	{
+		const Cluster& cluster = clusters[group1[i]];
+
+		for (size_t j = 0; j < cluster.index_count; ++j)
+			valence[cluster.indices[j]]++;
+	}
+
+	for (size_t i = 0; i < group2.size(); ++i)
+	{
+		const Cluster& cluster = clusters[group2[i]];
 
 		for (size_t j = 0; j < cluster.index_count; ++j)
 			valence[cluster.indices[j]]++;
@@ -122,7 +149,7 @@ static std::vector<std::vector<int> > partitionMerge(const std::vector<Cluster>&
 	{
 		std::vector<int> group;
 		group.push_back(i);
-		unsigned int ext = countExternal(group, clusters, valence);
+		unsigned int ext = countExternal(group, std::vector<int>(), clusters, valence);
 		std::multimap<unsigned int, std::vector<int> >::iterator it = groups.insert(std::make_pair(ext, group));
 		part[i] = it;
 	}
@@ -143,7 +170,7 @@ static std::vector<std::vector<int> > partitionMerge(const std::vector<Cluster>&
 		else
 		{
 			std::multimap<unsigned int, std::vector<int> >::iterator bestGroup = groups.end();
-			unsigned int bestShared = 0;
+			unsigned int bestScore = 0;
 
 			for (size_t ci = 0; ci < group.size(); ++ci)
 			{
@@ -156,12 +183,15 @@ static std::vector<std::vector<int> > partitionMerge(const std::vector<Cluster>&
 					if (group.size() + it->second.size() > MAX_GROUP_SIZE)
 						continue;
 
-					unsigned int shd = countShared(group, it->second, adjacency);
+					if (kMergeScoreSmallest && bestGroup != groups.end() && it->second.size() > bestGroup->second.size())
+						continue;
 
-					if (shd > bestShared)
+					unsigned int score = kMergeScoreExternal ? ~countExternal(group, it->second, clusters, valence) : countShared(group, it->second, adjacency);
+
+					if (score > bestScore)
 					{
-						bestShared = shd;
 						bestGroup = it;
+						bestScore = score;
 					}
 				}
 			}
@@ -174,10 +204,12 @@ static std::vector<std::vector<int> > partitionMerge(const std::vector<Cluster>&
 			else
 			{
 				// combine and reinsert
-				std::vector<int> combined = group;
-				combined.insert(combined.end(), bestGroup->second.begin(), bestGroup->second.end());
+				unsigned int ext = countExternal(group, bestGroup->second, clusters, valence);
 
-				unsigned int ext = countExternal(combined, clusters, valence);
+				std::vector<int> combined;
+				combined.reserve(combined.size() + bestGroup->second.size());
+				combined.insert(combined.end(), group.begin(), group.end());
+				combined.insert(combined.end(), bestGroup->second.begin(), bestGroup->second.end());
 
 				for (size_t i = 0; i < bestGroup->second.size(); ++i)
 					part[bestGroup->second[i]] = groups.end();
@@ -217,6 +249,7 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 	}
 
 	assert(cluster_offset == cluster_indices + total_index_count);
+	(void)total_index_count;
 
 	std::vector<std::vector<int> > groups = partitionMerge(clusters, vertex_count);
 
