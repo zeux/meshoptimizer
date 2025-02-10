@@ -349,26 +349,27 @@ static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clus
 	if (METIS & 1)
 		return partitionMetis(clusters, pending, remap);
 
-	(void)remap;
+	std::vector<unsigned int> cluster_indices;
+	std::vector<unsigned int> cluster_counts(pending.size());
 
-	std::vector<std::vector<int> > result;
-
-	size_t last_indices = 0;
-
-	// rough merge; while clusters are approximately spatially ordered, this should use a proper partitioning algorithm
 	for (size_t i = 0; i < pending.size(); ++i)
 	{
-		if (result.empty() || last_indices + clusters[pending[i]].indices.size() > kClusterSize * kGroupSize * 3)
-		{
-			result.push_back(std::vector<int>());
-			last_indices = 0;
-		}
+		const Cluster& cluster = clusters[pending[i]];
 
-		result.back().push_back(pending[i]);
-		last_indices += clusters[pending[i]].indices.size();
+		cluster_counts[i] = cluster.indices.size();
+
+		for (size_t j = 0; j < cluster.indices.size(); ++j)
+			cluster_indices.push_back(remap[cluster.indices[j]]);
 	}
 
-	return result;
+	std::vector<unsigned int> cluster_part(pending.size());
+	size_t partition_count = meshopt_partitionClusters(&cluster_part[0], &cluster_indices[0], cluster_indices.size(), &cluster_counts[0], cluster_counts.size(), remap.size(), 8);
+
+	std::vector<std::vector<int> > partitions(partition_count);
+	for (size_t i = 0; i < pending.size(); ++i)
+		partitions[cluster_part[i]].push_back(pending[i]);
+
+	return partitions;
 }
 
 static void lockBoundary(std::vector<unsigned char>& locks, const std::vector<std::vector<int> >& groups, const std::vector<Cluster>& clusters, const std::vector<unsigned int>& remap)

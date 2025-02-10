@@ -590,6 +590,18 @@ MESHOPTIMIZER_API struct meshopt_Bounds meshopt_computeClusterBounds(const unsig
 MESHOPTIMIZER_API struct meshopt_Bounds meshopt_computeMeshletBounds(const unsigned int* meshlet_vertices, const unsigned char* meshlet_triangles, size_t triangle_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 
 /**
+ * Experimental: Cluster partitioner
+ * Partitions clusters into groups of similar size, prioritizing grouping clusters that share vertices.
+ *
+ * destination must contain enough space for the resulting partiotion data (cluster_count elements)
+ * destination[i] will contain the partition id for cluster i, with the total number of partitions returned by the function
+ * cluster_indices should have the vertex indices referenced by each cluster, stored sequentially
+ * cluster_index_counts should have the number of indices in each cluster; sum of all cluster_index_counts must be equal to total_index_count
+ * target_partition_size is a target size for each partition, in clusters; the resulting partitions may be smaller or larger
+ */
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* cluster_indices, size_t total_index_count, const unsigned int* cluster_index_counts, size_t cluster_count, size_t vertex_count, size_t target_partition_size);
+
+/**
  * Spatial sorter
  * Generates a remap table that can be used to reorder points for spatial locality.
  * Resulting remap table maps old vertices to new vertices and can be used in meshopt_remapVertexBuffer.
