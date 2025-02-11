@@ -67,6 +67,11 @@ static void buildClusterAdjacency(ClusterAdjacency& adjacency, const unsigned in
 			used[cluster_indices[j]] = 0;
 	}
 
+	// we can now allocate adjacency buffers
+	adjacency.offsets = allocator.allocate<unsigned int>(cluster_count + 1);
+	adjacency.clusters = allocator.allocate<unsigned int>(total_adjacency);
+	adjacency.shared = allocator.allocate<unsigned int>(total_adjacency);
+
 	// convert ref counts to offsets
 	size_t total_refs = 0;
 
@@ -101,11 +106,6 @@ static void buildClusterAdjacency(ClusterAdjacency& adjacency, const unsigned in
 	// after the previous pass, ref_offsets contain the end of the data for each vertex; shift it forward to get the start
 	memmove(ref_offsets + 1, ref_offsets, vertex_count * sizeof(unsigned int));
 	ref_offsets[0] = 0;
-
-	// we can now allocate adjacency buffers
-	adjacency.offsets = allocator.allocate<unsigned int>(cluster_count + 1);
-	adjacency.clusters = allocator.allocate<unsigned int>(total_adjacency);
-	adjacency.shared = allocator.allocate<unsigned int>(total_adjacency);
 
 	// fill cluster adjacency for each cluster...
 	adjacency.offsets[0] = 0;
@@ -161,6 +161,9 @@ static void buildClusterAdjacency(ClusterAdjacency& adjacency, const unsigned in
 		// mark the end of the adjacency list; the next cluster will start there as well
 		adjacency.offsets[i + 1] = adjacency.offsets[i] + unsigned(count);
 	}
+
+	// ref_offsets can't be deallocated as it was allocated before adjacency
+	allocator.deallocate(ref_data);
 }
 
 // TOOD part of prototype code, to be removed
