@@ -122,11 +122,8 @@ static unsigned int countExternal(const std::vector<int>& group1, const std::vec
 	return total;
 }
 
-static std::vector<std::vector<int> > partitionMerge(const std::vector<Cluster>& clusters, size_t vertex_count)
+static std::vector<std::vector<int> > partitionMerge(const std::vector<Cluster>& clusters, size_t vertex_count, size_t target_group_size, size_t max_group_size)
 {
-	const size_t GROUP_SIZE = 8;
-	const size_t MAX_GROUP_SIZE = 12;
-
 	std::vector<std::vector<int> > result;
 	if (clusters.empty())
 		return result;
@@ -137,7 +134,11 @@ static std::vector<std::vector<int> > partitionMerge(const std::vector<Cluster>&
 	{
 		const Cluster& cluster = clusters[i];
 		for (size_t j = 0; j < cluster.index_count; ++j)
-			indexToClusters[cluster.indices[j]].push_back(i);
+		{
+			std::vector<size_t>& list = indexToClusters[cluster.indices[j]];
+			if (list.empty() || list.back() != i)
+				list.push_back(i);
+		}
 	}
 
 	// Build adjacency information
@@ -191,7 +192,7 @@ static std::vector<std::vector<int> > partitionMerge(const std::vector<Cluster>&
 		for (size_t i = 0; i < group.size(); ++i)
 			part[group[i]] = groups.end();
 
-		if (group.size() >= GROUP_SIZE)
+		if (group.size() >= target_group_size)
 		{
 			result.push_back(group);
 		}
@@ -208,7 +209,7 @@ static std::vector<std::vector<int> > partitionMerge(const std::vector<Cluster>&
 					if (it == groups.end())
 						continue;
 
-					if (group.size() + it->second.size() > MAX_GROUP_SIZE)
+					if (group.size() + it->second.size() > max_group_size)
 						continue;
 
 					if (kMergeScoreSmallest && bestGroup != groups.end() && it->second.size() > bestGroup->second.size())
@@ -262,8 +263,6 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 
 	assert(target_partition_size > 0);
 
-	(void)target_partition_size;
-
 	meshopt_Allocator allocator;
 
 	std::vector<Cluster> clusters(cluster_count);
@@ -279,7 +278,7 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 	assert(cluster_offset == cluster_indices + total_index_count);
 	(void)total_index_count;
 
-	std::vector<std::vector<int> > groups = partitionMerge(clusters, vertex_count);
+	std::vector<std::vector<int> > groups = partitionMerge(clusters, vertex_count, target_partition_size, target_partition_size + target_partition_size / 2);
 
 	for (size_t i = 0; i < groups.size(); ++i)
 		for (size_t j = 0; j < groups[i].size(); ++j)
