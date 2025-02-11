@@ -15,34 +15,24 @@ static const bool kMergeScoreSmallest = false;
 static const bool kSortExternal = false;
 
 // TOOD part of prototype code, to be removed
-struct Cluster
-{
-	const unsigned int* indices;
-	size_t index_count;
-};
-
 // TODO: valence[] is only used as a seen[] buffer
-static unsigned int countTotal(const std::vector<int>& group, const std::vector<Cluster>& clusters, std::vector<unsigned int>& valence)
+static unsigned int countTotal(const std::vector<int>& group, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, std::vector<unsigned int>& valence)
 {
 	unsigned int total = 0;
 
 	for (size_t i = 0; i < group.size(); ++i)
 	{
-		const Cluster& cluster = clusters[group[i]];
-
-		for (size_t j = 0; j < cluster.index_count; ++j)
+		for (size_t j = cluster_offsets[group[i]]; j < cluster_offsets[group[i] + 1]; ++j)
 		{
-			total += 1 - (valence[cluster.indices[j]] >> 31);
-			valence[cluster.indices[j]] |= 1u << 31;
+			total += 1 - (valence[cluster_indices[j]] >> 31);
+			valence[cluster_indices[j]] |= 1u << 31;
 		}
 	}
 
 	for (size_t i = 0; i < group.size(); ++i)
 	{
-		const Cluster& cluster = clusters[group[i]];
-
-		for (size_t j = 0; j < cluster.index_count; ++j)
-			valence[cluster.indices[j]] &= ~(1u << 31);
+		for (size_t j = cluster_offsets[group[i]]; j < cluster_offsets[group[i] + 1]; ++j)
+			valence[cluster_indices[j]] &= ~(1u << 31);
 	}
 
 	return total;
@@ -67,82 +57,67 @@ static unsigned int countShared(const std::vector<int>& group1, const std::vecto
 	return total;
 }
 
-static unsigned int countExternal(const std::vector<int>& group1, const std::vector<int>& group2, const std::vector<Cluster>& clusters, std::vector<unsigned int>& valence)
+static unsigned int countExternal(const std::vector<int>& group1, const std::vector<int>& group2, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, std::vector<unsigned int>& valence)
 {
 	unsigned int total = 0;
 
 	for (size_t i = 0; i < group1.size(); ++i)
 	{
-		const Cluster& cluster = clusters[group1[i]];
-
-		for (size_t j = 0; j < cluster.index_count; ++j)
-			valence[cluster.indices[j]]--;
+		for (size_t j = cluster_offsets[group1[i]]; j < cluster_offsets[group1[i] + 1]; ++j)
+			valence[cluster_indices[j]]--;
 	}
 
 	for (size_t i = 0; i < group2.size(); ++i)
 	{
-		const Cluster& cluster = clusters[group2[i]];
-
-		for (size_t j = 0; j < cluster.index_count; ++j)
-			valence[cluster.indices[j]]--;
+		for (size_t j = cluster_offsets[group2[i]]; j < cluster_offsets[group2[i] + 1]; ++j)
+			valence[cluster_indices[j]]--;
 	}
 
 	for (size_t i = 0; i < group1.size(); ++i)
 	{
-		const Cluster& cluster = clusters[group1[i]];
-
-		for (size_t j = 0; j < cluster.index_count; ++j)
-			total += valence[cluster.indices[j]] != 0;
+		for (size_t j = cluster_offsets[group1[i]]; j < cluster_offsets[group1[i] + 1]; ++j)
+			total += valence[cluster_indices[j]] != 0;
 	}
 
 	for (size_t i = 0; i < group2.size(); ++i)
 	{
-		const Cluster& cluster = clusters[group2[i]];
-
-		for (size_t j = 0; j < cluster.index_count; ++j)
-			total += valence[cluster.indices[j]] != 0;
+		for (size_t j = cluster_offsets[group2[i]]; j < cluster_offsets[group2[i] + 1]; ++j)
+			total += valence[cluster_indices[j]] != 0;
 	}
 
 	for (size_t i = 0; i < group1.size(); ++i)
 	{
-		const Cluster& cluster = clusters[group1[i]];
-
-		for (size_t j = 0; j < cluster.index_count; ++j)
-			valence[cluster.indices[j]]++;
+		for (size_t j = cluster_offsets[group1[i]]; j < cluster_offsets[group1[i] + 1]; ++j)
+			valence[cluster_indices[j]]++;
 	}
 
 	for (size_t i = 0; i < group2.size(); ++i)
 	{
-		const Cluster& cluster = clusters[group2[i]];
-
-		for (size_t j = 0; j < cluster.index_count; ++j)
-			valence[cluster.indices[j]]++;
+		for (size_t j = cluster_offsets[group2[i]]; j < cluster_offsets[group2[i] + 1]; ++j)
+			valence[cluster_indices[j]]++;
 	}
 
 	return total;
 }
 
-static std::vector<std::vector<int> > partitionMerge(const std::vector<Cluster>& clusters, size_t vertex_count, size_t target_group_size, size_t max_group_size)
+static std::vector<std::vector<int> > partitionMerge(const unsigned int* cluster_indices, const unsigned int* cluster_offsets, size_t cluster_count, size_t vertex_count, size_t target_group_size, size_t max_group_size)
 {
 	std::vector<std::vector<int> > result;
-	if (clusters.empty())
-		return result;
 
 	// Build index -> clusters mapping
 	std::map<unsigned int, std::vector<size_t> > indexToClusters;
-	for (size_t i = 0; i < clusters.size(); ++i)
+	for (size_t i = 0; i < cluster_count; ++i)
 	{
-		const Cluster& cluster = clusters[i];
-		for (size_t j = 0; j < cluster.index_count; ++j)
+		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
 		{
-			std::vector<size_t>& list = indexToClusters[cluster.indices[j]];
+			std::vector<size_t>& list = indexToClusters[cluster_indices[j]];
 			if (list.empty() || list.back() != i)
 				list.push_back(i);
 		}
 	}
 
 	// Build adjacency information
-	std::vector<std::map<size_t, unsigned int> > adjacency(clusters.size());
+	std::vector<std::map<size_t, unsigned int> > adjacency(cluster_count);
 
 	// For each remapped index, increment shared count for each pair of clusters that contains it
 	for (std::map<unsigned int, std::vector<size_t> >::const_iterator it = indexToClusters.begin(); it != indexToClusters.end(); ++it)
@@ -162,23 +137,21 @@ static std::vector<std::vector<int> > partitionMerge(const std::vector<Cluster>&
 	}
 
 	std::vector<unsigned int> valence(vertex_count);
-	for (size_t i = 0; i < clusters.size(); ++i)
+	for (size_t i = 0; i < cluster_count; ++i)
 	{
-		const Cluster& cluster = clusters[i];
-
-		for (size_t j = 0; j < cluster.index_count; ++j)
-			valence[cluster.indices[j]]++;
+		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
+			valence[cluster_indices[j]]++;
 	}
 
 	// Initially, create a singleton group for each cluster, stored as multimap sorted by external count
 	std::multimap<unsigned int, std::vector<int> > groups;
-	std::vector<std::multimap<unsigned int, std::vector<int> >::iterator> part(clusters.size(), groups.end());
+	std::vector<std::multimap<unsigned int, std::vector<int> >::iterator> part(cluster_count, groups.end());
 
-	for (size_t i = 0; i < clusters.size(); ++i)
+	for (size_t i = 0; i < cluster_count; ++i)
 	{
 		std::vector<int> group;
 		group.push_back(i);
-		unsigned int ext = kSortExternal ? countExternal(group, std::vector<int>(), clusters, valence) : countTotal(group, clusters, valence);
+		unsigned int ext = kSortExternal ? countExternal(group, std::vector<int>(), cluster_indices, cluster_offsets, valence) : countTotal(group, cluster_indices, cluster_offsets, valence);
 		std::multimap<unsigned int, std::vector<int> >::iterator it = groups.insert(std::make_pair(ext, group));
 		part[i] = it;
 	}
@@ -215,7 +188,7 @@ static std::vector<std::vector<int> > partitionMerge(const std::vector<Cluster>&
 					if (kMergeScoreSmallest && bestGroup != groups.end() && it->second.size() > bestGroup->second.size())
 						continue;
 
-					unsigned int score = kMergeScoreExternal ? ~countExternal(group, it->second, clusters, valence) : countShared(group, it->second, adjacency);
+					unsigned int score = kMergeScoreExternal ? ~countExternal(group, it->second, cluster_indices, cluster_offsets, valence) : countShared(group, it->second, adjacency);
 
 					if (score > bestScore)
 					{
@@ -238,7 +211,7 @@ static std::vector<std::vector<int> > partitionMerge(const std::vector<Cluster>&
 				combined.insert(combined.end(), group.begin(), group.end());
 				combined.insert(combined.end(), bestGroup->second.begin(), bestGroup->second.end());
 
-				unsigned int ext = kSortExternal ? countExternal(combined, std::vector<int>(), clusters, valence) : countTotal(combined, clusters, valence);
+				unsigned int ext = kSortExternal ? countExternal(combined, std::vector<int>(), cluster_indices, cluster_offsets, valence) : countTotal(combined, cluster_indices, cluster_offsets, valence);
 
 				for (size_t i = 0; i < bestGroup->second.size(); ++i)
 					part[bestGroup->second[i]] = groups.end();
@@ -265,20 +238,20 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 
 	meshopt_Allocator allocator;
 
-	std::vector<Cluster> clusters(cluster_count);
-	const unsigned int* cluster_offset = cluster_indices;
+	// build cluster index offsets as a prefix sum
+	unsigned int* cluster_offsets = allocator.allocate<unsigned int>(cluster_count + 1);
+	unsigned int cluster_nextoffset = 0;
 
 	for (size_t i = 0; i < cluster_count; ++i)
 	{
-		clusters[i].indices = cluster_offset;
-		clusters[i].index_count = cluster_index_counts[i];
-		cluster_offset += cluster_index_counts[i];
+		cluster_offsets[i] = cluster_nextoffset;
+		cluster_nextoffset += cluster_index_counts[i];
 	}
 
-	assert(cluster_offset == cluster_indices + total_index_count);
-	(void)total_index_count;
+	assert(cluster_nextoffset == total_index_count);
+	cluster_offsets[cluster_count] = total_index_count;
 
-	std::vector<std::vector<int> > groups = partitionMerge(clusters, vertex_count, target_partition_size, target_partition_size + target_partition_size / 2);
+	std::vector<std::vector<int> > groups = partitionMerge(cluster_indices, cluster_offsets, cluster_count, vertex_count, target_partition_size, target_partition_size + target_partition_size / 2);
 
 	for (size_t i = 0; i < groups.size(); ++i)
 		for (size_t j = 0; j < groups[i].size(); ++j)
