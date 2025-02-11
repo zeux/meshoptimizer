@@ -2,6 +2,7 @@
 #include "meshoptimizer.h"
 
 #include <assert.h>
+#include <string.h>
 
 // TOOD part of prototype code, to be removed
 #include <map>
@@ -13,6 +14,154 @@ namespace meshopt
 static const bool kMergeScoreExternal = false;
 static const bool kMergeScoreSmallest = false;
 static const bool kSortExternal = false;
+
+struct ClusterAdjacency
+{
+	unsigned int* offsets;
+	unsigned int* clusters;
+	unsigned int* shared;
+};
+
+static void buildClusterAdjacency(ClusterAdjacency& adjacency, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, size_t cluster_count, unsigned char* used, size_t vertex_count, meshopt_Allocator& allocator)
+{
+	unsigned int* ref_offsets = allocator.allocate<unsigned int>(vertex_count + 1);
+
+	// compute number of clusters referenced by each vertex
+	memset(ref_offsets, 0, vertex_count * sizeof(unsigned int));
+
+	for (size_t i = 0; i < cluster_count; ++i)
+	{
+		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
+		{
+			unsigned int v = cluster_indices[j];
+			assert(v < vertex_count);
+
+			ref_offsets[v] += 1 - used[v];
+			used[v] = 1;
+		}
+
+		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
+			used[cluster_indices[j]] = 0;
+	}
+
+	// compute (worst-case) number of adjacent clusters for each cluster
+	size_t total_adjacency = 0;
+
+	for (size_t i = 0; i < cluster_count; ++i)
+	{
+		size_t count = 0;
+		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
+		{
+			unsigned int v = cluster_indices[j];
+			assert(v < vertex_count);
+
+			// worst case is every vertex has a disjoint cluster list
+			count += used[v] ? 0 : ref_offsets[v] - 1;
+			used[v] = 1;
+		}
+
+		// ... but only every other cluster can be adjacent in the end
+		total_adjacency += count < cluster_count - 1 ? count : cluster_count - 1;
+
+		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
+			used[cluster_indices[j]] = 0;
+	}
+
+	// convert ref counts to offsets
+	size_t total_refs = 0;
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		size_t count = ref_offsets[i];
+		ref_offsets[i] = unsigned(total_refs);
+		total_refs += count;
+	}
+
+	unsigned int* ref_data = allocator.allocate<unsigned int>(total_refs);
+
+	// fill cluster refs for each vertex
+	for (size_t i = 0; i < cluster_count; ++i)
+	{
+		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
+		{
+			unsigned int v = cluster_indices[j];
+			assert(v < vertex_count);
+
+			if (used[v])
+				continue;
+
+			ref_data[ref_offsets[v]++] = unsigned(i);
+			used[v] = 1;
+		}
+
+		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
+			used[cluster_indices[j]] = 0;
+	}
+
+	// after the previous pass, ref_offsets contain the end of the data for each vertex; shift it forward to get the start
+	memmove(ref_offsets + 1, ref_offsets, vertex_count * sizeof(unsigned int));
+	ref_offsets[0] = 0;
+
+	// we can now allocate adjacency buffers
+	adjacency.offsets = allocator.allocate<unsigned int>(cluster_count + 1);
+	adjacency.clusters = allocator.allocate<unsigned int>(total_adjacency);
+	adjacency.shared = allocator.allocate<unsigned int>(total_adjacency);
+
+	// fill cluster adjacency for each cluster...
+	adjacency.offsets[0] = 0;
+
+	for (size_t i = 0; i < cluster_count; ++i)
+	{
+		unsigned int* adj = adjacency.clusters + adjacency.offsets[i];
+		unsigned int* shd = adjacency.shared + adjacency.offsets[i];
+		size_t count = 0;
+
+		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
+		{
+			unsigned int v = cluster_indices[j];
+			assert(v < vertex_count);
+
+			if (used[v])
+				continue;
+
+			// merge the entire cluster list of each vertex into current list
+			for (size_t k = ref_offsets[v]; k < ref_offsets[v + 1]; ++k)
+			{
+				unsigned int c = ref_data[k];
+				assert(c < cluster_count);
+
+				if (c == unsigned(i))
+					continue;
+
+				// if the cluster is already in the list, increment the shared count
+				bool found = false;
+				for (size_t l = 0; l < count; ++l)
+					if (adj[l] == c)
+					{
+						found = true;
+						shd[l]++;
+						break;
+					}
+
+				// .. or append a new cluster
+				if (!found)
+				{
+					adj[count] = c;
+					shd[count] = 1;
+					count++;
+				}
+			}
+
+			used[v] = 1;
+		}
+
+		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
+			used[cluster_indices[j]] = 0;
+
+		// mark the end of the adjacency list; the next cluster will start there as well
+		adjacency.offsets[i + 1] = adjacency.offsets[i] + unsigned(count);
+	}
+}
 
 // TOOD part of prototype code, to be removed
 // TODO: valence[] is only used as a seen[] buffer
@@ -38,19 +187,25 @@ static unsigned int countTotal(const std::vector<int>& group, const unsigned int
 	return total;
 }
 
-static unsigned int countShared(const std::vector<int>& group1, const std::vector<int>& group2, const std::vector<std::map<size_t, unsigned int> >& adjacency)
+static unsigned int countShared(const std::vector<int>& group1, const std::vector<int>& group2, const ClusterAdjacency& adjacency)
 {
 	unsigned int total = 0;
 
 	for (size_t i1 = 0; i1 < group1.size(); ++i1)
 	{
-		const std::map<size_t, unsigned int>& adj = adjacency[group1[i1]];
-
+		unsigned int c1 = group1[i1];
 		for (size_t i2 = 0; i2 < group2.size(); ++i2)
 		{
-			std::map<size_t, unsigned int>::const_iterator it = adj.find(group2[i2]);
-			if (it != adj.end())
-				total += it->second;
+			unsigned int c2 = group2[i2];
+
+			for (unsigned int adj = adjacency.offsets[c1]; adj < adjacency.offsets[c1 + 1]; ++adj)
+			{
+				if (adjacency.clusters[adj] == c2)
+				{
+					total += adjacency.shared[adj];
+					break;
+				}
+			}
 		}
 	}
 
@@ -100,41 +255,9 @@ static unsigned int countExternal(const std::vector<int>& group1, const std::vec
 	return total;
 }
 
-static std::vector<std::vector<int> > partitionMerge(const unsigned int* cluster_indices, const unsigned int* cluster_offsets, size_t cluster_count, size_t vertex_count, size_t target_group_size, size_t max_group_size)
+static std::vector<std::vector<int> > partitionMerge(const ClusterAdjacency& adjacency, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, size_t cluster_count, size_t vertex_count, size_t target_group_size, size_t max_group_size)
 {
 	std::vector<std::vector<int> > result;
-
-	// Build index -> clusters mapping
-	std::map<unsigned int, std::vector<size_t> > indexToClusters;
-	for (size_t i = 0; i < cluster_count; ++i)
-	{
-		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
-		{
-			std::vector<size_t>& list = indexToClusters[cluster_indices[j]];
-			if (list.empty() || list.back() != i)
-				list.push_back(i);
-		}
-	}
-
-	// Build adjacency information
-	std::vector<std::map<size_t, unsigned int> > adjacency(cluster_count);
-
-	// For each remapped index, increment shared count for each pair of clusters that contains it
-	for (std::map<unsigned int, std::vector<size_t> >::const_iterator it = indexToClusters.begin(); it != indexToClusters.end(); ++it)
-	{
-		const std::vector<size_t>& clusterList = it->second;
-
-		for (size_t i = 0; i < clusterList.size(); ++i)
-		{
-			for (size_t j = i + 1; j < clusterList.size(); ++j)
-			{
-				size_t c1 = clusterList[i];
-				size_t c2 = clusterList[j];
-				adjacency[c1][c2]++;
-				adjacency[c2][c1]++;
-			}
-		}
-	}
 
 	std::vector<unsigned int> valence(vertex_count);
 	for (size_t i = 0; i < cluster_count; ++i)
@@ -176,9 +299,9 @@ static std::vector<std::vector<int> > partitionMerge(const unsigned int* cluster
 
 			for (size_t ci = 0; ci < group.size(); ++ci)
 			{
-				for (std::map<size_t, unsigned int>::iterator adj = adjacency[group[ci]].begin(); adj != adjacency[group[ci]].end(); ++adj)
+				for (unsigned int adj = adjacency.offsets[group[ci]]; adj != adjacency.offsets[group[ci] + 1]; ++adj)
 				{
-					std::multimap<unsigned int, std::vector<int> >::iterator it = part[adj->first];
+					std::multimap<unsigned int, std::vector<int> >::iterator it = part[adjacency.clusters[adj]];
 					if (it == groups.end())
 						continue;
 
@@ -238,6 +361,9 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 
 	meshopt_Allocator allocator;
 
+	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
+	memset(used, 0, vertex_count);
+
 	// build cluster index offsets as a prefix sum
 	unsigned int* cluster_offsets = allocator.allocate<unsigned int>(cluster_count + 1);
 	unsigned int cluster_nextoffset = 0;
@@ -251,7 +377,11 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 	assert(cluster_nextoffset == total_index_count);
 	cluster_offsets[cluster_count] = total_index_count;
 
-	std::vector<std::vector<int> > groups = partitionMerge(cluster_indices, cluster_offsets, cluster_count, vertex_count, target_partition_size, target_partition_size + target_partition_size / 2);
+	// build cluster adjacency along with edge weights (shared vertex count)
+	ClusterAdjacency adjacency = {};
+	buildClusterAdjacency(adjacency, cluster_indices, cluster_offsets, cluster_count, used, vertex_count, allocator);
+
+	std::vector<std::vector<int> > groups = partitionMerge(adjacency, cluster_indices, cluster_offsets, cluster_count, vertex_count, target_partition_size, target_partition_size + target_partition_size / 2);
 
 	for (size_t i = 0; i < groups.size(); ++i)
 		for (size_t j = 0; j < groups[i].size(); ++j)
