@@ -4,9 +4,6 @@
 #include <assert.h>
 #include <string.h>
 
-// TOOD part of prototype code, to be removed
-#include <vector>
-
 namespace meshopt
 {
 
@@ -165,13 +162,20 @@ static void buildClusterAdjacency(ClusterAdjacency& adjacency, const unsigned in
 	allocator.deallocate(ref_data);
 }
 
-struct ClusterGroupOrder
+struct ClusterGroup
+{
+	int group;
+	int next;
+	unsigned int size; // 0 unless root
+};
+
+struct GroupOrder
 {
 	unsigned int id;
 	int order;
 };
 
-static void heapPush(ClusterGroupOrder* heap, size_t size, ClusterGroupOrder item)
+static void heapPush(GroupOrder* heap, size_t size, GroupOrder item)
 {
 	// insert a new element at the end (breaks heap invariant)
 	heap[size++] = item;
@@ -182,17 +186,17 @@ static void heapPush(ClusterGroupOrder* heap, size_t size, ClusterGroupOrder ite
 	{
 		size_t p = (i - 1) / 2;
 
-		ClusterGroupOrder temp = heap[i];
+		GroupOrder temp = heap[i];
 		heap[i] = heap[p];
 		heap[p] = temp;
 		i = p;
 	}
 }
 
-static ClusterGroupOrder heapPop(ClusterGroupOrder* heap, size_t size)
+static GroupOrder heapPop(GroupOrder* heap, size_t size)
 {
 	assert(size > 0);
-	ClusterGroupOrder top = heap[0];
+	GroupOrder top = heap[0];
 
 	// move the last element to the top (breaks heap invariant)
 	heap[0] = heap[--size];
@@ -211,7 +215,7 @@ static ClusterGroupOrder heapPop(ClusterGroupOrder* heap, size_t size)
 			break;
 
 		// otherwise, swap the parent and child and continue
-		ClusterGroupOrder temp = heap[i];
+		GroupOrder temp = heap[i];
 		heap[i] = heap[j];
 		heap[j] = temp;
 		i = j;
@@ -220,13 +224,13 @@ static ClusterGroupOrder heapPop(ClusterGroupOrder* heap, size_t size)
 	return top;
 }
 
-static unsigned int countTotal(const std::vector<int>& group, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, unsigned char* used)
+static unsigned int countTotal(const ClusterGroup* groups, int id, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, unsigned char* used)
 {
 	unsigned int total = 0;
 
-	for (size_t i = 0; i < group.size(); ++i)
+	for (int i = id; i >= 0; i = groups[i].next)
 	{
-		for (size_t j = cluster_offsets[group[i]]; j < cluster_offsets[group[i] + 1]; ++j)
+		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
 		{
 			unsigned int v = cluster_indices[j];
 			total += 1 - used[v];
@@ -234,106 +238,87 @@ static unsigned int countTotal(const std::vector<int>& group, const unsigned int
 		}
 	}
 
-	for (size_t i = 0; i < group.size(); ++i)
+	for (int i = id; i >= 0; i = groups[i].next)
 	{
-		for (size_t j = cluster_offsets[group[i]]; j < cluster_offsets[group[i] + 1]; ++j)
+		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
 			used[cluster_indices[j]] = 0;
 	}
 
 	return total;
 }
 
-static unsigned int countShared(const std::vector<int>& group1, const std::vector<int>& group2, const ClusterAdjacency& adjacency)
+static unsigned int countShared(const ClusterGroup* groups, int group1, int group2, const ClusterAdjacency& adjacency)
 {
 	unsigned int total = 0;
 
-	for (size_t i1 = 0; i1 < group1.size(); ++i1)
-	{
-		unsigned int c1 = group1[i1];
-		for (size_t i2 = 0; i2 < group2.size(); ++i2)
+	for (int i1 = group1; i1 >= 0; i1 = groups[i1].next)
+		for (int i2 = group2; i2 >= 0; i2 = groups[i2].next)
 		{
-			unsigned int c2 = group2[i2];
-
-			for (unsigned int adj = adjacency.offsets[c1]; adj < adjacency.offsets[c1 + 1]; ++adj)
-			{
-				if (adjacency.clusters[adj] == c2)
+			for (unsigned int adj = adjacency.offsets[i1]; adj < adjacency.offsets[i1 + 1]; ++adj)
+				if (adjacency.clusters[adj] == unsigned(i2))
 				{
 					total += adjacency.shared[adj];
 					break;
 				}
-			}
 		}
-	}
 
 	return total;
 }
 
-static unsigned int countExternal(const std::vector<int>& group1, const std::vector<int>& group2, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, unsigned int* valence)
+static unsigned int countExternal(const ClusterGroup* groups, int group1, int group2, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, unsigned int* valence)
 {
 	unsigned int total = 0;
 
-	for (size_t i = 0; i < group1.size(); ++i)
-	{
-		for (size_t j = cluster_offsets[group1[i]]; j < cluster_offsets[group1[i] + 1]; ++j)
+	for (int i = group1; i >= 0; i = groups[i].next)
+		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
 			valence[cluster_indices[j]]--;
-	}
 
-	for (size_t i = 0; i < group2.size(); ++i)
-	{
-		for (size_t j = cluster_offsets[group2[i]]; j < cluster_offsets[group2[i] + 1]; ++j)
+	for (int i = group2; i >= 0; i = groups[i].next)
+		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
 			valence[cluster_indices[j]]--;
-	}
 
-	for (size_t i = 0; i < group1.size(); ++i)
-	{
-		for (size_t j = cluster_offsets[group1[i]]; j < cluster_offsets[group1[i] + 1]; ++j)
+	for (int i = group1; i >= 0; i = groups[i].next)
+		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
 			total += valence[cluster_indices[j]] != 0;
-	}
 
-	for (size_t i = 0; i < group2.size(); ++i)
-	{
-		for (size_t j = cluster_offsets[group2[i]]; j < cluster_offsets[group2[i] + 1]; ++j)
+	for (int i = group2; i >= 0; i = groups[i].next)
+		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
 			total += valence[cluster_indices[j]] != 0;
-	}
 
-	for (size_t i = 0; i < group1.size(); ++i)
-	{
-		for (size_t j = cluster_offsets[group1[i]]; j < cluster_offsets[group1[i] + 1]; ++j)
+	for (int i = group1; i >= 0; i = groups[i].next)
+		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
 			valence[cluster_indices[j]]++;
-	}
 
-	for (size_t i = 0; i < group2.size(); ++i)
-	{
-		for (size_t j = cluster_offsets[group2[i]]; j < cluster_offsets[group2[i] + 1]; ++j)
+	for (int i = group2; i >= 0; i = groups[i].next)
+		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
 			valence[cluster_indices[j]]++;
-	}
 
 	return total;
 }
 
-static int pickGroupToMerge(int target, const std::vector<std::vector<int> >& groups, const std::vector<int>& part, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, const ClusterAdjacency& adjacency, unsigned int* valence, size_t max_group_size)
+static int pickGroupToMerge(const ClusterGroup* groups, int id, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, const ClusterAdjacency& adjacency, unsigned int* valence, size_t max_group_size)
 {
-	const std::vector<int>& group = groups[target];
+	assert(groups[id].size > 0);
 
 	int best_group = -1;
 	unsigned int best_score = 0;
 
-	for (size_t ci = 0; ci < group.size(); ++ci)
+	for (int ci = id; ci >= 0; ci = groups[ci].next)
 	{
-		for (unsigned int adj = adjacency.offsets[group[ci]]; adj != adjacency.offsets[group[ci] + 1]; ++adj)
+		for (unsigned int adj = adjacency.offsets[ci]; adj != adjacency.offsets[ci + 1]; ++adj)
 		{
-			int other = part[adjacency.clusters[adj]];
+			int other = groups[adjacency.clusters[adj]].group;
 			if (other < 0)
 				continue;
 
-			assert(groups[other].size() > 0);
-			if (group.size() + groups[other].size() > max_group_size)
+			assert(groups[other].size > 0);
+			if (groups[id].size + groups[other].size > max_group_size)
 				continue;
 
-			if (kMergeScoreSmallest && best_group >= 0 && groups[other].size() > groups[best_group].size())
+			if (kMergeScoreSmallest && best_group >= 0 && groups[other].size > groups[best_group].size)
 				continue;
 
-			unsigned int score = kMergeScoreExternal ? ~countExternal(group, groups[other], cluster_indices, cluster_offsets, valence) : countShared(group, groups[other], adjacency);
+			unsigned int score = kMergeScoreExternal ? ~countExternal(groups, id, other, cluster_indices, cluster_offsets, valence) : countShared(groups, id, other, adjacency);
 
 			if (score > best_score)
 			{
@@ -390,21 +375,21 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 		}
 	}
 
-	std::vector<std::vector<int> > groups(cluster_count);
-	std::vector<int> part(cluster_count);
+	ClusterGroup* groups = allocator.allocate<ClusterGroup>(cluster_count);
 
-	ClusterGroupOrder* order = allocator.allocate<ClusterGroupOrder>(cluster_count);
+	GroupOrder* order = allocator.allocate<GroupOrder>(cluster_count);
 	size_t pending = 0;
 
 	// create a singleton group for each cluster and order them by priority
 	for (size_t i = 0; i < cluster_count; ++i)
 	{
-		groups[i].push_back(int(i));
-		part[i] = int(i);
+		groups[i].group = int(i);
+		groups[i].next = -1;
+		groups[i].size = 1;
 
-		ClusterGroupOrder item = {};
+		GroupOrder item = {};
 		item.id = unsigned(i);
-		item.order = kSortExternal ? countExternal(groups[i], std::vector<int>(), cluster_indices, cluster_offsets, valence) : countTotal(groups[i], cluster_indices, cluster_offsets, used);
+		item.order = kSortExternal ? countExternal(groups, i, -1, cluster_indices, cluster_offsets, valence) : countTotal(groups, i, cluster_indices, cluster_offsets, used);
 
 		heapPush(order, pending++, item);
 	}
@@ -412,48 +397,62 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 	// iteratively merge the smallest group with the best group
 	while (pending)
 	{
-		ClusterGroupOrder top = heapPop(order, pending--);
-		assert(top.id < groups.size());
-
-		std::vector<int>& group = groups[top.id];
+		GroupOrder top = heapPop(order, pending--);
 
 		// this group was merged into another group earlier
-		if (group.empty())
+		if (groups[top.id].size == 0)
 			continue;
 
 		// disassociate clusters from the group to prevent them from being merged again; we will re-associate them if the group is reinserted
-		for (size_t i = 0; i < group.size(); ++i)
-			part[group[i]] = -1;
+		for (int i = top.id; i >= 0; i = groups[i].next)
+		{
+			assert(groups[i].group == int(top.id));
+			groups[i].group = -1;
+		}
 
-		if (group.size() >= target_partition_size)
+		// the group is large enough, emit as is
+		if (groups[top.id].size >= target_partition_size)
 			continue;
 
-		int best_group = pickGroupToMerge(top.id, groups, part, cluster_indices, cluster_offsets, adjacency, valence, target_partition_size + target_partition_size / 2);
+		int best_group = pickGroupToMerge(groups, top.id, cluster_indices, cluster_offsets, adjacency, valence, target_partition_size + target_partition_size / 2);
 
 		// we can't grow the group any more, emit as is
 		if (best_group == -1)
 			continue;
 
-		// combine and reinsert
-		group.insert(group.end(), groups[best_group].begin(), groups[best_group].end());
-		groups[best_group].clear();
+		// combine groups by linking them together
+		assert(groups[best_group].size > 0);
 
-		for (size_t i = 0; i < group.size(); ++i)
-			part[group[i]] = int(top.id);
+		for (int i = top.id; i >= 0; i = groups[i].next)
+			if (groups[i].next < 0)
+			{
+				groups[i].next = best_group;
+				break;
+			}
 
-		top.order = kSortExternal ? countExternal(group, std::vector<int>(), cluster_indices, cluster_offsets, valence) : countTotal(group, cluster_indices, cluster_offsets, used);
+		groups[top.id].size += groups[best_group].size;
+		groups[best_group].size = 0;
+
+		for (int i = top.id; i >= 0; i = groups[i].next)
+			groups[i].group = int(top.id);
+
+		top.order = kSortExternal ? countExternal(groups, top.id, -1, cluster_indices, cluster_offsets, valence) : countTotal(groups, top.id, cluster_indices, cluster_offsets, used);
 		heapPush(order, pending++, top);
 	}
 
-	size_t next = 0;
-	for (size_t i = 0; i < groups.size(); ++i)
-	{
-		for (size_t j = 0; j < groups[i].size(); ++j)
-			destination[groups[i][j]] = unsigned(next);
+	size_t next_group = 0;
 
-		if (!groups[i].empty())
-			++next;
+	for (size_t i = 0; i < cluster_count; ++i)
+	{
+		if (groups[i].size == 0)
+			continue;
+
+		for (int j = int(i); j >= 0; j = groups[j].next)
+			destination[j] = unsigned(next_group);
+
+		next_group++;
 	}
 
-	return groups.size();
+	assert(next_group <= cluster_count);
+	return next_group;
 }
