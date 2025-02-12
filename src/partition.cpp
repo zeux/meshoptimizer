@@ -10,6 +10,8 @@ namespace meshopt
 static const bool kMergeScoreExternal = false;
 static const bool kMergeScoreSmallest = false;
 static const bool kSortExternal = false;
+static const bool kTrueExternal = false;
+static const bool kFastMetrics = false;
 
 struct ClusterAdjacency
 {
@@ -167,6 +169,7 @@ struct ClusterGroup
 	int group;
 	int next;
 	unsigned int size; // 0 unless root
+	unsigned int vertices;
 };
 
 struct GroupOrder
@@ -265,7 +268,7 @@ static unsigned int countShared(const ClusterGroup* groups, int group1, int grou
 	return total;
 }
 
-static unsigned int countExternal(const ClusterGroup* groups, int group1, int group2, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, unsigned int* valence)
+static unsigned int countExternal(const ClusterGroup* groups, int group1, int group2, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, unsigned int* valence, unsigned char* used)
 {
 	unsigned int total = 0;
 
@@ -277,13 +280,42 @@ static unsigned int countExternal(const ClusterGroup* groups, int group1, int gr
 		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
 			valence[cluster_indices[j]]--;
 
-	for (int i = group1; i >= 0; i = groups[i].next)
-		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
-			total += valence[cluster_indices[j]] != 0;
+	if (kTrueExternal || kFastMetrics)
+	{
+		for (int i = group1; i >= 0; i = groups[i].next)
+		{
+			for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
+			{
+				total += valence[cluster_indices[j]] != 0 && used[cluster_indices[j]] == 0;
+				used[cluster_indices[j]] = 1;
+			}
 
-	for (int i = group2; i >= 0; i = groups[i].next)
-		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
-			total += valence[cluster_indices[j]] != 0;
+			for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
+				used[cluster_indices[j]] = 0;
+		}
+
+		for (int i = group2; i >= 0; i = groups[i].next)
+		{
+			for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
+			{
+				total += valence[cluster_indices[j]] != 0 && used[cluster_indices[j]] == 0;
+				used[cluster_indices[j]] = 1;
+			}
+
+			for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
+				used[cluster_indices[j]] = 0;
+		}
+	}
+	else
+	{
+		for (int i = group1; i >= 0; i = groups[i].next)
+			for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
+				total += valence[cluster_indices[j]] != 0;
+
+		for (int i = group2; i >= 0; i = groups[i].next)
+			for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
+				total += valence[cluster_indices[j]] != 0;
+	}
 
 	for (int i = group1; i >= 0; i = groups[i].next)
 		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
@@ -296,7 +328,7 @@ static unsigned int countExternal(const ClusterGroup* groups, int group1, int gr
 	return total;
 }
 
-static int pickGroupToMerge(const ClusterGroup* groups, int id, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, const ClusterAdjacency& adjacency, unsigned int* valence, size_t max_group_size)
+static int pickGroupToMerge(const ClusterGroup* groups, int id, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, const ClusterAdjacency& adjacency, unsigned int* valence, unsigned char* used, size_t max_group_size)
 {
 	assert(groups[id].size > 0);
 
@@ -318,7 +350,18 @@ static int pickGroupToMerge(const ClusterGroup* groups, int id, const unsigned i
 			if (kMergeScoreSmallest && best_group >= 0 && groups[other].size > groups[best_group].size)
 				continue;
 
-			unsigned int score = kMergeScoreExternal ? ~countExternal(groups, id, other, cluster_indices, cluster_offsets, valence) : countShared(groups, id, other, adjacency);
+			unsigned int score;
+
+			if (kFastMetrics)
+			{
+				unsigned int shared = countShared(groups, id, other, adjacency);
+
+				score = kMergeScoreExternal ? ~(groups[id].vertices + groups[other].vertices - shared * 2) : shared;
+			}
+			else
+			{
+				score = kMergeScoreExternal ? ~countExternal(groups, id, other, cluster_indices, cluster_offsets, valence, used) : countShared(groups, id, other, adjacency);
+			}
 
 			if (score > best_score)
 			{
@@ -386,10 +429,11 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 		groups[i].group = int(i);
 		groups[i].next = -1;
 		groups[i].size = 1;
+		groups[i].vertices = kSortExternal ? countExternal(groups, i, -1, cluster_indices, cluster_offsets, valence, used) : countTotal(groups, i, cluster_indices, cluster_offsets, used);
 
 		GroupOrder item = {};
 		item.id = unsigned(i);
-		item.order = kSortExternal ? countExternal(groups, i, -1, cluster_indices, cluster_offsets, valence) : countTotal(groups, i, cluster_indices, cluster_offsets, used);
+		item.order = groups[i].vertices;
 
 		heapPush(order, pending++, item);
 	}
@@ -414,7 +458,7 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 		if (groups[top.id].size >= target_partition_size)
 			continue;
 
-		int best_group = pickGroupToMerge(groups, top.id, cluster_indices, cluster_offsets, adjacency, valence, target_partition_size + target_partition_size / 2);
+		int best_group = pickGroupToMerge(groups, top.id, cluster_indices, cluster_offsets, adjacency, valence, used, target_partition_size + target_partition_size / 2);
 
 		// we can't grow the group any more, emit as is
 		if (best_group == -1)
@@ -431,12 +475,26 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 			}
 
 		groups[top.id].size += groups[best_group].size;
+
+		if (kFastMetrics)
+		{
+			unsigned int shared = countShared(groups, top.id, best_group, adjacency);
+
+			groups[top.id].vertices += groups[best_group].vertices;
+			groups[top.id].vertices -= shared * (kSortExternal ? 2 : 1); // TODO: risk of underflow?
+		}
+		else
+		{
+			groups[top.id].vertices = kSortExternal ? countExternal(groups, top.id, -1, cluster_indices, cluster_offsets, valence, used) : countTotal(groups, top.id, cluster_indices, cluster_offsets, used);
+		}
+
 		groups[best_group].size = 0;
+		groups[best_group].vertices = 0;
 
 		for (int i = top.id; i >= 0; i = groups[i].next)
 			groups[i].group = int(top.id);
 
-		top.order = kSortExternal ? countExternal(groups, top.id, -1, cluster_indices, cluster_offsets, valence) : countTotal(groups, top.id, cluster_indices, cluster_offsets, used);
+		top.order = groups[top.id].vertices;
 		heapPush(order, pending++, top);
 	}
 
