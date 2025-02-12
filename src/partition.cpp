@@ -5,7 +5,6 @@
 #include <string.h>
 
 // TOOD part of prototype code, to be removed
-#include <map>
 #include <vector>
 
 namespace meshopt
@@ -166,6 +165,61 @@ static void buildClusterAdjacency(ClusterAdjacency& adjacency, const unsigned in
 	allocator.deallocate(ref_data);
 }
 
+struct ClusterGroupOrder
+{
+	unsigned int id;
+	int order;
+};
+
+static void heapPush(ClusterGroupOrder* heap, size_t size, ClusterGroupOrder item)
+{
+	// insert a new element at the end (breaks heap invariant)
+	heap[size++] = item;
+
+	// bubble up the new element to its correct position
+	size_t i = size - 1;
+	while (i > 0 && heap[i].order < heap[(i - 1) / 2].order)
+	{
+		size_t p = (i - 1) / 2;
+
+		ClusterGroupOrder temp = heap[i];
+		heap[i] = heap[p];
+		heap[p] = temp;
+		i = p;
+	}
+}
+
+static ClusterGroupOrder heapPop(ClusterGroupOrder* heap, size_t size)
+{
+	assert(size > 0);
+	ClusterGroupOrder top = heap[0];
+
+	// move the last element to the top (breaks heap invariant)
+	heap[0] = heap[--size];
+
+	// bubble down the new top element to its correct position
+	size_t i = 0;
+	while (i * 2 + 1 < size)
+	{
+		// find the smallest child
+		size_t j = i * 2 + 1;
+		if (j + 1 < size && heap[j + 1].order < heap[j].order)
+			j++;
+
+		// if the parent is already smaller than both children, we're done
+		if (heap[j].order >= heap[i].order)
+			break;
+
+		// otherwise, swap the parent and child and continue
+		ClusterGroupOrder temp = heap[i];
+		heap[i] = heap[j];
+		heap[j] = temp;
+		i = j;
+	}
+
+	return top;
+}
+
 // TOOD part of prototype code, to be removed
 // TODO: valence[] is only used as a seen[] buffer
 static unsigned int countTotal(const std::vector<int>& group, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, std::vector<unsigned int>& valence)
@@ -258,10 +312,8 @@ static unsigned int countExternal(const std::vector<int>& group1, const std::vec
 	return total;
 }
 
-static std::vector<std::vector<int> > partitionMerge(const ClusterAdjacency& adjacency, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, size_t cluster_count, size_t vertex_count, size_t target_group_size, size_t max_group_size)
+static std::vector<std::vector<int> > partitionMerge(const ClusterAdjacency& adjacency, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, size_t cluster_count, size_t vertex_count, size_t target_group_size, size_t max_group_size, meshopt_Allocator& allocator)
 {
-	std::vector<std::vector<int> > result;
-
 	std::vector<unsigned int> valence(vertex_count);
 	for (size_t i = 0; i < cluster_count; ++i)
 	{
@@ -269,89 +321,88 @@ static std::vector<std::vector<int> > partitionMerge(const ClusterAdjacency& adj
 			valence[cluster_indices[j]]++;
 	}
 
-	// Initially, create a singleton group for each cluster, stored as multimap sorted by external count
-	std::multimap<unsigned int, std::vector<int> > groups;
-	std::vector<std::multimap<unsigned int, std::vector<int> >::iterator> part(cluster_count, groups.end());
+	std::vector<std::vector<int> > groups(cluster_count);
+	std::vector<int> part(cluster_count);
 
+	ClusterGroupOrder* order = allocator.allocate<ClusterGroupOrder>(cluster_count);
+	size_t pending = 0;
+
+	// create a singleton group for each cluster and order them by priority
 	for (size_t i = 0; i < cluster_count; ++i)
 	{
-		std::vector<int> group;
-		group.push_back(i);
-		unsigned int ext = kSortExternal ? countExternal(group, std::vector<int>(), cluster_indices, cluster_offsets, valence) : countTotal(group, cluster_indices, cluster_offsets, valence);
-		std::multimap<unsigned int, std::vector<int> >::iterator it = groups.insert(std::make_pair(ext, group));
-		part[i] = it;
+		groups[i].push_back(int(i));
+		part[i] = int(i);
+
+		ClusterGroupOrder item = {};
+		item.id = unsigned(i);
+		item.order = kSortExternal ? countExternal(groups[i], std::vector<int>(), cluster_indices, cluster_offsets, valence) : countTotal(groups[i], cluster_indices, cluster_offsets, valence);
+
+		heapPush(order, pending++, item);
 	}
 
-	// Iteratively take group with smallest number of external vertices, merge it with another group that minimizes external vertices
-	while (!groups.empty())
+	// iteratively merge the smallest group with the best group
+	while (pending)
 	{
-		std::vector<int> group = groups.begin()->second;
-		groups.erase(groups.begin());
+		ClusterGroupOrder top = heapPop(order, pending--);
+		assert(top.id < groups.size());
 
+		std::vector<int>& group = groups[top.id];
+
+		// this group was merged into another group earlier
+		if (group.empty())
+			continue;
+
+		// disassociate clusters from the group to prevent them from being merged again; we will re-associate them if the group is reinserted
 		for (size_t i = 0; i < group.size(); ++i)
-			part[group[i]] = groups.end();
+			part[group[i]] = -1;
 
 		if (group.size() >= target_group_size)
-		{
-			result.push_back(group);
-		}
-		else
-		{
-			std::multimap<unsigned int, std::vector<int> >::iterator bestGroup = groups.end();
-			unsigned int bestScore = 0;
+			continue;
 
-			for (size_t ci = 0; ci < group.size(); ++ci)
+		int best_group = -1;
+		unsigned int best_score = 0;
+
+		for (size_t ci = 0; ci < group.size(); ++ci)
+		{
+			for (unsigned int adj = adjacency.offsets[group[ci]]; adj != adjacency.offsets[group[ci] + 1]; ++adj)
 			{
-				for (unsigned int adj = adjacency.offsets[group[ci]]; adj != adjacency.offsets[group[ci] + 1]; ++adj)
+				int other = part[adjacency.clusters[adj]];
+				if (other < 0)
+					continue;
+
+				assert(groups[other].size() > 0);
+				if (group.size() + groups[other].size() > max_group_size)
+					continue;
+
+				if (kMergeScoreSmallest && best_group >= 0 && groups[other].size() > groups[best_group].size())
+					continue;
+
+				unsigned int score = kMergeScoreExternal ? ~countExternal(group, groups[other], cluster_indices, cluster_offsets, valence) : countShared(group, groups[other], adjacency);
+
+				if (score > best_score)
 				{
-					std::multimap<unsigned int, std::vector<int> >::iterator it = part[adjacency.clusters[adj]];
-					if (it == groups.end())
-						continue;
-
-					if (group.size() + it->second.size() > max_group_size)
-						continue;
-
-					if (kMergeScoreSmallest && bestGroup != groups.end() && it->second.size() > bestGroup->second.size())
-						continue;
-
-					unsigned int score = kMergeScoreExternal ? ~countExternal(group, it->second, cluster_indices, cluster_offsets, valence) : countShared(group, it->second, adjacency);
-
-					if (score > bestScore)
-					{
-						bestGroup = it;
-						bestScore = score;
-					}
+					best_group = other;
+					best_score = score;
 				}
 			}
-
-			if (bestGroup == groups.end())
-			{
-				// we're stuck, emit as is
-				result.push_back(group);
-			}
-			else
-			{
-				// combine and reinsert
-				std::vector<int> combined;
-				combined.reserve(combined.size() + bestGroup->second.size());
-				combined.insert(combined.end(), group.begin(), group.end());
-				combined.insert(combined.end(), bestGroup->second.begin(), bestGroup->second.end());
-
-				unsigned int ext = kSortExternal ? countExternal(combined, std::vector<int>(), cluster_indices, cluster_offsets, valence) : countTotal(combined, cluster_indices, cluster_offsets, valence);
-
-				for (size_t i = 0; i < bestGroup->second.size(); ++i)
-					part[bestGroup->second[i]] = groups.end();
-
-				groups.erase(bestGroup);
-				std::multimap<unsigned int, std::vector<int> >::iterator it = groups.insert(std::make_pair(ext, combined));
-
-				for (size_t i = 0; i < combined.size(); ++i)
-					part[combined[i]] = it;
-			}
 		}
+
+		// we can't grow the group any more, emit as is
+		if (best_group == -1)
+			continue;
+
+		// combine and reinsert
+		group.insert(group.end(), groups[best_group].begin(), groups[best_group].end());
+		groups[best_group].clear();
+
+		for (size_t i = 0; i < group.size(); ++i)
+			part[group[i]] = int(top.id);
+
+		top.order = kSortExternal ? countExternal(group, std::vector<int>(), cluster_indices, cluster_offsets, valence) : countTotal(group, cluster_indices, cluster_offsets, valence);
+		heapPush(order, pending++, top);
 	}
 
-	return result;
+	return groups;
 }
 
 } // namespace meshopt
@@ -384,11 +435,18 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 	ClusterAdjacency adjacency = {};
 	buildClusterAdjacency(adjacency, cluster_indices, cluster_offsets, cluster_count, used, vertex_count, allocator);
 
-	std::vector<std::vector<int> > groups = partitionMerge(adjacency, cluster_indices, cluster_offsets, cluster_count, vertex_count, target_partition_size, target_partition_size + target_partition_size / 2);
+	// TOOD part of prototype code, to be removed
+	std::vector<std::vector<int> > groups = partitionMerge(adjacency, cluster_indices, cluster_offsets, cluster_count, vertex_count, target_partition_size, target_partition_size + target_partition_size / 2, allocator);
 
+	size_t next = 0;
 	for (size_t i = 0; i < groups.size(); ++i)
+	{
 		for (size_t j = 0; j < groups[i].size(); ++j)
-			destination[groups[i][j]] = unsigned(i);
+			destination[groups[i][j]] = unsigned(next);
+
+		if (!groups[i].empty())
+			++next;
+	}
 
 	return groups.size();
 }
