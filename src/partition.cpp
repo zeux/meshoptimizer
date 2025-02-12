@@ -312,8 +312,71 @@ static unsigned int countExternal(const std::vector<int>& group1, const std::vec
 	return total;
 }
 
-static std::vector<std::vector<int> > partitionMerge(const ClusterAdjacency& adjacency, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, size_t cluster_count, size_t vertex_count, size_t target_group_size, size_t max_group_size, meshopt_Allocator& allocator)
+static int pickGroupToMerge(int target, const std::vector<std::vector<int> >& groups, const std::vector<int>& part, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, const ClusterAdjacency& adjacency, std::vector<unsigned int>& valence, size_t max_group_size)
 {
+	const std::vector<int>& group = groups[target];
+
+	int best_group = -1;
+	unsigned int best_score = 0;
+
+	for (size_t ci = 0; ci < group.size(); ++ci)
+	{
+		for (unsigned int adj = adjacency.offsets[group[ci]]; adj != adjacency.offsets[group[ci] + 1]; ++adj)
+		{
+			int other = part[adjacency.clusters[adj]];
+			if (other < 0)
+				continue;
+
+			assert(groups[other].size() > 0);
+			if (group.size() + groups[other].size() > max_group_size)
+				continue;
+
+			if (kMergeScoreSmallest && best_group >= 0 && groups[other].size() > groups[best_group].size())
+				continue;
+
+			unsigned int score = kMergeScoreExternal ? ~countExternal(group, groups[other], cluster_indices, cluster_offsets, valence) : countShared(group, groups[other], adjacency);
+
+			if (score > best_score)
+			{
+				best_group = other;
+				best_score = score;
+			}
+		}
+	}
+
+	return best_group;
+}
+
+} // namespace meshopt
+
+size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* cluster_indices, size_t total_index_count, const unsigned int* cluster_index_counts, size_t cluster_count, size_t vertex_count, size_t target_partition_size)
+{
+	using namespace meshopt;
+
+	assert(target_partition_size > 0);
+
+	meshopt_Allocator allocator;
+
+	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
+	memset(used, 0, vertex_count);
+
+	// build cluster index offsets as a prefix sum
+	unsigned int* cluster_offsets = allocator.allocate<unsigned int>(cluster_count + 1);
+	unsigned int cluster_nextoffset = 0;
+
+	for (size_t i = 0; i < cluster_count; ++i)
+	{
+		cluster_offsets[i] = cluster_nextoffset;
+		cluster_nextoffset += cluster_index_counts[i];
+	}
+
+	assert(cluster_nextoffset == total_index_count);
+	cluster_offsets[cluster_count] = total_index_count;
+
+	// build cluster adjacency along with edge weights (shared vertex count)
+	ClusterAdjacency adjacency = {};
+	buildClusterAdjacency(adjacency, cluster_indices, cluster_offsets, cluster_count, used, vertex_count, allocator);
+
 	std::vector<unsigned int> valence(vertex_count);
 	for (size_t i = 0; i < cluster_count; ++i)
 	{
@@ -356,36 +419,10 @@ static std::vector<std::vector<int> > partitionMerge(const ClusterAdjacency& adj
 		for (size_t i = 0; i < group.size(); ++i)
 			part[group[i]] = -1;
 
-		if (group.size() >= target_group_size)
+		if (group.size() >= target_partition_size)
 			continue;
 
-		int best_group = -1;
-		unsigned int best_score = 0;
-
-		for (size_t ci = 0; ci < group.size(); ++ci)
-		{
-			for (unsigned int adj = adjacency.offsets[group[ci]]; adj != adjacency.offsets[group[ci] + 1]; ++adj)
-			{
-				int other = part[adjacency.clusters[adj]];
-				if (other < 0)
-					continue;
-
-				assert(groups[other].size() > 0);
-				if (group.size() + groups[other].size() > max_group_size)
-					continue;
-
-				if (kMergeScoreSmallest && best_group >= 0 && groups[other].size() > groups[best_group].size())
-					continue;
-
-				unsigned int score = kMergeScoreExternal ? ~countExternal(group, groups[other], cluster_indices, cluster_offsets, valence) : countShared(group, groups[other], adjacency);
-
-				if (score > best_score)
-				{
-					best_group = other;
-					best_score = score;
-				}
-			}
-		}
+		int best_group = pickGroupToMerge(top.id, groups, part, cluster_indices, cluster_offsets, adjacency, valence, target_partition_size + target_partition_size / 2);
 
 		// we can't grow the group any more, emit as is
 		if (best_group == -1)
@@ -401,42 +438,6 @@ static std::vector<std::vector<int> > partitionMerge(const ClusterAdjacency& adj
 		top.order = kSortExternal ? countExternal(group, std::vector<int>(), cluster_indices, cluster_offsets, valence) : countTotal(group, cluster_indices, cluster_offsets, valence);
 		heapPush(order, pending++, top);
 	}
-
-	return groups;
-}
-
-} // namespace meshopt
-
-size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* cluster_indices, size_t total_index_count, const unsigned int* cluster_index_counts, size_t cluster_count, size_t vertex_count, size_t target_partition_size)
-{
-	using namespace meshopt;
-
-	assert(target_partition_size > 0);
-
-	meshopt_Allocator allocator;
-
-	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
-	memset(used, 0, vertex_count);
-
-	// build cluster index offsets as a prefix sum
-	unsigned int* cluster_offsets = allocator.allocate<unsigned int>(cluster_count + 1);
-	unsigned int cluster_nextoffset = 0;
-
-	for (size_t i = 0; i < cluster_count; ++i)
-	{
-		cluster_offsets[i] = cluster_nextoffset;
-		cluster_nextoffset += cluster_index_counts[i];
-	}
-
-	assert(cluster_nextoffset == total_index_count);
-	cluster_offsets[cluster_count] = total_index_count;
-
-	// build cluster adjacency along with edge weights (shared vertex count)
-	ClusterAdjacency adjacency = {};
-	buildClusterAdjacency(adjacency, cluster_indices, cluster_offsets, cluster_count, used, vertex_count, allocator);
-
-	// TOOD part of prototype code, to be removed
-	std::vector<std::vector<int> > groups = partitionMerge(adjacency, cluster_indices, cluster_offsets, cluster_count, vertex_count, target_partition_size, target_partition_size + target_partition_size / 2, allocator);
 
 	size_t next = 0;
 	for (size_t i = 0; i < groups.size(); ++i)
