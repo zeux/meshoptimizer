@@ -220,9 +220,7 @@ static ClusterGroupOrder heapPop(ClusterGroupOrder* heap, size_t size)
 	return top;
 }
 
-// TOOD part of prototype code, to be removed
-// TODO: valence[] is only used as a seen[] buffer
-static unsigned int countTotal(const std::vector<int>& group, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, std::vector<unsigned int>& valence)
+static unsigned int countTotal(const std::vector<int>& group, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, unsigned char* used)
 {
 	unsigned int total = 0;
 
@@ -230,15 +228,16 @@ static unsigned int countTotal(const std::vector<int>& group, const unsigned int
 	{
 		for (size_t j = cluster_offsets[group[i]]; j < cluster_offsets[group[i] + 1]; ++j)
 		{
-			total += 1 - (valence[cluster_indices[j]] >> 31);
-			valence[cluster_indices[j]] |= 1u << 31;
+			unsigned int v = cluster_indices[j];
+			total += 1 - used[v];
+			used[v] = 1;
 		}
 	}
 
 	for (size_t i = 0; i < group.size(); ++i)
 	{
 		for (size_t j = cluster_offsets[group[i]]; j < cluster_offsets[group[i] + 1]; ++j)
-			valence[cluster_indices[j]] &= ~(1u << 31);
+			used[cluster_indices[j]] = 0;
 	}
 
 	return total;
@@ -269,7 +268,7 @@ static unsigned int countShared(const std::vector<int>& group1, const std::vecto
 	return total;
 }
 
-static unsigned int countExternal(const std::vector<int>& group1, const std::vector<int>& group2, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, std::vector<unsigned int>& valence)
+static unsigned int countExternal(const std::vector<int>& group1, const std::vector<int>& group2, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, unsigned int* valence)
 {
 	unsigned int total = 0;
 
@@ -312,7 +311,7 @@ static unsigned int countExternal(const std::vector<int>& group1, const std::vec
 	return total;
 }
 
-static int pickGroupToMerge(int target, const std::vector<std::vector<int> >& groups, const std::vector<int>& part, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, const ClusterAdjacency& adjacency, std::vector<unsigned int>& valence, size_t max_group_size)
+static int pickGroupToMerge(int target, const std::vector<std::vector<int> >& groups, const std::vector<int>& part, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, const ClusterAdjacency& adjacency, unsigned int* valence, size_t max_group_size)
 {
 	const std::vector<int>& group = groups[target];
 
@@ -377,11 +376,18 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 	ClusterAdjacency adjacency = {};
 	buildClusterAdjacency(adjacency, cluster_indices, cluster_offsets, cluster_count, used, vertex_count, allocator);
 
-	std::vector<unsigned int> valence(vertex_count);
-	for (size_t i = 0; i < cluster_count; ++i)
+	unsigned int* valence = NULL;
+
+	if (kSortExternal || kMergeScoreExternal)
 	{
-		for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
-			valence[cluster_indices[j]]++;
+		valence = allocator.allocate<unsigned int>(vertex_count);
+		memset(valence, 0, vertex_count * sizeof(unsigned int));
+
+		for (size_t i = 0; i < cluster_count; ++i)
+		{
+			for (size_t j = cluster_offsets[i]; j < cluster_offsets[i + 1]; ++j)
+				valence[cluster_indices[j]]++;
+		}
 	}
 
 	std::vector<std::vector<int> > groups(cluster_count);
@@ -398,7 +404,7 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 
 		ClusterGroupOrder item = {};
 		item.id = unsigned(i);
-		item.order = kSortExternal ? countExternal(groups[i], std::vector<int>(), cluster_indices, cluster_offsets, valence) : countTotal(groups[i], cluster_indices, cluster_offsets, valence);
+		item.order = kSortExternal ? countExternal(groups[i], std::vector<int>(), cluster_indices, cluster_offsets, valence) : countTotal(groups[i], cluster_indices, cluster_offsets, used);
 
 		heapPush(order, pending++, item);
 	}
@@ -435,7 +441,7 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 		for (size_t i = 0; i < group.size(); ++i)
 			part[group[i]] = int(top.id);
 
-		top.order = kSortExternal ? countExternal(group, std::vector<int>(), cluster_indices, cluster_offsets, valence) : countTotal(group, cluster_indices, cluster_offsets, valence);
+		top.order = kSortExternal ? countExternal(group, std::vector<int>(), cluster_indices, cluster_offsets, valence) : countTotal(group, cluster_indices, cluster_offsets, used);
 		heapPush(order, pending++, top);
 	}
 
