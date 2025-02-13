@@ -352,6 +352,12 @@ static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clus
 	std::vector<unsigned int> cluster_indices;
 	std::vector<unsigned int> cluster_counts(pending.size());
 
+	size_t total_index_count = 0;
+	for (size_t i = 0; i < pending.size(); ++i)
+		total_index_count += clusters[pending[i]].indices.size();
+
+	cluster_indices.reserve(total_index_count);
+
 	for (size_t i = 0; i < pending.size(); ++i)
 	{
 		const Cluster& cluster = clusters[pending[i]];
@@ -363,9 +369,12 @@ static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clus
 	}
 
 	std::vector<unsigned int> cluster_part(pending.size());
-	size_t partition_count = meshopt_partitionClusters(&cluster_part[0], &cluster_indices[0], cluster_indices.size(), &cluster_counts[0], cluster_counts.size(), remap.size(), 8);
+	size_t partition_count = meshopt_partitionClusters(&cluster_part[0], &cluster_indices[0], cluster_indices.size(), &cluster_counts[0], cluster_counts.size(), remap.size(), kGroupSize);
 
 	std::vector<std::vector<int> > partitions(partition_count);
+	for (size_t i = 0; i < partition_count; ++i)
+		partitions[i].reserve(kGroupSize + 4);
+
 	for (size_t i = 0; i < pending.size(); ++i)
 		partitions[cluster_part[i]].push_back(pending[i]);
 
