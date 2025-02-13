@@ -7,9 +7,6 @@
 namespace meshopt
 {
 
-static const bool kMergeSmaller = false;
-static const bool kFastMetrics = false;
-
 struct ClusterAdjacency
 {
 	unsigned int* offsets;
@@ -286,8 +283,8 @@ static int pickGroupToMerge(const ClusterGroup* groups, int id, const ClusterAdj
 
 			unsigned int score = countShared(groups, id, other, adjacency);
 
-			if (kMergeSmaller)
-				score += max_group_size - groups[other].size;
+			// favor smaller target groups
+			score += max_group_size - groups[other].size;
 
 			if (score > best_score)
 			{
@@ -376,7 +373,8 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 		if (best_group == -1)
 			continue;
 
-		unsigned int shared = kFastMetrics ? countShared(groups, top.id, best_group, adjacency) : 0;
+		// compute shared vertices to adjust the total vertices estimate after merging
+		unsigned int shared = countShared(groups, top.id, best_group, adjacency);
 
 		// combine groups by linking them together
 		assert(groups[best_group].size > 0);
@@ -388,21 +386,15 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 				break;
 			}
 
+		// update group sizes; note, the vertex update is an approximation which avoids recomputing the true size via countTotal
 		groups[top.id].size += groups[best_group].size;
-
-		if (kFastMetrics)
-		{
-			groups[top.id].vertices += groups[best_group].vertices;
-			groups[top.id].vertices -= shared; // TODO: risk of underflow?
-		}
-		else
-		{
-			groups[top.id].vertices = countTotal(groups, top.id, cluster_indices, cluster_offsets, used);
-		}
+		groups[top.id].vertices += groups[best_group].vertices;
+		groups[top.id].vertices -= shared;
 
 		groups[best_group].size = 0;
 		groups[best_group].vertices = 0;
 
+		// re-associate all clusters back to the merged group
 		for (int i = top.id; i >= 0; i = groups[i].next)
 			groups[i].group = int(top.id);
 
