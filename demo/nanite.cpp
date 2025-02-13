@@ -362,7 +362,7 @@ static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clus
 	{
 		const Cluster& cluster = clusters[pending[i]];
 
-		cluster_counts[i] = cluster.indices.size();
+		cluster_counts[i] = unsigned(cluster.indices.size());
 
 		for (size_t j = 0; j < cluster.indices.size(); ++j)
 			cluster_indices.push_back(remap[cluster.indices[j]]);

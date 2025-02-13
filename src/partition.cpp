@@ -284,7 +284,7 @@ static int pickGroupToMerge(const ClusterGroup* groups, int id, const ClusterAdj
 			unsigned int score = countShared(groups, id, other, adjacency);
 
 			// favor smaller target groups
-			score += max_group_size - groups[other].size;
+			score += unsigned(max_group_size) - groups[other].size;
 
 			if (score > best_score)
 			{
@@ -321,7 +321,7 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 	}
 
 	assert(cluster_nextoffset == total_index_count);
-	cluster_offsets[cluster_count] = total_index_count;
+	cluster_offsets[cluster_count] = unsigned(total_index_count);
 
 	// build cluster adjacency along with edge weights (shared vertex count)
 	ClusterAdjacency adjacency = {};
@@ -338,7 +338,7 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 		groups[i].group = int(i);
 		groups[i].next = -1;
 		groups[i].size = 1;
-		groups[i].vertices = countTotal(groups, i, cluster_indices, cluster_offsets, used);
+		groups[i].vertices = countTotal(groups, int(i), cluster_indices, cluster_offsets, used);
 
 		GroupOrder item = {};
 		item.id = unsigned(i);
