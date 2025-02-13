@@ -491,7 +491,7 @@ static int measureUnique(std::vector<int>& used, const std::vector<unsigned int>
 	for (size_t i = 0; i < indices.size(); ++i)
 	{
 		unsigned int v = indices[i];
-		vertices += used[v] && (!locks || !(*locks)[v]);
+		vertices += used[v] && (!locks || (*locks)[v]);
 		used[v] = 0;
 	}
 
