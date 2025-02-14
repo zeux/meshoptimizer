@@ -657,12 +657,13 @@ void simplifyComplete(const Mesh& mesh)
 
 void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 {
-	// note: we use clusters that are larger than normal to give simplifier room to work; in practice you'd use cluster groups merged from smaller clusters and build a cluster DAG
-	const size_t max_vertices = 255;
-	const size_t max_triangles = 512;
+	const size_t max_vertices = 64;
+	const size_t max_triangles = 64;
+	const size_t target_group_size = 8;
 
 	double start = timestamp();
 
+	// build clusters (meshlets) out of the mesh
 	size_t max_meshlets = meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles);
 	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
 	std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
@@ -671,6 +672,44 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 	meshlets.resize(meshopt_buildMeshlets(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, max_triangles, 0.f));
 
 	double middle = timestamp();
+
+	// partition clusters in groups; each group will be simplified separately and the boundaries between groups will be preserved
+	std::vector<unsigned int> cluster_indices;
+	cluster_indices.reserve(mesh.indices.size()); // slight underestimate, vector should realloc once
+	std::vector<unsigned int> cluster_sizes(meshlets.size());
+
+	for (size_t i = 0; i < meshlets.size(); ++i)
+	{
+		const meshopt_Meshlet& m = meshlets[i];
+
+		for (size_t j = 0; j < m.triangle_count * 3; ++j)
+			cluster_indices.push_back(meshlet_vertices[m.vertex_offset + meshlet_triangles[m.triangle_offset + j]]);
+
+		cluster_sizes[i] = m.triangle_count * 3;
+	}
+
+	// makes sure clusters are partitioned using position-only adjacency
+	meshopt_generateShadowIndexBuffer(&cluster_indices[0], &cluster_indices[0], cluster_indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(float) * 3, sizeof(Vertex));
+
+	std::vector<unsigned int> partition(meshlets.size());
+	size_t partition_count = meshopt_partitionClusters(&partition[0], &cluster_indices[0], cluster_indices.size(), &cluster_sizes[0], cluster_sizes.size(), mesh.vertices.size(), target_group_size);
+
+	// convert partitions to linked lists to make it easier to iterate over (vectors of vectors would work too)
+	std::vector<int> partnext(meshlets.size(), -1);
+	std::vector<int> partlast(partition_count, -1);
+
+	for (size_t i = 0; i < meshlets.size(); ++i)
+	{
+		unsigned int part = partition[i];
+
+		if (partlast[part] >= 0)
+			partnext[partlast[part]] = int(i);
+
+		partlast[part] = int(i);
+		partnext[i] = -1;
+	}
+
+	double parttime = timestamp();
 
 	float scale = meshopt_simplifyScale(&mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
 
@@ -681,33 +720,47 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 
 	for (size_t i = 0; i < meshlets.size(); ++i)
 	{
-		const meshopt_Meshlet& m = meshlets[i];
+		if (partlast[partition[i]] < 0)
+			continue; // part of a group that was already processed
 
-		size_t cluster_offset = lod.size();
+		// mark group as processed
+		partlast[partition[i]] = -1;
 
-		for (size_t j = 0; j < m.triangle_count * 3; ++j)
-			lod.push_back(meshlet_vertices[m.vertex_offset + meshlet_triangles[m.triangle_offset + j]]);
+		size_t group_offset = lod.size();
 
+		for (int j = int(i); j >= 0; j = partnext[j])
+		{
+			const meshopt_Meshlet& m = meshlets[j];
+
+			for (size_t k = 0; k < m.triangle_count * 3; ++k)
+				lod.push_back(meshlet_vertices[m.vertex_offset + meshlet_triangles[m.triangle_offset + k]]);
+		}
+
+		size_t group_triangles = (lod.size() - group_offset) / 3;
+
+		// simplify the group, preserving the border vertices
+		// note: this technically also locks the exterior border; a full mesh analysis (see nanite.cpp / lockBoundary) would work better for some meshes
 		unsigned int options = meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute;
 
-		float cluster_target_error = 1e-2f * scale;
-		size_t cluster_target = size_t(float(m.triangle_count) * threshold) * 3;
-		float cluster_error = 0.f;
-		size_t cluster_size = meshopt_simplify(&lod[cluster_offset], &lod[cluster_offset], m.triangle_count * 3, &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), cluster_target, cluster_target_error, options, &cluster_error);
+		float group_target_error = 1e-2f * scale;
+		size_t group_target = size_t(float(group_triangles) * threshold) * 3;
+		float group_error = 0.f;
+		size_t group_size = meshopt_simplify(&lod[group_offset], &lod[group_offset], group_triangles * 3, &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), group_target, group_target_error, options, &group_error);
 
-		error = cluster_error > error ? cluster_error : error;
+		error = group_error > error ? group_error : error;
 
-		// simplified cluster is available in lod[cluster_offset..cluster_offset + cluster_size]
-		lod.resize(cluster_offset + cluster_size);
+		// simplified group is available in lod[group_offset..group_offset + group_size]
+		lod.resize(group_offset + group_size);
 	}
 
 	double end = timestamp();
 
-	printf("%-9s: %d triangles => %d triangles (%.2f%% deviation) in %.2f msec, clusterized in %.2f msec\n",
+	printf("%-9s: %d triangles => %d triangles (%.2f%% deviation) in %.2f msec, clusterized in %.2f msec, partitioned in %.2f msec (%d clusters in %d groups)\n",
 	    "SimplifyN", // N for Nanite
 	    int(mesh.indices.size() / 3), int(lod.size() / 3),
 	    error / scale * 100,
-	    (end - middle) * 1000, (middle - start) * 1000);
+	    (end - parttime) * 1000, (middle - start) * 1000, (parttime - middle) * 1000,
+	    int(meshlets.size()), int(partition_count));
 }
 
 void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
@@ -1402,7 +1455,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	meshlets(mesh);
+	simplifyClusters(mesh, 0.2f);
 }
 
 void processNanite(const char* path)
