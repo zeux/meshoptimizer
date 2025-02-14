@@ -7,6 +7,8 @@
 namespace meshopt
 {
 
+static const unsigned int kGroupSizeBias = 3;
+
 struct ClusterAdjacency
 {
 	unsigned int* offsets;
@@ -284,7 +286,7 @@ static int pickGroupToMerge(const ClusterGroup* groups, int id, const ClusterAdj
 			unsigned int score = countShared(groups, id, other, adjacency);
 
 			// favor smaller target groups
-			score += unsigned(max_group_size) - groups[other].size;
+			score += (unsigned(max_group_size) - groups[other].size) * kGroupSizeBias;
 
 			if (score > best_score)
 			{
