@@ -29,6 +29,7 @@ set(SOURCES
     src/indexgenerator.cpp
     src/overdrawanalyzer.cpp
     src/overdrawoptimizer.cpp
+    src/partition.cpp
     src/quantization.cpp
     src/simplifier.cpp
     src/spatialorder.cpp
