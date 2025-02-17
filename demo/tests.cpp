@@ -616,6 +616,25 @@ static void encodeVertexEmpty()
 	assert(meshopt_decodeVertexBuffer(NULL, 0, 16, &buffer[0], buffer.size()) == 0);
 }
 
+static void decodeVersion()
+{
+	assert(meshopt_decodeVertexVersion(reinterpret_cast<const unsigned char*>("\xa0"), 1) == 0);
+	assert(meshopt_decodeVertexVersion(reinterpret_cast<const unsigned char*>("\xa1"), 1) == 1);
+	assert(meshopt_decodeVertexVersion(reinterpret_cast<const unsigned char*>("\xa1hello"), 6) == 1);
+
+	assert(meshopt_decodeVertexVersion(NULL, 0) == -1);
+	assert(meshopt_decodeVertexVersion(reinterpret_cast<const unsigned char*>("\xa7"), 1) == -1);
+	assert(meshopt_decodeVertexVersion(reinterpret_cast<const unsigned char*>("\xb1"), 1) == -1);
+
+	assert(meshopt_decodeIndexVersion(reinterpret_cast<const unsigned char*>("\xe0"), 1) == 0);
+	assert(meshopt_decodeIndexVersion(reinterpret_cast<const unsigned char*>("\xd1"), 1) == 1);
+	assert(meshopt_decodeIndexVersion(reinterpret_cast<const unsigned char*>("\xe1hello"), 6) == 1);
+
+	assert(meshopt_decodeIndexVersion(NULL, 0) == -1);
+	assert(meshopt_decodeIndexVersion(reinterpret_cast<const unsigned char*>("\xa7"), 1) == -1);
+	assert(meshopt_decodeIndexVersion(reinterpret_cast<const unsigned char*>("\xa1"), 1) == -1);
+}
+
 static void decodeFilterOct8()
 {
 	const unsigned char data[4 * 4] = {
@@ -2150,6 +2169,8 @@ void runTests()
 		encodeVertexEmpty();
 		encodeVertexMemorySafe();
 	}
+
+	decodeVersion();
 
 	decodeFilterOct8();
 	decodeFilterOct12();

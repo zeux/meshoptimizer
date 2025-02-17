@@ -244,6 +244,13 @@ MESHOPTIMIZER_API void meshopt_encodeIndexVersion(int version);
 MESHOPTIMIZER_API int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t index_size, const unsigned char* buffer, size_t buffer_size);
 
 /**
+ * Get encoded index format version
+ * Returns format version of the encoded index buffer/sequence, or -1 if the buffer header is invalid
+ * Note that a non-negative value doesn't guarantee that the buffer will be decoded correctly if the input is malformed.
+ */
+MESHOPTIMIZER_API int meshopt_decodeIndexVersion(const unsigned char* buffer, size_t buffer_size);
+
+/**
  * Index sequence encoder
  * Encodes index sequence into an array of bytes that is generally smaller and compresses better compared to original.
  * Input index sequence can represent arbitrary topology; for triangle lists meshopt_encodeIndexBuffer is likely to be better.
@@ -302,6 +309,13 @@ MESHOPTIMIZER_API void meshopt_encodeVertexVersion(int version);
  * destination must contain enough space for the resulting vertex buffer (vertex_count * vertex_size bytes)
  */
 MESHOPTIMIZER_API int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t vertex_size, const unsigned char* buffer, size_t buffer_size);
+
+/**
+ * Get encoded vertex format version
+ * Returns format version of the encoded vertex buffer, or -1 if the buffer header is invalid
+ * Note that a non-negative value doesn't guarantee that the buffer will be decoded correctly if the input is malformed.
+ */
+MESHOPTIMIZER_API int meshopt_decodeVertexVersion(const unsigned char* buffer, size_t buffer_size);
 
 /**
  * Vertex buffer filters
