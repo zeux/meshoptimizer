@@ -307,6 +307,8 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 
 	assert(target_partition_size > 0);
 
+	size_t max_partition_size = target_partition_size + target_partition_size * 3 / 8;
+
 	meshopt_Allocator allocator;
 
 	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
@@ -318,6 +320,8 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 
 	for (size_t i = 0; i < cluster_count; ++i)
 	{
+		assert(cluster_index_counts[i] > 0);
+
 		cluster_offsets[i] = cluster_nextoffset;
 		cluster_nextoffset += cluster_index_counts[i];
 	}
@@ -369,7 +373,7 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 		if (groups[top.id].size >= target_partition_size)
 			continue;
 
-		int best_group = pickGroupToMerge(groups, top.id, adjacency, target_partition_size + target_partition_size / 2);
+		int best_group = pickGroupToMerge(groups, top.id, adjacency, max_partition_size);
 
 		// we can't grow the group any more, emit as is
 		if (best_group == -1)
