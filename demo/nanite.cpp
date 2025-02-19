@@ -584,7 +584,6 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 
 		size_t triangles = 0;
 		size_t stuck_triangles = 0;
-		int single_clusters = 0;
 		int stuck_clusters = 0;
 		int full_clusters = 0;
 		size_t components_lod = 0;
@@ -603,22 +602,6 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 			if (groups[i].empty())
 				continue; // metis shortcut
 
-			if (groups[i].size() == 1)
-			{
-#if TRACE
-				printf("stuck cluster: singleton with %d triangles\n", int(clusters[groups[i][0]].indices.size() / 3));
-#endif
-
-				if (dump && depth == atoi(dump))
-					dumpObj("cluster", clusters[groups[i][0]].indices);
-
-				single_clusters++;
-				stuck_clusters++;
-				stuck_triangles += clusters[groups[i][0]].indices.size() / 3;
-				retry.push_back(groups[i][0]);
-				continue;
-			}
-
 			std::vector<unsigned int> merged;
 			for (size_t j = 0; j < groups[i].size(); ++j)
 				merged.insert(merged.end(), clusters[groups[i][j]].indices.begin(), clusters[groups[i][j]].indices.end());
@@ -636,7 +619,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 
 			float error = 0.f;
 			std::vector<unsigned int> simplified = simplify(vertices, merged, kUseLocks ? &locks : NULL, target_size, &error);
-			if (simplified.size() > merged.size() * kSimplifyThreshold || simplified.size() / (kClusterSize * 3) >= merged.size() / (kClusterSize * 3))
+			if (simplified.size() > merged.size() * kSimplifyThreshold)
 			{
 #if TRACE
 				printf("stuck cluster: simplified %d => %d over threshold\n", int(merged.size() / 3), int(simplified.size() / 3));
@@ -693,7 +676,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		    double(full_clusters) * inv_clusters * 100, double(triangles) * inv_clusters, double(xformed_lod) * inv_clusters, double(components_lod) * inv_clusters, double(boundary_lod) * inv_clusters, avg_group,
 		    int(triangles));
 		if (stuck_clusters)
-			printf("; stuck %d clusters (%d single, %d triangles)", stuck_clusters, single_clusters, int(stuck_triangles));
+			printf("; stuck %d clusters (%d triangles)", stuck_clusters, int(stuck_triangles));
 		printf("\n");
 
 		if (kUseRetry)
