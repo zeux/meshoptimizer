@@ -615,6 +615,9 @@ size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* meshlet_ve
 
 	assert(cone_weight >= 0 && cone_weight <= 1);
 
+	if (index_count == 0)
+		return 0;
+
 	meshopt_Allocator allocator;
 
 	TriangleAdjacency2 adjacency = {};

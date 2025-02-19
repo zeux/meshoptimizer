@@ -1059,6 +1059,17 @@ static void clusterBoundsDegenerate()
 	assert(bounds2.center[2] - bounds2.radius <= 0 && bounds2.center[2] + bounds2.radius >= 1);
 }
 
+static void meshletsEmpty()
+{
+	const float vbd[4 * 3] = {};
+
+	meshopt_Meshlet ml[1];
+	unsigned int mv[4];
+	unsigned char mt[8];
+	size_t mc = meshopt_buildMeshlets(ml, mv, mt, NULL, 0, vbd, 4, sizeof(float) * 3, 64, 64, 0.f);
+	assert(mc == 0);
+}
+
 static void meshletsDense()
 {
 	const float vbd[4 * 3] = {};
@@ -2187,6 +2198,7 @@ void runTests()
 
 	clusterBoundsDegenerate();
 
+	meshletsEmpty();
 	meshletsDense();
 	meshletsSparse();
 
