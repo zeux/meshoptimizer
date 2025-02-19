@@ -624,7 +624,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 #if TRACE
 				printf("stuck cluster: simplified %d => %d over threshold\n", int(merged.size() / 3), int(simplified.size() / 3));
 #endif
-				stuck_clusters++;
+				stuck_clusters += groups[i].size();
 				stuck_triangles += merged.size() / 3;
 				for (size_t j = 0; j < groups[i].size(); ++j)
 					retry.push_back(groups[i][j]);
