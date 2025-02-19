@@ -2,12 +2,11 @@
 #include "meshoptimizer.h"
 
 #include <assert.h>
+#include <math.h>
 #include <string.h>
 
 namespace meshopt
 {
-
-static const unsigned int kGroupSizeBias = 3;
 
 struct ClusterAdjacency
 {
@@ -264,12 +263,14 @@ static unsigned int countShared(const ClusterGroup* groups, int group1, int grou
 	return total;
 }
 
-static int pickGroupToMerge(const ClusterGroup* groups, int id, const ClusterAdjacency& adjacency, size_t max_group_size)
+static int pickGroupToMerge(const ClusterGroup* groups, int id, const ClusterAdjacency& adjacency, size_t max_partition_size)
 {
 	assert(groups[id].size > 0);
 
+	float group_rsqrt = 1.f / sqrtf(float(int(groups[id].vertices)));
+
 	int best_group = -1;
-	unsigned int best_score = 0;
+	float best_score = 0;
 
 	for (int ci = id; ci >= 0; ci = groups[ci].next)
 	{
@@ -280,13 +281,14 @@ static int pickGroupToMerge(const ClusterGroup* groups, int id, const ClusterAdj
 				continue;
 
 			assert(groups[other].size > 0);
-			if (groups[id].size + groups[other].size > max_group_size)
+			if (groups[id].size + groups[other].size > max_partition_size)
 				continue;
 
-			unsigned int score = countShared(groups, id, other, adjacency);
+			unsigned int shared = countShared(groups, id, other, adjacency);
+			float other_rsqrt = 1.f / sqrtf(float(int(groups[other].vertices)));
 
-			// favor smaller target groups
-			score += (unsigned(max_group_size) - groups[other].size) * kGroupSizeBias;
+			// normalize shared count by the expected boundary of each group (+ keeps scoring symmetric)
+			float score = float(int(shared)) * (group_rsqrt + other_rsqrt);
 
 			if (score > best_score)
 			{
@@ -307,6 +309,8 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 
 	assert(target_partition_size > 0);
 
+	size_t max_partition_size = target_partition_size + target_partition_size * 3 / 8;
+
 	meshopt_Allocator allocator;
 
 	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
@@ -318,6 +322,8 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 
 	for (size_t i = 0; i < cluster_count; ++i)
 	{
+		assert(cluster_index_counts[i] > 0);
+
 		cluster_offsets[i] = cluster_nextoffset;
 		cluster_nextoffset += cluster_index_counts[i];
 	}
@@ -369,7 +375,7 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 		if (groups[top.id].size >= target_partition_size)
 			continue;
 
-		int best_group = pickGroupToMerge(groups, top.id, adjacency, target_partition_size + target_partition_size / 2);
+		int best_group = pickGroupToMerge(groups, top.id, adjacency, max_partition_size);
 
 		// we can't grow the group any more, emit as is
 		if (best_group == -1)
@@ -391,7 +397,7 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 		// update group sizes; note, the vertex update is an approximation which avoids recomputing the true size via countTotal
 		groups[top.id].size += groups[best_group].size;
 		groups[top.id].vertices += groups[best_group].vertices;
-		groups[top.id].vertices -= shared;
+		groups[top.id].vertices = (groups[top.id].vertices > shared) ? groups[top.id].vertices - shared : 1;
 
 		groups[best_group].size = 0;
 		groups[best_group].vertices = 0;

@@ -576,6 +576,8 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	while (pending.size() > 1)
 	{
 		std::vector<std::vector<int> > groups = partition(clusters, pending, remap);
+		double avg_group = double(pending.size()) / double(groups.size());
+
 		pending.clear();
 
 		std::vector<int> retry;
@@ -686,9 +688,9 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		double inv_clusters = pending.empty() ? 0 : 1.0 / double(pending.size());
 
 		depth++;
-		printf("lod %d: %d clusters (%.1f%% full, %.1f tri/cl, %.1f vtx/cl, %.2f connected, %.1f boundary), %d triangles",
+		printf("lod %d: %d clusters (%.1f%% full, %.1f tri/cl, %.1f vtx/cl, %.2f connected, %.1f boundary, %.1f partition), %d triangles",
 		    depth, int(pending.size()),
-		    double(full_clusters) * inv_clusters * 100, double(triangles) * inv_clusters, double(xformed_lod) * inv_clusters, double(components_lod) * inv_clusters, double(boundary_lod) * inv_clusters,
+		    double(full_clusters) * inv_clusters * 100, double(triangles) * inv_clusters, double(xformed_lod) * inv_clusters, double(components_lod) * inv_clusters, double(boundary_lod) * inv_clusters, avg_group,
 		    int(triangles));
 		if (stuck_clusters)
 			printf("; stuck %d clusters (%d single, %d triangles)", stuck_clusters, single_clusters, int(stuck_triangles));

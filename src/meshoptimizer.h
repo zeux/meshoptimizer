@@ -752,6 +752,8 @@ inline size_t meshopt_buildMeshletsScan(meshopt_Meshlet* meshlets, unsigned int*
 template <typename T>
 inline meshopt_Bounds meshopt_computeClusterBounds(const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 template <typename T>
+inline size_t meshopt_partitionClusters(unsigned int* destination, const T* cluster_indices, size_t total_index_count, const unsigned int* cluster_index_counts, size_t cluster_count, size_t vertex_count, size_t target_partition_size);
+template <typename T>
 inline void meshopt_spatialSortTriangles(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 #endif
 
@@ -1136,6 +1138,14 @@ inline meshopt_Bounds meshopt_computeClusterBounds(const T* indices, size_t inde
 	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
 
 	return meshopt_computeClusterBounds(in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride);
+}
+
+template <typename T>
+inline size_t meshopt_partitionClusters(unsigned int* destination, const T* cluster_indices, size_t total_index_count, const unsigned int* cluster_index_counts, size_t cluster_count, size_t vertex_count, size_t target_partition_size)
+{
+	meshopt_IndexAdapter<T> in(NULL, cluster_indices, total_index_count);
+
+	return meshopt_partitionClusters(destination, in.data, total_index_count, cluster_index_counts, cluster_count, vertex_count, target_partition_size);
 }
 
 template <typename T>
