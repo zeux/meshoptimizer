@@ -428,6 +428,195 @@ static std::vector<unsigned int> simplify(const std::vector<Vertex>& vertices, c
 	return lod;
 }
 
+static void dumpMetrics(int level, const std::vector<Cluster>& queue, const std::vector<std::vector<int> >& groups, const std::vector<unsigned int>& remap, const std::vector<unsigned char>& locks, const std::vector<int>& retry);
+
+static bool loadMetis()
+{
+#ifdef _WIN32
+	return false;
+#else
+	void* handle = dlopen("libmetis.so", RTLD_NOW | RTLD_LOCAL);
+	if (!handle)
+		return false;
+
+	METIS_SetDefaultOptions = (int (*)(int*))dlsym(handle, "METIS_SetDefaultOptions");
+	METIS_PartGraphRecursive = (int (*)(int*, int*, int*, int*, int*, int*, int*, int*, float*, float*, int*, int*, int*))dlsym(handle, "METIS_PartGraphRecursive");
+
+	return METIS_SetDefaultOptions && METIS_PartGraphRecursive;
+#endif
+}
+
+void dumpObj(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, bool recomputeNormals = false);
+void dumpObj(const char* section, const std::vector<unsigned int>& indices);
+
+void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
+{
+	static const char* metis = getenv("METIS");
+	METIS = metis ? atoi(metis) : 0;
+
+	if (METIS)
+	{
+		if (loadMetis())
+			printf("using metis for %s\n", (METIS & 3) == 3 ? "clustering and partition" : ((METIS & 1) ? "partition only" : "clustering only"));
+		else
+			printf("metis library is not available\n"), METIS = 0;
+	}
+
+	static const char* dump = getenv("DUMP");
+
+	int depth = 0;
+	std::vector<unsigned char> locks(vertices.size());
+
+	// for cluster connectivity, we need a position-only remap that maps vertices with the same position to the same index
+	// it's more efficient to build it once; unfortunately, meshopt_generateVertexRemap doesn't support stride so we need to use *Multi version
+	std::vector<unsigned int> remap(vertices.size());
+	meshopt_Stream position = {&vertices[0].px, sizeof(float) * 3, sizeof(Vertex)};
+	meshopt_generateVertexRemapMulti(&remap[0], &indices[0], indices.size(), vertices.size(), &position, 1);
+
+	// initial clusterization splits the original mesh
+	std::vector<Cluster> clusters = clusterize(vertices, indices);
+	for (size_t i = 0; i < clusters.size(); ++i)
+		clusters[i].self = bounds(vertices, clusters[i].indices, 0.f);
+
+	printf("ideal lod chain: %.1f levels\n", log2(double(indices.size() / 3) / double(kClusterSize)));
+
+	std::vector<int> pending(clusters.size());
+	for (size_t i = 0; i < clusters.size(); ++i)
+		pending[i] = int(i);
+
+	// merge and simplify clusters until we can't merge anymore
+	while (pending.size() > 1)
+	{
+		std::vector<std::vector<int> > groups = partition(clusters, pending, remap);
+
+		if (kUseLocks)
+			lockBoundary(locks, groups, clusters, remap);
+
+		pending.clear();
+
+		std::vector<int> retry;
+
+		size_t triangles = 0;
+		size_t stuck_triangles = 0;
+
+		if (dump && depth == atoi(dump))
+			dumpObj(vertices, std::vector<unsigned int>());
+
+		// every group needs to be simplified now
+		for (size_t i = 0; i < groups.size(); ++i)
+		{
+			if (groups[i].empty())
+				continue; // metis shortcut
+
+			std::vector<unsigned int> merged;
+			for (size_t j = 0; j < groups[i].size(); ++j)
+				merged.insert(merged.end(), clusters[groups[i][j]].indices.begin(), clusters[groups[i][j]].indices.end());
+
+			if (dump && depth == atoi(dump))
+			{
+				for (size_t j = 0; j < groups[i].size(); ++j)
+					dumpObj("cluster", clusters[groups[i][j]].indices);
+
+				dumpObj("group", merged);
+			}
+
+			// aim to reduce group size in half
+			size_t target_size = (merged.size() / 3) / 2 * 3;
+
+			float error = 0.f;
+			std::vector<unsigned int> simplified = simplify(vertices, merged, kUseLocks ? &locks : NULL, target_size, &error);
+			if (simplified.size() > merged.size() * kSimplifyThreshold)
+			{
+				stuck_triangles += merged.size() / 3;
+				for (size_t j = 0; j < groups[i].size(); ++j)
+					retry.push_back(groups[i][j]);
+				continue; // simplification is stuck; abandon the merge
+			}
+
+			// enforce bounds and error monotonicity
+			// note: it is incorrect to use the precise bounds of the merged or simplified mesh, because this may violate monotonicity
+			LODBounds groupb = boundsMerge(clusters, groups[i]);
+			groupb.error += error; // this may overestimate the error, but we are starting from the simplified mesh so this is a little more correct
+
+			std::vector<Cluster> split = clusterize(vertices, simplified);
+
+			// update parent bounds and error for all clusters in the group
+			// note that all clusters in the group need to switch simultaneously so they have the same bounds
+			for (size_t j = 0; j < groups[i].size(); ++j)
+			{
+				assert(clusters[groups[i][j]].parent.error == FLT_MAX);
+				clusters[groups[i][j]].parent = groupb;
+			}
+
+			for (size_t j = 0; j < split.size(); ++j)
+			{
+				split[j].self = groupb;
+
+				clusters.push_back(split[j]); // std::move
+				pending.push_back(int(clusters.size()) - 1);
+
+				triangles += split[j].indices.size() / 3;
+			}
+		}
+
+		dumpMetrics(depth, clusters, groups, remap, locks, retry);
+		depth++;
+
+		if (kUseRetry)
+		{
+			if (triangles < stuck_triangles / 3)
+				break;
+
+			pending.insert(pending.end(), retry.begin(), retry.end());
+		}
+	}
+
+	size_t total_triangles = 0;
+	size_t lowest_triangles = 0;
+	for (size_t i = 0; i < clusters.size(); ++i)
+	{
+		total_triangles += clusters[i].indices.size() / 3;
+		if (clusters[i].parent.error == FLT_MAX)
+			lowest_triangles += clusters[i].indices.size() / 3;
+	}
+
+	printf("total: %d triangles in %d clusters\n", int(total_triangles), int(clusters.size()));
+	printf("lowest lod: %d triangles\n", int(lowest_triangles));
+
+	// for testing purposes, we can compute a DAG cut from a given viewpoint and dump it as an OBJ
+	float maxx = 0.f, maxy = 0.f, maxz = 0.f;
+	for (size_t i = 0; i < vertices.size(); ++i)
+	{
+		maxx = std::max(maxx, vertices[i].px * 2);
+		maxy = std::max(maxy, vertices[i].py * 2);
+		maxz = std::max(maxz, vertices[i].pz * 2);
+	}
+
+	float threshold = 2e-3f; // 2 pixels at 1080p
+	float fovy = 60.f;
+	float znear = 1e-2f;
+	float proj = 1.f / tanf(fovy * 3.1415926f / 180.f * 0.5f);
+
+	std::vector<unsigned int> cut;
+	for (size_t i = 0; i < clusters.size(); ++i)
+		if (boundsError(clusters[i].self, maxx, maxy, maxz, proj, znear) <= threshold && boundsError(clusters[i].parent, maxx, maxy, maxz, proj, znear) > threshold)
+			cut.insert(cut.end(), clusters[i].indices.begin(), clusters[i].indices.end());
+
+	printf("cut (%.3f): %d triangles\n", threshold, int(cut.size() / 3));
+
+	if (dump && -1 == atoi(dump))
+	{
+		dumpObj(vertices, cut);
+
+		for (size_t i = 0; i < clusters.size(); ++i)
+			if (boundsError(clusters[i].self, maxx, maxy, maxz, proj, znear) <= threshold && boundsError(clusters[i].parent, maxx, maxy, maxz, proj, znear) > threshold)
+				dumpObj("cluster", clusters[i].indices);
+	}
+}
+
+// What follows is code that is helpful for collecting metrics, visualizing cuts, etc.
+// This code is not used in the actual clustering implementation and can be ignored.
+
 static int follow(std::vector<int>& parents, int index)
 {
 	while (index != parents[index])
@@ -545,212 +734,4 @@ static void dumpMetrics(int level, const std::vector<Cluster>& queue, const std:
 	if (stuck_clusters)
 		printf("; stuck %d clusters (%d triangles)", stuck_clusters, stuck_triangles);
 	printf("\n");
-}
-
-static bool loadMetis()
-{
-#ifdef _WIN32
-	return false;
-#else
-	void* handle = dlopen("libmetis.so", RTLD_NOW | RTLD_LOCAL);
-	if (!handle)
-		return false;
-
-	METIS_SetDefaultOptions = (int (*)(int*))dlsym(handle, "METIS_SetDefaultOptions");
-	METIS_PartGraphRecursive = (int (*)(int*, int*, int*, int*, int*, int*, int*, int*, float*, float*, int*, int*, int*))dlsym(handle, "METIS_PartGraphRecursive");
-
-	return METIS_SetDefaultOptions && METIS_PartGraphRecursive;
-#endif
-}
-
-void dumpObj(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, bool recomputeNormals = false);
-void dumpObj(const char* section, const std::vector<unsigned int>& indices);
-
-void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
-{
-	static const char* metis = getenv("METIS");
-	METIS = metis ? atoi(metis) : 0;
-
-	if (METIS)
-	{
-		if (loadMetis())
-			printf("using metis for %s\n", (METIS & 3) == 3 ? "clustering and partition" : ((METIS & 1) ? "partition only" : "clustering only"));
-		else
-			printf("metis library is not available\n"), METIS = 0;
-	}
-
-	static const char* dump = getenv("DUMP");
-
-#ifndef NDEBUG
-	std::vector<std::pair<int, int> > dag_debug;
-#endif
-
-	int depth = 0;
-	std::vector<unsigned char> locks(vertices.size());
-
-	// for cluster connectivity, we need a position-only remap that maps vertices with the same position to the same index
-	// it's more efficient to build it once; unfortunately, meshopt_generateVertexRemap doesn't support stride so we need to use *Multi version
-	std::vector<unsigned int> remap(vertices.size());
-	meshopt_Stream position = {&vertices[0].px, sizeof(float) * 3, sizeof(Vertex)};
-	meshopt_generateVertexRemapMulti(&remap[0], &indices[0], indices.size(), vertices.size(), &position, 1);
-
-	// initial clusterization splits the original mesh
-	std::vector<Cluster> clusters = clusterize(vertices, indices);
-	for (size_t i = 0; i < clusters.size(); ++i)
-		clusters[i].self = bounds(vertices, clusters[i].indices, 0.f);
-
-	printf("ideal lod chain: %.1f levels\n", log2(double(indices.size() / 3) / double(kClusterSize)));
-
-	std::vector<int> pending(clusters.size());
-	for (size_t i = 0; i < clusters.size(); ++i)
-		pending[i] = int(i);
-
-	// merge and simplify clusters until we can't merge anymore
-	while (pending.size() > 1)
-	{
-		std::vector<std::vector<int> > groups = partition(clusters, pending, remap);
-
-		if (kUseLocks)
-			lockBoundary(locks, groups, clusters, remap);
-
-		pending.clear();
-
-		std::vector<int> retry;
-
-		size_t triangles = 0;
-		size_t stuck_triangles = 0;
-
-		if (dump && depth == atoi(dump))
-			dumpObj(vertices, std::vector<unsigned int>());
-
-		// every group needs to be simplified now
-		for (size_t i = 0; i < groups.size(); ++i)
-		{
-			if (groups[i].empty())
-				continue; // metis shortcut
-
-			std::vector<unsigned int> merged;
-			for (size_t j = 0; j < groups[i].size(); ++j)
-				merged.insert(merged.end(), clusters[groups[i][j]].indices.begin(), clusters[groups[i][j]].indices.end());
-
-			if (dump && depth == atoi(dump))
-			{
-				for (size_t j = 0; j < groups[i].size(); ++j)
-					dumpObj("cluster", clusters[groups[i][j]].indices);
-
-				dumpObj("group", merged);
-			}
-
-			// aim to reduce group size in half
-			size_t target_size = (merged.size() / 3) / 2 * 3;
-
-			float error = 0.f;
-			std::vector<unsigned int> simplified = simplify(vertices, merged, kUseLocks ? &locks : NULL, target_size, &error);
-			if (simplified.size() > merged.size() * kSimplifyThreshold)
-			{
-				stuck_triangles += merged.size() / 3;
-				for (size_t j = 0; j < groups[i].size(); ++j)
-					retry.push_back(groups[i][j]);
-				continue; // simplification is stuck; abandon the merge
-			}
-
-			// enforce bounds and error monotonicity
-			// note: it is incorrect to use the precise bounds of the merged or simplified mesh, because this may violate monotonicity
-			LODBounds groupb = boundsMerge(clusters, groups[i]);
-			groupb.error += error; // this may overestimate the error, but we are starting from the simplified mesh so this is a little more correct
-
-			std::vector<Cluster> split = clusterize(vertices, simplified);
-
-			// update parent bounds and error for all clusters in the group
-			// note that all clusters in the group need to switch simultaneously so they have the same bounds
-			for (size_t j = 0; j < groups[i].size(); ++j)
-			{
-				assert(clusters[groups[i][j]].parent.error == FLT_MAX);
-				clusters[groups[i][j]].parent = groupb;
-			}
-
-#ifndef NDEBUG
-			// record DAG edges for validation during the cut
-			for (size_t j = 0; j < groups[i].size(); ++j)
-				for (size_t k = 0; k < split.size(); ++k)
-					dag_debug.push_back(std::make_pair(groups[i][j], int(clusters.size()) + int(k)));
-#endif
-
-			for (size_t j = 0; j < split.size(); ++j)
-			{
-				split[j].self = groupb;
-
-				clusters.push_back(split[j]); // std::move
-				pending.push_back(int(clusters.size()) - 1);
-
-				triangles += split[j].indices.size() / 3;
-			}
-		}
-
-		dumpMetrics(depth, clusters, groups, remap, locks, retry);
-		depth++;
-
-		if (kUseRetry)
-		{
-			if (triangles < stuck_triangles / 3)
-				break;
-
-			pending.insert(pending.end(), retry.begin(), retry.end());
-		}
-	}
-
-	size_t total_triangles = 0;
-	size_t lowest_triangles = 0;
-	for (size_t i = 0; i < clusters.size(); ++i)
-	{
-		total_triangles += clusters[i].indices.size() / 3;
-		if (clusters[i].parent.error == FLT_MAX)
-			lowest_triangles += clusters[i].indices.size() / 3;
-	}
-
-	printf("total: %d triangles in %d clusters\n", int(total_triangles), int(clusters.size()));
-	printf("lowest lod: %d triangles\n", int(lowest_triangles));
-
-	// for testing purposes, we can compute a DAG cut from a given viewpoint and dump it as an OBJ
-	float maxx = 0.f, maxy = 0.f, maxz = 0.f;
-	for (size_t i = 0; i < vertices.size(); ++i)
-	{
-		maxx = std::max(maxx, vertices[i].px * 2);
-		maxy = std::max(maxy, vertices[i].py * 2);
-		maxz = std::max(maxz, vertices[i].pz * 2);
-	}
-
-	float threshold = 2e-3f; // 2 pixels at 1080p
-	float fovy = 60.f;
-	float znear = 1e-2f;
-	float proj = 1.f / tanf(fovy * 3.1415926f / 180.f * 0.5f);
-
-	std::vector<unsigned int> cut;
-	for (size_t i = 0; i < clusters.size(); ++i)
-		if (boundsError(clusters[i].self, maxx, maxy, maxz, proj, znear) <= threshold && boundsError(clusters[i].parent, maxx, maxy, maxz, proj, znear) > threshold)
-			cut.insert(cut.end(), clusters[i].indices.begin(), clusters[i].indices.end());
-
-#ifndef NDEBUG
-	for (size_t i = 0; i < dag_debug.size(); ++i)
-	{
-		int j = dag_debug[i].first, k = dag_debug[i].second;
-		float ej = boundsError(clusters[j].self, maxx, maxy, maxz, proj, znear);
-		float ejp = boundsError(clusters[j].parent, maxx, maxy, maxz, proj, znear);
-		float ek = boundsError(clusters[k].self, maxx, maxy, maxz, proj, znear);
-
-		assert(ej <= ek);
-		assert(ejp >= ej);
-	}
-#endif
-
-	printf("cut (%.3f): %d triangles\n", threshold, int(cut.size() / 3));
-
-	if (dump && -1 == atoi(dump))
-	{
-		dumpObj(vertices, cut);
-
-		for (size_t i = 0; i < clusters.size(); ++i)
-			if (boundsError(clusters[i].self, maxx, maxy, maxz, proj, znear) <= threshold && boundsError(clusters[i].parent, maxx, maxy, maxz, proj, znear) > threshold)
-				dumpObj("cluster", clusters[i].indices);
-	}
 }
