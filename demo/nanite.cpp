@@ -212,6 +212,7 @@ static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clus
 
 static void lockBoundary(std::vector<unsigned char>& locks, const std::vector<std::vector<int> >& groups, const std::vector<Cluster>& clusters, const std::vector<unsigned int>& remap)
 {
+	// for each remapped vertex, keep track of index of the group it's in (or -2 if it's in multiple groups)
 	std::vector<int> groupmap(locks.size(), -1);
 
 	for (size_t i = 0; i < groups.size(); ++i)
