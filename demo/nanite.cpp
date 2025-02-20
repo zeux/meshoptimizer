@@ -498,6 +498,55 @@ static int measureUnique(std::vector<int>& used, const std::vector<unsigned int>
 	return int(vertices);
 }
 
+static void dumpMetrics(int level, const std::vector<Cluster>& queue, const std::vector<std::vector<int> >& groups, const std::vector<unsigned int>& remap, const std::vector<unsigned char>& locks, const std::vector<int>& retry)
+{
+	std::vector<int> parents(remap.size());
+
+	int clusters = 0;
+	int triangles = 0;
+	int full_clusters = 0;
+	int components = 0;
+	int xformed = 0;
+	int boundary = 0;
+
+	for (size_t i = 0; i < groups.size(); ++i)
+	{
+		for (size_t j = 0; j < groups[i].size(); ++j)
+		{
+			const Cluster& cluster = queue[groups[i][j]];
+
+			clusters++;
+			triangles += int(cluster.indices.size() / 3);
+			full_clusters += cluster.indices.size() == kClusterSize * 3;
+			components += measureComponents(parents, cluster.indices, remap);
+			xformed += measureUnique(parents, cluster.indices);
+			boundary += kUseLocks ? measureUnique(parents, cluster.indices, &locks) : 0;
+		}
+	}
+
+	int stuck_clusters = 0;
+	int stuck_triangles = 0;
+
+	for (size_t i = 0; i < retry.size(); ++i)
+	{
+		const Cluster& cluster = queue[retry[i]];
+
+		stuck_clusters++;
+		stuck_triangles += int(cluster.indices.size() / 3);
+	}
+
+	double avg_group = double(clusters) / double(groups.size());
+	double inv_clusters = 1.0 / double(clusters);
+
+	printf("lod %d: %d clusters (%.1f%% full, %.1f tri/cl, %.1f vtx/cl, %.2f connected, %.1f boundary, %.1f partition), %d triangles",
+	    level, clusters,
+	    double(full_clusters) * inv_clusters * 100, double(triangles) * inv_clusters, double(xformed) * inv_clusters, double(components) * inv_clusters, double(boundary) * inv_clusters, avg_group,
+	    int(triangles));
+	if (stuck_clusters)
+		printf("; stuck %d clusters (%d triangles)", stuck_clusters, stuck_triangles);
+	printf("\n");
+}
+
 static bool loadMetis()
 {
 #ifdef _WIN32
@@ -538,7 +587,6 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 
 	int depth = 0;
 	std::vector<unsigned char> locks(vertices.size());
-	std::vector<int> parents(vertices.size());
 
 	// for cluster connectivity, we need a position-only remap that maps vertices with the same position to the same index
 	// it's more efficient to build it once; unfortunately, meshopt_generateVertexRemap doesn't support stride so we need to use *Multi version
@@ -551,22 +599,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	for (size_t i = 0; i < clusters.size(); ++i)
 		clusters[i].self = bounds(vertices, clusters[i].indices, 0.f);
 
-	size_t components_initial = 0;
-	size_t xformed_initial = 0;
-	for (size_t i = 0; i < clusters.size(); ++i)
-	{
-		components_initial += measureComponents(parents, clusters[i].indices, remap);
-		xformed_initial += measureUnique(parents, clusters[i].indices);
-	}
-
 	printf("ideal lod chain: %.1f levels\n", log2(double(indices.size() / 3) / double(kClusterSize)));
-
-	printf("lod 0: %d clusters (%.1f tri/cl, %.1f vtx/cl, %.2f connected), %d triangles\n",
-	    int(clusters.size()),
-	    double(indices.size() / 3) / double(clusters.size()),
-	    double(xformed_initial) / double(clusters.size()),
-	    double(components_initial) / double(clusters.size()),
-	    int(indices.size() / 3));
 
 	std::vector<int> pending(clusters.size());
 	for (size_t i = 0; i < clusters.size(); ++i)
@@ -576,7 +609,9 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	while (pending.size() > 1)
 	{
 		std::vector<std::vector<int> > groups = partition(clusters, pending, remap);
-		double avg_group = double(pending.size()) / double(groups.size());
+
+		if (kUseLocks)
+			lockBoundary(locks, groups, clusters, remap);
 
 		pending.clear();
 
@@ -584,17 +619,9 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 
 		size_t triangles = 0;
 		size_t stuck_triangles = 0;
-		int stuck_clusters = 0;
-		int full_clusters = 0;
-		size_t components_lod = 0;
-		size_t xformed_lod = 0;
-		size_t boundary_lod = 0;
 
 		if (dump && depth == atoi(dump))
 			dumpObj(vertices, std::vector<unsigned int>());
-
-		if (kUseLocks)
-			lockBoundary(locks, groups, clusters, remap);
 
 		// every group needs to be simplified now
 		for (size_t i = 0; i < groups.size(); ++i)
@@ -621,10 +648,6 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 			std::vector<unsigned int> simplified = simplify(vertices, merged, kUseLocks ? &locks : NULL, target_size, &error);
 			if (simplified.size() > merged.size() * kSimplifyThreshold)
 			{
-#if TRACE
-				printf("stuck cluster: simplified %d => %d over threshold\n", int(merged.size() / 3), int(simplified.size() / 3));
-#endif
-				stuck_clusters += groups[i].size();
 				stuck_triangles += merged.size() / 3;
 				for (size_t j = 0; j < groups[i].size(); ++j)
 					retry.push_back(groups[i][j]);
@@ -661,23 +684,11 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 				pending.push_back(int(clusters.size()) - 1);
 
 				triangles += split[j].indices.size() / 3;
-				full_clusters += split[j].indices.size() == kClusterSize * 3;
-				components_lod += measureComponents(parents, split[j].indices, remap);
-				xformed_lod += measureUnique(parents, split[j].indices);
-				boundary_lod += kUseLocks ? measureUnique(parents, split[j].indices, &locks) : 0;
 			}
 		}
 
-		double inv_clusters = pending.empty() ? 0 : 1.0 / double(pending.size());
-
+		dumpMetrics(depth, clusters, groups, remap, locks, retry);
 		depth++;
-		printf("lod %d: %d clusters (%.1f%% full, %.1f tri/cl, %.1f vtx/cl, %.2f connected, %.1f boundary, %.1f partition), %d triangles",
-		    depth, int(pending.size()),
-		    double(full_clusters) * inv_clusters * 100, double(triangles) * inv_clusters, double(xformed_lod) * inv_clusters, double(components_lod) * inv_clusters, double(boundary_lod) * inv_clusters, avg_group,
-		    int(triangles));
-		if (stuck_clusters)
-			printf("; stuck %d clusters (%d triangles)", stuck_clusters, int(stuck_triangles));
-		printf("\n");
 
 		if (kUseRetry)
 		{
