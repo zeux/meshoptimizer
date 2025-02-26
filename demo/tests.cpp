@@ -1114,6 +1114,65 @@ static void meshletsSparse()
 	assert(memcmp(tri1, ibd + 3, 3 * sizeof(unsigned int)) == 0);
 }
 
+static void meshletsFlex()
+{
+	// two tetrahedrons far apart
+	float vb[2 * 4 * 3] = {
+	    0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1,
+	    10, 0, 0, 11, 0, 0, 10, 1, 0, 10, 0, 1, // clang-format :-/
+	};
+
+	unsigned int ib[2 * 4 * 3] = {
+	    0, 1, 2, 0, 2, 3, 0, 3, 1, 1, 3, 2,
+	    4, 5, 6, 4, 6, 7, 4, 7, 5, 5, 7, 6, // clang-format :-/
+	};
+
+	// up to 2 meshlets with min_triangles=4
+	assert(meshopt_buildMeshletsBound(2 * 4 * 3, 16, 4) == 2);
+
+	meshopt_Meshlet ml[2];
+	unsigned int mv[2 * 16];
+	unsigned char mt[2 * 8 * 3]; // 2 meshlets with up to 8 triangles
+
+	// with regular function, we should get one meshlet (maxt=8) or two (maxt=4)
+	assert(meshopt_buildMeshlets(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 8, sizeof(float) * 3, 16, 8, 0.f) == 1);
+	assert(ml[0].triangle_count == 8);
+	assert(ml[0].vertex_count == 8);
+
+	assert(meshopt_buildMeshlets(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 8, sizeof(float) * 3, 16, 4, 0.f) == 2);
+	assert(ml[0].triangle_count == 4);
+	assert(ml[0].vertex_count == 4);
+	assert(ml[1].triangle_count == 4);
+	assert(ml[1].vertex_count == 4);
+
+	// with flex function and mint=4 maxt=8 we should get one meshlet if split_factor is zero, or large enough to accomodate both
+	assert(meshopt_buildMeshletsFlex(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 8, sizeof(float) * 3, 16, 4, 8, 0.f, 0.f) == 1);
+	assert(ml[0].triangle_count == 8);
+	assert(ml[0].vertex_count == 8);
+
+	assert(meshopt_buildMeshletsFlex(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 8, sizeof(float) * 3, 16, 4, 8, 0.f, 10.f) == 1);
+	assert(ml[0].triangle_count == 8);
+	assert(ml[0].vertex_count == 8);
+
+	// however, with a smaller split factor we should get two meshlets
+	assert(meshopt_buildMeshletsFlex(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 8, sizeof(float) * 3, 16, 4, 8, 0.f, 1.f) == 2);
+	assert(ml[0].triangle_count == 4);
+	assert(ml[0].vertex_count == 4);
+	assert(ml[1].triangle_count == 4);
+	assert(ml[1].vertex_count == 4);
+
+	// this should hold when using axis-aligned metric as well (negative cone weight)
+	assert(meshopt_buildMeshletsFlex(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 8, sizeof(float) * 3, 16, 4, 8, -1.f, 10.f) == 1);
+	assert(ml[0].triangle_count == 8);
+	assert(ml[0].vertex_count == 8);
+
+	assert(meshopt_buildMeshletsFlex(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 8, sizeof(float) * 3, 16, 4, 8, -1.f, 1.f) == 2);
+	assert(ml[0].triangle_count == 4);
+	assert(ml[0].vertex_count == 4);
+	assert(ml[1].triangle_count == 4);
+	assert(ml[1].vertex_count == 4);
+}
+
 static void partitionBasic()
 {
 	// 0   1   2
@@ -2201,6 +2260,7 @@ void runTests()
 	meshletsEmpty();
 	meshletsDense();
 	meshletsSparse();
+	meshletsFlex();
 
 	partitionBasic();
 
