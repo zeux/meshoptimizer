@@ -992,6 +992,8 @@ static int follow(int* parents, int index)
 
 void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false)
 {
+	bool dump = getenv("DUMP") && atoi(getenv("DUMP"));
+
 	// NVidia-recommends 64/126; we round 126 down to a multiple of 4
 	// alternatively we also test uniform configuration with 64/64 which is better for AMD
 	const size_t max_vertices = 64;
@@ -1012,8 +1014,9 @@ void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false)
 	else
 		meshlets.resize(meshopt_buildMeshlets(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, max_triangles, cone_weight));
 
-	for (size_t i = 0; i < meshlets.size(); ++i)
-		meshopt_optimizeMeshlet(&meshlet_vertices[meshlets[i].vertex_offset], &meshlet_triangles[meshlets[i].triangle_offset], meshlets[i].triangle_count, meshlets[i].vertex_count);
+	if (!dump)
+		for (size_t i = 0; i < meshlets.size(); ++i)
+			meshopt_optimizeMeshlet(&meshlet_vertices[meshlets[i].vertex_offset], &meshlet_triangles[meshlets[i].triangle_offset], meshlets[i].triangle_count, meshlets[i].vertex_count);
 
 	if (meshlets.size())
 	{
@@ -1025,6 +1028,9 @@ void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false)
 	}
 
 	double end = timestamp();
+
+	if (dump)
+		dumpObj(mesh.vertices, std::vector<unsigned>());
 
 	double avg_vertices = 0;
 	double avg_triangles = 0;
@@ -1042,9 +1048,22 @@ void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false)
 			boundary[meshlet_vertices[m.vertex_offset + j]]++;
 	}
 
+	std::vector<unsigned int> cluster;
+
 	for (size_t i = 0; i < meshlets.size(); ++i)
 	{
 		const meshopt_Meshlet& m = meshlets[i];
+
+		if (dump)
+		{
+			cluster.clear();
+			for (unsigned int j = 0; j < m.triangle_count * 3; ++j)
+				cluster.push_back(meshlet_vertices[m.vertex_offset + meshlet_triangles[m.triangle_offset + j]]);
+
+			char cname[32];
+			snprintf(cname, sizeof(cname), "ml_%d\n", int(i));
+			dumpObj(cname, cluster);
+		}
 
 		avg_vertices += m.vertex_count;
 		avg_triangles += m.triangle_count;
@@ -1455,7 +1474,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	simplifyClusters(mesh, 0.2f);
+	meshlets(mesh, false, true);
 }
 
 void processNanite(const char* path)
