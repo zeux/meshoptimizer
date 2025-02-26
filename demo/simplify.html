@@ -7,7 +7,7 @@
 		<style>
 			body {
 				font-family: Monospace;
-				background-color: #000;
+				background-color: #300a24;
 				color: #fff;
 				margin: 0px;
 				overflow: hidden;
@@ -28,6 +28,44 @@
 				text-decoration: underline;
 				cursor: pointer;
 			}
+			#grid-container {
+				width: 100%;
+				height: 100%;
+				display: grid;
+				grid-template-columns: repeat(var(--grid-columns, 1), 1fr);
+				grid-auto-rows: 1fr;
+			}
+			.renderer-container {
+				position: relative;
+				width: 100%;
+				height: 100%;
+			}
+			.renderer-container canvas {
+				width: 100% !important;
+				height: 100% !important;
+				display: block;
+			}
+			.renderer-label {
+				position: absolute;
+				top: 10px;
+				left: 10px;
+				background-color: rgba(0, 0, 0, 0.5);
+				padding: 5px 10px;
+				border-radius: 5px;
+				pointer-events: none;
+				font-size: 14px;
+			}
+			.stats-label {
+				position: absolute;
+				top: 45px;
+				left: 10px;
+				background-color: rgba(0, 0, 0, 0.5);
+				padding: 5px 10px;
+				border-radius: 5px;
+				pointer-events: none;
+				font-size: 12px;
+				line-height: 1.4;
+			}
 		</style>
 
 		<script async src="https://unpkg.com/es-module-shims@1.3.6/dist/es-module-shims.js"></script>
@@ -42,12 +80,8 @@
 	</head>
 
 	<body>
-		<div id="info">
-			<a href="https://github.com/zeux/meshoptimizer" target="_blank" rel="noopener">meshoptimizer</a>
-			<div id="ratio"></div>
-		</div>
-
-		<input type="file" id="fileInput" style="display: none" accept=".obj,.glb" />
+		<div id="grid-container"></div>
+		<input type="file" id="fileInput" style="display: none" accept=".obj,.glb" multiple />
 
 		<script type="module">
 			import * as THREE from 'three';
@@ -59,9 +93,17 @@
 			import { MeshoptSimplifier } from '../js/meshopt_simplifier.module.js';
 			import { GUI } from 'https://unpkg.com/lil-gui@0.17.0/dist/lil-gui.esm.js';
 
-			var container;
+			var container, gridContainer;
+			var camera, clock;
+			var renderers = [];
+			var scenes = [];
+			var controls = [];
+			var models = [];
+			var mixers = [];
+			var viewStats = [];
 
-			var camera, scene, renderer, mixer, clock, controls, model;
+			// Track camera distance for autoLod
+			var lastCameraDistance = 0;
 
 			var settings = {
 				wireframe: false,
@@ -79,22 +121,12 @@
 				textureWeight: 0.0,
 				autoLod: false,
 				autoLodFactor: 1.0,
-
-				stats: {
-					triangles: 0,
-					vertices: 0,
-					error: '0',
-				},
+				gridColumns: 2,
 
 				loadFile: function () {
 					var input = document.getElementById('fileInput');
 					input.onchange = function () {
-						var file = input.files[0];
-						var uri = URL.createObjectURL(file);
-						var ext = file.name.split('.').pop().toLowerCase();
-
-						load(uri, ext);
-						controls.reset();
+						loadFiles(input.files);
 					};
 					input.click();
 				},
@@ -113,6 +145,7 @@
 			guiDisplay.add(settings, 'animate').onChange(update);
 			guiDisplay.add(settings, 'pointSize', 1, 16).onChange(update);
 			guiDisplay.add(settings, 'debugOverlay').onChange(simplify); // requires debug data rebuild
+			guiDisplay.add(settings, 'gridColumns', 1, 4, 1).onChange(updateGridLayout);
 
 			var guiSimplify = gui.addFolder('Simplify');
 			guiSimplify.add(settings, 'ratio', 0, 1, 0.01).onChange(simplify);
@@ -137,20 +170,136 @@
 			guiLoad.add(settings, 'autoUpdate').onChange(autoReload);
 			guiLoad.add(settings, 'autoUpdateStatus').listen();
 
-			var guiStats = gui.addFolder('Stats');
-			guiStats.add(settings.stats, 'triangles').listen();
-			guiStats.add(settings.stats, 'vertices').listen();
-			guiStats.add(settings.stats, 'error').listen();
-
 			updateSettings();
 			init();
-			load('pirate.glb', 'glb');
+			loadDefault();
 			animate();
+
+			function loadFiles(files) {
+				// Clear existing views
+				clearViews();
+
+				if (files.length > 0) {
+					// Set grid columns based on the number of files, up to the max setting
+					const columns = Math.min(files.length, settings.gridColumns);
+					document.documentElement.style.setProperty('--grid-columns', columns);
+
+					// Load each file into a separate view
+					for (var i = 0; i < files.length; i++) {
+						var file = files[i];
+						var uri = URL.createObjectURL(file);
+						var ext = file.name.split('.').pop().toLowerCase();
+
+						createView(i, file.name);
+						loadIntoView(i, uri, ext);
+					}
+				}
+			}
+
+			function updateGridLayout() {
+				if (renderers.length > 0) {
+					const columns = Math.min(renderers.length, settings.gridColumns);
+					document.documentElement.style.setProperty('--grid-columns', columns);
+					updateRendererSizes();
+				}
+			}
+
+			// Helper function to handle autoLOD updates - no longer tied to camera rotation
+			function updateAutoLod() {
+				if (settings.autoLod) {
+					// Check if distance has changed significantly
+					var center = new THREE.Vector3();
+					var currentDistance = camera.position.distanceTo(center);
+
+					if (Math.abs(currentDistance - lastCameraDistance) > 1e-3) {
+						lastCameraDistance = currentDistance;
+						simplify();
+					}
+				}
+			}
 
 			function updateSettings() {
 				for (var i = 0; i < guiAttributes.length; ++i) {
 					guiAttributes[i].enable(settings.useAttributes);
 				}
+			}
+
+			function clearViews() {
+				// Remove all existing renderers and clear arrays
+				for (var i = 0; i < renderers.length; i++) {
+					var container = renderers[i].domElement.parentElement;
+					if (container) {
+						container.parentElement.removeChild(container);
+					}
+				}
+
+				renderers = [];
+				scenes = [];
+				controls = [];
+				models = [];
+				mixers = [];
+				stats = [];
+
+				// Clear the grid container
+				gridContainer.innerHTML = '';
+			}
+
+			function createView(index, name) {
+				// Create renderer container
+				var rendererContainer = document.createElement('div');
+				rendererContainer.className = 'renderer-container';
+				gridContainer.appendChild(rendererContainer);
+
+				// Add label with file name
+				var label = document.createElement('div');
+				label.className = 'renderer-label';
+				label.textContent = name;
+				rendererContainer.appendChild(label);
+
+				// Add stats label
+				var statsLabel = document.createElement('div');
+				statsLabel.className = 'stats-label';
+				rendererContainer.appendChild(statsLabel);
+
+				// Initialize stats for this view
+				viewStats.push({
+					triangles: 0,
+					vertices: 0,
+					error: 0,
+					ratio: 0,
+					label: statsLabel,
+				});
+
+				// Create renderer
+				var renderer = new THREE.WebGLRenderer();
+				renderer.setPixelRatio(window.devicePixelRatio);
+				rendererContainer.appendChild(renderer.domElement);
+				renderers.push(renderer);
+
+				// Create scene
+				var scene = new THREE.Scene();
+				scene.background = new THREE.Color(0x300a24);
+				scenes.push(scene);
+
+				// Add lighting
+				var ambientLight = new THREE.AmbientLight(0xcccccc, 0.3);
+				scene.add(ambientLight);
+
+				var pointLight = new THREE.PointLight(0xffffff, 0.8);
+				pointLight.position.set(3, 3, 0);
+				scene.add(pointLight);
+
+				// Create controls
+				var control = new OrbitControls(camera, renderer.domElement);
+				control.addEventListener('change', updateAutoLod);
+				controls.push(control);
+
+				// Set null placeholders
+				models.push(null);
+				mixers.push(null);
+
+				// Adjust renderer size
+				updateRendererSizes();
 			}
 
 			function simplifyMesh(geo, threshold) {
@@ -310,13 +459,6 @@
 				MeshoptSimplifier.ready.then(function () {
 					MeshoptSimplifier.useExperimentalFeatures = true;
 
-					var rnum = 0;
-					var rden = 0;
-
-					var triangles = 0;
-					var vertices = 0;
-					var error = 0;
-
 					var threshold = Math.pow(10, -settings.errorThresholdLog10);
 
 					if (settings.autoLod) {
@@ -334,51 +476,87 @@
 						threshold = distance * loderrortarget * settings.autoLodFactor;
 					}
 
-					scene.traverse(function (object) {
-						if (object.isMesh) {
-							if (!object.original) {
-								object.original = object.geometry.clone();
+					// Process each scene
+					for (var sceneIndex = 0; sceneIndex < scenes.length; sceneIndex++) {
+						var scene = scenes[sceneIndex];
 
-								// use small depth offset to avoid overlay z-fighting with the original mesh
-								// has to be done on the main material as overlays use lines that don't support depth offset
-								object.material.polygonOffset = true;
-								object.material.polygonOffsetFactor = 0.5;
-								object.material.polygonOffsetUnits = 16;
+						// Reset stats for this view
+						var stats = viewStats[sceneIndex];
+						stats.triangles = 0;
+						stats.vertices = 0;
+						stats.error = 0;
+						stats.ratio = 0;
 
-								object.material = [
-									object.material,
-									new THREE.MeshBasicMaterial({ color: 0x0000ff, wireframe: true }), // border
-									new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true }), // seam
-									new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true }), // complex
-									new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true }), // locked
-								];
+						var rnum = 0;
+						var rden = 0;
+
+						scene.traverse(function (object) {
+							if (object.isMesh) {
+								if (!object.original) {
+									object.original = object.geometry.clone();
+
+									// use small depth offset to avoid overlay z-fighting with the original mesh
+									// has to be done on the main material as overlays use lines that don't support depth offset
+									object.material.polygonOffset = true;
+									object.material.polygonOffsetFactor = 0.5;
+									object.material.polygonOffsetUnits = 16;
+
+									object.material = [
+										object.material,
+										new THREE.MeshBasicMaterial({ color: 0x0000ff, wireframe: true }), // border
+										new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true }), // seam
+										new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true }), // complex
+										new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true }), // locked
+									];
+								}
+
+								var [geo, tri, err] = simplifyMesh(object.original, threshold);
+
+								object.geometry = geo;
+
+								stats.error = Math.max(stats.error, err);
+								stats.triangles += tri;
+								stats.vertices += object.geometry.attributes.position.count;
+
+								rnum += tri;
+								rden += object.original.index.count / 3;
 							}
+							if (object.isPoints) {
+								simplifyPoints(object.geometry);
 
-							var [geo, tri, err] = simplifyMesh(object.original, threshold);
+								stats.vertices += object.geometry.index.count;
 
-							object.geometry = geo;
+								rnum += object.geometry.index.count;
+								rden += object.geometry.attributes.position.count;
+							}
+						});
 
-							error = Math.max(error, err); // note: we are ignoring the possibility of different mesh scales atm
-							triangles += tri;
-							vertices += object.geometry.attributes.position.count;
-							rnum += tri;
-							rden += object.original.index.count / 3;
-						}
-						if (object.isPoints) {
-							simplifyPoints(object.geometry);
+						stats.ratio = rden > 0 ? (rnum / rden) * 100 : 0;
 
-							vertices += object.geometry.index.count;
-							rnum += object.geometry.index.count;
-							rden += object.geometry.attributes.position.count;
-						}
-					});
-
-					settings.stats.triangles = triangles;
-					settings.stats.vertices = vertices;
-					settings.stats.error = error.toExponential(3);
-
-					document.getElementById('ratio').innerText = ((rnum / rden) * 100).toFixed(1) + '%';
+						// Update stats display for this view
+						updateStatsDisplay(sceneIndex);
+					}
 				});
+			}
+
+			function updateStatsDisplay(viewIndex) {
+				if (viewIndex >= 0 && viewIndex < viewStats.length) {
+					var stats = viewStats[viewIndex];
+
+					stats.label.innerHTML =
+						'Triangles: ' +
+						stats.triangles +
+						'<br>' +
+						'Vertices: ' +
+						stats.vertices +
+						'<br>' +
+						'Error: ' +
+						stats.error.toExponential(3) +
+						'<br>' +
+						'Ratio: ' +
+						stats.ratio.toFixed(1) +
+						'%';
+				}
 			}
 
 			function reload() {
@@ -416,24 +594,29 @@
 			}
 
 			function update() {
-				scene.traverse(function (child) {
-					if (child.isMesh) {
-						if (Array.isArray(child.material)) {
-							child.material[0].wireframe = settings.wireframe;
-						} else {
-							child.material.wireframe = settings.wireframe;
+				for (var sceneIndex = 0; sceneIndex < scenes.length; sceneIndex++) {
+					var scene = scenes[sceneIndex];
+
+					scene.traverse(function (child) {
+						if (child.isMesh) {
+							if (Array.isArray(child.material)) {
+								child.material[0].wireframe = settings.wireframe;
+							} else {
+								child.material.wireframe = settings.wireframe;
+							}
 						}
-					}
-					if (child.isPoints) {
-						child.material.size = settings.pointSize;
-					}
-				});
+						if (child.isPoints) {
+							child.material.size = settings.pointSize;
+						}
+					});
+				}
 			}
 
-			function load(path, ext) {
-				if (model) {
-					scene.remove(model);
-					model = undefined;
+			function loadIntoView(viewIndex, path, ext) {
+				if (models[viewIndex]) {
+					scenes[viewIndex].remove(models[viewIndex]);
+					models[viewIndex] = undefined;
+					mixers[viewIndex] = undefined;
 				}
 
 				var onProgress = function (xhr) {};
@@ -456,15 +639,18 @@
 					loader.load(
 						path,
 						function (gltf) {
-							model = gltf.scene;
-							center(model);
-							scene.add(model);
+							models[viewIndex] = gltf.scene;
+							center(models[viewIndex]);
+							scenes[viewIndex].add(models[viewIndex]);
 
-							mixer = new THREE.AnimationMixer(model);
+							mixers[viewIndex] = new THREE.AnimationMixer(models[viewIndex]);
 
 							if (gltf.animations.length) {
-								mixer.clipAction(gltf.animations[gltf.animations.length - 1]).play();
+								mixers[viewIndex].clipAction(gltf.animations[gltf.animations.length - 1]).play();
 							}
+
+							// Apply simplification
+							simplify();
 						},
 						onProgress,
 						onError
@@ -487,9 +673,12 @@
 								}
 							});
 
-							model = obj;
-							center(model);
-							scene.add(model);
+							models[viewIndex] = obj;
+							center(models[viewIndex]);
+							scenes[viewIndex].add(models[viewIndex]);
+
+							// Apply simplification
+							simplify();
 						},
 						onProgress,
 						onError
@@ -499,58 +688,79 @@
 				}
 			}
 
+			function loadDefault() {
+				// Create a single view with the default model
+				document.documentElement.style.setProperty('--grid-columns', 1);
+				createView(0, 'pirate.glb');
+				loadIntoView(0, 'pirate.glb', 'glb');
+			}
+
 			function init() {
 				container = document.createElement('div');
 				document.body.appendChild(container);
 
-				renderer = new THREE.WebGLRenderer();
-				renderer.setPixelRatio(window.devicePixelRatio);
-				renderer.setSize(window.innerWidth, window.innerHeight);
-				container.appendChild(renderer.domElement);
+				gridContainer = document.getElementById('grid-container');
 
-				window.addEventListener('resize', onWindowResize, false);
-
+				// Create a single camera shared by all views
 				camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
 				camera.position.y = 1.0;
 				camera.position.z = 3.0;
 
-				controls = new OrbitControls(camera, renderer.domElement);
-
-				controls.addEventListener('change', function () {
-					if (settings.autoLod) {
-						simplify();
-					}
-				});
-
-				scene = new THREE.Scene();
-				scene.background = new THREE.Color(0x300a24);
-
-				var ambientLight = new THREE.AmbientLight(0xcccccc, 0.3);
-				scene.add(ambientLight);
-
-				var pointLight = new THREE.PointLight(0xffffff, 0.8);
-				pointLight.position.set(3, 3, 0);
-				camera.add(pointLight);
-				scene.add(camera);
-
 				clock = new THREE.Clock();
+
+				window.addEventListener('resize', updateRendererSizes, false);
 			}
 
-			function onWindowResize() {
-				camera.aspect = window.innerWidth / window.innerHeight;
+			function updateRendererSizes() {
+				// Get the grid container dimensions
+				var gridWidth = gridContainer.clientWidth;
+				var gridHeight = gridContainer.clientHeight;
+
+				// Calculate aspect ratio based on the grid cells, not the whole window
+				var columns = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--grid-columns'));
+				var cellWidth = gridWidth / columns;
+				var cellHeight = gridHeight / Math.ceil(renderers.length / columns);
+				var cellAspect = cellWidth / cellHeight;
+
+				// Update camera aspect ratio to match a single cell
+				camera.aspect = cellAspect;
 				camera.updateProjectionMatrix();
 
-				renderer.setSize(window.innerWidth, window.innerHeight);
+				// Update all renderers
+				for (var i = 0; i < renderers.length; i++) {
+					var domElement = renderers[i].domElement;
+					var container = domElement.parentElement;
+
+					// Use the container's actual dimensions
+					var width = container.clientWidth;
+					var height = container.clientHeight;
+
+					renderers[i].setSize(width, height);
+				}
 			}
 
 			function animate() {
-				if (mixer && settings.animate) {
-					mixer.update(clock.getDelta());
+				requestAnimationFrame(animate);
+
+				// Update all controls
+				for (var i = 0; i < controls.length; i++) {
+					controls[i].update();
 				}
 
-				requestAnimationFrame(animate);
-				controls.update();
-				renderer.render(scene, camera);
+				// Update animation mixers
+				if (settings.animate) {
+					var delta = clock.getDelta();
+					for (var i = 0; i < mixers.length; i++) {
+						if (mixers[i]) {
+							mixers[i].update(delta);
+						}
+					}
+				}
+
+				// Render all views
+				for (var i = 0; i < renderers.length; i++) {
+					renderers[i].render(scenes[i], camera);
+				}
 			}
 		</script>
 	</body>
