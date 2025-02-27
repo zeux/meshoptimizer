@@ -18,7 +18,7 @@
 #include <string.h>
 
 #include <algorithm>
-#include <map>
+#include <map> // only for METIS
 #include <vector>
 
 #ifndef _WIN32
@@ -145,14 +145,16 @@ static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, cons
 
 	const size_t max_vertices = 192; // TODO: depends on kClusterSize, also may want to dial down for mesh shaders
 	const size_t max_triangles = kClusterSize;
+	const size_t min_triangles = (kClusterSize / 3) & ~3;
+	const float split_factor = 2.0f;
 
-	size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), max_vertices, max_triangles);
+	size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), max_vertices, min_triangles);
 
 	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
 	std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
 	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
 
-	meshlets.resize(meshopt_buildMeshlets(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, max_triangles, 0.f));
+	meshlets.resize(meshopt_buildMeshletsFlex(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, 0.f, split_factor));
 
 	std::vector<Cluster> clusters(meshlets.size());
 
