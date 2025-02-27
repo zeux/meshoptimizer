@@ -990,10 +990,8 @@ static int follow(int* parents, int index)
 	return index;
 }
 
-void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false, bool flex = false)
+void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false, bool flex = false, bool dump = false)
 {
-	bool dump = getenv("DUMP") && atoi(getenv("DUMP"));
-
 	// NVidia-recommends 64/126; we round 126 down to a multiple of 4
 	// alternatively we also test uniform configuration with 64/64 which is better for AMD
 	const size_t max_vertices = 64;
@@ -1480,7 +1478,14 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	meshlets(mesh, /* scan= */ false, /* uniform= */ true, /* flex= */ true);
+#ifdef _MSC_VER
+#pragma warning(disable : 4996)
+#endif
+
+	bool dump = getenv("DUMP") && atoi(getenv("DUMP"));
+
+	meshlets(mesh, /* scan= */ false, /* uniform= */ true, /* flex= */ false);
+	meshlets(mesh, /* scan= */ false, /* uniform= */ true, /* flex= */ true, dump);
 }
 
 void processNanite(const char* path)
