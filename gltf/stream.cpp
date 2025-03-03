@@ -25,6 +25,11 @@ struct Bounds
 		return min.f[0] <= max.f[0] && min.f[1] <= max.f[1] && min.f[2] <= max.f[2] && min.f[3] <= max.f[3];
 	}
 
+	float getExtent() const
+	{
+		return std::max(max.f[0] - min.f[0], std::max(max.f[1] - min.f[1], max.f[2] - min.f[2]));
+	}
+
 	void merge(const Bounds& other)
 	{
 		for (int k = 0; k < 4; ++k)
@@ -108,7 +113,20 @@ QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes
 		result.offset[0] = b.min.f[0];
 		result.offset[1] = b.min.f[1];
 		result.offset[2] = b.min.f[2];
-		result.scale = std::max(b.max.f[0] - b.min.f[0], std::max(b.max.f[1] - b.min.f[1], b.max.f[2] - b.min.f[2]));
+		result.scale = b.getExtent();
+	}
+
+	if (b.isValid() && settings.quantize && !settings.pos_float)
+	{
+		float error = result.scale * 0.5f / (1 << (result.bits - 1));
+		float max_rel_error = 0;
+
+		for (size_t i = 0; i < meshes.size(); ++i)
+			if (bounds[i].isValid())
+				max_rel_error = std::max(max_rel_error, error / bounds[i].getExtent());
+
+		if (max_rel_error > 5e-2f)
+			fprintf(stderr, "Warning: position data has significant error (%.0f%%); consider using floating-point quantization (-vpf) or more bits (-vp N)\n", max_rel_error * 100);
 	}
 
 	result.node_scale = result.scale / float((1 << result.bits) - 1) * (result.normalized ? 65535.f : 1.f);
