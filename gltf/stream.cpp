@@ -24,10 +24,20 @@ struct Bounds
 	{
 		return min.f[0] <= max.f[0] && min.f[1] <= max.f[1] && min.f[2] <= max.f[2] && min.f[3] <= max.f[3];
 	}
+
+	void merge(const Bounds& other)
+	{
+		for (int k = 0; k < 4; ++k)
+		{
+			min.f[k] = std::min(min.f[k], other.min.f[k]);
+			max.f[k] = std::max(max.f[k], other.max.f[k]);
+		}
+	}
 };
 
-static void updateAttributeBounds(const Mesh& mesh, cgltf_attribute_type type, Bounds& b)
+static Bounds computeBounds(const Mesh& mesh, cgltf_attribute_type type)
 {
+	Bounds b;
 	Attr pad = {};
 
 	for (size_t j = 0; j < mesh.streams.size(); ++j)
@@ -73,6 +83,8 @@ static void updateAttributeBounds(const Mesh& mesh, cgltf_attribute_type type, B
 		b.min.f[k] -= pad.f[k];
 		b.max.f[k] += pad.f[k];
 	}
+
+	return b;
 }
 
 QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes, const Settings& settings)
@@ -82,12 +94,14 @@ QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes
 	result.bits = settings.pos_bits;
 	result.normalized = settings.pos_normalized;
 
-	Bounds b;
+	std::vector<Bounds> bounds(meshes.size());
 
 	for (size_t i = 0; i < meshes.size(); ++i)
-	{
-		updateAttributeBounds(meshes[i], cgltf_attribute_type_position, b);
-	}
+		bounds[i] = computeBounds(meshes[i], cgltf_attribute_type_position);
+
+	Bounds b;
+	for (size_t i = 0; i < meshes.size(); ++i)
+		b.merge(bounds[i]);
 
 	if (b.isValid())
 	{
@@ -154,7 +168,9 @@ void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTextur
 			continue;
 
 		indices[i] = follow(parents, indices[i]);
-		updateAttributeBounds(mesh, cgltf_attribute_type_texcoord, bounds[indices[i]]);
+
+		Bounds mb = computeBounds(mesh, cgltf_attribute_type_texcoord);
+		bounds[indices[i]].merge(mb);
 	}
 
 	// update all material data using canonical bounds
