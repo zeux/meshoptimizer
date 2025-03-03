@@ -122,7 +122,7 @@ QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes
 		float max_rel_error = 0;
 
 		for (size_t i = 0; i < meshes.size(); ++i)
-			if (bounds[i].isValid())
+			if (bounds[i].isValid() && bounds[i].getExtent() > 1e-2f)
 				max_rel_error = std::max(max_rel_error, error / bounds[i].getExtent());
 
 		if (max_rel_error > 5e-2f)
