@@ -568,14 +568,14 @@ MESHOPTIMIZER_API size_t meshopt_buildMeshletsBound(size_t index_count, size_t m
 MESHOPTIMIZER_API size_t meshopt_buildMeshletsFlex(struct meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t min_triangles, size_t max_triangles, float cone_weight, float split_factor);
 
 /**
- * Experimental: Meshlet optimizer
+ * Meshlet optimizer
  * Reorders meshlet vertices and triangles to maximize locality to improve rasterizer throughput
  *
  * meshlet_triangles and meshlet_vertices must refer to meshlet triangle and vertex index data; when buildMeshlets* is used, these
  * need to be computed from meshlet's vertex_offset and triangle_offset
  * triangle_count and vertex_count must not exceed implementation limits (vertex_count <= 255 - not 256!, triangle_count <= 512)
  */
-MESHOPTIMIZER_EXPERIMENTAL void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, size_t triangle_count, size_t vertex_count);
+MESHOPTIMIZER_API void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, size_t triangle_count, size_t vertex_count);
 
 struct meshopt_Bounds
 {
