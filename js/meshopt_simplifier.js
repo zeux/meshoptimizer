@@ -205,10 +205,6 @@ var MeshoptSimplifier = (function () {
 		ready: ready,
 		supported: true,
 
-		// set this to true to be able to use simplifyPoints and simplifyWithAttributes
-		// note that these functions are experimental and may change interface/behavior in a way that will require revising calling code
-		useExperimentalFeatures: false,
-
 		compactMesh: function (indices) {
 			assert(
 				indices instanceof Uint32Array || indices instanceof Int32Array || indices instanceof Uint16Array || indices instanceof Int16Array
@@ -234,7 +230,6 @@ var MeshoptSimplifier = (function () {
 			var options = 0;
 			for (var i = 0; i < (flags ? flags.length : 0); ++i) {
 				assert(flags[i] in simplifyOptions);
-				assert(this.useExperimentalFeatures || flags[i] != 'Prune'); // set useExperimentalFeatures to use experimental flags like Prune
 				options |= simplifyOptions[flags[i]];
 			}
 
@@ -267,7 +262,6 @@ var MeshoptSimplifier = (function () {
 			target_error,
 			flags
 		) {
-			assert(this.useExperimentalFeatures); // set useExperimentalFeatures to use this; note that this function is experimental and may change interface in a way that will require revising calling code
 			assert(
 				indices instanceof Uint32Array || indices instanceof Int32Array || indices instanceof Uint16Array || indices instanceof Int16Array
 			);
@@ -330,7 +324,6 @@ var MeshoptSimplifier = (function () {
 		},
 
 		simplifyPoints: function (vertex_positions, vertex_positions_stride, target_vertex_count, vertex_colors, vertex_colors_stride, color_weight) {
-			assert(this.useExperimentalFeatures); // set useExperimentalFeatures to use this; note that this function is experimental and may change interface in a way that will require revising calling code
 			assert(vertex_positions instanceof Float32Array);
 			assert(vertex_positions.length % vertex_positions_stride == 0);
 			assert(vertex_positions_stride >= 3);

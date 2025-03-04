@@ -457,8 +457,6 @@
 
 			function simplify() {
 				MeshoptSimplifier.ready.then(function () {
-					MeshoptSimplifier.useExperimentalFeatures = true;
-
 					var threshold = Math.pow(10, -settings.errorThresholdLog10);
 
 					if (settings.autoLod) {
