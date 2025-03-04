@@ -358,7 +358,7 @@ enum meshopt_EncodeExpMode
 	meshopt_EncodeExpSharedVector,
 	/* When encoding exponents, use shared value for each component of all vectors (best compression) */
 	meshopt_EncodeExpSharedComponent,
-	/* Experimental: When encoding exponents, use separate values for each component, but clamp to 0 (good quality if very small values are not important) */
+	/* When encoding exponents, use separate values for each component, but clamp to 0 (good quality if very small values are not important) */
 	meshopt_EncodeExpClamped,
 };
 
