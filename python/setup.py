@@ -43,7 +43,7 @@ def parse_cmake_sources():
                     line = line.strip()
                     if line.startswith('src/') and line.endswith('.cpp'):
                         # Convert to relative path from python directory
-                        source_files.append(line.replace('src/', ''))
+                        source_files.append(line)
     
 
     return source_files
@@ -63,7 +63,7 @@ def generate_module_file():
     with open(module_template_path, 'r') as template_file:
         template_content = template_file.read()
     
-    source_imports = '\n'.join([f'#include "{src}"' for src in source_files])
+    source_imports = '\n'.join([f'#include "{src.replace('src/' , '')}"' for src in source_files])
     module_content = template_content.replace('{{SOURCE_IMPORTS}}', source_imports)
     
     # Write the resulting module file
