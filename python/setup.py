@@ -195,7 +195,7 @@ meshoptimizer_module = Extension(
 
 setup(
     name='meshoptimizer',
-    version="0.2.20a3",
+    version="0.2.20a4",
     description='Python wrapper for meshoptimizer library',
     long_description=get_long_description(),
     long_description_content_type='text/markdown',
