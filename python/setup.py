@@ -52,7 +52,6 @@ def parse_cmake_sources():
 def generate_module_file():
     # Get source files from CMakeLists.txt
     source_files = parse_cmake_sources()
-    print(source_files)
     # Create the module.cpp file from template
     module_template_path = os.path.join(SETUP_DIR, 'module.template.cpp')
     # Create directory if it doesn't exist
@@ -63,7 +62,7 @@ def generate_module_file():
     with open(module_template_path, 'r') as template_file:
         template_content = template_file.read()
     
-    source_imports = '\n'.join([f'#include "{src.replace('src/' , '')}"' for src in source_files])
+    source_imports = '\n'.join([f'#include "{src.replace("src/", "")}"' for src in source_files])
     module_content = template_content.replace('{{SOURCE_IMPORTS}}', source_imports)
     
     # Write the resulting module file
