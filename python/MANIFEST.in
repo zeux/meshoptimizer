@@ -4,25 +4,5 @@ include module.template.cpp
 recursive-include src *.cpp *.h
 # Include the parent src directory if building from repository
 graft ../src
-# Include meshoptimizer.h header
-include ../src/meshoptimizer.h
-# Explicitly include all source files needed for the build
-include src/allocator.cpp
-include src/clusterizer.cpp
-include src/indexcodec.cpp
-include src/indexgenerator.cpp
-include src/overdrawanalyzer.cpp
-include src/overdrawoptimizer.cpp
-include src/partition.cpp
-include src/quantization.cpp
-include src/simplifier.cpp
-include src/spatialorder.cpp
-include src/stripifier.cpp
-include src/vcacheanalyzer.cpp
-include src/vcacheoptimizer.cpp
-include src/vertexcodec.cpp
-include src/vertexfilter.cpp
-include src/vfetchanalyzer.cpp
-include src/vfetchoptimizer.cpp
 prune .vscode
 prune tests
