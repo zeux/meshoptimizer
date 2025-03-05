@@ -3,11 +3,6 @@ name: Python Package
 on:
   workflow_dispatch:
 
-
-# on:
-#   release:
-#     types: [created]
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
