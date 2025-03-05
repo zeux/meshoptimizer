@@ -1,8 +1,12 @@
 name: Python Package
 
 on:
-  release:
-    types: [created]
+  workflow_dispatch:
+
+
+# on:
+#   release:
+#     types: [created]
 
 jobs:
   deploy:
