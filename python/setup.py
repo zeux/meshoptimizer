@@ -56,19 +56,6 @@ def get_include_dirs():
     else:
         include_dirs.append(os.path.join('..', 'src'))
     
-    # Try to add numpy include directory if available, but don't fail if it's not
-    try:
-        import numpy
-        include_dirs.append(numpy.get_include())
-    except ImportError:
-        # Create a class that will resolve numpy's include path during build
-        class numpy_include_dir(object):
-            def __str__(self):
-                import numpy
-                return numpy.get_include()
-        
-        include_dirs.append(numpy_include_dir())
-    
     return include_dirs
 
 # Platform-specific compile and link arguments
@@ -78,22 +65,29 @@ def get_build_args():
     
     extra_compile_args = []
     extra_link_args = []
+    define_macros = []
     
     if is_windows:
         # Windows-specific flags (MSVC)
         extra_compile_args = ['/std:c++14', '/O2', '/EHsc']
+        # Export functions for DLL
+        define_macros = [
+            ('MESHOPTIMIZER_API', '__declspec(dllexport)'),
+            ('MESHOPTIMIZER_EXPERIMENTAL', '__declspec(dllexport)')
+        ]
+        extra_link_args = ['/DLL']
     else:
         # Unix-like systems (Linux/Mac)
-        extra_compile_args = ['-std=c++11', '-O3']
+        extra_compile_args = ['-std=c++11', '-O3', '-fPIC']
         if is_macos:
             extra_compile_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.9'])
     
-    return extra_compile_args, extra_link_args
+    return extra_compile_args, extra_link_args, define_macros
 
 # Get the source files and build arguments
 source_files = get_source_files()
 include_dirs = get_include_dirs()
-extra_compile_args, extra_link_args = get_build_args()
+extra_compile_args, extra_link_args, define_macros = get_build_args()
 
 # Define the extension module
 meshoptimizer_module = Extension(
@@ -102,6 +96,7 @@ meshoptimizer_module = Extension(
     include_dirs=include_dirs,
     extra_compile_args=extra_compile_args,
     extra_link_args=extra_link_args,
+    define_macros=define_macros,
     language='c++',
 )
 
