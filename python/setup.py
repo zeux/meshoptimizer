@@ -30,7 +30,7 @@ def get_version():
                         return f"{major}.{minor}.{patch}"
     except Exception as e:
         print(f"Warning: Could not extract version: {e}")
-    return '0.1.0'  # Default version if unable to extract
+    raise RuntimeError("Version not found. Please ensure meshoptimizer.h is present in the src directory.")
 
 # Get long description from README
 def get_long_description():
