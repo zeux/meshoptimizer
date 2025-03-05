@@ -2,4 +2,5 @@ include README.md
 include pyproject.toml
 recursive-include src *.cpp *.h
 recursive-include python/src *.cpp *.h
-recursive-include ../src *.cpp *.h
+# Include the meshoptimizer source files
+graft ../src

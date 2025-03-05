@@ -16,25 +16,32 @@ def get_long_description():
         print(f"Warning: Could not read README.md: {e}")
     return 'Python wrapper for meshoptimizer library'
 
-# Determine source files
-def get_source_files():
-    # Check if we're in the python directory or the root directory
+# Determine source files and generate module file
+def generate_module_file():
     src_path = os.path.join('..', 'src')
-
+    
     # Get all .cpp files from the src directory
     source_files = []
     if os.path.exists(src_path):
-        for filename in os.listdir(src_path):
-            if filename.endswith('.cpp'):
-                source_files.append(os.path.join(src_path, filename))
+        source_files = [f"../../src/{f}" for f in os.listdir(src_path) if f.endswith('.cpp')]
     
-    # Add the module initialization file
-    source_files.append("python/src/module.cpp")
+    # Create the module.cpp file from template
+    module_template_path = os.path.join(SETUP_DIR, 'bindings', 'module.template.cpp')
+    # Create directory if it doesn't exist
     
-    # Make sure we have source files
-    if not source_files:
-        raise RuntimeError(f"No source files found in {src_path}")
+    output_module_path = os.path.join(SETUP_DIR, 'bindings', 'module.cpp')
     
+    # Read template and insert source imports
+    with open(module_template_path, 'r') as template_file:
+        template_content = template_file.read()
+    
+    source_imports = '\n'.join([f'#include "{src}"' for src in source_files])
+    module_content = template_content.replace('{{SOURCE_IMPORTS}}', source_imports)
+    
+    # Write the resulting module file
+    with open(output_module_path, 'w') as module_file:
+        module_file.write(module_content)
+        
     return source_files
 
 # Platform-specific compile and link arguments
@@ -46,14 +53,19 @@ def get_build_args():
     extra_link_args = []
     define_macros = []
     
+    # Define macros for all platforms
+    define_macros = [
+        ('MESHOPTIMIZER_IMPLEMENTATION', '1')  # Include implementation in the build
+    ]
+    
     if is_windows:
         # Windows-specific flags (MSVC)
         extra_compile_args = ['/std:c++14', '/O2', '/EHsc']
         # Export functions for DLL
-        define_macros = [
+        define_macros.extend([
             ('MESHOPTIMIZER_API', '__declspec(dllexport)'),
             ('MESHOPTIMIZER_EXPERIMENTAL', '__declspec(dllexport)')
-        ]
+        ])
         extra_link_args = ['/DLL']
     else:
         # Unix-like systems (Linux/Mac)
@@ -64,14 +76,13 @@ def get_build_args():
     return extra_compile_args, extra_link_args, define_macros
 
 # Get the source files and build arguments
-source_files = get_source_files()
 include_dirs = [os.path.join('..', 'src')]
 extra_compile_args, extra_link_args, define_macros = get_build_args()
 
 # Define the extension module
 meshoptimizer_module = Extension(
     'meshoptimizer._meshoptimizer',
-    sources=source_files,
+    sources= ["bindings/module.cpp"],
     include_dirs=include_dirs,
     extra_compile_args=extra_compile_args,
     extra_link_args=extra_link_args,
@@ -79,20 +90,7 @@ meshoptimizer_module = Extension(
     language='c++',
 )
 
-# Check if source files exist at the expected paths
-def check_source_files_exist():
-    for source_file in source_files:
-        if not os.path.exists(source_file):
-            print(f"Warning: Source file not found: {source_file}")
-            return False
-    return True
-
-# Verify source files exist
-if not check_source_files_exist():
-    print("Warning: Some source files were not found. This may cause build failures.")
-    print(f"Current directory: {os.getcwd()}")
-    print(f"Setup directory: {SETUP_DIR}")
-    print(f"Source files: {source_files}")
+generate_module_file()
 
 setup(
     name='meshoptimizer',

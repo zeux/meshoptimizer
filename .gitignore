@@ -1,4 +1,5 @@
-python/src/
+python/bindings/module.cpp
+python/src
 # IDE integrations
 /.idea/
 /.vs/
