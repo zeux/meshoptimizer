@@ -11,6 +11,31 @@ SRC_DIR = os.path.join(SETUP_DIR, 'src')
 if not os.path.exists(SRC_DIR):
     os.makedirs(SRC_DIR)
 
+# Copy meshoptimizer.h header if it doesn't exist in src directory
+def ensure_header_file():
+    header_dest = os.path.join(SRC_DIR, 'meshoptimizer.h')
+    if not os.path.exists(header_dest):
+        # Try to find the header file
+        header_src = os.path.join('..', 'src', 'meshoptimizer.h')
+        if os.path.exists(header_src):
+            # Copy from parent directory
+            with open(header_src, 'r') as f:
+                content = f.read()
+            with open(header_dest, 'w') as f:
+                f.write(content)
+            print(f"Copied meshoptimizer.h from {header_src} to {header_dest}")
+        else:
+            # Check if it's in the current directory
+            header_src = os.path.join('src', 'meshoptimizer.h')
+            if os.path.exists(header_src):
+                with open(header_src, 'r') as f:
+                    content = f.read()
+                with open(header_dest, 'w') as f:
+                    f.write(content)
+                print(f"Copied meshoptimizer.h from {header_src} to {header_dest}")
+            else:
+                print("Warning: Could not find meshoptimizer.h header file")
+
 # Get long description from README
 def get_long_description():
     try:
@@ -22,38 +47,55 @@ def get_long_description():
         print(f"Warning: Could not read README.md: {e}")
     return 'Python wrapper for meshoptimizer library'
 
-# Parse CMakeLists.txt to get source files in the correct order
-def parse_cmake_sources():
-    cmake_path = os.path.join('..', 'CMakeLists.txt')
-    source_files = []
+# Define source files explicitly to ensure they're included in the build
+def get_source_files():
+    # These are the source files needed for the Python extension
+    source_files = [
+        'src/allocator.cpp',
+        'src/clusterizer.cpp',
+        'src/indexcodec.cpp',
+        'src/indexgenerator.cpp',
+        'src/overdrawanalyzer.cpp',
+        'src/overdrawoptimizer.cpp',
+        'src/partition.cpp',
+        'src/quantization.cpp',
+        'src/simplifier.cpp',
+        'src/spatialorder.cpp',
+        'src/stripifier.cpp',
+        'src/vcacheanalyzer.cpp',
+        'src/vcacheoptimizer.cpp',
+        'src/vertexcodec.cpp',
+        'src/vertexfilter.cpp',
+        'src/vfetchanalyzer.cpp',
+        'src/vfetchoptimizer.cpp'
+    ]
     
-    if os.path.exists(cmake_path):
-        with open(cmake_path, 'r') as f:
-            content = f.read()
-            
-        # Find the SOURCES section
-        start = content.find('set(SOURCES')
-        if start != -1:
-            end = content.find(')', start)
-            if end != -1:
-                sources_section = content[start:end]
-                
-                # Extract file paths
-                for line in sources_section.split('\n'):
-                    line = line.strip()
-                    if line.startswith('src/') and line.endswith('.cpp'):
-                        # Convert to relative path from python directory
-                        source_files.append(line)
+    # Check if we're building from an sdist package
+    if not os.path.exists(os.path.join('..', 'src')):
+        # We're in an sdist package, source files should be in the package
+        return source_files
     
-
+    # We're building from the repository, verify files exist
+    for i, src_file in enumerate(source_files):
+        # Check if file exists in parent directory
+        if os.path.exists(os.path.join('..', src_file)):
+            continue
+        # If not, check if it exists in the current directory
+        elif os.path.exists(src_file):
+            source_files[i] = src_file
+        else:
+            print(f"Warning: Source file {src_file} not found")
+    
     return source_files
 
 # Determine source files and generate module file
 def generate_module_file():
-    # Get source files from CMakeLists.txt
-    source_files = parse_cmake_sources()
+    # Get source files
+    source_files = get_source_files()
     # Create the module.cpp file from template
     module_template_path = os.path.join(SETUP_DIR, 'module.template.cpp')
+    if not os.path.exists(module_template_path):
+        return []
     # Create directory if it doesn't exist
     
     output_module_path = os.path.join(SRC_DIR, 'module.cpp')
@@ -62,7 +104,26 @@ def generate_module_file():
     with open(module_template_path, 'r') as template_file:
         template_content = template_file.read()
     
-    source_imports = '\n'.join([f'#include "{src.replace("src/", "")}"' for src in source_files])
+    # Copy source files to src directory if needed
+    for src_file in source_files:
+        src_basename = os.path.basename(src_file)
+        dest_path = os.path.join(SRC_DIR, src_basename)
+        
+        # If we're building from the repository, copy the files
+        if os.path.exists(os.path.join('..', src_file)):
+            with open(os.path.join('..', src_file), 'r') as f:
+                content = f.read()
+            with open(dest_path, 'w') as f:
+                f.write(content)
+        # If we're in an sdist package, the files might be in the current directory
+        elif os.path.exists(src_file):
+            with open(src_file, 'r') as f:
+                content = f.read()
+            with open(dest_path, 'w') as f:
+                f.write(content)
+    
+    # Generate includes for the module.cpp file
+    source_imports = '\n'.join([f'#include "{os.path.basename(src)}"' for src in source_files])
     module_content = template_content.replace('{{SOURCE_IMPORTS}}', source_imports)
     
     # Write the resulting module file
@@ -70,7 +131,6 @@ def generate_module_file():
         # Add a comment indicating this file is generated
         module_file.write("// This file is automatically generated by setup.py\n")
         module_file.write(module_content)
-
         
     return source_files
 
@@ -108,25 +168,30 @@ def get_build_args():
 # Import numpy for include directory
 import numpy as np
 
+# Ensure header file is available
+ensure_header_file()
+
+# Generate the module file with source files
+source_files = generate_module_file()
+
 # Get the source files and build arguments
-include_dirs = [os.path.join('..', 'src'), np.get_include()]
+include_dirs = [SRC_DIR, np.get_include()]
+# Also include parent src directory if it exists
+if os.path.exists(os.path.join('..', 'src')):
+    include_dirs.append(os.path.join('..', 'src'))
+
 extra_compile_args, extra_link_args, define_macros = get_build_args()
 
 # Define the extension module
 meshoptimizer_module = Extension(
     'meshoptimizer._meshoptimizer',
-    sources= ["src/module.cpp"],
+    sources=["src/module.cpp"],
     include_dirs=include_dirs,
     extra_compile_args=extra_compile_args,
     extra_link_args=extra_link_args,
     define_macros=define_macros,
     language='c++',
 )
-
-try:
-    generate_module_file()
-except Exception as e:
-    pass
 
 setup(
     name='meshoptimizer',
