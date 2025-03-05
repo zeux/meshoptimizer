@@ -94,14 +94,14 @@ jobs:
       run: |
         python -m unittest discover -v
 
-    - name: Build package
-      run: |
-        python -m build --sdist
-      if: matrix.os == 'ubuntu'
+    # - name: Build package
+    #   run: |
+    #     python -m build --sdist
+    #   if: matrix.os == 'ubuntu'
 
-    - name: Store package
-      uses: actions/upload-artifact@v4
-      with:
-        name: python-package
-        path: python/dist/*
-      if: matrix.os == 'ubuntu'
+    # - name: Store package
+    #   uses: actions/upload-artifact@v4
+    #   with:
+    #     name: python-package
+    #     path: python/dist/*
+    #   if: matrix.os == 'ubuntu'
