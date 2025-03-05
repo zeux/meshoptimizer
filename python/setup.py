@@ -4,33 +4,9 @@ import platform
 import sys
 import re
 
+
 # Get the directory containing this file (setup.py)
 SETUP_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# # Read version from package or use a default
-# def get_version():
-#     try:
-#         # Try to read from the src directory first
-#         version_file_paths = [
-#             os.path.join('src', 'meshoptimizer.h'),
-#             os.path.join('..', 'src', 'meshoptimizer.h')
-#         ]
-        
-#         for path in version_file_paths:
-#             full_path = os.path.join(SETUP_DIR, path)
-#             if os.path.exists(full_path):
-#                 with open(full_path, 'r') as f:
-#                     content = f.read()
-#                     version_match = re.search(r'#define\s+MESHOPTIMIZER_VERSION\s+(\d+)', content)
-#                     if version_match:
-#                         version = int(version_match.group(1))
-#                         major = version // 10000
-#                         minor = (version // 100) % 100
-#                         patch = version % 100
-#                         return f"{major}.{minor}.{patch}"
-#     except Exception as e:
-#         print(f"Warning: Could not extract version: {e}")
-#     raise RuntimeError("Version not found. Please ensure meshoptimizer.h is present in the src directory.")
 
 # Get long description from README
 def get_long_description():
@@ -44,44 +20,80 @@ def get_long_description():
     return 'Python wrapper for meshoptimizer library'
 
 # Determine source files
-# Check if we're in the python directory or the root directory
-if os.path.exists(os.path.join(SETUP_DIR, 'src')):
-    # Source files are in the python/src directory
-    src_path = os.path.join(SETUP_DIR, 'src')
-else:
-    # Source files are in the root src directory
-    src_path = os.path.join(SETUP_DIR, '..', 'src')
+def get_source_files():
+    # Check if we're in the python directory or the root directory
+    if os.path.exists('src'):
+        # Source files are in the src directory
+        src_path = 'src'
+        rel_path = 'src'
+    else:
+        # Source files are in the root src directory
+        src_path = os.path.join('..', 'src')
+        rel_path = os.path.join('..', 'src')
+    
+    # Get all .cpp files from the src directory
+    source_files = []
+    if os.path.exists(src_path):
+        for filename in os.listdir(src_path):
+            if filename.endswith('.cpp'):
+                source_files.append(os.path.join(rel_path, filename))
+    
+    # Add the module initialization file
+    source_files.append("python/src/module.cpp")
+    
+    # Make sure we have source files
+    if not source_files:
+        raise RuntimeError(f"No source files found in {src_path}")
+    
+    return source_files
 
-# Get all .cpp files from the src directory
-source_files = []
-for filename in os.listdir(src_path):
-    if filename.endswith('.cpp'):
-        # Use relative path for the source files
-        rel_path = 'src' if os.path.exists(os.path.join(SETUP_DIR, 'src')) else os.path.join('..', 'src')
-        source_files.append(os.path.join(rel_path, filename))
+# Get include directories
+def get_include_dirs():
+    include_dirs = []
+    
+    if os.path.exists('src'):
+        include_dirs.append('src')
+    else:
+        include_dirs.append(os.path.join('..', 'src'))
+    
+    # Try to add numpy include directory if available, but don't fail if it's not
+    try:
+        import numpy
+        include_dirs.append(numpy.get_include())
+    except ImportError:
+        # Create a class that will resolve numpy's include path during build
+        class numpy_include_dir(object):
+            def __str__(self):
+                import numpy
+                return numpy.get_include()
+        
+        include_dirs.append(numpy_include_dir())
+    
+    return include_dirs
 
-# Make sure we have source files
-if not source_files:
-    raise RuntimeError(f"No source files found in {src_path}")
+# Platform-specific compile and link arguments
+def get_build_args():
+    is_windows = platform.system() == 'Windows'
+    is_macos = platform.system() == 'Darwin'
+    
+    extra_compile_args = []
+    extra_link_args = []
+    
+    if is_windows:
+        # Windows-specific flags (MSVC)
+        extra_compile_args = ['/std:c++14', '/O2', '/EHsc']
+    else:
+        # Unix-like systems (Linux/Mac)
+        extra_compile_args = ['-std=c++11', '-O3']
+        if is_macos:
+            extra_compile_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.9'])
+    
+    return extra_compile_args, extra_link_args
 
-
-# Platform-specific compile arguments
-extra_compile_args = ['-std=c++11']
-if platform.system() != 'Windows':
-    extra_compile_args.append('-fPIC')
-if platform.system() == 'Darwin':
-    extra_compile_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.9'])
-
-# Ensure build directories exist
-build_temp_dir = os.path.join('build', f'temp.{platform.system().lower()}-{platform.machine()}-{sys.version_info[0]}.{sys.version_info[1]}')
-os.makedirs(os.path.join(SETUP_DIR, build_temp_dir), exist_ok=True)
-
-# Define include directories
-include_dirs = []
-if os.path.exists(os.path.join(SETUP_DIR, 'src')):
-    include_dirs.append('src')
-else:
-    include_dirs.append(os.path.join('..', 'src'))
+# Get the source files and build arguments
+source_files = get_source_files()
+include_dirs = get_include_dirs()
+extra_compile_args, extra_link_args = get_build_args()
 
 # Define the extension module
 meshoptimizer_module = Extension(
@@ -89,6 +101,7 @@ meshoptimizer_module = Extension(
     sources=source_files,
     include_dirs=include_dirs,
     extra_compile_args=extra_compile_args,
+    extra_link_args=extra_link_args,
     language='c++',
 )
 
@@ -105,6 +118,7 @@ if not check_source_files_exist():
     print("Warning: Some source files were not found. This may cause build failures.")
     print(f"Current directory: {os.getcwd()}")
     print(f"Setup directory: {SETUP_DIR}")
+    print(f"Source files: {source_files}")
 
 setup(
     name='meshoptimizer',
@@ -118,9 +132,14 @@ setup(
     install_requires=[
         'numpy>=1.19.0',
     ],
+    setup_requires=[
+        'setuptools>=42',
+        'wheel',
+        'numpy>=1.19.0',
+    ],
     python_requires='>=3.6',
     package_data={
-        '': ['src/*.cpp', 'src/*.h'],
+        '': ['src/*.cpp', 'src/*.h', 'python/src/*.cpp', 'python/src/*.h'],
     },
     include_package_data=True,
     classifiers=[
