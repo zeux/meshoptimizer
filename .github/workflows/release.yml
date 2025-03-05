@@ -71,7 +71,7 @@ jobs:
   python:
     strategy:
       matrix:
-        os: [ubuntu] #, macos, windows]
+        os: [ubuntu, macos, windows]
     runs-on: ${{matrix.os}}-latest
     steps:
     - uses: actions/checkout@v4
