@@ -47,28 +47,22 @@ def get_long_description():
 # Check if we're in the python directory or the root directory
 if os.path.exists(os.path.join(SETUP_DIR, 'src')):
     # Source files are in the python/src directory
-    source_files = [
-        os.path.join('src', filename) for filename in [
-            'allocator.cpp', 'clusterizer.cpp', 'indexcodec.cpp', 'indexgenerator.cpp',
-            'overdrawanalyzer.cpp', 'overdrawoptimizer.cpp', 'simplifier.cpp',
-            'spatialorder.cpp', 'stripifier.cpp', 'vcacheanalyzer.cpp',
-            'vcacheoptimizer.cpp', 'vertexcodec.cpp', 'vertexfilter.cpp',
-            'vfetchanalyzer.cpp', 'vfetchoptimizer.cpp', 'quantization.cpp',
-            'partition.cpp'
-        ]
-    ]
+    src_path = os.path.join(SETUP_DIR, 'src')
 else:
     # Source files are in the root src directory
-    source_files = [
-        os.path.join('..', 'src', filename) for filename in [
-            'allocator.cpp', 'clusterizer.cpp', 'indexcodec.cpp', 'indexgenerator.cpp',
-            'overdrawanalyzer.cpp', 'overdrawoptimizer.cpp', 'simplifier.cpp',
-            'spatialorder.cpp', 'stripifier.cpp', 'vcacheanalyzer.cpp',
-            'vcacheoptimizer.cpp', 'vertexcodec.cpp', 'vertexfilter.cpp',
-            'vfetchanalyzer.cpp', 'vfetchoptimizer.cpp', 'quantization.cpp',
-            'partition.cpp'
-        ]
-    ]
+    src_path = os.path.join(SETUP_DIR, '..', 'src')
+
+# Get all .cpp files from the src directory
+source_files = []
+for filename in os.listdir(src_path):
+    if filename.endswith('.cpp'):
+        # Use relative path for the source files
+        rel_path = 'src' if os.path.exists(os.path.join(SETUP_DIR, 'src')) else os.path.join('..', 'src')
+        source_files.append(os.path.join(rel_path, filename))
+
+# Make sure we have source files
+if not source_files:
+    raise RuntimeError(f"No source files found in {src_path}")
 
 
 # Platform-specific compile arguments
