@@ -2,7 +2,7 @@
 Decoder functions for meshoptimizer.
 """
 import ctypes
-from typing import Optional, Union, Tuple, Any, List
+from typing import Union
 import numpy as np
 from ._loader import lib
 

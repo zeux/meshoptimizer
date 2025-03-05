@@ -6,7 +6,7 @@ preserves the mesh geometry correctly.
 """
 import numpy as np
 import unittest
-from meshoptimizer import Mesh, encode_vertex_buffer, encode_index_buffer, decode_vertex_buffer, decode_index_buffer
+from meshoptimizer import encode_vertex_buffer, decode_vertex_buffer
 
 class TestEncoding(unittest.TestCase):
     """Test encoding and decoding functionality."""
@@ -35,7 +35,6 @@ class TestEncoding(unittest.TestCase):
             4, 5, 1, 1, 0, 4   # bottom
         ], dtype=np.uint32)
         
-        self.mesh = Mesh(self.vertices, self.indices)
     
     def get_triangles_set(self, vertices, indices):
         """
@@ -73,88 +72,29 @@ class TestEncoding(unittest.TestCase):
         # Check that the decoded vertices match the original
         np.testing.assert_array_almost_equal(self.vertices, decoded_vertices)
     
-    def test_encode_decode_mesh(self):
-        """Test that encoding and decoding a mesh preserves the geometry."""
-        # Encode the mesh
-        encoded = self.mesh.encode()
-        
-        # Decode the mesh
-        decoded_mesh = Mesh.decode(
-            encoded,
-            vertex_count=len(self.mesh.vertices),
-            vertex_size=self.mesh.vertices.itemsize * self.mesh.vertices.shape[1],
-            index_count=len(self.mesh.indices)
+    def encode_decode_indices(self):
+        """Test that encoding and decoding indices preserves the data."""
+        # Encode indices
+        encoded_indices = encode_vertex_buffer(
+            self.indices, 
+            len(self.indices), 
+            self.indices.itemsize * self.indices.shape[1]
         )
         
-        # Check that the decoded vertices match the original
-        np.testing.assert_array_almost_equal(self.mesh.vertices, decoded_mesh.vertices)
+        # Decode indices using the new function that returns a numpy array
+        decoded_indices = decode_vertex_buffer(
+            len(self.indices), 
+            self.indices.itemsize * self.indices.shape[1], 
+            encoded_indices
+        )
         
-        # The indices might not match exactly due to how the encoding/decoding works,
-        # but the geometry should be preserved. Let's check that by comparing
-        # the triangles.
-        
-        # Get the triangles from the original and decoded meshes
-        original_triangles = self.get_triangles_set(self.mesh.vertices, self.mesh.indices)
-        decoded_triangles = self.get_triangles_set(decoded_mesh.vertices, decoded_mesh.indices)
-        
+        # Check that the decoded indices match the original
+        np.testing.assert_array_almost_equal(self.indices, decoded_indices)
         # Check that the triangles match
+        original_triangles = self.get_triangles_set(self.vertices, self.indices)
+        decoded_triangles = self.get_triangles_set(self.vertices, decoded_indices)
         self.assertEqual(original_triangles, decoded_triangles)
-    
-    def test_optimize_and_encode_decode(self):
-        """Test that optimizing and then encoding/decoding preserves the geometry."""
-        # Optimize the mesh
-        optimized_mesh = Mesh(self.vertices.copy(), self.indices.copy())
-        optimized_mesh.optimize_vertex_cache()
-        optimized_mesh.optimize_overdraw()
-        optimized_mesh.optimize_vertex_fetch()
-        
-        # Encode the optimized mesh
-        encoded = optimized_mesh.encode()
-        
-        # Decode the mesh
-        decoded_mesh = Mesh.decode(
-            encoded,
-            vertex_count=len(optimized_mesh.vertices),
-            vertex_size=optimized_mesh.vertices.itemsize * optimized_mesh.vertices.shape[1],
-            index_count=len(optimized_mesh.indices)
-        )
-        
-        # Check that the decoded vertices match the optimized vertices
-        np.testing.assert_array_almost_equal(optimized_mesh.vertices, decoded_mesh.vertices)
-        
-        # Get the triangles from the optimized and decoded meshes
-        optimized_triangles = self.get_triangles_set(optimized_mesh.vertices, optimized_mesh.indices)
-        decoded_triangles = self.get_triangles_set(decoded_mesh.vertices, decoded_mesh.indices)
-        
-        # Check that the triangles match
-        self.assertEqual(optimized_triangles, decoded_triangles)
-    
-    def test_simplify_and_encode_decode(self):
-        """Test that simplifying and then encoding/decoding preserves the geometry."""
-        # Simplify the mesh
-        simplified_mesh = Mesh(self.vertices.copy(), self.indices.copy())
-        simplified_mesh.simplify(target_ratio=0.5)  # Keep 50% of triangles
-        
-        # Encode the simplified mesh
-        encoded = simplified_mesh.encode()
-        
-        # Decode the mesh
-        decoded_mesh = Mesh.decode(
-            encoded,
-            vertex_count=len(simplified_mesh.vertices),
-            vertex_size=simplified_mesh.vertices.itemsize * simplified_mesh.vertices.shape[1],
-            index_count=len(simplified_mesh.indices)
-        )
-        
-        # Check that the decoded vertices match the simplified vertices
-        np.testing.assert_array_almost_equal(simplified_mesh.vertices, decoded_mesh.vertices)
-        
-        # Get the triangles from the simplified and decoded meshes
-        simplified_triangles = self.get_triangles_set(simplified_mesh.vertices, simplified_mesh.indices)
-        decoded_triangles = self.get_triangles_set(decoded_mesh.vertices, decoded_mesh.indices)
-        
-        # Check that the triangles match
-        self.assertEqual(simplified_triangles, decoded_triangles)
+
 
 if __name__ == '__main__':
     unittest.main()

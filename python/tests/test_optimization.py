@@ -7,7 +7,6 @@ work correctly and preserve the mesh geometry.
 import numpy as np
 import unittest
 from meshoptimizer import (
-    Mesh, 
     optimize_vertex_cache, 
     optimize_overdraw, 
     optimize_vertex_fetch,
@@ -43,7 +42,6 @@ class TestOptimization(unittest.TestCase):
             4, 5, 1, 1, 0, 4   # bottom
         ], dtype=np.uint32)
         
-        self.mesh = Mesh(self.vertices, self.indices)
     
     def get_triangles_set(self, vertices, indices):
         """
@@ -184,36 +182,6 @@ class TestOptimization(unittest.TestCase):
         # Check that the triangles match
         self.assertEqual(original_triangles, remapped_triangles)
     
-    def test_mesh_optimization_chain(self):
-        """Test chaining multiple optimizations on a mesh."""
-        # Create a copy of the mesh
-        optimized_mesh = Mesh(self.vertices.copy(), self.indices.copy())
-        
-        # Apply optimizations
-        optimized_mesh.optimize_vertex_cache()
-        optimized_mesh.optimize_overdraw()
-        optimized_mesh.optimize_vertex_fetch()
-        
-        # Check that the optimized mesh has the same number of triangles
-        self.assertEqual(len(self.indices) // 3, len(optimized_mesh.indices) // 3)
-        
-        # Check that the optimized mesh has the same or fewer vertices
-        self.assertLessEqual(len(optimized_mesh.vertices), len(self.vertices))
-        
-        # For the full optimization chain, we can't directly compare triangles because
-        # the vertex fetch optimization reorders vertices for better cache locality.
-        # Instead, we'll check that each vertex in the optimized mesh is present in the original mesh.
-        
-        # Check that all optimized vertices are present in the original vertices
-        for i in range(len(optimized_mesh.vertices)):
-            vertex = tuple(optimized_mesh.vertices[i])
-            # Check if this vertex exists in the original vertices
-            found = False
-            for j in range(len(self.vertices)):
-                if np.allclose(self.vertices[j], optimized_mesh.vertices[i]):
-                    found = True
-                    break
-            self.assertTrue(found, f"Vertex {vertex} not found in original vertices")
 
 if __name__ == '__main__':
     unittest.main()

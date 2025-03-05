@@ -2,7 +2,7 @@
 Encoder functions for meshoptimizer.
 """
 import ctypes
-from typing import Optional, Union, Tuple
+from typing import Optional
 import numpy as np
 from ._loader import lib
 

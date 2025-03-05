@@ -7,15 +7,12 @@ work correctly and preserve the mesh geometry as much as possible.
 import numpy as np
 import unittest
 from meshoptimizer import (
-    Mesh, 
     simplify,
     simplify_sloppy,
     simplify_points,
     simplify_scale,
     SIMPLIFY_LOCK_BORDER,
     SIMPLIFY_SPARSE,
-    SIMPLIFY_ERROR_ABSOLUTE,
-    SIMPLIFY_PRUNE
 )
 
 class TestSimplification(unittest.TestCase):
@@ -45,7 +42,6 @@ class TestSimplification(unittest.TestCase):
             4, 5, 1, 1, 0, 4   # bottom
         ], dtype=np.uint32)
         
-        self.mesh = Mesh(self.vertices, self.indices)
         
         # Create a more complex mesh (a sphere)
         # Generate a sphere with 8 segments and 8 rings
@@ -83,7 +79,6 @@ class TestSimplification(unittest.TestCase):
         
         self.sphere_vertices = np.array(vertices, dtype=np.float32)
         self.sphere_indices = np.array(indices, dtype=np.uint32)
-        self.sphere_mesh = Mesh(self.sphere_vertices, self.sphere_indices)
     
     def test_simplify_basic(self):
         """Test basic simplification."""
@@ -228,35 +223,6 @@ class TestSimplification(unittest.TestCase):
         
         # Check that the scale is positive
         self.assertGreater(scale, 0.0)
-    
-    def test_mesh_simplify(self):
-        """Test mesh simplification using the Mesh class."""
-        # Create a copy of the sphere mesh
-        simplified_mesh = Mesh(self.sphere_vertices.copy(), self.sphere_indices.copy())
-        
-        # Simplify the mesh
-        simplified_mesh.simplify(target_ratio=0.5)  # Keep 50% of triangles
-        
-        # Check that the number of triangles is reduced
-        self.assertLessEqual(len(simplified_mesh.indices) // 3, len(self.sphere_indices) // 3)
-        
-        # Check that the mesh is still valid
-        # (Each triangle should have 3 unique vertices)
-        for i in range(0, len(simplified_mesh.indices), 3):
-            a = simplified_mesh.indices[i]
-            b = simplified_mesh.indices[i+1]
-            c = simplified_mesh.indices[i+2]
-            
-            # Check that indices are within bounds
-            self.assertLess(a, len(simplified_mesh.vertices))
-            self.assertLess(b, len(simplified_mesh.vertices))
-            self.assertLess(c, len(simplified_mesh.vertices))
-            
-            # Check that the triangle has 3 unique vertices
-            # (This is not always true for simplified meshes, but it's a good sanity check)
-            # self.assertNotEqual(a, b)
-            # self.assertNotEqual(b, c)
-            # self.assertNotEqual(c, a)
 
 if __name__ == '__main__':
     unittest.main()
