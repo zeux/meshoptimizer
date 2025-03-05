@@ -92,7 +92,6 @@ jobs:
 
     - name: Run tests
       run: |
-        cd python
         python -m unittest discover -v
 
     - name: Build package
