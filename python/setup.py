@@ -96,7 +96,7 @@ if not check_source_files_exist():
 
 setup(
     name='meshoptimizer',
-    version="0.2.20a1",
+    version="0.2.20a2",
     description='Python wrapper for meshoptimizer library',
     long_description=get_long_description(),
     long_description_content_type='text/markdown',
