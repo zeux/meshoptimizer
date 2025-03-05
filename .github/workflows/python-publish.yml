@@ -1,4 +1,4 @@
-name: Publish Python Package
+name: Python Package
 
 on:
   release:
@@ -9,21 +9,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Required for setuptools_scm to determine version
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.x'
+        python-version: '3.10'
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install build twine
+
     - name: Build package
       run: |
         cd python
-        python -m build
+        python -m build --sdist
+
     - name: Publish package
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         user: __token__
         password: ${{ secrets.PYPI_API_TOKEN }}
         packages-dir: python/dist/
+        skip-existing: true

@@ -2,58 +2,74 @@ from setuptools import setup, Extension, find_packages
 import os
 import platform
 import sys
-
-# Read long description from README
-with open(os.path.join(os.path.dirname(__file__), "README.md"), "r", encoding="utf-8") as f:
-    long_description = f.read()
 import re
+
+# Get the directory containing this file (setup.py)
+SETUP_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Read version from package or use a default
 def get_version():
     try:
-        with open(os.path.join(os.path.dirname(__file__), '..', 'src', 'meshoptimizer.h'), 'r') as f:
-            content = f.read()
-            version_match = re.search(r'#define\s+MESHOPTIMIZER_VERSION\s+(\d+)', content)
-            if version_match:
-                version = int(version_match.group(1))
-                major = version // 10000
-                minor = (version // 100) % 100
-                patch = version % 100
-                return f"{major}.{minor}.{patch}"
-    except:
-        pass
+        # Try to read from the src directory first
+        version_file_paths = [
+            os.path.join('src', 'meshoptimizer.h'),
+            os.path.join('..', 'src', 'meshoptimizer.h')
+        ]
+        
+        for path in version_file_paths:
+            full_path = os.path.join(SETUP_DIR, path)
+            if os.path.exists(full_path):
+                with open(full_path, 'r') as f:
+                    content = f.read()
+                    version_match = re.search(r'#define\s+MESHOPTIMIZER_VERSION\s+(\d+)', content)
+                    if version_match:
+                        version = int(version_match.group(1))
+                        major = version // 10000
+                        minor = (version // 100) % 100
+                        patch = version % 100
+                        return f"{major}.{minor}.{patch}"
+    except Exception as e:
+        print(f"Warning: Could not extract version: {e}")
     return '0.1.0'  # Default version if unable to extract
 
 # Get long description from README
 def get_long_description():
     try:
-        with open(os.path.join(os.path.dirname(__file__), 'README.md'), 'r') as f:
-            return f.read()
-    except:
-        return 'Python wrapper for meshoptimizer library'
+        readme_path = os.path.join(SETUP_DIR, 'README.md')
+        if os.path.exists(readme_path):
+            with open(readme_path, 'r', encoding='utf-8') as f:
+                return f.read()
+    except Exception as e:
+        print(f"Warning: Could not read README.md: {e}")
+    return 'Python wrapper for meshoptimizer library'
 
 # Determine source files
-source_files = [
-    os.path.join('..', 'src', f) for f in [
-        'allocator.cpp',
-        'clusterizer.cpp',
-        'indexcodec.cpp',
-        'indexgenerator.cpp',
-        'overdrawanalyzer.cpp',
-        'overdrawoptimizer.cpp',
-        'simplifier.cpp',
-        'spatialorder.cpp',
-        'stripifier.cpp',
-        'vcacheanalyzer.cpp',
-        'vcacheoptimizer.cpp',
-        'vertexcodec.cpp',
-        'vertexfilter.cpp',
-        'vfetchanalyzer.cpp',
-        'vfetchoptimizer.cpp',
-        'quantization.cpp',
-        'partition.cpp',
+# Check if we're in the python directory or the root directory
+if os.path.exists(os.path.join(SETUP_DIR, 'src')):
+    # Source files are in the python/src directory
+    source_files = [
+        os.path.join('src', filename) for filename in [
+            'allocator.cpp', 'clusterizer.cpp', 'indexcodec.cpp', 'indexgenerator.cpp',
+            'overdrawanalyzer.cpp', 'overdrawoptimizer.cpp', 'simplifier.cpp',
+            'spatialorder.cpp', 'stripifier.cpp', 'vcacheanalyzer.cpp',
+            'vcacheoptimizer.cpp', 'vertexcodec.cpp', 'vertexfilter.cpp',
+            'vfetchanalyzer.cpp', 'vfetchoptimizer.cpp', 'quantization.cpp',
+            'partition.cpp'
+        ]
     ]
-]
+else:
+    # Source files are in the root src directory
+    source_files = [
+        os.path.join('..', 'src', filename) for filename in [
+            'allocator.cpp', 'clusterizer.cpp', 'indexcodec.cpp', 'indexgenerator.cpp',
+            'overdrawanalyzer.cpp', 'overdrawoptimizer.cpp', 'simplifier.cpp',
+            'spatialorder.cpp', 'stripifier.cpp', 'vcacheanalyzer.cpp',
+            'vcacheoptimizer.cpp', 'vertexcodec.cpp', 'vertexfilter.cpp',
+            'vfetchanalyzer.cpp', 'vfetchoptimizer.cpp', 'quantization.cpp',
+            'partition.cpp'
+        ]
+    ]
+
 
 # Platform-specific compile arguments
 extra_compile_args = ['-std=c++11']
@@ -64,16 +80,37 @@ if platform.system() == 'Darwin':
 
 # Ensure build directories exist
 build_temp_dir = os.path.join('build', f'temp.{platform.system().lower()}-{platform.machine()}-{sys.version_info[0]}.{sys.version_info[1]}')
-os.makedirs(build_temp_dir, exist_ok=True)
+os.makedirs(os.path.join(SETUP_DIR, build_temp_dir), exist_ok=True)
+
+# Define include directories
+include_dirs = []
+if os.path.exists(os.path.join(SETUP_DIR, 'src')):
+    include_dirs.append('src')
+else:
+    include_dirs.append(os.path.join('..', 'src'))
 
 # Define the extension module
 meshoptimizer_module = Extension(
     'meshoptimizer._meshoptimizer',
     sources=source_files,
-    include_dirs=[os.path.join('..', 'src')],
+    include_dirs=include_dirs,
     extra_compile_args=extra_compile_args,
     language='c++',
 )
+
+# Check if source files exist at the expected paths
+def check_source_files_exist():
+    for source_file in source_files:
+        if not os.path.exists(source_file):
+            print(f"Warning: Source file not found: {source_file}")
+            return False
+    return True
+
+# Verify source files exist
+if not check_source_files_exist():
+    print("Warning: Some source files were not found. This may cause build failures.")
+    print(f"Current directory: {os.getcwd()}")
+    print(f"Setup directory: {SETUP_DIR}")
 
 setup(
     name='meshoptimizer',
@@ -88,6 +125,10 @@ setup(
         'numpy>=1.19.0',
     ],
     python_requires='>=3.6',
+    package_data={
+        '': ['src/*.cpp', 'src/*.h'],
+    },
+    include_package_data=True,
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
