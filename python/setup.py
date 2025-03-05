@@ -1,9 +1,6 @@
 from setuptools import setup, Extension, find_packages
 import os
 import platform
-import sys
-import re
-
 
 # Get the directory containing this file (setup.py)
 SETUP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -22,21 +19,14 @@ def get_long_description():
 # Determine source files
 def get_source_files():
     # Check if we're in the python directory or the root directory
-    if os.path.exists('src'):
-        # Source files are in the src directory
-        src_path = 'src'
-        rel_path = 'src'
-    else:
-        # Source files are in the root src directory
-        src_path = os.path.join('..', 'src')
-        rel_path = os.path.join('..', 'src')
-    
+    src_path = os.path.join('..', 'src')
+
     # Get all .cpp files from the src directory
     source_files = []
     if os.path.exists(src_path):
         for filename in os.listdir(src_path):
             if filename.endswith('.cpp'):
-                source_files.append(os.path.join(rel_path, filename))
+                source_files.append(os.path.join(src_path, filename))
     
     # Add the module initialization file
     source_files.append("python/src/module.cpp")
@@ -46,17 +36,6 @@ def get_source_files():
         raise RuntimeError(f"No source files found in {src_path}")
     
     return source_files
-
-# Get include directories
-def get_include_dirs():
-    include_dirs = []
-    
-    if os.path.exists('src'):
-        include_dirs.append('src')
-    else:
-        include_dirs.append(os.path.join('..', 'src'))
-    
-    return include_dirs
 
 # Platform-specific compile and link arguments
 def get_build_args():
@@ -86,7 +65,7 @@ def get_build_args():
 
 # Get the source files and build arguments
 source_files = get_source_files()
-include_dirs = get_include_dirs()
+include_dirs = [os.path.join('..', 'src')]
 extra_compile_args, extra_link_args, define_macros = get_build_args()
 
 # Define the extension module
