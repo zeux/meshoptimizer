@@ -7,30 +7,30 @@ import re
 # Get the directory containing this file (setup.py)
 SETUP_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Read version from package or use a default
-def get_version():
-    try:
-        # Try to read from the src directory first
-        version_file_paths = [
-            os.path.join('src', 'meshoptimizer.h'),
-            os.path.join('..', 'src', 'meshoptimizer.h')
-        ]
+# # Read version from package or use a default
+# def get_version():
+#     try:
+#         # Try to read from the src directory first
+#         version_file_paths = [
+#             os.path.join('src', 'meshoptimizer.h'),
+#             os.path.join('..', 'src', 'meshoptimizer.h')
+#         ]
         
-        for path in version_file_paths:
-            full_path = os.path.join(SETUP_DIR, path)
-            if os.path.exists(full_path):
-                with open(full_path, 'r') as f:
-                    content = f.read()
-                    version_match = re.search(r'#define\s+MESHOPTIMIZER_VERSION\s+(\d+)', content)
-                    if version_match:
-                        version = int(version_match.group(1))
-                        major = version // 10000
-                        minor = (version // 100) % 100
-                        patch = version % 100
-                        return f"{major}.{minor}.{patch}"
-    except Exception as e:
-        print(f"Warning: Could not extract version: {e}")
-    raise RuntimeError("Version not found. Please ensure meshoptimizer.h is present in the src directory.")
+#         for path in version_file_paths:
+#             full_path = os.path.join(SETUP_DIR, path)
+#             if os.path.exists(full_path):
+#                 with open(full_path, 'r') as f:
+#                     content = f.read()
+#                     version_match = re.search(r'#define\s+MESHOPTIMIZER_VERSION\s+(\d+)', content)
+#                     if version_match:
+#                         version = int(version_match.group(1))
+#                         major = version // 10000
+#                         minor = (version // 100) % 100
+#                         patch = version % 100
+#                         return f"{major}.{minor}.{patch}"
+#     except Exception as e:
+#         print(f"Warning: Could not extract version: {e}")
+#     raise RuntimeError("Version not found. Please ensure meshoptimizer.h is present in the src directory.")
 
 # Get long description from README
 def get_long_description():
@@ -108,7 +108,7 @@ if not check_source_files_exist():
 
 setup(
     name='meshoptimizer',
-    version=get_version(),
+    version="0.2.20a1",
     description='Python wrapper for meshoptimizer library',
     long_description=get_long_description(),
     long_description_content_type='text/markdown',
