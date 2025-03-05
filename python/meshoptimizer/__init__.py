@@ -257,5 +257,3 @@ class Mesh:
         
         return cls(vertices, indices)
 
-# Version information
-__version__ = '0.1.0'
