@@ -31,10 +31,10 @@ jobs:
         cd python
         python -m build --sdist
 
-    # - name: Publish package
-    #   uses: pypa/gh-action-pypi-publish@release/v1
-    #   with:
-    #     user: __token__
-    #     password: ${{ secrets.PYPI_API_TOKEN }}
-    #     packages-dir: python/dist/
-    #     skip-existing: true
+    - name: Publish package
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        user: __token__
+        password: ${{ secrets.PYPI_API_TOKEN }}
+        packages-dir: python/dist/
+        skip-existing: true
