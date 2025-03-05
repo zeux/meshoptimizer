@@ -292,7 +292,7 @@ MESHOPTIMIZER_API size_t meshopt_encodeVertexBufferBound(size_t vertex_count, si
  *
  * level should be in the range [0, 3] with 0 being the fastest and 3 being the slowest and producing the best compression ratio.
  */
-MESHOPTIMIZER_API size_t meshopt_encodeVertexBufferLevel(unsigned char* buffer, size_t buffer_size, const void* vertices, size_t vertex_count, size_t vertex_size, int level);
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_encodeVertexBufferLevel(unsigned char* buffer, size_t buffer_size, const void* vertices, size_t vertex_count, size_t vertex_size, int level);
 
 /**
  * Set vertex encoder format version
@@ -358,7 +358,7 @@ enum meshopt_EncodeExpMode
 	meshopt_EncodeExpSharedVector,
 	/* When encoding exponents, use shared value for each component of all vectors (best compression) */
 	meshopt_EncodeExpSharedComponent,
-	/* Experimental: When encoding exponents, use separate values for each component, but clamp to 0 (good quality if very small values are not important) */
+	/* When encoding exponents, use separate values for each component, but clamp to 0 (good quality if very small values are not important) */
 	meshopt_EncodeExpClamped,
 };
 
@@ -399,7 +399,7 @@ enum
 MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, unsigned int options, float* result_error);
 
 /**
- * Experimental: Mesh simplifier with attribute metric
+ * Mesh simplifier with attribute metric
  * The algorithm enhances meshopt_simplify by incorporating attribute values into the error metric used to prioritize simplification order; see meshopt_simplify documentation for details.
  * Note that the number of attributes affects memory requirements and running time; this algorithm requires ~1.5x more memory and time compared to meshopt_simplify when using 4 scalar attributes.
  *
@@ -408,7 +408,7 @@ MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsig
  * attribute_count must be <= 32
  * vertex_lock can be NULL; when it's not NULL, it should have a value for each vertex; 1 denotes vertices that can't be moved
  */
-MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, const unsigned char* vertex_lock, size_t target_index_count, float target_error, unsigned int options, float* result_error);
+MESHOPTIMIZER_API size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, const unsigned char* vertex_lock, size_t target_index_count, float target_error, unsigned int options, float* result_error);
 
 /**
  * Experimental: Mesh simplifier (sloppy)
@@ -426,7 +426,7 @@ MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifyWithAttributes(unsigned int* d
 MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, float* result_error);
 
 /**
- * Experimental: Point cloud simplifier
+ * Point cloud simplifier
  * Reduces the number of points in the cloud to reach the given target
  * Returns the number of points after simplification, with destination containing new index data
  * The resulting index buffer references vertices from the original vertex buffer.
@@ -437,7 +437,7 @@ MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifySloppy(unsigned int* destinati
  * vertex_colors should can be NULL; when it's not NULL, it should have float3 color in the first 12 bytes of each vertex
  * color_weight determines relative priority of color wrt position; 1.0 is a safe default
  */
-MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_colors, size_t vertex_colors_stride, float color_weight, size_t target_vertex_count);
+MESHOPTIMIZER_API size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_colors, size_t vertex_colors_stride, float color_weight, size_t target_vertex_count);
 
 /**
  * Returns the error scaling factor used by the simplifier to convert between absolute and relative extents
@@ -565,17 +565,17 @@ MESHOPTIMIZER_API size_t meshopt_buildMeshletsBound(size_t index_count, size_t m
  * cone_weight should be set to 0 when cone culling is not used, and a value between 0 and 1 otherwise to balance between cluster size and cone culling efficiency; additionally, cone_weight can be set to a negative value to prioritize axis aligned clusters (for raytracing) instead
  * split_factor should be set to a non-negative value; when greater than 0, clusters that have large bounds may be split unless they are under the min_triangles threshold
  */
-MESHOPTIMIZER_API size_t meshopt_buildMeshletsFlex(struct meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t min_triangles, size_t max_triangles, float cone_weight, float split_factor);
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_buildMeshletsFlex(struct meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t min_triangles, size_t max_triangles, float cone_weight, float split_factor);
 
 /**
- * Experimental: Meshlet optimizer
+ * Meshlet optimizer
  * Reorders meshlet vertices and triangles to maximize locality to improve rasterizer throughput
  *
  * meshlet_triangles and meshlet_vertices must refer to meshlet triangle and vertex index data; when buildMeshlets* is used, these
  * need to be computed from meshlet's vertex_offset and triangle_offset
  * triangle_count and vertex_count must not exceed implementation limits (vertex_count <= 255 - not 256!, triangle_count <= 512)
  */
-MESHOPTIMIZER_EXPERIMENTAL void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, size_t triangle_count, size_t vertex_count);
+MESHOPTIMIZER_API void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, size_t triangle_count, size_t vertex_count);
 
 struct meshopt_Bounds
 {

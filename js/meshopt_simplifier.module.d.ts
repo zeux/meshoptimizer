@@ -6,8 +6,6 @@ export const MeshoptSimplifier: {
 	supported: boolean;
 	ready: Promise<void>;
 
-	useExperimentalFeatures: boolean;
-
 	compactMesh: (indices: Uint32Array) => [Uint32Array, number];
 
 	simplify: (
@@ -19,7 +17,6 @@ export const MeshoptSimplifier: {
 		flags?: Flags[]
 	) => [Uint32Array, number];
 
-	// Experimental; requires useExperimentalFeatures to be set to true
 	simplifyWithAttributes: (
 		indices: Uint32Array,
 		vertex_positions: Float32Array,
@@ -35,7 +32,6 @@ export const MeshoptSimplifier: {
 
 	getScale: (vertex_positions: Float32Array, vertex_positions_stride: number) => number;
 
-	// Experimental; requires useExperimentalFeatures to be set to true
 	simplifyPoints: (
 		vertex_positions: Float32Array,
 		vertex_positions_stride: number,
