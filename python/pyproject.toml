@@ -1,0 +1,6 @@
+[build-system]
+requires = ["setuptools>=42", "wheel", "setuptools_scm>=6.0", "numpy>=1.19.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+root = ".."
