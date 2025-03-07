@@ -19,6 +19,10 @@ const size_t kMeshletMaxVertices = 255;
 // A reasonable limit is around 2*max_vertices or less
 const size_t kMeshletMaxTriangles = 512;
 
+// We keep a limited number of seed triangles and add a few triangles per finished meshlet
+const size_t kMeshletMaxSeeds = 256;
+const size_t kMeshletAddSeeds = 4;
+
 struct TriangleAdjacency2
 {
 	unsigned int* counts;
@@ -435,6 +439,72 @@ static unsigned int getNeighborTriangle(const meshopt_Meshlet& meshlet, const Co
 	return best_triangle;
 }
 
+static unsigned int appendSeedTriangles(unsigned int* seeds, const meshopt_Meshlet& meshlet, const unsigned int* meshlet_vertices, const unsigned int* indices, const TriangleAdjacency2& adjacency, const Cone* triangles, const unsigned int* live_triangles, float cornerx, float cornery, float cornerz)
+{
+	unsigned int best_seeds[kMeshletAddSeeds];
+	unsigned int best_live[kMeshletAddSeeds];
+	float best_score[kMeshletAddSeeds];
+
+	for (size_t i = 0; i < kMeshletAddSeeds; ++i)
+	{
+		best_seeds[i] = ~0u;
+		best_live[i] = ~0u;
+		best_score[i] = FLT_MAX;
+	}
+
+	for (size_t i = 0; i < meshlet.vertex_count; ++i)
+	{
+		unsigned int index = meshlet_vertices[meshlet.vertex_offset + i];
+
+		unsigned int best_neighbor = ~0u;
+		unsigned int best_neighbor_live = ~0u;
+
+		// find the neighbor with the smallest live metric
+		unsigned int* neighbors = &adjacency.data[0] + adjacency.offsets[index];
+		size_t neighbors_size = adjacency.counts[index];
+
+		for (size_t j = 0; j < neighbors_size; ++j)
+		{
+			unsigned int triangle = neighbors[j];
+			unsigned int a = indices[triangle * 3 + 0], b = indices[triangle * 3 + 1], c = indices[triangle * 3 + 2];
+
+			unsigned int live = live_triangles[a] + live_triangles[b] + live_triangles[c];
+
+			if (live < best_neighbor_live)
+			{
+				best_neighbor = triangle;
+				best_neighbor_live = live;
+			}
+		}
+
+		// add the neighbor to the list of seeds; the list is unsorted and the replacement criteria is approximate
+		if (best_neighbor == ~0u)
+			continue;
+
+		float best_neighbor_score = getDistance(triangles[best_neighbor].px - cornerx, triangles[best_neighbor].py - cornery, triangles[best_neighbor].pz - cornerz, false);
+
+		for (size_t j = 0; j < kMeshletAddSeeds; ++j)
+		{
+			if (best_neighbor_live < best_live[j] || (best_neighbor_live == best_live[j] && best_neighbor_score < best_score[j]))
+			{
+				best_seeds[j] = best_neighbor;
+				best_live[j] = best_neighbor_live;
+				best_score[j] = best_neighbor_score;
+				break;
+			}
+		}
+	}
+
+	// add surviving seeds to the meshlet
+	size_t seed_count = 0;
+
+	for (size_t i = 0; i < kMeshletAddSeeds; ++i)
+		if (best_seeds[i] != ~0u)
+			seeds[seed_count++] = best_seeds[i];
+
+	return seed_count;
+}
+
 struct KDNode
 {
 	union
@@ -692,7 +762,7 @@ size_t meshopt_buildMeshletsFlex(meshopt_Meshlet* meshlets, unsigned int* meshle
 	}
 
 	// seed triangles to continue meshlet flow
-	unsigned int seeds[256] = {};
+	unsigned int seeds[kMeshletMaxSeeds] = {};
 	size_t seed_count = 0;
 
 	assert(initial_seed != ~0u);
@@ -713,6 +783,9 @@ size_t meshopt_buildMeshletsFlex(meshopt_Meshlet* meshlets, unsigned int* meshle
 		// if the best triangle doesn't fit into current meshlet, the spatial scoring we've used is not very meaningful, so we re-select using topological scoring
 		if (best_triangle != ~0u && (meshlet.vertex_count + best_extra > max_vertices || meshlet.triangle_count >= max_triangles))
 		{
+			if (seed_count + kMeshletAddSeeds <= kMeshletMaxSeeds)
+				seed_count += appendSeedTriangles(seeds + seed_count, meshlet, meshlet_vertices, indices, adjacency, triangles, live_triangles, cornerx, cornery, cornerz);
+
 			best_triangle = getNeighborTriangle(meshlet, NULL, meshlet_vertices, indices, adjacency, triangles, live_triangles, used, meshlet_expected_radius, 0.f);
 		}
 
