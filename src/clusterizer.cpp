@@ -362,7 +362,7 @@ static bool appendMeshlet(meshopt_Meshlet& meshlet, unsigned int a, unsigned int
 	return result;
 }
 
-static unsigned int getNeighborTriangle(const meshopt_Meshlet& meshlet, const Cone* meshlet_cone, unsigned int* meshlet_vertices, const unsigned int* indices, const TriangleAdjacency2& adjacency, const Cone* triangles, const unsigned int* live_triangles, const unsigned char* used, float meshlet_expected_radius, float cone_weight)
+static unsigned int getNeighborTriangle(const meshopt_Meshlet& meshlet, const Cone* meshlet_cone, const unsigned int* meshlet_vertices, const unsigned int* indices, const TriangleAdjacency2& adjacency, const Cone* triangles, const unsigned int* live_triangles, const unsigned char* used, float meshlet_expected_radius, float cone_weight)
 {
 	unsigned int best_triangle = ~0u;
 	int best_priority = 5;
@@ -673,6 +673,30 @@ size_t meshopt_buildMeshletsFlex(meshopt_Meshlet* meshlets, unsigned int* meshle
 	// index of the vertex in the meshlet, 0xff if the vertex isn't used
 	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
 	memset(used, -1, vertex_count);
+
+	// initial seed triangle is the one closest to the corner
+	unsigned int initial_seed = ~0u;
+	float initial_score = FLT_MAX;
+
+	for (size_t i = 0; i < face_count; ++i)
+	{
+		const Cone& tri = triangles[i];
+
+		float score = getDistance(tri.px - cornerx, tri.py - cornery, tri.pz - cornerz, false);
+
+		if (initial_seed == ~0u || score < initial_score)
+		{
+			initial_seed = unsigned(i);
+			initial_score = score;
+		}
+	}
+
+	// seed triangles to continue meshlet flow
+	unsigned int seeds[256] = {};
+	size_t seed_count = 0;
+
+	assert(initial_seed != ~0u);
+	seeds[seed_count++] = initial_seed;
 
 	meshopt_Meshlet meshlet = {};
 	size_t meshlet_offset = 0;
