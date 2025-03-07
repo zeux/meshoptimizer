@@ -658,6 +658,18 @@ size_t meshopt_buildMeshletsFlex(meshopt_Meshlet* meshlets, unsigned int* meshle
 	KDNode* nodes = allocator.allocate<KDNode>(face_count * 2);
 	kdtreeBuild(0, nodes, face_count * 2, &triangles[0].px, sizeof(Cone) / sizeof(float), kdindices, face_count, /* leaf_size= */ 8);
 
+	// find a specific corner of the mesh to use as a starting point for meshlet flow
+	float cornerx = FLT_MAX, cornery = FLT_MAX, cornerz = FLT_MAX;
+
+	for (size_t i = 0; i < face_count; ++i)
+	{
+		const Cone& tri = triangles[i];
+
+		cornerx = cornerx > tri.px ? tri.px : cornerx;
+		cornery = cornery > tri.py ? tri.py : cornery;
+		cornerz = cornerz > tri.pz ? tri.pz : cornerz;
+	}
+
 	// index of the vertex in the meshlet, 0xff if the vertex isn't used
 	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
 	memset(used, -1, vertex_count);
