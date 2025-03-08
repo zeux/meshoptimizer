@@ -485,7 +485,8 @@ static unsigned int appendSeedTriangles(unsigned int* seeds, const meshopt_Meshl
 
 		for (size_t j = 0; j < kMeshletAddSeeds; ++j)
 		{
-			if (best_neighbor_live < best_live[j] || (best_neighbor_live == best_live[j] && best_neighbor_score < best_score[j]))
+			// non-strict comparison reduces the number of duplicate seeds (triangles adjacent to multiple vertices)
+			if (best_neighbor_live < best_live[j] || (best_neighbor_live == best_live[j] && best_neighbor_score <= best_score[j]))
 			{
 				best_seeds[j] = best_neighbor;
 				best_live[j] = best_neighbor_live;
