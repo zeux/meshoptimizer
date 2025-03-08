@@ -505,6 +505,46 @@ static unsigned int appendSeedTriangles(unsigned int* seeds, const meshopt_Meshl
 	return seed_count;
 }
 
+static size_t pruneSeedTriangles(unsigned int* seeds, size_t seed_count, const unsigned char* emitted_flags)
+{
+	size_t result = 0;
+
+	for (size_t i = 0; i < seed_count; ++i)
+	{
+		unsigned int index = seeds[i];
+
+		seeds[result] = index;
+		result += emitted_flags[index] == 0;
+	}
+
+	return result;
+}
+
+static unsigned int selectSeedTriangle(const unsigned int* seeds, size_t seed_count, const unsigned int* indices, const Cone* triangles, const unsigned int* live_triangles, float cornerx, float cornery, float cornerz)
+{
+	unsigned int best_seed = ~0u;
+	unsigned int best_live = ~0u;
+	float best_score = FLT_MAX;
+
+	for (size_t i = 0; i < seed_count; ++i)
+	{
+		unsigned int index = seeds[i];
+		unsigned int a = indices[index * 3 + 0], b = indices[index * 3 + 1], c = indices[index * 3 + 2];
+
+		unsigned int live = live_triangles[a] + live_triangles[b] + live_triangles[c];
+		float score = getDistance(triangles[index].px - cornerx, triangles[index].py - cornery, triangles[index].pz - cornerz, false);
+
+		if (live < best_live || (live == best_live && score < best_score))
+		{
+			best_seed = index;
+			best_live = live;
+			best_score = score;
+		}
+	}
+
+	return best_seed;
+}
+
 struct KDNode
 {
 	union
@@ -780,13 +820,22 @@ size_t meshopt_buildMeshletsFlex(meshopt_Meshlet* meshlets, unsigned int* meshle
 		unsigned int best_triangle = getNeighborTriangle(meshlet, &meshlet_cone, meshlet_vertices, indices, adjacency, triangles, live_triangles, used, meshlet_expected_radius, cone_weight);
 		int best_extra = best_triangle == ~0u ? -1 : (used[indices[best_triangle * 3 + 0]] == 0xff) + (used[indices[best_triangle * 3 + 1]] == 0xff) + (used[indices[best_triangle * 3 + 2]] == 0xff);
 
+		// for the first triangle, we don't have a meshlet cone yet, so we use the initial seed
+		if (meshlet_offset == 0 && meshlet.triangle_count == 0)
+			best_triangle = initial_seed;
+
 		// if the best triangle doesn't fit into current meshlet, the spatial scoring we've used is not very meaningful, so we re-select using topological scoring
 		if (best_triangle != ~0u && (meshlet.vertex_count + best_extra > max_vertices || meshlet.triangle_count >= max_triangles))
 		{
+			seed_count = pruneSeedTriangles(seeds, seed_count, emitted_flags);
 			if (seed_count + kMeshletAddSeeds <= kMeshletMaxSeeds)
 				seed_count += appendSeedTriangles(seeds + seed_count, meshlet, meshlet_vertices, indices, adjacency, triangles, live_triangles, cornerx, cornery, cornerz);
 
-			best_triangle = getNeighborTriangle(meshlet, NULL, meshlet_vertices, indices, adjacency, triangles, live_triangles, used, meshlet_expected_radius, 0.f);
+			unsigned int best_seed = selectSeedTriangle(seeds, seed_count, indices, triangles, live_triangles, cornerx, cornery, cornerz);
+
+			// TODO?
+			best_triangle = best_seed;
+			// best_triangle = getNeighborTriangle(meshlet, NULL, meshlet_vertices, indices, adjacency, triangles, live_triangles, used, meshlet_expected_radius, 0.f);
 		}
 
 		bool split = false;
@@ -802,6 +851,7 @@ size_t meshopt_buildMeshletsFlex(meshopt_Meshlet* meshlets, unsigned int* meshle
 
 			best_triangle = index;
 			split = meshlet.triangle_count >= min_triangles && split_factor > 0 && distance > meshlet_expected_radius * split_factor;
+			// TODO seeds
 		}
 
 		if (best_triangle == ~0u)
