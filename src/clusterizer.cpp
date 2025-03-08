@@ -806,9 +806,6 @@ size_t meshopt_buildMeshletsFlex(meshopt_Meshlet* meshlets, unsigned int* meshle
 	unsigned int seeds[kMeshletMaxSeeds] = {};
 	size_t seed_count = 0;
 
-	assert(initial_seed != ~0u);
-	seeds[seed_count++] = initial_seed;
-
 	meshopt_Meshlet meshlet = {};
 	size_t meshlet_offset = 0;
 
@@ -818,30 +815,18 @@ size_t meshopt_buildMeshletsFlex(meshopt_Meshlet* meshlets, unsigned int* meshle
 	{
 		Cone meshlet_cone = getMeshletCone(meshlet_cone_acc, meshlet.triangle_count);
 
-		unsigned int best_triangle = getNeighborTriangle(meshlet, &meshlet_cone, meshlet_vertices, indices, adjacency, triangles, live_triangles, used, meshlet_expected_radius, cone_weight);
-		int best_extra = best_triangle == ~0u ? -1 : (used[indices[best_triangle * 3 + 0]] == 0xff) + (used[indices[best_triangle * 3 + 1]] == 0xff) + (used[indices[best_triangle * 3 + 2]] == 0xff);
+		unsigned int best_triangle = ~0u;
 
 		// for the first triangle, we don't have a meshlet cone yet, so we use the initial seed
+		// to continue the meshlet, we select an adjacent triangle based on connectivity and spatial scoring
 		if (meshlet_offset == 0 && meshlet.triangle_count == 0)
 			best_triangle = initial_seed;
-
-		// if the best triangle doesn't fit into current meshlet, the spatial scoring we've used is not very meaningful, so we re-select using topological scoring
-		if (best_triangle != ~0u && (meshlet.vertex_count + best_extra > max_vertices || meshlet.triangle_count >= max_triangles))
-		{
-			seed_count = pruneSeedTriangles(seeds, seed_count, emitted_flags);
-			if (seed_count + kMeshletAddSeeds <= kMeshletMaxSeeds)
-				seed_count += appendSeedTriangles(seeds + seed_count, meshlet, meshlet_vertices, indices, adjacency, triangles, live_triangles, cornerx, cornery, cornerz);
-
-			unsigned int best_seed = selectSeedTriangle(seeds, seed_count, indices, triangles, live_triangles, cornerx, cornery, cornerz);
-
-			// TODO?
-			best_triangle = best_seed;
-			// best_triangle = getNeighborTriangle(meshlet, NULL, meshlet_vertices, indices, adjacency, triangles, live_triangles, used, meshlet_expected_radius, 0.f);
-		}
+		else
+			best_triangle = getNeighborTriangle(meshlet, &meshlet_cone, meshlet_vertices, indices, adjacency, triangles, live_triangles, used, meshlet_expected_radius, cone_weight);
 
 		bool split = false;
 
-		// when we run out of neighboring triangles we need to switch to spatial search; we currently just pick the closest triangle irrespective of connectivity
+		// when we run out of adjacent triangles we need to switch to spatial search; we currently just pick the closest triangle irrespective of connectivity
 		if (best_triangle == ~0u)
 		{
 			float position[3] = {meshlet_cone.px, meshlet_cone.py, meshlet_cone.pz};
@@ -852,11 +837,25 @@ size_t meshopt_buildMeshletsFlex(meshopt_Meshlet* meshlets, unsigned int* meshle
 
 			best_triangle = index;
 			split = meshlet.triangle_count >= min_triangles && split_factor > 0 && distance > meshlet_expected_radius * split_factor;
-			// TODO seeds
 		}
 
 		if (best_triangle == ~0u)
 			break;
+
+		int best_extra = (used[indices[best_triangle * 3 + 0]] == 0xff) + (used[indices[best_triangle * 3 + 1]] == 0xff) + (used[indices[best_triangle * 3 + 2]] == 0xff);
+
+		// if the best triangle doesn't fit into current meshlet, we re-select using seeds to maintain global flow
+		if (split || (meshlet.vertex_count + best_extra > max_vertices || meshlet.triangle_count >= max_triangles))
+		{
+			seed_count = pruneSeedTriangles(seeds, seed_count, emitted_flags);
+			if (seed_count + kMeshletAddSeeds <= kMeshletMaxSeeds)
+				seed_count += appendSeedTriangles(seeds + seed_count, meshlet, meshlet_vertices, indices, adjacency, triangles, live_triangles, cornerx, cornery, cornerz);
+
+			unsigned int best_seed = selectSeedTriangle(seeds, seed_count, indices, triangles, live_triangles, cornerx, cornery, cornerz);
+
+			// we may not find a valid seed triangle if the mesh is disconnected as seeds are based on adjacency
+			best_triangle = best_seed != ~0u ? best_seed : best_triangle;
+		}
 
 		unsigned int a = indices[best_triangle * 3 + 0], b = indices[best_triangle * 3 + 1], c = indices[best_triangle * 3 + 2];
 		assert(a < vertex_count && b < vertex_count && c < vertex_count);
@@ -899,6 +898,7 @@ size_t meshopt_buildMeshletsFlex(meshopt_Meshlet* meshlets, unsigned int* meshle
 		meshlet_cone_acc.ny += triangles[best_triangle].ny;
 		meshlet_cone_acc.nz += triangles[best_triangle].nz;
 
+		assert(!emitted_flags[best_triangle]);
 		emitted_flags[best_triangle] = 1;
 	}
 
