@@ -1484,6 +1484,7 @@ void processDev(const char* path)
 
 	bool dump = getenv("DUMP") && atoi(getenv("DUMP"));
 
+	meshlets(mesh, /* scan= */ false, /* uniform= */ false, /* flex= */ false);
 	meshlets(mesh, /* scan= */ false, /* uniform= */ true, /* flex= */ false);
 	meshlets(mesh, /* scan= */ false, /* uniform= */ true, /* flex= */ true, dump);
 }
