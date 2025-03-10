@@ -428,7 +428,7 @@ static unsigned int getNeighborTriangle(const meshopt_Meshlet& meshlet, const Co
 	return best_triangle;
 }
 
-static unsigned int appendSeedTriangles(unsigned int* seeds, const meshopt_Meshlet& meshlet, const unsigned int* meshlet_vertices, const unsigned int* indices, const TriangleAdjacency2& adjacency, const Cone* triangles, const unsigned int* live_triangles, float cornerx, float cornery, float cornerz)
+static size_t appendSeedTriangles(unsigned int* seeds, const meshopt_Meshlet& meshlet, const unsigned int* meshlet_vertices, const unsigned int* indices, const TriangleAdjacency2& adjacency, const Cone* triangles, const unsigned int* live_triangles, float cornerx, float cornery, float cornerz)
 {
 	unsigned int best_seeds[kMeshletAddSeeds];
 	unsigned int best_live[kMeshletAddSeeds];
