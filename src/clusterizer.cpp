@@ -141,9 +141,11 @@ static void buildTriangleAdjacencySparse(TriangleAdjacency2& adjacency, const un
 	}
 }
 
-static void computeBoundingSphere(float result[4], const float points[][3], size_t count)
+static void computeBoundingSphere(float result[4], const float* points, size_t count, size_t points_stride)
 {
 	assert(count > 0);
+
+	size_t points_stride_float = points_stride / sizeof(float);
 
 	// find extremum points along all 3 axes; for each axis we get a pair of points with min/max coordinates
 	size_t pmin[3] = {0, 0, 0};
@@ -151,12 +153,12 @@ static void computeBoundingSphere(float result[4], const float points[][3], size
 
 	for (size_t i = 0; i < count; ++i)
 	{
-		const float* p = points[i];
+		const float* p = points + i * points_stride_float;
 
 		for (int axis = 0; axis < 3; ++axis)
 		{
-			pmin[axis] = (p[axis] < points[pmin[axis]][axis]) ? i : pmin[axis];
-			pmax[axis] = (p[axis] > points[pmax[axis]][axis]) ? i : pmax[axis];
+			pmin[axis] = (p[axis] < points[pmin[axis] * points_stride_float + axis]) ? i : pmin[axis];
+			pmax[axis] = (p[axis] > points[pmax[axis] * points_stride_float + axis]) ? i : pmax[axis];
 		}
 	}
 
@@ -166,8 +168,8 @@ static void computeBoundingSphere(float result[4], const float points[][3], size
 
 	for (int axis = 0; axis < 3; ++axis)
 	{
-		const float* p1 = points[pmin[axis]];
-		const float* p2 = points[pmax[axis]];
+		const float* p1 = points + pmin[axis] * points_stride_float;
+		const float* p2 = points + pmax[axis] * points_stride_float;
 
 		float d2 = (p2[0] - p1[0]) * (p2[0] - p1[0]) + (p2[1] - p1[1]) * (p2[1] - p1[1]) + (p2[2] - p1[2]) * (p2[2] - p1[2]);
 
@@ -179,8 +181,8 @@ static void computeBoundingSphere(float result[4], const float points[][3], size
 	}
 
 	// use the longest segment as the initial sphere diameter
-	const float* p1 = points[pmin[paxis]];
-	const float* p2 = points[pmax[paxis]];
+	const float* p1 = points + pmin[paxis] * points_stride_float;
+	const float* p2 = points + pmax[paxis] * points_stride_float;
 
 	float center[3] = {(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, (p1[2] + p2[2]) / 2};
 	float radius = sqrtf(paxisd2) / 2;
@@ -188,7 +190,7 @@ static void computeBoundingSphere(float result[4], const float points[][3], size
 	// iteratively adjust the sphere up until all points fit
 	for (size_t i = 0; i < count; ++i)
 	{
-		const float* p = points[i];
+		const float* p = points + i * points_stride_float;
 		float d2 = (p[0] - center[0]) * (p[0] - center[0]) + (p[1] - center[1]) * (p[1] - center[1]) + (p[2] - center[2]) * (p[2] - center[2]);
 
 		if (d2 > radius * radius)
@@ -857,13 +859,13 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 
 	// compute cluster bounding sphere; we'll use the center to determine normal cone apex as well
 	float psphere[4] = {};
-	computeBoundingSphere(psphere, corners[0], triangles * 3);
+	computeBoundingSphere(psphere, corners[0][0], triangles * 3, sizeof(float) * 3);
 
 	float center[3] = {psphere[0], psphere[1], psphere[2]};
 
 	// treating triangle normals as points, find the bounding sphere - the sphere center determines the optimal cone axis
 	float nsphere[4] = {};
-	computeBoundingSphere(nsphere, normals, triangles);
+	computeBoundingSphere(nsphere, normals[0], triangles, sizeof(float) * 3);
 
 	float axis[3] = {nsphere[0], nsphere[1], nsphere[2]};
 	float axislength = sqrtf(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]);
@@ -987,20 +989,8 @@ meshopt_Bounds meshopt_computeSphereBounds(const float* positions, size_t count,
 	if (count == 0)
 		return bounds;
 
-	meshopt_Allocator allocator;
-	float* centers = allocator.allocate<float>(count * 3); // TBD
-
-	for (size_t i = 0; i < count; ++i)
-	{
-		const float* position = positions + i * (positions_stride / sizeof(float));
-
-		centers[i * 3 + 0] = position[0];
-		centers[i * 3 + 1] = position[1];
-		centers[i * 3 + 2] = position[2];
-	}
-
 	float psphere[4] = {};
-	computeBoundingSphere(psphere, (float(*)[3])centers, count);
+	computeBoundingSphere(psphere, positions, count, positions_stride);
 
 	float pradius = 0;
 
