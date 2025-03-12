@@ -191,8 +191,13 @@ static void computeBoundingSphere(float result[4], const float* points, size_t c
 	// use the longest segment as the initial sphere diameter
 	const float* p1 = points + pmin[paxis] * points_stride_float;
 	const float* p2 = points + pmax[paxis] * points_stride_float;
+	float r1 = radii[pmin[paxis] * radii_stride_float];
+	float r2 = radii[pmax[paxis] * radii_stride_float];
 
-	float center[3] = {(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, (p1[2] + p2[2]) / 2};
+	float paxisd = sqrtf((p2[0] - p1[0]) * (p2[0] - p1[0]) + (p2[1] - p1[1]) * (p2[1] - p1[1]) + (p2[2] - p1[2]) * (p2[2] - p1[2]));
+	float paxisk = paxisd > 0 ? (paxisd + r2 - r1) / (2 * paxisd) : 0.f;
+
+	float center[3] = {p1[0] + (p2[0] - p1[0]) * paxisk, p1[1] + (p2[1] - p1[1]) * paxisk, p1[2] + (p2[2] - p1[2]) * paxisk};
 	float radius = paxisdr / 2;
 
 	// iteratively adjust the sphere up until all points fit
@@ -202,16 +207,16 @@ static void computeBoundingSphere(float result[4], const float* points, size_t c
 		float r = radii[i * radii_stride_float];
 
 		float d2 = (p[0] - center[0]) * (p[0] - center[0]) + (p[1] - center[1]) * (p[1] - center[1]) + (p[2] - center[2]) * (p[2] - center[2]);
-		float dr = sqrtf(d2) + r;
+		float d = sqrtf(d2);
 
-		if (dr > radius)
+		if (d + r > radius)
 		{
-			float k = 0.5f + (radius / dr) / 2;
+			float k = d > 0 ? (d + r - radius) / (2 * d) : 0.f;
 
-			center[0] = center[0] * k + p[0] * (1 - k);
-			center[1] = center[1] * k + p[1] * (1 - k);
-			center[2] = center[2] * k + p[2] * (1 - k);
-			radius = (radius + dr) / 2;
+			center[0] += k * (p[0] - center[0]);
+			center[1] += k * (p[1] - center[1]);
+			center[2] += k * (p[2] - center[2]);
+			radius = (radius + d + r) / 2;
 		}
 	}
 
