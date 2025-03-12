@@ -141,11 +141,12 @@ static void buildTriangleAdjacencySparse(TriangleAdjacency2& adjacency, const un
 	}
 }
 
-static void computeBoundingSphere(float result[4], const float* points, size_t count, size_t points_stride)
+static void computeBoundingSphere(float result[4], const float* points, size_t count, size_t points_stride, const float* radii, size_t radii_stride)
 {
 	assert(count > 0);
 
 	size_t points_stride_float = points_stride / sizeof(float);
+	size_t radii_stride_float = radii_stride / sizeof(float);
 
 	// find extremum points along all 3 axes; for each axis we get a pair of points with min/max coordinates
 	size_t pmin[3] = {0, 0, 0};
@@ -154,28 +155,35 @@ static void computeBoundingSphere(float result[4], const float* points, size_t c
 	for (size_t i = 0; i < count; ++i)
 	{
 		const float* p = points + i * points_stride_float;
+		float r = radii[i * radii_stride_float];
 
 		for (int axis = 0; axis < 3; ++axis)
 		{
-			pmin[axis] = (p[axis] < points[pmin[axis] * points_stride_float + axis]) ? i : pmin[axis];
-			pmax[axis] = (p[axis] > points[pmax[axis] * points_stride_float + axis]) ? i : pmax[axis];
+			float bmin = points[pmin[axis] * points_stride_float + axis] - radii[pmin[axis] * radii_stride_float];
+			float bmax = points[pmax[axis] * points_stride_float + axis] + radii[pmax[axis] * radii_stride_float];
+
+			pmin[axis] = (p[axis] - r < bmin) ? i : pmin[axis];
+			pmax[axis] = (p[axis] + r > bmax) ? i : pmax[axis];
 		}
 	}
 
 	// find the pair of points with largest distance
-	float paxisd2 = 0;
 	int paxis = 0;
+	float paxisdr = 0;
 
 	for (int axis = 0; axis < 3; ++axis)
 	{
 		const float* p1 = points + pmin[axis] * points_stride_float;
 		const float* p2 = points + pmax[axis] * points_stride_float;
+		float r1 = radii[pmin[axis] * radii_stride_float];
+		float r2 = radii[pmax[axis] * radii_stride_float];
 
 		float d2 = (p2[0] - p1[0]) * (p2[0] - p1[0]) + (p2[1] - p1[1]) * (p2[1] - p1[1]) + (p2[2] - p1[2]) * (p2[2] - p1[2]);
+		float dr = sqrtf(d2) + r1 + r2;
 
-		if (d2 > paxisd2)
+		if (dr > paxisdr)
 		{
-			paxisd2 = d2;
+			paxisdr = dr;
 			paxis = axis;
 		}
 	}
@@ -185,25 +193,25 @@ static void computeBoundingSphere(float result[4], const float* points, size_t c
 	const float* p2 = points + pmax[paxis] * points_stride_float;
 
 	float center[3] = {(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, (p1[2] + p2[2]) / 2};
-	float radius = sqrtf(paxisd2) / 2;
+	float radius = paxisdr / 2;
 
 	// iteratively adjust the sphere up until all points fit
 	for (size_t i = 0; i < count; ++i)
 	{
 		const float* p = points + i * points_stride_float;
+		float r = radii[i * radii_stride_float];
+
 		float d2 = (p[0] - center[0]) * (p[0] - center[0]) + (p[1] - center[1]) * (p[1] - center[1]) + (p[2] - center[2]) * (p[2] - center[2]);
+		float dr = sqrtf(d2) + r;
 
-		if (d2 > radius * radius)
+		if (dr > radius)
 		{
-			float d = sqrtf(d2);
-			assert(d > 0);
-
-			float k = 0.5f + (radius / d) / 2;
+			float k = 0.5f + (radius / dr) / 2;
 
 			center[0] = center[0] * k + p[0] * (1 - k);
 			center[1] = center[1] * k + p[1] * (1 - k);
 			center[2] = center[2] * k + p[2] * (1 - k);
-			radius = (radius + d) / 2;
+			radius = (radius + dr) / 2;
 		}
 	}
 
@@ -857,15 +865,17 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 	if (triangles == 0)
 		return bounds;
 
+	const float rzero = 0.f;
+
 	// compute cluster bounding sphere; we'll use the center to determine normal cone apex as well
 	float psphere[4] = {};
-	computeBoundingSphere(psphere, corners[0][0], triangles * 3, sizeof(float) * 3);
+	computeBoundingSphere(psphere, corners[0][0], triangles * 3, sizeof(float) * 3, &rzero, 0);
 
 	float center[3] = {psphere[0], psphere[1], psphere[2]};
 
 	// treating triangle normals as points, find the bounding sphere - the sphere center determines the optimal cone axis
 	float nsphere[4] = {};
-	computeBoundingSphere(nsphere, normals[0], triangles, sizeof(float) * 3);
+	computeBoundingSphere(nsphere, normals[0], triangles, sizeof(float) * 3, &rzero, 0);
 
 	float axis[3] = {nsphere[0], nsphere[1], nsphere[2]};
 	float axislength = sqrtf(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]);
@@ -981,7 +991,7 @@ meshopt_Bounds meshopt_computeSphereBounds(const float* positions, size_t count,
 
 	assert(positions_stride >= 12 && positions_stride <= 256);
 	assert(positions_stride % sizeof(float) == 0);
-	assert(radii == NULL || radii_stride >= 4);
+	assert((radii_stride >= 4 && radii_stride <= 256) || radii == NULL);
 	assert(radii_stride % sizeof(float) == 0);
 
 	meshopt_Bounds bounds = {};
@@ -989,8 +999,10 @@ meshopt_Bounds meshopt_computeSphereBounds(const float* positions, size_t count,
 	if (count == 0)
 		return bounds;
 
+	const float rzero = 0.f;
+
 	float psphere[4] = {};
-	computeBoundingSphere(psphere, positions, count, positions_stride);
+	computeBoundingSphere(psphere, positions, count, positions_stride, radii ? radii : &rzero, radii ? radii_stride : 0);
 
 	float pradius = 0;
 
