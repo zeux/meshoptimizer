@@ -973,6 +973,56 @@ meshopt_Bounds meshopt_computeMeshletBounds(const unsigned int* meshlet_vertices
 	return meshopt_computeClusterBounds(indices, triangle_count * 3, vertex_positions, vertex_count, vertex_positions_stride);
 }
 
+meshopt_Bounds meshopt_computeSphereBounds(const float* positions, size_t count, size_t positions_stride, const float* radii, size_t radii_stride)
+{
+	using namespace meshopt;
+
+	assert(positions_stride >= 12 && positions_stride <= 256);
+	assert(positions_stride % sizeof(float) == 0);
+	assert(radii == NULL || radii_stride >= 4);
+	assert(radii_stride % sizeof(float) == 0);
+
+	meshopt_Bounds bounds = {};
+
+	if (count == 0)
+		return bounds;
+
+	meshopt_Allocator allocator;
+	float* centers = allocator.allocate<float>(count * 3); // TBD
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		const float* position = positions + i * (positions_stride / sizeof(float));
+
+		centers[i * 3 + 0] = position[0];
+		centers[i * 3 + 1] = position[1];
+		centers[i * 3 + 2] = position[2];
+	}
+
+	float psphere[4] = {};
+	computeBoundingSphere(psphere, (float(*)[3])centers, count);
+
+	float pradius = 0;
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		const float* position = positions + i * (positions_stride / sizeof(float));
+		float radius = radii ? radii[i * (radii_stride / sizeof(float))] : 0;
+
+		float dx = position[0] - psphere[0], dy = position[1] - psphere[1], dz = position[2] - psphere[2];
+		float distance = sqrtf(dx * dx + dy * dy + dz * dz) + radius;
+
+		pradius = pradius < distance ? distance : pradius;
+	}
+
+	bounds.center[0] = psphere[0];
+	bounds.center[1] = psphere[1];
+	bounds.center[2] = psphere[2];
+	bounds.radius = pradius;
+
+	return bounds;
+}
+
 void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, size_t triangle_count, size_t vertex_count)
 {
 	using namespace meshopt;
