@@ -1009,23 +1009,10 @@ meshopt_Bounds meshopt_computeSphereBounds(const float* positions, size_t count,
 	float psphere[4] = {};
 	computeBoundingSphere(psphere, positions, count, positions_stride, radii ? radii : &rzero, radii ? radii_stride : 0);
 
-	float pradius = 0;
-
-	for (size_t i = 0; i < count; ++i)
-	{
-		const float* position = positions + i * (positions_stride / sizeof(float));
-		float radius = radii ? radii[i * (radii_stride / sizeof(float))] : 0;
-
-		float dx = position[0] - psphere[0], dy = position[1] - psphere[1], dz = position[2] - psphere[2];
-		float distance = sqrtf(dx * dx + dy * dy + dz * dz) + radius;
-
-		pradius = pradius < distance ? distance : pradius;
-	}
-
 	bounds.center[0] = psphere[0];
 	bounds.center[1] = psphere[1];
 	bounds.center[2] = psphere[2];
-	bounds.radius = pradius;
+	bounds.radius = psphere[3];
 
 	return bounds;
 }
