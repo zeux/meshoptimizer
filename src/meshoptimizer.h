@@ -434,7 +434,7 @@ MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifySloppy(unsigned int* destinati
  *
  * destination must contain enough space for the target index buffer (target_vertex_count elements)
  * vertex_positions should have float3 position in the first 12 bytes of each vertex
- * vertex_colors should can be NULL; when it's not NULL, it should have float3 color in the first 12 bytes of each vertex
+ * vertex_colors can be NULL; when it's not NULL, it should have float3 color in the first 12 bytes of each vertex
  * color_weight determines relative priority of color wrt position; 1.0 is a safe default
  */
 MESHOPTIMIZER_API size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_colors, size_t vertex_colors_stride, float color_weight, size_t target_vertex_count);
@@ -618,6 +618,15 @@ struct meshopt_Bounds
  */
 MESHOPTIMIZER_API struct meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 MESHOPTIMIZER_API struct meshopt_Bounds meshopt_computeMeshletBounds(const unsigned int* meshlet_vertices, const unsigned char* meshlet_triangles, size_t triangle_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
+
+/**
+ * Experimental: Sphere bounds generator
+ * Creates bounding sphere around a set of points or a set of spheres; returns the center and radius of the sphere, with other fields of the result set to 0.
+ *
+ * positions should have float3 position in the first 12 bytes of each element
+ * radii can be NULL; when it's not NULL, it should have a non-negative float radius in the first 4 bytes of each element
+ */
+MESHOPTIMIZER_EXPERIMENTAL struct meshopt_Bounds meshopt_computeSphereBounds(const float* positions, size_t count, size_t positions_stride, const float* radii, size_t radii_stride);
 
 /**
  * Experimental: Cluster partitioner

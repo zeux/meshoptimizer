@@ -86,35 +86,17 @@ static LODBounds bounds(const std::vector<Vertex>& vertices, const std::vector<u
 
 static LODBounds boundsMerge(const std::vector<Cluster>& clusters, const std::vector<int>& group)
 {
+	std::vector<LODBounds> bounds(group.size());
+	for (size_t j = 0; j < group.size(); ++j)
+		bounds[j] = clusters[group[j]].self;
+
+	meshopt_Bounds merged = meshopt_computeSphereBounds(&bounds[0].center[0], bounds.size(), sizeof(LODBounds), &bounds[0].radius, sizeof(LODBounds));
+
 	LODBounds result = {};
-
-	// we approximate merged bounds center as weighted average of cluster centers
-	// (could also use bounds() center, but we can't use bounds() radius so might as well just merge manually)
-	float weight = 0.f;
-	for (size_t j = 0; j < group.size(); ++j)
-	{
-		result.center[0] += clusters[group[j]].self.center[0] * clusters[group[j]].self.radius;
-		result.center[1] += clusters[group[j]].self.center[1] * clusters[group[j]].self.radius;
-		result.center[2] += clusters[group[j]].self.center[2] * clusters[group[j]].self.radius;
-		weight += clusters[group[j]].self.radius;
-	}
-
-	if (weight > 0)
-	{
-		result.center[0] /= weight;
-		result.center[1] /= weight;
-		result.center[2] /= weight;
-	}
-
-	// merged bounds must strictly contain all cluster bounds
-	result.radius = 0.f;
-	for (size_t j = 0; j < group.size(); ++j)
-	{
-		float dx = clusters[group[j]].self.center[0] - result.center[0];
-		float dy = clusters[group[j]].self.center[1] - result.center[1];
-		float dz = clusters[group[j]].self.center[2] - result.center[2];
-		result.radius = std::max(result.radius, clusters[group[j]].self.radius + sqrtf(dx * dx + dy * dy + dz * dz));
-	}
+	result.center[0] = merged.center[0];
+	result.center[1] = merged.center[1];
+	result.center[2] = merged.center[2];
+	result.radius = merged.radius;
 
 	// merged bounds error must be conservative wrt cluster errors
 	result.error = 0.f;
