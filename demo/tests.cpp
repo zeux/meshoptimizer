@@ -1203,6 +1203,41 @@ static void meshletsFlex()
 	assert(ml[1].vertex_count == 4);
 }
 
+static void meshletsMax()
+{
+	float vb[16 * 16 * 3];
+	unsigned int ib[15 * 15 * 2 * 3];
+
+	// 16x16 grid of vertices, 15x15 grid of triangles
+	for (int y = 0; y < 16; ++y)
+		for (int x = 0; x < 16; ++x)
+		{
+			vb[(y * 16 + x) * 3 + 0] = float(x);
+			vb[(y * 16 + x) * 3 + 1] = float(y);
+			vb[(y * 16 + x) * 3 + 2] = 0;
+		}
+
+	for (int y = 0; y < 15; ++y)
+		for (int x = 0; x < 15; ++x)
+		{
+			ib[(y * 15 + x) * 2 * 3 + 0] = (y + 0) * 16 + (x + 0);
+			ib[(y * 15 + x) * 2 * 3 + 1] = (y + 0) * 16 + (x + 1);
+			ib[(y * 15 + x) * 2 * 3 + 2] = (y + 1) * 16 + (x + 0);
+			ib[(y * 15 + x) * 2 * 3 + 3] = (y + 1) * 16 + (x + 0);
+			ib[(y * 15 + x) * 2 * 3 + 4] = (y + 0) * 16 + (x + 1);
+			ib[(y * 15 + x) * 2 * 3 + 5] = (y + 1) * 16 + (x + 1);
+		}
+
+	meshopt_Meshlet ml[1];
+	unsigned int mv[16 * 16];
+	unsigned char mt[15 * 15 * 2 * 3 + 3];
+
+	size_t mc = meshopt_buildMeshlets(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 16 * 16, sizeof(float) * 3, 256, 512, 0.f);
+	assert(mc == 1);
+	assert(ml[0].triangle_count == 450);
+	assert(ml[0].vertex_count == 256);
+}
+
 static void partitionBasic()
 {
 	// 0   1   2
@@ -2292,6 +2327,7 @@ void runTests()
 	meshletsDense();
 	meshletsSparse();
 	meshletsFlex();
+	meshletsMax();
 
 	partitionBasic();
 
