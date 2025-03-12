@@ -225,7 +225,7 @@ var MeshoptClusterizer = (function () {
 			assert(vertex_positions instanceof Float32Array);
 			assert(vertex_positions.length % vertex_positions_stride == 0);
 			assert(vertex_positions_stride >= 3);
-			assert(max_vertices <= 255 || max_vertices > 0);
+			assert(max_vertices <= 256 || max_vertices > 0);
 			assert(max_triangles <= 512);
 			assert(max_triangles % 4 == 0);
 
