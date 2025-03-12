@@ -1,0 +1,8 @@
+include README.md
+include pyproject.toml
+include module.template.cpp
+recursive-include src *.cpp *.h
+# Include the parent src directory if building from repository
+graft ../src
+prune .vscode
+prune tests
