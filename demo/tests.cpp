@@ -1236,6 +1236,17 @@ static void meshletsMax()
 	assert(mc == 1);
 	assert(ml[0].triangle_count == 450);
 	assert(ml[0].vertex_count == 256);
+
+	meshopt_optimizeMeshlet(mv, mt, ml[0].triangle_count, ml[0].vertex_count);
+
+	// check sequential ordering of remapped indices
+	int vmax = -1;
+
+	for (size_t i = 0; i < 450 * 3; ++i)
+	{
+		assert(mt[i] <= vmax + 1);
+		vmax = vmax < mt[i] ? mt[i] : vmax;
+	}
 }
 
 static void partitionBasic()
