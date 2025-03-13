@@ -13,8 +13,8 @@
 namespace meshopt
 {
 
-// This must be <= 255 since index 0xff is used internally to indice a vertex that doesn't belong to a meshlet
-const size_t kMeshletMaxVertices = 255;
+// This must be <= 256 since meshlet indices are stored as bytes
+const size_t kMeshletMaxVertices = 256;
 
 // A reasonable limit is around 2*max_vertices or less
 const size_t kMeshletMaxTriangles = 512;
@@ -328,22 +328,22 @@ static void finishMeshlet(meshopt_Meshlet& meshlet, unsigned char* meshlet_trian
 		meshlet_triangles[offset++] = 0;
 }
 
-static bool appendMeshlet(meshopt_Meshlet& meshlet, unsigned int a, unsigned int b, unsigned int c, unsigned char* used, meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, size_t meshlet_offset, size_t max_vertices, size_t max_triangles, bool split = false)
+static bool appendMeshlet(meshopt_Meshlet& meshlet, unsigned int a, unsigned int b, unsigned int c, short* used, meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, size_t meshlet_offset, size_t max_vertices, size_t max_triangles, bool split = false)
 {
-	unsigned char& av = used[a];
-	unsigned char& bv = used[b];
-	unsigned char& cv = used[c];
+	short& av = used[a];
+	short& bv = used[b];
+	short& cv = used[c];
 
 	bool result = false;
 
-	int used_extra = (av == 0xff) + (bv == 0xff) + (cv == 0xff);
+	int used_extra = (av < 0) + (bv < 0) + (cv < 0);
 
 	if (meshlet.vertex_count + used_extra > max_vertices || meshlet.triangle_count >= max_triangles || split)
 	{
 		meshlets[meshlet_offset] = meshlet;
 
 		for (size_t j = 0; j < meshlet.vertex_count; ++j)
-			used[meshlet_vertices[meshlet.vertex_offset + j]] = 0xff;
+			used[meshlet_vertices[meshlet.vertex_offset + j]] = -1;
 
 		finishMeshlet(meshlet, meshlet_triangles);
 
@@ -355,33 +355,33 @@ static bool appendMeshlet(meshopt_Meshlet& meshlet, unsigned int a, unsigned int
 		result = true;
 	}
 
-	if (av == 0xff)
+	if (av < 0)
 	{
-		av = (unsigned char)meshlet.vertex_count;
+		av = short(meshlet.vertex_count);
 		meshlet_vertices[meshlet.vertex_offset + meshlet.vertex_count++] = a;
 	}
 
-	if (bv == 0xff)
+	if (bv < 0)
 	{
-		bv = (unsigned char)meshlet.vertex_count;
+		bv = short(meshlet.vertex_count);
 		meshlet_vertices[meshlet.vertex_offset + meshlet.vertex_count++] = b;
 	}
 
-	if (cv == 0xff)
+	if (cv < 0)
 	{
-		cv = (unsigned char)meshlet.vertex_count;
+		cv = short(meshlet.vertex_count);
 		meshlet_vertices[meshlet.vertex_offset + meshlet.vertex_count++] = c;
 	}
 
-	meshlet_triangles[meshlet.triangle_offset + meshlet.triangle_count * 3 + 0] = av;
-	meshlet_triangles[meshlet.triangle_offset + meshlet.triangle_count * 3 + 1] = bv;
-	meshlet_triangles[meshlet.triangle_offset + meshlet.triangle_count * 3 + 2] = cv;
+	meshlet_triangles[meshlet.triangle_offset + meshlet.triangle_count * 3 + 0] = (unsigned char)av;
+	meshlet_triangles[meshlet.triangle_offset + meshlet.triangle_count * 3 + 1] = (unsigned char)bv;
+	meshlet_triangles[meshlet.triangle_offset + meshlet.triangle_count * 3 + 2] = (unsigned char)cv;
 	meshlet.triangle_count++;
 
 	return result;
 }
 
-static unsigned int getNeighborTriangle(const meshopt_Meshlet& meshlet, const Cone& meshlet_cone, const unsigned int* meshlet_vertices, const unsigned int* indices, const TriangleAdjacency2& adjacency, const Cone* triangles, const unsigned int* live_triangles, const unsigned char* used, float meshlet_expected_radius, float cone_weight)
+static unsigned int getNeighborTriangle(const meshopt_Meshlet& meshlet, const Cone& meshlet_cone, const unsigned int* meshlet_vertices, const unsigned int* indices, const TriangleAdjacency2& adjacency, const Cone* triangles, const unsigned int* live_triangles, const short* used, float meshlet_expected_radius, float cone_weight)
 {
 	unsigned int best_triangle = ~0u;
 	int best_priority = 5;
@@ -399,7 +399,7 @@ static unsigned int getNeighborTriangle(const meshopt_Meshlet& meshlet, const Co
 			unsigned int triangle = neighbors[j];
 			unsigned int a = indices[triangle * 3 + 0], b = indices[triangle * 3 + 1], c = indices[triangle * 3 + 2];
 
-			int extra = (used[a] == 0xff) + (used[b] == 0xff) + (used[c] == 0xff);
+			int extra = (used[a] < 0) + (used[b] < 0) + (used[c] < 0);
 			assert(extra <= 2);
 
 			int priority = -1;
@@ -785,9 +785,9 @@ size_t meshopt_buildMeshletsFlex(meshopt_Meshlet* meshlets, unsigned int* meshle
 		cornerz = cornerz > tri.pz ? tri.pz : cornerz;
 	}
 
-	// index of the vertex in the meshlet, 0xff if the vertex isn't used
-	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
-	memset(used, -1, vertex_count);
+	// index of the vertex in the meshlet, -1 if the vertex isn't used
+	short* used = allocator.allocate<short>(vertex_count);
+	memset(used, -1, vertex_count * sizeof(short));
 
 	// initial seed triangle is the one closest to the corner
 	unsigned int initial_seed = ~0u;
@@ -846,7 +846,7 @@ size_t meshopt_buildMeshletsFlex(meshopt_Meshlet* meshlets, unsigned int* meshle
 		if (best_triangle == ~0u)
 			break;
 
-		int best_extra = (used[indices[best_triangle * 3 + 0]] == 0xff) + (used[indices[best_triangle * 3 + 1]] == 0xff) + (used[indices[best_triangle * 3 + 2]] == 0xff);
+		int best_extra = (used[indices[best_triangle * 3 + 0]] < 0) + (used[indices[best_triangle * 3 + 1]] < 0) + (used[indices[best_triangle * 3 + 2]] < 0);
 
 		// if the best triangle doesn't fit into current meshlet, we re-select using seeds to maintain global flow
 		if (split || (meshlet.vertex_count + best_extra > max_vertices || meshlet.triangle_count >= max_triangles))
@@ -936,9 +936,9 @@ size_t meshopt_buildMeshletsScan(meshopt_Meshlet* meshlets, unsigned int* meshle
 
 	meshopt_Allocator allocator;
 
-	// index of the vertex in the meshlet, 0xff if the vertex isn't used
-	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
-	memset(used, -1, vertex_count);
+	// index of the vertex in the meshlet, -1 if the vertex isn't used
+	short* used = allocator.allocate<short>(vertex_count);
+	memset(used, -1, vertex_count * sizeof(short));
 
 	meshopt_Meshlet meshlet = {};
 	size_t meshlet_offset = 0;
@@ -1233,23 +1233,23 @@ void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* mesh
 	// reorder meshlet vertices for access locality assuming index buffer is scanned sequentially
 	unsigned int order[kMeshletMaxVertices];
 
-	unsigned char remap[kMeshletMaxVertices];
-	memset(remap, -1, vertex_count);
+	short remap[kMeshletMaxVertices];
+	memset(remap, -1, vertex_count * sizeof(short));
 
 	size_t vertex_offset = 0;
 
 	for (size_t i = 0; i < triangle_count * 3; ++i)
 	{
-		unsigned char& r = remap[indices[i]];
+		short& r = remap[indices[i]];
 
-		if (r == 0xff)
+		if (r < 0)
 		{
-			r = (unsigned char)(vertex_offset);
+			r = short(vertex_offset);
 			order[vertex_offset] = vertices[indices[i]];
 			vertex_offset++;
 		}
 
-		indices[i] = r;
+		indices[i] = (unsigned char)r;
 	}
 
 	assert(vertex_offset <= vertex_count);
