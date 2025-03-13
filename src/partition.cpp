@@ -155,6 +155,8 @@ static void buildClusterAdjacency(ClusterAdjacency& adjacency, const unsigned in
 		adjacency.offsets[i + 1] = adjacency.offsets[i] + unsigned(count);
 	}
 
+	assert(adjacency.offsets[cluster_count] <= total_adjacency);
+
 	// ref_offsets can't be deallocated as it was allocated before adjacency
 	allocator.deallocate(ref_data);
 }
@@ -205,8 +207,7 @@ static GroupOrder heapPop(GroupOrder* heap, size_t size)
 	{
 		// find the smallest child
 		size_t j = i * 2 + 1;
-		if (j + 1 < size && heap[j + 1].order < heap[j].order)
-			j++;
+		j += (j + 1 < size && heap[j + 1].order < heap[j].order);
 
 		// if the parent is already smaller than both children, we're done
 		if (heap[j].order >= heap[i].order)
