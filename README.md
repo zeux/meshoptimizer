@@ -13,10 +13,10 @@ The library provides a C and C++ interface for all algorithms; you can use it fr
 meshoptimizer is hosted on GitHub; you can download the latest release using git:
 
 ```
-git clone -b v0.22 https://github.com/zeux/meshoptimizer.git
+git clone -b v0.23 https://github.com/zeux/meshoptimizer.git
 ```
 
-Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v0.22.zip).
+Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v0.23.zip).
 
 The library is also available as a Linux package in several distributions ([ArchLinux](https://aur.archlinux.org/packages/meshoptimizer/), [Debian](https://packages.debian.org/libmeshoptimizer), [FreeBSD](https://www.freshports.org/misc/meshoptimizer/), [Nix](https://mynixos.com/nixpkgs/package/meshoptimizer), [Ubuntu](https://packages.ubuntu.com/libmeshoptimizer)), as well as a [Vcpkg port](https://github.com/microsoft/vcpkg/tree/master/ports/meshoptimizer) (see [installation instructions](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started)) and a [Conan package](https://conan.io/center/recipes/meshoptimizer).
 
@@ -556,6 +556,26 @@ meshopt_setAllocator(malloc, free);
 Vertex and index decoders (`meshopt_decodeVertexBuffer`, `meshopt_decodeIndexBuffer`, `meshopt_decodeIndexSequence`) do not allocate memory and work completely within the buffer space provided via arguments.
 
 All functions have bounded stack usage that does not exceed 32 KB for any algorithms.
+
+## Experimental APIs
+
+Several algorithms provided by this library are marked as "experimental"; this status is reflected in the comments as well as the annotation `MESHOPTIMIZER_EXPERIMENTAL` for each function.
+
+APIs that are not experimental (annotated with `MESHOPTIMIZER_API`) are considered stable, which means that library updates will not break compatibility: existing calls should compile (API compatibility), existing binaries should link (ABI compatibility), and existing behavior should not change significantly (for example, floating point parameters will have similar behavior). This does not mean that the output of the algorithms will be identical: future versions may improve the algorithms and produce different results.
+
+APIs that *are* experimental may have their interface change, both in ways that will cause existing calls to not compile, and in ways that may compile but have significantly different behavior (e.g., changes in parameter order, meaning, valid ranges). Experimental APIs may also, in rare cases, be removed from future library versions. It is recommended to carefully read release notes when updating the library if experimental APIs are in use. Some experimental APIs may also lack documentation in this README.
+
+Applications may configure the library to change the attributes of experimental APIs, for example defining `MESHOPTIMIZER_EXPERIMENTAL` as `__attribute((deprecated))` will emit compiler warnings when experimental APIs are used.
+
+Currently, the following APIs are experimental, with the functions marked with `*` being likely to become stable in the future with no changes:
+
+- `meshopt_buildMeshletsFlex`
+- `meshopt_computeSphereBounds`*
+- `meshopt_encodeVertexBufferLevel`*
+- `meshopt_generateProvokingIndexBuffer`*
+- `meshopt_partitionClusters`
+- `meshopt_simplifySloppy`
+- `meshopt_spatialSortTriangles`
 
 ## License
 
