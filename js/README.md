@@ -147,6 +147,16 @@ To control behavior of the algorithm more precisely, `flags` may specify an arra
 - `'ErrorAbsolute'` changes the error metric from relative to absolute both for the input error limit as well as for the resulting error. This can be used instead of `getScale`.
 - `'Sparse'` improves simplification performance assuming input indices are a sparse subset of the mesh. This can be useful when simplifying small mesh subsets independently. For consistency, it is recommended to use absolute errors when sparse simplification is desired.
 
+While `simplify` is aware of attribute discontinuities by default (and infers them through the supplied index buffer) and tries to preserve them, it can be useful to provide information about attribute values. This allows the simplifier to take attribute error into account which can improve shading (by using vertex normals), texture deformation (by using texture coordinates), and may be necessary to preserve vertex colors when textures are not used in the first place. This can be done by using a variant of the simplification function that takes attribute values and weight factors, `simplifyWithAttributes`:
+
+```ts
+simplifyWithAttributes: (indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, vertex_attributes: Float32Array, vertex_attributes_stride: number, attribute_weights: number[], vertex_lock: Uint8Array | null, target_index_count: number, target_error: number, flags?: Flags[]) => [Uint32Array, number];
+```
+
+This function takes an additional `vertex_attributes` buffer that contains all the attributes to be used. The `attribute_weights` array contains a weight for each attribute, which is used to balance the importance of each attribute during simplification. For normalized attributes like normals and vertex colors, a weight around 1.0 is usually appropriate; internally, a change of `1/weight` in attribute value over a distance `d` is approximately equivalent to a change of `d` in position. Using higher weights may be appropriate to preserve attribute quality at the cost of position quality. If the attribute has a different scale (e.g. unnormalized vertex colors in [0..255] range), the weight should be divided by the scaling factor (1/255 in this example).
+
+The optional `vertex_lock` parameter can be used to lock some vertices in place, preventing them from being moved during simplification. This is a binary array of the same length as the number of vertices, where `1` means that the vertex is locked and `0` means that it is free to move. This can be used to preserve seams or other important features of the mesh.
+
 When the resulting mesh is stored, it might be desireable to remove the redundant vertices from the attribute buffers instead of simply using the original vertex data with the smaller index buffer. For that purpose, the simplifier module provides the `compactMesh` function, which is similar to `reorderMesh` function that the encoder provides, but doesn't perform extra optimizations and merely prepares a new vertex order that can be used to create new, smaller, vertex buffers:
 
 ```ts
@@ -158,6 +168,16 @@ The simplification algorithm uses relative errors for input and output; to conve
 ```ts
 getScale: (vertex_positions: Float32Array, vertex_positions_stride: number) => number;
 ```
+
+The algorithms `simplify` and `simplifyWithAttributes` work on triangle meshes. `MeshoptSimplifier` additionally provides an algorithm to simplify point clouds, with optional per-point color support:
+
+```ts
+simplifyPoints: (vertex_positions: Float32Array, vertex_positions_stride: number, target_vertex_count: number, vertex_colors?: Float32Array, vertex_colors_stride?: number, color_weight?: number) => Uint32Array;
+```
+
+`vertex_colors` is an optional buffer containing RGB colors, with 3 values per point; `color_weight` can be used to balance the importance of color preservation with position preservation, and can be set to `1.0` if the input colors are in `[0..1]` range.
+
+The resulting indices can be used to render the simplified point cloud; similarly to triangle simplification, to reduce the memory footprint, the point cloud can be reindexed using the remap table returned by `compactMesh`.
 
 ## Clusterizer
 
