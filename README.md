@@ -557,6 +557,26 @@ Vertex and index decoders (`meshopt_decodeVertexBuffer`, `meshopt_decodeIndexBuf
 
 All functions have bounded stack usage that does not exceed 32 KB for any algorithms.
 
+## Experimental APIs
+
+Several algorithms provided by this library are marked as "experimental"; this status is reflected in the comments as well as the annotation `MESHOPTIMIZER_EXPERIMENTAL` for each function.
+
+APIs that are not experimental (annotated with `MESHOPTIMIZER_API`) are considered stable, which means that library updates will not break compatibility: existing calls should compile (API compatibility), existing binaries should link (ABI compatibility), and existing behavior should not change significantly (for example, floating point parameters will have similar behavior). This does not mean that the output of the algorithms will be identical: future versions may improve the algorithms and produce different results.
+
+APIs that *are* experimental may have their interface change, both in ways that will cause existing calls to not compile, and in ways that may compile but have significantly different behavior (e.g., changes in parameter order, meaning, valid ranges). Experimental APIs may also, in rare cases, be removed from future library versions. It is recommended to carefully read release notes when updating the library if experimental APIs are in use. Some experimental APIs may also lack documentation in this README.
+
+Applications may configure the library to change the attributes of experimental APIs, for example defining `MESHOPTIMIZER_EXPERIMENTAL` as `__attribute((deprecated))` will emit compiler warnings when experimental APIs are used.
+
+Currently, the following APIs are experimental, with the functions marked with `*` being likely to become stable in the future with no changes:
+
+- `meshopt_buildMeshletsFlex`
+- `meshopt_computeSphereBounds`*
+- `meshopt_encodeVertexBufferLevel`*
+- `meshopt_generateProvokingIndexBuffer`*
+- `meshopt_partitionClusters`
+- `meshopt_simplifySloppy`
+- `meshopt_spatialSortTriangles`
+
 ## License
 
 This library is available to anybody free of charge, under the terms of MIT License (see LICENSE.md).
