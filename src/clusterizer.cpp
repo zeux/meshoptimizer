@@ -101,10 +101,9 @@ static void buildTriangleAdjacencySparse(TriangleAdjacency2& adjacency, const un
 	for (size_t i = 0; i < index_count; ++i)
 		adjacency.counts[indices[i]]++;
 
-	// fill offset table
+	// fill offset table; uses sparse_seen bit to tag visited vertices
 	unsigned int offset = 0;
 
-	// when using sparse mode this pass uses sparse_seen bit to tag visited vertices
 	for (size_t i = 0; i < index_count; ++i)
 	{
 		unsigned int v = indices[i];
@@ -130,7 +129,7 @@ static void buildTriangleAdjacencySparse(TriangleAdjacency2& adjacency, const un
 	}
 
 	// fix offsets that have been disturbed by the previous pass
-	// when using sparse mode this pass also fixes counts (that were marked with sparse_seen)
+	// also fix counts (that were marked with sparse_seen by the first pass)
 	for (size_t i = 0; i < index_count; ++i)
 	{
 		unsigned int v = indices[i];
@@ -242,8 +241,8 @@ static float getDistance(float dx, float dy, float dz, bool aa)
 		return sqrtf(dx * dx + dy * dy + dz * dz);
 
 	float rx = fabsf(dx), ry = fabsf(dy), rz = fabsf(dz);
-	float rxy = rx >= ry ? rx : ry;
-	return rxy >= rz ? rxy : rz;
+	float rxy = rx > ry ? rx : ry;
+	return rxy > rz ? rxy : rz;
 }
 
 static float getMeshletScore(float distance, float spread, float cone_weight, float expected_radius)
