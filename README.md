@@ -565,7 +565,7 @@ APIs that are not experimental (annotated with `MESHOPTIMIZER_API`) are consider
 
 APIs that *are* experimental may have their interface change, both in ways that will cause existing calls to not compile, and in ways that may compile but have significantly different behavior (e.g., changes in parameter order, meaning, valid ranges). Experimental APIs may also, in rare cases, be removed from future library versions. It is recommended to carefully read release notes when updating the library if experimental APIs are in use. Some experimental APIs may also lack documentation in this README.
 
-Applications may configure the library to change the attributes of experimental APIs, for example defining `MESHOPTIMIZER_EXPERIMENTAL` as `__attribute((deprecated))` will emit compiler warnings when experimental APIs are used.
+Applications may configure the library to change the attributes of experimental APIs, for example defining `MESHOPTIMIZER_EXPERIMENTAL` as `__attribute__((deprecated))` will emit compiler warnings when experimental APIs are used.
 
 Currently, the following APIs are experimental, with the functions marked with `*` being likely to become stable in the future with no changes:
 
