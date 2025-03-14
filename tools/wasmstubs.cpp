@@ -2,9 +2,9 @@
 #error This file contains libc stubs for WASI SDK and should only be used in non-Emscripten WebAssembly builds
 #endif
 
+#include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <assert.h>
 
 extern unsigned char __heap_base;
 static intptr_t sbrkp = intptr_t(&__heap_base);

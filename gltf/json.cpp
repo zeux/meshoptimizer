@@ -41,6 +41,18 @@ void append(std::string& s, const std::string& v)
 	s += v;
 }
 
+void append(std::string& s, const float* data, size_t count)
+{
+	s += '[';
+	for (size_t i = 0; i < count; ++i)
+	{
+		if (i != 0)
+			s += ',';
+		append(s, data[i]);
+	}
+	s += ']';
+}
+
 void appendJson(std::string& s, const char* data)
 {
 	enum State

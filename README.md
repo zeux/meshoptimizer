@@ -13,10 +13,10 @@ The library provides a C and C++ interface for all algorithms; you can use it fr
 meshoptimizer is hosted on GitHub; you can download the latest release using git:
 
 ```
-git clone -b v0.22 https://github.com/zeux/meshoptimizer.git
+git clone -b v0.23 https://github.com/zeux/meshoptimizer.git
 ```
 
-Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v0.22.zip).
+Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v0.23.zip).
 
 The library is also available as a Linux package in several distributions ([ArchLinux](https://aur.archlinux.org/packages/meshoptimizer/), [Debian](https://packages.debian.org/libmeshoptimizer), [FreeBSD](https://www.freshports.org/misc/meshoptimizer/), [Nix](https://mynixos.com/nixpkgs/package/meshoptimizer), [Ubuntu](https://packages.ubuntu.com/libmeshoptimizer)), as well as a [Vcpkg port](https://github.com/microsoft/vcpkg/tree/master/ports/meshoptimizer) (see [installation instructions](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started)) and a [Conan package](https://conan.io/center/recipes/meshoptimizer).
 
@@ -48,12 +48,14 @@ When optimizing a mesh, you should typically feed it through a set of optimizati
 
 Most algorithms in this library assume that a mesh has a vertex buffer and an index buffer. For algorithms to work well and also for GPU to render your mesh efficiently, the vertex buffer has to have no redundant vertices; you can generate an index buffer from an unindexed vertex buffer or reindex an existing (potentially redundant) index buffer as follows:
 
+> Note: meshoptimizer generally works with 32-bit (`unsigned int`) indices, however when using C++ APIs you can use any integer type for index data by using the provided template overloads. By convention, remap tables always use `unsigned int`.
+
 First, generate a remap table from your existing vertex (and, optionally, index) data:
 
 ```c++
 size_t index_count = face_count * 3;
 size_t unindexed_vertex_count = face_count * 3;
-std::vector<unsigned int> remap(index_count); // allocate temporary memory for the remap table
+std::vector<unsigned int> remap(unindexed_vertex_count); // temporary remap table
 size_t vertex_count = meshopt_generateVertexRemap(&remap[0], NULL, index_count, &unindexed_vertices[0], unindexed_vertex_count, sizeof(Vertex));
 ```
 
@@ -177,7 +179,9 @@ assert(resvb == 0 && resib == 0);
 
 Note that vertex encoding assumes that vertex buffer was optimized for vertex fetch, and that vertices are quantized; index encoding assumes that the vertex/index buffers were optimized for vertex cache and vertex fetch. Feeding unoptimized data into the encoders will produce poor compression ratios. Both codecs are lossless - the only lossy step is quantization that happens before encoding.
 
-Decoding functions are heavily optimized and can directly target write-combined memory; you can expect both decoders to run at 1-3 GB/s on modern desktop CPUs. Compression ratios depend on the data; vertex data compression ratio is typically around 2-4x (compared to already quantized data), index data compression ratio is around 5-6x (compared to raw 16-bit index data). General purpose lossless compressors can further improve on these results.
+Decoding functions are heavily optimized and can directly target write-combined memory; you can expect both decoders to run at 3-5 GB/s on modern desktop CPUs. Compression ratios depend on the data; vertex data compression ratio is typically around 2-4x (compared to already quantized data), index data compression ratio is around 5-6x (compared to raw 16-bit index data). General purpose lossless compressors can further improve on these results.
+
+For additional improvements in compression ratio and decoding performance, it is recommended to switch to vertex codec v1 (via `meshopt_encodeVertexVersion(1)`). This will result in smaller outputs that decode faster, and provide additional control over compression level - `meshopt_encodeVertexBuffer` will use compression level 2 by default, but using `meshopt_encodeVertexBufferLevel` allows to improve compression in certain cases by using level 3, or to reduce compression ratio and improve encoding speed by using level 1. Note that v1 format requires meshoptimizer v0.23 or later for decoding.
 
 Index buffer codec only supports triangle list topology; when encoding triangle strips or line lists, use `meshopt_encodeIndexSequence`/`meshopt_decodeIndexSequence` instead. This codec typically encodes indices into ~1 byte per index, but compressing the results further with a general purpose compressor can improve the results to 1-3 bits per index.
 
@@ -237,9 +241,9 @@ For optimal compression results, the values must be quantized to small integers.
 For single-precision floating-point data, it's recommended to use `meshopt_quantizeFloat` to remove entropy from the lower bits of the mantissa. Due to current limitations of the codec, the bit count needs to be 15 (23-8) for good results (7 can be used for more extreme compression).
 For normal or tangent vectors, using octahedral encoding is recommended over three components as it reduces redundancy. Similarly to other quantized values, consider using 10-12 bits per component instead of 16.
 
-> Note: vertex codec v0 is limited to taking advantage of redundancy in high bits of each byte. Because of this, packing multiple 10-bit values into 32 bits will reduce compression ratio, and when storing a 12-bit value in 16 bits, high bits should be zeroed out. This limitation may be lifted in future versions of the codec.
+When data is bit packed, using v1 vertex codec (via `meshopt_encodeVertexVersion(1)`) and specifying compression level 3 (`meshopt_encodeVertexBufferLevel`) can improve the compression further by redistributing bits between components. Note that v1 vertex codec is recommended regardless, as it improves compression ratios and decoding performance even absent bit packing.
 
-To further leverage the inherent structure of some data, the preparation stage can use filters that encode and decode the data in a lossy manner. This is similar to quantization but can be used without having to change the shader code. After decoding, the filter transformation needs to be reversed. This library provides three filters:
+To further leverage the inherent structure of some data, the preparation stage can use filters that encode and decode the data in a lossy manner. This is similar to quantization but can be used without having to change the shader code. After decoding, the filter transformation needs to be reversed. For native game engine pipelines, it is usually more optimal to carefully prequantize and pretransform the vertex data, but sometimes (for example when serializing data in glTF format) this is not a practical option and filters are more practical. This library provides three filters:
 
 - Octahedral filter (`meshopt_encodeFilterOct`/`meshopt_decodeFilterOct`) encodes quantized (snorm) normal or tangent vectors using octahedral encoding. Any number of bits <= 16 can be used with 4 bytes or 8 bytes per vector.
 - Quaternion filter (`meshopt_encodeFilterQuat`/`meshopt_decodeFilterQuat`) encodes quantized (snorm) quaternion vectors; this can be used to encode rotations or tangent frames. Any number of bits between 4 and 16 can be used with 8 bytes per vector.
@@ -250,7 +254,7 @@ To further leverage the inherent structure of some data, the preparation stage c
     - `meshopt_EncodeExpSharedComponent` shares exponents between the same component in different vectors
     - `meshopt_EncodeExpClamped` does not share exponents but clamps the exponent range to reduce exponent entropy
 
-Note that all filters are lossy and require the data to be deinterleaved with one attribute per stream; this faciliates efficient SIMD implementation of filter decoders, allowing the overall decompression speed to be close to that of the raw codec.
+Note that all filters are lossy and require the data to be deinterleaved with one attribute per stream; this faciliates efficient SIMD implementation of filter decoders, allowing the overall decompression speed to be closer to that of the raw codec.
 
 ## Triangle strip conversion
 
@@ -301,7 +305,7 @@ Finally, when compressing vertex data, `meshopt_encodeVertexBuffer` should be us
 
 All algorithms presented so far don't affect visual appearance at all, with the exception of quantization that has minimal controlled impact. However, fundamentally the most effective way at reducing the rendering or transmission cost of a mesh is to make the mesh simpler.
 
-This library provides two simplification algorithms that reduce the number of triangles in the mesh. Given a vertex and an index buffer, they generate a second index buffer that uses existing vertices in the vertex buffer. This index buffer can be used directly for rendering with the original vertex buffer (preferably after vertex cache optimization), or a new compact vertex/index buffer can be generated using `meshopt_optimizeVertexFetch` that uses the optimal number and order of vertices.
+This library provides two simplification algorithms that reduce the number of triangles in the mesh. Given a vertex and an index buffer, they generate a second index buffer that uses existing vertices in the vertex buffer. This index buffer can be used directly for rendering with the original vertex buffer (preferably after vertex cache optimization using `meshopt_optimizeVertexCache`), or a new compact vertex/index buffer can be generated using `meshopt_optimizeVertexFetch` that uses the optimal number and order of vertices.
 
 The first simplification algorithm, `meshopt_simplify`, follows the topology of the original mesh in an attempt to preserve attribute seams, borders and overall appearance. For meshes with inconsistent topology or many seams, such as faceted meshes, it can result in simplifier getting "stuck" and not being able to simplify the mesh fully. Therefore it's critical that identical vertices are "welded" together, that is, the input vertex buffer does not contain duplicates. Additionally, it may be worthwhile to weld the vertices without taking into account vertex attributes that aren't critical and can be rebuilt later.
 
@@ -415,7 +419,7 @@ size_t meshlet_count = meshopt_buildMeshlets(meshlets.data(), meshlet_vertices.d
     indices.size(), &vertices[0].x, vertices.size(), sizeof(Vertex), max_vertices, max_triangles, cone_weight);
 ```
 
-To generate the meshlet data, `max_vertices` and `max_triangles` need to be set within limits supported by the hardware; for NVidia the values of 64 and 124 are recommended (`max_triangles` must be divisible by 4 so 124 is the value closest to official NVidia's recommended 126). `cone_weight` should be left as 0 if cluster cone culling is not used, and set to a value between 0 and 1 to balance cone culling efficiency with other forms of culling like frustum or occlusion culling.
+To generate the meshlet data, `max_vertices` and `max_triangles` need to be set within limits supported by the hardware; for NVidia the values of 64 and 124 are recommended (`max_triangles` must be divisible by 4 so 124 is the value closest to official NVidia's recommended 126). `cone_weight` should be left as 0 if cluster cone culling is not used, and set to a value between 0 and 1 to balance cone culling efficiency with other forms of culling like frustum or occlusion culling (`0.25` is a reasonable default).
 
 Each resulting meshlet refers to a portion of `meshlet_vertices` and `meshlet_triangles` arrays; the arrays are overallocated for the worst case so it's recommended to trim them before saving them as an asset / uploading them to the GPU:
 
@@ -552,6 +556,26 @@ meshopt_setAllocator(malloc, free);
 Vertex and index decoders (`meshopt_decodeVertexBuffer`, `meshopt_decodeIndexBuffer`, `meshopt_decodeIndexSequence`) do not allocate memory and work completely within the buffer space provided via arguments.
 
 All functions have bounded stack usage that does not exceed 32 KB for any algorithms.
+
+## Experimental APIs
+
+Several algorithms provided by this library are marked as "experimental"; this status is reflected in the comments as well as the annotation `MESHOPTIMIZER_EXPERIMENTAL` for each function.
+
+APIs that are not experimental (annotated with `MESHOPTIMIZER_API`) are considered stable, which means that library updates will not break compatibility: existing calls should compile (API compatibility), existing binaries should link (ABI compatibility), and existing behavior should not change significantly (for example, floating point parameters will have similar behavior). This does not mean that the output of the algorithms will be identical: future versions may improve the algorithms and produce different results.
+
+APIs that *are* experimental may have their interface change, both in ways that will cause existing calls to not compile, and in ways that may compile but have significantly different behavior (e.g., changes in parameter order, meaning, valid ranges). Experimental APIs may also, in rare cases, be removed from future library versions. It is recommended to carefully read release notes when updating the library if experimental APIs are in use. Some experimental APIs may also lack documentation in this README.
+
+Applications may configure the library to change the attributes of experimental APIs, for example defining `MESHOPTIMIZER_EXPERIMENTAL` as `__attribute((deprecated))` will emit compiler warnings when experimental APIs are used.
+
+Currently, the following APIs are experimental, with the functions marked with `*` being likely to become stable in the future with no changes:
+
+- `meshopt_buildMeshletsFlex`
+- `meshopt_computeSphereBounds`*
+- `meshopt_encodeVertexBufferLevel`*
+- `meshopt_generateProvokingIndexBuffer`*
+- `meshopt_partitionClusters`
+- `meshopt_simplifySloppy`
+- `meshopt_spatialSortTriangles`
 
 ## License
 

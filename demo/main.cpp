@@ -657,12 +657,13 @@ void simplifyComplete(const Mesh& mesh)
 
 void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 {
-	// note: we use clusters that are larger than normal to give simplifier room to work; in practice you'd use cluster groups merged from smaller clusters and build a cluster DAG
-	const size_t max_vertices = 255;
-	const size_t max_triangles = 512;
+	const size_t max_vertices = 64;
+	const size_t max_triangles = 64;
+	const size_t target_group_size = 8;
 
 	double start = timestamp();
 
+	// build clusters (meshlets) out of the mesh
 	size_t max_meshlets = meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles);
 	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
 	std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
@@ -671,6 +672,44 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 	meshlets.resize(meshopt_buildMeshlets(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, max_triangles, 0.f));
 
 	double middle = timestamp();
+
+	// partition clusters in groups; each group will be simplified separately and the boundaries between groups will be preserved
+	std::vector<unsigned int> cluster_indices;
+	cluster_indices.reserve(mesh.indices.size()); // slight underestimate, vector should realloc once
+	std::vector<unsigned int> cluster_sizes(meshlets.size());
+
+	for (size_t i = 0; i < meshlets.size(); ++i)
+	{
+		const meshopt_Meshlet& m = meshlets[i];
+
+		for (size_t j = 0; j < m.triangle_count * 3; ++j)
+			cluster_indices.push_back(meshlet_vertices[m.vertex_offset + meshlet_triangles[m.triangle_offset + j]]);
+
+		cluster_sizes[i] = m.triangle_count * 3;
+	}
+
+	// makes sure clusters are partitioned using position-only adjacency
+	meshopt_generateShadowIndexBuffer(&cluster_indices[0], &cluster_indices[0], cluster_indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(float) * 3, sizeof(Vertex));
+
+	std::vector<unsigned int> partition(meshlets.size());
+	size_t partition_count = meshopt_partitionClusters(&partition[0], &cluster_indices[0], cluster_indices.size(), &cluster_sizes[0], cluster_sizes.size(), mesh.vertices.size(), target_group_size);
+
+	// convert partitions to linked lists to make it easier to iterate over (vectors of vectors would work too)
+	std::vector<int> partnext(meshlets.size(), -1);
+	std::vector<int> partlast(partition_count, -1);
+
+	for (size_t i = 0; i < meshlets.size(); ++i)
+	{
+		unsigned int part = partition[i];
+
+		if (partlast[part] >= 0)
+			partnext[partlast[part]] = int(i);
+
+		partlast[part] = int(i);
+		partnext[i] = -1;
+	}
+
+	double parttime = timestamp();
 
 	float scale = meshopt_simplifyScale(&mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
 
@@ -681,33 +720,47 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 
 	for (size_t i = 0; i < meshlets.size(); ++i)
 	{
-		const meshopt_Meshlet& m = meshlets[i];
+		if (partlast[partition[i]] < 0)
+			continue; // part of a group that was already processed
 
-		size_t cluster_offset = lod.size();
+		// mark group as processed
+		partlast[partition[i]] = -1;
 
-		for (size_t j = 0; j < m.triangle_count * 3; ++j)
-			lod.push_back(meshlet_vertices[m.vertex_offset + meshlet_triangles[m.triangle_offset + j]]);
+		size_t group_offset = lod.size();
 
+		for (int j = int(i); j >= 0; j = partnext[j])
+		{
+			const meshopt_Meshlet& m = meshlets[j];
+
+			for (size_t k = 0; k < m.triangle_count * 3; ++k)
+				lod.push_back(meshlet_vertices[m.vertex_offset + meshlet_triangles[m.triangle_offset + k]]);
+		}
+
+		size_t group_triangles = (lod.size() - group_offset) / 3;
+
+		// simplify the group, preserving the border vertices
+		// note: this technically also locks the exterior border; a full mesh analysis (see nanite.cpp / lockBoundary) would work better for some meshes
 		unsigned int options = meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute;
 
-		float cluster_target_error = 1e-2f * scale;
-		size_t cluster_target = size_t(float(m.triangle_count) * threshold) * 3;
-		float cluster_error = 0.f;
-		size_t cluster_size = meshopt_simplify(&lod[cluster_offset], &lod[cluster_offset], m.triangle_count * 3, &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), cluster_target, cluster_target_error, options, &cluster_error);
+		float group_target_error = 1e-2f * scale;
+		size_t group_target = size_t(float(group_triangles) * threshold) * 3;
+		float group_error = 0.f;
+		size_t group_size = meshopt_simplify(&lod[group_offset], &lod[group_offset], group_triangles * 3, &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), group_target, group_target_error, options, &group_error);
 
-		error = cluster_error > error ? cluster_error : error;
+		error = group_error > error ? group_error : error;
 
-		// simplified cluster is available in lod[cluster_offset..cluster_offset + cluster_size]
-		lod.resize(cluster_offset + cluster_size);
+		// simplified group is available in lod[group_offset..group_offset + group_size]
+		lod.resize(group_offset + group_size);
 	}
 
 	double end = timestamp();
 
-	printf("%-9s: %d triangles => %d triangles (%.2f%% deviation) in %.2f msec, clusterized in %.2f msec\n",
+	printf("%-9s: %d triangles => %d triangles (%.2f%% deviation) in %.2f msec, clusterized in %.2f msec, partitioned in %.2f msec (%d clusters in %d groups)\n",
 	    "SimplifyN", // N for Nanite
 	    int(mesh.indices.size() / 3), int(lod.size() / 3),
 	    error / scale * 100,
-	    (end - middle) * 1000, (middle - start) * 1000);
+	    (end - parttime) * 1000, (middle - start) * 1000, (parttime - middle) * 1000,
+	    int(meshlets.size()), int(partition_count));
 }
 
 void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
@@ -768,11 +821,12 @@ void encodeIndex(const Mesh& mesh, char desc)
 		    (result[i + 2] == mesh.indices[i + 0] && result[i + 0] == mesh.indices[i + 1] && result[i + 1] == mesh.indices[i + 2]));
 	}
 
-	printf("IdxCodec%c: %.1f bits/triangle (post-deflate %.1f bits/triangle); encode %.2f msec, decode %.2f msec (%.2f GB/s)\n",
+	printf("IdxCodec%c: %.1f bits/triangle (post-deflate %.1f bits/triangle); encode %.2f msec (%.3f GB/s), decode %.2f msec (%.2f GB/s)\n",
 	    desc,
 	    double(buffer.size() * 8) / double(mesh.indices.size() / 3),
 	    double(csize * 8) / double(mesh.indices.size() / 3),
 	    (middle - start) * 1000,
+	    (double(result.size() * 4) / (1 << 30)) / (middle - start),
 	    (end - middle) * 1000,
 	    (double(result.size() * 4) / (1 << 30)) / (end - middle));
 }
@@ -799,11 +853,12 @@ void encodeIndexSequence(const std::vector<unsigned int>& data, size_t vertex_co
 
 	assert(memcmp(&data[0], &result[0], data.size() * sizeof(unsigned int)) == 0);
 
-	printf("IdxCodec%c: %.1f bits/index (post-deflate %.1f bits/index); encode %.2f msec, decode %.2f msec (%.2f GB/s)\n",
+	printf("IdxCodec%c: %.1f bits/index (post-deflate %.1f bits/index); encode %.2f msec (%.3f GB/s), decode %.2f msec (%.2f GB/s)\n",
 	    desc,
 	    double(buffer.size() * 8) / double(data.size()),
 	    double(csize * 8) / double(data.size()),
 	    (middle - start) * 1000,
+	    (double(result.size() * 4) / (1 << 30)) / (middle - start),
 	    (end - middle) * 1000,
 	    (double(result.size() * 4) / (1 << 30)) / (end - middle));
 }
@@ -822,7 +877,7 @@ void packVertex(const Mesh& mesh, const char* pvn)
 }
 
 template <typename PV>
-void encodeVertex(const Mesh& mesh, const char* pvn)
+void encodeVertex(const Mesh& mesh, const char* pvn, int level = 2)
 {
 	std::vector<PV> pv(mesh.vertices.size());
 	packMesh(pv, mesh.vertices);
@@ -833,7 +888,7 @@ void encodeVertex(const Mesh& mesh, const char* pvn)
 	double start = timestamp();
 
 	std::vector<unsigned char> vbuf(meshopt_encodeVertexBufferBound(mesh.vertices.size(), sizeof(PV)));
-	vbuf.resize(meshopt_encodeVertexBuffer(&vbuf[0], vbuf.size(), &pv[0], mesh.vertices.size(), sizeof(PV)));
+	vbuf.resize(meshopt_encodeVertexBufferLevel(&vbuf[0], vbuf.size(), &pv[0], mesh.vertices.size(), sizeof(PV), level));
 
 	double middle = timestamp();
 
@@ -847,10 +902,11 @@ void encodeVertex(const Mesh& mesh, const char* pvn)
 
 	size_t csize = compress(vbuf);
 
-	printf("VtxCodec%1s: %.1f bits/vertex (post-deflate %.1f bits/vertex); encode %.2f msec, decode %.2f msec (%.2f GB/s)\n", pvn,
+	printf("VtxCodec%1s: %.1f bits/vertex (post-deflate %.1f bits/vertex); encode %.2f msec (%.3f GB/s), decode %.2f msec (%.2f GB/s)\n", pvn,
 	    double(vbuf.size() * 8) / double(mesh.vertices.size()),
 	    double(csize * 8) / double(mesh.vertices.size()),
 	    (middle - start) * 1000,
+	    (double(result.size() * sizeof(PV)) / (1 << 30)) / (middle - start),
 	    (end - middle) * 1000,
 	    (double(result.size() * sizeof(PV)) / (1 << 30)) / (end - middle));
 }
@@ -934,30 +990,35 @@ static int follow(int* parents, int index)
 	return index;
 }
 
-void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false)
+void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false, bool flex = false, bool dump = false)
 {
 	// NVidia-recommends 64/126; we round 126 down to a multiple of 4
 	// alternatively we also test uniform configuration with 64/64 which is better for AMD
 	const size_t max_vertices = 64;
 	const size_t max_triangles = uniform ? 64 : 124;
+	const size_t min_triangles = uniform ? 24 : 32; // only used in flex mode
 
 	// note: should be set to 0 unless cone culling is used at runtime!
-	const float cone_weight = 0.5f;
+	const float cone_weight = flex ? -1.0f : 0.25f;
+	const float split_factor = flex ? 2.0f : 0.0f;
 
 	// note: input mesh is assumed to be optimized for vertex cache and vertex fetch
 	double start = timestamp();
-	size_t max_meshlets = meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles);
+	size_t max_meshlets = meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, min_triangles);
 	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
 	std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
 	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
 
 	if (scan)
 		meshlets.resize(meshopt_buildMeshletsScan(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), max_vertices, max_triangles));
-	else
+	else if (flex)
+		meshlets.resize(meshopt_buildMeshletsFlex(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, cone_weight, split_factor));
+	else // note: equivalent to the call of buildMeshletsFlex() with non-negative cone_weight and split_factor = 0
 		meshlets.resize(meshopt_buildMeshlets(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, max_triangles, cone_weight));
 
-	for (size_t i = 0; i < meshlets.size(); ++i)
-		meshopt_optimizeMeshlet(&meshlet_vertices[meshlets[i].vertex_offset], &meshlet_triangles[meshlets[i].triangle_offset], meshlets[i].triangle_count, meshlets[i].vertex_count);
+	if (!dump)
+		for (size_t i = 0; i < meshlets.size(); ++i)
+			meshopt_optimizeMeshlet(&meshlet_vertices[meshlets[i].vertex_offset], &meshlet_triangles[meshlets[i].triangle_offset], meshlets[i].triangle_count, meshlets[i].vertex_count);
 
 	if (meshlets.size())
 	{
@@ -970,11 +1031,14 @@ void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false)
 
 	double end = timestamp();
 
+	if (dump)
+		dumpObj(mesh.vertices, std::vector<unsigned>());
+
 	double avg_vertices = 0;
 	double avg_triangles = 0;
 	double avg_boundary = 0;
+	double avg_connected = 0;
 	size_t not_full = 0;
-	size_t not_connected = 0;
 
 	std::vector<int> boundary(mesh.vertices.size());
 
@@ -986,9 +1050,22 @@ void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false)
 			boundary[meshlet_vertices[m.vertex_offset + j]]++;
 	}
 
+	std::vector<unsigned int> cluster;
+
 	for (size_t i = 0; i < meshlets.size(); ++i)
 	{
 		const meshopt_Meshlet& m = meshlets[i];
+
+		if (dump)
+		{
+			cluster.clear();
+			for (unsigned int j = 0; j < m.triangle_count * 3; ++j)
+				cluster.push_back(meshlet_vertices[m.vertex_offset + meshlet_triangles[m.triangle_offset + j]]);
+
+			char cname[32];
+			snprintf(cname, sizeof(cname), "ml_%d\n", int(i));
+			dumpObj(cname, cluster);
+		}
 
 		avg_vertices += m.vertex_count;
 		avg_triangles += m.triangle_count;
@@ -1019,16 +1096,17 @@ void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false)
 			roots += follow(parents, j) == int(j);
 
 		assert(roots != 0);
-		not_connected += roots > 1;
+		avg_connected += roots;
 	}
 
 	avg_vertices /= double(meshlets.size());
 	avg_triangles /= double(meshlets.size());
 	avg_boundary /= double(meshlets.size());
+	avg_connected /= double(meshlets.size());
 
-	printf("Meshlets%c: %d meshlets (avg vertices %.1f, avg triangles %.1f, avg boundary %.1f, not full %d, not connected %d) in %.2f msec\n",
-	    scan ? 'S' : (uniform ? 'U' : ' '),
-	    int(meshlets.size()), avg_vertices, avg_triangles, avg_boundary, int(not_full), int(not_connected), (end - start) * 1000);
+	printf("Meshlets%c: %d meshlets (avg vertices %.1f, avg triangles %.1f, avg boundary %.1f, avg connected %.2f, not full %d) in %.2f msec\n",
+	    scan ? 'S' : (flex ? 'F' : (uniform ? 'U' : ' ')),
+	    int(meshlets.size()), avg_vertices, avg_triangles, avg_boundary, avg_connected, int(not_full), (end - start) * 1000);
 
 	float camera[3] = {100, 100, 100};
 
@@ -1355,11 +1433,13 @@ void process(const char* path)
 	meshopt_optimizeVertexFetch(&copystrip.vertices[0], &copystrip.indices[0], copystrip.indices.size(), &copystrip.vertices[0], copystrip.vertices.size(), sizeof(Vertex));
 
 	stripify(copy, false, ' ');
-	stripify(copy, true, 'R');
-	stripify(copystrip, true, 'S');
+	stripify(copy, /* use_restart= */ true, 'R');
+	stripify(copystrip, /* use_restart= */ true, 'S');
 
-	meshlets(copy, false);
-	meshlets(copy, true);
+	meshlets(copy, /* scan= */ true);
+	meshlets(copy, /* scan= */ false);
+	meshlets(copy, /* scan= */ false, /* uniform= */ true);
+	meshlets(copy, /* scan= */ false, /* uniform= */ false, /* flex= */ true);
 
 	shadow(copy);
 	tessellationAdjacency(copy);
@@ -1398,8 +1478,15 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	meshlets(mesh);
-	meshlets(mesh, /* scan= */ false, /* uniform= */ true);
+#ifdef _MSC_VER
+#pragma warning(disable : 4996)
+#endif
+
+	bool dump = getenv("DUMP") && atoi(getenv("DUMP"));
+
+	meshlets(mesh, /* scan= */ false, /* uniform= */ false, /* flex= */ false);
+	meshlets(mesh, /* scan= */ false, /* uniform= */ true, /* flex= */ false);
+	meshlets(mesh, /* scan= */ false, /* uniform= */ true, /* flex= */ true, dump);
 }
 
 void processNanite(const char* path)
@@ -1415,7 +1502,7 @@ int main(int argc, char** argv)
 {
 	void runTests();
 
-	meshopt_encodeVertexVersion(0);
+	meshopt_encodeVertexVersion(1);
 	meshopt_encodeIndexVersion(1);
 
 	if (argc == 1)

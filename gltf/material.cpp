@@ -55,14 +55,6 @@ static bool areTextureViewsEqual(const cgltf_texture_view& lhs, const cgltf_text
 	return true;
 }
 
-static bool areExtrasEqual(const cgltf_extras& lhs, const cgltf_extras& rhs)
-{
-	if (lhs.data && rhs.data)
-		return strcmp(lhs.data, rhs.data) == 0;
-	else
-		return lhs.data == rhs.data;
-}
-
 static bool areMaterialComponentsEqual(const cgltf_pbr_metallic_roughness& lhs, const cgltf_pbr_metallic_roughness& rhs)
 {
 	if (!areTextureViewsEqual(lhs.base_color_texture, rhs.base_color_texture))
@@ -246,6 +238,23 @@ static bool areMaterialComponentsEqual(const cgltf_dispersion& lhs, const cgltf_
 	return true;
 }
 
+static bool areMaterialComponentsEqual(const cgltf_diffuse_transmission& lhs, const cgltf_diffuse_transmission& rhs)
+{
+	if (lhs.diffuse_transmission_factor != rhs.diffuse_transmission_factor)
+		return false;
+
+	if (memcmp(lhs.diffuse_transmission_color_factor, rhs.diffuse_transmission_color_factor, sizeof(cgltf_float) * 3) != 0)
+		return false;
+
+	if (!areTextureViewsEqual(lhs.diffuse_transmission_texture, rhs.diffuse_transmission_texture))
+		return false;
+
+	if (!areTextureViewsEqual(lhs.diffuse_transmission_color_texture, rhs.diffuse_transmission_color_texture))
+		return false;
+
+	return true;
+}
+
 static bool areMaterialsEqual(const cgltf_material& lhs, const cgltf_material& rhs, const Settings& settings)
 {
 	if (lhs.has_pbr_metallic_roughness != rhs.has_pbr_metallic_roughness)
@@ -318,6 +327,12 @@ static bool areMaterialsEqual(const cgltf_material& lhs, const cgltf_material& r
 		return false;
 
 	if (lhs.has_dispersion && !areMaterialComponentsEqual(lhs.dispersion, rhs.dispersion))
+		return false;
+
+	if (lhs.has_diffuse_transmission != rhs.has_diffuse_transmission)
+		return false;
+
+	if (lhs.has_diffuse_transmission && !areMaterialComponentsEqual(lhs.diffuse_transmission, rhs.diffuse_transmission))
 		return false;
 
 	if (!areTextureViewsEqual(lhs.normal_texture, rhs.normal_texture))
@@ -533,6 +548,12 @@ static void analyzeMaterial(const cgltf_material& material, MaterialInfo& mi, cg
 	if (material.has_anisotropy)
 	{
 		analyzeMaterialTexture(material.anisotropy.anisotropy_texture, TextureKind_Normal, mi, data, textures, images);
+	}
+
+	if (material.has_diffuse_transmission)
+	{
+		analyzeMaterialTexture(material.diffuse_transmission.diffuse_transmission_texture, TextureKind_Attrib, mi, data, textures, images);
+		analyzeMaterialTexture(material.diffuse_transmission.diffuse_transmission_color_texture, TextureKind_Color, mi, data, textures, images);
 	}
 
 	analyzeMaterialTexture(material.normal_texture, TextureKind_Normal, mi, data, textures, images);

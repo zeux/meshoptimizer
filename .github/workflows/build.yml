@@ -14,7 +14,13 @@ jobs:
   unix:
     strategy:
       matrix:
-        os: [{ name: ubuntu, version: ubuntu-latest }, { name: macos-intel, version: macos-13 }, { name: macos-arm, version: macos-14 }]
+        os:
+          [
+            { name: ubuntu, version: ubuntu-latest },
+            { name: ubuntu-arm, version: ubuntu-24.04-arm },
+            { name: macos-intel, version: macos-13 },
+            { name: macos-arm, version: macos-14 },
+          ]
     name: ${{matrix.os.name}}
     runs-on: ${{matrix.os.version}}
     env:
@@ -30,6 +36,7 @@ jobs:
           make -j2 config=debug test
           make -j2 config=release test
           make -j2 config=coverage test
+          make -j2 config=coverage-scalar test
       - name: make gltfpack
         run: make -j2 config=release gltfpack
       - name: upload coverage
@@ -74,7 +81,7 @@ jobs:
         run: node js/meshopt_clusterizer.test.js
       - name: check es5
         run: |
-          npm install -g es-check
+          npm install -g es-check@7.2.1
           npx es-check es5 js/meshopt_decoder.js js/meshopt_encoder.js js/meshopt_simplifier.js js/meshopt_clusterizer.js
           npx es-check --module es5 js/meshopt_decoder.module.js js/meshopt_encoder.module.js js/meshopt_simplifier.module.js js/meshopt_clusterizer.module.js
           npx es-check es5 gltf/library.js
@@ -94,13 +101,13 @@ jobs:
       - name: test
         run: find glTF-Sample-Assets -name '*.gltf' -or -name '*.glb' | xargs -P 2 -L 16 -d '\n' ./gltfpack -cc -test
       - name: pack
-        run: find glTF-Sample-Assets -name '*.gltf' | grep -v 'glTF-Draco' | xargs -P 2 -L 16 -d '\n' -I '{}' ./gltfpack -i '{}' -o '{}pack.gltf'
+        run: find glTF-Sample-Assets -name '*.gltf' | grep -v '\-Draco/' | xargs -P 2 -L 16 -d '\n' -I '{}' ./gltfpack -i '{}' -o '{}pack.gltf'
       - name: validate
         run: |
           curl -sL $VALIDATOR | tar xJ
           find glTF-Sample-Assets -name '*.gltfpack.gltf' | xargs -P 2 -L 1 -d '\n' ./gltf_validator -r -a
         env:
-          VALIDATOR: https://github.com/KhronosGroup/glTF-Validator/releases/download/2.0.0-dev.3.8/gltf_validator-2.0.0-dev.3.8-linux64.tar.xz
+          VALIDATOR: https://github.com/KhronosGroup/glTF-Validator/releases/download/2.0.0-dev.3.10/gltf_validator-2.0.0-dev.3.10-linux64.tar.xz
 
   gltfpack-js:
     runs-on: ubuntu-latest
@@ -108,18 +115,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '16'
+          node-version: '18'
       - name: install wasi
         run: |
-          curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sdk-$VERSION.0-linux.tar.gz | tar xz
-          curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/libclang_rt.builtins-wasm32-wasi-$VERSION.0.tar.gz | tar xz -C wasi-sdk-$VERSION.0
-          curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sysroot-$VERSION.0.tar.gz | tar xz -C wasi-sdk-$VERSION.0/share
-          mv wasi-sdk-$VERSION.0 wasi-sdk
+          curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sdk-$VERSION.0-x86_64-linux.deb > wasi-sdk.deb
+          sudo dpkg -i wasi-sdk.deb
         env:
-          VERSION: 22
+          VERSION: 25
       - name: build
         run: |
-          make -j2 -B WASI_SDK=wasi-sdk gltf/library.wasm js
+          make -j2 -B gltf/library.wasm js
           git status
       - name: test
         run: |
@@ -164,21 +169,24 @@ jobs:
         run: |
           find glTF-Sample-Assets -name '*.gltf' -or -name '*.glb' | xargs -P 2 -L 16 -d '\n' ./gltfpack -cc -test
           ./gltfpack -test demo/pirate.obj -si 0.5
-          ./gltfpack -test demo/pirate.obj -si 0.1 -sv -sa
+          ./gltfpack -test demo/pirate.obj -si 0.5 -sv -slb -se 0.02
+          ./gltfpack -test demo/pirate.obj -si 0.1 -sa
           ./gltfpack -test demo/pirate.obj -sd 0.5 -md 64
           ./gltfpack -test demo/pirate.obj -noq
           ./gltfpack -test demo/pirate.obj -vp 16 -vt 16 -vn 16 -vc 16
           ./gltfpack -test demo/pirate.obj -vpf -vtf -vnf
           ./gltfpack -test glTF-Sample-Assets/Models/ABeautifulGame/glTF/ABeautifulGame.gltf -mi -c
+          ./gltfpack -test glTF-Sample-Assets/Models/ABeautifulGame/glTF/ABeautifulGame.gltf -kn -km -ke
           ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -c
           ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -cc
           ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tc
-          ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tc -tq color 10 -tu normal,attrib
+          ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tc -tq color 10 -tu normal,attrib -ts attrib 0.5 -tl color 512
           ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tr
           ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tc -ts 0.5 -tl 64
-          ./gltfpack -test glTF-Sample-Assets/Models/CesiumMan/glTF/CesiumMan.gltf -tu -ts 0.6 -tp
+          ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tc color -tfy -tq 4 -tj 1
+          ./gltfpack -test glTF-Sample-Assets/Models/CesiumMan/glTF/CesiumMan.gltf -tu -ts 0.6 -tp -ar 0
           ./gltfpack -test glTF-Sample-Assets/Models/PrimitiveModeNormalsTest/glTF/PrimitiveModeNormalsTest.gltf -si 0.5
-          ./gltfpack -test glTF-Sample-Assets/Models/VertexColorTest/glTF/VertexColorTest.gltf -si 0.5 -sv
+          ./gltfpack -test glTF-Sample-Assets/Models/VertexColorTest/glTF/VertexColorTest.gltf -si 0.5 -sv -vc 12
           ./gltfpack -test glTF-Sample-Assets/Models/SimpleMeshes/glTF/SimpleMeshes.gltf -mm
           ./gltfpack -test glTF-Sample-Assets/Models/SimpleMeshes/glTF/SimpleMeshes.gltf -kn
           echo newmtl Leather > demo/pirate.mtl

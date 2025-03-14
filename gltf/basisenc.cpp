@@ -114,7 +114,7 @@ static const char* prepareEncode(basisu::basis_compressor_params& params, const 
 	if (!getDimensions(img_data, mime_type.c_str(), width, height))
 		return "error parsing image header";
 
-	adjustDimensions(width, height, settings);
+	adjustDimensions(width, height, settings.texture_scale[info.kind], settings.texture_limit[info.kind], settings.texture_pow2);
 
 	temp_input = temp_prefix + mimeExtension(mime_type.c_str());
 	temp_output = temp_prefix + ".ktx2";

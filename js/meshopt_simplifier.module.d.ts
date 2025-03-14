@@ -1,12 +1,10 @@
 // This file is part of meshoptimizer library and is distributed under the terms of MIT License.
-// Copyright (C) 2016-2024, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
+// Copyright (C) 2016-2025, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
 export type Flags = 'LockBorder' | 'Sparse' | 'ErrorAbsolute' | 'Prune';
 
 export const MeshoptSimplifier: {
 	supported: boolean;
 	ready: Promise<void>;
-
-	useExperimentalFeatures: boolean;
 
 	compactMesh: (indices: Uint32Array) => [Uint32Array, number];
 
@@ -19,7 +17,6 @@ export const MeshoptSimplifier: {
 		flags?: Flags[]
 	) => [Uint32Array, number];
 
-	// Experimental; requires useExperimentalFeatures to be set to true
 	simplifyWithAttributes: (
 		indices: Uint32Array,
 		vertex_positions: Float32Array,
@@ -35,7 +32,6 @@ export const MeshoptSimplifier: {
 
 	getScale: (vertex_positions: Float32Array, vertex_positions_stride: number) => number;
 
-	// Experimental; requires useExperimentalFeatures to be set to true
 	simplifyPoints: (
 		vertex_positions: Float32Array,
 		vertex_positions_stride: number,

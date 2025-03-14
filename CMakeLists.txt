@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.5...3.30)
 
 if(POLICY CMP0077)
     cmake_policy(SET CMP0077 NEW) # Enables override of options from parent CMakeLists.txt
@@ -12,12 +12,13 @@ if(POLICY CMP0092)
     cmake_policy(SET CMP0092 NEW) # Enables clean /W4 override for MSVC
 endif()
 
-project(meshoptimizer VERSION 0.22 LANGUAGES CXX)
+project(meshoptimizer VERSION 0.23 LANGUAGES CXX)
 
 option(MESHOPT_BUILD_DEMO "Build demo" OFF)
 option(MESHOPT_BUILD_GLTFPACK "Build gltfpack" OFF)
 option(MESHOPT_BUILD_SHARED_LIBS "Build shared libraries" OFF)
 option(MESHOPT_WERROR "Treat warnings as errors" OFF)
+option(MESHOPT_INSTALL "Install library" ON)
 set(MESHOPT_BASISU_PATH "" CACHE STRING "")
 
 set(SOURCES
@@ -28,6 +29,7 @@ set(SOURCES
     src/indexgenerator.cpp
     src/overdrawanalyzer.cpp
     src/overdrawoptimizer.cpp
+    src/partition.cpp
     src/quantization.cpp
     src/simplifier.cpp
     src/spatialorder.cpp
@@ -135,38 +137,39 @@ if(MESHOPT_BUILD_GLTFPACK)
     endif()
 endif()
 
-include(GNUInstallDirs)
+if(MESHOPT_INSTALL)
+	include(GNUInstallDirs)
 
-install(TARGETS ${TARGETS} EXPORT meshoptimizerTargets
-    COMPONENT meshoptimizer
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+	install(TARGETS ${TARGETS} EXPORT meshoptimizerTargets
+	    COMPONENT meshoptimizer
+	    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+	    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+	    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+	    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
-install(FILES src/meshoptimizer.h COMPONENT meshoptimizer DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-install(EXPORT meshoptimizerTargets COMPONENT meshoptimizer DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/meshoptimizer NAMESPACE meshoptimizer::)
+	install(FILES src/meshoptimizer.h COMPONENT meshoptimizer DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+	install(EXPORT meshoptimizerTargets COMPONENT meshoptimizer DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/meshoptimizer NAMESPACE meshoptimizer::)
 
-# TARGET_PDB_FILE is available since 3.1
-if(MSVC AND NOT (CMAKE_VERSION VERSION_LESS "3.1"))
-    foreach(TARGET ${TARGETS})
-        get_target_property(TARGET_TYPE ${TARGET} TYPE)
-        if(NOT ${TARGET_TYPE} STREQUAL "STATIC_LIBRARY")
-            install(FILES $<TARGET_PDB_FILE:${TARGET}> COMPONENT meshoptimizer DESTINATION ${CMAKE_INSTALL_BINDIR} OPTIONAL)
-        endif()
-    endforeach(TARGET)
+	if(MSVC)
+	    foreach(TARGET ${TARGETS})
+	        get_target_property(TARGET_TYPE ${TARGET} TYPE)
+	        if(NOT ${TARGET_TYPE} STREQUAL "STATIC_LIBRARY")
+	            install(FILES $<TARGET_PDB_FILE:${TARGET}> COMPONENT meshoptimizer DESTINATION ${CMAKE_INSTALL_BINDIR} OPTIONAL)
+	        endif()
+	    endforeach(TARGET)
+	endif()
+
+	include(CMakePackageConfigHelpers)
+
+	configure_package_config_file(config.cmake.in
+	    ${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfig.cmake
+	    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/meshoptimizer NO_SET_AND_CHECK_MACRO)
+
+	write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfigVersion.cmake COMPATIBILITY ExactVersion)
+
+	install(FILES
+	    ${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfig.cmake
+	    ${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfigVersion.cmake
+	    COMPONENT meshoptimizer
+	    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/meshoptimizer)
 endif()
-
-include(CMakePackageConfigHelpers)
-
-configure_package_config_file(config.cmake.in
-    ${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfig.cmake
-    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/meshoptimizer NO_SET_AND_CHECK_MACRO)
-
-write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfigVersion.cmake COMPATIBILITY ExactVersion)
-
-install(FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfig.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfigVersion.cmake
-    COMPONENT meshoptimizer
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/meshoptimizer)

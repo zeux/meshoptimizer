@@ -24,10 +24,25 @@ struct Bounds
 	{
 		return min.f[0] <= max.f[0] && min.f[1] <= max.f[1] && min.f[2] <= max.f[2] && min.f[3] <= max.f[3];
 	}
+
+	float getExtent() const
+	{
+		return std::max(max.f[0] - min.f[0], std::max(max.f[1] - min.f[1], max.f[2] - min.f[2]));
+	}
+
+	void merge(const Bounds& other)
+	{
+		for (int k = 0; k < 4; ++k)
+		{
+			min.f[k] = std::min(min.f[k], other.min.f[k]);
+			max.f[k] = std::max(max.f[k], other.max.f[k]);
+		}
+	}
 };
 
-static void updateAttributeBounds(const Mesh& mesh, cgltf_attribute_type type, Bounds& b)
+static Bounds computeBounds(const Mesh& mesh, cgltf_attribute_type type)
 {
+	Bounds b;
 	Attr pad = {};
 
 	for (size_t j = 0; j < mesh.streams.size(); ++j)
@@ -73,6 +88,8 @@ static void updateAttributeBounds(const Mesh& mesh, cgltf_attribute_type type, B
 		b.min.f[k] -= pad.f[k];
 		b.max.f[k] += pad.f[k];
 	}
+
+	return b;
 }
 
 QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes, const Settings& settings)
@@ -82,19 +99,34 @@ QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes
 	result.bits = settings.pos_bits;
 	result.normalized = settings.pos_normalized;
 
-	Bounds b;
+	std::vector<Bounds> bounds(meshes.size());
 
 	for (size_t i = 0; i < meshes.size(); ++i)
-	{
-		updateAttributeBounds(meshes[i], cgltf_attribute_type_position, b);
-	}
+		bounds[i] = computeBounds(meshes[i], cgltf_attribute_type_position);
+
+	Bounds b;
+	for (size_t i = 0; i < meshes.size(); ++i)
+		b.merge(bounds[i]);
 
 	if (b.isValid())
 	{
 		result.offset[0] = b.min.f[0];
 		result.offset[1] = b.min.f[1];
 		result.offset[2] = b.min.f[2];
-		result.scale = std::max(b.max.f[0] - b.min.f[0], std::max(b.max.f[1] - b.min.f[1], b.max.f[2] - b.min.f[2]));
+		result.scale = b.getExtent();
+	}
+
+	if (b.isValid() && settings.quantize && !settings.pos_float)
+	{
+		float error = result.scale * 0.5f / (1 << (result.bits - 1));
+		float max_rel_error = 0;
+
+		for (size_t i = 0; i < meshes.size(); ++i)
+			if (bounds[i].isValid() && bounds[i].getExtent() > 1e-2f)
+				max_rel_error = std::max(max_rel_error, error / bounds[i].getExtent());
+
+		if (max_rel_error > 5e-2f)
+			fprintf(stderr, "Warning: position data has significant error (%.0f%%); consider using floating-point quantization (-vpf) or more bits (-vp N)\n", max_rel_error * 100);
 	}
 
 	result.node_scale = result.scale / float((1 << result.bits) - 1) * (result.normalized ? 65535.f : 1.f);
@@ -154,7 +186,9 @@ void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTextur
 			continue;
 
 		indices[i] = follow(parents, indices[i]);
-		updateAttributeBounds(mesh, cgltf_attribute_type_texcoord, bounds[indices[i]]);
+
+		Bounds mb = computeBounds(mesh, cgltf_attribute_type_texcoord);
+		bounds[indices[i]].merge(mb);
 	}
 
 	// update all material data using canonical bounds
@@ -679,11 +713,11 @@ StreamFormat writeTimeStream(std::string& bin, const std::vector<float>& data)
 	return format;
 }
 
-StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data, const Settings& settings)
+StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data, const Settings& settings, bool has_tangents)
 {
 	if (type == cgltf_animation_path_type_rotation)
 	{
-		StreamFormat::Filter filter = settings.compressmore ? StreamFormat::Filter_Quat : StreamFormat::Filter_None;
+		StreamFormat::Filter filter = settings.compressmore && !has_tangents ? StreamFormat::Filter_Quat : StreamFormat::Filter_None;
 
 		size_t offset = bin.size();
 		size_t stride = 8;

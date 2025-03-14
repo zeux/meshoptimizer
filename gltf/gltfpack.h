@@ -1,7 +1,7 @@
 /**
- * gltfpack - version 0.22
+ * gltfpack - version 0.23
  *
- * Copyright (C) 2016-2024, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
+ * Copyright (C) 2016-2025, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
  * Report bugs and download new versions at https://github.com/zeux/meshoptimizer
  *
  * This application is distributed under the MIT License. See notice at the end of this file.
@@ -51,6 +51,8 @@ struct Mesh
 
 	cgltf_material* material;
 	cgltf_skin* skin;
+
+	cgltf_extras extras;
 
 	cgltf_primitive_type type;
 
@@ -153,8 +155,8 @@ struct Settings
 
 	bool texture_pow2;
 	bool texture_flipy;
-	float texture_scale;
-	int texture_limit;
+	float texture_scale[TextureKind__Count];
+	int texture_limit[TextureKind__Count];
 
 	TextureMode texture_mode[TextureKind__Count];
 	int texture_quality[TextureKind__Count];
@@ -308,18 +310,20 @@ cgltf_data* parseGltf(const char* path, std::vector<Mesh>& meshes, std::vector<A
 
 cgltf_data* parseGlb(const void* buffer, size_t size, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const char** error);
 
+bool areExtrasEqual(const cgltf_extras& lhs, const cgltf_extras& rhs);
+
 void processAnimation(Animation& animation, const Settings& settings);
 void processMesh(Mesh& mesh, const Settings& settings);
 
 void debugSimplify(const Mesh& mesh, Mesh& kinds, Mesh& loops, float ratio, float error, bool attributes, bool quantize_tbn);
-void debugMeshlets(const Mesh& mesh, Mesh& meshlets, int max_vertices, bool scan);
+void debugMeshlets(const Mesh& mesh, Mesh& meshlets, int max_vertices);
 
 bool compareMeshTargets(const Mesh& lhs, const Mesh& rhs);
 bool compareMeshVariants(const Mesh& lhs, const Mesh& rhs);
 bool compareMeshNodes(const Mesh& lhs, const Mesh& rhs);
 
 void hashMesh(Mesh& mesh);
-void dedupMeshes(std::vector<Mesh>& meshes);
+void dedupMeshes(std::vector<Mesh>& meshes, const Settings& settings);
 void mergeMeshInstances(Mesh& mesh);
 void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings);
 void filterEmptyMeshes(std::vector<Mesh>& meshes);
@@ -338,7 +342,7 @@ void optimizeMaterials(cgltf_data* data, const char* input_path, std::vector<Ima
 bool readImage(const cgltf_image& image, const char* input_path, std::string& data, std::string& mime_type);
 bool hasAlpha(const std::string& data, const char* mime_type);
 bool getDimensions(const std::string& data, const char* mime_type, int& width, int& height);
-void adjustDimensions(int& width, int& height, const Settings& settings);
+void adjustDimensions(int& width, int& height, float scale, int limit, bool pow2);
 const char* mimeExtension(const char* mime_type);
 
 #ifdef WITH_BASISU
@@ -358,7 +362,7 @@ void getPositionBounds(float min[3], float max[3], const Stream& stream, const Q
 StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings);
 StreamFormat writeIndexStream(std::string& bin, const std::vector<unsigned int>& stream);
 StreamFormat writeTimeStream(std::string& bin, const std::vector<float>& data);
-StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data, const Settings& settings);
+StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data, const Settings& settings, bool has_tangents = false);
 
 void compressVertexStream(std::string& bin, const std::string& data, size_t count, size_t stride);
 void compressIndexStream(std::string& bin, const std::string& data, size_t count, size_t stride);
@@ -371,6 +375,7 @@ void append(std::string& s, size_t v);
 void append(std::string& s, float v);
 void append(std::string& s, const char* v);
 void append(std::string& s, const std::string& v);
+void append(std::string& s, const float* data, size_t count);
 void appendJson(std::string& s, const char* data);
 
 const char* attributeType(cgltf_attribute_type type);
@@ -396,10 +401,10 @@ void writeLight(std::string& json, const cgltf_light& light);
 void writeArray(std::string& json, const char* name, const std::string& contents);
 void writeExtensions(std::string& json, const ExtensionInfo* extensions, size_t count);
 void writeExtras(std::string& json, const cgltf_extras& extras);
-void writeScene(std::string& json, const cgltf_scene& scene, const std::string& roots);
+void writeScene(std::string& json, const cgltf_scene& scene, const std::string& roots, const Settings& settings);
 
 /**
- * Copyright (c) 2016-2024 Arseny Kapoulkine
+ * Copyright (c) 2016-2025 Arseny Kapoulkine
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
