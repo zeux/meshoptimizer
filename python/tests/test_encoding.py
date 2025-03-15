@@ -6,7 +6,11 @@ preserves the mesh geometry correctly.
 """
 import numpy as np
 import unittest
-from meshoptimizer import encode_vertex_buffer, decode_vertex_buffer
+from meshoptimizer import (
+    encode_vertex_buffer, decode_vertex_buffer,
+    encode_index_buffer, decode_index_buffer,
+    encode_index_sequence, decode_index_sequence
+)
 
 class TestEncoding(unittest.TestCase):
     """Test encoding and decoding functionality."""
@@ -72,27 +76,48 @@ class TestEncoding(unittest.TestCase):
         # Check that the decoded vertices match the original
         np.testing.assert_array_almost_equal(self.vertices, decoded_vertices)
     
-    def encode_decode_indices(self):
+    def test_encode_decode_index_buffer(self):
         """Test that encoding and decoding indices preserves the data."""
         # Encode indices
-        encoded_indices = encode_vertex_buffer(
-            self.indices, 
-            len(self.indices), 
-            self.indices.itemsize * self.indices.shape[1]
+        encoded_indices = encode_index_buffer(
+            self.indices,
+            len(self.indices),
+            len(self.vertices)
         )
         
-        # Decode indices using the new function that returns a numpy array
-        decoded_indices = decode_vertex_buffer(
-            len(self.indices), 
-            self.indices.itemsize * self.indices.shape[1], 
+        # Decode indices
+        decoded_indices = decode_index_buffer(
+            len(self.indices),
+            4,  # 4 bytes for uint32
             encoded_indices
         )
         
-        # Check that the decoded indices match the original
-        np.testing.assert_array_almost_equal(self.indices, decoded_indices)
-        # Check that the triangles match
+        # The encoding/decoding process may reorder indices for optimization
+        # So we don't check that the indices match exactly, but that they represent the same triangles
         original_triangles = self.get_triangles_set(self.vertices, self.indices)
         decoded_triangles = self.get_triangles_set(self.vertices, decoded_indices)
+        self.assertEqual(original_triangles, decoded_triangles)
+    
+    def test_encode_decode_index_sequence(self):
+        """Test that encoding and decoding index sequence preserves the data."""
+        # Encode index sequence
+        encoded_sequence = encode_index_sequence(
+            self.indices,
+            len(self.indices),
+            len(self.vertices)
+        )
+        
+        # Decode index sequence
+        decoded_sequence = decode_index_sequence(
+            len(self.indices),
+            4,  # 4 bytes for uint32
+            encoded_sequence
+        )
+        
+        # The encoding/decoding process may reorder indices for optimization
+        # So we don't check that the indices match exactly, but that they represent the same triangles
+        original_triangles = self.get_triangles_set(self.vertices, self.indices)
+        decoded_triangles = self.get_triangles_set(self.vertices, decoded_sequence)
         self.assertEqual(original_triangles, decoded_triangles)
 
 

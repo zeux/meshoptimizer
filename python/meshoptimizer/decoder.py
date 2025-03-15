@@ -117,6 +117,40 @@ def decode_index_version(buffer: Union[bytes, np.ndarray]) -> int:
         len(buffer_array)
     )
 
+def decode_index_sequence(index_count: int,
+                         index_size: int,
+                         buffer: Union[bytes, np.ndarray]) -> np.ndarray:
+    """
+    Decode index sequence data.
+    
+    Args:
+        index_count: number of indices
+        index_size: size of each index in bytes (2 or 4)
+        buffer: encoded buffer as bytes
+        
+    Returns:
+        Numpy array containing the decoded index data
+    """
+    # Convert buffer to numpy array if it's not already
+    buffer_array = np.frombuffer(buffer, dtype=np.uint8)
+    
+    # Create destination array
+    destination = np.zeros(index_count, dtype=np.uint32)
+    
+    # Call C function
+    result = lib.meshopt_decodeIndexSequence(
+        destination.ctypes.data_as(ctypes.c_void_p),
+        index_count,
+        index_size,
+        buffer_array.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte)),
+        len(buffer_array)
+    )
+    
+    if result != 0:
+        raise RuntimeError(f"Failed to decode index sequence: error code {result}")
+    
+    return destination
+
 def decode_filter_oct(buffer: np.ndarray, count: int, stride: int) -> np.ndarray:
     """
     Apply octahedral filter to decoded data.

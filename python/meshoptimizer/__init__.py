@@ -11,6 +11,7 @@ High-level functionality is available in the 'export' submodule.
 from .encoder import (
     encode_vertex_buffer,
     encode_index_buffer,
+    encode_index_sequence,
     encode_vertex_version,
     encode_index_version,
 )
@@ -18,6 +19,7 @@ from .encoder import (
 from .decoder import (
     decode_vertex_buffer,
     decode_index_buffer,
+    decode_index_sequence,
     decode_vertex_version,
     decode_index_version,
     decode_filter_oct,

@@ -153,6 +153,20 @@ def setup_function_signatures() -> None:
     ]
     lib.meshopt_encodeIndexBuffer.restype = ctypes.c_size_t
     
+    lib.meshopt_encodeIndexSequenceBound.argtypes = [
+        ctypes.c_size_t,                # index_count
+        ctypes.c_size_t                 # vertex_count
+    ]
+    lib.meshopt_encodeIndexSequenceBound.restype = ctypes.c_size_t
+    
+    lib.meshopt_encodeIndexSequence.argtypes = [
+        ctypes.POINTER(ctypes.c_ubyte), # buffer
+        ctypes.c_size_t,                # buffer_size
+        ctypes.POINTER(ctypes.c_uint),  # indices
+        ctypes.c_size_t                 # index_count
+    ]
+    lib.meshopt_encodeIndexSequence.restype = ctypes.c_size_t
+    
     # Decoding
     lib.meshopt_decodeVertexBuffer.argtypes = [
         ctypes.c_void_p,                # destination
@@ -171,6 +185,15 @@ def setup_function_signatures() -> None:
         ctypes.c_size_t                 # buffer_size
     ]
     lib.meshopt_decodeIndexBuffer.restype = ctypes.c_int
+    
+    lib.meshopt_decodeIndexSequence.argtypes = [
+        ctypes.c_void_p,                # destination
+        ctypes.c_size_t,                # index_count
+        ctypes.c_size_t,                # index_size
+        ctypes.POINTER(ctypes.c_ubyte), # buffer
+        ctypes.c_size_t                 # buffer_size
+    ]
+    lib.meshopt_decodeIndexSequence.restype = ctypes.c_int
     
     # Encoding/Decoding versions
     lib.meshopt_encodeVertexVersion.argtypes = [ctypes.c_int]

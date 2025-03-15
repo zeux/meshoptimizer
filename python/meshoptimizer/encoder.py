@@ -119,3 +119,48 @@ def encode_index_version(version: int) -> None:
         raise ValueError("Version must be 0 or 1")
     
     lib.meshopt_encodeIndexVersion(version)
+
+def encode_index_sequence(indices: np.ndarray,
+                         index_count: Optional[int] = None,
+                         vertex_count: Optional[int] = None) -> bytes:
+    """
+    Encode index sequence data.
+    
+    Args:
+        indices: numpy array of index data
+        index_count: number of indices (optional, derived from indices if not provided)
+        vertex_count: number of vertices (optional, derived from indices if not provided)
+        
+    Returns:
+        Encoded buffer as bytes
+    """
+    # Convert indices to numpy array if it's not already
+    indices = np.asarray(indices, dtype=np.uint32)
+    
+    # Derive index_count if not provided
+    if index_count is None:
+        index_count = len(indices)
+    
+    # Derive vertex_count if not provided
+    if vertex_count is None:
+        vertex_count = np.max(indices) + 1
+    
+    # Calculate buffer size
+    bound = lib.meshopt_encodeIndexSequenceBound(index_count, vertex_count)
+    
+    # Allocate buffer
+    buffer = np.zeros(bound, dtype=np.uint8)
+    
+    # Call C function
+    result_size = lib.meshopt_encodeIndexSequence(
+        buffer.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte)),
+        bound,
+        indices.ctypes.data_as(ctypes.POINTER(ctypes.c_uint)),
+        index_count
+    )
+    
+    if result_size == 0:
+        raise RuntimeError("Failed to encode index sequence")
+    
+    # Return only the used portion of the buffer
+    return bytes(buffer[:result_size])
