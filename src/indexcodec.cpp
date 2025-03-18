@@ -433,6 +433,7 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 			// fifo reads are wrapped around 16 entry buffer
 			unsigned int a = edgefifo[(edgefifooffset - 1 - fe) & 15][0];
 			unsigned int b = edgefifo[(edgefifooffset - 1 - fe) & 15][1];
+			unsigned int c = 0;
 
 			int fec = codetri & 15;
 
@@ -442,37 +443,30 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 			{
 				// fifo reads are wrapped around 16 entry buffer
 				unsigned int cf = vertexfifo[(vertexfifooffset - 1 - fec) & 15];
-				unsigned int c = (fec == 0) ? next : cf;
+				c = (fec == 0) ? next : cf;
 
 				int fec0 = fec == 0;
 				next += fec0;
 
-				// output triangle
-				writeTriangle(destination, i, index_size, a, b, c);
-
-				// push vertex/edge fifo must match the encoding step *exactly* otherwise the data will not be decoded correctly
+				// push vertex fifo must match the encoding step *exactly* otherwise the data will not be decoded correctly
 				pushVertexFifo(vertexfifo, c, vertexfifooffset, fec0);
-
-				pushEdgeFifo(edgefifo, c, b, edgefifooffset);
-				pushEdgeFifo(edgefifo, a, c, edgefifooffset);
 			}
 			else
 			{
-				unsigned int c = 0;
-
 				// fec - (fec ^ 3) decodes 13, 14 into -1, 1
 				// note that we need to update the last index since free indices are delta-encoded
 				last = c = (fec != 15) ? last + (fec - (fec ^ 3)) : decodeIndex(data, last);
 
-				// output triangle
-				writeTriangle(destination, i, index_size, a, b, c);
-
 				// push vertex/edge fifo must match the encoding step *exactly* otherwise the data will not be decoded correctly
 				pushVertexFifo(vertexfifo, c, vertexfifooffset);
-
-				pushEdgeFifo(edgefifo, c, b, edgefifooffset);
-				pushEdgeFifo(edgefifo, a, c, edgefifooffset);
 			}
+
+			// push edge fifo must match the encoding step *exactly* otherwise the data will not be decoded correctly
+			pushEdgeFifo(edgefifo, c, b, edgefifooffset);
+			pushEdgeFifo(edgefifo, a, c, edgefifooffset);
+
+			// output triangle
+			writeTriangle(destination, i, index_size, a, b, c);
 		}
 		else
 		{
