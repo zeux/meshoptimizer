@@ -19,6 +19,7 @@ If you are shipping a game that is using meshoptimizer, listing the library in t
 - [Monaco 2](https://store.steampowered.com/app/1063030/Monaco_2/)
 - [Ravenswatch (2023)](https://store.steampowered.com/app/2071280/Ravenswatch/)
 - [The Settlers: New Allies (2023)](https://www.ubisoft.com/en-us/game/the-settlers/new-allies)
+- [Sid Meier's Civilization VII (2025)](https://civilization.2k.com/civ-vii/)
 - [Sky: Children of the Light (2019)](https://www.thatskygame.com/)
 - [Stranded: Alien Dawn (2023)](https://www.strandedaliendawn.com/en-US)
 - [Tunnet (2023)](https://store.steampowered.com/app/2286390/Tunnet/)
