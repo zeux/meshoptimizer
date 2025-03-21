@@ -99,6 +99,40 @@ static void decodeIndexV1()
 	assert(memcmp(decoded, kIndexBufferTricky, sizeof(kIndexBufferTricky)) == 0);
 }
 
+static void decodeIndexV1More()
+{
+	const unsigned char input[] = {
+	    0xe1, 0xf0, 0x10, 0xfe, 0xff, 0xf0, 0x0c, 0xff, 0x02, 0x02, 0x02, 0x00, 0x76, 0x87, 0x56, 0x67,
+	    0x78, 0xa9, 0x86, 0x65, 0x89, 0x68, 0x98, 0x01, 0x69, 0x00, 0x00, // clang-format
+	};
+
+	const unsigned int ib[] = {0, 1, 2, 2, 1, 3, 4, 6, 5, 7, 8, 9};
+	const size_t index_count = sizeof(ib) / sizeof(ib[0]);
+
+	std::vector<unsigned char> buffer(input, input + sizeof(input));
+
+	unsigned int decoded[index_count];
+	assert(meshopt_decodeIndexBuffer(decoded, index_count, 4, &buffer[0], buffer.size()) == 0);
+	assert(memcmp(decoded, ib, sizeof(ib)) == 0);
+}
+
+static void decodeIndexV1ThreeEdges()
+{
+	const unsigned char input[] = {
+	    0xe1, 0xf0, 0x20, 0x30, 0x40, 0x00, 0x76, 0x87, 0x56, 0x67, 0x78, 0xa9, 0x86, 0x65, 0x89, 0x68,
+	    0x98, 0x01, 0x69, 0x00, 0x00, // clang-format
+	};
+
+	const unsigned int ib[] = {0, 1, 2, 1, 0, 3, 2, 1, 4, 0, 2, 5};
+	const size_t index_count = sizeof(ib) / sizeof(ib[0]);
+
+	std::vector<unsigned char> buffer(input, input + sizeof(input));
+
+	unsigned int decoded[index_count];
+	assert(meshopt_decodeIndexBuffer(decoded, index_count, 4, &buffer[0], buffer.size()) == 0);
+	assert(memcmp(decoded, ib, sizeof(ib)) == 0);
+}
+
 static void decodeIndex16()
 {
 	const size_t index_count = sizeof(kIndexBuffer) / sizeof(kIndexBuffer[0]);
@@ -375,6 +409,50 @@ static void decodeVertexV0()
 	PV decoded[vertex_count];
 	assert(meshopt_decodeVertexBuffer(decoded, vertex_count, sizeof(PV), &buffer[0], buffer.size()) == 0);
 	assert(memcmp(decoded, kVertexBuffer, sizeof(kVertexBuffer)) == 0);
+}
+
+static void decodeVertexV0More()
+{
+	const unsigned char expected[] = {
+	    0, 0, 0, 0, 0, 1, 2, 8, 0, 2, 4, 16, 0, 3, 6, 24,
+	    0, 4, 8, 32, 0, 5, 10, 40, 0, 6, 12, 48, 0, 7, 14, 56,
+	    0, 8, 16, 64, 0, 9, 18, 72, 0, 10, 20, 80, 0, 11, 22, 88,
+	    0, 12, 24, 96, 0, 13, 26, 104, 0, 14, 28, 112, 0, 15, 30, 120, // clang-format :-/
+	};
+
+	const unsigned char input[] = {
+	    0xa0, 0x00, 0x01, 0x2a, 0xaa, 0xaa, 0xaa, 0x02, 0x04, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44,
+	    0x03, 0x00, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10,
+	    0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	    0x00, // clang-format :-/
+	};
+
+	unsigned char decoded[sizeof(expected)];
+	assert(meshopt_decodeVertexBuffer(decoded, 16, 4, input, sizeof(input)) == 0);
+	assert(memcmp(decoded, expected, sizeof(expected)) == 0);
+}
+
+static void decodeVertexV0Mode2()
+{
+	const unsigned char expected[] = {
+	    0, 0, 0, 0, 4, 5, 6, 7, 8, 10, 12, 14, 12, 15, 18, 21,
+	    16, 20, 24, 28, 20, 25, 30, 35, 24, 30, 36, 42, 28, 35, 42, 49,
+	    32, 40, 48, 56, 36, 45, 54, 63, 40, 50, 60, 70, 44, 55, 66, 77,
+	    48, 60, 72, 84, 52, 65, 78, 91, 56, 70, 84, 98, 60, 75, 90, 105, // clang-format :-/
+	};
+
+	const unsigned char input[] = {
+	    0xa0, 0x02, 0x08, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x88, 0x02, 0x0a, 0xaa, 0xaa, 0xaa, 0xaa,
+	    0xaa, 0xaa, 0xaa, 0x02, 0x0c, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0x02, 0x0e, 0xee, 0xee,
+	    0xee, 0xee, 0xee, 0xee, 0xee, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	    0x00, 0x00, 0x00, 0x00, 0x00, // clang-format :-/
+	};
+
+	unsigned char decoded[sizeof(expected)];
+	assert(meshopt_decodeVertexBuffer(decoded, 16, 4, input, sizeof(input)) == 0);
+	assert(memcmp(decoded, expected, sizeof(expected)) == 0);
 }
 
 static void decodeVertexV1()
@@ -2276,6 +2354,8 @@ void runTests()
 {
 	decodeIndexV0();
 	decodeIndexV1();
+	decodeIndexV1More();
+	decodeIndexV1ThreeEdges();
 	decodeIndex16();
 	encodeIndexMemorySafe();
 	decodeIndexMemorySafe();
@@ -2296,6 +2376,8 @@ void runTests()
 	encodeIndexSequenceEmpty();
 
 	decodeVertexV0();
+	decodeVertexV0More();
+	decodeVertexV0Mode2();
 	decodeVertexV1();
 	decodeVertexV1Custom();
 
