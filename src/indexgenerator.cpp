@@ -2,6 +2,7 @@
 #include "meshoptimizer.h"
 
 #include <assert.h>
+#include <math.h>
 #include <string.h>
 
 // This work is based on:
@@ -83,6 +84,47 @@ struct VertexStreamHasher
 		}
 
 		return true;
+	}
+};
+
+struct VertexFuzzyHasher
+{
+	const float* vertex_positions;
+	size_t vertex_stride_float;
+
+	float tolerance;
+	int (*callback)(void*, unsigned int, unsigned int);
+	void* context;
+
+	size_t hash(unsigned int index) const
+	{
+		const unsigned int* key = reinterpret_cast<const unsigned int*>(vertex_positions + index * vertex_stride_float);
+
+		unsigned int x = key[0], y = key[1], z = key[2];
+
+		// replace negative zero with zero
+		x = (x == 0x80000000) ? 0 : x;
+		y = (y == 0x80000000) ? 0 : y;
+		z = (z == 0x80000000) ? 0 : z;
+
+		// scramble bits to make sure that integer coordinates have entropy in lower bits
+		x ^= x >> 17;
+		y ^= y >> 17;
+		z ^= z >> 17;
+
+		// Optimized Spatial Hashing for Collision Detection of Deformable Objects
+		return (x * 73856093) ^ (y * 19349663) ^ (z * 83492791);
+	}
+
+	bool equal(unsigned int lhs, unsigned int rhs) const
+	{
+		const float* lp = vertex_positions + lhs * vertex_stride_float;
+		const float* rp = vertex_positions + rhs * vertex_stride_float;
+
+		if (fabsf(lp[0] - rp[0]) > tolerance || fabsf(lp[1] - rp[1]) > tolerance || fabsf(lp[2] - rp[2]) > tolerance)
+			return false;
+
+		return callback ? callback(context, lhs, rhs) : true;
 	}
 };
 
@@ -305,20 +347,17 @@ size_t meshopt_generateVertexRemapFuzzy(unsigned int* destination, const unsigne
 {
 	using namespace meshopt;
 
-	(void)tolerance;
-	(void)callback;
-	(void)context;
-
 	assert(indices || index_count == vertex_count);
 	assert(!indices || index_count % 3 == 0);
 	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
+	assert(tolerance >= 0);
 
 	meshopt_Allocator allocator;
 
 	memset(destination, -1, vertex_count * sizeof(unsigned int));
 
-	VertexHasher hasher = {reinterpret_cast<const unsigned char*>(vertex_positions), sizeof(float) * 3, vertex_positions_stride};
+	VertexFuzzyHasher hasher = {vertex_positions, vertex_positions_stride / sizeof(float), tolerance, callback, context};
 
 	size_t table_size = hashBuckets(vertex_count);
 	unsigned int* table = allocator.allocate<unsigned int>(table_size);
