@@ -100,24 +100,41 @@ struct VertexFuzzyHasher
 	int (*callback)(void*, unsigned int, unsigned int);
 	void* context;
 
+	unsigned int truncate(unsigned int v, int off) const
+	{
+		int ve = int((v >> 23) & 0xff) - 127;
+		int vd = tolerance_exp - (ve - 23);
+
+		// vd < 0: tolerance is <ulp; vd > 23: tolerance is >magnitude
+		// when tolerance is >magnitude, we return 2^tolerance_exp when off = 1
+		if (unsigned(vd) > 23)
+			return vd < 0 ? v : -off & ((v & 0x80000000) | ((tolerance_exp + 127) << 23));
+
+		unsigned int vr = v;
+		vr &= ~((1 << vd) - 1);
+		vr += off << vd;
+
+		return vr;
+	}
+
 	size_t hash(unsigned int index) const
 	{
 		const unsigned int* key = reinterpret_cast<const unsigned int*>(vertex_positions + index * vertex_stride_float);
 
 		unsigned int x = key[0], y = key[1], z = key[2];
 
+		if (tolerance_off >= 0)
+		{
+			// truncate coordinates to tolerance precision and offset each by 0/1
+			x = truncate(x, (tolerance_off >> 0) & 1);
+			y = truncate(y, (tolerance_off >> 1) & 1);
+			z = truncate(z, (tolerance_off >> 2) & 1);
+		}
+
 		// replace negative zero with zero
 		x = (x == 0x80000000) ? 0 : x;
 		y = (y == 0x80000000) ? 0 : y;
 		z = (z == 0x80000000) ? 0 : z;
-
-		if (tolerance_off >= 0)
-		{
-			// adjust coordinates to a specific neighbor
-			x += (tolerance_off >> 0) & 1;
-			y += (tolerance_off >> 1) & 1;
-			z += (tolerance_off >> 2) & 1;
-		}
 
 		// scramble bits to make sure that integer coordinates have entropy in lower bits
 		x ^= x >> 17;
