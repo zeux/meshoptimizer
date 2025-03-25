@@ -6,6 +6,7 @@
 #include <string.h>
 
 // This work is based on:
+// Matthias Teschner, Bruno Heidelberger, Matthias Mueller, Danat Pomeranets, Markus Gross. Optimized Spatial Hashing for Collision Detection of Deformable Objects. 2003
 // John McDonald, Mark Kilgard. Crack-Free Point-Normal Triangles using Adjacent Edge Normals. 2010
 // John Hable. Variable Rate Shading with Visibility Buffer Rendering. 2024
 namespace meshopt
@@ -93,6 +94,9 @@ struct VertexFuzzyHasher
 	size_t vertex_stride_float;
 
 	float tolerance;
+	int tolerance_exp;
+	int tolerance_off;
+
 	int (*callback)(void*, unsigned int, unsigned int);
 	void* context;
 
@@ -106,6 +110,14 @@ struct VertexFuzzyHasher
 		x = (x == 0x80000000) ? 0 : x;
 		y = (y == 0x80000000) ? 0 : y;
 		z = (z == 0x80000000) ? 0 : z;
+
+		if (tolerance_off >= 0)
+		{
+			// adjust coordinates to a specific neighbor
+			x += (tolerance_off >> 0) & 1;
+			y += (tolerance_off >> 1) & 1;
+			z += (tolerance_off >> 2) & 1;
+		}
 
 		// scramble bits to make sure that integer coordinates have entropy in lower bits
 		x ^= x >> 17;
@@ -273,13 +285,11 @@ size_t meshopt_generateVertexRemap(unsigned int* destination, const unsigned int
 			if (*entry == ~0u)
 			{
 				*entry = index;
-
 				destination[index] = next_vertex++;
 			}
 			else
 			{
 				assert(destination[*entry] != ~0u);
-
 				destination[index] = destination[*entry];
 			}
 		}
@@ -327,13 +337,11 @@ size_t meshopt_generateVertexRemapMulti(unsigned int* destination, const unsigne
 			if (*entry == ~0u)
 			{
 				*entry = index;
-
 				destination[index] = next_vertex++;
 			}
 			else
 			{
 				assert(destination[*entry] != ~0u);
-
 				destination[index] = destination[*entry];
 			}
 		}
@@ -357,9 +365,12 @@ size_t meshopt_generateVertexRemapFuzzy(unsigned int* destination, const unsigne
 
 	memset(destination, -1, vertex_count * sizeof(unsigned int));
 
-	VertexFuzzyHasher hasher = {vertex_positions, vertex_positions_stride / sizeof(float), tolerance, callback, context};
+	int tolerance_exp = 0;
+	frexpf(tolerance, &tolerance_exp);
 
-	size_t table_size = hashBuckets(vertex_count);
+	VertexFuzzyHasher hasher = {vertex_positions, vertex_positions_stride / sizeof(float), tolerance, tolerance_exp, -1, callback, context};
+
+	size_t table_size = hashBuckets(vertex_count) * (tolerance > 0 ? 8 : 1);
 	unsigned int* table = allocator.allocate<unsigned int>(table_size);
 	memset(table, -1, table_size * sizeof(unsigned int));
 
@@ -370,20 +381,55 @@ size_t meshopt_generateVertexRemapFuzzy(unsigned int* destination, const unsigne
 		unsigned int index = indices ? indices[i] : unsigned(i);
 		assert(index < vertex_count);
 
-		if (destination[index] == ~0u)
-		{
-			unsigned int* entry = hashLookup(table, table_size, hasher, index, ~0u);
+		if (destination[index] != ~0u)
+			continue;
 
-			if (*entry == ~0u)
+		if (tolerance > 0)
+		{
+			unsigned int* entries[8] = {};
+			unsigned int* found = NULL;
+
+			for (int k = 0; k < 8; ++k)
 			{
-				*entry = index;
+				hasher.tolerance_off = k;
+				entries[k] = hashLookup(table, table_size, hasher, index, ~0u);
+
+				// if any entry refers to an equivalent vertex, we can use it
+				if (*entries[k] != ~0u)
+				{
+					found = entries[k];
+					break;
+				}
+			}
+
+			if (!found)
+			{
+				// no equivalent vertex found; fill the hash table so that future vertices can match ours
+				for (int k = 0; k < 8; ++k)
+					*entries[k] = index;
 
 				destination[index] = next_vertex++;
 			}
 			else
 			{
-				assert(destination[*entry] != ~0u);
+				// reuse the equivalent vertex
+				assert(destination[*found] != ~0u);
+				destination[index] = destination[*found];
+			}
+		}
+		else
+		{
+			// when tolerance=0, we can map each vertex to a single hash entry using positional equivalence
+			unsigned int* entry = hashLookup(table, table_size, hasher, index, ~0u);
 
+			if (*entry == ~0u)
+			{
+				*entry = index;
+				destination[index] = next_vertex++;
+			}
+			else
+			{
+				assert(destination[*entry] != ~0u);
 				destination[index] = destination[*entry];
 			}
 		}
