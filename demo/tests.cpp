@@ -1386,8 +1386,15 @@ static void remapFuzzy()
 	for (int i = 0; i < 8; ++i)
 		assert(remap[i] == unsigned(i));
 
-	res = meshopt_generateVertexRemapFuzzy(remap, NULL, 8, vb, 8, sizeof(float) * 3, 1.5e-4f, NULL, NULL);
-	assert(res <= 7);
+	res = meshopt_generateVertexRemapFuzzy(remap, NULL, 8, vb, 8, sizeof(float) * 3, 1.1e-4f, NULL, NULL);
+	assert(res == 4);
+	for (int i = 0; i < 8; ++i)
+		assert(remap[i] == unsigned(i / 2));
+
+	res = meshopt_generateVertexRemapFuzzy(remap, NULL, 8, vb, 8, sizeof(float) * 3, 1.3e-4f, NULL, NULL);
+	assert(res == 4);
+	for (int i = 0; i < 8; ++i)
+		assert(remap[i] == unsigned(i / 2));
 }
 
 static size_t allocCount;
