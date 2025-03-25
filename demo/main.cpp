@@ -1287,6 +1287,50 @@ void provoking(const Mesh& mesh)
 	    int(mesh.indices.size() / 3), int(pcount), double(pcount) / double(bestv) * 100.0 - 100.0, (end - start) * 1000);
 }
 
+static int reindexCompare(void* context, unsigned int lhs, unsigned int rhs)
+{
+	const Vertex* vertices = static_cast<Vertex*>(context);
+	const Vertex& lv = vertices[lhs];
+	const Vertex& rv = vertices[rhs];
+
+	float ln = lv.nx * lv.nx + lv.ny * lv.ny + lv.nz * lv.nz;
+	float rn = rv.nx * rv.nx + rv.ny * rv.ny + rv.nz * rv.nz;
+
+	// 1/1024px UV tolerance, 3 degree normal tolerance
+	return fabsf(lv.tx - rv.tx) < 1e-3f &&
+	       fabsf(lv.ty - rv.ty) < 1e-3f &&
+	       (lv.nx * rv.nx + lv.ny * rv.ny + lv.nz * rv.nz >= 0.9986f * sqrtf(ln * rn));
+}
+
+void reindexFuzzy(const Mesh& mesh)
+{
+	std::vector<PackedVertex> pv(mesh.vertices.size());
+	packMesh(pv, mesh.vertices);
+
+	std::vector<unsigned int> remap(mesh.vertices.size());
+
+	double start = timestamp();
+
+	size_t up = meshopt_generateVertexRemap(&remap[0], &mesh.indices[0], mesh.indices.size(), &pv[0], mesh.vertices.size(), sizeof(PackedVertex));
+
+	double remapt = timestamp();
+
+	size_t uf0 = meshopt_generateVertexRemapFuzzy(&remap[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), 0.f, reindexCompare, const_cast<Vertex*>(&mesh.vertices[0]));
+
+	double remapf = timestamp();
+
+	size_t uft = meshopt_generateVertexRemapFuzzy(&remap[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), 1e-3f, reindexCompare, const_cast<Vertex*>(&mesh.vertices[0]));
+
+	double end = timestamp();
+
+	printf("ReindexQ : %d vertices => %d unique vertices in %.2f msec\n",
+	    int(mesh.vertices.size()), int(up), (remapt - start) * 1000);
+	printf("ReindexF0: %d vertices => %d unique vertices in %.2f msec\n",
+	    int(mesh.vertices.size()), int(uf0), (remapf - remapt) * 1000);
+	printf("ReindexF : %d vertices => %d unique vertices in %.2f msec\n",
+	    int(mesh.vertices.size()), int(uft), (end - remapf) * 1000);
+}
+
 void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices); // nanite.cpp
 
 bool loadMesh(Mesh& mesh, const char* path)
@@ -1468,6 +1512,8 @@ void process(const char* path)
 	spatialSort(mesh);
 	spatialSortTriangles(mesh);
 
+	reindexFuzzy(mesh);
+
 	if (path)
 		processDeinterleaved(path);
 }
@@ -1477,6 +1523,8 @@ void processDev(const char* path)
 	Mesh mesh;
 	if (!loadMesh(mesh, path))
 		return;
+
+	reindexFuzzy(mesh);
 
 #ifdef _MSC_VER
 #pragma warning(disable : 4996)
