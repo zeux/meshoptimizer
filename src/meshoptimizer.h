@@ -78,6 +78,7 @@ MESHOPTIMIZER_API size_t meshopt_generateVertexRemapMulti(unsigned int* destinat
  * Experimental: Generates a vertex remap table from the vertex buffer and an optional index buffer and returns number of unique vertices
  * As a result, all vertices that are equivalent map to the same (new) location, with no gaps in the resulting sequence.
  * Equivalence is checked in two steps: vertex positions are compared with the specified tolerance (abs(a - b) <= tolerance), and then the user-specified equality function is called (if provided).
+ * Remap generation is more expensive when tolerance is non-zero, so it's recommended to use 0 when possible.
  * Resulting remap table maps old vertices to new vertices and can be used in meshopt_remapVertexBuffer/meshopt_remapIndexBuffer.
  *
  * destination must contain enough space for the resulting remap table (vertex_count elements)
