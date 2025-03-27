@@ -118,10 +118,17 @@ struct PositionHasher
 		unsigned int ri = sparse_remap ? sparse_remap[index] : index;
 		const unsigned int* key = reinterpret_cast<const unsigned int*>(vertex_positions + ri * vertex_stride_float);
 
+		unsigned int x = key[0], y = key[1], z = key[2];
+
+		// replace negative zero with zero
+		x = (x == 0x80000000) ? 0 : x;
+		y = (y == 0x80000000) ? 0 : y;
+		z = (z == 0x80000000) ? 0 : z;
+
 		// scramble bits to make sure that integer coordinates have entropy in lower bits
-		unsigned int x = key[0] ^ (key[0] >> 17);
-		unsigned int y = key[1] ^ (key[1] >> 17);
-		unsigned int z = key[2] ^ (key[2] >> 17);
+		x ^= x >> 17;
+		y ^= y >> 17;
+		z ^= z >> 17;
 
 		// Optimized Spatial Hashing for Collision Detection of Deformable Objects
 		return (x * 73856093) ^ (y * 19349663) ^ (z * 83492791);
@@ -132,7 +139,10 @@ struct PositionHasher
 		unsigned int li = sparse_remap ? sparse_remap[lhs] : lhs;
 		unsigned int ri = sparse_remap ? sparse_remap[rhs] : rhs;
 
-		return memcmp(vertex_positions + li * vertex_stride_float, vertex_positions + ri * vertex_stride_float, sizeof(float) * 3) == 0;
+		const float* lv = vertex_positions + li * vertex_stride_float;
+		const float* rv = vertex_positions + ri * vertex_stride_float;
+
+		return lv[0] == rv[0] && lv[1] == rv[1] && lv[2] == rv[2];
 	}
 };
 

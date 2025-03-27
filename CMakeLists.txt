@@ -25,6 +25,7 @@ set(SOURCES
     src/meshoptimizer.h
     src/allocator.cpp
     src/clusterizer.cpp
+    src/indexanalyzer.cpp
     src/indexcodec.cpp
     src/indexgenerator.cpp
     src/overdrawanalyzer.cpp
@@ -34,11 +35,9 @@ set(SOURCES
     src/simplifier.cpp
     src/spatialorder.cpp
     src/stripifier.cpp
-    src/vcacheanalyzer.cpp
     src/vcacheoptimizer.cpp
     src/vertexcodec.cpp
     src/vertexfilter.cpp
-    src/vfetchanalyzer.cpp
     src/vfetchoptimizer.cpp
 )
 
