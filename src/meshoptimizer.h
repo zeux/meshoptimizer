@@ -735,6 +735,8 @@ template <typename T>
 inline size_t meshopt_generateVertexRemap(unsigned int* destination, const T* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size);
 template <typename T>
 inline size_t meshopt_generateVertexRemapMulti(unsigned int* destination, const T* indices, size_t index_count, size_t vertex_count, const meshopt_Stream* streams, size_t stream_count);
+template <typename F>
+inline size_t meshopt_generateVertexRemapCustom(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, F callback);
 template <typename T, typename F>
 inline size_t meshopt_generateVertexRemapCustom(unsigned int* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, F callback);
 template <typename T>
@@ -943,6 +945,17 @@ inline size_t meshopt_generateVertexRemapMulti(unsigned int* destination, const 
 	meshopt_IndexAdapter<T> in(NULL, indices, indices ? index_count : 0);
 
 	return meshopt_generateVertexRemapMulti(destination, indices ? in.data : NULL, index_count, vertex_count, streams, stream_count);
+}
+
+template <typename F>
+inline size_t meshopt_generateVertexRemapCustom(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, F callback)
+{
+	struct Call
+	{
+		static int compare(void* context, unsigned int lhs, unsigned int rhs) { return (*static_cast<F*>(context))(lhs, rhs) ? 1 : 0; }
+	};
+
+	return meshopt_generateVertexRemapCustom(destination, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride, &Call::compare, &callback);
 }
 
 template <typename T, typename F>
