@@ -1359,42 +1359,43 @@ static int remapFuzzyFalse(void*, unsigned int, unsigned int)
 	return 0;
 }
 
+static int remapFuzzyTrue(void*, unsigned int, unsigned int)
+{
+	return 1;
+}
+
 static void remapFuzzy()
 {
 	const float vb[] = {
 	    0, 0, 0,
-	    0, 0, -1e-4f,
 	    1, 0, 0,
-	    1 + 1e-4f, 0, 0,
 	    0, 1, 0,
-	    0, 1 - 1e-4f, 0,
 	    0, 0, 1,
+	    1, 0, 0,
 	    0, -0.f, 1, // clang-format
 	};
 
-	unsigned int remap[8];
+	unsigned int remap[6];
 	size_t res;
 
-	res = meshopt_generateVertexRemapFuzzy(remap, NULL, 8, vb, 8, sizeof(float) * 3, 0.f, NULL, NULL);
-	assert(res == 7); // last two vertices are identical
-	for (int i = 0; i < 7; ++i)
-		assert(remap[i] == unsigned(i));
-	assert(remap[7] == 6);
-
-	res = meshopt_generateVertexRemapFuzzy(remap, NULL, 8, vb, 8, sizeof(float) * 3, 0.f, remapFuzzyFalse, NULL);
-	assert(res == 8); // last two vertices are identical, but callback returns false
-	for (int i = 0; i < 8; ++i)
-		assert(remap[i] == unsigned(i));
-
-	res = meshopt_generateVertexRemapFuzzy(remap, NULL, 8, vb, 8, sizeof(float) * 3, 1.1e-4f, NULL, NULL);
+	res = meshopt_generateVertexRemapFuzzy(remap, NULL, 6, vb, 6, sizeof(float) * 3, 0.f, NULL, NULL);
 	assert(res == 4);
-	for (int i = 0; i < 8; ++i)
-		assert(remap[i] == unsigned(i / 2));
+	for (int i = 0; i < 4; ++i)
+		assert(remap[i] == unsigned(i));
+	assert(remap[4] == 1);
+	assert(remap[5] == 3);
 
-	res = meshopt_generateVertexRemapFuzzy(remap, NULL, 8, vb, 8, sizeof(float) * 3, 1.3e-4f, NULL, NULL);
+	res = meshopt_generateVertexRemapFuzzy(remap, NULL, 6, vb, 6, sizeof(float) * 3, 0.f, remapFuzzyTrue, NULL);
 	assert(res == 4);
-	for (int i = 0; i < 8; ++i)
-		assert(remap[i] == unsigned(i / 2));
+	for (int i = 0; i < 4; ++i)
+		assert(remap[i] == unsigned(i));
+	assert(remap[4] == 1);
+	assert(remap[5] == 3);
+
+	res = meshopt_generateVertexRemapFuzzy(remap, NULL, 6, vb, 6, sizeof(float) * 3, 0.f, remapFuzzyFalse, NULL);
+	assert(res == 6);
+	for (int i = 0; i < 6; ++i)
+		assert(remap[i] == unsigned(i));
 }
 
 static size_t allocCount;

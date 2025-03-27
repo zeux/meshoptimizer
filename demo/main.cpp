@@ -1313,22 +1313,16 @@ void reindexFuzzy(const Mesh& mesh)
 
 	size_t up = meshopt_generateVertexRemap(&remap[0], &mesh.indices[0], mesh.indices.size(), &pv[0], mesh.vertices.size(), sizeof(PackedVertex));
 
-	double remapt = timestamp();
+	double middle = timestamp();
 
-	size_t uf0 = meshopt_generateVertexRemapFuzzy(&remap[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), 0.f, reindexCompare, const_cast<Vertex*>(&mesh.vertices[0]));
-
-	double remapf = timestamp();
-
-	size_t uft = meshopt_generateVertexRemapFuzzy(&remap[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), 1e-6f, reindexCompare, const_cast<Vertex*>(&mesh.vertices[0]));
+	size_t uf = meshopt_generateVertexRemapFuzzy(&remap[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), 0.f, reindexCompare, const_cast<Vertex*>(&mesh.vertices[0]));
 
 	double end = timestamp();
 
 	printf("ReindexQ : %d vertices => %d unique vertices in %.2f msec\n",
-	    int(mesh.vertices.size()), int(up), (remapt - start) * 1000);
-	printf("ReindexF0: %d vertices => %d unique vertices in %.2f msec\n",
-	    int(mesh.vertices.size()), int(uf0), (remapf - remapt) * 1000);
+	    int(mesh.vertices.size()), int(up), (middle - start) * 1000);
 	printf("ReindexF : %d vertices => %d unique vertices in %.2f msec\n",
-	    int(mesh.vertices.size()), int(uft), (end - remapf) * 1000);
+	    int(mesh.vertices.size()), int(uf), (end - middle) * 1000);
 }
 
 void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices); // nanite.cpp
@@ -1523,8 +1517,6 @@ void processDev(const char* path)
 	Mesh mesh;
 	if (!loadMesh(mesh, path))
 		return;
-
-	reindexFuzzy(mesh);
 
 #ifdef _MSC_VER
 #pragma warning(disable : 4996)
