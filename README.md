@@ -56,7 +56,8 @@ First, generate a remap table from your existing vertex (and, optionally, index)
 size_t index_count = face_count * 3;
 size_t unindexed_vertex_count = face_count * 3;
 std::vector<unsigned int> remap(unindexed_vertex_count); // temporary remap table
-size_t vertex_count = meshopt_generateVertexRemap(&remap[0], NULL, index_count, &unindexed_vertices[0], unindexed_vertex_count, sizeof(Vertex));
+size_t vertex_count = meshopt_generateVertexRemap(&remap[0], NULL, index_count,
+    &unindexed_vertices[0], unindexed_vertex_count, sizeof(Vertex));
 ```
 
 Note that in this case we only have an unindexed vertex buffer; when input mesh has an index buffer, it will need to be passed to `meshopt_generateVertexRemap` instead of `NULL`, along with the correct source vertex count. In either case, the remap table is generated based on binary equivalence of the input vertices, so the resulting mesh will render the same way. Binary equivalence considers all input bytes, including padding which should be zero-initialized if the vertex structure has gaps.
@@ -70,7 +71,18 @@ meshopt_remapVertexBuffer(vertices, &unindexed_vertices[0], unindexed_vertex_cou
 
 You can then further optimize the resulting buffers by calling the other functions on them in-place.
 
-`meshopt_generateVertexRemap` uses binary equivalence of vertex data, which is generally a reasonable default; however, in some cases some attributes may have floating point drift causing extra vertices to be generated. For such cases, it may be necessary to quantize some attributes (most importantly, normals and tangents) before generating the remap, or use a custom weld algorithm that supports per-attribute tolerance instead.
+`meshopt_generateVertexRemap` uses binary equivalence of vertex data, which is generally a reasonable default; however, in some cases some attributes may have floating point drift causing extra vertices to be generated. For such cases, it may be necessary to quantize some attributes (most importantly, normals and tangents) before generating the remap, or use `meshopt_generateVertexRemapCustom` algorithm that allows comparing individual attributes with tolerance by providing a custom comparison function:
+
+```c++
+size_t vertex_count = meshopt_generateVertexRemapCustom(&remap[0], NULL, index_count,
+    &unindexed_vertices[0].px, unindexed_vertex_count, sizeof(Vertex),
+    [&](unsigned int lhs, unsigned int rhs) -> bool {
+        const Vertex& lv = unindexed_vertices[lhs];
+        const Vertex& rv = unindexed_vertices[rhs];
+
+        return fabsf(lv.tx - rv.tx) < 1e-3f && fabsf(lv.ty - rv.ty) < 1e-3f;
+    });
+```
 
 ## Vertex cache optimization
 
@@ -573,6 +585,7 @@ Currently, the following APIs are experimental, with the functions marked with `
 - `meshopt_computeSphereBounds`*
 - `meshopt_encodeVertexBufferLevel`*
 - `meshopt_generateProvokingIndexBuffer`*
+- `meshopt_generateVertexRemapCustom`*
 - `meshopt_partitionClusters`
 - `meshopt_simplifySloppy`
 - `meshopt_spatialSortTriangles`

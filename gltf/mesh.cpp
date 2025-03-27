@@ -66,6 +66,15 @@ static void transformNormal(float* res, const float* ptr, const float* transform
 	res[2] = z * s;
 }
 
+static Stream* getStream(Mesh& mesh, cgltf_attribute_type type, int index = 0)
+{
+	for (size_t i = 0; i < mesh.streams.size(); ++i)
+		if (mesh.streams[i].type == type && mesh.streams[i].index == index)
+			return &mesh.streams[i];
+
+	return NULL;
+}
+
 // assumes mesh & target are structurally identical
 static void transformMesh(Mesh& target, const Mesh& mesh, const cgltf_node* node)
 {
@@ -720,15 +729,6 @@ static void filterTriangles(Mesh& mesh)
 	}
 
 	mesh.indices.resize(write);
-}
-
-static Stream* getStream(Mesh& mesh, cgltf_attribute_type type, int index = 0)
-{
-	for (size_t i = 0; i < mesh.streams.size(); ++i)
-		if (mesh.streams[i].type == type && mesh.streams[i].index == index)
-			return &mesh.streams[i];
-
-	return NULL;
 }
 
 static void simplifyAttributes(std::vector<float>& attrs, float* attrw, size_t stride, Mesh& mesh)
