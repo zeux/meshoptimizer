@@ -75,7 +75,7 @@ You can then further optimize the resulting buffers by calling the other functio
 
 ```c++
 size_t vertex_count = meshopt_generateVertexRemapFuzzy(&remap[0], NULL, index_count,
-    &unindexed_vertices[0].px, unindexed_vertex_count, sizeof(Vertex), 0.f,
+    &unindexed_vertices[0].px, unindexed_vertex_count, sizeof(Vertex),
     [&](unsigned int lhs, unsigned int rhs) -> bool {
         const Vertex& lv = unindexed_vertices[lhs];
         const Vertex& rv = unindexed_vertices[rhs];

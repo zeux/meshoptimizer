@@ -1378,21 +1378,21 @@ static void remapFuzzy()
 	unsigned int remap[6];
 	size_t res;
 
-	res = meshopt_generateVertexRemapFuzzy(remap, NULL, 6, vb, 6, sizeof(float) * 3, 0.f, NULL, NULL);
+	res = meshopt_generateVertexRemapFuzzy(remap, NULL, 6, vb, 6, sizeof(float) * 3, NULL, NULL);
 	assert(res == 4);
 	for (int i = 0; i < 4; ++i)
 		assert(remap[i] == unsigned(i));
 	assert(remap[4] == 1);
 	assert(remap[5] == 3);
 
-	res = meshopt_generateVertexRemapFuzzy(remap, NULL, 6, vb, 6, sizeof(float) * 3, 0.f, remapFuzzyTrue, NULL);
+	res = meshopt_generateVertexRemapFuzzy(remap, NULL, 6, vb, 6, sizeof(float) * 3, remapFuzzyTrue, NULL);
 	assert(res == 4);
 	for (int i = 0; i < 4; ++i)
 		assert(remap[i] == unsigned(i));
 	assert(remap[4] == 1);
 	assert(remap[5] == 3);
 
-	res = meshopt_generateVertexRemapFuzzy(remap, NULL, 6, vb, 6, sizeof(float) * 3, 0.f, remapFuzzyFalse, NULL);
+	res = meshopt_generateVertexRemapFuzzy(remap, NULL, 6, vb, 6, sizeof(float) * 3, remapFuzzyFalse, NULL);
 	assert(res == 6);
 	for (int i = 0; i < 6; ++i)
 		assert(remap[i] == unsigned(i));

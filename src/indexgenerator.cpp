@@ -2,7 +2,6 @@
 #include "meshoptimizer.h"
 
 #include <assert.h>
-#include <math.h>
 #include <string.h>
 
 // This work is based on:
@@ -93,43 +92,14 @@ struct VertexFuzzyHasher
 	const float* vertex_positions;
 	size_t vertex_stride_float;
 
-	float tolerance;
-	int tolerance_exp;
-	int tolerance_off;
-
 	int (*callback)(void*, unsigned int, unsigned int);
 	void* context;
-
-	unsigned int truncate(unsigned int v, int off) const
-	{
-		int ve = int((v >> 23) & 0xff) - 127;
-		int vd = tolerance_exp - (ve - 23);
-
-		// vd < 0: tolerance is <ulp; vd > 23: tolerance is >magnitude
-		// when tolerance is >magnitude, we return 2^tolerance_exp when off = 1
-		if (unsigned(vd) > 23)
-			return vd < 0 ? v : -off & ((v & 0x80000000) | ((tolerance_exp + 127) << 23));
-
-		unsigned int vr = v;
-		vr &= ~((1 << vd) - 1);
-		vr += off << vd;
-
-		return vr;
-	}
 
 	size_t hash(unsigned int index) const
 	{
 		const unsigned int* key = reinterpret_cast<const unsigned int*>(vertex_positions + index * vertex_stride_float);
 
 		unsigned int x = key[0], y = key[1], z = key[2];
-
-		if (tolerance_off >= 0)
-		{
-			// truncate coordinates to tolerance precision and offset each by 0/1
-			x = truncate(x, (tolerance_off >> 0) & 1);
-			y = truncate(y, (tolerance_off >> 1) & 1);
-			z = truncate(z, (tolerance_off >> 2) & 1);
-		}
 
 		// replace negative zero with zero
 		x = (x == 0x80000000) ? 0 : x;
@@ -150,7 +120,7 @@ struct VertexFuzzyHasher
 		const float* lp = vertex_positions + lhs * vertex_stride_float;
 		const float* rp = vertex_positions + rhs * vertex_stride_float;
 
-		if (fabsf(lp[0] - rp[0]) > tolerance || fabsf(lp[1] - rp[1]) > tolerance || fabsf(lp[2] - rp[2]) > tolerance)
+		if (lp[0] != rp[0] || lp[1] != rp[1] || lp[2] != rp[2])
 			return false;
 
 		return callback ? callback(context, lhs, rhs) : true;
@@ -368,7 +338,7 @@ size_t meshopt_generateVertexRemapMulti(unsigned int* destination, const unsigne
 	return next_vertex;
 }
 
-size_t meshopt_generateVertexRemapFuzzy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, float tolerance, int (*callback)(void*, unsigned int, unsigned int), void* context)
+size_t meshopt_generateVertexRemapFuzzy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, int (*callback)(void*, unsigned int, unsigned int), void* context)
 {
 	using namespace meshopt;
 
@@ -376,18 +346,14 @@ size_t meshopt_generateVertexRemapFuzzy(unsigned int* destination, const unsigne
 	assert(!indices || index_count % 3 == 0);
 	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
-	assert(tolerance >= 0);
 
 	meshopt_Allocator allocator;
 
 	memset(destination, -1, vertex_count * sizeof(unsigned int));
 
-	int tolerance_exp = 0;
-	frexpf(tolerance, &tolerance_exp);
+	VertexFuzzyHasher hasher = {vertex_positions, vertex_positions_stride / sizeof(float), callback, context};
 
-	VertexFuzzyHasher hasher = {vertex_positions, vertex_positions_stride / sizeof(float), tolerance, tolerance_exp, -1, callback, context};
-
-	size_t table_size = hashBuckets(vertex_count) * (tolerance > 0 ? 8 : 1);
+	size_t table_size = hashBuckets(vertex_count);
 	unsigned int* table = allocator.allocate<unsigned int>(table_size);
 	memset(table, -1, table_size * sizeof(unsigned int));
 
@@ -398,45 +364,8 @@ size_t meshopt_generateVertexRemapFuzzy(unsigned int* destination, const unsigne
 		unsigned int index = indices ? indices[i] : unsigned(i);
 		assert(index < vertex_count);
 
-		if (destination[index] != ~0u)
-			continue;
-
-		if (tolerance > 0)
+		if (destination[index] == ~0u)
 		{
-			unsigned int* entries[8] = {};
-			unsigned int* found = NULL;
-
-			for (int k = 0; k < 8; ++k)
-			{
-				hasher.tolerance_off = k;
-				entries[k] = hashLookup(table, table_size, hasher, index, ~0u);
-
-				// if any entry refers to an equivalent vertex, we can use it
-				if (*entries[k] != ~0u)
-				{
-					found = entries[k];
-					break;
-				}
-			}
-
-			if (!found)
-			{
-				// no equivalent vertex found; fill the hash table so that future vertices can match ours
-				for (int k = 0; k < 8; ++k)
-					*entries[k] = index;
-
-				destination[index] = next_vertex++;
-			}
-			else
-			{
-				// reuse the equivalent vertex
-				assert(destination[*found] != ~0u);
-				destination[index] = destination[*found];
-			}
-		}
-		else
-		{
-			// when tolerance=0, we can map each vertex to a single hash entry using positional equivalence
 			unsigned int* entry = hashLookup(table, table_size, hasher, index, ~0u);
 
 			if (*entry == ~0u)
