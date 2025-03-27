@@ -224,6 +224,43 @@ static void buildPositionRemap(unsigned int* remap, const float* vertex_position
 	allocator.deallocate(vertex_table);
 }
 
+template <typename Hash>
+static size_t generateVertexRemap(unsigned int* remap, const unsigned int* indices, size_t index_count, size_t vertex_count, const Hash& hash, meshopt_Allocator& allocator)
+{
+	memset(remap, -1, vertex_count * sizeof(unsigned int));
+
+	size_t table_size = hashBuckets(vertex_count);
+	unsigned int* table = allocator.allocate<unsigned int>(table_size);
+	memset(table, -1, table_size * sizeof(unsigned int));
+
+	unsigned int next_vertex = 0;
+
+	for (size_t i = 0; i < index_count; ++i)
+	{
+		unsigned int index = indices ? indices[i] : unsigned(i);
+		assert(index < vertex_count);
+
+		if (remap[index] != ~0u)
+			continue;
+
+		unsigned int* entry = hashLookup(table, table_size, hash, index, ~0u);
+
+		if (*entry == ~0u)
+		{
+			*entry = index;
+			remap[index] = next_vertex++;
+		}
+		else
+		{
+			assert(remap[*entry] != ~0u);
+			remap[index] = remap[*entry];
+		}
+	}
+
+	assert(next_vertex <= vertex_count);
+	return next_vertex;
+}
+
 template <size_t BlockSize>
 static void remapVertices(void* destination, const void* vertices, size_t vertex_count, size_t vertex_size, const unsigned int* remap)
 {
@@ -249,41 +286,9 @@ size_t meshopt_generateVertexRemap(unsigned int* destination, const unsigned int
 	assert(vertex_size > 0 && vertex_size <= 256);
 
 	meshopt_Allocator allocator;
-
-	memset(destination, -1, vertex_count * sizeof(unsigned int));
-
 	VertexHasher hasher = {static_cast<const unsigned char*>(vertices), vertex_size, vertex_size};
 
-	size_t table_size = hashBuckets(vertex_count);
-	unsigned int* table = allocator.allocate<unsigned int>(table_size);
-	memset(table, -1, table_size * sizeof(unsigned int));
-
-	unsigned int next_vertex = 0;
-
-	for (size_t i = 0; i < index_count; ++i)
-	{
-		unsigned int index = indices ? indices[i] : unsigned(i);
-		assert(index < vertex_count);
-
-		if (destination[index] == ~0u)
-		{
-			unsigned int* entry = hashLookup(table, table_size, hasher, index, ~0u);
-
-			if (*entry == ~0u)
-			{
-				*entry = index;
-				destination[index] = next_vertex++;
-			}
-			else
-			{
-				assert(destination[*entry] != ~0u);
-				destination[index] = destination[*entry];
-			}
-		}
-	}
-
-	assert(next_vertex <= vertex_count);
-	return next_vertex;
+	return generateVertexRemap(destination, indices, index_count, vertex_count, hasher, allocator);
 }
 
 size_t meshopt_generateVertexRemapMulti(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, const struct meshopt_Stream* streams, size_t stream_count)
@@ -301,41 +306,9 @@ size_t meshopt_generateVertexRemapMulti(unsigned int* destination, const unsigne
 	}
 
 	meshopt_Allocator allocator;
-
-	memset(destination, -1, vertex_count * sizeof(unsigned int));
-
 	VertexStreamHasher hasher = {streams, stream_count};
 
-	size_t table_size = hashBuckets(vertex_count);
-	unsigned int* table = allocator.allocate<unsigned int>(table_size);
-	memset(table, -1, table_size * sizeof(unsigned int));
-
-	unsigned int next_vertex = 0;
-
-	for (size_t i = 0; i < index_count; ++i)
-	{
-		unsigned int index = indices ? indices[i] : unsigned(i);
-		assert(index < vertex_count);
-
-		if (destination[index] == ~0u)
-		{
-			unsigned int* entry = hashLookup(table, table_size, hasher, index, ~0u);
-
-			if (*entry == ~0u)
-			{
-				*entry = index;
-				destination[index] = next_vertex++;
-			}
-			else
-			{
-				assert(destination[*entry] != ~0u);
-				destination[index] = destination[*entry];
-			}
-		}
-	}
-
-	assert(next_vertex <= vertex_count);
-	return next_vertex;
+	return generateVertexRemap(destination, indices, index_count, vertex_count, hasher, allocator);
 }
 
 size_t meshopt_generateVertexRemapFuzzy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, int (*callback)(void*, unsigned int, unsigned int), void* context)
@@ -348,41 +321,9 @@ size_t meshopt_generateVertexRemapFuzzy(unsigned int* destination, const unsigne
 	assert(vertex_positions_stride % sizeof(float) == 0);
 
 	meshopt_Allocator allocator;
-
-	memset(destination, -1, vertex_count * sizeof(unsigned int));
-
 	VertexFuzzyHasher hasher = {vertex_positions, vertex_positions_stride / sizeof(float), callback, context};
 
-	size_t table_size = hashBuckets(vertex_count);
-	unsigned int* table = allocator.allocate<unsigned int>(table_size);
-	memset(table, -1, table_size * sizeof(unsigned int));
-
-	unsigned int next_vertex = 0;
-
-	for (size_t i = 0; i < index_count; ++i)
-	{
-		unsigned int index = indices ? indices[i] : unsigned(i);
-		assert(index < vertex_count);
-
-		if (destination[index] == ~0u)
-		{
-			unsigned int* entry = hashLookup(table, table_size, hasher, index, ~0u);
-
-			if (*entry == ~0u)
-			{
-				*entry = index;
-				destination[index] = next_vertex++;
-			}
-			else
-			{
-				assert(destination[*entry] != ~0u);
-				destination[index] = destination[*entry];
-			}
-		}
-	}
-
-	assert(next_vertex <= vertex_count);
-	return next_vertex;
+	return generateVertexRemap(destination, indices, index_count, vertex_count, hasher, allocator);
 }
 
 void meshopt_remapVertexBuffer(void* destination, const void* vertices, size_t vertex_count, size_t vertex_size, const unsigned int* remap)
