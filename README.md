@@ -71,10 +71,10 @@ meshopt_remapVertexBuffer(vertices, &unindexed_vertices[0], unindexed_vertex_cou
 
 You can then further optimize the resulting buffers by calling the other functions on them in-place.
 
-`meshopt_generateVertexRemap` uses binary equivalence of vertex data, which is generally a reasonable default; however, in some cases some attributes may have floating point drift causing extra vertices to be generated. For such cases, it may be necessary to quantize some attributes (most importantly, normals and tangents) before generating the remap, or use `meshopt_generateVertexRemapFuzzy` algorithm that allows comparing individual attributes with tolerance:
+`meshopt_generateVertexRemap` uses binary equivalence of vertex data, which is generally a reasonable default; however, in some cases some attributes may have floating point drift causing extra vertices to be generated. For such cases, it may be necessary to quantize some attributes (most importantly, normals and tangents) before generating the remap, or use `meshopt_generateVertexRemapCustom` algorithm that allows comparing individual attributes with tolerance by providing a custom comparison function:
 
 ```c++
-size_t vertex_count = meshopt_generateVertexRemapFuzzy(&remap[0], NULL, index_count,
+size_t vertex_count = meshopt_generateVertexRemapCustom(&remap[0], NULL, index_count,
     &unindexed_vertices[0].px, unindexed_vertex_count, sizeof(Vertex),
     [&](unsigned int lhs, unsigned int rhs) -> bool {
         const Vertex& lv = unindexed_vertices[lhs];
@@ -585,7 +585,7 @@ Currently, the following APIs are experimental, with the functions marked with `
 - `meshopt_computeSphereBounds`*
 - `meshopt_encodeVertexBufferLevel`*
 - `meshopt_generateProvokingIndexBuffer`*
-- `meshopt_generateVertexRemapFuzzy`
+- `meshopt_generateVertexRemapCustom`*
 - `meshopt_partitionClusters`
 - `meshopt_simplifySloppy`
 - `meshopt_spatialSortTriangles`

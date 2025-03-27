@@ -1315,7 +1315,7 @@ void reindexFuzzy(const Mesh& mesh)
 
 	double middle = timestamp();
 
-	size_t uf = meshopt_generateVertexRemapFuzzy(&remap[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), reindexCompare, const_cast<Vertex*>(&mesh.vertices[0]));
+	size_t uf = meshopt_generateVertexRemapCustom(&remap[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), reindexCompare, const_cast<Vertex*>(&mesh.vertices[0]));
 
 	double end = timestamp();
 

@@ -87,7 +87,7 @@ struct VertexStreamHasher
 	}
 };
 
-struct VertexFuzzyHasher
+struct VertexCustomHasher
 {
 	const float* vertex_positions;
 	size_t vertex_stride_float;
@@ -340,7 +340,7 @@ size_t meshopt_generateVertexRemapMulti(unsigned int* destination, const unsigne
 	return generateVertexRemap(destination, indices, index_count, vertex_count, hasher, allocator);
 }
 
-size_t meshopt_generateVertexRemapFuzzy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, int (*callback)(void*, unsigned int, unsigned int), void* context)
+size_t meshopt_generateVertexRemapCustom(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, int (*callback)(void*, unsigned int, unsigned int), void* context)
 {
 	using namespace meshopt;
 
@@ -350,7 +350,7 @@ size_t meshopt_generateVertexRemapFuzzy(unsigned int* destination, const unsigne
 	assert(vertex_positions_stride % sizeof(float) == 0);
 
 	meshopt_Allocator allocator;
-	VertexFuzzyHasher hasher = {vertex_positions, vertex_positions_stride / sizeof(float), callback, context};
+	VertexCustomHasher hasher = {vertex_positions, vertex_positions_stride / sizeof(float), callback, context};
 
 	return generateVertexRemap(destination, indices, index_count, vertex_count, hasher, allocator);
 }
