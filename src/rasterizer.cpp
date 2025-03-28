@@ -139,21 +139,9 @@ static void rasterize(OverdrawBuffer* buffer, float v1x, float v1y, float v1z, f
 	}
 }
 
-} // namespace meshopt
-
-meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+static float transformTriangles(float* triangles, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
-	using namespace meshopt;
-
-	assert(index_count % 3 == 0);
-	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
-	assert(vertex_positions_stride % sizeof(float) == 0);
-
-	meshopt_Allocator allocator;
-
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
-
-	meshopt_OverdrawStatistics result = {};
 
 	float minv[3] = {FLT_MAX, FLT_MAX, FLT_MAX};
 	float maxv[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
@@ -172,8 +160,6 @@ meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, 
 	float extent = max(maxv[0] - minv[0], max(maxv[1] - minv[1], maxv[2] - minv[2]));
 	float scale = kViewport / extent;
 
-	float* triangles = allocator.allocate<float>(index_count * 3);
-
 	for (size_t i = 0; i < index_count; ++i)
 	{
 		unsigned int index = indices[i];
@@ -186,31 +172,55 @@ meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, 
 		triangles[i * 3 + 2] = (v[2] - minv[2]) * scale;
 	}
 
+	return extent;
+}
+
+static void rasterizeTriangles(OverdrawBuffer* buffer, const float* triangles, size_t index_count, int axis)
+{
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		const float* vn0 = &triangles[3 * (i + 0)];
+		const float* vn1 = &triangles[3 * (i + 1)];
+		const float* vn2 = &triangles[3 * (i + 2)];
+
+		switch (axis)
+		{
+		case 0:
+			rasterize(buffer, vn0[2], vn0[1], vn0[0], vn1[2], vn1[1], vn1[0], vn2[2], vn2[1], vn2[0]);
+			break;
+		case 1:
+			rasterize(buffer, vn0[0], vn0[2], vn0[1], vn1[0], vn1[2], vn1[1], vn2[0], vn2[2], vn2[1]);
+			break;
+		case 2:
+			rasterize(buffer, vn0[1], vn0[0], vn0[2], vn1[1], vn1[0], vn1[2], vn2[1], vn2[0], vn2[2]);
+			break;
+		}
+	}
+}
+
+} // namespace meshopt
+
+meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+{
+	using namespace meshopt;
+
+	assert(index_count % 3 == 0);
+	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
+	assert(vertex_positions_stride % sizeof(float) == 0);
+
+	meshopt_Allocator allocator;
+
+	meshopt_OverdrawStatistics result = {};
+
+	float* triangles = allocator.allocate<float>(index_count * 3);
+	transformTriangles(triangles, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride);
+
 	OverdrawBuffer* buffer = allocator.allocate<OverdrawBuffer>(1);
 
 	for (int axis = 0; axis < 3; ++axis)
 	{
 		memset(buffer, 0, sizeof(OverdrawBuffer));
-
-		for (size_t i = 0; i < index_count; i += 3)
-		{
-			const float* vn0 = &triangles[3 * (i + 0)];
-			const float* vn1 = &triangles[3 * (i + 1)];
-			const float* vn2 = &triangles[3 * (i + 2)];
-
-			switch (axis)
-			{
-			case 0:
-				rasterize(buffer, vn0[2], vn0[1], vn0[0], vn1[2], vn1[1], vn1[0], vn2[2], vn2[1], vn2[0]);
-				break;
-			case 1:
-				rasterize(buffer, vn0[0], vn0[2], vn0[1], vn1[0], vn1[2], vn1[1], vn2[0], vn2[2], vn2[1]);
-				break;
-			case 2:
-				rasterize(buffer, vn0[1], vn0[0], vn0[2], vn1[1], vn1[0], vn1[2], vn2[1], vn2[0], vn2[2]);
-				break;
-			}
-		}
+		rasterizeTriangles(buffer, triangles, index_count, axis);
 
 		for (int y = 0; y < kViewport; ++y)
 			for (int x = 0; x < kViewport; ++x)
