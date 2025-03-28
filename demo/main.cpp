@@ -1325,6 +1325,18 @@ void reindexFuzzy(const Mesh& mesh)
 	    int(mesh.vertices.size()), int(uf), (end - middle) * 1000);
 }
 
+void coverage(const Mesh& mesh)
+{
+	double start = timestamp();
+
+	meshopt_CoverageStatistics cs = meshopt_analyzeCoverage(&mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
+
+	double end = timestamp();
+
+	printf("Coverage : X %.1f%% Y %.1f%% Z %.1f%% in %.2f msec\n",
+	    cs.coverage[0] * 100, cs.coverage[1] * 100, cs.coverage[2] * 100, (end - start) * 1000);
+}
+
 void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices); // nanite.cpp
 
 bool loadMesh(Mesh& mesh, const char* path)
@@ -1507,6 +1519,7 @@ void process(const char* path)
 	spatialSortTriangles(mesh);
 
 	reindexFuzzy(mesh);
+	coverage(mesh);
 
 	if (path)
 		processDeinterleaved(path);
