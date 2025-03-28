@@ -36,8 +36,8 @@ static float computeDepthGradients(float& dzdx, float& dzdy, float x1, float y1,
 	float det = (x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1);
 	float invdet = (det == 0) ? 0 : 1 / det;
 
-	dzdx = (z2 - z1) * (y3 - y1) - (y2 - y1) * (z3 - z1) * invdet;
-	dzdy = (x2 - x1) * (z3 - z1) - (z2 - z1) * (x3 - x1) * invdet;
+	dzdx = ((z2 - z1) * (y3 - y1) - (y2 - y1) * (z3 - z1)) * invdet;
+	dzdy = ((x2 - x1) * (z3 - z1) - (z2 - z1) * (x3 - x1)) * invdet;
 
 	return det;
 }
