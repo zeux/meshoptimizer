@@ -18,14 +18,6 @@ struct OverdrawBuffer
 	unsigned int overdraw[kViewport][kViewport][2];
 };
 
-#ifndef min
-#define min(a, b) ((a) < (b) ? (a) : (b))
-#endif
-
-#ifndef max
-#define max(a, b) ((a) > (b) ? (a) : (b))
-#endif
-
 static float computeDepthGradients(float& dzdx, float& dzdy, float x1, float y1, float z1, float x2, float y2, float z2, float x3, float y3, float z3)
 {
 	// z2 = z1 + dzdx * (x2 - x1) + dzdy * (y2 - y1)
@@ -76,11 +68,26 @@ static void rasterize(OverdrawBuffer* buffer, float v1x, float v1y, float v1z, f
 	// bounding rectangle, clipped against viewport
 	// since we rasterize pixels with covered centers, min >0.5 should round up
 	// as for max, due to top-left filling convention we will never rasterize right/bottom edges
-	// so max >= 0.5 should round down
-	int minx = max((min(X1, min(X2, X3)) + 7) >> 4, 0);
-	int maxx = min((max(X1, max(X2, X3)) + 7) >> 4, kViewport);
-	int miny = max((min(Y1, min(Y2, Y3)) + 7) >> 4, 0);
-	int maxy = min((max(Y1, max(Y2, Y3)) + 7) >> 4, kViewport);
+	// so max >= 0.5 should round down for inclusive bounds, and up for exclusive (in our case)
+	int minx = X1 < X2 ? X1 : X2;
+	minx = minx < X3 ? minx : X3;
+	minx = (minx + 7) >> 4;
+	minx = minx < 0 ? 0 : minx;
+
+	int miny = Y1 < Y2 ? Y1 : Y2;
+	miny = miny < Y3 ? miny : Y3;
+	miny = (miny + 7) >> 4;
+	miny = miny < 0 ? 0 : miny;
+
+	int maxx = X1 > X2 ? X1 : X2;
+	maxx = maxx > X3 ? maxx : X3;
+	maxx = (maxx + 7) >> 4;
+	maxx = maxx > kViewport ? kViewport : maxx;
+
+	int maxy = Y1 > Y2 ? Y1 : Y2;
+	maxy = maxy > Y3 ? maxy : Y3;
+	maxy = (maxy + 7) >> 4;
+	maxy = maxy > kViewport ? kViewport : maxy;
 
 	// deltas, 28.4 fixed point
 	int DX12 = X1 - X2;
@@ -152,12 +159,15 @@ static float transformTriangles(float* triangles, const unsigned int* indices, s
 
 		for (int j = 0; j < 3; ++j)
 		{
-			minv[j] = min(minv[j], v[j]);
-			maxv[j] = max(maxv[j], v[j]);
+			minv[j] = minv[j] < v[j] ? minv[j] : v[j];
+			maxv[j] = maxv[j] > v[j] ? maxv[j] : v[j];
 		}
 	}
 
-	float extent = max(maxv[0] - minv[0], max(maxv[1] - minv[1], maxv[2] - minv[2]));
+	float extent = maxv[0] - minv[0];
+	extent = maxv[1] - minv[1] > extent ? maxv[1] - minv[1] : extent;
+	extent = maxv[2] - minv[2] > extent ? maxv[2] - minv[2] : extent;
+
 	float scale = kViewport / extent;
 
 	for (size_t i = 0; i < index_count; ++i)
