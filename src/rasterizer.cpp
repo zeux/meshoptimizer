@@ -159,14 +159,18 @@ static float transformTriangles(float* triangles, const unsigned int* indices, s
 
 		for (int j = 0; j < 3; ++j)
 		{
-			minv[j] = minv[j] < v[j] ? minv[j] : v[j];
-			maxv[j] = maxv[j] > v[j] ? maxv[j] : v[j];
+			float vj = v[j];
+
+			minv[j] = minv[j] > vj ? vj : minv[j];
+			maxv[j] = maxv[j] < vj ? vj : maxv[j];
 		}
 	}
 
-	float extent = maxv[0] - minv[0];
-	extent = maxv[1] - minv[1] > extent ? maxv[1] - minv[1] : extent;
-	extent = maxv[2] - minv[2] > extent ? maxv[2] - minv[2] : extent;
+	float extent = 0.f;
+
+	extent = (maxv[0] - minv[0]) < extent ? extent : (maxv[0] - minv[0]);
+	extent = (maxv[1] - minv[1]) < extent ? extent : (maxv[1] - minv[1]);
+	extent = (maxv[2] - minv[2]) < extent ? extent : (maxv[2] - minv[2]);
 
 	float scale = kViewport / extent;
 
