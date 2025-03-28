@@ -237,3 +237,39 @@ meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, 
 
 	return result;
 }
+
+meshopt_CoverageStatistics meshopt_analyzeCoverage(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+{
+	using namespace meshopt;
+
+	assert(index_count % 3 == 0);
+	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
+	assert(vertex_positions_stride % sizeof(float) == 0);
+
+	meshopt_Allocator allocator;
+
+	meshopt_CoverageStatistics result = {};
+
+	float* triangles = allocator.allocate<float>(index_count * 3);
+	float extent = transformTriangles(triangles, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride);
+
+	OverdrawBuffer* buffer = allocator.allocate<OverdrawBuffer>(1);
+
+	for (int axis = 0; axis < 3; ++axis)
+	{
+		memset(buffer, 0, sizeof(OverdrawBuffer));
+		rasterizeTriangles(buffer, triangles, index_count, axis);
+
+		unsigned int covered = 0;
+
+		for (int y = 0; y < kViewport; ++y)
+			for (int x = 0; x < kViewport; ++x)
+				covered += (buffer->overdraw[y][x][0] | buffer->overdraw[y][x][1]) > 0;
+
+		result.coverage[axis] = float(covered) / float(kViewport * kViewport);
+	}
+
+	result.extent = extent;
+
+	return result;
+}
