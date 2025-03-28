@@ -498,6 +498,19 @@ struct meshopt_VertexCacheStatistics
  */
 MESHOPTIMIZER_API struct meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int warp_size, unsigned int primgroup_size);
 
+struct meshopt_VertexFetchStatistics
+{
+	unsigned int bytes_fetched;
+	float overfetch; /* fetched bytes / vertex buffer size; best case 1.0 (each byte is fetched once) */
+};
+
+/**
+ * Vertex fetch cache analyzer
+ * Returns cache hit statistics using a simplified direct mapped model
+ * Results may not match actual GPU performance
+ */
+MESHOPTIMIZER_API struct meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
+
 struct meshopt_OverdrawStatistics
 {
 	unsigned int pixels_covered;
@@ -514,18 +527,19 @@ struct meshopt_OverdrawStatistics
  */
 MESHOPTIMIZER_API struct meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 
-struct meshopt_VertexFetchStatistics
+struct meshopt_CoverageStatistics
 {
-	unsigned int bytes_fetched;
-	float overfetch; /* fetched bytes / vertex buffer size; best case 1.0 (each byte is fetched once) */
+	float coverage[3];
+	float extent; /* viewport size in mesh coordinates */
 };
 
 /**
- * Vertex fetch cache analyzer
- * Returns cache hit statistics using a simplified direct mapped model
- * Results may not match actual GPU performance
+ * Experimental: Coverage analyzer
+ * Returns coverage statistics (ratio of viewport pixels covered from each axis) using a software rasterizer
+ *
+ * vertex_positions should have float3 position in the first 12 bytes of each vertex
  */
-MESHOPTIMIZER_API struct meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const unsigned int* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
+MESHOPTIMIZER_EXPERIMENTAL struct meshopt_CoverageStatistics meshopt_analyzeCoverage(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 
 /**
  * Meshlet is a small mesh cluster (subset) that consists of:
@@ -784,9 +798,11 @@ inline size_t meshopt_unstripify(T* destination, const T* indices, size_t index_
 template <typename T>
 inline meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const T* indices, size_t index_count, size_t vertex_count, unsigned int cache_size, unsigned int warp_size, unsigned int buffer_size);
 template <typename T>
+inline meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const T* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
+template <typename T>
 inline meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 template <typename T>
-inline meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const T* indices, size_t index_count, size_t vertex_count, size_t vertex_size);
+inline meshopt_CoverageStatistics meshopt_analyzeCoverage(const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 template <typename T>
 inline size_t meshopt_buildMeshlets(meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t max_triangles, float cone_weight);
 template <typename T>
@@ -1169,6 +1185,14 @@ inline meshopt_VertexCacheStatistics meshopt_analyzeVertexCache(const T* indices
 }
 
 template <typename T>
+inline meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+{
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
+
+	return meshopt_analyzeVertexFetch(in.data, index_count, vertex_count, vertex_size);
+}
+
+template <typename T>
 inline meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
@@ -1177,11 +1201,11 @@ inline meshopt_OverdrawStatistics meshopt_analyzeOverdraw(const T* indices, size
 }
 
 template <typename T>
-inline meshopt_VertexFetchStatistics meshopt_analyzeVertexFetch(const T* indices, size_t index_count, size_t vertex_count, size_t vertex_size)
+inline meshopt_CoverageStatistics meshopt_analyzeCoverage(const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
 
-	return meshopt_analyzeVertexFetch(in.data, index_count, vertex_count, vertex_size);
+	return meshopt_analyzeCoverage(in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride);
 }
 
 template <typename T>

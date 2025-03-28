@@ -498,6 +498,8 @@ While the only way to get precise performance data is to measure performance on 
 
 `meshopt_analyzeOverdraw` returns overdraw statistics. The main metric it uses is overdraw - the ratio between the number of pixel shader invocations to the total number of covered pixels, as measured from several different orthographic cameras. The best case for overdraw is 1.0 - each pixel is shaded once.
 
+`meshopt_analyzeCoverage` returns coverage statistics: the ratio of covered pixels to the viewport extent from each cardinal axis. This is not an efficiency measure per se, but it can be used to measure silhouette change after simplification as well as more precise distance based culling, where the amount of view dependent coverage can be estimated by computing a dot product between the view direction and the coverage vector.
+
 Note that all analyzers use approximate models for the relevant GPU units, so the numbers you will get as the result are only a rough approximation of the actual performance.
 
 ## Specialized processing
@@ -581,6 +583,7 @@ Applications may configure the library to change the attributes of experimental 
 
 Currently, the following APIs are experimental, with the functions marked with `*` being likely to become stable in the future with no changes:
 
+- `meshopt_analyzeCoverage`*
 - `meshopt_buildMeshletsFlex`
 - `meshopt_computeSphereBounds`*
 - `meshopt_encodeVertexBufferLevel`*
