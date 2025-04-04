@@ -266,7 +266,7 @@ To further leverage the inherent structure of some data, the preparation stage c
     - `meshopt_EncodeExpSharedComponent` shares exponents between the same component in different vectors
     - `meshopt_EncodeExpClamped` does not share exponents but clamps the exponent range to reduce exponent entropy
 
-Note that all filters are lossy and require the data to be deinterleaved with one attribute per stream; this faciliates efficient SIMD implementation of filter decoders, allowing the overall decompression speed to be closer to that of the raw codec.
+Note that all filters are lossy and require the data to be deinterleaved with one attribute per stream; this facilitates efficient SIMD implementation of filter decoders, allowing the overall decompression speed to be closer to that of the raw codec.
 
 ## Triangle strip conversion
 
@@ -311,7 +311,7 @@ After this `meshopt_remapVertexBuffer` needs to be called once for each vertex s
 
 Instead of calling `meshopt_optimizeVertexFetch` for reordering vertices in a single vertex buffer for efficiency, calling `meshopt_optimizeVertexFetchRemap` and then calling `meshopt_remapVertexBuffer` for each stream again is recommended.
 
-Finally, when compressing vertex data, `meshopt_encodeVertexBuffer` should be used on each vertex stream separately - this allows the encoder to best utilize corellation between attribute values for different vertices.
+Finally, when compressing vertex data, `meshopt_encodeVertexBuffer` should be used on each vertex stream separately - this allows the encoder to best utilize correlation between attribute values for different vertices.
 
 ## Simplification
 
