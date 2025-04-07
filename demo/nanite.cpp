@@ -750,7 +750,7 @@ struct BoxSort
 	}
 };
 
-void mergeminmax(Box& box, const Box& other)
+static void mergeBox(Box& box, const Box& other)
 {
 	for (int k = 0; k < 3; ++k)
 	{
@@ -759,13 +759,13 @@ void mergeminmax(Box& box, const Box& other)
 	}
 }
 
-float surface(const Box& box)
+inline float surface(const Box& box)
 {
 	float sx = box.max[0] - box.min[0], sy = box.max[1] - box.min[1], sz = box.max[2] - box.min[2];
 	return sx * sy + sx * sz + sy * sz;
 }
 
-float sahcost(const Box* boxes, unsigned int* order, size_t count, int depth = 0)
+static float sahCost(const Box* boxes, unsigned int* order, size_t count, int depth)
 {
 	assert(count > 0);
 
@@ -793,8 +793,8 @@ float sahcost(const Box* boxes, unsigned int* order, size_t count, int depth = 0
 	{
 		for (int k = 0; k < 3; ++k)
 		{
-			mergeminmax(accum[2 * k + 0], boxes[axes[i + k * count]]);
-			mergeminmax(accum[2 * k + 1], boxes[axes[(count - 1 - i) + k * count]]);
+			mergeBox(accum[2 * k + 0], boxes[axes[i + k * count]]);
+			mergeBox(accum[2 * k + 1], boxes[axes[(count - 1 - i) + k * count]]);
 		}
 
 		for (int k = 0; k < 3; ++k)
@@ -830,17 +830,34 @@ float sahcost(const Box* boxes, unsigned int* order, size_t count, int depth = 0
 	memcpy(order, &axes[bestk * count], sizeof(unsigned int) * count);
 
 	float total = costs[count - 1];
-	float sahl = sahcost(boxes, order, bestsplit + 1, depth + 1);
-	float sahr = sahcost(boxes, &order[bestsplit + 1], count - bestsplit - 1, depth + 1);
-
-	if (depth < 3)
-	{
-		printf("d %d best split: %d %d %f\n", depth, bestk, int(bestsplit), bestcost);
-		printf("d %d count left %d right %d\n", depth, int(bestsplit + 1), int(count - bestsplit - 1));
-		printf("d %d total %f sahl %f sahr %f\n", depth, total, sahl, sahr);
-	}
+	float sahl = sahCost(boxes, order, bestsplit + 1, depth + 1);
+	float sahr = sahCost(boxes, &order[bestsplit + 1], count - bestsplit - 1, depth + 1);
 
 	return total + sahl + sahr;
+}
+
+static float sahCost(const Box* boxes, size_t count)
+{
+	std::vector<unsigned int> order(count);
+	for (size_t i = 0; i < count; ++i)
+		order[i] = unsigned(i);
+
+	return sahCost(boxes, &order[0], count, 0);
+}
+
+static void expandBox(Box& box, float x, float y, float z)
+{
+	box.min[0] = std::min(box.min[0], x);
+	box.min[1] = std::min(box.min[1], y);
+	box.min[2] = std::min(box.min[2], z);
+
+	box.max[0] = std::max(box.max[0], x);
+	box.max[1] = std::max(box.max[1], y);
+	box.max[2] = std::max(box.max[2], z);
+
+	box.pos[0] += x;
+	box.pos[1] += y;
+	box.pos[2] += z;
 }
 
 void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
@@ -859,17 +876,7 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 		{
 			const Vertex& vertex = vertices[indices[i * 3 + j]];
 
-			box.min[0] = std::min(box.min[0], vertex.px);
-			box.min[1] = std::min(box.min[1], vertex.py);
-			box.min[2] = std::min(box.min[2], vertex.pz);
-
-			box.max[0] = std::max(box.max[0], vertex.px);
-			box.max[1] = std::max(box.max[1], vertex.py);
-			box.max[2] = std::max(box.max[2], vertex.pz);
-
-			box.pos[0] += vertex.px;
-			box.pos[1] += vertex.py;
-			box.pos[2] += vertex.pz;
+			expandBox(box, vertex.px, vertex.py, vertex.pz);
 		}
 
 		for (int k = 0; k < 3; ++k)
@@ -878,15 +885,85 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 
 	Box all = triangles[0];
 	for (size_t i = 1; i < triangles.size(); ++i)
-		mergeminmax(all, triangles[i]);
-
-	std::vector<unsigned int> order(triangles.size());
-	for (size_t i = 0; i < triangles.size(); ++i)
-		order[i] = unsigned(i);
+		mergeBox(all, triangles[i]);
 
 	float sahr = surface(all);
-	float saht = sahcost(&triangles[0], &order[0], triangles.size());
+	float saht = sahCost(&triangles[0], triangles.size());
 
 	printf("SAH %f\n", saht / sahr);
 	printf("raw SAH %f\n", saht);
+
+	const size_t max_vertices = 64;
+	const size_t min_triangles = 32;
+	const size_t max_triangles = 64;
+	const float cone_weight = -0.25f;
+	const float split_factor = 2.0f;
+
+	size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), max_vertices, min_triangles);
+
+	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
+	std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
+	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
+
+	meshlets.resize(meshopt_buildMeshletsFlex(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, cone_weight, split_factor));
+
+	std::vector<Box> meshlet_boxes(meshlets.size());
+	std::vector<Box> cluster_tris(max_triangles);
+
+	float sahc = 0.f;
+
+	for (size_t i = 0; i < meshlets.size(); ++i)
+	{
+		const meshopt_Meshlet& meshlet = meshlets[i];
+
+		{
+			Box& box = meshlet_boxes[i];
+
+			box.min[0] = box.min[1] = box.min[2] = FLT_MAX;
+			box.max[0] = box.max[1] = box.max[2] = -FLT_MAX;
+			box.pos[0] = box.pos[1] = box.pos[2] = 0.f;
+
+			for (size_t j = 0; j < meshlet.vertex_count; ++j)
+			{
+				const Vertex& vertex = vertices[meshlet_vertices[meshlet.vertex_offset + j]];
+
+				expandBox(box, vertex.px, vertex.py, vertex.pz);
+			}
+
+			for (int k = 0; k < 3; ++k)
+				box.pos[k] = (box.max[k] + box.min[k]) * 0.5f;
+		}
+
+		for (size_t j = 0; j < meshlet.triangle_count; ++j)
+		{
+			Box& box = cluster_tris[j];
+
+			box.min[0] = box.min[1] = box.min[2] = FLT_MAX;
+			box.max[0] = box.max[1] = box.max[2] = -FLT_MAX;
+			box.pos[0] = box.pos[1] = box.pos[2] = 0.f;
+
+			for (int k = 0; k < 3; ++k)
+			{
+				const Vertex& vertex = vertices[meshlet_vertices[meshlet.vertex_offset + meshlet_triangles[meshlet.triangle_offset + j * 3 + k]]];
+
+				expandBox(box, vertex.px, vertex.py, vertex.pz);
+			}
+
+			for (int k = 0; k < 3; ++k)
+				box.pos[k] /= 3.f;
+		}
+
+		sahc += sahCost(&cluster_tris[0], meshlet.triangle_count);
+	}
+
+	// TODO: we're double counting the cluster boxes (once as leaves here, once as roots above)
+	printf("sahc before tlas %f\n", sahc);
+	sahc += sahCost(&meshlet_boxes[0], meshlets.size());
+	printf("sahc after tlas %f\n", sahc);
+
+	printf("%d clusters\n", int(meshlets.size()));
+	printf("CSAH %f\n", sahc / sahr);
+	printf("raw CSAH %f\n", sahc);
+
+	printf("cluster overhead %f\n", sahc / saht);
 }
