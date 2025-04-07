@@ -249,8 +249,15 @@ static bool loadMetis();
 void dumpObj(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, bool recomputeNormals = false);
 void dumpObj(const char* section, const std::vector<unsigned int>& indices);
 
+void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices);
+
 void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
+	static const char* clrt = getenv("CLRT");
+
+	if (clrt && atoi(clrt))
+		return ::clrt(vertices, indices);
+
 	static const char* metis = getenv("METIS");
 	METIS = metis ? atoi(metis) : 0;
 
@@ -722,4 +729,164 @@ static void dumpMetrics(int level, const std::vector<Cluster>& queue, const std:
 	if (stuck_clusters)
 		printf("; stuck %d clusters (%d triangles)", stuck_clusters, stuck_triangles);
 	printf("\n");
+}
+
+// What follows is code for metrics collection of RT impact of clustering on performance; for now this is not integrated with the rest of Nanite example
+struct Box
+{
+	float min[3];
+	float max[3];
+	float pos[3];
+};
+
+struct BoxSort
+{
+	const Box* boxes;
+	int axis;
+
+	bool operator()(unsigned int lhs, unsigned int rhs) const
+	{
+		return boxes[lhs].pos[axis] < boxes[rhs].pos[axis];
+	}
+};
+
+void mergeminmax(Box& box, const Box& other)
+{
+	for (int k = 0; k < 3; ++k)
+	{
+		box.min[k] = std::min(box.min[k], other.min[k]);
+		box.max[k] = std::max(box.max[k], other.max[k]);
+	}
+}
+
+float surface(const Box& box)
+{
+	float sx = box.max[0] - box.min[0], sy = box.max[1] - box.min[1], sz = box.max[2] - box.min[2];
+	return sx * sy + sx * sz + sy * sz;
+}
+
+float sahcost(const Box* boxes, unsigned int* order, size_t count, int depth = 0)
+{
+	assert(count > 0);
+
+	if (count == 1)
+		return surface(boxes[order[0]]);
+
+	// for each axis, box order by position[axis]
+	// (can be done once in the future)
+	std::vector<unsigned int> axes(count * 3);
+
+	for (int k = 0; k < 3; ++k)
+	{
+		for (size_t i = 0; i < count; ++i)
+			axes[i + k * count] = order[i];
+
+		BoxSort sort = {boxes, k};
+		std::sort(&axes[k * count], &axes[k * count] + count, sort);
+	}
+
+	// for each axis, accumulated SAH cost in forward and backward directions
+	std::vector<float> costs(count * 6);
+	Box accum[6] = { boxes[axes[0]], boxes[axes[count - 1]], boxes[axes[count]], boxes[axes[2 * count - 1]], boxes[axes[2 * count]], boxes[axes[3 * count - 1]] };
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		for (int k = 0; k < 3; ++k)
+		{
+			mergeminmax(accum[2 * k + 0], boxes[axes[i + k * count]]);
+			mergeminmax(accum[2 * k + 1], boxes[axes[(count - 1 - i) + k * count]]);
+		}
+
+		for (int k = 0; k < 3; ++k)
+		{
+			costs[i + (2 * k + 0) * count] = surface(accum[2 * k + 0]);
+			costs[i + (2 * k + 1) * count] = surface(accum[2 * k + 1]);
+		}
+	}
+
+	// find best split that minimizes SAH
+	int bestk = -1;
+	size_t bestsplit = 0;
+	float bestcost = FLT_MAX;
+
+	for (size_t i = 0; i < count - 1; ++i)
+		for (int k = 0; k < 3; ++k)
+		{
+			// costs[x] = inclusive cost of boxes[0..x]
+			float costl = costs[i + (2 * k + 0) * count] * (i + 1);
+			// costs[count-1-x] = inclusive cost of boxes[x..count-1]
+			float costr = costs[(count - 1 - (i + 1)) + (2 * k + 1) * count] * (count - (i + 1));
+			float cost = costl + costr;
+
+			if (cost < bestcost)
+			{
+				bestcost = cost;
+				bestk = k;
+				bestsplit = i;
+			}
+		}
+
+	// copy split into order
+	memcpy(order, &axes[bestk * count], sizeof(unsigned int) * count);
+
+	float total = costs[count - 1];
+	float sahl = sahcost(boxes, order, bestsplit + 1, depth + 1);
+	float sahr = sahcost(boxes, &order[bestsplit + 1], count - bestsplit - 1, depth + 1);
+
+	if (depth < 3)
+	{
+		printf("d %d best split: %d %d %f\n", depth, bestk, int(bestsplit), bestcost);
+		printf("d %d count left %d right %d\n", depth, int(bestsplit + 1), int(count - bestsplit - 1));
+		printf("d %d total %f sahl %f sahr %f\n", depth, total, sahl, sahr);
+	}
+
+	return total + sahl + sahr;
+}
+
+void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
+{
+	std::vector<Box> triangles(indices.size() / 3);
+
+	for (size_t i = 0; i < indices.size() / 3; ++i)
+	{
+		Box& box = triangles[i];
+
+		box.min[0] = box.min[1] = box.min[2] = FLT_MAX;
+		box.max[0] = box.max[1] = box.max[2] = -FLT_MAX;
+		box.pos[0] = box.pos[1] = box.pos[2] = 0.f;
+
+		for (int j = 0; j < 3; ++j)
+		{
+			const Vertex& vertex = vertices[indices[i * 3 + j]];
+
+			box.min[0] = std::min(box.min[0], vertex.px);
+			box.min[1] = std::min(box.min[1], vertex.py);
+			box.min[2] = std::min(box.min[2], vertex.pz);
+
+			box.max[0] = std::max(box.max[0], vertex.px);
+			box.max[1] = std::max(box.max[1], vertex.py);
+			box.max[2] = std::max(box.max[2], vertex.pz);
+
+			box.pos[0] += vertex.px;
+			box.pos[1] += vertex.py;
+			box.pos[2] += vertex.pz;
+		}
+
+		for (int k = 0; k < 3; ++k)
+			box.pos[k] /= 3.f;
+	}
+
+	Box all = triangles[0];
+	for (size_t i = 1; i < triangles.size(); ++i)
+		mergeminmax(all, triangles[i]);
+
+	std::vector<unsigned int> order(triangles.size());
+	for (size_t i = 0; i < triangles.size(); ++i)
+		order[i] = unsigned(i);
+
+	float sahr = surface(all);
+	float saht = sahcost(&triangles[0], &order[0], triangles.size());
+
+	printf("SAH %f\n", saht / sahr);
+	printf("raw SAH %f\n", saht);
 }
