@@ -860,6 +860,8 @@ static void expandBox(Box& box, float x, float y, float z)
 	box.pos[2] += z;
 }
 
+double timestamp();
+
 void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
 	std::vector<Box> triangles(indices.size() / 3);
@@ -887,13 +889,15 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 	for (size_t i = 1; i < triangles.size(); ++i)
 		mergeBox(all, triangles[i]);
 
+	double start = timestamp();
+
 	float sahr = surface(all);
 	float saht = sahCost(&triangles[0], triangles.size());
 
-	printf("BLAS SAH %f\n", saht / sahr);
+	double middle = timestamp();
 
 	const size_t max_vertices = 64;
-	const size_t min_triangles = 32;
+	const size_t min_triangles = 16;
 	const size_t max_triangles = 64;
 	const float cone_weight = -0.25f;
 	const float split_factor = 2.0f;
@@ -905,6 +909,8 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
 
 	meshlets.resize(meshopt_buildMeshletsFlex(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, cone_weight, split_factor));
+
+	double end = timestamp();
 
 	std::vector<Box> meshlet_boxes(meshlets.size());
 	std::vector<Box> cluster_tris(max_triangles);
@@ -958,6 +964,8 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 
 	sahc += sahCost(&meshlet_boxes[0], meshlet_boxes.size());
 
+	printf("BLAS SAH %f\n", saht / sahr);
 	printf("CLAS SAH %f\n", sahc / sahr);
 	printf("%d clusters, %.1f tri/cl, SAH overhead %f\n", int(meshlet_boxes.size()), double(indices.size() / 3) / double(meshlet_boxes.size()), sahc / saht);
+	printf("BVH build %.1f ms, clusterize %.1f ms\n", (middle - start) * 1000.0, (end - middle) * 1000.0);
 }
