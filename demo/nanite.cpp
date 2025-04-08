@@ -765,36 +765,24 @@ inline float surface(const Box& box)
 	return sx * sy + sx * sz + sy * sz;
 }
 
-static float sahCost(const Box* boxes, unsigned int* order, size_t count, int depth)
+static float sahCost(const Box* boxes, unsigned int* orderx, unsigned int* ordery, unsigned int* orderz, float* scratch, unsigned char* sides, size_t count, int depth)
 {
 	assert(count > 0);
 
 	if (count == 1)
-		return surface(boxes[order[0]]);
-
-	// for each axis, box order by position[axis]
-	// (can be done once in the future)
-	std::vector<unsigned int> axes(count * 3);
-
-	for (int k = 0; k < 3; ++k)
-	{
-		for (size_t i = 0; i < count; ++i)
-			axes[i + k * count] = order[i];
-
-		BoxSort sort = {boxes, k};
-		std::sort(&axes[k * count], &axes[k * count] + count, sort);
-	}
+		return surface(boxes[orderx[0]]);
 
 	// for each axis, accumulated SAH cost in forward and backward directions
-	std::vector<float> costs(count * 6);
-	Box accum[6] = { boxes[axes[0]], boxes[axes[count - 1]], boxes[axes[count]], boxes[axes[2 * count - 1]], boxes[axes[2 * count]], boxes[axes[3 * count - 1]] };
+	float* costs = scratch;
+	Box accum[6] = { boxes[orderx[0]], boxes[orderx[count - 1]], boxes[ordery[0]], boxes[ordery[count - 1]], boxes[orderz[0]], boxes[orderz[count - 1]] };
+	unsigned int* axes[3] = { orderx, ordery, orderz };
 
 	for (size_t i = 0; i < count; ++i)
 	{
 		for (int k = 0; k < 3; ++k)
 		{
-			mergeBox(accum[2 * k + 0], boxes[axes[i + k * count]]);
-			mergeBox(accum[2 * k + 1], boxes[axes[(count - 1 - i) + k * count]]);
+			mergeBox(accum[2 * k + 0], boxes[axes[k][i]]);
+			mergeBox(accum[2 * k + 1], boxes[axes[k][count - 1 - i]]);
 		}
 
 		for (int k = 0; k < 3; ++k)
@@ -826,23 +814,58 @@ static float sahCost(const Box* boxes, unsigned int* order, size_t count, int de
 			}
 		}
 
-	// copy split into order
-	memcpy(order, &axes[bestk * count], sizeof(unsigned int) * count);
-
 	float total = costs[count - 1];
-	float sahl = sahCost(boxes, order, bestsplit + 1, depth + 1);
-	float sahr = sahCost(boxes, &order[bestsplit + 1], count - bestsplit - 1, depth + 1);
+
+	// mark sides of split
+	for (size_t i = 0; i < bestsplit + 1; ++i)
+		sides[axes[bestk][i]] = 0;
+
+	for (size_t i = bestsplit + 1; i < count; ++i)
+		sides[axes[bestk][i]] = 1;
+
+	// partition all axes into two sides, maintaining order
+	// note: we reuse scratch[], invalidating costs[]
+	for (int k = 0; k < 3; ++k)
+	{
+		if (k == bestk)
+			continue;
+
+		unsigned int* temp = reinterpret_cast<unsigned int*>(scratch);
+		memcpy(temp, axes[k], sizeof(unsigned int) * count);
+
+		unsigned int* ptr[2] = {axes[k], axes[k] + bestsplit + 1};
+
+		for (size_t i = 0; i < count; ++i)
+		{
+			unsigned char side = sides[temp[i]];
+			*ptr[side] = temp[i];
+			ptr[side]++;
+		}
+	}
+
+	float sahl = sahCost(boxes, orderx, ordery, orderz, scratch, sides, bestsplit + 1, depth + 1);
+	float sahr = sahCost(boxes, orderx + bestsplit + 1, ordery + bestsplit + 1, orderz + bestsplit + 1, scratch, sides, count - bestsplit - 1, depth + 1);
 
 	return total + sahl + sahr;
 }
 
 static float sahCost(const Box* boxes, size_t count)
 {
-	std::vector<unsigned int> order(count);
-	for (size_t i = 0; i < count; ++i)
-		order[i] = unsigned(i);
+	std::vector<unsigned int> axes(count * 3);
 
-	return sahCost(boxes, &order[0], count, 0);
+	for (int k = 0; k < 3; ++k)
+	{
+		for (size_t i = 0; i < count; ++i)
+			axes[i + k * count] = unsigned(i);
+
+		BoxSort sort = {boxes, k};
+		std::sort(&axes[k * count], &axes[k * count] + count, sort);
+	}
+
+	std::vector<float> scratch(count * 6);
+	std::vector<unsigned char> sides(count);
+
+	return sahCost(boxes, &axes[0], &axes[count], &axes[count * 2], &scratch[0], &sides[0], count, 0);
 }
 
 static void expandBox(Box& box, float x, float y, float z)
