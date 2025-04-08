@@ -890,8 +890,7 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 	float sahr = surface(all);
 	float saht = sahCost(&triangles[0], triangles.size());
 
-	printf("SAH %f\n", saht / sahr);
-	printf("raw SAH %f\n", saht);
+	printf("BLAS SAH %f\n", saht / sahr);
 
 	const size_t max_vertices = 64;
 	const size_t min_triangles = 32;
@@ -954,16 +953,11 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 		}
 
 		sahc += sahCost(&cluster_tris[0], meshlet.triangle_count);
+		sahc -= surface(meshlet_boxes[i]); // box will be accounted for in tlas
 	}
 
-	// TODO: we're double counting the cluster boxes (once as leaves here, once as roots above)
-	printf("sahc before tlas %f\n", sahc);
-	sahc += sahCost(&meshlet_boxes[0], meshlets.size());
-	printf("sahc after tlas %f\n", sahc);
+	sahc += sahCost(&meshlet_boxes[0], meshlet_boxes.size());
 
-	printf("%d clusters\n", int(meshlets.size()));
-	printf("CSAH %f\n", sahc / sahr);
-	printf("raw CSAH %f\n", sahc);
-
-	printf("cluster overhead %f\n", sahc / saht);
+	printf("CLAS SAH %f\n", sahc / sahr);
+	printf("%d clusters, %.1f tri/cl, SAH overhead %f\n", int(meshlet_boxes.size()), double(indices.size() / 3) / double(meshlet_boxes.size()), sahc / saht);
 }
