@@ -939,6 +939,7 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 	std::vector<Box> cluster_tris(max_triangles);
 
 	float sahc = 0.f;
+	size_t xformed = 0;
 
 	for (size_t i = 0; i < meshlets.size(); ++i)
 	{
@@ -983,12 +984,21 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 
 		sahc += sahCost(&cluster_tris[0], meshlet.triangle_count);
 		sahc -= surface(meshlet_boxes[i]); // box will be accounted for in tlas
+
+		bool used[256] = {};
+		for (size_t j = 0; j < meshlet.triangle_count * 3; ++j)
+		{
+			unsigned char v = meshlet_triangles[meshlet.triangle_offset + j];
+
+			xformed += !used[v];
+			used[v] = true;
+		}
 	}
 
 	sahc += sahCost(&meshlet_boxes[0], meshlet_boxes.size());
 
 	printf("BLAS SAH %f\n", saht / sahr);
 	printf("CLAS SAH %f\n", sahc / sahr);
-	printf("%d clusters, %.1f tri/cl, SAH overhead %f\n", int(meshlet_boxes.size()), double(indices.size() / 3) / double(meshlet_boxes.size()), sahc / saht);
+	printf("%d clusters, %.1f tri/cl, %.1f vtx/cl, SAH overhead %f\n", int(meshlet_boxes.size()), double(indices.size() / 3) / double(meshlet_boxes.size()), double(xformed) / double(meshlet_boxes.size()), sahc / saht);
 	printf("BVH build %.1f ms, clusterize %.1f ms\n", (middle - start) * 1000.0, (end - middle) * 1000.0);
 }
