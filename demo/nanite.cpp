@@ -774,8 +774,8 @@ static float sahCost(const Box* boxes, unsigned int* orderx, unsigned int* order
 
 	// for each axis, accumulated SAH cost in forward and backward directions
 	float* costs = scratch;
-	Box accum[6] = { boxes[orderx[0]], boxes[orderx[count - 1]], boxes[ordery[0]], boxes[ordery[count - 1]], boxes[orderz[0]], boxes[orderz[count - 1]] };
-	unsigned int* axes[3] = { orderx, ordery, orderz };
+	Box accum[6] = {boxes[orderx[0]], boxes[orderx[count - 1]], boxes[ordery[0]], boxes[ordery[count - 1]], boxes[orderz[0]], boxes[orderz[count - 1]]};
+	unsigned int* axes[3] = {orderx, ordery, orderz};
 
 	for (size_t i = 0; i < count; ++i)
 	{

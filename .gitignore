@@ -9,7 +9,9 @@
 /cmake-build-*/
 /out/
 /gltf/library.wasm
+compile_commands.json
 
 # Test files
 /data/
 /*.log
+/perf.data*
