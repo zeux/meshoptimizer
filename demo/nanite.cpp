@@ -249,8 +249,15 @@ static bool loadMetis();
 void dumpObj(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, bool recomputeNormals = false);
 void dumpObj(const char* section, const std::vector<unsigned int>& indices);
 
+void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices);
+
 void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
+	static const char* clrt = getenv("CLRT");
+
+	if (clrt && atoi(clrt))
+		return ::clrt(vertices, indices);
+
 	static const char* metis = getenv("METIS");
 	METIS = metis ? atoi(metis) : 0;
 
@@ -722,4 +729,276 @@ static void dumpMetrics(int level, const std::vector<Cluster>& queue, const std:
 	if (stuck_clusters)
 		printf("; stuck %d clusters (%d triangles)", stuck_clusters, stuck_triangles);
 	printf("\n");
+}
+
+// What follows is code for metrics collection of RT impact of clustering on performance; for now this is not integrated with the rest of Nanite example
+struct Box
+{
+	float min[3];
+	float max[3];
+	float pos[3];
+};
+
+struct BoxSort
+{
+	const Box* boxes;
+	int axis;
+
+	bool operator()(unsigned int lhs, unsigned int rhs) const
+	{
+		return boxes[lhs].pos[axis] < boxes[rhs].pos[axis];
+	}
+};
+
+static void mergeBox(Box& box, const Box& other)
+{
+	for (int k = 0; k < 3; ++k)
+	{
+		box.min[k] = std::min(box.min[k], other.min[k]);
+		box.max[k] = std::max(box.max[k], other.max[k]);
+	}
+}
+
+inline float surface(const Box& box)
+{
+	float sx = box.max[0] - box.min[0], sy = box.max[1] - box.min[1], sz = box.max[2] - box.min[2];
+	return sx * sy + sx * sz + sy * sz;
+}
+
+static float sahCost(const Box* boxes, unsigned int* orderx, unsigned int* ordery, unsigned int* orderz, float* scratch, unsigned char* sides, size_t count, int depth)
+{
+	assert(count > 0);
+
+	if (count == 1)
+		return surface(boxes[orderx[0]]);
+
+	// for each axis, accumulated SAH cost in forward and backward directions
+	float* costs = scratch;
+	Box accum[6] = {boxes[orderx[0]], boxes[orderx[count - 1]], boxes[ordery[0]], boxes[ordery[count - 1]], boxes[orderz[0]], boxes[orderz[count - 1]]};
+	unsigned int* axes[3] = {orderx, ordery, orderz};
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		for (int k = 0; k < 3; ++k)
+		{
+			mergeBox(accum[2 * k + 0], boxes[axes[k][i]]);
+			mergeBox(accum[2 * k + 1], boxes[axes[k][count - 1 - i]]);
+		}
+
+		for (int k = 0; k < 3; ++k)
+		{
+			costs[i + (2 * k + 0) * count] = surface(accum[2 * k + 0]);
+			costs[i + (2 * k + 1) * count] = surface(accum[2 * k + 1]);
+		}
+	}
+
+	// find best split that minimizes SAH
+	int bestk = -1;
+	size_t bestsplit = 0;
+	float bestcost = FLT_MAX;
+
+	for (size_t i = 0; i < count - 1; ++i)
+		for (int k = 0; k < 3; ++k)
+		{
+			// costs[x] = inclusive cost of boxes[0..x]
+			float costl = costs[i + (2 * k + 0) * count] * (i + 1);
+			// costs[count-1-x] = inclusive cost of boxes[x..count-1]
+			float costr = costs[(count - 1 - (i + 1)) + (2 * k + 1) * count] * (count - (i + 1));
+			float cost = costl + costr;
+
+			if (cost < bestcost)
+			{
+				bestcost = cost;
+				bestk = k;
+				bestsplit = i;
+			}
+		}
+
+	float total = costs[count - 1];
+
+	// mark sides of split
+	for (size_t i = 0; i < bestsplit + 1; ++i)
+		sides[axes[bestk][i]] = 0;
+
+	for (size_t i = bestsplit + 1; i < count; ++i)
+		sides[axes[bestk][i]] = 1;
+
+	// partition all axes into two sides, maintaining order
+	// note: we reuse scratch[], invalidating costs[]
+	for (int k = 0; k < 3; ++k)
+	{
+		if (k == bestk)
+			continue;
+
+		unsigned int* temp = reinterpret_cast<unsigned int*>(scratch);
+		memcpy(temp, axes[k], sizeof(unsigned int) * count);
+
+		unsigned int* ptr[2] = {axes[k], axes[k] + bestsplit + 1};
+
+		for (size_t i = 0; i < count; ++i)
+		{
+			unsigned char side = sides[temp[i]];
+			*ptr[side] = temp[i];
+			ptr[side]++;
+		}
+	}
+
+	float sahl = sahCost(boxes, orderx, ordery, orderz, scratch, sides, bestsplit + 1, depth + 1);
+	float sahr = sahCost(boxes, orderx + bestsplit + 1, ordery + bestsplit + 1, orderz + bestsplit + 1, scratch, sides, count - bestsplit - 1, depth + 1);
+
+	return total + sahl + sahr;
+}
+
+static float sahCost(const Box* boxes, size_t count)
+{
+	std::vector<unsigned int> axes(count * 3);
+
+	for (int k = 0; k < 3; ++k)
+	{
+		for (size_t i = 0; i < count; ++i)
+			axes[i + k * count] = unsigned(i);
+
+		BoxSort sort = {boxes, k};
+		std::sort(&axes[k * count], &axes[k * count] + count, sort);
+	}
+
+	std::vector<float> scratch(count * 6);
+	std::vector<unsigned char> sides(count);
+
+	return sahCost(boxes, &axes[0], &axes[count], &axes[count * 2], &scratch[0], &sides[0], count, 0);
+}
+
+static void expandBox(Box& box, float x, float y, float z)
+{
+	box.min[0] = std::min(box.min[0], x);
+	box.min[1] = std::min(box.min[1], y);
+	box.min[2] = std::min(box.min[2], z);
+
+	box.max[0] = std::max(box.max[0], x);
+	box.max[1] = std::max(box.max[1], y);
+	box.max[2] = std::max(box.max[2], z);
+
+	box.pos[0] += x;
+	box.pos[1] += y;
+	box.pos[2] += z;
+}
+
+double timestamp();
+
+void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
+{
+	std::vector<Box> triangles(indices.size() / 3);
+
+	for (size_t i = 0; i < indices.size() / 3; ++i)
+	{
+		Box& box = triangles[i];
+
+		box.min[0] = box.min[1] = box.min[2] = FLT_MAX;
+		box.max[0] = box.max[1] = box.max[2] = -FLT_MAX;
+		box.pos[0] = box.pos[1] = box.pos[2] = 0.f;
+
+		for (int j = 0; j < 3; ++j)
+		{
+			const Vertex& vertex = vertices[indices[i * 3 + j]];
+
+			expandBox(box, vertex.px, vertex.py, vertex.pz);
+		}
+
+		for (int k = 0; k < 3; ++k)
+			box.pos[k] /= 3.f;
+	}
+
+	Box all = triangles[0];
+	for (size_t i = 1; i < triangles.size(); ++i)
+		mergeBox(all, triangles[i]);
+
+	double start = timestamp();
+
+	float sahr = surface(all);
+	float saht = sahCost(&triangles[0], triangles.size());
+
+	double middle = timestamp();
+
+	const size_t max_vertices = 64;
+	const size_t min_triangles = 16;
+	const size_t max_triangles = 64;
+	const float cone_weight = -0.25f;
+	const float split_factor = 2.0f;
+
+	size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), max_vertices, min_triangles);
+
+	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
+	std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
+	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
+
+	meshlets.resize(meshopt_buildMeshletsFlex(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, cone_weight, split_factor));
+
+	double end = timestamp();
+
+	std::vector<Box> meshlet_boxes(meshlets.size());
+	std::vector<Box> cluster_tris(max_triangles);
+
+	float sahc = 0.f;
+	size_t xformed = 0;
+
+	for (size_t i = 0; i < meshlets.size(); ++i)
+	{
+		const meshopt_Meshlet& meshlet = meshlets[i];
+
+		{
+			Box& box = meshlet_boxes[i];
+
+			box.min[0] = box.min[1] = box.min[2] = FLT_MAX;
+			box.max[0] = box.max[1] = box.max[2] = -FLT_MAX;
+			box.pos[0] = box.pos[1] = box.pos[2] = 0.f;
+
+			for (size_t j = 0; j < meshlet.vertex_count; ++j)
+			{
+				const Vertex& vertex = vertices[meshlet_vertices[meshlet.vertex_offset + j]];
+
+				expandBox(box, vertex.px, vertex.py, vertex.pz);
+			}
+
+			for (int k = 0; k < 3; ++k)
+				box.pos[k] = (box.max[k] + box.min[k]) * 0.5f;
+		}
+
+		for (size_t j = 0; j < meshlet.triangle_count; ++j)
+		{
+			Box& box = cluster_tris[j];
+
+			box.min[0] = box.min[1] = box.min[2] = FLT_MAX;
+			box.max[0] = box.max[1] = box.max[2] = -FLT_MAX;
+			box.pos[0] = box.pos[1] = box.pos[2] = 0.f;
+
+			for (int k = 0; k < 3; ++k)
+			{
+				const Vertex& vertex = vertices[meshlet_vertices[meshlet.vertex_offset + meshlet_triangles[meshlet.triangle_offset + j * 3 + k]]];
+
+				expandBox(box, vertex.px, vertex.py, vertex.pz);
+			}
+
+			for (int k = 0; k < 3; ++k)
+				box.pos[k] /= 3.f;
+		}
+
+		sahc += sahCost(&cluster_tris[0], meshlet.triangle_count);
+		sahc -= surface(meshlet_boxes[i]); // box will be accounted for in tlas
+
+		bool used[256] = {};
+		for (size_t j = 0; j < meshlet.triangle_count * 3; ++j)
+		{
+			unsigned char v = meshlet_triangles[meshlet.triangle_offset + j];
+
+			xformed += !used[v];
+			used[v] = true;
+		}
+	}
+
+	sahc += sahCost(&meshlet_boxes[0], meshlet_boxes.size());
+
+	printf("BLAS SAH %f\n", saht / sahr);
+	printf("CLAS SAH %f\n", sahc / sahr);
+	printf("%d clusters, %.1f tri/cl, %.1f vtx/cl, SAH overhead %f\n", int(meshlet_boxes.size()), double(indices.size() / 3) / double(meshlet_boxes.size()), double(xformed) / double(meshlet_boxes.size()), sahc / saht);
+	printf("BVH build %.1f ms, clusterize %.1f ms\n", (middle - start) * 1000.0, (end - middle) * 1000.0);
 }
