@@ -813,12 +813,15 @@ static size_t bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* 
 		}
 	}
 
+	// if we could not pack the meshlet, we must be vertex bound
+	size_t step = count <= max_triangles && max_vertices / 3 < min_triangles ? max_vertices / 3 : min_triangles;
+
 	// find best split that minimizes SAH
 	int bestk = -1;
 	size_t bestsplit = 0;
 	float bestcost = FLT_MAX;
 
-	for (size_t i = 0; i < count - 1; ++i)
+	for (size_t i = step - 1; i < count - 1; i += step)
 		for (int k = 0; k < 3; ++k)
 		{
 			// costs[x] = inclusive cost of boxes[0..x]
