@@ -733,11 +733,11 @@ inline float surface(const BVHBox& box)
 	return sx * sy + sx * sz + sy * sz;
 }
 
-static bool bvhPack(const unsigned int* order, size_t count,
-    short* used, meshopt_Meshlet& meshlet, meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, const unsigned int* indices, size_t meshlet_offset, size_t max_vertices, size_t max_triangles)
+static bool bvhPack(const unsigned int* order, size_t count, short* used, unsigned char* boundary, const unsigned int* indices, size_t max_vertices)
 {
-	assert(count <= max_triangles);
+	assert(count > 0);
 
+	// count number of unique vertices
 	size_t used_vertices = 0;
 	for (size_t i = 0; i < count; ++i)
 	{
@@ -748,6 +748,7 @@ static bool bvhPack(const unsigned int* order, size_t count,
 		used[a] = used[b] = used[c] = 1;
 	}
 
+	// reset used[] for future invocations of bvhPack
 	for (size_t i = 0; i < count; ++i)
 	{
 		unsigned int index = order[i];
@@ -759,42 +760,21 @@ static bool bvhPack(const unsigned int* order, size_t count,
 	if (used_vertices > max_vertices)
 		return false;
 
-	for (size_t i = 0; i < count; ++i)
-	{
-		unsigned int index = order[i];
-		unsigned int a = indices[index * 3 + 0], b = indices[index * 3 + 1], c = indices[index * 3 + 2];
-
-		appendMeshlet(meshlet, a, b, c, used, meshlets, meshlet_vertices, meshlet_triangles, meshlet_offset, max_vertices, max_triangles);
-	}
-
-	for (size_t i = 0; i < count; ++i)
-	{
-		unsigned int index = order[i];
-		unsigned int a = indices[index * 3 + 0], b = indices[index * 3 + 1], c = indices[index * 3 + 2];
-
-		used[a] = used[b] = used[c] = -1;
-	}
-
-	finishMeshlet(meshlet, meshlet_triangles);
-	meshlets[meshlet_offset] = meshlet;
-
-	meshlet.vertex_offset += meshlet.vertex_count;
-	meshlet.triangle_offset += (meshlet.triangle_count * 3 + 3) & ~3; // 4b padding
-	meshlet.vertex_count = 0;
-	meshlet.triangle_count = 0;
+	// mark meshlet boundary for future reassembly
+	boundary[0] = 1;
+	memset(boundary + 1, 0, count - 1);
 
 	return true;
 }
 
-static size_t bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* ordery, unsigned int* orderz, float* scratch, unsigned char* sides, size_t count, int depth,
-    short* used, meshopt_Meshlet& meshlet, meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, const unsigned int* indices,
-    size_t meshlet_offset, size_t max_vertices, size_t min_triangles, size_t max_triangles)
+static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* ordery, unsigned int* orderz, unsigned char* boundary, size_t count, int depth,
+    void* scratch, short* used, const unsigned int* indices, size_t max_vertices, size_t min_triangles, size_t max_triangles)
 {
-	if (count <= max_triangles && bvhPack(orderx, count, used, meshlet, meshlets, meshlet_vertices, meshlet_triangles, indices, meshlet_offset, max_vertices, max_triangles))
-		return meshlet_offset + 1;
+	if (count <= max_triangles && bvhPack(orderx, count, used, boundary, indices, max_vertices))
+		return;
 
 	// for each axis, accumulated SAH cost in forward and backward directions
-	float* costs = scratch;
+	float* costs = static_cast<float*>(scratch);
 	BVHBox accum[6] = {boxes[orderx[0]], boxes[orderx[count - 1]], boxes[ordery[0]], boxes[ordery[count - 1]], boxes[orderz[0]], boxes[orderz[count - 1]]};
 	unsigned int* axes[3] = {orderx, ordery, orderz};
 
@@ -839,6 +819,8 @@ static size_t bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* 
 		}
 
 	// mark sides of split
+	unsigned char* sides = static_cast<unsigned char*>(scratch) + count * sizeof(unsigned int);
+
 	for (size_t i = 0; i < bestsplit + 1; ++i)
 		sides[axes[bestk][i]] = 0;
 
@@ -846,13 +828,13 @@ static size_t bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* 
 		sides[axes[bestk][i]] = 1;
 
 	// partition all axes into two sides, maintaining order
-	// note: we reuse scratch[], invalidating costs[]
+	unsigned int* temp = static_cast<unsigned int*>(scratch);
+
 	for (int k = 0; k < 3; ++k)
 	{
 		if (k == bestk)
 			continue;
 
-		unsigned int* temp = reinterpret_cast<unsigned int*>(scratch);
 		memcpy(temp, axes[k], sizeof(unsigned int) * count);
 
 		unsigned int* ptr[2] = {axes[k], axes[k] + bestsplit + 1};
@@ -865,12 +847,10 @@ static size_t bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* 
 		}
 	}
 
-	meshlet_offset = bvhSplit(boxes, orderx, ordery, orderz, scratch, sides, bestsplit + 1, depth + 1,
-	    used, meshlet, meshlets, meshlet_vertices, meshlet_triangles, indices, meshlet_offset, max_vertices, min_triangles, max_triangles);
-	meshlet_offset = bvhSplit(boxes, orderx + bestsplit + 1, ordery + bestsplit + 1, orderz + bestsplit + 1, scratch, sides, count - bestsplit - 1, depth + 1,
-	    used, meshlet, meshlets, meshlet_vertices, meshlet_triangles, indices, meshlet_offset, max_vertices, min_triangles, max_triangles);
-
-	return meshlet_offset;
+	bvhSplit(boxes, orderx, ordery, orderz, boundary, bestsplit + 1, depth + 1,
+	    scratch, used, indices, max_vertices, min_triangles, max_triangles);
+	bvhSplit(boxes, orderx + bestsplit + 1, ordery + bestsplit + 1, orderz + bestsplit + 1, boundary + bestsplit + 1, count - bestsplit - 1, depth + 1,
+	    scratch, used, indices, max_vertices, min_triangles, max_triangles);
 }
 
 } // namespace meshopt
@@ -1207,12 +1187,34 @@ size_t meshopt_buildMeshletsSplit(struct meshopt_Meshlet* meshlets, unsigned int
 	}
 
 	float* scratch = allocator.allocate<float>(face_count * 6);
-	unsigned char* sides = allocator.allocate<unsigned char>(face_count);
+	unsigned char* boundary = allocator.allocate<unsigned char>(face_count);
 
+	bvhSplit(boxes, &axes[0], &axes[face_count], &axes[face_count * 2], boundary, face_count, 0, scratch, used, indices, max_vertices, min_triangles, max_triangles);
+
+	// pack triangles into meshlets according to the order and boundaries marked by bvhSplit
 	meshopt_Meshlet meshlet = {};
-	size_t meshlet_offset = bvhSplit(boxes, &axes[0], &axes[face_count], &axes[face_count * 2], &scratch[0], &sides[0], face_count, 0,
-	    used, meshlet, meshlets, meshlet_vertices, meshlet_triangles, indices,
-	    0, max_vertices, min_triangles, max_triangles);
+	size_t meshlet_offset = 0;
+
+	for (size_t i = 0; i < face_count; ++i)
+	{
+		assert(boundary[i] <= 1);
+		bool split = i > 0 && boundary[i] == 1;
+
+		unsigned int index = axes[i];
+		assert(index < face_count);
+
+		unsigned int a = indices[index * 3 + 0], b = indices[index * 3 + 1], c = indices[index * 3 + 2];
+
+		// appends triangle to the meshlet and writes previous meshlet to the output if full
+		meshlet_offset += appendMeshlet(meshlet, a, b, c, used, meshlets, meshlet_vertices, meshlet_triangles, meshlet_offset, max_vertices, max_triangles, split);
+	}
+
+	if (meshlet.triangle_count)
+	{
+		finishMeshlet(meshlet, meshlet_triangles);
+
+		meshlets[meshlet_offset++] = meshlet;
+	}
 
 	assert(meshlet_offset <= meshopt_buildMeshletsBound(index_count, max_vertices, min_triangles));
 	return meshlet_offset;
