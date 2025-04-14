@@ -775,6 +775,34 @@ static void radixPass(unsigned int* destination, const unsigned int* source, con
 	}
 }
 
+static void bvhPrepare(BVHBox* boxes, float* centroids, const unsigned int* indices, size_t face_count, const float* vertex_positions, size_t vertex_count, size_t vertex_stride_float)
+{
+	(void)vertex_count;
+
+	for (size_t i = 0; i < face_count; ++i)
+	{
+		unsigned int a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
+		assert(a < vertex_count && b < vertex_count && c < vertex_count);
+
+		const float* va = vertex_positions + vertex_stride_float * a;
+		const float* vb = vertex_positions + vertex_stride_float * b;
+		const float* vc = vertex_positions + vertex_stride_float * c;
+
+		BVHBox& box = boxes[i];
+
+		for (int k = 0; k < 3; ++k)
+		{
+			box.min[k] = va[k] < vb[k] ? va[k] : vb[k];
+			box.min[k] = vc[k] < box.min[k] ? vc[k] : box.min[k];
+
+			box.max[k] = va[k] > vb[k] ? va[k] : vb[k];
+			box.max[k] = vc[k] > box.max[k] ? vc[k] : box.max[k];
+
+			centroids[i + face_count * k] = (va[k] + vb[k] + vc[k]) / 3.f;
+		}
+	}
+}
+
 static bool bvhPack(const unsigned int* order, size_t count, short* used, unsigned char* boundary, const unsigned int* indices, size_t max_vertices)
 {
 	assert(count > 0);
@@ -1186,29 +1214,7 @@ size_t meshopt_buildMeshletsSplit(struct meshopt_Meshlet* meshlets, unsigned int
 
 	// compute bounding boxes and centroids for sorting
 	BVHBox* boxes = allocator.allocate<BVHBox>(face_count);
-
-	for (size_t i = 0; i < face_count; ++i)
-	{
-		unsigned int a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
-		assert(a < vertex_count && b < vertex_count && c < vertex_count);
-
-		const float* va = vertex_positions + vertex_stride_float * a;
-		const float* vb = vertex_positions + vertex_stride_float * b;
-		const float* vc = vertex_positions + vertex_stride_float * c;
-
-		BVHBox& box = boxes[i];
-
-		for (int k = 0; k < 3; ++k)
-		{
-			box.min[k] = va[k] < vb[k] ? va[k] : vb[k];
-			box.min[k] = vc[k] < box.min[k] ? vc[k] : box.min[k];
-
-			box.max[k] = va[k] > vb[k] ? va[k] : vb[k];
-			box.max[k] = vc[k] > box.max[k] ? vc[k] : box.max[k];
-
-			scratch[i + face_count * k] = (va[k] + vb[k] + vc[k]) / 3.f;
-		}
-	}
+	bvhPrepare(boxes, scratch, indices, face_count, vertex_positions, vertex_count, vertex_stride_float);
 
 	unsigned int* axes = allocator.allocate<unsigned int>(face_count * 3);
 	unsigned int* temp = reinterpret_cast<unsigned int*>(scratch) + face_count * 3;
