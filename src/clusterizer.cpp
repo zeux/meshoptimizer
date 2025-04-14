@@ -845,21 +845,20 @@ static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* or
 
 	// for each axis, accumulated SAH cost in forward and backward directions
 	float* costs = static_cast<float*>(scratch);
-	BVHBox accum[6] = {boxes[orderx[0]], boxes[orderx[count - 1]], boxes[ordery[0]], boxes[ordery[count - 1]], boxes[orderz[0]], boxes[orderz[count - 1]]};
 	unsigned int* axes[3] = {orderx, ordery, orderz};
 
-	for (size_t i = 0; i < count; ++i)
+	for (int k = 0; k < 3; ++k)
 	{
-		for (int k = 0; k < 3; ++k)
-		{
-			mergeBox(accum[2 * k + 0], boxes[axes[k][i]]);
-			mergeBox(accum[2 * k + 1], boxes[axes[k][count - 1 - i]]);
-		}
+		const unsigned int* axis = axes[k];
+		BVHBox accuml = boxes[axis[0]], accumr = boxes[axis[count - 1]];
 
-		for (int k = 0; k < 3; ++k)
+		for (size_t i = 0; i < count; ++i)
 		{
-			costs[i + (2 * k + 0) * count] = surface(accum[2 * k + 0]);
-			costs[i + (2 * k + 1) * count] = surface(accum[2 * k + 1]);
+			mergeBox(accuml, boxes[axis[i]]);
+			mergeBox(accumr, boxes[axis[count - 1 - i]]);
+
+			costs[i + (2 * k + 0) * count] = surface(accuml);
+			costs[i + (2 * k + 1) * count] = surface(accumr);
 		}
 	}
 
@@ -871,8 +870,8 @@ static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* or
 	size_t bestsplit = 0;
 	float bestcost = FLT_MAX;
 
-	for (size_t i = step - 1; i < count - 1; i += step)
-		for (int k = 0; k < 3; ++k)
+	for (int k = 0; k < 3; ++k)
+		for (size_t i = step - 1; i < count - 1; i += step)
 		{
 			// costs[x] = inclusive cost of boxes[0..x]
 			float costl = costs[i + (2 * k + 0) * count] * (i + 1);
