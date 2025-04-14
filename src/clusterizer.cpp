@@ -883,17 +883,19 @@ static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* or
 			{
 				bestcost = cost;
 				bestk = k;
-				bestsplit = i;
+				bestsplit = i + 1;
 			}
 		}
 
-	// mark sides of split
+	assert(bestk >= 0);
+
+	// mark sides of split for partitioning
 	unsigned char* sides = static_cast<unsigned char*>(scratch) + count * sizeof(unsigned int);
 
-	for (size_t i = 0; i < bestsplit + 1; ++i)
+	for (size_t i = 0; i < bestsplit; ++i)
 		sides[axes[bestk][i]] = 0;
 
-	for (size_t i = bestsplit + 1; i < count; ++i)
+	for (size_t i = bestsplit; i < count; ++i)
 		sides[axes[bestk][i]] = 1;
 
 	// partition all axes into two sides, maintaining order
@@ -904,21 +906,26 @@ static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* or
 		if (k == bestk)
 			continue;
 
-		memcpy(temp, axes[k], sizeof(unsigned int) * count);
+		unsigned int* axis = axes[k];
+		memcpy(temp, axis, sizeof(unsigned int) * count);
 
-		unsigned int* ptr[2] = {axes[k], axes[k] + bestsplit + 1};
+		size_t l = 0, r = bestsplit;
 
 		for (size_t i = 0; i < count; ++i)
 		{
 			unsigned char side = sides[temp[i]];
-			*ptr[side] = temp[i];
-			ptr[side]++;
+			axis[side ? r : l] = temp[i];
+			l += 1;
+			l -= side;
+			r += side;
 		}
+
+		assert(l == bestsplit && r == count);
 	}
 
-	bvhSplit(boxes, orderx, ordery, orderz, boundary, bestsplit + 1, depth + 1,
+	bvhSplit(boxes, orderx, ordery, orderz, boundary, bestsplit, depth + 1,
 	    scratch, used, indices, max_vertices, min_triangles, max_triangles);
-	bvhSplit(boxes, orderx + bestsplit + 1, ordery + bestsplit + 1, orderz + bestsplit + 1, boundary + bestsplit + 1, count - bestsplit - 1, depth + 1,
+	bvhSplit(boxes, orderx + bestsplit, ordery + bestsplit, orderz + bestsplit, boundary + bestsplit, count - bestsplit, depth + 1,
 	    scratch, used, indices, max_vertices, min_triangles, max_triangles);
 }
 
