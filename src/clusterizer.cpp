@@ -1137,42 +1137,31 @@ size_t meshopt_buildMeshletsSplit(struct meshopt_Meshlet* meshlets, unsigned int
 
 	meshopt_Allocator allocator;
 
-	// index of the vertex in the meshlet, -1 if the vertex isn't used
-	short* used = allocator.allocate<short>(vertex_count);
-	memset(used, -1, vertex_count * sizeof(short));
-
 	BVHBox* boxes = allocator.allocate<BVHBox>(face_count);
+	float* scratch = allocator.allocate<float>(face_count * 6);
 
 	for (size_t i = 0; i < face_count; ++i)
 	{
 		unsigned int a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
 		assert(a < vertex_count && b < vertex_count && c < vertex_count);
-		(void)a;
-		(void)b;
-		(void)c;
+
+		const float* va = vertex_positions + vertex_stride_float * a;
+		const float* vb = vertex_positions + vertex_stride_float * b;
+		const float* vc = vertex_positions + vertex_stride_float * c;
 
 		BVHBox& box = boxes[i];
 
-		box.min[0] = box.min[1] = box.min[2] = FLT_MAX;
-		box.max[0] = box.max[1] = box.max[2] = -FLT_MAX;
-		box.pos[0] = box.pos[1] = box.pos[2] = 0.f;
-
-		for (int j = 0; j < 3; ++j)
+		for (int k = 0; k < 3; ++k)
 		{
-			const float* pos = vertex_positions + vertex_stride_float * indices[i * 3 + j];
+			box.min[k] = va[k] < vb[k] ? va[k] : vb[k];
+			box.min[k] = vc[k] < box.min[k] ? vc[k] : box.min[k];
 
-			for (int k = 0; k < 3; ++k)
-			{
-				float pv = pos[k];
-
-				box.min[k] = pv < box.min[k] ? pv : box.min[k];
-				box.max[k] = pv > box.max[k] ? pv : box.max[k];
-				box.pos[k] += pv;
-			}
+			box.max[k] = va[k] > vb[k] ? va[k] : vb[k];
+			box.max[k] = vc[k] > box.max[k] ? vc[k] : box.max[k];
 		}
 
 		for (int k = 0; k < 3; ++k)
-			box.pos[k] /= 3;
+			box.pos[k] = (va[k] + vb[k] + vc[k]) / 3.f;
 	}
 
 	unsigned int* axes = allocator.allocate<unsigned int>(face_count * 3);
@@ -1186,7 +1175,10 @@ size_t meshopt_buildMeshletsSplit(struct meshopt_Meshlet* meshlets, unsigned int
 		std::sort(&axes[k * face_count], &axes[k * face_count] + face_count, sort);
 	}
 
-	float* scratch = allocator.allocate<float>(face_count * 6);
+	// index of the vertex in the meshlet, -1 if the vertex isn't used
+	short* used = allocator.allocate<short>(vertex_count);
+	memset(used, -1, vertex_count * sizeof(short));
+
 	unsigned char* boundary = allocator.allocate<unsigned char>(face_count);
 
 	bvhSplit(boxes, &axes[0], &axes[face_count], &axes[face_count * 2], boundary, face_count, 0, scratch, used, indices, max_vertices, min_triangles, max_triangles);
