@@ -6,8 +6,6 @@
 #include <math.h>
 #include <string.h>
 
-#include <algorithm> // temporary, for bvh sort
-
 // This work is based on:
 // Graham Wihlidal. Optimizing the Graphics Pipeline with Compute. 2016
 // Matthaeus Chajdas. GeometryFX 1.2 - Cluster Culling. 2016
@@ -704,26 +702,14 @@ struct BVHBox
 {
 	float min[3];
 	float max[3];
-	float pos[3];
-};
-
-struct BVHBoxSort
-{
-	const BVHBox* boxes;
-	int axis;
-
-	bool operator()(unsigned int lhs, unsigned int rhs) const
-	{
-		return boxes[lhs].pos[axis] < boxes[rhs].pos[axis];
-	}
 };
 
 static void mergeBox(BVHBox& box, const BVHBox& other)
 {
 	for (int k = 0; k < 3; ++k)
 	{
-		box.min[k] = std::min(box.min[k], other.min[k]);
-		box.max[k] = std::max(box.max[k], other.max[k]);
+		box.min[k] = other.min[k] < box.min[k] ? other.min[k] : box.min[k];
+		box.max[k] = other.max[k] > box.max[k] ? other.max[k] : box.max[k];
 	}
 }
 
@@ -731,6 +717,62 @@ inline float surface(const BVHBox& box)
 {
 	float sx = box.max[0] - box.min[0], sy = box.max[1] - box.min[1], sz = box.max[2] - box.min[2];
 	return sx * sy + sx * sz + sy * sz;
+}
+
+inline unsigned int radixFloat(unsigned int v)
+{
+	// if sign bit is 0, flip sign bit
+	// if sign bit is 1, flip everything
+	unsigned int mask = (int(v) >> 31) | 0x80000000;
+	return v ^ mask;
+}
+
+static void computeHistogram(unsigned int (&hist)[1024][3], const float* data, size_t count)
+{
+	memset(hist, 0, sizeof(hist));
+
+	const unsigned int* bits = reinterpret_cast<const unsigned int*>(data);
+
+	// compute 3 10-bit histograms in parallel (dropping 2 LSB)
+	for (size_t i = 0; i < count; ++i)
+	{
+		unsigned int id = radixFloat(bits[i]);
+
+		hist[(id >> 2) & 1023][0]++;
+		hist[(id >> 12) & 1023][1]++;
+		hist[(id >> 22) & 1023][2]++;
+	}
+
+	unsigned int sum0 = 0, sum1 = 0, sum2 = 0;
+
+	// replace histogram data with prefix histogram sums in-place
+	for (int i = 0; i < 1024; ++i)
+	{
+		unsigned int hx = hist[i][0], hy = hist[i][1], hz = hist[i][2];
+
+		hist[i][0] = sum0;
+		hist[i][1] = sum1;
+		hist[i][2] = sum2;
+
+		sum0 += hx;
+		sum1 += hy;
+		sum2 += hz;
+	}
+
+	assert(sum0 == count && sum1 == count && sum2 == count);
+}
+
+static void radixPass(unsigned int* destination, const unsigned int* source, const float* keys, size_t count, unsigned int (&hist)[1024][3], int pass)
+{
+	const unsigned int* bits = reinterpret_cast<const unsigned int*>(keys);
+	int bitoff = pass * 10 + 2; // drop 2 LSB to be able to use 3 10-bit passes
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		unsigned int id = (radixFloat(bits[source[i]]) >> bitoff) & 1023;
+
+		destination[hist[id][pass]++] = source[i];
+	}
 }
 
 static bool bvhPack(const unsigned int* order, size_t count, short* used, unsigned char* boundary, const unsigned int* indices, size_t max_vertices)
@@ -1137,8 +1179,13 @@ size_t meshopt_buildMeshletsSplit(struct meshopt_Meshlet* meshlets, unsigned int
 
 	meshopt_Allocator allocator;
 
-	BVHBox* boxes = allocator.allocate<BVHBox>(face_count);
+	// 3 floats plus 1 uint for sorting, or
+	// 2 floats per axis for SAH costs, or
+	// 1 uint plus 1 byte for partitioning
 	float* scratch = allocator.allocate<float>(face_count * 6);
+
+	// compute bounding boxes and centroids for sorting
+	BVHBox* boxes = allocator.allocate<BVHBox>(face_count);
 
 	for (size_t i = 0; i < face_count; ++i)
 	{
@@ -1158,21 +1205,29 @@ size_t meshopt_buildMeshletsSplit(struct meshopt_Meshlet* meshlets, unsigned int
 
 			box.max[k] = va[k] > vb[k] ? va[k] : vb[k];
 			box.max[k] = vc[k] > box.max[k] ? vc[k] : box.max[k];
-		}
 
-		for (int k = 0; k < 3; ++k)
-			box.pos[k] = (va[k] + vb[k] + vc[k]) / 3.f;
+			scratch[i + face_count * k] = (va[k] + vb[k] + vc[k]) / 3.f;
+		}
 	}
 
 	unsigned int* axes = allocator.allocate<unsigned int>(face_count * 3);
+	unsigned int* temp = reinterpret_cast<unsigned int*>(scratch) + face_count * 3;
 
 	for (int k = 0; k < 3; ++k)
 	{
-		for (size_t i = 0; i < face_count; ++i)
-			axes[i + k * face_count] = unsigned(i);
+		unsigned int* order = axes + k * face_count;
+		const float* keys = scratch + k * face_count;
 
-		BVHBoxSort sort = {boxes, k};
-		std::sort(&axes[k * face_count], &axes[k * face_count] + face_count, sort);
+		unsigned int hist[1024][3];
+		computeHistogram(hist, keys, face_count);
+
+		// 3-pass radix sort computes the resulting order into axes
+		for (size_t i = 0; i < face_count; ++i)
+			temp[i] = unsigned(i);
+
+		radixPass(order, temp, keys, face_count, hist, 0);
+		radixPass(temp, order, keys, face_count, hist, 1);
+		radixPass(order, temp, keys, face_count, hist, 2);
 	}
 
 	// index of the vertex in the meshlet, -1 if the vertex isn't used
