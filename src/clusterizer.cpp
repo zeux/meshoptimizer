@@ -23,6 +23,9 @@ const size_t kMeshletMaxTriangles = 512;
 const size_t kMeshletMaxSeeds = 256;
 const size_t kMeshletAddSeeds = 4;
 
+// To avoid excessive recursion for malformed inputs, we limit the maximum depth of the tree
+const int kMeshletMaxTreeDepth = 50;
+
 struct TriangleAdjacency2
 {
 	unsigned int* counts;
@@ -803,11 +806,8 @@ static void bvhPrepare(BVHBox* boxes, float* centroids, const unsigned int* indi
 	}
 }
 
-static bool bvhPack(const unsigned int* order, size_t count, short* used, unsigned char* boundary, const unsigned int* indices, size_t max_vertices)
+static size_t bvhVertices(const unsigned int* order, size_t count, short* used, const unsigned int* indices)
 {
-	assert(count > 0);
-
-	// count number of unique vertices
 	size_t used_vertices = 0;
 	for (size_t i = 0; i < count; ++i)
 	{
@@ -827,21 +827,26 @@ static bool bvhPack(const unsigned int* order, size_t count, short* used, unsign
 		used[a] = used[b] = used[c] = -1;
 	}
 
-	if (used_vertices > max_vertices)
-		return false;
+	return used_vertices;
+}
 
-	// mark meshlet boundary for future reassembly
+static void bvhPack(unsigned char* boundary, size_t count)
+{
+	assert(count > 0);
+
 	boundary[0] = 1;
 	memset(boundary + 1, 0, count - 1);
-
-	return true;
 }
 
 static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* ordery, unsigned int* orderz, unsigned char* boundary, size_t count, int depth,
     void* scratch, short* used, const unsigned int* indices, size_t max_vertices, size_t min_triangles, size_t max_triangles)
 {
-	if (count <= max_triangles && bvhPack(orderx, count, used, boundary, indices, max_vertices))
-		return;
+	// note: currently we rely on the caller to split the resulting sequence into smaller meshlets
+	if (depth >= kMeshletMaxTreeDepth)
+		return bvhPack(boundary, count);
+
+	if (count <= max_triangles && bvhVertices(orderx, count, used, indices) <= max_vertices)
+		return bvhPack(boundary, count);
 
 	// for each axis, accumulated SAH cost in forward and backward directions
 	float* costs = static_cast<float*>(scratch);
