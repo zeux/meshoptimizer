@@ -707,7 +707,7 @@ struct BVHBox
 	float max[3];
 };
 
-static void mergeBox(BVHBox& box, const BVHBox& other)
+static void boxMerge(BVHBox& box, const BVHBox& other)
 {
 	for (int k = 0; k < 3; ++k)
 	{
@@ -716,7 +716,7 @@ static void mergeBox(BVHBox& box, const BVHBox& other)
 	}
 }
 
-inline float surface(const BVHBox& box)
+inline float boxSurface(const BVHBox& box)
 {
 	float sx = box.max[0] - box.min[0], sy = box.max[1] - box.min[1], sz = box.max[2] - box.min[2];
 	return sx * sy + sx * sz + sy * sz;
@@ -859,11 +859,11 @@ static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* or
 
 		for (size_t i = 0; i < count; ++i)
 		{
-			mergeBox(accuml, boxes[axis[i]]);
-			mergeBox(accumr, boxes[axis[count - 1 - i]]);
+			boxMerge(accuml, boxes[axis[i]]);
+			boxMerge(accumr, boxes[axis[count - 1 - i]]);
 
-			costs[i + (2 * k + 0) * count] = surface(accuml);
-			costs[i + (2 * k + 1) * count] = surface(accumr);
+			costs[i + (2 * k + 0) * count] = boxSurface(accuml);
+			costs[i + (2 * k + 1) * count] = boxSurface(accumr);
 		}
 	}
 
