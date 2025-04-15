@@ -818,7 +818,7 @@ static size_t bvhVertices(const unsigned int* order, size_t count, short* used, 
 		used[a] = used[b] = used[c] = 1;
 	}
 
-	// reset used[] for future invocations of bvhPack
+	// reset used[] for future invocations
 	for (size_t i = 0; i < count; ++i)
 	{
 		unsigned int index = order[i];
@@ -838,8 +838,61 @@ static void bvhPack(unsigned char* boundary, size_t count)
 	memset(boundary + 1, 0, count - 1);
 }
 
-static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* ordery, unsigned int* orderz, unsigned char* boundary, size_t count, int depth,
-    void* scratch, short* used, const unsigned int* indices, size_t max_vertices, size_t min_triangles, size_t max_triangles)
+static size_t bvhPivot(const BVHBox* boxes, const unsigned int* order, size_t count, void* scratch, size_t step, float* out_cost)
+{
+	BVHBox accuml = boxes[order[0]], accumr = boxes[order[count - 1]];
+	float* costs = static_cast<float*>(scratch);
+
+	// accumulate SAH cost in forward and backward directions
+	for (size_t i = 0; i < count; ++i)
+	{
+		boxMerge(accuml, boxes[order[i]]);
+		boxMerge(accumr, boxes[order[count - 1 - i]]);
+
+		costs[i] = boxSurface(accuml);
+		costs[i + count] = boxSurface(accumr);
+	}
+
+	// find best split that minimizes SAH
+	size_t bestsplit = 0;
+	float bestcost = FLT_MAX;
+
+	for (size_t i = step - 1; i < count - 1; i += step)
+	{
+		// costs[x] = inclusive cost of boxes[0..x]
+		float costl = costs[i] * (i + 1);
+		// costs[count-1-x] = inclusive cost of boxes[x..count-1]
+		float costr = costs[(count - 1 - (i + 1)) + count] * (count - (i + 1));
+		float cost = costl + costr;
+
+		if (cost < bestcost)
+		{
+			bestcost = cost;
+			bestsplit = i + 1;
+		}
+	}
+
+	*out_cost = bestcost;
+	return bestsplit;
+}
+
+static void bvhPartition(unsigned int* target, const unsigned int* order, const unsigned char* sides, size_t split, size_t count)
+{
+	size_t l = 0, r = split;
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		unsigned char side = sides[order[i]];
+		target[side ? r : l] = order[i];
+		l += 1;
+		l -= side;
+		r += side;
+	}
+
+	assert(l == split && r == count);
+}
+
+static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* ordery, unsigned int* orderz, unsigned char* boundary, size_t count, int depth, void* scratch, short* used, const unsigned int* indices, size_t max_vertices, size_t min_triangles, size_t max_triangles)
 {
 	// note: currently we rely on the caller to split the resulting sequence into smaller meshlets
 	if (depth >= kMeshletMaxTreeDepth)
@@ -848,24 +901,7 @@ static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* or
 	if (count <= max_triangles && bvhVertices(orderx, count, used, indices) <= max_vertices)
 		return bvhPack(boundary, count);
 
-	// for each axis, accumulated SAH cost in forward and backward directions
-	float* costs = static_cast<float*>(scratch);
 	unsigned int* axes[3] = {orderx, ordery, orderz};
-
-	for (int k = 0; k < 3; ++k)
-	{
-		const unsigned int* axis = axes[k];
-		BVHBox accuml = boxes[axis[0]], accumr = boxes[axis[count - 1]];
-
-		for (size_t i = 0; i < count; ++i)
-		{
-			boxMerge(accuml, boxes[axis[i]]);
-			boxMerge(accumr, boxes[axis[count - 1 - i]]);
-
-			costs[i + (2 * k + 0) * count] = boxSurface(accuml);
-			costs[i + (2 * k + 1) * count] = boxSurface(accumr);
-		}
-	}
 
 	// if we could not pack the meshlet, we must be vertex bound
 	size_t step = count <= max_triangles && max_vertices / 3 < min_triangles ? max_vertices / 3 : min_triangles;
@@ -876,21 +912,17 @@ static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* or
 	float bestcost = FLT_MAX;
 
 	for (int k = 0; k < 3; ++k)
-		for (size_t i = step - 1; i < count - 1; i += step)
-		{
-			// costs[x] = inclusive cost of boxes[0..x]
-			float costl = costs[i + (2 * k + 0) * count] * (i + 1);
-			// costs[count-1-x] = inclusive cost of boxes[x..count-1]
-			float costr = costs[(count - 1 - (i + 1)) + (2 * k + 1) * count] * (count - (i + 1));
-			float cost = costl + costr;
+	{
+		float axiscost = FLT_MAX;
+		size_t axissplit = bvhPivot(boxes, axes[k], count, scratch, step, &axiscost);
 
-			if (cost < bestcost)
-			{
-				bestcost = cost;
-				bestk = k;
-				bestsplit = i + 1;
-			}
+		if (axissplit && axiscost < bestcost)
+		{
+			bestk = k;
+			bestcost = axiscost;
+			bestsplit = axissplit;
 		}
+	}
 
 	assert(bestk >= 0);
 
@@ -913,25 +945,11 @@ static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* or
 
 		unsigned int* axis = axes[k];
 		memcpy(temp, axis, sizeof(unsigned int) * count);
-
-		size_t l = 0, r = bestsplit;
-
-		for (size_t i = 0; i < count; ++i)
-		{
-			unsigned char side = sides[temp[i]];
-			axis[side ? r : l] = temp[i];
-			l += 1;
-			l -= side;
-			r += side;
-		}
-
-		assert(l == bestsplit && r == count);
+		bvhPartition(axis, temp, sides, bestsplit, count);
 	}
 
-	bvhSplit(boxes, orderx, ordery, orderz, boundary, bestsplit, depth + 1,
-	    scratch, used, indices, max_vertices, min_triangles, max_triangles);
-	bvhSplit(boxes, orderx + bestsplit, ordery + bestsplit, orderz + bestsplit, boundary + bestsplit, count - bestsplit, depth + 1,
-	    scratch, used, indices, max_vertices, min_triangles, max_triangles);
+	bvhSplit(boxes, orderx, ordery, orderz, boundary, bestsplit, depth + 1, scratch, used, indices, max_vertices, min_triangles, max_triangles);
+	bvhSplit(boxes, orderx + bestsplit, ordery + bestsplit, orderz + bestsplit, boundary + bestsplit, count - bestsplit, depth + 1, scratch, used, indices, max_vertices, min_triangles, max_triangles);
 }
 
 } // namespace meshopt
@@ -1219,9 +1237,9 @@ size_t meshopt_buildMeshletsSplit(struct meshopt_Meshlet* meshlets, unsigned int
 	meshopt_Allocator allocator;
 
 	// 3 floats plus 1 uint for sorting, or
-	// 2 floats per axis for SAH costs, or
+	// 2 floats for SAH costs, or
 	// 1 uint plus 1 byte for partitioning
-	float* scratch = allocator.allocate<float>(face_count * 6);
+	float* scratch = allocator.allocate<float>(face_count * 4);
 
 	// compute bounding boxes and centroids for sorting
 	BVHBox* boxes = allocator.allocate<BVHBox>(face_count);
