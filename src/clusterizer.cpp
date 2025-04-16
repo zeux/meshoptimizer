@@ -1294,14 +1294,29 @@ size_t meshopt_buildMeshletsSplit(struct meshopt_Meshlet* meshlets, unsigned int
 
 	bvhSplit(boxes, &axes[0], &axes[face_count], &axes[face_count * 2], boundary, face_count, 0, scratch, used, indices, max_vertices, min_triangles, max_triangles);
 
+	// compute the desired number of meshlets; note that on some meshes with a lot of vertex bound clusters this might go over the bound
+	size_t meshlet_count = 0;
+	for (size_t i = 0; i < face_count; ++i)
+	{
+		assert(boundary[i] <= 1);
+		meshlet_count += boundary[i];
+	}
+
+	size_t meshlet_bound = meshopt_buildMeshletsBound(index_count, max_vertices, min_triangles);
+
 	// pack triangles into meshlets according to the order and boundaries marked by bvhSplit
 	meshopt_Meshlet meshlet = {};
 	size_t meshlet_offset = 0;
+	size_t meshlet_pending = meshlet_count;
 
 	for (size_t i = 0; i < face_count; ++i)
 	{
 		assert(boundary[i] <= 1);
 		bool split = i > 0 && boundary[i] == 1;
+
+		// while we are over the limit, we ignore boundary[] data and disable splits until we free up enough space
+		if (split && meshlet_count > meshlet_bound && meshlet_offset + meshlet_pending >= meshlet_bound)
+			split = false;
 
 		unsigned int index = axes[i];
 		assert(index < face_count);
@@ -1310,6 +1325,7 @@ size_t meshopt_buildMeshletsSplit(struct meshopt_Meshlet* meshlets, unsigned int
 
 		// appends triangle to the meshlet and writes previous meshlet to the output if full
 		meshlet_offset += appendMeshlet(meshlet, a, b, c, used, meshlets, meshlet_vertices, meshlet_triangles, meshlet_offset, max_vertices, max_triangles, split);
+		meshlet_pending -= boundary[i];
 	}
 
 	if (meshlet.triangle_count)
@@ -1319,7 +1335,7 @@ size_t meshopt_buildMeshletsSplit(struct meshopt_Meshlet* meshlets, unsigned int
 		meshlets[meshlet_offset++] = meshlet;
 	}
 
-	assert(meshlet_offset <= meshopt_buildMeshletsBound(index_count, max_vertices, min_triangles));
+	assert(meshlet_offset <= meshlet_bound);
 	return meshlet_offset;
 }
 
