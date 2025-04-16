@@ -228,6 +228,9 @@ codectest: tools/codectest.cpp $(LIBRARY)
 codecfuzz: tools/codecfuzz.cpp src/vertexcodec.cpp src/indexcodec.cpp
 	$(CXX) $^ -fsanitize=fuzzer,address,undefined -O1 -g -o $@
 
+clusterfuzz: tools/clusterfuzz.cpp src/clusterizer.cpp
+	$(CXX) $^ -fsanitize=fuzzer,address,undefined -O1 -g -o $@
+
 simplifyfuzz: tools/simplifyfuzz.cpp src/simplifier.cpp
 	$(CXX) $^ -fsanitize=fuzzer,address,undefined -O1 -g -o $@
 
