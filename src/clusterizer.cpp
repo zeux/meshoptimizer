@@ -806,8 +806,9 @@ static void bvhPrepare(BVHBox* boxes, float* centroids, const unsigned int* indi
 	}
 }
 
-static size_t bvhVertices(const unsigned int* order, size_t count, short* used, const unsigned int* indices)
+static bool bvhPackLeaf(unsigned char* boundary, const unsigned int* order, size_t count, short* used, const unsigned int* indices, size_t max_vertices)
 {
+	// count number of unique vertices
 	size_t used_vertices = 0;
 	for (size_t i = 0; i < count; ++i)
 	{
@@ -827,15 +828,36 @@ static size_t bvhVertices(const unsigned int* order, size_t count, short* used, 
 		used[a] = used[b] = used[c] = -1;
 	}
 
-	return used_vertices;
-}
+	if (used_vertices > max_vertices)
+		return false;
 
-static void bvhPack(unsigned char* boundary, size_t count)
-{
+	// mark meshlet boundary for future reassembly
 	assert(count > 0);
 
 	boundary[0] = 1;
 	memset(boundary + 1, 0, count - 1);
+
+	return true;
+}
+
+static void bvhPackTail(unsigned char* boundary, const unsigned int* order, size_t count, short* used, const unsigned int* indices, size_t max_vertices, size_t max_triangles)
+{
+	for (size_t i = 0; i < count;)
+	{
+		size_t chunk = i + max_triangles <= count ? max_triangles : count - i;
+
+		if (bvhPackLeaf(boundary + i, order + i, chunk, used, indices, max_vertices))
+		{
+			i += chunk;
+			continue;
+		}
+
+		// chunk is vertex bound, split it into smaller meshlets
+		assert(chunk > max_vertices / 3);
+
+		bvhPackLeaf(boundary + i, order + i, max_vertices / 3, used, indices, max_vertices);
+		i += max_vertices / 3;
+	}
 }
 
 static size_t bvhPivot(const BVHBox* boxes, const unsigned int* order, size_t count, void* scratch, size_t step, float* out_cost)
@@ -894,12 +916,11 @@ static void bvhPartition(unsigned int* target, const unsigned int* order, const 
 
 static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* ordery, unsigned int* orderz, unsigned char* boundary, size_t count, int depth, void* scratch, short* used, const unsigned int* indices, size_t max_vertices, size_t min_triangles, size_t max_triangles)
 {
-	// note: currently we rely on the caller to split the resulting sequence into smaller meshlets
 	if (depth >= kMeshletMaxTreeDepth)
-		return bvhPack(boundary, count);
+		return bvhPackTail(boundary, orderx, count, used, indices, max_vertices, max_triangles);
 
-	if (count <= max_triangles && bvhVertices(orderx, count, used, indices) <= max_vertices)
-		return bvhPack(boundary, count);
+	if (count <= max_triangles && bvhPackLeaf(boundary, orderx, count, used, indices, max_vertices))
+		return;
 
 	unsigned int* axes[3] = {orderx, ordery, orderz};
 
