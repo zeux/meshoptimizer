@@ -945,7 +945,9 @@ static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* or
 		}
 	}
 
-	assert(bestk >= 0);
+	// this may happen if SAH costs along the admissible splits are NaN
+	if (bestk < 0)
+		return bvhPackTail(boundary, orderx, count, used, indices, max_vertices, max_triangles);
 
 	// mark sides of split for partitioning
 	unsigned char* sides = static_cast<unsigned char*>(scratch) + count * sizeof(unsigned int);
