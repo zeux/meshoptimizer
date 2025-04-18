@@ -860,7 +860,15 @@ static void bvhPackTail(unsigned char* boundary, const unsigned int* order, size
 	}
 }
 
-static size_t bvhPivot(const BVHBox* boxes, const unsigned int* order, size_t count, void* scratch, size_t step, float* out_cost)
+static bool bvhDivisible(size_t count, size_t min, size_t max)
+{
+	// count is representable as a sum of values in [min..max] if if it in range of [k*min..k*min+k*(max-min)]
+	// equivalent to ceil(count / max) <= floor(count / min), but the form below allows using idiv
+	// we avoid expensive integer divisions in the common case where min is <= max/2
+	return min * 2 <= max ? count >= min : count % min <= (count / min) * (max - min);
+}
+
+static size_t bvhPivot(const BVHBox* boxes, const unsigned int* order, size_t count, void* scratch, size_t step, size_t min, size_t max, float* out_cost)
 {
 	BVHBox accuml = boxes[order[0]], accumr = boxes[order[count - 1]];
 	float* costs = static_cast<float*>(scratch);
@@ -875,12 +883,19 @@ static size_t bvhPivot(const BVHBox* boxes, const unsigned int* order, size_t co
 		costs[i + count] = boxSurface(accumr);
 	}
 
+	bool aligned = count > max && bvhDivisible(count, min, max);
+
 	// find best split that minimizes SAH
 	size_t bestsplit = 0;
 	float bestcost = FLT_MAX;
 
 	for (size_t i = step - 1; i < count - 1; i += step)
 	{
+		if (!bvhDivisible(i + 1, min, max))
+			continue;
+		if (aligned && !bvhDivisible(count - (i + 1), min, max))
+			continue;
+
 		// costs[x] = inclusive cost of boxes[0..x]
 		float costl = costs[i] * (i + 1);
 		// costs[count-1-x] = inclusive cost of boxes[x..count-1]
@@ -924,8 +939,11 @@ static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* or
 
 	unsigned int* axes[3] = {orderx, ordery, orderz};
 
+	// we can use step=1 unconditionally but to reduce the cost for min=max case we use step=max
+	size_t step = min_triangles == max_triangles && count > max_triangles ? max_triangles : 1;
+
 	// if we could not pack the meshlet, we must be vertex bound
-	size_t step = count <= max_triangles && max_vertices / 3 < min_triangles ? max_vertices / 3 : min_triangles;
+	size_t mint = count <= max_triangles && max_vertices / 3 < min_triangles ? max_vertices / 3 : min_triangles;
 
 	// find best split that minimizes SAH
 	int bestk = -1;
@@ -935,7 +953,7 @@ static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* or
 	for (int k = 0; k < 3; ++k)
 	{
 		float axiscost = FLT_MAX;
-		size_t axissplit = bvhPivot(boxes, axes[k], count, scratch, step, &axiscost);
+		size_t axissplit = bvhPivot(boxes, axes[k], count, scratch, step, mint, max_triangles, &axiscost);
 
 		if (axissplit && axiscost < bestcost)
 		{
