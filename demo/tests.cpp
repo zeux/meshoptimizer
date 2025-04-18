@@ -1327,6 +1327,73 @@ static void meshletsMax()
 	}
 }
 
+static void meshletsSplit()
+{
+	// two tetrahedrons far apart
+	float vb[2 * 4 * 3] = {
+	    0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1,
+	    10, 0, 0, 11, 0, 0, 10, 1, 0, 10, 0, 1, // clang-format :-/
+	};
+
+	unsigned int ib[2 * 4 * 3] = {
+	    0, 1, 2, 0, 2, 3, 0, 3, 1, 1, 3, 2,
+	    4, 5, 6, 4, 6, 7, 4, 7, 5, 5, 7, 6, // clang-format :-/
+	};
+
+	// up to 2 meshlets with min_triangles=4
+	assert(meshopt_buildMeshletsBound(2 * 4 * 3, 16, 4) == 2);
+
+	meshopt_Meshlet ml[2];
+	unsigned int mv[2 * 16];
+	unsigned char mt[2 * 8 * 3]; // 2 meshlets with up to 8 triangles
+
+	// with strict limits, we should get one meshlet (maxt=8) or two (maxt=4)
+	assert(meshopt_buildMeshletsSplit(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 8, sizeof(float) * 3, 16, 8, 8) == 1);
+	assert(ml[0].triangle_count == 8);
+	assert(ml[0].vertex_count == 8);
+
+	assert(meshopt_buildMeshletsSplit(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 8, sizeof(float) * 3, 16, 4, 4) == 2);
+	assert(ml[0].triangle_count == 4);
+	assert(ml[0].vertex_count == 4);
+	assert(ml[1].triangle_count == 4);
+	assert(ml[1].vertex_count == 4);
+
+	// with maxv=4 we should get two meshlets since we can't accomodate both
+	assert(meshopt_buildMeshletsSplit(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 8, sizeof(float) * 3, 4, 4, 8) == 2);
+	assert(ml[0].triangle_count == 4);
+	assert(ml[0].vertex_count == 4);
+	assert(ml[1].triangle_count == 4);
+	assert(ml[1].vertex_count == 4);
+}
+
+static void meshletsSplitDeep()
+{
+	const int N = 400;
+	const size_t max_vertices = 4;
+	const size_t max_triangles = 4;
+
+	float vb[(N + 1) * 3];
+	unsigned int ib[N * 3];
+
+	vb[0] = vb[1] = vb[2] = 0;
+
+	for (size_t i = 0; i < N; ++i)
+	{
+		vb[(i + 1) * 3 + 0] = vb[(i + 1) * 3 + 1] = vb[(i + 1) * 3 + 2] = powf(1.2f, float(i));
+
+		ib[i * 3 + 0] = 0;
+		ib[i * 3 + 1] = ib[i * 3 + 2] = unsigned(i + 1);
+	}
+
+	size_t max_meshlets = meshopt_buildMeshletsBound(N * 3, max_vertices, max_triangles);
+	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
+	std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
+	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
+
+	size_t result = meshopt_buildMeshletsSplit(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &ib[0], N * 3, &vb[0], N + 1, sizeof(float) * 3, max_vertices, max_triangles, max_triangles);
+	assert(result == N);
+}
+
 static void partitionBasic()
 {
 	// 0   1   2
@@ -2465,6 +2532,8 @@ void runTests()
 	meshletsSparse();
 	meshletsFlex();
 	meshletsMax();
+	meshletsSplit();
+	meshletsSplitDeep();
 
 	partitionBasic();
 
