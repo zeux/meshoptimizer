@@ -884,12 +884,13 @@ static size_t bvhPivot(const BVHBox* boxes, const unsigned int* order, size_t co
 	}
 
 	bool aligned = count > max && bvhDivisible(count, min, max);
+	size_t end = aligned ? count - min : count - 1;
 
 	// find best split that minimizes SAH
 	size_t bestsplit = 0;
 	float bestcost = FLT_MAX;
 
-	for (size_t i = step - 1; i < count - 1; i += step)
+	for (size_t i = min - 1; i < end; i += step)
 	{
 		size_t lsplit = i + 1, rsplit = count - (i + 1);
 
