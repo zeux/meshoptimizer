@@ -891,16 +891,18 @@ static size_t bvhPivot(const BVHBox* boxes, const unsigned int* order, size_t co
 
 	for (size_t i = step - 1; i < count - 1; i += step)
 	{
-		if (!bvhDivisible(i + 1, min, max))
+		size_t lsplit = i + 1, rsplit = count - (i + 1);
+
+		if (!bvhDivisible(lsplit, min, max))
 			continue;
-		if (aligned && !bvhDivisible(count - (i + 1), min, max))
+		if (aligned && !bvhDivisible(rsplit, min, max))
 			continue;
 
-		// costs[x] = inclusive cost of boxes[0..x]
-		float costl = costs[i] * (i + 1);
-		// costs[count-1-x] = inclusive cost of boxes[x..count-1]
-		float costr = costs[(count - 1 - (i + 1)) + count] * (count - (i + 1));
-		float cost = costl + costr;
+		// costs[x] = inclusive surface area of boxes[0..x]
+		// costs[count-1-x] = inclusive surface area of boxes[x..count-1]
+		float larea = costs[i], rarea = costs[(count - 1 - (i + 1)) + count];
+
+		float cost = larea * float(lsplit) + rarea * float(rsplit);
 
 		if (cost < bestcost)
 		{
