@@ -1268,7 +1268,7 @@ size_t meshopt_buildMeshletsScan(meshopt_Meshlet* meshlets, unsigned int* meshle
 	return meshlet_offset;
 }
 
-size_t meshopt_buildMeshletsSplit(struct meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t min_triangles, size_t max_triangles)
+size_t meshopt_buildMeshletsSplit(struct meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t min_triangles, size_t max_triangles, float fill_weight)
 {
 	using namespace meshopt;
 
@@ -1279,8 +1279,6 @@ size_t meshopt_buildMeshletsSplit(struct meshopt_Meshlet* meshlets, unsigned int
 	assert(max_vertices >= 3 && max_vertices <= kMeshletMaxVertices);
 	assert(min_triangles >= 1 && min_triangles <= max_triangles && max_triangles <= kMeshletMaxTriangles);
 	assert(min_triangles % 4 == 0 && max_triangles % 4 == 0); // ensures the caller will compute output space properly as index data is 4b aligned
-
-	float fill_weight = 0.5f;
 
 	if (index_count == 0)
 		return 0;

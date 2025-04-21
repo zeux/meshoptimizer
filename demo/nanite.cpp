@@ -925,6 +925,7 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 	const size_t max_triangles = 64;
 	const float cone_weight = -0.25f;
 	const float split_factor = 2.0f;
+	const float split_weight = 0.5f;
 
 	size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), max_vertices, min_triangles);
 
@@ -933,7 +934,7 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
 
 	if (use_splitalgo)
-		meshlets.resize(meshopt_buildMeshletsSplit(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles));
+		meshlets.resize(meshopt_buildMeshletsSplit(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, split_weight));
 	else
 		meshlets.resize(meshopt_buildMeshletsFlex(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, cone_weight, split_factor));
 
