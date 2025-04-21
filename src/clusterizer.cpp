@@ -868,7 +868,7 @@ static bool bvhDivisible(size_t count, size_t min, size_t max)
 	return min * 2 <= max ? count >= min : count % min <= (count / min) * (max - min);
 }
 
-static size_t bvhPivot(const BVHBox* boxes, const unsigned int* order, size_t count, void* scratch, size_t step, size_t min, size_t max, float* out_cost)
+static size_t bvhPivot(const BVHBox* boxes, const unsigned int* order, size_t count, void* scratch, size_t step, size_t min, size_t max, float fill, float* out_cost)
 {
 	BVHBox accuml = boxes[order[0]], accumr = boxes[order[count - 1]];
 	float* costs = static_cast<float*>(scratch);
@@ -905,6 +905,11 @@ static size_t bvhPivot(const BVHBox* boxes, const unsigned int* order, size_t co
 
 		float cost = larea * float(lsplit) + rarea * float(rsplit);
 
+		size_t lrest = lsplit % max == 0 ? 0 : max - (lsplit % max);
+		size_t rrest = rsplit % max == 0 ? 0 : max - (rsplit % max);
+		cost += float(lrest) * larea * fill;
+		cost += float(rrest) * rarea * fill;
+
 		if (cost < bestcost)
 		{
 			bestcost = cost;
@@ -932,7 +937,7 @@ static void bvhPartition(unsigned int* target, const unsigned int* order, const 
 	assert(l == split && r == count);
 }
 
-static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* ordery, unsigned int* orderz, unsigned char* boundary, size_t count, int depth, void* scratch, short* used, const unsigned int* indices, size_t max_vertices, size_t min_triangles, size_t max_triangles)
+static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* ordery, unsigned int* orderz, unsigned char* boundary, size_t count, int depth, void* scratch, short* used, const unsigned int* indices, size_t max_vertices, size_t min_triangles, size_t max_triangles, float fill_weight)
 {
 	if (depth >= kMeshletMaxTreeDepth)
 		return bvhPackTail(boundary, orderx, count, used, indices, max_vertices, max_triangles);
@@ -948,6 +953,9 @@ static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* or
 	// if we could not pack the meshlet, we must be vertex bound
 	size_t mint = count <= max_triangles && max_vertices / 3 < min_triangles ? max_vertices / 3 : min_triangles;
 
+	// only use fill weight if we are optimizing for triangle count
+	float fill = count <= max_triangles ? 0.f : fill_weight;
+
 	// find best split that minimizes SAH
 	int bestk = -1;
 	size_t bestsplit = 0;
@@ -956,7 +964,7 @@ static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* or
 	for (int k = 0; k < 3; ++k)
 	{
 		float axiscost = FLT_MAX;
-		size_t axissplit = bvhPivot(boxes, axes[k], count, scratch, step, mint, max_triangles, &axiscost);
+		size_t axissplit = bvhPivot(boxes, axes[k], count, scratch, step, mint, max_triangles, fill, &axiscost);
 
 		if (axissplit && axiscost < bestcost)
 		{
@@ -992,8 +1000,8 @@ static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* or
 		bvhPartition(axis, temp, sides, bestsplit, count);
 	}
 
-	bvhSplit(boxes, orderx, ordery, orderz, boundary, bestsplit, depth + 1, scratch, used, indices, max_vertices, min_triangles, max_triangles);
-	bvhSplit(boxes, orderx + bestsplit, ordery + bestsplit, orderz + bestsplit, boundary + bestsplit, count - bestsplit, depth + 1, scratch, used, indices, max_vertices, min_triangles, max_triangles);
+	bvhSplit(boxes, orderx, ordery, orderz, boundary, bestsplit, depth + 1, scratch, used, indices, max_vertices, min_triangles, max_triangles, fill_weight);
+	bvhSplit(boxes, orderx + bestsplit, ordery + bestsplit, orderz + bestsplit, boundary + bestsplit, count - bestsplit, depth + 1, scratch, used, indices, max_vertices, min_triangles, max_triangles, fill_weight);
 }
 
 } // namespace meshopt
@@ -1272,6 +1280,8 @@ size_t meshopt_buildMeshletsSplit(struct meshopt_Meshlet* meshlets, unsigned int
 	assert(min_triangles >= 1 && min_triangles <= max_triangles && max_triangles <= kMeshletMaxTriangles);
 	assert(min_triangles % 4 == 0 && max_triangles % 4 == 0); // ensures the caller will compute output space properly as index data is 4b aligned
 
+	float fill_weight = 0.5f;
+
 	if (index_count == 0)
 		return 0;
 
@@ -1315,7 +1325,7 @@ size_t meshopt_buildMeshletsSplit(struct meshopt_Meshlet* meshlets, unsigned int
 
 	unsigned char* boundary = allocator.allocate<unsigned char>(face_count);
 
-	bvhSplit(boxes, &axes[0], &axes[face_count], &axes[face_count * 2], boundary, face_count, 0, scratch, used, indices, max_vertices, min_triangles, max_triangles);
+	bvhSplit(boxes, &axes[0], &axes[face_count], &axes[face_count * 2], boundary, face_count, 0, scratch, used, indices, max_vertices, min_triangles, max_triangles, fill_weight);
 
 	// compute the desired number of meshlets; note that on some meshes with a lot of vertex bound clusters this might go over the bound
 	size_t meshlet_count = 0;
