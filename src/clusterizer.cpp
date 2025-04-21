@@ -886,6 +886,8 @@ static size_t bvhPivot(const BVHBox* boxes, const unsigned int* order, size_t co
 	bool aligned = count > max && bvhDivisible(count, min, max);
 	size_t end = aligned ? count - min : count - 1;
 
+	float rmaxf = 1.f / float(int(max));
+
 	// find best split that minimizes SAH
 	size_t bestsplit = 0;
 	float bestcost = FLT_MAX;
@@ -902,13 +904,16 @@ static size_t bvhPivot(const BVHBox* boxes, const unsigned int* order, size_t co
 		// costs[x] = inclusive surface area of boxes[0..x]
 		// costs[count-1-x] = inclusive surface area of boxes[x..count-1]
 		float larea = costs[i], rarea = costs[(count - 1 - (i + 1)) + count];
+		float cost = larea * float(int(lsplit)) + rarea * float(int(rsplit));
 
-		float cost = larea * float(lsplit) + rarea * float(rsplit);
+		if (cost > bestcost)
+			continue;
 
-		size_t lrest = lsplit % max == 0 ? 0 : max - (lsplit % max);
-		size_t rrest = rsplit % max == 0 ? 0 : max - (rsplit % max);
-		cost += float(lrest) * larea * fill;
-		cost += float(rrest) * rarea * fill;
+		// fill cost; use floating point math to avoid expensive integer modulo
+		int lrest = int(float(int(lsplit + max - 1)) * rmaxf) * int(max) - int(lsplit);
+		int rrest = int(float(int(rsplit + max - 1)) * rmaxf) * int(max) - int(rsplit);
+
+		cost += fill * (float(lrest) * larea + float(rrest) * rarea);
 
 		if (cost < bestcost)
 		{
