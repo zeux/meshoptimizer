@@ -801,7 +801,7 @@ static void bvhPrepare(BVHBox* boxes, float* centroids, const unsigned int* indi
 			box.max[k] = va[k] > vb[k] ? va[k] : vb[k];
 			box.max[k] = vc[k] > box.max[k] ? vc[k] : box.max[k];
 
-			centroids[i + face_count * k] = (va[k] + vb[k] + vc[k]) / 3.f;
+			centroids[i + face_count * k] = (box.min[k] + box.max[k]) / 2.f;
 		}
 	}
 }
