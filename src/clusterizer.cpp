@@ -883,7 +883,7 @@ static size_t bvhPivot(const BVHBox* boxes, const unsigned int* order, size_t co
 		costs[i + count] = boxSurface(accumr);
 	}
 
-	bool aligned = count > max && bvhDivisible(count, min, max);
+	bool aligned = count >= min * 2 && bvhDivisible(count, min, max);
 	size_t end = aligned ? count - min : count - 1;
 
 	float rmaxf = 1.f / float(int(max));
