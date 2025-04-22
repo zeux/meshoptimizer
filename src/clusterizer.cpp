@@ -801,7 +801,7 @@ static void bvhPrepare(BVHBox* boxes, float* centroids, const unsigned int* indi
 			box.max[k] = va[k] > vb[k] ? va[k] : vb[k];
 			box.max[k] = vc[k] > box.max[k] ? vc[k] : box.max[k];
 
-			centroids[i + face_count * k] = (va[k] + vb[k] + vc[k]) / 3.f;
+			centroids[i + face_count * k] = (box.min[k] + box.max[k]) / 2.f;
 		}
 	}
 }
@@ -868,7 +868,7 @@ static bool bvhDivisible(size_t count, size_t min, size_t max)
 	return min * 2 <= max ? count >= min : count % min <= (count / min) * (max - min);
 }
 
-static size_t bvhPivot(const BVHBox* boxes, const unsigned int* order, size_t count, void* scratch, size_t step, size_t min, size_t max, float* out_cost)
+static size_t bvhPivot(const BVHBox* boxes, const unsigned int* order, size_t count, void* scratch, size_t step, size_t min, size_t max, float fill, float* out_cost)
 {
 	BVHBox accuml = boxes[order[0]], accumr = boxes[order[count - 1]];
 	float* costs = static_cast<float*>(scratch);
@@ -883,8 +883,10 @@ static size_t bvhPivot(const BVHBox* boxes, const unsigned int* order, size_t co
 		costs[i + count] = boxSurface(accumr);
 	}
 
-	bool aligned = count > max && bvhDivisible(count, min, max);
+	bool aligned = count >= min * 2 && bvhDivisible(count, min, max);
 	size_t end = aligned ? count - min : count - 1;
+
+	float rmaxf = 1.f / float(int(max));
 
 	// find best split that minimizes SAH
 	size_t bestsplit = 0;
@@ -902,8 +904,16 @@ static size_t bvhPivot(const BVHBox* boxes, const unsigned int* order, size_t co
 		// costs[x] = inclusive surface area of boxes[0..x]
 		// costs[count-1-x] = inclusive surface area of boxes[x..count-1]
 		float larea = costs[i], rarea = costs[(count - 1 - (i + 1)) + count];
+		float cost = larea * float(int(lsplit)) + rarea * float(int(rsplit));
 
-		float cost = larea * float(lsplit) + rarea * float(rsplit);
+		if (cost > bestcost)
+			continue;
+
+		// fill cost; use floating point math to avoid expensive integer modulo
+		int lrest = int(float(int(lsplit + max - 1)) * rmaxf) * int(max) - int(lsplit);
+		int rrest = int(float(int(rsplit + max - 1)) * rmaxf) * int(max) - int(rsplit);
+
+		cost += fill * (float(lrest) * larea + float(rrest) * rarea);
 
 		if (cost < bestcost)
 		{
@@ -932,7 +942,7 @@ static void bvhPartition(unsigned int* target, const unsigned int* order, const 
 	assert(l == split && r == count);
 }
 
-static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* ordery, unsigned int* orderz, unsigned char* boundary, size_t count, int depth, void* scratch, short* used, const unsigned int* indices, size_t max_vertices, size_t min_triangles, size_t max_triangles)
+static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* ordery, unsigned int* orderz, unsigned char* boundary, size_t count, int depth, void* scratch, short* used, const unsigned int* indices, size_t max_vertices, size_t min_triangles, size_t max_triangles, float fill_weight)
 {
 	if (depth >= kMeshletMaxTreeDepth)
 		return bvhPackTail(boundary, orderx, count, used, indices, max_vertices, max_triangles);
@@ -948,6 +958,9 @@ static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* or
 	// if we could not pack the meshlet, we must be vertex bound
 	size_t mint = count <= max_triangles && max_vertices / 3 < min_triangles ? max_vertices / 3 : min_triangles;
 
+	// only use fill weight if we are optimizing for triangle count
+	float fill = count <= max_triangles ? 0.f : fill_weight;
+
 	// find best split that minimizes SAH
 	int bestk = -1;
 	size_t bestsplit = 0;
@@ -956,7 +969,7 @@ static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* or
 	for (int k = 0; k < 3; ++k)
 	{
 		float axiscost = FLT_MAX;
-		size_t axissplit = bvhPivot(boxes, axes[k], count, scratch, step, mint, max_triangles, &axiscost);
+		size_t axissplit = bvhPivot(boxes, axes[k], count, scratch, step, mint, max_triangles, fill, &axiscost);
 
 		if (axissplit && axiscost < bestcost)
 		{
@@ -992,8 +1005,8 @@ static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* or
 		bvhPartition(axis, temp, sides, bestsplit, count);
 	}
 
-	bvhSplit(boxes, orderx, ordery, orderz, boundary, bestsplit, depth + 1, scratch, used, indices, max_vertices, min_triangles, max_triangles);
-	bvhSplit(boxes, orderx + bestsplit, ordery + bestsplit, orderz + bestsplit, boundary + bestsplit, count - bestsplit, depth + 1, scratch, used, indices, max_vertices, min_triangles, max_triangles);
+	bvhSplit(boxes, orderx, ordery, orderz, boundary, bestsplit, depth + 1, scratch, used, indices, max_vertices, min_triangles, max_triangles, fill_weight);
+	bvhSplit(boxes, orderx + bestsplit, ordery + bestsplit, orderz + bestsplit, boundary + bestsplit, count - bestsplit, depth + 1, scratch, used, indices, max_vertices, min_triangles, max_triangles, fill_weight);
 }
 
 } // namespace meshopt
@@ -1260,7 +1273,7 @@ size_t meshopt_buildMeshletsScan(meshopt_Meshlet* meshlets, unsigned int* meshle
 	return meshlet_offset;
 }
 
-size_t meshopt_buildMeshletsSplit(struct meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t min_triangles, size_t max_triangles)
+size_t meshopt_buildMeshletsSplit(struct meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t min_triangles, size_t max_triangles, float fill_weight)
 {
 	using namespace meshopt;
 
@@ -1315,7 +1328,7 @@ size_t meshopt_buildMeshletsSplit(struct meshopt_Meshlet* meshlets, unsigned int
 
 	unsigned char* boundary = allocator.allocate<unsigned char>(face_count);
 
-	bvhSplit(boxes, &axes[0], &axes[face_count], &axes[face_count * 2], boundary, face_count, 0, scratch, used, indices, max_vertices, min_triangles, max_triangles);
+	bvhSplit(boxes, &axes[0], &axes[face_count], &axes[face_count * 2], boundary, face_count, 0, scratch, used, indices, max_vertices, min_triangles, max_triangles, fill_weight);
 
 	// compute the desired number of meshlets; note that on some meshes with a lot of vertex bound clusters this might go over the bound
 	size_t meshlet_count = 0;

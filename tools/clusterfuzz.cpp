@@ -41,12 +41,12 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* buffer, size_t size)
 	meshopt_buildMeshletsFlex(ml, mv, mt, ib, indices, vb[0], 100, sizeof(float) * 4, /* max_vertices= */ 16, /* min_triangles= */ 8, /* max_triangles= */ 32, 0.f, 2.f);
 	meshopt_buildMeshletsFlex(ml, mv, mt, ib, indices, vb[0], 100, sizeof(float) * 4, /* max_vertices= */ 16, /* min_triangles= */ 16, /* max_triangles= */ 32, 0.f, 2.f);
 
-	meshopt_buildMeshletsSplit(ml, mv, mt, ib, indices, vb[0], 100, sizeof(float) * 4, /* max_vertices= */ 4, /* min_triangles= */ 4, /* max_triangles= */ 8);
-	meshopt_buildMeshletsSplit(ml, mv, mt, ib, indices, vb[0], 100, sizeof(float) * 4, /* max_vertices= */ 8, /* min_triangles= */ 4, /* max_triangles= */ 32);
-	meshopt_buildMeshletsSplit(ml, mv, mt, ib, indices, vb[0], 100, sizeof(float) * 4, /* max_vertices= */ 8, /* min_triangles= */ 8, /* max_triangles= */ 32);
-	meshopt_buildMeshletsSplit(ml, mv, mt, ib, indices, vb[0], 100, sizeof(float) * 4, /* max_vertices= */ 8, /* min_triangles= */ 12, /* max_triangles= */ 32);
-	meshopt_buildMeshletsSplit(ml, mv, mt, ib, indices, vb[0], 100, sizeof(float) * 4, /* max_vertices= */ 16, /* min_triangles= */ 16, /* max_triangles= */ 32);
-	meshopt_buildMeshletsSplit(ml, mv, mt, ib, indices, vb[0], 100, sizeof(float) * 4, /* max_vertices= */ 16, /* min_triangles= */ 32, /* max_triangles= */ 32);
+	meshopt_buildMeshletsSplit(ml, mv, mt, ib, indices, vb[0], 100, sizeof(float) * 4, /* max_vertices= */ 4, /* min_triangles= */ 4, /* max_triangles= */ 8, 0.f);
+	meshopt_buildMeshletsSplit(ml, mv, mt, ib, indices, vb[0], 100, sizeof(float) * 4, /* max_vertices= */ 8, /* min_triangles= */ 4, /* max_triangles= */ 32, 0.f);
+	meshopt_buildMeshletsSplit(ml, mv, mt, ib, indices, vb[0], 100, sizeof(float) * 4, /* max_vertices= */ 8, /* min_triangles= */ 8, /* max_triangles= */ 32, 0.f);
+	meshopt_buildMeshletsSplit(ml, mv, mt, ib, indices, vb[0], 100, sizeof(float) * 4, /* max_vertices= */ 8, /* min_triangles= */ 12, /* max_triangles= */ 32, 0.f);
+	meshopt_buildMeshletsSplit(ml, mv, mt, ib, indices, vb[0], 100, sizeof(float) * 4, /* max_vertices= */ 16, /* min_triangles= */ 16, /* max_triangles= */ 32, 0.f);
+	meshopt_buildMeshletsSplit(ml, mv, mt, ib, indices, vb[0], 100, sizeof(float) * 4, /* max_vertices= */ 16, /* min_triangles= */ 32, /* max_triangles= */ 32, 0.f);
 
 	return 0;
 }
