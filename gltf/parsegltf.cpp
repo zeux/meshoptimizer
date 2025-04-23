@@ -395,7 +395,7 @@ static void parseAnimationsGltf(cgltf_data* data, std::vector<Animation>& animat
 
 			if (!channel.target_node)
 			{
-				fprintf(stderr, "Warning: ignoring channel %d of animation %d because it has no target node\n", int(j), int(i));
+				fprintf(stderr, "Warning: ignoring channel %d of animation %d (%s) because it has no target node\n", int(j), int(i), animation.name ? animation.name : "");
 				continue;
 			}
 
@@ -415,7 +415,7 @@ static void parseAnimationsGltf(cgltf_data* data, std::vector<Animation>& animat
 
 		if (result.tracks.empty())
 		{
-			fprintf(stderr, "Warning: ignoring animation %d because it has no valid tracks\n", int(i));
+			fprintf(stderr, "Warning: ignoring animation %d (%s) because it has no valid tracks\n", int(i), animation.name ? animation.name : "");
 			animations.pop_back();
 		}
 	}
