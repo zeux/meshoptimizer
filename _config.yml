@@ -1,0 +1,5 @@
+name: Mesh optimization library that makes meshes smaller and faster to render 
+title: false
+markdown: kramdown
+kramdown:
+  toc_levels: 2..3
