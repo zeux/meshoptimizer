@@ -16,7 +16,7 @@ If you are shipping a game that is using meshoptimizer, listing the library in t
 - [Jagged Alliance 3 (2023)](https://jaggedalliance3.thqnordic.com/)
 - [The Legend of Zelda: Tears of the Kingdom (2023)](https://zelda.nintendo.com/tears-of-the-kingdom/)
 - [Manifold Garden (2019)](https://manifold.garden)
-- [Monaco 2](https://store.steampowered.com/app/1063030/Monaco_2/)
+- [Monaco 2 (2025)](https://store.steampowered.com/app/1063030/Monaco_2/)
 - [Ravenswatch (2023)](https://store.steampowered.com/app/2071280/Ravenswatch/)
 - [The Settlers: New Allies (2023)](https://www.ubisoft.com/en-us/game/the-settlers/new-allies)
 - [Sid Meier's Civilization VII (2025)](https://civilization.2k.com/civ-vii/)
