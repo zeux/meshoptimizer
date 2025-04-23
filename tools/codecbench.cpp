@@ -1,5 +1,6 @@
 #include "../src/meshoptimizer.h"
 
+#include <algorithm>
 #include <vector>
 
 #include <stdint.h>
