@@ -201,7 +201,7 @@ inline uint64_t rotateleft64(uint64_t v, int x)
 #endif
 
 #ifdef SIMD_SSE
-static void decodeFilterOctSimd(signed char* data, size_t count)
+static void decodeFilterOctSimd8(signed char* data, size_t count)
 {
 	const __m128 sign = _mm_set1_ps(-0.f);
 
@@ -246,7 +246,7 @@ static void decodeFilterOctSimd(signed char* data, size_t count)
 	}
 }
 
-static void decodeFilterOctSimd(short* data, size_t count)
+static void decodeFilterOctSimd16(short* data, size_t count)
 {
 	const __m128 sign = _mm_set1_ps(-0.f);
 
@@ -405,7 +405,7 @@ inline float32x4_t vdivq_f32(float32x4_t x, float32x4_t y)
 #endif
 
 #ifdef SIMD_NEON
-static void decodeFilterOctSimd(signed char* data, size_t count)
+static void decodeFilterOctSimd8(signed char* data, size_t count)
 {
 	const int32x4_t sign = vdupq_n_s32(0x80000000);
 
@@ -454,7 +454,7 @@ static void decodeFilterOctSimd(signed char* data, size_t count)
 	}
 }
 
-static void decodeFilterOctSimd(short* data, size_t count)
+static void decodeFilterOctSimd16(short* data, size_t count)
 {
 	const int32x4_t sign = vdupq_n_s32(0x80000000);
 
@@ -599,7 +599,7 @@ static void decodeFilterExpSimd(unsigned int* data, size_t count)
 #endif
 
 #ifdef SIMD_WASM
-static void decodeFilterOctSimd(signed char* data, size_t count)
+static void decodeFilterOctSimd8(signed char* data, size_t count)
 {
 	const v128_t sign = wasm_f32x4_splat(-0.f);
 
@@ -648,7 +648,7 @@ static void decodeFilterOctSimd(signed char* data, size_t count)
 	}
 }
 
-static void decodeFilterOctSimd(short* data, size_t count)
+static void decodeFilterOctSimd16(short* data, size_t count)
 {
 	const v128_t sign = wasm_f32x4_splat(-0.f);
 	const v128_t zmask = wasm_i32x4_splat(0x7fff);
@@ -834,9 +834,9 @@ void meshopt_decodeFilterOct(void* buffer, size_t count, size_t stride)
 
 #if defined(SIMD_SSE) || defined(SIMD_NEON) || defined(SIMD_WASM)
 	if (stride == 4)
-		dispatchSimd(decodeFilterOctSimd, static_cast<signed char*>(buffer), count, 4);
+		dispatchSimd(decodeFilterOctSimd8, static_cast<signed char*>(buffer), count, 4);
 	else
-		dispatchSimd(decodeFilterOctSimd, static_cast<short*>(buffer), count, 4);
+		dispatchSimd(decodeFilterOctSimd16, static_cast<short*>(buffer), count, 4);
 #else
 	if (stride == 4)
 		decodeFilterOct(static_cast<signed char*>(buffer), count);
