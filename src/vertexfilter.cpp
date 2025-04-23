@@ -295,8 +295,9 @@ static void decodeFilterOctSimd(short* data, size_t count)
 		__m128i res_1 = _mm_unpackhi_epi16(xzr, y0r);
 
 		// patch in .w
-		res_0 = _mm_or_si128(res_0, _mm_and_si128(_mm_castps_si128(n4_0), _mm_set1_epi64x(0xffff000000000000)));
-		res_1 = _mm_or_si128(res_1, _mm_and_si128(_mm_castps_si128(n4_1), _mm_set1_epi64x(0xffff000000000000)));
+		__m128i maskw = _mm_set_epi32(0xffff0000, 0, 0xffff0000, 0);
+		res_0 = _mm_or_si128(res_0, _mm_and_si128(_mm_castps_si128(n4_0), maskw));
+		res_1 = _mm_or_si128(res_1, _mm_and_si128(_mm_castps_si128(n4_1), maskw));
 
 		_mm_storeu_si128(reinterpret_cast<__m128i*>(&data[(i + 0) * 4]), res_0);
 		_mm_storeu_si128(reinterpret_cast<__m128i*>(&data[(i + 2) * 4]), res_1);
