@@ -1,4 +1,4 @@
-# 🐇 meshoptimizer ![MIT](https://img.shields.io/badge/license-MIT-blue.svg) [![GitHub](https://img.shields.io/badge/repo-github-green.svg)](https://github.com/zeux/meshoptimizer)
+# 🐇 meshoptimizer [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md) [![GitHub](https://img.shields.io/badge/repo-github-green.svg)](https://github.com/zeux/meshoptimizer)
 
 * TOC
 {:toc}
@@ -595,4 +595,4 @@ Currently, the following APIs are experimental, with the functions marked with `
 
 ## License
 
-This library is available to anybody free of charge, under the terms of MIT License (see LICENSE.md).
+This library is available to anybody free of charge, under the terms of [MIT License](LICENSE.md).
