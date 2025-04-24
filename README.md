@@ -1,4 +1,4 @@
-# 🐇 meshoptimizer [![Actions Status](https://github.com/zeux/meshoptimizer/workflows/build/badge.svg)](https://github.com/zeux/meshoptimizer/actions) [![codecov.io](https://codecov.io/github/zeux/meshoptimizer/coverage.svg?branch=master)](https://codecov.io/github/zeux/meshoptimizer?branch=master) ![MIT](https://img.shields.io/badge/license-MIT-blue.svg) [![GitHub](https://img.shields.io/badge/repo-github-green.svg)](https://github.com/zeux/meshoptimizer)
+# 🐇 meshoptimizer [![Actions Status](https://github.com/zeux/meshoptimizer/workflows/build/badge.svg)](https://github.com/zeux/meshoptimizer/actions) [![codecov.io](https://codecov.io/github/zeux/meshoptimizer/coverage.svg?branch=master)](https://codecov.io/github/zeux/meshoptimizer?branch=master) [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md) [![GitHub](https://img.shields.io/badge/repo-github-green.svg)](https://github.com/zeux/meshoptimizer)
 
 ## Purpose
 
@@ -595,4 +595,8 @@ Currently, the following APIs are experimental, with the functions marked with `
 
 ## License
 
-This library is available to anybody free of charge, under the terms of MIT License (see LICENSE.md).
+This library is available to anybody free of charge, under the terms of [MIT License](LICENSE.md).
+
+To honor the license agreement, please include attribution into the user-facing product documentation and/or credits, for example using this or similar text:
+
+> Uses meshoptimizer. Copyright (c) 2016-2025, Arseny Kapoulkine
