@@ -621,7 +621,7 @@ Currently, the following APIs are experimental, with the functions marked with `
 - `meshopt_generateVertexRemapCustom`*
 - `meshopt_partitionClusters`
 - `meshopt_simplifySloppy`
-- `meshopt_spatialSortTriangles`
+- `meshopt_spatialSortTriangles`*
 
 ## License
 
