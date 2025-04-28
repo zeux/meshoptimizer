@@ -793,19 +793,19 @@ size_t compress(const std::vector<T>& data, int level = SDEFL_LVL_DEF)
 	return sdeflate(&s, &cbuf[0], reinterpret_cast<const unsigned char*>(&data[0]), int(data.size() * sizeof(T)), level);
 }
 
-void encodeIndex(const Mesh& mesh, char desc)
+void encodeIndex(const std::vector<unsigned int>& indices, size_t vertex_count, char desc)
 {
 	// allocate result outside of the timing loop to exclude memset() from decode timing
-	std::vector<unsigned int> result(mesh.indices.size());
+	std::vector<unsigned int> result(indices.size());
 
 	double start = timestamp();
 
-	std::vector<unsigned char> buffer(meshopt_encodeIndexBufferBound(mesh.indices.size(), mesh.vertices.size()));
-	buffer.resize(meshopt_encodeIndexBuffer(&buffer[0], buffer.size(), &mesh.indices[0], mesh.indices.size()));
+	std::vector<unsigned char> buffer(meshopt_encodeIndexBufferBound(indices.size(), vertex_count));
+	buffer.resize(meshopt_encodeIndexBuffer(&buffer[0], buffer.size(), &indices[0], indices.size()));
 
 	double middle = timestamp();
 
-	int res = meshopt_decodeIndexBuffer(&result[0], mesh.indices.size(), &buffer[0], buffer.size());
+	int res = meshopt_decodeIndexBuffer(&result[0], indices.size(), &buffer[0], buffer.size());
 	assert(res == 0);
 	(void)res;
 
@@ -813,22 +813,27 @@ void encodeIndex(const Mesh& mesh, char desc)
 
 	size_t csize = compress(buffer);
 
-	for (size_t i = 0; i < mesh.indices.size(); i += 3)
+	for (size_t i = 0; i < indices.size(); i += 3)
 	{
 		assert(
-		    (result[i + 0] == mesh.indices[i + 0] && result[i + 1] == mesh.indices[i + 1] && result[i + 2] == mesh.indices[i + 2]) ||
-		    (result[i + 1] == mesh.indices[i + 0] && result[i + 2] == mesh.indices[i + 1] && result[i + 0] == mesh.indices[i + 2]) ||
-		    (result[i + 2] == mesh.indices[i + 0] && result[i + 0] == mesh.indices[i + 1] && result[i + 1] == mesh.indices[i + 2]));
+		    (result[i + 0] == indices[i + 0] && result[i + 1] == indices[i + 1] && result[i + 2] == indices[i + 2]) ||
+		    (result[i + 1] == indices[i + 0] && result[i + 2] == indices[i + 1] && result[i + 0] == indices[i + 2]) ||
+		    (result[i + 2] == indices[i + 0] && result[i + 0] == indices[i + 1] && result[i + 1] == indices[i + 2]));
 	}
 
 	printf("IdxCodec%c: %.1f bits/triangle (post-deflate %.1f bits/triangle); encode %.2f msec (%.3f GB/s), decode %.2f msec (%.2f GB/s)\n",
 	    desc,
-	    double(buffer.size() * 8) / double(mesh.indices.size() / 3),
-	    double(csize * 8) / double(mesh.indices.size() / 3),
+	    double(buffer.size() * 8) / double(indices.size() / 3),
+	    double(csize * 8) / double(indices.size() / 3),
 	    (middle - start) * 1000,
 	    (double(result.size() * 4) / (1 << 30)) / (middle - start),
 	    (end - middle) * 1000,
 	    (double(result.size() * 4) / (1 << 30)) / (end - middle));
+}
+
+void encodeIndex(const Mesh& mesh, char desc)
+{
+	encodeIndex(mesh.indices, mesh.vertices.size(), desc);
 }
 
 void encodeIndexSequence(const std::vector<unsigned int>& data, size_t vertex_count, char desc)
