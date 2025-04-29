@@ -586,6 +586,8 @@ To render the mesh with provoking vertex data, the application should use `provo
 
 Note: This assumes the provoking vertex is the first vertex of a triangle, which is true for all graphics APIs except OpenGL/WebGL. For OpenGL/WebGL, you may need to rotate each triangle (abc -> bca) in the resulting index buffer, or use the `glProvokingVertex` function (OpenGL 3.2+) or `WEBGL_provoking_vertex` extension (WebGL2) to change the provoking vertex convention. For WebGL2, this is highly recommended to avoid a variety of emulation slowdowns that happen by default if `flat` attributes are used, such as an implicit use of geometry shaders.
 
+Because the order of indices in the resulting index buffer must be preserved exactly for the technique to work, all optimizations that reorder indices (such as vertex cache optimization) must be applied before generating the provoking index buffer. Additionally, if index compression is used, `meshopt_encodeIndexSequence` should be used instead of `meshopt_encodeIndexBuffer` to ensure that the triangles are not rotated during encoding.
+
 ## Memory management
 
 Many algorithms allocate temporary memory to store intermediate results or accelerate processing. The amount of memory allocated is a function of various input parameters such as vertex count and index count. By default memory is allocated using `operator new` and `operator delete`; if these operators are overloaded by the application, the overloads will be used instead. Alternatively it's possible to specify custom allocation/deallocation functions using `meshopt_setAllocator`, e.g.
