@@ -218,6 +218,11 @@ static void buildPositionRemap(unsigned int* remap, unsigned int* wedge, const f
 		remap[index] = *entry;
 	}
 
+	allocator.deallocate(table);
+
+	if (!wedge)
+		return;
+
 	// build wedge table: for each vertex, which other vertex is the next wedge that also maps to the same vertex?
 	// entries in table form a (cyclic) wedge loop per vertex; for manifold vertices, wedge[i] == remap[i] == i
 	for (size_t i = 0; i < vertex_count; ++i)
@@ -231,8 +236,6 @@ static void buildPositionRemap(unsigned int* remap, unsigned int* wedge, const f
 			wedge[i] = wedge[r];
 			wedge[r] = unsigned(i);
 		}
-
-	allocator.deallocate(table);
 }
 
 static unsigned int* buildSparseRemap(unsigned int* indices, size_t index_count, size_t vertex_count, size_t* out_vertex_count, meshopt_Allocator& allocator)
@@ -2243,8 +2246,7 @@ size_t meshopt_simplifyPrune(unsigned int* destination, const unsigned int* indi
 
 	// build position remap that maps each vertex to the one with identical position
 	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
-	unsigned int* wedge = allocator.allocate<unsigned int>(vertex_count);
-	buildPositionRemap(remap, wedge, vertex_positions_data, vertex_count, vertex_positions_stride, NULL, allocator);
+	buildPositionRemap(remap, NULL, vertex_positions_data, vertex_count, vertex_positions_stride, NULL, allocator);
 
 	Vector3* vertex_positions = allocator.allocate<Vector3>(vertex_count);
 	rescalePositions(vertex_positions, vertex_positions_data, vertex_count, vertex_positions_stride, NULL);
