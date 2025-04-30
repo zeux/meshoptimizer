@@ -1146,18 +1146,12 @@ static void sphereBounds()
 	    1, 0, 1, 3, // clang-format
 	};
 
-	// without the radius, the center is somewhere inside the tetrahedron
-	// note that we currently compute a somewhat suboptimal sphere here due to the tetrahedron being perfecly axis aligned
+	// without the radius, the center is inside the tetrahedron
 	meshopt_Bounds bounds = meshopt_computeSphereBounds(vbr, 4, sizeof(float) * 4, NULL, 0);
-	assert(bounds.radius < 0.97f);
-
-	// forcing a better initial guess for the center by using different radii produces a close to optimal sphere
-	float eps[4] = {1e-3f, 2e-3f, 3e-3f, 4e-3f};
-	meshopt_Bounds boundse = meshopt_computeSphereBounds(vbr, 4, sizeof(float) * 4, eps, sizeof(float));
-	assert(fabsf(boundse.center[0] - 0.5f) < 1e-2f);
-	assert(fabsf(boundse.center[1] - 0.5f) < 1e-2f);
-	assert(fabsf(boundse.center[2] - 0.5f) < 1e-2f);
-	assert(boundse.radius < 0.87f);
+	assert(fabsf(bounds.center[0] - 0.5f) < 1e-2f);
+	assert(fabsf(bounds.center[1] - 0.5f) < 1e-2f);
+	assert(fabsf(bounds.center[2] - 0.5f) < 1e-2f);
+	assert(bounds.radius < 0.87f);
 
 	// when using the radius, the last sphere envelops the entire set
 	meshopt_Bounds boundsr = meshopt_computeSphereBounds(vbr, 4, sizeof(float) * 4, vbr + 3, sizeof(float) * 4);
