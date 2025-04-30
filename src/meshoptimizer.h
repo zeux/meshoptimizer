@@ -439,8 +439,8 @@ MESHOPTIMIZER_API size_t meshopt_simplifyWithAttributes(unsigned int* destinatio
 MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, float* result_error);
 
 /**
- * Experimental: Mesh simplifier (prune)
- * Reduces the number of triangles in the mesh by removing disconnected parts of the mesh
+ * Experimental: Mesh simplifier (pruner)
+ * Reduces the number of triangles in the mesh by removing small isolated parts of the mesh
  * Returns the number of indices after simplification, with destination containing new index data
  * The resulting index buffer references vertices from the original vertex buffer.
  * If the original vertex data isn't required, creating a compact vertex buffer using meshopt_optimizeVertexFetch is recommended.

@@ -1875,6 +1875,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	updateEdgeAdjacency(adjacency, result, index_count, vertex_count, NULL);
 
 	// build position remap that maps each vertex to the one with identical position
+	// wedge table stores next vertex with identical position for each vertex
 	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
 	unsigned int* wedge = allocator.allocate<unsigned int>(vertex_count);
 	buildPositionRemap(remap, wedge, vertex_positions_data, vertex_count, vertex_positions_stride, sparse_remap, allocator);
