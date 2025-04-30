@@ -616,7 +616,7 @@ static void decodeVertexDeltas()
 	}
 
 	std::vector<unsigned char> buffer(meshopt_encodeVertexBufferBound(16, 8));
-	buffer.resize(meshopt_encodeVertexBufferLevel(&buffer[0], buffer.size(), data, 16, 8, 2));
+	buffer.resize(meshopt_encodeVertexBufferLevel(&buffer[0], buffer.size(), data, 16, 8, 2, -1));
 
 	unsigned short decoded[16 * 4];
 	assert(meshopt_decodeVertexBuffer(decoded, 16, 8, &buffer[0], buffer.size()) == 0);
@@ -637,7 +637,7 @@ static void decodeVertexBitXor()
 	}
 
 	std::vector<unsigned char> buffer(meshopt_encodeVertexBufferBound(16, 16));
-	buffer.resize(meshopt_encodeVertexBufferLevel(&buffer[0], buffer.size(), data, 16, 16, 3));
+	buffer.resize(meshopt_encodeVertexBufferLevel(&buffer[0], buffer.size(), data, 16, 16, 3, -1));
 
 	unsigned int decoded[16 * 4];
 	assert(meshopt_decodeVertexBuffer(decoded, 16, 16, &buffer[0], buffer.size()) == 0);

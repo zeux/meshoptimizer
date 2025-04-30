@@ -893,7 +893,7 @@ void encodeVertex(const Mesh& mesh, const char* pvn, int level = 2)
 	double start = timestamp();
 
 	std::vector<unsigned char> vbuf(meshopt_encodeVertexBufferBound(mesh.vertices.size(), sizeof(PV)));
-	vbuf.resize(meshopt_encodeVertexBufferLevel(&vbuf[0], vbuf.size(), &pv[0], mesh.vertices.size(), sizeof(PV), level));
+	vbuf.resize(meshopt_encodeVertexBufferLevel(&vbuf[0], vbuf.size(), &pv[0], mesh.vertices.size(), sizeof(PV), level, -1));
 
 	double middle = timestamp();
 
