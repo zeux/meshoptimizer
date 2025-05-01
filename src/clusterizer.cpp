@@ -10,6 +10,7 @@
 // Graham Wihlidal. Optimizing the Graphics Pipeline with Compute. 2016
 // Matthaeus Chajdas. GeometryFX 1.2 - Cluster Culling. 2016
 // Jack Ritter. An Efficient Bounding Sphere. 1990
+// Thomas Larsson. Fast and Tight Fitting Bounding Spheres. 2008
 namespace meshopt
 {
 
@@ -147,37 +148,62 @@ static void buildTriangleAdjacencySparse(TriangleAdjacency2& adjacency, const un
 	}
 }
 
-static void computeBoundingSphere(float result[4], const float* points, size_t count, size_t points_stride, const float* radii, size_t radii_stride)
+static void computeBoundingSphere(float result[4], const float* points, size_t count, size_t points_stride, const float* radii, size_t radii_stride, size_t axis_count)
 {
+	static const float kAxes[7][3] = {
+	    // X, Y, Z
+	    {1, 0, 0},
+	    {0, 1, 0},
+	    {0, 0, 1},
+
+	    // XYZ, -XYZ, X-YZ, XY-Z; normalized to unit length
+	    {0.57735026f, 0.57735026f, 0.57735026f},
+	    {-0.57735026f, 0.57735026f, 0.57735026f},
+	    {0.57735026f, -0.57735026f, 0.57735026f},
+	    {0.57735026f, 0.57735026f, -0.57735026f},
+	};
+
 	assert(count > 0);
+	assert(axis_count <= sizeof(kAxes) / sizeof(kAxes[0]));
 
 	size_t points_stride_float = points_stride / sizeof(float);
 	size_t radii_stride_float = radii_stride / sizeof(float);
 
-	// find extremum points along all 3 axes; for each axis we get a pair of points with min/max coordinates
-	size_t pmin[3] = {0, 0, 0};
-	size_t pmax[3] = {0, 0, 0};
+	// find extremum points along all axes; for each axis we get a pair of points with min/max coordinates
+	size_t pmin[7], pmax[7];
+	float tmin[7], tmax[7];
+
+	for (size_t axis = 0; axis < axis_count; ++axis)
+	{
+		pmin[axis] = pmax[axis] = 0;
+		tmin[axis] = FLT_MAX;
+		tmax[axis] = -FLT_MAX;
+	}
 
 	for (size_t i = 0; i < count; ++i)
 	{
 		const float* p = points + i * points_stride_float;
 		float r = radii[i * radii_stride_float];
 
-		for (int axis = 0; axis < 3; ++axis)
+		for (size_t axis = 0; axis < axis_count; ++axis)
 		{
-			float bmin = points[pmin[axis] * points_stride_float + axis] - radii[pmin[axis] * radii_stride_float];
-			float bmax = points[pmax[axis] * points_stride_float + axis] + radii[pmax[axis] * radii_stride_float];
+			const float* ax = kAxes[axis];
 
-			pmin[axis] = (p[axis] - r < bmin) ? i : pmin[axis];
-			pmax[axis] = (p[axis] + r > bmax) ? i : pmax[axis];
+			float tp = ax[0] * p[0] + ax[1] * p[1] + ax[2] * p[2];
+			float tpmin = tp - r, tpmax = tp + r;
+
+			pmin[axis] = (tpmin < tmin[axis]) ? i : pmin[axis];
+			pmax[axis] = (tpmax > tmax[axis]) ? i : pmax[axis];
+			tmin[axis] = (tpmin < tmin[axis]) ? tpmin : tmin[axis];
+			tmax[axis] = (tpmax > tmax[axis]) ? tpmax : tmax[axis];
 		}
 	}
 
 	// find the pair of points with largest distance
-	int paxis = 0;
+	size_t paxis = 0;
 	float paxisdr = 0;
 
-	for (int axis = 0; axis < 3; ++axis)
+	for (size_t axis = 0; axis < axis_count; ++axis)
 	{
 		const float* p1 = points + pmin[axis] * points_stride_float;
 		const float* p2 = points + pmax[axis] * points_stride_float;
@@ -1435,13 +1461,13 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 
 	// compute cluster bounding sphere; we'll use the center to determine normal cone apex as well
 	float psphere[4] = {};
-	computeBoundingSphere(psphere, corners[0][0], triangles * 3, sizeof(float) * 3, &rzero, 0);
+	computeBoundingSphere(psphere, corners[0][0], triangles * 3, sizeof(float) * 3, &rzero, 0, 7);
 
 	float center[3] = {psphere[0], psphere[1], psphere[2]};
 
 	// treating triangle normals as points, find the bounding sphere - the sphere center determines the optimal cone axis
 	float nsphere[4] = {};
-	computeBoundingSphere(nsphere, normals[0], triangles, sizeof(float) * 3, &rzero, 0);
+	computeBoundingSphere(nsphere, normals[0], triangles, sizeof(float) * 3, &rzero, 0, 3);
 
 	float axis[3] = {nsphere[0], nsphere[1], nsphere[2]};
 	float axislength = sqrtf(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]);
@@ -1568,7 +1594,7 @@ meshopt_Bounds meshopt_computeSphereBounds(const float* positions, size_t count,
 	const float rzero = 0.f;
 
 	float psphere[4] = {};
-	computeBoundingSphere(psphere, positions, count, positions_stride, radii ? radii : &rzero, radii ? radii_stride : 0);
+	computeBoundingSphere(psphere, positions, count, positions_stride, radii ? radii : &rzero, radii ? radii_stride : 0, 7);
 
 	bounds.center[0] = psphere[0];
 	bounds.center[1] = psphere[1];
