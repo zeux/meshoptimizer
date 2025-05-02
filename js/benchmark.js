@@ -132,7 +132,7 @@ Promise.all([encoder.ready, decoder.ready]).then(() => {
 				rep += ' ';
 				rep += data[key][idx];
 				rep += ' ms (';
-				rep += (data[key].bytes / 1024 / 1024 / 1024 / data[key][idx]) * 1000;
+				rep += (data[key].bytes / 1e9 / data[key][idx]) * 1000;
 				rep += ' GB/s)';
 				rep += '\n';
 			}
