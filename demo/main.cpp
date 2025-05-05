@@ -826,9 +826,9 @@ void encodeIndex(const std::vector<unsigned int>& indices, size_t vertex_count, 
 	    double(buffer.size() * 8) / double(indices.size() / 3),
 	    double(csize * 8) / double(indices.size() / 3),
 	    (middle - start) * 1000,
-	    (double(result.size() * 4) / (1 << 30)) / (middle - start),
+	    (double(result.size() * 4) / 1e9) / (middle - start),
 	    (end - middle) * 1000,
-	    (double(result.size() * 4) / (1 << 30)) / (end - middle));
+	    (double(result.size() * 4) / 1e9) / (end - middle));
 }
 
 void encodeIndex(const Mesh& mesh, char desc)
@@ -863,9 +863,9 @@ void encodeIndexSequence(const std::vector<unsigned int>& data, size_t vertex_co
 	    double(buffer.size() * 8) / double(data.size()),
 	    double(csize * 8) / double(data.size()),
 	    (middle - start) * 1000,
-	    (double(result.size() * 4) / (1 << 30)) / (middle - start),
+	    (double(result.size() * 4) / 1e9) / (middle - start),
 	    (end - middle) * 1000,
-	    (double(result.size() * 4) / (1 << 30)) / (end - middle));
+	    (double(result.size() * 4) / 1e9) / (end - middle));
 }
 
 template <typename PV>
@@ -911,9 +911,9 @@ void encodeVertex(const Mesh& mesh, const char* pvn, int level = 2)
 	    double(vbuf.size() * 8) / double(mesh.vertices.size()),
 	    double(csize * 8) / double(mesh.vertices.size()),
 	    (middle - start) * 1000,
-	    (double(result.size() * sizeof(PV)) / (1 << 30)) / (middle - start),
+	    (double(result.size() * sizeof(PV)) / 1e9) / (middle - start),
 	    (end - middle) * 1000,
-	    (double(result.size() * sizeof(PV)) / (1 << 30)) / (end - middle));
+	    (double(result.size() * sizeof(PV)) / 1e9) / (end - middle));
 }
 
 void stripify(const Mesh& mesh, bool use_restart, char desc)
