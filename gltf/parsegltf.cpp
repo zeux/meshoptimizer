@@ -66,6 +66,14 @@ static void readAccessor(std::vector<Attr>& data, const cgltf_accessor* accessor
 	}
 }
 
+static void readAccessor(std::vector<Attr>& data, const cgltf_accessor* accessor, const std::vector<unsigned int>& sparse)
+{
+	data.resize(sparse.size());
+
+	for (size_t i = 0; i < sparse.size(); ++i)
+		cgltf_accessor_read_float(accessor, sparse[i], &data[i].f[0], 4);
+}
+
 static void fixupIndices(std::vector<unsigned int>& indices, cgltf_primitive_type& type)
 {
 	if (type == cgltf_primitive_type_line_loop)
@@ -196,13 +204,26 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 			}
 			else if (primitive.type != cgltf_primitive_type_points)
 			{
-				// note, while we could generate a good index buffer, reindexMesh will take care of this
+				// note, while we could generate a good index buffer here, mesh will be reindexed during processing
 				result.indices.resize(vertex_count);
 				for (size_t i = 0; i < vertex_count; ++i)
 					result.indices[i] = unsigned(i);
 			}
 
+			// convert line loops and line/triangle strips to lists
 			fixupIndices(result.indices, result.type);
+
+			std::vector<unsigned int> sparse;
+
+			// if the index data is very sparse, switch to deindexing on the fly to avoid the excessive cost of reading large accessors
+			if (result.indices.size() < vertex_count / 2)
+			{
+				sparse = result.indices;
+
+				// mesh will be reindexed during processing
+				for (size_t i = 0; i < result.indices.size(); ++i)
+					result.indices[i] = unsigned(i);
+			}
 
 			for (size_t ai = 0; ai < primitive.attributes_count; ++ai)
 			{
@@ -229,7 +250,10 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 				if (attr.type == cgltf_attribute_type_custom)
 					s.custom_name = attr.name;
 
-				readAccessor(s.data, attr.data);
+				if (sparse.empty())
+					readAccessor(s.data, attr.data);
+				else
+					readAccessor(s.data, attr.data, sparse);
 
 				if (attr.type == cgltf_attribute_type_color && attr.data->type == cgltf_type_vec3)
 				{
@@ -259,7 +283,10 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 					s.index = attr.index;
 					s.target = int(ti + 1);
 
-					readAccessor(s.data, attr.data);
+					if (sparse.empty())
+						readAccessor(s.data, attr.data);
+					else
+						readAccessor(s.data, attr.data, sparse);
 				}
 			}
 
