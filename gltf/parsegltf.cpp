@@ -177,11 +177,8 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 			Mesh& result = meshes.back();
 
 			result.scene = -1;
-
 			result.material = primitive.material;
-
 			result.extras = primitive.extras;
-
 			result.type = primitive.type;
 
 			result.streams.reserve(primitive.attributes_count);
@@ -312,11 +309,11 @@ static void parseMeshInstancesGltf(std::vector<Transform>& instances, cgltf_node
 	for (size_t i = 0; i < count; ++i)
 	{
 		if (translation)
-			cgltf_accessor_read_float(translation, i, instance.translation, sizeof(float));
+			cgltf_accessor_read_float(translation, i, instance.translation, 4);
 		if (rotation)
-			cgltf_accessor_read_float(rotation, i, instance.rotation, sizeof(float));
+			cgltf_accessor_read_float(rotation, i, instance.rotation, 4);
 		if (scale)
-			cgltf_accessor_read_float(scale, i, instance.scale, sizeof(float));
+			cgltf_accessor_read_float(scale, i, instance.scale, 4);
 
 		Transform xf;
 		cgltf_node_transform_world(&instance, xf.data);
