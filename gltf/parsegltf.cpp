@@ -216,7 +216,7 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 			std::vector<unsigned int> sparse;
 
 			// if the index data is very sparse, switch to deindexing on the fly to avoid the excessive cost of reading large accessors
-			if (result.indices.size() < vertex_count / 2)
+			if (!result.indices.empty() && result.indices.size() < vertex_count / 2)
 			{
 				sparse = result.indices;
 
