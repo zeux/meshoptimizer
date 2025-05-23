@@ -147,8 +147,6 @@ struct Settings
 	bool simplify_attributes;
 	float simplify_debug;
 
-	int meshlet_debug;
-
 	bool texture_ktx2;
 	bool texture_embed;
 	bool texture_ref;
