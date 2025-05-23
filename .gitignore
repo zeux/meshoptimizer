@@ -3,12 +3,14 @@
 /.idea/
 /.vs/
 /.vscode/
+/.zed/
 
 # Build files
 /build/
 /cmake-build-*/
 /out/
 /gltf/library.wasm
+/*.dSYM/
 compile_commands.json
 
 # Test files
