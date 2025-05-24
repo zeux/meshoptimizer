@@ -122,6 +122,9 @@ if(MESHOPT_BUILD_GLTFPACK)
 
     if(NOT MESHOPT_BASISU_PATH STREQUAL "")
         get_filename_component(BASISU_PATH ${MESHOPT_BASISU_PATH} ABSOLUTE)
+        if (NOT EXISTS ${BASISU_PATH})
+            message(FATAL_ERROR "Basis Universal path ${BASISU_PATH} not found")
+        endif()
 
         target_compile_definitions(gltfpack PRIVATE WITH_BASISU)
         set_source_files_properties(gltf/basisenc.cpp gltf/basislib.cpp PROPERTIES INCLUDE_DIRECTORIES ${BASISU_PATH})
