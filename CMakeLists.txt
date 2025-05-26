@@ -17,8 +17,11 @@ project(meshoptimizer VERSION 0.23 LANGUAGES CXX)
 option(MESHOPT_BUILD_DEMO "Build demo" OFF)
 option(MESHOPT_BUILD_GLTFPACK "Build gltfpack" OFF)
 option(MESHOPT_BUILD_SHARED_LIBS "Build shared libraries" OFF)
+option(MESHOPT_STABLE_EXPORTS "Only export stable APIs from shared library" OFF)
 option(MESHOPT_WERROR "Treat warnings as errors" OFF)
 option(MESHOPT_INSTALL "Install library" ON)
+
+# Path to Basis Universal library, if you want to use it with gltfpack
 set(MESHOPT_BASISU_PATH "" CACHE STRING "")
 
 set(SOURCES
@@ -99,6 +102,10 @@ if(MESHOPT_BUILD_SHARED_LIBS)
         target_compile_definitions(meshoptimizer PRIVATE "MESHOPTIMIZER_API=__declspec(dllexport)")
     else()
         target_compile_definitions(meshoptimizer PUBLIC "MESHOPTIMIZER_API=__attribute__((visibility(\"default\")))")
+    endif()
+
+    if(MESHOPT_STABLE_EXPORTS)
+		target_compile_definitions(meshoptimizer PUBLIC "MESHOPTIMIZER_EXPERIMENTAL=")
     endif()
 endif()
 

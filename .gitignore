@@ -7,10 +7,10 @@
 
 # Build files
 /build/
-/cmake-build-*/
+/cmake*/
 /out/
-/gltf/library.wasm
 /*.dSYM/
+/gltf/library.wasm
 compile_commands.json
 
 # Test files
