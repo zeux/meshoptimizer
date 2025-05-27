@@ -1405,13 +1405,13 @@ static void partitionBasic()
 	const unsigned int cc[4] = {6, 6, 6, 6};
 	unsigned int part[4];
 
-	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 4, 13, 1) == 4);
+	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 4, NULL, 13, 0, 1) == 4);
 	assert(part[0] == 0 && part[1] == 1 && part[2] == 2 && part[3] == 3);
 
-	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 4, 13, 2) == 2);
+	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 4, NULL, 13, 0, 2) == 2);
 	assert(part[0] == 0 && part[1] == 0 && part[2] == 1 && part[3] == 1);
 
-	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 4, 13, 4) == 1);
+	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 4, NULL, 13, 0, 4) == 1);
 	assert(part[0] == 0 && part[1] == 0 && part[2] == 0 && part[3] == 0);
 }
 
