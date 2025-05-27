@@ -1539,15 +1539,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-#ifdef _MSC_VER
-#pragma warning(disable : 4996)
-#endif
-
-	bool dump = getenv("DUMP") && atoi(getenv("DUMP"));
-
-	meshlets(mesh, /* scan= */ false, /* uniform= */ false, /* flex= */ false);
-	meshlets(mesh, /* scan= */ false, /* uniform= */ true, /* flex= */ false);
-	meshlets(mesh, /* scan= */ false, /* uniform= */ true, /* flex= */ false, /* split= */ true, dump);
+	simplifyClusters(mesh);
 }
 
 void processNanite(const char* path)
