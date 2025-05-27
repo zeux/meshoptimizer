@@ -278,11 +278,16 @@ static int pickGroupToMerge(const ClusterGroup* groups, int id, const ClusterAdj
 
 } // namespace meshopt
 
-size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* cluster_indices, size_t total_index_count, const unsigned int* cluster_index_counts, size_t cluster_count, size_t vertex_count, size_t target_partition_size)
+size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* cluster_indices, size_t total_index_count, const unsigned int* cluster_index_counts, size_t cluster_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_partition_size)
 {
 	using namespace meshopt;
 
+	assert((vertex_positions == NULL || vertex_positions_stride >= 12) && vertex_positions_stride <= 256);
+	assert(vertex_positions_stride % sizeof(float) == 0);
 	assert(target_partition_size > 0);
+
+	(void)vertex_positions;
+	(void)vertex_positions_stride;
 
 	size_t max_partition_size = target_partition_size + target_partition_size * 3 / 8;
 
