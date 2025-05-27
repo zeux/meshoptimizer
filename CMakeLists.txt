@@ -113,6 +113,7 @@ set(TARGETS meshoptimizer)
 
 if(MESHOPT_BUILD_DEMO)
     add_executable(demo demo/main.cpp demo/nanite.cpp demo/tests.cpp tools/objloader.cpp)
+    set_target_properties(demo PROPERTIES CXX_STANDARD 11)
     target_link_libraries(demo meshoptimizer)
 endif()
 

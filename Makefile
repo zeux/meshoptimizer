@@ -23,6 +23,7 @@ CFLAGS=-g -Wall -Wextra -std=c89
 CXXFLAGS=-g -Wall -Wextra -Wshadow -Wno-missing-field-initializers -std=gnu++98
 LDFLAGS=
 
+$(DEMO_OBJECTS): CXXFLAGS+=-std=c++11
 $(GLTFPACK_OBJECTS): CXXFLAGS+=-std=c++11
 
 ifdef BASISU
