@@ -50,6 +50,60 @@ static void filterClusterIndices(unsigned int* data, unsigned int* offsets, cons
 	offsets[cluster_count] = unsigned(cluster_write);
 }
 
+static void computeClusterBounds(float* cluster_bounds, const unsigned int* cluster_indices, const unsigned int* cluster_index_counts, size_t cluster_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+{
+	(void)vertex_count;
+
+	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
+	size_t cluster_start = 0;
+
+	for (size_t i = 0; i < cluster_count; ++i)
+	{
+		float center[3] = {0, 0, 0};
+
+		// approximate center of the cluster by averaging all vertex positions
+		for (size_t j = 0; j < cluster_index_counts[i]; ++j)
+		{
+			unsigned int v = cluster_indices[cluster_start + j];
+			assert(v < vertex_count);
+
+			const float* p = vertex_positions + v * vertex_stride_float;
+
+			center[0] += p[0];
+			center[1] += p[1];
+			center[2] += p[2];
+		}
+
+		// note: technically clusters can't be empty per meshopt_partitionCluster but we check for a division by zero in case that changes
+		if (cluster_index_counts[i])
+		{
+			center[0] /= float(cluster_index_counts[i]);
+			center[1] /= float(cluster_index_counts[i]);
+			center[2] /= float(cluster_index_counts[i]);
+		}
+
+		// compute radius of the bounding sphere for each cluster
+		float radiussq = 0;
+
+		for (size_t j = 0; j < cluster_index_counts[i]; ++j)
+		{
+			unsigned int v = cluster_indices[cluster_start + j];
+			const float* p = vertex_positions + v * vertex_stride_float;
+
+			float d2 = (p[0] - center[0]) * (p[0] - center[0]) + (p[1] - center[1]) * (p[1] - center[1]) + (p[2] - center[2]) * (p[2] - center[2]);
+
+			radiussq = radiussq < d2 ? d2 : radiussq;
+		}
+
+		cluster_bounds[i * 4 + 0] = center[0];
+		cluster_bounds[i * 4 + 1] = center[1];
+		cluster_bounds[i * 4 + 2] = center[2];
+		cluster_bounds[i * 4 + 3] = sqrtf(radiussq);
+
+		cluster_start += cluster_index_counts[i];
+	}
+}
+
 static void buildClusterAdjacency(ClusterAdjacency& adjacency, const unsigned int* cluster_indices, const unsigned int* cluster_offsets, size_t cluster_count, size_t vertex_count, meshopt_Allocator& allocator)
 {
 	unsigned int* ref_offsets = allocator.allocate<unsigned int>(vertex_count + 1);
@@ -286,12 +340,18 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 	assert(vertex_positions_stride % sizeof(float) == 0);
 	assert(target_partition_size > 0);
 
-	(void)vertex_positions;
-	(void)vertex_positions_stride;
-
 	size_t max_partition_size = target_partition_size + target_partition_size * 3 / 8;
 
 	meshopt_Allocator allocator;
+
+	// compute bounding sphere for each cluster if positions are provided
+	float* cluster_bounds = NULL;
+
+	if (vertex_positions)
+	{
+		cluster_bounds = allocator.allocate<float>(cluster_count * 4);
+		computeClusterBounds(cluster_bounds, cluster_indices, cluster_index_counts, cluster_count, vertex_positions, vertex_count, vertex_positions_stride);
+	}
 
 	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
 	memset(used, 0, vertex_count);
