@@ -496,7 +496,7 @@ static std::vector<Cluster> clusterizeMetis(const std::vector<Vertex>& vertices,
 	// not sure why this is a special case that we need to handle but okay metis
 	if (nparts > 1)
 	{
-		int r = METIS_PartGraphRecursive(&nvtxs, &ncon, &xadj[0], &adjncy[0], NULL, NULL, &adjwgt[0], &nparts, NULL, NULL, options, &edgecut, &part[0]);
+		int r = METIS_PartGraphRecursive(&nvtxs, &ncon, xadj.data(), adjncy.data(), NULL, NULL, adjwgt.data(), &nparts, NULL, NULL, options, &edgecut, part.data());
 		assert(r == METIS_OK);
 		(void)r;
 	}
