@@ -2,6 +2,7 @@
 #include "meshoptimizer.h"
 
 #include <assert.h>
+#include <float.h>
 #include <math.h>
 #include <string.h>
 
@@ -14,6 +15,17 @@ struct ClusterAdjacency
 	unsigned int* clusters;
 	unsigned int* shared;
 };
+
+// "Insert" two 0 bits after each of the 10 low bits of x
+inline unsigned int morton32(unsigned int x)
+{
+	x &= 0x000003ff;                  // x = ---- ---- ---- ---- ---- --98 7654 3210
+	x = (x ^ (x << 16)) & 0xff0000ff; // x = ---- --98 ---- ---- ---- ---- 7654 3210
+	x = (x ^ (x << 8)) & 0x0300f00f;  // x = ---- --98 ---- ---- 7654 ---- ---- 3210
+	x = (x ^ (x << 4)) & 0x030c30c3;  // x = ---- --98 ---- 76-- --54 ---- 32-- --10
+	x = (x ^ (x << 2)) & 0x09249249;  // x = ---- 9--8 --7- -6-- 5--4 --3- -2-- 1--0
+	return x;
+}
 
 static void computeClusterBounds(float* cluster_bounds, const unsigned int* cluster_indices, const unsigned int* cluster_index_counts, size_t cluster_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
@@ -66,6 +78,40 @@ static void computeClusterBounds(float* cluster_bounds, const unsigned int* clus
 		cluster_bounds[i * 4 + 3] = sqrtf(radiussq);
 
 		cluster_start += cluster_index_counts[i];
+	}
+}
+
+static void computeClusterKeys(unsigned int* result, const float* cluster_bounds, size_t cluster_count)
+{
+	float minv[3] = {FLT_MAX, FLT_MAX, FLT_MAX};
+	float maxv[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+
+	for (size_t i = 0; i < cluster_count; ++i)
+		for (int j = 0; j < 3; ++j)
+		{
+			float vj = cluster_bounds[i * 4 + j];
+
+			minv[j] = minv[j] > vj ? vj : minv[j];
+			maxv[j] = maxv[j] < vj ? vj : maxv[j];
+		}
+
+	float extent = 0.f;
+
+	extent = (maxv[0] - minv[0]) < extent ? extent : (maxv[0] - minv[0]);
+	extent = (maxv[1] - minv[1]) < extent ? extent : (maxv[1] - minv[1]);
+	extent = (maxv[2] - minv[2]) < extent ? extent : (maxv[2] - minv[2]);
+
+	// rescale each axis to 10 bits to get 30-bit Morton codes
+	float scale = extent == 0 ? 0.f : 1023.f / extent;
+
+	// generate Morton order based on the position inside a unit cube
+	for (size_t i = 0; i < cluster_count; ++i)
+	{
+		int x = int((cluster_bounds[i * 4 + 0] - minv[0]) * scale + 0.5f);
+		int y = int((cluster_bounds[i * 4 + 1] - minv[1]) * scale + 0.5f);
+		int z = int((cluster_bounds[i * 4 + 2] - minv[2]) * scale + 0.5f);
+
+		result[i] = morton32(x) | (morton32(y) << 1) | (morton32(z) << 2);
 	}
 }
 
@@ -351,6 +397,9 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 	{
 		cluster_bounds = allocator.allocate<float>(cluster_count * 4);
 		computeClusterBounds(cluster_bounds, cluster_indices, cluster_index_counts, cluster_count, vertex_positions, vertex_count, vertex_positions_stride);
+
+		unsigned int* cluster_keys = allocator.allocate<unsigned int>(cluster_count);
+		computeClusterKeys(cluster_keys, cluster_bounds, cluster_count);
 	}
 
 	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
