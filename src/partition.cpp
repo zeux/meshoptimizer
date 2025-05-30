@@ -482,19 +482,19 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 
 	meshopt_Allocator allocator;
 
-	// compute bounding sphere for each cluster if positions are provided
 	float* cluster_bounds = NULL;
 	unsigned int* cluster_links = NULL;
 
 	if (vertex_positions)
 	{
+		// compute bounding sphere for each cluster if positions are provided
 		cluster_bounds = allocator.allocate<float>(cluster_count * 4);
 		computeClusterBounds(cluster_bounds, cluster_indices, cluster_index_counts, cluster_count, vertex_positions, vertex_count, vertex_positions_stride);
 
-		unsigned int* cluster_scratch = allocator.allocate<unsigned int>(cluster_count * 3);
-		unsigned int* cluster_order = cluster_scratch;
-		unsigned int* cluster_keys = cluster_order + cluster_count;
-		unsigned int* cluster_temp = cluster_keys + cluster_count;
+		// compute Morton codes for each cluster to use as keys for sorting; we reuse the allocation for sorting order
+		unsigned int* cluster_keys = allocator.allocate<unsigned int>(cluster_count * 3);
+		unsigned int* cluster_order = cluster_keys + cluster_count;
+		unsigned int* cluster_temp = cluster_keys + cluster_count * 2;
 
 		computeClusterKeys(cluster_keys, cluster_bounds, cluster_count);
 
@@ -504,10 +504,12 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 		for (size_t i = 0; i < cluster_count; ++i)
 			cluster_temp[i] = unsigned(i);
 
+		// 3-pass radix sort computes the resulting order
 		radixPass(cluster_order, cluster_temp, cluster_keys, cluster_count, hist, 0);
 		radixPass(cluster_temp, cluster_order, cluster_keys, cluster_count, hist, 1);
 		radixPass(cluster_order, cluster_temp, cluster_keys, cluster_count, hist, 2);
 
+		// compute spatial links between neighboring clusters; these will be used as additional adjacency information
 		cluster_links = allocator.allocate<unsigned int>(cluster_count * kSpatialLinks);
 		computeClusterLinks(cluster_links, cluster_bounds, cluster_order, cluster_count);
 	}
