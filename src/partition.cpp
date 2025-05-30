@@ -9,6 +9,9 @@
 namespace meshopt
 {
 
+const size_t kSpatialLinks = 3;
+const size_t kSpatialSearch = kSpatialLinks * 3;
+
 struct ClusterAdjacency
 {
 	unsigned int* offsets;
@@ -157,6 +160,40 @@ static void radixPass(unsigned int* destination, const unsigned int* source, con
 		unsigned int id = unsigned(keys[source[i]] >> bitoff) & 1023;
 
 		destination[hist[id][pass]++] = source[i];
+	}
+}
+
+static void computeClusterLinks(unsigned int* cluster_links, const float* cluster_bounds, const unsigned int* cluster_order, size_t cluster_count)
+{
+	for (size_t i = 0; i < cluster_count; ++i)
+	{
+		unsigned int links[kSpatialLinks];
+		float dists[kSpatialLinks];
+
+		memset(links, ~0, sizeof(links));
+		memset(dists, 0, sizeof(dists));
+
+		size_t je = i + 1 + kSpatialSearch < cluster_count ? i + 1 + kSpatialSearch : cluster_count;
+
+		for (size_t j = i + 1; j < je; ++j)
+		{
+			const float* ci = &cluster_bounds[cluster_order[i] * 4];
+			const float* cj = &cluster_bounds[cluster_order[j] * 4];
+
+			float d = sqrtf((ci[0] - cj[0]) * (ci[0] - cj[0]) + (ci[1] - cj[1]) * (ci[1] - cj[1]) + (ci[2] - cj[2]) * (ci[2] - cj[2]));
+			if (d > ci[3] + cj[3])
+				continue;
+
+			for (size_t k = 0; k < kSpatialLinks; ++k)
+				if (links[k] == ~0u || d < dists[k])
+				{
+					links[k] = cluster_order[j];
+					dists[k] = d;
+				}
+		}
+
+		for (size_t k = 0; k < kSpatialLinks; ++k)
+			cluster_links[cluster_order[i] * kSpatialLinks + k] = links[k];
 	}
 }
 
@@ -437,6 +474,7 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 
 	// compute bounding sphere for each cluster if positions are provided
 	float* cluster_bounds = NULL;
+	unsigned int* cluster_links = NULL;
 
 	if (vertex_positions)
 	{
@@ -459,6 +497,9 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 		radixPass(cluster_order, cluster_temp, cluster_keys, cluster_count, hist, 0);
 		radixPass(cluster_temp, cluster_order, cluster_keys, cluster_count, hist, 1);
 		radixPass(cluster_order, cluster_temp, cluster_keys, cluster_count, hist, 2);
+
+		cluster_links = allocator.allocate<unsigned int>(cluster_count * kSpatialLinks);
+		computeClusterLinks(cluster_links, cluster_bounds, cluster_order, cluster_count);
 	}
 
 	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
