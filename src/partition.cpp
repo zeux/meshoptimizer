@@ -115,6 +115,51 @@ static void computeClusterKeys(unsigned int* result, const float* cluster_bounds
 	}
 }
 
+static void computeHistogram(unsigned int (&hist)[1024][3], const unsigned int* data, size_t count)
+{
+	memset(hist, 0, sizeof(hist));
+
+	// compute 3 10-bit histograms in parallel
+	for (size_t i = 0; i < count; ++i)
+	{
+		unsigned long long id = data[i];
+
+		hist[(id >> 0) & 1023][0]++;
+		hist[(id >> 10) & 1023][1]++;
+		hist[(id >> 20) & 1023][2]++;
+	}
+
+	unsigned int sum0 = 0, sum1 = 0, sum2 = 0;
+
+	// replace histogram data with prefix histogram sums in-place
+	for (int i = 0; i < 1024; ++i)
+	{
+		unsigned int h0 = hist[i][0], h1 = hist[i][1], h2 = hist[i][2];
+
+		hist[i][0] = sum0;
+		hist[i][1] = sum1;
+		hist[i][2] = sum2;
+
+		sum0 += h0;
+		sum1 += h1;
+		sum2 += h2;
+	}
+
+	assert(sum0 == count && sum1 == count && sum2 == count);
+}
+
+static void radixPass(unsigned int* destination, const unsigned int* source, const unsigned int* keys, size_t count, unsigned int (&hist)[1024][3], int pass)
+{
+	int bitoff = pass * 10;
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		unsigned int id = unsigned(keys[source[i]] >> bitoff) & 1023;
+
+		destination[hist[id][pass]++] = source[i];
+	}
+}
+
 static void filterClusterIndices(unsigned int* data, unsigned int* offsets, const unsigned int* cluster_indices, const unsigned int* cluster_index_counts, size_t cluster_count, unsigned char* used, size_t vertex_count, size_t total_index_count)
 {
 	(void)vertex_count;
@@ -398,8 +443,22 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 		cluster_bounds = allocator.allocate<float>(cluster_count * 4);
 		computeClusterBounds(cluster_bounds, cluster_indices, cluster_index_counts, cluster_count, vertex_positions, vertex_count, vertex_positions_stride);
 
-		unsigned int* cluster_keys = allocator.allocate<unsigned int>(cluster_count);
+		unsigned int* cluster_scratch = allocator.allocate<unsigned int>(cluster_count * 3);
+		unsigned int* cluster_order = cluster_scratch;
+		unsigned int* cluster_keys = cluster_order + cluster_count;
+		unsigned int* cluster_temp = cluster_keys + cluster_count;
+
 		computeClusterKeys(cluster_keys, cluster_bounds, cluster_count);
+
+		unsigned int hist[1024][3];
+		computeHistogram(hist, cluster_keys, cluster_count);
+
+		for (size_t i = 0; i < cluster_count; ++i)
+			cluster_temp[i] = unsigned(i);
+
+		radixPass(cluster_order, cluster_temp, cluster_keys, cluster_count, hist, 0);
+		radixPass(cluster_temp, cluster_order, cluster_keys, cluster_count, hist, 1);
+		radixPass(cluster_order, cluster_temp, cluster_keys, cluster_count, hist, 2);
 	}
 
 	unsigned char* used = allocator.allocate<unsigned char>(vertex_count);
