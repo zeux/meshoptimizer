@@ -197,7 +197,7 @@ static void computeClusterLinks(unsigned int* cluster_links, const float* cluste
 	}
 }
 
-static void filterClusterIndices(unsigned int* data, unsigned int* offsets, const unsigned int* cluster_indices, const unsigned int* cluster_index_counts, size_t cluster_count, unsigned char* used, size_t vertex_count, size_t total_index_count)
+static void filterClusterIndices(unsigned int* data, unsigned int* offsets, const unsigned int* cluster_indices, const unsigned int* cluster_index_counts, const unsigned int* cluster_links, size_t cluster_count, unsigned char* used, size_t vertex_count, size_t total_index_count)
 {
 	(void)vertex_count;
 	(void)total_index_count;
@@ -224,11 +224,21 @@ static void filterClusterIndices(unsigned int* data, unsigned int* offsets, cons
 		for (size_t j = offsets[i]; j < cluster_write; ++j)
 			used[data[j]] = 0;
 
+		// add spatial links
+		if (cluster_links)
+		{
+			data[cluster_write++] = unsigned(vertex_count + i);
+
+			for (size_t k = 0; k < kSpatialLinks; ++k)
+				if (cluster_links[i * kSpatialLinks + k] != ~0u)
+					data[cluster_write++] = unsigned(vertex_count + cluster_links[i * kSpatialLinks + k]);
+		}
+
 		cluster_start += cluster_index_counts[i];
 	}
 
 	assert(cluster_start == total_index_count);
-	assert(cluster_write <= total_index_count);
+	assert(cluster_write <= total_index_count + (cluster_links ? cluster_count * (kSpatialLinks + 1) : 0));
 	offsets[cluster_count] = unsigned(cluster_write);
 }
 
@@ -509,12 +519,12 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 	unsigned int* cluster_offsets = allocator.allocate<unsigned int>(cluster_count + 1);
 
 	// make new cluster index list that filters out duplicate indices
-	filterClusterIndices(cluster_newindices, cluster_offsets, cluster_indices, cluster_index_counts, cluster_count, used, vertex_count, total_index_count);
+	filterClusterIndices(cluster_newindices, cluster_offsets, cluster_indices, cluster_index_counts, cluster_links, cluster_count, used, vertex_count, total_index_count);
 	cluster_indices = cluster_newindices;
 
 	// build cluster adjacency along with edge weights (shared vertex count)
 	ClusterAdjacency adjacency = {};
-	buildClusterAdjacency(adjacency, cluster_indices, cluster_offsets, cluster_count, vertex_count, allocator);
+	buildClusterAdjacency(adjacency, cluster_indices, cluster_offsets, cluster_count, vertex_count + (cluster_links ? cluster_count : 0), allocator);
 
 	ClusterGroup* groups = allocator.allocate<ClusterGroup>(cluster_count);
 
