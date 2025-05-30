@@ -11,7 +11,7 @@ namespace meshopt
 {
 
 // "Insert" two 0 bits after each of the 20 low bits of x
-inline unsigned long long part1By2(unsigned long long x)
+inline unsigned long long morton64(unsigned long long x)
 {
 	x &= 0x000fffffull;                          // x = ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- ---- jihg fedc ba98 7654 3210
 	x = (x ^ (x << 32)) & 0x000f00000000ffffull; // x = ---- ---- ---- jihg ---- ---- ---- ---- ---- ---- ---- ---- fedc ba98 7654 3210
@@ -60,7 +60,7 @@ static void computeOrder(unsigned long long* result, const float* vertex_positio
 		int y = int((v[1] - minv[1]) * scale + 0.5f);
 		int z = int((v[2] - minv[2]) * scale + 0.5f);
 
-		result[i] = part1By2(x) | (part1By2(y) << 1) | (part1By2(z) << 2);
+		result[i] = morton64(x) | (morton64(y) << 1) | (morton64(z) << 2);
 	}
 }
 
