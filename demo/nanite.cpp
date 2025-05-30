@@ -68,6 +68,7 @@ const size_t kGroupSize = 8;
 const bool kUseLocks = true;
 const bool kUseNormals = true;
 const bool kUseRetry = true;
+const bool kUseSpatialLinks = false;
 const int kMetisSlop = 2;
 const float kSimplifyThreshold = 0.85f;
 
@@ -127,7 +128,7 @@ static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, cons
 
 	const size_t max_vertices = 192; // TODO: depends on kClusterSize, also may want to dial down for mesh shaders
 	const size_t max_triangles = kClusterSize;
-	const size_t min_triangles = (kClusterSize / 3) & ~3;
+	const size_t min_triangles = kClusterSize / 4;
 	const float split_factor = 2.0f;
 
 	size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), max_vertices, min_triangles);
@@ -182,7 +183,7 @@ static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clus
 	}
 
 	std::vector<unsigned int> cluster_part(pending.size());
-	size_t partition_count = meshopt_partitionClusters(&cluster_part[0], &cluster_indices[0], cluster_indices.size(), &cluster_counts[0], cluster_counts.size(), &vertices[0].px, remap.size(), sizeof(Vertex), kGroupSize);
+	size_t partition_count = meshopt_partitionClusters(&cluster_part[0], &cluster_indices[0], cluster_indices.size(), &cluster_counts[0], cluster_counts.size(), kUseSpatialLinks ? &vertices[0].px : NULL, remap.size(), sizeof(Vertex), kGroupSize);
 
 	std::vector<std::vector<int> > partitions(partition_count);
 	for (size_t i = 0; i < partition_count; ++i)
