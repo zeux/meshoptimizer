@@ -692,6 +692,7 @@ static void dumpMetrics(int level, const std::vector<Cluster>& queue, const std:
 	int components = 0;
 	int xformed = 0;
 	int boundary = 0;
+	float radius = 0;
 
 	for (size_t i = 0; i < groups.size(); ++i)
 	{
@@ -705,6 +706,7 @@ static void dumpMetrics(int level, const std::vector<Cluster>& queue, const std:
 			components += measureComponents(parents, cluster.indices, remap);
 			xformed += measureUnique(parents, cluster.indices);
 			boundary += kUseLocks ? measureUnique(parents, cluster.indices, &locks) : 0;
+			radius += cluster.self.radius;
 		}
 	}
 
@@ -722,9 +724,9 @@ static void dumpMetrics(int level, const std::vector<Cluster>& queue, const std:
 	double avg_group = double(clusters) / double(groups.size());
 	double inv_clusters = 1.0 / double(clusters);
 
-	printf("lod %d: %d clusters (%.1f%% full, %.1f tri/cl, %.1f vtx/cl, %.2f connected, %.1f boundary, %.1f partition), %d triangles",
+	printf("lod %d: %d clusters (%.1f%% full, %.1f tri/cl, %.1f vtx/cl, %.2f connected, %.1f boundary, %.1f partition, %f radius), %d triangles",
 	    level, clusters,
-	    double(full_clusters) * inv_clusters * 100, double(triangles) * inv_clusters, double(xformed) * inv_clusters, double(components) * inv_clusters, double(boundary) * inv_clusters, avg_group,
+	    double(full_clusters) * inv_clusters * 100, double(triangles) * inv_clusters, double(xformed) * inv_clusters, double(components) * inv_clusters, double(boundary) * inv_clusters, avg_group, radius * inv_clusters,
 	    int(triangles));
 	if (stuck_clusters)
 		printf("; stuck %d clusters (%d triangles)", stuck_clusters, stuck_triangles);
