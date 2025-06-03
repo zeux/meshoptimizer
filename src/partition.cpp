@@ -306,7 +306,18 @@ static void mergeBounds(float* target, const float* source)
 	}
 }
 
-static int pickGroupToMerge(const ClusterGroup* groups, int id, const ClusterAdjacency& adjacency, size_t max_partition_size)
+static float boundsScore(const float* target, const float* source)
+{
+	float r1 = target[3], r2 = source[3];
+	float dx = source[0] - target[0], dy = source[1] - target[1], dz = source[2] - target[2];
+	float d = sqrtf(dx * dx + dy * dy + dz * dz);
+
+	float mr = d + r1 < r2 ? r2 : (d + r2 < r1 ? r1 : (d + r2 + r1) / 2);
+
+	return mr > 0 ? r1 / mr : 0.f;
+}
+
+static int pickGroupToMerge(const ClusterGroup* groups, int id, const ClusterAdjacency& adjacency, size_t max_partition_size, const float* cluster_bounds)
 {
 	assert(groups[id].size > 0);
 
@@ -332,6 +343,10 @@ static int pickGroupToMerge(const ClusterGroup* groups, int id, const ClusterAdj
 
 			// normalize shared count by the expected boundary of each group (+ keeps scoring symmetric)
 			float score = float(int(shared)) * (group_rsqrt + other_rsqrt);
+
+			// incorporate spatial score to favor merging nearby groups
+			if (cluster_bounds)
+				score *= 1.f + 0.4f * boundsScore(&cluster_bounds[id * 4], &cluster_bounds[other * 4]);
 
 			if (score > best_score)
 			{
@@ -422,7 +437,7 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 		if (groups[top.id].size >= target_partition_size)
 			continue;
 
-		int best_group = pickGroupToMerge(groups, top.id, adjacency, max_partition_size);
+		int best_group = pickGroupToMerge(groups, top.id, adjacency, max_partition_size, cluster_bounds);
 
 		// we can't grow the group any more, emit as is
 		if (best_group == -1)
