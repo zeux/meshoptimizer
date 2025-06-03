@@ -283,6 +283,29 @@ static unsigned int countShared(const ClusterGroup* groups, int group1, int grou
 	return total;
 }
 
+static void mergeBounds(float* target, const float* source)
+{
+	float r1 = target[3], r2 = source[3];
+	float dx = source[0] - target[0], dy = source[1] - target[1], dz = source[2] - target[2];
+	float d = sqrtf(dx * dx + dy * dy + dz * dz);
+
+	if (d + r1 < r2)
+	{
+		memcpy(target, source, 4 * sizeof(float));
+		return;
+	}
+
+	if (d + r2 > r1)
+	{
+		float k = d > 0 ? (d + r2 - r1) / (2 * d) : 0.f;
+
+		target[0] += dx * k;
+		target[1] += dy * k;
+		target[2] += dz * k;
+		target[3] = (d + r2 + r1) / 2;
+	}
+}
+
 static int pickGroupToMerge(const ClusterGroup* groups, int id, const ClusterAdjacency& adjacency, size_t max_partition_size)
 {
 	assert(groups[id].size > 0);
@@ -425,6 +448,13 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 
 		groups[best_group].size = 0;
 		groups[best_group].vertices = 0;
+
+		// merge bounding spheres if bounds are available
+		if (cluster_bounds)
+		{
+			mergeBounds(&cluster_bounds[top.id * 4], &cluster_bounds[best_group * 4]);
+			memset(&cluster_bounds[best_group * 4], 0, 4 * sizeof(float));
+		}
 
 		// re-associate all clusters back to the merged group
 		for (int i = top.id; i >= 0; i = groups[i].next)
