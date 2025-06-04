@@ -22,7 +22,7 @@ inline unsigned long long part1By2(unsigned long long x)
 	return x;
 }
 
-static void computeOrder(unsigned long long* result, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride)
+static void computeOrder(unsigned long long* result, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, bool morton)
 {
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
@@ -60,7 +60,10 @@ static void computeOrder(unsigned long long* result, const float* vertex_positio
 		int y = int((v[1] - minv[1]) * scale + 0.5f);
 		int z = int((v[2] - minv[2]) * scale + 0.5f);
 
-		result[i] = part1By2(x) | (part1By2(y) << 1) | (part1By2(z) << 2);
+		if (morton)
+			result[i] = part1By2(x) | (part1By2(y) << 1) | (part1By2(z) << 2);
+		else
+			result[i] = ((unsigned long long)x << 0) | ((unsigned long long)y << 20) | ((unsigned long long)z << 40);
 	}
 }
 
@@ -115,6 +118,117 @@ static void radixPass(unsigned int* destination, const unsigned int* source, con
 	}
 }
 
+static void computeHistogram(unsigned int (&hist)[256][2], const unsigned long long* data, size_t count, int bitoff)
+{
+	memset(hist, 0, sizeof(hist));
+
+	// compute 2 8-bit histograms in parallel
+	for (size_t i = 0; i < count; ++i)
+	{
+		unsigned long long id = data[i];
+
+		hist[(id >> (bitoff + 0)) & 255][0]++;
+		hist[(id >> (bitoff + 8)) & 255][1]++;
+	}
+
+	unsigned int sum0 = 0, sum1 = 0;
+
+	// replace histogram data with prefix histogram sums in-place
+	for (int i = 0; i < 256; ++i)
+	{
+		unsigned int h0 = hist[i][0], h1 = hist[i][1];
+
+		hist[i][0] = sum0;
+		hist[i][1] = sum1;
+
+		sum0 += h0;
+		sum1 += h1;
+	}
+
+	assert(sum0 == count && sum1 == count);
+}
+
+static void radixPass(unsigned int* destination, const unsigned int* source, const unsigned long long* keys, size_t count, unsigned int (&hist)[256][2], int pass, int bitoff)
+{
+	for (size_t i = 0; i < count; ++i)
+	{
+		unsigned int id = unsigned(keys[source[i]] >> bitoff) & 255;
+
+		destination[hist[id][pass]++] = source[i];
+	}
+}
+
+static void partitionPoints(unsigned int* target, const unsigned int* order, const unsigned char* sides, size_t split, size_t count)
+{
+	size_t l = 0, r = split;
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		unsigned char side = sides[order[i]];
+		target[side ? r : l] = order[i];
+		l += 1;
+		l -= side;
+		r += side;
+	}
+
+	assert(l == split && r == count);
+}
+
+static void splitPoints(unsigned int* destination, unsigned int* orderx, unsigned int* ordery, unsigned int* orderz, const unsigned long long* keys, size_t count, void* scratch, size_t chunk_size)
+{
+	unsigned int* axes[3] = {orderx, ordery, orderz};
+
+	int bestk = -1;
+	int bestdim = -1;
+
+	for (int k = 0; k < 3; ++k)
+	{
+		int dim = ((keys[axes[k][count - 1]] >> (k * 20)) & ((1 << 20) - 1)) - ((keys[axes[k][0]] >> (k * 20)) & ((1 << 20) - 1));
+
+		if (dim > bestdim)
+		{
+			bestk = k;
+			bestdim = dim;
+		}
+	}
+
+	assert(bestk >= 0);
+
+	if (count <= chunk_size)
+	{
+		memcpy(destination, axes[bestk], count * sizeof(unsigned int));
+		return;
+	}
+
+	size_t split = ((count / 2) + chunk_size - 1) / chunk_size * chunk_size;
+	assert(split > 0 && split < count);
+
+	// mark sides of split for partitioning
+	unsigned char* sides = static_cast<unsigned char*>(scratch) + count * sizeof(unsigned int);
+
+	for (size_t i = 0; i < split; ++i)
+		sides[axes[bestk][i]] = 0;
+
+	for (size_t i = split; i < count; ++i)
+		sides[axes[bestk][i]] = 1;
+
+	// partition all axes into two sides, maintaining order
+	unsigned int* temp = static_cast<unsigned int*>(scratch);
+
+	for (int k = 0; k < 3; ++k)
+	{
+		if (k == bestk)
+			continue;
+
+		unsigned int* axis = axes[k];
+		memcpy(temp, axis, sizeof(unsigned int) * count);
+		partitionPoints(axis, temp, sides, split, count);
+	}
+
+	splitPoints(destination, orderx, ordery, orderz, keys, split, scratch, chunk_size);
+	splitPoints(destination + split, orderx + split, ordery + split, orderz + split, keys, count - split, scratch, chunk_size);
+}
+
 } // namespace meshopt
 
 void meshopt_spatialSortRemap(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
@@ -127,7 +241,7 @@ void meshopt_spatialSortRemap(unsigned int* destination, const float* vertex_pos
 	meshopt_Allocator allocator;
 
 	unsigned long long* keys = allocator.allocate<unsigned long long>(vertex_count);
-	computeOrder(keys, vertex_positions, vertex_count, vertex_positions_stride);
+	computeOrder(keys, vertex_positions, vertex_count, vertex_positions_stride, /* morton= */ true);
 
 	unsigned int hist[1024][5];
 	computeHistogram(hist, keys, vertex_count);
@@ -201,4 +315,35 @@ void meshopt_spatialSortTriangles(unsigned int* destination, const unsigned int*
 		destination[r * 3 + 1] = b;
 		destination[r * 3 + 2] = c;
 	}
+}
+
+void meshopt_spatialSortPoints(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t chunk_size)
+{
+	using namespace meshopt;
+
+	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
+	assert(vertex_positions_stride % sizeof(float) == 0);
+	assert(chunk_size > 0);
+
+	meshopt_Allocator allocator;
+
+	unsigned long long* keys = allocator.allocate<unsigned long long>(vertex_count);
+	computeOrder(keys, vertex_positions, vertex_count, vertex_positions_stride, /* morton= */ false);
+
+	unsigned int* order = allocator.allocate<unsigned int>(vertex_count * 5);
+	unsigned int* scratch = order + vertex_count * 3;
+
+	for (int k = 0; k < 3; ++k)
+	{
+		unsigned int hist[256][2];
+		computeHistogram(hist, keys, vertex_count, k * 20);
+
+		for (size_t i = 0; i < vertex_count; ++i)
+			order[k * vertex_count + i] = unsigned(i);
+
+		radixPass(scratch, order + k * vertex_count, keys, vertex_count, hist, 0, k * 20 + 0);
+		radixPass(order + k * vertex_count, scratch, keys, vertex_count, hist, 1, k * 20 + 8);
+	}
+
+	splitPoints(destination, order, order + vertex_count, order + 2 * vertex_count, keys, vertex_count, scratch, chunk_size);
 }
