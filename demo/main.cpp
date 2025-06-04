@@ -692,7 +692,7 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 	meshopt_generateShadowIndexBuffer(&cluster_indices[0], &cluster_indices[0], cluster_indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(float) * 3, sizeof(Vertex));
 
 	std::vector<unsigned int> partition(meshlets.size());
-	size_t partition_count = meshopt_partitionClusters(&partition[0], &cluster_indices[0], cluster_indices.size(), &cluster_sizes[0], cluster_sizes.size(), mesh.vertices.size(), target_group_size);
+	size_t partition_count = meshopt_partitionClusters(&partition[0], &cluster_indices[0], cluster_indices.size(), &cluster_sizes[0], cluster_sizes.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_group_size);
 
 	// convert partitions to linked lists to make it easier to iterate over (vectors of vectors would work too)
 	std::vector<int> partnext(meshlets.size(), -1);
@@ -1539,15 +1539,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-#ifdef _MSC_VER
-#pragma warning(disable : 4996)
-#endif
-
-	bool dump = getenv("DUMP") && atoi(getenv("DUMP"));
-
-	meshlets(mesh, /* scan= */ false, /* uniform= */ false, /* flex= */ false);
-	meshlets(mesh, /* scan= */ false, /* uniform= */ true, /* flex= */ false);
-	meshlets(mesh, /* scan= */ false, /* uniform= */ true, /* flex= */ false, /* split= */ true, dump);
+	simplifyClusters(mesh);
 }
 
 void processNanite(const char* path)

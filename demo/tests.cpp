@@ -1396,23 +1396,48 @@ static void partitionBasic()
 	//     9
 	// 10 11  12
 	const unsigned int ci[] = {
-	    0, 1, 3, 4, 5, 6,   //
-	    1, 2, 3, 6, 7, 8,   //
-	    4, 5, 6, 9, 10, 11, //
-	    6, 7, 8, 9, 11, 12, //
+	    0, 1, 3, 4, 5, 6,
+	    1, 2, 3, 6, 7, 8,
+	    4, 5, 6, 9, 10, 11,
+	    6, 7, 8, 9, 11, 12, // clang-format :-/
 	};
 
 	const unsigned int cc[4] = {6, 6, 6, 6};
 	unsigned int part[4];
 
-	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 4, 13, 1) == 4);
+	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 4, NULL, 13, 0, 1) == 4);
 	assert(part[0] == 0 && part[1] == 1 && part[2] == 2 && part[3] == 3);
 
-	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 4, 13, 2) == 2);
+	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 4, NULL, 13, 0, 2) == 2);
 	assert(part[0] == 0 && part[1] == 0 && part[2] == 1 && part[3] == 1);
 
-	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 4, 13, 4) == 1);
+	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 4, NULL, 13, 0, 4) == 1);
 	assert(part[0] == 0 && part[1] == 0 && part[2] == 0 && part[3] == 0);
+}
+
+static void partitionSpatial()
+{
+	const unsigned int ci[] = {
+	    0, 1, 2,
+	    0, 3, 4,
+	    0, 5, 6, // clang-format :-/
+	};
+
+	const float vb[] = {
+	    0, 0, 0,
+	    1, 0, 0, 0, 1, 0,
+	    0, 2, 0, 2, 0, 0,
+	    -1, 0, 0, 0, -1, 0, // clang-format :-/
+	};
+
+	const unsigned int cc[3] = {3, 3, 3};
+	unsigned int part[3];
+
+	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 3, NULL, 7, 0, 2) == 2);
+	assert(part[0] == 0 && part[1] == 0 && part[2] == 1);
+
+	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 3, vb, 7, sizeof(float) * 3, 2) == 2);
+	assert(part[0] == 0 && part[1] == 1 && part[2] == 0);
 }
 
 static int remapCustomFalse(void*, unsigned int, unsigned int)
@@ -2560,6 +2585,7 @@ void runTests()
 	meshletsSplitDeep();
 
 	partitionBasic();
+	partitionSpatial();
 
 	remapCustom();
 

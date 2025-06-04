@@ -68,6 +68,7 @@ const size_t kGroupSize = 8;
 const bool kUseLocks = true;
 const bool kUseNormals = true;
 const bool kUseRetry = true;
+const bool kUseSplit = false;
 const int kMetisSlop = 2;
 const float kSimplifyThreshold = 0.85f;
 
@@ -129,6 +130,7 @@ static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, cons
 	const size_t max_triangles = kClusterSize;
 	const size_t min_triangles = (kClusterSize / 3) & ~3;
 	const float split_factor = 2.0f;
+	const float fill_weight = 0.75f;
 
 	size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), max_vertices, min_triangles);
 
@@ -136,7 +138,10 @@ static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, cons
 	std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
 	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
 
-	meshlets.resize(meshopt_buildMeshletsFlex(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, 0.f, split_factor));
+	if (kUseSplit)
+		meshlets.resize(meshopt_buildMeshletsSplit(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, fill_weight));
+	else
+		meshlets.resize(meshopt_buildMeshletsFlex(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, 0.f, split_factor));
 
 	std::vector<Cluster> clusters(meshlets.size());
 
@@ -157,7 +162,7 @@ static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, cons
 	return clusters;
 }
 
-static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clusters, const std::vector<int>& pending, const std::vector<unsigned int>& remap)
+static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clusters, const std::vector<int>& pending, const std::vector<unsigned int>& remap, const std::vector<Vertex>& vertices)
 {
 	if (METIS & 1)
 		return partitionMetis(clusters, pending, remap);
@@ -182,7 +187,7 @@ static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clus
 	}
 
 	std::vector<unsigned int> cluster_part(pending.size());
-	size_t partition_count = meshopt_partitionClusters(&cluster_part[0], &cluster_indices[0], cluster_indices.size(), &cluster_counts[0], cluster_counts.size(), remap.size(), kGroupSize);
+	size_t partition_count = meshopt_partitionClusters(&cluster_part[0], &cluster_indices[0], cluster_indices.size(), &cluster_counts[0], cluster_counts.size(), &vertices[0].px, remap.size(), sizeof(Vertex), kGroupSize);
 
 	std::vector<std::vector<int> > partitions(partition_count);
 	for (size_t i = 0; i < partition_count; ++i)
@@ -294,7 +299,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	// merge and simplify clusters until we can't merge anymore
 	while (pending.size() > 1)
 	{
-		std::vector<std::vector<int> > groups = partition(clusters, pending, remap);
+		std::vector<std::vector<int> > groups = partition(clusters, pending, remap, vertices);
 
 		if (kUseLocks)
 			lockBoundary(locks, groups, clusters, remap);
@@ -692,6 +697,7 @@ static void dumpMetrics(int level, const std::vector<Cluster>& queue, const std:
 	int components = 0;
 	int xformed = 0;
 	int boundary = 0;
+	float radius = 0;
 
 	for (size_t i = 0; i < groups.size(); ++i)
 	{
@@ -705,6 +711,7 @@ static void dumpMetrics(int level, const std::vector<Cluster>& queue, const std:
 			components += measureComponents(parents, cluster.indices, remap);
 			xformed += measureUnique(parents, cluster.indices);
 			boundary += kUseLocks ? measureUnique(parents, cluster.indices, &locks) : 0;
+			radius += cluster.self.radius;
 		}
 	}
 
@@ -722,9 +729,9 @@ static void dumpMetrics(int level, const std::vector<Cluster>& queue, const std:
 	double avg_group = double(clusters) / double(groups.size());
 	double inv_clusters = 1.0 / double(clusters);
 
-	printf("lod %d: %d clusters (%.1f%% full, %.1f tri/cl, %.1f vtx/cl, %.2f connected, %.1f boundary, %.1f partition), %d triangles",
+	printf("lod %d: %d clusters (%.1f%% full, %.1f tri/cl, %.1f vtx/cl, %.2f connected, %.1f boundary, %.1f partition, %f radius), %d triangles",
 	    level, clusters,
-	    double(full_clusters) * inv_clusters * 100, double(triangles) * inv_clusters, double(xformed) * inv_clusters, double(components) * inv_clusters, double(boundary) * inv_clusters, avg_group,
+	    double(full_clusters) * inv_clusters * 100, double(triangles) * inv_clusters, double(xformed) * inv_clusters, double(components) * inv_clusters, double(boundary) * inv_clusters, avg_group, radius * inv_clusters,
 	    int(triangles));
 	if (stuck_clusters)
 		printf("; stuck %d clusters (%d triangles)", stuck_clusters, stuck_triangles);
