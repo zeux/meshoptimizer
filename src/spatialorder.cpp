@@ -178,16 +178,23 @@ static void partitionPoints(unsigned int* target, const unsigned int* order, con
 
 static void splitPoints(unsigned int* destination, unsigned int* orderx, unsigned int* ordery, unsigned int* orderz, const unsigned long long* keys, size_t count, void* scratch, size_t chunk_size)
 {
+	if (count <= chunk_size)
+	{
+		memcpy(destination, orderx, count * sizeof(unsigned int));
+		return;
+	}
+
 	unsigned int* axes[3] = {orderx, ordery, orderz};
 
 	int bestk = -1;
-	int bestdim = -1;
+	unsigned int bestdim = 0;
 
 	for (int k = 0; k < 3; ++k)
 	{
-		int dim = ((keys[axes[k][count - 1]] >> (k * 20)) & ((1 << 20) - 1)) - ((keys[axes[k][0]] >> (k * 20)) & ((1 << 20) - 1));
+		const unsigned int mask = (1 << 20) - 1;
+		unsigned int dim = (unsigned(keys[axes[k][count - 1]] >> (k * 20)) & mask) - (unsigned(keys[axes[k][0]] >> (k * 20)) & mask);
 
-		if (dim > bestdim)
+		if (dim >= bestdim)
 		{
 			bestk = k;
 			bestdim = dim;
@@ -196,12 +203,7 @@ static void splitPoints(unsigned int* destination, unsigned int* orderx, unsigne
 
 	assert(bestk >= 0);
 
-	if (count <= chunk_size)
-	{
-		memcpy(destination, axes[bestk], count * sizeof(unsigned int));
-		return;
-	}
-
+	// split roughly in half, with the left split always being aligned to chunk size
 	size_t split = ((count / 2) + chunk_size - 1) / chunk_size * chunk_size;
 	assert(split > 0 && split < count);
 
@@ -333,7 +335,7 @@ void meshopt_spatialSortPoints(unsigned int* destination, const float* vertex_po
 	computeOrder(keys, vertex_positions, vertex_count, vertex_positions_stride, /* morton= */ false);
 
 	unsigned int* order = allocator.allocate<unsigned int>(vertex_count * 5);
-	unsigned int* scratch = order + vertex_count * 3;
+	unsigned int* scratch = allocator.allocate<unsigned int>(vertex_count * 2); // 4b for order + 1b for side or 2b for keys
 
 	for (int k = 0; k < 3; ++k)
 	{
@@ -341,7 +343,7 @@ void meshopt_spatialSortPoints(unsigned int* destination, const float* vertex_po
 		unsigned short* keyk = reinterpret_cast<unsigned short*>(scratch + vertex_count);
 
 		for (size_t i = 0; i < vertex_count; ++i)
-			keyk[i] = (unsigned short)(unsigned(keys[i] >> (k * 20)) & 0xffff);
+			keyk[i] = (unsigned short)(keys[i] >> (k * 20));
 
 		unsigned int hist[256][2];
 		computeHistogram(hist, keyk, vertex_count);
