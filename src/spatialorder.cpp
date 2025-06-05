@@ -67,54 +67,33 @@ static void computeOrder(unsigned long long* result, const float* vertex_positio
 	}
 }
 
-static void computeHistogram(unsigned int (&hist)[1024][5], const unsigned long long* data, size_t count)
+static void radixSort10(unsigned int* destination, const unsigned int* source, const unsigned short* keys, size_t count)
 {
+	unsigned int hist[1024];
 	memset(hist, 0, sizeof(hist));
 
-	// compute 5 10-bit histograms in parallel
+	// compute histogram (assume keys are 10-bit)
 	for (size_t i = 0; i < count; ++i)
-	{
-		unsigned long long id = data[i];
+		hist[keys[i]]++;
 
-		hist[(id >> 0) & 1023][0]++;
-		hist[(id >> 10) & 1023][1]++;
-		hist[(id >> 20) & 1023][2]++;
-		hist[(id >> 30) & 1023][3]++;
-		hist[(id >> 40) & 1023][4]++;
-	}
-
-	unsigned int sum0 = 0, sum1 = 0, sum2 = 0, sum3 = 0, sum4 = 0;
+	unsigned int sum = 0;
 
 	// replace histogram data with prefix histogram sums in-place
 	for (int i = 0; i < 1024; ++i)
 	{
-		unsigned int h0 = hist[i][0], h1 = hist[i][1], h2 = hist[i][2], h3 = hist[i][3], h4 = hist[i][4];
-
-		hist[i][0] = sum0;
-		hist[i][1] = sum1;
-		hist[i][2] = sum2;
-		hist[i][3] = sum3;
-		hist[i][4] = sum4;
-
-		sum0 += h0;
-		sum1 += h1;
-		sum2 += h2;
-		sum3 += h3;
-		sum4 += h4;
+		unsigned int h = hist[i];
+		hist[i] = sum;
+		sum += h;
 	}
 
-	assert(sum0 == count && sum1 == count && sum2 == count && sum3 == count && sum4 == count);
-}
+	assert(sum == count);
 
-static void radixPass(unsigned int* destination, const unsigned int* source, const unsigned long long* keys, size_t count, unsigned int (&hist)[1024][5], int pass)
-{
-	int bitoff = pass * 10;
-
+	// reorder values
 	for (size_t i = 0; i < count; ++i)
 	{
-		unsigned int id = unsigned(keys[source[i]] >> bitoff) & 1023;
+		unsigned int id = keys[source[i]];
 
-		destination[hist[id][pass]++] = source[i];
+		destination[hist[id]++] = source[i];
 	}
 }
 
@@ -247,20 +226,23 @@ void meshopt_spatialSortRemap(unsigned int* destination, const float* vertex_pos
 	unsigned long long* keys = allocator.allocate<unsigned long long>(vertex_count);
 	computeOrder(keys, vertex_positions, vertex_count, vertex_positions_stride, /* morton= */ true);
 
-	unsigned int hist[1024][5];
-	computeHistogram(hist, keys, vertex_count);
-
-	unsigned int* scratch = allocator.allocate<unsigned int>(vertex_count);
+	unsigned int* scratch = allocator.allocate<unsigned int>(vertex_count * 2); // 4b for order + 2b for keys
+	unsigned short* keyk = (unsigned short*)(scratch + vertex_count);
 
 	for (size_t i = 0; i < vertex_count; ++i)
 		destination[i] = unsigned(i);
 
+	unsigned int* order[] = {scratch, destination};
+
 	// 5-pass radix sort computes the resulting order into scratch
-	radixPass(scratch, destination, keys, vertex_count, hist, 0);
-	radixPass(destination, scratch, keys, vertex_count, hist, 1);
-	radixPass(scratch, destination, keys, vertex_count, hist, 2);
-	radixPass(destination, scratch, keys, vertex_count, hist, 3);
-	radixPass(scratch, destination, keys, vertex_count, hist, 4);
+	for (int k = 0; k < 5; ++k)
+	{
+		// copy 10-bit key segments into keyk to reduce cache pressure during radix pass
+		for (size_t i = 0; i < vertex_count; ++i)
+			keyk[i] = (unsigned short)((keys[i] >> (k * 10)) & 1023);
+
+		radixSort10(order[k % 2], order[(k + 1) % 2], keyk, vertex_count);
+	}
 
 	// since our remap table is mapping old=>new, we need to reverse it
 	for (size_t i = 0; i < vertex_count; ++i)
@@ -336,12 +318,11 @@ void meshopt_spatialSortPoints(unsigned int* destination, const float* vertex_po
 
 	unsigned int* order = allocator.allocate<unsigned int>(vertex_count * 5);
 	unsigned int* scratch = allocator.allocate<unsigned int>(vertex_count * 2); // 4b for order + 1b for side or 2b for keys
+	unsigned short* keyk = reinterpret_cast<unsigned short*>(scratch + vertex_count);
 
 	for (int k = 0; k < 3; ++k)
 	{
-		unsigned int* temp = scratch;
-		unsigned short* keyk = reinterpret_cast<unsigned short*>(scratch + vertex_count);
-
+		// copy 16-bit key segments into keyk to reduce cache pressure during radix pass
 		for (size_t i = 0; i < vertex_count; ++i)
 			keyk[i] = (unsigned short)(keys[i] >> (k * 20));
 
@@ -351,8 +332,8 @@ void meshopt_spatialSortPoints(unsigned int* destination, const float* vertex_po
 		for (size_t i = 0; i < vertex_count; ++i)
 			order[k * vertex_count + i] = unsigned(i);
 
-		radixPass(temp, order + k * vertex_count, keyk, vertex_count, hist, 0);
-		radixPass(order + k * vertex_count, temp, keyk, vertex_count, hist, 1);
+		radixPass(scratch, order + k * vertex_count, keyk, vertex_count, hist, 0);
+		radixPass(order + k * vertex_count, scratch, keyk, vertex_count, hist, 1);
 	}
 
 	splitPoints(destination, order, order + vertex_count, order + 2 * vertex_count, keys, vertex_count, scratch, chunk_size);
