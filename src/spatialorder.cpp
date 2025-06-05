@@ -118,7 +118,7 @@ static void radixPass(unsigned int* destination, const unsigned int* source, con
 	}
 }
 
-static void computeHistogram(unsigned int (&hist)[256][2], const unsigned long long* data, size_t count, int bitoff)
+static void computeHistogram(unsigned int (&hist)[256][2], const unsigned short* data, size_t count)
 {
 	memset(hist, 0, sizeof(hist));
 
@@ -127,8 +127,8 @@ static void computeHistogram(unsigned int (&hist)[256][2], const unsigned long l
 	{
 		unsigned long long id = data[i];
 
-		hist[(id >> (bitoff + 0)) & 255][0]++;
-		hist[(id >> (bitoff + 8)) & 255][1]++;
+		hist[(id >> 0) & 255][0]++;
+		hist[(id >> 8) & 255][1]++;
 	}
 
 	unsigned int sum0 = 0, sum1 = 0;
@@ -148,8 +148,10 @@ static void computeHistogram(unsigned int (&hist)[256][2], const unsigned long l
 	assert(sum0 == count && sum1 == count);
 }
 
-static void radixPass(unsigned int* destination, const unsigned int* source, const unsigned long long* keys, size_t count, unsigned int (&hist)[256][2], int pass, int bitoff)
+static void radixPass(unsigned int* destination, const unsigned int* source, const unsigned short* keys, size_t count, unsigned int (&hist)[256][2], int pass)
 {
+	int bitoff = pass * 8;
+
 	for (size_t i = 0; i < count; ++i)
 	{
 		unsigned int id = unsigned(keys[source[i]] >> bitoff) & 255;
@@ -335,14 +337,20 @@ void meshopt_spatialSortPoints(unsigned int* destination, const float* vertex_po
 
 	for (int k = 0; k < 3; ++k)
 	{
+		unsigned int* temp = scratch;
+		unsigned short* keyk = reinterpret_cast<unsigned short*>(scratch + vertex_count);
+
+		for (size_t i = 0; i < vertex_count; ++i)
+			keyk[i] = (unsigned short)(unsigned(keys[i] >> (k * 20)) & 0xffff);
+
 		unsigned int hist[256][2];
-		computeHistogram(hist, keys, vertex_count, k * 20);
+		computeHistogram(hist, keyk, vertex_count);
 
 		for (size_t i = 0; i < vertex_count; ++i)
 			order[k * vertex_count + i] = unsigned(i);
 
-		radixPass(scratch, order + k * vertex_count, keys, vertex_count, hist, 0, k * 20 + 0);
-		radixPass(order + k * vertex_count, scratch, keys, vertex_count, hist, 1, k * 20 + 8);
+		radixPass(temp, order + k * vertex_count, keyk, vertex_count, hist, 0);
+		radixPass(order + k * vertex_count, temp, keyk, vertex_count, hist, 1);
 	}
 
 	splitPoints(destination, order, order + vertex_count, order + 2 * vertex_count, keys, vertex_count, scratch, chunk_size);
