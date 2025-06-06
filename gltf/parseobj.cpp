@@ -216,17 +216,33 @@ static void parseMeshObj(fastObjMesh* obj, unsigned int face_offset, unsigned in
 	{
 		unsigned int face_vertices = obj->face_vertices[face_offset + fi];
 
-		for (unsigned int vi = 2; vi < face_vertices; ++vi)
+		if (mesh.type == cgltf_primitive_type_lines)
 		{
-			size_t to = index_offset + (vi - 2) * 3;
+			for (unsigned int vi = 1; vi < face_vertices; ++vi)
+			{
+				size_t to = index_offset + (vi - 1) * 2;
 
-			mesh.indices[to + 0] = remap[vertex_offset];
-			mesh.indices[to + 1] = remap[vertex_offset + vi - 1];
-			mesh.indices[to + 2] = remap[vertex_offset + vi];
+				mesh.indices[to + 0] = remap[vertex_offset + vi - 1];
+				mesh.indices[to + 1] = remap[vertex_offset + vi];
+			}
+
+			vertex_offset += face_vertices;
+			index_offset += (face_vertices - 1) * 2;
 		}
+		else
+		{
+			for (unsigned int vi = 2; vi < face_vertices; ++vi)
+			{
+				size_t to = index_offset + (vi - 2) * 3;
 
-		vertex_offset += face_vertices;
-		index_offset += (face_vertices - 2) * 3;
+				mesh.indices[to + 0] = remap[vertex_offset];
+				mesh.indices[to + 1] = remap[vertex_offset + vi - 1];
+				mesh.indices[to + 2] = remap[vertex_offset + vi];
+			}
+
+			vertex_offset += face_vertices;
+			index_offset += (face_vertices - 2) * 3;
+		}
 	}
 
 	assert(vertex_offset == face_vertex_count);
@@ -241,16 +257,17 @@ static void parseMeshGroupObj(fastObjMesh* obj, const fastObjGroup& og, cgltf_da
 	for (unsigned int face_offset = og.face_offset; face_offset < face_end_offset;)
 	{
 		unsigned int mi = obj->face_materials[face_offset];
+		unsigned char isl = obj->face_lines ? obj->face_lines[face_offset] : 0;
 
 		unsigned int face_count = 0;
 		unsigned int face_vertex_count = 0;
 		unsigned int index_count = 0;
 
-		for (unsigned int fj = face_offset; fj < face_end_offset && obj->face_materials[fj] == mi; ++fj)
+		for (unsigned int fj = face_offset; fj < face_end_offset && obj->face_materials[fj] == mi && (!obj->face_lines || obj->face_lines[fj] == isl); ++fj)
 		{
 			face_count += 1;
 			face_vertex_count += obj->face_vertices[fj];
-			index_count += (obj->face_vertices[fj] - 2) * 3;
+			index_count += isl ? (obj->face_vertices[fj] - 1) * 2 : (obj->face_vertices[fj] - 2) * 3;
 		}
 
 		meshes.push_back(Mesh());
@@ -262,7 +279,7 @@ static void parseMeshGroupObj(fastObjMesh* obj, const fastObjGroup& og, cgltf_da
 			mesh.material = &data->materials[mi];
 		}
 
-		mesh.type = cgltf_primitive_type_triangles;
+		mesh.type = isl ? cgltf_primitive_type_lines : cgltf_primitive_type_triangles;
 		mesh.targets = 0;
 
 		if (node)
