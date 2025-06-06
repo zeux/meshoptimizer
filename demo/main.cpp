@@ -1237,6 +1237,35 @@ void spatialSortTriangles(const Mesh& mesh)
 	    (end - start) * 1000);
 }
 
+void spatialClusterPoints(const Mesh& mesh, size_t cluster_size)
+{
+	typedef PackedVertexOct PV;
+
+	double start = timestamp();
+
+	std::vector<unsigned int> index(mesh.vertices.size());
+	meshopt_spatialClusterPoints(&index[0], &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), cluster_size);
+
+	double end = timestamp();
+
+	std::vector<PV> pv(mesh.vertices.size());
+	packMesh(pv, mesh.vertices);
+
+	std::vector<PV> pvo(mesh.vertices.size());
+	for (size_t i = 0; i < index.size(); ++i)
+		pvo[i] = pv[index[i]];
+
+	std::vector<unsigned char> vbuf(meshopt_encodeVertexBufferBound(mesh.vertices.size(), sizeof(PV)));
+	vbuf.resize(meshopt_encodeVertexBuffer(&vbuf[0], vbuf.size(), &pvo[0], mesh.vertices.size(), sizeof(PV)));
+
+	size_t csize = compress(vbuf);
+
+	printf("SpatialCP: %.1f bits/vertex (post-deflate %.1f bits/vertex); sort %.2f msec\n",
+	    double(vbuf.size() * 8) / double(mesh.vertices.size()),
+	    double(csize * 8) / double(mesh.vertices.size()),
+	    (end - start) * 1000);
+}
+
 void tessellationAdjacency(const Mesh& mesh)
 {
 	double start = timestamp();
@@ -1525,6 +1554,7 @@ void process(const char* path)
 
 	spatialSort(mesh);
 	spatialSortTriangles(mesh);
+	spatialClusterPoints(mesh, 64);
 
 	reindexFuzzy(mesh);
 	coverage(mesh);
