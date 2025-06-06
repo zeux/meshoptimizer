@@ -155,9 +155,9 @@ static void partitionPoints(unsigned int* target, const unsigned int* order, con
 	assert(l == split && r == count);
 }
 
-static void splitPoints(unsigned int* destination, unsigned int* orderx, unsigned int* ordery, unsigned int* orderz, const unsigned long long* keys, size_t count, void* scratch, size_t chunk_size)
+static void splitPoints(unsigned int* destination, unsigned int* orderx, unsigned int* ordery, unsigned int* orderz, const unsigned long long* keys, size_t count, void* scratch, size_t cluster_size)
 {
-	if (count <= chunk_size)
+	if (count <= cluster_size)
 	{
 		memcpy(destination, orderx, count * sizeof(unsigned int));
 		return;
@@ -182,8 +182,8 @@ static void splitPoints(unsigned int* destination, unsigned int* orderx, unsigne
 
 	assert(bestk >= 0);
 
-	// split roughly in half, with the left split always being aligned to chunk size
-	size_t split = ((count / 2) + chunk_size - 1) / chunk_size * chunk_size;
+	// split roughly in half, with the left split always being aligned to cluster size
+	size_t split = ((count / 2) + cluster_size - 1) / cluster_size * cluster_size;
 	assert(split > 0 && split < count);
 
 	// mark sides of split for partitioning
@@ -208,8 +208,8 @@ static void splitPoints(unsigned int* destination, unsigned int* orderx, unsigne
 		partitionPoints(axis, temp, sides, split, count);
 	}
 
-	splitPoints(destination, orderx, ordery, orderz, keys, split, scratch, chunk_size);
-	splitPoints(destination + split, orderx + split, ordery + split, orderz + split, keys, count - split, scratch, chunk_size);
+	splitPoints(destination, orderx, ordery, orderz, keys, split, scratch, cluster_size);
+	splitPoints(destination + split, orderx + split, ordery + split, orderz + split, keys, count - split, scratch, cluster_size);
 }
 
 } // namespace meshopt
@@ -303,20 +303,20 @@ void meshopt_spatialSortTriangles(unsigned int* destination, const unsigned int*
 	}
 }
 
-void meshopt_spatialSortPoints(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t chunk_size)
+void meshopt_spatialClusterPoints(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t cluster_size)
 {
 	using namespace meshopt;
 
 	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
-	assert(chunk_size > 0);
+	assert(cluster_size > 0);
 
 	meshopt_Allocator allocator;
 
 	unsigned long long* keys = allocator.allocate<unsigned long long>(vertex_count);
 	computeOrder(keys, vertex_positions, vertex_count, vertex_positions_stride, /* morton= */ false);
 
-	unsigned int* order = allocator.allocate<unsigned int>(vertex_count * 5);
+	unsigned int* order = allocator.allocate<unsigned int>(vertex_count * 3);
 	unsigned int* scratch = allocator.allocate<unsigned int>(vertex_count * 2); // 4b for order + 1b for side or 2b for keys
 	unsigned short* keyk = reinterpret_cast<unsigned short*>(scratch + vertex_count);
 
@@ -336,5 +336,5 @@ void meshopt_spatialSortPoints(unsigned int* destination, const float* vertex_po
 		radixPass(order + k * vertex_count, scratch, keyk, vertex_count, hist, 1);
 	}
 
-	splitPoints(destination, order, order + vertex_count, order + 2 * vertex_count, keys, vertex_count, scratch, chunk_size);
+	splitPoints(destination, order, order + vertex_count, order + 2 * vertex_count, keys, vertex_count, scratch, cluster_size);
 }
