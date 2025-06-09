@@ -715,6 +715,16 @@ MESHOPTIMIZER_API void meshopt_spatialSortRemap(unsigned int* destination, const
 MESHOPTIMIZER_EXPERIMENTAL void meshopt_spatialSortTriangles(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 
 /**
+ * Experimental: Spatial clusterizer
+ * Reorders points into clusters optimized for spatial locality, and generates a new index buffer.
+ * Ensures the output can be split into cluster_size chunks where each chunk has good positional locality. Only the last chunk will be smaller than cluster_size.
+ *
+ * destination must contain enough space for the resulting index buffer (vertex_count elements)
+ * vertex_positions should have float3 position in the first 12 bytes of each vertex
+ */
+MESHOPTIMIZER_EXPERIMENTAL void meshopt_spatialClusterPoints(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t cluster_size);
+
+/**
  * Quantize a float into half-precision (as defined by IEEE-754 fp16) floating point value
  * Generates +-inf for overflow, preserves NaN, flushes denormals to zero, rounds to nearest
  * Representable magnitude range: [6e-5; 65504]
