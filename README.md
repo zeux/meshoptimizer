@@ -270,51 +270,6 @@ To further leverage the inherent structure of some data, the preparation stage c
 
 Note that all filters are lossy and require the data to be deinterleaved with one attribute per stream; this facilitates efficient SIMD implementation of filter decoders, allowing the overall decompression speed to be closer to that of the raw codec.
 
-## Triangle strip conversion
-
-On most hardware, indexed triangle lists are the most efficient way to drive the GPU. However, in some cases triangle strips might prove beneficial:
-
-- On some older GPUs, triangle strips may be a bit more efficient to render
-- On extremely memory constrained systems, index buffers for triangle strips could save a bit of memory
-
-This library provides an algorithm for converting a vertex cache optimized triangle list to a triangle strip:
-
-```c++
-std::vector<unsigned int> strip(meshopt_stripifyBound(index_count));
-unsigned int restart_index = ~0u;
-size_t strip_size = meshopt_stripify(&strip[0], indices, index_count, vertex_count, restart_index);
-```
-
-Typically you should expect triangle strips to have ~50-60% of indices compared to triangle lists (~1.5-1.8 indices per triangle) and have ~5% worse ACMR.
-Note that triangle strips can be stitched with or without restart index support. Using restart indices can result in ~10% smaller index buffers, but on some GPUs restart indices may result in decreased performance.
-
-To reduce the triangle strip size further, it's recommended to use `meshopt_optimizeVertexCacheStrip` instead of `meshopt_optimizeVertexCache` when optimizing for vertex cache. This trades off some efficiency in vertex transform for smaller index buffers.
-
-## Deinterleaved geometry
-
-All of the examples above assume that geometry is represented as a single vertex buffer and a single index buffer. This requires storing all vertex attributes - position, normal, texture coordinate, skinning weights etc. - in a single contiguous struct. However, in some cases using multiple vertex streams may be preferable. In particular, if some passes require only positional data - such as depth pre-pass or shadow map - then it may be beneficial to split it from the rest of the vertex attributes to make sure the bandwidth use during these passes is optimal. On some mobile GPUs a position-only attribute stream also improves efficiency of tiling algorithms.
-
-Most of the functions in this library either only need the index buffer (such as vertex cache optimization) or only need positional information (such as overdraw optimization). However, several tasks require knowledge about all vertex attributes.
-
-For indexing, `meshopt_generateVertexRemap` assumes that there's just one vertex stream; when multiple vertex streams are used, it's necessary to use `meshopt_generateVertexRemapMulti` as follows:
-
-```c++
-meshopt_Stream streams[] = {
-    {&unindexed_pos[0], sizeof(float) * 3, sizeof(float) * 3},
-    {&unindexed_nrm[0], sizeof(float) * 3, sizeof(float) * 3},
-    {&unindexed_uv[0], sizeof(float) * 2, sizeof(float) * 2},
-};
-
-std::vector<unsigned int> remap(index_count);
-size_t vertex_count = meshopt_generateVertexRemapMulti(&remap[0], NULL, index_count, index_count, streams, sizeof(streams) / sizeof(streams[0]));
-```
-
-After this `meshopt_remapVertexBuffer` needs to be called once for each vertex stream to produce the correctly reindexed stream. For shadow indexing, similarly `meshopt_generateShadowIndexBufferMulti` is available as a replacement.
-
-Instead of calling `meshopt_optimizeVertexFetch` for reordering vertices in a single vertex buffer for efficiency, calling `meshopt_optimizeVertexFetchRemap` and then calling `meshopt_remapVertexBuffer` for each stream again is recommended.
-
-Finally, when compressing vertex data, `meshopt_encodeVertexBuffer` should be used on each vertex stream separately - this allows the encoder to best utilize correlation between attribute values for different vertices.
-
 ## Simplification
 
 All algorithms presented so far don't affect visual appearance at all, with the exception of quantization that has minimal controlled impact. However, fundamentally the most effective way at reducing the rendering or transmission cost of a mesh is to make the mesh simpler.
@@ -535,9 +490,54 @@ While the only way to get precise performance data is to measure performance on 
 
 Note that all analyzers use approximate models for the relevant GPU units, so the numbers you will get as the result are only a rough approximation of the actual performance.
 
+## Deinterleaved geometry
+
+All of the examples above assume that geometry is represented as a single vertex buffer and a single index buffer. This requires storing all vertex attributes - position, normal, texture coordinate, skinning weights etc. - in a single contiguous struct. However, in some cases using multiple vertex streams may be preferable. In particular, if some passes require only positional data - such as depth pre-pass or shadow map - then it may be beneficial to split it from the rest of the vertex attributes to make sure the bandwidth use during these passes is optimal. On some mobile GPUs a position-only attribute stream also improves efficiency of tiling algorithms.
+
+Most of the functions in this library either only need the index buffer (such as vertex cache optimization) or only need positional information (such as overdraw optimization). However, several tasks require knowledge about all vertex attributes.
+
+For indexing, `meshopt_generateVertexRemap` assumes that there's just one vertex stream; when multiple vertex streams are used, it's necessary to use `meshopt_generateVertexRemapMulti` as follows:
+
+```c++
+meshopt_Stream streams[] = {
+    {&unindexed_pos[0], sizeof(float) * 3, sizeof(float) * 3},
+    {&unindexed_nrm[0], sizeof(float) * 3, sizeof(float) * 3},
+    {&unindexed_uv[0], sizeof(float) * 2, sizeof(float) * 2},
+};
+
+std::vector<unsigned int> remap(index_count);
+size_t vertex_count = meshopt_generateVertexRemapMulti(&remap[0], NULL, index_count, index_count, streams, sizeof(streams) / sizeof(streams[0]));
+```
+
+After this `meshopt_remapVertexBuffer` needs to be called once for each vertex stream to produce the correctly reindexed stream. For shadow indexing, similarly `meshopt_generateShadowIndexBufferMulti` is available as a replacement.
+
+Instead of calling `meshopt_optimizeVertexFetch` for reordering vertices in a single vertex buffer for efficiency, calling `meshopt_optimizeVertexFetchRemap` and then calling `meshopt_remapVertexBuffer` for each stream again is recommended.
+
+Finally, when compressing vertex data, `meshopt_encodeVertexBuffer` should be used on each vertex stream separately - this allows the encoder to best utilize correlation between attribute values for different vertices.
+
 ## Specialized processing
 
 In addition to the core optimization techniques, the library provides several specialized algorithms for specific rendering techniques and pipeline optimizations that require a particular configuration of vertex and index data.
+
+### Triangle strip conversion
+
+On most hardware, indexed triangle lists are the most efficient way to drive the GPU. However, in some cases triangle strips might prove beneficial:
+
+- On some older GPUs, triangle strips may be a bit more efficient to render
+- On extremely memory constrained systems, index buffers for triangle strips could save a bit of memory
+
+This library provides an algorithm for converting a vertex cache optimized triangle list to a triangle strip:
+
+```c++
+std::vector<unsigned int> strip(meshopt_stripifyBound(index_count));
+unsigned int restart_index = ~0u;
+size_t strip_size = meshopt_stripify(&strip[0], indices, index_count, vertex_count, restart_index);
+```
+
+Typically you should expect triangle strips to have ~50-60% of indices compared to triangle lists (~1.5-1.8 indices per triangle) and have ~5% worse ACMR.
+Note that triangle strips can be stitched with or without restart index support. Using restart indices can result in ~10% smaller index buffers, but on some GPUs restart indices may result in decreased performance.
+
+To reduce the triangle strip size further, it's recommended to use `meshopt_optimizeVertexCacheStrip` instead of `meshopt_optimizeVertexCache` when optimizing for vertex cache. This trades off some efficiency in vertex transform for smaller index buffers.
 
 ### Geometry shader adjacency
 
