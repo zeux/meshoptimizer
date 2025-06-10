@@ -163,7 +163,11 @@ In some cases, it may be beneficial to split the vertex positions into a separat
 
 Note that for meshes with optimal indexing and few attribute seams, the shadow index buffer will be very similar to the original index buffer, so may not be always worth generating a separate shadow index buffer even if the rendering pipeline relies on depth-only passes.
 
-## Mesh shading
+## Clusterization
+
+While traditionally meshes have server as a unit of rendering, new approaches to rendering and raytracing are starting to use a smaller unit of work, such as clusters or meshlets. This allows more freedom in how the geometry is processed, and can lead to better performance and more efficient use of GPU hardware. This section describes algorithms designed to work with meshes as sets of clusters.
+
+### Mesh shading
 
 Modern GPUs are beginning to deviate from the traditional rasterization model. NVidia GPUs starting from Turing and AMD GPUs starting from RDNA2 provide a new programmable geometry pipeline that, instead of being built around index buffers and vertex shaders, is built around mesh shaders - a new shader type that allows to provide a batch of work to the rasterizer.
 
@@ -199,7 +203,7 @@ meshlet_triangles.resize(last.triangle_offset + ((last.triangle_count * 3 + 3) &
 meshlets.resize(meshlet_count);
 ```
 
-However depending on the application other strategies of storing the data can be useful; for example, `meshlet_vertices` serves as indices into the original vertex buffer but it might be worthwhile to generate a mini vertex buffer for each meshlet to remove the extra indirection when accessing vertex data, or it might be desirable to compress vertex data as vertices in each meshlet are likely to be very spatially coherent.
+Depending on the application, other strategies of storing the data can be useful; for example, `meshlet_vertices` serves as indices into the original vertex buffer but it might be worthwhile to generate a mini vertex buffer for each meshlet to remove the extra indirection when accessing vertex data, or it might be desirable to compress vertex data as vertices in each meshlet are likely to be very spatially coherent.
 
 For optimal performance, it is recommended to further optimize each meshlet in isolation for better triangle and vertex locality by calling `meshopt_optimizeMeshlet` on vertex and index data like so:
 
@@ -231,7 +235,7 @@ void main() {
 }
 ```
 
-After generating the meshlet data, it's also possible to generate extra data for each meshlet that can be saved and used at runtime to perform cluster culling, where each meshlet can be discarded if it's guaranteed to be invisible. To generate the data, `meshlet_computeMeshletBounds` can be used:
+After generating the meshlet data, it's possible to generate extra data for each meshlet that can be saved and used at runtime to perform cluster culling, where each meshlet can be discarded if it's guaranteed to be invisible. To generate the data, `meshlet_computeMeshletBounds` can be used:
 
 ```c++
 meshopt_Bounds bounds = meshopt_computeMeshletBounds(&meshlet_vertices[m.vertex_offset], &meshlet_triangles[m.triangle_offset],
@@ -244,7 +248,9 @@ The resulting `bounds` values can be used to perform frustum or occlusion cullin
 if (dot(normalize(cone_apex - camera_position), cone_axis) >= cone_cutoff) reject();
 ```
 
-## Clustered raytracing
+Cluster culling should ideally run at a lower frequency than mesh shading, either using amplification/task shaders, or using a separate compute dispatch.
+
+### Clustered raytracing
 
 In addition to rasterization, meshlets can also be used for ray tracing. NVidia GPUs starting from Turing with recent drivers provide support for cluster acceleration structures (via `VK_NV_cluster_acceleration_structure` extension / NVAPI); instead of building a traditional BLAS, a cluster acceleration structure can be built for each meshlet and combined into a single clustered BLAS. While this currently results in reduced ray tracing performance for static geometry (for which a traditional BLAS may be more suitable), it allows updating the individual clusters without having to rebuild or refit the entire BLAS, which can be useful for mesh deformation or hierarchical level of detail.
 
@@ -272,7 +278,6 @@ The algorithm recursively subdivides the triangles into a BVH-like hierarchy usi
 The `min_triangles` and `max_triangles` parameters control the allowed range of triangles per cluster. For optimal raytracing performance, `min_triangles` should be at most `max_triangles/2` (or, ideally, `max_triangles/4`) to give the algorithm enough freedom to produce high-quality spatial partitioning. For meshes with few seams due to normal or UV discontinuities, using `max_vertices` equal to `max_triangles` is recommended when rasterization performance is a concern; for meshes with many seams or for renderers that primarily use meshlets for ray tracing, a higher `max_vertices` value should be used as it ensures that more clusters can fully utilize the triangle limit.
 
 The `fill_weight` parameter (typically between 0 and 1, although values higher than 1 could be used to prioritize cluster fill even more) controls the trade-off between pure SAH optimization and triangle utilization. A value of 0 will optimize purely for SAH, resulting in best raytracing performance but potentially smaller clusters. Values between 0.5 and 0.75 typically provide a good balance of SAH quality vs triangle count.
-
 
 ## Vertex/index buffer compression
 
