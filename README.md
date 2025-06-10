@@ -31,20 +31,18 @@ meshoptimizer is distributed as a set of C++ source files. To include it into yo
 
 The source files are organized in such a way that you don't need to change your build-system settings, and you only need to add the source files for the algorithms you use. They should build without warnings or special compilation options on all major compilers.
 
-## Pipeline
+## Core pipeline
 
-When optimizing a mesh, you should typically feed it through a set of optimizations (the order is important!):
+When optimizing a mesh, to maximize rendering efficiency you should typically feed it through a set of optimizations (the order is important!):
 
 1. Indexing
-2. (optional, discussed last) Simplification
-3. Vertex cache optimization
-4. Overdraw optimization
-5. Vertex fetch optimization
-6. Vertex quantization
-7. Shadow indexing
-8. (optional) Vertex/index buffer compression
+2. Vertex cache optimization
+3. (optional) Overdraw optimization
+4. Vertex fetch optimization
+5. Vertex quantization
+6. (optional) Shadow indexing
 
-## Indexing
+### Indexing
 
 Most algorithms in this library assume that a mesh has a vertex buffer and an index buffer. For algorithms to work well and also for GPU to render your mesh efficiently, the vertex buffer has to have no redundant vertices; you can generate an index buffer from an unindexed vertex buffer or reindex an existing (potentially redundant) index buffer as follows:
 
@@ -84,7 +82,7 @@ size_t vertex_count = meshopt_generateVertexRemapCustom(&remap[0], NULL, index_c
     });
 ```
 
-## Vertex cache optimization
+### Vertex cache optimization
 
 When the GPU renders the mesh, it has to run the vertex shader for each vertex; usually GPUs have a built-in fixed size cache that stores the transformed vertices (the result of running the vertex shader), and uses this cache to reduce the number of vertex shader invocations. This cache is usually small, 16-32 vertices, and can have different replacement policies; to use this cache efficiently, you have to reorder your triangles to maximize the locality of reused vertex references like so:
 
@@ -92,9 +90,9 @@ When the GPU renders the mesh, it has to run the vertex shader for each vertex; 
 meshopt_optimizeVertexCache(indices, indices, index_count, vertex_count);
 ```
 
-## Overdraw optimization
+### Overdraw optimization
 
-After transforming the vertices, GPU sends the triangles for rasterization which results in generating pixels that are usually first ran through the depth test, and pixels that pass it get the pixel shader executed to generate the final color. As pixel shaders get more expensive, it becomes more and more important to reduce overdraw. While in general improving overdraw requires view-dependent operations, this library provides an algorithm to reorder triangles to minimize the overdraw from all directions, which you should run after vertex cache optimization like this:
+After transforming the vertices, GPU sends the triangles for rasterization which results in generating pixels that are usually first ran through the depth test, and pixels that pass it get the pixel shader executed to generate the final color. As pixel shaders get more expensive, it becomes more and more important to reduce overdraw. While in general improving overdraw requires view-dependent operations, this library provides an algorithm to reorder triangles to minimize the overdraw from all directions, which you can run after vertex cache optimization like this:
 
 ```c++
 meshopt_optimizeOverdraw(indices, indices, index_count, &vertices[0].x, vertex_count, sizeof(Vertex), 1.05f);
@@ -104,7 +102,9 @@ The overdraw optimizer needs to read vertex positions as a float3 from the verte
 
 When performing the overdraw optimization you have to specify a floating-point threshold parameter. The algorithm tries to maintain a balance between vertex cache efficiency and overdraw; the threshold determines how much the algorithm can compromise the vertex cache hit ratio, with 1.05 meaning that the resulting ratio should be at most 5% worse than before the optimization.
 
-## Vertex fetch optimization
+Note that depending on the renderer structure and target hardware, the optimization may or may not be beneficial; for example, mobile GPUs with tiled deferred rendering (PowerVR, Apple) would not benefit from this optimization. For vertex heavy scenes it's recommended to measure the performance impact to ensure that the reduced vertex cache efficiency is outweighed by the reduced overdraw.
+
+### Vertex fetch optimization
 
 After the final triangle order has been established, we still can optimize the vertex buffer for memory efficiency. Before running the vertex shader GPU has to fetch the vertex attributes from the vertex buffer; the fetch is usually backed by a memory cache, and as such optimizing the data for the locality of memory access is important. You can do this by running this code:
 
@@ -116,7 +116,7 @@ This will reorder the vertices in the vertex buffer to try to improve the locali
 
 Note that the algorithm does not try to model cache replacement precisely and instead just orders vertices in the order of use, which generally produces results that are close to optimal.
 
-## Vertex quantization
+### Vertex quantization
 
 To optimize memory bandwidth when fetching the vertex data even further, and to reduce the amount of memory required to store the mesh, it is often beneficial to quantize the vertex attributes to smaller types. While this optimization can technically run at any part of the pipeline (and sometimes doing quantization as the first step can improve indexing by merging almost identical vertices), it generally is easier to run this after all other optimizations since some of them require access to float3 positions.
 
@@ -141,7 +141,7 @@ unsigned short pz = meshopt_quantizeHalf(v.z);
 
 Since quantized vertex attributes often need to remain in their compact representations for efficient transfer and storage, they are usually dequantized during vertex processing by configuring the GPU vertex input correctly to expect normalized integers or half precision floats, which often needs no or minimal changes to the shader code. When CPU dequantization is required instead, `meshopt_dequantizeHalf` can be used to convert half precision values back to single precision; for normalized integer formats, the dequantization just requires dividing by 2^N-1 for unorm and 2^(N-1)-1 for snorm variants, for example manually reversing `meshopt_quantizeUnorm(v, 10)` can be done by dividing by 1023.
 
-## Shadow indexing
+### Shadow indexing
 
 Many rendering pipelines require meshes to be rendered to depth-only targets, such as shadow maps or during a depth pre-pass, in addition to color/G-buffer targets. While using the same geometry data for both cases is possible, reducing the number of unique vertices for depth-only rendering can be beneficial, especially when the source geometry has many attribute seams due to faceted shading or lightmap texture seams.
 
@@ -160,6 +160,8 @@ meshopt_optimizeVertexCache(&shadow_indices[0], &shadow_indices[0], index_count,
 ```
 
 In some cases, it may be beneficial to split the vertex positions into a separate buffer to maximize efficiency for depth-only rendering. Note that the example above assumes only positions are relevant for shadow rendering, but more complex materials may require adding texture coordinates (for alpha testing) or skinning data to the vertex portion used as a key. `meshopt_generateShadowIndexBufferMulti` can be useful for these cases if the relevant data is not contiguous.
+
+Note that for meshes with optimal indexing and few attribute seams, the shadow index buffer will be very similar to the original index buffer, so may not be always worth generating a separate shadow index buffer even if the rendering pipeline relies on depth-only passes.
 
 ## Vertex/index buffer compression
 
