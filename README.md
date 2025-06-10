@@ -163,6 +163,117 @@ In some cases, it may be beneficial to split the vertex positions into a separat
 
 Note that for meshes with optimal indexing and few attribute seams, the shadow index buffer will be very similar to the original index buffer, so may not be always worth generating a separate shadow index buffer even if the rendering pipeline relies on depth-only passes.
 
+## Mesh shading
+
+Modern GPUs are beginning to deviate from the traditional rasterization model. NVidia GPUs starting from Turing and AMD GPUs starting from RDNA2 provide a new programmable geometry pipeline that, instead of being built around index buffers and vertex shaders, is built around mesh shaders - a new shader type that allows to provide a batch of work to the rasterizer.
+
+Using mesh shaders in context of traditional mesh rendering provides an opportunity to use a variety of optimization techniques, starting from more efficient vertex reuse, using various forms of culling (e.g. cluster frustum or occlusion culling) and in-memory compression to maximize the utilization of GPU hardware. Beyond traditional rendering mesh shaders provide a richer programming model that can synthesize new geometry more efficiently than common alternatives such as geometry shaders. Mesh shading can be accessed via Vulkan or Direct3D 12 APIs; please refer to [Introduction to Turing Mesh Shaders](https://developer.nvidia.com/blog/introduction-turing-mesh-shaders/) and [Mesh Shaders and Amplification Shaders: Reinventing the Geometry Pipeline](https://devblogs.microsoft.com/directx/coming-to-directx-12-mesh-shaders-and-amplification-shaders-reinventing-the-geometry-pipeline/) for additional information.
+
+To use mesh shaders for conventional rendering efficiently, geometry needs to be converted into a series of meshlets; each meshlet represents a small subset of the original mesh and comes with a small set of vertices and a separate micro-index buffer that references vertices in the meshlet. This information can be directly fed to the rasterizer from the mesh shader. This library provides algorithms to create meshlet data for a mesh, and - assuming geometry is static - can compute bounding information that can be used to perform cluster culling, a technique that can reject a meshlet if it's invisible on screen.
+
+To generate meshlet data, this library provides `meshopt_buildMeshlets` algorithm, which tries to balance topological efficiency (by maximizing vertex reuse inside meshlets) with culling efficiency (by minimizing meshlet radius and triangle direction divergence) and produces GPU-friendly data. As an alternative (that can be useful for load-time processing), `meshopt_buildMeshletsScan` can create the meshlet data using a vertex cache-optimized index buffer as a starting point by greedily aggregating consecutive triangles until they go over the meshlet limits. `meshopt_buildMeshlets` is recommended for offline data processing even if cone culling is not used.
+
+```c++
+const size_t max_vertices = 64;
+const size_t max_triangles = 124;
+const float cone_weight = 0.0f;
+
+size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), max_vertices, max_triangles);
+std::vector<meshopt_Meshlet> meshlets(max_meshlets);
+std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
+std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
+
+size_t meshlet_count = meshopt_buildMeshlets(meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), indices.data(),
+    indices.size(), &vertices[0].x, vertices.size(), sizeof(Vertex), max_vertices, max_triangles, cone_weight);
+```
+
+To generate the meshlet data, `max_vertices` and `max_triangles` need to be set within limits supported by the hardware; for NVidia the values of 64 and 124 are recommended (`max_triangles` must be divisible by 4 so 124 is the value closest to official NVidia's recommended 126). `cone_weight` should be left as 0 if cluster cone culling is not used, and set to a value between 0 and 1 to balance cone culling efficiency with other forms of culling like frustum or occlusion culling (`0.25` is a reasonable default).
+
+Each resulting meshlet refers to a portion of `meshlet_vertices` and `meshlet_triangles` arrays; the arrays are overallocated for the worst case so it's recommended to trim them before saving them as an asset / uploading them to the GPU:
+
+```c++
+const meshopt_Meshlet& last = meshlets[meshlet_count - 1];
+
+meshlet_vertices.resize(last.vertex_offset + last.vertex_count);
+meshlet_triangles.resize(last.triangle_offset + ((last.triangle_count * 3 + 3) & ~3));
+meshlets.resize(meshlet_count);
+```
+
+However depending on the application other strategies of storing the data can be useful; for example, `meshlet_vertices` serves as indices into the original vertex buffer but it might be worthwhile to generate a mini vertex buffer for each meshlet to remove the extra indirection when accessing vertex data, or it might be desirable to compress vertex data as vertices in each meshlet are likely to be very spatially coherent.
+
+For optimal performance, it is recommended to further optimize each meshlet in isolation for better triangle and vertex locality by calling `meshopt_optimizeMeshlet` on vertex and index data like so:
+
+```c++
+meshopt_optimizeMeshlet(&meshlet_vertices[m.vertex_offset], &meshlet_triangles[m.triangle_offset], m.triangle_count, m.vertex_count);
+```
+
+Different applications will choose different strategies for rendering meshlets; on a GPU capable of mesh shading, meshlets can be rendered directly; for example, a basic GLSL shader for `VK_EXT_mesh_shader` extension could look like this (parts omitted for brevity):
+
+```glsl
+layout(binding = 0) readonly buffer Meshlets { Meshlet meshlets[]; };
+layout(binding = 1) readonly buffer MeshletVertices { uint meshlet_vertices[]; };
+layout(binding = 2) readonly buffer MeshletTriangles { uint8_t meshlet_triangles[]; };
+
+void main() {
+    Meshlet meshlet = meshlets[gl_WorkGroupID.x];
+    SetMeshOutputsEXT(meshlet.vertex_count, meshlet.triangle_count);
+
+    for (uint i = gl_LocalInvocationIndex; i < meshlet.vertex_count; i += gl_WorkGroupSize.x) {
+        uint index = meshlet_vertices[meshlet.vertex_offset + i];
+        gl_MeshVerticesEXT[i].gl_Position = world_view_projection * vec4(vertex_positions[index], 1);
+    }
+
+    for (uint i = gl_LocalInvocationIndex; i < meshlet.triangle_count; i += gl_WorkGroupSize.x) {
+        uint offset = meshlet.triangle_offset + i * 3;
+        gl_PrimitiveTriangleIndicesEXT[i] = uvec3(
+            meshlet_triangles[offset], meshlet_triangles[offset + 1], meshlet_triangles[offset + 2]);
+    }
+}
+```
+
+After generating the meshlet data, it's also possible to generate extra data for each meshlet that can be saved and used at runtime to perform cluster culling, where each meshlet can be discarded if it's guaranteed to be invisible. To generate the data, `meshlet_computeMeshletBounds` can be used:
+
+```c++
+meshopt_Bounds bounds = meshopt_computeMeshletBounds(&meshlet_vertices[m.vertex_offset], &meshlet_triangles[m.triangle_offset],
+    m.triangle_count, &vertices[0].x, vertices.size(), sizeof(Vertex));
+```
+
+The resulting `bounds` values can be used to perform frustum or occlusion culling using the bounding sphere, or cone culling using the cone axis/angle (which will reject the entire meshlet if all triangles are guaranteed to be back-facing from the camera point of view):
+
+```c++
+if (dot(normalize(cone_apex - camera_position), cone_axis) >= cone_cutoff) reject();
+```
+
+## Clustered raytracing
+
+In addition to rasterization, meshlets can also be used for ray tracing. NVidia GPUs starting from Turing with recent drivers provide support for cluster acceleration structures (via `VK_NV_cluster_acceleration_structure` extension / NVAPI); instead of building a traditional BLAS, a cluster acceleration structure can be built for each meshlet and combined into a single clustered BLAS. While this currently results in reduced ray tracing performance for static geometry (for which a traditional BLAS may be more suitable), it allows updating the individual clusters without having to rebuild or refit the entire BLAS, which can be useful for mesh deformation or hierarchical level of detail.
+
+When using meshlets for raytracing, the performance characteristics that matter differ from when rendering meshes with rasterization. For raytracing, clusters with optimal spatial division that minimize ray-triangle intersection tests are preferred, while for rasterization, clusters with maximum triangle count within vertex limits are ideal.
+
+To generate meshlets optimized for raytracing, this library provides `meshopt_buildMeshletsSplit` algorithm, which builds clusters using surface area heuristic (SAH) to produce raytracing-friendly cluster distributions:
+
+```c++
+const size_t max_vertices = 64;
+const size_t min_triangles = 16;
+const size_t max_triangles = 64;
+const float fill_weight = 0.5f;
+
+size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), max_vertices, min_triangles); // note: use min_triangles to compute worst case bound
+std::vector<meshopt_Meshlet> meshlets(max_meshlets);
+std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
+std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
+
+size_t meshlet_count = meshopt_buildMeshletsSplit(meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), indices.data(),
+    indices.size(), &vertices[0].x, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, fill_weight);
+```
+
+The algorithm recursively subdivides the triangles into a BVH-like hierarchy using SAH for optimal spatial partitioning while balancing cluster size; this results in clusters that are significantly more efficient to raytrace compared to clusters generated by `meshopt_buildMeshlets`, but can still be used for rasterization (for example, to build visibility buffers or G-buffers).
+
+The `min_triangles` and `max_triangles` parameters control the allowed range of triangles per cluster. For optimal raytracing performance, `min_triangles` should be at most `max_triangles/2` (or, ideally, `max_triangles/4`) to give the algorithm enough freedom to produce high-quality spatial partitioning. For meshes with few seams due to normal or UV discontinuities, using `max_vertices` equal to `max_triangles` is recommended when rasterization performance is a concern; for meshes with many seams or for renderers that primarily use meshlets for ray tracing, a higher `max_vertices` value should be used as it ensures that more clusters can fully utilize the triangle limit.
+
+The `fill_weight` parameter (typically between 0 and 1, although values higher than 1 could be used to prioritize cluster fill even more) controls the trade-off between pure SAH optimization and triangle utilization. A value of 0 will optimize purely for SAH, resulting in best raytracing performance but potentially smaller clusters. Values between 0.5 and 0.75 typically provide a good balance of SAH quality vs triangle count.
+
+
 ## Vertex/index buffer compression
 
 In case storage size or transmission bandwidth is of importance, you might want to additionally compress vertex and index data. While several mesh compression libraries, like Google Draco, are available, they typically are designed to maximize the compression ratio at the cost of disturbing the vertex/index order (which makes the meshes inefficient to render on GPU) or decompression performance. They also frequently don't support custom game-ready quantized vertex formats and thus require to re-quantize the data after loading it, introducing extra quantization errors and making decoding slower.
@@ -365,116 +476,6 @@ indices.resize(meshopt_simplifyPoints(&indices[0], &points[0].x, points.size(), 
 ```
 
 The resulting indices can be used to render the simplified point cloud; to reduce the memory footprint, the point cloud can be reindexed to create an array of points from the indices.
-
-## Mesh shading
-
-Modern GPUs are beginning to deviate from the traditional rasterization model. NVidia GPUs starting from Turing and AMD GPUs starting from RDNA2 provide a new programmable geometry pipeline that, instead of being built around index buffers and vertex shaders, is built around mesh shaders - a new shader type that allows to provide a batch of work to the rasterizer.
-
-Using mesh shaders in context of traditional mesh rendering provides an opportunity to use a variety of optimization techniques, starting from more efficient vertex reuse, using various forms of culling (e.g. cluster frustum or occlusion culling) and in-memory compression to maximize the utilization of GPU hardware. Beyond traditional rendering mesh shaders provide a richer programming model that can synthesize new geometry more efficiently than common alternatives such as geometry shaders. Mesh shading can be accessed via Vulkan or Direct3D 12 APIs; please refer to [Introduction to Turing Mesh Shaders](https://developer.nvidia.com/blog/introduction-turing-mesh-shaders/) and [Mesh Shaders and Amplification Shaders: Reinventing the Geometry Pipeline](https://devblogs.microsoft.com/directx/coming-to-directx-12-mesh-shaders-and-amplification-shaders-reinventing-the-geometry-pipeline/) for additional information.
-
-To use mesh shaders for conventional rendering efficiently, geometry needs to be converted into a series of meshlets; each meshlet represents a small subset of the original mesh and comes with a small set of vertices and a separate micro-index buffer that references vertices in the meshlet. This information can be directly fed to the rasterizer from the mesh shader. This library provides algorithms to create meshlet data for a mesh, and - assuming geometry is static - can compute bounding information that can be used to perform cluster culling, a technique that can reject a meshlet if it's invisible on screen.
-
-To generate meshlet data, this library provides `meshopt_buildMeshlets` algorithm, which tries to balance topological efficiency (by maximizing vertex reuse inside meshlets) with culling efficiency (by minimizing meshlet radius and triangle direction divergence) and produces GPU-friendly data. As an alternative (that can be useful for load-time processing), `meshopt_buildMeshletsScan` can create the meshlet data using a vertex cache-optimized index buffer as a starting point by greedily aggregating consecutive triangles until they go over the meshlet limits. `meshopt_buildMeshlets` is recommended for offline data processing even if cone culling is not used.
-
-```c++
-const size_t max_vertices = 64;
-const size_t max_triangles = 124;
-const float cone_weight = 0.0f;
-
-size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), max_vertices, max_triangles);
-std::vector<meshopt_Meshlet> meshlets(max_meshlets);
-std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
-std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
-
-size_t meshlet_count = meshopt_buildMeshlets(meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), indices.data(),
-    indices.size(), &vertices[0].x, vertices.size(), sizeof(Vertex), max_vertices, max_triangles, cone_weight);
-```
-
-To generate the meshlet data, `max_vertices` and `max_triangles` need to be set within limits supported by the hardware; for NVidia the values of 64 and 124 are recommended (`max_triangles` must be divisible by 4 so 124 is the value closest to official NVidia's recommended 126). `cone_weight` should be left as 0 if cluster cone culling is not used, and set to a value between 0 and 1 to balance cone culling efficiency with other forms of culling like frustum or occlusion culling (`0.25` is a reasonable default).
-
-Each resulting meshlet refers to a portion of `meshlet_vertices` and `meshlet_triangles` arrays; the arrays are overallocated for the worst case so it's recommended to trim them before saving them as an asset / uploading them to the GPU:
-
-```c++
-const meshopt_Meshlet& last = meshlets[meshlet_count - 1];
-
-meshlet_vertices.resize(last.vertex_offset + last.vertex_count);
-meshlet_triangles.resize(last.triangle_offset + ((last.triangle_count * 3 + 3) & ~3));
-meshlets.resize(meshlet_count);
-```
-
-However depending on the application other strategies of storing the data can be useful; for example, `meshlet_vertices` serves as indices into the original vertex buffer but it might be worthwhile to generate a mini vertex buffer for each meshlet to remove the extra indirection when accessing vertex data, or it might be desirable to compress vertex data as vertices in each meshlet are likely to be very spatially coherent.
-
-For optimal performance, it is recommended to further optimize each meshlet in isolation for better triangle and vertex locality by calling `meshopt_optimizeMeshlet` on vertex and index data like so:
-
-```c++
-meshopt_optimizeMeshlet(&meshlet_vertices[m.vertex_offset], &meshlet_triangles[m.triangle_offset], m.triangle_count, m.vertex_count);
-```
-
-Different applications will choose different strategies for rendering meshlets; on a GPU capable of mesh shading, meshlets can be rendered directly; for example, a basic GLSL shader for `VK_EXT_mesh_shader` extension could look like this (parts omitted for brevity):
-
-```glsl
-layout(binding = 0) readonly buffer Meshlets { Meshlet meshlets[]; };
-layout(binding = 1) readonly buffer MeshletVertices { uint meshlet_vertices[]; };
-layout(binding = 2) readonly buffer MeshletTriangles { uint8_t meshlet_triangles[]; };
-
-void main() {
-    Meshlet meshlet = meshlets[gl_WorkGroupID.x];
-    SetMeshOutputsEXT(meshlet.vertex_count, meshlet.triangle_count);
-
-    for (uint i = gl_LocalInvocationIndex; i < meshlet.vertex_count; i += gl_WorkGroupSize.x) {
-        uint index = meshlet_vertices[meshlet.vertex_offset + i];
-        gl_MeshVerticesEXT[i].gl_Position = world_view_projection * vec4(vertex_positions[index], 1);
-    }
-
-    for (uint i = gl_LocalInvocationIndex; i < meshlet.triangle_count; i += gl_WorkGroupSize.x) {
-        uint offset = meshlet.triangle_offset + i * 3;
-        gl_PrimitiveTriangleIndicesEXT[i] = uvec3(
-            meshlet_triangles[offset], meshlet_triangles[offset + 1], meshlet_triangles[offset + 2]);
-    }
-}
-```
-
-After generating the meshlet data, it's also possible to generate extra data for each meshlet that can be saved and used at runtime to perform cluster culling, where each meshlet can be discarded if it's guaranteed to be invisible. To generate the data, `meshlet_computeMeshletBounds` can be used:
-
-```c++
-meshopt_Bounds bounds = meshopt_computeMeshletBounds(&meshlet_vertices[m.vertex_offset], &meshlet_triangles[m.triangle_offset],
-    m.triangle_count, &vertices[0].x, vertices.size(), sizeof(Vertex));
-```
-
-The resulting `bounds` values can be used to perform frustum or occlusion culling using the bounding sphere, or cone culling using the cone axis/angle (which will reject the entire meshlet if all triangles are guaranteed to be back-facing from the camera point of view):
-
-```c++
-if (dot(normalize(cone_apex - camera_position), cone_axis) >= cone_cutoff) reject();
-```
-
-## Clustered raytracing
-
-In addition to rasterization, meshlets can also be used for ray tracing. NVidia GPUs starting from Turing with recent drivers provide support for cluster acceleration structures (via `VK_NV_cluster_acceleration_structure` extension / NVAPI); instead of building a traditional BLAS, a cluster acceleration structure can be built for each meshlet and combined into a single clustered BLAS. While this currently results in reduced ray tracing performance for static geometry (for which a traditional BLAS may be more suitable), it allows updating the individual clusters without having to rebuild or refit the entire BLAS, which can be useful for mesh deformation or hierarchical level of detail.
-
-When using meshlets for raytracing, the performance characteristics that matter differ from when rendering meshes with rasterization. For raytracing, clusters with optimal spatial division that minimize ray-triangle intersection tests are preferred, while for rasterization, clusters with maximum triangle count within vertex limits are ideal.
-
-To generate meshlets optimized for raytracing, this library provides `meshopt_buildMeshletsSplit` algorithm, which builds clusters using surface area heuristic (SAH) to produce raytracing-friendly cluster distributions:
-
-```c++
-const size_t max_vertices = 64;
-const size_t min_triangles = 16;
-const size_t max_triangles = 64;
-const float fill_weight = 0.5f;
-
-size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), max_vertices, min_triangles); // note: use min_triangles to compute worst case bound
-std::vector<meshopt_Meshlet> meshlets(max_meshlets);
-std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
-std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
-
-size_t meshlet_count = meshopt_buildMeshletsSplit(meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), indices.data(),
-    indices.size(), &vertices[0].x, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, fill_weight);
-```
-
-The algorithm recursively subdivides the triangles into a BVH-like hierarchy using SAH for optimal spatial partitioning while balancing cluster size; this results in clusters that are significantly more efficient to raytrace compared to clusters generated by `meshopt_buildMeshlets`, but can still be used for rasterization (for example, to build visibility buffers or G-buffers).
-
-The `min_triangles` and `max_triangles` parameters control the allowed range of triangles per cluster. For optimal raytracing performance, `min_triangles` should be at most `max_triangles/2` (or, ideally, `max_triangles/4`) to give the algorithm enough freedom to produce high-quality spatial partitioning. For meshes with few seams due to normal or UV discontinuities, using `max_vertices` equal to `max_triangles` is recommended when rasterization performance is a concern; for meshes with many seams or for renderers that primarily use meshlets for ray tracing, a higher `max_vertices` value should be used as it ensures that more clusters can fully utilize the triangle limit.
-
-The `fill_weight` parameter (typically between 0 and 1, although values higher than 1 could be used to prioritize cluster fill even more) controls the trade-off between pure SAH optimization and triangle utilization. A value of 0 will optimize purely for SAH, resulting in best raytracing performance but potentially smaller clusters. Values between 0.5 and 0.75 typically provide a good balance of SAH quality vs triangle count.
 
 ## Efficiency analyzers
 
