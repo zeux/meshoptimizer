@@ -626,6 +626,7 @@ Currently, the following APIs are experimental, with the functions marked with `
 - `meshopt_partitionClusters`
 - `meshopt_simplifyPrune`*
 - `meshopt_simplifySloppy`
+- `meshopt_spatialClusterPoints`
 - `meshopt_spatialSortTriangles`*
 
 ## License
