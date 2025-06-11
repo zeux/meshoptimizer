@@ -401,7 +401,7 @@ The vertex codec tries to take advantage of the inherent locality of sequential 
 It is crucial to correctly specify the stride when encoding vertex data; however, it does not matter whether the vertices are interleaved or deinterleaved, as the codecs perform full byte deinterleaving internally.
 
 For optimal compression results, the values must be quantized to small integers. It can be valuable to use bit counts that are not multiples of 8. For example, instead of using 16 bits to represent texture coordinates, use 12-bit integers and divide by 4095 in the shader. Alternatively, using half-precision floats can often achieve good results.
-For single-precision floating-point data, it's recommended to use `meshopt_quantizeFloat` to remove entropy from the lower bits of the mantissa. Due to current limitations of the codec, the bit count needs to be 15 (23-8) for good results (7 can be used for more extreme compression).
+For single-precision floating-point data, it's recommended to use `meshopt_quantizeFloat` to remove entropy from the lower bits of the mantissa; for best results, consider using 15 bits or 7 bits for extreme compression.
 For normal or tangent vectors, using octahedral encoding is recommended over three components as it reduces redundancy. Similarly to other quantized values, consider using 10-12 bits per component instead of 16.
 
 When data is bit packed, using v1 vertex codec and specifying compression level 3 (`meshopt_encodeVertexBufferLevel` with level 3 and version 1) can improve the compression further by redistributing bits between components. Note that v1 vertex codec (`meshopt_encodeVertexVersion(1)`) is recommended regardless, as it improves compression ratios and decoding performance even absent bit packing.
