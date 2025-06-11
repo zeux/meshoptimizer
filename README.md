@@ -665,12 +665,12 @@ Currently, the following APIs are experimental, with the functions marked with `
 - `meshopt_buildMeshletsFlex`
 - `meshopt_buildMeshletsSplit`
 - `meshopt_computeSphereBounds`*
-- `meshopt_encodeVertexBufferLevel`
+- `meshopt_encodeVertexBufferLevel`*
 - `meshopt_generateVertexRemapCustom`*
-- `meshopt_partitionClusters`
+- `meshopt_partitionClusters`*
 - `meshopt_simplifyPrune`*
 - `meshopt_simplifySloppy`
-- `meshopt_spatialClusterPoints`
+- `meshopt_spatialClusterPoints`*
 
 ## License
 
