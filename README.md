@@ -258,7 +258,7 @@ In addition to rasterization, meshlets can also be used for ray tracing. NVidia 
 
 When using meshlets for raytracing, the performance characteristics that matter differ from when rendering meshes with rasterization. For raytracing, clusters with optimal spatial division that minimize ray-triangle intersection tests are preferred, while for rasterization, clusters with maximum triangle count within vertex limits are ideal.
 
-To generate meshlets optimized for raytracing, this library provides `meshopt_buildMeshletsSplit` algorithm, which builds clusters using surface area heuristic (SAH) to produce raytracing-friendly cluster distributions:
+To generate meshlets optimized for raytracing, this library provides `meshopt_buildMeshletsSpatial` algorithm, which builds clusters using surface area heuristic (SAH) to produce raytracing-friendly cluster distributions:
 
 ```c++
 const size_t max_vertices = 64;
@@ -271,7 +271,7 @@ std::vector<meshopt_Meshlet> meshlets(max_meshlets);
 std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
 std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
 
-size_t meshlet_count = meshopt_buildMeshletsSplit(meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), indices.data(),
+size_t meshlet_count = meshopt_buildMeshletsSpatial(meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), indices.data(),
     indices.size(), &vertices[0].x, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, fill_weight);
 ```
 
@@ -663,7 +663,7 @@ Currently, the following APIs are experimental, with the functions marked with `
 
 - `meshopt_analyzeCoverage`*
 - `meshopt_buildMeshletsFlex`
-- `meshopt_buildMeshletsSplit`
+- `meshopt_buildMeshletsSpatial`
 - `meshopt_computeSphereBounds`*
 - `meshopt_encodeVertexBufferLevel`*
 - `meshopt_generateVertexRemapCustom`*

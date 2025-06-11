@@ -1321,7 +1321,7 @@ static void meshletsMax()
 	}
 }
 
-static void meshletsSplit()
+static void meshletsSpatial()
 {
 	// two tetrahedrons far apart
 	float vb[2 * 4 * 3] = {
@@ -1342,25 +1342,25 @@ static void meshletsSplit()
 	unsigned char mt[2 * 8 * 3]; // 2 meshlets with up to 8 triangles
 
 	// with strict limits, we should get one meshlet (maxt=8) or two (maxt=4)
-	assert(meshopt_buildMeshletsSplit(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 8, sizeof(float) * 3, 16, 8, 8, 0.f) == 1);
+	assert(meshopt_buildMeshletsSpatial(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 8, sizeof(float) * 3, 16, 8, 8, 0.f) == 1);
 	assert(ml[0].triangle_count == 8);
 	assert(ml[0].vertex_count == 8);
 
-	assert(meshopt_buildMeshletsSplit(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 8, sizeof(float) * 3, 16, 4, 4, 0.f) == 2);
+	assert(meshopt_buildMeshletsSpatial(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 8, sizeof(float) * 3, 16, 4, 4, 0.f) == 2);
 	assert(ml[0].triangle_count == 4);
 	assert(ml[0].vertex_count == 4);
 	assert(ml[1].triangle_count == 4);
 	assert(ml[1].vertex_count == 4);
 
 	// with maxv=4 we should get two meshlets since we can't accomodate both
-	assert(meshopt_buildMeshletsSplit(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 8, sizeof(float) * 3, 4, 4, 8, 0.f) == 2);
+	assert(meshopt_buildMeshletsSpatial(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 8, sizeof(float) * 3, 4, 4, 8, 0.f) == 2);
 	assert(ml[0].triangle_count == 4);
 	assert(ml[0].vertex_count == 4);
 	assert(ml[1].triangle_count == 4);
 	assert(ml[1].vertex_count == 4);
 }
 
-static void meshletsSplitDeep()
+static void meshletsSpatialDeep()
 {
 	const int N = 400;
 	const size_t max_vertices = 4;
@@ -1384,7 +1384,7 @@ static void meshletsSplitDeep()
 	std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
 	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
 
-	size_t result = meshopt_buildMeshletsSplit(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &ib[0], N * 3, &vb[0], N + 1, sizeof(float) * 3, max_vertices, max_triangles, max_triangles, 0.f);
+	size_t result = meshopt_buildMeshletsSpatial(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &ib[0], N * 3, &vb[0], N + 1, sizeof(float) * 3, max_vertices, max_triangles, max_triangles, 0.f);
 	assert(result == N);
 }
 
@@ -2581,8 +2581,8 @@ void runTests()
 	meshletsSparse();
 	meshletsFlex();
 	meshletsMax();
-	meshletsSplit();
-	meshletsSplitDeep();
+	meshletsSpatial();
+	meshletsSpatialDeep();
 
 	partitionBasic();
 	partitionSpatial();
