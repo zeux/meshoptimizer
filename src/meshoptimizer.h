@@ -830,6 +830,8 @@ inline size_t meshopt_simplifyWithAttributes(T* destination, const T* indices, s
 template <typename T>
 inline size_t meshopt_simplifySloppy(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, float* result_error = NULL);
 template <typename T>
+inline size_t meshopt_simplifyPrune(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, float target_error);
+template <typename T>
 inline size_t meshopt_stripify(T* destination, const T* indices, size_t index_count, size_t vertex_count, T restart_index);
 template <typename T>
 inline size_t meshopt_unstripify(T* destination, const T* indices, size_t index_count, T restart_index);
@@ -1196,6 +1198,15 @@ inline size_t meshopt_simplifySloppy(T* destination, const T* indices, size_t in
 	meshopt_IndexAdapter<T> out(destination, NULL, index_count);
 
 	return meshopt_simplifySloppy(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride, target_index_count, target_error, result_error);
+}
+
+template <typename T>
+inline size_t meshopt_simplifyPrune(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, float target_error)
+{
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, NULL, index_count);
+
+	return meshopt_simplifyPrune(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride, target_error);
 }
 
 template <typename T>
