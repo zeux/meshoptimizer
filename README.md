@@ -193,6 +193,8 @@ size_t meshlet_count = meshopt_buildMeshlets(meshlets.data(), meshlet_vertices.d
 
 To generate the meshlet data, `max_vertices` and `max_triangles` need to be set within limits supported by the hardware; for NVidia the values of 64 and 124 are recommended (`max_triangles` must be divisible by 4 so 124 is the value closest to official NVidia's recommended 126). `cone_weight` should be left as 0 if cluster cone culling is not used, and set to a value between 0 and 1 to balance cone culling efficiency with other forms of culling like frustum or occlusion culling (`0.25` is a reasonable default).
 
+> Note that for earlier AMD GPUs, the best configurations tend to use the same limits for `max_vertices` and `max_triangles`, such as 64 and 64, or 128 and 128. Additionally, while NVidia recommends 64/124 as a good configuration, consider using a different configuration like `max_vertices 64, max_triangles 96`, to provide more realistic limits that are achievable on real-world meshes, and to reduce the overhead on other GPUs.
+
 Each resulting meshlet refers to a portion of `meshlet_vertices` and `meshlet_triangles` arrays; the arrays are overallocated for the worst case so it's recommended to trim them before saving them as an asset / uploading them to the GPU:
 
 ```c++
