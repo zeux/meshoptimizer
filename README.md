@@ -279,6 +279,37 @@ The `min_triangles` and `max_triangles` parameters control the allowed range of 
 
 The `fill_weight` parameter (typically between 0 and 1, although values higher than 1 could be used to prioritize cluster fill even more) controls the trade-off between pure SAH optimization and triangle utilization. A value of 0 will optimize purely for SAH, resulting in best raytracing performance but potentially smaller clusters. Values between 0.5 and 0.75 typically provide a good balance of SAH quality vs triangle count.
 
+### Point cloud clusterization
+
+Both of the meshlet algorithms are designed to work with triangle meshes. In some cases, splitting a point cloud into fixed size clusters can be useful; the resulting point clusters could be rendered via mesh or compute shaders, or the resulting subdivision can be used to parallelize point processing while maintaining locality of points. To that end, this library provides `meshopt_spatialClusterPoints` algorithm:
+
+```c++
+const size_t cluster_size = 256;
+
+std::vector<unsigned int> index(mesh.vertices.size());
+meshopt_spatialClusterPoints(&index[0], &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), cluster_size);
+```
+
+The resulting index buffer could be used to process the points directly, or reorganize the point data into flat contiguous arrays. Every consecutive chunk of `cluster_size` points in the index buffer refers to a single cluster, with just the last cluster containing fewer points if the total number of points is not a multiple of `cluster_size`. Note that the index buffer is not a remap table, so `meshopt_remapVertexBuffer` can't be used to flatten the point data.
+
+### Cluster partitioning
+
+When working with clustered geometry, it can be beneficial to organize clusters into larger groups (partitions) for more efficient processing or workload distribution. This library provides an algorithm to partition clusters into groups of similar size while prioritizing locality:
+
+```c++
+const size_t partition_size = 32;
+
+std::vector<unsigned int> cluster_partitions(cluster_count);
+size_t partition_count = meshopt_partitionClusters(&cluster_partitions[0], &cluster_indices[0], total_index_count,
+    &cluster_index_counts[0], cluster_count, &vertices[0].x, vertex_count, sizeof(Vertex), partition_size);
+```
+
+The algorithm assigns each cluster to a partition, aiming for a target partition size while prioritizing topological locality (sharing vertices) and spatial locality. The resulting partitions can be used for more efficient batched processing of clusters, or for hierarchial simplification schemes similar to Nanite.
+
+If vertex positions are specified (not NULL), spatial locality will influence priority of merging clusters; otherwise, the algorithm will rely solely on topological connections.
+
+After partitioning, each element in the destination array contains the partition ID (ranging from 0 to the returned partition count minus 1) for the corresponding cluster. Note that the partitions may be both smaller and larger than the target size.
+
 ## Vertex/index buffer compression
 
 In case storage size or transmission bandwidth is of importance, you might want to additionally compress vertex and index data. While several mesh compression libraries, like Google Draco, are available, they typically are designed to maximize the compression ratio at the cost of disturbing the vertex/index order (which makes the meshes inefficient to render on GPU) or decompression performance. They also frequently don't support custom game-ready quantized vertex formats and thus require to re-quantize the data after loading it, introducing extra quantization errors and making decoding slower.
