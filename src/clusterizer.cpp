@@ -11,6 +11,7 @@
 // Matthaeus Chajdas. GeometryFX 1.2 - Cluster Culling. 2016
 // Jack Ritter. An Efficient Bounding Sphere. 1990
 // Thomas Larsson. Fast and Tight Fitting Bounding Spheres. 2008
+// Ingo Wald, Vlastimil Havran. On building fast kd-Trees for Ray Tracing, and on doing that in O(N log N). 2006
 namespace meshopt
 {
 
@@ -889,7 +890,7 @@ static void bvhPackTail(unsigned char* boundary, const unsigned int* order, size
 static bool bvhDivisible(size_t count, size_t min, size_t max)
 {
 	// count is representable as a sum of values in [min..max] if if it in range of [k*min..k*min+k*(max-min)]
-	// equivalent to ceil(count / max) <= floor(count / min), but the form below allows using idiv
+	// equivalent to ceil(count / max) <= floor(count / min), but the form below allows using idiv (see nv_cluster_builder)
 	// we avoid expensive integer divisions in the common case where min is <= max/2
 	return min * 2 <= max ? count >= min : count % min <= (count / min) * (max - min);
 }
