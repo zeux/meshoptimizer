@@ -1300,7 +1300,7 @@ size_t meshopt_buildMeshletsScan(meshopt_Meshlet* meshlets, unsigned int* meshle
 	return meshlet_offset;
 }
 
-size_t meshopt_buildMeshletsSplit(struct meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t min_triangles, size_t max_triangles, float fill_weight)
+size_t meshopt_buildMeshletsSpatial(struct meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t min_triangles, size_t max_triangles, float fill_weight)
 {
 	using namespace meshopt;
 

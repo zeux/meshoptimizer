@@ -68,7 +68,7 @@ const size_t kGroupSize = 8;
 const bool kUseLocks = true;
 const bool kUseNormals = true;
 const bool kUseRetry = true;
-const bool kUseSplit = false;
+const bool kUseSpatial = false;
 const int kMetisSlop = 2;
 const float kSimplifyThreshold = 0.85f;
 
@@ -138,8 +138,8 @@ static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, cons
 	std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
 	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
 
-	if (kUseSplit)
-		meshlets.resize(meshopt_buildMeshletsSplit(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, fill_weight));
+	if (kUseSpatial)
+		meshlets.resize(meshopt_buildMeshletsSpatial(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, fill_weight));
 	else
 		meshlets.resize(meshopt_buildMeshletsFlex(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, 0.f, split_factor));
 
@@ -926,7 +926,7 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 
 	double middle = timestamp();
 
-	const bool use_splitalgo = true;
+	const bool use_spatial = true;
 	const size_t max_vertices = 64;
 	const size_t min_triangles = 16;
 	const size_t max_triangles = 64;
@@ -940,8 +940,8 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 	std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
 	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
 
-	if (use_splitalgo)
-		meshlets.resize(meshopt_buildMeshletsSplit(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, fill_weight));
+	if (use_spatial)
+		meshlets.resize(meshopt_buildMeshletsSpatial(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, fill_weight));
 	else
 		meshlets.resize(meshopt_buildMeshletsFlex(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, cone_weight, split_factor));
 

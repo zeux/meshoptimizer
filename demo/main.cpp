@@ -995,13 +995,13 @@ static int follow(int* parents, int index)
 	return index;
 }
 
-void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false, bool flex = false, bool split = false, bool dump = false)
+void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false, bool flex = false, bool spatial = false, bool dump = false)
 {
 	// NVidia-recommends 64/126; we round 126 down to a multiple of 4
 	// alternatively we also test uniform configuration with 64/64 which is better for AMD
 	const size_t max_vertices = 64;
 	const size_t max_triangles = uniform ? 64 : 124;
-	const size_t min_triangles = split ? 16 : (uniform ? 24 : 32); // only used in flex/split modes
+	const size_t min_triangles = spatial ? 16 : (uniform ? 24 : 32); // only used in flex/spatial modes
 
 	// note: should be set to 0 unless cone culling is used at runtime!
 	const float cone_weight = flex ? -1.0f : 0.25f;
@@ -1018,8 +1018,8 @@ void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false, bool fl
 		meshlets.resize(meshopt_buildMeshletsScan(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), max_vertices, max_triangles));
 	else if (flex)
 		meshlets.resize(meshopt_buildMeshletsFlex(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, cone_weight, split_factor));
-	else if (split)
-		meshlets.resize(meshopt_buildMeshletsSplit(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, 0.f));
+	else if (spatial)
+		meshlets.resize(meshopt_buildMeshletsSpatial(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, 0.f));
 	else // note: equivalent to the call of buildMeshletsFlex() with non-negative cone_weight and split_factor = 0
 		meshlets.resize(meshopt_buildMeshlets(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, max_triangles, cone_weight));
 
@@ -1112,7 +1112,7 @@ void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false, bool fl
 	avg_connected /= double(meshlets.size());
 
 	printf("Meshlets%c: %d meshlets (avg vertices %.1f, avg triangles %.1f, avg boundary %.1f, avg connected %.2f, not full %d) in %.2f msec\n",
-	    scan ? 'S' : (flex ? 'F' : (split ? 'X' : (uniform ? 'U' : ' '))),
+	    scan ? 'S' : (flex ? 'F' : (spatial ? 'X' : (uniform ? 'U' : ' '))),
 	    int(meshlets.size()), avg_vertices, avg_triangles, avg_boundary, avg_connected, int(not_full), (end - start) * 1000);
 
 	float camera[3] = {100, 100, 100};
@@ -1526,7 +1526,7 @@ void process(const char* path)
 	meshlets(copy, /* scan= */ false);
 	meshlets(copy, /* scan= */ false, /* uniform= */ true);
 	meshlets(copy, /* scan= */ false, /* uniform= */ false, /* flex= */ true);
-	meshlets(copy, /* scan= */ false, /* uniform= */ true, /* flex= */ false, /* split= */ true);
+	meshlets(copy, /* scan= */ false, /* uniform= */ true, /* flex= */ false, /* spatial= */ true);
 
 	shadow(copy);
 	tessellationAdjacency(copy);
