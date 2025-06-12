@@ -79,7 +79,8 @@ Mesh parseObj(const char* path, double& reindex)
 	size_t total_indices = 0;
 
 	for (unsigned int i = 0; i < obj->face_count; ++i)
-		total_indices += 3 * (obj->face_vertices[i] - 2);
+		if (obj->face_vertices[i] > 2)
+			total_indices += 3 * (obj->face_vertices[i] - 2);
 
 	std::vector<Vertex> vertices(total_indices);
 
@@ -88,6 +89,9 @@ Mesh parseObj(const char* path, double& reindex)
 
 	for (unsigned int i = 0; i < obj->face_count; ++i)
 	{
+		if (obj->face_vertices[i] <= 2)
+			continue;
+
 		for (unsigned int j = 0; j < obj->face_vertices[i]; ++j)
 		{
 			fastObjIndex gi = obj->indices[index_offset + j];

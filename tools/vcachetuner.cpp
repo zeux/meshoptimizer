@@ -1,5 +1,5 @@
-#include "../src/meshoptimizer.h"
 #include "../extern/fast_obj.h"
+#include "../src/meshoptimizer.h"
 
 #define SDEFL_IMPLEMENTATION
 #include "../extern/sdefl.h"
@@ -18,11 +18,11 @@ const int kValenceMax = 8;
 
 namespace meshopt
 {
-	struct VertexScoreTable
-	{
-		float cache[1 + kCacheSizeMax];
-		float live[1 + kValenceMax];
-	};
+struct VertexScoreTable
+{
+	float cache[1 + kCacheSizeMax];
+	float live[1 + kValenceMax];
+};
 } // namespace meshopt
 
 void meshopt_optimizeVertexCacheTable(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, const meshopt::VertexScoreTable* table);
@@ -34,14 +34,14 @@ struct Profile
 	int compression;
 };
 
-Profile profiles[] =
-{
-	{1.f, 0, 0, 0, 0},  // Compression
-	{1.f, 0, 0, 0, 1},  // Compression w/deflate
-	// {1.f, 14, 64, 128}, // AMD GCN
-	// {1.f, 32, 32, 32},  // NVidia Pascal
-	// {1.f, 16, 32, 32}, // NVidia Kepler, Maxwell
-	// {1.f, 128, 0, 0}, // Intel
+Profile profiles[] = {
+    {1.f, 0, 0, 0, 0}, // Compression
+    {1.f, 0, 0, 0, 1}, // Compression w/deflate
+
+    // {1.f, 14, 64, 128}, // AMD GCN
+    // {1.f, 32, 32, 32},  // NVidia Pascal
+    // {1.f, 16, 32, 32}, // NVidia Kepler, Maxwell
+    // {1.f, 128, 0, 0}, // Intel
 };
 
 const int Profile_Count = sizeof(profiles) / sizeof(profiles[0]);
@@ -52,7 +52,7 @@ struct pcg32_random_t
 	uint64_t inc;
 };
 
-#define PCG32_INITIALIZER { 0x853c49e6748fea9bULL, 0xda3e39cb94b95bdbULL }
+#define PCG32_INITIALIZER {0x853c49e6748fea9bULL, 0xda3e39cb94b95bdbULL}
 
 uint32_t pcg32_random_r(pcg32_random_t* rng)
 {
@@ -130,7 +130,8 @@ Mesh objmesh(const char* path)
 	size_t total_indices = 0;
 
 	for (unsigned int i = 0; i < obj->face_count; ++i)
-		total_indices += 3 * (obj->face_vertices[i] - 2);
+		if (obj->face_vertices[i] > 2)
+			total_indices += 3 * (obj->face_vertices[i] - 2);
 
 	struct Vertex
 	{
@@ -146,6 +147,9 @@ Mesh objmesh(const char* path)
 
 	for (unsigned int i = 0; i < obj->face_count; ++i)
 	{
+		if (obj->face_vertices[i] <= 2)
+			continue;
+
 		for (unsigned int j = 0; j < obj->face_vertices[i]; ++j)
 		{
 			fastObjIndex gi = obj->indices[index_offset + j];
@@ -335,7 +339,7 @@ std::pair<State, float> genN(std::vector<State>& seed, const std::vector<Mesh>& 
 		}
 	}
 
-	#pragma omp parallel for
+#pragma omp parallel for
 	for (size_t i = 0; i < seed.size(); ++i)
 	{
 		result[i].fitness = fitness_score(result[i], meshes);
