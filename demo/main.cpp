@@ -125,6 +125,10 @@ Mesh parseObj(const char* path, double& reindex)
 
 	Mesh result;
 
+	// empty mesh
+	if (total_indices == 0)
+		return result;
+
 	std::vector<unsigned int> remap(total_indices);
 
 	size_t total_vertices = meshopt_generateVertexRemap(&remap[0], NULL, total_indices, &vertices[0], total_indices, sizeof(Vertex));

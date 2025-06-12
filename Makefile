@@ -17,7 +17,7 @@ GLTFPACK_OBJECTS=$(GLTFPACK_SOURCES:%=$(BUILD)/%.o)
 OBJECTS=$(LIBRARY_OBJECTS) $(DEMO_OBJECTS) $(GLTFPACK_OBJECTS)
 
 LIBRARY=$(BUILD)/libmeshoptimizer.a
-DEMO=$(BUILD)/meshoptimizer
+DEMO=$(BUILD)/meshoptdemo
 
 CFLAGS=-g -Wall -Wextra -std=c89
 CXXFLAGS=-g -Wall -Wextra -Wshadow -Wno-missing-field-initializers -std=gnu++98
