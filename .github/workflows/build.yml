@@ -58,9 +58,9 @@ jobs:
         shell: bash # necessary for fail-fast
         run: |
           cmake --build . -- -property:Configuration=Debug -verbosity:minimal
-          Debug/demo.exe demo/pirate.obj
+          Debug/meshoptdemo.exe demo/pirate.obj
           cmake --build . -- -property:Configuration=Release -verbosity:minimal
-          Release/demo.exe demo/pirate.obj
+          Release/meshoptdemo.exe demo/pirate.obj
 
   nodejs:
     runs-on: ubuntu-latest
