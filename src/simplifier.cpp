@@ -218,6 +218,11 @@ static void buildPositionRemap(unsigned int* remap, unsigned int* wedge, const f
 		remap[index] = *entry;
 	}
 
+	allocator.deallocate(table);
+
+	if (!wedge)
+		return;
+
 	// build wedge table: for each vertex, which other vertex is the next wedge that also maps to the same vertex?
 	// entries in table form a (cyclic) wedge loop per vertex; for manifold vertices, wedge[i] == remap[i] == i
 	for (size_t i = 0; i < vertex_count; ++i)
@@ -231,8 +236,6 @@ static void buildPositionRemap(unsigned int* remap, unsigned int* wedge, const f
 			wedge[i] = wedge[r];
 			wedge[r] = unsigned(i);
 		}
-
-	allocator.deallocate(table);
 }
 
 static unsigned int* buildSparseRemap(unsigned int* indices, size_t index_count, size_t vertex_count, size_t* out_vertex_count, meshopt_Allocator& allocator)
@@ -1872,6 +1875,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	updateEdgeAdjacency(adjacency, result, index_count, vertex_count, NULL);
 
 	// build position remap that maps each vertex to the one with identical position
+	// wedge table stores next vertex with identical position for each vertex
 	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
 	unsigned int* wedge = allocator.allocate<unsigned int>(vertex_count);
 	buildPositionRemap(remap, wedge, vertex_positions_data, vertex_count, vertex_positions_stride, sparse_remap, allocator);
@@ -2224,6 +2228,40 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 		*out_result_error = sqrtf(result_error);
 
 	return write;
+}
+
+size_t meshopt_simplifyPrune(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, float target_error)
+{
+	using namespace meshopt;
+
+	assert(index_count % 3 == 0);
+	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
+	assert(vertex_positions_stride % sizeof(float) == 0);
+	assert(target_error >= 0);
+
+	meshopt_Allocator allocator;
+
+	unsigned int* result = destination;
+	if (result != indices)
+		memcpy(result, indices, index_count * sizeof(unsigned int));
+
+	// build position remap that maps each vertex to the one with identical position
+	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
+	buildPositionRemap(remap, NULL, vertex_positions_data, vertex_count, vertex_positions_stride, NULL, allocator);
+
+	Vector3* vertex_positions = allocator.allocate<Vector3>(vertex_count);
+	rescalePositions(vertex_positions, vertex_positions_data, vertex_count, vertex_positions_stride, NULL);
+
+	unsigned int* components = allocator.allocate<unsigned int>(vertex_count);
+	size_t component_count = buildComponents(components, vertex_count, indices, index_count, remap);
+
+	float* component_errors = allocator.allocate<float>(component_count * 4); // overallocate for temporary use inside measureComponents
+	measureComponents(component_errors, component_count, components, vertex_positions, vertex_count);
+
+	float component_nexterror = 0;
+	size_t result_count = pruneComponents(result, index_count, components, component_errors, component_count, target_error * target_error, component_nexterror);
+
+	return result_count;
 }
 
 size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_colors, size_t vertex_colors_stride, float color_weight, size_t target_vertex_count)

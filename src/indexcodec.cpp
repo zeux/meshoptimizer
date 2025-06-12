@@ -210,6 +210,7 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 
 		if (fer >= 0 && (fer >> 2) < 15)
 		{
+			// note: getEdgeFifo implicitly rotates triangles by matching a/b to existing edge
 			const unsigned int* order = kTriangleIndexOrder[fer & 3];
 
 			unsigned int a = indices[i + order[0]], b = indices[i + order[1]], c = indices[i + order[2]];
@@ -267,6 +268,7 @@ size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t buffer_size, cons
 			int fc = getVertexFifo(vertexfifo, c, vertexfifooffset);
 
 			// after rotation, a is almost always equal to next, so we don't waste bits on FIFO encoding for a
+			// note: decoder implicitly assumes that if feb=fec=0, then fea=0 (reset code); this is enforced by rotation
 			int fea = (a == next) ? (next++, 0) : 15;
 			int feb = (fb >= 0 && fb < 14) ? fb + 1 : (b == next ? (next++, 0) : 15);
 			int fec = (fc >= 0 && fc < 14) ? fc + 1 : (c == next ? (next++, 0) : 15);

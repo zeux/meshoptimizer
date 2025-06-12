@@ -12,13 +12,16 @@ if(POLICY CMP0092)
     cmake_policy(SET CMP0092 NEW) # Enables clean /W4 override for MSVC
 endif()
 
-project(meshoptimizer VERSION 0.23 LANGUAGES CXX)
+project(meshoptimizer VERSION 0.24 LANGUAGES CXX)
 
 option(MESHOPT_BUILD_DEMO "Build demo" OFF)
 option(MESHOPT_BUILD_GLTFPACK "Build gltfpack" OFF)
 option(MESHOPT_BUILD_SHARED_LIBS "Build shared libraries" OFF)
+option(MESHOPT_STABLE_EXPORTS "Only export stable APIs from shared library" OFF)
 option(MESHOPT_WERROR "Treat warnings as errors" OFF)
 option(MESHOPT_INSTALL "Install library" ON)
+
+# Path to Basis Universal library, if you want to use it with gltfpack
 set(MESHOPT_BASISU_PATH "" CACHE STRING "")
 
 set(SOURCES
@@ -28,10 +31,10 @@ set(SOURCES
     src/indexanalyzer.cpp
     src/indexcodec.cpp
     src/indexgenerator.cpp
-    src/overdrawanalyzer.cpp
     src/overdrawoptimizer.cpp
     src/partition.cpp
     src/quantization.cpp
+    src/rasterizer.cpp
     src/simplifier.cpp
     src/spatialorder.cpp
     src/stripifier.cpp
@@ -100,12 +103,17 @@ if(MESHOPT_BUILD_SHARED_LIBS)
     else()
         target_compile_definitions(meshoptimizer PUBLIC "MESHOPTIMIZER_API=__attribute__((visibility(\"default\")))")
     endif()
+
+    if(MESHOPT_STABLE_EXPORTS)
+		target_compile_definitions(meshoptimizer PUBLIC "MESHOPTIMIZER_EXPERIMENTAL=")
+    endif()
 endif()
 
 set(TARGETS meshoptimizer)
 
 if(MESHOPT_BUILD_DEMO)
     add_executable(demo demo/main.cpp demo/nanite.cpp demo/tests.cpp tools/objloader.cpp)
+    set_target_properties(demo PROPERTIES CXX_STANDARD 11)
     target_link_libraries(demo meshoptimizer)
 endif()
 
@@ -122,6 +130,9 @@ if(MESHOPT_BUILD_GLTFPACK)
 
     if(NOT MESHOPT_BASISU_PATH STREQUAL "")
         get_filename_component(BASISU_PATH ${MESHOPT_BASISU_PATH} ABSOLUTE)
+        if (NOT EXISTS ${BASISU_PATH})
+            message(FATAL_ERROR "Basis Universal path ${BASISU_PATH} not found")
+        endif()
 
         target_compile_definitions(gltfpack PRIVATE WITH_BASISU)
         set_source_files_properties(gltf/basisenc.cpp gltf/basislib.cpp PROPERTIES INCLUDE_DIRECTORIES ${BASISU_PATH})

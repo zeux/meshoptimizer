@@ -616,7 +616,7 @@ static void decodeVertexDeltas()
 	}
 
 	std::vector<unsigned char> buffer(meshopt_encodeVertexBufferBound(16, 8));
-	buffer.resize(meshopt_encodeVertexBufferLevel(&buffer[0], buffer.size(), data, 16, 8, 2));
+	buffer.resize(meshopt_encodeVertexBufferLevel(&buffer[0], buffer.size(), data, 16, 8, 2, -1));
 
 	unsigned short decoded[16 * 4];
 	assert(meshopt_decodeVertexBuffer(decoded, 16, 8, &buffer[0], buffer.size()) == 0);
@@ -637,7 +637,7 @@ static void decodeVertexBitXor()
 	}
 
 	std::vector<unsigned char> buffer(meshopt_encodeVertexBufferBound(16, 16));
-	buffer.resize(meshopt_encodeVertexBufferLevel(&buffer[0], buffer.size(), data, 16, 16, 3));
+	buffer.resize(meshopt_encodeVertexBufferLevel(&buffer[0], buffer.size(), data, 16, 16, 3, -1));
 
 	unsigned int decoded[16 * 4];
 	assert(meshopt_decodeVertexBuffer(decoded, 16, 16, &buffer[0], buffer.size()) == 0);
@@ -1146,18 +1146,12 @@ static void sphereBounds()
 	    1, 0, 1, 3, // clang-format
 	};
 
-	// without the radius, the center is somewhere inside the tetrahedron
-	// note that we currently compute a somewhat suboptimal sphere here due to the tetrahedron being perfecly axis aligned
+	// without the radius, the center is inside the tetrahedron
 	meshopt_Bounds bounds = meshopt_computeSphereBounds(vbr, 4, sizeof(float) * 4, NULL, 0);
-	assert(bounds.radius < 0.97f);
-
-	// forcing a better initial guess for the center by using different radii produces a close to optimal sphere
-	float eps[4] = {1e-3f, 2e-3f, 3e-3f, 4e-3f};
-	meshopt_Bounds boundse = meshopt_computeSphereBounds(vbr, 4, sizeof(float) * 4, eps, sizeof(float));
-	assert(fabsf(boundse.center[0] - 0.5f) < 1e-2f);
-	assert(fabsf(boundse.center[1] - 0.5f) < 1e-2f);
-	assert(fabsf(boundse.center[2] - 0.5f) < 1e-2f);
-	assert(boundse.radius < 0.87f);
+	assert(fabsf(bounds.center[0] - 0.5f) < 1e-2f);
+	assert(fabsf(bounds.center[1] - 0.5f) < 1e-2f);
+	assert(fabsf(bounds.center[2] - 0.5f) < 1e-2f);
+	assert(bounds.radius < 0.87f);
 
 	// when using the radius, the last sphere envelops the entire set
 	meshopt_Bounds boundsr = meshopt_computeSphereBounds(vbr, 4, sizeof(float) * 4, vbr + 3, sizeof(float) * 4);
@@ -1327,6 +1321,73 @@ static void meshletsMax()
 	}
 }
 
+static void meshletsSpatial()
+{
+	// two tetrahedrons far apart
+	float vb[2 * 4 * 3] = {
+	    0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1,
+	    10, 0, 0, 11, 0, 0, 10, 1, 0, 10, 0, 1, // clang-format :-/
+	};
+
+	unsigned int ib[2 * 4 * 3] = {
+	    0, 1, 2, 0, 2, 3, 0, 3, 1, 1, 3, 2,
+	    4, 5, 6, 4, 6, 7, 4, 7, 5, 5, 7, 6, // clang-format :-/
+	};
+
+	// up to 2 meshlets with min_triangles=4
+	assert(meshopt_buildMeshletsBound(2 * 4 * 3, 16, 4) == 2);
+
+	meshopt_Meshlet ml[2];
+	unsigned int mv[2 * 16];
+	unsigned char mt[2 * 8 * 3]; // 2 meshlets with up to 8 triangles
+
+	// with strict limits, we should get one meshlet (maxt=8) or two (maxt=4)
+	assert(meshopt_buildMeshletsSpatial(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 8, sizeof(float) * 3, 16, 8, 8, 0.f) == 1);
+	assert(ml[0].triangle_count == 8);
+	assert(ml[0].vertex_count == 8);
+
+	assert(meshopt_buildMeshletsSpatial(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 8, sizeof(float) * 3, 16, 4, 4, 0.f) == 2);
+	assert(ml[0].triangle_count == 4);
+	assert(ml[0].vertex_count == 4);
+	assert(ml[1].triangle_count == 4);
+	assert(ml[1].vertex_count == 4);
+
+	// with maxv=4 we should get two meshlets since we can't accomodate both
+	assert(meshopt_buildMeshletsSpatial(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 8, sizeof(float) * 3, 4, 4, 8, 0.f) == 2);
+	assert(ml[0].triangle_count == 4);
+	assert(ml[0].vertex_count == 4);
+	assert(ml[1].triangle_count == 4);
+	assert(ml[1].vertex_count == 4);
+}
+
+static void meshletsSpatialDeep()
+{
+	const int N = 400;
+	const size_t max_vertices = 4;
+	const size_t max_triangles = 4;
+
+	float vb[(N + 1) * 3];
+	unsigned int ib[N * 3];
+
+	vb[0] = vb[1] = vb[2] = 0;
+
+	for (size_t i = 0; i < N; ++i)
+	{
+		vb[(i + 1) * 3 + 0] = vb[(i + 1) * 3 + 1] = vb[(i + 1) * 3 + 2] = powf(1.2f, float(i));
+
+		ib[i * 3 + 0] = 0;
+		ib[i * 3 + 1] = ib[i * 3 + 2] = unsigned(i + 1);
+	}
+
+	size_t max_meshlets = meshopt_buildMeshletsBound(N * 3, max_vertices, max_triangles);
+	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
+	std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
+	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
+
+	size_t result = meshopt_buildMeshletsSpatial(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &ib[0], N * 3, &vb[0], N + 1, sizeof(float) * 3, max_vertices, max_triangles, max_triangles, 0.f);
+	assert(result == N);
+}
+
 static void partitionBasic()
 {
 	// 0   1   2
@@ -1335,23 +1396,48 @@ static void partitionBasic()
 	//     9
 	// 10 11  12
 	const unsigned int ci[] = {
-	    0, 1, 3, 4, 5, 6,   //
-	    1, 2, 3, 6, 7, 8,   //
-	    4, 5, 6, 9, 10, 11, //
-	    6, 7, 8, 9, 11, 12, //
+	    0, 1, 3, 4, 5, 6,
+	    1, 2, 3, 6, 7, 8,
+	    4, 5, 6, 9, 10, 11,
+	    6, 7, 8, 9, 11, 12, // clang-format :-/
 	};
 
 	const unsigned int cc[4] = {6, 6, 6, 6};
 	unsigned int part[4];
 
-	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 4, 13, 1) == 4);
+	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 4, NULL, 13, 0, 1) == 4);
 	assert(part[0] == 0 && part[1] == 1 && part[2] == 2 && part[3] == 3);
 
-	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 4, 13, 2) == 2);
+	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 4, NULL, 13, 0, 2) == 2);
 	assert(part[0] == 0 && part[1] == 0 && part[2] == 1 && part[3] == 1);
 
-	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 4, 13, 4) == 1);
+	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 4, NULL, 13, 0, 4) == 1);
 	assert(part[0] == 0 && part[1] == 0 && part[2] == 0 && part[3] == 0);
+}
+
+static void partitionSpatial()
+{
+	const unsigned int ci[] = {
+	    0, 1, 2,
+	    0, 3, 4,
+	    0, 5, 6, // clang-format :-/
+	};
+
+	const float vb[] = {
+	    0, 0, 0,
+	    1, 0, 0, 0, 1, 0,
+	    0, 2, 0, 2, 0, 0,
+	    -1, 0, 0, 0, -1, 0, // clang-format :-/
+	};
+
+	const unsigned int cc[3] = {3, 3, 3};
+	unsigned int part[3];
+
+	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 3, NULL, 7, 0, 2) == 2);
+	assert(part[0] == 0 && part[1] == 0 && part[2] == 1);
+
+	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 3, vb, 7, sizeof(float) * 3, 2) == 2);
+	assert(part[0] == 0 && part[1] == 1 && part[2] == 0);
 }
 
 static int remapCustomFalse(void*, unsigned int, unsigned int)
@@ -2203,6 +2289,36 @@ static void simplifyPruneCleanup()
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 }
 
+static void simplifyPruneFunc()
+{
+	unsigned int ib[] = {
+	    0, 1, 2,
+	    3, 4, 5,
+	    6, 7, 8, // clang-format :-/
+	};
+
+	float vb[] = {
+	    0, 0, 0,
+	    0, 1, 0,
+	    1, 0, 0,
+	    0, 0, 1,
+	    0, 2, 1,
+	    2, 0, 1,
+	    0, 0, 2,
+	    0, 4, 2,
+	    4, 0, 2, // clang-format :-/
+	};
+
+	unsigned int expected[] = {
+	    6,
+	    7,
+	    8,
+	};
+
+	assert(meshopt_simplifyPrune(ib, ib, 9, vb, 9, 12, 0.5f) == 3);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+}
+
 static void adjacency()
 {
 	// 0 1/4
@@ -2465,8 +2581,11 @@ void runTests()
 	meshletsSparse();
 	meshletsFlex();
 	meshletsMax();
+	meshletsSpatial();
+	meshletsSpatialDeep();
 
 	partitionBasic();
+	partitionSpatial();
 
 	remapCustom();
 
@@ -2494,6 +2613,7 @@ void runTests()
 	simplifyDebug();
 	simplifyPrune();
 	simplifyPruneCleanup();
+	simplifyPruneFunc();
 
 	adjacency();
 	tessellation();

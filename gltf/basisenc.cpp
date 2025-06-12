@@ -46,19 +46,35 @@ static void fillParams(basisu::basis_compressor_params& params, const char* inpu
 
 		params.m_uastc = true;
 
+#if BASISU_LIB_VERSION >= 160
+		params.m_pack_uastc_ldr_4x4_flags &= ~basisu::cPackUASTCLevelMask;
+		params.m_pack_uastc_ldr_4x4_flags |= s_level_flags[bs.uastc_l];
+
+		params.m_rdo_uastc_ldr_4x4 = bs.uastc_q > 0;
+		params.m_rdo_uastc_ldr_4x4_quality_scalar = bs.uastc_q;
+		params.m_rdo_uastc_ldr_4x4_dict_size = 1024;
+#else
 		params.m_pack_uastc_flags &= ~basisu::cPackUASTCLevelMask;
 		params.m_pack_uastc_flags |= s_level_flags[bs.uastc_l];
 
 		params.m_rdo_uastc = bs.uastc_q > 0;
 		params.m_rdo_uastc_quality_scalar = bs.uastc_q;
 		params.m_rdo_uastc_dict_size = 1024;
+#endif
 	}
 	else
 	{
 		params.m_compression_level = bs.etc1s_l;
+
+#if BASISU_LIB_VERSION >= 160
+		params.m_etc1s_quality_level = bs.etc1s_q;
+		params.m_etc1s_max_endpoint_clusters = 0;
+		params.m_etc1s_max_selector_clusters = 0;
+#else
 		params.m_quality_level = bs.etc1s_q;
 		params.m_max_endpoint_clusters = 0;
 		params.m_max_selector_clusters = 0;
+#endif
 
 		params.m_no_selector_rdo = info.normal_map;
 		params.m_no_endpoint_rdo = info.normal_map;

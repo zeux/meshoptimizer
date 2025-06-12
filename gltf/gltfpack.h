@@ -1,11 +1,12 @@
 /**
- * gltfpack - version 0.23
+ * gltfpack - version 0.24
  *
  * Copyright (C) 2016-2025, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
  * Report bugs and download new versions at https://github.com/zeux/meshoptimizer
  *
  * This application is distributed under the MIT License. See notice at the end of this file.
  */
+#pragma once
 
 #ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
@@ -146,8 +147,6 @@ struct Settings
 	bool simplify_lock_borders;
 	bool simplify_attributes;
 	float simplify_debug;
-
-	int meshlet_debug;
 
 	bool texture_ktx2;
 	bool texture_embed;

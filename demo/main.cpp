@@ -692,7 +692,7 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 	meshopt_generateShadowIndexBuffer(&cluster_indices[0], &cluster_indices[0], cluster_indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(float) * 3, sizeof(Vertex));
 
 	std::vector<unsigned int> partition(meshlets.size());
-	size_t partition_count = meshopt_partitionClusters(&partition[0], &cluster_indices[0], cluster_indices.size(), &cluster_sizes[0], cluster_sizes.size(), mesh.vertices.size(), target_group_size);
+	size_t partition_count = meshopt_partitionClusters(&partition[0], &cluster_indices[0], cluster_indices.size(), &cluster_sizes[0], cluster_sizes.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_group_size);
 
 	// convert partitions to linked lists to make it easier to iterate over (vectors of vectors would work too)
 	std::vector<int> partnext(meshlets.size(), -1);
@@ -793,19 +793,19 @@ size_t compress(const std::vector<T>& data, int level = SDEFL_LVL_DEF)
 	return sdeflate(&s, &cbuf[0], reinterpret_cast<const unsigned char*>(&data[0]), int(data.size() * sizeof(T)), level);
 }
 
-void encodeIndex(const Mesh& mesh, char desc)
+void encodeIndex(const std::vector<unsigned int>& indices, size_t vertex_count, char desc)
 {
 	// allocate result outside of the timing loop to exclude memset() from decode timing
-	std::vector<unsigned int> result(mesh.indices.size());
+	std::vector<unsigned int> result(indices.size());
 
 	double start = timestamp();
 
-	std::vector<unsigned char> buffer(meshopt_encodeIndexBufferBound(mesh.indices.size(), mesh.vertices.size()));
-	buffer.resize(meshopt_encodeIndexBuffer(&buffer[0], buffer.size(), &mesh.indices[0], mesh.indices.size()));
+	std::vector<unsigned char> buffer(meshopt_encodeIndexBufferBound(indices.size(), vertex_count));
+	buffer.resize(meshopt_encodeIndexBuffer(&buffer[0], buffer.size(), &indices[0], indices.size()));
 
 	double middle = timestamp();
 
-	int res = meshopt_decodeIndexBuffer(&result[0], mesh.indices.size(), &buffer[0], buffer.size());
+	int res = meshopt_decodeIndexBuffer(&result[0], indices.size(), &buffer[0], buffer.size());
 	assert(res == 0);
 	(void)res;
 
@@ -813,22 +813,27 @@ void encodeIndex(const Mesh& mesh, char desc)
 
 	size_t csize = compress(buffer);
 
-	for (size_t i = 0; i < mesh.indices.size(); i += 3)
+	for (size_t i = 0; i < indices.size(); i += 3)
 	{
 		assert(
-		    (result[i + 0] == mesh.indices[i + 0] && result[i + 1] == mesh.indices[i + 1] && result[i + 2] == mesh.indices[i + 2]) ||
-		    (result[i + 1] == mesh.indices[i + 0] && result[i + 2] == mesh.indices[i + 1] && result[i + 0] == mesh.indices[i + 2]) ||
-		    (result[i + 2] == mesh.indices[i + 0] && result[i + 0] == mesh.indices[i + 1] && result[i + 1] == mesh.indices[i + 2]));
+		    (result[i + 0] == indices[i + 0] && result[i + 1] == indices[i + 1] && result[i + 2] == indices[i + 2]) ||
+		    (result[i + 1] == indices[i + 0] && result[i + 2] == indices[i + 1] && result[i + 0] == indices[i + 2]) ||
+		    (result[i + 2] == indices[i + 0] && result[i + 0] == indices[i + 1] && result[i + 1] == indices[i + 2]));
 	}
 
 	printf("IdxCodec%c: %.1f bits/triangle (post-deflate %.1f bits/triangle); encode %.2f msec (%.3f GB/s), decode %.2f msec (%.2f GB/s)\n",
 	    desc,
-	    double(buffer.size() * 8) / double(mesh.indices.size() / 3),
-	    double(csize * 8) / double(mesh.indices.size() / 3),
+	    double(buffer.size() * 8) / double(indices.size() / 3),
+	    double(csize * 8) / double(indices.size() / 3),
 	    (middle - start) * 1000,
-	    (double(result.size() * 4) / (1 << 30)) / (middle - start),
+	    (double(result.size() * 4) / 1e9) / (middle - start),
 	    (end - middle) * 1000,
-	    (double(result.size() * 4) / (1 << 30)) / (end - middle));
+	    (double(result.size() * 4) / 1e9) / (end - middle));
+}
+
+void encodeIndex(const Mesh& mesh, char desc)
+{
+	encodeIndex(mesh.indices, mesh.vertices.size(), desc);
 }
 
 void encodeIndexSequence(const std::vector<unsigned int>& data, size_t vertex_count, char desc)
@@ -858,9 +863,9 @@ void encodeIndexSequence(const std::vector<unsigned int>& data, size_t vertex_co
 	    double(buffer.size() * 8) / double(data.size()),
 	    double(csize * 8) / double(data.size()),
 	    (middle - start) * 1000,
-	    (double(result.size() * 4) / (1 << 30)) / (middle - start),
+	    (double(result.size() * 4) / 1e9) / (middle - start),
 	    (end - middle) * 1000,
-	    (double(result.size() * 4) / (1 << 30)) / (end - middle));
+	    (double(result.size() * 4) / 1e9) / (end - middle));
 }
 
 template <typename PV>
@@ -888,7 +893,7 @@ void encodeVertex(const Mesh& mesh, const char* pvn, int level = 2)
 	double start = timestamp();
 
 	std::vector<unsigned char> vbuf(meshopt_encodeVertexBufferBound(mesh.vertices.size(), sizeof(PV)));
-	vbuf.resize(meshopt_encodeVertexBufferLevel(&vbuf[0], vbuf.size(), &pv[0], mesh.vertices.size(), sizeof(PV), level));
+	vbuf.resize(meshopt_encodeVertexBufferLevel(&vbuf[0], vbuf.size(), &pv[0], mesh.vertices.size(), sizeof(PV), level, -1));
 
 	double middle = timestamp();
 
@@ -906,9 +911,9 @@ void encodeVertex(const Mesh& mesh, const char* pvn, int level = 2)
 	    double(vbuf.size() * 8) / double(mesh.vertices.size()),
 	    double(csize * 8) / double(mesh.vertices.size()),
 	    (middle - start) * 1000,
-	    (double(result.size() * sizeof(PV)) / (1 << 30)) / (middle - start),
+	    (double(result.size() * sizeof(PV)) / 1e9) / (middle - start),
 	    (end - middle) * 1000,
-	    (double(result.size() * sizeof(PV)) / (1 << 30)) / (end - middle));
+	    (double(result.size() * sizeof(PV)) / 1e9) / (end - middle));
 }
 
 void stripify(const Mesh& mesh, bool use_restart, char desc)
@@ -990,13 +995,13 @@ static int follow(int* parents, int index)
 	return index;
 }
 
-void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false, bool flex = false, bool dump = false)
+void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false, bool flex = false, bool spatial = false, bool dump = false)
 {
 	// NVidia-recommends 64/126; we round 126 down to a multiple of 4
 	// alternatively we also test uniform configuration with 64/64 which is better for AMD
 	const size_t max_vertices = 64;
 	const size_t max_triangles = uniform ? 64 : 124;
-	const size_t min_triangles = uniform ? 24 : 32; // only used in flex mode
+	const size_t min_triangles = spatial ? 16 : (uniform ? 24 : 32); // only used in flex/spatial modes
 
 	// note: should be set to 0 unless cone culling is used at runtime!
 	const float cone_weight = flex ? -1.0f : 0.25f;
@@ -1013,6 +1018,8 @@ void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false, bool fl
 		meshlets.resize(meshopt_buildMeshletsScan(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), max_vertices, max_triangles));
 	else if (flex)
 		meshlets.resize(meshopt_buildMeshletsFlex(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, cone_weight, split_factor));
+	else if (spatial)
+		meshlets.resize(meshopt_buildMeshletsSpatial(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, 0.f));
 	else // note: equivalent to the call of buildMeshletsFlex() with non-negative cone_weight and split_factor = 0
 		meshlets.resize(meshopt_buildMeshlets(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, max_triangles, cone_weight));
 
@@ -1076,7 +1083,7 @@ void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false, bool fl
 				avg_boundary += 1;
 
 		// union-find vertices to check if the meshlet is connected
-		int parents[max_vertices];
+		int parents[256];
 		for (unsigned int j = 0; j < m.vertex_count; ++j)
 			parents[j] = int(j);
 
@@ -1105,7 +1112,7 @@ void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false, bool fl
 	avg_connected /= double(meshlets.size());
 
 	printf("Meshlets%c: %d meshlets (avg vertices %.1f, avg triangles %.1f, avg boundary %.1f, avg connected %.2f, not full %d) in %.2f msec\n",
-	    scan ? 'S' : (flex ? 'F' : (uniform ? 'U' : ' ')),
+	    scan ? 'S' : (flex ? 'F' : (spatial ? 'X' : (uniform ? 'U' : ' '))),
 	    int(meshlets.size()), avg_vertices, avg_triangles, avg_boundary, avg_connected, int(not_full), (end - start) * 1000);
 
 	float camera[3] = {100, 100, 100};
@@ -1230,6 +1237,35 @@ void spatialSortTriangles(const Mesh& mesh)
 	    (end - start) * 1000);
 }
 
+void spatialClusterPoints(const Mesh& mesh, size_t cluster_size)
+{
+	typedef PackedVertexOct PV;
+
+	double start = timestamp();
+
+	std::vector<unsigned int> index(mesh.vertices.size());
+	meshopt_spatialClusterPoints(&index[0], &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), cluster_size);
+
+	double end = timestamp();
+
+	std::vector<PV> pv(mesh.vertices.size());
+	packMesh(pv, mesh.vertices);
+
+	std::vector<PV> pvo(mesh.vertices.size());
+	for (size_t i = 0; i < index.size(); ++i)
+		pvo[i] = pv[index[i]];
+
+	std::vector<unsigned char> vbuf(meshopt_encodeVertexBufferBound(mesh.vertices.size(), sizeof(PV)));
+	vbuf.resize(meshopt_encodeVertexBuffer(&vbuf[0], vbuf.size(), &pvo[0], mesh.vertices.size(), sizeof(PV)));
+
+	size_t csize = compress(vbuf);
+
+	printf("SpatialCP: %.1f bits/vertex (post-deflate %.1f bits/vertex); sort %.2f msec\n",
+	    double(vbuf.size() * 8) / double(mesh.vertices.size()),
+	    double(csize * 8) / double(mesh.vertices.size()),
+	    (end - start) * 1000);
+}
+
 void tessellationAdjacency(const Mesh& mesh)
 {
 	double start = timestamp();
@@ -1323,6 +1359,18 @@ void reindexFuzzy(const Mesh& mesh)
 	    int(mesh.vertices.size()), int(up), (middle - start) * 1000);
 	printf("ReindexF : %d vertices => %d unique vertices in %.2f msec\n",
 	    int(mesh.vertices.size()), int(uf), (end - middle) * 1000);
+}
+
+void coverage(const Mesh& mesh)
+{
+	double start = timestamp();
+
+	meshopt_CoverageStatistics cs = meshopt_analyzeCoverage(&mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
+
+	double end = timestamp();
+
+	printf("Coverage : X %.1f%% Y %.1f%% Z %.1f%% in %.2f msec\n",
+	    cs.coverage[0] * 100, cs.coverage[1] * 100, cs.coverage[2] * 100, (end - start) * 1000);
 }
 
 void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices); // nanite.cpp
@@ -1478,6 +1526,7 @@ void process(const char* path)
 	meshlets(copy, /* scan= */ false);
 	meshlets(copy, /* scan= */ false, /* uniform= */ true);
 	meshlets(copy, /* scan= */ false, /* uniform= */ false, /* flex= */ true);
+	meshlets(copy, /* scan= */ false, /* uniform= */ true, /* flex= */ false, /* spatial= */ true);
 
 	shadow(copy);
 	tessellationAdjacency(copy);
@@ -1505,8 +1554,10 @@ void process(const char* path)
 
 	spatialSort(mesh);
 	spatialSortTriangles(mesh);
+	spatialClusterPoints(mesh, 64);
 
 	reindexFuzzy(mesh);
+	coverage(mesh);
 
 	if (path)
 		processDeinterleaved(path);
@@ -1518,15 +1569,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-#ifdef _MSC_VER
-#pragma warning(disable : 4996)
-#endif
-
-	bool dump = getenv("DUMP") && atoi(getenv("DUMP"));
-
-	meshlets(mesh, /* scan= */ false, /* uniform= */ false, /* flex= */ false);
-	meshlets(mesh, /* scan= */ false, /* uniform= */ true, /* flex= */ false);
-	meshlets(mesh, /* scan= */ false, /* uniform= */ true, /* flex= */ true, dump);
+	simplifyClusters(mesh);
 }
 
 void processNanite(const char* path)

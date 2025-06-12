@@ -26,12 +26,12 @@ void fuzzRoundtrip(const uint8_t* data, size_t size, size_t stride, int level)
 	void* decoded = malloc(count * stride);
 	assert(encoded && decoded);
 
-	size_t res = meshopt_encodeVertexBufferLevel(static_cast<unsigned char*>(encoded), bound, data, count, stride, level);
+	size_t res = meshopt_encodeVertexBufferLevel(static_cast<unsigned char*>(encoded), bound, data, count, stride, level, -1);
 	assert(res > 0 && res <= bound);
 
 	// encode again at the boundary to check for memory safety
 	// this should produce the same output because encoder is deterministic
-	size_t rese = meshopt_encodeVertexBufferLevel(static_cast<unsigned char*>(encoded) + bound - res, res, data, count, stride, level);
+	size_t rese = meshopt_encodeVertexBufferLevel(static_cast<unsigned char*>(encoded) + bound - res, res, data, count, stride, level, -1);
 	assert(rese == res);
 
 	int rc = meshopt_decodeVertexBuffer(decoded, count, stride, static_cast<unsigned char*>(encoded) + bound - res, res);

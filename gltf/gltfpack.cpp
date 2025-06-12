@@ -420,13 +420,6 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 			debug_meshes.push_back(kinds);
 			debug_meshes.push_back(loops);
 		}
-
-		if (settings.meshlet_debug > 0)
-		{
-			Mesh meshlets = {};
-			debugMeshlets(mesh, meshlets, settings.meshlet_debug);
-			debug_meshes.push_back(meshlets);
-		}
 	}
 #endif
 
@@ -1392,10 +1385,6 @@ int main(int argc, char** argv)
 		else if (strcmp(arg, "-sd") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.simplify_debug = clamp(float(atof(argv[++i])), 0.f, 1.f);
-		}
-		else if (strcmp(arg, "-md") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
-		{
-			settings.meshlet_debug = clamp(atoi(argv[++i]), 3, 255);
 		}
 #endif
 		else if (strcmp(arg, "-tu") == 0)

@@ -1406,10 +1406,7 @@ void writeAnimation(std::string& json, std::vector<BufferView>& views, std::stri
 
 	if (tracks.empty())
 	{
-		char index[16];
-		snprintf(index, sizeof(index), "%d", int(i));
-
-		fprintf(stderr, "Warning: ignoring animation %s because it has no tracks with motion; use -ac to override\n", animation.name && *animation.name ? animation.name : index);
+		fprintf(stderr, "Warning: ignoring animation %d (%s) because it has no tracks with motion; use -ac to override\n", int(i), animation.name ? animation.name : "");
 		return;
 	}
 
