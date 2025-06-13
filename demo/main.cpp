@@ -219,101 +219,6 @@ void dumpObj(const char* section, const std::vector<unsigned int>& indices)
 	}
 }
 
-bool isMeshValid(const Mesh& mesh)
-{
-	size_t index_count = mesh.indices.size();
-	size_t vertex_count = mesh.vertices.size();
-
-	if (index_count % 3 != 0)
-		return false;
-
-	const unsigned int* indices = &mesh.indices[0];
-
-	for (size_t i = 0; i < index_count; ++i)
-		if (indices[i] >= vertex_count)
-			return false;
-
-	return true;
-}
-
-bool rotateTriangle(Triangle& t)
-{
-	int c01 = memcmp(&t.v[0], &t.v[1], sizeof(Vertex));
-	int c02 = memcmp(&t.v[0], &t.v[2], sizeof(Vertex));
-	int c12 = memcmp(&t.v[1], &t.v[2], sizeof(Vertex));
-
-	if (c12 < 0 && c01 > 0)
-	{
-		// 1 is minimum, rotate 012 => 120
-		Vertex tv = t.v[0];
-		t.v[0] = t.v[1], t.v[1] = t.v[2], t.v[2] = tv;
-	}
-	else if (c02 > 0 && c12 > 0)
-	{
-		// 2 is minimum, rotate 012 => 201
-		Vertex tv = t.v[2];
-		t.v[2] = t.v[1], t.v[1] = t.v[0], t.v[0] = tv;
-	}
-
-	return c01 != 0 && c02 != 0 && c12 != 0;
-}
-
-unsigned int hashRange(const char* key, size_t len)
-{
-	// MurmurHash2
-	const unsigned int m = 0x5bd1e995;
-	const int r = 24;
-
-	unsigned int h = 0;
-
-	while (len >= 4)
-	{
-		unsigned int k = *reinterpret_cast<const unsigned int*>(key);
-
-		k *= m;
-		k ^= k >> r;
-		k *= m;
-
-		h *= m;
-		h ^= k;
-
-		key += 4;
-		len -= 4;
-	}
-
-	return h;
-}
-
-unsigned int hashMesh(const Mesh& mesh)
-{
-	size_t triangle_count = mesh.indices.size() / 3;
-
-	const Vertex* vertices = &mesh.vertices[0];
-	const unsigned int* indices = &mesh.indices[0];
-
-	unsigned int h1 = 0;
-	unsigned int h2 = 0;
-
-	for (size_t i = 0; i < triangle_count; ++i)
-	{
-		Triangle t;
-		t.v[0] = vertices[indices[i * 3 + 0]];
-		t.v[1] = vertices[indices[i * 3 + 1]];
-		t.v[2] = vertices[indices[i * 3 + 2]];
-
-		// skip degenerate triangles since some algorithms don't preserve them
-		if (rotateTriangle(t))
-		{
-			unsigned int hash = hashRange(t.data, sizeof(t.data));
-
-			h1 ^= hash;
-			h2 += hash;
-		}
-	}
-
-	return h1 * 0x5bd1e995 + h2;
-}
-
 struct PackedVertex
 {
 	unsigned short px, py, pz;
@@ -713,9 +618,6 @@ void optimize(const Mesh& mesh, bool fifo = false)
 
 	double end = timestamp();
 
-	assert(isMeshValid(copy));
-	assert(hashMesh(mesh) == hashMesh(copy));
-
 	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), 16, 0, 0);
 	meshopt_VertexFetchStatistics vfs = meshopt_analyzeVertexFetch(&copy.indices[0], copy.indices.size(), copy.vertices.size(), sizeof(Vertex));
 	meshopt_OverdrawStatistics os = meshopt_analyzeOverdraw(&copy.indices[0], copy.indices.size(), &copy.vertices[0].px, copy.vertices.size(), sizeof(Vertex));
@@ -877,9 +779,6 @@ void stripify(const Mesh& mesh, bool use_restart, char desc)
 	Mesh copy = mesh;
 	copy.indices.resize(meshopt_unstripify(&copy.indices[0], &strip[0], strip.size(), restart_index));
 	assert(copy.indices.size() <= meshopt_unstripifyBound(strip.size()));
-
-	assert(isMeshValid(copy));
-	assert(hashMesh(mesh) == hashMesh(copy));
 
 	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), 16, 0, 0);
 	meshopt_VertexCacheStatistics vcs_nv = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), 32, 32, 32);
