@@ -46,8 +46,6 @@ double timestamp()
 }
 #endif
 
-const size_t kCacheSize = 16;
-
 struct Vertex
 {
 	float px, py, pz;
@@ -316,85 +314,6 @@ unsigned int hashMesh(const Mesh& mesh)
 	return h1 * 0x5bd1e995 + h2;
 }
 
-void optNone(Mesh& mesh)
-{
-	(void)mesh;
-}
-
-void optRandomShuffle(Mesh& mesh)
-{
-	size_t triangle_count = mesh.indices.size() / 3;
-
-	unsigned int* indices = &mesh.indices[0];
-
-	unsigned int rng = 0;
-
-	for (size_t i = triangle_count - 1; i > 0; --i)
-	{
-		// Fisher-Yates shuffle
-		size_t j = rng % (i + 1);
-
-		unsigned int t;
-		t = indices[3 * j + 0], indices[3 * j + 0] = indices[3 * i + 0], indices[3 * i + 0] = t;
-		t = indices[3 * j + 1], indices[3 * j + 1] = indices[3 * i + 1], indices[3 * i + 1] = t;
-		t = indices[3 * j + 2], indices[3 * j + 2] = indices[3 * i + 2], indices[3 * i + 2] = t;
-
-		// LCG RNG, constants from Numerical Recipes
-		rng = rng * 1664525 + 1013904223;
-	}
-}
-
-void optCache(Mesh& mesh)
-{
-	meshopt_optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size());
-}
-
-void optCacheFifo(Mesh& mesh)
-{
-	meshopt_optimizeVertexCacheFifo(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize);
-}
-
-void optCacheStrip(Mesh& mesh)
-{
-	meshopt_optimizeVertexCacheStrip(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size());
-}
-
-void optOverdraw(Mesh& mesh)
-{
-	// use worst-case ACMR threshold so that overdraw optimizer can sort *all* triangles
-	// warning: this significantly deteriorates the vertex cache efficiency so it is not advised; look at optComplete for the recommended method
-	const float kThreshold = 3.f;
-	meshopt_optimizeOverdraw(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), kThreshold);
-}
-
-void optFetch(Mesh& mesh)
-{
-	meshopt_optimizeVertexFetch(&mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
-}
-
-void optFetchRemap(Mesh& mesh)
-{
-	// this produces results equivalent to optFetch, but can be used to remap multiple vertex streams
-	std::vector<unsigned int> remap(mesh.vertices.size());
-	meshopt_optimizeVertexFetchRemap(&remap[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size());
-
-	meshopt_remapIndexBuffer(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &remap[0]);
-	meshopt_remapVertexBuffer(&mesh.vertices[0], &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex), &remap[0]);
-}
-
-void optComplete(Mesh& mesh)
-{
-	// vertex cache optimization should go first as it provides starting order for overdraw
-	meshopt_optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size());
-
-	// reorder indices for overdraw, balancing overdraw and vertex cache efficiency
-	const float kThreshold = 1.01f; // allow up to 1% worse ACMR to get more reordering opportunities for overdraw
-	meshopt_optimizeOverdraw(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), kThreshold);
-
-	// vertex fetch optimization should go last as it depends on the final index order
-	meshopt_optimizeVertexFetch(&mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
-}
-
 struct PackedVertex
 {
 	unsigned short px, py, pz;
@@ -639,9 +558,9 @@ void simplifyComplete(const Mesh& mesh)
 	// for using LOD data at runtime, in addition to vertices and indices you have to save lod_index_offsets/lod_index_counts.
 
 	{
-		meshopt_VertexCacheStatistics vcs0 = meshopt_analyzeVertexCache(&indices[lod_index_offsets[0]], lod_index_counts[0], vertices.size(), kCacheSize, 0, 0);
+		meshopt_VertexCacheStatistics vcs0 = meshopt_analyzeVertexCache(&indices[lod_index_offsets[0]], lod_index_counts[0], vertices.size(), 16, 0, 0);
 		meshopt_VertexFetchStatistics vfs0 = meshopt_analyzeVertexFetch(&indices[lod_index_offsets[0]], lod_index_counts[0], vertices.size(), sizeof(Vertex));
-		meshopt_VertexCacheStatistics vcsN = meshopt_analyzeVertexCache(&indices[lod_index_offsets[lod_count - 1]], lod_index_counts[lod_count - 1], vertices.size(), kCacheSize, 0, 0);
+		meshopt_VertexCacheStatistics vcsN = meshopt_analyzeVertexCache(&indices[lod_index_offsets[lod_count - 1]], lod_index_counts[lod_count - 1], vertices.size(), 16, 0, 0);
 		meshopt_VertexFetchStatistics vfsN = meshopt_analyzeVertexFetch(&indices[lod_index_offsets[lod_count - 1]], lod_index_counts[lod_count - 1], vertices.size(), sizeof(Vertex));
 
 		typedef PackedVertexOct PV;
@@ -771,18 +690,33 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 	    int(meshlets.size()), int(partition_count));
 }
 
-void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
+void optimize(const Mesh& mesh, bool fifo = false)
 {
 	Mesh copy = mesh;
+	// note: we assume that the mesh is already optimally indexed (via parseObj); if that is not the case, you'd need to reindex first
 
 	double start = timestamp();
-	optf(copy);
+
+	// vertex cache optimization should go first as it provides starting order for overdraw
+	// note: fifo optimization is not recommended as a default, since it produces worse results, but it's faster to run so it can be useful for procedural meshes
+	if (fifo)
+		meshopt_optimizeVertexCacheFifo(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size(), /* cache_size= */ 16);
+	else
+		meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
+
+	// reorder indices for overdraw, balancing overdraw and vertex cache efficiency
+	const float kThreshold = 1.01f; // allow up to 1% worse ACMR to get more reordering opportunities for overdraw
+	meshopt_optimizeOverdraw(&copy.indices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0].px, copy.vertices.size(), sizeof(Vertex), kThreshold);
+
+	// vertex fetch optimization should go last as it depends on the final index order
+	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
+
 	double end = timestamp();
 
 	assert(isMeshValid(copy));
 	assert(hashMesh(mesh) == hashMesh(copy));
 
-	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), kCacheSize, 0, 0);
+	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), 16, 0, 0);
 	meshopt_VertexFetchStatistics vfs = meshopt_analyzeVertexFetch(&copy.indices[0], copy.indices.size(), copy.vertices.size(), sizeof(Vertex));
 	meshopt_OverdrawStatistics os = meshopt_analyzeOverdraw(&copy.indices[0], copy.indices.size(), &copy.vertices[0].px, copy.vertices.size(), sizeof(Vertex));
 
@@ -790,7 +724,9 @@ void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
 	meshopt_VertexCacheStatistics vcs_amd = meshopt_analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), 14, 64, 128);
 	meshopt_VertexCacheStatistics vcs_intel = meshopt_analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), 128, 0, 0);
 
-	printf("%-9s: ACMR %f ATVR %f (NV %f AMD %f Intel %f) Overfetch %f Overdraw %f in %.2f msec\n", name, vcs.acmr, vcs.atvr, vcs_nv.atvr, vcs_amd.atvr, vcs_intel.atvr, vfs.overfetch, os.overdraw, (end - start) * 1000);
+	printf("Optimize%s: ACMR %f ATVR %f (NV %f AMD %f Intel %f) overfetch %f overdraw %f in %.2f msec\n",
+	    fifo ? "F" : " ",
+	    vcs.acmr, vcs.atvr, vcs_nv.atvr, vcs_amd.atvr, vcs_intel.atvr, vfs.overfetch, os.overdraw, (end - start) * 1000);
 }
 
 template <typename T>
@@ -945,7 +881,7 @@ void stripify(const Mesh& mesh, bool use_restart, char desc)
 	assert(isMeshValid(copy));
 	assert(hashMesh(mesh) == hashMesh(copy));
 
-	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, 0, 0);
+	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), 16, 0, 0);
 	meshopt_VertexCacheStatistics vcs_nv = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), 32, 32, 32);
 	meshopt_VertexCacheStatistics vcs_amd = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), 14, 64, 128);
 	meshopt_VertexCacheStatistics vcs_intel = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), 128, 0, 0);
@@ -972,8 +908,8 @@ void shadow(const Mesh& mesh)
 	// this is valuable even if the original indices array was optimized for vertex cache!
 	meshopt_optimizeVertexCache(&shadow_indices[0], &shadow_indices[0], shadow_indices.size(), mesh.vertices.size());
 
-	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, 0, 0);
-	meshopt_VertexCacheStatistics vcss = meshopt_analyzeVertexCache(&shadow_indices[0], shadow_indices.size(), mesh.vertices.size(), kCacheSize, 0, 0);
+	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), 16, 0, 0);
+	meshopt_VertexCacheStatistics vcss = meshopt_analyzeVertexCache(&shadow_indices[0], shadow_indices.size(), mesh.vertices.size(), 16, 0, 0);
 
 	std::vector<char> shadow_flags(mesh.vertices.size());
 	size_t shadow_vertices = 0;
@@ -1508,15 +1444,8 @@ void process(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	optimize(mesh, "Original", optNone);
-	optimize(mesh, "Random", optRandomShuffle);
-	optimize(mesh, "Cache", optCache);
-	optimize(mesh, "CacheFifo", optCacheFifo);
-	optimize(mesh, "CacheStrp", optCacheStrip);
-	optimize(mesh, "Overdraw", optOverdraw);
-	optimize(mesh, "Fetch", optFetch);
-	optimize(mesh, "FetchMap", optFetchRemap);
-	optimize(mesh, "Complete", optComplete);
+	optimize(mesh);
+	optimize(mesh, /* fifo= */ true);
 
 	Mesh copy = mesh;
 	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
