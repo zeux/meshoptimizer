@@ -3,6 +3,7 @@
 
 void meshopt_setAllocator(void* (MESHOPTIMIZER_ALLOC_CALLCONV* allocate)(size_t), void (MESHOPTIMIZER_ALLOC_CALLCONV* deallocate)(void*))
 {
-	meshopt_Allocator::Storage::allocate = allocate;
-	meshopt_Allocator::Storage::deallocate = deallocate;
+	meshopt_Allocator::Storage& s = meshopt_Allocator::storage();
+	s.allocate = allocate;
+	s.deallocate = deallocate;
 }

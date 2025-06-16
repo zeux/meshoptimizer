@@ -890,14 +890,17 @@ inline int meshopt_quantizeSnorm(float v, int N)
 class meshopt_Allocator
 {
 public:
-	template <typename T>
-	struct StorageT
+	struct Storage
 	{
-		static void* (MESHOPTIMIZER_ALLOC_CALLCONV* allocate)(size_t);
-		static void (MESHOPTIMIZER_ALLOC_CALLCONV* deallocate)(void*);
+		void* (MESHOPTIMIZER_ALLOC_CALLCONV* allocate)(size_t);
+		void (MESHOPTIMIZER_ALLOC_CALLCONV* deallocate)(void*);
 	};
 
-	typedef StorageT<void> Storage;
+	static Storage& storage()
+	{
+		static Storage s = {::operator new, ::operator delete };
+		return s;
+	}
 
 	meshopt_Allocator()
 	    : blocks()
@@ -908,14 +911,14 @@ public:
 	~meshopt_Allocator()
 	{
 		for (size_t i = count; i > 0; --i)
-			Storage::deallocate(blocks[i - 1]);
+			storage().deallocate(blocks[i - 1]);
 	}
 
 	template <typename T>
 	T* allocate(size_t size)
 	{
 		assert(count < sizeof(blocks) / sizeof(blocks[0]));
-		T* result = static_cast<T*>(Storage::allocate(size > size_t(-1) / sizeof(T) ? size_t(-1) : size * sizeof(T)));
+		T* result = static_cast<T*>(storage().allocate(size > size_t(-1) / sizeof(T) ? size_t(-1) : size * sizeof(T)));
 		blocks[count++] = result;
 		return result;
 	}
@@ -923,7 +926,7 @@ public:
 	void deallocate(void* ptr)
 	{
 		assert(count > 0 && blocks[count - 1] == ptr);
-		Storage::deallocate(ptr);
+		storage().deallocate(ptr);
 		count--;
 	}
 
@@ -931,12 +934,6 @@ private:
 	void* blocks[24];
 	size_t count;
 };
-
-// This makes sure that allocate/deallocate are lazily generated in translation units that need them and are deduplicated by the linker
-template <typename T>
-void* (MESHOPTIMIZER_ALLOC_CALLCONV* meshopt_Allocator::StorageT<T>::allocate)(size_t) = operator new;
-template <typename T>
-void (MESHOPTIMIZER_ALLOC_CALLCONV* meshopt_Allocator::StorageT<T>::deallocate)(void*) = operator delete;
 #endif
 
 /* Inline implementation for C++ templated wrappers */
@@ -958,7 +955,7 @@ struct meshopt_IndexAdapter<T, false>
 	{
 		size_t size = count > size_t(-1) / sizeof(unsigned int) ? size_t(-1) : count * sizeof(unsigned int);
 
-		data = static_cast<unsigned int*>(meshopt_Allocator::Storage::allocate(size));
+		data = static_cast<unsigned int*>(meshopt_Allocator::storage().allocate(size));
 
 		if (input)
 		{
@@ -975,7 +972,7 @@ struct meshopt_IndexAdapter<T, false>
 				result[i] = T(data[i]);
 		}
 
-		meshopt_Allocator::Storage::deallocate(data);
+		meshopt_Allocator::storage().deallocate(data);
 	}
 };
 
