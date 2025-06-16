@@ -896,11 +896,15 @@ public:
 		void (MESHOPTIMIZER_ALLOC_CALLCONV* deallocate)(void*);
 	};
 
+#ifdef MESHOPTIMIZER_ALLOC_EXPORT
+	MESHOPTIMIZER_API static Storage& storage();
+#else
 	static Storage& storage()
 	{
 		static Storage s = {::operator new, ::operator delete };
 		return s;
 	}
+#endif
 
 	meshopt_Allocator()
 	    : blocks()
