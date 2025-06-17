@@ -104,6 +104,8 @@ if(MESHOPT_BUILD_SHARED_LIBS)
         target_compile_definitions(meshoptimizer PUBLIC "MESHOPTIMIZER_API=__attribute__((visibility(\"default\")))")
     endif()
 
+    target_compile_definitions(meshoptimizer PUBLIC MESHOPTIMIZER_ALLOC_EXPORT)
+
     if(MESHOPT_STABLE_EXPORTS)
 		target_compile_definitions(meshoptimizer PUBLIC "MESHOPTIMIZER_EXPERIMENTAL=")
     endif()
