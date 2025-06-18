@@ -52,8 +52,19 @@
 				background-color: rgba(0, 0, 0, 0.5);
 				padding: 5px 10px;
 				border-radius: 5px;
-				pointer-events: none;
+				pointer-events: auto;
 				font-size: 14px;
+				transition: background-color 0.2s;
+			}
+			.renderer-label:hover {
+				background-color: rgba(0, 0, 0, 0.7);
+			}
+			.renderer-label.focused {
+				background-color: rgba(255, 100, 100, 0.7);
+				color: white;
+			}
+			.renderer-label.clickable {
+				cursor: pointer;
 			}
 			.stats-label {
 				position: absolute;
@@ -65,6 +76,10 @@
 				pointer-events: none;
 				font-size: 12px;
 				line-height: 1.4;
+			}
+
+			.renderer-container.hidden {
+				display: none;
 			}
 		</style>
 
@@ -102,6 +117,10 @@
 			var models = [];
 			var mixers = [];
 			var viewStats = [];
+
+			// Focus tracking
+			var focusedViewIndex = -1; // -1 means no focus (show all)
+			var rendererContainers = [];
 
 			// Track camera distance for autoLod
 			var lastCameraDistance = 0;
@@ -146,7 +165,7 @@
 			guiDisplay.add(settings, 'animate').onChange(update);
 			guiDisplay.add(settings, 'pointSize', 1, 16).onChange(update);
 			guiDisplay.add(settings, 'debugOverlay').onChange(simplify); // requires debug data rebuild
-			guiDisplay.add(settings, 'gridColumns', 1, 4, 1).onChange(updateGridLayout);
+			guiDisplay.add(settings, 'gridColumns', 1, 6, 1).onChange(updateGridLayout);
 
 			var guiSimplify = gui.addFolder('Simplify');
 			guiSimplify.add(settings, 'ratio', 0, 1, 0.01).onChange(simplify);
@@ -199,7 +218,8 @@
 
 			function updateGridLayout() {
 				if (renderers.length > 0) {
-					const columns = Math.min(renderers.length, settings.gridColumns);
+					var visibleViews = focusedViewIndex >= 0 ? 1 : renderers.length;
+					var columns = Math.min(visibleViews, settings.gridColumns);
 					document.documentElement.style.setProperty('--grid-columns', columns);
 					updateRendererSizes();
 				}
@@ -240,9 +260,70 @@
 				models = [];
 				mixers = [];
 				viewStats = [];
+				rendererContainers = [];
+
+				// Reset focus state
+				focusedViewIndex = -1;
 
 				// Clear the grid container
 				gridContainer.innerHTML = '';
+			}
+
+			function updateLabelsClickability() {
+				var isClickable = rendererContainers.length > 1;
+
+				for (var i = 0; i < rendererContainers.length; i++) {
+					var container = rendererContainers[i];
+					var label = container.querySelector('.renderer-label');
+
+					if (isClickable) {
+						label.classList.add('clickable');
+						label.title = 'Click to focus on this view';
+					} else {
+						label.classList.remove('clickable');
+						label.title = '';
+					}
+				}
+			}
+
+			function toggleFocus(viewIndex) {
+				if (focusedViewIndex === viewIndex) {
+					// Currently focused on this view, unfocus (show all)
+					focusedViewIndex = -1;
+				} else {
+					// Focus on this view
+					focusedViewIndex = viewIndex;
+				}
+				updateFocusDisplay();
+				simplify(); // Re-run simplify with new focus state
+			}
+
+			function updateFocusDisplay() {
+				for (var i = 0; i < rendererContainers.length; i++) {
+					var container = rendererContainers[i];
+					var label = container.querySelector('.renderer-label');
+
+					if (focusedViewIndex === -1) {
+						// No focus - show all containers
+						container.classList.remove('hidden');
+						label.classList.remove('focused');
+						if (rendererContainers.length > 1) {
+							label.title = 'Click to focus on this view';
+						}
+					} else if (focusedViewIndex === i) {
+						// This is the focused view
+						container.classList.remove('hidden');
+						label.classList.add('focused');
+						label.title = 'Click to exit focus mode';
+					} else {
+						// Hide non-focused views
+						container.classList.add('hidden');
+						label.classList.remove('focused');
+					}
+				}
+
+				// Update grid layout when focus changes
+				updateGridLayout();
 			}
 
 			function createView(index, name) {
@@ -250,11 +331,17 @@
 				var rendererContainer = document.createElement('div');
 				rendererContainer.className = 'renderer-container';
 				gridContainer.appendChild(rendererContainer);
+				rendererContainers.push(rendererContainer);
 
 				// Add label with file name
 				var label = document.createElement('div');
 				label.className = 'renderer-label';
 				label.textContent = name;
+				label.onclick = function () {
+					if (rendererContainers.length > 1) {
+						toggleFocus(index);
+					}
+				};
 				rendererContainer.appendChild(label);
 
 				// Add stats label
@@ -302,6 +389,9 @@
 
 				// Adjust renderer size
 				updateRendererSizes();
+
+				// Update label clickability for all views
+				updateLabelsClickability();
 			}
 
 			function simplifyMesh(geo, threshold) {
@@ -479,6 +569,9 @@
 					// Process each scene
 					for (var sceneIndex = 0; sceneIndex < scenes.length; sceneIndex++) {
 						var scene = scenes[sceneIndex];
+						if (focusedViewIndex >= 0 && sceneIndex != focusedViewIndex) {
+							continue;
+						}
 
 						// Reset stats for this view
 						var stats = viewStats[sceneIndex];
@@ -716,13 +809,23 @@
 				var gridWidth = gridContainer.clientWidth;
 				var gridHeight = gridContainer.clientHeight;
 
-				// Calculate aspect ratio based on the grid cells, not the whole window
-				var columns = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--grid-columns'));
-				var cellWidth = gridWidth / columns;
-				var cellHeight = gridHeight / Math.ceil(renderers.length / columns);
-				var cellAspect = cellWidth / cellHeight;
+				// Calculate aspect ratio based on the grid layout
+				var visibleViews = focusedViewIndex >= 0 ? 1 : renderers.length;
+				var columns = Math.min(visibleViews, settings.gridColumns);
 
-				// Update camera aspect ratio to match a single cell
+				var cellAspect;
+
+				if (focusedViewIndex >= 0) {
+					// In focus mode, use the full container aspect ratio
+					cellAspect = gridWidth / gridHeight;
+				} else {
+					// In multi-view mode, calculate cell aspect ratio
+					var cellWidth = gridWidth / columns;
+					var cellHeight = gridHeight / Math.ceil(renderers.length / columns);
+					cellAspect = cellWidth / cellHeight;
+				}
+
+				// Update camera aspect ratio to match the display mode
 				camera.aspect = cellAspect;
 				camera.updateProjectionMatrix();
 
@@ -757,9 +860,12 @@
 					}
 				}
 
-				// Render all views
+				// Render only visible views
 				for (var i = 0; i < renderers.length; i++) {
-					renderers[i].render(scenes[i], camera);
+					// Only render if view is visible (not hidden by focus mode)
+					if (focusedViewIndex === -1 || focusedViewIndex === i) {
+						renderers[i].render(scenes[i], camera);
+					}
 				}
 			}
 		</script>
