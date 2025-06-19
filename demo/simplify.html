@@ -11,6 +11,9 @@
 				color: #fff;
 				margin: 0px;
 				overflow: hidden;
+				display: flex;
+				flex-direction: column;
+				height: 100vh;
 			}
 			#info {
 				color: #fff;
@@ -30,10 +33,11 @@
 			}
 			#grid-container {
 				width: 100%;
-				height: 100%;
+				flex: 1;
 				display: grid;
 				grid-template-columns: repeat(var(--grid-columns, 1), 1fr);
-				grid-auto-rows: 1fr;
+				grid-auto-rows: minmax(300px, 1fr);
+				overflow-y: auto;
 			}
 			.renderer-container {
 				position: relative;
@@ -81,6 +85,24 @@
 			.renderer-container.hidden {
 				display: none;
 			}
+
+			/* Custom scrollbar styling */
+			#grid-container::-webkit-scrollbar {
+				width: 16px;
+			}
+
+			#grid-container::-webkit-scrollbar-track {
+				background: rgba(255, 255, 255, 0.1);
+			}
+
+			#grid-container::-webkit-scrollbar-thumb {
+				background: rgba(255, 255, 255, 0.3);
+				border-radius: 8px;
+			}
+
+			#grid-container::-webkit-scrollbar-thumb:hover {
+				background: rgba(255, 255, 255, 0.5);
+			}
 		</style>
 
 		<script async src="https://cdn.jsdelivr.net/npm/es-module-shims@2.0.10/dist/es-module-shims.min.js"></script>
@@ -120,7 +142,6 @@
 
 			// Focus tracking
 			var focusedViewIndex = -1; // -1 means no focus (show all)
-			var rendererContainers = [];
 
 			// Track camera distance for autoLod
 			var lastCameraDistance = 0;
@@ -221,6 +242,17 @@
 					var visibleViews = focusedViewIndex >= 0 ? 1 : renderers.length;
 					var columns = Math.min(visibleViews, settings.gridColumns);
 					document.documentElement.style.setProperty('--grid-columns', columns);
+
+					// Set grid cell height based on whether we're in single view or grid mode
+					if (columns > 1) {
+						// In grid mode, make cells square by calculating height based on viewport width
+						var cellWidth = Math.floor(window.innerWidth / columns);
+						document.documentElement.style.setProperty('--grid-cell-height', cellWidth + 'px');
+					} else {
+						// Single view mode, use full height
+						document.documentElement.style.setProperty('--grid-cell-height', '100vh');
+					}
+
 					updateRendererSizes();
 				}
 			}
@@ -260,7 +292,6 @@
 				models = [];
 				mixers = [];
 				viewStats = [];
-				rendererContainers = [];
 
 				// Reset focus state
 				focusedViewIndex = -1;
@@ -270,10 +301,10 @@
 			}
 
 			function updateLabelsClickability() {
-				var isClickable = rendererContainers.length > 1;
+				var isClickable = renderers.length > 1;
 
-				for (var i = 0; i < rendererContainers.length; i++) {
-					var container = rendererContainers[i];
+				for (var i = 0; i < renderers.length; i++) {
+					var container = renderers[i].domElement.parentElement;
 					var label = container.querySelector('.renderer-label');
 
 					if (isClickable) {
@@ -299,15 +330,15 @@
 			}
 
 			function updateFocusDisplay() {
-				for (var i = 0; i < rendererContainers.length; i++) {
-					var container = rendererContainers[i];
+				for (var i = 0; i < renderers.length; i++) {
+					var container = renderers[i].domElement.parentElement;
 					var label = container.querySelector('.renderer-label');
 
 					if (focusedViewIndex === -1) {
 						// No focus - show all containers
 						container.classList.remove('hidden');
 						label.classList.remove('focused');
-						if (rendererContainers.length > 1) {
+						if (renderers.length > 1) {
 							label.title = 'Click to focus on this view';
 						}
 					} else if (focusedViewIndex === i) {
@@ -331,14 +362,13 @@
 				var rendererContainer = document.createElement('div');
 				rendererContainer.className = 'renderer-container';
 				gridContainer.appendChild(rendererContainer);
-				rendererContainers.push(rendererContainer);
 
 				// Add label with file name
 				var label = document.createElement('div');
 				label.className = 'renderer-label';
 				label.textContent = name;
 				label.onclick = function () {
-					if (rendererContainers.length > 1) {
+					if (renderers.length > 1) {
 						toggleFocus(index);
 					}
 				};
@@ -805,31 +835,28 @@
 			}
 
 			function updateRendererSizes() {
-				// Get the grid container dimensions
-				var gridWidth = gridContainer.clientWidth;
-				var gridHeight = gridContainer.clientHeight;
-
-				// Calculate aspect ratio based on the grid layout
-				var visibleViews = focusedViewIndex >= 0 ? 1 : renderers.length;
-				var columns = Math.min(visibleViews, settings.gridColumns);
-
-				var cellAspect;
+				// Calculate the correct aspect ratio based on focus mode
+				var aspectRatio;
 
 				if (focusedViewIndex >= 0) {
-					// In focus mode, use the full container aspect ratio
-					cellAspect = gridWidth / gridHeight;
+					// In focus mode, use the focused renderer's container dimensions
+					var focusedContainer = renderers[focusedViewIndex].domElement.parentElement;
+					aspectRatio = focusedContainer.clientWidth / focusedContainer.clientHeight;
 				} else {
-					// In multi-view mode, calculate cell aspect ratio
+					// In grid mode, calculate based on grid layout
+					var gridWidth = gridContainer.clientWidth;
+					var gridHeight = gridContainer.clientHeight;
+					var columns = Math.min(renderers.length, settings.gridColumns);
 					var cellWidth = gridWidth / columns;
 					var cellHeight = gridHeight / Math.ceil(renderers.length / columns);
-					cellAspect = cellWidth / cellHeight;
+					aspectRatio = cellWidth / cellHeight;
 				}
 
-				// Update camera aspect ratio to match the display mode
-				camera.aspect = cellAspect;
+				// Update camera aspect ratio once
+				camera.aspect = aspectRatio;
 				camera.updateProjectionMatrix();
 
-				// Update all renderers
+				// Update all renderer sizes
 				for (var i = 0; i < renderers.length; i++) {
 					var domElement = renderers[i].domElement;
 					var container = domElement.parentElement;
