@@ -1392,6 +1392,11 @@ static size_t filterIndexBuffer(unsigned int* indices, size_t index_count, const
 		}
 	}
 
+#if TRACE
+	if (index_count != write)
+		printf("removed %d degenerate triangles\n", int((index_count - write) / 3));
+#endif
+
 	return write;
 }
 
@@ -2050,10 +2055,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 		remapEdgeLoops(loop, vertex_count, collapse_remap);
 		remapEdgeLoops(loopback, vertex_count, collapse_remap);
 
-		size_t new_count = remapIndexBuffer(result, result_count, collapse_remap);
-		assert(new_count < result_count);
-
-		result_count = new_count;
+		result_count = remapIndexBuffer(result, result_count, collapse_remap);
 
 		if ((options & meshopt_SimplifyPrune) && result_count > target_index_count && component_nexterror <= vertex_error)
 			result_count = pruneComponents(result, result_count, components, component_errors, component_count, vertex_error, component_nexterror);
