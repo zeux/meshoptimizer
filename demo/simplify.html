@@ -153,12 +153,11 @@
 				ratio: 1.0,
 				debugOverlay: false,
 				lockBorder: false,
-				prune: false,
-				weldVertices: false,
-				useAttributes: false,
+				prune: true,
+				useAttributes: true,
 				errorThresholdLog10: 1,
 				errorScaled: true,
-				normalWeight: 0.5,
+				normalWeight: 1.0,
 				colorWeight: 1.0,
 				textureWeight: 0.0,
 				autoLod: false,
@@ -193,15 +192,15 @@
 			guiSimplify.add(settings, 'ratio', 0, 1, 0.01).onChange(simplify);
 			guiSimplify.add(settings, 'lockBorder').onChange(simplify);
 			guiSimplify.add(settings, 'prune').onChange(simplify);
-			guiSimplify.add(settings, 'weldVertices').onChange(simplify);
-			guiSimplify.add(settings, 'errorThresholdLog10', 0, 3, 0.1).onChange(simplify);
-			guiSimplify.add(settings, 'errorScaled').onChange(simplify);
 			guiSimplify.add(settings, 'useAttributes').onChange(simplify).onFinishChange(updateSettings);
 
 			var guiAttributes = [];
 			guiAttributes.push(guiSimplify.add(settings, 'normalWeight', 0, 2, 0.01).onChange(simplify));
 			guiAttributes.push(guiSimplify.add(settings, 'colorWeight', 0, 2, 0.01).onChange(simplify));
 			guiAttributes.push(guiSimplify.add(settings, 'textureWeight', 0, 100, 0.1).onChange(simplify));
+
+			guiSimplify.add(settings, 'errorScaled').onChange(simplify);
+			guiSimplify.add(settings, 'errorThresholdLog10', 0, 3, 0.1).onChange(simplify);
 
 			var guiLod = gui.addFolder('LOD');
 			guiLod.add(settings, 'autoLod').onChange(simplify);
@@ -427,12 +426,6 @@
 			}
 
 			function simplifyMesh(geo, threshold) {
-				if (settings.weldVertices) {
-					// pre-welding is important for some meshes that have very close normals in adjacent face corners
-					// for now we use the welder from three.js; this is not as performant as it could be
-					geo = mergeVertices(geo, 1e-2);
-				}
-
 				var attributes = 8; // 3 color, 3 normal, 2 uv
 
 				var positions = new Float32Array(geo.attributes.position.array);
