@@ -157,6 +157,7 @@
 				weldVertices: false,
 				useAttributes: false,
 				errorThresholdLog10: 1,
+				errorScaled: true,
 				normalWeight: 0.5,
 				colorWeight: 1.0,
 				textureWeight: 0.0,
@@ -194,6 +195,7 @@
 			guiSimplify.add(settings, 'prune').onChange(simplify);
 			guiSimplify.add(settings, 'weldVertices').onChange(simplify);
 			guiSimplify.add(settings, 'errorThresholdLog10', 0, 3, 0.1).onChange(simplify);
+			guiSimplify.add(settings, 'errorScaled').onChange(simplify);
 			guiSimplify.add(settings, 'useAttributes').onChange(simplify).onFinishChange(updateSettings);
 
 			var guiAttributes = [];
@@ -487,7 +489,7 @@
 					var S = MeshoptSimplifier; // to avoid line breaks below...
 					return settings.useAttributes
 						? S.simplifyWithAttributes(indices, positions, stride, attrib, attributes, attrib_weights, null, target, threshold, flags)
-						: MeshoptSimplifier.simplify(indices, positions, stride, target, threshold, flags);
+						: S.simplify(indices, positions, stride, target, threshold, flags);
 				}
 
 				var res = run();
@@ -577,6 +579,11 @@
 				geo.index = new THREE.BufferAttribute(res, 1);
 			}
 
+			function getRadius(obj) {
+				var box = new THREE.Box3().setFromObject(obj);
+				return box.max.sub(box.min).length() / 2;
+			}
+
 			function simplify() {
 				MeshoptSimplifier.ready.then(function () {
 					var threshold = Math.pow(10, -settings.errorThresholdLog10);
@@ -593,6 +600,8 @@
 						// since we rescale the entire scene to fit a unit box, we can directly feed the threshold
 						// this works correctly if there's just one mesh or scales match; ideally we tweak this to compute
 						// threshold per mesh based on relative scale between mesh and scene.
+						// this also computes distance to model *center* instead of surface boundary so features on the boundary
+						// might be simplified more than they should be.
 						threshold = distance * loderrortarget * settings.autoLodFactor;
 					}
 
@@ -612,6 +621,8 @@
 
 						var rnum = 0;
 						var rden = 0;
+
+						var extent = getRadius(scene);
 
 						scene.traverse(function (object) {
 							if (object.isMesh) {
@@ -633,11 +644,13 @@
 									];
 								}
 
-								var [geo, tri, err] = simplifyMesh(object.original, threshold);
+								var scale = settings.errorScaled ? getRadius(object) / extent : 1.0;
+
+								var [geo, tri, err] = simplifyMesh(object.original, threshold / scale);
 
 								object.geometry = geo;
 
-								stats.error = Math.max(stats.error, err);
+								stats.error = Math.max(stats.error, err * scale);
 								stats.triangles += tri;
 								stats.vertices += object.geometry.attributes.position.count;
 
