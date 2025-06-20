@@ -1369,6 +1369,32 @@ static void remapEdgeLoops(unsigned int* loop, size_t vertex_count, const unsign
 	}
 }
 
+static size_t filterIndexBuffer(unsigned int* indices, size_t index_count, const unsigned int* remap)
+{
+	size_t write = 0;
+
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		unsigned int v0 = indices[i + 0];
+		unsigned int v1 = indices[i + 1];
+		unsigned int v2 = indices[i + 2];
+
+		unsigned int r0 = remap[v0];
+		unsigned int r1 = remap[v1];
+		unsigned int r2 = remap[v2];
+
+		if (r0 != r1 && r0 != r2 && r1 != r2)
+		{
+			indices[write + 0] = v0;
+			indices[write + 1] = v1;
+			indices[write + 2] = v2;
+			write += 3;
+		}
+	}
+
+	return write;
+}
+
 static unsigned int follow(unsigned int* parents, unsigned int index)
 {
 	while (index != parents[index])
@@ -2032,6 +2058,10 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 		if ((options & meshopt_SimplifyPrune) && result_count > target_index_count && component_nexterror <= vertex_error)
 			result_count = pruneComponents(result, result_count, components, component_errors, component_count, vertex_error, component_nexterror);
 	}
+
+	// when a vertex is collapsed onto a seam pair, if it was connected to both vertices, that will create a zero area triangle
+	// which is not topologically degenerate; filter out triangles like this as a post-process (this breaks loop metadata so it must be done last)
+	result_count = filterIndexBuffer(result, result_count, remap);
 
 	// we're done with the regular simplification but we're still short of the target; try pruning more aggressively towards error_limit
 	while ((options & meshopt_SimplifyPrune) && result_count > target_index_count && component_nexterror <= error_limit)
