@@ -68,6 +68,8 @@ struct Mesh
 	std::vector<const char*> target_names;
 
 	std::vector<cgltf_material_mapping> variants;
+
+	float quality;
 };
 
 struct Track
@@ -146,6 +148,7 @@ struct Settings
 	bool simplify_aggressive;
 	bool simplify_lock_borders;
 	bool simplify_attributes;
+	bool simplify_scaled;
 	float simplify_debug;
 
 	bool texture_ktx2;
@@ -353,6 +356,8 @@ void markAnimated(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vec
 void markNeededNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, const std::vector<Mesh>& meshes, const std::vector<Animation>& animations, const Settings& settings);
 void remapNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, size_t& node_offset);
 void decomposeTransform(float translation[3], float rotation[4], float scale[3], const float* transform);
+
+void computeMeshQuality(std::vector<Mesh>& meshes);
 
 QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes, const Settings& settings);
 void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTexture>& result, std::vector<size_t>& indices, const std::vector<Mesh>& meshes, const Settings& settings);

@@ -1112,8 +1112,13 @@ void processMesh(Mesh& mesh, const Settings& settings)
 		filterBones(mesh);
 		reindexMesh(mesh, settings.quantize && !settings.nrm_float);
 		filterTriangles(mesh);
+
 		if (settings.simplify_ratio < 1)
-			simplifyMesh(mesh, settings.simplify_ratio, settings.simplify_error, settings.simplify_attributes, settings.simplify_aggressive, settings.simplify_lock_borders);
+		{
+			float error = settings.simplify_scaled ? settings.simplify_error / mesh.quality : settings.simplify_error;
+			simplifyMesh(mesh, settings.simplify_ratio, error, settings.simplify_attributes, settings.simplify_aggressive, settings.simplify_lock_borders);
+		}
+
 		optimizeMesh(mesh, settings.compressmore);
 		break;
 
@@ -1200,3 +1205,47 @@ void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio, fl
 	loops.streams.push_back(colors);
 }
 #endif
+
+static float getScale(const float* transform)
+{
+	float translation[3], rotation[4], scale[3];
+	decomposeTransform(translation, rotation, scale, transform);
+
+	float sx = fabsf(scale[0]), sy = fabsf(scale[1]), sz = fabsf(scale[2]);
+	return std::max(std::max(sx, sy), sz);
+}
+
+void computeMeshQuality(std::vector<Mesh>& meshes)
+{
+	std::vector<float> scales(meshes.size(), 1.f);
+	float maxscale = 0.f;
+
+	for (size_t i = 0; i < meshes.size(); ++i)
+	{
+		Mesh& mesh = meshes[i];
+
+		const Stream* positions = getStream(mesh, cgltf_attribute_type_position);
+		if (!positions)
+			continue;
+
+		float geometry_scale = meshopt_simplifyScale(positions->data[0].f, positions->data.size(), sizeof(Attr));
+		float node_maxscale = 0.f;
+
+		for (cgltf_node* node : mesh.nodes)
+		{
+			float transform[16];
+			cgltf_node_transform_world(node, transform);
+
+			node_maxscale = std::max(node_maxscale, getScale(transform));
+		}
+
+		for (const Transform& xf : mesh.instances)
+			node_maxscale = std::max(node_maxscale, getScale(xf.data));
+
+		scales[i] = node_maxscale == 0.f ? geometry_scale : node_maxscale * geometry_scale;
+		maxscale = std::max(maxscale, scales[i]);
+	}
+
+	for (size_t i = 0; i < meshes.size(); ++i)
+		meshes[i].quality = (scales[i] == 0.f || maxscale == 0.f) ? 1.f : scales[i] / maxscale;
+}
