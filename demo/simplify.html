@@ -152,7 +152,9 @@
 				pointSize: 1.0,
 				ratio: 1.0,
 				debugOverlay: false,
+				sloppy: false,
 				lockBorder: false,
+				preprune: 0.0,
 				prune: true,
 				useAttributes: true,
 				errorThresholdLog10: 1,
@@ -190,8 +192,10 @@
 
 			var guiSimplify = gui.addFolder('Simplify');
 			guiSimplify.add(settings, 'ratio', 0, 1, 0.01).onChange(simplify);
+			guiSimplify.add(settings, 'sloppy').onChange(simplify);
 			guiSimplify.add(settings, 'lockBorder').onChange(simplify);
 			guiSimplify.add(settings, 'prune').onChange(simplify);
+			guiSimplify.add(settings, 'preprune', 0, 0.2, 0.01).onChange(simplify);
 			guiSimplify.add(settings, 'useAttributes').onChange(simplify).onFinishChange(updateSettings);
 
 			var guiAttributes = [];
@@ -425,7 +429,7 @@
 				updateLabelsClickability();
 			}
 
-			function simplifyMesh(geo, threshold) {
+			function simplifyMesh(geo, threshold, scale) {
 				var attributes = 8; // 3 color, 3 normal, 2 uv
 
 				var positions = new Float32Array(geo.attributes.position.array);
@@ -478,11 +482,18 @@
 
 				console.time('simplify');
 
+				if (settings.preprune > 0) {
+					indices = MeshoptSimplifier.simplifyPrune(indices, positions, stride, settings.preprune / scale);
+					target = Math.min(target, indices.length);
+				}
+
 				function run() {
 					var S = MeshoptSimplifier; // to avoid line breaks below...
-					return settings.useAttributes
-						? S.simplifyWithAttributes(indices, positions, stride, attrib, attributes, attrib_weights, null, target, threshold, flags)
-						: S.simplify(indices, positions, stride, target, threshold, flags);
+					return settings.sloppy
+						? S.simplifySloppy(indices, positions, stride, target, threshold)
+						: settings.useAttributes
+							? S.simplifyWithAttributes(indices, positions, stride, attrib, attributes, attrib_weights, null, target, threshold, flags)
+							: S.simplify(indices, positions, stride, target, threshold, flags);
 				}
 
 				var res = run();
@@ -639,7 +650,7 @@
 
 								var scale = settings.errorScaled ? getRadius(object) / extent : 1.0;
 
-								var [geo, tri, err] = simplifyMesh(object.original, threshold / scale);
+								var [geo, tri, err] = simplifyMesh(object.original, threshold / scale, scale);
 
 								object.geometry = geo;
 
