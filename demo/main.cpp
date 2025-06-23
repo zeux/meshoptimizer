@@ -1405,7 +1405,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	simplifyClusters(mesh);
+	simplify(mesh, 0.1f, meshopt_SimplifyPrune);
 }
 
 void processNanite(const char* path)
