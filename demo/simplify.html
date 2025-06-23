@@ -169,7 +169,12 @@
 				loadFile: function () {
 					var input = document.getElementById('fileInput');
 					input.onchange = function () {
-						loadFiles(input.files);
+						var files = Array.from(input.files).sort(function (a, b) {
+							var an = a.name.split('.')[0];
+							var bn = b.name.split('.')[0];
+							return an.localeCompare(bn);
+						});
+						loadFiles(files);
 					};
 					input.click();
 				},
@@ -852,22 +857,9 @@
 			}
 
 			function updateRendererSizes() {
-				// Calculate the correct aspect ratio based on focus mode
-				var aspectRatio;
-
-				if (focusedViewIndex >= 0) {
-					// In focus mode, use the focused renderer's container dimensions
-					var focusedContainer = renderers[focusedViewIndex].domElement.parentElement;
-					aspectRatio = focusedContainer.clientWidth / focusedContainer.clientHeight;
-				} else {
-					// In grid mode, calculate based on grid layout
-					var gridWidth = gridContainer.clientWidth;
-					var gridHeight = gridContainer.clientHeight;
-					var columns = Math.min(renderers.length, settings.gridColumns);
-					var cellWidth = gridWidth / columns;
-					var cellHeight = gridHeight / Math.ceil(renderers.length / columns);
-					aspectRatio = cellWidth / cellHeight;
-				}
+				// Calculate the correct aspect ratio based on a visible view
+				var container = renderers[focusedViewIndex >= 0 ? focusedViewIndex : 0].domElement.parentElement;
+				var aspectRatio = container.clientWidth / container.clientHeight;
 
 				// Update camera aspect ratio once
 				camera.aspect = aspectRatio;
