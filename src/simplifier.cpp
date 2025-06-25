@@ -1532,17 +1532,17 @@ static size_t pruneComponents(unsigned int* indices, size_t index_count, const u
 
 	for (size_t i = 0; i < index_count; i += 3)
 	{
-		unsigned int c = components[indices[i]];
-		assert(c == components[indices[i + 1]] && c == components[indices[i + 2]]);
+		unsigned int v0 = indices[i + 0], v1 = indices[i + 1], v2 = indices[i + 2];
+		unsigned int c = components[v0];
+		assert(c == components[v1] && c == components[v2]);
 
 		if (component_errors[c] > error_cutoff)
 		{
-			// update next error with the smallest error of the remaining components
 			min_error = min_error > component_errors[c] ? component_errors[c] : min_error;
 
-			indices[write + 0] = indices[i + 0];
-			indices[write + 1] = indices[i + 1];
-			indices[write + 2] = indices[i + 2];
+			indices[write + 0] = v0;
+			indices[write + 1] = v1;
+			indices[write + 2] = v2;
 			write += 3;
 		}
 	}
@@ -1555,6 +1555,7 @@ static size_t pruneComponents(unsigned int* indices, size_t index_count, const u
 	printf("pruned %d triangles in %d components (goal %e); next %e\n", int((index_count - write) / 3), int(pruned_components), sqrtf(error_cutoff), min_error < FLT_MAX ? sqrtf(min_error) : min_error * 2);
 #endif
 
+	// update next error with the smallest error of the remaining components
 	nexterror = min_error;
 	return write;
 }
