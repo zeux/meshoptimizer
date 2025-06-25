@@ -1552,7 +1552,7 @@ static size_t pruneComponents(unsigned int* indices, size_t index_count, const u
 	for (size_t i = 0; i < component_count; ++i)
 		pruned_components += (component_errors[i] >= nexterror && component_errors[i] <= error_cutoff);
 
-	printf("pruned %d triangles in %d components (goal %e)\n", int((index_count - write) / 3), int(pruned_components), sqrtf(error_cutoff));
+	printf("pruned %d triangles in %d components (goal %e); next %e\n", int((index_count - write) / 3), int(pruned_components), sqrtf(error_cutoff), min_error < FLT_MAX ? sqrtf(min_error) : min_error * 2);
 #endif
 
 	nexterror = min_error;
@@ -2095,7 +2095,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	}
 
 #if TRACE
-	printf("result: %d triangles, error: %e; total %d passes\n", int(result_count / 3), sqrtf(result_error), int(pass_count));
+	printf("result: %d triangles, error: %e (pos %.3e); total %d passes\n", int(result_count / 3), sqrtf(result_error), sqrtf(vertex_error), int(pass_count));
 #endif
 
 	// if debug visualization data is requested, fill it instead of index data; for simplicity, this doesn't work with sparsity
