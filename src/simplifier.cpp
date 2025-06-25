@@ -2066,6 +2066,9 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	// which is not topologically degenerate; filter out triangles like this as a post-process (this breaks loop metadata so it must be done last)
 	result_count = filterIndexBuffer(result, result_count, remap);
 
+	// at this point, component_nexterror might be stale: component it references may have been removed through a series of edge collapses
+	bool component_nextstale = true;
+
 	// we're done with the regular simplification but we're still short of the target; try pruning more aggressively towards error_limit
 	while ((options & meshopt_SimplifyPrune) && result_count > target_index_count && component_nexterror <= error_limit)
 	{
@@ -2082,9 +2085,10 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 				component_maxerror = component_errors[i];
 
 		size_t new_count = pruneComponents(result, result_count, components, component_errors, component_count, component_cutoff, component_nexterror);
-		if (new_count == result_count)
+		if (new_count == result_count && !component_nextstale)
 			break;
 
+		component_nextstale = false; // pruneComponents guarantees next error is up to date
 		result_count = new_count;
 		result_error = result_error < component_maxerror ? component_maxerror : result_error;
 		vertex_error = vertex_error < component_maxerror ? component_maxerror : vertex_error;
