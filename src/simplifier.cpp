@@ -1525,18 +1525,24 @@ static void measureComponents(float* component_errors, size_t component_count, c
 
 static size_t pruneComponents(unsigned int* indices, size_t index_count, const unsigned int* components, const float* component_errors, size_t component_count, float error_cutoff, float& nexterror)
 {
+	(void)component_count;
+
 	size_t write = 0;
+	float min_error = FLT_MAX;
 
 	for (size_t i = 0; i < index_count; i += 3)
 	{
-		unsigned int c = components[indices[i]];
-		assert(c == components[indices[i + 1]] && c == components[indices[i + 2]]);
+		unsigned int v0 = indices[i + 0], v1 = indices[i + 1], v2 = indices[i + 2];
+		unsigned int c = components[v0];
+		assert(c == components[v1] && c == components[v2]);
 
 		if (component_errors[c] > error_cutoff)
 		{
-			indices[write + 0] = indices[i + 0];
-			indices[write + 1] = indices[i + 1];
-			indices[write + 2] = indices[i + 2];
+			min_error = min_error > component_errors[c] ? component_errors[c] : min_error;
+
+			indices[write + 0] = v0;
+			indices[write + 1] = v1;
+			indices[write + 2] = v2;
 			write += 3;
 		}
 	}
@@ -1546,15 +1552,11 @@ static size_t pruneComponents(unsigned int* indices, size_t index_count, const u
 	for (size_t i = 0; i < component_count; ++i)
 		pruned_components += (component_errors[i] >= nexterror && component_errors[i] <= error_cutoff);
 
-	printf("pruned %d triangles in %d components (goal %e)\n", int((index_count - write) / 3), int(pruned_components), sqrtf(error_cutoff));
+	printf("pruned %d triangles in %d components (goal %e); next %e\n", int((index_count - write) / 3), int(pruned_components), sqrtf(error_cutoff), min_error < FLT_MAX ? sqrtf(min_error) : min_error * 2);
 #endif
 
-	// update next error with the smallest error of the remaining components for future pruning
-	nexterror = FLT_MAX;
-	for (size_t i = 0; i < component_count; ++i)
-		if (component_errors[i] > error_cutoff)
-			nexterror = nexterror > component_errors[i] ? component_errors[i] : nexterror;
-
+	// update next error with the smallest error of the remaining components
+	nexterror = min_error;
 	return write;
 }
 
@@ -2065,6 +2067,9 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	// which is not topologically degenerate; filter out triangles like this as a post-process (this breaks loop metadata so it must be done last)
 	result_count = filterIndexBuffer(result, result_count, remap);
 
+	// at this point, component_nexterror might be stale: component it references may have been removed through a series of edge collapses
+	bool component_nextstale = true;
+
 	// we're done with the regular simplification but we're still short of the target; try pruning more aggressively towards error_limit
 	while ((options & meshopt_SimplifyPrune) && result_count > target_index_count && component_nexterror <= error_limit)
 	{
@@ -2081,16 +2086,17 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 				component_maxerror = component_errors[i];
 
 		size_t new_count = pruneComponents(result, result_count, components, component_errors, component_count, component_cutoff, component_nexterror);
-		if (new_count == result_count)
+		if (new_count == result_count && !component_nextstale)
 			break;
 
+		component_nextstale = false; // pruneComponents guarantees next error is up to date
 		result_count = new_count;
 		result_error = result_error < component_maxerror ? component_maxerror : result_error;
 		vertex_error = vertex_error < component_maxerror ? component_maxerror : vertex_error;
 	}
 
 #if TRACE
-	printf("result: %d triangles, error: %e; total %d passes\n", int(result_count / 3), sqrtf(result_error), int(pass_count));
+	printf("result: %d triangles, error: %e (pos %.3e); total %d passes\n", int(result_count / 3), sqrtf(result_error), sqrtf(vertex_error), int(pass_count));
 #endif
 
 	// if debug visualization data is requested, fill it instead of index data; for simplicity, this doesn't work with sparsity
