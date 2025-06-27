@@ -92,6 +92,8 @@ When the GPU renders the mesh, it has to run the vertex shader for each vertex; 
 meshopt_optimizeVertexCache(indices, indices, index_count, vertex_count);
 ```
 
+The details of vertex reuse vary between different GPU architectures, so vertex cache optimization uses an adaptive algorithm that produces a triangle sequence with good locality that works well across different GPUs. Alternatively, you can use an algorithm that optimizes specifically for fixed-size FIFO caches: `meshopt_optimizeVertexCacheFifo` (with a recommended cache size of 16). While it generally produces less performant results on most GPUs, it runs ~2x faster, which may benefit rapid content iteration.
+
 ### Overdraw optimization
 
 After transforming the vertices, GPU sends the triangles for rasterization which results in generating pixels that are usually first ran through the depth test, and pixels that pass it get the pixel shader executed to generate the final color. As pixel shaders get more expensive, it becomes more and more important to reduce overdraw. While in general improving overdraw requires view-dependent operations, this library provides an algorithm to reorder triangles to minimize the overdraw from all directions, which you can run after vertex cache optimization like this:
