@@ -24,12 +24,14 @@ The library is also available as a Linux package in several distributions ([Arch
 
 ## Building
 
-meshoptimizer is distributed as a set of C++ source files. To include it into your project, you can use one of the two options:
+meshoptimizer is distributed as a C/C++ header (`src/meshoptimizer.h`) and a set of C++ source files (`src/*.cpp`). To include it in your project, you can use one of two options:
 
 * Use CMake to build the library (either as a standalone project or as part of your project)
 * Add source files to your project's build system
 
-The source files are organized in such a way that you don't need to change your build-system settings, and you only need to add the source files for the algorithms you use. They should build without warnings or special compilation options on all major compilers.
+The source files are organized in such a way that you don't need to change your build-system settings, and you only need to add the source files for the algorithms you use. They should build without warnings or special compilation options on all major compilers. If you prefer amalgamated builds, you can also concatenate the source files into a single `.cpp` file and build that instead.
+
+To use meshoptimizer functions, simply `#include` the header `meshoptimizer.h`; the library source is C++, but the header is C-compatible.
 
 ## Core pipeline
 
