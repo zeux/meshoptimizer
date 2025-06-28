@@ -140,7 +140,7 @@ if(MESHOPT_BUILD_GLTFPACK)
         target_compile_definitions(gltfpack PRIVATE WITH_BASISU)
         set_source_files_properties(gltf/basisenc.cpp gltf/basislib.cpp PROPERTIES INCLUDE_DIRECTORIES ${BASISU_PATH})
 
-        if(NOT MSVC AND CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "x86_64")
+        if(NOT MSVC AND CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
             set_source_files_properties(gltf/basislib.cpp PROPERTIES COMPILE_OPTIONS -msse4.1)
         endif()
 
