@@ -11,9 +11,9 @@ jobs:
   gltfpack:
     strategy:
       matrix:
-        os: [windows, ubuntu, macos]
-    name: gltfpack-${{matrix.os}}
-    runs-on: ${{matrix.os}}-latest
+        os: [{ name: windows, version: windows-latest }, { name: ubuntu, version: ubuntu-22.04 }, { name: macos, version: macos-14 }]
+    name: gltfpack-${{matrix.os.name}}
+    runs-on: ${{matrix.os.version}}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -29,12 +29,12 @@ jobs:
         with:
           name: gltfpack-windows
           path: Release/gltfpack.exe
-        if: matrix.os == 'windows'
+        if: matrix.os.name == 'windows'
       - uses: actions/upload-artifact@v4
         with:
-          name: gltfpack-${{matrix.os}}
+          name: gltfpack-${{matrix.os.name}}
           path: gltfpack
-        if: matrix.os != 'windows'
+        if: matrix.os.name != 'windows'
 
   nodejs:
     runs-on: ubuntu-latest
