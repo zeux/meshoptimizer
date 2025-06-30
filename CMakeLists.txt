@@ -144,10 +144,9 @@ if(MESHOPT_BUILD_GLTFPACK)
             set_source_files_properties(gltf/basislib.cpp PROPERTIES COMPILE_OPTIONS -msse4.1)
         endif()
 
-        if(UNIX)
-            target_link_libraries(gltfpack pthread)
-        endif()
-    endif()
+		find_package(Threads REQUIRED)
+		target_link_libraries(gltfpack Threads::Threads)
+	endif()
 endif()
 
 if(MESHOPT_INSTALL)
