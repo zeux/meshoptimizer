@@ -19,7 +19,7 @@ jobs:
             { name: ubuntu, version: ubuntu-latest },
             { name: ubuntu-arm, version: ubuntu-24.04-arm },
             { name: macos-intel, version: macos-13 },
-            { name: macos-arm, version: macos-14 },
+            { name: macos-arm, version: macos-latest },
           ]
     name: ${{matrix.os.name}}
     runs-on: ${{matrix.os.version}}
