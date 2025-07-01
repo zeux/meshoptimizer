@@ -2259,7 +2259,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	size_t write = filterTriangles(destination, tritable, tritable_size, indices, index_count, vertex_cells, cell_remap);
 
 #if TRACE
-	printf("result: %d cells, %d triangles (%d unfiltered), error %e\n", int(cell_count), int(write / 3), int(min_triangles), sqrtf(result_error));
+	printf("result: grid size %d, %d cells, %d triangles (%d unfiltered), error %e\n", min_grid, int(cell_count), int(write / 3), int(min_triangles), sqrtf(result_error));
 #endif
 
 	if (out_result_error)
