@@ -2251,15 +2251,15 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	for (size_t i = 0; i < cell_count; ++i)
 		result_error = result_error < cell_errors[i] ? cell_errors[i] : result_error;
 
-	// collapse triangles!
-	// note that we need to filter out triangles that we've already output because we very frequently generate redundant triangles between cells :(
+	// vertex collapses often result in duplicate triangles; we need a table to filter them out
 	size_t tritable_size = hashBuckets2(min_triangles);
 	unsigned int* tritable = allocator.allocate<unsigned int>(tritable_size);
 
+	// note: this is the first and last write to destination, which allows aliasing destination with indices
 	size_t write = filterTriangles(destination, tritable, tritable_size, indices, index_count, vertex_cells, cell_remap);
 
 #if TRACE
-	printf("result: %d cells, %d triangles (%d unfiltered), error %e\n", int(cell_count), int(write / 3), int(min_triangles), sqrtf(result_error));
+	printf("result: grid size %d, %d cells, %d triangles (%d unfiltered), error %e\n", min_grid, int(cell_count), int(write / 3), int(min_triangles), sqrtf(result_error));
 #endif
 
 	if (out_result_error)
