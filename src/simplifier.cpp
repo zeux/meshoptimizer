@@ -2225,8 +2225,8 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	}
 
 	// vertex collapses often result in duplicate triangles; we need a table to filter them out
-	size_t tritable_size = hashBuckets2(min_triangles > target_index_count / 3 ? min_triangles : target_index_count / 3);
-	unsigned int* tritable = allocator.allocate<unsigned int>(tritable_size);
+	size_t tritable_size = hashBuckets2(min_triangles);
+	unsigned int* tritable = NULL; // allocated below
 
 	// due to filtering, min_triangles is an upper bound on the final triangle count
 	// for smaller grids, we might be able to use the next grid size if the filtered triangle count still meets the target
@@ -2234,25 +2234,27 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	{
 		computeVertexIds(vertex_ids, vertex_positions, vertex_count, min_grid + 1);
 		size_t unfiltered = countTriangles(vertex_ids, indices, index_count);
-		size_t filtered = 0;
 
-		// since tritable is allocated for target, we might not be able to filter triangles for a larger grid
-		if (hashBuckets2(unfiltered) <= tritable_size)
-		{
-			filtered = filterTriangles(destination, tritable, tritable_size, indices, index_count, vertex_ids, NULL);
+		// since tritable is sized for target, make sure we can filter triangles for a larger grid
+		tritable_size = hashBuckets2(min_triangles < unfiltered ? unfiltered : min_triangles);
+		tritable = allocator.allocate<unsigned int>(tritable_size);
 
-			if (filtered <= target_index_count)
-			{
-				min_grid += 1;
-				min_triangles = unfiltered;
-			}
-		}
+		size_t filtered = filterTriangles(destination, tritable, tritable_size, indices, index_count, vertex_ids, NULL);
 
 #if TRACE
 		printf("probe: grid size %d, filtered triangles %d (unfiltered %d), %s\n",
-		    min_grid + (filtered > target_index_count), int(filtered / 3), int(unfiltered),
-		    filtered == 0 ? "skipped" : (filtered <= target_index_count ? "under" : "over"));
+		    min_grid + 1, int(filtered / 3), int(unfiltered), filtered <= target_index_count ? "under" : "over");
 #endif
+
+		if (filtered <= target_index_count)
+		{
+			min_grid += 1;
+			min_triangles = unfiltered;
+		}
+	}
+	else
+	{
+		tritable = allocator.allocate<unsigned int>(tritable_size);
 	}
 
 	// build vertex->cell association by mapping all vertices with the same quantized position to the same cell
