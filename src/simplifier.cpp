@@ -2225,7 +2225,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	}
 
 	// vertex collapses often result in duplicate triangles; we need a table to filter them out
-	size_t tritable_size = hashBuckets2(min_triangles);
+	size_t tritable_size = hashBuckets2(min_triangles > target_index_count / 3 ? min_triangles : target_index_count / 3);
 	unsigned int* tritable = allocator.allocate<unsigned int>(tritable_size);
 
 	// due to filtering, min_triangles is an upper bound on the final triangle count
@@ -2250,7 +2250,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 
 #if TRACE
 		printf("probe: grid size %d, filtered triangles %d (unfiltered %d), %s\n",
-		    min_grid + 1, int(filtered / 3), int(unfiltered),
+		    min_grid + (filtered > target_index_count), int(filtered / 3), int(unfiltered),
 		    filtered == 0 ? "skipped" : (filtered <= target_index_count ? "under" : "over"));
 #endif
 	}
