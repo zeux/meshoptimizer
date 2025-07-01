@@ -2230,7 +2230,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 
 	// due to filtering, min_triangles is an upper bound on the final triangle count
 	// for smaller grids, we might be able to use the next grid size if the filtered triangle count still meets the target
-	if (min_triangles <= target_index_count / 3 && min_grid < 1024)
+	if (min_triangles <= target_index_count / 3 && min_grid < 64)
 	{
 		computeVertexIds(vertex_ids, vertex_positions, vertex_count, min_grid + 1);
 		size_t unfiltered = countTriangles(vertex_ids, indices, index_count);
