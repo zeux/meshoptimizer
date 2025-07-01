@@ -1829,9 +1829,9 @@ static size_t filterTriangles(unsigned int* destination, unsigned int* tritable,
 
 		if (c0 != c1 && c0 != c2 && c1 != c2)
 		{
-			unsigned int a = cell_remap[c0];
-			unsigned int b = cell_remap[c1];
-			unsigned int c = cell_remap[c2];
+			unsigned int a = cell_remap ? cell_remap[c0] : c0;
+			unsigned int b = cell_remap ? cell_remap[c1] : c1;
+			unsigned int c = cell_remap ? cell_remap[c2] : c2;
 
 			if (b < a && b < c)
 			{
@@ -2224,6 +2224,37 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 		return 0;
 	}
 
+	// vertex collapses often result in duplicate triangles; we need a table to filter them out
+	size_t tritable_size = hashBuckets2(min_triangles);
+	unsigned int* tritable = allocator.allocate<unsigned int>(tritable_size);
+
+	// due to filtering, min_triangles is an upper bound on the final triangle count
+	// for smaller grids, we might be able to use the next grid size if the filtered triangle count still meets the target
+	if (min_triangles <= target_index_count / 3 && min_grid < 1024)
+	{
+		computeVertexIds(vertex_ids, vertex_positions, vertex_count, min_grid + 1);
+		size_t unfiltered = countTriangles(vertex_ids, indices, index_count);
+		size_t filtered = 0;
+
+		// since tritable is allocated for target, we might not be able to filter triangles for a larger grid
+		if (hashBuckets2(unfiltered) <= tritable_size)
+		{
+			filtered = filterTriangles(destination, tritable, tritable_size, indices, index_count, vertex_ids, NULL);
+
+			if (filtered <= target_index_count)
+			{
+				min_grid += 1;
+				min_triangles = unfiltered;
+			}
+		}
+
+#if TRACE
+		printf("probe: grid size %d, filtered triangles %d (unfiltered %d), %s\n",
+		    min_grid + 1, int(filtered / 3), int(unfiltered),
+		    filtered == 0 ? "skipped" : (filtered <= target_index_count ? "under" : "over"));
+#endif
+	}
+
 	// build vertex->cell association by mapping all vertices with the same quantized position to the same cell
 	size_t table_size = hashBuckets2(vertex_count);
 	unsigned int* table = allocator.allocate<unsigned int>(table_size);
@@ -2251,11 +2282,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	for (size_t i = 0; i < cell_count; ++i)
 		result_error = result_error < cell_errors[i] ? cell_errors[i] : result_error;
 
-	// collapse triangles!
-	// note that we need to filter out triangles that we've already output because we very frequently generate redundant triangles between cells :(
-	size_t tritable_size = hashBuckets2(min_triangles);
-	unsigned int* tritable = allocator.allocate<unsigned int>(tritable_size);
-
+	// compute final triangles; collapse each vertex to the representative for its cell and filter out duplicates
 	size_t write = filterTriangles(destination, tritable, tritable_size, indices, index_count, vertex_cells, cell_remap);
 
 #if TRACE
