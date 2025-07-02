@@ -2239,7 +2239,10 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 		tritable_size = hashBuckets2(min_triangles < unfiltered ? unfiltered : min_triangles);
 		tritable = allocator.allocate<unsigned int>(tritable_size);
 
-		size_t filtered = filterTriangles(destination, tritable, tritable_size, indices, index_count, vertex_ids, NULL);
+		// we can't clobber the indices buffer as we will need it for final filtering
+		unsigned int* scratch = destination != indices ? destination : allocator.allocate<unsigned int>(unfiltered * 3);
+
+		size_t filtered = filterTriangles(scratch, tritable, tritable_size, indices, index_count, vertex_ids, NULL);
 
 #if TRACE
 		printf("probe: grid size %d, filtered triangles %d (unfiltered %d), %s\n",
