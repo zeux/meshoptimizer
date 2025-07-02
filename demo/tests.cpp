@@ -1619,6 +1619,35 @@ static void simplifySloppyStuck()
 	assert(meshopt_simplifySloppy(target, ib, 6, vb, 3, 12, 6, 0.f) == 0);
 }
 
+static void simplifySloppyProbe()
+{
+	// 0
+	// 1 2
+	// 3 4 5
+	unsigned int ib[] = {
+	    0, 2, 1,
+	    1, 2, 3,
+	    3, 2, 4,
+	    2, 5, 4, // clang-format :-/
+	};
+
+	float vb[] = {
+	    0, 9, 0,
+	    0, 1, 0,
+	    2, 2, 0,
+	    0, 0, 0,
+	    1, 0, 0,
+	    9, 0, 0, // clang-format :-/
+	};
+
+	unsigned int expected[] = {0, 2, 1, 1, 2, 5};
+
+	float error;
+	assert(meshopt_simplifySloppy(ib, ib, 12, vb, 6, 12, 6, 1.f, &error) == 6);
+	assert(error == 0.f); // sloppy simplifier does not track border error
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+}
+
 static void simplifyPointsStuck()
 {
 	const float vb[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -2596,6 +2625,7 @@ void runTests()
 	simplify();
 	simplifyStuck();
 	simplifySloppyStuck();
+	simplifySloppyProbe();
 	simplifyPointsStuck();
 	simplifyFlip();
 	simplifyScale();
