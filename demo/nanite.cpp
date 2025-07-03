@@ -69,6 +69,7 @@ const bool kUseLocks = true;
 const bool kUseNormals = true;
 const bool kUseRetry = true;
 const bool kUseSpatial = false;
+const bool kUseSloppyFallback = false;
 const int kMetisSlop = 2;
 const float kSimplifyThreshold = 0.85f;
 
@@ -244,6 +245,10 @@ static std::vector<unsigned int> simplify(const std::vector<Vertex>& vertices, c
 		lod.resize(meshopt_simplifyWithAttributes(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), NULL, 0, NULL, 0, &(*locks)[0], target_count, FLT_MAX, options, error));
 	else
 		lod.resize(meshopt_simplify(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), target_count, FLT_MAX, options | meshopt_SimplifyLockBorder, error));
+
+	if (lod.size() > target_count && kUseSloppyFallback)
+		lod.resize(meshopt_simplifySloppy(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), locks ? &(*locks)[0] : NULL, target_count, FLT_MAX, error));
+
 	return lod;
 }
 
