@@ -434,10 +434,11 @@ MESHOPTIMIZER_API size_t meshopt_simplifyWithAttributes(unsigned int* destinatio
  *
  * destination must contain enough space for the target index buffer, worst case is index_count elements (*not* target_index_count)!
  * vertex_positions should have float3 position in the first 12 bytes of each vertex
+ * vertex_lock can be NULL; when it's not NULL, it should have a value for each vertex; vertices that can't be moved should set 1 consistently for all indices with the same position
  * target_error represents the error relative to mesh extents that can be tolerated, e.g. 0.01 = 1% deformation; value range [0..1]
  * result_error can be NULL; when it's not NULL, it will contain the resulting (relative) error after simplification
  */
-MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, float* result_error);
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const unsigned char* vertex_lock, size_t target_index_count, float target_error, float* result_error);
 
 /**
  * Experimental: Mesh simplifier (pruner)
@@ -1204,7 +1205,7 @@ inline size_t meshopt_simplifySloppy(T* destination, const T* indices, size_t in
 	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
 	meshopt_IndexAdapter<T> out(destination, NULL, index_count);
 
-	return meshopt_simplifySloppy(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride, target_index_count, target_error, result_error);
+	return meshopt_simplifySloppy(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride, NULL, target_index_count, target_error, result_error);
 }
 
 template <typename T>
