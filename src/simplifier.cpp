@@ -2173,7 +2173,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	size_t max_triangles = index_count / 3;
 
 	// when we're error-limited, we compute the triangle count for the min. size; this accelerates convergence and provides the correct answer when we can't use a larger grid
-	if (min_grid > 1)
+	if (min_grid > 1 || vertex_lock)
 	{
 		computeVertexIds(vertex_ids, vertex_positions, vertex_lock, vertex_count, min_grid);
 		min_triangles = countTriangles(vertex_ids, indices, index_count);
