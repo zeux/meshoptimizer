@@ -613,6 +613,7 @@ void optimizeMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, s
 				continue;
 
 			material.alpha_mode = cgltf_alpha_mode_opaque;
+			material.alpha_cutoff = 0.5f; // reset to default to avoid writing it to output
 		}
 	}
 }
