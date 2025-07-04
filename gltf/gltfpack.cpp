@@ -1194,6 +1194,7 @@ Settings defaults()
 	settings.mesh_dedup = true;
 	settings.simplify_ratio = 1.f;
 	settings.simplify_error = 1e-2f;
+	settings.simplify_attributes = true;
 	settings.simplify_scaled = true;
 
 	for (int kind = 0; kind < TextureKind__Count; ++kind)
@@ -1374,7 +1375,12 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-sv") == 0)
 		{
-			settings.simplify_attributes = true;
+			fprintf(stderr, "Warning: option -sv is only provided for compatibility as attribute aware simplification is enabled by default; it may be removed in the future\n");
+		}
+		else if (strcmp(arg, "-svd") == 0)
+		{
+			fprintf(stderr, "Warning: option -ssd disable attribute aware simplification and is only provided as a safety measure; it may be removed in the future\n");
+			settings.simplify_attributes = false;
 		}
 		else if (strcmp(arg, "-ssd") == 0)
 		{
@@ -1588,7 +1594,6 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-si R: simplify meshes targeting triangle/point count ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\t-se E: limit simplification error to E (default: 0.01 = 1%% deviation; E should be between 0 and 1)\n");
 			fprintf(stderr, "\t-sa: aggressively simplify to the target ratio disregarding quality\n");
-			fprintf(stderr, "\t-sv: take vertex attributes into account when simplifying meshes\n");
 			fprintf(stderr, "\t-slb: lock border vertices during simplification to avoid gaps on connected meshes\n");
 			fprintf(stderr, "\nVertex precision:\n");
 			fprintf(stderr, "\t-vp N: use N-bit quantization for positions (default: 14; N should be between 1 and 16)\n");
