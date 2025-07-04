@@ -597,14 +597,14 @@ static bool shouldKeepAlpha(const cgltf_texture_view& color, float alpha, cgltf_
 	return image && getChannels(*image, images[image - data->images], input_path) == 4;
 }
 
-void optimizeMaterials(cgltf_data* data, const char* input_path, std::vector<ImageInfo>& images)
+void optimizeMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, std::vector<ImageInfo>& images, const char* input_path)
 {
 	for (size_t i = 0; i < data->materials_count; ++i)
 	{
 		// remove BLEND/MASK from materials that don't have alpha information
 		cgltf_material& material = data->materials[i];
 
-		if (material.alpha_mode != cgltf_alpha_mode_opaque)
+		if (material.alpha_mode != cgltf_alpha_mode_opaque && !materials[i].mesh_alpha)
 		{
 			if (material.has_pbr_metallic_roughness && shouldKeepAlpha(material.pbr_metallic_roughness.base_color_texture, material.pbr_metallic_roughness.base_color_factor[3], data, input_path, images))
 				continue;
@@ -613,6 +613,7 @@ void optimizeMaterials(cgltf_data* data, const char* input_path, std::vector<Ima
 				continue;
 
 			material.alpha_mode = cgltf_alpha_mode_opaque;
+			material.alpha_cutoff = 0.5f; // reset to default to avoid writing it to output
 		}
 	}
 }

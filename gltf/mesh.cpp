@@ -1249,3 +1249,16 @@ void computeMeshQuality(std::vector<Mesh>& meshes)
 	for (size_t i = 0; i < meshes.size(); ++i)
 		meshes[i].quality = (scales[i] == 0.f || maxscale == 0.f) ? 1.f : scales[i] / maxscale;
 }
+
+bool hasAlpha(const Mesh& mesh)
+{
+	const Stream* color = getStream(const_cast<Mesh&>(mesh), cgltf_attribute_type_color);
+	if (!color)
+		return false;
+
+	for (size_t i = 0; i < color->data.size(); ++i)
+		if (color->data[i].f[3] < 1.f)
+			return true;
+
+	return false;
+}
