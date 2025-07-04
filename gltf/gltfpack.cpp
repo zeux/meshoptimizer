@@ -1346,7 +1346,7 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-mdd") == 0)
 		{
-			fprintf(stderr, "Warning: option -mdd disables mesh deduplication and is only provided as a safety measure; it will be removed in the future\n");
+			fprintf(stderr, "Warning: option -mdd disables mesh deduplication and is temporary; avoid production usage\n");
 			settings.mesh_dedup = false;
 		}
 		else if (strcmp(arg, "-mm") == 0)
@@ -1375,16 +1375,16 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-sv") == 0)
 		{
-			fprintf(stderr, "Warning: option -sv is only provided for compatibility as attribute aware simplification is enabled by default; it may be removed in the future\n");
+			fprintf(stderr, "Warning: attribute aware simplification is enabled by default; option -sv is only provided for compatibility and may be removed in the future\n");
 		}
 		else if (strcmp(arg, "-svd") == 0)
 		{
-			fprintf(stderr, "Warning: option -ssd disable attribute aware simplification and is only provided as a safety measure; it may be removed in the future\n");
+			fprintf(stderr, "Warning: option -ssd disables attribute aware simplification and is temporary; avoid production usage\n");
 			settings.simplify_attributes = false;
 		}
 		else if (strcmp(arg, "-ssd") == 0)
 		{
-			fprintf(stderr, "Warning: option -ssd disables scaled simplification error and is only provided as a safety measure; it will be removed in the future\n");
+			fprintf(stderr, "Warning: option -ssd disables scaled simplification error and is temporary; avoid production usage\n");
 			settings.simplify_scaled = false;
 		}
 		else if (strcmp(arg, "-tu") == 0)
