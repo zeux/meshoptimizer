@@ -234,6 +234,7 @@ struct MaterialInfo
 	bool uses_texture_transform;
 	bool needs_tangents;
 	bool unlit;
+	bool mesh_alpha;
 
 	unsigned int texture_set_mask;
 
@@ -339,7 +340,7 @@ void mergeTextures(cgltf_data* data, std::vector<TextureInfo>& textures);
 bool hasValidTransform(const cgltf_texture_view& view);
 
 void analyzeMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, std::vector<TextureInfo>& textures, std::vector<ImageInfo>& images);
-void optimizeMaterials(cgltf_data* data, const char* input_path, std::vector<ImageInfo>& images);
+void optimizeMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, std::vector<ImageInfo>& images, const char* input_path);
 
 bool readImage(const cgltf_image& image, const char* input_path, std::string& data, std::string& mime_type);
 bool hasAlpha(const std::string& data, const char* mime_type);
@@ -358,6 +359,8 @@ void remapNodes(cgltf_data* data, std::vector<NodeInfo>& nodes, size_t& node_off
 void decomposeTransform(float translation[3], float rotation[4], float scale[3], const float* transform);
 
 void computeMeshQuality(std::vector<Mesh>& meshes);
+
+bool hasAlpha(const Mesh& mesh);
 
 QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes, const Settings& settings);
 void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTexture>& result, std::vector<size_t>& indices, const std::vector<Mesh>& meshes, const Settings& settings);

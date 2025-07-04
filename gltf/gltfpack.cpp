@@ -370,11 +370,27 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 	std::vector<TextureInfo> textures(data->textures_count);
 	std::vector<ImageInfo> images(data->images_count);
 
+	// mark materials that need to keep blending due to mesh vertex colors
+	for (size_t i = 0; i < meshes.size(); ++i)
+	{
+		Mesh& mesh = meshes[i];
+
+		// skip hasAlpha check unless it's required
+		if (((mesh.material && mesh.material->alpha_mode != cgltf_alpha_mode_opaque) || mesh.variants.size()) && hasAlpha(mesh))
+		{
+			if (mesh.material)
+				materials[mesh.material - data->materials].mesh_alpha = true;
+
+			for (size_t j = 0; j < mesh.variants.size(); ++j)
+				materials[mesh.variants[j].material - data->materials].mesh_alpha = true;
+		}
+	}
+
 	analyzeMaterials(data, materials, textures, images);
 
 	mergeTextures(data, textures);
 
-	optimizeMaterials(data, input_path, images);
+	optimizeMaterials(data, materials, images, input_path);
 
 	// streams need to be filtered before mesh merging (or processing) to make sure we can merge meshes with redundant streams
 	for (size_t i = 0; i < meshes.size(); ++i)
