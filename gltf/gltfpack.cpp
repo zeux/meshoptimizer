@@ -418,30 +418,8 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 	markNeededNodes(data, nodes, meshes, animations, settings);
 	markNeededMaterials(data, materials, meshes, settings);
 
-	if (settings.simplify_scaled && (settings.simplify_ratio < 1 || settings.simplify_debug > 0))
+	if (settings.simplify_scaled && settings.simplify_ratio < 1)
 		computeMeshQuality(meshes);
-
-#ifndef NDEBUG
-	std::vector<Mesh> debug_meshes;
-
-	for (size_t i = 0; i < meshes.size(); ++i)
-	{
-		const Mesh& mesh = meshes[i];
-
-		if (mesh.type != cgltf_primitive_type_triangles)
-			continue;
-
-		if (settings.simplify_debug > 0)
-		{
-			Mesh kinds = {};
-			Mesh loops = {};
-			float error = settings.simplify_scaled ? settings.simplify_error / mesh.quality : settings.simplify_error;
-			debugSimplify(mesh, kinds, loops, settings.simplify_debug, error, settings.simplify_attributes, settings.quantize && !settings.nrm_float);
-			debug_meshes.push_back(kinds);
-			debug_meshes.push_back(loops);
-		}
-	}
-#endif
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
@@ -451,10 +429,6 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 		if (mesh.geometry_duplicate)
 			hashMesh(mesh);
 	}
-
-#ifndef NDEBUG
-	meshes.insert(meshes.end(), debug_meshes.begin(), debug_meshes.end());
-#endif
 
 	filterEmptyMeshes(meshes); // some meshes may become empty after processing
 
@@ -1407,12 +1381,6 @@ int main(int argc, char** argv)
 			fprintf(stderr, "Warning: option -ssd disables scaled simplification error and is only provided as a safety measure; it will be removed in the future\n");
 			settings.simplify_scaled = false;
 		}
-#ifndef NDEBUG
-		else if (strcmp(arg, "-sd") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
-		{
-			settings.simplify_debug = clamp(float(atof(argv[++i])), 0.f, 1.f);
-		}
-#endif
 		else if (strcmp(arg, "-tu") == 0)
 		{
 			settings.texture_ktx2 = true;

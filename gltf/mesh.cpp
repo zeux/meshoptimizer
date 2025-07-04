@@ -841,13 +841,8 @@ static void simplifyUvSplit(Mesh& mesh, std::vector<unsigned int>& remap)
 	}
 }
 
-static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attributes, bool aggressive, bool lock_borders, bool debug = false)
+static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attributes, bool aggressive, bool lock_borders)
 {
-	enum
-	{
-		meshopt_SimplifyInternalDebug = 1 << 30
-	};
-
 	assert(mesh.type == cgltf_primitive_type_triangles);
 
 	if (mesh.indices.empty())
@@ -872,9 +867,6 @@ static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attribut
 		options |= meshopt_SimplifyLockBorder;
 	else
 		options |= meshopt_SimplifyPrune;
-
-	if (debug)
-		options |= meshopt_SimplifyInternalDebug;
 
 	std::vector<unsigned int> indices(mesh.indices.size());
 
@@ -903,7 +895,7 @@ static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attribut
 		mesh.indices.swap(indices);
 	}
 
-	if (uvremap.size() && mesh.indices.size() && !debug)
+	if (uvremap.size() && mesh.indices.size())
 		meshopt_remapIndexBuffer(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &uvremap[0]);
 }
 
@@ -1126,85 +1118,6 @@ void processMesh(Mesh& mesh, const Settings& settings)
 		assert(!"Unknown primitive type");
 	}
 }
-
-#ifndef NDEBUG
-void debugSimplify(const Mesh& source, Mesh& kinds, Mesh& loops, float ratio, float error, bool attributes, bool quantize_tbn)
-{
-	Mesh mesh = source;
-	assert(mesh.type == cgltf_primitive_type_triangles);
-
-	// note: it's important to follow the same pipeline as processMesh
-	// otherwise the result won't match
-	filterBones(mesh);
-	reindexMesh(mesh, quantize_tbn);
-	filterTriangles(mesh);
-
-	simplifyMesh(mesh, ratio, error, attributes, /* aggressive= */ false, /* lock_borders= */ false, /* debug= */ true);
-
-	// color palette for display
-	static const Attr kPalette[] = {
-	    {0.5f, 0.5f, 0.5f, 1.f}, // manifold
-	    {0.f, 0.f, 1.f, 1.f},    // border
-	    {0.f, 1.f, 0.f, 1.f},    // seam
-	    {0.f, 1.f, 1.f, 1.f},    // complex
-	    {1.f, 0.f, 0.f, 1.f},    // locked
-	};
-
-	// prepare meshes
-	kinds.nodes = mesh.nodes;
-	kinds.skin = mesh.skin;
-
-	loops.nodes = mesh.nodes;
-	loops.skin = mesh.skin;
-
-	for (size_t i = 0; i < mesh.streams.size(); ++i)
-	{
-		const Stream& stream = mesh.streams[i];
-
-		if (stream.target == 0 && (stream.type == cgltf_attribute_type_position || stream.type == cgltf_attribute_type_joints || stream.type == cgltf_attribute_type_weights))
-		{
-			kinds.streams.push_back(stream);
-			loops.streams.push_back(stream);
-		}
-	}
-
-	size_t vertex_count = mesh.streams[0].data.size();
-
-	// transform kind/loop data into lines & points
-	Stream colors = {cgltf_attribute_type_color};
-	colors.data.resize(vertex_count, kPalette[0]);
-
-	kinds.type = cgltf_primitive_type_points;
-	loops.type = cgltf_primitive_type_lines;
-
-	for (size_t i = 0; i < mesh.indices.size(); i += 3)
-	{
-		for (int k = 0; k < 3; ++k)
-		{
-			const unsigned int mask = (1 << 28) - 1;
-			unsigned int v = mesh.indices[i + k];
-			unsigned int next = mesh.indices[i + (k + 1) % 3];
-			unsigned int vk = (v >> 28) & 7;
-			unsigned int vl = v >> 31;
-
-			if (vk)
-			{
-				colors.data[v & mask] = kPalette[vk];
-				kinds.indices.push_back(v & mask);
-			}
-
-			if (vl)
-			{
-				loops.indices.push_back(v & mask);
-				loops.indices.push_back(next & mask);
-			}
-		}
-	}
-
-	kinds.streams.push_back(colors);
-	loops.streams.push_back(colors);
-}
-#endif
 
 static float getScale(const float* transform)
 {

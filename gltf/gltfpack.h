@@ -149,7 +149,6 @@ struct Settings
 	bool simplify_lock_borders;
 	bool simplify_attributes;
 	bool simplify_scaled;
-	float simplify_debug;
 
 	bool texture_ktx2;
 	bool texture_embed;
@@ -317,9 +316,6 @@ bool areExtrasEqual(const cgltf_extras& lhs, const cgltf_extras& rhs);
 
 void processAnimation(Animation& animation, const Settings& settings);
 void processMesh(Mesh& mesh, const Settings& settings);
-
-void debugSimplify(const Mesh& mesh, Mesh& kinds, Mesh& loops, float ratio, float error, bool attributes, bool quantize_tbn);
-void debugMeshlets(const Mesh& mesh, Mesh& meshlets, int max_vertices);
 
 bool compareMeshTargets(const Mesh& lhs, const Mesh& rhs);
 bool compareMeshVariants(const Mesh& lhs, const Mesh& rhs);
