@@ -1194,6 +1194,7 @@ Settings defaults()
 	settings.mesh_dedup = true;
 	settings.simplify_ratio = 1.f;
 	settings.simplify_error = 1e-2f;
+	settings.simplify_attributes = true;
 	settings.simplify_scaled = true;
 
 	for (int kind = 0; kind < TextureKind__Count; ++kind)
@@ -1345,7 +1346,7 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-mdd") == 0)
 		{
-			fprintf(stderr, "Warning: option -mdd disables mesh deduplication and is only provided as a safety measure; it will be removed in the future\n");
+			fprintf(stderr, "Warning: option -mdd disables mesh deduplication and is temporary; avoid production usage\n");
 			settings.mesh_dedup = false;
 		}
 		else if (strcmp(arg, "-mm") == 0)
@@ -1374,11 +1375,16 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-sv") == 0)
 		{
-			settings.simplify_attributes = true;
+			fprintf(stderr, "Warning: attribute aware simplification is enabled by default; option -sv is only provided for compatibility and may be removed in the future\n");
+		}
+		else if (strcmp(arg, "-svd") == 0)
+		{
+			fprintf(stderr, "Warning: option -ssd disables attribute aware simplification and is temporary; avoid production usage\n");
+			settings.simplify_attributes = false;
 		}
 		else if (strcmp(arg, "-ssd") == 0)
 		{
-			fprintf(stderr, "Warning: option -ssd disables scaled simplification error and is only provided as a safety measure; it will be removed in the future\n");
+			fprintf(stderr, "Warning: option -ssd disables scaled simplification error and is temporary; avoid production usage\n");
 			settings.simplify_scaled = false;
 		}
 		else if (strcmp(arg, "-tu") == 0)
@@ -1588,7 +1594,6 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-si R: simplify meshes targeting triangle/point count ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\t-se E: limit simplification error to E (default: 0.01 = 1%% deviation; E should be between 0 and 1)\n");
 			fprintf(stderr, "\t-sa: aggressively simplify to the target ratio disregarding quality\n");
-			fprintf(stderr, "\t-sv: take vertex attributes into account when simplifying meshes\n");
 			fprintf(stderr, "\t-slb: lock border vertices during simplification to avoid gaps on connected meshes\n");
 			fprintf(stderr, "\nVertex precision:\n");
 			fprintf(stderr, "\t-vp N: use N-bit quantization for positions (default: 14; N should be between 1 and 16)\n");
