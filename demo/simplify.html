@@ -148,6 +148,7 @@
 
 			var settings = {
 				wireframe: false,
+				wireframeOverlay: false,
 				animate: false,
 				pointSize: 1.0,
 				ratio: 1.0,
@@ -190,6 +191,7 @@
 			var gui = new GUI({ width: 300 });
 			var guiDisplay = gui.addFolder('Display');
 			guiDisplay.add(settings, 'wireframe').onChange(update);
+			guiDisplay.add(settings, 'wireframeOverlay').onChange(simplify); // requires debug data rebuild
 			guiDisplay.add(settings, 'animate').onChange(update);
 			guiDisplay.add(settings, 'pointSize', 1, 16).onChange(update);
 			guiDisplay.add(settings, 'debugOverlay').onChange(simplify); // requires debug data rebuild
@@ -482,6 +484,9 @@
 				if (settings.prune) {
 					flags.push('Prune');
 				}
+				if (settings.debugOverlay) {
+					flags.push('_InternalDebug');
+				}
 
 				var stride = geo.attributes.position instanceof THREE.InterleavedBufferAttribute ? geo.attributes.position.data.stride : 3;
 
@@ -490,21 +495,12 @@
 					target = Math.min(target, indices.length);
 				}
 
-				function run() {
-					var S = MeshoptSimplifier; // to avoid line breaks below...
-					return settings.sloppy
-						? S.simplifySloppy(indices, positions, stride, target, threshold)
-						: settings.useAttributes
-							? S.simplifyWithAttributes(indices, positions, stride, attrib, attributes, attrib_weights, null, target, threshold, flags)
-							: S.simplify(indices, positions, stride, target, threshold, flags);
-				}
-
-				var res = run();
-
-				if (settings.debugOverlay) {
-					flags.push('_InternalDebug');
-					var dres = run();
-				}
+				var S = MeshoptSimplifier; // to avoid line breaks below...
+				var res = settings.sloppy
+					? S.simplifySloppy(indices, positions, stride, target, threshold)
+					: settings.useAttributes
+						? S.simplifyWithAttributes(indices, positions, stride, attrib, attributes, attrib_weights, null, target, threshold, flags)
+						: S.simplify(indices, positions, stride, target, threshold, flags);
 
 				var rgeo = geo.clone();
 
@@ -513,16 +509,17 @@
 				if (settings.debugOverlay) {
 					// we need extra indices for debug overlay
 					dind = Array.from(res[0]);
+					var dlen = dind.length;
+
+					var mask = (1 << 28) - 1;
 
 					for (var kind = 1; kind <= 5; ++kind) {
 						var offset = dind.length;
 
-						for (var i = 0; i < dres[0].length; i += 3) {
-							var mask = (1 << 28) - 1;
-
+						for (var i = 0; i < dlen; i += 3) {
 							for (var e = 0; e < 3; ++e) {
-								var a = dres[0][i + e],
-									b = dres[0][i + ((e + 1) % 3)];
+								var a = dind[i + e],
+									b = dind[i + ((e + 1) % 3)];
 								var ak = (a >> 28) & 7,
 									bk = (b >> 28) & 7;
 
@@ -546,10 +543,21 @@
 						}
 
 						if (offset != dind.length) {
-							rgeo.addGroup(offset, dind.length - offset, kind);
+							rgeo.addGroup(offset, dind.length - offset, kind + 1); // +1 to skip overlay
 							offset = dind.length;
 						}
 					}
+
+					// clear debug bits for actual indices
+					for (var i = 0; i < dlen; i++) {
+						dind[i] &= mask;
+					}
+
+					if (settings.wireframeOverlay) {
+						rgeo.addGroup(0, dlen, 1); // 1=overlay
+					}
+				} else if (settings.wireframeOverlay) {
+					rgeo.addGroup(0, dind.length, 1); // 1=overlay
 				}
 
 				rgeo.index.array = new Uint32Array(dind);
@@ -649,6 +657,7 @@
 
 									object.material = [
 										object.material,
+										new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true }), // overlay
 										new THREE.MeshBasicMaterial({ color: 0x0000ff, wireframe: true }), // border
 										new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true }), // seam
 										new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true }), // complex
