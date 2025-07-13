@@ -1379,7 +1379,7 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-svd") == 0)
 		{
-			fprintf(stderr, "Warning: option -ssd disables attribute aware simplification and is temporary; avoid production usage\n");
+			fprintf(stderr, "Warning: option -svd disables attribute aware simplification and is temporary; avoid production usage\n");
 			settings.simplify_attributes = false;
 		}
 		else if (strcmp(arg, "-ssd") == 0)
@@ -1576,7 +1576,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nTextures:\n");
 			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression\n");
 			fprintf(stderr, "\t-tu: use UASTC when encoding textures (much higher quality and much larger size)\n");
-			fprintf(stderr, "\t-tq N: set texture encoding quality (default: 8; N should be between 1 and 10\n");
+			fprintf(stderr, "\t-tq N: set texture encoding quality (default: 8; N should be between 1 and 10)\n");
 			fprintf(stderr, "\t-ts R: scale texture dimensions by the ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\t-tl N: limit texture dimensions to N pixels (default: 0 = no limit)\n");
 			fprintf(stderr, "\t-tp: resize textures to nearest power of 2 to conform to WebGL1 restrictions\n");
