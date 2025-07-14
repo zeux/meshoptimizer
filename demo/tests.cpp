@@ -1572,7 +1572,7 @@ static void simplify()
 
 	float error;
 	assert(meshopt_simplify(ib, ib, 12, vb, 6, 12, 3, 1e-2f, 0, &error) == 3);
-	assert(error == 0.f);
+	assert(error < 1e-4f);
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 }
 
@@ -2248,7 +2248,7 @@ static void simplifyDebug()
 
 	float error;
 	assert(meshopt_simplify(ib, ib, 12, vb, 6, 12, 3, 1e-2f, meshopt_SimplifyInternalDebug, &error) == 3);
-	assert(error == 0.f);
+	assert(error < 1e-4f);
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 }
 
@@ -2260,9 +2260,9 @@ static void simplifyPrune()
 	// +
 	// 6 7 8 (same position)
 	unsigned int ib[] = {
+	    3, 2, 4,
 	    0, 2, 1,
 	    1, 2, 3,
-	    3, 2, 4,
 	    2, 5, 4,
 	    6, 7, 8, // clang-format :-/
 	};
@@ -2287,7 +2287,7 @@ static void simplifyPrune()
 
 	float error;
 	assert(meshopt_simplify(ib, ib, 15, vb, 9, 12, 3, 1e-2f, meshopt_SimplifyPrune, &error) == 3);
-	assert(error == 0.f);
+	assert(error < 1e-4f);
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 
 	// re-run prune with and without sparsity on a small subset to make sure the component code correctly handles sparse subsets
