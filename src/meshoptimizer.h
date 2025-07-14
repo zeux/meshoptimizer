@@ -393,6 +393,8 @@ enum
 	meshopt_SimplifyErrorAbsolute = 1 << 2,
 	/* Remove disconnected parts of the mesh during simplification incrementally, regardless of the topological restrictions inside components. */
 	meshopt_SimplifyPrune = 1 << 3,
+	/* Experimental: Produce more regular triangle sizes and shapes during simplification, at some cost to geometric quality. */
+	meshopt_SimplifyRegularize = 1 << 4,
 };
 
 /**
