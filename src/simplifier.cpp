@@ -694,6 +694,17 @@ static void quadricFromPlane(Quadric& Q, float a, float b, float c, float d, flo
 	Q.w = w;
 }
 
+static void quadricFromPoint(Quadric& Q, float x, float y, float z, float w)
+{
+	Q.a00 = Q.a11 = Q.a22 = w;
+	Q.a10 = Q.a20 = Q.a21 = 0;
+	Q.b0 = -x * w;
+	Q.b1 = -y * w;
+	Q.b2 = -z * w;
+	Q.c = (x * x + y * y + z * z) * w;
+	Q.w = w;
+}
+
 static void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2, float weight)
 {
 	Vector3 p10 = {p1.x - p0.x, p1.y - p0.y, p1.z - p0.z};
@@ -828,6 +839,25 @@ static void fillFaceQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 		quadricAdd(vertex_quadrics[remap[i0]], Q);
 		quadricAdd(vertex_quadrics[remap[i1]], Q);
 		quadricAdd(vertex_quadrics[remap[i2]], Q);
+	}
+}
+
+static void fillVertexQuadrics(Quadric* vertex_quadrics, const Vector3* vertex_positions, size_t vertex_count, const unsigned int* remap)
+{
+	const float kRegularizationFactor = 1e-7f;
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		if (remap[i] != i)
+			continue;
+
+		const Vector3& p = vertex_positions[i];
+		float w = vertex_quadrics[i].w * kRegularizationFactor;
+
+		Quadric Q;
+		quadricFromPoint(Q, p.x, p.y, p.z, w);
+
+		quadricAdd(vertex_quadrics[i], Q);
 	}
 }
 
@@ -1973,6 +2003,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	}
 
 	fillFaceQuadrics(vertex_quadrics, result, index_count, vertex_positions, remap);
+	fillVertexQuadrics(vertex_quadrics, vertex_positions, vertex_count, remap);
 	fillEdgeQuadrics(vertex_quadrics, result, index_count, vertex_positions, remap, vertex_kind, loop, loopback);
 
 	if (attribute_count)
