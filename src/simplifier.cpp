@@ -550,7 +550,7 @@ static const size_t kMaxAttributes = 32;
 
 struct Quadric
 {
-	// a00*x^2 + a11*y^2 + a22*z^2 + 2*(a10*xy + a20*xz + a21*yz) + b0*x + b1*y + b2*z + c
+	// a00*x^2 + a11*y^2 + a22*z^2 + 2*a10*xy + 2*a20*xz + 2*a21*yz + 2*b0*x + 2*b1*y + 2*b2*z + c
 	float a00, a11, a22;
 	float a10, a20, a21;
 	float b0, b1, b2, c;
