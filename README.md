@@ -169,7 +169,7 @@ Note that for meshes with optimal indexing and few attribute seams, the shadow i
 
 ## Clusterization
 
-While traditionally meshes have server as a unit of rendering, new approaches to rendering and raytracing are starting to use a smaller unit of work, such as clusters or meshlets. This allows more freedom in how the geometry is processed, and can lead to better performance and more efficient use of GPU hardware. This section describes algorithms designed to work with meshes as sets of clusters.
+While traditionally meshes have served as a unit of rendering, new approaches to rendering and raytracing are starting to use a smaller unit of work, such as clusters or meshlets. This allows more freedom in how the geometry is processed, and can lead to better performance and more efficient use of GPU hardware. This section describes algorithms designed to work with meshes as sets of clusters.
 
 ### Mesh shading
 
@@ -241,7 +241,7 @@ void main() {
 }
 ```
 
-After generating the meshlet data, it's possible to generate extra data for each meshlet that can be saved and used at runtime to perform cluster culling, where each meshlet can be discarded if it's guaranteed to be invisible. To generate the data, `meshlet_computeMeshletBounds` can be used:
+After generating the meshlet data, it's possible to generate extra data for each meshlet that can be saved and used at runtime to perform cluster culling, where each meshlet can be discarded if it's guaranteed to be invisible. To generate the data, `meshopt_computeMeshletBounds` can be used:
 
 ```c++
 meshopt_Bounds bounds = meshopt_computeMeshletBounds(&meshlet_vertices[m.vertex_offset], &meshlet_triangles[m.triangle_offset],
