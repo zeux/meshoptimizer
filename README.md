@@ -427,13 +427,11 @@ Note that all filters are lossy and require the data to be deinterleaved with on
 
 ## Simplification
 
-All algorithms presented so far don't affect visual appearance at all, with the exception of quantization that has minimal controlled impact. However, fundamentally the most effective way at reducing the rendering or transmission cost of a mesh is to reduce the number of triangles in the mesh.
+All algorithms presented so far don't affect visual appearance at all, with the exception of quantization that has minimal controlled impact. However, fundamentally the most effective way to reduce the rendering or transmission cost of a mesh is to reduce the number of triangles in the mesh.
 
 ### Basic simplification
 
-This library provides two simplification algorithms that reduce the number of triangles in the mesh. Given a vertex and an index buffer, they generate a second index buffer that uses existing vertices in the vertex buffer. This index buffer can be used directly for rendering with the original vertex buffer (preferably after vertex cache optimization using `meshopt_optimizeVertexCache`), or a new compact vertex/index buffer can be generated using `meshopt_optimizeVertexFetch` that uses the optimal number and order of vertices.
-
-The first simplification algorithm, `meshopt_simplify`, follows the topology of the original mesh in an attempt to preserve attribute seams, borders and overall appearance. For meshes with inconsistent topology or many seams, such as faceted meshes, it can result in simplifier getting "stuck" and not being able to simplify the mesh fully. Therefore it's critical that identical vertices are "welded" together, that is, the input vertex buffer does not contain duplicates. Additionally, it may be worthwhile to weld the vertices without taking into account vertex attributes that aren't critical and can be rebuilt later.
+This library provides a simplification algorithm, `meshopt_simplify`, that reduces the number of triangles in the mesh. Given a vertex and an index buffer, it generates a second index buffer that uses existing vertices in the vertex buffer. This index buffer can be used directly for rendering with the original vertex buffer (preferably after vertex cache optimization using `meshopt_optimizeVertexCache`), or a new compact vertex/index buffer can be generated using `meshopt_optimizeVertexFetch` that uses the optimal number and order of vertices.
 
 ```c++
 float threshold = 0.2f;
@@ -450,22 +448,11 @@ Target error is an approximate measure of the deviation from the original mesh u
 
 To disable the error limit, `target_error` can be set to `FLT_MAX`. This makes it more likely that the simplifier will reach the target index count, but it may produce a mesh that looks significantly different from the original, so using the resulting error to control viewing distance would be required. Conversely, setting `target_index_count` to 0 will simplify the input mesh as much as possible within the specified error limit; this can be useful for generating LODs that should look good at a given viewing distance.
 
-The second simplification algorithm, `meshopt_simplifySloppy`, doesn't follow the topology of the original mesh. This means that it doesn't preserve attribute seams or borders, but it can collapse internal details that are too small to matter better because it can merge mesh features that are topologically disjoint but spatially close.
+The algorithm follows the topology of the original mesh in an attempt to preserve attribute seams, borders and overall appearance. For meshes with inconsistent topology or many seams, such as faceted meshes, it can result in simplifier getting "stuck" and not being able to simplify the mesh fully. Therefore it's critical that identical vertices are "welded" together, that is, the input vertex buffer does not contain duplicates. Additionally, it may be worthwhile to weld the vertices without taking into account vertex attributes that aren't critical and can be rebuilt later.
 
-```c++
-float threshold = 0.2f;
-size_t target_index_count = size_t(index_count * threshold);
-float target_error = 1e-1f;
+Alternatively, the library provides another simplification algorithm, `meshopt_simplifySloppy`, which doesn't follow the topology of the original mesh. This means that it doesn't preserve attribute seams or borders, but it can collapse internal details that are too small to matter because it can merge mesh features that are topologically disjoint but spatially close. In general, this algorithm produces meshes with worse geometric quality and poor attribute quality compared to `meshopt_simplify`.
 
-std::vector<unsigned int> lod(index_count);
-float lod_error = 0.f;
-lod.resize(meshopt_simplifySloppy(&lod[0], indices, index_count, &vertices[0].x, vertex_count, sizeof(Vertex),
-    target_index_count, target_error, &lod_error));
-```
-
-This algorithm will not stop early due to topology restrictions but can still do so if target index count can't be reached without introducing an error larger than target. It is 5-6x faster than `meshopt_simplify` when simplification ratio is large, and is able to reach ~20M triangles/sec on a desktop CPU (`meshopt_simplify` works at ~3M triangles/sec).
-
-Both algorithms can also return the resulting normalized deviation that can be used to choose the correct level of detail based on screen size or solid angle; the error can be converted to object space by multiplying by the scaling factor returned by `meshopt_simplifyScale`. For example, given a mesh with a precomputed LOD and a prescaled error, the screen-space normalized error can be computed and used for LOD selection:
+The algorithm can also return the resulting normalized deviation that can be used to choose the correct level of detail based on screen size or solid angle; the error can be converted to object space by multiplying by the scaling factor returned by `meshopt_simplifyScale`. For example, given a mesh with a precomputed LOD and a prescaled error, the screen-space normalized error can be computed and used for LOD selection:
 
 ```c++
 // lod_factor can be 1 or can be adjusted for more or less aggressive LOD selection
@@ -478,7 +465,7 @@ When a sequence of LOD meshes is generated that all use the original vertex buff
 
 ### Advanced simplification
 
-The main simplification algorithm, `meshopt_simplify`, exposes additional options and functions that can be used to control the simplification process in more detail.
+`meshopt_simplify` exposes additional options and functions that can be used to control the simplification process in more detail.
 
 For basic customization, a number of options can be passed via `options` bitmask that adjust the behavior of the simplifier:
 
