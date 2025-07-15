@@ -550,7 +550,7 @@ static const size_t kMaxAttributes = 32;
 
 struct Quadric
 {
-	// a00*x^2 + a11*y^2 + a22*z^2 + 2*(a10*xy + a20*xz + a21*yz) + b0*x + b1*y + b2*z + c
+	// a00*x^2 + a11*y^2 + a22*z^2 + 2*a10*xy + 2*a20*xz + 2*a21*yz + 2*b0*x + 2*b1*y + 2*b2*z + c
 	float a00, a11, a22;
 	float a10, a20, a21;
 	float b0, b1, b2, c;
@@ -694,6 +694,17 @@ static void quadricFromPlane(Quadric& Q, float a, float b, float c, float d, flo
 	Q.w = w;
 }
 
+static void quadricFromPoint(Quadric& Q, float x, float y, float z, float w)
+{
+	Q.a00 = Q.a11 = Q.a22 = w;
+	Q.a10 = Q.a20 = Q.a21 = 0;
+	Q.b0 = -x * w;
+	Q.b1 = -y * w;
+	Q.b2 = -z * w;
+	Q.c = (x * x + y * y + z * z) * w;
+	Q.w = w;
+}
+
 static void quadricFromTriangle(Quadric& Q, const Vector3& p0, const Vector3& p1, const Vector3& p2, float weight)
 {
 	Vector3 p10 = {p1.x - p0.x, p1.y - p0.y, p1.z - p0.z};
@@ -828,6 +839,26 @@ static void fillFaceQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 		quadricAdd(vertex_quadrics[remap[i0]], Q);
 		quadricAdd(vertex_quadrics[remap[i1]], Q);
 		quadricAdd(vertex_quadrics[remap[i2]], Q);
+	}
+}
+
+static void fillVertexQuadrics(Quadric* vertex_quadrics, const Vector3* vertex_positions, size_t vertex_count, const unsigned int* remap, unsigned int options)
+{
+	// by default, we use a very small weight to improve triangulation and numerical stability without affecting the shape or error
+	float factor = (options & meshopt_SimplifyRegularize) ? 1e-1f : 1e-7f;
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		if (remap[i] != i)
+			continue;
+
+		const Vector3& p = vertex_positions[i];
+		float w = vertex_quadrics[i].w * factor;
+
+		Quadric Q;
+		quadricFromPoint(Q, p.x, p.y, p.z, w);
+
+		quadricAdd(vertex_quadrics[i], Q);
 	}
 }
 
@@ -1886,7 +1917,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	assert(vertex_positions_stride % sizeof(float) == 0);
 	assert(target_index_count <= index_count);
 	assert(target_error >= 0);
-	assert((options & ~(meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute | meshopt_SimplifyPrune | meshopt_SimplifyInternalDebug)) == 0);
+	assert((options & ~(meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute | meshopt_SimplifyPrune | meshopt_SimplifyRegularize | meshopt_SimplifyInternalDebug)) == 0);
 	assert(vertex_attributes_stride >= attribute_count * sizeof(float) && vertex_attributes_stride <= 256);
 	assert(vertex_attributes_stride % sizeof(float) == 0);
 	assert(attribute_count <= kMaxAttributes);
@@ -1973,6 +2004,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	}
 
 	fillFaceQuadrics(vertex_quadrics, result, index_count, vertex_positions, remap);
+	fillVertexQuadrics(vertex_quadrics, vertex_positions, vertex_count, remap, options);
 	fillEdgeQuadrics(vertex_quadrics, result, index_count, vertex_positions, remap, vertex_kind, loop, loopback);
 
 	if (attribute_count)

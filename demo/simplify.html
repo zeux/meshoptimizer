@@ -157,6 +157,7 @@
 				lockBorder: false,
 				preprune: 0.0,
 				prune: true,
+				regularize: false,
 				useAttributes: true,
 				errorThresholdLog10: 1,
 				errorScaled: true,
@@ -202,6 +203,7 @@
 			guiSimplify.add(settings, 'sloppy').onChange(simplify);
 			guiSimplify.add(settings, 'lockBorder').onChange(simplify);
 			guiSimplify.add(settings, 'prune').onChange(simplify);
+			guiSimplify.add(settings, 'regularize').onChange(simplify);
 			guiSimplify.add(settings, 'preprune', 0, 0.2, 0.01).onChange(simplify);
 			guiSimplify.add(settings, 'useAttributes').onChange(simplify).onFinishChange(updateSettings);
 
@@ -483,6 +485,9 @@
 				}
 				if (settings.prune) {
 					flags.push('Prune');
+				}
+				if (settings.regularize) {
+					flags.push('Regularize');
 				}
 				if (settings.debugOverlay) {
 					flags.push('_InternalDebug');
