@@ -868,6 +868,9 @@ static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attribut
 	else
 		options |= meshopt_SimplifyPrune;
 
+	if (mesh.targets || getStream(mesh, cgltf_attribute_type_weights))
+		options |= meshopt_SimplifyRegularize;
+
 	std::vector<unsigned int> indices(mesh.indices.size());
 
 	if (attributes)
