@@ -502,7 +502,7 @@
 
 				var S = MeshoptSimplifier; // to avoid line breaks below...
 				var res = settings.sloppy
-					? S.simplifySloppy(indices, positions, stride, target, threshold)
+					? S.simplifySloppy(indices, positions, stride, null, target, threshold)
 					: settings.useAttributes
 						? S.simplifyWithAttributes(indices, positions, stride, attrib, attributes, attrib_weights, null, target, threshold, flags)
 						: S.simplify(indices, positions, stride, target, threshold, flags);

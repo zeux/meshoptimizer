@@ -193,16 +193,30 @@ var MeshoptSimplifier = (function () {
 		return target;
 	}
 
-	function simplifySloppy(fun, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride, target_index_count, target_error) {
+	function simplifySloppy(
+		fun,
+		indices,
+		index_count,
+		vertex_positions,
+		vertex_count,
+		vertex_positions_stride,
+		vertex_lock,
+		target_index_count,
+		target_error
+	) {
 		var sbrk = instance.exports.sbrk;
 		var te = sbrk(4);
 		var ti = sbrk(index_count * 4);
 		var sp = sbrk(vertex_count * vertex_positions_stride);
 		var si = sbrk(index_count * 4);
+		var vl = vertex_lock ? sbrk(vertex_count) : 0;
 		var heap = new Uint8Array(instance.exports.memory.buffer);
 		heap.set(bytes(vertex_positions), sp);
 		heap.set(bytes(indices), si);
-		var result = fun(ti, si, index_count, sp, vertex_count, vertex_positions_stride, 0, target_index_count, target_error, te);
+		if (vertex_lock) {
+			heap.set(bytes(vertex_lock), vl);
+		}
+		var result = fun(ti, si, index_count, sp, vertex_count, vertex_positions_stride, vl, target_index_count, target_error, te);
 		// heap may have grown
 		heap = new Uint8Array(instance.exports.memory.buffer);
 		var target = new Uint32Array(result);
@@ -395,7 +409,7 @@ var MeshoptSimplifier = (function () {
 			}
 		},
 
-		simplifySloppy: function (indices, vertex_positions, vertex_positions_stride, target_index_count, target_error) {
+		simplifySloppy: function (indices, vertex_positions, vertex_positions_stride, vertex_lock, target_index_count, target_error) {
 			assert(
 				indices instanceof Uint32Array || indices instanceof Int32Array || indices instanceof Uint16Array || indices instanceof Int16Array
 			);
@@ -403,6 +417,8 @@ var MeshoptSimplifier = (function () {
 			assert(vertex_positions instanceof Float32Array);
 			assert(vertex_positions.length % vertex_positions_stride == 0);
 			assert(vertex_positions_stride >= 3);
+			assert(vertex_lock == null || vertex_lock instanceof Uint8Array);
+			assert(vertex_lock == null || vertex_lock.length == vertex_positions.length / vertex_positions_stride);
 			assert(target_index_count >= 0 && target_index_count <= indices.length);
 			assert(target_index_count % 3 == 0);
 			assert(target_error >= 0);
@@ -415,6 +431,7 @@ var MeshoptSimplifier = (function () {
 				vertex_positions,
 				vertex_positions.length / vertex_positions_stride,
 				vertex_positions_stride * 4,
+				vertex_lock ? new Uint8Array(vertex_lock) : null,
 				target_index_count,
 				target_error
 			);
