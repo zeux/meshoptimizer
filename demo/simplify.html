@@ -650,7 +650,7 @@
 						var extent = getRadius(scene);
 
 						scene.traverse(function (object) {
-							if (object.isMesh) {
+							if (object.isMesh && object.geometry.index) {
 								if (!object.original) {
 									object.original = object.geometry.clone();
 
@@ -826,7 +826,7 @@
 							obj.traverse(function (node) {
 								if (node.isMesh) {
 									// obj loader does not index the geometry, so we need to do it ourselves
-									node.geometry = mergeVertices(node.geometry, 0.0);
+									node.geometry = mergeVertices(node.geometry);
 
 									// we use groups and multiple materials for debug visualization, so merge all of the source ones for now
 									if (Array.isArray(node.material)) {
