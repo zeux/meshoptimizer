@@ -167,6 +167,50 @@ static void decodeFilterExp(unsigned int* data, size_t count)
 }
 #endif
 
+template <typename ST, typename T>
+static void decodeFilterColor(T* data, size_t count)
+{
+	const float max = float((1 << (sizeof(T) * 8)) - 1);
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		// recover scale from alpha high bit
+		int as = data[i * 4 + 3];
+		as |= as >> 1;
+		as |= as >> 2;
+		as |= as >> 4;
+		as |= as >> 8; // noop for 8-bit
+
+		int ah = as >> 1;
+
+		float y = float(data[i * 4 + 0]) / float(as);
+		float co = float(ST(data[i * 4 + 1])) / float(ah) * 0.5f;
+		float cg = float(ST(data[i * 4 + 2])) / float(ah) * 0.5f;
+		float a = float(data[i * 4 + 3] & ah) / float(ah);
+
+		// convert to RGB
+		float r = y + co - cg;
+		float g = y + cg;
+		float b = y - co - cg;
+
+		// clamp to [0..1] range
+		r = r < 0.f ? 0.f : (r > 1.f ? 1.f : r);
+		g = g < 0.f ? 0.f : (g > 1.f ? 1.f : g);
+		b = b < 0.f ? 0.f : (b > 1.f ? 1.f : b);
+
+		// rounded float->int
+		int rf = int(r * max + 0.5f);
+		int gf = int(g * max + 0.5f);
+		int bf = int(b * max + 0.5f);
+		int af = int(a * max + 0.5f);
+
+		data[i * 4 + 0] = T(rf);
+		data[i * 4 + 1] = T(gf);
+		data[i * 4 + 2] = T(bf);
+		data[i * 4 + 3] = T(af);
+	}
+}
+
 #if defined(SIMD_SSE) || defined(SIMD_NEON) || defined(SIMD_WASM)
 template <typename T>
 static void dispatchSimd(void (*process)(T*, size_t), T* data, size_t count, size_t stride)
@@ -872,6 +916,18 @@ void meshopt_decodeFilterExp(void* buffer, size_t count, size_t stride)
 #endif
 }
 
+void meshopt_decodeFilterColor(void* buffer, size_t count, size_t stride)
+{
+	using namespace meshopt;
+
+	assert(stride == 4 || stride == 8);
+
+	if (stride == 4)
+		decodeFilterColor<signed char>(static_cast<unsigned char*>(buffer), count);
+	else
+		decodeFilterColor<short>(static_cast<unsigned short*>(buffer), count);
+}
+
 void meshopt_encodeFilterOct(void* destination, size_t count, size_t stride, int bits, const float* data)
 {
 	assert(stride == 4 || stride == 8);
@@ -1038,6 +1094,47 @@ void meshopt_encodeFilterExp(void* destination_, size_t count, size_t stride, in
 			int m = int(v[j] * optexp2(-exp) + (v[j] >= 0 ? 0.5f : -0.5f));
 
 			d[j] = (m & mmask) | (unsigned(exp) << 24);
+		}
+	}
+}
+
+void meshopt_encodeFilterColor(void* destination, size_t count, size_t stride, int bits, const float* data)
+{
+	assert(stride == 4 || stride == 8);
+	assert(bits >= 2 && bits <= 16);
+
+	unsigned char* d8 = static_cast<unsigned char*>(destination);
+	unsigned short* d16 = static_cast<unsigned short*>(destination);
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		const float* c = &data[i * 4];
+
+		// RGB: YCoCg encoding
+		float y = c[0] * 0.25f + c[1] * 0.5f + c[2] * 0.25f;
+		float co = c[0] * 0.5f - c[2] * 0.5f;
+		float cg = -c[0] * 0.25f + c[1] * 0.5f - c[2] * 0.25f;
+
+		int fy = meshopt_quantizeUnorm(y, bits);
+		int fco = meshopt_quantizeSnorm(co * 2, bits);
+		int fcg = meshopt_quantizeSnorm(cg * 2, bits);
+
+		// alpha: K-1-bit encoding with high bit set to 1
+		int fa = meshopt_quantizeUnorm(c[3], bits - 1) | (1 << (bits - 1));
+
+		if (stride == 4)
+		{
+			d8[i * 4 + 0] = (unsigned char)(fy);
+			d8[i * 4 + 1] = (unsigned char)(fco);
+			d8[i * 4 + 2] = (unsigned char)(fcg);
+			d8[i * 4 + 3] = (unsigned char)(fa);
+		}
+		else
+		{
+			d16[i * 4 + 0] = (unsigned short)(fy);
+			d16[i * 4 + 1] = (unsigned short)(fco);
+			d16[i * 4 + 2] = (unsigned short)(fcg);
+			d16[i * 4 + 3] = (unsigned short)(fa);
 		}
 	}
 }
