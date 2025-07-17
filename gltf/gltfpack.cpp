@@ -154,10 +154,14 @@ static void printAttributeStats(const std::vector<BufferView>& views, BufferView
 
 		size_t count = view.data.size() / view.stride;
 
-		printf("stats: %s %s: compressed %d bytes (%.1f bits), raw %d bytes (%d bits)\n",
-		    name, variant,
-		    int(view.bytes), double(view.bytes) / double(count) * 8,
-		    int(view.data.size()), int(view.stride * 8));
+		if (view.compression == BufferView::Compression_None)
+			printf("stats: %s %s: %d bytes (%.1f bits)\n",
+			    name, variant, int(view.bytes), double(view.bytes) / double(count) * 8);
+		else
+			printf("stats: %s %s: compressed %d bytes (%.1f bits), raw %d bytes (%d bits)\n",
+			    name, variant,
+			    int(view.bytes), double(view.bytes) / double(count) * 8,
+			    int(view.data.size()), int(view.stride * 8));
 	}
 }
 
