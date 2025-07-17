@@ -181,28 +181,25 @@ static void decodeFilterColor(T* data, size_t count)
 		as |= as >> 4;
 		as |= as >> 8; // noop for 8-bit
 
-		int ah = as >> 1;
+		// convert to RGB in integer space (co/cg are sign extended)
+		int y = data[i * 4 + 0], co = ST(data[i * 4 + 1]), cg = ST(data[i * 4 + 2]);
 
-		float y = float(data[i * 4 + 0]) / float(as);
-		float co = float(ST(data[i * 4 + 1])) / float(ah) * 0.5f;
-		float cg = float(ST(data[i * 4 + 2])) / float(ah) * 0.5f;
-		float a = float(data[i * 4 + 3] & ah) / float(ah);
+		int r = y + co - cg;
+		int g = y + cg;
+		int b = y - co - cg;
 
-		// convert to RGB
-		float r = y + co - cg;
-		float g = y + cg;
-		float b = y - co - cg;
+		// expand alpha by one bit to match other components
+		int a = data[i * 4 + 3];
+		a = ((a << 1) & as) | (a & 1);
 
-		// clamp to [0..1] range
-		r = r < 0.f ? 0.f : (r > 1.f ? 1.f : r);
-		g = g < 0.f ? 0.f : (g > 1.f ? 1.f : g);
-		b = b < 0.f ? 0.f : (b > 1.f ? 1.f : b);
+		// compute scaling factor
+		float ss = max / float(as);
 
 		// rounded float->int
-		int rf = int(r * max + 0.5f);
-		int gf = int(g * max + 0.5f);
-		int bf = int(b * max + 0.5f);
-		int af = int(a * max + 0.5f);
+		int rf = int(float(r) * ss + 0.5f);
+		int gf = int(float(g) * ss + 0.5f);
+		int bf = int(float(b) * ss + 0.5f);
+		int af = int(float(a) * ss + 0.5f);
 
 		data[i * 4 + 0] = T(rf);
 		data[i * 4 + 1] = T(gf);
@@ -1110,14 +1107,15 @@ void meshopt_encodeFilterColor(void* destination, size_t count, size_t stride, i
 	{
 		const float* c = &data[i * 4];
 
-		// RGB: YCoCg encoding
-		float y = c[0] * 0.25f + c[1] * 0.5f + c[2] * 0.25f;
-		float co = c[0] * 0.5f - c[2] * 0.5f;
-		float cg = -c[0] * 0.25f + c[1] * 0.5f - c[2] * 0.25f;
+		int fr = meshopt_quantizeUnorm(c[0], bits);
+		int fg = meshopt_quantizeUnorm(c[1], bits);
+		int fb = meshopt_quantizeUnorm(c[2], bits);
 
-		int fy = meshopt_quantizeUnorm(y, bits);
-		int fco = meshopt_quantizeSnorm(co * 2, bits);
-		int fcg = meshopt_quantizeSnorm(cg * 2, bits);
+		// YCoCg-R encoding with truncated Co/Cg ensures that decoding can be done using integers
+		int fco = (fr - fb) / 2;
+		int tmp = fb + fco;
+		int fcg = (fg - tmp) / 2;
+		int fy = tmp + fcg;
 
 		// alpha: K-1-bit encoding with high bit set to 1
 		int fa = meshopt_quantizeUnorm(c[3], bits - 1) | (1 << (bits - 1));
