@@ -1104,6 +1104,70 @@ static void encodeFilterExpClamp()
 		assert(fabsf(decoded[i] - data[i]) < 1e-3f);
 }
 
+static void encodeFilterColor8()
+{
+	const float data[4 * 4] = {
+	    1.0f, 0.0f, 0.0f, 1.0f,
+	    0.0f, 1.0f, 0.0f, 0.5f,
+	    0.0f, 0.0f, 1.0f, 0.25f,
+	    0.4f, 0.4f, 0.4f, 0.75f, // clang-format :-/
+	};
+
+	const unsigned char expected[4 * 4] = {
+	    0x40, 0x7f, 0xc1, 0xff,
+	    0x7f, 0x00, 0x7f, 0xc0,
+	    0x40, 0x81, 0xc0, 0xa0,
+	    0x66, 0x00, 0x00, 0xdf, // clang-format :-/
+	};
+
+	unsigned char encoded[4 * 4];
+	meshopt_encodeFilterColor(encoded, 4, 4, 8, data);
+
+	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+
+	unsigned char decoded[4 * 4];
+	memcpy(decoded, encoded, sizeof(decoded));
+	meshopt_decodeFilterColor(decoded, 4, 4);
+
+	for (size_t i = 0; i < 4 * 4; ++i)
+		assert(fabsf(decoded[i] / 255.f - data[i]) < 1e-2f);
+
+	// ensure grayscale is preserved
+	assert(decoded[12] == decoded[13] && decoded[12] == decoded[14]);
+}
+
+static void encodeFilterColor12()
+{
+	const float data[4 * 4] = {
+	    1.0f, 0.0f, 0.0f, 1.0f,
+	    0.0f, 1.0f, 0.0f, 0.5f,
+	    0.0f, 0.0f, 1.0f, 0.25f,
+	    0.4f, 0.4f, 0.4f, 0.75f, // clang-format :-/
+	};
+
+	const unsigned short expected[4 * 4] = {
+	    0x0400, 0x07ff, 0xfc01, 0x0fff,
+	    0x07ff, 0x0000, 0x07ff, 0x0c00,
+	    0x0400, 0xf801, 0xfc00, 0x0a00,
+	    0x0666, 0x0000, 0x0000, 0x0dff, // clang-format :-/
+	};
+
+	unsigned short encoded[4 * 4];
+	meshopt_encodeFilterColor(encoded, 4, 8, 12, data);
+
+	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+
+	unsigned short decoded[4 * 4];
+	memcpy(decoded, encoded, sizeof(decoded));
+	meshopt_decodeFilterColor(decoded, 4, 8);
+
+	for (size_t i = 0; i < 4 * 4; ++i)
+		assert(fabsf(decoded[i] / 65535.f - data[i]) < 1e-3f);
+
+	// ensure grayscale is preserved
+	assert(decoded[12] == decoded[13] && decoded[12] == decoded[14]);
+}
+
 static void clusterBoundsDegenerate()
 {
 	const float vbd[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -2611,6 +2675,8 @@ void runTests()
 	encodeFilterExpZero();
 	encodeFilterExpAlias();
 	encodeFilterExpClamp();
+	encodeFilterColor8();
+	encodeFilterColor12();
 
 	clusterBoundsDegenerate();
 	sphereBounds();
