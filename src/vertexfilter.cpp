@@ -181,7 +181,7 @@ static void decodeFilterColor(T* data, size_t count)
 		as |= as >> 4;
 		as |= as >> 8; // noop for 8-bit
 
-		// convert to RGB in integer space (co/cg are sign extended)
+		// convert to RGB in fixed point (co/cg are sign extended)
 		int y = data[i * 4 + 0], co = ST(data[i * 4 + 1]), cg = ST(data[i * 4 + 2]);
 
 		int r = y + co - cg;
@@ -425,6 +425,105 @@ static void decodeFilterExpSimd(unsigned int* data, size_t count)
 		__m128 r = _mm_mul_ps(_mm_castsi128_ps(es), m);
 
 		_mm_storeu_ps(reinterpret_cast<float*>(&data[i]), r);
+	}
+}
+
+static void decodeFilterColorSimd8(unsigned char* data, size_t count)
+{
+	for (size_t i = 0; i < count; i += 4)
+	{
+		__m128i c4 = _mm_loadu_si128(reinterpret_cast<__m128i*>(&data[i * 4]));
+
+		// unpack y/co/cg/a (co/cg are sign extended with arithmetic shifts)
+		__m128i yf = _mm_and_si128(c4, _mm_set1_epi32(0xff));
+		__m128i cof = _mm_srai_epi32(_mm_slli_epi32(c4, 16), 24);
+		__m128i cgf = _mm_srai_epi32(_mm_slli_epi32(c4, 8), 24);
+		__m128i af = _mm_srli_epi32(c4, 24);
+
+		// recover scale from alpha high bit
+		__m128i as = af;
+		as = _mm_or_si128(as, _mm_srli_epi32(as, 1));
+		as = _mm_or_si128(as, _mm_srli_epi32(as, 2));
+		as = _mm_or_si128(as, _mm_srli_epi32(as, 4));
+
+		// expand alpha by one bit to match other components
+		af = _mm_or_si128(_mm_and_si128(_mm_slli_epi32(af, 1), as), _mm_and_si128(af, _mm_set1_epi32(1)));
+
+		// compute scaling factor
+		__m128 ss = _mm_mul_ps(_mm_set1_ps(255.f), _mm_rcp_ps(_mm_cvtepi32_ps(as)));
+
+		// convert to RGB in fixed point
+		__m128i rf = _mm_add_epi32(yf, _mm_sub_epi32(cof, cgf));
+		__m128i gf = _mm_add_epi32(yf, cgf);
+		__m128i bf = _mm_sub_epi32(yf, _mm_add_epi32(cof, cgf));
+
+		// rounded signed float->int
+		__m128i rr = _mm_cvtps_epi32(_mm_mul_ps(_mm_cvtepi32_ps(rf), ss));
+		__m128i gr = _mm_cvtps_epi32(_mm_mul_ps(_mm_cvtepi32_ps(gf), ss));
+		__m128i br = _mm_cvtps_epi32(_mm_mul_ps(_mm_cvtepi32_ps(bf), ss));
+		__m128i ar = _mm_cvtps_epi32(_mm_mul_ps(_mm_cvtepi32_ps(af), ss));
+
+		// repack rgba into final value
+		__m128i res = rr;
+		res = _mm_or_si128(res, _mm_slli_epi32(gr, 8));
+		res = _mm_or_si128(res, _mm_slli_epi32(br, 16));
+		res = _mm_or_si128(res, _mm_slli_epi32(ar, 24));
+
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(&data[i * 4]), res);
+	}
+}
+
+static void decodeFilterColorSimd16(unsigned short* data, size_t count)
+{
+	for (size_t i = 0; i < count; i += 4)
+	{
+		__m128i c4_0 = _mm_loadu_si128(reinterpret_cast<__m128i*>(&data[(i + 0) * 4]));
+		__m128i c4_1 = _mm_loadu_si128(reinterpret_cast<__m128i*>(&data[(i + 2) * 4]));
+
+		// gather both y/co 16-bit pairs in each 32-bit lane
+		__m128i c4_yco = _mm_castps_si128(_mm_shuffle_ps(_mm_castsi128_ps(c4_0), _mm_castsi128_ps(c4_1), _MM_SHUFFLE(2, 0, 2, 0)));
+		__m128i c4_cga = _mm_castps_si128(_mm_shuffle_ps(_mm_castsi128_ps(c4_0), _mm_castsi128_ps(c4_1), _MM_SHUFFLE(3, 1, 3, 1)));
+
+		// unpack y/co/cg/a components (co/cg are sign extended with arithmetic shifts)
+		__m128i yf = _mm_and_si128(c4_yco, _mm_set1_epi32(0xffff));
+		__m128i cof = _mm_srai_epi32(c4_yco, 16);
+		__m128i cgf = _mm_srai_epi32(_mm_slli_epi32(c4_cga, 16), 16);
+		__m128i af = _mm_srli_epi32(c4_cga, 16);
+
+		// recover scale from alpha high bit
+		__m128i as = af;
+		as = _mm_or_si128(as, _mm_srli_epi32(as, 1));
+		as = _mm_or_si128(as, _mm_srli_epi32(as, 2));
+		as = _mm_or_si128(as, _mm_srli_epi32(as, 4));
+		as = _mm_or_si128(as, _mm_srli_epi32(as, 8));
+
+		// expand alpha by one bit to match other components
+		af = _mm_or_si128(_mm_and_si128(_mm_slli_epi32(af, 1), as), _mm_and_si128(af, _mm_set1_epi32(1)));
+
+		// compute scaling factor
+		__m128 ss = _mm_div_ps(_mm_set1_ps(65535.f), _mm_cvtepi32_ps(as));
+
+		// convert to RGB in fixed point
+		__m128i rf = _mm_add_epi32(yf, _mm_sub_epi32(cof, cgf));
+		__m128i gf = _mm_add_epi32(yf, cgf);
+		__m128i bf = _mm_sub_epi32(yf, _mm_add_epi32(cof, cgf));
+
+		// rounded signed float->int
+		__m128i rr = _mm_cvtps_epi32(_mm_mul_ps(_mm_cvtepi32_ps(rf), ss));
+		__m128i gr = _mm_cvtps_epi32(_mm_mul_ps(_mm_cvtepi32_ps(gf), ss));
+		__m128i br = _mm_cvtps_epi32(_mm_mul_ps(_mm_cvtepi32_ps(bf), ss));
+		__m128i ar = _mm_cvtps_epi32(_mm_mul_ps(_mm_cvtepi32_ps(af), ss));
+
+		// mix r/b and g/a to make 16-bit unpack easier
+		__m128i rbr = _mm_or_si128(_mm_and_si128(rr, _mm_set1_epi32(0xffff)), _mm_slli_epi32(br, 16));
+		__m128i gar = _mm_or_si128(_mm_and_si128(gr, _mm_set1_epi32(0xffff)), _mm_slli_epi32(ar, 16));
+
+		// pack r/g/b/a using 16-bit unpacks
+		__m128i res_0 = _mm_unpacklo_epi16(rbr, gar);
+		__m128i res_1 = _mm_unpackhi_epi16(rbr, gar);
+
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(&data[(i + 0) * 4]), res_0);
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(&data[(i + 2) * 4]), res_1);
 	}
 }
 #endif
@@ -919,10 +1018,17 @@ void meshopt_decodeFilterColor(void* buffer, size_t count, size_t stride)
 
 	assert(stride == 4 || stride == 8);
 
+#if defined(SIMD_SSE) // || defined(SIMD_NEON) || defined(SIMD_WASM)
+	if (stride == 4)
+		dispatchSimd(decodeFilterColorSimd8, static_cast<unsigned char*>(buffer), count, 4);
+	else
+		dispatchSimd(decodeFilterColorSimd16, static_cast<unsigned short*>(buffer), count, 4);
+#else
 	if (stride == 4)
 		decodeFilterColor<signed char>(static_cast<unsigned char*>(buffer), count);
 	else
 		decodeFilterColor<short>(static_cast<unsigned short*>(buffer), count);
+#endif
 }
 
 void meshopt_encodeFilterOct(void* destination, size_t count, size_t stride, int bits, const float* data)
