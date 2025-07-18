@@ -165,7 +165,6 @@ static void decodeFilterExp(unsigned int* data, size_t count)
 		data[i] = u.ui;
 	}
 }
-#endif
 
 template <typename ST, typename T>
 static void decodeFilterColor(T* data, size_t count)
@@ -207,6 +206,7 @@ static void decodeFilterColor(T* data, size_t count)
 		data[i * 4 + 3] = T(af);
 	}
 }
+#endif
 
 #if defined(SIMD_SSE) || defined(SIMD_NEON) || defined(SIMD_WASM)
 template <typename T>
