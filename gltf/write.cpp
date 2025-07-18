@@ -171,6 +171,9 @@ static const char* compressionFilter(StreamFormat::Filter filter)
 	case StreamFormat::Filter_Exp:
 		return "EXPONENTIAL";
 
+	case StreamFormat::Filter_Color:
+		return "COLOR";
+
 	default:
 		return "";
 	}

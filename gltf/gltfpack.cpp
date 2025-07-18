@@ -1513,6 +1513,7 @@ int main(int argc, char** argv)
 			meshopt_encodeVertexVersion(1);
 			settings.compress = true;
 			settings.compressmore = true;
+			settings.compressexp = true;
 		}
 		else if (strcmp(arg, "-v") == 0)
 		{

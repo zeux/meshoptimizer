@@ -560,22 +560,28 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	}
 	else if (stream.type == cgltf_attribute_type_color)
 	{
+		bool col = settings.compressexp && settings.compressmore;
 		int bits = settings.col_bits;
+
+		StreamFormat::Filter filter = col ? StreamFormat::Filter_Color : StreamFormat::Filter_None;
 
 		size_t offset = bin.size();
 		size_t stride = bits > 8 ? 8 : 4;
 		bin.resize(bin.size() + stream.data.size() * stride);
 
-		encodeColor(&bin[offset], stream.data.size(), stride, bits, stream.data[0].f);
+		if (col)
+			meshopt_encodeFilterColor(&bin[offset], stream.data.size(), stride, bits, stream.data[0].f);
+		else
+			encodeColor(&bin[offset], stream.data.size(), stride, bits, stream.data[0].f);
 
 		if (bits > 8)
 		{
-			StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16u, true, 8};
+			StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16u, true, 8, filter};
 			return format;
 		}
 		else
 		{
-			StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_8u, true, 4};
+			StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_8u, true, 4, filter};
 			return format;
 		}
 	}

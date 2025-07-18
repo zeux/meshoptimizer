@@ -168,6 +168,7 @@ struct Settings
 
 	bool compress;
 	bool compressmore;
+	bool compressexp;
 	bool fallback;
 
 	int verbose;
