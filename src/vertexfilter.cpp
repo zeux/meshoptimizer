@@ -1040,6 +1040,111 @@ static void decodeFilterExpSimd(unsigned int* data, size_t count)
 		wasm_v128_store(&data[i], r);
 	}
 }
+
+static void decodeFilterColorSimd8(unsigned char* data, size_t count)
+{
+	for (size_t i = 0; i < count; i += 4)
+	{
+		v128_t c4 = wasm_v128_load(&data[i * 4]);
+
+		// unpack y/co/cg/a (co/cg are sign extended with arithmetic shifts)
+		v128_t yf = wasm_v128_and(c4, wasm_i32x4_splat(0xff));
+		v128_t cof = wasm_i32x4_shr(wasm_i32x4_shl(c4, 16), 24);
+		v128_t cgf = wasm_i32x4_shr(wasm_i32x4_shl(c4, 8), 24);
+		v128_t af = wasm_u32x4_shr(c4, 24);
+
+		// recover scale from alpha high bit
+		v128_t as = af;
+		as = wasm_v128_or(as, wasm_i32x4_shr(as, 1));
+		as = wasm_v128_or(as, wasm_i32x4_shr(as, 2));
+		as = wasm_v128_or(as, wasm_i32x4_shr(as, 4));
+
+		// expand alpha by one bit to match other components
+		af = wasm_v128_or(wasm_v128_and(wasm_i32x4_shl(af, 1), as), wasm_v128_and(af, wasm_i32x4_splat(1)));
+
+		// compute scaling factor
+		v128_t ss = wasm_f32x4_div(wasm_f32x4_splat(255.f), wasm_f32x4_convert_i32x4(as));
+
+		// convert to RGB in fixed point
+		v128_t rf = wasm_i32x4_add(yf, wasm_i32x4_sub(cof, cgf));
+		v128_t gf = wasm_i32x4_add(yf, cgf);
+		v128_t bf = wasm_i32x4_sub(yf, wasm_i32x4_add(cof, cgf));
+
+		// fast rounded signed float->int: addition triggers renormalization after which mantissa stores the integer value
+		// note: the result is offset by 0x4B40_0000, but we only need the low 8 bits so we can omit the subtraction
+		const v128_t fsnap = wasm_f32x4_splat(3 << 22);
+
+		v128_t rr = wasm_f32x4_add(wasm_f32x4_mul(wasm_f32x4_convert_i32x4(rf), ss), fsnap);
+		v128_t gr = wasm_f32x4_add(wasm_f32x4_mul(wasm_f32x4_convert_i32x4(gf), ss), fsnap);
+		v128_t br = wasm_f32x4_add(wasm_f32x4_mul(wasm_f32x4_convert_i32x4(bf), ss), fsnap);
+		v128_t ar = wasm_f32x4_add(wasm_f32x4_mul(wasm_f32x4_convert_i32x4(af), ss), fsnap);
+
+		// repack rgba into final value
+		v128_t res = wasm_v128_and(rr, wasm_i32x4_splat(0xff));
+		res = wasm_v128_or(res, wasm_i32x4_shl(wasm_v128_and(gr, wasm_i32x4_splat(0xff)), 8));
+		res = wasm_v128_or(res, wasm_i32x4_shl(wasm_v128_and(br, wasm_i32x4_splat(0xff)), 16));
+		res = wasm_v128_or(res, wasm_i32x4_shl(ar, 24));
+
+		wasm_v128_store(&data[i * 4], res);
+	}
+}
+
+static void decodeFilterColorSimd16(unsigned short* data, size_t count)
+{
+	for (size_t i = 0; i < count; i += 4)
+	{
+		v128_t c4_0 = wasm_v128_load(&data[(i + 0) * 4]);
+		v128_t c4_1 = wasm_v128_load(&data[(i + 2) * 4]);
+
+		// gather both y/co 16-bit pairs in each 32-bit lane
+		v128_t c4_yco = wasmx_unziplo_v32x4(c4_0, c4_1);
+		v128_t c4_cga = wasmx_unziphi_v32x4(c4_0, c4_1);
+
+		// unpack y/co/cg/a components (co/cg are sign extended with arithmetic shifts)
+		v128_t yf = wasm_v128_and(c4_yco, wasm_i32x4_splat(0xffff));
+		v128_t cof = wasm_i32x4_shr(c4_yco, 16);
+		v128_t cgf = wasm_i32x4_shr(wasm_i32x4_shl(c4_cga, 16), 16);
+		v128_t af = wasm_u32x4_shr(c4_cga, 16);
+
+		// recover scale from alpha high bit
+		v128_t as = af;
+		as = wasm_v128_or(as, wasm_i32x4_shr(as, 1));
+		as = wasm_v128_or(as, wasm_i32x4_shr(as, 2));
+		as = wasm_v128_or(as, wasm_i32x4_shr(as, 4));
+		as = wasm_v128_or(as, wasm_i32x4_shr(as, 8));
+
+		// expand alpha by one bit to match other components
+		af = wasm_v128_or(wasm_v128_and(wasm_i32x4_shl(af, 1), as), wasm_v128_and(af, wasm_i32x4_splat(1)));
+
+		// compute scaling factor
+		v128_t ss = wasm_f32x4_div(wasm_f32x4_splat(65535.f), wasm_f32x4_convert_i32x4(as));
+
+		// convert to RGB in fixed point
+		v128_t rf = wasm_i32x4_add(yf, wasm_i32x4_sub(cof, cgf));
+		v128_t gf = wasm_i32x4_add(yf, cgf);
+		v128_t bf = wasm_i32x4_sub(yf, wasm_i32x4_add(cof, cgf));
+
+		// fast rounded signed float->int: addition triggers renormalization after which mantissa stores the integer value
+		// note: the result is offset by 0x4B40_0000, but we only need the low 8 bits so we can omit the subtraction
+		const v128_t fsnap = wasm_f32x4_splat(3 << 22);
+
+		v128_t rr = wasm_f32x4_add(wasm_f32x4_mul(wasm_f32x4_convert_i32x4(rf), ss), fsnap);
+		v128_t gr = wasm_f32x4_add(wasm_f32x4_mul(wasm_f32x4_convert_i32x4(gf), ss), fsnap);
+		v128_t br = wasm_f32x4_add(wasm_f32x4_mul(wasm_f32x4_convert_i32x4(bf), ss), fsnap);
+		v128_t ar = wasm_f32x4_add(wasm_f32x4_mul(wasm_f32x4_convert_i32x4(af), ss), fsnap);
+
+		// mix r/b and g/a to make 16-bit unpack easier
+		v128_t rbr = wasm_v128_or(wasm_v128_and(rr, wasm_i32x4_splat(0xffff)), wasm_i32x4_shl(br, 16));
+		v128_t gar = wasm_v128_or(wasm_v128_and(gr, wasm_i32x4_splat(0xffff)), wasm_i32x4_shl(ar, 16));
+
+		// pack r/g/b/a using 16-bit unpacks
+		v128_t res_0 = wasmx_unpacklo_v16x8(rbr, gar);
+		v128_t res_1 = wasmx_unpackhi_v16x8(rbr, gar);
+
+		wasm_v128_store(&data[(i + 0) * 4], res_0);
+		wasm_v128_store(&data[(i + 2) * 4], res_1);
+	}
+}
 #endif
 
 // optimized variant of frexp
@@ -1123,7 +1228,7 @@ void meshopt_decodeFilterColor(void* buffer, size_t count, size_t stride)
 
 	assert(stride == 4 || stride == 8);
 
-#if defined(SIMD_SSE) || defined(SIMD_NEON) // || defined(SIMD_WASM)
+#if defined(SIMD_SSE) || defined(SIMD_NEON) || defined(SIMD_WASM)
 	if (stride == 4)
 		dispatchSimd(decodeFilterColorSimd8, static_cast<unsigned char*>(buffer), count, 4);
 	else
