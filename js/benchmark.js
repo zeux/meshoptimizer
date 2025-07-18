@@ -80,9 +80,11 @@ var tests = {
 
 		var filters = [
 			{ name: 'none', filter: 'NONE', stride: 16 },
-			{ name: 'oct4', filter: 'OCTAHEDRAL', stride: 4 },
+			{ name: 'oct8', filter: 'OCTAHEDRAL', stride: 4 },
 			{ name: 'oct12', filter: 'OCTAHEDRAL', stride: 8 },
 			{ name: 'quat12', filter: 'QUATERNION', stride: 8 },
+			{ name: 'col8', filter: 'COLOR', stride: 4 },
+			{ name: 'col12', filter: 'COLOR', stride: 8 },
 			{ name: 'exp', filter: 'EXPONENTIAL', stride: 16 },
 		];
 
@@ -130,10 +132,15 @@ Promise.all([encoder.ready, decoder.ready]).then(() => {
 			if (idx != 'bytes') {
 				rep += idx;
 				rep += ' ';
-				rep += data[key][idx];
+				rep += data[key][idx].toFixed(3);
 				rep += ' ms (';
-				rep += (data[key].bytes / 1e9 / data[key][idx]) * 1000;
+				rep += ((data[key].bytes / 1e9 / data[key][idx]) * 1000).toFixed(3);
 				rep += ' GB/s)';
+				if (key == 'decodeGltf' && idx != 'none') {
+					rep += '; filter ';
+					rep += ((data[key].bytes / 1e9 / (data[key][idx] - data[key]['none'])) * 1000).toFixed(3);
+					rep += ' GB/s';
+				}
 				rep += '\n';
 			}
 		}
