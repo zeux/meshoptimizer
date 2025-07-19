@@ -105,7 +105,7 @@ void benchCodecs(const std::vector<Vertex>& vertices, const std::vector<unsigned
 	}
 }
 
-void benchFilters(size_t count, double& besto8, double& besto12, double& bestq12, double& bestexp, bool verbose)
+void benchFilters(size_t count, double& besto8, double& besto12, double& bestq12, double& bestc8, double& bestc12, double& bestexp, bool verbose)
 {
 	// note: the filters are branchless so we just run them on runs of zeroes
 	size_t count4 = (count + 3) & ~3;
@@ -131,21 +131,33 @@ void benchFilters(size_t count, double& besto8, double& besto12, double& bestq12
 
 		double t3 = timestamp();
 
-		meshopt_decodeFilterExp(&d8[0], count4, 8);
+		meshopt_decodeFilterColor(&d4[0], count4, 4);
 
 		double t4 = timestamp();
 
+		meshopt_decodeFilterColor(&d8[0], count4, 8);
+
+		double t5 = timestamp();
+
+		meshopt_decodeFilterExp(&d8[0], count4, 8);
+
+		double t6 = timestamp();
+
 		if (verbose)
-			printf("filter: oct8 %.2f ms (%.2f GB/sec), oct12 %.2f ms (%.2f GB/sec), quat12 %.2f ms (%.2f GB/sec), exp %.2f ms (%.2f GB/sec)\n",
+			printf("filter: oct8 %.2f ms (%.2f GB/sec), oct12 %.2f ms (%.2f GB/sec), quat12 %.2f ms (%.2f GB/sec), col8 %.2f ms (%.2f GB/sec), col12 %.2f ms (%.2f GB/sec), exp %.2f ms (%.2f GB/sec)\n",
 			    (t1 - t0) * 1000, double(d4.size()) / 1e9 / (t1 - t0),
 			    (t2 - t1) * 1000, double(d8.size()) / 1e9 / (t2 - t1),
 			    (t3 - t2) * 1000, double(d8.size()) / 1e9 / (t3 - t2),
-			    (t4 - t3) * 1000, double(d8.size()) / 1e9 / (t4 - t3));
+			    (t4 - t3) * 1000, double(d8.size()) / 1e9 / (t4 - t3),
+			    (t5 - t4) * 1000, double(d4.size()) / 1e9 / (t5 - t4),
+			    (t6 - t5) * 1000, double(d8.size()) / 1e9 / (t6 - t5));
 
 		besto8 = std::max(besto8, double(d4.size()) / 1e9 / (t1 - t0));
 		besto12 = std::max(besto12, double(d8.size()) / 1e9 / (t2 - t1));
 		bestq12 = std::max(bestq12, double(d8.size()) / 1e9 / (t3 - t2));
-		bestexp = std::max(bestexp, double(d8.size()) / 1e9 / (t4 - t3));
+		bestc8 = std::max(bestc8, double(d4.size()) / 1e9 / (t4 - t3));
+		bestc12 = std::max(bestc12, double(d8.size()) / 1e9 / (t5 - t4));
+		bestexp = std::max(bestexp, double(d8.size()) / 1e9 / (t6 - t5));
 	}
 }
 
@@ -320,7 +332,7 @@ int main(int argc, char** argv)
 		}
 	}
 
-	printf("Algorithm   :\tvtx0\tvtx1\tidx\toct8\toct12\tquat12\texp\n");
+	printf("Algorithm   :\tvtx0\tvtx1\tidx\toct8\toct12\tquat12\tcol8\tcol12\texp\n");
 
 	for (int l = 0; l < (loop ? 100 : 1); ++l)
 	{
@@ -334,10 +346,10 @@ int main(int argc, char** argv)
 		double bestvd1 = 0, bestidr = 0;
 		benchCodecs(vertices, indices, bestvd1, bestidr, verbose);
 
-		double besto8 = 0, besto12 = 0, bestq12 = 0, bestexp = 0;
-		benchFilters(8 * N * N, besto8, besto12, bestq12, bestexp, verbose);
+		double besto8 = 0, besto12 = 0, bestq12 = 0, bestc8 = 0, bestc12 = 0, bestexp = 0;
+		benchFilters(8 * N * N, besto8, besto12, bestq12, bestc8, bestc12, bestexp, verbose);
 
-		printf("Score (GB/s):\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n",
-		    bestvd0, bestvd1, bestid, besto8, besto12, bestq12, bestexp);
+		printf("Score (GB/s):\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n",
+		    bestvd0, bestvd1, bestid, besto8, besto12, bestq12, bestc8, bestc12, bestexp);
 	}
 }

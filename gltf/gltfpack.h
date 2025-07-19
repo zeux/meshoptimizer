@@ -168,6 +168,7 @@ struct Settings
 
 	bool compress;
 	bool compressmore;
+	bool compressexp;
 	bool fallback;
 
 	int verbose;
@@ -195,10 +196,11 @@ struct StreamFormat
 {
 	enum Filter
 	{
-		Filter_None = 0,
-		Filter_Oct = 1,
-		Filter_Quat = 2,
-		Filter_Exp = 3,
+		Filter_None,
+		Filter_Oct,
+		Filter_Quat,
+		Filter_Exp,
+		Filter_Color,
 	};
 
 	cgltf_type type;
