@@ -1439,6 +1439,9 @@ void meshopt_encodeFilterColor(void* destination, size_t count, size_t stride, i
 		int fcg = (fg - tmp) / 2;
 		int fy = tmp + fcg;
 
+		// validate that R/G/B can be reconstructed with K bit integers
+		assert(unsigned((fy + fco - fcg) | (fy + fcg) | (fy - fco - fcg)) < (1u << bits));
+
 		// alpha: K-1-bit encoding with high bit set to 1
 		int fa = meshopt_quantizeUnorm(c[3], bits - 1) | (1 << (bits - 1));
 
