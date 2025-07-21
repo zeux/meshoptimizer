@@ -25,6 +25,7 @@ If you are shipping a game that is using meshoptimizer, listing the library in t
 - [Sky: Children of the Light (2019)](https://www.thatskygame.com/)
 - [Stranded: Alien Dawn (2023)](https://www.strandedaliendawn.com/en-US)
 - [Tunnet (2023)](https://store.steampowered.com/app/2286390/Tunnet/)
+- [Warframe (2013)](https://www.warframe.com/game/about)
 
 # Engines
 
