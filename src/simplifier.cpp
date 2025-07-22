@@ -904,6 +904,13 @@ static void fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 			Quadric Q;
 			quadricFromTriangleEdge(Q, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2], edgeWeight);
 
+			Quadric QT;
+			quadricFromTriangle(QT, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2], edgeWeight);
+
+			// mix edge quadric with triangle quadric to stabilize collapses in both directions; both quadrics inherit edge weight so that their error is added
+			QT.w = 0;
+			quadricAdd(Q, QT);
+
 			quadricAdd(vertex_quadrics[remap[i0]], Q);
 			quadricAdd(vertex_quadrics[remap[i1]], Q);
 		}
