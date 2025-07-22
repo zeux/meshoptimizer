@@ -743,6 +743,33 @@ static void quadricFromTriangleEdge(Quadric& Q, const Vector3& p0, const Vector3
 	quadricFromPlane(Q, perp.x, perp.y, perp.z, -distance, length * weight);
 }
 
+static void quadricFromLine(Quadric& Q, const Vector3& p0, const Vector3& p1, float weight)
+{
+	Vector3 n = {p1.x - p0.x, p1.y - p0.y, p1.z - p0.z};
+	float length = normalize(n);
+
+	// d^2 = (n.y * Z - n.z * Y + cx)^2 + (n.z * X - n.x * Z + cy)^2 + (n.x * Y - n.y * X + cz)^2
+	float cx = n.z * p0.y - n.y * p0.z;
+	float cy = n.x * p0.z - n.z * p0.x;
+	float cz = n.y * p0.x - n.x * p0.y;
+
+	// note: the weight is scaled linearly with edge length; this has to match the triangle weight
+	float w = length * weight;
+
+	// expand the equation above to quadric form
+	Q.a00 = (n.z * n.z + n.y * n.y) * w;
+	Q.a11 = (n.x * n.x + n.z * n.z) * w;
+	Q.a22 = (n.x * n.x + n.y * n.y) * w;
+	Q.a10 = -n.x * n.y * w;
+	Q.a20 = -n.x * n.z * w;
+	Q.a21 = -n.y * n.z * w;
+	Q.b0 = (cy * n.z - cz * n.y) * w;
+	Q.b1 = (cz * n.x - cx * n.z) * w;
+	Q.b2 = (cx * n.y - cy * n.x) * w;
+	Q.c = (cx * cx + cy * cy + cz * cz) * w;
+	Q.w = w;
+}
+
 static void quadricFromAttributes(Quadric& Q, QuadricGrad* G, const Vector3& p0, const Vector3& p1, const Vector3& p2, const float* va0, const float* va1, const float* va2, size_t attribute_count)
 {
 	// for each attribute we want to encode the following function into the quadric:
@@ -910,6 +937,9 @@ static void fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 			// mix edge quadric with triangle quadric to stabilize collapses in both directions; both quadrics inherit edge weight so that their error is added
 			QT.w = 0;
 			quadricAdd(Q, QT);
+
+			if (k0 == Kind_Seam || k1 == Kind_Seam)
+				quadricFromLine(Q, vertex_positions[i0], vertex_positions[i1], edgeWeight);
 
 			quadricAdd(vertex_quadrics[remap[i0]], Q);
 			quadricAdd(vertex_quadrics[remap[i1]], Q);
