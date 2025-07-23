@@ -2200,12 +2200,12 @@ static void simplifySeam()
 
 	assert(meshopt_simplify(res, ib, 36, vb, 16, 16, 12, 1.f, 0, &error) == 12);
 	assert(memcmp(res, expected, sizeof(expected)) == 0);
-	assert(fabsf(error - 0.09f) < 0.01f); // note: the error is not zero because there is a difference in height between the seam vertices
+	assert(fabsf(error - 0.1f) < 0.01f); // note: the error is not zero because there is a difference in height between the seam vertices
 
 	float aw = 1;
 	assert(meshopt_simplifyWithAttributes(res, ib, 36, vb, 16, 16, vb + 3, 16, &aw, 1, NULL, 12, 2.f, 0, &error) == 12);
 	assert(memcmp(res, expected, sizeof(expected)) == 0);
-	assert(fabsf(error - 0.09f) < 0.01f); // note: this is the same error as above because the attribute is constant on either side of the seam
+	assert(fabsf(error - 0.1f) < 0.01f); // note: this is the same error as above because the attribute is constant on either side of the seam
 }
 
 static void simplifySeamFake()

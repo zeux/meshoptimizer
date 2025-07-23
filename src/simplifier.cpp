@@ -888,21 +888,24 @@ static void fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 			if ((k1 == Kind_Border || k1 == Kind_Seam) && loopback[i1] != i0)
 				continue;
 
-			// seam edges should occur twice (i0->i1 and i1->i0) - skip redundant edges
-			if (kHasOpposite[k0][k1] && remap[i1] > remap[i0])
-				continue;
-
 			unsigned int i2 = indices[i + next[e + 1]];
 
 			// we try hard to maintain border edge geometry; seam edges can move more freely
 			// due to topological restrictions on collapses, seam quadrics slightly improves collapse structure but aren't critical
-			const float kEdgeWeightSeam = 1.f;
+			const float kEdgeWeightSeam = 0.5f; // applied twice due to opposite edges
 			const float kEdgeWeightBorder = 10.f;
 
 			float edgeWeight = (k0 == Kind_Border || k1 == Kind_Border) ? kEdgeWeightBorder : kEdgeWeightSeam;
 
 			Quadric Q;
 			quadricFromTriangleEdge(Q, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2], edgeWeight);
+
+			Quadric QT;
+			quadricFromTriangle(QT, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2], edgeWeight);
+
+			// mix edge quadric with triangle quadric to stabilize collapses in both directions; both quadrics inherit edge weight so that their error is added
+			QT.w = 0;
+			quadricAdd(Q, QT);
 
 			quadricAdd(vertex_quadrics[remap[i0]], Q);
 			quadricAdd(vertex_quadrics[remap[i1]], Q);
