@@ -870,6 +870,29 @@ static void quadricFromAttributes(Quadric& Q, QuadricGrad* G, const Vector3& p0,
 	}
 }
 
+static bool quadricSolve(Vector3& p, const Quadric& Q)
+{
+	// solve A*p = -b where A is the quadric matrix and b is the linear term
+	float a00 = Q.a00, a11 = Q.a11, a22 = Q.a22;
+	float a10 = Q.a10, a20 = Q.a20, a21 = Q.a21;
+	float b0 = -Q.b0, b1 = -Q.b1, b2 = -Q.b2;
+
+	float det = a00 * (a11 * a22 - a21 * a21) - a10 * (a10 * a22 - a21 * a20) + a20 * (a10 * a21 - a11 * a20);
+
+	if (fabsf(det) < 1e-9f)
+		return false;
+
+	// solve using Cramer's rule: p_c = det(A_c) / det(A) where A_c has first column replaced with b
+	float det_x = b0 * (a11 * a22 - a21 * a21) - a10 * (b1 * a22 - a21 * b2) + a20 * (b1 * a21 - a11 * b2);
+	float det_y = a00 * (b1 * a22 - a21 * b2) - b0 * (a10 * a22 - a21 * a20) + a20 * (a10 * b2 - b1 * a20);
+	float det_z = a00 * (a11 * b2 - b1 * a21) - a10 * (a10 * b2 - b1 * a20) + b0 * (a10 * a21 - a11 * a20);
+
+	p.x = det_x / det;
+	p.y = det_y / det;
+	p.z = det_z / det;
+	return true;
+}
+
 static void fillFaceQuadrics(Quadric* vertex_quadrics, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const unsigned int* remap)
 {
 	for (size_t i = 0; i < index_count; i += 3)
@@ -1398,6 +1421,36 @@ static void updateQuadrics(const unsigned int* collapse_remap, size_t vertex_cou
 			}
 		}
 	}
+}
+
+static void solveQuadrics(Vector3* vertex_positions, size_t vertex_count, const unsigned int* remap, const Quadric* vertex_quadrics)
+{
+#ifdef TRACE
+	size_t stats[4] = {};
+	float staterr = 0;
+#endif
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		TRACESTATS(0);
+
+		const Quadric& Q = vertex_quadrics[remap[i]];
+
+		Vector3 p;
+		if (!quadricSolve(p, Q))
+			continue;
+
+		vertex_positions[i] = p;
+
+#if TRACE
+		TRACESTATS(1);
+		staterr += sqrtf(quadricError(Q, p));
+#endif
+	}
+
+#if TRACE
+	printf("solved %d/%d positions; avg error %e\n", int(stats[1]), int(stats[0]), staterr / stats[1]);
+#endif
 }
 
 static size_t remapIndexBuffer(unsigned int* indices, size_t index_count, const unsigned int* collapse_remap)
@@ -2146,6 +2199,9 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 		if ((options & meshopt_SimplifyPrune) && result_count > target_index_count && component_nexterror <= vertex_error)
 			result_count = pruneComponents(result, result_count, components, component_errors, component_count, vertex_error, component_nexterror);
 	}
+
+	if (options & meshopt_SimplifyInternalSolve)
+		solveQuadrics(vertex_positions, vertex_count, remap, vertex_quadrics);
 
 	// when a vertex is collapsed onto a seam pair, if it was connected to both vertices, that will create a zero area triangle
 	// which is not topologically degenerate; filter out triangles like this as a post-process (this breaks loop metadata so it must be done last)
