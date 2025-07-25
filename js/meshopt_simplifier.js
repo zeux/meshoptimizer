@@ -77,7 +77,18 @@ var MeshoptSimplifier = (function () {
 		return result;
 	}
 
-	function simplify(fun, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride, target_index_count, target_error, options) {
+	function simplify(
+		fun,
+		indices,
+		index_count,
+		vertex_positions,
+		vertex_count,
+		vertex_positions_stride,
+		target_index_count,
+		target_error,
+		options,
+		update
+	) {
 		var sbrk = instance.exports.sbrk;
 		var te = sbrk(4);
 		var ti = sbrk(index_count * 4);
@@ -93,6 +104,9 @@ var MeshoptSimplifier = (function () {
 		bytes(target).set(heap.subarray(ti, ti + result * 4));
 		var error = new Float32Array(1);
 		bytes(error).set(heap.subarray(te, te + 4));
+		if (update) {
+			bytes(vertex_positions).set(heap.subarray(sp, sp + vertex_count * vertex_positions_stride));
+		}
 		sbrk(te - sbrk(0));
 		return [target, error[0]];
 	}
@@ -110,7 +124,8 @@ var MeshoptSimplifier = (function () {
 		vertex_lock,
 		target_index_count,
 		target_error,
-		options
+		options,
+		update
 	) {
 		var sbrk = instance.exports.sbrk;
 		var te = sbrk(4);
@@ -151,6 +166,10 @@ var MeshoptSimplifier = (function () {
 		bytes(target).set(heap.subarray(ti, ti + result * 4));
 		var error = new Float32Array(1);
 		bytes(error).set(heap.subarray(te, te + 4));
+		if (update) {
+			bytes(vertex_positions).set(heap.subarray(sp, sp + vertex_count * vertex_positions_stride));
+			bytes(vertex_attributes).set(heap.subarray(sa, sa + vertex_count * vertex_attributes_stride));
+		}
 		sbrk(te - sbrk(0));
 		return [target, error[0]];
 	}
@@ -250,6 +269,7 @@ var MeshoptSimplifier = (function () {
 		ErrorAbsolute: 4,
 		Prune: 8,
 		Regularize: 16,
+		_InternalSolve: 1 << 29, // internal, don't use!
 		_InternalDebug: 1 << 30, // internal, don't use!
 	};
 
@@ -295,7 +315,8 @@ var MeshoptSimplifier = (function () {
 				vertex_positions_stride * 4,
 				target_index_count,
 				target_error,
-				options
+				options,
+				(options & simplifyOptions._InternalSolve) != 0
 			);
 			result[0] = indices instanceof Uint32Array ? result[0] : new indices.constructor(result[0]);
 
@@ -356,7 +377,8 @@ var MeshoptSimplifier = (function () {
 				vertex_lock ? new Uint8Array(vertex_lock) : null,
 				target_index_count,
 				target_error,
-				options
+				options,
+				(options & simplifyOptions._InternalSolve) != 0
 			);
 			result[0] = indices instanceof Uint32Array ? result[0] : new indices.constructor(result[0]);
 
