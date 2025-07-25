@@ -394,6 +394,13 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 				{
 					result[i] = Kind_Manifold;
 				}
+				else if (openi != ~0u && openo != ~0u && remap[openi] == remap[openo] && openi != i)
+				{
+					// classify half-seams as seams (the branch below would mis-classify them as borders)
+					// half-seam is a single vertex that connects to both vertices of a potential seam
+					// treating these as seams allows collapsing the "full" seam vertex onto them
+					result[i] = Kind_Seam;
+				}
 				else if (openi != i && openo != i)
 				{
 					result[i] = Kind_Border;
@@ -1111,7 +1118,7 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 				unsigned int s0 = wedge[i0];
 				unsigned int s1 = loop[i0] == i1 ? loopback[s0] : loop[s0];
 
-				assert(s0 != i0 && wedge[s0] == i0);
+				assert(wedge[s0] == i0); // s0 may be equal to i0 for half-seams
 				assert(s1 != ~0u && remap[s1] == remap[i1]);
 
 				// note: this should never happen due to the assertion above, but when disabled if we ever hit this case we'll get a memory safety issue; for now play it safe
@@ -1277,7 +1284,7 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 			// for seam collapses we need to move the seam pair together; this is a bit tricky since we need to rely on edge loops as target vertex may be locked (and thus have more than two wedges)
 			unsigned int s0 = wedge[i0];
 			unsigned int s1 = loop[i0] == i1 ? loopback[s0] : loop[s0];
-			assert(s0 != i0 && wedge[s0] == i0);
+			assert(wedge[s0] == i0); // s0 may be equal to i0 for half-seams
 			assert(s1 != ~0u && remap[s1] == r1);
 
 			// additional asserts to verify that the seam pair is consistent
