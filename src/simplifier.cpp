@@ -486,7 +486,7 @@ struct Vector3
 	float x, y, z;
 };
 
-static float rescalePositions(Vector3* result, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const unsigned int* sparse_remap = NULL)
+static float rescalePositions(Vector3* result, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const unsigned int* sparse_remap = NULL, float* out_offset = NULL)
 {
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
@@ -532,6 +532,13 @@ static float rescalePositions(Vector3* result, const float* vertex_positions_dat
 		}
 	}
 
+	if (out_offset)
+	{
+		out_offset[0] = minv[0];
+		out_offset[1] = minv[1];
+		out_offset[2] = minv[2];
+	}
+
 	return extent;
 }
 
@@ -549,6 +556,37 @@ static void rescaleAttributes(float* result, const float* vertex_attributes_data
 			float a = vertex_attributes_data[ri * vertex_attributes_stride_float + rk];
 
 			result[i * attribute_count + k] = a * attribute_weights[rk];
+		}
+	}
+}
+
+static void finalizeVertices(float* vertex_positions_data, size_t vertex_positions_stride, float* vertex_attributes_data, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, size_t vertex_count, const Vector3* vertex_positions, const float* vertex_attributes, const unsigned int* sparse_remap, const unsigned int* attribute_remap, float vertex_scale, const float* vertex_offset)
+{
+	size_t vertex_positions_stride_float = vertex_positions_stride / sizeof(float);
+	size_t vertex_attributes_stride_float = vertex_attributes_stride / sizeof(float);
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		unsigned int ri = sparse_remap ? sparse_remap[i] : i;
+
+		const Vector3& p = vertex_positions[i];
+		float* v = vertex_positions_data + ri * vertex_positions_stride_float;
+
+		v[0] = p.x * vertex_scale + vertex_offset[0];
+		v[1] = p.y * vertex_scale + vertex_offset[1];
+		v[2] = p.z * vertex_scale + vertex_offset[2];
+
+		if (attribute_count)
+		{
+			const float* sa = vertex_attributes + i * attribute_count;
+			float* va = vertex_attributes_data + ri * vertex_attributes_stride_float;
+
+			for (size_t k = 0; k < attribute_count; ++k)
+			{
+				unsigned int rk = attribute_remap[k];
+
+				va[rk] = sa[k] / attribute_weights[rk];
+			}
 		}
 	}
 }
@@ -1912,9 +1950,10 @@ static float interpolate(float y, float x0, float y0, float x1, float y1, float 
 
 } // namespace meshopt
 
-// Note: this is only exposed for debug visualization purposes; do *not* use
+// Note: this is only exposed for development purposes; do *not* use
 enum
 {
+	meshopt_SimplifyInternalSolve = 1 << 29,
 	meshopt_SimplifyInternalDebug = 1 << 30
 };
 
@@ -1927,7 +1966,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	assert(vertex_positions_stride % sizeof(float) == 0);
 	assert(target_index_count <= index_count);
 	assert(target_error >= 0);
-	assert((options & ~(meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute | meshopt_SimplifyPrune | meshopt_SimplifyRegularize | meshopt_SimplifyInternalDebug)) == 0);
+	assert((options & ~(meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute | meshopt_SimplifyPrune | meshopt_SimplifyRegularize | meshopt_SimplifyInternalSolve | meshopt_SimplifyInternalDebug)) == 0);
 	assert(vertex_attributes_stride >= attribute_count * sizeof(float) && vertex_attributes_stride <= 256);
 	assert(vertex_attributes_stride % sizeof(float) == 0);
 	assert(attribute_count <= kMaxAttributes);
@@ -1979,14 +2018,14 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 #endif
 
 	Vector3* vertex_positions = allocator.allocate<Vector3>(vertex_count);
-	float vertex_scale = rescalePositions(vertex_positions, vertex_positions_data, vertex_count, vertex_positions_stride, sparse_remap);
+	float vertex_offset[3] = {};
+	float vertex_scale = rescalePositions(vertex_positions, vertex_positions_data, vertex_count, vertex_positions_stride, sparse_remap, vertex_offset);
 
 	float* vertex_attributes = NULL;
+	unsigned int attribute_remap[kMaxAttributes];
 
 	if (attribute_count)
 	{
-		unsigned int attribute_remap[kMaxAttributes];
-
 		// remap attributes to only include ones with weight > 0 to minimize memory/compute overhead for quadrics
 		size_t attributes_used = 0;
 		for (size_t i = 0; i < attribute_count; ++i)
@@ -2143,6 +2182,10 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 #if TRACE
 	printf("result: %d triangles, error: %e (pos %.3e); total %d passes\n", int(result_count / 3), sqrtf(result_error), sqrtf(vertex_error), int(pass_count));
 #endif
+
+	// if solve is requested, update input buffers destructively from internal data
+	if (options & meshopt_SimplifyInternalSolve)
+		finalizeVertices(const_cast<float*>(vertex_positions_data), vertex_positions_stride, const_cast<float*>(vertex_attributes_data), vertex_attributes_stride, attribute_weights, attribute_count, vertex_count, vertex_positions, vertex_attributes, sparse_remap, attribute_remap, vertex_scale, vertex_offset);
 
 	// if debug visualization data is requested, fill it instead of index data; for simplicity, this doesn't work with sparsity
 	if ((options & meshopt_SimplifyInternalDebug) && !sparse_remap)
