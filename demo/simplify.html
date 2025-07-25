@@ -159,6 +159,7 @@
 				preprune: 0.0,
 				prune: true,
 				regularize: false,
+				solve: false,
 				useAttributes: true,
 				errorThresholdLog10: 1,
 				errorScaled: true,
@@ -205,6 +206,7 @@
 			guiSimplify.add(settings, 'lockBorder').onChange(simplify);
 			guiSimplify.add(settings, 'prune').onChange(simplify);
 			guiSimplify.add(settings, 'regularize').onChange(simplify);
+			guiSimplify.add(settings, 'solve').onChange(simplify);
 			guiSimplify.add(settings, 'preprune', 0, 0.2, 0.01).onChange(simplify);
 			guiSimplify.add(settings, 'useAttributes').onChange(simplify).onFinishChange(updateSettings);
 
@@ -442,8 +444,8 @@
 			function simplifyMesh(geo, threshold, scale) {
 				var attributes = 8; // 3 color, 3 normal, 2 uv
 
-				var positions = new Float32Array(geo.attributes.position.array);
-				var indices = new Uint32Array(geo.index.array); // needed for _InternalDebug to work
+				var positions = new Float32Array(geo.attributes.position.array).slice(); // clone for _InternalSolve
+				var indices = new Uint32Array(geo.index.array); // upcast 16-bit indices for _InternalDebug
 				var target = settings.autoLod ? 0 : Math.floor((indices.length * settings.ratio) / 3) * 3;
 
 				if (settings.useAttributes) {
@@ -489,6 +491,9 @@
 				}
 				if (settings.regularize) {
 					flags.push('Regularize');
+				}
+				if (settings.solve) {
+					flags.push('_InternalSolve');
 				}
 				if (settings.debugOverlay) {
 					flags.push('_InternalDebug');
@@ -569,6 +574,35 @@
 				rgeo.index.array = new Uint32Array(dind);
 				rgeo.index.count = dind.length;
 				rgeo.index.needsUpdate = true;
+
+				if (settings.solve) {
+					for (var i = 0, e = geo.attributes.position.count; i < e; ++i) {
+						rgeo.attributes.position.setX(i, positions[i * stride + 0]);
+						rgeo.attributes.position.setY(i, positions[i * stride + 1]);
+						rgeo.attributes.position.setZ(i, positions[i * stride + 2]);
+					}
+
+					if (settings.useAttributes && geo.attributes.normal) {
+						for (var i = 0, e = geo.attributes.position.count; i < e; ++i) {
+							var nx = attrib[i * attributes + 0];
+							var ny = attrib[i * attributes + 1];
+							var nz = attrib[i * attributes + 2];
+
+							var nl = Math.sqrt(nx * nx + ny * ny + nz * nz);
+
+							rgeo.attributes.normal.setX(i, nx / nl);
+							rgeo.attributes.normal.setY(i, ny / nl);
+							rgeo.attributes.normal.setZ(i, nz / nl);
+						}
+					}
+
+					if (settings.useAttributes && geo.attributes.uv) {
+						for (var i = 0, e = geo.attributes.position.count; i < e; ++i) {
+							rgeo.attributes.uv.setX(i, attrib[i * attributes + 6]);
+							rgeo.attributes.uv.setY(i, attrib[i * attributes + 7]);
+						}
+					}
+				}
 
 				rgeo.addGroup(0, res[0].length, 0);
 
