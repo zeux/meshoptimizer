@@ -1111,6 +1111,24 @@ static bool hasTriangleFlips(const EdgeAdjacency& adjacency, const Vector3* vert
 	return false;
 }
 
+static bool hasTriangleFlips(const EdgeAdjacency& adjacency, const Vector3* vertex_positions, unsigned int i0, const Vector3& v1)
+{
+	const Vector3& v0 = vertex_positions[i0];
+
+	const EdgeAdjacency::Edge* edges = &adjacency.data[adjacency.offsets[i0]];
+	size_t count = adjacency.offsets[i0 + 1] - adjacency.offsets[i0];
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		unsigned int a = edges[i].next, b = edges[i].prev;
+
+		if (hasTriangleFlip(vertex_positions[a], vertex_positions[b], v0, v1))
+			return true;
+	}
+
+	return false;
+}
+
 static size_t boundEdgeCollapses(const EdgeAdjacency& adjacency, size_t vertex_count, size_t index_count, unsigned char* vertex_kind)
 {
 	size_t dual_count = 0;
@@ -1478,11 +1496,10 @@ static void updateQuadrics(const unsigned int* collapse_remap, size_t vertex_cou
 	}
 }
 
-static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, size_t vertex_count, const Quadric* vertex_quadrics, const Quadric* attribute_quadrics, const QuadricGrad* attribute_gradients, size_t attribute_count, const unsigned int* remap, const unsigned char* vertex_update)
+static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, size_t vertex_count, const Quadric* vertex_quadrics, const Quadric* attribute_quadrics, const QuadricGrad* attribute_gradients, size_t attribute_count, const unsigned int* remap, const EdgeAdjacency& adjacency, const unsigned char* vertex_update)
 {
 #ifdef TRACE
 	size_t stats[4] = {};
-	float staterr = 0;
 #endif
 
 	for (size_t i = 0; i < vertex_count; ++i)
@@ -1505,22 +1522,29 @@ static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, s
 
 		Vector3 p;
 		if (!quadricSolve(p, Q))
+		{
+			TRACESTATS(1);
 			continue;
+		}
+
+		if (hasTriangleFlips(adjacency, vertex_positions, i, p))
+		{
+			TRACESTATS(2);
+			continue;
+		}
 
 		vertex_positions[i] = p;
-
-#if TRACE
-		TRACESTATS(1);
-		staterr += sqrtf(quadricError(Q, p));
-#endif
 	}
 
 #if TRACE
-	printf("solved %d/%d positions; avg error %e\n", int(stats[1]), int(stats[0]), staterr / stats[1]);
+	printf("updated %d/%d positions; failed solve %d flip %d\n", int(stats[0] - stats[1] - stats[2]), int(stats[0]), int(stats[1]), int(stats[2]));
 #endif
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
+		if (!vertex_update[i])
+			continue;
+
 		const Vector3& p = vertex_positions[remap[i]];
 		const Quadric& A = attribute_quadrics[i];
 
@@ -2332,7 +2356,8 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 			vertex_update[v] = (k == Kind_Manifold || k == Kind_Complex);
 		}
 
-		solveQuadrics(vertex_positions, vertex_attributes, vertex_count, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, remap, vertex_update);
+		updateEdgeAdjacency(adjacency, result, result_count, vertex_count, remap);
+		solveQuadrics(vertex_positions, vertex_attributes, vertex_count, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, remap, adjacency, vertex_update);
 
 		finalizeVertices(const_cast<float*>(vertex_positions_data), vertex_positions_stride, const_cast<float*>(vertex_attributes_data), vertex_attributes_stride, attribute_weights, attribute_count, vertex_count, vertex_positions, vertex_attributes, sparse_remap, attribute_remap, vertex_scale, vertex_offset, vertex_update);
 	}
