@@ -561,13 +561,16 @@ static void rescaleAttributes(float* result, const float* vertex_attributes_data
 	}
 }
 
-static void finalizeVertices(float* vertex_positions_data, size_t vertex_positions_stride, float* vertex_attributes_data, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, size_t vertex_count, const Vector3* vertex_positions, const float* vertex_attributes, const unsigned int* sparse_remap, const unsigned int* attribute_remap, float vertex_scale, const float* vertex_offset)
+static void finalizeVertices(float* vertex_positions_data, size_t vertex_positions_stride, float* vertex_attributes_data, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, size_t vertex_count, const Vector3* vertex_positions, const float* vertex_attributes, const unsigned int* sparse_remap, const unsigned int* attribute_remap, float vertex_scale, const float* vertex_offset, const unsigned char* vertex_update)
 {
 	size_t vertex_positions_stride_float = vertex_positions_stride / sizeof(float);
 	size_t vertex_attributes_stride_float = vertex_attributes_stride / sizeof(float);
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
+		if (!vertex_update[i])
+			continue;
+
 		unsigned int ri = sparse_remap ? sparse_remap[i] : i;
 
 		const Vector3& p = vertex_positions[i];
@@ -1475,7 +1478,7 @@ static void updateQuadrics(const unsigned int* collapse_remap, size_t vertex_cou
 	}
 }
 
-static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, size_t vertex_count, const Quadric* vertex_quadrics, const Quadric* attribute_quadrics, const QuadricGrad* attribute_gradients, size_t attribute_count, const unsigned int* remap, const unsigned char* vertex_kind)
+static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, size_t vertex_count, const Quadric* vertex_quadrics, const Quadric* attribute_quadrics, const QuadricGrad* attribute_gradients, size_t attribute_count, const unsigned int* remap, const unsigned char* vertex_update)
 {
 #ifdef TRACE
 	size_t stats[4] = {};
@@ -1484,7 +1487,7 @@ static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, s
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		if (vertex_kind[i] != Kind_Manifold && vertex_kind[i] != Kind_Complex)
+		if (!vertex_update[i])
 			continue;
 
 		if (remap[i] != i)
@@ -2279,9 +2282,6 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 			result_count = pruneComponents(result, result_count, components, component_errors, component_count, vertex_error, component_nexterror);
 	}
 
-	if (options & meshopt_SimplifyInternalSolve)
-		solveQuadrics(vertex_positions, vertex_attributes, vertex_count, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, remap, vertex_kind);
-
 	// when a vertex is collapsed onto a seam pair, if it was connected to both vertices, that will create a zero area triangle
 	// which is not topologically degenerate; filter out triangles like this as a post-process (this breaks loop metadata so it must be done last)
 	result_count = filterIndexBuffer(result, result_count, remap);
@@ -2320,7 +2320,22 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 
 	// if solve is requested, update input buffers destructively from internal data
 	if (options & meshopt_SimplifyInternalSolve)
-		finalizeVertices(const_cast<float*>(vertex_positions_data), vertex_positions_stride, const_cast<float*>(vertex_attributes_data), vertex_attributes_stride, attribute_weights, attribute_count, vertex_count, vertex_positions, vertex_attributes, sparse_remap, attribute_remap, vertex_scale, vertex_offset);
+	{
+		unsigned char* vertex_update = collapse_locked; // reuse as scratch space
+		memset(vertex_update, 0, vertex_count);
+
+		for (size_t i = 0; i < result_count; ++i)
+		{
+			unsigned int v = result[i];
+			unsigned char k = vertex_kind[v];
+
+			vertex_update[v] = (k == Kind_Manifold || k == Kind_Complex);
+		}
+
+		solveQuadrics(vertex_positions, vertex_attributes, vertex_count, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, remap, vertex_update);
+
+		finalizeVertices(const_cast<float*>(vertex_positions_data), vertex_positions_stride, const_cast<float*>(vertex_attributes_data), vertex_attributes_stride, attribute_weights, attribute_count, vertex_count, vertex_positions, vertex_attributes, sparse_remap, attribute_remap, vertex_scale, vertex_offset, vertex_update);
+	}
 
 	// if debug visualization data is requested, fill it instead of index data; for simplicity, this doesn't work with sparsity
 	if ((options & meshopt_SimplifyInternalDebug) && !sparse_remap)
