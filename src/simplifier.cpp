@@ -27,6 +27,7 @@
 // Matthias Teschner, Bruno Heidelberger, Matthias Mueller, Danat Pomeranets, Markus Gross. Optimized Spatial Hashing for Collision Detection of Deformable Objects. 2003
 // Peter Van Sandt, Yannis Chronis, Jignesh M. Patel. Efficiently Searching In-Memory Sorted Arrays: Revenge of the Interpolation Search? 2019
 // Hugues Hoppe. New Quadric Metric for Simplifying Meshes with Appearance Attributes. 1999
+// Hugues Hoppe, Steve Marschner. Efficient Minimization of New Quadric Metric for Simplifying Meshes with Appearance Attributes. 2000
 namespace meshopt
 {
 
@@ -893,6 +894,39 @@ static bool quadricSolve(Vector3& p, const Quadric& Q)
 	return true;
 }
 
+static void quadricReduceAttributes(Quadric& Q, const Quadric& A, const QuadricGrad* G, size_t attribute_count)
+{
+	// update vertex quadric with attribute quadric; multiply by vertex weight to minimize normalized error
+	Q.a00 += A.a00 * Q.w;
+	Q.a11 += A.a11 * Q.w;
+	Q.a22 += A.a22 * Q.w;
+	Q.a10 += A.a10 * Q.w;
+	Q.a20 += A.a20 * Q.w;
+	Q.a21 += A.a21 * Q.w;
+	Q.b0 += A.b0 * Q.w;
+	Q.b1 += A.b1 * Q.w;
+	Q.b2 += A.b2 * Q.w;
+
+	float iaw = A.w == 0 ? 0.f : Q.w / A.w;
+
+	// update linear system based on attribute gradients (BB^T/a)
+	for (size_t k = 0; k < attribute_count; ++k)
+	{
+		const QuadricGrad& g = G[k];
+
+		Q.a00 -= (g.gx * g.gx) * iaw;
+		Q.a11 -= (g.gy * g.gy) * iaw;
+		Q.a22 -= (g.gz * g.gz) * iaw;
+		Q.a10 -= (g.gx * g.gy) * iaw;
+		Q.a20 -= (g.gx * g.gz) * iaw;
+		Q.a21 -= (g.gy * g.gz) * iaw;
+
+		Q.b0 -= (g.gx * g.gw) * iaw;
+		Q.b1 -= (g.gy * g.gw) * iaw;
+		Q.b2 -= (g.gz * g.gw) * iaw;
+	}
+}
+
 static void fillFaceQuadrics(Quadric* vertex_quadrics, const unsigned int* indices, size_t index_count, const Vector3* vertex_positions, const unsigned int* remap)
 {
 	for (size_t i = 0; i < index_count; i += 3)
@@ -1434,7 +1468,10 @@ static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, s
 	{
 		TRACESTATS(0);
 
-		const Quadric& Q = vertex_quadrics[remap[i]];
+		Quadric Q = vertex_quadrics[remap[i]];
+
+		if (attribute_count)
+			quadricReduceAttributes(Q, attribute_quadrics[i], &attribute_gradients[i * attribute_count], attribute_count);
 
 		Vector3 p;
 		if (!quadricSolve(p, Q))
