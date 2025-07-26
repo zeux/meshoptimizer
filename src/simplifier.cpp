@@ -1423,7 +1423,7 @@ static void updateQuadrics(const unsigned int* collapse_remap, size_t vertex_cou
 	}
 }
 
-static void solveQuadrics(Vector3* vertex_positions, size_t vertex_count, const unsigned int* remap, const Quadric* vertex_quadrics)
+static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, size_t vertex_count, const Quadric* vertex_quadrics, const Quadric* attribute_quadrics, const QuadricGrad* attribute_gradients, size_t attribute_count, const unsigned int* remap)
 {
 #ifdef TRACE
 	size_t stats[4] = {};
@@ -1451,6 +1451,21 @@ static void solveQuadrics(Vector3* vertex_positions, size_t vertex_count, const 
 #if TRACE
 	printf("solved %d/%d positions; avg error %e\n", int(stats[1]), int(stats[0]), staterr / stats[1]);
 #endif
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		const Vector3& p = vertex_positions[remap[i]];
+		const Quadric& A = attribute_quadrics[i];
+
+		float iw = A.w == 0 ? 0.f : 1.f / A.w;
+
+		for (size_t k = 0; k < attribute_count; ++k)
+		{
+			const QuadricGrad& G = attribute_gradients[i * attribute_count + k];
+
+			vertex_attributes[i * attribute_count + k] = (G.gx * p.x + G.gy * p.y + G.gz * p.z + G.gw) * iw;
+		}
+	}
 }
 
 static size_t remapIndexBuffer(unsigned int* indices, size_t index_count, const unsigned int* collapse_remap)
@@ -2201,7 +2216,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	}
 
 	if (options & meshopt_SimplifyInternalSolve)
-		solveQuadrics(vertex_positions, vertex_count, remap, vertex_quadrics);
+		solveQuadrics(vertex_positions, vertex_attributes, vertex_count, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, remap);
 
 	// when a vertex is collapsed onto a seam pair, if it was connected to both vertices, that will create a zero area triangle
 	// which is not topologically degenerate; filter out triangles like this as a post-process (this breaks loop metadata so it must be done last)
