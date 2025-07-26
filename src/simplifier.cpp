@@ -876,21 +876,46 @@ static bool quadricSolve(Vector3& p, const Quadric& Q)
 	// solve A*p = -b where A is the quadric matrix and b is the linear term
 	float a00 = Q.a00, a11 = Q.a11, a22 = Q.a22;
 	float a10 = Q.a10, a20 = Q.a20, a21 = Q.a21;
-	float b0 = -Q.b0, b1 = -Q.b1, b2 = -Q.b2;
+	float x0 = -Q.b0, x1 = -Q.b1, x2 = -Q.b2;
 
-	float det = a00 * (a11 * a22 - a21 * a21) - a10 * (a10 * a22 - a21 * a20) + a20 * (a10 * a21 - a11 * a20);
+	const float eps = 1e-6f;
 
-	if (fabsf(det) < 1e-9f)
+	// LDL decomposition: A = LDL^T
+	float d0 = a00;
+	if (fabsf(d0) < eps)
 		return false;
 
-	// solve using Cramer's rule: p_c = det(A_c) / det(A) where A_c has first column replaced with b
-	float det_x = b0 * (a11 * a22 - a21 * a21) - a10 * (b1 * a22 - a21 * b2) + a20 * (b1 * a21 - a11 * b2);
-	float det_y = a00 * (b1 * a22 - a21 * b2) - b0 * (a10 * a22 - a21 * a20) + a20 * (a10 * b2 - b1 * a20);
-	float det_z = a00 * (a11 * b2 - b1 * a21) - a10 * (a10 * b2 - b1 * a20) + b0 * (a10 * a21 - a11 * a20);
+	float l10 = a10 / d0;
+	float l20 = a20 / d0;
 
-	p.x = det_x / det;
-	p.y = det_y / det;
-	p.z = det_z / det;
+	float d1 = a11 - l10 * l10 * d0;
+	if (fabsf(d1) < eps)
+		return false;
+
+	float l21 = (a21 - l20 * l10 * d0) / d1;
+
+	float d2 = a22 - l20 * l20 * d0 - l21 * l21 * d1;
+	if (fabsf(d2) < eps)
+		return false;
+
+	// solve L*y = b
+	float y0 = x0;
+	float y1 = x1 - l10 * y0;
+	float y2 = x2 - l20 * y0 - l21 * y1;
+
+	// solve D*z = y
+	float z0 = y0 / d0;
+	float z1 = y1 / d1;
+	float z2 = y2 / d2;
+
+	// substitute L^T*p = z
+	float pz = z2;
+	float py = z1 - l21 * pz;
+	float px = z0 - l10 * py - l20 * pz;
+
+	p.x = px;
+	p.y = py;
+	p.z = pz;
 	return true;
 }
 
