@@ -882,21 +882,14 @@ static bool quadricSolve(Vector3& p, const Quadric& Q)
 
 	// LDL decomposition: A = LDL^T
 	float d0 = a00;
-	if (fabsf(d0) < eps)
-		return false;
-
 	float l10 = a10 / d0;
 	float l20 = a20 / d0;
 
-	float d1 = a11 - l10 * l10 * d0;
-	if (fabsf(d1) < eps)
-		return false;
+	float d1 = a11 - a10 * l10;
+	float dl21 = a21 - a20 * l10;
+	float l21 = dl21 / d1;
 
-	float l21 = (a21 - l20 * l10 * d0) / d1;
-
-	float d2 = a22 - l20 * l20 * d0 - l21 * l21 * d1;
-	if (fabsf(d2) < eps)
-		return false;
+	float d2 = a22 - a20 * l20 - dl21 * l21;
 
 	// solve L*y = b
 	float y0 = x0;
@@ -916,7 +909,7 @@ static bool quadricSolve(Vector3& p, const Quadric& Q)
 	p.x = px;
 	p.y = py;
 	p.z = pz;
-	return true;
+	return fabsf(d0) > eps && fabsf(d1) > eps && fabsf(d2) > eps;
 }
 
 static void quadricReduceAttributes(Quadric& Q, const Quadric& A, const QuadricGrad* G, size_t attribute_count)
