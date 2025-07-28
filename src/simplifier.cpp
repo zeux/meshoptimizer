@@ -1498,7 +1498,7 @@ static void updateQuadrics(const unsigned int* collapse_remap, size_t vertex_cou
 
 static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, size_t vertex_count, const Quadric* vertex_quadrics, const Quadric* attribute_quadrics, const QuadricGrad* attribute_gradients, size_t attribute_count, const unsigned int* remap, const unsigned int* wedge, const EdgeAdjacency& adjacency, const unsigned char* vertex_update)
 {
-#ifdef TRACE
+#if TRACE
 	size_t stats[4] = {};
 #endif
 
@@ -2363,7 +2363,9 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 			vertex_update[v] = (k == Kind_Manifold || k == Kind_Complex);
 		}
 
+		// edge adjacency may be stale as we haven't updated it after last series of edge collapses
 		updateEdgeAdjacency(adjacency, result, result_count, vertex_count, remap);
+
 		solveQuadrics(vertex_positions, vertex_attributes, vertex_count, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, remap, wedge, adjacency, vertex_update);
 
 		finalizeVertices(const_cast<float*>(vertex_positions_data), vertex_positions_stride, const_cast<float*>(vertex_attributes_data), vertex_attributes_stride, attribute_weights, attribute_count, vertex_count, vertex_positions, vertex_attributes, sparse_remap, attribute_remap, vertex_scale, vertex_offset, vertex_update);
