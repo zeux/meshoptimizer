@@ -449,8 +449,8 @@
 			function simplifyMesh(geo, threshold, scale) {
 				var attributes = 8; // 3 color, 3 normal, 2 uv
 
-				var positions = new Float32Array(geo.attributes.position.array).slice(); // clone for _InternalSolve
-				var indices = new Uint32Array(geo.index.array); // upcast 16-bit indices for _InternalDebug
+				var positions = new Float32Array(geo.attributes.position.array).slice(); // clone for solve
+				var indices = new Uint32Array(geo.index.array).slice(); // clone for solve, upcast 16-bit indices for _InternalDebug
 				var target = settings.autoLod ? 0 : Math.floor((indices.length * settings.ratio) / 3) * 3;
 
 				if (settings.useAttributes) {
@@ -497,9 +497,6 @@
 				if (settings.regularize) {
 					flags.push('Regularize');
 				}
-				if (settings.solve) {
-					flags.push('_InternalSolve');
-				}
 				if (settings.debugOverlay) {
 					flags.push('_InternalDebug');
 				}
@@ -514,18 +511,24 @@
 				var S = MeshoptSimplifier; // to avoid line breaks below...
 				var res = settings.sloppy
 					? S.simplifySloppy(indices, positions, stride, null, target, threshold)
-					: settings.useAttributes
-						? S.simplifyWithAttributes(indices, positions, stride, attrib, attributes, attrib_weights, null, target, threshold, flags)
-						: S.simplify(indices, positions, stride, target, threshold, flags);
+					: settings.solve
+						? S.simplifyWithUpdate(indices, positions, stride, attrib, attributes, attrib_weights, null, target, threshold, flags)
+						: settings.useAttributes
+							? S.simplifyWithAttributes(indices, positions, stride, attrib, attributes, attrib_weights, null, target, threshold, flags)
+							: S.simplify(indices, positions, stride, target, threshold, flags);
+
+				if (!settings.sloppy && settings.solve) {
+					res[0] = indices.slice(0, res[0]);
+				}
 
 				var rgeo = geo.clone();
 
 				var dind = res[0];
+				var dlen = dind.length;
 
 				if (settings.debugOverlay) {
 					// we need extra indices for debug overlay
-					dind = Array.from(res[0]);
-					var dlen = dind.length;
+					dind = Array.from(dind);
 
 					var mask = (1 << 28) - 1;
 
@@ -609,9 +612,9 @@
 					}
 				}
 
-				rgeo.addGroup(0, res[0].length, 0);
+				rgeo.addGroup(0, dlen, 0);
 
-				return [rgeo, res[0].length / 3, res[1]];
+				return [rgeo, dlen / 3, res[1]];
 			}
 
 			function simplifyPoints(geo) {
