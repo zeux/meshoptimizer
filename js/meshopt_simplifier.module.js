@@ -76,18 +76,7 @@ var MeshoptSimplifier = (function () {
 		return result;
 	}
 
-	function simplify(
-		fun,
-		indices,
-		index_count,
-		vertex_positions,
-		vertex_count,
-		vertex_positions_stride,
-		target_index_count,
-		target_error,
-		options,
-		update
-	) {
+	function simplify(fun, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride, target_index_count, target_error, options) {
 		var sbrk = instance.exports.sbrk;
 		var te = sbrk(4);
 		var ti = sbrk(index_count * 4);
@@ -103,9 +92,6 @@ var MeshoptSimplifier = (function () {
 		bytes(target).set(heap.subarray(ti, ti + result * 4));
 		var error = new Float32Array(1);
 		bytes(error).set(heap.subarray(te, te + 4));
-		if (update) {
-			bytes(vertex_positions).set(heap.subarray(sp, sp + vertex_count * vertex_positions_stride));
-		}
 		sbrk(te - sbrk(0));
 		return [target, error[0]];
 	}
@@ -123,8 +109,7 @@ var MeshoptSimplifier = (function () {
 		vertex_lock,
 		target_index_count,
 		target_error,
-		options,
-		update
+		options
 	) {
 		var sbrk = instance.exports.sbrk;
 		var te = sbrk(4);
@@ -165,12 +150,65 @@ var MeshoptSimplifier = (function () {
 		bytes(target).set(heap.subarray(ti, ti + result * 4));
 		var error = new Float32Array(1);
 		bytes(error).set(heap.subarray(te, te + 4));
-		if (update) {
-			bytes(vertex_positions).set(heap.subarray(sp, sp + vertex_count * vertex_positions_stride));
-			bytes(vertex_attributes).set(heap.subarray(sa, sa + vertex_count * vertex_attributes_stride));
-		}
 		sbrk(te - sbrk(0));
 		return [target, error[0]];
+	}
+
+	function simplifyUpdate(
+		fun,
+		indices,
+		index_count,
+		vertex_positions,
+		vertex_count,
+		vertex_positions_stride,
+		vertex_attributes,
+		vertex_attributes_stride,
+		attribute_weights,
+		vertex_lock,
+		target_index_count,
+		target_error,
+		options
+	) {
+		var sbrk = instance.exports.sbrk;
+		var te = sbrk(4);
+		var sp = sbrk(vertex_count * vertex_positions_stride);
+		var sa = sbrk(vertex_count * vertex_attributes_stride);
+		var sw = sbrk(attribute_weights.length * 4);
+		var si = sbrk(index_count * 4);
+		var vl = vertex_lock ? sbrk(vertex_count) : 0;
+		var heap = new Uint8Array(instance.exports.memory.buffer);
+		heap.set(bytes(vertex_positions), sp);
+		heap.set(bytes(vertex_attributes), sa);
+		heap.set(bytes(attribute_weights), sw);
+		heap.set(bytes(indices), si);
+		if (vertex_lock) {
+			heap.set(bytes(vertex_lock), vl);
+		}
+		var result = fun(
+			si,
+			index_count,
+			sp,
+			vertex_count,
+			vertex_positions_stride,
+			sa,
+			vertex_attributes_stride,
+			sw,
+			attribute_weights.length,
+			vl,
+			target_index_count,
+			target_error,
+			options,
+			te
+		);
+		// heap may have grown
+		heap = new Uint8Array(instance.exports.memory.buffer);
+		bytes(indices).set(heap.subarray(si, si + result * 4));
+		bytes(vertex_positions).set(heap.subarray(sp, sp + vertex_count * vertex_positions_stride));
+		bytes(vertex_attributes).set(heap.subarray(sa, sa + vertex_count * vertex_attributes_stride));
+		var error = new Float32Array(1);
+		bytes(error).set(heap.subarray(te, te + 4));
+		sbrk(te - sbrk(0));
+		return [result, error[0]];
 	}
 
 	function simplifyScale(fun, vertex_positions, vertex_count, vertex_positions_stride) {
@@ -268,7 +306,6 @@ var MeshoptSimplifier = (function () {
 		ErrorAbsolute: 4,
 		Prune: 8,
 		Regularize: 16,
-		_InternalSolve: 1 << 29, // internal, don't use!
 		_InternalDebug: 1 << 30, // internal, don't use!
 	};
 
@@ -314,8 +351,7 @@ var MeshoptSimplifier = (function () {
 				vertex_positions_stride * 4,
 				target_index_count,
 				target_error,
-				options,
-				(options & simplifyOptions._InternalSolve) != 0
+				options
 			);
 			result[0] = indices instanceof Uint32Array ? result[0] : new indices.constructor(result[0]);
 
@@ -376,11 +412,75 @@ var MeshoptSimplifier = (function () {
 				vertex_lock ? new Uint8Array(vertex_lock) : null,
 				target_index_count,
 				target_error,
-				options,
-				(options & simplifyOptions._InternalSolve) != 0
+				options
 			);
 			result[0] = indices instanceof Uint32Array ? result[0] : new indices.constructor(result[0]);
 
+			return result;
+		},
+
+		simplifyWithUpdate: function (
+			indices,
+			vertex_positions,
+			vertex_positions_stride,
+			vertex_attributes,
+			vertex_attributes_stride,
+			attribute_weights,
+			vertex_lock,
+			target_index_count,
+			target_error,
+			flags
+		) {
+			assert(
+				indices instanceof Uint32Array || indices instanceof Int32Array || indices instanceof Uint16Array || indices instanceof Int16Array
+			);
+			assert(indices.length % 3 == 0);
+			assert(vertex_positions instanceof Float32Array);
+			assert(vertex_positions.length % vertex_positions_stride == 0);
+			assert(vertex_positions_stride >= 3);
+			assert(vertex_attributes instanceof Float32Array);
+			assert(vertex_attributes.length % vertex_attributes_stride == 0);
+			assert(vertex_attributes_stride >= 0);
+			assert(vertex_lock == null || vertex_lock instanceof Uint8Array);
+			assert(vertex_lock == null || vertex_lock.length == vertex_positions.length / vertex_positions_stride);
+			assert(target_index_count >= 0 && target_index_count <= indices.length);
+			assert(target_index_count % 3 == 0);
+			assert(target_error >= 0);
+			assert(Array.isArray(attribute_weights));
+			assert(vertex_attributes_stride >= attribute_weights.length);
+			assert(attribute_weights.length <= 32);
+			for (var i = 0; i < attribute_weights.length; ++i) {
+				assert(attribute_weights[i] >= 0);
+			}
+
+			var options = 0;
+			for (var i = 0; i < (flags ? flags.length : 0); ++i) {
+				assert(flags[i] in simplifyOptions);
+				options |= simplifyOptions[flags[i]];
+			}
+
+			var indices32 = indices.BYTES_PER_ELEMENT == 4 ? indices : new Uint32Array(indices);
+			var result = simplifyUpdate(
+				instance.exports.meshopt_simplifyWithUpdate,
+				indices32,
+				indices.length,
+				vertex_positions,
+				vertex_positions.length / vertex_positions_stride,
+				vertex_positions_stride * 4,
+				vertex_attributes,
+				vertex_attributes_stride * 4,
+				new Float32Array(attribute_weights),
+				vertex_lock ? new Uint8Array(vertex_lock) : null,
+				target_index_count,
+				target_error,
+				options
+			);
+			if (indices !== indices32) {
+				// copy back indices if they were converted to Uint32Array
+				for (var i = 0; i < result[0]; ++i) {
+					indices[i] = indices32[i];
+				}
+			}
 			return result;
 		},
 
