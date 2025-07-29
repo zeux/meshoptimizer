@@ -584,13 +584,9 @@
 				rgeo.index.needsUpdate = true;
 
 				if (settings.solve) {
-					for (var i = 0, e = geo.attributes.position.count; i < e; ++i) {
-						rgeo.attributes.position.setX(i, positions[i * stride + 0]);
-						rgeo.attributes.position.setY(i, positions[i * stride + 1]);
-						rgeo.attributes.position.setZ(i, positions[i * stride + 2]);
-					}
+					rgeo.attributes.position = new THREE.BufferAttribute(positions, stride);
 
-					if (settings.useAttributes && geo.attributes.normal) {
+					if (settings.useAttributes) {
 						for (var i = 0, e = geo.attributes.position.count; i < e; ++i) {
 							var nx = attrib[i * attributes + 0];
 							var ny = attrib[i * attributes + 1];
@@ -598,16 +594,23 @@
 
 							var nl = Math.sqrt(nx * nx + ny * ny + nz * nz);
 
-							rgeo.attributes.normal.setX(i, nx / nl);
-							rgeo.attributes.normal.setY(i, ny / nl);
-							rgeo.attributes.normal.setZ(i, nz / nl);
+							if (nl > 0) {
+								attrib[i * attributes + 0] = nx / nl;
+								attrib[i * attributes + 1] = ny / nl;
+								attrib[i * attributes + 2] = nz / nl;
+							}
 						}
-					}
 
-					if (settings.useAttributes && geo.attributes.uv) {
-						for (var i = 0, e = geo.attributes.position.count; i < e; ++i) {
-							rgeo.attributes.uv.setX(i, attrib[i * attributes + 6]);
-							rgeo.attributes.uv.setY(i, attrib[i * attributes + 7]);
+						var attribbuf = new THREE.InterleavedBuffer(attrib, attrib_weights.length);
+
+						if (geo.attributes.normal) {
+							rgeo.attributes.normal = new THREE.InterleavedBufferAttribute(attribbuf, 3, 0, false);
+						}
+						if (geo.attributes.color) {
+							rgeo.attributes.color = new THREE.InterleavedBufferAttribute(attribbuf, 3, 3, false);
+						}
+						if (geo.attributes.uv) {
+							rgeo.attributes.uv = new THREE.InterleavedBufferAttribute(attribbuf, 2, 6, false);
 						}
 					}
 				}
