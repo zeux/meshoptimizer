@@ -1553,6 +1553,9 @@ static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, s
 	printf("updated %d/%d positions; failed solve %d flip %d\n", int(stats[0] - stats[1] - stats[2]), int(stats[0]), int(stats[1]), int(stats[2]));
 #endif
 
+	if (attribute_count == 0)
+		return;
+
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
 		if (!vertex_update[i])
