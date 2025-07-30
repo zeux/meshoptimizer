@@ -119,6 +119,8 @@ ifeq ($(config),fuzz)
     $(GLTFPACK_OBJECTS): CXXFLAGS+=-DGLTFFUZZ
 endif
 
+-include Makefile.config
+
 all: $(DEMO)
 
 test: $(DEMO)
