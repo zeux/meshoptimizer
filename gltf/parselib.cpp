@@ -7,3 +7,6 @@
 
 #define FAST_OBJ_IMPLEMENTATION
 #include "../extern/fast_obj.h"
+
+#undef CGLTF_IMPLEMENTATION
+#undef FAST_OBJ_IMPLEMENTATION
