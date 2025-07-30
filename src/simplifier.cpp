@@ -881,7 +881,7 @@ static bool quadricSolve(Vector3& p, const Quadric& Q)
 	float a10 = Q.a10, a20 = Q.a20, a21 = Q.a21;
 	float x0 = -Q.b0, x1 = -Q.b1, x2 = -Q.b2;
 
-	const float eps = 1e-6f;
+	float eps = 1e-7f * Q.w;
 
 	// LDL decomposition: A = LDL^T
 	float d0 = a00;
@@ -912,6 +912,7 @@ static bool quadricSolve(Vector3& p, const Quadric& Q)
 	p.x = px;
 	p.y = py;
 	p.z = pz;
+
 	return fabsf(d0) > eps && fabsf(d1) > eps && fabsf(d2) > eps;
 }
 
@@ -1525,6 +1526,7 @@ static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, s
 
 		if (attribute_count)
 		{
+			// optimal point simultaneously minimizes attribute quadrics for all wedges
 			unsigned int v = i;
 			do
 			{
