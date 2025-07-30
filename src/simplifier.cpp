@@ -571,7 +571,7 @@ static void finalizeVertices(float* vertex_positions_data, size_t vertex_positio
 		if (!vertex_update[i])
 			continue;
 
-		unsigned int ri = sparse_remap ? sparse_remap[i] : i;
+		unsigned int ri = sparse_remap ? sparse_remap[i] : unsigned(i);
 
 		const Vector3& p = vertex_positions[i];
 		float* v = vertex_positions_data + ri * vertex_positions_stride_float;
@@ -1527,7 +1527,7 @@ static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, s
 		if (attribute_count)
 		{
 			// optimal point simultaneously minimizes attribute quadrics for all wedges
-			unsigned int v = i;
+			unsigned int v = unsigned(i);
 			do
 			{
 				quadricReduceAttributes(Q, attribute_quadrics[v], &attribute_gradients[v * attribute_count], attribute_count);
@@ -1542,7 +1542,7 @@ static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, s
 			continue;
 		}
 
-		if (hasTriangleFlips(adjacency, vertex_positions, i, p))
+		if (hasTriangleFlips(adjacency, vertex_positions, unsigned(i), p))
 		{
 			TRACESTATS(2);
 			continue;
