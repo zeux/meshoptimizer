@@ -378,7 +378,7 @@ var MeshoptSimplifier = (function () {
 			assert(vertex_positions.length % vertex_positions_stride == 0);
 			assert(vertex_positions_stride >= 3);
 			assert(vertex_attributes instanceof Float32Array);
-			assert(vertex_attributes.length % vertex_attributes_stride == 0);
+			assert(vertex_attributes.length == vertex_attributes_stride * (vertex_positions.length / vertex_positions_stride));
 			assert(vertex_attributes_stride >= 0);
 			assert(vertex_lock == null || vertex_lock instanceof Uint8Array);
 			assert(vertex_lock == null || vertex_lock.length == vertex_positions.length / vertex_positions_stride);
@@ -439,7 +439,7 @@ var MeshoptSimplifier = (function () {
 			assert(vertex_positions.length % vertex_positions_stride == 0);
 			assert(vertex_positions_stride >= 3);
 			assert(vertex_attributes instanceof Float32Array);
-			assert(vertex_attributes.length % vertex_attributes_stride == 0);
+			assert(vertex_attributes.length == vertex_attributes_stride * (vertex_positions.length / vertex_positions_stride));
 			assert(vertex_attributes_stride >= 0);
 			assert(vertex_lock == null || vertex_lock instanceof Uint8Array);
 			assert(vertex_lock == null || vertex_lock.length == vertex_positions.length / vertex_positions_stride);
