@@ -159,6 +159,7 @@
 				preprune: 0.0,
 				prune: true,
 				regularize: false,
+				solve: false,
 				useAttributes: true,
 				errorThresholdLog10: 1,
 				errorScaled: true,
@@ -205,6 +206,7 @@
 			guiSimplify.add(settings, 'lockBorder').onChange(simplify);
 			guiSimplify.add(settings, 'prune').onChange(simplify);
 			guiSimplify.add(settings, 'regularize').onChange(simplify);
+			guiSimplify.add(settings, 'solve').onChange(simplify);
 			guiSimplify.add(settings, 'preprune', 0, 0.2, 0.01).onChange(simplify);
 			guiSimplify.add(settings, 'useAttributes').onChange(simplify).onFinishChange(updateSettings);
 
@@ -418,10 +420,15 @@
 				var ambientLight = new THREE.AmbientLight(0xcccccc, 1);
 				scene.add(ambientLight);
 
-				var pointLight = new THREE.PointLight(0xffffff, 4);
-				pointLight.position.set(3, 3, 0);
-				pointLight.decay = 0.5;
-				scene.add(pointLight);
+				var pointLightR = new THREE.PointLight(0xffffff, 4);
+				pointLightR.position.set(3, 3, 0);
+				pointLightR.decay = 0.5;
+				scene.add(pointLightR);
+
+				var pointLightL = new THREE.PointLight(0xffffff, 1);
+				pointLightL.position.set(-3, 5, 0);
+				pointLightL.decay = 0.5;
+				scene.add(pointLightL);
 
 				// Create controls
 				var control = new OrbitControls(camera, renderer.domElement);
@@ -442,8 +449,8 @@
 			function simplifyMesh(geo, threshold, scale) {
 				var attributes = 8; // 3 color, 3 normal, 2 uv
 
-				var positions = new Float32Array(geo.attributes.position.array);
-				var indices = new Uint32Array(geo.index.array); // needed for _InternalDebug to work
+				var positions = new Float32Array(geo.attributes.position.array).slice(); // clone for solve
+				var indices = new Uint32Array(geo.index.array).slice(); // clone for solve, upcast 16-bit indices for _InternalDebug
 				var target = settings.autoLod ? 0 : Math.floor((indices.length * settings.ratio) / 3) * 3;
 
 				if (settings.useAttributes) {
@@ -478,6 +485,10 @@
 						settings.textureWeight,
 						settings.textureWeight,
 					];
+				} else {
+					var attrib = new Float32Array();
+					var attrib_weights = [];
+					attributes = 0;
 				}
 
 				var flags = [];
@@ -504,18 +515,24 @@
 				var S = MeshoptSimplifier; // to avoid line breaks below...
 				var res = settings.sloppy
 					? S.simplifySloppy(indices, positions, stride, null, target, threshold)
-					: settings.useAttributes
-						? S.simplifyWithAttributes(indices, positions, stride, attrib, attributes, attrib_weights, null, target, threshold, flags)
-						: S.simplify(indices, positions, stride, target, threshold, flags);
+					: settings.solve
+						? S.simplifyWithUpdate(indices, positions, stride, attrib, attributes, attrib_weights, null, target, threshold, flags)
+						: settings.useAttributes
+							? S.simplifyWithAttributes(indices, positions, stride, attrib, attributes, attrib_weights, null, target, threshold, flags)
+							: S.simplify(indices, positions, stride, target, threshold, flags);
+
+				if (!settings.sloppy && settings.solve) {
+					res[0] = indices.slice(0, res[0]);
+				}
 
 				var rgeo = geo.clone();
 
 				var dind = res[0];
+				var dlen = dind.length;
 
 				if (settings.debugOverlay) {
 					// we need extra indices for debug overlay
-					dind = Array.from(res[0]);
-					var dlen = dind.length;
+					dind = Array.from(dind);
 
 					var mask = (1 << 28) - 1;
 
@@ -570,9 +587,41 @@
 				rgeo.index.count = dind.length;
 				rgeo.index.needsUpdate = true;
 
-				rgeo.addGroup(0, res[0].length, 0);
+				if (settings.solve) {
+					rgeo.attributes.position = new THREE.BufferAttribute(positions, stride);
 
-				return [rgeo, res[0].length / 3, res[1]];
+					if (settings.useAttributes) {
+						for (var i = 0, e = geo.attributes.position.count; i < e; ++i) {
+							var nx = attrib[i * attributes + 0];
+							var ny = attrib[i * attributes + 1];
+							var nz = attrib[i * attributes + 2];
+
+							var nl = Math.sqrt(nx * nx + ny * ny + nz * nz);
+
+							if (nl > 0) {
+								attrib[i * attributes + 0] = nx / nl;
+								attrib[i * attributes + 1] = ny / nl;
+								attrib[i * attributes + 2] = nz / nl;
+							}
+						}
+
+						var attribbuf = new THREE.InterleavedBuffer(attrib, attrib_weights.length);
+
+						if (geo.attributes.normal) {
+							rgeo.attributes.normal = new THREE.InterleavedBufferAttribute(attribbuf, 3, 0, false);
+						}
+						if (geo.attributes.color) {
+							rgeo.attributes.color = new THREE.InterleavedBufferAttribute(attribbuf, 3, 3, false);
+						}
+						if (geo.attributes.uv) {
+							rgeo.attributes.uv = new THREE.InterleavedBufferAttribute(attribbuf, 2, 6, false);
+						}
+					}
+				}
+
+				rgeo.addGroup(0, dlen, 0);
+
+				return [rgeo, dlen / 3, res[1]];
 			}
 
 			function simplifyPoints(geo) {
