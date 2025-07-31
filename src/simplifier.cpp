@@ -906,40 +906,39 @@ static bool quadricSolve(Vector3& p, const Quadric& Q, const QuadricGrad& GV)
 
 	float eps = 1e-7f * Q.w;
 
-	// augment system with linear constraint GV using Lagrange multiplier
-	float a30 = GV.gx, a31 = GV.gy, a32 = GV.gz;
-	float x3 = -GV.gw;
-
 	// LDL decomposition: A = LDL^T
 	float d0 = a00;
 	float l10 = a10 / d0;
 	float l20 = a20 / d0;
-	float l30 = a30 / d0;
 
 	float d1 = a11 - a10 * l10;
 	float dl21 = a21 - a20 * l10;
 	float l21 = dl21 / d1;
 
-	float dl31 = a31 - a30 * l10;
-	float l31 = dl31 / d1;
-
 	float d2 = a22 - a20 * l20 - dl21 * l21;
-
-	float dl32 = a32 - a30 * l20 - dl31 * l21;
-	float l32 = dl32 / d2;
-
-	float d3 = -a30 * l30 - dl31 * l31 - dl32 * l32;
 
 	// solve L*y = x
 	float y0 = x0;
 	float y1 = x1 - l10 * y0;
 	float y2 = x2 - l20 * y0 - l21 * y1;
-	float y3 = x3 - l30 * y0 - l31 * y1 - l32 * y2;
 
 	// solve D*z = y
 	float z0 = y0 / d0;
 	float z1 = y1 / d1;
 	float z2 = y2 / d2;
+
+	// augment system with linear constraint GV using Lagrange multiplier
+	float a30 = GV.gx, a31 = GV.gy, a32 = GV.gz;
+	float x3 = -GV.gw;
+
+	float l30 = a30 / d0;
+	float dl31 = a31 - a30 * l10;
+	float l31 = dl31 / d1;
+	float dl32 = a32 - a30 * l20 - dl31 * l21;
+	float l32 = dl32 / d2;
+	float d3 = 0.f - a30 * l30 - dl31 * l31 - dl32 * l32;
+
+	float y3 = x3 - l30 * y0 - l31 * y1 - l32 * y2;
 	float z3 = fabsf(d3) > eps ? y3 / d3 : 0.f; // if d3 is zero, we can ignore the constraint
 
 	// substitute L^T*p = z
@@ -1005,12 +1004,12 @@ static void fillFaceQuadrics(Quadric* vertex_quadrics, QuadricGrad* volume_gradi
 
 		if (volume_gradients)
 		{
-			QuadricGrad VG;
-			quadricVolumeGradient(VG, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2]);
+			QuadricGrad GV;
+			quadricVolumeGradient(GV, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2]);
 
-			quadricAdd(volume_gradients[remap[i0]], VG);
-			quadricAdd(volume_gradients[remap[i1]], VG);
-			quadricAdd(volume_gradients[remap[i2]], VG);
+			quadricAdd(volume_gradients[remap[i0]], GV);
+			quadricAdd(volume_gradients[remap[i1]], GV);
+			quadricAdd(volume_gradients[remap[i2]], GV);
 		}
 	}
 }
