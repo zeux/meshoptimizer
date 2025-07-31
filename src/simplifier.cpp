@@ -897,7 +897,7 @@ static void quadricVolumeGradient(QuadricGrad& G, const Vector3& p0, const Vecto
 	G.gw = (-p0.x * normal.x - p0.y * normal.y - p0.z * normal.z) * area;
 }
 
-static bool quadricSolve(Vector3& p, const Quadric& Q)
+static bool quadricSolve(Vector3& p, const Quadric& Q, const QuadricGrad& GV)
 {
 	// solve A*p = -b where A is the quadric matrix and b is the linear term
 	float a00 = Q.a00, a11 = Q.a11, a22 = Q.a22;
@@ -906,31 +906,47 @@ static bool quadricSolve(Vector3& p, const Quadric& Q)
 
 	float eps = 1e-7f * Q.w;
 
+	// augment system with linear constraint GV using Lagrange multiplier
+	float a30 = GV.gx, a31 = GV.gy, a32 = GV.gz;
+	float x3 = -GV.gw;
+
 	// LDL decomposition: A = LDL^T
 	float d0 = a00;
 	float l10 = a10 / d0;
 	float l20 = a20 / d0;
+	float l30 = a30 / d0;
 
 	float d1 = a11 - a10 * l10;
 	float dl21 = a21 - a20 * l10;
 	float l21 = dl21 / d1;
 
+	float dl31 = a31 - a30 * l10;
+	float l31 = dl31 / d1;
+
 	float d2 = a22 - a20 * l20 - dl21 * l21;
 
-	// solve L*y = b
+	float dl32 = a32 - a30 * l20 - dl31 * l21;
+	float l32 = dl32 / d2;
+
+	float d3 = -a30 * l30 - dl31 * l31 - dl32 * l32;
+
+	// solve L*y = x
 	float y0 = x0;
 	float y1 = x1 - l10 * y0;
 	float y2 = x2 - l20 * y0 - l21 * y1;
+	float y3 = x3 - l30 * y0 - l31 * y1 - l32 * y2;
 
 	// solve D*z = y
 	float z0 = y0 / d0;
 	float z1 = y1 / d1;
 	float z2 = y2 / d2;
+	float z3 = fabsf(d3) > eps ? y3 / d3 : 0.f; // if d3 is zero, we can ignore the constraint
 
 	// substitute L^T*p = z
-	float pz = z2;
-	float py = z1 - l21 * pz;
-	float px = z0 - l10 * py - l20 * pz;
+	float lambda = z3;
+	float pz = z2 - l32 * lambda;
+	float py = z1 - l21 * pz - l31 * lambda;
+	float px = z0 - l10 * py - l20 * pz - l30 * lambda;
 
 	p.x = px;
 	p.y = py;
@@ -1535,7 +1551,7 @@ static void updateQuadrics(const unsigned int* collapse_remap, size_t vertex_cou
 	}
 }
 
-static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, size_t vertex_count, const Quadric* vertex_quadrics, const Quadric* attribute_quadrics, const QuadricGrad* attribute_gradients, size_t attribute_count, const unsigned int* remap, const unsigned int* wedge, const EdgeAdjacency& adjacency, const unsigned char* vertex_kind, const unsigned char* vertex_update)
+static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, size_t vertex_count, const Quadric* vertex_quadrics, const QuadricGrad* volume_gradients, const Quadric* attribute_quadrics, const QuadricGrad* attribute_gradients, size_t attribute_count, const unsigned int* remap, const unsigned int* wedge, const EdgeAdjacency& adjacency, const unsigned char* vertex_kind, const unsigned char* vertex_update)
 {
 #if TRACE
 	size_t stats[4] = {};
@@ -1561,6 +1577,7 @@ static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, s
 		TRACESTATS(0);
 
 		Quadric Q = vertex_quadrics[i];
+		QuadricGrad GV = {};
 
 		if (attribute_count)
 		{
@@ -1571,10 +1588,14 @@ static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, s
 				quadricReduceAttributes(Q, attribute_quadrics[v], &attribute_gradients[v * attribute_count], attribute_count);
 				v = wedge[v];
 			} while (v != i);
+
+			// minimizing attribute quadrics results in volume loss so we incorporate volume gradient as a constraint
+			if (volume_gradients)
+				GV = volume_gradients[i];
 		}
 
 		Vector3 p;
-		if (!quadricSolve(p, Q))
+		if (!quadricSolve(p, Q, GV))
 		{
 			TRACESTATS(1);
 			continue;
