@@ -20,42 +20,80 @@ function dezig(v) {
 }
 
 MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, filter) => {
-	assert(source[0] === 0xa0);
+	assert(source[0] === 0xa0 || source[0] === 0xa1);
+	const version = source[0] & 0x0f;
 
 	const maxBlockElements = Math.min((0x2000 / byteStride) & ~0x000f, 0x100);
 
 	const deltas = new Uint8Array(0x10);
 
-	const tailDataOffs = source.length - byteStride;
+	const tailSize = version === 0 ? byteStride : byteStride + byteStride / 4;
+	const tailDataOffs = source.length - tailSize;
 
 	// What deltas are stored relative to
 	const tempData = source.slice(tailDataOffs, tailDataOffs + byteStride);
 
-	let srcOffs = 0x01;
+	// Channel modes for v1
+	const channels = version === 0 ? null : source.slice(tailDataOffs + byteStride, tailDataOffs + tailSize);
 
-	// Attribute Blocks
+	let srcOffs = 1; // Skip header byte
+
+	const headerModes = [
+		[0, 2, 4, 8], // v0
+		[0, 1, 2, 4], // v1, when control is 0
+		[1, 2, 4, 8], // v1, when control is 1
+	];
+
+	// Attribute blocks
 	for (let dstElemBase = 0; dstElemBase < elementCount; dstElemBase += maxBlockElements) {
 		const attrBlockElementCount = Math.min(elementCount - dstElemBase, maxBlockElements);
 		const groupCount = ((attrBlockElementCount + 0x0f) & ~0x0f) >>> 4;
 		const headerByteCount = ((groupCount + 0x03) & ~0x03) >>> 2;
 
+		// Control modes for v1
+		const controlBitsOffs = srcOffs;
+		srcOffs += version === 0 ? 0 : byteStride / 4;
+
 		// Data blocks
 		for (let byte = 0; byte < byteStride; byte++) {
-			let headerBitsOffs = srcOffs;
+			// Control mode for current byte for v1
+			const controlMode = version === 0 ? 0 : (source[controlBitsOffs + (byte >>> 2)] >>> ((byte & 0x03) << 1)) & 0x03;
 
+			if (controlMode === 2) {
+				// All byte deltas are 0; no data is stored for this byte
+				continue;
+			} else if (controlMode === 3) {
+				// Byte deltas are stored uncompressed with no header bits
+				srcOffs += attrBlockElementCount;
+				continue;
+			}
+
+			// Header bits are omitted for v1 when using control modes 2/3
+			const headerBitsOffs = srcOffs;
 			srcOffs += headerByteCount;
+
 			for (let group = 0; group < groupCount; group++) {
-				const mode = (source[headerBitsOffs] >>> ((group & 0x03) << 1)) & 0x03;
-				// If this is the last group, move to the next byte of header bits.
-				if ((group & 0x03) === 0x03) headerBitsOffs++;
+				const mode = (source[headerBitsOffs + (group >>> 2)] >>> ((group & 0x03) << 1)) & 0x03;
+				const modeBits = headerModes[version === 0 ? 0 : controlMode + 1][mode];
 
 				const dstElemGroup = dstElemBase + (group << 4);
 
-				if (mode === 0) {
-					// bits 0: All 16 byte deltas are 0; the size of the encoded block is 0 bytes
+				if (modeBits === 0) {
+					// All 16 byte deltas are 0; the size of the encoded block is 0 bytes
 					deltas.fill(0x00);
-				} else if (mode === 1) {
-					// bits 1: Deltas are using 2-bit sentinel encoding; the size of the encoded block is [4..20] bytes
+				} else if (modeBits === 1) {
+					// Deltas are using 1-bit sentinel encoding; the size of the encoded block is [2..18] bytes
+					const srcBase = srcOffs;
+					srcOffs += 0x02;
+					for (let m = 0; m < 0x10; m++) {
+						// Bits are stored from least significant to most significant for 1-bit encoding
+						const shift = m & 0x07;
+						let delta = (source[srcBase + (m >>> 3)] >>> shift) & 0x01;
+						if (delta === 1) delta = source[srcOffs++];
+						deltas[m] = delta;
+					}
+				} else if (modeBits === 2) {
+					// Deltas are using 2-bit sentinel encoding; the size of the encoded block is [4..20] bytes
 					const srcBase = srcOffs;
 					srcOffs += 0x04;
 					for (let m = 0; m < 0x10; m++) {
@@ -65,19 +103,19 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 						if (delta === 3) delta = source[srcOffs++];
 						deltas[m] = delta;
 					}
-				} else if (mode === 2) {
-					// bits 2: Deltas are using 4-bit sentinel encoding; the size of the encoded block is [8..24] bytes
+				} else if (modeBits === 4) {
+					// Deltas are using 4-bit sentinel encoding; the size of the encoded block is [8..24] bytes
 					const srcBase = srcOffs;
 					srcOffs += 0x08;
 					for (let m = 0; m < 0x10; m++) {
 						// 0 = >>> 6, 1 = >>> 4, 2 = >>> 2, 3 = >>> 0
-						const shift = m & 0x01 ? 0 : 4;
+						const shift = 4 - ((m & 0x01) << 2);
 						let delta = (source[srcBase + (m >>> 1)] >>> shift) & 0x0f;
 						if (delta === 0xf) delta = source[srcOffs++];
 						deltas[m] = delta;
 					}
 				} else {
-					// bits 3: All 16 byte deltas are stored verbatim; the size of the encoded block is 16 bytes
+					// All 16 byte deltas are stored verbatim; the size of the encoded block is 16 bytes
 					deltas.set(source.subarray(srcOffs, srcOffs + 0x10));
 					srcOffs += 0x10;
 				}
@@ -94,6 +132,9 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 			}
 		}
 	}
+
+	const tailSizePadded = Math.max(tailSize, version === 0 ? 32 : 24);
+	assert(srcOffs == source.length - tailSizePadded);
 
 	// Filters - only applied if filter isn't undefined or NONE
 	if (filter === 'OCTAHEDRAL') {
@@ -368,6 +409,6 @@ MeshoptDecoder.decodeGltfBufferAsync = (count, size, source, mode, filter) => {
 };
 
 // node.js interface:
-// for (let k in MeshoptDecoder) { exports[k] = MeshoptDecoder[k]; }
+// for (let k in MeshoptDecoder) exports[k] = MeshoptDecoder[k];
 
 export { MeshoptDecoder };
