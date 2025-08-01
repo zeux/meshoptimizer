@@ -25,7 +25,7 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 
 	const maxBlockElements = Math.min((0x2000 / byteStride) & ~0x000f, 0x100);
 
-	const deltas = new Uint8Array(0x10);
+	const deltas = new Uint8Array(maxBlockElements * byteStride);
 
 	const tailSize = version === 0 ? byteStride : byteStride + byteStride / 4;
 	const tailDataOffs = source.length - tailSize;
@@ -54,8 +54,13 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 		const controlBitsOffs = srcOffs;
 		srcOffs += version === 0 ? 0 : byteStride / 4;
 
+		// Zero out deltas to simplify logic
+		deltas.fill(0x00);
+
 		// Data blocks
 		for (let byte = 0; byte < byteStride; byte++) {
+			const deltaBase = byte * attrBlockElementCount;
+
 			// Control mode for current byte for v1
 			const controlMode = version === 0 ? 0 : (source[controlBitsOffs + (byte >>> 2)] >>> ((byte & 0x03) << 1)) & 0x03;
 
@@ -64,6 +69,7 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 				continue;
 			} else if (controlMode === 3) {
 				// Byte deltas are stored uncompressed with no header bits
+				deltas.set(source.subarray(srcOffs, srcOffs + attrBlockElementCount), deltaBase);
 				srcOffs += attrBlockElementCount;
 				continue;
 			}
@@ -76,11 +82,10 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 				const mode = (source[headerBitsOffs + (group >>> 2)] >>> ((group & 0x03) << 1)) & 0x03;
 				const modeBits = headerModes[version === 0 ? 0 : controlMode + 1][mode];
 
-				const dstElemGroup = dstElemBase + (group << 4);
+				const deltaOffs = deltaBase + (group << 4);
 
 				if (modeBits === 0) {
 					// All 16 byte deltas are 0; the size of the encoded block is 0 bytes
-					deltas.fill(0x00);
 				} else if (modeBits === 1) {
 					// Deltas are using 1-bit sentinel encoding; the size of the encoded block is [2..18] bytes
 					const srcBase = srcOffs;
@@ -90,7 +95,7 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 						const shift = m & 0x07;
 						let delta = (source[srcBase + (m >>> 3)] >>> shift) & 0x01;
 						if (delta === 1) delta = source[srcOffs++];
-						deltas[m] = delta;
+						deltas[deltaOffs + m] = delta;
 					}
 				} else if (modeBits === 2) {
 					// Deltas are using 2-bit sentinel encoding; the size of the encoded block is [4..20] bytes
@@ -101,7 +106,7 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 						const shift = 6 - ((m & 0x03) << 1);
 						let delta = (source[srcBase + (m >>> 2)] >>> shift) & 0x03;
 						if (delta === 3) delta = source[srcOffs++];
-						deltas[m] = delta;
+						deltas[deltaOffs + m] = delta;
 					}
 				} else if (modeBits === 4) {
 					// Deltas are using 4-bit sentinel encoding; the size of the encoded block is [8..24] bytes
@@ -112,22 +117,63 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 						const shift = 4 - ((m & 0x01) << 2);
 						let delta = (source[srcBase + (m >>> 1)] >>> shift) & 0x0f;
 						if (delta === 0xf) delta = source[srcOffs++];
-						deltas[m] = delta;
+						deltas[deltaOffs + m] = delta;
 					}
 				} else {
 					// All 16 byte deltas are stored verbatim; the size of the encoded block is 16 bytes
-					deltas.set(source.subarray(srcOffs, srcOffs + 0x10));
+					deltas.set(source.subarray(srcOffs, srcOffs + 0x10), deltaOffs);
 					srcOffs += 0x10;
 				}
+			}
+		}
 
-				// Go through and apply deltas to data
-				for (let m = 0; m < 0x10; m++) {
-					const dstElem = dstElemGroup + m;
-					if (dstElem >= elementCount) break;
+		// Go through and apply deltas to data
+		for (let elem = 0; elem < attrBlockElementCount; elem++) {
+			const dstElem = dstElemBase + elem;
 
-					const delta = dezig(deltas[m]);
+			for (let byteGroup = 0; byteGroup < byteStride; byteGroup += 4) {
+				let channelMode = version === 0 ? 0 : channels[byteGroup >>> 2] & 0x03;
+				assert(channelMode !== 0x03);
+
+				if (channelMode === 0) {
+					// Channel 0 (byte deltas): Byte deltas are stored as zigzag-encoded differences between the byte values of the element and the byte values of the previous element in the same position.
+					for (let byte = byteGroup; byte < byteGroup + 4; byte++) {
+						const delta = dezig(deltas[byte * attrBlockElementCount + elem]);
+						const temp = (tempData[byte] + delta) & 0xff; // wrap around
+
+						const dstOffs = dstElem * byteStride + byte;
+						target[dstOffs] = tempData[byte] = temp;
+					}
+				} else if (channelMode === 1) {
+					// Channel 1 (2-byte deltas): 2-byte deltas are computed as zigzag-encoded differences between 16-bit values of the element and the previous element in the same position.
+					for (let byte = byteGroup; byte < byteGroup + 4; byte += 2) {
+						const delta = dezig(deltas[byte * attrBlockElementCount + elem] + (deltas[(byte + 1) * attrBlockElementCount + elem] << 8));
+						let temp = tempData[byte] + (tempData[byte + 1] << 8);
+
+						temp = (temp + delta) & 0xffff; // wrap around
+
+						const dstOffs = dstElem * byteStride + byte;
+						target[dstOffs] = tempData[byte] = temp & 0xff;
+						target[dstOffs + 1] = tempData[byte + 1] = temp >>> 8;
+					}
+				} else if (channelMode === 2) {
+					// Channel 2 (4-byte XOR deltas): 4-byte deltas are computed as XOR between 32-bit values of the element and the previous element in the same position, with an additional rotation applied based on the high 4 bits of the channel mode byte.
+					const byte = byteGroup;
+					const delta =
+						deltas[byte * attrBlockElementCount + elem] +
+						(deltas[(byte + 1) * attrBlockElementCount + elem] << 8) +
+						(deltas[(byte + 2) * attrBlockElementCount + elem] << 16) +
+						(deltas[(byte + 3) * attrBlockElementCount + elem] << 24);
+					let temp = tempData[byte] + (tempData[byte + 1] << 8) + (tempData[byte + 2] << 16) + (tempData[byte + 3] << 24);
+
+					const rot = channels[byteGroup >>> 2] >>> 4;
+					temp = temp ^ ((delta >>> rot) | (delta << (32 - rot))); // rotate and XOR
+
 					const dstOffs = dstElem * byteStride + byte;
-					target[dstOffs] = tempData[byte] += delta;
+					target[dstOffs] = tempData[byte] = temp & 0xff;
+					target[dstOffs + 1] = tempData[byte + 1] = (temp >>> 8) & 0xff;
+					target[dstOffs + 2] = tempData[byte + 2] = (temp >>> 16) & 0xff;
+					target[dstOffs + 3] = tempData[byte + 3] = temp >>> 24;
 				}
 			}
 		}
