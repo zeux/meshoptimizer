@@ -105,12 +105,15 @@ All these functions take a source floating point buffer as an input, and perform
 - `encodeFilterExp` takes each K floats from the source array (where `K=stride/4`, for a total of `count` K-vectors), and encodes them into `stride` bytes in a way that, when decoded, the result is stored as K single-precision floating point values. This may seem redundant but it allows to trade some precision for a higher compression ratio due to reduced precision of stored components, controlled by `bits` which must be in `[1..24]` range, and a shared exponent encoding used by the function.
 The `mode` parameter can be used to influence the exponent sharing and provides a tradeoff between compressed size and quality for various use cases, and can be one of 'Separate', 'SharedVector', 'SharedComponent' and 'Clamped' (defaulting to 'SharedVector').
 
+- `encodeFilterColor` takes each 4 floats from the source array (for a total of `count` 4-vectors), treats them as an RGBA color with each component from 0..1, and encodes them into `stride` bytes in a way that, when decoded, the result is stored as a normalized unsigned 4-vector. `stride` must be 4 (in which case the round-trip result is 4 8-bit normalized values) or 8 (in which case the round-trip result is 4 16-bit normalized values). This encoding is recommended for colors (with stride=4 for medium quality and 8 for high quality output). `bits` represents the desired precision of each component and must be in `[1..8]` range if `stride=4` and `[1..16]` range if `stride=8`.
+
 Note that in all cases using the highest `bits` value allowed by the output `stride` won't change the size of the output array (which is always going to be `count * stride` bytes), but it *will* reduce compression efficiency, as such the lowest acceptable `bits` value is recommended to use. When multiple parts of the data require different levels of precision, encode filters can be called multiple times and the output of the same filter called with the same `stride` can be concatenated even if `bits` are different.
 
 After data is quantized using filter encoding or manual quantization, the result should be compressed using one of the following functions that mirror the interface of the decoding functions described above:
 
 ```ts
 encodeVertexBuffer: (source: Uint8Array, count: number, size: number) => Uint8Array;
+encodeVertexBufferLevel: (source: Uint8Array, count: number, size: number, level: number, version?: number) => Uint8Array;
 encodeIndexBuffer: (source: Uint8Array, count: number, size: number) => Uint8Array;
 encodeIndexSequence: (source: Uint8Array, count: number, size: number) => Uint8Array;
 
@@ -122,6 +125,8 @@ encodeGltfBuffer: (source: Uint8Array, count: number, size: number, mode: string
 Note that the source is specified as byte arrays; for example, to quantize a position stream encoded using 16-bit integers with 5 vertices, `source` must have length of `5 * 8 = 40` bytes (8 bytes for each position - 3\*2 bytes of data and 2 bytes of padding to conform to alignment requirements), `count` must be 5 and `size` must be 8. When padding data to the alignment boundary make sure to use 0 as padding bytes for optimal compression.
 
 When interleaved vertex data is compressed, `encodeVertexBuffer` can be called with the full size of a single interleaved vertex; however, when compressing deinterleaved data, note that `encodeVertexBuffer` should be called on each component individually if the strides of different streams are different.
+
+By default, `encodeVertexBuffer` uses v0 version of the encoding; this encoding is compatible with `EXT_meshopt_compression` glTF extension but results in lower compression ratios. For better compression, `encodeVertexBufferLevel` can be used to specify encoding version 1; the `level` parameter controls the compression ratio and can be set to 2 (default), 3 for higher compression, or 0/1 for lower. The higher the level, the better the compression ratio, but also the slower the encoding process. When version is set to 0, `level` does not have any effect and the encoding is equivalent to `encodeVertexBuffer`.
 
 ## Simplifier
 
