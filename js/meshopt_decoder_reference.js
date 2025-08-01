@@ -352,13 +352,19 @@ MeshoptDecoder.decodeIndexSequence = (target, count, byteStride, source) => {
 };
 
 MeshoptDecoder.decodeGltfBuffer = (target, count, size, source, mode, filter) => {
-	var table = {
+	const table = {
 		ATTRIBUTES: MeshoptDecoder.decodeVertexBuffer,
 		TRIANGLES: MeshoptDecoder.decodeIndexBuffer,
 		INDICES: MeshoptDecoder.decodeIndexSequence,
 	};
 	assert(table[mode] !== undefined);
 	table[mode](target, count, size, source, filter);
+};
+
+MeshoptDecoder.decodeGltfBufferAsync = (count, size, source, mode, filter) => {
+	const target = new Uint8Array(count * size);
+	MeshoptDecoder.decodeGltfBuffer(target, count, size, source, mode, filter);
+	return Promise.resolve(target);
 };
 
 // node.js interface:
