@@ -99,14 +99,8 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 	if (filter === 'OCTAHEDRAL') {
 		assert(byteStride === 4 || byteStride === 8);
 
-		let dst, maxInt;
-		if (byteStride === 4) {
-			dst = new Int8Array(target.buffer);
-			maxInt = 127;
-		} else {
-			dst = new Int16Array(target.buffer);
-			maxInt = 32767;
-		}
+		const dst = byteStride === 4 ? new Int8Array(target.buffer) : new Int16Array(target.buffer);
+		const maxInt = byteStride === 4 ? 127 : 32767;
 
 		for (let i = 0; i < 4 * elementCount; i += 4) {
 			let x = dst[i + 0],
@@ -152,6 +146,42 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 				exp = v >> 24,
 				mantissa = (v << 8) >> 8;
 			dst[i] = 2.0 ** exp * mantissa;
+		}
+	} else if (filter === 'COLOR') {
+		assert(byteStride === 4 || byteStride === 8);
+
+		const maxInt = (1 << (byteStride * 2)) - 1;
+
+		const data = byteStride === 4 ? new Uint8Array(target.buffer) : new Uint16Array(target.buffer, 0, elementCount * 4);
+		const dataSigned = byteStride === 4 ? new Int8Array(target.buffer) : new Int16Array(target.buffer, 0, elementCount * 4);
+
+		for (let i = 0; i < elementCount * 4; i += 4) {
+			const y = data[i + 0];
+			const co = dataSigned[i + 1];
+			const cg = dataSigned[i + 2];
+			const alphaInput = data[i + 3];
+
+			// Recover scale from alpha high bit - find highest bit set
+			const alphaBit = 31 - Math.clz32(alphaInput);
+			const as = (1 << (alphaBit + 1)) - 1;
+
+			// YCoCg to RGB conversion
+			const r = y + co - cg;
+			const g = y + cg;
+			const b = y - co - cg;
+
+			// Expand alpha by one bit, replicating last bit
+			let a = alphaInput & (as >> 1);
+			a = (a << 1) | (a & 1);
+
+			// Scale to full range
+			const ss = maxInt / as;
+
+			// Store result
+			data[i + 0] = Math.round(r * ss);
+			data[i + 1] = Math.round(g * ss);
+			data[i + 2] = Math.round(b * ss);
+			data[i + 3] = Math.round(a * ss);
 		}
 	}
 };
