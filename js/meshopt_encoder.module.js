@@ -87,13 +87,13 @@ var MeshoptEncoder = (function () {
 		return remap;
 	}
 
-	function encode(fun, bound, source, count, size) {
+	function encode(fun, bound, source, count, size, level, version) {
 		var sbrk = instance.exports.sbrk;
 		var tp = sbrk(bound);
 		var sp = sbrk(count * size);
 		var heap = new Uint8Array(instance.exports.memory.buffer);
 		heap.set(bytes(source), sp);
-		var res = fun(tp, bound, sp, count, size);
+		var res = fun(tp, bound, sp, count, size, level, version);
 		var target = new Uint8Array(res);
 		target.set(heap.subarray(tp, tp + res));
 		sbrk(tp - sbrk(0));
@@ -154,6 +154,14 @@ var MeshoptEncoder = (function () {
 			assert(size % 4 == 0);
 			var bound = instance.exports.meshopt_encodeVertexBufferBound(count, size);
 			return encode(instance.exports.meshopt_encodeVertexBuffer, bound, source, count, size);
+		},
+		encodeVertexBufferLevel: function (source, count, size, level, version) {
+			assert(size > 0 && size <= 256);
+			assert(size % 4 == 0);
+			assert(level >= 0 && level <= 3);
+			assert(version === undefined || version == 0 || version == 1);
+			var bound = instance.exports.meshopt_encodeVertexBufferBound(count, size);
+			return encode(instance.exports.meshopt_encodeVertexBufferLevel, bound, source, count, size, level, version || 0);
 		},
 		encodeIndexBuffer: function (source, count, size) {
 			assert(size == 2 || size == 4);

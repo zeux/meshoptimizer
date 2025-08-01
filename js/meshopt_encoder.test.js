@@ -46,6 +46,28 @@ var tests = {
 		}
 
 		var encoded = encoder.encodeVertexBuffer(data, 16, 4);
+		assert.equal(encoded[0], 0xa0);
+
+		var decoded = new Uint8Array(16 * 4);
+		decoder.decodeVertexBuffer(decoded, 16, 4, encoded);
+
+		assert.deepEqual(decoded, data);
+	},
+
+	roundtripVertexBufferV1: function () {
+		var data = new Uint8Array(16 * 4);
+
+		// this tests 0/2/4/8 bit groups in one stream
+		for (var i = 0; i < 16; ++i) {
+			data[i * 4 + 0] = 0;
+			data[i * 4 + 1] = i * 1;
+			data[i * 4 + 2] = i * 2;
+			data[i * 4 + 3] = i * 8;
+		}
+
+		var encoded = encoder.encodeVertexBufferLevel(data, 16, 4, 3, /* version= */ 1);
+		assert.equal(encoded[0], 0xa1);
+
 		var decoded = new Uint8Array(16 * 4);
 		decoder.decodeVertexBuffer(decoded, 16, 4, encoded);
 
