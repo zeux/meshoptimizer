@@ -1312,6 +1312,10 @@ int main(int argc, char** argv)
 		{
 			settings.nrm_float = true;
 		}
+		else if (strcmp(arg, "-vi") == 0)
+		{
+			settings.mesh_interleaved = true;
+		}
 		else if (strcmp(arg, "-at") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.trn_bits = clamp(atoi(argv[++i]), 1, 24);
@@ -1612,6 +1616,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nVertex attributes:\n");
 			fprintf(stderr, "\t-vtf: use floating point attributes for texture coordinates\n");
 			fprintf(stderr, "\t-vnf: use floating point attributes for normals\n");
+			fprintf(stderr, "\t-vi: use interleaved vertex attributes (reduces compression efficiency)\n");
 			fprintf(stderr, "\t-kv: keep source vertex attributes even if they aren't used\n");
 			fprintf(stderr, "\nAnimations:\n");
 			fprintf(stderr, "\t-at N: use N-bit quantization for translations (default: 16; N should be between 1 and 24)\n");
