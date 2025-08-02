@@ -142,6 +142,7 @@ struct Settings
 	bool mesh_dedup;
 	bool mesh_merge;
 	bool mesh_instancing;
+	bool mesh_interleaved;
 
 	float simplify_ratio;
 	float simplify_error;
