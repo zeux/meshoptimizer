@@ -904,7 +904,7 @@ static bool quadricSolve(Vector3& p, const Quadric& Q, const QuadricGrad& GV)
 	float a10 = Q.a10, a20 = Q.a20, a21 = Q.a21;
 	float x0 = -Q.b0, x1 = -Q.b1, x2 = -Q.b2;
 
-	float eps = 1e-7f * Q.w;
+	float eps = 1e-6f * Q.w;
 
 	// LDL decomposition: A = LDL^T
 	float d0 = a00;
