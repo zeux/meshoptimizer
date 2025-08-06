@@ -904,7 +904,7 @@ static bool quadricSolve(Vector3& p, const Quadric& Q, const QuadricGrad& GV)
 	float a10 = Q.a10, a20 = Q.a20, a21 = Q.a21;
 	float x0 = -Q.b0, x1 = -Q.b1, x2 = -Q.b2;
 
-	float eps = 1e-7f * Q.w;
+	float eps = 1e-6f * Q.w;
 
 	// LDL decomposition: A = LDL^T
 	float d0 = a00;
@@ -1176,6 +1176,32 @@ static bool hasTriangleFlips(const EdgeAdjacency& adjacency, const Vector3* vert
 	}
 
 	return false;
+}
+
+static float getNeighborhoodRadius(const EdgeAdjacency& adjacency, const Vector3* vertex_positions, unsigned int i0)
+{
+	const Vector3& v0 = vertex_positions[i0];
+
+	const EdgeAdjacency::Edge* edges = &adjacency.data[adjacency.offsets[i0]];
+	size_t count = adjacency.offsets[i0 + 1] - adjacency.offsets[i0];
+
+	float result = 0.f;
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		unsigned int a = edges[i].next, b = edges[i].prev;
+
+		const Vector3& va = vertex_positions[a];
+		const Vector3& vb = vertex_positions[b];
+
+		float da = (va.x - v0.x) * (va.x - v0.x) + (va.y - v0.y) * (va.y - v0.y) + (va.z - v0.z) * (va.z - v0.z);
+		float db = (vb.x - v0.x) * (vb.x - v0.x) + (vb.y - v0.y) * (vb.y - v0.y) + (vb.z - v0.z) * (vb.z - v0.z);
+
+		result = result < da ? da : result;
+		result = result < db ? db : result;
+	}
+
+	return sqrtf(result);
 }
 
 static size_t boundEdgeCollapses(const EdgeAdjacency& adjacency, size_t vertex_count, size_t index_count, unsigned char* vertex_kind)
@@ -1553,7 +1579,7 @@ static void updateQuadrics(const unsigned int* collapse_remap, size_t vertex_cou
 static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, size_t vertex_count, const Quadric* vertex_quadrics, const QuadricGrad* volume_gradients, const Quadric* attribute_quadrics, const QuadricGrad* attribute_gradients, size_t attribute_count, const unsigned int* remap, const unsigned int* wedge, const EdgeAdjacency& adjacency, const unsigned char* vertex_kind, const unsigned char* vertex_update)
 {
 #if TRACE
-	size_t stats[4] = {};
+	size_t stats[5] = {};
 #endif
 
 	for (size_t i = 0; i < vertex_count; ++i)
@@ -1575,8 +1601,15 @@ static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, s
 
 		TRACESTATS(0);
 
+		const Vector3& vp = vertex_positions[i];
+
 		Quadric Q = vertex_quadrics[i];
 		QuadricGrad GV = {};
+
+		// add a point quadric for regularization to stabilize the solution
+		Quadric R;
+		quadricFromPoint(R, vp.x, vp.y, vp.z, Q.w * 1e-4f);
+		quadricAdd(Q, R);
 
 		if (attribute_count)
 		{
@@ -1596,21 +1629,34 @@ static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, s
 		Vector3 p;
 		if (!quadricSolve(p, Q, GV))
 		{
-			TRACESTATS(1);
-			continue;
-		}
-
-		if (hasTriangleFlips(adjacency, vertex_positions, unsigned(i), p))
-		{
 			TRACESTATS(2);
 			continue;
 		}
 
+		// reject updates that move the vertex too far from its neighborhood
+		// this detects and fixes most cases when the quadric is not well-defined
+		float nr = getNeighborhoodRadius(adjacency, vertex_positions, unsigned(i));
+		float dp = (p.x - vp.x) * (p.x - vp.x) + (p.y - vp.y) * (p.y - vp.y) + (p.z - vp.z) * (p.z - vp.z);
+
+		if (dp > nr * nr)
+		{
+			TRACESTATS(3);
+			continue;
+		}
+
+		// reject updates that would flip a neighboring triangle, as we do for edge collapse
+		if (hasTriangleFlips(adjacency, vertex_positions, unsigned(i), p))
+		{
+			TRACESTATS(4);
+			continue;
+		}
+
+		TRACESTATS(1);
 		vertex_positions[i] = p;
 	}
 
 #if TRACE
-	printf("updated %d/%d positions; failed solve %d flip %d\n", int(stats[0] - stats[1] - stats[2]), int(stats[0]), int(stats[1]), int(stats[2]));
+	printf("updated %d/%d positions; failed solve %d bounds %d flip %d\n", int(stats[1]), int(stats[0]), int(stats[2]), int(stats[3]), int(stats[4]));
 #endif
 
 	if (attribute_count == 0)
