@@ -410,10 +410,11 @@ enum
  * Mesh simplifier
  * Reduces the number of triangles in the mesh, attempting to preserve mesh appearance as much as possible
  * The algorithm tries to preserve mesh topology and can stop short of the target goal based on topology constraints or target error.
- * If not all attributes from the input mesh are required, it's recommended to reindex the mesh without them prior to simplification.
+ * If not all attributes from the input mesh are needed, it's recommended to reindex the mesh without them prior to simplification.
  * Returns the number of indices after simplification, with destination containing new index data
+ *
  * The resulting index buffer references vertices from the original vertex buffer.
- * If the original vertex data isn't required, creating a compact vertex buffer using meshopt_optimizeVertexFetch is recommended.
+ * If the original vertex data isn't needed, creating a compact vertex buffer using meshopt_optimizeVertexFetch is recommended.
  *
  * destination must contain enough space for the target index buffer, worst case is index_count elements (*not* target_index_count)!
  * vertex_positions should have float3 position in the first 12 bytes of each vertex
@@ -425,21 +426,48 @@ MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsig
 
 /**
  * Mesh simplifier with attribute metric
- * The algorithm enhances meshopt_simplify by incorporating attribute values into the error metric used to prioritize simplification order; see meshopt_simplify documentation for details.
- * Note that the number of attributes affects memory requirements and running time; this algorithm requires ~1.5x more memory and time compared to meshopt_simplify when using 4 scalar attributes.
+ * Reduces the number of triangles in the mesh, attempting to preserve mesh appearance as much as possible.
+ * Similar to meshopt_simplify, but incorporates attribute values into the error metric used to prioritize simplification order.
+ * The algorithm tries to preserve mesh topology and can stop short of the target goal based on topology constraints or target error.
+ * If not all attributes from the input mesh are needed, it's recommended to reindex the mesh without them prior to simplification.
+ * Returns the number of indices after simplification, with destination containing new index data
  *
+ * The resulting index buffer references vertices from the original vertex buffer.
+ * If the original vertex data isn't needed, creating a compact vertex buffer using meshopt_optimizeVertexFetch is recommended.
+ * Note that the number of attributes with non-zero weights affects memory requirements and running time.
+ *
+ * destination must contain enough space for the target index buffer, worst case is index_count elements (*not* target_index_count)!
+ * vertex_positions should have float3 position in the first 12 bytes of each vertex
  * vertex_attributes should have attribute_count floats for each vertex
  * attribute_weights should have attribute_count floats in total; the weights determine relative priority of attributes between each other and wrt position
  * attribute_count must be <= 32
  * vertex_lock can be NULL; when it's not NULL, it should have a value for each vertex; 1 denotes vertices that can't be moved
+ * target_error represents the error relative to mesh extents that can be tolerated, e.g. 0.01 = 1% deformation; value range [0..1]
+ * options must be a bitmask composed of meshopt_SimplifyX options; 0 is a safe default
+ * result_error can be NULL; when it's not NULL, it will contain the resulting (relative) error after simplification
  */
 MESHOPTIMIZER_API size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, const unsigned char* vertex_lock, size_t target_index_count, float target_error, unsigned int options, float* result_error);
 
 /**
  * Experimental: Mesh simplifier with position/attribute update
- * The algorithm enhances meshopt_simplifyWithAttributes by updating vertex positions and attributes during simplification to minimize the error.
+ * Reduces the number of triangles in the mesh, attempting to preserve mesh appearance as much as possible.
+ * Similar to meshopt_simplifyWithAttributes, but destructively updates positions and attribute values for optimal appearance.
+ * The algorithm tries to preserve mesh topology and can stop short of the target goal based on topology constraints or target error.
+ * If not all attributes from the input mesh are needed, it's recommended to reindex the mesh without them prior to simplification.
+ * Returns the number of indices after simplification, indices are destructively updated with new index data
  *
- * indices, vertex_positions, vertex_attributes are updated in-place; the vertex order is preserved, so creating a compact vertex buffer using meshopt_optimizeVertexFetch is recommended.
+ * The updated index buffer references vertices from the original vertex buffer, however the vertex positions and attributes are updated in-place.
+ * Creating a compact vertex buffer using meshopt_optimizeVertexFetch is recommended; if the original vertex data is needed, it should be copied before simplification.
+ * Note that the number of attributes with non-zero weights affects memory requirements and running time. Attributes with zero weights are not updated.
+ *
+ * vertex_positions should have float3 position in the first 12 bytes of each vertex
+ * vertex_attributes should have attribute_count floats for each vertex
+ * attribute_weights should have attribute_count floats in total; the weights determine relative priority of attributes between each other and wrt position
+ * attribute_count must be <= 32
+ * vertex_lock can be NULL; when it's not NULL, it should have a value for each vertex; 1 denotes vertices that can't be moved
+ * target_error represents the error relative to mesh extents that can be tolerated, e.g. 0.01 = 1% deformation; value range [0..1]
+ * options must be a bitmask composed of meshopt_SimplifyX options; 0 is a safe default
+ * result_error can be NULL; when it's not NULL, it will contain the resulting (relative) error after simplification
  */
 MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifyWithUpdate(unsigned int* indices, size_t index_count, float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, float* vertex_attributes, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, const unsigned char* vertex_lock, size_t target_index_count, float target_error, unsigned int options, float* result_error);
 
@@ -449,7 +477,7 @@ MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifyWithUpdate(unsigned int* indic
  * The algorithm doesn't preserve mesh topology but can stop short of the target goal based on target error.
  * Returns the number of indices after simplification, with destination containing new index data
  * The resulting index buffer references vertices from the original vertex buffer.
- * If the original vertex data isn't required, creating a compact vertex buffer using meshopt_optimizeVertexFetch is recommended.
+ * If the original vertex data isn't needed, creating a compact vertex buffer using meshopt_optimizeVertexFetch is recommended.
  *
  * destination must contain enough space for the target index buffer, worst case is index_count elements (*not* target_index_count)!
  * vertex_positions should have float3 position in the first 12 bytes of each vertex
@@ -464,7 +492,7 @@ MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifySloppy(unsigned int* destinati
  * Reduces the number of triangles in the mesh by removing small isolated parts of the mesh
  * Returns the number of indices after simplification, with destination containing new index data
  * The resulting index buffer references vertices from the original vertex buffer.
- * If the original vertex data isn't required, creating a compact vertex buffer using meshopt_optimizeVertexFetch is recommended.
+ * If the original vertex data isn't needed, creating a compact vertex buffer using meshopt_optimizeVertexFetch is recommended.
  *
  * destination must contain enough space for the target index buffer, worst case is index_count elements
  * vertex_positions should have float3 position in the first 12 bytes of each vertex
@@ -477,7 +505,7 @@ MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_simplifyPrune(unsigned int* destinatio
  * Reduces the number of points in the cloud to reach the given target
  * Returns the number of points after simplification, with destination containing new index data
  * The resulting index buffer references vertices from the original vertex buffer.
- * If the original vertex data isn't required, creating a compact vertex buffer using meshopt_optimizeVertexFetch is recommended.
+ * If the original vertex data isn't needed, creating a compact vertex buffer using meshopt_optimizeVertexFetch is recommended.
  *
  * destination must contain enough space for the target index buffer (target_vertex_count elements)
  * vertex_positions should have float3 position in the first 12 bytes of each vertex
