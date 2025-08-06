@@ -1606,6 +1606,11 @@ static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, s
 		Quadric Q = vertex_quadrics[i];
 		QuadricGrad GV = {};
 
+		// add a point quadric for regularization to stabilize the solution
+		Quadric R;
+		quadricFromPoint(R, vp.x, vp.y, vp.z, Q.w * 1e-4f);
+		quadricAdd(Q, R);
+
 		if (attribute_count)
 		{
 			// optimal point simultaneously minimizes attribute quadrics for all wedges
