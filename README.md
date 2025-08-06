@@ -464,17 +464,7 @@ bool lod_ok = e * lod_factor >= lod_error;
 
 When a sequence of LOD meshes is generated that all use the original vertex buffer, care must be taken to order vertices optimally to not penalize mobile GPU architectures that are only capable of transforming a sequential vertex buffer range. It's recommended in this case to first optimize each LOD for vertex cache, then assemble all LODs in one large index buffer starting from the coarsest LOD (the one with fewest triangles), and call `meshopt_optimizeVertexFetch` on the final large index buffer. This will make sure that coarser LODs require a smaller vertex range and are efficient wrt vertex fetch and transform.
 
-### Advanced simplification
-
-`meshopt_simplify` exposes additional options and functions that can be used to control the simplification process in more detail.
-
-For basic customization, a number of options can be passed via `options` bitmask that adjust the behavior of the simplifier:
-
-- `meshopt_SimplifyLockBorder` restricts the simplifier from collapsing edges that are on the border of the mesh. This can be useful for simplifying mesh subsets independently, so that the LODs can be combined without introducing cracks.
-- `meshopt_SimplifyErrorAbsolute` changes the error metric from relative to absolute both for the input error limit as well as for the resulting error. This can be used instead of `meshopt_simplifyScale`.
-- `meshopt_SimplifySparse` improves simplification performance assuming input indices are a sparse subset of the mesh. This can be useful when simplifying small mesh subsets independently, and is intended to be used for meshlet simplification. For consistency, it is recommended to use absolute errors when sparse simplification is desired, as this flag changes the meaning of the relative errors.
-- `meshopt_SimplifyPrune` allows the simplifier to remove isolated components regardless of the topological restrictions inside the component. This is generally recommended for full-mesh simplification as it can improve quality and reduce triangle count; note that with this option, triangles connected to locked vertices may be removed as part of their component.
-- `meshopt_SimplifyRegularize` produces more regular triangle sizes and shapes during simplification, at some cost to geometric quality. This can improve geometric quality under deformation such as skinning.
+### Attribute-aware simplification
 
 While `meshopt_simplify` is aware of attribute discontinuities by default (and infers them through the supplied index buffer) and tries to preserve them, it can be useful to provide information about attribute values. This allows the simplifier to take attribute error into account which can improve shading (by using vertex normals), texture deformation (by using texture coordinates), and may be necessary to preserve vertex colors when textures are not used in the first place. This can be done by using a variant of the simplification function that takes attribute values and weight factors, `meshopt_simplifyWithAttributes`:
 
@@ -493,7 +483,35 @@ The attributes are passed as a separate buffer (in the example above it's a subs
 
 Both the target error and the resulting error combine positional error and attribute error, so the error can be used to control the LOD while taking attribute quality into account, assuming carefully chosen weights.
 
-When using `meshopt_simplifyWithAttributes`, it is also possible to lock certain vertices by providing a `vertex_lock` array that contains a boolean value for each vertex in the mesh. This can be useful to preserve certain vertices, such as the boundary of the mesh, with more control than `meshopt_SimplifyLockBorder` option provides.
+### Simplification with vertex update
+
+All simplification functions described so far reuse the original vertex buffer and only produce a new index buffer. This means that the resulting mesh will have the same vertex positions and attributes as the original mesh; this is optimal for minimizing the memory consumption and for highly detailed meshes often provides good quality. However, for more aggressive simplification to retain visual quality, it may be necessary to update the vertex positions and attributes. This can be done by using a variant of the simplification function that updates vertex positions and attributes, `meshopt_simplifyWithUpdate`:
+
+```c++
+indices.resize(meshopt_simplifyWithUpdate(&indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex),
+    &vertices[0].nx, sizeof(Vertex), attr_weights, 3, /* vertex_lock= */ NULL,
+    target_index_count, target_error, /* options= */ 0, &result_error));
+```
+
+Unlike `meshopt_simplify`/`meshopt_simplifyWithAttributes`, this function updates the index buffer as well as vertex positions and attributes in place. The resulting indices still refer to the original vertex buffer; any attributes that are not passed to the simplifier can be left unchanged. However, since the original contents of `vertices` is no longer valid for rendering the original mesh, a new compact vertex/index buffer should be generated using `meshopt_optimizeVertexFetch` (after optimizing the index data with `meshopt_optimizeVertexCache`). If the original data was important, it should be copied before calling this function.
+
+Since the vertex positions are updated, this may require updating some attributes that could previously be left as-is when using the original vertex buffer. Notably, texture coordinates need to be updated to avoid texture distortion; thus it's highly recommended to include texture coordinates in the attribute data passed to the simplifier. For attributes to be updated, the corresponding attribute weight must not be zero; for texture coordinates, a weight of 1.0 is usually sufficient in this case (although a higher or mesh dependent weight could be used with this function or other functions to reduce UV stretching).
+
+Using unique vertex data for each LOD in a chain can improve visual quality, but it comes at a cost of ~doubling vertex memory used (if each LOD is using half the triangles of the previous LOD). To reduce the memory footprint, it is possible to use shared vertices with `meshopt_simplifyWithAttributes` for the first one or two LODs in the chain, and only switch to `meshopt_simplifyWithUpdate` for the remainder. In that case, similarly to the use of `meshopt_simplify` described earlier, care must be taken to optimally arrange the vertices in the original vertex buffer.
+
+### Advanced simplification
+
+`meshopt_simplify*` functions expose additional options and parameters that can be used to control the simplification process in more detail.
+
+For basic customization, a number of options can be passed via `options` bitmask that adjust the behavior of the simplifier:
+
+- `meshopt_SimplifyLockBorder` restricts the simplifier from collapsing edges that are on the border of the mesh. This can be useful for simplifying mesh subsets independently, so that the LODs can be combined without introducing cracks.
+- `meshopt_SimplifyErrorAbsolute` changes the error metric from relative to absolute both for the input error limit as well as for the resulting error. This can be used instead of `meshopt_simplifyScale`.
+- `meshopt_SimplifySparse` improves simplification performance assuming input indices are a sparse subset of the mesh. This can be useful when simplifying small mesh subsets independently, and is intended to be used for meshlet simplification. For consistency, it is recommended to use absolute errors when sparse simplification is desired, as this flag changes the meaning of the relative errors.
+- `meshopt_SimplifyPrune` allows the simplifier to remove isolated components regardless of the topological restrictions inside the component. This is generally recommended for full-mesh simplification as it can improve quality and reduce triangle count; note that with this option, triangles connected to locked vertices may be removed as part of their component.
+- `meshopt_SimplifyRegularize` produces more regular triangle sizes and shapes during simplification, at some cost to geometric quality. This can improve geometric quality under deformation such as skinning.
+
+When using `meshopt_simplifyWithAttributes`/`meshopt_simplifyWithUpdate`, it is also possible to lock certain vertices by providing a `vertex_lock` array that contains a boolean value for each vertex in the mesh. This can be useful to preserve certain vertices, such as the boundary of the mesh, with more control than `meshopt_SimplifyLockBorder` option provides.
 
 In addition to the `meshopt_SimplifyPrune` flag, you can explicitly prune isolated components by calling the `meshopt_simplifyPrune` function. This can be done before regular simplification or as the only step, which is useful for scenarios like isosurface cleanup. Similar to other simplification functions, the `target_error` argument controls the cutoff of component radius and is specified in relative units (e.g., `1e-2f` will remove components under 1%). If an absolute cutoff is desired, divide the parameter by the factor returned by `meshopt_simplifyScale`.
 
