@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import re
 import sys
 
 # regenerate with wasmpack.py generate
@@ -30,7 +31,18 @@ def stats(buffer):
 
 	return result
 
-if sys.argv[-1] == 'generate':
+def patch(target, stem, code):
+	with open(target, 'r') as f: content = f.read()
+
+	pattern = r'(["\']).*\1(;\s*//\s*embed! ' + stem + r')'
+	result = re.sub(pattern, r'\1' + re.escape(code) + r'\1\2', content)
+
+	with open(target, 'w') as f: f.write(result)
+
+if len(sys.argv) >= 2 and sys.argv[1] == 'generate':
 	print(stats(sys.stdin.buffer)[:60])
+elif len(sys.argv) >= 2 and sys.argv[1] == 'patch':
+	code = encode(sys.stdin.buffer)
+	patch(sys.argv[2], sys.argv[3], code)
 else:
 	print(encode(sys.stdin.buffer))
