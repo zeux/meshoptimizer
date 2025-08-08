@@ -153,6 +153,17 @@ var tests = {
 		var resC2 = simplifier.simplifyPoints(positions, 3, 2, colors, 3, 1e-2);
 		assert.deepEqual(resC2, expected);
 	},
+
+	simplifyPrune: function () {
+		var indices = new Uint32Array([0, 1, 2, 3, 4, 5, 6, 7, 8]);
+
+		var positions = new Float32Array([0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 2, 1, 2, 0, 1, 0, 0, 2, 0, 4, 2, 4, 0, 2]);
+
+		var expected = new Uint32Array([6, 7, 8]);
+
+		var res = simplifier.simplifyPrune(indices, positions, 3, 0.5);
+		assert.deepEqual(res, expected);
+	},
 };
 
 Promise.all([simplifier.ready]).then(() => {

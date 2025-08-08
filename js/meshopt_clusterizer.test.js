@@ -101,6 +101,26 @@ const tests = {
 			assert.deepStrictEqual(normal, expectedNormals[i]);
 		});
 	},
+
+	computeSphereBounds: function () {
+		// positions without per-point radii (tetrahedron)
+		const positions = new Float32Array([0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1]);
+		const bp = clusterizer.computeSphereBounds(positions, 3);
+
+		assert(Math.abs(bp.centerX - 0.5) < 1e-3);
+		assert(Math.abs(bp.centerY - 0.5) < 1e-3);
+		assert(Math.abs(bp.centerZ - 0.5) < 1e-3);
+		assert(bp.radius < 0.87);
+
+		// use 4th float of each element as radius (last point has radius=3 enveloping others)
+		const radii = new Float32Array([0, 1, 2, 3]);
+		const br = clusterizer.computeSphereBounds(positions, 3, radii, 1);
+
+		assert(Math.abs(br.centerX - 1.0) < 1e-3);
+		assert(Math.abs(br.centerY - 0.0) < 1e-3);
+		assert(Math.abs(br.centerZ - 1.0) < 1e-3);
+		assert(Math.abs(br.radius - 3.0) < 1e-3);
+	},
 };
 
 clusterizer.ready.then(() => {

@@ -40,4 +40,6 @@ export const MeshoptSimplifier: {
 		vertex_colors_stride?: number,
 		color_weight?: number
 	) => Uint32Array;
+
+	simplifyPrune: (indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, target_error: number) => Uint32Array;
 };
