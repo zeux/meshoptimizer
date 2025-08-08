@@ -672,20 +672,15 @@ APIs that *are* experimental may have their interface change, both in ways that 
 
 Applications may configure the library to change the attributes of experimental APIs, for example defining `MESHOPTIMIZER_EXPERIMENTAL` as `__attribute__((deprecated))` will emit compiler warnings when experimental APIs are used. When building a shared library with CMake, `MESHOPT_STABLE_EXPORTS` option can be set to only export stable APIs; this produces an ABI-stable shared library that can be updated without recompiling the application code.
 
-Currently, the following APIs are experimental, with the functions marked with `*` being likely to become stable in the future with no changes:
+Currently, the following APIs are experimental:
 
-- `meshopt_analyzeCoverage`*
 - `meshopt_buildMeshletsFlex`
 - `meshopt_buildMeshletsSpatial`
-- `meshopt_computeSphereBounds`*
 - `meshopt_decodeFilterColor`
 - `meshopt_encodeFilterColor`
-- `meshopt_encodeVertexBufferLevel`*
-- `meshopt_generateVertexRemapCustom`*
-- `meshopt_partitionClusters`*
-- `meshopt_simplifyPrune`*
 - `meshopt_simplifySloppy`
-- `meshopt_spatialClusterPoints`*
+- `meshopt_simplifyWithUpdate`
+- `meshopt_SimplifyRegularize` flag for `meshopt_simplify*` functions
 
 ## License
 
