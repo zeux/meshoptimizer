@@ -153,6 +153,14 @@ To control behavior of the algorithm more precisely, `flags` may specify an arra
 - `'Sparse'` improves simplification performance assuming input indices are a sparse subset of the mesh. This can be useful when simplifying small mesh subsets independently. For consistency, it is recommended to use absolute errors when sparse simplification is desired.
 - ``Prune`` allows removal of isolated components regardless of the topological restrictions inside the component. This is generally recommended for full-mesh simplification as it can improve quality and reduce triangle count; note that with this option, triangles connected to locked vertices may be removed as part of their component.
 
+In addition to the `Prune` flag, you can explicitly prune isolated components under a target threshold by calling the `simplifyPrune` function:
+
+```ts
+simplifyPrune: (indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, target_error: number) => Uint32Array;
+```
+
+This can be done before regular simplification or as the only step, which is useful for scenarios like isosurface cleanup.
+
 While `simplify` is aware of attribute discontinuities by default (and infers them through the supplied index buffer) and tries to preserve them, it can be useful to provide information about attribute values. This allows the simplifier to take attribute error into account which can improve shading (by using vertex normals), texture deformation (by using texture coordinates), and may be necessary to preserve vertex colors when textures are not used in the first place. This can be done by using a variant of the simplification function that takes attribute values and weight factors, `simplifyWithAttributes`:
 
 ```ts
@@ -251,6 +259,12 @@ It is also possible to compute bounds of a vertex cluster that is not generated 
 
 ```ts
 computeClusterBounds(indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number) => Bounds;
+```
+
+Finally, it is possible to compute spherical bounds of an arbitrary set of points, which can be useful to compute bounds for arbitrary mesh subsets. Each point can have an optional radius; this can be used to merge the spherical bounds of multiple clusters. The inputs are provided as strided arrays with the stride in `Float32` units.
+
+```ts
+computeSphereBounds: (positions: Float32Array, positions_stride: number, radii?: Float32Array, radii_stride?: number) => Bounds;
 ```
 
 ## License
