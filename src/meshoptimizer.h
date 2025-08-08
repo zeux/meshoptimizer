@@ -731,7 +731,7 @@ MESHOPTIMIZER_API struct meshopt_Bounds meshopt_computeMeshletBounds(const unsig
 MESHOPTIMIZER_API struct meshopt_Bounds meshopt_computeSphereBounds(const float* positions, size_t count, size_t positions_stride, const float* radii, size_t radii_stride);
 
 /**
- * Experimental: Cluster partitioner
+ * Cluster partitioner
  * Partitions clusters into groups of similar size, prioritizing grouping clusters that share vertices or are close to each other.
  *
  * destination must contain enough space for the resulting partiotion data (cluster_count elements)
@@ -741,7 +741,7 @@ MESHOPTIMIZER_API struct meshopt_Bounds meshopt_computeSphereBounds(const float*
  * vertex_positions should have float3 position in the first 12 bytes of each vertex (or can be NULL if not used)
  * target_partition_size is a target size for each partition, in clusters; the resulting partitions may be smaller or larger
  */
-MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* cluster_indices, size_t total_index_count, const unsigned int* cluster_index_counts, size_t cluster_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_partition_size);
+MESHOPTIMIZER_API size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* cluster_indices, size_t total_index_count, const unsigned int* cluster_index_counts, size_t cluster_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_partition_size);
 
 /**
  * Spatial sorter
@@ -763,14 +763,14 @@ MESHOPTIMIZER_API void meshopt_spatialSortRemap(unsigned int* destination, const
 MESHOPTIMIZER_API void meshopt_spatialSortTriangles(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 
 /**
- * Experimental: Spatial clusterizer
+ * Spatial clusterizer
  * Reorders points into clusters optimized for spatial locality, and generates a new index buffer.
  * Ensures the output can be split into cluster_size chunks where each chunk has good positional locality. Only the last chunk will be smaller than cluster_size.
  *
  * destination must contain enough space for the resulting index buffer (vertex_count elements)
  * vertex_positions should have float3 position in the first 12 bytes of each vertex
  */
-MESHOPTIMIZER_EXPERIMENTAL void meshopt_spatialClusterPoints(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t cluster_size);
+MESHOPTIMIZER_API void meshopt_spatialClusterPoints(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t cluster_size);
 
 /**
  * Quantize a float into half-precision (as defined by IEEE-754 fp16) floating point value
