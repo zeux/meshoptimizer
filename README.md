@@ -322,55 +322,66 @@ In case storage size or transmission bandwidth is of importance, you might want 
 
 Alternatively you can use general purpose compression libraries like zstd or Oodle to compress vertex/index data - however these compressors aren't designed to exploit redundancies in vertex/index data and as such compression rates can be unsatisfactory.
 
-### Vertex/index compression
-
-To that end, this library provides algorithms to "encode" vertex and index data. The result of the encoding is generally significantly smaller than initial data, and remains compressible with general purpose compressors - so you can either store encoded data directly (for modest compression ratios and maximum decoding performance), or further compress it with zstd/Oodle to maximize compression ratio.
+To that end, this library provides algorithms to "encode" vertex and index data. The result of the encoding is generally significantly smaller than initial data, and remains compressible with general purpose compressors - so you can either store encoded data directly (for modest compression ratios and maximum decoding performance), or further compress it with LZ4/zstd/Oodle to maximize compression ratio.
 
 > Note: this compression scheme is available as a glTF extension [EXT_meshopt_compression](https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Vendor/EXT_meshopt_compression/README.md).
 
-To encode, you need to allocate target buffers (preferably using the worst case bound) and call encoding functions:
+### Vertex compression
+
+This library provides a lossless algorithm to encode/decode vertex data. To encode vertices, you need to allocate a target buffer (using the worst case bound) and call the encoding function:
 
 ```c++
 std::vector<unsigned char> vbuf(meshopt_encodeVertexBufferBound(vertex_count, sizeof(Vertex)));
 vbuf.resize(meshopt_encodeVertexBuffer(&vbuf[0], vbuf.size(), vertices, vertex_count, sizeof(Vertex)));
+```
 
+To decode the data at runtime, call the decoding function:
+
+```c++
+int res = meshopt_decodeVertexBuffer(vertices, vertex_count, sizeof(Vertex), &vbuf[0], vbuf.size());
+assert(res == 0);
+```
+
+Note that vertex encoding assumes that vertex buffer was optimized for vertex fetch, and that vertices are quantized. Feeding unoptimized data into the encoder may produce poor compression ratios. The codec is lossless by itself - the only lossy step is quantization/reordering or filters that you may apply before encoding. Additionally, if the vertex data contains padding bytes, they should be zero-initialized to ensure that the encoder does not need to store uninitialized data.
+
+Decoder is heavily optimized and can directly target write-combined memory; you can expect it to run at 3-6 GB/s on modern desktop CPUs. Compression ratio depends on the data; vertex data compression ratio is typically around 2-4x (compared to already quantized and optimally packed data). General purpose lossless compressors can further improve the compression ratio at some cost to decoding performance.
+
+The vertex codec tries to take advantage of the inherent locality of sequential vertices and identify bit patterns that repeat in consecutive vertices. Typically, vertex cache + vertex fetch provides a reasonably local vertex traversal order; without an index buffer, it is recommended to sort vertices spatially (via `meshopt_spatialSortRemap`) to improve the compression ratio.
+
+It is crucial to correctly specify the stride when encoding vertex data; however, for compression ratio it does not matter whether the vertices are interleaved or deinterleaved, as the codecs perform full byte deinterleaving internally. The stride of each stream must be a multiple of 4 bytes.
+
+For optimal compression results, the values should be quantized to small integers. It can be valuable to use bit counts that are not multiples of 8. For example, instead of using 16 bits to represent texture coordinates, use 12-bit integers and divide by 4095 in the shader. Alternatively, using half-precision floats can often achieve good results.
+For single-precision floating-point data, it's recommended to use `meshopt_quantizeFloat` to remove entropy from the lower bits of the mantissa; for best results, consider using 15 bits or 7 bits for extreme compression.
+For normal or tangent vectors, using octahedral encoding is recommended over three components as it reduces redundancy; similarly, consider using 10-12 bits per component instead of 16.
+
+When data is bit packed, using v1 vertex codec and specifying compression level 3 (`meshopt_encodeVertexBufferLevel` with level 3 and version 1) can improve the compression further by redistributing bits between components. Note that v1 vertex codec (`meshopt_encodeVertexVersion(1)`) is recommended regardless, as it improves compression ratios and decoding performance even absent bit packing.
+
+### Index compression
+
+This library also provides algorithms to encode/decode index data. To encode triangle indices, you need to allocate a target buffer (using the worst case bound) and call the encoding function:
+
+```c++
 std::vector<unsigned char> ibuf(meshopt_encodeIndexBufferBound(index_count, vertex_count));
 ibuf.resize(meshopt_encodeIndexBuffer(&ibuf[0], ibuf.size(), indices, index_count));
 ```
 
-You can then either serialize `vbuf`/`ibuf` as is, or compress them further. To decode the data at runtime, call decoding functions:
+To decode the data at runtime, call the decoding function:
 
 ```c++
-int resvb = meshopt_decodeVertexBuffer(vertices, vertex_count, sizeof(Vertex), &vbuf[0], vbuf.size());
-int resib = meshopt_decodeIndexBuffer(indices, index_count, &ibuf[0], ibuf.size());
-assert(resvb == 0 && resib == 0);
+int res = meshopt_decodeIndexBuffer(indices, index_count, &ibuf[0], ibuf.size());
+assert(res == 0);
 ```
 
-Note that vertex encoding assumes that vertex buffer was optimized for vertex fetch, and that vertices are quantized; index encoding assumes that the vertex/index buffers were optimized for vertex cache and vertex fetch. Feeding unoptimized data into the encoders will produce poor compression ratios. Both codecs are lossless - the only lossy step is quantization that happens before encoding.
+Note that index encoding assumes that the index buffer was optimized for vertex cache and vertex fetch. Feeding unoptimized data into the encoder will produce poor compression ratios. Codec preserves the order of triangles, however it can rotate each triangle to improve compression ratio (which means the provoking vertex may change).
 
-Decoding functions are heavily optimized and can directly target write-combined memory; you can expect both decoders to run at 3-5 GB/s on modern desktop CPUs. Compression ratios depend on the data; vertex data compression ratio is typically around 2-4x (compared to already quantized data), index data compression ratio is around 5-6x (compared to raw 16-bit index data). General purpose lossless compressors can further improve on these results.
+Decoder is heavily optimized and can directly target write-combined memory; you can expect it to run at 3-6 GB/s on modern desktop CPUs.
 
-For additional improvements in compression ratio and decoding performance, it is recommended to switch to vertex codec v1 (via `meshopt_encodeVertexVersion(1)`). This will result in smaller outputs that decode faster, and provide additional control over compression level - `meshopt_encodeVertexBuffer` will use compression level 2 by default, but using `meshopt_encodeVertexBufferLevel` allows to improve compression in certain cases by using level 3, or to reduce compression ratio and improve encoding speed by using level 1. Note that v1 format requires meshoptimizer v0.23 or later for decoding.
+The index codec targets 1 byte per triangle as a best case (6x smaller than raw 16-bit index data); on real-world meshes, it's typical to achieve 1-1.2 bytes per triangle. To reach this, the index data needs to be optimized for vertex cache and vertex fetch. Optimizations that do not disrupt triangle locality (such as overdraw) are safe to use in between.
+To reduce the data size further, it's possible to use `meshopt_optimizeVertexCacheStrip` instead of `meshopt_optimizeVertexCache` when optimizing for vertex cache. This trades off some efficiency in vertex transform for smaller index (and sometimes vertex) data.
+
+When referenced vertex indices are not sequential, the index codec will use around 2 bytes per index. This can happen when the referenced vertices are a sparse subset of the vertex buffer, such as when encoding LODs. General-purpose compression can be especially helpful in this case.
 
 Index buffer codec only supports triangle list topology; when encoding triangle strips or line lists, use `meshopt_encodeIndexSequence`/`meshopt_decodeIndexSequence` instead. This codec typically encodes indices into ~1 byte per index, but compressing the results further with a general purpose compressor can improve the results to 1-3 bits per index.
-
-The following guarantees on data compatibility are provided for point releases (*no* guarantees are given for development branch):
-
-- Data encoded with older versions of the library can always be decoded with newer versions;
-- Data encoded with newer versions of the library can be decoded with older versions, provided that encoding versions are set correctly; if binary stability of encoded data is important, use `meshopt_encodeVertexVersion` and `meshopt_encodeIndexVersion` to 'pin' the data versions.
-
-Due to a very high decoding performance and compatibility with general purpose lossless compressors, the compression is a good fit for the use on the web. To that end, meshoptimizer provides both vertex and index decoders compiled into WebAssembly and wrapped into a module with JavaScript-friendly interface, `js/meshopt_decoder.js`, that you can use to decode meshes that were encoded offline:
-
-```js
-// ready is a Promise that is resolved when (asynchronous) WebAssembly compilation finishes
-await MeshoptDecoder.ready;
-
-// decode from *Data (Uint8Array) into *Buffer (Uint8Array)
-MeshoptDecoder.decodeVertexBuffer(vertexBuffer, vertexCount, vertexSize, vertexData);
-MeshoptDecoder.decodeIndexBuffer(indexBuffer, indexCount, indexSize, indexData);
-```
-
-[Usage example](https://meshoptimizer.org/demo/) is available, with source in `demo/index.html`; this example uses .GLB files encoded using `gltfpack`.
 
 ### Point cloud compression
 
@@ -388,31 +399,9 @@ meshopt_remapVertexBuffer(positions, positions, point_count, sizeof(vec3), &rema
 
 After this the resulting arrays should be quantized (e.g. using 16-bit fixed point numbers for positions and 8-bit color components), and the result can be compressed using `meshopt_encodeVertexBuffer` as described in the previous section. To decompress, `meshopt_decodeVertexBuffer` will recover the quantized data that can be used directly or converted back to original floating-point data. The compression ratio depends on the nature of source data, for colored points it's typical to get 35-40 bits per point.
 
-### Advanced compression
+### Vertex filters
 
-Both vertex and index codecs are designed to be used in a three-stage pipeline:
-
-- Preparation (quantization, filtering, ordering)
-- Encoding (`meshopt_encodeVertexBuffer`/`meshopt_encodeIndexBuffer`)
-- Optional compression (LZ4/zlib/zstd/Oodle)
-
-The preparation stage is crucial for achieving good compression ratios; this section will cover some techniques that can be used to improve the results.
-
-The index codec targets 1 byte per triangle as a best case; on real-world data, it's typical to achieve 1-1.2 bytes per triangle. To reach this, the data needs to be optimized for vertex cache and vertex fetch. Optimizations that do not disrupt triangle locality (such as overdraw) are safe to use in between.
-To reduce the data size further, it's possible to use `meshopt_optimizeVertexCacheStrip` instead of `meshopt_optimizeVertexCache` when optimizing for vertex cache. This trades off some efficiency in vertex transform for smaller vertex and index data.
-
-When referenced vertex indices are not sequential, the index codec will use around 2 bytes per index. This can happen when the referenced vertices are a sparse subset of the vertex buffer, such as when encoding LODs. General-purpose compression can be especially helpful in this case.
-
-The vertex codec tries to take advantage of the inherent locality of sequential vertices and identify bit patterns that repeat in consecutive vertices. Typically, vertex cache + vertex fetch provides a reasonably local vertex traversal order; without an index buffer, it is recommended to sort vertices spatially to improve the compression ratio.
-It is crucial to correctly specify the stride when encoding vertex data; however, it does not matter whether the vertices are interleaved or deinterleaved, as the codecs perform full byte deinterleaving internally.
-
-For optimal compression results, the values must be quantized to small integers. It can be valuable to use bit counts that are not multiples of 8. For example, instead of using 16 bits to represent texture coordinates, use 12-bit integers and divide by 4095 in the shader. Alternatively, using half-precision floats can often achieve good results.
-For single-precision floating-point data, it's recommended to use `meshopt_quantizeFloat` to remove entropy from the lower bits of the mantissa; for best results, consider using 15 bits or 7 bits for extreme compression.
-For normal or tangent vectors, using octahedral encoding is recommended over three components as it reduces redundancy. Similarly to other quantized values, consider using 10-12 bits per component instead of 16.
-
-When data is bit packed, using v1 vertex codec and specifying compression level 3 (`meshopt_encodeVertexBufferLevel` with level 3 and version 1) can improve the compression further by redistributing bits between components. Note that v1 vertex codec (`meshopt_encodeVertexVersion(1)`) is recommended regardless, as it improves compression ratios and decoding performance even absent bit packing.
-
-To further leverage the inherent structure of some data, the preparation stage can use filters that encode and decode the data in a lossy manner. This is similar to quantization but can be used without having to change the shader code. After decoding, the filter transformation needs to be reversed. For native game engine pipelines, it is usually more optimal to carefully prequantize and pretransform the vertex data, but sometimes (for example when serializing data in glTF format) this is not a practical option and filters are more practical. This library provides three filters:
+To further leverage the inherent structure of some vertex data, it's possible to use filters that encode and decode the data in a lossy manner. This is similar to quantization but can be used without having to change the shader code. After decoding, the filter transformation needs to be reversed. For native game engine pipelines, it is usually more optimal to carefully prequantize and pretransform the vertex data, but sometimes (for example when serializing data in glTF format) this is not a practical option and filters are more convenient. This library provides four filters:
 
 - Octahedral filter (`meshopt_encodeFilterOct`/`meshopt_decodeFilterOct`) encodes quantized (snorm) normal or tangent vectors using octahedral encoding. Any number of bits <= 16 can be used with 4 bytes or 8 bytes per vector.
 - Quaternion filter (`meshopt_encodeFilterQuat`/`meshopt_decodeFilterQuat`) encodes quantized (snorm) quaternion vectors; this can be used to encode rotations or tangent frames. Any number of bits between 4 and 16 can be used with 8 bytes per vector.
@@ -424,7 +413,16 @@ To further leverage the inherent structure of some data, the preparation stage c
     - `meshopt_EncodeExpClamped` does not share exponents but clamps the exponent range to reduce exponent entropy
 - Color filter (`meshopt_encodeFilterColor`/`meshopt_decodeFilterColor`) encodes quantized (unorm) RGBA colors using YCoCg encoding. Any number of bits <= 16 can be used with 4 bytes or 8 bytes per vector.
 
-Note that all filters are lossy and require the data to be deinterleaved with one attribute per stream; this facilitates efficient SIMD implementation of filter decoders, allowing the overall decompression speed to be closer to that of the raw codec.
+Note that all filters are lossy and require the data to be deinterleaved with one attribute per stream; this facilitates efficient SIMD implementation of filter decoders, which decodes at 5-10 GB/s on modern desktop CPUs, allowing the overall decompression speed to be closer to that of the raw vertex codec.
+
+### Versioning and compatibility
+
+The following guarantees on data compatibility are provided for point releases (*no* guarantees are given for development branch):
+
+- Data encoded with older versions of the library can always be decoded with newer versions;
+- Data encoded with newer versions of the library can be decoded with older versions, provided that encoding versions are set correctly; if binary stability of encoded data is important, use `meshopt_encodeVertexVersion` and `meshopt_encodeIndexVersion` to 'pin' the data versions (or `version` argument of `meshopt_encodeVertexBufferLevel`).
+
+By default, vertex data is encoded for format version 0 (compatible with meshoptimizer v0.8+), and index data is encoded for format version 1 (compatible with meshoptimizer v0.14+). When decoding the data, the decoder will automatically detect the version from the data header.
 
 ## Simplification
 
