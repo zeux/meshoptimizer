@@ -1683,7 +1683,7 @@ static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, s
 	}
 }
 
-static size_t remapIndexBuffer(unsigned int* indices, size_t index_count, const unsigned int* collapse_remap)
+static size_t remapIndexBuffer(unsigned int* indices, size_t index_count, const unsigned int* collapse_remap, const unsigned int* remap)
 {
 	size_t write = 0;
 
@@ -1698,7 +1698,14 @@ static size_t remapIndexBuffer(unsigned int* indices, size_t index_count, const 
 		assert(collapse_remap[v1] == v1);
 		assert(collapse_remap[v2] == v2);
 
-		if (v0 != v1 && v0 != v2 && v1 != v2)
+		// collapse zero area triangles even if they are not topologically degenerate
+		// this is required to cleanup manifold->seam collapses when a vertex is collapsed onto a seam pair
+		// as well as complex collapses and some other cases where cross wedge collapses are performed
+		unsigned int r0 = remap[v0];
+		unsigned int r1 = remap[v1];
+		unsigned int r2 = remap[v2];
+
+		if (r0 != r1 && r0 != r2 && r1 != r2)
 		{
 			indices[write + 0] = v0;
 			indices[write + 1] = v1;
@@ -1729,37 +1736,6 @@ static void remapEdgeLoops(unsigned int* loop, size_t vertex_count, const unsign
 				loop[i] = r;
 		}
 	}
-}
-
-static size_t filterIndexBuffer(unsigned int* indices, size_t index_count, const unsigned int* remap)
-{
-	size_t write = 0;
-
-	for (size_t i = 0; i < index_count; i += 3)
-	{
-		unsigned int v0 = indices[i + 0];
-		unsigned int v1 = indices[i + 1];
-		unsigned int v2 = indices[i + 2];
-
-		unsigned int r0 = remap[v0];
-		unsigned int r1 = remap[v1];
-		unsigned int r2 = remap[v2];
-
-		if (r0 != r1 && r0 != r2 && r1 != r2)
-		{
-			indices[write + 0] = v0;
-			indices[write + 1] = v1;
-			indices[write + 2] = v2;
-			write += 3;
-		}
-	}
-
-#if TRACE
-	if (index_count != write)
-		printf("removed %d degenerate triangles\n", int((index_count - write) / 3));
-#endif
-
-	return write;
 }
 
 static unsigned int follow(unsigned int* parents, unsigned int index)
@@ -2428,18 +2404,17 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 		// updateQuadrics will update vertex error if we use attributes, but if we don't then result_error and vertex_error are equivalent
 		vertex_error = attribute_count == 0 ? result_error : vertex_error;
 
+		// note: we update loops following edge collapses, but after this we might still have stale loop data
+		// this can happen when a triangle with a loop edge gets collapsed along a non-loop edge
+		// that works since a loop that points to a vertex that is no longer connected is not affecting collapse logic
 		remapEdgeLoops(loop, vertex_count, collapse_remap);
 		remapEdgeLoops(loopback, vertex_count, collapse_remap);
 
-		result_count = remapIndexBuffer(result, result_count, collapse_remap);
+		result_count = remapIndexBuffer(result, result_count, collapse_remap, remap);
 
 		if ((options & meshopt_SimplifyPrune) && result_count > target_index_count && component_nexterror <= vertex_error)
 			result_count = pruneComponents(result, result_count, components, component_errors, component_count, vertex_error, component_nexterror);
 	}
-
-	// when a vertex is collapsed onto a seam pair, if it was connected to both vertices, that will create a zero area triangle
-	// which is not topologically degenerate; filter out triangles like this as a post-process (this breaks loop metadata so it must be done last)
-	result_count = filterIndexBuffer(result, result_count, remap);
 
 	// at this point, component_nexterror might be stale: component it references may have been removed through a series of edge collapses
 	bool component_nextstale = true;
