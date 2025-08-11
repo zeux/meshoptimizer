@@ -2223,7 +2223,7 @@ static void simplifySeamFake()
 	    2, 1, 3, // clang-format :-/
 	};
 
-	assert(meshopt_simplify(ib, ib, 6, vb, 4, 16, 0, 1.f, 0, NULL) == 0);
+	assert(meshopt_simplify(ib, ib, 6, vb, 4, 16, 0, 1.f, 0, NULL) == 6);
 }
 
 static void simplifySeamAttr()
