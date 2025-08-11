@@ -1260,19 +1260,11 @@ static size_t pickEdgeCollapses(Collapse* collapses, size_t collapse_capacity, c
 
 			// two vertices are on a border or a seam, but there's no direct edge between them
 			// this indicates that they belong to two different edge loops and we should not collapse this edge
-			// loop[] tracks half edges so we only need to check i0->i1
-			if (k0 == k1 && (k0 == Kind_Border || k0 == Kind_Seam) && loop[i0] != i1)
+			// loop[] and loopback[] track half edges so we only need to check one of them
+			if ((k0 == Kind_Border || k0 == Kind_Seam) && k1 != Kind_Manifold && loop[i0] != i1)
 				continue;
-
-			if (k0 == Kind_Locked || k1 == Kind_Locked)
-			{
-				// the same check as above, but for border/seam -> locked collapses
-				// loop[] and loopback[] track half edges so we only need to check one of them
-				if ((k0 == Kind_Border || k0 == Kind_Seam) && loop[i0] != i1)
-					continue;
-				if ((k1 == Kind_Border || k1 == Kind_Seam) && loopback[i1] != i0)
-					continue;
-			}
+			if ((k1 == Kind_Border || k1 == Kind_Seam) && k0 != Kind_Manifold && loopback[i1] != i0)
+				continue;
 
 			// edge can be collapsed in either direction - we will pick the one with minimum error
 			// note: we evaluate error later during collapse ranking, here we just tag the edge as bidirectional
