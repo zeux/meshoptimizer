@@ -317,11 +317,13 @@ const unsigned char kCanCollapse[Kind_Count][Kind_Count] = {
 // if a vertex is manifold or seam, adjoining edges are guaranteed to have an opposite edge
 // note that for seam edges, the opposite edge isn't present in the attribute-based topology
 // but is present if you consider a position-only mesh variant
+// while many complex collapses have the opposite edge, since complex vertices collapse to the
+// same wedge, keeping opposite edges separate improves the quality by considering both targets
 const unsigned char kHasOpposite[Kind_Count][Kind_Count] = {
-    {1, 1, 1, 0, 1},
+    {1, 1, 1, 1, 1},
     {1, 0, 1, 0, 0},
     {1, 1, 1, 0, 1},
-    {0, 0, 0, 0, 0},
+    {1, 0, 0, 0, 0},
     {1, 0, 1, 0, 0},
 };
 
