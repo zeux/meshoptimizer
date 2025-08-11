@@ -1316,7 +1316,7 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 			ei += quadricError(attribute_quadrics[i0], &attribute_gradients[i0 * attribute_count], attribute_count, vertex_positions[i1], &vertex_attributes[i1 * attribute_count]);
 			ej += bidi ? quadricError(attribute_quadrics[i1], &attribute_gradients[i1 * attribute_count], attribute_count, vertex_positions[i0], &vertex_attributes[i0 * attribute_count]) : 0;
 
-			// note: seam edges need to aggregate attribute errors between primary and secondary edges, as attribute quadrics are separate
+			// seam edges need to aggregate attribute errors between primary and secondary edges, as attribute quadrics are separate
 			if (vertex_kind[i0] == Kind_Seam)
 			{
 				// for seam collapses we need to find the seam pair; this is a bit tricky since we need to rely on edge loops as target vertex may be locked (and thus have more than two wedges)
@@ -1331,6 +1331,18 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 
 				ei += quadricError(attribute_quadrics[s0], &attribute_gradients[s0 * attribute_count], attribute_count, vertex_positions[s1], &vertex_attributes[s1 * attribute_count]);
 				ej += bidi ? quadricError(attribute_quadrics[s1], &attribute_gradients[s1 * attribute_count], attribute_count, vertex_positions[s0], &vertex_attributes[s0 * attribute_count]) : 0;
+			}
+			else
+			{
+				// complex edges can have multiple wedges, so we need to aggregate errors for all wedges
+				// this is different from seams (where we aggregate pairwise) because all wedges collapse onto the same target
+				if (vertex_kind[i0] == Kind_Complex)
+					for (unsigned int v = wedge[i0]; v != i0; v = wedge[v])
+						ei += quadricError(attribute_quadrics[v], &attribute_gradients[v * attribute_count], attribute_count, vertex_positions[i1], &vertex_attributes[i1 * attribute_count]);
+
+				if (vertex_kind[i1] == Kind_Complex && bidi)
+					for (unsigned int v = wedge[i1]; v != i1; v = wedge[v])
+						ej += quadricError(attribute_quadrics[v], &attribute_gradients[v * attribute_count], attribute_count, vertex_positions[i0], &vertex_attributes[i0 * attribute_count]);
 			}
 		}
 
