@@ -155,6 +155,7 @@
 				ratio: 1.0,
 				debugOverlay: false,
 				sloppy: false,
+				permissive: false,
 				lockBorder: false,
 				preprune: 0.0,
 				prune: true,
@@ -203,6 +204,7 @@
 			var guiSimplify = gui.addFolder('Simplify');
 			guiSimplify.add(settings, 'ratio', 0, 1, 0.01).onChange(simplify);
 			guiSimplify.add(settings, 'sloppy').onChange(simplify);
+			guiSimplify.add(settings, 'permissive').onChange(simplify);
 			guiSimplify.add(settings, 'lockBorder').onChange(simplify);
 			guiSimplify.add(settings, 'prune').onChange(simplify);
 			guiSimplify.add(settings, 'regularize').onChange(simplify);
@@ -501,8 +503,69 @@
 				if (settings.regularize) {
 					flags.push('Regularize');
 				}
+				if (settings.permissive) {
+					flags.push('Permissive');
+				}
 				if (settings.debugOverlay) {
 					flags.push('_InternalDebug');
+				}
+
+				var locks = new Uint8Array(geo.attributes.position.count);
+
+				if (settings.permissive) {
+					var pos_cache = {};
+					var pos_remap = [];
+
+					var unique = 0;
+
+					for (var i = 0, e = geo.attributes.position.count; i < e; ++i) {
+						var px = geo.attributes.position.getX(i);
+						var py = geo.attributes.position.getY(i);
+						var pz = geo.attributes.position.getZ(i);
+						var pk = px.toString() + ' ' + py.toString() + ' ' + pz.toString();
+
+						if (pos_cache[pk] === undefined) {
+							pos_cache[pk] = i;
+							pos_remap[i] = i;
+							unique++;
+						} else {
+							pos_remap[i] = pos_cache[pk];
+						}
+					}
+
+					if (geo.attributes.normal) {
+						for (var i = 0, e = geo.attributes.position.count; i < e; ++i) {
+							if (pos_remap[i] != i) {
+								var rx = geo.attributes.normal.getX(pos_remap[i]),
+									ry = geo.attributes.normal.getY(pos_remap[i]),
+									rz = geo.attributes.normal.getZ(pos_remap[i]);
+								var nx = geo.attributes.normal.getX(i),
+									ny = geo.attributes.normal.getY(i),
+									nz = geo.attributes.normal.getZ(i);
+
+								// keep sharp edges
+								if (rx * nx + ry * ny + rz * nz < 0.5) {
+									locks[i] |= 2;
+								}
+							}
+						}
+					}
+
+					if (geo.attributes.uv) {
+						for (var i = 0, e = geo.attributes.position.count; i < e; ++i) {
+							if (pos_remap[i] != i) {
+								var ru = geo.attributes.uv.getX(pos_remap[i]),
+									rv = geo.attributes.uv.getY(pos_remap[i]);
+								var u = geo.attributes.uv.getX(i),
+									v = geo.attributes.uv.getY(i);
+
+								// keep UV seams
+								if (u != ru || v != rv) {
+									locks[i] |= 2;
+								}
+							}
+						}
+					}
 				}
 
 				var stride = geo.attributes.position instanceof THREE.InterleavedBufferAttribute ? geo.attributes.position.data.stride : 3;
@@ -516,10 +579,8 @@
 				var res = settings.sloppy
 					? S.simplifySloppy(indices, positions, stride, null, target, threshold)
 					: settings.solve
-						? S.simplifyWithUpdate(indices, positions, stride, attrib, attributes, attrib_weights, null, target, threshold, flags)
-						: settings.useAttributes
-							? S.simplifyWithAttributes(indices, positions, stride, attrib, attributes, attrib_weights, null, target, threshold, flags)
-							: S.simplify(indices, positions, stride, target, threshold, flags);
+						? S.simplifyWithUpdate(indices, positions, stride, attrib, attributes, attrib_weights, locks, target, threshold, flags)
+						: S.simplifyWithAttributes(indices, positions, stride, attrib, attributes, attrib_weights, locks, target, threshold, flags);
 
 				if (!settings.sloppy && settings.solve) {
 					res[0] = indices.slice(0, res[0]);
