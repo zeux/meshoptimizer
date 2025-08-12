@@ -456,15 +456,24 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 		}
 	}
 
+	if (options & meshopt_SimplifyPermissive)
+		for (size_t i = 0; i < vertex_count; ++i)
+			if (result[i] == Kind_Seam || result[i] == Kind_Locked)
+			{
+				unsigned int ri = sparse_remap ? sparse_remap[i] : unsigned(i);
+				bool protect = vertex_lock && (vertex_lock[ri] & 2) != 0;
+
+				result[i] = protect ? result[i] : Kind_Complex;
+			}
+
 	if (vertex_lock)
 	{
 		// vertex_lock may lock any wedge, not just the primary vertex, so we need to lock the primary vertex and relock any wedges
 		for (size_t i = 0; i < vertex_count; ++i)
 		{
 			unsigned int ri = sparse_remap ? sparse_remap[i] : unsigned(i);
-			assert(vertex_lock[ri] <= 1); // values other than 0/1 are reserved for future use
 
-			if (vertex_lock[ri])
+			if (vertex_lock[ri] & 1)
 				result[remap[i]] = Kind_Locked;
 		}
 
@@ -2231,7 +2240,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	assert(vertex_positions_stride % sizeof(float) == 0);
 	assert(target_index_count <= index_count);
 	assert(target_error >= 0);
-	assert((options & ~(meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute | meshopt_SimplifyPrune | meshopt_SimplifyRegularize | meshopt_SimplifyInternalSolve | meshopt_SimplifyInternalDebug)) == 0);
+	assert((options & ~(meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute | meshopt_SimplifyPrune | meshopt_SimplifyRegularize | meshopt_SimplifyPermissive | meshopt_SimplifyInternalSolve | meshopt_SimplifyInternalDebug)) == 0);
 	assert(vertex_attributes_stride >= attribute_count * sizeof(float) && vertex_attributes_stride <= 256);
 	assert(vertex_attributes_stride % sizeof(float) == 0);
 	assert(attribute_count <= kMaxAttributes);
