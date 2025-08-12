@@ -460,10 +460,18 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 		for (size_t i = 0; i < vertex_count; ++i)
 			if (result[i] == Kind_Seam || result[i] == Kind_Locked)
 			{
-				unsigned int ri = sparse_remap ? sparse_remap[i] : unsigned(i);
-				bool protect = vertex_lock && (vertex_lock[ri] & 2) != 0;
+				bool protect = false;
 
-				result[i] = protect ? result[i] : Kind_Complex;
+				// vertex_lock may protect any wedge, not just the primary vertex, so we switch to complex only if no wedges are protected
+				unsigned int v = unsigned(i);
+				do
+				{
+					unsigned int rv = sparse_remap ? sparse_remap[v] : v;
+					protect |= vertex_lock && (vertex_lock[rv] & 2) != 0;
+					v = wedge[v];
+				} while (v != i);
+
+				result[i] = protect ? result[i] : int(Kind_Complex);
 			}
 
 	if (vertex_lock)
