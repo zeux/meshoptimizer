@@ -59,7 +59,7 @@ WASM_SIMPLIFIER_SOURCES=src/simplifier.cpp src/vfetchoptimizer.cpp tools/wasmstu
 WASM_SIMPLIFIER_EXPORTS=meshopt_simplify meshopt_simplifyWithAttributes meshopt_simplifyWithUpdate meshopt_simplifyScale meshopt_simplifyPoints meshopt_simplifySloppy meshopt_simplifyPrune meshopt_optimizeVertexFetchRemap sbrk __wasm_call_ctors
 
 WASM_CLUSTERIZER_SOURCES=src/clusterizer.cpp tools/wasmstubs.cpp
-WASM_CLUSTERIZER_EXPORTS=meshopt_buildMeshletsBound meshopt_buildMeshlets meshopt_computeClusterBounds meshopt_computeMeshletBounds meshopt_optimizeMeshlet sbrk __wasm_call_ctors
+WASM_CLUSTERIZER_EXPORTS=meshopt_buildMeshletsBound meshopt_buildMeshlets meshopt_computeClusterBounds meshopt_computeMeshletBounds meshopt_computeSphereBounds meshopt_optimizeMeshlet sbrk __wasm_call_ctors
 
 ifneq ($(werror),)
 	CFLAGS+=-Werror
@@ -188,8 +188,8 @@ build/clusterizer.wasm: $(WASM_CLUSTERIZER_SOURCES)
 js/meshopt_decoder.js: build/decoder_base.wasm build/decoder_simd.wasm tools/wasmpack.py
 	sed -i "s#Built with clang.*#Built with $$($(WASMCC) --version | head -n 1 | sed 's/\s\+(.*//')#" $@
 	sed -i "s#Built from meshoptimizer .*#Built from meshoptimizer $$(cat src/meshoptimizer.h | grep -Po '(?<=version )[0-9.]+')#" $@
-	sed -i "s#\([\"']\).*\(;\s*//\s*embed! base\)#\\1$$(cat build/decoder_base.wasm | python3 tools/wasmpack.py)\\1\\2#" $@
-	sed -i "s#\([\"']\).*\(;\s*//\s*embed! simd\)#\\1$$(cat build/decoder_simd.wasm | python3 tools/wasmpack.py)\\1\\2#" $@
+	python3 tools/wasmpack.py patch $@ base <build/decoder_base.wasm
+	python3 tools/wasmpack.py patch $@ simd <build/decoder_simd.wasm
 
 js/meshopt_encoder.js: build/encoder.wasm tools/wasmpack.py
 js/meshopt_simplifier.js: build/simplifier.wasm tools/wasmpack.py
@@ -198,7 +198,7 @@ js/meshopt_clusterizer.js: build/clusterizer.wasm tools/wasmpack.py
 js/meshopt_encoder.js js/meshopt_simplifier.js js/meshopt_clusterizer.js:
 	sed -i "s#Built with clang.*#Built with $$($(WASMCC) --version | head -n 1 | sed 's/\s\+(.*//')#" $@
 	sed -i "s#Built from meshoptimizer .*#Built from meshoptimizer $$(cat src/meshoptimizer.h | grep -Po '(?<=version )[0-9.]+')#" $@
-	sed -i "s#\([\"']\).*\(;\s*//\s*embed! wasm\)#\\1$$(cat $< | python3 tools/wasmpack.py)\\1\\2#" $@
+	python3 tools/wasmpack.py patch $@ wasm <$<
 
 js/%.module.js: js/%.js
 	sed '\#// export!#q' <$< >$@
