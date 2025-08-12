@@ -307,6 +307,7 @@ var MeshoptSimplifier = (function () {
 		ErrorAbsolute: 4,
 		Prune: 8,
 		Regularize: 16,
+		Permissive: 32,
 		_InternalDebug: 1 << 30, // internal, don't use!
 	};
 
@@ -410,7 +411,7 @@ var MeshoptSimplifier = (function () {
 				vertex_attributes,
 				vertex_attributes_stride * 4,
 				new Float32Array(attribute_weights),
-				vertex_lock ? new Uint8Array(vertex_lock) : null,
+				vertex_lock,
 				target_index_count,
 				target_error,
 				options
@@ -471,7 +472,7 @@ var MeshoptSimplifier = (function () {
 				vertex_attributes,
 				vertex_attributes_stride * 4,
 				new Float32Array(attribute_weights),
-				vertex_lock ? new Uint8Array(vertex_lock) : null,
+				vertex_lock,
 				target_index_count,
 				target_error,
 				options
@@ -553,7 +554,7 @@ var MeshoptSimplifier = (function () {
 				vertex_positions,
 				vertex_positions.length / vertex_positions_stride,
 				vertex_positions_stride * 4,
-				vertex_lock ? new Uint8Array(vertex_lock) : null,
+				vertex_lock,
 				target_index_count,
 				target_error
 			);
