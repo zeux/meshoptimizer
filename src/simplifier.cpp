@@ -317,11 +317,13 @@ const unsigned char kCanCollapse[Kind_Count][Kind_Count] = {
 // if a vertex is manifold or seam, adjoining edges are guaranteed to have an opposite edge
 // note that for seam edges, the opposite edge isn't present in the attribute-based topology
 // but is present if you consider a position-only mesh variant
+// while many complex collapses have the opposite edge, since complex vertices collapse to the
+// same wedge, keeping opposite edges separate improves the quality by considering both targets
 const unsigned char kHasOpposite[Kind_Count][Kind_Count] = {
-    {1, 1, 1, 0, 1},
+    {1, 1, 1, 1, 1},
     {1, 0, 1, 0, 0},
     {1, 1, 1, 0, 1},
-    {0, 0, 0, 0, 0},
+    {1, 0, 0, 0, 0},
     {1, 0, 1, 0, 0},
 };
 
@@ -1258,19 +1260,11 @@ static size_t pickEdgeCollapses(Collapse* collapses, size_t collapse_capacity, c
 
 			// two vertices are on a border or a seam, but there's no direct edge between them
 			// this indicates that they belong to two different edge loops and we should not collapse this edge
-			// loop[] tracks half edges so we only need to check i0->i1
-			if (k0 == k1 && (k0 == Kind_Border || k0 == Kind_Seam) && loop[i0] != i1)
+			// loop[] and loopback[] track half edges so we only need to check one of them
+			if ((k0 == Kind_Border || k0 == Kind_Seam) && k1 != Kind_Manifold && loop[i0] != i1)
 				continue;
-
-			if (k0 == Kind_Locked || k1 == Kind_Locked)
-			{
-				// the same check as above, but for border/seam -> locked collapses
-				// loop[] and loopback[] track half edges so we only need to check one of them
-				if ((k0 == Kind_Border || k0 == Kind_Seam) && loop[i0] != i1)
-					continue;
-				if ((k1 == Kind_Border || k1 == Kind_Seam) && loopback[i1] != i0)
-					continue;
-			}
+			if ((k1 == Kind_Border || k1 == Kind_Seam) && k0 != Kind_Manifold && loopback[i1] != i0)
+				continue;
 
 			// edge can be collapsed in either direction - we will pick the one with minimum error
 			// note: we evaluate error later during collapse ranking, here we just tag the edge as bidirectional
@@ -1316,7 +1310,7 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 			ei += quadricError(attribute_quadrics[i0], &attribute_gradients[i0 * attribute_count], attribute_count, vertex_positions[i1], &vertex_attributes[i1 * attribute_count]);
 			ej += bidi ? quadricError(attribute_quadrics[i1], &attribute_gradients[i1 * attribute_count], attribute_count, vertex_positions[i0], &vertex_attributes[i0 * attribute_count]) : 0;
 
-			// note: seam edges need to aggregate attribute errors between primary and secondary edges, as attribute quadrics are separate
+			// seam edges need to aggregate attribute errors between primary and secondary edges, as attribute quadrics are separate
 			if (vertex_kind[i0] == Kind_Seam)
 			{
 				// for seam collapses we need to find the seam pair; this is a bit tricky since we need to rely on edge loops as target vertex may be locked (and thus have more than two wedges)
@@ -1331,6 +1325,18 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 
 				ei += quadricError(attribute_quadrics[s0], &attribute_gradients[s0 * attribute_count], attribute_count, vertex_positions[s1], &vertex_attributes[s1 * attribute_count]);
 				ej += bidi ? quadricError(attribute_quadrics[s1], &attribute_gradients[s1 * attribute_count], attribute_count, vertex_positions[s0], &vertex_attributes[s0 * attribute_count]) : 0;
+			}
+			else
+			{
+				// complex edges can have multiple wedges, so we need to aggregate errors for all wedges
+				// this is different from seams (where we aggregate pairwise) because all wedges collapse onto the same target
+				if (vertex_kind[i0] == Kind_Complex)
+					for (unsigned int v = wedge[i0]; v != i0; v = wedge[v])
+						ei += quadricError(attribute_quadrics[v], &attribute_gradients[v * attribute_count], attribute_count, vertex_positions[i1], &vertex_attributes[i1 * attribute_count]);
+
+				if (vertex_kind[i1] == Kind_Complex && bidi)
+					for (unsigned int v = wedge[i1]; v != i1; v = wedge[v])
+						ej += quadricError(attribute_quadrics[v], &attribute_gradients[v * attribute_count], attribute_count, vertex_positions[i0], &vertex_attributes[i0 * attribute_count]);
 			}
 		}
 
@@ -1683,7 +1689,7 @@ static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, s
 	}
 }
 
-static size_t remapIndexBuffer(unsigned int* indices, size_t index_count, const unsigned int* collapse_remap)
+static size_t remapIndexBuffer(unsigned int* indices, size_t index_count, const unsigned int* collapse_remap, const unsigned int* remap)
 {
 	size_t write = 0;
 
@@ -1698,7 +1704,14 @@ static size_t remapIndexBuffer(unsigned int* indices, size_t index_count, const 
 		assert(collapse_remap[v1] == v1);
 		assert(collapse_remap[v2] == v2);
 
-		if (v0 != v1 && v0 != v2 && v1 != v2)
+		// collapse zero area triangles even if they are not topologically degenerate
+		// this is required to cleanup manifold->seam collapses when a vertex is collapsed onto a seam pair
+		// as well as complex collapses and some other cases where cross wedge collapses are performed
+		unsigned int r0 = remap[v0];
+		unsigned int r1 = remap[v1];
+		unsigned int r2 = remap[v2];
+
+		if (r0 != r1 && r0 != r2 && r1 != r2)
 		{
 			indices[write + 0] = v0;
 			indices[write + 1] = v1;
@@ -1729,37 +1742,6 @@ static void remapEdgeLoops(unsigned int* loop, size_t vertex_count, const unsign
 				loop[i] = r;
 		}
 	}
-}
-
-static size_t filterIndexBuffer(unsigned int* indices, size_t index_count, const unsigned int* remap)
-{
-	size_t write = 0;
-
-	for (size_t i = 0; i < index_count; i += 3)
-	{
-		unsigned int v0 = indices[i + 0];
-		unsigned int v1 = indices[i + 1];
-		unsigned int v2 = indices[i + 2];
-
-		unsigned int r0 = remap[v0];
-		unsigned int r1 = remap[v1];
-		unsigned int r2 = remap[v2];
-
-		if (r0 != r1 && r0 != r2 && r1 != r2)
-		{
-			indices[write + 0] = v0;
-			indices[write + 1] = v1;
-			indices[write + 2] = v2;
-			write += 3;
-		}
-	}
-
-#if TRACE
-	if (index_count != write)
-		printf("removed %d degenerate triangles\n", int((index_count - write) / 3));
-#endif
-
-	return write;
 }
 
 static unsigned int follow(unsigned int* parents, unsigned int index)
@@ -2428,18 +2410,17 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 		// updateQuadrics will update vertex error if we use attributes, but if we don't then result_error and vertex_error are equivalent
 		vertex_error = attribute_count == 0 ? result_error : vertex_error;
 
+		// note: we update loops following edge collapses, but after this we might still have stale loop data
+		// this can happen when a triangle with a loop edge gets collapsed along a non-loop edge
+		// that works since a loop that points to a vertex that is no longer connected is not affecting collapse logic
 		remapEdgeLoops(loop, vertex_count, collapse_remap);
 		remapEdgeLoops(loopback, vertex_count, collapse_remap);
 
-		result_count = remapIndexBuffer(result, result_count, collapse_remap);
+		result_count = remapIndexBuffer(result, result_count, collapse_remap, remap);
 
 		if ((options & meshopt_SimplifyPrune) && result_count > target_index_count && component_nexterror <= vertex_error)
 			result_count = pruneComponents(result, result_count, components, component_errors, component_count, vertex_error, component_nexterror);
 	}
-
-	// when a vertex is collapsed onto a seam pair, if it was connected to both vertices, that will create a zero area triangle
-	// which is not topologically degenerate; filter out triangles like this as a post-process (this breaks loop metadata so it must be done last)
-	result_count = filterIndexBuffer(result, result_count, remap);
 
 	// at this point, component_nexterror might be stale: component it references may have been removed through a series of edge collapses
 	bool component_nextstale = true;
