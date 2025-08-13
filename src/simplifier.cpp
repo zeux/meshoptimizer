@@ -1995,7 +1995,7 @@ static void computeVertexIds(unsigned int* vertex_ids, const Vector3* vertex_pos
 		int yi = int(v.y * cell_scale + 0.5f);
 		int zi = int(v.z * cell_scale + 0.5f);
 
-		if (vertex_lock && vertex_lock[i])
+		if (vertex_lock && (vertex_lock[i] & 1))
 			vertex_ids[i] = (1 << 30) | unsigned(i);
 		else
 			vertex_ids[i] = (xi << 20) | (yi << 10) | zi;
@@ -2568,7 +2568,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	const int kInterpolationPasses = 5;
 
 	// invariant: # of triangles in min_grid <= target_count
-	int min_grid = int(1.f / (target_error < 1e-3f ? 1e-3f : target_error));
+	int min_grid = int(1.f / (target_error < 1e-3f ? 1e-3f : (target_error < 1.f ? target_error : 1.f)));
 	int max_grid = 1025;
 	size_t min_triangles = 0;
 	size_t max_triangles = index_count / 3;
