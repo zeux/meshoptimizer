@@ -607,8 +607,9 @@
 								var ak = (a >> 28) & 7,
 									bk = (b >> 28) & 7;
 
-								if (a >> 31 != 0 && (ak == kind || bk == kind) && (ak == kind || ak == 4) && (bk == kind || bk == 4)) {
-									// loop of current kind (allow one of the vertices to be locked)
+								if ((a >> 31 != 0 || kind == 3) && (ak == kind || bk == kind) && (ak == kind || ak == 4) && (bk == kind || bk == 4)) {
+									// edge of current kind (allow one of the vertices to be locked)
+									// note: complex edges ignore loop metadata
 									dind.push(a & mask);
 									dind.push(a & mask);
 									dind.push(b & mask);
