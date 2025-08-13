@@ -679,6 +679,7 @@ Currently, the following APIs are experimental:
 - `meshopt_simplifySloppy`
 - `meshopt_simplifyWithUpdate`
 - `meshopt_SimplifyRegularize` flag for `meshopt_simplify*` functions
+- `meshopt_SimplifyPermissive` mode for `meshopt_simplify*` functions
 
 ## License
 
