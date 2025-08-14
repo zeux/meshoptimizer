@@ -1423,6 +1423,7 @@ void process(const char* path)
 	simplify(mesh);
 	simplify(mesh, 0.1f, meshopt_SimplifyPrune);
 	simplifyAttr(mesh);
+	simplifyAttr(mesh, 0.1f, meshopt_SimplifyPermissive);
 	simplifyUpdate(mesh);
 	simplifySloppy(mesh);
 	simplifyComplete(mesh);
@@ -1446,7 +1447,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	simplifyUpdate(mesh, 0.1f, meshopt_SimplifyPrune);
+	simplifyUpdate(mesh, 0.1f, meshopt_SimplifyPrune | meshopt_SimplifyPermissive);
 }
 
 void processNanite(const char* path)

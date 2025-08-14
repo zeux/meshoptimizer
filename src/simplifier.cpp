@@ -456,15 +456,32 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 		}
 	}
 
+	if (options & meshopt_SimplifyPermissive)
+		for (size_t i = 0; i < vertex_count; ++i)
+			if (result[i] == Kind_Seam || result[i] == Kind_Locked)
+			{
+				bool protect = false;
+
+				// vertex_lock may protect any wedge, not just the primary vertex, so we switch to complex only if no wedges are protected
+				unsigned int v = unsigned(i);
+				do
+				{
+					unsigned int rv = sparse_remap ? sparse_remap[v] : v;
+					protect |= vertex_lock && (vertex_lock[rv] & 2) != 0;
+					v = wedge[v];
+				} while (v != i);
+
+				result[i] = protect ? result[i] : int(Kind_Complex);
+			}
+
 	if (vertex_lock)
 	{
 		// vertex_lock may lock any wedge, not just the primary vertex, so we need to lock the primary vertex and relock any wedges
 		for (size_t i = 0; i < vertex_count; ++i)
 		{
 			unsigned int ri = sparse_remap ? sparse_remap[i] : unsigned(i);
-			assert(vertex_lock[ri] <= 1); // values other than 0/1 are reserved for future use
 
-			if (vertex_lock[ri])
+			if (vertex_lock[ri] & 1)
 				result[remap[i]] = Kind_Locked;
 		}
 
@@ -1978,7 +1995,7 @@ static void computeVertexIds(unsigned int* vertex_ids, const Vector3* vertex_pos
 		int yi = int(v.y * cell_scale + 0.5f);
 		int zi = int(v.z * cell_scale + 0.5f);
 
-		if (vertex_lock && vertex_lock[i])
+		if (vertex_lock && (vertex_lock[i] & 1))
 			vertex_ids[i] = (1 << 30) | unsigned(i);
 		else
 			vertex_ids[i] = (xi << 20) | (yi << 10) | zi;
@@ -2231,7 +2248,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	assert(vertex_positions_stride % sizeof(float) == 0);
 	assert(target_index_count <= index_count);
 	assert(target_error >= 0);
-	assert((options & ~(meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute | meshopt_SimplifyPrune | meshopt_SimplifyRegularize | meshopt_SimplifyInternalSolve | meshopt_SimplifyInternalDebug)) == 0);
+	assert((options & ~(meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute | meshopt_SimplifyPrune | meshopt_SimplifyRegularize | meshopt_SimplifyPermissive | meshopt_SimplifyInternalSolve | meshopt_SimplifyInternalDebug)) == 0);
 	assert(vertex_attributes_stride >= attribute_count * sizeof(float) && vertex_attributes_stride <= 256);
 	assert(vertex_attributes_stride % sizeof(float) == 0);
 	assert(attribute_count <= kMaxAttributes);
@@ -2551,7 +2568,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	const int kInterpolationPasses = 5;
 
 	// invariant: # of triangles in min_grid <= target_count
-	int min_grid = int(1.f / (target_error < 1e-3f ? 1e-3f : target_error));
+	int min_grid = int(1.f / (target_error < 1e-3f ? 1e-3f : (target_error < 1.f ? target_error : 1.f)));
 	int max_grid = 1025;
 	size_t min_triangles = 0;
 	size_t max_triangles = index_count / 3;

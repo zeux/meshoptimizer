@@ -69,6 +69,7 @@ const bool kUseLocks = true;
 const bool kUseNormals = true;
 const bool kUseRetry = true;
 const bool kUseSpatial = false;
+const bool kUsePermissiveFallback = true;
 const bool kUseSloppyFallback = false;
 const int kMetisSlop = 2;
 const float kSimplifyThreshold = 0.85f;
@@ -222,12 +223,12 @@ static void lockBoundary(std::vector<unsigned char>& locks, const std::vector<st
 			}
 		}
 
-	// note: we need to consistently lock all vertices with the same position to avoid holes
 	for (size_t i = 0; i < locks.size(); ++i)
 	{
 		unsigned int r = remap[i];
 
-		locks[i] = (groupmap[r] == -2);
+		// keep protect bit if set
+		locks[i] = (groupmap[r] == -2) | (locks[i] & 2);
 	}
 }
 
@@ -237,14 +238,16 @@ static std::vector<unsigned int> simplify(const std::vector<Vertex>& vertices, c
 		return indices;
 
 	std::vector<unsigned int> lod(indices.size());
-	unsigned int options = meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute;
-	float normal_weights[3] = {0.5f, 0.5f, 0.5f};
-	if (kUseNormals)
-		lod.resize(meshopt_simplifyWithAttributes(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), &vertices[0].nx, sizeof(Vertex), normal_weights, 3, locks ? &(*locks)[0] : NULL, target_count, FLT_MAX, options, error));
-	else if (locks)
-		lod.resize(meshopt_simplifyWithAttributes(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), NULL, 0, NULL, 0, &(*locks)[0], target_count, FLT_MAX, options, error));
-	else
-		lod.resize(meshopt_simplify(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), target_count, FLT_MAX, options | meshopt_SimplifyLockBorder, error));
+
+	unsigned int options = meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute | (locks ? 0 : meshopt_SimplifyLockBorder);
+
+	float normal_weight = kUseNormals ? 0.5f : 0.0f;
+	float normal_weights[3] = {normal_weight, normal_weight, normal_weight};
+
+	lod.resize(meshopt_simplifyWithAttributes(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), &vertices[0].nx, sizeof(Vertex), normal_weights, 3, locks ? &(*locks)[0] : NULL, target_count, FLT_MAX, options, error));
+
+	if (lod.size() > target_count && kUsePermissiveFallback)
+		lod.resize(meshopt_simplifyWithAttributes(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), &vertices[0].nx, sizeof(Vertex), normal_weights, 3, locks ? &(*locks)[0] : NULL, target_count, FLT_MAX, options | meshopt_SimplifyPermissive, error));
 
 	if (lod.size() > target_count && kUseSloppyFallback)
 		lod.resize(meshopt_simplifySloppy(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), locks ? &(*locks)[0] : NULL, target_count, FLT_MAX, error));
@@ -289,6 +292,23 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	std::vector<unsigned int> remap(vertices.size());
 	meshopt_Stream position = {&vertices[0].px, sizeof(float) * 3, sizeof(Vertex)};
 	meshopt_generateVertexRemapMulti(&remap[0], &indices[0], indices.size(), vertices.size(), &position, 1);
+
+	// set up protect bits on UV seams for permissive mode
+	if (kUsePermissiveFallback)
+	{
+		// ... ideally remap[i] should point to the first vertex with the same position, but that's not what we do atm :(
+		std::vector<unsigned int> unremap(vertices.size());
+		for (size_t i = 0; i < vertices.size(); ++i)
+			unremap[remap[i]] = unsigned(i);
+
+		for (size_t i = 0; i < vertices.size(); ++i)
+		{
+			unsigned int r = unremap[remap[i]]; // canonical vertex with the same position
+
+			if (r != i && (vertices[r].tx != vertices[i].tx || vertices[r].ty != vertices[i].ty))
+				locks[i] |= 2;
+		}
+	}
 
 	// initial clusterization splits the original mesh
 	std::vector<Cluster> clusters = clusterize(vertices, indices);
