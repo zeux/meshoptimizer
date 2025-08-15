@@ -288,27 +288,18 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	std::vector<unsigned char> locks(vertices.size());
 
 	// for cluster connectivity, we need a position-only remap that maps vertices with the same position to the same index
-	// it's more efficient to build it once; unfortunately, meshopt_generateVertexRemap doesn't support stride so we need to use *Multi version
 	std::vector<unsigned int> remap(vertices.size());
-	meshopt_Stream position = {&vertices[0].px, sizeof(float) * 3, sizeof(Vertex)};
-	meshopt_generateVertexRemapMulti(&remap[0], &indices[0], indices.size(), vertices.size(), &position, 1);
+	meshopt_generatePositionRemap(&remap[0], &vertices[0].px, vertices.size(), sizeof(Vertex));
 
 	// set up protect bits on UV seams for permissive mode
 	if (kUsePermissiveFallback)
-	{
-		// ... ideally remap[i] should point to the first vertex with the same position, but that's not what we do atm :(
-		std::vector<unsigned int> unremap(vertices.size());
-		for (size_t i = 0; i < vertices.size(); ++i)
-			unremap[remap[i]] = unsigned(i);
-
 		for (size_t i = 0; i < vertices.size(); ++i)
 		{
-			unsigned int r = unremap[remap[i]]; // canonical vertex with the same position
+			unsigned int r = remap[i]; // canonical vertex with the same position
 
 			if (r != i && (vertices[r].tx != vertices[i].tx || vertices[r].ty != vertices[i].ty))
 				locks[i] |= 2;
 		}
-	}
 
 	// initial clusterization splits the original mesh
 	std::vector<Cluster> clusters = clusterize(vertices, indices);
