@@ -769,6 +769,48 @@ static void simplifyAttributes(std::vector<float>& attrs, float* attrw, size_t s
 	}
 }
 
+static void simplifyProtect(std::vector<unsigned char>& locks, Mesh& mesh)
+{
+	const Stream* positions = getStream(mesh, cgltf_attribute_type_position);
+	assert(positions);
+
+	size_t vertex_count = positions->data.size();
+
+	locks.resize(vertex_count);
+	unsigned char* data = locks.data();
+
+	std::vector<unsigned int> remap(vertex_count);
+	meshopt_generatePositionRemap(&remap[0], positions->data[0].f, vertex_count, sizeof(Attr));
+
+	// protect UV discontinuities
+	if (Stream* attr = getStream(mesh, cgltf_attribute_type_texcoord))
+	{
+		Attr* a = attr->data.data();
+
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			unsigned int r = remap[i];
+
+			if (r != i && (a[i].f[0] != a[r].f[0] || a[i].f[1] != a[r].f[1]))
+				data[i] |= 2;
+		}
+	}
+
+	// protect sharp edges (to avoid collapses with high error mostly)
+	if (Stream* attr = getStream(mesh, cgltf_attribute_type_normal))
+	{
+		Attr* a = attr->data.data();
+
+		for (size_t i = 0; i < vertex_count; ++i)
+		{
+			unsigned int r = remap[i];
+
+			if (r != i && (a[i].f[0] * a[r].f[0] + a[i].f[1] * a[r].f[1] + a[i].f[2] * a[r].f[2]) < 0.5f)
+				data[i] |= 2;
+		}
+	}
+}
+
 static void simplifyUvSplit(Mesh& mesh, std::vector<unsigned int>& remap)
 {
 	assert(mesh.type == cgltf_primitive_type_triangles);
@@ -881,9 +923,13 @@ static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attribut
 	if (attributes)
 		simplifyAttributes(attrs, attrw, sizeof(attrw) / sizeof(attrw[0]), mesh);
 
+	std::vector<unsigned char> locks;
+	if (attributes && permissive)
+		simplifyProtect(locks, mesh);
+
 	if (attributes)
 		indices.resize(meshopt_simplifyWithAttributes(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr),
-		    attrs.data(), sizeof(attrw), attrw, sizeof(attrw) / sizeof(attrw[0]), NULL, target_index_count, target_error, options));
+		    attrs.data(), sizeof(attrw), attrw, sizeof(attrw) / sizeof(attrw[0]), permissive ? locks.data() : NULL, target_index_count, target_error, options));
 	else
 		indices.resize(meshopt_simplify(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count, target_error, options));
 
