@@ -769,7 +769,7 @@ static void simplifyAttributes(std::vector<float>& attrs, float* attrw, size_t s
 	}
 }
 
-static void simplifyProtect(std::vector<unsigned char>& locks, Mesh& mesh)
+static void simplifyProtect(std::vector<unsigned char>& locks, Mesh& mesh, size_t presplit_vertices)
 {
 	const Stream* positions = getStream(mesh, cgltf_attribute_type_position);
 	assert(positions);
@@ -809,6 +809,10 @@ static void simplifyProtect(std::vector<unsigned char>& locks, Mesh& mesh)
 				data[i] |= 2;
 		}
 	}
+
+	// protect all vertices that were artificially split on the UV mirror edges
+	for (size_t i = presplit_vertices; i < vertex_count; ++i)
+		data[i] |= 2;
 }
 
 static void simplifyUvSplit(Mesh& mesh, std::vector<unsigned int>& remap)
@@ -894,11 +898,13 @@ static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attribut
 	if (!positions)
 		return;
 
+	size_t presplit_vertices = positions->data.size();
+
 	std::vector<unsigned int> uvremap;
 	if (attributes)
 		simplifyUvSplit(mesh, uvremap);
 
-	size_t vertex_count = mesh.streams[0].data.size();
+	size_t vertex_count = positions->data.size();
 
 	size_t target_index_count = size_t(double(size_t(mesh.indices.size() / 3)) * threshold) * 3;
 	float target_error = error;
@@ -925,7 +931,7 @@ static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attribut
 
 	std::vector<unsigned char> locks;
 	if (attributes && permissive)
-		simplifyProtect(locks, mesh);
+		simplifyProtect(locks, mesh, presplit_vertices);
 
 	if (attributes)
 		indices.resize(meshopt_simplifyWithAttributes(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr),
