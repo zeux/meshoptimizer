@@ -150,6 +150,7 @@ struct Settings
 	bool simplify_lock_borders;
 	bool simplify_attributes;
 	bool simplify_scaled;
+	bool simplify_permissive;
 
 	bool texture_ktx2;
 	bool texture_embed;

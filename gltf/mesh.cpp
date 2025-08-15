@@ -841,7 +841,7 @@ static void simplifyUvSplit(Mesh& mesh, std::vector<unsigned int>& remap)
 	}
 }
 
-static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attributes, bool aggressive, bool lock_borders)
+static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attributes, bool aggressive, bool lock_borders, bool permissive)
 {
 	assert(mesh.type == cgltf_primitive_type_triangles);
 
@@ -868,23 +868,24 @@ static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attribut
 	else
 		options |= meshopt_SimplifyPrune;
 
+	if (permissive)
+		options |= meshopt_SimplifyPermissive;
+
 	if (mesh.targets || getStream(mesh, cgltf_attribute_type_weights))
 		options |= meshopt_SimplifyRegularize;
 
 	std::vector<unsigned int> indices(mesh.indices.size());
 
+	float attrw[6] = {};
+	std::vector<float> attrs;
 	if (attributes)
-	{
-		float attrw[6] = {};
-		std::vector<float> attrs;
 		simplifyAttributes(attrs, attrw, sizeof(attrw) / sizeof(attrw[0]), mesh);
 
-		indices.resize(meshopt_simplifyWithAttributes(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), attrs.data(), sizeof(attrw), attrw, sizeof(attrw) / sizeof(attrw[0]), NULL, target_index_count, target_error, options));
-	}
+	if (attributes)
+		indices.resize(meshopt_simplifyWithAttributes(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr),
+		    attrs.data(), sizeof(attrw), attrw, sizeof(attrw) / sizeof(attrw[0]), NULL, target_index_count, target_error, options));
 	else
-	{
 		indices.resize(meshopt_simplify(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count, target_error, options));
-	}
 
 	mesh.indices.swap(indices);
 
@@ -1111,7 +1112,7 @@ void processMesh(Mesh& mesh, const Settings& settings)
 		if (settings.simplify_ratio < 1)
 		{
 			float error = settings.simplify_scaled ? settings.simplify_error / mesh.quality : settings.simplify_error;
-			simplifyMesh(mesh, settings.simplify_ratio, error, settings.simplify_attributes, settings.simplify_aggressive, settings.simplify_lock_borders);
+			simplifyMesh(mesh, settings.simplify_ratio, error, settings.simplify_attributes, settings.simplify_aggressive, settings.simplify_lock_borders, settings.simplify_permissive);
 		}
 
 		optimizeMesh(mesh, settings.compressmore);
