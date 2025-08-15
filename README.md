@@ -676,6 +676,7 @@ Currently, the following APIs are experimental:
 - `meshopt_buildMeshletsSpatial`
 - `meshopt_decodeFilterColor`
 - `meshopt_encodeFilterColor`
+- `meshopt_generatePositionRemap`
 - `meshopt_simplifySloppy`
 - `meshopt_simplifyWithUpdate`
 - `meshopt_SimplifyRegularize` flag for `meshopt_simplify*` functions
