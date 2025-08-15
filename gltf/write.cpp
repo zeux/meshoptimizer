@@ -732,7 +732,7 @@ size_t getBufferView(std::vector<BufferView>& views, BufferView::Kind kind, Stre
 	return views.size() - 1;
 }
 
-void writeBufferView(std::string& json, BufferView::Kind kind, StreamFormat::Filter filter, size_t count, size_t stride, size_t bin_offset, size_t bin_size, BufferView::Compression compression, size_t compressed_offset, size_t compressed_size)
+void writeBufferView(std::string& json, BufferView::Kind kind, StreamFormat::Filter filter, size_t count, size_t stride, size_t bin_offset, size_t bin_size, BufferView::Compression compression, size_t compressed_offset, size_t compressed_size, const char* meshopt_ext)
 {
 	assert(bin_size == count * stride);
 
@@ -759,7 +759,9 @@ void writeBufferView(std::string& json, BufferView::Kind kind, StreamFormat::Fil
 	if (compression != BufferView::Compression_None)
 	{
 		append(json, ",\"extensions\":{");
-		append(json, "\"EXT_meshopt_compression\":{");
+		append(json, "\"");
+		append(json, meshopt_ext);
+		append(json, "\":{");
 		append(json, "\"buffer\":0");
 		append(json, ",\"byteOffset\":");
 		append(json, size_t(compressed_offset));

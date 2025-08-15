@@ -23,7 +23,7 @@ std::string getVersion()
 	return result;
 }
 
-static void finalizeBufferViews(std::string& json, std::vector<BufferView>& views, std::string& bin, std::string* fallback, size_t& fallback_size)
+static void finalizeBufferViews(std::string& json, std::vector<BufferView>& views, std::string& bin, std::string* fallback, size_t& fallback_size, const char* meshopt_ext)
 {
 	for (size_t i = 0; i < views.size(); ++i)
 	{
@@ -63,7 +63,7 @@ static void finalizeBufferViews(std::string& json, std::vector<BufferView>& view
 		size_t raw_offset = (view.compression != BufferView::Compression_None) ? fallback_offset : bin_offset;
 
 		comma(json);
-		writeBufferView(json, view.kind, view.filter, count, view.stride, raw_offset, view.data.size(), view.compression, bin_offset, bin.size() - bin_offset);
+		writeBufferView(json, view.kind, view.filter, count, view.stride, raw_offset, view.data.size(), view.compression, bin_offset, bin.size() - bin_offset, meshopt_ext);
 
 		// record written bytes for statistics
 		view.bytes = bin.size() - bin_offset;
@@ -345,7 +345,7 @@ struct hash<std::pair<uint64_t, uint64_t> >
 };
 } // namespace std
 
-static size_t process(cgltf_data* data, const char* input_path, const char* output_path, const char* report_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const Settings& settings, std::string& json, std::string& bin, std::string& fallback, size_t& fallback_size)
+static size_t process(cgltf_data* data, const char* input_path, const char* output_path, const char* report_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const Settings& settings, std::string& json, std::string& bin, std::string& fallback, size_t& fallback_size, const char* meshopt_ext)
 {
 	if (settings.verbose)
 	{
@@ -839,7 +839,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 
 	const ExtensionInfo extensions[] = {
 	    {"KHR_mesh_quantization", settings.quantize, true},
-	    {"EXT_meshopt_compression", settings.compress, !settings.fallback},
+	    {meshopt_ext, settings.compress, !settings.fallback},
 	    {"KHR_texture_transform", (settings.quantize && !settings.tex_float && !json_textures.empty()) || ext_texture_transform, false},
 	    {"KHR_materials_pbrSpecularGlossiness", ext_pbr_specular_glossiness, false},
 	    {"KHR_materials_clearcoat", ext_clearcoat, false},
@@ -875,7 +875,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 	size_t bufferspec_pos = json.size();
 
 	std::string json_views;
-	finalizeBufferViews(json_views, views, bin, settings.fallback ? &fallback : NULL, fallback_size);
+	finalizeBufferViews(json_views, views, bin, settings.fallback ? &fallback : NULL, fallback_size, meshopt_ext);
 
 	writeArray(json, "bufferViews", json_views);
 	writeArray(json, "accessors", json_accessors);
@@ -959,7 +959,7 @@ static const char* getBaseName(const char* path)
 	return std::max(rs, bs);
 }
 
-static std::string getBufferSpec(const char* bin_path, size_t bin_size, const char* fallback_path, size_t fallback_size, bool fallback_ref)
+static std::string getBufferSpec(const char* bin_path, size_t bin_size, const char* fallback_path, size_t fallback_size, bool fallback_ref, const char* meshopt_ext)
 {
 	std::string json;
 	append(json, "\"buffers\":[");
@@ -988,7 +988,9 @@ static std::string getBufferSpec(const char* bin_path, size_t bin_size, const ch
 		append(json, "\"byteLength\":");
 		append(json, fallback_size);
 		append(json, ",\"extensions\":{");
-		append(json, "\"EXT_meshopt_compression\":{");
+		append(json, "\"");
+		append(json, meshopt_ext);
+		append(json, "\":{");
 		append(json, "\"fallback\":true");
 		append(json, "}}");
 		append(json, "}");
@@ -1074,11 +1076,13 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 		}
 	}
 
+	const char* meshopt_ext = settings.compressexp ? "EXTX_meshopt_compression" : "EXT_meshopt_compression";
+
 	std::string json, bin, fallback;
 	size_t fallback_size = 0;
 
 	json += '{';
-	size_t bufferspec_pos = process(data, input, output, report, meshes, animations, settings, json, bin, fallback, fallback_size);
+	size_t bufferspec_pos = process(data, input, output, report, meshes, animations, settings, json, bin, fallback, fallback_size, meshopt_ext);
 	json += '}';
 
 	cgltf_free(data);
@@ -1105,7 +1109,7 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 			return 4;
 		}
 
-		std::string bufferspec = getBufferSpec(getBaseName(binpath.c_str()), bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback_size, settings.compress);
+		std::string bufferspec = getBufferSpec(getBaseName(binpath.c_str()), bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback_size, settings.compress, meshopt_ext);
 		json.insert(bufferspec_pos, "," + bufferspec);
 
 		fwrite(json.c_str(), json.size(), 1, outjson);
@@ -1139,7 +1143,7 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 			return 4;
 		}
 
-		std::string bufferspec = getBufferSpec(NULL, bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback_size, settings.compress);
+		std::string bufferspec = getBufferSpec(NULL, bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback_size, settings.compress, meshopt_ext);
 		json.insert(bufferspec_pos, "," + bufferspec);
 
 		while (json.size() % 4)
@@ -1718,7 +1722,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* buffer, size_t size)
 
 	std::string json, bin, fallback;
 	size_t fallback_size = 0;
-	process(data, NULL, NULL, NULL, meshes, animations, settings, json, bin, fallback, fallback_size);
+	process(data, NULL, NULL, NULL, meshes, animations, settings, json, bin, fallback, fallback_size, NULL);
 
 	cgltf_free(data);
 
