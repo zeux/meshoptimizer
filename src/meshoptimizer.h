@@ -125,6 +125,16 @@ MESHOPTIMIZER_API void meshopt_generateShadowIndexBuffer(unsigned int* destinati
 MESHOPTIMIZER_API void meshopt_generateShadowIndexBufferMulti(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, const struct meshopt_Stream* streams, size_t stream_count);
 
 /**
+ * Experimental: Generates a remap table that maps all vertices with the same position to the same (existing) index.
+ * Similarly to meshopt_generateShadowIndexBuffer, this can be helpful to pre-process meshes for position-only rendering.
+ * This can also be used to implement algorithms that require positional-only connectivity, such as hierarchical simplification.
+ *
+ * destination must contain enough space for the resulting remap table (vertex_count elements)
+ * vertex_positions should have float3 position in the first 12 bytes of each vertex
+ */
+MESHOPTIMIZER_EXPERIMENTAL void meshopt_generatePositionRemap(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
+
+/**
  * Generate index buffer that can be used as a geometry shader input with triangle adjacency topology
  * Each triangle is converted into a 6-vertex patch with the following layout:
  * - 0, 2, 4: original triangle vertices

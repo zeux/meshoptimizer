@@ -545,6 +545,10 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 
 	double middle = timestamp();
 
+	// generate position remap; we'll use that to partition clusters using position-only adjacency
+	std::vector<unsigned int> remap(mesh.vertices.size());
+	meshopt_generatePositionRemap(&remap[0], &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
+
 	// partition clusters in groups; each group will be simplified separately and the boundaries between groups will be preserved
 	std::vector<unsigned int> cluster_indices;
 	cluster_indices.reserve(mesh.indices.size()); // slight underestimate, vector should realloc once
@@ -555,13 +559,15 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 		const meshopt_Meshlet& m = meshlets[i];
 
 		for (size_t j = 0; j < m.triangle_count * 3; ++j)
-			cluster_indices.push_back(meshlet_vertices[m.vertex_offset + meshlet_triangles[m.triangle_offset + j]]);
+		{
+			unsigned int v = meshlet_vertices[m.vertex_offset + meshlet_triangles[m.triangle_offset + j]];
+
+			// use the first vertex with equivalent position so that cluster adjacency ignores attribute seams
+			cluster_indices.push_back(remap[v]);
+		}
 
 		cluster_sizes[i] = m.triangle_count * 3;
 	}
-
-	// makes sure clusters are partitioned using position-only adjacency
-	meshopt_generateShadowIndexBuffer(&cluster_indices[0], &cluster_indices[0], cluster_indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(float) * 3, sizeof(Vertex));
 
 	std::vector<unsigned int> partition(meshlets.size());
 	size_t partition_count = meshopt_partitionClusters(&partition[0], &cluster_indices[0], cluster_indices.size(), &cluster_sizes[0], cluster_sizes.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_group_size);
