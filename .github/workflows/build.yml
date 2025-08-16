@@ -177,6 +177,7 @@ jobs:
           ./gltfpack -test demo/pirate.obj -vi -c
           ./gltfpack -test glTF-Sample-Assets/Models/ABeautifulGame/glTF/ABeautifulGame.gltf -mi -c
           ./gltfpack -test glTF-Sample-Assets/Models/ABeautifulGame/glTF/ABeautifulGame.gltf -kn -km -ke
+          ./gltfpack -test glTF-Sample-Assets/Models/ABeautifulGame/glTF/ABeautifulGame.gltf -si 0.1 -sp
           ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -c
           ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -cc
           ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tc
