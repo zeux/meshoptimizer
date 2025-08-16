@@ -1519,7 +1519,7 @@ int main(int argc, char** argv)
 			settings.compress = true;
 			settings.fallback = true;
 		}
-		else if (strcmp(arg, "-ce") == 0)
+		else if (strcmp(arg, "-cx") == 0)
 		{
 			fprintf(stderr, "Warning: experimental compression will produce files that are not compliant with EXT_meshopt_compression\n");
 			meshopt_encodeVertexVersion(1);
