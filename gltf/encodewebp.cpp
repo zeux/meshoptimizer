@@ -112,7 +112,12 @@ static const char* encodeWebP(const cgltf_image& image, const char* input_path, 
 	if ((width != pic.width || height != pic.height) && !WebPPictureRescale(&pic, width, height))
 		return "error resizing image";
 
-	config.quality = settings.texture_quality[info.kind] * 10; // map 1-10 to 10-100
+	int quality = settings.texture_quality[info.kind];
+
+	if (info.normal_map)
+		config.quality = 50 + quality * 5; // map 1-10 to 55-100
+	else
+		config.quality = 20 + quality * 8; // map 1-10 to 28-100
 
 	pic.writer = writeWebP;
 	pic.custom_ptr = &encoded;
