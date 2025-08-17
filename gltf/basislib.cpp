@@ -1,4 +1,4 @@
-#ifdef WITH_BASISU
+#ifdef WITH_BASISU_SOURCE
 
 #ifdef __clang__
 #pragma GCC diagnostic ignored "-Wunknown-warning-option"

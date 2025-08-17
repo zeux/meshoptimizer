@@ -9,7 +9,10 @@
 #endif
 
 #ifdef __GNUC__
+#pragma GCC diagnostic ignored "-Wc++17-extensions"
 #pragma GCC diagnostic ignored "-Wclass-memaccess"
+#pragma GCC diagnostic ignored "-Wshadow"
+#pragma GCC diagnostic ignored "-Wunused-local-typedefs"
 #pragma GCC diagnostic ignored "-Wunused-value"
 #endif
 
