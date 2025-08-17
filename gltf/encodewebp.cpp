@@ -9,7 +9,9 @@
 #include "imageio/image_dec.h"
 #endif
 
+#include <atomic>
 #include <memory>
+#include <thread>
 
 static int writeWebP(const uint8_t* data, size_t data_size, const WebPPicture* picture)
 {
@@ -69,17 +71,37 @@ static const char* encodeWebP(const cgltf_image& image, const char* input_path, 
 
 void encodeImagesWebP(std::string* encoded, const cgltf_data* data, const std::vector<ImageInfo>& images, const char* input_path, const Settings& settings)
 {
-	for (size_t i = 0; i < data->images_count; ++i)
+	std::atomic<size_t> next_image{0};
+
+	auto encode = [&]()
 	{
-		const cgltf_image& image = data->images[i];
-		ImageInfo info = images[i];
+		for (;;)
+		{
+			size_t i = next_image++;
+			if (i >= data->images_count)
+				break;
 
-		if (settings.texture_mode[info.kind] != TextureMode_WebP)
-			continue;
+			const cgltf_image& image = data->images[i];
+			ImageInfo info = images[i];
 
-		if (const char* error = encodeWebP(image, input_path, info, settings, encoded[i]))
-			encoded[i] = error;
-	}
+			if (settings.texture_mode[info.kind] == TextureMode_WebP)
+				if (const char* error = encodeWebP(image, input_path, info, settings, encoded[i]))
+					encoded[i] = error;
+		}
+	};
+
+	// we use main thread as a worker as well
+	size_t worker_count = settings.texture_jobs == 0 ? std::thread::hardware_concurrency() : settings.texture_jobs;
+	size_t thread_count = worker_count > 0 ? worker_count - 1 : 0;
+
+	std::vector<std::thread> threads;
+	for (size_t i = 0; i < thread_count; ++i)
+		threads.emplace_back(encode);
+
+	encode();
+
+	for (size_t i = 0; i < thread_count; ++i)
+		threads[i].join();
 }
 
 #endif

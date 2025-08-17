@@ -163,6 +163,9 @@ if(MESHOPT_BUILD_GLTFPACK)
 
         target_compile_definitions(gltfpack PRIVATE WITH_LIBWEBP WITH_LIBWEBP_IMAGEDEC)
         set_source_files_properties(gltf/encodewebp.cpp PROPERTIES INCLUDE_DIRECTORIES ${LIBWEBP_PATH})
+
+		find_package(Threads REQUIRED)
+		target_link_libraries(gltfpack Threads::Threads)
 	endif()
 endif()
 
