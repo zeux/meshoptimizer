@@ -349,7 +349,7 @@ void adjustDimensions(int& width, int& height, float scale, int limit, bool pow2
 const char* mimeExtension(const char* mime_type);
 
 #ifdef WITH_BASISU
-void encodeImages(std::string* encoded, const cgltf_data* data, const std::vector<ImageInfo>& images, const char* input_path, const Settings& settings);
+void encodeImagesBasis(std::string* encoded, const cgltf_data* data, const std::vector<ImageInfo>& images, const char* input_path, const Settings& settings);
 #endif
 
 void markScenes(cgltf_data* data, std::vector<NodeInfo>& nodes);

@@ -49,8 +49,8 @@ set(SOURCES
 
 set(GLTF_SOURCES
     gltf/animation.cpp
-    gltf/basisenc.cpp
     gltf/basislib.cpp
+    gltf/encodebasis.cpp
     gltf/fileio.cpp
     gltf/gltfpack.cpp
     gltf/image.cpp
@@ -141,7 +141,7 @@ if(MESHOPT_BUILD_GLTFPACK)
         endif()
 
         target_compile_definitions(gltfpack PRIVATE WITH_BASISU WITH_BASISU_SOURCE)
-        set_source_files_properties(gltf/basisenc.cpp gltf/basislib.cpp PROPERTIES INCLUDE_DIRECTORIES ${BASISU_PATH})
+        set_source_files_properties(gltf/encodebasis.cpp gltf/basislib.cpp PROPERTIES INCLUDE_DIRECTORIES ${BASISU_PATH})
 
         if(NOT MSVC AND CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
             set_source_files_properties(gltf/basislib.cpp PROPERTIES COMPILE_OPTIONS -msse4.1)
@@ -162,7 +162,7 @@ if(MESHOPT_BUILD_GLTFPACK)
         endif()
 
         target_compile_definitions(gltfpack PRIVATE WITH_BASISU)
-        set_source_files_properties(gltf/basisenc.cpp PROPERTIES INCLUDE_DIRECTORIES ${BASISU_PATH})
+        set_source_files_properties(gltf/encodebasis.cpp PROPERTIES INCLUDE_DIRECTORIES ${BASISU_PATH})
 
         add_subdirectory(${BASISU_PATH} ${CMAKE_CURRENT_BINARY_DIR}/basisu EXCLUDE_FROM_ALL)
 		target_link_libraries(gltfpack basisu_encoder)

@@ -1,3 +1,4 @@
+// This file is part of gltfpack; see gltfpack.h for version/license details
 #ifdef WITH_BASISU
 
 #define BASISU_NO_ITERATOR_DEBUG_LEVEL
@@ -151,7 +152,7 @@ static const char* prepareEncode(basisu::basis_compressor_params& params, const 
 	return NULL;
 }
 
-void encodeImages(std::string* encoded, const cgltf_data* data, const std::vector<ImageInfo>& images, const char* input_path, const Settings& settings)
+void encodeImagesBasis(std::string* encoded, const cgltf_data* data, const std::vector<ImageInfo>& images, const char* input_path, const Settings& settings)
 {
 	basisu::basisu_encoder_init();
 

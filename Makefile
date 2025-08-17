@@ -29,7 +29,8 @@ $(GLTFPACK_OBJECTS): CXXFLAGS+=-std=c++11
 
 ifdef BASISU
     $(GLTFPACK_OBJECTS): CXXFLAGS+=-DWITH_BASISU -DWITH_BASISU_SOURCE
-    $(BUILD)/gltf/basis%.cpp.o: CXXFLAGS+=-I$(BASISU)
+    $(BUILD)/gltf/encodebasis.cpp.o: CXXFLAGS+=-I$(BASISU)
+    $(BUILD)/gltf/basislib.cpp.o: CXXFLAGS+=-I$(BASISU)
     gltfpack: LDFLAGS+=-lpthread
 
     ifeq ($(HOSTTYPE),x86_64)
