@@ -5,7 +5,7 @@
 #include "webp/decode.h"
 #include "webp/encode.h"
 
-#ifdef WITH_LIBWEBP_IMAGEDEC
+#ifndef WITH_LIBWEBP_BASIS
 #include "imageio/image_dec.h"
 #endif
 
@@ -19,6 +19,56 @@ static int writeWebP(const uint8_t* data, size_t data_size, const WebPPicture* p
 	encoded->append(reinterpret_cast<const char*>(data), data_size);
 	return 1;
 }
+
+// when gltfpack is built with Basis Universal, we have easy access to its jpeg/png decoders
+#ifdef WITH_LIBWEBP_BASIS
+namespace pv_png
+{
+void* load_png(const void* pImage_buf, size_t buf_size, uint32_t desired_chans, uint32_t& width, uint32_t& height, uint32_t& num_chans);
+} // namespace pv_png
+
+namespace jpgd
+{
+static const uint32_t cFlagLinearChromaFiltering = 1;
+unsigned char* decompress_jpeg_image_from_memory(const unsigned char* pSrc_data, int src_data_size, int* width, int* height, int* actual_comps, int req_comps, uint32_t flags = 0);
+} // namespace jpgd
+
+typedef int (*WebPImageReader)(const uint8_t* const data, size_t data_size, struct WebPPicture* const pic, int keep_alpha, struct Metadata* const metadata);
+
+static int readPngBasis(const uint8_t* const data, size_t data_size, struct WebPPicture* const pic, int keep_alpha, struct Metadata* const metadata)
+{
+	(void)keep_alpha;
+	(void)metadata;
+
+	uint32_t width = 0, height = 0, channels = 0;
+	void* img = pv_png::load_png(data, data_size, 4, width, height, channels);
+	if (!img)
+		return 0;
+
+	pic->width = width;
+	pic->height = height;
+	int ok = WebPPictureImportRGBA(pic, static_cast<uint8_t*>(img), width * 4);
+	free(img);
+	return ok;
+}
+
+static int readJpegBasis(const uint8_t* const data, size_t data_size, struct WebPPicture* const pic, int keep_alpha, struct Metadata* const metadata)
+{
+	(void)keep_alpha;
+	(void)metadata;
+
+	int width = 0, height = 0, channels = 0;
+	unsigned char* img = jpgd::decompress_jpeg_image_from_memory(data, int(data_size), &width, &height, &channels, 4, jpgd::cFlagLinearChromaFiltering);
+	if (!img)
+		return 0;
+
+	pic->width = width;
+	pic->height = height;
+	int ok = WebPPictureImportRGBA(pic, img, width * 4);
+	free(img);
+	return ok;
+}
+#endif
 
 static const char* encodeWebP(const cgltf_image& image, const char* input_path, const ImageInfo& info, const Settings& settings, std::string& encoded)
 {
@@ -41,10 +91,14 @@ static const char* encodeWebP(const cgltf_image& image, const char* input_path, 
 
 	adjustDimensions(width, height, settings.texture_scale[info.kind], settings.texture_limit[info.kind], settings.texture_pow2);
 
+#ifdef WITH_LIBWEBP_BASIS
+	WebPImageReader reader = (mime_type == "image/jpeg") ? readJpegBasis : readPngBasis;
+#else
 	WebPInputFileFormat format = (mime_type == "image/jpeg") ? WEBP_JPEG_FORMAT : WEBP_PNG_FORMAT;
 	WebPImageReader reader = WebPGetImageReader(format);
 	if (!reader)
 		return "unsupported image format";
+#endif
 
 	WebPPicture pic;
 	if (!WebPPictureInit(&pic))
@@ -52,7 +106,7 @@ static const char* encodeWebP(const cgltf_image& image, const char* input_path, 
 
 	std::unique_ptr<WebPPicture, void (*)(WebPPicture*)> pic_storage(&pic, WebPPictureFree);
 
-	if (!reader((const uint8_t*)img_data.data(), img_data.size(), &pic, 1, NULL))
+	if (!reader(reinterpret_cast<const uint8_t*>(img_data.data()), img_data.size(), &pic, 1, NULL))
 		return "error decoding source image";
 
 	if ((width != pic.width || height != pic.height) && !WebPPictureRescale(&pic, width, height))

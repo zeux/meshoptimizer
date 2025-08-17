@@ -159,10 +159,17 @@ if(MESHOPT_BUILD_GLTFPACK)
         endif()
 
         add_subdirectory(${LIBWEBP_PATH} ${CMAKE_CURRENT_BINARY_DIR}/libwebp EXCLUDE_FROM_ALL)
-		target_link_libraries(gltfpack webp imagedec)
+        target_link_libraries(gltfpack webp)
 
-        target_compile_definitions(gltfpack PRIVATE WITH_LIBWEBP WITH_LIBWEBP_IMAGEDEC)
+        target_compile_definitions(gltfpack PRIVATE WITH_LIBWEBP)
         set_source_files_properties(gltf/encodewebp.cpp PROPERTIES INCLUDE_DIRECTORIES ${LIBWEBP_PATH})
+
+        # when gltfpack is built with Basis Universal, we use Basis image decoders for PNG/JPEG support for ease of distribution
+        if(NOT MESHOPT_GLTFPACK_BASISU_PATH STREQUAL "")
+            target_compile_definitions(gltfpack PRIVATE WITH_LIBWEBP_BASIS)
+        else()
+            target_link_libraries(gltfpack imagedec)
+        endif()
 
 		find_package(Threads REQUIRED)
 		target_link_libraries(gltfpack Threads::Threads)
