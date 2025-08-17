@@ -1282,7 +1282,7 @@ int main(int argc, char** argv)
 	const char* report = NULL;
 	bool help = false;
 	bool test = false;
-	bool require_ktx2 = false;
+	bool require_texc = false;
 
 	std::vector<const char*> testinputs;
 
@@ -1447,14 +1447,14 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-tq") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			require_ktx2 = true;
+			require_texc = true;
 
 			int quality = clamp(atoi(argv[++i]), 1, 10);
 			applySetting(settings.texture_quality, quality);
 		}
 		else if (strcmp(arg, "-tq") == 0 && i + 2 < argc && isalpha(argv[i + 1][0]) && isdigit(argv[i + 2][0]))
 		{
-			require_ktx2 = true;
+			require_texc = true;
 
 			unsigned int mask = textureMask(argv[++i]);
 			int quality = clamp(atoi(argv[++i]), 1, 10);
@@ -1462,14 +1462,14 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-ts") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			require_ktx2 = true;
+			require_texc = true;
 
 			float scale = clamp(float(atof(argv[++i])), 0.f, 1.f);
 			applySetting(settings.texture_scale, scale);
 		}
 		else if (strcmp(arg, "-ts") == 0 && i + 2 < argc && isalpha(argv[i + 1][0]) && isdigit(argv[i + 2][0]))
 		{
-			require_ktx2 = true;
+			require_texc = true;
 
 			unsigned int mask = textureMask(argv[++i]);
 			float scale = clamp(float(atof(argv[++i])), 0.f, 1.f);
@@ -1477,14 +1477,14 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-tl") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			require_ktx2 = true;
+			require_texc = true;
 
 			int limit = atoi(argv[++i]);
 			applySetting(settings.texture_limit, limit);
 		}
 		else if (strcmp(arg, "-tl") == 0 && i + 2 < argc && isalpha(argv[i + 1][0]) && isdigit(argv[i + 2][0]))
 		{
-			require_ktx2 = true;
+			require_texc = true;
 
 			unsigned int mask = textureMask(argv[++i]);
 			int limit = atoi(argv[++i]);
@@ -1492,13 +1492,13 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-tp") == 0)
 		{
-			require_ktx2 = true;
+			require_texc = true;
 
 			settings.texture_pow2 = true;
 		}
 		else if (strcmp(arg, "-tfy") == 0)
 		{
-			require_ktx2 = true;
+			require_texc = true;
 
 			settings.texture_flipy = true;
 		}
@@ -1684,13 +1684,13 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
-	if (require_ktx2 && !settings.texture_ktx2)
+	if (require_texc && !settings.texture_ktx2 && !settings.texture_webp)
 	{
 		fprintf(stderr, "Texture processing is only supported when texture compression is enabled via -tc/-tu\n");
 		return 1;
 	}
 
-	if (settings.texture_ref && settings.texture_ktx2)
+	if (settings.texture_ref && (settings.texture_ktx2 || settings.texture_webp))
 	{
 		fprintf(stderr, "Option -tr currently can not be used together with -tc\n");
 		return 1;
@@ -1709,9 +1709,7 @@ int main(int argc, char** argv)
 	}
 
 	if (settings.keep_nodes && (settings.mesh_merge || settings.mesh_instancing))
-	{
 		fprintf(stderr, "Warning: option -kn disables mesh merge (-mm) and mesh instancing (-mi) optimizations\n");
-	}
 
 	return gltfpack(input, output, report, settings);
 }
