@@ -23,6 +23,7 @@ option(MESHOPT_INSTALL "Install library" ON)
 
 # Optional gltfpack components for texture compression support
 set(MESHOPT_GLTFPACK_BASISU_PATH "" CACHE STRING "") # Basis Universal, https://github.com/BinomialLLC/basis_universal
+set(MESHOPT_GLTFPACK_LIBWEBP_PATH "" CACHE STRING "") # libwebp, https://github.com/webmproject/libwebp
 
 set(SOURCES
     src/meshoptimizer.h
@@ -47,6 +48,7 @@ set(SOURCES
 set(GLTF_SOURCES
     gltf/animation.cpp
     gltf/encodebasis.cpp
+    gltf/encodewebp.cpp
     gltf/fileio.cpp
     gltf/gltfpack.cpp
     gltf/image.cpp
@@ -150,6 +152,18 @@ if(MESHOPT_BUILD_GLTFPACK)
 		target_link_libraries(gltfpack Threads::Threads)
 	endif()
 
+    if(NOT MESHOPT_GLTFPACK_LIBWEBP_PATH STREQUAL "")
+        get_filename_component(LIBWEBP_PATH ${MESHOPT_GLTFPACK_LIBWEBP_PATH} ABSOLUTE)
+        if (NOT EXISTS ${LIBWEBP_PATH})
+            message(FATAL_ERROR "libwebp path ${LIBWEBP_PATH} not found")
+        endif()
+
+        add_subdirectory(${LIBWEBP_PATH} ${CMAKE_CURRENT_BINARY_DIR}/libwebp EXCLUDE_FROM_ALL)
+		target_link_libraries(gltfpack webp imagedec)
+
+        target_compile_definitions(gltfpack PRIVATE WITH_LIBWEBP WITH_LIBWEBP_IMAGEDEC)
+        set_source_files_properties(gltf/encodewebp.cpp PROPERTIES INCLUDE_DIRECTORIES ${LIBWEBP_PATH})
+	endif()
 endif()
 
 if(MESHOPT_INSTALL)

@@ -494,21 +494,23 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 		append(json_samplers, "}");
 	}
 
-	std::vector<std::string> encoded_images;
+	std::vector<std::string> encoded_images(data->images_count);
 
 #ifdef WITH_BASISU
 	if (data->images_count && settings.texture_ktx2)
-	{
-		encoded_images.resize(data->images_count);
 		encodeImagesBasis(encoded_images.data(), data, images, input_path, settings);
-	}
+#endif
+
+#ifdef WITH_LIBWEBP
+	if (data->images_count && settings.texture_webp)
+		encodeImagesWebP(encoded_images.data(), data, images, input_path, settings);
 #endif
 
 	for (size_t i = 0; i < data->images_count; ++i)
 	{
 		const cgltf_image& image = data->images[i];
 
-		std::string* encoded = (encoded_images.size() && !encoded_images[i].empty()) ? &encoded_images[i] : NULL;
+		std::string* encoded = !encoded_images[i].empty() ? &encoded_images[i] : NULL;
 
 		comma(json_images);
 		append(json_images, "{");
@@ -856,7 +858,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 	    {"KHR_materials_variants", data->variants_count > 0, false},
 	    {"KHR_lights_punctual", data->lights_count > 0, false},
 	    {"KHR_texture_basisu", (!json_textures.empty() && settings.texture_ktx2) || ext_texture_basisu, true},
-	    {"EXT_texture_webp", ext_texture_webp, true},
+	    {"EXT_texture_webp", (!json_textures.empty() && settings.texture_webp) || ext_texture_webp, true},
 	    {"EXT_mesh_gpu_instancing", ext_instancing, true},
 	};
 
@@ -1042,6 +1044,17 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 		fprintf(stderr, "Error: gltfpack was built without BasisU support, texture compression is not available\n");
 #ifdef __wasi__
 		fprintf(stderr, "Note: node.js builds do not support BasisU due to lack of platform features; download a native build from https://github.com/zeux/meshoptimizer/releases\n");
+#endif
+		return 3;
+	}
+#endif
+
+#ifndef WITH_LIBWEBP
+	if (data->images_count && settings.texture_webp)
+	{
+		fprintf(stderr, "Error: gltfpack was built without WebP support, texture compression is not available\n");
+#ifdef __wasi__
+		fprintf(stderr, "Note: node.js builds do not support WebP due to lack of platform features; download a native build from https://github.com/zeux/meshoptimizer/releases\n");
 #endif
 		return 3;
 	}
@@ -1422,6 +1435,16 @@ int main(int argc, char** argv)
 
 			applySetting(settings.texture_mode, TextureMode_ETC1S, mask);
 		}
+		else if (strcmp(arg, "-tw") == 0)
+		{
+			settings.texture_webp = true;
+
+			unsigned int mask = ~0u;
+			if (i + 1 < argc && isalpha(argv[i + 1][0]))
+				mask = textureMask(argv[++i]);
+
+			applySetting(settings.texture_mode, TextureMode_WebP, mask);
+		}
 		else if (strcmp(arg, "-tq") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			require_ktx2 = true;
@@ -1592,6 +1615,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nTextures:\n");
 			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression\n");
 			fprintf(stderr, "\t-tu: use UASTC when encoding textures (much higher quality and much larger size)\n");
+			fprintf(stderr, "\t-tw: convert all textures to WebP format\n");
 			fprintf(stderr, "\t-tq N: set texture encoding quality (default: 8; N should be between 1 and 10)\n");
 			fprintf(stderr, "\t-ts R: scale texture dimensions by the ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\t-tl N: limit texture dimensions to N pixels (default: 0 = no limit)\n");
@@ -1602,6 +1626,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\tTexture classes:\n");
 			fprintf(stderr, "\t-tc C: use ETC1S when encoding textures of class C\n");
 			fprintf(stderr, "\t-tu C: use UASTC when encoding textures of class C\n");
+			fprintf(stderr, "\t-tw C: use WebP when encoding textures of class C\n");
 			fprintf(stderr, "\t-tq C N: set texture encoding quality for class C\n");
 			fprintf(stderr, "\t-ts C R: scale texture dimensions for class C\n");
 			fprintf(stderr, "\t-tl C N: limit texture dimensions for class C\n");

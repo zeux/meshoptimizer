@@ -113,6 +113,7 @@ enum TextureMode
 	TextureMode_Raw,
 	TextureMode_ETC1S,
 	TextureMode_UASTC,
+	TextureMode_WebP,
 };
 
 struct Settings
@@ -153,6 +154,7 @@ struct Settings
 	bool simplify_permissive;
 
 	bool texture_ktx2;
+	bool texture_webp;
 	bool texture_embed;
 	bool texture_ref;
 
@@ -350,6 +352,10 @@ const char* mimeExtension(const char* mime_type);
 
 #ifdef WITH_BASISU
 void encodeImagesBasis(std::string* encoded, const cgltf_data* data, const std::vector<ImageInfo>& images, const char* input_path, const Settings& settings);
+#endif
+
+#ifdef WITH_LIBWEBP
+void encodeImagesWebP(std::string* encoded, const cgltf_data* data, const std::vector<ImageInfo>& images, const char* input_path, const Settings& settings);
 #endif
 
 void markScenes(cgltf_data* data, std::vector<NodeInfo>& nodes);
