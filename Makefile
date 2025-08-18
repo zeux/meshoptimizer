@@ -28,14 +28,9 @@ $(DEMO_OBJECTS): CXXFLAGS+=-std=c++11
 $(GLTFPACK_OBJECTS): CXXFLAGS+=-std=c++11
 
 ifdef BASISU
-    $(GLTFPACK_OBJECTS): CXXFLAGS+=-DWITH_BASISU -DWITH_BASISU_SOURCE
+    $(GLTFPACK_OBJECTS): CXXFLAGS+=-DWITH_BASISU
     $(BUILD)/gltf/encodebasis.cpp.o: CXXFLAGS+=-I$(BASISU)
-    $(BUILD)/gltf/basislib.cpp.o: CXXFLAGS+=-I$(BASISU)
-    gltfpack: LDFLAGS+=-lpthread
-
-    ifeq ($(HOSTTYPE),x86_64)
-        $(BUILD)/gltf/basislib.cpp.o: CXXFLAGS+=-msse4.1
-    endif
+    gltfpack: LDFLAGS+=-lpthread $(BASISU)/libbasisu_encoder.a
 endif
 
 WASI_SDK?=/opt/wasi-sdk
