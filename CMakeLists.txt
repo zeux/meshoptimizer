@@ -21,8 +21,8 @@ option(MESHOPT_STABLE_EXPORTS "Only export stable APIs from shared library" OFF)
 option(MESHOPT_WERROR "Treat warnings as errors" OFF)
 option(MESHOPT_INSTALL "Install library" ON)
 
-# Path to Basis Universal library, if you want to use it with gltfpack
-set(MESHOPT_BASISU_PATH "" CACHE STRING "")
+# Optional gltfpack components for texture compression support
+set(MESHOPT_GLTFPACK_BASISU_PATH "" CACHE STRING "") # Basis Universal, https://github.com/BinomialLLC/basis_universal
 
 set(SOURCES
     src/meshoptimizer.h
@@ -46,8 +46,7 @@ set(SOURCES
 
 set(GLTF_SOURCES
     gltf/animation.cpp
-    gltf/basisenc.cpp
-    gltf/basislib.cpp
+    gltf/encodebasis.cpp
     gltf/fileio.cpp
     gltf/gltfpack.cpp
     gltf/image.cpp
@@ -131,22 +130,26 @@ if(MESHOPT_BUILD_GLTFPACK)
         set_target_properties(gltfpack PROPERTIES INSTALL_RPATH ${RPATH})
     endif()
 
-    if(NOT MESHOPT_BASISU_PATH STREQUAL "")
-        get_filename_component(BASISU_PATH ${MESHOPT_BASISU_PATH} ABSOLUTE)
+    if(NOT MESHOPT_GLTFPACK_BASISU_PATH STREQUAL "")
+        get_filename_component(BASISU_PATH ${MESHOPT_GLTFPACK_BASISU_PATH} ABSOLUTE)
         if (NOT EXISTS ${BASISU_PATH})
             message(FATAL_ERROR "Basis Universal path ${BASISU_PATH} not found")
         endif()
 
-        target_compile_definitions(gltfpack PRIVATE WITH_BASISU)
-        set_source_files_properties(gltf/basisenc.cpp gltf/basislib.cpp PROPERTIES INCLUDE_DIRECTORIES ${BASISU_PATH})
-
-        if(NOT MSVC AND CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
-            set_source_files_properties(gltf/basislib.cpp PROPERTIES COMPILE_OPTIONS -msse4.1)
+        if (NOT SSE AND NOT MSVC AND CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+	        message(WARNING "Building Basis Universal without SSE4.1 support; performance may be suboptimal")
         endif()
+
+        target_compile_definitions(gltfpack PRIVATE WITH_BASISU)
+        set_source_files_properties(gltf/encodebasis.cpp PROPERTIES INCLUDE_DIRECTORIES ${BASISU_PATH})
+
+        add_subdirectory(${BASISU_PATH} ${CMAKE_CURRENT_BINARY_DIR}/basisu EXCLUDE_FROM_ALL)
+		target_link_libraries(gltfpack basisu_encoder)
 
 		find_package(Threads REQUIRED)
 		target_link_libraries(gltfpack Threads::Threads)
 	endif()
+
 endif()
 
 if(MESHOPT_INSTALL)

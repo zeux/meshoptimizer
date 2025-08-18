@@ -136,10 +136,8 @@ jobs:
           node js/meshopt_simplifier.test.js
           node js/meshopt_clusterizer.test.js
 
-  gltfpack-basis:
+  gltfpack-full:
     runs-on: ubuntu-latest
-    env:
-      werror: 1
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -147,8 +145,10 @@ jobs:
           repository: zeux/basis_universal
           ref: gltfpack
           path: basis_universal
-      - name: make gltfpack
-        run: make -j2 BASISU=basis_universal gltfpack
+      - name: cmake configure
+        run: cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_GLTFPACK_BASISU_PATH=basis_universal
+      - name: cmake build
+        run: cmake --build . --target gltfpack -j 4
 
   gltfpack-coverage:
     runs-on: ubuntu-latest
@@ -163,6 +163,11 @@ jobs:
         with:
           repository: KhronosGroup/glTF-Sample-Assets
           path: glTF-Sample-Assets
+      - name: build basisu
+        run: |
+          cd basis_universal
+          cmake . -D CMAKE_BUILD_TYPE=Debug
+          make -j4 basisu_encoder
       - name: make
         run: make -j2 config=coverage BASISU=basis_universal gltfpack
       - name: test

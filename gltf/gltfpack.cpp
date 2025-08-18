@@ -500,8 +500,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 	if (data->images_count && settings.texture_ktx2)
 	{
 		encoded_images.resize(data->images_count);
-
-		encodeImages(encoded_images.data(), data, images, input_path, settings);
+		encodeImagesBasis(encoded_images.data(), data, images, input_path, settings);
 	}
 #endif
 

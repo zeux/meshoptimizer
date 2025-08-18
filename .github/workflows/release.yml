@@ -11,7 +11,13 @@ jobs:
   gltfpack:
     strategy:
       matrix:
-        os: [{ name: windows, version: windows-latest }, { name: ubuntu, version: ubuntu-22.04 }, { name: macos, version: macos-14 }]
+        os:
+          [
+            { name: windows, version: windows-latest },
+            { name: ubuntu, version: ubuntu-22.04 },
+            { name: macos, version: macos-14 },
+            { name: macos-intel, version: macos-13 },
+          ]
     name: gltfpack-${{matrix.os.name}}
     runs-on: ${{matrix.os.version}}
     steps:
@@ -22,7 +28,10 @@ jobs:
           ref: gltfpack
           path: basis_universal
       - name: cmake configure
-        run: cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_BASISU_PATH=basis_universal -DMESHOPT_WERROR=ON -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded" -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
+        run: cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_GLTFPACK_BASISU_PATH=basis_universal -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded" -DCMAKE_BUILD_TYPE=Release
+      - name: cmake configure sse
+        run: cmake . -DSSE=ON
+        if: matrix.os.name == 'macos-intel' || matrix.os.name == 'ubuntu'
       - name: cmake build
         run: cmake --build . --target gltfpack --config Release -j 2
       - uses: actions/upload-artifact@v4

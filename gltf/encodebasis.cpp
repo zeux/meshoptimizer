@@ -1,4 +1,6 @@
+// This file is part of gltfpack; see gltfpack.h for version/license details
 #ifdef WITH_BASISU
+#include "gltfpack.h"
 
 #define BASISU_NO_ITERATOR_DEBUG_LEVEL
 
@@ -9,13 +11,14 @@
 #endif
 
 #ifdef __GNUC__
+#pragma GCC diagnostic ignored "-Wc++17-extensions"
 #pragma GCC diagnostic ignored "-Wclass-memaccess"
+#pragma GCC diagnostic ignored "-Wshadow"
+#pragma GCC diagnostic ignored "-Wunused-local-typedefs"
 #pragma GCC diagnostic ignored "-Wunused-value"
 #endif
 
 #include "encoder/basisu_comp.h"
-
-#include "gltfpack.h"
 
 struct BasisSettings
 {
@@ -148,7 +151,7 @@ static const char* prepareEncode(basisu::basis_compressor_params& params, const 
 	return NULL;
 }
 
-void encodeImages(std::string* encoded, const cgltf_data* data, const std::vector<ImageInfo>& images, const char* input_path, const Settings& settings)
+void encodeImagesBasis(std::string* encoded, const cgltf_data* data, const std::vector<ImageInfo>& images, const char* input_path, const Settings& settings)
 {
 	basisu::basisu_encoder_init();
 
