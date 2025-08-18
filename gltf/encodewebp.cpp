@@ -119,6 +119,8 @@ static const char* encodeWebP(const cgltf_image& image, const char* input_path, 
 	else
 		config.quality = 20 + quality * 8; // map 1-10 to 28-100
 
+	config.emulate_jpeg_size = 1; // for flatter quality curve
+
 	pic.writer = writeWebP;
 	pic.custom_ptr = &encoded;
 
