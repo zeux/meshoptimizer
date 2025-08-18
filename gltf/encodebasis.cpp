@@ -1,5 +1,6 @@
 // This file is part of gltfpack; see gltfpack.h for version/license details
 #ifdef WITH_BASISU
+#include "gltfpack.h"
 
 #define BASISU_NO_ITERATOR_DEBUG_LEVEL
 
@@ -18,8 +19,6 @@
 #endif
 
 #include "encoder/basisu_comp.h"
-
-#include "gltfpack.h"
 
 struct BasisSettings
 {
