@@ -544,7 +544,7 @@
 									nz = geo.attributes.normal.getZ(i);
 
 								// keep sharp edges
-								if (rx * nx + ry * ny + rz * nz < 0.5) {
+								if (rx * nx + ry * ny + rz * nz < 0.25) {
 									locks[i] |= 2;
 								}
 							}

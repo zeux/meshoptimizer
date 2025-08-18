@@ -805,7 +805,7 @@ static void simplifyProtect(std::vector<unsigned char>& locks, Mesh& mesh, size_
 		{
 			unsigned int r = remap[i];
 
-			if (r != i && (a[i].f[0] * a[r].f[0] + a[i].f[1] * a[r].f[1] + a[i].f[2] * a[r].f[2]) < 0.5f)
+			if (r != i && (a[i].f[0] * a[r].f[0] + a[i].f[1] * a[r].f[1] + a[i].f[2] * a[r].f[2]) < 0.25f)
 				data[i] |= 2;
 		}
 	}
