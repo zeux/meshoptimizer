@@ -918,11 +918,13 @@ void writeImage(std::string& json, std::vector<BufferView>& views, const cgltf_i
 
 	if (encoded)
 	{
+		const char* mime_type = (settings.texture_mode[info.kind] == TextureMode_WebP) ? "image/webp" : "image/ktx2";
+
 		// image was pre-encoded via encodeImages (which might have failed!)
 		if (encoded->compare(0, 5, "error") == 0)
 			writeImageError(json, "encode", int(index), image.uri, encoded->c_str());
 		else
-			writeImageData(json, views, index, image.uri, "image/ktx2", *encoded, output_path, info.kind, settings.texture_embed);
+			writeImageData(json, views, index, image.uri, mime_type, *encoded, output_path, info.kind, settings.texture_embed);
 		return;
 	}
 
@@ -960,8 +962,12 @@ void writeTexture(std::string& json, const cgltf_texture& texture, const ImageIn
 	{
 		if (info && settings.texture_mode[info->kind] != TextureMode_Raw)
 		{
+			const char* texture_ext = (settings.texture_mode[info->kind] == TextureMode_WebP) ? "EXT_texture_webp" : "KHR_texture_basisu";
+
 			comma(json);
-			append(json, "\"extensions\":{\"KHR_texture_basisu\":{\"source\":");
+			append(json, "\"extensions\":{\"");
+			append(json, texture_ext);
+			append(json, "\":{\"source\":");
 			append(json, size_t(texture.image - data->images));
 			append(json, "}}");
 

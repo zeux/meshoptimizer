@@ -27,8 +27,13 @@ jobs:
           repository: zeux/basis_universal
           ref: gltfpack
           path: basis_universal
+      - uses: actions/checkout@v4
+        with:
+          repository: webmproject/libwebp
+          ref: 1.6.0
+          path: libwebp
       - name: cmake configure
-        run: cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_GLTFPACK_BASISU_PATH=basis_universal -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded" -DCMAKE_BUILD_TYPE=Release
+        run: cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_GLTFPACK_BASISU_PATH=basis_universal -D MESHOPT_GLTFPACK_LIBWEBP_PATH=libwebp -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded" -DCMAKE_BUILD_TYPE=Release
       - name: cmake configure sse
         run: cmake . -DSSE=ON
         if: matrix.os.name == 'macos-intel' || matrix.os.name == 'ubuntu'

@@ -145,8 +145,13 @@ jobs:
           repository: zeux/basis_universal
           ref: gltfpack
           path: basis_universal
+      - uses: actions/checkout@v4
+        with:
+          repository: webmproject/libwebp
+          ref: 1.6.0
+          path: libwebp
       - name: cmake configure
-        run: cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_GLTFPACK_BASISU_PATH=basis_universal
+        run: cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_GLTFPACK_BASISU_PATH=basis_universal -DMESHOPT_GLTFPACK_LIBWEBP_PATH=libwebp
       - name: cmake build
         run: cmake --build . --target gltfpack -j 4
 
