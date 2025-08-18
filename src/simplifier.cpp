@@ -479,6 +479,13 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 		for (size_t i = 0; i < vertex_count; ++i)
 			if (result[i] == Kind_Seam || result[i] == Kind_Locked)
 			{
+				if (remap[i] != i)
+				{
+					// only process primary vertices; wedges will be updated to match the primary vertex
+					result[i] = result[remap[i]];
+					continue;
+				}
+
 				bool protect = false;
 
 				// vertex_lock may protect any wedge, not just the primary vertex, so we switch to complex only if no wedges are protected
