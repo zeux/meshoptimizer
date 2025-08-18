@@ -339,6 +339,25 @@ static bool hasEdge(const EdgeAdjacency& adjacency, unsigned int a, unsigned int
 	return false;
 }
 
+static bool hasEdge(const EdgeAdjacency& adjacency, unsigned int a, unsigned int b, const unsigned int* remap, const unsigned int* wedge)
+{
+	unsigned int v = a;
+
+	do
+	{
+		unsigned int count = adjacency.offsets[v + 1] - adjacency.offsets[v];
+		const EdgeAdjacency::Edge* edges = adjacency.data + adjacency.offsets[v];
+
+		for (size_t i = 0; i < count; ++i)
+			if (remap[edges[i].next] == remap[b])
+				return true;
+
+		v = wedge[v];
+	} while (v != a);
+
+	return false;
+}
+
 static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned int* loopback, size_t vertex_count, const EdgeAdjacency& adjacency, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_lock, const unsigned int* sparse_remap, unsigned int options)
 {
 	memset(loop, -1, vertex_count * sizeof(unsigned int));
@@ -468,6 +487,17 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 				{
 					unsigned int rv = sparse_remap ? sparse_remap[v] : v;
 					protect |= vertex_lock && (vertex_lock[rv] & 2) != 0;
+					v = wedge[v];
+				} while (v != i);
+
+				// protect if any adjoining edge doesn't have an opposite edge (indicating vertex is on the border)
+				do
+				{
+					const EdgeAdjacency::Edge* edges = &adjacency.data[adjacency.offsets[v]];
+					size_t count = adjacency.offsets[v + 1] - adjacency.offsets[v];
+
+					for (size_t j = 0; j < count; ++j)
+						protect |= !hasEdge(adjacency, edges[j].next, v, remap, wedge);
 					v = wedge[v];
 				} while (v != i);
 
