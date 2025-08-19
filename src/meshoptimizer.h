@@ -414,7 +414,7 @@ enum
 	meshopt_SimplifyPrune = 1 << 3,
 	/* Experimental: Produce more regular triangle sizes and shapes during simplification, at some cost to geometric quality. */
 	meshopt_SimplifyRegularize = 1 << 4,
-	/* Experimental: Allow collapses across attribute discontinuities, except for vertices that are tagged with 2 in vertex_lock. */
+	/* Experimental: Allow collapses across attribute discontinuities, except for vertices that are tagged with bit 1 (bit mask `0x02`) in vertex_lock. */
 	meshopt_SimplifyPermissive = 1 << 5,
 };
 
