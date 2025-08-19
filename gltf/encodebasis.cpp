@@ -7,15 +7,19 @@
 #ifdef __clang__
 #pragma GCC diagnostic ignored "-Wunknown-warning-option"
 #pragma GCC diagnostic ignored "-Warray-bounds"
+#pragma GCC diagnostic ignored "-Wc++17-extensions"
 #pragma GCC diagnostic ignored "-Wdeprecated-builtins"
 #endif
 
 #ifdef __GNUC__
-#pragma GCC diagnostic ignored "-Wc++17-extensions"
 #pragma GCC diagnostic ignored "-Wclass-memaccess"
 #pragma GCC diagnostic ignored "-Wshadow"
 #pragma GCC diagnostic ignored "-Wunused-local-typedefs"
 #pragma GCC diagnostic ignored "-Wunused-value"
+#endif
+
+#if defined(__GNUC__) && __GNUC__ >= 12
+#pragma GCC diagnostic ignored "-Wc++17-extensions"
 #endif
 
 #include "encoder/basisu_comp.h"

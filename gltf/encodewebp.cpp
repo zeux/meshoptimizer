@@ -115,9 +115,9 @@ static const char* encodeWebP(const cgltf_image& image, const char* input_path, 
 	int quality = settings.texture_quality[info.kind];
 
 	if (info.normal_map)
-		config.quality = 50 + quality * 5; // map 1-10 to 55-100
+		config.quality = float(50 + quality * 5); // map 1-10 to 55-100
 	else
-		config.quality = 20 + quality * 8; // map 1-10 to 28-100
+		config.quality = float(20 + quality * 8); // map 1-10 to 28-100
 
 	config.emulate_jpeg_size = 1; // for flatter quality curve
 
