@@ -228,7 +228,7 @@ static void lockBoundary(std::vector<unsigned char>& locks, const std::vector<st
 		unsigned int r = remap[i];
 
 		// keep protect bit if set
-		locks[i] = (groupmap[r] == -2) | (locks[i] & 2);
+		locks[i] = (groupmap[r] == -2) | (locks[i] & meshopt_SimplifyVertex_Protect);
 	}
 }
 
@@ -298,7 +298,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 			unsigned int r = remap[i]; // canonical vertex with the same position
 
 			if (r != i && (vertices[r].tx != vertices[i].tx || vertices[r].ty != vertices[i].ty))
-				locks[i] |= 2;
+				locks[i] |= meshopt_SimplifyVertex_Protect;
 		}
 
 	// initial clusterization splits the original mesh
