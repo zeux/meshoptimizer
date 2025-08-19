@@ -223,14 +223,12 @@ var MeshoptClusterizer = (function () {
 		// allocate memory
 		var resultp = sbrk(BOUNDS_SIZE);
 		var positionsp = sbrk(positions.byteLength);
-		var radiip = 0;
+		var radiip = radii ? sbrk(radii.byteLength) : 0;
 
 		// copy input data to wasm memory
 		var heap = new Uint8Array(instance.exports.memory.buffer);
 		heap.set(bytes(positions), positionsp);
-
 		if (radii) {
-			radiip = sbrk(radii.byteLength);
 			heap.set(bytes(radii), radiip);
 		}
 
