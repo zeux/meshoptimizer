@@ -1687,13 +1687,13 @@ int main(int argc, char** argv)
 
 	if (require_texc && !settings.texture_ktx2 && !settings.texture_webp)
 	{
-		fprintf(stderr, "Texture processing is only supported when texture compression is enabled via -tc/-tu\n");
+		fprintf(stderr, "Texture processing is only supported when texture compression is enabled via -tc/-tu/-tw\n");
 		return 1;
 	}
 
 	if (settings.texture_ref && (settings.texture_ktx2 || settings.texture_webp))
 	{
-		fprintf(stderr, "Option -tr currently can not be used together with -tc\n");
+		fprintf(stderr, "Option -tr currently can not be used together with texture compression\n");
 		return 1;
 	}
 

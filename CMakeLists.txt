@@ -139,18 +139,15 @@ if(MESHOPT_BUILD_GLTFPACK)
         endif()
 
         if (NOT SSE AND NOT MSVC AND CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
-	        message(WARNING "Building Basis Universal without SSE4.1 support; performance may be suboptimal")
+            message(WARNING "Building Basis Universal without SSE4.1 support; performance may be suboptimal")
         endif()
 
-        target_compile_definitions(gltfpack PRIVATE WITH_BASISU)
-        set_source_files_properties(gltf/encodebasis.cpp PROPERTIES INCLUDE_DIRECTORIES ${BASISU_PATH})
-
         add_subdirectory(${BASISU_PATH} ${CMAKE_CURRENT_BINARY_DIR}/basisu EXCLUDE_FROM_ALL)
-		target_link_libraries(gltfpack basisu_encoder)
 
-		find_package(Threads REQUIRED)
-		target_link_libraries(gltfpack Threads::Threads)
-	endif()
+        target_compile_definitions(gltfpack PRIVATE WITH_BASISU)
+        target_link_libraries(gltfpack basisu_encoder)
+        set_source_files_properties(gltf/encodebasis.cpp PROPERTIES INCLUDE_DIRECTORIES ${BASISU_PATH}) # necessary because basisu_encoder doesn't export include directories
+    endif()
 
     if(NOT MESHOPT_GLTFPACK_LIBWEBP_PATH STREQUAL "")
         get_filename_component(LIBWEBP_PATH ${MESHOPT_GLTFPACK_LIBWEBP_PATH} ABSOLUTE)
@@ -159,10 +156,9 @@ if(MESHOPT_BUILD_GLTFPACK)
         endif()
 
         add_subdirectory(${LIBWEBP_PATH} ${CMAKE_CURRENT_BINARY_DIR}/libwebp EXCLUDE_FROM_ALL)
-        target_link_libraries(gltfpack webp)
 
         target_compile_definitions(gltfpack PRIVATE WITH_LIBWEBP)
-        set_source_files_properties(gltf/encodewebp.cpp PROPERTIES INCLUDE_DIRECTORIES ${LIBWEBP_PATH})
+        target_link_libraries(gltfpack webp)
 
         # when gltfpack is built with Basis Universal, we use Basis image decoders for PNG/JPEG support for ease of distribution
         if(NOT MESHOPT_GLTFPACK_BASISU_PATH STREQUAL "")
@@ -170,10 +166,12 @@ if(MESHOPT_BUILD_GLTFPACK)
         else()
             target_link_libraries(gltfpack imagedec)
         endif()
+    endif()
 
-		find_package(Threads REQUIRED)
-		target_link_libraries(gltfpack Threads::Threads)
-	endif()
+    if(NOT MESHOPT_GLTFPACK_BASISU_PATH STREQUAL "" OR NOT MESHOPT_GLTFPACK_LIBWEBP_PATH STREQUAL "")
+        find_package(Threads REQUIRED)
+        target_link_libraries(gltfpack Threads::Threads)
+    endif()
 endif()
 
 if(MESHOPT_INSTALL)
