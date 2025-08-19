@@ -1,6 +1,6 @@
 {
 	"name": "meshoptimizer",
-	"version": "0.24.0",
+	"version": "0.25.0",
 	"description": "Mesh optimization library that makes meshes smaller and faster to render",
 	"author": "Arseny Kapoulkine",
 	"license": "MIT",
