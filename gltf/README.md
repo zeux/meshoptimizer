@@ -22,7 +22,7 @@ When using `-c` option, gltfpack outputs compressed `.glb`/`.gltf` files that us
 
 For better compression, you can use `-cc` option which applies additional compression; additionally make sure that your content delivery method is configured to use deflate (gzip) - meshoptimizer codecs are designed to produce output that can be compressed further with general purpose compressors.
 
-gltfpack can also compress textures using Basis Universal format stored in a KTX2 container (`-tc` flag, requires support for `KHR_texture_basisu`) or using WebP format (`-tw` flag, requires support for `EXT_texture_webp`). Textures can also be embedded into `.bin`/`.glb` output using `-te` flag.
+gltfpack can also compress textures using Basis Universal format stored in a KTX2 container (`-tc` flag, requires support for `KHR_texture_basisu`) or using WebP format (`-tw` flag, requires support for `EXT_texture_webp`).
 
 When working with glTF files that contain point clouds, gltfpack automatically processes the point cloud data to reduce the download size to the extent possible. In addition to aforementioned compression options (either `-c` or `-cc` are recommended), gltfpack can also prune point clouds to provide a more uniform density when `-si` option is used.
 
@@ -102,11 +102,12 @@ gltfpack does not support vendor-specific extensions or custom extensions, inclu
 
 ## Building
 
-gltfpack can be built from source using CMake or Make. To build a full version of gltfpack that supports texture compression, CMake configuration needs to specify the path to https://github.com/zeux/basis_universal fork (branch gltfpack) via `MESHOPT_BASISU_PATH` variable:
+gltfpack can be built from source using CMake or Make. To build a full version of gltfpack that supports texture compression, CMake configuration needs to specify the path to https://github.com/zeux/basis_universal fork (branch gltfpack) via `MESHOPT_GLTFPACK_BASISU_PATH` variable, as well as libwebp path via `MESHOPT_GLTFPACK_LIBWEBP_PATH` variable:
 
 ```
 git clone -b gltfpack https://github.com/zeux/basis_universal
-cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_BASISU_PATH=basis_universal -DCMAKE_BUILD_TYPE=Release
+git clone https://github.com/webmproject/libwebp
+cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_GLTFPACK_BASISU_PATH=basis_universal -DMESHOPT_GLTFPACK_LIBWEBP_PATH=libwebp -DCMAKE_BUILD_TYPE=Release
 cmake --build . --target gltfpack --config Release
 ```
 
