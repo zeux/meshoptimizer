@@ -50,14 +50,15 @@ jobs:
         if: matrix.os.name != 'ubuntu-clang'
 
   windows:
-    runs-on: windows-latest
     strategy:
       matrix:
-        arch: [Win32, x64]
+        arch: [{ name: windows-x86, arch: Win32 }, { name: windows, arch: x64 }]
+    name: ${{matrix.arch.name}}
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - name: cmake configure
-        run: cmake . -DMESHOPT_BUILD_DEMO=ON -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_WERROR=ON -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>" -A ${{matrix.arch}}
+        run: cmake . -DMESHOPT_BUILD_DEMO=ON -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_WERROR=ON -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>" -A ${{matrix.arch.arch}}
       - name: cmake test
         shell: bash # necessary for fail-fast
         run: |
@@ -220,7 +221,7 @@ jobs:
           sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
           bash <(curl -s https://codecov.io/bash) -f './gltf*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
 
-  iphone:
+  macos-iphone:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
