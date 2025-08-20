@@ -792,7 +792,7 @@ static void simplifyProtect(std::vector<unsigned char>& locks, Mesh& mesh, size_
 			unsigned int r = remap[i];
 
 			if (r != i && (a[i].f[0] != a[r].f[0] || a[i].f[1] != a[r].f[1]))
-				data[i] |= 2;
+				data[i] |= meshopt_SimplifyVertex_Protect;
 		}
 	}
 
@@ -806,13 +806,13 @@ static void simplifyProtect(std::vector<unsigned char>& locks, Mesh& mesh, size_
 			unsigned int r = remap[i];
 
 			if (r != i && (a[i].f[0] * a[r].f[0] + a[i].f[1] * a[r].f[1] + a[i].f[2] * a[r].f[2]) < 0.25f)
-				data[i] |= 2;
+				data[i] |= meshopt_SimplifyVertex_Protect;
 		}
 	}
 
 	// protect all vertices that were artificially split on the UV mirror edges
 	for (size_t i = presplit_vertices; i < vertex_count; ++i)
-		data[i] |= 2;
+		data[i] |= meshopt_SimplifyVertex_Protect;
 }
 
 static void simplifyUvSplit(Mesh& mesh, std::vector<unsigned int>& remap)

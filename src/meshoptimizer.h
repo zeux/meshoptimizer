@@ -1,5 +1,5 @@
 /**
- * meshoptimizer - version 0.24
+ * meshoptimizer - version 0.25
  *
  * Copyright (C) 2016-2025, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
  * Report bugs and download new versions at https://github.com/zeux/meshoptimizer
@@ -12,7 +12,7 @@
 #include <stddef.h>
 
 /* Version macro; major * 1000 + minor * 10 + patch */
-#define MESHOPTIMIZER_VERSION 240 /* 0.24 */
+#define MESHOPTIMIZER_VERSION 250 /* 0.25 */
 
 /* If no API is defined, assume default */
 #ifndef MESHOPTIMIZER_API
@@ -165,7 +165,7 @@ MESHOPTIMIZER_API void meshopt_generateTessellationIndexBuffer(unsigned int* des
 
 /**
  * Generate index buffer that can be used for visibility buffer rendering and returns the size of the reorder table
- * Each triangle's provoking vertex index is equal to primitive id; this allows passing it to the fragment shader using nointerpolate attribute.
+ * Each triangle's provoking vertex index is equal to primitive id; this allows passing it to the fragment shader using flat/nointerpolation attribute.
  * This is important for performance on hardware where primitive id can't be accessed efficiently in fragment shader.
  * The reorder table stores the original vertex id for each vertex in the new index buffer, and should be used in the vertex shader to load vertex data.
  * The provoking vertex is assumed to be the first vertex in the triangle; if this is not the case (OpenGL), rotate each triangle (abc -> bca) before rendering.
@@ -414,8 +414,19 @@ enum
 	meshopt_SimplifyPrune = 1 << 3,
 	/* Experimental: Produce more regular triangle sizes and shapes during simplification, at some cost to geometric quality. */
 	meshopt_SimplifyRegularize = 1 << 4,
-	/* Experimental: Allow collapses across attribute discontinuities, except for vertices that are tagged with bit 1 (bit mask `0x02`) in vertex_lock. */
+	/* Experimental: Allow collapses across attribute discontinuities, except for vertices that are tagged with meshopt_SimplifyVertex_Protect in vertex_lock. */
 	meshopt_SimplifyPermissive = 1 << 5,
+};
+
+/**
+ * Experimental: Simplification vertex flags/locks, for use in `vertex_lock` arrays in simplification APIs
+ */
+enum
+{
+	/* Do not move this vertex. */
+	meshopt_SimplifyVertex_Lock = 1 << 0,
+	/* Protect attribute discontinuity at this vertex; must be used together with meshopt_SimplifyPermissive option. */
+	meshopt_SimplifyVertex_Protect = 1 << 1,
 };
 
 /**
@@ -746,7 +757,7 @@ MESHOPTIMIZER_API struct meshopt_Bounds meshopt_computeSphereBounds(const float*
  * Cluster partitioner
  * Partitions clusters into groups of similar size, prioritizing grouping clusters that share vertices or are close to each other.
  *
- * destination must contain enough space for the resulting partiotion data (cluster_count elements)
+ * destination must contain enough space for the resulting partition data (cluster_count elements)
  * destination[i] will contain the partition id for cluster i, with the total number of partitions returned by the function
  * cluster_indices should have the vertex indices referenced by each cluster, stored sequentially
  * cluster_index_counts should have the number of indices in each cluster; sum of all cluster_index_counts must be equal to total_index_count

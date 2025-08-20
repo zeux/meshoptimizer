@@ -16,7 +16,7 @@ jobs:
             { name: windows, version: windows-latest },
             { name: ubuntu, version: ubuntu-22.04 },
             { name: macos, version: macos-14 },
-            { name: macos-intel, version: macos-13 },
+            { name: macos-intel, version: macos-14 },
           ]
     name: gltfpack-${{matrix.os.name}}
     runs-on: ${{matrix.os.version}}
@@ -34,11 +34,14 @@ jobs:
           path: libwebp
       - name: cmake configure
         run: cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_GLTFPACK_BASISU_PATH=basis_universal -D MESHOPT_GLTFPACK_LIBWEBP_PATH=libwebp -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded" -DCMAKE_BUILD_TYPE=Release
-      - name: cmake configure sse
+      - name: cmake configure x64
         run: cmake . -DSSE=ON
-        if: matrix.os.name == 'macos-intel' || matrix.os.name == 'ubuntu'
+        if: matrix.os.name == 'ubuntu'
+      - name: cmake configure mac-x64
+        run: cmake . -DSSE=ON -DCMAKE_OSX_ARCHITECTURES=x86_64
+        if: matrix.os.name == 'macos-intel'
       - name: cmake build
-        run: cmake --build . --target gltfpack --config Release -j 2
+        run: cmake --build . --target gltfpack --config Release -j 3
       - uses: actions/upload-artifact@v4
         with:
           name: gltfpack-windows

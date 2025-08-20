@@ -18,8 +18,8 @@ jobs:
           [
             { name: ubuntu, version: ubuntu-latest },
             { name: ubuntu-arm, version: ubuntu-24.04-arm },
-            { name: macos-intel, version: macos-13 },
-            { name: macos-arm, version: macos-latest },
+            { name: ubuntu-clang, version: ubuntu-latest },
+            { name: macos, version: macos-latest },
           ]
     name: ${{matrix.os.name}}
     runs-on: ${{matrix.os.version}}
@@ -30,6 +30,9 @@ jobs:
       - name: work around ASLR+ASAN compatibility
         run: sudo sysctl -w vm.mmap_rnd_bits=28
         if: matrix.os.name == 'ubuntu'
+      - name: enable clang
+        run: echo CXX=clang++ >Makefile.config
+        if: matrix.os.name == 'ubuntu-clang'
       - name: make test
         run: |
           make -j2 config=sanitize test
@@ -44,16 +47,18 @@ jobs:
           find . -type f -name '*.gcno' -exec gcov -p {} +
           sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
           bash <(curl -s https://codecov.io/bash) -f './src*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
+        if: matrix.os.name != 'ubuntu-clang'
 
   windows:
-    runs-on: windows-latest
     strategy:
       matrix:
-        arch: [Win32, x64]
+        arch: [{ name: windows-x86, arch: Win32 }, { name: windows, arch: x64 }]
+    name: ${{matrix.arch.name}}
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - name: cmake configure
-        run: cmake . -DMESHOPT_BUILD_DEMO=ON -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_WERROR=ON -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>" -A ${{matrix.arch}}
+        run: cmake . -DMESHOPT_BUILD_DEMO=ON -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_WERROR=ON -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>" -A ${{matrix.arch.arch}}
       - name: cmake test
         shell: bash # necessary for fail-fast
         run: |
@@ -216,8 +221,8 @@ jobs:
           sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
           bash <(curl -s https://codecov.io/bash) -f './gltf*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
 
-  iphone:
-    runs-on: macos-latest
+  macos-iphone:
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - name: make

@@ -493,7 +493,7 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 				do
 				{
 					unsigned int rv = sparse_remap ? sparse_remap[v] : v;
-					protect |= vertex_lock && (vertex_lock[rv] & 2) != 0;
+					protect |= vertex_lock && (vertex_lock[rv] & meshopt_SimplifyVertex_Protect) != 0;
 					v = wedge[v];
 				} while (v != i);
 
@@ -518,7 +518,7 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 		{
 			unsigned int ri = sparse_remap ? sparse_remap[i] : unsigned(i);
 
-			if (vertex_lock[ri] & 1)
+			if (vertex_lock[ri] & meshopt_SimplifyVertex_Lock)
 				result[remap[i]] = Kind_Locked;
 		}
 
@@ -2032,7 +2032,7 @@ static void computeVertexIds(unsigned int* vertex_ids, const Vector3* vertex_pos
 		int yi = int(v.y * cell_scale + 0.5f);
 		int zi = int(v.z * cell_scale + 0.5f);
 
-		if (vertex_lock && (vertex_lock[i] & 1))
+		if (vertex_lock && (vertex_lock[i] & meshopt_SimplifyVertex_Lock))
 			vertex_ids[i] = (1 << 30) | unsigned(i);
 		else
 			vertex_ids[i] = (xi << 20) | (yi << 10) | zi;

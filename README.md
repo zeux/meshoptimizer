@@ -13,10 +13,10 @@ The library provides a C and C++ interface for all algorithms; you can use it fr
 meshoptimizer is hosted on GitHub; you can download the latest release using git:
 
 ```
-git clone -b v0.24 https://github.com/zeux/meshoptimizer.git
+git clone -b v0.25 https://github.com/zeux/meshoptimizer.git
 ```
 
-Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v0.24.zip).
+Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v0.25.zip).
 
 The library is also available as a Linux package in several distributions ([ArchLinux](https://aur.archlinux.org/packages/meshoptimizer/), [Debian](https://packages.debian.org/libmeshoptimizer), [FreeBSD](https://www.freshports.org/misc/meshoptimizer/), [Nix](https://mynixos.com/nixpkgs/package/meshoptimizer), [Ubuntu](https://packages.ubuntu.com/libmeshoptimizer)), as well as a [Vcpkg port](https://github.com/microsoft/vcpkg/tree/master/ports/meshoptimizer) (see [installation instructions](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started)) and a [Conan package](https://conan.io/center/recipes/meshoptimizer).
 
@@ -483,7 +483,7 @@ Both the target error and the resulting error combine positional error and attri
 
 ### Permissive simplification
 
-By default, `meshopt_simplify` preserves all attribute discontinuities that it infers through the supplied index buffer. For meshes with many seams, this can result in the simplifier getting "stuck" and not being able to simplify the mesh fully, as it cannot collapse vertices across attribute seams. This is especially problematic for meshes with faceted normals (flat shading), as the simplifier may not be able to reduce the triangle count at all. The `meshopt_SimplifyPermissive` option relaxes these restrictions, allowing the simplifier to collapse vertices across attribute discontinuities when the resulting error is acceptable:
+By default, `meshopt_simplify` preserves attribute discontinuities inferred from the supplied index buffer. For meshes with many seams, the simplifier can get "stuck" and fail to fully simplify the mesh, as it cannot collapse vertices across attribute seams. This is especially problematic for meshes with faceted normals (flat shading), as the simplifier may not be able to reduce the triangle count at all. The `meshopt_SimplifyPermissive` option relaxes these restrictions, allowing the simplifier to collapse vertices across attribute discontinuities when the resulting error is acceptable:
 
 ```c++
 std::vector<unsigned int> lod(index_count);
@@ -493,7 +493,7 @@ lod.resize(meshopt_simplifyWithAttributes(&lod[0], indices, index_count, &vertic
     target_index_count, target_error, /* options= */ meshopt_SimplifyPermissive, &lod_error));
 ```
 
-To maintain appearance, it's highly recommended to use this option together with attribute-aware simplification, as shown above, as it allows the simplifier to maintain attribute appearance. Additionally, in this mode it is often desireable to selectively preserve certain attribute seams, such as UV seams or sharp creases. This can be achieved by using the `vertex_lock` array with bit 1 (bit mask `0x02`) set for individual vertices to protect specific discontinuities. To create this array, you can use `meshopt_generatePositionRemap` to create a mapping table for vertices with identical positions, and then compare each vertex to the remapped vertex to determine which attributes are different:
+To maintain appearance, it's highly recommended to use this option together with attribute-aware simplification, as shown above, as it allows the simplifier to maintain attribute appearance. In this mode, it is often desirable to selectively preserve certain attribute seams, such as UV seams or sharp creases. This can be achieved by using the `vertex_lock` array with flag `meshopt_SimplifyVertex_Protect` set for individual vertices to protect specific discontinuities. To fill this array, use `meshopt_generatePositionRemap` to create a mapping table for vertices with identical positions, and then compare each vertex to the remapped vertex to determine which attributes are different:
 
 ```c++
 std::vector<unsigned int> remap(vertices.size());
@@ -504,21 +504,21 @@ for (size_t i = 0; i < vertices.size(); ++i) {
     unsigned int r = remap[i];
 
     if (r != i && (vertices[r].tx != vertices[i].tx || vertices[r].ty != vertices[i].ty))
-        locks[i] |= 0x02; // set protect bit for UV seams
+        locks[i] |= meshopt_SimplifyVertex_Protect; // protect UV seams
 
     if (r != i && (vertices[r].nx * vertices[i].nx + vertices[r].ny * vertices[i].ny + vertices[r].nz * vertices[i].nz < 0.25f))
-        locks[i] |= 0x02; // set protect bit for sharp normal creases
+        locks[i] |= meshopt_SimplifyVertex_Protect; // protect sharp normal creases
 }
 ```
 
-This approach allows fine-grained control over which discontinuities to preserve. The permissive mode combined with selective locking provides a balance between simplification quality and attribute preservation, and usually results in higher quality LODs for the same target triangle count (and dramatically higher quality compared to `meshopt_simplifySloppy`).
+This approach provides fine-grained control over which discontinuities to preserve. The permissive mode combined with selective locking provides a balance between simplification quality and attribute preservation, and usually results in higher quality LODs for the same target triangle count (and dramatically higher quality compared to `meshopt_simplifySloppy`).
 
 > [!NOTE]
 > This functionality is currently experimental and is subject to future improvements. Certain collapses are restricted to protect the overall topology, and attribute quality may occasionally regress.
 
 ### Simplification with vertex update
 
-All simplification functions described so far reuse the original vertex buffer and only produce a new index buffer. This means that the resulting mesh will have the same vertex positions and attributes as the original mesh; this is optimal for minimizing the memory consumption and for highly detailed meshes often provides good quality. However, for more aggressive simplification to retain visual quality, it may be necessary to update the vertex positions and attributes. This can be done by using a variant of the simplification function that updates vertex positions and attributes, `meshopt_simplifyWithUpdate`:
+All simplification functions described so far reuse the original vertex buffer and only produce a new index buffer. This means that the resulting mesh will have the same vertex positions and attributes as the original mesh; this is optimal for minimizing the memory consumption and for highly detailed meshes often provides good quality. However, for more aggressive simplification to retain visual quality, it may be necessary to adjust vertex data for optimal appearance. This can be done by using a variant of the simplification function that updates vertex positions and attributes, `meshopt_simplifyWithUpdate`:
 
 ```c++
 indices.resize(meshopt_simplifyWithUpdate(&indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex),
@@ -543,13 +543,13 @@ For basic customization, a number of options can be passed via `options` bitmask
 - `meshopt_SimplifySparse` improves simplification performance assuming input indices are a sparse subset of the mesh. This can be useful when simplifying small mesh subsets independently, and is intended to be used for meshlet simplification. For consistency, it is recommended to use absolute errors when sparse simplification is desired, as this flag changes the meaning of the relative errors.
 - `meshopt_SimplifyPrune` allows the simplifier to remove isolated components regardless of the topological restrictions inside the component. This is generally recommended for full-mesh simplification as it can improve quality and reduce triangle count; note that with this option, triangles connected to locked vertices may be removed as part of their component.
 - `meshopt_SimplifyRegularize` produces more regular triangle sizes and shapes during simplification, at some cost to geometric quality. This can improve geometric quality under deformation such as skinning.
-- `meshopt_SimplifyPermissive`  allows collapses across attribute discontinuities, except for vertices that are tagged with bit 1 (bit mask `0x02`) via `vertex_lock`.
+- `meshopt_SimplifyPermissive`  allows collapses across attribute discontinuities, except for vertices that are tagged with `meshopt_SimplifyVertex_Protect` via `vertex_lock`.
 
-When using `meshopt_simplifyWithAttributes`, it is also possible to lock certain vertices by providing a `vertex_lock` array that contains a value for each vertex in the mesh, with bit 0 (bit mask `0x01`) set for vertices that should not be collapsed. This can be useful to preserve certain vertices, such as the boundary of the mesh, with more control than `meshopt_SimplifyLockBorder` option provides. When using `meshopt_simplifyWithUpdate`, locking vertices (whether via `vertex_lock` or `meshopt_SimplifyLockBorder`) will also prevent the simplifier from updating their positions and attributes; this can be useful together with `meshopt_SimplifySparse` for meshlet simplification, as meshlets at one level of hierarchy can be simplified together without excessive data copying.
+When using `meshopt_simplifyWithAttributes`, it is also possible to lock certain vertices by providing a `vertex_lock` array that contains a value for each vertex in the mesh, with `meshopt_SimplifyVertex_Lock` set for vertices that should not be collapsed. This can be useful to preserve certain vertices, such as the boundary of the mesh, with more control than `meshopt_SimplifyLockBorder` option provides. When using `meshopt_simplifyWithUpdate`, locking vertices (whether via `vertex_lock` or `meshopt_SimplifyLockBorder`) will also prevent the simplifier from updating their positions and attributes; this can be useful together with `meshopt_SimplifySparse` for meshlet simplification, as meshlets at one level of hierarchy can be simplified together without excessive data copying.
 
 In addition to the `meshopt_SimplifyPrune` flag, you can explicitly prune isolated components by calling the `meshopt_simplifyPrune` function. This can be done before regular simplification or as the only step, which is useful for scenarios like isosurface cleanup. Similar to other simplification functions, the `target_error` argument controls the cutoff of component radius and is specified in relative units (e.g., `1e-2f` will remove components under 1%). If an absolute cutoff is desired, divide the parameter by the factor returned by `meshopt_simplifyScale`.
 
-Simplification currently assumes that the input mesh is using the same material for all triangles. If the mesh uses multiple materials, it is possible to split the mesh into subsets based on the material and simplify each subset independently, using `meshopt_SimplifyLockBorder` or `vertex_lock` to preserve material boundaries; however, this limits the collapses and may reduce the resulting quality. An alternative approach is to encode information about the material into the vertex buffer, ensuring that all three vertices referencing the same triangle have the same material ID; this may require duplicating vertices on the boundary between materials. After this, simplification can be performed as usual, and after simplification per-triangle material information can be computed from the vertex material IDs. There is no need to inform the simplifier of the value of the material ID: the implicit boundaries created by duplicating vertices with conflicting material IDs will be preserved automatically.
+Simplification currently assumes that the input mesh is using the same material for all triangles. If the mesh uses multiple materials, it is possible to split the mesh into subsets based on the material and simplify each subset independently, using `meshopt_SimplifyLockBorder` or `vertex_lock` to preserve material boundaries; however, this limits the collapses and may reduce the resulting quality. An alternative approach is to encode information about the material into the vertex buffer, ensuring that all three vertices referencing the same triangle have the same material ID; this may require duplicating vertices on the boundary between materials. After this, simplification can be performed as usual, and after simplification per-triangle material information can be computed from the vertex material IDs. There is no need to inform the simplifier of the value of the material ID: the implicit boundaries created by duplicating vertices with conflicting material IDs will be preserved automatically (unless permissive simplification is used, in which case material boundaries should be protected via `vertex_lock`).
 
 When generating a LOD chain, you can either re-simplify each LOD from the original mesh or use the previous LOD as the starting point for the next level. The latter approach is more efficient and produces smoother visual transitions between LOD levels while preserving mesh attributes better. With this method, resulting error values from previous levels should be accumulated for LOD selection. Additionally, consider using `meshopt_SimplifySparse` to improve performance when generating deep LOD chains.
 
@@ -716,7 +716,7 @@ Currently, the following APIs are experimental:
 - `meshopt_simplifySloppy`
 - `meshopt_simplifyWithUpdate`
 - `meshopt_SimplifyRegularize` flag for `meshopt_simplify*` functions
-- `meshopt_SimplifyPermissive` mode for `meshopt_simplify*` functions
+- `meshopt_SimplifyPermissive` mode for `meshopt_simplify*` functions (and associated `meshopt_SimplifyVertex_*` flags)
 
 ## License
 
