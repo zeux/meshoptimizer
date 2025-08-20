@@ -516,8 +516,7 @@ for (size_t i = 0; i < vertices.size(); ++i) {
 
 This approach provides fine-grained control over which discontinuities to preserve. The permissive mode combined with selective locking provides a balance between simplification quality and attribute preservation, and usually results in higher quality LODs for the same target triangle count (and dramatically higher quality compared to `meshopt_simplifySloppy`).
 
-> [!NOTE]
-> This functionality is currently experimental and is subject to future improvements. Certain collapses are restricted to protect the overall topology, and attribute quality may occasionally regress.
+> Note: this functionality is currently experimental and is subject to future improvements. Certain collapses are restricted to protect the overall topology, and attribute quality may occasionally regress.
 
 ### Simplification with vertex update
 
