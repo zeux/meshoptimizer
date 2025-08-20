@@ -1,7 +1,9 @@
 name: CIFuzz
 
 on:
-  pull_request:
+  push:
+    branches:
+      - 'master'
     paths-ignore:
       - '*.md'
 
@@ -20,7 +22,7 @@ jobs:
         uses: google/oss-fuzz/infra/cifuzz/actions/run_fuzzers@master
         with:
           oss-fuzz-project-name: 'meshoptimizer'
-          fuzz-seconds: 30
+          fuzz-seconds: 150
           dry-run: false
           language: c++
       - name: Upload Crash

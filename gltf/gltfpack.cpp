@@ -23,7 +23,7 @@ std::string getVersion()
 	return result;
 }
 
-static void finalizeBufferViews(std::string& json, std::vector<BufferView>& views, std::string& bin, std::string* fallback, size_t& fallback_size)
+static void finalizeBufferViews(std::string& json, std::vector<BufferView>& views, std::string& bin, std::string* fallback, size_t& fallback_size, const char* meshopt_ext)
 {
 	for (size_t i = 0; i < views.size(); ++i)
 	{
@@ -63,7 +63,7 @@ static void finalizeBufferViews(std::string& json, std::vector<BufferView>& view
 		size_t raw_offset = (view.compression != BufferView::Compression_None) ? fallback_offset : bin_offset;
 
 		comma(json);
-		writeBufferView(json, view.kind, view.filter, count, view.stride, raw_offset, view.data.size(), view.compression, bin_offset, bin.size() - bin_offset);
+		writeBufferView(json, view.kind, view.filter, count, view.stride, raw_offset, view.data.size(), view.compression, bin_offset, bin.size() - bin_offset, meshopt_ext);
 
 		// record written bytes for statistics
 		view.bytes = bin.size() - bin_offset;
@@ -154,10 +154,14 @@ static void printAttributeStats(const std::vector<BufferView>& views, BufferView
 
 		size_t count = view.data.size() / view.stride;
 
-		printf("stats: %s %s: compressed %d bytes (%.1f bits), raw %d bytes (%d bits)\n",
-		    name, variant,
-		    int(view.bytes), double(view.bytes) / double(count) * 8,
-		    int(view.data.size()), int(view.stride * 8));
+		if (view.compression == BufferView::Compression_None)
+			printf("stats: %s %s: %d bytes (%.1f bits)\n",
+			    name, variant, int(view.bytes), double(view.bytes) / double(count) * 8);
+		else
+			printf("stats: %s %s: compressed %d bytes (%.1f bits), raw %d bytes (%d bits)\n",
+			    name, variant,
+			    int(view.bytes), double(view.bytes) / double(count) * 8,
+			    int(view.data.size()), int(view.stride * 8));
 	}
 }
 
@@ -341,7 +345,7 @@ struct hash<std::pair<uint64_t, uint64_t> >
 };
 } // namespace std
 
-static size_t process(cgltf_data* data, const char* input_path, const char* output_path, const char* report_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const Settings& settings, std::string& json, std::string& bin, std::string& fallback, size_t& fallback_size)
+static size_t process(cgltf_data* data, const char* input_path, const char* output_path, const char* report_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const Settings& settings, std::string& json, std::string& bin, std::string& fallback, size_t& fallback_size, const char* meshopt_ext)
 {
 	if (settings.verbose)
 	{
@@ -370,11 +374,27 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 	std::vector<TextureInfo> textures(data->textures_count);
 	std::vector<ImageInfo> images(data->images_count);
 
+	// mark materials that need to keep blending due to mesh vertex colors
+	for (size_t i = 0; i < meshes.size(); ++i)
+	{
+		Mesh& mesh = meshes[i];
+
+		// skip hasAlpha check unless it's required
+		if (((mesh.material && mesh.material->alpha_mode != cgltf_alpha_mode_opaque) || mesh.variants.size()) && hasAlpha(mesh))
+		{
+			if (mesh.material)
+				materials[mesh.material - data->materials].mesh_alpha = true;
+
+			for (size_t j = 0; j < mesh.variants.size(); ++j)
+				materials[mesh.variants[j].material - data->materials].mesh_alpha = true;
+		}
+	}
+
 	analyzeMaterials(data, materials, textures, images);
 
 	mergeTextures(data, textures);
 
-	optimizeMaterials(data, input_path, images);
+	optimizeMaterials(data, materials, images, input_path);
 
 	// streams need to be filtered before mesh merging (or processing) to make sure we can merge meshes with redundant streams
 	for (size_t i = 0; i < meshes.size(); ++i)
@@ -402,26 +422,8 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 	markNeededNodes(data, nodes, meshes, animations, settings);
 	markNeededMaterials(data, materials, meshes, settings);
 
-#ifndef NDEBUG
-	std::vector<Mesh> debug_meshes;
-
-	for (size_t i = 0; i < meshes.size(); ++i)
-	{
-		const Mesh& mesh = meshes[i];
-
-		if (mesh.type != cgltf_primitive_type_triangles)
-			continue;
-
-		if (settings.simplify_debug > 0)
-		{
-			Mesh kinds = {};
-			Mesh loops = {};
-			debugSimplify(mesh, kinds, loops, settings.simplify_debug, settings.simplify_error, settings.simplify_attributes, settings.quantize && !settings.nrm_float);
-			debug_meshes.push_back(kinds);
-			debug_meshes.push_back(loops);
-		}
-	}
-#endif
+	if (settings.simplify_scaled && settings.simplify_ratio < 1)
+		computeMeshQuality(meshes);
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
@@ -431,10 +433,6 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 		if (mesh.geometry_duplicate)
 			hashMesh(mesh);
 	}
-
-#ifndef NDEBUG
-	meshes.insert(meshes.end(), debug_meshes.begin(), debug_meshes.end());
-#endif
 
 	filterEmptyMeshes(meshes); // some meshes may become empty after processing
 
@@ -496,22 +494,23 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 		append(json_samplers, "}");
 	}
 
-	std::vector<std::string> encoded_images;
+	std::vector<std::string> encoded_images(data->images_count);
 
 #ifdef WITH_BASISU
 	if (data->images_count && settings.texture_ktx2)
-	{
-		encoded_images.resize(data->images_count);
+		encodeImagesBasis(encoded_images.data(), data, images, input_path, settings);
+#endif
 
-		encodeImages(encoded_images.data(), data, images, input_path, settings);
-	}
+#ifdef WITH_LIBWEBP
+	if (data->images_count && settings.texture_webp)
+		encodeImagesWebP(encoded_images.data(), data, images, input_path, settings);
 #endif
 
 	for (size_t i = 0; i < data->images_count; ++i)
 	{
 		const cgltf_image& image = data->images[i];
 
-		std::string* encoded = (encoded_images.size() && !encoded_images[i].empty()) ? &encoded_images[i] : NULL;
+		std::string* encoded = !encoded_images[i].empty() ? &encoded_images[i] : NULL;
 
 		comma(json_images);
 		append(json_images, "{");
@@ -841,7 +840,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 
 	const ExtensionInfo extensions[] = {
 	    {"KHR_mesh_quantization", settings.quantize, true},
-	    {"EXT_meshopt_compression", settings.compress, !settings.fallback},
+	    {meshopt_ext, settings.compress, !settings.fallback},
 	    {"KHR_texture_transform", (settings.quantize && !settings.tex_float && !json_textures.empty()) || ext_texture_transform, false},
 	    {"KHR_materials_pbrSpecularGlossiness", ext_pbr_specular_glossiness, false},
 	    {"KHR_materials_clearcoat", ext_clearcoat, false},
@@ -859,7 +858,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 	    {"KHR_materials_variants", data->variants_count > 0, false},
 	    {"KHR_lights_punctual", data->lights_count > 0, false},
 	    {"KHR_texture_basisu", (!json_textures.empty() && settings.texture_ktx2) || ext_texture_basisu, true},
-	    {"EXT_texture_webp", ext_texture_webp, true},
+	    {"EXT_texture_webp", (!json_textures.empty() && settings.texture_webp) || ext_texture_webp, true},
 	    {"EXT_mesh_gpu_instancing", ext_instancing, true},
 	};
 
@@ -877,7 +876,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 	size_t bufferspec_pos = json.size();
 
 	std::string json_views;
-	finalizeBufferViews(json_views, views, bin, settings.fallback ? &fallback : NULL, fallback_size);
+	finalizeBufferViews(json_views, views, bin, settings.fallback ? &fallback : NULL, fallback_size, meshopt_ext);
 
 	writeArray(json, "bufferViews", json_views);
 	writeArray(json, "accessors", json_accessors);
@@ -961,7 +960,7 @@ static const char* getBaseName(const char* path)
 	return std::max(rs, bs);
 }
 
-static std::string getBufferSpec(const char* bin_path, size_t bin_size, const char* fallback_path, size_t fallback_size, bool fallback_ref)
+static std::string getBufferSpec(const char* bin_path, size_t bin_size, const char* fallback_path, size_t fallback_size, bool fallback_ref, const char* meshopt_ext)
 {
 	std::string json;
 	append(json, "\"buffers\":[");
@@ -990,7 +989,9 @@ static std::string getBufferSpec(const char* bin_path, size_t bin_size, const ch
 		append(json, "\"byteLength\":");
 		append(json, fallback_size);
 		append(json, ",\"extensions\":{");
-		append(json, "\"EXT_meshopt_compression\":{");
+		append(json, "\"");
+		append(json, meshopt_ext);
+		append(json, "\":{");
 		append(json, "\"fallback\":true");
 		append(json, "}}");
 		append(json, "}");
@@ -1048,6 +1049,17 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 	}
 #endif
 
+#ifndef WITH_LIBWEBP
+	if (data->images_count && settings.texture_webp)
+	{
+		fprintf(stderr, "Error: gltfpack was built without WebP support, texture compression is not available\n");
+#ifdef __wasi__
+		fprintf(stderr, "Note: node.js builds do not support WebP due to lack of platform features; download a native build from https://github.com/zeux/meshoptimizer/releases\n");
+#endif
+		return 3;
+	}
+#endif
+
 	if (oext == ".glb")
 	{
 		settings.texture_embed = true;
@@ -1076,11 +1088,13 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 		}
 	}
 
+	const char* meshopt_ext = settings.compressexp ? "EXTX_meshopt_compression" : "EXT_meshopt_compression";
+
 	std::string json, bin, fallback;
 	size_t fallback_size = 0;
 
 	json += '{';
-	size_t bufferspec_pos = process(data, input, output, report, meshes, animations, settings, json, bin, fallback, fallback_size);
+	size_t bufferspec_pos = process(data, input, output, report, meshes, animations, settings, json, bin, fallback, fallback_size, meshopt_ext);
 	json += '}';
 
 	cgltf_free(data);
@@ -1107,7 +1121,7 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 			return 4;
 		}
 
-		std::string bufferspec = getBufferSpec(getBaseName(binpath.c_str()), bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback_size, settings.compress);
+		std::string bufferspec = getBufferSpec(getBaseName(binpath.c_str()), bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback_size, settings.compress, meshopt_ext);
 		json.insert(bufferspec_pos, "," + bufferspec);
 
 		fwrite(json.c_str(), json.size(), 1, outjson);
@@ -1141,7 +1155,7 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 			return 4;
 		}
 
-		std::string bufferspec = getBufferSpec(NULL, bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback_size, settings.compress);
+		std::string bufferspec = getBufferSpec(NULL, bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback_size, settings.compress, meshopt_ext);
 		json.insert(bufferspec_pos, "," + bufferspec);
 
 		while (json.size() % 4)
@@ -1200,6 +1214,8 @@ Settings defaults()
 	settings.mesh_dedup = true;
 	settings.simplify_ratio = 1.f;
 	settings.simplify_error = 1e-2f;
+	settings.simplify_attributes = true;
+	settings.simplify_scaled = true;
 
 	for (int kind = 0; kind < TextureKind__Count; ++kind)
 	{
@@ -1266,7 +1282,7 @@ int main(int argc, char** argv)
 	const char* report = NULL;
 	bool help = false;
 	bool test = false;
-	bool require_ktx2 = false;
+	bool require_texc = false;
 
 	std::vector<const char*> testinputs;
 
@@ -1312,6 +1328,10 @@ int main(int argc, char** argv)
 		{
 			settings.nrm_float = true;
 		}
+		else if (strcmp(arg, "-vi") == 0)
+		{
+			settings.mesh_interleaved = true;
+		}
 		else if (strcmp(arg, "-at") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.trn_bits = clamp(atoi(argv[++i]), 1, 24);
@@ -1350,7 +1370,7 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-mdd") == 0)
 		{
-			fprintf(stderr, "Warning: option -mdd disables mesh deduplication and is only provided as a safety measure; it will be removed in the future\n");
+			fprintf(stderr, "Warning: option -mdd disables mesh deduplication and is temporary; avoid production usage\n");
 			settings.mesh_dedup = false;
 		}
 		else if (strcmp(arg, "-mm") == 0)
@@ -1379,14 +1399,22 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-sv") == 0)
 		{
-			settings.simplify_attributes = true;
+			fprintf(stderr, "Warning: attribute aware simplification is enabled by default; option -sv is only provided for compatibility and may be removed in the future\n");
 		}
-#ifndef NDEBUG
-		else if (strcmp(arg, "-sd") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		else if (strcmp(arg, "-svd") == 0)
 		{
-			settings.simplify_debug = clamp(float(atof(argv[++i])), 0.f, 1.f);
+			fprintf(stderr, "Warning: option -svd disables attribute aware simplification and is temporary; avoid production usage\n");
+			settings.simplify_attributes = false;
 		}
-#endif
+		else if (strcmp(arg, "-ssd") == 0)
+		{
+			fprintf(stderr, "Warning: option -ssd disables scaled simplification error and is temporary; avoid production usage\n");
+			settings.simplify_scaled = false;
+		}
+		else if (strcmp(arg, "-sp") == 0)
+		{
+			settings.simplify_permissive = true;
+		}
 		else if (strcmp(arg, "-tu") == 0)
 		{
 			settings.texture_ktx2 = true;
@@ -1407,16 +1435,26 @@ int main(int argc, char** argv)
 
 			applySetting(settings.texture_mode, TextureMode_ETC1S, mask);
 		}
+		else if (strcmp(arg, "-tw") == 0)
+		{
+			settings.texture_webp = true;
+
+			unsigned int mask = ~0u;
+			if (i + 1 < argc && isalpha(argv[i + 1][0]))
+				mask = textureMask(argv[++i]);
+
+			applySetting(settings.texture_mode, TextureMode_WebP, mask);
+		}
 		else if (strcmp(arg, "-tq") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			require_ktx2 = true;
+			require_texc = true;
 
 			int quality = clamp(atoi(argv[++i]), 1, 10);
 			applySetting(settings.texture_quality, quality);
 		}
 		else if (strcmp(arg, "-tq") == 0 && i + 2 < argc && isalpha(argv[i + 1][0]) && isdigit(argv[i + 2][0]))
 		{
-			require_ktx2 = true;
+			require_texc = true;
 
 			unsigned int mask = textureMask(argv[++i]);
 			int quality = clamp(atoi(argv[++i]), 1, 10);
@@ -1424,14 +1462,14 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-ts") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			require_ktx2 = true;
+			require_texc = true;
 
 			float scale = clamp(float(atof(argv[++i])), 0.f, 1.f);
 			applySetting(settings.texture_scale, scale);
 		}
 		else if (strcmp(arg, "-ts") == 0 && i + 2 < argc && isalpha(argv[i + 1][0]) && isdigit(argv[i + 2][0]))
 		{
-			require_ktx2 = true;
+			require_texc = true;
 
 			unsigned int mask = textureMask(argv[++i]);
 			float scale = clamp(float(atof(argv[++i])), 0.f, 1.f);
@@ -1439,14 +1477,14 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-tl") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			require_ktx2 = true;
+			require_texc = true;
 
 			int limit = atoi(argv[++i]);
 			applySetting(settings.texture_limit, limit);
 		}
 		else if (strcmp(arg, "-tl") == 0 && i + 2 < argc && isalpha(argv[i + 1][0]) && isdigit(argv[i + 2][0]))
 		{
-			require_ktx2 = true;
+			require_texc = true;
 
 			unsigned int mask = textureMask(argv[++i]);
 			int limit = atoi(argv[++i]);
@@ -1454,13 +1492,13 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-tp") == 0)
 		{
-			require_ktx2 = true;
+			require_texc = true;
 
 			settings.texture_pow2 = true;
 		}
 		else if (strcmp(arg, "-tfy") == 0)
 		{
-			require_ktx2 = true;
+			require_texc = true;
 
 			settings.texture_flipy = true;
 		}
@@ -1503,12 +1541,13 @@ int main(int argc, char** argv)
 			settings.compress = true;
 			settings.fallback = true;
 		}
-		else if (strcmp(arg, "-ce") == 0)
+		else if (strcmp(arg, "-cx") == 0)
 		{
 			fprintf(stderr, "Warning: experimental compression will produce files that are not compliant with EXT_meshopt_compression\n");
 			meshopt_encodeVertexVersion(1);
 			settings.compress = true;
 			settings.compressmore = true;
+			settings.compressexp = true;
 		}
 		else if (strcmp(arg, "-v") == 0)
 		{
@@ -1576,7 +1615,8 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nTextures:\n");
 			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression\n");
 			fprintf(stderr, "\t-tu: use UASTC when encoding textures (much higher quality and much larger size)\n");
-			fprintf(stderr, "\t-tq N: set texture encoding quality (default: 8; N should be between 1 and 10\n");
+			fprintf(stderr, "\t-tw: convert all textures to WebP\n");
+			fprintf(stderr, "\t-tq N: set texture encoding quality (default: 8; N should be between 1 and 10)\n");
 			fprintf(stderr, "\t-ts R: scale texture dimensions by the ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\t-tl N: limit texture dimensions to N pixels (default: 0 = no limit)\n");
 			fprintf(stderr, "\t-tp: resize textures to nearest power of 2 to conform to WebGL1 restrictions\n");
@@ -1586,6 +1626,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\tTexture classes:\n");
 			fprintf(stderr, "\t-tc C: use ETC1S when encoding textures of class C\n");
 			fprintf(stderr, "\t-tu C: use UASTC when encoding textures of class C\n");
+			fprintf(stderr, "\t-tw C: use WebP when encoding textures of class C\n");
 			fprintf(stderr, "\t-tq C N: set texture encoding quality for class C\n");
 			fprintf(stderr, "\t-ts C R: scale texture dimensions for class C\n");
 			fprintf(stderr, "\t-tl C N: limit texture dimensions for class C\n");
@@ -1593,8 +1634,8 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nSimplification:\n");
 			fprintf(stderr, "\t-si R: simplify meshes targeting triangle/point count ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\t-se E: limit simplification error to E (default: 0.01 = 1%% deviation; E should be between 0 and 1)\n");
+			fprintf(stderr, "\t-sp: use permissive simplification mode to allow simplification across attribute discontinuities\n");
 			fprintf(stderr, "\t-sa: aggressively simplify to the target ratio disregarding quality\n");
-			fprintf(stderr, "\t-sv: take vertex attributes into account when simplifying meshes\n");
 			fprintf(stderr, "\t-slb: lock border vertices during simplification to avoid gaps on connected meshes\n");
 			fprintf(stderr, "\nVertex precision:\n");
 			fprintf(stderr, "\t-vp N: use N-bit quantization for positions (default: 14; N should be between 1 and 16)\n");
@@ -1608,6 +1649,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nVertex attributes:\n");
 			fprintf(stderr, "\t-vtf: use floating point attributes for texture coordinates\n");
 			fprintf(stderr, "\t-vnf: use floating point attributes for normals\n");
+			fprintf(stderr, "\t-vi: use interleaved vertex attributes (reduces compression efficiency)\n");
 			fprintf(stderr, "\t-kv: keep source vertex attributes even if they aren't used\n");
 			fprintf(stderr, "\nAnimations:\n");
 			fprintf(stderr, "\t-at N: use N-bit quantization for translations (default: 16; N should be between 1 and 24)\n");
@@ -1635,6 +1677,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-o file: output file path, .gltf/.glb\n");
 			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc for higher compression ratio)\n");
 			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression\n");
+			fprintf(stderr, "\t-tw: convert all textures to WebP\n");
 			fprintf(stderr, "\t-si R: simplify meshes targeting triangle/point count ratio R (between 0 and 1)\n");
 			fprintf(stderr, "\nRun gltfpack -h to display a full list of options\n");
 		}
@@ -1642,15 +1685,15 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
-	if (require_ktx2 && !settings.texture_ktx2)
+	if (require_texc && !settings.texture_ktx2 && !settings.texture_webp)
 	{
-		fprintf(stderr, "Texture processing is only supported when texture compression is enabled via -tc/-tu\n");
+		fprintf(stderr, "Texture processing is only supported when texture compression is enabled via -tc/-tu/-tw\n");
 		return 1;
 	}
 
-	if (settings.texture_ref && settings.texture_ktx2)
+	if (settings.texture_ref && (settings.texture_ktx2 || settings.texture_webp))
 	{
-		fprintf(stderr, "Option -tr currently can not be used together with -tc\n");
+		fprintf(stderr, "Option -tr currently can not be used together with texture compression\n");
 		return 1;
 	}
 
@@ -1667,9 +1710,7 @@ int main(int argc, char** argv)
 	}
 
 	if (settings.keep_nodes && (settings.mesh_merge || settings.mesh_instancing))
-	{
 		fprintf(stderr, "Warning: option -kn disables mesh merge (-mm) and mesh instancing (-mi) optimizations\n");
-	}
 
 	return gltfpack(input, output, report, settings);
 }
@@ -1709,7 +1750,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* buffer, size_t size)
 
 	std::string json, bin, fallback;
 	size_t fallback_size = 0;
-	process(data, NULL, NULL, NULL, meshes, animations, settings, json, bin, fallback, fallback_size);
+	process(data, NULL, NULL, NULL, meshes, animations, settings, json, bin, fallback, fallback_size, NULL);
 
 	cgltf_free(data);
 

@@ -46,6 +46,28 @@ var tests = {
 		}
 
 		var encoded = encoder.encodeVertexBuffer(data, 16, 4);
+		assert.equal(encoded[0], 0xa0);
+
+		var decoded = new Uint8Array(16 * 4);
+		decoder.decodeVertexBuffer(decoded, 16, 4, encoded);
+
+		assert.deepEqual(decoded, data);
+	},
+
+	roundtripVertexBufferV1: function () {
+		var data = new Uint8Array(16 * 4);
+
+		// this tests 0/2/4/8 bit groups in one stream
+		for (var i = 0; i < 16; ++i) {
+			data[i * 4 + 0] = 0;
+			data[i * 4 + 1] = i * 1;
+			data[i * 4 + 2] = i * 2;
+			data[i * 4 + 3] = i * 8;
+		}
+
+		var encoded = encoder.encodeVertexBufferLevel(data, 16, 4, 3, /* version= */ 1);
+		assert.equal(encoded[0], 0xa1);
+
 		var decoded = new Uint8Array(16 * 4);
 		decoder.decodeVertexBuffer(decoded, 16, 4, encoded);
 
@@ -150,6 +172,28 @@ var tests = {
 		// 1 vector with 3 components (12 bytes), encode each vector into 12 bytes with 15 bits of precision/component
 		// exponents are separate but clamped to 0
 		var encoded = encoder.encodeFilterExp(data, 1, 12, 15, 'Clamped');
+		assert.deepEqual(encoded, bytes(expected));
+	},
+
+	encodeFilterColor8: function () {
+		var data = new Float32Array([1, 0, 0, 1, 0, 1, 0, 0.5, 0, 0, 1, 0.25, 0.4, 0.4, 0.4, 0.75]);
+
+		var expected = new Uint8Array([0x40, 0x7f, 0xc1, 0xff, 0x7f, 0x00, 0x7f, 0xc0, 0x40, 0x81, 0xc0, 0xa0, 0x66, 0x00, 0x00, 0xdf]);
+
+		// 4 vectors, encode each vector into 4 bytes with 8 bits of precision/component
+		var encoded = encoder.encodeFilterColor(data, 4, 4, 8);
+		assert.deepEqual(encoded, expected);
+	},
+
+	encodeFilterColor12: function () {
+		var data = new Float32Array([1, 0, 0, 1, 0, 1, 0, 0.5, 0, 0, 1, 0.25, 0.4, 0.4, 0.4, 0.75]);
+
+		var expected = new Uint16Array([
+			0x0400, 0x07ff, 0xfc01, 0x0fff, 0x07ff, 0x0000, 0x07ff, 0x0c00, 0x0400, 0xf801, 0xfc00, 0x0a00, 0x0666, 0x0000, 0x0000, 0x0dff,
+		]);
+
+		// 4 vectors, encode each vector into 8 bytes with 12 bits of precision/component
+		var encoded = encoder.encodeFilterColor(data, 4, 8, 12);
 		assert.deepEqual(encoded, bytes(expected));
 	},
 

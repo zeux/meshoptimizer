@@ -1104,6 +1104,70 @@ static void encodeFilterExpClamp()
 		assert(fabsf(decoded[i] - data[i]) < 1e-3f);
 }
 
+static void encodeFilterColor8()
+{
+	const float data[4 * 4] = {
+	    1.0f, 0.0f, 0.0f, 1.0f,
+	    0.0f, 1.0f, 0.0f, 0.5f,
+	    0.0f, 0.0f, 1.0f, 0.25f,
+	    0.4f, 0.4f, 0.4f, 0.75f, // clang-format :-/
+	};
+
+	const unsigned char expected[4 * 4] = {
+	    0x40, 0x7f, 0xc1, 0xff,
+	    0x7f, 0x00, 0x7f, 0xc0,
+	    0x40, 0x81, 0xc0, 0xa0,
+	    0x66, 0x00, 0x00, 0xdf, // clang-format :-/
+	};
+
+	unsigned char encoded[4 * 4];
+	meshopt_encodeFilterColor(encoded, 4, 4, 8, data);
+
+	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+
+	unsigned char decoded[4 * 4];
+	memcpy(decoded, encoded, sizeof(decoded));
+	meshopt_decodeFilterColor(decoded, 4, 4);
+
+	for (size_t i = 0; i < 4 * 4; ++i)
+		assert(fabsf(decoded[i] / 255.f - data[i]) < 1e-2f);
+
+	// ensure grayscale is preserved
+	assert(decoded[12] == decoded[13] && decoded[12] == decoded[14]);
+}
+
+static void encodeFilterColor12()
+{
+	const float data[4 * 4] = {
+	    1.0f, 0.0f, 0.0f, 1.0f,
+	    0.0f, 1.0f, 0.0f, 0.5f,
+	    0.0f, 0.0f, 1.0f, 0.25f,
+	    0.4f, 0.4f, 0.4f, 0.75f, // clang-format :-/
+	};
+
+	const unsigned short expected[4 * 4] = {
+	    0x0400, 0x07ff, 0xfc01, 0x0fff,
+	    0x07ff, 0x0000, 0x07ff, 0x0c00,
+	    0x0400, 0xf801, 0xfc00, 0x0a00,
+	    0x0666, 0x0000, 0x0000, 0x0dff, // clang-format :-/
+	};
+
+	unsigned short encoded[4 * 4];
+	meshopt_encodeFilterColor(encoded, 4, 8, 12, data);
+
+	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+
+	unsigned short decoded[4 * 4];
+	memcpy(decoded, encoded, sizeof(decoded));
+	meshopt_decodeFilterColor(decoded, 4, 8);
+
+	for (size_t i = 0; i < 4 * 4; ++i)
+		assert(fabsf(decoded[i] / 65535.f - data[i]) < 1e-3f);
+
+	// ensure grayscale is preserved
+	assert(decoded[12] == decoded[13] && decoded[12] == decoded[14]);
+}
+
 static void clusterBoundsDegenerate()
 {
 	const float vbd[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -1572,7 +1636,7 @@ static void simplify()
 
 	float error;
 	assert(meshopt_simplify(ib, ib, 12, vb, 6, 12, 3, 1e-2f, 0, &error) == 3);
-	assert(error == 0.f);
+	assert(error < 1e-4f);
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 }
 
@@ -1617,6 +1681,45 @@ static void simplifySloppyStuck()
 
 	// simplifying down to 2 triangles given that all triangles are degenerate results in 0 as well
 	assert(meshopt_simplifySloppy(target, ib, 6, vb, 3, 12, 6, 0.f) == 0);
+}
+
+static void simplifySloppyLocks()
+{
+	// 0
+	// 1 2
+	// 3 4 5
+	unsigned int ib[] = {
+	    0, 2, 1,
+	    1, 2, 3,
+	    3, 2, 4,
+	    2, 5, 4, // clang-format :-/
+	};
+
+	float vb[] = {
+	    0, 4, 0,
+	    0, 1, 0,
+	    2, 2, 0,
+	    0, 0, 0,
+	    1, 0, 0,
+	    4, 0, 0, // clang-format :-/
+	};
+
+	// lock spine
+	unsigned char locks[] = {1, 0, 1, 0, 0, 1};
+
+	unsigned int expected[] = {
+	    0,
+	    2,
+	    1,
+	    1,
+	    2,
+	    5,
+	};
+
+	float error;
+	assert(meshopt_simplifySloppy(ib, ib, 12, vb, 6, 12, locks, 3, 1.f, &error) == 6);
+	assert(error == 0.f);
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 }
 
 static void simplifyPointsStuck()
@@ -2097,12 +2200,12 @@ static void simplifySeam()
 
 	assert(meshopt_simplify(res, ib, 36, vb, 16, 16, 12, 1.f, 0, &error) == 12);
 	assert(memcmp(res, expected, sizeof(expected)) == 0);
-	assert(fabsf(error - 0.09f) < 0.01f); // note: the error is not zero because there is a difference in height between the seam vertices
+	assert(fabsf(error - 0.1f) < 0.01f); // note: the error is not zero because there is a difference in height between the seam vertices
 
 	float aw = 1;
 	assert(meshopt_simplifyWithAttributes(res, ib, 36, vb, 16, 16, vb + 3, 16, &aw, 1, NULL, 12, 2.f, 0, &error) == 12);
 	assert(memcmp(res, expected, sizeof(expected)) == 0);
-	assert(fabsf(error - 0.09f) < 0.01f); // note: this is the same error as above because the attribute is constant on either side of the seam
+	assert(fabsf(error - 0.1f) < 0.01f); // note: this is the same error as above because the attribute is constant on either side of the seam
 }
 
 static void simplifySeamFake()
@@ -2209,7 +2312,7 @@ static void simplifyDebug()
 
 	float error;
 	assert(meshopt_simplify(ib, ib, 12, vb, 6, 12, 3, 1e-2f, meshopt_SimplifyInternalDebug, &error) == 3);
-	assert(error == 0.f);
+	assert(error < 1e-4f);
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 }
 
@@ -2221,9 +2324,9 @@ static void simplifyPrune()
 	// +
 	// 6 7 8 (same position)
 	unsigned int ib[] = {
+	    3, 2, 4,
 	    0, 2, 1,
 	    1, 2, 3,
-	    3, 2, 4,
 	    2, 5, 4,
 	    6, 7, 8, // clang-format :-/
 	};
@@ -2248,7 +2351,7 @@ static void simplifyPrune()
 
 	float error;
 	assert(meshopt_simplify(ib, ib, 15, vb, 9, 12, 3, 1e-2f, meshopt_SimplifyPrune, &error) == 3);
-	assert(error == 0.f);
+	assert(error < 1e-4f);
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 
 	// re-run prune with and without sparsity on a small subset to make sure the component code correctly handles sparse subsets
@@ -2572,6 +2675,8 @@ void runTests()
 	encodeFilterExpZero();
 	encodeFilterExpAlias();
 	encodeFilterExpClamp();
+	encodeFilterColor8();
+	encodeFilterColor12();
 
 	clusterBoundsDegenerate();
 	sphereBounds();
@@ -2596,6 +2701,7 @@ void runTests()
 	simplify();
 	simplifyStuck();
 	simplifySloppyStuck();
+	simplifySloppyLocks();
 	simplifyPointsStuck();
 	simplifyFlip();
 	simplifyScale();

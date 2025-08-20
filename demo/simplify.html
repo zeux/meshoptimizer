@@ -11,6 +11,9 @@
 				color: #fff;
 				margin: 0px;
 				overflow: hidden;
+				display: flex;
+				flex-direction: column;
+				height: 100vh;
 			}
 			#info {
 				color: #fff;
@@ -30,10 +33,11 @@
 			}
 			#grid-container {
 				width: 100%;
-				height: 100%;
+				flex: 1;
 				display: grid;
 				grid-template-columns: repeat(var(--grid-columns, 1), 1fr);
-				grid-auto-rows: 1fr;
+				grid-auto-rows: minmax(300px, 1fr);
+				overflow-y: auto;
 			}
 			.renderer-container {
 				position: relative;
@@ -44,6 +48,7 @@
 				width: 100% !important;
 				height: 100% !important;
 				display: block;
+				user-select: none;
 			}
 			.renderer-label {
 				position: absolute;
@@ -52,8 +57,19 @@
 				background-color: rgba(0, 0, 0, 0.5);
 				padding: 5px 10px;
 				border-radius: 5px;
-				pointer-events: none;
+				pointer-events: auto;
 				font-size: 14px;
+				transition: background-color 0.2s;
+			}
+			.renderer-label:hover {
+				background-color: rgba(0, 0, 0, 0.7);
+			}
+			.renderer-label.focused {
+				background-color: rgba(255, 100, 100, 0.7);
+				color: white;
+			}
+			.renderer-label.clickable {
+				cursor: pointer;
 			}
 			.stats-label {
 				position: absolute;
@@ -65,6 +81,28 @@
 				pointer-events: none;
 				font-size: 12px;
 				line-height: 1.4;
+			}
+
+			.renderer-container.hidden {
+				display: none;
+			}
+
+			/* Custom scrollbar styling */
+			#grid-container::-webkit-scrollbar {
+				width: 16px;
+			}
+
+			#grid-container::-webkit-scrollbar-track {
+				background: rgba(255, 255, 255, 0.1);
+			}
+
+			#grid-container::-webkit-scrollbar-thumb {
+				background: rgba(255, 255, 255, 0.3);
+				border-radius: 8px;
+			}
+
+			#grid-container::-webkit-scrollbar-thumb:hover {
+				background: rgba(255, 255, 255, 0.5);
 			}
 		</style>
 
@@ -103,21 +141,30 @@
 			var mixers = [];
 			var viewStats = [];
 
+			// Focus tracking
+			var focusedViewIndex = -1; // -1 means no focus (show all)
+
 			// Track camera distance for autoLod
 			var lastCameraDistance = 0;
 
 			var settings = {
 				wireframe: false,
+				wireframeOverlay: false,
 				animate: false,
 				pointSize: 1.0,
 				ratio: 1.0,
 				debugOverlay: false,
+				sloppy: false,
+				permissive: false,
 				lockBorder: false,
-				prune: false,
-				weldVertices: false,
-				useAttributes: false,
+				preprune: 0.0,
+				prune: true,
+				regularize: false,
+				solve: false,
+				useAttributes: true,
 				errorThresholdLog10: 1,
-				normalWeight: 0.5,
+				errorScaled: true,
+				normalWeight: 1.0,
 				colorWeight: 1.0,
 				textureWeight: 0.0,
 				autoLod: false,
@@ -127,7 +174,12 @@
 				loadFile: function () {
 					var input = document.getElementById('fileInput');
 					input.onchange = function () {
-						loadFiles(input.files);
+						var files = Array.from(input.files).sort(function (a, b) {
+							var an = a.name.split('.')[0];
+							var bn = b.name.split('.')[0];
+							return an.localeCompare(bn);
+						});
+						loadFiles(files);
 					};
 					input.click();
 				},
@@ -143,23 +195,30 @@
 			var gui = new GUI({ width: 300 });
 			var guiDisplay = gui.addFolder('Display');
 			guiDisplay.add(settings, 'wireframe').onChange(update);
+			guiDisplay.add(settings, 'wireframeOverlay').onChange(simplify); // requires debug data rebuild
 			guiDisplay.add(settings, 'animate').onChange(update);
 			guiDisplay.add(settings, 'pointSize', 1, 16).onChange(update);
 			guiDisplay.add(settings, 'debugOverlay').onChange(simplify); // requires debug data rebuild
-			guiDisplay.add(settings, 'gridColumns', 1, 4, 1).onChange(updateGridLayout);
+			guiDisplay.add(settings, 'gridColumns', 1, 6, 1).onChange(updateGridLayout);
 
 			var guiSimplify = gui.addFolder('Simplify');
 			guiSimplify.add(settings, 'ratio', 0, 1, 0.01).onChange(simplify);
+			guiSimplify.add(settings, 'sloppy').onChange(simplify);
+			guiSimplify.add(settings, 'permissive').onChange(simplify);
 			guiSimplify.add(settings, 'lockBorder').onChange(simplify);
 			guiSimplify.add(settings, 'prune').onChange(simplify);
-			guiSimplify.add(settings, 'weldVertices').onChange(simplify);
-			guiSimplify.add(settings, 'errorThresholdLog10', 0, 3, 0.1).onChange(simplify);
+			guiSimplify.add(settings, 'regularize').onChange(simplify);
+			guiSimplify.add(settings, 'solve').onChange(simplify);
+			guiSimplify.add(settings, 'preprune', 0, 0.2, 0.01).onChange(simplify);
 			guiSimplify.add(settings, 'useAttributes').onChange(simplify).onFinishChange(updateSettings);
 
 			var guiAttributes = [];
 			guiAttributes.push(guiSimplify.add(settings, 'normalWeight', 0, 2, 0.01).onChange(simplify));
 			guiAttributes.push(guiSimplify.add(settings, 'colorWeight', 0, 2, 0.01).onChange(simplify));
 			guiAttributes.push(guiSimplify.add(settings, 'textureWeight', 0, 100, 0.1).onChange(simplify));
+
+			guiSimplify.add(settings, 'errorScaled').onChange(simplify);
+			guiSimplify.add(settings, 'errorThresholdLog10', 0, 3, 0.1).onChange(simplify);
 
 			var guiLod = gui.addFolder('LOD');
 			guiLod.add(settings, 'autoLod').onChange(simplify);
@@ -199,8 +258,20 @@
 
 			function updateGridLayout() {
 				if (renderers.length > 0) {
-					const columns = Math.min(renderers.length, settings.gridColumns);
+					var visibleViews = focusedViewIndex >= 0 ? 1 : renderers.length;
+					var columns = Math.min(visibleViews, settings.gridColumns);
 					document.documentElement.style.setProperty('--grid-columns', columns);
+
+					// Set grid cell height based on whether we're in single view or grid mode
+					if (columns > 1) {
+						// In grid mode, make cells square by calculating height based on viewport width
+						var cellWidth = Math.floor(window.innerWidth / columns);
+						document.documentElement.style.setProperty('--grid-cell-height', cellWidth + 'px');
+					} else {
+						// Single view mode, use full height
+						document.documentElement.style.setProperty('--grid-cell-height', '100vh');
+					}
+
 					updateRendererSizes();
 				}
 			}
@@ -241,8 +312,68 @@
 				mixers = [];
 				viewStats = [];
 
+				// Reset focus state
+				focusedViewIndex = -1;
+
 				// Clear the grid container
 				gridContainer.innerHTML = '';
+			}
+
+			function updateLabelsClickability() {
+				var isClickable = renderers.length > 1;
+
+				for (var i = 0; i < renderers.length; i++) {
+					var container = renderers[i].domElement.parentElement;
+					var label = container.querySelector('.renderer-label');
+
+					if (isClickable) {
+						label.classList.add('clickable');
+						label.title = 'Click to focus on this view';
+					} else {
+						label.classList.remove('clickable');
+						label.title = '';
+					}
+				}
+			}
+
+			function toggleFocus(viewIndex) {
+				if (focusedViewIndex === viewIndex) {
+					// Currently focused on this view, unfocus (show all)
+					focusedViewIndex = -1;
+				} else {
+					// Focus on this view
+					focusedViewIndex = viewIndex;
+				}
+				updateFocusDisplay();
+				simplify(); // Re-run simplify with new focus state
+			}
+
+			function updateFocusDisplay() {
+				for (var i = 0; i < renderers.length; i++) {
+					var container = renderers[i].domElement.parentElement;
+					var label = container.querySelector('.renderer-label');
+
+					if (focusedViewIndex === -1) {
+						// No focus - show all containers
+						container.classList.remove('hidden');
+						label.classList.remove('focused');
+						if (renderers.length > 1) {
+							label.title = 'Click to focus on this view';
+						}
+					} else if (focusedViewIndex === i) {
+						// This is the focused view
+						container.classList.remove('hidden');
+						label.classList.add('focused');
+						label.title = 'Click to exit focus mode';
+					} else {
+						// Hide non-focused views
+						container.classList.add('hidden');
+						label.classList.remove('focused');
+					}
+				}
+
+				// Update grid layout when focus changes
+				updateGridLayout();
 			}
 
 			function createView(index, name) {
@@ -255,6 +386,11 @@
 				var label = document.createElement('div');
 				label.className = 'renderer-label';
 				label.textContent = name;
+				label.onclick = function () {
+					if (renderers.length > 1) {
+						toggleFocus(index);
+					}
+				};
 				rendererContainer.appendChild(label);
 
 				// Add stats label
@@ -286,10 +422,15 @@
 				var ambientLight = new THREE.AmbientLight(0xcccccc, 1);
 				scene.add(ambientLight);
 
-				var pointLight = new THREE.PointLight(0xffffff, 4);
-				pointLight.position.set(3, 3, 0);
-				pointLight.decay = 0.5;
-				scene.add(pointLight);
+				var pointLightR = new THREE.PointLight(0xffffff, 4);
+				pointLightR.position.set(3, 3, 0);
+				pointLightR.decay = 0.5;
+				scene.add(pointLightR);
+
+				var pointLightL = new THREE.PointLight(0xffffff, 1);
+				pointLightL.position.set(-3, 5, 0);
+				pointLightL.decay = 0.5;
+				scene.add(pointLightL);
 
 				// Create controls
 				var control = new OrbitControls(camera, renderer.domElement);
@@ -302,19 +443,16 @@
 
 				// Adjust renderer size
 				updateRendererSizes();
+
+				// Update label clickability for all views
+				updateLabelsClickability();
 			}
 
-			function simplifyMesh(geo, threshold) {
-				if (settings.weldVertices) {
-					// pre-welding is important for some meshes that have very close normals in adjacent face corners
-					// for now we use the welder from three.js; this is not as performant as it could be
-					geo = mergeVertices(geo, 1e-2);
-				}
-
+			function simplifyMesh(geo, threshold, scale) {
 				var attributes = 8; // 3 color, 3 normal, 2 uv
 
-				var positions = new Float32Array(geo.attributes.position.array);
-				var indices = new Uint32Array(geo.index.array); // needed for _InternalDebug to work
+				var positions = new Float32Array(geo.attributes.position.array).slice(); // clone for solve
+				var indices = new Uint32Array(geo.index.array).slice(); // clone for solve, upcast 16-bit indices for _InternalDebug
 				var target = settings.autoLod ? 0 : Math.floor((indices.length * settings.ratio) / 3) * 3;
 
 				if (settings.useAttributes) {
@@ -349,6 +487,10 @@
 						settings.textureWeight,
 						settings.textureWeight,
 					];
+				} else {
+					var attrib = new Float32Array();
+					var attrib_weights = [];
+					attributes = 0;
 				}
 
 				var flags = [];
@@ -358,52 +500,126 @@
 				if (settings.prune) {
 					flags.push('Prune');
 				}
+				if (settings.regularize) {
+					flags.push('Regularize');
+				}
+				if (settings.permissive) {
+					flags.push('Permissive');
+				}
+				if (settings.debugOverlay) {
+					flags.push('_InternalDebug');
+				}
+
+				var locks = new Uint8Array(geo.attributes.position.count);
+
+				if (settings.permissive) {
+					var pos_cache = {};
+					var pos_remap = [];
+
+					var unique = 0;
+
+					for (var i = 0, e = geo.attributes.position.count; i < e; ++i) {
+						var px = geo.attributes.position.getX(i);
+						var py = geo.attributes.position.getY(i);
+						var pz = geo.attributes.position.getZ(i);
+						var pk = px.toString() + ' ' + py.toString() + ' ' + pz.toString();
+
+						if (pos_cache[pk] === undefined) {
+							pos_cache[pk] = i;
+							pos_remap[i] = i;
+							unique++;
+						} else {
+							pos_remap[i] = pos_cache[pk];
+						}
+					}
+
+					if (geo.attributes.normal) {
+						for (var i = 0, e = geo.attributes.position.count; i < e; ++i) {
+							if (pos_remap[i] != i) {
+								var rx = geo.attributes.normal.getX(pos_remap[i]),
+									ry = geo.attributes.normal.getY(pos_remap[i]),
+									rz = geo.attributes.normal.getZ(pos_remap[i]);
+								var nx = geo.attributes.normal.getX(i),
+									ny = geo.attributes.normal.getY(i),
+									nz = geo.attributes.normal.getZ(i);
+
+								// keep sharp edges
+								if (rx * nx + ry * ny + rz * nz < 0.25) {
+									locks[i] |= 2;
+								}
+							}
+						}
+					}
+
+					if (geo.attributes.uv) {
+						for (var i = 0, e = geo.attributes.position.count; i < e; ++i) {
+							if (pos_remap[i] != i) {
+								var ru = geo.attributes.uv.getX(pos_remap[i]),
+									rv = geo.attributes.uv.getY(pos_remap[i]);
+								var u = geo.attributes.uv.getX(i),
+									v = geo.attributes.uv.getY(i);
+
+								// keep UV seams
+								if (u != ru || v != rv) {
+									locks[i] |= 2;
+								}
+							}
+						}
+					}
+				}
 
 				var stride = geo.attributes.position instanceof THREE.InterleavedBufferAttribute ? geo.attributes.position.data.stride : 3;
 
-				console.time('simplify');
-
-				function run() {
-					var S = MeshoptSimplifier; // to avoid line breaks below...
-					return settings.useAttributes
-						? S.simplifyWithAttributes(indices, positions, stride, attrib, attributes, attrib_weights, null, target, threshold, flags)
-						: MeshoptSimplifier.simplify(indices, positions, stride, target, threshold, flags);
+				if (settings.preprune > 0) {
+					indices = MeshoptSimplifier.simplifyPrune(indices, positions, stride, settings.preprune / scale);
+					target = Math.min(target, indices.length);
 				}
 
-				var res = run();
+				var S = MeshoptSimplifier; // to avoid line breaks below...
+				var res = settings.sloppy
+					? S.simplifySloppy(indices, positions, stride, null, target, threshold)
+					: settings.solve
+						? S.simplifyWithUpdate(indices, positions, stride, attrib, attributes, attrib_weights, locks, target, threshold, flags)
+						: S.simplifyWithAttributes(indices, positions, stride, attrib, attributes, attrib_weights, locks, target, threshold, flags);
 
-				if (settings.debugOverlay) {
-					flags.push('_InternalDebug');
-					var dres = run();
+				if (!settings.sloppy && settings.solve) {
+					res[0] = indices.slice(0, res[0]);
 				}
-
-				console.timeEnd('simplify');
 
 				var rgeo = geo.clone();
 
 				var dind = res[0];
+				var dlen = dind.length;
 
 				if (settings.debugOverlay) {
 					// we need extra indices for debug overlay
-					dind = Array.from(res[0]);
+					dind = Array.from(dind);
 
-					for (var kind = 1; kind <= 4; ++kind) {
+					var mask = (1 << 28) - 1;
+
+					for (var kind = 1; kind <= 5; ++kind) {
 						var offset = dind.length;
 
-						for (var i = 0; i < dres[0].length; i += 3) {
-							var mask = (1 << 28) - 1;
-
+						for (var i = 0; i < dlen; i += 3) {
 							for (var e = 0; e < 3; ++e) {
-								var a = dres[0][i + e],
-									b = dres[0][i + ((e + 1) % 3)];
+								var a = dind[i + e],
+									b = dind[i + ((e + 1) % 3)];
+								var ak = (a >> 28) & 7,
+									bk = (b >> 28) & 7;
 
-								if (a >> 31 != 0 && kind != 4 && (((a >> 28) & 7) == kind || ((b >> 28) & 7) == kind)) {
-									// loop of current kind (non-locked to allow one of the vertices to be locked)
+								if ((a >> 31 != 0 || kind == 3) && (ak == kind || bk == kind) && (ak == kind || ak == 4) && (bk == kind || bk == 4)) {
+									// edge of current kind (allow one of the vertices to be locked)
+									// note: complex edges ignore loop metadata
 									dind.push(a & mask);
 									dind.push(a & mask);
 									dind.push(b & mask);
-								} else if (kind == 4 && ((a >> 28) & 7) == kind && ((b >> 28) & 7) == kind) {
-									// locked edge (may not be marked as a loop)
+								} else if (a >> 31 != 0 && kind == 5 && ak != bk && ak != 4 && bk != 4) {
+									// mixed edge (neither vertex is locked, and they are of different kinds)
+									dind.push(a & mask);
+									dind.push(a & mask);
+									dind.push(b & mask);
+								} else if (kind == 4 && ak == kind && bk == kind) {
+									// locked edge (not be marked as a loop)
 									dind.push(a & mask);
 									dind.push(a & mask);
 									dind.push(b & mask);
@@ -412,19 +628,62 @@
 						}
 
 						if (offset != dind.length) {
-							rgeo.addGroup(offset, dind.length - offset, kind);
+							rgeo.addGroup(offset, dind.length - offset, kind + 1); // +1 to skip overlay
 							offset = dind.length;
 						}
 					}
+
+					// clear debug bits for actual indices
+					for (var i = 0; i < dlen; i++) {
+						dind[i] &= mask;
+					}
+
+					if (settings.wireframeOverlay) {
+						rgeo.addGroup(0, dlen, 1); // 1=overlay
+					}
+				} else if (settings.wireframeOverlay) {
+					rgeo.addGroup(0, dind.length, 1); // 1=overlay
 				}
 
 				rgeo.index.array = new Uint32Array(dind);
 				rgeo.index.count = dind.length;
 				rgeo.index.needsUpdate = true;
 
-				rgeo.addGroup(0, res[0].length, 0);
+				if (settings.solve) {
+					rgeo.attributes.position = new THREE.BufferAttribute(positions, stride);
 
-				return [rgeo, res[0].length / 3, res[1]];
+					if (settings.useAttributes) {
+						for (var i = 0, e = geo.attributes.position.count; i < e; ++i) {
+							var nx = attrib[i * attributes + 0];
+							var ny = attrib[i * attributes + 1];
+							var nz = attrib[i * attributes + 2];
+
+							var nl = Math.sqrt(nx * nx + ny * ny + nz * nz);
+
+							if (nl > 0) {
+								attrib[i * attributes + 0] = nx / nl;
+								attrib[i * attributes + 1] = ny / nl;
+								attrib[i * attributes + 2] = nz / nl;
+							}
+						}
+
+						var attribbuf = new THREE.InterleavedBuffer(attrib, attrib_weights.length);
+
+						if (geo.attributes.normal) {
+							rgeo.attributes.normal = new THREE.InterleavedBufferAttribute(attribbuf, 3, 0, false);
+						}
+						if (geo.attributes.color) {
+							rgeo.attributes.color = new THREE.InterleavedBufferAttribute(attribbuf, 3, 3, false);
+						}
+						if (geo.attributes.uv) {
+							rgeo.attributes.uv = new THREE.InterleavedBufferAttribute(attribbuf, 2, 6, false);
+						}
+					}
+				}
+
+				rgeo.addGroup(0, dlen, 0);
+
+				return [rgeo, dlen / 3, res[1]];
 			}
 
 			function simplifyPoints(geo) {
@@ -457,6 +716,11 @@
 				geo.index = new THREE.BufferAttribute(res, 1);
 			}
 
+			function getRadius(obj) {
+				var box = new THREE.Box3().setFromObject(obj);
+				return box.max.sub(box.min).length() / 2;
+			}
+
 			function simplify() {
 				MeshoptSimplifier.ready.then(function () {
 					var threshold = Math.pow(10, -settings.errorThresholdLog10);
@@ -473,12 +737,17 @@
 						// since we rescale the entire scene to fit a unit box, we can directly feed the threshold
 						// this works correctly if there's just one mesh or scales match; ideally we tweak this to compute
 						// threshold per mesh based on relative scale between mesh and scene.
+						// this also computes distance to model *center* instead of surface boundary so features on the boundary
+						// might be simplified more than they should be.
 						threshold = distance * loderrortarget * settings.autoLodFactor;
 					}
 
 					// Process each scene
 					for (var sceneIndex = 0; sceneIndex < scenes.length; sceneIndex++) {
 						var scene = scenes[sceneIndex];
+						if (focusedViewIndex >= 0 && sceneIndex != focusedViewIndex) {
+							continue;
+						}
 
 						// Reset stats for this view
 						var stats = viewStats[sceneIndex];
@@ -490,8 +759,10 @@
 						var rnum = 0;
 						var rden = 0;
 
+						var extent = getRadius(scene);
+
 						scene.traverse(function (object) {
-							if (object.isMesh) {
+							if (object.isMesh && object.geometry.index) {
 								if (!object.original) {
 									object.original = object.geometry.clone();
 
@@ -503,18 +774,22 @@
 
 									object.material = [
 										object.material,
+										new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true }), // overlay
 										new THREE.MeshBasicMaterial({ color: 0x0000ff, wireframe: true }), // border
 										new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true }), // seam
-										new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true }), // complex
+										new THREE.MeshBasicMaterial({ color: 0x009f9f, wireframe: true }), // complex
 										new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true }), // locked
+										new THREE.MeshBasicMaterial({ color: 0xff9f00, wireframe: true }), // mixed edge
 									];
 								}
 
-								var [geo, tri, err] = simplifyMesh(object.original, threshold);
+								var scale = settings.errorScaled ? getRadius(object) / extent : 1.0;
+
+								var [geo, tri, err] = simplifyMesh(object.original, threshold / scale, scale);
 
 								object.geometry = geo;
 
-								stats.error = Math.max(stats.error, err);
+								stats.error = Math.max(stats.error, err * scale);
 								stats.triangles += tri;
 								stats.vertices += object.geometry.attributes.position.count;
 
@@ -663,7 +938,7 @@
 							obj.traverse(function (node) {
 								if (node.isMesh) {
 									// obj loader does not index the geometry, so we need to do it ourselves
-									node.geometry = mergeVertices(node.geometry, 0.0);
+									node.geometry = mergeVertices(node.geometry);
 
 									// we use groups and multiple materials for debug visualization, so merge all of the source ones for now
 									if (Array.isArray(node.material)) {
@@ -712,21 +987,15 @@
 			}
 
 			function updateRendererSizes() {
-				// Get the grid container dimensions
-				var gridWidth = gridContainer.clientWidth;
-				var gridHeight = gridContainer.clientHeight;
+				// Calculate the correct aspect ratio based on a visible view
+				var container = renderers[focusedViewIndex >= 0 ? focusedViewIndex : 0].domElement.parentElement;
+				var aspectRatio = container.clientWidth / container.clientHeight;
 
-				// Calculate aspect ratio based on the grid cells, not the whole window
-				var columns = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--grid-columns'));
-				var cellWidth = gridWidth / columns;
-				var cellHeight = gridHeight / Math.ceil(renderers.length / columns);
-				var cellAspect = cellWidth / cellHeight;
-
-				// Update camera aspect ratio to match a single cell
-				camera.aspect = cellAspect;
+				// Update camera aspect ratio once
+				camera.aspect = aspectRatio;
 				camera.updateProjectionMatrix();
 
-				// Update all renderers
+				// Update all renderer sizes
 				for (var i = 0; i < renderers.length; i++) {
 					var domElement = renderers[i].domElement;
 					var container = domElement.parentElement;
@@ -757,9 +1026,12 @@
 					}
 				}
 
-				// Render all views
+				// Render only visible views
 				for (var i = 0; i < renderers.length; i++) {
-					renderers[i].render(scenes[i], camera);
+					// Only render if view is visible (not hidden by focus mode)
+					if (focusedViewIndex === -1 || focusedViewIndex === i) {
+						renderers[i].render(scenes[i], camera);
+					}
 				}
 			}
 		</script>

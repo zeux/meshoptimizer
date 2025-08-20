@@ -44,12 +44,12 @@ const tests = {
 		const buffers = clusterizer.buildMeshlets(cubeWithNormals.indices, cubeWithNormals.vertices, cubeWithNormals.vertexStride, maxVertices, 512);
 
 		const expectedVertices = [
-			new Uint32Array([2, 3, 0, 1]),
-			new Uint32Array([12, 13, 14, 15]),
 			new Uint32Array([6, 7, 4, 5]),
-			new Uint32Array([16, 17, 18, 19]),
-			new Uint32Array([8, 9, 10, 11]),
-			new Uint32Array([22, 23, 20, 21]),
+			new Uint32Array([14, 15, 12, 13]),
+			new Uint32Array([2, 3, 0, 1]),
+			new Uint32Array([20, 21, 22, 23]),
+			new Uint32Array([10, 11, 8, 9]),
+			new Uint32Array([18, 19, 16, 17]),
 		];
 		const expectedTriangles = new Uint8Array([0, 1, 2, 2, 3, 0]);
 
@@ -83,12 +83,12 @@ const tests = {
 		const buffers = clusterizer.buildMeshlets(cubeWithNormals.indices, cubeWithNormals.vertices, cubeWithNormals.vertexStride, maxVertices, 512);
 
 		const expectedNormals = [
-			new Int32Array([0, 0, 1]),
-			new Int32Array([-1, 0, 0]),
 			new Int32Array([0, 0, -1]),
-			new Int32Array([0, 1, 0]),
-			new Int32Array([1, 0, 0]),
+			new Int32Array([-1, 0, 0]),
+			new Int32Array([0, 0, 1]),
 			new Int32Array([0, -1, 0]),
+			new Int32Array([1, 0, 0]),
+			new Int32Array([0, 1, 0]),
 		];
 
 		const bounds = clusterizer.computeMeshletBounds(buffers, cubeWithNormals.vertices, cubeWithNormals.vertexStride);
@@ -101,25 +101,35 @@ const tests = {
 			assert.deepStrictEqual(normal, expectedNormals[i]);
 		});
 	},
+
+	computeSphereBounds: function () {
+		// positions without per-point radii (tetrahedron)
+		const positions = new Float32Array([0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1]);
+		const bp = clusterizer.computeSphereBounds(positions, 3);
+
+		assert(Math.abs(bp.centerX - 0.5) < 1e-3);
+		assert(Math.abs(bp.centerY - 0.5) < 1e-3);
+		assert(Math.abs(bp.centerZ - 0.5) < 1e-3);
+		assert(bp.radius < 0.87);
+
+		// use 4th float of each element as radius (last point has radius=3 enveloping others)
+		const radii = new Float32Array([0, 1, 2, 3]);
+		const br = clusterizer.computeSphereBounds(positions, 3, radii, 1);
+
+		assert(Math.abs(br.centerX - 1.0) < 1e-3);
+		assert(Math.abs(br.centerY - 0.0) < 1e-3);
+		assert(Math.abs(br.centerZ - 1.0) < 1e-3);
+		assert(Math.abs(br.radius - 3.0) < 1e-3);
+	},
 };
 
-clusterizer.ready.then((_) => {
-	let passed = 0;
-	let failed = 0;
+clusterizer.ready.then(() => {
+	var count = 0;
 
-	for (const key in tests) {
-		try {
-			tests[key]();
-			++passed;
-		} catch (e) {
-			console.error(e);
-			++failed;
-		}
+	for (var key in tests) {
+		tests[key]();
+		count++;
 	}
 
-	if (failed === 0) {
-		console.log(passed, 'tests passed');
-	} else {
-		console.log(passed, 'tests passed &', failed, 'tests failed');
-	}
+	console.log(count, 'tests passed');
 });

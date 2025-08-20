@@ -35,7 +35,7 @@ var tests = {
 		var expected = new Uint32Array([0, 5, 3]);
 
 		assert.deepEqual(res[0], expected);
-		assert.equal(res[1], 0); // error
+		assert(res[1] < 1e-4); // error
 	},
 
 	simplify16: function () {
@@ -51,7 +51,7 @@ var tests = {
 		var expected = new Uint16Array([0, 5, 3]);
 
 		assert.deepEqual(res[0], expected);
-		assert.equal(res[1], 0); // error
+		assert(res[1] < 1e-4); // error
 	},
 
 	simplifyLockBorder: function () {
@@ -67,7 +67,7 @@ var tests = {
 		var expected = new Uint32Array([0, 2, 1, 1, 2, 3, 3, 2, 4, 2, 5, 4]);
 
 		assert.deepEqual(res[0], expected);
-		assert.equal(res[1], 0); // error
+		assert(res[1] < 1e-4); // error
 	},
 
 	simplifyAttr: function () {
@@ -83,7 +83,7 @@ var tests = {
 			for (var x = 0; x < 3; ++x) {
 				vb_pos[(y * 3 + x) * 3 + 0] = x;
 				vb_pos[(y * 3 + x) * 3 + 1] = y;
-				vb_pos[(y * 3 + x) * 3 + 2] = 0.03 * x;
+				vb_pos[(y * 3 + x) * 3 + 2] = 0.03 * x + 0.028 * (y % 2) + (x == 2 && y == 7 ? 1 : 0) * 0.03;
 				vb_att[(y * 3 + x) * 3 + 0] = r;
 				vb_att[(y * 3 + x) * 3 + 1] = g;
 				vb_att[(y * 3 + x) * 3 + 2] = b;
@@ -103,11 +103,11 @@ var tests = {
 			}
 		}
 
-		var attr_weights = [0.01, 0.01, 0.01];
+		var attr_weights = [0.5, 0.5, 0.5];
 
 		var res = simplifier.simplifyWithAttributes(ib, vb_pos, 3, vb_att, 3, attr_weights, null, 6 * 3, 1e-2);
 
-		var expected = new Uint32Array([0, 2, 9, 9, 2, 11, 9, 11, 12, 12, 11, 14, 12, 14, 21, 21, 14, 23]);
+		var expected = new Uint32Array([0, 2, 11, 0, 11, 9, 9, 11, 12, 12, 11, 14, 12, 14, 23, 12, 23, 21]);
 
 		assert.deepEqual(res[0], expected);
 	},
@@ -121,12 +121,12 @@ var tests = {
 		var positions = new Float32Array([0, 2, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 2, 0, 0]);
 		var locks = new Uint8Array([1, 1, 1, 1, 0, 1]); // only vertex 4 can move
 
-		var res = simplifier.simplifyWithAttributes(indices, positions, 3, new Float32Array(), 1, [], locks, 3, 0.01);
+		var res = simplifier.simplifyWithAttributes(indices, positions, 3, new Float32Array(), 0, [], locks, 3, 0.01);
 
 		var expected = new Uint32Array([0, 2, 1, 1, 2, 3, 2, 5, 3]);
 
 		assert.deepEqual(res[0], expected);
-		assert.equal(res[1], 0); // error
+		assert(res[1] < 1e-4); // error
 	},
 
 	getScale: function () {
@@ -152,6 +152,17 @@ var tests = {
 
 		var resC2 = simplifier.simplifyPoints(positions, 3, 2, colors, 3, 1e-2);
 		assert.deepEqual(resC2, expected);
+	},
+
+	simplifyPrune: function () {
+		var indices = new Uint32Array([0, 1, 2, 3, 4, 5, 6, 7, 8]);
+
+		var positions = new Float32Array([0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 2, 1, 2, 0, 1, 0, 0, 2, 0, 4, 2, 4, 0, 2]);
+
+		var expected = new Uint32Array([6, 7, 8]);
+
+		var res = simplifier.simplifyPrune(indices, positions, 3, 0.5);
+		assert.deepEqual(res, expected);
 	},
 };
 

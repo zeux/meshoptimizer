@@ -10,8 +10,8 @@
 #include <algorithm>
 #include <vector>
 
-#include "../src/meshoptimizer.h"
 #include "../extern/fast_obj.h"
+#include "../src/meshoptimizer.h"
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
@@ -159,10 +159,10 @@ void inspectCache(Cache cache)
 		unsigned int ideal_invocations = (grid_size + 1) * (grid_size + 1);
 
 		printf("%d, %f, %f, %f, %f\n", cache_size,
-		       double(invocations1) / double(ideal_invocations),
-		       double(invocations2) / double(ideal_invocations),
-		       double(invocations3) / double(ideal_invocations),
-		       double(invocations4) / double(ideal_invocations));
+		    double(invocations1) / double(ideal_invocations),
+		    double(invocations2) / double(ideal_invocations),
+		    double(invocations3) / double(ideal_invocations),
+		    double(invocations4) / double(ideal_invocations));
 	}
 }
 
@@ -174,7 +174,8 @@ void testCache(IDXGIAdapter* adapter)
 
 	setupShaders(device, context);
 
-	inspectCache([&](const unsigned int* indices, size_t index_count) { return queryVSInvocations(device, context, indices, index_count); });
+	inspectCache([&](const unsigned int* indices, size_t index_count)
+	    { return queryVSInvocations(device, context, indices, index_count); });
 }
 
 void testCacheSequence(IDXGIAdapter* adapter, int argc, char** argv)
@@ -409,6 +410,9 @@ void testCacheMeshes(IDXGIAdapter* adapter, int argc, char** argv)
 
 		for (unsigned int i = 0; i < obj->face_count; ++i)
 		{
+			if (obj->face_vertices[i] <= 2)
+				continue;
+
 			for (unsigned int j = 0; j < obj->face_vertices[i]; ++j)
 			{
 				fastObjIndex gi = obj->indices[index_offset + j];

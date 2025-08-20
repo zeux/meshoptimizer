@@ -22,7 +22,7 @@ When using `-c` option, gltfpack outputs compressed `.glb`/`.gltf` files that us
 
 For better compression, you can use `-cc` option which applies additional compression; additionally make sure that your content delivery method is configured to use deflate (gzip) - meshoptimizer codecs are designed to produce output that can be compressed further with general purpose compressors.
 
-gltfpack can also compress textures using Basis Universal format stored in a KTX2 container (`-tc` flag, requires support for `KHR_texture_basisu`). 
+gltfpack can also compress textures using Basis Universal format stored in a KTX2 container (`-tc` flag, requires support for `KHR_texture_basisu`) or using WebP format (`-tw` flag, requires support for `EXT_texture_webp`).
 
 When working with glTF files that contain point clouds, gltfpack automatically processes the point cloud data to reduce the download size to the extent possible. In addition to aforementioned compression options (either `-c` or `-cc` are recommended), gltfpack can also prune point clouds to provide a more uniform density when `-si` option is used.
 
@@ -52,6 +52,7 @@ The following settings are frequently used to reduce the resulting data size:
 
 * `-cc`: produce compressed gltf/glb files (requires `EXT_meshopt_compression`)
 * `-tc`: convert all textures to KTX2 with BasisU supercompression (requires `KHR_texture_basisu` and may require `-tp` flag for compatibility with WebGL 1)
+* `-tw`: convert all textures to WebP (requires `EXT_texture_webp`)
 * `-mi`: use mesh instancing when serializing references to the same meshes (requires `EXT_mesh_gpu_instancing`)
 * `-si R`: simplify meshes targeting triangle/point count ratio R (default: 1; R should be between 0 and 1)
 
@@ -92,19 +93,21 @@ Even if the source file does not use extensions, gltfpack may use some extension
 
 - KHR_mesh_quantization (used by default unless disabled via `-noq`)
 - KHR_texture_transform (used by default when textures are present, unless disabled via `-noq` or `-vtf`)
-- KHR_texture_basisu (used when requested via `-tc`)
+- KHR_texture_basisu (used when requested via `-tc` or `-tu`)
 - EXT_meshopt_compression (used when requested via `-c` or `-cc`)
 - EXT_mesh_gpu_instancing (used when requested via `-mi`)
+- EXT_texture_webp (used when requested via `-tw`)
 
 gltfpack does not support vendor-specific extensions or custom extensions, including ones defined in [Khronos glTF repository](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor). Unknown extension nodes are discarded from the output.
 
 ## Building
 
-gltfpack can be built from source using CMake or Make. To build a full version of gltfpack that supports texture compression, CMake configuration needs to specify the path to https://github.com/zeux/basis_universal fork (branch gltfpack) via `MESHOPT_BASISU_PATH` variable:
+gltfpack can be built from source using CMake or Make. To build a full version of gltfpack that supports texture compression, CMake configuration needs to specify the path to https://github.com/zeux/basis_universal fork (branch gltfpack) via `MESHOPT_GLTFPACK_BASISU_PATH` variable, as well as libwebp path via `MESHOPT_GLTFPACK_LIBWEBP_PATH` variable:
 
 ```
 git clone -b gltfpack https://github.com/zeux/basis_universal
-cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_BASISU_PATH=basis_universal -DCMAKE_BUILD_TYPE=Release
+git clone https://github.com/webmproject/libwebp
+cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_GLTFPACK_BASISU_PATH=basis_universal -DMESHOPT_GLTFPACK_LIBWEBP_PATH=libwebp -DCMAKE_BUILD_TYPE=Release
 cmake --build . --target gltfpack --config Release
 ```
 

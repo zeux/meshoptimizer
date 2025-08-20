@@ -313,6 +313,45 @@ static void encodeSnorm(void* destination, size_t count, size_t stride, int bits
 	}
 }
 
+static int quantizeColor(float v, int bytebits, int bits)
+{
+	int result = meshopt_quantizeUnorm(v, bytebits);
+
+	// replicate the top bit into the low significant bits
+	const int mask = (1 << (bytebits - bits)) - 1;
+
+	return (result & ~mask) | (mask & -(result >> (bytebits - 1)));
+}
+
+static void encodeColor(void* destination, size_t count, size_t stride, int bits, const float* data)
+{
+	assert(stride == 4 || stride == 8);
+	assert(bits >= 2 && bits <= 16);
+
+	unsigned char* d8 = static_cast<unsigned char*>(destination);
+	unsigned short* d16 = static_cast<unsigned short*>(destination);
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		const float* c = &data[i * 4];
+
+		if (stride == 4)
+		{
+			d8[i * 4 + 0] = uint8_t(quantizeColor(c[0], 8, bits));
+			d8[i * 4 + 1] = uint8_t(quantizeColor(c[1], 8, bits));
+			d8[i * 4 + 2] = uint8_t(quantizeColor(c[2], 8, bits));
+			d8[i * 4 + 3] = uint8_t(quantizeColor(c[3], 8, bits));
+		}
+		else
+		{
+			d16[i * 4 + 0] = uint16_t(quantizeColor(c[0], 16, bits));
+			d16[i * 4 + 1] = uint16_t(quantizeColor(c[1], 16, bits));
+			d16[i * 4 + 2] = uint16_t(quantizeColor(c[2], 16, bits));
+			d16[i * 4 + 3] = uint16_t(quantizeColor(c[3], 16, bits));
+		}
+	}
+}
+
 static StreamFormat writeVertexStreamRaw(std::string& bin, const Stream& stream, cgltf_type type, size_t components)
 {
 	assert(components >= 1 && components <= 4);
@@ -328,11 +367,11 @@ static StreamFormat writeVertexStreamRaw(std::string& bin, const Stream& stream,
 	return format;
 }
 
-static StreamFormat writeVertexStreamFloat(std::string& bin, const Stream& stream, cgltf_type type, int components, const Settings& settings, int bits, meshopt_EncodeExpMode mode)
+static StreamFormat writeVertexStreamFloat(std::string& bin, const Stream& stream, cgltf_type type, int components, bool expf, int bits, meshopt_EncodeExpMode mode)
 {
 	assert(components >= 1 && components <= 4);
 
-	StreamFormat::Filter filter = settings.compress ? StreamFormat::Filter_Exp : StreamFormat::Filter_None;
+	StreamFormat::Filter filter = expf ? StreamFormat::Filter_Exp : StreamFormat::Filter_None;
 
 	if (filter == StreamFormat::Filter_Exp)
 	{
@@ -360,17 +399,7 @@ static StreamFormat writeVertexStreamFloat(std::string& bin, const Stream& strea
 	return format;
 }
 
-static int quantizeColor(float v, int bytebits, int bits)
-{
-	int result = meshopt_quantizeUnorm(v, bytebits);
-
-	// replicate the top bit into the low significant bits
-	const int mask = (1 << (bytebits - bits)) - 1;
-
-	return (result & ~mask) | (mask & -(result >> (bytebits - 1)));
-}
-
-StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings)
+StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings, bool filters)
 {
 	if (stream.type == cgltf_attribute_type_position)
 	{
@@ -378,7 +407,8 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 			return writeVertexStreamRaw(bin, stream, cgltf_type_vec3, 3);
 
 		if (settings.pos_float)
-			return writeVertexStreamFloat(bin, stream, cgltf_type_vec3, 3, settings, qp.bits, settings.compressmore ? meshopt_EncodeExpSharedComponent : meshopt_EncodeExpSeparate);
+			return writeVertexStreamFloat(bin, stream, cgltf_type_vec3, 3, settings.compress && filters, qp.bits,
+			    settings.compressmore ? meshopt_EncodeExpSharedComponent : meshopt_EncodeExpSeparate);
 
 		if (stream.target == 0)
 		{
@@ -458,7 +488,8 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 		// expand the encoded range to ensure it covers [0..1) interval
 		// this can slightly reduce precision but we should not need more precision inside 0..1, and this significantly improves compressed size when using encodeExpOne
 		if (settings.tex_float)
-			return writeVertexStreamFloat(bin, stream, cgltf_type_vec2, 2, settings, qt.bits, settings.compressmore ? meshopt_EncodeExpSharedComponent : meshopt_EncodeExpClamped);
+			return writeVertexStreamFloat(bin, stream, cgltf_type_vec2, 2, settings.compress && filters, qt.bits,
+			    settings.compressmore ? meshopt_EncodeExpSharedComponent : meshopt_EncodeExpClamped);
 
 		float uv_rscale[2] = {
 		    qt.scale[0] == 0.f ? 0.f : 1.f / qt.scale[0],
@@ -486,9 +517,10 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 
 		// expand the encoded range to ensure it covers [0..1) interval
 		if (settings.nrm_float)
-			return writeVertexStreamFloat(bin, stream, cgltf_type_vec3, 3, settings, settings.nrm_bits, settings.compressmore || stream.target ? meshopt_EncodeExpSharedComponent : meshopt_EncodeExpClamped);
+			return writeVertexStreamFloat(bin, stream, cgltf_type_vec3, 3, settings.compress && filters, settings.nrm_bits,
+			    (settings.compressmore || stream.target) ? meshopt_EncodeExpSharedComponent : meshopt_EncodeExpClamped);
 
-		bool oct = settings.compressmore && stream.target == 0;
+		bool oct = filters && settings.compressmore && stream.target == 0;
 		int bits = settings.nrm_bits;
 
 		StreamFormat::Filter filter = oct ? StreamFormat::Filter_Oct : StreamFormat::Filter_None;
@@ -511,7 +543,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 		if (!settings.quantize)
 			return writeVertexStreamRaw(bin, stream, cgltf_type_vec4, 4);
 
-		bool oct = settings.compressmore && stream.target == 0;
+		bool oct = filters && settings.compressmore && stream.target == 0;
 		int bits = (settings.nrm_bits > 8) ? 8 : settings.nrm_bits;
 
 		StreamFormat::Filter filter = oct ? StreamFormat::Filter_Oct : StreamFormat::Filter_None;
@@ -531,40 +563,28 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	}
 	else if (stream.type == cgltf_attribute_type_color)
 	{
+		bool col = filters && settings.compressexp && settings.compressmore;
 		int bits = settings.col_bits;
 
-		for (size_t i = 0; i < stream.data.size(); ++i)
-		{
-			const Attr& a = stream.data[i];
+		StreamFormat::Filter filter = col ? StreamFormat::Filter_Color : StreamFormat::Filter_None;
 
-			if (bits > 8)
-			{
-				uint16_t v[4] = {
-				    uint16_t(quantizeColor(a.f[0], 16, bits)),
-				    uint16_t(quantizeColor(a.f[1], 16, bits)),
-				    uint16_t(quantizeColor(a.f[2], 16, bits)),
-				    uint16_t(quantizeColor(a.f[3], 16, bits))};
-				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
-			}
-			else
-			{
-				uint8_t v[4] = {
-				    uint8_t(quantizeColor(a.f[0], 8, bits)),
-				    uint8_t(quantizeColor(a.f[1], 8, bits)),
-				    uint8_t(quantizeColor(a.f[2], 8, bits)),
-				    uint8_t(quantizeColor(a.f[3], 8, bits))};
-				bin.append(reinterpret_cast<const char*>(v), sizeof(v));
-			}
-		}
+		size_t offset = bin.size();
+		size_t stride = bits > 8 ? 8 : 4;
+		bin.resize(bin.size() + stream.data.size() * stride);
+
+		if (col)
+			meshopt_encodeFilterColor(&bin[offset], stream.data.size(), stride, bits, stream.data[0].f);
+		else
+			encodeColor(&bin[offset], stream.data.size(), stride, bits, stream.data[0].f);
 
 		if (bits > 8)
 		{
-			StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16u, true, 8};
+			StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16u, true, 8, filter};
 			return format;
 		}
 		else
 		{
-			StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_8u, true, 4};
+			StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_8u, true, 4, filter};
 			return format;
 		}
 	}
@@ -639,7 +659,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	else if (stream.type == cgltf_attribute_type_custom)
 	{
 		// note: _custom is equivalent to _ID, as such the data contains scalar integers
-		if (!settings.compressmore)
+		if (!settings.compressmore || !filters)
 			return writeVertexStreamRaw(bin, stream, cgltf_type_scalar, 1);
 
 		unsigned int maxv = 0;

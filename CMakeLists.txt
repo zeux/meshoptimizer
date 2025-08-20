@@ -12,7 +12,7 @@ if(POLICY CMP0092)
     cmake_policy(SET CMP0092 NEW) # Enables clean /W4 override for MSVC
 endif()
 
-project(meshoptimizer VERSION 0.24 LANGUAGES CXX)
+project(meshoptimizer VERSION 0.25 LANGUAGES CXX)
 
 option(MESHOPT_BUILD_DEMO "Build demo" OFF)
 option(MESHOPT_BUILD_GLTFPACK "Build gltfpack" OFF)
@@ -21,8 +21,9 @@ option(MESHOPT_STABLE_EXPORTS "Only export stable APIs from shared library" OFF)
 option(MESHOPT_WERROR "Treat warnings as errors" OFF)
 option(MESHOPT_INSTALL "Install library" ON)
 
-# Path to Basis Universal library, if you want to use it with gltfpack
-set(MESHOPT_BASISU_PATH "" CACHE STRING "")
+# Optional gltfpack components for texture compression support
+set(MESHOPT_GLTFPACK_BASISU_PATH "" CACHE STRING "") # Basis Universal, https://github.com/BinomialLLC/basis_universal
+set(MESHOPT_GLTFPACK_LIBWEBP_PATH "" CACHE STRING "") # libwebp, https://github.com/webmproject/libwebp
 
 set(SOURCES
     src/meshoptimizer.h
@@ -46,8 +47,8 @@ set(SOURCES
 
 set(GLTF_SOURCES
     gltf/animation.cpp
-    gltf/basisenc.cpp
-    gltf/basislib.cpp
+    gltf/encodebasis.cpp
+    gltf/encodewebp.cpp
     gltf/fileio.cpp
     gltf/gltfpack.cpp
     gltf/image.cpp
@@ -104,6 +105,8 @@ if(MESHOPT_BUILD_SHARED_LIBS)
         target_compile_definitions(meshoptimizer PUBLIC "MESHOPTIMIZER_API=__attribute__((visibility(\"default\")))")
     endif()
 
+    target_compile_definitions(meshoptimizer PUBLIC MESHOPTIMIZER_ALLOC_EXPORT)
+
     if(MESHOPT_STABLE_EXPORTS)
 		target_compile_definitions(meshoptimizer PUBLIC "MESHOPTIMIZER_EXPERIMENTAL=")
     endif()
@@ -114,6 +117,7 @@ set(TARGETS meshoptimizer)
 if(MESHOPT_BUILD_DEMO)
     add_executable(demo demo/main.cpp demo/nanite.cpp demo/tests.cpp tools/objloader.cpp)
     set_target_properties(demo PROPERTIES CXX_STANDARD 11)
+    set_target_properties(demo PROPERTIES OUTPUT_NAME meshoptdemo)
     target_link_libraries(demo meshoptimizer)
 endif()
 
@@ -128,22 +132,45 @@ if(MESHOPT_BUILD_GLTFPACK)
         set_target_properties(gltfpack PROPERTIES INSTALL_RPATH ${RPATH})
     endif()
 
-    if(NOT MESHOPT_BASISU_PATH STREQUAL "")
-        get_filename_component(BASISU_PATH ${MESHOPT_BASISU_PATH} ABSOLUTE)
+    if(NOT MESHOPT_GLTFPACK_BASISU_PATH STREQUAL "")
+        get_filename_component(BASISU_PATH ${MESHOPT_GLTFPACK_BASISU_PATH} ABSOLUTE)
         if (NOT EXISTS ${BASISU_PATH})
             message(FATAL_ERROR "Basis Universal path ${BASISU_PATH} not found")
         endif()
 
+        if (NOT SSE AND NOT MSVC AND CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+            message(WARNING "Building Basis Universal without SSE4.1 support; performance may be suboptimal")
+        endif()
+
+        add_subdirectory(${BASISU_PATH} ${CMAKE_CURRENT_BINARY_DIR}/basisu EXCLUDE_FROM_ALL)
+
         target_compile_definitions(gltfpack PRIVATE WITH_BASISU)
-        set_source_files_properties(gltf/basisenc.cpp gltf/basislib.cpp PROPERTIES INCLUDE_DIRECTORIES ${BASISU_PATH})
+        target_link_libraries(gltfpack basisu_encoder)
+        set_source_files_properties(gltf/encodebasis.cpp PROPERTIES INCLUDE_DIRECTORIES ${BASISU_PATH}) # necessary because basisu_encoder doesn't export include directories
+    endif()
 
-        if(NOT MSVC AND CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "x86_64")
-            set_source_files_properties(gltf/basislib.cpp PROPERTIES COMPILE_OPTIONS -msse4.1)
+    if(NOT MESHOPT_GLTFPACK_LIBWEBP_PATH STREQUAL "")
+        get_filename_component(LIBWEBP_PATH ${MESHOPT_GLTFPACK_LIBWEBP_PATH} ABSOLUTE)
+        if (NOT EXISTS ${LIBWEBP_PATH})
+            message(FATAL_ERROR "libwebp path ${LIBWEBP_PATH} not found")
         endif()
 
-        if(UNIX)
-            target_link_libraries(gltfpack pthread)
+        add_subdirectory(${LIBWEBP_PATH} ${CMAKE_CURRENT_BINARY_DIR}/libwebp EXCLUDE_FROM_ALL)
+
+        target_compile_definitions(gltfpack PRIVATE WITH_LIBWEBP)
+        target_link_libraries(gltfpack webp)
+
+        # when gltfpack is built with Basis Universal, we use Basis image decoders for PNG/JPEG support for ease of distribution
+        if(NOT MESHOPT_GLTFPACK_BASISU_PATH STREQUAL "")
+            target_compile_definitions(gltfpack PRIVATE WITH_LIBWEBP_BASIS)
+        else()
+            target_link_libraries(gltfpack imagedec)
         endif()
+    endif()
+
+    if(NOT MESHOPT_GLTFPACK_BASISU_PATH STREQUAL "" OR NOT MESHOPT_GLTFPACK_LIBWEBP_PATH STREQUAL "")
+        find_package(Threads REQUIRED)
+        target_link_libraries(gltfpack Threads::Threads)
     endif()
 endif()
 

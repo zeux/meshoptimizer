@@ -18,8 +18,8 @@ jobs:
           [
             { name: ubuntu, version: ubuntu-latest },
             { name: ubuntu-arm, version: ubuntu-24.04-arm },
-            { name: macos-intel, version: macos-13 },
-            { name: macos-arm, version: macos-14 },
+            { name: ubuntu-clang, version: ubuntu-latest },
+            { name: macos, version: macos-latest },
           ]
     name: ${{matrix.os.name}}
     runs-on: ${{matrix.os.version}}
@@ -30,6 +30,9 @@ jobs:
       - name: work around ASLR+ASAN compatibility
         run: sudo sysctl -w vm.mmap_rnd_bits=28
         if: matrix.os.name == 'ubuntu'
+      - name: enable clang
+        run: echo CXX=clang++ >Makefile.config
+        if: matrix.os.name == 'ubuntu-clang'
       - name: make test
         run: |
           make -j2 config=sanitize test
@@ -44,23 +47,25 @@ jobs:
           find . -type f -name '*.gcno' -exec gcov -p {} +
           sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
           bash <(curl -s https://codecov.io/bash) -f './src*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
+        if: matrix.os.name != 'ubuntu-clang'
 
   windows:
-    runs-on: windows-latest
     strategy:
       matrix:
-        arch: [Win32, x64]
+        arch: [{ name: windows-x86, arch: Win32 }, { name: windows, arch: x64 }]
+    name: ${{matrix.arch.name}}
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - name: cmake configure
-        run: cmake . -DMESHOPT_BUILD_DEMO=ON -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_WERROR=ON -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>" -A ${{matrix.arch}}
+        run: cmake . -DMESHOPT_BUILD_DEMO=ON -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_WERROR=ON -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>" -A ${{matrix.arch.arch}}
       - name: cmake test
         shell: bash # necessary for fail-fast
         run: |
           cmake --build . -- -property:Configuration=Debug -verbosity:minimal
-          Debug/demo.exe demo/pirate.obj
+          Debug/meshoptdemo.exe demo/pirate.obj
           cmake --build . -- -property:Configuration=Release -verbosity:minimal
-          Release/demo.exe demo/pirate.obj
+          Release/meshoptdemo.exe demo/pirate.obj
 
   nodejs:
     runs-on: ubuntu-latest
@@ -136,10 +141,8 @@ jobs:
           node js/meshopt_simplifier.test.js
           node js/meshopt_clusterizer.test.js
 
-  gltfpack-basis:
+  gltfpack-full:
     runs-on: ubuntu-latest
-    env:
-      werror: 1
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -147,8 +150,15 @@ jobs:
           repository: zeux/basis_universal
           ref: gltfpack
           path: basis_universal
-      - name: make gltfpack
-        run: make -j2 BASISU=basis_universal gltfpack
+      - uses: actions/checkout@v4
+        with:
+          repository: webmproject/libwebp
+          ref: 1.6.0
+          path: libwebp
+      - name: cmake configure
+        run: cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_GLTFPACK_BASISU_PATH=basis_universal -DMESHOPT_GLTFPACK_LIBWEBP_PATH=libwebp
+      - name: cmake build
+        run: cmake --build . --target gltfpack -j 4
 
   gltfpack-coverage:
     runs-on: ubuntu-latest
@@ -163,20 +173,26 @@ jobs:
         with:
           repository: KhronosGroup/glTF-Sample-Assets
           path: glTF-Sample-Assets
+      - name: build basisu
+        run: |
+          cd basis_universal
+          cmake . -D CMAKE_BUILD_TYPE=Debug
+          make -j4 basisu_encoder
       - name: make
         run: make -j2 config=coverage BASISU=basis_universal gltfpack
       - name: test
         run: |
           find glTF-Sample-Assets -name '*.gltf' -or -name '*.glb' | xargs -P 2 -L 16 -d '\n' ./gltfpack -cc -test
           ./gltfpack -test demo/pirate.obj -si 0.5
-          ./gltfpack -test demo/pirate.obj -si 0.5 -sv -slb -se 0.02
+          ./gltfpack -test demo/pirate.obj -si 0.5 -slb -se 0.02
           ./gltfpack -test demo/pirate.obj -si 0.1 -sa
-          ./gltfpack -test demo/pirate.obj -sd 0.5
           ./gltfpack -test demo/pirate.obj -noq
           ./gltfpack -test demo/pirate.obj -vp 16 -vt 16 -vn 16 -vc 16
           ./gltfpack -test demo/pirate.obj -vpf -vtf -vnf
+          ./gltfpack -test demo/pirate.obj -vi -c
           ./gltfpack -test glTF-Sample-Assets/Models/ABeautifulGame/glTF/ABeautifulGame.gltf -mi -c
           ./gltfpack -test glTF-Sample-Assets/Models/ABeautifulGame/glTF/ABeautifulGame.gltf -kn -km -ke
+          ./gltfpack -test glTF-Sample-Assets/Models/ABeautifulGame/glTF/ABeautifulGame.gltf -si 0.1 -sp
           ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -c
           ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -vpf -vtf -cc
           ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tc
@@ -186,7 +202,7 @@ jobs:
           ./gltfpack -test glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -tc color -tfy -tq 4 -tj 1
           ./gltfpack -test glTF-Sample-Assets/Models/CesiumMan/glTF/CesiumMan.gltf -tu -ts 0.6 -tp -ar 0
           ./gltfpack -test glTF-Sample-Assets/Models/PrimitiveModeNormalsTest/glTF/PrimitiveModeNormalsTest.gltf -si 0.5
-          ./gltfpack -test glTF-Sample-Assets/Models/VertexColorTest/glTF/VertexColorTest.gltf -si 0.5 -sv -vc 12
+          ./gltfpack -test glTF-Sample-Assets/Models/VertexColorTest/glTF/VertexColorTest.gltf -si 0.5 -vc 12
           ./gltfpack -test glTF-Sample-Assets/Models/SimpleMeshes/glTF/SimpleMeshes.gltf -mm
           ./gltfpack -test glTF-Sample-Assets/Models/SimpleMeshes/glTF/SimpleMeshes.gltf -kn
           echo newmtl Leather > demo/pirate.mtl
@@ -205,8 +221,8 @@ jobs:
           sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
           bash <(curl -s https://codecov.io/bash) -f './gltf*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
 
-  iphone:
-    runs-on: macos-latest
+  macos-iphone:
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - name: make

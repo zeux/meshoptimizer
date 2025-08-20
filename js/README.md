@@ -105,12 +105,15 @@ All these functions take a source floating point buffer as an input, and perform
 - `encodeFilterExp` takes each K floats from the source array (where `K=stride/4`, for a total of `count` K-vectors), and encodes them into `stride` bytes in a way that, when decoded, the result is stored as K single-precision floating point values. This may seem redundant but it allows to trade some precision for a higher compression ratio due to reduced precision of stored components, controlled by `bits` which must be in `[1..24]` range, and a shared exponent encoding used by the function.
 The `mode` parameter can be used to influence the exponent sharing and provides a tradeoff between compressed size and quality for various use cases, and can be one of 'Separate', 'SharedVector', 'SharedComponent' and 'Clamped' (defaulting to 'SharedVector').
 
+- `encodeFilterColor` takes each 4 floats from the source array (for a total of `count` 4-vectors), treats them as an RGBA color with each component from 0..1, and encodes them into `stride` bytes in a way that, when decoded, the result is stored as a normalized unsigned 4-vector. `stride` must be 4 (in which case the round-trip result is 4 8-bit normalized values) or 8 (in which case the round-trip result is 4 16-bit normalized values). This encoding is recommended for colors (with stride=4 for medium quality and 8 for high quality output). `bits` represents the desired precision of each component and must be in `[1..8]` range if `stride=4` and `[1..16]` range if `stride=8`.
+
 Note that in all cases using the highest `bits` value allowed by the output `stride` won't change the size of the output array (which is always going to be `count * stride` bytes), but it *will* reduce compression efficiency, as such the lowest acceptable `bits` value is recommended to use. When multiple parts of the data require different levels of precision, encode filters can be called multiple times and the output of the same filter called with the same `stride` can be concatenated even if `bits` are different.
 
 After data is quantized using filter encoding or manual quantization, the result should be compressed using one of the following functions that mirror the interface of the decoding functions described above:
 
 ```ts
 encodeVertexBuffer: (source: Uint8Array, count: number, size: number) => Uint8Array;
+encodeVertexBufferLevel: (source: Uint8Array, count: number, size: number, level: number, version?: number) => Uint8Array;
 encodeIndexBuffer: (source: Uint8Array, count: number, size: number) => Uint8Array;
 encodeIndexSequence: (source: Uint8Array, count: number, size: number) => Uint8Array;
 
@@ -122,6 +125,8 @@ encodeGltfBuffer: (source: Uint8Array, count: number, size: number, mode: string
 Note that the source is specified as byte arrays; for example, to quantize a position stream encoded using 16-bit integers with 5 vertices, `source` must have length of `5 * 8 = 40` bytes (8 bytes for each position - 3\*2 bytes of data and 2 bytes of padding to conform to alignment requirements), `count` must be 5 and `size` must be 8. When padding data to the alignment boundary make sure to use 0 as padding bytes for optimal compression.
 
 When interleaved vertex data is compressed, `encodeVertexBuffer` can be called with the full size of a single interleaved vertex; however, when compressing deinterleaved data, note that `encodeVertexBuffer` should be called on each component individually if the strides of different streams are different.
+
+By default, `encodeVertexBuffer` uses v0 version of the encoding; this encoding is compatible with `EXT_meshopt_compression` glTF extension but results in lower compression ratios. For better compression, `encodeVertexBufferLevel` can be used to specify encoding version 1; the `level` parameter controls the compression ratio and can be set to 2 (default), 3 for higher compression, or 0/1 for lower. The higher the level, the better the compression ratio, but also the slower the encoding process. When version is set to 0, `level` does not have any effect and the encoding is equivalent to `encodeVertexBuffer`.
 
 ## Simplifier
 
@@ -146,6 +151,15 @@ To control behavior of the algorithm more precisely, `flags` may specify an arra
 - `'LockBorder'` locks the vertices that lie on the topological border of the mesh in place such that they don't move during simplification. This can be valuable to simplify independent chunks of a mesh, for example terrain, to ensure that individual levels of detail can be stitched together later without gaps.
 - `'ErrorAbsolute'` changes the error metric from relative to absolute both for the input error limit as well as for the resulting error. This can be used instead of `getScale`.
 - `'Sparse'` improves simplification performance assuming input indices are a sparse subset of the mesh. This can be useful when simplifying small mesh subsets independently. For consistency, it is recommended to use absolute errors when sparse simplification is desired.
+- ``Prune`` allows removal of isolated components regardless of the topological restrictions inside the component. This is generally recommended for full-mesh simplification as it can improve quality and reduce triangle count; note that with this option, triangles connected to locked vertices may be removed as part of their component.
+
+In addition to the `Prune` flag, you can explicitly prune isolated components under a target threshold by calling the `simplifyPrune` function:
+
+```ts
+simplifyPrune: (indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, target_error: number) => Uint32Array;
+```
+
+This can be done before regular simplification or as the only step, which is useful for scenarios like isosurface cleanup.
 
 While `simplify` is aware of attribute discontinuities by default (and infers them through the supplied index buffer) and tries to preserve them, it can be useful to provide information about attribute values. This allows the simplifier to take attribute error into account which can improve shading (by using vertex normals), texture deformation (by using texture coordinates), and may be necessary to preserve vertex colors when textures are not used in the first place. This can be done by using a variant of the simplification function that takes attribute values and weight factors, `simplifyWithAttributes`:
 
@@ -245,6 +259,12 @@ It is also possible to compute bounds of a vertex cluster that is not generated 
 
 ```ts
 computeClusterBounds(indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number) => Bounds;
+```
+
+Finally, it is possible to compute spherical bounds of an arbitrary set of points, which can be useful to compute bounds for arbitrary mesh subsets. Each point can have an optional radius; this can be used to merge the spherical bounds of multiple clusters. The inputs are provided as strided arrays with the stride in `Float32` units.
+
+```ts
+computeSphereBounds: (positions: Float32Array, positions_stride: number, radii?: Float32Array, radii_stride?: number) => Bounds;
 ```
 
 ## License

@@ -46,8 +46,6 @@ double timestamp()
 }
 #endif
 
-const size_t kCacheSize = 16;
-
 struct Vertex
 {
 	float px, py, pz;
@@ -79,7 +77,8 @@ Mesh parseObj(const char* path, double& reindex)
 	size_t total_indices = 0;
 
 	for (unsigned int i = 0; i < obj->face_count; ++i)
-		total_indices += 3 * (obj->face_vertices[i] - 2);
+		if (obj->face_vertices[i] > 2)
+			total_indices += 3 * (obj->face_vertices[i] - 2);
 
 	std::vector<Vertex> vertices(total_indices);
 
@@ -88,6 +87,9 @@ Mesh parseObj(const char* path, double& reindex)
 
 	for (unsigned int i = 0; i < obj->face_count; ++i)
 	{
+		if (obj->face_vertices[i] <= 2)
+			continue;
+
 		for (unsigned int j = 0; j < obj->face_vertices[i]; ++j)
 		{
 			fastObjIndex gi = obj->indices[index_offset + j];
@@ -124,6 +126,10 @@ Mesh parseObj(const char* path, double& reindex)
 	reindex = timestamp();
 
 	Mesh result;
+
+	// empty mesh
+	if (total_indices == 0)
+		return result;
 
 	std::vector<unsigned int> remap(total_indices);
 
@@ -211,180 +217,6 @@ void dumpObj(const char* section, const std::vector<unsigned int>& indices)
 
 		fprintf(stderr, "f %d//%d %d//%d %d//%d\n", a + 1, a + 1, b + 1, b + 1, c + 1, c + 1);
 	}
-}
-
-bool isMeshValid(const Mesh& mesh)
-{
-	size_t index_count = mesh.indices.size();
-	size_t vertex_count = mesh.vertices.size();
-
-	if (index_count % 3 != 0)
-		return false;
-
-	const unsigned int* indices = &mesh.indices[0];
-
-	for (size_t i = 0; i < index_count; ++i)
-		if (indices[i] >= vertex_count)
-			return false;
-
-	return true;
-}
-
-bool rotateTriangle(Triangle& t)
-{
-	int c01 = memcmp(&t.v[0], &t.v[1], sizeof(Vertex));
-	int c02 = memcmp(&t.v[0], &t.v[2], sizeof(Vertex));
-	int c12 = memcmp(&t.v[1], &t.v[2], sizeof(Vertex));
-
-	if (c12 < 0 && c01 > 0)
-	{
-		// 1 is minimum, rotate 012 => 120
-		Vertex tv = t.v[0];
-		t.v[0] = t.v[1], t.v[1] = t.v[2], t.v[2] = tv;
-	}
-	else if (c02 > 0 && c12 > 0)
-	{
-		// 2 is minimum, rotate 012 => 201
-		Vertex tv = t.v[2];
-		t.v[2] = t.v[1], t.v[1] = t.v[0], t.v[0] = tv;
-	}
-
-	return c01 != 0 && c02 != 0 && c12 != 0;
-}
-
-unsigned int hashRange(const char* key, size_t len)
-{
-	// MurmurHash2
-	const unsigned int m = 0x5bd1e995;
-	const int r = 24;
-
-	unsigned int h = 0;
-
-	while (len >= 4)
-	{
-		unsigned int k = *reinterpret_cast<const unsigned int*>(key);
-
-		k *= m;
-		k ^= k >> r;
-		k *= m;
-
-		h *= m;
-		h ^= k;
-
-		key += 4;
-		len -= 4;
-	}
-
-	return h;
-}
-
-unsigned int hashMesh(const Mesh& mesh)
-{
-	size_t triangle_count = mesh.indices.size() / 3;
-
-	const Vertex* vertices = &mesh.vertices[0];
-	const unsigned int* indices = &mesh.indices[0];
-
-	unsigned int h1 = 0;
-	unsigned int h2 = 0;
-
-	for (size_t i = 0; i < triangle_count; ++i)
-	{
-		Triangle t;
-		t.v[0] = vertices[indices[i * 3 + 0]];
-		t.v[1] = vertices[indices[i * 3 + 1]];
-		t.v[2] = vertices[indices[i * 3 + 2]];
-
-		// skip degenerate triangles since some algorithms don't preserve them
-		if (rotateTriangle(t))
-		{
-			unsigned int hash = hashRange(t.data, sizeof(t.data));
-
-			h1 ^= hash;
-			h2 += hash;
-		}
-	}
-
-	return h1 * 0x5bd1e995 + h2;
-}
-
-void optNone(Mesh& mesh)
-{
-	(void)mesh;
-}
-
-void optRandomShuffle(Mesh& mesh)
-{
-	size_t triangle_count = mesh.indices.size() / 3;
-
-	unsigned int* indices = &mesh.indices[0];
-
-	unsigned int rng = 0;
-
-	for (size_t i = triangle_count - 1; i > 0; --i)
-	{
-		// Fisher-Yates shuffle
-		size_t j = rng % (i + 1);
-
-		unsigned int t;
-		t = indices[3 * j + 0], indices[3 * j + 0] = indices[3 * i + 0], indices[3 * i + 0] = t;
-		t = indices[3 * j + 1], indices[3 * j + 1] = indices[3 * i + 1], indices[3 * i + 1] = t;
-		t = indices[3 * j + 2], indices[3 * j + 2] = indices[3 * i + 2], indices[3 * i + 2] = t;
-
-		// LCG RNG, constants from Numerical Recipes
-		rng = rng * 1664525 + 1013904223;
-	}
-}
-
-void optCache(Mesh& mesh)
-{
-	meshopt_optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size());
-}
-
-void optCacheFifo(Mesh& mesh)
-{
-	meshopt_optimizeVertexCacheFifo(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize);
-}
-
-void optCacheStrip(Mesh& mesh)
-{
-	meshopt_optimizeVertexCacheStrip(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size());
-}
-
-void optOverdraw(Mesh& mesh)
-{
-	// use worst-case ACMR threshold so that overdraw optimizer can sort *all* triangles
-	// warning: this significantly deteriorates the vertex cache efficiency so it is not advised; look at optComplete for the recommended method
-	const float kThreshold = 3.f;
-	meshopt_optimizeOverdraw(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), kThreshold);
-}
-
-void optFetch(Mesh& mesh)
-{
-	meshopt_optimizeVertexFetch(&mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
-}
-
-void optFetchRemap(Mesh& mesh)
-{
-	// this produces results equivalent to optFetch, but can be used to remap multiple vertex streams
-	std::vector<unsigned int> remap(mesh.vertices.size());
-	meshopt_optimizeVertexFetchRemap(&remap[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size());
-
-	meshopt_remapIndexBuffer(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &remap[0]);
-	meshopt_remapVertexBuffer(&mesh.vertices[0], &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex), &remap[0]);
-}
-
-void optComplete(Mesh& mesh)
-{
-	// vertex cache optimization should go first as it provides starting order for overdraw
-	meshopt_optimizeVertexCache(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size());
-
-	// reorder indices for overdraw, balancing overdraw and vertex cache efficiency
-	const float kThreshold = 1.01f; // allow up to 1% worse ACMR to get more reordering opportunities for overdraw
-	meshopt_optimizeOverdraw(&mesh.indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), kThreshold);
-
-	// vertex fetch optimization should go last as it depends on the final index order
-	meshopt_optimizeVertexFetch(&mesh.vertices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
 }
 
 struct PackedVertex
@@ -499,6 +331,46 @@ void simplifyAttr(const Mesh& mesh, float threshold = 0.2f, unsigned int options
 
 	printf("%-9s: %d triangles => %d triangles (%.2f%% deviation) in %.2f msec\n",
 	    "SimplifyAttr",
+	    int(mesh.indices.size() / 3), int(lod.indices.size() / 3),
+	    result_error * 100,
+	    (end - start) * 1000);
+}
+
+void simplifyUpdate(const Mesh& mesh, float threshold = 0.2f, unsigned int options = 0)
+{
+	Mesh lod;
+
+	double start = timestamp();
+
+	size_t target_index_count = size_t(mesh.indices.size() * threshold);
+	float target_error = 1e-2f;
+	float result_error = 0;
+
+	const float nrm_weight = 0.5f;
+	const float attr_weights[3] = {nrm_weight, nrm_weight, nrm_weight};
+
+	lod = mesh; // start from the original mesh
+	lod.indices.resize(meshopt_simplifyWithUpdate(&lod.indices[0], mesh.indices.size(), &lod.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), &lod.vertices[0].nx, sizeof(Vertex), attr_weights, 3, NULL, target_index_count, target_error, options, &result_error));
+
+	lod.vertices.resize(meshopt_optimizeVertexFetch(&lod.vertices[0], &lod.indices[0], lod.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex)));
+
+	for (size_t i = 0; i < lod.vertices.size(); ++i)
+	{
+		// update normals
+		Vertex& v = lod.vertices[i];
+		float nl = sqrtf(v.nx * v.nx + v.ny * v.ny + v.nz * v.nz);
+		if (nl > 0)
+		{
+			v.nx /= nl;
+			v.ny /= nl;
+			v.nz /= nl;
+		}
+	}
+
+	double end = timestamp();
+
+	printf("%-9s: %d triangles => %d triangles (%.2f%% deviation) in %.2f msec\n",
+	    "SimplifyUpdt",
 	    int(mesh.indices.size() / 3), int(lod.indices.size() / 3),
 	    result_error * 100,
 	    (end - start) * 1000);
@@ -631,9 +503,9 @@ void simplifyComplete(const Mesh& mesh)
 	// for using LOD data at runtime, in addition to vertices and indices you have to save lod_index_offsets/lod_index_counts.
 
 	{
-		meshopt_VertexCacheStatistics vcs0 = meshopt_analyzeVertexCache(&indices[lod_index_offsets[0]], lod_index_counts[0], vertices.size(), kCacheSize, 0, 0);
+		meshopt_VertexCacheStatistics vcs0 = meshopt_analyzeVertexCache(&indices[lod_index_offsets[0]], lod_index_counts[0], vertices.size(), 16, 0, 0);
 		meshopt_VertexFetchStatistics vfs0 = meshopt_analyzeVertexFetch(&indices[lod_index_offsets[0]], lod_index_counts[0], vertices.size(), sizeof(Vertex));
-		meshopt_VertexCacheStatistics vcsN = meshopt_analyzeVertexCache(&indices[lod_index_offsets[lod_count - 1]], lod_index_counts[lod_count - 1], vertices.size(), kCacheSize, 0, 0);
+		meshopt_VertexCacheStatistics vcsN = meshopt_analyzeVertexCache(&indices[lod_index_offsets[lod_count - 1]], lod_index_counts[lod_count - 1], vertices.size(), 16, 0, 0);
 		meshopt_VertexFetchStatistics vfsN = meshopt_analyzeVertexFetch(&indices[lod_index_offsets[lod_count - 1]], lod_index_counts[lod_count - 1], vertices.size(), sizeof(Vertex));
 
 		typedef PackedVertexOct PV;
@@ -673,6 +545,10 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 
 	double middle = timestamp();
 
+	// generate position remap; we'll use that to partition clusters using position-only adjacency
+	std::vector<unsigned int> remap(mesh.vertices.size());
+	meshopt_generatePositionRemap(&remap[0], &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex));
+
 	// partition clusters in groups; each group will be simplified separately and the boundaries between groups will be preserved
 	std::vector<unsigned int> cluster_indices;
 	cluster_indices.reserve(mesh.indices.size()); // slight underestimate, vector should realloc once
@@ -683,13 +559,15 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 		const meshopt_Meshlet& m = meshlets[i];
 
 		for (size_t j = 0; j < m.triangle_count * 3; ++j)
-			cluster_indices.push_back(meshlet_vertices[m.vertex_offset + meshlet_triangles[m.triangle_offset + j]]);
+		{
+			unsigned int v = meshlet_vertices[m.vertex_offset + meshlet_triangles[m.triangle_offset + j]];
+
+			// use the first vertex with equivalent position so that cluster adjacency ignores attribute seams
+			cluster_indices.push_back(remap[v]);
+		}
 
 		cluster_sizes[i] = m.triangle_count * 3;
 	}
-
-	// makes sure clusters are partitioned using position-only adjacency
-	meshopt_generateShadowIndexBuffer(&cluster_indices[0], &cluster_indices[0], cluster_indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(float) * 3, sizeof(Vertex));
 
 	std::vector<unsigned int> partition(meshlets.size());
 	size_t partition_count = meshopt_partitionClusters(&partition[0], &cluster_indices[0], cluster_indices.size(), &cluster_sizes[0], cluster_sizes.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), target_group_size);
@@ -763,18 +641,30 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 	    int(meshlets.size()), int(partition_count));
 }
 
-void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
+void optimize(const Mesh& mesh, bool fifo = false)
 {
 	Mesh copy = mesh;
+	// note: we assume that the mesh is already optimally indexed (via parseObj); if that is not the case, you'd need to reindex first
 
 	double start = timestamp();
-	optf(copy);
+
+	// vertex cache optimization should go first as it provides starting order for overdraw
+	// note: fifo optimization is not recommended as a default, since it produces worse results, but it's faster to run so it can be useful for procedural meshes
+	if (fifo)
+		meshopt_optimizeVertexCacheFifo(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size(), /* cache_size= */ 16);
+	else
+		meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
+
+	// reorder indices for overdraw, balancing overdraw and vertex cache efficiency
+	const float kThreshold = 1.01f; // allow up to 1% worse ACMR to get more reordering opportunities for overdraw
+	meshopt_optimizeOverdraw(&copy.indices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0].px, copy.vertices.size(), sizeof(Vertex), kThreshold);
+
+	// vertex fetch optimization should go last as it depends on the final index order
+	meshopt_optimizeVertexFetch(&copy.vertices[0], &copy.indices[0], copy.indices.size(), &copy.vertices[0], copy.vertices.size(), sizeof(Vertex));
+
 	double end = timestamp();
 
-	assert(isMeshValid(copy));
-	assert(hashMesh(mesh) == hashMesh(copy));
-
-	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), kCacheSize, 0, 0);
+	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), 16, 0, 0);
 	meshopt_VertexFetchStatistics vfs = meshopt_analyzeVertexFetch(&copy.indices[0], copy.indices.size(), copy.vertices.size(), sizeof(Vertex));
 	meshopt_OverdrawStatistics os = meshopt_analyzeOverdraw(&copy.indices[0], copy.indices.size(), &copy.vertices[0].px, copy.vertices.size(), sizeof(Vertex));
 
@@ -782,7 +672,9 @@ void optimize(const Mesh& mesh, const char* name, void (*optf)(Mesh& mesh))
 	meshopt_VertexCacheStatistics vcs_amd = meshopt_analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), 14, 64, 128);
 	meshopt_VertexCacheStatistics vcs_intel = meshopt_analyzeVertexCache(&copy.indices[0], copy.indices.size(), copy.vertices.size(), 128, 0, 0);
 
-	printf("%-9s: ACMR %f ATVR %f (NV %f AMD %f Intel %f) Overfetch %f Overdraw %f in %.2f msec\n", name, vcs.acmr, vcs.atvr, vcs_nv.atvr, vcs_amd.atvr, vcs_intel.atvr, vfs.overfetch, os.overdraw, (end - start) * 1000);
+	printf("Optimize%s: ACMR %f ATVR %f (NV %f AMD %f Intel %f) overfetch %f overdraw %f in %.2f msec\n",
+	    fifo ? "F" : " ",
+	    vcs.acmr, vcs.atvr, vcs_nv.atvr, vcs_amd.atvr, vcs_intel.atvr, vfs.overfetch, os.overdraw, (end - start) * 1000);
 }
 
 template <typename T>
@@ -934,10 +826,7 @@ void stripify(const Mesh& mesh, bool use_restart, char desc)
 	copy.indices.resize(meshopt_unstripify(&copy.indices[0], &strip[0], strip.size(), restart_index));
 	assert(copy.indices.size() <= meshopt_unstripifyBound(strip.size()));
 
-	assert(isMeshValid(copy));
-	assert(hashMesh(mesh) == hashMesh(copy));
-
-	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, 0, 0);
+	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), 16, 0, 0);
 	meshopt_VertexCacheStatistics vcs_nv = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), 32, 32, 32);
 	meshopt_VertexCacheStatistics vcs_amd = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), 14, 64, 128);
 	meshopt_VertexCacheStatistics vcs_intel = meshopt_analyzeVertexCache(&copy.indices[0], mesh.indices.size(), mesh.vertices.size(), 128, 0, 0);
@@ -964,8 +853,8 @@ void shadow(const Mesh& mesh)
 	// this is valuable even if the original indices array was optimized for vertex cache!
 	meshopt_optimizeVertexCache(&shadow_indices[0], &shadow_indices[0], shadow_indices.size(), mesh.vertices.size());
 
-	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), kCacheSize, 0, 0);
-	meshopt_VertexCacheStatistics vcss = meshopt_analyzeVertexCache(&shadow_indices[0], shadow_indices.size(), mesh.vertices.size(), kCacheSize, 0, 0);
+	meshopt_VertexCacheStatistics vcs = meshopt_analyzeVertexCache(&mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), 16, 0, 0);
+	meshopt_VertexCacheStatistics vcss = meshopt_analyzeVertexCache(&shadow_indices[0], shadow_indices.size(), mesh.vertices.size(), 16, 0, 0);
 
 	std::vector<char> shadow_flags(mesh.vertices.size());
 	size_t shadow_vertices = 0;
@@ -1500,15 +1389,8 @@ void process(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	optimize(mesh, "Original", optNone);
-	optimize(mesh, "Random", optRandomShuffle);
-	optimize(mesh, "Cache", optCache);
-	optimize(mesh, "CacheFifo", optCacheFifo);
-	optimize(mesh, "CacheStrp", optCacheStrip);
-	optimize(mesh, "Overdraw", optOverdraw);
-	optimize(mesh, "Fetch", optFetch);
-	optimize(mesh, "FetchMap", optFetchRemap);
-	optimize(mesh, "Complete", optComplete);
+	optimize(mesh);
+	optimize(mesh, /* fifo= */ true);
 
 	Mesh copy = mesh;
 	meshopt_optimizeVertexCache(&copy.indices[0], &copy.indices[0], copy.indices.size(), copy.vertices.size());
@@ -1547,6 +1429,8 @@ void process(const char* path)
 	simplify(mesh);
 	simplify(mesh, 0.1f, meshopt_SimplifyPrune);
 	simplifyAttr(mesh);
+	simplifyAttr(mesh, 0.1f, meshopt_SimplifyPermissive);
+	simplifyUpdate(mesh);
 	simplifySloppy(mesh);
 	simplifyComplete(mesh);
 	simplifyPoints(mesh);
@@ -1569,7 +1453,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	simplifyClusters(mesh);
+	simplifyUpdate(mesh, 0.1f, meshopt_SimplifyPrune | meshopt_SimplifyPermissive);
 }
 
 void processNanite(const char* path)

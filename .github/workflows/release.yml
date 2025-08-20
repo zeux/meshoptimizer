@@ -11,9 +11,15 @@ jobs:
   gltfpack:
     strategy:
       matrix:
-        os: [windows, ubuntu, macos]
-    name: gltfpack-${{matrix.os}}
-    runs-on: ${{matrix.os}}-latest
+        os:
+          [
+            { name: windows, version: windows-latest },
+            { name: ubuntu, version: ubuntu-22.04 },
+            { name: macos, version: macos-14 },
+            { name: macos-intel, version: macos-14 },
+          ]
+    name: gltfpack-${{matrix.os.name}}
+    runs-on: ${{matrix.os.version}}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -21,20 +27,31 @@ jobs:
           repository: zeux/basis_universal
           ref: gltfpack
           path: basis_universal
+      - uses: actions/checkout@v4
+        with:
+          repository: webmproject/libwebp
+          ref: 1.6.0
+          path: libwebp
       - name: cmake configure
-        run: cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_BASISU_PATH=basis_universal -DMESHOPT_WERROR=ON -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded" -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
+        run: cmake . -DMESHOPT_BUILD_GLTFPACK=ON -DMESHOPT_GLTFPACK_BASISU_PATH=basis_universal -D MESHOPT_GLTFPACK_LIBWEBP_PATH=libwebp -DCMAKE_MSVC_RUNTIME_LIBRARY="MultiThreaded" -DCMAKE_BUILD_TYPE=Release
+      - name: cmake configure x64
+        run: cmake . -DSSE=ON
+        if: matrix.os.name == 'ubuntu'
+      - name: cmake configure mac-x64
+        run: cmake . -DSSE=ON -DCMAKE_OSX_ARCHITECTURES=x86_64
+        if: matrix.os.name == 'macos-intel'
       - name: cmake build
-        run: cmake --build . --target gltfpack --config Release -j 2
+        run: cmake --build . --target gltfpack --config Release -j 3
       - uses: actions/upload-artifact@v4
         with:
           name: gltfpack-windows
           path: Release/gltfpack.exe
-        if: matrix.os == 'windows'
+        if: matrix.os.name == 'windows'
       - uses: actions/upload-artifact@v4
         with:
-          name: gltfpack-${{matrix.os}}
+          name: gltfpack-${{matrix.os.name}}
           path: gltfpack
-        if: matrix.os != 'windows'
+        if: matrix.os.name != 'windows'
 
   nodejs:
     runs-on: ubuntu-latest
