@@ -513,8 +513,7 @@ for (size_t i = 0; i < vertices.size(); ++i) {
 
 This approach provides fine-grained control over which discontinuities to preserve. The permissive mode combined with selective locking provides a balance between simplification quality and attribute preservation, and usually results in higher quality LODs for the same target triangle count (and dramatically higher quality compared to `meshopt_simplifySloppy`).
 
-> [!NOTE]
-> This functionality is currently experimental and is subject to future improvements. Certain collapses are restricted to protect the overall topology, and attribute quality may occasionally regress.
+> Note: this functionality is currently experimental and is subject to future improvements. Certain collapses are restricted to protect the overall topology, and attribute quality may occasionally regress.
 
 ### Simplification with vertex update
 
@@ -529,6 +528,8 @@ indices.resize(meshopt_simplifyWithUpdate(&indices[0], indices.size(), &vertices
 Unlike `meshopt_simplify`/`meshopt_simplifyWithAttributes`, this function updates the index buffer as well as vertex positions and attributes in place. The resulting indices still refer to the original vertex buffer; any attributes that are not passed to the simplifier can be left unchanged. However, since the original contents of `vertices` is no longer valid for rendering the original mesh, a new compact vertex/index buffer should be generated using `meshopt_optimizeVertexFetch` (after optimizing the index data with `meshopt_optimizeVertexCache`). If the original data was important, it should be copied before calling this function.
 
 Since the vertex positions are updated, this may require updating some attributes that could previously be left as-is when using the original vertex buffer. Notably, texture coordinates need to be updated to avoid texture distortion; thus it's highly recommended to include texture coordinates in the attribute data passed to the simplifier. For attributes to be updated, the corresponding attribute weight must not be zero; for texture coordinates, a weight of 1.0 is usually sufficient in this case (although a higher or mesh dependent weight could be used with this function or other functions to reduce UV stretching).
+
+Attributes that have specific constraints like normals and colors should be renormalized or clamped after the function returns new data. Attributes like bone indices/weights don't need to be updated for reasonable results (but regularization via `meshopt_SimplifyRegularize` may still be helpful to maintain deformation quality).
 
 Using unique vertex data for each LOD in a chain can improve visual quality, but it comes at a cost of ~doubling vertex memory used (if each LOD is using half the triangles of the previous LOD). To reduce the memory footprint, it is possible to use shared vertices with `meshopt_simplifyWithAttributes` for the first one or two LODs in the chain, and only switch to `meshopt_simplifyWithUpdate` for the remainder. In that case, similarly to the use of `meshopt_simplify` described earlier, care must be taken to optimally arrange the vertices in the original vertex buffer.
 
