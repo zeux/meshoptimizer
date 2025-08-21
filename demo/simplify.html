@@ -106,7 +106,6 @@
 			}
 		</style>
 
-		<script async src="https://cdn.jsdelivr.net/npm/es-module-shims@2.0.10/dist/es-module-shims.min.js"></script>
 		<script type="importmap">
 			{
 				"imports": {
@@ -455,6 +454,8 @@
 				var indices = new Uint32Array(geo.index.array).slice(); // clone for solve, upcast 16-bit indices for _InternalDebug
 				var target = settings.autoLod ? 0 : Math.floor((indices.length * settings.ratio) / 3) * 3;
 
+				var stride = geo.attributes.position instanceof THREE.InterleavedBufferAttribute ? geo.attributes.position.data.stride : 3;
+
 				if (settings.useAttributes) {
 					var attrib = new Float32Array(geo.attributes.position.count * attributes);
 
@@ -513,25 +514,8 @@
 				var locks = new Uint8Array(geo.attributes.position.count);
 
 				if (settings.permissive) {
-					var pos_cache = {};
-					var pos_remap = [];
-
-					var unique = 0;
-
-					for (var i = 0, e = geo.attributes.position.count; i < e; ++i) {
-						var px = geo.attributes.position.getX(i);
-						var py = geo.attributes.position.getY(i);
-						var pz = geo.attributes.position.getZ(i);
-						var pk = px.toString() + ' ' + py.toString() + ' ' + pz.toString();
-
-						if (pos_cache[pk] === undefined) {
-							pos_cache[pk] = i;
-							pos_remap[i] = i;
-							unique++;
-						} else {
-							pos_remap[i] = pos_cache[pk];
-						}
-					}
+					var pos_remap = MeshoptSimplifier.generatePositionRemap(positions, stride);
+					var protect_bit = 2;
 
 					if (geo.attributes.normal) {
 						for (var i = 0, e = geo.attributes.position.count; i < e; ++i) {
@@ -545,7 +529,7 @@
 
 								// keep sharp edges
 								if (rx * nx + ry * ny + rz * nz < 0.25) {
-									locks[i] |= 2;
+									locks[i] |= protect_bit;
 								}
 							}
 						}
@@ -561,14 +545,12 @@
 
 								// keep UV seams
 								if (u != ru || v != rv) {
-									locks[i] |= 2;
+									locks[i] |= protect_bit;
 								}
 							}
 						}
 					}
 				}
-
-				var stride = geo.attributes.position instanceof THREE.InterleavedBufferAttribute ? geo.attributes.position.data.stride : 3;
 
 				if (settings.preprune > 0) {
 					indices = MeshoptSimplifier.simplifyPrune(indices, positions, stride, settings.preprune / scale);
