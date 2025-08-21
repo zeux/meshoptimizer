@@ -1,7 +1,6 @@
-// This is a playground for experimenting with algorithms necessary for Nanite like hierarchical clustering
-// The code is not optimized, not robust, and not intended for production use.
-// It optionally supports METIS for clustering and partitioning, with an eventual goal of removing this code
-// in favor of meshopt algorithms.
+// This is a playground for experimenting with Nanite like hierarchical clustering built on top of meshoptimizer.
+// The code is not intended for direct production use but can serve as a reference.
+// It optionally supports METIS for clustering and partitioning, although it defaults to meshopt algorithms.
 
 // For reference, see the original Nanite paper:
 // Brian Karis. Nanite: A Deep Dive. 2021
