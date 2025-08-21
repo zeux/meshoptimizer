@@ -204,9 +204,9 @@ if(MESHOPT_INSTALL)
 
 	include(CMakePackageConfigHelpers)
 
-	configure_package_config_file(config.cmake.in
-	    ${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfig.cmake
-	    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/meshoptimizer NO_SET_AND_CHECK_MACRO)
+	# CMake 3.18+ supports file(CONFIGURE OUTPUT file CONTENT content @ONLY) but we only require 3.5+
+	file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfig.cmake
+		"include(\"\${CMAKE_CURRENT_LIST_DIR}/meshoptimizerTargets.cmake\")\n")
 
 	write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfigVersion.cmake COMPATIBILITY ExactVersion)
 
