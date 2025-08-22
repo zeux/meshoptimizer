@@ -112,8 +112,6 @@ if(MESHOPT_BUILD_SHARED_LIBS)
     endif()
 endif()
 
-set(TARGETS meshoptimizer)
-
 if(MESHOPT_BUILD_DEMO)
     add_executable(demo demo/main.cpp demo/nanite.cpp demo/tests.cpp tools/objloader.cpp)
     set_target_properties(demo PROPERTIES CXX_STANDARD 11)
@@ -125,7 +123,6 @@ if(MESHOPT_BUILD_GLTFPACK)
     add_executable(gltfpack ${GLTF_SOURCES})
     set_target_properties(gltfpack PROPERTIES CXX_STANDARD 11)
     target_link_libraries(gltfpack meshoptimizer)
-    list(APPEND TARGETS gltfpack)
 
     if(MESHOPT_BUILD_SHARED_LIBS)
         string(CONCAT RPATH "$ORIGIN/../" ${CMAKE_INSTALL_LIBDIR})
@@ -177,18 +174,27 @@ endif()
 if(MESHOPT_INSTALL)
 	include(GNUInstallDirs)
 
-	install(TARGETS ${TARGETS} EXPORT meshoptimizerTargets
+	install(TARGETS meshoptimizer EXPORT meshoptimizerTargets
 	    COMPONENT meshoptimizer
 	    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 	    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 	    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 	    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
+	if(MESHOPT_BUILD_GLTFPACK)
+	    install(TARGETS gltfpack RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+	endif()
+
 	install(FILES src/meshoptimizer.h COMPONENT meshoptimizer DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 	install(EXPORT meshoptimizerTargets COMPONENT meshoptimizer DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/meshoptimizer NAMESPACE meshoptimizer::)
 
 	if(MSVC)
-	    foreach(TARGET ${TARGETS})
+		set(PDB_TARGETS meshoptimizer)
+		if(MESHOPT_BUILD_GLTFPACK)
+		    list(APPEND PDB_TARGETS gltfpack)
+		endif()
+
+	    foreach(TARGET ${PDB_TARGETS})
 	        get_target_property(TARGET_TYPE ${TARGET} TYPE)
 	        if(NOT ${TARGET_TYPE} STREQUAL "STATIC_LIBRARY")
 	            install(FILES $<TARGET_PDB_FILE:${TARGET}> COMPONENT meshoptimizer DESTINATION ${CMAKE_INSTALL_BINDIR} OPTIONAL)
@@ -198,9 +204,9 @@ if(MESHOPT_INSTALL)
 
 	include(CMakePackageConfigHelpers)
 
-	configure_package_config_file(config.cmake.in
-	    ${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfig.cmake
-	    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/meshoptimizer NO_SET_AND_CHECK_MACRO)
+	# CMake 3.18+ supports file(CONFIGURE OUTPUT file CONTENT content @ONLY) but we only require 3.5+
+	file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfig.cmake
+		"include(\"\${CMAKE_CURRENT_LIST_DIR}/meshoptimizerTargets.cmake\")\n")
 
 	write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/meshoptimizerConfigVersion.cmake COMPATIBILITY ExactVersion)
 
