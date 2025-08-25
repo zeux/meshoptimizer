@@ -945,7 +945,6 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 	const size_t max_vertices = 64;
 	const size_t min_triangles = 16;
 	const size_t max_triangles = 64;
-	const float cone_weight = -0.25f;
 	const float split_factor = 2.0f;
 	const float fill_weight = 0.5f;
 
@@ -958,7 +957,7 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 	if (use_spatial)
 		meshlets.resize(meshopt_buildMeshletsSpatial(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, fill_weight));
 	else
-		meshlets.resize(meshopt_buildMeshletsFlex(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, cone_weight, split_factor));
+		meshlets.resize(meshopt_buildMeshletsFlex(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, 0.f, split_factor));
 
 	double end = timestamp();
 
