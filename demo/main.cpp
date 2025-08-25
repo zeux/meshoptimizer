@@ -893,7 +893,7 @@ void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false, bool fl
 	const size_t min_triangles = spatial ? 16 : (uniform ? 24 : 32); // only used in flex/spatial modes
 
 	// note: should be set to 0 unless cone culling is used at runtime!
-	const float cone_weight = flex ? -1.0f : 0.25f;
+	const float cone_weight = 0.25f;
 	const float split_factor = flex ? 2.0f : 0.0f;
 
 	// note: input mesh is assumed to be optimized for vertex cache and vertex fetch
@@ -909,7 +909,7 @@ void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false, bool fl
 		meshlets.resize(meshopt_buildMeshletsFlex(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, cone_weight, split_factor));
 	else if (spatial)
 		meshlets.resize(meshopt_buildMeshletsSpatial(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, 0.f));
-	else // note: equivalent to the call of buildMeshletsFlex() with non-negative cone_weight and split_factor = 0
+	else // note: equivalent to the call of buildMeshletsFlex() with split_factor = 0 and min_triangles = max_triangles
 		meshlets.resize(meshopt_buildMeshlets(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, max_triangles, cone_weight));
 
 	if (!dump)
