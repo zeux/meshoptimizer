@@ -667,14 +667,13 @@ MESHOPTIMIZER_API size_t meshopt_buildMeshletsBound(size_t index_count, size_t m
  * Experimental: Meshlet builder with flexible cluster sizes
  * Splits the mesh into a set of meshlets, similarly to meshopt_buildMeshlets, but allows to specify minimum and maximum number of triangles per meshlet.
  * Clusters between min and max triangle counts are split when the cluster size would have exceeded the expected cluster size by more than split_factor.
- * Additionally, allows to switch to axis aligned clusters by setting cone_weight to a negative value.
  *
  * meshlets must contain enough space for all meshlets, worst case size can be computed with meshopt_buildMeshletsBound using min_triangles (not max!)
  * meshlet_vertices must contain enough space for all meshlets, worst case size is equal to max_meshlets * max_vertices
  * meshlet_triangles must contain enough space for all meshlets, worst case size is equal to max_meshlets * max_triangles * 3
  * vertex_positions should have float3 position in the first 12 bytes of each vertex
  * max_vertices, min_triangles and max_triangles must not exceed implementation limits (max_vertices <= 256, max_triangles <= 512; min_triangles <= max_triangles; both min_triangles and max_triangles must be divisible by 4)
- * cone_weight should be set to 0 when cone culling is not used, and a value between 0 and 1 otherwise to balance between cluster size and cone culling efficiency; additionally, cone_weight can be set to a negative value to prioritize axis aligned clusters (for raytracing) instead
+ * cone_weight should be set to 0 when cone culling is not used, and a value between 0 and 1 otherwise to balance between cluster size and cone culling efficiency
  * split_factor should be set to a non-negative value; when greater than 0, clusters that have large bounds may be split unless they are under the min_triangles threshold
  */
 MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_buildMeshletsFlex(struct meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t min_triangles, size_t max_triangles, float cone_weight, float split_factor);
