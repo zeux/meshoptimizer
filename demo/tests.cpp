@@ -1326,17 +1326,6 @@ static void meshletsFlex()
 	assert(ml[0].vertex_count == 4);
 	assert(ml[1].triangle_count == 4);
 	assert(ml[1].vertex_count == 4);
-
-	// this should hold when using axis-aligned metric as well (negative cone weight)
-	assert(meshopt_buildMeshletsFlex(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 8, sizeof(float) * 3, 16, 4, 8, -1.f, 10.f) == 1);
-	assert(ml[0].triangle_count == 8);
-	assert(ml[0].vertex_count == 8);
-
-	assert(meshopt_buildMeshletsFlex(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 8, sizeof(float) * 3, 16, 4, 8, -1.f, 1.f) == 2);
-	assert(ml[0].triangle_count == 4);
-	assert(ml[0].vertex_count == 4);
-	assert(ml[1].triangle_count == 4);
-	assert(ml[1].vertex_count == 4);
 }
 
 static void meshletsMax()

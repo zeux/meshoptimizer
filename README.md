@@ -211,7 +211,7 @@ meshlets.resize(meshlet_count);
 
 Depending on the application, other strategies of storing the data can be useful; for example, `meshlet_vertices` serves as indices into the original vertex buffer but it might be worthwhile to generate a mini vertex buffer for each meshlet to remove the extra indirection when accessing vertex data, or it might be desirable to compress vertex data as vertices in each meshlet are likely to be very spatially coherent.
 
-For optimal performance, it is recommended to further optimize each meshlet in isolation for better triangle and vertex locality by calling `meshopt_optimizeMeshlet` on vertex and index data like so:
+For optimal rasterization performance, it is recommended to further optimize each meshlet in isolation for better triangle and vertex locality by calling `meshopt_optimizeMeshlet` on vertex and index data like so:
 
 ```c++
 meshopt_optimizeMeshlet(&meshlet_vertices[m.vertex_offset], &meshlet_triangles[m.triangle_offset], m.triangle_count, m.vertex_count);
@@ -255,6 +255,8 @@ if (dot(normalize(cone_apex - camera_position), cone_axis) >= cone_cutoff) rejec
 ```
 
 Cluster culling should ideally run at a lower frequency than mesh shading, either using amplification/task shaders, or using a separate compute dispatch.
+
+By default, the meshlet builder tries to form complete meshlets even if that requires merging disconnected regions of the mesh into a single meshlet. In some cases, such as hierarchical level of detail, or when advanced culling is used, it may be beneficial to prioritize spatial locality of triangles in a meshlet even if that results in partially filled meshlets. To that end, `meshopt_buildMeshletsFlex` function can be used instead of `meshopt_buildMeshlets`; it provides two triangle limits, `min_triangles` and `max_triangles`, and uses an additional configuration parameter, `split_factor` (recommended value is 2.0), to decide whether increasing the meshlet radius is worth it to fit more triangles in the meshlet. When using this function, the worst case bound for the number of meshlets has to be computed using `meshopt_buildMeshletsBound` with `min_triangles` parameter instead of `max_triangles`.
 
 ### Clustered raytracing
 
