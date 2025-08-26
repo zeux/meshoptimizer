@@ -1010,6 +1010,15 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 	std::string iext = getExtension(input);
 	std::string oext = output ? getExtension(output) : "";
 
+	if (output)
+	{
+		if (oext != ".gltf" && oext != ".glb")
+		{
+			fprintf(stderr, "Error: unsupported output extension '%s' (expected .gltf or .glb)\n", oext.c_str());
+			return 4;
+		}
+	}
+
 	if (iext == ".gltf" || iext == ".glb")
 	{
 		const char* error = NULL;
