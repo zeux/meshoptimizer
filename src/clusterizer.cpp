@@ -576,7 +576,7 @@ struct KDNode
 		unsigned int index;
 	};
 
-	// leaves: axis = 3, children = number of extra points after this one (0 if 'index' is the only point)
+	// leaves: axis = 3, children = number of points including this one
 	// branches: axis != 3, left subtree = skip 1, right subtree = skip 1+children
 	unsigned int axis : 2;
 	unsigned int children : 30;
@@ -612,7 +612,7 @@ static size_t kdtreeBuildLeaf(size_t offset, KDNode* nodes, size_t node_count, u
 
 	result.index = indices[0];
 	result.axis = 3;
-	result.children = unsigned(count - 1);
+	result.children = unsigned(count);
 
 	// all remaining points are stored in nodes immediately following the leaf
 	for (size_t i = 1; i < count; ++i)
@@ -671,6 +671,7 @@ static size_t kdtreeBuild(size_t offset, KDNode* nodes, size_t node_count, const
 	size_t next_offset = kdtreeBuild(offset + 1, nodes, node_count, points, stride, indices, middle, leaf_size);
 
 	// distance to the right subtree is represented explicitly
+	assert(next_offset - offset > 1);
 	result.children = unsigned(next_offset - offset - 1);
 
 	return kdtreeBuild(next_offset, nodes, node_count, points, stride, indices + middle, count - middle, leaf_size);
@@ -680,15 +681,22 @@ static void kdtreeNearest(KDNode* nodes, unsigned int root, const float* points,
 {
 	const KDNode& node = nodes[root];
 
+	if (node.children == 0)
+		return;
+
 	if (node.axis == 3)
 	{
 		// leaf
-		for (unsigned int i = 0; i <= node.children; ++i)
+		bool inactive = true;
+
+		for (unsigned int i = 0; i < node.children; ++i)
 		{
 			unsigned int index = nodes[root + i].index;
 
 			if (emitted_flags[index])
 				continue;
+
+			inactive = false;
 
 			const float* point = points + index * stride;
 
@@ -701,6 +709,10 @@ static void kdtreeNearest(KDNode* nodes, unsigned int root, const float* points,
 				limit = distance;
 			}
 		}
+
+		// deactivate leaves that no longer have items to emit
+		if (inactive)
+			nodes[root].children = 0;
 	}
 	else
 	{
@@ -708,6 +720,11 @@ static void kdtreeNearest(KDNode* nodes, unsigned int root, const float* points,
 		float delta = position[node.axis] - node.split;
 		unsigned int first = (delta <= 0) ? 0 : node.children;
 		unsigned int second = first ^ node.children;
+
+		// deactivate branches that no longer have items to emit to accelerate traversal
+		// note that we do this *before* recursing which delays deactivation but keeps tail calls
+		if ((nodes[root + 1 + first].children | nodes[root + 1 + second].children) == 0)
+			nodes[root].children = 0;
 
 		kdtreeNearest(nodes, root + 1 + first, points, stride, emitted_flags, position, result, limit);
 
