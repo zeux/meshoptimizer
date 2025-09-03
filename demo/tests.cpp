@@ -1434,8 +1434,8 @@ static void meshletsSpatialDeep()
 
 	size_t max_meshlets = meshopt_buildMeshletsBound(N * 3, max_vertices, max_triangles);
 	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
-	std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
-	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
+	std::vector<unsigned int> meshlet_vertices(N * 3);
+	std::vector<unsigned char> meshlet_triangles(N * 3);
 
 	size_t result = meshopt_buildMeshletsSpatial(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &ib[0], N * 3, &vb[0], N + 1, sizeof(float) * 3, max_vertices, max_triangles, max_triangles, 0.f);
 	assert(result == N);
