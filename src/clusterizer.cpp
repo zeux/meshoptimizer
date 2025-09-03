@@ -1241,6 +1241,7 @@ size_t meshopt_buildMeshletsFlex(meshopt_Meshlet* meshlets, unsigned int* meshle
 		meshlets[meshlet_offset++] = meshlet;
 
 	assert(meshlet_offset <= meshopt_buildMeshletsBound(index_count, max_vertices, min_triangles));
+	assert(meshlet.triangle_offset + meshlet.triangle_count * 3 <= index_count && meshlet.vertex_offset + meshlet.vertex_count <= index_count);
 	return meshlet_offset;
 }
 
@@ -1280,6 +1281,7 @@ size_t meshopt_buildMeshletsScan(meshopt_Meshlet* meshlets, unsigned int* meshle
 		meshlets[meshlet_offset++] = meshlet;
 
 	assert(meshlet_offset <= meshopt_buildMeshletsBound(index_count, max_vertices, max_triangles));
+	assert(meshlet.triangle_offset + meshlet.triangle_count * 3 <= index_count && meshlet.vertex_offset + meshlet.vertex_count <= index_count);
 	return meshlet_offset;
 }
 
@@ -1377,6 +1379,7 @@ size_t meshopt_buildMeshletsSpatial(struct meshopt_Meshlet* meshlets, unsigned i
 		meshlets[meshlet_offset++] = meshlet;
 
 	assert(meshlet_offset <= meshlet_bound);
+	assert(meshlet.triangle_offset + meshlet.triangle_count * 3 <= index_count && meshlet.vertex_offset + meshlet.vertex_count <= index_count);
 	return meshlet_offset;
 }
 
