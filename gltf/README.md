@@ -100,6 +100,18 @@ Even if the source file does not use extensions, gltfpack may use some extension
 
 gltfpack does not support vendor-specific extensions or custom extensions, including ones defined in [Khronos glTF repository](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor). Unknown extension nodes are discarded from the output.
 
+## Custom data
+
+glTF files may contain custom application-specific data stored outside of custom extensions. gltfpack has limited support for preserving this data.
+
+Unknown vertex or instance attributes are generally discarded. While it would be possible to preserve them in theory, many scene transformations and analyses require a full understanding of the attribute semantics - some attributes need to be transformed with the mesh transformation matrix, some need to be adjusted when meshes are merged, some influence how meshes are rendered, etc. However, gltfpack supports some specific attributes that are commonly used in the ecosystem:
+
+- Vertex attributes that store integer IDs with names `_ID`, `_BATCHID` or `_FEATURE_ID_n` are preserved as-is. These can be used to identify objects.
+
+Additional application-specific data can be stored via the glTF `extras` property. While extras (outside of `asset`) are discarded by default, using the `-ke` option preserves extras in materials, nodes, primitives and scenes.
+
+In addition to `asset` extras, gltfpack unconditionally preserves morph target names specified via the `targetNames` property inside `extras` on meshes.
+
 ## Building
 
 gltfpack can be built from source using CMake or Make. To build a full version of gltfpack that supports texture compression, CMake configuration needs to specify the path to https://github.com/zeux/basis_universal fork (branch gltfpack) via `MESHOPT_GLTFPACK_BASISU_PATH` variable, as well as libwebp path via `MESHOPT_GLTFPACK_LIBWEBP_PATH` variable:
