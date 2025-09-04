@@ -126,7 +126,7 @@ Note that the source is specified as byte arrays; for example, to quantize a pos
 
 When interleaved vertex data is compressed, `encodeVertexBuffer` can be called with the full size of a single interleaved vertex; however, when compressing deinterleaved data, note that `encodeVertexBuffer` should be called on each component individually if the strides of different streams are different.
 
-By default, `encodeVertexBuffer` uses v0 version of the encoding; this encoding is compatible with `EXT_meshopt_compression` glTF extension but results in lower compression ratios. For better compression, `encodeVertexBufferLevel` can be used to specify encoding version 1; the `level` parameter controls the compression ratio and can be set to 2 (default), 3 for higher compression, or 0/1 for lower. The higher the level, the better the compression ratio, but also the slower the encoding process. When version is set to 0, `level` does not have any effect and the encoding is equivalent to `encodeVertexBuffer`.
+By default, `encodeVertexBuffer` uses v1 version of the encoding; this encoding is *not* compatible with `EXT_meshopt_compression` glTF extension but results in higher compression ratios. To encode data compatible with `EXT_meshopt_compression`, use `encodeVertexBufferLevel` with version=0, or - preferably - `encodeGltfBuffer`, which defaults to v0 (but can also be used to encode v1 content by passing version=1).
 
 ## Simplifier
 
