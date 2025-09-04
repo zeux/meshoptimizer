@@ -301,7 +301,7 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 	}
 }
 
-static void parseMeshInstancesGltf(std::vector<Transform>& instances, cgltf_node* node, size_t ni)
+static void parseMeshInstancesGltf(std::vector<Instance>& instances, cgltf_node* node, size_t ni)
 {
 	cgltf_accessor* translation = NULL;
 	cgltf_accessor* rotation = NULL;
@@ -344,10 +344,10 @@ static void parseMeshInstancesGltf(std::vector<Transform>& instances, cgltf_node
 		if (scale)
 			cgltf_accessor_read_float(scale, i, instance.scale, 4);
 
-		Transform xf;
-		cgltf_node_transform_world(&instance, xf.data);
+		Instance obj = {};
+		cgltf_node_transform_world(&instance, obj.transform);
 
-		instances.push_back(xf);
+		instances.push_back(obj);
 	}
 }
 

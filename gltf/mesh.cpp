@@ -174,9 +174,9 @@ bool compareMeshNodes(const Mesh& lhs, const Mesh& rhs)
 	return true;
 }
 
-static bool compareTransforms(const Transform& lhs, const Transform& rhs)
+static bool compareInstances(const Instance& lhs, const Instance& rhs)
 {
-	return memcmp(&lhs, &rhs, sizeof(Transform)) == 0;
+	return memcmp(&lhs, &rhs, sizeof(Instance)) == 0;
 }
 
 static bool canMergeMeshNodes(cgltf_node* lhs, cgltf_node* rhs, const Settings& settings)
@@ -223,7 +223,7 @@ static bool canMergeMeshes(const Mesh& lhs, const Mesh& rhs, const Settings& set
 		return false;
 
 	for (size_t i = 0; i < lhs.instances.size(); ++i)
-		if (!compareTransforms(lhs.instances[i], rhs.instances[i]))
+		if (!compareInstances(lhs.instances[i], rhs.instances[i]))
 			return false;
 
 	if (lhs.material != rhs.material)
@@ -1208,8 +1208,8 @@ void computeMeshQuality(std::vector<Mesh>& meshes)
 			node_maxscale = std::max(node_maxscale, getScale(transform));
 		}
 
-		for (const Transform& xf : mesh.instances)
-			node_maxscale = std::max(node_maxscale, getScale(xf.data));
+		for (const Instance& xf : mesh.instances)
+			node_maxscale = std::max(node_maxscale, getScale(xf.transform));
 
 		scales[i] = node_maxscale == 0.f ? geometry_scale : node_maxscale * geometry_scale;
 		maxscale = std::max(maxscale, scales[i]);

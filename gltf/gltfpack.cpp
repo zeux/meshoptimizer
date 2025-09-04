@@ -310,7 +310,7 @@ static void detachMesh(Mesh& mesh, cgltf_data* data, const std::vector<NodeInfo>
 		mesh.instances.resize(mesh.nodes.size());
 
 		for (size_t j = 0; j < mesh.nodes.size(); ++j)
-			cgltf_node_transform_world(mesh.nodes[j], mesh.instances[j].data);
+			cgltf_node_transform_world(mesh.nodes[j], mesh.instances[j].transform);
 
 		mesh.nodes.clear();
 		mesh.scene = scene;
