@@ -14,7 +14,7 @@ export const MeshoptEncoder: {
 	encodeIndexBuffer: (source: Uint8Array, count: number, size: number) => Uint8Array;
 	encodeIndexSequence: (source: Uint8Array, count: number, size: number) => Uint8Array;
 
-	encodeGltfBuffer: (source: Uint8Array, count: number, size: number, mode: string) => Uint8Array;
+	encodeGltfBuffer: (source: Uint8Array, count: number, size: number, mode: string, version?: number) => Uint8Array;
 
 	encodeFilterOct: (source: Float32Array, count: number, stride: number, bits: number) => Uint8Array;
 	encodeFilterQuat: (source: Float32Array, count: number, stride: number, bits: number) => Uint8Array;
