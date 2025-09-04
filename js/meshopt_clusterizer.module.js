@@ -119,7 +119,7 @@ var MeshoptClusterizer = (function () {
 		var last_triangle_count = meshlets[(count - 1) * 4 + 3];
 
 		var used_vertices = last_vertex_offset + last_vertex_count;
-		var used_triangles = last_triangle_offset + ((last_triangle_count * 3 + 3) & ~3);
+		var used_triangles = last_triangle_offset + last_triangle_count * 3;
 
 		var result = {
 			meshlets: meshlets,
@@ -250,9 +250,8 @@ var MeshoptClusterizer = (function () {
 			assert(vertex_positions instanceof Float32Array);
 			assert(vertex_positions.length % vertex_positions_stride == 0);
 			assert(vertex_positions_stride >= 3);
-			assert(max_vertices <= 256 || max_vertices > 0);
-			assert(max_triangles <= 512);
-			assert(max_triangles % 4 == 0);
+			assert(max_vertices > 0 && max_vertices <= 256);
+			assert(max_triangles >= 1 && max_triangles <= 512);
 
 			cone_weight = cone_weight || 0.0;
 

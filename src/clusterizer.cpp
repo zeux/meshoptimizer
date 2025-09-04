@@ -335,15 +335,6 @@ static float computeTriangleCones(Cone* triangles, const unsigned int* indices, 
 	return mesh_area;
 }
 
-static void finishMeshlet(meshopt_Meshlet& meshlet, unsigned char* meshlet_triangles)
-{
-	size_t offset = meshlet.triangle_offset + meshlet.triangle_count * 3;
-
-	// fill 4b padding with 0
-	while (offset & 3)
-		meshlet_triangles[offset++] = 0;
-}
-
 static bool appendMeshlet(meshopt_Meshlet& meshlet, unsigned int a, unsigned int b, unsigned int c, short* used, meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, size_t meshlet_offset, size_t max_vertices, size_t max_triangles, bool split = false)
 {
 	short& av = used[a];
@@ -361,10 +352,8 @@ static bool appendMeshlet(meshopt_Meshlet& meshlet, unsigned int a, unsigned int
 		for (size_t j = 0; j < meshlet.vertex_count; ++j)
 			used[meshlet_vertices[meshlet.vertex_offset + j]] = -1;
 
-		finishMeshlet(meshlet, meshlet_triangles);
-
 		meshlet.vertex_offset += meshlet.vertex_count;
-		meshlet.triangle_offset += (meshlet.triangle_count * 3 + 3) & ~3; // 4b padding
+		meshlet.triangle_offset += meshlet.triangle_count * 3;
 		meshlet.vertex_count = 0;
 		meshlet.triangle_count = 0;
 
@@ -1051,7 +1040,6 @@ size_t meshopt_buildMeshletsBound(size_t index_count, size_t max_vertices, size_
 	assert(index_count % 3 == 0);
 	assert(max_vertices >= 3 && max_vertices <= kMeshletMaxVertices);
 	assert(max_triangles >= 1 && max_triangles <= kMeshletMaxTriangles);
-	assert(max_triangles % 4 == 0); // ensures the caller will compute output space properly as index data is 4b aligned
 
 	(void)kMeshletMaxVertices;
 	(void)kMeshletMaxTriangles;
@@ -1076,7 +1064,6 @@ size_t meshopt_buildMeshletsFlex(meshopt_Meshlet* meshlets, unsigned int* meshle
 
 	assert(max_vertices >= 3 && max_vertices <= kMeshletMaxVertices);
 	assert(min_triangles >= 1 && min_triangles <= max_triangles && max_triangles <= kMeshletMaxTriangles);
-	assert(min_triangles % 4 == 0 && max_triangles % 4 == 0); // ensures the caller will compute output space properly as index data is 4b aligned
 
 	assert(cone_weight >= 0 && cone_weight <= 1);
 	assert(split_factor >= 0);
@@ -1251,13 +1238,10 @@ size_t meshopt_buildMeshletsFlex(meshopt_Meshlet* meshlets, unsigned int* meshle
 	}
 
 	if (meshlet.triangle_count)
-	{
-		finishMeshlet(meshlet, meshlet_triangles);
-
 		meshlets[meshlet_offset++] = meshlet;
-	}
 
 	assert(meshlet_offset <= meshopt_buildMeshletsBound(index_count, max_vertices, min_triangles));
+	assert(meshlet.triangle_offset + meshlet.triangle_count * 3 <= index_count && meshlet.vertex_offset + meshlet.vertex_count <= index_count);
 	return meshlet_offset;
 }
 
@@ -1274,7 +1258,6 @@ size_t meshopt_buildMeshletsScan(meshopt_Meshlet* meshlets, unsigned int* meshle
 
 	assert(max_vertices >= 3 && max_vertices <= kMeshletMaxVertices);
 	assert(max_triangles >= 1 && max_triangles <= kMeshletMaxTriangles);
-	assert(max_triangles % 4 == 0); // ensures the caller will compute output space properly as index data is 4b aligned
 
 	meshopt_Allocator allocator;
 
@@ -1295,13 +1278,10 @@ size_t meshopt_buildMeshletsScan(meshopt_Meshlet* meshlets, unsigned int* meshle
 	}
 
 	if (meshlet.triangle_count)
-	{
-		finishMeshlet(meshlet, meshlet_triangles);
-
 		meshlets[meshlet_offset++] = meshlet;
-	}
 
 	assert(meshlet_offset <= meshopt_buildMeshletsBound(index_count, max_vertices, max_triangles));
+	assert(meshlet.triangle_offset + meshlet.triangle_count * 3 <= index_count && meshlet.vertex_offset + meshlet.vertex_count <= index_count);
 	return meshlet_offset;
 }
 
@@ -1315,7 +1295,6 @@ size_t meshopt_buildMeshletsSpatial(struct meshopt_Meshlet* meshlets, unsigned i
 
 	assert(max_vertices >= 3 && max_vertices <= kMeshletMaxVertices);
 	assert(min_triangles >= 1 && min_triangles <= max_triangles && max_triangles <= kMeshletMaxTriangles);
-	assert(min_triangles % 4 == 0 && max_triangles % 4 == 0); // ensures the caller will compute output space properly as index data is 4b aligned
 
 	if (index_count == 0)
 		return 0;
@@ -1397,13 +1376,10 @@ size_t meshopt_buildMeshletsSpatial(struct meshopt_Meshlet* meshlets, unsigned i
 	}
 
 	if (meshlet.triangle_count)
-	{
-		finishMeshlet(meshlet, meshlet_triangles);
-
 		meshlets[meshlet_offset++] = meshlet;
-	}
 
 	assert(meshlet_offset <= meshlet_bound);
+	assert(meshlet.triangle_offset + meshlet.triangle_count * 3 <= index_count && meshlet.vertex_offset + meshlet.vertex_count <= index_count);
 	return meshlet_offset;
 }
 

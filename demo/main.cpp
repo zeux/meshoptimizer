@@ -538,8 +538,8 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 	// build clusters (meshlets) out of the mesh
 	size_t max_meshlets = meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles);
 	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
-	std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
-	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
+	std::vector<unsigned int> meshlet_vertices(mesh.indices.size());
+	std::vector<unsigned char> meshlet_triangles(mesh.indices.size());
 
 	meshlets.resize(meshopt_buildMeshlets(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, max_triangles, 0.f));
 
@@ -886,10 +886,9 @@ static int follow(int* parents, int index)
 
 void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false, bool flex = false, bool spatial = false, bool dump = false)
 {
-	// NVidia-recommends 64/126; we round 126 down to a multiple of 4
-	// alternatively we also test uniform configuration with 64/64 which is better for AMD
+	// NVidia recommends 64/126; we also test uniform configuration with 64/64 which is better for earlier AMD GPUs
 	const size_t max_vertices = 64;
-	const size_t max_triangles = uniform ? 64 : 124;
+	const size_t max_triangles = uniform ? 64 : 126;
 	const size_t min_triangles = spatial ? 16 : (uniform ? 24 : 32); // only used in flex/spatial modes
 
 	// note: should be set to 0 unless cone culling is used at runtime!
@@ -900,8 +899,8 @@ void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false, bool fl
 	double start = timestamp();
 	size_t max_meshlets = meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, min_triangles);
 	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
-	std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
-	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
+	std::vector<unsigned int> meshlet_vertices(mesh.indices.size());
+	std::vector<unsigned char> meshlet_triangles(mesh.indices.size());
 
 	if (scan)
 		meshlets.resize(meshopt_buildMeshletsScan(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), max_vertices, max_triangles));
@@ -922,7 +921,7 @@ void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false, bool fl
 
 		// this is an example of how to trim the vertex/triangle arrays when copying data out to GPU storage
 		meshlet_vertices.resize(last.vertex_offset + last.vertex_count);
-		meshlet_triangles.resize(last.triangle_offset + ((last.triangle_count * 3 + 3) & ~3));
+		meshlet_triangles.resize(last.triangle_offset + last.triangle_count * 3);
 	}
 
 	double end = timestamp();
