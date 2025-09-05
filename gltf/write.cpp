@@ -1254,20 +1254,20 @@ static void writeInstanceData(std::vector<BufferView>& views, std::string& json_
 	writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, data.size());
 }
 
-size_t writeInstances(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const std::vector<Transform>& transforms, const QuantizationPosition& qp, const Settings& settings)
+size_t writeInstances(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const std::vector<Instance>& instances, const QuantizationPosition& qp, const Settings& settings)
 {
 	std::vector<Attr> position, rotation, scale;
-	position.resize(transforms.size());
-	rotation.resize(transforms.size());
-	scale.resize(transforms.size());
+	position.resize(instances.size());
+	rotation.resize(instances.size());
+	scale.resize(instances.size());
 
-	for (size_t i = 0; i < transforms.size(); ++i)
+	for (size_t i = 0; i < instances.size(); ++i)
 	{
-		decomposeTransform(position[i].f, rotation[i].f, scale[i].f, transforms[i].data);
+		decomposeTransform(position[i].f, rotation[i].f, scale[i].f, instances[i].transform);
 
 		if (settings.quantize && !settings.pos_float)
 		{
-			const float* transform = transforms[i].data;
+			const float* transform = instances[i].transform;
 
 			// pos_offset has to be applied first, thus it results in an offset rotated by the instance matrix
 			position[i].f[0] += qp.offset[0] * transform[0] + qp.offset[1] * transform[4] + qp.offset[2] * transform[8];

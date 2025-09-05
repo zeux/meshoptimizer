@@ -301,7 +301,7 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 	}
 }
 
-static void parseMeshInstancesGltf(std::vector<Transform>& instances, cgltf_node* node)
+static void parseMeshInstancesGltf(std::vector<Instance>& instances, cgltf_node* node, size_t ni)
 {
 	cgltf_accessor* translation = NULL;
 	cgltf_accessor* rotation = NULL;
@@ -309,7 +309,7 @@ static void parseMeshInstancesGltf(std::vector<Transform>& instances, cgltf_node
 
 	for (size_t i = 0; i < node->mesh_gpu_instancing.attributes_count; ++i)
 	{
-		cgltf_attribute& attr = node->mesh_gpu_instancing.attributes[i];
+		const cgltf_attribute& attr = node->mesh_gpu_instancing.attributes[i];
 
 		if (strcmp(attr.name, "TRANSLATION") == 0 && attr.data->type == cgltf_type_vec3)
 			translation = attr.data;
@@ -317,6 +317,8 @@ static void parseMeshInstancesGltf(std::vector<Transform>& instances, cgltf_node
 			rotation = attr.data;
 		else if (strcmp(attr.name, "SCALE") == 0 && attr.data->type == cgltf_type_vec3)
 			scale = attr.data;
+		else
+			fprintf(stderr, "Warning: ignoring %s instance attribute %s in node %d\n", *attr.name == '_' ? "custom" : "unknown", attr.name, int(ni));
 	}
 
 	size_t count = node->mesh_gpu_instancing.attributes[0].data->count;
@@ -342,10 +344,10 @@ static void parseMeshInstancesGltf(std::vector<Transform>& instances, cgltf_node
 		if (scale)
 			cgltf_accessor_read_float(scale, i, instance.scale, 4);
 
-		Transform xf;
-		cgltf_node_transform_world(&instance, xf.data);
+		Instance obj = {};
+		cgltf_node_transform_world(&instance, obj.transform);
 
-		instances.push_back(xf);
+		instances.push_back(obj);
 	}
 }
 
@@ -375,7 +377,7 @@ static void parseMeshNodesGltf(cgltf_data* data, std::vector<Mesh>& meshes, cons
 			if (node.has_mesh_gpu_instancing)
 			{
 				mesh->scene = 0; // we need to assign scene index since instances are attached to a scene; for now we assume 0
-				parseMeshInstancesGltf(mesh->instances, &node);
+				parseMeshInstancesGltf(mesh->instances, &node, i);
 			}
 			else
 			{

@@ -39,16 +39,16 @@ struct Stream
 	std::vector<Attr> data;
 };
 
-struct Transform
+struct Instance
 {
-	float data[16];
+	float transform[16];
 };
 
 struct Mesh
 {
 	int scene;
 	std::vector<cgltf_node*> nodes;
-	std::vector<Transform> instances;
+	std::vector<Instance> instances;
 
 	cgltf_material* material;
 	cgltf_skin* skin;
@@ -403,7 +403,7 @@ void writeMeshAttributes(std::string& json, std::vector<BufferView>& views, std:
 size_t writeMeshIndices(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const std::vector<unsigned int>& indices, cgltf_primitive_type type, const Settings& settings);
 void writeMeshGeometry(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings);
 size_t writeJointBindMatrices(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const cgltf_skin& skin, const QuantizationPosition& qp, const Settings& settings);
-size_t writeInstances(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const std::vector<Transform>& transforms, const QuantizationPosition& qp, const Settings& settings);
+size_t writeInstances(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const std::vector<Instance>& instances, const QuantizationPosition& qp, const Settings& settings);
 void writeMeshNode(std::string& json, size_t mesh_offset, cgltf_node* node, cgltf_skin* skin, cgltf_data* data, const QuantizationPosition* qp);
 void writeMeshNodeInstanced(std::string& json, size_t mesh_offset, size_t accr_offset);
 void writeSkin(std::string& json, const cgltf_skin& skin, size_t matrix_accr, const std::vector<NodeInfo>& nodes, cgltf_data* data);
