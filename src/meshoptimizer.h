@@ -251,7 +251,8 @@ MESHOPTIMIZER_API size_t meshopt_encodeIndexBuffer(unsigned char* buffer, size_t
 MESHOPTIMIZER_API size_t meshopt_encodeIndexBufferBound(size_t index_count, size_t vertex_count);
 
 /**
- * Set index encoder format version
+ * Set index encoder format version (defaults to 1)
+ *
  * version must specify the data format version to encode; valid values are 0 (decodable by all library versions) and 1 (decodable by 0.14+)
  */
 MESHOPTIMIZER_API void meshopt_encodeIndexVersion(int version);
@@ -303,6 +304,7 @@ MESHOPTIMIZER_API int meshopt_decodeIndexSequence(void* destination, size_t inde
  * For maximum efficiency the vertex buffer being encoded has to be quantized and optimized for locality of reference (cache/fetch) first.
  *
  * buffer must contain enough space for the encoded vertex buffer (use meshopt_encodeVertexBufferBound to compute worst case size)
+ * vertex_size must be a multiple of 4 (and <= 256)
  */
 MESHOPTIMIZER_API size_t meshopt_encodeVertexBuffer(unsigned char* buffer, size_t buffer_size, const void* vertices, size_t vertex_count, size_t vertex_size);
 MESHOPTIMIZER_API size_t meshopt_encodeVertexBufferBound(size_t vertex_count, size_t vertex_size);
@@ -313,13 +315,16 @@ MESHOPTIMIZER_API size_t meshopt_encodeVertexBufferBound(size_t vertex_count, si
  * For compression level to take effect, the vertex encoding version must be set to 1.
  * The default compression level implied by meshopt_encodeVertexBuffer is 2.
  *
+ * buffer must contain enough space for the encoded vertex buffer (use meshopt_encodeVertexBufferBound to compute worst case size)
+ * vertex_size must be a multiple of 4 (and <= 256)
  * level should be in the range [0, 3] with 0 being the fastest and 3 being the slowest and producing the best compression ratio.
  * version should be -1 to use the default version (specified via meshopt_encodeVertexVersion), or 0/1 to override the version; per above, level won't take effect if version is 0.
  */
 MESHOPTIMIZER_API size_t meshopt_encodeVertexBufferLevel(unsigned char* buffer, size_t buffer_size, const void* vertices, size_t vertex_count, size_t vertex_size, int level, int version);
 
 /**
- * Set vertex encoder format version
+ * Set vertex encoder format version (defaults to 1)
+ *
  * version must specify the data format version to encode; valid values are 0 (decodable by all library versions) and 1 (decodable by 0.23+)
  */
 MESHOPTIMIZER_API void meshopt_encodeVertexVersion(int version);
@@ -331,6 +336,7 @@ MESHOPTIMIZER_API void meshopt_encodeVertexVersion(int version);
  * The decoder is safe to use for untrusted input, but it may produce garbage data.
  *
  * destination must contain enough space for the resulting vertex buffer (vertex_count * vertex_size bytes)
+ * vertex_size must be a multiple of 4 (and <= 256)
  */
 MESHOPTIMIZER_API int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t vertex_size, const unsigned char* buffer, size_t buffer_size);
 

@@ -46,7 +46,7 @@ var tests = {
 		}
 
 		var encoded = encoder.encodeVertexBuffer(data, 16, 4);
-		assert.equal(encoded[0], 0xa0);
+		assert.equal(encoded[0], 0xa1);
 
 		var decoded = new Uint8Array(16 * 4);
 		decoder.decodeVertexBuffer(decoded, 16, 4, encoded);
@@ -204,6 +204,29 @@ var tests = {
 		var decoded = new Uint32Array(data.length);
 		decoder.decodeGltfBuffer(bytes(decoded), data.length, 4, encoded, 'TRIANGLES');
 
+		assert.equal(encoded[0], 0xe1);
+		assert.deepEqual(decoded, data);
+	},
+
+	encodeGltfBufferAttribute: function () {
+		var data = new Uint32Array([0, 1, 2, 2, 1, 3, 4, 6, 5, 7, 8, 9]);
+
+		var encoded = encoder.encodeGltfBuffer(bytes(data), data.length, 4, 'ATTRIBUTES');
+		var decoded = new Uint32Array(data.length);
+		decoder.decodeGltfBuffer(bytes(decoded), data.length, 4, encoded, 'ATTRIBUTES');
+
+		assert.equal(encoded[0], 0xa0);
+		assert.deepEqual(decoded, data);
+	},
+
+	encodeGltfBufferAttributeV1: function () {
+		var data = new Uint32Array([0, 1, 2, 2, 1, 3, 4, 6, 5, 7, 8, 9]);
+
+		var encoded = encoder.encodeGltfBuffer(bytes(data), data.length, 4, 'ATTRIBUTES', 1);
+		var decoded = new Uint32Array(data.length);
+		decoder.decodeGltfBuffer(bytes(decoded), data.length, 4, encoded, 'ATTRIBUTES');
+
+		assert.equal(encoded[0], 0xa1);
 		assert.deepEqual(decoded, data);
 	},
 };

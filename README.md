@@ -356,7 +356,7 @@ For optimal compression results, the values should be quantized to small integer
 For single-precision floating-point data, it's recommended to use `meshopt_quantizeFloat` to remove entropy from the lower bits of the mantissa; for best results, consider using 15 bits or 7 bits for extreme compression.
 For normal or tangent vectors, using octahedral encoding is recommended over three components as it reduces redundancy; similarly, consider using 10-12 bits per component instead of 16.
 
-When data is bit packed, using v1 vertex codec and specifying compression level 3 (`meshopt_encodeVertexBufferLevel` with level 3 and version 1) can improve the compression further by redistributing bits between components. Note that v1 vertex codec (`meshopt_encodeVertexVersion(1)`) is recommended regardless, as it improves compression ratios and decoding performance even absent bit packing.
+When data is bit packed, specifying compression level 3 (via `meshopt_encodeVertexBufferLevel`) can improve the compression further by redistributing bits between components.
 
 ### Index compression
 
@@ -424,7 +424,7 @@ The following guarantees on data compatibility are provided for point releases (
 - Data encoded with older versions of the library can always be decoded with newer versions;
 - Data encoded with newer versions of the library can be decoded with older versions, provided that encoding versions are set correctly; if binary stability of encoded data is important, use `meshopt_encodeVertexVersion` and `meshopt_encodeIndexVersion` to 'pin' the data versions (or `version` argument of `meshopt_encodeVertexBufferLevel`).
 
-By default, vertex data is encoded for format version 0 (compatible with meshoptimizer v0.8+), and index data is encoded for format version 1 (compatible with meshoptimizer v0.14+). When decoding the data, the decoder will automatically detect the version from the data header.
+By default, vertex data is encoded for format version 1 (compatible with meshoptimizer v0.23+), and index data is encoded for format version 1 (compatible with meshoptimizer v0.14+). When decoding the data, the decoder will automatically detect the version from the data header.
 
 ## Simplification
 

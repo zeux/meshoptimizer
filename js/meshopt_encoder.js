@@ -23,7 +23,7 @@ var MeshoptEncoder = (function () {
 	var ready = WebAssembly.instantiate(unpack(wasm), {}).then(function (result) {
 		instance = result.instance;
 		instance.exports.__wasm_call_ctors();
-		instance.exports.meshopt_encodeVertexVersion(0);
+		instance.exports.meshopt_encodeVertexVersion(1);
 		instance.exports.meshopt_encodeIndexVersion(1);
 	});
 
@@ -162,7 +162,7 @@ var MeshoptEncoder = (function () {
 			assert(level >= 0 && level <= 3);
 			assert(version === undefined || version == 0 || version == 1);
 			var bound = instance.exports.meshopt_encodeVertexBufferBound(count, size);
-			return encode(instance.exports.meshopt_encodeVertexBufferLevel, bound, source, count, size, level, version || 0);
+			return encode(instance.exports.meshopt_encodeVertexBufferLevel, bound, source, count, size, level, version === undefined ? -1 : version);
 		},
 		encodeIndexBuffer: function (source, count, size) {
 			assert(size == 2 || size == 4);
@@ -177,14 +177,14 @@ var MeshoptEncoder = (function () {
 			var bound = instance.exports.meshopt_encodeIndexSequenceBound(count, maxindex(indices) + 1);
 			return encode(instance.exports.meshopt_encodeIndexSequence, bound, indices, count, 4);
 		},
-		encodeGltfBuffer: function (source, count, size, mode) {
+		encodeGltfBuffer: function (source, count, size, mode, version) {
 			var table = {
-				ATTRIBUTES: this.encodeVertexBuffer,
+				ATTRIBUTES: this.encodeVertexBufferLevel,
 				TRIANGLES: this.encodeIndexBuffer,
 				INDICES: this.encodeIndexSequence,
 			};
 			assert(table[mode]);
-			return table[mode](source, count, size);
+			return table[mode](source, count, size, /* level= */ 2, version === undefined ? 0 : version);
 		},
 		encodeFilterOct: function (source, count, stride, bits) {
 			assert(stride == 4 || stride == 8);

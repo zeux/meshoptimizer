@@ -1468,9 +1468,6 @@ int main(int argc, char** argv)
 {
 	void runTests();
 
-	meshopt_encodeVertexVersion(1);
-	meshopt_encodeIndexVersion(1);
-
 	if (argc == 1)
 	{
 		runTests();
