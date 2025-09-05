@@ -1219,7 +1219,7 @@ void computeMeshQuality(std::vector<Mesh>& meshes)
 		meshes[i].quality = (scales[i] == 0.f || maxscale == 0.f) ? 1.f : scales[i] / maxscale;
 }
 
-bool hasAlpha(const Mesh& mesh)
+bool hasVertexAlpha(const Mesh& mesh)
 {
 	const Stream* color = getStream(const_cast<Mesh&>(mesh), cgltf_attribute_type_color);
 	if (!color)
@@ -1227,6 +1227,15 @@ bool hasAlpha(const Mesh& mesh)
 
 	for (size_t i = 0; i < color->data.size(); ++i)
 		if (color->data[i].f[3] < 1.f)
+			return true;
+
+	return false;
+}
+
+bool hasInstanceAlpha(const std::vector<Instance>& instances)
+{
+	for (const Instance& instance : instances)
+		if (instance.color[3] < 1.f)
 			return true;
 
 	return false;

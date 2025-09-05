@@ -310,7 +310,12 @@ static void detachMesh(Mesh& mesh, cgltf_data* data, const std::vector<NodeInfo>
 		mesh.instances.resize(mesh.nodes.size());
 
 		for (size_t j = 0; j < mesh.nodes.size(); ++j)
-			cgltf_node_transform_world(mesh.nodes[j], mesh.instances[j].transform);
+		{
+			Instance& obj = mesh.instances[j];
+
+			cgltf_node_transform_world(mesh.nodes[j], obj.transform);
+			obj.color[0] = obj.color[1] = obj.color[2] = obj.color[3] = 1.0f;
+		}
 
 		mesh.nodes.clear();
 		mesh.scene = scene;
@@ -380,7 +385,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 		Mesh& mesh = meshes[i];
 
 		// skip hasAlpha check unless it's required
-		if (((mesh.material && mesh.material->alpha_mode != cgltf_alpha_mode_opaque) || mesh.variants.size()) && hasAlpha(mesh))
+		if ((((mesh.material && mesh.material->alpha_mode != cgltf_alpha_mode_opaque) || mesh.variants.size()) && hasVertexAlpha(mesh)) || hasInstanceAlpha(mesh.instances))
 		{
 			if (mesh.material)
 				materials[mesh.material - data->materials].mesh_alpha = true;
@@ -715,10 +720,14 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 			comma(json_roots[mesh.scene]);
 			append(json_roots[mesh.scene], node_offset);
 
-			size_t instance_accr = writeInstances(views, json_accessors, accr_offset, mesh.instances, qp, settings);
+			bool has_color = false;
+			for (const Instance& instance : mesh.instances)
+				has_color |= (instance.color[0] != 1.f || instance.color[1] != 1.f || instance.color[2] != 1.f || instance.color[3] != 1.f);
+
+			size_t instance_accr = writeInstances(views, json_accessors, accr_offset, mesh.instances, qp, has_color, settings);
 
 			assert(!mesh.skin);
-			writeMeshNodeInstanced(json_nodes, mesh_offset, instance_accr);
+			writeMeshNodeInstanced(json_nodes, mesh_offset, instance_accr, has_color);
 
 			node_offset++;
 		}

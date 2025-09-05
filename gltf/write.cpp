@@ -1254,12 +1254,16 @@ static void writeInstanceData(std::vector<BufferView>& views, std::string& json_
 	writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, data.size());
 }
 
-size_t writeInstances(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const std::vector<Instance>& instances, const QuantizationPosition& qp, const Settings& settings)
+size_t writeInstances(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const std::vector<Instance>& instances, const QuantizationPosition& qp, bool has_color, const Settings& settings)
 {
 	std::vector<Attr> position, rotation, scale;
 	position.resize(instances.size());
 	rotation.resize(instances.size());
 	scale.resize(instances.size());
+
+	Stream color = {cgltf_attribute_type_color};
+	if (has_color)
+		color.data.resize(instances.size());
 
 	for (size_t i = 0; i < instances.size(); ++i)
 	{
@@ -1279,6 +1283,9 @@ size_t writeInstances(std::vector<BufferView>& views, std::string& json_accessor
 			scale[i].f[1] *= qp.node_scale;
 			scale[i].f[2] *= qp.node_scale;
 		}
+
+		if (has_color)
+			memcpy(color.data[i].f, instances[i].color, sizeof(Attr));
 	}
 
 	writeInstanceData(views, json_accessors, cgltf_animation_path_type_translation, position, settings);
@@ -1287,6 +1294,23 @@ size_t writeInstances(std::vector<BufferView>& views, std::string& json_accessor
 
 	size_t result = accr_offset;
 	accr_offset += 3;
+
+	if (has_color)
+	{
+		BufferView::Compression compression = settings.compress ? BufferView::Compression_Attribute : BufferView::Compression_None;
+
+		std::string scratch;
+		StreamFormat format = writeVertexStream(scratch, color, QuantizationPosition(), QuantizationTexture(), settings);
+
+		size_t view = getBufferView(views, BufferView::Kind_Instance, format.filter, compression, format.stride, 0);
+		size_t offset = views[view].data.size();
+		views[view].data += scratch;
+
+		comma(json_accessors);
+		writeAccessor(json_accessors, view, offset, format.type, format.component_type, format.normalized, instances.size());
+		accr_offset += 1;
+	}
+
 	return result;
 }
 
@@ -1320,7 +1344,7 @@ void writeMeshNode(std::string& json, size_t mesh_offset, cgltf_node* node, cglt
 	append(json, "}");
 }
 
-void writeMeshNodeInstanced(std::string& json, size_t mesh_offset, size_t accr_offset)
+void writeMeshNodeInstanced(std::string& json, size_t mesh_offset, size_t accr_offset, bool has_color)
 {
 	comma(json);
 	append(json, "{\"mesh\":");
@@ -1338,6 +1362,13 @@ void writeMeshNodeInstanced(std::string& json, size_t mesh_offset, size_t accr_o
 	comma(json);
 	append(json, "\"SCALE\":");
 	append(json, accr_offset + 2);
+
+	if (has_color)
+	{
+		comma(json);
+		append(json, "\"_COLOR_0\":");
+		append(json, accr_offset + 3);
+	}
 
 	append(json, "}}}");
 	append(json, "}");
