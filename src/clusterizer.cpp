@@ -828,7 +828,7 @@ static void bvhPrepare(BVHBox* boxes, float* centroids, const unsigned int* indi
 	}
 }
 
-static size_t bvhCountVertices(const unsigned int* order, size_t count, short* used, const unsigned int* indices)
+static size_t bvhCountVertices(const unsigned int* order, size_t count, short* used, const unsigned int* indices, unsigned int* out = NULL)
 {
 	// count number of unique vertices
 	size_t used_vertices = 0;
@@ -839,6 +839,9 @@ static size_t bvhCountVertices(const unsigned int* order, size_t count, short* u
 
 		used_vertices += (used[a] < 0) + (used[b] < 0) + (used[c] < 0);
 		used[a] = used[b] = used[c] = 1;
+
+		if (out)
+			out[i] = unsigned(used_vertices);
 	}
 
 	// reset used[] for future invocations
@@ -905,12 +908,12 @@ static void bvhComputeArea(float* areas, const BVHBox* boxes, const unsigned int
 	}
 }
 
-static size_t bvhPivot(const float* areas, size_t count, size_t step, size_t min, size_t max, float fill, float* out_cost)
+static size_t bvhPivot(const float* areas, const unsigned int* vertices, size_t count, size_t step, size_t min, size_t max, float fill, size_t maxfill, float* out_cost)
 {
 	bool aligned = count >= min * 2 && bvhDivisible(count, min, max);
 	size_t end = aligned ? count - min : count - 1;
 
-	float rmaxf = 1.f / float(int(max));
+	float rmaxfill = 1.f / float(int(maxfill));
 
 	// find best split that minimizes SAH
 	size_t bestsplit = 0;
@@ -933,9 +936,14 @@ static size_t bvhPivot(const float* areas, size_t count, size_t step, size_t min
 		if (cost > bestcost)
 			continue;
 
-		// fill cost; use floating point math to avoid expensive integer modulo
-		int lrest = int(float(int(lsplit + max - 1)) * rmaxf) * int(max) - int(lsplit);
-		int rrest = int(float(int(rsplit + max - 1)) * rmaxf) * int(max) - int(rsplit);
+		// use vertex fill when splitting vertex limited clusters; note that we use the same (left->right) vertex count
+		// using bidirectional vertex counts is a little more expensive to compute and produces slightly worse results in practice
+		size_t lfill = vertices ? vertices[i] : lsplit;
+		size_t rfill = vertices ? vertices[i] : rsplit;
+
+		// fill cost; use floating point math to round up to maxfill to avoid expensive integer modulo
+		int lrest = int(float(int(lfill + maxfill - 1)) * rmaxfill) * int(maxfill) - int(lfill);
+		int rrest = int(float(int(rfill + maxfill - 1)) * rmaxfill) * int(maxfill) - int(rfill);
 
 		cost += fill * (float(lrest) * larea + float(rrest) * rarea);
 
@@ -981,9 +989,7 @@ static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* or
 
 	// if we could not pack the meshlet, we must be vertex bound
 	size_t mint = count <= max_triangles && max_vertices / 3 < min_triangles ? max_vertices / 3 : min_triangles;
-
-	// only use fill weight if we are optimizing for triangle count
-	float fill = count <= max_triangles ? 0.f : fill_weight;
+	size_t maxfill = count <= max_triangles ? max_vertices : max_triangles;
 
 	// find best split that minimizes SAH
 	int bestk = -1;
@@ -993,10 +999,19 @@ static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* or
 	for (int k = 0; k < 3; ++k)
 	{
 		float* areas = static_cast<float*>(scratch);
+		unsigned int* vertices = NULL;
+
 		bvhComputeArea(areas, boxes, axes[k], count);
 
+		if (count <= max_triangles)
+		{
+			// for vertex bound clusters, count number of unique vertices for each split
+			vertices = reinterpret_cast<unsigned int*>(areas + 2 * count);
+			bvhCountVertices(axes[k], count, used, indices, vertices);
+		}
+
 		float axiscost = FLT_MAX;
-		size_t axissplit = bvhPivot(areas, count, step, mint, max_triangles, fill, &axiscost);
+		size_t axissplit = bvhPivot(areas, vertices, count, step, mint, max_triangles, fill_weight, maxfill, &axiscost);
 
 		if (axissplit && axiscost < bestcost)
 		{
@@ -1310,7 +1325,7 @@ size_t meshopt_buildMeshletsSpatial(struct meshopt_Meshlet* meshlets, unsigned i
 	meshopt_Allocator allocator;
 
 	// 3 floats plus 1 uint for sorting, or
-	// 2 floats for SAH costs, or
+	// 2 floats plus 1 uint for pivoting, or
 	// 1 uint plus 1 byte for partitioning
 	float* scratch = allocator.allocate<float>(face_count * 4);
 
