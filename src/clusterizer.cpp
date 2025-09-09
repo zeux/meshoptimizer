@@ -828,7 +828,7 @@ static void bvhPrepare(BVHBox* boxes, float* centroids, const unsigned int* indi
 	}
 }
 
-static bool bvhPackLeaf(unsigned char* boundary, const unsigned int* order, size_t count, short* used, const unsigned int* indices, size_t max_vertices)
+static size_t bvhCountVertices(const unsigned int* order, size_t count, short* used, const unsigned int* indices)
 {
 	// count number of unique vertices
 	size_t used_vertices = 0;
@@ -850,16 +850,16 @@ static bool bvhPackLeaf(unsigned char* boundary, const unsigned int* order, size
 		used[a] = used[b] = used[c] = -1;
 	}
 
-	if (used_vertices > max_vertices)
-		return false;
+	return used_vertices;
+}
 
+static void bvhPackLeaf(unsigned char* boundary, size_t count)
+{
 	// mark meshlet boundary for future reassembly
 	assert(count > 0);
 
 	boundary[0] = 1;
 	memset(boundary + 1, 0, count - 1);
-
-	return true;
 }
 
 static void bvhPackTail(unsigned char* boundary, const unsigned int* order, size_t count, short* used, const unsigned int* indices, size_t max_vertices, size_t max_triangles)
@@ -868,8 +868,9 @@ static void bvhPackTail(unsigned char* boundary, const unsigned int* order, size
 	{
 		size_t chunk = i + max_triangles <= count ? max_triangles : count - i;
 
-		if (bvhPackLeaf(boundary + i, order + i, chunk, used, indices, max_vertices))
+		if (bvhCountVertices(order + i, chunk, used, indices) <= max_vertices)
 		{
+			bvhPackLeaf(boundary + i, chunk);
 			i += chunk;
 			continue;
 		}
@@ -877,7 +878,7 @@ static void bvhPackTail(unsigned char* boundary, const unsigned int* order, size
 		// chunk is vertex bound, split it into smaller meshlets
 		assert(chunk > max_vertices / 3);
 
-		bvhPackLeaf(boundary + i, order + i, max_vertices / 3, used, indices, max_vertices);
+		bvhPackLeaf(boundary + i, max_vertices / 3);
 		i += max_vertices / 3;
 	}
 }
@@ -890,21 +891,22 @@ static bool bvhDivisible(size_t count, size_t min, size_t max)
 	return min * 2 <= max ? count >= min : count % min <= (count / min) * (max - min);
 }
 
-static size_t bvhPivot(const BVHBox* boxes, const unsigned int* order, size_t count, void* scratch, size_t step, size_t min, size_t max, float fill, float* out_cost)
+static void bvhComputeArea(float* areas, const BVHBox* boxes, const unsigned int* order, size_t count)
 {
 	BVHBox accuml = boxes[order[0]], accumr = boxes[order[count - 1]];
-	float* costs = static_cast<float*>(scratch);
 
-	// accumulate SAH cost in forward and backward directions
 	for (size_t i = 0; i < count; ++i)
 	{
 		boxMerge(accuml, boxes[order[i]]);
 		boxMerge(accumr, boxes[order[count - 1 - i]]);
 
-		costs[i] = boxSurface(accuml);
-		costs[i + count] = boxSurface(accumr);
+		areas[i] = boxSurface(accuml);
+		areas[i + count] = boxSurface(accumr);
 	}
+}
 
+static size_t bvhPivot(const float* areas, size_t count, size_t step, size_t min, size_t max, float fill, float* out_cost)
+{
 	bool aligned = count >= min * 2 && bvhDivisible(count, min, max);
 	size_t end = aligned ? count - min : count - 1;
 
@@ -923,9 +925,9 @@ static size_t bvhPivot(const BVHBox* boxes, const unsigned int* order, size_t co
 		if (aligned && !bvhDivisible(rsplit, min, max))
 			continue;
 
-		// costs[x] = inclusive surface area of boxes[0..x]
-		// costs[count-1-x] = inclusive surface area of boxes[x..count-1]
-		float larea = costs[i], rarea = costs[(count - 1 - (i + 1)) + count];
+		// areas[x] = inclusive surface area of boxes[0..x]
+		// areas[count-1-x] = inclusive surface area of boxes[x..count-1]
+		float larea = areas[i], rarea = areas[(count - 1 - (i + 1)) + count];
 		float cost = larea * float(int(lsplit)) + rarea * float(int(rsplit));
 
 		if (cost > bestcost)
@@ -969,8 +971,8 @@ static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* or
 	if (depth >= kMeshletMaxTreeDepth)
 		return bvhPackTail(boundary, orderx, count, used, indices, max_vertices, max_triangles);
 
-	if (count <= max_triangles && bvhPackLeaf(boundary, orderx, count, used, indices, max_vertices))
-		return;
+	if (count <= max_triangles && bvhCountVertices(orderx, count, used, indices) <= max_vertices)
+		return bvhPackLeaf(boundary, count);
 
 	unsigned int* axes[3] = {orderx, ordery, orderz};
 
@@ -990,8 +992,11 @@ static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* or
 
 	for (int k = 0; k < 3; ++k)
 	{
+		float* areas = static_cast<float*>(scratch);
+		bvhComputeArea(areas, boxes, axes[k], count);
+
 		float axiscost = FLT_MAX;
-		size_t axissplit = bvhPivot(boxes, axes[k], count, scratch, step, mint, max_triangles, fill, &axiscost);
+		size_t axissplit = bvhPivot(areas, count, step, mint, max_triangles, fill, &axiscost);
 
 		if (axissplit && axiscost < bestcost)
 		{
