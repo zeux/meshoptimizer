@@ -261,14 +261,14 @@ static bool loadMetis();
 void dumpObj(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, bool recomputeNormals = false);
 void dumpObj(const char* section, const std::vector<unsigned int>& indices);
 
-void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices);
+void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, float fill_weight);
 
 void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
 	static const char* clrt = getenv("CLRT");
 
-	if (clrt && atoi(clrt))
-		return ::clrt(vertices, indices);
+	if (clrt)
+		return ::clrt(vertices, indices, float(atof(clrt)));
 
 	static const char* metis = getenv("METIS");
 	METIS = metis ? atoi(metis) : 0;
@@ -907,7 +907,7 @@ static void expandBox(Box& box, float x, float y, float z)
 
 double timestamp();
 
-void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
+void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, float fill_weight)
 {
 	std::vector<Box> triangles(indices.size() / 3);
 
@@ -946,13 +946,12 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 	const size_t min_triangles = 16;
 	const size_t max_triangles = 64;
 	const float split_factor = 2.0f;
-	const float fill_weight = 0.5f;
 
 	size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), max_vertices, min_triangles);
 
 	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
-	std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
-	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
+	std::vector<unsigned int> meshlet_vertices(indices.size());
+	std::vector<unsigned char> meshlet_triangles(indices.size());
 
 	if (use_spatial)
 		meshlets.resize(meshopt_buildMeshletsSpatial(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, fill_weight));
