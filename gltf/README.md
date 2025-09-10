@@ -107,6 +107,7 @@ glTF files may contain custom application-specific data stored outside of custom
 Unknown vertex or instance attributes are generally discarded. While it would be possible to preserve them in theory, many scene transformations and analyses require a full understanding of the attribute semantics - some attributes need to be transformed with the mesh transformation matrix, some need to be adjusted when meshes are merged, some influence how meshes are rendered, etc. However, gltfpack supports some specific attributes that are commonly used in the ecosystem:
 
 - Vertex attributes that store integer IDs with names `_ID`, `_BATCHID` or `_FEATURE_ID_n` are preserved as-is. These can be used to identify objects.
+- Instance attribute `_COLOR_0` is preserved as-is. This can be used to provide per-instance color tinting.
 
 Additional application-specific data can be stored via the glTF `extras` property. While extras (outside of `asset`) are discarded by default, using the `-ke` option preserves extras in materials, nodes, primitives and scenes.
 

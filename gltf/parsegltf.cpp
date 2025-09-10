@@ -306,6 +306,7 @@ static void parseMeshInstancesGltf(std::vector<Instance>& instances, cgltf_node*
 	cgltf_accessor* translation = NULL;
 	cgltf_accessor* rotation = NULL;
 	cgltf_accessor* scale = NULL;
+	cgltf_accessor* color = NULL;
 
 	for (size_t i = 0; i < node->mesh_gpu_instancing.attributes_count; ++i)
 	{
@@ -317,6 +318,8 @@ static void parseMeshInstancesGltf(std::vector<Instance>& instances, cgltf_node*
 			rotation = attr.data;
 		else if (strcmp(attr.name, "SCALE") == 0 && attr.data->type == cgltf_type_vec3)
 			scale = attr.data;
+		else if (strcmp(attr.name, "_COLOR_0") == 0 && (attr.data->type == cgltf_type_vec3 || attr.data->type == cgltf_type_vec4))
+			color = attr.data;
 		else
 			fprintf(stderr, "Warning: ignoring %s instance attribute %s in node %d\n", *attr.name == '_' ? "custom" : "unknown", attr.name, int(ni));
 	}
@@ -346,6 +349,11 @@ static void parseMeshInstancesGltf(std::vector<Instance>& instances, cgltf_node*
 
 		Instance obj = {};
 		cgltf_node_transform_world(&instance, obj.transform);
+
+		obj.color[0] = obj.color[1] = obj.color[2] = obj.color[3] = 1.0f;
+
+		if (color)
+			cgltf_accessor_read_float(color, i, obj.color, 4);
 
 		instances.push_back(obj);
 	}
