@@ -736,26 +736,51 @@ static void kdtreeNearest(KDNode* nodes, unsigned int root, const float* points,
 	}
 }
 
+struct BVHBoxT
+{
+	float min[4];
+	float max[4];
+};
+
 struct BVHBox
 {
 	float min[3];
 	float max[3];
 };
 
-static void boxMerge(BVHBox& box, const BVHBox& other)
+#if defined(SIMD_SSE)
+static float boxMerge(BVHBoxT& box, const BVHBox& other)
+{
+	__m128 min = _mm_loadu_ps(box.min);
+	__m128 max = _mm_loadu_ps(box.max);
+
+	min = _mm_min_ps(min, _mm_loadu_ps(other.min));
+	max = _mm_max_ps(max, _mm_loadu_ps(other.max));
+
+	_mm_store_ps(box.min, min);
+	_mm_store_ps(box.max, max);
+
+	__m128 size = _mm_sub_ps(max, min);
+	__m128 size_yzx = _mm_shuffle_ps(size, size, _MM_SHUFFLE(0, 0, 2, 1));
+	__m128 mul = _mm_mul_ps(size, size_yzx);
+	__m128 sum_xy = _mm_add_ss(mul, _mm_shuffle_ps(mul, mul, _MM_SHUFFLE(1, 1, 1, 1)));
+	__m128 sum_xyz = _mm_add_ss(sum_xy, _mm_shuffle_ps(mul, mul, _MM_SHUFFLE(2, 2, 2, 2)));
+
+	return _mm_cvtss_f32(sum_xyz);
+}
+#else
+static float boxMerge(BVHBoxT& box, const BVHBox& other)
 {
 	for (int k = 0; k < 3; ++k)
 	{
 		box.min[k] = other.min[k] < box.min[k] ? other.min[k] : box.min[k];
 		box.max[k] = other.max[k] > box.max[k] ? other.max[k] : box.max[k];
 	}
-}
 
-inline float boxSurface(const BVHBox& box)
-{
 	float sx = box.max[0] - box.min[0], sy = box.max[1] - box.min[1], sz = box.max[2] - box.min[2];
 	return sx * sy + sx * sz + sy * sz;
 }
+#endif
 
 inline unsigned int radixFloat(unsigned int v)
 {
@@ -909,15 +934,16 @@ static bool bvhDivisible(size_t count, size_t min, size_t max)
 
 static void bvhComputeArea(float* areas, const BVHBox* boxes, const unsigned int* order, size_t count)
 {
-	BVHBox accuml = boxes[order[0]], accumr = boxes[order[count - 1]];
+	BVHBoxT accuml = {{FLT_MAX, FLT_MAX, FLT_MAX, 0}, {-FLT_MAX, -FLT_MAX, -FLT_MAX, 0}};
+	BVHBoxT accumr = accuml;
 
 	for (size_t i = 0; i < count; ++i)
 	{
-		boxMerge(accuml, boxes[order[i]]);
-		boxMerge(accumr, boxes[order[count - 1 - i]]);
+		float larea = boxMerge(accuml, boxes[order[i]]);
+		float rarea = boxMerge(accumr, boxes[order[count - 1 - i]]);
 
-		areas[i] = boxSurface(accuml);
-		areas[i + count] = boxSurface(accumr);
+		areas[i] = larea;
+		areas[i + count] = rarea;
 	}
 }
 
@@ -1343,8 +1369,9 @@ size_t meshopt_buildMeshletsSpatial(struct meshopt_Meshlet* meshlets, unsigned i
 	float* scratch = allocator.allocate<float>(face_count * 4);
 
 	// compute bounding boxes and centroids for sorting
-	BVHBox* boxes = allocator.allocate<BVHBox>(face_count);
+	BVHBox* boxes = allocator.allocate<BVHBox>(face_count + 1); // padding for SIMD
 	bvhPrepare(boxes, scratch, indices, face_count, vertex_positions, vertex_count, vertex_stride_float);
+	memset(boxes + face_count, 0, sizeof(BVHBox));
 
 	unsigned int* axes = allocator.allocate<unsigned int>(face_count * 3);
 	unsigned int* temp = reinterpret_cast<unsigned int*>(scratch) + face_count * 3;
