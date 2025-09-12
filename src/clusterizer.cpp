@@ -768,6 +768,26 @@ static float boxMerge(BVHBoxT& box, const BVHBox& other)
 
 	return _mm_cvtss_f32(sum_xyz);
 }
+#elif defined(SIMD_NEON)
+static float boxMerge(BVHBoxT& box, const BVHBox& other)
+{
+	float32x4_t min = vld1q_f32(box.min);
+	float32x4_t max = vld1q_f32(box.max);
+
+	min = vminq_f32(min, vld1q_f32(other.min));
+	max = vmaxq_f32(max, vld1q_f32(other.max));
+
+	vst1q_f32(box.min, min);
+	vst1q_f32(box.max, max);
+
+	float32x4_t size = vsubq_f32(max, min);
+	float32x4_t size_yzx = vextq_f32(vextq_f32(size, size, 3), size, 2);
+	float32x4_t mul = vmulq_f32(size, size_yzx);
+	float sum_xy = vgetq_lane_f32(mul, 0) + vgetq_lane_f32(mul, 1);
+	float sum_xyz = sum_xy + vgetq_lane_f32(mul, 2);
+
+	return sum_xyz;
+}
 #else
 static float boxMerge(BVHBoxT& box, const BVHBox& other)
 {
