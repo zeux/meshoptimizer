@@ -6,6 +6,19 @@
 #include <math.h>
 #include <string.h>
 
+// The block below auto-detects SIMD ISA that can be used on the target platform
+#ifndef MESHOPTIMIZER_NO_SIMD
+// The SIMD implementation requires SSE2 or NEON, which can be enabled unconditionally through compiler settings
+// MSVC supports compiling SSE2/NEON code regardless of compile options; when compiling with MSVC, we assume all 32-bit CPUs support SSE2/NEON
+#if defined(__SSE2__) || (defined(_MSC_VER) && !defined(__clang__) && (defined(_M_IX86) || defined(_M_X64)))
+#define SIMD_SSE
+#include <emmintrin.h>
+#elif (defined(__ARM_NEON__) || defined(__ARM_NEON)) || (defined(_MSC_VER) && (defined(_M_ARM) || defined(_M_ARM64)))
+#define SIMD_NEON
+#include <arm_neon.h>
+#endif
+#endif // !MESHOPTIMIZER_NO_SIMD
+
 // This work is based on:
 // Graham Wihlidal. Optimizing the Graphics Pipeline with Compute. 2016
 // Matthaeus Chajdas. GeometryFX 1.2 - Cluster Culling. 2016
@@ -1695,3 +1708,6 @@ void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* mesh
 	assert(vertex_offset <= vertex_count);
 	memcpy(vertices, order, vertex_offset * sizeof(unsigned int));
 }
+
+#undef SIMD_SSE
+#undef SIMD_NEON
