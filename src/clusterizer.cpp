@@ -162,6 +162,19 @@ static void buildTriangleAdjacencySparse(TriangleAdjacency2& adjacency, const un
 	}
 }
 
+static void clearUsed(short* used, size_t vertex_count, const unsigned int* indices, size_t index_count)
+{
+	// for sparse inputs, it's faster to only clear vertices referenced by the index buffer
+	if (vertex_count <= index_count)
+		memset(used, -1, vertex_count * sizeof(short));
+	else
+		for (size_t i = 0; i < index_count; ++i)
+		{
+			assert(indices[i] < vertex_count);
+			used[indices[i]] = -1;
+		}
+}
+
 static void computeBoundingSphere(float result[4], const float* points, size_t count, size_t points_stride, const float* radii, size_t radii_stride, size_t axis_count)
 {
 	static const float kAxes[7][3] = {
@@ -1196,7 +1209,7 @@ size_t meshopt_buildMeshletsFlex(meshopt_Meshlet* meshlets, unsigned int* meshle
 
 	// index of the vertex in the meshlet, -1 if the vertex isn't used
 	short* used = allocator.allocate<short>(vertex_count);
-	memset(used, -1, vertex_count * sizeof(short));
+	clearUsed(used, vertex_count, indices, index_count);
 
 	// initial seed triangle is the one closest to the corner
 	unsigned int initial_seed = ~0u;
@@ -1342,7 +1355,7 @@ size_t meshopt_buildMeshletsScan(meshopt_Meshlet* meshlets, unsigned int* meshle
 
 	// index of the vertex in the meshlet, -1 if the vertex isn't used
 	short* used = allocator.allocate<short>(vertex_count);
-	memset(used, -1, vertex_count * sizeof(short));
+	clearUsed(used, vertex_count, indices, index_count);
 
 	meshopt_Meshlet meshlet = {};
 	size_t meshlet_offset = 0;
@@ -1415,7 +1428,7 @@ size_t meshopt_buildMeshletsSpatial(struct meshopt_Meshlet* meshlets, unsigned i
 
 	// index of the vertex in the meshlet, -1 if the vertex isn't used
 	short* used = allocator.allocate<short>(vertex_count);
-	memset(used, -1, vertex_count * sizeof(short));
+	clearUsed(used, vertex_count, indices, index_count);
 
 	unsigned char* boundary = allocator.allocate<unsigned char>(face_count);
 
