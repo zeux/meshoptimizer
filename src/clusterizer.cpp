@@ -6,6 +6,17 @@
 #include <math.h>
 #include <string.h>
 
+// The block below auto-detects SIMD ISA that can be used on the target platform
+#ifndef MESHOPTIMIZER_NO_SIMD
+#if defined(__SSE2__) || (defined(_MSC_VER) && defined(_M_X64))
+#define SIMD_SSE
+#include <emmintrin.h>
+#elif defined(__aarch64__) || (defined(_MSC_VER) && defined(_M_ARM64) && _MSC_VER >= 1922)
+#define SIMD_NEON
+#include <arm_neon.h>
+#endif
+#endif // !MESHOPTIMIZER_NO_SIMD
+
 // This work is based on:
 // Graham Wihlidal. Optimizing the Graphics Pipeline with Compute. 2016
 // Matthaeus Chajdas. GeometryFX 1.2 - Cluster Culling. 2016
@@ -147,6 +158,19 @@ static void buildTriangleAdjacencySparse(TriangleAdjacency2& adjacency, const un
 			adjacency.offsets[v] -= adjacency.counts[v];
 		}
 	}
+}
+
+static void clearUsed(short* used, size_t vertex_count, const unsigned int* indices, size_t index_count)
+{
+	// for sparse inputs, it's faster to only clear vertices referenced by the index buffer
+	if (vertex_count <= index_count)
+		memset(used, -1, vertex_count * sizeof(short));
+	else
+		for (size_t i = 0; i < index_count; ++i)
+		{
+			assert(indices[i] < vertex_count);
+			used[indices[i]] = -1;
+		}
 }
 
 static void computeBoundingSphere(float result[4], const float* points, size_t count, size_t points_stride, const float* radii, size_t radii_stride, size_t axis_count)
@@ -723,26 +747,71 @@ static void kdtreeNearest(KDNode* nodes, unsigned int root, const float* points,
 	}
 }
 
+struct BVHBoxT
+{
+	float min[4];
+	float max[4];
+};
+
 struct BVHBox
 {
 	float min[3];
 	float max[3];
 };
 
-static void boxMerge(BVHBox& box, const BVHBox& other)
+#if defined(SIMD_SSE)
+static float boxMerge(BVHBoxT& box, const BVHBox& other)
+{
+	__m128 min = _mm_loadu_ps(box.min);
+	__m128 max = _mm_loadu_ps(box.max);
+
+	min = _mm_min_ps(min, _mm_loadu_ps(other.min));
+	max = _mm_max_ps(max, _mm_loadu_ps(other.max));
+
+	_mm_store_ps(box.min, min);
+	_mm_store_ps(box.max, max);
+
+	__m128 size = _mm_sub_ps(max, min);
+	__m128 size_yzx = _mm_shuffle_ps(size, size, _MM_SHUFFLE(0, 0, 2, 1));
+	__m128 mul = _mm_mul_ps(size, size_yzx);
+	__m128 sum_xy = _mm_add_ss(mul, _mm_shuffle_ps(mul, mul, _MM_SHUFFLE(1, 1, 1, 1)));
+	__m128 sum_xyz = _mm_add_ss(sum_xy, _mm_shuffle_ps(mul, mul, _MM_SHUFFLE(2, 2, 2, 2)));
+
+	return _mm_cvtss_f32(sum_xyz);
+}
+#elif defined(SIMD_NEON)
+static float boxMerge(BVHBoxT& box, const BVHBox& other)
+{
+	float32x4_t min = vld1q_f32(box.min);
+	float32x4_t max = vld1q_f32(box.max);
+
+	min = vminq_f32(min, vld1q_f32(other.min));
+	max = vmaxq_f32(max, vld1q_f32(other.max));
+
+	vst1q_f32(box.min, min);
+	vst1q_f32(box.max, max);
+
+	float32x4_t size = vsubq_f32(max, min);
+	float32x4_t size_yzx = vextq_f32(vextq_f32(size, size, 3), size, 2);
+	float32x4_t mul = vmulq_f32(size, size_yzx);
+	float sum_xy = vgetq_lane_f32(mul, 0) + vgetq_lane_f32(mul, 1);
+	float sum_xyz = sum_xy + vgetq_lane_f32(mul, 2);
+
+	return sum_xyz;
+}
+#else
+static float boxMerge(BVHBoxT& box, const BVHBox& other)
 {
 	for (int k = 0; k < 3; ++k)
 	{
 		box.min[k] = other.min[k] < box.min[k] ? other.min[k] : box.min[k];
 		box.max[k] = other.max[k] > box.max[k] ? other.max[k] : box.max[k];
 	}
-}
 
-inline float boxSurface(const BVHBox& box)
-{
 	float sx = box.max[0] - box.min[0], sy = box.max[1] - box.min[1], sz = box.max[2] - box.min[2];
 	return sx * sy + sx * sz + sy * sz;
 }
+#endif
 
 inline unsigned int radixFloat(unsigned int v)
 {
@@ -896,15 +965,16 @@ static bool bvhDivisible(size_t count, size_t min, size_t max)
 
 static void bvhComputeArea(float* areas, const BVHBox* boxes, const unsigned int* order, size_t count)
 {
-	BVHBox accuml = boxes[order[0]], accumr = boxes[order[count - 1]];
+	BVHBoxT accuml = {{FLT_MAX, FLT_MAX, FLT_MAX, 0}, {-FLT_MAX, -FLT_MAX, -FLT_MAX, 0}};
+	BVHBoxT accumr = accuml;
 
 	for (size_t i = 0; i < count; ++i)
 	{
-		boxMerge(accuml, boxes[order[i]]);
-		boxMerge(accumr, boxes[order[count - 1 - i]]);
+		float larea = boxMerge(accuml, boxes[order[i]]);
+		float rarea = boxMerge(accumr, boxes[order[count - 1 - i]]);
 
-		areas[i] = boxSurface(accuml);
-		areas[i + count] = boxSurface(accumr);
+		areas[i] = larea;
+		areas[i + count] = rarea;
 	}
 }
 
@@ -1137,7 +1207,7 @@ size_t meshopt_buildMeshletsFlex(meshopt_Meshlet* meshlets, unsigned int* meshle
 
 	// index of the vertex in the meshlet, -1 if the vertex isn't used
 	short* used = allocator.allocate<short>(vertex_count);
-	memset(used, -1, vertex_count * sizeof(short));
+	clearUsed(used, vertex_count, indices, index_count);
 
 	// initial seed triangle is the one closest to the corner
 	unsigned int initial_seed = ~0u;
@@ -1283,7 +1353,7 @@ size_t meshopt_buildMeshletsScan(meshopt_Meshlet* meshlets, unsigned int* meshle
 
 	// index of the vertex in the meshlet, -1 if the vertex isn't used
 	short* used = allocator.allocate<short>(vertex_count);
-	memset(used, -1, vertex_count * sizeof(short));
+	clearUsed(used, vertex_count, indices, index_count);
 
 	meshopt_Meshlet meshlet = {};
 	size_t meshlet_offset = 0;
@@ -1330,8 +1400,9 @@ size_t meshopt_buildMeshletsSpatial(struct meshopt_Meshlet* meshlets, unsigned i
 	float* scratch = allocator.allocate<float>(face_count * 4);
 
 	// compute bounding boxes and centroids for sorting
-	BVHBox* boxes = allocator.allocate<BVHBox>(face_count);
+	BVHBox* boxes = allocator.allocate<BVHBox>(face_count + 1); // padding for SIMD
 	bvhPrepare(boxes, scratch, indices, face_count, vertex_positions, vertex_count, vertex_stride_float);
+	memset(boxes + face_count, 0, sizeof(BVHBox));
 
 	unsigned int* axes = allocator.allocate<unsigned int>(face_count * 3);
 	unsigned int* temp = reinterpret_cast<unsigned int*>(scratch) + face_count * 3;
@@ -1355,7 +1426,7 @@ size_t meshopt_buildMeshletsSpatial(struct meshopt_Meshlet* meshlets, unsigned i
 
 	// index of the vertex in the meshlet, -1 if the vertex isn't used
 	short* used = allocator.allocate<short>(vertex_count);
-	memset(used, -1, vertex_count * sizeof(short));
+	clearUsed(used, vertex_count, indices, index_count);
 
 	unsigned char* boundary = allocator.allocate<unsigned char>(face_count);
 
@@ -1695,3 +1766,6 @@ void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* mesh
 	assert(vertex_offset <= vertex_count);
 	memcpy(vertices, order, vertex_offset * sizeof(unsigned int));
 }
+
+#undef SIMD_SSE
+#undef SIMD_NEON

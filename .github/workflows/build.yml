@@ -52,9 +52,14 @@ jobs:
   windows:
     strategy:
       matrix:
-        arch: [{ name: windows-x86, arch: Win32 }, { name: windows, arch: x64 }]
+        arch:
+          [
+            { name: windows, runner: windows-latest, arch: x64 },
+            { name: windows-x86, runner: windows-latest, arch: Win32 },
+            { name: windows-arm, runner: windows-11-arm, arch: ARM64 },
+          ]
     name: ${{matrix.arch.name}}
-    runs-on: windows-latest
+    runs-on: ${{matrix.arch.runner}}
     steps:
       - uses: actions/checkout@v4
       - name: cmake configure
