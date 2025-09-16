@@ -1,11 +1,6 @@
 // For reference, see the original Nanite paper:
 // Brian Karis. Nanite: A Deep Dive. 2021
-
-#ifndef _CRT_SECURE_NO_WARNINGS
-#define _CRT_SECURE_NO_WARNINGS
-#endif
-
-#include "../src/meshoptimizer.h"
+#include "clusterlod.h"
 
 #include <float.h>
 #include <math.h>
@@ -14,6 +9,12 @@
 
 #include <algorithm>
 #include <vector>
+
+#include "../src/meshoptimizer.h"
+
+#ifndef TRACE
+#define TRACE 0
+#endif
 
 struct Vertex
 {
@@ -55,8 +56,6 @@ const bool kClusterSpatial = false;
 const float kClusterFillFactor = 2.0f;
 const float kClusterFillWeight = 0.75f;
 const bool kClusterOptimizeRaster = true;
-
-const bool kDumpMetrics = true;
 
 static LODBounds bounds(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, float error)
 {
@@ -218,15 +217,12 @@ static std::vector<unsigned int> simplify(const std::vector<Vertex>& vertices, c
 	return lod;
 }
 
+#if TRACE
 static void dumpMetrics(int level, const std::vector<Cluster>& queue, const std::vector<std::vector<int> >& groups, const std::vector<unsigned int>& remap, const std::vector<unsigned char>& locks, const std::vector<int>& retry);
+#endif
 
-void dumpObj(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, bool recomputeNormals = false);
-void dumpObj(const char* section, const std::vector<unsigned int>& indices);
-
-void clod(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
+size_t clod(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, void* output_context, clodOutput output_callback)
 {
-	static const char* dump = getenv("DUMP");
-
 	int depth = 0;
 	std::vector<unsigned char> locks(vertices.size());
 
@@ -249,8 +245,9 @@ void clod(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 	for (size_t i = 0; i < clusters.size(); ++i)
 		clusters[i].self = bounds(vertices, clusters[i].indices, 0.f);
 
-	if (kDumpMetrics)
-		printf("ideal lod chain: %.1f levels\n", log2(double(indices.size() / 3) / double(kClusterSize)));
+#if TRACE
+	printf("ideal lod chain: %.1f levels\n", log2(double(indices.size() / 3) / double(kClusterSize)));
+#endif
 
 	std::vector<int> pending(clusters.size());
 	for (size_t i = 0; i < clusters.size(); ++i)
@@ -270,23 +267,13 @@ void clod(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 		size_t triangles = 0;
 		size_t stuck_triangles = 0;
 
-		if (dump && depth == atoi(dump))
-			dumpObj(vertices, std::vector<unsigned int>());
-
 		// every group needs to be simplified now
 		for (size_t i = 0; i < groups.size(); ++i)
 		{
 			std::vector<unsigned int> merged;
+			merged.reserve(kClusterSize * groups[i].size());
 			for (size_t j = 0; j < groups[i].size(); ++j)
 				merged.insert(merged.end(), clusters[groups[i][j]].indices.begin(), clusters[groups[i][j]].indices.end());
-
-			if (dump && depth == atoi(dump))
-			{
-				for (size_t j = 0; j < groups[i].size(); ++j)
-					dumpObj("cluster", clusters[groups[i][j]].indices);
-
-				dumpObj("group", merged);
-			}
 
 			// aim to reduce group size in half
 			size_t target_size = (merged.size() / 3) / 2 * 3;
@@ -320,15 +307,22 @@ void clod(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 			{
 				split[j].self = groupb;
 
-				clusters.push_back(split[j]); // std::move
-				pending.push_back(int(clusters.size()) - 1);
+				if (output_callback)
+				{
+					clodCluster cluster = {depth + 1, &split[j].indices[0], split[j].indices.size()};
+					output_callback(output_context, cluster);
+				}
 
 				triangles += split[j].indices.size() / 3;
+				clusters.push_back(std::move(split[j]));
+				pending.push_back(int(clusters.size()) - 1);
 			}
 		}
 
-		if (kDumpMetrics)
-			dumpMetrics(depth, clusters, groups, remap, locks, retry);
+#if TRACE
+		dumpMetrics(depth, clusters, groups, remap, locks, retry);
+#endif
+
 		depth++;
 
 		if (kUseRetry)
@@ -345,13 +339,16 @@ void clod(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 		if (clusters[i].parent.error == FLT_MAX)
 			lowest_triangles += clusters[i].indices.size() / 3;
 
-	if (kDumpMetrics)
-		printf("lowest lod: %d triangles\n", int(lowest_triangles));
+#if TRACE
+	printf("lowest lod: %d triangles\n", int(lowest_triangles));
+#endif
+
+	return lowest_triangles;
 }
 
+#if TRACE
 // What follows is code that is helpful for collecting metrics, visualizing cuts, etc.
 // This code is not used in the actual clustering implementation and can be ignored.
-
 static int follow(std::vector<int>& parents, int index)
 {
 	while (index != parents[index])
@@ -472,3 +469,4 @@ static void dumpMetrics(int level, const std::vector<Cluster>& queue, const std:
 		printf("; stuck %d clusters (%d triangles)", stuck_clusters, stuck_triangles);
 	printf("\n");
 }
+#endif

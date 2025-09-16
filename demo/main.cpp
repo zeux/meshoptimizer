@@ -9,6 +9,8 @@
 
 #include <vector>
 
+#include "clusterlod.h"
+
 #include "../extern/fast_obj.h"
 
 #define SDEFL_IMPLEMENTATION
@@ -1466,8 +1468,6 @@ void coverage(const Mesh& mesh)
 	    cs.coverage[0] * 100, cs.coverage[1] * 100, cs.coverage[2] * 100, (end - start) * 1000);
 }
 
-void clod(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices); // clusterlod.cpp
-
 bool loadMesh(Mesh& mesh, const char* path)
 {
 	double start = timestamp();
@@ -1662,13 +1662,28 @@ void processDev(const char* path)
 	meshletsRT(mesh);
 }
 
+static void dumpCLOD(void* context, clodCluster cluster)
+{
+	const char* dump = static_cast<const char*>(context);
+
+	if (dump && atoi(dump) == cluster.depth)
+		dumpObj("cluster", std::vector<unsigned int>(cluster.indices, cluster.indices + cluster.index_count));
+}
+
 void processCLOD(const char* path)
 {
 	Mesh mesh;
 	if (!loadMesh(mesh, path))
 		return;
 
-	clod(mesh.vertices, mesh.indices);
+	const char* dump = getenv("DUMP");
+
+	if (dump)
+		dumpObj(mesh.vertices, std::vector<unsigned int>());
+
+	size_t lowest = clod(mesh.vertices, mesh.indices, const_cast<char*>(dump), dumpCLOD);
+	printf("clusterlod: %d triangles => %d triangles on lowest level (%.2f%% of original)\n",
+	    int(mesh.indices.size() / 3), int(lowest), float(lowest) / float(mesh.indices.size() / 3) * 100.0f);
 }
 
 int main(int argc, char** argv)
