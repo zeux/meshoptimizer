@@ -42,14 +42,21 @@ struct Cluster
 };
 
 const size_t kClusterSize = 128;
-const size_t kGroupSize = 8;
-const bool kUseLocks = true;
+const size_t kClusterVertices = 192;
+const size_t kGroupSize = 16;
+
 const bool kUseNormals = true;
 const bool kUseRetry = true;
-const bool kUseSpatial = false;
 const bool kUsePermissiveFallback = true;
 const bool kUseSloppyFallback = false;
 const float kSimplifyThreshold = 0.85f;
+
+const bool kClusterSpatial = false;
+const float kClusterFillFactor = 2.0f;
+const float kClusterFillWeight = 0.75f;
+const bool kClusterOptimizeRaster = true;
+
+const bool kDumpMetrics = true;
 
 static LODBounds bounds(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, float error)
 {
@@ -88,11 +95,9 @@ static LODBounds boundsMerge(const std::vector<Cluster>& clusters, const std::ve
 
 static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
-	const size_t max_vertices = 192; // TODO: depends on kClusterSize, also may want to dial down for mesh shaders
+	const size_t max_vertices = kClusterVertices;
 	const size_t max_triangles = kClusterSize;
 	const size_t min_triangles = kClusterSize / 3;
-	const float split_factor = 2.0f;
-	const float fill_weight = 0.75f;
 
 	size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), max_vertices, min_triangles);
 
@@ -100,10 +105,10 @@ static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, cons
 	std::vector<unsigned int> meshlet_vertices(indices.size());
 	std::vector<unsigned char> meshlet_triangles(indices.size());
 
-	if (kUseSpatial)
-		meshlets.resize(meshopt_buildMeshletsSpatial(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, fill_weight));
+	if (kClusterSpatial)
+		meshlets.resize(meshopt_buildMeshletsSpatial(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, kClusterFillWeight));
 	else
-		meshlets.resize(meshopt_buildMeshletsFlex(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, 0.f, split_factor));
+		meshlets.resize(meshopt_buildMeshletsFlex(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, 0.f, kClusterFillFactor));
 
 	std::vector<Cluster> clusters(meshlets.size());
 
@@ -111,7 +116,8 @@ static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, cons
 	{
 		const meshopt_Meshlet& meshlet = meshlets[i];
 
-		meshopt_optimizeMeshlet(&meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count, meshlet.vertex_count);
+		if (kClusterOptimizeRaster)
+			meshopt_optimizeMeshlet(&meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count, meshlet.vertex_count);
 
 		// note: for now we discard meshlet-local indices; they are valuable for shader code so in the future we should bring them back
 		clusters[i].indices.resize(meshlet.triangle_count * 3);
@@ -189,25 +195,25 @@ static void lockBoundary(std::vector<unsigned char>& locks, const std::vector<st
 	}
 }
 
-static std::vector<unsigned int> simplify(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, const std::vector<unsigned char>* locks, size_t target_count, float* error = NULL)
+static std::vector<unsigned int> simplify(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, const std::vector<unsigned char>& locks, size_t target_count, float* error = NULL)
 {
 	if (target_count > indices.size())
 		return indices;
 
 	std::vector<unsigned int> lod(indices.size());
 
-	unsigned int options = meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute | (locks ? 0 : meshopt_SimplifyLockBorder);
+	unsigned int options = meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute;
 
 	float normal_weight = kUseNormals ? 0.5f : 0.0f;
 	float normal_weights[3] = {normal_weight, normal_weight, normal_weight};
 
-	lod.resize(meshopt_simplifyWithAttributes(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), &vertices[0].nx, sizeof(Vertex), normal_weights, 3, locks ? &(*locks)[0] : NULL, target_count, FLT_MAX, options, error));
+	lod.resize(meshopt_simplifyWithAttributes(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), &vertices[0].nx, sizeof(Vertex), normal_weights, 3, &locks[0], target_count, FLT_MAX, options, error));
 
 	if (lod.size() > target_count && kUsePermissiveFallback)
-		lod.resize(meshopt_simplifyWithAttributes(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), &vertices[0].nx, sizeof(Vertex), normal_weights, 3, locks ? &(*locks)[0] : NULL, target_count, FLT_MAX, options | meshopt_SimplifyPermissive, error));
+		lod.resize(meshopt_simplifyWithAttributes(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), &vertices[0].nx, sizeof(Vertex), normal_weights, 3, &locks[0], target_count, FLT_MAX, options | meshopt_SimplifyPermissive, error));
 
 	if (lod.size() > target_count && kUseSloppyFallback)
-		lod.resize(meshopt_simplifySloppy(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), locks ? &(*locks)[0] : NULL, target_count, FLT_MAX, error));
+		lod.resize(meshopt_simplifySloppy(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), &locks[0], target_count, FLT_MAX, error));
 
 	return lod;
 }
@@ -243,7 +249,8 @@ void clod(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 	for (size_t i = 0; i < clusters.size(); ++i)
 		clusters[i].self = bounds(vertices, clusters[i].indices, 0.f);
 
-	printf("ideal lod chain: %.1f levels\n", log2(double(indices.size() / 3) / double(kClusterSize)));
+	if (kDumpMetrics)
+		printf("ideal lod chain: %.1f levels\n", log2(double(indices.size() / 3) / double(kClusterSize)));
 
 	std::vector<int> pending(clusters.size());
 	for (size_t i = 0; i < clusters.size(); ++i)
@@ -254,8 +261,7 @@ void clod(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 	{
 		std::vector<std::vector<int> > groups = partition(clusters, pending, remap, vertices);
 
-		if (kUseLocks)
-			lockBoundary(locks, groups, clusters, remap);
+		lockBoundary(locks, groups, clusters, remap);
 
 		pending.clear();
 
@@ -286,7 +292,7 @@ void clod(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 			size_t target_size = (merged.size() / 3) / 2 * 3;
 
 			float error = 0.f;
-			std::vector<unsigned int> simplified = simplify(vertices, merged, kUseLocks ? &locks : NULL, target_size, &error);
+			std::vector<unsigned int> simplified = simplify(vertices, merged, locks, target_size, &error);
 			if (simplified.size() > merged.size() * kSimplifyThreshold)
 			{
 				stuck_triangles += merged.size() / 3;
@@ -321,7 +327,8 @@ void clod(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 			}
 		}
 
-		dumpMetrics(depth, clusters, groups, remap, locks, retry);
+		if (kDumpMetrics)
+			dumpMetrics(depth, clusters, groups, remap, locks, retry);
 		depth++;
 
 		if (kUseRetry)
@@ -338,7 +345,8 @@ void clod(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 		if (clusters[i].parent.error == FLT_MAX)
 			lowest_triangles += clusters[i].indices.size() / 3;
 
-	printf("lowest lod: %d triangles\n", int(lowest_triangles));
+	if (kDumpMetrics)
+		printf("lowest lod: %d triangles\n", int(lowest_triangles));
 }
 
 // What follows is code that is helpful for collecting metrics, visualizing cuts, etc.
@@ -437,7 +445,7 @@ static void dumpMetrics(int level, const std::vector<Cluster>& queue, const std:
 			full_clusters += cluster.indices.size() == kClusterSize * 3;
 			components += measureComponents(parents, cluster.indices, remap);
 			xformed += measureUnique(parents, cluster.indices);
-			boundary += kUseLocks ? measureUnique(parents, cluster.indices, &locks) : 0;
+			boundary += measureUnique(parents, cluster.indices, &locks);
 			radius += cluster.self.radius;
 		}
 	}
