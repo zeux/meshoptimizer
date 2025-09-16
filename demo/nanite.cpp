@@ -758,18 +758,6 @@ struct Box
 {
 	float min[3];
 	float max[3];
-	float pos[3];
-};
-
-struct BoxSort
-{
-	const Box* boxes;
-	int axis;
-
-	bool operator()(unsigned int lhs, unsigned int rhs) const
-	{
-		return boxes[lhs].pos[axis] < boxes[rhs].pos[axis];
-	}
 };
 
 static void mergeBox(Box& box, const Box& other)
@@ -787,107 +775,108 @@ inline float surface(const Box& box)
 	return sx * sy + sx * sz + sy * sz;
 }
 
-static float sahCost(const Box* boxes, unsigned int* orderx, unsigned int* ordery, unsigned int* orderz, float* scratch, unsigned char* sides, size_t count, int depth)
+static float sahCost(const Box* boxes, unsigned int* order, unsigned int* temp, size_t count)
 {
-	assert(count > 0);
+	const Box kDummy = {{FLT_MAX, FLT_MAX, FLT_MAX}, {-FLT_MAX, -FLT_MAX, -FLT_MAX}};
 
-	if (count == 1)
-		return surface(boxes[orderx[0]]);
+	Box total = boxes[order[0]];
+	for (size_t i = 1; i < count; ++i)
+		mergeBox(total, boxes[order[i]]);
 
-	// for each axis, accumulated SAH cost in forward and backward directions
-	float* costs = scratch;
-	Box accum[6] = {boxes[orderx[0]], boxes[orderx[count - 1]], boxes[ordery[0]], boxes[ordery[count - 1]], boxes[orderz[0]], boxes[orderz[count - 1]]};
-	unsigned int* axes[3] = {orderx, ordery, orderz};
+	int best_axis = -1;
+	int best_bin = -1;
+	float best_cost = FLT_MAX;
 
-	for (size_t i = 0; i < count; ++i)
+	const int kBins = 64;
+
+	for (int axis = 0; axis < 3; ++axis)
 	{
-		for (int k = 0; k < 3; ++k)
-		{
-			mergeBox(accum[2 * k + 0], boxes[axes[k][i]]);
-			mergeBox(accum[2 * k + 1], boxes[axes[k][count - 1 - i]]);
-		}
+		Box bins[kBins] = {};
+		unsigned int counts[kBins] = {};
 
-		for (int k = 0; k < 3; ++k)
-		{
-			costs[i + (2 * k + 0) * count] = surface(accum[2 * k + 0]);
-			costs[i + (2 * k + 1) * count] = surface(accum[2 * k + 1]);
-		}
-	}
-
-	// find best split that minimizes SAH
-	int bestk = -1;
-	size_t bestsplit = 0;
-	float bestcost = FLT_MAX;
-
-	for (size_t i = 0; i < count - 1; ++i)
-		for (int k = 0; k < 3; ++k)
-		{
-			// costs[x] = inclusive cost of boxes[0..x]
-			float costl = costs[i + (2 * k + 0) * count] * (i + 1);
-			// costs[count-1-x] = inclusive cost of boxes[x..count-1]
-			float costr = costs[(count - 1 - (i + 1)) + (2 * k + 1) * count] * (count - (i + 1));
-			float cost = costl + costr;
-
-			if (cost < bestcost)
-			{
-				bestcost = cost;
-				bestk = k;
-				bestsplit = i;
-			}
-		}
-
-	float total = costs[count - 1];
-
-	// mark sides of split
-	for (size_t i = 0; i < bestsplit + 1; ++i)
-		sides[axes[bestk][i]] = 0;
-
-	for (size_t i = bestsplit + 1; i < count; ++i)
-		sides[axes[bestk][i]] = 1;
-
-	// partition all axes into two sides, maintaining order
-	// note: we reuse scratch[], invalidating costs[]
-	for (int k = 0; k < 3; ++k)
-	{
-		if (k == bestk)
+		float extent = total.max[axis] - total.min[axis];
+		if (extent <= 0.f)
 			continue;
-
-		unsigned int* temp = reinterpret_cast<unsigned int*>(scratch);
-		memcpy(temp, axes[k], sizeof(unsigned int) * count);
-
-		unsigned int* ptr[2] = {axes[k], axes[k] + bestsplit + 1};
 
 		for (size_t i = 0; i < count; ++i)
 		{
-			unsigned char side = sides[temp[i]];
-			*ptr[side] = temp[i];
-			ptr[side]++;
+			unsigned int index = order[i];
+			float p = (boxes[index].min[axis] + boxes[index].max[axis]) * 0.5f;
+			int bin = int((p - total.min[axis]) / extent * (kBins - 1) + 0.5f);
+			assert(bin >= 0 && bin < kBins);
+
+			if (counts[bin]++)
+				mergeBox(bins[bin], boxes[index]);
+			else
+				bins[bin] = boxes[index];
 		}
+
+		Box laccum = kDummy, raccum = kDummy;
+		size_t lcount = 0, rcount = 0;
+		float costs[kBins] = {};
+
+		for (int i = 0; i < kBins - 1; ++i)
+		{
+			if (counts[i])
+				mergeBox(laccum, bins[i]);
+
+			if (counts[kBins - 1 - i])
+				mergeBox(raccum, bins[kBins - 1 - i]);
+
+			lcount += counts[i];
+			costs[i] += lcount ? surface(laccum) * lcount : 0.f;
+			rcount += counts[kBins - 1 - i];
+			costs[kBins - 2 - i] += rcount ? surface(raccum) * rcount : 0.f;
+		}
+
+		for (int i = 0; i < kBins - 1; ++i)
+			if (costs[i] < best_cost)
+			{
+				best_cost = costs[i];
+				best_bin = i;
+				best_axis = axis;
+			}
 	}
 
-	float sahl = sahCost(boxes, orderx, ordery, orderz, scratch, sides, bestsplit + 1, depth + 1);
-	float sahr = sahCost(boxes, orderx + bestsplit + 1, ordery + bestsplit + 1, orderz + bestsplit + 1, scratch, sides, count - bestsplit - 1, depth + 1);
+	if (best_axis == -1)
+		return surface(total) * float(count);
 
-	return total + sahl + sahr;
+	float best_extent = total.max[best_axis] - total.min[best_axis];
+
+	size_t offset0 = 0, offset1 = count;
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		unsigned int index = order[i];
+		float p = (boxes[index].min[best_axis] + boxes[index].max[best_axis]) * 0.5f;
+		int bin = int((p - total.min[best_axis]) / best_extent * (kBins - 1) + 0.5f);
+		assert(bin >= 0 && bin < kBins);
+
+		if (bin <= best_bin)
+			temp[offset0++] = index;
+		else
+			temp[--offset1] = index;
+	}
+
+	assert(offset0 == offset1);
+
+	if (offset0 == 0 || offset0 == count)
+		return surface(total) * float(count);
+
+	return surface(total) + sahCost(boxes, temp, order, offset0) + sahCost(boxes, temp + offset0, order + offset0, count - offset0);
 }
 
 static float sahCost(const Box* boxes, size_t count)
 {
-	std::vector<unsigned int> axes(count * 3);
+	if (count == 0)
+		return 0.f;
 
-	for (int k = 0; k < 3; ++k)
-	{
-		for (size_t i = 0; i < count; ++i)
-			axes[i + k * count] = unsigned(i);
+	std::vector<unsigned int> order(count);
+	for (size_t i = 0; i < count; ++i)
+		order[i] = unsigned(i);
 
-		BoxSort sort = {boxes, k};
-		std::sort(&axes[k * count], &axes[k * count] + count, sort);
-	}
-
-	std::vector<float> scratch(count * 6);
-	std::vector<unsigned char> sides(count);
-
-	return sahCost(boxes, &axes[0], &axes[count], &axes[count * 2], &scratch[0], &sides[0], count, 0);
+	std::vector<unsigned int> temp(count);
+	return sahCost(boxes, &order[0], &temp[0], count);
 }
 
 static void expandBox(Box& box, float x, float y, float z)
@@ -899,10 +888,6 @@ static void expandBox(Box& box, float x, float y, float z)
 	box.max[0] = std::max(box.max[0], x);
 	box.max[1] = std::max(box.max[1], y);
 	box.max[2] = std::max(box.max[2], z);
-
-	box.pos[0] += x;
-	box.pos[1] += y;
-	box.pos[2] += z;
 }
 
 double timestamp();
@@ -917,7 +902,6 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 
 		box.min[0] = box.min[1] = box.min[2] = FLT_MAX;
 		box.max[0] = box.max[1] = box.max[2] = -FLT_MAX;
-		box.pos[0] = box.pos[1] = box.pos[2] = 0.f;
 
 		for (int j = 0; j < 3; ++j)
 		{
@@ -925,9 +909,6 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 
 			expandBox(box, vertex.px, vertex.py, vertex.pz);
 		}
-
-		for (int k = 0; k < 3; ++k)
-			box.pos[k] /= 3.f;
 	}
 
 	Box all = triangles[0];
@@ -975,7 +956,6 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 
 			box.min[0] = box.min[1] = box.min[2] = FLT_MAX;
 			box.max[0] = box.max[1] = box.max[2] = -FLT_MAX;
-			box.pos[0] = box.pos[1] = box.pos[2] = 0.f;
 
 			for (size_t j = 0; j < meshlet.vertex_count; ++j)
 			{
@@ -983,9 +963,6 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 
 				expandBox(box, vertex.px, vertex.py, vertex.pz);
 			}
-
-			for (int k = 0; k < 3; ++k)
-				box.pos[k] = (box.max[k] + box.min[k]) * 0.5f;
 		}
 
 		for (size_t j = 0; j < meshlet.triangle_count; ++j)
@@ -994,7 +971,6 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 
 			box.min[0] = box.min[1] = box.min[2] = FLT_MAX;
 			box.max[0] = box.max[1] = box.max[2] = -FLT_MAX;
-			box.pos[0] = box.pos[1] = box.pos[2] = 0.f;
 
 			for (int k = 0; k < 3; ++k)
 			{
@@ -1002,9 +978,6 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 
 				expandBox(box, vertex.px, vertex.py, vertex.pz);
 			}
-
-			for (int k = 0; k < 3; ++k)
-				box.pos[k] /= 3.f;
 		}
 
 		sahc += sahCost(&cluster_tris[0], meshlet.triangle_count);
