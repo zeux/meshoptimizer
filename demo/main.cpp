@@ -1681,7 +1681,8 @@ void processCLOD(const char* path)
 	if (dump)
 		dumpObj(mesh.vertices, std::vector<unsigned int>());
 
-	size_t lowest = clod(mesh.vertices, mesh.indices, const_cast<char*>(dump), dumpCLOD);
+	clodConfig config = clodDefaultConfig(/* max_triangles= */ 128);
+	size_t lowest = clodBuild(config, mesh.vertices, mesh.indices, const_cast<char*>(dump), dumpCLOD);
 	printf("clusterlod: %d triangles => %d triangles on lowest level (%.2f%% of original)\n",
 	    int(mesh.indices.size() / 3), int(lowest), float(lowest) / float(mesh.indices.size() / 3) * 100.0f);
 }
