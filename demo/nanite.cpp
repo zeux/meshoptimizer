@@ -760,12 +760,14 @@ struct Box
 	float max[3];
 };
 
+static const Box kDummyBox = {{FLT_MAX, FLT_MAX, FLT_MAX}, {-FLT_MAX, -FLT_MAX, -FLT_MAX}};
+
 static void mergeBox(Box& box, const Box& other)
 {
 	for (int k = 0; k < 3; ++k)
 	{
-		box.min[k] = std::min(box.min[k], other.min[k]);
-		box.max[k] = std::max(box.max[k], other.max[k]);
+		box.min[k] = other.min[k] < box.min[k] ? other.min[k] : box.min[k];
+		box.max[k] = other.max[k] > box.max[k] ? other.max[k] : box.max[k];
 	}
 }
 
@@ -777,8 +779,6 @@ inline float surface(const Box& box)
 
 static float sahCost(const Box* boxes, unsigned int* order, unsigned int* temp, size_t count)
 {
-	const Box kDummy = {{FLT_MAX, FLT_MAX, FLT_MAX}, {-FLT_MAX, -FLT_MAX, -FLT_MAX}};
-
 	Box total = boxes[order[0]];
 	for (size_t i = 1; i < count; ++i)
 		mergeBox(total, boxes[order[i]]);
@@ -787,16 +787,19 @@ static float sahCost(const Box* boxes, unsigned int* order, unsigned int* temp, 
 	int best_bin = -1;
 	float best_cost = FLT_MAX;
 
-	const int kBins = 64;
+	const int kBins = 15;
 
 	for (int axis = 0; axis < 3; ++axis)
 	{
-		Box bins[kBins] = {};
+		Box bins[kBins];
 		unsigned int counts[kBins] = {};
 
 		float extent = total.max[axis] - total.min[axis];
 		if (extent <= 0.f)
 			continue;
+
+		for (int i = 0; i < kBins; ++i)
+			bins[i] = kDummyBox;
 
 		for (size_t i = 0; i < count; ++i)
 		{
@@ -805,23 +808,18 @@ static float sahCost(const Box* boxes, unsigned int* order, unsigned int* temp, 
 			int bin = int((p - total.min[axis]) / extent * (kBins - 1) + 0.5f);
 			assert(bin >= 0 && bin < kBins);
 
-			if (counts[bin]++)
-				mergeBox(bins[bin], boxes[index]);
-			else
-				bins[bin] = boxes[index];
+			mergeBox(bins[bin], boxes[index]);
+			counts[bin]++;
 		}
 
-		Box laccum = kDummy, raccum = kDummy;
+		Box laccum = kDummyBox, raccum = kDummyBox;
 		size_t lcount = 0, rcount = 0;
 		float costs[kBins] = {};
 
 		for (int i = 0; i < kBins - 1; ++i)
 		{
-			if (counts[i])
-				mergeBox(laccum, bins[i]);
-
-			if (counts[kBins - 1 - i])
-				mergeBox(raccum, bins[kBins - 1 - i]);
+			mergeBox(laccum, bins[i]);
+			mergeBox(raccum, bins[kBins - 1 - i]);
 
 			lcount += counts[i];
 			costs[i] += lcount ? surface(laccum) * lcount : 0.f;
@@ -879,17 +877,6 @@ static float sahCost(const Box* boxes, size_t count)
 	return sahCost(boxes, &order[0], &temp[0], count);
 }
 
-static void expandBox(Box& box, float x, float y, float z)
-{
-	box.min[0] = std::min(box.min[0], x);
-	box.min[1] = std::min(box.min[1], y);
-	box.min[2] = std::min(box.min[2], z);
-
-	box.max[0] = std::max(box.max[0], x);
-	box.max[1] = std::max(box.max[1], y);
-	box.max[2] = std::max(box.max[2], z);
-}
-
 double timestamp();
 
 void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, float fill_weight)
@@ -899,15 +886,14 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 	for (size_t i = 0; i < indices.size() / 3; ++i)
 	{
 		Box& box = triangles[i];
-
-		box.min[0] = box.min[1] = box.min[2] = FLT_MAX;
-		box.max[0] = box.max[1] = box.max[2] = -FLT_MAX;
+		box = kDummyBox;
 
 		for (int j = 0; j < 3; ++j)
 		{
 			const Vertex& vertex = vertices[indices[i * 3 + j]];
 
-			expandBox(box, vertex.px, vertex.py, vertex.pz);
+			Box p = {{vertex.px, vertex.py, vertex.pz}, {vertex.px, vertex.py, vertex.pz}};
+			mergeBox(box, p);
 		}
 	}
 
@@ -951,32 +937,19 @@ void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& 
 	{
 		const meshopt_Meshlet& meshlet = meshlets[i];
 
-		{
-			Box& box = meshlet_boxes[i];
-
-			box.min[0] = box.min[1] = box.min[2] = FLT_MAX;
-			box.max[0] = box.max[1] = box.max[2] = -FLT_MAX;
-
-			for (size_t j = 0; j < meshlet.vertex_count; ++j)
-			{
-				const Vertex& vertex = vertices[meshlet_vertices[meshlet.vertex_offset + j]];
-
-				expandBox(box, vertex.px, vertex.py, vertex.pz);
-			}
-		}
+		meshlet_boxes[i] = kDummyBox;
 
 		for (size_t j = 0; j < meshlet.triangle_count; ++j)
 		{
-			Box& box = cluster_tris[j];
-
-			box.min[0] = box.min[1] = box.min[2] = FLT_MAX;
-			box.max[0] = box.max[1] = box.max[2] = -FLT_MAX;
+			cluster_tris[j] = kDummyBox;
 
 			for (int k = 0; k < 3; ++k)
 			{
 				const Vertex& vertex = vertices[meshlet_vertices[meshlet.vertex_offset + meshlet_triangles[meshlet.triangle_offset + j * 3 + k]]];
 
-				expandBox(box, vertex.px, vertex.py, vertex.pz);
+				Box p = {{vertex.px, vertex.py, vertex.pz}, {vertex.px, vertex.py, vertex.pz}};
+				mergeBox(cluster_tris[j], p);
+				mergeBox(meshlet_boxes[i], p);
 			}
 		}
 
