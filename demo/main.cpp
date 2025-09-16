@@ -618,7 +618,7 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 		size_t group_triangles = (lod.size() - group_offset) / 3;
 
 		// simplify the group, preserving the border vertices
-		// note: this technically also locks the exterior border; a full mesh analysis (see nanite.cpp / lockBoundary) would work better for some meshes
+		// note: this technically also locks the exterior border; a full mesh analysis (see clusterlod.cpp / lockBoundary) would work better for some meshes
 		unsigned int options = meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute;
 
 		float group_target_error = 1e-2f * scale;
@@ -635,7 +635,7 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 	double end = timestamp();
 
 	printf("%-9s: %d triangles => %d triangles (%.2f%% deviation) in %.2f msec, clusterized in %.2f msec, partitioned in %.2f msec (%d clusters in %d groups)\n",
-	    "SimplifyN", // N for Nanite
+	    "SimplifyM",
 	    int(mesh.indices.size() / 3), int(lod.size() / 3),
 	    error / scale * 100,
 	    (end - parttime) * 1000, (middle - start) * 1000, (parttime - middle) * 1000,
@@ -1466,7 +1466,7 @@ void coverage(const Mesh& mesh)
 	    cs.coverage[0] * 100, cs.coverage[1] * 100, cs.coverage[2] * 100, (end - start) * 1000);
 }
 
-void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices); // nanite.cpp
+void clod(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices); // clusterlod.cpp
 
 bool loadMesh(Mesh& mesh, const char* path)
 {
@@ -1662,13 +1662,13 @@ void processDev(const char* path)
 	meshletsRT(mesh);
 }
 
-void processNanite(const char* path)
+void processCLOD(const char* path)
 {
 	Mesh mesh;
 	if (!loadMesh(mesh, path))
 		return;
 
-	nanite(mesh.vertices, mesh.indices);
+	clod(mesh.vertices, mesh.indices);
 }
 
 int main(int argc, char** argv)
@@ -1686,10 +1686,10 @@ int main(int argc, char** argv)
 			for (int i = 2; i < argc; ++i)
 				processDev(argv[i]);
 		}
-		else if (strcmp(argv[1], "-n") == 0)
+		else if (strcmp(argv[1], "-clod") == 0)
 		{
 			for (int i = 2; i < argc; ++i)
-				processNanite(argv[i]);
+				processCLOD(argv[i]);
 		}
 		else
 		{

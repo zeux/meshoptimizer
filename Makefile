@@ -128,8 +128,8 @@ check: $(DEMO)
 dev: $(DEMO)
 	$(DEMO) -d $(files)
 
-nanite: $(DEMO)
-	$(DEMO) -n $(files)
+clod: $(DEMO)
+	$(DEMO) -clod $(files)
 
 format:
 	clang-format -i src/*.h src/*.cpp demo/*.cpp gltf/*.h gltf/*.cpp

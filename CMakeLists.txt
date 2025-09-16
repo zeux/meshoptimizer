@@ -113,7 +113,7 @@ if(MESHOPT_BUILD_SHARED_LIBS)
 endif()
 
 if(MESHOPT_BUILD_DEMO)
-    add_executable(demo demo/main.cpp demo/nanite.cpp demo/tests.cpp tools/objloader.cpp)
+    add_executable(demo demo/main.cpp demo/clusterlod.cpp demo/tests.cpp tools/objloader.cpp)
     set_target_properties(demo PROPERTIES CXX_STANDARD 11)
     set_target_properties(demo PROPERTIES OUTPUT_NAME meshoptdemo)
     target_link_libraries(demo meshoptimizer)

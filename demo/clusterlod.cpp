@@ -261,7 +261,7 @@ static bool loadMetis();
 void dumpObj(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, bool recomputeNormals = false);
 void dumpObj(const char* section, const std::vector<unsigned int>& indices);
 
-void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
+void clod(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
 	static const char* metis = getenv("METIS");
 	METIS = metis ? atoi(metis) : 0;
