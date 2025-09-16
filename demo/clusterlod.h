@@ -17,7 +17,9 @@ struct clodConfig
 
 	bool optimize_raster;
 
+	float simplify_ratio;
 	float simplify_threshold;
+	bool simplify_permissive;
 	bool simplify_fallback_permissive;
 	bool simplify_fallback_sloppy;
 };

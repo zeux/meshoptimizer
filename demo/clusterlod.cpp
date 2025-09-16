@@ -179,14 +179,14 @@ static std::vector<unsigned int> simplify(const clodConfig& config, const clodMe
 
 	std::vector<unsigned int> lod(indices.size());
 
-	unsigned int options = meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute;
+	unsigned int options = meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute | (config.simplify_permissive ? meshopt_SimplifyPermissive : 0);
 
 	lod.resize(meshopt_simplifyWithAttributes(&lod[0], &indices[0], indices.size(),
 	    mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride,
 	    mesh.vertex_attributes, mesh.vertex_attributes_stride, mesh.attribute_weights, mesh.attribute_count,
 	    &locks[0], target_count, FLT_MAX, options, error));
 
-	if (lod.size() > target_count && config.simplify_fallback_permissive)
+	if (lod.size() > target_count && config.simplify_fallback_permissive && !config.simplify_permissive)
 		lod.resize(meshopt_simplifyWithAttributes(&lod[0], &indices[0], indices.size(),
 		    mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride,
 		    mesh.vertex_attributes, mesh.vertex_attributes_stride, mesh.attribute_weights, mesh.attribute_count,
@@ -220,9 +220,11 @@ clodConfig clodDefaultConfig(size_t max_triangles)
 
 	config.optimize_raster = true;
 
+	config.simplify_ratio = 0.5f;
 	config.simplify_threshold = 0.85f;
+	config.simplify_permissive = false; // probably safe to enable by default but might need extra handling for normal creases?
 	config.simplify_fallback_permissive = true;
-	config.simplify_fallback_sloppy = false; // TODO: requires performance tuning
+	config.simplify_fallback_sloppy = false; // requires performance tuning
 
 	return config;
 }
@@ -271,8 +273,17 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 
 	// initial clusterization splits the original mesh
 	std::vector<Cluster> clusters = clusterize(config, mesh, mesh.indices, mesh.index_count);
+
 	for (size_t i = 0; i < clusters.size(); ++i)
+	{
 		clusters[i].self = bounds(mesh, clusters[i].indices, 0.f);
+
+		if (output_callback)
+		{
+			clodCluster cluster = {0, &clusters[i].indices[0], clusters[i].indices.size()};
+			output_callback(output_context, cluster);
+		}
+	}
 
 #if TRACE
 	printf("ideal lod chain: %.1f levels\n", log2(double(mesh.index_count / 3) / double(config.max_triangles)));
@@ -304,8 +315,7 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 			for (size_t j = 0; j < groups[i].size(); ++j)
 				merged.insert(merged.end(), clusters[groups[i][j]].indices.begin(), clusters[groups[i][j]].indices.end());
 
-			// aim to reduce group size in half
-			size_t target_size = (merged.size() / 3) / 2 * 3;
+			size_t target_size = size_t((merged.size() / 3) * config.simplify_ratio) * 3;
 
 			float error = 0.f;
 			std::vector<unsigned int> simplified = simplify(config, mesh, merged, locks, target_size, &error);
