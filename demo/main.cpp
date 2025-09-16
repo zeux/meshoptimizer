@@ -1682,7 +1682,22 @@ void processCLOD(const char* path)
 		dumpObj(mesh.vertices, std::vector<unsigned int>());
 
 	clodConfig config = clodDefaultConfig(/* max_triangles= */ 128);
-	size_t lowest = clodBuild(config, mesh.vertices, mesh.indices, const_cast<char*>(dump), dumpCLOD);
+
+	const float attribute_weights[3] = {0.5f, 0.5f, 0.5f};
+
+	clodMesh cmesh = {};
+	cmesh.indices = &mesh.indices[0];
+	cmesh.index_count = mesh.indices.size();
+	cmesh.vertex_count = mesh.vertices.size();
+	cmesh.vertex_positions = &mesh.vertices[0].px;
+	cmesh.vertex_positions_stride = sizeof(Vertex);
+	cmesh.vertex_attributes = &mesh.vertices[0].nx;
+	cmesh.vertex_attributes_stride = sizeof(Vertex);
+	cmesh.attribute_weights = attribute_weights;
+	cmesh.attribute_count = sizeof(attribute_weights) / sizeof(attribute_weights[0]);
+	cmesh.attribute_protect_mask = (1 << 3) | (1 << 4); // protect UV seams
+
+	size_t lowest = clodBuild(config, cmesh, const_cast<char*>(dump), dumpCLOD);
 	printf("clusterlod: %d triangles => %d triangles on lowest level (%.2f%% of original)\n",
 	    int(mesh.indices.size() / 3), int(lowest), float(lowest) / float(mesh.indices.size() / 3) * 100.0f);
 }

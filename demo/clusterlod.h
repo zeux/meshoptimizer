@@ -1,9 +1,6 @@
 #pragma once
 
 #include <stddef.h>
-#include <vector>
-
-struct Vertex;
 
 struct clodConfig
 {
@@ -25,6 +22,25 @@ struct clodConfig
 	bool simplify_fallback_sloppy;
 };
 
+struct clodMesh
+{
+	const unsigned int* indices;
+	size_t index_count;
+
+	size_t vertex_count;
+
+	const float* vertex_positions;
+	size_t vertex_positions_stride;
+
+	const float* vertex_attributes;
+	size_t vertex_attributes_stride;
+
+	const float* attribute_weights;
+	size_t attribute_count;
+
+	unsigned int attribute_protect_mask;
+};
+
 struct clodCluster
 {
 	int depth;
@@ -35,7 +51,16 @@ struct clodCluster
 
 typedef void (*clodOutput)(void* context, clodCluster cluster);
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 clodConfig clodDefaultConfig(size_t max_triangles);
 clodConfig clodDefaultConfigRT(size_t max_triangles);
 
-size_t clodBuild(clodConfig config, const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, void* output_context, clodOutput output_callback);
+size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOutput output_callback);
+
+#ifdef __cplusplus
+}
+#endif

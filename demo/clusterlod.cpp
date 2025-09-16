@@ -16,13 +16,6 @@
 #define TRACE 0
 #endif
 
-struct Vertex
-{
-	float px, py, pz;
-	float nx, ny, nz;
-	float tx, ty;
-};
-
 // To compute approximate (perspective) projection error of a cluster in screen space (0..1; multiply by screen height to get pixels):
 // - camera_proj is projection[1][1], or cot(fovy/2); camera_znear is *positive* near plane distance
 // - for simplicity, we ignore perspective distortion and use rotationally invariant projection size estimation
@@ -42,11 +35,9 @@ struct Cluster
 	LODBounds parent;
 };
 
-const bool kUseNormals = true;
-
-static LODBounds bounds(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, float error)
+static LODBounds bounds(const clodMesh& mesh, const std::vector<unsigned int>& indices, float error)
 {
-	meshopt_Bounds bounds = meshopt_computeClusterBounds(&indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex));
+	meshopt_Bounds bounds = meshopt_computeClusterBounds(&indices[0], indices.size(), mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride);
 
 	LODBounds result;
 	result.center[0] = bounds.center[0];
@@ -79,19 +70,21 @@ static LODBounds boundsMerge(const std::vector<Cluster>& clusters, const std::ve
 	return result;
 }
 
-static std::vector<Cluster> clusterize(const clodConfig& config, const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
+static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh& mesh, const unsigned int* indices, size_t index_count)
 {
-	size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), config.max_vertices, config.min_triangles);
+	size_t max_meshlets = meshopt_buildMeshletsBound(index_count, config.max_vertices, config.min_triangles);
 
 	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
-	std::vector<unsigned int> meshlet_vertices(indices.size());
-	std::vector<unsigned char> meshlet_triangles(indices.size());
+	std::vector<unsigned int> meshlet_vertices(index_count);
+	std::vector<unsigned char> meshlet_triangles(index_count);
 
 	if (config.cluster_spatial)
-		meshlets.resize(meshopt_buildMeshletsSpatial(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex),
+		meshlets.resize(meshopt_buildMeshletsSpatial(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], indices, index_count,
+		    mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride,
 		    config.max_vertices, config.min_triangles, config.max_triangles, config.cluster_fill));
 	else
-		meshlets.resize(meshopt_buildMeshletsFlex(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex),
+		meshlets.resize(meshopt_buildMeshletsFlex(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], indices, index_count,
+		    mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride,
 		    config.max_vertices, config.min_triangles, config.max_triangles, 0.f, config.cluster_fill));
 
 	std::vector<Cluster> clusters(meshlets.size());
@@ -114,7 +107,7 @@ static std::vector<Cluster> clusterize(const clodConfig& config, const std::vect
 	return clusters;
 }
 
-static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clusters, const std::vector<int>& pending, const std::vector<unsigned int>& remap, const std::vector<Vertex>& vertices, size_t partition_size)
+static std::vector<std::vector<int> > partition(size_t partition_size, const clodMesh& mesh, const std::vector<Cluster>& clusters, const std::vector<int>& pending, const std::vector<unsigned int>& remap)
 {
 	std::vector<unsigned int> cluster_indices;
 	std::vector<unsigned int> cluster_counts(pending.size());
@@ -136,7 +129,7 @@ static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clus
 	}
 
 	std::vector<unsigned int> cluster_part(pending.size());
-	size_t partition_count = meshopt_partitionClusters(&cluster_part[0], &cluster_indices[0], cluster_indices.size(), &cluster_counts[0], cluster_counts.size(), &vertices[0].px, remap.size(), sizeof(Vertex), partition_size);
+	size_t partition_count = meshopt_partitionClusters(&cluster_part[0], &cluster_indices[0], cluster_indices.size(), &cluster_counts[0], cluster_counts.size(), mesh.vertex_positions, remap.size(), mesh.vertex_positions_stride, partition_size);
 
 	std::vector<std::vector<int> > partitions(partition_count);
 	for (size_t i = 0; i < partition_count; ++i)
@@ -179,7 +172,7 @@ static void lockBoundary(std::vector<unsigned char>& locks, const std::vector<st
 	}
 }
 
-static std::vector<unsigned int> simplify(const clodConfig& config, const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, const std::vector<unsigned char>& locks, size_t target_count, float* error = NULL)
+static std::vector<unsigned int> simplify(const clodConfig& config, const clodMesh& mesh, const std::vector<unsigned int>& indices, const std::vector<unsigned char>& locks, size_t target_count, float* error = NULL)
 {
 	if (target_count > indices.size())
 		return indices;
@@ -188,16 +181,21 @@ static std::vector<unsigned int> simplify(const clodConfig& config, const std::v
 
 	unsigned int options = meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute;
 
-	float normal_weight = kUseNormals ? 0.5f : 0.0f;
-	float normal_weights[3] = {normal_weight, normal_weight, normal_weight};
-
-	lod.resize(meshopt_simplifyWithAttributes(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), &vertices[0].nx, sizeof(Vertex), normal_weights, 3, &locks[0], target_count, FLT_MAX, options, error));
+	lod.resize(meshopt_simplifyWithAttributes(&lod[0], &indices[0], indices.size(),
+	    mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride,
+	    mesh.vertex_attributes, mesh.vertex_attributes_stride, mesh.attribute_weights, mesh.attribute_count,
+	    &locks[0], target_count, FLT_MAX, options, error));
 
 	if (lod.size() > target_count && config.simplify_fallback_permissive)
-		lod.resize(meshopt_simplifyWithAttributes(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), &vertices[0].nx, sizeof(Vertex), normal_weights, 3, &locks[0], target_count, FLT_MAX, options | meshopt_SimplifyPermissive, error));
+		lod.resize(meshopt_simplifyWithAttributes(&lod[0], &indices[0], indices.size(),
+		    mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride,
+		    mesh.vertex_attributes, mesh.vertex_attributes_stride, mesh.attribute_weights, mesh.attribute_count,
+		    &locks[0], target_count, FLT_MAX, options | meshopt_SimplifyPermissive, error));
 
 	if (lod.size() > target_count && config.simplify_fallback_sloppy)
-		lod.resize(meshopt_simplifySloppy(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), &locks[0], target_count, FLT_MAX, error));
+		lod.resize(meshopt_simplifySloppy(&lod[0], &indices[0], indices.size(),
+		    mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride,
+		    &locks[0], target_count, FLT_MAX, error));
 
 	return lod;
 }
@@ -243,32 +241,41 @@ clodConfig clodDefaultConfigRT(size_t max_triangles)
 	return config;
 }
 
-size_t clodBuild(clodConfig config, const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, void* output_context, clodOutput output_callback)
+size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOutput output_callback)
 {
+	assert(mesh.vertex_attributes_stride % sizeof(float) == 0);
+	assert(mesh.attribute_count * sizeof(float) <= mesh.vertex_attributes_stride);
+	assert(mesh.attribute_protect_mask < (1u << (mesh.vertex_attributes_stride / sizeof(float))));
+
 	int depth = 0;
-	std::vector<unsigned char> locks(vertices.size());
+	std::vector<unsigned char> locks(mesh.vertex_count);
 
 	// for cluster connectivity, we need a position-only remap that maps vertices with the same position to the same index
-	std::vector<unsigned int> remap(vertices.size());
-	meshopt_generatePositionRemap(&remap[0], &vertices[0].px, vertices.size(), sizeof(Vertex));
+	std::vector<unsigned int> remap(mesh.vertex_count);
+	meshopt_generatePositionRemap(&remap[0], mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride);
 
 	// set up protect bits on UV seams for permissive mode
-	if (config.simplify_fallback_permissive)
-		for (size_t i = 0; i < vertices.size(); ++i)
+	if (mesh.attribute_protect_mask)
+	{
+		size_t max_attributes = mesh.vertex_attributes_stride / sizeof(float);
+
+		for (size_t i = 0; i < mesh.vertex_count; ++i)
 		{
 			unsigned int r = remap[i]; // canonical vertex with the same position
 
-			if (r != i && (vertices[r].tx != vertices[i].tx || vertices[r].ty != vertices[i].ty))
-				locks[i] |= meshopt_SimplifyVertex_Protect;
+			for (size_t j = 0; j < max_attributes; ++j)
+				if (r != i && (mesh.attribute_protect_mask & (1u << j)) && mesh.vertex_attributes[i * max_attributes + j] != mesh.vertex_attributes[r * max_attributes + j])
+					locks[i] |= meshopt_SimplifyVertex_Protect;
 		}
+	}
 
 	// initial clusterization splits the original mesh
-	std::vector<Cluster> clusters = clusterize(config, vertices, indices);
+	std::vector<Cluster> clusters = clusterize(config, mesh, mesh.indices, mesh.index_count);
 	for (size_t i = 0; i < clusters.size(); ++i)
-		clusters[i].self = bounds(vertices, clusters[i].indices, 0.f);
+		clusters[i].self = bounds(mesh, clusters[i].indices, 0.f);
 
 #if TRACE
-	printf("ideal lod chain: %.1f levels\n", log2(double(indices.size() / 3) / double(config.max_triangles)));
+	printf("ideal lod chain: %.1f levels\n", log2(double(mesh.index_count / 3) / double(config.max_triangles)));
 #endif
 
 	std::vector<int> pending(clusters.size());
@@ -278,7 +285,7 @@ size_t clodBuild(clodConfig config, const std::vector<Vertex>& vertices, const s
 	// merge and simplify clusters until we can't merge anymore
 	while (pending.size() > 1)
 	{
-		std::vector<std::vector<int> > groups = partition(clusters, pending, remap, vertices, config.partition_size);
+		std::vector<std::vector<int> > groups = partition(config.partition_size, mesh, clusters, pending, remap);
 
 		lockBoundary(locks, groups, clusters, remap);
 
@@ -301,7 +308,7 @@ size_t clodBuild(clodConfig config, const std::vector<Vertex>& vertices, const s
 			size_t target_size = (merged.size() / 3) / 2 * 3;
 
 			float error = 0.f;
-			std::vector<unsigned int> simplified = simplify(config, vertices, merged, locks, target_size, &error);
+			std::vector<unsigned int> simplified = simplify(config, mesh, merged, locks, target_size, &error);
 			if (simplified.size() > merged.size() * config.simplify_threshold)
 			{
 				stuck_triangles += merged.size() / 3;
@@ -315,7 +322,7 @@ size_t clodBuild(clodConfig config, const std::vector<Vertex>& vertices, const s
 			LODBounds groupb = boundsMerge(clusters, groups[i]);
 			groupb.error += error; // this may overestimate the error, but we are starting from the simplified mesh so this is a little more correct
 
-			std::vector<Cluster> split = clusterize(config, vertices, simplified);
+			std::vector<Cluster> split = clusterize(config, mesh, simplified.data(), simplified.size());
 
 			// update parent bounds and error for all clusters in the group
 			// note that all clusters in the group need to switch simultaneously so they have the same bounds
