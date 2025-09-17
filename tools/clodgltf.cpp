@@ -1,7 +1,3 @@
-#ifndef _CRT_SECURE_NO_WARNINGS
-#define _CRT_SECURE_NO_WARNINGS
-#endif
-
 #include <stdio.h>
 
 #include <algorithm>
@@ -21,7 +17,7 @@
 const size_t kNumThreads = 16;
 const size_t kBytesPerVertex = 32;
 const size_t kBytesPerTriangle = 64;
-const size_t kMemoryLimit = size_t(32) << 30; // 32 GB
+const size_t kMemoryLimit = size_t(32) << 30; // 32 GB per queue
 
 const bool kUseThreadArena = true;
 const size_t kThreadArenaSize = size_t(1) << 30; // 1 GB per thread
@@ -281,14 +277,13 @@ static void processPrimitive(const Request& request, Stats& stats)
 	if (texcoord_accessor)
 		cmesh.attribute_protect_mask = (1 << 3) | (1 << 4); // protect UV seams
 
-	size_t lowest = clodBuild(config, cmesh, &stats,
-	    [](void* context, clodCluster cluster)
+	size_t lowest = clodBuild(config, cmesh, &stats, [](void* context, clodCluster cluster)
 	    {
 		    Stats& stats = *static_cast<Stats*>(context);
 
 		    stats.clusters++;
-		    stats.total_triangles += cluster.index_count / 3;
-	    });
+		    stats.total_triangles += cluster.index_count / 3; },
+	    /*output_group=*/NULL);
 
 	printf("Done with primitive %d/%d (mesh %s/%d): %zu vertices (%zu unique), %zu triangles => %zu triangles\n",
 	    int(request.primitive_index), int(request.primitive_count),

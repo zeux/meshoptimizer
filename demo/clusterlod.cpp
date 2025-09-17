@@ -20,8 +20,8 @@ struct Cluster
 {
 	std::vector<unsigned int> indices;
 
-	clodBounds self;
-	clodBounds parent;
+	int group;
+	clodBounds bounds;
 };
 
 static clodBounds bounds(const clodMesh& mesh, const std::vector<unsigned int>& indices, float error)
@@ -41,7 +41,7 @@ static clodBounds boundsMerge(const std::vector<Cluster>& clusters, const std::v
 {
 	std::vector<clodBounds> bounds(group.size());
 	for (size_t j = 0; j < group.size(); ++j)
-		bounds[j] = clusters[group[j]].self;
+		bounds[j] = clusters[group[j]].bounds;
 
 	meshopt_Bounds merged = meshopt_computeSphereBounds(&bounds[0].center[0], bounds.size(), sizeof(clodBounds), &bounds[0].radius, sizeof(clodBounds));
 
@@ -54,7 +54,7 @@ static clodBounds boundsMerge(const std::vector<Cluster>& clusters, const std::v
 	// merged bounds error must be conservative wrt cluster errors
 	result.error = 0.f;
 	for (size_t j = 0; j < group.size(); ++j)
-		result.error = std::max(result.error, clusters[group[j]].self.error);
+		result.error = std::max(result.error, clusters[group[j]].bounds.error);
 
 	return result;
 }
@@ -90,7 +90,8 @@ static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh&
 		for (size_t j = 0; j < meshlet.triangle_count * 3; ++j)
 			clusters[i].indices[j] = meshlet_vertices[meshlet.vertex_offset + meshlet_triangles[meshlet.triangle_offset + j]];
 
-		clusters[i].parent.error = FLT_MAX;
+		clusters[i].group = -1;
+		clusters[i].bounds = bounds(mesh, clusters[i].indices, 0.f);
 	}
 
 	return clusters;
@@ -275,13 +276,12 @@ clodConfig clodDefaultConfigRT(size_t max_triangles)
 	return config;
 }
 
-size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOutput output_callback)
+size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOutputCluster output_cluster, clodOutputGroup output_group)
 {
 	assert(mesh.vertex_attributes_stride % sizeof(float) == 0);
 	assert(mesh.attribute_count * sizeof(float) <= mesh.vertex_attributes_stride);
 	assert(mesh.attribute_protect_mask < (1u << (mesh.vertex_attributes_stride / sizeof(float))));
 
-	int depth = 0;
 	std::vector<unsigned char> locks(mesh.vertex_count);
 
 	// for cluster connectivity, we need a position-only remap that maps vertices with the same position to the same index
@@ -306,20 +306,16 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 	// initial clusterization splits the original mesh
 	std::vector<Cluster> clusters = clusterize(config, mesh, mesh.indices, mesh.index_count);
 
-	for (size_t i = 0; i < clusters.size(); ++i)
-	{
-		clusters[i].self = bounds(mesh, clusters[i].indices, 0.f);
-
-		if (output_callback)
-		{
-			clodCluster cluster = {0, &clusters[i].indices[0], clusters[i].indices.size()};
-			output_callback(output_context, cluster);
-		}
-	}
+	if (output_cluster)
+		for (size_t i = 0; i < clusters.size(); ++i)
+			output_cluster(output_context, {0, -1, clusters[i].bounds, clusters[i].indices.data(), clusters[i].indices.size()});
 
 	std::vector<int> pending(clusters.size());
 	for (size_t i = 0; i < clusters.size(); ++i)
 		pending[i] = int(i);
+
+	int depth = 0;
+	int next_group = 0;
 
 	// merge and simplify clusters until we can't merge anymore
 	while (pending.size() > 1)
@@ -360,25 +356,29 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 			clodBounds groupb = boundsMerge(clusters, groups[i]);
 			groupb.error += error; // this may overestimate the error, but we are starting from the simplified mesh so this is a little more correct
 
-			std::vector<Cluster> split = clusterize(config, mesh, simplified.data(), simplified.size());
+			int group_id = next_group++;
+
+			if (output_group)
+				output_group(output_context, {groupb, &groups[i][0], groups[i].size()});
 
 			// update parent bounds and error for all clusters in the group
 			// note that all clusters in the group need to switch simultaneously so they have the same bounds
 			for (size_t j = 0; j < groups[i].size(); ++j)
 			{
-				assert(clusters[groups[i][j]].parent.error == FLT_MAX);
-				clusters[groups[i][j]].parent = groupb;
+				assert(clusters[groups[i][j]].group == -1);
+				clusters[groups[i][j]].group = group_id;
+				clusters[groups[i][j]].bounds = groupb;
 			}
+
+			std::vector<Cluster> split = clusterize(config, mesh, simplified.data(), simplified.size());
 
 			for (size_t j = 0; j < split.size(); ++j)
 			{
-				split[j].self = groupb;
+				if (output_cluster)
+					output_cluster(output_context, {depth + 1, group_id, split[j].bounds, &split[j].indices[0], split[j].indices.size()});
 
-				if (output_callback)
-				{
-					clodCluster cluster = {depth + 1, &split[j].indices[0], split[j].indices.size()};
-					output_callback(output_context, cluster);
-				}
+				// update cluster bounds to the group-merged bounds; this ensures that we compute the group bounds for whatever group this cluster will be part of conservatively
+				split[j].bounds = groupb;
 
 				triangles += split[j].indices.size() / 3;
 				clusters.push_back(std::move(split[j]));
@@ -403,7 +403,7 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 
 	size_t lowest_triangles = 0;
 	for (size_t i = 0; i < clusters.size(); ++i)
-		if (clusters[i].parent.error == FLT_MAX)
+		if (clusters[i].group == -1)
 			lowest_triangles += clusters[i].indices.size() / 3;
 
 #if TRACE
@@ -510,7 +510,7 @@ static void dumpMetrics(const clodConfig& config, int level, const std::vector<C
 			components += measureComponents(parents, cluster.indices, remap);
 			xformed += measureUnique(parents, cluster.indices);
 			boundary += measureUnique(parents, cluster.indices, &locks);
-			radius += cluster.self.radius;
+			radius += cluster.bounds.radius;
 		}
 	}
 

@@ -60,11 +60,24 @@ struct clodCluster
 {
 	int depth;
 
+	int refined;
+
+	clodBounds bounds;
+
 	const unsigned int* indices;
 	size_t index_count;
 };
 
-typedef void (*clodOutput)(void* context, clodCluster cluster);
+struct clodGroup
+{
+	clodBounds bounds;
+
+	const int* clusters;
+	size_t cluster_count;
+};
+
+typedef void (*clodOutputCluster)(void* context, clodCluster cluster);
+typedef void (*clodOutputGroup)(void* context, clodGroup group);
 
 #ifdef __cplusplus
 extern "C"
@@ -74,7 +87,7 @@ extern "C"
 clodConfig clodDefaultConfig(size_t max_triangles);
 clodConfig clodDefaultConfigRT(size_t max_triangles);
 
-size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOutput output_callback);
+size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOutputCluster output_cluster, clodOutputGroup output_group);
 
 #ifdef __cplusplus
 }

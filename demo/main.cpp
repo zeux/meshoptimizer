@@ -1707,7 +1707,7 @@ void processCLOD(const char* path)
 	cmesh.attribute_protect_mask = (1 << 3) | (1 << 4); // protect UV seams
 
 	double start = timestamp();
-	size_t lowest = clodBuild(config, cmesh, const_cast<char*>(dump), dumpCLOD);
+	size_t lowest = clodBuild(config, cmesh, const_cast<char*>(dump), dumpCLOD, NULL);
 	double end = timestamp();
 
 	printf("clusterlod: %d triangles => %d triangles on lowest level (%.2f%% of original) in %.2f msec\n",
