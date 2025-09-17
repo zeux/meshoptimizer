@@ -16,6 +16,7 @@ struct clodConfig
 	float cluster_fill_weight;
 	float cluster_split_factor;
 
+	bool optimize_bounds;
 	bool optimize_raster;
 
 	float simplify_ratio;

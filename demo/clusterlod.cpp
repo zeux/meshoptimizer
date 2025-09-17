@@ -24,7 +24,7 @@ struct Cluster
 	clodBounds bounds;
 };
 
-static clodBounds bounds(const clodMesh& mesh, const std::vector<unsigned int>& indices, float error)
+static clodBounds boundsCompute(const clodMesh& mesh, const std::vector<unsigned int>& indices, float error)
 {
 	meshopt_Bounds bounds = meshopt_computeClusterBounds(&indices[0], indices.size(), mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride);
 
@@ -59,7 +59,7 @@ static clodBounds boundsMerge(const std::vector<Cluster>& clusters, const std::v
 	return result;
 }
 
-static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh& mesh, const unsigned int* indices, size_t index_count)
+static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh& mesh, const unsigned int* indices, size_t index_count, const clodBounds* inherit_bounds = NULL)
 {
 	size_t max_meshlets = meshopt_buildMeshletsBound(index_count, config.max_vertices, config.min_triangles);
 
@@ -91,7 +91,11 @@ static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh&
 			clusters[i].indices[j] = meshlet_vertices[meshlet.vertex_offset + meshlet_triangles[meshlet.triangle_offset + j]];
 
 		clusters[i].group = -1;
-		clusters[i].bounds = bounds(mesh, clusters[i].indices, 0.f);
+
+		if (inherit_bounds)
+			clusters[i].bounds = *inherit_bounds;
+		else
+			clusters[i].bounds = boundsCompute(mesh, clusters[i].indices, 0.f);
 	}
 
 	return clusters;
@@ -370,12 +374,14 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 				clusters[groups[i][j]].bounds = groupb;
 			}
 
-			std::vector<Cluster> split = clusterize(config, mesh, simplified.data(), simplified.size());
+			std::vector<Cluster> split = clusterize(config, mesh, simplified.data(), simplified.size(), &groupb);
 
 			for (size_t j = 0; j < split.size(); ++j)
 			{
+				clodBounds bounds = config.optimize_bounds ? boundsCompute(mesh, split[j].indices, groupb.error) : groupb;
+
 				if (output_cluster)
-					output_cluster(output_context, {depth + 1, group_id, split[j].bounds, &split[j].indices[0], split[j].indices.size()});
+					output_cluster(output_context, {depth + 1, group_id, bounds, &split[j].indices[0], split[j].indices.size()});
 
 				// update cluster bounds to the group-merged bounds; this ensures that we compute the group bounds for whatever group this cluster will be part of conservatively
 				split[j].bounds = groupb;
