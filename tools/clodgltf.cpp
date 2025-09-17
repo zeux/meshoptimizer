@@ -92,6 +92,13 @@ static void mmap_file_release(const struct cgltf_memory_options* memory_options,
 	}
 }
 
+struct Stats
+{
+	size_t clusters;
+	size_t total_triangles;
+	size_t lowest_triangles;
+};
+
 struct Request
 {
 	const cgltf_data* data;
@@ -103,8 +110,6 @@ struct Request
 
 	size_t time_estimate;
 	size_t memory_requirements;
-
-	std::atomic<size_t>* result;
 };
 
 struct ThreadArena
@@ -116,7 +121,7 @@ struct ThreadArena
 
 thread_local ThreadArena* gThreadArena;
 
-static void processPrimitive(const Request& request)
+static void processPrimitive(const Request& request, Stats& stats)
 {
 	const cgltf_mesh& mesh = *request.mesh;
 	const cgltf_primitive& primitive = *request.primitive;
@@ -276,7 +281,14 @@ static void processPrimitive(const Request& request)
 	if (texcoord_accessor)
 		cmesh.attribute_protect_mask = (1 << 3) | (1 << 4); // protect UV seams
 
-	size_t lowest = clodBuild(config, cmesh, NULL, NULL);
+	size_t lowest = clodBuild(config, cmesh, &stats,
+	    [](void* context, clodCluster cluster)
+	    {
+		    Stats& stats = *static_cast<Stats*>(context);
+
+		    stats.clusters++;
+		    stats.total_triangles += cluster.index_count / 3;
+	    });
 
 	printf("Done with primitive %d/%d (mesh %s/%d): %zu vertices (%zu unique), %zu triangles => %zu triangles\n",
 	    int(request.primitive_index), int(request.primitive_count),
@@ -284,8 +296,7 @@ static void processPrimitive(const Request& request)
 	    position_accessor->count, vertex_count, indices.size() / 3,
 	    lowest);
 
-	if (request.result)
-		*request.result += lowest;
+	stats.lowest_triangles = lowest;
 }
 
 static void* threadArenaAlloc(size_t size)
@@ -319,6 +330,7 @@ static void threadArenaFree(void* ptr)
 struct RequestQueue
 {
 	std::vector<Request> items;
+	std::vector<Stats> stats;
 
 	std::atomic<size_t> next{0};
 	std::atomic<size_t> memory{0};
@@ -363,7 +375,11 @@ static void workerThread(RequestQueue& queue)
 			std::this_thread::yield();
 		}
 
-		processPrimitive(request);
+		Stats stats = {};
+		processPrimitive(request, stats);
+
+		if (!queue.stats.empty())
+			queue.stats[index] = stats;
 
 		queue.memory -= request.memory_requirements;
 	}
@@ -451,7 +467,6 @@ int main(int argc, char** argv)
 
 	size_t peak_memory_requirements = 0;
 	size_t current_primitive = 0;
-	std::atomic<size_t> lowest_triangles{};
 
 	for (Request& request : queue.items)
 	{
@@ -459,8 +474,9 @@ int main(int argc, char** argv)
 			peak_memory_requirements += request.memory_requirements;
 		request.primitive_index = ++current_primitive;
 		request.primitive_count = queue.items.size();
-		request.result = &lowest_triangles;
 	}
+
+	queue.stats.resize(queue.items.size());
 
 	printf("Processing %d meshes from %s (peak memory required %.2f GB, limit %.2f GB)\n",
 	    int(data->meshes_count), path,
@@ -479,6 +495,16 @@ int main(int argc, char** argv)
 
 	cgltf_free(data);
 
-	printf("All done! %d primitives, %d meshes, %.2fB triangles => %.3fM triangles\n", int(current_primitive), int(data->meshes_count), double(total_triangles) / 1e9, double(lowest_triangles.load()) / 1e6);
+	Stats totals = {};
+	for (const Stats& stats : queue.stats)
+	{
+		totals.clusters += stats.clusters;
+		totals.total_triangles += stats.total_triangles;
+		totals.lowest_triangles += stats.lowest_triangles;
+	}
+
+	printf("All done! %d primitives, %d meshes, %.2fB triangles => lowest %.3fM triangles, total %.2fB triangles in %.1fM clusters\n",
+	    int(current_primitive), int(data->meshes_count), double(total_triangles) / 1e9,
+	    double(totals.lowest_triangles) / 1e6, double(totals.total_triangles) / 1e9, double(totals.clusters) / 1e6);
 	return 0;
 }
