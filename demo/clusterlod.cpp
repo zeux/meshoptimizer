@@ -81,11 +81,11 @@ static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh&
 	if (config.cluster_spatial)
 		meshlets.resize(meshopt_buildMeshletsSpatial(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], indices, index_count,
 		    mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride,
-		    config.max_vertices, config.min_triangles, config.max_triangles, config.cluster_fill));
+		    config.max_vertices, config.min_triangles, config.max_triangles, config.cluster_fill_weight));
 	else
 		meshlets.resize(meshopt_buildMeshletsFlex(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], indices, index_count,
 		    mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride,
-		    config.max_vertices, config.min_triangles, config.max_triangles, 0.f, config.cluster_fill));
+		    config.max_vertices, config.min_triangles, config.max_triangles, 0.f, config.cluster_split_factor));
 
 	std::vector<Cluster> clusters(meshlets.size());
 
@@ -234,7 +234,10 @@ static std::vector<unsigned int> simplify(const clodConfig& config, const clodMe
 
 	// while it's possible to call simplifySloppy directly, it doesn't support sparsity or absolute error, so we need to do some extra work
 	if (lod.size() > target_count && config.simplify_fallback_sloppy)
+	{
 		simplifyFallback(lod, mesh, indices, locks, target_count, error);
+		*error *= config.simplify_sloppy_factor; // scale error up to account for appearance degradation
+	}
 
 	return lod;
 }
@@ -255,15 +258,16 @@ clodConfig clodDefaultConfig(size_t max_triangles)
 	config.partition_size = 16;
 
 	config.cluster_spatial = false;
-	config.cluster_fill = 2.0f;
+	config.cluster_split_factor = 2.0f;
 
 	config.optimize_raster = true;
 
 	config.simplify_ratio = 0.5f;
 	config.simplify_threshold = 0.85f;
-	config.simplify_permissive = false; // probably safe to enable by default but might need extra handling for normal creases?
-	config.simplify_fallback_permissive = true;
-	config.simplify_fallback_sloppy = false; // requires performance tuning
+	config.simplify_sloppy_factor = 2.0f;
+	config.simplify_permissive = true;
+	config.simplify_fallback_permissive = false; // note: by default we run in permissive mode, but it's also possible to disable that and use it only as a fallback
+	config.simplify_fallback_sloppy = true;
 
 	return config;
 }
@@ -275,7 +279,7 @@ clodConfig clodDefaultConfigRT(size_t max_triangles)
 	config.max_vertices = std::max(size_t(256), max_triangles + max_triangles / 2);
 
 	config.cluster_spatial = true;
-	config.cluster_fill = 0.5f;
+	config.cluster_fill_weight = 0.5f;
 
 	config.optimize_raster = false;
 

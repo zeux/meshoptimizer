@@ -1697,9 +1697,13 @@ void processCLOD(const char* path)
 	cmesh.attribute_count = sizeof(attribute_weights) / sizeof(attribute_weights[0]);
 	cmesh.attribute_protect_mask = (1 << 3) | (1 << 4); // protect UV seams
 
+	double start = timestamp();
 	size_t lowest = clodBuild(config, cmesh, const_cast<char*>(dump), dumpCLOD);
-	printf("clusterlod: %d triangles => %d triangles on lowest level (%.2f%% of original)\n",
-	    int(mesh.indices.size() / 3), int(lowest), float(lowest) / float(mesh.indices.size() / 3) * 100.0f);
+	double end = timestamp();
+
+	printf("clusterlod: %d triangles => %d triangles on lowest level (%.2f%% of original) in %.2f msec\n",
+	    int(mesh.indices.size() / 3), int(lowest), float(lowest) / float(mesh.indices.size() / 3) * 100.0f,
+	    (end - start) * 1000);
 }
 
 int main(int argc, char** argv)

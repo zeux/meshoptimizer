@@ -13,12 +13,14 @@ struct clodConfig
 	bool retry_queue;
 
 	bool cluster_spatial;
-	float cluster_fill; // fill_factor when !spatial, fill_weight when spatial
+	float cluster_fill_weight;
+	float cluster_split_factor;
 
 	bool optimize_raster;
 
 	float simplify_ratio;
 	float simplify_threshold;
+	float simplify_sloppy_factor;
 	bool simplify_permissive;
 	bool simplify_fallback_permissive;
 	bool simplify_fallback_sloppy;
