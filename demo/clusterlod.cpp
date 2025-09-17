@@ -16,30 +16,19 @@
 #define TRACE 0
 #endif
 
-// To compute approximate (perspective) projection error of a cluster in screen space (0..1; multiply by screen height to get pixels):
-// - camera_proj is projection[1][1], or cot(fovy/2); camera_znear is *positive* near plane distance
-// - for simplicity, we ignore perspective distortion and use rotationally invariant projection size estimation
-// - return: bounds.error / max(distance(bounds.center, camera_position) - bounds.radius, camera_znear) * (camera_proj * 0.5f)
-struct LODBounds
-{
-	float center[3];
-	float radius;
-	float error;
-};
-
 struct Cluster
 {
 	std::vector<unsigned int> indices;
 
-	LODBounds self;
-	LODBounds parent;
+	clodBounds self;
+	clodBounds parent;
 };
 
-static LODBounds bounds(const clodMesh& mesh, const std::vector<unsigned int>& indices, float error)
+static clodBounds bounds(const clodMesh& mesh, const std::vector<unsigned int>& indices, float error)
 {
 	meshopt_Bounds bounds = meshopt_computeClusterBounds(&indices[0], indices.size(), mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride);
 
-	LODBounds result;
+	clodBounds result;
 	result.center[0] = bounds.center[0];
 	result.center[1] = bounds.center[1];
 	result.center[2] = bounds.center[2];
@@ -48,15 +37,15 @@ static LODBounds bounds(const clodMesh& mesh, const std::vector<unsigned int>& i
 	return result;
 }
 
-static LODBounds boundsMerge(const std::vector<Cluster>& clusters, const std::vector<int>& group)
+static clodBounds boundsMerge(const std::vector<Cluster>& clusters, const std::vector<int>& group)
 {
-	std::vector<LODBounds> bounds(group.size());
+	std::vector<clodBounds> bounds(group.size());
 	for (size_t j = 0; j < group.size(); ++j)
 		bounds[j] = clusters[group[j]].self;
 
-	meshopt_Bounds merged = meshopt_computeSphereBounds(&bounds[0].center[0], bounds.size(), sizeof(LODBounds), &bounds[0].radius, sizeof(LODBounds));
+	meshopt_Bounds merged = meshopt_computeSphereBounds(&bounds[0].center[0], bounds.size(), sizeof(clodBounds), &bounds[0].radius, sizeof(clodBounds));
 
-	LODBounds result = {};
+	clodBounds result = {};
 	result.center[0] = merged.center[0];
 	result.center[1] = merged.center[1];
 	result.center[2] = merged.center[2];
@@ -372,7 +361,7 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 
 			// enforce bounds and error monotonicity
 			// note: it is incorrect to use the precise bounds of the merged or simplified mesh, because this may violate monotonicity
-			LODBounds groupb = boundsMerge(clusters, groups[i]);
+			clodBounds groupb = boundsMerge(clusters, groups[i]);
 			groupb.error += error; // this may overestimate the error, but we are starting from the simplified mesh so this is a little more correct
 
 			std::vector<Cluster> split = clusterize(config, mesh, simplified.data(), simplified.size());

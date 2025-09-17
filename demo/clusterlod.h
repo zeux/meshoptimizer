@@ -45,6 +45,17 @@ struct clodMesh
 	unsigned int attribute_protect_mask;
 };
 
+// To compute approximate (perspective) projection error of a cluster in screen space (0..1; multiply by screen height to get pixels):
+// - camera_proj is projection[1][1], or cot(fovy/2); camera_znear is *positive* near plane distance
+// - for simplicity, we ignore perspective distortion and use rotationally invariant projection size estimation
+// - return: bounds.error / max(distance(bounds.center, camera_position) - bounds.radius, camera_znear) * (camera_proj * 0.5f)
+struct clodBounds
+{
+	float center[3];
+	float radius;
+	float error;
+};
+
 struct clodCluster
 {
 	int depth;
