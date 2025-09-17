@@ -317,10 +317,6 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 		}
 	}
 
-#if TRACE
-	printf("ideal lod chain: %.1f levels\n", log2(double(mesh.index_count / 3) / double(config.max_triangles)));
-#endif
-
 	std::vector<int> pending(clusters.size());
 	for (size_t i = 0; i < clusters.size(); ++i)
 		pending[i] = int(i);
@@ -411,7 +407,7 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 			lowest_triangles += clusters[i].indices.size() / 3;
 
 #if TRACE
-	printf("lowest lod: %d triangles\n", int(lowest_triangles));
+	printf("lod %d: (lowest) %d triangles\n", int(depth), int(lowest_triangles));
 #endif
 
 	return lowest_triangles;

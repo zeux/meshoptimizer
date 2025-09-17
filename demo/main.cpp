@@ -1676,7 +1676,16 @@ void processCLOD(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4996) // getenv is "unsafe"
+#endif
+
 	const char* dump = getenv("DUMP");
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 	if (dump)
 		dumpObj(mesh.vertices, std::vector<unsigned int>());
