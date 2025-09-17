@@ -47,7 +47,8 @@ const float kClusterFillWeight = 0.75f;
 
 const bool kSimplifyPermissive = true;
 const bool kSimplifyFallbackPermissive = false;
-const bool kSimplifyFallbackSloppy = false;
+const bool kSimplifyFallbackSloppy = true;
+const float kSimplifySloppyErrorFactor = 2.0f;
 const float kSimplifyRatio = 0.5f;
 const float kSimplifyThreshold = 0.85f;
 
@@ -199,6 +200,46 @@ static void lockBoundary(std::vector<unsigned char>& locks, const std::vector<st
 	}
 }
 
+struct SloppyVertex
+{
+	float x, y, z;
+	unsigned int id;
+};
+
+static void simplifyFallback(std::vector<unsigned int>& lod, const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, const std::vector<unsigned char>* locks, size_t target_count, float* error)
+{
+	std::vector<SloppyVertex> subset(indices.size());
+	std::vector<unsigned char> subset_locks(indices.size());
+
+	lod.resize(indices.size());
+
+	// deindex the mesh subset to avoid calling simplifySloppy on the entire vertex buffer (which is prohibitively expensive without sparsity)
+	for (size_t i = 0; i < indices.size(); ++i)
+	{
+		unsigned int v = indices[i];
+		assert(v < mesh.vertex_count);
+
+		subset[i].x = vertices[v].px;
+		subset[i].y = vertices[v].py;
+		subset[i].z = vertices[v].pz;
+		subset[i].id = v;
+
+		if (locks)
+			subset_locks[i] = (*locks)[v];
+		lod[i] = unsigned(i);
+	}
+
+	lod.resize(meshopt_simplifySloppy(&lod[0], &lod[0], lod.size(), &subset[0].x, subset.size(), sizeof(SloppyVertex), subset_locks.data(), target_count, FLT_MAX, error));
+
+	// convert error to absolute and scale it up to account for extra visual quality degradation
+	if (error)
+		*error *= meshopt_simplifyScale(&subset[0].x, subset.size(), sizeof(SloppyVertex)) * kSimplifySloppyErrorFactor;
+
+	// restore original vertex indices
+	for (size_t i = 0; i < lod.size(); ++i)
+		lod[i] = subset[lod[i]].id;
+}
+
 static std::vector<unsigned int> simplify(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, const std::vector<unsigned char>* locks, size_t target_count, float* error = NULL)
 {
 	assert(target_count <= indices.size());
@@ -215,8 +256,9 @@ static std::vector<unsigned int> simplify(const std::vector<Vertex>& vertices, c
 	if (lod.size() > target_count && !kSimplifyPermissive && kSimplifyFallbackPermissive)
 		lod.resize(meshopt_simplifyWithAttributes(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), &vertices[0].nx, sizeof(Vertex), normal_weights, 3, locks ? &(*locks)[0] : NULL, target_count, FLT_MAX, options | meshopt_SimplifyPermissive, error));
 
+	// while it's possible to call simplifySloppy directly, it doesn't support sparsity or absolute error, so we need to do some extra work
 	if (lod.size() > target_count && kSimplifyFallbackSloppy)
-		lod.resize(meshopt_simplifySloppy(&lod[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), locks ? &(*locks)[0] : NULL, target_count, FLT_MAX, error));
+		simplifyFallback(lod, vertices, indices, locks, target_count, error);
 
 	return lod;
 }
