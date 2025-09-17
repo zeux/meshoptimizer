@@ -172,7 +172,47 @@ static void lockBoundary(std::vector<unsigned char>& locks, const std::vector<st
 	}
 }
 
-static std::vector<unsigned int> simplify(const clodConfig& config, const clodMesh& mesh, const std::vector<unsigned int>& indices, const std::vector<unsigned char>& locks, size_t target_count, float* error = NULL)
+struct SloppyVertex
+{
+	float x, y, z;
+	unsigned int id;
+};
+
+static void simplifyFallback(std::vector<unsigned int>& lod, const clodMesh& mesh, const std::vector<unsigned int>& indices, const std::vector<unsigned char>& locks, size_t target_count, float* error)
+{
+	std::vector<SloppyVertex> subset(indices.size());
+	std::vector<unsigned char> subset_locks(indices.size());
+
+	lod.resize(indices.size());
+
+	size_t positions_stride = mesh.vertex_positions_stride / sizeof(float);
+
+	// deindex the mesh subset to avoid calling simplifySloppy on the entire vertex buffer (which is prohibitively expensive without sparsity)
+	for (size_t i = 0; i < indices.size(); ++i)
+	{
+		unsigned int v = indices[i];
+		assert(v < mesh.vertex_count);
+
+		subset[i].x = mesh.vertex_positions[v * positions_stride + 0];
+		subset[i].y = mesh.vertex_positions[v * positions_stride + 1];
+		subset[i].z = mesh.vertex_positions[v * positions_stride + 2];
+		subset[i].id = v;
+
+		subset_locks[i] = locks[v];
+		lod[i] = unsigned(i);
+	}
+
+	lod.resize(meshopt_simplifySloppy(&lod[0], &lod[0], lod.size(), &subset[0].x, subset.size(), sizeof(SloppyVertex), subset_locks.data(), target_count, FLT_MAX, error));
+
+	// convert error to absolute
+	*error *= meshopt_simplifyScale(&subset[0].x, subset.size(), sizeof(SloppyVertex));
+
+	// restore original vertex indices
+	for (size_t i = 0; i < lod.size(); ++i)
+		lod[i] = subset[lod[i]].id;
+}
+
+static std::vector<unsigned int> simplify(const clodConfig& config, const clodMesh& mesh, const std::vector<unsigned int>& indices, const std::vector<unsigned char>& locks, size_t target_count, float* error)
 {
 	if (target_count > indices.size())
 		return indices;
@@ -192,10 +232,9 @@ static std::vector<unsigned int> simplify(const clodConfig& config, const clodMe
 		    mesh.vertex_attributes, mesh.vertex_attributes_stride, mesh.attribute_weights, mesh.attribute_count,
 		    &locks[0], target_count, FLT_MAX, options | meshopt_SimplifyPermissive, error));
 
+	// while it's possible to call simplifySloppy directly, it doesn't support sparsity or absolute error, so we need to do some extra work
 	if (lod.size() > target_count && config.simplify_fallback_sloppy)
-		lod.resize(meshopt_simplifySloppy(&lod[0], &indices[0], indices.size(),
-		    mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride,
-		    &locks[0], target_count, FLT_MAX, error));
+		simplifyFallback(lod, mesh, indices, locks, target_count, error);
 
 	return lod;
 }
