@@ -39,7 +39,7 @@ const size_t kGroupSize = 16;
 const bool kUseLocks = true;
 const bool kUseNormals = true;
 const bool kUseRetry = true;
-const bool kOptimizeMeshlet = true; // raster-specific
+const bool kOptimizeMeshlets = true; // raster-specific
 
 const bool kClusterSpatial = false;
 const float kClusterSplitFactor = 2.0f;
@@ -121,7 +121,7 @@ static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, cons
 	{
 		const meshopt_Meshlet& meshlet = meshlets[i];
 
-		if (kOptimizeMeshlet)
+		if (kOptimizeMeshlets)
 			meshopt_optimizeMeshlet(&meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count, meshlet.vertex_count);
 
 		// note: for now we discard meshlet-local indices; they are valuable for shader code so in the future we should bring them back
@@ -161,7 +161,7 @@ static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clus
 
 	std::vector<std::vector<int> > partitions(partition_count);
 	for (size_t i = 0; i < partition_count; ++i)
-		partitions[i].reserve(kGroupSize + 4);
+		partitions[i].reserve(kGroupSize + kGroupSize / 2);
 
 	for (size_t i = 0; i < pending.size(); ++i)
 		partitions[cluster_part[i]].push_back(pending[i]);
@@ -325,6 +325,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		for (size_t i = 0; i < groups.size(); ++i)
 		{
 			std::vector<unsigned int> merged;
+			merged.reserve(kClusterSize * groups[i].size());
 			for (size_t j = 0; j < groups[i].size(); ++j)
 				merged.insert(merged.end(), clusters[groups[i][j]].indices.begin(), clusters[groups[i][j]].indices.end());
 
@@ -366,12 +367,14 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 
 			for (size_t j = 0; j < split.size(); ++j)
 			{
+				// update self bounds for all new clusters to be equal to the group bounds as well
+				// this is required for DAG error monotonicity; each cluster should be able to independently arrive at the same binary decision "is my error good enough"
 				split[j].self = groupb;
 
-				clusters.push_back(split[j]); // std::move
-				pending.push_back(int(clusters.size()) - 1);
-
 				triangles += split[j].indices.size() / 3;
+
+				clusters.push_back(std::move(split[j]));
+				pending.push_back(int(clusters.size()) - 1);
 			}
 		}
 
