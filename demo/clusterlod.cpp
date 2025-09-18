@@ -103,6 +103,9 @@ static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh&
 
 static std::vector<std::vector<int> > partition(size_t partition_size, const clodMesh& mesh, const std::vector<Cluster>& clusters, const std::vector<int>& pending, const std::vector<unsigned int>& remap)
 {
+	if (pending.size() <= partition_size)
+		return {pending};
+
 	std::vector<unsigned int> cluster_indices;
 	std::vector<unsigned int> cluster_counts(pending.size());
 
@@ -127,7 +130,7 @@ static std::vector<std::vector<int> > partition(size_t partition_size, const clo
 
 	std::vector<std::vector<int> > partitions(partition_count);
 	for (size_t i = 0; i < partition_count; ++i)
-		partitions[i].reserve(partition_size + 4);
+		partitions[i].reserve(partition_size + partition_size / 2);
 
 	for (size_t i = 0; i < pending.size(); ++i)
 		partitions[cluster_part[i]].push_back(pending[i]);
