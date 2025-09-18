@@ -254,22 +254,16 @@ static std::vector<unsigned int> simplify(const std::vector<Vertex>& vertices, c
 	return lod;
 }
 
-static void dumpMetrics(int level, const std::vector<Cluster>& queue, const std::vector<std::vector<int> >& groups, const std::vector<unsigned int>& remap, const std::vector<unsigned char>& locks, const std::vector<int>& retry);
+static float sahOverhead(const std::vector<Cluster>& queue, const std::vector<std::vector<int> >& groups, const std::vector<Vertex>& vertices);
+static void dumpMetrics(int level, const std::vector<Cluster>& queue, const std::vector<std::vector<int> >& groups, const std::vector<unsigned int>& remap, const std::vector<unsigned char>& locks, const std::vector<int>& retry, float saho);
 
 static bool loadMetis();
 
 void dumpObj(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, bool recomputeNormals = false);
 void dumpObj(const char* section, const std::vector<unsigned int>& indices);
 
-void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, float fill_weight);
-
 void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
-	static const char* clrt = getenv("CLRT");
-
-	if (clrt)
-		return ::clrt(vertices, indices, float(atof(clrt)));
-
 	static const char* metis = getenv("METIS");
 	METIS = metis ? atoi(metis) : 0;
 
@@ -386,7 +380,8 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 			}
 		}
 
-		dumpMetrics(depth, clusters, groups, remap, locks, retry);
+		float saho = kUseSpatial ? sahOverhead(clusters, groups, vertices) : 0.f;
+		dumpMetrics(depth, clusters, groups, remap, locks, retry, saho);
 		depth++;
 
 		if (kUseRetry)
@@ -702,7 +697,7 @@ static int measureUnique(std::vector<int>& used, const std::vector<unsigned int>
 	return int(vertices);
 }
 
-static void dumpMetrics(int level, const std::vector<Cluster>& queue, const std::vector<std::vector<int> >& groups, const std::vector<unsigned int>& remap, const std::vector<unsigned char>& locks, const std::vector<int>& retry)
+static void dumpMetrics(int level, const std::vector<Cluster>& queue, const std::vector<std::vector<int> >& groups, const std::vector<unsigned int>& remap, const std::vector<unsigned char>& locks, const std::vector<int>& retry, float saho)
 {
 	std::vector<int> parents(remap.size());
 
@@ -744,9 +739,9 @@ static void dumpMetrics(int level, const std::vector<Cluster>& queue, const std:
 	double avg_group = double(clusters) / double(groups.size());
 	double inv_clusters = 1.0 / double(clusters);
 
-	printf("lod %d: %d clusters (%.1f%% full, %.1f tri/cl, %.1f vtx/cl, %.2f connected, %.1f boundary, %.1f partition, %f radius), %d triangles",
+	printf("lod %d: %d clusters (%.1f%% full, %.1f tri/cl, %.1f vtx/cl, %.2f connected, %.1f boundary, %.1f partition, %.3f sah overhead, %f radius), %d triangles",
 	    level, clusters,
-	    double(full_clusters) * inv_clusters * 100, double(triangles) * inv_clusters, double(xformed) * inv_clusters, double(components) * inv_clusters, double(boundary) * inv_clusters, avg_group, radius * inv_clusters,
+	    double(full_clusters) * inv_clusters * 100, double(triangles) * inv_clusters, double(xformed) * inv_clusters, double(components) * inv_clusters, double(boundary) * inv_clusters, avg_group, saho, radius * inv_clusters,
 	    int(triangles));
 	if (stuck_clusters)
 		printf("; stuck %d clusters (%d triangles)", stuck_clusters, stuck_triangles);
@@ -877,92 +872,48 @@ static float sahCost(const Box* boxes, size_t count)
 	return sahCost(boxes, &order[0], &temp[0], count);
 }
 
-double timestamp();
-
-void clrt(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, float fill_weight)
+static float sahOverhead(const std::vector<Cluster>& queue, const std::vector<std::vector<int> >& groups, const std::vector<Vertex>& vertices)
 {
-	std::vector<Box> triangles(indices.size() / 3);
-
-	for (size_t i = 0; i < indices.size() / 3; ++i)
-	{
-		Box& box = triangles[i];
-		box = kDummyBox;
-
-		for (int j = 0; j < 3; ++j)
-		{
-			const Vertex& vertex = vertices[indices[i * 3 + j]];
-
-			Box p = {{vertex.px, vertex.py, vertex.pz}, {vertex.px, vertex.py, vertex.pz}};
-			mergeBox(box, p);
-		}
-	}
-
-	Box all = triangles[0];
-	for (size_t i = 1; i < triangles.size(); ++i)
-		mergeBox(all, triangles[i]);
-
-	double start = timestamp();
-
-	float sahr = surface(all);
-	float saht = sahCost(&triangles[0], triangles.size());
-
-	double middle = timestamp();
-
-	const bool use_spatial = true;
-	const size_t max_vertices = 64;
-	const size_t min_triangles = 16;
-	const size_t max_triangles = 64;
-	const float split_factor = 2.0f;
-
-	size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), max_vertices, min_triangles);
-
-	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
-	std::vector<unsigned int> meshlet_vertices(indices.size());
-	std::vector<unsigned char> meshlet_triangles(indices.size());
-
-	if (use_spatial)
-		meshlets.resize(meshopt_buildMeshletsSpatial(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, fill_weight));
-	else
-		meshlets.resize(meshopt_buildMeshletsFlex(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, 0.f, split_factor));
-
-	double end = timestamp();
-
-	std::vector<Box> meshlet_boxes(meshlets.size());
-	std::vector<Box> cluster_tris(max_triangles);
+	std::vector<Box> all_tris, cluster_tris, cluster_boxes;
 
 	float sahc = 0.f;
-	size_t xformed = 0;
 
-	for (size_t i = 0; i < meshlets.size(); ++i)
-	{
-		const meshopt_Meshlet& meshlet = meshlets[i];
-
-		meshlet_boxes[i] = kDummyBox;
-
-		for (size_t j = 0; j < meshlet.triangle_count; ++j)
+	for (size_t i = 0; i < groups.size(); ++i)
+		for (size_t j = 0; j < groups[i].size(); ++j)
 		{
-			cluster_tris[j] = kDummyBox;
+			const Cluster& cluster = queue[groups[i][j]];
 
-			for (int k = 0; k < 3; ++k)
+			cluster_tris.clear();
+
+			Box cluster_box = kDummyBox;
+
+			for (size_t k = 0; k < cluster.indices.size(); k += 3)
 			{
-				const Vertex& vertex = vertices[meshlet_vertices[meshlet.vertex_offset + meshlet_triangles[meshlet.triangle_offset + j * 3 + k]]];
+				Box box = kDummyBox;
 
-				Box p = {{vertex.px, vertex.py, vertex.pz}, {vertex.px, vertex.py, vertex.pz}};
-				mergeBox(cluster_tris[j], p);
-				mergeBox(meshlet_boxes[i], p);
+				for (int v = 0; v < 3; ++v)
+				{
+					const Vertex& vertex = vertices[cluster.indices[k + v]];
+
+					Box p = {{vertex.px, vertex.py, vertex.pz}, {vertex.px, vertex.py, vertex.pz}};
+					mergeBox(box, p);
+				}
+
+				mergeBox(cluster_box, box);
+
+				all_tris.push_back(box);
+				cluster_tris.push_back(box);
 			}
+
+			cluster_boxes.push_back(cluster_box);
+
+			sahc += sahCost(&cluster_tris[0], cluster_tris.size());
+			sahc -= surface(cluster_box); // box will be accounted for in tlas
 		}
 
-		sahc += sahCost(&cluster_tris[0], meshlet.triangle_count);
-		sahc -= surface(meshlet_boxes[i]); // box will be accounted for in tlas
+	sahc += sahCost(&cluster_boxes[0], cluster_boxes.size());
 
-		xformed += meshlet.vertex_count;
-	}
+	float saht = sahCost(all_tris.data(), all_tris.size());
 
-	sahc += sahCost(&meshlet_boxes[0], meshlet_boxes.size());
-
-	printf("BLAS SAH %f\n", saht / sahr);
-	printf("CLAS SAH %f\n", sahc / sahr);
-	printf("%d clusters, %.1f tri/cl, %.1f vtx/cl, SAH overhead %f\n", int(meshlet_boxes.size()), double(indices.size() / 3) / double(meshlet_boxes.size()), double(xformed) / double(meshlet_boxes.size()), sahc / saht);
-	printf("BVH build %.1f ms, clusterize %.1f ms\n", (middle - start) * 1000.0, (end - middle) * 1000.0);
+	return sahc / saht;
 }
