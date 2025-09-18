@@ -137,6 +137,9 @@ static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, cons
 
 static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clusters, const std::vector<int>& pending, const std::vector<unsigned int>& remap, const std::vector<Vertex>& vertices)
 {
+	if (pending.size() <= kGroupSize)
+		return {pending};
+
 	std::vector<unsigned int> cluster_indices;
 	std::vector<unsigned int> cluster_counts(pending.size());
 
