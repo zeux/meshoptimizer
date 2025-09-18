@@ -17,28 +17,7 @@
 #include <string.h>
 
 #include <algorithm>
-#include <map> // only for METIS
 #include <vector>
-
-#ifndef _WIN32
-#include <dlfcn.h>
-#endif
-
-#define METIS_OK 1
-#define METIS_OPTION_SEED 8
-#define METIS_OPTION_UFACTOR 16
-#define METIS_NOPTIONS 40
-
-static int METIS = 0;
-static int (*METIS_SetDefaultOptions)(int* options);
-static int (*METIS_PartGraphRecursive)(int* nvtxs, int* ncon, int* xadj,
-    int* adjncy, int* vwgt, int* vsize, int* adjwgt,
-    int* nparts, float* tpwgts, float* ubvec, int* options,
-    int* edgecut, int* part);
-
-#ifndef TRACE
-#define TRACE 0
-#endif
 
 struct Vertex
 {
@@ -70,7 +49,6 @@ const bool kUseRetry = true;
 const bool kUseSpatial = false;
 const bool kUsePermissiveFallback = true;
 const bool kUseSloppyFallback = false;
-const int kMetisSlop = 2;
 const float kSimplifyThreshold = 0.85f;
 
 static LODBounds bounds(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, float error)
@@ -119,14 +97,8 @@ static float boundsError(const LODBounds& bounds, float camera_x, float camera_y
 	return bounds.error / (d > camera_znear ? d : camera_znear) * (camera_proj * 0.5f);
 }
 
-static std::vector<Cluster> clusterizeMetis(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices);
-static std::vector<std::vector<int> > partitionMetis(const std::vector<Cluster>& clusters, const std::vector<int>& pending, const std::vector<unsigned int>& remap);
-
 static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
-	if (METIS & 2)
-		return clusterizeMetis(vertices, indices);
-
 	const size_t max_vertices = 192; // TODO: depends on kClusterSize, also may want to dial down for mesh shaders
 	const size_t max_triangles = kClusterSize;
 	const size_t min_triangles = kClusterSize / 3;
@@ -165,9 +137,6 @@ static std::vector<Cluster> clusterize(const std::vector<Vertex>& vertices, cons
 
 static std::vector<std::vector<int> > partition(const std::vector<Cluster>& clusters, const std::vector<int>& pending, const std::vector<unsigned int>& remap, const std::vector<Vertex>& vertices)
 {
-	if (METIS & 1)
-		return partitionMetis(clusters, pending, remap);
-
 	std::vector<unsigned int> cluster_indices;
 	std::vector<unsigned int> cluster_counts(pending.size());
 
@@ -257,24 +226,11 @@ static std::vector<unsigned int> simplify(const std::vector<Vertex>& vertices, c
 static float sahOverhead(const std::vector<Cluster>& queue, const std::vector<std::vector<int> >& groups, const std::vector<Vertex>& vertices);
 static void dumpMetrics(int level, const std::vector<Cluster>& queue, const std::vector<std::vector<int> >& groups, const std::vector<unsigned int>& remap, const std::vector<unsigned char>& locks, const std::vector<int>& retry, float saho);
 
-static bool loadMetis();
-
 void dumpObj(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, bool recomputeNormals = false);
 void dumpObj(const char* section, const std::vector<unsigned int>& indices);
 
 void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
-	static const char* metis = getenv("METIS");
-	METIS = metis ? atoi(metis) : 0;
-
-	if (METIS)
-	{
-		if (loadMetis())
-			printf("using metis for %s\n", (METIS & 3) == 3 ? "clustering and partition" : ((METIS & 1) ? "partition only" : "clustering only"));
-		else
-			printf("metis library is not available\n"), METIS = 0;
-	}
-
 	static const char* dump = getenv("DUMP");
 
 	int depth = 0;
@@ -298,8 +254,6 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	std::vector<Cluster> clusters = clusterize(vertices, indices);
 	for (size_t i = 0; i < clusters.size(); ++i)
 		clusters[i].self = bounds(vertices, clusters[i].indices, 0.f);
-
-	printf("ideal lod chain: %.1f levels\n", log2(double(indices.size() / 3) / double(kClusterSize)));
 
 	std::vector<int> pending(clusters.size());
 	for (size_t i = 0; i < clusters.size(); ++i)
@@ -326,9 +280,6 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		// every group needs to be simplified now
 		for (size_t i = 0; i < groups.size(); ++i)
 		{
-			if (groups[i].empty())
-				continue; // metis shortcut
-
 			std::vector<unsigned int> merged;
 			for (size_t j = 0; j < groups[i].size(); ++j)
 				merged.insert(merged.end(), clusters[groups[i][j]].indices.begin(), clusters[groups[i][j]].indices.end());
@@ -380,8 +331,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 			}
 		}
 
-		float saho = kUseSpatial ? sahOverhead(clusters, groups, vertices) : 0.f;
-		dumpMetrics(depth, clusters, groups, remap, locks, retry, saho);
+		dumpMetrics(depth, clusters, groups, remap, locks, retry, kUseSpatial ? sahOverhead(clusters, groups, vertices) : 0.f);
 		depth++;
 
 		if (kUseRetry)
@@ -398,7 +348,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		if (clusters[i].parent.error == FLT_MAX)
 			lowest_triangles += clusters[i].indices.size() / 3;
 
-	printf("lowest lod: %d triangles\n", int(lowest_triangles));
+	printf("lod %d: (lowest) %d triangles\n", depth, int(lowest_triangles));
 
 	// for testing purposes, we can compute a DAG cut from a given viewpoint and dump it as an OBJ
 	float maxx = 0.f, maxy = 0.f, maxz = 0.f;
@@ -431,202 +381,8 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	}
 }
 
-// What follows is code that optionally uses METIS library to perform partitioning and/or clustering.
-// The focus of this example is on combining meshopt_ algorithms, but METIS fallbacks are provided for now.
-
-static bool loadMetis()
-{
-#ifdef _WIN32
-	return false;
-#else
-	void* handle = dlopen("libmetis.so", RTLD_NOW | RTLD_LOCAL);
-	if (!handle)
-		return false;
-
-	METIS_SetDefaultOptions = (int (*)(int*))dlsym(handle, "METIS_SetDefaultOptions");
-	METIS_PartGraphRecursive = (int (*)(int*, int*, int*, int*, int*, int*, int*, int*, float*, float*, int*, int*, int*))dlsym(handle, "METIS_PartGraphRecursive");
-
-	return METIS_SetDefaultOptions && METIS_PartGraphRecursive;
-#endif
-}
-
-static std::vector<Cluster> clusterizeMetis(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
-{
-	std::vector<unsigned int> shadowib(indices.size());
-	meshopt_generateShadowIndexBuffer(&shadowib[0], &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(float) * 3, sizeof(Vertex));
-
-	std::vector<std::vector<int> > trilist(vertices.size());
-
-	for (size_t i = 0; i < indices.size(); ++i)
-		trilist[shadowib[i]].push_back(int(i / 3));
-
-	std::vector<int> xadj(indices.size() / 3 + 1);
-	std::vector<int> adjncy;
-	std::vector<int> adjwgt;
-	std::vector<int> part(indices.size() / 3);
-
-	std::vector<int> scratch;
-
-	for (size_t i = 0; i < indices.size() / 3; ++i)
-	{
-		unsigned int a = shadowib[i * 3 + 0], b = shadowib[i * 3 + 1], c = shadowib[i * 3 + 2];
-
-		scratch.clear();
-		scratch.insert(scratch.end(), trilist[a].begin(), trilist[a].end());
-		scratch.insert(scratch.end(), trilist[b].begin(), trilist[b].end());
-		scratch.insert(scratch.end(), trilist[c].begin(), trilist[c].end());
-		std::sort(scratch.begin(), scratch.end());
-
-		for (size_t j = 0; j < scratch.size(); ++j)
-		{
-			if (scratch[j] == int(i))
-				continue;
-
-			if (j == 0 || scratch[j] != scratch[j - 1])
-			{
-				adjncy.push_back(scratch[j]);
-				adjwgt.push_back(1);
-			}
-			else if (j != 0)
-			{
-				assert(scratch[j] == scratch[j - 1]);
-				adjwgt.back()++;
-			}
-		}
-
-		xadj[i + 1] = int(adjncy.size());
-	}
-
-	int options[METIS_NOPTIONS];
-	METIS_SetDefaultOptions(options);
-	options[METIS_OPTION_SEED] = 42;
-	options[METIS_OPTION_UFACTOR] = 1; // minimize partition imbalance
-
-	// since Metis can't enforce partition sizes, add a little slop to reduce the change we need to split results further
-	int nvtxs = int(indices.size() / 3);
-	int ncon = 1;
-	int nparts = int(indices.size() / 3 + (kClusterSize - kMetisSlop) - 1) / (kClusterSize - kMetisSlop);
-	int edgecut = 0;
-
-	// not sure why this is a special case that we need to handle but okay metis
-	if (nparts > 1)
-	{
-		int r = METIS_PartGraphRecursive(&nvtxs, &ncon, xadj.data(), adjncy.data(), NULL, NULL, adjwgt.data(), &nparts, NULL, NULL, options, &edgecut, part.data());
-		assert(r == METIS_OK);
-		(void)r;
-	}
-
-	std::vector<Cluster> result(nparts);
-
-	for (size_t i = 0; i < indices.size() / 3; ++i)
-	{
-		result[part[i]].indices.push_back(indices[i * 3 + 0]);
-		result[part[i]].indices.push_back(indices[i * 3 + 1]);
-		result[part[i]].indices.push_back(indices[i * 3 + 2]);
-	}
-
-	for (int i = 0; i < nparts; ++i)
-	{
-		result[i].parent.error = FLT_MAX;
-
-		// need to split the cluster further...
-		// this could use meshopt but we're trying to get a complete baseline from metis
-		if (result[i].indices.size() > kClusterSize * 3)
-		{
-			std::vector<Cluster> splits = clusterizeMetis(vertices, result[i].indices);
-			assert(splits.size() > 1);
-
-			result[i] = splits[0];
-			for (size_t j = 1; j < splits.size(); ++j)
-				result.push_back(splits[j]);
-		}
-	}
-
-	return result;
-}
-
-static std::vector<std::vector<int> > partitionMetis(const std::vector<Cluster>& clusters, const std::vector<int>& pending, const std::vector<unsigned int>& remap)
-{
-	std::vector<std::vector<int> > result;
-	std::vector<std::vector<int> > vertices(remap.size());
-
-	for (size_t i = 0; i < pending.size(); ++i)
-	{
-		const Cluster& cluster = clusters[pending[i]];
-
-		for (size_t j = 0; j < cluster.indices.size(); ++j)
-		{
-			int v = remap[cluster.indices[j]];
-
-			std::vector<int>& list = vertices[v];
-			if (list.empty() || list.back() != int(i))
-				list.push_back(int(i));
-		}
-	}
-
-	std::map<std::pair<int, int>, int> adjacency;
-
-	for (size_t v = 0; v < vertices.size(); ++v)
-	{
-		const std::vector<int>& list = vertices[v];
-
-		for (size_t i = 0; i < list.size(); ++i)
-			for (size_t j = i + 1; j < list.size(); ++j)
-				adjacency[std::make_pair(std::min(list[i], list[j]), std::max(list[i], list[j]))]++;
-	}
-
-	std::vector<std::vector<std::pair<int, int> > > neighbors(pending.size());
-
-	for (std::map<std::pair<int, int>, int>::iterator it = adjacency.begin(); it != adjacency.end(); ++it)
-	{
-		neighbors[it->first.first].push_back(std::make_pair(it->first.second, it->second));
-		neighbors[it->first.second].push_back(std::make_pair(it->first.first, it->second));
-	}
-
-	std::vector<int> xadj(pending.size() + 1);
-	std::vector<int> adjncy;
-	std::vector<int> adjwgt;
-	std::vector<int> part(pending.size());
-
-	for (size_t i = 0; i < pending.size(); ++i)
-	{
-		for (size_t j = 0; j < neighbors[i].size(); ++j)
-		{
-			adjncy.push_back(neighbors[i][j].first);
-			adjwgt.push_back(neighbors[i][j].second);
-		}
-
-		xadj[i + 1] = int(adjncy.size());
-	}
-
-	int options[METIS_NOPTIONS];
-	METIS_SetDefaultOptions(options);
-	options[METIS_OPTION_SEED] = 42;
-	options[METIS_OPTION_UFACTOR] = 100;
-
-	int nvtxs = int(pending.size());
-	int ncon = 1;
-	int nparts = int(pending.size() + kGroupSize - 1) / kGroupSize;
-	int edgecut = 0;
-
-	// not sure why this is a special case that we need to handle but okay metis
-	if (nparts > 1)
-	{
-		int r = METIS_PartGraphRecursive(&nvtxs, &ncon, &xadj[0], &adjncy[0], NULL, NULL, &adjwgt[0], &nparts, NULL, NULL, options, &edgecut, &part[0]);
-		assert(r == METIS_OK);
-		(void)r;
-	}
-
-	result.resize(nparts);
-	for (size_t i = 0; i < part.size(); ++i)
-		result[part[i]].push_back(pending[i]);
-
-	return result;
-}
-
 // What follows is code that is helpful for collecting metrics, visualizing cuts, etc.
 // This code is not used in the actual clustering implementation and can be ignored.
-
 static int follow(std::vector<int>& parents, int index)
 {
 	while (index != parents[index])
@@ -748,7 +504,6 @@ static void dumpMetrics(int level, const std::vector<Cluster>& queue, const std:
 	printf("\n");
 }
 
-// What follows is code for metrics collection of RT impact of clustering on performance; for now this is not integrated with the rest of Nanite example
 struct Box
 {
 	float min[3];
