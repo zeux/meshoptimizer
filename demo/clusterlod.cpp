@@ -365,13 +365,13 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 			if (output_group)
 				output_group(output_context, {groupb, &groups[i][0], groups[i].size()});
 
-			// update parent bounds and error for all clusters in the group
-			// note that all clusters in the group need to switch simultaneously so they have the same bounds
+			// mark clusters as belonging to the current group; we won't really use them again
 			for (size_t j = 0; j < groups[i].size(); ++j)
 			{
-				assert(clusters[groups[i][j]].group == -1);
-				clusters[groups[i][j]].group = group_id;
-				clusters[groups[i][j]].bounds = groupb;
+				Cluster& cluster = clusters[groups[i][j]];
+				assert(cluster.group == -1);
+				cluster.group = group_id;
+				cluster.indices = std::vector<unsigned int>(); // release memory, we don't need the cluster indices anymore
 			}
 
 			std::vector<Cluster> split = clusterize(config, mesh, simplified.data(), simplified.size(), &groupb);
