@@ -217,7 +217,7 @@ static void simplifyFallback(std::vector<unsigned int>& lod, const std::vector<V
 	for (size_t i = 0; i < indices.size(); ++i)
 	{
 		unsigned int v = indices[i];
-		assert(v < mesh.vertex_count);
+		assert(v < vertices.size());
 
 		subset[i].x = vertices[v].px;
 		subset[i].y = vertices[v].py;
@@ -271,7 +271,11 @@ void dumpObj(const char* section, const std::vector<unsigned int>& indices);
 
 void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
+#ifdef _MSC_VER
+	static const char* dump = NULL; // tired of C4996
+#else
 	static const char* dump = getenv("DUMP");
+#endif
 
 	int depth = 0;
 	std::vector<unsigned char> locks(vertices.size());
@@ -281,7 +285,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	meshopt_generatePositionRemap(&remap[0], &vertices[0].px, vertices.size(), sizeof(Vertex));
 
 	// set up protect bits on UV seams for permissive mode
-	if (kSimplifyPermissive || kSimplifyFallbackPermissive)
+	if (kUseLocks)
 		for (size_t i = 0; i < vertices.size(); ++i)
 		{
 			unsigned int r = remap[i]; // canonical vertex with the same position
@@ -384,11 +388,15 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	}
 
 	size_t lowest_triangles = 0;
+	size_t lowest_clusters = 0;
 	for (size_t i = 0; i < clusters.size(); ++i)
 		if (clusters[i].parent.error == FLT_MAX)
+		{
 			lowest_triangles += clusters[i].indices.size() / 3;
+			lowest_clusters++;
+		}
 
-	printf("lod %d: (lowest) %d triangles\n", depth, int(lowest_triangles));
+	printf("lod %d: (lowest) %d clusters, %d triangles\n", depth, int(lowest_clusters), int(lowest_triangles));
 
 	// for testing purposes, we can compute a DAG cut from a given viewpoint and dump it as an OBJ
 	float maxx = 0.f, maxy = 0.f, maxz = 0.f;
