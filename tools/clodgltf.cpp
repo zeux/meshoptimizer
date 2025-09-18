@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "../demo/clusterlod.h"
@@ -17,76 +18,8 @@
 const size_t kNumThreads = 16;
 const size_t kBytesPerVertex = 32;
 const size_t kBytesPerTriangle = 64;
-const size_t kMemoryLimit = size_t(32) << 30; // 32 GB per queue
-
-const bool kUseThreadArena = true;
+const size_t kMemoryLimit = size_t(32) << 30;    // 32 GB per queue
 const size_t kThreadArenaSize = size_t(1) << 30; // 1 GB per thread
-
-struct Stream
-{
-	const float* data;
-	size_t count;
-	size_t stride;
-};
-
-struct Vertex
-{
-	float px, py, pz;
-	float nx, ny, nz;
-	float tx, ty;
-};
-
-static cgltf_result mmap_file_read(const struct cgltf_memory_options* memory_options, const struct cgltf_file_options* file_options, const char* path, cgltf_size* size, void** data)
-{
-	(void)memory_options;
-	(void)file_options;
-
-	int fd = open(path, O_RDONLY);
-	if (fd == -1)
-		return cgltf_result_file_not_found;
-
-	struct stat sb;
-	if (fstat(fd, &sb) == -1)
-	{
-		close(fd);
-		return cgltf_result_io_error;
-	}
-
-	if (sb.st_size == 0)
-	{
-		close(fd);
-		*size = 0;
-		*data = NULL;
-		return cgltf_result_success;
-	}
-
-	void* mapped = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-	if (mapped == MAP_FAILED)
-	{
-		close(fd);
-		return cgltf_result_io_error;
-	}
-
-	close(fd);
-
-	*size = sb.st_size;
-	*data = mapped;
-
-	return cgltf_result_success;
-}
-
-static void mmap_file_release(const struct cgltf_memory_options* memory_options, const struct cgltf_file_options* file_options, void* data, cgltf_size size)
-{
-	(void)memory_options;
-	(void)file_options;
-
-	if (data)
-	{
-		int rc = munmap(data, size);
-		assert(rc == 0);
-		(void)rc;
-	}
-}
 
 struct Stats
 {
@@ -337,7 +270,7 @@ static void workerThread(RequestQueue& queue)
 {
 	ThreadArena arena = {};
 
-	if (kUseThreadArena)
+	if (kThreadArenaSize)
 	{
 		arena.data = ::operator new(kThreadArenaSize);
 		arena.size = kThreadArenaSize;
@@ -379,7 +312,7 @@ static void workerThread(RequestQueue& queue)
 		queue.memory -= request.memory_requirements;
 	}
 
-	if (kUseThreadArena)
+	if (kThreadArenaSize)
 	{
 		assert(gthreadArena == &arena);
 		gThreadArena = NULL;
@@ -389,6 +322,65 @@ static void workerThread(RequestQueue& queue)
 	}
 }
 
+static cgltf_result mmap_file_read(const struct cgltf_memory_options* memory_options, const struct cgltf_file_options* file_options, const char* path, cgltf_size* size, void** data)
+{
+	(void)memory_options;
+	(void)file_options;
+
+	int fd = open(path, O_RDONLY);
+	if (fd == -1)
+		return cgltf_result_file_not_found;
+
+	struct stat sb;
+	if (fstat(fd, &sb) == -1)
+	{
+		close(fd);
+		return cgltf_result_io_error;
+	}
+
+	if (sb.st_size == 0)
+	{
+		close(fd);
+		*size = 0;
+		*data = NULL;
+		return cgltf_result_success;
+	}
+
+	void* mapped = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	if (mapped == MAP_FAILED)
+	{
+		close(fd);
+		return cgltf_result_io_error;
+	}
+
+	close(fd);
+
+	*size = sb.st_size;
+	*data = mapped;
+
+	return cgltf_result_success;
+}
+
+static void mmap_file_release(const struct cgltf_memory_options* memory_options, const struct cgltf_file_options* file_options, void* data, cgltf_size size)
+{
+	(void)memory_options;
+	(void)file_options;
+
+	if (data)
+	{
+		int rc = munmap(data, size);
+		assert(rc == 0);
+		(void)rc;
+	}
+}
+
+double timestamp()
+{
+	timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return double(ts.tv_sec) + 1e-9 * double(ts.tv_nsec);
+}
+
 int main(int argc, char** argv)
 {
 	if (argc <= 1)
@@ -396,6 +388,8 @@ int main(int argc, char** argv)
 		fprintf(stderr, "Usage: clodgltf <path>\n");
 		return 1;
 	}
+
+	double start = timestamp();
 
 	const char* path = argv[1];
 
@@ -498,8 +492,13 @@ int main(int argc, char** argv)
 		totals.lowest_triangles += stats.lowest_triangles;
 	}
 
-	printf("All done! %d primitives, %d meshes, %.2fB triangles => lowest %.3fM triangles, total %.2fB triangles in %.1fM clusters\n",
+	double end = timestamp();
+	int elapsed = int(end - start);
+
+	printf("All done! %d primitives, %d meshes, %.2fB triangles => lowest %.3fM triangles, total %.2fB triangles in %.1fM clusters (%d:%02d)\n",
 	    int(current_primitive), int(data->meshes_count), double(total_triangles) / 1e9,
-	    double(totals.lowest_triangles) / 1e6, double(totals.total_triangles) / 1e9, double(totals.clusters) / 1e6);
+	    double(totals.lowest_triangles) / 1e6, double(totals.total_triangles) / 1e9, double(totals.clusters) / 1e6,
+	    elapsed / 60, elapsed % 60);
+
 	return 0;
 }
