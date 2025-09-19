@@ -57,9 +57,10 @@ static void processPrimitive(const Request& request, Stats& stats)
 
 	const char* mesh_name = mesh.name ? mesh.name : "";
 
-	printf("Processing primitive %d/%d (mesh %s/%d)\n",
-	    int(request.primitive_index), int(request.primitive_count),
-	    mesh_name, int(&primitive - mesh.primitives));
+	if (0)
+		printf("Processing primitive %d/%d (mesh %s/%d)\n",
+		    int(request.primitive_index), int(request.primitive_count),
+		    mesh_name, int(&primitive - mesh.primitives));
 
 	if (primitive.type != cgltf_primitive_type_triangles)
 	{
@@ -218,11 +219,12 @@ static void processPrimitive(const Request& request, Stats& stats)
 		    stats.total_triangles += cluster.index_count / 3; },
 	    /*output_group=*/NULL);
 
-	printf("Done with primitive %d/%d (mesh %s/%d): %zu vertices (%zu unique), %zu triangles => %zu triangles\n",
-	    int(request.primitive_index), int(request.primitive_count),
-	    mesh_name, int(&primitive - mesh.primitives),
-	    position_accessor->count, vertex_count, indices.size() / 3,
-	    lowest);
+	if (0)
+		printf("Done with primitive %d/%d (mesh %s/%d): %zu vertices (%zu unique), %zu triangles => %zu triangles\n",
+		    int(request.primitive_index), int(request.primitive_count),
+		    mesh_name, int(&primitive - mesh.primitives),
+		    position_accessor->count, vertex_count, indices.size() / 3,
+		    lowest);
 
 	stats.lowest_triangles = lowest;
 }
