@@ -172,13 +172,9 @@ void encodeImagesBasis(std::string* encoded, const cgltf_data* data, const std::
 		const cgltf_image& image = data->images[i];
 		ImageInfo info = images[i];
 
-		if (settings.texture_mode[info.kind] == TextureMode_Raw)
-			continue;
-
-		if (const char* error = prepareEncode(params[i], image, input_path, info, settings, temp_prefix + "-" + std::to_string(i), temp_inputs[i], temp_outputs[i]))
-			encoded[i] = error;
-
-		// image is ready to encode in parallel
+		if (settings.texture_mode[info.kind] == TextureMode_ETC1S || settings.texture_mode[info.kind] == TextureMode_UASTC)
+			if (const char* error = prepareEncode(params[i], image, input_path, info, settings, temp_prefix + "-" + std::to_string(i), temp_inputs[i], temp_outputs[i]))
+				encoded[i] = error;
 	}
 
 	uint32_t num_threads = settings.texture_jobs == 0 ? std::thread::hardware_concurrency() : settings.texture_jobs;
