@@ -205,11 +205,23 @@ buildMeshlets(indices: Uint32Array, vertex_positions: Float32Array, vertex_posit
 
 The algorithm uses position data stored in a strided array; `vertex_positions_stride` represents the distance between subsequent positions in `Float32` units.
 
-The maximum number of triangles and number of vertices per meshlet can be controlled via `max_triangles` and `max_vertices` parameters. However, `max_vertices` must not be greater than 255 and `max_triangles` must not be greater than 512.
+The maximum number of triangles and number of vertices per meshlet can be controlled via `max_triangles` and `max_vertices` parameters. However, `max_vertices` must not be greater than 256 and `max_triangles` must not be greater than 512.
 
 Additionally, if cluster cone culling is to be used, `buildMeshlets` allows specifying a `cone_weight` as a value between 0 and 1 to balance culling efficiency with other forms of culling. By default, `cone_weight` is set to 0.
 
-All meshlets are implicitly optimized for better triangle and vertex locality by `buildMeshlets`.
+For finer control over triangle counts, use `buildMeshletsFlex`, which accepts minimum and maximum triangle limits and an optional `split_factor` to nudge large clusters to split sooner.
+
+```ts
+buildMeshletsFlex(indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, max_vertices: number, min_triangles: number, max_triangles: number, cone_weight?: number, split_factor?: number) => MeshletBuffers;
+```
+
+To favor spatial splits for ray tracing, `buildMeshletsSpatial` keeps the same controls but replaces cone weighting with `fill_weight` to trade off cluster fullness against SAH cost.
+
+```ts
+buildMeshletsSpatial(indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, max_vertices: number, min_triangles: number, max_triangles: number, fill_weight?: number) => MeshletBuffers;
+```
+
+All meshlets produced by these builders are implicitly optimized for better triangle and vertex locality.
 
 The algorithm returns the meshlet data as packed buffers:
 
