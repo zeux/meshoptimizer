@@ -768,8 +768,8 @@ static float boxMerge(BVHBoxT& box, const BVHBox& other)
 	min = _mm_min_ps(min, _mm_loadu_ps(other.min));
 	max = _mm_max_ps(max, _mm_loadu_ps(other.max));
 
-	_mm_store_ps(box.min, min);
-	_mm_store_ps(box.max, max);
+	_mm_storeu_ps(box.min, min);
+	_mm_storeu_ps(box.max, max);
 
 	__m128 size = _mm_sub_ps(max, min);
 	__m128 size_yzx = _mm_shuffle_ps(size, size, _MM_SHUFFLE(0, 0, 2, 1));
