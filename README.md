@@ -711,12 +711,9 @@ Applications may configure the library to change the attributes of experimental 
 
 Currently, the following APIs are experimental:
 
-- `meshopt_buildMeshletsFlex`
-- `meshopt_buildMeshletsSpatial`
 - `meshopt_decodeFilterColor`
 - `meshopt_encodeFilterColor`
 - `meshopt_generatePositionRemap`
-- `meshopt_simplifySloppy`
 - `meshopt_simplifyWithUpdate`
 - `meshopt_SimplifyRegularize` flag for `meshopt_simplify*` functions
 - `meshopt_SimplifyPermissive` mode for `meshopt_simplify*` functions (and associated `meshopt_SimplifyVertex_*` flags)
