@@ -30,6 +30,15 @@ export const MeshoptSimplifier: {
 		flags?: Flags[]
 	) => [Uint32Array, number];
 
+	simplifySloppy: (
+		indices: Uint32Array,
+		vertex_positions: Float32Array,
+		vertex_positions_stride: number,
+		vertex_lock: Uint8Array | null,
+		target_index_count: number,
+		target_error: number
+	) => [Uint32Array, number];
+
 	getScale: (vertex_positions: Float32Array, vertex_positions_stride: number) => number;
 
 	simplifyPoints: (
