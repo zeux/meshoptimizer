@@ -32,8 +32,11 @@ struct clodConfig
 	float simplify_ratio;
 	float simplify_threshold;
 
+	// amplify the error of simplified clusters to account for appearance degradation
+	float simplify_error_factor;
+
 	// amplify the error of clusters that go through sloppy simplification to account for appearance degradation
-	float simplify_sloppy_factor;
+	float simplify_error_factor_sloppy;
 
 	// use permissive simplification instead of regular simplification (make sure to use attribute_protect_mask if this is set!)
 	bool simplify_permissive;
@@ -371,7 +374,7 @@ static std::vector<unsigned int> simplify(const clodConfig& config, const clodMe
 	if (lod.size() > target_count && config.simplify_fallback_sloppy)
 	{
 		simplifyFallback(lod, mesh, indices, locks, target_count, error);
-		*error *= config.simplify_sloppy_factor; // scale error up to account for appearance degradation
+		*error *= config.simplify_error_factor_sloppy; // scale error up to account for appearance degradation
 	}
 
 	return lod;
@@ -395,7 +398,8 @@ clodConfig clodDefaultConfig(size_t max_triangles)
 
 	config.simplify_ratio = 0.5f;
 	config.simplify_threshold = 0.85f;
-	config.simplify_sloppy_factor = 2.0f;
+	config.simplify_error_factor = 1.0f;
+	config.simplify_error_factor_sloppy = 2.0f;
 	config.simplify_permissive = true;
 	config.simplify_fallback_permissive = false; // note: by default we run in permissive mode, but it's also possible to disable that and use it only as a fallback
 	config.simplify_fallback_sloppy = true;
@@ -495,7 +499,7 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 			// enforce bounds and error monotonicity
 			// note: it is incorrect to use the precise bounds of the merged or simplified mesh, because this may violate monotonicity
 			clodBounds groupb = boundsMerge(clusters, groups[i]);
-			groupb.error += error; // this may overestimate the error, but we are starting from the simplified mesh so this is a little more correct
+			groupb.error = std::max(groupb.error * config.simplify_error_factor, error);
 
 			int group_id = next_group++;
 
