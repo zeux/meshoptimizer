@@ -617,7 +617,7 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 		size_t group_triangles = (lod.size() - group_offset) / 3;
 
 		// simplify the group, preserving the border vertices
-		// note: this technically also locks the exterior border; a full mesh analysis (see nanite.cpp / lockBoundary) would work better for some meshes
+		// note: this technically also locks the exterior border; a full mesh analysis (see clusterlod.h / lockBoundary) would work better for some meshes
 		unsigned int options = meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute;
 
 		float group_target_error = 1e-2f * scale;
@@ -634,7 +634,7 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 	double end = timestamp();
 
 	printf("%-9s: %d triangles => %d triangles (%.2f%% deviation) in %.2f msec, clusterized in %.2f msec, partitioned in %.2f msec (%d clusters in %d groups)\n",
-	    "SimplifyN", // N for Nanite
+	    "SimplifyG",
 	    int(mesh.indices.size() / 3), int(lod.size() / 3),
 	    error / scale * 100,
 	    (end - parttime) * 1000, (middle - start) * 1000, (parttime - middle) * 1000,
