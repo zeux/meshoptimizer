@@ -5,7 +5,7 @@
  * To use this code, you need to have one source file which includes meshoptimizer.h and defines CLUSTERLOD_IMPLEMENTATION
  * before including this file. Other source files in your project can just include this file and use the provided functions.
  *
- * Copyright (C) 2025, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
+ * Copyright (C) 2016-2025, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
  * This code is distributed under the MIT License. See notice at the end of this file.
  */
 #pragma once
@@ -50,9 +50,6 @@ struct clodConfig
 
 	// should clodCluster::indices be optimized for rasterization
 	bool optimize_raster;
-
-	// should we retry processing of clusters that get stuck? can be useful when not using simplification fallbacks
-	bool retry_queue;
 };
 
 struct clodMesh
@@ -111,6 +108,10 @@ struct clodCluster
 	// cluster indices; refer to the original mesh vertex buffer
 	const unsigned int* indices;
 	size_t index_count;
+
+	// cluster vertex count; indices[] has vertex_count unique entries
+	// can be used to extract local index buffer from indices[] using meshopt_buildMeshletsScan
+	size_t vertex_count;
 };
 
 struct clodGroup
@@ -163,8 +164,12 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 #include <algorithm>
 #include <vector>
 
+namespace clod
+{
+
 struct Cluster
 {
+	size_t vertices;
 	std::vector<unsigned int> indices;
 
 	int group;
@@ -233,6 +238,8 @@ static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh&
 
 		if (config.optimize_raster)
 			meshopt_optimizeMeshlet(&meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count, meshlet.vertex_count);
+
+		clusters[i].vertices = meshlet.vertex_count;
 
 		// note: for now we discard meshlet-local indices; they are valuable for shader code so in the future we should bring them back
 		clusters[i].indices.resize(meshlet.triangle_count * 3);
@@ -384,6 +391,8 @@ static std::vector<unsigned int> simplify(const clodConfig& config, const clodMe
 	return lod;
 }
 
+} // namespace clod
+
 clodConfig clodDefaultConfig(size_t max_triangles)
 {
 	assert(max_triangles >= 4 && max_triangles <= 256);
@@ -427,6 +436,8 @@ clodConfig clodDefaultConfigRT(size_t max_triangles)
 
 size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOutputCluster output_cluster, clodOutputGroup output_group)
 {
+	using namespace clod;
+
 	assert(mesh.vertex_attributes_stride % sizeof(float) == 0);
 	assert(mesh.attribute_count * sizeof(float) <= mesh.vertex_attributes_stride);
 	assert(mesh.attribute_protect_mask < (1u << (mesh.vertex_attributes_stride / sizeof(float))));
@@ -475,11 +486,6 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 
 		pending.clear();
 
-		std::vector<int> retry;
-
-		size_t triangles = 0;
-		size_t stuck_triangles = 0;
-
 		// every group needs to be simplified now
 		for (size_t i = 0; i < groups.size(); ++i)
 		{
@@ -494,9 +500,6 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 			std::vector<unsigned int> simplified = simplify(config, mesh, merged, locks, target_size, &error);
 			if (simplified.size() > merged.size() * config.simplify_threshold)
 			{
-				stuck_triangles += merged.size() / 3;
-				for (size_t j = 0; j < groups[i].size(); ++j)
-					retry.push_back(groups[i][j]);
 				continue; // simplification is stuck; abandon the merge
 			}
 
@@ -520,7 +523,7 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 				clodBounds bounds = (config.optimize_bounds && cluster.refined != -1) ? boundsCompute(mesh, cluster.indices, cluster.bounds.error) : cluster.bounds;
 
 				if (output_cluster)
-					output_cluster(output_context, {depth, group_id, cluster.refined, bounds, cluster.indices.data(), cluster.indices.size()});
+					output_cluster(output_context, {depth, group_id, cluster.refined, bounds, cluster.indices.data(), cluster.indices.size(), cluster.vertices});
 
 				cluster.indices = std::vector<unsigned int>(); // release memory, we don't need the cluster indices anymore
 			}
@@ -533,21 +536,12 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 				cluster.bounds = groupb;
 				cluster.refined = group_id;
 
-				triangles += cluster.indices.size() / 3;
 				clusters.push_back(std::move(cluster));
 				pending.push_back(int(clusters.size()) - 1);
 			}
 		}
 
 		depth++;
-
-		if (config.retry_queue)
-		{
-			if (triangles < stuck_triangles / 3)
-				break;
-
-			pending.insert(pending.end(), retry.begin(), retry.end());
-		}
 	}
 
 	size_t lowest_triangles = 0;
@@ -559,7 +553,7 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 			clodBounds bounds = (config.optimize_bounds && cluster.refined != -1) ? boundsCompute(mesh, cluster.indices, cluster.bounds.error) : cluster.bounds;
 
 			if (output_cluster)
-				output_cluster(output_context, {depth, -1, cluster.refined, bounds, cluster.indices.data(), cluster.indices.size()});
+				output_cluster(output_context, {depth, -1, cluster.refined, bounds, cluster.indices.data(), cluster.indices.size(), cluster.vertices});
 
 			lowest_triangles += cluster.indices.size() / 3;
 		}
@@ -569,7 +563,7 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 #endif
 
 /**
- * Copyright (c) 2025 Arseny Kapoulkine
+ * Copyright (c) 2016-2025 Arseny Kapoulkine
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
