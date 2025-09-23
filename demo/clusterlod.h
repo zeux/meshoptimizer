@@ -93,12 +93,6 @@ struct clodBounds
 
 struct clodCluster
 {
-	// DAG level the cluster was generated from
-	int depth;
-
-	// index of group that contains this cluster, or -1 for leaf clusters that weren't simplified further
-	int group;
-
 	// index of more refined group (with more triangles) that produced this cluster during simplification, or -1 for original geometry
 	int refined;
 
@@ -119,22 +113,16 @@ struct clodGroup
 	// DAG level the group was generated at
 	int depth;
 
-	// simplified group bounds (reflects error for clusters with clodCluster::refined == group id)
+	// simplified group bounds (reflects error for clusters with clodCluster::refined == group id; error is FLT_MAX for terminal groups)
 	// cluster should be rendered if:
-	// 1. cluster is in no groups (leaf) *or* clodGroup::simplified for the group it's in is over error threshold
+	// 1. clodGroup::simplified for the group it's in is over error threshold
 	// 2. cluster.refined is -1 *or* clodGroup::simplified for groups[cluster.refined].simplified is at or under error threshold
 	clodBounds simplified;
-
-	// clusters that belong to the group
-	const int* clusters;
-	size_t cluster_count;
 };
 
-// gets called for each cluster generated in sequence (starting from id 0)
-typedef void (*clodOutputCluster)(void* context, clodCluster cluster);
-
-// gets called for each group generated in sequence (starting from id 0)
-typedef void (*clodOutputGroup)(void* context, clodGroup group);
+// gets called for each group in sequence
+// returned value gets saved for clusters emitted from this group (clodCluster::refined)
+typedef int (*clodOutput)(void* context, clodGroup group, const clodCluster* clusters, size_t cluster_count);
 
 #ifdef __cplusplus
 extern "C"
@@ -147,9 +135,20 @@ clodConfig clodDefaultConfigRT(size_t max_triangles);
 
 // build cluster LOD hierarchy, calling output callbacks as new clusters and groups are generated
 // returns the number of triangles in the lowest LOD level
-size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOutputCluster output_cluster, clodOutputGroup output_group);
+size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOutput output_callback);
 
 #ifdef __cplusplus
+} // extern "C"
+
+template <typename Output>
+size_t clodBuild(clodConfig config, clodMesh mesh, Output output)
+{
+	struct Call
+	{
+		static int output(void* context, clodGroup group, const clodCluster* clusters, size_t cluster_count) { return (*static_cast<Output*>(context))(group, clusters, cluster_count); }
+	};
+
+	return clodBuild(config, mesh, &output, &Call::output);
 }
 #endif
 
@@ -158,7 +157,6 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 // Brian Karis. Nanite: A Deep Dive. 2021
 #include <float.h>
 #include <math.h>
-#include <stdio.h>
 #include <string.h>
 
 #include <algorithm>
@@ -391,6 +389,25 @@ static std::vector<unsigned int> simplify(const clodConfig& config, const clodMe
 	return lod;
 }
 
+static int outputGroup(const clodConfig& config, const clodMesh& mesh, const std::vector<Cluster>& clusters, const std::vector<int>& group, const clodBounds& simplified, int depth, void* output_context, clodOutput output_callback)
+{
+	std::vector<clodCluster> group_clusters(group.size());
+
+	for (size_t i = 0; i < group.size(); ++i)
+	{
+		const Cluster& cluster = clusters[group[i]];
+		clodCluster& result = group_clusters[i];
+
+		result.refined = cluster.refined;
+		result.bounds = (config.optimize_bounds && cluster.refined != -1) ? boundsCompute(mesh, cluster.indices, cluster.bounds.error) : cluster.bounds;
+		result.indices = cluster.indices.data();
+		result.index_count = cluster.indices.size();
+		result.vertex_count = cluster.vertices;
+	}
+
+	return output_callback ? output_callback(output_context, {depth, simplified}, group_clusters.data(), group_clusters.size()) : -1;
+}
+
 } // namespace clod
 
 clodConfig clodDefaultConfig(size_t max_triangles)
@@ -434,7 +451,7 @@ clodConfig clodDefaultConfigRT(size_t max_triangles)
 	return config;
 }
 
-size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOutputCluster output_cluster, clodOutputGroup output_group)
+size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOutput output_callback)
 {
 	using namespace clod;
 
@@ -475,7 +492,7 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 		pending[i] = int(i);
 
 	int depth = 0;
-	int next_group = 0;
+	size_t lowest_triangles = 0;
 
 	// merge and simplify clusters until we can't merge anymore
 	while (pending.size() > 1)
@@ -494,48 +511,43 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 			for (size_t j = 0; j < groups[i].size(); ++j)
 				merged.insert(merged.end(), clusters[groups[i][j]].indices.begin(), clusters[groups[i][j]].indices.end());
 
+			// enforce bounds and error monotonicity
+			// note: it is incorrect to use the precise bounds of the merged or simplified mesh, because this may violate monotonicity
+			clodBounds bounds = boundsMerge(clusters, groups[i]);
+
 			size_t target_size = size_t((merged.size() / 3) * config.simplify_ratio) * 3;
 
 			float error = 0.f;
 			std::vector<unsigned int> simplified = simplify(config, mesh, merged, locks, target_size, &error);
 			if (simplified.size() > merged.size() * config.simplify_threshold)
 			{
+				bounds.error = FLT_MAX; // terminal group, won't simplify further
+				outputGroup(config, mesh, clusters, groups[i], bounds, depth, output_context, output_callback);
+
+				lowest_triangles += merged.size() / 3;
 				continue; // simplification is stuck; abandon the merge
 			}
 
-			// enforce bounds and error monotonicity
-			// note: it is incorrect to use the precise bounds of the merged or simplified mesh, because this may violate monotonicity
-			clodBounds groupb = boundsMerge(clusters, groups[i]);
-			groupb.error = std::max(groupb.error * config.simplify_error_factor, error);
+			// enforce error monotonicity (with an optional hierarchical factor to separate transitions more)
+			bounds.error = std::max(bounds.error * config.simplify_error_factor, error);
 
-			int group_id = next_group++;
+			// output the new group with all clusters; the resulting id will be recorded in new clusters as clodCluster::refined
+			int refined = outputGroup(config, mesh, clusters, groups[i], bounds, depth, output_context, output_callback);
 
-			if (output_group)
-				output_group(output_context, {depth, groupb, &groups[i][0], groups[i].size()});
-
-			// mark clusters as belonging to the current group; we won't really use them again
+			// discard clusters from the group - they won't be used anymore
 			for (size_t j = 0; j < groups[i].size(); ++j)
-			{
-				Cluster& cluster = clusters[groups[i][j]];
-				assert(cluster.group == -1);
-				cluster.group = group_id;
-
-				clodBounds bounds = (config.optimize_bounds && cluster.refined != -1) ? boundsCompute(mesh, cluster.indices, cluster.bounds.error) : cluster.bounds;
-
-				if (output_cluster)
-					output_cluster(output_context, {depth, group_id, cluster.refined, bounds, cluster.indices.data(), cluster.indices.size(), cluster.vertices});
-
-				cluster.indices = std::vector<unsigned int>(); // release memory, we don't need the cluster indices anymore
-			}
+				clusters[groups[i][j]].indices = std::vector<unsigned int>(); // release memory, we don't need the cluster indices anymore
 
 			std::vector<Cluster> split = clusterize(config, mesh, simplified.data(), simplified.size());
 
 			for (Cluster& cluster : split)
 			{
-				// update cluster group bounds to the group-merged bounds; this ensures that we compute the group bounds for whatever group this cluster will be part of conservatively
-				cluster.bounds = groupb;
-				cluster.refined = group_id;
+				cluster.refined = refined;
 
+				// update cluster group bounds to the group-merged bounds; this ensures that we compute the group bounds for whatever group this cluster will be part of conservatively
+				cluster.bounds = bounds;
+
+				// enqueue new cluster for further processing
 				clusters.push_back(std::move(cluster));
 				pending.push_back(int(clusters.size()) - 1);
 			}
@@ -544,19 +556,18 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 		depth++;
 	}
 
-	size_t lowest_triangles = 0;
+	if (pending.size())
+	{
+		assert(pending.size() == 1);
+		const Cluster& cluster = clusters[pending[0]];
 
-	for (size_t i = 0; i < clusters.size(); ++i)
-		if (clusters[i].group == -1)
-		{
-			Cluster& cluster = clusters[i];
-			clodBounds bounds = (config.optimize_bounds && cluster.refined != -1) ? boundsCompute(mesh, cluster.indices, cluster.bounds.error) : cluster.bounds;
+		clodBounds bounds = cluster.bounds;
+		bounds.error = FLT_MAX; // terminal group, won't simplify further
 
-			if (output_cluster)
-				output_cluster(output_context, {depth, -1, cluster.refined, bounds, cluster.indices.data(), cluster.indices.size(), cluster.vertices});
+		outputGroup(config, mesh, clusters, pending, bounds, depth, output_context, output_callback);
 
-			lowest_triangles += cluster.indices.size() / 3;
-		}
+		lowest_triangles += cluster.indices.size() / 3;
+	}
 
 	return lowest_triangles;
 }
