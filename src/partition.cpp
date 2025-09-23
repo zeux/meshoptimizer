@@ -371,7 +371,7 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 	assert(vertex_positions_stride % sizeof(float) == 0);
 	assert(target_partition_size > 0);
 
-	size_t max_partition_size = target_partition_size + target_partition_size * 3 / 8;
+	size_t max_partition_size = target_partition_size + target_partition_size / 3;
 
 	meshopt_Allocator allocator;
 
