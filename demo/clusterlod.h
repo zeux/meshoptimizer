@@ -20,7 +20,7 @@ struct clodConfig
 	size_t max_triangles;
 
 	// partition size; maps to meshopt_partitionClusters parameter
-	// note: this is the target size; actual partitions may be up to 1.5x larger
+	// note: this is the target size; actual partitions may be up to 1/3 larger (e.g. target 24 results in maximum 32)
 	size_t partition_size;
 
 	// clusterization setup; maps to meshopt_buildMeshletsSpatial / meshopt_buildMeshletsFlex
@@ -99,7 +99,10 @@ struct clodCluster
 	// DAG level the cluster was generated from
 	int depth;
 
-	// index of more refined group (with more triangles) that produced this cluster during simplification
+	// index of group that contains this cluster, or -1 for leaf clusters that weren't simplified further
+	int group;
+
+	// index of more refined group (with more triangles) that produced this cluster during simplification, or -1 for original geometry
 	int refined;
 
 	// cluster bounds; should only be used for culling, as bounds.error is not monotonic across DAG
@@ -112,6 +115,9 @@ struct clodCluster
 
 struct clodGroup
 {
+	// DAG level the group was generated at
+	int depth;
+
 	// simplified group bounds (reflects error for clusters with clodCluster::refined == group id)
 	// cluster should be rendered if:
 	// 1. cluster is in no groups (leaf) *or* clodGroup::simplified for the group it's in is over error threshold
@@ -162,6 +168,8 @@ struct Cluster
 	std::vector<unsigned int> indices;
 
 	int group;
+	int refined;
+
 	clodBounds bounds;
 };
 
@@ -200,7 +208,7 @@ static clodBounds boundsMerge(const std::vector<Cluster>& clusters, const std::v
 	return result;
 }
 
-static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh& mesh, const unsigned int* indices, size_t index_count, const clodBounds* inherit_bounds = NULL)
+static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh& mesh, const unsigned int* indices, size_t index_count)
 {
 	size_t max_meshlets = meshopt_buildMeshletsBound(index_count, config.max_vertices, config.min_triangles);
 
@@ -232,11 +240,7 @@ static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh&
 			clusters[i].indices[j] = meshlet_vertices[meshlet.vertex_offset + meshlet_triangles[meshlet.triangle_offset + j]];
 
 		clusters[i].group = -1;
-
-		if (inherit_bounds)
-			clusters[i].bounds = *inherit_bounds;
-		else
-			clusters[i].bounds = boundsCompute(mesh, clusters[i].indices, 0.f);
+		clusters[i].refined = -1;
 	}
 
 	return clusters;
@@ -451,9 +455,9 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 	// initial clusterization splits the original mesh
 	std::vector<Cluster> clusters = clusterize(config, mesh, mesh.indices, mesh.index_count);
 
-	if (output_cluster)
-		for (size_t i = 0; i < clusters.size(); ++i)
-			output_cluster(output_context, {0, -1, clusters[i].bounds, clusters[i].indices.data(), clusters[i].indices.size()});
+	// compute initial precise bounds; subsequent bounds will be using group-merged bounds
+	for (Cluster& cluster : clusters)
+		cluster.bounds = boundsCompute(mesh, cluster.indices, 0.f);
 
 	std::vector<int> pending(clusters.size());
 	for (size_t i = 0; i < clusters.size(); ++i)
@@ -504,7 +508,7 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 			int group_id = next_group++;
 
 			if (output_group)
-				output_group(output_context, {groupb, &groups[i][0], groups[i].size()});
+				output_group(output_context, {depth, groupb, &groups[i][0], groups[i].size()});
 
 			// mark clusters as belonging to the current group; we won't really use them again
 			for (size_t j = 0; j < groups[i].size(); ++j)
@@ -512,23 +516,25 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 				Cluster& cluster = clusters[groups[i][j]];
 				assert(cluster.group == -1);
 				cluster.group = group_id;
+
+				clodBounds bounds = (config.optimize_bounds && cluster.refined != -1) ? boundsCompute(mesh, cluster.indices, cluster.bounds.error) : cluster.bounds;
+
+				if (output_cluster)
+					output_cluster(output_context, {depth, group_id, cluster.refined, bounds, cluster.indices.data(), cluster.indices.size()});
+
 				cluster.indices = std::vector<unsigned int>(); // release memory, we don't need the cluster indices anymore
 			}
 
-			std::vector<Cluster> split = clusterize(config, mesh, simplified.data(), simplified.size(), &groupb);
+			std::vector<Cluster> split = clusterize(config, mesh, simplified.data(), simplified.size());
 
-			for (size_t j = 0; j < split.size(); ++j)
+			for (Cluster& cluster : split)
 			{
-				clodBounds bounds = config.optimize_bounds ? boundsCompute(mesh, split[j].indices, groupb.error) : groupb;
+				// update cluster group bounds to the group-merged bounds; this ensures that we compute the group bounds for whatever group this cluster will be part of conservatively
+				cluster.bounds = groupb;
+				cluster.refined = group_id;
 
-				if (output_cluster)
-					output_cluster(output_context, {depth + 1, group_id, bounds, &split[j].indices[0], split[j].indices.size()});
-
-				// update cluster bounds to the group-merged bounds; this ensures that we compute the group bounds for whatever group this cluster will be part of conservatively
-				split[j].bounds = groupb;
-
-				triangles += split[j].indices.size() / 3;
-				clusters.push_back(std::move(split[j]));
+				triangles += cluster.indices.size() / 3;
+				clusters.push_back(std::move(cluster));
 				pending.push_back(int(clusters.size()) - 1);
 			}
 		}
@@ -545,9 +551,18 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 	}
 
 	size_t lowest_triangles = 0;
+
 	for (size_t i = 0; i < clusters.size(); ++i)
 		if (clusters[i].group == -1)
-			lowest_triangles += clusters[i].indices.size() / 3;
+		{
+			Cluster& cluster = clusters[i];
+			clodBounds bounds = (config.optimize_bounds && cluster.refined != -1) ? boundsCompute(mesh, cluster.indices, cluster.bounds.error) : cluster.bounds;
+
+			if (output_cluster)
+				output_cluster(output_context, {depth, -1, cluster.refined, bounds, cluster.indices.data(), cluster.indices.size()});
+
+			lowest_triangles += cluster.indices.size() / 3;
+		}
 
 	return lowest_triangles;
 }
