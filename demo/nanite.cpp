@@ -107,7 +107,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	float znear = 1e-2f;
 	float proj = 1.f / tanf(fovy * 3.1415926f / 180.f * 0.5f);
 
-	size_t lowest = clodBuild(config, mesh, [&](clodGroup group, const clodCluster* clusters, size_t cluster_count) -> int { // clang-format!
+	clodBuild(config, mesh, [&](clodGroup group, const clodCluster* clusters, size_t cluster_count) -> int { // clang-format!
 		if (stats.size() <= size_t(group.depth))
 			stats.push_back({});
 
@@ -153,9 +153,15 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 
 	std::vector<int> used(vertices.size());
 
+	size_t lowest_clusters = 0;
+	size_t lowest_triangles = 0;
+
 	for (size_t i = 0; i < stats.size(); ++i)
 	{
 		Stats& level = stats[i];
+
+		lowest_clusters += level.stuck_clusters;
+		lowest_triangles += level.stuck_triangles;
 
 		size_t connected = 0;
 		for (const auto& cluster : level.indices)
@@ -173,12 +179,12 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		    double(level.clusters) / double(level.groups),
 		    saho, level.radius * inv_clusters,
 		    int(level.triangles));
-		if (level.stuck_clusters)
+		if (level.stuck_clusters && level.clusters > 1)
 			printf("; stuck %d clusters (%d triangles)", int(level.stuck_clusters), int(level.stuck_triangles));
 		printf("\n");
 	}
 
-	printf("lod %d: (lowest) %d clusters, %d triangles\n", int(stats.size() - 1), int(stats.back().clusters), int(lowest));
+	printf("lowest lod: %d clusters, %d triangles\n", int(lowest_clusters), int(lowest_triangles));
 
 	if (cut_level >= -1)
 	{
