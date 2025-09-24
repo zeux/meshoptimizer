@@ -32,8 +32,10 @@ struct clodConfig
 	float simplify_ratio;
 	float simplify_threshold;
 
-	// amplify the error of simplified clusters to account for appearance degradation
-	float simplify_error_factor;
+	// to compute the error of simplified clusters, we use the formula that combines previous accumulated error as follows:
+	// max(previous_error * simplify_error_merge_previous, current_error) + current_error * simplify_error_merge_additive
+	float simplify_error_merge_previous;
+	float simplify_error_merge_additive;
 
 	// amplify the error of clusters that go through sloppy simplification to account for appearance degradation
 	float simplify_error_factor_sloppy;
@@ -68,6 +70,9 @@ struct clodMesh
 	// input vertex attributes; used for attribute-aware simplification and permissive simplification
 	const float* vertex_attributes;
 	size_t vertex_attributes_stride;
+
+	// input vertex locks; allows to preserve additional seams (when not using attribute_protect_mask) or lock vertices via meshopt_SimplifyVertex_* flags
+	const unsigned char* vertex_lock;
 
 	// attribute weights for attribute-aware simplification; maps to meshopt_simplifyWithAttributes parameters
 	const float* attribute_weights;
@@ -134,7 +139,7 @@ clodConfig clodDefaultConfig(size_t max_triangles);
 clodConfig clodDefaultConfigRT(size_t max_triangles);
 
 // build cluster LOD hierarchy, calling output callbacks as new clusters and groups are generated
-// returns the number of triangles in the lowest LOD level
+// returns the total number of clusters produced
 size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOutput output_callback);
 
 #ifdef __cplusplus
@@ -293,7 +298,7 @@ static std::vector<std::vector<int> > partition(size_t partition_size, const clo
 	return partitions;
 }
 
-static void lockBoundary(std::vector<unsigned char>& locks, const std::vector<std::vector<int> >& groups, const std::vector<Cluster>& clusters, const std::vector<unsigned int>& remap)
+static void lockBoundary(std::vector<unsigned char>& locks, const std::vector<std::vector<int> >& groups, const std::vector<Cluster>& clusters, const std::vector<unsigned int>& remap, const unsigned char* vertex_lock)
 {
 	// for each remapped vertex, keep track of index of the group it's in (or -2 if it's in multiple groups)
 	std::vector<int> groupmap(locks.size(), -1);
@@ -321,6 +326,9 @@ static void lockBoundary(std::vector<unsigned char>& locks, const std::vector<st
 
 		// keep protect bit if set
 		locks[i] = (groupmap[r] == -2) | (locks[i] & meshopt_SimplifyVertex_Protect);
+
+		if (vertex_lock)
+			locks[i] |= vertex_lock[i];
 	}
 }
 
@@ -437,7 +445,7 @@ clodConfig clodDefaultConfig(size_t max_triangles)
 
 	config.simplify_ratio = 0.5f;
 	config.simplify_threshold = 0.85f;
-	config.simplify_error_factor = 1.0f;
+	config.simplify_error_merge_previous = 1.0f;
 	config.simplify_error_factor_sloppy = 2.0f;
 	config.simplify_permissive = true;
 	config.simplify_fallback_permissive = false; // note: by default we run in permissive mode, but it's also possible to disable that and use it only as a fallback
@@ -501,16 +509,16 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 		pending[i] = int(i);
 
 	int depth = 0;
-	size_t lowest_triangles = 0;
 
 	// merge and simplify clusters until we can't merge anymore
 	while (pending.size() > 1)
 	{
 		std::vector<std::vector<int> > groups = partition(config.partition_size, mesh, clusters, pending, remap);
 
-		lockBoundary(locks, groups, clusters, remap);
-
 		pending.clear();
+
+		// mark boundaries between groups with a lock bit to avoid gaps in simplified result
+		lockBoundary(locks, groups, clusters, remap, mesh.vertex_lock);
 
 		// every group needs to be simplified now
 		for (size_t i = 0; i < groups.size(); ++i)
@@ -532,13 +540,11 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 			{
 				bounds.error = FLT_MAX; // terminal group, won't simplify further
 				outputGroup(config, mesh, clusters, groups[i], bounds, depth, output_context, output_callback);
-
-				lowest_triangles += merged.size() / 3;
 				continue; // simplification is stuck; abandon the merge
 			}
 
 			// enforce error monotonicity (with an optional hierarchical factor to separate transitions more)
-			bounds.error = std::max(bounds.error * config.simplify_error_factor, error);
+			bounds.error = std::max(bounds.error * config.simplify_error_merge_previous, error) + error * config.simplify_error_merge_additive;
 
 			// output the new group with all clusters; the resulting id will be recorded in new clusters as clodCluster::refined
 			int refined = outputGroup(config, mesh, clusters, groups[i], bounds, depth, output_context, output_callback);
@@ -574,11 +580,9 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 		bounds.error = FLT_MAX; // terminal group, won't simplify further
 
 		outputGroup(config, mesh, clusters, pending, bounds, depth, output_context, output_callback);
-
-		lowest_triangles += cluster.indices.size() / 3;
 	}
 
-	return lowest_triangles;
+	return clusters.size();
 }
 #endif
 
