@@ -2267,7 +2267,7 @@ static float interpolate(float y, float x0, float y0, float x1, float y1, float 
 	// three point interpolation from "revenge of interpolation search" paper
 	float num = (y1 - y) * (x1 - x2) * (x1 - x0) * (y2 - y0);
 	float den = (y2 - y) * (x1 - x2) * (y0 - y1) + (y0 - y) * (x1 - x0) * (y1 - y2);
-	return x1 + num / den;
+	return x1 + (den == 0.f ? 0.f : num / den);
 }
 
 } // namespace meshopt
