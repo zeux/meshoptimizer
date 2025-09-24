@@ -217,14 +217,19 @@ static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh&
 
 	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
 	std::vector<unsigned int> meshlet_vertices(index_count);
+
+#if MESHOPTIMIZER_VERSION < 1000
+	std::vector<unsigned char> meshlet_triangles(index_count + max_meshlets * 3); // account for 4b alignment
+#else
 	std::vector<unsigned char> meshlet_triangles(index_count);
+#endif
 
 	if (config.cluster_spatial)
-		meshlets.resize(meshopt_buildMeshletsSpatial(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], indices, index_count,
+		meshlets.resize(meshopt_buildMeshletsSpatial(meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), indices, index_count,
 		    mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride,
 		    config.max_vertices, config.min_triangles, config.max_triangles, config.cluster_fill_weight));
 	else
-		meshlets.resize(meshopt_buildMeshletsFlex(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], indices, index_count,
+		meshlets.resize(meshopt_buildMeshletsFlex(meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), indices, index_count,
 		    mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride,
 		    config.max_vertices, config.min_triangles, config.max_triangles, 0.f, config.cluster_split_factor));
 
@@ -419,6 +424,10 @@ clodConfig clodDefaultConfig(size_t max_triangles)
 	config.min_triangles = max_triangles / 3;
 	config.max_triangles = max_triangles;
 
+#if MESHOPTIMIZER_VERSION < 1000
+	config.min_triangles &= ~3; // account for 4b alignment
+#endif
+
 	config.partition_size = 16;
 
 	config.cluster_spatial = false;
@@ -511,11 +520,11 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 			for (size_t j = 0; j < groups[i].size(); ++j)
 				merged.insert(merged.end(), clusters[groups[i][j]].indices.begin(), clusters[groups[i][j]].indices.end());
 
+			size_t target_size = size_t((merged.size() / 3) * config.simplify_ratio) * 3;
+
 			// enforce bounds and error monotonicity
 			// note: it is incorrect to use the precise bounds of the merged or simplified mesh, because this may violate monotonicity
 			clodBounds bounds = boundsMerge(clusters, groups[i]);
-
-			size_t target_size = size_t((merged.size() / 3) * config.simplify_ratio) * 3;
 
 			float error = 0.f;
 			std::vector<unsigned int> simplified = simplify(config, mesh, merged, locks, target_size, &error);
@@ -536,7 +545,7 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 
 			// discard clusters from the group - they won't be used anymore
 			for (size_t j = 0; j < groups[i].size(); ++j)
-				clusters[groups[i][j]].indices = std::vector<unsigned int>(); // release memory, we don't need the cluster indices anymore
+				clusters[groups[i][j]].indices = std::vector<unsigned int>();
 
 			std::vector<Cluster> split = clusterize(config, mesh, simplified.data(), simplified.size());
 
