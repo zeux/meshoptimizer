@@ -127,7 +127,7 @@ struct clodGroup
 
 // gets called for each group in sequence
 // returned value gets saved for clusters emitted from this group (clodCluster::refined)
-typedef int (*clodOutput)(void* context, clodGroup group, const clodCluster* clusters, size_t cluster_count);
+typedef int (*clodOutput)(void* output_context, clodGroup group, const clodCluster* clusters, size_t cluster_count);
 
 #ifdef __cplusplus
 extern "C"
@@ -150,7 +150,10 @@ size_t clodBuild(clodConfig config, clodMesh mesh, Output output)
 {
 	struct Call
 	{
-		static int output(void* context, clodGroup group, const clodCluster* clusters, size_t cluster_count) { return (*static_cast<Output*>(context))(group, clusters, cluster_count); }
+		static int output(void* output_context, clodGroup group, const clodCluster* clusters, size_t cluster_count)
+		{
+			return (*static_cast<Output*>(output_context))(group, clusters, cluster_count);
+		}
 	};
 
 	return clodBuild(config, mesh, &output, &Call::output);
@@ -249,7 +252,7 @@ static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh&
 
 		clusters[i].vertices = meshlet.vertex_count;
 
-		// note: for now we discard meshlet-local indices; they are valuable for shader code so in the future we should bring them back
+		// note: we discard meshlet-local indices; they can be recovered by the caller using meshopt_buildMeshletsScan
 		clusters[i].indices.resize(meshlet.triangle_count * 3);
 		for (size_t j = 0; j < meshlet.triangle_count * 3; ++j)
 			clusters[i].indices[j] = meshlet_vertices[meshlet.vertex_offset + meshlet_triangles[meshlet.triangle_offset + j]];
