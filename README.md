@@ -241,6 +241,8 @@ void main() {
 }
 ```
 
+> Note that DirectX 12 mesh shaders cannot index raw buffers using arbitrary byte offsets. Use a typed SRV buffer (`Buffer<uint>`) with `DXGI_FORMAT_R8_UINT` format, repack each triangle to 32 bits to be able to use aligned 32-bit loads with `ByteAddressBuffer`, or consider utilizing [16-bit scalar types](https://github.com/microsoft/DirectXShaderCompiler/wiki/16-Bit-Scalar-Types) to load a 3-byte triangle using two aligned 16-bit loads like so: `Buffer.Load<uint16_t2>(triangle_offset & ~1)`, then extracting indices with bitwise operations based on `triangle_offset & 1`.
+
 After generating the meshlet data, it's possible to generate extra data for each meshlet that can be saved and used at runtime to perform cluster culling, where each meshlet can be discarded if it's guaranteed to be invisible. To generate the data, `meshopt_computeMeshletBounds` can be used:
 
 ```c++
@@ -713,7 +715,6 @@ Currently, the following APIs are experimental:
 
 - `meshopt_decodeFilterColor`
 - `meshopt_encodeFilterColor`
-- `meshopt_generatePositionRemap`
 - `meshopt_simplifyWithUpdate`
 - `meshopt_SimplifyRegularize` flag for `meshopt_simplify*` functions
 - `meshopt_SimplifyPermissive` mode for `meshopt_simplify*` functions (and associated `meshopt_SimplifyVertex_*` flags)
