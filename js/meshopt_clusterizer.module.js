@@ -313,7 +313,7 @@ var MeshoptClusterizer = (function () {
 				vertex_positions.length / vertex_positions_stride,
 				vertex_positions_stride * 4,
 				max_vertices,
-				max_triangles,
+				min_triangles,
 				max_triangles,
 				cone_weight,
 				split_factor
@@ -339,7 +339,7 @@ var MeshoptClusterizer = (function () {
 				vertex_positions.length / vertex_positions_stride,
 				vertex_positions_stride * 4,
 				max_vertices,
-				max_triangles,
+				min_triangles,
 				max_triangles,
 				fill_weight
 			);
