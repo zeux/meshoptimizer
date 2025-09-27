@@ -527,7 +527,7 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 		for (size_t i = 0; i < groups.size(); ++i)
 		{
 			std::vector<unsigned int> merged;
-			merged.reserve(config.max_triangles * groups[i].size());
+			merged.reserve(groups[i].size() * config.max_triangles * 3);
 			for (size_t j = 0; j < groups[i].size(); ++j)
 				merged.insert(merged.end(), clusters[groups[i][j]].indices.begin(), clusters[groups[i][j]].indices.end());
 
