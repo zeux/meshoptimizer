@@ -109,7 +109,7 @@ void* operator new(size_t size)
 
 void operator delete(void* ptr) throw()
 {
-	void* brk = sbrk(0);
+	void* brk = reinterpret_cast<void*>(sbrkp);
 	assert(ptr <= brk);
 
 	sbrk((char*)ptr - (char*)brk);
