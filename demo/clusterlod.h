@@ -303,10 +303,13 @@ static std::vector<std::vector<int> > partition(size_t partition_size, const clo
 
 static void lockBoundary(std::vector<unsigned char>& locks, const std::vector<std::vector<int> >& groups, const std::vector<Cluster>& clusters, const std::vector<unsigned int>& remap, const unsigned char* vertex_lock)
 {
-	// for each remapped vertex, keep track of index of the group it's in (or -2 if it's in multiple groups)
-	std::vector<int> groupmap(locks.size(), -1);
+	// for each remapped vertex, use bit 7 as temporary storage to indicate that the vertex has been used by a different group previously
+	for (size_t i = 0; i < locks.size(); ++i)
+		locks[i] &= ~((1 << 0) | (1 << 7));
 
 	for (size_t i = 0; i < groups.size(); ++i)
+	{
+		// mark all remapped vertices as locked if seen by a prior group
 		for (size_t j = 0; j < groups[i].size(); ++j)
 		{
 			const Cluster& cluster = clusters[groups[i][j]];
@@ -316,19 +319,31 @@ static void lockBoundary(std::vector<unsigned char>& locks, const std::vector<st
 				unsigned int v = cluster.indices[k];
 				unsigned int r = remap[v];
 
-				if (groupmap[r] == -1 || groupmap[r] == int(i))
-					groupmap[r] = int(i);
-				else
-					groupmap[r] = -2;
+				locks[r] |= locks[r] >> 7;
 			}
 		}
+
+		// mark all remapped vertices as seen
+		for (size_t j = 0; j < groups[i].size(); ++j)
+		{
+			const Cluster& cluster = clusters[groups[i][j]];
+
+			for (size_t k = 0; k < cluster.indices.size(); ++k)
+			{
+				unsigned int v = cluster.indices[k];
+				unsigned int r = remap[v];
+
+				locks[r] |= 1 << 7;
+			}
+		}
+	}
 
 	for (size_t i = 0; i < locks.size(); ++i)
 	{
 		unsigned int r = remap[i];
 
-		// keep protect bit if set
-		locks[i] = (groupmap[r] == -2) | (locks[i] & meshopt_SimplifyVertex_Protect);
+		// consistently lock all vertices with the same position; keep protect bit if set
+		locks[i] = (locks[r] & 1) | (locks[i] & meshopt_SimplifyVertex_Protect);
 
 		if (vertex_lock)
 			locks[i] |= vertex_lock[i];
