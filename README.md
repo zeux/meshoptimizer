@@ -183,13 +183,13 @@ To generate meshlet data, this library provides `meshopt_buildMeshlets` algorith
 
 ```c++
 const size_t max_vertices = 64;
-const size_t max_triangles = 126;
+const size_t max_triangles = 126; // note: in v0.25 or prior, max_triangles needs to be divisible by 4
 const float cone_weight = 0.0f;
 
 size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), max_vertices, max_triangles);
 std::vector<meshopt_Meshlet> meshlets(max_meshlets);
 std::vector<unsigned int> meshlet_vertices(indices.size());
-std::vector<unsigned char> meshlet_triangles(indices.size());
+std::vector<unsigned char> meshlet_triangles(indices.size()); // note: in v0.25 or prior, use indices.size() + max_meshlets * 3
 
 size_t meshlet_count = meshopt_buildMeshlets(meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), indices.data(),
     indices.size(), &vertices[0].x, vertices.size(), sizeof(Vertex), max_vertices, max_triangles, cone_weight);
@@ -277,7 +277,7 @@ const float fill_weight = 0.5f;
 size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), max_vertices, min_triangles); // note: use min_triangles to compute worst case bound
 std::vector<meshopt_Meshlet> meshlets(max_meshlets);
 std::vector<unsigned int> meshlet_vertices(indices.size());
-std::vector<unsigned char> meshlet_triangles(indices.size());
+std::vector<unsigned char> meshlet_triangles(indices.size()); // note: in v0.25 or prior, use indices.size() + max_meshlets * 3
 
 size_t meshlet_count = meshopt_buildMeshletsSpatial(meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), indices.data(),
     indices.size(), &vertices[0].x, vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, fill_weight);
