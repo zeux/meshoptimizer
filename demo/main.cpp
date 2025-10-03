@@ -633,12 +633,12 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 
 	double end = timestamp();
 
-	printf("%-9s: %d triangles => %d triangles (%.2f%% deviation) in %.2f msec, clusterized in %.2f msec, partitioned in %.2f msec (%d clusters in %d groups)\n",
+	printf("%-9s: %d triangles => %d triangles (%.2f%% deviation) in %.2f msec, clusterized in %.2f msec, partitioned in %.2f msec (%d clusters in %d groups, %.1f avg)\n",
 	    "SimplifyG",
 	    int(mesh.indices.size() / 3), int(lod.size() / 3),
 	    error / scale * 100,
 	    (end - parttime) * 1000, (middle - start) * 1000, (parttime - middle) * 1000,
-	    int(meshlets.size()), int(partition_count));
+	    int(meshlets.size()), int(partition_count), double(meshlets.size()) / double(partition_count));
 }
 
 void optimize(const Mesh& mesh, bool fifo = false)
