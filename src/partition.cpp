@@ -2,7 +2,6 @@
 #include "meshoptimizer.h"
 
 #include <assert.h>
-#include <float.h>
 #include <math.h>
 #include <string.h>
 
@@ -444,32 +443,28 @@ static void mergeSpatial(ClusterGroup* groups, unsigned int* order, size_t count
 	if (total <= max_partition_size || count <= leaf_size)
 		return mergeLeaf(groups, order, count, target_partition_size, max_partition_size);
 
-	float minc[3] = {FLT_MAX, FLT_MAX, FLT_MAX};
-	float maxc[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+	float mean[3] = {};
+	float vars[3] = {};
+	float runc = 1, runs = 1;
 
-	for (size_t i = 0; i < count; ++i)
+	// gather statistics on the points in the subtree using Welford's algorithm
+	for (size_t i = 0; i < count; ++i, runc += 1.f, runs = 1.f / runc)
 	{
-		const float* c = groups[order[i]].center;
+		const float* point = groups[order[i]].center;
 
 		for (int k = 0; k < 3; ++k)
 		{
-			minc[k] = c[k] < minc[k] ? c[k] : minc[k];
-			maxc[k] = c[k] > maxc[k] ? c[k] : maxc[k];
+			float delta = point[k] - mean[k];
+			mean[k] += delta * runs;
+			vars[k] += delta * (point[k] - mean[k]);
 		}
 	}
 
-	int axis = 0;
-	for (int k = 1; k < 3; ++k)
-		if (maxc[k] - minc[k] > maxc[axis] - minc[axis])
-			axis = k;
+	// split axis is one where the variance is largest
+	int axis = (vars[0] >= vars[1] && vars[0] >= vars[2]) ? 0 : (vars[1] >= vars[2] ? 1 : 2);
 
-	float mean = 0.f;
-	for (size_t i = 0; i < count; ++i)
-		mean += groups[order[i]].center[axis];
-
-	mean /= float(count);
-
-	size_t middle = mergePartition(order, count, groups, axis, mean);
+	float split = mean[axis];
+	size_t middle = mergePartition(order, count, groups, axis, split);
 
 	// enforce balance for degenerate partitions
 	if (middle <= leaf_size / 2 || count - middle <= leaf_size / 2)
