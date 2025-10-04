@@ -761,13 +761,14 @@ MESHOPTIMIZER_API struct meshopt_Bounds meshopt_computeSphereBounds(const float*
 /**
  * Cluster partitioner
  * Partitions clusters into groups of similar size, prioritizing grouping clusters that share vertices or are close to each other.
+ * When vertex positions are not provided, only clusters that share vertices will be grouped together, which may result in small partitions for some inputs.
  *
  * destination must contain enough space for the resulting partition data (cluster_count elements)
  * destination[i] will contain the partition id for cluster i, with the total number of partitions returned by the function
  * cluster_indices should have the vertex indices referenced by each cluster, stored sequentially
  * cluster_index_counts should have the number of indices in each cluster; sum of all cluster_index_counts must be equal to total_index_count
- * vertex_positions should have float3 position in the first 12 bytes of each vertex (or can be NULL if not used)
- * target_partition_size is a target size for each partition, in clusters; the resulting partitions may be smaller or larger
+ * vertex_positions can be NULL; when it's not NULL, it should have float3 position in the first 12 bytes of each vertex
+ * target_partition_size is a target size for each partition, in clusters; the resulting partitions may be smaller or larger (up to target + target/3)
  */
 MESHOPTIMIZER_API size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* cluster_indices, size_t total_index_count, const unsigned int* cluster_index_counts, size_t cluster_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_partition_size);
 
