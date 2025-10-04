@@ -19,8 +19,9 @@ struct clodConfig
 	size_t min_triangles;
 	size_t max_triangles;
 
-	// partition size; maps to meshopt_partitionClusters parameter
-	// note: this is the target size; actual partitions may be up to 1/3 larger (e.g. target 24 results in maximum 32)
+	// partitioning setup; maps to meshopt_partitionClusters parameters
+	// note: partition size is the target size, not maximum; actual partitions may be up to 1/3 larger (e.g. target 24 results in maximum 32)
+	bool partition_spatial;
 	size_t partition_size;
 
 	// clusterization setup; maps to meshopt_buildMeshletsSpatial / meshopt_buildMeshletsFlex
@@ -264,9 +265,9 @@ static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh&
 	return clusters;
 }
 
-static std::vector<std::vector<int> > partition(size_t partition_size, const clodMesh& mesh, const std::vector<Cluster>& clusters, const std::vector<int>& pending, const std::vector<unsigned int>& remap)
+static std::vector<std::vector<int> > partition(const clodConfig& config, const clodMesh& mesh, const std::vector<Cluster>& clusters, const std::vector<int>& pending, const std::vector<unsigned int>& remap)
 {
-	if (pending.size() <= partition_size)
+	if (pending.size() <= config.partition_size)
 		return {pending};
 
 	std::vector<unsigned int> cluster_indices;
@@ -289,11 +290,12 @@ static std::vector<std::vector<int> > partition(size_t partition_size, const clo
 	}
 
 	std::vector<unsigned int> cluster_part(pending.size());
-	size_t partition_count = meshopt_partitionClusters(&cluster_part[0], &cluster_indices[0], cluster_indices.size(), &cluster_counts[0], cluster_counts.size(), mesh.vertex_positions, remap.size(), mesh.vertex_positions_stride, partition_size);
+	size_t partition_count = meshopt_partitionClusters(&cluster_part[0], &cluster_indices[0], cluster_indices.size(), &cluster_counts[0], cluster_counts.size(),
+	    config.partition_spatial ? mesh.vertex_positions : NULL, remap.size(), mesh.vertex_positions_stride, config.partition_size);
 
 	std::vector<std::vector<int> > partitions(partition_count);
 	for (size_t i = 0; i < partition_count; ++i)
-		partitions[i].reserve(partition_size + partition_size / 2);
+		partitions[i].reserve(config.partition_size + config.partition_size / 3);
 
 	for (size_t i = 0; i < pending.size(); ++i)
 		partitions[cluster_part[i]].push_back(pending[i]);
@@ -454,6 +456,7 @@ clodConfig clodDefaultConfig(size_t max_triangles)
 	config.min_triangles &= ~3; // account for 4b alignment
 #endif
 
+	config.partition_spatial = true;
 	config.partition_size = 16;
 
 	config.cluster_spatial = false;
@@ -531,7 +534,7 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 	// merge and simplify clusters until we can't merge anymore
 	while (pending.size() > 1)
 	{
-		std::vector<std::vector<int> > groups = partition(config.partition_size, mesh, clusters, pending, remap);
+		std::vector<std::vector<int> > groups = partition(config, mesh, clusters, pending, remap);
 
 		pending.clear();
 
