@@ -1493,6 +1493,30 @@ static void partitionSpatial()
 	assert(part[0] == 0 && part[1] == 1 && part[2] == 0);
 }
 
+static void partitionSpatialMerge()
+{
+	const unsigned int ci[] = {
+	    0, 1, 2,
+	    3, 4, 5,
+	    6, 7, 8, // clang-format :-/
+	};
+
+	const float vb[] = {
+	    0, 0, 0, 1, 0, 0, 0, 1, 0,
+	    0, 0, 0, 0, 2, 0, 2, 0, 0,
+	    10, 0, 0, 10, 1, 0, 10, 2, 0, // clang-format :-/
+	};
+
+	const unsigned int cc[3] = {3, 3, 3};
+	unsigned int part[3];
+
+	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 3, NULL, 9, 0, 2) == 3);
+	assert(part[0] == 0 && part[1] == 1 && part[2] == 2);
+
+	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 3, vb, 9, sizeof(float) * 3, 2) == 2);
+	assert(part[0] == 0 && part[1] == 0 && part[2] == 1);
+}
+
 static int remapCustomFalse(void*, unsigned int, unsigned int)
 {
 	return 0;
@@ -2680,6 +2704,7 @@ void runTests()
 
 	partitionBasic();
 	partitionSpatial();
+	partitionSpatialMerge();
 
 	remapCustom();
 
