@@ -78,6 +78,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		size_t vertices;
 
 		size_t full_clusters;
+		size_t singleton_groups;
 
 		size_t stuck_clusters;
 		size_t stuck_triangles;
@@ -117,6 +118,7 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		level.clusters += cluster_count;
 		if (group.simplified.error == FLT_MAX)
 			level.stuck_clusters += cluster_count;
+		level.singleton_groups += cluster_count == 1;
 
 		for (size_t i = 0; i < cluster_count; ++i)
 		{
@@ -172,11 +174,11 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 
 		double inv_clusters = 1.0 / double(level.clusters);
 
-		printf("lod %d: %d clusters (%.1f%% full, %.1f tri/cl, %.1f vtx/cl, %.2f connected, %.1f boundary, %.1f partition, %.3f sah overhead, %f radius), %d triangles",
+		printf("lod %d: %d clusters (%.1f%% full, %.1f tri/cl, %.1f vtx/cl, %.2f connected, %.1f boundary, %.1f partition, %d singletons, %.3f sah overhead, %f radius), %d triangles",
 		    int(i), int(level.clusters),
 		    double(level.full_clusters) * inv_clusters * 100, double(level.triangles) * inv_clusters, double(level.vertices) * inv_clusters,
 		    double(connected) * inv_clusters, double(boundary) * inv_clusters,
-		    double(level.clusters) / double(level.groups),
+		    double(level.clusters) / double(level.groups), int(level.singleton_groups),
 		    saho, level.radius * inv_clusters,
 		    int(level.triangles));
 		if (level.stuck_clusters && level.clusters > 1)
