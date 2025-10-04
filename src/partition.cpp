@@ -2,6 +2,7 @@
 #include "meshoptimizer.h"
 
 #include <assert.h>
+#include <float.h>
 #include <math.h>
 #include <string.h>
 
@@ -362,6 +363,121 @@ static int pickGroupToMerge(const ClusterGroup* groups, int id, const ClusterAdj
 	return best_group;
 }
 
+static void mergeLeaf(ClusterGroup* groups, unsigned int* order, size_t count, size_t target_partition_size, size_t max_partition_size)
+{
+	for (size_t i = 0; i < count; ++i)
+	{
+		unsigned int id = order[i];
+		if (groups[id].size == 0 || groups[id].size >= target_partition_size)
+			continue;
+
+		float best_score = -1.f;
+		int best_group = -1;
+
+		for (size_t j = 0; j < count; ++j)
+		{
+			unsigned int other = order[j];
+			if (id == other || groups[other].size == 0)
+				continue;
+
+			if (groups[id].size + groups[other].size > max_partition_size)
+				continue;
+
+			// favor merging nearby groups
+			float score = boundsScore(groups[id], groups[other]);
+
+			if (score > best_score)
+			{
+				best_score = score;
+				best_group = other;
+			}
+		}
+
+		if (best_group != -1)
+		{
+			// combine groups by linking them together
+			unsigned int tail = id;
+			while (groups[tail].next >= 0)
+				tail = groups[tail].next;
+
+			groups[tail].next = best_group;
+
+			// update group sizes; note, we omit vertices update for simplicity as it's not used for spatial merge
+			groups[id].size += groups[best_group].size;
+			groups[best_group].size = 0;
+
+			// merge bounding spheres
+			mergeBounds(groups[id], groups[best_group]);
+			groups[best_group].radius = 0.f;
+		}
+	}
+}
+
+static size_t mergePartition(unsigned int* order, size_t count, const ClusterGroup* groups, int axis, float pivot)
+{
+	size_t m = 0;
+
+	// invariant: elements in range [0, m) are < pivot, elements in range [m, i) are >= pivot
+	for (size_t i = 0; i < count; ++i)
+	{
+		float v = groups[order[i]].center[axis];
+
+		// swap(m, i) unconditionally
+		unsigned int t = order[m];
+		order[m] = order[i];
+		order[i] = t;
+
+		// when v >= pivot, we swap i with m without advancing it, preserving invariants
+		m += v < pivot;
+	}
+
+	return m;
+}
+
+static void mergeSpatial(ClusterGroup* groups, unsigned int* order, size_t count, size_t target_partition_size, size_t max_partition_size, size_t leaf_size)
+{
+	size_t total = 0;
+	for (size_t i = 0; i < count; ++i)
+		total += groups[order[i]].size;
+
+	if (total <= max_partition_size || count <= leaf_size)
+		return mergeLeaf(groups, order, count, target_partition_size, max_partition_size);
+
+	float minc[3] = {FLT_MAX, FLT_MAX, FLT_MAX};
+	float maxc[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		const float* c = groups[order[i]].center;
+
+		for (int k = 0; k < 3; ++k)
+		{
+			minc[k] = c[k] < minc[k] ? c[k] : minc[k];
+			maxc[k] = c[k] > maxc[k] ? c[k] : maxc[k];
+		}
+	}
+
+	int axis = 0;
+	for (int k = 1; k < 3; ++k)
+		if (maxc[k] - minc[k] > maxc[axis] - minc[axis])
+			axis = k;
+
+	float mean = 0.f;
+	for (size_t i = 0; i < count; ++i)
+		mean += groups[order[i]].center[axis];
+
+	mean /= float(count);
+
+	size_t middle = mergePartition(order, count, groups, axis, mean);
+
+	// enforce balance for degenerate partitions
+	if (middle <= leaf_size / 2 || count - middle <= leaf_size / 2)
+		middle = count / 2;
+
+	mergeSpatial(groups, order, middle, target_partition_size, max_partition_size, leaf_size);
+	mergeSpatial(groups, order + middle, count - middle, target_partition_size, max_partition_size, leaf_size);
+}
+
 } // namespace meshopt
 
 size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* cluster_indices, size_t total_index_count, const unsigned int* cluster_index_counts, size_t cluster_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_partition_size)
@@ -478,6 +594,20 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 		heapPush(order, pending++, top);
 	}
 
+	// if vertex positions are provided, we do a final pass to see if we can merge small groups based on spatial locality alone
+	if (vertex_positions)
+	{
+		unsigned int* merge_order = reinterpret_cast<unsigned int*>(order);
+		size_t merge_offset = 0;
+
+		for (size_t i = 0; i < cluster_count; ++i)
+			if (groups[i].size)
+				merge_order[merge_offset++] = unsigned(i);
+
+		mergeSpatial(groups, merge_order, merge_offset, target_partition_size, max_partition_size, /* leaf_size= */ 8);
+	}
+
+	// output each remaining group
 	size_t next_group = 0;
 
 	for (size_t i = 0; i < cluster_count; ++i)
