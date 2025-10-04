@@ -393,22 +393,23 @@ static void mergeLeaf(ClusterGroup* groups, unsigned int* order, size_t count, s
 			}
 		}
 
+		// merge id *into* best_group; that way, we may merge more groups into the same best_group, maximizing the chance of reaching target
 		if (best_group != -1)
 		{
 			// combine groups by linking them together
-			unsigned int tail = id;
+			unsigned int tail = best_group;
 			while (groups[tail].next >= 0)
 				tail = groups[tail].next;
 
-			groups[tail].next = best_group;
+			groups[tail].next = id;
 
 			// update group sizes; note, we omit vertices update for simplicity as it's not used for spatial merge
-			groups[id].size += groups[best_group].size;
-			groups[best_group].size = 0;
+			groups[best_group].size += groups[id].size;
+			groups[id].size = 0;
 
 			// merge bounding spheres
-			mergeBounds(groups[id], groups[best_group]);
-			groups[best_group].radius = 0.f;
+			mergeBounds(groups[best_group], groups[id]);
+			groups[id].radius = 0.f;
 		}
 	}
 }
