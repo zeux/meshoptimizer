@@ -563,14 +563,11 @@ size_t meshopt_partitionClusters(unsigned int* destination, const unsigned int* 
 		unsigned int shared = countShared(groups, top.id, best_group, adjacency);
 
 		// combine groups by linking them together
-		assert(groups[best_group].size > 0);
+		unsigned int tail = top.id;
+		while (groups[tail].next >= 0)
+			tail = groups[tail].next;
 
-		for (int i = top.id; i >= 0; i = groups[i].next)
-			if (groups[i].next < 0)
-			{
-				groups[i].next = best_group;
-				break;
-			}
+		groups[tail].next = best_group;
 
 		// update group sizes; note, the vertex update is a O(1) approximation which avoids recomputing the true size
 		groups[top.id].size += groups[best_group].size;
