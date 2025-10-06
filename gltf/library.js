@@ -344,29 +344,4 @@ function uploadArgv(argv) {
 	return buf;
 }
 
-// Automatic initialization for node.js
-if (typeof window === 'undefined' && typeof process !== 'undefined' && process.release.name === 'node') {
-	var fs = require('fs');
-	var util = require('util');
-
-	// Node versions before v12 don't support TextEncoder/TextDecoder natively, but util. provides compatible replacements
-	if (typeof TextEncoder === 'undefined' && typeof TextDecoder === 'undefined') {
-		TextEncoder = util.TextEncoder;
-		TextDecoder = util.TextDecoder;
-	}
-
-	init(fs.readFileSync(__dirname + '/library.wasm'));
-}
-
-// UMD
-(function (root, factory) {
-	if (typeof define === 'function' && define.amd) {
-		define([], factory);
-	} else if (typeof module === 'object' && module.exports) {
-		module.exports = factory();
-	} else {
-		root.gltfpack = factory();
-	}
-})(typeof self !== 'undefined' ? self : this, function () {
-	return { init: init, pack: pack };
-});
+export { init, pack };
