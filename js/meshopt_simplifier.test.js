@@ -1,5 +1,5 @@
-var assert = require('assert').strict;
-var simplifier = require('./meshopt_simplifier.js');
+import assert from 'assert/strict';
+import { MeshoptSimplifier as simplifier } from './meshopt_simplifier.js';
 
 process.on('unhandledRejection', (error) => {
 	console.log('unhandledRejection', error);
