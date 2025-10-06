@@ -18,9 +18,9 @@
 		"*.js",
 		"*.ts"
 	],
+	"type": "module",
 	"main": "index.js",
-	"module": "index.module.js",
-	"types": "index.module.d.ts",
+	"types": "index.d.ts",
 	"scripts": {
 		"test": "node meshopt_encoder.test.js && node meshopt_decoder.test.js && node meshopt_simplifier.test.js && node meshopt_clusterizer.test.js",
 		"prepublishOnly": "npm test"

@@ -384,11 +384,4 @@ var MeshoptClusterizer = (function () {
 	};
 })();
 
-// export! MeshoptClusterizer
-if (typeof exports === 'object' && typeof module === 'object') module.exports = MeshoptClusterizer;
-else if (typeof define === 'function' && define['amd'])
-	define([], function () {
-		return MeshoptClusterizer;
-	});
-else if (typeof exports === 'object') exports['MeshoptClusterizer'] = MeshoptClusterizer;
-else (typeof self !== 'undefined' ? self : this).MeshoptClusterizer = MeshoptClusterizer;
+export { MeshoptClusterizer };

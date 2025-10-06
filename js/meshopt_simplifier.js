@@ -1,7 +1,6 @@
 // This file is part of meshoptimizer library and is distributed under the terms of MIT License.
 // Copyright (C) 2016-2025, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
 var MeshoptSimplifier = (function () {
-	'use strict';
 	// Built with clang version 19.1.5-wasi-sdk
 	// Built from meshoptimizer 0.25
 	var wasm =
@@ -618,11 +617,4 @@ var MeshoptSimplifier = (function () {
 	};
 })();
 
-// export! MeshoptSimplifier
-if (typeof exports === 'object' && typeof module === 'object') module.exports = MeshoptSimplifier;
-else if (typeof define === 'function' && define['amd'])
-	define([], function () {
-		return MeshoptSimplifier;
-	});
-else if (typeof exports === 'object') exports['MeshoptSimplifier'] = MeshoptSimplifier;
-else (typeof self !== 'undefined' ? self : this).MeshoptSimplifier = MeshoptSimplifier;
+export { MeshoptSimplifier };
