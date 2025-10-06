@@ -15,6 +15,7 @@
 		"url": "https://github.com/zeux/meshoptimizer"
 	},
 	"files": [
+		"*.cjs",
 		"*.js",
 		"*.ts"
 	],

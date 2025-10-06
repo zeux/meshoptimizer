@@ -137,7 +137,7 @@ format:
 formatjs:
 	prettier -w js/*.js gltf/*.js demo/*.html js/*.ts
 
-js: js/meshopt_decoder.js js/meshopt_decoder.module.js js/meshopt_encoder.js js/meshopt_encoder.module.js js/meshopt_simplifier.js js/meshopt_simplifier.module.js js/meshopt_clusterizer.js js/meshopt_clusterizer.module.js
+js: js/meshopt_decoder.js js/meshopt_encoder.js js/meshopt_simplifier.js js/meshopt_clusterizer.js
 
 symbols: $(BUILD)/amalgamated.so
 	nm $< -U -g
@@ -196,10 +196,12 @@ js/meshopt_encoder.js js/meshopt_simplifier.js js/meshopt_clusterizer.js:
 	sed -i "s#Built from meshoptimizer .*#Built from meshoptimizer $$(cat src/meshoptimizer.h | grep -Po '(?<=version )[0-9.]+')#" $@
 	python3 tools/wasmpack.py patch $@ wasm <$<
 
-js/%.module.js: js/%.js
-	sed '\#// export!#q' <$< >$@
-	sed -i "/use strict.;/d" $@
-	sed -i "s#// export! \(.*\)#export { \\1 };#" $@
+js/meshopt_decoder.cjs: js/meshopt_decoder.js
+	sed '/export {/d' <$< >$@
+	echo "if (typeof exports === 'object' && typeof module === 'object') module.exports = MeshoptDecoder;" >>$@
+	echo "else if (typeof define === 'function' && define['amd']) define([], function () { return MeshoptDecoder; });" >>$@
+	echo "else if (typeof exports === 'object') exports['MeshoptDecoder'] = MeshoptDecoder;" >>$@
+	echo "else (typeof self !== 'undefined' ? self : this).MeshoptDecoder = MeshoptDecoder;" >>$@
 
 $(DEMO): $(DEMO_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
