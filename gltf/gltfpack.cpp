@@ -23,7 +23,7 @@ std::string getVersion()
 	return result;
 }
 
-static void finalizeBufferViews(std::string& json, std::vector<BufferView>& views, std::string& bin, std::string* fallback, size_t& fallback_size, const char* meshopt_ext)
+static void finalizeBufferViews(std::string& json, std::vector<BufferView>& views, std::string& bin, std::string* fallback, size_t& fallback_size, const char* meshopt_ext, int attribute_level)
 {
 	for (size_t i = 0; i < views.size(); ++i)
 	{
@@ -43,7 +43,7 @@ static void finalizeBufferViews(std::string& json, std::vector<BufferView>& view
 			switch (view.compression)
 			{
 			case BufferView::Compression_Attribute:
-				compressVertexStream(bin, view.data, count, view.stride);
+				compressVertexStream(bin, view.data, count, view.stride, attribute_level);
 				break;
 			case BufferView::Compression_Index:
 				compressIndexStream(bin, view.data, count, view.stride);
@@ -885,7 +885,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 	size_t bufferspec_pos = json.size();
 
 	std::string json_views;
-	finalizeBufferViews(json_views, views, bin, settings.fallback ? &fallback : NULL, fallback_size, meshopt_ext);
+	finalizeBufferViews(json_views, views, bin, settings.fallback ? &fallback : NULL, fallback_size, meshopt_ext, settings.compresskhr ? (settings.compressmore ? 3 : 2) : 0);
 
 	writeArray(json, "bufferViews", json_views);
 	writeArray(json, "accessors", json_accessors);
@@ -1106,7 +1106,7 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 		}
 	}
 
-	const char* meshopt_ext = settings.compressexp ? "EXTX_meshopt_compression" : "EXT_meshopt_compression";
+	const char* meshopt_ext = settings.compresskhr ? "KHR_meshopt_compression" : "EXT_meshopt_compression";
 
 	std::string json, bin, fallback;
 	size_t fallback_size = 0;
@@ -1559,13 +1559,16 @@ int main(int argc, char** argv)
 			settings.compress = true;
 			settings.fallback = true;
 		}
-		else if (strcmp(arg, "-cx") == 0)
+		else if (strcmp(arg, "-cz") == 0)
 		{
-			fprintf(stderr, "Warning: experimental compression will produce files that are not compliant with EXT_meshopt_compression\n");
-			meshopt_encodeVertexVersion(1);
 			settings.compress = true;
 			settings.compressmore = true;
-			settings.compressexp = true;
+			settings.compresskhr = true;
+		}
+		else if (strcmp(arg, "-ce") == 0 && i + 1 < argc && (strcmp(argv[i + 1], "khr") == 0 || strcmp(argv[i + 1], "ext") == 0))
+		{
+			settings.compress = true;
+			settings.compresskhr = strcmp(argv[++i], "khr") == 0;
 		}
 		else if (strcmp(arg, "-v") == 0)
 		{
@@ -1629,7 +1632,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nBasics:\n");
 			fprintf(stderr, "\t-i file: input file to process, .obj/.gltf/.glb\n");
 			fprintf(stderr, "\t-o file: output file path, .gltf/.glb\n");
-			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc for higher compression ratio)\n");
+			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc/-cz for higher compression ratio)\n");
 			fprintf(stderr, "\nTextures:\n");
 			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression\n");
 			fprintf(stderr, "\t-tu: use UASTC when encoding textures (much higher quality and much larger size)\n");
@@ -1683,6 +1686,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-mi: use EXT_mesh_gpu_instancing when serializing multiple mesh instances\n");
 			fprintf(stderr, "\nMiscellaneous:\n");
 			fprintf(stderr, "\t-cf: produce compressed gltf/glb files with fallback for loaders that don't support compression\n");
+			fprintf(stderr, "\t-ce ext|khr: use EXT or KHR version of meshopt compression extension for compression\n");
 			fprintf(stderr, "\t-noq: disable quantization; produces much larger glTF files with no extensions\n");
 			fprintf(stderr, "\t-v: verbose output (print version when used without other options)\n");
 			fprintf(stderr, "\t-r file: output a JSON report to file\n");
@@ -1693,7 +1697,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nBasics:\n");
 			fprintf(stderr, "\t-i file: input file to process, .obj/.gltf/.glb\n");
 			fprintf(stderr, "\t-o file: output file path, .gltf/.glb\n");
-			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc for higher compression ratio)\n");
+			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc/-cz for higher compression ratio)\n");
 			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression\n");
 			fprintf(stderr, "\t-tw: convert all textures to WebP\n");
 			fprintf(stderr, "\t-si R: simplify meshes targeting triangle/point count ratio R (between 0 and 1)\n");
