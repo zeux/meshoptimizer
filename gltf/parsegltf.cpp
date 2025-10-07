@@ -552,8 +552,6 @@ static bool freeUnusedBuffers(cgltf_data* data)
 
 static cgltf_result decompressMeshopt(cgltf_data* data)
 {
-	bool warned = false;
-
 	for (size_t i = 0; i < data->buffer_views_count; ++i)
 	{
 		if (!data->buffer_views[i].has_meshopt_compression)
@@ -572,22 +570,18 @@ static cgltf_result decompressMeshopt(cgltf_data* data)
 		data->buffer_views[i].data = result;
 
 		int rc = -1;
-		bool warn = false;
 
 		switch (mc->mode)
 		{
 		case cgltf_meshopt_compression_mode_attributes:
-			warn = meshopt_decodeVertexVersion(source, mc->size) != 0;
 			rc = meshopt_decodeVertexBuffer(result, mc->count, mc->stride, source, mc->size);
 			break;
 
 		case cgltf_meshopt_compression_mode_triangles:
-			warn = meshopt_decodeIndexVersion(source, mc->size) != 1;
 			rc = meshopt_decodeIndexBuffer(result, mc->count, mc->stride, source, mc->size);
 			break;
 
 		case cgltf_meshopt_compression_mode_indices:
-			warn = meshopt_decodeIndexVersion(source, mc->size) != 1;
 			rc = meshopt_decodeIndexSequence(result, mc->count, mc->stride, source, mc->size);
 			break;
 
@@ -597,12 +591,6 @@ static cgltf_result decompressMeshopt(cgltf_data* data)
 
 		if (rc != 0)
 			return cgltf_result_io_error;
-
-		if (warn && !warned)
-		{
-			fprintf(stderr, "Warning: EXT_meshopt_compression data uses versions outside of the glTF specification (vertex 0 / index 1 expected)\n");
-			warned = true;
-		}
 
 		switch (mc->filter)
 		{
@@ -616,6 +604,10 @@ static cgltf_result decompressMeshopt(cgltf_data* data)
 
 		case cgltf_meshopt_compression_filter_exponential:
 			meshopt_decodeFilterExp(result, mc->count, mc->stride);
+			break;
+
+		case cgltf_meshopt_compression_filter_color:
+			meshopt_decodeFilterColor(result, mc->count, mc->stride);
 			break;
 
 		default:
