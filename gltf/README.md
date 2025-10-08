@@ -28,10 +28,10 @@ When working with glTF files that contain point clouds, gltfpack automatically p
 
 ## Decompression
 
-When using compressed files, [js/meshopt_decoder.js](https://github.com/zeux/meshoptimizer/blob/master/js/meshopt_decoder.js) or `js/meshopt_decoder.module.js` needs to be loaded to provide the WebAssembly decoder module like this:
+When using compressed files, [js/meshopt_decoder.js](https://github.com/zeux/meshoptimizer/blob/master/js/meshopt_decoder.js) needs to be loaded to provide the WebAssembly decoder module like this:
 
 ```js
-import { MeshoptDecoder } from './meshopt_decoder.module.js';
+import { MeshoptDecoder } from './meshopt_decoder.js';
 
 ...
 

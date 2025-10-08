@@ -15,12 +15,35 @@
 		"url": "https://github.com/zeux/meshoptimizer"
 	},
 	"files": [
+		"*.cjs",
 		"*.js",
 		"*.ts"
 	],
+	"type": "module",
 	"main": "index.js",
-	"module": "index.module.js",
-	"types": "index.module.d.ts",
+	"types": "index.d.ts",
+	"exports": {
+		".": {
+			"types": "./index.d.ts",
+			"default": "./index.js"
+		},
+		"./encoder": {
+			"types": "./meshopt_encoder.d.ts",
+			"default": "./meshopt_encoder.js"
+		},
+		"./decoder": {
+			"types": "./meshopt_decoder.d.ts",
+			"default": "./meshopt_decoder.js"
+		},
+		"./simplifier": {
+			"types": "./meshopt_simplifier.d.ts",
+			"default": "./meshopt_simplifier.js"
+		},
+		"./clusterizer": {
+			"types": "./meshopt_clusterizer.d.ts",
+			"default": "./meshopt_clusterizer.js"
+		}
+	},
 	"scripts": {
 		"test": "node meshopt_encoder.test.js && node meshopt_decoder.test.js && node meshopt_simplifier.test.js && node meshopt_clusterizer.test.js",
 		"prepublishOnly": "npm test"

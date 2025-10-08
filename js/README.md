@@ -4,12 +4,7 @@ This folder contains JavaScript/WebAssembly modules that can be used to access p
 
 ## Structure
 
-Each component comes in two variants:
-
-- `meshopt_component.js` uses a UMD-style module declaration and can be used by a wide variety of JavaScript module loaders, including node.js require(), AMD, Common.JS, and can also be loaded into the web page directly via a `<script>` tag which exposes the module as a global variable
-- `meshopt_component.module.js` uses ES6 module exports and can be imported from another ES6 module
-
-In either case the export name is MeshoptComponent and is an object that has two fields:
+Each component comes in a separate file, `meshopt_component.js`, which uses ES6 module exports and can be imported from another ES6 module. The export name is MeshoptComponent and is an object that has two fields:
 
 - `supported` is a boolean that can be checked to see if the component is supported by the current execution environment; it will generally be `false` when WebAssembly is not supported or enabled. To use these components on browsers without WebAssembly a polyfill library is recommended.
 - `ready` is a Promise that is resolved when WebAssembly compilation and initialization finishes; any functions are unsafe to call before that happens.
@@ -19,6 +14,8 @@ In addition to that, each component exposes a set of specific functions document
 ## Decoder
 
 `MeshoptDecoder` (`meshopt_decoder.js`) implements high performance decompression of attribute and index buffers encoded using meshopt compression. This can be used to decompress glTF buffers encoded with `EXT_meshopt_compression` extension or for custom geometry compression pipelines. The module contains two implementations, scalar and SIMD, with the best performing implementation selected automatically. When SIMD is available, the decoders run at 1-3 GB/s on modern desktop computers.
+
+> Note: for maximum compatibility, MeshoptDecoder is also available as CommonJS module via `meshopt_decoder.cjs`; it can be used by a wide variety of JavaScript module loaders, including node.js require(), AMD, Common.JS, and can also be loaded into the web page directly via a `<script>` tag which exposes the module as a global variable `MeshoptDecoder`.
 
 To decode a buffer, one of the decoding functions should be called:
 

@@ -1,5 +1,5 @@
-var assert = require('assert').strict;
-var decoder = require('./meshopt_decoder.js');
+import assert from 'assert/strict';
+import { MeshoptDecoder as decoder } from './meshopt_decoder.js';
 
 process.on('unhandledRejection', (error) => {
 	console.log('unhandledRejection', error);

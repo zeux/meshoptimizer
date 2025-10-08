@@ -1,7 +1,6 @@
 // This file is part of meshoptimizer library and is distributed under the terms of MIT License.
 // Copyright (C) 2016-2025, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
 var MeshoptEncoder = (function () {
-	'use strict';
 	// Built with clang version 19.1.5-wasi-sdk
 	// Built from meshoptimizer 0.25
 	var wasm =
@@ -215,11 +214,4 @@ var MeshoptEncoder = (function () {
 	};
 })();
 
-// export! MeshoptEncoder
-if (typeof exports === 'object' && typeof module === 'object') module.exports = MeshoptEncoder;
-else if (typeof define === 'function' && define['amd'])
-	define([], function () {
-		return MeshoptEncoder;
-	});
-else if (typeof exports === 'object') exports['MeshoptEncoder'] = MeshoptEncoder;
-else (typeof self !== 'undefined' ? self : this).MeshoptEncoder = MeshoptEncoder;
+export { MeshoptEncoder };

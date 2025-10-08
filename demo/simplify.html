@@ -127,8 +127,8 @@
 			import { OBJLoader } from 'three-examples/loaders/OBJLoader.js';
 			import { OrbitControls } from 'three-examples/controls/OrbitControls.js';
 			import { mergeVertices } from 'three-examples/utils/BufferGeometryUtils.js';
-			import { MeshoptDecoder } from '../js/meshopt_decoder.module.js';
-			import { MeshoptSimplifier } from '../js/meshopt_simplifier.module.js';
+			import { MeshoptDecoder } from '../js/meshopt_decoder.js';
+			import { MeshoptSimplifier } from '../js/meshopt_simplifier.js';
 			import { GUI } from 'lil-gui';
 
 			var container, gridContainer;
@@ -817,7 +817,7 @@
 			}
 
 			function reload() {
-				var simp = import('/js/meshopt_simplifier.module.js?x=' + Date.now());
+				var simp = import('/js/meshopt_simplifier.js?x=' + Date.now());
 				MeshoptSimplifier.ready = simp.then(function (s) {
 					return s.MeshoptSimplifier.ready.then(function () {
 						for (var prop in s.MeshoptSimplifier) {
@@ -832,7 +832,7 @@
 			function autoReload() {
 				if (!settings.autoUpdate) return;
 
-				fetch('/js/meshopt_simplifier.module.js?x=' + Date.now(), { method: 'HEAD' })
+				fetch('/js/meshopt_simplifier.js?x=' + Date.now(), { method: 'HEAD' })
 					.then(function (r) {
 						var last = r.headers.get('Last-Modified');
 						if (last != moduleLastModified) {
