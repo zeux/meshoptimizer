@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 // This file is part of gltfpack and is distributed under the terms of MIT License.
-import { init, pack } from './library.js';
+import { pack } from './library.js';
 import fs from 'fs';
-
-init(fs.readFileSync(new URL('./library.wasm', import.meta.url)));
 
 var args = process.argv.slice(2);
 

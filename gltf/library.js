@@ -344,4 +344,13 @@ function uploadArgv(argv) {
 	return buf;
 }
 
+// Automatic initialization for node.js
+if (typeof process !== 'undefined' && process.release && process.release.name === 'node') {
+	init(
+		import('node:fs').then(function (fs) {
+			return fs.readFileSync(new URL('./library.wasm', import.meta.url));
+		})
+	);
+}
+
 export { init, pack };
