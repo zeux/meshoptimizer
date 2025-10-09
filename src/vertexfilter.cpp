@@ -961,7 +961,7 @@ static void decodeFilterOctSimd16(short* data, size_t count)
 
 static void decodeFilterQuatSimd(short* data, size_t count)
 {
-	const float scale = 1.f / sqrtf(2.f);
+	const float scale = 32767.f / sqrtf(2.f);
 
 	for (size_t i = 0; i < count; i += 4)
 	{
@@ -980,28 +980,31 @@ static void decodeFilterQuatSimd(short* data, size_t count)
 
 		// get a floating-point scaler using zc with bottom 2 bits set to 1 (which represents 1.f)
 		v128_t sf = wasm_v128_or(cf, wasm_i32x4_splat(3));
-		v128_t ss = wasm_f32x4_div(wasm_f32x4_splat(scale), wasm_f32x4_convert_i32x4(sf));
+		v128_t s = wasm_f32x4_convert_i32x4(sf);
 
-		// convert x/y/z to [-1..1] (scaled...)
-		v128_t x = wasm_f32x4_mul(wasm_f32x4_convert_i32x4(xf), ss);
-		v128_t y = wasm_f32x4_mul(wasm_f32x4_convert_i32x4(yf), ss);
-		v128_t z = wasm_f32x4_mul(wasm_f32x4_convert_i32x4(zf), ss);
+		// convert x/y/z to floating point (unscaled! implied scale of 1/sqrt(2.f) * 1/sf)
+		v128_t x = wasm_f32x4_convert_i32x4(xf);
+		v128_t y = wasm_f32x4_convert_i32x4(yf);
+		v128_t z = wasm_f32x4_convert_i32x4(zf);
 
-		// reconstruct w as a square root; we clamp to 0.f to avoid NaN due to precision errors
+		// reconstruct w as a square root (unscaled); we clamp to 0.f to avoid NaN due to precision errors
 		// note: i32x4_max with 0 is equivalent to f32x4_max
-		v128_t ww = wasm_f32x4_sub(wasm_f32x4_splat(1.f), wasm_f32x4_add(wasm_f32x4_mul(x, x), wasm_f32x4_add(wasm_f32x4_mul(y, y), wasm_f32x4_mul(z, z))));
+		v128_t ws = wasm_f32x4_mul(s, s);
+		v128_t ww = wasm_f32x4_sub(wasm_f32x4_add(ws, ws), wasm_f32x4_add(wasm_f32x4_mul(x, x), wasm_f32x4_add(wasm_f32x4_mul(y, y), wasm_f32x4_mul(z, z))));
 		v128_t w = wasm_f32x4_sqrt(wasm_i32x4_max(ww, wasm_i32x4_splat(0)));
 
-		v128_t s = wasm_f32x4_splat(32767.f);
+		// compute final scale; note that all computations above are unscaled
+		// we need to divide by sf to get out of fixed point, divide by sqrt(2) to renormalize and multiply by 32767 to get to int16 range
+		v128_t ss = wasm_f32x4_div(wasm_f32x4_splat(scale), s);
 
 		// fast rounded signed float->int: addition triggers renormalization after which mantissa stores the integer value
 		// note: the result is offset by 0x4B40_0000, but we only need the low 16 bits so we can omit the subtraction
 		const v128_t fsnap = wasm_f32x4_splat(3 << 22);
 
-		v128_t xr = wasm_f32x4_add(wasm_f32x4_mul(x, s), fsnap);
-		v128_t yr = wasm_f32x4_add(wasm_f32x4_mul(y, s), fsnap);
-		v128_t zr = wasm_f32x4_add(wasm_f32x4_mul(z, s), fsnap);
-		v128_t wr = wasm_f32x4_add(wasm_f32x4_mul(w, s), fsnap);
+		v128_t xr = wasm_f32x4_add(wasm_f32x4_mul(x, ss), fsnap);
+		v128_t yr = wasm_f32x4_add(wasm_f32x4_mul(y, ss), fsnap);
+		v128_t zr = wasm_f32x4_add(wasm_f32x4_mul(z, ss), fsnap);
+		v128_t wr = wasm_f32x4_add(wasm_f32x4_mul(w, ss), fsnap);
 
 		// mix x/z and w/y to make 16-bit unpack easier
 		v128_t xzr = wasm_v128_or(wasm_v128_and(xr, wasm_i32x4_splat(0xffff)), wasm_i32x4_shl(zr, 16));
