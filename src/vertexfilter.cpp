@@ -347,7 +347,7 @@ static void decodeFilterOctSimd16(short* data, size_t count)
 
 static void decodeFilterQuatSimd(short* data, size_t count)
 {
-	const float scale = 1.f / sqrtf(2.f);
+	const float scale = 32767.f / sqrtf(2.f);
 
 	for (size_t i = 0; i < count; i += 4)
 	{
@@ -366,24 +366,27 @@ static void decodeFilterQuatSimd(short* data, size_t count)
 
 		// get a floating-point scaler using zc with bottom 2 bits set to 1 (which represents 1.f)
 		__m128i sf = _mm_or_si128(cf, _mm_set1_epi32(3));
-		__m128 ss = _mm_div_ps(_mm_set1_ps(scale), _mm_cvtepi32_ps(sf));
+		__m128 s = _mm_cvtepi32_ps(sf);
 
-		// convert x/y/z to [-1..1] (scaled...)
-		__m128 x = _mm_mul_ps(_mm_cvtepi32_ps(xf), ss);
-		__m128 y = _mm_mul_ps(_mm_cvtepi32_ps(yf), ss);
-		__m128 z = _mm_mul_ps(_mm_cvtepi32_ps(zf), ss);
+		// convert x/y/z to floating point (unscaled! implied scale of 1/sqrt(2.f) * 1/sf)
+		__m128 x = _mm_cvtepi32_ps(xf);
+		__m128 y = _mm_cvtepi32_ps(yf);
+		__m128 z = _mm_cvtepi32_ps(zf);
 
-		// reconstruct w as a square root; we clamp to 0.f to avoid NaN due to precision errors
-		__m128 ww = _mm_sub_ps(_mm_set1_ps(1.f), _mm_add_ps(_mm_mul_ps(x, x), _mm_add_ps(_mm_mul_ps(y, y), _mm_mul_ps(z, z))));
+		// reconstruct w as a square root (unscaled); we clamp to 0.f to avoid NaN due to precision errors
+		__m128 ws = _mm_mul_ps(s, s);
+		__m128 ww = _mm_sub_ps(_mm_add_ps(ws, ws), _mm_add_ps(_mm_mul_ps(x, x), _mm_add_ps(_mm_mul_ps(y, y), _mm_mul_ps(z, z))));
 		__m128 w = _mm_sqrt_ps(_mm_max_ps(ww, _mm_setzero_ps()));
 
-		__m128 s = _mm_set1_ps(32767.f);
+		// compute final scale; note that all computations above are unscaled
+		// we need to divide by sf to get out of fixed point, divide by sqrt(2) to renormalize and multiply by 32767 to get to int16 range
+		__m128 ss = _mm_div_ps(_mm_set1_ps(scale), s);
 
 		// rounded signed float->int
-		__m128i xr = _mm_cvtps_epi32(_mm_mul_ps(x, s));
-		__m128i yr = _mm_cvtps_epi32(_mm_mul_ps(y, s));
-		__m128i zr = _mm_cvtps_epi32(_mm_mul_ps(z, s));
-		__m128i wr = _mm_cvtps_epi32(_mm_mul_ps(w, s));
+		__m128i xr = _mm_cvtps_epi32(_mm_mul_ps(x, ss));
+		__m128i yr = _mm_cvtps_epi32(_mm_mul_ps(y, ss));
+		__m128i zr = _mm_cvtps_epi32(_mm_mul_ps(z, ss));
+		__m128i wr = _mm_cvtps_epi32(_mm_mul_ps(w, ss));
 
 		// mix x/z and w/y to make 16-bit unpack easier
 		__m128i xzr = _mm_or_si128(_mm_and_si128(xr, _mm_set1_epi32(0xffff)), _mm_slli_epi32(zr, 16));
