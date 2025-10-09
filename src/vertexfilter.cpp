@@ -379,8 +379,8 @@ static void decodeFilterQuatSimd(short* data, size_t count)
 		__m128 z = _mm_cvtepi32_ps(zf);
 
 		// reconstruct w as a square root (unscaled); we clamp to 0.f to avoid NaN due to precision errors
-		__m128 ws = _mm_mul_ps(s, s);
-		__m128 ww = _mm_sub_ps(_mm_add_ps(ws, ws), _mm_add_ps(_mm_mul_ps(x, x), _mm_add_ps(_mm_mul_ps(y, y), _mm_mul_ps(z, z))));
+		__m128 ws = _mm_mul_ps(s, _mm_add_ps(s, s)); // s*2s instead of 2*(s*s) to work around clang bug with integer multiplication
+		__m128 ww = _mm_sub_ps(ws, _mm_add_ps(_mm_mul_ps(x, x), _mm_add_ps(_mm_mul_ps(y, y), _mm_mul_ps(z, z))));
 		__m128 w = _mm_sqrt_ps(_mm_max_ps(ww, _mm_setzero_ps()));
 
 		// compute final scale; note that all computations above are unscaled
