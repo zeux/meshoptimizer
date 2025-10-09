@@ -109,28 +109,33 @@ static void decodeFilterOct(T* data, size_t count)
 
 static void decodeFilterQuat(short* data, size_t count)
 {
-	const float scale = 1.f / sqrtf(2.f);
+	const float scale = 32767.f / sqrtf(2.f);
 
 	for (size_t i = 0; i < count; ++i)
 	{
 		// recover scale from the high byte of the component
 		int sf = data[i * 4 + 3] | 3;
-		float ss = scale / float(sf);
+		float s = float(sf);
 
-		// convert x/y/z to [-1..1] (scaled...)
-		float x = float(data[i * 4 + 0]) * ss;
-		float y = float(data[i * 4 + 1]) * ss;
-		float z = float(data[i * 4 + 2]) * ss;
+		// convert x/y/z to floating point (unscaled! implied scale of 1/sqrt(2.f) * 1/sf)
+		float x = float(data[i * 4 + 0]);
+		float y = float(data[i * 4 + 1]);
+		float z = float(data[i * 4 + 2]);
 
-		// reconstruct w as a square root; we clamp to 0.f to avoid NaN due to precision errors
-		float ww = 1.f - x * x - y * y - z * z;
+		// reconstruct w as a square root (unscaled); we clamp to 0.f to avoid NaN due to precision errors
+		float ws = s * s;
+		float ww = ws * 2.f - x * x - y * y - z * z;
 		float w = sqrtf(ww >= 0.f ? ww : 0.f);
 
+		// compute final scale; note that all computations above are unscaled
+		// we need to divide by sf to get out of fixed point, divide by sqrt(2) to renormalize and multiply by 32767 to get to int16 range
+		float ss = scale / s;
+
 		// rounded signed float->int
-		int xf = int(x * 32767.f + (x >= 0.f ? 0.5f : -0.5f));
-		int yf = int(y * 32767.f + (y >= 0.f ? 0.5f : -0.5f));
-		int zf = int(z * 32767.f + (z >= 0.f ? 0.5f : -0.5f));
-		int wf = int(w * 32767.f + 0.5f);
+		int xf = int(x * ss + (x >= 0.f ? 0.5f : -0.5f));
+		int yf = int(y * ss + (y >= 0.f ? 0.5f : -0.5f));
+		int zf = int(z * ss + (z >= 0.f ? 0.5f : -0.5f));
+		int wf = int(w * ss + 0.5f);
 
 		int qc = data[i * 4 + 3] & 3;
 
