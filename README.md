@@ -718,7 +718,6 @@ Currently, the following APIs are experimental:
 - `meshopt_decodeFilterColor`
 - `meshopt_encodeFilterColor`
 - `meshopt_simplifyWithUpdate`
-- `meshopt_SimplifyRegularize` flag for `meshopt_simplify*` functions
 - `meshopt_SimplifyPermissive` mode for `meshopt_simplify*` functions (and associated `meshopt_SimplifyVertex_*` flags)
 
 ## License
