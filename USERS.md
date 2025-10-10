@@ -10,6 +10,7 @@ If you are shipping a game that is using meshoptimizer, listing the library in t
 - [Baldur's Gate 3 (2023)](https://baldursgate3.game/)
 - [Cities: Skylines II (2023)](https://www.paradoxinteractive.com/games/cities-skylines-ii/about)
 - [Counter-Strike 2 (2023)](https://www.counter-strike.net/cs2)
+- [Cyberpunk 2077 (2020)](https://www.cyberpunk.net/us/en/)
 - [Deadlock](https://store.steampowered.com/app/1422450/Deadlock/)
 - [Dota 2 (2013)](https://www.dota2.com/home)
 - [Dragon's Dogma 2 (2024)](https://www.dragonsdogma.com/2/en-us/)
