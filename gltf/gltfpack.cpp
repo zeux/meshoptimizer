@@ -1684,7 +1684,8 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nMiscellaneous:\n");
 			fprintf(stderr, "\t-cf: produce compressed gltf/glb files with fallback for loaders that don't support compression\n");
 			fprintf(stderr, "\t-noq: disable quantization; produces much larger glTF files with no extensions\n");
-			fprintf(stderr, "\t-v: verbose output (print version when used without other options)\n");
+			fprintf(stderr, "\t-v: verbose output (when used with other options)\n");
+			fprintf(stderr, "\t-v: print version (when used without other options)\n");
 			fprintf(stderr, "\t-r file: output a JSON report to file\n");
 			fprintf(stderr, "\t-h: display this help and exit\n");
 		}
