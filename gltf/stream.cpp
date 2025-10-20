@@ -488,8 +488,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 		// expand the encoded range to ensure it covers [0..1) interval
 		// this can slightly reduce precision but we should not need more precision inside 0..1, and this significantly improves compressed size when using encodeExpOne
 		if (settings.tex_float)
-			return writeVertexStreamFloat(bin, stream, cgltf_type_vec2, 2, settings.compress && filters, qt.bits,
-			    settings.compressmore ? meshopt_EncodeExpSharedComponent : meshopt_EncodeExpClamped);
+			return writeVertexStreamFloat(bin, stream, cgltf_type_vec2, 2, settings.compress && filters, qt.bits, meshopt_EncodeExpClamped);
 
 		float uv_rscale[2] = {
 		    qt.scale[0] == 0.f ? 0.f : 1.f / qt.scale[0],
