@@ -1640,7 +1640,7 @@ static void updateQuadrics(const unsigned int* collapse_remap, size_t vertex_cou
 static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, size_t vertex_count, const Quadric* vertex_quadrics, const QuadricGrad* volume_gradients, const Quadric* attribute_quadrics, const QuadricGrad* attribute_gradients, size_t attribute_count, const unsigned int* remap, const unsigned int* wedge, const EdgeAdjacency& adjacency, const unsigned char* vertex_kind, const unsigned char* vertex_update)
 {
 #if TRACE
-	size_t stats[5] = {};
+	size_t stats[6] = {};
 #endif
 
 	for (size_t i = 0; i < vertex_count; ++i)
@@ -1712,12 +1712,19 @@ static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, s
 			continue;
 		}
 
+		// reject updates that increase positional error too much; allow some tolerance to improve attribute quality
+		if (quadricError(vertex_quadrics[i], p) > quadricError(vertex_quadrics[i], vp) * 1.5f)
+		{
+			TRACESTATS(5);
+			continue;
+		}
+
 		TRACESTATS(1);
 		vertex_positions[i] = p;
 	}
 
 #if TRACE
-	printf("updated %d/%d positions; failed solve %d bounds %d flip %d\n", int(stats[1]), int(stats[0]), int(stats[2]), int(stats[3]), int(stats[4]));
+	printf("updated %d/%d positions; failed solve %d bounds %d flip %d error %d\n", int(stats[1]), int(stats[0]), int(stats[2]), int(stats[3]), int(stats[4]), int(stats[5]));
 #endif
 
 	if (attribute_count == 0)
