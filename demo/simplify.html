@@ -126,7 +126,7 @@
 			import { GLTFLoader } from 'three-examples/loaders/GLTFLoader.js';
 			import { OBJLoader } from 'three-examples/loaders/OBJLoader.js';
 			import { OrbitControls } from 'three-examples/controls/OrbitControls.js';
-			import { mergeVertices } from 'three-examples/utils/BufferGeometryUtils.js';
+			import { mergeGeometries, mergeVertices } from 'three-examples/utils/BufferGeometryUtils.js';
 			import { MeshoptDecoder } from '../js/meshopt_decoder.js';
 			import { MeshoptSimplifier } from '../js/meshopt_simplifier.js';
 			import { GUI } from 'lil-gui';
@@ -919,6 +919,8 @@
 					loader.load(
 						path,
 						function (obj) {
+							var geos = [];
+
 							obj.traverse(function (node) {
 								if (node.isMesh) {
 									// obj loader does not index the geometry, so we need to do it ourselves
@@ -929,10 +931,23 @@
 										node.material = node.material[0];
 										node.geometry.clearGroups();
 									}
+
+									geos.push(node.geometry);
 								}
 							});
 
-							models[viewIndex] = obj;
+							// try to merge geometries into a single mesh; this cleanly handles material boundaries and separate objects
+							// it may fail if the geometries are incompatible (different attributes), in which case we just use the original object
+							var merged = mergeGeometries(geos);
+
+							if (merged) {
+								var mat = new THREE.MeshStandardMaterial({ color: 0xdddddd });
+
+								models[viewIndex] = new THREE.Mesh(merged, mat);
+							} else {
+								models[viewIndex] = obj;
+							}
+
 							center(models[viewIndex]);
 							scenes[viewIndex].add(models[viewIndex]);
 
