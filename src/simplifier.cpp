@@ -1739,16 +1739,41 @@ static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, s
 		if (vertex_kind[i] == Kind_Locked)
 			continue;
 
-		const Vector3& p = vertex_positions[remap[i]];
-		const Quadric& A = attribute_quadrics[i];
-
-		float iw = A.w == 0 ? 0.f : 1.f / A.w;
+		if (remap[i] != i)
+			continue;
 
 		for (size_t k = 0; k < attribute_count; ++k)
 		{
-			const QuadricGrad& G = attribute_gradients[i * attribute_count + k];
+			unsigned int shared = ~0u;
 
-			vertex_attributes[i * attribute_count + k] = (G.gx * p.x + G.gy * p.y + G.gz * p.z + G.gw) * iw;
+			// for complex vertices, preserve attribute continuity and use highest weight wedge if values were shared
+			if (vertex_kind[i] == Kind_Complex)
+			{
+				shared = i;
+
+				for (unsigned int v = wedge[i]; v != i; v = wedge[v])
+					if (vertex_attributes[v * attribute_count + k] != vertex_attributes[i * attribute_count + k])
+						shared = ~0u;
+					else if (shared != ~0u && attribute_quadrics[v].w > attribute_quadrics[shared].w)
+						shared = v;
+			}
+
+			// update attributes for all wedges
+			unsigned int v = unsigned(i);
+			do
+			{
+				unsigned int r = (shared == ~0u) ? v : shared;
+
+				const Vector3& p = vertex_positions[i];
+				const Quadric& A = attribute_quadrics[r];
+				const QuadricGrad& G = attribute_gradients[r * attribute_count + k];
+
+				float iw = A.w == 0 ? 0.f : 1.f / A.w;
+				float av = (G.gx * p.x + G.gy * p.y + G.gz * p.z + G.gw) * iw;
+
+				vertex_attributes[v * attribute_count + k] = av;
+				v = wedge[v];
+			} while (v != i);
 		}
 	}
 }
