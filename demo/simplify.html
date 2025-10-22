@@ -170,6 +170,7 @@
 				autoLod: false,
 				autoLodFactor: 1.0,
 				gridColumns: 2,
+				debugCheckerboard: false,
 
 				loadFile: function () {
 					var input = document.getElementById('fileInput');
@@ -228,6 +229,7 @@
 			var guiLoad = gui.addFolder('Load');
 			guiLoad.add(settings, 'loadFile');
 			guiLoad.add(settings, 'updateModule');
+			guiLoad.add(settings, 'debugCheckerboard');
 			guiLoad.add(settings, 'autoUpdate').onChange(autoReload);
 			guiLoad.add(settings, 'autoUpdateStatus').listen();
 
@@ -941,7 +943,18 @@
 							var merged = mergeGeometries(geos);
 
 							if (merged) {
-								var mat = new THREE.MeshStandardMaterial({ color: 0xdddddd });
+								if (settings.debugCheckerboard) {
+									var cb = new THREE.TextureLoader().load(
+										'https://threejs.org/examples/textures/floors/FloorsCheckerboard_S_Diffuse.jpg'
+									);
+									cb.wrapS = THREE.RepeatWrapping;
+									cb.wrapT = THREE.RepeatWrapping;
+									cb.repeat.set(8, 8); // Adjust for number of repetitions
+
+									var mat = new THREE.MeshStandardMaterial({ map: cb });
+								} else {
+									var mat = new THREE.MeshStandardMaterial({ color: 0xdddddd });
+								}
 
 								models[viewIndex] = new THREE.Mesh(merged, mat);
 							} else {
