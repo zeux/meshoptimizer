@@ -1637,7 +1637,7 @@ static void updateQuadrics(const unsigned int* collapse_remap, size_t vertex_cou
 	}
 }
 
-static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, size_t vertex_count, const Quadric* vertex_quadrics, const QuadricGrad* volume_gradients, const Quadric* attribute_quadrics, const QuadricGrad* attribute_gradients, size_t attribute_count, const unsigned int* remap, const unsigned int* wedge, const EdgeAdjacency& adjacency, const unsigned char* vertex_kind, const unsigned char* vertex_update)
+static void solvePositions(Vector3* vertex_positions, size_t vertex_count, const Quadric* vertex_quadrics, const QuadricGrad* volume_gradients, const Quadric* attribute_quadrics, const QuadricGrad* attribute_gradients, size_t attribute_count, const unsigned int* remap, const unsigned int* wedge, const EdgeAdjacency& adjacency, const unsigned char* vertex_kind, const unsigned char* vertex_update)
 {
 #if TRACE
 	size_t stats[6] = {};
@@ -1726,17 +1726,13 @@ static void solveQuadrics(Vector3* vertex_positions, float* vertex_attributes, s
 #if TRACE
 	printf("updated %d/%d positions; failed solve %d bounds %d flip %d error %d\n", int(stats[1]), int(stats[0]), int(stats[2]), int(stats[3]), int(stats[4]), int(stats[5]));
 #endif
+}
 
-	if (attribute_count == 0)
-		return;
-
+static void solveAttributes(Vector3* vertex_positions, float* vertex_attributes, size_t vertex_count, const Quadric* attribute_quadrics, const QuadricGrad* attribute_gradients, size_t attribute_count, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, const unsigned char* vertex_update)
+{
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
 		if (!vertex_update[i])
-			continue;
-
-		// updating externally locked vertices is prohibited
-		if (vertex_kind[i] == Kind_Locked)
 			continue;
 
 		if (remap[i] != i)
@@ -2561,7 +2557,10 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 		// edge adjacency may be stale as we haven't updated it after last series of edge collapses
 		updateEdgeAdjacency(adjacency, result, result_count, vertex_count, remap);
 
-		solveQuadrics(vertex_positions, vertex_attributes, vertex_count, vertex_quadrics, volume_gradients, attribute_quadrics, attribute_gradients, attribute_count, remap, wedge, adjacency, vertex_kind, vertex_update);
+		solvePositions(vertex_positions, vertex_count, vertex_quadrics, volume_gradients, attribute_quadrics, attribute_gradients, attribute_count, remap, wedge, adjacency, vertex_kind, vertex_update);
+
+		if (attribute_count)
+			solveAttributes(vertex_positions, vertex_attributes, vertex_count, attribute_quadrics, attribute_gradients, attribute_count, remap, wedge, vertex_kind, vertex_update);
 
 		finalizeVertices(const_cast<float*>(vertex_positions_data), vertex_positions_stride, const_cast<float*>(vertex_attributes_data), vertex_attributes_stride, attribute_weights, attribute_count, vertex_count, vertex_positions, vertex_attributes, sparse_remap, attribute_remap, vertex_scale, vertex_offset, vertex_update);
 	}
