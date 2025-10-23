@@ -620,7 +620,7 @@ static void rescaleAttributes(float* result, const float* vertex_attributes_data
 	}
 }
 
-static void finalizeVertices(float* vertex_positions_data, size_t vertex_positions_stride, float* vertex_attributes_data, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, size_t vertex_count, const Vector3* vertex_positions, const float* vertex_attributes, const unsigned int* sparse_remap, const unsigned int* attribute_remap, float vertex_scale, const float* vertex_offset, const unsigned char* vertex_update, const unsigned char* vertex_kind, const unsigned char* vertex_lock)
+static void finalizeVertices(float* vertex_positions_data, size_t vertex_positions_stride, float* vertex_attributes_data, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, size_t vertex_count, const Vector3* vertex_positions, const float* vertex_attributes, const unsigned int* sparse_remap, const unsigned int* attribute_remap, float vertex_scale, const float* vertex_offset, const unsigned char* vertex_kind, const unsigned char* vertex_update, const unsigned char* vertex_lock)
 {
 	size_t vertex_positions_stride_float = vertex_positions_stride / sizeof(float);
 	size_t vertex_attributes_stride_float = vertex_attributes_stride / sizeof(float);
@@ -1720,7 +1720,7 @@ static void solvePositions(Vector3* vertex_positions, size_t vertex_count, const
 		}
 
 		// reject updates that increase positional error too much; allow some tolerance to improve attribute quality
-		if (quadricError(vertex_quadrics[i], p) > quadricError(vertex_quadrics[i], vp) * 1.5f)
+		if (quadricError(vertex_quadrics[i], p) > quadricError(vertex_quadrics[i], vp) * 1.5f + 1e-6f)
 		{
 			TRACESTATS(5);
 			continue;
@@ -1752,7 +1752,7 @@ static void solveAttributes(Vector3* vertex_positions, float* vertex_attributes,
 			// for complex vertices, preserve attribute continuity and use highest weight wedge if values were shared
 			if (vertex_kind[i] == Kind_Complex)
 			{
-				shared = i;
+				shared = unsigned(i);
 
 				for (unsigned int v = wedge[i]; v != i; v = wedge[v])
 					if (vertex_attributes[v * attribute_count + k] != vertex_attributes[i * attribute_count + k])
@@ -1767,7 +1767,7 @@ static void solveAttributes(Vector3* vertex_positions, float* vertex_attributes,
 			{
 				unsigned int r = (shared == ~0u) ? v : shared;
 
-				const Vector3& p = vertex_positions[i];
+				const Vector3& p = vertex_positions[i]; // same for all wedges
 				const Quadric& A = attribute_quadrics[r];
 				const QuadricGrad& G = attribute_gradients[r * attribute_count + k];
 
@@ -2569,7 +2569,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 		if (attribute_count)
 			solveAttributes(vertex_positions, vertex_attributes, vertex_count, attribute_quadrics, attribute_gradients, attribute_count, remap, wedge, vertex_kind, vertex_update);
 
-		finalizeVertices(const_cast<float*>(vertex_positions_data), vertex_positions_stride, const_cast<float*>(vertex_attributes_data), vertex_attributes_stride, attribute_weights, attribute_count, vertex_count, vertex_positions, vertex_attributes, sparse_remap, attribute_remap, vertex_scale, vertex_offset, vertex_update, vertex_kind, vertex_lock);
+		finalizeVertices(const_cast<float*>(vertex_positions_data), vertex_positions_stride, const_cast<float*>(vertex_attributes_data), vertex_attributes_stride, attribute_weights, attribute_count, vertex_count, vertex_positions, vertex_attributes, sparse_remap, attribute_remap, vertex_scale, vertex_offset, vertex_kind, vertex_update, vertex_lock);
 	}
 
 	// if debug visualization data is requested, fill it instead of index data; for simplicity, this doesn't work with sparsity
