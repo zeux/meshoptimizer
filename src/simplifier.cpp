@@ -620,7 +620,7 @@ static void rescaleAttributes(float* result, const float* vertex_attributes_data
 	}
 }
 
-static void finalizeVertices(float* vertex_positions_data, size_t vertex_positions_stride, float* vertex_attributes_data, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, size_t vertex_count, const Vector3* vertex_positions, const float* vertex_attributes, const unsigned int* sparse_remap, const unsigned int* attribute_remap, float vertex_scale, const float* vertex_offset, const unsigned char* vertex_update)
+static void finalizeVertices(float* vertex_positions_data, size_t vertex_positions_stride, float* vertex_attributes_data, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, size_t vertex_count, const Vector3* vertex_positions, const float* vertex_attributes, const unsigned int* sparse_remap, const unsigned int* attribute_remap, float vertex_scale, const float* vertex_offset, const unsigned char* vertex_update, const unsigned char* vertex_kind, const unsigned char* vertex_lock)
 {
 	size_t vertex_positions_stride_float = vertex_positions_stride / sizeof(float);
 	size_t vertex_attributes_stride_float = vertex_attributes_stride / sizeof(float);
@@ -632,12 +632,20 @@ static void finalizeVertices(float* vertex_positions_data, size_t vertex_positio
 
 		unsigned int ri = sparse_remap ? sparse_remap[i] : unsigned(i);
 
-		const Vector3& p = vertex_positions[i];
-		float* v = vertex_positions_data + ri * vertex_positions_stride_float;
+		// updating externally locked vertices is not allowed
+		if (vertex_lock && (vertex_lock[ri] & meshopt_SimplifyVertex_Lock) != 0)
+			continue;
 
-		v[0] = p.x * vertex_scale + vertex_offset[0];
-		v[1] = p.y * vertex_scale + vertex_offset[1];
-		v[2] = p.z * vertex_scale + vertex_offset[2];
+		// moving locked vertices may result in floating point drift
+		if (vertex_kind[i] != Kind_Locked)
+		{
+			const Vector3& p = vertex_positions[i];
+			float* v = vertex_positions_data + ri * vertex_positions_stride_float;
+
+			v[0] = p.x * vertex_scale + vertex_offset[0];
+			v[1] = p.y * vertex_scale + vertex_offset[1];
+			v[2] = p.z * vertex_scale + vertex_offset[2];
+		}
 
 		if (attribute_count)
 		{
@@ -1648,7 +1656,6 @@ static void solvePositions(Vector3* vertex_positions, size_t vertex_count, const
 		if (!vertex_update[i])
 			continue;
 
-		// moving externally locked vertices is prohibited
 		// moving vertices on an attribute discontinuity may result in extrapolating UV outside of the chart bounds
 		// moving vertices on a border requires a stronger edge quadric to preserve the border geometry
 		if (vertex_kind[i] == Kind_Locked || vertex_kind[i] == Kind_Seam || vertex_kind[i] == Kind_Border)
@@ -2550,8 +2557,8 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 		{
 			unsigned int v = result[i];
 
-			// recomputing externally locked vertices may result in floating point drift
-			vertex_update[v] = vertex_kind[v] != Kind_Locked;
+			// mark the vertex for finalizeVertices and root vertex for solve*
+			vertex_update[remap[v]] = vertex_update[v] = 1;
 		}
 
 		// edge adjacency may be stale as we haven't updated it after last series of edge collapses
@@ -2562,7 +2569,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 		if (attribute_count)
 			solveAttributes(vertex_positions, vertex_attributes, vertex_count, attribute_quadrics, attribute_gradients, attribute_count, remap, wedge, vertex_kind, vertex_update);
 
-		finalizeVertices(const_cast<float*>(vertex_positions_data), vertex_positions_stride, const_cast<float*>(vertex_attributes_data), vertex_attributes_stride, attribute_weights, attribute_count, vertex_count, vertex_positions, vertex_attributes, sparse_remap, attribute_remap, vertex_scale, vertex_offset, vertex_update);
+		finalizeVertices(const_cast<float*>(vertex_positions_data), vertex_positions_stride, const_cast<float*>(vertex_attributes_data), vertex_attributes_stride, attribute_weights, attribute_count, vertex_count, vertex_positions, vertex_attributes, sparse_remap, attribute_remap, vertex_scale, vertex_offset, vertex_update, vertex_kind, vertex_lock);
 	}
 
 	// if debug visualization data is requested, fill it instead of index data; for simplicity, this doesn't work with sparsity
