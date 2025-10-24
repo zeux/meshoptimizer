@@ -126,7 +126,7 @@
 			import { GLTFLoader } from 'three-examples/loaders/GLTFLoader.js';
 			import { OBJLoader } from 'three-examples/loaders/OBJLoader.js';
 			import { OrbitControls } from 'three-examples/controls/OrbitControls.js';
-			import { mergeVertices } from 'three-examples/utils/BufferGeometryUtils.js';
+			import { mergeGeometries, mergeVertices } from 'three-examples/utils/BufferGeometryUtils.js';
 			import { MeshoptDecoder } from '../js/meshopt_decoder.js';
 			import { MeshoptSimplifier } from '../js/meshopt_simplifier.js';
 			import { GUI } from 'lil-gui';
@@ -155,6 +155,7 @@
 				debugOverlay: false,
 				sloppy: false,
 				permissive: false,
+				permissiveProtection: 3,
 				lockBorder: false,
 				preprune: 0.0,
 				prune: true,
@@ -169,6 +170,7 @@
 				autoLod: false,
 				autoLodFactor: 1.0,
 				gridColumns: 2,
+				debugCheckerboard: false,
 
 				loadFile: function () {
 					var input = document.getElementById('fileInput');
@@ -204,6 +206,7 @@
 			guiSimplify.add(settings, 'ratio', 0, 1, 0.01).onChange(simplify);
 			guiSimplify.add(settings, 'sloppy').onChange(simplify);
 			guiSimplify.add(settings, 'permissive').onChange(simplify);
+			guiSimplify.add(settings, 'permissiveProtection', { none: 0, normals: 1, uvs: 2, all: 3 }).onChange(simplify);
 			guiSimplify.add(settings, 'lockBorder').onChange(simplify);
 			guiSimplify.add(settings, 'prune').onChange(simplify);
 			guiSimplify.add(settings, 'regularize').onChange(simplify);
@@ -226,6 +229,7 @@
 			var guiLoad = gui.addFolder('Load');
 			guiLoad.add(settings, 'loadFile');
 			guiLoad.add(settings, 'updateModule');
+			guiLoad.add(settings, 'debugCheckerboard');
 			guiLoad.add(settings, 'autoUpdate').onChange(autoReload);
 			guiLoad.add(settings, 'autoUpdateStatus').listen();
 
@@ -517,7 +521,7 @@
 					var pos_remap = MeshoptSimplifier.generatePositionRemap(positions, stride);
 					var protect_bit = 2;
 
-					if (geo.attributes.normal) {
+					if (geo.attributes.normal && (settings.permissiveProtection & 1) != 0) {
 						for (var i = 0, e = geo.attributes.position.count; i < e; ++i) {
 							if (pos_remap[i] != i) {
 								var rx = geo.attributes.normal.getX(pos_remap[i]),
@@ -535,7 +539,7 @@
 						}
 					}
 
-					if (geo.attributes.uv) {
+					if (geo.attributes.uv && (settings.permissiveProtection & 2) != 0) {
 						for (var i = 0, e = geo.attributes.position.count; i < e; ++i) {
 							if (pos_remap[i] != i) {
 								var ru = geo.attributes.uv.getX(pos_remap[i]),
@@ -917,6 +921,8 @@
 					loader.load(
 						path,
 						function (obj) {
+							var geos = [];
+
 							obj.traverse(function (node) {
 								if (node.isMesh) {
 									// obj loader does not index the geometry, so we need to do it ourselves
@@ -927,10 +933,34 @@
 										node.material = node.material[0];
 										node.geometry.clearGroups();
 									}
+
+									geos.push(node.geometry);
 								}
 							});
 
-							models[viewIndex] = obj;
+							// try to merge geometries into a single mesh; this cleanly handles material boundaries and separate objects
+							// it may fail if the geometries are incompatible (different attributes), in which case we just use the original object
+							var merged = mergeGeometries(geos);
+
+							if (merged) {
+								if (settings.debugCheckerboard) {
+									var cb = new THREE.TextureLoader().load(
+										'https://threejs.org/examples/textures/floors/FloorsCheckerboard_S_Diffuse.jpg'
+									);
+									cb.wrapS = THREE.RepeatWrapping;
+									cb.wrapT = THREE.RepeatWrapping;
+									cb.repeat.set(8, 8); // Adjust for number of repetitions
+
+									var mat = new THREE.MeshStandardMaterial({ map: cb });
+								} else {
+									var mat = new THREE.MeshStandardMaterial({ color: 0xdddddd });
+								}
+
+								models[viewIndex] = new THREE.Mesh(merged, mat);
+							} else {
+								models[viewIndex] = obj;
+							}
+
 							center(models[viewIndex]);
 							scenes[viewIndex].add(models[viewIndex]);
 

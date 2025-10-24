@@ -112,6 +112,31 @@ var tests = {
 		assert.deepEqual(res[0], expected);
 	},
 
+	simplifyUpdate: function () {
+		var indices = new Uint32Array([0, 1, 3, 3, 1, 4, 4, 1, 2, 0, 3, 2, 3, 4, 2]);
+
+		var positions = new Float32Array([0, 0, 0, 1, 1, 0, 2, 0, 0, 0.9, 0.2, 0.1, 1.1, 0.2, 0.1]);
+		var attributes = new Float32Array([0, 0, 0, 0.2, 0.1]);
+
+		var res = simplifier.simplifyWithUpdate(indices, positions, 3, attributes, 1, [1], null, 9, 1);
+
+		var expected = new Uint32Array([0, 1, 3, 3, 1, 2, 0, 3, 2]);
+
+		assert.equal(res[0], expected.length);
+		assert.deepEqual(indices.subarray(0, expected.length), expected);
+
+		// border vertices haven't moved but may have small floating point drift
+		for (var i = 0; i < 3; ++i) {
+			assert(Math.abs(attributes[i]) < 1e-6);
+		}
+
+		// center vertex got updated
+		assert(Math.abs(positions[3 * 3 + 0] - 0.88) < 1e-2);
+		assert(Math.abs(positions[3 * 3 + 1] - 0.19) < 1e-2);
+		assert(Math.abs(positions[3 * 3 + 2] - 0.11) < 1e-2);
+		assert(Math.abs(attributes[3] - 0.18) < 1e-2);
+	},
+
 	simplifyLockFlags: function () {
 		// 0
 		// 1 2
