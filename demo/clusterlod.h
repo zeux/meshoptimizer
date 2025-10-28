@@ -51,8 +51,8 @@ struct clodConfig
 	// should clodCluster::bounds be computed based on the geometry of each cluster
 	bool optimize_bounds;
 
-	// should clodCluster::indices be optimized for rasterization
-	bool optimize_raster;
+	// should clodCluster::indices be optimized for locality; helps with rasterization performance and ray tracing performance in fast-build modes
+	bool optimize_clusters;
 };
 
 struct clodMesh
@@ -248,7 +248,7 @@ static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh&
 	{
 		const meshopt_Meshlet& meshlet = meshlets[i];
 
-		if (config.optimize_raster)
+		if (config.optimize_clusters)
 			meshopt_optimizeMeshlet(&meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count, meshlet.vertex_count);
 
 		clusters[i].vertices = meshlet.vertex_count;
@@ -462,7 +462,7 @@ clodConfig clodDefaultConfig(size_t max_triangles)
 	config.cluster_spatial = false;
 	config.cluster_split_factor = 2.0f;
 
-	config.optimize_raster = true;
+	config.optimize_clusters = true;
 
 	config.simplify_ratio = 0.5f;
 	config.simplify_threshold = 0.85f;
@@ -479,12 +479,14 @@ clodConfig clodDefaultConfigRT(size_t max_triangles)
 {
 	clodConfig config = clodDefaultConfig(max_triangles);
 
-	config.max_vertices = std::max(size_t(256), max_triangles + max_triangles / 2);
+	// for ray tracing, we may want smaller clusters when that improves BVH quality further; for maximum ray tracing performance this could be reduced even further
+	config.min_triangles = max_triangles / 4;
+
+	// by default, we use larger max_vertices for RT; the vertex count is not important for ray tracing performance, and this helps improve cluster utilization
+	config.max_vertices = std::max(size_t(256), max_triangles * 2);
 
 	config.cluster_spatial = true;
 	config.cluster_fill_weight = 0.5f;
-
-	config.optimize_raster = false;
 
 	return config;
 }
