@@ -487,7 +487,7 @@ clodConfig clodDefaultConfigRT(size_t max_triangles)
 	config.min_triangles = max_triangles / 4;
 
 	// by default, we use larger max_vertices for RT; the vertex count is not important for ray tracing performance, and this helps improve cluster utilization
-	config.max_vertices = std::max(size_t(256), max_triangles * 2);
+	config.max_vertices = std::min(size_t(256), max_triangles * 2);
 
 	config.cluster_spatial = true;
 	config.cluster_fill_weight = 0.5f;
