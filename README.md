@@ -485,6 +485,8 @@ lod.resize(meshopt_simplifyWithAttributes(&lod[0], indices, index_count, &vertic
 
 The attributes are passed as a separate buffer (in the example above it's a subset of the same vertex buffer) and should be stored as consecutive floats; attribute weights are used to control the importance of each attribute in the simplification process. For normalized attributes like normals and vertex colors, a weight around 1.0 is usually appropriate; internally, a change of `1/weight` in attribute value over a distance `d` is approximately equivalent to a change of `d` in position. Using higher weights may be appropriate to preserve attribute quality at the cost of position quality. If the attribute has a different scale (e.g. unnormalized vertex colors in [0..255] range), the weight should be divided by the scaling factor (1/255 in this example).
 
+Including texture coordinates in the attribute set is optional, as simplification generally preserves texture quality reasonably well by default; if included, a weight of around 10-100 is usually appropriate depending on the UV density. It's also possible to compute the weight automatically by setting it to the reciprocal average density of UVs, which can be computed as `1/sqrt(average UV area)` = `1/sqrt(sum(abs(uv area)) / triangle count)` over all triangles in the mesh , possibly scaled by a constant factor if necessary.
+
 Both the target error and the resulting error combine positional error and attribute error, so the error can be used to control the LOD while taking attribute quality into account, assuming carefully chosen weights.
 
 ### Permissive simplification
