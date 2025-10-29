@@ -19,9 +19,10 @@ struct clodConfig
 	size_t min_triangles;
 	size_t max_triangles;
 
-	// partitioning setup; maps to meshopt_partitionClusters parameters
+	// partitioning setup; maps to meshopt_partitionClusters parameters (plus optional partition sorting)
 	// note: partition size is the target size, not maximum; actual partitions may be up to 1/3 larger (e.g. target 24 results in maximum 32)
 	bool partition_spatial;
+	bool partition_sort;
 	size_t partition_size;
 
 	// clusterization setup; maps to meshopt_buildMeshletsSpatial / meshopt_buildMeshletsFlex
@@ -51,8 +52,8 @@ struct clodConfig
 	// should clodCluster::bounds be computed based on the geometry of each cluster
 	bool optimize_bounds;
 
-	// should clodCluster::indices be optimized for rasterization
-	bool optimize_raster;
+	// should clodCluster::indices be optimized for locality; helps with rasterization performance and ray tracing performance in fast-build modes
+	bool optimize_clusters;
 };
 
 struct clodMesh
@@ -110,7 +111,6 @@ struct clodCluster
 	size_t index_count;
 
 	// cluster vertex count; indices[] has vertex_count unique entries
-	// can be used to extract local index buffer from indices[] using meshopt_buildMeshletsScan
 	size_t vertex_count;
 };
 
@@ -142,6 +142,11 @@ clodConfig clodDefaultConfigRT(size_t max_triangles);
 // build cluster LOD hierarchy, calling output callbacks as new clusters and groups are generated
 // returns the total number of clusters produced
 size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOutput output_callback);
+
+// extract meshlet-local indices from cluster indices produced by clodBuild
+// fills triangles[] and vertices[] such that vertices[triangles[i]] == indices[i]
+// returns number of unique vertices (which will be equal to clodCluster::vertex_count)
+size_t clodLocalIndices(unsigned int* vertices, unsigned char* triangles, const unsigned int* indices, size_t index_count);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -248,12 +253,12 @@ static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh&
 	{
 		const meshopt_Meshlet& meshlet = meshlets[i];
 
-		if (config.optimize_raster)
+		if (config.optimize_clusters)
 			meshopt_optimizeMeshlet(&meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count, meshlet.vertex_count);
 
 		clusters[i].vertices = meshlet.vertex_count;
 
-		// note: we discard meshlet-local indices; they can be recovered by the caller using meshopt_buildMeshletsScan
+		// note: we discard meshlet-local indices; they can be recovered by the caller using clodLocalIndices
 		clusters[i].indices.resize(meshlet.triangle_count * 3);
 		for (size_t j = 0; j < meshlet.triangle_count * 3; ++j)
 			clusters[i].indices[j] = meshlet_vertices[meshlet.vertex_offset + meshlet_triangles[meshlet.triangle_offset + j]];
@@ -273,6 +278,7 @@ static std::vector<std::vector<int> > partition(const clodConfig& config, const 
 	std::vector<unsigned int> cluster_indices;
 	std::vector<unsigned int> cluster_counts(pending.size());
 
+	// copy cluster index data into a flat array for partitioning
 	size_t total_index_count = 0;
 	for (size_t i = 0; i < pending.size(); ++i)
 		total_index_count += clusters[pending[i]].indices.size();
@@ -289,16 +295,33 @@ static std::vector<std::vector<int> > partition(const clodConfig& config, const 
 			cluster_indices.push_back(remap[cluster.indices[j]]);
 	}
 
+	// partition clusters into groups; the output is a partition id per cluster
 	std::vector<unsigned int> cluster_part(pending.size());
 	size_t partition_count = meshopt_partitionClusters(&cluster_part[0], &cluster_indices[0], cluster_indices.size(), &cluster_counts[0], cluster_counts.size(),
 	    config.partition_spatial ? mesh.vertex_positions : NULL, remap.size(), mesh.vertex_positions_stride, config.partition_size);
 
+	// preallocate partitions for worst case
 	std::vector<std::vector<int> > partitions(partition_count);
 	for (size_t i = 0; i < partition_count; ++i)
 		partitions[i].reserve(config.partition_size + config.partition_size / 3);
 
+	std::vector<unsigned int> partition_remap;
+
+	if (config.partition_sort)
+	{
+		// compute partition points for sorting; any representative point will do, we use last cluster center for simplicity
+		std::vector<float> partition_point(partition_count * 3);
+		for (size_t i = 0; i < pending.size(); ++i)
+			memcpy(&partition_point[cluster_part[i] * 3], clusters[pending[i]].bounds.center, sizeof(float) * 3);
+
+		// sort partitions spatially; the output is a remap table from old index (partition id) to new index
+		partition_remap.resize(partition_count);
+		meshopt_spatialSortRemap(partition_remap.data(), partition_point.data(), partition_count, sizeof(float) * 3);
+	}
+
+	// distribute clusters into partitions, applying spatial order if requested
 	for (size_t i = 0; i < pending.size(); ++i)
-		partitions[cluster_part[i]].push_back(pending[i]);
+		partitions[partition_remap.empty() ? cluster_part[i] : partition_remap[cluster_part[i]]].push_back(pending[i]);
 
 	return partitions;
 }
@@ -462,7 +485,7 @@ clodConfig clodDefaultConfig(size_t max_triangles)
 	config.cluster_spatial = false;
 	config.cluster_split_factor = 2.0f;
 
-	config.optimize_raster = true;
+	config.optimize_clusters = true;
 
 	config.simplify_ratio = 0.5f;
 	config.simplify_threshold = 0.85f;
@@ -479,12 +502,14 @@ clodConfig clodDefaultConfigRT(size_t max_triangles)
 {
 	clodConfig config = clodDefaultConfig(max_triangles);
 
-	config.max_vertices = std::max(size_t(256), max_triangles + max_triangles / 2);
+	// for ray tracing, we may want smaller clusters when that improves BVH quality further; for maximum ray tracing performance this could be reduced even further
+	config.min_triangles = max_triangles / 4;
+
+	// by default, we use larger max_vertices for RT; the vertex count is not important for ray tracing performance, and this helps improve cluster utilization
+	config.max_vertices = std::min(size_t(256), max_triangles * 2);
 
 	config.cluster_spatial = true;
 	config.cluster_fill_weight = 0.5f;
-
-	config.optimize_raster = false;
 
 	return config;
 }
@@ -604,6 +629,59 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 	}
 
 	return clusters.size();
+}
+
+size_t clodLocalIndices(unsigned int* vertices, unsigned char* triangles, const unsigned int* indices, size_t index_count)
+{
+	size_t unique = 0;
+
+	// direct mapped cache for fast lookups based on low index bits; inspired by vk_lod_clusters from NVIDIA
+	short cache[1024];
+	memset(cache, -1, sizeof(cache));
+
+	for (size_t i = 0; i < index_count; ++i)
+	{
+		unsigned int v = indices[i];
+		unsigned int key = v & (sizeof(cache) / sizeof(cache[0]) - 1);
+		short c = cache[key];
+
+		// fast path: vertex has been seen before
+		if (c >= 0 && vertices[c] == v)
+		{
+			triangles[i] = (unsigned char)c;
+			continue;
+		}
+
+		// fast path: vertex has never been seen before
+		if (c < 0)
+		{
+			cache[key] = short(unique);
+			triangles[i] = (unsigned char)unique;
+			vertices[unique++] = v;
+			continue;
+		}
+
+		// slow path: hash collision with a different vertex, so we need to look through all vertices
+		int pos = -1;
+		for (size_t j = 0; j < unique; ++j)
+			if (vertices[j] == v)
+			{
+				pos = int(j);
+				break;
+			}
+
+		if (pos < 0)
+		{
+			pos = int(unique);
+			vertices[unique++] = v;
+		}
+
+		cache[key] = short(pos);
+		triangles[i] = (unsigned char)pos;
+	}
+
+	assert(unique <= 256);
+	return unique;
 }
 #endif
 

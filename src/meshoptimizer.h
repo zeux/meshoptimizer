@@ -699,10 +699,9 @@ MESHOPTIMIZER_API size_t meshopt_buildMeshletsSpatial(struct meshopt_Meshlet* me
 
 /**
  * Meshlet optimizer
- * Reorders meshlet vertices and triangles to maximize locality to improve rasterizer throughput
+ * Reorders meshlet vertices and triangles to maximize locality which can improve rasterizer throughput or ray tracing performance when using fast-build modes.
  *
- * meshlet_triangles and meshlet_vertices must refer to meshlet triangle and vertex index data; when buildMeshlets* is used, these
- * need to be computed from meshlet's vertex_offset and triangle_offset
+ * meshlet_triangles and meshlet_vertices must refer to meshlet data; when buildMeshlets* is used, these need to be computed from meshlet's vertex_offset and triangle_offset
  * triangle_count and vertex_count must not exceed implementation limits (vertex_count <= 256, triangle_count <= 512)
  */
 MESHOPTIMIZER_API void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, size_t triangle_count, size_t vertex_count);

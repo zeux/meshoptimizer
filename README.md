@@ -289,6 +289,8 @@ The `min_triangles` and `max_triangles` parameters control the allowed range of 
 
 The `fill_weight` parameter (typically between 0 and 1, although values higher than 1 could be used to prioritize cluster fill even more) controls the trade-off between pure SAH optimization and triangle utilization. A value of 0 will optimize purely for SAH, resulting in best raytracing performance but potentially smaller clusters. Values between 0.25 and 0.75 typically provide a good balance of SAH quality vs triangle count.
 
+When the resulting meshlets are used to generate hardware-specific acceleration structures, using fast trace (e.g. `VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR`) builds results in maximum performance; if build performance is important, using `meshopt_optimizeMeshlet` can help improve ray tracing performance when using fast build (e.g. `VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR`), although the tracing performance will still be lower than with fast trace builds.
+
 ### Point cloud clusterization
 
 Both of the meshlet algorithms are designed to work with triangle meshes. In some cases, splitting a point cloud into fixed size clusters can be useful; the resulting point clusters could be rendered via mesh or compute shaders, or the resulting subdivision can be used to parallelize point processing while maintaining locality of points. To that end, this library provides `meshopt_spatialClusterPoints` algorithm:
