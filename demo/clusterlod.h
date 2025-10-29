@@ -19,9 +19,10 @@ struct clodConfig
 	size_t min_triangles;
 	size_t max_triangles;
 
-	// partitioning setup; maps to meshopt_partitionClusters parameters
+	// partitioning setup; maps to meshopt_partitionClusters parameters (plus optional partition sorting)
 	// note: partition size is the target size, not maximum; actual partitions may be up to 1/3 larger (e.g. target 24 results in maximum 32)
 	bool partition_spatial;
+	bool partition_sort;
 	size_t partition_size;
 
 	// clusterization setup; maps to meshopt_buildMeshletsSpatial / meshopt_buildMeshletsFlex
@@ -277,6 +278,7 @@ static std::vector<std::vector<int> > partition(const clodConfig& config, const 
 	std::vector<unsigned int> cluster_indices;
 	std::vector<unsigned int> cluster_counts(pending.size());
 
+	// copy cluster index data into a flat array for partitioning
 	size_t total_index_count = 0;
 	for (size_t i = 0; i < pending.size(); ++i)
 		total_index_count += clusters[pending[i]].indices.size();
@@ -293,16 +295,33 @@ static std::vector<std::vector<int> > partition(const clodConfig& config, const 
 			cluster_indices.push_back(remap[cluster.indices[j]]);
 	}
 
+	// partition clusters into groups; the output is a partition id per cluster
 	std::vector<unsigned int> cluster_part(pending.size());
 	size_t partition_count = meshopt_partitionClusters(&cluster_part[0], &cluster_indices[0], cluster_indices.size(), &cluster_counts[0], cluster_counts.size(),
 	    config.partition_spatial ? mesh.vertex_positions : NULL, remap.size(), mesh.vertex_positions_stride, config.partition_size);
 
+	// preallocate partitions for worst case
 	std::vector<std::vector<int> > partitions(partition_count);
 	for (size_t i = 0; i < partition_count; ++i)
 		partitions[i].reserve(config.partition_size + config.partition_size / 3);
 
+	std::vector<unsigned int> partition_remap;
+
+	if (config.partition_sort)
+	{
+		// compute partition points for sorting; any representative point will do, we use last cluster center for simplicity
+		std::vector<float> partition_point(partition_count * 3);
+		for (size_t i = 0; i < pending.size(); ++i)
+			memcpy(&partition_point[cluster_part[i] * 3], clusters[pending[i]].bounds.center, sizeof(float) * 3);
+
+		// sort partitions spatially; the output is a remap table from old index (partition id) to new index
+		partition_remap.resize(partition_count);
+		meshopt_spatialSortRemap(partition_remap.data(), partition_point.data(), partition_count, sizeof(float) * 3);
+	}
+
+	// distribute clusters into partitions, applying spatial order if requested
 	for (size_t i = 0; i < pending.size(); ++i)
-		partitions[cluster_part[i]].push_back(pending[i]);
+		partitions[partition_remap.empty() ? cluster_part[i] : partition_remap[cluster_part[i]]].push_back(pending[i]);
 
 	return partitions;
 }
