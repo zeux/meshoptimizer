@@ -1048,9 +1048,6 @@ static void bvhPartition(unsigned int* target, const unsigned int* order, const 
 
 static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* ordery, unsigned int* orderz, unsigned char* boundary, size_t count, int depth, void* scratch, short* used, const unsigned int* indices, size_t max_vertices, size_t min_triangles, size_t max_triangles, float fill_weight)
 {
-	if (depth >= kMeshletMaxTreeDepth)
-		return bvhPackTail(boundary, orderx, count, used, indices, max_vertices, max_triangles);
-
 	if (count <= max_triangles && bvhCountVertices(orderx, count, used, indices) <= max_vertices)
 		return bvhPackLeaf(boundary, count);
 
@@ -1093,8 +1090,8 @@ static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* or
 		}
 	}
 
-	// this may happen if SAH costs along the admissible splits are NaN
-	if (bestk < 0)
+	// this may happen if SAH costs along the admissible splits are NaN, or due to imbalanced splits on pathological inputs
+	if (bestk < 0 || depth >= kMeshletMaxTreeDepth)
 		return bvhPackTail(boundary, orderx, count, used, indices, max_vertices, max_triangles);
 
 	// mark sides of split for partitioning
@@ -1119,6 +1116,7 @@ static void bvhSplit(const BVHBox* boxes, unsigned int* orderx, unsigned int* or
 		bvhPartition(axis, temp, sides, bestsplit, count);
 	}
 
+	// recursion depth is bounded due to max depth check above
 	bvhSplit(boxes, orderx, ordery, orderz, boundary, bestsplit, depth + 1, scratch, used, indices, max_vertices, min_triangles, max_triangles, fill_weight);
 	bvhSplit(boxes, orderx + bestsplit, ordery + bestsplit, orderz + bestsplit, boundary + bestsplit, count - bestsplit, depth + 1, scratch, used, indices, max_vertices, min_triangles, max_triangles, fill_weight);
 }
