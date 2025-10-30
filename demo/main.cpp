@@ -1430,6 +1430,7 @@ void process(const char* path)
 	simplifyAttr(mesh);
 	simplifyAttr(mesh, 0.1f, meshopt_SimplifyPermissive);
 	simplifyUpdate(mesh);
+	simplifyUpdate(mesh, 0.1f, meshopt_SimplifyPermissive);
 	simplifySloppy(mesh);
 	simplifyComplete(mesh);
 	simplifyPoints(mesh);
