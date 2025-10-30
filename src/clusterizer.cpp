@@ -640,7 +640,7 @@ static size_t kdtreeBuildLeaf(size_t offset, KDNode* nodes, size_t node_count, u
 	return offset + count;
 }
 
-static size_t kdtreeBuild(size_t offset, KDNode* nodes, size_t node_count, const float* points, size_t stride, unsigned int* indices, size_t count, size_t leaf_size)
+static size_t kdtreeBuild(size_t offset, KDNode* nodes, size_t node_count, const float* points, size_t stride, unsigned int* indices, size_t count, size_t leaf_size, int depth)
 {
 	assert(count > 0);
 	assert(offset < node_count);
@@ -672,7 +672,8 @@ static size_t kdtreeBuild(size_t offset, KDNode* nodes, size_t node_count, const
 	size_t middle = kdtreePartition(indices, count, points, stride, axis, split);
 
 	// when the partition is degenerate simply consolidate the points into a single node
-	if (middle <= leaf_size / 2 || middle >= count - leaf_size / 2)
+	// this also ensures recursion depth is bounded on pathological inputs
+	if (middle <= leaf_size / 2 || middle >= count - leaf_size / 2 || depth >= kMeshletMaxTreeDepth)
 		return kdtreeBuildLeaf(offset, nodes, node_count, indices, count);
 
 	KDNode& result = nodes[offset];
@@ -681,13 +682,13 @@ static size_t kdtreeBuild(size_t offset, KDNode* nodes, size_t node_count, const
 	result.axis = axis;
 
 	// left subtree is right after our node
-	size_t next_offset = kdtreeBuild(offset + 1, nodes, node_count, points, stride, indices, middle, leaf_size);
+	size_t next_offset = kdtreeBuild(offset + 1, nodes, node_count, points, stride, indices, middle, leaf_size, depth + 1);
 
 	// distance to the right subtree is represented explicitly
 	assert(next_offset - offset > 1);
 	result.children = unsigned(next_offset - offset - 1);
 
-	return kdtreeBuild(next_offset, nodes, node_count, points, stride, indices + middle, count - middle, leaf_size);
+	return kdtreeBuild(next_offset, nodes, node_count, points, stride, indices + middle, count - middle, leaf_size, depth + 1);
 }
 
 static void kdtreeNearest(KDNode* nodes, unsigned int root, const float* points, size_t stride, const unsigned char* emitted_flags, const float* position, unsigned int& result, float& limit)
@@ -739,6 +740,7 @@ static void kdtreeNearest(KDNode* nodes, unsigned int root, const float* points,
 		if ((nodes[root + 1 + first].children | nodes[root + 1 + second].children) == 0)
 			nodes[root].children = 0;
 
+		// recursion depth is bounded by tree depth (which is limited by construction)
 		kdtreeNearest(nodes, root + 1 + first, points, stride, emitted_flags, position, result, limit);
 
 		// only process the other node if it can have a match based on closest distance so far
@@ -1191,7 +1193,7 @@ size_t meshopt_buildMeshletsFlex(meshopt_Meshlet* meshlets, unsigned int* meshle
 		kdindices[i] = unsigned(i);
 
 	KDNode* nodes = allocator.allocate<KDNode>(face_count * 2);
-	kdtreeBuild(0, nodes, face_count * 2, &triangles[0].px, sizeof(Cone) / sizeof(float), kdindices, face_count, /* leaf_size= */ 8);
+	kdtreeBuild(0, nodes, face_count * 2, &triangles[0].px, sizeof(Cone) / sizeof(float), kdindices, face_count, /* leaf_size= */ 8, 0);
 
 	// find a specific corner of the mesh to use as a starting point for meshlet flow
 	float cornerx = FLT_MAX, cornery = FLT_MAX, cornerz = FLT_MAX;
