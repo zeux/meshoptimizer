@@ -767,6 +767,7 @@ static float boxMerge(BVHBoxT& box, const BVHBox& other)
 	__m128 min = _mm_loadu_ps(box.min);
 	__m128 max = _mm_loadu_ps(box.max);
 
+	// note: over-read is safe because BVHBox array is allocated with padding
 	min = _mm_min_ps(min, _mm_loadu_ps(other.min));
 	max = _mm_max_ps(max, _mm_loadu_ps(other.max));
 
@@ -787,6 +788,7 @@ static float boxMerge(BVHBoxT& box, const BVHBox& other)
 	float32x4_t min = vld1q_f32(box.min);
 	float32x4_t max = vld1q_f32(box.max);
 
+	// note: over-read is safe because BVHBox array is allocated with padding
 	min = vminq_f32(min, vld1q_f32(other.min));
 	max = vmaxq_f32(max, vld1q_f32(other.max));
 
