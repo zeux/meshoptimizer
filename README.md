@@ -719,8 +719,6 @@ Applications may configure the library to change the attributes of experimental 
 
 Currently, the following APIs are experimental:
 
-- `meshopt_decodeFilterColor`
-- `meshopt_encodeFilterColor`
 - `meshopt_SimplifyPermissive` mode for `meshopt_simplify*` functions (and associated `meshopt_SimplifyVertex_*` flags)
 
 ## License

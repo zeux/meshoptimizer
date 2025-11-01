@@ -360,13 +360,13 @@ MESHOPTIMIZER_API int meshopt_decodeVertexVersion(const unsigned char* buffer, s
  * meshopt_decodeFilterExp decodes exponential encoding of floating-point data with 8-bit exponent and 24-bit integer mantissa as 2^E*M.
  * Each 32-bit component is decoded in isolation; stride must be divisible by 4.
  *
- * Experimental: meshopt_decodeFilterColor decodes YCoCg (+A) color encoding where RGB is converted to YCoCg space with variable bit quantization.
+ * meshopt_decodeFilterColor decodes YCoCg (+A) color encoding where RGB is converted to YCoCg space with variable bit quantization.
  * Each component is stored as an 8-bit or 16-bit normalized integer; stride must be equal to 4 or 8.
  */
 MESHOPTIMIZER_API void meshopt_decodeFilterOct(void* buffer, size_t count, size_t stride);
 MESHOPTIMIZER_API void meshopt_decodeFilterQuat(void* buffer, size_t count, size_t stride);
 MESHOPTIMIZER_API void meshopt_decodeFilterExp(void* buffer, size_t count, size_t stride);
-MESHOPTIMIZER_EXPERIMENTAL void meshopt_decodeFilterColor(void* buffer, size_t count, size_t stride);
+MESHOPTIMIZER_API void meshopt_decodeFilterColor(void* buffer, size_t count, size_t stride);
 
 /**
  * Vertex buffer filter encoders
@@ -384,7 +384,7 @@ MESHOPTIMIZER_EXPERIMENTAL void meshopt_decodeFilterColor(void* buffer, size_t c
  * Exponent can be shared between all components of a given vector as defined by stride or all values of a given component; stride must be divisible by 4.
  * Input data must contain stride/4 floats for every vector (count*stride/4 total).
  *
- * Experimental: meshopt_encodeFilterColor encodes RGBA color data by converting RGB to YCoCg color space with variable bit quantization.
+ * meshopt_encodeFilterColor encodes RGBA color data by converting RGB to YCoCg color space with variable bit quantization.
  * Each component is stored as an 8-bit or 16-bit integer; stride must be equal to 4 or 8.
  * Input data must contain 4 floats for every color (count*4 total).
  */
@@ -403,7 +403,7 @@ enum meshopt_EncodeExpMode
 MESHOPTIMIZER_API void meshopt_encodeFilterOct(void* destination, size_t count, size_t stride, int bits, const float* data);
 MESHOPTIMIZER_API void meshopt_encodeFilterQuat(void* destination, size_t count, size_t stride, int bits, const float* data);
 MESHOPTIMIZER_API void meshopt_encodeFilterExp(void* destination, size_t count, size_t stride, int bits, const float* data, enum meshopt_EncodeExpMode mode);
-MESHOPTIMIZER_EXPERIMENTAL void meshopt_encodeFilterColor(void* destination, size_t count, size_t stride, int bits, const float* data);
+MESHOPTIMIZER_API void meshopt_encodeFilterColor(void* destination, size_t count, size_t stride, int bits, const float* data);
 
 /**
  * Simplification options
