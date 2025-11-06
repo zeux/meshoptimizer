@@ -728,9 +728,10 @@ static void decodeFilterQuatSimd(short* data, size_t count)
 		uint64x2_t res_1 = vreinterpretq_u64_s16(vzipq_s16(vreinterpretq_s16_s32(wyr), vreinterpretq_s16_s32(xzr)).val[1]);
 
 		// store results to stack so that we can rotate using scalar instructions
-		uint64_t res[4];
-		vst1q_u64(&res[0], res_0);
-		vst1q_u64(&res[2], res_1);
+		// TODO: volatile works around LLVM mis-optimizing code; https://github.com/llvm/llvm-project/issues/166808
+		volatile uint64_t res[4];
+		vst1q_u64(const_cast<uint64_t*>(&res[0]), res_0);
+		vst1q_u64(const_cast<uint64_t*>(&res[2]), res_1);
 
 		// rotate and store
 		uint64_t* out = reinterpret_cast<uint64_t*>(&data[i * 4]);
