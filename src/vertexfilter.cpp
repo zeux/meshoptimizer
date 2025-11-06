@@ -724,16 +724,21 @@ static void decodeFilterQuatSimd(short* data, size_t count)
 		int32x4_t wyr = vsliq_n_s32(wr, yr, 16);
 
 		// pack x/y/z/w using 16-bit unpacks; we pack wxyz by default (for qc=0)
-		int32x4_t res_0 = vreinterpretq_s32_s16(vzipq_s16(vreinterpretq_s16_s32(wyr), vreinterpretq_s16_s32(xzr)).val[0]);
-		int32x4_t res_1 = vreinterpretq_s32_s16(vzipq_s16(vreinterpretq_s16_s32(wyr), vreinterpretq_s16_s32(xzr)).val[1]);
+		uint64x2_t res_0 = vreinterpretq_u64_s16(vzipq_s16(vreinterpretq_s16_s32(wyr), vreinterpretq_s16_s32(xzr)).val[0]);
+		uint64x2_t res_1 = vreinterpretq_u64_s16(vzipq_s16(vreinterpretq_s16_s32(wyr), vreinterpretq_s16_s32(xzr)).val[1]);
+
+		// store results to stack so that we can rotate using scalar instructions
+		uint64_t res[4];
+		vst1q_u64(&res[0], res_0);
+		vst1q_u64(&res[2], res_1);
 
 		// rotate and store
-		uint64_t* out = (uint64_t*)&data[i * 4];
+		uint64_t* out = reinterpret_cast<uint64_t*>(&data[i * 4]);
 
-		out[0] = rotateleft64(vgetq_lane_u64(vreinterpretq_u64_s32(res_0), 0), vgetq_lane_s32(cf, 0) << 4);
-		out[1] = rotateleft64(vgetq_lane_u64(vreinterpretq_u64_s32(res_0), 1), vgetq_lane_s32(cf, 1) << 4);
-		out[2] = rotateleft64(vgetq_lane_u64(vreinterpretq_u64_s32(res_1), 0), vgetq_lane_s32(cf, 2) << 4);
-		out[3] = rotateleft64(vgetq_lane_u64(vreinterpretq_u64_s32(res_1), 1), vgetq_lane_s32(cf, 3) << 4);
+		out[0] = rotateleft64(res[0], data[(i + 0) * 4 + 3] << 4);
+		out[1] = rotateleft64(res[1], data[(i + 1) * 4 + 3] << 4);
+		out[2] = rotateleft64(res[2], data[(i + 2) * 4 + 3] << 4);
+		out[3] = rotateleft64(res[3], data[(i + 3) * 4 + 3] << 4);
 	}
 }
 
