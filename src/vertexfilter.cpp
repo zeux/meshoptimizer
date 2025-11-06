@@ -550,6 +550,13 @@ inline float32x4_t vdivq_f32(float32x4_t x, float32x4_t y)
 	r = vmulq_f32(r, vrecpsq_f32(y, r)); // refine rcp estimate
 	return vmulq_f32(x, r);
 }
+
+#ifndef __ARM_FEATURE_FMA
+inline float32x4_t vfmaq_f32(float32x4_t x, float32x4_t y, float32x4_t z)
+{
+	return vaddq_f32(x, vmulq_f32(y, z));
+}
+#endif
 #endif
 
 #ifdef SIMD_NEON
@@ -580,7 +587,7 @@ static void decodeFilterOctSimd8(signed char* data, size_t count)
 		y = vaddq_f32(y, vreinterpretq_f32_s32(veorq_s32(vreinterpretq_s32_f32(t), vandq_s32(vreinterpretq_s32_f32(y), sign))));
 
 		// compute normal length & scale
-		float32x4_t ll = vaddq_f32(vmulq_f32(x, x), vaddq_f32(vmulq_f32(y, y), vmulq_f32(z, z)));
+		float32x4_t ll = vfmaq_f32(vfmaq_f32(vmulq_f32(x, x), y, y), z, z);
 		float32x4_t rl = vrsqrteq_f32(ll);
 		float32x4_t s = vmulq_f32(vdupq_n_f32(127.f), rl);
 
@@ -588,9 +595,9 @@ static void decodeFilterOctSimd8(signed char* data, size_t count)
 		// note: the result is offset by 0x4B40_0000, but we only need the low 8 bits so we can omit the subtraction
 		const float32x4_t fsnap = vdupq_n_f32(3 << 22);
 
-		int32x4_t xr = vreinterpretq_s32_f32(vaddq_f32(vmulq_f32(x, s), fsnap));
-		int32x4_t yr = vreinterpretq_s32_f32(vaddq_f32(vmulq_f32(y, s), fsnap));
-		int32x4_t zr = vreinterpretq_s32_f32(vaddq_f32(vmulq_f32(z, s), fsnap));
+		int32x4_t xr = vreinterpretq_s32_f32(vfmaq_f32(fsnap, x, s));
+		int32x4_t yr = vreinterpretq_s32_f32(vfmaq_f32(fsnap, y, s));
+		int32x4_t zr = vreinterpretq_s32_f32(vfmaq_f32(fsnap, z, s));
 
 		// combine xr/yr/zr into final value
 		int32x4_t res = vsliq_n_s32(xr, vsliq_n_s32(yr, zr, 8), 8);
@@ -632,7 +639,7 @@ static void decodeFilterOctSimd16(short* data, size_t count)
 		y = vaddq_f32(y, vreinterpretq_f32_s32(veorq_s32(vreinterpretq_s32_f32(t), vandq_s32(vreinterpretq_s32_f32(y), sign))));
 
 		// compute normal length & scale
-		float32x4_t ll = vaddq_f32(vmulq_f32(x, x), vaddq_f32(vmulq_f32(y, y), vmulq_f32(z, z)));
+		float32x4_t ll = vfmaq_f32(vfmaq_f32(vmulq_f32(x, x), y, y), z, z);
 		float32x4_t rl = vrsqrteq_f32(ll);
 		rl = vmulq_f32(rl, vrsqrtsq_f32(vmulq_f32(rl, ll), rl)); // refine rsqrt estimate
 		float32x4_t s = vmulq_f32(vdupq_n_f32(32767.f), rl);
@@ -641,9 +648,9 @@ static void decodeFilterOctSimd16(short* data, size_t count)
 		// note: the result is offset by 0x4B40_0000, but we only need the low 16 bits so we can omit the subtraction
 		const float32x4_t fsnap = vdupq_n_f32(3 << 22);
 
-		int32x4_t xr = vreinterpretq_s32_f32(vaddq_f32(vmulq_f32(x, s), fsnap));
-		int32x4_t yr = vreinterpretq_s32_f32(vaddq_f32(vmulq_f32(y, s), fsnap));
-		int32x4_t zr = vreinterpretq_s32_f32(vaddq_f32(vmulq_f32(z, s), fsnap));
+		int32x4_t xr = vreinterpretq_s32_f32(vfmaq_f32(fsnap, x, s));
+		int32x4_t yr = vreinterpretq_s32_f32(vfmaq_f32(fsnap, y, s));
+		int32x4_t zr = vreinterpretq_s32_f32(vfmaq_f32(fsnap, z, s));
 
 		// mix x/z and y/0 to make 16-bit unpack easier
 		int32x4_t xzr = vsliq_n_s32(xr, zr, 16);
@@ -692,7 +699,7 @@ static void decodeFilterQuatSimd(short* data, size_t count)
 
 		// reconstruct w as a square root (unscaled); we clamp to 0.f to avoid NaN due to precision errors
 		float32x4_t ws = vmulq_f32(s, s);
-		float32x4_t ww = vsubq_f32(vaddq_f32(ws, ws), vaddq_f32(vmulq_f32(x, x), vaddq_f32(vmulq_f32(y, y), vmulq_f32(z, z))));
+		float32x4_t ww = vsubq_f32(vaddq_f32(ws, ws), vfmaq_f32(vfmaq_f32(vmulq_f32(x, x), y, y), z, z));
 		float32x4_t w = vsqrtq_f32(vmaxq_f32(ww, vdupq_n_f32(0.f)));
 
 		// compute final scale; note that all computations above are unscaled
@@ -703,10 +710,10 @@ static void decodeFilterQuatSimd(short* data, size_t count)
 		// note: the result is offset by 0x4B40_0000, but we only need the low 16 bits so we can omit the subtraction
 		const float32x4_t fsnap = vdupq_n_f32(3 << 22);
 
-		int32x4_t xr = vreinterpretq_s32_f32(vaddq_f32(vmulq_f32(x, ss), fsnap));
-		int32x4_t yr = vreinterpretq_s32_f32(vaddq_f32(vmulq_f32(y, ss), fsnap));
-		int32x4_t zr = vreinterpretq_s32_f32(vaddq_f32(vmulq_f32(z, ss), fsnap));
-		int32x4_t wr = vreinterpretq_s32_f32(vaddq_f32(vmulq_f32(w, ss), fsnap));
+		int32x4_t xr = vreinterpretq_s32_f32(vfmaq_f32(fsnap, x, ss));
+		int32x4_t yr = vreinterpretq_s32_f32(vfmaq_f32(fsnap, y, ss));
+		int32x4_t zr = vreinterpretq_s32_f32(vfmaq_f32(fsnap, z, ss));
+		int32x4_t wr = vreinterpretq_s32_f32(vfmaq_f32(fsnap, w, ss));
 
 		// mix x/z and w/y to make 16-bit unpack easier
 		int32x4_t xzr = vsliq_n_s32(xr, zr, 16);
@@ -779,10 +786,10 @@ static void decodeFilterColorSimd8(unsigned char* data, size_t count)
 		// note: the result is offset by 0x4B40_0000, but we only need the low 8 bits so we can omit the subtraction
 		const float32x4_t fsnap = vdupq_n_f32(3 << 22);
 
-		int32x4_t rr = vreinterpretq_s32_f32(vaddq_f32(vmulq_f32(vcvtq_f32_s32(rf), ss), fsnap));
-		int32x4_t gr = vreinterpretq_s32_f32(vaddq_f32(vmulq_f32(vcvtq_f32_s32(gf), ss), fsnap));
-		int32x4_t br = vreinterpretq_s32_f32(vaddq_f32(vmulq_f32(vcvtq_f32_s32(bf), ss), fsnap));
-		int32x4_t ar = vreinterpretq_s32_f32(vaddq_f32(vmulq_f32(vcvtq_f32_s32(af), ss), fsnap));
+		int32x4_t rr = vreinterpretq_s32_f32(vfmaq_f32(fsnap, vcvtq_f32_s32(rf), ss));
+		int32x4_t gr = vreinterpretq_s32_f32(vfmaq_f32(fsnap, vcvtq_f32_s32(gf), ss));
+		int32x4_t br = vreinterpretq_s32_f32(vfmaq_f32(fsnap, vcvtq_f32_s32(bf), ss));
+		int32x4_t ar = vreinterpretq_s32_f32(vfmaq_f32(fsnap, vcvtq_f32_s32(af), ss));
 
 		// repack rgba into final value
 		int32x4_t res = vsliq_n_s32(rr, vsliq_n_s32(gr, vsliq_n_s32(br, ar, 8), 8), 8);
@@ -830,10 +837,10 @@ static void decodeFilterColorSimd16(unsigned short* data, size_t count)
 		// note: the result is offset by 0x4B40_0000, but we only need the low 16 bits so we can omit the subtraction
 		const float32x4_t fsnap = vdupq_n_f32(3 << 22);
 
-		int32x4_t rr = vreinterpretq_s32_f32(vaddq_f32(vmulq_f32(vcvtq_f32_s32(rf), ss), fsnap));
-		int32x4_t gr = vreinterpretq_s32_f32(vaddq_f32(vmulq_f32(vcvtq_f32_s32(gf), ss), fsnap));
-		int32x4_t br = vreinterpretq_s32_f32(vaddq_f32(vmulq_f32(vcvtq_f32_s32(bf), ss), fsnap));
-		int32x4_t ar = vreinterpretq_s32_f32(vaddq_f32(vmulq_f32(vcvtq_f32_s32(af), ss), fsnap));
+		int32x4_t rr = vreinterpretq_s32_f32(vfmaq_f32(fsnap, vcvtq_f32_s32(rf), ss));
+		int32x4_t gr = vreinterpretq_s32_f32(vfmaq_f32(fsnap, vcvtq_f32_s32(gf), ss));
+		int32x4_t br = vreinterpretq_s32_f32(vfmaq_f32(fsnap, vcvtq_f32_s32(bf), ss));
+		int32x4_t ar = vreinterpretq_s32_f32(vfmaq_f32(fsnap, vcvtq_f32_s32(af), ss));
 
 		// mix r/b and g/a to make 16-bit unpack easier
 		int32x4_t rbr = vsliq_n_s32(rr, br, 16);
