@@ -14,6 +14,7 @@ If you are shipping a game that is using meshoptimizer, listing the library in t
 - [Deadlock](https://store.steampowered.com/app/1422450/Deadlock/)
 - [Dota 2 (2013)](https://www.dota2.com/home)
 - [Dragon's Dogma 2 (2024)](https://www.dragonsdogma.com/2/en-us/)
+- [Enlisted (2021)](https://enlisted.net/)
 - [Half-Life: Alyx (2020)](https://store.steampowered.com/app/546560/HalfLife_Alyx/)
 - [Jagged Alliance 3 (2023)](https://jaggedalliance3.thqnordic.com/)
 - [The Legend of Zelda: Tears of the Kingdom (2023)](https://zelda.nintendo.com/tears-of-the-kingdom/)
@@ -26,6 +27,7 @@ If you are shipping a game that is using meshoptimizer, listing the library in t
 - [Sky: Children of the Light (2019)](https://www.thatskygame.com/)
 - [Stranded: Alien Dawn (2023)](https://www.strandedaliendawn.com/en-US)
 - [Tunnet (2023)](https://store.steampowered.com/app/2286390/Tunnet/)
+- [War Thunder (2013)](https://warthunder.com/)
 - [Warframe (2013)](https://www.warframe.com/game/about)
 
 # Engines
@@ -34,6 +36,7 @@ If you are shipping an engine that is using meshoptimizer, listing the library i
 
 - [Bevy](https://bevyengine.org/)
 - [bgfx](https://github.com/bkaradzic/bgfx)
+- [Dagor Engine](https://github.com/GaijinEntertainment/DagorEngine)
 - [filament](https://github.com/google/filament)
 - [Flax Engine](https://flaxengine.com/)
 - [The Forge](https://theforge.dev/)
