@@ -137,7 +137,7 @@ format:
 formatjs:
 	prettier -w js/*.js gltf/*.js demo/*.html js/*.ts
 
-js: js/meshopt_decoder.js js/meshopt_encoder.js js/meshopt_simplifier.js js/meshopt_clusterizer.js
+js: js/meshopt_decoder.cjs js/meshopt_decoder.js js/meshopt_encoder.js js/meshopt_simplifier.js js/meshopt_clusterizer.js
 
 symbols: $(BUILD)/amalgamated.so
 	nm $< -U -g
