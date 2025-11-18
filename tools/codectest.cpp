@@ -223,7 +223,11 @@ int main(int argc, char** argv)
 		std::vector<unsigned char> output(meshopt_encodeVertexBufferBound(vertex_count, stride));
 		size_t output_size = meshopt_encodeVertexBuffer(output.data(), output.size(), input.data(), vertex_count, stride);
 
+#if TRACE
+		printf("%d => %d\n", int(input.size()), int(output_size));
+#else
 		fwrite(output.data(), 1, output_size, stdout);
+#endif
 		return 0;
 	}
 }
