@@ -173,7 +173,7 @@ struct Settings
 
 	bool compress;
 	bool compressmore;
-	bool compressexp;
+	bool compresskhr;
 	bool fallback;
 
 	int verbose;
@@ -379,7 +379,7 @@ StreamFormat writeIndexStream(std::string& bin, const std::vector<unsigned int>&
 StreamFormat writeTimeStream(std::string& bin, const std::vector<float>& data);
 StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data, const Settings& settings, bool has_tangents = false);
 
-void compressVertexStream(std::string& bin, const std::string& data, size_t count, size_t stride);
+void compressVertexStream(std::string& bin, const std::string& data, size_t count, size_t stride, int level);
 void compressIndexStream(std::string& bin, const std::string& data, size_t count, size_t stride);
 void compressIndexSequence(std::string& bin, const std::string& data, size_t count, size_t stride);
 
