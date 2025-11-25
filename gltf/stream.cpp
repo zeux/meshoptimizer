@@ -629,7 +629,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	}
 	else if (stream.type == cgltf_attribute_type_color)
 	{
-		bool col = filters && settings.compressexp && settings.compressmore;
+		bool col = filters && settings.compresskhr && settings.compressmore;
 		int bits = settings.col_bits;
 
 		StreamFormat::Filter filter = col ? StreamFormat::Filter_Color : StreamFormat::Filter_None;
@@ -866,12 +866,12 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 	}
 }
 
-void compressVertexStream(std::string& bin, const std::string& data, size_t count, size_t stride)
+void compressVertexStream(std::string& bin, const std::string& data, size_t count, size_t stride, int level)
 {
 	assert(data.size() == count * stride);
 
 	std::vector<unsigned char> compressed(meshopt_encodeVertexBufferBound(count, stride));
-	size_t size = meshopt_encodeVertexBuffer(&compressed[0], compressed.size(), data.c_str(), count, stride);
+	size_t size = meshopt_encodeVertexBufferLevel(&compressed[0], compressed.size(), data.c_str(), count, stride, level, level > 0);
 
 	bin.append(reinterpret_cast<const char*>(&compressed[0]), size);
 }
