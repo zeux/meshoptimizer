@@ -42,6 +42,9 @@ struct clodConfig
 	// amplify the error of clusters that go through sloppy simplification to account for appearance degradation
 	float simplify_error_factor_sloppy;
 
+	// experimental: limit error by edge length, aiming to remove subpixel triangles even if the attribute error is high
+	float simplify_error_edge_limit;
+
 	// use permissive simplification instead of regular simplification (make sure to use attribute_protect_mask if this is set!)
 	bool simplify_permissive;
 
@@ -440,6 +443,36 @@ static std::vector<unsigned int> simplify(const clodConfig& config, const clodMe
 	{
 		simplifyFallback(lod, mesh, indices, locks, target_count, error);
 		*error *= config.simplify_error_factor_sloppy; // scale error up to account for appearance degradation
+	}
+
+	// optionally limit error by edge length, aiming to remove subpixel triangles even if the attribute error is high
+	if (config.simplify_error_edge_limit > 0)
+	{
+		float max_edge_sq = 0;
+
+		for (size_t i = 0; i < indices.size(); i += 3)
+		{
+			unsigned int a = indices[i + 0], b = indices[i + 1], c = indices[i + 2];
+			assert(a < mesh.vertex_count && b < mesh.vertex_count && c < mesh.vertex_count);
+
+			const float* va = &mesh.vertex_positions[a * (mesh.vertex_positions_stride / sizeof(float))];
+			const float* vb = &mesh.vertex_positions[b * (mesh.vertex_positions_stride / sizeof(float))];
+			const float* vc = &mesh.vertex_positions[c * (mesh.vertex_positions_stride / sizeof(float))];
+
+			// compute squared edge lengths
+			float eab = (va[0] - vb[0]) * (va[0] - vb[0]) + (va[1] - vb[1]) * (va[1] - vb[1]) + (va[2] - vb[2]) * (va[2] - vb[2]);
+			float eac = (va[0] - vc[0]) * (va[0] - vc[0]) + (va[1] - vc[1]) * (va[1] - vc[1]) + (va[2] - vc[2]) * (va[2] - vc[2]);
+			float ebc = (vb[0] - vc[0]) * (vb[0] - vc[0]) + (vb[1] - vc[1]) * (vb[1] - vc[1]) + (vb[2] - vc[2]) * (vb[2] - vc[2]);
+
+			float emax = std::max(std::max(eab, eac), ebc);
+			float emin = std::min(std::min(eab, eac), ebc);
+
+			// we prefer using min edge length to reduce the number of triangles <1px thick, but need some stopgap for thin and long triangles like wires
+			max_edge_sq = std::max(max_edge_sq, std::max(emin, emax / 4));
+		}
+
+		// adjust the error to limit it for dense clusters based on edge lengths
+		*error = std::min(*error, sqrtf(max_edge_sq) * config.simplify_error_edge_limit);
 	}
 
 	return lod;
