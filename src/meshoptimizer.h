@@ -574,6 +574,14 @@ MESHOPTIMIZER_API size_t meshopt_stripifyBound(size_t index_count);
 MESHOPTIMIZER_API size_t meshopt_unstripify(unsigned int* destination, const unsigned int* indices, size_t index_count, unsigned int restart_index);
 MESHOPTIMIZER_API size_t meshopt_unstripifyBound(size_t index_count);
 
+/**
+ * Mesh welder, removes redundant vertices when points/attributes overlap.
+ * Parameters remap_indices and desitnation array should have enough space to store vertex_count of vertices.
+ *
+ * Returns the number of the number of unique vertices found.
+ */
+MESHOPTIMIZER_API size_t meshopt_weldMesh(size_t* remap_indices, float* destination, const float* vertices, size_t vertex_count, int component_count);
+
 struct meshopt_VertexCacheStatistics
 {
 	unsigned int vertices_transformed;

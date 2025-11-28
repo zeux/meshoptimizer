@@ -2606,6 +2606,48 @@ static void provoking()
 	assert(memcmp(pre, expectedre, sizeof(expectedre)) == 0);
 }
 
+static void weld()
+{
+	float  outVb[128]; // space for tests...
+	size_t remap[128];
+
+	const float vb[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+	// weld to 1 vertex
+	assert(meshopt_weldMesh(remap, outVb, vb, 3, 3) == 1);
+
+	const float vbCube[] =
+	{
+		-1.0f,  1.0f,  1.0f,
+		 1.0f,  1.0f,  1.0f,
+		-1.0f, -1.0f,  1.0f,
+		 1.0f, -1.0f,  1.0f,
+		-1.0f,  1.0f, -1.0f,
+		 1.0f,  1.0f, -1.0f,
+		-1.0f, -1.0f, -1.0f,
+		 1.0f, -1.0f, -1.0f,
+		-1.0f,  1.0f,  1.0f,
+		 1.0f,  1.0f,  1.0f,
+		-1.0f,  1.0f, -1.0f,
+		 1.0f,  1.0f, -1.0f,
+		-1.0f, -1.0f,  1.0f,
+		 1.0f, -1.0f,  1.0f,
+		-1.0f, -1.0f, -1.0f,
+		 1.0f, -1.0f, -1.0f,
+		 1.0f, -1.0f,  1.0f,
+		 1.0f,  1.0f,  1.0f,
+		 1.0f, -1.0f, -1.0f,
+		 1.0f,  1.0f, -1.0f,
+		-1.0f, -1.0f,  1.0f,
+		-1.0f,  1.0f,  1.0f,
+		-1.0f, -1.0f, -1.0f,
+		-1.0f,  1.0f, -1.0f,
+	};
+
+	// weld to 8 vertices for cube
+	assert(meshopt_weldMesh(remap, outVb, vbCube, 24, 3) == 8);
+}
+
 static void quantizeFloat()
 {
 	volatile float zero = 0.f; // avoids div-by-zero warnings
@@ -2818,6 +2860,7 @@ void runTests()
 	adjacency();
 	tessellation();
 	provoking();
+	weld();
 
 	quantizeFloat();
 	quantizeHalf();
