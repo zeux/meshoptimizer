@@ -43,6 +43,7 @@ set(SOURCES
     src/vertexcodec.cpp
     src/vertexfilter.cpp
     src/vfetchoptimizer.cpp
+    src/welder.cpp
 )
 
 set(GLTF_SOURCES
