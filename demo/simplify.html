@@ -155,7 +155,7 @@
 				debugOverlay: false,
 				sloppy: false,
 				permissive: false,
-				permissiveProtection: 3,
+				permissiveProtection: 2, // uvs
 				lockBorder: false,
 				preprune: 0.0,
 				prune: true,
@@ -207,7 +207,7 @@
 			guiSimplify.add(settings, 'ratio', 0, 1, 0.01).onChange(simplify);
 			guiSimplify.add(settings, 'sloppy').onChange(simplify);
 			guiSimplify.add(settings, 'permissive').onChange(simplify);
-			guiSimplify.add(settings, 'permissiveProtection', { none: 0, normals: 1, uvs: 2, all: 3 }).onChange(simplify);
+			guiSimplify.add(settings, 'permissiveProtection', { none: 0, uvs: 2, normals: 1, all: 3 }).onChange(simplify);
 			guiSimplify.add(settings, 'lockBorder').onChange(simplify);
 			guiSimplify.add(settings, 'prune').onChange(simplify);
 			guiSimplify.add(settings, 'regularize').onChange(simplify);
