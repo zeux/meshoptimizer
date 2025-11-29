@@ -503,7 +503,7 @@ lod.resize(meshopt_simplifyWithAttributes(&lod[0], indices, index_count, &vertic
     target_index_count, target_error, /* options= */ meshopt_SimplifyPermissive, &lod_error));
 ```
 
-To maintain appearance, it's highly recommended to use this option together with attribute-aware simplification, as shown above, as it allows the simplifier to maintain attribute appearance. In this mode, it is often desirable to selectively preserve certain attribute seams, such as UV seams or sharp creases. This can be achieved by using the `vertex_lock` array with flag `meshopt_SimplifyVertex_Protect` set for individual vertices to protect specific discontinuities. To fill this array, use `meshopt_generatePositionRemap` to create a mapping table for vertices with identical positions, and then compare each vertex to the remapped vertex to determine which attributes are different:
+To maintain appearance, it's highly recommended to use this option together with attribute-aware simplification, as shown above, as it allows the simplifier to maintain attribute quality. In this mode, it is often desirable to selectively preserve certain attribute seams, such as UV seams or sharp creases. This can be achieved by using the `vertex_lock` array with flag `meshopt_SimplifyVertex_Protect` set for individual vertices to protect specific discontinuities. To fill this array, use `meshopt_generatePositionRemap` to create a mapping table for vertices with identical positions, and then compare each vertex to the remapped vertex to determine which attributes are different:
 
 ```c++
 std::vector<unsigned int> remap(vertices.size());
@@ -515,9 +515,6 @@ for (size_t i = 0; i < vertices.size(); ++i) {
 
     if (r != i && (vertices[r].tx != vertices[i].tx || vertices[r].ty != vertices[i].ty))
         locks[i] |= meshopt_SimplifyVertex_Protect; // protect UV seams
-
-    if (r != i && (vertices[r].nx * vertices[i].nx + vertices[r].ny * vertices[i].ny + vertices[r].nz * vertices[i].nz < 0.25f))
-        locks[i] |= meshopt_SimplifyVertex_Protect; // protect sharp normal creases
 }
 ```
 
