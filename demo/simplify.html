@@ -610,7 +610,7 @@
 
 					var mask = (1 << 28) - 1;
 
-					for (var kind = 1; kind <= 5; ++kind) {
+					for (var kind = 1; kind <= 6; ++kind) {
 						var offset = dind.length;
 
 						for (var i = 0; i < dlen; i += 3) {
@@ -620,8 +620,8 @@
 								var ak = (a >> 28) & 7,
 									bk = (b >> 28) & 7;
 
-								if ((a >> 31 != 0 || kind == 3) && (ak == kind || bk == kind) && (ak == kind || ak == 4) && (bk == kind || bk == 4)) {
-									// edge of current kind (allow one of the vertices to be locked)
+								if (a >> 31 != 0 && (ak == kind || bk == kind) && (ak == kind || ak == 4) && (bk == kind || bk == 4)) {
+									// loop edge of current kind (allow one of the vertices to be locked)
 									// note: complex edges ignore loop metadata
 									dind.push(a & mask);
 									dind.push(a & mask);
@@ -631,8 +631,13 @@
 									dind.push(a & mask);
 									dind.push(a & mask);
 									dind.push(b & mask);
-								} else if (kind == 4 && ak == kind && bk == kind) {
-									// locked edge (not be marked as a loop)
+								} else if (a >> 31 == 0 && kind == 4 && ak == kind && bk == kind) {
+									// locked edge (not marked as a loop)
+									dind.push(a & mask);
+									dind.push(a & mask);
+									dind.push(b & mask);
+								} else if (a >> 31 == 0 && kind == 6 && ak == 3 && bk == 3) {
+									// complex edge (not marked as a loop)
 									dind.push(a & mask);
 									dind.push(a & mask);
 									dind.push(b & mask);
@@ -793,6 +798,7 @@
 										new THREE.MeshBasicMaterial({ color: 0x009f9f, wireframe: true }), // complex
 										new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true }), // locked
 										new THREE.MeshBasicMaterial({ color: 0xff9f00, wireframe: true }), // mixed edge
+										new THREE.MeshBasicMaterial({ color: 0x9f5f9f, wireframe: true }), // complex, no loop
 									];
 								}
 
