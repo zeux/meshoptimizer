@@ -351,16 +351,16 @@ MESHOPTIMIZER_API int meshopt_decodeVertexVersion(const unsigned char* buffer, s
  * Vertex buffer filters
  * These functions can be used to filter output of meshopt_decodeVertexBuffer in-place.
  *
- * meshopt_decodeFilterOct decodes octahedral encoding of a unit vector with K-bit (K <= 16) signed X/Y as an input; Z must store 1.0f.
+ * meshopt_decodeFilterOct decodes octahedral encoding of a unit vector with K-bit signed X/Y as an input; Z will store 1.0f.
  * Each component is stored as an 8-bit or 16-bit normalized integer; stride must be equal to 4 or 8. W is preserved as is.
  *
- * meshopt_decodeFilterQuat decodes 3-component quaternion encoding with K-bit (4 <= K <= 16) component encoding and a 2-bit component index indicating which component to reconstruct.
+ * meshopt_decodeFilterQuat decodes 3-component quaternion encoding with K-bit component encoding and a 2-bit component index indicating which component to reconstruct.
  * Each component is stored as an 16-bit integer; stride must be equal to 8.
  *
  * meshopt_decodeFilterExp decodes exponential encoding of floating-point data with 8-bit exponent and 24-bit integer mantissa as 2^E*M.
  * Each 32-bit component is decoded in isolation; stride must be divisible by 4.
  *
- * meshopt_decodeFilterColor decodes YCoCg (+A) color encoding where RGB is converted to YCoCg space with variable bit quantization.
+ * meshopt_decodeFilterColor decodes RGBA colors from YCoCg (+A) color encoding where RGB is converted to YCoCg space with K-bit component encoding, and A is stored using K-1 bits.
  * Each component is stored as an 8-bit or 16-bit normalized integer; stride must be equal to 4 or 8.
  */
 MESHOPTIMIZER_API void meshopt_decodeFilterOct(void* buffer, size_t count, size_t stride);
@@ -372,7 +372,7 @@ MESHOPTIMIZER_API void meshopt_decodeFilterColor(void* buffer, size_t count, siz
  * Vertex buffer filter encoders
  * These functions can be used to encode data in a format that meshopt_decodeFilter can decode
  *
- * meshopt_encodeFilterOct encodes unit vectors with K-bit (K <= 16) signed X/Y as an output.
+ * meshopt_encodeFilterOct encodes unit vectors with K-bit (2 <= K <= 16) signed X/Y as an output.
  * Each component is stored as an 8-bit or 16-bit normalized integer; stride must be equal to 4 or 8. W is preserved as is.
  * Input data must contain 4 floats for every vector (count*4 total).
  *
@@ -384,7 +384,7 @@ MESHOPTIMIZER_API void meshopt_decodeFilterColor(void* buffer, size_t count, siz
  * Exponent can be shared between all components of a given vector as defined by stride or all values of a given component; stride must be divisible by 4.
  * Input data must contain stride/4 floats for every vector (count*stride/4 total).
  *
- * meshopt_encodeFilterColor encodes RGBA color data by converting RGB to YCoCg color space with variable bit quantization.
+ * meshopt_encodeFilterColor encodes RGBA color data by converting RGB to YCoCg color space with K-bit (2 <= K <= 16) component encoding; A is stored using K-1 bits.
  * Each component is stored as an 8-bit or 16-bit integer; stride must be equal to 4 or 8.
  * Input data must contain 4 floats for every color (count*4 total).
  */
