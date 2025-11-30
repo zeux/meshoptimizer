@@ -795,21 +795,6 @@ static void simplifyProtect(std::vector<unsigned char>& locks, Mesh& mesh, size_
 				data[i] |= meshopt_SimplifyVertex_Protect;
 		}
 	}
-
-	// protect sharp edges (to avoid collapses with high error mostly)
-	if (Stream* attr = getStream(mesh, cgltf_attribute_type_normal))
-	{
-		Attr* a = attr->data.data();
-
-		for (size_t i = 0; i < vertex_count; ++i)
-		{
-			unsigned int r = remap[i];
-
-			if (r != i && (a[i].f[0] * a[r].f[0] + a[i].f[1] * a[r].f[1] + a[i].f[2] * a[r].f[2]) < 0.25f)
-				data[i] |= meshopt_SimplifyVertex_Protect;
-		}
-	}
-
 	// protect all vertices that were artificially split on the UV mirror edges
 	for (size_t i = presplit_vertices; i < vertex_count; ++i)
 		data[i] |= meshopt_SimplifyVertex_Protect;
