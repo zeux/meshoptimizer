@@ -411,15 +411,14 @@ After this the resulting arrays should be quantized (e.g. using 16-bit fixed poi
 
 To further leverage the inherent structure of some vertex data, it's possible to use filters that encode and decode the data in a lossy manner. This is similar to quantization but can be used without having to change the shader code. After decoding, the filter transformation needs to be reversed. For native game engine pipelines, it is usually more optimal to carefully prequantize and pretransform the vertex data, but sometimes (for example when serializing data in glTF format) this is not a practical option and filters are more convenient. This library provides four filters:
 
-- Octahedral filter (`meshopt_encodeFilterOct`/`meshopt_decodeFilterOct`) encodes quantized (snorm) normal or tangent vectors using octahedral encoding. Any number of bits <= 16 can be used with 4 bytes or 8 bytes per vector.
+- Octahedral filter (`meshopt_encodeFilterOct`/`meshopt_decodeFilterOct`) encodes quantized (snorm) normal or tangent vectors using octahedral encoding. Any number of bits between 2 and 16 can be used with 4 bytes or 8 bytes per vector.
 - Quaternion filter (`meshopt_encodeFilterQuat`/`meshopt_decodeFilterQuat`) encodes quantized (snorm) quaternion vectors; this can be used to encode rotations or tangent frames. Any number of bits between 4 and 16 can be used with 8 bytes per vector.
 - Exponential filter (`meshopt_encodeFilterExp`/`meshopt_decodeFilterExp`) encodes single-precision floating-point vectors; this can be used to encode arbitrary floating-point data more efficiently. In addition to an arbitrary bit count (<= 24), the filter takes a "mode" parameter that allows specifying how the exponent sharing is performed to trade off compression ratio and quality:
-
     - `meshopt_EncodeExpSeparate` does not share exponents and results in the largest output
     - `meshopt_EncodeExpSharedVector` shares exponents between different components of the same vector
     - `meshopt_EncodeExpSharedComponent` shares exponents between the same component in different vectors
     - `meshopt_EncodeExpClamped` does not share exponents but clamps the exponent range to reduce exponent entropy
-- Color filter (`meshopt_encodeFilterColor`/`meshopt_decodeFilterColor`) encodes quantized (unorm) RGBA colors using YCoCg encoding. Any number of bits <= 16 can be used with 4 bytes or 8 bytes per vector.
+- Color filter (`meshopt_encodeFilterColor`/`meshopt_decodeFilterColor`) encodes quantized (unorm) RGBA colors using YCoCg encoding. Any number of bits between 2 and 16 can be used with 4 bytes or 8 bytes per vector.
 
 Note that all filters are lossy and require the data to be deinterleaved with one attribute per stream; this facilitates efficient SIMD implementation of filter decoders, which decodes at 5-10 GB/s on modern desktop CPUs, allowing the overall decompression speed to be closer to that of the raw vertex codec.
 
