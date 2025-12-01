@@ -187,7 +187,7 @@ var MeshoptEncoder = (function () {
 		},
 		encodeFilterOct: function (source, count, stride, bits) {
 			assert(stride == 4 || stride == 8);
-			assert(bits >= 1 && bits <= 16);
+			assert(bits >= 2 && bits <= 16);
 			return filter(instance.exports.meshopt_encodeFilterOct, source, count, stride, bits, 16);
 		},
 		encodeFilterQuat: function (source, count, stride, bits) {

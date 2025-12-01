@@ -1276,7 +1276,7 @@ void meshopt_decodeFilterColor(void* buffer, size_t count, size_t stride)
 void meshopt_encodeFilterOct(void* destination, size_t count, size_t stride, int bits, const float* data)
 {
 	assert(stride == 4 || stride == 8);
-	assert(bits >= 1 && bits <= 16);
+	assert(bits >= 2 && bits <= 16);
 
 	signed char* d8 = static_cast<signed char*>(destination);
 	short* d16 = static_cast<short*>(destination);
