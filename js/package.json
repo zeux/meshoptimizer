@@ -42,6 +42,9 @@
 		"./clusterizer": {
 			"types": "./meshopt_clusterizer.d.ts",
 			"default": "./meshopt_clusterizer.js"
+		},
+		"./decoder.cjs": {
+			"require": "./meshopt_decoder.cjs"
 		}
 	},
 	"scripts": {
