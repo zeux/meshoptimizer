@@ -1,0 +1,104 @@
+<style type="text/css">
+	/* Wide desktop: Float TOC to the right as a sidebar (only when there's enough space) */
+	@media (min-width: 1600px) {
+		#markdown-toc {
+			position: fixed;
+			top: 20px;
+			right: max(20px, calc((100vw - 1012px) / 2 - 310px));
+			width: 280px;
+			max-height: calc(100vh - 40px);
+			overflow-y: auto;
+			margin: 0;
+			padding: 15px 20px;
+			background: #f6f8fa;
+			border: 1px solid #d0d7de;
+			border-radius: 6px;
+		}
+
+		/* Remove bullets from top-level items */
+		#markdown-toc {
+			list-style: none;
+			padding-left: 15px;
+		}
+
+		#markdown-toc ul {
+			list-style: disc;
+			margin-top: 2px;
+			margin-bottom: 2px;
+			padding-left: 20px;
+		}
+
+		#markdown-toc li {
+			margin: 4px 0;
+		}
+
+		/* Add a subtle scrollbar for the TOC */
+		#markdown-toc::-webkit-scrollbar {
+			width: 8px;
+		}
+
+		#markdown-toc::-webkit-scrollbar-track {
+			background: #f1f1f1;
+			border-radius: 4px;
+		}
+
+		#markdown-toc::-webkit-scrollbar-thumb {
+			background: #888;
+			border-radius: 4px;
+		}
+
+		#markdown-toc::-webkit-scrollbar-thumb:hover {
+			background: #555;
+		}
+	}
+
+	/* Narrow screens: Collapsible TOC */
+	@media (max-width: 1599px) {
+		#markdown-toc {
+			margin: 20px 0;
+			padding: 0;
+			padding-left: 0;
+			border: 1px solid #d0d7de;
+			border-radius: 6px;
+			background: #f6f8fa;
+			overflow: hidden;
+			position: relative;
+			list-style: none;
+		}
+
+		/* Hide TOC items by default, show when expanded */
+		#markdown-toc > li {
+			display: none;
+		}
+
+		#markdown-toc.expanded > li {
+			display: block;
+			margin: 8px 15px;
+		}
+
+		#markdown-toc::before {
+			content: 'Table of contents';
+			display: block;
+			padding: 12px 15px;
+			font-weight: 600;
+			background: #f6f8fa;
+			cursor: pointer;
+			user-select: none;
+		}
+
+		#markdown-toc.expanded::before {
+			border-bottom: 1px solid #d0d7de;
+		}
+	}
+</style>
+
+<script type="text/javascript">
+	document.addEventListener('DOMContentLoaded', function () {
+		var toc = document.getElementById('markdown-toc');
+		if (toc) {
+			toc.addEventListener('click', function () {
+				toc.classList.toggle('expanded');
+			});
+		}
+	});
+</script>
