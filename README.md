@@ -1,4 +1,4 @@
-# 🐇 meshoptimizer [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md) [![GitHub](https://img.shields.io/badge/repo-github-green.svg)](https://github.com/zeux/meshoptimizer)
+# 🐇 meshoptimizer [![GitHub](https://img.shields.io/badge/github-MIT-blue?logo=github)](https://github.com/zeux/meshoptimizer)
 
 * TOC
 {:toc}
