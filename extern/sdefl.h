@@ -180,6 +180,10 @@ extern int zsdeflate(struct sdefl *s, void *o, const void *i, int n, int lvl);
 #include <string.h> /* memcpy */
 #include <limits.h> /* CHAR_BIT */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define SDEFL_NIL               (-1)
 #define SDEFL_MAX_MATCH         258
 #define SDEFL_MAX_CODE_LEN      (15)
@@ -785,7 +789,12 @@ zsdeflate(struct sdefl *s, void *out, const void *in, int n, int lvl) {
 extern int
 sdefl_bound(int len) {
   int max_blocks = 1 + sdefl_div_round_up(len, SDEFL_RAW_BLK_SIZE);
-  int bound = 5 * max_blocks + len + 1 + 4 + 8;
+  int bound = 5 * max_blocks + len + 1 + 4 + 8 + 3;
   return bound;
 }
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif /* SDEFL_IMPLEMENTATION */
