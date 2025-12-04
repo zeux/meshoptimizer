@@ -1,5 +1,5 @@
 import assert from 'assert/strict';
-import { MeshoptDecoder as decoder } from './meshopt_decoder.js';
+import { MeshoptDecoder as decoder } from './meshopt_decoder.mjs';
 
 process.on('unhandledRejection', (error) => {
 	console.log('unhandledRejection', error);

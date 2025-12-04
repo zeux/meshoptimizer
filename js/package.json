@@ -16,6 +16,7 @@
 	},
 	"files": [
 		"*.cjs",
+		"*.mjs",
 		"*.js",
 		"*.ts"
 	],
@@ -33,7 +34,7 @@
 		},
 		"./decoder": {
 			"types": "./meshopt_decoder.d.ts",
-			"default": "./meshopt_decoder.js"
+			"default": "./meshopt_decoder.mjs"
 		},
 		"./simplifier": {
 			"types": "./meshopt_simplifier.d.ts",
