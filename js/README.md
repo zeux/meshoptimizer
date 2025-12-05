@@ -2,6 +2,8 @@
 
 This folder contains JavaScript/WebAssembly modules that can be used to access parts of functionality of meshoptimizer library. While normally these would be used internally by glTF loaders, processors and other Web optimization tools, they can also be used directly if needed. The modules are available as an [NPM package](https://www.npmjs.com/package/meshoptimizer) but can also be redistributed individually on a file-by-file basis.
 
+When using the NPM package, package exports can be used to import individual components (e.g. `meshoptimizer/decoder`) as well as the entire package (`meshoptimizer`).
+
 ## Structure
 
 Each component comes in a separate file, `meshopt_component.js`, which uses ES6 module exports and can be imported from another ES6 module. The export name is MeshoptComponent and is an object that has two fields:
