@@ -1,5 +1,5 @@
 import { MeshoptEncoder as encoder } from './meshopt_encoder.js';
-import { MeshoptDecoder as decoder } from './meshopt_decoder.js';
+import { MeshoptDecoder as decoder } from './meshopt_decoder.mjs';
 import { performance } from 'perf_hooks';
 
 process.on('unhandledRejection', (error) => {

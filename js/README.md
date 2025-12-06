@@ -2,6 +2,8 @@
 
 This folder contains JavaScript/WebAssembly modules that can be used to access parts of functionality of meshoptimizer library. While normally these would be used internally by glTF loaders, processors and other Web optimization tools, they can also be used directly if needed. The modules are available as an [NPM package](https://www.npmjs.com/package/meshoptimizer) but can also be redistributed individually on a file-by-file basis.
 
+When using the NPM package, package exports can be used to import individual components (e.g. `meshoptimizer/decoder`) as well as the entire package (`meshoptimizer`).
+
 ## Structure
 
 Each component comes in a separate file, `meshopt_component.js`, which uses ES6 module exports and can be imported from another ES6 module. The export name is MeshoptComponent and is an object that has two fields:
@@ -13,9 +15,9 @@ In addition to that, each component exposes a set of specific functions document
 
 ## Decoder
 
-`MeshoptDecoder` (`meshopt_decoder.js`) implements high performance decompression of attribute and index buffers encoded using meshopt compression. This can be used to decompress glTF buffers encoded with `EXT_meshopt_compression` extension or for custom geometry compression pipelines. The module contains two implementations, scalar and SIMD, with the best performing implementation selected automatically. When SIMD is available, the decoders run at 1-3 GB/s on modern desktop computers.
+`MeshoptDecoder` (`meshopt_decoder.mjs`) implements high performance decompression of attribute and index buffers encoded using meshopt compression. This can be used to decompress glTF buffers encoded with `EXT_meshopt_compression` extension or for custom geometry compression pipelines. The module contains two implementations, scalar and SIMD, with the best performing implementation selected automatically. When SIMD is available, the decoders run at 1-3 GB/s on modern desktop computers.
 
-> Note: for maximum compatibility, MeshoptDecoder is also available as CommonJS module via `meshopt_decoder.cjs`; it can be used by a wide variety of JavaScript module loaders, including node.js require(), AMD, Common.JS, and can also be loaded into the web page directly via a `<script>` tag which exposes the module as a global variable `MeshoptDecoder`.
+> Note: for maximum compatibility, MeshoptDecoder is also available as CommonJS module via `meshopt_decoder.cjs`; it can be used by a wide variety of JavaScript module loaders, including node.js require(), AMD, Common.JS, and can also be loaded into the web page directly via a `<script>` tag which exposes the module as a global variable `MeshoptDecoder`. The ESM version uses `.mjs` file extension unlike other components, to avoid compatibility issues with prior versions.
 
 To decode a buffer, one of the decoding functions should be called:
 

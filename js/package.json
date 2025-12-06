@@ -1,6 +1,6 @@
 {
 	"name": "meshoptimizer",
-	"version": "0.25.0",
+	"version": "1.0.0",
 	"description": "Mesh optimization library that makes meshes smaller and faster to render",
 	"author": "Arseny Kapoulkine",
 	"license": "MIT",
@@ -16,6 +16,7 @@
 	},
 	"files": [
 		"*.cjs",
+		"*.mjs",
 		"*.js",
 		"*.ts"
 	],
@@ -33,7 +34,7 @@
 		},
 		"./decoder": {
 			"types": "./meshopt_decoder.d.ts",
-			"default": "./meshopt_decoder.js"
+			"default": "./meshopt_decoder.mjs"
 		},
 		"./simplifier": {
 			"types": "./meshopt_simplifier.d.ts",
@@ -42,6 +43,9 @@
 		"./clusterizer": {
 			"types": "./meshopt_clusterizer.d.ts",
 			"default": "./meshopt_clusterizer.js"
+		},
+		"./decoder.cjs": {
+			"require": "./meshopt_decoder.cjs"
 		}
 	},
 	"scripts": {
