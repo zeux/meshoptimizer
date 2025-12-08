@@ -106,7 +106,6 @@
 			}
 		</style>
 
-		<script async src="https://cdn.jsdelivr.net/npm/es-module-shims@2.0.10/dist/es-module-shims.min.js"></script>
 		<script type="importmap">
 			{
 				"imports": {
@@ -127,9 +126,9 @@
 			import { GLTFLoader } from 'three-examples/loaders/GLTFLoader.js';
 			import { OBJLoader } from 'three-examples/loaders/OBJLoader.js';
 			import { OrbitControls } from 'three-examples/controls/OrbitControls.js';
-			import { mergeVertices } from 'three-examples/utils/BufferGeometryUtils.js';
-			import { MeshoptDecoder } from '../js/meshopt_decoder.module.js';
-			import { MeshoptSimplifier } from '../js/meshopt_simplifier.module.js';
+			import { mergeGeometries, mergeVertices } from 'three-examples/utils/BufferGeometryUtils.js';
+			import { MeshoptDecoder } from '../js/meshopt_decoder.mjs';
+			import { MeshoptSimplifier } from '../js/meshopt_simplifier.js';
 			import { GUI } from 'lil-gui';
 
 			var container, gridContainer;
@@ -156,12 +155,14 @@
 				debugOverlay: false,
 				sloppy: false,
 				permissive: false,
+				permissiveProtection: 2, // uvs
 				lockBorder: false,
 				preprune: 0.0,
 				prune: true,
 				regularize: false,
 				solve: false,
 				useAttributes: true,
+				autoTextureWeight: false,
 				errorThresholdLog10: 1,
 				errorScaled: true,
 				normalWeight: 1.0,
@@ -170,6 +171,7 @@
 				autoLod: false,
 				autoLodFactor: 1.0,
 				gridColumns: 2,
+				debugCheckerboard: false,
 
 				loadFile: function () {
 					var input = document.getElementById('fileInput');
@@ -205,6 +207,7 @@
 			guiSimplify.add(settings, 'ratio', 0, 1, 0.01).onChange(simplify);
 			guiSimplify.add(settings, 'sloppy').onChange(simplify);
 			guiSimplify.add(settings, 'permissive').onChange(simplify);
+			guiSimplify.add(settings, 'permissiveProtection', { none: 0, uvs: 2, normals: 1, all: 3 }).onChange(simplify);
 			guiSimplify.add(settings, 'lockBorder').onChange(simplify);
 			guiSimplify.add(settings, 'prune').onChange(simplify);
 			guiSimplify.add(settings, 'regularize').onChange(simplify);
@@ -217,6 +220,7 @@
 			guiAttributes.push(guiSimplify.add(settings, 'colorWeight', 0, 2, 0.01).onChange(simplify));
 			guiAttributes.push(guiSimplify.add(settings, 'textureWeight', 0, 100, 0.1).onChange(simplify));
 
+			guiSimplify.add(settings, 'autoTextureWeight').onChange(simplify);
 			guiSimplify.add(settings, 'errorScaled').onChange(simplify);
 			guiSimplify.add(settings, 'errorThresholdLog10', 0, 3, 0.1).onChange(simplify);
 
@@ -227,6 +231,7 @@
 			var guiLoad = gui.addFolder('Load');
 			guiLoad.add(settings, 'loadFile');
 			guiLoad.add(settings, 'updateModule');
+			guiLoad.add(settings, 'debugCheckerboard');
 			guiLoad.add(settings, 'autoUpdate').onChange(autoReload);
 			guiLoad.add(settings, 'autoUpdateStatus').listen();
 
@@ -455,6 +460,8 @@
 				var indices = new Uint32Array(geo.index.array).slice(); // clone for solve, upcast 16-bit indices for _InternalDebug
 				var target = settings.autoLod ? 0 : Math.floor((indices.length * settings.ratio) / 3) * 3;
 
+				var stride = geo.attributes.position instanceof THREE.InterleavedBufferAttribute ? geo.attributes.position.data.stride : 3;
+
 				if (settings.useAttributes) {
 					var attrib = new Float32Array(geo.attributes.position.count * attributes);
 
@@ -477,6 +484,31 @@
 						}
 					}
 
+					var autoTextureWeight = 0;
+
+					if (settings.autoTextureWeight && geo.attributes.uv) {
+						for (var i = 0, e = geo.index.count; i < e; i += 3) {
+							var a = geo.index.getX(i),
+								b = geo.index.getX(i + 1),
+								c = geo.index.getX(i + 2);
+
+							var au = geo.attributes.uv.getX(a),
+								av = geo.attributes.uv.getY(a);
+
+							var bu = geo.attributes.uv.getX(b),
+								bv = geo.attributes.uv.getY(b);
+
+							var cu = geo.attributes.uv.getX(c),
+								cv = geo.attributes.uv.getY(c);
+
+							var uvarea = Math.abs((bu - au) * (cv - av) - (cu - au) * (bv - av)) * 0.5;
+							autoTextureWeight += uvarea;
+						}
+
+						autoTextureWeight /= geo.index.count / 3;
+						autoTextureWeight = autoTextureWeight > 0 ? 1 / Math.sqrt(autoTextureWeight) : 0;
+					}
+
 					var attrib_weights = [
 						settings.normalWeight,
 						settings.normalWeight,
@@ -484,8 +516,8 @@
 						settings.colorWeight,
 						settings.colorWeight,
 						settings.colorWeight,
-						settings.textureWeight,
-						settings.textureWeight,
+						settings.autoTextureWeight ? autoTextureWeight : settings.textureWeight,
+						settings.autoTextureWeight ? autoTextureWeight : settings.textureWeight,
 					];
 				} else {
 					var attrib = new Float32Array();
@@ -513,27 +545,10 @@
 				var locks = new Uint8Array(geo.attributes.position.count);
 
 				if (settings.permissive) {
-					var pos_cache = {};
-					var pos_remap = [];
+					var pos_remap = MeshoptSimplifier.generatePositionRemap(positions, stride);
+					var protect_bit = 2;
 
-					var unique = 0;
-
-					for (var i = 0, e = geo.attributes.position.count; i < e; ++i) {
-						var px = geo.attributes.position.getX(i);
-						var py = geo.attributes.position.getY(i);
-						var pz = geo.attributes.position.getZ(i);
-						var pk = px.toString() + ' ' + py.toString() + ' ' + pz.toString();
-
-						if (pos_cache[pk] === undefined) {
-							pos_cache[pk] = i;
-							pos_remap[i] = i;
-							unique++;
-						} else {
-							pos_remap[i] = pos_cache[pk];
-						}
-					}
-
-					if (geo.attributes.normal) {
+					if (geo.attributes.normal && (settings.permissiveProtection & 1) != 0) {
 						for (var i = 0, e = geo.attributes.position.count; i < e; ++i) {
 							if (pos_remap[i] != i) {
 								var rx = geo.attributes.normal.getX(pos_remap[i]),
@@ -545,13 +560,13 @@
 
 								// keep sharp edges
 								if (rx * nx + ry * ny + rz * nz < 0.25) {
-									locks[i] |= 2;
+									locks[i] |= protect_bit;
 								}
 							}
 						}
 					}
 
-					if (geo.attributes.uv) {
+					if (geo.attributes.uv && (settings.permissiveProtection & 2) != 0) {
 						for (var i = 0, e = geo.attributes.position.count; i < e; ++i) {
 							if (pos_remap[i] != i) {
 								var ru = geo.attributes.uv.getX(pos_remap[i]),
@@ -561,14 +576,12 @@
 
 								// keep UV seams
 								if (u != ru || v != rv) {
-									locks[i] |= 2;
+									locks[i] |= protect_bit;
 								}
 							}
 						}
 					}
 				}
-
-				var stride = geo.attributes.position instanceof THREE.InterleavedBufferAttribute ? geo.attributes.position.data.stride : 3;
 
 				if (settings.preprune > 0) {
 					indices = MeshoptSimplifier.simplifyPrune(indices, positions, stride, settings.preprune / scale);
@@ -597,7 +610,7 @@
 
 					var mask = (1 << 28) - 1;
 
-					for (var kind = 1; kind <= 5; ++kind) {
+					for (var kind = 1; kind <= 6; ++kind) {
 						var offset = dind.length;
 
 						for (var i = 0; i < dlen; i += 3) {
@@ -607,8 +620,8 @@
 								var ak = (a >> 28) & 7,
 									bk = (b >> 28) & 7;
 
-								if ((a >> 31 != 0 || kind == 3) && (ak == kind || bk == kind) && (ak == kind || ak == 4) && (bk == kind || bk == 4)) {
-									// edge of current kind (allow one of the vertices to be locked)
+								if (a >> 31 != 0 && (ak == kind || bk == kind) && (ak == kind || ak == 4) && (bk == kind || bk == 4)) {
+									// loop edge of current kind (allow one of the vertices to be locked)
 									// note: complex edges ignore loop metadata
 									dind.push(a & mask);
 									dind.push(a & mask);
@@ -618,8 +631,13 @@
 									dind.push(a & mask);
 									dind.push(a & mask);
 									dind.push(b & mask);
-								} else if (kind == 4 && ak == kind && bk == kind) {
-									// locked edge (not be marked as a loop)
+								} else if (a >> 31 == 0 && kind == 4 && ak == kind && bk == kind) {
+									// locked edge (not marked as a loop)
+									dind.push(a & mask);
+									dind.push(a & mask);
+									dind.push(b & mask);
+								} else if (a >> 31 == 0 && kind == 6 && ak == 3 && bk == 3) {
+									// complex edge (not marked as a loop)
 									dind.push(a & mask);
 									dind.push(a & mask);
 									dind.push(b & mask);
@@ -780,6 +798,7 @@
 										new THREE.MeshBasicMaterial({ color: 0x009f9f, wireframe: true }), // complex
 										new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true }), // locked
 										new THREE.MeshBasicMaterial({ color: 0xff9f00, wireframe: true }), // mixed edge
+										new THREE.MeshBasicMaterial({ color: 0x9f5f9f, wireframe: true }), // complex, no loop
 									];
 								}
 
@@ -835,7 +854,7 @@
 			}
 
 			function reload() {
-				var simp = import('/js/meshopt_simplifier.module.js?x=' + Date.now());
+				var simp = import('/js/meshopt_simplifier.js?x=' + Date.now());
 				MeshoptSimplifier.ready = simp.then(function (s) {
 					return s.MeshoptSimplifier.ready.then(function () {
 						for (var prop in s.MeshoptSimplifier) {
@@ -850,7 +869,7 @@
 			function autoReload() {
 				if (!settings.autoUpdate) return;
 
-				fetch('/js/meshopt_simplifier.module.js?x=' + Date.now(), { method: 'HEAD' })
+				fetch('/js/meshopt_simplifier.js?x=' + Date.now(), { method: 'HEAD' })
 					.then(function (r) {
 						var last = r.headers.get('Last-Modified');
 						if (last != moduleLastModified) {
@@ -935,6 +954,8 @@
 					loader.load(
 						path,
 						function (obj) {
+							var geos = [];
+
 							obj.traverse(function (node) {
 								if (node.isMesh) {
 									// obj loader does not index the geometry, so we need to do it ourselves
@@ -945,10 +966,34 @@
 										node.material = node.material[0];
 										node.geometry.clearGroups();
 									}
+
+									geos.push(node.geometry);
 								}
 							});
 
-							models[viewIndex] = obj;
+							// try to merge geometries into a single mesh; this cleanly handles material boundaries and separate objects
+							// it may fail if the geometries are incompatible (different attributes), in which case we just use the original object
+							var merged = mergeGeometries(geos);
+
+							if (merged) {
+								if (settings.debugCheckerboard) {
+									var cb = new THREE.TextureLoader().load(
+										'https://threejs.org/examples/textures/floors/FloorsCheckerboard_S_Diffuse.jpg'
+									);
+									cb.wrapS = THREE.RepeatWrapping;
+									cb.wrapT = THREE.RepeatWrapping;
+									cb.repeat.set(8, 8); // Adjust for number of repetitions
+
+									var mat = new THREE.MeshStandardMaterial({ map: cb });
+								} else {
+									var mat = new THREE.MeshStandardMaterial({ color: 0xdddddd });
+								}
+
+								models[viewIndex] = new THREE.Mesh(merged, mat);
+							} else {
+								models[viewIndex] = obj;
+							}
+
 							center(models[viewIndex]);
 							scenes[viewIndex].add(models[viewIndex]);
 

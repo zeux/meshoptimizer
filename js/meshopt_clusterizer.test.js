@@ -1,5 +1,5 @@
-const assert = require('assert').strict;
-const clusterizer = require('./meshopt_clusterizer.js');
+import assert from 'assert/strict';
+import { MeshoptClusterizer as clusterizer } from './meshopt_clusterizer.js';
 
 process.on('unhandledRejection', (error) => {
 	console.log('unhandledRejection', error);

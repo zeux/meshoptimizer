@@ -538,8 +538,8 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 	// build clusters (meshlets) out of the mesh
 	size_t max_meshlets = meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles);
 	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
-	std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
-	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
+	std::vector<unsigned int> meshlet_vertices(mesh.indices.size());
+	std::vector<unsigned char> meshlet_triangles(mesh.indices.size());
 
 	meshlets.resize(meshopt_buildMeshlets(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, max_triangles, 0.f));
 
@@ -617,7 +617,7 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 		size_t group_triangles = (lod.size() - group_offset) / 3;
 
 		// simplify the group, preserving the border vertices
-		// note: this technically also locks the exterior border; a full mesh analysis (see nanite.cpp / lockBoundary) would work better for some meshes
+		// note: this technically also locks the exterior border; a full mesh analysis (see clusterlod.h / lockBoundary) would work better for some meshes
 		unsigned int options = meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute;
 
 		float group_target_error = 1e-2f * scale;
@@ -633,12 +633,12 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 
 	double end = timestamp();
 
-	printf("%-9s: %d triangles => %d triangles (%.2f%% deviation) in %.2f msec, clusterized in %.2f msec, partitioned in %.2f msec (%d clusters in %d groups)\n",
-	    "SimplifyN", // N for Nanite
+	printf("%-9s: %d triangles => %d triangles (%.2f%% deviation) in %.2f msec, clusterized in %.2f msec, partitioned in %.2f msec (%d clusters in %d groups, %.1f avg)\n",
+	    "SimplifyG",
 	    int(mesh.indices.size() / 3), int(lod.size() / 3),
 	    error / scale * 100,
 	    (end - parttime) * 1000, (middle - start) * 1000, (parttime - middle) * 1000,
-	    int(meshlets.size()), int(partition_count));
+	    int(meshlets.size()), int(partition_count), double(meshlets.size()) / double(partition_count));
 }
 
 void optimize(const Mesh& mesh, bool fifo = false)
@@ -886,22 +886,21 @@ static int follow(int* parents, int index)
 
 void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false, bool flex = false, bool spatial = false, bool dump = false)
 {
-	// NVidia-recommends 64/126; we round 126 down to a multiple of 4
-	// alternatively we also test uniform configuration with 64/64 which is better for AMD
+	// NVidia recommends 64/126; we also test uniform configuration with 64/64 which is better for earlier AMD GPUs
 	const size_t max_vertices = 64;
-	const size_t max_triangles = uniform ? 64 : 124;
+	const size_t max_triangles = uniform ? 64 : 126;
 	const size_t min_triangles = spatial ? 16 : (uniform ? 24 : 32); // only used in flex/spatial modes
 
 	// note: should be set to 0 unless cone culling is used at runtime!
-	const float cone_weight = flex ? -1.0f : 0.25f;
+	const float cone_weight = 0.25f;
 	const float split_factor = flex ? 2.0f : 0.0f;
 
 	// note: input mesh is assumed to be optimized for vertex cache and vertex fetch
 	double start = timestamp();
 	size_t max_meshlets = meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, min_triangles);
 	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
-	std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
-	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
+	std::vector<unsigned int> meshlet_vertices(mesh.indices.size());
+	std::vector<unsigned char> meshlet_triangles(mesh.indices.size());
 
 	if (scan)
 		meshlets.resize(meshopt_buildMeshletsScan(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), mesh.vertices.size(), max_vertices, max_triangles));
@@ -909,7 +908,7 @@ void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false, bool fl
 		meshlets.resize(meshopt_buildMeshletsFlex(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, cone_weight, split_factor));
 	else if (spatial)
 		meshlets.resize(meshopt_buildMeshletsSpatial(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, 0.f));
-	else // note: equivalent to the call of buildMeshletsFlex() with non-negative cone_weight and split_factor = 0
+	else // note: equivalent to the call of buildMeshletsFlex() with split_factor = 0 and min_triangles = max_triangles
 		meshlets.resize(meshopt_buildMeshlets(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, max_triangles, cone_weight));
 
 	if (!dump)
@@ -922,7 +921,7 @@ void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false, bool fl
 
 		// this is an example of how to trim the vertex/triangle arrays when copying data out to GPU storage
 		meshlet_vertices.resize(last.vertex_offset + last.vertex_count);
-		meshlet_triangles.resize(last.triangle_offset + ((last.triangle_count * 3 + 3) & ~3));
+		meshlet_triangles.resize(last.triangle_offset + last.triangle_count * 3);
 	}
 
 	double end = timestamp();
@@ -1431,6 +1430,7 @@ void process(const char* path)
 	simplifyAttr(mesh);
 	simplifyAttr(mesh, 0.1f, meshopt_SimplifyPermissive);
 	simplifyUpdate(mesh);
+	simplifyUpdate(mesh, 0.1f, meshopt_SimplifyPermissive);
 	simplifySloppy(mesh);
 	simplifyComplete(mesh);
 	simplifyPoints(mesh);
@@ -1468,9 +1468,6 @@ void processNanite(const char* path)
 int main(int argc, char** argv)
 {
 	void runTests();
-
-	meshopt_encodeVertexVersion(1);
-	meshopt_encodeIndexVersion(1);
 
 	if (argc == 1)
 	{

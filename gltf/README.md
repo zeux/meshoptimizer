@@ -20,7 +20,7 @@ By default gltfpack outputs regular `.glb`/`.gltf` files that have been optimize
 
 When using `-c` option, gltfpack outputs compressed `.glb`/`.gltf` files that use meshoptimizer codecs to reduce the download size further. Loading these files requires extending GLTF loaders with support for [EXT_meshopt_compression](https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Vendor/EXT_meshopt_compression/README.md) extension; three.js supports it in r122+ (requires calling `GLTFLoader.setMeshoptDecoder`), Babylon.js supports it in 5.0+ without further setup.
 
-For better compression, you can use `-cc` option which applies additional compression; additionally make sure that your content delivery method is configured to use deflate (gzip) - meshoptimizer codecs are designed to produce output that can be compressed further with general purpose compressors.
+For better compression, you can use `-cc` option which applies additional compression; additionally make sure that your content delivery method is configured to use deflate (gzip) - meshoptimizer codecs are designed to produce output that can be compressed further with general purpose compressors. For maximum compression, consider using [KHR_meshopt_compression](https://github.com/KhronosGroup/glTF/pull/2517) extension with a higher compression level (`-cz` option).
 
 gltfpack can also compress textures using Basis Universal format stored in a KTX2 container (`-tc` flag, requires support for `KHR_texture_basisu`) or using WebP format (`-tw` flag, requires support for `EXT_texture_webp`).
 
@@ -28,10 +28,10 @@ When working with glTF files that contain point clouds, gltfpack automatically p
 
 ## Decompression
 
-When using compressed files, [js/meshopt_decoder.js](https://github.com/zeux/meshoptimizer/blob/master/js/meshopt_decoder.js) or `js/meshopt_decoder.module.js` needs to be loaded to provide the WebAssembly decoder module like this:
+When using compressed files, [js/meshopt_decoder.mjs](https://github.com/zeux/meshoptimizer/blob/master/js/meshopt_decoder.mjs) needs to be loaded to provide the WebAssembly decoder module like this:
 
 ```js
-import { MeshoptDecoder } from './meshopt_decoder.module.js';
+import { MeshoptDecoder } from './meshopt_decoder.mjs';
 
 ...
 
@@ -83,6 +83,7 @@ gltfpack supports most Khronos extensions and some multi-vendor extensions in th
 - KHR_materials_variants
 - KHR_materials_volume
 - KHR_mesh_quantization
+- KHR_meshopt_compression
 - KHR_texture_basisu
 - KHR_texture_transform
 - EXT_mesh_gpu_instancing
@@ -92,6 +93,7 @@ gltfpack supports most Khronos extensions and some multi-vendor extensions in th
 Even if the source file does not use extensions, gltfpack may use some extensions in the output file either by default or when certain options are used:
 
 - KHR_mesh_quantization (used by default unless disabled via `-noq`)
+- KHR_meshopt_compression (used when requested via `-ce khr` or `-cz`)
 - KHR_texture_transform (used by default when textures are present, unless disabled via `-noq` or `-vtf`)
 - KHR_texture_basisu (used when requested via `-tc` or `-tu`)
 - EXT_meshopt_compression (used when requested via `-c` or `-cc`)
@@ -99,6 +101,19 @@ Even if the source file does not use extensions, gltfpack may use some extension
 - EXT_texture_webp (used when requested via `-tw`)
 
 gltfpack does not support vendor-specific extensions or custom extensions, including ones defined in [Khronos glTF repository](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor). Unknown extension nodes are discarded from the output.
+
+## Custom data
+
+glTF files may contain custom application-specific data stored outside of custom extensions. gltfpack has limited support for preserving this data.
+
+Unknown vertex or instance attributes are generally discarded. While it would be possible to preserve them in theory, many scene transformations and analyses require a full understanding of the attribute semantics - some attributes need to be transformed with the mesh transformation matrix, some need to be adjusted when meshes are merged, some influence how meshes are rendered, etc. However, gltfpack supports some specific attributes that are commonly used in the ecosystem:
+
+- Vertex attributes that store integer IDs with names `_ID`, `_BATCHID` or `_FEATURE_ID_n` are preserved as-is. These can be used to identify objects.
+- Instance attribute `_COLOR_0` is preserved as-is. This can be used to provide per-instance color tinting.
+
+Additional application-specific data can be stored via the glTF `extras` property. While extras (outside of `asset`) are discarded by default, using the `-ke` option preserves extras in materials, nodes, primitives and scenes.
+
+In addition to `asset` extras, gltfpack unconditionally preserves morph target names specified via the `targetNames` property inside `extras` on meshes.
 
 ## Building
 

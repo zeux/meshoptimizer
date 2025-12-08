@@ -2,14 +2,11 @@
 
 This folder contains JavaScript/WebAssembly modules that can be used to access parts of functionality of meshoptimizer library. While normally these would be used internally by glTF loaders, processors and other Web optimization tools, they can also be used directly if needed. The modules are available as an [NPM package](https://www.npmjs.com/package/meshoptimizer) but can also be redistributed individually on a file-by-file basis.
 
+When using the NPM package, package exports can be used to import individual components (e.g. `meshoptimizer/decoder`) as well as the entire package (`meshoptimizer`).
+
 ## Structure
 
-Each component comes in two variants:
-
-- `meshopt_component.js` uses a UMD-style module declaration and can be used by a wide variety of JavaScript module loaders, including node.js require(), AMD, Common.JS, and can also be loaded into the web page directly via a `<script>` tag which exposes the module as a global variable
-- `meshopt_component.module.js` uses ES6 module exports and can be imported from another ES6 module
-
-In either case the export name is MeshoptComponent and is an object that has two fields:
+Each component comes in a separate file, `meshopt_component.js`, which uses ES6 module exports and can be imported from another ES6 module. The export name is MeshoptComponent and is an object that has two fields:
 
 - `supported` is a boolean that can be checked to see if the component is supported by the current execution environment; it will generally be `false` when WebAssembly is not supported or enabled. To use these components on browsers without WebAssembly a polyfill library is recommended.
 - `ready` is a Promise that is resolved when WebAssembly compilation and initialization finishes; any functions are unsafe to call before that happens.
@@ -18,7 +15,9 @@ In addition to that, each component exposes a set of specific functions document
 
 ## Decoder
 
-`MeshoptDecoder` (`meshopt_decoder.js`) implements high performance decompression of attribute and index buffers encoded using meshopt compression. This can be used to decompress glTF buffers encoded with `EXT_meshopt_compression` extension or for custom geometry compression pipelines. The module contains two implementations, scalar and SIMD, with the best performing implementation selected automatically. When SIMD is available, the decoders run at 1-3 GB/s on modern desktop computers.
+`MeshoptDecoder` (`meshopt_decoder.mjs`) implements high performance decompression of attribute and index buffers encoded using meshopt compression. This can be used to decompress glTF buffers encoded with `EXT_meshopt_compression` extension or for custom geometry compression pipelines. The module contains two implementations, scalar and SIMD, with the best performing implementation selected automatically. When SIMD is available, the decoders run at 1-3 GB/s on modern desktop computers.
+
+> Note: for maximum compatibility, MeshoptDecoder is also available as CommonJS module via `meshopt_decoder.cjs`; it can be used by a wide variety of JavaScript module loaders, including node.js require(), AMD, Common.JS, and can also be loaded into the web page directly via a `<script>` tag which exposes the module as a global variable `MeshoptDecoder`. The ESM version uses `.mjs` file extension unlike other components, to avoid compatibility issues with prior versions.
 
 To decode a buffer, one of the decoding functions should be called:
 
@@ -98,14 +97,14 @@ encodeFilterExp: (source: Float32Array, count: number, stride: number, bits: num
 
 All these functions take a source floating point buffer as an input, and perform a complex transformation that, when reversed by a decoder, results in an optimally quantized decompressed output. Because of this these functions assume specific configuration of input and output data:
 
-- `encodeFilterOct` takes each 4 floats from the source array (for a total of `count` 4-vectors), treats them as a unit vector (XYZ) and fourth component from -1..1 (W), and encodes them into `stride` bytes in a way that, when decoded, the result is stored as a normalized signed 4-vector. `stride` must be 4 (in which case the round-trip result is 4 8-bit normalized values) or 8 (in which case the round-trip result is 4 16-bit normalized values). This encoding is recommended for normals (with stride=4 for medium quality and 8 for high quality output) and tangents (with stride=4 providing enough quality in all cases; note that 4-th component is preserved in case it stores coordinate spaced winding). `bits` represents the desired precision of each component and must be in `[1..8]` range if `stride=4` and `[1..16]` range if `stride=8`.
+- `encodeFilterOct` takes each 4 floats from the source array (for a total of `count` 4-vectors), treats them as a unit vector (XYZ) and fourth component from -1..1 (W), and encodes them into `stride` bytes in a way that, when decoded, the result is stored as a normalized signed 4-vector. `stride` must be 4 (in which case the round-trip result is 4 8-bit normalized values) or 8 (in which case the round-trip result is 4 16-bit normalized values). This encoding is recommended for normals (with stride=4 for medium quality and 8 for high quality output) and tangents (with stride=4 providing enough quality in all cases; note that 4-th component is preserved in case it stores tangent frame winding). `bits` represents the desired precision of each component and must be in `[2..8]` range if `stride=4` and `[2..16]` range if `stride=8`.
 
 - `encodeFilterQuat` takes each 4 floats from the source array (for a total of `count` 4-vectrors), treats them as a unit quaternion, and encodes them into `stride` bytes in a way that, when decoded, the result is stored as a normalized signed 4-vector representing the same rotation as the source quaternion. `stride` must be 8 (the round-trip result is 4 16-bit normalized values). `bits` represents the desired precision of each component and must be in `[4..16]` range, although using less than 9-10 bits is likely going to lead to significant deviation in rotations.
 
 - `encodeFilterExp` takes each K floats from the source array (where `K=stride/4`, for a total of `count` K-vectors), and encodes them into `stride` bytes in a way that, when decoded, the result is stored as K single-precision floating point values. This may seem redundant but it allows to trade some precision for a higher compression ratio due to reduced precision of stored components, controlled by `bits` which must be in `[1..24]` range, and a shared exponent encoding used by the function.
 The `mode` parameter can be used to influence the exponent sharing and provides a tradeoff between compressed size and quality for various use cases, and can be one of 'Separate', 'SharedVector', 'SharedComponent' and 'Clamped' (defaulting to 'SharedVector').
 
-- `encodeFilterColor` takes each 4 floats from the source array (for a total of `count` 4-vectors), treats them as an RGBA color with each component from 0..1, and encodes them into `stride` bytes in a way that, when decoded, the result is stored as a normalized unsigned 4-vector. `stride` must be 4 (in which case the round-trip result is 4 8-bit normalized values) or 8 (in which case the round-trip result is 4 16-bit normalized values). This encoding is recommended for colors (with stride=4 for medium quality and 8 for high quality output). `bits` represents the desired precision of each component and must be in `[1..8]` range if `stride=4` and `[1..16]` range if `stride=8`.
+- `encodeFilterColor` takes each 4 floats from the source array (for a total of `count` 4-vectors), treats them as an RGBA color with each component from 0..1, and encodes them into `stride` bytes in a way that, when decoded, the result is stored as a normalized unsigned 4-vector. `stride` must be 4 (in which case the round-trip result is 4 8-bit normalized values) or 8 (in which case the round-trip result is 4 16-bit normalized values). This encoding is recommended for colors (with stride=4 for medium quality and 8 for high quality output). `bits` represents the desired precision of each component and must be in `[2..8]` range if `stride=4` and `[2..16]` range if `stride=8`.
 
 Note that in all cases using the highest `bits` value allowed by the output `stride` won't change the size of the output array (which is always going to be `count * stride` bytes), but it *will* reduce compression efficiency, as such the lowest acceptable `bits` value is recommended to use. When multiple parts of the data require different levels of precision, encode filters can be called multiple times and the output of the same filter called with the same `stride` can be concatenated even if `bits` are different.
 
@@ -126,7 +125,7 @@ Note that the source is specified as byte arrays; for example, to quantize a pos
 
 When interleaved vertex data is compressed, `encodeVertexBuffer` can be called with the full size of a single interleaved vertex; however, when compressing deinterleaved data, note that `encodeVertexBuffer` should be called on each component individually if the strides of different streams are different.
 
-By default, `encodeVertexBuffer` uses v0 version of the encoding; this encoding is compatible with `EXT_meshopt_compression` glTF extension but results in lower compression ratios. For better compression, `encodeVertexBufferLevel` can be used to specify encoding version 1; the `level` parameter controls the compression ratio and can be set to 2 (default), 3 for higher compression, or 0/1 for lower. The higher the level, the better the compression ratio, but also the slower the encoding process. When version is set to 0, `level` does not have any effect and the encoding is equivalent to `encodeVertexBuffer`.
+By default, `encodeVertexBuffer` uses v1 version of the encoding; this encoding is *not* compatible with `EXT_meshopt_compression` glTF extension but results in higher compression ratios. To encode data compatible with `EXT_meshopt_compression`, use `encodeVertexBufferLevel` with version=0, or - preferably - `encodeGltfBuffer`, which defaults to v0 (but can also be used to encode v1 content by passing version=1).
 
 ## Simplifier
 
@@ -205,11 +204,23 @@ buildMeshlets(indices: Uint32Array, vertex_positions: Float32Array, vertex_posit
 
 The algorithm uses position data stored in a strided array; `vertex_positions_stride` represents the distance between subsequent positions in `Float32` units.
 
-The maximum number of triangles and number of vertices per meshlet can be controlled via `max_triangles` and `max_vertices` parameters. However, `max_vertices` must not be greater than 255 and `max_triangles` must not be greater than 512.
+The maximum number of triangles and number of vertices per meshlet can be controlled via `max_triangles` and `max_vertices` parameters. However, `max_vertices` must not be greater than 256 and `max_triangles` must not be greater than 512.
 
 Additionally, if cluster cone culling is to be used, `buildMeshlets` allows specifying a `cone_weight` as a value between 0 and 1 to balance culling efficiency with other forms of culling. By default, `cone_weight` is set to 0.
 
-All meshlets are implicitly optimized for better triangle and vertex locality by `buildMeshlets`.
+For finer control over triangle counts, use `buildMeshletsFlex`, which accepts minimum and maximum triangle limits and an optional `split_factor` to nudge large clusters to split sooner.
+
+```ts
+buildMeshletsFlex(indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, max_vertices: number, min_triangles: number, max_triangles: number, cone_weight?: number, split_factor?: number) => MeshletBuffers;
+```
+
+To favor spatial splits for ray tracing, `buildMeshletsSpatial` keeps the same controls but replaces cone weighting with `fill_weight` to trade off cluster fullness against SAH cost.
+
+```ts
+buildMeshletsSpatial(indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, max_vertices: number, min_triangles: number, max_triangles: number, fill_weight?: number) => MeshletBuffers;
+```
+
+All meshlets produced by these builders are implicitly optimized for better triangle and vertex locality.
 
 The algorithm returns the meshlet data as packed buffers:
 

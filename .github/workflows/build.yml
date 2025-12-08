@@ -52,9 +52,14 @@ jobs:
   windows:
     strategy:
       matrix:
-        arch: [{ name: windows-x86, arch: Win32 }, { name: windows, arch: x64 }]
+        arch:
+          [
+            { name: windows, runner: windows-latest, arch: x64 },
+            { name: windows-x86, runner: windows-latest, arch: Win32 },
+            { name: windows-arm, runner: windows-11-arm, arch: ARM64 },
+          ]
     name: ${{matrix.arch.name}}
-    runs-on: windows-latest
+    runs-on: ${{matrix.arch.runner}}
     steps:
       - uses: actions/checkout@v4
       - name: cmake configure
@@ -87,9 +92,8 @@ jobs:
       - name: check es5
         run: |
           npm install -g es-check@7.2.1
-          npx es-check es5 js/meshopt_decoder.js js/meshopt_encoder.js js/meshopt_simplifier.js js/meshopt_clusterizer.js
-          npx es-check --module es5 js/meshopt_decoder.module.js js/meshopt_encoder.module.js js/meshopt_simplifier.module.js js/meshopt_clusterizer.module.js
-          npx es-check es5 gltf/library.js
+          npx es-check --module es5 js/meshopt_decoder.mjs js/meshopt_encoder.js js/meshopt_simplifier.js js/meshopt_clusterizer.js
+          npx es-check --module es2020 gltf/library.js
 
   gltfpack:
     runs-on: ubuntu-latest

@@ -1,6 +1,6 @@
-var encoder = require('./meshopt_encoder.js');
-var decoder = require('./meshopt_decoder.js');
-var { performance } = require('perf_hooks');
+import { MeshoptEncoder as encoder } from './meshopt_encoder.js';
+import { MeshoptDecoder as decoder } from './meshopt_decoder.mjs';
+import { performance } from 'perf_hooks';
 
 process.on('unhandledRejection', (error) => {
 	console.log('unhandledRejection', error);

@@ -92,6 +92,41 @@ static Bounds computeBounds(const Mesh& mesh, cgltf_attribute_type type)
 	return b;
 }
 
+static float computeUvArea(const Mesh& mesh)
+{
+	if (mesh.indices.empty() || mesh.type != cgltf_primitive_type_triangles)
+		return 0.f;
+
+	float result = 0.f;
+
+	for (size_t j = 0; j < mesh.streams.size(); ++j)
+	{
+		const Stream& s = mesh.streams[j];
+
+		if (s.type != cgltf_attribute_type_texcoord)
+			continue;
+
+		float uvarea = 0.f;
+
+		for (size_t i = 0; i < mesh.indices.size(); i += 3)
+		{
+			unsigned int a = mesh.indices[i + 0];
+			unsigned int b = mesh.indices[i + 1];
+			unsigned int c = mesh.indices[i + 2];
+
+			const Attr& va = s.data[a];
+			const Attr& vb = s.data[b];
+			const Attr& vc = s.data[c];
+
+			uvarea += fabsf((vb.f[0] - va.f[0]) * (vc.f[1] - va.f[1]) - (vc.f[0] - va.f[0]) * (vb.f[1] - va.f[1]));
+		}
+
+		result = std::max(result, uvarea / float(mesh.indices.size() / 3));
+	}
+
+	return result;
+}
+
 QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes, const Settings& settings)
 {
 	QuantizationPosition result = {};
@@ -189,6 +224,38 @@ void prepareQuantizationTexture(cgltf_data* data, std::vector<QuantizationTextur
 
 		Bounds mb = computeBounds(mesh, cgltf_attribute_type_texcoord);
 		bounds[indices[i]].merge(mb);
+	}
+
+	// detect potential precision issues and warn about them
+	if (settings.quantize && !settings.tex_float)
+	{
+		float max_rel_error = 0;
+
+		for (size_t i = 0; i < meshes.size(); ++i)
+		{
+			const Mesh& mesh = meshes[i];
+
+			if (!mesh.material && mesh.variants.empty())
+				continue;
+
+			const Bounds& b = bounds[indices[i]];
+			if (!b.isValid())
+				continue;
+
+			float scale = std::max(b.max.f[0] - b.min.f[0], b.max.f[1] - b.min.f[1]);
+			float error = scale * 0.5f / (1 << (settings.tex_bits - 1));
+
+			if (error < 1e-3f)
+				continue;
+
+			float uvarea = computeUvArea(mesh);
+			float rel_error = uvarea > 0 ? error / sqrtf(uvarea) : 0.f;
+
+			max_rel_error = std::max(max_rel_error, rel_error);
+		}
+
+		if (max_rel_error > 1e-1f)
+			fprintf(stderr, "Warning: texture coordinate data has significant error (%.0f%%); consider using floating-point quantization (-vtf) or more bits (-vt N)\n", max_rel_error * 100);
 	}
 
 	// update all material data using canonical bounds
@@ -488,8 +555,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 		// expand the encoded range to ensure it covers [0..1) interval
 		// this can slightly reduce precision but we should not need more precision inside 0..1, and this significantly improves compressed size when using encodeExpOne
 		if (settings.tex_float)
-			return writeVertexStreamFloat(bin, stream, cgltf_type_vec2, 2, settings.compress && filters, qt.bits,
-			    settings.compressmore ? meshopt_EncodeExpSharedComponent : meshopt_EncodeExpClamped);
+			return writeVertexStreamFloat(bin, stream, cgltf_type_vec2, 2, settings.compress && filters, qt.bits, meshopt_EncodeExpClamped);
 
 		float uv_rscale[2] = {
 		    qt.scale[0] == 0.f ? 0.f : 1.f / qt.scale[0],
@@ -563,7 +629,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	}
 	else if (stream.type == cgltf_attribute_type_color)
 	{
-		bool col = filters && settings.compressexp && settings.compressmore;
+		bool col = filters && settings.compresskhr && settings.compressmore;
 		int bits = settings.col_bits;
 
 		StreamFormat::Filter filter = col ? StreamFormat::Filter_Color : StreamFormat::Filter_None;
@@ -800,12 +866,12 @@ StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type typ
 	}
 }
 
-void compressVertexStream(std::string& bin, const std::string& data, size_t count, size_t stride)
+void compressVertexStream(std::string& bin, const std::string& data, size_t count, size_t stride, int level)
 {
 	assert(data.size() == count * stride);
 
 	std::vector<unsigned char> compressed(meshopt_encodeVertexBufferBound(count, stride));
-	size_t size = meshopt_encodeVertexBuffer(&compressed[0], compressed.size(), data.c_str(), count, stride);
+	size_t size = meshopt_encodeVertexBufferLevel(&compressed[0], compressed.size(), data.c_str(), count, stride, level, level > 0);
 
 	bin.append(reinterpret_cast<const char*>(&compressed[0]), size);
 }

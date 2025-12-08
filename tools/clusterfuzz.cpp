@@ -48,5 +48,14 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* buffer, size_t size)
 	meshopt_buildMeshletsSpatial(ml, mv, mt, ib, indices, vb[0], 100, sizeof(float) * 4, /* max_vertices= */ 16, /* min_triangles= */ 16, /* max_triangles= */ 32, 0.f);
 	meshopt_buildMeshletsSpatial(ml, mv, mt, ib, indices, vb[0], 100, sizeof(float) * 4, /* max_vertices= */ 16, /* min_triangles= */ 32, /* max_triangles= */ 32, 0.f);
 
+	unsigned int part[333];
+	unsigned int clsize[333];
+
+	// treat each triangle as a cluster
+	for (int i = 0; i < indices; ++i)
+		clsize[i / 3] = 3;
+
+	meshopt_partitionClusters(part, ib, indices, clsize, indices / 3, vb[0], 100, sizeof(float) * 4, /* target_group_size= */ 12);
+
 	return 0;
 }

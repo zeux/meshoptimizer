@@ -301,15 +301,16 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 	}
 }
 
-static void parseMeshInstancesGltf(std::vector<Transform>& instances, cgltf_node* node)
+static void parseMeshInstancesGltf(std::vector<Instance>& instances, cgltf_node* node, size_t ni)
 {
 	cgltf_accessor* translation = NULL;
 	cgltf_accessor* rotation = NULL;
 	cgltf_accessor* scale = NULL;
+	cgltf_accessor* color = NULL;
 
 	for (size_t i = 0; i < node->mesh_gpu_instancing.attributes_count; ++i)
 	{
-		cgltf_attribute& attr = node->mesh_gpu_instancing.attributes[i];
+		const cgltf_attribute& attr = node->mesh_gpu_instancing.attributes[i];
 
 		if (strcmp(attr.name, "TRANSLATION") == 0 && attr.data->type == cgltf_type_vec3)
 			translation = attr.data;
@@ -317,6 +318,10 @@ static void parseMeshInstancesGltf(std::vector<Transform>& instances, cgltf_node
 			rotation = attr.data;
 		else if (strcmp(attr.name, "SCALE") == 0 && attr.data->type == cgltf_type_vec3)
 			scale = attr.data;
+		else if (strcmp(attr.name, "_COLOR_0") == 0 && (attr.data->type == cgltf_type_vec3 || attr.data->type == cgltf_type_vec4))
+			color = attr.data;
+		else
+			fprintf(stderr, "Warning: ignoring %s instance attribute %s in node %d\n", *attr.name == '_' ? "custom" : "unknown", attr.name, int(ni));
 	}
 
 	size_t count = node->mesh_gpu_instancing.attributes[0].data->count;
@@ -342,10 +347,15 @@ static void parseMeshInstancesGltf(std::vector<Transform>& instances, cgltf_node
 		if (scale)
 			cgltf_accessor_read_float(scale, i, instance.scale, 4);
 
-		Transform xf;
-		cgltf_node_transform_world(&instance, xf.data);
+		Instance obj = {};
+		cgltf_node_transform_world(&instance, obj.transform);
 
-		instances.push_back(xf);
+		obj.color[0] = obj.color[1] = obj.color[2] = obj.color[3] = 1.0f;
+
+		if (color)
+			cgltf_accessor_read_float(color, i, obj.color, 4);
+
+		instances.push_back(obj);
 	}
 }
 
@@ -375,7 +385,7 @@ static void parseMeshNodesGltf(cgltf_data* data, std::vector<Mesh>& meshes, cons
 			if (node.has_mesh_gpu_instancing)
 			{
 				mesh->scene = 0; // we need to assign scene index since instances are attached to a scene; for now we assume 0
-				parseMeshInstancesGltf(mesh->instances, &node);
+				parseMeshInstancesGltf(mesh->instances, &node, i);
 			}
 			else
 			{
@@ -542,8 +552,6 @@ static bool freeUnusedBuffers(cgltf_data* data)
 
 static cgltf_result decompressMeshopt(cgltf_data* data)
 {
-	bool warned = false;
-
 	for (size_t i = 0; i < data->buffer_views_count; ++i)
 	{
 		if (!data->buffer_views[i].has_meshopt_compression)
@@ -562,22 +570,18 @@ static cgltf_result decompressMeshopt(cgltf_data* data)
 		data->buffer_views[i].data = result;
 
 		int rc = -1;
-		bool warn = false;
 
 		switch (mc->mode)
 		{
 		case cgltf_meshopt_compression_mode_attributes:
-			warn = meshopt_decodeVertexVersion(source, mc->size) != 0;
 			rc = meshopt_decodeVertexBuffer(result, mc->count, mc->stride, source, mc->size);
 			break;
 
 		case cgltf_meshopt_compression_mode_triangles:
-			warn = meshopt_decodeIndexVersion(source, mc->size) != 1;
 			rc = meshopt_decodeIndexBuffer(result, mc->count, mc->stride, source, mc->size);
 			break;
 
 		case cgltf_meshopt_compression_mode_indices:
-			warn = meshopt_decodeIndexVersion(source, mc->size) != 1;
 			rc = meshopt_decodeIndexSequence(result, mc->count, mc->stride, source, mc->size);
 			break;
 
@@ -587,12 +591,6 @@ static cgltf_result decompressMeshopt(cgltf_data* data)
 
 		if (rc != 0)
 			return cgltf_result_io_error;
-
-		if (warn && !warned)
-		{
-			fprintf(stderr, "Warning: EXT_meshopt_compression data uses versions outside of the glTF specification (vertex 0 / index 1 expected)\n");
-			warned = true;
-		}
 
 		switch (mc->filter)
 		{
@@ -606,6 +604,10 @@ static cgltf_result decompressMeshopt(cgltf_data* data)
 
 		case cgltf_meshopt_compression_filter_exponential:
 			meshopt_decodeFilterExp(result, mc->count, mc->stride);
+			break;
+
+		case cgltf_meshopt_compression_filter_color:
+			meshopt_decodeFilterColor(result, mc->count, mc->stride);
 			break;
 
 		default:

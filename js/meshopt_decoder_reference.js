@@ -2,7 +2,7 @@
 // Copyright (C) 2016-2025, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
 
 // This is the reference decoder implementation by Jasper St. Pierre.
-// It follows the decoder interface and should be a drop-in replacement for the actual decoder from meshopt_decoder.js
+// It follows the decoder interface and should be a drop-in replacement for the actual decoder from meshopt_decoder module
 // It is provided for educational value and is not recommended for use in production because it's not performance-optimized.
 
 const MeshoptDecoder = {};

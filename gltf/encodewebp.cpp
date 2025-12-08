@@ -123,6 +123,7 @@ static const char* encodeWebP(const cgltf_image& image, const char* input_path, 
 
 	pic.writer = writeWebP;
 	pic.custom_ptr = &encoded;
+	encoded.clear();
 
 	if (!WebPEncode(&config, &pic))
 		return "error encoding image";

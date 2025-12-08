@@ -39,6 +39,28 @@ export const MeshoptClusterizer: {
 		max_triangles: number,
 		cone_weight?: number
 	) => MeshletBuffers;
+
+	buildMeshletsFlex: (
+		indices: Uint32Array,
+		vertex_positions: Float32Array,
+		vertex_positions_stride: number,
+		max_vertices: number,
+		min_triangles: number,
+		max_triangles: number,
+		cone_weight?: number,
+		split_factor?: number
+	) => MeshletBuffers;
+
+	buildMeshletsSpatial: (
+		indices: Uint32Array,
+		vertex_positions: Float32Array,
+		vertex_positions_stride: number,
+		max_vertices: number,
+		min_triangles: number,
+		max_triangles: number,
+		fill_weight?: number
+	) => MeshletBuffers;
+
 	extractMeshlet: (buffers: MeshletBuffers, index: number) => Meshlet;
 
 	computeClusterBounds: (indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number) => Bounds;

@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 // This file is part of gltfpack and is distributed under the terms of MIT License.
-var gltfpack = require('./library.js');
-
-var fs = require('fs');
+import { pack } from './library.js';
+import fs from 'fs';
 
 var args = process.argv.slice(2);
 
-var interface = {
+var iface = {
 	read: function (path) {
 		return fs.readFileSync(path);
 	},
@@ -15,8 +14,7 @@ var interface = {
 	},
 };
 
-gltfpack
-	.pack(args, interface)
+pack(args, iface)
 	.then(function (log) {
 		process.stdout.write(log);
 		process.exit(0);

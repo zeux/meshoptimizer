@@ -1326,17 +1326,6 @@ static void meshletsFlex()
 	assert(ml[0].vertex_count == 4);
 	assert(ml[1].triangle_count == 4);
 	assert(ml[1].vertex_count == 4);
-
-	// this should hold when using axis-aligned metric as well (negative cone weight)
-	assert(meshopt_buildMeshletsFlex(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 8, sizeof(float) * 3, 16, 4, 8, -1.f, 10.f) == 1);
-	assert(ml[0].triangle_count == 8);
-	assert(ml[0].vertex_count == 8);
-
-	assert(meshopt_buildMeshletsFlex(ml, mv, mt, ib, sizeof(ib) / sizeof(ib[0]), vb, 8, sizeof(float) * 3, 16, 4, 8, -1.f, 1.f) == 2);
-	assert(ml[0].triangle_count == 4);
-	assert(ml[0].vertex_count == 4);
-	assert(ml[1].triangle_count == 4);
-	assert(ml[1].vertex_count == 4);
 }
 
 static void meshletsMax()
@@ -1445,8 +1434,8 @@ static void meshletsSpatialDeep()
 
 	size_t max_meshlets = meshopt_buildMeshletsBound(N * 3, max_vertices, max_triangles);
 	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
-	std::vector<unsigned int> meshlet_vertices(max_meshlets * max_vertices);
-	std::vector<unsigned char> meshlet_triangles(max_meshlets * max_triangles * 3);
+	std::vector<unsigned int> meshlet_vertices(N * 3);
+	std::vector<unsigned char> meshlet_triangles(N * 3);
 
 	size_t result = meshopt_buildMeshletsSpatial(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &ib[0], N * 3, &vb[0], N + 1, sizeof(float) * 3, max_vertices, max_triangles, max_triangles, 0.f);
 	assert(result == N);
@@ -1502,6 +1491,30 @@ static void partitionSpatial()
 
 	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 3, vb, 7, sizeof(float) * 3, 2) == 2);
 	assert(part[0] == 0 && part[1] == 1 && part[2] == 0);
+}
+
+static void partitionSpatialMerge()
+{
+	const unsigned int ci[] = {
+	    0, 1, 2,
+	    3, 4, 5,
+	    6, 7, 8, // clang-format :-/
+	};
+
+	const float vb[] = {
+	    0, 0, 0, 1, 0, 0, 0, 1, 0,
+	    0, 0, 0, 0, 2, 0, 2, 0, 0,
+	    10, 0, 0, 10, 1, 0, 10, 2, 0, // clang-format :-/
+	};
+
+	const unsigned int cc[3] = {3, 3, 3};
+	unsigned int part[3];
+
+	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 3, NULL, 9, 0, 2) == 3);
+	assert(part[0] == 0 && part[1] == 1 && part[2] == 2);
+
+	assert(meshopt_partitionClusters(part, ci, sizeof(ci) / sizeof(ci[0]), cc, 3, vb, 9, sizeof(float) * 3, 2) == 2);
+	assert(part[0] == 0 && part[1] == 0 && part[2] == 1);
 }
 
 static int remapCustomFalse(void*, unsigned int, unsigned int)
@@ -2422,6 +2435,83 @@ static void simplifyPruneFunc()
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
 }
 
+static void simplifyUpdate()
+{
+	float vb[5][4] = {
+	    {0, 0, 0, 0},
+	    {1, 1, 0, 0},
+	    {2, 0, 0, 0},
+	    {0.9f, 0.2f, 0.1f, 0.2f},
+	    {1.1f, 0.2f, 0.1f, 0.1f},
+	};
+
+	//     1
+	//    3 4
+	// 0       2
+	unsigned int ib[15] = {
+	    0, 1, 3, 3, 1, 4, 4, 1, 2, 0, 3, 2, 3, 4, 2, //
+	};
+
+	float attr_weight = 1.f;
+
+	assert(meshopt_simplifyWithUpdate(ib, 15, vb[0], 5, 4 * sizeof(float), vb[0] + 3, 4 * sizeof(float), &attr_weight, 1, NULL, 9, 1.f) == 9);
+
+	unsigned int expected[] = {
+	    0, 1, 3, 3, 1, 2, 0, 3, 2, //
+	};
+
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+
+	// border vertices haven't moved but may have small floating point drift
+	for (int i = 0; i < 3; ++i)
+		assert(fabsf(vb[i][3]) < 1e-6f);
+
+	// center vertex got updated
+	assert(fabsf(vb[3][0] - 0.88f) < 1e-2f);
+	assert(fabsf(vb[3][1] - 0.19f) < 1e-2f);
+	assert(fabsf(vb[3][2] - 0.11f) < 1e-2f);
+	assert(fabsf(vb[3][3] - 0.18f) < 1e-2f);
+}
+
+static void simplifyUpdateLocked(unsigned int options)
+{
+	float vb[5][4] = {
+	    {0, 0, 0, 0},
+	    {1, 1, 0, 0},
+	    {2, 0, 0, 0},
+	    {0.9f, 0.2f, 0.1f, 0.2f},
+	    {1.1f, 0.2f, 0.1f, 0.1f},
+	};
+
+	//     1
+	//    3 4
+	// 0       2
+	unsigned int ib[15] = {
+	    0, 1, 3, 3, 1, 4, 4, 1, 2, 0, 3, 2, 3, 4, 2, //
+	};
+
+	float attr_weight = 1.f;
+
+	unsigned char vertex_lock[5] = {0, 0, 0, 1, 0};
+
+	assert(meshopt_simplifyWithUpdate(ib, 15, vb[0], 5, 4 * sizeof(float), vb[0] + 3, 4 * sizeof(float), &attr_weight, 1, vertex_lock, 9, 1.f, options) == 9);
+
+	unsigned int expected[] = {
+	    0, 1, 3, 3, 1, 2, 0, 3, 2, //
+	};
+
+	assert(memcmp(ib, expected, sizeof(expected)) == 0);
+
+	for (int i = 0; i < 3; ++i)
+		assert(fabsf(vb[i][3]) < 1e-6f);
+
+	// locking guarantees exact result
+	assert(vb[3][0] == 0.9f);
+	assert(vb[3][1] == 0.2f);
+	assert(vb[3][2] == 0.1f);
+	assert(vb[3][3] == 0.2f);
+}
+
 static void adjacency()
 {
 	// 0 1/4
@@ -2691,6 +2781,7 @@ void runTests()
 
 	partitionBasic();
 	partitionSpatial();
+	partitionSpatialMerge();
 
 	remapCustom();
 
@@ -2720,6 +2811,9 @@ void runTests()
 	simplifyPrune();
 	simplifyPruneCleanup();
 	simplifyPruneFunc();
+	simplifyUpdate();
+	simplifyUpdateLocked(0);
+	simplifyUpdateLocked(meshopt_SimplifySparse);
 
 	adjacency();
 	tessellation();

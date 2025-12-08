@@ -174,9 +174,9 @@ bool compareMeshNodes(const Mesh& lhs, const Mesh& rhs)
 	return true;
 }
 
-static bool compareTransforms(const Transform& lhs, const Transform& rhs)
+static bool compareInstances(const Instance& lhs, const Instance& rhs)
 {
-	return memcmp(&lhs, &rhs, sizeof(Transform)) == 0;
+	return memcmp(&lhs, &rhs, sizeof(Instance)) == 0;
 }
 
 static bool canMergeMeshNodes(cgltf_node* lhs, cgltf_node* rhs, const Settings& settings)
@@ -223,7 +223,7 @@ static bool canMergeMeshes(const Mesh& lhs, const Mesh& rhs, const Settings& set
 		return false;
 
 	for (size_t i = 0; i < lhs.instances.size(); ++i)
-		if (!compareTransforms(lhs.instances[i], rhs.instances[i]))
+		if (!compareInstances(lhs.instances[i], rhs.instances[i]))
 			return false;
 
 	if (lhs.material != rhs.material)
@@ -795,21 +795,6 @@ static void simplifyProtect(std::vector<unsigned char>& locks, Mesh& mesh, size_
 				data[i] |= meshopt_SimplifyVertex_Protect;
 		}
 	}
-
-	// protect sharp edges (to avoid collapses with high error mostly)
-	if (Stream* attr = getStream(mesh, cgltf_attribute_type_normal))
-	{
-		Attr* a = attr->data.data();
-
-		for (size_t i = 0; i < vertex_count; ++i)
-		{
-			unsigned int r = remap[i];
-
-			if (r != i && (a[i].f[0] * a[r].f[0] + a[i].f[1] * a[r].f[1] + a[i].f[2] * a[r].f[2]) < 0.25f)
-				data[i] |= meshopt_SimplifyVertex_Protect;
-		}
-	}
-
 	// protect all vertices that were artificially split on the UV mirror edges
 	for (size_t i = presplit_vertices; i < vertex_count; ++i)
 		data[i] |= meshopt_SimplifyVertex_Protect;
@@ -1208,8 +1193,8 @@ void computeMeshQuality(std::vector<Mesh>& meshes)
 			node_maxscale = std::max(node_maxscale, getScale(transform));
 		}
 
-		for (const Transform& xf : mesh.instances)
-			node_maxscale = std::max(node_maxscale, getScale(xf.data));
+		for (const Instance& xf : mesh.instances)
+			node_maxscale = std::max(node_maxscale, getScale(xf.transform));
 
 		scales[i] = node_maxscale == 0.f ? geometry_scale : node_maxscale * geometry_scale;
 		maxscale = std::max(maxscale, scales[i]);
@@ -1219,7 +1204,7 @@ void computeMeshQuality(std::vector<Mesh>& meshes)
 		meshes[i].quality = (scales[i] == 0.f || maxscale == 0.f) ? 1.f : scales[i] / maxscale;
 }
 
-bool hasAlpha(const Mesh& mesh)
+bool hasVertexAlpha(const Mesh& mesh)
 {
 	const Stream* color = getStream(const_cast<Mesh&>(mesh), cgltf_attribute_type_color);
 	if (!color)
@@ -1227,6 +1212,15 @@ bool hasAlpha(const Mesh& mesh)
 
 	for (size_t i = 0; i < color->data.size(); ++i)
 		if (color->data[i].f[3] < 1.f)
+			return true;
+
+	return false;
+}
+
+bool hasInstanceAlpha(const std::vector<Instance>& instances)
+{
+	for (const Instance& instance : instances)
+		if (instance.color[3] < 1.f)
 			return true;
 
 	return false;

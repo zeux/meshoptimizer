@@ -1,6 +1,6 @@
 // This file is part of meshoptimizer library and is distributed under the terms of MIT License.
 // Copyright (C) 2016-2025, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
-export type Flags = 'LockBorder' | 'Sparse' | 'ErrorAbsolute' | 'Prune';
+export type Flags = 'LockBorder' | 'Sparse' | 'ErrorAbsolute' | 'Prune' | 'Regularize' | 'Permissive';
 
 export const MeshoptSimplifier: {
 	supported: boolean;
@@ -28,6 +28,28 @@ export const MeshoptSimplifier: {
 		target_index_count: number,
 		target_error: number,
 		flags?: Flags[]
+	) => [Uint32Array, number];
+
+	simplifyWithUpdate: (
+		indices: Uint32Array,
+		vertex_positions: Float32Array,
+		vertex_positions_stride: number,
+		vertex_attributes: Float32Array,
+		vertex_attributes_stride: number,
+		attribute_weights: number[],
+		vertex_lock: Uint8Array | null,
+		target_index_count: number,
+		target_error: number,
+		flags?: Flags[]
+	) => [number, number];
+
+	simplifySloppy: (
+		indices: Uint32Array,
+		vertex_positions: Float32Array,
+		vertex_positions_stride: number,
+		vertex_lock: Uint8Array | null,
+		target_index_count: number,
+		target_error: number
 	) => [Uint32Array, number];
 
 	getScale: (vertex_positions: Float32Array, vertex_positions_stride: number) => number;
