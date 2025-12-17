@@ -477,6 +477,27 @@ static void decodeVertexV1Custom()
 	assert(memcmp(decoded, kVertexBuffer, sizeof(kVertexBuffer)) == 0);
 }
 
+static void decodeVertexV1Deltas()
+{
+	const unsigned short expected[] = {
+	    248, 248, 240, 240, 249, 250, 243, 244, 250, 252, 246, 248, 251, 254, 249, 252,
+	    252, 256, 252, 256, 253, 258, 255, 260, 254, 260, 258, 264, 255, 262, 261, 268,
+	    256, 264, 264, 272, 257, 262, 267, 268, 258, 260, 270, 264, 259, 258, 273, 260,
+	    260, 256, 276, 256, 261, 254, 279, 252, 262, 252, 282, 248, 263, 250, 285, 244, // clang-format :-/
+	};
+
+	const unsigned char input[] = {
+	    0xa1, 0x99, 0x99, 0x01, 0x2a, 0xaa, 0xaa, 0xaa, 0x02, 0x04, 0x44, 0x44, 0x44, 0x43, 0x33, 0x33,
+	    0x33, 0x02, 0x06, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x02, 0x08, 0x88, 0x88, 0x88, 0x87,
+	    0x77, 0x77, 0x77, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	    0x00, 0xf8, 0x00, 0xf8, 0x00, 0xf0, 0x00, 0xf0, 0x00, 0x01, 0x01, // clang-format :-/
+	};
+
+	unsigned short decoded[sizeof(expected) / sizeof(expected[0])];
+	assert(meshopt_decodeVertexBuffer(decoded, 16, 8, input, sizeof(input)) == 0);
+	assert(memcmp(decoded, expected, sizeof(expected)) == 0);
+}
+
 static void encodeVertexMemorySafe()
 {
 	const size_t vertex_count = sizeof(kVertexBuffer) / sizeof(kVertexBuffer[0]);
@@ -610,9 +631,9 @@ static void decodeVertexDeltas()
 	for (size_t i = 0; i < 16; ++i)
 	{
 		data[i * 4 + 0] = (unsigned short)(0xf8 + i * 1);
-		data[i * 4 + 1] = (unsigned short)(0xf8 + i * 2);
+		data[i * 4 + 1] = (unsigned short)(0xf8 + (i < 8 ? i : 16 - i) * 2);
 		data[i * 4 + 2] = (unsigned short)(0xf0 + i * 3);
-		data[i * 4 + 3] = (unsigned short)(0xf0 + i * 4);
+		data[i * 4 + 3] = (unsigned short)(0xf0 + (i < 8 ? i : 16 - i) * 4);
 	}
 
 	std::vector<unsigned char> buffer(meshopt_encodeVertexBufferBound(16, 8));
@@ -2733,6 +2754,7 @@ void runTests()
 	decodeVertexV0Mode2();
 	decodeVertexV1();
 	decodeVertexV1Custom();
+	decodeVertexV1Deltas();
 
 	for (int version = 0; version <= 1; ++version)
 	{
