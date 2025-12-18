@@ -1,6 +1,7 @@
 // This file is part of gltfpack; see gltfpack.h for version/license details
 #include "gltfpack.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 static const char* kMimeTypes[][2] = {
