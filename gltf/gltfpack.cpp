@@ -875,7 +875,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 	{
 		const char* ext = data->extensions_required[i];
 
-		if (!isExtensionSupported(extensions, sizeof(extensions) / sizeof(extensions[0]), ext))
+		if (!isExtensionSupported(extensions, sizeof(extensions) / sizeof(extensions[0]), ext) && strstr(ext, "_meshopt_compression") == NULL)
 			fprintf(stderr, "Warning: required extension %s is not supported and will be skipped\n", ext);
 	}
 
