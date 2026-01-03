@@ -325,7 +325,7 @@ size_t meshopt_generateVertexRemapMulti(unsigned int* destination, const unsigne
 	using namespace meshopt;
 
 	assert(indices || index_count == vertex_count);
-	assert(index_count % 3 == 0);
+	assert(!indices || index_count % 3 == 0);
 	assert(stream_count > 0 && stream_count <= 16);
 
 	for (size_t i = 0; i < stream_count; ++i)
