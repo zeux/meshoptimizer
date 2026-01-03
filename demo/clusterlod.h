@@ -5,7 +5,7 @@
  * To use this code, you need to have one source file which includes meshoptimizer.h and defines CLUSTERLOD_IMPLEMENTATION
  * before including this file. Other source files in your project can just include this file and use the provided functions.
  *
- * Copyright (C) 2016-2025, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
+ * Copyright (C) 2016-2026, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
  * This code is distributed under the MIT License. See notice at the end of this file.
  */
 #pragma once
@@ -722,7 +722,7 @@ size_t clodLocalIndices(unsigned int* vertices, unsigned char* triangles, const 
 #endif
 
 /**
- * Copyright (c) 2016-2025 Arseny Kapoulkine
+ * Copyright (c) 2016-2026 Arseny Kapoulkine
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation

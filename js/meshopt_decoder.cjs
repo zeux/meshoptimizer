@@ -1,5 +1,5 @@
 // This file is part of meshoptimizer library and is distributed under the terms of MIT License.
-// Copyright (C) 2016-2025, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
+// Copyright (C) 2016-2026, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
 var MeshoptDecoder = (function () {
 	// Built with clang version 19.1.5-wasi-sdk
 	// Built from meshoptimizer 1.0

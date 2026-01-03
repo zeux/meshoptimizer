@@ -723,4 +723,4 @@ This library is available to anybody free of charge, under the terms of [MIT Lic
 
 To honor the license agreement, please include attribution into the user-facing product documentation and/or credits, for example using this or similar text:
 
-> Uses meshoptimizer. Copyright (c) 2016-2025, Arseny Kapoulkine
+> Uses meshoptimizer. Copyright (c) 2016-2026, Arseny Kapoulkine
