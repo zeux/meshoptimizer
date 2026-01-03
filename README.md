@@ -86,7 +86,7 @@ size_t vertex_count = meshopt_generateVertexRemapCustom(&remap[0], NULL, index_c
 
 ### Vertex cache optimization
 
-When the GPU renders the mesh, it has to run the vertex shader for each vertex; usually GPUs have a built-in fixed size cache that stores the transformed vertices (the result of running the vertex shader), and uses this cache to reduce the number of vertex shader invocations. This cache is usually small, 16-32 vertices, and can have different replacement policies; to use this cache efficiently, you have to reorder your triangles to maximize the locality of reused vertex references like so:
+When the GPU renders the mesh, it runs the vertex shader for each vertex. Historically, GPUs used a small fixed-size post-transform cache (16-32 vertices) with different replacement policies to store the shader output and avoid redundant shader invocations. Modern GPUs still perform vertex reuse, but with substantially different mechanics: vertex invocations are batched into thread groups based on the input indices, and effective reuse depends on factors like vertex shader outputs and rasterizer throughput. To maximize the locality of reused vertex references, you have to reorder your triangles like so:
 
 ```c++
 meshopt_optimizeVertexCache(indices, indices, index_count, vertex_count);
