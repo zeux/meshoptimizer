@@ -296,6 +296,12 @@ MESHOPTIMIZER_API size_t meshopt_encodeIndexSequenceBound(size_t index_count, si
 MESHOPTIMIZER_API int meshopt_decodeIndexSequence(void* destination, size_t index_count, size_t index_size, const unsigned char* buffer, size_t buffer_size);
 
 /**
+ * Experimental: Meshlet encoder
+ * Warning: this is work in progress; data format is not stable and code is not memory-safe. Do not use.
+ */
+MESHOPTIMIZER_API size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const unsigned int* vertices, const unsigned char* triangles, size_t triangle_count, size_t vertex_count);
+
+/**
  * Vertex buffer encoder
  * Encodes vertex data into an array of bytes that is generally smaller and compresses better compared to original.
  * Returns encoded data size on success, 0 on error; the only error condition is if buffer doesn't have enough space
