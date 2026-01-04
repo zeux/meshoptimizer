@@ -760,6 +760,70 @@ void encodeIndexSequence(const std::vector<unsigned int>& data, size_t vertex_co
 	    (double(result.size() * 4) / 1e9) / (end - middle));
 }
 
+void encodeMeshlets(const Mesh& mesh)
+{
+	const size_t max_vertices = 64;
+	const size_t max_triangles = 64;
+
+	size_t max_meshlets = meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles);
+	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
+	std::vector<unsigned int> meshlet_vertices(mesh.indices.size());
+	std::vector<unsigned char> meshlet_triangles(mesh.indices.size());
+
+	meshlets.resize(meshopt_buildMeshlets(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, max_triangles, 0.f));
+
+	if (meshlets.size())
+	{
+		const meshopt_Meshlet& last = meshlets.back();
+
+		// this is an example of how to trim the vertex/triangle arrays when copying data out to GPU storage
+		meshlet_vertices.resize(last.vertex_offset + last.vertex_count);
+		meshlet_triangles.resize(last.triangle_offset + last.triangle_count * 3);
+
+		// TODO: over-allocate meshlet_vertices to multiple of 3 to make meshopt_optimizeVertexFetch below work without assertions
+		meshlet_vertices.resize((meshlet_vertices.size() + 2) / 3 * 3);
+	}
+
+	std::vector<unsigned char> cbuf(4096); // TODO
+
+	for (size_t i = 0; i < meshlets.size(); ++i)
+	{
+		if (1) // TODO
+		{
+			meshopt_optimizeMeshlet(&meshlet_vertices[meshlets[i].vertex_offset], &meshlet_triangles[meshlets[i].triangle_offset], meshlets[i].triangle_count, meshlets[i].vertex_count);
+		}
+		else
+		{
+			meshopt_optimizeVertexCacheStrip(&meshlet_triangles[meshlets[i].triangle_offset], &meshlet_triangles[meshlets[i].triangle_offset], meshlets[i].triangle_count * 3, meshlets[i].vertex_count);
+			meshopt_optimizeVertexFetch(&meshlet_vertices[meshlets[i].vertex_offset], &meshlet_triangles[meshlets[i].triangle_offset], meshlets[i].triangle_count * 3, &meshlet_vertices[meshlets[i].vertex_offset], meshlets[i].vertex_count, sizeof(unsigned int));
+		}
+	}
+
+	std::vector<Vertex> vertices = mesh.vertices;
+	meshopt_optimizeVertexFetch(&vertices[0], &meshlet_vertices[0], meshlet_vertices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
+
+	size_t ibst = 0, vbst = 0;
+
+	for (size_t i = 0; i < meshlets.size(); ++i)
+	{
+		const meshopt_Meshlet& meshlet = meshlets[i];
+
+		size_t ibs = meshopt_encodeIndexBuffer(&cbuf[0], cbuf.size(), &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count * 3);
+		ibs -= 16; // tail
+		size_t vbs = meshopt_encodeIndexSequence(&cbuf[0], cbuf.size(), &meshlet_vertices[meshlet.vertex_offset], meshlet.vertex_count);
+		vbs -= 4; // tail
+
+		ibst += ibs;
+		vbst += vbs;
+	}
+
+	printf("MeshletCodec (IB): %d meshlets, %d bytes/meshlet; IB %d bytes, %.1f bits/triangle; VB %d bytes, %.1f bits/vertex reference, %.1f bits/vertex\n",
+	    int(meshlets.size()),
+	    int((ibst + vbst) / meshlets.size()),
+	    int(ibst), double(ibst * 8) / double(mesh.indices.size() / 3),
+	    int(vbst), double(vbst * 8) / double(meshlet_vertices.size()), double(vbst * 8) / double(mesh.vertices.size()));
+}
+
 template <typename PV>
 void packVertex(const Mesh& mesh, const char* pvn)
 {
@@ -1453,7 +1517,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	simplifyUpdate(mesh, 0.1f, meshopt_SimplifyPrune | meshopt_SimplifyPermissive);
+	encodeMeshlets(mesh);
 }
 
 void processNanite(const char* path)
