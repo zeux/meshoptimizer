@@ -803,7 +803,7 @@ void encodeMeshlets(const Mesh& mesh)
 	meshopt_optimizeVertexFetch(&vertices[0], &meshlet_vertices[0], meshlet_vertices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
 
 	size_t ibst = 0, vbst = 0;
-	size_t mbst = 0;
+	size_t mbst = 0, mbpt = 0;
 
 	for (size_t i = 0; i < meshlets.size(); ++i)
 	{
@@ -818,17 +818,26 @@ void encodeMeshlets(const Mesh& mesh)
 		ibst += ibs;
 		vbst += vbs;
 		mbst += mbs;
+		// 6-bit extras
+		mbpt += (meshlet.triangle_count + 1) / 2 + ((mbs - (meshlet.triangle_count + 1) / 2) * 6 + 7) / 8;
 	}
 
-	printf("MeshletCodec (IB): %d meshlets, %d bytes/meshlet; IB %d bytes, %.1f bits/triangle; VB %d bytes, %.1f bits/vertex reference, %.1f bits/vertex\n",
+	printf("MeshletCodec (IB): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/triangle\n",
 	    int(meshlets.size()),
-	    int((ibst + vbst) / meshlets.size()),
-	    int(ibst), double(ibst * 8) / double(mesh.indices.size() / 3),
+	    int(ibst / meshlets.size()),
+	    int(ibst), double(ibst * 8) / double(mesh.indices.size() / 3));
+	printf("MeshletCodec (VB): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/vertex reference, %.1f bits/vertex\n",
+	    int(meshlets.size()),
+	    int(vbst / meshlets.size()),
 	    int(vbst), double(vbst * 8) / double(meshlet_vertices.size()), double(vbst * 8) / double(mesh.vertices.size()));
-	printf("MeshletCodec (4b): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/triangle\n",
+	printf("MeshletCodec (4b+8b): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/triangle\n",
 	    int(meshlets.size()),
 	    int(mbst / meshlets.size()),
 	    int(mbst), double(mbst * 8) / double(mesh.indices.size() / 3));
+	printf("MeshletCodec (4b+6b): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/triangle\n",
+	    int(meshlets.size()),
+	    int(mbpt / meshlets.size()),
+	    int(mbpt), double(mbpt * 8) / double(mesh.indices.size() / 3));
 }
 
 template <typename PV>
