@@ -65,8 +65,7 @@ size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const un
 {
 	using namespace meshopt;
 
-	(void)buffer;
-	(void)buffer_size;
+	(void)buffer_size; // TODO
 	(void)vertices;
 	(void)vertex_count;
 
@@ -77,12 +76,15 @@ size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const un
 
 	unsigned int next = 0;
 
-	size_t extra = 0;
-
 	// 4-bit triangle codes give us 16 options that we use as follows:
 	// 3*2 edge reuse (2 edges * 3 last triangles) * 2 next/explicit = 12 options
 	// 4 remaining options = next bits; 000, 001, 011, 111.
 	// triangles are rotated to make next bits line up.
+
+	unsigned char* codes = buffer;
+	unsigned char* extra = buffer + (triangle_count + 1) / 2;
+
+	memset(codes, 0, (triangle_count + 1) / 2);
 
 	for (size_t i = 0; i < triangle_count; ++i)
 	{
@@ -92,7 +94,7 @@ size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const un
 
 		int fer = getEdgeFifo(edgefifo, triangles[i * 3 + 0], triangles[i * 3 + 1], triangles[i * 3 + 2], edgefifooffset);
 
-		if (fer >= 0 && (fer >> 2) < 8)
+		if (fer >= 0 && (fer >> 2) < 6)
 		{
 			// note: getEdgeFifo implicitly rotates triangles by matching a/b to existing edge
 			const unsigned int* order = kTriangleIndexOrder[fer & 3];
@@ -105,7 +107,12 @@ size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const un
 			printf("%3d+ | %3d %3d %3d | edge: e%d c%d\n", last, a, b, c, fer >> 2, fec);
 #endif
 
-			extra += fec;
+			unsigned int code = (fer >> 2) * 2 + fec;
+
+			codes[i / 2] |= (unsigned char)(code << ((i & 1) * 4));
+
+			if (fec)
+				*extra++ = (unsigned char)c;
 
 			pushEdgeFifo(edgefifo, c, b, edgefifooffset);
 			pushEdgeFifo(edgefifo, a, c, edgefifooffset);
@@ -126,16 +133,25 @@ size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const un
 			assert(feb == 1 || fec == 0);
 
 #if TRACE
-			printf("%3d+ | %3d %3d %3d | restart: %d%d%d\n", last, a, b, c, fea, feb, fec, next);
+			printf("%3d+ | %3d %3d %3d | restart: %d%d%d\n", last, a, b, c, fea, feb, fec);
 #endif
 
-			extra += fea + feb + fec;
+			unsigned int code = 12 + (fea + feb + fec);
+
+			codes[i / 2] |= (unsigned char)(code << ((i & 1) * 4));
+
+			if (fea)
+				*extra++ = (unsigned char)a;
+			if (feb)
+				*extra++ = (unsigned char)b;
+			if (fec)
+				*extra++ = (unsigned char)c;
 
 			pushEdgeFifo(edgefifo, c, b, edgefifooffset);
 			pushEdgeFifo(edgefifo, a, c, edgefifooffset);
 		}
 	}
 
-	// 6-bit explicit indices, 4-bit triangle codes
-	return (extra * 6 + 7) / 8 + (triangle_count + 1) / 2;
+	assert(size_t(extra - buffer) <= buffer_size);
+	return extra - buffer;
 }
