@@ -27,6 +27,11 @@ static const unsigned int kTriangleIndexOrder[3][3] = {
     {2, 0, 1},
 };
 
+static int rotateTriangle(unsigned int a, unsigned int b, unsigned int c)
+{
+	return (a > b && a > c) ? 1 : (b > c ? 2 : 0);
+}
+
 static int getEdgeFifo(EdgeFifo fifo, unsigned int a, unsigned int b, unsigned int c, size_t offset)
 {
 	for (int i = 0; i < 16; ++i)
@@ -58,5 +63,79 @@ static void pushEdgeFifo(EdgeFifo fifo, unsigned int a, unsigned int b, size_t& 
 
 size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const unsigned int* vertices, const unsigned char* triangles, size_t triangle_count, size_t vertex_count)
 {
-	return 0;
+	using namespace meshopt;
+
+	(void)buffer;
+	(void)buffer_size;
+	(void)vertices;
+	(void)vertex_count;
+
+	EdgeFifo edgefifo;
+	memset(edgefifo, -1, sizeof(edgefifo));
+
+	size_t edgefifooffset = 0;
+
+	unsigned int next = 0;
+
+	size_t extra = 0;
+
+	// 4-bit triangle codes give us 16 options that we use as follows:
+	// 3*2 edge reuse (2 edges * 3 last triangles) * 2 next/explicit = 12 options
+	// 4 remaining options = next bits; 000, 001, 011, 111.
+	// triangles are rotated to make next bits line up.
+
+	for (size_t i = 0; i < triangle_count; ++i)
+	{
+#if TRACE
+		unsigned int last = next;
+#endif
+
+		int fer = getEdgeFifo(edgefifo, triangles[i * 3 + 0], triangles[i * 3 + 1], triangles[i * 3 + 2], edgefifooffset);
+
+		if (fer >= 0 && (fer >> 2) < 8)
+		{
+			// note: getEdgeFifo implicitly rotates triangles by matching a/b to existing edge
+			const unsigned int* order = kTriangleIndexOrder[fer & 3];
+
+			unsigned int a = triangles[i * 3 + order[0]], b = triangles[i * 3 + order[1]], c = triangles[i * 3 + order[2]];
+
+			int fec = (c == next) ? (next++, 0) : 1;
+
+#if TRACE
+			printf("%3d+ | %3d %3d %3d | edge: e%d c%d\n", last, a, b, c, fer >> 2, fec);
+#endif
+
+			extra += fec;
+
+			pushEdgeFifo(edgefifo, c, b, edgefifooffset);
+			pushEdgeFifo(edgefifo, a, c, edgefifooffset);
+		}
+		else
+		{
+			int rotation = rotateTriangle(triangles[i * 3 + 0], triangles[i * 3 + 1], triangles[i * 3 + 2]);
+			const unsigned int* order = kTriangleIndexOrder[rotation];
+
+			unsigned int a = triangles[i * 3 + order[0]], b = triangles[i * 3 + order[1]], c = triangles[i * 3 + order[2]];
+
+			// fe must be continuous: once a vertex is encoded with next, further vertices must also be encoded with next
+			int fea = (a == next && b == next + 1 && c == next + 2) ? (next++, 0) : 1;
+			int feb = (b == next && c == next + 1) ? (next++, 0) : 1;
+			int fec = (c == next) ? (next++, 0) : 1;
+
+			assert(fea == 1 || feb == 0);
+			assert(feb == 1 || fec == 0);
+
+#if TRACE
+			printf("%3d+ | %3d %3d %3d | restart: %d%d%d\n", last, a, b, c, fea, feb, fec, next);
+#endif
+
+			extra += fea + feb + fec;
+
+			pushEdgeFifo(edgefifo, c, b, edgefifooffset);
+			pushEdgeFifo(edgefifo, a, c, edgefifooffset);
+		}
+	}
+
+	// 6-bit explicit indices, 4-bit triangle codes
+	return (extra * 6 + 7) / 8 + (triangle_count + 1) / 2;
 }
