@@ -805,6 +805,8 @@ void encodeMeshlets(const Mesh& mesh)
 	size_t ibst = 0, vbst = 0;
 	size_t mbst = 0, mbpt = 0;
 
+	std::vector<unsigned char> packed;
+
 	for (size_t i = 0; i < meshlets.size(); ++i)
 	{
 		const meshopt_Meshlet& meshlet = meshlets[i];
@@ -814,6 +816,11 @@ void encodeMeshlets(const Mesh& mesh)
 		size_t vbs = meshopt_encodeIndexSequence(&cbuf[0], cbuf.size(), &meshlet_vertices[meshlet.vertex_offset], meshlet.vertex_count);
 		vbs -= 4; // tail
 		size_t mbs = meshopt_encodeMeshlet(&cbuf[0], cbuf.size(), &meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count, meshlet.vertex_count);
+
+		packed.push_back(meshlet.triangle_count);
+		packed.push_back(mbs & 0xff);
+		packed.push_back((mbs >> 8) & 0xff);
+		packed.insert(packed.end(), &cbuf[0], &cbuf[mbs]);
 
 		unsigned int rt[256];
 		meshopt_decodeMeshlet(rt, meshlet.triangle_count, &cbuf[0], mbs);
@@ -854,6 +861,24 @@ void encodeMeshlets(const Mesh& mesh)
 	    int(meshlets.size()),
 	    int(mbpt / meshlets.size()),
 	    int(mbpt), double(mbpt * 8) / double(mesh.indices.size() / 3));
+
+#if !TRACE
+	for (int i = 0; i < 3; ++i)
+	{
+		unsigned int rt[256];
+		double t0 = timestamp();
+		unsigned char* p = &packed[0];
+		for (size_t j = 0; j < meshlets.size(); ++j)
+		{
+			size_t size = p[1] | (p[2] << 8);
+			meshopt_decodeMeshlet(rt, p[0], p + 3, size);
+			p += 3 + size;
+		}
+		double t1 = timestamp();
+
+		printf("MeshletCodec (packed): decode time %.3f msec, %.3fB tri/sec, %.1f ns/meshlet\n", (t1 - t0) * 1000, double(mesh.indices.size() / 3) / 1e9 / (t1 - t0), (t1 - t0) * 1e9 / double(meshlets.size()));
+	}
+#endif
 }
 
 template <typename PV>
