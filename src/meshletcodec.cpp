@@ -4,6 +4,41 @@
 #include <assert.h>
 #include <string.h>
 
+// The block below auto-detects SIMD ISA that can be used on the target platform
+#ifndef MESHOPTIMIZER_NO_SIMD
+
+// The SIMD implementation requires SSE4.1, which can be enabled unconditionally through compiler settings
+#if defined(__AVX__) || defined(__SSE41__)
+#define SIMD_SSE
+#endif
+
+// MSVC supports compiling SSE4.1 code regardless of compile options; we use a cpuid-based scalar fallback
+#if !defined(SIMD_SSE) && defined(_MSC_VER) && !defined(__clang__) && (defined(_M_IX86) || defined(_M_X64))
+#define SIMD_SSE
+#define SIMD_FALLBACK
+#endif
+
+// GCC 4.9+ and clang 3.8+ support targeting SIMD ISA from individual functions; we use a cpuid-based scalar fallback
+#if !defined(SIMD_SSE) && !defined(SIMD_AVX) && ((defined(__clang__) && __clang_major__ * 100 + __clang_minor__ >= 308) || (defined(__GNUC__) && __GNUC__ * 100 + __GNUC_MINOR__ >= 409)) && (defined(__i386__) || defined(__x86_64__))
+#define SIMD_SSE
+#define SIMD_FALLBACK
+#define SIMD_TARGET __attribute__((target("sse4.1")))
+#endif
+
+#ifndef SIMD_TARGET
+#define SIMD_TARGET
+#endif
+
+#endif // !MESHOPTIMIZER_NO_SIMD
+
+#ifdef SIMD_SSE
+#include <smmintrin.h>
+#endif
+
+#ifdef SIMD_FALLBACK
+// TODO: cpuid based fallback
+#endif
+
 #ifndef TRACE
 #define TRACE 0
 #endif
@@ -59,6 +94,7 @@ static void pushEdgeFifo(EdgeFifo fifo, unsigned int a, unsigned int b, size_t& 
 	offset = (offset + 1) & 15;
 }
 
+#if !defined(SIMD_SSE)
 static void decodeTriangles(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, size_t triangle_count)
 {
 	// branchlessly read next or extra vertex and advance pointers
@@ -115,6 +151,184 @@ static void decodeTriangles(unsigned int* triangles, const unsigned char* codes,
 
 #undef NEXT
 }
+#endif
+
+#if defined(SIMD_SSE)
+// SIMD state is stored in a single 16b register as follows:
+// 0..5: 6 next extra bytes
+// 6..14: 9 bytes = 3 triangles worth of index data
+// 15: 'next' byte
+
+// upon reading each triangle pair we need to transform this state such that the 9 bytes with triangle data contain the newly decoded triangles,
+// which is a permutation of original state modulo per-element additions
+// this transform can be chained to decode second triangle from original state; we create tables for 256 combinations of two 4-bit triangle codes
+// the actual decoding becomes shuffle+add per triangle pair, plus management of extra bytes
+static unsigned char kDecodeTableShuf[256][16];
+static unsigned char kDecodeTableNext[256][16];
+static unsigned char kDecodeTableExtra[256];
+
+static bool decodeBuildTables()
+{
+	for (int code = 0; code < 256; ++code)
+	{
+		int tri0 = code & 0xf, tri1 = code >> 4;
+
+		unsigned char shuf[16] = {};
+		unsigned char next[16] = {};
+		int extra = 0;
+		int nextoff = 0;
+
+		// state 0..5 will be refilled every iteration, so we ignore that
+		// state 6..8 will always contain the last decoded triangle because every triangle shifts fifo equally, so we can decode it independently
+		shuf[6] = 12;
+		shuf[7] = 13;
+		shuf[8] = 14;
+
+		// state 15 will contain next (potentially incremented a few times)
+		shuf[15] = 15;
+
+		// state 9..11 will contain the first decoded triangle (tri0), which can refer to extra/next and the original triangle history
+		if (tri0 < 12)
+		{
+			// reuse: edge comes from the history based on edge index
+			int trioff = 6 + (2 - tri0 / 4) * 3;
+
+			// edge cb or ac
+			shuf[9] = trioff + ((tri0 & 2) ? 2 : 0);
+			shuf[10] = trioff + ((tri0 & 2) ? 1 : 2);
+
+			// third vertex is either next or comes from extra
+			shuf[11] = (tri0 & 1) ? extra : 15;
+			next[11] = (tri0 & 1) ? 0 : nextoff;
+			extra += tri0 & 1;
+			nextoff += 1 - (tri0 & 1);
+		}
+		else
+		{
+			// restart: three vertices, each comes from next or extra; two of them may need to be incremented
+			int fea = tri0 > 12;
+			int feb = tri0 > 13;
+			int fec = tri0 > 14;
+
+			shuf[9] = fea ? extra : 15;
+			next[9] = fea ? 0 : nextoff;
+			extra += fea;
+			nextoff += 1 - fea;
+
+			shuf[10] = feb ? extra : 15;
+			next[10] = feb ? 0 : nextoff;
+			extra += feb;
+			nextoff += 1 - feb;
+
+			shuf[11] = fec ? extra : 15;
+			next[11] = fec ? 0 : nextoff;
+			extra += fec;
+			nextoff += 1 - fec;
+		}
+
+		// state 12..14 will contain the second decoded triangle (tri1); when decoding edge reuse, we need to handle edge 0/1 specially as it was just decoded earlier
+		if (tri1 < 12)
+		{
+			if (tri1 / 4 == 0)
+			{
+				// we need to decode one of two edges from the triangle we just decoded
+				// for that we simply need to copy shuf/next values for the two decoded indices
+				shuf[12] = shuf[9 + ((tri1 & 2) ? 2 : 0)];
+				next[12] = next[9 + ((tri1 & 2) ? 2 : 0)];
+
+				shuf[13] = shuf[9 + ((tri1 & 2) ? 1 : 2)];
+				next[13] = next[9 + ((tri1 & 2) ? 1 : 2)];
+			}
+			else
+			{
+				// reuse: edge comes from original history based on edge index
+				// note: we reuse with an offset because last triangle in the original history was consumed by tri0
+				int trioff = 9 + (2 - tri1 / 4) * 3;
+
+				// edge cb or ac
+				shuf[12] = trioff + ((tri1 & 2) ? 2 : 0);
+				shuf[13] = trioff + ((tri1 & 2) ? 1 : 2);
+			}
+
+			// third vertex is either next or comes from extra
+			shuf[14] = (tri1 & 1) ? extra : 15;
+			next[14] = (tri1 & 1) ? 0 : nextoff;
+			extra += tri1 & 1;
+			nextoff += 1 - (tri1 & 1);
+		}
+		else
+		{
+			int fea = tri1 > 12;
+			int feb = tri1 > 13;
+			int fec = tri1 > 14;
+
+			shuf[12] = fea ? extra : 15;
+			next[12] = fea ? 0 : nextoff;
+			extra += fea;
+			nextoff += 1 - fea;
+
+			shuf[13] = feb ? extra : 15;
+			next[13] = feb ? 0 : nextoff;
+			extra += feb;
+			nextoff += 1 - feb;
+
+			shuf[14] = fec ? extra : 15;
+			next[14] = fec ? 0 : nextoff;
+			extra += fec;
+			nextoff += 1 - fec;
+		}
+
+		// next needs to advance
+		next[15] = nextoff;
+
+		memcpy(&kDecodeTableShuf[code], shuf, sizeof(shuf));
+		memcpy(&kDecodeTableNext[code], next, sizeof(next));
+		kDecodeTableExtra[code] = (unsigned char)extra;
+	}
+
+	return true;
+}
+
+static bool gDecodeTablesInitialized = decodeBuildTables();
+#endif
+
+#if defined(SIMD_SSE)
+SIMD_TARGET
+static void decodeTrianglesSimd(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, size_t triangle_count)
+{
+	assert(gDecodeTablesInitialized);
+	(void)gDecodeTablesInitialized;
+
+	// 0..5: 6 next extra bytes
+	// 6..14: 9 bytes = 3 triangles worth of index data
+	// 15: 'next' byte
+	__m128i state = _mm_setzero_si128();
+
+	__m128i repack = _mm_setr_epi8(9, 10, 11, 0x80, 12, 13, 14, 0x80, 0, 0, 0, 0, 0, 0, 0, 0);
+
+	for (size_t i = 0; i < triangle_count; i += 2)
+	{
+		unsigned int code = *codes++;
+
+		int extoff = kDecodeTableExtra[code];
+		__m128i shuf = _mm_loadu_si128(reinterpret_cast<const __m128i*>(kDecodeTableShuf[code]));
+		__m128i next = _mm_loadu_si128(reinterpret_cast<const __m128i*>(kDecodeTableNext[code]));
+
+		// patch first 6 bytes with current extra
+		__m128i ext = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(extra));
+		state = _mm_blend_epi16(state, ext, 7);
+
+		// roll state forward
+		state = _mm_add_epi8(_mm_shuffle_epi8(state, shuf), next);
+
+		// copy 6 bytes of new triangle data into output, formatted as 8 bytes with 0 padding
+		__m128i tri4 = _mm_shuffle_epi8(state, repack);
+		_mm_storeu_si64(reinterpret_cast<__m128i*>(&triangles[i]), tri4);
+
+		extra += extoff;
+	}
+}
+#endif
 
 } // namespace meshopt
 
@@ -222,5 +436,13 @@ void meshopt_decodeMeshlet(unsigned int* triangles, size_t triangle_count, const
 	const unsigned char* codes = buffer;
 	const unsigned char* extra = buffer + (triangle_count + 1) / 2;
 
+#if defined(SIMD_SSE)
+	decodeTrianglesSimd(triangles, codes, extra, triangle_count);
+#else
 	decodeTriangles(triangles, codes, extra, triangle_count);
+#endif
 }
+
+#undef SIMD_SSE
+#undef SIMD_FALLBACK
+#undef SIMD_TARGET
