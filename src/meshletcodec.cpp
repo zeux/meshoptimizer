@@ -59,6 +59,63 @@ static void pushEdgeFifo(EdgeFifo fifo, unsigned int a, unsigned int b, size_t& 
 	offset = (offset + 1) & 15;
 }
 
+static void decodeTriangles(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, size_t triangle_count)
+{
+	// branchlessly read next or extra vertex and advance pointers
+#define NEXT(var, ec) \
+	e = *extra; \
+	unsigned int var = (ec) ? e : next; \
+	extra += (ec), next += 1 - (ec)
+
+	unsigned int next = 0;
+	unsigned int fifo[3] = {}; // two edge fifo entries in one uint: 0xcbac
+
+	for (size_t i = 0; i < triangle_count; ++i)
+	{
+		unsigned int code = (codes[i / 2] >> ((i & 1) * 4)) & 0xF;
+		unsigned int tri;
+
+		if (code < 12)
+		{
+			// reuse
+			unsigned int edge = fifo[code / 4];
+			edge >>= (code << 3) & 16; // shift by 16 if bit 1 is set (odd edge for each triangle)
+
+			// 0-1 extra vertices
+			unsigned int e;
+			NEXT(c, code & 1);
+
+			// repack triangle into edge format (0xcbac)
+			tri = ((edge & 0xff) << 16) | (edge & 0xff00) | c | (c << 24);
+		}
+		else
+		{
+			// restart
+			int fea = code > 12;
+			int feb = code > 13;
+			int fec = code > 14;
+
+			// 0-3 extra vertices
+			unsigned int e;
+			NEXT(a, fea);
+			NEXT(b, feb);
+			NEXT(c, fec);
+
+			// repack triangle into edge format (0xcbac)
+			tri = c | (a << 8) | (b << 16) | (c << 24);
+		}
+
+		// output triangle is stored without extra edge vertex (0xcbac => 0xcba)
+		triangles[i] = tri >> 8;
+
+		fifo[2] = fifo[1];
+		fifo[1] = fifo[0];
+		fifo[0] = tri;
+	}
+
+#undef NEXT
+}
+
 } // namespace meshopt
 
 size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const unsigned int* vertices, const unsigned char* triangles, size_t triangle_count, size_t vertex_count)
@@ -154,4 +211,16 @@ size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const un
 
 	assert(size_t(extra - buffer) <= buffer_size);
 	return extra - buffer;
+}
+
+void meshopt_decodeMeshlet(unsigned int* triangles, size_t triangle_count, const unsigned char* buffer, size_t buffer_size)
+{
+	using namespace meshopt;
+
+	(void)buffer_size; // TODO
+
+	const unsigned char* codes = buffer;
+	const unsigned char* extra = buffer + (triangle_count + 1) / 2;
+
+	decodeTriangles(triangles, codes, extra, triangle_count);
 }

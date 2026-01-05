@@ -299,7 +299,8 @@ MESHOPTIMIZER_API int meshopt_decodeIndexSequence(void* destination, size_t inde
  * Experimental: Meshlet encoder
  * Warning: this is work in progress; data format is not stable and code is not memory-safe. Do not use.
  */
-MESHOPTIMIZER_API size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const unsigned int* vertices, const unsigned char* triangles, size_t triangle_count, size_t vertex_count);
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const unsigned int* vertices, const unsigned char* triangles, size_t triangle_count, size_t vertex_count);
+MESHOPTIMIZER_EXPERIMENTAL void meshopt_decodeMeshlet(unsigned int* triangles, size_t triangle_count, const unsigned char* buffer, size_t buffer_size);
 
 /**
  * Vertex buffer encoder
