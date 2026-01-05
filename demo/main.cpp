@@ -815,6 +815,22 @@ void encodeMeshlets(const Mesh& mesh)
 		vbs -= 4; // tail
 		size_t mbs = meshopt_encodeMeshlet(&cbuf[0], cbuf.size(), &meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count, meshlet.vertex_count);
 
+		unsigned int rt[256];
+		meshopt_decodeMeshlet(rt, meshlet.triangle_count, &cbuf[0], mbs);
+
+		for (size_t j = 0; j < meshlet.triangle_count; ++j)
+		{
+			unsigned int a = meshlet_triangles[meshlet.triangle_offset + j * 3 + 0];
+			unsigned int b = meshlet_triangles[meshlet.triangle_offset + j * 3 + 1];
+			unsigned int c = meshlet_triangles[meshlet.triangle_offset + j * 3 + 2];
+
+			unsigned int abc = (a << 0) | (b << 8) | (c << 16);
+			unsigned int bca = (b << 0) | (c << 8) | (a << 16);
+			unsigned int cba = (c << 0) | (a << 8) | (b << 16);
+
+			assert(rt[j] == abc || rt[j] == bca || rt[j] == cba);
+		}
+
 		ibst += ibs;
 		vbst += vbs;
 		mbst += mbs;
