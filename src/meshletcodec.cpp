@@ -321,7 +321,7 @@ size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const un
 
 	for (size_t i = 0; i < triangle_count; ++i)
 	{
-#if TRACE
+#if TRACE > 1
 		unsigned int last = next;
 #endif
 
@@ -336,7 +336,7 @@ size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const un
 
 			int fec = (c == next) ? (next++, 0) : 1;
 
-#if TRACE
+#if TRACE > 1
 			printf("%3d+ | %3d %3d %3d | edge: e%d c%d\n", last, a, b, c, fer >> 2, fec);
 #endif
 
@@ -365,7 +365,7 @@ size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const un
 			assert(fea == 1 || feb == 0);
 			assert(feb == 1 || fec == 0);
 
-#if TRACE
+#if TRACE > 1
 			printf("%3d+ | %3d %3d %3d | restart: %d%d%d\n", last, a, b, c, fea, feb, fec);
 #endif
 
@@ -384,6 +384,19 @@ size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const un
 			pushEdgeFifo(edgefifo, a, c, edgefifooffset);
 		}
 	}
+
+#if TRACE > 1
+	printf("extra:");
+	for (const unsigned char* ptr = buffer + (triangle_count + 1) / 2; ptr != extra; ++ptr)
+		printf(" %d", *ptr);
+	printf("\n");
+#endif
+
+#if TRACE
+	printf("stats: %d triangles, %d bytes (%d codes, %d extra)%s\n",
+	    int(triangle_count), int(extra - buffer), (int)((triangle_count + 1) / 2), (int)(extra - buffer - (triangle_count + 1) / 2),
+	    next == vertex_count ? "" : "; next mismatch");
+#endif
 
 	assert(size_t(extra - buffer) <= buffer_size);
 	return extra - buffer;
