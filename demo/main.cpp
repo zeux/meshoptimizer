@@ -760,12 +760,9 @@ void encodeIndexSequence(const std::vector<unsigned int>& data, size_t vertex_co
 	    (double(result.size() * 4) / 1e9) / (end - middle));
 }
 
-void encodeMeshlets(const Mesh& mesh)
+void encodeMeshlets(const Mesh& mesh, size_t max_vertices, size_t max_triangles)
 {
-	const size_t max_vertices = 64;
-	const size_t max_triangles = 64;
-
-	const size_t vertex_bits = int(ceil(log2(double(max_vertices))));
+	size_t vertex_bits = int(ceil(log2(double(max_vertices))));
 
 	size_t max_meshlets = meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles);
 	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
@@ -788,23 +785,16 @@ void encodeMeshlets(const Mesh& mesh)
 
 	std::vector<unsigned char> cbuf(4096); // TODO
 
+	// optimize each meshlet for locality; this is important for performance, and critical for good compression
 	for (size_t i = 0; i < meshlets.size(); ++i)
-	{
-		if (1) // TODO
-		{
-			meshopt_optimizeMeshlet(&meshlet_vertices[meshlets[i].vertex_offset], &meshlet_triangles[meshlets[i].triangle_offset], meshlets[i].triangle_count, meshlets[i].vertex_count);
-		}
-		else
-		{
-			meshopt_optimizeVertexCacheStrip(&meshlet_triangles[meshlets[i].triangle_offset], &meshlet_triangles[meshlets[i].triangle_offset], meshlets[i].triangle_count * 3, meshlets[i].vertex_count);
-			meshopt_optimizeVertexFetch(&meshlet_vertices[meshlets[i].vertex_offset], &meshlet_triangles[meshlets[i].triangle_offset], meshlets[i].triangle_count * 3, &meshlet_vertices[meshlets[i].vertex_offset], meshlets[i].vertex_count, sizeof(unsigned int));
-		}
-	}
+		meshopt_optimizeMeshlet(&meshlet_vertices[meshlets[i].vertex_offset], &meshlet_triangles[meshlets[i].triangle_offset], meshlets[i].triangle_count, meshlets[i].vertex_count);
 
+	// optimize the order of vertex references within each meshlet and globally; this is valuable for access locality and critical for compression of vertex references
+	// note that this reorders the vertex buffer too, so if a traditional index buffer is required it would need to be reconstructed from the meshlet data for optimal locality
 	std::vector<Vertex> vertices = mesh.vertices;
 	meshopt_optimizeVertexFetch(&vertices[0], &meshlet_vertices[0], meshlet_vertices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
 
-	size_t ibst = 0, vbst = 0;
+	size_t vbst = 0;
 	size_t mbst = 0, mbpt = 0;
 
 	std::vector<unsigned char> packed;
@@ -813,8 +803,6 @@ void encodeMeshlets(const Mesh& mesh)
 	{
 		const meshopt_Meshlet& meshlet = meshlets[i];
 
-		size_t ibs = meshopt_encodeIndexBuffer(&cbuf[0], cbuf.size(), &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count * 3);
-		ibs -= 16; // tail
 		size_t vbs = meshopt_encodeIndexSequence(&cbuf[0], cbuf.size(), &meshlet_vertices[meshlet.vertex_offset], meshlet.vertex_count);
 		vbs -= 4; // tail
 		size_t mbs = meshopt_encodeMeshlet(&cbuf[0], cbuf.size(), &meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count, meshlet.vertex_count);
@@ -840,39 +828,39 @@ void encodeMeshlets(const Mesh& mesh)
 			assert(rt[j] == abc || rt[j] == bca || rt[j] == cba);
 		}
 
-		ibst += ibs;
 		vbst += vbs;
 		mbst += mbs;
 		// K-bit extras
 		mbpt += (meshlet.triangle_count + 1) / 2 + ((mbs - (meshlet.triangle_count + 1) / 2) * vertex_bits + 7) / 8;
 	}
 
-	printf("MeshletCodec (IB): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/triangle\n",
-	    int(meshlets.size()),
-	    int(ibst / meshlets.size()),
-	    int(ibst), double(ibst * 8) / double(mesh.indices.size() / 3));
-	printf("MeshletCodec (VB): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/vertex reference, %.1f bits/vertex\n",
+	size_t mbc = compress(packed);
+
+	printf("MeshletCodec (%d/%d, VB): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/vertex reference, %.1f bits/vertex\n",
+	    int(max_vertices), int(max_triangles),
 	    int(meshlets.size()),
 	    int(vbst / meshlets.size()),
 	    int(vbst), double(vbst * 8) / double(meshlet_vertices.size()), double(vbst * 8) / double(mesh.vertices.size()));
-	printf("MeshletCodec (4b+8b): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/triangle\n",
+	printf("MeshletCodec (%d/%d, 8b): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/triangle\n",
+	    int(max_vertices), int(max_triangles),
 	    int(meshlets.size()),
 	    int(mbst / meshlets.size()),
 	    int(mbst), double(mbst * 8) / double(mesh.indices.size() / 3));
-	printf("MeshletCodec (4b+%db): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/triangle\n",
-	    int(vertex_bits),
+	printf("MeshletCodec (%d/%d, %db): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/triangle\n",
+	    int(max_vertices), int(max_triangles), int(vertex_bits),
 	    int(meshlets.size()),
 	    int(mbpt / meshlets.size()),
 	    int(mbpt), double(mbpt * 8) / double(mesh.indices.size() / 3));
-
-	size_t mbc = compress(packed);
-	printf("MeshletCodec (4b+zip): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/triangle\n",
+	printf("MeshletCodec (%d/%d, 8b+zip): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/triangle\n",
+	    int(max_vertices), int(max_triangles),
 	    int(meshlets.size()),
 	    int(mbc / meshlets.size()),
 	    int(mbc), double(mbc * 8) / double(mesh.indices.size() / 3));
 
 #if !TRACE
-	for (int i = 0; i < 3; ++i)
+	double mbtime = 0;
+
+	for (int i = 0; i < 10; ++i)
 	{
 		unsigned int rt[256];
 		double t0 = timestamp();
@@ -885,8 +873,12 @@ void encodeMeshlets(const Mesh& mesh)
 		}
 		double t1 = timestamp();
 
-		printf("MeshletCodec (packed): decode time %.3f msec, %.3fB tri/sec, %.1f ns/meshlet\n", (t1 - t0) * 1000, double(mesh.indices.size() / 3) / 1e9 / (t1 - t0), (t1 - t0) * 1e9 / double(meshlets.size()));
+		mbtime = (mbtime == 0 || t1 - t0 < mbtime) ? (t1 - t0) : mbtime;
 	}
+
+	printf("MeshletCodec (%d/%d, packed): decode time %.3f msec, %.3fB tri/sec, %.1f ns/meshlet\n",
+	    int(max_vertices), int(max_triangles),
+	    mbtime * 1000, double(mesh.indices.size() / 3) / 1e9 / mbtime, mbtime * 1e9 / double(meshlets.size()));
 #endif
 }
 
@@ -1583,7 +1575,9 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	encodeMeshlets(mesh);
+	encodeMeshlets(mesh, 32, 48);
+	encodeMeshlets(mesh, 64, 64);
+	encodeMeshlets(mesh, 64, 96);
 }
 
 void processNanite(const char* path)
