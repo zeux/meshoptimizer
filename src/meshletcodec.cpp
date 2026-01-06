@@ -163,8 +163,7 @@ static void decodeTriangles(unsigned int* triangles, const unsigned char* codes,
 // which is a permutation of original state modulo per-element additions
 // this transform can be chained to decode second triangle from original state; we create tables for 256 combinations of two 4-bit triangle codes
 // the actual decoding becomes shuffle+add per triangle pair, plus management of extra bytes
-static unsigned char kDecodeTableShuf[256][16];
-static unsigned char kDecodeTableNext[256][16];
+static unsigned char kDecodeTableMasks[256][16];
 static unsigned char kDecodeTableExtra[256];
 
 static bool decodeBuildTables()
@@ -238,8 +237,11 @@ static bool decodeBuildTables()
 		// next needs to advance
 		next[15] = nextoff;
 
-		memcpy(&kDecodeTableShuf[code], shuf, sizeof(shuf));
-		memcpy(&kDecodeTableNext[code], next, sizeof(next));
+		// next[0..8] = 0 trivially (never written to); next[9] must also be 0 because nextoff is 0 initially
+		// shuf[0..5] is not used, which allows us to pack next[10..15] + shuf[6..15] into a single 16-byte entry
+		assert(next[9] == 0);
+		memcpy(&kDecodeTableMasks[code][0], &next[10], 6);
+		memcpy(&kDecodeTableMasks[code][6], &shuf[6], 10);
 		kDecodeTableExtra[code] = (unsigned char)extra;
 	}
 
@@ -270,8 +272,9 @@ static void decodeTrianglesSimd(unsigned int* triangles, const unsigned char* co
 		unsigned int code = *codes++;
 
 		int extoff = kDecodeTableExtra[code];
-		__m128i shuf = _mm_loadu_si128(reinterpret_cast<const __m128i*>(kDecodeTableShuf[code]));
-		__m128i next = _mm_loadu_si128(reinterpret_cast<const __m128i*>(kDecodeTableNext[code]));
+
+		__m128i shuf = _mm_loadu_si128(reinterpret_cast<const __m128i*>(kDecodeTableMasks[code]));
+		__m128i next = _mm_slli_si128(shuf, 10);
 
 		// patch first 6 bytes with current extra
 		__m128i ext = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(extra));
