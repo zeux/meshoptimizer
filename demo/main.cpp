@@ -765,6 +765,8 @@ void encodeMeshlets(const Mesh& mesh)
 	const size_t max_vertices = 64;
 	const size_t max_triangles = 64;
 
+	const size_t vertex_bits = int(ceil(log2(double(max_vertices))));
+
 	size_t max_meshlets = meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles);
 	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
 	std::vector<unsigned int> meshlet_vertices(mesh.indices.size());
@@ -841,8 +843,8 @@ void encodeMeshlets(const Mesh& mesh)
 		ibst += ibs;
 		vbst += vbs;
 		mbst += mbs;
-		// 6-bit extras
-		mbpt += (meshlet.triangle_count + 1) / 2 + ((mbs - (meshlet.triangle_count + 1) / 2) * 6 + 7) / 8;
+		// K-bit extras
+		mbpt += (meshlet.triangle_count + 1) / 2 + ((mbs - (meshlet.triangle_count + 1) / 2) * vertex_bits + 7) / 8;
 	}
 
 	printf("MeshletCodec (IB): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/triangle\n",
@@ -857,10 +859,17 @@ void encodeMeshlets(const Mesh& mesh)
 	    int(meshlets.size()),
 	    int(mbst / meshlets.size()),
 	    int(mbst), double(mbst * 8) / double(mesh.indices.size() / 3));
-	printf("MeshletCodec (4b+6b): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/triangle\n",
+	printf("MeshletCodec (4b+%db): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/triangle\n",
+	    int(vertex_bits),
 	    int(meshlets.size()),
 	    int(mbpt / meshlets.size()),
 	    int(mbpt), double(mbpt * 8) / double(mesh.indices.size() / 3));
+
+	size_t mbc = compress(packed);
+	printf("MeshletCodec (4b+zip): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/triangle\n",
+	    int(meshlets.size()),
+	    int(mbc / meshlets.size()),
+	    int(mbc), double(mbc * 8) / double(mesh.indices.size() / 3));
 
 #if !TRACE
 	for (int i = 0; i < 3; ++i)
