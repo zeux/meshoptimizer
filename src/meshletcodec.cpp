@@ -169,10 +169,13 @@ static unsigned char kDecodeTableExtra[256];
 
 static bool decodeBuildTables()
 {
+#define NEXT(var, ec) \
+	shuf[var] = (ec) ? extra : 15; \
+	next[var] = (ec) ? 0 : nextoff; \
+	extra += (ec), nextoff += 1 - (ec)
+
 	for (int code = 0; code < 256; ++code)
 	{
-		int tri0 = code & 0xf, tri1 = code >> 4;
-
 		unsigned char shuf[16] = {};
 		unsigned char next[16] = {};
 		int extra = 0;
@@ -188,94 +191,48 @@ static bool decodeBuildTables()
 		shuf[15] = 15;
 
 		// state 9..11 will contain the first decoded triangle (tri0), which can refer to extra/next and the original triangle history
-		if (tri0 < 12)
-		{
-			// reuse: edge comes from the history based on edge index
-			int trioff = 6 + (2 - tri0 / 4) * 3;
-
-			// edge cb or ac
-			shuf[9] = trioff + ((tri0 & 2) ? 2 : 0);
-			shuf[10] = trioff + ((tri0 & 2) ? 1 : 2);
-
-			// third vertex is either next or comes from extra
-			shuf[11] = (tri0 & 1) ? extra : 15;
-			next[11] = (tri0 & 1) ? 0 : nextoff;
-			extra += tri0 & 1;
-			nextoff += 1 - (tri0 & 1);
-		}
-		else
-		{
-			// restart: three vertices, each comes from next or extra; two of them may need to be incremented
-			int fea = tri0 > 12;
-			int feb = tri0 > 13;
-			int fec = tri0 > 14;
-
-			shuf[9] = fea ? extra : 15;
-			next[9] = fea ? 0 : nextoff;
-			extra += fea;
-			nextoff += 1 - fea;
-
-			shuf[10] = feb ? extra : 15;
-			next[10] = feb ? 0 : nextoff;
-			extra += feb;
-			nextoff += 1 - feb;
-
-			shuf[11] = fec ? extra : 15;
-			next[11] = fec ? 0 : nextoff;
-			extra += fec;
-			nextoff += 1 - fec;
-		}
-
 		// state 12..14 will contain the second decoded triangle (tri1); when decoding edge reuse, we need to handle edge 0/1 specially as it was just decoded earlier
-		if (tri1 < 12)
+		for (int k = 0; k < 2; ++k)
 		{
-			if (tri1 / 4 == 0)
-			{
-				// we need to decode one of two edges from the triangle we just decoded
-				// for that we simply need to copy shuf/next values for the two decoded indices
-				shuf[12] = shuf[9 + ((tri1 & 2) ? 2 : 0)];
-				next[12] = next[9 + ((tri1 & 2) ? 2 : 0)];
+			int tri = (code >> (k * 4)) & 0xf;
 
-				shuf[13] = shuf[9 + ((tri1 & 2) ? 1 : 2)];
-				next[13] = next[9 + ((tri1 & 2) ? 1 : 2)];
+			if (tri < 12)
+			{
+				if (k == 1 && tri / 4 == 0)
+				{
+					// we need to decode one of two edges from the triangle we just decoded earlier
+					// for that we simply need to copy shuf/next values for the two decoded indices
+					shuf[9 + k * 3] = shuf[9 + ((tri & 2) ? 2 : 0)];
+					next[9 + k * 3] = next[9 + ((tri & 2) ? 2 : 0)];
+
+					shuf[10 + k * 3] = shuf[9 + ((tri & 2) ? 1 : 2)];
+					next[10 + k * 3] = next[9 + ((tri & 2) ? 1 : 2)];
+				}
+				else
+				{
+					// reuse: edge comes from the history based on edge index
+					// note: we reuse with an offset because last triangle in the original history was consumed by tri0
+					int trioff = 6 + k * 3 + (2 - tri / 4) * 3;
+
+					// edge cb or ac
+					shuf[9 + k * 3] = trioff + ((tri & 2) ? 2 : 0);
+					shuf[10 + k * 3] = trioff + ((tri & 2) ? 1 : 2);
+				}
+
+				// third vertex is either next or comes from extra
+				NEXT(11 + k * 3, tri & 1);
 			}
 			else
 			{
-				// reuse: edge comes from original history based on edge index
-				// note: we reuse with an offset because last triangle in the original history was consumed by tri0
-				int trioff = 9 + (2 - tri1 / 4) * 3;
+				// restart: three vertices, each comes from next or extra
+				int fea = tri > 12;
+				int feb = tri > 13;
+				int fec = tri > 14;
 
-				// edge cb or ac
-				shuf[12] = trioff + ((tri1 & 2) ? 2 : 0);
-				shuf[13] = trioff + ((tri1 & 2) ? 1 : 2);
+				NEXT(9 + k * 3, fea);
+				NEXT(10 + k * 3, feb);
+				NEXT(11 + k * 3, fec);
 			}
-
-			// third vertex is either next or comes from extra
-			shuf[14] = (tri1 & 1) ? extra : 15;
-			next[14] = (tri1 & 1) ? 0 : nextoff;
-			extra += tri1 & 1;
-			nextoff += 1 - (tri1 & 1);
-		}
-		else
-		{
-			int fea = tri1 > 12;
-			int feb = tri1 > 13;
-			int fec = tri1 > 14;
-
-			shuf[12] = fea ? extra : 15;
-			next[12] = fea ? 0 : nextoff;
-			extra += fea;
-			nextoff += 1 - fea;
-
-			shuf[13] = feb ? extra : 15;
-			next[13] = feb ? 0 : nextoff;
-			extra += feb;
-			nextoff += 1 - feb;
-
-			shuf[14] = fec ? extra : 15;
-			next[14] = fec ? 0 : nextoff;
-			extra += fec;
-			nextoff += 1 - fec;
 		}
 
 		// next needs to advance
@@ -287,6 +244,8 @@ static bool decodeBuildTables()
 	}
 
 	return true;
+
+#undef NEXT
 }
 
 static bool gDecodeTablesInitialized = decodeBuildTables();
