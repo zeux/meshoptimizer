@@ -226,7 +226,7 @@ static unsigned char* encodeVertices(unsigned char* ctrl, unsigned char* data, c
 }
 
 #if !defined(SIMD_SSE)
-static void decodeTriangles(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, size_t triangle_count)
+static const unsigned char* decodeTriangles(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, size_t triangle_count)
 {
 	// branchlessly read next or extra vertex and advance pointers
 #define NEXT(var, ec) \
@@ -280,9 +280,38 @@ static void decodeTriangles(unsigned int* triangles, const unsigned char* codes,
 		fifo[0] = tri;
 	}
 
+	return extra;
+
 #undef NEXT
 }
 #endif
+
+static const unsigned char* decodeVertices(unsigned int* vertices, const unsigned char* ctrl, const unsigned char* data, size_t vertex_count)
+{
+	unsigned int last = 0;
+
+	static const unsigned int kMasks[] = {0, 0xff, 0xffff, 0xffffffff};
+	static const unsigned char kLengths[] = {0, 1, 2, 4};
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		unsigned char code = ctrl[i / 4] >> ((i % 4) * 2) & 3;
+
+		// branchlessly read up to 4 bytes
+		unsigned int v = (data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24)) & kMasks[code];
+
+		// unzigzag + 1
+		unsigned int d = (v >> 1) ^ -int(v & 1);
+		unsigned int r = last + d + 1;
+
+		vertices[i] = r;
+
+		data += kLengths[code];
+		last = r;
+	}
+
+	return data;
+}
 
 #if defined(SIMD_SSE)
 // SIMD state is stored in a single 16b register as follows:
@@ -386,7 +415,7 @@ static bool gDecodeTablesInitialized = decodeBuildTables();
 
 #if defined(SIMD_SSE)
 SIMD_TARGET
-static void decodeTrianglesSimd(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, size_t triangle_count)
+static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, size_t triangle_count)
 {
 	assert(gDecodeTablesInitialized);
 	(void)gDecodeTablesInitialized;
@@ -420,6 +449,8 @@ static void decodeTrianglesSimd(unsigned int* triangles, const unsigned char* co
 
 		extra += extoff;
 	}
+
+	return extra;
 }
 #endif
 
@@ -484,10 +515,16 @@ int meshopt_decodeMeshlet(unsigned int* vertices, unsigned int* triangles, size_
 	const unsigned char* extra = buffer + (triangle_count + 1) / 2;
 
 #if defined(SIMD_SSE)
-	decodeTrianglesSimd(triangles, codes, extra, triangle_count);
+	const unsigned char* tend = decodeTrianglesSimd(triangles, codes, extra, triangle_count);
 #else
-	decodeTriangles(triangles, codes, extra, triangle_count);
+	const unsigned char* tend = decodeTriangles(triangles, codes, extra, triangle_count);
 #endif
+
+	const unsigned char* vctrl = tend;
+	const unsigned char* vdata = tend + (vertex_count + 3) / 4;
+
+	const unsigned char* vend = decodeVertices(vertices, vctrl, vdata, vertex_count);
+	(void)vend;
 
 	return 0;
 }
