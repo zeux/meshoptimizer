@@ -808,12 +808,15 @@ void encodeMeshlets(const Mesh& mesh, size_t max_vertices, size_t max_triangles)
 		size_t mbs = meshopt_encodeMeshlet(&cbuf[0], cbuf.size(), &meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count, meshlet.vertex_count);
 
 		packed.push_back(meshlet.triangle_count);
+		packed.push_back(meshlet.vertex_count);
 		packed.push_back(mbs & 0xff);
 		packed.push_back((mbs >> 8) & 0xff);
 		packed.insert(packed.end(), &cbuf[0], &cbuf[mbs]);
 
+		unsigned int rv[256];
 		unsigned int rt[256];
-		meshopt_decodeMeshlet(rt, meshlet.triangle_count, &cbuf[0], mbs);
+		int rc = meshopt_decodeMeshlet(rv, rt, meshlet.triangle_count, meshlet.vertex_count, &cbuf[0], mbs);
+		assert(rc == 0);
 
 		for (size_t j = 0; j < meshlet.triangle_count; ++j)
 		{
@@ -862,14 +865,15 @@ void encodeMeshlets(const Mesh& mesh, size_t max_vertices, size_t max_triangles)
 
 	for (int i = 0; i < 10; ++i)
 	{
+		unsigned int rv[256];
 		unsigned int rt[256];
 		double t0 = timestamp();
 		unsigned char* p = &packed[0];
 		for (size_t j = 0; j < meshlets.size(); ++j)
 		{
-			size_t size = p[1] | (p[2] << 8);
-			meshopt_decodeMeshlet(rt, p[0], p + 3, size);
-			p += 3 + size;
+			size_t size = p[2] | (p[3] << 8);
+			meshopt_decodeMeshlet(rv, rt, p[0], p[1], p + 4, size);
+			p += 4 + size;
 		}
 		double t1 = timestamp();
 

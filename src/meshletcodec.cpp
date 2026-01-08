@@ -416,10 +416,12 @@ size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const un
 	return end - buffer;
 }
 
-void meshopt_decodeMeshlet(unsigned int* triangles, size_t triangle_count, const unsigned char* buffer, size_t buffer_size)
+int meshopt_decodeMeshlet(unsigned int* vertices, unsigned int* triangles, size_t triangle_count, size_t vertex_count, const unsigned char* buffer, size_t buffer_size)
 {
 	using namespace meshopt;
 
+	(void)vertices;
+	(void)vertex_count;
 	(void)buffer_size; // TODO
 
 	const unsigned char* codes = buffer;
@@ -430,6 +432,8 @@ void meshopt_decodeMeshlet(unsigned int* triangles, size_t triangle_count, const
 #else
 	decodeTriangles(triangles, codes, extra, triangle_count);
 #endif
+
+	return 0;
 }
 
 #undef SIMD_SSE
