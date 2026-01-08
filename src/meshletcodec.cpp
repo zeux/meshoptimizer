@@ -284,7 +284,6 @@ static const unsigned char* decodeTriangles(unsigned int* triangles, const unsig
 
 #undef NEXT
 }
-#endif
 
 static const unsigned char* decodeVertices(unsigned int* vertices, const unsigned char* ctrl, const unsigned char* data, size_t vertex_count)
 {
@@ -312,6 +311,7 @@ static const unsigned char* decodeVertices(unsigned int* vertices, const unsigne
 
 	return data;
 }
+#endif
 
 #if defined(SIMD_SSE)
 // SIMD state is stored in a single 16b register as follows:
@@ -326,6 +326,11 @@ static const unsigned char* decodeVertices(unsigned int* vertices, const unsigne
 static unsigned char kDecodeTableMasks[256][16];
 static unsigned char kDecodeTableExtra[256];
 
+// for SIMD vertex decoding we need to unpack 4 values with 0-4 bytes in each
+// this can be done with a single control-dependent shuffle per group
+static unsigned char kDecodeTableVerts[256][16];
+static unsigned char kDecodeTableLength[256];
+
 static bool decodeBuildTables()
 {
 #define NEXT(var, ec) \
@@ -333,6 +338,7 @@ static bool decodeBuildTables()
 	next[var] = (ec) ? 0 : nextoff; \
 	extra += (ec), nextoff += 1 - (ec)
 
+	// fill triangle decoding tables for each combination of two triangle codes
 	for (int code = 0; code < 256; ++code)
 	{
 		unsigned char shuf[16] = {};
@@ -405,6 +411,29 @@ static bool decodeBuildTables()
 		kDecodeTableExtra[code] = (unsigned char)extra;
 	}
 
+	// fill vertex decoding tables for each combination of four vertex references
+	for (unsigned int i = 0; i < 256; ++i)
+	{
+		unsigned char shuf[16] = {};
+		int offset = 0;
+
+		for (int k = 0; k < 4; ++k)
+		{
+			int code = (i >> (k * 2)) & 3;
+			int length = (code == 3) ? 4 : code; // 0/1/2/4 bytes
+
+			shuf[k * 4 + 0] = (length > 0) ? offset + 0 : 0x80;
+			shuf[k * 4 + 1] = (length > 1) ? offset + 1 : 0x80;
+			shuf[k * 4 + 2] = (length > 2) ? offset + 2 : 0x80;
+			shuf[k * 4 + 3] = (length > 3) ? offset + 3 : 0x80;
+
+			offset += length;
+		}
+
+		memcpy(kDecodeTableVerts[i], shuf, sizeof(shuf));
+		kDecodeTableLength[i] = offset;
+	}
+
 	return true;
 
 #undef NEXT
@@ -451,6 +480,38 @@ static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const u
 	}
 
 	return extra;
+}
+
+SIMD_TARGET static const unsigned char* decodeVerticesSimd(unsigned int* vertices, const unsigned char* ctrl, const unsigned char* data, size_t vertex_count)
+{
+	__m128i last = _mm_setzero_si128();
+
+	for (size_t i = 0; i < vertex_count; i += 4)
+	{
+		unsigned char code = *ctrl++;
+
+		__m128i word = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data));
+		__m128i shuf = _mm_loadu_si128(reinterpret_cast<const __m128i*>(kDecodeTableVerts[code]));
+
+		__m128i v = _mm_shuffle_epi8(word, shuf);
+
+		// unzigzag+1
+		__m128i xl = _mm_sub_epi32(_mm_setzero_si128(), _mm_and_si128(v, _mm_set1_epi32(1)));
+		__m128i xr = _mm_srli_epi32(v, 1);
+		__m128i x = _mm_add_epi32(_mm_xor_si128(xl, xr), _mm_set1_epi32(1));
+
+		// prefix sum
+		x = _mm_add_epi32(x, _mm_slli_si128(x, 8));
+		x = _mm_add_epi32(x, _mm_slli_si128(x, 4));
+		x = _mm_add_epi32(x, _mm_shuffle_epi32(last, 0xff));
+
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(&vertices[i]), x);
+
+		data += kDecodeTableLength[code];
+		last = x;
+	}
+
+	return data;
 }
 #endif
 
@@ -507,9 +568,7 @@ int meshopt_decodeMeshlet(unsigned int* vertices, unsigned int* triangles, size_
 {
 	using namespace meshopt;
 
-	(void)vertices;
-	(void)vertex_count;
-	(void)buffer_size; // TODO
+	// TODO: framing, bounds checks
 
 	const unsigned char* codes = buffer;
 	const unsigned char* extra = buffer + (triangle_count + 1) / 2;
@@ -523,8 +582,14 @@ int meshopt_decodeMeshlet(unsigned int* vertices, unsigned int* triangles, size_
 	const unsigned char* vctrl = tend;
 	const unsigned char* vdata = tend + (vertex_count + 3) / 4;
 
+#if defined(SIMD_SSE)
+	const unsigned char* vend = decodeVerticesSimd(vertices, vctrl, vdata, vertex_count);
+#else
 	const unsigned char* vend = decodeVertices(vertices, vctrl, vdata, vertex_count);
-	(void)vend;
+#endif
+
+	if (vend != buffer + buffer_size)
+		return -3;
 
 	return 0;
 }
