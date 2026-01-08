@@ -94,6 +94,90 @@ static void pushEdgeFifo(EdgeFifo fifo, unsigned int a, unsigned int b, size_t& 
 	offset = (offset + 1) & 15;
 }
 
+static unsigned char* encodeTriangles(unsigned char* codes, unsigned char* extra, const unsigned char* triangles, size_t triangle_count)
+{
+	EdgeFifo edgefifo;
+	memset(edgefifo, -1, sizeof(edgefifo));
+
+	size_t edgefifooffset = 0;
+
+	unsigned int next = 0;
+
+	// 4-bit triangle codes give us 16 options that we use as follows:
+	// 3*2 edge reuse (2 edges * 3 last triangles) * 2 next/explicit = 12 options
+	// 4 remaining options = next bits; 000, 001, 011, 111.
+	// triangles are rotated to make next bits line up.
+	memset(codes, 0, (triangle_count + 1) / 2);
+
+	for (size_t i = 0; i < triangle_count; ++i)
+	{
+#if TRACE > 1
+		unsigned int last = next;
+#endif
+
+		int fer = getEdgeFifo(edgefifo, triangles[i * 3 + 0], triangles[i * 3 + 1], triangles[i * 3 + 2], edgefifooffset);
+
+		if (fer >= 0 && (fer >> 2) < 6)
+		{
+			// note: getEdgeFifo implicitly rotates triangles by matching a/b to existing edge
+			const unsigned int* order = kTriangleIndexOrder[fer & 3];
+
+			unsigned int a = triangles[i * 3 + order[0]], b = triangles[i * 3 + order[1]], c = triangles[i * 3 + order[2]];
+
+			int fec = (c == next) ? (next++, 0) : 1;
+
+#if TRACE > 1
+			printf("%3d+ | %3d %3d %3d | edge: e%d c%d\n", last, a, b, c, fer >> 2, fec);
+#endif
+
+			unsigned int code = (fer >> 2) * 2 + fec;
+
+			codes[i / 2] |= (unsigned char)(code << ((i & 1) * 4));
+
+			if (fec)
+				*extra++ = (unsigned char)c;
+
+			pushEdgeFifo(edgefifo, c, b, edgefifooffset);
+			pushEdgeFifo(edgefifo, a, c, edgefifooffset);
+		}
+		else
+		{
+			int rotation = rotateTriangle(triangles[i * 3 + 0], triangles[i * 3 + 1], triangles[i * 3 + 2]);
+			const unsigned int* order = kTriangleIndexOrder[rotation];
+
+			unsigned int a = triangles[i * 3 + order[0]], b = triangles[i * 3 + order[1]], c = triangles[i * 3 + order[2]];
+
+			// fe must be continuous: once a vertex is encoded with next, further vertices must also be encoded with next
+			int fea = (a == next && b == next + 1 && c == next + 2) ? (next++, 0) : 1;
+			int feb = (b == next && c == next + 1) ? (next++, 0) : 1;
+			int fec = (c == next) ? (next++, 0) : 1;
+
+			assert(fea == 1 || feb == 0);
+			assert(feb == 1 || fec == 0);
+
+#if TRACE > 1
+			printf("%3d+ | %3d %3d %3d | restart: %d%d%d\n", last, a, b, c, fea, feb, fec);
+#endif
+
+			unsigned int code = 12 + (fea + feb + fec);
+
+			codes[i / 2] |= (unsigned char)(code << ((i & 1) * 4));
+
+			if (fea)
+				*extra++ = (unsigned char)a;
+			if (feb)
+				*extra++ = (unsigned char)b;
+			if (fec)
+				*extra++ = (unsigned char)c;
+
+			pushEdgeFifo(edgefifo, c, b, edgefifooffset);
+			pushEdgeFifo(edgefifo, a, c, edgefifooffset);
+		}
+	}
+
+	return extra;
+}
+
 #if !defined(SIMD_SSE)
 static void decodeTriangles(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, size_t triangle_count)
 {
@@ -302,104 +386,34 @@ size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const un
 	(void)vertices;
 	(void)vertex_count;
 
-	EdgeFifo edgefifo;
-	memset(edgefifo, -1, sizeof(edgefifo));
-
-	size_t edgefifooffset = 0;
-
-	unsigned int next = 0;
-
-	// 4-bit triangle codes give us 16 options that we use as follows:
-	// 3*2 edge reuse (2 edges * 3 last triangles) * 2 next/explicit = 12 options
-	// 4 remaining options = next bits; 000, 001, 011, 111.
-	// triangles are rotated to make next bits line up.
-
 	unsigned char* codes = buffer;
 	unsigned char* extra = buffer + (triangle_count + 1) / 2;
 
-	memset(codes, 0, (triangle_count + 1) / 2);
-
-	for (size_t i = 0; i < triangle_count; ++i)
-	{
-#if TRACE > 1
-		unsigned int last = next;
-#endif
-
-		int fer = getEdgeFifo(edgefifo, triangles[i * 3 + 0], triangles[i * 3 + 1], triangles[i * 3 + 2], edgefifooffset);
-
-		if (fer >= 0 && (fer >> 2) < 6)
-		{
-			// note: getEdgeFifo implicitly rotates triangles by matching a/b to existing edge
-			const unsigned int* order = kTriangleIndexOrder[fer & 3];
-
-			unsigned int a = triangles[i * 3 + order[0]], b = triangles[i * 3 + order[1]], c = triangles[i * 3 + order[2]];
-
-			int fec = (c == next) ? (next++, 0) : 1;
-
-#if TRACE > 1
-			printf("%3d+ | %3d %3d %3d | edge: e%d c%d\n", last, a, b, c, fer >> 2, fec);
-#endif
-
-			unsigned int code = (fer >> 2) * 2 + fec;
-
-			codes[i / 2] |= (unsigned char)(code << ((i & 1) * 4));
-
-			if (fec)
-				*extra++ = (unsigned char)c;
-
-			pushEdgeFifo(edgefifo, c, b, edgefifooffset);
-			pushEdgeFifo(edgefifo, a, c, edgefifooffset);
-		}
-		else
-		{
-			int rotation = rotateTriangle(triangles[i * 3 + 0], triangles[i * 3 + 1], triangles[i * 3 + 2]);
-			const unsigned int* order = kTriangleIndexOrder[rotation];
-
-			unsigned int a = triangles[i * 3 + order[0]], b = triangles[i * 3 + order[1]], c = triangles[i * 3 + order[2]];
-
-			// fe must be continuous: once a vertex is encoded with next, further vertices must also be encoded with next
-			int fea = (a == next && b == next + 1 && c == next + 2) ? (next++, 0) : 1;
-			int feb = (b == next && c == next + 1) ? (next++, 0) : 1;
-			int fec = (c == next) ? (next++, 0) : 1;
-
-			assert(fea == 1 || feb == 0);
-			assert(feb == 1 || fec == 0);
-
-#if TRACE > 1
-			printf("%3d+ | %3d %3d %3d | restart: %d%d%d\n", last, a, b, c, fea, feb, fec);
-#endif
-
-			unsigned int code = 12 + (fea + feb + fec);
-
-			codes[i / 2] |= (unsigned char)(code << ((i & 1) * 4));
-
-			if (fea)
-				*extra++ = (unsigned char)a;
-			if (feb)
-				*extra++ = (unsigned char)b;
-			if (fec)
-				*extra++ = (unsigned char)c;
-
-			pushEdgeFifo(edgefifo, c, b, edgefifooffset);
-			pushEdgeFifo(edgefifo, a, c, edgefifooffset);
-		}
-	}
+	unsigned char* end = encodeTriangles(codes, extra, triangles, triangle_count);
 
 #if TRACE > 1
 	printf("extra:");
-	for (const unsigned char* ptr = buffer + (triangle_count + 1) / 2; ptr != extra; ++ptr)
+	for (const unsigned char* ptr = extra; ptr != end; ++ptr)
 		printf(" %d", *ptr);
+	printf("\n");
+
+	unsigned int minv = ~0u;
+	for (size_t i = 0; i < vertex_count; ++i)
+		minv = minv < vertices[i] ? minv : vertices[i];
+
+	printf("vertices: [%d+]", minv);
+	for (size_t i = 0; i < vertex_count; ++i)
+		printf(" %d", vertices[i] - minv);
 	printf("\n");
 #endif
 
 #if TRACE
-	printf("stats: %d triangles, %d bytes (%d codes, %d extra)%s\n",
-	    int(triangle_count), int(extra - buffer), (int)((triangle_count + 1) / 2), (int)(extra - buffer - (triangle_count + 1) / 2),
-	    next == vertex_count ? "" : "; next mismatch");
+	printf("stats: %d triangles, %d bytes (%d codes, %d extra)\n",
+	    int(triangle_count), int(end - buffer), (int)((triangle_count + 1) / 2), (int)(end - extra));
 #endif
 
-	assert(size_t(extra - buffer) <= buffer_size);
-	return extra - buffer;
+	assert(size_t(end - buffer) <= buffer_size);
+	return end - buffer;
 }
 
 void meshopt_decodeMeshlet(unsigned int* triangles, size_t triangle_count, const unsigned char* buffer, size_t buffer_size)
