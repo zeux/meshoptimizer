@@ -760,10 +760,8 @@ void encodeIndexSequence(const std::vector<unsigned int>& data, size_t vertex_co
 	    (double(result.size() * 4) / 1e9) / (end - middle));
 }
 
-void encodeMeshlets(const Mesh& mesh, size_t max_vertices, size_t max_triangles)
+void encodeMeshlets(const Mesh& mesh, size_t max_vertices, size_t max_triangles, bool reorder = true)
 {
-	size_t vertex_bits = int(ceil(log2(double(max_vertices))));
-
 	size_t max_meshlets = meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles);
 	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
 	std::vector<unsigned int> meshlet_vertices(mesh.indices.size());
@@ -792,10 +790,10 @@ void encodeMeshlets(const Mesh& mesh, size_t max_vertices, size_t max_triangles)
 	// optimize the order of vertex references within each meshlet and globally; this is valuable for access locality and critical for compression of vertex references
 	// note that this reorders the vertex buffer too, so if a traditional index buffer is required it would need to be reconstructed from the meshlet data for optimal locality
 	std::vector<Vertex> vertices = mesh.vertices;
-	meshopt_optimizeVertexFetch(&vertices[0], &meshlet_vertices[0], meshlet_vertices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
+	if (reorder)
+		meshopt_optimizeVertexFetch(&vertices[0], &meshlet_vertices[0], meshlet_vertices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
 
-	size_t vbst = 0;
-	size_t mbst = 0, mbpt = 0;
+	size_t mbst = 0;
 
 	std::vector<unsigned char> packed;
 
@@ -803,8 +801,6 @@ void encodeMeshlets(const Mesh& mesh, size_t max_vertices, size_t max_triangles)
 	{
 		const meshopt_Meshlet& meshlet = meshlets[i];
 
-		size_t vbs = meshopt_encodeIndexSequence(&cbuf[0], cbuf.size(), &meshlet_vertices[meshlet.vertex_offset], meshlet.vertex_count);
-		vbs -= 4; // tail
 		size_t mbs = meshopt_encodeMeshlet(&cbuf[0], cbuf.size(), &meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count, meshlet.vertex_count);
 
 		packed.push_back(meshlet.triangle_count);
@@ -817,6 +813,9 @@ void encodeMeshlets(const Mesh& mesh, size_t max_vertices, size_t max_triangles)
 		unsigned int rt[256];
 		int rc = meshopt_decodeMeshlet(rv, rt, meshlet.triangle_count, meshlet.vertex_count, &cbuf[0], mbs);
 		assert(rc == 0);
+
+		for (size_t j = 0; j < meshlet.vertex_count; ++j)
+			assert(rv[j] == meshlet_vertices[meshlet.vertex_offset + j]);
 
 		for (size_t j = 0; j < meshlet.triangle_count; ++j)
 		{
@@ -831,34 +830,20 @@ void encodeMeshlets(const Mesh& mesh, size_t max_vertices, size_t max_triangles)
 			assert(rt[j] == abc || rt[j] == bca || rt[j] == cba);
 		}
 
-		vbst += vbs;
 		mbst += mbs;
-		// K-bit extras
-		mbpt += (meshlet.triangle_count + 1) / 2 + ((mbs - (meshlet.triangle_count + 1) / 2) * vertex_bits + 7) / 8;
 	}
 
 	size_t mbc = compress(packed);
 
-	printf("MeshletCodec (%d/%d, VB): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/vertex reference, %.1f bits/vertex\n",
-	    int(max_vertices), int(max_triangles),
-	    int(meshlets.size()),
-	    int(vbst / meshlets.size()),
-	    int(vbst), double(vbst * 8) / double(meshlet_vertices.size()), double(vbst * 8) / double(mesh.vertices.size()));
-	printf("MeshletCodec (%d/%d, 8b): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/triangle\n",
+	printf("MeshletCodec (%d/%d): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/triangle\n",
 	    int(max_vertices), int(max_triangles),
 	    int(meshlets.size()),
 	    int(mbst / meshlets.size()),
 	    int(mbst), double(mbst * 8) / double(mesh.indices.size() / 3));
-	printf("MeshletCodec (%d/%d, %db): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/triangle\n",
-	    int(max_vertices), int(max_triangles), int(vertex_bits),
-	    int(meshlets.size()),
-	    int(mbpt / meshlets.size()),
-	    int(mbpt), double(mbpt * 8) / double(mesh.indices.size() / 3));
-	printf("MeshletCodec (%d/%d, 8b+zip): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/triangle\n",
+	printf("MeshletCodec (%d/%d, packed): %d bytes/meshlet, %.1f bits/triangle; post-deflate: %d bytes/meshlet, %.1f bits/triangle)\n",
 	    int(max_vertices), int(max_triangles),
-	    int(meshlets.size()),
-	    int(mbc / meshlets.size()),
-	    int(mbc), double(mbc * 8) / double(mesh.indices.size() / 3));
+	    int(packed.size() / meshlets.size()), double(packed.size() * 8) / double(mesh.indices.size() / 3),
+	    int(mbc / meshlets.size()), double(mbc * 8) / double(mesh.indices.size() / 3));
 
 #if !TRACE
 	double mbtime = 0;
