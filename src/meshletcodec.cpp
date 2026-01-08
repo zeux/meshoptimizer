@@ -178,6 +178,53 @@ static unsigned char* encodeTriangles(unsigned char* codes, unsigned char* extra
 	return extra;
 }
 
+static unsigned char* encodeVertices(unsigned char* ctrl, unsigned char* data, const unsigned int* vertices, size_t vertex_count)
+{
+	// grouped varint, 2 bit per value to indicate 0/1/2/4 byte deltas
+	memset(ctrl, 0, (vertex_count + 3) / 4);
+
+	unsigned int last = 0;
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		unsigned int d = vertices[i] - last - 1;
+		unsigned int v = (d << 1) ^ (int(d) >> 31);
+
+		int code = 0;
+
+		if (v == 0)
+			; // 0 bytes
+		else if (v < 256)
+		{
+			// 1 byte
+			code = 1;
+			*data++ = v;
+		}
+		else if (v < 65536)
+		{
+			// 2 bytes
+			code = 2;
+			*data++ = (unsigned char)(v & 0xFF);
+			*data++ = (unsigned char)((v >> 8) & 0xFF);
+		}
+		else
+		{
+			// 4 bytes
+			code = 3;
+			*data++ = (unsigned char)(v & 0xFF);
+			*data++ = (unsigned char)((v >> 8) & 0xFF);
+			*data++ = (unsigned char)((v >> 16) & 0xFF);
+			*data++ = (unsigned char)((v >> 24) & 0xFF);
+		}
+
+		ctrl[i / 4] |= (code << ((i % 4) * 2));
+
+		last = vertices[i];
+	}
+
+	return data;
+}
+
 #if !defined(SIMD_SSE)
 static void decodeTriangles(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, size_t triangle_count)
 {
@@ -389,11 +436,18 @@ size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const un
 	unsigned char* codes = buffer;
 	unsigned char* extra = buffer + (triangle_count + 1) / 2;
 
-	unsigned char* end = encodeTriangles(codes, extra, triangles, triangle_count);
+	unsigned char* tend = encodeTriangles(codes, extra, triangles, triangle_count);
+
+	unsigned char* ctrl = tend;
+	unsigned char* data = ctrl + (vertex_count + 3) / 4;
+
+	unsigned char* vend = encodeVertices(ctrl, data, vertices, vertex_count);
+
+	unsigned char* end = vend;
 
 #if TRACE > 1
 	printf("extra:");
-	for (const unsigned char* ptr = extra; ptr != end; ++ptr)
+	for (const unsigned char* ptr = extra; ptr != tend; ++ptr)
 		printf(" %d", *ptr);
 	printf("\n");
 
@@ -408,8 +462,10 @@ size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const un
 #endif
 
 #if TRACE
-	printf("stats: %d triangles, %d bytes (%d codes, %d extra)\n",
-	    int(triangle_count), int(end - buffer), (int)((triangle_count + 1) / 2), (int)(end - extra));
+	printf("stats: %d vertices, %d triangles => %d bytes (triangles: %d codes, %d extra; vertices: %d control, %d data)\n",
+	    int(vertex_count), int(triangle_count), int(end - buffer),
+	    (int)((triangle_count + 1) / 2), (int)(tend - extra),
+	    (int)((vertex_count + 3) / 4), (int)(vend - data));
 #endif
 
 	assert(size_t(end - buffer) <= buffer_size);
