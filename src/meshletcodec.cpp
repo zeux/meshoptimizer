@@ -35,8 +35,12 @@
 #include <smmintrin.h>
 #endif
 
-#ifdef SIMD_FALLBACK
-// TODO: cpuid based fallback
+#if defined(SIMD_SSE) && defined(SIMD_FALLBACK)
+#ifdef _MSC_VER
+#include <intrin.h> // __cpuid
+#else
+#include <cpuid.h> // __cpuid
+#endif
 #endif
 
 #ifndef TRACE
@@ -229,7 +233,7 @@ static size_t encodeVertices(unsigned char* ctrl, unsigned char* data, const uns
 	return data - start;
 }
 
-#if !defined(SIMD_SSE)
+#if defined(SIMD_FALLBACK) || (!defined(SIMD_SSE))
 static const unsigned char* decodeTriangles(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, const unsigned char* bound, size_t triangle_count)
 {
 	// branchlessly read next or extra vertex and advance pointers
@@ -321,6 +325,19 @@ static const unsigned char* decodeVertices(unsigned int* vertices, const unsigne
 
 	return data;
 }
+
+static int decodeMeshlet(unsigned int* triangles, unsigned int* vertices, const unsigned char* codes, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t triangle_count, size_t vertex_count)
+{
+	data = decodeTriangles(triangles, codes, data, bound, triangle_count);
+	if (!data)
+		return -2;
+
+	data = decodeVertices(vertices, ctrl, data, bound, vertex_count);
+	if (!data)
+		return -2;
+
+	return (data == bound) ? 0 : -3;
+}
 #endif
 
 #if defined(SIMD_SSE)
@@ -347,6 +364,19 @@ static bool decodeBuildTables()
 	shuf[var] = (ec) ? extra : 15; \
 	next[var] = (ec) ? 0 : nextoff; \
 	extra += (ec), nextoff += 1 - (ec)
+
+	// check for SSE4.1 support if we have a fallback path
+#if defined(SIMD_SSE) && defined(SIMD_FALLBACK)
+	int cpuinfo[4] = {};
+#ifdef _MSC_VER
+	__cpuid(cpuinfo, 1);
+#else
+	__cpuid(1, cpuinfo[0], cpuinfo[1], cpuinfo[2], cpuinfo[3]);
+#endif
+	// bit 19 = SSE4.1
+	if ((cpuinfo[2] & (1 << 19)) == 0)
+		return false;
+#endif
 
 	// fill triangle decoding tables for each combination of two triangle codes
 	for (int code = 0; code < 256; ++code)
@@ -484,7 +514,7 @@ static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const u
 
 		// copy 6 bytes of new triangle data into output, formatted as 8 bytes with 0 padding
 		__m128i tri4 = _mm_shuffle_epi8(state, repack);
-		_mm_storeu_si64(reinterpret_cast<__m128i*>(&triangles[i]), tri4);
+		_mm_storel_epi64(reinterpret_cast<__m128i*>(&triangles[i]), tri4);
 
 		extra += extoff;
 	}
@@ -525,6 +555,19 @@ SIMD_TARGET static const unsigned char* decodeVerticesSimd(unsigned int* vertice
 	}
 
 	return data;
+}
+
+SIMD_TARGET static int decodeMeshletSimd(unsigned int* triangles, unsigned int* vertices, const unsigned char* codes, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t triangle_count, size_t vertex_count)
+{
+	data = decodeTrianglesSimd(triangles, codes, data, bound, triangle_count);
+	if (!data)
+		return -2;
+
+	data = decodeVerticesSimd(vertices, ctrl, data, bound, vertex_count);
+	if (!data)
+		return -2;
+
+	return (data == bound) ? 0 : -3;
 }
 #endif
 
@@ -620,28 +663,13 @@ int meshopt_decodeMeshlet(unsigned int* vertices, unsigned int* triangles, size_
 
 	const unsigned char* data = buffer;
 
-#if defined(SIMD_SSE)
-	data = decodeTrianglesSimd(triangles, codes, data, bound, triangle_count);
-	if (!data)
-		return -2;
-
-	data = decodeVerticesSimd(vertices, ctrl, data, bound, vertex_count);
-	if (!data)
-		return -2;
+#if defined(SIMD_SSE) && defined(SIMD_FALLBACK)
+	return (gDecodeTablesInitialized ? decodeMeshletSimd : decodeMeshlet)(triangles, vertices, codes, ctrl, data, bound, triangle_count, vertex_count);
+#elif defined(SIMD_SSE)
+	return decodeMeshletSimd(triangles, vertices, codes, ctrl, data, bound, triangle_count, vertex_count);
 #else
-	data = decodeTriangles(triangles, codes, data, bound, triangle_count);
-	if (!data)
-		return -2;
-
-	data = decodeVertices(vertices, ctrl, data, bound, vertex_count);
-	if (!data)
-		return -2;
+	return decodeMeshlet(triangles, vertices, codes, ctrl, data, bound, triangle_count, vertex_count);
 #endif
-
-	if (data != bound)
-		return -3;
-
-	return 0;
 }
 
 #undef SIMD_SSE
