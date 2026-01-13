@@ -586,7 +586,7 @@ size_t meshopt_encodeMeshletBound(size_t max_vertices, size_t max_triangles)
 	return codes_size + extra_size + ctrl_size + data_size + gap_size;
 }
 
-size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const unsigned int* vertices, const unsigned char* triangles, size_t triangle_count, size_t vertex_count)
+size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const unsigned int* vertices, size_t vertex_count, const unsigned char* triangles, size_t triangle_count)
 {
 	using namespace meshopt;
 
@@ -656,7 +656,7 @@ size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const un
 	return result;
 }
 
-int meshopt_decodeMeshlet(unsigned int* vertices, unsigned int* triangles, size_t triangle_count, size_t vertex_count, const unsigned char* buffer, size_t buffer_size)
+int meshopt_decodeMeshlet(unsigned int* vertices, size_t vertex_count, unsigned int* triangles, size_t triangle_count, const unsigned char* buffer, size_t buffer_size)
 {
 	using namespace meshopt;
 

@@ -781,7 +781,7 @@ void encodeMeshlets(const Mesh& mesh, size_t max_vertices, size_t max_triangles,
 		meshlet_vertices.resize((meshlet_vertices.size() + 2) / 3 * 3);
 	}
 
-	std::vector<unsigned char> cbuf(4096); // TODO
+	std::vector<unsigned char> cbuf(meshopt_encodeMeshletBound(max_vertices, max_triangles));
 
 	// optimize each meshlet for locality; this is important for performance, and critical for good compression
 	for (size_t i = 0; i < meshlets.size(); ++i)
@@ -801,17 +801,18 @@ void encodeMeshlets(const Mesh& mesh, size_t max_vertices, size_t max_triangles,
 	{
 		const meshopt_Meshlet& meshlet = meshlets[i];
 
-		size_t mbs = meshopt_encodeMeshlet(&cbuf[0], cbuf.size(), &meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count, meshlet.vertex_count);
+		size_t mbs = meshopt_encodeMeshlet(&cbuf[0], cbuf.size(), &meshlet_vertices[meshlet.vertex_offset], meshlet.vertex_count, &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count);
+		assert(mbs > 0);
 
-		packed.push_back(meshlet.triangle_count);
 		packed.push_back(meshlet.vertex_count);
+		packed.push_back(meshlet.triangle_count);
 		packed.push_back(mbs & 0xff);
 		packed.push_back((mbs >> 8) & 0xff);
 		packed.insert(packed.end(), &cbuf[0], &cbuf[mbs]);
 
 		unsigned int rv[256];
 		unsigned int rt[256];
-		int rc = meshopt_decodeMeshlet(rv, rt, meshlet.triangle_count, meshlet.vertex_count, &cbuf[0], mbs);
+		int rc = meshopt_decodeMeshlet(rv, meshlet.vertex_count, rt, meshlet.triangle_count, &cbuf[0], mbs);
 		assert(rc == 0);
 
 		for (size_t j = 0; j < meshlet.vertex_count; ++j)
@@ -857,7 +858,7 @@ void encodeMeshlets(const Mesh& mesh, size_t max_vertices, size_t max_triangles,
 		for (size_t j = 0; j < meshlets.size(); ++j)
 		{
 			size_t size = p[2] | (p[3] << 8);
-			meshopt_decodeMeshlet(rv, rt, p[0], p[1], p + 4, size);
+			meshopt_decodeMeshlet(rv, p[0], rt, p[1], p + 4, size);
 			p += 4 + size;
 		}
 		double t1 = timestamp();
