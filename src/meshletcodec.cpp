@@ -230,7 +230,7 @@ static size_t encodeVertices(unsigned char* ctrl, unsigned char* data, const uns
 }
 
 #if !defined(SIMD_SSE)
-static const unsigned char* decodeTriangles(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, size_t triangle_count)
+static const unsigned char* decodeTriangles(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, const unsigned char* bound, size_t triangle_count)
 {
 	// branchlessly read next or extra vertex and advance pointers
 #define NEXT(var, ec) \
@@ -243,6 +243,9 @@ static const unsigned char* decodeTriangles(unsigned int* triangles, const unsig
 
 	for (size_t i = 0; i < triangle_count; ++i)
 	{
+		if (extra > bound)
+			return NULL;
+
 		unsigned int code = (codes[i / 2] >> ((i & 1) * 4)) & 0xF;
 		unsigned int tri;
 
@@ -289,7 +292,7 @@ static const unsigned char* decodeTriangles(unsigned int* triangles, const unsig
 #undef NEXT
 }
 
-static const unsigned char* decodeVertices(unsigned int* vertices, const unsigned char* ctrl, const unsigned char* data, size_t vertex_count)
+static const unsigned char* decodeVertices(unsigned int* vertices, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count)
 {
 	unsigned int last = 0;
 
@@ -298,6 +301,9 @@ static const unsigned char* decodeVertices(unsigned int* vertices, const unsigne
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
+		if (data > bound)
+			return NULL;
+
 		unsigned char code = ctrl[i / 4] >> ((i % 4) * 2) & 3;
 
 		// branchlessly read up to 4 bytes
@@ -448,7 +454,7 @@ static bool gDecodeTablesInitialized = decodeBuildTables();
 
 #if defined(SIMD_SSE)
 SIMD_TARGET
-static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, size_t triangle_count)
+static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, const unsigned char* bound, size_t triangle_count)
 {
 	// 0..5: 6 next extra bytes
 	// 6..14: 9 bytes = 3 triangles worth of index data
@@ -460,6 +466,9 @@ static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const u
 	for (size_t i = 0; i < triangle_count; i += 2)
 	{
 		unsigned int code = *codes++;
+
+		if (extra > bound)
+			return NULL;
 
 		int extoff = kDecodeTableExtra[code];
 
@@ -483,13 +492,16 @@ static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const u
 	return extra;
 }
 
-SIMD_TARGET static const unsigned char* decodeVerticesSimd(unsigned int* vertices, const unsigned char* ctrl, const unsigned char* data, size_t vertex_count)
+SIMD_TARGET static const unsigned char* decodeVerticesSimd(unsigned int* vertices, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count)
 {
 	__m128i last = _mm_setzero_si128();
 
 	for (size_t i = 0; i < vertex_count; i += 4)
 	{
 		unsigned char code = *ctrl++;
+
+		if (data > bound)
+			return NULL;
 
 		__m128i word = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data));
 		__m128i shuf = _mm_loadu_si128(reinterpret_cast<const __m128i*>(kDecodeTableVerts[code]));
@@ -609,11 +621,21 @@ int meshopt_decodeMeshlet(unsigned int* vertices, unsigned int* triangles, size_
 	const unsigned char* data = buffer;
 
 #if defined(SIMD_SSE)
-	data = decodeTrianglesSimd(triangles, codes, data, triangle_count);
-	data = decodeVerticesSimd(vertices, ctrl, data, vertex_count);
+	data = decodeTrianglesSimd(triangles, codes, data, bound, triangle_count);
+	if (!data)
+		return -2;
+
+	data = decodeVerticesSimd(vertices, ctrl, data, bound, vertex_count);
+	if (!data)
+		return -2;
 #else
-	data = decodeTriangles(triangles, codes, data, triangle_count);
-	data = decodeVertices(vertices, ctrl, data, vertex_count);
+	data = decodeTriangles(triangles, codes, data, bound, triangle_count);
+	if (!data)
+		return -2;
+
+	data = decodeVertices(vertices, ctrl, data, bound, vertex_count);
+	if (!data)
+		return -2;
 #endif
 
 	if (data != bound)
