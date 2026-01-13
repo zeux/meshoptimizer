@@ -450,9 +450,6 @@ static bool gDecodeTablesInitialized = decodeBuildTables();
 SIMD_TARGET
 static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, size_t triangle_count)
 {
-	assert(gDecodeTablesInitialized);
-	(void)gDecodeTablesInitialized;
-
 	// 0..5: 6 next extra bytes
 	// 6..14: 9 bytes = 3 triangles worth of index data
 	// 15: 'next' byte
@@ -527,32 +524,44 @@ size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const un
 
 	assert(triangle_count <= 256 && vertex_count <= 256);
 
+	// 4 bits per triangle + up to three bytes of extra data
 	unsigned char codes[256 / 2];
 	unsigned char extra[256 * 3];
 	size_t codes_size = (triangle_count + 1) / 2;
 	size_t extra_size = encodeTriangles(codes, extra, triangles, triangle_count);
 	assert(extra_size <= sizeof(extra));
 
+	// 2 bits per vertex + up to 4 bytes of actual data
 	unsigned char ctrl[256 / 4];
 	unsigned char data[256 * 4];
 	size_t ctrl_size = (vertex_count + 3) / 4;
 	size_t data_size = encodeVertices(ctrl, data, vertices, vertex_count);
 	assert(data_size <= sizeof(data));
 
-	size_t result = codes_size + extra_size + ctrl_size + data_size;
+	// we need to ensure that up to 16 bytes after extra+data are available for SIMD decoding
+	// to minimize overhead, we place fixed-size codes+control at the end of the buffer
+	size_t gap_size = (codes_size + ctrl_size < 16) ? 16 - (codes_size + ctrl_size) : 0;
+
+	size_t result = codes_size + extra_size + ctrl_size + data_size + gap_size;
 
 	if (result > buffer_size)
 		return 0;
 
-	memcpy(buffer, codes, codes_size);
-	buffer += codes_size;
+	// variable-size data first
 	memcpy(buffer, extra, extra_size);
 	buffer += extra_size;
-
-	memcpy(buffer, ctrl, ctrl_size);
-	buffer += ctrl_size;
 	memcpy(buffer, data, data_size);
 	buffer += data_size;
+
+	// gap (for accelerated decoding) separates variable-size and fixed-size data
+	memset(buffer, 0, gap_size);
+	buffer += gap_size;
+
+	// fixed-size data last; it can be located from buffer end during decoding
+	memcpy(buffer, codes, codes_size);
+	buffer += codes_size;
+	memcpy(buffer, ctrl, ctrl_size);
+	buffer += ctrl_size;
 
 #if TRACE > 1
 	printf("extra:");
@@ -571,9 +580,9 @@ size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const un
 #endif
 
 #if TRACE
-	printf("stats: %d vertices, %d triangles => %d bytes (triangles: %d codes, %d extra; vertices: %d control, %d data)\n",
+	printf("stats: %d vertices, %d triangles => %d bytes (triangles: %d codes, %d extra; vertices: %d control, %d data; %d gap)\n",
 	    int(vertex_count), int(triangle_count), int(result),
-	    int(codes_size), int(extra_size), int(ctrl_size), int(data_size));
+	    int(codes_size), int(extra_size), int(ctrl_size), int(data_size), int(gap_size));
 #endif
 
 	return result;
@@ -583,27 +592,31 @@ int meshopt_decodeMeshlet(unsigned int* vertices, unsigned int* triangles, size_
 {
 	using namespace meshopt;
 
-	// TODO: framing, bounds checks
+	// layout must match encoding
+	size_t codes_size = (triangle_count + 1) / 2;
+	size_t ctrl_size = (vertex_count + 3) / 4;
+	size_t gap_size = (codes_size + ctrl_size < 16) ? 16 - (codes_size + ctrl_size) : 0;
 
-	const unsigned char* codes = buffer;
-	const unsigned char* extra = buffer + (triangle_count + 1) / 2;
+	if (buffer_size < codes_size + ctrl_size + gap_size)
+		return -2;
+
+	const unsigned char* end = buffer + buffer_size;
+	const unsigned char* ctrl = end - ctrl_size;
+	const unsigned char* codes = ctrl - codes_size;
+
+	const unsigned char* bound = codes - gap_size;
+
+	const unsigned char* data = buffer;
 
 #if defined(SIMD_SSE)
-	const unsigned char* tend = decodeTrianglesSimd(triangles, codes, extra, triangle_count);
+	data = decodeTrianglesSimd(triangles, codes, data, triangle_count);
+	data = decodeVerticesSimd(vertices, ctrl, data, vertex_count);
 #else
-	const unsigned char* tend = decodeTriangles(triangles, codes, extra, triangle_count);
+	data = decodeTriangles(triangles, codes, data, triangle_count);
+	data = decodeVertices(vertices, ctrl, data, vertex_count);
 #endif
 
-	const unsigned char* vctrl = tend;
-	const unsigned char* vdata = tend + (vertex_count + 3) / 4;
-
-#if defined(SIMD_SSE)
-	const unsigned char* vend = decodeVerticesSimd(vertices, vctrl, vdata, vertex_count);
-#else
-	const unsigned char* vend = decodeVertices(vertices, vctrl, vdata, vertex_count);
-#endif
-
-	if (vend != buffer + buffer_size)
+	if (data != bound)
 		return -3;
 
 	return 0;
