@@ -573,6 +573,19 @@ SIMD_TARGET static int decodeMeshletSimd(unsigned int* triangles, unsigned int* 
 
 } // namespace meshopt
 
+size_t meshopt_encodeMeshletBound(size_t max_vertices, size_t max_triangles)
+{
+	size_t codes_size = (max_triangles + 1) / 2;
+	size_t extra_size = max_triangles * 3;
+
+	size_t ctrl_size = (max_vertices + 3) / 4;
+	size_t data_size = max_vertices * 4;
+
+	size_t gap_size = (codes_size + ctrl_size < 16) ? 16 - (codes_size + ctrl_size) : 0;
+
+	return codes_size + extra_size + ctrl_size + data_size + gap_size;
+}
+
 size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const unsigned int* vertices, const unsigned char* triangles, size_t triangle_count, size_t vertex_count)
 {
 	using namespace meshopt;
