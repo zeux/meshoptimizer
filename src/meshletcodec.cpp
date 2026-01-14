@@ -326,13 +326,13 @@ static const unsigned char* decodeVertices(unsigned int* vertices, const unsigne
 	return data;
 }
 
-static int decodeMeshlet(unsigned int* triangles, unsigned int* vertices, const unsigned char* codes, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t triangle_count, size_t vertex_count)
+static int decodeMeshlet(unsigned int* vertices, unsigned int* triangles, const unsigned char* codes, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count, size_t triangle_count)
 {
-	data = decodeTriangles(triangles, codes, data, bound, triangle_count);
+	data = decodeVertices(vertices, ctrl, data, bound, vertex_count);
 	if (!data)
 		return -2;
 
-	data = decodeVertices(vertices, ctrl, data, bound, vertex_count);
+	data = decodeTriangles(triangles, codes, data, bound, triangle_count);
 	if (!data)
 		return -2;
 
@@ -559,19 +559,19 @@ SIMD_TARGET static const unsigned char* decodeVerticesSimd(unsigned int* vertice
 	return data;
 }
 
-SIMD_TARGET static int decodeMeshletSimd(unsigned int* triangles, unsigned int* vertices, const unsigned char* codes, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t triangle_count, size_t vertex_count)
+SIMD_TARGET static int decodeMeshletSimd(unsigned int* vertices, unsigned int* triangles, const unsigned char* codes, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count, size_t triangle_count)
 {
-	// decodes 2 triangles at a time; last group may be partial, but:
-	// - we can write 2 triangles to the output because the caller has to provide output buffers aligned to 4 elements
-	// - the remaining code data is 0 in valid encodings so extra will not be advanced beyond bound
-	data = decodeTrianglesSimd(triangles, codes, data, bound, triangle_count);
-	if (!data)
-		return -2;
-
 	// decodes 4 vertices at a time; last group may be partial, but:
 	// - we can write 4 vertices to the output because the caller has to provide output buffers aligned to 4 elements
 	// - the remaining control data is 0 in valid encodings so data will not be advanced beyond bound
 	data = decodeVerticesSimd(vertices, ctrl, data, bound, vertex_count);
+	if (!data)
+		return -2;
+
+	// decodes 2 triangles at a time; last group may be partial, but:
+	// - we can write 2 triangles to the output because the caller has to provide output buffers aligned to 4 elements
+	// - the remaining code data is 0 in valid encodings so extra will not be advanced beyond bound
+	data = decodeTrianglesSimd(triangles, codes, data, bound, triangle_count);
 	if (!data)
 		return -2;
 
@@ -624,10 +624,10 @@ size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const un
 		return 0;
 
 	// variable-size data first
-	memcpy(buffer, extra, extra_size);
-	buffer += extra_size;
 	memcpy(buffer, data, data_size);
 	buffer += data_size;
+	memcpy(buffer, extra, extra_size);
+	buffer += extra_size;
 
 	// gap (for accelerated decoding) separates variable-size and fixed-size data
 	memset(buffer, 0, gap_size);
@@ -685,11 +685,11 @@ int meshopt_decodeMeshlet(unsigned int* vertices, size_t vertex_count, unsigned 
 	const unsigned char* bound = codes - gap_size;
 
 #if defined(SIMD_SSE) && defined(SIMD_FALLBACK)
-	return (gDecodeTablesInitialized ? decodeMeshletSimd : decodeMeshlet)(triangles, vertices, codes, ctrl, data, bound, triangle_count, vertex_count);
+	return (gDecodeTablesInitialized ? decodeMeshletSimd : decodeMeshlet)(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count);
 #elif defined(SIMD_SSE)
-	return decodeMeshletSimd(triangles, vertices, codes, ctrl, data, bound, triangle_count, vertex_count);
+	return decodeMeshletSimd(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count);
 #else
-	return decodeMeshlet(triangles, vertices, codes, ctrl, data, bound, triangle_count, vertex_count);
+	return decodeMeshlet(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count);
 #endif
 }
 
