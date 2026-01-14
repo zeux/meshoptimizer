@@ -227,7 +227,7 @@ codecbench-simd.wasm: tools/codecbench.cpp $(LIBRARY_SOURCES)
 codectest: tools/codectest.cpp $(LIBRARY)
 	$(CXX) $^ $(CXXFLAGS) $(LDFLAGS) -o $@
 
-codecfuzz: tools/codecfuzz.cpp src/vertexcodec.cpp src/indexcodec.cpp
+codecfuzz: tools/codecfuzz.cpp src/vertexcodec.cpp src/indexcodec.cpp src/meshletcodec.cpp
 	$(CXX) $^ -fsanitize=fuzzer,address,undefined -O1 -g -o $@
 
 clusterfuzz: tools/clusterfuzz.cpp src/clusterizer.cpp
