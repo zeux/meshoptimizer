@@ -51,31 +51,23 @@
 #include <stdio.h>
 #endif
 
-// TODO: amalgamated build conflicts wrt indexcodec
-
 // This work is based on:
 // TODO
 namespace meshopt
 {
 
-typedef unsigned int EdgeFifo[16][2];
-
-static const unsigned int kTriangleIndexOrder[3][3] = {
-    {0, 1, 2},
-    {1, 2, 0},
-    {2, 0, 1},
-};
+typedef unsigned int EdgeFifo8[8][2];
 
 static int rotateTriangle(unsigned int a, unsigned int b, unsigned int c)
 {
 	return (a > b && a > c) ? 1 : (b > c ? 2 : 0);
 }
 
-static int getEdgeFifo(EdgeFifo fifo, unsigned int a, unsigned int b, unsigned int c, size_t offset)
+static int getEdgeFifo8(EdgeFifo8 fifo, unsigned int a, unsigned int b, unsigned int c, size_t offset)
 {
-	for (int i = 0; i < 16; ++i)
+	for (int i = 0; i < 8; ++i)
 	{
-		size_t index = (offset - 1 - i) & 15;
+		size_t index = (offset - 1 - i) & 7;
 
 		unsigned int e0 = fifo[index][0];
 		unsigned int e1 = fifo[index][1];
@@ -91,16 +83,16 @@ static int getEdgeFifo(EdgeFifo fifo, unsigned int a, unsigned int b, unsigned i
 	return -1;
 }
 
-static void pushEdgeFifo(EdgeFifo fifo, unsigned int a, unsigned int b, size_t& offset)
+static void pushEdgeFifo8(EdgeFifo8 fifo, unsigned int a, unsigned int b, size_t& offset)
 {
 	fifo[offset][0] = a;
 	fifo[offset][1] = b;
-	offset = (offset + 1) & 15;
+	offset = (offset + 1) & 7;
 }
 
 static size_t encodeTriangles(unsigned char* codes, unsigned char* extra, const unsigned char* triangles, size_t triangle_count)
 {
-	EdgeFifo edgefifo;
+	EdgeFifo8 edgefifo;
 	memset(edgefifo, -1, sizeof(edgefifo));
 
 	size_t edgefifooffset = 0;
@@ -113,6 +105,8 @@ static size_t encodeTriangles(unsigned char* codes, unsigned char* extra, const 
 	// triangles are rotated to make next bits line up.
 	memset(codes, 0, (triangle_count + 1) / 2);
 
+	static const int rotations[] = {0, 1, 2, 0, 1};
+
 	unsigned char* start = extra;
 
 	for (size_t i = 0; i < triangle_count; ++i)
@@ -121,12 +115,12 @@ static size_t encodeTriangles(unsigned char* codes, unsigned char* extra, const 
 		unsigned int last = next;
 #endif
 
-		int fer = getEdgeFifo(edgefifo, triangles[i * 3 + 0], triangles[i * 3 + 1], triangles[i * 3 + 2], edgefifooffset);
+		int fer = getEdgeFifo8(edgefifo, triangles[i * 3 + 0], triangles[i * 3 + 1], triangles[i * 3 + 2], edgefifooffset);
 
 		if (fer >= 0 && (fer >> 2) < 6)
 		{
-			// note: getEdgeFifo implicitly rotates triangles by matching a/b to existing edge
-			const unsigned int* order = kTriangleIndexOrder[fer & 3];
+			// note: getEdgeFifo8 implicitly rotates triangles by matching a/b to existing edge
+			const int* order = rotations + (fer & 3);
 
 			unsigned int a = triangles[i * 3 + order[0]], b = triangles[i * 3 + order[1]], c = triangles[i * 3 + order[2]];
 
@@ -143,13 +137,14 @@ static size_t encodeTriangles(unsigned char* codes, unsigned char* extra, const 
 			if (fec)
 				*extra++ = (unsigned char)c;
 
-			pushEdgeFifo(edgefifo, c, b, edgefifooffset);
-			pushEdgeFifo(edgefifo, a, c, edgefifooffset);
+			pushEdgeFifo8(edgefifo, c, b, edgefifooffset);
+			pushEdgeFifo8(edgefifo, a, c, edgefifooffset);
 		}
 		else
 		{
+			// rotate triangles to minimize the need for extra vertices
 			int rotation = rotateTriangle(triangles[i * 3 + 0], triangles[i * 3 + 1], triangles[i * 3 + 2]);
-			const unsigned int* order = kTriangleIndexOrder[rotation];
+			const int* order = rotations + rotation;
 
 			unsigned int a = triangles[i * 3 + order[0]], b = triangles[i * 3 + order[1]], c = triangles[i * 3 + order[2]];
 
@@ -176,8 +171,8 @@ static size_t encodeTriangles(unsigned char* codes, unsigned char* extra, const 
 			if (fec)
 				*extra++ = (unsigned char)c;
 
-			pushEdgeFifo(edgefifo, c, b, edgefifooffset);
-			pushEdgeFifo(edgefifo, a, c, edgefifooffset);
+			pushEdgeFifo8(edgefifo, c, b, edgefifooffset);
+			pushEdgeFifo8(edgefifo, a, c, edgefifooffset);
 		}
 	}
 
@@ -683,8 +678,9 @@ int meshopt_decodeMeshlet(unsigned int* vertices, size_t vertex_count, unsigned 
 
 	// gap ensures we have at least 16 bytes available after bound; this allows SIMD decoders to over-read safely
 	const unsigned char* bound = codes - gap_size;
+	assert(bound >= buffer && bound + 16 <= buffer + buffer_size);
 
-#if defined(SIMD_SSE) && defined(SIMD_FALLBACK)
+#if defined(SIMD_FALLBACK)
 	return (gDecodeTablesInitialized ? decodeMeshletSimd : decodeMeshlet)(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count);
 #elif defined(SIMD_SSE)
 	return decodeMeshletSimd(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count);
