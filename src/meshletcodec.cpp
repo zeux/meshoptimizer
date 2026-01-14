@@ -513,6 +513,7 @@ static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const u
 		state = _mm_add_epi8(_mm_shuffle_epi8(state, shuf), next);
 
 		// copy 6 bytes of new triangle data into output, formatted as 8 bytes with 0 padding
+		// safe to write 2 triangles as caller provides padded output buffer
 		__m128i tri4 = _mm_shuffle_epi8(state, repack);
 		_mm_storel_epi64(reinterpret_cast<__m128i*>(&triangles[i]), tri4);
 
@@ -548,6 +549,7 @@ SIMD_TARGET static const unsigned char* decodeVerticesSimd(unsigned int* vertice
 		x = _mm_add_epi32(x, _mm_slli_si128(x, 4));
 		x = _mm_add_epi32(x, _mm_shuffle_epi32(last, 0xff));
 
+		// safe to write 4 vertices as caller provides padded output buffer
 		_mm_storeu_si128(reinterpret_cast<__m128i*>(&vertices[i]), x);
 
 		data += kDecodeTableLength[code];
@@ -559,10 +561,16 @@ SIMD_TARGET static const unsigned char* decodeVerticesSimd(unsigned int* vertice
 
 SIMD_TARGET static int decodeMeshletSimd(unsigned int* triangles, unsigned int* vertices, const unsigned char* codes, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t triangle_count, size_t vertex_count)
 {
+	// decodes 2 triangles at a time; last group may be partial, but:
+	// - we can write 2 triangles to the output because the caller has to provide output buffers aligned to 4 elements
+	// - the remaining code data is 0 in valid encodings so extra will not be advanced beyond bound
 	data = decodeTrianglesSimd(triangles, codes, data, bound, triangle_count);
 	if (!data)
 		return -2;
 
+	// decodes 4 vertices at a time; last group may be partial, but:
+	// - we can write 4 vertices to the output because the caller has to provide output buffers aligned to 4 elements
+	// - the remaining control data is 0 in valid encodings so data will not be advanced beyond bound
 	data = decodeVerticesSimd(vertices, ctrl, data, bound, vertex_count);
 	if (!data)
 		return -2;
@@ -671,10 +679,10 @@ int meshopt_decodeMeshlet(unsigned int* vertices, size_t vertex_count, unsigned 
 	const unsigned char* end = buffer + buffer_size;
 	const unsigned char* ctrl = end - ctrl_size;
 	const unsigned char* codes = ctrl - codes_size;
-
-	const unsigned char* bound = codes - gap_size;
-
 	const unsigned char* data = buffer;
+
+	// gap ensures we have at least 16 bytes available after bound; this allows SIMD decoders to over-read safely
+	const unsigned char* bound = codes - gap_size;
 
 #if defined(SIMD_SSE) && defined(SIMD_FALLBACK)
 	return (gDecodeTablesInitialized ? decodeMeshletSimd : decodeMeshlet)(triangles, vertices, codes, ctrl, data, bound, triangle_count, vertex_count);
