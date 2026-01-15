@@ -804,10 +804,10 @@ void encodeMeshlets(const Mesh& mesh, size_t max_vertices, size_t max_triangles,
 		size_t mbs = meshopt_encodeMeshlet(&cbuf[0], cbuf.size(), &meshlet_vertices[meshlet.vertex_offset], meshlet.vertex_count, &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count);
 		assert(mbs > 0);
 
-		packed.push_back(meshlet.vertex_count);
-		packed.push_back(meshlet.triangle_count);
-		packed.push_back(mbs & 0xff);
-		packed.push_back((mbs >> 8) & 0xff);
+		packed.push_back((unsigned char)meshlet.vertex_count);
+		packed.push_back((unsigned char)meshlet.triangle_count);
+		packed.push_back((unsigned char)(mbs & 0xff));
+		packed.push_back((unsigned char)((mbs >> 8) & 0xff));
 		packed.insert(packed.end(), &cbuf[0], &cbuf[mbs]);
 
 		unsigned int rv[256];
@@ -1536,6 +1536,8 @@ void process(const char* path)
 	packVertex<PackedVertex>(copy, "");
 	encodeVertex<PackedVertex>(copy, "");
 	encodeVertex<PackedVertexOct>(copy, "O");
+
+	encodeMeshlets(mesh, 64, 96);
 
 	simplify(mesh);
 	simplify(mesh, 0.1f, meshopt_SimplifyPrune);
