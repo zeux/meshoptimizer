@@ -193,34 +193,21 @@ static size_t encodeVertices(unsigned char* ctrl, unsigned char* data, const uns
 		unsigned int d = vertices[i] - last - 1;
 		unsigned int v = (d << 1) ^ (int(d) >> 31);
 
-		int code = 0;
+		// 0/1/2/4 bytes per value
+		int code = v == 0 ? 0 : (v < 256 ? 1 : (v < 65536 ? 2 : 3));
 
-		if (v == 0)
-			; // 0 bytes
-		else if (v < 256)
+		if (code > 0)
+			*data++ = (unsigned char)(v & 0xff);
+		if (code > 1)
+			*data++ = (unsigned char)((v >> 8) & 0xff);
+
+		if (code > 2)
 		{
-			// 1 byte
-			code = 1;
-			*data++ = (unsigned char)v;
-		}
-		else if (v < 65536)
-		{
-			// 2 bytes
-			code = 2;
-			*data++ = (unsigned char)(v & 0xFF);
-			*data++ = (unsigned char)((v >> 8) & 0xFF);
-		}
-		else
-		{
-			// 4 bytes
-			code = 3;
-			*data++ = (unsigned char)(v & 0xFF);
-			*data++ = (unsigned char)((v >> 8) & 0xFF);
-			*data++ = (unsigned char)((v >> 16) & 0xFF);
-			*data++ = (unsigned char)((v >> 24) & 0xFF);
+			*data++ = (unsigned char)((v >> 16) & 0xff);
+			*data++ = (unsigned char)((v >> 24) & 0xff);
 		}
 
-		ctrl[i / 4] |= (code << ((i % 4) * 2));
+		ctrl[i / 4] |= code << ((i % 4) * 2);
 
 		last = vertices[i];
 	}
@@ -303,7 +290,7 @@ static const unsigned char* decodeVertices(unsigned int* vertices, const unsigne
 		if (data > bound)
 			return NULL;
 
-		unsigned char code = ctrl[i / 4] >> ((i % 4) * 2) & 3;
+		unsigned char code = (ctrl[i / 4] >> ((i % 4) * 2)) & 3;
 
 		// branchlessly read up to 4 bytes
 		unsigned int v = (data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24)) & kMasks[code];
@@ -556,6 +543,9 @@ SIMD_TARGET static const unsigned char* decodeVerticesSimd(unsigned int* vertice
 
 SIMD_TARGET static int decodeMeshletSimd(unsigned int* vertices, unsigned int* triangles, const unsigned char* codes, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count, size_t triangle_count)
 {
+	assert(gDecodeTablesInitialized);
+	(void)gDecodeTablesInitialized;
+
 	// decodes 4 vertices at a time; last group may be partial, but:
 	// - we can write 4 vertices to the output because the caller has to provide output buffers aligned to 4 elements
 	// - the remaining control data is 0 in valid encodings so data will not be advanced beyond bound
