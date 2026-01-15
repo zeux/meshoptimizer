@@ -201,7 +201,7 @@ static size_t encodeVertices(unsigned char* ctrl, unsigned char* data, const uns
 		{
 			// 1 byte
 			code = 1;
-			*data++ = v;
+			*data++ = (unsigned char)v;
 		}
 		else if (v < 65536)
 		{
@@ -356,8 +356,8 @@ static unsigned char kDecodeTableLength[256];
 static bool decodeBuildTables()
 {
 #define NEXT(var, ec) \
-	shuf[var] = (ec) ? extra : 15; \
-	next[var] = (ec) ? 0 : nextoff; \
+	shuf[var] = (ec) ? (unsigned char)extra : 15; \
+	next[var] = (ec) ? 0 : (unsigned char)nextoff; \
 	extra += (ec), nextoff += 1 - (ec)
 
 	// check for SSE4.1 support if we have a fallback path
@@ -415,8 +415,8 @@ static bool decodeBuildTables()
 					int trioff = 6 + k * 3 + (2 - tri / 4) * 3;
 
 					// edge cb or ac
-					shuf[9 + k * 3] = trioff + ((tri & 2) ? 2 : 0);
-					shuf[10 + k * 3] = trioff + ((tri & 2) ? 1 : 2);
+					shuf[9 + k * 3] = (unsigned char)(trioff + ((tri & 2) ? 2 : 0));
+					shuf[10 + k * 3] = (unsigned char)(trioff + ((tri & 2) ? 1 : 2));
 				}
 
 				// third vertex is either next or comes from extra
@@ -436,7 +436,7 @@ static bool decodeBuildTables()
 		}
 
 		// next needs to advance
-		next[15] = nextoff;
+		next[15] = (unsigned char)nextoff;
 
 		// next[0..8] = 0 trivially (never written to); next[9] must also be 0 because nextoff is 0 initially
 		// shuf[0..5] is not used, which allows us to pack next[10..15] + shuf[6..15] into a single 16-byte entry
@@ -457,16 +457,16 @@ static bool decodeBuildTables()
 			int code = (i >> (k * 2)) & 3;
 			int length = (code == 3) ? 4 : code; // 0/1/2/4 bytes
 
-			shuf[k * 4 + 0] = (length > 0) ? offset + 0 : 0x80;
-			shuf[k * 4 + 1] = (length > 1) ? offset + 1 : 0x80;
-			shuf[k * 4 + 2] = (length > 2) ? offset + 2 : 0x80;
-			shuf[k * 4 + 3] = (length > 3) ? offset + 3 : 0x80;
+			shuf[k * 4 + 0] = (length > 0) ? (unsigned char)(offset + 0) : 0x80;
+			shuf[k * 4 + 1] = (length > 1) ? (unsigned char)(offset + 1) : 0x80;
+			shuf[k * 4 + 2] = (length > 2) ? (unsigned char)(offset + 2) : 0x80;
+			shuf[k * 4 + 3] = (length > 3) ? (unsigned char)(offset + 3) : 0x80;
 
 			offset += length;
 		}
 
 		memcpy(kDecodeTableVerts[i], shuf, sizeof(shuf));
-		kDecodeTableLength[i] = offset;
+		kDecodeTableLength[i] = (unsigned char)offset;
 	}
 
 	return true;
@@ -486,7 +486,7 @@ static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const u
 	// 15: 'next' byte
 	__m128i state = _mm_setzero_si128();
 
-	__m128i repack = _mm_setr_epi8(9, 10, 11, 0x80, 12, 13, 14, 0x80, 0, 0, 0, 0, 0, 0, 0, 0);
+	__m128i repack = _mm_setr_epi8(9, 10, 11, -1, 12, 13, 14, -1, 0, 0, 0, 0, 0, 0, 0, 0);
 
 	for (size_t i = 0; i < triangle_count; i += 2)
 	{
