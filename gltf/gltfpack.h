@@ -23,6 +23,8 @@
 #include <string>
 #include <vector>
 
+static const cgltf_component_type cgltf_component_type_r_16f = (cgltf_component_type)5131;
+
 struct Attr
 {
 	float f[4];
@@ -126,7 +128,9 @@ struct Settings
 
 	bool pos_normalized;
 	bool pos_float;
+	bool pos_half;
 	bool tex_float;
+	bool tex_half;
 	bool nrm_float;
 
 	int trn_bits;
