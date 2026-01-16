@@ -164,6 +164,19 @@ QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes
 			fprintf(stderr, "Warning: position data has significant error (%.0f%%); consider using floating-point quantization (-vpf) or more bits (-vp N)\n", max_rel_error * 100);
 	}
 
+	if (b.isValid() && settings.quantize && settings.pos_half)
+	{
+		float amax = 0;
+		for (int k = 0; k < 3; ++k)
+		{
+			amax = std::max(amax, fabsf(b.min.f[0]));
+			amax = std::max(amax, fabsf(b.max.f[0]));
+		}
+
+		if (amax > 65500)
+			fprintf(stderr, "Warning: position data can't be represented by half-precision floating point; consider using floating-point quantization (-vpf)\n");
+	}
+
 	result.node_scale = result.scale / float((1 << result.bits) - 1) * (result.normalized ? 65535.f : 1.f);
 
 	return result;
