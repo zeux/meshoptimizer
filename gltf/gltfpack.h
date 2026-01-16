@@ -23,8 +23,6 @@
 #include <string>
 #include <vector>
 
-static const cgltf_component_type cgltf_component_type_r_16f = (cgltf_component_type)5131;
-
 struct Attr
 {
 	float f[4];
