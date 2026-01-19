@@ -1,0 +1,684 @@
+// This file is part of meshoptimizer library; see meshoptimizer.h for version/license details
+#include "meshoptimizer.h"
+
+#include <assert.h>
+#include <string.h>
+
+// The block below auto-detects SIMD ISA that can be used on the target platform
+#ifndef MESHOPTIMIZER_NO_SIMD
+
+// The SIMD implementation requires SSE4.1, which can be enabled unconditionally through compiler settings
+#if defined(__AVX__) || defined(__SSE41__)
+#define SIMD_SSE
+#endif
+
+// MSVC supports compiling SSE4.1 code regardless of compile options; we use a cpuid-based scalar fallback
+#if !defined(SIMD_SSE) && defined(_MSC_VER) && !defined(__clang__) && (defined(_M_IX86) || defined(_M_X64))
+#define SIMD_SSE
+#define SIMD_FALLBACK
+#endif
+
+// GCC 4.9+ and clang 3.8+ support targeting SIMD ISA from individual functions; we use a cpuid-based scalar fallback
+#if !defined(SIMD_SSE) && !defined(SIMD_AVX) && ((defined(__clang__) && __clang_major__ * 100 + __clang_minor__ >= 308) || (defined(__GNUC__) && __GNUC__ * 100 + __GNUC_MINOR__ >= 409)) && (defined(__i386__) || defined(__x86_64__))
+#define SIMD_SSE
+#define SIMD_FALLBACK
+#define SIMD_TARGET __attribute__((target("sse4.1")))
+#endif
+
+#ifndef SIMD_TARGET
+#define SIMD_TARGET
+#endif
+
+#endif // !MESHOPTIMIZER_NO_SIMD
+
+#ifdef SIMD_SSE
+#include <smmintrin.h>
+#endif
+
+#if defined(SIMD_SSE) && defined(SIMD_FALLBACK)
+#ifdef _MSC_VER
+#include <intrin.h> // __cpuid
+#else
+#include <cpuid.h> // __cpuid
+#endif
+#endif
+
+#ifndef TRACE
+#define TRACE 0
+#endif
+
+#if TRACE
+#include <stdio.h>
+#endif
+
+// This work is based on:
+// TODO
+namespace meshopt
+{
+
+typedef unsigned int EdgeFifo8[8][2];
+
+static int rotateTriangle(unsigned int a, unsigned int b, unsigned int c)
+{
+	return (a > b && a > c) ? 1 : (b > c ? 2 : 0);
+}
+
+static int getEdgeFifo8(EdgeFifo8 fifo, unsigned int a, unsigned int b, unsigned int c, size_t offset)
+{
+	for (int i = 0; i < 8; ++i)
+	{
+		size_t index = (offset - 1 - i) & 7;
+
+		unsigned int e0 = fifo[index][0];
+		unsigned int e1 = fifo[index][1];
+
+		if (e0 == a && e1 == b)
+			return (i << 2) | 0;
+		if (e0 == b && e1 == c)
+			return (i << 2) | 1;
+		if (e0 == c && e1 == a)
+			return (i << 2) | 2;
+	}
+
+	return -1;
+}
+
+static void pushEdgeFifo8(EdgeFifo8 fifo, unsigned int a, unsigned int b, size_t& offset)
+{
+	fifo[offset][0] = a;
+	fifo[offset][1] = b;
+	offset = (offset + 1) & 7;
+}
+
+static size_t encodeTriangles(unsigned char* codes, unsigned char* extra, const unsigned char* triangles, size_t triangle_count)
+{
+	EdgeFifo8 edgefifo;
+	memset(edgefifo, -1, sizeof(edgefifo));
+
+	size_t edgefifooffset = 0;
+
+	unsigned int next = 0;
+
+	// 4-bit triangle codes give us 16 options that we use as follows:
+	// 3*2 edge reuse (2 edges * 3 last triangles) * 2 next/explicit = 12 options
+	// 4 remaining options = next bits; 000, 001, 011, 111.
+	// triangles are rotated to make next bits line up.
+	memset(codes, 0, (triangle_count + 1) / 2);
+
+	static const int rotations[] = {0, 1, 2, 0, 1};
+
+	unsigned char* start = extra;
+
+	for (size_t i = 0; i < triangle_count; ++i)
+	{
+#if TRACE > 1
+		unsigned int last = next;
+#endif
+
+		int fer = getEdgeFifo8(edgefifo, triangles[i * 3 + 0], triangles[i * 3 + 1], triangles[i * 3 + 2], edgefifooffset);
+
+		if (fer >= 0 && (fer >> 2) < 6)
+		{
+			// note: getEdgeFifo8 implicitly rotates triangles by matching a/b to existing edge
+			const int* order = rotations + (fer & 3);
+
+			unsigned int a = triangles[i * 3 + order[0]], b = triangles[i * 3 + order[1]], c = triangles[i * 3 + order[2]];
+
+			int fec = (c == next) ? (next++, 0) : 1;
+
+#if TRACE > 1
+			printf("%3d+ | %3d %3d %3d | edge: e%d c%d\n", last, a, b, c, fer >> 2, fec);
+#endif
+
+			unsigned int code = (fer >> 2) * 2 + fec;
+
+			codes[i / 2] |= (unsigned char)(code << ((i & 1) * 4));
+
+			if (fec)
+				*extra++ = (unsigned char)c;
+
+			pushEdgeFifo8(edgefifo, c, b, edgefifooffset);
+			pushEdgeFifo8(edgefifo, a, c, edgefifooffset);
+		}
+		else
+		{
+			// rotate triangles to minimize the need for extra vertices
+			int rotation = rotateTriangle(triangles[i * 3 + 0], triangles[i * 3 + 1], triangles[i * 3 + 2]);
+			const int* order = rotations + rotation;
+
+			unsigned int a = triangles[i * 3 + order[0]], b = triangles[i * 3 + order[1]], c = triangles[i * 3 + order[2]];
+
+			// fe must be continuous: once a vertex is encoded with next, further vertices must also be encoded with next
+			int fea = (a == next && b == next + 1 && c == next + 2) ? (next++, 0) : 1;
+			int feb = (b == next && c == next + 1) ? (next++, 0) : 1;
+			int fec = (c == next) ? (next++, 0) : 1;
+
+			assert(fea == 1 || feb == 0);
+			assert(feb == 1 || fec == 0);
+
+#if TRACE > 1
+			printf("%3d+ | %3d %3d %3d | restart: %d%d%d\n", last, a, b, c, fea, feb, fec);
+#endif
+
+			unsigned int code = 12 + (fea + feb + fec);
+
+			codes[i / 2] |= (unsigned char)(code << ((i & 1) * 4));
+
+			if (fea)
+				*extra++ = (unsigned char)a;
+			if (feb)
+				*extra++ = (unsigned char)b;
+			if (fec)
+				*extra++ = (unsigned char)c;
+
+			pushEdgeFifo8(edgefifo, c, b, edgefifooffset);
+			pushEdgeFifo8(edgefifo, a, c, edgefifooffset);
+		}
+	}
+
+	return extra - start;
+}
+
+static size_t encodeVertices(unsigned char* ctrl, unsigned char* data, const unsigned int* vertices, size_t vertex_count)
+{
+	// grouped varint, 2 bit per value to indicate 0/1/2/4 byte deltas
+	memset(ctrl, 0, (vertex_count + 3) / 4);
+
+	unsigned char* start = data;
+
+	unsigned int last = 0;
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		unsigned int d = vertices[i] - last - 1;
+		unsigned int v = (d << 1) ^ (int(d) >> 31);
+
+		// 0/1/2/4 bytes per value
+		int code = v == 0 ? 0 : (v < 256 ? 1 : (v < 65536 ? 2 : 3));
+
+		if (code > 0)
+			*data++ = (unsigned char)(v & 0xff);
+		if (code > 1)
+			*data++ = (unsigned char)((v >> 8) & 0xff);
+
+		if (code > 2)
+		{
+			*data++ = (unsigned char)((v >> 16) & 0xff);
+			*data++ = (unsigned char)((v >> 24) & 0xff);
+		}
+
+		ctrl[i / 4] |= code << ((i % 4) * 2);
+
+		last = vertices[i];
+	}
+
+	return data - start;
+}
+
+#if defined(SIMD_FALLBACK) || (!defined(SIMD_SSE))
+static const unsigned char* decodeTriangles(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, const unsigned char* bound, size_t triangle_count)
+{
+	// branchlessly read next or extra vertex and advance pointers
+#define NEXT(var, ec) \
+	e = *extra; \
+	unsigned int var = (ec) ? e : next; \
+	extra += (ec), next += 1 - (ec)
+
+	unsigned int next = 0;
+	unsigned int fifo[3] = {}; // two edge fifo entries in one uint: 0xcbac
+
+	for (size_t i = 0; i < triangle_count; ++i)
+	{
+		if (extra > bound)
+			return NULL;
+
+		unsigned int code = (codes[i / 2] >> ((i & 1) * 4)) & 0xF;
+		unsigned int tri;
+
+		if (code < 12)
+		{
+			// reuse
+			unsigned int edge = fifo[code / 4];
+			edge >>= (code << 3) & 16; // shift by 16 if bit 1 is set (odd edge for each triangle)
+
+			// 0-1 extra vertices
+			unsigned int e;
+			NEXT(c, code & 1);
+
+			// repack triangle into edge format (0xcbac)
+			tri = ((edge & 0xff) << 16) | (edge & 0xff00) | c | (c << 24);
+		}
+		else
+		{
+			// restart
+			int fea = code > 12;
+			int feb = code > 13;
+			int fec = code > 14;
+
+			// 0-3 extra vertices
+			unsigned int e;
+			NEXT(a, fea);
+			NEXT(b, feb);
+			NEXT(c, fec);
+
+			// repack triangle into edge format (0xcbac)
+			tri = c | (a << 8) | (b << 16) | (c << 24);
+		}
+
+		// output triangle is stored without extra edge vertex (0xcbac => 0xcba)
+		triangles[i] = tri >> 8;
+
+		fifo[2] = fifo[1];
+		fifo[1] = fifo[0];
+		fifo[0] = tri;
+	}
+
+	return extra;
+
+#undef NEXT
+}
+
+static const unsigned char* decodeVertices(unsigned int* vertices, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count)
+{
+	unsigned int last = 0;
+
+	static const unsigned int kMasks[] = {0, 0xff, 0xffff, 0xffffffff};
+	static const unsigned char kLengths[] = {0, 1, 2, 4};
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		if (data > bound)
+			return NULL;
+
+		unsigned char code = (ctrl[i / 4] >> ((i % 4) * 2)) & 3;
+
+		// branchlessly read up to 4 bytes
+		unsigned int v = (data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24)) & kMasks[code];
+
+		// unzigzag + 1
+		unsigned int d = (v >> 1) ^ -int(v & 1);
+		unsigned int r = last + d + 1;
+
+		vertices[i] = r;
+
+		data += kLengths[code];
+		last = r;
+	}
+
+	return data;
+}
+
+static int decodeMeshlet(unsigned int* vertices, unsigned int* triangles, const unsigned char* codes, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count, size_t triangle_count)
+{
+	data = decodeVertices(vertices, ctrl, data, bound, vertex_count);
+	if (!data)
+		return -2;
+
+	data = decodeTriangles(triangles, codes, data, bound, triangle_count);
+	if (!data)
+		return -2;
+
+	return (data == bound) ? 0 : -3;
+}
+#endif
+
+#if defined(SIMD_SSE)
+// SIMD state is stored in a single 16b register as follows:
+// 0..5: 6 next extra bytes
+// 6..14: 9 bytes = 3 triangles worth of index data
+// 15: 'next' byte
+
+// upon reading each triangle pair we need to transform this state such that the 9 bytes with triangle data contain the newly decoded triangles,
+// which is a permutation of original state modulo per-element additions
+// this transform can be chained to decode second triangle from original state; we create tables for 256 combinations of two 4-bit triangle codes
+// the actual decoding becomes shuffle+add per triangle pair, plus management of extra bytes
+static unsigned char kDecodeTableMasks[256][16];
+static unsigned char kDecodeTableExtra[256];
+
+// for SIMD vertex decoding we need to unpack 4 values with 0-4 bytes in each
+// this can be done with a single control-dependent shuffle per group
+static unsigned char kDecodeTableVerts[256][16];
+static unsigned char kDecodeTableLength[256];
+
+static bool decodeBuildTables()
+{
+#define NEXT(var, ec) \
+	shuf[var] = (ec) ? (unsigned char)extra : 15; \
+	next[var] = (ec) ? 0 : (unsigned char)nextoff; \
+	extra += (ec), nextoff += 1 - (ec)
+
+	// check for SSE4.1 support if we have a fallback path
+#if defined(SIMD_SSE) && defined(SIMD_FALLBACK)
+	int cpuinfo[4] = {};
+#ifdef _MSC_VER
+	__cpuid(cpuinfo, 1);
+#else
+	__cpuid(1, cpuinfo[0], cpuinfo[1], cpuinfo[2], cpuinfo[3]);
+#endif
+	// bit 19 = SSE4.1
+	if ((cpuinfo[2] & (1 << 19)) == 0)
+		return false;
+#endif
+
+	// fill triangle decoding tables for each combination of two triangle codes
+	for (int code = 0; code < 256; ++code)
+	{
+		unsigned char shuf[16] = {};
+		unsigned char next[16] = {};
+		int extra = 0;
+		int nextoff = 0;
+
+		// state 0..5 will be refilled every iteration, so we ignore that
+		// state 6..8 will always contain the last decoded triangle because every triangle shifts fifo equally, so we can decode it independently
+		shuf[6] = 12;
+		shuf[7] = 13;
+		shuf[8] = 14;
+
+		// state 15 will contain next (potentially incremented a few times)
+		shuf[15] = 15;
+
+		// state 9..11 will contain the first decoded triangle (tri0), which can refer to extra/next and the original triangle history
+		// state 12..14 will contain the second decoded triangle (tri1); when decoding edge reuse, we need to handle edge 0/1 specially as it was just decoded earlier
+		for (int k = 0; k < 2; ++k)
+		{
+			int tri = (code >> (k * 4)) & 0xf;
+
+			if (tri < 12)
+			{
+				if (k == 1 && tri / 4 == 0)
+				{
+					// we need to decode one of two edges from the triangle we just decoded earlier
+					// for that we simply need to copy shuf/next values for the two decoded indices
+					shuf[9 + k * 3] = shuf[9 + ((tri & 2) ? 2 : 0)];
+					next[9 + k * 3] = next[9 + ((tri & 2) ? 2 : 0)];
+
+					shuf[10 + k * 3] = shuf[9 + ((tri & 2) ? 1 : 2)];
+					next[10 + k * 3] = next[9 + ((tri & 2) ? 1 : 2)];
+				}
+				else
+				{
+					// reuse: edge comes from the history based on edge index
+					// note: we reuse with an offset because last triangle in the original history was consumed by tri0
+					int trioff = 6 + k * 3 + (2 - tri / 4) * 3;
+
+					// edge cb or ac
+					shuf[9 + k * 3] = (unsigned char)(trioff + ((tri & 2) ? 2 : 0));
+					shuf[10 + k * 3] = (unsigned char)(trioff + ((tri & 2) ? 1 : 2));
+				}
+
+				// third vertex is either next or comes from extra
+				NEXT(11 + k * 3, tri & 1);
+			}
+			else
+			{
+				// restart: three vertices, each comes from next or extra
+				int fea = tri > 12;
+				int feb = tri > 13;
+				int fec = tri > 14;
+
+				NEXT(9 + k * 3, fea);
+				NEXT(10 + k * 3, feb);
+				NEXT(11 + k * 3, fec);
+			}
+		}
+
+		// next needs to advance
+		next[15] = (unsigned char)nextoff;
+
+		// next[0..8] = 0 trivially (never written to); next[9] must also be 0 because nextoff is 0 initially
+		// shuf[0..5] is not used, which allows us to pack next[10..15] + shuf[6..15] into a single 16-byte entry
+		assert(next[9] == 0);
+		memcpy(&kDecodeTableMasks[code][0], &next[10], 6);
+		memcpy(&kDecodeTableMasks[code][6], &shuf[6], 10);
+		kDecodeTableExtra[code] = (unsigned char)extra;
+	}
+
+	// fill vertex decoding tables for each combination of four vertex references
+	for (unsigned int i = 0; i < 256; ++i)
+	{
+		unsigned char shuf[16] = {};
+		int offset = 0;
+
+		for (int k = 0; k < 4; ++k)
+		{
+			int code = (i >> (k * 2)) & 3;
+			int length = (code == 3) ? 4 : code; // 0/1/2/4 bytes
+
+			shuf[k * 4 + 0] = (length > 0) ? (unsigned char)(offset + 0) : 0x80;
+			shuf[k * 4 + 1] = (length > 1) ? (unsigned char)(offset + 1) : 0x80;
+			shuf[k * 4 + 2] = (length > 2) ? (unsigned char)(offset + 2) : 0x80;
+			shuf[k * 4 + 3] = (length > 3) ? (unsigned char)(offset + 3) : 0x80;
+
+			offset += length;
+		}
+
+		memcpy(kDecodeTableVerts[i], shuf, sizeof(shuf));
+		kDecodeTableLength[i] = (unsigned char)offset;
+	}
+
+	return true;
+
+#undef NEXT
+}
+
+static bool gDecodeTablesInitialized = decodeBuildTables();
+#endif
+
+#if defined(SIMD_SSE)
+SIMD_TARGET
+static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, const unsigned char* bound, size_t triangle_count)
+{
+	// 0..5: 6 next extra bytes
+	// 6..14: 9 bytes = 3 triangles worth of index data
+	// 15: 'next' byte
+	__m128i state = _mm_setzero_si128();
+
+	__m128i repack = _mm_setr_epi8(9, 10, 11, -1, 12, 13, 14, -1, 0, 0, 0, 0, 0, 0, 0, 0);
+
+	for (size_t i = 0; i < triangle_count; i += 2)
+	{
+		unsigned int code = *codes++;
+
+		if (extra > bound)
+			return NULL;
+
+		int extoff = kDecodeTableExtra[code];
+
+		__m128i shuf = _mm_loadu_si128(reinterpret_cast<const __m128i*>(kDecodeTableMasks[code]));
+		__m128i next = _mm_slli_si128(shuf, 10);
+
+		// patch first 6 bytes with current extra
+		__m128i ext = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(extra));
+		state = _mm_blend_epi16(state, ext, 7);
+
+		// roll state forward
+		state = _mm_add_epi8(_mm_shuffle_epi8(state, shuf), next);
+
+		// copy 6 bytes of new triangle data into output, formatted as 8 bytes with 0 padding
+		// safe to write 2 triangles as caller provides padded output buffer
+		__m128i tri4 = _mm_shuffle_epi8(state, repack);
+		_mm_storel_epi64(reinterpret_cast<__m128i*>(&triangles[i]), tri4);
+
+		extra += extoff;
+	}
+
+	return extra;
+}
+
+SIMD_TARGET static const unsigned char* decodeVerticesSimd(unsigned int* vertices, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count)
+{
+	__m128i last = _mm_setzero_si128();
+
+	for (size_t i = 0; i < vertex_count; i += 4)
+	{
+		unsigned char code = *ctrl++;
+
+		if (data > bound)
+			return NULL;
+
+		__m128i word = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data));
+		__m128i shuf = _mm_loadu_si128(reinterpret_cast<const __m128i*>(kDecodeTableVerts[code]));
+
+		__m128i v = _mm_shuffle_epi8(word, shuf);
+
+		// unzigzag+1
+		__m128i xl = _mm_sub_epi32(_mm_setzero_si128(), _mm_and_si128(v, _mm_set1_epi32(1)));
+		__m128i xr = _mm_srli_epi32(v, 1);
+		__m128i x = _mm_add_epi32(_mm_xor_si128(xl, xr), _mm_set1_epi32(1));
+
+		// prefix sum
+		x = _mm_add_epi32(x, _mm_slli_si128(x, 8));
+		x = _mm_add_epi32(x, _mm_slli_si128(x, 4));
+		x = _mm_add_epi32(x, _mm_shuffle_epi32(last, 0xff));
+
+		// safe to write 4 vertices as caller provides padded output buffer
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(&vertices[i]), x);
+
+		data += kDecodeTableLength[code];
+		last = x;
+	}
+
+	return data;
+}
+
+SIMD_TARGET static int decodeMeshletSimd(unsigned int* vertices, unsigned int* triangles, const unsigned char* codes, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count, size_t triangle_count)
+{
+	assert(gDecodeTablesInitialized);
+	(void)gDecodeTablesInitialized;
+
+	// decodes 4 vertices at a time; last group may be partial, but:
+	// - we can write 4 vertices to the output because the caller has to provide output buffers aligned to 4 elements
+	// - the remaining control data is 0 in valid encodings so data will not be advanced beyond bound
+	data = decodeVerticesSimd(vertices, ctrl, data, bound, vertex_count);
+	if (!data)
+		return -2;
+
+	// decodes 2 triangles at a time; last group may be partial, but:
+	// - we can write 2 triangles to the output because the caller has to provide output buffers aligned to 4 elements
+	// - the remaining code data is 0 in valid encodings so extra will not be advanced beyond bound
+	data = decodeTrianglesSimd(triangles, codes, data, bound, triangle_count);
+	if (!data)
+		return -2;
+
+	return (data == bound) ? 0 : -3;
+}
+#endif
+
+} // namespace meshopt
+
+size_t meshopt_encodeMeshletBound(size_t max_vertices, size_t max_triangles)
+{
+	size_t codes_size = (max_triangles + 1) / 2;
+	size_t extra_size = max_triangles * 3;
+
+	size_t ctrl_size = (max_vertices + 3) / 4;
+	size_t data_size = max_vertices * 4;
+
+	size_t gap_size = (codes_size + ctrl_size < 16) ? 16 - (codes_size + ctrl_size) : 0;
+
+	return codes_size + extra_size + ctrl_size + data_size + gap_size;
+}
+
+size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const unsigned int* vertices, size_t vertex_count, const unsigned char* triangles, size_t triangle_count)
+{
+	using namespace meshopt;
+
+	assert(triangle_count <= 256 && vertex_count <= 256);
+
+	// 4 bits per triangle + up to three bytes of extra data
+	unsigned char codes[256 / 2];
+	unsigned char extra[256 * 3];
+	size_t codes_size = (triangle_count + 1) / 2;
+	size_t extra_size = encodeTriangles(codes, extra, triangles, triangle_count);
+	assert(extra_size <= sizeof(extra));
+
+	// 2 bits per vertex + up to 4 bytes of actual data
+	unsigned char ctrl[256 / 4];
+	unsigned char data[256 * 4];
+	size_t ctrl_size = (vertex_count + 3) / 4;
+	size_t data_size = encodeVertices(ctrl, data, vertices, vertex_count);
+	assert(data_size <= sizeof(data));
+
+	// we need to ensure that up to 16 bytes after extra+data are available for SIMD decoding
+	// to minimize overhead, we place fixed-size codes+control at the end of the buffer
+	size_t gap_size = (codes_size + ctrl_size < 16) ? 16 - (codes_size + ctrl_size) : 0;
+
+	size_t result = codes_size + extra_size + ctrl_size + data_size + gap_size;
+
+	if (result > buffer_size)
+		return 0;
+
+	// variable-size data first
+	memcpy(buffer, data, data_size);
+	buffer += data_size;
+	memcpy(buffer, extra, extra_size);
+	buffer += extra_size;
+
+	// gap (for accelerated decoding) separates variable-size and fixed-size data
+	memset(buffer, 0, gap_size);
+	buffer += gap_size;
+
+	// fixed-size data last; it can be located from buffer end during decoding
+	memcpy(buffer, codes, codes_size);
+	buffer += codes_size;
+	memcpy(buffer, ctrl, ctrl_size);
+	buffer += ctrl_size;
+
+#if TRACE > 1
+	printf("extra:");
+	for (size_t i = 0; i < extra_size; ++i)
+		printf(" %d", extra[i]);
+	printf("\n");
+
+	unsigned int minv = ~0u;
+	for (size_t i = 0; i < vertex_count; ++i)
+		minv = minv < vertices[i] ? minv : vertices[i];
+
+	printf("vertices: [%d+]", minv);
+	for (size_t i = 0; i < vertex_count; ++i)
+		printf(" %d", vertices[i] - minv);
+	printf("\n");
+#endif
+
+#if TRACE
+	printf("stats: %d vertices, %d triangles => %d bytes (triangles: %d codes, %d extra; vertices: %d control, %d data; %d gap)\n",
+	    int(vertex_count), int(triangle_count), int(result),
+	    int(codes_size), int(extra_size), int(ctrl_size), int(data_size), int(gap_size));
+#endif
+
+	return result;
+}
+
+int meshopt_decodeMeshlet(unsigned int* vertices, size_t vertex_count, unsigned int* triangles, size_t triangle_count, const unsigned char* buffer, size_t buffer_size)
+{
+	using namespace meshopt;
+
+	// layout must match encoding
+	size_t codes_size = (triangle_count + 1) / 2;
+	size_t ctrl_size = (vertex_count + 3) / 4;
+	size_t gap_size = (codes_size + ctrl_size < 16) ? 16 - (codes_size + ctrl_size) : 0;
+
+	if (buffer_size < codes_size + ctrl_size + gap_size)
+		return -2;
+
+	const unsigned char* end = buffer + buffer_size;
+	const unsigned char* ctrl = end - ctrl_size;
+	const unsigned char* codes = ctrl - codes_size;
+	const unsigned char* data = buffer;
+
+	// gap ensures we have at least 16 bytes available after bound; this allows SIMD decoders to over-read safely
+	const unsigned char* bound = codes - gap_size;
+	assert(bound >= buffer && bound + 16 <= buffer + buffer_size);
+
+#if defined(SIMD_FALLBACK)
+	return (gDecodeTablesInitialized ? decodeMeshletSimd : decodeMeshlet)(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count);
+#elif defined(SIMD_SSE)
+	return decodeMeshletSimd(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count);
+#else
+	return decodeMeshlet(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count);
+#endif
+}
+
+#undef SIMD_SSE
+#undef SIMD_FALLBACK
+#undef SIMD_TARGET

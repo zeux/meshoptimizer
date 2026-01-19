@@ -760,6 +760,118 @@ void encodeIndexSequence(const std::vector<unsigned int>& data, size_t vertex_co
 	    (double(result.size() * 4) / 1e9) / (end - middle));
 }
 
+void encodeMeshlets(const Mesh& mesh, size_t max_vertices, size_t max_triangles, bool reorder = true)
+{
+	size_t max_meshlets = meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles);
+	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
+	std::vector<unsigned int> meshlet_vertices(mesh.indices.size());
+	std::vector<unsigned char> meshlet_triangles(mesh.indices.size());
+
+	meshlets.resize(meshopt_buildMeshlets(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, max_triangles, 0.f));
+
+	if (meshlets.size())
+	{
+		const meshopt_Meshlet& last = meshlets.back();
+
+		// this is an example of how to trim the vertex/triangle arrays when copying data out to GPU storage
+		meshlet_vertices.resize(last.vertex_offset + last.vertex_count);
+		meshlet_triangles.resize(last.triangle_offset + last.triangle_count * 3);
+
+		// TODO: over-allocate meshlet_vertices to multiple of 3 to make meshopt_optimizeVertexFetch below work without assertions
+		meshlet_vertices.resize((meshlet_vertices.size() + 2) / 3 * 3);
+	}
+
+	std::vector<unsigned char> cbuf(meshopt_encodeMeshletBound(max_vertices, max_triangles));
+
+	// optimize each meshlet for locality; this is important for performance, and critical for good compression
+	for (size_t i = 0; i < meshlets.size(); ++i)
+		meshopt_optimizeMeshlet(&meshlet_vertices[meshlets[i].vertex_offset], &meshlet_triangles[meshlets[i].triangle_offset], meshlets[i].triangle_count, meshlets[i].vertex_count);
+
+	// optimize the order of vertex references within each meshlet and globally; this is valuable for access locality and critical for compression of vertex references
+	// note that this reorders the vertex buffer too, so if a traditional index buffer is required it would need to be reconstructed from the meshlet data for optimal locality
+	std::vector<Vertex> vertices = mesh.vertices;
+	if (reorder)
+		meshopt_optimizeVertexFetch(&vertices[0], &meshlet_vertices[0], meshlet_vertices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex));
+
+	size_t mbst = 0;
+
+	std::vector<unsigned char> packed;
+
+	for (size_t i = 0; i < meshlets.size(); ++i)
+	{
+		const meshopt_Meshlet& meshlet = meshlets[i];
+
+		size_t mbs = meshopt_encodeMeshlet(&cbuf[0], cbuf.size(), &meshlet_vertices[meshlet.vertex_offset], meshlet.vertex_count, &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count);
+		assert(mbs > 0);
+
+		packed.push_back((unsigned char)meshlet.vertex_count);
+		packed.push_back((unsigned char)meshlet.triangle_count);
+		packed.push_back((unsigned char)(mbs & 0xff));
+		packed.push_back((unsigned char)((mbs >> 8) & 0xff));
+		packed.insert(packed.end(), &cbuf[0], &cbuf[mbs]);
+
+		unsigned int rv[256];
+		unsigned int rt[256];
+		int rc = meshopt_decodeMeshlet(rv, meshlet.vertex_count, rt, meshlet.triangle_count, &cbuf[0], mbs);
+		assert(rc == 0);
+
+		for (size_t j = 0; j < meshlet.vertex_count; ++j)
+			assert(rv[j] == meshlet_vertices[meshlet.vertex_offset + j]);
+
+		for (size_t j = 0; j < meshlet.triangle_count; ++j)
+		{
+			unsigned int a = meshlet_triangles[meshlet.triangle_offset + j * 3 + 0];
+			unsigned int b = meshlet_triangles[meshlet.triangle_offset + j * 3 + 1];
+			unsigned int c = meshlet_triangles[meshlet.triangle_offset + j * 3 + 2];
+
+			unsigned int abc = (a << 0) | (b << 8) | (c << 16);
+			unsigned int bca = (b << 0) | (c << 8) | (a << 16);
+			unsigned int cba = (c << 0) | (a << 8) | (b << 16);
+
+			assert(rt[j] == abc || rt[j] == bca || rt[j] == cba);
+		}
+
+		mbst += mbs;
+	}
+
+	size_t mbc = compress(packed);
+
+	printf("MeshletCodec (%d/%d): %d meshlets, %d bytes/meshlet; %d bytes, %.1f bits/triangle\n",
+	    int(max_vertices), int(max_triangles),
+	    int(meshlets.size()),
+	    int(mbst / meshlets.size()),
+	    int(mbst), double(mbst * 8) / double(mesh.indices.size() / 3));
+	printf("MeshletCodec (%d/%d, packed): %d bytes/meshlet, %.1f bits/triangle; post-deflate: %d bytes/meshlet, %.1f bits/triangle)\n",
+	    int(max_vertices), int(max_triangles),
+	    int(packed.size() / meshlets.size()), double(packed.size() * 8) / double(mesh.indices.size() / 3),
+	    int(mbc / meshlets.size()), double(mbc * 8) / double(mesh.indices.size() / 3));
+
+#if !TRACE
+	double mbtime = 0;
+
+	for (int i = 0; i < 10; ++i)
+	{
+		unsigned int rv[256];
+		unsigned int rt[256];
+		double t0 = timestamp();
+		unsigned char* p = &packed[0];
+		for (size_t j = 0; j < meshlets.size(); ++j)
+		{
+			size_t size = p[2] | (p[3] << 8);
+			meshopt_decodeMeshlet(rv, p[0], rt, p[1], p + 4, size);
+			p += 4 + size;
+		}
+		double t1 = timestamp();
+
+		mbtime = (mbtime == 0 || t1 - t0 < mbtime) ? (t1 - t0) : mbtime;
+	}
+
+	printf("MeshletCodec (%d/%d, packed): decode time %.3f msec, %.3fB tri/sec, %.1f ns/meshlet\n",
+	    int(max_vertices), int(max_triangles),
+	    mbtime * 1000, double(mesh.indices.size() / 3) / 1e9 / mbtime, mbtime * 1e9 / double(meshlets.size()));
+#endif
+}
+
 template <typename PV>
 void packVertex(const Mesh& mesh, const char* pvn)
 {
@@ -1425,6 +1537,8 @@ void process(const char* path)
 	encodeVertex<PackedVertex>(copy, "");
 	encodeVertex<PackedVertexOct>(copy, "O");
 
+	encodeMeshlets(mesh, 64, 96);
+
 	simplify(mesh);
 	simplify(mesh, 0.1f, meshopt_SimplifyPrune);
 	simplifyAttr(mesh);
@@ -1453,7 +1567,9 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	simplifyUpdate(mesh, 0.1f, meshopt_SimplifyPrune | meshopt_SimplifyPermissive);
+	encodeMeshlets(mesh, 32, 48);
+	encodeMeshlets(mesh, 64, 64);
+	encodeMeshlets(mesh, 64, 96);
 }
 
 void processNanite(const char* path)

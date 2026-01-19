@@ -43,6 +43,32 @@ void fuzzRoundtrip(const uint8_t* data, size_t size, size_t stride, int level)
 	free(encoded);
 }
 
+void fuzzRoundtripMeshlet(const uint8_t* data, size_t size)
+{
+	size_t triangle_count = size / 3;
+	if (triangle_count > 256)
+		triangle_count = 256;
+
+	unsigned char buf[4096];
+	size_t enc = meshopt_encodeMeshlet(buf, sizeof(buf), NULL, 0, reinterpret_cast<const unsigned char*>(data), triangle_count);
+	assert(enc > 0);
+
+	unsigned int rt[256];
+	int rc = meshopt_decodeMeshlet(NULL, 0, rt, triangle_count, buf, enc);
+	assert(rc == 0);
+
+	for (size_t i = 0; i < triangle_count; ++i)
+	{
+		unsigned char a = data[i * 3 + 0], b = data[i * 3 + 1], c = data[i * 3 + 2];
+
+		unsigned int abc = (a << 0) | (b << 8) | (c << 16);
+		unsigned int bca = (b << 0) | (c << 8) | (a << 16);
+		unsigned int cba = (c << 0) | (a << 8) | (b << 16);
+
+		assert(rt[i] == abc || rt[i] == bca || rt[i] == cba);
+	}
+}
+
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 {
 	// decodeIndexBuffer supports 2 and 4-byte indices
@@ -72,6 +98,16 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 	fuzzRoundtrip(data, size, 16, level);
 	fuzzRoundtrip(data, size, 24, level);
 	fuzzRoundtrip(data, size, 32, level);
+
+	// validate that decodeMeshlet works on untrusted data
+	if (size > 2)
+	{
+		unsigned int rt[256], rv[256];
+		meshopt_decodeMeshlet(rt, data[0] + 1, rv, data[1] + 1, reinterpret_cast<const unsigned char*>(data + 2), size - 2);
+	}
+
+	// validate that index data roundtrips in meshlet encoding modulo rotation
+	fuzzRoundtripMeshlet(data, size);
 
 	return 0;
 }
