@@ -619,10 +619,10 @@ size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const un
 	buffer += gap_size;
 
 	// fixed-size data last; it can be located from buffer end during decoding
-	memcpy(buffer, codes, codes_size);
-	buffer += codes_size;
 	memcpy(buffer, ctrl, ctrl_size);
 	buffer += ctrl_size;
+	memcpy(buffer, codes, codes_size);
+	buffer += codes_size;
 
 #if TRACE > 1
 	printf("extra:");
@@ -653,6 +653,8 @@ int meshopt_decodeMeshlet(unsigned int* vertices, size_t vertex_count, unsigned 
 {
 	using namespace meshopt;
 
+	assert(triangle_count <= 256 && vertex_count <= 256);
+
 	// layout must match encoding
 	size_t codes_size = (triangle_count + 1) / 2;
 	size_t ctrl_size = (vertex_count + 3) / 4;
@@ -662,12 +664,12 @@ int meshopt_decodeMeshlet(unsigned int* vertices, size_t vertex_count, unsigned 
 		return -2;
 
 	const unsigned char* end = buffer + buffer_size;
-	const unsigned char* ctrl = end - ctrl_size;
-	const unsigned char* codes = ctrl - codes_size;
+	const unsigned char* codes = end - codes_size;
+	const unsigned char* ctrl = codes - ctrl_size;
 	const unsigned char* data = buffer;
 
 	// gap ensures we have at least 16 bytes available after bound; this allows SIMD decoders to over-read safely
-	const unsigned char* bound = codes - gap_size;
+	const unsigned char* bound = ctrl - gap_size;
 	assert(bound >= buffer && bound + 16 <= buffer + buffer_size);
 
 #if defined(SIMD_FALLBACK)
