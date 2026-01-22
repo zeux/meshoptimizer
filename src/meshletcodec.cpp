@@ -186,7 +186,7 @@ static size_t encodeVertices(unsigned char* ctrl, unsigned char* data, const uns
 
 	unsigned char* start = data;
 
-	unsigned int last = 0;
+	unsigned int last = ~0u;
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
@@ -280,7 +280,7 @@ static const unsigned char* decodeTriangles(unsigned int* triangles, const unsig
 
 static const unsigned char* decodeVertices(unsigned int* vertices, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count)
 {
-	unsigned int last = 0;
+	unsigned int last = ~0u;
 
 	static const unsigned int kMasks[] = {0, 0xff, 0xffff, 0xffffffff};
 	static const unsigned char kLengths[] = {0, 1, 2, 4};
@@ -507,7 +507,7 @@ static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const u
 
 SIMD_TARGET static const unsigned char* decodeVerticesSimd(unsigned int* vertices, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count)
 {
-	__m128i last = _mm_setzero_si128();
+	__m128i last = _mm_set1_epi32(-1);
 
 	for (size_t i = 0; i < vertex_count; i += 4)
 	{
