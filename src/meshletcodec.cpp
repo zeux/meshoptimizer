@@ -574,26 +574,37 @@ static const unsigned char* decodeTrianglesSimd(unsigned char* triangles, const 
 {
 	__m128i state = _mm_setzero_si128();
 
-	size_t groups = triangle_count / 2;
+	// because the output buffer is guaranteed to have 32-bit aligned size available, we can optimize writes and tail processing
+	// instead of processing triangles 2 at a time, we process 2 *pairs* at a time (12-byte write) followed by a tail pair, if present
+	// if the number of triangles mod 4 is 3, we'd normally need to write 12k+9 bytes, but we can instead overwrite up to 3 bytes in the main loop
+	size_t groups = (triangle_count + 1) / 4;
 
 	// process all complete groups
 	for (size_t i = 0; i < groups; ++i)
 	{
-		unsigned char code = *codes++;
+		unsigned char code0 = *codes++;
+		unsigned char code1 = *codes++;
 
+		// each triangle pair reads <=6 bytes from extra, so two pairs need <=12 bytes and gap guarantees 16 byte of overread
 		if (extra > bound)
 			return NULL;
 
-		state = decodeTriangleGroup(state, code, extra);
+		state = decodeTriangleGroup(state, code0, extra);
 
-		// write 6 bytes of new triangle data into output
-		// TODO: we can't actually do an 8-byte write because we may not have padding if group count is even
-		__m128i r = _mm_srli_si128(state, 9);
-		_mm_storel_epi64(reinterpret_cast<__m128i*>(&triangles[i * 6]), r);
+		// write first decoded triangle and first index of second decoded triangle
+		__m128i r0 = _mm_srli_si128(state, 9);
+		*reinterpret_cast<unsigned int*>(&triangles[i * 12]) = _mm_cvtsi128_si32(r0);
+
+		state = decodeTriangleGroup(state, code1, extra);
+
+		// write last two indices of second decoded triangle that we didn't write above plus two new ones
+		// note that the second decoded triangle has shifted down to 6-8 bytes, hence shift by 7
+		__m128i r1 = _mm_srli_si128(state, 7);
+		_mm_storel_epi64(reinterpret_cast<__m128i*>(&triangles[i * 12 + 4]), r1);
 	}
 
-	// process a 1 triangle tail; to maintain the memory safety guarantee we have to write a 32-bit element
-	if (triangle_count & 1)
+	// process a 1-2 triangle tail; to maintain the memory safety guarantee we have to write a 32-bit element
+	if (size_t((triangle_count & 3) - 1) < 2)
 	{
 		unsigned char code = *codes++;
 
@@ -602,10 +613,14 @@ static const unsigned char* decodeTrianglesSimd(unsigned char* triangles, const 
 
 		state = decodeTriangleGroup(state, code, extra);
 
-		unsigned int* tail = reinterpret_cast<unsigned int*>(&triangles[(triangle_count & ~1) * 3]);
+		unsigned int* tail = reinterpret_cast<unsigned int*>(&triangles[(triangle_count & ~3) * 3]);
 
 		__m128i r = _mm_srli_si128(state, 9);
-		*tail = _mm_cvtsi128_si32(r);
+
+		if ((triangle_count & 3) == 1)
+			*tail = _mm_cvtsi128_si32(r);
+		else
+			_mm_storel_epi64(reinterpret_cast<__m128i*>(tail), r);
 	}
 
 	return extra;
@@ -774,9 +789,7 @@ SIMD_TARGET static int decodeMeshletSimd(void* vertices, void* triangles, const 
 	assert(gDecodeTablesInitialized);
 	(void)gDecodeTablesInitialized;
 
-	// decodes 4 vertices at a time; last group may be partial, but:
-	// - we can write 4 vertices to the output because the caller has to provide output buffers aligned to 4 elements
-	// - the remaining control data is 0 in valid encodings so data will not be advanced beyond bound
+	// decodes 4 vertices at a time with tail processing; writes up to align(vertex_size * vertex_count, 4)
 	if (vertex_size == 4)
 		data = decodeVerticesSimd(static_cast<unsigned int*>(vertices), ctrl, data, bound, vertex_count);
 	else
@@ -784,9 +797,7 @@ SIMD_TARGET static int decodeMeshletSimd(void* vertices, void* triangles, const 
 	if (!data)
 		return -2;
 
-	// decodes 2 triangles at a time; last group may be partial, but:
-	// - we can write 2 triangles to the output because the caller has to provide output buffers aligned to 4 elements
-	// - the remaining code data is 0 in valid encodings so extra will not be advanced beyond bound
+	// decodes 2/4 triangles at a time with tail processing; writes up to align(triangle_size * triangle_count, 4)
 	if (triangle_size == 4)
 		data = decodeTrianglesSimd(static_cast<unsigned int*>(triangles), codes, data, bound, triangle_count);
 	else
