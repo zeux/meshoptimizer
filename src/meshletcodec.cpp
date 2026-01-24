@@ -216,7 +216,21 @@ static size_t encodeVertices(unsigned char* ctrl, unsigned char* data, const uns
 }
 
 #if defined(SIMD_FALLBACK) || (!defined(SIMD_SSE))
-static const unsigned char* decodeTriangles(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, const unsigned char* bound, size_t triangle_count)
+inline void writeTriangle(unsigned int* triangles, size_t i, unsigned int fifo)
+{
+	// output triangle is stored without extra edge vertex (0xcbac => 0xcba)
+	triangles[i] = fifo >> 8;
+}
+
+inline void writeTriangle(unsigned char* triangles, size_t i, unsigned int fifo)
+{
+	triangles[i * 3 + 0] = (unsigned char)(fifo >> 8);
+	triangles[i * 3 + 1] = (unsigned char)(fifo >> 16);
+	triangles[i * 3 + 2] = (unsigned char)(fifo >> 24);
+}
+
+template <typename T>
+static const unsigned char* decodeTriangles(T* triangles, const unsigned char* codes, const unsigned char* extra, const unsigned char* bound, size_t triangle_count)
 {
 	// branchlessly read next or extra vertex and advance pointers
 #define NEXT(var, ec) \
@@ -265,8 +279,7 @@ static const unsigned char* decodeTriangles(unsigned int* triangles, const unsig
 			tri = c | (a << 8) | (b << 16) | (c << 24);
 		}
 
-		// output triangle is stored without extra edge vertex (0xcbac => 0xcba)
-		triangles[i] = tri >> 8;
+		writeTriangle(triangles, i, tri);
 
 		fifo[2] = fifo[1];
 		fifo[1] = fifo[0];
@@ -278,7 +291,8 @@ static const unsigned char* decodeTriangles(unsigned int* triangles, const unsig
 #undef NEXT
 }
 
-static const unsigned char* decodeVertices(unsigned int* vertices, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count)
+template <typename V>
+static const unsigned char* decodeVertices(V* vertices, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count)
 {
 	unsigned int last = ~0u;
 
@@ -299,7 +313,7 @@ static const unsigned char* decodeVertices(unsigned int* vertices, const unsigne
 		unsigned int d = (v >> 1) ^ -int(v & 1);
 		unsigned int r = last + d + 1;
 
-		vertices[i] = r;
+		vertices[i] = V(r);
 
 		data += kLengths[code];
 		last = r;
@@ -310,14 +324,17 @@ static const unsigned char* decodeVertices(unsigned int* vertices, const unsigne
 
 static int decodeMeshlet(void* vertices, void* triangles, const unsigned char* codes, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count, size_t triangle_count, size_t vertex_size, size_t triangle_size)
 {
-	(void)vertex_size;
-	(void)triangle_size;
-
-	data = decodeVertices(static_cast<unsigned int*>(vertices), ctrl, data, bound, vertex_count);
+	if (vertex_size == 4)
+		data = decodeVertices(static_cast<unsigned int*>(vertices), ctrl, data, bound, vertex_count);
+	else
+		data = decodeVertices(static_cast<unsigned short*>(vertices), ctrl, data, bound, vertex_count);
 	if (!data)
 		return -2;
 
-	data = decodeTriangles(static_cast<unsigned int*>(triangles), codes, data, bound, triangle_count);
+	if (triangle_size == 4)
+		data = decodeTriangles(static_cast<unsigned int*>(triangles), codes, data, bound, triangle_count);
+	else
+		data = decodeTriangles(static_cast<unsigned char*>(triangles), codes, data, bound, triangle_count);
 	if (!data)
 		return -2;
 
@@ -660,8 +677,8 @@ int meshopt_decodeMeshlet(void* vertices, size_t vertex_count, size_t vertex_siz
 	using namespace meshopt;
 
 	assert(triangle_count <= 256 && vertex_count <= 256);
-	assert(vertex_size == 4);
-	assert(triangle_size == 4);
+	assert(vertex_size == 4 || vertex_size == 2);
+	assert(triangle_size == 4 || triangle_size == 1);
 
 	// layout must match encoding
 	size_t codes_size = (triangle_count + 1) / 2;
