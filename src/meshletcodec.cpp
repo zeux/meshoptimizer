@@ -572,6 +572,12 @@ static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const u
 SIMD_TARGET
 static const unsigned char* decodeTrianglesSimd(unsigned char* triangles, const unsigned char* codes, const unsigned char* extra, const unsigned char* bound, size_t triangle_count)
 {
+#ifdef __GNUC__
+	typedef int __attribute__((aligned(1))) unaligned_int;
+#else
+	typedef int unaligned_int;
+#endif
+
 	__m128i state = _mm_setzero_si128();
 
 	// because the output buffer is guaranteed to have 32-bit aligned size available, we can optimize writes and tail processing
@@ -593,7 +599,7 @@ static const unsigned char* decodeTrianglesSimd(unsigned char* triangles, const 
 
 		// write first decoded triangle and first index of second decoded triangle
 		__m128i r0 = _mm_srli_si128(state, 9);
-		*reinterpret_cast<unsigned int*>(&triangles[i * 12]) = _mm_cvtsi128_si32(r0);
+		*reinterpret_cast<unaligned_int*>(&triangles[i * 12]) = _mm_cvtsi128_si32(r0);
 
 		state = decodeTriangleGroup(state, code1, extra);
 
@@ -613,12 +619,12 @@ static const unsigned char* decodeTrianglesSimd(unsigned char* triangles, const 
 
 		state = decodeTriangleGroup(state, code, extra);
 
-		unsigned int* tail = reinterpret_cast<unsigned int*>(&triangles[(triangle_count & ~3) * 3]);
+		unsigned char* tail = &triangles[(triangle_count & ~3) * 3];
 
 		__m128i r = _mm_srli_si128(state, 9);
 
 		if ((triangle_count & 3) == 1)
-			*tail = _mm_cvtsi128_si32(r);
+			*reinterpret_cast<unaligned_int*>(tail) = _mm_cvtsi128_si32(r);
 		else
 			_mm_storel_epi64(reinterpret_cast<__m128i*>(tail), r);
 	}
@@ -718,6 +724,12 @@ SIMD_TARGET static const unsigned char* decodeVerticesSimd(unsigned int* vertice
 
 SIMD_TARGET static const unsigned char* decodeVerticesSimd(unsigned short* vertices, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count)
 {
+#ifdef __GNUC__
+	typedef int __attribute__((aligned(1))) unaligned_int;
+#else
+	typedef int unaligned_int;
+#endif
+
 	__m128i repack = _mm_setr_epi8(0, 1, 4, 5, 8, 9, 12, 13, 0, 0, 0, 0, 0, 0, 0, 0);
 
 	__m128i last = _mm_set1_epi32(-1);
@@ -752,8 +764,8 @@ SIMD_TARGET static const unsigned char* decodeVerticesSimd(unsigned short* verti
 
 		__m128i r = _mm_shuffle_epi8(last, repack);
 
-		int* tail = reinterpret_cast<int*>(&vertices[vertex_count & ~3]);
-		*tail = _mm_cvtsi128_si32(r);
+		unsigned short* tail = &vertices[vertex_count & ~3];
+		*reinterpret_cast<unaligned_int*>(tail) = _mm_cvtsi128_si32(r);
 	}
 
 	return data;
