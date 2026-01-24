@@ -519,8 +519,8 @@ static const unsigned char* decodeTrianglesRawSimd(unsigned int* triangles, cons
 
 		// copy 6 bytes of new triangle data into output, formatted as 8 bytes with 0 padding
 		// safe to write 2 triangles as caller provides padded output buffer
-		__m128i tri4 = _mm_shuffle_epi8(state, repack);
-		_mm_storel_epi64(reinterpret_cast<__m128i*>(&triangles[i]), tri4);
+		__m128i r = _mm_shuffle_epi8(state, repack);
+		_mm_storel_epi64(reinterpret_cast<__m128i*>(&triangles[i]), r);
 	}
 
 	return extra;
@@ -533,7 +533,10 @@ static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const u
 
 	__m128i state = _mm_setzero_si128();
 
-	for (size_t i = 0; i < triangle_count; i += 2)
+	size_t groups = triangle_count / 2;
+
+	// process all complete groups
+	for (size_t i = 0; i < groups; ++i)
 	{
 		unsigned char code = *codes++;
 
@@ -542,10 +545,25 @@ static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const u
 
 		state = decodeTriangleGroup(state, code, extra);
 
-		// copy 6 bytes of new triangle data into output, formatted as 8 bytes with 0 padding
-		// safe to write 2 triangles as caller provides padded output buffer
-		__m128i tri4 = _mm_shuffle_epi8(state, repack);
-		_mm_storel_epi64(reinterpret_cast<__m128i*>(&triangles[i]), tri4);
+		// write 6 bytes of new triangle data into output, formatted as 8 bytes with 0 padding
+		__m128i r = _mm_shuffle_epi8(state, repack);
+		_mm_storel_epi64(reinterpret_cast<__m128i*>(&triangles[i * 2]), r);
+	}
+
+	// process a 1 triangle tail; to maintain the memory safety guarantee we have to write a 32-bit element
+	if (triangle_count & 1)
+	{
+		unsigned char code = *codes++;
+
+		if (extra > bound)
+			return NULL;
+
+		state = decodeTriangleGroup(state, code, extra);
+
+		unsigned int* tail = &triangles[triangle_count & ~1];
+
+		__m128i r = _mm_shuffle_epi8(state, repack);
+		*tail = _mm_cvtsi128_si32(r);
 	}
 
 	return extra;
@@ -556,7 +574,10 @@ static const unsigned char* decodeTrianglesSimd(unsigned char* triangles, const 
 {
 	__m128i state = _mm_setzero_si128();
 
-	for (size_t i = 0; i < triangle_count; i += 2)
+	size_t groups = triangle_count / 2;
+
+	// process all complete groups
+	for (size_t i = 0; i < groups; ++i)
 	{
 		unsigned char code = *codes++;
 
@@ -565,10 +586,26 @@ static const unsigned char* decodeTrianglesSimd(unsigned char* triangles, const 
 
 		state = decodeTriangleGroup(state, code, extra);
 
-		// copy 6 bytes of new triangle data into output
-		// safe to write 2 triangles as caller provides padded output buffer
-		__m128i tri4 = _mm_srli_si128(state, 9);
-		_mm_storel_epi64(reinterpret_cast<__m128i*>(&triangles[i * 3]), tri4);
+		// write 6 bytes of new triangle data into output
+		// TODO: we can't actually do an 8-byte write because we may not have padding if group count is even
+		__m128i r = _mm_srli_si128(state, 9);
+		_mm_storel_epi64(reinterpret_cast<__m128i*>(&triangles[i * 6]), r);
+	}
+
+	// process a 1 triangle tail; to maintain the memory safety guarantee we have to write a 32-bit element
+	if (triangle_count & 1)
+	{
+		unsigned char code = *codes++;
+
+		if (extra > bound)
+			return NULL;
+
+		state = decodeTriangleGroup(state, code, extra);
+
+		unsigned int* tail = reinterpret_cast<unsigned int*>(&triangles[(triangle_count & ~1) * 3]);
+
+		__m128i r = _mm_srli_si128(state, 9);
+		*tail = _mm_cvtsi128_si32(r);
 	}
 
 	return extra;
