@@ -486,43 +486,67 @@ static bool gDecodeTablesInitialized = decodeBuildTables();
 
 #if defined(SIMD_SSE)
 SIMD_TARGET
+inline __m128i decodeTriangleGroup(__m128i state, unsigned char code, const unsigned char*& extra)
+{
+	__m128i shuf = _mm_loadu_si128(reinterpret_cast<const __m128i*>(kDecodeTableMasks[code]));
+	__m128i next = _mm_slli_si128(shuf, 10);
+
+	// patch first 6 bytes with current extra and roll state forward
+	__m128i ext = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(extra));
+	state = _mm_blend_epi16(state, ext, 7);
+	state = _mm_add_epi8(_mm_shuffle_epi8(state, shuf), next);
+
+	extra += kDecodeTableExtra[code];
+
+	return state;
+}
+
+SIMD_TARGET
 static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, const unsigned char* bound, size_t triangle_count)
 {
-	// 0..5: 6 next extra bytes
-	// 6..14: 9 bytes = 3 triangles worth of index data
-	// 15: 'next' byte
-	__m128i state = _mm_setzero_si128();
-
 	__m128i repack = _mm_setr_epi8(9, 10, 11, -1, 12, 13, 14, -1, 0, 0, 0, 0, 0, 0, 0, 0);
+
+	__m128i state = _mm_setzero_si128();
 
 	for (size_t i = 0; i < triangle_count; i += 2)
 	{
-		unsigned int code = *codes++;
+		unsigned char code = *codes++;
 
 		if (extra > bound)
 			return NULL;
 
-		int extoff = kDecodeTableExtra[code];
-
-		__m128i shuf = _mm_loadu_si128(reinterpret_cast<const __m128i*>(kDecodeTableMasks[code]));
-		__m128i next = _mm_slli_si128(shuf, 10);
-
-		// patch first 6 bytes with current extra
-		__m128i ext = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(extra));
-		state = _mm_blend_epi16(state, ext, 7);
-
-		// roll state forward
-		state = _mm_add_epi8(_mm_shuffle_epi8(state, shuf), next);
+		state = decodeTriangleGroup(state, code, extra);
 
 		// copy 6 bytes of new triangle data into output, formatted as 8 bytes with 0 padding
 		// safe to write 2 triangles as caller provides padded output buffer
 		__m128i tri4 = _mm_shuffle_epi8(state, repack);
 		_mm_storel_epi64(reinterpret_cast<__m128i*>(&triangles[i]), tri4);
-
-		extra += extoff;
 	}
 
 	return extra;
+}
+
+SIMD_TARGET
+inline __m128i decodeVertexGroup(__m128i last, unsigned char code, const unsigned char*& data)
+{
+	__m128i word = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data));
+	__m128i shuf = _mm_loadu_si128(reinterpret_cast<const __m128i*>(kDecodeTableVerts[code]));
+
+	__m128i v = _mm_shuffle_epi8(word, shuf);
+
+	// unzigzag+1
+	__m128i xl = _mm_sub_epi32(_mm_setzero_si128(), _mm_and_si128(v, _mm_set1_epi32(1)));
+	__m128i xr = _mm_srli_epi32(v, 1);
+	__m128i x = _mm_add_epi32(_mm_xor_si128(xl, xr), _mm_set1_epi32(1));
+
+	// prefix sum
+	x = _mm_add_epi32(x, _mm_slli_si128(x, 8));
+	x = _mm_add_epi32(x, _mm_slli_si128(x, 4));
+	x = _mm_add_epi32(x, _mm_shuffle_epi32(last, 0xff));
+
+	data += kDecodeTableLength[code];
+
+	return x;
 }
 
 SIMD_TARGET static const unsigned char* decodeVerticesSimd(unsigned int* vertices, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count)
@@ -536,26 +560,10 @@ SIMD_TARGET static const unsigned char* decodeVerticesSimd(unsigned int* vertice
 		if (data > bound)
 			return NULL;
 
-		__m128i word = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data));
-		__m128i shuf = _mm_loadu_si128(reinterpret_cast<const __m128i*>(kDecodeTableVerts[code]));
-
-		__m128i v = _mm_shuffle_epi8(word, shuf);
-
-		// unzigzag+1
-		__m128i xl = _mm_sub_epi32(_mm_setzero_si128(), _mm_and_si128(v, _mm_set1_epi32(1)));
-		__m128i xr = _mm_srli_epi32(v, 1);
-		__m128i x = _mm_add_epi32(_mm_xor_si128(xl, xr), _mm_set1_epi32(1));
-
-		// prefix sum
-		x = _mm_add_epi32(x, _mm_slli_si128(x, 8));
-		x = _mm_add_epi32(x, _mm_slli_si128(x, 4));
-		x = _mm_add_epi32(x, _mm_shuffle_epi32(last, 0xff));
+		last = decodeVertexGroup(last, code, data);
 
 		// safe to write 4 vertices as caller provides padded output buffer
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(&vertices[i]), x);
-
-		data += kDecodeTableLength[code];
-		last = x;
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(&vertices[i]), last);
 	}
 
 	return data;
