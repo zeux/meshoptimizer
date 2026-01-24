@@ -604,7 +604,6 @@ SIMD_TARGET static const unsigned char* decodeVerticesRawSimd(unsigned int* vert
 	for (size_t i = 0; i < vertex_count; i += 4)
 	{
 		unsigned char code = *ctrl++;
-
 		if (data > bound)
 			return NULL;
 
@@ -621,7 +620,22 @@ SIMD_TARGET static const unsigned char* decodeVerticesSimd(unsigned int* vertice
 {
 	__m128i last = _mm_set1_epi32(-1);
 
-	for (size_t i = 0; i < vertex_count; i += 4)
+	size_t groups = vertex_count / 4;
+
+	// process all complete groups
+	for (size_t i = 0; i < groups; ++i)
+	{
+		unsigned char code = *ctrl++;
+		if (data > bound)
+			return NULL;
+
+		last = decodeVertexGroup(last, code, data);
+
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(&vertices[i * 4]), last);
+	}
+
+	// process a 1-3 vertex tail; to maintain the memory safety guarantee we have to write individual elements
+	if (vertex_count & 3)
 	{
 		unsigned char code = *ctrl++;
 
@@ -630,8 +644,21 @@ SIMD_TARGET static const unsigned char* decodeVerticesSimd(unsigned int* vertice
 
 		last = decodeVertexGroup(last, code, data);
 
-		// safe to write 4 vertices as caller provides padded output buffer
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(&vertices[i]), last);
+		unsigned int* tail = &vertices[vertex_count & ~3];
+
+		switch (vertex_count & 3)
+		{
+		case 3:
+			tail[2] = _mm_extract_epi32(last, 2);
+			// fallthrough
+		case 2:
+			tail[1] = _mm_extract_epi32(last, 1);
+			// fallthrough
+		case 1:
+			tail[0] = _mm_extract_epi32(last, 0);
+			// fallthrough
+		default:;
+		}
 	}
 
 	return data;
@@ -643,7 +670,12 @@ SIMD_TARGET static const unsigned char* decodeVerticesSimd(unsigned short* verti
 
 	__m128i last = _mm_set1_epi32(-1);
 
-	for (size_t i = 0; i < vertex_count; i += 4)
+	// because the output buffer is guaranteed to have 32-bit aligned size available, we can simplify tail processing
+	// when the last group has 3 elements, we can process it in the main loop; the last element written will be last+1
+	size_t groups = (vertex_count + 1) / 4;
+
+	// process all complete groups
+	for (size_t i = 0; i < groups; ++i)
 	{
 		unsigned char code = *ctrl++;
 
@@ -652,9 +684,24 @@ SIMD_TARGET static const unsigned char* decodeVerticesSimd(unsigned short* verti
 
 		last = decodeVertexGroup(last, code, data);
 
-		// safe to write 4 vertices as caller provides padded output buffer
 		__m128i r = _mm_shuffle_epi8(last, repack);
-		_mm_storel_epi64(reinterpret_cast<__m128i*>(&vertices[i]), r);
+		_mm_storel_epi64(reinterpret_cast<__m128i*>(&vertices[i * 4]), r);
+	}
+
+	// process a 1-2 vertex tail; to maintain the memory safety guarantee we have to write a 32-bit element
+	if (size_t((vertex_count & 3) - 1) < 2)
+	{
+		unsigned char code = *ctrl++;
+
+		if (data > bound)
+			return NULL;
+
+		last = decodeVertexGroup(last, code, data);
+
+		__m128i r = _mm_shuffle_epi8(last, repack);
+
+		int* tail = reinterpret_cast<int*>(&vertices[vertex_count & ~3]);
+		*tail = _mm_cvtsi128_si32(r);
 	}
 
 	return data;
