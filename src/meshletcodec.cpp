@@ -19,7 +19,7 @@
 #endif
 
 // GCC 4.9+ and clang 3.8+ support targeting SIMD ISA from individual functions; we use a cpuid-based scalar fallback
-#if !defined(SIMD_SSE) && !defined(SIMD_AVX) && ((defined(__clang__) && __clang_major__ * 100 + __clang_minor__ >= 308) || (defined(__GNUC__) && __GNUC__ * 100 + __GNUC_MINOR__ >= 409)) && (defined(__i386__) || defined(__x86_64__))
+#if !defined(SIMD_SSE) && ((defined(__clang__) && __clang_major__ * 100 + __clang_minor__ >= 308) || (defined(__GNUC__) && __GNUC__ * 100 + __GNUC_MINOR__ >= 409)) && (defined(__i386__) || defined(__x86_64__))
 #define SIMD_SSE
 #define SIMD_FALLBACK
 #define SIMD_TARGET __attribute__((target("sse4.1")))
@@ -655,7 +655,8 @@ inline __m128i decodeVertexGroup(__m128i last, unsigned char code, const unsigne
 	return x;
 }
 
-SIMD_TARGET static const unsigned char* decodeVerticesRawSimd(unsigned int* vertices, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count)
+SIMD_TARGET
+static const unsigned char* decodeVerticesRawSimd(unsigned int* vertices, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count)
 {
 	__m128i last = _mm_set1_epi32(-1);
 
@@ -674,7 +675,8 @@ SIMD_TARGET static const unsigned char* decodeVerticesRawSimd(unsigned int* vert
 	return data;
 }
 
-SIMD_TARGET static const unsigned char* decodeVerticesSimd(unsigned int* vertices, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count)
+SIMD_TARGET
+static const unsigned char* decodeVerticesSimd(unsigned int* vertices, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count)
 {
 	__m128i last = _mm_set1_epi32(-1);
 
@@ -722,7 +724,8 @@ SIMD_TARGET static const unsigned char* decodeVerticesSimd(unsigned int* vertice
 	return data;
 }
 
-SIMD_TARGET static const unsigned char* decodeVerticesSimd(unsigned short* vertices, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count)
+SIMD_TARGET
+static const unsigned char* decodeVerticesSimd(unsigned short* vertices, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count)
 {
 #ifdef __GNUC__
 	typedef int __attribute__((aligned(1))) unaligned_int;
@@ -771,7 +774,8 @@ SIMD_TARGET static const unsigned char* decodeVerticesSimd(unsigned short* verti
 	return data;
 }
 
-SIMD_TARGET static int decodeMeshletRawSimd(void* vertices, void* triangles, const unsigned char* codes, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count, size_t triangle_count, size_t vertex_size, size_t triangle_size)
+SIMD_TARGET
+static int decodeMeshletRawSimd(void* vertices, void* triangles, const unsigned char* codes, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count, size_t triangle_count, size_t vertex_size, size_t triangle_size)
 {
 	(void)vertex_size;
 	(void)triangle_size;
@@ -796,7 +800,8 @@ SIMD_TARGET static int decodeMeshletRawSimd(void* vertices, void* triangles, con
 	return (data == bound) ? 0 : -3;
 }
 
-SIMD_TARGET static int decodeMeshletSimd(void* vertices, void* triangles, const unsigned char* codes, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count, size_t triangle_count, size_t vertex_size, size_t triangle_size)
+SIMD_TARGET
+static int decodeMeshletSimd(void* vertices, void* triangles, const unsigned char* codes, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count, size_t triangle_count, size_t vertex_size, size_t triangle_size)
 {
 	assert(gDecodeTablesInitialized);
 	(void)gDecodeTablesInitialized;
