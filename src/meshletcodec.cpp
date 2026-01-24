@@ -900,7 +900,7 @@ int meshopt_decodeMeshlet(void* vertices, size_t vertex_count, size_t vertex_siz
 
 	assert(triangle_count <= 256 && vertex_count <= 256);
 	assert(vertex_size == 4 || vertex_size == 2);
-	assert(triangle_size == 4 || triangle_size == 1);
+	assert(triangle_size == 4 || triangle_size == 3);
 
 	// layout must match encoding
 	size_t codes_size = (triangle_count + 1) / 2;

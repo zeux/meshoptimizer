@@ -1271,7 +1271,7 @@ inline int meshopt_decodeMeshlet(V* vertices, size_t vertex_count, T* triangles,
 	char types_valid[(sizeof(V) == 2 || sizeof(V) == 4) && (sizeof(T) == 1 || sizeof(T) == 4) ? 1 : -1];
 	(void)types_valid;
 
-	return meshopt_decodeMeshlet(vertices, vertex_count, sizeof(V), triangles, triangle_count, sizeof(T), buffer, buffer_size);
+	return meshopt_decodeMeshlet(vertices, vertex_count, sizeof(V), triangles, triangle_count, sizeof(T) == 1 ? 3 : 4, buffer, buffer_size);
 }
 
 inline size_t meshopt_encodeVertexBufferLevel(unsigned char* buffer, size_t buffer_size, const void* vertices, size_t vertex_count, size_t vertex_size, int level)
