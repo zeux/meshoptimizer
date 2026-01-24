@@ -43,6 +43,29 @@ void fuzzRoundtrip(const uint8_t* data, size_t size, size_t stride, int level)
 	free(encoded);
 }
 
+size_t align(size_t value, size_t alignment)
+{
+	return (value + alignment - 1) & ~(alignment - 1);
+}
+
+void fuzzDecodeMeshlet(size_t vertex_count, size_t triangle_count, const unsigned char* data, size_t size)
+{
+	// raw decoding: allowed to write align(count, 4) elements
+	unsigned int rt[256];
+	unsigned int rv[256];
+	meshopt_decodeMeshletRaw(rv + 256 - align(vertex_count, 4), vertex_count, rt + 256 - align(triangle_count, 4), triangle_count, data, size);
+
+	// regular decoding: allowed to write align(count * size, 4) bytes
+	// with variations for 3-byte triangles and 2-byte vertex references
+	unsigned short rsv[256];
+	unsigned char rbt[256 * 3];
+
+	meshopt_decodeMeshlet(rv + 256 - vertex_count, vertex_count, 4, rt + 256 - triangle_count, triangle_count, 4, data, size);
+	meshopt_decodeMeshlet(rsv + 256 - align(vertex_count, 2), vertex_count, 2, rt + 256 - triangle_count, triangle_count, 4, data, size);
+	meshopt_decodeMeshlet(rv + 256 - vertex_count, vertex_count, 4, rbt + 256 * 3 - align(triangle_count * 3, 4), triangle_count, 3, data, size);
+	meshopt_decodeMeshlet(rsv + 256 - align(vertex_count, 2), vertex_count, 2, rbt + 256 * 3 - align(triangle_count * 3, 4), triangle_count, 3, data, size);
+}
+
 void fuzzRoundtripMeshlet(const uint8_t* data, size_t size)
 {
 	size_t triangle_count = size / 3;
@@ -54,7 +77,7 @@ void fuzzRoundtripMeshlet(const uint8_t* data, size_t size)
 	assert(enc > 0);
 
 	unsigned int rt[256];
-	int rc = meshopt_decodeMeshlet(NULL, 0, rt, triangle_count, buf, enc);
+	int rc = meshopt_decodeMeshlet(static_cast<unsigned int*>(NULL), 0, rt, triangle_count, buf, enc);
 	assert(rc == 0);
 
 	for (size_t i = 0; i < triangle_count; ++i)
@@ -99,12 +122,9 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 	fuzzRoundtrip(data, size, 24, level);
 	fuzzRoundtrip(data, size, 32, level);
 
-	// validate that decodeMeshlet works on untrusted data
+	// validate that decodeMeshlet works on untrusted data and is memory safe within documented limits
 	if (size > 2)
-	{
-		unsigned int rt[256], rv[256];
-		meshopt_decodeMeshlet(rt, data[0] + 1, rv, data[1] + 1, reinterpret_cast<const unsigned char*>(data + 2), size - 2);
-	}
+		fuzzDecodeMeshlet(data[0] + 1, data[1] + 1, reinterpret_cast<const unsigned char*>(data + 2), size - 2);
 
 	// validate that index data roundtrips in meshlet encoding modulo rotation
 	fuzzRoundtripMeshlet(data, size);
