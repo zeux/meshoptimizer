@@ -502,6 +502,29 @@ inline __m128i decodeTriangleGroup(__m128i state, unsigned char code, const unsi
 }
 
 SIMD_TARGET
+inline __m128i decodeVertexGroup(__m128i last, unsigned char code, const unsigned char*& data)
+{
+	__m128i word = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data));
+	__m128i shuf = _mm_loadu_si128(reinterpret_cast<const __m128i*>(kDecodeTableVerts[code]));
+
+	__m128i v = _mm_shuffle_epi8(word, shuf);
+
+	// unzigzag+1
+	__m128i xl = _mm_sub_epi32(_mm_setzero_si128(), _mm_and_si128(v, _mm_set1_epi32(1)));
+	__m128i xr = _mm_srli_epi32(v, 1);
+	__m128i x = _mm_add_epi32(_mm_xor_si128(xl, xr), _mm_set1_epi32(1));
+
+	// prefix sum
+	x = _mm_add_epi32(x, _mm_slli_si128(x, 8));
+	x = _mm_add_epi32(x, _mm_slli_si128(x, 4));
+	x = _mm_add_epi32(x, _mm_shuffle_epi32(last, 0xff));
+
+	data += kDecodeTableLength[code];
+
+	return x;
+}
+
+SIMD_TARGET
 static const unsigned char* decodeTrianglesRawSimd(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, const unsigned char* bound, size_t triangle_count)
 {
 	__m128i repack = _mm_setr_epi8(9, 10, 11, -1, 12, 13, 14, -1, 0, 0, 0, 0, 0, 0, 0, 0);
@@ -633,29 +656,6 @@ static const unsigned char* decodeTrianglesSimd(unsigned char* triangles, const 
 }
 
 SIMD_TARGET
-inline __m128i decodeVertexGroup(__m128i last, unsigned char code, const unsigned char*& data)
-{
-	__m128i word = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data));
-	__m128i shuf = _mm_loadu_si128(reinterpret_cast<const __m128i*>(kDecodeTableVerts[code]));
-
-	__m128i v = _mm_shuffle_epi8(word, shuf);
-
-	// unzigzag+1
-	__m128i xl = _mm_sub_epi32(_mm_setzero_si128(), _mm_and_si128(v, _mm_set1_epi32(1)));
-	__m128i xr = _mm_srli_epi32(v, 1);
-	__m128i x = _mm_add_epi32(_mm_xor_si128(xl, xr), _mm_set1_epi32(1));
-
-	// prefix sum
-	x = _mm_add_epi32(x, _mm_slli_si128(x, 8));
-	x = _mm_add_epi32(x, _mm_slli_si128(x, 4));
-	x = _mm_add_epi32(x, _mm_shuffle_epi32(last, 0xff));
-
-	data += kDecodeTableLength[code];
-
-	return x;
-}
-
-SIMD_TARGET
 static const unsigned char* decodeVerticesRawSimd(unsigned int* vertices, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count)
 {
 	__m128i last = _mm_set1_epi32(-1);
@@ -765,9 +765,9 @@ static const unsigned char* decodeVerticesSimd(unsigned short* vertices, const u
 
 		last = decodeVertexGroup(last, code, data);
 
-		__m128i r = _mm_shuffle_epi8(last, repack);
-
 		unsigned short* tail = &vertices[vertex_count & ~3];
+
+		__m128i r = _mm_shuffle_epi8(last, repack);
 		*reinterpret_cast<unaligned_int*>(tail) = _mm_cvtsi128_si32(r);
 	}
 
