@@ -76,9 +76,9 @@ void fuzzRoundtripMeshlet(const uint8_t* data, size_t size)
 	size_t enc = meshopt_encodeMeshlet(buf, sizeof(buf), NULL, 0, reinterpret_cast<const unsigned char*>(data), triangle_count);
 	assert(enc > 0);
 
-	unsigned int rt[256];
-	int rc = meshopt_decodeMeshlet(static_cast<unsigned int*>(NULL), 0, rt, triangle_count, buf, enc);
-	assert(rc == 0);
+	unsigned int rt4[256];
+	int rc4 = meshopt_decodeMeshlet(static_cast<unsigned int*>(NULL), 0, rt4, triangle_count, buf, enc);
+	assert(rc4 == 0);
 
 	for (size_t i = 0; i < triangle_count; ++i)
 	{
@@ -88,7 +88,26 @@ void fuzzRoundtripMeshlet(const uint8_t* data, size_t size)
 		unsigned int bca = (b << 0) | (c << 8) | (a << 16);
 		unsigned int cba = (c << 0) | (a << 8) | (b << 16);
 
-		assert(rt[i] == abc || rt[i] == bca || rt[i] == cba);
+		unsigned int tri = rt4[i];
+
+		assert(tri == abc || tri == bca || tri == cba);
+	}
+
+	unsigned char rt3[256 * 3];
+	int rc3 = meshopt_decodeMeshlet(static_cast<unsigned int*>(NULL), 0, rt3, triangle_count, buf, enc);
+	assert(rc3 == 0);
+
+	for (size_t i = 0; i < triangle_count; ++i)
+	{
+		unsigned char a = data[i * 3 + 0], b = data[i * 3 + 1], c = data[i * 3 + 2];
+
+		unsigned int abc = (a << 0) | (b << 8) | (c << 16);
+		unsigned int bca = (b << 0) | (c << 8) | (a << 16);
+		unsigned int cba = (c << 0) | (a << 8) | (b << 16);
+
+		unsigned int tri = rt3[i * 3 + 0] | (rt3[i * 3 + 1] << 8) | (rt3[i * 3 + 2] << 16);
+
+		assert(tri == abc || tri == bca || tri == cba);
 	}
 }
 
