@@ -563,7 +563,7 @@ static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const u
 		unsigned int* tail = &triangles[triangle_count & ~1];
 
 		__m128i r = _mm_shuffle_epi8(state, repack);
-		*tail = _mm_cvtsi128_si32(r);
+		*tail = unsigned(_mm_cvtsi128_si32(r));
 	}
 
 	return extra;
@@ -609,8 +609,8 @@ static const unsigned char* decodeTrianglesSimd(unsigned char* triangles, const 
 		_mm_storel_epi64(reinterpret_cast<__m128i*>(&triangles[i * 12 + 4]), r1);
 	}
 
-	// process a 1-2 triangle tail; to maintain the memory safety guarantee we have to write a 32-bit element
-	if (size_t((triangle_count & 3) - 1) < 2)
+	// process a 1-2 triangle tail; to maintain the memory safety guarantee we have to write 1-2 32-bit elements
+	if (groups * 4 < triangle_count)
 	{
 		unsigned char code = *codes++;
 
@@ -738,7 +738,7 @@ static const unsigned char* decodeVerticesSimd(unsigned short* vertices, const u
 	__m128i last = _mm_set1_epi32(-1);
 
 	// because the output buffer is guaranteed to have 32-bit aligned size available, we can simplify tail processing
-	// when the last group has 3 elements, we can process it in the main loop; the last element written will be last+1
+	// if the number of vertices mod 4 is 3, we'd normally need to write 8+6 bytes, but we can instead overwrite up to 2 bytes in the main loop
 	size_t groups = (vertex_count + 1) / 4;
 
 	// process all complete groups
@@ -756,7 +756,7 @@ static const unsigned char* decodeVerticesSimd(unsigned short* vertices, const u
 	}
 
 	// process a 1-2 vertex tail; to maintain the memory safety guarantee we have to write a 32-bit element
-	if (size_t((vertex_count & 3) - 1) < 2)
+	if (groups * 4 < vertex_count)
 	{
 		unsigned char code = *ctrl++;
 
