@@ -111,6 +111,33 @@ void fuzzRoundtripMeshlet(const uint8_t* data, size_t size)
 	}
 }
 
+void fuzzRoundtripMeshletV(const uint8_t* data, size_t size)
+{
+	size_t vertex_count = size / 4;
+	if (vertex_count > 256)
+		vertex_count = 256;
+
+	unsigned char tri[4] = {0, 1, 2};
+
+	unsigned char buf[4096];
+	size_t enc = meshopt_encodeMeshlet(buf, sizeof(buf), reinterpret_cast<const uint32_t*>(data), vertex_count, tri, 1);
+	assert(enc > 0);
+
+	unsigned int rv4[256];
+	int rc4 = meshopt_decodeMeshlet(rv4, vertex_count, tri, 1, buf, enc);
+	assert(rc4 == 0);
+
+	for (size_t i = 0; i < vertex_count; ++i)
+		assert(rv4[i] == reinterpret_cast<const uint32_t*>(data)[i]);
+
+	unsigned short rv2[256];
+	int rc2 = meshopt_decodeMeshlet(rv2, vertex_count, tri, 1, buf, enc);
+	assert(rc2 == 0);
+
+	for (size_t i = 0; i < vertex_count; ++i)
+		assert(rv2[i] == uint16_t(reinterpret_cast<const uint32_t*>(data)[i]));
+}
+
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 {
 	// decodeIndexBuffer supports 2 and 4-byte indices
@@ -147,6 +174,9 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 
 	// validate that index data roundtrips in meshlet encoding modulo rotation
 	fuzzRoundtripMeshlet(data, size);
+
+	// validate that vertex data roundtrips in meshlet encoding
+	fuzzRoundtripMeshletV(data, size);
 
 	return 0;
 }
