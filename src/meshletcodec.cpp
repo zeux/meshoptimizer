@@ -25,6 +25,11 @@
 #define SIMD_TARGET __attribute__((target("sse4.1")))
 #endif
 
+// When targeting AArch64, enable NEON SIMD unconditionally; we do not support SIMD decoding for 32-bit ARM
+#if defined(__aarch64__) || (defined(_MSC_VER) && defined(_M_ARM64) && _MSC_VER >= 1922)
+#define SIMD_NEON
+#endif
+
 #ifndef SIMD_TARGET
 #define SIMD_TARGET
 #endif
@@ -33,6 +38,10 @@
 
 #ifdef SIMD_SSE
 #include <smmintrin.h>
+#endif
+
+#ifdef SIMD_NEON
+#include <arm_neon.h>
 #endif
 
 #if defined(SIMD_SSE) && defined(SIMD_FALLBACK)
@@ -215,7 +224,7 @@ static size_t encodeVertices(unsigned char* ctrl, unsigned char* data, const uns
 	return data - start;
 }
 
-#if defined(SIMD_FALLBACK) || (!defined(SIMD_SSE))
+#if defined(SIMD_FALLBACK) || (!defined(SIMD_SSE) && !defined(SIMD_NEON))
 inline void writeTriangle(unsigned int* triangles, size_t i, unsigned int fifo)
 {
 	// output triangle is stored without extra edge vertex (0xcbac => 0xcba)
@@ -342,7 +351,7 @@ static int decodeMeshlet(void* vertices, void* triangles, const unsigned char* c
 }
 #endif
 
-#if defined(SIMD_SSE)
+#if defined(SIMD_SSE) || defined(SIMD_NEON)
 // SIMD state is stored in a single 16b register as follows:
 // 0..5: 6 next extra bytes
 // 6..14: 9 bytes = 3 triangles worth of index data
@@ -523,13 +532,61 @@ inline __m128i decodeVertexGroup(__m128i last, unsigned char code, const unsigne
 
 	return x;
 }
+#endif
 
+#if defined(SIMD_NEON)
+SIMD_TARGET
+inline uint8x16_t decodeTriangleGroup(uint8x16_t state, unsigned char code, const unsigned char*& extra)
+{
+	uint8x16_t shuf = vld1q_u8(kDecodeTableMasks[code]);
+	uint8x16_t next = vextq_u8(vdupq_n_u8(0), shuf, 6);
+
+	// patch first 6 bytes with current extra and roll state forward
+	uint8x8_t extl = vld1_u8(extra);
+	uint8x16_t ext = vcombine_u8(extl, vdup_n_u8(0));
+	state = vbslq_u8(vcombine_u8(vcreate_u8(0xffffffffffffull), vdup_n_u8(0)), ext, state);
+	state = vaddq_u8(vqtbl1q_u8(state, shuf), next);
+
+	extra += kDecodeTableExtra[code];
+
+	return state;
+}
+
+SIMD_TARGET
+inline uint32x4_t decodeVertexGroup(uint32x4_t last, unsigned char code, const unsigned char*& data)
+{
+	uint8x16_t word = vld1q_u8(data);
+	uint8x16_t shuf = vld1q_u8(kDecodeTableVerts[code]);
+
+	uint32x4_t v = vreinterpretq_u32_u8(vqtbl1q_u8(word, shuf));
+
+	// unzigzag+1
+	uint32x4_t xl = vsubq_u32(vdupq_n_u32(0), vandq_u32(v, vdupq_n_u32(1)));
+	uint32x4_t xr = vshrq_n_u32(v, 1);
+	uint32x4_t x = vaddq_u32(veorq_u32(xl, xr), vdupq_n_u32(1));
+
+	// prefix sum
+	x = vaddq_u32(x, vextq_u32(vdupq_n_u32(0), x, 2));
+	x = vaddq_u32(x, vextq_u32(vdupq_n_u32(0), x, 3));
+	x = vaddq_u32(x, vdupq_n_u32(vgetq_lane_u32(last, 3)));
+
+	data += kDecodeTableLength[code];
+
+	return x;
+}
+#endif
+
+#if defined(SIMD_SSE) || defined(SIMD_NEON)
 SIMD_TARGET
 static const unsigned char* decodeTrianglesRawSimd(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, const unsigned char* bound, size_t triangle_count)
 {
+#if defined(SIMD_SSE)
 	__m128i repack = _mm_setr_epi8(9, 10, 11, -1, 12, 13, 14, -1, 0, 0, 0, 0, 0, 0, 0, 0);
-
 	__m128i state = _mm_setzero_si128();
+#elif defined(SIMD_NEON)
+	uint8x8_t repack = vcreate_u8(0xff0e0d0cff0b0a09ull);
+	uint8x16_t state = vdupq_n_u8(0);
+#endif
 
 	for (size_t i = 0; i < triangle_count; i += 2)
 	{
@@ -542,8 +599,13 @@ static const unsigned char* decodeTrianglesRawSimd(unsigned int* triangles, cons
 
 		// copy 6 bytes of new triangle data into output, formatted as 8 bytes with 0 padding
 		// safe to write 2 triangles as caller provides padded output buffer
+#if defined(SIMD_SSE)
 		__m128i r = _mm_shuffle_epi8(state, repack);
 		_mm_storel_epi64(reinterpret_cast<__m128i*>(&triangles[i]), r);
+#elif defined(SIMD_NEON)
+		uint8x8_t r = vqtbl1_u8(state, repack);
+		vst1_u8(reinterpret_cast<uint8_t*>(&triangles[i]), r);
+#endif
 	}
 
 	return extra;
@@ -552,9 +614,13 @@ static const unsigned char* decodeTrianglesRawSimd(unsigned int* triangles, cons
 SIMD_TARGET
 static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, const unsigned char* bound, size_t triangle_count)
 {
+#if defined(SIMD_SSE)
 	__m128i repack = _mm_setr_epi8(9, 10, 11, -1, 12, 13, 14, -1, 0, 0, 0, 0, 0, 0, 0, 0);
-
 	__m128i state = _mm_setzero_si128();
+#elif defined(SIMD_NEON)
+	uint8x8_t repack = vcreate_u8(0xff0e0d0cff0b0a09ull);
+	uint8x16_t state = vdupq_n_u8(0);
+#endif
 
 	size_t groups = triangle_count / 2;
 
@@ -569,8 +635,13 @@ static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const u
 		state = decodeTriangleGroup(state, code, extra);
 
 		// write 6 bytes of new triangle data into output, formatted as 8 bytes with 0 padding
+#if defined(SIMD_SSE)
 		__m128i r = _mm_shuffle_epi8(state, repack);
 		_mm_storel_epi64(reinterpret_cast<__m128i*>(&triangles[i * 2]), r);
+#elif defined(SIMD_NEON)
+		uint8x8_t r = vqtbl1_u8(state, repack);
+		vst1_u8(reinterpret_cast<uint8_t*>(&triangles[i * 2]), r);
+#endif
 	}
 
 	// process a 1 triangle tail; to maintain the memory safety guarantee we have to write a 32-bit element
@@ -585,8 +656,13 @@ static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const u
 
 		unsigned int* tail = &triangles[triangle_count & ~1];
 
+#if defined(SIMD_SSE)
 		__m128i r = _mm_shuffle_epi8(state, repack);
 		*tail = unsigned(_mm_cvtsi128_si32(r));
+#elif defined(SIMD_NEON)
+		uint8x8_t r = vqtbl1_u8(state, repack);
+		*tail = vget_lane_u32(vreinterpret_u32_u8(r), 0);
+#endif
 	}
 
 	return extra;
@@ -601,7 +677,11 @@ static const unsigned char* decodeTrianglesSimd(unsigned char* triangles, const 
 	typedef int unaligned_int;
 #endif
 
+#if defined(SIMD_SSE)
 	__m128i state = _mm_setzero_si128();
+#elif defined(SIMD_NEON)
+	uint8x16_t state = vdupq_n_u8(0);
+#endif
 
 	// because the output buffer is guaranteed to have 32-bit aligned size available, we can optimize writes and tail processing
 	// instead of processing triangles 2 at a time, we process 2 *pairs* at a time (12-byte write) followed by a tail pair, if present
@@ -621,15 +701,25 @@ static const unsigned char* decodeTrianglesSimd(unsigned char* triangles, const 
 		state = decodeTriangleGroup(state, code0, extra);
 
 		// write first decoded triangle and first index of second decoded triangle
+#if defined(SIMD_SSE)
 		__m128i r0 = _mm_srli_si128(state, 9);
 		*reinterpret_cast<unaligned_int*>(&triangles[i * 12]) = _mm_cvtsi128_si32(r0);
+#elif defined(SIMD_NEON)
+		uint8x16_t r0 = vextq_u8(state, vdupq_n_u8(0), 9);
+		*reinterpret_cast<unaligned_int*>(&triangles[i * 12]) = vgetq_lane_u32(vreinterpretq_u32_u8(r0), 0);
+#endif
 
 		state = decodeTriangleGroup(state, code1, extra);
 
 		// write last two indices of second decoded triangle that we didn't write above plus two new ones
 		// note that the second decoded triangle has shifted down to 6-8 bytes, hence shift by 7
+#if defined(SIMD_SSE)
 		__m128i r1 = _mm_srli_si128(state, 7);
 		_mm_storel_epi64(reinterpret_cast<__m128i*>(&triangles[i * 12 + 4]), r1);
+#elif defined(SIMD_NEON)
+		uint8x16_t r1 = vextq_u8(state, vdupq_n_u8(0), 7);
+		vst1_u8(reinterpret_cast<uint8_t*>(&triangles[i * 12 + 4]), vget_low_u8(r1));
+#endif
 	}
 
 	// process a 1-2 triangle tail; to maintain the memory safety guarantee we have to write 1-2 32-bit elements
@@ -644,12 +734,21 @@ static const unsigned char* decodeTrianglesSimd(unsigned char* triangles, const 
 
 		unsigned char* tail = &triangles[(triangle_count & ~3) * 3];
 
+#if defined(SIMD_SSE)
 		__m128i r = _mm_srli_si128(state, 9);
 
 		if ((triangle_count & 3) == 1)
 			*reinterpret_cast<unaligned_int*>(tail) = _mm_cvtsi128_si32(r);
 		else
 			_mm_storel_epi64(reinterpret_cast<__m128i*>(tail), r);
+#elif defined(SIMD_NEON)
+		uint8x16_t r = vextq_u8(state, vdupq_n_u8(0), 9);
+
+		if ((triangle_count & 3) == 1)
+			*reinterpret_cast<unaligned_int*>(tail) = vgetq_lane_u32(vreinterpretq_u32_u8(r), 0);
+		else
+			vst1_u8(reinterpret_cast<uint8_t*>(tail), vget_low_u8(r));
+#endif
 	}
 
 	return extra;
@@ -658,7 +757,11 @@ static const unsigned char* decodeTrianglesSimd(unsigned char* triangles, const 
 SIMD_TARGET
 static const unsigned char* decodeVerticesRawSimd(unsigned int* vertices, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count)
 {
+#if defined(SIMD_SSE)
 	__m128i last = _mm_set1_epi32(-1);
+#elif defined(SIMD_NEON)
+	uint32x4_t last = vdupq_n_u32(~0u);
+#endif
 
 	for (size_t i = 0; i < vertex_count; i += 4)
 	{
@@ -669,7 +772,11 @@ static const unsigned char* decodeVerticesRawSimd(unsigned int* vertices, const 
 		last = decodeVertexGroup(last, code, data);
 
 		// safe to write 4 vertices as caller provides padded output buffer
+#if defined(SIMD_SSE)
 		_mm_storeu_si128(reinterpret_cast<__m128i*>(&vertices[i]), last);
+#elif defined(SIMD_NEON)
+		vst1q_u32(&vertices[i], last);
+#endif
 	}
 
 	return data;
@@ -678,7 +785,11 @@ static const unsigned char* decodeVerticesRawSimd(unsigned int* vertices, const 
 SIMD_TARGET
 static const unsigned char* decodeVerticesSimd(unsigned int* vertices, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count)
 {
+#if defined(SIMD_SSE)
 	__m128i last = _mm_set1_epi32(-1);
+#elif defined(SIMD_NEON)
+	uint32x4_t last = vdupq_n_u32(~0u);
+#endif
 
 	size_t groups = vertex_count / 4;
 
@@ -691,7 +802,11 @@ static const unsigned char* decodeVerticesSimd(unsigned int* vertices, const uns
 
 		last = decodeVertexGroup(last, code, data);
 
+#if defined(SIMD_SSE)
 		_mm_storeu_si128(reinterpret_cast<__m128i*>(&vertices[i * 4]), last);
+#elif defined(SIMD_NEON)
+		vst1q_u32(&vertices[i * 4], last);
+#endif
 	}
 
 	// process a 1-3 vertex tail; to maintain the memory safety guarantee we have to write individual elements
@@ -708,6 +823,7 @@ static const unsigned char* decodeVerticesSimd(unsigned int* vertices, const uns
 
 		switch (vertex_count & 3)
 		{
+#if defined(SIMD_SSE)
 		case 3:
 			tail[2] = _mm_extract_epi32(last, 2);
 			// fallthrough
@@ -717,6 +833,17 @@ static const unsigned char* decodeVerticesSimd(unsigned int* vertices, const uns
 		case 1:
 			tail[0] = _mm_extract_epi32(last, 0);
 			// fallthrough
+#elif defined(SIMD_NEON)
+		case 3:
+			tail[2] = vgetq_lane_u32(last, 2);
+			// fallthrough
+		case 2:
+			tail[1] = vgetq_lane_u32(last, 1);
+			// fallthrough
+		case 1:
+			tail[0] = vgetq_lane_u32(last, 0);
+			// fallthrough
+#endif
 		default:;
 		}
 	}
@@ -733,9 +860,13 @@ static const unsigned char* decodeVerticesSimd(unsigned short* vertices, const u
 	typedef int unaligned_int;
 #endif
 
+#if defined(SIMD_SSE)
 	__m128i repack = _mm_setr_epi8(0, 1, 4, 5, 8, 9, 12, 13, 0, 0, 0, 0, 0, 0, 0, 0);
-
 	__m128i last = _mm_set1_epi32(-1);
+#elif defined(SIMD_NEON)
+	uint8x8_t repack = vcreate_u8(0x0d0c090805040100ull);
+	uint32x4_t last = vdupq_n_u32(~0u);
+#endif
 
 	// because the output buffer is guaranteed to have 32-bit aligned size available, we can simplify tail processing
 	// if the number of vertices mod 4 is 3, we'd normally need to write 8+6 bytes, but we can instead overwrite up to 2 bytes in the main loop
@@ -751,8 +882,13 @@ static const unsigned char* decodeVerticesSimd(unsigned short* vertices, const u
 
 		last = decodeVertexGroup(last, code, data);
 
+#if defined(SIMD_SSE)
 		__m128i r = _mm_shuffle_epi8(last, repack);
 		_mm_storel_epi64(reinterpret_cast<__m128i*>(&vertices[i * 4]), r);
+#elif defined(SIMD_NEON)
+		uint8x8_t r = vqtbl1_u8(vreinterpretq_u8_u32(last), repack);
+		vst1_u8(reinterpret_cast<uint8_t*>(&vertices[i * 4]), r);
+#endif
 	}
 
 	// process a 1-2 vertex tail; to maintain the memory safety guarantee we have to write a 32-bit element
@@ -767,8 +903,13 @@ static const unsigned char* decodeVerticesSimd(unsigned short* vertices, const u
 
 		unsigned short* tail = &vertices[vertex_count & ~3];
 
+#if defined(SIMD_SSE)
 		__m128i r = _mm_shuffle_epi8(last, repack);
 		*reinterpret_cast<unaligned_int*>(tail) = _mm_cvtsi128_si32(r);
+#elif defined(SIMD_NEON)
+		uint8x8_t r = vqtbl1_u8(vreinterpretq_u8_u32(last), repack);
+		*reinterpret_cast<unaligned_int*>(tail) = vget_lane_u32(vreinterpret_u32_u8(r), 0);
+#endif
 	}
 
 	return data;
@@ -938,7 +1079,7 @@ int meshopt_decodeMeshlet(void* vertices, size_t vertex_count, size_t vertex_siz
 
 #if defined(SIMD_FALLBACK)
 	return (gDecodeTablesInitialized ? decodeMeshletSimd : decodeMeshlet)(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count, vertex_size, triangle_size);
-#elif defined(SIMD_SSE)
+#elif defined(SIMD_SSE) || defined(SIMD_NEON)
 	return decodeMeshletSimd(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count, vertex_size, triangle_size);
 #else
 	return decodeMeshlet(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count, vertex_size, triangle_size);
@@ -970,7 +1111,7 @@ int meshopt_decodeMeshletRaw(unsigned int* vertices, size_t vertex_count, unsign
 
 #if defined(SIMD_FALLBACK)
 	return (gDecodeTablesInitialized ? decodeMeshletRawSimd : decodeMeshlet)(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count, 4, 4);
-#elif defined(SIMD_SSE)
+#elif defined(SIMD_SSE) || defined(SIMD_NEON)
 	return decodeMeshletRawSimd(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count, 4, 4);
 #else
 	return decodeMeshlet(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count, 4, 4);
@@ -978,5 +1119,6 @@ int meshopt_decodeMeshletRaw(unsigned int* vertices, size_t vertex_count, unsign
 }
 
 #undef SIMD_SSE
+#undef SIMD_NEON
 #undef SIMD_FALLBACK
 #undef SIMD_TARGET
