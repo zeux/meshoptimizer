@@ -661,22 +661,24 @@ static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const u
 		*tail = unsigned(_mm_cvtsi128_si32(r));
 #elif defined(SIMD_NEON)
 		uint8x8_t r = vqtbl1_u8(state, repack);
-		*tail = vget_lane_u32(vreinterpret_u32_u8(r), 0);
+		vst1_lane_u32(tail, vreinterpret_u32_u8(r), 0);
 #endif
 	}
 
 	return extra;
 }
 
+#if defined(SIMD_SSE)
+#ifdef __GNUC__
+typedef int __attribute__((aligned(1))) unaligned_int;
+#else
+typedef int unaligned_int;
+#endif
+#endif
+
 SIMD_TARGET
 static const unsigned char* decodeTrianglesSimd(unsigned char* triangles, const unsigned char* codes, const unsigned char* extra, const unsigned char* bound, size_t triangle_count)
 {
-#ifdef __GNUC__
-	typedef int __attribute__((aligned(1))) unaligned_int;
-#else
-	typedef int unaligned_int;
-#endif
-
 #if defined(SIMD_SSE)
 	__m128i state = _mm_setzero_si128();
 #elif defined(SIMD_NEON)
@@ -706,7 +708,7 @@ static const unsigned char* decodeTrianglesSimd(unsigned char* triangles, const 
 		*reinterpret_cast<unaligned_int*>(&triangles[i * 12]) = _mm_cvtsi128_si32(r0);
 #elif defined(SIMD_NEON)
 		uint8x16_t r0 = vextq_u8(state, vdupq_n_u8(0), 9);
-		*reinterpret_cast<unaligned_int*>(&triangles[i * 12]) = vgetq_lane_u32(vreinterpretq_u32_u8(r0), 0);
+		vst1q_lane_u32(reinterpret_cast<unsigned int*>(&triangles[i * 12]), vreinterpretq_u32_u8(r0), 0);
 #endif
 
 		state = decodeTriangleGroup(state, code1, extra);
@@ -745,7 +747,7 @@ static const unsigned char* decodeTrianglesSimd(unsigned char* triangles, const 
 		uint8x16_t r = vextq_u8(state, vdupq_n_u8(0), 9);
 
 		if ((triangle_count & 3) == 1)
-			*reinterpret_cast<unaligned_int*>(tail) = vgetq_lane_u32(vreinterpretq_u32_u8(r), 0);
+			vst1q_lane_u32(reinterpret_cast<unsigned int*>(tail), vreinterpretq_u32_u8(r), 0);
 		else
 			vst1_u8(reinterpret_cast<uint8_t*>(tail), vget_low_u8(r));
 #endif
@@ -835,13 +837,13 @@ static const unsigned char* decodeVerticesSimd(unsigned int* vertices, const uns
 			// fallthrough
 #elif defined(SIMD_NEON)
 		case 3:
-			tail[2] = vgetq_lane_u32(last, 2);
+			vst1q_lane_u32(&tail[2], last, 2);
 			// fallthrough
 		case 2:
-			tail[1] = vgetq_lane_u32(last, 1);
+			vst1q_lane_u32(&tail[1], last, 1);
 			// fallthrough
 		case 1:
-			tail[0] = vgetq_lane_u32(last, 0);
+			vst1q_lane_u32(&tail[0], last, 0);
 			// fallthrough
 #endif
 		default:;
@@ -854,12 +856,6 @@ static const unsigned char* decodeVerticesSimd(unsigned int* vertices, const uns
 SIMD_TARGET
 static const unsigned char* decodeVerticesSimd(unsigned short* vertices, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count)
 {
-#ifdef __GNUC__
-	typedef int __attribute__((aligned(1))) unaligned_int;
-#else
-	typedef int unaligned_int;
-#endif
-
 #if defined(SIMD_SSE)
 	__m128i repack = _mm_setr_epi8(0, 1, 4, 5, 8, 9, 12, 13, 0, 0, 0, 0, 0, 0, 0, 0);
 	__m128i last = _mm_set1_epi32(-1);
@@ -907,7 +903,7 @@ static const unsigned char* decodeVerticesSimd(unsigned short* vertices, const u
 		*reinterpret_cast<unaligned_int*>(tail) = _mm_cvtsi128_si32(r);
 #elif defined(SIMD_NEON)
 		uint16x4_t r = vmovn_u32(last);
-		*reinterpret_cast<unaligned_int*>(tail) = vget_lane_u32(vreinterpret_u32_u16(r), 0);
+		vst1_lane_u32(reinterpret_cast<unsigned int*>(tail), vreinterpret_u32_u16(r), 0);
 #endif
 	}
 
