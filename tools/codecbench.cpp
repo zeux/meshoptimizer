@@ -225,7 +225,7 @@ void benchMeshlets(const std::vector<float>& positions, const std::vector<unsign
 		    int(max_vertices), int(max_triangles), int(meshlets.size()), int(packed.size()), double(packed.size() * 8) / double(indices.size() / 3));
 
 	unsigned int rv[256];
-	unsigned int rt[256];
+	unsigned char rt[256 * 3];
 
 	for (int attempt = 0; attempt < 50; ++attempt)
 	{
