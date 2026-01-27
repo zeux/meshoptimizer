@@ -603,8 +603,8 @@ static const unsigned char* decodeTrianglesRawSimd(unsigned int* triangles, cons
 		__m128i r = _mm_shuffle_epi8(state, repack);
 		_mm_storel_epi64(reinterpret_cast<__m128i*>(&triangles[i]), r);
 #elif defined(SIMD_NEON)
-		uint8x8_t r = vqtbl1_u8(state, repack);
-		vst1_u8(reinterpret_cast<uint8_t*>(&triangles[i]), r);
+		uint32x2_t r = vreinterpret_u32_u8(vqtbl1_u8(state, repack));
+		vst1_u32(&triangles[i], r);
 #endif
 	}
 
@@ -639,8 +639,8 @@ static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const u
 		__m128i r = _mm_shuffle_epi8(state, repack);
 		_mm_storel_epi64(reinterpret_cast<__m128i*>(&triangles[i * 2]), r);
 #elif defined(SIMD_NEON)
-		uint8x8_t r = vqtbl1_u8(state, repack);
-		vst1_u8(reinterpret_cast<uint8_t*>(&triangles[i * 2]), r);
+		uint32x2_t r = vreinterpret_u32_u8(vqtbl1_u8(state, repack));
+		vst1_u32(&triangles[i * 2], r);
 #endif
 	}
 
@@ -660,8 +660,8 @@ static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const u
 		__m128i r = _mm_shuffle_epi8(state, repack);
 		*tail = unsigned(_mm_cvtsi128_si32(r));
 #elif defined(SIMD_NEON)
-		uint8x8_t r = vqtbl1_u8(state, repack);
-		vst1_lane_u32(tail, vreinterpret_u32_u8(r), 0);
+		uint32x2_t r = vreinterpret_u32_u8(vqtbl1_u8(state, repack));
+		vst1_lane_u32(tail, r, 0);
 #endif
 	}
 
@@ -720,7 +720,7 @@ static const unsigned char* decodeTrianglesSimd(unsigned char* triangles, const 
 		_mm_storel_epi64(reinterpret_cast<__m128i*>(&triangles[i * 12 + 4]), r1);
 #elif defined(SIMD_NEON)
 		uint8x16_t r1 = vextq_u8(state, vdupq_n_u8(0), 7);
-		vst1_u8(reinterpret_cast<uint8_t*>(&triangles[i * 12 + 4]), vget_low_u8(r1));
+		vst1_u8(&triangles[i * 12 + 4], vget_low_u8(r1));
 #endif
 	}
 
@@ -749,7 +749,7 @@ static const unsigned char* decodeTrianglesSimd(unsigned char* triangles, const 
 		if ((triangle_count & 3) == 1)
 			vst1q_lane_u32(reinterpret_cast<unsigned int*>(tail), vreinterpretq_u32_u8(r), 0);
 		else
-			vst1_u8(reinterpret_cast<uint8_t*>(tail), vget_low_u8(r));
+			vst1_u8(tail, vget_low_u8(r));
 #endif
 	}
 
