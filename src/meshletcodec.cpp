@@ -864,7 +864,6 @@ static const unsigned char* decodeVerticesSimd(unsigned short* vertices, const u
 	__m128i repack = _mm_setr_epi8(0, 1, 4, 5, 8, 9, 12, 13, 0, 0, 0, 0, 0, 0, 0, 0);
 	__m128i last = _mm_set1_epi32(-1);
 #elif defined(SIMD_NEON)
-	uint8x8_t repack = vcreate_u8(0x0d0c090805040100ull);
 	uint32x4_t last = vdupq_n_u32(~0u);
 #endif
 
@@ -886,8 +885,8 @@ static const unsigned char* decodeVerticesSimd(unsigned short* vertices, const u
 		__m128i r = _mm_shuffle_epi8(last, repack);
 		_mm_storel_epi64(reinterpret_cast<__m128i*>(&vertices[i * 4]), r);
 #elif defined(SIMD_NEON)
-		uint8x8_t r = vqtbl1_u8(vreinterpretq_u8_u32(last), repack);
-		vst1_u8(reinterpret_cast<uint8_t*>(&vertices[i * 4]), r);
+		uint16x4_t r = vmovn_u32(last);
+		vst1_u16(&vertices[i * 4], r);
 #endif
 	}
 
@@ -907,8 +906,8 @@ static const unsigned char* decodeVerticesSimd(unsigned short* vertices, const u
 		__m128i r = _mm_shuffle_epi8(last, repack);
 		*reinterpret_cast<unaligned_int*>(tail) = _mm_cvtsi128_si32(r);
 #elif defined(SIMD_NEON)
-		uint8x8_t r = vqtbl1_u8(vreinterpretq_u8_u32(last), repack);
-		*reinterpret_cast<unaligned_int*>(tail) = vget_lane_u32(vreinterpret_u32_u8(r), 0);
+		uint16x4_t r = vmovn_u32(last);
+		*reinterpret_cast<unaligned_int*>(tail) = vget_lane_u32(vreinterpret_u32_u16(r), 0);
 #endif
 	}
 
