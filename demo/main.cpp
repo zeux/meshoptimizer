@@ -760,6 +760,34 @@ void encodeIndexSequence(const std::vector<unsigned int>& data, size_t vertex_co
 	    (double(result.size() * 4) / 1e9) / (end - middle));
 }
 
+template <typename V, typename T>
+void validateDecodeMeshlet(const unsigned char* data, size_t size, const unsigned int* vertices, size_t vertex_count, const unsigned char* triangles, size_t triangle_count)
+{
+	V rv[256];
+	T rt[sizeof(T) == 1 ? 256 * 3 + 3 : 256];
+
+	int rc = meshopt_decodeMeshlet(rv, vertex_count, rt, triangle_count, data, size);
+	assert(rc == 0);
+
+	for (size_t j = 0; j < vertex_count; ++j)
+		assert(rv[j] == V(vertices[j]));
+
+	for (size_t j = 0; j < triangle_count; ++j)
+	{
+		unsigned int a = triangles[j * 3 + 0];
+		unsigned int b = triangles[j * 3 + 1];
+		unsigned int c = triangles[j * 3 + 2];
+
+		unsigned int tri = sizeof(T) == 1 ? rt[j * 3] | (rt[j * 3 + 1] << 8) | (rt[j * 3 + 2] << 16) : rt[j];
+
+		unsigned int abc = (a << 0) | (b << 8) | (c << 16);
+		unsigned int bca = (b << 0) | (c << 8) | (a << 16);
+		unsigned int cba = (c << 0) | (a << 8) | (b << 16);
+
+		assert(tri == abc || tri == bca || tri == cba);
+	}
+}
+
 void encodeMeshlets(const Mesh& mesh, size_t max_vertices, size_t max_triangles, bool reorder = true)
 {
 	size_t max_meshlets = meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, max_triangles);
@@ -810,26 +838,10 @@ void encodeMeshlets(const Mesh& mesh, size_t max_vertices, size_t max_triangles,
 		packed.push_back((unsigned char)((mbs >> 8) & 0xff));
 		packed.insert(packed.end(), &cbuf[0], &cbuf[mbs]);
 
-		unsigned int rv[256];
-		unsigned int rt[256];
-		int rc = meshopt_decodeMeshlet(rv, meshlet.vertex_count, rt, meshlet.triangle_count, &cbuf[0], mbs);
-		assert(rc == 0);
-
-		for (size_t j = 0; j < meshlet.vertex_count; ++j)
-			assert(rv[j] == meshlet_vertices[meshlet.vertex_offset + j]);
-
-		for (size_t j = 0; j < meshlet.triangle_count; ++j)
-		{
-			unsigned int a = meshlet_triangles[meshlet.triangle_offset + j * 3 + 0];
-			unsigned int b = meshlet_triangles[meshlet.triangle_offset + j * 3 + 1];
-			unsigned int c = meshlet_triangles[meshlet.triangle_offset + j * 3 + 2];
-
-			unsigned int abc = (a << 0) | (b << 8) | (c << 16);
-			unsigned int bca = (b << 0) | (c << 8) | (a << 16);
-			unsigned int cba = (c << 0) | (a << 8) | (b << 16);
-
-			assert(rt[j] == abc || rt[j] == bca || rt[j] == cba);
-		}
+		validateDecodeMeshlet<unsigned int, unsigned int>(&cbuf[0], mbs, &meshlet_vertices[meshlet.vertex_offset], meshlet.vertex_count, &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count);
+		validateDecodeMeshlet<unsigned int, unsigned char>(&cbuf[0], mbs, &meshlet_vertices[meshlet.vertex_offset], meshlet.vertex_count, &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count);
+		validateDecodeMeshlet<unsigned short, unsigned int>(&cbuf[0], mbs, &meshlet_vertices[meshlet.vertex_offset], meshlet.vertex_count, &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count);
+		validateDecodeMeshlet<unsigned short, unsigned char>(&cbuf[0], mbs, &meshlet_vertices[meshlet.vertex_offset], meshlet.vertex_count, &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count);
 
 		mbst += mbs;
 	}
@@ -858,7 +870,7 @@ void encodeMeshlets(const Mesh& mesh, size_t max_vertices, size_t max_triangles,
 		for (size_t j = 0; j < meshlets.size(); ++j)
 		{
 			size_t size = p[2] | (p[3] << 8);
-			meshopt_decodeMeshlet(rv, p[0], rt, p[1], p + 4, size);
+			meshopt_decodeMeshletRaw(rv, p[0], rt, p[1], p + 4, size);
 			p += 4 + size;
 		}
 		double t1 = timestamp();
