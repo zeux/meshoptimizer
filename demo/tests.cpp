@@ -2724,6 +2724,108 @@ static void dequantizeHalf()
 	assert(nanf != nanf);
 }
 
+static void encodeMeshletBound()
+{
+	const unsigned char triangles[5 * 3] = {
+	    0, 1, 2,
+	    2, 1, 3,
+	    3, 5, 4,
+	    2, 0, 6,
+	    7, 7, 7, // clang-format :-/
+	};
+
+	const unsigned int vertices[7] = {
+	    5,
+	    12,
+	    140,
+	    0,
+	    12389,
+	    123456789,
+	    7,
+	};
+
+	size_t bound = meshopt_encodeMeshletBound(7, 5);
+
+	unsigned char enc[256];
+	size_t size = meshopt_encodeMeshlet(enc, sizeof(enc), vertices, 7, triangles, 5);
+	assert(size > 0 && size <= bound);
+
+	assert(meshopt_encodeMeshlet(enc, size - 1, vertices, 7, triangles, 5) == 0);
+}
+
+template <typename V, typename T, size_t VS, size_t TS>
+static void validateDecodeMeshlet(const unsigned char* data, size_t size, const unsigned int* vertices, size_t vertex_count, const unsigned char* triangles, size_t triangle_count)
+{
+	V rv[VS];
+	T rt[TS];
+
+	int rc = meshopt_decodeMeshlet(rv, vertex_count, rt, triangle_count, data, size);
+	assert(rc == 0);
+
+	for (size_t j = 0; j < vertex_count; ++j)
+		assert(rv[j] == V(vertices[j]));
+
+	for (size_t j = 0; j < triangle_count; ++j)
+	{
+		unsigned int a = triangles[j * 3 + 0];
+		unsigned int b = triangles[j * 3 + 1];
+		unsigned int c = triangles[j * 3 + 2];
+
+		unsigned int tri = sizeof(T) == 1 ? rt[j * 3] | (rt[j * 3 + 1] << 8) | (rt[j * 3 + 2] << 16) : rt[j];
+
+		unsigned int abc = (a << 0) | (b << 8) | (c << 16);
+		unsigned int bca = (b << 0) | (c << 8) | (a << 16);
+		unsigned int cba = (c << 0) | (a << 8) | (b << 16);
+
+		assert(tri == abc || tri == bca || tri == cba);
+	}
+}
+
+static void decodeMeshletSafety()
+{
+	const unsigned char triangles[5 * 3] = {
+	    0, 1, 2,
+	    2, 1, 3,
+	    3, 5, 4,
+	    2, 0, 6,
+	    7, 7, 7, // clang-format :-/
+	};
+
+	const unsigned int vertices[7] = {
+	    5,
+	    12,
+	    140,
+	    0,
+	    12389,
+	    123456789,
+	    7,
+	};
+
+	unsigned char encb[256];
+	size_t size = meshopt_encodeMeshlet(encb, sizeof(encb), vertices, 7, triangles, 5);
+	assert(size > 0);
+
+	// move encoded buffer to the end to make sure any over-reads trigger sanitizers
+	unsigned char* enc = encb + sizeof(encb) - size;
+	memmove(enc, encb, size);
+
+	validateDecodeMeshlet<unsigned int, unsigned int, /* VS= */ 7, /* TS= */ 5>(enc, size, vertices, 7, triangles, 5);
+
+	// decodeMeshlet uses aligned 32-bit writes => must round vertex/triangle storage up when using short/char decoding
+	// note the +1 in triangle storage is because align(5*3, 4) = 16; it's up to +3 in general case
+	validateDecodeMeshlet<unsigned int, unsigned char, /* VS= */ 7, /* TS= */ 5 * 3 + 1>(enc, size, vertices, 7, triangles, 5);
+	validateDecodeMeshlet<unsigned short, unsigned int, /* VS= */ 7 + 1, /* TS= */ 5>(enc, size, vertices, 7, triangles, 5);
+	validateDecodeMeshlet<unsigned short, unsigned char, /* VS= */ 7 + 1, /* TS= */ 5 * 3 + 1>(enc, size, vertices, 7, triangles, 5);
+
+	// any truncated input should not be decodable; we check both prefix and suffix truncation
+	unsigned int rv[7], rt[5];
+
+	for (size_t i = 1; i < size; ++i)
+		assert(meshopt_decodeMeshlet(rv, 7, rt, 5, enc, i) < 0);
+	for (size_t i = 1; i < size; ++i)
+		assert(meshopt_decodeMeshlet(rv, 7, rt, 5, enc + i, size - i) < 0);
+}
+
 void runTests()
 {
 	decodeIndexV0();
@@ -2844,4 +2946,7 @@ void runTests()
 	quantizeFloat();
 	quantizeHalf();
 	dequantizeHalf();
+
+	encodeMeshletBound();
+	decodeMeshletSafety();
 }
