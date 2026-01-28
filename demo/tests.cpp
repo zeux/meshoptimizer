@@ -2824,6 +2824,22 @@ static void decodeMeshletSafety()
 		assert(meshopt_decodeMeshlet(rv, 7, rt, 5, enc, i) < 0);
 	for (size_t i = 1; i < size; ++i)
 		assert(meshopt_decodeMeshlet(rv, 7, rt, 5, enc + i, size - i) < 0);
+
+	// when using decodeMeshletRaw, the output buffer sizes must be 16b aligned
+	unsigned int rvr[8], rtr[8];
+
+	for (size_t i = 1; i < size; ++i)
+		assert(meshopt_decodeMeshletRaw(rvr, 7, rtr, 5, enc, i) < 0);
+	for (size_t i = 1; i < size; ++i)
+		assert(meshopt_decodeMeshletRaw(rvr, 7, rtr, 5, enc + i, size - i) < 0);
+
+	// otherwise, decodeMeshlet and decodeMeshletRaw should agree
+	int rc = meshopt_decodeMeshlet(rv, 7, rt, 5, enc, size);
+	int rcr = meshopt_decodeMeshletRaw(rvr, 7, rtr, 5, enc, size);
+
+	assert(rc == 0 && rcr == 0);
+	assert(memcmp(rv, rvr, 7 * sizeof(unsigned int)) == 0);
+	assert(memcmp(rt, rtr, 5 * sizeof(unsigned int)) == 0);
 }
 
 void runTests()
