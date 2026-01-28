@@ -761,10 +761,10 @@ void encodeIndexSequence(const std::vector<unsigned int>& data, size_t vertex_co
 }
 
 template <typename V, typename T>
-void validateDecodeMeshlet(const unsigned char* data, size_t size, const unsigned int* vertices, size_t vertex_count, const unsigned char* triangles, size_t triangle_count)
+static void validateDecodeMeshlet(const unsigned char* data, size_t size, const unsigned int* vertices, size_t vertex_count, const unsigned char* triangles, size_t triangle_count)
 {
 	V rv[256];
-	T rt[sizeof(T) == 1 ? 256 * 3 + 3 : 256];
+	T rt[sizeof(T) == 1 ? 256 * 3 : 256];
 
 	int rc = meshopt_decodeMeshlet(rv, vertex_count, rt, triangle_count, data, size);
 	assert(rc == 0);
