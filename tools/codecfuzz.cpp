@@ -75,6 +75,7 @@ void fuzzRoundtripMeshlet(const uint8_t* data, size_t size)
 	unsigned char buf[4096];
 	size_t enc = meshopt_encodeMeshlet(buf, sizeof(buf), NULL, 0, reinterpret_cast<const unsigned char*>(data), triangle_count);
 	assert(enc > 0);
+	assert(enc <= meshopt_encodeMeshletBound(0, triangle_count));
 
 	unsigned int rt4[256];
 	int rc4 = meshopt_decodeMeshlet(static_cast<unsigned int*>(NULL), 0, rt4, triangle_count, buf, enc);
@@ -122,6 +123,7 @@ void fuzzRoundtripMeshletV(const uint8_t* data, size_t size)
 	unsigned char buf[4096];
 	size_t enc = meshopt_encodeMeshlet(buf, sizeof(buf), reinterpret_cast<const uint32_t*>(data), vertex_count, tri, 1);
 	assert(enc > 0);
+	assert(enc <= meshopt_encodeMeshletBound(vertex_count, 1));
 
 	unsigned int rv4[256];
 	int rc4 = meshopt_decodeMeshlet(rv4, vertex_count, tri, 1, buf, enc);
