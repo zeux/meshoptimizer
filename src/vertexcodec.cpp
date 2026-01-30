@@ -816,6 +816,12 @@ inline __m128i decodeShuffleMask(unsigned char mask0, unsigned char mask1)
 	return _mm_unpacklo_epi64(sm0, sm1r);
 }
 
+#ifdef __GNUC__
+typedef int __attribute__((aligned(1))) unaligned_int;
+#else
+typedef int unaligned_int;
+#endif
+
 SIMD_TARGET
 inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int hbits)
 {
@@ -834,12 +840,6 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	case 1:
 	case 6:
 	{
-#ifdef __GNUC__
-		typedef int __attribute__((aligned(1))) unaligned_int;
-#else
-		typedef int unaligned_int;
-#endif
-
 #ifdef SIMD_LATENCYOPT
 		unsigned int data32;
 		memcpy(&data32, data, 4);
