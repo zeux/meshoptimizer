@@ -8,7 +8,7 @@
 #ifndef MESHOPTIMIZER_NO_SIMD
 
 // The SIMD implementation requires SSE4.1, which can be enabled unconditionally through compiler settings
-#if defined(__AVX__) || defined(__SSE41__)
+#if defined(__AVX__) || defined(__SSE4_1__)
 #define SIMD_SSE
 #endif
 
