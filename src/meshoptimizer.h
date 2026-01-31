@@ -300,7 +300,7 @@ MESHOPTIMIZER_API int meshopt_decodeIndexSequence(void* destination, size_t inde
  */
 MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const unsigned int* vertices, size_t vertex_count, const unsigned char* triangles, size_t triangle_count);
 MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_encodeMeshletBound(size_t max_vertices, size_t max_triangles);
-MESHOPTIMIZER_EXPERIMENTAL int meshopt_decodeMeshlet(void* vertices, size_t vertex_count, size_t vertex_size, void* triangles, size_t triangle_count, size_t triangle_size, const unsigned char* buffer, size_t buffer_size);
+MESHOPTIMIZER_EXPERIMENTAL int meshopt_decodeMeshlet(void* vertices, size_t vertex_count, void* triangles, size_t triangle_count, const unsigned char* buffer, size_t buffer_size, size_t vertex_size, size_t triangle_size);
 MESHOPTIMIZER_EXPERIMENTAL int meshopt_decodeMeshletRaw(unsigned int* vertices, size_t vertex_count, unsigned int* triangles, size_t triangle_count, const unsigned char* buffer, size_t buffer_size);
 
 /**
@@ -1271,7 +1271,7 @@ inline int meshopt_decodeMeshlet(V* vertices, size_t vertex_count, T* triangles,
 	char types_valid[(sizeof(V) == 2 || sizeof(V) == 4) && (sizeof(T) == 1 || sizeof(T) == 4) ? 1 : -1];
 	(void)types_valid;
 
-	return meshopt_decodeMeshlet(vertices, vertex_count, sizeof(V), triangles, triangle_count, sizeof(T) == 1 ? 3 : 4, buffer, buffer_size);
+	return meshopt_decodeMeshlet(vertices, vertex_count, triangles, triangle_count, buffer, buffer_size, sizeof(V), sizeof(T) == 1 ? 3 : 4);
 }
 
 inline size_t meshopt_encodeVertexBufferLevel(unsigned char* buffer, size_t buffer_size, const void* vertices, size_t vertex_count, size_t vertex_size, int level)

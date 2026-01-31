@@ -987,7 +987,7 @@ size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const un
 	return result;
 }
 
-int meshopt_decodeMeshlet(void* vertices, size_t vertex_count, size_t vertex_size, void* triangles, size_t triangle_count, size_t triangle_size, const unsigned char* buffer, size_t buffer_size)
+int meshopt_decodeMeshlet(void* vertices, size_t vertex_count, void* triangles, size_t triangle_count, const unsigned char* buffer, size_t buffer_size, size_t vertex_size, size_t triangle_size)
 {
 	using namespace meshopt;
 
