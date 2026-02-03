@@ -60,8 +60,6 @@
 #include <stdio.h>
 #endif
 
-// This work is based on:
-// TODO
 namespace meshopt
 {
 
@@ -190,35 +188,49 @@ static size_t encodeTriangles(unsigned char* codes, unsigned char* extra, const 
 
 static size_t encodeVertices(unsigned char* ctrl, unsigned char* data, const unsigned int* vertices, size_t vertex_count)
 {
-	// grouped varint, 2 bit per value to indicate 0/1/2/4 byte deltas
+	// grouped varint, 2 bit per value to indicate 0/1/2/3 byte deltas, with per-group 4-byte fallback
 	memset(ctrl, 0, (vertex_count + 3) / 4);
 
 	unsigned char* start = data;
 
 	unsigned int last = ~0u;
 
-	for (size_t i = 0; i < vertex_count; ++i)
+	for (size_t i = 0; i < vertex_count; i += 4)
 	{
-		unsigned int d = vertices[i] - last - 1;
-		unsigned int v = (d << 1) ^ (int(d) >> 31);
+		unsigned int gv[4] = {};
 
-		// 0/1/2/4 bytes per value
-		int code = v == 0 ? 0 : (v < 256 ? 1 : (v < 65536 ? 2 : 3));
-
-		if (code > 0)
-			*data++ = (unsigned char)(v & 0xff);
-		if (code > 1)
-			*data++ = (unsigned char)((v >> 8) & 0xff);
-
-		if (code > 2)
+		for (int k = 0; k < 4 && i + k < vertex_count; ++k)
 		{
-			*data++ = (unsigned char)((v >> 16) & 0xff);
-			*data++ = (unsigned char)((v >> 24) & 0xff);
+			unsigned int d = vertices[i + k] - last - 1;
+			unsigned int v = (d << 1) ^ (int(d) >> 31);
+
+			gv[k] = v;
+			last = vertices[i + k];
 		}
 
-		ctrl[i / 4] |= code << ((i % 4) * 2);
+		// if any value needs 4 bytes, or if *all* values need 3 bytes, we use 4 bytes for all values
+		// this allows us to encode most 3-byte deltas with 3 bytes which saves space overall
+		bool use4 = (gv[0] | gv[1] | gv[2] | gv[3]) > 0xffffff || (gv[0] > 0xffff && gv[1] > 0xffff && gv[2] > 0xffff && gv[3] > 0xffff);
 
-		last = vertices[i];
+		for (int k = 0; k < 4; ++k)
+		{
+			unsigned int v = gv[k];
+
+			// 0/1/2/3 bytes per value, or all 4 values use 4 bytes
+			int code = use4 ? 3 : (v == 0 ? 0 : (v < 256 ? 1 : (v < 65536 ? 2 : 3)));
+
+			if (code > 0)
+				*data++ = (unsigned char)(v & 0xff);
+			if (code > 1)
+				*data++ = (unsigned char)((v >> 8) & 0xff);
+			if (code > 2)
+				*data++ = (unsigned char)((v >> 16) & 0xff);
+			if (use4)
+				*data++ = (unsigned char)((v >> 24) & 0xff);
+
+			// split low and high bits into two nibbles for better packing
+			ctrl[i / 4] |= ((code & 1) << k) | ((code >> 1) << (k + 4));
+		}
 	}
 
 	return data - start;
@@ -305,27 +317,33 @@ static const unsigned char* decodeVertices(V* vertices, const unsigned char* ctr
 {
 	unsigned int last = ~0u;
 
-	static const unsigned int kMasks[] = {0, 0xff, 0xffff, 0xffffffff};
-	static const unsigned char kLengths[] = {0, 1, 2, 4};
+	static const unsigned int masks[] = {0, 0xff, 0xffff, 0xffffff, 0xffffffff};
 
-	for (size_t i = 0; i < vertex_count; ++i)
+	for (size_t i = 0; i < vertex_count; i += 4)
 	{
 		if (data > bound)
 			return NULL;
 
-		unsigned char code = (ctrl[i / 4] >> ((i % 4) * 2)) & 3;
+		unsigned char code4 = ctrl[i / 4];
 
-		// branchlessly read up to 4 bytes
-		unsigned int v = (data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24)) & kMasks[code];
+		for (int k = 0; k < 4; ++k)
+		{
+			int code = ((code4 >> k) & 1) | ((code4 >> (k + 3)) & 2);
+			int length = code4 == 0xff ? 4 : code;
 
-		// unzigzag + 1
-		unsigned int d = (v >> 1) ^ -int(v & 1);
-		unsigned int r = last + d + 1;
+			// branchlessly read up to 4 bytes
+			unsigned int v = (data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24)) & masks[length];
 
-		vertices[i] = V(r);
+			// unzigzag + 1
+			unsigned int d = (v >> 1) ^ -int(v & 1);
+			unsigned int r = last + d + 1;
 
-		data += kLengths[code];
-		last = r;
+			if (i + k < vertex_count)
+				vertices[i + k] = V(r);
+
+			data += length;
+			last = r;
+		}
 	}
 
 	return data;
@@ -470,8 +488,8 @@ static bool decodeBuildTables()
 
 		for (int k = 0; k < 4; ++k)
 		{
-			int code = (i >> (k * 2)) & 3;
-			int length = (code == 3) ? 4 : code; // 0/1/2/4 bytes
+			int code = ((i >> k) & 1) | ((i >> (k + 3)) & 2);
+			int length = i == 0xff ? 4 : code; // 0/1/2/3 bytes, or all 4 bytes if code==0xff
 
 			shuf[k * 4 + 0] = (length > 0) ? (unsigned char)(offset + 0) : 0x80;
 			shuf[k * 4 + 1] = (length > 1) ? (unsigned char)(offset + 1) : 0x80;
@@ -970,7 +988,7 @@ size_t meshopt_encodeMeshletBound(size_t max_vertices, size_t max_triangles)
 	size_t extra_size = max_triangles * 3;
 
 	size_t ctrl_size = (max_vertices + 3) / 4;
-	size_t data_size = max_vertices * 4;
+	size_t data_size = (max_vertices + 3) / 4 * 16; // worst case: 16 bytes per vertex group
 
 	size_t gap_size = (codes_size + ctrl_size < 16) ? 16 - (codes_size + ctrl_size) : 0;
 
