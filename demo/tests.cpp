@@ -2851,6 +2851,73 @@ static void decodeMeshletSafety()
 	assert(memcmp(rt, rtr, 5 * sizeof(unsigned int)) == 0);
 }
 
+static void decodeMeshletBasic()
+{
+	const unsigned char triangles[5 * 3] = {
+	    0, 1, 2,
+	    2, 1, 3,
+	    4, 3, 5,
+	    2, 0, 6,
+	    6, 6, 6, // clang-format :-/
+	};
+
+	const unsigned int vertices[7] = {
+	    5,
+	    12,
+	    140,
+	    0,
+	    12389,
+	    123456789,
+	    7,
+	};
+
+	const unsigned char encoded[46] = {
+	    0x0a, 0x0c, 0xfe, 0x19, 0x01, 0xc8, 0x60, 0x00, 0x00, 0x5e, 0x39, 0xb7, 0x0e, 0x1d, 0x9a, 0xb7,
+	    0x0e, 0x00, 0x00, 0x00, 0x00, 0x04, 0x03, 0x05, 0x02, 0x00, 0x06, 0x06, 0x06, 0x06, 0x00, 0x00,
+	    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x87, 0xff, 0x2c, 0xff, 0x0f, // clang-format :-/
+	};
+
+	unsigned int rv[7];
+	unsigned char rt[5 * 3 + 1];
+	int rc = meshopt_decodeMeshlet(rv, 7, rt, 5, encoded, sizeof(encoded));
+
+	assert(rc == 0);
+	assert(memcmp(rv, vertices, sizeof(vertices)) == 0);
+	assert(memcmp(rt, triangles, sizeof(triangles)) == 0);
+}
+
+static void decodeMeshletTypical()
+{
+	const unsigned char triangles[44 * 3] = {
+	    0, 1, 2, 0, 2, 3, 3, 2, 4, 3, 4, 5, 0, 3, 6, 6, 3, 5, 0, 6, 7, 7, 6, 8,
+	    8, 6, 5, 7, 8, 9, 8, 5, 10, 10, 5, 4, 10, 4, 11, 11, 4, 12, 11, 12, 13, 10, 11, 14,
+	    10, 14, 8, 14, 11, 15, 15, 11, 13, 15, 13, 16, 15, 16, 14, 16, 13, 17, 14, 16, 18, 14, 18, 8,
+	    18, 16, 19, 19, 16, 20, 20, 16, 17, 20, 17, 21, 20, 21, 22, 20, 22, 19, 22, 21, 23, 19, 22, 24,
+	    19, 24, 25, 19, 25, 18, 18, 25, 26, 18, 26, 8, 8, 26, 9, 22, 23, 27, 22, 27, 24, 27, 23, 28,
+	    27, 28, 29, 27, 29, 24, 29, 28, 30, 24, 29, 31, // clang-format :-/
+	};
+
+	const unsigned int vertices[32] = {
+	    10, 11, 9, 12, 8, 13, 14, 15, 16, 17, 18, 19, 0, 20, 21, 22,
+	    23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, // clang-format :-/
+	};
+
+	const unsigned char encoded[53] = {
+	    0x14, 0x05, 0x04, 0x09, 0x08, 0x27, 0x26, 0x05, 0x05, 0x04, 0x08, 0x0d, 0x0e, 0x08, 0x11, 0x13,
+	    0x12, 0x08, 0x09, 0x16, 0x17, 0x18, 0x18, 0x0d, 0x03, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x0c,
+	    0x02, 0x38, 0x24, 0x43, 0x34, 0x20, 0x80, 0x61, 0x03, 0x61, 0x16, 0x26, 0x03, 0x10, 0x66, 0x10,
+	    0x12, 0xe3, 0x61, 0x10, 0x66, // clang-format :-/
+	};
+
+	unsigned int rv[32];
+	unsigned char rt[44 * 3];
+	int rc = meshopt_decodeMeshlet(rv, 32, rt, 44, encoded, sizeof(encoded));
+
+	assert(rc == 0);
+	assert(memcmp(rv, vertices, sizeof(vertices)) == 0);
+	assert(memcmp(rt, triangles, sizeof(triangles)) == 0);
+}
+
 void runTests()
 {
 	decodeIndexV0();
@@ -2974,4 +3041,6 @@ void runTests()
 
 	encodeMeshletBound();
 	decodeMeshletSafety();
+	decodeMeshletBasic();
+	decodeMeshletTypical();
 }
