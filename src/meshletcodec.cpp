@@ -228,7 +228,8 @@ static size_t encodeVertices(unsigned char* ctrl, unsigned char* data, const uns
 			if (use4)
 				*data++ = (unsigned char)((v >> 24) & 0xff);
 
-			ctrl[i / 4] |= code << (k * 2);
+			// split low and high bits into two nibbles for better packing
+			ctrl[i / 4] |= ((code & 1) << k) | ((code >> 1) << (k + 4));
 		}
 	}
 
@@ -328,7 +329,7 @@ static const unsigned char* decodeVertices(V* vertices, const unsigned char* ctr
 
 		for (int k = 0; k < 4; ++k)
 		{
-			unsigned char code = code4 == 0xff ? 4 : (code4 >> (k * 2)) & 3;
+			unsigned char code = code4 == 0xff ? 4 : ((code4 >> k) & 1) | ((code4 >> (k + 3)) & 2);
 
 			// branchlessly read up to 4 bytes
 			unsigned int v = (data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24)) & kMasks[code];
@@ -487,7 +488,7 @@ static bool decodeBuildTables()
 
 		for (int k = 0; k < 4; ++k)
 		{
-			int code = (i >> (k * 2)) & 3;
+			int code = ((i >> k) & 1) | ((i >> (k + 3)) & 2);
 			int length = i == 0xff ? 4 : code; // 0/1/2/3 bytes, or all 4 bytes if code==0xff
 
 			shuf[k * 4 + 0] = (length > 0) ? (unsigned char)(offset + 0) : 0x80;
