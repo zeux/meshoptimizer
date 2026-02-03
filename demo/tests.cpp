@@ -2788,7 +2788,7 @@ static void decodeMeshletSafety()
 	    2, 1, 3,
 	    3, 5, 4,
 	    2, 0, 6,
-	    7, 7, 7, // clang-format :-/
+	    6, 6, 6, // clang-format :-/
 	};
 
 	const unsigned int vertices[7] = {
@@ -2824,6 +2824,15 @@ static void decodeMeshletSafety()
 		assert(meshopt_decodeMeshlet(rv, 7, rt, 5, enc, i) < 0);
 	for (size_t i = 1; i < size; ++i)
 		assert(meshopt_decodeMeshlet(rv, 7, rt, 5, enc + i, size - i) < 0);
+
+	// because SIMD implementation is specialized by size, we need to test truncated inputs for short representations
+	unsigned short rvs[7 + 1];    // 32b alignment
+	unsigned char rts[5 * 3 + 1]; // 32b alignment
+
+	for (size_t i = 1; i < size; ++i)
+		assert(meshopt_decodeMeshlet(rvs, 7, rts, 5, enc, i) < 0);
+	for (size_t i = 1; i < size; ++i)
+		assert(meshopt_decodeMeshlet(rvs, 7, rts, 5, enc + i, size - i) < 0);
 
 	// when using decodeMeshletRaw, the output buffer sizes must be 16b aligned
 	unsigned int rvr[8], rtr[8];
