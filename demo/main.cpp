@@ -832,10 +832,13 @@ void encodeMeshlets(const Mesh& mesh, size_t max_vertices, size_t max_triangles,
 		size_t mbs = meshopt_encodeMeshlet(&cbuf[0], cbuf.size(), &meshlet_vertices[meshlet.vertex_offset], meshlet.vertex_count, &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count);
 		assert(mbs > 0);
 
-		packed.push_back((unsigned char)meshlet.vertex_count);
-		packed.push_back((unsigned char)meshlet.triangle_count);
-		packed.push_back((unsigned char)(mbs & 0xff));
-		packed.push_back((unsigned char)((mbs >> 8) & 0xff));
+		// 24-bit header: 7 bit (vertex_count-1), 7 bit (triangle_count-1), 10 bit size
+		// fits up to 128v/128t meshlet with 1024 bytes of encoded data; meshopt_encodeMeshletBound(128,128) < 1000
+		assert(size_t(meshlet.vertex_count - 1) < 128 && size_t(meshlet.triangle_count - 1) < 128 && mbs < 1024);
+		unsigned int header = ((meshlet.vertex_count - 1) & 0x7f) | (((meshlet.triangle_count - 1) & 0x7f) << 7) | ((unsigned(mbs) & 0x3ff) << 14);
+		packed.push_back((unsigned char)(header & 0xff));
+		packed.push_back((unsigned char)((header >> 8) & 0xff));
+		packed.push_back((unsigned char)((header >> 16) & 0xff));
 		packed.insert(packed.end(), &cbuf[0], &cbuf[mbs]);
 
 		validateDecodeMeshlet<unsigned int, unsigned int>(&cbuf[0], mbs, &meshlet_vertices[meshlet.vertex_offset], meshlet.vertex_count, &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count);
@@ -869,9 +872,12 @@ void encodeMeshlets(const Mesh& mesh, size_t max_vertices, size_t max_triangles,
 		unsigned char* p = &packed[0];
 		for (size_t j = 0; j < meshlets.size(); ++j)
 		{
-			size_t size = p[2] | (p[3] << 8);
-			meshopt_decodeMeshletRaw(rv, p[0], rt, p[1], p + 4, size);
-			p += 4 + size;
+			unsigned int header = p[0] | (p[1] << 8) | (p[2] << 16);
+			size_t vertex_count = (header & 0x7f) + 1;
+			size_t triangle_count = ((header >> 7) & 0x7f) + 1;
+			size_t size = (header >> 14) & 0x3ff;
+			meshopt_decodeMeshletRaw(rv, vertex_count, rt, triangle_count, p + 3, size);
+			p += 3 + size;
 		}
 		double t1 = timestamp();
 
