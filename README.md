@@ -416,20 +416,22 @@ To decode the data at runtime, call the decoding function:
 uint16_t* vertices = ...;
 uint8_t* triangles = ...;
 
-// equivalent to: meshopt_decodeMeshlet(vertices, m.vertex_count, 2, triangles, m.triangle_count, 3, stream, encoded_size)
+// automatically deduces `vertex_size=2` and `triangle_size=3` based on pointer types
 int res = meshopt_decodeMeshlet(vertices, m.vertex_count, triangles, m.triangle_count, stream, encoded_size);
 assert(res == 0);
 ```
 
 Vertex indices can be decoded as 16-bit or 32-bit elements; triangle data can be decoded as byte triplets (3 bytes per triangle, matching the `meshopt_buildMeshlets` output format) or as 32-bit packed elements (4 bytes per triangle, `a | (b << 8) | (c << 16)`). Output buffers must have available space aligned to 4 bytes; for example, decoding a 3-triangle stream using 3 bytes per triangle needs to be able to write 12 bytes to the output triangles array.
 
-When using the C++ API, `meshopt_decodeMeshlet` will automatically deduce the sizes based on the types of vertex and triangle pointers; when using the C API, the sizes need to be specified explicitly.
+When using the C++ API, `meshopt_decodeMeshlet` will automatically deduce the element sizes based on the types of vertex and triangle pointers; when using the C API, the sizes need to be specified explicitly.
 
 Decoder is heavily optimized and can directly target write-combined memory; you can expect it to run at 7-10 GB/s on modern desktop CPUs.
 
 Note that meshlet encoding assumes that the meshlet data was optimized; meshlets should be processed using `meshopt_optimizeMeshlet` before encoding. Additionally, vertex references should have a high degree of reference locality; this can be achieved by building meshlets from meshes optimized for vertex cache/fetch, or linearizing the vertex reference data (and reordering the vertex buffer accordingly). Feeding unoptimized data into the encoder will produce poor compression ratios. Codec preserves the order of triangles, however it can rotate each triangle to improve compression ratio (which means the provoking vertex may change).
 
 Meshlets without vertex references are supported; passing `NULL` vertices and `0` vertex count during encoding and decoding will produce encoded meshlets with just triangle data. Note that parameters supplied during decoding must match those used during encoding; if a meshlet was encoded with vertex references, it must be decoded with the same number of vertex references.
+
+The meshlet codec targets 5-7 bits per triangle for triangle data; when vertex references are encoded, the encoded size strongly depends on how linear the references are, but it's typical to see 9-12 bits per triangle in aggregate. To reduce the compressed size further, it's possible to compress the resulting encoded data with a general purpose compressor, which usually achieves 5-8 bits/triangle in aggregate; note that in this case general purpose compressors should be applied to a stream with many encoded meshlets at once to amortize their overhead.
 
 > Note: this codec is currently experimental and the data format and APIs are subject to change.
 
