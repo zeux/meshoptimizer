@@ -300,7 +300,7 @@ MESHOPTIMIZER_API int meshopt_decodeIndexSequence(void* destination, size_t inde
  * Encodes meshlet data into an array of bytes that is generally smaller and compresses better compared to original.
  * Returns encoded data size on success, 0 on error; the only error condition is if buffer doesn't have enough space
  * This function encodes a single meshlet; when encoding multiple meshlets, additional headers may be necessary to store vertex/triangle count and encoded size.
- * For maximum efficiency the meshlet being encoded should be optimized using meshopt_optimizeMeshlet; additionally, underlying vertex data should be optimized for locality (fetch).
+ * For maximum efficiency the meshlet being encoded should be optimized using meshopt_optimizeMeshlet; additionally, vertex reference data should be optimized for locality (fetch).
  *
  * buffer must contain enough space for the encoded meshlet (use meshopt_encodeMeshletBound to compute worst case size)
  * vertices may be NULL, in which case vertex_count must be 0 and only triangle data is encoded
@@ -318,8 +318,9 @@ MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_encodeMeshletBound(size_t max_vertices
  * vertices must contain enough space for the resulting vertex data, aligned to 4 bytes (align(vertex_count * vertex_size, 4) bytes)
  * vertex_size must be 2 (16-bit vertex references) or 4 (32-bit vertex references)
  * triangles must contain enough space for the resulting triangle data, aligned to 4 bytes (align(triangle_count * triangle_size, 4) bytes)
- * triangle_size must be 3 (8-bit indices) or 4 (32-bit triangles, stored as (a) | (b << 8) | (c << 16))
+ * triangle_size must be 3 (8-bit triangle indices) or 4 (32-bit packed triangles, stored as (a) | (b << 8) | (c << 16))
  * vertex_count, triangle_count match those used during encoding exactly; buffer_size must be equal to the encoded size returned by meshopt_encodeMeshlet.
+ * vertices may be NULL, in which case vertex_count must be 0 and the meshlet must contain just triangle data
  *
  * When using "raw" decoding (meshopt_decodeMeshletRaw), both vertices and triangles should have available space further aligned to 16 bytes for efficient SIMD decoding.
  */
