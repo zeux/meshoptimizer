@@ -872,6 +872,11 @@ SIMD_TARGET static int decodeMeshletSimd(void* vertices, void* triangles, const 
 	assert(gDecodeTablesInitialized);
 	(void)gDecodeTablesInitialized;
 
+#ifdef __clang__
+	// data is guaranteed to be non-null initially; if decode loops never hit bounds errors, it remains non-null
+	__builtin_assume(data);
+#endif
+
 	// decodes 4 vertices at a time with tail processing; writes up to align(vertex_size * vertex_count, 4)
 	// raw decoding skips tail processing by rounding up vertex count; it's safe because output buffer is guaranteed to have extra space, and tail control data is 0
 	if (vertex_size == 4 || Raw)
