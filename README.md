@@ -391,6 +391,50 @@ When referenced vertex indices are not sequential, the index codec will use arou
 
 Index buffer codec only supports triangle list topology; when encoding triangle strips or line lists, use `meshopt_encodeIndexSequence`/`meshopt_decodeIndexSequence` instead. This codec typically encodes indices into ~1 byte per index, but compressing the results further with a general purpose compressor can improve the results to 1-3 bits per index.
 
+
+### Meshlet compression
+
+When using mesh shading or clustered raytracing, meshlet vertex reference and triangle data can be compressed similarly to index data. This library provides a dedicated codec that exploits locality inherent in meshlet data. Unlike vertex and index buffer codecs that work on entire buffers, the meshlet codec encodes each meshlet independently; this allows applications to have more flexibility in structuring the runtime storage and adjust the decoded data during decoding. This also means that in some applications, additional data describing the meshlet (vertex/triangle count, encoded size) will need to be encoded into the meshlet stream, if it isn't already available during decoding.
+
+The input to the encoder is the vertex index array and micro-index buffer for a single meshlet, as produced by `meshopt_buildMeshlets`. To encode a meshlet, allocate a target buffer using the worst case bound and call the encoding function:
+
+```c++
+std::vector<unsigned char> mbuf(meshopt_encodeMeshletBound(max_vertices, max_triangles));
+
+for (const meshopt_Meshlet& m : meshlets)
+{
+    size_t msize = meshopt_encodeMeshlet(&mbuf[0], mbuf.size(),
+        &meshlet_vertices[m.vertex_offset], m.vertex_count, &meshlet_triangles[m.triangle_offset], m.triangle_count);
+
+    // write m.vertex_count, m.triangle_count, msize and mbuf[0..msize-1] to the output stream
+}
+```
+
+To decode the data at runtime, call the decoding function:
+
+```c++
+uint16_t* vertices = ...;
+uint8_t* triangles = ...;
+
+// automatically deduces `vertex_size=2` and `triangle_size=3` based on pointer types
+int res = meshopt_decodeMeshlet(vertices, m.vertex_count, triangles, m.triangle_count, stream, encoded_size);
+assert(res == 0);
+```
+
+Vertex indices can be decoded as 16-bit or 32-bit elements; triangle data can be decoded as byte triplets (3 bytes per triangle, matching the `meshopt_buildMeshlets` output format) or as 32-bit packed elements (4 bytes per triangle, `a | (b << 8) | (c << 16)`). Output buffers must have available space aligned to 4 bytes; for example, decoding a 3-triangle stream using 3 bytes per triangle needs to be able to write 12 bytes to the output triangles array.
+
+When using the C++ API, `meshopt_decodeMeshlet` will automatically deduce the element sizes based on the types of vertex and triangle pointers; when using the C API, the sizes need to be specified explicitly.
+
+Decoder is heavily optimized and can directly target write-combined memory; you can expect it to run at 7-10 GB/s on modern desktop CPUs.
+
+Note that meshlet encoding assumes that the meshlet data was optimized; meshlets should be processed using `meshopt_optimizeMeshlet` before encoding. Additionally, vertex references should have a high degree of reference locality; this can be achieved by building meshlets from meshes optimized for vertex cache/fetch, or linearizing the vertex reference data (and reordering the vertex buffer accordingly). Feeding unoptimized data into the encoder will produce poor compression ratios. Codec preserves the order of triangles, however it can rotate each triangle to improve compression ratio (which means the provoking vertex may change).
+
+Meshlets without vertex references are supported; passing `NULL` vertices and `0` vertex count during encoding and decoding will produce encoded meshlets with just triangle data. Note that parameters supplied during decoding must match those used during encoding; if a meshlet was encoded with vertex references, it must be decoded with the same number of vertex references.
+
+The meshlet codec targets 5-7 bits per triangle for triangle data; when vertex references are encoded, the encoded size strongly depends on how linear the references are, but it's typical to see 9-12 bits per triangle in aggregate. To reduce the compressed size further, it's possible to compress the resulting encoded data with a general purpose compressor, which usually achieves 5-8 bits/triangle in aggregate; note that in this case general purpose compressors should be applied to a stream with many encoded meshlets at once to amortize their overhead.
+
+> Note: this codec is currently experimental and the data format and APIs are subject to change.
+
 ### Point cloud compression
 
 The vertex encoding algorithms can be used to compress arbitrary streams of attribute data; one other use case besides triangle meshes is point cloud data. Typically point clouds come with position, color and possibly other attributes but don't have an implied point order.
@@ -716,6 +760,8 @@ Applications may configure the library to change the attributes of experimental 
 Currently, the following APIs are experimental:
 
 - `meshopt_SimplifyPermissive` mode for `meshopt_simplify*` functions (and associated `meshopt_SimplifyVertex_*` flags)
+- `meshopt_encodeMeshlet` and `meshopt_encodeMeshletBound` functions
+- `meshopt_decodeMeshlet` and `meshopt_decodeMeshletRaw` functions
 
 ## License
 
