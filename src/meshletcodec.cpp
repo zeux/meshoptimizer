@@ -594,41 +594,15 @@ inline uint32x4_t decodeVertexGroup(uint32x4_t last, unsigned char code, const u
 }
 #endif
 
+#if defined(SIMD_SSE)
+#ifdef __GNUC__
+typedef int __attribute__((aligned(1))) unaligned_int;
+#else
+typedef int unaligned_int;
+#endif
+#endif
+
 #if defined(SIMD_SSE) || defined(SIMD_NEON)
-SIMD_TARGET
-static const unsigned char* decodeTrianglesRawSimd(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, const unsigned char* bound, size_t triangle_count)
-{
-#if defined(SIMD_SSE)
-	__m128i repack = _mm_setr_epi8(9, 10, 11, -1, 12, 13, 14, -1, 0, 0, 0, 0, 0, 0, 0, 0);
-	__m128i state = _mm_setzero_si128();
-#elif defined(SIMD_NEON)
-	uint8x8_t repack = vcreate_u8(0xff0e0d0cff0b0a09ull);
-	uint8x16_t state = vdupq_n_u8(0);
-#endif
-
-	for (size_t i = 0; i < triangle_count; i += 2)
-	{
-		unsigned char code = *codes++;
-
-		if (extra > bound)
-			return NULL;
-
-		state = decodeTriangleGroup(state, code, extra);
-
-		// copy 6 bytes of new triangle data into output, formatted as 8 bytes with 0 padding
-		// safe to write 2 triangles as caller provides padded output buffer
-#if defined(SIMD_SSE)
-		__m128i r = _mm_shuffle_epi8(state, repack);
-		_mm_storel_epi64(reinterpret_cast<__m128i*>(&triangles[i]), r);
-#elif defined(SIMD_NEON)
-		uint32x2_t r = vreinterpret_u32_u8(vqtbl1_u8(state, repack));
-		vst1_u32(&triangles[i], r);
-#endif
-	}
-
-	return extra;
-}
-
 SIMD_TARGET
 static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const unsigned char* codes, const unsigned char* extra, const unsigned char* bound, size_t triangle_count)
 {
@@ -685,14 +659,6 @@ static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const u
 
 	return extra;
 }
-
-#if defined(SIMD_SSE)
-#ifdef __GNUC__
-typedef int __attribute__((aligned(1))) unaligned_int;
-#else
-typedef int unaligned_int;
-#endif
-#endif
 
 SIMD_TARGET
 static const unsigned char* decodeTrianglesSimd(unsigned char* triangles, const unsigned char* codes, const unsigned char* extra, const unsigned char* bound, size_t triangle_count)
@@ -772,34 +738,6 @@ static const unsigned char* decodeTrianglesSimd(unsigned char* triangles, const 
 	}
 
 	return extra;
-}
-
-SIMD_TARGET
-static const unsigned char* decodeVerticesRawSimd(unsigned int* vertices, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count)
-{
-#if defined(SIMD_SSE)
-	__m128i last = _mm_set1_epi32(-1);
-#elif defined(SIMD_NEON)
-	uint32x4_t last = vdupq_n_u32(~0u);
-#endif
-
-	for (size_t i = 0; i < vertex_count; i += 4)
-	{
-		unsigned char code = *ctrl++;
-		if (data > bound)
-			return NULL;
-
-		last = decodeVertexGroup(last, code, data);
-
-		// safe to write 4 vertices as caller provides padded output buffer
-#if defined(SIMD_SSE)
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(&vertices[i]), last);
-#elif defined(SIMD_NEON)
-		vst1q_u32(&vertices[i], last);
-#endif
-	}
-
-	return data;
 }
 
 SIMD_TARGET
@@ -928,49 +866,25 @@ static const unsigned char* decodeVerticesSimd(unsigned short* vertices, const u
 	return data;
 }
 
-SIMD_TARGET
-static int decodeMeshletRawSimd(void* vertices, void* triangles, const unsigned char* codes, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count, size_t triangle_count, size_t vertex_size, size_t triangle_size)
-{
-	(void)vertex_size;
-	(void)triangle_size;
-
-	assert(gDecodeTablesInitialized);
-	(void)gDecodeTablesInitialized;
-
-	// decodes 4 vertices at a time; last group may be partial, but:
-	// - we can write 4 vertices to the output because the caller has to provide output buffers aligned to 4 elements
-	// - the remaining control data is 0 in valid encodings so data will not be advanced beyond bound
-	data = decodeVerticesRawSimd(static_cast<unsigned int*>(vertices), ctrl, data, bound, vertex_count);
-	if (!data)
-		return -2;
-
-	// decodes 2 triangles at a time; last group may be partial, but:
-	// - we can write 2 triangles to the output because the caller has to provide output buffers aligned to 4 elements
-	// - the remaining code data is 0 in valid encodings so extra will not be advanced beyond bound
-	data = decodeTrianglesRawSimd(static_cast<unsigned int*>(triangles), codes, data, bound, triangle_count);
-	if (!data)
-		return -2;
-
-	return (data == bound) ? 0 : -3;
-}
-
-SIMD_TARGET
-static int decodeMeshletSimd(void* vertices, void* triangles, const unsigned char* codes, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count, size_t triangle_count, size_t vertex_size, size_t triangle_size)
+template <int Raw>
+SIMD_TARGET static int decodeMeshletSimd(void* vertices, void* triangles, const unsigned char* codes, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count, size_t triangle_count, size_t vertex_size, size_t triangle_size)
 {
 	assert(gDecodeTablesInitialized);
 	(void)gDecodeTablesInitialized;
 
 	// decodes 4 vertices at a time with tail processing; writes up to align(vertex_size * vertex_count, 4)
-	if (vertex_size == 4)
-		data = decodeVerticesSimd(static_cast<unsigned int*>(vertices), ctrl, data, bound, vertex_count);
+	// raw decoding skips tail processing by rounding up vertex count; it's safe because output buffer is guaranteed to have extra space, and tail control data is 0
+	if (vertex_size == 4 || Raw)
+		data = decodeVerticesSimd(static_cast<unsigned int*>(vertices), ctrl, data, bound, Raw ? (vertex_count + 3) & ~3 : vertex_count);
 	else
 		data = decodeVerticesSimd(static_cast<unsigned short*>(vertices), ctrl, data, bound, vertex_count);
 	if (!data)
 		return -2;
 
 	// decodes 2/4 triangles at a time with tail processing; writes up to align(triangle_size * triangle_count, 4)
-	if (triangle_size == 4)
-		data = decodeTrianglesSimd(static_cast<unsigned int*>(triangles), codes, data, bound, triangle_count);
+	// raw decoding skips tail processing by rounding up triangle count; it's safe because output buffer is guaranteed to have extra space, and tail code data is 0
+	if (triangle_size == 4 || Raw)
+		data = decodeTrianglesSimd(static_cast<unsigned int*>(triangles), codes, data, bound, Raw ? (triangle_count + 1) & ~1 : triangle_count);
 	else
 		data = decodeTrianglesSimd(static_cast<unsigned char*>(triangles), codes, data, bound, triangle_count);
 	if (!data)
@@ -1091,9 +1005,9 @@ int meshopt_decodeMeshlet(void* vertices, size_t vertex_count, size_t vertex_siz
 	assert(bound >= buffer && bound + 16 <= buffer + buffer_size);
 
 #if defined(SIMD_FALLBACK)
-	return (gDecodeTablesInitialized ? decodeMeshletSimd : decodeMeshlet)(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count, vertex_size, triangle_size);
+	return (gDecodeTablesInitialized ? decodeMeshletSimd<0> : decodeMeshlet)(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count, vertex_size, triangle_size);
 #elif defined(SIMD_SSE) || defined(SIMD_NEON)
-	return decodeMeshletSimd(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count, vertex_size, triangle_size);
+	return decodeMeshletSimd<0>(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count, vertex_size, triangle_size);
 #else
 	return decodeMeshlet(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count, vertex_size, triangle_size);
 #endif
@@ -1123,9 +1037,9 @@ int meshopt_decodeMeshletRaw(unsigned int* vertices, size_t vertex_count, unsign
 	assert(bound >= buffer && bound + 16 <= buffer + buffer_size);
 
 #if defined(SIMD_FALLBACK)
-	return (gDecodeTablesInitialized ? decodeMeshletRawSimd : decodeMeshlet)(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count, 4, 4);
+	return (gDecodeTablesInitialized ? decodeMeshletSimd<1> : decodeMeshlet)(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count, 4, 4);
 #elif defined(SIMD_SSE) || defined(SIMD_NEON)
-	return decodeMeshletRawSimd(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count, 4, 4);
+	return decodeMeshletSimd<1>(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count, 4, 4);
 #else
 	return decodeMeshlet(vertices, triangles, codes, ctrl, data, bound, vertex_count, triangle_count, 4, 4);
 #endif
