@@ -30,6 +30,14 @@
 #define SIMD_NEON
 #endif
 
+#if defined(_MSC_VER) && _MSC_VER > 1930
+#define SIMD_FLATTEN [[msvc::flatten]]
+#elif defined(__GNUC__) || defined(__clang__)
+#define SIMD_FLATTEN __attribute__((flatten))
+#else
+#define SIMD_FLATTEN
+#endif
+
 #ifndef SIMD_TARGET
 #define SIMD_TARGET
 #endif
@@ -867,7 +875,8 @@ static const unsigned char* decodeVerticesSimd(unsigned short* vertices, const u
 }
 
 template <int Raw>
-SIMD_TARGET static int decodeMeshletSimd(void* vertices, void* triangles, const unsigned char* codes, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count, size_t triangle_count, size_t vertex_size, size_t triangle_size)
+SIMD_TARGET SIMD_FLATTEN static int
+decodeMeshletSimd(void* vertices, void* triangles, const unsigned char* codes, const unsigned char* ctrl, const unsigned char* data, const unsigned char* bound, size_t vertex_count, size_t triangle_count, size_t vertex_size, size_t triangle_size)
 {
 	assert(gDecodeTablesInitialized);
 	(void)gDecodeTablesInitialized;
@@ -1053,4 +1062,5 @@ int meshopt_decodeMeshletRaw(unsigned int* vertices, size_t vertex_count, unsign
 #undef SIMD_SSE
 #undef SIMD_NEON
 #undef SIMD_FALLBACK
+#undef SIMD_FLATTEN
 #undef SIMD_TARGET
