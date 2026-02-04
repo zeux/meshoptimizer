@@ -303,6 +303,7 @@ MESHOPTIMIZER_API int meshopt_decodeIndexSequence(void* destination, size_t inde
  * For maximum efficiency the meshlet being encoded should be optimized using meshopt_optimizeMeshlet; additionally, underlying vertex data should be optimized for locality (fetch).
  *
  * buffer must contain enough space for the encoded meshlet (use meshopt_encodeMeshletBound to compute worst case size)
+ * vertices may be NULL, in which case vertex_count must be 0 and only triangle data is encoded
  * vertex_count and triangle_count must be <= 256.
  */
 MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_encodeMeshlet(unsigned char* buffer, size_t buffer_size, const unsigned int* vertices, size_t vertex_count, const unsigned char* triangles, size_t triangle_count);
@@ -318,6 +319,7 @@ MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_encodeMeshletBound(size_t max_vertices
  * vertex_size must be 2 (16-bit vertex references) or 4 (32-bit vertex references)
  * triangles must contain enough space for the resulting triangle data, aligned to 4 bytes (align(triangle_count * triangle_size, 4) bytes)
  * triangle_size must be 3 (8-bit indices) or 4 (32-bit triangles, stored as (a) | (b << 8) | (c << 16))
+ * vertex_count, triangle_count match those used during encoding exactly; buffer_size must be equal to the encoded size returned by meshopt_encodeMeshlet.
  *
  * When using "raw" decoding (meshopt_decodeMeshletRaw), both vertices and triangles should have available space further aligned to 16 bytes for efficient SIMD decoding.
  */
