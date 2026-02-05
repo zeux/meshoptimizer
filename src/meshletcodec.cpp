@@ -731,17 +731,15 @@ static const unsigned char* decodeTrianglesSimd(unsigned char* triangles, const 
 #if defined(SIMD_SSE)
 		__m128i r = _mm_srli_si128(state, 9);
 
-		if ((triangle_count & 3) == 1)
-			*reinterpret_cast<unaligned_int*>(tail) = _mm_cvtsi128_si32(r);
-		else
-			_mm_storel_epi64(reinterpret_cast<__m128i*>(tail), r);
+		*reinterpret_cast<unaligned_int*>(tail) = _mm_cvtsi128_si32(r);
+		if ((triangle_count & 3) > 1)
+			*reinterpret_cast<unaligned_int*>(tail + 4) = _mm_extract_epi32(r, 1);
 #elif defined(SIMD_NEON)
 		uint8x16_t r = vextq_u8(state, vdupq_n_u8(0), 9);
 
-		if ((triangle_count & 3) == 1)
-			vst1q_lane_u32(reinterpret_cast<unsigned int*>(tail), vreinterpretq_u32_u8(r), 0);
-		else
-			vst1_u8(tail, vget_low_u8(r));
+		vst1q_lane_u32(reinterpret_cast<unsigned int*>(tail), vreinterpretq_u32_u8(r), 0);
+		if ((triangle_count & 3) > 1)
+			vst1q_lane_u32(reinterpret_cast<unsigned int*>(tail + 4), vreinterpretq_u32_u8(r), 1);
 #endif
 	}
 
