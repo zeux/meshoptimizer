@@ -654,7 +654,7 @@ static const unsigned char* decodeTrianglesSimd(unsigned int* triangles, const u
 
 		state = decodeTriangleGroup(state, code, extra);
 
-		unsigned int* tail = &triangles[triangle_count & ~1];
+		unsigned int* tail = &triangles[triangle_count & ~1u];
 
 #if defined(SIMD_SSE)
 		__m128i r = _mm_shuffle_epi8(state, repack);
@@ -726,7 +726,7 @@ static const unsigned char* decodeTrianglesSimd(unsigned char* triangles, const 
 
 		state = decodeTriangleGroup(state, code, extra);
 
-		unsigned char* tail = &triangles[(triangle_count & ~3) * 3];
+		unsigned char* tail = &triangles[(triangle_count & ~3u) * 3];
 
 #if defined(SIMD_SSE)
 		__m128i r = _mm_srli_si128(state, 9);
@@ -783,7 +783,7 @@ static const unsigned char* decodeVerticesSimd(unsigned int* vertices, const uns
 
 		last = decodeVertexGroup(last, code, data);
 
-		unsigned int* tail = &vertices[vertex_count & ~3];
+		unsigned int* tail = &vertices[vertex_count & ~3u];
 
 #if defined(SIMD_SSE)
 		tail[0] = _mm_cvtsi128_si32(last);
@@ -846,7 +846,7 @@ static const unsigned char* decodeVerticesSimd(unsigned short* vertices, const u
 
 		last = decodeVertexGroup(last, code, data);
 
-		unsigned short* tail = &vertices[vertex_count & ~3];
+		unsigned short* tail = &vertices[vertex_count & ~3u];
 
 #if defined(SIMD_SSE)
 		__m128i r = _mm_shufflelo_epi16(last, 8);
