@@ -787,31 +787,19 @@ static const unsigned char* decodeVerticesSimd(unsigned int* vertices, const uns
 
 		unsigned int* tail = &vertices[vertex_count & ~3];
 
-		switch (vertex_count & 3)
-		{
 #if defined(SIMD_SSE)
-		case 3:
-			tail[2] = _mm_extract_epi32(last, 2);
-			// fallthrough
-		case 2:
+		tail[0] = _mm_cvtsi128_si32(last);
+		if ((vertex_count & 3) > 1)
 			tail[1] = _mm_extract_epi32(last, 1);
-			// fallthrough
-		case 1:
-			tail[0] = _mm_extract_epi32(last, 0);
-			// fallthrough
+		if ((vertex_count & 3) > 2)
+			tail[2] = _mm_extract_epi32(last, 2);
 #elif defined(SIMD_NEON)
-		case 3:
-			vst1q_lane_u32(&tail[2], last, 2);
-			// fallthrough
-		case 2:
+		vst1q_lane_u32(&tail[0], last, 0);
+		if ((vertex_count & 3) > 1)
 			vst1q_lane_u32(&tail[1], last, 1);
-			// fallthrough
-		case 1:
-			vst1q_lane_u32(&tail[0], last, 0);
-			// fallthrough
+		if ((vertex_count & 3) > 2)
+			vst1q_lane_u32(&tail[2], last, 2);
 #endif
-		default:;
-		}
 	}
 
 	return data;
@@ -863,7 +851,7 @@ static const unsigned char* decodeVerticesSimd(unsigned short* vertices, const u
 		unsigned short* tail = &vertices[vertex_count & ~3];
 
 #if defined(SIMD_SSE)
-		__m128i r = _mm_shuffle_epi8(last, repack);
+		__m128i r = _mm_shufflelo_epi16(last, 8);
 		*reinterpret_cast<unaligned_int*>(tail) = _mm_cvtsi128_si32(r);
 #elif defined(SIMD_NEON)
 		uint16x4_t r = vmovn_u32(last);
