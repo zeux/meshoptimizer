@@ -65,10 +65,43 @@ uint decodeVertices(uint out_vertices, uint ctrl, uint data, uint bound, uint ve
 	return data;
 }
 
+uint decodeTriangle(uint code, uint extra0, uint extra1, uint extra2, inout uint fifo0, inout uint fifo1, inout uint fifo2, inout uint next, inout uint extra)
+{
+	// reuse: 0-1 extra vertices
+	uint fifo = code < 4 ? fifo0 : (code < 8 ? fifo1 : fifo2);
+	uint edge = fifo >> ((code << 3) & 16); // shift by 16 if bit 1 is set (odd edge for each triangle)
+	uint c_reuse = (code & 1) == 1 ? extra0 : next;
+
+	// restart: 0-3 extra vertices
+	uint extran = code & 3;
+	uint a = extran > 0 ? extra0 : next;
+	uint b = extran > 1 ? extra1 : next + (1 - extran);
+	uint c = extran > 2 ? extra2 : next + (2 - extran);
+
+	// select between reuse and restart and repack triangle into edge format (0xcbac)
+	a = code >= 12 ? a : (edge >> 8) & 0xff;
+	b = code >= 12 ? b : edge & 0xff;
+	c = code >= 12 ? c : c_reuse;
+
+	uint tri = c | (a << 8) | (b << 16) | (c << 24);
+
+	// advance next/extra; reuse codes use 1 lsb for extra count, restart codes use 2 lsbs
+	uint extrab = code < 12 ? 1 : 3;
+	next += extrab - code & extrab;
+	extra += code & extrab;
+
+	// rotate fifo
+	fifo2 = fifo1;
+	fifo1 = fifo0;
+	fifo0 = tri;
+
+	return tri >> 8;
+}
+
 uint decodeTriangles(uint out_triangles, uint codes, uint extra, uint bound, uint triangle_count)
 {
 	uint next = 0;
-	uint fifo[3] = {}; // two edge fifo entries in one uint: 0xcbac
+	uint fifo0 = 0, fifo1 = 0, fifo2 = 0; // two edge fifo entries in one uint: 0xcbac
 
 	for (uint i = 0; i < triangle_count; ++i)
 	{
@@ -77,41 +110,13 @@ uint decodeTriangles(uint out_triangles, uint codes, uint extra, uint bound, uin
 
 		uint codeg = uint(gStream[codes + i / 2]);
 		uint code = (codeg >> ((i & 1) * 4)) & 0xF;
-		uint tri;
 
-		if (code < 12)
-		{
-			// reuse
-			uint edge = fifo[code / 4];
-			edge >>= (code << 3) & 16; // shift by 16 if bit 1 is set (odd edge for each triangle)
+		uint extra0 = uint(gStream[extra + 0]);
+		uint extra1 = uint(gStream[extra + 1]);
+		uint extra2 = uint(gStream[extra + 2]);
+		uint tri = decodeTriangle(code, extra0, extra1, extra2, fifo0, fifo1, fifo2, next, extra);
 
-			// 0-1 extra vertices
-			uint c = ((code & 1) == 0) ? next++ : uint(gStream[extra++]);
-
-			// repack triangle into edge format (0xcbac)
-			tri = ((edge & 0xff) << 16) | (edge & 0xff00) | c | (c << 24);
-		}
-		else
-		{
-			// restart
-			bool fea = code > 12;
-			bool feb = code > 13;
-			bool fec = code > 14;
-
-			// 0-3 extra vertices
-			uint a = !fea ? next++ : uint(gStream[extra++]);
-			uint b = !feb ? next++ : uint(gStream[extra++]);
-			uint c = !fec ? next++ : uint(gStream[extra++]);
-
-			// repack triangle into edge format (0xcbac)
-			tri = c | (a << 8) | (b << 16) | (c << 24);
-		}
-
-		gOutput[out_triangles + i] = tri >> 8;
-
-		fifo[2] = fifo[1];
-		fifo[1] = fifo[0];
-		fifo[0] = tri;
+		gOutput[out_triangles + i] = tri;
 	}
 
 	return extra;
