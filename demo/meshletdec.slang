@@ -103,20 +103,29 @@ uint decodeTriangles(uint out_triangles, uint codes, uint extra, uint bound, uin
 	uint next = 0;
 	uint fifo0 = 0, fifo1 = 0, fifo2 = 0; // two edge fifo entries in one uint: 0xcbac
 
-	for (uint i = 0; i < triangle_count; ++i)
+	for (uint i = 0; i < triangle_count; i += 2)
 	{
 		if (extra > bound)
 			return ~0u;
 
 		uint codeg = uint(gStream[codes + i / 2]);
-		uint code = (codeg >> ((i & 1) * 4)) & 0xF;
 
+		// first triangle
 		uint extra0 = uint(gStream[extra + 0]);
 		uint extra1 = uint(gStream[extra + 1]);
 		uint extra2 = uint(gStream[extra + 2]);
-		uint tri = decodeTriangle(code, extra0, extra1, extra2, fifo0, fifo1, fifo2, next, extra);
+		uint tri = decodeTriangle(codeg & 15, extra0, extra1, extra2, fifo0, fifo1, fifo2, next, extra);
 
 		gOutput[out_triangles + i] = tri;
+
+		// second triangle, if any
+		extra0 = uint(gStream[extra + 0]);
+		extra1 = uint(gStream[extra + 1]);
+		extra2 = uint(gStream[extra + 2]);
+		tri = decodeTriangle(codeg >> 4, extra0, extra1, extra2, fifo0, fifo1, fifo2, next, extra);
+
+		if (i + 1 < triangle_count)
+			gOutput[out_triangles + i + 1] = tri;
 	}
 
 	return extra;
