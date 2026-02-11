@@ -325,8 +325,6 @@ static const unsigned char* decodeVertices(V* vertices, const unsigned char* ctr
 {
 	unsigned int last = ~0u;
 
-	static const unsigned int masks[] = {0, 0xff, 0xffff, 0xffffff, 0xffffffff};
-
 	for (size_t i = 0; i < vertex_count; i += 4)
 	{
 		if (data > bound)
@@ -340,7 +338,8 @@ static const unsigned char* decodeVertices(V* vertices, const unsigned char* ctr
 			int length = code4 == 0xff ? 4 : code;
 
 			// branchlessly read up to 4 bytes
-			unsigned int v = (data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24)) & masks[length];
+			unsigned int mask = (length == 4) ? ~0u : (1 << (8 * length)) - 1;
+			unsigned int v = (data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24)) & mask;
 
 			// unzigzag + 1
 			unsigned int d = (v >> 1) ^ -int(v & 1);
