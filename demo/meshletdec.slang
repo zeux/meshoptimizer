@@ -1,16 +1,16 @@
 /**
-* meshletdec.slang - an example GPU decoder for meshlet data encoded using meshopt_encodeMeshlet
-* This is intended to be used as a starting point for applications that want to decode meshlet data on the GPU.
-*
-* The shader exposes an entrypoint, decodeMeshlets, that decodes a set of meshlets; each meshlet is decoded independently,
-* and the output vertex/triangle data is written as uint32 per element (triangle data is written as 0xabc).
-* This matches the output format for meshopt_decodeMeshlet with vertex_size=4 triangle_size=4. If alternative formats are
-* needed, the code should be changed to output them; note that for triangle data, it may make sense to output data to shared
-* memory to be able to use larger aligned 32-bit writes to global memory after that.
-*
-* Copyright (C) 2016-2026, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
-* This code is distributed under the MIT License. See notice at the end of this file.
-*/
+ * meshletdec.slang - an example GPU decoder for meshlet data encoded using meshopt_encodeMeshlet
+ * This is intended to be used as a starting point for applications that want to decode meshlet data on the GPU.
+ *
+ * The shader exposes an entrypoint, decodeMeshlets, that decodes a set of meshlets; each meshlet is decoded independently,
+ * and the output vertex/triangle data is written as uint32 per element (triangle data is written as 0xccbbaa).
+ * This matches the output format for meshopt_decodeMeshlet with vertex_size=4 triangle_size=4. If alternative formats are
+ * needed, the code should be changed to output them; note that for triangle data, it may make sense to output data to shared
+ * memory to be able to use larger aligned 32-bit writes to global memory after that.
+ *
+ * Copyright (C) 2016-2026, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
+ * This code is distributed under the MIT License. See notice at the end of this file.
+ */
 
 struct MeshletDesc
 {
@@ -95,6 +95,7 @@ uint decodeTriangle(uint code, uint extra0, uint extra1, uint extra2, inout uint
 	fifo1 = fifo0;
 	fifo0 = tri;
 
+	// output triangle is stored without extra edge vertex (0xcbac => 0xcba)
 	return tri >> 8;
 }
 
@@ -161,7 +162,7 @@ int decodeMeshlet(uint out_vertices, uint vertex_count, uint out_triangles, uint
 
 [shader("compute")]
 [numthreads(32, 1, 1)]
-void decodeMeshlets(uint3 dispatch_thread_id : SV_DispatchThreadID)
+void decodeMeshlets(uint3 dispatch_thread_id: SV_DispatchThreadID)
 {
 	uint meshlet_count = gMeshletCount;
 
@@ -183,26 +184,26 @@ void decodeMeshlets(uint3 dispatch_thread_id : SV_DispatchThreadID)
 }
 
 /**
-* Copyright (c) 2016-2026 Arseny Kapoulkine
-*
-* Permission is hereby granted, free of charge, to any person
-* obtaining a copy of this software and associated documentation
-* files (the "Software"), to deal in the Software without
-* restriction, including without limitation the rights to use,
-* copy, modify, merge, publish, distribute, sublicense, and/or sell
-* copies of the Software, and to permit persons to whom the
-* Software is furnished to do so, subject to the following
-* conditions:
-*
-* The above copyright notice and this permission notice shall be
-* included in all copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-* OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
-* HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-* WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-* FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-* OTHER DEALINGS IN THE SOFTWARE.
-*/
+ * Copyright (c) 2016-2026 Arseny Kapoulkine
+ *
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
