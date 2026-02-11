@@ -427,6 +427,8 @@ When using the C++ API, `meshopt_decodeMeshlet` will automatically deduce the el
 
 Decoder is heavily optimized and can directly target write-combined memory; you can expect it to run at 7-10 GB/s on modern desktop CPUs.
 
+> Applications that do most of the streaming decompression on the GPU can also decode meshlet data on the GPU if CPU decoding is inconvenient; an example [meshletdec.slang](./demo/meshletdec.slang) shader is provided for 32-bit output format, and can be easily adapted to other formats, including custom ones.
+
 Note that meshlet encoding assumes that the meshlet data was optimized; meshlets should be processed using `meshopt_optimizeMeshlet` before encoding. Additionally, vertex references should have a high degree of reference locality; this can be achieved by building meshlets from meshes optimized for vertex cache/fetch, or linearizing the vertex reference data (and reordering the vertex buffer accordingly). Feeding unoptimized data into the encoder will produce poor compression ratios. Codec preserves the order of triangles, however it can rotate each triangle to improve compression ratio (which means the provoking vertex may change).
 
 Meshlets without vertex references are supported; passing `NULL` vertices and `0` vertex count during encoding and decoding will produce encoded meshlets with just triangle data. Note that parameters supplied during decoding must match those used during encoding; if a meshlet was encoded with vertex references, it must be decoded with the same number of vertex references.
