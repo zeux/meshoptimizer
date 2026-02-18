@@ -350,7 +350,7 @@ int res = meshopt_decodeVertexBuffer(vertices, vertex_count, sizeof(Vertex), &vb
 assert(res == 0);
 ```
 
-Note that vertex encoding assumes that vertex buffer was optimized for vertex fetch, and that vertices are quantized. Feeding unoptimized data into the encoder may produce poor compression ratios. The codec is lossless by itself - the only lossy step is quantization/reordering or filters that you may apply before encoding. Additionally, if the vertex data contains padding bytes, they should be zero-initialized to ensure that the encoder does not need to store uninitialized data.
+Note that vertex encoding assumes that vertex buffer was optimized for vertex fetch, and that vertices are quantized. Feeding unoptimized data into the encoder may result in poor compression ratios. The codec is lossless by itself - the only lossy step is quantization/reordering or filters that you may apply before encoding. Additionally, if the vertex data contains padding bytes, they should be zero-initialized to ensure that the encoder does not need to store uninitialized data.
 
 Decoder is heavily optimized and can directly target write-combined memory; you can expect it to run at 3-6 GB/s on modern desktop CPUs. Compression ratio depends on the data; vertex data compression ratio is typically around 2-4x (compared to already quantized and optimally packed data). General purpose lossless compressors can further improve the compression ratio at some cost to decoding performance.
 
@@ -380,7 +380,7 @@ int res = meshopt_decodeIndexBuffer(indices, index_count, &ibuf[0], ibuf.size())
 assert(res == 0);
 ```
 
-Note that index encoding assumes that the index buffer was optimized for vertex cache and vertex fetch. Feeding unoptimized data into the encoder will produce poor compression ratios. Codec preserves the order of triangles, however it can rotate each triangle to improve compression ratio (which means the provoking vertex may change).
+Note that index encoding assumes that the index buffer was optimized for vertex cache and vertex fetch. Feeding unoptimized data into the encoder will result in poor compression ratios. Codec preserves the order of triangles, however it can rotate each triangle to improve compression ratio (which means the provoking vertex may change).
 
 Decoder is heavily optimized and can directly target write-combined memory; you can expect it to run at 3-6 GB/s on modern desktop CPUs.
 
@@ -396,7 +396,7 @@ Index buffer codec only supports triangle list topology; when encoding triangle 
 
 When using mesh shading or clustered raytracing, meshlet vertex reference and triangle data can be compressed similarly to index data. This library provides a dedicated codec that exploits locality inherent in meshlet data. Unlike vertex and index buffer codecs that work on entire buffers, the meshlet codec encodes each meshlet independently; this allows applications to have more flexibility in structuring the runtime storage and adjust the decoded data during decoding. This also means that in some applications, additional data describing the meshlet (vertex/triangle count, encoded size) will need to be encoded into the meshlet stream, if it isn't already available during decoding.
 
-The input to the encoder is the vertex index array and micro-index buffer for a single meshlet, as produced by `meshopt_buildMeshlets`. To encode a meshlet, allocate a target buffer using the worst case bound and call the encoding function:
+To encode a meshlet, you need to allocate a target buffer (using the worst case bound) and call the encoding function with the vertex index references and micro-index buffer, as produced by `meshopt_buildMeshlets`:
 
 ```c++
 std::vector<unsigned char> mbuf(meshopt_encodeMeshletBound(max_vertices, max_triangles));
@@ -421,7 +421,7 @@ int res = meshopt_decodeMeshlet(vertices, m.vertex_count, triangles, m.triangle_
 assert(res == 0);
 ```
 
-Vertex indices can be decoded as 16-bit or 32-bit elements; triangle data can be decoded as byte triplets (3 bytes per triangle, matching the `meshopt_buildMeshlets` output format) or as 32-bit packed elements (4 bytes per triangle, `a | (b << 8) | (c << 16)`). Output buffers must have available space aligned to 4 bytes; for example, decoding a 3-triangle stream using 3 bytes per triangle needs to be able to write 12 bytes to the output triangles array.
+Vertex index references can be decoded as either 16-bit or 32-bit integers; triangle data can be decoded as 3 bytes per triangle (matching `meshopt_buildMeshlets` output format) or as a 32-bit integer per triangle (with indices packed as `a | (b << 8) | (c << 16)` and top byte unused). Output buffers must have available space aligned to 4 bytes; for example, decoding a 3-triangle stream using 3 bytes per triangle needs to be able to write 12 bytes to the output triangles array.
 
 When using the C++ API, `meshopt_decodeMeshlet` will automatically deduce the element sizes based on the types of vertex and triangle pointers; when using the C API, the sizes need to be specified explicitly.
 
@@ -429,7 +429,7 @@ Decoder is heavily optimized and can directly target write-combined memory; you 
 
 > Applications that do most of the streaming decompression on the GPU can also decode meshlet data on the GPU if CPU decoding is inconvenient; an example [meshletdec.slang](./demo/meshletdec.slang) shader is provided for 32-bit output format, and can be easily adapted to other formats, including custom ones.
 
-Note that meshlet encoding assumes that the meshlet data was optimized; meshlets should be processed using `meshopt_optimizeMeshlet` before encoding. Additionally, vertex references should have a high degree of reference locality; this can be achieved by building meshlets from meshes optimized for vertex cache/fetch, or linearizing the vertex reference data (and reordering the vertex buffer accordingly). Feeding unoptimized data into the encoder will produce poor compression ratios. Codec preserves the order of triangles, however it can rotate each triangle to improve compression ratio (which means the provoking vertex may change).
+Note that meshlet encoding assumes that the meshlet data was optimized; meshlets should be processed using `meshopt_optimizeMeshlet` before encoding. Additionally, vertex references should have a high degree of reference locality; this can be achieved by building meshlets from meshes optimized for vertex cache/fetch, or linearizing the vertex reference data (and reordering the vertex buffer accordingly). Feeding unoptimized data into the encoder will result in poor compression ratios. Codec preserves the order of triangles, however it can rotate each triangle to improve compression ratio (which means the provoking vertex may change).
 
 Meshlets without vertex references are supported; passing `NULL` vertices and `0` vertex count during encoding and decoding will produce encoded meshlets with just triangle data. Note that parameters supplied during decoding must match those used during encoding; if a meshlet was encoded with vertex references, it must be decoded with the same number of vertex references.
 
