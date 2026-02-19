@@ -19,18 +19,9 @@
 
 // This work is based on:
 // Graham Wihlidal. Optimizing the Graphics Pipeline with Compute. 2016
-// Matthaeus Chajdas. GeometryFX 1.2 - Cluster Culling. 2016
-// Jack Ritter. An Efficient Bounding Sphere. 1990
-// Thomas Larsson. Fast and Tight Fitting Bounding Spheres. 2008
 // Ingo Wald, Vlastimil Havran. On building fast kd-Trees for Ray Tracing, and on doing that in O(N log N). 2006
 namespace meshopt
 {
-
-// This must be <= 256 since meshlet indices are stored as bytes
-const size_t kMeshletMaxVertices = 256;
-
-// A reasonable limit is around 2*max_vertices or less
-const size_t kMeshletMaxTriangles = 512;
 
 // We keep a limited number of seed triangles and add a few triangles per finished meshlet
 const size_t kMeshletMaxSeeds = 256;
@@ -1020,11 +1011,8 @@ size_t meshopt_buildMeshletsBound(size_t index_count, size_t max_vertices, size_
 	using namespace meshopt;
 
 	assert(index_count % 3 == 0);
-	assert(max_vertices >= 3 && max_vertices <= kMeshletMaxVertices);
-	assert(max_triangles >= 1 && max_triangles <= kMeshletMaxTriangles);
-
-	(void)kMeshletMaxVertices;
-	(void)kMeshletMaxTriangles;
+	assert(max_vertices >= 3 && max_vertices <= 256);
+	assert(max_triangles >= 1 && max_triangles <= 512);
 
 	// meshlet construction is limited by max vertices and max triangles per meshlet
 	// the worst case is that the input is an unindexed stream since this equally stresses both limits
@@ -1044,8 +1032,8 @@ size_t meshopt_buildMeshletsFlex(meshopt_Meshlet* meshlets, unsigned int* meshle
 	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
 
-	assert(max_vertices >= 3 && max_vertices <= kMeshletMaxVertices);
-	assert(min_triangles >= 1 && min_triangles <= max_triangles && max_triangles <= kMeshletMaxTriangles);
+	assert(max_vertices >= 3 && max_vertices <= 256);
+	assert(min_triangles >= 1 && min_triangles <= max_triangles && max_triangles <= 512);
 
 	assert(cone_weight >= 0 && cone_weight <= 1);
 	assert(split_factor >= 0);
@@ -1238,8 +1226,8 @@ size_t meshopt_buildMeshletsScan(meshopt_Meshlet* meshlets, unsigned int* meshle
 
 	assert(index_count % 3 == 0);
 
-	assert(max_vertices >= 3 && max_vertices <= kMeshletMaxVertices);
-	assert(max_triangles >= 1 && max_triangles <= kMeshletMaxTriangles);
+	assert(max_vertices >= 3 && max_vertices <= 256);
+	assert(max_triangles >= 1 && max_triangles <= 512);
 
 	meshopt_Allocator allocator;
 
@@ -1275,8 +1263,8 @@ size_t meshopt_buildMeshletsSpatial(struct meshopt_Meshlet* meshlets, unsigned i
 	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
 
-	assert(max_vertices >= 3 && max_vertices <= kMeshletMaxVertices);
-	assert(min_triangles >= 1 && min_triangles <= max_triangles && max_triangles <= kMeshletMaxTriangles);
+	assert(max_vertices >= 3 && max_vertices <= 256);
+	assert(min_triangles >= 1 && min_triangles <= max_triangles && max_triangles <= 512);
 
 	if (index_count == 0)
 		return 0;
