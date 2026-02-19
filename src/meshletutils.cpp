@@ -7,11 +7,9 @@
 #include <string.h>
 
 // This work is based on:
-// Graham Wihlidal. Optimizing the Graphics Pipeline with Compute. 2016
 // Matthaeus Chajdas. GeometryFX 1.2 - Cluster Culling. 2016
 // Jack Ritter. An Efficient Bounding Sphere. 1990
 // Thomas Larsson. Fast and Tight Fitting Bounding Spheres. 2008
-// Ingo Wald, Vlastimil Havran. On building fast kd-Trees for Ray Tracing, and on doing that in O(N log N). 2006
 namespace meshopt
 {
 
@@ -23,7 +21,7 @@ const size_t kMeshletMaxTriangles = 512;
 
 static void computeBoundingSphere(float result[4], const float* points, size_t count, size_t points_stride, const float* radii, size_t radii_stride, size_t axis_count)
 {
-	static const float kAxes[7][3] = {
+	static const float axes[7][3] = {
 	    // X, Y, Z
 	    {1, 0, 0},
 	    {0, 1, 0},
@@ -37,7 +35,7 @@ static void computeBoundingSphere(float result[4], const float* points, size_t c
 	};
 
 	assert(count > 0);
-	assert(axis_count <= sizeof(kAxes) / sizeof(kAxes[0]));
+	assert(axis_count <= sizeof(axes) / sizeof(axes[0]));
 
 	size_t points_stride_float = points_stride / sizeof(float);
 	size_t radii_stride_float = radii_stride / sizeof(float);
@@ -60,7 +58,7 @@ static void computeBoundingSphere(float result[4], const float* points, size_t c
 
 		for (size_t axis = 0; axis < axis_count; ++axis)
 		{
-			const float* ax = kAxes[axis];
+			const float* ax = axes[axis];
 
 			float tp = ax[0] * p[0] + ax[1] * p[1] + ax[2] * p[2];
 			float tpmin = tp - r, tpmax = tp + r;
