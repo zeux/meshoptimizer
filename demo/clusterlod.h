@@ -669,55 +669,7 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 
 size_t clodLocalIndices(unsigned int* vertices, unsigned char* triangles, const unsigned int* indices, size_t index_count)
 {
-	size_t unique = 0;
-
-	// direct mapped cache for fast lookups based on low index bits; inspired by vk_lod_clusters from NVIDIA
-	short cache[1024];
-	memset(cache, -1, sizeof(cache));
-
-	for (size_t i = 0; i < index_count; ++i)
-	{
-		unsigned int v = indices[i];
-		unsigned int key = v & (sizeof(cache) / sizeof(cache[0]) - 1);
-		short c = cache[key];
-
-		// fast path: vertex has been seen before
-		if (c >= 0 && vertices[c] == v)
-		{
-			triangles[i] = (unsigned char)c;
-			continue;
-		}
-
-		// fast path: vertex has never been seen before
-		if (c < 0)
-		{
-			cache[key] = short(unique);
-			triangles[i] = (unsigned char)unique;
-			vertices[unique++] = v;
-			continue;
-		}
-
-		// slow path: hash collision with a different vertex, so we need to look through all vertices
-		int pos = -1;
-		for (size_t j = 0; j < unique; ++j)
-			if (vertices[j] == v)
-			{
-				pos = int(j);
-				break;
-			}
-
-		if (pos < 0)
-		{
-			pos = int(unique);
-			vertices[unique++] = v;
-		}
-
-		cache[key] = short(pos);
-		triangles[i] = (unsigned char)pos;
-	}
-
-	assert(unique <= 256);
-	return unique;
+	return meshopt_extractMeshletIndices(vertices, triangles, indices, index_count);
 }
 #endif
 
