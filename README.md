@@ -764,6 +764,7 @@ Currently, the following APIs are experimental:
 - `meshopt_SimplifyPermissive` mode for `meshopt_simplify*` functions (and associated `meshopt_SimplifyVertex_*` flags)
 - `meshopt_encodeMeshlet` and `meshopt_encodeMeshletBound` functions
 - `meshopt_decodeMeshlet` and `meshopt_decodeMeshletRaw` functions
+- `meshopt_extractMeshletIndices` function
 
 ## License
 

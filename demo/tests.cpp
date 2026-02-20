@@ -1395,6 +1395,24 @@ static void meshletsMax()
 	}
 }
 
+static void extractMeshlet()
+{
+	// 15 and 1039 collide in low 10 bits
+	const unsigned int indices[] = {0, 7, 15, 1039, 7, 15};
+
+	unsigned int vertices[4];
+	unsigned char triangles[6];
+	size_t unique = meshopt_extractMeshletIndices(vertices, triangles, indices, 6);
+	assert(unique == 4);
+
+	// verify the invariant: vertices[triangles[i]] == indices[i]
+	for (size_t i = 0; i < 6; ++i)
+		assert(vertices[triangles[i]] == indices[i]);
+
+	assert(vertices[0] == 0 && vertices[1] == 7 && vertices[2] == 15 && vertices[3] == 1039);
+	assert(triangles[0] == 0 && triangles[1] == 1 && triangles[2] == 2 && triangles[3] == 3 && triangles[4] == 1 && triangles[5] == 2);
+}
+
 static void meshletsSpatial()
 {
 	// two tetrahedrons far apart
@@ -2986,6 +3004,8 @@ void runTests()
 
 	clusterBoundsDegenerate();
 	sphereBounds();
+
+	extractMeshlet();
 
 	meshletsEmpty();
 	meshletsDense();
