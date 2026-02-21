@@ -131,19 +131,8 @@ static void computeBoundingSphere(float result[4], const float* points, size_t c
 	result[3] = radius;
 }
 
-} // namespace meshopt
-
-meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+static meshopt_Bounds computeClusterBounds(const unsigned int* indices, size_t index_count, const unsigned int* corners, size_t corner_count, const float* vertex_positions, size_t vertex_positions_stride)
 {
-	using namespace meshopt;
-
-	assert(index_count % 3 == 0);
-	assert(index_count / 3 <= kMeshletMaxTriangles);
-	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
-	assert(vertex_positions_stride % sizeof(float) == 0);
-
-	(void)vertex_count;
-
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
 
 	// compute triangle normals (.w completes plane equation)
@@ -153,7 +142,6 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 	for (size_t i = 0; i < index_count; i += 3)
 	{
 		unsigned int a = indices[i + 0], b = indices[i + 1], c = indices[i + 2];
-		assert(a < vertex_count && b < vertex_count && c < vertex_count);
 
 		const float* p0 = vertex_positions + vertex_stride_float * a;
 		const float* p1 = vertex_positions + vertex_stride_float * b;
@@ -194,7 +182,7 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 
 	// compute cluster bounding sphere; we'll use the center to determine normal cone apex as well
 	float psphere[4] = {};
-	computeBoundingSphere(psphere, vertex_positions, index_count, vertex_positions_stride, &rzero, 0, 7, indices);
+	computeBoundingSphere(psphere, vertex_positions, corner_count, vertex_positions_stride, &rzero, 0, 7, corners);
 
 	float center[3] = {psphere[0], psphere[1], psphere[2]};
 
@@ -285,6 +273,25 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 	return bounds;
 }
 
+} // namespace meshopt
+
+meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
+{
+	using namespace meshopt;
+
+	assert(index_count % 3 == 0);
+	assert(index_count / 3 <= kMeshletMaxTriangles);
+	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
+	assert(vertex_positions_stride % sizeof(float) == 0);
+
+	(void)vertex_count;
+
+	for (size_t i = 0; i < index_count; ++i)
+		assert(indices[i] < vertex_count);
+
+	return computeClusterBounds(indices, index_count, indices, index_count, vertex_positions, vertex_positions_stride);
+}
+
 meshopt_Bounds meshopt_computeMeshletBounds(const unsigned int* meshlet_vertices, const unsigned char* meshlet_triangles, size_t triangle_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
 {
 	using namespace meshopt;
@@ -293,17 +300,22 @@ meshopt_Bounds meshopt_computeMeshletBounds(const unsigned int* meshlet_vertices
 	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
 
+	(void)vertex_count;
+
 	unsigned int indices[kMeshletMaxTriangles * 3];
+	size_t corner_count = 0;
 
 	for (size_t i = 0; i < triangle_count * 3; ++i)
 	{
-		unsigned int index = meshlet_vertices[meshlet_triangles[i]];
+		unsigned char t = meshlet_triangles[i];
+		unsigned int index = meshlet_vertices[t];
 		assert(index < vertex_count);
 
 		indices[i] = index;
+		corner_count = t >= corner_count ? t + 1 : corner_count;
 	}
 
-	return meshopt_computeClusterBounds(indices, triangle_count * 3, vertex_positions, vertex_count, vertex_positions_stride);
+	return computeClusterBounds(indices, triangle_count * 3, meshlet_vertices, corner_count, vertex_positions, vertex_positions_stride);
 }
 
 meshopt_Bounds meshopt_computeSphereBounds(const float* positions, size_t count, size_t positions_stride, const float* radii, size_t radii_stride)
