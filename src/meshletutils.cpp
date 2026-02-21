@@ -286,10 +286,26 @@ meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t 
 
 	(void)vertex_count;
 
-	for (size_t i = 0; i < index_count; ++i)
-		assert(indices[i] < vertex_count);
+	unsigned int cache[512];
+	memset(cache, -1, sizeof(cache));
 
-	return computeClusterBounds(indices, index_count, indices, index_count, vertex_positions, vertex_positions_stride);
+	unsigned int corners[kMeshletMaxTriangles * 3 + 1]; // +1 for branchless slot
+	size_t corner_count = 0;
+
+	for (size_t i = 0; i < index_count; ++i)
+	{
+		unsigned int v = indices[i];
+		assert(v < vertex_count);
+
+		unsigned int& c = cache[v & (sizeof(cache) / sizeof(cache[0]) - 1)];
+
+		// branchless append if vertex isn't in cache
+		corners[corner_count] = v;
+		corner_count += (c != v);
+		c = v;
+	}
+
+	return computeClusterBounds(indices, index_count, corners, corner_count, vertex_positions, vertex_positions_stride);
 }
 
 meshopt_Bounds meshopt_computeMeshletBounds(const unsigned int* meshlet_vertices, const unsigned char* meshlet_triangles, size_t triangle_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride)
