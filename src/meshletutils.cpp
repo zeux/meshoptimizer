@@ -328,6 +328,8 @@ meshopt_Bounds meshopt_computeMeshletBounds(const unsigned int* meshlet_vertices
 		assert(index < vertex_count);
 
 		indices[i] = index;
+
+		// meshlet_vertices[] slice should only contain vertices used by triangle indices, which is the case for any well formed meshlet
 		corner_count = t >= corner_count ? t + 1 : corner_count;
 	}
 
