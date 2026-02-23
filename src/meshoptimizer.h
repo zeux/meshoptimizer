@@ -775,6 +775,7 @@ struct meshopt_Bounds
  *
  * vertex_positions should have float3 position in the first 12 bytes of each vertex
  * vertex_count should specify the number of vertices in the entire mesh, not cluster or meshlet
+ * indices should have at most 256 unique vertex indices
  * index_count/3 and triangle_count must not exceed implementation limits (<= 512)
  */
 MESHOPTIMIZER_API struct meshopt_Bounds meshopt_computeClusterBounds(const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
