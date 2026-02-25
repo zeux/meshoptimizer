@@ -81,7 +81,7 @@ static void rasterizeOpacityRec(unsigned char* result, size_t index, int level, 
 	float a12 = sampleTexture(texture, u12, v12);
 
 	// recursively rasterize each triangle
-	// note: triangles 1 and 3 have flipped winding, and 1 is additionally flipped
+	// note: triangles 1 and 3 have flipped winding, and 1 is flipped upside down
 	rasterizeOpacityRec<States>(result, index * 4 + 0, level - 1, u0, v0, a0, u01, v01, a01, u02, v02, a02, texture);
 	rasterizeOpacityRec<States>(result, index * 4 + 1, level - 1, u02, v02, a02, u12, v12, a12, u01, v01, a01, texture);
 	rasterizeOpacityRec<States>(result, index * 4 + 2, level - 1, u01, v01, a01, u1, v1, a1, u12, v12, a12, texture);
@@ -96,13 +96,19 @@ void meshopt_opacityMapRasterize(unsigned char* result, int level, int states, c
 
 	assert(level >= 0 && level <= 12);
 	assert(states == 2 || states == 4);
+	assert(unsigned(texture_width - 1) < 16384 && unsigned(texture_height - 1) < 16384);
+	assert(texture_stride >= 1 && texture_stride <= 4);
+	assert(texture_pitch >= texture_stride * texture_width);
 
 	Texture texture = {texture_data, texture_stride, texture_pitch, texture_width, texture_height};
 
+	// 1-bit 2-state or 2-bit 4-state per micro triangle, rounded up to whole bytes
+	memset(result, 0, ((1 << (level * 2)) * (states / 2) + 7) / 8);
+
+	// rasterize all micro triangles recursively, passing corner data down to reduce redundant sampling
 	float alpha0 = sampleTexture(texture, uv0[0], uv0[1]);
 	float alpha1 = sampleTexture(texture, uv1[0], uv1[1]);
 	float alpha2 = sampleTexture(texture, uv2[0], uv2[1]);
 
-	memset(result, 0, ((1 << (level * 2)) * (states / 2) + 7) / 8);
 	(states == 2 ? rasterizeOpacityRec<2> : rasterizeOpacityRec<4>)(result, 0, level, uv0[0], uv0[1], alpha0, uv1[0], uv1[1], alpha1, uv2[0], uv2[1], alpha2, texture);
 }
