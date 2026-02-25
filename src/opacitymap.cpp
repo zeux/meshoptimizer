@@ -17,8 +17,7 @@ namespace meshopt
 struct Texture
 {
 	const unsigned char* data;
-	size_t stride;
-	size_t pitch;
+	size_t stride, pitch;
 	unsigned int width, height;
 };
 
@@ -35,6 +34,28 @@ static float sampleTexture(const Texture& texture, float u, float v)
 	return texture.data[y * texture.pitch + x * texture.stride] * (1.f / 255.f);
 }
 
+static void rasterizeOpacity2(unsigned char* result, size_t index, float a0, float a1, float a2, float ac)
+{
+	// for now threshold average value; this could use a more sophisticated heuristic in the future
+	float average = (a0 + a1 + a2 + ac) * 0.25f;
+	int state = average >= 0.5f;
+
+	result[index / 8] |= state << (index % 8);
+}
+
+static void rasterizeOpacity4(unsigned char* result, size_t index, float a0, float a1, float a2, float ac)
+{
+	int transp = (a0 < 0.25f) & (a1 < 0.25f) & (a2 < 0.25f) & (ac < 0.25f);
+	int opaque = (a0 > 0.75f) & (a1 > 0.75f) & (a2 > 0.75f) & (ac > 0.75f);
+	float average = (a0 + a1 + a2 + ac) * 0.25f;
+
+	// treat state as known if thresholding of corners & centers against wider bounds is consistent
+	// for unknown states, we currently use the same formula as the 2-state opacity for better consistency with forced 2-state
+	int state = (transp | opaque) ? opaque : (2 + (average >= 0.5f));
+
+	result[index / 4] |= state << ((index % 4) * 2);
+}
+
 template <int States>
 static void rasterizeOpacityRec(unsigned char* result, size_t index, int level, float u0, float v0, float a0, float u1, float v1, float a1, float u2, float v2, float a2, const Texture& texture)
 {
@@ -45,12 +66,8 @@ static void rasterizeOpacityRec(unsigned char* result, size_t index, int level, 
 		float vc = (v0 + v1 + v2) / 3;
 		float ac = sampleTexture(texture, uc, vc);
 
-		// we now have three corners and center alpha; for now simply average and threshold them
-		float avg = (a0 + a1 + a2 + ac) * 0.25f;
-		bool opaque = avg >= 0.5f;
-
-		assert(States == 2);
-		result[index / 8] |= unsigned(opaque) << (index % 8);
+		// rasterize opacity state based on alpha values in corners and center
+		(States == 2) ? rasterizeOpacity2(result, index, a0, a1, a2, ac) : rasterizeOpacity4(result, index, a0, a1, a2, ac);
 		return;
 	}
 
