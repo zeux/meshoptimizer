@@ -57,35 +57,35 @@ static void rasterizeOpacity4(unsigned char* result, size_t index, float a0, flo
 }
 
 template <int States>
-static void rasterizeOpacityRec(unsigned char* result, size_t index, int level, float u0, float v0, float a0, float u1, float v1, float a1, float u2, float v2, float a2, const Texture& texture)
+static void rasterizeOpacityRec(unsigned char* result, size_t index, int level, const float* c0, const float* c1, const float* c2, const Texture& texture)
 {
 	if (level == 0)
 	{
 		// compute triangle center & sample
-		float uc = (u0 + u1 + u2) / 3;
-		float vc = (v0 + v1 + v2) / 3;
+		float uc = (c0[0] + c1[0] + c2[0]) / 3;
+		float vc = (c0[1] + c1[1] + c2[1]) / 3;
 		float ac = sampleTexture(texture, uc, vc);
 
 		// rasterize opacity state based on alpha values in corners and center
-		(States == 2) ? rasterizeOpacity2(result, index, a0, a1, a2, ac) : rasterizeOpacity4(result, index, a0, a1, a2, ac);
+		(States == 2) ? rasterizeOpacity2(result, index, c0[2], c1[2], c2[2], ac) : rasterizeOpacity4(result, index, c0[2], c1[2], c2[2], ac);
 		return;
 	}
 
 	// compute each edge midpoint & sample
-	float u01 = (u0 + u1) / 2, v01 = (v0 + v1) / 2;
-	float u02 = (u0 + u2) / 2, v02 = (v0 + v2) / 2;
-	float u12 = (u1 + u2) / 2, v12 = (v1 + v2) / 2;
+	float c01[3] = {(c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2, 0.f};
+	float c12[3] = {(c1[0] + c2[0]) / 2, (c1[1] + c2[1]) / 2, 0.f};
+	float c02[3] = {(c0[0] + c2[0]) / 2, (c0[1] + c2[1]) / 2, 0.f};
 
-	float a01 = sampleTexture(texture, u01, v01);
-	float a02 = sampleTexture(texture, u02, v02);
-	float a12 = sampleTexture(texture, u12, v12);
+	c01[2] = sampleTexture(texture, c01[0], c01[1]);
+	c02[2] = sampleTexture(texture, c02[0], c02[1]);
+	c12[2] = sampleTexture(texture, c12[0], c12[1]);
 
 	// recursively rasterize each triangle
 	// note: triangles 1 and 3 have flipped winding, and 1 is flipped upside down
-	rasterizeOpacityRec<States>(result, index * 4 + 0, level - 1, u0, v0, a0, u01, v01, a01, u02, v02, a02, texture);
-	rasterizeOpacityRec<States>(result, index * 4 + 1, level - 1, u02, v02, a02, u12, v12, a12, u01, v01, a01, texture);
-	rasterizeOpacityRec<States>(result, index * 4 + 2, level - 1, u01, v01, a01, u1, v1, a1, u12, v12, a12, texture);
-	rasterizeOpacityRec<States>(result, index * 4 + 3, level - 1, u12, v12, a12, u02, v02, a02, u2, v2, a2, texture);
+	rasterizeOpacityRec<States>(result, index * 4 + 0, level - 1, c0, c01, c02, texture);
+	rasterizeOpacityRec<States>(result, index * 4 + 1, level - 1, c02, c12, c01, texture);
+	rasterizeOpacityRec<States>(result, index * 4 + 2, level - 1, c01, c1, c12, texture);
+	rasterizeOpacityRec<States>(result, index * 4 + 3, level - 1, c12, c02, c2, texture);
 }
 
 } // namespace meshopt
@@ -106,9 +106,9 @@ void meshopt_opacityMapRasterize(unsigned char* result, int level, int states, c
 	memset(result, 0, ((1 << (level * 2)) * (states / 2) + 7) / 8);
 
 	// rasterize all micro triangles recursively, passing corner data down to reduce redundant sampling
-	float alpha0 = sampleTexture(texture, uv0[0], uv0[1]);
-	float alpha1 = sampleTexture(texture, uv1[0], uv1[1]);
-	float alpha2 = sampleTexture(texture, uv2[0], uv2[1]);
+	float c0[3] = {uv0[0], uv0[1], sampleTexture(texture, uv0[0], uv0[1])};
+	float c1[3] = {uv1[0], uv1[1], sampleTexture(texture, uv1[0], uv1[1])};
+	float c2[3] = {uv2[0], uv2[1], sampleTexture(texture, uv2[0], uv2[1])};
 
-	(states == 2 ? rasterizeOpacityRec<2> : rasterizeOpacityRec<4>)(result, 0, level, uv0[0], uv0[1], alpha0, uv1[0], uv1[1], alpha1, uv2[0], uv2[1], alpha2, texture);
+	(states == 2 ? rasterizeOpacityRec<2> : rasterizeOpacityRec<4>)(result, 0, level, c0, c1, c2, texture);
 }
