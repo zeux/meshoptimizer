@@ -384,28 +384,30 @@ void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* mesh
 	for (size_t i = 0; i < triangle_count; ++i)
 	{
 		int next = -1;
-		int next_match = -1;
+		int next_score = -1;
 
 		for (size_t j = i; j < triangle_count; ++j)
 		{
 			unsigned char a = indices[j * 3 + 0], b = indices[j * 3 + 1], c = indices[j * 3 + 2];
 			assert(a < vertex_count && b < vertex_count && c < vertex_count);
 
-			// score each triangle by how many vertices are in cache
-			// note: the distance is computed using unsigned 8-bit values, so cache timestamp overflow is handled gracefully
-			int aok = (unsigned char)(cache_last - cache[a]) < cache_cutoff;
-			int bok = (unsigned char)(cache_last - cache[b]) < cache_cutoff;
-			int cok = (unsigned char)(cache_last - cache[c]) < cache_cutoff;
+			// compute cache distance using unsigned 8-bit subtraction, so cache timestamp overflow is handled gracefully
+			unsigned char ad = (unsigned char)(cache_last - cache[a]);
+			unsigned char bd = (unsigned char)(cache_last - cache[b]);
+			unsigned char cd = (unsigned char)(cache_last - cache[c]);
 
-			if (aok + bok + cok > next_match)
-			{
-				next = (int)j;
-				next_match = aok + bok + cok;
+			// we currently score purely by how many vertices are in the cache window
+			// future heuristics for compressibility could include minimizing distance (ad+bd+cd)
+			// however, that requires scanning the entire candidate set, making the early out below impossible
+			int match = (ad < cache_cutoff) + (bd < cache_cutoff) + (cd < cache_cutoff);
+			int score = match;
 
-				// note that we could end up with all 3 vertices in the cache, but 2 is enough for ~strip traversal
-				if (next_match >= 2)
-					break;
-			}
+			next = (score > next_score) ? int(j) : next;
+			next_score = (score > next_score) ? score : next_score;
+
+			// for now we settle for a first edge match, which makes the function ~linear in practice
+			if (match >= 2)
+				break;
 		}
 
 		assert(next >= 0);
@@ -447,7 +449,7 @@ void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* mesh
 			// if subsequent triangles don't share edges ca or bc, we can rotate the triangle to fix this
 			bool needab = false, needbc = false, needca = false;
 
-			for (size_t j = i + 1; j < triangle_count && j <= i + cache_cutoff; ++j)
+			for (size_t j = i + 1; j < triangle_count && j <= i + 3; ++j)
 			{
 				unsigned char oa = indices[j * 3 + 0], ob = indices[j * 3 + 1], oc = indices[j * 3 + 2];
 
