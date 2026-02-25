@@ -1453,6 +1453,16 @@ int main(int argc, char** argv)
 
 			applySetting(settings.texture_mode, TextureMode_ETC1S, mask);
 		}
+		else if (strcmp(arg, "-tx") == 0)
+		{
+			settings.texture_ktx2 = true;
+
+			unsigned int mask = ~0u;
+			if (i + 1 < argc && isalpha(argv[i + 1][0]))
+				mask = textureMask(argv[++i]);
+
+			applySetting(settings.texture_mode, TextureMode_XUASTC, mask);
+		}
 		else if (strcmp(arg, "-tw") == 0)
 		{
 			settings.texture_webp = true;
@@ -1634,8 +1644,9 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-o file: output file path, .gltf/.glb\n");
 			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc/-cz for higher compression ratio)\n");
 			fprintf(stderr, "\nTextures:\n");
-			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression\n");
-			fprintf(stderr, "\t-tu: use UASTC when encoding textures (much higher quality and much larger size)\n");
+			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU ETC1S supercompression\n");
+			fprintf(stderr, "\t-tu: use UASTC when encoding textures (higher quality and larger size)\n");
+			fprintf(stderr, "\t-tx: use XUASTC when encoding textures (DCT supercompression)\n");
 			fprintf(stderr, "\t-tw: convert all textures to WebP\n");
 			fprintf(stderr, "\t-tq N: set texture encoding quality (default: 8; N should be between 1 and 10)\n");
 			fprintf(stderr, "\t-ts R: scale texture dimensions by the ratio R (default: 1; R should be between 0 and 1)\n");
@@ -1647,6 +1658,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\tTexture classes:\n");
 			fprintf(stderr, "\t-tc C: use ETC1S when encoding textures of class C\n");
 			fprintf(stderr, "\t-tu C: use UASTC when encoding textures of class C\n");
+			fprintf(stderr, "\t-tx C: use XUASTC when encoding textures of class C\n");
 			fprintf(stderr, "\t-tw C: use WebP when encoding textures of class C\n");
 			fprintf(stderr, "\t-tq C N: set texture encoding quality for class C\n");
 			fprintf(stderr, "\t-ts C R: scale texture dimensions for class C\n");
@@ -1710,7 +1722,7 @@ int main(int argc, char** argv)
 
 	if (require_texc && !settings.texture_ktx2 && !settings.texture_webp)
 	{
-		fprintf(stderr, "Texture processing is only supported when texture compression is enabled via -tc/-tu/-tw\n");
+		fprintf(stderr, "Texture processing is only supported when texture compression is enabled via -tc/-tu/-tx/-tw\n");
 		return 1;
 	}
 
@@ -1734,6 +1746,13 @@ int main(int argc, char** argv)
 
 	if (settings.keep_nodes && (settings.mesh_merge || settings.mesh_instancing))
 		fprintf(stderr, "Warning: option -kn disables mesh merge (-mm) and mesh instancing (-mi) optimizations\n");
+
+	for (int i = 0; i < TextureKind__Count; ++i)
+		if (settings.texture_mode[i] == TextureMode_XUASTC)
+		{
+			fprintf(stderr, "Warning: -tx uses XUASTC format which is not part of the KHR_texture_basisu specification\n");
+			break;
+		}
 
 	return gltfpack(input, output, report, settings);
 }
