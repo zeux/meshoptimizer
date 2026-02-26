@@ -90,6 +90,55 @@ static void rasterizeOpacityRec(unsigned char* result, size_t index, int level, 
 
 } // namespace meshopt
 
+size_t meshopt_opacityMapMeasure(int* omm_levels, int* omm_indices, const unsigned int* indices, size_t index_count, const float* vertex_uvs, size_t vertex_count, size_t vertex_uvs_stride, unsigned int texture_width, unsigned int texture_height, int max_level, float target_edge)
+{
+	using namespace meshopt;
+
+	assert(index_count % 3 == 0);
+	assert(vertex_uvs_stride >= 8 && vertex_uvs_stride <= 256);
+	assert(vertex_uvs_stride % sizeof(float) == 0);
+	assert(unsigned(texture_width - 1) < 16384 && unsigned(texture_height - 1) < 16384);
+	assert(max_level > 0 && max_level <= 12);
+	assert(target_edge >= 0);
+
+	(void)vertex_count;
+
+	size_t vertex_stride_float = vertex_uvs_stride / sizeof(float);
+	float texture_area = float(texture_width) * float(texture_height);
+
+	size_t result = 0;
+
+	for (size_t i = 0; i < index_count; i += 3)
+	{
+		unsigned int a = indices[i + 0], b = indices[i + 1], c = indices[i + 2];
+		assert(a < vertex_count && b < vertex_count && c < vertex_count);
+
+		float u0 = vertex_uvs[a * vertex_stride_float + 0], v0 = vertex_uvs[a * vertex_stride_float + 1];
+		float u1 = vertex_uvs[b * vertex_stride_float + 0], v1 = vertex_uvs[b * vertex_stride_float + 1];
+		float u2 = vertex_uvs[c * vertex_stride_float + 0], v2 = vertex_uvs[c * vertex_stride_float + 1];
+
+		int level = max_level;
+
+		if (target_edge > 0)
+		{
+			// compute ratio of edge length (in texels) to target and determine subdivision level
+			float uvarea = fabsf((u1 - u0) * (v2 - v0) - (u2 - u0) * (v1 - v0)) * 0.5f * texture_area;
+			float ratio = sqrtf(uvarea) / target_edge;
+			float levelf = log2f(ratio > 1 ? ratio : 1);
+
+			// round to nearest and clamp
+			level = int(levelf + 0.5f);
+			level = unsigned(level) < unsigned(max_level) ? level : max_level;
+		}
+
+		omm_indices[i / 3] = int(result);
+		omm_levels[result] = level;
+		result++;
+	}
+
+	return result;
+}
+
 void meshopt_opacityMapRasterize(unsigned char* result, int level, int states, const float* uv0, const float* uv1, const float* uv2, const unsigned char* texture_data, size_t texture_stride, size_t texture_pitch, unsigned int texture_width, unsigned int texture_height)
 {
 	using namespace meshopt;
