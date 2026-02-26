@@ -18,12 +18,6 @@ struct TriangleOMM
 {
 	int uvs[6];
 	int level;
-	int index;
-
-	bool operator==(const TriangleOMM& other) const
-	{
-		return level == other.level; // TODO: this can't compare anything else because it's used in hashLookup to check for empty item :(
-	}
 };
 
 struct Texture
@@ -48,8 +42,11 @@ static float sampleTexture(const Texture& texture, float u, float v)
 
 struct TriangleOMMHasher
 {
-	size_t hash(const TriangleOMM& tri) const
+	const TriangleOMM* data;
+
+	size_t hash(unsigned int index) const
 	{
+		const TriangleOMM& tri = data[index];
 		unsigned int h = tri.level;
 
 		const unsigned int m = 0x5bd1e995;
@@ -77,9 +74,12 @@ struct TriangleOMMHasher
 		return h;
 	}
 
-	bool equal(const TriangleOMM& lhs, const TriangleOMM& rhs) const
+	bool equal(unsigned int lhs, unsigned int rhs) const
 	{
-		return lhs.level == rhs.level && memcmp(lhs.uvs, rhs.uvs, sizeof(lhs.uvs)) == 0;
+		const TriangleOMM& lt = data[lhs];
+		const TriangleOMM& rt = data[rhs];
+
+		return lt.level == rt.level && memcmp(lt.uvs, rt.uvs, sizeof(lt.uvs)) == 0;
 	}
 };
 
@@ -200,13 +200,11 @@ size_t meshopt_opacityMapMeasure(int* omm_levels, int* omm_indices, const unsign
 
 	// hash map used to deduplicate triangle rasterization requests based on UV
 	size_t table_size = hashBuckets3(index_count / 3);
-	TriangleOMM* table = allocator.allocate<TriangleOMM>(table_size);
-	memset(table, -1, table_size * sizeof(TriangleOMM)); // level=-1 is invalid
+	unsigned int* table = allocator.allocate<unsigned int>(table_size);
+	memset(table, -1, table_size * sizeof(unsigned int));
 
-	TriangleOMM dummy = {};
-	dummy.level = -1;
-
-	TriangleOMMHasher hasher;
+	TriangleOMM* triangles = allocator.allocate<TriangleOMM>(index_count / 3);
+	TriangleOMMHasher hasher = {triangles};
 
 	size_t result = 0;
 
@@ -237,19 +235,20 @@ size_t meshopt_opacityMapMeasure(int* omm_levels, int* omm_indices, const unsign
 		int su0 = quantizeSubpixel(u0, texture_width), sv0 = quantizeSubpixel(v0, texture_height);
 		int su1 = quantizeSubpixel(u1, texture_width), sv1 = quantizeSubpixel(v1, texture_height);
 		int su2 = quantizeSubpixel(u2, texture_width), sv2 = quantizeSubpixel(v2, texture_height);
-		TriangleOMM tri = {{su0, sv0, su1, sv1, su2, sv2}, level, 0};
-		TriangleOMM* entry = hashLookup3(table, table_size, hasher, tri, dummy);
 
-		if (entry->level < 0)
+		TriangleOMM tri = {{su0, sv0, su1, sv1, su2, sv2}, level};
+		triangles[result] = tri; // speculatively write triangle data to give hasher a way to compare it
+
+		unsigned int* entry = hashLookup3(table, table_size, hasher, unsigned(result), ~0u);
+
+		if (*entry == ~0u)
 		{
-			tri.index = int(result);
+			*entry = unsigned(result);
 			omm_levels[result] = level;
 			result++;
-
-			*entry = tri;
 		}
 
-		omm_indices[i / 3] = entry->index;
+		omm_indices[i / 3] = int(*entry);
 	}
 
 	return result;
