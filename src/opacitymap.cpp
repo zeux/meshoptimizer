@@ -83,6 +83,65 @@ struct TriangleOMMHasher
 	}
 };
 
+struct OMMHasher
+{
+	const unsigned char* data;
+	const unsigned int* offsets;
+	const int* levels;
+	int states;
+
+	size_t hash(unsigned int index) const
+	{
+		size_t size = ((1 << (levels[index] * 2)) * (states / 2) + 7) / 8;
+		const unsigned char* key = data + offsets[index];
+
+		unsigned int h = levels[index];
+
+		const unsigned int m = 0x5bd1e995;
+		const int r = 24;
+
+		// MurmurHash2
+		for (size_t i = 0; i < size / 4; ++i)
+		{
+			unsigned int k = *reinterpret_cast<const unsigned int*>(key + i * 4);
+
+			k *= m;
+			k ^= k >> r;
+			k *= m;
+
+			h *= m;
+			h ^= k;
+		}
+
+		// MurmurHash2 tail
+		switch (size & 3)
+		{
+		case 3:
+			h ^= key[size - 3] << 16;
+			// fallthrough
+		case 2:
+			h ^= key[size - 2] << 8;
+			// fallthrough
+		case 1:
+			h ^= key[size - 1];
+			h *= m;
+		}
+
+		// MurmurHash2 finalizer
+		h ^= h >> 13;
+		h *= 0x5bd1e995;
+		h ^= h >> 15;
+		return h;
+	}
+
+	bool equal(unsigned int lhs, unsigned int rhs) const
+	{
+		size_t size = ((1 << (levels[lhs] * 2)) * (states / 2) + 7) / 8;
+
+		return levels[lhs] == levels[rhs] && memcmp(data + offsets[lhs], data + offsets[rhs], size) == 0;
+	}
+};
+
 static size_t hashBuckets3(size_t count)
 {
 	size_t buckets = 1;
@@ -180,7 +239,7 @@ static void rasterizeOpacityRec(unsigned char* result, size_t index, int level, 
 
 } // namespace meshopt
 
-size_t meshopt_opacityMapMeasure(int* omm_levels, int* omm_indices, const unsigned int* indices, size_t index_count, const float* vertex_uvs, size_t vertex_count, size_t vertex_uvs_stride, unsigned int texture_width, unsigned int texture_height, int max_level, float target_edge)
+size_t meshopt_opacityMapMeasure(int* levels, int* omm_indices, const unsigned int* indices, size_t index_count, const float* vertex_uvs, size_t vertex_count, size_t vertex_uvs_stride, unsigned int texture_width, unsigned int texture_height, int max_level, float target_edge)
 {
 	using namespace meshopt;
 
@@ -245,7 +304,7 @@ size_t meshopt_opacityMapMeasure(int* omm_levels, int* omm_indices, const unsign
 		if (*entry == ~0u)
 		{
 			*entry = unsigned(result);
-			omm_levels[result] = level;
+			levels[result] = level;
 			result++;
 		}
 
@@ -299,4 +358,61 @@ void meshopt_opacityMapRasterize(unsigned char* result, int level, int states, c
 	float c2[3] = {uv2[0], uv2[1], sampleTexture(texture, uv2[0], uv2[1])};
 
 	(states == 2 ? rasterizeOpacityRec<2> : rasterizeOpacityRec<4>)(result, 0, level, c0, c1, c2, texture);
+}
+
+size_t meshopt_opacityMapCompact(unsigned char* data, size_t data_size, int* levels, unsigned int* offsets, size_t omm_count, int* omm_indices, size_t triangle_count, int states)
+{
+	using namespace meshopt;
+
+	assert(states == 2 || states == 4);
+
+	meshopt_Allocator allocator;
+
+	unsigned char* data_old = allocator.allocate<unsigned char>(data_size);
+	memcpy(data_old, data, data_size);
+
+	size_t table_size = hashBuckets3(omm_count);
+	unsigned int* table = allocator.allocate<unsigned int>(table_size);
+	memset(table, -1, table_size * sizeof(unsigned int));
+
+	OMMHasher hasher = {data, offsets, levels, states};
+
+	int* remap = allocator.allocate<int>(omm_count);
+
+	size_t next = 0;
+	size_t offset = 0;
+
+	for (size_t i = 0; i < omm_count; ++i)
+	{
+		int level = levels[i];
+		assert(level >= 0 && level <= 12);
+
+		const unsigned char* old = data_old + offsets[i];
+		size_t size = ((1 << (level * 2)) * (states / 2) + 7) / 8;
+
+		// speculatively write data to give hasher a way to compare it
+		memcpy(data + offset, old, size);
+		offsets[next] = unsigned(offset);
+		levels[next] = level;
+
+		unsigned int* entry = hashLookup3(table, table_size, hasher, unsigned(next), ~0u);
+
+		if (*entry == ~0u)
+		{
+			*entry = unsigned(next);
+			next++;
+			offset += size;
+		}
+
+		remap[i] = int(*entry);
+	}
+
+	// remap triangle indices to new indices or special indices
+	for (size_t i = 0; i < triangle_count; ++i)
+	{
+		assert(unsigned(omm_indices[i]) < omm_count);
+		omm_indices[i] = remap[omm_indices[i]];
+	}
+
+	return next;
 }
