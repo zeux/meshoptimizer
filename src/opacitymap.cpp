@@ -237,6 +237,30 @@ static void rasterizeOpacityRec(unsigned char* result, size_t index, int level, 
 	rasterizeOpacityRec<States>(result, index * 4 + 3, level - 1, c12, c02, c2, texture);
 }
 
+static int getSpecialIndex(const unsigned char* data, int level, int states)
+{
+	int first = data[0] & (states == 2 ? 1 : 3);
+	int special = -(1 + first);
+
+	// at level 0, every micromap can be converted to a special index
+	if (level == 0)
+		return special;
+
+	// at level 1 with 2 states, the byte is partially filled so we need a separate check
+	if (level == 1 && states == 2)
+		return (data[0] & 15) == ((-first) & 15) ? special : 0;
+
+	// otherwise we need to check that all bytes are consistent with the first value and we can do this byte-wise
+	int expected = first * (states == 2 ? 0xff : 0x55);
+	size_t size = (1 << (level * 2)) * (states / 2) / 8;
+
+	for (size_t i = 0; i < size; ++i)
+		if (data[i] != expected)
+			return 0;
+
+	return special;
+}
+
 } // namespace meshopt
 
 size_t meshopt_opacityMapMeasure(int* levels, int* omm_indices, const unsigned int* indices, size_t index_count, const float* vertex_uvs, size_t vertex_count, size_t vertex_uvs_stride, unsigned int texture_width, unsigned int texture_height, int max_level, float target_edge)
@@ -288,7 +312,7 @@ size_t meshopt_opacityMapMeasure(int* levels, int* omm_indices, const unsigned i
 			// round to nearest and clamp
 			level = int(levelf + 0.5f);
 			level = level < 0 ? 0 : level;
-			level = level > max_level ? max_level : level;
+			level = level < max_level ? level : max_level;
 		}
 
 		// deduplicate rasterization requests based on UV
@@ -328,6 +352,7 @@ int meshopt_opacityMapRasterizeMip(int level, const float* uv0, const float* uv1
 
 	// round down and clamp
 	int mip = int(levelf);
+	mip = mip < 0 ? 0 : mip;
 	mip = mip < 16 ? mip : 16;
 
 	// ensure the selected mip is in range
@@ -389,6 +414,14 @@ size_t meshopt_opacityMapCompact(unsigned char* data, size_t data_size, int* lev
 
 		const unsigned char* old = data_old + offsets[i];
 		size_t size = ((1 << (level * 2)) * (states / 2) + 7) / 8;
+
+		// try to convert to a special index if all micro-triangle states are the same
+		int special = getSpecialIndex(old, level, states);
+		if (special < 0)
+		{
+			remap[i] = special;
+			continue;
+		}
 
 		// speculatively write data to give hasher a way to compare it
 		memcpy(data + offset, old, size);
