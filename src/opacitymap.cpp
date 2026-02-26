@@ -16,7 +16,7 @@ namespace meshopt
 
 struct TriangleOMM
 {
-	float uvs[6];
+	int uvs[6];
 	int level;
 	int index;
 
@@ -117,6 +117,11 @@ static T* hashLookup3(T* table, size_t buckets, const Hash& hash, const T& key, 
 
 	assert(false && "Hash table is full"); // unreachable
 	return NULL;
+}
+
+inline int quantizeSubpixel(float v, unsigned int size)
+{
+	return int(v * float(int(size) * 4) + (v >= 0 ? 0.5f : -0.5f));
 }
 
 static void rasterizeOpacity2(unsigned char* result, size_t index, float a0, float a1, float a2, float ac)
@@ -229,7 +234,10 @@ size_t meshopt_opacityMapMeasure(int* omm_levels, int* omm_indices, const unsign
 		}
 
 		// deduplicate rasterization requests based on UV
-		TriangleOMM tri = {{u0, v0, u1, v1, u2, v2}, level, 0};
+		int su0 = quantizeSubpixel(u0, texture_width), sv0 = quantizeSubpixel(v0, texture_height);
+		int su1 = quantizeSubpixel(u1, texture_width), sv1 = quantizeSubpixel(v1, texture_height);
+		int su2 = quantizeSubpixel(u2, texture_width), sv2 = quantizeSubpixel(v2, texture_height);
+		TriangleOMM tri = {{su0, sv0, su1, sv1, su2, sv2}, level, 0};
 		TriangleOMM* entry = hashLookup3(table, table_size, hasher, tri, dummy);
 
 		if (entry->level < 0)
