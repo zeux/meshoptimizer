@@ -14,6 +14,18 @@ namespace meshopt
 // note that triangles 0 and 2 have the same winding as the source triangle, however triangles 1 (flipped)
 // and 3 (upright) have flipped winding; this is obvious from the level 2 subdivision in the diagram above
 
+struct TriangleOMM
+{
+	float uvs[6];
+	int level;
+	int index;
+
+	bool operator==(const TriangleOMM& other) const
+	{
+		return level == other.level; // TODO: this can't compare anything else because it's used in hashLookup to check for empty item :(
+	}
+};
+
 struct Texture
 {
 	const unsigned char* data;
@@ -32,6 +44,79 @@ static float sampleTexture(const Texture& texture, float u, float v)
 
 	// TODO: bilinear
 	return texture.data[y * texture.pitch + x * texture.stride] * (1.f / 255.f);
+}
+
+struct TriangleOMMHasher
+{
+	size_t hash(const TriangleOMM& tri) const
+	{
+		unsigned int h = tri.level;
+
+		const unsigned int m = 0x5bd1e995;
+		const int r = 24;
+
+		// MurmurHash2
+		const unsigned int* uvs = reinterpret_cast<const unsigned int*>(tri.uvs);
+
+		for (int i = 0; i < 6; ++i)
+		{
+			unsigned int k = uvs[i];
+
+			k *= m;
+			k ^= k >> r;
+			k *= m;
+
+			h *= m;
+			h ^= k;
+		}
+
+		// MurmurHash2 finalizer
+		h ^= h >> 13;
+		h *= 0x5bd1e995;
+		h ^= h >> 15;
+		return h;
+	}
+
+	bool equal(const TriangleOMM& lhs, const TriangleOMM& rhs) const
+	{
+		return lhs.level == rhs.level && memcmp(lhs.uvs, rhs.uvs, sizeof(lhs.uvs)) == 0;
+	}
+};
+
+static size_t hashBuckets3(size_t count)
+{
+	size_t buckets = 1;
+	while (buckets < count + count / 4)
+		buckets *= 2;
+
+	return buckets;
+}
+
+template <typename T, typename Hash>
+static T* hashLookup3(T* table, size_t buckets, const Hash& hash, const T& key, const T& empty)
+{
+	assert(buckets > 0);
+	assert((buckets & (buckets - 1)) == 0);
+
+	size_t hashmod = buckets - 1;
+	size_t bucket = hash.hash(key) & hashmod;
+
+	for (size_t probe = 0; probe <= hashmod; ++probe)
+	{
+		T& item = table[bucket];
+
+		if (item == empty)
+			return &item;
+
+		if (hash.equal(item, key))
+			return &item;
+
+		// hash collision, quadratic probing
+		bucket = (bucket + probe + 1) & hashmod;
+	}
+
+	assert(false && "Hash table is full"); // unreachable
+	return NULL;
 }
 
 static void rasterizeOpacity2(unsigned char* result, size_t index, float a0, float a1, float a2, float ac)
@@ -103,8 +188,20 @@ size_t meshopt_opacityMapMeasure(int* omm_levels, int* omm_indices, const unsign
 
 	(void)vertex_count;
 
+	meshopt_Allocator allocator;
+
 	size_t vertex_stride_float = vertex_uvs_stride / sizeof(float);
 	float texture_area = float(texture_width) * float(texture_height);
+
+	// hash map used to deduplicate triangle rasterization requests based on UV
+	size_t table_size = hashBuckets3(index_count / 3);
+	TriangleOMM* table = allocator.allocate<TriangleOMM>(table_size);
+	memset(table, -1, table_size * sizeof(TriangleOMM)); // level=-1 is invalid
+
+	TriangleOMM dummy = {};
+	dummy.level = -1;
+
+	TriangleOMMHasher hasher;
 
 	size_t result = 0;
 
@@ -131,9 +228,20 @@ size_t meshopt_opacityMapMeasure(int* omm_levels, int* omm_indices, const unsign
 			level = unsigned(level) < unsigned(max_level) ? level : max_level;
 		}
 
-		omm_indices[i / 3] = int(result);
-		omm_levels[result] = level;
-		result++;
+		// deduplicate rasterization requests based on UV
+		TriangleOMM tri = {{u0, v0, u1, v1, u2, v2}, level, 0};
+		TriangleOMM* entry = hashLookup3(table, table_size, hasher, tri, dummy);
+
+		if (entry->level < 0)
+		{
+			tri.index = int(result);
+			omm_levels[result] = level;
+			result++;
+
+			*entry = tri;
+		}
+
+		omm_indices[i / 3] = entry->index;
 	}
 
 	return result;
