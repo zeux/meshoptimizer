@@ -228,7 +228,8 @@ size_t meshopt_opacityMapMeasure(int* omm_levels, int* omm_indices, const unsign
 
 			// round to nearest and clamp
 			level = int(levelf + 0.5f);
-			level = unsigned(level) < unsigned(max_level) ? level : max_level;
+			level = level < 0 ? 0 : level;
+			level = level > max_level ? max_level : level;
 		}
 
 		// deduplicate rasterization requests based on UV
