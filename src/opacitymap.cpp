@@ -212,22 +212,21 @@ inline int quantizeSubpixel(float v, unsigned int size)
 
 static void rasterizeOpacity2(unsigned char* result, size_t index, float a0, float a1, float a2, float ac)
 {
-	// for now threshold average value; this could use a more sophisticated heuristic in the future
-	float average = (a0 + a1 + a2 + ac) * 0.25f;
-	int state = average >= 0.5f;
+	// basic coverage estimator from center and corner values; trained to minimize error
+	float coverage = (a0 + a1 + a2) * 0.12f + ac * 0.64f;
 
-	result[index / 8] |= state << (index % 8);
+	result[index / 8] |= (coverage >= 0.5f) << (index % 8);
 }
 
 static void rasterizeOpacity4(unsigned char* result, size_t index, float a0, float a1, float a2, float ac)
 {
 	int transp = (a0 < 0.25f) & (a1 < 0.25f) & (a2 < 0.25f) & (ac < 0.25f);
 	int opaque = (a0 > 0.75f) & (a1 > 0.75f) & (a2 > 0.75f) & (ac > 0.75f);
-	float average = (a0 + a1 + a2 + ac) * 0.25f;
+	float coverage = (a0 + a1 + a2) * 0.12f + ac * 0.64f;
 
 	// treat state as known if thresholding of corners & centers against wider bounds is consistent
 	// for unknown states, we currently use the same formula as the 2-state opacity for better consistency with forced 2-state
-	int state = (transp | opaque) ? opaque : (2 + (average >= 0.5f));
+	int state = (transp | opaque) ? opaque : (2 + (coverage >= 0.5f));
 
 	result[index / 4] |= state << ((index % 4) * 2);
 }
@@ -253,8 +252,8 @@ static void rasterizeOpacityRec(unsigned char* result, size_t index, int level, 
 	float c02[3] = {(c0[0] + c2[0]) / 2, (c0[1] + c2[1]) / 2, 0.f};
 
 	c01[2] = sampleTexture(texture, c01[0], c01[1]);
-	c02[2] = sampleTexture(texture, c02[0], c02[1]);
 	c12[2] = sampleTexture(texture, c12[0], c12[1]);
+	c02[2] = sampleTexture(texture, c02[0], c02[1]);
 
 	// recursively rasterize each triangle
 	// note: triangles 1 and 3 have flipped winding, and 1 is flipped upside down
@@ -378,7 +377,7 @@ int meshopt_opacityMapRasterizeMip(int level, const float* uv0, const float* uv1
 	float levelf = log2f(ratio > 1 ? ratio : 1);
 
 	// round down and clamp
-	int mip = int(levelf);
+	int mip = int(levelf - 0.5f);
 	mip = mip < 0 ? 0 : mip;
 	mip = mip < 16 ? mip : 16;
 
