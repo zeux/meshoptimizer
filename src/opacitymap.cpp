@@ -289,7 +289,7 @@ static int getSpecialIndex(const unsigned char* data, int level, int states)
 
 } // namespace meshopt
 
-size_t meshopt_opacityMapMeasure(int* levels, int* omm_indices, const unsigned int* indices, size_t index_count, const float* vertex_uvs, size_t vertex_count, size_t vertex_uvs_stride, unsigned int texture_width, unsigned int texture_height, int max_level, float target_edge)
+size_t meshopt_opacityMapMeasure(int* levels, unsigned int* sources, int* omm_indices, const unsigned int* indices, size_t index_count, const float* vertex_uvs, size_t vertex_count, size_t vertex_uvs_stride, unsigned int texture_width, unsigned int texture_height, int max_level, float target_edge)
 {
 	using namespace meshopt;
 
@@ -355,6 +355,7 @@ size_t meshopt_opacityMapMeasure(int* levels, int* omm_indices, const unsigned i
 		{
 			*entry = unsigned(result);
 			levels[result] = level;
+			sources[result] = int(i / 3);
 			result++;
 		}
 
@@ -364,7 +365,15 @@ size_t meshopt_opacityMapMeasure(int* levels, int* omm_indices, const unsigned i
 	return result;
 }
 
-int meshopt_opacityMapRasterizeMip(int level, const float* uv0, const float* uv1, const float* uv2, unsigned int texture_width, unsigned int texture_height)
+size_t meshopt_opacityMapTriangleSize(int level, int states)
+{
+	assert(level >= 0 && level <= 12);
+	assert(states == 2 || states == 4);
+
+	return ((1 << (level * 2)) * (states / 2) + 7) / 8;
+}
+
+int meshopt_opacityMapPreferredMip(int level, const float* uv0, const float* uv1, const float* uv2, unsigned int texture_width, unsigned int texture_height)
 {
 	assert(level >= 0 && level <= 12);
 	assert(unsigned(texture_width - 1) < 16384 && unsigned(texture_height - 1) < 16384);
@@ -440,6 +449,7 @@ size_t meshopt_opacityMapCompact(unsigned char* data, size_t data_size, int* lev
 
 		const unsigned char* old = data_old + offsets[i];
 		size_t size = ((1 << (level * 2)) * (states / 2) + 7) / 8;
+		assert(offsets[i] + size <= data_size);
 
 		// try to convert to a special index if all micro-triangle states are the same
 		int special = getSpecialIndex(old, level, states);

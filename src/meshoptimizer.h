@@ -843,6 +843,15 @@ MESHOPTIMIZER_API void meshopt_spatialSortTriangles(unsigned int* destination, c
 MESHOPTIMIZER_API void meshopt_spatialClusterPoints(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t cluster_size);
 
 /**
+ * Experimental: Opacity micromap generator
+ */
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_opacityMapMeasure(int* levels, unsigned int* sources, int* omm_indices, const unsigned int* indices, size_t index_count, const float* vertex_uvs, size_t vertex_count, size_t vertex_uvs_stride, unsigned int texture_width, unsigned int texture_height, int max_level, float target_edge);
+MESHOPTIMIZER_EXPERIMENTAL void meshopt_opacityMapRasterize(unsigned char* result, int level, int states, const float* uv0, const float* uv1, const float* uv2, const unsigned char* texture_data, size_t texture_stride, size_t texture_pitch, unsigned int texture_width, unsigned int texture_height);
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_opacityMapCompact(unsigned char* data, size_t data_size, int* levels, unsigned int* offsets, size_t omm_count, int* omm_indices, size_t triangle_count, int states);
+MESHOPTIMIZER_EXPERIMENTAL int meshopt_opacityMapPreferredMip(int level, const float* uv0, const float* uv1, const float* uv2, unsigned int texture_width, unsigned int texture_height);
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_opacityMapTriangleSize(int level, int states);
+
+/**
  * Quantize a float into half-precision (as defined by IEEE-754 fp16) floating point value
  * Generates +-inf for overflow, preserves NaN, flushes denormals to zero, rounds to nearest
  * Representable magnitude range: [6e-5; 65504]
