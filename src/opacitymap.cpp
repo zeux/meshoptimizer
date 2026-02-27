@@ -29,15 +29,42 @@ struct Texture
 
 static float sampleTexture(const Texture& texture, float u, float v)
 {
-	int x = int(u * float(int(texture.width)));
-	int y = int(v * float(int(texture.height)));
+	// wrap texture coordinates; floor is expensive so only call it if we're outside of [0, 1] range (+eps)
+	u = fabsf(u - 0.5f) > 0.5f ? u - floorf(u) : u;
+	v = fabsf(v - 0.5f) > 0.5f ? v - floorf(v) : v;
 
-	// TODO: clamp/wrap
+	// convert from [0, 1] to pixel grid and shift so that texel centers are on an integer grid
+	u = u * float(int(texture.width)) - 0.5f;
+	v = v * float(int(texture.height)) - 0.5f;
+
+	// clamp u/v along the left/top edge to avoid extrapolation since we don't interpolate across the edge
+	u = u < 0 ? 0.f : u;
+	v = v < 0 ? 0.f : v;
+
+	// note: u/v is now in [0, size-0.5]; float->int->float is usually less expensive than floor
+	int x = int(u);
+	int y = int(v);
+	float rx = u - float(x);
+	float ry = v - float(y);
+
+	// safeguard: this should not happen but if it ever does, ensure the accesses are inbounds
 	if (unsigned(x) >= texture.width || unsigned(y) >= texture.height)
 		return 0.f;
 
-	// TODO: bilinear
-	return texture.data[y * texture.pitch + x * texture.stride] * (1.f / 255.f);
+	// clamp the offsets instead of wrapping for simplicity and performance
+	size_t offset = size_t(y) * texture.pitch + x * texture.stride;
+	size_t offsetx = (x + 1 < int(texture.width)) ? texture.stride : 0;
+	size_t offsety = (y + 1 < int(texture.height)) ? texture.pitch : 0;
+
+	unsigned char a00 = texture.data[offset];
+	unsigned char a10 = texture.data[offset + offsetx];
+	unsigned char a01 = texture.data[offset + offsety];
+	unsigned char a11 = texture.data[offset + offsetx + offsety];
+
+	// blinear interpolation; we do it partially in integer space, deferring full conversion to [0, 1] until the end
+	float ax0 = float(a00) + float(a10 - a00) * rx;
+	float ax1 = float(a01) + float(a11 - a01) * rx;
+	return (ax0 + (ax1 - ax0) * ry) * (1.f / 255.f);
 }
 
 struct TriangleOMMHasher
