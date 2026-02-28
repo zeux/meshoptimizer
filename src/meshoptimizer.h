@@ -510,6 +510,15 @@ MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsig
 MESHOPTIMIZER_API size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, const unsigned char* vertex_lock, size_t target_index_count, float target_error, unsigned int options, float* result_error);
 
 /**
+ * Mesh simplifier with attribute metric and per-triangle material tracking
+ * Similar to meshopt_simplifyWithAttributes, but also tracks per-triangle material IDs through simplification.
+ *
+ * triangle_materials can be NULL; when it's not NULL, must contain index_count/3 material IDs (one per triangle), modified in-place during simplification
+ * All other parameters are the same as meshopt_simplifyWithAttributes
+ */
+MESHOPTIMIZER_API size_t meshopt_simplifyWithAttributesAndMaterials(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, const unsigned char* vertex_lock, unsigned int* triangle_materials, size_t target_index_count, float target_error, unsigned int options, float* result_error);
+
+/**
  * Mesh simplifier with position/attribute update
  * Reduces the number of triangles in the mesh, attempting to preserve mesh appearance as much as possible.
  * Similar to meshopt_simplifyWithAttributes, but destructively updates positions and attribute values for optimal appearance.
@@ -715,6 +724,16 @@ MESHOPTIMIZER_API size_t meshopt_buildMeshletsBound(size_t index_count, size_t m
  * split_factor should be set to a non-negative value; when greater than 0, clusters that have large bounds may be split unless they are under the min_triangles threshold
  */
 MESHOPTIMIZER_API size_t meshopt_buildMeshletsFlex(struct meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t min_triangles, size_t max_triangles, float cone_weight, float split_factor);
+
+/**
+ * Meshlet builder with triangle mapping support
+ * Similar to meshopt_buildMeshletsFlex, but also outputs a mapping from meshlet triangles to original triangles.
+ *
+ * meshlet_triangle_map can be NULL; when it's not NULL, must contain enough space for index_count/3 elements
+ * meshlet_triangle_map[i] will contain the original triangle index for the i-th triangle in the meshlet output
+ * All other parameters are the same as meshopt_buildMeshletsFlex
+ */
+MESHOPTIMIZER_API size_t meshopt_buildMeshletsFlexWithMapping(struct meshopt_Meshlet* meshlets, unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, unsigned int* meshlet_triangle_map, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t max_vertices, size_t min_triangles, size_t max_triangles, float cone_weight, float split_factor);
 
 /**
  * Meshlet builder that produces clusters optimized for raytracing

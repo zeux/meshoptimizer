@@ -1804,7 +1804,7 @@ static void solveAttributes(Vector3* vertex_positions, float* vertex_attributes,
 	}
 }
 
-static size_t remapIndexBuffer(unsigned int* indices, size_t index_count, const unsigned int* collapse_remap, const unsigned int* remap)
+static size_t remapIndexBuffer(unsigned int* indices, size_t index_count, const unsigned int* collapse_remap, const unsigned int* remap, unsigned int* triangle_materials = NULL)
 {
 	size_t write = 0;
 
@@ -1831,6 +1831,10 @@ static size_t remapIndexBuffer(unsigned int* indices, size_t index_count, const 
 			indices[write + 0] = v0;
 			indices[write + 1] = v1;
 			indices[write + 2] = v2;
+
+			if (triangle_materials)
+				triangle_materials[write / 3] = triangle_materials[i / 3];
+
 			write += 3;
 		}
 	}
@@ -2337,7 +2341,7 @@ enum
 	meshopt_SimplifyInternalDebug = 1 << 30
 };
 
-size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes_data, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, const unsigned char* vertex_lock, size_t target_index_count, float target_error, unsigned int options, float* out_result_error)
+size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes_data, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, const unsigned char* vertex_lock, unsigned int* triangle_materials, size_t target_index_count, float target_error, unsigned int options, float* out_result_error)
 {
 	using namespace meshopt;
 
@@ -2531,7 +2535,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 		remapEdgeLoops(loop, vertex_count, collapse_remap);
 		remapEdgeLoops(loopback, vertex_count, collapse_remap);
 
-		result_count = remapIndexBuffer(result, result_count, collapse_remap, remap);
+		result_count = remapIndexBuffer(result, result_count, collapse_remap, remap, triangle_materials);
 
 		if ((options & meshopt_SimplifyPrune) && result_count > target_index_count && component_nexterror <= vertex_error)
 			result_count = pruneComponents(result, result_count, components, component_errors, component_count, vertex_error, component_nexterror);
@@ -2626,19 +2630,26 @@ size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, 
 {
 	assert((options & meshopt_SimplifyInternalSolve) == 0); // use meshopt_simplifyWithUpdate instead
 
-	return meshopt_simplifyEdge(destination, indices, index_count, vertex_positions_data, vertex_count, vertex_positions_stride, NULL, 0, NULL, 0, NULL, target_index_count, target_error, options, out_result_error);
+	return meshopt_simplifyEdge(destination, indices, index_count, vertex_positions_data, vertex_count, vertex_positions_stride, NULL, 0, NULL, 0, NULL, NULL, target_index_count, target_error, options, out_result_error);
 }
 
 size_t meshopt_simplifyWithAttributes(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes_data, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, const unsigned char* vertex_lock, size_t target_index_count, float target_error, unsigned int options, float* out_result_error)
 {
 	assert((options & meshopt_SimplifyInternalSolve) == 0); // use meshopt_simplifyWithUpdate instead
 
-	return meshopt_simplifyEdge(destination, indices, index_count, vertex_positions_data, vertex_count, vertex_positions_stride, vertex_attributes_data, vertex_attributes_stride, attribute_weights, attribute_count, vertex_lock, target_index_count, target_error, options, out_result_error);
+	return meshopt_simplifyEdge(destination, indices, index_count, vertex_positions_data, vertex_count, vertex_positions_stride, vertex_attributes_data, vertex_attributes_stride, attribute_weights, attribute_count, vertex_lock, NULL, target_index_count, target_error, options, out_result_error);
+}
+
+size_t meshopt_simplifyWithAttributesAndMaterials(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_attributes_data, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, const unsigned char* vertex_lock, unsigned int* triangle_materials, size_t target_index_count, float target_error, unsigned int options, float* out_result_error)
+{
+	assert((options & meshopt_SimplifyInternalSolve) == 0); // use meshopt_simplifyWithUpdate instead
+
+	return meshopt_simplifyEdge(destination, indices, index_count, vertex_positions_data, vertex_count, vertex_positions_stride, vertex_attributes_data, vertex_attributes_stride, attribute_weights, attribute_count, vertex_lock, triangle_materials, target_index_count, target_error, options, out_result_error);
 }
 
 size_t meshopt_simplifyWithUpdate(unsigned int* indices, size_t index_count, float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, float* vertex_attributes_data, size_t vertex_attributes_stride, const float* attribute_weights, size_t attribute_count, const unsigned char* vertex_lock, size_t target_index_count, float target_error, unsigned int options, float* out_result_error)
 {
-	return meshopt_simplifyEdge(indices, indices, index_count, vertex_positions_data, vertex_count, vertex_positions_stride, vertex_attributes_data, vertex_attributes_stride, attribute_weights, attribute_count, vertex_lock, target_index_count, target_error, options | meshopt_SimplifyInternalSolve, out_result_error);
+	return meshopt_simplifyEdge(indices, indices, index_count, vertex_positions_data, vertex_count, vertex_positions_stride, vertex_attributes_data, vertex_attributes_stride, attribute_weights, attribute_count, vertex_lock, NULL, target_index_count, target_error, options | meshopt_SimplifyInternalSolve, out_result_error);
 }
 
 size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const unsigned char* vertex_lock, size_t target_index_count, float target_error, float* out_result_error)

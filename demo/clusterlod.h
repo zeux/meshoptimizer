@@ -88,6 +88,10 @@ struct clodMesh
 
 	// attribute mask to flag attribute discontinuities for permissive simplification; mask (1<<K) corresponds to attribute K
 	unsigned int attribute_protect_mask;
+
+	// per-triangle material IDs for material-aware simplification; can be NULL
+	// when it's not NULL, must contain index_count/3 material IDs (one per triangle)
+	unsigned int* triangle_materials;
 };
 
 // To compute approximate (perspective) projection error of a cluster in screen space (0..1; multiply by screen height to get pixels):
@@ -118,6 +122,9 @@ struct clodCluster
 
 	// cluster vertex count; indices[] has vertex_count unique entries
 	size_t vertex_count;
+
+	// per-triangle material IDs (size = index_count / 3); NULL if materials are not used
+	const unsigned int* materials;
 };
 
 struct clodGroup
@@ -189,6 +196,7 @@ struct Cluster
 {
 	size_t vertices;
 	std::vector<unsigned int> indices;
+	std::vector<unsigned int> materials; // per-triangle material IDs (size = indices.size() / 3)
 
 	int group;
 	int refined;
@@ -231,7 +239,7 @@ static clodBounds boundsMerge(const std::vector<Cluster>& clusters, const std::v
 	return result;
 }
 
-static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh& mesh, const unsigned int* indices, size_t index_count)
+static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh& mesh, const unsigned int* indices, size_t index_count, const unsigned int* triangle_materials = NULL)
 {
 	size_t max_meshlets = meshopt_buildMeshletsBound(index_count, config.max_vertices, config.min_triangles);
 
@@ -244,14 +252,28 @@ static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh&
 	std::vector<unsigned char> meshlet_triangles(index_count);
 #endif
 
-	if (config.cluster_spatial)
+	// use Flex with triangle mapping when materials are provided (spatial doesn't support mapping)
+	std::vector<unsigned int> meshlet_triangle_map;
+
+	if (triangle_materials)
+	{
+		meshlet_triangle_map.resize(index_count / 3);
+		meshlets.resize(meshopt_buildMeshletsFlexWithMapping(meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), meshlet_triangle_map.data(), indices, index_count,
+		    mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride,
+		    config.max_vertices, config.min_triangles, config.max_triangles, 0.f, config.cluster_split_factor));
+	}
+	else if (config.cluster_spatial)
+	{
 		meshlets.resize(meshopt_buildMeshletsSpatial(meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), indices, index_count,
 		    mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride,
 		    config.max_vertices, config.min_triangles, config.max_triangles, config.cluster_fill_weight));
+	}
 	else
+	{
 		meshlets.resize(meshopt_buildMeshletsFlex(meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), indices, index_count,
 		    mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride,
 		    config.max_vertices, config.min_triangles, config.max_triangles, 0.f, config.cluster_split_factor));
+	}
 
 	std::vector<Cluster> clusters(meshlets.size());
 
@@ -268,6 +290,13 @@ static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh&
 		clusters[i].indices.resize(meshlet.triangle_count * 3);
 		for (size_t j = 0; j < meshlet.triangle_count * 3; ++j)
 			clusters[i].indices[j] = meshlet_vertices[meshlet.vertex_offset + meshlet_triangles[meshlet.triangle_offset + j]];
+
+		if (triangle_materials)
+		{
+			clusters[i].materials.resize(meshlet.triangle_count);
+			for (size_t j = 0; j < meshlet.triangle_count; ++j)
+				clusters[i].materials[j] = triangle_materials[meshlet_triangle_map[meshlet.triangle_offset / 3 + j]];
+		}
 
 		clusters[i].group = -1;
 		clusters[i].refined = -1;
@@ -421,7 +450,7 @@ static void simplifyFallback(std::vector<unsigned int>& lod, const clodMesh& mes
 		lod[i] = subset[lod[i]].id;
 }
 
-static std::vector<unsigned int> simplify(const clodConfig& config, const clodMesh& mesh, const std::vector<unsigned int>& indices, const std::vector<unsigned char>& locks, size_t target_count, float* error)
+static std::vector<unsigned int> simplify(const clodConfig& config, const clodMesh& mesh, const std::vector<unsigned int>& indices, const std::vector<unsigned char>& locks, size_t target_count, float* error, std::vector<unsigned int>* inout_materials = NULL)
 {
 	if (target_count > indices.size())
 		return indices;
@@ -430,19 +459,33 @@ static std::vector<unsigned int> simplify(const clodConfig& config, const clodMe
 
 	unsigned int options = meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute | (config.simplify_permissive ? meshopt_SimplifyPermissive : 0) | (config.simplify_regularize ? meshopt_SimplifyRegularize : 0);
 
-	lod.resize(meshopt_simplifyWithAttributes(&lod[0], &indices[0], indices.size(),
+	// copy materials for permissive retry
+	std::vector<unsigned int> lod_materials;
+	unsigned int* lod_materials_ptr = NULL;
+	if (inout_materials && !inout_materials->empty())
+	{
+		lod_materials = *inout_materials;
+		lod_materials_ptr = &lod_materials[0];
+	}
+
+	lod.resize(meshopt_simplifyWithAttributesAndMaterials(&lod[0], &indices[0], indices.size(),
 	    mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride,
 	    mesh.vertex_attributes, mesh.vertex_attributes_stride, mesh.attribute_weights, mesh.attribute_count,
-	    &locks[0], target_count, FLT_MAX, options, error));
+	    &locks[0], lod_materials_ptr, target_count, FLT_MAX, options, error));
 
 	if (lod.size() > target_count && config.simplify_fallback_permissive && !config.simplify_permissive)
-		lod.resize(meshopt_simplifyWithAttributes(&lod[0], &indices[0], indices.size(),
+	{
+		if (lod_materials_ptr)
+			lod_materials = *inout_materials; // reset materials for retry
+
+		lod.resize(meshopt_simplifyWithAttributesAndMaterials(&lod[0], &indices[0], indices.size(),
 		    mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride,
 		    mesh.vertex_attributes, mesh.vertex_attributes_stride, mesh.attribute_weights, mesh.attribute_count,
-		    &locks[0], target_count, FLT_MAX, options | meshopt_SimplifyPermissive, error));
+		    &locks[0], lod_materials_ptr, target_count, FLT_MAX, options | meshopt_SimplifyPermissive, error));
+	}
 
-	// while it's possible to call simplifySloppy directly, it doesn't support sparsity or absolute error, so we need to do some extra work
-	if (lod.size() > target_count && config.simplify_fallback_sloppy)
+	// while it's possible to call simplifySloppy directly, it doesn't support sparsity, absolute error, or material tracking
+	if (lod.size() > target_count && config.simplify_fallback_sloppy && !inout_materials)
 	{
 		simplifyFallback(lod, mesh, indices, locks, target_count, error);
 		*error *= config.simplify_error_factor_sloppy; // scale error up to account for appearance degradation
@@ -478,6 +521,12 @@ static std::vector<unsigned int> simplify(const clodConfig& config, const clodMe
 		*error = std::min(*error, sqrtf(max_edge_sq) * config.simplify_error_edge_limit);
 	}
 
+	if (lod_materials_ptr)
+	{
+		lod_materials.resize(lod.size() / 3);
+		*inout_materials = lod_materials;
+	}
+
 	return lod;
 }
 
@@ -495,6 +544,7 @@ static int outputGroup(const clodConfig& config, const clodMesh& mesh, const std
 		result.indices = cluster.indices.data();
 		result.index_count = cluster.indices.size();
 		result.vertex_count = cluster.vertices;
+		result.materials = cluster.materials.empty() ? NULL : cluster.materials.data();
 	}
 
 	return output_callback ? output_callback(output_context, {depth, simplified}, group_clusters.data(), group_clusters.size()) : -1;
@@ -580,7 +630,7 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 	}
 
 	// initial clusterization splits the original mesh
-	std::vector<Cluster> clusters = clusterize(config, mesh, mesh.indices, mesh.index_count);
+	std::vector<Cluster> clusters = clusterize(config, mesh, mesh.indices, mesh.index_count, mesh.triangle_materials);
 
 	// compute initial precise bounds; subsequent bounds will be using group-merged bounds
 	for (Cluster& cluster : clusters)
@@ -607,8 +657,17 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 		{
 			std::vector<unsigned int> merged;
 			merged.reserve(groups[i].size() * config.max_triangles * 3);
+
+			std::vector<unsigned int> merged_materials;
+			if (mesh.triangle_materials)
+				merged_materials.reserve(groups[i].size() * config.max_triangles);
+
 			for (size_t j = 0; j < groups[i].size(); ++j)
+			{
 				merged.insert(merged.end(), clusters[groups[i][j]].indices.begin(), clusters[groups[i][j]].indices.end());
+				if (mesh.triangle_materials)
+					merged_materials.insert(merged_materials.end(), clusters[groups[i][j]].materials.begin(), clusters[groups[i][j]].materials.end());
+			}
 
 			size_t target_size = size_t((merged.size() / 3) * config.simplify_ratio) * 3;
 
@@ -617,7 +676,7 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 			clodBounds bounds = boundsMerge(clusters, groups[i]);
 
 			float error = 0.f;
-			std::vector<unsigned int> simplified = simplify(config, mesh, merged, locks, target_size, &error);
+			std::vector<unsigned int> simplified = simplify(config, mesh, merged, locks, target_size, &error, merged_materials.empty() ? NULL : &merged_materials);
 			if (simplified.size() > merged.size() * config.simplify_threshold)
 			{
 				bounds.error = FLT_MAX; // terminal group, won't simplify further
@@ -635,7 +694,7 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 			for (size_t j = 0; j < groups[i].size(); ++j)
 				clusters[groups[i][j]].indices = std::vector<unsigned int>();
 
-			std::vector<Cluster> split = clusterize(config, mesh, simplified.data(), simplified.size());
+			std::vector<Cluster> split = clusterize(config, mesh, simplified.data(), simplified.size(), merged_materials.empty() ? NULL : merged_materials.data());
 
 			for (Cluster& cluster : split)
 			{
