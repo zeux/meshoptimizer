@@ -61,7 +61,7 @@ static float sampleTexture(const Texture& texture, float u, float v)
 	unsigned char a01 = texture.data[offset + offsety];
 	unsigned char a11 = texture.data[offset + offsetx + offsety];
 
-	// blinear interpolation; we do it partially in integer space, deferring full conversion to [0, 1] until the end
+	// bilinear interpolation; we do it partially in integer space, deferring full conversion to [0, 1] until the end
 	float ax0 = float(a00) + float(a10 - a00) * rx;
 	float ax1 = float(a01) + float(a11 - a01) * rx;
 	return (ax0 + (ax1 - ax0) * ry) * (1.f / 255.f);
@@ -130,7 +130,8 @@ struct OMMHasher
 		// MurmurHash2
 		for (size_t i = 0; i < size / 4; ++i)
 		{
-			unsigned int k = *reinterpret_cast<const unsigned int*>(key + i * 4);
+			unsigned int k;
+			memcpy(&k, key + i * 4, sizeof(k));
 
 			k *= m;
 			k ^= k >> r;
@@ -355,7 +356,7 @@ size_t meshopt_opacityMapMeasure(int* levels, unsigned int* sources, int* omm_in
 		{
 			*entry = unsigned(result);
 			levels[result] = level;
-			sources[result] = int(i / 3);
+			sources[result] = unsigned(i / 3);
 			result++;
 		}
 
