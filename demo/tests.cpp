@@ -2938,19 +2938,30 @@ static void decodeMeshletTypical()
 
 static void opacityMap()
 {
-	const size_t triangle_count = 2;
-	const size_t vertex_count = 4;
+	const size_t triangle_count = 6;
+	const size_t vertex_count = 8;
 
 	const unsigned int indices[triangle_count * 3] = {
-	    0, 1, 2,
-	    0, 2, 3, // clang-format :-/
+	    // 4 corner triangles
+	    0, 4, 7,
+	    1, 5, 4,
+	    2, 6, 5,
+	    3, 7, 6,
+
+	    // 2 center triangles (2x larger)
+	    4, 6, 5, // note: this triangle is flipped from its correct orientation to produce the same OMM to test compaction
+	    4, 6, 7, // clang-format :-/
 	};
 
 	const float uvs[vertex_count * 2] = {
 	    0.f, 0.f,
 	    1.f, 0.f,
 	    1.f, 1.f,
-	    0.f, 1.f, // clang-format :-/
+	    0.f, 1.f,
+	    0.5f, 0.f,
+	    1.f, 0.5f,
+	    0.5f, 1.f,
+	    0.f, 0.5f, // clang-format :-/
 	};
 
 	const unsigned int texture_size = 32;
@@ -2966,20 +2977,12 @@ static void opacityMap()
 			float dy = float(y) + 0.5f - center;
 			float dc = radius - sqrtf(dx * dx + dy * dy);
 
-			texture[y * texture_size + x] = meshopt_quantizeUnorm(dc + 0.5f, 8);
+			texture[y * texture_size + x] = (unsigned char)meshopt_quantizeUnorm(dc + 0.5f, 8);
 		}
 
-	// subdivision parameters
-	const float target_edge = 3.f;
+	// subdivision parameterrs
+	const float target_edge = 2.5f;
 	const int max_level = 4;
-
-	// compute level and source triangle per OMM; note that this can also deduplicate OMMs based on UVs but in our case the UVs are unique
-	int levels[triangle_count];
-	unsigned int sources[triangle_count];
-	int omm_indices[triangle_count];
-
-	size_t omm_count = meshopt_opacityMapMeasure(levels, sources, omm_indices, indices, triangle_count * 3, uvs, vertex_count, sizeof(float) * 2, texture_size, texture_size, max_level, target_edge);
-	assert(omm_count <= triangle_count);
 
 	// state histogram for testing
 	int histogram[2][4] = {};
@@ -2987,6 +2990,18 @@ static void opacityMap()
 	for (int k = 0; k < 2; ++k)
 	{
 		int states = 2 << k;
+
+		int levels[triangle_count];
+		unsigned int sources[triangle_count];
+		int omm_indices[triangle_count];
+
+		// compute level and source triangle per OMM; note that this can also deduplicate OMMs based on UVs but in our case the UVs are unique
+		size_t omm_count = meshopt_opacityMapMeasure(levels, sources, omm_indices, indices, triangle_count * 3, uvs, vertex_count, sizeof(float) * 2, texture_size, texture_size, max_level, target_edge);
+		assert(omm_count <= triangle_count);
+
+		// validate expected levels/special indices based on underlying test data; depends on implementation specifics, might change
+		assert(levels[0] == 2 && levels[1] == 2 && levels[2] == 2 && levels[3] == 2);
+		assert(levels[4] == 3 && levels[5] == 3);
 
 		// layout OMM data
 		std::vector<unsigned int> offsets(omm_count);
@@ -3033,17 +3048,22 @@ static void opacityMap()
 		// after compaction, some OMM indices may be replaced with a special index (-4..-1)
 		for (size_t i = 0; i < triangle_count; ++i)
 			assert(omm_indices[i] < 0 || size_t(omm_indices[i]) < compact_count);
+
+		// validate expected levels/special indices based on underlying test data; depends on implementation specifics, might change
+		assert(levels[0] == 3 && levels[1] == 3); // note: OMM data got compacted so we only have 3-level OMMs left
+		assert(omm_indices[0] == -1 && omm_indices[1] == -1 && omm_indices[2] == -1 && omm_indices[3] == -1);
+		assert(compact_count == 1 && omm_indices[4] == 0 && omm_indices[5] == 0); // we force the two center triangles to use opposite orientations to make sure their data matches
 	}
 
-	// validate expected histogram based on underlying test data; naturally this depends on rasterization specifics
+	// validate expected histogram based on underlying test data; depends on rasterization specifics, might change
 	assert(histogram[0][0] == histogram[1][0] + histogram[1][2]);
 	assert(histogram[0][1] == histogram[1][1] + histogram[1][3]);
 
 	float opaque = float(histogram[0][1]) / float(histogram[0][0] + histogram[0][1]);
 	float known = float(histogram[1][0] + histogram[1][1]) / float(histogram[1][0] + histogram[1][1] + histogram[1][2] + histogram[1][3]);
 
-	assert(fabsf(opaque - 0.31f) < 1e-2f);
-	assert(fabsf(known - 0.73f) < 1e-2f);
+	assert(fabsf(opaque - 0.38f) < 1e-2f);
+	assert(fabsf(known - 0.66f) < 1e-2f);
 }
 
 void runTests()
