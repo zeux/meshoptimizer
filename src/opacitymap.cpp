@@ -2,7 +2,6 @@
 #include "meshoptimizer.h"
 
 #include <assert.h>
-#include <float.h>
 #include <math.h>
 #include <string.h>
 
@@ -13,12 +12,11 @@ namespace meshopt
 // https://docs.vulkan.org/spec/latest/_images/micromap-subd.svg
 // note that triangles 0 and 2 have the same winding as the source triangle, however triangles 1 (flipped)
 // and 3 (upright) have flipped winding; this is obvious from the level 2 subdivision in the diagram above
-
-struct TriangleOMM
+inline size_t getLevelSize(int level, int states)
 {
-	int uvs[6];
-	int level;
-};
+	// 1-bit 2-state or 2-bit 4-state per micro triangle, rounded up to whole bytes
+	return ((1 << (level * 2)) * (states >> 1) + 7) >> 3;
+}
 
 struct Texture
 {
@@ -92,6 +90,12 @@ static unsigned int hashUpdate4u(unsigned int h, const unsigned char* key, size_
 	return h;
 }
 
+struct TriangleOMM
+{
+	int uvs[6];
+	int level;
+};
+
 struct TriangleOMMHasher
 {
 	const TriangleOMM* data;
@@ -121,10 +125,8 @@ struct OMMHasher
 
 	size_t hash(unsigned int index) const
 	{
-		size_t size = ((1 << (levels[index] * 2)) * (states / 2) + 7) / 8;
-		assert(size > 0);
-
 		const unsigned char* key = data + offsets[index];
+		size_t size = getLevelSize(levels[index], states);
 
 		unsigned int h = levels[index];
 
@@ -143,7 +145,7 @@ struct OMMHasher
 
 	bool equal(unsigned int lhs, unsigned int rhs) const
 	{
-		size_t size = ((1 << (levels[lhs] * 2)) * (states / 2) + 7) / 8;
+		size_t size = getLevelSize(levels[lhs], states);
 
 		return levels[lhs] == levels[rhs] && memcmp(data + offsets[lhs], data + offsets[rhs], size) == 0;
 	}
@@ -258,7 +260,7 @@ static int getSpecialIndex(const unsigned char* data, int level, int states)
 
 	// otherwise we need to check that all bytes are consistent with the first value and we can do this byte-wise
 	int expected = first * (states == 2 ? 0xff : 0x55);
-	size_t size = (1 << (level * 2)) * (states / 2) / 8;
+	size_t size = getLevelSize(level, states);
 
 	for (size_t i = 0; i < size; ++i)
 		if (data[i] != expected)
@@ -350,7 +352,7 @@ size_t meshopt_opacityMapTriangleSize(int level, int states)
 	assert(level >= 0 && level <= 12);
 	assert(states == 2 || states == 4);
 
-	return ((1 << (level * 2)) * (states / 2) + 7) / 8;
+	return meshopt::getLevelSize(level, states);
 }
 
 int meshopt_opacityMapPreferredMip(int level, const float* uv0, const float* uv1, const float* uv2, unsigned int texture_width, unsigned int texture_height)
@@ -387,10 +389,9 @@ void meshopt_opacityMapRasterize(unsigned char* result, int level, int states, c
 	assert(texture_stride >= 1 && texture_stride <= 4);
 	assert(texture_pitch >= texture_stride * texture_width);
 
-	Texture texture = {texture_data, texture_stride, texture_pitch, texture_width, texture_height};
+	memset(result, 0, getLevelSize(level, states));
 
-	// 1-bit 2-state or 2-bit 4-state per micro triangle, rounded up to whole bytes
-	memset(result, 0, ((1 << (level * 2)) * (states / 2) + 7) / 8);
+	Texture texture = {texture_data, texture_stride, texture_pitch, texture_width, texture_height};
 
 	// rasterize all micro triangles recursively, passing corner data down to reduce redundant sampling
 	float c0[3] = {uv0[0], uv0[1], sampleTexture(texture, uv0[0], uv0[1])};
@@ -428,7 +429,7 @@ size_t meshopt_opacityMapCompact(unsigned char* data, size_t data_size, int* lev
 		assert(level >= 0 && level <= 12);
 
 		const unsigned char* old = data_old + offsets[i];
-		size_t size = ((1 << (level * 2)) * (states / 2) + 7) / 8;
+		size_t size = getLevelSize(level, states);
 		assert(offsets[i] + size <= data_size);
 
 		// try to convert to a special index if all micro-triangle states are the same
