@@ -67,6 +67,31 @@ static float sampleTexture(const Texture& texture, float u, float v)
 	return (ax0 + (ax1 - ax0) * ry) * (1.f / 255.f);
 }
 
+static unsigned int hashUpdate4u(unsigned int h, const unsigned char* key, size_t len)
+{
+	// MurmurHash2
+	const unsigned int m = 0x5bd1e995;
+	const int r = 24;
+
+	while (len >= 4)
+	{
+		unsigned int k;
+		memcpy(&k, key, sizeof(k));
+
+		k *= m;
+		k ^= k >> r;
+		k *= m;
+
+		h *= m;
+		h ^= k;
+
+		key += 4;
+		len -= 4;
+	}
+
+	return h;
+}
+
 struct TriangleOMMHasher
 {
 	const TriangleOMM* data;
@@ -74,31 +99,8 @@ struct TriangleOMMHasher
 	size_t hash(unsigned int index) const
 	{
 		const TriangleOMM& tri = data[index];
-		unsigned int h = tri.level;
 
-		const unsigned int m = 0x5bd1e995;
-		const int r = 24;
-
-		// MurmurHash2
-		const unsigned int* uvs = reinterpret_cast<const unsigned int*>(tri.uvs);
-
-		for (int i = 0; i < 6; ++i)
-		{
-			unsigned int k = uvs[i];
-
-			k *= m;
-			k ^= k >> r;
-			k *= m;
-
-			h *= m;
-			h ^= k;
-		}
-
-		// MurmurHash2 finalizer
-		h ^= h >> 13;
-		h *= 0x5bd1e995;
-		h ^= h >> 15;
-		return h;
+		return hashUpdate4u(tri.level, reinterpret_cast<const unsigned char*>(tri.uvs), sizeof(tri.uvs));
 	}
 
 	bool equal(unsigned int lhs, unsigned int rhs) const
@@ -120,40 +122,17 @@ struct OMMHasher
 	size_t hash(unsigned int index) const
 	{
 		size_t size = ((1 << (levels[index] * 2)) * (states / 2) + 7) / 8;
+		assert(size > 0);
+
 		const unsigned char* key = data + offsets[index];
 
 		unsigned int h = levels[index];
 
-		const unsigned int m = 0x5bd1e995;
-		const int r = 24;
-
-		// MurmurHash2
-		for (size_t i = 0; i < size / 4; ++i)
-		{
-			unsigned int k;
-			memcpy(&k, key + i * 4, sizeof(k));
-
-			k *= m;
-			k ^= k >> r;
-			k *= m;
-
-			h *= m;
-			h ^= k;
-		}
-
-		// MurmurHash2 tail
-		switch (size & 3)
-		{
-		case 3:
-			h ^= key[size - 3] << 16;
-			// fallthrough
-		case 2:
-			h ^= key[size - 2] << 8;
-			// fallthrough
-		case 1:
-			h ^= key[size - 1];
-			h *= m;
-		}
+		// MurmurHash2 for large keys, simple fold for small; note that size is a power of two
+		if (size < 4)
+			h ^= key[0] | (key[size - 1] << 8);
+		else
+			h = hashUpdate4u(h, key, size);
 
 		// MurmurHash2 finalizer
 		h ^= h >> 13;
