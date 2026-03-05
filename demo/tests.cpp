@@ -3063,7 +3063,7 @@ static void opacityMap()
 	float known = float(histogram[1][0] + histogram[1][1]) / float(histogram[1][0] + histogram[1][1] + histogram[1][2] + histogram[1][3]);
 
 	assert(fabsf(opaque - 0.38f) < 1e-2f);
-	assert(fabsf(known - 0.66f) < 1e-2f);
+	assert(fabsf(known - 0.76f) < 1e-2f);
 }
 
 void runTests()

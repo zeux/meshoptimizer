@@ -202,8 +202,8 @@ static void rasterizeOpacity2(unsigned char* result, size_t index, float a0, flo
 
 static void rasterizeOpacity4(unsigned char* result, size_t index, float a0, float a1, float a2, float ac)
 {
-	int transp = (a0 < 0.25f) & (a1 < 0.25f) & (a2 < 0.25f) & (ac < 0.25f);
-	int opaque = (a0 > 0.75f) & (a1 > 0.75f) & (a2 > 0.75f) & (ac > 0.75f);
+	int transp = (a0 < 0.5f) & (a1 < 0.5f) & (a2 < 0.5f) & (ac < 0.5f);
+	int opaque = (a0 > 0.5f) & (a1 > 0.5f) & (a2 > 0.5f) & (ac > 0.5f);
 	float coverage = (a0 + a1 + a2) * 0.12f + ac * 0.64f;
 
 	// treat state as known if thresholding of corners & centers against wider bounds is consistent
