@@ -347,7 +347,7 @@ size_t meshopt_opacityMapMeasure(int* levels, unsigned int* sources, int* omm_in
 	return result;
 }
 
-size_t meshopt_opacityMapTriangleSize(int level, int states)
+size_t meshopt_opacityMapEntrySize(int level, int states)
 {
 	assert(level >= 0 && level <= 12);
 	assert(states == 2 || states == 4);

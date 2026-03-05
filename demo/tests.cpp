@@ -3010,7 +3010,7 @@ static void opacityMap()
 		for (size_t i = 0; i < omm_count; ++i)
 		{
 			offsets[i] = unsigned(data_size);
-			data_size += meshopt_opacityMapTriangleSize(levels[i], states);
+			data_size += meshopt_opacityMapEntrySize(levels[i], states);
 		}
 
 		std::vector<unsigned char> data(data_size);
@@ -3043,7 +3043,7 @@ static void opacityMap()
 		// compact OMMs; note, this can be done per mesh but for optimal reuse this should be done for all meshes in model/scene at once
 		size_t compact_count = meshopt_opacityMapCompact(&data[0], data.size(), levels, &offsets[0], omm_count, omm_indices, triangle_count, states);
 		assert(compact_count <= omm_count);
-		data.resize(compact_count == 0 ? 0 : offsets[compact_count - 1] + meshopt_opacityMapTriangleSize(levels[compact_count - 1], states));
+		data.resize(compact_count == 0 ? 0 : offsets[compact_count - 1] + meshopt_opacityMapEntrySize(levels[compact_count - 1], states));
 
 		// after compaction, some OMM indices may be replaced with a special index (-4..-1)
 		for (size_t i = 0; i < triangle_count; ++i)

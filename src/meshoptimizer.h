@@ -849,7 +849,7 @@ MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_opacityMapMeasure(int* levels, unsigne
 MESHOPTIMIZER_EXPERIMENTAL void meshopt_opacityMapRasterize(unsigned char* result, int level, int states, const float* uv0, const float* uv1, const float* uv2, const unsigned char* texture_data, size_t texture_stride, size_t texture_pitch, unsigned int texture_width, unsigned int texture_height);
 MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_opacityMapCompact(unsigned char* data, size_t data_size, int* levels, unsigned int* offsets, size_t omm_count, int* omm_indices, size_t triangle_count, int states);
 MESHOPTIMIZER_EXPERIMENTAL int meshopt_opacityMapPreferredMip(int level, const float* uv0, const float* uv1, const float* uv2, unsigned int texture_width, unsigned int texture_height);
-MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_opacityMapTriangleSize(int level, int states);
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_opacityMapEntrySize(int level, int states);
 
 /**
  * Quantize a float into half-precision (as defined by IEEE-754 fp16) floating point value
