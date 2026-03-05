@@ -200,6 +200,7 @@ static int rasterizeEdge(float u0, float v0, float u1, float v1, int edgeres, co
 	float u = u0, v = v0;
 
 	int mask = 0;
+	int count = 0;
 
 	for (int i = 0; i < edgeres; ++i)
 	{
@@ -208,9 +209,10 @@ static int rasterizeEdge(float u0, float v0, float u1, float v1, int edgeres, co
 
 		float a = sampleTexture(texture, u, v);
 		mask |= (a >= 0.5f) << i;
+		count += a >= 0.5f;
 	}
 
-	return mask;
+	return mask | (count << 16);
 }
 
 template <int States>
@@ -220,6 +222,14 @@ static void rasterizeOpacity0(unsigned char* result, size_t index, float a0, flo
 
 	// basic coverage estimator from center and corner values; trained to minimize error
 	float coverage = (a0 + a1 + a2) * 0.12f + ac * 0.64f;
+
+	if (edgeres)
+	{
+		float edgescale = 1.f / edgeres;
+
+		// if we have edge samples, we can get a better coverage estimate by including them; trained to minimize error
+		coverage = ac * 0.22f + float((e0 >> 16) + (e1 >> 16) + (e2 >> 16)) * edgescale * 0.23f + (a0 + a1 + a2) * 0.03f;
+	}
 
 	if (states == 2)
 	{
@@ -232,14 +242,16 @@ static void rasterizeOpacity0(unsigned char* result, size_t index, float a0, flo
 
 	// treat state as known if thresholding of corners & centers against wider bounds is consistent
 	// for unknown states, we currently use the same formula as the 2-state opacity for better consistency with forced 2-state
-	int state = (transp | opaque) ? opaque : (2 + (coverage >= 0.5f));
+	int unknown = 2 + (coverage >= 0.5f);
+	int state = (transp | opaque) ? opaque : unknown;
 
 	if (edgeres && (transp | opaque))
 	{
+		// if we have edge samples, ensure they are consistent too, falling back to unknown if not
 		int exp = opaque ? (1 << edgeres) - 1 : 0;
-		int eok = (e0 == exp) & (e1 == exp) & (e2 == exp);
+		int eok = ((e0 & 0xffff) == exp) & ((e1 & 0xffff) == exp) & ((e2 & 0xffff) == exp);
 
-		state = eok ? state : 2 + (coverage >= 0.5f);
+		state = eok ? state : unknown;
 	}
 
 	result[index / 4] |= state << ((index % 4) * 2);
@@ -257,7 +269,7 @@ static void rasterizeOpacityRec(unsigned char* result, size_t index, int level, 
 
 		int e0 = 0, e1 = 0, e2 = 0;
 
-		if (edgeres > 0 && States == 4)
+		if (edgeres > 0)
 		{
 			// sample additional points on the edges to improve 4-state conservative estimation
 			e0 = rasterizeEdge(c0[0], c0[1], c1[0], c1[1], edgeres, texture);
