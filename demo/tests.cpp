@@ -2936,6 +2936,136 @@ static void decodeMeshletTypical()
 	assert(memcmp(rt, triangles, sizeof(triangles)) == 0);
 }
 
+static void opacityMap()
+{
+	const size_t triangle_count = 6;
+	const size_t vertex_count = 8;
+
+	const unsigned int indices[triangle_count * 3] = {
+	    // 4 corner triangles
+	    0, 4, 7,
+	    1, 5, 4,
+	    2, 6, 5,
+	    3, 7, 6,
+
+	    // 2 center triangles (2x larger)
+	    4, 6, 5, // note: this triangle is flipped from its correct orientation to produce the same OMM to test compaction
+	    4, 6, 7, // clang-format :-/
+	};
+
+	const float uvs[vertex_count * 2] = {
+	    0.f, 0.f,
+	    1.f, 0.f,
+	    1.f, 1.f,
+	    0.f, 1.f,
+	    0.5f, 0.f,
+	    1.f, 0.5f,
+	    0.5f, 1.f,
+	    0.f, 0.5f, // clang-format :-/
+	};
+
+	const unsigned int texture_size = 32;
+	unsigned char texture[texture_size * texture_size];
+
+	float center = float(texture_size) * 0.5f;
+	float radius = 10.f;
+
+	for (unsigned int y = 0; y < texture_size; ++y)
+		for (unsigned int x = 0; x < texture_size; ++x)
+		{
+			float dx = float(x) + 0.5f - center;
+			float dy = float(y) + 0.5f - center;
+			float dc = radius - sqrtf(dx * dx + dy * dy);
+
+			texture[y * texture_size + x] = (unsigned char)meshopt_quantizeUnorm(dc + 0.5f, 8);
+		}
+
+	// subdivision parameterrs
+	const float target_edge = 2.5f;
+	const int max_level = 4;
+
+	// state histogram for testing
+	int histogram[2][4] = {};
+
+	for (int k = 0; k < 2; ++k)
+	{
+		int states = 2 << k;
+
+		int levels[triangle_count];
+		unsigned int sources[triangle_count];
+		int omm_indices[triangle_count];
+
+		// compute level and source triangle per OMM; note that this can also deduplicate OMMs based on UVs but in our case the UVs are unique
+		size_t omm_count = meshopt_opacityMapMeasure(levels, sources, omm_indices, indices, triangle_count * 3, uvs, vertex_count, sizeof(float) * 2, texture_size, texture_size, max_level, target_edge);
+		assert(omm_count <= triangle_count);
+
+		// validate expected levels/special indices based on underlying test data; depends on implementation specifics, might change
+		assert(levels[0] == 2 && levels[1] == 2 && levels[2] == 2 && levels[3] == 2);
+		assert(levels[4] == 3 && levels[5] == 3);
+
+		// layout OMM data
+		std::vector<unsigned int> offsets(omm_count);
+		size_t data_size = 0;
+
+		for (size_t i = 0; i < omm_count; ++i)
+		{
+			offsets[i] = unsigned(data_size);
+			data_size += meshopt_opacityMapEntrySize(levels[i], states);
+		}
+
+		std::vector<unsigned char> data(data_size);
+
+		for (size_t i = 0; i < omm_count; ++i)
+		{
+			unsigned int tri = sources[i];
+			assert(tri < triangle_count);
+
+			const float* uv0 = &uvs[indices[tri * 3 + 0] * 2];
+			const float* uv1 = &uvs[indices[tri * 3 + 1] * 2];
+			const float* uv2 = &uvs[indices[tri * 3 + 2] * 2];
+
+			// we can use mip 0 to rasterize for maximally conservative rasterization, or use the preferred mip for best performance
+			int mip = meshopt_opacityMapPreferredMip(levels[i], uv0, uv1, uv2, texture_size, texture_size);
+			assert(mip >= 0 && mip <= 5);
+
+			meshopt_opacityMapRasterize(&data[offsets[i]], levels[i], states, uv0, uv1, uv2, texture, 1, texture_size, texture_size, texture_size);
+
+			size_t micro_triangle_count = size_t(1) << (levels[i] * 2);
+
+			for (size_t j = 0; j < micro_triangle_count; ++j)
+			{
+				unsigned char byte = data[offsets[i] + (j >> (states == 2 ? 3 : 2))];
+				int state = (byte >> (states == 2 ? j & 7 : (j & 3) * 2)) & (states - 1);
+				histogram[k][state]++;
+			}
+		}
+
+		// compact OMMs; note, this can be done per mesh but for optimal reuse this should be done for all meshes in model/scene at once
+		size_t compact_count = meshopt_opacityMapCompact(&data[0], data.size(), levels, &offsets[0], omm_count, omm_indices, triangle_count, states);
+		assert(compact_count <= omm_count);
+		data.resize(compact_count == 0 ? 0 : offsets[compact_count - 1] + meshopt_opacityMapEntrySize(levels[compact_count - 1], states));
+
+		// after compaction, some OMM indices may be replaced with a special index (-4..-1)
+		for (size_t i = 0; i < triangle_count; ++i)
+			assert(omm_indices[i] < 0 || size_t(omm_indices[i]) < compact_count);
+
+		// validate expected levels/special indices based on underlying test data; depends on implementation specifics, might change
+		assert(levels[0] == 3 && levels[1] == 3); // note: OMM data got compacted so we only have 3-level OMMs left
+		assert(omm_indices[0] == -1 && omm_indices[1] == -1 && omm_indices[2] == -1 && omm_indices[3] == -1);
+		assert(compact_count == 1 && omm_indices[4] == 0 && omm_indices[5] == 0); // we force the two center triangles to use opposite orientations to make sure their data matches
+	}
+
+	// validate expected histogram based on underlying test data; depends on rasterization specifics, might change
+	assert(histogram[0][0] == histogram[1][0] + histogram[1][2]);
+	assert(histogram[0][1] == histogram[1][1] + histogram[1][3]);
+
+	float opaque = float(histogram[0][1]) / float(histogram[0][0] + histogram[0][1]);
+	float known = float(histogram[1][0] + histogram[1][1]) / float(histogram[1][0] + histogram[1][1] + histogram[1][2] + histogram[1][3]);
+
+	assert(fabsf(opaque - 0.38f) < 1e-2f);
+	assert(fabsf(known - 0.66f) < 1e-2f);
+}
+
 void runTests()
 {
 	decodeIndexV0();
@@ -3063,4 +3193,6 @@ void runTests()
 	decodeMeshletSafety();
 	decodeMeshletBasic();
 	decodeMeshletTypical();
+
+	opacityMap();
 }
