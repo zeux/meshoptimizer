@@ -409,7 +409,7 @@ size_t meshopt_opacityMapEntrySize(int level, int states)
 	return meshopt::getLevelSize(level, states);
 }
 
-int meshopt_opacityMapPreferredMip(int level, const float* uv0, const float* uv1, const float* uv2, unsigned int texture_width, unsigned int texture_height)
+int meshopt_opacityMapPreferredMip(int level, const float* uv0, const float* uv1, const float* uv2, unsigned int texture_width, unsigned int texture_height, int quality)
 {
 	assert(level >= 0 && level <= 12);
 	assert(unsigned(texture_width - 1) < 16384 && unsigned(texture_height - 1) < 16384);
@@ -421,8 +421,8 @@ int meshopt_opacityMapPreferredMip(int level, const float* uv0, const float* uv1
 	float uvedge = sqrtf(uvarea) / float(1 << level);
 	float levelf = log2f(uvedge > 1 ? uvedge : 1);
 
-	// round down and clamp
-	int mip = int(levelf - 0.5f);
+	// round and clamp
+	int mip = int(levelf + 0.5f - quality * 0.5f);
 	mip = mip < 0 ? 0 : mip;
 	mip = mip < 16 ? mip : 16;
 
