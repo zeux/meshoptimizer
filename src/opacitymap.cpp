@@ -258,45 +258,91 @@ static void rasterizeOpacity0(unsigned char* result, size_t index, float a0, flo
 }
 
 template <int States>
+static void rasterizeOpacity1(unsigned char* result, size_t index, int edgeres, const float* c0, const float* c1, const float* c2, const Texture& texture)
+{
+	// compute each edge midpoint & sample
+	float c01[3] = {(c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2, 0.f};
+	float c12[3] = {(c1[0] + c2[0]) / 2, (c1[1] + c2[1]) / 2, 0.f};
+	float c20[3] = {(c2[0] + c0[0]) / 2, (c2[1] + c0[1]) / 2, 0.f};
+
+	c01[2] = sampleTexture(texture, c01[0], c01[1]);
+	c12[2] = sampleTexture(texture, c12[0], c12[1]);
+	c20[2] = sampleTexture(texture, c20[0], c20[1]);
+
+	// corner tables for each edge, and corner + edge tables for each triangle
+	// edges are numbered counter clockwise, 6 outer first, 3 inner last; triangle vertex and edge references are in triangle winding order
+	static const unsigned char edges[9][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 4}, {4, 5}, {5, 0}, {5, 1}, {1, 3}, {3, 5}};
+	static const unsigned char triangles[4][6] = {{0, 1, 5, 0, 6, 5}, {5, 3, 1, 8, 7, 6}, {1, 2, 3, 1, 2, 7}, {3, 5, 4, 8, 4, 3}};
+
+	const float* points[] = {c0, c01, c1, c12, c2, c20};
+
+	int em[9] = {};
+
+	// sample additional points on the edges to improve state estimation
+	if (edgeres > 0)
+		for (size_t i = 0; i < 9; ++i)
+			em[i] = rasterizeEdge(points[edges[i][0]][0], points[edges[i][0]][1], points[edges[i][1]][0], points[edges[i][1]][1], edgeres, texture);
+
+	for (size_t i = 0; i < 4; ++i)
+	{
+		const unsigned char* tri = triangles[i];
+		const float* p0 = points[tri[0]];
+		const float* p1 = points[tri[1]];
+		const float* p2 = points[tri[2]];
+
+		// compute triangle center & sample
+		float uc = (p0[0] + p1[0] + p2[0]) * (1.f / 3.f);
+		float vc = (p0[1] + p1[1] + p2[1]) * (1.f / 3.f);
+		float ac = sampleTexture(texture, uc, vc);
+
+		// rasterize opacity state based on alpha values in corners and center (and optionally edges)
+		rasterizeOpacity0<States>(result, index * 4 + i, p0[2], p1[2], p2[2], ac, em[tri[3]], em[tri[4]], em[tri[5]], edgeres);
+	}
+}
+
+template <int States>
 static void rasterizeOpacityRec(unsigned char* result, size_t index, int level, int edgeres, const float* c0, const float* c1, const float* c2, const Texture& texture)
 {
 	if (level == 0)
 	{
 		// compute triangle center & sample
-		float uc = (c0[0] + c1[0] + c2[0]) / 3;
-		float vc = (c0[1] + c1[1] + c2[1]) / 3;
+		float uc = (c0[0] + c1[0] + c2[0]) * (1.f / 3.f);
+		float vc = (c0[1] + c1[1] + c2[1]) * (1.f / 3.f);
 		float ac = sampleTexture(texture, uc, vc);
 
 		int e0 = 0, e1 = 0, e2 = 0;
 
 		if (edgeres > 0)
 		{
-			// sample additional points on the edges to improve 4-state conservative estimation
+			// sample additional points on the edges to improve state estimation
 			e0 = rasterizeEdge(c0[0], c0[1], c1[0], c1[1], edgeres, texture);
 			e1 = rasterizeEdge(c1[0], c1[1], c2[0], c2[1], edgeres, texture);
 			e2 = rasterizeEdge(c2[0], c2[1], c0[0], c0[1], edgeres, texture);
 		}
 
-		// rasterize opacity state based on alpha values in corners and center
-		rasterizeOpacity0<States>(result, index, c0[2], c1[2], c2[2], ac, e0, e1, e2, edgeres);
-		return;
+		// rasterize opacity state based on alpha values in corners and center (and optionally edges)
+		return rasterizeOpacity0<States>(result, index, c0[2], c1[2], c2[2], ac, e0, e1, e2, edgeres);
 	}
+
+	// fast path: equivalent to recursive rasterization, but reuses edge data to reduce sample count
+	if (level == 1 && edgeres > 0)
+		return rasterizeOpacity1<States>(result, index, edgeres, c0, c1, c2, texture);
 
 	// compute each edge midpoint & sample
 	float c01[3] = {(c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2, 0.f};
 	float c12[3] = {(c1[0] + c2[0]) / 2, (c1[1] + c2[1]) / 2, 0.f};
-	float c02[3] = {(c0[0] + c2[0]) / 2, (c0[1] + c2[1]) / 2, 0.f};
+	float c20[3] = {(c2[0] + c0[0]) / 2, (c2[1] + c0[1]) / 2, 0.f};
 
 	c01[2] = sampleTexture(texture, c01[0], c01[1]);
 	c12[2] = sampleTexture(texture, c12[0], c12[1]);
-	c02[2] = sampleTexture(texture, c02[0], c02[1]);
+	c20[2] = sampleTexture(texture, c20[0], c20[1]);
 
 	// recursively rasterize each triangle
 	// note: triangles 1 and 3 have flipped winding, and 1 is flipped upside down
-	rasterizeOpacityRec<States>(result, index * 4 + 0, level - 1, edgeres, c0, c01, c02, texture);
-	rasterizeOpacityRec<States>(result, index * 4 + 1, level - 1, edgeres, c02, c12, c01, texture);
+	rasterizeOpacityRec<States>(result, index * 4 + 0, level - 1, edgeres, c0, c01, c20, texture);
+	rasterizeOpacityRec<States>(result, index * 4 + 1, level - 1, edgeres, c20, c12, c01, texture);
 	rasterizeOpacityRec<States>(result, index * 4 + 2, level - 1, edgeres, c01, c1, c12, texture);
-	rasterizeOpacityRec<States>(result, index * 4 + 3, level - 1, edgeres, c12, c02, c2, texture);
+	rasterizeOpacityRec<States>(result, index * 4 + 3, level - 1, edgeres, c12, c20, c2, texture);
 }
 
 static int getSpecialIndex(const unsigned char* data, int level, int states)
