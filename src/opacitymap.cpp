@@ -498,7 +498,7 @@ void meshopt_opacityMapRasterize(unsigned char* result, int level, int states, c
 	float uvarea = fabsf((uv1[0] - uv0[0]) * (uv2[1] - uv0[1]) - (uv2[0] - uv0[0]) * (uv1[1] - uv0[1])) * 0.5f * texture_area;
 	float uvedge = sqrtf(uvarea) / float(1 << level);
 
-	int edgeres = int(uvedge / 1.75f + 0.5f);
+	int edgeres = int(uvedge * 0.75f);
 	edgeres = edgeres < 0 ? 0 : edgeres;
 	edgeres = edgeres > 7 ? 7 : edgeres;
 
