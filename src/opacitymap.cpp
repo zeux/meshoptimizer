@@ -468,7 +468,7 @@ int meshopt_opacityMapPreferredMip(int level, const float* uv0, const float* uv1
 	float levelf = log2f(uvedge > 1 ? uvedge : 1);
 
 	// round and clamp
-	int mip = int(levelf + 0.5f - quality * 0.5f);
+	int mip = int(levelf - 0.5f - quality * 0.5f);
 	mip = mip < 0 ? 0 : mip;
 	mip = mip < 16 ? mip : 16;
 
