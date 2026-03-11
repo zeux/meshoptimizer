@@ -3025,7 +3025,7 @@ static void opacityMap()
 			const float* uv2 = &uvs[indices[tri * 3 + 2] * 2];
 
 			// we can use mip 0 to rasterize for maximally conservative rasterization, or use the preferred mip for best performance
-			int mip = meshopt_opacityMapPreferredMip(levels[i], uv0, uv1, uv2, texture_size, texture_size);
+			int mip = meshopt_opacityMapPreferredMip(levels[i], uv0, uv1, uv2, texture_size, texture_size, 0);
 			assert(mip >= 0 && mip <= 5);
 
 			meshopt_opacityMapRasterize(&data[offsets[i]], levels[i], states, uv0, uv1, uv2, texture, 1, texture_size, texture_size, texture_size);
@@ -3062,8 +3062,8 @@ static void opacityMap()
 	float opaque = float(histogram[0][1]) / float(histogram[0][0] + histogram[0][1]);
 	float known = float(histogram[1][0] + histogram[1][1]) / float(histogram[1][0] + histogram[1][1] + histogram[1][2] + histogram[1][3]);
 
-	assert(fabsf(opaque - 0.38f) < 1e-2f);
-	assert(fabsf(known - 0.66f) < 1e-2f);
+	assert(fabsf(opaque - 0.36f) < 1e-2f);
+	assert(fabsf(known - 0.76f) < 1e-2f);
 }
 
 void runTests()
