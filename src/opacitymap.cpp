@@ -379,7 +379,7 @@ size_t meshopt_opacityMapMeasure(int* levels, unsigned int* sources, int* omm_in
 	assert(vertex_uvs_stride >= 8 && vertex_uvs_stride <= 256);
 	assert(vertex_uvs_stride % sizeof(float) == 0);
 	assert(unsigned(texture_width - 1) < 16384 && unsigned(texture_height - 1) < 16384);
-	assert(max_level > 0 && max_level <= 12);
+	assert(max_level >= 0 && max_level <= 12);
 	assert(target_edge >= 0);
 
 	(void)vertex_count;
