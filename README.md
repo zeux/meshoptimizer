@@ -765,6 +765,7 @@ Currently, the following APIs are experimental:
 - `meshopt_encodeMeshlet` and `meshopt_encodeMeshletBound` functions
 - `meshopt_decodeMeshlet` and `meshopt_decodeMeshletRaw` functions
 - `meshopt_extractMeshletIndices` function
+- `meshopt_opacityMap*` functions (`meshopt_opacityMapMeasure`, `meshopt_opacityMapRasterize`, `meshopt_opacityMapCompact`, `meshopt_opacityMapPreferredMip`, `meshopt_opacityMapEntrySize`)
 
 ## License
 
