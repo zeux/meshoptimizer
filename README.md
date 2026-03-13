@@ -750,7 +750,8 @@ const float target_edge = 3.0f; // target 3x3px area for each microtriangle
 std::vector<int> levels(indices.size() / 3);
 std::vector<unsigned int> sources(indices.size() / 3);
 std::vector<int> omm_indices(indices.size() / 3);
-size_t omm_count = meshopt_opacityMapMeasure(&levels[0], &sources[0], &omm_indices[0], &indices[0], indices.size(), &vertices[0].u, vertices.size(), sizeof(Vertex), texture_width, texture_height, max_level, target_edge);
+size_t omm_count = meshopt_opacityMapMeasure(&levels[0], &sources[0], &omm_indices[0], &indices[0], indices.size(),
+    &vertices[0].u, vertices.size(), sizeof(Vertex), texture_width, texture_height, max_level, target_edge);
 ```
 
 Each OMM entry requires separate storage which can be determined based on subdivision level and format (2-state or 4-state), and can be computed via `meshopt_opacityMapEntrySize`:
@@ -778,7 +779,8 @@ for (size_t i = 0; i < omm_count; ++i)
 
     // optionally use meshopt_opacityMapPreferredMip if mip levels are available
     // texture addressing below assumes RGBA texture input without padding
-    meshopt_opacityMapRasterize(&data[offsets[i]], levels[i], states, uv0, uv1, uv2, texture.data() + 3, 4, texture_width * 4, texture_width, texture_height);
+    meshopt_opacityMapRasterize(&data[offsets[i]], levels[i], states, uv0, uv1, uv2,
+        texture.data() + 3, 4, texture_width * 4, texture_width, texture_height);
 }
 ```
 
