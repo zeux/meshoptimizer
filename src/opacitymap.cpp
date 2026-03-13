@@ -569,8 +569,8 @@ size_t meshopt_opacityMapCompact(unsigned char* data, size_t data_size, unsigned
 	// remap triangle indices to new indices or special indices
 	for (size_t i = 0; i < triangle_count; ++i)
 	{
-		assert(unsigned(omm_indices[i]) < omm_count);
-		omm_indices[i] = remap[omm_indices[i]];
+		assert(omm_indices[i] < 0 || unsigned(omm_indices[i]) < omm_count);
+		omm_indices[i] = omm_indices[i] < 0 ? omm_indices[i] : remap[omm_indices[i]];
 	}
 
 	return next;
