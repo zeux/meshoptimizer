@@ -747,7 +747,7 @@ First, call `meshopt_opacityMapMeasure` to compute a subdivision level for each 
 const int states = 4; // 2-state or 4-state OMMs (used after measure)
 const int max_level = 6; // max subdivision level
 const float target_edge = 3.0f; // target 3x3px area for each microtriangle
-std::vector<int> levels(indices.size() / 3);
+std::vector<unsigned char> levels(indices.size() / 3);
 std::vector<unsigned int> sources(indices.size() / 3);
 std::vector<int> omm_indices(indices.size() / 3);
 size_t omm_count = meshopt_opacityMapMeasure(&levels[0], &sources[0], &omm_indices[0], &indices[0], indices.size(),

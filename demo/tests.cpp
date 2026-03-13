@@ -2991,7 +2991,7 @@ static void opacityMap()
 	{
 		int states = 2 << k;
 
-		int levels[triangle_count];
+		unsigned char levels[triangle_count];
 		unsigned int sources[triangle_count];
 		int omm_indices[triangle_count];
 

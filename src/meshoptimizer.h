@@ -854,7 +854,7 @@ MESHOPTIMIZER_API void meshopt_spatialClusterPoints(unsigned int* destination, c
  * max_level specifies the maximum subdivision level (0..12)
  * target_edge can be 0; when >0, triangle subdivision is adaptive and targets target_edge^2 texel area
  */
-MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_opacityMapMeasure(int* levels, unsigned int* sources, int* omm_indices, const unsigned int* indices, size_t index_count, const float* vertex_uvs, size_t vertex_count, size_t vertex_uvs_stride, unsigned int texture_width, unsigned int texture_height, int max_level, float target_edge);
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_opacityMapMeasure(unsigned char* levels, unsigned int* sources, int* omm_indices, const unsigned int* indices, size_t index_count, const float* vertex_uvs, size_t vertex_count, size_t vertex_uvs_stride, unsigned int texture_width, unsigned int texture_height, int max_level, float target_edge);
 
 /**
  * Experimental: Opacity micromap generator (rasterize)
@@ -883,7 +883,7 @@ MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_opacityMapEntrySize(int level, int sta
  * omm_indices should contain indices into the original OMM data, and will be updated with a new index or a special index (-4..-1) when possible
  * states should be 2 for 2-state format (opaque/transparent) and 4 for 4-state format (opaque/transparent/unknown)
  */
-MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_opacityMapCompact(unsigned char* data, size_t data_size, int* levels, unsigned int* offsets, size_t omm_count, int* omm_indices, size_t triangle_count, int states);
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_opacityMapCompact(unsigned char* data, size_t data_size, unsigned char* levels, unsigned int* offsets, size_t omm_count, int* omm_indices, size_t triangle_count, int states);
 
 /**
  * Experimental: Opacity micromap generator (rasterize mip)
