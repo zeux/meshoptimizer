@@ -767,7 +767,7 @@ for (size_t i = 0; i < omm_count; ++i)
 }
 ```
 
-Second, call `meshopt_opacityMapRasterize` for each triangle to compute the opacity state per microtriangle. This can be done sequentially or in parallel; it can also use a fixed mip level of the original texture, or, if all mip levels are readily available, mip level can be selected per triangle to balance rasterization cost vs quality. When generating 4-state micromaps, using mip 0 is recommended to produce maximally conservative output so that enabling opacity micromaps does not noticeably change the raytraced output.
+Second, call `meshopt_opacityMapRasterize` for each triangle to compute the opacity state per microtriangle. This can be done sequentially or in parallel; it can use the original texture resolution or a smaller mip level to balance rasterization cost vs quality. When generating 4-state micromaps, using mip 0 is recommended to produce maximally conservative output so that enabling opacity micromaps does not noticeably change the raytraced output. For 2-state micromaps, or if the original textures are much higher resolution than the micromap subdivision, smaller mips (e.g. 1 or 2) can also work well.
 
 ```c++
 for (size_t i = 0; i < omm_count; ++i)
@@ -777,8 +777,7 @@ for (size_t i = 0; i < omm_count; ++i)
     const float* uv1 = &vertices[indices[tri * 3 + 1]].u;
     const float* uv2 = &vertices[indices[tri * 3 + 2]].u;
 
-    // optionally use meshopt_opacityMapPreferredMip if mip levels are available
-    // texture addressing below assumes RGBA texture input without padding
+    // texture addressing below assumes RGBA texture input without padding; +3 points to A
     meshopt_opacityMapRasterize(&data[offsets[i]], levels[i], states, uv0, uv1, uv2,
         texture.data() + 3, 4, texture_width * 4, texture_width, texture_height);
 }
@@ -829,7 +828,7 @@ Currently, the following APIs are experimental:
 - `meshopt_encodeMeshlet` and `meshopt_encodeMeshletBound` functions
 - `meshopt_decodeMeshlet` and `meshopt_decodeMeshletRaw` functions
 - `meshopt_extractMeshletIndices` function
-- `meshopt_opacityMap*` functions (`meshopt_opacityMapMeasure`, `meshopt_opacityMapRasterize`, `meshopt_opacityMapCompact`, `meshopt_opacityMapPreferredMip`, `meshopt_opacityMapEntrySize`)
+- `meshopt_opacityMap*` functions (`meshopt_opacityMapMeasure`, `meshopt_opacityMapRasterize`, `meshopt_opacityMapCompact`, `meshopt_opacityMapEntrySize`)
 
 ## License
 
