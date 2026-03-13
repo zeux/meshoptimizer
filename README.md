@@ -744,6 +744,7 @@ Generating opacity micromaps happens in three stages: measure (and layout), rast
 First, call `meshopt_opacityMapMeasure` to compute a subdivision level for each triangle based on its texel footprint; this also computes initial per-triangle OMM indices as it's common for triangles in the source mesh to refer to the same UVs:
 
 ```c++
+const int states = 4; // 2-state or 4-state OMMs (used after measure)
 const int max_level = 6; // max subdivision level
 const float target_edge = 3.0f; // target 3x3px area for each microtriangle
 std::vector<int> levels(indices.size() / 3);
@@ -768,20 +769,20 @@ for (size_t i = 0; i < omm_count; ++i)
 Second, call `meshopt_opacityMapRasterize` for each triangle to compute the opacity state per microtriangle. This can be done sequentially or in parallel; it can also use a fixed mip level of the original texture, or, if all mip levels are readily available, using an adaptive mip level per triangle can be used to help balance rasterization cost vs quality. When generating 4-state micromaps, using mip 0 is recommended to produce maximally conservative output so that enabling opacity micromaps does not noticeably change the raytraced output.
 
 ```c++
-const int states = 4;
 for (size_t i = 0; i < omm_count; ++i)
 {
     unsigned int tri = sources[i];
-    const float* uv0 = &vertex_uvs[indices[tri * 3 + 0] * 2];
-    const float* uv1 = &vertex_uvs[indices[tri * 3 + 1] * 2];
-    const float* uv2 = &vertex_uvs[indices[tri * 3 + 2] * 2];
+    const float* uv0 = &vertices[indices[tri * 3 + 0]].u;
+    const float* uv1 = &vertices[indices[tri * 3 + 1]].u;
+    const float* uv2 = &vertices[indices[tri * 3 + 2]].u;
 
     // optionally use meshopt_opacityMapPreferredMip if mip levels are available
-    meshopt_opacityMapRasterize(&data[offsets[i]], levels[i], states, uv0, uv1, uv2, texture.data(), 4, texture_width * 4, texture_width, texture_height);
+    // texture addressing below assumes RGBA texture input without padding
+    meshopt_opacityMapRasterize(&data[offsets[i]], levels[i], states, uv0, uv1, uv2, texture.data() + 3, 4, texture_width * 4, texture_width, texture_height);
 }
 ```
 
-After rasterization, the OMM data *can* be used as is; however, it's typical to see redundant entries that either can be reused between different triangles, or that have consistent states for all micro-triangles, which can be represented using "special" indices (-4..-1) per triangle. Thus it's recommented to compact the data - if it's already laid out sequentially similarly to the example above, then just calling `meshopt_opacityMapCompact` and trimming the output arrays is sufficient for optimal output:
+After rasterization, the OMM data *can* be used as is; however, it's typical to see redundant entries that either can be reused between different triangles, or that have consistent states for all micro-triangles, which can be represented using "special" indices (-4..-1) per triangle. Thus it's recommended to compact the data - if it's already laid out sequentially similarly to the example above, then just calling `meshopt_opacityMapCompact` and trimming the output arrays is sufficient for optimal output:
 
 ```c++
 omm_count = meshopt_opacityMapCompact(&data[0], data_size, &levels[0], &offsets[0], omm_count, &omm_indices[0], indices.size() / 3, states);
