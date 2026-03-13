@@ -13,7 +13,7 @@
 #endif
 
 // MSVC supports compiling SSE2 code regardless of compile options; we assume all 32-bit CPUs support SSE2
-#if !defined(SIMD_SSE) && defined(_MSC_VER) && !defined(__clang__) && (defined(_M_IX86) || defined(_M_X64))
+#if !defined(SIMD_SSE) && defined(_MSC_VER) && !defined(__clang__) && (defined(_M_IX86) || (defined(_M_X64) && !defined(_M_ARM64EC)))
 #define SIMD_SSE
 #endif
 
@@ -23,7 +23,7 @@
 #endif
 
 // On MSVC, we assume that ARM builds always target NEON-capable devices
-#if !defined(SIMD_NEON) && defined(_MSC_VER) && (defined(_M_ARM) || defined(_M_ARM64))
+#if !defined(SIMD_NEON) && defined(_MSC_VER) && (defined(_M_ARM) || defined(_M_ARM64) || defined(_M_ARM64EC))
 #define SIMD_NEON
 #endif
 
@@ -536,7 +536,7 @@ static void decodeFilterColorSimd16(unsigned short* data, size_t count)
 }
 #endif
 
-#if defined(SIMD_NEON) && !defined(__aarch64__) && !defined(_M_ARM64)
+#if defined(SIMD_NEON) && !defined(__aarch64__) && !(defined(_M_ARM64) || defined(_M_ARM64EC))
 inline float32x4_t vsqrtq_f32(float32x4_t x)
 {
 	float32x4_t r = vrsqrteq_f32(x);
@@ -640,7 +640,7 @@ static void decodeFilterOctSimd16(short* data, size_t count)
 
 		// compute normal length & scale
 		float32x4_t ll = vfmaq_f32(vfmaq_f32(vmulq_f32(x, x), y, y), z, z);
-#if !defined(__aarch64__) && !defined(_M_ARM64)
+#if !defined(__aarch64__) && !(defined(_M_ARM64) || defined(_M_ARM64EC))
 		float32x4_t rl = vrsqrteq_f32(ll);
 		rl = vmulq_f32(rl, vrsqrtsq_f32(vmulq_f32(rl, ll), rl)); // refine rsqrt estimate
 		float32x4_t s = vmulq_f32(vdupq_n_f32(32767.f), rl);

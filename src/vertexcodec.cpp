@@ -19,7 +19,7 @@
 #endif
 
 // MSVC supports compiling SSSE3 code regardless of compile options; we use a cpuid-based scalar fallback
-#if !defined(SIMD_SSE) && !defined(SIMD_AVX) && defined(_MSC_VER) && !defined(__clang__) && (defined(_M_IX86) || defined(_M_X64))
+#if !defined(SIMD_SSE) && !defined(SIMD_AVX) && defined(_MSC_VER) && !defined(__clang__) && (defined(_M_IX86) || (defined(_M_X64) && !defined(_M_ARM64EC)))
 #define SIMD_SSE
 #define SIMD_FALLBACK
 #endif
@@ -37,7 +37,7 @@
 #endif
 
 // On MSVC, we assume that ARM builds always target NEON-capable devices
-#if !defined(SIMD_NEON) && defined(_MSC_VER) && (defined(_M_ARM) || defined(_M_ARM64))
+#if !defined(SIMD_NEON) && defined(_MSC_VER) && (defined(_M_ARM) || defined(_M_ARM64) || defined(_M_ARM64EC))
 #define SIMD_NEON
 #endif
 
