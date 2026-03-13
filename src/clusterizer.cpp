@@ -8,7 +8,7 @@
 
 // The block below auto-detects SIMD ISA that can be used on the target platform
 #ifndef MESHOPTIMIZER_NO_SIMD
-#if defined(__SSE2__) || (defined(_MSC_VER) && defined(_M_X64) && !(defined(_M_ARM64) || defined(_M_ARM64EC)))
+#if defined(__SSE2__) || (defined(_MSC_VER) && defined(_M_X64) && !defined(_M_ARM64EC))
 #define SIMD_SSE
 #include <emmintrin.h>
 #elif defined(__aarch64__) || (defined(_MSC_VER) && (defined(_M_ARM64) || defined(_M_ARM64EC)) && _MSC_VER >= 1922)
