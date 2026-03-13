@@ -735,6 +735,65 @@ To render the mesh with provoking vertex data, the application should use `provo
 
 Because the order of indices in the resulting index buffer must be preserved exactly for the technique to work, all optimizations that reorder indices (such as vertex cache optimization) must be applied before generating the provoking index buffer. Additionally, if index compression is used, `meshopt_encodeIndexSequence` should be used instead of `meshopt_encodeIndexBuffer` to ensure that the triangles are not rotated during encoding.
 
+### Opacity micromaps
+
+When using hardware raytracing with alpha-tested transparency, tracing the ray requires invoking any-hit shaders for each intersected surface; this can be inefficient as it requires extra communication and synchronization between raytracing hardware and shader units. Opacity micromaps (OMMs) can significantly accelerate the tests by providing opacity masks for each triangle; this requires subdividing each triangle using a uniform grid (4^N microtriangles for subdivision level N), with each microtriangle storing 1 bit (for 2-state micromaps) or 2 bits (for 4-state micromaps) of opacity data. To minimize the memory overhead, the maps can be reused between triangles using a per-triangle OMM index buffer. This library provides algorithms to generate OMM data for a given mesh from an alpha texture; the resulting data can be used directly in Vulkan via [VK_EXT_opacity_micromap](https://docs.vulkan.org/spec/latest/chapters/raytraversal.html#ray-opacity-micromap) or in DirectX via [DXR1.2](https://github.com/microsoft/DirectX-Specs/blob/master/d3d/Raytracing.md#opacity-micromaps).
+
+Generating opacity micromaps happens in three stages: measure (and layout), rasterize and compact. Compaction is optional but recommended, and can be performed on each mesh individually or on all meshes in the same model/scene.
+
+First, call `meshopt_opacityMapMeasure` to compute a subdivision level for each triangle based on its texel footprint; this also computes initial per-triangle OMM indices as it's common for triangles in the source mesh to refer to the same UVs:
+
+```c++
+const int max_level = 6; // max subdivision level
+const float target_edge = 3.0f; // target 3x3px area for each microtriangle
+std::vector<int> levels(indices.size() / 3);
+std::vector<unsigned int> sources(indices.size() / 3);
+std::vector<int> omm_indices(indices.size() / 3);
+size_t omm_count = meshopt_opacityMapMeasure(&levels[0], &sources[0], &omm_indices[0], &indices[0], indices.size(), &vertices[0].u, vertices.size(), sizeof(Vertex), texture_width, texture_height, max_level, target_edge);
+```
+
+Each OMM entry requires separate storage which can be determined based on subdivision level and format (2-state or 4-state), and can be computed via `meshopt_opacityMapEntrySize`:
+
+```c++
+std::vector<unsigned int> offsets(omm_count);
+size_t data_size = 0;
+
+for (size_t i = 0; i < omm_count; ++i)
+{
+    offsets[i] = unsigned(data_size);
+    data_size += meshopt_opacityMapEntrySize(levels[i], states);
+}
+```
+
+Second, call `meshopt_opacityMapRasterize` for each triangle to compute the opacity state per microtriangle. This can be done sequentially or in parallel; it can also use a fixed mip level of the original texture, or, if all mip levels are readily available, using an adaptive mip level per triangle can be used to help balance rasterization cost vs quality. When generating 4-state micromaps, using mip 0 is recommended to produce maximally conservative output so that enabling opacity micromaps does not noticeably change the raytraced output.
+
+```c++
+const int states = 4;
+for (size_t i = 0; i < omm_count; ++i)
+{
+    unsigned int tri = sources[i];
+    const float* uv0 = &vertex_uvs[indices[tri * 3 + 0] * 2];
+    const float* uv1 = &vertex_uvs[indices[tri * 3 + 1] * 2];
+    const float* uv2 = &vertex_uvs[indices[tri * 3 + 2] * 2];
+
+    // optionally use meshopt_opacityMapPreferredMip if mip levels are available
+    meshopt_opacityMapRasterize(&data[offsets[i]], levels[i], states, uv0, uv1, uv2, texture.data(), 4, texture_width * 4, texture_width, texture_height);
+}
+```
+
+After rasterization, the OMM data *can* be used as is; however, it's typical to see redundant entries that either can be reused between different triangles, or that have consistent states for all micro-triangles, which can be represented using "special" indices (-4..-1) per triangle. Thus it's recommented to compact the data - if it's already laid out sequentially similarly to the example above, then just calling `meshopt_opacityMapCompact` and trimming the output arrays is sufficient for optimal output:
+
+```c++
+omm_count = meshopt_opacityMapCompact(&data[0], data_size, &levels[0], &offsets[0], omm_count, &omm_indices[0], indices.size() / 3, states);
+data_size = (omm_count == 0) ? 0 : offsets[omm_count - 1] + meshopt_opacityMapEntrySize(levels[omm_count - 1], states);
+```
+
+After compaction, `levels` and `offsets` (`omm_count` entries) and `data` (`data_size` bytes) can be serialized and later passed to the raytracing runtime to build the opacity micromap structures. Often, compacting OMM data across multiple meshes can produce smaller results; in that case, all resulting OMM indices will point to a single OMM array object.
+
+Additionally, note that while the code above works with 32-bit OMM indices, after compaction it's typical to see each mesh refer to a small section of OMM array data which can be represented using 16-bit (or, sometimes, 8-bit indices). The index data can be narrowed to a shorter type in these cases; note that when using 16-bit OMM index data, due to special indices, the index values should be in range `[0..65531]` (and `[0..251]` for 8-bit indices, assuming 4-state OMMs are used).
+
+When using 4-state OMMs, rasterization code produces both unknown-transparent and unknown-opaque states based on microtriangle coverage; this enables the use of forced 2-state flag during traversal for specific effects where micromap data is sufficient for reasonable quality; this is recommended for performance as this results in no any-hit invocations.
+
 ## Memory management
 
 Many algorithms allocate temporary memory to store intermediate results or accelerate processing. The amount of memory allocated is a function of various input parameters such as vertex count and index count. By default memory is allocated using `operator new` and `operator delete`; if these operators are overloaded by the application, the overloads will be used instead. Alternatively it's possible to specify custom allocation/deallocation functions using `meshopt_setAllocator`, e.g.
