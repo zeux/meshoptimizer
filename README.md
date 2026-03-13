@@ -767,7 +767,7 @@ for (size_t i = 0; i < omm_count; ++i)
 }
 ```
 
-Second, call `meshopt_opacityMapRasterize` for each triangle to compute the opacity state per microtriangle. This can be done sequentially or in parallel; it can also use a fixed mip level of the original texture, or, if all mip levels are readily available, using an adaptive mip level per triangle can be used to help balance rasterization cost vs quality. When generating 4-state micromaps, using mip 0 is recommended to produce maximally conservative output so that enabling opacity micromaps does not noticeably change the raytraced output.
+Second, call `meshopt_opacityMapRasterize` for each triangle to compute the opacity state per microtriangle. This can be done sequentially or in parallel; it can also use a fixed mip level of the original texture, or, if all mip levels are readily available, mip level can be selected per triangle to balance rasterization cost vs quality. When generating 4-state micromaps, using mip 0 is recommended to produce maximally conservative output so that enabling opacity micromaps does not noticeably change the raytraced output.
 
 ```c++
 for (size_t i = 0; i < omm_count; ++i)
