@@ -56,7 +56,7 @@
 
 // When targeting AArch64/x64, optimize for latency to allow decoding of individual 16-byte groups to overlap
 // We don't do this for 32-bit systems because we need 64-bit math for this and this will hurt in-order CPUs
-#if defined(__x86_64__) || defined(_M_X64) || defined(__aarch64__) || defined(_M_ARM64)
+#if defined(__x86_64__) || defined(_M_X64) || defined(__aarch64__) || defined(_M_ARM64) || defined(_M_ARM64EC)
 #define SIMD_LATENCYOPT
 #endif
 
