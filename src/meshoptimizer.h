@@ -886,14 +886,6 @@ MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_opacityMapEntrySize(int level, int sta
 MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_opacityMapCompact(unsigned char* data, size_t data_size, unsigned char* levels, unsigned int* offsets, size_t omm_count, int* omm_indices, size_t triangle_count, int states);
 
 /**
- * Experimental: Opacity micromap generator (rasterize mip)
- * Computes preferred mip level index for a given triangle; instead of using mip 0, rasterization can be performed using that mip level.
- * Quality 0 provides a good tradeoff between precision and rasterization performance; higher values will use finer mips, lower (negative) values will use coarser mips.
- * When rasterizing 4-state opacity maps, higher quality (2-3) may be necessary for more conservative output.
- */
-MESHOPTIMIZER_EXPERIMENTAL int meshopt_opacityMapPreferredMip(int level, const float* uv0, const float* uv1, const float* uv2, unsigned int texture_width, unsigned int texture_height, int quality);
-
-/**
  * Quantize a float into half-precision (as defined by IEEE-754 fp16) floating point value
  * Generates +-inf for overflow, preserves NaN, flushes denormals to zero, rounds to nearest
  * Representable magnitude range: [6e-5; 65504]

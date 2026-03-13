@@ -455,30 +455,6 @@ size_t meshopt_opacityMapEntrySize(int level, int states)
 	return meshopt::getLevelSize(level, states);
 }
 
-int meshopt_opacityMapPreferredMip(int level, const float* uv0, const float* uv1, const float* uv2, unsigned int texture_width, unsigned int texture_height, int quality)
-{
-	assert(level >= 0 && level <= 12);
-	assert(unsigned(texture_width - 1) < 16384 && unsigned(texture_height - 1) < 16384);
-
-	float texture_area = float(texture_width) * float(texture_height);
-
-	// compute log2 of edge length (in texels)
-	float uvarea = fabsf((uv1[0] - uv0[0]) * (uv2[1] - uv0[1]) - (uv2[0] - uv0[0]) * (uv1[1] - uv0[1])) * 0.5f * texture_area;
-	float uvedge = sqrtf(uvarea) / float(1 << level);
-	float levelf = log2f(uvedge > 1 ? uvedge : 1);
-
-	// round and clamp
-	int mip = int(levelf - 0.5f - quality * 0.5f);
-	mip = mip < 0 ? 0 : mip;
-	mip = mip < 16 ? mip : 16;
-
-	// ensure the selected mip is in range
-	while (mip > 0 && (texture_width >> mip) == 0 && (texture_height >> mip) == 0)
-		mip--;
-
-	return mip;
-}
-
 void meshopt_opacityMapRasterize(unsigned char* result, int level, int states, const float* uv0, const float* uv1, const float* uv2, const unsigned char* texture_data, size_t texture_stride, size_t texture_pitch, unsigned int texture_width, unsigned int texture_height)
 {
 	using namespace meshopt;

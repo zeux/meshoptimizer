@@ -3024,10 +3024,6 @@ static void opacityMap()
 			const float* uv1 = &uvs[indices[tri * 3 + 1] * 2];
 			const float* uv2 = &uvs[indices[tri * 3 + 2] * 2];
 
-			// we can use mip 0 to rasterize for maximally conservative rasterization, or use the preferred mip for best performance
-			int mip = meshopt_opacityMapPreferredMip(levels[i], uv0, uv1, uv2, texture_size, texture_size, 0);
-			assert(mip >= 0 && mip <= 5);
-
 			meshopt_opacityMapRasterize(&data[offsets[i]], levels[i], states, uv0, uv1, uv2, texture, 1, texture_size, texture_size, texture_size);
 
 			size_t micro_triangle_count = size_t(1) << (levels[i] * 2);
