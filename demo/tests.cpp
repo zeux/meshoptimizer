@@ -2991,7 +2991,7 @@ static void opacityMap()
 	{
 		int states = 2 << k;
 
-		int levels[triangle_count];
+		unsigned char levels[triangle_count];
 		unsigned int sources[triangle_count];
 		int omm_indices[triangle_count];
 
@@ -3023,10 +3023,6 @@ static void opacityMap()
 			const float* uv0 = &uvs[indices[tri * 3 + 0] * 2];
 			const float* uv1 = &uvs[indices[tri * 3 + 1] * 2];
 			const float* uv2 = &uvs[indices[tri * 3 + 2] * 2];
-
-			// we can use mip 0 to rasterize for maximally conservative rasterization, or use the preferred mip for best performance
-			int mip = meshopt_opacityMapPreferredMip(levels[i], uv0, uv1, uv2, texture_size, texture_size, 0);
-			assert(mip >= 0 && mip <= 5);
 
 			meshopt_opacityMapRasterize(&data[offsets[i]], levels[i], states, uv0, uv1, uv2, texture, 1, texture_size, texture_size, texture_size);
 

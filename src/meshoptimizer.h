@@ -843,13 +843,47 @@ MESHOPTIMIZER_API void meshopt_spatialSortTriangles(unsigned int* destination, c
 MESHOPTIMIZER_API void meshopt_spatialClusterPoints(unsigned int* destination, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t cluster_size);
 
 /**
- * Experimental: Opacity micromap generator
+ * Experimental: Opacity micromap generator (measure)
+ * Computes a subdivision level for each input triangle, as well as deduplicating the triangles that reference the same UVs to reduce rasterization requests.
+ * Returns the number of OMM entries.
+ *
+ * levels and sources must contain enough space for the worst case output (index_count/3 elements, one per resulting OMM entry)
+ * levels[i] will contain the subdivision level for entry i, with the total number of entries returned by the function; each entry should be rasterized from triangle index sources[i]
+ * omm_indices must contain enough space for the resulting OMM indices (index_count/3 elements, one per triangle)
+ * vertex_uvs should have float2 texture coordinate in the first 8 bytes of each vertex
+ * max_level specifies the maximum subdivision level (0..12)
+ * target_edge can be 0; when >0, triangle subdivision is adaptive and targets target_edge^2 texel area
  */
-MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_opacityMapMeasure(int* levels, unsigned int* sources, int* omm_indices, const unsigned int* indices, size_t index_count, const float* vertex_uvs, size_t vertex_count, size_t vertex_uvs_stride, unsigned int texture_width, unsigned int texture_height, int max_level, float target_edge);
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_opacityMapMeasure(unsigned char* levels, unsigned int* sources, int* omm_indices, const unsigned int* indices, size_t index_count, const float* vertex_uvs, size_t vertex_count, size_t vertex_uvs_stride, unsigned int texture_width, unsigned int texture_height, int max_level, float target_edge);
+
+/**
+ * Experimental: Opacity micromap generator (rasterize)
+ * Rasterizes opacity state for a single triangle entry by sampling the alpha texture, using bilinear filtering and 0.5 alpha cutoff.
+ *
+ * result should contain enough space for the output opacity data (which can be computed using meshopt_opacityMapEntrySize)
+ * level specifies the subdivision level (0..12)
+ * states should be 2 for 2-state format (opaque/transparent) and 4 for 4-state format (opaque/transparent/unknown)
+ * uv0/uv1/uv2 should refer to a float2 texture coordinate for each triangle corner; note that micromap data is sensitive to the corner order
+ * texture_data should point to the alpha channel of the first pixel, encoded as UNORM8
+ * texture_stride specifies the distance in bytes between consecutive pixels, e.g. 4 for RGBA input
+ * texture_pitch specifies the distance in bytes between consecutive rows, e.g. 4*texture_width for tightly packed RGBA input
+ */
 MESHOPTIMIZER_EXPERIMENTAL void meshopt_opacityMapRasterize(unsigned char* result, int level, int states, const float* uv0, const float* uv1, const float* uv2, const unsigned char* texture_data, size_t texture_stride, size_t texture_pitch, unsigned int texture_width, unsigned int texture_height);
-MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_opacityMapCompact(unsigned char* data, size_t data_size, int* levels, unsigned int* offsets, size_t omm_count, int* omm_indices, size_t triangle_count, int states);
-MESHOPTIMIZER_EXPERIMENTAL int meshopt_opacityMapPreferredMip(int level, const float* uv0, const float* uv1, const float* uv2, unsigned int texture_width, unsigned int texture_height, int quality);
 MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_opacityMapEntrySize(int level, int states);
+
+/**
+ * Experimental: Opacity micromap generator (compact)
+ * Compacts and deduplicates opacity data, merging identical micromap entries and replacing micromap states with special indices (-4..-1) when possible.
+ * Returns the number of OMM entries after compaction; the data array should be trimmed using the last offset/size.
+ *
+ * data should contain opacity data for all input/output entries
+ * levels should contain subdivision levels for all input/output entries
+ * offsets should contain offset into data[] for each entry
+ * levels[i] and offsets[i] will be updated with post-compaction level/offset for entry i, with the total number of entries returned by the function
+ * omm_indices should contain indices into the original OMM data, and will be updated with a new index or a special index (-4..-1) when possible
+ * states should be 2 for 2-state format (opaque/transparent) and 4 for 4-state format (opaque/transparent/unknown)
+ */
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_opacityMapCompact(unsigned char* data, size_t data_size, unsigned char* levels, unsigned int* offsets, size_t omm_count, int* omm_indices, size_t triangle_count, int states);
 
 /**
  * Quantize a float into half-precision (as defined by IEEE-754 fp16) floating point value

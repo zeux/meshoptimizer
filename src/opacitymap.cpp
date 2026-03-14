@@ -120,7 +120,7 @@ struct OMMHasher
 {
 	const unsigned char* data;
 	const unsigned int* offsets;
-	const int* levels;
+	const unsigned char* levels;
 	int states;
 
 	size_t hash(unsigned int index) const
@@ -371,7 +371,7 @@ static int getSpecialIndex(const unsigned char* data, int level, int states)
 
 } // namespace meshopt
 
-size_t meshopt_opacityMapMeasure(int* levels, unsigned int* sources, int* omm_indices, const unsigned int* indices, size_t index_count, const float* vertex_uvs, size_t vertex_count, size_t vertex_uvs_stride, unsigned int texture_width, unsigned int texture_height, int max_level, float target_edge)
+size_t meshopt_opacityMapMeasure(unsigned char* levels, unsigned int* sources, int* omm_indices, const unsigned int* indices, size_t index_count, const float* vertex_uvs, size_t vertex_count, size_t vertex_uvs_stride, unsigned int texture_width, unsigned int texture_height, int max_level, float target_edge)
 {
 	using namespace meshopt;
 
@@ -436,7 +436,7 @@ size_t meshopt_opacityMapMeasure(int* levels, unsigned int* sources, int* omm_in
 		if (*entry == ~0u)
 		{
 			*entry = unsigned(result);
-			levels[result] = level;
+			levels[result] = (unsigned char)level;
 			sources[result] = unsigned(i / 3);
 			result++;
 		}
@@ -453,30 +453,6 @@ size_t meshopt_opacityMapEntrySize(int level, int states)
 	assert(states == 2 || states == 4);
 
 	return meshopt::getLevelSize(level, states);
-}
-
-int meshopt_opacityMapPreferredMip(int level, const float* uv0, const float* uv1, const float* uv2, unsigned int texture_width, unsigned int texture_height, int quality)
-{
-	assert(level >= 0 && level <= 12);
-	assert(unsigned(texture_width - 1) < 16384 && unsigned(texture_height - 1) < 16384);
-
-	float texture_area = float(texture_width) * float(texture_height);
-
-	// compute log2 of edge length (in texels)
-	float uvarea = fabsf((uv1[0] - uv0[0]) * (uv2[1] - uv0[1]) - (uv2[0] - uv0[0]) * (uv1[1] - uv0[1])) * 0.5f * texture_area;
-	float uvedge = sqrtf(uvarea) / float(1 << level);
-	float levelf = log2f(uvedge > 1 ? uvedge : 1);
-
-	// round and clamp
-	int mip = int(levelf - 0.5f - quality * 0.5f);
-	mip = mip < 0 ? 0 : mip;
-	mip = mip < 16 ? mip : 16;
-
-	// ensure the selected mip is in range
-	while (mip > 0 && (texture_width >> mip) == 0 && (texture_height >> mip) == 0)
-		mip--;
-
-	return mip;
 }
 
 void meshopt_opacityMapRasterize(unsigned char* result, int level, int states, const float* uv0, const float* uv1, const float* uv2, const unsigned char* texture_data, size_t texture_stride, size_t texture_pitch, unsigned int texture_width, unsigned int texture_height)
@@ -498,6 +474,7 @@ void meshopt_opacityMapRasterize(unsigned char* result, int level, int states, c
 	float uvarea = fabsf((uv1[0] - uv0[0]) * (uv2[1] - uv0[1]) - (uv2[0] - uv0[0]) * (uv1[1] - uv0[1])) * 0.5f * texture_area;
 	float uvedge = sqrtf(uvarea) / float(1 << level);
 
+	// target ~2px distance between edge samples (assuming equilateral microtriangles)
 	int edgeres = int(uvedge * 0.75f);
 	edgeres = edgeres < 0 ? 0 : edgeres;
 	edgeres = edgeres > 7 ? 7 : edgeres;
@@ -510,7 +487,7 @@ void meshopt_opacityMapRasterize(unsigned char* result, int level, int states, c
 	(states == 2 ? rasterizeOpacityRec<2> : rasterizeOpacityRec<4>)(result, 0, level, edgeres, c0, c1, c2, texture);
 }
 
-size_t meshopt_opacityMapCompact(unsigned char* data, size_t data_size, int* levels, unsigned int* offsets, size_t omm_count, int* omm_indices, size_t triangle_count, int states)
+size_t meshopt_opacityMapCompact(unsigned char* data, size_t data_size, unsigned char* levels, unsigned int* offsets, size_t omm_count, int* omm_indices, size_t triangle_count, int states)
 {
 	using namespace meshopt;
 
@@ -552,7 +529,7 @@ size_t meshopt_opacityMapCompact(unsigned char* data, size_t data_size, int* lev
 		// speculatively write data to give hasher a way to compare it
 		memcpy(data + offset, old, size);
 		offsets[next] = unsigned(offset);
-		levels[next] = level;
+		levels[next] = (unsigned char)level;
 
 		unsigned int* entry = hashLookup3(table, table_size, hasher, unsigned(next), ~0u);
 
@@ -569,8 +546,8 @@ size_t meshopt_opacityMapCompact(unsigned char* data, size_t data_size, int* lev
 	// remap triangle indices to new indices or special indices
 	for (size_t i = 0; i < triangle_count; ++i)
 	{
-		assert(unsigned(omm_indices[i]) < omm_count);
-		omm_indices[i] = remap[omm_indices[i]];
+		assert(omm_indices[i] < 0 || unsigned(omm_indices[i]) < omm_count);
+		omm_indices[i] = omm_indices[i] < 0 ? omm_indices[i] : remap[omm_indices[i]];
 	}
 
 	return next;
