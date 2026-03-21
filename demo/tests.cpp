@@ -2980,7 +2980,7 @@ static void opacityMap()
 			texture[y * texture_size + x] = (unsigned char)meshopt_quantizeUnorm(dc + 0.5f, 8);
 		}
 
-	// subdivision parameterrs
+	// subdivision parameters
 	const float target_edge = 2.5f;
 	const int max_level = 4;
 

@@ -87,7 +87,7 @@ uint decodeTriangle(uint code, uint extra0, uint extra1, uint extra2, inout uint
 
 	// advance next/extra; reuse codes use 1 lsb for extra count, restart codes use 2 lsbs
 	uint extrab = code < 12 ? 1 : 3;
-	next += extrab - code & extrab;
+	next += extrab - (code & extrab);
 	extra += code & extrab;
 
 	// rotate fifo
