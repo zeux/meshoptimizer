@@ -363,12 +363,13 @@ meshopt_Bounds meshopt_computeSphereBounds(const float* positions, size_t count,
 	return bounds;
 }
 
-void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, size_t triangle_count, size_t vertex_count)
+void meshopt_optimizeMeshletLevel(unsigned int* meshlet_vertices, size_t vertex_count, unsigned char* meshlet_triangles, size_t triangle_count, int level)
 {
 	using namespace meshopt;
 
 	assert(triangle_count <= kMeshletMaxTriangles);
 	assert(vertex_count <= kMeshletMaxVertices);
+	assert(level >= 0 && level <= 9);
 
 	unsigned char* indices = meshlet_triangles;
 	unsigned int* vertices = meshlet_vertices;
@@ -381,10 +382,26 @@ void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* mesh
 	unsigned char cache_last = 128;
 	const unsigned char cache_cutoff = 3; // 3 triangles = ~5..9 vertices depending on reuse
 
+	// vertex valence is used to prioritize triangles for level>0
+	// note: we use 8-bit counters for performance; for outlier vertices the valence is incorrect but that just affects the heuristic
+	unsigned char valence[kMeshletMaxVertices];
+	memset(valence, 0, vertex_count);
+
+	for (size_t i = 0; i < triangle_count; ++i)
+	{
+		unsigned char a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
+		assert(a < vertex_count && b < vertex_count && c < vertex_count);
+
+		valence[a]++;
+		valence[b]++;
+		valence[c]++;
+	}
+
 	for (size_t i = 0; i < triangle_count; ++i)
 	{
 		int next = -1;
 		int next_score = -1;
+		int edges = 0;
 
 		for (size_t j = i; j < triangle_count; ++j)
 		{
@@ -396,18 +413,36 @@ void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* mesh
 			unsigned char bd = (unsigned char)(cache_last - cache[b]);
 			unsigned char cd = (unsigned char)(cache_last - cache[c]);
 
-			// we currently score purely by how many vertices are in the cache window
-			// future heuristics for compressibility could include minimizing distance (ad+bd+cd)
-			// however, that requires scanning the entire candidate set, making the early out below impossible
 			int match = (ad < cache_cutoff) + (bd < cache_cutoff) + (cd < cache_cutoff);
-			int score = match;
 
-			next = (score > next_score) ? int(j) : next;
-			next_score = (score > next_score) ? score : next_score;
+			if (level)
+			{
+				// prefer low minimum valence
+				int vmin = valence[a] < valence[b] ? valence[a] : valence[b];
+				vmin = valence[c] < vmin ? valence[c] : vmin;
 
-			// for now we settle for a first edge match, which makes the function ~linear in practice
-			if (match >= 2)
-				break;
+				// prefer vertices with smaller cache distance and valence to improve traversal locality
+				int score = match * 1024 + (1023 - ad - bd - cd);
+				score = score * 256 + (255 - vmin);
+
+				next = (score > next_score) ? int(j) : next;
+				next_score = (score > next_score) ? score : next_score;
+
+				// terminate after finding enough edge matches
+				if (match >= 2 && ++edges >= level)
+					break;
+			}
+			else
+			{
+				int score = match;
+
+				next = (score > next_score) ? int(j) : next;
+				next_score = (score > next_score) ? score : next_score;
+
+				// settle for a first edge match, which makes the function ~linear in practice
+				if (match >= 2)
+					break;
+			}
 		}
 
 		assert(next >= 0);
@@ -427,6 +462,11 @@ void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* mesh
 		cache[a] = cache_last;
 		cache[b] = cache_last;
 		cache[c] = cache_last;
+
+		// update vertex valences for scoring heuristic
+		valence[a]--;
+		valence[b]--;
+		valence[c]--;
 	}
 
 	// rotate triangles to maximize compressibility
@@ -502,6 +542,11 @@ void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* mesh
 
 	assert(vertex_offset <= vertex_count);
 	memcpy(vertices, order, vertex_offset * sizeof(unsigned int));
+}
+
+void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, size_t triangle_count, size_t vertex_count)
+{
+	meshopt_optimizeMeshletLevel(meshlet_vertices, vertex_count, meshlet_triangles, triangle_count, 0);
 }
 
 size_t meshopt_extractMeshletIndices(unsigned int* vertices, unsigned char* triangles, const unsigned int* indices, size_t index_count)

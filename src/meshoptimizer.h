@@ -738,6 +738,14 @@ MESHOPTIMIZER_API size_t meshopt_buildMeshletsSpatial(struct meshopt_Meshlet* me
  */
 MESHOPTIMIZER_API void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, size_t triangle_count, size_t vertex_count);
 
+/**
+ * Experimental: Meshlet optimizer
+ * Reorders meshlet vertices and triangles to maximize locality, with higher levels resulting in smaller compressed size at the cost of optimization time.
+ *
+ * level should be in the range [0, 9] with 0 equivalent to meshopt_optimizeMeshlet and 9 being the slowest; the sweet spot for compression ratio is around 3
+ */
+MESHOPTIMIZER_EXPERIMENTAL void meshopt_optimizeMeshletLevel(unsigned int* meshlet_vertices, size_t vertex_count, unsigned char* meshlet_triangles, size_t triangle_count, int level);
+
 struct meshopt_Bounds
 {
 	/* bounding sphere, useful for frustum and occlusion culling */
