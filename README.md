@@ -821,8 +821,7 @@ Applications may configure the library to change the attributes of experimental 
 Currently, the following APIs are experimental:
 
 - `meshopt_SimplifyPermissive` mode for `meshopt_simplify*` functions (and associated `meshopt_SimplifyVertex_*` flags)
-- `meshopt_encodeMeshlet` and `meshopt_encodeMeshletBound` functions
-- `meshopt_decodeMeshlet` and `meshopt_decodeMeshletRaw` functions
+- `meshopt_encode/decodeMeshlet*` functions (`meshopt_encodeMeshlet`, `meshopt_encodeMeshletBound`, `meshopt_decodeMeshlet`, `meshopt_decodeMeshletRaw`)
 - `meshopt_extractMeshletIndices` and `meshopt_optimizeMeshletLevel` functions
 - `meshopt_opacityMap*` functions (`meshopt_opacityMapMeasure`, `meshopt_opacityMapRasterize`, `meshopt_opacityMapCompact`, `meshopt_opacityMapEntrySize`)
 
