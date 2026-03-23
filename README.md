@@ -783,7 +783,7 @@ for (size_t i = 0; i < omm_count; ++i)
 }
 ```
 
-> Note: Opacity micromap data is sensitive to triangle corner order. If index or meshlet compression is used, to match runtime order the index data should be decompressed from the compressed representation first. Since per-triangle OMM indices use the original triangle order, it's recommended to perform OMM processing after the index order has been finalized.
+> Note: Opacity micromap data is sensitive to triangle corner order, which index or meshlet compression can change. If compression is used, index data should be decompressed from the compressed representation before rasterization, or order should be normalized before rasterization as well as after decompression (e.g. by rotating each triangle so that `a < b, c`). Since per-triangle OMM indices use the original triangle order, it's recommended to perform OMM processing after the index order has been finalized.
 
 After rasterization, the OMM data *can* be used as is; however, it's typical to see redundant entries that either can be reused between different triangles, or that have consistent states for all micro-triangles, which can be represented using "special" indices (-4..-1) per triangle. Thus it's recommended to compact the data - if it's already laid out sequentially similarly to the example above, then just calling `meshopt_opacityMapCompact` and trimming the output arrays is sufficient for optimal output:
 
