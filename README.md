@@ -435,8 +435,6 @@ Meshlets without vertex references are supported; passing `NULL` vertices and `0
 
 The meshlet codec targets 5-7 bits per triangle for triangle data; when vertex references are encoded, the encoded size strongly depends on how linear the references are, but it's typical to see 9-12 bits per triangle in aggregate. To reduce the compressed size further, it's possible to compress the resulting encoded data with a general purpose compressor, which usually achieves 5-8 bits/triangle in aggregate; note that in this case general purpose compressors should be applied to a stream with many encoded meshlets at once to amortize their overhead.
 
-> Note: this codec is currently experimental and the data format and APIs are subject to change.
-
 ### Point cloud compression
 
 The vertex encoding algorithms can be used to compress arbitrary streams of attribute data; one other use case besides triangle meshes is point cloud data. Typically point clouds come with position, color and possibly other attributes but don't have an implied point order.
@@ -564,8 +562,6 @@ for (size_t i = 0; i < vertices.size(); ++i) {
 ```
 
 This approach provides fine-grained control over which discontinuities to preserve. The permissive mode combined with selective locking provides a balance between simplification quality and attribute preservation, and usually results in higher quality LODs for the same target triangle count (and dramatically higher quality compared to `meshopt_simplifySloppy`).
-
-> Note: this functionality is currently experimental and is subject to future improvements. Certain collapses are restricted to protect the overall topology, and attribute quality may occasionally regress.
 
 ### Simplification with vertex update
 
