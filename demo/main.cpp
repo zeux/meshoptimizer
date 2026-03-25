@@ -804,9 +804,6 @@ void encodeMeshlets(const Mesh& mesh, size_t max_vertices, size_t max_triangles,
 		// this is an example of how to trim the vertex/triangle arrays when copying data out to GPU storage
 		meshlet_vertices.resize(last.vertex_offset + last.vertex_count);
 		meshlet_triangles.resize(last.triangle_offset + last.triangle_count * 3);
-
-		// TODO: over-allocate meshlet_vertices to multiple of 3 to make meshopt_optimizeVertexFetch below work without assertions
-		meshlet_vertices.resize((meshlet_vertices.size() + 2) / 3 * 3);
 	}
 
 	std::vector<unsigned char> cbuf(meshopt_encodeMeshletBound(max_vertices, max_triangles));
