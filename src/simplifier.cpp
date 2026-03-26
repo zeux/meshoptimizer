@@ -1084,7 +1084,7 @@ static void fillFaceQuadrics(Quadric* vertex_quadrics, QuadricGrad* volume_gradi
 static void fillVertexQuadrics(Quadric* vertex_quadrics, const Vector3* vertex_positions, size_t vertex_count, const unsigned int* remap, unsigned int options)
 {
 	// by default, we use a very small weight to improve triangulation and numerical stability without affecting the shape or error
-	float factor = (options & meshopt_SimplifyRegularize) ? 1e-1f : 1e-7f;
+	float factor = (options & meshopt_SimplifyRegularizeLight) ? 1e-2f : (options & meshopt_SimplifyRegularize) ? 1e-1f : 1e-7f;
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
@@ -2346,7 +2346,6 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	assert(vertex_positions_stride % sizeof(float) == 0);
 	assert(target_index_count <= index_count);
 	assert(target_error >= 0);
-	assert((options & ~(meshopt_SimplifyLockBorder | meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute | meshopt_SimplifyPrune | meshopt_SimplifyRegularize | meshopt_SimplifyPermissive | meshopt_SimplifyInternalSolve | meshopt_SimplifyInternalDebug)) == 0);
 	assert(vertex_attributes_stride >= attribute_count * sizeof(float) && vertex_attributes_stride <= 256);
 	assert(vertex_attributes_stride % sizeof(float) == 0);
 	assert(attribute_count <= kMaxAttributes);
