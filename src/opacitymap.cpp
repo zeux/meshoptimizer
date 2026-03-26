@@ -23,6 +23,7 @@ struct Texture
 	const unsigned char* data;
 	size_t stride, pitch;
 	unsigned int width, height;
+	float widthf, heightf; // width * 256.f, height * 256.f
 };
 
 static float sampleTexture(const Texture& texture, float u, float v)
@@ -31,19 +32,19 @@ static float sampleTexture(const Texture& texture, float u, float v)
 	u = fabsf(u - 0.5f) > 0.5f ? u - floorf(u) : u;
 	v = fabsf(v - 0.5f) > 0.5f ? v - floorf(v) : v;
 
-	// convert from [0, 1] to pixel grid and shift so that texel centers are on an integer grid
-	u = u * float(int(texture.width)) - 0.5f;
-	v = v * float(int(texture.height)) - 0.5f;
+	// convert from [0, 1] to 16.8 fixed point coordinates (rounded to nearest subpixel) with texel centers on integer grid
+	int uf = int(u * texture.widthf - 127.5f);
+	int vf = int(v * texture.heightf - 127.5f);
 
-	// clamp u/v along the left/top edge to avoid extrapolation since we don't interpolate across the edge
-	u = u < 0 ? 0.f : u;
-	v = v < 0 ? 0.f : v;
+	// clamp to avoid extrapolation past left/top edge since we don't wrap across the edge
+	uf = uf < 0 ? 0 : uf;
+	vf = vf < 0 ? 0 : vf;
 
-	// note: u/v is now in [0, size-0.5]; float->int->float is usually less expensive than floor
-	int x = int(u);
-	int y = int(v);
-	float rx = u - float(x);
-	float ry = v - float(y);
+	// x/y are texel coordinates, rx/ry are subpixel offsets
+	int x = uf >> 8;
+	int y = vf >> 8;
+	int rx = uf & 255;
+	int ry = vf & 255;
 
 	// safeguard: this should not happen but if it ever does, ensure the accesses are inbounds
 	if (unsigned(x) >= texture.width || unsigned(y) >= texture.height)
@@ -59,10 +60,12 @@ static float sampleTexture(const Texture& texture, float u, float v)
 	unsigned char a01 = texture.data[offset + offsety];
 	unsigned char a11 = texture.data[offset + offsetx + offsety];
 
-	// bilinear interpolation; we do it partially in integer space, deferring full conversion to [0, 1] until the end
-	float ax0 = float(a00) + float(a10 - a00) * rx;
-	float ax1 = float(a01) + float(a11 - a01) * rx;
-	return (ax0 + (ax1 - ax0) * ry) * (1.f / 255.f);
+	// bilinear interpolation in integer space: result is 8.16 fixed point
+	int ax0 = a00 * 256 + (a10 - a00) * rx;
+	int ax1 = a01 * 256 + (a11 - a01) * rx;
+	int axy = ax0 * 256 + (ax1 - ax0) * ry;
+
+	return float(axy) * (1.f / (255.f * 65536.f));
 }
 
 static unsigned int hashUpdate4u(unsigned int h, const unsigned char* key, size_t len)
@@ -467,10 +470,10 @@ void meshopt_opacityMapRasterize(unsigned char* result, int level, int states, c
 
 	memset(result, 0, getLevelSize(level, states));
 
-	Texture texture = {texture_data, texture_stride, texture_pitch, texture_width, texture_height};
+	Texture texture = {texture_data, texture_stride, texture_pitch, texture_width, texture_height, float(int(texture_width)) * 256.f, float(int(texture_height)) * 256.f};
 
 	// determine number of edge samples for conservative state estimation
-	float texture_area = float(texture_width) * float(texture_height);
+	float texture_area = float(int(texture_width)) * float(int(texture_height));
 	float uvarea = fabsf((uv1[0] - uv0[0]) * (uv2[1] - uv0[1]) - (uv2[0] - uv0[0]) * (uv1[1] - uv0[1])) * 0.5f * texture_area;
 	float uvedge = sqrtf(uvarea) / float(1 << level);
 
