@@ -846,7 +846,7 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		data32 &= data32 >> 1;
 
 		// arrange bits such that low bits of nibbles of data64 contain all 2-bit elements of data32
-		unsigned long long data64 = ((unsigned long long)data32 << 30) | (data32 & 0x3fffffff);
+		unsigned long long data64 = ((unsigned long long)data32 << 30) | data32;
 
 		// adds all 1-bit nibbles together; the sum fits in 4 bits because datacnt=16 would have used mode 3
 		int datacnt = int(((data64 & 0x1111111111111111ull) * 0x1111111111111111ull) >> 60);
@@ -1060,7 +1060,7 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		data32 &= data32 >> 1;
 
 		// arrange bits such that low bits of nibbles of data64 contain all 2-bit elements of data32
-		unsigned long long data64 = ((unsigned long long)data32 << 30) | (data32 & 0x3fffffff);
+		unsigned long long data64 = ((unsigned long long)data32 << 30) | data32;
 
 		// adds all 1-bit nibbles together; the sum fits in 4 bits because datacnt=16 would have used mode 3
 		int datacnt = int(((data64 & 0x1111111111111111ull) * 0x1111111111111111ull) >> 60);
