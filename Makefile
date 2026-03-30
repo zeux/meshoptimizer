@@ -171,7 +171,7 @@ build/decoder_base.wasm: $(WASM_DECODER_SOURCES)
 
 build/decoder_simd.wasm: $(WASM_DECODER_SOURCES)
 	@mkdir -p build
-	$(WASMCC) $^ $(WASM_FLAGS) $(patsubst %,$(WASM_EXPORT_PREFIX)=%,$(WASM_DECODER_EXPORTS)) -o $@ -msimd128 -mbulk-memory
+	$(WASMCC) $^ $(WASM_FLAGS) $(patsubst %,$(WASM_EXPORT_PREFIX)=%,$(WASM_DECODER_EXPORTS)) -o $@ -msimd128 -mbulk-memory -DMESHOPTIMIZER_VERTEXFILTER_SIMDNOTAIL
 
 build/encoder.wasm: $(WASM_ENCODER_SOURCES)
 	@mkdir -p build
