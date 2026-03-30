@@ -459,7 +459,7 @@ enum
 };
 
 /**
- * Experimental: Simplification vertex flags/locks, for use in `vertex_lock` arrays in simplification APIs
+ * Simplification vertex flags/locks, for use in `vertex_lock` arrays in simplification APIs
  */
 enum
 {
@@ -467,6 +467,8 @@ enum
 	meshopt_SimplifyVertex_Lock = 1 << 0,
 	/* Protect attribute discontinuity at this vertex; must be used together with meshopt_SimplifyPermissive option. */
 	meshopt_SimplifyVertex_Protect = 1 << 1,
+	/* Experimental: Increase priority for this vertex, making it more likely that it's preserved during simplification. */
+	meshopt_SimplifyVertex_Priority = 1 << 2,
 };
 
 /**
