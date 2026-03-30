@@ -222,6 +222,11 @@ static void dispatchSimd(void (*process)(T*, size_t), T* data, size_t count, siz
 	size_t count4 = count & ~size_t(3);
 	process(data, count4);
 
+#ifdef MESHOPTIMIZER_VERTEXFILTER_SIMDNOTAIL
+	// optionally omit tail processing to improve code size, expecting the caller to pass aligned counts
+	assert(count4 == count);
+	(void)stride;
+#else
 	if (count4 < count)
 	{
 		T tail[4 * 4] = {}; // max stride 4, max count 4
@@ -232,6 +237,7 @@ static void dispatchSimd(void (*process)(T*, size_t), T* data, size_t count, siz
 		process(tail, count - count4);
 		memcpy(data + count4 * stride, tail, tail_size);
 	}
+#endif
 }
 
 inline uint64_t rotateleft64(uint64_t v, int x)
