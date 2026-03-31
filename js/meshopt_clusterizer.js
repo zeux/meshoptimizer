@@ -137,7 +137,7 @@ var MeshoptClusterizer = (function () {
 		var result = {
 			meshlets: meshlets,
 			vertices: new Uint32Array(heap.buffer, meshlet_verticesp, used_vertices).slice(),
-			triangles: new Uint8Array(heap.buffer, meshlet_trianglesp, used_triangles * 3).slice(),
+			triangles: new Uint8Array(heap.buffer, meshlet_trianglesp, used_triangles).slice(),
 			meshletCount: count,
 		};
 
