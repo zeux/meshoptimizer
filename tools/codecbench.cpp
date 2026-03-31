@@ -148,8 +148,8 @@ void benchFilters(size_t count, double& besto8, double& besto12, double& bestq12
 			    (t1 - t0) * 1000, double(d4.size()) / 1e9 / (t1 - t0),
 			    (t2 - t1) * 1000, double(d8.size()) / 1e9 / (t2 - t1),
 			    (t3 - t2) * 1000, double(d8.size()) / 1e9 / (t3 - t2),
-			    (t4 - t3) * 1000, double(d8.size()) / 1e9 / (t4 - t3),
-			    (t5 - t4) * 1000, double(d4.size()) / 1e9 / (t5 - t4),
+			    (t4 - t3) * 1000, double(d4.size()) / 1e9 / (t4 - t3),
+			    (t5 - t4) * 1000, double(d8.size()) / 1e9 / (t5 - t4),
 			    (t6 - t5) * 1000, double(d8.size()) / 1e9 / (t6 - t5));
 
 		besto8 = std::max(besto8, double(d4.size()) / 1e9 / (t1 - t0));
@@ -183,12 +183,10 @@ void benchMeshlets(const std::vector<float>& positions, const std::vector<unsign
 
 	// optimize each meshlet for locality before encoding
 	for (size_t i = 0; i < meshlets.size(); ++i)
-		meshopt_optimizeMeshlet(&meshlet_vertices[meshlets[i].vertex_offset], &meshlet_triangles[meshlets[i].triangle_offset], meshlets[i].triangle_count, meshlets[i].vertex_count);
+		meshopt_optimizeMeshletLevel(&meshlet_vertices[meshlets[i].vertex_offset], meshlets[i].vertex_count, &meshlet_triangles[meshlets[i].triangle_offset], meshlets[i].triangle_count, 3);
 
 	// optimize meshlet_vertices for locality (requires vertex reorder)
-	// TODO: over-allocate meshlet_vertices to multiple of 3 to make meshopt_optimizeVertexFetch below work without assertions
 	std::vector<float> positionscopy(positions.size());
-	meshlet_vertices.resize((meshlet_vertices.size() + 2) / 3 * 3);
 	meshopt_optimizeVertexFetch(&positionscopy[0], &meshlet_vertices[0], meshlet_vertices.size(), &positions[0], positions.size() / 3, sizeof(float) * 3);
 
 #if 0 // TODO: disabled for now to make meshlet decoder tuning more accurate; might make sense to re-enable in the future for SOL timings
@@ -402,13 +400,13 @@ int main(int argc, char** argv)
 	{
 		for (int y = 0; y < N; ++y)
 		{
-			indices.push_back((x + 0) * N + (y + 0));
-			indices.push_back((x + 1) * N + (y + 0));
-			indices.push_back((x + 0) * N + (y + 1));
+			indices.push_back((x + 0) * (N + 1) + (y + 0));
+			indices.push_back((x + 1) * (N + 1) + (y + 0));
+			indices.push_back((x + 0) * (N + 1) + (y + 1));
 
-			indices.push_back((x + 0) * N + (y + 1));
-			indices.push_back((x + 1) * N + (y + 0));
-			indices.push_back((x + 1) * N + (y + 1));
+			indices.push_back((x + 0) * (N + 1) + (y + 1));
+			indices.push_back((x + 1) * (N + 1) + (y + 0));
+			indices.push_back((x + 1) * (N + 1) + (y + 1));
 		}
 	}
 
