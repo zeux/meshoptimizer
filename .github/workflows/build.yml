@@ -130,7 +130,7 @@ jobs:
           curl -sL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-$VERSION/wasi-sdk-$VERSION.0-x86_64-linux.deb > wasi-sdk.deb
           sudo dpkg -i wasi-sdk.deb
         env:
-          VERSION: 25
+          VERSION: 32
       - name: build
         run: |
           make -j2 -B gltf/library.wasm js

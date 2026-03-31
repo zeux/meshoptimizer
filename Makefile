@@ -37,7 +37,7 @@ WASI_SDK?=/opt/wasi-sdk
 WASMCC?=$(WASI_SDK)/bin/clang++
 WASIROOT?=$(WASI_SDK)/share/wasi-sysroot
 
-WASM_FLAGS=--target=wasm32-wasi --sysroot=$(WASIROOT)
+WASM_FLAGS=--target=wasm32-wasi -Wno-deprecated --sysroot=$(WASIROOT) --no-wasm-opt
 WASM_FLAGS+=-Wall -Wextra
 WASM_FLAGS+=-O3 -DNDEBUG -nostartfiles -nostdlib -Wl,--no-entry -Wl,-s
 WASM_FLAGS+=-mcpu=mvp # make sure clang doesn't use post-MVP features like sign extension
@@ -163,7 +163,7 @@ $(BUILD)/gltfpack: $(GLTFPACK_OBJECTS) $(LIBRARY)
 gltfpack.wasm: gltf/library.wasm
 
 gltf/library.wasm: $(LIBRARY_SOURCES) $(GLTFPACK_SOURCES)
-	$(WASMCC) $^ -o $@ -Wall -Os -DNDEBUG --target=wasm32-wasi --sysroot=$(WASIROOT) -nostartfiles -Wl,--no-entry -Wl,--export=pack -Wl,--export=malloc -Wl,--export=free -Wl,--export=__wasm_call_ctors -Wl,-s -Wl,--allow-undefined-file=gltf/wasistubs.txt
+	$(WASMCC) $^ -o $@ -Wall -Os -DNDEBUG --target=wasm32-wasi -Wno-deprecated --sysroot=$(WASIROOT) -nostartfiles --no-wasm-opt -Wl,--no-entry -Wl,--export=pack -Wl,--export=malloc -Wl,--export=free -Wl,--export=__wasm_call_ctors -Wl,-s -Wl,--allow-undefined-file=gltf/wasistubs.txt
 
 build/decoder_base.wasm: $(WASM_DECODER_SOURCES)
 	@mkdir -p build
