@@ -338,7 +338,7 @@ static void writeMaterialComponent(std::string& json, const cgltf_data* data, co
 		append(json, "\"clearcoatFactor\":");
 		append(json, cc.clearcoat_factor);
 	}
-	if (cc.clearcoat_factor != 0)
+	if (cc.clearcoat_roughness_factor != 0)
 	{
 		comma(json);
 		append(json, "\"clearcoatRoughnessFactor\":");

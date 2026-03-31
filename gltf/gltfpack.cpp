@@ -1258,13 +1258,13 @@ unsigned int textureMask(const char* arg)
 	while (arg)
 	{
 		const char* comma = strchr(arg, ',');
-		size_t seg = comma ? comma - arg - 1 : strlen(arg);
+		size_t seg = comma ? comma - arg : strlen(arg);
 
-		if (strncmp(arg, "color", seg) == 0)
+		if (seg == 5 && strncmp(arg, "color", seg) == 0)
 			result |= 1 << TextureKind_Color;
-		else if (strncmp(arg, "normal", seg) == 0)
+		else if (seg == 6 && strncmp(arg, "normal", seg) == 0)
 			result |= 1 << TextureKind_Normal;
-		else if (strncmp(arg, "attrib", seg) == 0)
+		else if (seg == 6 && strncmp(arg, "attrib", seg) == 0)
 			result |= 1 << TextureKind_Attrib;
 		else
 			fprintf(stderr, "Warning: unrecognized texture class %.*s\n", int(seg), arg);

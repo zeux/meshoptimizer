@@ -683,7 +683,8 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 		unsigned int maxj = 0;
 
 		for (size_t i = 0; i < stream.data.size(); ++i)
-			maxj = std::max(maxj, unsigned(stream.data[i].f[0]));
+			for (int k = 0; k < 4; ++k)
+				maxj = std::max(maxj, unsigned(int(stream.data[i].f[k])));
 
 		assert(maxj <= 65535);
 
@@ -731,7 +732,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 		unsigned int maxv = 0;
 
 		for (size_t i = 0; i < stream.data.size(); ++i)
-			maxv = std::max(maxv, unsigned(stream.data[i].f[0]));
+			maxv = std::max(maxv, unsigned(int(stream.data[i].f[0])));
 
 		// exp encoding uses a signed mantissa with only 23 significant bits; input glTF encoding may encode indices losslessly up to 2^24
 		if (maxv >= (1 << 23))
