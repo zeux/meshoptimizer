@@ -2749,7 +2749,7 @@ static void encodeMeshletBound()
 	    2, 1, 3,
 	    3, 5, 4,
 	    2, 0, 6,
-	    7, 7, 7, // clang-format :-/
+	    6, 6, 6, // clang-format :-/
 	};
 
 	const unsigned int vertices[7] = {
