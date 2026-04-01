@@ -60,6 +60,7 @@ struct clodConfig
 
 	// should clodCluster::indices be optimized for locality; helps with rasterization performance and ray tracing performance in fast-build modes
 	bool optimize_clusters;
+	int optimize_clusters_level;
 };
 
 struct clodMesh
@@ -259,8 +260,13 @@ static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh&
 	{
 		const meshopt_Meshlet& meshlet = meshlets[i];
 
+#if MESHOPTIMIZER_VERSION < 1010
 		if (config.optimize_clusters)
 			meshopt_optimizeMeshlet(&meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count, meshlet.vertex_count);
+#else
+		if (config.optimize_clusters)
+			meshopt_optimizeMeshletLevel(&meshlet_vertices[meshlet.vertex_offset], meshlet.vertex_count, &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count, config.optimize_clusters_level);
+#endif
 
 		clusters[i].vertices = meshlet.vertex_count;
 
@@ -522,6 +528,7 @@ clodConfig clodDefaultConfig(size_t max_triangles)
 	config.cluster_split_factor = 2.0f;
 
 	config.optimize_clusters = true;
+	config.optimize_clusters_level = 1;
 
 	config.simplify_ratio = 0.5f;
 	config.simplify_threshold = 0.85f;
