@@ -30,7 +30,7 @@
 #define SIMD_NEON
 #endif
 
-#if defined(_MSC_VER) && _MSC_VER > 1930
+#if defined(_MSC_VER) && !defined(__clang__) && _MSC_VER > 1930
 #define SIMD_FLATTEN [[msvc::flatten]]
 #elif defined(__GNUC__) || defined(__clang__)
 #define SIMD_FLATTEN __attribute__((flatten))
