@@ -300,7 +300,7 @@ MESHOPTIMIZER_API int meshopt_decodeIndexSequence(void* destination, size_t inde
  * Encodes meshlet data into an array of bytes that is generally smaller and compresses better compared to original.
  * Returns encoded data size on success, 0 on error; the only error condition is if buffer doesn't have enough space
  * This function encodes a single meshlet; when encoding multiple meshlets, additional headers may be necessary to store vertex/triangle count and encoded size.
- * For maximum efficiency the meshlet being encoded should be optimized using meshopt_optimizeMeshlet; additionally, vertex reference data should be optimized for locality (fetch).
+ * For maximum efficiency the meshlet being encoded should be optimized using meshopt_optimizeMeshletLevel with level 1+ (3 recommended); additionally, vertex reference data should be optimized for locality (fetch).
  *
  * buffer must contain enough space for the encoded meshlet (use meshopt_encodeMeshletBound to compute worst case size)
  * vertices may be NULL, in which case vertex_count must be 0 and only triangle data is encoded
@@ -745,6 +745,7 @@ MESHOPTIMIZER_API void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, u
 /**
  * Experimental: Meshlet optimizer
  * Reorders meshlet vertices and triangles to maximize locality, with higher levels resulting in smaller compressed size at the cost of optimization time.
+ * At level 0 the result is equivalent to meshopt_optimizeMeshlet; levels >= 1 may rotate triangle corners to improve compression (which can change provoking vertex and affect OMM data).
  *
  * level should be in the range [0, 9] with 0 equivalent to meshopt_optimizeMeshlet and 9 being the slowest; the sweet spot for compression ratio is around 3
  */

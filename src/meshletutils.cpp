@@ -469,53 +469,56 @@ void meshopt_optimizeMeshletLevel(unsigned int* meshlet_vertices, size_t vertex_
 		valence[c]--;
 	}
 
-	// rotate triangles to maximize compressibility
-	memset(cache, 0, vertex_count);
-
-	for (size_t i = 0; i < triangle_count; ++i)
+	// rotate triangles to maximize compressibility; only done at level >= 1 for compatibility
+	if (level >= 1)
 	{
-		unsigned char a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
+		memset(cache, 0, vertex_count);
 
-		// if only the middle vertex has been used, rotate triangle to ensure new vertices are always sequential
-		if (!cache[a] && cache[b] && !cache[c])
+		for (size_t i = 0; i < triangle_count; ++i)
 		{
-			// abc -> bca
-			unsigned char t = a;
-			a = b, b = c, c = t;
-		}
-		else if (!cache[a] && !cache[b] && !cache[c])
-		{
-			// out of three edges, the edge ab can not be reused by subsequent triangles in some encodings
-			// if subsequent triangles don't share edges ca or bc, we can rotate the triangle to fix this
-			bool needab = false, needbc = false, needca = false;
+			unsigned char a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
 
-			for (size_t j = i + 1; j < triangle_count && j <= i + 3; ++j)
-			{
-				unsigned char oa = indices[j * 3 + 0], ob = indices[j * 3 + 1], oc = indices[j * 3 + 2];
-
-				// note: edge comparisons are reversed as reused edges are flipped
-				needab |= (oa == b && ob == a) || (ob == b && oc == a) || (oc == b && oa == a);
-				needbc |= (oa == c && ob == b) || (ob == c && oc == b) || (oc == c && oa == b);
-				needca |= (oa == a && ob == c) || (ob == a && oc == c) || (oc == a && oa == c);
-			}
-
-			if (needab && !needbc)
+			// if only the middle vertex has been used, rotate triangle to ensure new vertices are always sequential
+			if (!cache[a] && cache[b] && !cache[c])
 			{
 				// abc -> bca
 				unsigned char t = a;
 				a = b, b = c, c = t;
 			}
-			else if (needab && !needca)
+			else if (!cache[a] && !cache[b] && !cache[c])
 			{
-				// abc -> cab
-				unsigned char t = c;
-				c = b, b = a, a = t;
+				// out of three edges, the edge ab can not be reused by subsequent triangles in some encodings
+				// if subsequent triangles don't share edges ca or bc, we can rotate the triangle to fix this
+				bool needab = false, needbc = false, needca = false;
+
+				for (size_t j = i + 1; j < triangle_count && j <= i + 3; ++j)
+				{
+					unsigned char oa = indices[j * 3 + 0], ob = indices[j * 3 + 1], oc = indices[j * 3 + 2];
+
+					// note: edge comparisons are reversed as reused edges are flipped
+					needab |= (oa == b && ob == a) || (ob == b && oc == a) || (oc == b && oa == a);
+					needbc |= (oa == c && ob == b) || (ob == c && oc == b) || (oc == c && oa == b);
+					needca |= (oa == a && ob == c) || (ob == a && oc == c) || (oc == a && oa == c);
+				}
+
+				if (needab && !needbc)
+				{
+					// abc -> bca
+					unsigned char t = a;
+					a = b, b = c, c = t;
+				}
+				else if (needab && !needca)
+				{
+					// abc -> cab
+					unsigned char t = c;
+					c = b, b = a, a = t;
+				}
 			}
+
+			indices[i * 3 + 0] = a, indices[i * 3 + 1] = b, indices[i * 3 + 2] = c;
+
+			cache[a] = cache[b] = cache[c] = 1;
 		}
-
-		indices[i * 3 + 0] = a, indices[i * 3 + 1] = b, indices[i * 3 + 2] = c;
-
-		cache[a] = cache[b] = cache[c] = 1;
 	}
 
 	// reorder meshlet vertices for access locality assuming index buffer is scanned sequentially
