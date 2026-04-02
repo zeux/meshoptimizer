@@ -148,8 +148,8 @@ void benchFilters(size_t count, double& besto8, double& besto12, double& bestq12
 			    (t1 - t0) * 1000, double(d4.size()) / 1e9 / (t1 - t0),
 			    (t2 - t1) * 1000, double(d8.size()) / 1e9 / (t2 - t1),
 			    (t3 - t2) * 1000, double(d8.size()) / 1e9 / (t3 - t2),
-			    (t4 - t3) * 1000, double(d8.size()) / 1e9 / (t4 - t3),
-			    (t5 - t4) * 1000, double(d4.size()) / 1e9 / (t5 - t4),
+			    (t4 - t3) * 1000, double(d4.size()) / 1e9 / (t4 - t3),
+			    (t5 - t4) * 1000, double(d8.size()) / 1e9 / (t5 - t4),
 			    (t6 - t5) * 1000, double(d8.size()) / 1e9 / (t6 - t5));
 
 		besto8 = std::max(besto8, double(d4.size()) / 1e9 / (t1 - t0));
@@ -158,6 +158,96 @@ void benchFilters(size_t count, double& besto8, double& besto12, double& bestq12
 		bestc8 = std::max(bestc8, double(d4.size()) / 1e9 / (t4 - t3));
 		bestc12 = std::max(bestc12, double(d8.size()) / 1e9 / (t5 - t4));
 		bestexp = std::max(bestexp, double(d8.size()) / 1e9 / (t6 - t5));
+	}
+}
+
+void benchMeshlets(const std::vector<float>& positions, const std::vector<unsigned int>& indices, bool encoderefs, double& bestml, bool verbose)
+{
+	const size_t max_vertices = 64;
+	const size_t max_triangles = 96;
+
+	size_t max_meshlets = meshopt_buildMeshletsBound(indices.size(), max_vertices, max_triangles);
+	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
+	std::vector<unsigned int> meshlet_vertices(indices.size());
+	std::vector<unsigned char> meshlet_triangles(indices.size());
+
+	meshlets.resize(meshopt_buildMeshlets(meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(),
+	    indices.data(), indices.size(), positions.data(), positions.size() / 3, sizeof(float) * 3, max_vertices, max_triangles, 0.f));
+
+	const meshopt_Meshlet& last = meshlets.back();
+
+	meshlet_vertices.resize(last.vertex_offset + last.vertex_count);
+	meshlet_triangles.resize(last.triangle_offset + last.triangle_count * 3);
+
+	std::vector<unsigned char> cbuf(meshopt_encodeMeshletBound(max_vertices, max_triangles));
+
+	// optimize each meshlet for locality before encoding
+	for (size_t i = 0; i < meshlets.size(); ++i)
+		meshopt_optimizeMeshletLevel(&meshlet_vertices[meshlets[i].vertex_offset], meshlets[i].vertex_count, &meshlet_triangles[meshlets[i].triangle_offset], meshlets[i].triangle_count, 3);
+
+	// optimize meshlet_vertices for locality (requires vertex reorder)
+	std::vector<float> positionscopy(positions.size());
+	meshopt_optimizeVertexFetch(&positionscopy[0], &meshlet_vertices[0], meshlet_vertices.size(), &positions[0], positions.size() / 3, sizeof(float) * 3);
+
+#if 0 // TODO: disabled for now to make meshlet decoder tuning more accurate; might make sense to re-enable in the future for SOL timings
+	// pack meshlets in decreasing triangle count order to reduce branch mispredictions
+	// (this matters less on real-world meshes but is more prominent on regular grids?)
+	std::sort(meshlets.begin(), meshlets.end(), [](const meshopt_Meshlet& lhs, const meshopt_Meshlet& rhs)
+	    { return lhs.triangle_count > rhs.triangle_count; });
+#endif
+
+	std::vector<unsigned char> packed;
+
+	size_t totals = 0;
+
+	for (size_t i = 0; i < meshlets.size(); ++i)
+	{
+		const meshopt_Meshlet& meshlet = meshlets[i];
+
+		size_t mvc = encoderefs ? meshlet.vertex_count : 0;
+
+		size_t mbs = meshopt_encodeMeshlet(&cbuf[0], cbuf.size(), &meshlet_vertices[meshlet.vertex_offset], mvc, &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count);
+		assert(mbs > 0);
+
+		packed.push_back((unsigned char)mvc);
+		packed.push_back((unsigned char)meshlet.triangle_count);
+		packed.push_back((unsigned char)(mbs & 0xff));
+		packed.push_back((unsigned char)((mbs >> 8) & 0xff));
+		packed.insert(packed.end(), cbuf.begin(), cbuf.begin() + mbs);
+
+		totals += size_t(meshlet.triangle_count) * 3 + size_t(mvc) * 4;
+	}
+
+	if (verbose)
+		printf("meshlets (%d/%d): %d meshlets, packed %d bytes (%.1f bits/triangle)\n",
+		    int(max_vertices), int(max_triangles), int(meshlets.size()), int(packed.size()), double(packed.size() * 8) / double(indices.size() / 3));
+
+	unsigned int rv[256];
+	unsigned char rt[256 * 3];
+
+	for (int attempt = 0; attempt < 50; ++attempt)
+	{
+		double t0 = timestamp();
+
+		const unsigned char* p = &packed[0];
+
+		for (size_t i = 0; i < meshlets.size(); ++i)
+		{
+			size_t mbs = p[2] | (p[3] << 8);
+			int rc = meshopt_decodeMeshlet(rv, p[0], rt, p[1], p + 4, mbs);
+			assert(rc == 0);
+			(void)rc;
+			p += 4 + mbs;
+		}
+
+		assert(p == &packed[0] + packed.size());
+
+		double t1 = timestamp();
+
+		if (verbose)
+			printf("meshlet decode: %.2f ms (%.2f GB/sec)\n", (t1 - t0) * 1000, double(totals) / 1e9 / (t1 - t0));
+
+		bestml = std::max(bestml, double(totals) / 1e9 / (t1 - t0));
 	}
 }
 
@@ -276,6 +366,8 @@ int main(int argc, char** argv)
 	std::vector<Vertex> vertices;
 	vertices.reserve((N + 1) * (N + 1));
 
+	std::vector<float> positions((N + 1) * (N + 1) * 3);
+
 	for (int x = 0; x <= N; ++x)
 	{
 		for (int y = 0; y <= N; ++y)
@@ -291,6 +383,12 @@ int main(int argc, char** argv)
 				v.data[k] = h & ((1 << (k + 1)) - 1);
 			}
 
+			size_t index = vertices.size();
+
+			positions[index * 3 + 0] = float(x);
+			positions[index * 3 + 1] = float(y);
+			positions[index * 3 + 2] = 0.f;
+
 			vertices.push_back(v);
 		}
 	}
@@ -302,27 +400,31 @@ int main(int argc, char** argv)
 	{
 		for (int y = 0; y < N; ++y)
 		{
-			indices.push_back((x + 0) * N + (y + 0));
-			indices.push_back((x + 1) * N + (y + 0));
-			indices.push_back((x + 0) * N + (y + 1));
+			indices.push_back((x + 0) * (N + 1) + (y + 0));
+			indices.push_back((x + 1) * (N + 1) + (y + 0));
+			indices.push_back((x + 0) * (N + 1) + (y + 1));
 
-			indices.push_back((x + 0) * N + (y + 1));
-			indices.push_back((x + 1) * N + (y + 0));
-			indices.push_back((x + 1) * N + (y + 1));
+			indices.push_back((x + 0) * (N + 1) + (y + 1));
+			indices.push_back((x + 1) * (N + 1) + (y + 0));
+			indices.push_back((x + 1) * (N + 1) + (y + 1));
 		}
 	}
 
-	printf("Algorithm   :\tvtx\tidx\toct8\toct12\tquat12\tcol8\tcol12\texp\n");
+	printf("Codec:\tvtx\tidx\tmlet\tmletΔ\toct8\toct12\tquat12\tcol8\tcol12\texp\n");
 
 	for (int l = 0; l < (loop ? 100 : 1); ++l)
 	{
 		double bestvd = 0, bestid = 0;
 		benchCodecs(vertices, indices, bestvd, bestid, verbose);
 
+		double bestml = 0, bestmt = 0;
+		benchMeshlets(positions, indices, /* encoderefs= */ true, bestml, verbose);
+		benchMeshlets(positions, indices, /* encoderefs= */ false, bestmt, verbose);
+
 		double besto8 = 0, besto12 = 0, bestq12 = 0, bestc8 = 0, bestc12 = 0, bestexp = 0;
 		benchFilters(8 * N * N, besto8, besto12, bestq12, bestc8, bestc12, bestexp, verbose);
 
-		printf("Score (GB/s):\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n",
-		    bestvd, bestid, besto8, besto12, bestq12, bestc8, bestc12, bestexp);
+		printf("GB/s :\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n",
+		    bestvd, bestid, bestml, bestmt, besto8, besto12, bestq12, bestc8, bestc12, bestexp);
 	}
 }

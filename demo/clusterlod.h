@@ -5,7 +5,7 @@
  * To use this code, you need to have one source file which includes meshoptimizer.h and defines CLUSTERLOD_IMPLEMENTATION
  * before including this file. Other source files in your project can just include this file and use the provided functions.
  *
- * Copyright (C) 2016-2025, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
+ * Copyright (C) 2016-2026, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
  * This code is distributed under the MIT License. See notice at the end of this file.
  */
 #pragma once
@@ -60,6 +60,7 @@ struct clodConfig
 
 	// should clodCluster::indices be optimized for locality; helps with rasterization performance and ray tracing performance in fast-build modes
 	bool optimize_clusters;
+	int optimize_clusters_level;
 };
 
 struct clodMesh
@@ -259,8 +260,13 @@ static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh&
 	{
 		const meshopt_Meshlet& meshlet = meshlets[i];
 
+#if MESHOPTIMIZER_VERSION < 1010
 		if (config.optimize_clusters)
 			meshopt_optimizeMeshlet(&meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count, meshlet.vertex_count);
+#else
+		if (config.optimize_clusters)
+			meshopt_optimizeMeshletLevel(&meshlet_vertices[meshlet.vertex_offset], meshlet.vertex_count, &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count, config.optimize_clusters_level);
+#endif
 
 		clusters[i].vertices = meshlet.vertex_count;
 
@@ -522,6 +528,7 @@ clodConfig clodDefaultConfig(size_t max_triangles)
 	config.cluster_split_factor = 2.0f;
 
 	config.optimize_clusters = true;
+	config.optimize_clusters_level = 1;
 
 	config.simplify_ratio = 0.5f;
 	config.simplify_threshold = 0.85f;
@@ -669,60 +676,12 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 
 size_t clodLocalIndices(unsigned int* vertices, unsigned char* triangles, const unsigned int* indices, size_t index_count)
 {
-	size_t unique = 0;
-
-	// direct mapped cache for fast lookups based on low index bits; inspired by vk_lod_clusters from NVIDIA
-	short cache[1024];
-	memset(cache, -1, sizeof(cache));
-
-	for (size_t i = 0; i < index_count; ++i)
-	{
-		unsigned int v = indices[i];
-		unsigned int key = v & (sizeof(cache) / sizeof(cache[0]) - 1);
-		short c = cache[key];
-
-		// fast path: vertex has been seen before
-		if (c >= 0 && vertices[c] == v)
-		{
-			triangles[i] = (unsigned char)c;
-			continue;
-		}
-
-		// fast path: vertex has never been seen before
-		if (c < 0)
-		{
-			cache[key] = short(unique);
-			triangles[i] = (unsigned char)unique;
-			vertices[unique++] = v;
-			continue;
-		}
-
-		// slow path: hash collision with a different vertex, so we need to look through all vertices
-		int pos = -1;
-		for (size_t j = 0; j < unique; ++j)
-			if (vertices[j] == v)
-			{
-				pos = int(j);
-				break;
-			}
-
-		if (pos < 0)
-		{
-			pos = int(unique);
-			vertices[unique++] = v;
-		}
-
-		cache[key] = short(pos);
-		triangles[i] = (unsigned char)pos;
-	}
-
-	assert(unique <= 256);
-	return unique;
+	return meshopt_extractMeshletIndices(vertices, triangles, indices, index_count);
 }
 #endif
 
 /**
- * Copyright (c) 2016-2025 Arseny Kapoulkine
+ * Copyright (c) 2016-2026 Arseny Kapoulkine
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation

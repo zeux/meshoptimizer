@@ -875,7 +875,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 	{
 		const char* ext = data->extensions_required[i];
 
-		if (!isExtensionSupported(extensions, sizeof(extensions) / sizeof(extensions[0]), ext))
+		if (!isExtensionSupported(extensions, sizeof(extensions) / sizeof(extensions[0]), ext) && strstr(ext, "_meshopt_compression") == NULL)
 			fprintf(stderr, "Warning: required extension %s is not supported and will be skipped\n", ext);
 	}
 
@@ -1258,13 +1258,13 @@ unsigned int textureMask(const char* arg)
 	while (arg)
 	{
 		const char* comma = strchr(arg, ',');
-		size_t seg = comma ? comma - arg - 1 : strlen(arg);
+		size_t seg = comma ? comma - arg : strlen(arg);
 
-		if (strncmp(arg, "color", seg) == 0)
+		if (seg == 5 && strncmp(arg, "color", seg) == 0)
 			result |= 1 << TextureKind_Color;
-		else if (strncmp(arg, "normal", seg) == 0)
+		else if (seg == 6 && strncmp(arg, "normal", seg) == 0)
 			result |= 1 << TextureKind_Normal;
-		else if (strncmp(arg, "attrib", seg) == 0)
+		else if (seg == 6 && strncmp(arg, "attrib", seg) == 0)
 			result |= 1 << TextureKind_Attrib;
 		else
 			fprintf(stderr, "Warning: unrecognized texture class %.*s\n", int(seg), arg);

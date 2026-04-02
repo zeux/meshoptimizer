@@ -71,13 +71,18 @@ static void fillParams(basisu::basis_compressor_params& params, const char* inpu
 	}
 	else
 	{
+#if BASISU_LIB_VERSION >= 200
+		params.m_etc1s_compression_level = bs.etc1s_l;
+		params.m_quality_level = bs.etc1s_q;
+		params.m_etc1s_max_endpoint_clusters = 0;
+		params.m_etc1s_max_selector_clusters = 0;
+#elif BASISU_LIB_VERSION >= 160
 		params.m_compression_level = bs.etc1s_l;
-
-#if BASISU_LIB_VERSION >= 160
 		params.m_etc1s_quality_level = bs.etc1s_q;
 		params.m_etc1s_max_endpoint_clusters = 0;
 		params.m_etc1s_max_selector_clusters = 0;
 #else
+		params.m_compression_level = bs.etc1s_l;
 		params.m_quality_level = bs.etc1s_q;
 		params.m_max_endpoint_clusters = 0;
 		params.m_max_selector_clusters = 0;
@@ -98,7 +103,12 @@ static void fillParams(basisu::basis_compressor_params& params, const char* inpu
 	params.m_y_flip = settings.texture_flipy;
 
 	params.m_create_ktx2_file = true;
+
+#if BASISU_LIB_VERSION >= 200
+	params.m_ktx2_and_basis_srgb_transfer_function = info.srgb;
+#else
 	params.m_ktx2_srgb_transfer_func = info.srgb;
+#endif
 
 	if (uastc)
 	{

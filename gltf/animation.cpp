@@ -46,7 +46,7 @@ static float getDeltaTolerance(cgltf_animation_path_type type)
 		return 0.001f; // 0.1% linear
 
 	default:
-		assert(!"Uknown animation path");
+		assert(!"Unknown animation path");
 		return 0;
 	}
 }
@@ -246,12 +246,14 @@ static void getBaseTransform(Attr* result, size_t components, cgltf_animation_pa
 		if (node->weights_count)
 		{
 			assert(node->weights_count == components);
-			memcpy(result->f, node->weights, components * sizeof(float));
+			for (size_t k = 0; k < components; ++k)
+				result[k].f[0] = node->weights[k];
 		}
 		else if (node->mesh && node->mesh->weights_count)
 		{
 			assert(node->mesh->weights_count == components);
-			memcpy(result->f, node->mesh->weights, components * sizeof(float));
+			for (size_t k = 0; k < components; ++k)
+				result[k].f[0] = node->mesh->weights[k];
 		}
 		break;
 
