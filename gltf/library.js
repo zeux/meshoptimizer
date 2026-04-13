@@ -157,7 +157,6 @@ var wasi = {
 		var heap = getHeap();
 		var name = getString(heap.buffer, path, path_len);
 
-		var heap = getHeap();
 		for (var i = 0; i < 64; ++i) heap.setUint8(buf + i, 0);
 
 		heap.setUint8(buf + 16, name == '.' ? 3 : 4);
@@ -218,14 +217,14 @@ var wasi = {
 				break;
 
 			case 2:
-				newposition = fds[fd].size;
+				newposition = fds[fd].size + offset;
 				break;
 
 			default:
 				return WASI_EINVAL;
 		}
 
-		if (newposition > fds[fd].size) {
+		if (newposition < 0 || newposition > fds[fd].size) {
 			return WASI_EINVAL;
 		}
 
