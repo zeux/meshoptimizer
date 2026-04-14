@@ -3062,6 +3062,67 @@ static void opacityMap()
 	assert(fabsf(known - 0.76f) < 1e-2f);
 }
 
+static void opacityMapRasterize0()
+{
+	const unsigned int texture_size = 32;
+	unsigned char texture[texture_size * texture_size];
+
+	float center = float(texture_size) * 0.5f;
+	float radius = 10.f;
+
+	for (unsigned int y = 0; y < texture_size; ++y)
+		for (unsigned int x = 0; x < texture_size; ++x)
+		{
+			float dx = float(x) + 0.5f - center;
+			float dy = float(y) + 0.5f - center;
+			float dc = radius - sqrtf(dx * dx + dy * dy);
+
+			texture[y * texture_size + x] = (unsigned char)meshopt_quantizeUnorm(dc + 0.5f, 8);
+		}
+
+	const float uv0[2] = {0.f, 0.f};
+	const float uv1[2] = {1.f, 0.f};
+	const float uv2[2] = {0.f, 1.f};
+	const float uv3[2] = {0.5f, 0.f};
+	const float uv4[2] = {0.f, 0.5f};
+	const float uv5[2] = {0.5f, 0.5f};
+
+	unsigned char r0 = 0, r1 = 0, r2 = 0;
+	meshopt_opacityMapRasterize(&r0, 0, 4, uv0, uv1, uv2, texture, 1, texture_size, texture_size, texture_size);
+	meshopt_opacityMapRasterize(&r1, 0, 4, uv0, uv3, uv4, texture, 1, texture_size, texture_size, texture_size);
+	meshopt_opacityMapRasterize(&r2, 0, 4, uv5, uv3, uv4, texture, 1, texture_size, texture_size, texture_size);
+
+	assert(r0 == 2); // unknown-transparent
+	assert(r1 == 0); // transparent
+	assert(r2 == 3); // unknown-opaque
+}
+
+static int opacityMapSpecialIndex(int level, int states, unsigned char value)
+{
+	std::vector<unsigned char> data(meshopt_opacityMapEntrySize(level, states), value);
+	unsigned char levels[1] = {(unsigned char)level};
+	unsigned int offsets[1] = {0};
+	int omm_indices[1] = {0};
+
+	size_t compact_count = meshopt_opacityMapCompact(&data[0], data.size(), levels, offsets, 1, omm_indices, 1, states);
+	assert(compact_count == 0);
+	return omm_indices[0];
+}
+
+static void opacityMapSpecial()
+{
+	for (int level = 0; level <= 2; ++level)
+	{
+		assert(opacityMapSpecialIndex(level, 2, 0x00) == -1);
+		assert(opacityMapSpecialIndex(level, 2, 0xff) == -2);
+
+		assert(opacityMapSpecialIndex(level, 4, 0x00) == -1);
+		assert(opacityMapSpecialIndex(level, 4, 0x55) == -2);
+		assert(opacityMapSpecialIndex(level, 4, 0xaa) == -3);
+		assert(opacityMapSpecialIndex(level, 4, 0xff) == -4);
+	}
+}
+
 void runTests()
 {
 	decodeIndexV0();
@@ -3191,4 +3252,6 @@ void runTests()
 	decodeMeshletTypical();
 
 	opacityMap();
+	opacityMapRasterize0();
+	opacityMapSpecial();
 }
