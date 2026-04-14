@@ -109,6 +109,13 @@ static void transformMesh(Mesh& target, const Mesh& mesh, const cgltf_node* node
 		{
 			for (size_t i = 0; i < stream.data.size(); ++i)
 				transformNormal(stream.data[i].f, source.data[i].f, transform);
+
+			if (det < 0)
+			{
+				// negative scale means we need to flip tangent frame handedness
+				for (size_t i = 0; i < stream.data.size(); ++i)
+					stream.data[i].f[3] = -stream.data[i].f[3];
+			}
 		}
 	}
 

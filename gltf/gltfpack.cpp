@@ -1165,14 +1165,6 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 		std::string fbpath = output;
 		fbpath.replace(fbpath.size() - 4, 4, ".fallback.bin");
 
-		FILE* out = fopen(output, "wb");
-		FILE* outfb = settings.fallback ? fopen(fbpath.c_str(), "wb") : NULL;
-		if (!out || (!outfb && settings.fallback))
-		{
-			fprintf(stderr, "Error saving %s\n", output);
-			return 4;
-		}
-
 		std::string bufferspec = getBufferSpec(NULL, bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback_size, settings.compress, meshopt_ext);
 		json.insert(bufferspec_pos, "," + bufferspec);
 
@@ -1182,9 +1174,26 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 		while (bin.size() % 4)
 			bin.push_back('\0');
 
+		// GLB header and two chunks with a chunk header
+		size_t size = 12 + 8 + json.size() + 8 + bin.size();
+
+		if (size > UINT32_MAX)
+		{
+			fprintf(stderr, "Error: GLB output cannot exceed 4 GB in size\n");
+			return 4;
+		}
+
+		FILE* out = fopen(output, "wb");
+		FILE* outfb = settings.fallback ? fopen(fbpath.c_str(), "wb") : NULL;
+		if (!out || (!outfb && settings.fallback))
+		{
+			fprintf(stderr, "Error saving %s\n", output);
+			return 4;
+		}
+
 		writeU32(out, 0x46546C67);
 		writeU32(out, 2);
-		writeU32(out, uint32_t(12 + 8 + json.size() + 8 + bin.size()));
+		writeU32(out, uint32_t(size));
 
 		writeU32(out, uint32_t(json.size()));
 		writeU32(out, 0x4E4F534A);

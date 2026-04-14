@@ -340,7 +340,7 @@ void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials,
 
 void mergeTextures(cgltf_data* data, std::vector<TextureInfo>& textures);
 
-bool hasValidTransform(const cgltf_texture_view& view);
+bool isValidTransform(const cgltf_texture_transform& transform);
 
 void analyzeMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, std::vector<TextureInfo>& textures, std::vector<ImageInfo>& images);
 void optimizeMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, std::vector<ImageInfo>& images, const char* input_path);

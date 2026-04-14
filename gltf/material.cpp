@@ -440,20 +440,11 @@ void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials,
 	}
 }
 
-bool hasValidTransform(const cgltf_texture_view& view)
+bool isValidTransform(const cgltf_texture_transform& transform)
 {
-	if (view.has_transform)
-	{
-		if (view.transform.offset[0] != 0.0f || view.transform.offset[1] != 0.0f ||
-		    view.transform.scale[0] != 1.0f || view.transform.scale[1] != 1.0f ||
-		    view.transform.rotation != 0.0f)
-			return true;
-
-		if (view.transform.has_texcoord && view.transform.texcoord != view.texcoord)
-			return true;
-	}
-
-	return false;
+	return transform.offset[0] != 0.0f || transform.offset[1] != 0.0f ||
+	       transform.scale[0] != 1.0f || transform.scale[1] != 1.0f ||
+	       transform.rotation != 0.0f;
 }
 
 static const cgltf_image* getTextureImage(const cgltf_texture* texture)
@@ -472,7 +463,7 @@ static const cgltf_image* getTextureImage(const cgltf_texture* texture)
 
 static void analyzeMaterialTexture(const cgltf_texture_view& view, TextureKind kind, MaterialInfo& mi, cgltf_data* data, std::vector<TextureInfo>& textures, std::vector<ImageInfo>& images)
 {
-	mi.uses_texture_transform |= hasValidTransform(view);
+	mi.uses_texture_transform |= view.has_transform && isValidTransform(view.transform);
 
 	if (view.texture)
 	{
