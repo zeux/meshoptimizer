@@ -335,7 +335,14 @@ var MeshoptSimplifier = (function () {
 			assert(indices.length % 3 == 0);
 
 			var indices32 = indices.BYTES_PER_ELEMENT == 4 ? indices : new Uint32Array(indices);
-			return reorder(instance.exports.meshopt_optimizeVertexFetchRemap, indices32, maxindex(indices) + 1);
+			var result = reorder(instance.exports.meshopt_optimizeVertexFetchRemap, indices32, maxindex(indices) + 1);
+			if (indices !== indices32) {
+				// copy back indices if they were converted to Uint32Array
+				for (var i = 0; i < indices32.length; ++i) {
+					indices[i] = indices32[i];
+				}
+			}
+			return result;
 		},
 
 		generatePositionRemap: function (vertex_positions, vertex_positions_stride) {
