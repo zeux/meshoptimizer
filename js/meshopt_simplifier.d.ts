@@ -7,6 +7,7 @@ export const MeshoptSimplifier: {
 	ready: Promise<void>;
 
 	compactMesh: (indices: Uint32Array) => [Uint32Array, number];
+	generatePositionRemap: (vertex_positions: Float32Array, vertex_positions_stride: number) => Uint32Array;
 
 	simplify: (
 		indices: Uint32Array,
