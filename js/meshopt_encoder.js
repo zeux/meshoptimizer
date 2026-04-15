@@ -57,6 +57,7 @@ var MeshoptEncoder = (function () {
 		var indices8 = bytes(indices);
 		heap.set(indices8, ip);
 		if (optf) {
+			// mutates indices in place, requiring a copy later
 			optf(ip, ip, indices.length, vertices);
 		}
 		var unique = fun(rp, ip, indices.length, vertices);
@@ -136,6 +137,8 @@ var MeshoptEncoder = (function () {
 		ready: ready,
 		supported: true,
 		reorderMesh: function (indices, triangles, optsize) {
+			assert(indices instanceof Uint32Array || indices instanceof Int32Array);
+			assert(!triangles || indices.length % 3 == 0);
 			var optf = triangles
 				? optsize
 					? instance.exports.meshopt_optimizeVertexCacheStrip
@@ -204,6 +207,7 @@ var MeshoptEncoder = (function () {
 				SharedComponent: 2,
 				Clamped: 3,
 			};
+			assert(!mode || mode in table);
 			return filter(instance.exports.meshopt_encodeFilterExp, source, count, stride, bits, stride, mode ? table[mode] : 1);
 		},
 		encodeFilterColor: function (source, count, stride, bits) {
