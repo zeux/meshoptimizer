@@ -147,10 +147,10 @@ var MeshoptDecoder = (function () {
 
 	function workerProcess(event) {
 		var data = event.data;
-		if (!data.id) {
-			return self.close();
-		}
 		self.ready.then(function (instance) {
+			if (!data.id) {
+				return self.close();
+			}
 			try {
 				var target = new Uint8Array(data.count * data.size);
 				decode(instance, instance.exports[data.mode], target, data.count, data.size, data.source, instance.exports[data.filter]);
