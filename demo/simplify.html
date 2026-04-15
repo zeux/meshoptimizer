@@ -109,8 +109,8 @@
 		<script type="importmap">
 			{
 				"imports": {
-					"three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
-					"three-examples/": "https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/",
+					"three": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.module.js",
+					"three-examples/": "https://cdn.jsdelivr.net/npm/three@0.183.0/examples/jsm/",
 					"lil-gui": "https://cdn.jsdelivr.net/npm/lil-gui@0.20.0/dist/lil-gui.esm.js"
 				}
 			}
@@ -132,7 +132,7 @@
 			import { GUI } from 'lil-gui';
 
 			var container, gridContainer;
-			var camera, clock;
+			var camera, timer;
 			var renderers = [];
 			var scenes = [];
 			var controls = [];
@@ -1026,7 +1026,8 @@
 				camera.position.y = 1.0;
 				camera.position.z = 3.0;
 
-				clock = new THREE.Clock();
+				timer = new THREE.Timer();
+				timer.connect(document);
 
 				window.addEventListener('resize', updateRendererSizes, false);
 			}
@@ -1053,8 +1054,9 @@
 				}
 			}
 
-			function animate() {
+			function animate(timestamp) {
 				requestAnimationFrame(animate);
+				timer.update(timestamp);
 
 				// Update all controls
 				for (var i = 0; i < controls.length; i++) {
@@ -1063,7 +1065,7 @@
 
 				// Update animation mixers
 				if (settings.animate) {
-					var delta = clock.getDelta();
+					var delta = timer.getDelta();
 					for (var i = 0; i < mixers.length; i++) {
 						if (mixers[i]) {
 							mixers[i].update(delta);

@@ -30,12 +30,11 @@
 			}
 		</style>
 
-		<script async src="https://cdn.jsdelivr.net/npm/es-module-shims@2.0.10/dist/es-module-shims.min.js"></script>
 		<script type="importmap">
 			{
 				"imports": {
-					"three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
-					"three-examples/": "https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/"
+					"three": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.module.js",
+					"three-examples/": "https://cdn.jsdelivr.net/npm/three@0.183.0/examples/jsm/"
 				}
 			}
 		</script>
@@ -53,7 +52,7 @@
 
 			var container;
 
-			var camera, scene, renderer, mixer, clock;
+			var camera, scene, renderer, mixer, timer;
 
 			var windowHalfX = window.innerWidth / 2;
 			var windowHalfY = window.innerHeight / 2;
@@ -116,7 +115,8 @@
 
 				window.addEventListener('resize', onWindowResize, false);
 
-				clock = new THREE.Clock();
+				timer = new THREE.Timer();
+				timer.connect(document);
 			}
 
 			function onWindowResize() {
@@ -129,9 +129,11 @@
 				renderer.setSize(window.innerWidth, window.innerHeight);
 			}
 
-			function animate() {
+			function animate(timestamp) {
+				timer.update(timestamp);
+
 				if (mixer) {
-					mixer.update(clock.getDelta());
+					mixer.update(timer.getDelta());
 				}
 
 				requestAnimationFrame(animate);
