@@ -74,7 +74,6 @@ var MeshoptSimplifier = (function () {
 		heap = new Uint8Array(instance.exports.memory.buffer);
 		var remap = new Uint32Array(vertices);
 		new Uint8Array(remap.buffer).set(heap.subarray(rp, rp + vertices * 4));
-		indices8.set(heap.subarray(ip, ip + indices.length * 4));
 		sbrk(ip - sbrk(0));
 
 		for (var i = 0; i < indices.length; ++i) indices[i] = remap[indices[i]];
@@ -249,7 +248,7 @@ var MeshoptSimplifier = (function () {
 		var sbrk = instance.exports.sbrk;
 		var ti = sbrk(target_vertex_count * 4);
 		var sp = sbrk(vertex_count * vertex_positions_stride);
-		var sc = sbrk(vertex_count * vertex_colors_stride);
+		var sc = vertex_colors ? sbrk(vertex_count * vertex_colors_stride) : 0;
 		var heap = new Uint8Array(instance.exports.memory.buffer);
 		heap.set(bytes(vertex_positions), sp);
 		if (vertex_colors) {
