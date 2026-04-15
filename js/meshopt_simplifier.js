@@ -542,7 +542,7 @@ var MeshoptSimplifier = (function () {
 					vertex_positions_stride * 4,
 					vertex_colors,
 					vertex_colors_stride * 4,
-					color_weight,
+					color_weight || 0,
 					target_vertex_count
 				);
 			} else {
