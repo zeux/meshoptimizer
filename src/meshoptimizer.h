@@ -1215,7 +1215,7 @@ template <typename T>
 inline void meshopt_remapIndexBuffer(T* destination, const T* indices, size_t index_count, const unsigned int* remap)
 {
 	meshopt_IndexAdapter<T> in(NULL, indices, indices ? index_count : 0);
-	meshopt_IndexAdapter<T> out(destination, 0, index_count);
+	meshopt_IndexAdapter<T> out(destination, NULL, index_count);
 
 	meshopt_remapIndexBuffer(out.data, indices ? in.data : NULL, index_count, remap);
 }
