@@ -114,6 +114,7 @@ struct VertexHasherF
 		const float* rp = vertex_positions + rhs * vertex_positions_stride_float;
 		const float* rn = vertex_normals + rhs * vertex_normals_stride_float;
 		const float* rt = vertex_uvs + rhs * vertex_uvs_stride_float;
+
 		return lp[0] == rp[0] && lp[1] == rp[1] && lp[2] == rp[2] && ln[0] == rn[0] && ln[1] == rn[1] && ln[2] == rn[2] && lt[0] == rt[0] && lt[1] == rt[1];
 	}
 };
@@ -270,12 +271,13 @@ static void mergeTangentGroups(unsigned int* groups, const unsigned int* data, s
 			float oj = face_tangents[data[j] >> 2].w;
 
 			// merge tangent groups if triangles are adjacent and orientations agree or either one is degenerate
+			// TODO: as is this can create degen bridges between +/-
 			if ((njb == nic || njc == nib) && oi * oj >= 0.f)
 			{
 				unsigned int gi = follow2(groups, (data[i] >> 2) * 3 + (data[i] & 3));
 				unsigned int gj = follow2(groups, (data[j] >> 2) * 3 + (data[j] & 3));
 
-				if (gi != gj) // TODO: unconditional? perf
+				if (gi != gj) // TODO: order?
 					groups[gj] = gi;
 			}
 		}
@@ -357,7 +359,6 @@ static void accumulateTangentGroups(float* result, const unsigned int* groups, c
 
 } // namespace meshopt
 
-// TODO: argument order?
 MESHOPTIMIZER_EXPERIMENTAL void meshopt_generateTangentsMikkT(float* result, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_normals, size_t vertex_normals_stride, const float* vertex_uvs, size_t vertex_uvs_stride)
 {
 	using namespace meshopt;
@@ -373,16 +374,11 @@ MESHOPTIMIZER_EXPERIMENTAL void meshopt_generateTangentsMikkT(float* result, con
 
 	size_t face_count = index_count / 3;
 
-	(void)vertex_count;
-	(void)vertex_normals;
-	(void)vertex_normals_stride;
-
 	// compute vertex remap to unique vertex index
 	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
 	buildVertexRemap(remap, vertex_positions, vertex_count, vertex_positions_stride, vertex_normals, vertex_normals_stride, vertex_uvs, vertex_uvs_stride, allocator);
 
 	// build adjacency information
-	// TODO: since remap maps to original vertices, adjacency will have a lot of holes
 	CornerAdjacency adjacency = {};
 	buildCornerAdjacency(adjacency, indices, index_count, remap, vertex_count, allocator);
 
@@ -417,7 +413,7 @@ MESHOPTIMIZER_EXPERIMENTAL void meshopt_generateTangentsMikkT(float* result, con
 			r[0] *= s;
 			r[1] *= s;
 			r[2] *= s;
-			r[3] = r[3] == 0.f ? 1.f : r[3]; // for isolated degenerate triangles, use orientation 1 for consistency
+			r[3] = r[3] == 0.f ? 1.f : r[3]; // for isolated degenerate triangles, use orientation 1 for consistency (TODO: -1?)
 		}
 
 	for (size_t i = 0; i < index_count; ++i)
