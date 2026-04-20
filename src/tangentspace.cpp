@@ -246,7 +246,7 @@ static unsigned int follow2(unsigned int* parents, unsigned int index)
 	return index;
 }
 
-static void mergeTangentGroups(unsigned int* groups, const unsigned int* data, size_t count, const unsigned int* indices, const unsigned int* remap, const Tangent* face_tangents)
+static void mergeTangentGroups(unsigned int* groups, unsigned char* groupsign, const unsigned int* data, size_t count, const unsigned int* indices, const unsigned int* remap)
 {
 	static const int next[4] = {1, 2, 0, 1};
 
@@ -258,8 +258,6 @@ static void mergeTangentGroups(unsigned int* groups, const unsigned int* data, s
 		unsigned int nib = indices ? remap[indices[cib]] : remap[cib];
 		unsigned int nic = indices ? remap[indices[cic]] : remap[cic];
 
-		float oi = face_tangents[data[i] >> 2].w;
-
 		for (size_t j = i + 1; j < count; ++j)
 		{
 			unsigned int cjb = (data[j] >> 2) * 3 + next[(data[j] & 3) + 0];
@@ -268,17 +266,18 @@ static void mergeTangentGroups(unsigned int* groups, const unsigned int* data, s
 			unsigned int njb = indices ? remap[indices[cjb]] : remap[cjb];
 			unsigned int njc = indices ? remap[indices[cjc]] : remap[cjc];
 
-			float oj = face_tangents[data[j] >> 2].w;
-
 			// merge tangent groups if triangles are adjacent and orientations agree or either one is degenerate
-			// TODO: as is this can create degen bridges between +/-
-			if ((njb == nic || njc == nib) && oi * oj >= 0.f)
+			if (njb == nic || njc == nib)
 			{
 				unsigned int gi = follow2(groups, (data[i] >> 2) * 3 + (data[i] & 3));
 				unsigned int gj = follow2(groups, (data[j] >> 2) * 3 + (data[j] & 3));
 
-				if (gi != gj) // TODO: order?
+				// note, we track signs per group to ensure that we can't merge groups with opposite orientation through a degen bridge
+				if (gi != gj && (groupsign[gi] | groupsign[gj]) != 3)
+				{
 					groups[gj] = gi;
+					groupsign[gi] |= groupsign[gj];
+				}
 			}
 		}
 	}
@@ -391,9 +390,14 @@ MESHOPTIMIZER_EXPERIMENTAL void meshopt_generateTangentsMikkT(float* result, con
 	for (size_t i = 0; i < index_count; ++i)
 		groups[i] = unsigned(i);
 
+	// each group must only contain triangles with the same orientation; to simplify accounting we store signs as a bitmask
+	unsigned char* groupsign = allocator.allocate<unsigned char>(index_count);
+	for (size_t i = 0; i < face_count; ++i)
+		groupsign[i * 3 + 0] = groupsign[i * 3 + 1] = groupsign[i * 3 + 2] = (face_tangents[i].w > 0.f ? 1 : 0) | (face_tangents[i].w < 0.f ? 2 : 0);
+
 	for (size_t i = 0; i < vertex_count; ++i)
 		if (adjacency.counts[i])
-			mergeTangentGroups(groups, adjacency.data + adjacency.offsets[i], adjacency.counts[i], indices, remap, face_tangents);
+			mergeTangentGroups(groups, groupsign, adjacency.data + adjacency.offsets[i], adjacency.counts[i], indices, remap);
 
 	for (size_t i = 0; i < index_count; ++i)
 		groups[i] = follow2(groups, unsigned(i));
@@ -413,7 +417,7 @@ MESHOPTIMIZER_EXPERIMENTAL void meshopt_generateTangentsMikkT(float* result, con
 			r[0] *= s;
 			r[1] *= s;
 			r[2] *= s;
-			r[3] = r[3] == 0.f ? 1.f : r[3]; // for isolated degenerate triangles, use orientation 1 for consistency (TODO: -1?)
+			r[3] = r[3] == 0.f ? -1.f : r[3]; // for isolated degenerate triangles, use orientation -1 for consistency
 		}
 
 	for (size_t i = 0; i < index_count; ++i)
