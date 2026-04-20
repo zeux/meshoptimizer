@@ -7,6 +7,7 @@
 
 // This work is based on:
 // Morten Mikkelsen. Simulation of wrinkled surfaces revisited. 2008
+// Cecil Hastings Jr. Approximations for digital computers. 1955
 namespace meshopt
 {
 
@@ -281,6 +282,16 @@ static void mergeTangentGroups(unsigned int* groups, const unsigned int* data, s
 	}
 }
 
+inline float optacos(float x)
+{
+	// approximation for acos(x) = sqrt(1 - abs(x)) * 2-degree polynomial, max error ~5e-4
+	float ax = fabsf(x);
+	ax = ax > 1.f ? 1.f : ax;
+	float r = 1.570337f + ax * (-0.2053972f + ax * 0.05147786f);
+	r *= sqrtf(1.0f - ax);
+	return x < 0.f ? 3.1415926f - r : r;
+}
+
 static void accumulateTangentGroups(float* result, const unsigned int* groups, const unsigned int* indices, size_t index_count, const unsigned int* remap, const Tangent* face_tangents, const float* vertex_positions, size_t vertex_positions_stride, const float* vertex_normals, size_t vertex_normals_stride)
 {
 	static const int next[4] = {1, 2, 0, 1};
@@ -332,7 +343,7 @@ static void accumulateTangentGroups(float* result, const unsigned int* groups, c
 			float dpl = sqrtf(dp1l * dp2l);
 
 			float cosa = (dp1x * dp2x + dp1y * dp2y + dp1z * dp2z) * (dpl == 0.f ? 0.f : 1.f / dpl);
-			float angle = acosf(cosa < -1.f ? -1.f : (cosa > 1.f ? 1.f : cosa));
+			float angle = optacos(cosa); // optacos handles clamping to [-1..1]
 
 			float w = angle * (sl == 0.f ? 0.f : 1.f / sl);
 
