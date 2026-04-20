@@ -358,7 +358,7 @@ static void accumulateTangentGroups(float* result, const unsigned int* groups, c
 
 } // namespace meshopt
 
-MESHOPTIMIZER_EXPERIMENTAL void meshopt_generateTangentsMikkT(float* result, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_normals, size_t vertex_normals_stride, const float* vertex_uvs, size_t vertex_uvs_stride)
+MESHOPTIMIZER_EXPERIMENTAL void meshopt_generateTangents(float* result, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_normals, size_t vertex_normals_stride, const float* vertex_uvs, size_t vertex_uvs_stride)
 {
 	using namespace meshopt;
 
