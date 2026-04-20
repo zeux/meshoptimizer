@@ -175,6 +175,63 @@ static void buildVertexRemap(unsigned int* remap, const float* vertex_positions,
 	allocator.deallocate(vertex_table);
 }
 
+struct CornerAdjacency
+{
+	unsigned int* counts;
+	unsigned int* offsets;
+	unsigned int* data;
+};
+
+static void buildCornerAdjacency(CornerAdjacency& adjacency, const unsigned int* indices, size_t index_count, const unsigned int* remap, size_t vertex_count, meshopt_Allocator& allocator)
+{
+	size_t face_count = index_count / 3;
+
+	// allocate arrays
+	adjacency.counts = allocator.allocate<unsigned int>(vertex_count);
+	adjacency.offsets = allocator.allocate<unsigned int>(vertex_count);
+	adjacency.data = allocator.allocate<unsigned int>(index_count);
+
+	// fill triangle counts
+	memset(adjacency.counts, 0, vertex_count * sizeof(unsigned int));
+
+	for (size_t i = 0; i < index_count; ++i)
+	{
+		unsigned int v = indices ? remap[indices[i]] : remap[i];
+		adjacency.counts[v]++;
+	}
+
+	// fill offset table
+	unsigned int offset = 0;
+
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		adjacency.offsets[i] = offset;
+		offset += adjacency.counts[i];
+	}
+
+	assert(offset == index_count);
+
+	// fill triangle data
+	for (size_t i = 0; i < face_count; ++i)
+	{
+		unsigned int a = indices ? remap[indices[i * 3 + 0]] : remap[i * 3 + 0];
+		unsigned int b = indices ? remap[indices[i * 3 + 1]] : remap[i * 3 + 1];
+		unsigned int c = indices ? remap[indices[i * 3 + 2]] : remap[i * 3 + 2];
+
+		adjacency.data[adjacency.offsets[a]++] = unsigned(i << 2) | 0;
+		adjacency.data[adjacency.offsets[b]++] = unsigned(i << 2) | 1;
+		adjacency.data[adjacency.offsets[c]++] = unsigned(i << 2) | 2;
+	}
+
+	// fix offsets that have been disturbed by the previous pass
+	for (size_t i = 0; i < vertex_count; ++i)
+	{
+		assert(adjacency.offsets[i] >= adjacency.counts[i]);
+
+		adjacency.offsets[i] -= adjacency.counts[i];
+	}
+}
+
 } // namespace meshopt
 
 // TODO: argument order?
@@ -200,6 +257,11 @@ MESHOPTIMIZER_EXPERIMENTAL void meshopt_generateTangentsMikkT(float* result, con
 	// compute vertex remap to unique vertex index
 	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
 	buildVertexRemap(remap, vertex_positions, vertex_count, vertex_positions_stride, vertex_normals, vertex_normals_stride, vertex_uvs, vertex_uvs_stride, allocator);
+
+	// build adjacency information
+	// TODO: since remap maps to original vertices, adjacency will have a lot of holes
+	CornerAdjacency adjacency = {};
+	buildCornerAdjacency(adjacency, indices, index_count, remap, vertex_count, allocator);
 
 	// compute per-triangle tangents
 	Tangent* face_tangents = allocator.allocate<Tangent>(face_count);
