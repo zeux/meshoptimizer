@@ -281,6 +281,69 @@ static void mergeTangentGroups(unsigned int* groups, const unsigned int* data, s
 	}
 }
 
+static void accumulateTangentGroups(float* result, const unsigned int* groups, const unsigned int* indices, size_t index_count, const unsigned int* remap, const Tangent* face_tangents, const float* vertex_positions, size_t vertex_positions_stride, const float* vertex_normals, size_t vertex_normals_stride)
+{
+	static const int next[4] = {1, 2, 0, 1};
+
+	size_t vertex_position_stride_float = vertex_positions_stride / sizeof(float);
+	size_t vertex_normal_stride_float = vertex_normals_stride / sizeof(float);
+
+	size_t face_count = index_count / 3;
+
+	for (size_t i = 0; i < face_count; ++i)
+	{
+		const Tangent& t = face_tangents[i];
+
+		if (t.w == 0.f)
+			continue;
+
+		for (int k = 0; k < 3; ++k)
+		{
+			float* r = &result[size_t(groups[i * 3 + k]) * 4];
+
+			unsigned int a = indices ? remap[indices[i * 3 + k]] : remap[i * 3 + k];
+			unsigned int b = indices ? remap[indices[i * 3 + next[k]]] : remap[i * 3 + next[k]];
+			unsigned int c = indices ? remap[indices[i * 3 + next[k + 1]]] : remap[i * 3 + next[k + 1]];
+
+			const float* pa = vertex_positions + a * vertex_position_stride_float;
+			const float* pb = vertex_positions + b * vertex_position_stride_float;
+			const float* pc = vertex_positions + c * vertex_position_stride_float;
+
+			const float* n = vertex_normals + a * vertex_normal_stride_float;
+
+			// reproject tangent vector onto vertex normal
+			float sd = t.x * n[0] + t.y * n[1] + t.z * n[2];
+			float sx = t.x - n[0] * sd, sy = t.y - n[1] * sd, sz = t.z - n[2] * sd;
+			float sl = sqrtf(sx * sx + sy * sy + sz * sz);
+
+			// compute incident angle for weighting, in tangent plane
+			// note: this step is absent from the paper, and the implementation computes angle after projecting edges to tangent plane...
+			float dp1x = pb[0] - pa[0], dp1y = pb[1] - pa[1], dp1z = pb[2] - pa[2];
+			float dp2x = pc[0] - pa[0], dp2y = pc[1] - pa[1], dp2z = pc[2] - pa[2];
+
+			float dp1d = dp1x * n[0] + dp1y * n[1] + dp1z * n[2];
+			float dp2d = dp2x * n[0] + dp2y * n[1] + dp2z * n[2];
+
+			dp1x -= n[0] * dp1d, dp1y -= n[1] * dp1d, dp1z -= n[2] * dp1d;
+			dp2x -= n[0] * dp2d, dp2y -= n[1] * dp2d, dp2z -= n[2] * dp2d;
+
+			float dp1l = dp1x * dp1x + dp1y * dp1y + dp1z * dp1z;
+			float dp2l = dp2x * dp2x + dp2y * dp2y + dp2z * dp2z;
+			float dpl = sqrtf(dp1l * dp2l);
+
+			float cosa = (dp1x * dp2x + dp1y * dp2y + dp1z * dp2z) * (dpl == 0.f ? 0.f : 1.f / dpl);
+			float angle = acosf(cosa < -1.f ? -1.f : (cosa > 1.f ? 1.f : cosa));
+
+			float w = angle * (sl == 0.f ? 0.f : 1.f / sl);
+
+			r[0] += sx * w;
+			r[1] += sy * w;
+			r[2] += sz * w;
+			r[3] = t.w;
+		}
+	}
+}
+
 } // namespace meshopt
 
 // TODO: argument order?
@@ -325,11 +388,28 @@ MESHOPTIMIZER_EXPERIMENTAL void meshopt_generateTangentsMikkT(float* result, con
 		if (adjacency.counts[i])
 			mergeTangentGroups(groups, adjacency.data + adjacency.offsets[i], adjacency.counts[i], indices, remap, face_tangents);
 
-	// TODO: for now output per face tangents
 	for (size_t i = 0; i < index_count; ++i)
-	{
-		float* r = &result[i * 4];
-		const Tangent& t = face_tangents[i / 3];
-		r[0] = t.x, r[1] = t.y, r[2] = t.z, r[3] = t.w;
-	}
+		groups[i] = follow2(groups, unsigned(i));
+
+	// accumulate tangents into their own respective groups
+	memset(result, 0, index_count * sizeof(float) * 4);
+	accumulateTangentGroups(result, groups, indices, index_count, remap, face_tangents, vertex_positions, vertex_positions_stride, vertex_normals, vertex_normals_stride);
+
+	// finalize tangents by normalizing roots and propagating the rest
+	for (size_t i = 0; i < index_count; ++i)
+		if (groups[i] == i)
+		{
+			float* r = &result[i * 4];
+			float l = sqrtf(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]);
+			float s = l == 0.f ? 0.f : 1.f / l;
+
+			r[0] *= s;
+			r[1] *= s;
+			r[2] *= s;
+			r[3] = r[3] == 0.f ? 1.f : r[3]; // for isolated degenerate triangles, use orientation 1 for consistency
+		}
+
+	for (size_t i = 0; i < index_count; ++i)
+		if (groups[i] != i)
+			memcpy(&result[i * 4], &result[groups[i] * 4], sizeof(float) * 4);
 }
