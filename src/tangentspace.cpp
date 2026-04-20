@@ -232,6 +232,55 @@ static void buildCornerAdjacency(CornerAdjacency& adjacency, const unsigned int*
 	}
 }
 
+static unsigned int follow2(unsigned int* parents, unsigned int index)
+{
+	while (index != parents[index])
+	{
+		unsigned int parent = parents[index];
+		parents[index] = parents[parent];
+		index = parent;
+	}
+
+	return index;
+}
+
+static void mergeTangentGroups(unsigned int* groups, const unsigned int* data, size_t count, const unsigned int* indices, const unsigned int* remap, const Tangent* face_tangents)
+{
+	static const int next[4] = {1, 2, 0, 1};
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		unsigned int cib = (data[i] >> 2) * 3 + next[(data[i] & 3) + 0];
+		unsigned int cic = (data[i] >> 2) * 3 + next[(data[i] & 3) + 1];
+
+		unsigned int nib = indices ? remap[indices[cib]] : remap[cib];
+		unsigned int nic = indices ? remap[indices[cic]] : remap[cic];
+
+		float oi = face_tangents[data[i] >> 2].w;
+
+		for (size_t j = i + 1; j < count; ++j)
+		{
+			unsigned int cjb = (data[j] >> 2) * 3 + next[(data[j] & 3) + 0];
+			unsigned int cjc = (data[j] >> 2) * 3 + next[(data[j] & 3) + 1];
+
+			unsigned int njb = indices ? remap[indices[cjb]] : remap[cjb];
+			unsigned int njc = indices ? remap[indices[cjc]] : remap[cjc];
+
+			float oj = face_tangents[data[j] >> 2].w;
+
+			// merge tangent groups if triangles are adjacent and orientations agree or either one is degenerate
+			if ((njb == nic || njc == nib) && oi * oj >= 0.f)
+			{
+				unsigned int gi = follow2(groups, (data[i] >> 2) * 3 + (data[i] & 3));
+				unsigned int gj = follow2(groups, (data[j] >> 2) * 3 + (data[j] & 3));
+
+				if (gi != gj) // TODO: unconditional? perf
+					groups[gj] = gi;
+			}
+		}
+	}
+}
+
 } // namespace meshopt
 
 // TODO: argument order?
@@ -266,6 +315,15 @@ MESHOPTIMIZER_EXPERIMENTAL void meshopt_generateTangentsMikkT(float* result, con
 	// compute per-triangle tangents
 	Tangent* face_tangents = allocator.allocate<Tangent>(face_count);
 	computeFaceTangents(face_tangents, face_count, indices, vertex_positions, vertex_positions_stride, vertex_uvs, vertex_uvs_stride);
+
+	// compute per-corner tangent groups: triangles adjacent to the same vertex with the same orientation are merged in strips
+	unsigned int* groups = allocator.allocate<unsigned int>(index_count);
+	for (size_t i = 0; i < index_count; ++i)
+		groups[i] = unsigned(i);
+
+	for (size_t i = 0; i < vertex_count; ++i)
+		if (adjacency.counts[i])
+			mergeTangentGroups(groups, adjacency.data + adjacency.offsets[i], adjacency.counts[i], indices, remap, face_tangents);
 
 	// TODO: for now output per face tangents
 	for (size_t i = 0; i < index_count; ++i)
