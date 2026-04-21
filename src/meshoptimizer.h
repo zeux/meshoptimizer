@@ -899,7 +899,18 @@ MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_opacityMapEntrySize(int level, int sta
 MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_opacityMapCompact(unsigned char* data, size_t data_size, unsigned char* levels, unsigned int* offsets, size_t omm_count, int* omm_indices, size_t triangle_count, int states);
 
 /**
- * Experimental: MikkTSpace tangent space generator
+ * Experimental: Tangent space generator
+ * Computes per-corner tangent vectors following the MikkTSpace algorithm; for each corner, computes normalized tangent vector (xyz) and orientation (w, +/-1).
+ * Bitangent can be reconstructed via cross(normal, tangent.xyz) * tangent.w.
+ * To apply tangents to the mesh, either deindex and reindex it with the tangent stream, or copy tangents to existing vertex data while duplicating
+ * vertices with different tangent vectors (e.g. on UV mirror seams).
+ * Input can be indexed or unindexed (indices=NULL); this does not affect the resulting tangents, but indexed inputs are ~30% faster to process.
+ *
+ * result must contain enough space for the output tangent data (index_count*4 elements)
+ * indices can be NULL if the input is unindexed
+ * vertex_positions should have float3 position in the first 12 bytes of each vertex
+ * vertex_normals should have unit float3 normal in the first 12 bytes of each vertex
+ * vertex_uvs should have float2 texture coordinate in the first 8 bytes of each vertex
  */
 MESHOPTIMIZER_EXPERIMENTAL void meshopt_generateTangents(float* result, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_normals, size_t vertex_normals_stride, const float* vertex_uvs, size_t vertex_uvs_stride);
 
