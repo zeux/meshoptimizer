@@ -7,6 +7,7 @@
 
 // This work is based on:
 // Morten Mikkelsen. Simulation of wrinkled surfaces revisited. 2008
+// Matthias Teschner, Bruno Heidelberger, Matthias Mueller, Danat Pomeranets, Markus Gross. Optimized Spatial Hashing for Collision Detection of Deformable Objects. 2003
 // Cecil Hastings Jr. Approximations for digital computers. 1955
 namespace meshopt
 {
@@ -59,30 +60,6 @@ static void computeFaceTangents(Tangent* result, size_t triangle_count, const un
 	}
 }
 
-static unsigned int hashUpdate4(unsigned int h, const unsigned char* key, size_t len)
-{
-	// MurmurHash2
-	const unsigned int m = 0x5bd1e995;
-	const int r = 24;
-
-	while (len >= 4)
-	{
-		unsigned int k = *reinterpret_cast<const unsigned int*>(key);
-
-		k *= m;
-		k ^= k >> r;
-		k *= m;
-
-		h *= m;
-		h ^= k;
-
-		key += 4;
-		len -= 4;
-	}
-
-	return h;
-}
-
 struct VertexHasherF
 {
 	const float* vertex_positions;
@@ -94,16 +71,33 @@ struct VertexHasherF
 
 	size_t hash(unsigned int index) const
 	{
-		const float* p = vertex_positions + index * vertex_positions_stride_float;
-		const float* n = vertex_normals + index * vertex_normals_stride_float;
-		const float* t = vertex_uvs + index * vertex_uvs_stride_float;
+		const unsigned int* p = reinterpret_cast<const unsigned int*>(vertex_positions + index * vertex_positions_stride_float);
+		const unsigned int* n = reinterpret_cast<const unsigned int*>(vertex_normals + index * vertex_normals_stride_float);
+		const unsigned int* t = reinterpret_cast<const unsigned int*>(vertex_uvs + index * vertex_uvs_stride_float);
 
-		// TODO: use a simpler / more direct hash function + handle negative zero
-		unsigned int hash = 0;
-		hash = hashUpdate4(hash, reinterpret_cast<const unsigned char*>(p), 3 * sizeof(float));
-		hash = hashUpdate4(hash, reinterpret_cast<const unsigned char*>(n), 3 * sizeof(float));
-		hash = hashUpdate4(hash, reinterpret_cast<const unsigned char*>(t), 2 * sizeof(float));
-		return hash;
+		unsigned int x = p[0], y = p[1], z = p[2];
+
+		// replace negative zero with zero
+		x = (x == 0x80000000) ? 0 : x;
+		y = (y == 0x80000000) ? 0 : y;
+		z = (z == 0x80000000) ? 0 : z;
+
+		// scramble bits to make sure that integer coordinates have entropy in lower bits
+		x ^= x >> 17;
+		y ^= y >> 17;
+		z ^= z >> 17;
+
+		// mix in normal bits
+		x ^= (n[0] == 0x80000000) ? 0 : n[0] >> 15;
+		y ^= (n[1] == 0x80000000) ? 0 : n[1] >> 15;
+		z ^= (n[2] == 0x80000000) ? 0 : n[2] >> 15;
+
+		// collect texture coordinate bits (simplified -0 handling and scrambling)
+		unsigned int w = (t[0] ^ t[1]) & 0x7fffffff;
+		w ^= w >> 13;
+
+		// Optimized Spatial Hashing for Collision Detection of Deformable Objects
+		return (x * 73856093) ^ (y * 19349663) ^ (z * 83492791) ^ (w * 50331653);
 	}
 
 	bool equal(unsigned int lhs, unsigned int rhs) const
