@@ -173,29 +173,27 @@ static void buildVertexRemap(unsigned int* remap, const float* vertex_positions,
 
 struct CornerAdjacency
 {
-	unsigned int* counts;
 	unsigned int* offsets;
 	unsigned int* data;
 };
 
 static void buildCornerAdjacency(CornerAdjacency& adjacency, const unsigned int* indices, size_t index_count, const unsigned int* remap, size_t vertex_count, meshopt_Allocator& allocator)
 {
-	size_t face_count = index_count / 3;
-
-	// allocate arrays
-	adjacency.counts = allocator.allocate<unsigned int>(vertex_count);
-	adjacency.offsets = allocator.allocate<unsigned int>(vertex_count);
+	adjacency.offsets = allocator.allocate<unsigned int>(vertex_count + 1);
 	adjacency.data = allocator.allocate<unsigned int>(index_count);
 
-	// fill triangle counts
-	memset(adjacency.counts, 0, vertex_count * sizeof(unsigned int));
+	size_t face_count = index_count / 3;
+	unsigned int* offsets = adjacency.offsets + 1;
+
+	// fill corner counts
+	memset(offsets, 0, vertex_count * sizeof(unsigned int));
 
 	for (size_t i = 0; i < index_count; ++i)
 	{
 		unsigned int v = indices ? remap[indices[i]] : remap[i];
 		assert(v < vertex_count);
 
-		adjacency.counts[v]++;
+		offsets[v]++;
 	}
 
 	// fill offset table
@@ -203,8 +201,9 @@ static void buildCornerAdjacency(CornerAdjacency& adjacency, const unsigned int*
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		adjacency.offsets[i] = offset;
-		offset += adjacency.counts[i];
+		unsigned int count = offsets[i];
+		offsets[i] = offset;
+		offset += count;
 	}
 
 	assert(offset == index_count);
@@ -217,18 +216,14 @@ static void buildCornerAdjacency(CornerAdjacency& adjacency, const unsigned int*
 		unsigned int c = indices ? remap[indices[i * 3 + 2]] : remap[i * 3 + 2];
 
 		// encode corner index in the low 2 bits
-		adjacency.data[adjacency.offsets[a]++] = unsigned(i << 2) | 0;
-		adjacency.data[adjacency.offsets[b]++] = unsigned(i << 2) | 1;
-		adjacency.data[adjacency.offsets[c]++] = unsigned(i << 2) | 2;
+		adjacency.data[offsets[a]++] = unsigned(i << 2) | 0;
+		adjacency.data[offsets[b]++] = unsigned(i << 2) | 1;
+		adjacency.data[offsets[c]++] = unsigned(i << 2) | 2;
 	}
 
-	// fix offsets that have been disturbed by the previous pass
-	for (size_t i = 0; i < vertex_count; ++i)
-	{
-		assert(adjacency.offsets[i] >= adjacency.counts[i]);
-
-		adjacency.offsets[i] -= adjacency.counts[i];
-	}
+	// finalize offsets
+	adjacency.offsets[0] = 0;
+	assert(adjacency.offsets[vertex_count] == index_count);
 }
 
 static unsigned int follow2(unsigned int* parents, unsigned int index)
@@ -394,8 +389,8 @@ void meshopt_generateTangents(float* result, const unsigned int* indices, size_t
 		groupsign[i * 3 + 0] = groupsign[i * 3 + 1] = groupsign[i * 3 + 2] = (face_tangents[i].w > 0.f ? 1 : 0) | (face_tangents[i].w < 0.f ? 2 : 0);
 
 	for (size_t i = 0; i < vertex_count; ++i)
-		if (adjacency.counts[i])
-			mergeTangentGroups(groups, groupsign, adjacency.data + adjacency.offsets[i], adjacency.counts[i], indices, remap);
+		if (adjacency.offsets[i + 1] != adjacency.offsets[i])
+			mergeTangentGroups(groups, groupsign, adjacency.data + adjacency.offsets[i], adjacency.offsets[i + 1] - adjacency.offsets[i], indices, remap);
 
 	for (size_t i = 0; i < index_count; ++i)
 		groups[i] = follow2(groups, unsigned(i));
