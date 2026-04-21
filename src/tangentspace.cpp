@@ -366,7 +366,7 @@ MESHOPTIMIZER_EXPERIMENTAL void meshopt_generateTangents(float* result, const un
 	assert(index_count % 3 == 0);
 	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
 	assert(vertex_normals_stride >= 12 && vertex_normals_stride <= 256);
-	assert(vertex_uvs_stride >= 12 && vertex_uvs_stride <= 256);
+	assert(vertex_uvs_stride >= 8 && vertex_uvs_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0 && vertex_normals_stride % sizeof(float) == 0 && vertex_uvs_stride % sizeof(float) == 0);
 
 	meshopt_Allocator allocator;
@@ -417,10 +417,11 @@ MESHOPTIMIZER_EXPERIMENTAL void meshopt_generateTangents(float* result, const un
 			r[0] *= s;
 			r[1] *= s;
 			r[2] *= s;
+			r[0] = s == 0.f ? 1.f : r[0];     // for isolated degenerate triangles, use (1, 0, 0) tangent for consistency
 			r[3] = r[3] == 0.f ? -1.f : r[3]; // for isolated degenerate triangles, use orientation -1 for consistency
 		}
 
 	for (size_t i = 0; i < index_count; ++i)
 		if (groups[i] != i)
-			memcpy(&result[i * 4], &result[groups[i] * 4], sizeof(float) * 4);
+			memcpy(&result[i * 4], &result[size_t(groups[i]) * 4], sizeof(float) * 4);
 }
