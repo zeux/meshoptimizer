@@ -51,7 +51,7 @@ static void computeFaceTangents(Tangent* result, size_t triangle_count, const un
 		float rw = det == 0.f ? 0.f : (det > 0.f ? 1.f : -1.f);
 
 		float rl = sqrtf(rx * rx + ry * ry + rz * rz);
-		float rs = (det != 0.f && rl != 0.f) ? rw / rl : 0.f;
+		float rs = rl != 0.f ? rw / rl : 0.f;
 
 		result[i].x = rx * rs;
 		result[i].y = ry * rs;
@@ -193,6 +193,8 @@ static void buildCornerAdjacency(CornerAdjacency& adjacency, const unsigned int*
 	for (size_t i = 0; i < index_count; ++i)
 	{
 		unsigned int v = indices ? remap[indices[i]] : remap[i];
+		assert(v < vertex_count);
+
 		adjacency.counts[v]++;
 	}
 
@@ -207,13 +209,14 @@ static void buildCornerAdjacency(CornerAdjacency& adjacency, const unsigned int*
 
 	assert(offset == index_count);
 
-	// fill triangle data
+	// fill corner data
 	for (size_t i = 0; i < face_count; ++i)
 	{
 		unsigned int a = indices ? remap[indices[i * 3 + 0]] : remap[i * 3 + 0];
 		unsigned int b = indices ? remap[indices[i * 3 + 1]] : remap[i * 3 + 1];
 		unsigned int c = indices ? remap[indices[i * 3 + 2]] : remap[i * 3 + 2];
 
+		// encode corner index in the low 2 bits
 		adjacency.data[adjacency.offsets[a]++] = unsigned(i << 2) | 0;
 		adjacency.data[adjacency.offsets[b]++] = unsigned(i << 2) | 1;
 		adjacency.data[adjacency.offsets[c]++] = unsigned(i << 2) | 2;
@@ -323,7 +326,7 @@ static void accumulateTangentGroups(float* result, const unsigned int* groups, c
 			float sl = sqrtf(sx * sx + sy * sy + sz * sz);
 
 			// compute incident angle for weighting, in tangent plane
-			// note: this step is absent from the paper, and the implementation computes angle after projecting edges to tangent plane...
+			// note: this step is absent from the paper, reference implementation computes angle after projecting edges to tangent plane...
 			float dp1x = pb[0] - pa[0], dp1y = pb[1] - pa[1], dp1z = pb[2] - pa[2];
 			float dp2x = pc[0] - pa[0], dp2y = pc[1] - pa[1], dp2z = pc[2] - pa[2];
 
@@ -340,6 +343,7 @@ static void accumulateTangentGroups(float* result, const unsigned int* groups, c
 			float cosa = (dp1x * dp2x + dp1y * dp2y + dp1z * dp2z) * (dpl == 0.f ? 0.f : 1.f / dpl);
 			float angle = optacos(cosa); // optacos handles clamping to [-1..1]
 
+			// accumulate renormalized tangent weighted by angle
 			float w = angle * (sl == 0.f ? 0.f : 1.f / sl);
 
 			r[0] += sx * w;
