@@ -1388,6 +1388,24 @@ void coverage(const Mesh& mesh)
 	    cs.coverage[0] * 100, cs.coverage[1] * 100, cs.coverage[2] * 100, (end - start) * 1000);
 }
 
+void tangents(const Mesh& mesh)
+{
+	double start = timestamp();
+
+	// note: tangent generation produces a tangent vector and orientation (+-1) per *corner* (3 per triangle), even for indexed inputs
+	// you *could* then copy the tangents to the existing vertices, but that will not work correctly in case the input has UV mirroring
+	// the correct way to handle this is to deindex & reindex the mesh if you need correct results, or copy tangents to an existing vertex stream
+	// while duplicating vertices with divergent tangents on the fly.
+	// you also can pass unindexed data (indices==NULL) to meshopt_generateTangents directly, here we don't for simplicity
+	std::vector<float> tangents(mesh.indices.size() * 4);
+
+	meshopt_generateTangents(&tangents[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), &mesh.vertices[0].nx, sizeof(Vertex), &mesh.vertices[0].tx, sizeof(Vertex));
+
+	double end = timestamp();
+
+	printf("Tangents : %d corners in %.2f msec\n", int(mesh.indices.size()), (end - start) * 1000);
+}
+
 void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices); // nanite.cpp
 
 bool loadMesh(Mesh& mesh, const char* path)
@@ -1571,6 +1589,8 @@ void process(const char* path)
 
 	reindexFuzzy(mesh);
 	coverage(mesh);
+
+	tangents(mesh);
 
 	if (path)
 		processDeinterleaved(path);
