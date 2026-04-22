@@ -1433,6 +1433,9 @@ void processDeinterleaved(const char* path)
 
 	for (unsigned int i = 0; i < obj->face_count; ++i)
 	{
+		if (obj->face_vertices[i] <= 2)
+			continue;
+
 		for (unsigned int j = 0; j < obj->face_vertices[i]; ++j)
 		{
 			fastObjIndex gi = obj->indices[index_offset + j];
