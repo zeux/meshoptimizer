@@ -1388,22 +1388,74 @@ void coverage(const Mesh& mesh)
 	    cs.coverage[0] * 100, cs.coverage[1] * 100, cs.coverage[2] * 100, (end - start) * 1000);
 }
 
+struct VertexTangent
+{
+	float px, py, pz;
+	float nx, ny, nz;
+	float tu, tv;
+	float tx, ty, tz, tw;
+};
+
 void tangents(const Mesh& mesh)
 {
 	double start = timestamp();
 
 	// note: tangent generation produces a tangent vector and orientation (+-1) per *corner* (3 per triangle), even for indexed inputs
 	// you *could* then copy the tangents to the existing vertices, but that will not work correctly in case the input has UV mirroring
-	// the correct way to handle this is to deindex & reindex the mesh if you need correct results, or copy tangents to an existing vertex stream
-	// while duplicating vertices with divergent tangents on the fly.
-	// you also can pass unindexed data (indices==NULL) to meshopt_generateTangents directly, here we don't for simplicity
+	// a simple way to handle this is to work on unindexed data (indices==NULL), generate tangents, and re-index
+	// we show a more involved way that splits vertices with divergent tangents on the fly.
 	std::vector<float> tangents(mesh.indices.size() * 4);
 
 	meshopt_generateTangents(&tangents[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), &mesh.vertices[0].nx, sizeof(Vertex), &mesh.vertices[0].tx, sizeof(Vertex));
 
+	std::vector<VertexTangent> newvertices(mesh.vertices.size());
+	std::vector<unsigned int> newindices = mesh.indices;
+	std::vector<unsigned int> splits(mesh.vertices.size(), ~0u);
+
+	for (size_t i = 0; i < mesh.vertices.size(); ++i)
+	{
+		VertexTangent& vt = newvertices[i];
+		const Vertex& v = mesh.vertices[i];
+
+		vt.px = v.px, vt.py = v.py, vt.pz = v.pz;
+		vt.nx = v.nx, vt.ny = v.ny, vt.nz = v.nz;
+		vt.tu = v.tx, vt.tv = v.ty;
+		// leave vt.txyzw as 0 as we'll fill them below
+	}
+
+	for (size_t i = 0; i < mesh.indices.size(); ++i)
+	{
+		const float* t = &tangents[i * 4];
+		unsigned int v = mesh.indices[i];
+
+		// initial tangent value
+		if (newvertices[v].tw == 0.f)
+			newvertices[v].tx = t[0], newvertices[v].ty = t[1], newvertices[v].tz = t[2], newvertices[v].tw = t[3];
+		else if (newvertices[v].tx != t[0] || newvertices[v].ty != t[1] || newvertices[v].tz != t[2] || newvertices[v].tw != t[3])
+		{
+			// tangent split; we might be able to reuse previously split vertices, or might need to add a new one
+			unsigned int sv = splits[v];
+			while (sv != ~0u && (newvertices[sv].tx != t[0] || newvertices[sv].ty != t[1] || newvertices[sv].tz != t[2] || newvertices[sv].tw != t[3]))
+				sv = splits[sv];
+
+			// need to add a new split and chain it to the existing list
+			if (sv == ~0u)
+			{
+				sv = unsigned(newvertices.size());
+				newvertices.push_back(newvertices[v]);
+				newvertices[sv].tx = t[0], newvertices[sv].ty = t[1], newvertices[sv].tz = t[2], newvertices[sv].tw = t[3];
+
+				splits.push_back(splits[v]);
+				splits[v] = sv;
+			}
+
+			newindices[i] = sv;
+		}
+	}
+
 	double end = timestamp();
 
-	printf("Tangents : %d corners in %.2f msec\n", int(mesh.indices.size()), (end - start) * 1000);
+	printf("Tangents : %d corners, %d splits in %.2f msec\n", int(mesh.indices.size()), int(newvertices.size() - mesh.vertices.size()), (end - start) * 1000);
 }
 
 void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices); // nanite.cpp
@@ -1602,9 +1654,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	encodeMeshlets(mesh, 32, 48);
-	encodeMeshlets(mesh, 64, 64);
-	encodeMeshlets(mesh, 64, 96);
+	tangents(mesh);
 }
 
 void processNanite(const char* path)
