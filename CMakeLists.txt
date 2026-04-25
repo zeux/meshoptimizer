@@ -42,6 +42,7 @@ set(SOURCES
     src/simplifier.cpp
     src/spatialorder.cpp
     src/stripifier.cpp
+    src/tangentspace.cpp
     src/vcacheoptimizer.cpp
     src/vertexcodec.cpp
     src/vertexfilter.cpp
