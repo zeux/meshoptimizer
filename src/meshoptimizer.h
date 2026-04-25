@@ -1054,6 +1054,8 @@ template <typename T>
 inline size_t meshopt_partitionClusters(unsigned int* destination, const T* cluster_indices, size_t total_index_count, const unsigned int* cluster_index_counts, size_t cluster_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_partition_size);
 template <typename T>
 inline void meshopt_spatialSortTriangles(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
+template <typename T>
+inline void meshopt_generateTangents(float* result, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_normals, size_t vertex_normals_stride, const float* vertex_uvs, size_t vertex_uvs_stride);
 #endif
 
 /* Inline implementation */
@@ -1543,6 +1545,14 @@ inline void meshopt_spatialSortTriangles(T* destination, const T* indices, size_
 	meshopt_IndexAdapter<T> out(destination, NULL, index_count);
 
 	meshopt_spatialSortTriangles(out.data, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride);
+}
+
+template <typename T>
+inline void meshopt_generateTangents(float* result, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_normals, size_t vertex_normals_stride, const float* vertex_uvs, size_t vertex_uvs_stride)
+{
+	meshopt_IndexAdapter<T> in(NULL, indices, indices ? index_count : 0);
+
+	meshopt_generateTangents(result, indices ? in.data : NULL, index_count, vertex_positions, vertex_count, vertex_positions_stride, vertex_normals, vertex_normals_stride, vertex_uvs, vertex_uvs_stride);
 }
 #endif
 
