@@ -911,7 +911,7 @@ enum
 
 /**
  * Experimental: Tangent space generator
- * Computes per-corner tangent vectors following the MikkTSpace algorithm; for each corner, computes normalized tangent vector (xyz) and orientation (w, +/-1).
+ * Computes per-corner tangent vectors; for each corner, computes normalized tangent vector (xyz) and orientation (w, +/-1).
  * Bitangent can be reconstructed via cross(normal, tangent.xyz) * tangent.w.
  * To apply tangents to the mesh, either deindex and reindex it with the tangent stream, or copy tangents to existing vertex data while duplicating
  * vertices with different tangent vectors (e.g. on UV mirror seams).
