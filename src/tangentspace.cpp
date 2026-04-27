@@ -238,38 +238,54 @@ static unsigned int follow2(unsigned int* parents, unsigned int index)
 	return index;
 }
 
-static void mergeTangentGroups(unsigned int* groups, unsigned char* groupsign, const unsigned int* data, size_t count, const unsigned int* indices, const unsigned int* remap)
+static void mergeTangentGroups(unsigned int* groups, unsigned int* facegroups, unsigned char* facesign, const unsigned int* data, size_t count, const unsigned int* indices, const unsigned int* remap)
 {
 	static const int next[4] = {1, 2, 0, 1};
 
 	for (size_t i = 0; i < count; ++i)
 	{
-		unsigned int cib = (data[i] >> 2) * 3 + next[(data[i] & 3) + 0];
-		unsigned int cic = (data[i] >> 2) * 3 + next[(data[i] & 3) + 1];
+		unsigned int ti = data[i] >> 2;
+		unsigned int cib = ti * 3 + next[(data[i] & 3) + 0];
+		unsigned int cic = ti * 3 + next[(data[i] & 3) + 1];
 
 		unsigned int nib = indices ? remap[indices[cib]] : remap[cib];
 		unsigned int nic = indices ? remap[indices[cic]] : remap[cic];
 
 		for (size_t j = i + 1; j < count; ++j)
 		{
-			unsigned int cjb = (data[j] >> 2) * 3 + next[(data[j] & 3) + 0];
-			unsigned int cjc = (data[j] >> 2) * 3 + next[(data[j] & 3) + 1];
+			unsigned int tj = data[j] >> 2;
+			unsigned int cjb = tj * 3 + next[(data[j] & 3) + 0];
+			unsigned int cjc = tj * 3 + next[(data[j] & 3) + 1];
 
 			unsigned int njb = indices ? remap[indices[cjb]] : remap[cjb];
 			unsigned int njc = indices ? remap[indices[cjc]] : remap[cjc];
 
 			// merge tangent groups if triangles are adjacent and orientations agree or either one is degenerate
-			if (njb == nic || njc == nib)
+			if ((njb == nic || njc == nib) && (facesign[ti] | facesign[tj]) != 3)
 			{
-				unsigned int gi = follow2(groups, (data[i] >> 2) * 3 + (data[i] & 3));
-				unsigned int gj = follow2(groups, (data[j] >> 2) * 3 + (data[j] & 3));
-
-				// note, we track signs per group to ensure that we can't merge groups with opposite orientation through a degen bridge
-				if (gi != gj && (groupsign[gi] | groupsign[gj]) != 3)
+				// if either triangle is degenerate, it could have been assigned to a concrete orientation; we need to confirm that via facegroups
+				if ((facesign[ti] & facesign[tj]) == 0)
 				{
-					groups[gj] = gi;
-					groupsign[gi] |= groupsign[gj];
+					unsigned int gti = follow2(facegroups, ti);
+					unsigned int gtj = follow2(facegroups, tj);
+
+					// skip merge if orientations diverge; otherwise, union the groups with gti as the root
+					if (gti != gtj)
+					{
+						if ((facesign[gti] | facesign[gtj]) == 3)
+							continue;
+
+						facegroups[gtj] = gti;
+						facesign[gti] |= facesign[gtj];
+					}
 				}
+
+				// union tangent groups for individual corners with gi as the root; the orientations must match due to facegroups check above
+				unsigned int gi = follow2(groups, ti * 3 + (data[i] & 3));
+				unsigned int gj = follow2(groups, tj * 3 + (data[j] & 3));
+
+				if (gi != gj)
+					groups[gj] = gi;
 			}
 		}
 	}
@@ -344,7 +360,6 @@ static void accumulateTangentGroups(float* result, const unsigned int* groups, c
 			r[0] += sx * w;
 			r[1] += sy * w;
 			r[2] += sz * w;
-			r[3] = t.w;
 		}
 	}
 }
@@ -383,14 +398,19 @@ void meshopt_generateTangents(float* result, const unsigned int* indices, size_t
 	for (size_t i = 0; i < index_count; ++i)
 		groups[i] = unsigned(i);
 
-	// each group must only contain triangles with the same orientation; to simplify accounting we store signs as a bitmask
-	unsigned char* groupsign = allocator.allocate<unsigned char>(index_count);
+	// compute per-face orientation groups: degenerate triangles are merged with adjacent non-degenerate ones and inherit their orientation, stored as a bitmask
+	unsigned int* facegroups = allocator.allocate<unsigned int>(face_count);
+	unsigned char* facesign = allocator.allocate<unsigned char>(face_count);
+
 	for (size_t i = 0; i < face_count; ++i)
-		groupsign[i * 3 + 0] = groupsign[i * 3 + 1] = groupsign[i * 3 + 2] = (face_tangents[i].w > 0.f ? 1 : 0) | (face_tangents[i].w < 0.f ? 2 : 0);
+	{
+		facegroups[i] = unsigned(i);
+		facesign[i] = (face_tangents[i].w > 0.f ? 1 : 0) | (face_tangents[i].w < 0.f ? 2 : 0);
+	}
 
 	for (size_t i = 0; i < vertex_count; ++i)
 		if (adjacency.offsets[i + 1] != adjacency.offsets[i])
-			mergeTangentGroups(groups, groupsign, adjacency.data + adjacency.offsets[i], adjacency.offsets[i + 1] - adjacency.offsets[i], indices, remap);
+			mergeTangentGroups(groups, facegroups, facesign, adjacency.data + adjacency.offsets[i], adjacency.offsets[i + 1] - adjacency.offsets[i], indices, remap);
 
 	for (size_t i = 0; i < index_count; ++i)
 		groups[i] = follow2(groups, unsigned(i));
@@ -399,7 +419,16 @@ void meshopt_generateTangents(float* result, const unsigned int* indices, size_t
 	memset(result, 0, index_count * sizeof(float) * 4);
 	accumulateTangentGroups(result, groups, indices, index_count, remap, face_tangents, vertex_positions, vertex_positions_stride, vertex_normals, vertex_normals_stride);
 
-	// finalize tangents by normalizing roots and propagating the rest
+	// finalize tangent signs for each face using facegroups
+	for (size_t i = 0; i < face_count; ++i)
+	{
+		unsigned int fg = follow2(facegroups, unsigned(i));
+		float w = (facesign[fg] & 1) ? 1.f : -1.f; // note: if face is degenerate, we canonicalize to -1 for consistency
+
+		result[(i * 3 + 0) * 4 + 3] = result[(i * 3 + 1) * 4 + 3] = result[(i * 3 + 2) * 4 + 3] = w;
+	}
+
+	// finalize tangent vectors by normalizing roots and propagating the rest
 	for (size_t i = 0; i < index_count; ++i)
 		if (groups[i] == i)
 		{
@@ -410,11 +439,10 @@ void meshopt_generateTangents(float* result, const unsigned int* indices, size_t
 			r[0] *= s;
 			r[1] *= s;
 			r[2] *= s;
-			r[0] = s == 0.f ? 1.f : r[0];     // for isolated degenerate triangles, use (1, 0, 0) tangent for consistency
-			r[3] = r[3] == 0.f ? -1.f : r[3]; // for isolated degenerate triangles, use orientation -1 for consistency
+			r[0] = s == 0.f ? 1.f : r[0]; // for isolated degenerate triangles, use (1, 0, 0) tangent for consistency
 		}
 
 	for (size_t i = 0; i < index_count; ++i)
 		if (groups[i] != i)
-			memcpy(&result[i * 4], &result[size_t(groups[i]) * 4], sizeof(float) * 4);
+			memcpy(&result[i * 4], &result[size_t(groups[i]) * 4], sizeof(float) * 3); // .w was set per face earlier
 }
