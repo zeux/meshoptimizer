@@ -301,7 +301,7 @@ inline float optacos(float x)
 	return x < 0.f ? 3.1415926f - r : r;
 }
 
-static void accumulateTangentGroups(float* result, const unsigned int* groups, const unsigned int* indices, size_t index_count, const unsigned int* remap, const Tangent* face_tangents, const float* vertex_positions, size_t vertex_positions_stride, const float* vertex_normals, size_t vertex_normals_stride)
+static void accumulateTangentGroups(float* result, const unsigned int* groups, const unsigned int* indices, size_t index_count, const unsigned int* remap, const Tangent* face_tangents, const float* vertex_positions, size_t vertex_positions_stride, const float* vertex_normals, size_t vertex_normals_stride, unsigned int options)
 {
 	static const int next[4] = {1, 2, 0, 1};
 
@@ -357,6 +357,10 @@ static void accumulateTangentGroups(float* result, const unsigned int* groups, c
 			// accumulate renormalized tangent weighted by angle
 			float w = angle * (sl == 0.f ? 0.f : 1.f / sl);
 
+			// weight larger adjacent triangles more to reduce interpolation artifacts from slivers; this deviates from reference implementation for higher quality
+			if ((options & meshopt_TangentCompatible) == 0)
+				w *= dpl;
+
 			r[0] += sx * w;
 			r[1] += sy * w;
 			r[2] += sz * w;
@@ -366,7 +370,7 @@ static void accumulateTangentGroups(float* result, const unsigned int* groups, c
 
 } // namespace meshopt
 
-void meshopt_generateTangents(float* result, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_normals, size_t vertex_normals_stride, const float* vertex_uvs, size_t vertex_uvs_stride)
+void meshopt_generateTangents(float* result, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_normals, size_t vertex_normals_stride, const float* vertex_uvs, size_t vertex_uvs_stride, unsigned int options)
 {
 	using namespace meshopt;
 
@@ -417,7 +421,7 @@ void meshopt_generateTangents(float* result, const unsigned int* indices, size_t
 
 	// accumulate tangents into their own respective groups
 	memset(result, 0, index_count * sizeof(float) * 4);
-	accumulateTangentGroups(result, groups, indices, index_count, remap, face_tangents, vertex_positions, vertex_positions_stride, vertex_normals, vertex_normals_stride);
+	accumulateTangentGroups(result, groups, indices, index_count, remap, face_tangents, vertex_positions, vertex_positions_stride, vertex_normals, vertex_normals_stride, options);
 
 	// finalize tangent signs for each face using facegroups
 	for (size_t i = 0; i < face_count; ++i)
