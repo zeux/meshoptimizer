@@ -50,6 +50,11 @@ static void computeFaceTangents(Tangent* result, size_t triangle_count, const un
 		float det = dt1x * dt2y - dt1y * dt2x;
 		float rw = det == 0.f ? 0.f : (det > 0.f ? 1.f : -1.f);
 
+		// treat zero area triangles as degenerate even if their UVs aren't for consistency
+		rw = (pa[0] == pb[0] && pa[1] == pb[1] && pa[2] == pb[2]) ? 0.f : rw;
+		rw = (pa[0] == pc[0] && pa[1] == pc[1] && pa[2] == pc[2]) ? 0.f : rw;
+		rw = (pb[0] == pc[0] && pb[1] == pc[1] && pb[2] == pc[2]) ? 0.f : rw;
+
 		float rl = sqrtf(rx * rx + ry * ry + rz * rz);
 		float rs = rl != 0.f ? rw / rl : 0.f;
 
