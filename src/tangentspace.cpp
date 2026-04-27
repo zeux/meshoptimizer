@@ -448,7 +448,9 @@ void meshopt_generateTangents(float* result, const unsigned int* indices, size_t
 			r[0] *= s;
 			r[1] *= s;
 			r[2] *= s;
-			r[0] = s == 0.f ? 1.f : r[0]; // for isolated degenerate triangles, use (1, 0, 0) tangent for consistency
+
+			if ((options & meshopt_TangentZeroFallback) == 0)
+				r[0] = s == 0.f ? 1.f : r[0]; // for isolated degenerate triangles, use (1, 0, 0) tangent for consistency
 		}
 
 	for (size_t i = 0; i < index_count; ++i)

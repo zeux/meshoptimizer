@@ -899,12 +899,14 @@ MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_opacityMapEntrySize(int level, int sta
 MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_opacityMapCompact(unsigned char* data, size_t data_size, unsigned char* levels, unsigned int* offsets, size_t omm_count, int* omm_indices, size_t triangle_count, int states);
 
 /**
- * Experimental: tangent generation options
+ * Tangent generation options
  */
 enum
 {
 	/* Produce tangents compatible with MikkTSpace (same weighting and fallbacks) at the cost of reduced quality. Not recommended unless normal maps are baked. */
 	meshopt_TangentCompatible = 1 << 0,
+	/* Experimental: For vertices only connected to degenerate triangles, output zero tangents instead of an arbitrary fallback.  */
+	meshopt_TangentZeroFallback = 1 << 1,
 };
 
 /**
