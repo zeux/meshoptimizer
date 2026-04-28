@@ -1410,8 +1410,8 @@ void tangents(const Mesh& mesh)
 
 	std::vector<VertexTangent> newvertices(mesh.vertices.size());
 	std::vector<unsigned int> newindices = mesh.indices;
-	std::vector<unsigned int> splits(mesh.vertices.size(), ~0u);
 
+	// copy positions/normals/UVs (Vertex has no tangent field, so we use VertexTangent)
 	for (size_t i = 0; i < mesh.vertices.size(); ++i)
 	{
 		VertexTangent& vt = newvertices[i];
@@ -1420,37 +1420,38 @@ void tangents(const Mesh& mesh)
 		vt.px = v.px, vt.py = v.py, vt.pz = v.pz;
 		vt.nx = v.nx, vt.ny = v.ny, vt.nz = v.nz;
 		vt.tu = v.tx, vt.tv = v.ty;
-		// leave vt.txyzw as 0 as we'll fill them below
 	}
+
+	// seed each vertex with one of its corner tangents; the loop below fixes any mismatches
+	for (size_t i = 0; i < mesh.indices.size(); ++i)
+	{
+		VertexTangent& vt = newvertices[mesh.indices[i]];
+		const float* t = &tangents[i * 4];
+		vt.tx = t[0], vt.ty = t[1], vt.tz = t[2], vt.tw = t[3];
+	}
+
+	std::vector<unsigned int> splits(mesh.vertices.size(), ~0u);
 
 	for (size_t i = 0; i < mesh.indices.size(); ++i)
 	{
 		const float* t = &tangents[i * 4];
 		unsigned int v = mesh.indices[i];
 
-		// initial tangent value
-		if (newvertices[v].tw == 0.f)
-			newvertices[v].tx = t[0], newvertices[v].ty = t[1], newvertices[v].tz = t[2], newvertices[v].tw = t[3];
-		else if (newvertices[v].tx != t[0] || newvertices[v].ty != t[1] || newvertices[v].tz != t[2] || newvertices[v].tw != t[3])
+		// walk the chain of split copies looking for a vertex whose tangent matches
+		while (v != ~0u && (newvertices[v].tx != t[0] || newvertices[v].ty != t[1] || newvertices[v].tz != t[2] || newvertices[v].tw != t[3]))
+			v = splits[v];
+
+		// no match in chain: append a new split copy with the target tangent and chain it
+		if (v == ~0u)
 		{
-			// tangent split; we might be able to reuse previously split vertices, or might need to add a new one
-			unsigned int sv = splits[v];
-			while (sv != ~0u && (newvertices[sv].tx != t[0] || newvertices[sv].ty != t[1] || newvertices[sv].tz != t[2] || newvertices[sv].tw != t[3]))
-				sv = splits[sv];
-
-			// need to add a new split and chain it to the existing list
-			if (sv == ~0u)
-			{
-				sv = unsigned(newvertices.size());
-				newvertices.push_back(newvertices[v]);
-				newvertices[sv].tx = t[0], newvertices[sv].ty = t[1], newvertices[sv].tz = t[2], newvertices[sv].tw = t[3];
-
-				splits.push_back(splits[v]);
-				splits[v] = sv;
-			}
-
-			newindices[i] = sv;
+			v = unsigned(newvertices.size());
+			newvertices.push_back(newvertices[mesh.indices[i]]);
+			newvertices[v].tx = t[0], newvertices[v].ty = t[1], newvertices[v].tz = t[2], newvertices[v].tw = t[3];
+			splits.push_back(splits[mesh.indices[i]]);
+			splits[mesh.indices[i]] = v;
 		}
+
+		newindices[i] = v;
 	}
 
 	double end = timestamp();
