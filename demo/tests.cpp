@@ -3123,6 +3123,60 @@ static void opacityMapSpecial()
 	}
 }
 
+static void tangentDegenerate()
+{
+	struct Vertex
+	{
+		float px, py, pz;
+		float nx, ny, nz;
+		float tx, ty;
+	};
+
+	const Vertex vertices[] = {
+	    {0, 0, 0, 0, 0, 1, 0, 0},
+	    {1, 1, 0, 0, 0, 1, 1, 1},
+	    {2, 2, 0, 0, 0, 1, 2, 2},
+	    {-1, -2, 1, 0, 0, 1, 0, -2},
+	    {0, 1, 1, 0, 0, 1, 1, 0},
+	    {-1, 0, 0, 0, 0, 1, 1, 0},
+	};
+
+	const unsigned int indices[] = {
+	    0, 3, 1, // outer, positive
+	    0, 1, 2, // inner, degenerate UVs
+	    1, 4, 2, // outer, positive
+	    2, 5, 0, // outer, negative
+	};
+
+	float tangents[12 * 4];
+	meshopt_generateTangents(tangents, indices, 12, &vertices[0].px, 6, sizeof(Vertex), &vertices[0].nx, sizeof(Vertex), &vertices[0].tx, sizeof(Vertex), meshopt_TangentCompatible);
+
+	const float vx = 0.0836f;
+	const float vy = 0.9965f;
+	const float expected[12][4] = {
+	    // outer, positive
+	    {1.f, 0.f, 0.f, 1.f}, // 0
+	    {1.f, 0.f, 0.f, 1.f}, // 3
+	    {vx, vy, 0.f, 1.f},   // 1
+	    // inner, degenerate UVs
+	    {1.f, 0.f, 0.f, 1.f}, // 0
+	    {vx, vy, 0.f, 1.f},   // 1
+	    {0.f, 1.f, 0.f, 1.f}, // 2
+	    // outer, positive
+	    {vx, vy, 0.f, 1.f},   // 1
+	    {0.f, 1.f, 0.f, 1.f}, // 4
+	    {0.f, 1.f, 0.f, 1.f}, // 2
+	    // outer, negative
+	    {-1.f, 0.f, 0.f, -1.f}, // 2 (split)
+	    {-1.f, 0.f, 0.f, -1.f}, // 5
+	    {-1.f, 0.f, 0.f, -1.f}, // 0 (split)
+	};
+
+	for (size_t i = 0; i < 12; ++i)
+		for (size_t k = 0; k < 4; ++k)
+			assert(fabsf(tangents[i * 4 + k] - expected[i][k]) < 1e-3f);
+}
+
 void runTests()
 {
 	decodeIndexV0();
@@ -3254,4 +3308,6 @@ void runTests()
 	opacityMap();
 	opacityMapRasterize0();
 	opacityMapSpecial();
+
+	tangentDegenerate();
 }
