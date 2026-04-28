@@ -801,14 +801,44 @@ When using 4-state OMMs, rasterization code produces both unknown-transparent an
 Meshes that use tangent space normal maps often require per-vertex tangent vectors in addition to normals. These could be exported alongside mesh data, but this library also provides an algorithm similar to MikkTSpace that can generate them from positions, normals and texture coordinates:
 
 ```c++
-std::vector<float> tangents(indices.size() * 4);
-meshopt_generateTangents(&tangents[0], &indices[0], indices.size(),
+std::vector<vec4> tangents(indices.size());
+meshopt_generateTangents(&tangents[0].x, &indices[0], indices.size(),
     &vertices[0].px, vertices.size(), sizeof(Vertex), &vertices[0].nx, sizeof(Vertex), &vertices[0].tx, sizeof(Vertex));
 ```
 
 For each triangle *corner* this writes a normalized tangent vector (xyz) and an orientation sign (+-1); the bitangent can be reconstructed in the shader as `cross(normal, tangent.xyz) * tangent.w`. Note that some coordinate space conventions that flip V direction in the texture space require negating orientation sign. The input can be indexed, as in the example above, or not (`indices=NULL`); this does not affect the output tangents.
 
 Because tangents are computed per corner, applying them to mesh vertices requires de-indexing the mesh and generating a new index/vertex buffer afterwards (see `Indexing` section earlier), or using indexed data and copying tangents to existing vertex data while duplicating vertices with different tangents (see `tangents` example in `demo/main.cpp`). With the indexed input, if it contains UV mirroring, vertices along the mirror edge may have different tangent spaces on different sides of the edge and need to be split - copying tangents to existing vertex data without splitting will not produce correct results.
+
+If splitting is required, it can be efficiently done with an extra pass and an index list per vertex:
+
+```c++
+// seed each vertex with one of its corner tangents; the loop below fixes any mismatches
+for (size_t i = 0; i < indices.size(); ++i)
+    vertices[indices[i]].tangent = tangents[i];
+
+std::vector<unsigned int> splits(vertices.size(), ~0u);
+
+for (size_t i = 0; i < indices.size(); ++i)
+{
+    // walk the chain of split copies looking for a vertex whose tangent matches
+    unsigned int v = indices[i];
+    while (v != ~0u && vertices[v].tangent != tangents[i])
+        v = splits[v];
+
+    // no match in chain: append a new split copy with the target tangent and chain it
+    if (v == ~0u)
+    {
+        v = unsigned(vertices.size());
+        vertices.push_back(vertices[indices[i]]);
+        vertices[v].tangent = tangents[i];
+        splits.push_back(splits[indices[i]]);
+        splits[indices[i]] = v;
+    }
+
+    indices[i] = v;
+}
+```
 
 The algorithm uses a MikkTSpace-like construction but by default, uses a modified weighting scheme that significantly improves tangent quality around beveled regions in the mesh. If the normal maps are baked from higher resolution geometry using MikkTSpace weighting, it's possible to produce MikkTSpace-compatible tangents by passing `meshopt_TangentCompatible` option as an extra argument to the function.
 
