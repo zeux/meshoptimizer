@@ -640,6 +640,92 @@ void filterStreams(Mesh& mesh, const MaterialInfo& mi)
 	mesh.streams.resize(write);
 }
 
+static int getTangentTexcoord(const cgltf_material* material)
+{
+	if (material->normal_texture.texture)
+		return material->normal_texture.texcoord;
+	if (material->has_clearcoat && material->clearcoat.clearcoat_normal_texture.texture)
+		return material->clearcoat.clearcoat_normal_texture.texcoord;
+	if (material->has_anisotropy && material->anisotropy.anisotropy_texture.texture)
+		return material->anisotropy.anisotropy_texture.texcoord;
+	return 0;
+}
+
+static Stream& prepareTangentStream(Mesh& mesh, size_t vertex_count)
+{
+	// remove existing tangent streams, if any
+	// in particular removes morph target streams as we don't support morph tangent generation
+	for (size_t i = 0; i < mesh.streams.size();)
+		if (mesh.streams[i].type == cgltf_attribute_type_tangent)
+			mesh.streams.erase(mesh.streams.begin() + i);
+		else
+			++i;
+
+	mesh.streams.push_back(Stream());
+
+	Stream& tangent = mesh.streams.back();
+	tangent.type = cgltf_attribute_type_tangent;
+	tangent.data.resize(vertex_count);
+
+	return tangent;
+}
+
+void generateTangents(Mesh& mesh)
+{
+	if (mesh.type != cgltf_primitive_type_triangles || mesh.indices.empty() || !mesh.material)
+		return;
+
+	int texcoord = getTangentTexcoord(mesh.material);
+	Stream* positions = getStream(mesh, cgltf_attribute_type_position);
+	Stream* normals = getStream(mesh, cgltf_attribute_type_normal);
+	Stream* uvs = getStream(mesh, cgltf_attribute_type_texcoord, texcoord);
+
+	if (!positions || !normals || !uvs)
+		return;
+
+	size_t vertex_count = positions->data.size();
+	assert(normals->data.size() == vertex_count && uvs->data.size() == vertex_count);
+
+	std::vector<Attr> tangents(mesh.indices.size());
+	meshopt_generateTangents(tangents[0].f, mesh.indices.data(), mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), normals->data[0].f, sizeof(Attr), uvs->data[0].f, sizeof(Attr), 0);
+
+	// note: potentially invalidates positions/normals/uvs but we no longer use these
+	Stream& tangent = prepareTangentStream(mesh, vertex_count);
+
+	// seed each vertex with one of its corner tangents; the loop below fixes any mismatches
+	for (size_t i = 0; i < mesh.indices.size(); ++i)
+		tangent.data[mesh.indices[i]] = tangents[i];
+
+	std::vector<unsigned int> splits(vertex_count, ~0u);
+
+	for (size_t i = 0; i < mesh.indices.size(); ++i)
+	{
+		const Attr& t = tangents[i];
+		unsigned int v = mesh.indices[i];
+		unsigned int sv = v;
+
+		// walk the chain of split copies looking for a vertex whose tangent matches
+		while (sv != ~0u && !(tangent.data[sv].f[0] == t.f[0] && tangent.data[sv].f[1] == t.f[1] && tangent.data[sv].f[2] == t.f[2] && tangent.data[sv].f[3] == t.f[3]))
+			sv = splits[sv];
+
+		// no match in chain: append a new split copy with the target tangent and chain it
+		if (sv == ~0u)
+		{
+			sv = unsigned(tangent.data.size());
+
+			for (Stream& stream : mesh.streams)
+				stream.data.push_back(stream.data[v]);
+
+			tangent.data[sv] = t;
+
+			splits.push_back(splits[v]);
+			splits[v] = sv;
+		}
+
+		mesh.indices[i] = sv;
+	}
+}
+
 struct QuantizedTBN
 {
 	int8_t nx, ny, nz, nw;
