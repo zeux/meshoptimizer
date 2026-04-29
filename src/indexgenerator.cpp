@@ -1,5 +1,6 @@
 // This file is part of meshoptimizer library; see meshoptimizer.h for version/license details
 #include "meshoptimizer.h"
+#include "meshoptimizer_internal.h"
 
 #include <assert.h>
 #include <string.h>
@@ -10,30 +11,6 @@
 // John Hable. Variable Rate Shading with Visibility Buffer Rendering. 2024
 namespace meshopt
 {
-
-static unsigned int hashUpdate4(unsigned int h, const unsigned char* key, size_t len)
-{
-	// MurmurHash2
-	const unsigned int m = 0x5bd1e995;
-	const int r = 24;
-
-	while (len >= 4)
-	{
-		unsigned int k = *reinterpret_cast<const unsigned int*>(key);
-
-		k *= m;
-		k ^= k >> r;
-		k *= m;
-
-		h *= m;
-		h ^= k;
-
-		key += 4;
-		len -= 4;
-	}
-
-	return h;
-}
 
 struct VertexHasher
 {
@@ -101,18 +78,7 @@ struct VertexCustomHasher
 
 		unsigned int x = key[0], y = key[1], z = key[2];
 
-		// replace negative zero with zero
-		x = (x == 0x80000000) ? 0 : x;
-		y = (y == 0x80000000) ? 0 : y;
-		z = (z == 0x80000000) ? 0 : z;
-
-		// scramble bits to make sure that integer coordinates have entropy in lower bits
-		x ^= x >> 17;
-		y ^= y >> 17;
-		z ^= z >> 17;
-
-		// Optimized Spatial Hashing for Collision Detection of Deformable Objects
-		return (x * 73856093) ^ (y * 19349663) ^ (z * 83492791);
+		return hashSpatial3(x, y, z);
 	}
 
 	bool equal(unsigned int lhs, unsigned int rhs) const
@@ -165,42 +131,6 @@ struct EdgeHasher
 		return remap[l0] == remap[r0] && remap[l1] == remap[r1];
 	}
 };
-
-static size_t hashBuckets(size_t count)
-{
-	size_t buckets = 1;
-	while (buckets < count + count / 4)
-		buckets *= 2;
-
-	return buckets;
-}
-
-template <typename T, typename Hash>
-static T* hashLookup(T* table, size_t buckets, const Hash& hash, const T& key, const T& empty)
-{
-	assert(buckets > 0);
-	assert((buckets & (buckets - 1)) == 0);
-
-	size_t hashmod = buckets - 1;
-	size_t bucket = hash.hash(key) & hashmod;
-
-	for (size_t probe = 0; probe <= hashmod; ++probe)
-	{
-		T& item = table[bucket];
-
-		if (item == empty)
-			return &item;
-
-		if (hash.equal(item, key))
-			return &item;
-
-		// hash collision, quadratic probing
-		bucket = (bucket + probe + 1) & hashmod;
-	}
-
-	assert(false && "Hash table is full"); // unreachable
-	return NULL;
-}
 
 static void buildPositionRemap(unsigned int* remap, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, meshopt_Allocator& allocator)
 {

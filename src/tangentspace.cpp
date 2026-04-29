@@ -1,5 +1,6 @@
 // This file is part of meshoptimizer library; see meshoptimizer.h for version/license details
 #include "meshoptimizer.h"
+#include "meshoptimizer_internal.h"
 
 #include <assert.h>
 #include <math.h>
@@ -80,17 +81,7 @@ struct VertexHasherF
 		const unsigned int* n = reinterpret_cast<const unsigned int*>(vertex_normals + index * vertex_normals_stride_float);
 		const unsigned int* t = reinterpret_cast<const unsigned int*>(vertex_uvs + index * vertex_uvs_stride_float);
 
-		unsigned int x = p[0], y = p[1], z = p[2];
-
-		// replace negative zero with zero
-		x = (x == 0x80000000) ? 0 : x;
-		y = (y == 0x80000000) ? 0 : y;
-		z = (z == 0x80000000) ? 0 : z;
-
-		// scramble bits to make sure that integer coordinates have entropy in lower bits
-		x ^= x >> 17;
-		y ^= y >> 17;
-		z ^= z >> 17;
+		unsigned int x = hashFloatBits(p[0]), y = hashFloatBits(p[1]), z = hashFloatBits(p[2]);
 
 		// mix in normal bits
 		x ^= (n[0] == 0x80000000) ? 0 : n[0] >> 15;
@@ -118,54 +109,18 @@ struct VertexHasherF
 	}
 };
 
-static size_t hashBuckets4(size_t count)
-{
-	size_t buckets = 1;
-	while (buckets < count + count / 4)
-		buckets *= 2;
-
-	return buckets;
-}
-
-template <typename T, typename Hash>
-static T* hashLookup4(T* table, size_t buckets, const Hash& hash, const T& key, const T& empty)
-{
-	assert(buckets > 0);
-	assert((buckets & (buckets - 1)) == 0);
-
-	size_t hashmod = buckets - 1;
-	size_t bucket = hash.hash(key) & hashmod;
-
-	for (size_t probe = 0; probe <= hashmod; ++probe)
-	{
-		T& item = table[bucket];
-
-		if (item == empty)
-			return &item;
-
-		if (hash.equal(item, key))
-			return &item;
-
-		// hash collision, quadratic probing
-		bucket = (bucket + probe + 1) & hashmod;
-	}
-
-	assert(false && "Hash table is full"); // unreachable
-	return NULL;
-}
-
 static void buildVertexRemap(unsigned int* remap, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_normals, size_t vertex_normals_stride, const float* vertex_uvs, size_t vertex_uvs_stride, meshopt_Allocator& allocator)
 {
 	VertexHasherF vertex_hasher = {vertex_positions, vertex_positions_stride / sizeof(float), vertex_normals, vertex_normals_stride / sizeof(float), vertex_uvs, vertex_uvs_stride / sizeof(float)};
 
-	size_t vertex_table_size = hashBuckets4(vertex_count);
+	size_t vertex_table_size = hashBuckets(vertex_count);
 	unsigned int* vertex_table = allocator.allocate<unsigned int>(vertex_table_size);
 	memset(vertex_table, -1, vertex_table_size * sizeof(unsigned int));
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
 		unsigned int index = unsigned(i);
-		unsigned int* entry = hashLookup4(vertex_table, vertex_table_size, vertex_hasher, index, ~0u);
+		unsigned int* entry = hashLookup(vertex_table, vertex_table_size, vertex_hasher, index, ~0u);
 
 		if (*entry == ~0u)
 			*entry = index;

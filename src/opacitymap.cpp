@@ -1,5 +1,6 @@
 // This file is part of meshoptimizer library; see meshoptimizer.h for version/license details
 #include "meshoptimizer.h"
+#include "meshoptimizer_internal.h"
 
 #include <assert.h>
 #include <math.h>
@@ -68,31 +69,6 @@ static float sampleTexture(const Texture& texture, float u, float v)
 	return float(axy) * (1.f / (255.f * 65536.f));
 }
 
-static unsigned int hashUpdate4u(unsigned int h, const unsigned char* key, size_t len)
-{
-	// MurmurHash2
-	const unsigned int m = 0x5bd1e995;
-	const int r = 24;
-
-	while (len >= 4)
-	{
-		unsigned int k;
-		memcpy(&k, key, sizeof(k));
-
-		k *= m;
-		k ^= k >> r;
-		k *= m;
-
-		h *= m;
-		h ^= k;
-
-		key += 4;
-		len -= 4;
-	}
-
-	return h;
-}
-
 struct TriangleOMM
 {
 	int uvs[6];
@@ -107,7 +83,7 @@ struct TriangleOMMHasher
 	{
 		const TriangleOMM& tri = data[index];
 
-		return hashUpdate4u(tri.level, reinterpret_cast<const unsigned char*>(tri.uvs), sizeof(tri.uvs));
+		return hashUpdate4(tri.level, reinterpret_cast<const unsigned char*>(tri.uvs), sizeof(tri.uvs));
 	}
 
 	bool equal(unsigned int lhs, unsigned int rhs) const
@@ -137,13 +113,9 @@ struct OMMHasher
 		if (size < 4)
 			h ^= key[0] | (key[size - 1] << 8);
 		else
-			h = hashUpdate4u(h, key, size);
+			h = hashUpdate4(h, key, size);
 
-		// MurmurHash2 finalizer
-		h ^= h >> 13;
-		h *= 0x5bd1e995;
-		h ^= h >> 15;
-		return h;
+		return hashFinalize(h);
 	}
 
 	bool equal(unsigned int lhs, unsigned int rhs) const
@@ -153,42 +125,6 @@ struct OMMHasher
 		return levels[lhs] == levels[rhs] && memcmp(data + offsets[lhs], data + offsets[rhs], size) == 0;
 	}
 };
-
-static size_t hashBuckets3(size_t count)
-{
-	size_t buckets = 1;
-	while (buckets < count + count / 4)
-		buckets *= 2;
-
-	return buckets;
-}
-
-template <typename T, typename Hash>
-static T* hashLookup3(T* table, size_t buckets, const Hash& hash, const T& key, const T& empty)
-{
-	assert(buckets > 0);
-	assert((buckets & (buckets - 1)) == 0);
-
-	size_t hashmod = buckets - 1;
-	size_t bucket = hash.hash(key) & hashmod;
-
-	for (size_t probe = 0; probe <= hashmod; ++probe)
-	{
-		T& item = table[bucket];
-
-		if (item == empty)
-			return &item;
-
-		if (hash.equal(item, key))
-			return &item;
-
-		// hash collision, quadratic probing
-		bucket = (bucket + probe + 1) & hashmod;
-	}
-
-	assert(false && "Hash table is full"); // unreachable
-	return NULL;
-}
 
 inline int quantizeSubpixel(float v, unsigned int size)
 {
@@ -393,7 +329,7 @@ size_t meshopt_opacityMapMeasure(unsigned char* levels, unsigned int* sources, i
 	float texture_area = float(texture_width) * float(texture_height);
 
 	// hash map used to deduplicate triangle rasterization requests based on UV
-	size_t table_size = hashBuckets3(index_count / 3);
+	size_t table_size = hashBuckets(index_count / 3);
 	unsigned int* table = allocator.allocate<unsigned int>(table_size);
 	memset(table, -1, table_size * sizeof(unsigned int));
 
@@ -434,7 +370,7 @@ size_t meshopt_opacityMapMeasure(unsigned char* levels, unsigned int* sources, i
 		TriangleOMM tri = {{su0, sv0, su1, sv1, su2, sv2}, level};
 		triangles[result] = tri; // speculatively write triangle data to give hasher a way to compare it
 
-		unsigned int* entry = hashLookup3(table, table_size, hasher, unsigned(result), ~0u);
+		unsigned int* entry = hashLookup(table, table_size, hasher, unsigned(result), ~0u);
 
 		if (*entry == ~0u)
 		{
@@ -501,7 +437,7 @@ size_t meshopt_opacityMapCompact(unsigned char* data, size_t data_size, unsigned
 	unsigned char* data_old = allocator.allocate<unsigned char>(data_size);
 	memcpy(data_old, data, data_size);
 
-	size_t table_size = hashBuckets3(omm_count);
+	size_t table_size = hashBuckets(omm_count);
 	unsigned int* table = allocator.allocate<unsigned int>(table_size);
 	memset(table, -1, table_size * sizeof(unsigned int));
 
@@ -534,7 +470,7 @@ size_t meshopt_opacityMapCompact(unsigned char* data, size_t data_size, unsigned
 		offsets[next] = unsigned(offset);
 		levels[next] = (unsigned char)level;
 
-		unsigned int* entry = hashLookup3(table, table_size, hasher, unsigned(next), ~0u);
+		unsigned int* entry = hashLookup(table, table_size, hasher, unsigned(next), ~0u);
 
 		if (*entry == ~0u)
 		{

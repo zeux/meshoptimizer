@@ -1,5 +1,6 @@
 // This file is part of meshoptimizer library; see meshoptimizer.h for version/license details
 #include "meshoptimizer.h"
+#include "meshoptimizer_internal.h"
 
 #include <assert.h>
 #include <float.h>
@@ -121,18 +122,7 @@ struct PositionHasher
 
 		unsigned int x = key[0], y = key[1], z = key[2];
 
-		// replace negative zero with zero
-		x = (x == 0x80000000) ? 0 : x;
-		y = (y == 0x80000000) ? 0 : y;
-		z = (z == 0x80000000) ? 0 : z;
-
-		// scramble bits to make sure that integer coordinates have entropy in lower bits
-		x ^= x >> 17;
-		y ^= y >> 17;
-		z ^= z >> 17;
-
-		// Optimized Spatial Hashing for Collision Detection of Deformable Objects
-		return (x * 73856093) ^ (y * 19349663) ^ (z * 83492791);
+		return hashSpatial3(x, y, z);
 	}
 
 	bool equal(unsigned int lhs, unsigned int rhs) const
@@ -162,47 +152,11 @@ struct RemapHasher
 	}
 };
 
-static size_t hashBuckets2(size_t count)
-{
-	size_t buckets = 1;
-	while (buckets < count + count / 4)
-		buckets *= 2;
-
-	return buckets;
-}
-
-template <typename T, typename Hash>
-static T* hashLookup2(T* table, size_t buckets, const Hash& hash, const T& key, const T& empty)
-{
-	assert(buckets > 0);
-	assert((buckets & (buckets - 1)) == 0);
-
-	size_t hashmod = buckets - 1;
-	size_t bucket = hash.hash(key) & hashmod;
-
-	for (size_t probe = 0; probe <= hashmod; ++probe)
-	{
-		T& item = table[bucket];
-
-		if (item == empty)
-			return &item;
-
-		if (hash.equal(item, key))
-			return &item;
-
-		// hash collision, quadratic probing
-		bucket = (bucket + probe + 1) & hashmod;
-	}
-
-	assert(false && "Hash table is full"); // unreachable
-	return NULL;
-}
-
 static void buildPositionRemap(unsigned int* remap, unsigned int* wedge, const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, const unsigned int* sparse_remap, meshopt_Allocator& allocator)
 {
 	PositionHasher hasher = {vertex_positions_data, vertex_positions_stride / sizeof(float), sparse_remap};
 
-	size_t table_size = hashBuckets2(vertex_count);
+	size_t table_size = hashBuckets(vertex_count);
 	unsigned int* table = allocator.allocate<unsigned int>(table_size);
 	memset(table, -1, table_size * sizeof(unsigned int));
 
@@ -211,7 +165,7 @@ static void buildPositionRemap(unsigned int* remap, unsigned int* wedge, const f
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
 		unsigned int index = unsigned(i);
-		unsigned int* entry = hashLookup2(table, table_size, hasher, index, ~0u);
+		unsigned int* entry = hashLookup(table, table_size, hasher, index, ~0u);
 
 		if (*entry == ~0u)
 			*entry = index;
@@ -263,7 +217,7 @@ static unsigned int* buildSparseRemap(unsigned int* indices, size_t index_count,
 	size_t offset = 0;
 
 	// temporary map dense => sparse; we allocate it last so that we can deallocate it
-	size_t revremap_size = hashBuckets2(unique);
+	size_t revremap_size = hashBuckets(unique);
 	unsigned int* revremap = allocator.allocate<unsigned int>(revremap_size);
 	memset(revremap, -1, revremap_size * sizeof(unsigned int));
 
@@ -273,7 +227,7 @@ static unsigned int* buildSparseRemap(unsigned int* indices, size_t index_count,
 	for (size_t i = 0; i < index_count; ++i)
 	{
 		unsigned int index = indices[i];
-		unsigned int* entry = hashLookup2(revremap, revremap_size, hasher, index, ~0u);
+		unsigned int* entry = hashLookup(revremap, revremap_size, hasher, index, ~0u);
 
 		if (*entry == ~0u)
 		{
@@ -2029,13 +1983,7 @@ struct CellHasher
 
 	size_t hash(unsigned int i) const
 	{
-		unsigned int h = vertex_ids[i];
-
-		// MurmurHash2 finalizer
-		h ^= h >> 13;
-		h *= 0x5bd1e995;
-		h ^= h >> 15;
-		return h;
+		return hashFinalize(vertex_ids[i]);
 	}
 
 	bool equal(unsigned int lhs, unsigned int rhs) const
@@ -2048,13 +1996,7 @@ struct IdHasher
 {
 	size_t hash(unsigned int id) const
 	{
-		unsigned int h = id;
-
-		// MurmurHash2 finalizer
-		h ^= h >> 13;
-		h *= 0x5bd1e995;
-		h ^= h >> 15;
-		return h;
+		return hashFinalize(id);
 	}
 
 	bool equal(unsigned int lhs, unsigned int rhs) const
@@ -2130,7 +2072,7 @@ static size_t fillVertexCells(unsigned int* table, size_t table_size, unsigned i
 
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		unsigned int* entry = hashLookup2(table, table_size, hasher, unsigned(i), ~0u);
+		unsigned int* entry = hashLookup(table, table_size, hasher, unsigned(i), ~0u);
 
 		if (*entry == ~0u)
 		{
@@ -2157,7 +2099,7 @@ static size_t countVertexCells(unsigned int* table, size_t table_size, const uns
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
 		unsigned int id = vertex_ids[i];
-		unsigned int* entry = hashLookup2(table, table_size, hasher, id, ~0u);
+		unsigned int* entry = hashLookup(table, table_size, hasher, id, ~0u);
 
 		result += (*entry == ~0u);
 		*entry = id;
@@ -2314,7 +2256,7 @@ static size_t filterTriangles(unsigned int* destination, unsigned int* tritable,
 			destination[result * 3 + 1] = b;
 			destination[result * 3 + 2] = c;
 
-			unsigned int* entry = hashLookup2(tritable, tritable_size, hasher, unsigned(result), ~0u);
+			unsigned int* entry = hashLookup(tritable, tritable_size, hasher, unsigned(result), ~0u);
 
 			if (*entry == ~0u)
 				*entry = unsigned(result++);
@@ -2733,7 +2675,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 	}
 
 	// build vertex->cell association by mapping all vertices with the same quantized position to the same cell
-	size_t table_size = hashBuckets2(vertex_count);
+	size_t table_size = hashBuckets(vertex_count);
 	unsigned int* table = allocator.allocate<unsigned int>(table_size);
 
 	unsigned int* vertex_cells = allocator.allocate<unsigned int>(vertex_count);
@@ -2760,7 +2702,7 @@ size_t meshopt_simplifySloppy(unsigned int* destination, const unsigned int* ind
 		result_error = result_error < cell_errors[i] ? cell_errors[i] : result_error;
 
 	// vertex collapses often result in duplicate triangles; we need a table to filter them out
-	size_t tritable_size = hashBuckets2(min_triangles);
+	size_t tritable_size = hashBuckets(min_triangles);
 	unsigned int* tritable = allocator.allocate<unsigned int>(tritable_size);
 
 	// note: this is the first and last write to destination, which allows aliasing destination with indices
@@ -2839,7 +2781,7 @@ size_t meshopt_simplifyPoints(unsigned int* destination, const float* vertex_pos
 
 	unsigned int* vertex_ids = allocator.allocate<unsigned int>(vertex_count);
 
-	size_t table_size = hashBuckets2(vertex_count);
+	size_t table_size = hashBuckets(vertex_count);
 	unsigned int* table = allocator.allocate<unsigned int>(table_size);
 
 	const int kInterpolationPasses = 5;
