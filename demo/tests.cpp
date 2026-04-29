@@ -25,7 +25,7 @@ static const unsigned int kIndexBuffer[] = {0, 1, 2, 2, 1, 3, 4, 6, 5, 7, 8, 9};
 
 static const unsigned char kIndexDataV0[] = {
     0xe0, 0xf0, 0x10, 0xfe, 0xff, 0xf0, 0x0c, 0xff, 0x02, 0x02, 0x02, 0x00, 0x76, 0x87, 0x56, 0x67,
-    0x78, 0xa9, 0x86, 0x65, 0x89, 0x68, 0x98, 0x01, 0x69, 0x00, 0x00, // clang-format :-/
+    0x78, 0xa9, 0x86, 0x65, 0x89, 0x68, 0x98, 0x01, 0x69, 0x00, 0x00 //
 };
 
 // note: this exercises two features of v1 format, restarts (0 1 2) and last
@@ -33,13 +33,13 @@ static const unsigned int kIndexBufferTricky[] = {0, 1, 2, 2, 1, 3, 0, 1, 2, 2, 
 
 static const unsigned char kIndexDataV1[] = {
     0xe1, 0xf0, 0x10, 0xfe, 0x1f, 0x3d, 0x00, 0x0a, 0x00, 0x76, 0x87, 0x56, 0x67, 0x78, 0xa9, 0x86,
-    0x65, 0x89, 0x68, 0x98, 0x01, 0x69, 0x00, 0x00, // clang-format :-/
+    0x65, 0x89, 0x68, 0x98, 0x01, 0x69, 0x00, 0x00 //
 };
 
 static const unsigned int kIndexSequence[] = {0, 1, 51, 2, 49, 1000};
 
 static const unsigned char kIndexSequenceV1[] = {
-    0xd1, 0x00, 0x04, 0xcd, 0x01, 0x04, 0x07, 0x98, 0x1f, 0x00, 0x00, 0x00, 0x00, // clang-format :-/
+    0xd1, 0x00, 0x04, 0xcd, 0x01, 0x04, 0x07, 0x98, 0x1f, 0x00, 0x00, 0x00, 0x00 //
 };
 
 static const PV kVertexBuffer[] = {
@@ -55,13 +55,13 @@ static const unsigned char kVertexDataV0[] = {
     0x00, 0x00, 0x17, 0x18, 0x17, 0x01, 0x26, 0x00, 0x00, 0x00, 0x01, 0x0c, 0x00, 0x00, 0x00, 0x17,
     0x01, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, // clang-format :-/
+    0x00, 0x00, 0x00, 0x00, 0x00 //
 };
 
 static const unsigned char kVertexDataV1[] = {
     0xa1, 0xee, 0xaa, 0xee, 0x00, 0x4b, 0x4b, 0x4b, 0x00, 0x00, 0x4b, 0x00, 0x00, 0x7d, 0x7d, 0x7d,
     0x00, 0x00, 0x7d, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x62, 0x00, 0x62, // clang-format :-/
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x62, 0x00, 0x62 //
 };
 
 // This binary blob is a valid v1 encoding of vertex buffer but it used a custom version of
@@ -74,7 +74,7 @@ static const unsigned char kVertexDataV1Custom[] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x0e, 0x00, 0x7d, 0x7d, 0x7d, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7d, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x62, // clang-format :-/
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x62 //
 };
 
 static void decodeIndexV0()
@@ -103,7 +103,7 @@ static void decodeIndexV1More()
 {
 	const unsigned char input[] = {
 	    0xe1, 0xf0, 0x10, 0xfe, 0xff, 0xf0, 0x0c, 0xff, 0x02, 0x02, 0x02, 0x00, 0x76, 0x87, 0x56, 0x67,
-	    0x78, 0xa9, 0x86, 0x65, 0x89, 0x68, 0x98, 0x01, 0x69, 0x00, 0x00, // clang-format
+	    0x78, 0xa9, 0x86, 0x65, 0x89, 0x68, 0x98, 0x01, 0x69, 0x00, 0x00 //
 	};
 
 	const unsigned int ib[] = {0, 1, 2, 2, 1, 3, 4, 6, 5, 7, 8, 9};
@@ -120,7 +120,7 @@ static void decodeIndexV1ThreeEdges()
 {
 	const unsigned char input[] = {
 	    0xe1, 0xf0, 0x20, 0x30, 0x40, 0x00, 0x76, 0x87, 0x56, 0x67, 0x78, 0xa9, 0x86, 0x65, 0x89, 0x68,
-	    0x98, 0x01, 0x69, 0x00, 0x00, // clang-format
+	    0x98, 0x01, 0x69, 0x00, 0x00 //
 	};
 
 	const unsigned int ib[] = {0, 1, 2, 1, 0, 3, 2, 1, 4, 0, 2, 5};
@@ -246,7 +246,7 @@ static void decodeIndexMalformedVByte()
 	    0xe1, 0x20, 0x20, 0x20, 0xff, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
 	    0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
 	    0xff, 0xff, 0xff, 0xff, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
-	    0x20, 0x20, 0x20, // clang-format :-/
+	    0x20, 0x20, 0x20 //
 	};
 
 	unsigned int decoded[66];
@@ -417,7 +417,7 @@ static void decodeVertexV0More()
 	    0, 0, 0, 0, 0, 1, 2, 8, 0, 2, 4, 16, 0, 3, 6, 24,
 	    0, 4, 8, 32, 0, 5, 10, 40, 0, 6, 12, 48, 0, 7, 14, 56,
 	    0, 8, 16, 64, 0, 9, 18, 72, 0, 10, 20, 80, 0, 11, 22, 88,
-	    0, 12, 24, 96, 0, 13, 26, 104, 0, 14, 28, 112, 0, 15, 30, 120, // clang-format :-/
+	    0, 12, 24, 96, 0, 13, 26, 104, 0, 14, 28, 112, 0, 15, 30, 120 //
 	};
 
 	const unsigned char input[] = {
@@ -425,7 +425,7 @@ static void decodeVertexV0More()
 	    0x03, 0x00, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10,
 	    0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	    0x00, // clang-format :-/
+	    0x00 //
 	};
 
 	unsigned char decoded[sizeof(expected)];
@@ -439,7 +439,7 @@ static void decodeVertexV0Mode2()
 	    0, 0, 0, 0, 4, 5, 6, 7, 8, 10, 12, 14, 12, 15, 18, 21,
 	    16, 20, 24, 28, 20, 25, 30, 35, 24, 30, 36, 42, 28, 35, 42, 49,
 	    32, 40, 48, 56, 36, 45, 54, 63, 40, 50, 60, 70, 44, 55, 66, 77,
-	    48, 60, 72, 84, 52, 65, 78, 91, 56, 70, 84, 98, 60, 75, 90, 105, // clang-format :-/
+	    48, 60, 72, 84, 52, 65, 78, 91, 56, 70, 84, 98, 60, 75, 90, 105 //
 	};
 
 	const unsigned char input[] = {
@@ -447,7 +447,7 @@ static void decodeVertexV0Mode2()
 	    0xaa, 0xaa, 0xaa, 0x02, 0x0c, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0xcc, 0x02, 0x0e, 0xee, 0xee,
 	    0xee, 0xee, 0xee, 0xee, 0xee, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	    0x00, 0x00, 0x00, 0x00, 0x00, // clang-format :-/
+	    0x00, 0x00, 0x00, 0x00, 0x00 //
 	};
 
 	unsigned char decoded[sizeof(expected)];
@@ -483,14 +483,14 @@ static void decodeVertexV1Deltas()
 	    248, 248, 240, 240, 249, 250, 243, 244, 250, 252, 246, 248, 251, 254, 249, 252,
 	    252, 256, 252, 256, 253, 258, 255, 260, 254, 260, 258, 264, 255, 262, 261, 268,
 	    256, 264, 264, 272, 257, 262, 267, 268, 258, 260, 270, 264, 259, 258, 273, 260,
-	    260, 256, 276, 256, 261, 254, 279, 252, 262, 252, 282, 248, 263, 250, 285, 244, // clang-format :-/
+	    260, 256, 276, 256, 261, 254, 279, 252, 262, 252, 282, 248, 263, 250, 285, 244 //
 	};
 
 	const unsigned char input[] = {
 	    0xa1, 0x99, 0x99, 0x01, 0x2a, 0xaa, 0xaa, 0xaa, 0x02, 0x04, 0x44, 0x44, 0x44, 0x43, 0x33, 0x33,
 	    0x33, 0x02, 0x06, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x66, 0x02, 0x08, 0x88, 0x88, 0x88, 0x87,
 	    0x77, 0x77, 0x77, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	    0x00, 0xf8, 0x00, 0xf8, 0x00, 0xf0, 0x00, 0xf0, 0x00, 0x01, 0x01, // clang-format :-/
+	    0x00, 0xf8, 0x00, 0xf8, 0x00, 0xf0, 0x00, 0xf0, 0x00, 0x01, 0x01 //
 	};
 
 	unsigned short decoded[sizeof(expected) / sizeof(expected[0])];
@@ -740,14 +740,14 @@ static void decodeFilterOct8()
 	    0, 1, 127, 0,
 	    0, 187, 127, 1,
 	    255, 1, 127, 0,
-	    14, 130, 127, 1, // clang-format :-/
+	    14, 130, 127, 1 //
 	};
 
 	const unsigned char expected[4 * 4] = {
 	    0, 1, 127, 0,
 	    0, 159, 82, 1,
 	    255, 1, 127, 0,
-	    1, 130, 241, 1, // clang-format :-/
+	    1, 130, 241, 1 //
 	};
 
 	// Aligned by 4
@@ -769,14 +769,14 @@ static void decodeFilterOct12()
 	    0, 1, 2047, 0,
 	    0, 1870, 2047, 1,
 	    2017, 1, 2047, 0,
-	    14, 1300, 2047, 1, // clang-format :-/
+	    14, 1300, 2047, 1 //
 	};
 
 	const unsigned short expected[4 * 4] = {
 	    0, 16, 32767, 0,
 	    0, 32621, 3088, 1,
 	    32764, 16, 471, 0,
-	    307, 28541, 16093, 1, // clang-format :-/
+	    307, 28541, 16093, 1 //
 	};
 
 	// Aligned by 4
@@ -798,14 +798,14 @@ static void decodeFilterQuat12()
 	    0, 1, 0, 0x7fc,
 	    0, 1870, 0, 0x7fd,
 	    2017, 1, 0, 0x7fe,
-	    14, 1300, 0, 0x7ff, // clang-format :-/
+	    14, 1300, 0, 0x7ff //
 	};
 
 	const unsigned short expected[4 * 4] = {
 	    32767, 0, 11, 0,
 	    0, 25013, 0, 21166,
 	    11, 0, 23504, 22830,
-	    158, 14715, 0, 29277, // clang-format :-/
+	    158, 14715, 0, 29277 //
 	};
 
 	// Aligned by 4
@@ -827,14 +827,14 @@ static void decodeFilterExp()
 	    0,
 	    0xff000003,
 	    0x02fffff7,
-	    0xfe7fffff, // clang-format :-/
+	    0xfe7fffff,
 	};
 
 	const unsigned int expected[4] = {
 	    0,
 	    0x3fc00000,
 	    0xc2100000,
-	    0x49fffffe, // clang-format :-/
+	    0x49fffffe,
 	};
 
 	// Aligned by 4
@@ -856,14 +856,14 @@ static void encodeFilterOct8()
 	    1, 0, 0, 0,
 	    0, -1, 0, 0,
 	    0.7071068f, 0, 0.707168f, 1,
-	    -0.7071068f, 0, -0.707168f, 1, // clang-format :-/
+	    -0.7071068f, 0, -0.707168f, 1 //
 	};
 
 	const unsigned char expected[4 * 4] = {
 	    0x7f, 0, 0x7f, 0,
 	    0, 0x81, 0x7f, 0,
 	    0x3f, 0, 0x7f, 0x7f,
-	    0x81, 0x40, 0x7f, 0x7f, // clang-format :-/
+	    0x81, 0x40, 0x7f, 0x7f //
 	};
 
 	unsigned char encoded[4 * 4];
@@ -885,14 +885,14 @@ static void encodeFilterOct12()
 	    1, 0, 0, 0,
 	    0, -1, 0, 0,
 	    0.7071068f, 0, 0.707168f, 1,
-	    -0.7071068f, 0, -0.707168f, 1, // clang-format :-/
+	    -0.7071068f, 0, -0.707168f, 1 //
 	};
 
 	const unsigned short expected[4 * 4] = {
 	    0x7ff, 0, 0x7ff, 0,
 	    0x0, 0xf801, 0x7ff, 0,
 	    0x3ff, 0, 0x7ff, 0x7fff,
-	    0xf801, 0x400, 0x7ff, 0x7fff, // clang-format :-/
+	    0xf801, 0x400, 0x7ff, 0x7fff //
 	};
 
 	unsigned short encoded[4 * 4];
@@ -914,14 +914,14 @@ static void encodeFilterQuat12()
 	    1, 0, 0, 0,
 	    0, -1, 0, 0,
 	    0.7071068f, 0, 0, 0.707168f,
-	    -0.7071068f, 0, 0, -0.707168f, // clang-format :-/
+	    -0.7071068f, 0, 0, -0.707168f //
 	};
 
 	const unsigned short expected[4 * 4] = {
 	    0, 0, 0, 0x7fc,
 	    0, 0, 0, 0x7fd,
 	    0x7ff, 0, 0, 0x7ff,
-	    0x7ff, 0, 0, 0x7ff, // clang-format :-/
+	    0x7ff, 0, 0, 0x7ff //
 	};
 
 	unsigned short encoded[4 * 4];
@@ -1131,14 +1131,14 @@ static void encodeFilterColor8()
 	    1.0f, 0.0f, 0.0f, 1.0f,
 	    0.0f, 1.0f, 0.0f, 0.5f,
 	    0.0f, 0.0f, 1.0f, 0.25f,
-	    0.4f, 0.4f, 0.4f, 0.75f, // clang-format :-/
+	    0.4f, 0.4f, 0.4f, 0.75f //
 	};
 
 	const unsigned char expected[4 * 4] = {
 	    0x40, 0x7f, 0xc1, 0xff,
 	    0x7f, 0x00, 0x7f, 0xc0,
 	    0x40, 0x81, 0xc0, 0xa0,
-	    0x66, 0x00, 0x00, 0xdf, // clang-format :-/
+	    0x66, 0x00, 0x00, 0xdf //
 	};
 
 	unsigned char encoded[4 * 4];
@@ -1163,14 +1163,14 @@ static void encodeFilterColor12()
 	    1.0f, 0.0f, 0.0f, 1.0f,
 	    0.0f, 1.0f, 0.0f, 0.5f,
 	    0.0f, 0.0f, 1.0f, 0.25f,
-	    0.4f, 0.4f, 0.4f, 0.75f, // clang-format :-/
+	    0.4f, 0.4f, 0.4f, 0.75f //
 	};
 
 	const unsigned short expected[4 * 4] = {
 	    0x0400, 0x07ff, 0xfc01, 0x0fff,
 	    0x07ff, 0x0000, 0x07ff, 0x0c00,
 	    0x0400, 0xf801, 0xfc00, 0x0a00,
-	    0x0666, 0x0000, 0x0000, 0x0dff, // clang-format :-/
+	    0x0666, 0x0000, 0x0000, 0x0dff //
 	};
 
 	unsigned short encoded[4 * 4];
@@ -1228,7 +1228,7 @@ static void sphereBounds()
 	    0, 0, 0, 0,
 	    0, 1, 0, 1,
 	    0, 0, 1, 2,
-	    1, 0, 1, 3, // clang-format
+	    1, 0, 1, 3 //
 	};
 
 	// without the radius, the center is inside the tetrahedron
@@ -1306,12 +1306,12 @@ static void meshletsFlex()
 	// two tetrahedrons far apart
 	float vb[2 * 4 * 3] = {
 	    0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1,
-	    10, 0, 0, 11, 0, 0, 10, 1, 0, 10, 0, 1, // clang-format :-/
+	    10, 0, 0, 11, 0, 0, 10, 1, 0, 10, 0, 1 //
 	};
 
 	unsigned int ib[2 * 4 * 3] = {
 	    0, 1, 2, 0, 2, 3, 0, 3, 1, 1, 3, 2,
-	    4, 5, 6, 4, 6, 7, 4, 7, 5, 5, 7, 6, // clang-format :-/
+	    4, 5, 6, 4, 6, 7, 4, 7, 5, 5, 7, 6 //
 	};
 
 	// up to 2 meshlets with min_triangles=4
@@ -1418,12 +1418,12 @@ static void meshletsSpatial()
 	// two tetrahedrons far apart
 	float vb[2 * 4 * 3] = {
 	    0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1,
-	    10, 0, 0, 11, 0, 0, 10, 1, 0, 10, 0, 1, // clang-format :-/
+	    10, 0, 0, 11, 0, 0, 10, 1, 0, 10, 0, 1 //
 	};
 
 	unsigned int ib[2 * 4 * 3] = {
 	    0, 1, 2, 0, 2, 3, 0, 3, 1, 1, 3, 2,
-	    4, 5, 6, 4, 6, 7, 4, 7, 5, 5, 7, 6, // clang-format :-/
+	    4, 5, 6, 4, 6, 7, 4, 7, 5, 5, 7, 6 //
 	};
 
 	// up to 2 meshlets with min_triangles=4
@@ -1491,7 +1491,7 @@ static void partitionBasic()
 	    0, 1, 3, 4, 5, 6,
 	    1, 2, 3, 6, 7, 8,
 	    4, 5, 6, 9, 10, 11,
-	    6, 7, 8, 9, 11, 12, // clang-format :-/
+	    6, 7, 8, 9, 11, 12 //
 	};
 
 	const unsigned int cc[4] = {6, 6, 6, 6};
@@ -1512,14 +1512,14 @@ static void partitionSpatial()
 	const unsigned int ci[] = {
 	    0, 1, 2,
 	    0, 3, 4,
-	    0, 5, 6, // clang-format :-/
+	    0, 5, 6 //
 	};
 
 	const float vb[] = {
 	    0, 0, 0,
 	    1, 0, 0, 0, 1, 0,
 	    0, 2, 0, 2, 0, 0,
-	    -1, 0, 0, 0, -1, 0, // clang-format :-/
+	    -1, 0, 0, 0, -1, 0 //
 	};
 
 	const unsigned int cc[3] = {3, 3, 3};
@@ -1537,13 +1537,13 @@ static void partitionSpatialMerge()
 	const unsigned int ci[] = {
 	    0, 1, 2,
 	    3, 4, 5,
-	    6, 7, 8, // clang-format :-/
+	    6, 7, 8 //
 	};
 
 	const float vb[] = {
 	    0, 0, 0, 1, 0, 0, 0, 1, 0,
 	    0, 0, 0, 0, 2, 0, 2, 0, 0,
-	    10, 0, 0, 10, 1, 0, 10, 2, 0, // clang-format :-/
+	    10, 0, 0, 10, 1, 0, 10, 2, 0 //
 	};
 
 	const unsigned int cc[3] = {3, 3, 3};
@@ -1574,7 +1574,7 @@ static void remapCustom()
 	    0, 1, 0,
 	    0, 0, 1,
 	    1, 0, 0,
-	    0, -0.f, 1, // clang-format
+	    0, -0.f, 1 //
 	};
 
 	unsigned int remap[6];
@@ -1668,7 +1668,7 @@ static void simplify()
 	    0, 2, 1,
 	    1, 2, 3,
 	    3, 2, 4,
-	    2, 5, 4, // clang-format :-/
+	    2, 5, 4 //
 	};
 
 	float vb[] = {
@@ -1677,7 +1677,7 @@ static void simplify()
 	    2, 2, 0,
 	    0, 0, 0,
 	    1, 0, 0,
-	    4, 0, 0, // clang-format :-/
+	    4, 0, 0 //
 	};
 
 	unsigned int expected[] = {
@@ -1744,7 +1744,7 @@ static void simplifySloppyLocks()
 	    0, 2, 1,
 	    1, 2, 3,
 	    3, 2, 4,
-	    2, 5, 4, // clang-format :-/
+	    2, 5, 4 //
 	};
 
 	float vb[] = {
@@ -1753,7 +1753,7 @@ static void simplifySloppyLocks()
 	    2, 2, 0,
 	    0, 0, 0,
 	    1, 0, 0,
-	    4, 0, 0, // clang-format :-/
+	    4, 0, 0 //
 	};
 
 	// lock spine
@@ -1797,7 +1797,7 @@ static void simplifyFlip()
 	    1.000000f, -0.200000f, 0.200000f,
 	    1.000000f, 0.200000f, 0.200000f,
 	    1.000000f, 0.500000f, -0.500000f,
-	    1.000000f, -1.000000f, 0.000000f, // clang-format :-/
+	    1.000000f, -1.000000f, 0.000000f //
 	};
 
 	// the collapse we expect is 7 -> 0
@@ -1805,13 +1805,15 @@ static void simplifyFlip()
 	    7, 4, 3,
 	    1, 2, 5,
 	    7, 1, 6,
-	    7, 8, 0, // gets removed
+	    // gets removed
+	    7, 8, 0,
 	    7, 6, 4,
 	    8, 5, 2,
 	    8, 7, 3,
 	    8, 3, 5,
 	    5, 6, 1,
-	    7, 0, 1, // gets removed
+	    // gets removed
+	    7, 0, 1 //
 	};
 
 	unsigned int expected[] = {
@@ -1822,7 +1824,7 @@ static void simplifyFlip()
 	    8, 5, 2,
 	    8, 0, 3,
 	    8, 3, 5,
-	    5, 6, 1, // clang-format :-/
+	    5, 6, 1 //
 	};
 
 	assert(meshopt_simplify(ib, ib, 30, vb, 9, 12, 3, 1e-3f) == 24);
@@ -1844,7 +1846,7 @@ static void simplifyDegenerate()
 	    0.000000f, 2.000000f, 0.000000f,
 	    1.000000f, 0.000000f, 0.000000f,
 	    2.000000f, 0.000000f, 0.000000f,
-	    1.000000f, 1.000000f, 0.000000f, // clang-format :-/
+	    1.000000f, 1.000000f, 0.000000f //
 	};
 
 	// 0 1 2
@@ -1856,13 +1858,15 @@ static void simplifyDegenerate()
 	    3, 1, 5,
 	    1, 2, 5,
 	    3, 5, 4,
-	    1, 0, 1, // these two degenerate triangles create a fake reverse edge
-	    0, 3, 0, // which breaks border classification
+	    // these two degenerate triangles create a fake reverse edge
+	    1, 0, 1,
+	    // which breaks border classification
+	    0, 3, 0 //
 	};
 
 	unsigned int expected[] = {
 	    0, 1, 4,
-	    4, 1, 2, // clang-format :-/
+	    4, 1, 2 //
 	};
 
 	assert(meshopt_simplify(ib, ib, 18, vb, 6, 12, 3, 1e-3f) == 6);
@@ -1880,7 +1884,7 @@ static void simplifyLockBorder()
 	    1.000000f, 2.000000f, 0.000000f,
 	    2.000000f, 0.000000f, 0.000000f,
 	    2.000000f, 1.000000f, 0.000000f,
-	    2.000000f, 2.000000f, 0.000000f, // clang-format :-/
+	    2.000000f, 2.000000f, 0.000000f //
 	};
 
 	// 0 1 2
@@ -1895,7 +1899,7 @@ static void simplifyLockBorder()
 	    3, 4, 6,
 	    6, 4, 7,
 	    4, 5, 7,
-	    7, 5, 8, // clang-format :-/
+	    7, 5, 8 //
 	};
 
 	unsigned int expected[] = {
@@ -1904,7 +1908,7 @@ static void simplifyLockBorder()
 	    3, 2, 5,
 	    6, 3, 7,
 	    3, 5, 7,
-	    7, 5, 8, // clang-format :-/
+	    7, 5, 8 //
 	};
 
 	assert(meshopt_simplify(ib, ib, 24, vb, 9, 12, 3, 1e-3f, meshopt_SimplifyLockBorder) == 18);
@@ -1979,13 +1983,13 @@ static void simplifyLockFlags()
 	    1, 2, 0,
 	    2, 0, 0,
 	    2, 1, 0,
-	    2, 2, 0, // clang-format :-/
+	    2, 2, 0 //
 	};
 
 	unsigned char lock[9] = {
 	    1, 1, 1,
 	    1, 0, 1,
-	    1, 1, 1, // clang-format :-/
+	    1, 1, 1 //
 	};
 
 	// 0 1 2
@@ -2000,7 +2004,7 @@ static void simplifyLockFlags()
 	    3, 4, 6,
 	    6, 4, 7,
 	    4, 5, 7,
-	    7, 5, 8, // clang-format :-/
+	    7, 5, 8 //
 	};
 
 	unsigned int expected[] = {
@@ -2009,7 +2013,7 @@ static void simplifyLockFlags()
 	    3, 2, 5,
 	    6, 3, 7,
 	    3, 5, 7,
-	    7, 5, 8, // clang-format :-/
+	    7, 5, 8 //
 	};
 
 	assert(meshopt_simplifyWithAttributes(ib, ib, 24, vb, 9, 12, NULL, 0, NULL, 0, lock, 3, 1e-3f, 0) == 18);
@@ -2030,31 +2034,31 @@ static void simplifyLockFlagsSeam()
 	    2, 0, 0,
 	    2, 1, 0,
 	    2, 1, 0,
-	    2, 2, 0, // clang-format :-/
+	    2, 2, 0 //
 	};
 
 	unsigned char lock0[12] = {
 	    1, 0, 0, 1,
 	    0, 0, 0, 0,
-	    1, 0, 0, 1, // clang-format :-/
+	    1, 0, 0, 1 //
 	};
 
 	unsigned char lock1[12] = {
 	    1, 0, 0, 1,
 	    1, 0, 0, 1,
-	    1, 0, 0, 1, // clang-format :-/
+	    1, 0, 0, 1 //
 	};
 
 	unsigned char lock2[12] = {
 	    1, 0, 1, 1,
 	    1, 0, 1, 1,
-	    1, 0, 1, 1, // clang-format :-/
+	    1, 0, 1, 1 //
 	};
 
 	unsigned char lock3[12] = {
 	    1, 1, 0, 1,
 	    1, 1, 0, 1,
-	    1, 1, 0, 1, // clang-format :-/
+	    1, 1, 0, 1 //
 	};
 
 	// 0 1-2 3
@@ -2069,7 +2073,7 @@ static void simplifyLockFlagsSeam()
 	    2, 3, 6,
 	    6, 3, 7,
 	    6, 7, 10,
-	    10, 7, 11, // clang-format :-/
+	    10, 7, 11 //
 	};
 
 	unsigned int res[24];
@@ -2099,7 +2103,7 @@ static void simplifySparse()
 	    1, 2, 0.1f,
 	    2, 0, 100,
 	    2, 1, 0,
-	    2, 2, 100, // clang-format :-/
+	    2, 2, 100 //
 	};
 
 	float vba[] = {
@@ -2111,7 +2115,7 @@ static void simplifySparse()
 	    0,
 	    100,
 	    0.5f,
-	    100, // clang-format :-/
+	    100,
 	};
 
 	float aw[] = {
@@ -2120,7 +2124,7 @@ static void simplifySparse()
 	unsigned char lock[9] = {
 	    8, 1, 8,
 	    1, 0, 1,
-	    8, 1, 8, // clang-format :-/
+	    8, 1, 8 //
 	};
 
 	//   1
@@ -2131,7 +2135,7 @@ static void simplifySparse()
 	    3, 1, 4,
 	    1, 5, 4,
 	    3, 4, 7,
-	    4, 5, 7, // clang-format :-/
+	    4, 5, 7 //
 	};
 
 	unsigned int res[12];
@@ -2139,7 +2143,7 @@ static void simplifySparse()
 	// vertices 3-4-5 are slightly elevated along Z which guides the collapses when only using geometry
 	unsigned int expected[] = {
 	    1, 5, 3,
-	    3, 5, 7, // clang-format :-/
+	    3, 5, 7 //
 	};
 
 	assert(meshopt_simplify(res, ib, 12, vb, 9, 12, 6, 1e-3f, meshopt_SimplifySparse) == 6);
@@ -2148,7 +2152,7 @@ static void simplifySparse()
 	// vertices 1-4-7 have a crease in the attribute value which guides the collapses the opposite way when weighing attributes sufficiently
 	unsigned int expecteda[] = {
 	    3, 1, 7,
-	    1, 5, 7, // clang-format :-/
+	    1, 5, 7 //
 	};
 
 	assert(meshopt_simplifyWithAttributes(res, ib, 12, vb, 9, 12, vba, sizeof(float), aw, 1, lock, 6, 1e-1f, meshopt_SimplifySparse) == 6);
@@ -2170,7 +2174,7 @@ static void simplifyErrorAbsolute()
 	    1, 2, 0,
 	    2, 0, 0,
 	    2, 1, 0,
-	    2, 2, 0, // clang-format :-/
+	    2, 2, 0 //
 	};
 
 	// 0 1 2
@@ -2185,7 +2189,7 @@ static void simplifyErrorAbsolute()
 	    3, 4, 6,
 	    6, 4, 7,
 	    4, 5, 7,
-	    7, 5, 8, // clang-format :-/
+	    7, 5, 8 //
 	};
 
 	float error = 0.f;
@@ -2212,7 +2216,7 @@ static void simplifySeam()
 	    3, 0, 0, 0,
 	    3, 1, 0, 0,
 	    3, 1, 0, 1,
-	    3, 2, 0, 1, // clang-format :-/
+	    3, 2, 0, 1 //
 	};
 
 	// 0   1-2   3
@@ -2232,7 +2236,7 @@ static void simplifySeam()
 	    8, 9, 12,
 	    12, 9, 13,
 	    10, 11, 14,
-	    14, 11, 15, // clang-format :-/
+	    14, 11, 15 //
 	};
 
 	// note: vertices 1-2 and 13-14 are classified as locked, because they are on a seam & a border
@@ -2244,7 +2248,7 @@ static void simplifySeam()
 	    0, 1, 13,
 	    2, 3, 14,
 	    0, 13, 12,
-	    14, 3, 15, // clang-format :-/
+	    14, 3, 15 //
 	};
 
 	unsigned int res[36];
@@ -2267,12 +2271,12 @@ static void simplifySeamFake()
 	    0, 0, 0, 0,
 	    1, 0, 0, 1,
 	    1, 0, 0, 2,
-	    0, 0, 0, 3, // clang-format :-/
+	    0, 0, 0, 3 //
 	};
 
 	unsigned int ib[] = {
 	    0, 1, 2,
-	    2, 1, 3, // clang-format :-/
+	    2, 1, 3 //
 	};
 
 	assert(meshopt_simplify(ib, ib, 6, vb, 4, 16, 0, 1.f, 0, NULL) == 6);
@@ -2293,7 +2297,7 @@ static void simplifySeamAttr()
 	    4, 0, 0, 2,
 	    4, 1, 0, 2,
 	    4, 1, 0, 2,
-	    4, 2, 0, 2, // clang-format :-/
+	    4, 2, 0, 2 //
 	};
 
 	// 0   1-2   3
@@ -2308,7 +2312,7 @@ static void simplifySeamAttr()
 	    4, 5, 8,
 	    8, 5, 9,
 	    6, 7, 10,
-	    10, 7, 11, // clang-format :-/
+	    10, 7, 11 //
 	};
 
 	// note: vertices 1-2 and 9-10 are classified as locked, because they are on a seam & a border
@@ -2321,7 +2325,7 @@ static void simplifySeamAttr()
 	    4, 1, 8,
 	    8, 1, 9,
 	    2, 7, 10,
-	    10, 7, 11, // clang-format :-/
+	    10, 7, 11 //
 	};
 
 	unsigned int res[24];
@@ -2342,7 +2346,7 @@ static void simplifyDebug()
 	    0, 2, 1,
 	    1, 2, 3,
 	    3, 2, 4,
-	    2, 5, 4, // clang-format :-/
+	    2, 5, 4 //
 	};
 
 	float vb[] = {
@@ -2351,7 +2355,7 @@ static void simplifyDebug()
 	    2, 2, 0,
 	    0, 0, 0,
 	    1, 0, 0,
-	    4, 0, 0, // clang-format :-/
+	    4, 0, 0 //
 	};
 
 	unsigned int expected[] = {
@@ -2380,7 +2384,7 @@ static void simplifyPrune()
 	    0, 2, 1,
 	    1, 2, 3,
 	    2, 5, 4,
-	    6, 7, 8, // clang-format :-/
+	    6, 7, 8 //
 	};
 
 	float vb[] = {
@@ -2392,7 +2396,7 @@ static void simplifyPrune()
 	    4, 0, 0,
 	    1, 1, 1,
 	    1, 1, 1,
-	    1, 1, 1, // clang-format :-/
+	    1, 1, 1 //
 	};
 
 	unsigned int expected[] = {
@@ -2417,7 +2421,7 @@ static void simplifyPruneCleanup()
 	unsigned int ib[] = {
 	    0, 1, 2,
 	    3, 4, 5,
-	    6, 7, 8, // clang-format :-/
+	    6, 7, 8 //
 	};
 
 	float vb[] = {
@@ -2429,7 +2433,7 @@ static void simplifyPruneCleanup()
 	    2, 0, 1,
 	    0, 0, 2,
 	    0, 4, 2,
-	    4, 0, 2, // clang-format :-/
+	    4, 0, 2 //
 	};
 
 	unsigned int expected[] = {
@@ -2449,7 +2453,7 @@ static void simplifyPruneFunc()
 	unsigned int ib[] = {
 	    0, 1, 2,
 	    3, 4, 5,
-	    6, 7, 8, // clang-format :-/
+	    6, 7, 8 //
 	};
 
 	float vb[] = {
@@ -2461,7 +2465,7 @@ static void simplifyPruneFunc()
 	    2, 0, 1,
 	    0, 0, 2,
 	    0, 4, 2,
-	    4, 0, 2, // clang-format :-/
+	    4, 0, 2 //
 	};
 
 	unsigned int expected[] = {
@@ -2488,7 +2492,7 @@ static void simplifyUpdate()
 	//    3 4
 	// 0       2
 	unsigned int ib[15] = {
-	    0, 1, 3, 3, 1, 4, 4, 1, 2, 0, 3, 2, 3, 4, 2, //
+	    0, 1, 3, 3, 1, 4, 4, 1, 2, 0, 3, 2, 3, 4, 2 //
 	};
 
 	float attr_weight = 1.f;
@@ -2496,7 +2500,7 @@ static void simplifyUpdate()
 	assert(meshopt_simplifyWithUpdate(ib, 15, vb[0], 5, 4 * sizeof(float), vb[0] + 3, 4 * sizeof(float), &attr_weight, 1, NULL, 9, 1.f) == 9);
 
 	unsigned int expected[] = {
-	    0, 1, 3, 3, 1, 2, 0, 3, 2, //
+	    0, 1, 3, 3, 1, 2, 0, 3, 2 //
 	};
 
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
@@ -2526,7 +2530,7 @@ static void simplifyUpdateLocked(unsigned int options)
 	//    3 4
 	// 0       2
 	unsigned int ib[15] = {
-	    0, 1, 3, 3, 1, 4, 4, 1, 2, 0, 3, 2, 3, 4, 2, //
+	    0, 1, 3, 3, 1, 4, 4, 1, 2, 0, 3, 2, 3, 4, 2 //
 	};
 
 	float attr_weight = 1.f;
@@ -2536,7 +2540,7 @@ static void simplifyUpdateLocked(unsigned int options)
 	assert(meshopt_simplifyWithUpdate(ib, 15, vb[0], 5, 4 * sizeof(float), vb[0] + 3, 4 * sizeof(float), &attr_weight, 1, vertex_lock, 9, 1.f, options) == 9);
 
 	unsigned int expected[] = {
-	    0, 1, 3, 3, 1, 2, 0, 3, 2, //
+	    0, 1, 3, 3, 1, 2, 0, 3, 2 //
 	};
 
 	assert(memcmp(ib, expected, sizeof(expected)) == 0);
@@ -2570,9 +2574,7 @@ static void adjacency()
 	    // patch 1
 	    5, 0,
 	    4, 4,
-	    3, 3,
-
-	    // clang-format :-/
+	    3, 3 //
 	};
 
 	assert(memcmp(adjib, expected, sizeof(expected)) == 0);
@@ -2601,9 +2603,7 @@ static void tessellation()
 	    2, 1,
 	    4, 3,
 	    3, 5,
-	    2, 1, 3,
-
-	    // clang-format :-/
+	    2, 1, 3 //
 	};
 
 	assert(memcmp(tessib, expected, sizeof(expected)) == 0);
@@ -2618,8 +2618,7 @@ static void provoking()
 	    3, 1, 4,
 	    1, 2, 4,
 	    4, 2, 5,
-	    0, 2, 4,
-	    // clang-format :-/
+	    0, 2, 4 //
 	};
 
 	unsigned int pib[15];
@@ -2631,13 +2630,11 @@ static void provoking()
 	    1, 4, 0,
 	    2, 4, 1,
 	    3, 4, 2,
-	    4, 5, 2,
-	    // clang-format :-/
+	    4, 5, 2 //
 	};
 
 	unsigned int expectedre[] = {
-	    3, 1, 2, 5, 4, 0,
-	    // clang-format :-/
+	    3, 1, 2, 5, 4, 0 //
 	};
 
 	assert(res == 6);
@@ -2749,7 +2746,7 @@ static void encodeMeshletBound()
 	    2, 1, 3,
 	    3, 5, 4,
 	    2, 0, 6,
-	    6, 6, 6, // clang-format :-/
+	    6, 6, 6 //
 	};
 
 	const unsigned int vertices[7] = {
@@ -2806,7 +2803,7 @@ static void decodeMeshletSafety()
 	    2, 1, 3,
 	    3, 5, 4,
 	    2, 0, 6,
-	    6, 6, 6, // clang-format :-/
+	    6, 6, 6 //
 	};
 
 	const unsigned int vertices[7] = {
@@ -2876,7 +2873,7 @@ static void decodeMeshletBasic()
 	    2, 1, 3,
 	    4, 3, 5,
 	    2, 0, 6,
-	    6, 6, 6, // clang-format :-/
+	    6, 6, 6 //
 	};
 
 	const unsigned int vertices[7] = {
@@ -2892,7 +2889,7 @@ static void decodeMeshletBasic()
 	const unsigned char encoded[46] = {
 	    0x0a, 0x0c, 0xfe, 0x19, 0x01, 0xc8, 0x60, 0x00, 0x00, 0x5e, 0x39, 0xb7, 0x0e, 0x1d, 0x9a, 0xb7,
 	    0x0e, 0x00, 0x00, 0x00, 0x00, 0x04, 0x03, 0x05, 0x02, 0x00, 0x06, 0x06, 0x06, 0x06, 0x00, 0x00,
-	    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x87, 0xff, 0x2c, 0xff, 0x0f, // clang-format :-/
+	    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x87, 0xff, 0x2c, 0xff, 0x0f //
 	};
 
 	unsigned int rv[7];
@@ -2912,19 +2909,19 @@ static void decodeMeshletTypical()
 	    10, 14, 8, 14, 11, 15, 15, 11, 13, 15, 13, 16, 15, 16, 14, 16, 13, 17, 14, 16, 18, 14, 18, 8,
 	    18, 16, 19, 19, 16, 20, 20, 16, 17, 20, 17, 21, 20, 21, 22, 20, 22, 19, 22, 21, 23, 19, 22, 24,
 	    19, 24, 25, 19, 25, 18, 18, 25, 26, 18, 26, 8, 8, 26, 9, 22, 23, 27, 22, 27, 24, 27, 23, 28,
-	    27, 28, 29, 27, 29, 24, 29, 28, 30, 24, 29, 31, // clang-format :-/
+	    27, 28, 29, 27, 29, 24, 29, 28, 30, 24, 29, 31 //
 	};
 
 	const unsigned int vertices[32] = {
 	    10, 11, 9, 12, 8, 13, 14, 15, 16, 17, 18, 19, 0, 20, 21, 22,
-	    23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, // clang-format :-/
+	    23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38 //
 	};
 
 	const unsigned char encoded[53] = {
 	    0x14, 0x05, 0x04, 0x09, 0x08, 0x27, 0x26, 0x05, 0x05, 0x04, 0x08, 0x0d, 0x0e, 0x08, 0x11, 0x13,
 	    0x12, 0x08, 0x09, 0x16, 0x17, 0x18, 0x18, 0x0d, 0x03, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x0c,
 	    0x02, 0x38, 0x24, 0x43, 0x34, 0x20, 0x80, 0x61, 0x03, 0x61, 0x16, 0x26, 0x03, 0x10, 0x66, 0x10,
-	    0x12, 0xe3, 0x61, 0x10, 0x66, // clang-format :-/
+	    0x12, 0xe3, 0x61, 0x10, 0x66 //
 	};
 
 	unsigned int rv[32];
@@ -2950,7 +2947,7 @@ static void opacityMap()
 
 	    // 2 center triangles (2x larger)
 	    4, 6, 5, // note: this triangle is flipped from its correct orientation to produce the same OMM to test compaction
-	    4, 6, 7, // clang-format :-/
+	    4, 6, 7  //
 	};
 
 	const float uvs[vertex_count * 2] = {
@@ -2961,7 +2958,7 @@ static void opacityMap()
 	    0.5f, 0.f,
 	    1.f, 0.5f,
 	    0.5f, 1.f,
-	    0.f, 0.5f, // clang-format :-/
+	    0.f, 0.5f //
 	};
 
 	const unsigned int texture_size = 32;
@@ -3142,10 +3139,14 @@ static void tangentDegenerate()
 	};
 
 	const unsigned int indices[] = {
-	    0, 3, 1, // outer, positive
-	    0, 1, 2, // inner, degenerate UVs
-	    1, 4, 2, // outer, positive
-	    2, 5, 0, // outer, negative
+	    // outer, positive
+	    0, 3, 1,
+	    // inner, degenerate UVs
+	    0, 1, 2,
+	    // outer, positive
+	    1, 4, 2,
+	    // outer, negative
+	    2, 5, 0 //
 	};
 
 	float tangents[12 * 4];
