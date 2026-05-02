@@ -53,7 +53,7 @@
 		}
 	},
 	"scripts": {
-		"test": "node meshopt_encoder.test.js && node meshopt_decoder.test.js && node meshopt_simplifier.test.js && node meshopt_clusterizer.test.js",
+		"test": "node meshopt_encoder.test.js && node meshopt_decoder.test.js && node meshopt_simplifier.test.js && node meshopt_clusterizer.test.js && node meshopt_tangents.test.js",
 		"prepublishOnly": "npm test"
 	}
 }
