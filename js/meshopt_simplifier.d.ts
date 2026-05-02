@@ -2,6 +2,9 @@
 // Copyright (C) 2016-2026, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
 export type SimplifierFlags = 'LockBorder' | 'Sparse' | 'ErrorAbsolute' | 'Prune' | 'Regularize' | 'Permissive';
 
+/** @deprecated Use SimplifierFlags instead. */
+export type Flags = SimplifierFlags;
+
 export const MeshoptSimplifier: {
 	supported: boolean;
 	ready: Promise<void>;
