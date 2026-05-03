@@ -89,6 +89,8 @@ jobs:
         run: node js/meshopt_simplifier.test.js
       - name: test clusterizer
         run: node js/meshopt_clusterizer.test.js
+      - name: check typescript declarations
+        run: npx --yes -p typescript@6 tsc --noEmit --moduleResolution node16 --module node16 --strict js/index.d.ts
       - name: check es5
         run: |
           npm install -g es-check@7.2.1
