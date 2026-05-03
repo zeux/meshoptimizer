@@ -321,6 +321,7 @@ var MeshoptSimplifier = (function () {
 		Prune: 8,
 		Regularize: 16,
 		Permissive: 32,
+		RegularizeLight: 64,
 		_InternalDebug: 1 << 30, // internal, don't use!
 	};
 

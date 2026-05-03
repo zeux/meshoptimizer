@@ -152,7 +152,7 @@ To control behavior of the algorithm more precisely, `flags` may specify an arra
 - `'ErrorAbsolute'` changes the error metric from relative to absolute both for the input error limit as well as for the resulting error. This can be used instead of `getScale`.
 - `'Sparse'` improves simplification performance assuming input indices are a sparse subset of the mesh. This can be useful when simplifying small mesh subsets independently. For consistency, it is recommended to use absolute errors when sparse simplification is desired.
 - `'Prune'` allows removal of isolated components regardless of the topological restrictions inside the component. This is generally recommended for full-mesh simplification as it can improve quality and reduce triangle count; note that with this option, triangles connected to locked vertices may be removed as part of their component.
-- `'Regularize'` produces more regular triangle sizes and shapes during simplification, at some cost to geometric quality. This can improve geometric quality under deformation such as skinning.
+- `'Regularize'` produces more regular triangle sizes and shapes during simplification, at some cost to geometric quality. This can improve geometric quality under deformation such as skinning. `'RegularizeLight'` can be used instead for a smaller regularization factor, reducing the impact on geometric quality.
 
 In addition to the `Prune` flag, you can explicitly prune isolated components under a target threshold by calling the `simplifyPrune` function:
 
