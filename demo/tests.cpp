@@ -2739,6 +2739,112 @@ static void dequantizeHalf()
 	assert(nanf != nanf);
 }
 
+static int validatePositionExponent(const float minv[3], const float maxv[3], int min_exponent, int max_bits)
+{
+	int exponent = meshopt_computePositionExponent(minv, maxv, min_exponent, max_bits);
+
+	const int anchor_min = -(1 << 23);
+	const int anchor_max = (1 << 23) - 1;
+	const unsigned int range_max = (1 << max_bits) - 1;
+
+	float scale = ldexpf(1.f, -exponent);
+
+	for (int k = 0; k < 3; ++k)
+	{
+		float lo = minv[k] * scale;
+		float hi = maxv[k] * scale;
+
+		// lo must fit in 24-bit signed under both round-to-nearest tie-break choices
+		int lo_neg = int(ceilf(lo - 0.5f));  // round half toward -inf
+		int lo_pos = int(floorf(lo + 0.5f)); // round half toward +inf
+		assert(anchor_min <= lo_neg);
+		assert(lo_neg <= lo_pos);
+		assert(lo_pos <= anchor_max);
+
+		// hi must fit in 24-bit signed under both round-to-nearest tie-break choices
+		int hi_neg = int(ceilf(hi - 0.5f));  // round half toward -inf
+		int hi_pos = int(floorf(hi + 0.5f)); // round half toward +inf
+		assert(anchor_min <= hi_neg);
+		assert(hi_neg <= hi_pos);
+		assert(hi_pos <= anchor_max);
+
+		// largest hi - smallest lo must fit in max_bits (covers both round-to-nearest tie-break choices)
+		assert(unsigned(hi_pos - lo_neg) <= range_max);
+	}
+
+	return exponent;
+}
+
+static void computePositionExponent()
+{
+	const float minv[3] = {-1.f, 2.f, 10.f};
+	const float maxv[3] = {1.f, 2.5f, 20.f};
+
+	assert(validatePositionExponent(minv, maxv, -16, 16) == -12);
+	assert(validatePositionExponent(minv, maxv, -10, 16) == -10);
+
+	const float minirr[3] = {-3.14159265f, -2.7182818f, -1.41321356f};
+	const float maxirr[3] = {3.14159265f, 2.7182818f, 1.41321356f};
+
+	assert(validatePositionExponent(minirr, maxirr, -16, 16) == -13);
+
+	const float point[3] = {1000000.f, 0.f, 0.f};
+	assert(validatePositionExponent(point, point, -16, 16) == -3);
+
+	const float negpoint[3] = {-1000000.f, 0.f, 0.f};
+	assert(validatePositionExponent(negpoint, negpoint, -16, 16) == -3);
+
+	const float asym_min[3] = {0.f, -1000.f, 0.f};
+	const float asym_max[3] = {1e-3f, 1000.f, 1.f};
+	assert(validatePositionExponent(asym_min, asym_max, -16, 16) == -5);
+
+	const float zero[3] = {0.f, 0.f, 0.f};
+	assert(validatePositionExponent(zero, zero, -16, 16) == -16);
+
+	const float range_min[3] = {0.f, 0.f, 0.f};
+	const float range_max[3] = {65535.f, 0.f, 0.f};
+	assert(validatePositionExponent(range_min, range_max, 0, 16) == 0);
+
+	const float range_over[3] = {65536.f, 0.f, 0.f};
+	assert(validatePositionExponent(range_min, range_over, 0, 16) == 1);
+
+	const float range_dgf_min[3] = {0.4f, 0.f, 0.f};
+	const float range_dgf_max[3] = {65535.5625f, 0.f, 0.f};
+	assert(validatePositionExponent(range_dgf_min, range_dgf_max, 0, 16) == 1);
+
+	const float range_half_min[3] = {-1.f, 0.f, 0.f};
+	const float range_half_max[3] = {131069.f, 0.f, 0.f};
+	assert(validatePositionExponent(range_half_min, range_half_max, 0, 16) == 2);
+
+	const float anchor_max[3] = {8388607.f, 0.f, 0.f};
+	assert(validatePositionExponent(anchor_max, anchor_max, 0, 16) == 0);
+
+	const float anchor_over[3] = {8388608.f, 0.f, 0.f};
+	assert(validatePositionExponent(anchor_over, anchor_over, 0, 16) == 1);
+
+	const float anchor_min[3] = {-8388608.f, 0.f, 0.f};
+	assert(validatePositionExponent(anchor_min, anchor_min, 0, 16) == 1); // note: symmetric range; 0 would be acceptable
+
+	const float posunit[3] = {1.f, 0.f, 0.f};
+	assert(validatePositionExponent(posunit, posunit, -23, 16) == -22);
+
+	const float negunit[3] = {-1.f, 0.f, 0.f};
+	assert(validatePositionExponent(negunit, negunit, -23, 16) == -22); // note: symmetric range; -23 would be acceptable
+
+	const float ties[3] = {0.5f, -0.5f, 2.5f};
+	assert(validatePositionExponent(ties, ties, 0, 16) == 0);
+
+	const float tie_min[3] = {-0.5f, 0.f, 0.f};
+	const float tie_max[3] = {0.5f, 0.f, 0.f};
+	assert(validatePositionExponent(tie_min, tie_max, 0, 16) == 0);
+
+	const float bits21_max[3] = {2097151.f, 0.f, 0.f};
+	assert(validatePositionExponent(range_min, bits21_max, 0, 21) == 0);
+
+	const float anchor_half[3] = {8388607.5f, 0.f, 0.f};
+	assert(validatePositionExponent(anchor_half, anchor_half, 0, 16) == 1);
+}
+
 static void encodeMeshletBound()
 {
 	const unsigned char triangles[5 * 3] = {
@@ -3300,6 +3406,7 @@ void runTests()
 	quantizeFloat();
 	quantizeHalf();
 	dequantizeHalf();
+	computePositionExponent();
 
 	encodeMeshletBound();
 	decodeMeshletSafety();
