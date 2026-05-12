@@ -2,6 +2,7 @@
 #include "meshoptimizer.h"
 
 #include <assert.h>
+#include <float.h>
 #include <math.h>
 
 union FloatBits
@@ -95,7 +96,12 @@ int meshopt_computeClusterPositionExponent(const float* minv, const float* maxv,
 	int maxc_exp = 0;
 	float maxc_fr = frexpf(maxc, &maxc_exp);
 
-	exp = exp < maxc_exp - 23 ? maxc_exp - 23 : exp;
+	// maxc is representable as 2^(maxc_exp-24) * 24-bit *unsigned* integer
+	// we have to use a 24-bit *signed* grid, so we have to chop off the last bit
+	// however, rounding in the corner case (mantissa is 1.111...) may increase the exponent by 1 so we need to offset it
+	int maxc_off = 23 - (maxc_fr == 1.f - FLT_EPSILON / 2);
+
+	exp = exp < maxc_exp - maxc_off ? maxc_exp - maxc_off : exp;
 
 	// compute conservative anchor with floor rounding, to allow for some ambiguity in the caller's rounding direction
 	float scale = ldexpf(1.f, -exp);
