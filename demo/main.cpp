@@ -1045,6 +1045,53 @@ void encodeMeshletsDXR(const Mesh& mesh, size_t max_triangles, int min_exp, int 
 	    int(meshlets.size()), int(packed.size()),
 	    double(packed.size()) / double(tris), double(stats_headers) / double(tris), double(stats_positions) / double(tris), double(stats_topology) / double(tris),
 	    double(mbc) / double(tris));
+
+#if !TRACE
+	double mbtime = 0;
+	size_t mbsize = 0;
+
+	for (int i = 0; i < 10; ++i)
+	{
+		unsigned char clp[12 + 256 * 6]; // up to 48 bits per vertex
+		unsigned char clt[256 * 3 + 4];  // +4 bytes for padding
+
+		double t0 = timestamp();
+		unsigned char* p = &packed[0];
+		for (size_t j = 0; j < meshlets.size(); ++j)
+		{
+			// decode cluster header
+			size_t vertex_count = p[0] + 1;
+			size_t triangle_count = p[1] + 1;
+			size_t topology_size = p[2] | (p[3] << 8);
+
+			// decode DXR header to establish position size
+			size_t position_bitsx = (p[8] & 15) + 1;
+			size_t position_bitsy = ((p[8] >> 4) & 15) + 1;
+			size_t position_bitsz = (p[12] & 15) + 1;
+			size_t position_size = (vertex_count * (position_bitsx + position_bitsy + position_bitsz) + 7) / 8;
+
+			// memcpy DXR Compressed1 portion as is
+			void* clpopt = topology_size ? clp : clt; // note: hack to ensure memcpy is not elided for benchmarking purposes; topology_size is always >0 so this always copies into clp
+			memcpy(clpopt, p + 4, 12 + position_size);
+
+			// decode topology as 3 bytes per triangle
+			int rc = meshopt_decodeMeshlet(static_cast<unsigned int*>(NULL), 0, clt, triangle_count, p + 16 + position_size, topology_size);
+			assert(rc == 0);
+			(void)rc;
+
+			p += 16 + position_size + topology_size;
+			if (i == 0) // stats for decode throughput
+				mbsize += position_size + triangle_count * 3;
+		}
+		double t1 = timestamp();
+
+		mbtime = (mbtime == 0 || t1 - t0 < mbtime) ? (t1 - t0) : mbtime;
+	}
+
+	printf("MeshletCodecDXR (%d): decode time %.3f msec, %.3fB tri/sec, %.3f GB/sec\n",
+	    int(max_triangles),
+	    mbtime * 1000, double(tris) / 1e9 / mbtime, double(mbsize) / mbtime * 1e-9);
+#endif
 }
 
 template <typename PV>
