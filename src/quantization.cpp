@@ -2,6 +2,7 @@
 #include "meshoptimizer.h"
 
 #include <assert.h>
+#include <math.h>
 
 union FloatBits
 {
@@ -73,4 +74,46 @@ float meshopt_dequantizeHalf(unsigned short h)
 	FloatBits u;
 	u.ui = s | r;
 	return u.f;
+}
+
+int meshopt_computeClusterPositionExponent(const float* minv, const float* maxv, int min_exp, int max_bits)
+{
+	assert(min_exp >= -126);
+	assert(max_bits >= 1 && max_bits <= 24);
+
+	int exp = min_exp;
+
+	// compute max absolute component to ensure that individual endpoints fit on a 24-bit signed grid
+	float maxc = 0.f;
+
+	for (int k = 0; k < 3; ++k)
+	{
+		maxc = maxc < fabsf(minv[k]) ? fabsf(minv[k]) : maxc;
+		maxc = maxc < fabsf(maxv[k]) ? fabsf(maxv[k]) : maxc;
+	}
+
+	int maxc_exp = 0;
+	float maxc_fr = frexpf(maxc, &maxc_exp);
+
+	exp = exp < maxc_exp - 23 ? maxc_exp - 23 : exp;
+
+	// compute conservative anchor with floor rounding, to allow for some ambiguity in the caller's rounding direction
+	float scale = ldexpf(1.f, -exp);
+	float anchor[3] = {floorf(minv[0] * scale), floorf(minv[1] * scale), floorf(minv[2] * scale)};
+
+	// compute effective range in 24-bit integer space, with conservative ceil rounding
+	float range = 0.f;
+	for (int k = 0; k < 3; ++k)
+	{
+		float v = ceilf(maxv[k] * scale) - anchor[k];
+		range = range < v ? v : range;
+	}
+
+	// range must be representable as max_bits unsigned integer
+	int range_exp = 0;
+	(void)frexpf(range, &range_exp);
+
+	exp += (range_exp > max_bits) ? range_exp - max_bits : 0;
+
+	return exp;
 }
