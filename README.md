@@ -336,7 +336,8 @@ int exponent = min_exp;
 
 for (size_t i = 0; i < meshlets.size(); ++i)
 {
-    int cexp = meshopt_computePositionExponent(meshlet_aabb[i].min, meshlet_aabb[i].max, min_exp, /* max_bits= */ 16);
+    AABB meshlet_aabb = ...; // compute meshlet AABB based on vertex positions
+    int cexp = meshopt_computePositionExponent(meshlet_aabb.min, meshlet_aabb.max, min_exp, /* max_bits= */ 16);
     exponent = std::max(exponent, cexp);
 }
 
@@ -364,7 +365,7 @@ for (size_t j = 0; j < meshlet.vertex_count; ++j)
 
 The exponent selection guarantees that as a result, for each cluster, we get 24-bit `anchor` components, and for each vertex `position[k] - anchor[k]` fits into a 16-bit unsigned integer. The positions *could* then be encoded using a fixed-width 16-bit encoding, with 6 bytes per vertex; however, because many clusters will require fewer bits, it's more efficient to determine the bit count per axis per cluster (by computing the number of bits per axis that is sufficient to fit `position[k] - anchor[k]`), and encoding the resulting deltas from the anchor into a bitstream. When using DXR2, the resulting position bits can be given directly to the cluster BVH builder by using `D3D12_VERTEX_FORMAT_COMPRESSED1` format.
 
-The same data could be directly decoded from a mesh shader in hybrid rendering pipelines, since each cluster uses a consistent number of bits per axis; this would require implementing unaligned bitstream read access in the shader, an exercise which shall be left to the reader.
+The same data could be directly decoded from a mesh shader in hybrid rendering pipelines, since each cluster uses a consistent number of bits per axis; this would require implementing unaligned bitstream read access in the shader. Alternatively, deltas could be stored as 16-bit integers alongside other vertex data (taking as much space as `snorm16`/`half` positions with significantly increased precision for larger meshes).
 
 > In the examples above, `max_bits` is set to 16 to match DXR2 limits. If DXR2 compatibility is not required, it may sometimes be necessary to use more bits to accommodate larger clusters. This is particularly relevant when using hierarchical cluster LOD, as all clusters at all levels of detail must share the exponent to eliminate gaps between adjacent clusters at different resolutions; Nanite uses up to 21 bits per axis for this reason.
 
