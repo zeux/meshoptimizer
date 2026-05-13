@@ -298,8 +298,8 @@ Both of the meshlet algorithms are designed to work with triangle meshes. In som
 ```c++
 const size_t cluster_size = 256;
 
-std::vector<unsigned int> index(mesh.vertices.size());
-meshopt_spatialClusterPoints(&index[0], &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), cluster_size);
+std::vector<unsigned int> index(vertices.size());
+meshopt_spatialClusterPoints(&index[0], &vertices[0].px, vertices.size(), sizeof(Vertex), cluster_size);
 ```
 
 The resulting index buffer could be used to process the points directly, or reorganize the point data into flat contiguous arrays. Every consecutive chunk of `cluster_size` points in the index buffer refers to a single cluster, with just the last cluster containing fewer points if the total number of points is not a multiple of `cluster_size`. Note that the index buffer is not a remap table, so `meshopt_remapVertexBuffer` can't be used to flatten the point data.
@@ -323,6 +323,53 @@ Two clusters are considered topologically adjacent if they reference the same in
 If vertex positions are specified (not `NULL`), spatial locality will influence priority of merging clusters; otherwise, the algorithm will rely solely on topological connections and will not merge disconnected clusters into the same partition, which may result in smaller partitions for some inputs.
 
 After partitioning, each element in the destination array contains the partition ID (ranging from 0 to the returned partition count minus 1) for the corresponding cluster. Note that the partitions may be both smaller and larger than the target size; given a target size, the maximum partition size returned currently is `target + target / 3`.
+
+### Cluster position quantization
+
+When working with clustered geometry, it may be possible to use cluster-relative quantization for vertex positions. In particular, a common representation involves quantizing positions to lie on an integer grid with an exponent shared between clusters, to avoid quantizing shared vertices differently between clusters, and storing each position as an offset from the cluster anchor. A variant of this representation called [Compressed1 position encoding](https://microsoft.github.io/DirectX-Specs/d3d/Raytracing2.html#compressed1-position-encoding) is supported by DXR2. This library provides a helper function, `meshopt_computePositionExponent`, that can be used to compute the exponent, as well as an example (see `encodeMeshletsDXR` in `demo/main.cpp`) demonstrating the full pipeline.
+
+First, compute the shared exponent to guarantee that any vertex in every cluster fits in a 24-bit signed integer, and additionally can be encoded as a K-bit unsigned delta from the per-cluster anchor (in the example below, `K=16` which matches DXR2 limits):
+
+```c++
+const int min_exp = -13; // start with an acceptable level of precision; 2^-13 ~= 0.1mm in metric units
+int exponent = min_exp;
+
+for (size_t i = 0; i < meshlets.size(); ++i)
+{
+    AABB meshlet_aabb = ...; // compute meshlet AABB based on vertex positions
+    int cexp = meshopt_computePositionExponent(meshlet_aabb.min, meshlet_aabb.max, min_exp, /* max_bits= */ 16);
+    exponent = std::max(exponent, cexp);
+}
+
+float scale = ldexpf(1.f, exponent);
+```
+
+After this, each cluster can be encoded independently; when encoding each position, positions should be converted to the integer grid, and the anchor should be established:
+
+```c++
+int positions[256][3];
+int anchor[3] = {INT_MAX, INT_MAX, INT_MAX};
+
+for (size_t j = 0; j < meshlet.vertex_count; ++j)
+{
+    unsigned int v = meshlet_vertices[meshlet.vertex_offset + j];
+    const float* p = &vertices[v].px;
+
+    for (int k = 0; k < 3; ++k)
+    {
+        positions[j][k] = int(roundf(p[k] / scale));
+        anchor[k] = std::min(anchor[k], positions[j][k]);
+    }
+}
+```
+
+The exponent selection guarantees that as a result, for each cluster, we get 24-bit `anchor` components, and for each vertex `position[k] - anchor[k]` fits into a 16-bit unsigned integer. The positions *could* then be encoded using a fixed-width 16-bit encoding, with 6 bytes per vertex; however, because many clusters will require fewer bits, it's more efficient to determine the bit count per axis per cluster (by computing the number of bits per axis that is sufficient to fit `position[k] - anchor[k]`), and encoding the resulting deltas from the anchor into a bitstream. When using DXR2, the resulting position bits can be given directly to the cluster BVH builder by using `D3D12_VERTEX_FORMAT_COMPRESSED1` format.
+
+The same data could be directly decoded from a mesh shader in hybrid rendering pipelines, since each cluster uses a consistent number of bits per axis; this would require implementing unaligned bitstream read access in the shader. Alternatively, deltas could be stored as 16-bit integers alongside other vertex data (taking as much space as `snorm16`/`half` positions with significantly increased precision for larger meshes).
+
+> In the examples above, `max_bits` is set to 16 to match DXR2 limits. If DXR2 compatibility is not required, it may sometimes be necessary to use more bits to accommodate larger clusters. This is particularly relevant when using hierarchical cluster LOD, as all clusters at all levels of detail must share the exponent to eliminate gaps between adjacent clusters at different resolutions; Nanite uses up to 21 bits per axis for this reason.
+
+This scheme works well together with meshlet compression described below, which can be used to encode topology (triangles) efficiently.
 
 ## Mesh compression
 
@@ -873,6 +920,7 @@ Currently, the following APIs are experimental:
 - `meshopt_SimplifyRegularizeLight` flag for `meshopt_simplify*` functions
 - `meshopt_encode/decodeMeshlet*` functions (`meshopt_encodeMeshlet`, `meshopt_encodeMeshletBound`, `meshopt_decodeMeshlet`, `meshopt_decodeMeshletRaw`)
 - `meshopt_extractMeshletIndices` and `meshopt_optimizeMeshletLevel` functions
+- `meshopt_computePositionExponent` function
 - `meshopt_opacityMap*` functions (`meshopt_opacityMapMeasure`, `meshopt_opacityMapRasterize`, `meshopt_opacityMapCompact`, `meshopt_opacityMapEntrySize`)
 - `meshopt_generateTangents` function and `meshopt_Tangent*` flags
 

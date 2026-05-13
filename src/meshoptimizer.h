@@ -947,6 +947,23 @@ MESHOPTIMIZER_API float meshopt_quantizeFloat(float v, int N);
 MESHOPTIMIZER_API float meshopt_dequantizeHalf(unsigned short h);
 
 /**
+ * Experimental: Compute shared exponent suitable for mesh/cluster position quantization
+ * Given mesh or cluster bounds, compute a shared exponent that can be used to quantize any position inside the bounds to a 24-bit integer grid.
+ * The resulting output can be stored as a compact bit-stream to be decoded directly in shaders, or to be used as an input to RT BVH builders,
+ * for example via D3D12_VERTEX_FORMAT_COMPRESSED1 in DXR2 (max_bits=16).
+ *
+ * To quantize positions, compute:
+ *   scale = pow(2, exponent)
+ *   iv = int(round(v / scale))
+ * The resulting integer can be stored as signed 24-bit, or as an unsigned offset from a signed 24-bit anchor value, shared between all positions.
+ *
+ * minv/maxv specify the axis-aligned bounding box of the mesh or cluster; each should refer to a float3 value
+ * min_exp specifies the minimum value for the returned exponent, limiting precision to reduce size; e.g. min_exp = -10 will produce minimum error of 1mm given metric units
+ * max_bits specifies the maximum allowed number of bits for the quantized integer range (offset from anchor is an unsigned integer up to 2^max_bits-1)
+ */
+MESHOPTIMIZER_EXPERIMENTAL int meshopt_computePositionExponent(const float* minv, const float* maxv, int min_exp, int max_bits);
+
+/**
  * Set allocation callbacks
  * These callbacks will be used instead of the default operator new/operator delete for all temporary allocations in the library.
  * Note that all algorithms only allocate memory for temporary use.

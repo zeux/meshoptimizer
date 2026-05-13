@@ -1,6 +1,7 @@
 #include "../src/meshoptimizer.h"
 
 #include <assert.h>
+#include <float.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -887,6 +888,214 @@ void encodeMeshlets(const Mesh& mesh, size_t max_vertices, size_t max_triangles,
 #endif
 }
 
+static void writeBits(std::vector<unsigned char>& data, unsigned int& acc, int& acc_bits, unsigned int value, int bits)
+{
+	assert(value < (1u << bits));
+	assert(acc_bits + bits <= 32);
+
+	acc |= value << acc_bits;
+	acc_bits += bits;
+
+	while (acc_bits >= 8)
+	{
+		data.push_back((unsigned char)(acc & 0xff));
+		acc >>= 8;
+		acc_bits -= 8;
+	}
+}
+
+void encodeMeshletsDXR(const Mesh& mesh, size_t max_triangles, int min_exp, int level = 3)
+{
+	// split mesh into clusters, optimized for RT
+	size_t min_triangles = max_triangles / 4;
+	size_t max_vertices = 256;
+	float fill_weight = 0.25f;
+	size_t max_meshlets = meshopt_buildMeshletsBound(mesh.indices.size(), max_vertices, min_triangles);
+
+	std::vector<unsigned int> shadow_indices(mesh.indices.size());
+	meshopt_generateShadowIndexBuffer(&shadow_indices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(float) * 3, sizeof(Vertex));
+
+	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
+	std::vector<unsigned int> meshlet_vertices(mesh.indices.size());
+	std::vector<unsigned char> meshlet_triangles(mesh.indices.size());
+	meshlets.resize(meshopt_buildMeshletsSpatial(&meshlets[0], &meshlet_vertices[0], &meshlet_triangles[0], &shadow_indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), max_vertices, min_triangles, max_triangles, fill_weight));
+
+	if (meshlets.size())
+	{
+		const meshopt_Meshlet& last = meshlets.back();
+
+		// this is an example of how to trim the vertex/triangle arrays when copying data out to GPU storage
+		meshlet_vertices.resize(last.vertex_offset + last.vertex_count);
+		meshlet_triangles.resize(last.triangle_offset + last.triangle_count * 3);
+	}
+
+	// optimize each meshlet for locality; this is critical for good compression
+	for (size_t i = 0; i < meshlets.size(); ++i)
+		meshopt_optimizeMeshletLevel(&meshlet_vertices[meshlets[i].vertex_offset], meshlets[i].vertex_count, &meshlet_triangles[meshlets[i].triangle_offset], meshlets[i].triangle_count, level);
+
+	// compute shared exponent per mesh:
+	// - must be at most min_exp which should be set to maximum required precision (e.g. -10 for 1mm accuracy given metric units)
+	// - must accommodate each cluster to fit into Compressed1 DXR encoding (16-bit offsets from 24-bit anchors)
+	// note, for DGF parity min_exp should be set based on mesh AABB; we do not do this as we do not consider this rigorous.
+	int exponent = min_exp;
+
+	for (const meshopt_Meshlet& meshlet : meshlets)
+	{
+		float minv[3] = {FLT_MAX, FLT_MAX, FLT_MAX}, maxv[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+
+		for (size_t j = 0; j < meshlet.vertex_count; ++j)
+		{
+			unsigned int v = meshlet_vertices[meshlet.vertex_offset + j];
+			const float* p = &mesh.vertices[v].px;
+
+			for (int k = 0; k < 3; ++k)
+			{
+				minv[k] = fminf(minv[k], p[k]);
+				maxv[k] = fmaxf(maxv[k], p[k]);
+			}
+		}
+
+		int cexp = meshopt_computePositionExponent(minv, maxv, min_exp, /* max_bits= */ 16);
+		exponent = (exponent > cexp) ? exponent : cexp;
+	}
+
+	std::vector<unsigned char> packed;
+	size_t stats_headers = 0, stats_positions = 0, stats_topology = 0;
+
+	for (size_t i = 0; i < meshlets.size(); ++i)
+	{
+		const meshopt_Meshlet& meshlet = meshlets[i];
+
+		// for each cluster, use meshopt codec for meshlet topology; will need to decode using meshopt_decodeMeshlet at runtime
+		unsigned char topology[1024];
+		assert(meshopt_encodeMeshletBound(0, max_triangles) <= sizeof(topology));
+
+		size_t tops = meshopt_encodeMeshlet(topology, sizeof(topology), NULL, 0, &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count);
+		assert(tops > 0);
+
+		// for each cluster, positions are encoded using 24-bit anchor and up-to-16-bit offset per axis
+		float scale = ldexpf(1.f, exponent);
+
+		int positions[256][3];
+		int anchor[3] = {INT_MAX, INT_MAX, INT_MAX};
+
+		for (size_t j = 0; j < meshlet.vertex_count; ++j)
+		{
+			unsigned int v = meshlet_vertices[meshlet.vertex_offset + j];
+			const float* p = &mesh.vertices[v].px;
+
+			for (int k = 0; k < 3; ++k)
+			{
+				positions[j][k] = int(roundf(p[k] / scale));
+				anchor[k] = anchor[k] < positions[j][k] ? anchor[k] : positions[j][k];
+			}
+		}
+
+		// compute optimal per-cluster per-axis bit count
+		int bits[3] = {1, 1, 1};
+
+		for (size_t j = 0; j < meshlet.vertex_count; ++j)
+			for (int k = 0; k < 3; ++k)
+			{
+				int v = positions[j][k] - anchor[k];
+				assert(v >= 0 && v < (1 << 16));
+
+				while (v >= (1 << bits[k]))
+					bits[k]++;
+			}
+
+		// prepare cluster header: 1 word with cluster sizes, and 3 words for DXR-compatible cluster position header
+		// see https://microsoft.github.io/DirectX-Specs/d3d/Raytracing2.html#compressed1-position-encoding
+		unsigned int header[4] = {
+		    (meshlet.vertex_count - 1) | ((meshlet.triangle_count - 1) << 8) | (unsigned(tops) << 16),
+		    (unsigned(anchor[0]) << 8) | (exponent + 127),
+		    (unsigned(anchor[1]) << 8) | (unsigned(bits[1] - 1) << 4) | unsigned(bits[0] - 1),
+		    (unsigned(anchor[2]) << 8) | unsigned(bits[2] - 1),
+		};
+
+		// write cluster header, cluster positions, and cluster topology
+		// note: we write the data in a way that is easiest to consume for the decoding; however, for best post-deflate compression consider reordering it
+		// (by grouping headers, positions, and topology into three separate streams)
+		// maximum post-deflate compression can be achieved by interleaving the cluster position bits per axis (all X => all Y => all Z), but that requires extra decoding work
+		// this layout can be decoded using `meshopt_decodeMeshlet` + `memcpy` when the consumer is DXR2-compatible.
+		for (unsigned int word : header)
+			for (int k = 0; k < 4; ++k)
+				packed.push_back((unsigned char)((word >> (k * 8)) & 0xff));
+
+		unsigned int acc = 0;
+		int acc_bits = 0;
+
+		for (size_t j = 0; j < meshlet.vertex_count; ++j)
+			for (int k = 0; k < 3; ++k)
+				writeBits(packed, acc, acc_bits, positions[j][k] - anchor[k], bits[k]);
+
+		if (acc_bits)
+			packed.push_back((unsigned char)(acc & 0xff));
+
+		packed.insert(packed.end(), topology, topology + tops);
+
+		stats_headers += 4 * 4;
+		stats_positions += (meshlet.vertex_count * (bits[0] + bits[1] + bits[2]) + 7) / 8;
+		stats_topology += tops;
+	}
+
+	size_t mbc = compress(packed);
+	size_t tris = mesh.indices.size() / 3;
+
+	printf("MeshletCodecDXR (%d@%d): %d meshlets, %d bytes; %.1f bytes/triangle (%.1f headers, %.1f positions, %.1f topology); post-deflate: %.1f bytes/triangle\n",
+	    int(max_triangles), exponent,
+	    int(meshlets.size()), int(packed.size()),
+	    double(packed.size()) / double(tris), double(stats_headers) / double(tris), double(stats_positions) / double(tris), double(stats_topology) / double(tris),
+	    double(mbc) / double(tris));
+
+#if !TRACE
+	double mbtime = 0;
+	size_t mbsize = 0;
+
+	for (int i = 0; i < 10; ++i)
+	{
+		unsigned char clp[12 + 256 * 6]; // up to 48 bits per vertex
+		unsigned char clt[256 * 3 + 4];  // +4 bytes for padding
+
+		double t0 = timestamp();
+		unsigned char* p = &packed[0];
+		for (size_t j = 0; j < meshlets.size(); ++j)
+		{
+			// decode cluster header
+			size_t vertex_count = p[0] + 1;
+			size_t triangle_count = p[1] + 1;
+			size_t topology_size = p[2] | (p[3] << 8);
+
+			// decode DXR header to establish position size
+			size_t position_bitsx = (p[8] & 15) + 1;
+			size_t position_bitsy = ((p[8] >> 4) & 15) + 1;
+			size_t position_bitsz = (p[12] & 15) + 1;
+			size_t position_size = (vertex_count * (position_bitsx + position_bitsy + position_bitsz) + 7) / 8;
+
+			// memcpy DXR Compressed1 portion as is
+			void* clpopt = topology_size ? clp : clt; // note: hack to ensure memcpy is not elided for benchmarking purposes; topology_size is always >0 so this always copies into clp
+			memcpy(clpopt, p + 4, 12 + position_size);
+
+			// decode topology as 3 bytes per triangle
+			int rc = meshopt_decodeMeshlet(static_cast<unsigned int*>(NULL), 0, clt, triangle_count, p + 16 + position_size, topology_size);
+			assert(rc == 0);
+			(void)rc;
+
+			p += 16 + position_size + topology_size;
+			if (i == 0) // stats for decode throughput
+				mbsize += position_size + triangle_count * 3;
+		}
+		double t1 = timestamp();
+
+		mbtime = (mbtime == 0 || t1 - t0 < mbtime) ? (t1 - t0) : mbtime;
+	}
+
+	printf("MeshletCodecDXR (%d): decode time %.3f msec, %.3fB tri/sec, %.3f GB/sec\n",
+	    int(max_triangles),
+	    mbtime * 1000, double(tris) / 1e9 / mbtime, double(mbsize) / mbtime * 1e-9);
+#endif
+}
+
 template <typename PV>
 void packVertex(const Mesh& mesh, const char* pvn)
 {
@@ -1627,6 +1836,7 @@ void process(const char* path)
 	encodeVertex<PackedVertexOct>(copy, "O");
 
 	encodeMeshlets(mesh, 64, 96);
+	encodeMeshletsDXR(mesh, 128, /* min_exp= */ -14);
 
 	simplify(mesh);
 	simplify(mesh, 0.1f, meshopt_SimplifyPrune);
@@ -1658,7 +1868,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	tangents(mesh);
+	encodeMeshletsDXR(mesh, 128, /* min_exp= */ -14);
 }
 
 void processNanite(const char* path)
