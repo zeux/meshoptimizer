@@ -953,14 +953,15 @@ MESHOPTIMIZER_API float meshopt_dequantizeHalf(unsigned short h);
  * for example via D3D12_VERTEX_FORMAT_COMPRESSED1 in DXR2 (max_bits=16).
  *
  * To quantize positions, compute:
- *   scale = 2 ** exponent
+ *   scale = pow(2, exponent)
  *   iv = int(round(v / scale))
- * The resulting integer can be stored as signed 24-bit, or as an unsigned offset from a signed 24-bit anchor value, shared between all positions
+ * The resulting integer can be stored as signed 24-bit, or as an unsigned offset from a signed 24-bit anchor value, shared between all positions.
  *
- * min_exp specifies the minimum value for the returned exponent, which allows to limit the precision; e.g. min_exp = -10 will produce minimum error of 1mm given metric units
+ * minv/maxv specify the axis-aligned bounding box of the mesh or cluster; each should refer to a float3 value
+ * min_exp specifies the minimum value for the returned exponent, limiting precision to reduce size; e.g. min_exp = -10 will produce minimum error of 1mm given metric units
  * max_bits specifies the maximum allowed number of bits for the quantized integer range (offset from anchor is an unsigned integer up to 2^max_bits-1)
  */
-MESHOPTIMIZER_EXPERIMENTAL int meshopt_computeClusterPositionExponent(const float* minv, const float* maxv, int min_exp, int max_bits);
+MESHOPTIMIZER_EXPERIMENTAL int meshopt_computePositionExponent(const float* minv, const float* maxv, int min_exp, int max_bits);
 
 /**
  * Set allocation callbacks

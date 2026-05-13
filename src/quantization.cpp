@@ -77,7 +77,7 @@ float meshopt_dequantizeHalf(unsigned short h)
 	return u.f;
 }
 
-int meshopt_computeClusterPositionExponent(const float* minv, const float* maxv, int min_exp, int max_bits)
+int meshopt_computePositionExponent(const float* minv, const float* maxv, int min_exp, int max_bits)
 {
 	assert(min_exp >= -126);
 	assert(max_bits >= 2 && max_bits <= 24);

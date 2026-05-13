@@ -935,7 +935,7 @@ void encodeMeshletsDXR(const Mesh& mesh, size_t max_triangles, int min_exp, int 
 
 	// compute shared exponent per mesh:
 	// - must be at most min_exp which should be set to maximum required precision (e.g. -10 for 1mm accuracy given metric units)
-	// - must accomodate each cluster to fit into Compressed1 DXR encoding (16-bit offsets from 24-bit anchors)
+	// - must accommodate each cluster to fit into Compressed1 DXR encoding (16-bit offsets from 24-bit anchors)
 	// note, for DGF parity min_exp should be set based on mesh AABB; we do not do this as we do not consider this rigorous.
 	int exponent = min_exp;
 
@@ -955,7 +955,7 @@ void encodeMeshletsDXR(const Mesh& mesh, size_t max_triangles, int min_exp, int 
 			}
 		}
 
-		int cexp = meshopt_computeClusterPositionExponent(minv, maxv, min_exp, /* max_bits= */ 16);
+		int cexp = meshopt_computePositionExponent(minv, maxv, min_exp, /* max_bits= */ 16);
 		exponent = (exponent > cexp) ? exponent : cexp;
 	}
 
