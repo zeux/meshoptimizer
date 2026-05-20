@@ -60,12 +60,6 @@ struct Mesh
 	std::vector<unsigned int> indices;
 };
 
-union Triangle
-{
-	Vertex v[3];
-	char data[sizeof(Vertex) * 3];
-};
-
 Mesh parseObj(const char* path, double& reindex)
 {
 	fastObjMesh* obj = fast_obj_read(path);
@@ -353,7 +347,7 @@ void simplifyUpdate(const Mesh& mesh, float threshold = 0.2f, unsigned int optio
 	lod = mesh; // start from the original mesh
 	lod.indices.resize(meshopt_simplifyWithUpdate(&lod.indices[0], mesh.indices.size(), &lod.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), &lod.vertices[0].nx, sizeof(Vertex), attr_weights, 3, NULL, target_index_count, target_error, options, &result_error));
 
-	lod.vertices.resize(meshopt_optimizeVertexFetch(&lod.vertices[0], &lod.indices[0], lod.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(Vertex)));
+	lod.vertices.resize(meshopt_optimizeVertexFetch(&lod.vertices[0], &lod.indices[0], lod.indices.size(), &lod.vertices[0], lod.vertices.size(), sizeof(Vertex)));
 
 	for (size_t i = 0; i < lod.vertices.size(); ++i)
 	{
@@ -552,7 +546,7 @@ void simplifyClusters(const Mesh& mesh, float threshold = 0.2f)
 
 	// partition clusters in groups; each group will be simplified separately and the boundaries between groups will be preserved
 	std::vector<unsigned int> cluster_indices;
-	cluster_indices.reserve(mesh.indices.size()); // slight underestimate, vector should realloc once
+	cluster_indices.reserve(mesh.indices.size());
 	std::vector<unsigned int> cluster_sizes(meshlets.size());
 
 	for (size_t i = 0; i < meshlets.size(); ++i)
@@ -1294,7 +1288,7 @@ void meshlets(const Mesh& mesh, bool scan = false, bool uniform = false, bool fl
 				cluster.push_back(meshlet_vertices[m.vertex_offset + meshlet_triangles[m.triangle_offset + j]]);
 
 			char cname[32];
-			snprintf(cname, sizeof(cname), "ml_%d\n", int(i));
+			snprintf(cname, sizeof(cname), "ml_%d", int(i));
 			dumpObj(cname, cluster);
 		}
 
