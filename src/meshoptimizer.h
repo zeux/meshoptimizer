@@ -1032,6 +1032,10 @@ inline size_t meshopt_generateVertexRemapCustom(unsigned int* destination, const
 template <typename T>
 inline void meshopt_remapIndexBuffer(T* destination, const T* indices, size_t index_count, const unsigned int* remap);
 template <typename T>
+inline size_t meshopt_filterIndexBuffer(T* destination, const T* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t vertex_stride);
+template <typename T>
+inline size_t meshopt_filterIndexBufferMulti(T* destination, const T* indices, size_t index_count, size_t vertex_count, const struct meshopt_Stream* streams, size_t stream_count);
+template <typename T>
 inline void meshopt_generateShadowIndexBuffer(T* destination, const T* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t vertex_stride);
 template <typename T>
 inline void meshopt_generateShadowIndexBufferMulti(T* destination, const T* indices, size_t index_count, size_t vertex_count, const meshopt_Stream* streams, size_t stream_count);
@@ -1284,6 +1288,24 @@ inline void meshopt_remapIndexBuffer(T* destination, const T* indices, size_t in
 	meshopt_IndexAdapter<T> out(destination, NULL, index_count);
 
 	meshopt_remapIndexBuffer(out.data, indices ? in.data : NULL, index_count, remap);
+}
+
+template <typename T>
+inline size_t meshopt_filterIndexBuffer(T* destination, const T* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t vertex_stride)
+{
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, NULL, index_count);
+
+	return meshopt_filterIndexBuffer(out.data, in.data, index_count, vertices, vertex_count, vertex_size, vertex_stride);
+}
+
+template <typename T>
+inline size_t meshopt_filterIndexBufferMulti(T* destination, const T* indices, size_t index_count, size_t vertex_count, const struct meshopt_Stream* streams, size_t stream_count)
+{
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
+	meshopt_IndexAdapter<T> out(destination, NULL, index_count);
+
+	return meshopt_filterIndexBufferMulti(out.data, in.data, index_count, vertex_count, streams, stream_count);
 }
 
 template <typename T>
