@@ -2555,6 +2555,44 @@ static void simplifyUpdateLocked(unsigned int options)
 	assert(vb[3][3] == 0.2f);
 }
 
+static void filterTriangles()
+{
+	// v0/v3 match fully; v0/v4 match on prefix only
+	const unsigned int vb[] = {
+	    1, 0, 10,
+	    2, 0, 20,
+	    3, 0, 30,
+	    1, 1, 10,
+	    1, 1, 99 //
+	};
+
+	const unsigned int ib[] = {
+	    0, 1, 2, //
+	    3, 1, 2, // dup of (0,1,2)
+	    4, 1, 2, // dup prefix
+	    2, 1, 0, // opposite winding of (0,1,2)
+	    0, 4, 1  // degen prefix
+	};
+
+	// prefix only: vertex key is first 4 bytes
+	unsigned int sib[15];
+	size_t slen = meshopt_filterIndexBuffer(sib, ib, 15, vb, 5, 4, 12);
+
+	unsigned int expecteds[] = {0, 1, 2, 2, 1, 0};
+	assert(slen == sizeof(expecteds) / sizeof(expecteds[0]));
+	assert(memcmp(sib, expecteds, sizeof(expecteds)) == 0);
+
+	// prefix+suffix: vertex key is first 4 and last 4 bytes
+	const meshopt_Stream streams[] = {{vb + 0, 4, 12}, {vb + 2, 4, 12}};
+
+	unsigned int mib[15];
+	size_t mlen = meshopt_filterIndexBufferMulti(mib, ib, 15, 5, streams, 2);
+	unsigned int expectedm[] = {0, 1, 2, 4, 1, 2, 2, 1, 0, 0, 4, 1};
+
+	assert(mlen == sizeof(expectedm) / sizeof(expectedm[0]));
+	assert(memcmp(mib, expectedm, sizeof(expectedm)) == 0);
+}
+
 static void adjacency()
 {
 	// 0 1/4
@@ -3399,6 +3437,7 @@ void runTests()
 	simplifyUpdateLocked(0);
 	simplifyUpdateLocked(meshopt_SimplifySparse);
 
+	filterTriangles();
 	adjacency();
 	tessellation();
 	provoking();
