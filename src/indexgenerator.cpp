@@ -489,6 +489,30 @@ size_t meshopt_filterIndexBuffer(unsigned int* destination, const unsigned int* 
 
 	meshopt_Allocator allocator;
 	VertexHasher hasher = {static_cast<const unsigned char*>(vertices), vertex_size, vertex_stride};
+
+	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
+	generateVertexRemap(remap, indices, index_count, vertex_count, hasher, allocator);
+
+	return filterIndexBuffer(destination, indices, index_count, remap, vertex_count, allocator);
+}
+
+size_t meshopt_filterIndexBufferMulti(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, const struct meshopt_Stream* streams, size_t stream_count)
+{
+	using namespace meshopt;
+
+	assert(indices);
+	assert(index_count % 3 == 0);
+	assert(stream_count > 0 && stream_count <= 16);
+
+	for (size_t i = 0; i < stream_count; ++i)
+	{
+		assert(streams[i].size > 0 && streams[i].size <= 256);
+		assert(streams[i].size <= streams[i].stride);
+	}
+
+	meshopt_Allocator allocator;
+	VertexStreamHasher hasher = {streams, stream_count};
+
 	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
 	generateVertexRemap(remap, indices, index_count, vertex_count, hasher, allocator);
 
