@@ -127,6 +127,30 @@ struct VertexCustomHasher
 	}
 };
 
+struct TriangleKey
+{
+	unsigned int a, b, c;
+
+	bool operator==(const TriangleKey& other) const
+	{
+		return a == other.a && b == other.b && c == other.c;
+	}
+};
+
+struct TriangleKeyHasher
+{
+	size_t hash(const TriangleKey& k) const
+	{
+		// Optimized Spatial Hashing for Collision Detection of Deformable Objects
+		return (k.a * 73856093) ^ (k.b * 19349663) ^ (k.c * 83492791);
+	}
+
+	bool equal(const TriangleKey& lhs, const TriangleKey& rhs) const
+	{
+		return lhs == rhs;
+	}
+};
+
 struct EdgeHasher
 {
 	const unsigned int* remap;
@@ -397,6 +421,76 @@ void meshopt_remapIndexBuffer(unsigned int* destination, const unsigned int* ind
 
 		destination[i] = remap[index];
 	}
+}
+
+size_t meshopt_filterIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t vertex_stride)
+{
+	using namespace meshopt;
+
+	assert(indices);
+	assert(index_count % 3 == 0);
+	assert(vertex_size > 0 && vertex_size <= 256);
+	assert(vertex_size <= vertex_stride);
+
+	meshopt_Allocator allocator;
+
+	// generate vertex remap table so that each vertex index maps to a unique value based on its position key
+	VertexHasher vertex_hasher = {static_cast<const unsigned char*>(vertices), vertex_size, vertex_stride};
+	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
+	generateVertexRemap(remap, indices, index_count, vertex_count, vertex_hasher, allocator);
+
+	// each unique triangle is stored in the hash table for deduplication
+	TriangleKeyHasher hasher = {};
+	TriangleKey empty = {~0u, ~0u, ~0u};
+
+	size_t face_count = index_count / 3;
+	size_t table_size = hashBuckets(face_count);
+	TriangleKey* table = allocator.allocate<TriangleKey>(table_size);
+	memset(table, -1, table_size * sizeof(TriangleKey));
+
+	size_t write = 0;
+
+	for (size_t i = 0; i < face_count; ++i)
+	{
+		unsigned int a = indices[i * 3 + 0], b = indices[i * 3 + 1], c = indices[i * 3 + 2];
+		assert(a < vertex_count && b < vertex_count && c < vertex_count);
+
+		unsigned int ra = remap[a], rb = remap[b], rc = remap[c];
+
+		// degenerate triangle
+		if (ra == rb || ra == rc || rb == rc)
+			continue;
+
+		// canonicalize triangle wrt winding preserving rotation
+		if (rb < ra && rb < rc)
+		{
+			// abc -> bca
+			unsigned int t = ra;
+			ra = rb, rb = rc, rc = t;
+		}
+		else if (rc < ra && rc < rb)
+		{
+			// abc -> cab
+			unsigned int t = rc;
+			rc = rb, rb = ra, ra = t;
+		}
+
+		TriangleKey key = {ra, rb, rc};
+		TriangleKey* entry = hashLookup(table, table_size, hasher, key, empty);
+
+		// duplicate triangle
+		if (entry->a != ~0u)
+			continue;
+
+		*entry = key;
+
+		destination[write + 0] = a;
+		destination[write + 1] = b;
+		destination[write + 2] = c;
+		write += 3;
+	}
+
+	return write;
 }
 
 void meshopt_generateShadowIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t vertex_stride)

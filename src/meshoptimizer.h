@@ -104,6 +104,16 @@ MESHOPTIMIZER_API void meshopt_remapVertexBuffer(void* destination, const void* 
 MESHOPTIMIZER_API void meshopt_remapIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count, const unsigned int* remap);
 
 /**
+ * Experimental: Filter out redundant triangles from the index buffer and return the number of remaining indices
+ * Triangles are considered redundant if they are degenerate (two vertices have the same position) or duplicate (three vertices are already connected).
+ * First vertex_size bytes of every vertex are compared for equality; typically vertex_size should be set to the size of the position attribute.
+ * Note that duplicate triangles with opposite windings are preserved, as they may be needed for double-sided rendering.
+ *
+ * destination must contain enough space for the resulting index buffer (index_count elements)
+ */
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_filterIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count, const void* vertices, size_t vertex_count, size_t vertex_size, size_t vertex_stride);
+
+/**
  * Generate index buffer that can be used for more efficient rendering when only a subset of the vertex attributes is necessary
  * All vertices that are binary equivalent (wrt first vertex_size bytes) map to the first vertex in the original vertex buffer.
  * This makes it possible to use the index buffer for Z pre-pass or shadowmap rendering, while using the original index buffer for regular rendering.
