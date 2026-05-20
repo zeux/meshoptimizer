@@ -330,6 +330,8 @@ static void generateShadowBuffer(unsigned int* destination, const unsigned int* 
 
 static size_t filterIndexBuffer(unsigned int* destination, const unsigned int* indices, size_t index_count, const unsigned int* remap, size_t vertex_count, meshopt_Allocator& allocator)
 {
+	(void)vertex_count;
+
 	TriangleKeyHasher hasher = {};
 	TriangleKey empty = {~0u, ~0u, ~0u};
 
@@ -482,7 +484,6 @@ size_t meshopt_filterIndexBuffer(unsigned int* destination, const unsigned int* 
 {
 	using namespace meshopt;
 
-	assert(indices);
 	assert(index_count % 3 == 0);
 	assert(vertex_size > 0 && vertex_size <= 256);
 	assert(vertex_size <= vertex_stride);
@@ -500,7 +501,6 @@ size_t meshopt_filterIndexBufferMulti(unsigned int* destination, const unsigned 
 {
 	using namespace meshopt;
 
-	assert(indices);
 	assert(index_count % 3 == 0);
 	assert(stream_count > 0 && stream_count <= 16);
 
@@ -523,7 +523,6 @@ void meshopt_generateShadowIndexBuffer(unsigned int* destination, const unsigned
 {
 	using namespace meshopt;
 
-	assert(indices);
 	assert(index_count % 3 == 0);
 	assert(vertex_size > 0 && vertex_size <= 256);
 	assert(vertex_size <= vertex_stride);
@@ -538,7 +537,6 @@ void meshopt_generateShadowIndexBufferMulti(unsigned int* destination, const uns
 {
 	using namespace meshopt;
 
-	assert(indices);
 	assert(index_count % 3 == 0);
 	assert(stream_count > 0 && stream_count <= 16);
 

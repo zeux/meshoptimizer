@@ -105,7 +105,7 @@ MESHOPTIMIZER_API void meshopt_remapIndexBuffer(unsigned int* destination, const
 
 /**
  * Experimental: Filter out redundant triangles from the index buffer and return the number of remaining indices
- * Triangles are considered redundant if they are degenerate (two vertices have the same position) or duplicate (three vertices are already connected).
+ * Triangles are considered redundant if they are degenerate (two vertices have the same vertex key) or duplicate (matching triangle was present earlier).
  * First vertex_size bytes of every vertex are compared for equality; typically vertex_size should be set to the size of the position attribute.
  * Note that duplicate triangles with opposite windings are preserved, as they may be needed for double-sided rendering.
  *
@@ -115,11 +115,12 @@ MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_filterIndexBuffer(unsigned int* destin
 
 /**
  * Experimental: Filter out redundant triangles from the index buffer and return the number of remaining indices
- * Triangles are considered redundant if they are degenerate (two vertices have the same position) or duplicate (three vertices are already connected).
+ * Triangles are considered redundant if they are degenerate (two vertices have the same vertex key) or duplicate (matching triangle was present earlier).
  * All bytes in specified streams are compared for equality; streams should include attributes relevant for position transform (e.g. bone influences).
  * Note that duplicate triangles with opposite windings are preserved, as they may be needed for double-sided rendering.
  *
  * destination must contain enough space for the resulting index buffer (index_count elements)
+ * stream_count must be <= 16
  */
 MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_filterIndexBufferMulti(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, const struct meshopt_Stream* streams, size_t stream_count);
 
