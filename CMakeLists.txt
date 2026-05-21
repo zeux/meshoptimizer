@@ -128,6 +128,10 @@ if(MESHOPT_BUILD_GLTFPACK)
     set_target_properties(gltfpack PROPERTIES CXX_STANDARD 11)
     target_link_libraries(gltfpack meshoptimizer)
 
+    if(MESHOPT_BUILD_SHARED_LIBS AND MESHOPT_STABLE_EXPORTS)
+        target_compile_definitions(gltfpack PRIVATE GLTFPACK_NO_EXPERIMENTAL)
+    endif()
+
     if(MESHOPT_BUILD_SHARED_LIBS)
         string(CONCAT RPATH "$ORIGIN/../" ${CMAKE_INSTALL_LIBDIR})
         set_target_properties(gltfpack PROPERTIES INSTALL_RPATH ${RPATH})

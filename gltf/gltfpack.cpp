@@ -1749,6 +1749,14 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
+#ifdef GLTFPACK_NO_EXPERIMENTAL
+	if (settings.mesh_tangents)
+	{
+		fprintf(stderr, "Option -gt is not available in this build\n");
+		return 1;
+	}
+#endif
+
 	if (settings.keep_nodes && (settings.mesh_merge || settings.mesh_instancing))
 		fprintf(stderr, "Warning: option -kn disables mesh merge (-mm) and mesh instancing (-mi) optimizations\n");
 

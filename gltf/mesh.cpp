@@ -640,6 +640,7 @@ void filterStreams(Mesh& mesh, const MaterialInfo& mi)
 	mesh.streams.resize(write);
 }
 
+#ifndef GLTFPACK_NO_EXPERIMENTAL
 static int getTangentTexcoord(const cgltf_material* material)
 {
 	if (material->normal_texture.texture)
@@ -669,9 +670,14 @@ static Stream& prepareTangentStream(Mesh& mesh, size_t vertex_count)
 
 	return tangent;
 }
+#endif
 
 void generateTangents(Mesh& mesh)
 {
+#ifdef GLTFPACK_NO_EXPERIMENTAL
+	// disabled until meshopt_generateTangents becomes stable
+	(void)mesh;
+#else
 	if (mesh.type != cgltf_primitive_type_triangles || mesh.indices.empty() || !mesh.material)
 		return;
 
@@ -724,6 +730,7 @@ void generateTangents(Mesh& mesh)
 
 		mesh.indices[i] = sv;
 	}
+#endif
 }
 
 struct QuantizedTBN
