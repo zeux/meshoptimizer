@@ -42,7 +42,8 @@ When optimizing a mesh, to maximize rendering efficiency you should typically fe
 3. (optional) Overdraw optimization
 4. Vertex fetch optimization
 5. Vertex quantization
-6. (optional) Shadow indexing
+6. Index filtering
+7. (optional) Shadow indexing
 
 ### Indexing
 
@@ -144,6 +145,18 @@ unsigned short pz = meshopt_quantizeHalf(v.z);
 ```
 
 Since quantized vertex attributes often need to remain in their compact representations for efficient transfer and storage, they are usually dequantized during vertex processing by configuring the GPU vertex input correctly to expect normalized integers or half precision floats, which often needs no or minimal changes to the shader code. When CPU dequantization is required instead, `meshopt_dequantizeHalf` can be used to convert half precision values back to single precision; for normalized integer formats, the dequantization just requires dividing by 2^N-1 for unorm and 2^(N-1)-1 for snorm variants. For example, manually reversing `meshopt_quantizeUnorm(v, 10)` can be done by dividing by 1023.
+
+### Index filtering
+
+Some meshes may contain triangles that are processed during rendering but do not contribute to the rendered result. If any two vertices of a triangle result in the same position after vertex shader, the triangle is degenerate and will be skipped by the rasterizer. Some triangles may also be duplicates of an earlier triangle with the same post-transform positions and winding, in which case only one of the triangles will be visible depending on depth testing settings (assuming blending is disabled). In either case, such triangles require extra processing and removing them may improve rasterization or ray tracing performance; this library provides an algorithm that removes such triangles from the index buffer:
+
+```c++
+indices.resize(meshopt_filterIndexBuffer(&indices[0], &indices[0], indices.size(), &vertices[0].x, vertices.size(), sizeof(float) * 3, sizeof(Vertex)));
+```
+
+Note that the example above assumes only positions are relevant for transforming the vertices, but for deformable meshes skinning data may need to be added to the vertex portion used as a key; `meshopt_filterIndexBufferMulti` can be useful for these cases if the relevant data is not contiguous.
+
+Filtering after quantization is convenient because quantization may increase the number of redundant triangles if triangles had similar but not identical vertex positions before quantization. However, filtering can be done at any point in the pipeline as soon as the index buffer becomes available; you could also run vertex fetch optimization after filtering, since it will naturally filter out any vertices that may become unused after redundant triangles are eliminated, potentially saving extra memory.
 
 ### Shadow indexing
 
@@ -923,6 +936,7 @@ Currently, the following APIs are experimental:
 - `meshopt_computePositionExponent` function
 - `meshopt_opacityMap*` functions (`meshopt_opacityMapMeasure`, `meshopt_opacityMapRasterize`, `meshopt_opacityMapCompact`, `meshopt_opacityMapEntrySize`)
 - `meshopt_generateTangents` function and `meshopt_Tangent*` flags
+- `meshopt_filterIndexBuffer` and `meshopt_filterIndexBufferMulti` functions
 
 ## License
 

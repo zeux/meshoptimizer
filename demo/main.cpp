@@ -1484,6 +1484,21 @@ void spatialClusterPoints(const Mesh& mesh, size_t cluster_size)
 	    (end - start) * 1000);
 }
 
+void filterTriangles(const Mesh& mesh)
+{
+	double start = timestamp();
+
+	std::vector<unsigned int> newindices(mesh.indices.size());
+	newindices.resize(meshopt_filterIndexBuffer(&newindices[0], &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0], mesh.vertices.size(), sizeof(float) * 3, sizeof(Vertex)));
+
+	double end = timestamp();
+
+	printf("FilterIB : %d triangles -> %d (%.2f%% redundant) in %.2f msec\n",
+	    int(mesh.indices.size() / 3), int(newindices.size() / 3),
+	    double((mesh.indices.size() - newindices.size()) / 3) / double(mesh.indices.size() / 3) * 100.0,
+	    (end - start) * 1000);
+}
+
 void tessellationAdjacency(const Mesh& mesh)
 {
 	double start = timestamp();
@@ -1814,6 +1829,7 @@ void process(const char* path)
 	meshlets(copy, /* scan= */ false, /* uniform= */ true, /* flex= */ false, /* spatial= */ true);
 
 	shadow(copy);
+	filterTriangles(copy);
 	tessellationAdjacency(copy);
 	provoking(copy);
 
