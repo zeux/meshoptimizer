@@ -345,12 +345,14 @@ First, compute the shared exponent to guarantee that any vertex in every cluster
 
 ```c++
 const int min_exp = -13; // start with an acceptable level of precision; 2^-13 ~= 0.1mm in metric units
+const int max_bits = 16; // maximum number of offset bits per axis
+
 int exponent = min_exp;
 
 for (size_t i = 0; i < meshlets.size(); ++i)
 {
     AABB meshlet_aabb = ...; // compute meshlet AABB based on vertex positions
-    int cexp = meshopt_computePositionExponent(meshlet_aabb.min, meshlet_aabb.max, min_exp, /* max_bits= */ 16);
+    int cexp = meshopt_computePositionExponent(meshlet_aabb.min, meshlet_aabb.max, min_exp, max_bits);
     exponent = std::max(exponent, cexp);
 }
 
@@ -805,6 +807,7 @@ First, call `meshopt_opacityMapMeasure` to compute a subdivision level for each 
 const int states = 4; // 2-state or 4-state OMMs (used after measure)
 const int max_level = 6; // max subdivision level
 const float target_edge = 3.0f; // target 3x3px area for each microtriangle
+
 std::vector<unsigned char> levels(indices.size() / 3);
 std::vector<unsigned int> sources(indices.size() / 3);
 std::vector<int> omm_indices(indices.size() / 3);
