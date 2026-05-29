@@ -137,6 +137,21 @@ struct clodGroup
 // returned value gets saved for clusters emitted from this group (clodCluster::refined)
 typedef int (*clodOutput)(void* output_context, clodGroup group, const clodCluster* clusters, size_t cluster_count);
 
+// when using BVH to determine cluster visibility, traverse the tree into nodes while bounds is over error threshold; for leaves,
+// group clusters should be rendered if cluster.refined is -1 *or* clodGroup::simplified for groups[cluster.refined].simplified is at or under error threshold
+struct clodNode
+{
+	// BVH node bounds, reflecting worst case error for all groups in the subtree
+	clodBounds bounds;
+
+	// leaf node: index of the group this node represents (or -1 for internal nodes)
+	int group;
+
+	// internal node: children are at nodes[child_offset..child_offset+child_count)
+	unsigned int child_offset;
+	unsigned int child_count;
+};
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -154,6 +169,19 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 // fills triangles[] and vertices[] such that vertices[triangles[i]] == indices[i]
 // returns number of unique vertices (which will be equal to clodCluster::vertex_count)
 size_t clodLocalIndices(unsigned int* vertices, unsigned char* triangles, const unsigned int* indices, size_t index_count);
+
+// upper bound on the number of nodes clodBuildHierarchy can produce
+// level_count is the number of levels in the group DAG (max(clodGroup::depth) + 1)
+size_t clodBuildHierarchyBound(size_t group_count, size_t node_width, size_t level_count);
+
+// build a spatial hierarchy over the groups produced by clodBuild for accelerating cluster visibility
+// level_count is the number of levels in the group DAG (max(clodGroup::depth) + 1)
+// the result is a forest:
+// - node 0 is the root that has per-level trees as children (level_count total)
+// - nodes 1..level_count are the roots of per-level trees, each covering groups with clodGroup::depth == level
+// - remaining nodes are per-level trees, each internal node has up to node_width children, and each leaf node refers to a single group
+// note that node 0 is purely organizational and does not store meaningful data, other than full mesh bounds
+size_t clodBuildHierarchy(clodNode* nodes, const clodGroup* groups, size_t group_count, size_t node_width, size_t level_count);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -210,13 +238,9 @@ static clodBounds boundsCompute(const clodMesh& mesh, const std::vector<unsigned
 	return result;
 }
 
-static clodBounds boundsMerge(const std::vector<Cluster>& clusters, const std::vector<int>& group)
+static clodBounds boundsMerge(const clodBounds* bounds, size_t count, size_t stride)
 {
-	std::vector<clodBounds> bounds(group.size());
-	for (size_t j = 0; j < group.size(); ++j)
-		bounds[j] = clusters[group[j]].bounds;
-
-	meshopt_Bounds merged = meshopt_computeSphereBounds(&bounds[0].center[0], bounds.size(), sizeof(clodBounds), &bounds[0].radius, sizeof(clodBounds));
+	meshopt_Bounds merged = meshopt_computeSphereBounds(&bounds[0].center[0], count, stride, &bounds[0].radius, stride);
 
 	clodBounds result = {};
 	result.center[0] = merged.center[0];
@@ -226,10 +250,19 @@ static clodBounds boundsMerge(const std::vector<Cluster>& clusters, const std::v
 
 	// merged bounds error must be conservative wrt cluster errors
 	result.error = 0.f;
-	for (size_t j = 0; j < group.size(); ++j)
-		result.error = std::max(result.error, clusters[group[j]].bounds.error);
+	for (size_t j = 0; j < count; ++j)
+		result.error = std::max(result.error, reinterpret_cast<const clodBounds*>(reinterpret_cast<const char*>(bounds) + j * stride)->error);
 
 	return result;
+}
+
+static clodBounds mergeGroups(const std::vector<Cluster>& clusters, const std::vector<int>& group)
+{
+	std::vector<clodBounds> bounds(group.size());
+	for (size_t j = 0; j < group.size(); ++j)
+		bounds[j] = clusters[group[j]].bounds;
+
+	return boundsMerge(bounds.data(), bounds.size(), sizeof(clodBounds));
 }
 
 static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh& mesh, const unsigned int* indices, size_t index_count)
@@ -506,6 +539,16 @@ static int outputGroup(const clodConfig& config, const clodMesh& mesh, const std
 	return output_callback ? output_callback(output_context, {depth, simplified}, group_clusters.data(), group_clusters.size()) : -1;
 }
 
+static clodNode mergeNodes(const clodNode* nodes, size_t offset, size_t count)
+{
+	clodNode result = {};
+	result.bounds = boundsMerge(&nodes[offset].bounds, count, sizeof(clodNode));
+	result.group = -1;
+	result.child_offset = unsigned(offset);
+	result.child_count = unsigned(count);
+	return result;
+}
+
 } // namespace clod
 
 clodConfig clodDefaultConfig(size_t max_triangles)
@@ -621,7 +664,7 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 
 			// enforce bounds and error monotonicity
 			// note: it is incorrect to use the precise bounds of the merged or simplified mesh, because this may violate monotonicity
-			clodBounds bounds = boundsMerge(clusters, groups[i]);
+			clodBounds bounds = mergeGroups(clusters, groups[i]);
 
 			float error = 0.f;
 			std::vector<unsigned int> simplified = simplify(config, mesh, merged, locks, target_size, &error);
@@ -677,6 +720,72 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 size_t clodLocalIndices(unsigned int* vertices, unsigned char* triangles, const unsigned int* indices, size_t index_count)
 {
 	return meshopt_extractMeshletIndices(vertices, triangles, indices, index_count);
+}
+
+size_t clodBuildHierarchyBound(size_t group_count, size_t node_width, size_t level_count)
+{
+	// count nodes for each tree depth; we pad by level_count at each iteration to account for unknown level distribution in the forest
+	size_t total = level_count;
+	for (size_t frontier = group_count; frontier > 1; frontier = (frontier + node_width - 1) / node_width)
+		total += frontier + level_count;
+
+	// ... plus a single root
+	return total + 1;
+}
+
+size_t clodBuildHierarchy(clodNode* nodes, const clodGroup* groups, size_t group_count, size_t node_width, size_t level_count)
+{
+	using namespace clod;
+
+	// reserve space for node 0 (flat root) and per-level roots
+	size_t offset = level_count + 1;
+
+	std::vector<clodNode> row(group_count);
+	std::vector<unsigned int> order(group_count);
+
+	for (size_t level = 0; level < level_count; ++level)
+	{
+		// start each tree hierarchy from the groups of that level as leaves
+		row.clear();
+		for (size_t i = 0; i < group_count; ++i)
+			if (groups[i].depth == int(level))
+			{
+				clodNode node = {};
+				node.bounds = groups[i].simplified;
+				node.group = int(i);
+				row.push_back(node);
+			}
+
+		// build the tree going up one level at a time, using spatial grouping of centers as a proxy for locality
+		while (row.size() > 1)
+		{
+			size_t count = row.size();
+			meshopt_spatialClusterPoints(order.data(), row[0].bounds.center, count, sizeof(clodNode), node_width);
+
+			for (size_t i = 0; i < count; ++i)
+				nodes[offset + i] = row[order[i]];
+
+			row.clear();
+			for (size_t i = 0; i < count; i += node_width)
+			{
+				// spatialClusterPoints guarantees that each cluster except for last one is full
+				size_t children = std::min(node_width, count - i);
+				row.push_back(mergeNodes(nodes, offset + i, children));
+			}
+
+			offset += count;
+		}
+
+		// the root of the current level goes into the shared root section in the beginning of the output
+		assert(row.size() == 1);
+		nodes[1 + level] = row[0];
+	}
+
+	// build flat root with all levels as children; it's redundant but simplifies traversal
+	nodes[0] = mergeNodes(nodes, 1, level_count);
+	nodes[0].bounds.error = FLT_MAX; // root node should never be culled
+
+	return offset;
 }
 #endif
 
