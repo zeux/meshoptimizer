@@ -38,6 +38,35 @@ static float sahOverhead(const std::vector<std::vector<unsigned int> >& clusters
 void dumpObj(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices, bool recomputeNormals = false);
 void dumpObj(const char* section, const std::vector<unsigned int>& indices);
 
+// simulate BVH based LOD cut and return triangle count
+static size_t countTriangles(const std::vector<clodNode>& nodes, unsigned int index, const std::vector<clodGroup>& groups, const std::vector<std::pair<unsigned int, unsigned int> >& group_clusters, const std::vector<std::pair<int, unsigned int> >& clusters, float cx, float cy, float cz, float proj, float znear, float threshold)
+{
+	const clodNode& node = nodes[index];
+
+	// prune the subtree once it's too detailed
+	if (boundsError(node.bounds, cx, cy, cz, proj, znear) <= threshold)
+		return 0;
+
+	size_t tris = 0;
+
+	if (node.group < 0)
+	{
+		// internal node: recurse into children
+		for (unsigned int i = 0; i < node.child_count; ++i)
+			tris += countTriangles(nodes, node.child_offset + i, groups, group_clusters, clusters, cx, cy, cz, proj, znear, threshold);
+	}
+	else
+	{
+		// leaf node: keep each cluster that is the least detailed one passing the threshold
+		std::pair<unsigned int, unsigned int> range = group_clusters[node.group];
+		for (unsigned int i = range.first; i < range.first + range.second; ++i)
+			if (clusters[i].first < 0 || boundsError(groups[clusters[i].first].simplified, cx, cy, cz, proj, znear) <= threshold)
+				tris += clusters[i].second;
+	}
+
+	return tris;
+}
+
 void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices)
 {
 #ifdef _MSC_VER
@@ -89,7 +118,10 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	};
 
 	std::vector<Stats> stats;
-	std::vector<clodBounds> groups;
+	std::vector<clodGroup> groups;
+
+	std::vector<std::pair<unsigned int, unsigned int> > group_clusters; // per group: (offset, count) into cluster_data
+	std::vector<std::pair<int, unsigned int> > cluster_data;            // per cluster: (clodCluster::refined, triangle count)
 
 	std::vector<std::vector<unsigned int> > cut;
 	int cut_level = dump ? atoi(dump) : -2;
@@ -120,9 +152,13 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 			level.stuck_clusters += cluster_count;
 		level.singleton_groups += cluster_count == 1;
 
+		group_clusters.push_back(std::make_pair(unsigned(cluster_data.size()), unsigned(cluster_count)));
+
 		for (size_t i = 0; i < cluster_count; ++i)
 		{
 			const clodCluster& cluster = clusters[i];
+
+			cluster_data.push_back(std::make_pair(cluster.refined, unsigned(cluster.index_count / 3)));
 
 			level.triangles += cluster.index_count / 3;
 			if (group.simplified.error == FLT_MAX)
@@ -139,13 +175,13 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 				cut.push_back(std::vector<unsigned int>(cluster.indices, cluster.indices + cluster.index_count));
 
 			// when requesting DAG cut from a viewpoint, we need to check if each cluster is the least detailed cluster that passes the error threshold
-			if (cut_level == -1 && (cluster.refined < 0 || boundsError(groups[cluster.refined], maxx, maxy, maxz, proj, znear) <= threshold) && boundsError(group.simplified, maxx, maxy, maxz, proj, znear) > threshold)
+			if (cut_level == -1 && (cluster.refined < 0 || boundsError(groups[cluster.refined].simplified, maxx, maxy, maxz, proj, znear) <= threshold) && boundsError(group.simplified, maxx, maxy, maxz, proj, znear) > threshold)
 				cut.push_back(std::vector<unsigned int>(cluster.indices, cluster.indices + cluster.index_count));
 		}
 
 		level.indices.push_back(std::vector<unsigned int>()); // mark end of group for measureBoundary
 
-		groups.push_back(group.simplified);
+		groups.push_back(group);
 		return int(groups.size() - 1);
 	});
 
@@ -187,6 +223,18 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	}
 
 	printf("lowest lod: %d clusters, %d triangles\n", int(lowest_clusters), int(lowest_triangles));
+
+	// build a spatial hierarchy over the groups and use it to compute the cut size from a given viewpoint
+	{
+		size_t node_width = 8;
+		size_t levels = groups.back().depth + 1; // groups are generated in order of increasing depth
+
+		std::vector<clodNode> nodes(clodBuildHierarchyBound(groups.size(), node_width, levels));
+		nodes.resize(clodBuildHierarchy(nodes.data(), groups.data(), groups.size(), node_width, levels));
+
+		size_t bvh_tris = countTriangles(nodes, 0, groups, group_clusters, cluster_data, maxx, maxy, maxz, proj, znear, threshold);
+		printf("bvh cut (error %.3f): %d triangles\n", threshold, int(bvh_tris));
+	}
 
 	if (cut_level >= -1)
 	{
