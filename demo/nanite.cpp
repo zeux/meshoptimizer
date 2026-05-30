@@ -232,7 +232,9 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		std::vector<clodNode> nodes(clodBuildHierarchyBound(groups.size(), node_width, levels));
 		nodes.resize(clodBuildHierarchy(nodes.data(), groups.data(), groups.size(), node_width, levels));
 
-		size_t bvh_tris = countTriangles(nodes, 0, groups, group_clusters, cluster_data, maxx, maxy, maxz, proj, znear, threshold);
+		size_t bvh_tris = 0;
+		for (size_t i = 0; i < levels; ++i) // the hierarchy is a forest with one root per level
+			bvh_tris += countTriangles(nodes, unsigned(i), groups, group_clusters, cluster_data, maxx, maxy, maxz, proj, znear, threshold);
 		printf("bvh cut (error %.3f): %d triangles\n", threshold, int(bvh_tris));
 	}
 

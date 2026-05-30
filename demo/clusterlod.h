@@ -176,11 +176,9 @@ size_t clodBuildHierarchyBound(size_t group_count, size_t node_width, size_t lev
 
 // build a spatial hierarchy over the groups produced by clodBuild for accelerating cluster visibility
 // level_count is the number of levels in the group DAG (max(clodGroup::depth) + 1)
-// the result is a forest:
-// - node 0 is the root that has per-level trees as children (level_count total)
-// - nodes 1..level_count are the roots of per-level trees, each covering groups with clodGroup::depth == level
-// - remaining nodes are per-level trees, each internal node has up to node_width children, and each leaf node refers to a single group
-// note that node 0 is purely organizational and does not store meaningful data, other than full mesh bounds
+// the result is a forest with one tree per DAG level:
+// - nodes 0..level_count-1 are the roots of per-level trees, each covering groups with clodGroup::depth == level
+// - remaining nodes are the tree nodes; each internal node has up to node_width children, and each leaf node refers to a single group
 size_t clodBuildHierarchy(clodNode* nodes, const clodGroup* groups, size_t group_count, size_t node_width, size_t level_count);
 
 #ifdef __cplusplus
@@ -729,16 +727,15 @@ size_t clodBuildHierarchyBound(size_t group_count, size_t node_width, size_t lev
 	for (size_t frontier = group_count; frontier > 1; frontier = (frontier + node_width - 1) / node_width)
 		total += frontier + level_count;
 
-	// ... plus a single root
-	return total + 1;
+	return total;
 }
 
 size_t clodBuildHierarchy(clodNode* nodes, const clodGroup* groups, size_t group_count, size_t node_width, size_t level_count)
 {
 	using namespace clod;
 
-	// reserve space for node 0 (flat root) and per-level roots
-	size_t offset = level_count + 1;
+	// reserve space for per-level roots
+	size_t offset = level_count;
 
 	std::vector<clodNode> row(group_count);
 	std::vector<unsigned int> order(group_count);
@@ -776,15 +773,12 @@ size_t clodBuildHierarchy(clodNode* nodes, const clodGroup* groups, size_t group
 			offset += count;
 		}
 
-		// the root of the current level goes into the shared root section in the beginning of the output
+		// the root of the current level goes into the fixed section at the beginning
 		assert(row.size() == 1);
-		nodes[1 + level] = row[0];
+		nodes[level] = row[0];
 	}
 
-	// build flat root with all levels as children; it's redundant but simplifies traversal
-	nodes[0] = mergeNodes(nodes, 1, level_count);
-	nodes[0].bounds.error = FLT_MAX; // root node should never be culled
-
+	assert(offset <= clodBuildHierarchyBound(group_count, node_width, level_count));
 	return offset;
 }
 #endif
