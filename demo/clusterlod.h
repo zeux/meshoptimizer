@@ -42,7 +42,7 @@ struct clodConfig
 	// amplify the error of clusters that go through sloppy simplification to account for appearance degradation
 	float simplify_error_factor_sloppy;
 
-	// experimental: limit error by edge length, aiming to remove subpixel triangles even if the attribute error is high
+	// limit error by edge length, aiming to remove subpixel triangles even if the attribute error is high
 	float simplify_error_edge_limit;
 
 	// use permissive simplification instead of regular simplification (make sure to use attribute_protect_mask if this is set!)
