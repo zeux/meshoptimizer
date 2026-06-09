@@ -475,7 +475,7 @@ enum
 	meshopt_SimplifyRegularize = 1 << 4,
 	/* Experimental: Allow collapses across attribute discontinuities, except for vertices that are tagged with meshopt_SimplifyVertex_Protect in vertex_lock. */
 	meshopt_SimplifyPermissive = 1 << 5,
-	/* Experimental: Produce more regular triangle sizes and shapes during simplification, at a small cost to geometric and attribute quality. */
+	/* Produce more regular triangle sizes and shapes during simplification, at a small cost to geometric and attribute quality. */
 	meshopt_SimplifyRegularizeLight = 1 << 6,
 };
 
@@ -488,7 +488,7 @@ enum
 	meshopt_SimplifyVertex_Lock = 1 << 0,
 	/* Protect attribute discontinuity at this vertex; must be used together with meshopt_SimplifyPermissive option. */
 	meshopt_SimplifyVertex_Protect = 1 << 1,
-	/* Experimental: Increase priority for this vertex, making it more likely that it's preserved during simplification. */
+	/* Increase priority for this vertex, making it more likely that it's preserved during simplification. */
 	meshopt_SimplifyVertex_Priority = 1 << 2,
 };
 
@@ -764,13 +764,13 @@ MESHOPTIMIZER_API size_t meshopt_buildMeshletsSpatial(struct meshopt_Meshlet* me
 MESHOPTIMIZER_API void meshopt_optimizeMeshlet(unsigned int* meshlet_vertices, unsigned char* meshlet_triangles, size_t triangle_count, size_t vertex_count);
 
 /**
- * Experimental: Meshlet optimizer
+ * Meshlet optimizer
  * Reorders meshlet vertices and triangles to maximize locality, with higher levels resulting in smaller compressed size at the cost of optimization time.
  * At level 0 the result is equivalent to meshopt_optimizeMeshlet; levels >= 1 may rotate triangle corners to improve compression (which can change provoking vertex and affect OMM data).
  *
  * level should be in the range [0, 9] with 0 equivalent to meshopt_optimizeMeshlet and 9 being the slowest; the sweet spot for compression ratio is around 3
  */
-MESHOPTIMIZER_EXPERIMENTAL void meshopt_optimizeMeshletLevel(unsigned int* meshlet_vertices, size_t vertex_count, unsigned char* meshlet_triangles, size_t triangle_count, int level);
+MESHOPTIMIZER_API void meshopt_optimizeMeshletLevel(unsigned int* meshlet_vertices, size_t vertex_count, unsigned char* meshlet_triangles, size_t triangle_count, int level);
 
 struct meshopt_Bounds
 {
