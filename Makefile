@@ -39,7 +39,7 @@ WASIROOT?=$(WASI_SDK)/share/wasi-sysroot
 
 WASM_FLAGS=--target=wasm32-wasi -Wno-deprecated --sysroot=$(WASIROOT) --no-wasm-opt
 WASM_FLAGS+=-Wall -Wextra
-WASM_FLAGS+=-O3 -DNDEBUG -nostartfiles -nostdlib -Wl,--no-entry -Wl,-s
+WASM_FLAGS+=-O3 -DNDEBUG -DMESHOPTIMIZER_VERTEXCODEC_ZEROCOPY -nostartfiles -nostdlib -Wl,--no-entry -Wl,-s
 WASM_FLAGS+=-mcpu=mvp # make sure clang doesn't use post-MVP features like sign extension
 WASM_FLAGS+=-fno-slp-vectorize -fno-vectorize -fno-unroll-loops
 WASM_FLAGS+=-Wl,-z -Wl,stack-size=36864 -Wl,--initial-memory=65536

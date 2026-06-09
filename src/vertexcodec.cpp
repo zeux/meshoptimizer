@@ -708,6 +708,14 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 	size_t vertex_count_aligned = (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1);
 	assert(vertex_count <= vertex_count_aligned);
 
+	// we can decode directly into the output buffer
+	// this uses strided writes and also reads the last vertex once, which is bad for performance for write-combined memory so we only enable this if configured
+#ifdef MESHOPTIMIZER_VERTEXCODEC_ZEROCOPY
+	unsigned char* target = vertex_data;
+#else
+	unsigned char* target = transposed;
+#endif
+
 	size_t control_size = version == 0 ? 0 : vertex_size / 4;
 	if (size_t(data_end - data) < control_size)
 		return NULL;
@@ -750,22 +758,23 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 		switch (channel & 3)
 		{
 		case 0:
-			decodeDeltas1<unsigned char, false>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k, 0);
+			decodeDeltas1<unsigned char, false>(buffer, target + k, vertex_count, vertex_size, last_vertex + k, 0);
 			break;
 		case 1:
-			decodeDeltas1<unsigned short, false>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k, 0);
+			decodeDeltas1<unsigned short, false>(buffer, target + k, vertex_count, vertex_size, last_vertex + k, 0);
 			break;
 		case 2:
-			decodeDeltas1<unsigned int, true>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k, (32 - (channel >> 4)) & 31);
+			decodeDeltas1<unsigned int, true>(buffer, target + k, vertex_count, vertex_size, last_vertex + k, (32 - (channel >> 4)) & 31);
 			break;
 		default:
 			return NULL; // invalid channel type
 		}
 	}
 
-	memcpy(vertex_data, transposed, vertex_count * vertex_size);
+	if (target == transposed)
+		memcpy(vertex_data, transposed, vertex_count * vertex_size);
 
-	memcpy(last_vertex, &transposed[vertex_size * (vertex_count - 1)], vertex_size);
+	memcpy(last_vertex, &target[vertex_size * (vertex_count - 1)], vertex_size);
 
 	return data;
 }
@@ -1560,6 +1569,14 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 
 	size_t vertex_count_aligned = (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1);
 
+	// we can decode directly into the output buffer if vertex count is aligned to 16 (delta decode works 16 vertices at a time)
+	// this uses strided writes and also reads the last vertex once, which is bad for performance for write-combined memory so we only enable this if configured
+#ifdef MESHOPTIMIZER_VERTEXCODEC_ZEROCOPY
+	unsigned char* target = vertex_count == vertex_count_aligned ? vertex_data : transposed;
+#else
+	unsigned char* target = transposed;
+#endif
+
 	size_t control_size = version == 0 ? 0 : vertex_size / 4;
 	if (size_t(data_end - data) < control_size)
 		return NULL;
@@ -1605,22 +1622,23 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 		switch (channel & 3)
 		{
 		case 0:
-			decodeDeltas4Simd<0>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k, 0);
+			decodeDeltas4Simd<0>(buffer, target + k, vertex_count_aligned, vertex_size, last_vertex + k, 0);
 			break;
 		case 1:
-			decodeDeltas4Simd<1>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k, 0);
+			decodeDeltas4Simd<1>(buffer, target + k, vertex_count_aligned, vertex_size, last_vertex + k, 0);
 			break;
 		case 2:
-			decodeDeltas4Simd<2>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k, (32 - (channel >> 4)) & 31);
+			decodeDeltas4Simd<2>(buffer, target + k, vertex_count_aligned, vertex_size, last_vertex + k, (32 - (channel >> 4)) & 31);
 			break;
 		default:
 			return NULL; // invalid channel type
 		}
 	}
 
-	memcpy(vertex_data, transposed, vertex_count * vertex_size);
+	if (target == transposed)
+		memcpy(vertex_data, transposed, vertex_count * vertex_size);
 
-	memcpy(last_vertex, &transposed[vertex_size * (vertex_count - 1)], vertex_size);
+	memcpy(last_vertex, &target[vertex_size * (vertex_count - 1)], vertex_size);
 
 	return data;
 }
