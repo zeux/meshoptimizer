@@ -246,6 +246,14 @@ static bool appendMeshlet(meshopt_Meshlet& meshlet, unsigned int a, unsigned int
 	short& bv = used[b];
 	short& cv = used[c];
 
+#ifdef MESHOPTIMIZER_CLUSTERIZER_INDEXLIMIT
+	// to ensure that after adding up to 2 new vertices, the existing vertex is within span limit (32), we need to reset vertex indices that are out of range
+	const int span_limit = 32 - 2;
+	av = (av + span_limit < int(meshlet.vertex_count)) ? -1 : av;
+	bv = (bv + span_limit < int(meshlet.vertex_count)) ? -1 : bv;
+	cv = (cv + span_limit < int(meshlet.vertex_count)) ? -1 : cv;
+#endif
+
 	bool result = false;
 
 	int used_extra = (av < 0) + (bv < 0) + (cv < 0);
