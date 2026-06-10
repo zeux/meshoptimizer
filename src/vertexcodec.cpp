@@ -985,8 +985,8 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 #endif
 
 	// for 8-bit groups, instead of loading the bytes through 'data', we load them through 'skip' as they are easier to preserve
-	// for 0-bit groups, we use a masked load so that we load zero bytes
-	const unsigned char* skip = data + (n >= 3 ? 0 : (2 << n));
+	// for 0-bit groups, we use a masked load so that we load zero bytes; in both cases the shift wraps to zero
+	const unsigned char* skip = data + ((2 << n) & 15);
 
 	__m128i selb = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(data));
 	__m128i rest = _mm_mask_loadu_epi8(_mm_setzero_si128(), n == 4 ? 0 : 0xffff, skip);
@@ -1003,8 +1003,8 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
 
 #ifdef SIMD_LATENCYOPT
-	// datacnt is 0 for 8-bit groups so we can't use skip to advance
-	return data + (n == 4 ? 0 : (2 << n)) + datacnt;
+	// datacnt is 0 for 8-bit groups so we can't use skip to advance; 0-bit groups wrap the shift to zero
+	return data + ((2 << n) & 31) + datacnt;
 #else
 	// mask16 is all 1s for 0-bit groups and we need to use zero instead
 	return skip + _mm_popcnt_u32(n == 4 ? 0 : mask16);
