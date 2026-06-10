@@ -985,7 +985,20 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	case 2: // 4-bit
 	case 7:
 	{
-		const unsigned char* skip = data + (2 << (hbits < 3 ? hbits : hbits - 5));
+		int n = hbits < 3 ? hbits : hbits - 5; // 0 for 1-bit, 1 for 2-bit, 2 for 4-bit
+
+#ifdef SIMD_LATENCYOPT
+		unsigned long long data64;
+		memcpy(&data64, data, 8);
+		data64 &= data64 >> n;
+		data64 &= data64 >> (n >> 1);
+
+		// mask out one bit per group that is set if all group bits were 1
+		static const unsigned long long lanes[3] = {0xffff, 0x55555555, 0x1111111111111111ull};
+		int datacnt = _mm_popcnt_u64(data64 & lanes[n]);
+#endif
+
+		const unsigned char* skip = data + (2 << n);
 
 		__m128i selb = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(data));
 		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(skip));
@@ -1001,7 +1014,11 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 
 		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
 
+#ifdef SIMD_LATENCYOPT
+		return skip + datacnt;
+#else
 		return skip + _mm_popcnt_u32(mask16);
+#endif
 	}
 
 	case 3:
