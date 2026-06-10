@@ -1444,6 +1444,16 @@ static const unsigned char* decodeBytesSimd(const unsigned char* data, const uns
 		size_t header_offset = i / kByteGroupSize;
 		unsigned char header_byte = header[header_offset / 4];
 
+#ifdef SIMD_AVX
+		// v0 streams encode zero groups explicitly (no control bytes), which results in long predictable runs
+		// that branchless group decoding handles less optimally; never taken for v1 streams (hshift > 0)
+		if ((hshift | header_byte) == 0)
+		{
+			memset(buffer + i, 0, kByteGroupSize * 4);
+			continue;
+		}
+#endif
+
 		data = decodeBytesGroupSimd(data, buffer + i + kByteGroupSize * 0, hshift + ((header_byte >> 0) & 3));
 		data = decodeBytesGroupSimd(data, buffer + i + kByteGroupSize * 1, hshift + ((header_byte >> 2) & 3));
 		data = decodeBytesGroupSimd(data, buffer + i + kByteGroupSize * 2, hshift + ((header_byte >> 4) & 3));
