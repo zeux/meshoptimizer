@@ -971,45 +971,44 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	// 0 for 1-bit, 1 for 2-bit, 2 for 4-bit, 3 for 8-bit, and 4 for 0-bit as it makes some of the uses easier
 	static const int hbtn[9] = {4, 1, 2, 3, 4, 0, 1, 2, 3};
 
-	{
-		int n = hbtn[hbits];
+	int n = hbtn[hbits];
 
 #ifdef SIMD_LATENCYOPT
-		unsigned long long data64;
-		memcpy(&data64, data, 8);
-		data64 &= data64 >> n;
-		data64 &= data64 >> (n >> 1);
+	unsigned long long data64;
+	memcpy(&data64, data, 8);
+	data64 &= data64 >> n;
+	data64 &= data64 >> (n >> 1);
 
-		// mask out one bit per group that is set if all group bits were 1
-		static const unsigned long long lanes[5] = {0xffff, 0x55555555, 0x1111111111111111ull, 0, 0};
-		int datacnt = _mm_popcnt_u64(data64 & lanes[n]);
+	// mask out one bit per group that is set if all group bits were 1
+	static const unsigned long long lanes[5] = {0xffff, 0x55555555, 0x1111111111111111ull, 0, 0};
+	int datacnt = _mm_popcnt_u64(data64 & lanes[n]);
 #endif
 
-		// for 8-bit groups, instead of loading the bytes through 'data', we load them through 'skip' as they are easier to preserve
-		const unsigned char* skip = data + (n >= 3 ? 0 : (2 << n));
+	// for 8-bit groups, instead of loading the bytes through 'data', we load them through 'skip' as they are easier to preserve
+	// for 0-bit groups, we use a masked load so that we load zero bytes
+	const unsigned char* skip = data + (n >= 3 ? 0 : (2 << n));
 
-		__m128i selb = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(data));
-		__m128i rest = _mm_mask_loadu_epi8(_mm_setzero_si128(), n == 4 ? 0 : 0xffff, skip);
+	__m128i selb = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(data));
+	__m128i rest = _mm_mask_loadu_epi8(_mm_setzero_si128(), n == 4 ? 0 : 0xffff, skip);
 
-		__m128i sent = kDecodeBytesGroupConfig[hbits][0];
-		__m128i ctrl = kDecodeBytesGroupConfig[hbits][1];
+	__m128i sent = kDecodeBytesGroupConfig[hbits][0];
+	__m128i ctrl = kDecodeBytesGroupConfig[hbits][1];
 
-		__m128i selw = _mm_shuffle_epi32(selb, 0x44);
-		__m128i sel = _mm_and_si128(sent, _mm_multishift_epi64_epi8(ctrl, selw));
-		__mmask16 mask16 = _mm_cmp_epi8_mask(sel, sent, _MM_CMPINT_EQ);
+	__m128i selw = _mm_shuffle_epi32(selb, 0x44);
+	__m128i sel = _mm_and_si128(sent, _mm_multishift_epi64_epi8(ctrl, selw));
+	__mmask16 mask16 = _mm_cmp_epi8_mask(sel, sent, _MM_CMPINT_EQ);
 
-		__m128i result = _mm_mask_expand_epi8(sel, mask16, rest);
+	__m128i result = _mm_mask_expand_epi8(sel, mask16, rest);
 
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
+	_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
 
 #ifdef SIMD_LATENCYOPT
-		// datacnt is 0 for 8-bit groups so we can't use skip to advance
-		return data + (n == 4 ? 0 : (2 << n)) + datacnt;
+	// datacnt is 0 for 8-bit groups so we can't use skip to advance
+	return data + (n == 4 ? 0 : (2 << n)) + datacnt;
 #else
-		// mask16 is all 1s for 8-bit groups and we need to use zero instead
-		return skip + _mm_popcnt_u32(n == 4 ? 0 : mask16);
+	// mask16 is all 1s for 0-bit groups and we need to use zero instead
+	return skip + _mm_popcnt_u32(n == 4 ? 0 : mask16);
 #endif
-	}
 }
 #endif
 
