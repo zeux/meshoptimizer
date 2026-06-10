@@ -953,7 +953,7 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 #endif
 
 #ifdef SIMD_AVX
-static const __m128i kDecodeBytesGroupConfig[8][2] = {
+static const __m128i kDecodeBytesGroupConfig[9][2] = {
     {_mm_setzero_si128(), _mm_setzero_si128()},
     {_mm_set1_epi8(3), _mm_setr_epi8(6, 4, 2, 0, 14, 12, 10, 8, 22, 20, 18, 16, 30, 28, 26, 24)},
     {_mm_set1_epi8(15), _mm_setr_epi8(4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56)},
@@ -962,6 +962,7 @@ static const __m128i kDecodeBytesGroupConfig[8][2] = {
     {_mm_set1_epi8(1), _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)},
     {_mm_set1_epi8(3), _mm_setr_epi8(6, 4, 2, 0, 14, 12, 10, 8, 22, 20, 18, 16, 30, 28, 26, 24)},
     {_mm_set1_epi8(15), _mm_setr_epi8(4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56)},
+    {_mm_setzero_si128(), _mm_setzero_si128()},
 };
 
 SIMD_TARGET
@@ -984,8 +985,10 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	case 6:
 	case 2: // 4-bit
 	case 7:
+	case 3: // 8-bit
+	case 8:
 	{
-		int n = hbits < 3 ? hbits : hbits - 5; // 0 for 1-bit, 1 for 2-bit, 2 for 4-bit
+		int n = hbits < 4 ? hbits : hbits - 5; // 0 for 1-bit, 1 for 2-bit, 2 for 4-bit, 3 for 8-bit
 
 #ifdef SIMD_LATENCYOPT
 		unsigned long long data64;
@@ -994,11 +997,12 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		data64 &= data64 >> (n >> 1);
 
 		// mask out one bit per group that is set if all group bits were 1
-		static const unsigned long long lanes[3] = {0xffff, 0x55555555, 0x1111111111111111ull};
+		static const unsigned long long lanes[4] = {0xffff, 0x55555555, 0x1111111111111111ull, 0};
 		int datacnt = _mm_popcnt_u64(data64 & lanes[n]);
 #endif
 
-		const unsigned char* skip = data + (2 << n);
+		// for 8-bit groups, instead of loading the bytes through 'data', we load them through 'skip' as they are easier to preserve
+		const unsigned char* skip = data + (n == 3 ? 0 : (2 << n));
 
 		__m128i selb = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(data));
 		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(skip));
@@ -1015,20 +1019,11 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
 
 #ifdef SIMD_LATENCYOPT
-		return skip + datacnt;
+		// datacnt is 0 for 8-bit groups so we can't use skip to advance
+		return data + (2 << n) + datacnt;
 #else
 		return skip + _mm_popcnt_u32(mask16);
 #endif
-	}
-
-	case 3:
-	case 8:
-	{
-		__m128i result = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data));
-
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
-
-		return data + 16;
 	}
 
 	default:
