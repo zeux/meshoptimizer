@@ -989,7 +989,7 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	const unsigned char* skip = data + ((2 << n) & 15);
 
 	__m128i selb = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(data));
-	__m128i rest = _mm_mask_loadu_epi8(_mm_setzero_si128(), n == 4 ? 0 : 0xffff, skip);
+	__m128i rest = _mm_maskz_loadu_epi8(__mmask16((n >> 2) - 1), skip);
 
 	__m128i sent = kDecodeBytesGroupConfig[hbits][0];
 	__m128i ctrl = kDecodeBytesGroupConfig[hbits][1];
