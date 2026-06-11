@@ -94,7 +94,7 @@ ifeq ($(config),release-avx)
 endif
 
 ifeq ($(config),release-avx512)
-	CXXFLAGS+=-O3 -DNDEBUG -mavx512vl -mavx512vbmi -mavx512vbmi2
+	CXXFLAGS+=-O3 -DNDEBUG -mavx512vl -mavx512vbmi -mavx512vbmi2 -mbmi2
 endif
 
 ifeq ($(config),release-scalar)
