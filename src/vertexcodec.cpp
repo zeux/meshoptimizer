@@ -708,6 +708,14 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 	size_t vertex_count_aligned = (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1);
 	assert(vertex_count <= vertex_count_aligned);
 
+	// we can decode directly into the output buffer
+	// this uses strided writes and also reads the last vertex once, which is bad for performance for write-combined memory so we only enable this if configured
+#ifdef MESHOPTIMIZER_VERTEXCODEC_ZEROCOPY
+	unsigned char* target = vertex_data;
+#else
+	unsigned char* target = transposed;
+#endif
+
 	size_t control_size = version == 0 ? 0 : vertex_size / 4;
 	if (size_t(data_end - data) < control_size)
 		return NULL;
@@ -750,22 +758,23 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 		switch (channel & 3)
 		{
 		case 0:
-			decodeDeltas1<unsigned char, false>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k, 0);
+			decodeDeltas1<unsigned char, false>(buffer, target + k, vertex_count, vertex_size, last_vertex + k, 0);
 			break;
 		case 1:
-			decodeDeltas1<unsigned short, false>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k, 0);
+			decodeDeltas1<unsigned short, false>(buffer, target + k, vertex_count, vertex_size, last_vertex + k, 0);
 			break;
 		case 2:
-			decodeDeltas1<unsigned int, true>(buffer, transposed + k, vertex_count, vertex_size, last_vertex + k, (32 - (channel >> 4)) & 31);
+			decodeDeltas1<unsigned int, true>(buffer, target + k, vertex_count, vertex_size, last_vertex + k, (32 - (channel >> 4)) & 31);
 			break;
 		default:
 			return NULL; // invalid channel type
 		}
 	}
 
-	memcpy(vertex_data, transposed, vertex_count * vertex_size);
+	if (target == transposed)
+		memcpy(vertex_data, transposed, vertex_count * vertex_size);
 
-	memcpy(last_vertex, &transposed[vertex_size * (vertex_count - 1)], vertex_size);
+	memcpy(last_vertex, &target[vertex_size * (vertex_count - 1)], vertex_size);
 
 	return data;
 }
@@ -944,7 +953,7 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 #endif
 
 #ifdef SIMD_AVX
-static const __m128i kDecodeBytesGroupConfig[8][2] = {
+static const __m128i kDecodeBytesGroupConfig[9][2] = {
     {_mm_setzero_si128(), _mm_setzero_si128()},
     {_mm_set1_epi8(3), _mm_setr_epi8(6, 4, 2, 0, 14, 12, 10, 8, 22, 20, 18, 16, 30, 28, 26, 24)},
     {_mm_set1_epi8(15), _mm_setr_epi8(4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56)},
@@ -953,61 +962,53 @@ static const __m128i kDecodeBytesGroupConfig[8][2] = {
     {_mm_set1_epi8(1), _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)},
     {_mm_set1_epi8(3), _mm_setr_epi8(6, 4, 2, 0, 14, 12, 10, 8, 22, 20, 18, 16, 30, 28, 26, 24)},
     {_mm_set1_epi8(15), _mm_setr_epi8(4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56)},
+    {_mm_setzero_si128(), _mm_setzero_si128()},
 };
 
 SIMD_TARGET
 inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int hbits)
 {
-	switch (hbits)
-	{
-	case 0:
-	case 4:
-	{
-		__m128i result = _mm_setzero_si128();
+	// 0 for 1-bit, 1 for 2-bit, 2 for 4-bit, 3 for 8-bit, and 4 for 0-bit as it makes some of the uses easier
+	static const int hbtn[9] = {4, 1, 2, 3, 4, 0, 1, 2, 3};
 
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
+	int n = hbtn[hbits];
 
-		return data;
-	}
+#ifdef SIMD_LATENCYOPT
+	unsigned long long data64;
+	memcpy(&data64, data, 8);
+	data64 &= data64 >> n;
+	data64 &= data64 >> (n >> 1);
 
-	case 5: // 1-bit
-	case 1: // 2-bit
-	case 6:
-	case 2: // 4-bit
-	case 7:
-	{
-		const unsigned char* skip = data + (2 << (hbits < 3 ? hbits : hbits - 5));
+	// mask out one bit per group that is set if all group bits were 1
+	static const unsigned long long lanes[5] = {0xffff, 0x55555555, 0x1111111111111111ull, 0, 0};
+	int datacnt = _mm_popcnt_u64(data64 & lanes[n]);
+#endif
 
-		__m128i selb = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(data));
-		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(skip));
+	// for 8-bit groups, instead of loading the bytes through 'data', we load them through 'skip' as they are easier to preserve
+	// for 0-bit groups, we use a masked load so that we load zero bytes; in both cases the shift wraps to zero
+	const unsigned char* skip = data + ((2 << n) & 15);
 
-		__m128i sent = kDecodeBytesGroupConfig[hbits][0];
-		__m128i ctrl = kDecodeBytesGroupConfig[hbits][1];
+	__m128i selb = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(data));
+	__m128i rest = _mm_maskz_loadu_epi8(__mmask16((n >> 2) - 1), skip);
 
-		__m128i selw = _mm_shuffle_epi32(selb, 0x44);
-		__m128i sel = _mm_and_si128(sent, _mm_multishift_epi64_epi8(ctrl, selw));
-		__mmask16 mask16 = _mm_cmp_epi8_mask(sel, sent, _MM_CMPINT_EQ);
+	__m128i sent = kDecodeBytesGroupConfig[hbits][0];
+	__m128i ctrl = kDecodeBytesGroupConfig[hbits][1];
 
-		__m128i result = _mm_mask_expand_epi8(sel, mask16, rest);
+	__m128i selw = _mm_shuffle_epi32(selb, 0x44);
+	__m128i sel = _mm_and_si128(sent, _mm_multishift_epi64_epi8(ctrl, selw));
+	__mmask16 mask16 = _mm_cmp_epi8_mask(sel, sent, _MM_CMPINT_EQ);
 
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
+	__m128i result = _mm_mask_expand_epi8(sel, mask16, rest);
 
-		return skip + _mm_popcnt_u32(mask16);
-	}
+	_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
 
-	case 3:
-	case 8:
-	{
-		__m128i result = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data));
-
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
-
-		return data + 16;
-	}
-
-	default:
-		SIMD_UNREACHABLE(); // unreachable
-	}
+#ifdef SIMD_LATENCYOPT
+	// datacnt is 0 for 8-bit groups so we can't use skip to advance; 0-bit groups wrap the shift to zero
+	return data + ((2 << n) & 31) + datacnt;
+#else
+	// mask16 is all 1s for 0-bit groups and we need to use zero instead
+	return skip + _mm_popcnt_u32(n == 4 ? 0 : mask16);
+#endif
 }
 #endif
 
@@ -1443,6 +1444,16 @@ static const unsigned char* decodeBytesSimd(const unsigned char* data, const uns
 		size_t header_offset = i / kByteGroupSize;
 		unsigned char header_byte = header[header_offset / 4];
 
+#ifdef SIMD_AVX
+		// v0 streams encode zero groups explicitly (no control bytes), which results in long predictable runs
+		// that branchless group decoding handles less optimally; never taken for v1 streams (hshift > 0)
+		if ((hshift | header_byte) == 0)
+		{
+			memset(buffer + i, 0, kByteGroupSize * 4);
+			continue;
+		}
+#endif
+
 		data = decodeBytesGroupSimd(data, buffer + i + kByteGroupSize * 0, hshift + ((header_byte >> 0) & 3));
 		data = decodeBytesGroupSimd(data, buffer + i + kByteGroupSize * 1, hshift + ((header_byte >> 2) & 3));
 		data = decodeBytesGroupSimd(data, buffer + i + kByteGroupSize * 2, hshift + ((header_byte >> 4) & 3));
@@ -1560,6 +1571,14 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 
 	size_t vertex_count_aligned = (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1);
 
+	// we can decode directly into the output buffer if vertex count is aligned to 16 (delta decode works 16 vertices at a time)
+	// this uses strided writes and also reads the last vertex once, which is bad for performance for write-combined memory so we only enable this if configured
+#ifdef MESHOPTIMIZER_VERTEXCODEC_ZEROCOPY
+	unsigned char* target = vertex_count == vertex_count_aligned ? vertex_data : transposed;
+#else
+	unsigned char* target = transposed;
+#endif
+
 	size_t control_size = version == 0 ? 0 : vertex_size / 4;
 	if (size_t(data_end - data) < control_size)
 		return NULL;
@@ -1605,22 +1624,23 @@ static const unsigned char* decodeVertexBlockSimd(const unsigned char* data, con
 		switch (channel & 3)
 		{
 		case 0:
-			decodeDeltas4Simd<0>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k, 0);
+			decodeDeltas4Simd<0>(buffer, target + k, vertex_count_aligned, vertex_size, last_vertex + k, 0);
 			break;
 		case 1:
-			decodeDeltas4Simd<1>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k, 0);
+			decodeDeltas4Simd<1>(buffer, target + k, vertex_count_aligned, vertex_size, last_vertex + k, 0);
 			break;
 		case 2:
-			decodeDeltas4Simd<2>(buffer, transposed + k, vertex_count_aligned, vertex_size, last_vertex + k, (32 - (channel >> 4)) & 31);
+			decodeDeltas4Simd<2>(buffer, target + k, vertex_count_aligned, vertex_size, last_vertex + k, (32 - (channel >> 4)) & 31);
 			break;
 		default:
 			return NULL; // invalid channel type
 		}
 	}
 
-	memcpy(vertex_data, transposed, vertex_count * vertex_size);
+	if (target == transposed)
+		memcpy(vertex_data, transposed, vertex_count * vertex_size);
 
-	memcpy(last_vertex, &transposed[vertex_size * (vertex_count - 1)], vertex_size);
+	memcpy(last_vertex, &target[vertex_size * (vertex_count - 1)], vertex_size);
 
 	return data;
 }
