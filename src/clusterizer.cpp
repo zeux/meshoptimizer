@@ -702,7 +702,7 @@ static float boxMerge(BVHBoxT& box, const BVHBox& other)
 	}
 
 	float sx = box.max[0] - box.min[0], sy = box.max[1] - box.min[1], sz = box.max[2] - box.min[2];
-	return sx * sy + sx * sz + sy * sz;
+	return sx * sy + sy * sz + sz * sx;
 }
 #endif
 
@@ -850,7 +850,7 @@ static void bvhPackTail(unsigned char* boundary, const unsigned int* order, size
 
 static bool bvhDivisible(size_t count, size_t min, size_t max)
 {
-	// count is representable as a sum of values in [min..max] if if it in range of [k*min..k*min+k*(max-min)]
+	// count is representable as a sum of values in [min..max] if it is in range of [k*min..k*min+k*(max-min)]
 	// equivalent to ceil(count / max) <= floor(count / min), but the form below allows using idiv (see nv_cluster_builder)
 	// we avoid expensive integer divisions in the common case where min is <= max/2
 	return min * 2 <= max ? count >= min : count % min <= (count / min) * (max - min);
@@ -1273,6 +1273,8 @@ size_t meshopt_buildMeshletsSpatial(struct meshopt_Meshlet* meshlets, unsigned i
 
 	assert(max_vertices >= 3 && max_vertices <= 256);
 	assert(min_triangles >= 1 && min_triangles <= max_triangles && max_triangles <= 512);
+
+	assert(fill_weight >= 0);
 
 	if (index_count == 0)
 		return 0;
