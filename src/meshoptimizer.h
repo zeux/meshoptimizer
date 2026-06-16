@@ -408,7 +408,7 @@ MESHOPTIMIZER_API int meshopt_decodeVertexVersion(const unsigned char* buffer, s
  * Each component is stored as an 8-bit or 16-bit normalized integer; stride must be equal to 4 or 8. W is preserved as is.
  *
  * meshopt_decodeFilterQuat decodes 3-component quaternion encoding with K-bit component encoding and a 2-bit component index indicating which component to reconstruct.
- * Each component is stored as an 16-bit integer; stride must be equal to 8.
+ * Each component is stored as a 16-bit integer; stride must be equal to 8.
  *
  * meshopt_decodeFilterExp decodes exponential encoding of floating-point data with 8-bit exponent and 24-bit integer mantissa as 2^E*M.
  * Each 32-bit component is decoded in isolation; stride must be divisible by 4.
@@ -426,19 +426,19 @@ MESHOPTIMIZER_API void meshopt_decodeFilterColor(void* buffer, size_t count, siz
  * These functions can be used to encode data in a format that meshopt_decodeFilter can decode
  *
  * meshopt_encodeFilterOct encodes unit vectors with K-bit (2 <= K <= 16) signed X/Y as an output.
- * Each component is stored as an 8-bit or 16-bit normalized integer; stride must be equal to 4 or 8. Z will store 1.0f, W is preserved as is.
+ * Each component is stored as an 8-bit or 16-bit normalized integer; stride must be equal to 4 (K <= 8) or 8 (K <= 16). Z will store 1.0f, W is preserved as is.
  * Input data must contain 4 floats for every vector (count*4 total).
  *
  * meshopt_encodeFilterQuat encodes unit quaternions with K-bit (4 <= K <= 16) component encoding.
- * Each component is stored as an 16-bit integer; stride must be equal to 8.
+ * Each component is stored as a 16-bit integer; stride must be equal to 8.
  * Input data must contain 4 floats for every quaternion (count*4 total).
  *
  * meshopt_encodeFilterExp encodes arbitrary (finite) floating-point data with 8-bit exponent and K-bit integer mantissa (1 <= K <= 24).
- * Exponent can be shared between all components of a given vector as defined by stride or all values of a given component; stride must be divisible by 4.
+ * Exponent can be shared between all components of a given vector as defined by stride or all values of a given component; stride must be divisible by 4 (and <= 256).
  * Input data must contain stride/4 floats for every vector (count*stride/4 total).
  *
  * meshopt_encodeFilterColor encodes RGBA color data by converting RGB to YCoCg color space with K-bit (2 <= K <= 16) component encoding; A is stored using K-1 bits.
- * Each component is stored as an 8-bit or 16-bit integer; stride must be equal to 4 or 8.
+ * Each component is stored as an 8-bit or 16-bit integer; stride must be equal to 4 (K <= 8) or 8 (K <= 16).
  * Input data must contain 4 floats for every color (count*4 total).
  */
 enum meshopt_EncodeExpMode

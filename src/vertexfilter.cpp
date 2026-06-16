@@ -894,7 +894,7 @@ static void decodeFilterOctSimd8(signed char* data, size_t count)
 		v128_t z = wasm_f32x4_sub(wasm_f32x4_convert_i32x4(zf), wasm_f32x4_add(wasm_f32x4_abs(x), wasm_f32x4_abs(y)));
 
 		// fixup octahedral coordinates for z<0
-		// note: i32x4_min with 0 is equvalent to f32x4_min
+		// note: i32x4_min with 0 is equivalent to f32x4_min
 		v128_t t = wasm_i32x4_min(z, wasm_i32x4_splat(0));
 
 		x = wasm_f32x4_add(x, wasm_v128_xor(t, wasm_v128_and(x, sign)));
@@ -949,7 +949,7 @@ static void decodeFilterOctSimd16(short* data, size_t count)
 		v128_t z = wasm_f32x4_sub(wasm_f32x4_convert_i32x4(zf), wasm_f32x4_add(wasm_f32x4_abs(x), wasm_f32x4_abs(y)));
 
 		// fixup octahedral coordinates for z<0
-		// note: i32x4_min with 0 is equvalent to f32x4_min
+		// note: i32x4_min with 0 is equivalent to f32x4_min
 		v128_t t = wasm_i32x4_min(z, wasm_i32x4_splat(0));
 
 		x = wasm_f32x4_add(x, wasm_v128_xor(t, wasm_v128_and(x, sign)));
@@ -1276,6 +1276,7 @@ void meshopt_encodeFilterOct(void* destination, size_t count, size_t stride, int
 {
 	assert(stride == 4 || stride == 8);
 	assert(bits >= 2 && bits <= 16);
+	assert(stride == 8 || bits <= 8);
 
 	signed char* d8 = static_cast<signed char*>(destination);
 	short* d16 = static_cast<short*>(destination);
@@ -1446,6 +1447,7 @@ void meshopt_encodeFilterColor(void* destination, size_t count, size_t stride, i
 {
 	assert(stride == 4 || stride == 8);
 	assert(bits >= 2 && bits <= 16);
+	assert(stride == 8 || bits <= 8);
 
 	unsigned char* d8 = static_cast<unsigned char*>(destination);
 	unsigned short* d16 = static_cast<unsigned short*>(destination);
