@@ -1044,6 +1044,59 @@ static void encodeFilterExpZero()
 		assert(decoded[i] == 0);
 }
 
+static void encodeFilterExpZeroShared()
+{
+	const float data[4] = {
+	    0.f,
+	    0.1f,
+	    -0.025f,
+	    -0.f,
+	};
+
+	// shared exponents (vector)
+	const unsigned int expected1[4] = {
+	    0xef000000,
+	    0xef003333,
+	    0xedffcccd,
+	    0xed000000,
+	};
+
+	// shared exponents (component)
+	const unsigned int expected2[4] = {
+	    0xed000000,
+	    0xef003333,
+	    0xedffcccd,
+	    0xef000000,
+	};
+
+	unsigned int encoded1[4];
+	meshopt_encodeFilterExp(encoded1, 2, 8, 15, data, meshopt_EncodeExpSharedVector);
+
+	unsigned int encoded2[4];
+	meshopt_encodeFilterExp(encoded2, 2, 8, 15, data, meshopt_EncodeExpSharedComponent);
+
+	assert(memcmp(encoded1, expected1, sizeof(expected1)) == 0);
+	assert(memcmp(encoded2, expected2, sizeof(expected2)) == 0);
+
+	float decoded1[4];
+	memcpy(decoded1, encoded1, sizeof(decoded1));
+	meshopt_decodeFilterExp(decoded1, 2, 8);
+
+	float decoded2[4];
+	memcpy(decoded2, encoded2, sizeof(decoded2));
+	meshopt_decodeFilterExp(decoded2, 2, 8);
+
+	for (size_t i = 0; i < 4; ++i)
+	{
+		assert(fabsf(decoded1[i] - data[i]) < 1e-5f);
+		assert(fabsf(decoded2[i] - data[i]) < 1e-5f);
+	}
+
+	// zeroes should be preserved exactly
+	assert(decoded1[0] == 0 && decoded1[3] == 0);
+	assert(decoded2[0] == 0 && decoded2[3] == 0);
+}
+
 static void encodeFilterExpAlias()
 {
 	const float data[4] = {
@@ -3383,6 +3436,7 @@ void runTests()
 	encodeFilterQuat12();
 	encodeFilterExp();
 	encodeFilterExpZero();
+	encodeFilterExpZeroShared();
 	encodeFilterExpAlias();
 	encodeFilterExpClamp();
 	encodeFilterColor8();
