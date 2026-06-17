@@ -1188,8 +1188,9 @@ inline int optlog2(float v)
 	} u;
 
 	u.f = v;
-	// +1 accounts for implicit 1. in mantissa; denormalized numbers will end up clamped to min_exp by calling code
-	return v == 0 ? 0 : int((u.ui >> 23) & 0xff) - 127 + 1;
+	// +1 accounts for implicit 1. in mantissa; zero and denormalized numbers will end up clamped to min_exp by calling code
+	// this is important for shared exponent modes, as a zero component should not inflate the shared exponent
+	return int((u.ui >> 23) & 0xff) - 127 + 1;
 }
 
 // optimized variant of ldexp
@@ -1367,11 +1368,12 @@ void meshopt_encodeFilterExp(void* destination_, size_t count, size_t stride, in
 
 	const int min_exp = -100;
 
+	// used to track maximum exponent for EncodeExpSharedComponent and zero exponent reuse for EncodeExpSeparate
+	for (size_t j = 0; j < stride_float; ++j)
+		component_exp[j] = (mode == meshopt_EncodeExpSeparate) ? 0 : min_exp;
+
 	if (mode == meshopt_EncodeExpSharedComponent)
 	{
-		for (size_t j = 0; j < stride_float; ++j)
-			component_exp[j] = min_exp;
-
 		for (size_t i = 0; i < count; ++i)
 		{
 			const float* v = &data[i * stride_float];
@@ -1409,7 +1411,9 @@ void meshopt_encodeFilterExp(void* destination_, size_t count, size_t stride, in
 			{
 				int e = optlog2(v[j]);
 
-				component_exp[j] = (min_exp < e) ? e : min_exp;
+				// zero values inherit the last encoded exponent to keep the encoded data more compressible
+				if (v[j] != 0)
+					component_exp[j] = (min_exp < e) ? e : min_exp;
 			}
 		}
 		else if (mode == meshopt_EncodeExpClamped)
