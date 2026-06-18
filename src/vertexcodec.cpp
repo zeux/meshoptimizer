@@ -815,7 +815,7 @@ static bool gDecodeBytesGroupInitialized = decodeBytesGroupBuildTables();
 #endif
 
 #ifdef SIMD_SSE
-// sent mask, replicating shuffle, mulhi/mullo multipliers for multishift emulation
+// sent mask, replicating shuffle, and two multipliers (even/odd) for multishift emulation
 static const __m128i kDecodeBytesGroupConfig[9][4] = {
     {_mm_set1_epi8(1), _mm_set1_epi8(-128), _mm_setzero_si128(), _mm_setzero_si128()},
     {_mm_set1_epi8(3), _mm_setr_epi8(0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3), _mm_setr_epi16(4, 64, 4, 64, 4, 64, 4, 64), _mm_setr_epi16(16, 256, 16, 256, 16, 256, 16, 256)},
@@ -855,11 +855,11 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(skip));
 
 	// unpack 1, 2 or 4-bit values: shuffle replicates each source byte into both halves of a 16-bit lane
-	// mulhi extracts the field for the low output byte and mullo the field for the high output byte (interleaved in place)
+	// mulhi extracts even and odd fields into the low byte; the results are interleaved back with shift/or
 	__m128i selw = _mm_shuffle_epi8(selb, kDecodeBytesGroupConfig[hbits][1]);
-	__m128i val0 = _mm_mulhi_epu16(selw, kDecodeBytesGroupConfig[hbits][2]);
-	__m128i val1 = _mm_mullo_epi16(selw, kDecodeBytesGroupConfig[hbits][3]);
-	__m128i seli = _mm_or_si128(val0, _mm_and_si128(val1, _mm_set1_epi16(0xff00)));
+	__m128i sel0 = _mm_mulhi_epu16(selw, kDecodeBytesGroupConfig[hbits][2]);
+	__m128i sel1 = _mm_mulhi_epu16(selw, kDecodeBytesGroupConfig[hbits][3]);
+	__m128i seli = _mm_or_si128(sel0, _mm_slli_epi16(sel1, 8));
 
 	// the interleaved fields are masked by the bit count (special handling: for 0/8-bit values, mul produces 0)
 	__m128i sent = kDecodeBytesGroupConfig[hbits][0];
