@@ -806,6 +806,8 @@ decodeBytesGroupBuildTables()
 		kDecodeBytesGroupCount[mask] = count;
 	}
 
+	(void)kDecodeBytesGroupCount; // table may not be used in some builds where shuffle table is still necessary
+
 	return true;
 }
 
@@ -870,9 +872,10 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	// decode shuffle mask from two halves; second half needs to be shifted by popcount(mask0)
 	__m128i sm0 = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(&kDecodeBytesGroupShuffle[mask0]));
 	__m128i sm1 = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(&kDecodeBytesGroupShuffle[mask1]));
-	__m128i sm1off = _mm_set1_epi8(kDecodeBytesGroupCount[mask0]);
 
-	__m128i sm1r = _mm_add_epi8(sm1, sm1off);
+	// each lane of mask is 0x00 or 0xff; sad yields 255*popcount(mask0) in low word => low byte is -popcount(mask0)
+	__m128i npops = _mm_sad_epu8(mask, _mm_setzero_si128());
+	__m128i sm1r = _mm_sub_epi8(sm1, _mm_shuffle_epi8(npops, _mm_setzero_si128()));
 	__m128i shuf = _mm_unpacklo_epi64(sm0, sm1r);
 
 	// expand rest via shuffle mask and combine with sel; shuffle mask zeroes out bytes that are replaced by sel
