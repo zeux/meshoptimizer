@@ -1384,12 +1384,18 @@ static const unsigned char* decodeBytesSimd(const unsigned char* data, const uns
 		size_t header_offset = i / kByteGroupSize;
 		unsigned char header_byte = header[header_offset / 4];
 
-#ifdef SIMD_AVX
-		// v0 streams encode zero groups explicitly (no control bytes), which results in long predictable runs
-		// that branchless group decoding handles less optimally; never taken for v1 streams (hshift > 0)
-		if ((hshift | header_byte) == 0)
+#if defined(SIMD_SSE) || defined(SIMD_AVX)
+		// very-fast-path: for consecutive 4 groups that are all 0-bit (v0/0, v1/0/0000) or 8-bit (v0/3333, v1/1/3333),
+		// the branchless decoders are slower than branching over the decoding of 4 groups and issuing a few load/store ops
+		if (hshift != 5 && header_byte == 0)
 		{
 			memset(buffer + i, 0, kByteGroupSize * 4);
+			continue;
+		}
+		else if (hshift != 4 && header_byte == 255)
+		{
+			memcpy(buffer + i, data, kByteGroupSize * 4);
+			data += kByteGroupSize * 4;
 			continue;
 		}
 #endif
