@@ -827,24 +827,6 @@ static const __m128i kDecodeBytesGroupConfig[9][4] = {
 };
 
 SIMD_TARGET
-inline __m128i decodeShuffleMask(unsigned char mask0, unsigned char mask1)
-{
-	__m128i sm0 = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(&kDecodeBytesGroupShuffle[mask0]));
-	__m128i sm1 = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(&kDecodeBytesGroupShuffle[mask1]));
-	__m128i sm1off = _mm_set1_epi8(kDecodeBytesGroupCount[mask0]);
-
-	__m128i sm1r = _mm_add_epi8(sm1, sm1off);
-
-	return _mm_unpacklo_epi64(sm0, sm1r);
-}
-
-#ifdef __GNUC__
-typedef int __attribute__((aligned(1))) unaligned_int;
-#else
-typedef int unaligned_int;
-#endif
-
-SIMD_TARGET
 inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int hbits)
 {
 	// 0 for 1-bit, 1 for 2-bit, 2 for 4-bit, 3 for 8-bit, and 4 for 0-bit as it makes some of the uses easier
@@ -885,8 +867,15 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	unsigned char mask0 = (unsigned char)(mask16 & 255);
 	unsigned char mask1 = (unsigned char)(mask16 >> 8);
 
-	// decode shuffle mask and combine rest+sel accordingly
-	__m128i shuf = decodeShuffleMask(mask0, mask1);
+	// decode shuffle mask from two halves; second half needs to be shifted by popcount(mask0)
+	__m128i sm0 = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(&kDecodeBytesGroupShuffle[mask0]));
+	__m128i sm1 = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(&kDecodeBytesGroupShuffle[mask1]));
+	__m128i sm1off = _mm_set1_epi8(kDecodeBytesGroupCount[mask0]);
+
+	__m128i sm1r = _mm_add_epi8(sm1, sm1off);
+	__m128i shuf = _mm_unpacklo_epi64(sm0, sm1r);
+
+	// expand rest via shuffle mask and combine with sel; shuffle mask zeroes out bytes that are replaced by sel
 	__m128i result = _mm_or_si128(_mm_shuffle_epi8(rest, shuf), _mm_andnot_si128(mask, sel));
 
 	_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
