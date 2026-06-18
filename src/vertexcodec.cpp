@@ -7,18 +7,18 @@
 // The block below auto-detects SIMD ISA that can be used on the target platform
 #ifndef MESHOPTIMIZER_NO_SIMD
 
-// The SIMD implementation requires SSSE3, which can be enabled unconditionally through compiler settings
-#if defined(__AVX__) || defined(__SSSE3__)
+// The SIMD implementation requires SSSE3+POPCNT, which can be enabled unconditionally through compiler settings
+#if defined(__AVX__) || (defined(__SSSE3__) && defined(__POPCNT__))
 #define SIMD_SSE
 #endif
 
 // An experimental implementation using AVX512 instructions; it's only enabled when AVX512 is enabled through compiler settings
-#if defined(__AVX512VBMI2__) && defined(__AVX512VBMI__) && defined(__AVX512VL__) && defined(__POPCNT__)
+#if defined(__AVX512VBMI2__) && defined(__AVX512VBMI__) && defined(__AVX512VL__)
 #undef SIMD_SSE
 #define SIMD_AVX
 #endif
 
-// MSVC supports compiling SSSE3 code regardless of compile options; we use a cpuid-based scalar fallback
+// MSVC supports compiling SSSE3+POPCNT code regardless of compile options; we use a cpuid-based scalar fallback
 #if !defined(SIMD_SSE) && !defined(SIMD_AVX) && defined(_MSC_VER) && !defined(__clang__) && (defined(_M_IX86) || (defined(_M_X64) && !defined(_M_ARM64EC)))
 #define SIMD_SSE
 #define SIMD_FALLBACK
@@ -28,7 +28,7 @@
 #if !defined(SIMD_SSE) && !defined(SIMD_AVX) && ((defined(__clang__) && __clang_major__ * 100 + __clang_minor__ >= 308) || (defined(__GNUC__) && __GNUC__ * 100 + __GNUC_MINOR__ >= 409)) && (defined(__i386__) || defined(__x86_64__))
 #define SIMD_SSE
 #define SIMD_FALLBACK
-#define SIMD_TARGET __attribute__((target("ssse3")))
+#define SIMD_TARGET __attribute__((target("ssse3,popcnt")))
 #endif
 
 // GCC/clang define these when NEON support is available
@@ -72,7 +72,7 @@
 #endif // !MESHOPTIMIZER_NO_SIMD
 
 #ifdef SIMD_SSE
-#include <tmmintrin.h>
+#include <nmmintrin.h>
 #endif
 
 #if defined(SIMD_SSE) && defined(SIMD_FALLBACK)
@@ -1857,7 +1857,8 @@ int meshopt_decodeVertexBuffer(void* destination, size_t vertex_count, size_t ve
 	const unsigned char* (*decode)(const unsigned char*, const unsigned char*, unsigned char*, size_t, size_t, unsigned char[256], const unsigned char*, int) = NULL;
 
 #if defined(SIMD_SSE) && defined(SIMD_FALLBACK)
-	decode = (cpuid & (1 << 9)) ? decodeVertexBlockSimd : decodeVertexBlock;
+	const unsigned int cpumask = (1 << 9) | (1 << 23); // SSSE3+POPCNT
+	decode = (cpuid & cpumask) == cpumask ? decodeVertexBlockSimd : decodeVertexBlock;
 #elif defined(SIMD_SSE) || defined(SIMD_AVX) || defined(SIMD_NEON) || defined(SIMD_WASM)
 	decode = decodeVertexBlockSimd;
 #else
