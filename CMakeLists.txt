@@ -14,6 +14,11 @@ endif()
 
 project(meshoptimizer VERSION 1.1 LANGUAGES CXX)
 
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^[Rr][Ii][Ss][Cc][Vv]")
+    set(MESHOPT_TARGET_RISCV TRUE)
+    message(STATUS "RISC-V target detected; meshoptimizer will use the portable scalar backend")
+endif()
+
 option(MESHOPT_BUILD_DEMO "Build demo" OFF)
 option(MESHOPT_BUILD_GLTFPACK "Build gltfpack" OFF)
 option(MESHOPT_BUILD_SHARED_LIBS "Build shared libraries" OFF)
@@ -89,6 +94,10 @@ if(MESHOPT_BUILD_SHARED_LIBS)
     add_library(meshoptimizer SHARED ${SOURCES})
 else()
     add_library(meshoptimizer STATIC ${SOURCES})
+endif()
+
+if(MESHOPT_TARGET_RISCV)
+    target_compile_definitions(meshoptimizer PUBLIC MESHOPTIMIZER_NO_SIMD)
 endif()
 
 target_include_directories(meshoptimizer INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>")

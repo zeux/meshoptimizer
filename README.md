@@ -33,6 +33,8 @@ The source files are organized in such a way that you don't need to change your 
 
 To use meshoptimizer functions, simply `#include` the header `meshoptimizer.h`; the library source is C++, but the header is C-compatible.
 
+When targeting `riscv64`, the CMake build explicitly defines `MESHOPTIMIZER_NO_SIMD` so that the library uses the existing portable scalar backend instead of inheriting host-only SSE/NEON/Wasm SIMD paths during generic cross-configuration. Source builds can use the same define manually when a conservative portable build is desired.
+
 ## Core pipeline
 
 When optimizing a mesh, to maximize rendering efficiency you should typically feed it through a set of optimizations (the order is important!):

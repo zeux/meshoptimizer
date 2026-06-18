@@ -33,6 +33,13 @@
 #define MESHOPTIMIZER_EXPERIMENTAL MESHOPTIMIZER_API
 #endif
 
+#if defined(__riscv)
+#define MESHOPTIMIZER_RISCV 1
+#if defined(__riscv_xlen) && __riscv_xlen == 64
+#define MESHOPTIMIZER_RISCV64 1
+#endif
+#endif
+
 /* C interface */
 #ifdef __cplusplus
 extern "C"
