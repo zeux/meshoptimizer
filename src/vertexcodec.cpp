@@ -864,24 +864,28 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 #endif
 
 	// for 8-bit groups, instead of loading the bytes through 'data', we load them through 'skip' as they are easier to preserve
-	// for 0-bit groups, we use a masked load so that we load zero bytes; in both cases the shift wraps to zero
+	// for 0-bit groups, the load results get discarded because mask is always 0; in both cases the shift wraps to zero
 	const unsigned char* skip = data + ((2 << n) & 15);
 
 	__m128i selb = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(data));
 	__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(skip));
 
+	// unpack 1, 2 or 4-bit values; shuffle moves bytes into place and mul pushes the correct bits into the 3-rd byte of uint32 product
 	__m128i mult = kDecodeBytesGroupConfig[hbits][1];
 	__m128i val0 = _mm_mulhi_epu16(_mm_shuffle_epi8(selb, kDecodeBytesGroupConfig[hbits][2]), mult);
 	__m128i val1 = _mm_mulhi_epu16(_mm_shuffle_epi8(selb, kDecodeBytesGroupConfig[hbits][3]), mult);
 
+	// the resulting products are masked by the bit count (special handling: for 0/8-bit values, mul produces 0)
 	__m128i sent = kDecodeBytesGroupConfig[hbits][0];
 	__m128i sel = _mm_and_si128(_mm_packus_epi16(val0, val1), sent);
 
+	// compare sel to sentinel; returns 0 for 0-bit (mul produces 0, sent is 1), 1 for 8-bit (mul produces 0, sent is 0)
 	__m128i mask = _mm_cmpeq_epi8(sel, sent);
 	int mask16 = _mm_movemask_epi8(mask);
 	unsigned char mask0 = (unsigned char)(mask16 & 255);
 	unsigned char mask1 = (unsigned char)(mask16 >> 8);
 
+	// decode shuffle mask and combine rest+sel accordingly
 	__m128i shuf = decodeShuffleMask(mask0, mask1);
 	__m128i result = _mm_or_si128(_mm_shuffle_epi8(rest, shuf), _mm_andnot_si128(mask, sel));
 
@@ -939,10 +943,12 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	__m128i sent = kDecodeBytesGroupConfig[hbits][0];
 	__m128i ctrl = kDecodeBytesGroupConfig[hbits][1];
 
+	// unpack 1, 2 or 4-bit values using multishift and mask the result; for 0/8-bit values, sel is always 0
 	__m128i selw = _mm_shuffle_epi32(selb, 0x44);
 	__m128i sel = _mm_and_si128(sent, _mm_multishift_epi64_epi8(ctrl, selw));
-	__mmask16 mask16 = _mm_cmp_epi8_mask(sel, sent, _MM_CMPINT_EQ);
 
+	// compare sel to sentinel and combine; mask is 0 for 0/8-bit as sent is 0
+	__mmask16 mask16 = _mm_cmp_epi8_mask(sel, sent, _MM_CMPINT_EQ);
 	__m128i result = _mm_mask_expand_epi8(sel, mask16, rest);
 
 	_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
