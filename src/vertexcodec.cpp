@@ -815,17 +815,17 @@ static bool gDecodeBytesGroupInitialized = decodeBytesGroupBuildTables();
 #endif
 
 #ifdef SIMD_SSE
-// sent mask, mult, shuf0/shuf1 for multishift emulation
+// sent mask, replicating shuffle, mulhi/mullo multipliers for multishift emulation
 static const __m128i kDecodeBytesGroupConfig[9][4] = {
-    {_mm_set1_epi8(1), _mm_setzero_si128(), _mm_set1_epi8(-128), _mm_set1_epi8(-128)},
-    {_mm_set1_epi8(3), _mm_setr_epi16(4, 16, 64, 256, 4, 16, 64, 256), _mm_setr_epi8(1, 0, 1, 0, 1, 0, 1, 0, 2, 1, 2, 1, 2, 1, 2, 1), _mm_setr_epi8(3, 2, 3, 2, 3, 2, 3, 2, 4, 3, 4, 3, 4, 3, 4, 3)},
-    {_mm_set1_epi8(15), _mm_setr_epi16(16, 256, 16, 256, 16, 256, 16, 256), _mm_setr_epi8(1, 0, 1, 0, 2, 1, 2, 1, 3, 2, 3, 2, 4, 3, 4, 3), _mm_setr_epi8(5, 4, 5, 4, 6, 5, 6, 5, 7, 6, 7, 6, 8, 7, 8, 7)},
-    {_mm_setzero_si128(), _mm_setzero_si128(), _mm_set1_epi8(-128), _mm_set1_epi8(-128)},
-    {_mm_set1_epi8(1), _mm_setzero_si128(), _mm_set1_epi8(-128), _mm_set1_epi8(-128)},
-    {_mm_set1_epi8(1), _mm_setr_epi16(256, 128, 64, 32, 16, 8, 4, 2), _mm_setr_epi8(1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0), _mm_setr_epi8(2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1)},
-    {_mm_set1_epi8(3), _mm_setr_epi16(4, 16, 64, 256, 4, 16, 64, 256), _mm_setr_epi8(1, 0, 1, 0, 1, 0, 1, 0, 2, 1, 2, 1, 2, 1, 2, 1), _mm_setr_epi8(3, 2, 3, 2, 3, 2, 3, 2, 4, 3, 4, 3, 4, 3, 4, 3)},
-    {_mm_set1_epi8(15), _mm_setr_epi16(16, 256, 16, 256, 16, 256, 16, 256), _mm_setr_epi8(1, 0, 1, 0, 2, 1, 2, 1, 3, 2, 3, 2, 4, 3, 4, 3), _mm_setr_epi8(5, 4, 5, 4, 6, 5, 6, 5, 7, 6, 7, 6, 8, 7, 8, 7)},
-    {_mm_setzero_si128(), _mm_setzero_si128(), _mm_set1_epi8(-128), _mm_set1_epi8(-128)},
+    {_mm_set1_epi8(1), _mm_set1_epi8(-128), _mm_setzero_si128(), _mm_setzero_si128()},
+    {_mm_set1_epi8(3), _mm_setr_epi8(0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3), _mm_setr_epi16(4, 64, 4, 64, 4, 64, 4, 64), _mm_setr_epi16(16, 256, 16, 256, 16, 256, 16, 256)},
+    {_mm_set1_epi8(15), _mm_setr_epi8(0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7), _mm_set1_epi16(16), _mm_set1_epi16(256)},
+    {_mm_setzero_si128(), _mm_set1_epi8(-128), _mm_setzero_si128(), _mm_setzero_si128()},
+    {_mm_set1_epi8(1), _mm_set1_epi8(-128), _mm_setzero_si128(), _mm_setzero_si128()},
+    {_mm_set1_epi8(1), _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1), _mm_setr_epi16(256, 64, 16, 4, 256, 64, 16, 4), _mm_setr_epi16(128, 32, 8, 2, 128, 32, 8, 2)},
+    {_mm_set1_epi8(3), _mm_setr_epi8(0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3), _mm_setr_epi16(4, 64, 4, 64, 4, 64, 4, 64), _mm_setr_epi16(16, 256, 16, 256, 16, 256, 16, 256)},
+    {_mm_set1_epi8(15), _mm_setr_epi8(0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7), _mm_set1_epi16(16), _mm_set1_epi16(256)},
+    {_mm_setzero_si128(), _mm_set1_epi8(-128), _mm_setzero_si128(), _mm_setzero_si128()},
 };
 
 SIMD_TARGET
@@ -854,14 +854,16 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	__m128i selb = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(data));
 	__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(skip));
 
-	// unpack 1, 2 or 4-bit values; shuffle moves bytes into place and mul pushes the correct bits into the 3-rd byte of uint32 product
-	__m128i mult = kDecodeBytesGroupConfig[hbits][1];
-	__m128i val0 = _mm_mulhi_epu16(_mm_shuffle_epi8(selb, kDecodeBytesGroupConfig[hbits][2]), mult);
-	__m128i val1 = _mm_mulhi_epu16(_mm_shuffle_epi8(selb, kDecodeBytesGroupConfig[hbits][3]), mult);
+	// unpack 1, 2 or 4-bit values: shuffle replicates each source byte into both halves of a 16-bit lane
+	// mulhi extracts the field for the low output byte and mullo the field for the high output byte (interleaved in place)
+	__m128i selw = _mm_shuffle_epi8(selb, kDecodeBytesGroupConfig[hbits][1]);
+	__m128i val0 = _mm_mulhi_epu16(selw, kDecodeBytesGroupConfig[hbits][2]);
+	__m128i val1 = _mm_mullo_epi16(selw, kDecodeBytesGroupConfig[hbits][3]);
+	__m128i seli = _mm_or_si128(val0, _mm_and_si128(val1, _mm_set1_epi16(0xff00)));
 
-	// the resulting products are masked by the bit count (special handling: for 0/8-bit values, mul produces 0)
+	// the interleaved fields are masked by the bit count (special handling: for 0/8-bit values, mul produces 0)
 	__m128i sent = kDecodeBytesGroupConfig[hbits][0];
-	__m128i sel = _mm_and_si128(_mm_packus_epi16(val0, val1), sent);
+	__m128i sel = _mm_and_si128(seli, sent);
 
 	// compare sel to sentinel; returns 0 for 0-bit (mul produces 0, sent is 1), 1 for 8-bit (mul produces 0, sent is 0)
 	__m128i mask = _mm_cmpeq_epi8(sel, sent);
