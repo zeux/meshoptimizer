@@ -813,6 +813,19 @@ static bool gDecodeBytesGroupInitialized = decodeBytesGroupBuildTables();
 #endif
 
 #ifdef SIMD_SSE
+// sent mask, mult, shuf0/shuf1 for multishift emulation
+static const __m128i kDecodeBytesGroupConfig[9][4] = {
+    {_mm_set1_epi8(1), _mm_setzero_si128(), _mm_set1_epi8(-128), _mm_set1_epi8(-128)},
+    {_mm_set1_epi8(3), _mm_setr_epi16(4, 16, 64, 256, 4, 16, 64, 256), _mm_setr_epi8(1, 0, 1, 0, 1, 0, 1, 0, 2, 1, 2, 1, 2, 1, 2, 1), _mm_setr_epi8(3, 2, 3, 2, 3, 2, 3, 2, 4, 3, 4, 3, 4, 3, 4, 3)},
+    {_mm_set1_epi8(15), _mm_setr_epi16(16, 256, 16, 256, 16, 256, 16, 256), _mm_setr_epi8(1, 0, 1, 0, 2, 1, 2, 1, 3, 2, 3, 2, 4, 3, 4, 3), _mm_setr_epi8(5, 4, 5, 4, 6, 5, 6, 5, 7, 6, 7, 6, 8, 7, 8, 7)},
+    {_mm_setzero_si128(), _mm_setzero_si128(), _mm_set1_epi8(-128), _mm_set1_epi8(-128)},
+    {_mm_set1_epi8(1), _mm_setzero_si128(), _mm_set1_epi8(-128), _mm_set1_epi8(-128)},
+    {_mm_set1_epi8(1), _mm_setr_epi16(256, 128, 64, 32, 16, 8, 4, 2), _mm_setr_epi8(1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0), _mm_setr_epi8(2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1)},
+    {_mm_set1_epi8(3), _mm_setr_epi16(4, 16, 64, 256, 4, 16, 64, 256), _mm_setr_epi8(1, 0, 1, 0, 1, 0, 1, 0, 2, 1, 2, 1, 2, 1, 2, 1), _mm_setr_epi8(3, 2, 3, 2, 3, 2, 3, 2, 4, 3, 4, 3, 4, 3, 4, 3)},
+    {_mm_set1_epi8(15), _mm_setr_epi16(16, 256, 16, 256, 16, 256, 16, 256), _mm_setr_epi8(1, 0, 1, 0, 2, 1, 2, 1, 3, 2, 3, 2, 4, 3, 4, 3), _mm_setr_epi8(5, 4, 5, 4, 6, 5, 6, 5, 7, 6, 7, 6, 8, 7, 8, 7)},
+    {_mm_setzero_si128(), _mm_setzero_si128(), _mm_set1_epi8(-128), _mm_set1_epi8(-128)},
+};
+
 SIMD_TARGET
 inline __m128i decodeShuffleMask(unsigned char mask0, unsigned char mask1)
 {
@@ -834,125 +847,57 @@ typedef int unaligned_int;
 SIMD_TARGET
 inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int hbits)
 {
-	switch (hbits)
-	{
-	case 0:
-	case 4:
-	{
-		__m128i result = _mm_setzero_si128();
+	// 0 for 1-bit, 1 for 2-bit, 2 for 4-bit, 3 for 8-bit, and 4 for 0-bit as it makes some of the uses easier
+	static const int hbtn[9] = {4, 1, 2, 3, 4, 0, 1, 2, 3};
 
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
+	int n = hbtn[hbits];
 
-		return data;
-	}
-
-	case 1:
-	case 6:
-	{
 #ifdef SIMD_LATENCYOPT
-		unsigned int data32;
-		memcpy(&data32, data, 4);
-		data32 &= data32 >> 1;
+	unsigned long long data64;
+	memcpy(&data64, data, 8);
+	data64 &= data64 >> n;
+	data64 &= data64 >> (n >> 1);
 
-		// arrange bits such that low bits of nibbles of data64 contain all 2-bit elements of data32
-		unsigned long long data64 = ((unsigned long long)data32 << 30) | data32;
-
-		// adds all 1-bit nibbles together; the sum fits in 4 bits because datacnt=16 would have used mode 3
-		int datacnt = int(((data64 & 0x1111111111111111ull) * 0x1111111111111111ull) >> 60);
+	// mask out one bit per group that is set if all group bits were 1
+	static const unsigned long long lanes[5] = {0xffff, 0x55555555, 0x1111111111111111ull, 0, 0};
+	int datacnt = _mm_popcnt_u64(data64 & lanes[n]);
 #endif
 
-		__m128i sel2 = _mm_cvtsi32_si128(*reinterpret_cast<const unaligned_int*>(data));
-		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + 4));
+	// for 8-bit groups, instead of loading the bytes through 'data', we load them through 'skip' as they are easier to preserve
+	// for 0-bit groups, we use a masked load so that we load zero bytes; in both cases the shift wraps to zero
+	const unsigned char* skip = data + ((2 << n) & 15);
 
-		__m128i sel22 = _mm_unpacklo_epi8(_mm_srli_epi16(sel2, 4), sel2);
-		__m128i sel2222 = _mm_unpacklo_epi8(_mm_srli_epi16(sel22, 2), sel22);
-		__m128i sel = _mm_and_si128(sel2222, _mm_set1_epi8(3));
+	__m128i selb = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(data));
+	__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(skip));
 
-		__m128i mask = _mm_cmpeq_epi8(sel, _mm_set1_epi8(3));
-		int mask16 = _mm_movemask_epi8(mask);
-		unsigned char mask0 = (unsigned char)(mask16 & 255);
-		unsigned char mask1 = (unsigned char)(mask16 >> 8);
+	__m128i mult = kDecodeBytesGroupConfig[hbits][1];
+	__m128i val0 = _mm_mulhi_epu16(_mm_shuffle_epi8(selb, kDecodeBytesGroupConfig[hbits][2]), mult);
+	__m128i val1 = _mm_mulhi_epu16(_mm_shuffle_epi8(selb, kDecodeBytesGroupConfig[hbits][3]), mult);
 
-		__m128i shuf = decodeShuffleMask(mask0, mask1);
-		__m128i result = _mm_or_si128(_mm_shuffle_epi8(rest, shuf), _mm_andnot_si128(mask, sel));
+	__m128i sent = kDecodeBytesGroupConfig[hbits][0];
+	__m128i sel = _mm_and_si128(_mm_packus_epi16(val0, val1), sent);
 
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
+	__m128i mask = _mm_cmpeq_epi8(sel, sent);
+	int mask16 = _mm_movemask_epi8(mask);
+	unsigned char mask0 = (unsigned char)(mask16 & 255);
+	unsigned char mask1 = (unsigned char)(mask16 >> 8);
+
+	__m128i shuf = decodeShuffleMask(mask0, mask1);
+	__m128i result = _mm_or_si128(_mm_shuffle_epi8(rest, shuf), _mm_andnot_si128(mask, sel));
+
+	_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
 
 #ifdef SIMD_LATENCYOPT
-		return data + 4 + datacnt;
+	// datacnt is 0 for 8-bit groups so we can't use skip to advance; 0-bit groups wrap the shift to zero
+	return data + ((2 << n) & 31) + datacnt;
 #else
-		return data + 4 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
+	return skip + _mm_popcnt_u32(mask16);
 #endif
-	}
-
-	case 2:
-	case 7:
-	{
-#ifdef SIMD_LATENCYOPT
-		unsigned long long data64;
-		memcpy(&data64, data, 8);
-		data64 &= data64 >> 1;
-		data64 &= data64 >> 2;
-
-		// adds all 1-bit nibbles together; the sum fits in 4 bits because datacnt=16 would have used mode 3
-		int datacnt = int(((data64 & 0x1111111111111111ull) * 0x1111111111111111ull) >> 60);
-#endif
-
-		__m128i sel4 = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(data));
-		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + 8));
-
-		__m128i sel44 = _mm_unpacklo_epi8(_mm_srli_epi16(sel4, 4), sel4);
-		__m128i sel = _mm_and_si128(sel44, _mm_set1_epi8(15));
-
-		__m128i mask = _mm_cmpeq_epi8(sel, _mm_set1_epi8(15));
-		int mask16 = _mm_movemask_epi8(mask);
-		unsigned char mask0 = (unsigned char)(mask16 & 255);
-		unsigned char mask1 = (unsigned char)(mask16 >> 8);
-
-		__m128i shuf = decodeShuffleMask(mask0, mask1);
-		__m128i result = _mm_or_si128(_mm_shuffle_epi8(rest, shuf), _mm_andnot_si128(mask, sel));
-
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
-
-#ifdef SIMD_LATENCYOPT
-		return data + 8 + datacnt;
-#else
-		return data + 8 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
-#endif
-	}
-
-	case 3:
-	case 8:
-	{
-		__m128i result = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data));
-
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
-
-		return data + 16;
-	}
-
-	case 5:
-	{
-		__m128i rest = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + 2));
-
-		unsigned char mask0 = data[0];
-		unsigned char mask1 = data[1];
-
-		__m128i shuf = decodeShuffleMask(mask0, mask1);
-		__m128i result = _mm_shuffle_epi8(rest, shuf);
-
-		_mm_storeu_si128(reinterpret_cast<__m128i*>(buffer), result);
-
-		return data + 2 + kDecodeBytesGroupCount[mask0] + kDecodeBytesGroupCount[mask1];
-	}
-
-	default:
-		SIMD_UNREACHABLE(); // unreachable
-	}
 }
 #endif
 
 #ifdef SIMD_AVX
+// sent mask, multishift control
 static const __m128i kDecodeBytesGroupConfig[9][2] = {
     {_mm_setzero_si128(), _mm_setzero_si128()},
     {_mm_set1_epi8(3), _mm_setr_epi8(6, 4, 2, 0, 14, 12, 10, 8, 22, 20, 18, 16, 30, 28, 26, 24)},
