@@ -806,8 +806,6 @@ decodeBytesGroupBuildTables()
 		kDecodeBytesGroupCount[mask] = count;
 	}
 
-	(void)kDecodeBytesGroupCount; // table may not be used in some builds where shuffle table is still necessary
-
 	return true;
 }
 
@@ -816,16 +814,16 @@ static bool gDecodeBytesGroupInitialized = decodeBytesGroupBuildTables();
 
 #ifdef SIMD_SSE
 // sent mask, replicating shuffle, and two multipliers (even/odd) for multishift emulation
-static const __m128i kDecodeBytesGroupConfig[9][4] = {
-    {_mm_set1_epi8(1), _mm_set1_epi8(-128), _mm_setzero_si128(), _mm_setzero_si128()},
-    {_mm_set1_epi8(3), _mm_setr_epi8(0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3), _mm_setr_epi16(4, 64, 4, 64, 4, 64, 4, 64), _mm_setr_epi16(16, 256, 16, 256, 16, 256, 16, 256)},
-    {_mm_set1_epi8(15), _mm_setr_epi8(0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7), _mm_set1_epi16(16), _mm_set1_epi16(256)},
-    {_mm_setzero_si128(), _mm_set1_epi8(-128), _mm_setzero_si128(), _mm_setzero_si128()},
-    {_mm_set1_epi8(1), _mm_set1_epi8(-128), _mm_setzero_si128(), _mm_setzero_si128()},
-    {_mm_set1_epi8(1), _mm_setr_epi8(0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1), _mm_setr_epi16(256, 64, 16, 4, 256, 64, 16, 4), _mm_setr_epi16(128, 32, 8, 2, 128, 32, 8, 2)},
-    {_mm_set1_epi8(3), _mm_setr_epi8(0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3), _mm_setr_epi16(4, 64, 4, 64, 4, 64, 4, 64), _mm_setr_epi16(16, 256, 16, 256, 16, 256, 16, 256)},
-    {_mm_set1_epi8(15), _mm_setr_epi8(0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7), _mm_set1_epi16(16), _mm_set1_epi16(256)},
-    {_mm_setzero_si128(), _mm_set1_epi8(-128), _mm_setzero_si128(), _mm_setzero_si128()},
+static const unsigned char kDecodeBytesGroupConfig[9][4][16] = {
+    {{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, {128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128}, {0}, {0}},
+    {{3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3}, {0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3}, {4, 0, 64, 0, 4, 0, 64, 0, 4, 0, 64, 0, 4, 0, 64, 0}, {16, 0, 0, 1, 16, 0, 0, 1, 16, 0, 0, 1, 16, 0, 0, 1}},
+    {{15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15}, {0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7}, {16, 0, 16, 0, 16, 0, 16, 0, 16, 0, 16, 0, 16, 0, 16, 0}, {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1}},
+    {{0}, {128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128}, {0}, {0}},
+    {{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, {128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128}, {0}, {0}},
+    {{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, {0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1}, {0, 1, 64, 0, 16, 0, 4, 0, 0, 1, 64, 0, 16, 0, 4, 0}, {128, 0, 32, 0, 8, 0, 2, 0, 128, 0, 32, 0, 8, 0, 2, 0}},
+    {{3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3}, {0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3}, {4, 0, 64, 0, 4, 0, 64, 0, 4, 0, 64, 0, 4, 0, 64, 0}, {16, 0, 0, 1, 16, 0, 0, 1, 16, 0, 0, 1, 16, 0, 0, 1}},
+    {{15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15}, {0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7}, {16, 0, 16, 0, 16, 0, 16, 0, 16, 0, 16, 0, 16, 0, 16, 0}, {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1}},
+    {{0}, {128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128}, {0}, {0}},
 };
 
 SIMD_TARGET
@@ -856,13 +854,13 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 
 	// unpack 1, 2 or 4-bit values: shuffle replicates each source byte into both halves of a 16-bit lane
 	// mulhi extracts even and odd fields into the low byte; the results are interleaved back with shift/or
-	__m128i selw = _mm_shuffle_epi8(selb, kDecodeBytesGroupConfig[hbits][1]);
-	__m128i sel0 = _mm_mulhi_epu16(selw, kDecodeBytesGroupConfig[hbits][2]);
-	__m128i sel1 = _mm_mulhi_epu16(selw, kDecodeBytesGroupConfig[hbits][3]);
+	__m128i selw = _mm_shuffle_epi8(selb, _mm_loadu_si128(reinterpret_cast<const __m128i*>(kDecodeBytesGroupConfig[hbits][1])));
+	__m128i sel0 = _mm_mulhi_epu16(selw, _mm_loadu_si128(reinterpret_cast<const __m128i*>(kDecodeBytesGroupConfig[hbits][2])));
+	__m128i sel1 = _mm_mulhi_epu16(selw, _mm_loadu_si128(reinterpret_cast<const __m128i*>(kDecodeBytesGroupConfig[hbits][3])));
 	__m128i seli = _mm_or_si128(sel0, _mm_slli_epi16(sel1, 8));
 
 	// the interleaved fields are masked by the bit count (special handling: for 0/8-bit values, mul produces 0)
-	__m128i sent = kDecodeBytesGroupConfig[hbits][0];
+	__m128i sent = _mm_loadu_si128(reinterpret_cast<const __m128i*>(kDecodeBytesGroupConfig[hbits][0]));
 	__m128i sel = _mm_and_si128(seli, sent);
 
 	// compare sel to sentinel; returns 0 for 0-bit (mul produces 0, sent is 1), 1 for 8-bit (mul produces 0, sent is 0)
@@ -896,16 +894,16 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 
 #ifdef SIMD_AVX
 // sent mask, multishift control
-static const __m128i kDecodeBytesGroupConfig[9][2] = {
-    {_mm_setzero_si128(), _mm_setzero_si128()},
-    {_mm_set1_epi8(3), _mm_setr_epi8(6, 4, 2, 0, 14, 12, 10, 8, 22, 20, 18, 16, 30, 28, 26, 24)},
-    {_mm_set1_epi8(15), _mm_setr_epi8(4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56)},
-    {_mm_setzero_si128(), _mm_setzero_si128()},
-    {_mm_setzero_si128(), _mm_setzero_si128()},
-    {_mm_set1_epi8(1), _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)},
-    {_mm_set1_epi8(3), _mm_setr_epi8(6, 4, 2, 0, 14, 12, 10, 8, 22, 20, 18, 16, 30, 28, 26, 24)},
-    {_mm_set1_epi8(15), _mm_setr_epi8(4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56)},
-    {_mm_setzero_si128(), _mm_setzero_si128()},
+static const unsigned char kDecodeBytesGroupConfig[9][2][16] = {
+    {{0}, {0}},
+    {{3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3}, {6, 4, 2, 0, 14, 12, 10, 8, 22, 20, 18, 16, 30, 28, 26, 24}},
+    {{15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15}, {4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56}},
+    {{0}, {0}},
+    {{0}, {0}},
+    {{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}},
+    {{3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3}, {6, 4, 2, 0, 14, 12, 10, 8, 22, 20, 18, 16, 30, 28, 26, 24}},
+    {{15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15}, {4, 0, 12, 8, 20, 16, 28, 24, 36, 32, 44, 40, 52, 48, 60, 56}},
+    {{0}, {0}},
 };
 
 SIMD_TARGET
@@ -934,8 +932,8 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	__m128i selb = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(data));
 	__m128i rest = _mm_maskz_loadu_epi8(__mmask16((n >> 2) - 1), skip);
 
-	__m128i sent = kDecodeBytesGroupConfig[hbits][0];
-	__m128i ctrl = kDecodeBytesGroupConfig[hbits][1];
+	__m128i sent = _mm_loadu_si128(reinterpret_cast<const __m128i*>(kDecodeBytesGroupConfig[hbits][0]));
+	__m128i ctrl = _mm_loadu_si128(reinterpret_cast<const __m128i*>(kDecodeBytesGroupConfig[hbits][1]));
 
 	// unpack 1, 2 or 4-bit values using multishift and mask the result; for 0/8-bit values, sel is always 0
 	__m128i selw = _mm_shuffle_epi32(selb, 0x44);
