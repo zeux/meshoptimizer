@@ -843,8 +843,8 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	data64 &= data64 >> (n >> 1);
 
 	// mask out one bit per group that is set if all group bits were 1
-	static const unsigned long long lanes[5] = {0xffff, 0x55555555, 0x1111111111111111ull, 0, 0};
-	int datacnt = _mm_popcnt_u64(data64 & lanes[n]);
+	static const unsigned long long lanes[9] = {0, 0x55555555, 0x1111111111111111ull, 0, 0, 0xffff, 0x55555555, 0x1111111111111111ull, 0};
+	int datacnt = int(_mm_popcnt_u64(data64 & lanes[hbits]));
 #endif
 
 	// for 8-bit groups, instead of loading the bytes through 'data', we load them through 'skip' as they are easier to preserve
@@ -923,8 +923,8 @@ inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsi
 	data64 &= data64 >> (n >> 1);
 
 	// mask out one bit per group that is set if all group bits were 1
-	static const unsigned long long lanes[5] = {0xffff, 0x55555555, 0x1111111111111111ull, 0, 0};
-	int datacnt = _mm_popcnt_u64(data64 & lanes[n]);
+	static const unsigned long long lanes[9] = {0, 0x55555555, 0x1111111111111111ull, 0, 0, 0xffff, 0x55555555, 0x1111111111111111ull, 0};
+	int datacnt = int(_mm_popcnt_u64(data64 & lanes[hbits]));
 #endif
 
 	// for 8-bit groups, instead of loading the bytes through 'data', we load them through 'skip' as they are easier to preserve
