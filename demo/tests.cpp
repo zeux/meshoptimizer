@@ -623,6 +623,31 @@ static void decodeVertexBitGroupSentinels()
 	assert(memcmp(decoded, data, sizeof(data)) == 0);
 }
 
+static void decodeVertexBitGroupSentinelCount()
+{
+	const unsigned char expected[13 * 4] = {
+	    0xff, 0, 0, 0, 0xfe, 0, 0, 0, 0xfd, 0, 0, 0, 0xfd, 0, 0, 0,
+	    0xfd, 0, 0, 0, 0xfc, 0, 0, 0, 0xfb, 0, 0, 0, 0xfb, 0, 0, 0,
+	    0xfa, 0, 0, 0, 0xfa, 0, 0, 0, 0xf9, 0, 0, 0, 0xf9, 0, 0, 0,
+	    0xf8, 0, 0, 0 //
+	};
+
+	// encodes several 2-bit sentinels including lane 12; lane 3 is clear so bit 30 does not alias bit 0 during counting
+	const unsigned char input[] = {
+	    0xa1, 0xa9,
+	    0x01, 0xfc, 0x3c, 0xcc, 0xcc,
+	    0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+	    0x00, 0x00, 0x00, 0x00,
+	    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	    0x00, 0x00, 0x00, 0x00 //
+	};
+
+	unsigned char decoded[sizeof(expected)];
+	assert(meshopt_decodeVertexBuffer(decoded, 13, 4, input, sizeof(input)) == 0);
+	assert(memcmp(decoded, expected, sizeof(expected)) == 0);
+}
+
 static void decodeVertexDeltas()
 {
 	unsigned short data[16 * 4];
@@ -3416,6 +3441,7 @@ void runTests()
 		decodeVertexRejectMalformedHeaders();
 		decodeVertexBitGroups();
 		decodeVertexBitGroupSentinels();
+		decodeVertexBitGroupSentinelCount();
 		decodeVertexDeltas();
 		decodeVertexBitXor();
 		decodeVertexLarge();
