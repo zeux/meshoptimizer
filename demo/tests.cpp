@@ -3342,6 +3342,47 @@ static void opacityMapSpecial()
 	}
 }
 
+static void tangentsBasic()
+{
+	struct Vertex
+	{
+		float px, py, pz;
+		float nx, ny, nz;
+		float tx, ty;
+	};
+
+	// unindexed quad with matching corner data for shared diagonal
+	const Vertex vertices[] = {
+	    {0, 0, 0, -0.28f, 0, 0.96f, 0, 0}, // diag 1
+	    {1, 0, 0, 0.28f, 0, 0.96f, 1, 0},
+	    {1, 1, 0, 0.28f, 0, 0.96f, 1, 1},  // diag 2
+	    {0, 0, 0, -0.28f, 0, 0.96f, 0, 0}, // diag 1
+	    {1, 1, 0, 0.28f, 0, 0.96f, 1, 1},  // diag 2
+	    {0, 1, 0, -0.28f, 0, 0.96f, 0, 1},
+	};
+
+	// unindexed input: indices == NULL, vertex_count == index_count
+	float tangents[6 * 4];
+	meshopt_generateTangents(tangents, NULL, 6, &vertices[0].px, 6, sizeof(Vertex), &vertices[0].nx, sizeof(Vertex), &vertices[0].tx, sizeof(Vertex), 0);
+
+	// (1, 0, 0) reprojected onto tilted normals
+	const float left[4] = {0.96f, 0.f, 0.28f, 1.f};
+	const float right[4] = {0.96f, 0.f, -0.28f, 1.f};
+
+	const float* expected[6] = {left, right, right, left, right, left};
+
+	for (size_t i = 0; i < 6; ++i)
+		for (size_t k = 0; k < 4; ++k)
+			assert(fabsf(tangents[i * 4 + k] - expected[i][k]) < 1e-3f);
+
+	// shared vertices get the same tangent vector
+	for (int k = 0; k < 4; ++k)
+	{
+		assert(tangents[0 * 4 + k] == tangents[3 * 4 + k]); // diag 1
+		assert(tangents[2 * 4 + k] == tangents[4 * 4 + k]); // diag 2
+	}
+}
+
 static void tangentDegenerate()
 {
 	struct Vertex
@@ -3536,5 +3577,6 @@ void runTests()
 	opacityMapRasterize0();
 	opacityMapSpecial();
 
+	tangentsBasic();
 	tangentDegenerate();
 }
