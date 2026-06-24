@@ -825,13 +825,15 @@ MESHOPTIMIZER_API struct meshopt_Bounds meshopt_computeMeshletBounds(const unsig
 MESHOPTIMIZER_API struct meshopt_Bounds meshopt_computeSphereBounds(const float* positions, size_t count, size_t positions_stride, const float* radii, size_t radii_stride);
 
 /**
- * Experimental: Extract meshlet-local vertex and triangle indices from absolute cluster indices.
+ * Extract meshlet-local vertex and triangle indices from absolute cluster indices.
  * Fills triangles[] and vertices[] such that vertices[triangles[i]] == indices[i], and returns the number of unique vertices.
  *
+ * vertices must contain enough space for the resulting references (up to 256 elements)
+ * triangles must contain enough space for local indices (index_count elements)
  * indices should have at most 256 unique vertex indices
  * index_count/3 must not exceed implementation limits (<= 512)
  */
-MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_extractMeshletIndices(unsigned int* vertices, unsigned char* triangles, const unsigned int* indices, size_t index_count);
+MESHOPTIMIZER_API size_t meshopt_extractMeshletIndices(unsigned int* vertices, unsigned char* triangles, const unsigned int* indices, size_t index_count);
 
 /**
  * Cluster partitioner
