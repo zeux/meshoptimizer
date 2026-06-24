@@ -630,6 +630,7 @@ This approach provides fine-grained control over which discontinuities to preser
 All simplification functions described so far reuse the original vertex buffer and only produce a new index buffer. This means that the resulting mesh will have the same vertex positions and attributes as the original mesh; this is optimal for minimizing the memory consumption and for highly detailed meshes often provides good quality. However, for more aggressive simplification to retain visual quality, it may be necessary to adjust vertex data for optimal appearance. This can be done by using a variant of the simplification function that updates vertex positions and attributes, `meshopt_simplifyWithUpdate`:
 
 ```c++
+float result_error = 0.f;
 indices.resize(meshopt_simplifyWithUpdate(&indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex),
     &vertices[0].nx, sizeof(Vertex), attr_weights, 3, /* vertex_lock= */ NULL,
     target_index_count, target_error, /* options= */ 0, &result_error));
@@ -915,7 +916,9 @@ meshopt_setAllocator(malloc, free);
 
 > Note that the library expects the allocation function to either throw in case of out-of-memory (in which case the exception will propagate to the caller) or abort, so technically the use of `malloc` above isn't safe. If you want to handle out-of-memory errors without using C++ exceptions, you can use `setjmp`/`longjmp` instead.
 
-Vertex and index decoders (`meshopt_decodeVertexBuffer`, `meshopt_decodeIndexBuffer`, `meshopt_decodeIndexSequence`) do not allocate memory and work completely within the buffer space provided via arguments.
+When building meshoptimizer as a shared library, allocations from the templated index wrappers provided in the header (used when index data is not `unsigned int`) will only be redirected to these callbacks if the library is built with `MESHOPTIMIZER_ALLOC_EXPORT` defined.
+
+Vertex, index and meshlet decoders (`meshopt_decodeVertexBuffer`, `meshopt_decodeIndexBuffer`, `meshopt_decodeIndexSequence`, `meshopt_decodeMeshlet`, `meshopt_decodeMeshletRaw`) do not allocate memory and work completely within the buffer space provided via arguments.
 
 All functions have bounded stack usage that does not exceed 32 KB for any algorithms.
 
@@ -933,11 +936,10 @@ Currently, the following APIs are experimental:
 
 - `meshopt_SimplifyPermissive` mode for `meshopt_simplify*` functions
 - `meshopt_encode/decodeMeshlet*` functions (`meshopt_encodeMeshlet`, `meshopt_encodeMeshletBound`, `meshopt_decodeMeshlet`, `meshopt_decodeMeshletRaw`)
-- `meshopt_extractMeshletIndices` function
-- `meshopt_computePositionExponent` function
 - `meshopt_opacityMap*` functions (`meshopt_opacityMapMeasure`, `meshopt_opacityMapRasterize`, `meshopt_opacityMapCompact`, `meshopt_opacityMapEntrySize`)
 - `meshopt_generateTangents` function and `meshopt_Tangent*` flags
 - `meshopt_filterIndexBuffer` and `meshopt_filterIndexBufferMulti` functions
+- `meshopt_computePositionExponent` function
 
 ## License
 
