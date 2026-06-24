@@ -273,6 +273,7 @@ MESHOPTIMIZER_API size_t meshopt_encodeIndexBufferBound(size_t index_count, size
 
 /**
  * Set index encoder format version (defaults to 1)
+ * This function is not thread safe and must not be called concurrently with meshopt_encodeIndexBuffer/meshopt_encodeIndexSequence.
  *
  * version must specify the data format version to encode; valid values are 0 (decodable by all library versions) and 1 (decodable by 0.14+)
  */
@@ -377,6 +378,7 @@ MESHOPTIMIZER_API size_t meshopt_encodeVertexBufferLevel(unsigned char* buffer, 
 
 /**
  * Set vertex encoder format version (defaults to 1)
+ * This function is not thread safe and must not be called concurrently with meshopt_encodeVertexBuffer/meshopt_encodeVertexBufferLevel.
  *
  * version must specify the data format version to encode; valid values are 0 (decodable by all library versions) and 1 (decodable by 0.23+)
  */
@@ -991,6 +993,9 @@ MESHOPTIMIZER_EXPERIMENTAL int meshopt_computePositionExponent(const float* minv
  * These callbacks will be used instead of the default operator new/operator delete for all temporary allocations in the library.
  * Note that all algorithms only allocate memory for temporary use.
  * allocate/deallocate are always called in a stack-like order - last pointer to be allocated is deallocated first.
+ * This function is not thread safe and must not be called concurrently with any other meshopt_ function.
+ *
+ * In shared library builds, allocations from templated index wrappers in this header will only be redirected if MESHOPTIMIZER_ALLOC_EXPORT is defined.
  */
 MESHOPTIMIZER_API void meshopt_setAllocator(void* (MESHOPTIMIZER_ALLOC_CALLCONV* allocate)(size_t), void (MESHOPTIMIZER_ALLOC_CALLCONV* deallocate)(void*));
 
