@@ -8,7 +8,7 @@ export const MeshoptTangents: {
 	ready: Promise<void>;
 
 	generateTangents: (
-		indices: Uint32Array | Int32Array | Uint16Array | Int16Array | null,
+		indices: Uint32Array | null,
 		vertex_positions: Float32Array,
 		vertex_positions_stride: number,
 		vertex_normals: Float32Array,
