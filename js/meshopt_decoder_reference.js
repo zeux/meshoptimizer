@@ -187,10 +187,10 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 	if (filter === 'OCTAHEDRAL') {
 		assert(byteStride === 4 || byteStride === 8);
 
-		const dst = byteStride === 4 ? new Int8Array(target.buffer) : new Int16Array(target.buffer);
+		const dst = new (byteStride === 4 ? Int8Array : Int16Array)(target.buffer, target.byteOffset, elementCount * 4);
 		const maxInt = byteStride === 4 ? 127 : 32767;
 
-		for (let i = 0; i < 4 * elementCount; i += 4) {
+		for (let i = 0; i < elementCount * 4; i += 4) {
 			let x = dst[i + 0],
 				y = dst[i + 1],
 				one = dst[i + 2];
@@ -209,9 +209,9 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 	} else if (filter === 'QUATERNION') {
 		assert(byteStride === 8);
 
-		const dst = new Int16Array(target.buffer);
+		const dst = new Int16Array(target.buffer, target.byteOffset, elementCount * 4);
 
-		for (let i = 0; i < 4 * elementCount; i += 4) {
+		for (let i = 0; i < elementCount * 4; i += 4) {
 			const inputW = dst[i + 3];
 			const maxComponent = inputW & 0x03;
 			const s = Math.SQRT1_2 / (inputW | 0x03);
@@ -230,9 +230,9 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 		const expBits = new Uint32Array(1);
 		const expFloat = new Float32Array(expBits.buffer);
 
-		const src = new Int32Array(target.buffer);
-		const dst = new Float32Array(target.buffer);
-		for (let i = 0; i < (byteStride * elementCount) / 4; i++) {
+		const src = new Int32Array(target.buffer, target.byteOffset, elementCount * (byteStride / 4));
+		const dst = new Float32Array(target.buffer, target.byteOffset, elementCount * (byteStride / 4));
+		for (let i = 0; i < elementCount * (byteStride / 4); i++) {
 			const v = src[i];
 			const exp = v >> 24,
 				mantissa = (v << 8) >> 8;
@@ -244,8 +244,8 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 
 		const maxInt = (1 << (byteStride * 2)) - 1;
 
-		const data = byteStride === 4 ? new Uint8Array(target.buffer) : new Uint16Array(target.buffer, 0, elementCount * 4);
-		const dataSigned = byteStride === 4 ? new Int8Array(target.buffer) : new Int16Array(target.buffer, 0, elementCount * 4);
+		const data = new (byteStride === 4 ? Uint8Array : Uint16Array)(target.buffer, target.byteOffset, elementCount * 4);
+		const dataSigned = new (byteStride === 4 ? Int8Array : Int16Array)(target.buffer, target.byteOffset, elementCount * 4);
 
 		for (let i = 0; i < elementCount * 4; i += 4) {
 			const y = data[i + 0];
