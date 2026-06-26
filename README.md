@@ -537,6 +537,8 @@ The following guarantees on data compatibility are provided for point releases (
 
 By default, vertex data is encoded for format version 1 (compatible with meshoptimizer v0.23+), and index data is encoded for format version 1 (compatible with meshoptimizer v0.14+). When decoding the data, the decoder will automatically detect the version from the data header.
 
+Meshlet data uses a frameless format without an embedded version header, so it's compatible across all library versions (starting with meshoptimizer v1.1). Any future change to meshlet encoding would be exposed as new functions; to adopt future improvements without breaking existing data, applications could record a format version externally, once per entire meshlet stream or file.
+
 ## Simplification
 
 All algorithms presented so far don't affect visual appearance at all, with the exception of quantization that has minimal controlled impact. However, fundamentally the most effective way to reduce the rendering or transmission cost of a mesh is to reduce the number of triangles in the mesh.
@@ -935,7 +937,6 @@ Applications may configure the library to change the attributes of experimental 
 Currently, the following APIs are experimental:
 
 - `meshopt_SimplifyPermissive` mode for `meshopt_simplify*` functions
-- `meshopt_encode/decodeMeshlet*` functions (`meshopt_encodeMeshlet`, `meshopt_encodeMeshletBound`, `meshopt_decodeMeshlet`, `meshopt_decodeMeshletRaw`)
 - `meshopt_opacityMap*` functions (`meshopt_opacityMapMeasure`, `meshopt_opacityMapRasterize`, `meshopt_opacityMapCompact`, `meshopt_opacityMapEntrySize`)
 - `meshopt_generateTangents` function and `meshopt_Tangent*` flags
 - `meshopt_filterIndexBuffer` and `meshopt_filterIndexBufferMulti` functions
