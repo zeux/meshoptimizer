@@ -827,7 +827,7 @@ static const unsigned char kDecodeBytesGroupConfig[9][4][16] = {
 };
 
 SIMD_TARGET
-inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int hbits)
+static inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int hbits)
 {
 	// 0 for 1-bit, 1 for 2-bit, 2 for 4-bit, 3 for 8-bit, and 4 for 0-bit as it makes some of the uses easier
 	static const int hbtn[9] = {4, 1, 2, 3, 4, 0, 1, 2, 3};
@@ -907,7 +907,7 @@ static const unsigned char kDecodeBytesGroupConfig[9][2][16] = {
 };
 
 SIMD_TARGET
-inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int hbits)
+static inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int hbits)
 {
 	// 0 for 1-bit, 1 for 2-bit, 2 for 4-bit, 3 for 8-bit, and 4 for 0-bit as it makes some of the uses easier
 	static const int hbtn[9] = {4, 1, 2, 3, 4, 0, 1, 2, 3};
@@ -981,7 +981,7 @@ inline void neonMoveMask(uint8x16_t mask, unsigned char& mask0, unsigned char& m
 }
 
 SIMD_TARGET
-inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int hbits)
+static inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int hbits)
 {
 	switch (hbits)
 	{
@@ -1123,7 +1123,7 @@ inline void wasmMoveMask(v128_t mask, unsigned char& mask0, unsigned char& mask1
 }
 
 SIMD_TARGET
-inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int hbits)
+static inline const unsigned char* decodeBytesGroupSimd(const unsigned char* data, unsigned char* buffer, int hbits)
 {
 	switch (hbits)
 	{
