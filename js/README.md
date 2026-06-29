@@ -135,7 +135,7 @@ By default, `encodeVertexBuffer` uses v1 version of the encoding; this encoding 
 To simplify the mesh, the following function needs to be called first:
 
 ```ts
-simplify(indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, target_index_count: number, target_error: number, flags?: Flags[]) => [Uint32Array, number];
+simplify(indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, target_index_count: number, target_error: number, flags?: SimplifierFlags[]) => [Uint32Array, number];
 ```
 
 Given an input triangle mesh represented by an index buffer and a position buffer, the algorithm tries to simplify the mesh down to the target index count while maintaining the appearance. For meshes with inconsistent topology or many seams, such as faceted meshes, it can result in simplifier getting "stuck" and not being able to simplify the mesh fully. Therefore it's critical that identical vertices are "welded" together, that is, the input vertex buffer does not contain duplicates. Additionally, it may be possible to preprocess the index buffer to discard any vertex attributes that aren't critical and can be rebuilt later.
@@ -152,7 +152,7 @@ To control behavior of the algorithm more precisely, `flags` may specify an arra
 - `'ErrorAbsolute'` changes the error metric from relative to absolute both for the input error limit as well as for the resulting error. This can be used instead of `getScale`.
 - `'Sparse'` improves simplification performance assuming input indices are a sparse subset of the mesh. This can be useful when simplifying small mesh subsets independently. For consistency, it is recommended to use absolute errors when sparse simplification is desired.
 - `'Prune'` allows removal of isolated components regardless of the topological restrictions inside the component. This is generally recommended for full-mesh simplification as it can improve quality and reduce triangle count; note that with this option, triangles connected to locked vertices may be removed as part of their component.
-- `'Regularize'` produces more regular triangle sizes and shapes during simplification, at some cost to geometric quality. This can improve geometric quality under deformation such as skinning.
+- `'Regularize'` produces more regular triangle sizes and shapes during simplification, at some cost to geometric quality. This can improve geometric quality under deformation such as skinning. `'RegularizeLight'` can be used instead for a smaller regularization factor, reducing the impact on geometric quality.
 
 In addition to the `Prune` flag, you can explicitly prune isolated components under a target threshold by calling the `simplifyPrune` function:
 
@@ -165,12 +165,28 @@ This can be done before regular simplification or as the only step, which is use
 While `simplify` is aware of attribute discontinuities by default (and infers them through the supplied index buffer) and tries to preserve them, it can be useful to provide information about attribute values. This allows the simplifier to take attribute error into account which can improve shading (by using vertex normals), texture deformation (by using texture coordinates), and may be necessary to preserve vertex colors when textures are not used in the first place. This can be done by using a variant of the simplification function that takes attribute values and weight factors, `simplifyWithAttributes`:
 
 ```ts
-simplifyWithAttributes: (indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, vertex_attributes: Float32Array, vertex_attributes_stride: number, attribute_weights: number[], vertex_lock: Uint8Array | null, target_index_count: number, target_error: number, flags?: Flags[]) => [Uint32Array, number];
+simplifyWithAttributes: (indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, vertex_attributes: Float32Array, vertex_attributes_stride: number, attribute_weights: number[], vertex_lock: Uint8Array | null, target_index_count: number, target_error: number, flags?: SimplifierFlags[]) => [Uint32Array, number];
 ```
 
 This function takes an additional `vertex_attributes` buffer that contains all the attributes to be used. The `attribute_weights` array contains a weight for each attribute, which is used to balance the importance of each attribute during simplification. For normalized attributes like normals and vertex colors, a weight around 1.0 is usually appropriate; internally, a change of `1/weight` in attribute value over a distance `d` is approximately equivalent to a change of `d` in position. Using higher weights may be appropriate to preserve attribute quality at the cost of position quality. If the attribute has a different scale (e.g. unnormalized vertex colors in [0..255] range), the weight should be divided by the scaling factor (1/255 in this example).
 
 The optional `vertex_lock` parameter can be used to lock some vertices in place, preventing them from being moved during simplification. This is a binary array of the same length as the number of vertices, where `1` means that the vertex is locked and `0` means that it is free to move. This can be used to preserve seams or other important features of the mesh.
+
+All simplification functions described so far reuse the original vertex buffer and only produce a new index buffer; however, for more aggressive simplification to retain visual quality, it may be necessary to adjust vertex data for optimal appearance. This can be done by using a variant of the simplification function that updates vertex positions and attributes, `simplifyWithUpdate`:
+
+```ts
+simplifyWithUpdate: (indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, vertex_attributes: Float32Array, vertex_attributes_stride: number, attribute_weights: number[], vertex_lock: Uint8Array | null, target_index_count: number, target_error: number, flags?: SimplifierFlags[]) => [number, number];
+```
+
+Unlike `simplify`/`simplifyWithAttributes`, this function updates the index buffer as well as vertex positions and attributes in place, and returns the resulting index count (which the `indices` array should be truncated to) and appearance error. The resulting indices still refer to the original vertex buffer; any attributes that are not passed to the simplifier can be left unchanged. However, since the original vertex data is no longer valid for rendering the original mesh, a new compact vertex buffer should be generated using `compactMesh`. If the original data was important, it should be copied before calling this function.
+
+The library also provides another simplification algorithm, `simplifySloppy`, which doesn't follow the topology of the original mesh:
+
+```ts
+simplifySloppy: (indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, vertex_lock: Uint8Array | null, target_index_count: number, target_error: number) => [Uint32Array, number];
+```
+
+This means that it doesn't preserve attribute seams or borders, but it can collapse internal details that are too small to matter because it can merge mesh features that are topologically disjoint but spatially close. In general, this algorithm produces meshes with worse geometric quality and poor attribute quality compared to `simplify`, but may simplify further. The optional `vertex_lock` array can be used to lock some vertices in place, with `1` marking locked vertices, or can be `null`.
 
 When the resulting mesh is stored, it might be desirable to remove the redundant vertices from the attribute buffers instead of simply using the original vertex data with the smaller index buffer. For that purpose, the simplifier module provides the `compactMesh` function, which is similar to `reorderMesh` function that the encoder provides, but doesn't perform extra optimizations and merely prepares a new vertex order that can be used to create new, smaller, vertex buffers:
 
@@ -267,6 +283,20 @@ Finally, it is possible to compute spherical bounds of an arbitrary set of point
 ```ts
 computeSphereBounds: (positions: Float32Array, positions_stride: number, radii?: Float32Array, radii_stride?: number) => Bounds;
 ```
+
+## Tangents
+
+`MeshoptTangents` (`meshopt_tangents.js`) implements tangent space generation for meshes that use tangent space normal maps. These meshes often require per-vertex tangent vectors in addition to normals; these could be exported alongside mesh data, but this module can generate them from positions, normals and texture coordinates:
+
+```ts
+generateTangents: (indices: Uint32Array | null, vertex_positions: Float32Array, vertex_positions_stride: number, vertex_normals: Float32Array, vertex_normals_stride: number, vertex_uvs: Float32Array, vertex_uvs_stride: number, flags?: TangentsFlags[]) => Float32Array;
+```
+
+For each triangle *corner* this writes a normalized tangent vector (xyz) and an orientation sign (+-1); the bitangent can be reconstructed in the shader as `cross(normal, tangent.xyz) * tangent.w`. Note that some coordinate space conventions that flip V direction in the texture space require negating orientation sign. The input can be indexed, or not (`indices=null`); this does not affect the output tangents.
+
+Because tangents are computed per corner, applying them to mesh vertices requires de-indexing the mesh and generating a new index/vertex buffer afterwards, or using indexed data and copying tangents to existing vertex data while duplicating vertices with different tangents. With the indexed input, if it contains UV mirroring, vertices along the mirror edge may have different tangent spaces on different sides of the edge and need to be split - copying tangents to existing vertex data without splitting will not produce correct results.
+
+The algorithm uses a MikkTSpace-like construction but by default, uses a modified weighting scheme that significantly improves tangent quality around beveled regions in the mesh. If the normal maps are baked from higher resolution geometry using MikkTSpace weighting, it's possible to produce MikkTSpace-compatible tangents by passing `'Compatible'` option in `flags`
 
 ## License
 

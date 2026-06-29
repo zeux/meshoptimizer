@@ -16,10 +16,10 @@ Two companion projects are developed and distributed alongside the library: [glt
 meshoptimizer is hosted on GitHub; you can download the latest release using git:
 
 ```
-git clone -b v1.1 https://github.com/zeux/meshoptimizer.git
+git clone -b v1.2 https://github.com/zeux/meshoptimizer.git
 ```
 
-Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v1.1.zip).
+Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v1.2.zip).
 
 The library is also available as a Linux package in several distributions ([ArchLinux](https://aur.archlinux.org/packages/meshoptimizer/), [Debian](https://packages.debian.org/libmeshoptimizer), [FreeBSD](https://www.freshports.org/misc/meshoptimizer/), [Nix](https://mynixos.com/nixpkgs/package/meshoptimizer), [Ubuntu](https://packages.ubuntu.com/libmeshoptimizer)), as well as a [Vcpkg port](https://github.com/microsoft/vcpkg/tree/master/ports/meshoptimizer) (see [installation instructions](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started)) and a [Conan package](https://conan.io/center/recipes/meshoptimizer).
 
@@ -45,7 +45,8 @@ When optimizing a mesh, to maximize rendering efficiency you should typically fe
 3. (optional) Overdraw optimization
 4. Vertex fetch optimization
 5. Vertex quantization
-6. (optional) Shadow indexing
+6. Index filtering
+7. (optional) Shadow indexing
 
 ### Indexing
 
@@ -147,6 +148,18 @@ unsigned short pz = meshopt_quantizeHalf(v.z);
 ```
 
 Since quantized vertex attributes often need to remain in their compact representations for efficient transfer and storage, they are usually dequantized during vertex processing by configuring the GPU vertex input correctly to expect normalized integers or half precision floats, which often needs no or minimal changes to the shader code. When CPU dequantization is required instead, `meshopt_dequantizeHalf` can be used to convert half precision values back to single precision; for normalized integer formats, the dequantization just requires dividing by 2^N-1 for unorm and 2^(N-1)-1 for snorm variants. For example, manually reversing `meshopt_quantizeUnorm(v, 10)` can be done by dividing by 1023.
+
+### Index filtering
+
+Some meshes may contain triangles that are processed during rendering but do not contribute to the rendered result. If any two vertices of a triangle result in the same position after vertex shader, the triangle is degenerate and will be skipped by the rasterizer. Some triangles may also be duplicates of an earlier triangle with the same post-transform positions and winding, in which case only one of the triangles will be visible depending on depth testing settings (assuming blending is disabled). In either case, such triangles require extra processing and removing them may improve rasterization or ray tracing performance; this library provides an algorithm that removes such triangles from the index buffer:
+
+```c++
+indices.resize(meshopt_filterIndexBuffer(&indices[0], &indices[0], indices.size(), &vertices[0].x, vertices.size(), sizeof(float) * 3, sizeof(Vertex)));
+```
+
+Note that the example above assumes only positions are relevant for transforming the vertices, but for deformable meshes skinning data may need to be added to the vertex portion used as a key; `meshopt_filterIndexBufferMulti` can be useful for these cases if the relevant data is not contiguous.
+
+Filtering after quantization is convenient because quantization may increase the number of redundant triangles if triangles had similar but not identical vertex positions before quantization. However, filtering can be done at any point in the pipeline as soon as the index buffer becomes available; you could also run vertex fetch optimization after filtering, since it will naturally filter out any vertices that may become unused after redundant triangles are eliminated, potentially saving extra memory.
 
 ### Shadow indexing
 
@@ -301,8 +314,8 @@ Both of the meshlet algorithms are designed to work with triangle meshes. In som
 ```c++
 const size_t cluster_size = 256;
 
-std::vector<unsigned int> index(mesh.vertices.size());
-meshopt_spatialClusterPoints(&index[0], &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), cluster_size);
+std::vector<unsigned int> index(vertices.size());
+meshopt_spatialClusterPoints(&index[0], &vertices[0].px, vertices.size(), sizeof(Vertex), cluster_size);
 ```
 
 The resulting index buffer could be used to process the points directly, or reorganize the point data into flat contiguous arrays. Every consecutive chunk of `cluster_size` points in the index buffer refers to a single cluster, with just the last cluster containing fewer points if the total number of points is not a multiple of `cluster_size`. Note that the index buffer is not a remap table, so `meshopt_remapVertexBuffer` can't be used to flatten the point data.
@@ -326,6 +339,55 @@ Two clusters are considered topologically adjacent if they reference the same in
 If vertex positions are specified (not `NULL`), spatial locality will influence priority of merging clusters; otherwise, the algorithm will rely solely on topological connections and will not merge disconnected clusters into the same partition, which may result in smaller partitions for some inputs.
 
 After partitioning, each element in the destination array contains the partition ID (ranging from 0 to the returned partition count minus 1) for the corresponding cluster. Note that the partitions may be both smaller and larger than the target size; given a target size, the maximum partition size returned currently is `target + target / 3`.
+
+### Cluster position quantization
+
+When working with clustered geometry, it may be possible to use cluster-relative quantization for vertex positions. In particular, a common representation involves quantizing positions to lie on an integer grid with an exponent shared between clusters, to avoid quantizing shared vertices differently between clusters, and storing each position as an offset from the cluster anchor. A variant of this representation called [Compressed1 position encoding](https://microsoft.github.io/DirectX-Specs/d3d/Raytracing2.html#compressed1-position-encoding) is supported by DXR2. This library provides a helper function, `meshopt_computePositionExponent`, that can be used to compute the exponent, as well as an example (see `encodeMeshletsDXR` in `demo/main.cpp`) demonstrating the full pipeline.
+
+First, compute the shared exponent to guarantee that any vertex in every cluster fits in a 24-bit signed integer, and additionally can be encoded as a K-bit unsigned delta from the per-cluster anchor (in the example below, `K=16` which matches DXR2 limits):
+
+```c++
+const int min_exp = -13; // start with an acceptable level of precision; 2^-13 ~= 0.1mm in metric units
+const int max_bits = 16; // maximum number of offset bits per axis
+
+int exponent = min_exp;
+
+for (size_t i = 0; i < meshlets.size(); ++i)
+{
+    AABB meshlet_aabb = ...; // compute meshlet AABB based on vertex positions
+    int cexp = meshopt_computePositionExponent(meshlet_aabb.min, meshlet_aabb.max, min_exp, max_bits);
+    exponent = std::max(exponent, cexp);
+}
+
+float scale = ldexpf(1.f, exponent);
+```
+
+After this, each cluster can be encoded independently; when encoding each position, positions should be converted to the integer grid, and the anchor should be established:
+
+```c++
+int positions[256][3];
+int anchor[3] = {INT_MAX, INT_MAX, INT_MAX};
+
+for (size_t j = 0; j < meshlet.vertex_count; ++j)
+{
+    unsigned int v = meshlet_vertices[meshlet.vertex_offset + j];
+    const float* p = &vertices[v].px;
+
+    for (int k = 0; k < 3; ++k)
+    {
+        positions[j][k] = int(roundf(p[k] / scale));
+        anchor[k] = std::min(anchor[k], positions[j][k]);
+    }
+}
+```
+
+The exponent selection guarantees that as a result, for each cluster, we get 24-bit `anchor` components, and for each vertex `position[k] - anchor[k]` fits into a 16-bit unsigned integer. The positions *could* then be encoded using a fixed-width 16-bit encoding, with 6 bytes per vertex; however, because many clusters will require fewer bits, it's more efficient to determine the bit count per axis per cluster (by computing the number of bits per axis that is sufficient to fit `position[k] - anchor[k]`), and encoding the resulting deltas from the anchor into a bitstream. When using DXR2, the resulting position bits can be given directly to the cluster BVH builder by using `D3D12_VERTEX_FORMAT_COMPRESSED1` format.
+
+The same data could be directly decoded from a mesh shader in hybrid rendering pipelines, since each cluster uses a consistent number of bits per axis; this would require implementing unaligned bitstream read access in the shader. Alternatively, deltas could be stored as 16-bit integers alongside other vertex data (taking as much space as `snorm16`/`half` positions with significantly increased precision for larger meshes).
+
+> In the examples above, `max_bits` is set to 16 to match DXR2 limits. If DXR2 compatibility is not required, it may sometimes be necessary to use more bits to accommodate larger clusters. This is particularly relevant when using hierarchical cluster LOD, as all clusters at all levels of detail must share the exponent to eliminate gaps between adjacent clusters at different resolutions; Nanite uses up to 21 bits per axis for this reason.
+
+This scheme works well together with meshlet compression described below, which can be used to encode topology (triangles) efficiently.
 
 ## Mesh compression
 
@@ -478,6 +540,8 @@ The following guarantees on data compatibility are provided for point releases (
 
 By default, vertex data is encoded for format version 1 (compatible with meshoptimizer v0.23+), and index data is encoded for format version 1 (compatible with meshoptimizer v0.14+). When decoding the data, the decoder will automatically detect the version from the data header.
 
+Meshlet data uses a frameless format without an embedded version header, so it's compatible across all library versions (starting with meshoptimizer v1.1). Any future change to meshlet encoding would be exposed as new functions; to adopt future improvements without breaking existing data, applications could record a format version externally, once per entire meshlet stream or file.
+
 ## Simplification
 
 All algorithms presented so far don't affect visual appearance at all, with the exception of quantization that has minimal controlled impact. However, fundamentally the most effective way to reduce the rendering or transmission cost of a mesh is to reduce the number of triangles in the mesh.
@@ -571,6 +635,7 @@ This approach provides fine-grained control over which discontinuities to preser
 All simplification functions described so far reuse the original vertex buffer and only produce a new index buffer. This means that the resulting mesh will have the same vertex positions and attributes as the original mesh; this is optimal for minimizing the memory consumption and for highly detailed meshes often provides good quality. However, for more aggressive simplification to retain visual quality, it may be necessary to adjust vertex data for optimal appearance. This can be done by using a variant of the simplification function that updates vertex positions and attributes, `meshopt_simplifyWithUpdate`:
 
 ```c++
+float result_error = 0.f;
 indices.resize(meshopt_simplifyWithUpdate(&indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex),
     &vertices[0].nx, sizeof(Vertex), attr_weights, 3, /* vertex_lock= */ NULL,
     target_index_count, target_error, /* options= */ 0, &result_error));
@@ -738,7 +803,7 @@ Because the order of indices in the resulting index buffer must be preserved exa
 
 ### Opacity micromaps
 
-When using hardware raytracing with alpha-tested transparency, tracing the ray requires invoking any-hit shaders for each intersected surface; this can be inefficient as it requires extra communication and synchronization between raytracing hardware and shader units. Opacity micromaps (OMMs) can significantly accelerate the tests by providing opacity masks for each triangle; this requires subdividing each triangle using a uniform grid (4^N microtriangles for subdivision level N), with each microtriangle storing 1 bit (for 2-state micromaps) or 2 bits (for 4-state micromaps) of opacity data. To minimize the memory overhead, the maps can be reused between triangles using a per-triangle OMM index buffer. This library provides algorithms to generate OMM data for a given mesh from an alpha texture; the resulting data can be used directly in Vulkan via [VK_EXT_opacity_micromap](https://docs.vulkan.org/spec/latest/chapters/raytraversal.html#ray-opacity-micromap) or in DirectX via [DXR1.2](https://github.com/microsoft/DirectX-Specs/blob/master/d3d/Raytracing.md#opacity-micromaps).
+When using hardware raytracing with alpha-tested transparency, tracing the ray requires invoking any-hit shaders for each intersected surface; this can be inefficient as it requires extra communication and synchronization between raytracing hardware and shader units. Opacity micromaps (OMMs) can significantly accelerate the tests by providing opacity masks for each triangle; this requires subdividing each triangle using a uniform grid (4^N microtriangles for subdivision level N), with each microtriangle storing 1 bit (for 2-state micromaps) or 2 bits (for 4-state micromaps) of opacity data. To minimize the memory overhead, the maps can be reused between triangles using a per-triangle OMM index buffer. This library provides algorithms to generate OMM data for a given mesh from an alpha texture; the resulting data can be used directly in Vulkan via [VK_KHR_opacity_micromap](https://docs.vulkan.org/spec/latest/chapters/raytraversal.html#ray-opacity-micromap) or in DirectX via [DXR1.2](https://github.com/microsoft/DirectX-Specs/blob/master/d3d/Raytracing.md#opacity-micromaps).
 
 Generating opacity micromaps happens in three stages: measure (and layout), rasterize and compact. Compaction is optional but recommended, and can be performed on each mesh individually or on all meshes in the same model/scene.
 
@@ -748,6 +813,7 @@ First, call `meshopt_opacityMapMeasure` to compute a subdivision level for each 
 const int states = 4; // 2-state or 4-state OMMs (used after measure)
 const int max_level = 6; // max subdivision level
 const float target_edge = 3.0f; // target 3x3px area for each microtriangle
+
 std::vector<unsigned char> levels(indices.size() / 3);
 std::vector<unsigned int> sources(indices.size() / 3);
 std::vector<int> omm_indices(indices.size() / 3);
@@ -799,6 +865,52 @@ Additionally, note that while the code above works with 32-bit OMM indices, afte
 
 When using 4-state OMMs, rasterization code produces both unknown-transparent and unknown-opaque states based on microtriangle coverage; this enables the use of forced 2-state flag during traversal for specific effects where micromap data is sufficient for reasonable quality; this is recommended for performance as this results in no any-hit invocations.
 
+### Tangent spaces
+
+Meshes that use tangent space normal maps often require per-vertex tangent vectors in addition to normals. These could be exported alongside mesh data, but this library also provides an algorithm similar to MikkTSpace that can generate them from positions, normals and texture coordinates:
+
+```c++
+std::vector<vec4> tangents(indices.size());
+meshopt_generateTangents(&tangents[0].x, &indices[0], indices.size(),
+    &vertices[0].px, vertices.size(), sizeof(Vertex), &vertices[0].nx, sizeof(Vertex), &vertices[0].tx, sizeof(Vertex));
+```
+
+For each triangle *corner* this writes a normalized tangent vector (xyz) and an orientation sign (+-1); the bitangent can be reconstructed in the shader as `cross(normal, tangent.xyz) * tangent.w`. Note that some coordinate space conventions that flip V direction in the texture space require negating orientation sign. The input can be indexed, as in the example above, or not (`indices=NULL`); this does not affect the output tangents.
+
+Because tangents are computed per corner, applying them to mesh vertices requires de-indexing the mesh and generating a new index/vertex buffer afterwards (see `Indexing` section earlier), or using indexed data and copying tangents to existing vertex data while duplicating vertices with different tangents (see `tangents` example in `demo/main.cpp`). With the indexed input, if it contains UV mirroring, vertices along the mirror edge may have different tangent spaces on different sides of the edge and need to be split - copying tangents to existing vertex data without splitting will not produce correct results.
+
+If splitting is required, it can be efficiently done with an extra pass and an index list per vertex:
+
+```c++
+// seed each vertex with one of its corner tangents; the loop below fixes any mismatches
+for (size_t i = 0; i < indices.size(); ++i)
+    vertices[indices[i]].tangent = tangents[i];
+
+std::vector<unsigned int> splits(vertices.size(), ~0u);
+
+for (size_t i = 0; i < indices.size(); ++i)
+{
+    // walk the chain of split copies looking for a vertex whose tangent matches
+    unsigned int v = indices[i];
+    while (v != ~0u && vertices[v].tangent != tangents[i])
+        v = splits[v];
+
+    // no match in chain: append a new split copy with the target tangent and chain it
+    if (v == ~0u)
+    {
+        v = unsigned(vertices.size());
+        vertices.push_back(vertices[indices[i]]);
+        vertices[v].tangent = tangents[i];
+        splits.push_back(splits[indices[i]]);
+        splits[indices[i]] = v;
+    }
+
+    indices[i] = v;
+}
+```
+
+The algorithm uses a MikkTSpace-like construction but by default, uses a modified weighting scheme that significantly improves tangent quality around beveled regions in the mesh. If the normal maps are baked from higher resolution geometry using MikkTSpace weighting, it's possible to produce MikkTSpace-compatible tangents by passing `meshopt_TangentCompatible` option as an extra argument to the function.
+
 ## Memory management
 
 Many algorithms allocate temporary memory to store intermediate results or accelerate processing. The amount of memory allocated is a function of various input parameters such as vertex count and index count. By default memory is allocated using `operator new` and `operator delete`; if these operators are overloaded by the application, the overloads will be used instead. Alternatively it's possible to specify custom allocation/deallocation functions using `meshopt_setAllocator`, e.g.
@@ -809,7 +921,9 @@ meshopt_setAllocator(malloc, free);
 
 > Note that the library expects the allocation function to either throw in case of out-of-memory (in which case the exception will propagate to the caller) or abort, so technically the use of `malloc` above isn't safe. If you want to handle out-of-memory errors without using C++ exceptions, you can use `setjmp`/`longjmp` instead.
 
-Vertex and index decoders (`meshopt_decodeVertexBuffer`, `meshopt_decodeIndexBuffer`, `meshopt_decodeIndexSequence`) do not allocate memory and work completely within the buffer space provided via arguments.
+When building meshoptimizer as a shared library, allocations from the templated index wrappers provided in the header (used when index data is not `unsigned int`) will only be redirected to these callbacks if the library is built with `MESHOPTIMIZER_ALLOC_EXPORT` defined.
+
+Vertex, index and meshlet decoders (`meshopt_decodeVertexBuffer`, `meshopt_decodeIndexBuffer`, `meshopt_decodeIndexSequence`, `meshopt_decodeMeshlet`, `meshopt_decodeMeshletRaw`) do not allocate memory and work completely within the buffer space provided via arguments.
 
 All functions have bounded stack usage that does not exceed 32 KB for any algorithms.
 
@@ -826,11 +940,10 @@ Applications may configure the library to change the attributes of experimental 
 Currently, the following APIs are experimental:
 
 - `meshopt_SimplifyPermissive` mode for `meshopt_simplify*` functions
-- `meshopt_SimplifyVertex_Priority` flag for `vertex_lock` parameter to `meshopt_simplify*` functions
-- `meshopt_SimplifyRegularizeLight` flag for `meshopt_simplify*` functions
-- `meshopt_encode/decodeMeshlet*` functions (`meshopt_encodeMeshlet`, `meshopt_encodeMeshletBound`, `meshopt_decodeMeshlet`, `meshopt_decodeMeshletRaw`)
-- `meshopt_extractMeshletIndices` and `meshopt_optimizeMeshletLevel` functions
 - `meshopt_opacityMap*` functions (`meshopt_opacityMapMeasure`, `meshopt_opacityMapRasterize`, `meshopt_opacityMapCompact`, `meshopt_opacityMapEntrySize`)
+- `meshopt_generateTangents` function and `meshopt_Tangent*` flags
+- `meshopt_filterIndexBuffer` and `meshopt_filterIndexBufferMulti` functions
+- `meshopt_computePositionExponent` function
 
 ## License
 

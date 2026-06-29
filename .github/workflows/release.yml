@@ -21,13 +21,13 @@ jobs:
     name: gltfpack-${{matrix.os.name}}
     runs-on: ${{matrix.os.version}}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
         with:
           repository: zeux/basis_universal
           ref: gltfpack
           path: basis_universal
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           repository: webmproject/libwebp
           ref: 1.6.0
@@ -42,12 +42,12 @@ jobs:
         if: matrix.os.name == 'macos-intel'
       - name: cmake build
         run: cmake --build . --target gltfpack --config Release -j 3
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: gltfpack-windows
           path: Release/gltfpack.exe
         if: matrix.os.name == 'windows'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: gltfpack-${{matrix.os.name}}
           path: gltfpack
@@ -56,8 +56,8 @@ jobs:
   nodejs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: '18'
       - name: install wasi
@@ -76,11 +76,11 @@ jobs:
           cp LICENSE.md js/
           cd gltf && npm pack && cd ..
           cd js && npm pack && cd ..
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: gltfpack-npm
           path: gltf/gltfpack-*.tgz
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: meshoptimizer-npm
           path: js/meshoptimizer-*.tgz

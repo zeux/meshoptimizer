@@ -7,6 +7,13 @@
 #include <math.h>
 #include <string.h>
 
+static float getScaleDelta(float l, float r)
+{
+	float d = fabsf(l - r);
+	float m = std::max(fabsf(l), fabsf(r));
+	return m == 0.f ? 0.f : d / m;
+}
+
 static float getDelta(const Attr& l, const Attr& r, cgltf_animation_path_type type)
 {
 	switch (type)
@@ -18,13 +25,13 @@ static float getDelta(const Attr& l, const Attr& r, cgltf_animation_path_type ty
 		return 2 * acosf(std::min(1.f, fabsf(l.f[0] * r.f[0] + l.f[1] * r.f[1] + l.f[2] * r.f[2] + l.f[3] * r.f[3])));
 
 	case cgltf_animation_path_type_scale:
-		return std::max(std::max(fabsf(l.f[0] / r.f[0] - 1), fabsf(l.f[1] / r.f[1] - 1)), fabsf(l.f[2] / r.f[2] - 1));
+		return std::max(std::max(getScaleDelta(l.f[0], r.f[0]), getScaleDelta(l.f[1], r.f[1])), getScaleDelta(l.f[2], r.f[2]));
 
 	case cgltf_animation_path_type_weights:
 		return fabsf(l.f[0] - r.f[0]);
 
 	default:
-		assert(!"Uknown animation path");
+		assert(!"Unknown animation path");
 		return 0;
 	}
 }

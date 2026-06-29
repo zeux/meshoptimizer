@@ -12,7 +12,7 @@ if(POLICY CMP0092)
     cmake_policy(SET CMP0092 NEW) # Enables clean /W4 override for MSVC
 endif()
 
-project(meshoptimizer VERSION 1.1 LANGUAGES CXX)
+project(meshoptimizer VERSION 1.2 LANGUAGES CXX)
 
 option(MESHOPT_BUILD_DEMO "Build demo" OFF)
 option(MESHOPT_BUILD_GLTFPACK "Build gltfpack" OFF)
@@ -42,6 +42,7 @@ set(SOURCES
     src/simplifier.cpp
     src/spatialorder.cpp
     src/stripifier.cpp
+    src/tangentspace.cpp
     src/vcacheoptimizer.cpp
     src/vertexcodec.cpp
     src/vertexfilter.cpp
@@ -127,6 +128,10 @@ if(MESHOPT_BUILD_GLTFPACK)
     set_target_properties(gltfpack PROPERTIES CXX_STANDARD 11)
     target_link_libraries(gltfpack meshoptimizer)
 
+    if(MESHOPT_BUILD_SHARED_LIBS AND MESHOPT_STABLE_EXPORTS)
+        target_compile_definitions(gltfpack PRIVATE GLTFPACK_NO_EXPERIMENTAL)
+    endif()
+
     if(MESHOPT_BUILD_SHARED_LIBS)
         string(CONCAT RPATH "$ORIGIN/../" ${CMAKE_INSTALL_LIBDIR})
         set_target_properties(gltfpack PROPERTIES INSTALL_RPATH ${RPATH})
@@ -138,7 +143,7 @@ if(MESHOPT_BUILD_GLTFPACK)
             message(FATAL_ERROR "Basis Universal path ${BASISU_PATH} not found")
         endif()
 
-        if (NOT SSE AND NOT MSVC AND CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+        if (NOT SSE AND NOT BASISU_SSE AND NOT MSVC AND CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
             message(WARNING "Building Basis Universal without SSE4.1 support; performance may be suboptimal")
         endif()
 

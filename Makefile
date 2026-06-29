@@ -39,7 +39,7 @@ WASIROOT?=$(WASI_SDK)/share/wasi-sysroot
 
 WASM_FLAGS=--target=wasm32-wasi -Wno-deprecated --sysroot=$(WASIROOT) --no-wasm-opt
 WASM_FLAGS+=-Wall -Wextra
-WASM_FLAGS+=-O3 -DNDEBUG -nostartfiles -nostdlib -Wl,--no-entry -Wl,-s
+WASM_FLAGS+=-O3 -DNDEBUG -DMESHOPTIMIZER_VERTEXCODEC_ZEROCOPY -nostartfiles -nostdlib -Wl,--no-entry -Wl,-s
 WASM_FLAGS+=-mcpu=mvp # make sure clang doesn't use post-MVP features like sign extension
 WASM_FLAGS+=-fno-slp-vectorize -fno-vectorize -fno-unroll-loops
 WASM_FLAGS+=-Wl,-z -Wl,stack-size=36864 -Wl,--initial-memory=65536
@@ -56,6 +56,9 @@ WASM_SIMPLIFIER_EXPORTS=meshopt_simplify meshopt_simplifyWithAttributes meshopt_
 
 WASM_CLUSTERIZER_SOURCES=src/clusterizer.cpp src/meshletutils.cpp tools/wasmstubs.cpp
 WASM_CLUSTERIZER_EXPORTS=meshopt_buildMeshletsBound meshopt_buildMeshletsFlex meshopt_buildMeshletsSpatial meshopt_computeClusterBounds meshopt_computeMeshletBounds meshopt_computeSphereBounds meshopt_optimizeMeshlet sbrk __wasm_call_ctors
+
+WASM_TANGENTS_SOURCES=src/tangentspace.cpp tools/wasmstubs.cpp
+WASM_TANGENTS_EXPORTS=meshopt_generateTangents sbrk __wasm_call_ctors
 
 ifneq ($(werror),)
 	CFLAGS+=-Werror
@@ -91,7 +94,7 @@ ifeq ($(config),release-avx)
 endif
 
 ifeq ($(config),release-avx512)
-	CXXFLAGS+=-O3 -DNDEBUG -mavx512vl -mavx512vbmi -mavx512vbmi2
+	CXXFLAGS+=-O3 -DNDEBUG -mavx512vl -mavx512vbmi -mavx512vbmi2 -mbmi2
 endif
 
 ifeq ($(config),release-scalar)
@@ -141,7 +144,7 @@ format:
 formatjs:
 	prettier -w js/*.js gltf/*.js demo/*.html js/*.ts
 
-js: js/meshopt_decoder.cjs js/meshopt_decoder.mjs js/meshopt_encoder.js js/meshopt_simplifier.js js/meshopt_clusterizer.js
+js: js/meshopt_decoder.cjs js/meshopt_decoder.mjs js/meshopt_encoder.js js/meshopt_simplifier.js js/meshopt_clusterizer.js js/meshopt_tangents.js
 
 symbols: $(BUILD)/amalgamated.so
 	nm $< -U -g
@@ -185,6 +188,10 @@ build/clusterizer.wasm: $(WASM_CLUSTERIZER_SOURCES)
 	@mkdir -p build
 	$(WASMCC) $^ $(WASM_FLAGS) $(patsubst %,$(WASM_EXPORT_PREFIX)=%,$(WASM_CLUSTERIZER_EXPORTS)) -lc -o $@
 
+build/tangents.wasm: $(WASM_TANGENTS_SOURCES)
+	@mkdir -p build
+	$(WASMCC) $^ $(WASM_FLAGS) $(patsubst %,$(WASM_EXPORT_PREFIX)=%,$(WASM_TANGENTS_EXPORTS)) -lc -o $@
+
 js/meshopt_decoder.mjs: build/decoder_base.wasm build/decoder_simd.wasm tools/wasmpack.py
 	sed -i "s#Built with clang.*#Built with $$($(WASMCC) --version | head -n 1 | sed 's/\s\+(.*//')#" $@
 	sed -i "s#Built from meshoptimizer .*#Built from meshoptimizer $$(cat src/meshoptimizer.h | grep -Po '(?<=version )[0-9.]+')#" $@
@@ -194,8 +201,9 @@ js/meshopt_decoder.mjs: build/decoder_base.wasm build/decoder_simd.wasm tools/wa
 js/meshopt_encoder.js: build/encoder.wasm tools/wasmpack.py
 js/meshopt_simplifier.js: build/simplifier.wasm tools/wasmpack.py
 js/meshopt_clusterizer.js: build/clusterizer.wasm tools/wasmpack.py
+js/meshopt_tangents.js: build/tangents.wasm tools/wasmpack.py
 
-js/meshopt_encoder.js js/meshopt_simplifier.js js/meshopt_clusterizer.js:
+js/meshopt_encoder.js js/meshopt_simplifier.js js/meshopt_clusterizer.js js/meshopt_tangents.js:
 	sed -i "s#Built with clang.*#Built with $$($(WASMCC) --version | head -n 1 | sed 's/\s\+(.*//')#" $@
 	sed -i "s#Built from meshoptimizer .*#Built from meshoptimizer $$(cat src/meshoptimizer.h | grep -Po '(?<=version )[0-9.]+')#" $@
 	python3 tools/wasmpack.py patch $@ wasm <$<

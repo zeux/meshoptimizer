@@ -175,7 +175,7 @@ static bool getDimensionsJpeg(const std::string& data, int& width, int& height)
 			continue; // no payload
 		}
 
-		// c0..c1 correspond to SOF0, SOF1
+		// c0/c2 correspond to SOF0/SOF2
 		if (marker == '\xc0' || marker == '\xc2')
 		{
 			if (offset + 10 > data.size())

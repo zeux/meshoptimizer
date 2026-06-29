@@ -183,14 +183,14 @@ static void writeTextureInfo(std::string& json, const cgltf_data* data, const cg
 {
 	assert(view.texture);
 
-	bool has_transform = false;
+	bool needs_transform = false;
 	cgltf_texture_transform transform = {};
 	transform.scale[0] = transform.scale[1] = 1.f;
 
-	if (hasValidTransform(view))
+	if (view.has_transform && isValidTransform(view.transform))
 	{
 		transform = view.transform;
-		has_transform = true;
+		needs_transform = true;
 	}
 
 	if (qt)
@@ -199,7 +199,7 @@ static void writeTextureInfo(std::string& json, const cgltf_data* data, const cg
 		transform.offset[1] += qt->offset[1];
 		transform.scale[0] *= qt->scale[0] / float((1 << qt->bits) - 1) * (qt->normalized ? 65535.f : 1.f);
 		transform.scale[1] *= qt->scale[1] / float((1 << qt->bits) - 1) * (qt->normalized ? 65535.f : 1.f);
-		has_transform = true;
+		needs_transform = true;
 	}
 
 	append(json, "{\"index\":");
@@ -216,7 +216,7 @@ static void writeTextureInfo(std::string& json, const cgltf_data* data, const cg
 		append(json, "\":");
 		append(json, view.scale);
 	}
-	if (has_transform)
+	if (needs_transform)
 	{
 		append(json, ",\"extensions\":{\"KHR_texture_transform\":{");
 		append(json, "\"offset\":");

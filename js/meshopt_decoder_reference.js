@@ -16,7 +16,8 @@ function assert(cond) {
 }
 
 function dezig(v) {
-	return (v & 1) !== 0 ? ~(v >>> 1) : v >>> 1;
+	// Equivalent to (v & 1) !== 0 ? ~(v >>> 1) : v >>> 1
+	return (v >>> 1) ^ -(v & 1);
 }
 
 MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, filter) => {
@@ -186,10 +187,10 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 	if (filter === 'OCTAHEDRAL') {
 		assert(byteStride === 4 || byteStride === 8);
 
-		const dst = byteStride === 4 ? new Int8Array(target.buffer) : new Int16Array(target.buffer);
+		const dst = new (byteStride === 4 ? Int8Array : Int16Array)(target.buffer, target.byteOffset, elementCount * 4);
 		const maxInt = byteStride === 4 ? 127 : 32767;
 
-		for (let i = 0; i < 4 * elementCount; i += 4) {
+		for (let i = 0; i < elementCount * 4; i += 4) {
 			let x = dst[i + 0],
 				y = dst[i + 1],
 				one = dst[i + 2];
@@ -199,7 +200,7 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 			const t = Math.max(-z, 0.0);
 			x -= x >= 0 ? t : -t;
 			y -= y >= 0 ? t : -t;
-			const h = maxInt / Math.hypot(x, y, z);
+			const h = maxInt / Math.sqrt(x * x + y * y + z * z);
 			dst[i + 0] = Math.round(x * h);
 			dst[i + 1] = Math.round(y * h);
 			dst[i + 2] = Math.round(z * h);
@@ -208,16 +209,16 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 	} else if (filter === 'QUATERNION') {
 		assert(byteStride === 8);
 
-		const dst = new Int16Array(target.buffer);
+		const dst = new Int16Array(target.buffer, target.byteOffset, elementCount * 4);
 
-		for (let i = 0; i < 4 * elementCount; i += 4) {
+		for (let i = 0; i < elementCount * 4; i += 4) {
 			const inputW = dst[i + 3];
 			const maxComponent = inputW & 0x03;
 			const s = Math.SQRT1_2 / (inputW | 0x03);
 			let x = dst[i + 0] * s;
 			let y = dst[i + 1] * s;
 			let z = dst[i + 2] * s;
-			let w = Math.sqrt(Math.max(0.0, 1.0 - x ** 2 - y ** 2 - z ** 2));
+			let w = Math.sqrt(Math.max(0.0, 1.0 - x * x - y * y - z * z));
 			dst[i + ((maxComponent + 1) % 4)] = Math.round(x * 32767);
 			dst[i + ((maxComponent + 2) % 4)] = Math.round(y * 32767);
 			dst[i + ((maxComponent + 3) % 4)] = Math.round(z * 32767);
@@ -226,21 +227,25 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 	} else if (filter === 'EXPONENTIAL') {
 		assert((byteStride & 0x03) === 0x00);
 
-		const src = new Int32Array(target.buffer);
-		const dst = new Float32Array(target.buffer);
-		for (let i = 0; i < (byteStride * elementCount) / 4; i++) {
-			const v = src[i],
-				exp = v >> 24,
+		const expBits = new Uint32Array(1);
+		const expFloat = new Float32Array(expBits.buffer);
+
+		const src = new Int32Array(target.buffer, target.byteOffset, elementCount * (byteStride / 4));
+		const dst = new Float32Array(target.buffer, target.byteOffset, elementCount * (byteStride / 4));
+		for (let i = 0; i < elementCount * (byteStride / 4); i++) {
+			const v = src[i];
+			const exp = v >> 24,
 				mantissa = (v << 8) >> 8;
-			dst[i] = 2.0 ** exp * mantissa;
+			expBits[0] = (exp + 127) << 23; // Equivalent to 2**exp
+			dst[i] = expFloat[0] * mantissa;
 		}
 	} else if (filter === 'COLOR') {
 		assert(byteStride === 4 || byteStride === 8);
 
 		const maxInt = (1 << (byteStride * 2)) - 1;
 
-		const data = byteStride === 4 ? new Uint8Array(target.buffer) : new Uint16Array(target.buffer, 0, elementCount * 4);
-		const dataSigned = byteStride === 4 ? new Int8Array(target.buffer) : new Int16Array(target.buffer, 0, elementCount * 4);
+		const data = new (byteStride === 4 ? Uint8Array : Uint16Array)(target.buffer, target.byteOffset, elementCount * 4);
+		const dataSigned = new (byteStride === 4 ? Int8Array : Int16Array)(target.buffer, target.byteOffset, elementCount * 4);
 
 		for (let i = 0; i < elementCount * 4; i += 4) {
 			const y = data[i + 0];
@@ -273,9 +278,14 @@ MeshoptDecoder.decodeVertexBuffer = (target, elementCount, byteStride, source, f
 	}
 };
 
+function readfifo(fifo, n) {
+	return fifo[(fifo.offset - 1 - n) & (fifo.length - 1)];
+}
+
 function pushfifo(fifo, n) {
-	for (let i = fifo.length - 1; i > 0; i--) fifo[i] = fifo[i - 1];
-	fifo[0] = n;
+	const offset = fifo.offset;
+	fifo[offset] = n;
+	fifo.offset = (offset + 1) & (fifo.length - 1);
 }
 
 MeshoptDecoder.decodeIndexBuffer = (target, count, byteStride, source) => {
@@ -307,6 +317,8 @@ MeshoptDecoder.decodeIndexBuffer = (target, count, byteStride, source) => {
 		last = 0;
 	const edgefifo = new Uint32Array(32);
 	const vertexfifo = new Uint32Array(16);
+	edgefifo.offset = 0;
+	vertexfifo.offset = 0;
 
 	function decodeIndex(v) {
 		return (last += dezig(v));
@@ -319,15 +331,15 @@ MeshoptDecoder.decodeIndexBuffer = (target, count, byteStride, source) => {
 			b1 = code & 0x0f;
 
 		if (b0 < 0x0f) {
-			const a = edgefifo[(b0 << 1) + 0],
-				b = edgefifo[(b0 << 1) + 1];
+			const a = readfifo(edgefifo, (b0 << 1) + 0),
+				b = readfifo(edgefifo, (b0 << 1) + 1);
 			let c = -1;
 
 			if (b1 === 0x00) {
 				c = next++;
 				pushfifo(vertexfifo, c);
 			} else if (b1 < 0x0d) {
-				c = vertexfifo[b1];
+				c = readfifo(vertexfifo, b1);
 			} else if (b1 === 0x0d) {
 				c = --last;
 				pushfifo(vertexfifo, c);
@@ -363,10 +375,10 @@ MeshoptDecoder.decodeIndexBuffer = (target, count, byteStride, source) => {
 				a = next++;
 
 				if (z === 0x00) b = next++;
-				else b = vertexfifo[z - 1];
+				else b = readfifo(vertexfifo, z - 1);
 
 				if (w === 0x00) c = next++;
-				else c = vertexfifo[w - 1];
+				else c = readfifo(vertexfifo, w - 1);
 
 				pushfifo(vertexfifo, a);
 				if (z === 0x00) pushfifo(vertexfifo, b);
@@ -383,11 +395,11 @@ MeshoptDecoder.decodeIndexBuffer = (target, count, byteStride, source) => {
 
 				if (z === 0x00) b = next++;
 				else if (z === 0x0f) b = decodeIndex(readLEB128());
-				else b = vertexfifo[z - 1];
+				else b = readfifo(vertexfifo, z - 1);
 
 				if (w === 0x00) c = next++;
 				else if (w === 0x0f) c = decodeIndex(readLEB128());
-				else c = vertexfifo[w - 1];
+				else c = readfifo(vertexfifo, w - 1);
 
 				pushfifo(vertexfifo, a);
 				if (z === 0x00 || z === 0x0f) pushfifo(vertexfifo, b);

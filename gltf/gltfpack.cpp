@@ -419,6 +419,9 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 
 		if (!settings.keep_attributes)
 			filterStreams(mesh, mi);
+
+		if (settings.mesh_tangents && (mi.needs_tangents || settings.keep_attributes))
+			generateTangents(mesh);
 	}
 
 	mergeMeshes(meshes, settings);
@@ -1165,14 +1168,6 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 		std::string fbpath = output;
 		fbpath.replace(fbpath.size() - 4, 4, ".fallback.bin");
 
-		FILE* out = fopen(output, "wb");
-		FILE* outfb = settings.fallback ? fopen(fbpath.c_str(), "wb") : NULL;
-		if (!out || (!outfb && settings.fallback))
-		{
-			fprintf(stderr, "Error saving %s\n", output);
-			return 4;
-		}
-
 		std::string bufferspec = getBufferSpec(NULL, bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback_size, settings.compress, meshopt_ext);
 		json.insert(bufferspec_pos, "," + bufferspec);
 
@@ -1182,9 +1177,26 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 		while (bin.size() % 4)
 			bin.push_back('\0');
 
+		// GLB header and two chunks with a chunk header
+		size_t size = 12 + 8 + json.size() + 8 + bin.size();
+
+		if (size > UINT32_MAX)
+		{
+			fprintf(stderr, "Error: GLB output cannot exceed 4 GB in size\n");
+			return 4;
+		}
+
+		FILE* out = fopen(output, "wb");
+		FILE* outfb = settings.fallback ? fopen(fbpath.c_str(), "wb") : NULL;
+		if (!out || (!outfb && settings.fallback))
+		{
+			fprintf(stderr, "Error saving %s\n", output);
+			return 4;
+		}
+
 		writeU32(out, 0x46546C67);
 		writeU32(out, 2);
-		writeU32(out, uint32_t(12 + 8 + json.size() + 8 + bin.size()));
+		writeU32(out, uint32_t(size));
 
 		writeU32(out, uint32_t(json.size()));
 		writeU32(out, 0x4E4F534A);
@@ -1349,6 +1361,10 @@ int main(int argc, char** argv)
 		else if (strcmp(arg, "-vi") == 0)
 		{
 			settings.mesh_interleaved = true;
+		}
+		else if (strcmp(arg, "-gt") == 0)
+		{
+			settings.mesh_tangents = true;
 		}
 		else if (strcmp(arg, "-at") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
@@ -1671,6 +1687,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-vtf: use floating point attributes for texture coordinates\n");
 			fprintf(stderr, "\t-vnf: use floating point attributes for normals\n");
 			fprintf(stderr, "\t-vi: use interleaved vertex attributes (reduces compression efficiency)\n");
+			fprintf(stderr, "\t-gt: generate tangent frames when needed, replacing existing tangents\n");
 			fprintf(stderr, "\t-kv: keep source vertex attributes even if they aren't used\n");
 			fprintf(stderr, "\nAnimations:\n");
 			fprintf(stderr, "\t-at N: use N-bit quantization for translations (default: 16; N should be between 1 and 24)\n");
@@ -1731,6 +1748,14 @@ int main(int argc, char** argv)
 		fprintf(stderr, "Option -cf can not be used together with -vpf, -vtf or -vnf\n");
 		return 1;
 	}
+
+#ifdef GLTFPACK_NO_EXPERIMENTAL
+	if (settings.mesh_tangents)
+	{
+		fprintf(stderr, "Option -gt is not available in this build\n");
+		return 1;
+	}
+#endif
 
 	if (settings.keep_nodes && (settings.mesh_merge || settings.mesh_instancing))
 		fprintf(stderr, "Warning: option -kn disables mesh merge (-mm) and mesh instancing (-mi) optimizations\n");
