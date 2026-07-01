@@ -22,6 +22,8 @@ static const char* componentType(cgltf_component_type type)
 		return "5125";
 	case cgltf_component_type_r_32f:
 		return "5126";
+	case cgltf_component_type_r_16f:
+		return "5131";
 	default:
 		return "0";
 	}

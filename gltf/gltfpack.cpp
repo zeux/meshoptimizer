@@ -852,6 +852,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 
 	const ExtensionInfo extensions[] = {
 	    {"KHR_mesh_quantization", settings.quantize, true},
+	    {"KHR_accessor_float16", settings.quantize && (settings.pos_half || settings.tex_half), true},
 	    {meshopt_ext, settings.compress, !settings.fallback},
 	    {"KHR_texture_transform", (settings.quantize && !settings.tex_float && !json_textures.empty()) || ext_texture_transform, false},
 	    {"KHR_materials_pbrSpecularGlossiness", ext_pbr_specular_glossiness, false},
@@ -1350,9 +1351,19 @@ int main(int argc, char** argv)
 		{
 			settings.pos_float = true;
 		}
+		else if (strcmp(arg, "-vph") == 0)
+		{
+			settings.pos_float = true;
+			settings.pos_half = true;
+		}
 		else if (strcmp(arg, "-vtf") == 0)
 		{
 			settings.tex_float = true;
+		}
+		else if (strcmp(arg, "-vth") == 0)
+		{
+			settings.tex_float = true;
+			settings.tex_half = true;
 		}
 		else if (strcmp(arg, "-vnf") == 0)
 		{
@@ -1683,8 +1694,10 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-vpi: use integer attributes for positions (default)\n");
 			fprintf(stderr, "\t-vpn: use normalized attributes for positions\n");
 			fprintf(stderr, "\t-vpf: use floating point attributes for positions\n");
+			fprintf(stderr, "\t-vph: use half precision attributes for positions\n");
 			fprintf(stderr, "\nVertex attributes:\n");
 			fprintf(stderr, "\t-vtf: use floating point attributes for texture coordinates\n");
+			fprintf(stderr, "\t-vth: use half precision attributes for texture coordinates\n");
 			fprintf(stderr, "\t-vnf: use floating point attributes for normals\n");
 			fprintf(stderr, "\t-vi: use interleaved vertex attributes (reduces compression efficiency)\n");
 			fprintf(stderr, "\t-gt: generate tangent frames when needed, replacing existing tangents\n");
