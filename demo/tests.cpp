@@ -1799,6 +1799,62 @@ static void simplifyStuck()
 	assert(meshopt_simplify(ib5, ib5, 6, vb5, 5, 12, 3, 1e-3f) == 6);
 }
 
+static void simplifyPrecision()
+{
+	// two identical flat plates, one at z=0 and one at z=900, in a mesh of extent 1000
+	// (the extra sliver triangle pins the extent so the far plate rescales to z=0.9,
+	// which is inexact in binary). the far plate must simplify just as well as the near
+	// one: with single precision quadrics the expanded form cancels catastrophically for
+	// geometry far from the bounding box minimum (residual ~1e-7*w*d^2), so the far
+	// plate stalls at a fraction of the requested reduction while the near plate
+	// reaches the minimum.
+	const int N = 150;
+
+	std::vector<float> vb;
+	std::vector<unsigned int> ib;
+
+	float corner[] = {1000, 1000, 1000, 990, 1000, 1000, 1000, 990, 1000};
+	vb.insert(vb.end(), corner, corner + 9);
+	ib.push_back(0);
+	ib.push_back(1);
+	ib.push_back(2);
+
+	for (int p = 0; p < 2; ++p)
+	{
+		unsigned int base = unsigned(vb.size() / 3);
+
+		for (int i = 0; i <= N; ++i)
+			for (int j = 0; j <= N; ++j)
+			{
+				vb.push_back(float(i));
+				vb.push_back(float(j));
+				vb.push_back(p ? 900.f : 0.f);
+			}
+
+		for (int i = 0; i < N; ++i)
+			for (int j = 0; j < N; ++j)
+			{
+				unsigned int a = base + i * (N + 1) + j, b = a + N + 1;
+
+				ib.push_back(a);
+				ib.push_back(b);
+				ib.push_back(a + 1);
+				ib.push_back(a + 1);
+				ib.push_back(b);
+				ib.push_back(b + 1);
+			}
+	}
+
+	std::vector<unsigned int> res(ib.size());
+	float error = 0;
+	size_t result = meshopt_simplify(&res[0], &ib[0], ib.size(), &vb[0], vb.size() / 3, 12, 12, 5e-5f, 0, &error);
+
+	// both plates must collapse to a handful of triangles; with float32 quadrics the
+	// far plate is left with tens of thousands
+	assert(result <= 24);
+	assert(error < 5e-5f);
+}
+
 static void simplifySloppyStuck()
 {
 	const float vb[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -3534,6 +3590,7 @@ void runTests()
 
 	simplify();
 	simplifyStuck();
+	simplifyPrecision();
 	simplifySloppyStuck();
 	simplifySloppyLocks();
 	simplifyPointsStuck();

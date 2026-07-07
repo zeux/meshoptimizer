@@ -667,16 +667,19 @@ static const size_t kMaxAttributes = 32;
 struct Quadric
 {
 	// a00*x^2 + a11*y^2 + a22*z^2 + 2*a10*xy + 2*a20*xz + 2*a21*yz + 2*b0*x + 2*b1*y + 2*b2*z + c
-	float a00, a11, a22;
-	float a10, a20, a21;
-	float b0, b1, b2, c;
-	float w;
+	// note: the expanded form cancels catastrophically in single precision; for a plane at
+	// offset d the b/c products carry independent rounding, leaving a residual of ~1e-7*w*d^2
+	// when evaluating on the plane. double keeps the error metric position-independent.
+	double a00, a11, a22;
+	double a10, a20, a21;
+	double b0, b1, b2, c;
+	double w;
 };
 
 struct QuadricGrad
 {
 	// gx*x + gy*y + gz*z + gw
-	float gx, gy, gz, gw;
+	double gx, gy, gz, gw;
 };
 
 struct Reservoir
@@ -747,11 +750,11 @@ static void quadricAdd(QuadricGrad* G, const QuadricGrad* R, size_t attribute_co
 	}
 }
 
-static float quadricEval(const Quadric& Q, const Vector3& v)
+static double quadricEval(const Quadric& Q, const Vector3& v)
 {
-	float rx = Q.b0;
-	float ry = Q.b1;
-	float rz = Q.b2;
+	double rx = Q.b0;
+	double ry = Q.b1;
+	double rz = Q.b2;
 
 	rx += Q.a10 * v.y;
 	ry += Q.a21 * v.z;
@@ -765,7 +768,7 @@ static float quadricEval(const Quadric& Q, const Vector3& v)
 	ry += Q.a11 * v.y;
 	rz += Q.a22 * v.z;
 
-	float r = Q.c;
+	double r = Q.c;
 	r += rx * v.x;
 	r += ry * v.y;
 	r += rz * v.z;
@@ -775,15 +778,15 @@ static float quadricEval(const Quadric& Q, const Vector3& v)
 
 static float quadricError(const Quadric& Q, const Vector3& v)
 {
-	float r = quadricEval(Q, v);
-	float s = Q.w == 0.f ? 0.f : 1.f / Q.w;
+	double r = quadricEval(Q, v);
+	double s = Q.w == 0. ? 0. : 1. / Q.w;
 
-	return fabsf(r) * s;
+	return float(fabs(r) * s);
 }
 
 static float quadricError(const Quadric& Q, const QuadricGrad* G, size_t attribute_count, const Vector3& v, const float* va)
 {
-	float r = quadricEval(Q, v);
+	double r = quadricEval(Q, v);
 
 	// see quadricFromAttributes for general derivation; here we need to add the parts of (eval(pos) - attr)^2 that depend on attr
 	for (size_t k = 0; k < attribute_count; ++k)
@@ -795,15 +798,15 @@ static float quadricError(const Quadric& Q, const QuadricGrad* G, size_t attribu
 	}
 
 	// note: unlike position error, we do not normalize by Q.w to retain edge scaling as described in quadricFromAttributes
-	return fabsf(r);
+	return float(fabs(r));
 }
 
 static void quadricFromPlane(Quadric& Q, float a, float b, float c, float d, float w)
 {
-	float aw = a * w;
-	float bw = b * w;
-	float cw = c * w;
-	float dw = d * w;
+	double aw = double(a) * w;
+	double bw = double(b) * w;
+	double cw = double(c) * w;
+	double dw = double(d) * w;
 
 	Q.a00 = a * aw;
 	Q.a11 = b * bw;
