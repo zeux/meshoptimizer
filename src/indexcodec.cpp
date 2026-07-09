@@ -7,6 +7,11 @@
 // This work is based on:
 // Fabian Giesen. Simple lossless index buffer compression & follow-up. 2013
 // Conor Stokes. Vertex Cache Optimised Index Buffer Compression. 2014
+
+#ifndef __has_builtin
+#define __has_builtin(x) 0
+#endif
+
 namespace meshopt
 {
 
@@ -441,7 +446,13 @@ int meshopt_decodeIndexBuffer(void* destination, size_t index_count, size_t inde
 			{
 				// fifo reads are wrapped around 16 entry buffer
 				unsigned int cf = vertexfifo[(vertexfifooffset - 1 - fec) & 15];
+
+				// clang needs the branch annotation because cf[] comes from "memory" and x86-cmov-conversion pass removes cmov otherwise
+#if defined(__clang__) && __has_builtin(__builtin_unpredictable)
+				c = __builtin_unpredictable(fec == 0) ? next : cf;
+#else
 				c = (fec == 0) ? next : cf;
+#endif
 
 				int fec0 = fec == 0;
 				next += fec0;
