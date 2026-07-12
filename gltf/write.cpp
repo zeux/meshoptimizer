@@ -2,6 +2,7 @@
 #include "gltfpack.h"
 
 #include <float.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -195,8 +196,11 @@ static void writeTextureInfo(std::string& json, const cgltf_data* data, const cg
 
 	if (qt)
 	{
-		transform.offset[0] += qt->offset[0];
-		transform.offset[1] += qt->offset[1];
+		float rcos = cosf(transform.rotation), rsin = sinf(transform.rotation);
+		float ox = transform.scale[0] * qt->offset[0], oy = transform.scale[1] * qt->offset[1];
+
+		transform.offset[0] += rcos * ox + rsin * oy;
+		transform.offset[1] += -rsin * ox + rcos * oy;
 		transform.scale[0] *= qt->scale[0] / float((1 << qt->bits) - 1) * (qt->normalized ? 65535.f : 1.f);
 		transform.scale[1] *= qt->scale[1] / float((1 << qt->bits) - 1) * (qt->normalized ? 65535.f : 1.f);
 		needs_transform = true;
