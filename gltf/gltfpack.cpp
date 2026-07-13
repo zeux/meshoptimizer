@@ -350,6 +350,23 @@ struct hash<std::pair<uint64_t, uint64_t> >
 };
 } // namespace std
 
+struct PrimitiveCacheEntry
+{
+	size_t offset;
+	size_t size;
+	QuantizationTexture qt;
+};
+
+static bool sameQuantization(const QuantizationTexture& lhs, const QuantizationTexture& rhs, const Settings& settings)
+{
+	if (!settings.quantize || settings.tex_float)
+		return true;
+
+	return lhs.offset[0] == rhs.offset[0] && lhs.offset[1] == rhs.offset[1] &&
+	       lhs.scale[0] == rhs.scale[0] && lhs.scale[1] == rhs.scale[1] &&
+	       lhs.bits == rhs.bits && lhs.normalized == rhs.normalized;
+}
+
 static size_t process(cgltf_data* data, const char* input_path, const char* output_path, const char* report_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const Settings& settings, std::string& json, std::string& bin, std::string& fallback, size_t& fallback_size, const char* meshopt_ext)
 {
 	if (settings.verbose)
@@ -582,7 +599,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 		ext_texture_transform = ext_texture_transform || mi.uses_texture_transform;
 	}
 
-	std::unordered_map<std::pair<uint64_t, uint64_t>, std::pair<size_t, size_t> > primitive_cache;
+	std::unordered_map<std::pair<uint64_t, uint64_t>, PrimitiveCacheEntry> primitive_cache;
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
@@ -614,18 +631,19 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 
 			if (prim.geometry_duplicate)
 			{
-				std::pair<size_t, size_t>& primitive_json = primitive_cache[std::make_pair(prim.geometry_hash[0], prim.geometry_hash[1])];
+				PrimitiveCacheEntry& entry = primitive_cache[std::make_pair(prim.geometry_hash[0], prim.geometry_hash[1])];
 
-				if (primitive_json.second)
+				if (entry.size && sameQuantization(entry.qt, qt, settings))
 				{
 					// reuse previously written accessors
-					json_meshes.append(json_meshes, primitive_json.first, primitive_json.second);
+					json_meshes.append(json_meshes, entry.offset, entry.size);
 				}
 				else
 				{
-					primitive_json.first = json_meshes.size();
+					entry.offset = json_meshes.size();
 					writeMeshGeometry(json_meshes, views, json_accessors, accr_offset, prim, qp, qt, settings);
-					primitive_json.second = json_meshes.size() - primitive_json.first;
+					entry.size = json_meshes.size() - entry.offset;
+					entry.qt = qt;
 				}
 			}
 			else
