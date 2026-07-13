@@ -1794,6 +1794,54 @@ extern "C" int pack(int argc, char** argv)
 #endif
 
 #ifdef GLTFFUZZ
+extern "C" size_t LLVMFuzzerMutate(uint8_t* data, size_t size, size_t max_size);
+
+extern "C" size_t LLVMFuzzerCustomMutator(uint8_t* data, size_t size, size_t max_size, unsigned int seed)
+{
+	// parse glTF/JSON chunk headers
+	if (size < 28 || memcmp(data, "glTF", 4) != 0 || memcmp(data + 16, "JSON", 4) != 0)
+		return LLVMFuzzerMutate(data, size, max_size);
+
+	uint32_t total_size, json_size;
+	memcpy(&total_size, data + 8, 4);
+	memcpy(&json_size, data + 12, 4);
+
+	// parse BIN chunk header (note, we assume it's required for simplicity)
+	if (json_size > size - 28 || memcmp(data + 24 + json_size, "BIN", 4) != 0)
+		return LLVMFuzzerMutate(data, size, max_size);
+
+	uint32_t bin_size;
+	memcpy(&bin_size, data + 20 + json_size, 4);
+
+	// final validation; note that all chunks must be 4 byte aligned
+	if (total_size != size || bin_size > size - 28 - json_size || 28 + json_size + bin_size != size || ((bin_size | json_size) & 3) != 0)
+		return LLVMFuzzerMutate(data, size, max_size);
+
+	// pick chunk to mutate; we default to mutating JSON but mutate BIN with 10% probability
+	bool mutate_bin = seed % 10 == 0;
+	size_t target_offset = mutate_bin ? 28 + json_size : 20;
+	size_t target_size = mutate_bin ? bin_size : json_size;
+
+	size_t target_capacity = (max_size - (size - target_size)) & ~3;
+
+	// mutate chunk and pad it to 4 byte boundary to maintain GLB alignment
+	std::vector<uint8_t> target(data + target_offset, data + target_offset + target_size);
+	target.resize(target_capacity);
+	target.resize(LLVMFuzzerMutate(target.data(), target_size, target_capacity));
+	target.resize((target.size() + 3) & ~3, mutate_bin ? 0 : ' ');
+
+	uint32_t new_target_size = uint32_t(target.size());
+	uint32_t new_total_size = uint32_t(size - target_size + new_target_size);
+
+	// patch the target chunk and update chunk length as well as total length
+	memmove(data + target_offset + new_target_size, data + target_offset + target_size, size - target_offset - target_size);
+	memcpy(data + target_offset, target.data(), new_target_size);
+	memcpy(data + 8, &new_total_size, 4);
+	memcpy(data + target_offset - 8, &new_target_size, 4);
+
+	return new_total_size;
+}
+
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* buffer, size_t size)
 {
 	Settings settings = defaults();
