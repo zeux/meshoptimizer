@@ -69,6 +69,12 @@
 "\"MAT3\""
 "\"MAT4\""
 "\"OPAQUE\""
+"\"POSITION\""
+"\"NORMAL\""
+"\"TANGENT\""
+"\"TEXCOORD\""
+"\"JOINTS\""
+"\"WEIGHTS\""
 "\"SCALAR\""
 "\"STEP\""
 "\"VEC2\""
@@ -181,6 +187,7 @@
 # AFL dictionary for GLTF extensions
 # -----------------------
 "\"KHR_materials_unlit\""
+"\"KHR_draco_mesh_compression\""
 "\"KHR_texture_basisu\""
 
 "\"KHR_materials_pbrSpecularGlossiness\""
@@ -198,7 +205,12 @@
 
 "\"KHR_lights_punctual\""
 "\"color\""
+"\"directional\""
 "\"intensity\""
+"\"light\""
+"\"lights\""
+"\"point\""
+"\"spot\""
 "\"type\""
 "\"range\""
 "\"innerConeAngle\""
@@ -263,6 +275,7 @@
 
 "\"KHR_materials_variants\""
 "\"mappings\""
+"\"targetNames\""
 "\"variants\""
 
 "\"EXT_texture_webp\""
