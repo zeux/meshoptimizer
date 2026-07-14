@@ -1864,7 +1864,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* buffer, size_t size)
 
 	std::string json, bin, fallback;
 	size_t fallback_size = 0;
-	process(data, NULL, NULL, NULL, meshes, animations, settings, json, bin, fallback, fallback_size, NULL);
+	process(data, NULL, NULL, NULL, meshes, animations, settings, json, bin, fallback, fallback_size, "KHR_meshopt_compression");
 
 	cgltf_free(data);
 
