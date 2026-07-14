@@ -181,6 +181,14 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 				continue;
 			}
 
+			const cgltf_accessor* positions = cgltf_find_accessor(&primitive, cgltf_attribute_type_position, 0);
+
+			if (!positions)
+			{
+				fprintf(stderr, "Warning: ignoring primitive %d of mesh %d because it has no position data\n", int(pi), int(mi));
+				continue;
+			}
+
 			meshes.push_back(Mesh());
 			Mesh& result = meshes.back();
 
@@ -191,7 +199,7 @@ static void parseMeshesGltf(cgltf_data* data, std::vector<Mesh>& meshes, std::ve
 
 			result.streams.reserve(primitive.attributes_count);
 
-			size_t vertex_count = primitive.attributes_count ? primitive.attributes[0].data->count : 0;
+			size_t vertex_count = positions->count;
 
 			if (primitive.indices)
 			{
