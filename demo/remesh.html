@@ -98,6 +98,7 @@
 				paint: {
 					mode: 'vertex',
 					resolution: 1024,
+					gutter: 1,
 				},
 
 				loadFile: function () {
@@ -146,6 +147,7 @@
 			var guiPaint = gui.addFolder('Paint');
 			guiPaint.add(settings.paint, 'mode', ['none', 'vertex', 'texture']);
 			guiPaint.add(settings.paint, 'resolution', [256, 512, 1024, 2048]);
+			guiPaint.add(settings.paint, 'gutter', 0, 8, 1);
 
 			var guiLoad = gui.addFolder('Load');
 			guiLoad.add(settings, 'loadFile');
@@ -335,14 +337,13 @@
 			}
 
 			function transferColors(model, geometry) {
-				var colors = new Float32Array(geometry.attributes.position.count * 3);
-				var counts = new Uint32Array(geometry.attributes.position.count);
+				var colors = new Float32Array(geometry.attributes.position.count * 4);
 				var query = new THREE.Vector3(), temp = new THREE.Vector3();
 
 				for (var i = 0; i < geometry.attributes.position.count; ++i) {
 					query.fromBufferAttribute(geometry.attributes.position, i);
-					sampleColor(model, query).toArray(colors, i * 3);
-					counts[i] = 1;
+					sampleColor(model, query).toArray(colors, i * 4);
+					colors[i * 4 + 3] = 1;
 				}
 
 				for (var i = 0; i < geometry.index.array.length; i += 3) {
@@ -355,25 +356,24 @@
 
 					for (var j = 0; j < 3; ++j) {
 						var v = geometry.index.array[i + j];
-						colors[v * 3] += color.r, colors[v * 3 + 1] += color.g, colors[v * 3 + 2] += color.b;
-						counts[v]++;
+						colors[v * 4] += color.r, colors[v * 4 + 1] += color.g, colors[v * 4 + 2] += color.b, colors[v * 4 + 3]++;
 					}
 				}
 
-				for (var i = 0; i < counts.length; ++i) {
-					colors[i * 3] /= counts[i], colors[i * 3 + 1] /= counts[i], colors[i * 3 + 2] /= counts[i];
+				for (var i = 0; i < colors.length; i += 4) {
+					colors[i] /= colors[i + 3], colors[i + 1] /= colors[i + 3], colors[i + 2] /= colors[i + 3], colors[i + 3] = 1;
 				}
 
-				geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+				geometry.setAttribute('color', new THREE.BufferAttribute(colors, 4));
 			}
 
-			function unwrapMesh(geometry) {
+			function unwrapMesh(geometry, resolution, gutter) {
 				var positions = geometry.attributes.position.array;
 				var indices = new Uint32Array(geometry.index.array);
 
 				var atlas = new Atlas();
 				atlas.addMesh({ vertexPositionData: positions, vertexCount: positions.length / 3, vertexPositionStride: 12, indexData: indices, indexCount: indices.length });
-				atlas.generate();
+				atlas.generate({}, { resolution: resolution, padding: gutter });
 
 				var mesh = atlas.getMesh(0);
 				var atlasIndices = new Uint32Array(mesh.indexCount);
@@ -391,8 +391,8 @@
 				return mergeVertices(geometry);
 			}
 
-			function transferTexture(model, geometry, size) {
-				var data = new Uint8Array(size * size * 4);
+			function transferTexture(model, geometry, size, gutter) {
+				var data = new Float32Array(size * size * 4);
 				var position = geometry.attributes.position, uv = geometry.attributes.uv, indices = geometry.index.array;
 				var bary = new THREE.Vector3(), point = new THREE.Vector3();
 
@@ -401,30 +401,46 @@
 					var x0 = uv.getX(a) * size, y0 = uv.getY(a) * size;
 					var x1 = uv.getX(b) * size, y1 = uv.getY(b) * size;
 					var x2 = uv.getX(c) * size, y2 = uv.getY(c) * size;
-					var minX = Math.max(0, Math.floor(Math.min(x0, x1, x2))), maxX = Math.min(size - 1, Math.ceil(Math.max(x0, x1, x2)));
-					var minY = Math.max(0, Math.floor(Math.min(y0, y1, y2))), maxY = Math.min(size - 1, Math.ceil(Math.max(y0, y1, y2)));
+					var minX = Math.max(0, Math.floor(Math.min(x0, x1, x2) - gutter)), maxX = Math.min(size - 1, Math.ceil(Math.max(x0, x1, x2) + gutter));
+					var minY = Math.max(0, Math.floor(Math.min(y0, y1, y2) - gutter)), maxY = Math.min(size - 1, Math.ceil(Math.max(y0, y1, y2) + gutter));
 					var denominator = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2);
 					if (Math.abs(denominator) < 1e-7) continue;
+
+					var scale = gutter / Math.abs(denominator);
+					var epsilonX = 1e-4 + Math.hypot(x1 - x2, y1 - y2) * scale;
+					var epsilonY = 1e-4 + Math.hypot(x2 - x0, y2 - y0) * scale;
+					var epsilonZ = 1e-4 + Math.hypot(x0 - x1, y0 - y1) * scale;
 
 					for (var y = minY; y <= maxY; ++y) {
 						for (var x = minX; x <= maxX; ++x) {
 							bary.x = ((y1 - y2) * (x + 0.5 - x2) + (x2 - x1) * (y + 0.5 - y2)) / denominator;
 							bary.y = ((y2 - y0) * (x + 0.5 - x2) + (x0 - x2) * (y + 0.5 - y2)) / denominator;
 							bary.z = 1 - bary.x - bary.y;
-							if (bary.x < -1e-4 || bary.y < -1e-4 || bary.z < -1e-4) continue;
+							if (bary.x < -epsilonX || bary.y < -epsilonY || bary.z < -epsilonZ) continue;
 
 							point.set(interpolate(position, a, b, c, bary, 0), interpolate(position, a, b, c, bary, 1), interpolate(position, a, b, c, bary, 2));
 							var color = sampleColor(model, point).convertLinearToSRGB();
+
 							var offset = (y * size + x) * 4;
-							data[offset] = color.r * 255;
-							data[offset + 1] = color.g * 255;
-							data[offset + 2] = color.b * 255;
-							data[offset + 3] = 255;
+							data[offset] += color.r * 255;
+							data[offset + 1] += color.g * 255;
+							data[offset + 2] += color.b * 255;
+							data[offset + 3]++;
 						}
 					}
 				}
 
-				var texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+				for (var i = 0; i < data.length; i += 4) {
+					var count = data[i + 3];
+					if (count) {
+						data[i] /= count;
+						data[i + 1] /= count;
+						data[i + 2] /= count;
+						data[i + 3] = 255;
+					}
+				}
+
+				var texture = new THREE.DataTexture(new Uint8Array(data), size, size, THREE.RGBAFormat);
 				texture.colorSpace = THREE.SRGBColorSpace;
 				texture.magFilter = THREE.LinearFilter;
 				texture.minFilter = THREE.LinearFilter;
@@ -462,10 +478,10 @@
 						remeshMaterial.vertexColors = true;
 						remeshMaterial.color.set(0xffffff);
 					} else if (settings.paint.mode == 'texture') {
-						geometry = unwrapMesh(geometry);
+						geometry = unwrapMesh(geometry, settings.paint.resolution, settings.paint.gutter);
 						remeshMaterial.vertexColors = false;
 						remeshMaterial.color.set(0xffffff);
-						remeshMaterial.map = transferTexture(merged, geometry, settings.paint.resolution);
+						remeshMaterial.map = transferTexture(merged, geometry, settings.paint.resolution, settings.paint.gutter);
 					} else {
 						remeshMaterial.vertexColors = false;
 						remeshMaterial.color.set(0xdddddd);
