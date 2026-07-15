@@ -84,9 +84,12 @@
 
 			var settings = {
 				wireframe: false,
-				ratio: 1.0,
-				regularize: false,
-				errorThreshold: 0.1,
+				resolution: 96,
+				simplify: {
+					enabled: false,
+					regularize: false,
+					errorThresholdLog10: 3,
+				},
 
 				loadFile: function () {
 					var input = document.getElementById('fileInput');
@@ -121,12 +124,15 @@
 			var guiDisplay = gui.addFolder('Display');
 			guiDisplay.add(settings, 'wireframe').onChange(update);
 
-			var guiSimplify = gui.addFolder('Remesh');
-			guiSimplify.add(settings, 'ratio', 0, 1, 0.01);
-			guiSimplify.add(settings, 'regularize');
-			guiSimplify.add(settings, 'errorThreshold', 0, 1, 0.001);
-			guiSimplify.add(settings, 'remesh');
-			guiSimplify.add(settings, 'revert');
+			var guiRemesh = gui.addFolder('Remesh');
+			guiRemesh.add(settings, 'resolution', 1, 256, 1);
+			guiRemesh.add(settings, 'remesh');
+			guiRemesh.add(settings, 'revert');
+
+			var guiSimplify = gui.addFolder('Simplify');
+			guiSimplify.add(settings.simplify, 'enabled');
+			guiSimplify.add(settings.simplify, 'regularize');
+			guiSimplify.add(settings.simplify, 'errorThresholdLog10', 0, 3, 0.1);
 
 			var guiLoad = gui.addFolder('Load');
 			guiLoad.add(settings, 'loadFile');
@@ -159,7 +165,6 @@
 				stats = {
 					triangles: 0,
 					vertices: 0,
-					error: 0,
 					ratio: 0,
 					label: statsLabel,
 				};
@@ -229,32 +234,30 @@
 				return geometries.length ? mergeGeometries(geometries) : null;
 			}
 
-			function simplifyMesh(geo, threshold) {
-				var positions = new Float32Array(geo.attributes.position.array);
-				var indices = new Uint32Array(geo.index.array);
-				var target = Math.floor((indices.length * settings.ratio) / 3) * 3;
-
-				var stride = geo.attributes.position instanceof THREE.InterleavedBufferAttribute ? geo.attributes.position.data.stride : 3;
-
-				var flags = ['Permissive', 'Prune'];
-				if (settings.regularize) {
-					flags.push('Regularize');
-				}
-
-				var res = MeshoptSimplifier.simplify(indices, positions, stride, target, threshold, flags);
+			function simplifyMesh(geo, threshold, sloppy, flags) {
+				var res = sloppy
+					? MeshoptSimplifier.simplifySloppy(geo.index.array, geo.attributes.position.array, 3, null, 0, threshold)
+					: MeshoptSimplifier.simplify(geo.index.array, geo.attributes.position.array, 3, 0, threshold, flags);
 
 				var rgeo = geo.clone();
 				rgeo.setIndex(new THREE.BufferAttribute(res[0], 1));
-				rgeo.computeVertexNormals();
 
-				return [rgeo, res[0].length / 3, res[1]];
+				return rgeo;
 			}
 
 			function remesh() {
 				MeshoptSimplifier.ready.then(function () {
 					if (!merged) return;
 
-					var [geometry, triangles, error] = simplifyMesh(merged, settings.errorThreshold);
+					var geometry = simplifyMesh(merged, 1 / settings.resolution, true);
+
+					if (settings.simplify.enabled) {
+						var flags = settings.simplify.regularize ? ['Regularize'] : [];
+						geometry = simplifyMesh(geometry, Math.pow(10, -settings.simplify.errorThresholdLog10), false, flags);
+					}
+
+					geometry.computeVertexNormals();
+					var triangles = geometry.index.count / 3;
 
 					if (remeshed) {
 						scene.remove(remeshed);
@@ -267,7 +270,6 @@
 
 					stats.triangles = triangles;
 					stats.vertices = geometry.attributes.position.count;
-					stats.error = error;
 					stats.ratio = (triangles / (merged.index.count / 3)) * 100;
 					updateStatsDisplay();
 				});
@@ -284,7 +286,6 @@
 
 				stats.triangles = 0;
 				stats.vertices = 0;
-				stats.error = 0;
 				stats.ratio = 100;
 
 				model.traverse(function (object) {
@@ -304,9 +305,6 @@
 					'<br>' +
 					'Vertices: ' +
 					stats.vertices +
-					'<br>' +
-					'Error: ' +
-					stats.error.toExponential(3) +
 					'<br>' +
 					'Ratio: ' +
 					stats.ratio.toFixed(1) +
@@ -360,17 +358,12 @@
 			}
 
 			function load(path, ext) {
-				if (model) {
-					scene.remove(model);
-					model = undefined;
-				}
-				if (merged) {
-					merged = undefined;
-				}
-				if (remeshed) {
-					scene.remove(remeshed);
-					remeshed = undefined;
-				}
+				if (model) scene.remove(model);
+				if (remeshed) scene.remove(remeshed);
+
+				model = undefined;
+				merged = undefined;
+				remeshed = undefined;
 
 				var onProgress = function (xhr) {};
 				var onError = function (e) {
