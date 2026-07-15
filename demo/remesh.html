@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<title>meshoptimizer - demo</title>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+		<style>
+			body {
+				font-family: Monospace;
+				background-color: #300a24;
+				color: #fff;
+				margin: 0px;
+				overflow: hidden;
+				display: flex;
+				flex-direction: column;
+				height: 100vh;
+			}
+			#container {
+				width: 100%;
+				flex: 1;
+				position: relative;
+			}
+			.renderer-container {
+				position: relative;
+				width: 100%;
+				height: 100%;
+			}
+			.renderer-container canvas {
+				width: 100% !important;
+				height: 100% !important;
+				display: block;
+				user-select: none;
+			}
+			.renderer-label {
+				position: absolute;
+				top: 10px;
+				left: 10px;
+				background-color: rgba(0, 0, 0, 0.5);
+				padding: 5px 10px;
+				border-radius: 5px;
+				pointer-events: none;
+				font-size: 14px;
+			}
+			.stats-label {
+				position: absolute;
+				top: 45px;
+				left: 10px;
+				background-color: rgba(0, 0, 0, 0.5);
+				padding: 5px 10px;
+				border-radius: 5px;
+				pointer-events: none;
+				font-size: 12px;
+				line-height: 1.4;
+			}
+		</style>
+
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.module.js",
+					"three-examples/": "https://cdn.jsdelivr.net/npm/three@0.183.0/examples/jsm/",
+					"lil-gui": "https://cdn.jsdelivr.net/npm/lil-gui@0.20.0/dist/lil-gui.esm.js"
+				}
+			}
+		</script>
+	</head>
+
+	<body>
+		<div id="container"></div>
+		<input type="file" id="fileInput" style="display: none" accept=".obj,.glb" />
+
+		<script type="module">
+			import * as THREE from 'three';
+			import { GLTFLoader } from 'three-examples/loaders/GLTFLoader.js';
+			import { OBJLoader } from 'three-examples/loaders/OBJLoader.js';
+			import { OrbitControls } from 'three-examples/controls/OrbitControls.js';
+			import { MeshoptDecoder } from '../js/meshopt_decoder.mjs';
+			import { MeshoptSimplifier } from '../js/meshopt_simplifier.js';
+			import { GUI } from 'lil-gui';
+
+			var container;
+			var camera, renderer, scene, controls, model, stats;
+
+			var settings = {
+				wireframe: false,
+				wireframeOverlay: false,
+				ratio: 1.0,
+				debugOverlay: false,
+				regularize: false,
+				errorThreshold: 0.1,
+
+				loadFile: function () {
+					var input = document.getElementById('fileInput');
+					input.onchange = function () {
+						var file = input.files[0];
+						var uri = URL.createObjectURL(file);
+						var ext = file.name.split('.').pop().toLowerCase();
+
+						container.querySelector('.renderer-label').textContent = file.name;
+						load(uri, ext);
+					};
+					input.click();
+				},
+
+				remesh: function () {
+					simplify();
+				},
+
+				revert: function () {
+					revert();
+				},
+
+				updateModule: function () {
+					reload();
+					simplify();
+				},
+				autoUpdate: false,
+				autoUpdateStatus: '',
+			};
+
+			var gui = new GUI({ width: 300 });
+			var guiDisplay = gui.addFolder('Display');
+			guiDisplay.add(settings, 'wireframe').onChange(update);
+			guiDisplay.add(settings, 'wireframeOverlay');
+			guiDisplay.add(settings, 'debugOverlay');
+
+			var guiSimplify = gui.addFolder('Remesh');
+			guiSimplify.add(settings, 'ratio', 0, 1, 0.01);
+			guiSimplify.add(settings, 'regularize');
+			guiSimplify.add(settings, 'errorThreshold', 0, 1, 0.001);
+			guiSimplify.add(settings, 'remesh');
+			guiSimplify.add(settings, 'revert');
+
+			var guiLoad = gui.addFolder('Load');
+			guiLoad.add(settings, 'loadFile');
+			guiLoad.add(settings, 'updateModule');
+			guiLoad.add(settings, 'autoUpdate').onChange(autoReload);
+			guiLoad.add(settings, 'autoUpdateStatus').listen();
+
+			init();
+			loadDefault();
+			render();
+
+			function createView(name) {
+				// Create renderer container
+				var rendererContainer = document.createElement('div');
+				rendererContainer.className = 'renderer-container';
+				container.appendChild(rendererContainer);
+
+				// Add label with file name
+				var label = document.createElement('div');
+				label.className = 'renderer-label';
+				label.textContent = name;
+				rendererContainer.appendChild(label);
+
+				// Add stats label
+				var statsLabel = document.createElement('div');
+				statsLabel.className = 'stats-label';
+				rendererContainer.appendChild(statsLabel);
+
+				// Initialize stats
+				stats = {
+					triangles: 0,
+					vertices: 0,
+					error: 0,
+					ratio: 0,
+					label: statsLabel,
+				};
+
+				// Create renderer
+				renderer = new THREE.WebGLRenderer();
+				renderer.setPixelRatio(window.devicePixelRatio);
+				rendererContainer.appendChild(renderer.domElement);
+
+				// Create scene
+				scene = new THREE.Scene();
+				scene.background = new THREE.Color(0x300a24);
+
+				// Add lighting
+				var ambientLight = new THREE.AmbientLight(0xcccccc, 1);
+				scene.add(ambientLight);
+
+				var pointLightR = new THREE.PointLight(0xffffff, 4);
+				pointLightR.position.set(3, 3, 0);
+				pointLightR.decay = 0.5;
+				scene.add(pointLightR);
+
+				var pointLightL = new THREE.PointLight(0xffffff, 1);
+				pointLightL.position.set(-3, 5, 0);
+				pointLightL.decay = 0.5;
+				scene.add(pointLightL);
+
+				// Create controls
+				controls = new OrbitControls(camera, renderer.domElement);
+
+				// Adjust renderer size
+				updateRendererSizes();
+			}
+
+			function simplifyMesh(geo, threshold) {
+				var positions = new Float32Array(geo.attributes.position.array);
+				var indices = new Uint32Array(geo.index.array); // upcast 16-bit indices for _InternalDebug
+				var target = Math.floor((indices.length * settings.ratio) / 3) * 3;
+
+				var stride = geo.attributes.position instanceof THREE.InterleavedBufferAttribute ? geo.attributes.position.data.stride : 3;
+
+				var flags = [];
+				if (settings.regularize) {
+					flags.push('Regularize');
+				}
+				if (settings.debugOverlay) {
+					flags.push('_InternalDebug');
+				}
+
+				var res = MeshoptSimplifier.simplify(indices, positions, stride, target, threshold, flags);
+
+				var rgeo = geo.clone();
+
+				var dind = res[0];
+				var dlen = dind.length;
+
+				if (settings.debugOverlay) {
+					// we need extra indices for debug overlay
+					dind = Array.from(dind);
+
+					var mask = (1 << 28) - 1;
+
+					for (var kind = 1; kind <= 6; ++kind) {
+						var offset = dind.length;
+
+						for (var i = 0; i < dlen; i += 3) {
+							for (var e = 0; e < 3; ++e) {
+								var a = dind[i + e],
+									b = dind[i + ((e + 1) % 3)];
+								var ak = (a >> 28) & 7,
+									bk = (b >> 28) & 7;
+
+								if (a >> 31 != 0 && (ak == kind || bk == kind) && (ak == kind || ak == 4) && (bk == kind || bk == 4)) {
+									// loop edge of current kind (allow one of the vertices to be locked)
+									// note: complex edges ignore loop metadata
+									dind.push(a & mask);
+									dind.push(a & mask);
+									dind.push(b & mask);
+								} else if (a >> 31 != 0 && kind == 5 && ak != bk && ak != 4 && bk != 4) {
+									// mixed edge (neither vertex is locked, and they are of different kinds)
+									dind.push(a & mask);
+									dind.push(a & mask);
+									dind.push(b & mask);
+								} else if (a >> 31 == 0 && kind == 4 && ak == kind && bk == kind) {
+									// locked edge (not marked as a loop)
+									dind.push(a & mask);
+									dind.push(a & mask);
+									dind.push(b & mask);
+								} else if (a >> 31 == 0 && kind == 6 && ak == 3 && bk == 3) {
+									// complex edge (not marked as a loop)
+									dind.push(a & mask);
+									dind.push(a & mask);
+									dind.push(b & mask);
+								}
+							}
+						}
+
+						if (offset != dind.length) {
+							rgeo.addGroup(offset, dind.length - offset, kind + 1); // +1 to skip overlay
+							offset = dind.length;
+						}
+					}
+
+					// clear debug bits for actual indices
+					for (var i = 0; i < dlen; i++) {
+						dind[i] &= mask;
+					}
+
+					if (settings.wireframeOverlay) {
+						rgeo.addGroup(0, dlen, 1); // 1=overlay
+					}
+				} else if (settings.wireframeOverlay) {
+					rgeo.addGroup(0, dind.length, 1); // 1=overlay
+				}
+
+				rgeo.index.array = new Uint32Array(dind);
+				rgeo.index.count = dind.length;
+				rgeo.index.needsUpdate = true;
+
+				rgeo.addGroup(0, dlen, 0);
+
+				return [rgeo, dlen / 3, res[1]];
+			}
+
+			function getRadius(obj) {
+				var box = new THREE.Box3().setFromObject(obj);
+				return box.max.sub(box.min).length() / 2;
+			}
+
+			function simplify() {
+				MeshoptSimplifier.ready.then(function () {
+					var threshold = settings.errorThreshold;
+
+					stats.triangles = 0;
+					stats.vertices = 0;
+					stats.error = 0;
+					stats.ratio = 0;
+
+					var rnum = 0;
+					var rden = 0;
+					var extent = getRadius(scene);
+
+					scene.traverse(function (object) {
+						if (object.isMesh && object.geometry.index) {
+							if (!object.original) {
+								object.original = object.geometry.clone();
+								object.originalMaterial = object.material;
+
+								// use small depth offset to avoid overlay z-fighting with the original mesh
+								// has to be done on the main material as overlays use lines that don't support depth offset
+								var material = (Array.isArray(object.material) ? object.material[0] : object.material).clone();
+								material.polygonOffset = true;
+								material.polygonOffsetFactor = 0.5;
+								material.polygonOffsetUnits = 16;
+
+								object.remeshMaterial = [
+									material,
+									new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true }), // overlay
+									new THREE.MeshBasicMaterial({ color: 0x0000ff, wireframe: true }), // border
+									new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true }), // seam
+									new THREE.MeshBasicMaterial({ color: 0x009f9f, wireframe: true }), // complex
+									new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true }), // locked
+									new THREE.MeshBasicMaterial({ color: 0xff9f00, wireframe: true }), // mixed edge
+									new THREE.MeshBasicMaterial({ color: 0x9f5f9f, wireframe: true }), // complex, no loop
+								];
+							}
+							object.material = object.remeshMaterial;
+
+							var scale = getRadius(object) / extent;
+							var [geo, tri, err] = simplifyMesh(object.original, threshold / scale);
+
+							object.geometry = geo;
+
+							stats.error = Math.max(stats.error, err * scale);
+							stats.triangles += tri;
+							stats.vertices += object.geometry.attributes.position.count;
+
+							rnum += tri;
+							rden += object.original.index.count / 3;
+						}
+					});
+
+					stats.ratio = rden > 0 ? (rnum / rden) * 100 : 0;
+					updateStatsDisplay();
+				});
+			}
+
+			function revert() {
+				stats.triangles = 0;
+				stats.vertices = 0;
+				stats.error = 0;
+				stats.ratio = 100;
+
+				scene.traverse(function (object) {
+					if (object.isMesh && object.geometry.index) {
+						if (object.original) {
+							object.geometry = object.original.clone();
+							object.material = object.originalMaterial;
+						}
+
+						stats.triangles += object.geometry.index.count / 3;
+						stats.vertices += object.geometry.attributes.position.count;
+					}
+				});
+
+				updateStatsDisplay();
+			}
+
+			function updateStatsDisplay() {
+				stats.label.innerHTML =
+					'Triangles: ' +
+					stats.triangles +
+					'<br>' +
+					'Vertices: ' +
+					stats.vertices +
+					'<br>' +
+					'Error: ' +
+					stats.error.toExponential(3) +
+					'<br>' +
+					'Ratio: ' +
+					stats.ratio.toFixed(1) +
+					'%';
+			}
+
+			function reload() {
+				var simp = import('/js/meshopt_simplifier.js?x=' + Date.now());
+				MeshoptSimplifier.ready = simp.then(function (s) {
+					return s.MeshoptSimplifier.ready.then(function () {
+						for (var prop in s.MeshoptSimplifier) {
+							MeshoptSimplifier[prop] = s.MeshoptSimplifier[prop];
+						}
+					});
+				});
+			}
+
+			var moduleLastModified = 0;
+
+			function autoReload() {
+				if (!settings.autoUpdate) return;
+
+				fetch('/js/meshopt_simplifier.js?x=' + Date.now(), { method: 'HEAD' })
+					.then(function (r) {
+						var last = r.headers.get('Last-Modified');
+						if (last != moduleLastModified) {
+							moduleLastModified = last;
+							reload();
+							simplify();
+						}
+
+						settings.autoUpdateStatus = new Date(last).toLocaleTimeString();
+						setTimeout(autoReload, 1000);
+					})
+					.catch(function (e) {
+						settings.autoUpdateStatus = 'error';
+						setTimeout(autoReload, 5000);
+					});
+			}
+
+			function update() {
+				scene.traverse(function (child) {
+					if (child.isMesh) {
+						if (Array.isArray(child.material)) {
+							child.material[0].wireframe = settings.wireframe;
+						} else {
+							child.material.wireframe = settings.wireframe;
+						}
+					}
+				});
+			}
+
+			function load(path, ext) {
+				if (model) {
+					scene.remove(model);
+					model = undefined;
+				}
+
+				var onProgress = function (xhr) {};
+				var onError = function (e) {
+					console.log(e);
+				};
+
+				function center(model) {
+					var bbox = new THREE.Box3().setFromObject(model);
+					var scale = 2 / Math.max(bbox.max.x - bbox.min.x, bbox.max.y - bbox.min.y, bbox.max.z - bbox.min.z);
+					var offset = new THREE.Vector3().addVectors(bbox.max, bbox.min).multiplyScalar(scale / 2);
+
+					model.scale.set(scale, scale, scale);
+					model.position.set(-offset.x, -offset.y, -offset.z);
+				}
+
+				if (ext == 'gltf' || ext == 'glb') {
+					var loader = new GLTFLoader();
+					loader.setMeshoptDecoder(MeshoptDecoder);
+					loader.load(
+						path,
+						function (gltf) {
+							model = gltf.scene;
+							center(model);
+							scene.add(model);
+							revert();
+						},
+						onProgress,
+						onError
+					);
+				} else if (ext == 'obj') {
+					var loader = new OBJLoader();
+					loader.load(
+						path,
+						function (obj) {
+							model = obj;
+							center(model);
+							scene.add(model);
+							revert();
+						},
+						onProgress,
+						onError
+					);
+				} else {
+					console.error('Unsupported file format');
+				}
+			}
+
+			function loadDefault() {
+				createView('pirate.glb');
+				load('pirate.glb', 'glb');
+			}
+
+			function init() {
+				container = document.getElementById('container');
+
+				camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+				camera.position.y = 1.0;
+				camera.position.z = 3.0;
+
+				window.addEventListener('resize', updateRendererSizes, false);
+			}
+
+			function updateRendererSizes() {
+				var rendererContainer = renderer.domElement.parentElement;
+				var aspectRatio = rendererContainer.clientWidth / rendererContainer.clientHeight;
+
+				camera.aspect = aspectRatio;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize(rendererContainer.clientWidth, rendererContainer.clientHeight);
+			}
+
+			function render() {
+				requestAnimationFrame(render);
+				controls.update();
+				renderer.render(scene, camera);
+			}
+		</script>
+	</body>
+</html>
