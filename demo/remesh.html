@@ -59,6 +59,7 @@
 				"imports": {
 					"three": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.module.js",
 					"three-examples/": "https://cdn.jsdelivr.net/npm/three@0.183.0/examples/jsm/",
+					"three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.9.10/build/index.module.js",
 					"lil-gui": "https://cdn.jsdelivr.net/npm/lil-gui@0.20.0/dist/lil-gui.esm.js"
 				}
 			}
@@ -75,12 +76,14 @@
 			import { OBJLoader } from 'three-examples/loaders/OBJLoader.js';
 			import { OrbitControls } from 'three-examples/controls/OrbitControls.js';
 			import { mergeGeometries } from 'three-examples/utils/BufferGeometryUtils.js';
+			import { MeshBVH } from 'three-mesh-bvh';
 			import { MeshoptDecoder } from '../js/meshopt_decoder.mjs';
 			import { MeshoptSimplifier } from '../js/meshopt_simplifier.js';
 			import { GUI } from 'lil-gui';
 
 			var container;
 			var camera, renderer, scene, controls, model, merged, remeshed, remeshMaterial, stats;
+			var textureImages = new WeakMap();
 
 			var settings = {
 				wireframe: false,
@@ -89,6 +92,9 @@
 					enabled: false,
 					regularize: false,
 					errorThresholdLog10: 3,
+				},
+				paint: {
+					mode: 'vertex',
 				},
 
 				loadFile: function () {
@@ -133,6 +139,9 @@
 			guiSimplify.add(settings.simplify, 'enabled');
 			guiSimplify.add(settings.simplify, 'regularize');
 			guiSimplify.add(settings.simplify, 'errorThresholdLog10', 0, 3, 0.1);
+
+			var guiPaint = gui.addFolder('Paint');
+			guiPaint.add(settings.paint, 'mode', ['none', 'vertex', 'texture']);
 
 			var guiLoad = gui.addFolder('Load');
 			guiLoad.add(settings, 'loadFile');
@@ -204,6 +213,8 @@
 			function mergeMesh(model) {
 				var geometries = [];
 				var vertex = new THREE.Vector3();
+				var sourceTriangle = [];
+				var sourceMesh = [];
 
 				model.updateMatrixWorld(true);
 				model.traverse(function (object) {
@@ -228,10 +239,128 @@
 						}
 						geometry.applyMatrix4(object.matrixWorld);
 						geometries.push(geometry);
+
+						for (var i = 0; i < geometry.index.count / 3; ++i) {
+							sourceTriangle.push(i);
+							sourceMesh.push(object);
+						}
 					}
 				});
 
-				return geometries.length ? mergeGeometries(geometries) : null;
+				var result = mergeGeometries(geometries);
+				result.sourceTriangle = sourceTriangle;
+				result.sourceMesh = sourceMesh;
+				result.bvh = new MeshBVH(result, { indirect: true });
+				return result;
+			}
+
+			function getTextureImage(texture) {
+				if (!textureImages.has(texture.source)) {
+					var canvas = document.createElement('canvas');
+					canvas.width = texture.image.width;
+					canvas.height = texture.image.height;
+					var context = canvas.getContext('2d');
+					context.drawImage(texture.image, 0, 0);
+					textureImages.set(texture.source, context.getImageData(0, 0, texture.image.width, texture.image.height));
+				}
+				return textureImages.get(texture.source);
+			}
+
+			function sampleTexture(texture, uv) {
+				var image = getTextureImage(texture);
+				var point = texture.transformUv(uv);
+				var x = Math.min(Math.floor(point.x * image.width), image.width - 1);
+				var y = Math.min(Math.floor(point.y * image.height), image.height - 1);
+				var offset = (y * image.width + x) * 4;
+				return new THREE.Color(image.data[offset] / 255, image.data[offset + 1] / 255, image.data[offset + 2] / 255);
+			}
+
+			function interpolate(attribute, a, b, c, bary, component) {
+				return attribute.getComponent(a, component) * bary.x + attribute.getComponent(b, component) * bary.y + attribute.getComponent(c, component) * bary.z;
+			}
+
+			function sampleColorBary(mesh, triangle, bary) {
+				var geometry = mesh.geometry;
+				var a = geometry.index.array[triangle * 3 + 0], b = geometry.index.array[triangle * 3 + 1], c = geometry.index.array[triangle * 3 + 2];
+
+				var material = mesh.material;
+				if (Array.isArray(material)) {
+					var group = geometry.groups.find(function (group) { return offset >= group.start && offset < group.start + group.count; });
+					material = material[group.materialIndex];
+				}
+
+				var result = material.color.clone();
+
+				var uv = new THREE.Vector2();
+				if (geometry.attributes.uv) {
+					uv.x = interpolate(geometry.attributes.uv, a, b, c, bary, 0);
+					uv.y = interpolate(geometry.attributes.uv, a, b, c, bary, 1);
+				}
+
+				if (material.map) {
+					result.multiply(sampleTexture(material.map, uv).convertSRGBToLinear());
+				}
+
+				if (material.vertexColors) {
+					result.r *= interpolate(geometry.attributes.color, a, b, c, bary, 0);
+					result.g *= interpolate(geometry.attributes.color, a, b, c, bary, 1);
+					result.b *= interpolate(geometry.attributes.color, a, b, c, bary, 2);
+				}
+
+				if (material.aoMap) {
+					var ao = sampleTexture(material.aoMap, uv).r;
+					result.multiplyScalar(1 + material.aoMapIntensity * (ao - 1));
+				}
+
+				if (material.metalnessMap) {
+					var metalness = sampleTexture(material.metalnessMap, uv).b;
+					result.multiplyScalar(1 - material.metalness * metalness);
+				}
+
+				return result;
+			}
+
+			function sampleColor(model, point) {
+				var hit = model.bvh.closestPointToPoint(point);
+				var a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), bary = new THREE.Vector3();
+				a.fromBufferAttribute(model.attributes.position, model.index.array[hit.faceIndex * 3 + 0]);
+				b.fromBufferAttribute(model.attributes.position, model.index.array[hit.faceIndex * 3 + 1]);
+				c.fromBufferAttribute(model.attributes.position, model.index.array[hit.faceIndex * 3 + 2]);
+				THREE.Triangle.getBarycoord(hit.point, a, b, c, bary);
+				return sampleColorBary(model.sourceMesh[hit.faceIndex], model.sourceTriangle[hit.faceIndex], bary);
+			}
+
+			function transferColors(model, geometry) {
+				var colors = new Float32Array(geometry.attributes.position.count * 3);
+				var counts = new Uint32Array(geometry.attributes.position.count);
+				var query = new THREE.Vector3(), temp = new THREE.Vector3();
+
+				for (var i = 0; i < geometry.attributes.position.count; ++i) {
+					query.fromBufferAttribute(geometry.attributes.position, i);
+					sampleColor(model, query).toArray(colors, i * 3);
+					counts[i] = 1;
+				}
+
+				for (var i = 0; i < geometry.index.array.length; i += 3) {
+					query.fromBufferAttribute(geometry.attributes.position, geometry.index.array[i]);
+					query.add(temp.fromBufferAttribute(geometry.attributes.position, geometry.index.array[i + 1]));
+					query.add(temp.fromBufferAttribute(geometry.attributes.position, geometry.index.array[i + 2]));
+					query.multiplyScalar(1 / 3);
+
+					var color = sampleColor(model, query);
+
+					for (var j = 0; j < 3; ++j) {
+						var v = geometry.index.array[i + j];
+						colors[v * 3] += color.r, colors[v * 3 + 1] += color.g, colors[v * 3 + 2] += color.b;
+						counts[v]++;
+					}
+				}
+
+				for (var i = 0; i < counts.length; ++i) {
+					colors[i * 3] /= counts[i], colors[i * 3 + 1] /= counts[i], colors[i * 3 + 2] /= counts[i];
+				}
+
+				geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 			}
 
 			function simplifyMesh(geo, threshold, sloppy, flags) {
@@ -257,6 +386,17 @@
 					}
 
 					geometry.computeVertexNormals();
+
+					if (settings.paint.mode == 'vertex') {
+						transferColors(merged, geometry);
+						remeshMaterial.vertexColors = true;
+						remeshMaterial.color.set(0xffffff);
+					} else {
+						remeshMaterial.vertexColors = false;
+						remeshMaterial.color.set(0xdddddd);
+					}
+					remeshMaterial.needsUpdate = true;
+
 					var triangles = geometry.index.count / 3;
 
 					if (remeshed) {
