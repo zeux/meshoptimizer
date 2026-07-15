@@ -60,6 +60,7 @@
 					"three": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.module.js",
 					"three-examples/": "https://cdn.jsdelivr.net/npm/three@0.183.0/examples/jsm/",
 					"three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.9.10/build/index.module.js",
+					"watlas": "https://cdn.jsdelivr.net/npm/watlas@1.0.1/dist/watlas.js",
 					"lil-gui": "https://cdn.jsdelivr.net/npm/lil-gui@0.20.0/dist/lil-gui.esm.js"
 				}
 			}
@@ -75,10 +76,11 @@
 			import { GLTFLoader } from 'three-examples/loaders/GLTFLoader.js';
 			import { OBJLoader } from 'three-examples/loaders/OBJLoader.js';
 			import { OrbitControls } from 'three-examples/controls/OrbitControls.js';
-			import { mergeGeometries } from 'three-examples/utils/BufferGeometryUtils.js';
+			import { mergeGeometries, mergeVertices } from 'three-examples/utils/BufferGeometryUtils.js';
 			import { MeshBVH } from 'three-mesh-bvh';
 			import { MeshoptDecoder } from '../js/meshopt_decoder.mjs';
 			import { MeshoptSimplifier } from '../js/meshopt_simplifier.js';
+			import { Initialize as initializeWatlas, Atlas } from 'watlas';
 			import { GUI } from 'lil-gui';
 
 			var container;
@@ -95,6 +97,7 @@
 				},
 				paint: {
 					mode: 'vertex',
+					resolution: 1024,
 				},
 
 				loadFile: function () {
@@ -142,6 +145,7 @@
 
 			var guiPaint = gui.addFolder('Paint');
 			guiPaint.add(settings.paint, 'mode', ['none', 'vertex', 'texture']);
+			guiPaint.add(settings.paint, 'resolution', [256, 512, 1024, 2048]);
 
 			var guiLoad = gui.addFolder('Load');
 			guiLoad.add(settings, 'loadFile');
@@ -363,6 +367,71 @@
 				geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 			}
 
+			function unwrapMesh(geometry) {
+				var positions = geometry.attributes.position.array;
+				var indices = new Uint32Array(geometry.index.array);
+
+				var atlas = new Atlas();
+				atlas.addMesh({ vertexPositionData: positions, vertexCount: positions.length / 3, vertexPositionStride: 12, indexData: indices, indexCount: indices.length });
+				atlas.generate();
+
+				var mesh = atlas.getMesh(0);
+				var atlasIndices = new Uint32Array(mesh.indexCount);
+				var uv = new Float32Array(mesh.indexCount * 2);
+				mesh.getIndexArray(atlasIndices);
+				for (var i = 0; i < mesh.indexCount; ++i) {
+					var v = mesh.getVertex(atlasIndices[i]);
+					uv[i * 2 + 0] = v.uv[0] / atlas.width;
+					uv[i * 2 + 1] = v.uv[1] / atlas.height;
+				}
+				atlas.delete();
+
+				geometry = geometry.toNonIndexed();
+				geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+				return mergeVertices(geometry);
+			}
+
+			function transferTexture(model, geometry, size) {
+				var data = new Uint8Array(size * size * 4);
+				var position = geometry.attributes.position, uv = geometry.attributes.uv, indices = geometry.index.array;
+				var bary = new THREE.Vector3(), point = new THREE.Vector3();
+
+				for (var i = 0; i < indices.length; i += 3) {
+					var a = indices[i], b = indices[i + 1], c = indices[i + 2];
+					var x0 = uv.getX(a) * size, y0 = uv.getY(a) * size;
+					var x1 = uv.getX(b) * size, y1 = uv.getY(b) * size;
+					var x2 = uv.getX(c) * size, y2 = uv.getY(c) * size;
+					var minX = Math.max(0, Math.floor(Math.min(x0, x1, x2))), maxX = Math.min(size - 1, Math.ceil(Math.max(x0, x1, x2)));
+					var minY = Math.max(0, Math.floor(Math.min(y0, y1, y2))), maxY = Math.min(size - 1, Math.ceil(Math.max(y0, y1, y2)));
+					var denominator = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2);
+					if (Math.abs(denominator) < 1e-7) continue;
+
+					for (var y = minY; y <= maxY; ++y) {
+						for (var x = minX; x <= maxX; ++x) {
+							bary.x = ((y1 - y2) * (x + 0.5 - x2) + (x2 - x1) * (y + 0.5 - y2)) / denominator;
+							bary.y = ((y2 - y0) * (x + 0.5 - x2) + (x0 - x2) * (y + 0.5 - y2)) / denominator;
+							bary.z = 1 - bary.x - bary.y;
+							if (bary.x < -1e-4 || bary.y < -1e-4 || bary.z < -1e-4) continue;
+
+							point.set(interpolate(position, a, b, c, bary, 0), interpolate(position, a, b, c, bary, 1), interpolate(position, a, b, c, bary, 2));
+							var color = sampleColor(model, point).convertLinearToSRGB();
+							var offset = (y * size + x) * 4;
+							data[offset] = color.r * 255;
+							data[offset + 1] = color.g * 255;
+							data[offset + 2] = color.b * 255;
+							data[offset + 3] = 255;
+						}
+					}
+				}
+
+				var texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+				texture.colorSpace = THREE.SRGBColorSpace;
+				texture.magFilter = THREE.LinearFilter;
+				texture.minFilter = THREE.LinearFilter;
+				texture.needsUpdate = true;
+				return texture;
+			}
+
 			function simplifyMesh(geo, threshold, sloppy, flags) {
 				var res = sloppy
 					? MeshoptSimplifier.simplifySloppy(geo.index.array, geo.attributes.position.array, 3, null, 0, threshold)
@@ -375,7 +444,7 @@
 			}
 
 			function remesh() {
-				MeshoptSimplifier.ready.then(function () {
+				MeshoptSimplifier.ready.then(initializeWatlas).then(function () {
 					if (!merged) return;
 
 					var geometry = simplifyMesh(merged, 1 / settings.resolution, true);
@@ -386,11 +455,17 @@
 					}
 
 					geometry.computeVertexNormals();
+					remeshMaterial.map = null;
 
 					if (settings.paint.mode == 'vertex') {
 						transferColors(merged, geometry);
 						remeshMaterial.vertexColors = true;
 						remeshMaterial.color.set(0xffffff);
+					} else if (settings.paint.mode == 'texture') {
+						geometry = unwrapMesh(geometry);
+						remeshMaterial.vertexColors = false;
+						remeshMaterial.color.set(0xffffff);
+						remeshMaterial.map = transferTexture(merged, geometry, settings.paint.resolution);
 					} else {
 						remeshMaterial.vertexColors = false;
 						remeshMaterial.color.set(0xdddddd);
