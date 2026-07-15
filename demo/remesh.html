@@ -84,11 +84,12 @@
 			import { GUI } from 'lil-gui';
 
 			var container;
-			var camera, renderer, scene, controls, model, merged, remeshed, remeshMaterial, stats;
+			var camera, renderer, scene, controls, model, merged, remeshed, remeshMaterial, wireframeMaterial, stats;
 			var textureImages = new WeakMap();
 
 			var settings = {
 				wireframe: false,
+				wireframeOverlay: false,
 				resolution: 96,
 				simplify: {
 					enabled: false,
@@ -133,6 +134,7 @@
 			var gui = new GUI({ width: 300 });
 			var guiDisplay = gui.addFolder('Display');
 			guiDisplay.add(settings, 'wireframe').onChange(update);
+			guiDisplay.add(settings, 'wireframeOverlay').onChange(update);
 
 			var guiRemesh = gui.addFolder('Remesh');
 			guiRemesh.add(settings, 'resolution', 1, 256, 1);
@@ -207,7 +209,8 @@
 				pointLightL.decay = 0.5;
 				scene.add(pointLightL);
 
-				remeshMaterial = new THREE.MeshStandardMaterial({ color: 0xdddddd });
+				remeshMaterial = new THREE.MeshStandardMaterial({ color: 0xdddddd, polygonOffset: true, polygonOffsetFactor: 0.5, polygonOffsetUnits: 16 });
+				wireframeMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, visible: false });
 
 				// Create controls
 				controls = new OrbitControls(camera, renderer.domElement);
@@ -488,17 +491,20 @@
 					}
 					remeshMaterial.needsUpdate = true;
 
-					var triangles = geometry.index.count / 3;
+					// remesh material + wireframe overlay material
+					geometry.addGroup(0, geometry.index.count, 0);
+					geometry.addGroup(0, geometry.index.count, 1);
 
 					if (remeshed) {
 						scene.remove(remeshed);
 					}
 
-					remeshed = new THREE.Mesh(geometry, remeshMaterial);
+					remeshed = new THREE.Mesh(geometry, [remeshMaterial, wireframeMaterial]);
 					model.visible = false;
 					scene.add(remeshed);
 					update();
 
+					var triangles = geometry.index.count / 3;
 					stats.triangles = triangles;
 					stats.vertices = geometry.attributes.position.count;
 					stats.ratio = (triangles / (merged.index.count / 3)) * 100;
@@ -577,6 +583,8 @@
 			}
 
 			function update() {
+				wireframeMaterial.visible = settings.wireframeOverlay;
+
 				scene.traverse(function (child) {
 					if (child.isMesh) {
 						if (Array.isArray(child.material)) {
