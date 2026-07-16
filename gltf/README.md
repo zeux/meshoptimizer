@@ -83,6 +83,7 @@ gltfpack supports most Khronos extensions and some multi-vendor extensions in th
 - KHR_materials_variants
 - KHR_materials_volume
 - KHR_mesh_quantization
+- KHR_accessor_float16
 - KHR_meshopt_compression
 - KHR_texture_basisu
 - KHR_texture_transform
@@ -93,6 +94,7 @@ gltfpack supports most Khronos extensions and some multi-vendor extensions in th
 Even if the source file does not use extensions, gltfpack may use some extensions in the output file either by default or when certain options are used:
 
 - KHR_mesh_quantization (used by default unless disabled via `-noq`)
+- KHR_accessor_float16 (used when requested via `-vph` or `-vth`)
 - KHR_meshopt_compression (used when requested via `-ce khr` or `-cz`)
 - KHR_texture_transform (used by default when textures are present, unless disabled via `-noq` or `-vtf`)
 - KHR_texture_basisu (used when requested via `-tc` or `-tu`)
