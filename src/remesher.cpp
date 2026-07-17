@@ -243,10 +243,10 @@ static void voxelize(unsigned char* grid, Voxel* voxels, const unsigned int* vox
 				int z = int(pz * scale);
 
 				// safety: rounding errors and non-finite inputs may produce out of bounds coordinates, so we clamp them
-				// TODO: codegen
-				x = (x < 0) ? 0 : (x > resolution - 2 ? resolution - 2 : x);
-				y = (y < 0) ? 0 : (y > resolution - 2 ? resolution - 2 : y);
-				z = (z < 0) ? 0 : (z > resolution - 2 ? resolution - 2 : z);
+				int cutoff = resolution - 3;
+				x = unsigned(x) < unsigned(cutoff) ? x : cutoff;
+				y = unsigned(y) < unsigned(cutoff) ? y : cutoff;
+				z = unsigned(z) < unsigned(cutoff) ? z : cutoff;
 
 				size_t row = (y + 1) + size_t(resolution) * (z + 1);
 				size_t idx = (x + 1) + size_t(resolution) * row;
@@ -346,7 +346,7 @@ size_t meshopt_remesh(float* destination, size_t max_triangle_count, const unsig
 	assert(index_count % 3 == 0);
 	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
-	assert(resolution > 0 && resolution <= 250); // TBD
+	assert(resolution >= 4 && resolution <= 256);
 
 	meshopt_Allocator allocator;
 
