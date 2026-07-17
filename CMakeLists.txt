@@ -39,6 +39,7 @@ set(SOURCES
     src/partition.cpp
     src/quantization.cpp
     src/rasterizer.cpp
+    src/remesher.cpp
     src/simplifier.cpp
     src/spatialorder.cpp
     src/stripifier.cpp
