@@ -513,6 +513,14 @@ enum
 MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, unsigned int options, float* result_error);
 
 /**
+ * Experimental: Remeshing flags; in high degree of flux
+ */
+enum
+{
+	meshopt_RemeshThicken = 1 << 0,
+};
+
+/**
  * Experimental: Voxel remesher
  */
 MESHOPTIMIZER_API size_t meshopt_remesh(float* destination, size_t max_triangle_count, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, int resolution, unsigned int options);
