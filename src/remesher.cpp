@@ -324,7 +324,7 @@ static size_t polygonize(float* destination, size_t max_triangle_count, const un
 					int iz = z + kCornerZ[i];
 
 					size_t index = ix + size_t(resolution) * (iy + size_t(resolution) * iz);
-					cube |= (grid[index] != 0) << i;
+					cube |= (grid[index] == 0) << i;
 				}
 
 				if (cube == 0 || cube == 0xff)
@@ -334,7 +334,7 @@ static size_t polygonize(float* destination, size_t max_triangle_count, const un
 
 				for (int i = 0; tris[i] != -1; i += 3)
 				{
-					int ea = tris[i + 0], eb = tris[i + 1], ec = tris[i + 2];
+					int ea = tris[i + 0], eb = tris[i + 2], ec = tris[i + 1];
 
 					// note: we only emit the triangle if we have space for it, but we reject degenerate triangles purely based on vertex codes
 					// this results in consistent capacity estimation, as result advances the same way regardless of whether triangle data is written
