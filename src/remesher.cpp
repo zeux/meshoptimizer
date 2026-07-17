@@ -159,6 +159,12 @@ static const unsigned char kCornerZ[8] = {0, 0, 1, 1, 0, 0, 1, 1};
 static const unsigned char kEdgeA[12] = {0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3};
 static const unsigned char kEdgeB[12] = {1, 2, 3, 0, 5, 6, 7, 4, 4, 5, 6, 7};
 
+struct Voxel
+{
+	float px, py, pz;
+	float w;
+};
+
 static float measureGrid(const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, int resolution, float* out_offset)
 {
 	size_t vertex_stride_float = vertex_positions_stride / sizeof(float);
@@ -195,7 +201,7 @@ static float measureGrid(const float* vertex_positions_data, size_t vertex_count
 	return scale;
 }
 
-static void voxelize(unsigned char* grid, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, int resolution, float scale, const float offset[3])
+static void voxelize(unsigned char* grid, Voxel* voxels, const unsigned int* voxel_rows, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, int resolution, float scale, const float offset[3])
 {
 	(void)vertex_count;
 
@@ -235,9 +241,13 @@ static void voxelize(unsigned char* grid, const unsigned int* indices, size_t in
 			for (int v = 0; v <= samples - u; ++v)
 			{
 				float su = float(u) * sr, sv = float(v) * sr;
-				int x = int((sx + su * ex + sv * fx) * scale);
-				int y = int((sy + su * ey + sv * fy) * scale);
-				int z = int((sz + su * ez + sv * fz) * scale);
+				float px = sx + su * ex + sv * fx;
+				float py = sy + su * ey + sv * fy;
+				float pz = sz + su * ez + sv * fz;
+
+				int x = int(px * scale);
+				int y = int(py * scale);
+				int z = int(pz * scale);
 
 				// safety: rounding errors and non-finite inputs may produce out of bounds coordinates, so we clamp them
 				// TODO: codegen
@@ -245,13 +255,28 @@ static void voxelize(unsigned char* grid, const unsigned int* indices, size_t in
 				y = (y < 0) ? 0 : (y > resolution - 2 ? resolution - 2 : y);
 				z = (z < 0) ? 0 : (z > resolution - 2 ? resolution - 2 : z);
 
-				size_t index = (x + 1) + size_t(resolution) * ((y + 1) + size_t(resolution) * (z + 1));
-				grid[index] = 1;
+				size_t row = (y + 1) + size_t(resolution) * (z + 1);
+				size_t idx = (x + 1) + size_t(resolution) * row;
+
+				if (voxels)
+				{
+					assert(grid[idx]);
+					Voxel& vox = voxels[voxel_rows[row] + (grid[idx] - 1)];
+
+					vox.px += px;
+					vox.py += py;
+					vox.pz += pz;
+					vox.w += 1.f;
+				}
+				else
+				{
+					grid[idx] = 1;
+				}
 			}
 	}
 }
 
-static size_t emitVertex(float* destination, size_t index, int x, int y, int z, int edge, const unsigned char* grid, int resolution, float scale, const float offset[3])
+static size_t emitVertex(float* destination, size_t index, int x, int y, int z, int edge, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, float scale, const float offset[3])
 {
 	int a = kEdgeA[edge], b = kEdgeB[edge];
 	int ax = kCornerX[a], ay = kCornerY[a], az = kCornerZ[a];
@@ -266,14 +291,23 @@ static size_t emitVertex(float* destination, size_t index, int x, int y, int z, 
 	int dy = (ag == 0) ? by : ay;
 	int dz = (ag == 0) ? bz : az;
 
-	destination[index * 3 + 0] = (x + dx + 0.5f) / scale + offset[0];
-	destination[index * 3 + 1] = (y + dy + 0.5f) / scale + offset[1];
-	destination[index * 3 + 2] = (z + dz + 0.5f) / scale + offset[2];
+	size_t row = (y + dy) + size_t(resolution) * (z + dz);
+	size_t idx = (x + dx) + size_t(resolution) * row;
 
-	return (x + dx) + size_t(resolution) * ((y + dy) + size_t(resolution) * (z + dz));
+	if (voxels)
+	{
+		assert(grid[idx]);
+		const Voxel& vox = voxels[voxel_rows[row] + (grid[idx] - 1)];
+
+		destination[index * 3 + 0] = vox.px / vox.w + offset[0];
+		destination[index * 3 + 1] = vox.py / vox.w + offset[1];
+		destination[index * 3 + 2] = vox.pz / vox.w + offset[2];
+	}
+
+	return idx;
 }
 
-static size_t polygonize(float* destination, size_t max_triangle_count, const unsigned char* grid, int resolution, float scale, const float offset[3])
+static size_t polygonize(float* destination, size_t max_triangle_count, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, float scale, const float offset[3])
 {
 	size_t result = 0;
 
@@ -307,9 +341,9 @@ static size_t polygonize(float* destination, size_t max_triangle_count, const un
 
 					if (destination && result < max_triangle_count)
 					{
-						size_t ca = emitVertex(destination, result * 3 + 0, x, y, z, a, grid, resolution, scale, offset);
-						size_t cb = emitVertex(destination, result * 3 + 1, x, y, z, b, grid, resolution, scale, offset);
-						size_t cc = emitVertex(destination, result * 3 + 2, x, y, z, c, grid, resolution, scale, offset);
+						size_t ca = emitVertex(destination, result * 3 + 0, x, y, z, a, grid, voxels, voxel_rows, resolution, scale, offset);
+						size_t cb = emitVertex(destination, result * 3 + 1, x, y, z, b, grid, voxels, voxel_rows, resolution, scale, offset);
+						size_t cc = emitVertex(destination, result * 3 + 2, x, y, z, c, grid, voxels, voxel_rows, resolution, scale, offset);
 
 						valid = (ca != cb) && (cb != cc) && (cc != ca); // degenerate triangle
 					}
@@ -342,16 +376,46 @@ size_t meshopt_remesh(float* destination, size_t max_triangle_count, const unsig
 	unsigned char* grid = allocator.allocate<unsigned char>(size_t(resolution) * size_t(resolution) * size_t(resolution));
 	memset(grid, 0, size_t(resolution) * size_t(resolution) * size_t(resolution));
 
-	voxelize(grid, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride, resolution, scale, offset);
+	voxelize(grid, NULL, NULL, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride, resolution, scale, offset);
+
+	// allocate additional voxel data for each occupied voxel; this can be filled in the second pass to compute positions
+	// note that we only do this if we need to compute output triangles; counting runs skip it for performance
+	Voxel* voxels = NULL;
+	unsigned int* voxel_rows = NULL;
+	size_t voxel_count = 0;
+
+	if (destination)
+	{
+		voxel_rows = allocator.allocate<unsigned int>(size_t(resolution) * size_t(resolution));
+
+		for (size_t i = 0; i < size_t(resolution) * size_t(resolution); ++i)
+		{
+			unsigned char* row = grid + i * size_t(resolution);
+
+			int count = 0;
+			for (int j = 0; j < resolution; ++j)
+				if (row[j] != 0)
+					row[j] = (unsigned char)++count;
+
+			assert(count < 256); // we store offsets in a single byte, with 0 reserved for empty voxels
+
+			voxel_rows[i] = unsigned(voxel_count);
+			voxel_count += count;
+		}
+
+		voxels = allocator.allocate<Voxel>(voxel_count);
+		memset(voxels, 0, voxel_count * sizeof(Voxel));
 
 #if TRACE
-	size_t count = 0;
-	for (size_t i = 0; i < size_t(resolution) * size_t(resolution) * size_t(resolution); ++i)
-		count += grid[i] != 0;
-	printf("remesher: %zu voxels occupied\n", count);
+		printf("remesher: %zu voxels occupied\n", voxel_count);
 #endif
+	}
 
-	size_t result = polygonize(destination, max_triangle_count, grid, resolution, scale, offset);
+	// accumulate voxel positions: in the second pass, this computes enough data in each voxel to calculate positions
+	if (voxels)
+		voxelize(grid, voxels, voxel_rows, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride, resolution, scale, offset);
+
+	size_t result = polygonize(destination, max_triangle_count, grid, voxels, voxel_rows, resolution, scale, offset);
 
 #if TRACE
 	printf("remesher: %zu triangles (%zu capacity)\n", result, max_triangle_count);
