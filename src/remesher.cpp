@@ -294,7 +294,7 @@ static size_t emitVertex(float* destination, size_t index, int x, int y, int z, 
 	size_t row = (y + dy) + size_t(resolution) * (z + dz);
 	size_t idx = (x + dx) + size_t(resolution) * row;
 
-	if (voxels)
+	if (destination)
 	{
 		assert(grid[idx]);
 		const Voxel& vox = voxels[voxel_rows[row] + (grid[idx] - 1)];
@@ -334,21 +334,17 @@ static size_t polygonize(float* destination, size_t max_triangle_count, const un
 
 				for (int i = 0; tris[i] != -1; i += 3)
 				{
-					int a = tris[i + 0];
-					int b = tris[i + 1];
-					int c = tris[i + 2];
-					bool valid = true;
+					int ea = tris[i + 0], eb = tris[i + 1], ec = tris[i + 2];
 
-					if (destination && result < max_triangle_count)
-					{
-						size_t ca = emitVertex(destination, result * 3 + 0, x, y, z, a, grid, voxels, voxel_rows, resolution, scale, offset);
-						size_t cb = emitVertex(destination, result * 3 + 1, x, y, z, b, grid, voxels, voxel_rows, resolution, scale, offset);
-						size_t cc = emitVertex(destination, result * 3 + 2, x, y, z, c, grid, voxels, voxel_rows, resolution, scale, offset);
+					// note: we only emit the triangle if we have space for it, but we reject degenerate triangles purely based on vertex codes
+					// this results in consistent capacity estimation, as result advances the same way regardless of whether triangle data is written
+					float* target = (destination && result < max_triangle_count) ? destination : NULL;
 
-						valid = (ca != cb) && (cb != cc) && (cc != ca); // degenerate triangle
-					}
+					size_t ca = emitVertex(target, result * 3 + 0, x, y, z, ea, grid, voxels, voxel_rows, resolution, scale, offset);
+					size_t cb = emitVertex(target, result * 3 + 1, x, y, z, eb, grid, voxels, voxel_rows, resolution, scale, offset);
+					size_t cc = emitVertex(target, result * 3 + 2, x, y, z, ec, grid, voxels, voxel_rows, resolution, scale, offset);
 
-					result += valid;
+					result += (ca != cb) && (cb != cc) && (cc != ca); // degenerate triangle
 				}
 			}
 
