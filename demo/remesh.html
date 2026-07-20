@@ -100,6 +100,10 @@
 				wireframe: false,
 				wireframeOverlay: false,
 				resolution: 64,
+				sloppy: false,
+				thicken: false,
+				shell: false,
+				debug: false,
 				normalCrease: 120,
 				simplify: {
 					enabled: false,
@@ -149,6 +153,10 @@
 
 			var guiRemesh = gui.addFolder('Remesh');
 			guiRemesh.add(settings, 'resolution', 4, 256, 1);
+			guiRemesh.add(settings, 'sloppy');
+			guiRemesh.add(settings, 'thicken');
+			guiRemesh.add(settings, 'shell');
+			guiRemesh.add(settings, 'debug');
 			guiRemesh.add(settings, 'normalCrease', 0, 180, 1).name('normal crease');
 			guiRemesh.add(settings, 'remesh');
 			guiRemesh.add(settings, 'revert');
@@ -517,7 +525,19 @@
 				MeshoptSimplifier.ready.then(initializeWatlas).then(function () {
 					if (!merged) return;
 
-					var geometry = simplifyMesh(merged, 1 / settings.resolution, true);
+					var geometry;
+					if (settings.sloppy) {
+						geometry = simplifyMesh(merged, 1 / settings.resolution, true);
+					} else {
+						var flags = [];
+						if (settings.thicken) flags.push('Thicken');
+						if (settings.shell) flags.push('Shell');
+						if (settings.debug) flags.push('Debug');
+						var result = MeshoptSimplifier.remesh(merged.index.array, merged.attributes.position.array, 3, settings.resolution, flags);
+						geometry = new THREE.BufferGeometry();
+						geometry.setAttribute('position', new THREE.BufferAttribute(result, 3));
+						geometry = mergeVertices(geometry);
+					}
 
 					if (settings.simplify.enabled) {
 						var flags = settings.simplify.regularize ? ['Regularize'] : [];
