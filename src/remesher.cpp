@@ -269,7 +269,7 @@ static void voxelize(unsigned char* grid, Voxel* voxels, const unsigned int* vox
 	}
 }
 
-static size_t emitVertex(float* destination, size_t index, int x, int y, int z, int edge, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, float scale, const float offset[3], bool thicken)
+static size_t emitVertex(float* destination, size_t index, int x, int y, int z, int edge, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, float scale, const float offset[3], unsigned int options)
 {
 	int a = edge >> 4, b = edge & 0xf;
 	int ax = a & 1, ay = (a >> 1) & 1, az = (a >> 2) & 1;
@@ -283,7 +283,7 @@ static size_t emitVertex(float* destination, size_t index, int x, int y, int z, 
 	int oc = 0;
 	float os = 0.1f / scale;
 
-	if (thicken)
+	if (options & meshopt_RemeshThicken)
 	{
 		// look at the opposite voxel to see if we have a thin sheet; the lookup is in bounds by construction since a->b is occupied->empty edge
 		int ox = bx - ax, oy = by - ay, oz = bz - az;
@@ -300,15 +300,24 @@ static size_t emitVertex(float* destination, size_t index, int x, int y, int z, 
 		assert(grid[idx]);
 		const Voxel& vox = voxels[voxel_rows[row] + (grid[idx] - 1)];
 
-		destination[index * 3 + 0] = vox.px / vox.w + float((oc >> 0) & 1) * os + offset[0];
-		destination[index * 3 + 1] = vox.py / vox.w + float((oc >> 1) & 1) * os + offset[1];
-		destination[index * 3 + 2] = vox.pz / vox.w + float((oc >> 2) & 1) * os + offset[2];
+		if (options & meshopt_RemeshDebug)
+		{
+			destination[index * 3 + 0] = (x + ax) / scale + offset[0];
+			destination[index * 3 + 1] = (y + ay) / scale + offset[1];
+			destination[index * 3 + 2] = (z + az) / scale + offset[2];
+		}
+		else
+		{
+			destination[index * 3 + 0] = vox.px / vox.w + float((oc >> 0) & 1) * os + offset[0];
+			destination[index * 3 + 1] = vox.py / vox.w + float((oc >> 1) & 1) * os + offset[1];
+			destination[index * 3 + 2] = vox.pz / vox.w + float((oc >> 2) & 1) * os + offset[2];
+		}
 	}
 
 	return idx * 8 + oc;
 }
 
-static size_t polygonize(float* destination, size_t max_triangle_count, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, float scale, const float offset[3], bool thicken)
+static size_t polygonize(float* destination, size_t max_triangle_count, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, float scale, const float offset[3], unsigned int options)
 {
 	size_t result = 0;
 
@@ -338,9 +347,9 @@ static size_t polygonize(float* destination, size_t max_triangle_count, const un
 					// this results in consistent capacity estimation, as result advances the same way regardless of whether triangle data is written
 					float* target = (destination && result < max_triangle_count) ? destination : NULL;
 
-					size_t ca = emitVertex(target, result * 3 + 0, x, y, z, ea, grid, voxels, voxel_rows, resolution, scale, offset, thicken);
-					size_t cb = emitVertex(target, result * 3 + 1, x, y, z, eb, grid, voxels, voxel_rows, resolution, scale, offset, thicken);
-					size_t cc = emitVertex(target, result * 3 + 2, x, y, z, ec, grid, voxels, voxel_rows, resolution, scale, offset, thicken);
+					size_t ca = emitVertex(target, result * 3 + 0, x, y, z, ea, grid, voxels, voxel_rows, resolution, scale, offset, options);
+					size_t cb = emitVertex(target, result * 3 + 1, x, y, z, eb, grid, voxels, voxel_rows, resolution, scale, offset, options);
+					size_t cc = emitVertex(target, result * 3 + 2, x, y, z, ec, grid, voxels, voxel_rows, resolution, scale, offset, options);
 
 					result += (ca != cb) && (cb != cc) && (cc != ca); // degenerate triangle
 				}
@@ -409,7 +418,7 @@ size_t meshopt_remesh(float* destination, size_t max_triangle_count, const unsig
 	if (voxels)
 		voxelize(grid, voxels, voxel_rows, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride, resolution, scale, offset);
 
-	size_t result = polygonize(destination, max_triangle_count, grid, voxels, voxel_rows, resolution, scale, offset, (options & meshopt_RemeshThicken) != 0);
+	size_t result = polygonize(destination, max_triangle_count, grid, voxels, voxel_rows, resolution, scale, offset, options);
 
 #if TRACE
 	printf("remesher: %zu triangles (%zu capacity)\n", result, max_triangle_count);
