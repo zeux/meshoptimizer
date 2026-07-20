@@ -253,7 +253,7 @@ static void voxelize(unsigned char* grid, Voxel* voxels, const unsigned int* vox
 
 				if (voxels)
 				{
-					assert(grid[idx]);
+					assert(grid[idx] != 0 && grid[idx] != 0xff);
 					Voxel& vox = voxels[voxel_rows[row] + (grid[idx] - 1)];
 
 					vox.px += px;
@@ -269,16 +269,86 @@ static void voxelize(unsigned char* grid, Voxel* voxels, const unsigned int* vox
 	}
 }
 
+static void solidifyQueue(unsigned int row, unsigned int* worklist, unsigned char* queued, size_t& pending)
+{
+	if (queued[row])
+		return;
+
+	queued[row] = 1;
+	worklist[pending++] = row;
+}
+
+static void solidify(unsigned char* grid, unsigned int* worklist, unsigned char* queued, int resolution)
+{
+	size_t pending = 0;
+	memset(queued, 0, size_t(resolution) * size_t(resolution));
+
+	// mark the interior empty voxels as 'inside'; we will propagate 'empty' state from the boundary
+	for (int z = 1; z < resolution - 1; ++z)
+		for (int y = 1; y < resolution - 1; ++y)
+		{
+			unsigned char* data = grid + size_t(resolution) * (y + size_t(resolution) * z);
+
+			for (int x = 1; x < resolution - 1; ++x)
+				data[x] = (data[x] == 0) ? 0xff : data[x];
+		}
+
+	// queue all rows for processing; note that boundary rows are always empty but we need them to propagate into neighboring rows
+	for (int z = 0; z < resolution; ++z)
+		for (int y = 0; y < resolution; ++y)
+			solidifyQueue(y + size_t(resolution) * z, worklist, queued, pending);
+
+	while (pending)
+	{
+		unsigned int row = worklist[--pending];
+		assert(queued[row]);
+		queued[row] = 0;
+
+		unsigned char* data = grid + size_t(resolution) * row;
+
+		// propagate outside state to the interior within row
+		for (int x = 1; x < resolution - 1; ++x)
+			data[x] = (data[x] == 0xff && data[x - 1] == 0) ? 0 : data[x];
+
+		for (int x = resolution - 2; x >= 1; --x)
+			data[x] = (data[x] == 0xff && data[x + 1] == 0) ? 0 : data[x];
+
+		// propagate outside state to the interior into neighboring rows
+		int y = row % resolution, z = row / resolution;
+
+		for (int k = 0; k < 4; ++k)
+		{
+			int yn = y + (k == 0 ? -1 : (k == 1 ? 1 : 0));
+			int zn = z + (k == 2 ? -1 : (k == 3 ? 1 : 0));
+
+			if (yn < 1 || yn >= resolution - 1 || zn < 1 || zn >= resolution - 1)
+				continue;
+
+			unsigned char* datan = grid + size_t(resolution) * (yn + size_t(resolution) * zn);
+			bool changed = false;
+
+			for (int x = 1; x < resolution - 1; ++x)
+				if (data[x] == 0 && datan[x] == 0xff)
+				{
+					datan[x] = 0;
+					changed = true;
+				}
+
+			if (changed)
+				solidifyQueue(yn + size_t(resolution) * zn, worklist, queued, pending);
+		}
+	}
+}
+
 static size_t emitVertex(float* destination, size_t index, int x, int y, int z, int edge, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, float scale, const float offset[3], unsigned int options)
 {
 	int a = edge >> 4, b = edge & 0xf;
 	int ax = a & 1, ay = (a >> 1) & 1, az = (a >> 2) & 1;
 	int bx = b & 1, by = (b >> 1) & 1, bz = (b >> 2) & 1;
 
-	unsigned char ag = grid[(x + ax) + size_t(resolution) * ((y + ay) + size_t(resolution) * (z + az))];
-	unsigned char bg = grid[(x + bx) + size_t(resolution) * ((y + by) + size_t(resolution) * (z + bz))];
-	assert(ag != 0 && bg == 0); // our edges are always from occupied to empty voxel
-	(void)ag, (void)bg;
+	// our edges are directional and always go from occupied (a) to empty (b) voxel
+	assert(grid[(x + ax) + size_t(resolution) * ((y + ay) + size_t(resolution) * (z + az))] != 0);
+	assert(grid[(x + bx) + size_t(resolution) * ((y + by) + size_t(resolution) * (z + bz))] == 0);
 
 	int oc = 0;
 	float os = 0.1f / scale;
@@ -297,7 +367,7 @@ static size_t emitVertex(float* destination, size_t index, int x, int y, int z, 
 
 	if (destination)
 	{
-		assert(grid[idx]);
+		assert(grid[idx] != 0 && grid[idx] != 0xff);
 		const Voxel& vox = voxels[voxel_rows[row] + (grid[idx] - 1)];
 
 		if (options & meshopt_RemeshDebug)
@@ -400,7 +470,7 @@ size_t meshopt_remesh(float* destination, size_t max_triangle_count, const unsig
 				if (row[j] != 0)
 					row[j] = (unsigned char)++count;
 
-			assert(count < 256); // we store offsets in a single byte, with 0 reserved for empty voxels
+			assert(count < 255); // we store offsets in a single byte, with 0 reserved for empty voxels and 0xff reserved for interior voxels
 
 			voxel_rows[i] = unsigned(voxel_count);
 			voxel_count += count;
@@ -411,6 +481,27 @@ size_t meshopt_remesh(float* destination, size_t max_triangle_count, const unsig
 
 #if TRACE
 		printf("remesher: %zu voxels occupied\n", voxel_count);
+#endif
+	}
+
+	// fill in empty voxels that are not reachable from the grid boundary; the inside empty voxels are marked with 0xff
+	// note that these voxels do *not* have the associated Voxel data as they were never voxelized
+	if ((options & meshopt_RemeshShell) == 0)
+	{
+		unsigned int* worklist = allocator.allocate<unsigned int>(size_t(resolution) * size_t(resolution));
+		unsigned char* queued = allocator.allocate<unsigned char>(size_t(resolution) * size_t(resolution));
+
+		solidify(grid, worklist, queued, resolution);
+
+#if TRACE
+		size_t inside_count = 0, occupied_count = 0;
+		for (size_t i = 0; i < size_t(resolution) * size_t(resolution) * size_t(resolution); ++i)
+		{
+			inside_count += (grid[i] == 0xff);
+			occupied_count += (grid[i] != 0 && grid[i] != 0xff);
+		}
+
+		printf("remesher: %zu voxels occupied, %zu voxels inside\n", occupied_count, inside_count);
 #endif
 	}
 

@@ -518,7 +518,8 @@ MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsig
 enum
 {
 	meshopt_RemeshThicken = 1 << 0,
-	meshopt_RemeshDebug = 1 << 1,
+	meshopt_RemeshShell = 1 << 1,
+	meshopt_RemeshDebug = 1 << 2,
 };
 
 /**
