@@ -314,6 +314,26 @@ var MeshoptSimplifier = (function () {
 		return target;
 	}
 
+	function remesh(fun, indices, vertex_positions, vertex_positions_stride, resolution, options) {
+		var sbrk = instance.exports.sbrk;
+		var sp = sbrk(vertex_positions.byteLength);
+		var si = sbrk(indices.byteLength);
+		var heap = new Uint8Array(instance.exports.memory.buffer);
+		heap.set(bytes(vertex_positions), sp);
+		heap.set(bytes(indices), si);
+		var vertex_count = vertex_positions.byteLength / vertex_positions_stride;
+		var capacity = fun(0, 0, si, indices.length, sp, vertex_count, vertex_positions_stride, resolution, options);
+		var tp = sbrk(capacity * 9 * 4);
+		var count = fun(tp, capacity, si, indices.length, sp, vertex_count, vertex_positions_stride, resolution, options);
+		assert(count <= capacity);
+		// heap may have grown
+		heap = new Uint8Array(instance.exports.memory.buffer);
+		var target = new Float32Array(count * 9);
+		bytes(target).set(heap.subarray(tp, tp + target.byteLength));
+		sbrk(sp - sbrk(0));
+		return target;
+	}
+
 	var simplifyOptions = {
 		LockBorder: 1,
 		Sparse: 2,
@@ -323,6 +343,12 @@ var MeshoptSimplifier = (function () {
 		Permissive: 32,
 		RegularizeLight: 64,
 		_InternalDebug: 1 << 30, // internal, don't use!
+	};
+
+	var remeshOptions = {
+		Thicken: 1,
+		Shell: 2,
+		Debug: 4,
 	};
 
 	return {
@@ -620,6 +646,24 @@ var MeshoptSimplifier = (function () {
 			result = indices instanceof Uint32Array ? result : new indices.constructor(result);
 
 			return result;
+		},
+
+		remesh: function (indices, vertex_positions, vertex_positions_stride, resolution, flags) {
+			assert(indices instanceof Uint32Array || indices instanceof Int32Array || indices instanceof Uint16Array || indices instanceof Int16Array);
+			assert(indices.length % 3 == 0);
+			assert(vertex_positions instanceof Float32Array);
+			assert(vertex_positions.length % vertex_positions_stride == 0);
+			assert(vertex_positions_stride >= 3);
+			assert(resolution >= 4 && resolution <= 256);
+
+			var options = 0;
+			for (var i = 0; i < (flags ? flags.length : 0); ++i) {
+				assert(flags[i] in remeshOptions);
+				options |= remeshOptions[flags[i]];
+			}
+
+			var indices32 = indices.BYTES_PER_ELEMENT == 4 ? indices : new Uint32Array(indices);
+			return remesh(instance.exports.meshopt_remesh, indices32, vertex_positions, vertex_positions_stride * 4, resolution, options);
 		},
 	};
 })();

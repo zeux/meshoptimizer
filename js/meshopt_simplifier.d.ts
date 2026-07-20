@@ -1,6 +1,7 @@
 // This file is part of meshoptimizer library and is distributed under the terms of MIT License.
 // Copyright (C) 2016-2026, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
 export type SimplifierFlags = 'LockBorder' | 'Sparse' | 'ErrorAbsolute' | 'Prune' | 'Regularize' | 'Permissive' | 'RegularizeLight';
+export type RemesherFlags = 'Thicken' | 'Shell' | 'Debug';
 
 /** @deprecated Use SimplifierFlags instead. */
 export type Flags = SimplifierFlags;
@@ -68,4 +69,6 @@ export const MeshoptSimplifier: {
 	) => Uint32Array;
 
 	simplifyPrune: (indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, target_error: number) => Uint32Array;
+
+	remesh: (indices: Uint32Array, vertex_positions: Float32Array, vertex_positions_stride: number, resolution: number, flags?: RemesherFlags[]) => Float32Array;
 };
