@@ -325,14 +325,14 @@ static void solidify(unsigned char* grid, unsigned int* worklist, unsigned char*
 				continue;
 
 			unsigned char* datan = grid + size_t(resolution) * (yn + size_t(resolution) * zn);
-			bool changed = false;
+			unsigned char changed = 0;
 
 			for (int x = 1; x < resolution - 1; ++x)
-				if (data[x] == 0 && datan[x] == 0xff)
-				{
-					datan[x] = 0;
-					changed = true;
-				}
+			{
+				unsigned char rep = (data[x] == 0 && datan[x] == 0xff) ? 0 : datan[x];
+				changed |= rep ^ datan[x];
+				datan[x] = rep;
+			}
 
 			if (changed)
 				solidifyQueue(yn + size_t(resolution) * zn, worklist, queued, pending);
