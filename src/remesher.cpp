@@ -163,17 +163,20 @@ struct Voxel
 	float b0, b1, b2;
 };
 
-static void voxelAccumulate(Voxel& vox, float px, float py, float pz, float a, float b, float c, float d, float w)
+static void voxelAccumulate(Voxel& vox, float px, float py, float pz, float w)
+{
+	vox.px += px * w;
+	vox.py += py * w;
+	vox.pz += pz * w;
+	vox.w += w;
+}
+
+static void voxelAccumulateQ(Voxel& vox, float a, float b, float c, float d, float w)
 {
 	float aw = a * w;
 	float bw = b * w;
 	float cw = c * w;
 	float dw = d * w;
-
-	vox.px += px * w;
-	vox.py += py * w;
-	vox.pz += pz * w;
-	vox.w += w;
 
 	vox.a00 += a * aw;
 	vox.a11 += b * bw;
@@ -261,7 +264,7 @@ static float measureGrid(const float* vertex_positions_data, size_t vertex_count
 	return scale;
 }
 
-static void voxelize(unsigned char* grid, Voxel* voxels, const unsigned int* voxel_rows, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, int resolution, float scale, const float offset[3])
+static void voxelize(unsigned char* grid, Voxel* voxels, const unsigned int* voxel_rows, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, int resolution, float scale, const float offset[3], unsigned int options)
 {
 	(void)vertex_count;
 
@@ -332,8 +335,13 @@ static void voxelize(unsigned char* grid, Voxel* voxels, const unsigned int* vox
 					assert(grid[idx] != 0 && grid[idx] != 0xff);
 					Voxel& vox = voxels[voxel_rows[row] + (grid[idx] - 1)];
 
-					float distance = nx * px + ny * py + nz * pz;
-					voxelAccumulate(vox, px, py, pz, nx, ny, nz, -distance, weight);
+					voxelAccumulate(vox, px, py, pz, weight);
+
+					if (options & meshopt_RemeshSolve)
+					{
+						float distance = nx * px + ny * py + nz * pz;
+						voxelAccumulateQ(vox, nx, ny, nz, -distance, weight);
+					}
 				}
 				else
 				{
@@ -547,7 +555,7 @@ size_t meshopt_remesh(float* destination, size_t max_triangle_count, const unsig
 	unsigned char* grid = allocator.allocate<unsigned char>(size_t(resolution) * size_t(resolution) * size_t(resolution));
 	memset(grid, 0, size_t(resolution) * size_t(resolution) * size_t(resolution));
 
-	voxelize(grid, NULL, NULL, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride, resolution, scale, offset);
+	voxelize(grid, NULL, NULL, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride, resolution, scale, offset, options);
 
 	// allocate additional voxel data for each occupied voxel; this can be filled in the second pass to compute positions
 	// note that we only do this if we need to compute output triangles; counting runs skip it for performance
@@ -605,7 +613,7 @@ size_t meshopt_remesh(float* destination, size_t max_triangle_count, const unsig
 
 	// accumulate voxel positions: in the second pass, this computes enough data in each voxel to calculate positions
 	if (voxels)
-		voxelize(grid, voxels, voxel_rows, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride, resolution, scale, offset);
+		voxelize(grid, voxels, voxel_rows, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride, resolution, scale, offset, options);
 
 	// compute final voxel positions; each voxel has a single resulting position that may be adjusted during polygonization
 	if (voxels)
