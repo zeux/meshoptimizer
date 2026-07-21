@@ -474,19 +474,23 @@ static size_t emitVertex(float* destination, size_t index, int x, int y, int z, 
 static size_t polygonize(float* destination, size_t max_triangle_count, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, float scale, const float offset[3], unsigned int options)
 {
 	size_t result = 0;
+	size_t slice = size_t(resolution) * size_t(resolution);
 
 	for (int z = 0; z < resolution - 1; ++z)
 		for (int y = 0; y < resolution - 1; ++y)
+		{
+			const unsigned char* data = grid + size_t(resolution) * (y + size_t(resolution) * z);
+
+			// we track each slice as a 8-bit code (matching cube indexing) as we iterate through the row to avoid extra lookups
+			int last = (data[0] == 0) | ((data[resolution] == 0) << 2) | ((data[slice] == 0) << 4) | ((data[slice + resolution] == 0) << 6);
+
 			for (int x = 0; x < resolution - 1; ++x)
 			{
-				int cube = 0;
+				int next = (data[x + 1] == 0) | ((data[x + 1 + resolution] == 0) << 2) | ((data[x + 1 + slice] == 0) << 4) | ((data[x + 1 + slice + resolution] == 0) << 6);
 
-				for (int i = 0; i < 8; ++i)
-				{
-					int ix = x + (i & 1), iy = y + ((i >> 1) & 1), iz = z + ((i >> 2) & 1);
-					size_t idx = ix + size_t(resolution) * (iy + size_t(resolution) * iz);
-					cube |= (grid[idx] == 0) << i;
-				}
+				// next slice bits are in position for the next iteration so we need to shift them to retrieve current cube code
+				int cube = last | (next << 1);
+				last = next;
 
 				if (cube == 0 || cube == 0xff)
 					continue;
@@ -508,6 +512,7 @@ static size_t polygonize(float* destination, size_t max_triangle_count, const un
 					result += (ca != cb) && (cb != cc) && (cc != ca); // degenerate triangle
 				}
 			}
+		}
 
 	return result;
 }
