@@ -349,6 +349,7 @@ var MeshoptSimplifier = (function () {
 		Thicken: 1,
 		Shell: 2,
 		Debug: 4,
+		Solve: 8,
 	};
 
 	return {
@@ -649,7 +650,9 @@ var MeshoptSimplifier = (function () {
 		},
 
 		remesh: function (indices, vertex_positions, vertex_positions_stride, resolution, flags) {
-			assert(indices instanceof Uint32Array || indices instanceof Int32Array || indices instanceof Uint16Array || indices instanceof Int16Array);
+			assert(
+				indices instanceof Uint32Array || indices instanceof Int32Array || indices instanceof Uint16Array || indices instanceof Int16Array
+			);
 			assert(indices.length % 3 == 0);
 			assert(vertex_positions instanceof Float32Array);
 			assert(vertex_positions.length % vertex_positions_stride == 0);
