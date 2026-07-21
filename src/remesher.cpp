@@ -351,6 +351,34 @@ static void voxelize(unsigned char* grid, Voxel* voxels, const unsigned int* vox
 	}
 }
 
+static size_t rowpack(unsigned char* grid, unsigned int* voxel_rows, int resolution)
+{
+	size_t result = 0;
+	size_t slice = size_t(resolution) * size_t(resolution);
+
+	for (size_t i = 0; i < slice; ++i)
+	{
+		unsigned char* data = grid + i * size_t(resolution);
+
+		int count = 0;
+
+		for (int x = 0; x < resolution; ++x)
+		{
+			assert(data[x] <= 1); // voxelize only produces 0/1 values
+
+			count += data[x];
+			data[x] = (data[x] != 0) ? (unsigned char)count : 0;
+		}
+
+		assert(count < 255); // we store offsets in a single byte, with 0 reserved for empty voxels and 0xff reserved for interior voxels
+
+		voxel_rows[i] = unsigned(result);
+		result += count;
+	}
+
+	return result;
+}
+
 static void solidifyQueue(unsigned int row, unsigned int* worklist, unsigned char* queued, size_t& pending)
 {
 	if (queued[row])
@@ -566,21 +594,7 @@ size_t meshopt_remesh(float* destination, size_t max_triangle_count, const unsig
 	if (destination)
 	{
 		voxel_rows = allocator.allocate<unsigned int>(size_t(resolution) * size_t(resolution));
-
-		for (size_t i = 0; i < size_t(resolution) * size_t(resolution); ++i)
-		{
-			unsigned char* row = grid + i * size_t(resolution);
-
-			int count = 0;
-			for (int j = 0; j < resolution; ++j)
-				if (row[j] != 0)
-					row[j] = (unsigned char)++count;
-
-			assert(count < 255); // we store offsets in a single byte, with 0 reserved for empty voxels and 0xff reserved for interior voxels
-
-			voxel_rows[i] = unsigned(voxel_count);
-			voxel_count += count;
-		}
+		voxel_count = rowpack(grid, voxel_rows, resolution);
 
 		voxels = allocator.allocate<Voxel>(voxel_count);
 		memset(voxels, 0, voxel_count * sizeof(Voxel));
