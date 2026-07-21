@@ -103,13 +103,14 @@
 				sloppy: false,
 				thicken: false,
 				shell: false,
+				solve: false,
 				debug: false,
 				normalCrease: 120,
 				simplify: {
 					enabled: false,
 					regularize: false,
 					solve: false,
-					errorThresholdLog10: 3,
+					errorThresholdLog10: 2.5,
 				},
 				paint: {
 					mode: 'vertex',
@@ -156,6 +157,7 @@
 			guiRemesh.add(settings, 'sloppy');
 			guiRemesh.add(settings, 'thicken');
 			guiRemesh.add(settings, 'shell');
+			guiRemesh.add(settings, 'solve');
 			guiRemesh.add(settings, 'debug');
 			guiRemesh.add(settings, 'normalCrease', 0, 180, 1).name('normal crease');
 			guiRemesh.add(settings, 'remesh');
@@ -215,6 +217,7 @@
 				// Create scene
 				scene = new THREE.Scene();
 				scene.background = new THREE.Color(0x300a24);
+
 				// Add lighting
 				var ambientLight = new THREE.AmbientLight(0xcccccc, 1);
 				scene.add(ambientLight);
@@ -501,10 +504,12 @@
 				canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(texture.image.data), canvas.width, canvas.height), 0, 0);
 			}
 
-			function simplifyMesh(geo, threshold, flags, solve) {
+			function simplifyMesh(geo, threshold, flags, solve, sloppy) {
 				var positions = solve ? new Float32Array(geo.attributes.position.array) : geo.attributes.position.array;
 				var indices = solve ? new Uint32Array(geo.index.array) : geo.index.array;
-				var res = solve
+				var res = sloppy
+						? MeshoptSimplifier.simplifySloppy(indices, positions, 3, null, 0, threshold)
+						: solve
 						? MeshoptSimplifier.simplifyWithUpdate(indices, positions, 3, new Float32Array(), 0, [], null, 0, threshold, flags)
 						: MeshoptSimplifier.simplify(indices, positions, 3, 0, threshold, flags);
 				if (solve) res[0] = indices.slice(0, res[0]);
@@ -527,11 +532,12 @@
 
 					var geometry;
 					if (settings.sloppy) {
-						geometry = simplifyMesh(merged, 1 / settings.resolution, true);
+						geometry = simplifyMesh(merged, 1 / settings.resolution, [], false, true);
 					} else {
 						var flags = [];
 						if (settings.thicken) flags.push('Thicken');
 						if (settings.shell) flags.push('Shell');
+						if (settings.solve) flags.push('Solve');
 						if (settings.debug) flags.push('Debug');
 						var result = MeshoptSimplifier.remesh(merged.index.array, merged.attributes.position.array, 3, settings.resolution, flags);
 						geometry = new THREE.BufferGeometry();
@@ -540,7 +546,7 @@
 					}
 
 					if (settings.simplify.enabled) {
-						var flags = settings.simplify.regularize ? ['Regularize'] : [];
+						var flags = settings.simplify.regularize ? ['RegularizeLight'] : [];
 						geometry = simplifyMesh(geometry, Math.pow(10, -settings.simplify.errorThresholdLog10), flags, settings.simplify.solve);
 					}
 
@@ -673,6 +679,7 @@
 			function load(path, ext) {
 				if (model) scene.remove(model);
 				if (remeshed) scene.remove(remeshed);
+
 				model = undefined;
 				merged = undefined;
 				remeshed = undefined;
