@@ -414,6 +414,25 @@ static void solidify(unsigned char* grid, unsigned int* worklist, unsigned char*
 	}
 }
 
+static void solve(Voxel* voxels, size_t voxel_count, unsigned int options)
+{
+	for (size_t i = 0; i < voxel_count; ++i)
+	{
+		Voxel& vox = voxels[i];
+		float px = vox.px / vox.w, py = vox.py / vox.w, pz = vox.pz / vox.w;
+
+		if (options & meshopt_RemeshSolve)
+		{
+			// TODO: lambda tuning/adaptive
+			float sx, sy, sz;
+			if (voxelSolve(sx, sy, sz, vox, 2e-2f))
+				px = sx, py = sy, pz = sz;
+		}
+
+		vox.px = px, vox.py = py, vox.pz = pz;
+	}
+}
+
 static size_t emitVertex(float* destination, size_t index, int x, int y, int z, int edge, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, float scale, const float offset[3], unsigned int options)
 {
 	int a = edge >> 4, b = edge & 0xf;
@@ -452,19 +471,9 @@ static size_t emitVertex(float* destination, size_t index, int x, int y, int z, 
 		}
 		else
 		{
-			float px = vox.px / vox.w, py = vox.py / vox.w, pz = vox.pz / vox.w;
-
-			if (options & meshopt_RemeshSolve)
-			{
-				// TODO: lambda tuning/adaptive
-				float sx, sy, sz;
-				if (voxelSolve(sx, sy, sz, vox, 2e-2f))
-					px = sx, py = sy, pz = sz;
-			}
-
-			destination[index * 3 + 0] = px + float((oc >> 0) & 1) * os + offset[0];
-			destination[index * 3 + 1] = py + float((oc >> 1) & 1) * os + offset[1];
-			destination[index * 3 + 2] = pz + float((oc >> 2) & 1) * os + offset[2];
+			destination[index * 3 + 0] = vox.px + float((oc >> 0) & 1) * os + offset[0];
+			destination[index * 3 + 1] = vox.py + float((oc >> 1) & 1) * os + offset[1];
+			destination[index * 3 + 2] = vox.pz + float((oc >> 2) & 1) * os + offset[2];
 		}
 	}
 
@@ -598,6 +607,11 @@ size_t meshopt_remesh(float* destination, size_t max_triangle_count, const unsig
 	if (voxels)
 		voxelize(grid, voxels, voxel_rows, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride, resolution, scale, offset);
 
+	// compute final voxel positions; each voxel has a single resulting position that may be adjusted during polygonization
+	if (voxels)
+		solve(voxels, voxel_count, options);
+
+	// output triangles from the voxel grid; if destination is NULL, this still counts the number of triangles that would be generated
 	size_t result = polygonize(destination, max_triangle_count, grid, voxels, voxel_rows, resolution, scale, offset, options);
 
 #if TRACE
