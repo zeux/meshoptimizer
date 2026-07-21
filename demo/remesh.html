@@ -309,18 +309,23 @@
 				return new THREE.Color(image.data[offset] / 255, image.data[offset + 1] / 255, image.data[offset + 2] / 255);
 			}
 
-			function interpolate(attribute, a, b, c, bary, component) {
-				return attribute.getComponent(a, component) * bary.x + attribute.getComponent(b, component) * bary.y + attribute.getComponent(c, component) * bary.z;
+			function interpolate(attr, a, b, c, bary, comp) {
+				return attr.getComponent(a, comp) * bary.x + attr.getComponent(b, comp) * bary.y + attr.getComponent(c, comp) * bary.z;
 			}
 
 			function sampleColorBary(mesh, triangle, bary) {
 				var geometry = mesh.geometry;
-				var offset = triangle * 3, indices = geometry.index;
-				var a = indices ? indices.array[offset] : offset, b = indices ? indices.array[offset + 1] : offset + 1, c = indices ? indices.array[offset + 2] : offset + 2;
+				var offset = triangle * 3,
+					indices = geometry.index;
+				var a = indices ? indices.array[offset] : offset,
+					b = indices ? indices.array[offset + 1] : offset + 1,
+					c = indices ? indices.array[offset + 2] : offset + 2;
 
 				var material = mesh.material;
 				if (Array.isArray(material)) {
-					var group = geometry.groups.find(function (group) { return offset >= group.start && offset < group.start + group.count; });
+					var group = geometry.groups.find(function (group) {
+						return offset >= group.start && offset < group.start + group.count;
+					});
 					material = material[group.materialIndex];
 				}
 
@@ -364,7 +369,10 @@
 					hit = model.bvh.raycastFirst(ray, THREE.DoubleSide, 1e-12, model.thickness * 2);
 				}
 				if (!hit) hit = model.bvh.closestPointToPoint(point);
-				var a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), bary = new THREE.Vector3();
+				var a = new THREE.Vector3(),
+					b = new THREE.Vector3(),
+					c = new THREE.Vector3(),
+					bary = new THREE.Vector3();
 				a.fromBufferAttribute(model.attributes.position, model.index.array[hit.faceIndex * 3 + 0]);
 				b.fromBufferAttribute(model.attributes.position, model.index.array[hit.faceIndex * 3 + 1]);
 				c.fromBufferAttribute(model.attributes.position, model.index.array[hit.faceIndex * 3 + 2]);
@@ -374,8 +382,12 @@
 
 			function transferColors(model, geometry) {
 				var colors = new Float32Array(geometry.attributes.position.count * 4);
-				var position = geometry.attributes.position, normal = geometry.attributes.normal, indices = geometry.index.array;
-				var query = new THREE.Vector3(), direction = new THREE.Vector3(), temp = new THREE.Vector3();
+				var position = geometry.attributes.position,
+					normal = geometry.attributes.normal,
+					indices = geometry.index.array;
+				var query = new THREE.Vector3(),
+					direction = new THREE.Vector3(),
+					temp = new THREE.Vector3();
 
 				for (var i = 0; i < position.count; ++i) {
 					query.fromBufferAttribute(position, i);
@@ -400,12 +412,18 @@
 
 					for (var j = 0; j < 3; ++j) {
 						var v = indices[i + j];
-						colors[v * 4] += color.r, colors[v * 4 + 1] += color.g, colors[v * 4 + 2] += color.b, colors[v * 4 + 3]++;
+						colors[v * 4] += color.r;
+						colors[v * 4 + 1] += color.g;
+						colors[v * 4 + 2] += color.b;
+						colors[v * 4 + 3]++;
 					}
 				}
 
 				for (var i = 0; i < colors.length; i += 4) {
-					colors[i] /= colors[i + 3], colors[i + 1] /= colors[i + 3], colors[i + 2] /= colors[i + 3], colors[i + 3] = 1;
+					colors[i] /= colors[i + 3];
+					colors[i + 1] /= colors[i + 3];
+					colors[i + 2] /= colors[i + 3];
+					colors[i + 3] = 1;
 				}
 
 				geometry.setAttribute('color', new THREE.BufferAttribute(colors, 4));
@@ -416,7 +434,13 @@
 				var indices = new Uint32Array(geometry.index.array);
 
 				var atlas = new Atlas();
-				atlas.addMesh({ vertexPositionData: positions, vertexCount: positions.length / 3, vertexPositionStride: 12, indexData: indices, indexCount: indices.length });
+				atlas.addMesh({
+					vertexPositionData: positions,
+					vertexCount: positions.length / 3,
+					vertexPositionStride: 12,
+					indexData: indices,
+					indexCount: indices.length,
+				});
 				atlas.generate({}, { resolution: resolution, padding: gutter });
 
 				var mesh = atlas.getMesh(0);
@@ -438,16 +462,28 @@
 
 			function transferTexture(model, geometry, size, gutter) {
 				var data = new Float32Array(size * size * 4);
-				var position = geometry.attributes.position, normal = geometry.attributes.normal, uv = geometry.attributes.uv, indices = geometry.index.array;
-				var bary = new THREE.Vector3(), point = new THREE.Vector3(), direction = new THREE.Vector3();
+				var position = geometry.attributes.position,
+					normal = geometry.attributes.normal,
+					uv = geometry.attributes.uv,
+					indices = geometry.index.array;
+				var bary = new THREE.Vector3(),
+					point = new THREE.Vector3(),
+					direction = new THREE.Vector3();
 
 				for (var i = 0; i < indices.length; i += 3) {
-					var a = indices[i], b = indices[i + 1], c = indices[i + 2];
-					var x0 = uv.getX(a) * size, y0 = uv.getY(a) * size;
-					var x1 = uv.getX(b) * size, y1 = uv.getY(b) * size;
-					var x2 = uv.getX(c) * size, y2 = uv.getY(c) * size;
-					var minX = Math.max(0, Math.floor(Math.min(x0, x1, x2) - gutter)), maxX = Math.min(size - 1, Math.ceil(Math.max(x0, x1, x2) + gutter));
-					var minY = Math.max(0, Math.floor(Math.min(y0, y1, y2) - gutter)), maxY = Math.min(size - 1, Math.ceil(Math.max(y0, y1, y2) + gutter));
+					var a = indices[i],
+						b = indices[i + 1],
+						c = indices[i + 2];
+					var x0 = uv.getX(a) * size,
+						y0 = uv.getY(a) * size;
+					var x1 = uv.getX(b) * size,
+						y1 = uv.getY(b) * size;
+					var x2 = uv.getX(c) * size,
+						y2 = uv.getY(c) * size;
+					var minX = Math.max(0, Math.floor(Math.min(x0, x1, x2) - gutter)),
+						maxX = Math.min(size - 1, Math.ceil(Math.max(x0, x1, x2) + gutter));
+					var minY = Math.max(0, Math.floor(Math.min(y0, y1, y2) - gutter)),
+						maxY = Math.min(size - 1, Math.ceil(Math.max(y0, y1, y2) + gutter));
 					var denominator = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2);
 					if (Math.abs(denominator) < 1e-7) continue;
 
@@ -463,8 +499,17 @@
 							bary.z = 1 - bary.x - bary.y;
 							if (bary.x < -epsilonX || bary.y < -epsilonY || bary.z < -epsilonZ) continue;
 
-							point.set(interpolate(position, a, b, c, bary, 0), interpolate(position, a, b, c, bary, 1), interpolate(position, a, b, c, bary, 2));
-							direction.set(interpolate(normal, a, b, c, bary, 0), interpolate(normal, a, b, c, bary, 1), interpolate(normal, a, b, c, bary, 2)).normalize();
+							point.set(
+								interpolate(position, a, b, c, bary, 0),
+								interpolate(position, a, b, c, bary, 1),
+								interpolate(position, a, b, c, bary, 2)
+							);
+							direction.set(
+								interpolate(normal, a, b, c, bary, 0),
+								interpolate(normal, a, b, c, bary, 1),
+								interpolate(normal, a, b, c, bary, 2)
+							);
+							direction.normalize();
 
 							var color = sampleColor(model, point, direction).convertLinearToSRGB();
 
@@ -507,12 +552,15 @@
 			function simplifyMesh(geo, threshold, flags, solve, sloppy) {
 				var positions = solve ? new Float32Array(geo.attributes.position.array) : geo.attributes.position.array;
 				var indices = solve ? new Uint32Array(geo.index.array) : geo.index.array;
-				var res = sloppy
-						? MeshoptSimplifier.simplifySloppy(indices, positions, 3, null, 0, threshold)
-						: solve
-						? MeshoptSimplifier.simplifyWithUpdate(indices, positions, 3, new Float32Array(), 0, [], null, 0, threshold, flags)
-						: MeshoptSimplifier.simplify(indices, positions, 3, 0, threshold, flags);
-				if (solve) res[0] = indices.slice(0, res[0]);
+				var res;
+				if (sloppy) {
+					res = MeshoptSimplifier.simplifySloppy(indices, positions, 3, null, 0, threshold);
+				} else if (solve) {
+					res = MeshoptSimplifier.simplifyWithUpdate(indices, positions, 3, new Float32Array(), 0, [], null, 0, threshold, flags);
+					res[0] = indices.slice(0, res[0]);
+				} else {
+					res = MeshoptSimplifier.simplify(indices, positions, 3, 0, threshold, flags);
+				}
 				var [remap, unique] = MeshoptSimplifier.compactMesh(res[0]);
 				var compact = new Float32Array(unique * 3);
 				for (var i = 0; i < remap.length; ++i) {
@@ -616,15 +664,7 @@
 
 			function updateStatsDisplay() {
 				stats.label.innerHTML =
-					'Triangles: ' +
-					stats.triangles +
-					'<br>' +
-					'Vertices: ' +
-					stats.vertices +
-					'<br>' +
-					'Ratio: ' +
-					stats.ratio.toFixed(1) +
-					'%';
+					'Triangles: ' + stats.triangles + '<br>' + 'Vertices: ' + stats.vertices + '<br>' + 'Ratio: ' + stats.ratio.toFixed(1) + '%';
 			}
 
 			function reload() {
