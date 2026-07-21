@@ -156,7 +156,74 @@ struct Voxel
 {
 	float px, py, pz;
 	float w;
+
+	// a00*x^2 + a11*y^2 + a22*z^2 + 2*a10*xy + 2*a20*xz + 2*a21*yz + 2*b0*x + 2*b1*y + 2*b2*z
+	float a00, a11, a22;
+	float a10, a20, a21;
+	float b0, b1, b2;
 };
+
+static void voxelAccumulate(Voxel& vox, float px, float py, float pz, float a, float b, float c, float d, float w)
+{
+	float aw = a * w;
+	float bw = b * w;
+	float cw = c * w;
+	float dw = d * w;
+
+	vox.px += px * w;
+	vox.py += py * w;
+	vox.pz += pz * w;
+	vox.w += w;
+
+	vox.a00 += a * aw;
+	vox.a11 += b * bw;
+	vox.a22 += c * cw;
+	vox.a10 += a * bw;
+	vox.a20 += a * cw;
+	vox.a21 += b * cw;
+	vox.b0 += a * dw;
+	vox.b1 += b * dw;
+	vox.b2 += c * dw;
+}
+
+static bool voxelSolve(float& rx, float& ry, float& rz, const Voxel& vox, float lambda)
+{
+	// solve A*p = -b where A is the quadric matrix and b is the linear term
+	float rw = lambda * vox.w;
+	float a00 = rw + vox.a00, a11 = rw + vox.a11, a22 = rw + vox.a22;
+	float a10 = vox.a10, a20 = vox.a20, a21 = vox.a21;
+	float x0 = lambda * vox.px - vox.b0, x1 = lambda * vox.py - vox.b1, x2 = lambda * vox.pz - vox.b2;
+
+	float eps = 1e-6f * vox.w;
+
+	// LDL decomposition: A = LDL^T
+	float d0 = a00;
+	float l10 = a10 / d0;
+	float l20 = a20 / d0;
+
+	float d1 = a11 - a10 * l10;
+	float dl21 = a21 - a20 * l10;
+	float l21 = dl21 / d1;
+
+	float d2 = a22 - a20 * l20 - dl21 * l21;
+
+	// solve L*y = x
+	float y0 = x0;
+	float y1 = x1 - l10 * y0;
+	float y2 = x2 - l20 * y0 - l21 * y1;
+
+	// solve D*z = y
+	float z0 = y0 / d0;
+	float z1 = y1 / d1;
+	float z2 = y2 / d2;
+
+	// substitute L^T*p = z
+	rz = z2;
+	ry = z1 - l21 * rz;
+	rx = z0 - l10 * ry - l20 * rz;
+
+	return fabsf(d0) > eps && fabsf(d1) > eps && fabsf(d2) > eps;
+}
 
 static float measureGrid(const float* vertex_positions_data, size_t vertex_count, size_t vertex_positions_stride, int resolution, float* out_offset)
 {
@@ -227,8 +294,17 @@ static void voxelize(unsigned char* grid, Voxel* voxels, const unsigned int* vox
 		samples = samples > 1 ? samples : 1;
 		samples = samples < resolution * 2 ? samples : resolution * 2;
 
+		// normal is used to compute area for weighting as well as for the quadric
+		float nx = ey * fz - ez * fy, ny = ez * fx - ex * fz, nz = ex * fy - ey * fx;
+		float area = sqrtf(nx * nx + ny * ny + nz * nz);
+
+		// TODO: skip degenerate triangles?
+		float ns = area == 0.f ? 0.f : 1.f / area;
+		nx *= ns, ny *= ns, nz *= ns;
+
 		float sx = va[0] - offset[0], sy = va[1] - offset[1], sz = va[2] - offset[2];
 		float sr = 1.f / float(samples);
+		float weight = area / float((samples + 1) * (samples + 2));
 
 		for (int u = 0; u <= samples; ++u)
 			for (int v = 0; v <= samples - u; ++v)
@@ -256,10 +332,8 @@ static void voxelize(unsigned char* grid, Voxel* voxels, const unsigned int* vox
 					assert(grid[idx] != 0 && grid[idx] != 0xff);
 					Voxel& vox = voxels[voxel_rows[row] + (grid[idx] - 1)];
 
-					vox.px += px;
-					vox.py += py;
-					vox.pz += pz;
-					vox.w += 1.f;
+					float distance = nx * px + ny * py + nz * pz;
+					voxelAccumulate(vox, px, py, pz, nx, ny, nz, -distance, weight);
 				}
 				else
 				{
@@ -378,9 +452,19 @@ static size_t emitVertex(float* destination, size_t index, int x, int y, int z, 
 		}
 		else
 		{
-			destination[index * 3 + 0] = vox.px / vox.w + float((oc >> 0) & 1) * os + offset[0];
-			destination[index * 3 + 1] = vox.py / vox.w + float((oc >> 1) & 1) * os + offset[1];
-			destination[index * 3 + 2] = vox.pz / vox.w + float((oc >> 2) & 1) * os + offset[2];
+			float px = vox.px / vox.w, py = vox.py / vox.w, pz = vox.pz / vox.w;
+
+			if (options & meshopt_RemeshSolve)
+			{
+				// TODO: lambda tuning/adaptive
+				float sx, sy, sz;
+				if (voxelSolve(sx, sy, sz, vox, 2e-2f))
+					px = sx, py = sy, pz = sz;
+			}
+
+			destination[index * 3 + 0] = px + float((oc >> 0) & 1) * os + offset[0];
+			destination[index * 3 + 1] = py + float((oc >> 1) & 1) * os + offset[1];
+			destination[index * 3 + 2] = pz + float((oc >> 2) & 1) * os + offset[2];
 		}
 	}
 
