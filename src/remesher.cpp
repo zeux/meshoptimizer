@@ -16,7 +16,7 @@
 
 // This work is based on:
 // Paul Bourke. Polygonising a scalar field. 1994
-// TODO
+// Michael Garland and Paul S. Heckbert. Surface simplification using quadric error metrics. 1997
 namespace meshopt
 {
 
@@ -455,8 +455,14 @@ static void solidify(unsigned char* grid, unsigned int* worklist, unsigned char*
 	}
 }
 
-static void solve(Voxel* voxels, size_t voxel_count, unsigned int options)
+static void solve(Voxel* voxels, size_t voxel_count, float scale, unsigned int options)
 {
+	// cutoff is a squared distance in model space; sqrt(3)/scale is the voxel diagonal
+	float factor = 2e-2f;
+	float cutoff = 3.f / (scale * scale);
+
+	size_t solved = 0;
+
 	for (size_t i = 0; i < voxel_count; ++i)
 	{
 		Voxel& vox = voxels[i];
@@ -464,14 +470,34 @@ static void solve(Voxel* voxels, size_t voxel_count, unsigned int options)
 
 		if (options & meshopt_RemeshSolve)
 		{
-			// TODO: lambda tuning/adaptive
+			// compute minimizing point; this includes regularization to stabilize the solve
 			float sx, sy, sz;
-			if (voxelSolve(sx, sy, sz, vox, 2e-2f))
-				px = sx, py = sy, pz = sz;
+			if (voxelSolve(sx, sy, sz, vox, factor))
+			{
+				float d = (sx - px) * (sx - px) + (sy - py) * (sy - py) + (sz - pz) * (sz - pz);
+
+				// reject solutions that move the vertex too far from voxel centroid; this is a safety net in case regularization is insufficient
+				if (d < cutoff)
+				{
+					px = sx;
+					py = sy;
+					pz = sz;
+					solved++;
+				}
+			}
 		}
 
-		vox.px = px, vox.py = py, vox.pz = pz;
+		vox.px = px;
+		vox.py = py;
+		vox.pz = pz;
 	}
+
+	(void)solved;
+
+#if TRACE
+	if (options & meshopt_RemeshSolve)
+		printf("remesher: solved %zu/%zu voxels\n", solved, voxel_count);
+#endif
 }
 
 static size_t emitVertex(float* destination, size_t index, int x, int y, int z, int edge, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, float scale, const float offset[3], unsigned int options)
@@ -636,7 +662,7 @@ size_t meshopt_remesh(float* destination, size_t max_triangle_count, const unsig
 
 	// compute final voxel positions; each voxel has a single resulting position that may be adjusted during polygonization
 	if (voxels)
-		solve(voxels, voxel_count, options);
+		solve(voxels, voxel_count, scale, options);
 
 	// output triangles from the voxel grid; if destination is NULL, this still counts the number of triangles that would be generated
 	size_t result = polygonize(destination, max_triangle_count, grid, voxels, voxel_rows, resolution, scale, offset, options);
