@@ -301,13 +301,18 @@ static void voxelize(unsigned char* grid, Voxel* voxels, const unsigned int* vox
 		float nx = ey * fz - ez * fy, ny = ez * fx - ex * fz, nz = ex * fy - ey * fx;
 		float area = sqrtf(nx * nx + ny * ny + nz * nz);
 
-		// TODO: skip degenerate triangles?
 		float ns = area == 0.f ? 0.f : 1.f / area;
-		nx *= ns, ny *= ns, nz *= ns;
+		nx *= ns;
+		ny *= ns;
+		nz *= ns;
 
 		float sx = va[0] - offset[0], sy = va[1] - offset[1], sz = va[2] - offset[2];
 		float sr = 1.f / float(samples);
 		float weight = area / float((samples + 1) * (samples + 2));
+
+		// skip degenerate triangles; they don't contribute to voxelization and may result in NaN when computing voxel centroid
+		if (weight == 0.f)
+			continue;
 
 		for (int u = 0; u <= samples; ++u)
 			for (int v = 0; v <= samples - u; ++v)
