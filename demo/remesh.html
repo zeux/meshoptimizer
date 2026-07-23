@@ -103,13 +103,13 @@
 				sloppy: false,
 				thicken: false,
 				shell: false,
-				solve: false,
+				solve: true,
 				debug: false,
 				normalCrease: 120,
 				simplify: {
 					enabled: false,
-					regularize: false,
-					solve: false,
+					regularize: true,
+					solve: true,
 					errorThresholdLog10: 2.5,
 				},
 				paint: {
@@ -302,9 +302,10 @@
 
 			function sampleTexture(texture, uv) {
 				var image = getTextureImage(texture);
-				var point = texture.transformUv(uv);
+				var point = texture.transformUv(uv.clone());
 				var x = Math.min(Math.floor(point.x * image.width), image.width - 1);
 				var y = Math.min(Math.floor(point.y * image.height), image.height - 1);
+
 				var offset = (y * image.width + x) * 4;
 				return new THREE.Color(image.data[offset] / 255, image.data[offset + 1] / 255, image.data[offset + 2] / 255);
 			}
@@ -326,7 +327,7 @@
 					var group = geometry.groups.find(function (group) {
 						return offset >= group.start && offset < group.start + group.count;
 					});
-					material = material[group.materialIndex];
+					material = material[group ? group.materialIndex : 0];
 				}
 
 				var result = material.color.clone();
@@ -352,9 +353,16 @@
 					result.multiplyScalar(1 + material.aoMapIntensity * (ao - 1));
 				}
 
-				if (material.metalnessMap) {
-					var metalness = sampleTexture(material.metalnessMap, uv).b;
-					result.multiplyScalar(1 - material.metalness * metalness);
+				if (material.metalness) {
+					var metalness = material.metalness;
+					if (material.metalnessMap) metalness *= sampleTexture(material.metalnessMap, uv).b;
+					result.multiplyScalar(1 - metalness);
+				}
+
+				if (material.emissive) {
+					var emissive = material.emissive.clone().multiplyScalar(material.emissiveIntensity);
+					if (material.emissiveMap) emissive.multiply(sampleTexture(material.emissiveMap, uv).convertSRGBToLinear());
+					result.add(emissive);
 				}
 
 				return result;
@@ -369,6 +377,7 @@
 					hit = model.bvh.raycastFirst(ray, THREE.DoubleSide, 1e-12, model.thickness * 2);
 				}
 				if (!hit) hit = model.bvh.closestPointToPoint(point);
+
 				var a = new THREE.Vector3(),
 					b = new THREE.Vector3(),
 					c = new THREE.Vector3(),
@@ -377,6 +386,7 @@
 				b.fromBufferAttribute(model.attributes.position, model.index.array[hit.faceIndex * 3 + 1]);
 				c.fromBufferAttribute(model.attributes.position, model.index.array[hit.faceIndex * 3 + 2]);
 				THREE.Triangle.getBarycoord(hit.point, a, b, c, bary);
+
 				return sampleColorBary(model.sourceMesh[hit.faceIndex], model.sourceTriangle[hit.faceIndex], bary);
 			}
 
@@ -525,9 +535,9 @@
 				for (var i = 0; i < data.length; i += 4) {
 					var count = data[i + 3];
 					if (count) {
-						data[i] /= count;
-						data[i + 1] /= count;
-						data[i + 2] /= count;
+						data[i] = Math.min(data[i] / count, 255);
+						data[i + 1] = Math.min(data[i + 1] / count, 255);
+						data[i + 2] = Math.min(data[i + 2] / count, 255);
 						data[i + 3] = 255;
 					}
 				}
@@ -544,14 +554,29 @@
 				var canvas = document.getElementById('texture-view');
 				canvas.style.display = texture ? 'block' : 'none';
 				if (!texture) return;
+
 				canvas.width = texture.image.width;
 				canvas.height = texture.image.height;
 				canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(texture.image.data), canvas.width, canvas.height), 0, 0);
 			}
 
+			function clearRemeshed() {
+				if (remeshed) {
+					scene.remove(remeshed);
+					remeshed.geometry.dispose();
+				}
+				remeshed = undefined;
+
+				if (remeshMaterial.map) remeshMaterial.map.dispose();
+				remeshMaterial.map = null;
+
+				showTexture(null);
+			}
+
 			function simplifyMesh(geo, threshold, flags, solve, sloppy) {
 				var positions = solve ? new Float32Array(geo.attributes.position.array) : geo.attributes.position.array;
 				var indices = solve ? new Uint32Array(geo.index.array) : geo.index.array;
+
 				var res;
 				if (sloppy) {
 					res = MeshoptSimplifier.simplifySloppy(indices, positions, 3, null, 0, threshold);
@@ -561,6 +586,7 @@
 				} else {
 					res = MeshoptSimplifier.simplify(indices, positions, 3, 0, threshold, flags);
 				}
+
 				var [remap, unique] = MeshoptSimplifier.compactMesh(res[0]);
 				var compact = new Float32Array(unique * 3);
 				for (var i = 0; i < remap.length; ++i) {
@@ -577,6 +603,8 @@
 			function remesh() {
 				MeshoptSimplifier.ready.then(initializeWatlas).then(function () {
 					if (!merged) return;
+
+					clearRemeshed();
 
 					var geometry;
 					if (settings.sloppy) {
@@ -601,7 +629,6 @@
 
 					geometry = mergeVertices(toCreasedNormals(geometry, THREE.MathUtils.degToRad(settings.debug ? 30 : settings.normalCrease)));
 
-					remeshMaterial.map = null;
 					remeshMaterial.vertexColors = false;
 
 					if (settings.paint.mode == 'vertex') {
@@ -615,21 +642,16 @@
 					} else {
 						remeshMaterial.color.set(0xdddddd);
 					}
-					showTexture(remeshMaterial.map);
-
 					remeshMaterial.needsUpdate = true;
 
 					// remesh material + wireframe overlay material
 					geometry.addGroup(0, geometry.index.count, 0);
 					geometry.addGroup(0, geometry.index.count, 1);
 
-					if (remeshed) {
-						scene.remove(remeshed);
-					}
-
 					remeshed = new THREE.Mesh(geometry, [remeshMaterial, wireframeMaterial]);
 					model.visible = false;
 					scene.add(remeshed);
+					showTexture(remeshMaterial.map);
 					update();
 
 					var triangles = geometry.index.count / 3;
@@ -644,10 +666,7 @@
 				if (!model) return;
 
 				model.visible = true;
-				if (remeshed) {
-					scene.remove(remeshed);
-					remeshed = undefined;
-				}
+				clearRemeshed();
 
 				stats.triangles = 0;
 				stats.vertices = 0;
@@ -719,11 +738,10 @@
 
 			function load(path, ext) {
 				if (model) scene.remove(model);
-				if (remeshed) scene.remove(remeshed);
+				clearRemeshed();
 
 				model = undefined;
 				merged = undefined;
-				remeshed = undefined;
 
 				var onProgress = function (xhr) {};
 				var onError = function (e) {
