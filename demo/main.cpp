@@ -1677,6 +1677,21 @@ void tangents(const Mesh& mesh)
 	printf("Tangents : %d corners, %d splits in %.2f msec\n", int(mesh.indices.size()), int(newvertices.size() - mesh.vertices.size()), (end - start) * 1000);
 }
 
+void remesh(const Mesh& mesh, char name, int resolution, unsigned int options = 0)
+{
+	double start = timestamp();
+	size_t capacity = meshopt_remesh(NULL, 0, &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), resolution, options);
+	double middle = timestamp();
+	std::vector<float> triangles(capacity * 3 * 3);
+	size_t count = meshopt_remesh(&triangles[0], capacity, &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), resolution, options);
+	double end = timestamp();
+
+	assert(count <= capacity);
+
+	printf("Remesh%c  : %d triangles => %d triangles in %.2f msec (count %.2f msec, compute %.2f msec)\n", name,
+	    int(mesh.indices.size() / 3), int(count), (end - start) * 1000, (middle - start) * 1000, (end - middle) * 1000);
+}
+
 void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices); // nanite.cpp
 
 bool loadMesh(Mesh& mesh, const char* path)
@@ -1868,6 +1883,9 @@ void process(const char* path)
 
 	tangents(mesh);
 
+	remesh(mesh, ' ', 128);
+	remesh(mesh, 'T', 128, meshopt_RemeshThicken);
+
 	if (path)
 		processDeinterleaved(path);
 }
@@ -1878,7 +1896,8 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	encodeMeshletsDXR(mesh, 128, /* min_exp= */ -14);
+	remesh(mesh, ' ', 128);
+	remesh(mesh, 'T', 128, meshopt_RemeshThicken);
 }
 
 void processNanite(const char* path)
