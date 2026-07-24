@@ -586,7 +586,8 @@
 						if (settings.thicken) flags.push('Thicken');
 						if (settings.shell) flags.push('Shell');
 						if (settings.solve) flags.push('Solve');
-						if (settings.debug) flags.push('Debug');
+						if (settings.debug) flags.push('_InternalDebug');
+
 						var result = MeshoptSimplifier.remesh(merged.index.array, merged.attributes.position.array, 3, settings.resolution, flags);
 						geometry = new THREE.BufferGeometry();
 						geometry.setAttribute('position', new THREE.BufferAttribute(result, 3));

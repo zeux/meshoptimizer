@@ -348,8 +348,8 @@ var MeshoptSimplifier = (function () {
 	var remeshOptions = {
 		Thicken: 1,
 		Shell: 2,
-		Debug: 4,
-		Solve: 8,
+		Solve: 4,
+		_InternalDebug: 1 << 30, // internal, don't use!
 	};
 
 	return {
