@@ -14,6 +14,12 @@
 #include <stdio.h>
 #endif
 
+// Note: this is only exposed for development purposes; do *not* use
+enum
+{
+	meshopt_RemeshInternalDebug = 1 << 30
+};
+
 // This work is based on:
 // Paul Bourke. Polygonising a scalar field. 1994
 // Michael Garland and Paul S. Heckbert. Surface simplification using quadric error metrics. 1997
@@ -530,11 +536,12 @@ static size_t emitVertex(float* destination, size_t index, int x, int y, int z, 
 		assert(grid[idx] != 0 && grid[idx] != 0xff);
 		const Voxel& vox = voxels[voxel_rows[row] + (grid[idx] - 1)];
 
-		if (options & meshopt_RemeshDebug)
+		if (options & meshopt_RemeshInternalDebug)
 		{
-			destination[index * 3 + 0] = (x + ax) / scale + offset[0];
-			destination[index * 3 + 1] = (y + ay) / scale + offset[1];
-			destination[index * 3 + 2] = (z + az) / scale + offset[2];
+			// -0.5 emits voxel center because grid coordinates are padded by 1, so we need to offset by -1+0.5
+			destination[index * 3 + 0] = (x + ax - 0.5f) / scale + offset[0];
+			destination[index * 3 + 1] = (y + ay - 0.5f) / scale + offset[1];
+			destination[index * 3 + 2] = (z + az - 0.5f) / scale + offset[2];
 		}
 		else
 		{

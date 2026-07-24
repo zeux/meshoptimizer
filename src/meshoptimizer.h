@@ -519,8 +519,7 @@ enum
 {
 	meshopt_RemeshThicken = 1 << 0,
 	meshopt_RemeshShell = 1 << 1,
-	meshopt_RemeshDebug = 1 << 2,
-	meshopt_RemeshSolve = 1 << 3,
+	meshopt_RemeshSolve = 1 << 2,
 };
 
 /**
