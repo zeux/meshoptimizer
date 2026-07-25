@@ -158,6 +158,18 @@ static const unsigned char kTriangleTable[256][16] = {
     {0x13, 0x02, 0x04, 0x15, 0x13, 0x04}, {0x10, 0x15, 0x13},
     {0x01, 0x02, 0x04}, {}};
 
+// when we use pure dual mode, every voxel gets one position, and triangles in many cube configurations become degenerate (when two vertices use the same voxel)
+// this can be determined statically from the cube configuration; for now we only use this to accelerate counting, and skipping degenerate triangles during output on the fly
+static const unsigned char kTriangleCountPure[256] = {
+    0, 1, 1, 2, 1, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 3, 1, 2, 3, 3, 2, 3, 2, 3, 1,
+    1, 2, 2, 2, 2, 3, 3, 2, 2, 3, 2, 1, 3, 3, 2, 1, 2, 2, 2, 2, 3, 2, 3, 1, 3, 3, 2, 1, 4, 2, 2, 0,
+    1, 2, 2, 3, 2, 2, 3, 2, 2, 3, 3, 3, 2, 1, 2, 1, 2, 2, 3, 2, 2, 2, 3, 1, 3, 3, 4, 2, 2, 1, 2, 0,
+    2, 3, 3, 3, 3, 3, 4, 2, 3, 4, 3, 2, 3, 2, 2, 0, 2, 1, 2, 1, 2, 1, 2, 0, 3, 2, 2, 0, 2, 0, 0, 0,
+    1, 2, 2, 3, 2, 3, 3, 3, 2, 3, 2, 2, 2, 2, 1, 1, 2, 3, 3, 3, 3, 3, 4, 2, 3, 4, 3, 2, 3, 2, 2, 0,
+    2, 3, 2, 2, 3, 4, 3, 2, 2, 3, 2, 1, 2, 2, 1, 0, 2, 2, 1, 1, 3, 2, 2, 0, 2, 2, 1, 0, 2, 0, 0, 0,
+    2, 3, 3, 4, 2, 2, 3, 2, 2, 3, 2, 2, 2, 1, 1, 0, 2, 2, 3, 2, 1, 1, 2, 0, 2, 2, 2, 0, 1, 0, 0, 0,
+    2, 3, 2, 2, 2, 2, 2, 0, 1, 2, 1, 0, 1, 0, 0, 0, 2, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0};
+
 struct Voxel
 {
 	float px, py, pz;
@@ -577,6 +589,13 @@ static size_t polygonize(float* destination, size_t max_triangle_count, const un
 
 				if (cube == 0 || cube == 0xff)
 					continue;
+
+				if (!destination && (options & meshopt_RemeshThicken) == 0)
+				{
+					// fast path: when in pure dual mode, we can statically determine the number of triangles the loop below will output based on cube configuration
+					result += kTriangleCountPure[cube];
+					continue;
+				}
 
 				const unsigned char* tris = kTriangleTable[cube];
 
