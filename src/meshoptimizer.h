@@ -513,21 +513,6 @@ enum
 MESHOPTIMIZER_API size_t meshopt_simplify(unsigned int* destination, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, size_t target_index_count, float target_error, unsigned int options, float* result_error);
 
 /**
- * Experimental: Remeshing flags; in high degree of flux
- */
-enum
-{
-	meshopt_RemeshThicken = 1 << 0,
-	meshopt_RemeshShell = 1 << 1,
-	meshopt_RemeshSolve = 1 << 2,
-};
-
-/**
- * Experimental: Voxel remesher
- */
-MESHOPTIMIZER_API size_t meshopt_remesh(float* destination, size_t max_triangle_count, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, int resolution, unsigned int options);
-
-/**
  * Mesh simplifier with attribute metric
  * Reduces the number of triangles in the mesh, attempting to preserve mesh appearance as much as possible.
  * Similar to meshopt_simplify, but incorporates attribute values into the error metric used to prioritize simplification order.
@@ -966,6 +951,33 @@ enum
 MESHOPTIMIZER_EXPERIMENTAL void meshopt_generateTangents(float* result, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_normals, size_t vertex_normals_stride, const float* vertex_uvs, size_t vertex_uvs_stride, unsigned int options);
 
 /**
+ * Experimental: Remeshing flags
+ */
+enum
+{
+	/* Thicken thin geometry sheets, producing unique vertex positions for each side of thin geometry. */
+	meshopt_RemeshThicken = 1 << 0,
+	/* Produce a two-sided shell that wraps around surfaces of the original mesh, instead of a solid mesh. */
+	meshopt_RemeshShell = 1 << 1,
+	/* Compute optimal output positions that approximate the original surface as closely as possible. */
+	meshopt_RemeshSolve = 1 << 2,
+};
+
+/**
+ * Experimental: Voxel remesher
+ * Generates a new mesh that approximates or refines the original mesh, attempting to preserve mesh appearance at a given voxel resolution.
+ * The original topology is not preserved; features that are closer than the voxel size may be merged, and small gaps in the original mesh may be closed.
+ * Returns the number of triangles in the new mesh, with destination containing a vertex position for each triangle corner.
+ *
+ * destination can be NULL; when it's not NULL, it must contain enough space for the resulting triangle buffer (max_triangle_count * 3 vertices, 3 floats per vertex)
+ * max_triangle_count is the number of triangles that can be written; the returned value is always the number of triangles that would be generated given sufficient output space
+ * vertex_positions should have float3 position in the first 12 bytes of each vertex
+ * resolution is the dimension of the internal voxel grid and should be in the range [4, 256]
+ * options must be a bitmask composed of meshopt_RemeshX options; 0 is a safe default
+ */
+MESHOPTIMIZER_EXPERIMENTAL size_t meshopt_remesh(float* destination, size_t max_triangle_count, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, int resolution, unsigned int options);
+
+/**
  * Quantize a float into half-precision (as defined by IEEE-754 fp16) floating point value
  * Generates +-inf for overflow, preserves NaN, flushes denormals to zero, rounds to nearest
  * Representable magnitude range: [6e-5; 65504]
@@ -1131,6 +1143,8 @@ template <typename T>
 inline void meshopt_spatialSortTriangles(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 template <typename T>
 inline void meshopt_generateTangents(float* result, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_normals, size_t vertex_normals_stride, const float* vertex_uvs, size_t vertex_uvs_stride, unsigned int options = 0);
+template <typename T>
+inline size_t meshopt_remesh(float* destination, size_t max_triangle_count, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, int resolution, unsigned int options = 0);
 #endif
 
 /* Inline implementation */
@@ -1646,6 +1660,14 @@ inline void meshopt_generateTangents(float* result, const T* indices, size_t ind
 	meshopt_IndexAdapter<T> in(NULL, indices, indices ? index_count : 0);
 
 	meshopt_generateTangents(result, indices ? in.data : NULL, index_count, vertex_positions, vertex_count, vertex_positions_stride, vertex_normals, vertex_normals_stride, vertex_uvs, vertex_uvs_stride, options);
+}
+
+template <typename T>
+inline size_t meshopt_remesh(float* destination, size_t max_triangle_count, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, int resolution, unsigned int options)
+{
+	meshopt_IndexAdapter<T> in(NULL, indices, index_count);
+
+	return meshopt_remesh(destination, max_triangle_count, in.data, index_count, vertex_positions, vertex_count, vertex_positions_stride, resolution, options);
 }
 #endif
 
