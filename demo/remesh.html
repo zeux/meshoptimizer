@@ -651,7 +651,14 @@
 						geometry = unwrapMesh(geometry, settings.paint.resolution, settings.paint.gutter);
 						remeshMaterial.color.set(0xffffff);
 						remeshMaterial.map = settings.paint.gpu
-							? retexture.transferTexture(renderer, geometry, settings.paint.resolution, settings.paint.gutter)
+							? retexture.transferTexture(
+									renderer,
+									geometry,
+									merged.bvh,
+									merged.thickness,
+									settings.paint.resolution,
+									settings.paint.gutter
+								)
 							: transferTexture(merged, geometry, settings.paint.resolution, settings.paint.gutter);
 					} else {
 						remeshMaterial.color.set(0xdddddd);

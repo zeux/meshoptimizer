@@ -2,6 +2,7 @@
 //
 // Remeshed atlas is rasterized in UV space, the triangle edges are expanded to cover extra gutter space.
 import * as THREE from 'three';
+import { BVHShaderGLSL, MeshBVHUniformStruct } from 'three-mesh-bvh';
 
 function expandGeometry(geometry, size, gutter) {
 	var position = geometry.attributes.position;
@@ -61,14 +62,55 @@ function expandGeometry(geometry, size, gutter) {
 }
 
 var bakeMaterial = new THREE.ShaderMaterial({
+	uniforms: {
+		bvh: { value: null },
+		thickness: { value: 0 },
+	},
 	vertexShader: `
+varying vec3 vPosition;
+varying vec3 vNormal;
+
 void main() {
+	vPosition = position;
+	vNormal = normal;
+
 	gl_Position = vec4(uv * 2.0 - 1.0, 0.0, 1.0);
 }
 `,
 	fragmentShader: `
+precision highp isampler2D;
+precision highp usampler2D;
+
+${BVHShaderGLSL.common_functions}
+${BVHShaderGLSL.bvh_struct_definitions}
+${BVHShaderGLSL.bvh_ray_functions}
+${BVHShaderGLSL.bvh_distance_functions}
+
+uniform BVH bvh;
+uniform float thickness;
+
+varying vec3 vPosition;
+varying vec3 vNormal;
+
 void main() {
-	gl_FragColor = vec4(1.0);
+	vec3 normal = normalize(vNormal);
+
+	uvec4 face = uvec4(0u);
+	vec3 faceNormal = vec3(0.0), bary = vec3(0.0), closest = vec3(0.0);
+	float side = 1.0, dist = 0.0;
+	float maxClosest = thickness * 10.0;
+
+	if (bvhIntersectFirstHit(bvh, vPosition + normal * thickness, -normal, face, faceNormal, bary, side, dist) && dist < thickness * 2.0) {
+		// ray hit
+	} else if (bvhClosestPointToPoint(bvh, vPosition, maxClosest, face, faceNormal, bary, side, closest) < maxClosest) {
+		// closest point found; note, bary is ordered incorrectly in three-mesh-bvh for closest point so we need to swizzle it
+		bary = bary.zxy;
+	} else {
+		discard;
+	}
+
+	uint hash = face.w * 2654435761u;
+	gl_FragColor = vec4(vec3(uvec3(hash >> 16u, hash >> 8u, hash) & 255u) / 255.0, 1.0);
 }
 `,
 	depthTest: false,
@@ -76,8 +118,14 @@ void main() {
 	side: THREE.DoubleSide,
 });
 
-export function transferTexture(renderer, geometry, size, gutter) {
+export function transferTexture(renderer, geometry, bvh, thickness, size, gutter) {
 	var expanded = expandGeometry(geometry, size, gutter);
+
+	var bvhgpu = new MeshBVHUniformStruct();
+	bvhgpu.updateFrom(bvh);
+
+	bakeMaterial.uniforms.bvh.value = bvhgpu;
+	bakeMaterial.uniforms.thickness.value = thickness;
 
 	var mesh = new THREE.Mesh(expanded, bakeMaterial);
 	mesh.frustumCulled = false;
@@ -101,6 +149,7 @@ export function transferTexture(renderer, geometry, size, gutter) {
 
 	expanded.dispose();
 	target.dispose();
+	bvhgpu.dispose();
 
 	var texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
 	texture.colorSpace = THREE.SRGBColorSpace;
