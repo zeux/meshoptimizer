@@ -84,6 +84,7 @@
 			import * as THREE from 'three';
 			import { GLTFLoader } from 'three-examples/loaders/GLTFLoader.js';
 			import { OBJLoader } from 'three-examples/loaders/OBJLoader.js';
+			import { GLTFExporter } from 'three-examples/exporters/GLTFExporter.js';
 			import { OrbitControls } from 'three-examples/controls/OrbitControls.js';
 			import { mergeGeometries, mergeVertices, toCreasedNormals } from 'three-examples/utils/BufferGeometryUtils.js';
 			import { MeshBVH } from 'three-mesh-bvh';
@@ -139,6 +140,11 @@
 					revert();
 				},
 
+				exportFile: function () {
+					if (!remeshed) return;
+					exportGlb('remesh.glb');
+				},
+
 				updateModule: function () {
 					reload();
 					remesh();
@@ -162,6 +168,7 @@
 			guiRemesh.add(settings, 'normalCrease', 0, 180, 1).name('normal crease');
 			guiRemesh.add(settings, 'remesh');
 			guiRemesh.add(settings, 'revert');
+			guiRemesh.add(settings, 'exportFile');
 
 			var guiSimplify = gui.addFolder('Simplify');
 			guiSimplify.add(settings.simplify, 'enabled');
@@ -662,6 +669,30 @@
 					stats.ratio = (triangles / (merged.index.count / 3)) * 100;
 					updateStatsDisplay();
 				});
+			}
+
+			function exportGlb(name) {
+				// can't export remeshed directly as it uses debug materials for wireframe
+				var mesh = new THREE.Mesh(remeshed.geometry, remeshMaterial);
+
+				new GLTFExporter().parse(
+					mesh,
+					function (glb) {
+						var link = document.createElement('a');
+						link.href = URL.createObjectURL(new Blob([glb], { type: 'model/gltf-binary' }));
+						link.download = name;
+						link.click();
+
+						// may resolve rare race conditions
+						setTimeout(function () {
+							URL.revokeObjectURL(link.href);
+						}, 0);
+					},
+					function (e) {
+						console.log(e);
+					},
+					{ binary: true }
+				);
 			}
 
 			function revert() {
