@@ -63,7 +63,7 @@ function expandGeometry(geometry, size, gutter) {
 
 var MAP_SIZE = 1024;
 var MAP_BUDGET = 1 << 30;
-var MAP_SLOTS = ['map', 'metalnessMap', 'roughnessMap'];
+var MAP_SLOTS = ['map', 'aoMap', 'emissiveMap', 'roughnessMap', 'metalnessMap'];
 
 function createTextureArray(materials) {
 	var textures = [];
@@ -111,7 +111,7 @@ function createTextureArray(materials) {
 }
 
 function createMaterialTexture(materials, layers) {
-	var stride = 12;
+	var stride = 24;
 	var count = Math.max(materials.length, 1);
 	var data = new Float32Array(count * stride);
 
@@ -130,17 +130,23 @@ function createMaterialTexture(materials, layers) {
 		data[i * stride + 2] = map ? map.offset.x : 0;
 		data[i * stride + 3] = map ? map.offset.y : 0;
 
-		// layer indices for all maps
-		data[i * stride + 4] = getLayer(material, 'map');
-		data[i * stride + 5] = getLayer(material, 'metalnessMap');
-		data[i * stride + 6] = getLayer(material, 'roughnessMap');
+		// layer indices
+		for (var j = 0; j < MAP_SLOTS.length; ++j) {
+			data[i * stride + 4 + j] = getLayer(material, MAP_SLOTS[j]);
+		}
 
 		// material parameters
-		data[i * stride + 7] = material.metalness !== undefined ? material.metalness : 0;
-		data[i * stride + 8] = material.color ? material.color.r : 1;
-		data[i * stride + 9] = material.color ? material.color.g : 1;
-		data[i * stride + 10] = material.color ? material.color.b : 1;
-		data[i * stride + 11] = material.roughness !== undefined ? material.roughness : 1;
+		data[i * stride + 12] = material.color ? material.color.r : 1;
+		data[i * stride + 13] = material.color ? material.color.g : 1;
+		data[i * stride + 14] = material.color ? material.color.b : 1;
+		data[i * stride + 15] = material.aoMapIntensity !== undefined ? material.aoMapIntensity : 1;
+
+		data[i * stride + 16] = material.emissive ? material.emissive.r * material.emissiveIntensity : 0;
+		data[i * stride + 17] = material.emissive ? material.emissive.g * material.emissiveIntensity : 0;
+		data[i * stride + 18] = material.emissive ? material.emissive.b * material.emissiveIntensity : 0;
+		data[i * stride + 19] = material.roughness !== undefined ? material.roughness : 1;
+
+		data[i * stride + 20] = material.metalness !== undefined ? material.metalness : 0;
 	}
 
 	var texture = new THREE.DataTexture(data, stride / 4, count, THREE.RGBAFormat, THREE.FloatType);
@@ -223,22 +229,36 @@ void main() {
 	vec4 md0 = texelFetch(materials, ivec2(0, mati), 0);
 	vec4 md1 = texelFetch(materials, ivec2(1, mati), 0);
 	vec4 md2 = texelFetch(materials, ivec2(2, mati), 0);
+	vec4 md3 = texelFetch(materials, ivec2(3, mati), 0);
+	vec4 md4 = texelFetch(materials, ivec2(4, mati), 0);
+	vec4 md5 = texelFetch(materials, ivec2(5, mati), 0);
 
+	// md0: uv transform, md1.xyzw + md2.x: layer indices in MAP_SLOTS order,
+	// md3: base color + ao intensity, md4: emissive color + roughness, md5.x: metalness
 	vec2 point = uv * md0.xy + md0.zw;
 
-	vec3 color = md2.rgb;
+	vec3 color = md3.rgb;
 	if (md1.x >= 0.0) color *= fromsrgb(texture(textures, vec3(point, md1.x)).rgb);
 
 	// vertex colors are linear, and are white when the source mesh or material doesn't use them
 	color *= textureSampleBarycoord(attrColor, bary, face.xyz).rgb;
 
-	float metalness = md1.w;
-	float roughness = md2.w;
-	if (md1.y >= 0.0) metalness *= texture(textures, vec3(point, md1.y)).b;
-	if (md1.z >= 0.0) roughness *= texture(textures, vec3(point, md1.z)).g;
+	if (md1.y >= 0.0) {
+		float occlusion = texture(textures, vec3(point, md1.y)).r;
+		color *= 1.0 + md3.w * (occlusion - 1.0);
+	}
+
+	float roughness = md4.w;
+	float metalness = md5.x;
+	if (md1.w >= 0.0) roughness *= texture(textures, vec3(point, md1.w)).g;
+	if (md2.x >= 0.0) metalness *= texture(textures, vec3(point, md2.x)).b;
 
 	// for now, bake metalness/roughness into color as an approximation
 	color *= 1.0 - metalness * (1.0 - roughness * roughness * roughness);
+
+	vec3 emissive = md4.rgb;
+	if (md1.z >= 0.0) emissive *= fromsrgb(texture(textures, vec3(point, md1.z)).rgb);
+	color += emissive;
 
 	gl_FragColor = vec4(tosrgb(color), 1.0);
 }
