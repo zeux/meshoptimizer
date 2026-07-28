@@ -90,6 +90,7 @@
 			import { MeshBVH } from 'three-mesh-bvh';
 			import { MeshoptDecoder } from '../js/meshopt_decoder.mjs';
 			import { MeshoptSimplifier } from '../js/meshopt_simplifier.js';
+			import * as retexture from './retexture.js';
 			import { Initialize as initializeWatlas, Atlas } from 'watlas';
 			import { GUI } from 'lil-gui';
 
@@ -117,6 +118,7 @@
 					mode: 'vertex',
 					resolution: 512,
 					gutter: 1,
+					gpu: false,
 				},
 
 				loadFile: function () {
@@ -180,6 +182,7 @@
 			guiPaint.add(settings.paint, 'mode', ['none', 'vertex', 'texture']);
 			guiPaint.add(settings.paint, 'resolution', [256, 512, 1024, 2048]);
 			guiPaint.add(settings.paint, 'gutter', 0, 8, 1);
+			guiPaint.add(settings.paint, 'gpu');
 
 			var guiLoad = gui.addFolder('Load');
 			guiLoad.add(settings, 'loadFile');
@@ -647,7 +650,9 @@
 					} else if (settings.paint.mode == 'texture') {
 						geometry = unwrapMesh(geometry, settings.paint.resolution, settings.paint.gutter);
 						remeshMaterial.color.set(0xffffff);
-						remeshMaterial.map = transferTexture(merged, geometry, settings.paint.resolution, settings.paint.gutter);
+						remeshMaterial.map = settings.paint.gpu
+							? retexture.transferTexture(renderer, geometry, settings.paint.resolution, settings.paint.gutter)
+							: transferTexture(merged, geometry, settings.paint.resolution, settings.paint.gutter);
 					} else {
 						remeshMaterial.color.set(0xdddddd);
 					}
