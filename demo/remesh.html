@@ -252,11 +252,27 @@
 				updateRendererSizes();
 			}
 
+			function copyAttribute(attribute, count, itemSize, def) {
+				var result = new Float32Array(count * itemSize).fill(def);
+
+				if (attribute) {
+					var copy = Math.min(itemSize, attribute.itemSize);
+					for (var i = 0; i < count; ++i) {
+						for (var k = 0; k < copy; ++k) {
+							result[i * itemSize + k] = attribute.getComponent(i, k);
+						}
+					}
+				}
+
+				return new THREE.BufferAttribute(result, itemSize);
+			}
+
 			function mergeMesh(model) {
 				var geometries = [];
 				var vertex = new THREE.Vector3();
 				var sourceTriangle = [];
 				var sourceMesh = [];
+				var materials = [];
 
 				model.updateMatrixWorld(true);
 				model.traverse(function (object) {
@@ -272,6 +288,19 @@
 
 						var geometry = new THREE.BufferGeometry();
 						geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+						// we need original normal/uv/colors for gpu retexture
+						// for mergeGeometries to agree to merge everything, we maintain consistent attribute sets
+						geometry.setAttribute('normal', copyAttribute(object.geometry.attributes.normal, source.count, 3, 0));
+						geometry.setAttribute('uv', copyAttribute(object.geometry.attributes.uv, source.count, 2, 0));
+						geometry.setAttribute('color', copyAttribute(object.geometry.attributes.color, source.count, 4, 1));
+
+						var material = Array.isArray(object.material) ? object.material[0] : object.material;
+						if (materials.indexOf(material) < 0) materials.push(material);
+
+						var materialIndex = new Uint32Array(source.count).fill(materials.indexOf(material));
+						geometry.setAttribute('material', new THREE.BufferAttribute(materialIndex, 1));
+
 						if (object.geometry.index) {
 							geometry.setIndex(object.geometry.index);
 						} else {
@@ -293,6 +322,7 @@
 				result.computeBoundingBox();
 				result.sourceTriangle = sourceTriangle;
 				result.sourceMesh = sourceMesh;
+				result.materials = materials;
 				result.bvh = new MeshBVH(result, { indirect: true });
 				result.thickness = result.boundingBox.getSize(new THREE.Vector3()).length() * 0.01;
 				return result;

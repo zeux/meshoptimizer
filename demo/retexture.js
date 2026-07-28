@@ -2,7 +2,7 @@
 //
 // Remeshed atlas is rasterized in UV space, the triangle edges are expanded to cover extra gutter space.
 import * as THREE from 'three';
-import { BVHShaderGLSL, MeshBVHUniformStruct } from 'three-mesh-bvh';
+import { BVHShaderGLSL, MeshBVHUniformStruct, FloatVertexAttributeTexture, UIntVertexAttributeTexture } from 'three-mesh-bvh';
 
 function expandGeometry(geometry, size, gutter) {
 	var position = geometry.attributes.position;
@@ -64,6 +64,10 @@ function expandGeometry(geometry, size, gutter) {
 var bakeMaterial = new THREE.ShaderMaterial({
 	uniforms: {
 		bvh: { value: null },
+		attrNormal: { value: null },
+		attrUv: { value: null },
+		attrColor: { value: null },
+		attrMaterial: { value: null },
 		thickness: { value: 0 },
 	},
 	vertexShader: `
@@ -87,6 +91,10 @@ ${BVHShaderGLSL.bvh_ray_functions}
 ${BVHShaderGLSL.bvh_distance_functions}
 
 uniform BVH bvh;
+uniform sampler2D attrNormal;
+uniform sampler2D attrUv;
+uniform sampler2D attrColor;
+uniform usampler2D attrMaterial;
 uniform float thickness;
 
 varying vec3 vPosition;
@@ -109,8 +117,9 @@ void main() {
 		discard;
 	}
 
-	uint hash = face.w * 2654435761u;
-	gl_FragColor = vec4(vec3(uvec3(hash >> 16u, hash >> 8u, hash) & 255u) / 255.0, 1.0);
+	vec2 uv = textureSampleBarycoord(attrUv, bary, face.xyz).xy;
+
+	gl_FragColor = vec4(uv, 0.0, 1.0);
 }
 `,
 	depthTest: false,
@@ -124,7 +133,22 @@ export function transferTexture(renderer, geometry, bvh, thickness, size, gutter
 	var bvhgpu = new MeshBVHUniformStruct();
 	bvhgpu.updateFrom(bvh);
 
+	var attributes = bvh.geometry.attributes;
+	var attrNormal = new FloatVertexAttributeTexture();
+	var attrUv = new FloatVertexAttributeTexture();
+	var attrColor = new FloatVertexAttributeTexture();
+	var attrMaterial = new UIntVertexAttributeTexture();
+
+	attrNormal.updateFrom(attributes.normal);
+	attrUv.updateFrom(attributes.uv);
+	attrColor.updateFrom(attributes.color);
+	attrMaterial.updateFrom(attributes.material);
+
 	bakeMaterial.uniforms.bvh.value = bvhgpu;
+	bakeMaterial.uniforms.attrNormal.value = attrNormal;
+	bakeMaterial.uniforms.attrUv.value = attrUv;
+	bakeMaterial.uniforms.attrColor.value = attrColor;
+	bakeMaterial.uniforms.attrMaterial.value = attrMaterial;
 	bakeMaterial.uniforms.thickness.value = thickness;
 
 	var mesh = new THREE.Mesh(expanded, bakeMaterial);
@@ -150,6 +174,10 @@ export function transferTexture(renderer, geometry, bvh, thickness, size, gutter
 	expanded.dispose();
 	target.dispose();
 	bvhgpu.dispose();
+	attrNormal.dispose();
+	attrUv.dispose();
+	attrColor.dispose();
+	attrMaterial.dispose();
 
 	var texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
 	texture.colorSpace = THREE.SRGBColorSpace;
