@@ -61,6 +61,93 @@ function expandGeometry(geometry, size, gutter) {
 	return result;
 }
 
+var MAP_SIZE = 1024;
+var MAP_BUDGET = 1 << 30;
+var MAP_SLOTS = ['map', 'metalnessMap', 'roughnessMap'];
+
+function createTextureArray(materials) {
+	var textures = [];
+	var layers = new Map();
+
+	for (var i = 0; i < materials.length; ++i) {
+		for (var j = 0; j < MAP_SLOTS.length; ++j) {
+			var texture = materials[i][MAP_SLOTS[j]];
+
+			// deduplicate images by source UUID to avoid wasting layers for reused images
+			if (texture && texture.image && !layers.has(texture.source)) {
+				layers.set(texture.source, textures.length);
+				textures.push(texture);
+			}
+		}
+	}
+
+	var depth = Math.max(textures.length, 1);
+	var size = MAP_SIZE;
+
+	// prevent accidental catastrophic memory use by downscaling texture array until it fits
+	while (size > 4 && depth * size * size * 4 > MAP_BUDGET) size /= 2;
+
+	// all images need to be resized to the same size because we need all of them in one texture array
+	var canvas = document.createElement('canvas');
+	canvas.width = canvas.height = size;
+	var context = canvas.getContext('2d', { willReadFrequently: true });
+
+	var data = new Uint8Array(size * size * 4 * depth);
+
+	for (var i = 0; i < textures.length; ++i) {
+		context.clearRect(0, 0, size, size);
+		context.drawImage(textures[i].image, 0, 0, size, size);
+		data.set(context.getImageData(0, 0, size, size).data, i * size * size * 4);
+	}
+
+	var result = new THREE.DataArrayTexture(data, size, size, depth);
+	result.wrapS = THREE.RepeatWrapping;
+	result.wrapT = THREE.RepeatWrapping;
+	result.minFilter = THREE.LinearFilter;
+	result.magFilter = THREE.LinearFilter;
+	result.needsUpdate = true;
+
+	return { array: result, layers: layers };
+}
+
+function createMaterialTexture(materials, layers) {
+	var stride = 12;
+	var count = Math.max(materials.length, 1);
+	var data = new Float32Array(count * stride);
+
+	function getLayer(material, slot) {
+		var texture = material[slot];
+		return texture && layers.has(texture.source) ? layers.get(texture.source) : -1;
+	}
+
+	for (var i = 0; i < materials.length; ++i) {
+		var material = materials[i];
+		var map = material.map;
+
+		// simplify UV transform by only taking repeat/offset from main texture
+		data[i * stride + 0] = map ? map.repeat.x : 1;
+		data[i * stride + 1] = map ? map.repeat.y : 1;
+		data[i * stride + 2] = map ? map.offset.x : 0;
+		data[i * stride + 3] = map ? map.offset.y : 0;
+
+		// layer indices for all maps
+		data[i * stride + 4] = getLayer(material, 'map');
+		data[i * stride + 5] = getLayer(material, 'metalnessMap');
+		data[i * stride + 6] = getLayer(material, 'roughnessMap');
+
+		// material parameters
+		data[i * stride + 7] = material.metalness !== undefined ? material.metalness : 0;
+		data[i * stride + 8] = material.color ? material.color.r : 1;
+		data[i * stride + 9] = material.color ? material.color.g : 1;
+		data[i * stride + 10] = material.color ? material.color.b : 1;
+		data[i * stride + 11] = material.roughness !== undefined ? material.roughness : 1;
+	}
+
+	var texture = new THREE.DataTexture(data, stride / 4, count, THREE.RGBAFormat, THREE.FloatType);
+	texture.needsUpdate = true;
+	return texture;
+}
+
 var bakeMaterial = new THREE.ShaderMaterial({
 	uniforms: {
 		bvh: { value: null },
@@ -68,6 +155,8 @@ var bakeMaterial = new THREE.ShaderMaterial({
 		attrUv: { value: null },
 		attrColor: { value: null },
 		attrMaterial: { value: null },
+		materials: { value: null },
+		textures: { value: null },
 		thickness: { value: 0 },
 	},
 	vertexShader: `
@@ -84,6 +173,7 @@ void main() {
 	fragmentShader: `
 precision highp isampler2D;
 precision highp usampler2D;
+precision highp sampler2DArray;
 
 ${BVHShaderGLSL.common_functions}
 ${BVHShaderGLSL.bvh_struct_definitions}
@@ -95,7 +185,17 @@ uniform sampler2D attrNormal;
 uniform sampler2D attrUv;
 uniform sampler2D attrColor;
 uniform usampler2D attrMaterial;
+uniform sampler2D materials;
+uniform sampler2DArray textures;
 uniform float thickness;
+
+vec3 fromsrgb(vec3 c) {
+	return pow(c, vec3(2.2));
+}
+
+vec3 tosrgb(vec3 c) {
+	return pow(c, vec3(1.0 / 2.2));
+}
 
 varying vec3 vPosition;
 varying vec3 vNormal;
@@ -118,8 +218,29 @@ void main() {
 	}
 
 	vec2 uv = textureSampleBarycoord(attrUv, bary, face.xyz).xy;
+	int mati = int(uTexelFetch1D(attrMaterial, face.x).r);
 
-	gl_FragColor = vec4(uv, 0.0, 1.0);
+	vec4 md0 = texelFetch(materials, ivec2(0, mati), 0);
+	vec4 md1 = texelFetch(materials, ivec2(1, mati), 0);
+	vec4 md2 = texelFetch(materials, ivec2(2, mati), 0);
+
+	vec2 point = uv * md0.xy + md0.zw;
+
+	vec3 color = md2.rgb;
+	if (md1.x >= 0.0) color *= fromsrgb(texture(textures, vec3(point, md1.x)).rgb);
+
+	// vertex colors are linear, and are white when the source mesh or material doesn't use them
+	color *= textureSampleBarycoord(attrColor, bary, face.xyz).rgb;
+
+	float metalness = md1.w;
+	float roughness = md2.w;
+	if (md1.y >= 0.0) metalness *= texture(textures, vec3(point, md1.y)).b;
+	if (md1.z >= 0.0) roughness *= texture(textures, vec3(point, md1.z)).g;
+
+	// for now, bake metalness/roughness into color as an approximation
+	color *= 1.0 - metalness * (1.0 - roughness * roughness * roughness);
+
+	gl_FragColor = vec4(tosrgb(color), 1.0);
 }
 `,
 	depthTest: false,
@@ -127,7 +248,7 @@ void main() {
 	side: THREE.DoubleSide,
 });
 
-export function transferTexture(renderer, geometry, bvh, thickness, size, gutter) {
+export function transferTexture(renderer, geometry, bvh, thickness, materials, size, gutter) {
 	var expanded = expandGeometry(geometry, size, gutter);
 
 	var bvhgpu = new MeshBVHUniformStruct();
@@ -144,11 +265,16 @@ export function transferTexture(renderer, geometry, bvh, thickness, size, gutter
 	attrColor.updateFrom(attributes.color);
 	attrMaterial.updateFrom(attributes.material);
 
+	var textures = createTextureArray(materials);
+	var materialsgpu = createMaterialTexture(materials, textures.layers);
+
 	bakeMaterial.uniforms.bvh.value = bvhgpu;
 	bakeMaterial.uniforms.attrNormal.value = attrNormal;
 	bakeMaterial.uniforms.attrUv.value = attrUv;
 	bakeMaterial.uniforms.attrColor.value = attrColor;
 	bakeMaterial.uniforms.attrMaterial.value = attrMaterial;
+	bakeMaterial.uniforms.materials.value = materialsgpu;
+	bakeMaterial.uniforms.textures.value = textures.array;
 	bakeMaterial.uniforms.thickness.value = thickness;
 
 	var mesh = new THREE.Mesh(expanded, bakeMaterial);
@@ -178,6 +304,8 @@ export function transferTexture(renderer, geometry, bvh, thickness, size, gutter
 	attrUv.dispose();
 	attrColor.dispose();
 	attrMaterial.dispose();
+	materialsgpu.dispose();
+	textures.array.dispose();
 
 	var texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
 	texture.colorSpace = THREE.SRGBColorSpace;
