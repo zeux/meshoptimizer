@@ -90,7 +90,7 @@
 			import { MeshBVH } from 'three-mesh-bvh';
 			import { MeshoptDecoder } from '../js/meshopt_decoder.mjs';
 			import { MeshoptSimplifier } from '../js/meshopt_simplifier.js';
-			import * as retexture from './retexture.js';
+			import * as repaint from './repaint.js';
 			import { Initialize as initializeWatlas, Atlas } from 'watlas';
 			import { GUI } from 'lil-gui';
 
@@ -289,7 +289,7 @@
 						var geometry = new THREE.BufferGeometry();
 						geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
-						// we need original normal/uv/colors for gpu retexture
+						// we need original normal/uv/colors for gpu repaint
 						// for mergeGeometries to agree to merge everything, we maintain consistent attribute sets
 						geometry.setAttribute('normal', copyAttribute(object.geometry.attributes.normal, source.count, 3, 0));
 						geometry.setAttribute('uv', copyAttribute(object.geometry.attributes.uv, source.count, 2, 0));
@@ -674,14 +674,16 @@
 					remeshMaterial.vertexColors = false;
 
 					if (settings.paint.mode == 'vertex') {
-						transferColors(merged, geometry);
+						if (settings.paint.gpu) repaint.transferColors(renderer, geometry, merged.bvh, merged.thickness, merged.materials);
+						else transferColors(merged, geometry);
+
 						remeshMaterial.vertexColors = true;
 						remeshMaterial.color.set(0xffffff);
 					} else if (settings.paint.mode == 'texture') {
 						geometry = unwrapMesh(geometry, settings.paint.resolution, settings.paint.gutter);
 						remeshMaterial.color.set(0xffffff);
 						remeshMaterial.map = settings.paint.gpu
-							? retexture.transferTexture(
+							? repaint.transferTexture(
 									renderer,
 									geometry,
 									merged.bvh,

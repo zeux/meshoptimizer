@@ -1,6 +1,9 @@
-// GPU texture transfer for remeshing demo
+// GPU color/texture transfer for remeshing demo
 //
 // Remeshed atlas is rasterized in UV space, the triangle edges are expanded to cover extra gutter space.
+// The fragment shader traces rays against the original mesh (falling back to closest point on miss).
+// The results are shaded using a simplified version of the original material, and written to the output texture.
+// When painting vertex colors, we directly rasterize points for target vertex/triangles and trace rays/eval materials as above.
 import * as THREE from 'three';
 import { BVHShaderGLSL, MeshBVHUniformStruct, FloatVertexAttributeTexture, UIntVertexAttributeTexture } from 'three-mesh-bvh';
 
@@ -59,6 +62,82 @@ function expandGeometry(geometry, size, gutter) {
 	result.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
 	result.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
 	return result;
+}
+
+function sampleGeometry(geometry, size) {
+	var position = geometry.attributes.position;
+	var normal = geometry.attributes.normal;
+	var indices = geometry.index.array;
+
+	var vertices = position.count;
+	var triangles = indices.length / 3;
+	var samples = vertices + triangles; // one sample per vertex plus one sample per triangle centroid
+
+	var positions = new Float32Array(samples * 3);
+	var normals = new Float32Array(samples * 3);
+	var uvs = new Float32Array(samples * 2);
+
+	for (var i = 0; i < vertices; ++i) {
+		for (var k = 0; k < 3; ++k) {
+			positions[i * 3 + k] = position.getComponent(i, k);
+			normals[i * 3 + k] = normal.getComponent(i, k);
+		}
+	}
+
+	for (var i = 0; i < triangles; ++i) {
+		var a = indices[i * 3 + 0],
+			b = indices[i * 3 + 1],
+			c = indices[i * 3 + 2];
+
+		// normals will be normalized in the shader
+		for (var k = 0; k < 3; ++k) {
+			positions[(vertices + i) * 3 + k] = (position.getComponent(a, k) + position.getComponent(b, k) + position.getComponent(c, k)) / 3;
+			normals[(vertices + i) * 3 + k] = normal.getComponent(a, k) + normal.getComponent(b, k) + normal.getComponent(c, k);
+		}
+	}
+
+	for (var i = 0; i < samples; ++i) {
+		uvs[i * 2 + 0] = ((i % size) + 0.5) / size;
+		uvs[i * 2 + 1] = (Math.floor(i / size) + 0.5) / size;
+	}
+
+	var result = new THREE.BufferGeometry();
+	result.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+	result.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+	result.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+	return result;
+}
+
+function extractColors(data, colors, indices) {
+	var vertices = colors.length / 4;
+	var triangles = indices.length / 3;
+
+	for (var i = 0; i < vertices; ++i) {
+		if (data[i * 4 + 3] == 0) continue;
+
+		for (var k = 0; k < 3; ++k) colors[i * 4 + k] = Math.pow(data[i * 4 + k] / 255, 2.2);
+		colors[i * 4 + 3] = 1;
+	}
+
+	for (var i = 0; i < triangles; ++i) {
+		var offset = (vertices + i) * 4;
+		if (data[offset + 3] == 0) continue;
+
+		for (var j = 0; j < 3; ++j) {
+			var v = indices[i * 3 + j];
+
+			for (var k = 0; k < 3; ++k) colors[v * 4 + k] += Math.pow(data[offset + k] / 255, 2.2);
+			colors[v * 4 + 3]++;
+		}
+	}
+
+	for (var i = 0; i < colors.length; i += 4) {
+		var weight = colors[i + 3];
+		if (weight == 0) continue;
+
+		for (var k = 0; k < 3; ++k) colors[i + k] /= weight;
+		colors[i + 3] = 1;
+	}
 }
 
 var MAP_SIZE = 1024;
@@ -174,6 +253,7 @@ void main() {
 	vNormal = normal;
 
 	gl_Position = vec4(uv * 2.0 - 1.0, 0.0, 1.0);
+	gl_PointSize = 1.0; // for vertex colors
 }
 `,
 	fragmentShader: `
@@ -268,9 +348,7 @@ void main() {
 	side: THREE.DoubleSide,
 });
 
-export function transferTexture(renderer, geometry, bvh, thickness, materials, size, gutter) {
-	var expanded = expandGeometry(geometry, size, gutter);
-
+function bindSource(bvh, thickness, materials) {
 	var bvhgpu = new MeshBVHUniformStruct();
 	bvhgpu.updateFrom(bvh);
 
@@ -297,9 +375,10 @@ export function transferTexture(renderer, geometry, bvh, thickness, materials, s
 	bakeMaterial.uniforms.textures.value = textures.array;
 	bakeMaterial.uniforms.thickness.value = thickness;
 
-	var mesh = new THREE.Mesh(expanded, bakeMaterial);
-	mesh.frustumCulled = false;
+	return [bvhgpu, attrNormal, attrUv, attrColor, attrMaterial, materialsgpu, textures.array];
+}
 
+function renderSamples(renderer, object, size) {
 	var target = new THREE.WebGLRenderTarget(size, size, {
 		minFilter: THREE.NearestFilter,
 		magFilter: THREE.NearestFilter,
@@ -309,28 +388,56 @@ export function transferTexture(renderer, geometry, bvh, thickness, materials, s
 
 	renderer.setClearColor(0x000000, 0);
 	renderer.setRenderTarget(target);
-	renderer.render(mesh, new THREE.OrthographicCamera());
+	renderer.render(object, new THREE.OrthographicCamera());
 
 	renderer.setRenderTarget(null);
 
-	// copy render target to DataTexture; this is redundant for display but we need this for GLB export to function
 	var data = new Uint8Array(size * size * 4);
 	renderer.readRenderTargetPixels(target, 0, 0, size, size, data);
 
-	expanded.dispose();
 	target.dispose();
-	bvhgpu.dispose();
-	attrNormal.dispose();
-	attrUv.dispose();
-	attrColor.dispose();
-	attrMaterial.dispose();
-	materialsgpu.dispose();
-	textures.array.dispose();
+	return data;
+}
 
+export function transferTexture(renderer, geometry, bvh, thickness, materials, size, gutter) {
+	var expanded = expandGeometry(geometry, size, gutter);
+	var resources = bindSource(bvh, thickness, materials);
+
+	var mesh = new THREE.Mesh(expanded, bakeMaterial);
+	mesh.frustumCulled = false;
+
+	var data = renderSamples(renderer, mesh, size);
+
+	expanded.dispose();
+	for (var i = 0; i < resources.length; ++i) resources[i].dispose();
+
+	// data comes from render texture, but we need it as DataTexture to be compatible with canvas/GLB export
 	var texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
 	texture.colorSpace = THREE.SRGBColorSpace;
 	texture.magFilter = THREE.LinearFilter;
 	texture.minFilter = THREE.LinearFilter;
 	texture.needsUpdate = true;
 	return texture;
+}
+
+export function transferColors(renderer, geometry, bvh, thickness, materials) {
+	var vertices = geometry.attributes.position.count;
+	var triangles = geometry.index.array.length / 3;
+	var size = Math.ceil(Math.sqrt(vertices + triangles));
+
+	var samples = sampleGeometry(geometry, size);
+	var resources = bindSource(bvh, thickness, materials);
+
+	var points = new THREE.Points(samples, bakeMaterial);
+	points.frustumCulled = false;
+
+	var data = renderSamples(renderer, points, size);
+
+	samples.dispose();
+	for (var i = 0; i < resources.length; ++i) resources[i].dispose();
+
+	var colors = new Float32Array(vertices * 4);
+	extractColors(data, colors, geometry.index.array);
+
+	geometry.setAttribute('color', new THREE.BufferAttribute(colors, 4));
 }
