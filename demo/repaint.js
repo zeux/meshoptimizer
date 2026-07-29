@@ -244,7 +244,7 @@ function createMaterialTexture(materials, layers) {
 	return texture;
 }
 
-var bakeMaterial = new THREE.ShaderMaterial({
+var bakeShader = new THREE.ShaderMaterial({
 	glslVersion: THREE.GLSL3,
 	uniforms: {
 		bvh: { value: null },
@@ -256,7 +256,8 @@ var bakeMaterial = new THREE.ShaderMaterial({
 		materials: { value: null },
 		textures: { value: null },
 		thickness: { value: 0 },
-		bakeNormal: { value: 0 },
+		bakeNormals: { value: 0 },
+		bakeMaterial: { value: 0 },
 	},
 	vertexShader: `
 attribute vec4 tangent;
@@ -293,7 +294,8 @@ uniform usampler2D attrMaterial;
 uniform sampler2D materials;
 uniform sampler2DArray textures;
 uniform float thickness;
-uniform float bakeNormal;
+uniform float bakeNormals;
+uniform float bakeMaterial;
 
 vec3 fromsrgb(vec3 c) {
 	return pow(c, vec3(2.2));
@@ -309,6 +311,7 @@ varying vec4 vTangent;
 
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outNormal;
+layout(location = 2) out vec4 outMaterial;
 
 void main() {
 	vec3 normal = normalize(vNormal);
@@ -357,8 +360,8 @@ void main() {
 	if (md1.w >= 0.0) roughness *= texture(textures, vec3(point, md1.w)).g;
 	if (md2.x >= 0.0) metalness *= texture(textures, vec3(point, md2.x)).b;
 
-	// for now, bake metalness/roughness into color as an approximation
-	color *= 1.0 - metalness * (1.0 - roughness * roughness * roughness);
+	// approximate metalness/roughness impact when material is not baked
+	if (bakeMaterial < 0.5) color *= 1.0 - metalness * (1.0 - roughness * roughness * roughness);
 
 	vec3 emissive = md4.rgb;
 	if (md1.z >= 0.0) emissive *= fromsrgb(texture(textures, vec3(point, md1.z)).rgb);
@@ -366,8 +369,9 @@ void main() {
 
 	outColor = vec4(tosrgb(color), 1.0);
 	outNormal = vec4(0.0);
+	outMaterial = vec4(0.0, roughness, metalness, 1.0);
 
-	if (bakeNormal > 0.5) {
+	if (bakeNormals > 0.5) {
 		vec3 snormal = textureSampleBarycoord(attrNormal, bary, face.xyz).xyz;
 
 		if (md2.y >= 0.0) {
@@ -393,17 +397,18 @@ void main() {
 	side: THREE.DoubleSide,
 });
 
-function bindCache(cache, thickness, normals) {
-	bakeMaterial.uniforms.bvh.value = cache.bvh;
-	bakeMaterial.uniforms.attrNormal.value = cache.attributes.normal;
-	bakeMaterial.uniforms.attrUv.value = cache.attributes.uv;
-	bakeMaterial.uniforms.attrColor.value = cache.attributes.color;
-	bakeMaterial.uniforms.attrTangent.value = cache.attributes.tangent;
-	bakeMaterial.uniforms.attrMaterial.value = cache.attributes.material;
-	bakeMaterial.uniforms.materials.value = cache.materials;
-	bakeMaterial.uniforms.textures.value = cache.textures;
-	bakeMaterial.uniforms.thickness.value = thickness;
-	bakeMaterial.uniforms.bakeNormal.value = normals ? 1 : 0;
+function bindCache(cache, thickness, bakeNormals, bakeMaterial) {
+	bakeShader.uniforms.bvh.value = cache.bvh;
+	bakeShader.uniforms.attrNormal.value = cache.attributes.normal;
+	bakeShader.uniforms.attrUv.value = cache.attributes.uv;
+	bakeShader.uniforms.attrColor.value = cache.attributes.color;
+	bakeShader.uniforms.attrTangent.value = cache.attributes.tangent;
+	bakeShader.uniforms.attrMaterial.value = cache.attributes.material;
+	bakeShader.uniforms.materials.value = cache.materials;
+	bakeShader.uniforms.textures.value = cache.textures;
+	bakeShader.uniforms.thickness.value = thickness;
+	bakeShader.uniforms.bakeNormals.value = bakeNormals ? 1 : 0;
+	bakeShader.uniforms.bakeMaterial.value = bakeMaterial ? 1 : 0;
 }
 
 function renderSamples(renderer, object, size, count) {
@@ -477,20 +482,22 @@ export function buildCache(bvh, materials) {
 	};
 }
 
-export function transferTexture(renderer, geometry, cache, thickness, size, gutter, normals) {
+export function transferTexture(renderer, geometry, cache, thickness, size, gutter, bakeNormals, bakeMaterial) {
 	var expanded = expandGeometry(geometry, size, gutter);
-	var mesh = new THREE.Mesh(expanded, bakeMaterial);
+	var mesh = new THREE.Mesh(expanded, bakeShader);
 	mesh.frustumCulled = false;
 
-	bindCache(cache, thickness, normals);
+	bindCache(cache, thickness, bakeNormals, bakeMaterial);
 
-	var data = renderSamples(renderer, mesh, size, normals ? 2 : 1);
+	var targets = bakeMaterial ? 3 : bakeNormals ? 2 : 1;
+	var data = renderSamples(renderer, mesh, size, targets);
 
 	expanded.dispose();
 
 	return {
 		map: createTexture(data[0], size, true),
-		normalMap: normals ? createTexture(data[1], size, false) : null,
+		normalMap: bakeNormals ? createTexture(data[1], size, false) : null,
+		materialMap: bakeMaterial ? createTexture(data[2], size, false) : null,
 	};
 }
 
@@ -500,10 +507,10 @@ export function transferColors(renderer, geometry, cache, thickness) {
 	var size = Math.ceil(Math.sqrt(vertices + triangles));
 
 	var samples = sampleGeometry(geometry, size);
-	var points = new THREE.Points(samples, bakeMaterial);
+	var points = new THREE.Points(samples, bakeShader);
 	points.frustumCulled = false;
 
-	bindCache(cache, thickness, false);
+	bindCache(cache, thickness, false, false);
 
 	var data = renderSamples(renderer, points, size, 1)[0];
 
