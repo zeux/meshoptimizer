@@ -128,6 +128,7 @@
 					mode: 'vertex',
 					resolution: 1024,
 					gutter: 1,
+					infill: true,
 					normals: false,
 					materials: false,
 				},
@@ -192,6 +193,7 @@
 			guiPaint.add(settings.paint, 'mode', ['none', 'vertex', 'texture']);
 			guiPaint.add(settings.paint, 'resolution', [256, 512, 1024, 2048]);
 			guiPaint.add(settings.paint, 'gutter', 0, 8, 1);
+			guiPaint.add(settings.paint, 'infill');
 			guiPaint.add(settings.paint, 'normals').name('normal map');
 			guiPaint.add(settings.paint, 'materials').name('material map');
 
@@ -487,6 +489,7 @@
 							merged.thickness,
 							settings.paint.resolution,
 							settings.paint.gutter,
+							settings.paint.infill,
 							settings.paint.normals,
 							settings.paint.materials
 						);

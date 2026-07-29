@@ -3,6 +3,7 @@
 // Remeshed atlas is rasterized in UV space, the triangle edges are expanded to cover extra gutter space.
 // The fragment shader traces rays against the original mesh (falling back to closest point on miss).
 // The results are shaded using a simplified version of the original material, and written to the output texture.
+// Texels that were not rasterized are infilled afterwards using the mips of the resulting texture.
 // When painting vertex colors, we directly rasterize points for target vertex/triangles and trace rays/eval materials as above.
 import * as THREE from 'three';
 import { BVHShaderGLSL, MeshBVHUniformStruct, FloatVertexAttributeTexture, UIntVertexAttributeTexture } from 'three-mesh-bvh';
@@ -399,6 +400,37 @@ void main() {
 	side: THREE.DoubleSide,
 });
 
+var infillShader = new THREE.ShaderMaterial({
+	glslVersion: THREE.GLSL3,
+	uniforms: {
+		map: { value: null },
+	},
+	vertexShader: `
+void main() {
+	gl_Position = vec4(vec2(gl_VertexID & 1, gl_VertexID >> 1) * 4.0 - 1.0, 0.0, 1.0);
+}
+`,
+	fragmentShader: `
+uniform sampler2D map;
+
+layout(location = 0) out vec4 result;
+
+void main() {
+	ivec2 p = ivec2(gl_FragCoord.xy);
+	vec2 uv = (vec2(p) + 0.5) / vec2(textureSize(map, 0));
+
+	// use first texel with non-zero alpha as fallback
+	vec4 c = texelFetch(map, p, 0);
+	for (int l = 1; l <= 10 && c.a < 1e-4; ++l) c = textureLod(map, uv, float(l));
+
+	// filtering results in premultiplied value that we need to unpremultiply
+	result = vec4(c.rgb / max(c.a, 1e-4), 1.0);
+}
+`,
+	depthTest: false,
+	depthWrite: false,
+});
+
 function bindCache(cache, thickness, bakeNormals, bakeMaterial) {
 	bakeShader.uniforms.bvh.value = cache.bvh;
 	bakeShader.uniforms.attrNormal.value = cache.attributes.normal;
@@ -413,28 +445,47 @@ function bindCache(cache, thickness, bakeNormals, bakeMaterial) {
 	bakeShader.uniforms.bakeMaterial.value = bakeMaterial ? 1 : 0;
 }
 
-function renderSamples(renderer, object, size, count) {
+function renderSamples(renderer, object, size, count, infill) {
 	var target = new THREE.WebGLRenderTarget(size, size, {
 		count: count,
-		minFilter: THREE.NearestFilter,
-		magFilter: THREE.NearestFilter,
+		minFilter: THREE.LinearMipmapNearestFilter, // we use linear filtering with explicit lod for infill
 		depthBuffer: false,
-		generateMipmaps: false,
+		generateMipmaps: infill,
 	});
+
+	var infilled = [];
+	for (var i = 0; infill && i < count; ++i) {
+		infilled.push(new THREE.WebGLRenderTarget(size, size, { depthBuffer: false }));
+	}
 
 	renderer.setClearColor(0x000000, 0);
 	renderer.setRenderTarget(target);
 	renderer.render(object, new THREE.OrthographicCamera());
+
+	if (infill) {
+		var infillQuad = new THREE.Mesh(new THREE.BufferGeometry(), infillShader);
+		infillQuad.geometry.setDrawRange(0, 3);
+		infillQuad.frustumCulled = false;
+
+		for (var i = 0; i < count; ++i) {
+			infillShader.uniforms.map.value = target.textures[i];
+
+			renderer.setRenderTarget(infilled[i]);
+			renderer.render(infillQuad, new THREE.OrthographicCamera());
+		}
+	}
 
 	renderer.setRenderTarget(null);
 
 	var data = [];
 	for (var i = 0; i < count; ++i) {
 		data.push(new Uint8Array(size * size * 4));
-		renderer.readRenderTargetPixels(target, 0, 0, size, size, data[i], undefined, i);
+		renderer.readRenderTargetPixels(infill ? infilled[i] : target, 0, 0, size, size, data[i], undefined, infill ? 0 : i);
 	}
 
 	target.dispose();
+	for (var i = 0; i < infilled.length; ++i) infilled[i].dispose();
+
 	return data;
 }
 
@@ -484,7 +535,7 @@ export function buildCache(bvh, materials) {
 	};
 }
 
-export function transferTexture(renderer, geometry, cache, thickness, size, gutter, bakeNormals, bakeMaterial) {
+export function transferTexture(renderer, geometry, cache, thickness, size, gutter, infill, bakeNormals, bakeMaterial) {
 	var expanded = expandGeometry(geometry, size, gutter);
 	var mesh = new THREE.Mesh(expanded, bakeShader);
 	mesh.frustumCulled = false;
@@ -492,7 +543,7 @@ export function transferTexture(renderer, geometry, cache, thickness, size, gutt
 	bindCache(cache, thickness, bakeNormals, bakeMaterial);
 
 	var targets = bakeMaterial ? 3 : bakeNormals ? 2 : 1;
-	var data = renderSamples(renderer, mesh, size, targets);
+	var data = renderSamples(renderer, mesh, size, targets, infill);
 
 	expanded.dispose();
 
