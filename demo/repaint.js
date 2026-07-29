@@ -348,34 +348,15 @@ void main() {
 	side: THREE.DoubleSide,
 });
 
-function bindSource(bvh, thickness, materials) {
-	var bvhgpu = new MeshBVHUniformStruct();
-	bvhgpu.updateFrom(bvh);
-
-	var attributes = bvh.geometry.attributes;
-	var attrNormal = new FloatVertexAttributeTexture();
-	var attrUv = new FloatVertexAttributeTexture();
-	var attrColor = new FloatVertexAttributeTexture();
-	var attrMaterial = new UIntVertexAttributeTexture();
-
-	attrNormal.updateFrom(attributes.normal);
-	attrUv.updateFrom(attributes.uv);
-	attrColor.updateFrom(attributes.color);
-	attrMaterial.updateFrom(attributes.material);
-
-	var textures = createTextureArray(materials);
-	var materialsgpu = createMaterialTexture(materials, textures.layers);
-
-	bakeMaterial.uniforms.bvh.value = bvhgpu;
-	bakeMaterial.uniforms.attrNormal.value = attrNormal;
-	bakeMaterial.uniforms.attrUv.value = attrUv;
-	bakeMaterial.uniforms.attrColor.value = attrColor;
-	bakeMaterial.uniforms.attrMaterial.value = attrMaterial;
-	bakeMaterial.uniforms.materials.value = materialsgpu;
-	bakeMaterial.uniforms.textures.value = textures.array;
+function bindCache(cache, thickness) {
+	bakeMaterial.uniforms.bvh.value = cache.bvh;
+	bakeMaterial.uniforms.attrNormal.value = cache.attributes.normal;
+	bakeMaterial.uniforms.attrUv.value = cache.attributes.uv;
+	bakeMaterial.uniforms.attrColor.value = cache.attributes.color;
+	bakeMaterial.uniforms.attrMaterial.value = cache.attributes.material;
+	bakeMaterial.uniforms.materials.value = cache.materials;
+	bakeMaterial.uniforms.textures.value = cache.textures;
 	bakeMaterial.uniforms.thickness.value = thickness;
-
-	return [bvhgpu, attrNormal, attrUv, attrColor, attrMaterial, materialsgpu, textures.array];
 }
 
 function renderSamples(renderer, object, size) {
@@ -399,17 +380,50 @@ function renderSamples(renderer, object, size) {
 	return data;
 }
 
-export function transferTexture(renderer, geometry, bvh, thickness, materials, size, gutter) {
-	var expanded = expandGeometry(geometry, size, gutter);
-	var resources = bindSource(bvh, thickness, materials);
+export function buildCache(bvh, materials) {
+	var bvhgpu = new MeshBVHUniformStruct();
+	var attrgpu = {
+		normal: new FloatVertexAttributeTexture(),
+		uv: new FloatVertexAttributeTexture(),
+		color: new FloatVertexAttributeTexture(),
+		material: new UIntVertexAttributeTexture(),
+	};
 
+	bvhgpu.updateFrom(bvh);
+	attrgpu.normal.updateFrom(bvh.geometry.attributes.normal);
+	attrgpu.uv.updateFrom(bvh.geometry.attributes.uv);
+	attrgpu.color.updateFrom(bvh.geometry.attributes.color);
+	attrgpu.material.updateFrom(bvh.geometry.attributes.material);
+
+	var textures = createTextureArray(materials);
+	var matgpu = createMaterialTexture(materials, textures.layers);
+
+	return {
+		bvh: bvhgpu,
+		attributes: attrgpu,
+		materials: matgpu,
+		textures: textures.array,
+
+		dispose: function () {
+			this.bvh.dispose();
+			this.materials.dispose();
+			this.textures.dispose();
+
+			for (var k in this.attributes) this.attributes[k].dispose();
+		},
+	};
+}
+
+export function transferTexture(renderer, geometry, cache, thickness, size, gutter) {
+	var expanded = expandGeometry(geometry, size, gutter);
 	var mesh = new THREE.Mesh(expanded, bakeMaterial);
 	mesh.frustumCulled = false;
+
+	bindCache(cache, thickness);
 
 	var data = renderSamples(renderer, mesh, size);
 
 	expanded.dispose();
-	for (var i = 0; i < resources.length; ++i) resources[i].dispose();
 
 	// data comes from render texture, but we need it as DataTexture to be compatible with canvas/GLB export
 	var texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
@@ -420,21 +434,20 @@ export function transferTexture(renderer, geometry, bvh, thickness, materials, s
 	return texture;
 }
 
-export function transferColors(renderer, geometry, bvh, thickness, materials) {
+export function transferColors(renderer, geometry, cache, thickness) {
 	var vertices = geometry.attributes.position.count;
 	var triangles = geometry.index.array.length / 3;
 	var size = Math.ceil(Math.sqrt(vertices + triangles));
 
 	var samples = sampleGeometry(geometry, size);
-	var resources = bindSource(bvh, thickness, materials);
-
 	var points = new THREE.Points(samples, bakeMaterial);
 	points.frustumCulled = false;
+
+	bindCache(cache, thickness);
 
 	var data = renderSamples(renderer, points, size);
 
 	samples.dispose();
-	for (var i = 0; i < resources.length; ++i) resources[i].dispose();
 
 	var colors = new Float32Array(vertices * 4);
 	extractColors(data, colors, geometry.index.array);

@@ -96,6 +96,7 @@
 
 			var container;
 			var camera, renderer, scene, controls, model, merged, remeshed, remeshMaterial, wireframeMaterial, stats;
+			var paintCache = null;
 
 			var settings = {
 				wireframe: false,
@@ -419,8 +420,12 @@
 
 					remeshMaterial.vertexColors = false;
 
+					if (settings.paint.mode != 'none') {
+						paintCache = paintCache || repaint.buildCache(merged.bvh, merged.materials);
+					}
+
 					if (settings.paint.mode == 'vertex') {
-						repaint.transferColors(renderer, geometry, merged.bvh, merged.thickness, merged.materials);
+						repaint.transferColors(renderer, geometry, paintCache, merged.thickness);
 						remeshMaterial.vertexColors = true;
 						remeshMaterial.color.set(0xffffff);
 					} else if (settings.paint.mode == 'texture') {
@@ -429,9 +434,8 @@
 						remeshMaterial.map = repaint.transferTexture(
 							renderer,
 							geometry,
-							merged.bvh,
+							paintCache,
 							merged.thickness,
-							merged.materials,
 							settings.paint.resolution,
 							settings.paint.gutter
 						);
@@ -559,6 +563,9 @@
 			function load(path, ext) {
 				if (model) scene.remove(model);
 				clearRemeshed();
+
+				if (paintCache) paintCache.dispose();
+				paintCache = null;
 
 				model = undefined;
 				merged = undefined;
