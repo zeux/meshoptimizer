@@ -351,7 +351,7 @@
 					indexData: indices,
 					indexCount: indices.length,
 				});
-				atlas.generate({}, { resolution: resolution, padding: gutter });
+				atlas.generate({ normalSeamWeight: 0 }, { resolution: resolution, padding: gutter });
 
 				var mesh = atlas.getMesh(0);
 				var atlasIndices = new Uint32Array(mesh.indexCount);
