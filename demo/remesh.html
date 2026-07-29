@@ -52,13 +52,17 @@
 				font-size: 12px;
 				line-height: 1.4;
 			}
-			#texture-view {
+			#texture-view,
+			#normal-view {
 				position: fixed;
 				left: 10px;
 				bottom: 10px;
 				width: 256px;
 				height: 256px;
 				display: none;
+			}
+			#normal-view {
+				left: 276px;
 			}
 		</style>
 
@@ -78,6 +82,7 @@
 	<body>
 		<div id="container"></div>
 		<canvas id="texture-view"></canvas>
+		<canvas id="normal-view"></canvas>
 		<input type="file" id="fileInput" style="display: none" accept=".obj,.glb" />
 
 		<script type="module">
@@ -90,6 +95,7 @@
 			import { MeshBVH } from 'three-mesh-bvh';
 			import { MeshoptDecoder } from '../js/meshopt_decoder.mjs';
 			import { MeshoptSimplifier } from '../js/meshopt_simplifier.js';
+			import { MeshoptTangents } from '../js/meshopt_tangents.js';
 			import * as repaint from './repaint.js';
 			import { Initialize as initializeWatlas, Atlas } from 'watlas';
 			import { GUI } from 'lil-gui';
@@ -117,6 +123,7 @@
 					mode: 'vertex',
 					resolution: 1024,
 					gutter: 1,
+					normals: false,
 				},
 
 				loadFile: function () {
@@ -179,6 +186,7 @@
 			guiPaint.add(settings.paint, 'mode', ['none', 'vertex', 'texture']);
 			guiPaint.add(settings.paint, 'resolution', [256, 512, 1024, 2048, 4096]);
 			guiPaint.add(settings.paint, 'gutter', 0, 8, 1);
+			guiPaint.add(settings.paint, 'normals').name('normal map');
 
 			var guiLoad = gui.addFolder('Load');
 			guiLoad.add(settings, 'loadFile');
@@ -302,6 +310,15 @@
 							for (var i = 0; i < source.count; ++i) indices[i] = i;
 							geometry.setIndex(new THREE.BufferAttribute(indices, 1));
 						}
+
+						// we prefer to use the original tangents, but we need to generate them if not present so that normal baking works
+						if (object.geometry.attributes.tangent) {
+							geometry.setAttribute('tangent', copyAttribute(object.geometry.attributes.tangent, source.count, 4, 0));
+						} else {
+							geometry = generateTangents(geometry);
+							geometry = mergeVertices(geometry);
+						}
+
 						geometry.applyMatrix4(object.matrixWorld);
 						geometries.push(geometry);
 					}
@@ -340,14 +357,25 @@
 				}
 				atlas.delete();
 
+				// uvs are computed per corner, for simplicity we deindex the geometry and expect caller to reindex
 				geometry = geometry.toNonIndexed();
 				geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-				geometry = mergeVertices(geometry);
 				return geometry;
 			}
 
-			function showTexture(texture) {
-				var canvas = document.getElementById('texture-view');
+			function generateTangents(geometry) {
+				var attr = geometry.attributes;
+				var indices = geometry.index ? new Uint32Array(geometry.index.array) : null;
+				var tangents = MeshoptTangents.generateTangents(indices, attr.position.array, 3, attr.normal.array, 3, attr.uv.array, 2);
+
+				// tangents are computed per corner, for simplicity we deindex the geometry and expect caller to reindex
+				if (indices) geometry = geometry.toNonIndexed();
+				geometry.setAttribute('tangent', new THREE.BufferAttribute(tangents, 4));
+				return geometry;
+			}
+
+			function showTexture(id, texture) {
+				var canvas = document.getElementById(id);
 				canvas.style.display = texture ? 'block' : 'none';
 				if (!texture) return;
 
@@ -366,7 +394,11 @@
 				if (remeshMaterial.map) remeshMaterial.map.dispose();
 				remeshMaterial.map = null;
 
-				showTexture(null);
+				if (remeshMaterial.normalMap) remeshMaterial.normalMap.dispose();
+				remeshMaterial.normalMap = null;
+
+				showTexture('texture-view', null);
+				showTexture('normal-view', null);
 			}
 
 			function simplifyMesh(geo, threshold, flags, solve) {
@@ -395,7 +427,7 @@
 			}
 
 			function remesh() {
-				MeshoptSimplifier.ready.then(initializeWatlas).then(function () {
+				Promise.all([MeshoptSimplifier.ready, MeshoptTangents.ready, initializeWatlas()]).then(function () {
 					if (!merged) return;
 
 					clearRemeshed();
@@ -419,6 +451,7 @@
 					geometry = mergeVertices(toCreasedNormals(geometry, THREE.MathUtils.degToRad(settings.debug ? 30 : settings.normalCrease)));
 
 					remeshMaterial.vertexColors = false;
+					remeshMaterial.roughness = 1;
 
 					if (settings.paint.mode != 'none') {
 						paintCache = paintCache || repaint.buildCache(merged.bvh, merged.materials);
@@ -430,15 +463,23 @@
 						remeshMaterial.color.set(0xffffff);
 					} else if (settings.paint.mode == 'texture') {
 						geometry = unwrapMesh(geometry, settings.paint.resolution, settings.paint.gutter);
-						remeshMaterial.color.set(0xffffff);
-						remeshMaterial.map = repaint.transferTexture(
+						if (settings.paint.normals) geometry = generateTangents(geometry);
+						geometry = mergeVertices(geometry);
+
+						var textures = repaint.transferTexture(
 							renderer,
 							geometry,
 							paintCache,
 							merged.thickness,
 							settings.paint.resolution,
-							settings.paint.gutter
+							settings.paint.gutter,
+							settings.paint.normals
 						);
+
+						remeshMaterial.color.set(0xffffff);
+						remeshMaterial.map = textures.map;
+						remeshMaterial.normalMap = textures.normalMap;
+						remeshMaterial.roughness = textures.normalMap ? 0.5 : 1;
 					} else {
 						remeshMaterial.color.set(0xdddddd);
 					}
@@ -451,7 +492,8 @@
 					remeshed = new THREE.Mesh(geometry, [remeshMaterial, wireframeMaterial]);
 					model.visible = false;
 					scene.add(remeshed);
-					showTexture(remeshMaterial.map);
+					showTexture('texture-view', remeshMaterial.map);
+					showTexture('normal-view', remeshMaterial.normalMap);
 					update();
 
 					var triangles = geometry.index.count / 3;

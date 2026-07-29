@@ -10,12 +10,14 @@ import { BVHShaderGLSL, MeshBVHUniformStruct, FloatVertexAttributeTexture, UIntV
 function expandGeometry(geometry, size, gutter) {
 	var position = geometry.attributes.position;
 	var normal = geometry.attributes.normal;
+	var tangent = geometry.attributes.tangent;
 	var uv = geometry.attributes.uv;
 	var indices = geometry.index.array;
 
 	var count = indices.length;
 	var positions = new Float32Array(count * 3);
 	var normals = new Float32Array(count * 3);
+	var tangents = tangent ? new Float32Array(count * 4) : null;
 	var uvs = new Float32Array(count * 2);
 
 	for (var i = 0; i < count; i += 3) {
@@ -52,6 +54,14 @@ function expandGeometry(geometry, size, gutter) {
 			normals[v * 3 + 1] = normal.getY(a) * w0 + normal.getY(b) * w1 + normal.getY(c) * w2;
 			normals[v * 3 + 2] = normal.getZ(a) * w0 + normal.getZ(b) * w1 + normal.getZ(c) * w2;
 
+			if (tangent) {
+				// tangents are only used when normal maps are baked
+				tangents[v * 4 + 0] = tangent.getX(a) * w0 + tangent.getX(b) * w1 + tangent.getX(c) * w2;
+				tangents[v * 4 + 1] = tangent.getY(a) * w0 + tangent.getY(b) * w1 + tangent.getY(c) * w2;
+				tangents[v * 4 + 2] = tangent.getZ(a) * w0 + tangent.getZ(b) * w1 + tangent.getZ(c) * w2;
+				tangents[v * 4 + 3] = tangent.getW(a) * w0 + tangent.getW(b) * w1 + tangent.getW(c) * w2;
+			}
+
 			uvs[v * 2 + 0] = (x0 * w0 + x1 * w1 + x2 * w2) / size;
 			uvs[v * 2 + 1] = (y0 * w0 + y1 * w1 + y2 * w2) / size;
 		}
@@ -61,6 +71,7 @@ function expandGeometry(geometry, size, gutter) {
 	result.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 	result.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
 	result.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+	if (tangent) result.setAttribute('tangent', new THREE.BufferAttribute(tangents, 4));
 	return result;
 }
 
@@ -142,7 +153,7 @@ function extractColors(data, colors, indices) {
 
 var MAP_SIZE = 1024;
 var MAP_BUDGET = 1 << 30;
-var MAP_SLOTS = ['map', 'aoMap', 'emissiveMap', 'roughnessMap', 'metalnessMap'];
+var MAP_SLOTS = ['map', 'aoMap', 'emissiveMap', 'roughnessMap', 'metalnessMap', 'normalMap'];
 
 function createTextureArray(materials) {
 	var textures = [];
@@ -234,23 +245,30 @@ function createMaterialTexture(materials, layers) {
 }
 
 var bakeMaterial = new THREE.ShaderMaterial({
+	glslVersion: THREE.GLSL3,
 	uniforms: {
 		bvh: { value: null },
 		attrNormal: { value: null },
 		attrUv: { value: null },
 		attrColor: { value: null },
+		attrTangent: { value: null },
 		attrMaterial: { value: null },
 		materials: { value: null },
 		textures: { value: null },
 		thickness: { value: 0 },
+		bakeNormal: { value: 0 },
 	},
 	vertexShader: `
+attribute vec4 tangent;
+
 varying vec3 vPosition;
 varying vec3 vNormal;
+varying vec4 vTangent;
 
 void main() {
 	vPosition = position;
 	vNormal = normal;
+	vTangent = tangent;
 
 	gl_Position = vec4(uv * 2.0 - 1.0, 0.0, 1.0);
 	gl_PointSize = 1.0; // for vertex colors
@@ -270,10 +288,12 @@ uniform BVH bvh;
 uniform sampler2D attrNormal;
 uniform sampler2D attrUv;
 uniform sampler2D attrColor;
+uniform sampler2D attrTangent;
 uniform usampler2D attrMaterial;
 uniform sampler2D materials;
 uniform sampler2DArray textures;
 uniform float thickness;
+uniform float bakeNormal;
 
 vec3 fromsrgb(vec3 c) {
 	return pow(c, vec3(2.2));
@@ -285,6 +305,10 @@ vec3 tosrgb(vec3 c) {
 
 varying vec3 vPosition;
 varying vec3 vNormal;
+varying vec4 vTangent;
+
+layout(location = 0) out vec4 outColor;
+layout(location = 1) out vec4 outNormal;
 
 void main() {
 	vec3 normal = normalize(vNormal);
@@ -313,7 +337,7 @@ void main() {
 	vec4 md4 = texelFetch(materials, ivec2(4, mati), 0);
 	vec4 md5 = texelFetch(materials, ivec2(5, mati), 0);
 
-	// md0: uv transform, md1.xyzw + md2.x: layer indices in MAP_SLOTS order,
+	// md0: uv transform, md1.xyzw + md2.xy: layer indices in MAP_SLOTS order,
 	// md3: base color + ao intensity, md4: emissive color + roughness, md5.x: metalness
 	vec2 point = uv * md0.xy + md0.zw;
 
@@ -340,7 +364,28 @@ void main() {
 	if (md1.z >= 0.0) emissive *= fromsrgb(texture(textures, vec3(point, md1.z)).rgb);
 	color += emissive;
 
-	gl_FragColor = vec4(tosrgb(color), 1.0);
+	outColor = vec4(tosrgb(color), 1.0);
+	outNormal = vec4(0.0);
+
+	if (bakeNormal > 0.5) {
+		vec3 snormal = textureSampleBarycoord(attrNormal, bary, face.xyz).xyz;
+
+		if (md2.y >= 0.0) {
+			vec4 stangent = textureSampleBarycoord(attrTangent, bary, face.xyz);
+			vec3 bitangent = cross(snormal, stangent.xyz) * (stangent.w < 0.0 ? -1.0 : 1.0);
+			vec3 nmap = texture(textures, vec3(point, md2.y)).xyz * 2.0 - 1.0;
+
+			// replace source (smooth) normal with perturbed normal
+			snormal = stangent.xyz * nmap.x + bitangent * nmap.y + snormal * nmap.z;
+		}
+
+		vec3 axisN = normal;
+		vec3 axisT = vTangent.xyz - axisN * dot(axisN, vTangent.xyz);
+		vec3 axisB = cross(axisN, axisT) * (vTangent.w < 0.0 ? -1.0 : 1.0);
+
+		vec3 tbn = vec3(dot(snormal, axisT), dot(snormal, axisB), dot(snormal, axisN));
+		outNormal = vec4(normalize(tbn) * 0.5 + 0.5, 1.0);
+	}
 }
 `,
 	depthTest: false,
@@ -348,19 +393,22 @@ void main() {
 	side: THREE.DoubleSide,
 });
 
-function bindCache(cache, thickness) {
+function bindCache(cache, thickness, normals) {
 	bakeMaterial.uniforms.bvh.value = cache.bvh;
 	bakeMaterial.uniforms.attrNormal.value = cache.attributes.normal;
 	bakeMaterial.uniforms.attrUv.value = cache.attributes.uv;
 	bakeMaterial.uniforms.attrColor.value = cache.attributes.color;
+	bakeMaterial.uniforms.attrTangent.value = cache.attributes.tangent;
 	bakeMaterial.uniforms.attrMaterial.value = cache.attributes.material;
 	bakeMaterial.uniforms.materials.value = cache.materials;
 	bakeMaterial.uniforms.textures.value = cache.textures;
 	bakeMaterial.uniforms.thickness.value = thickness;
+	bakeMaterial.uniforms.bakeNormal.value = normals ? 1 : 0;
 }
 
-function renderSamples(renderer, object, size) {
+function renderSamples(renderer, object, size, count) {
 	var target = new THREE.WebGLRenderTarget(size, size, {
+		count: count,
 		minFilter: THREE.NearestFilter,
 		magFilter: THREE.NearestFilter,
 		depthBuffer: false,
@@ -373,11 +421,24 @@ function renderSamples(renderer, object, size) {
 
 	renderer.setRenderTarget(null);
 
-	var data = new Uint8Array(size * size * 4);
-	renderer.readRenderTargetPixels(target, 0, 0, size, size, data);
+	var data = [];
+	for (var i = 0; i < count; ++i) {
+		data.push(new Uint8Array(size * size * 4));
+		renderer.readRenderTargetPixels(target, 0, 0, size, size, data[i], undefined, i);
+	}
 
 	target.dispose();
 	return data;
+}
+
+// data comes from render texture, but we need it as DataTexture to be compatible with canvas/GLB export
+function createTexture(data, size, srgb) {
+	var texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+	if (srgb) texture.colorSpace = THREE.SRGBColorSpace;
+	texture.magFilter = THREE.LinearFilter;
+	texture.minFilter = THREE.LinearFilter;
+	texture.needsUpdate = true;
+	return texture;
 }
 
 export function buildCache(bvh, materials) {
@@ -386,6 +447,7 @@ export function buildCache(bvh, materials) {
 		normal: new FloatVertexAttributeTexture(),
 		uv: new FloatVertexAttributeTexture(),
 		color: new FloatVertexAttributeTexture(),
+		tangent: new FloatVertexAttributeTexture(),
 		material: new UIntVertexAttributeTexture(),
 	};
 
@@ -393,6 +455,7 @@ export function buildCache(bvh, materials) {
 	attrgpu.normal.updateFrom(bvh.geometry.attributes.normal);
 	attrgpu.uv.updateFrom(bvh.geometry.attributes.uv);
 	attrgpu.color.updateFrom(bvh.geometry.attributes.color);
+	attrgpu.tangent.updateFrom(bvh.geometry.attributes.tangent);
 	attrgpu.material.updateFrom(bvh.geometry.attributes.material);
 
 	var textures = createTextureArray(materials);
@@ -414,24 +477,21 @@ export function buildCache(bvh, materials) {
 	};
 }
 
-export function transferTexture(renderer, geometry, cache, thickness, size, gutter) {
+export function transferTexture(renderer, geometry, cache, thickness, size, gutter, normals) {
 	var expanded = expandGeometry(geometry, size, gutter);
 	var mesh = new THREE.Mesh(expanded, bakeMaterial);
 	mesh.frustumCulled = false;
 
-	bindCache(cache, thickness);
+	bindCache(cache, thickness, normals);
 
-	var data = renderSamples(renderer, mesh, size);
+	var data = renderSamples(renderer, mesh, size, normals ? 2 : 1);
 
 	expanded.dispose();
 
-	// data comes from render texture, but we need it as DataTexture to be compatible with canvas/GLB export
-	var texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
-	texture.colorSpace = THREE.SRGBColorSpace;
-	texture.magFilter = THREE.LinearFilter;
-	texture.minFilter = THREE.LinearFilter;
-	texture.needsUpdate = true;
-	return texture;
+	return {
+		map: createTexture(data[0], size, true),
+		normalMap: normals ? createTexture(data[1], size, false) : null,
+	};
 }
 
 export function transferColors(renderer, geometry, cache, thickness) {
@@ -443,9 +503,9 @@ export function transferColors(renderer, geometry, cache, thickness) {
 	var points = new THREE.Points(samples, bakeMaterial);
 	points.frustumCulled = false;
 
-	bindCache(cache, thickness);
+	bindCache(cache, thickness, false);
 
-	var data = renderSamples(renderer, points, size);
+	var data = renderSamples(renderer, points, size, 1)[0];
 
 	samples.dispose();
 
