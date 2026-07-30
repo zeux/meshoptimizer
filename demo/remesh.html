@@ -73,8 +73,8 @@
 		<script type="importmap">
 			{
 				"imports": {
-					"three": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.module.js",
-					"three-examples/": "https://cdn.jsdelivr.net/npm/three@0.183.0/examples/jsm/",
+					"three": "https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.module.js",
+					"three-examples/": "https://cdn.jsdelivr.net/npm/three@0.185.0/examples/jsm/",
 					"three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.9.10/build/index.module.js",
 					"watlas": "https://cdn.jsdelivr.net/npm/watlas@1.0.1/dist/watlas.js",
 					"lil-gui": "https://cdn.jsdelivr.net/npm/lil-gui@0.20.0/dist/lil-gui.esm.js"
@@ -280,31 +280,39 @@
 				return new THREE.BufferAttribute(result, itemSize);
 			}
 
+			function skinAttribute(object, attribute, w) {
+				var v = new THREE.Vector4();
+
+				for (var i = 0; i < attribute.count; ++i) {
+					v.set(attribute.getX(i), attribute.getY(i), attribute.getZ(i), w);
+					object.applyBoneTransform(i, v);
+					if (w == 0) v.normalize();
+					attribute.setXYZ(i, v.x, v.y, v.z);
+				}
+			}
+
 			function mergeMesh(model) {
 				var geometries = [];
-				var vertex = new THREE.Vector3();
 				var materials = [];
 
 				model.updateMatrixWorld(true);
 				model.traverse(function (object) {
 					if (object.isMesh && object.geometry.attributes.position) {
 						var source = object.geometry.attributes.position;
-						var positions = new Float32Array(source.count * 3);
-
-						// getVertexPosition applies the skinning transform, if present
-						for (var i = 0; i < source.count; ++i) {
-							object.getVertexPosition(i, vertex);
-							vertex.toArray(positions, i * 3);
-						}
-
 						var geometry = new THREE.BufferGeometry();
-						geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+						geometry.setAttribute('position', copyAttribute(source, source.count, 3, 0));
 
 						// we need original normal/uv/colors for gpu repaint
 						// for mergeGeometries to agree to merge everything, we maintain consistent attribute sets
 						geometry.setAttribute('normal', copyAttribute(object.geometry.attributes.normal, source.count, 3, 0));
 						geometry.setAttribute('uv', copyAttribute(object.geometry.attributes.uv, source.count, 2, 0));
 						geometry.setAttribute('color', copyAttribute(object.geometry.attributes.color, source.count, 4, 1));
+
+						if (object.isSkinnedMesh) {
+							skinAttribute(object, geometry.attributes.position, 1);
+							skinAttribute(object, geometry.attributes.normal, 0);
+						}
 
 						var material = Array.isArray(object.material) ? object.material[0] : object.material;
 						if (materials.indexOf(material) < 0) materials.push(material);
@@ -323,6 +331,7 @@
 						// we prefer to use the original tangents, but we need to generate them if not present so that normal baking works
 						if (object.geometry.attributes.tangent) {
 							geometry.setAttribute('tangent', copyAttribute(object.geometry.attributes.tangent, source.count, 4, 0));
+							if (object.isSkinnedMesh) skinAttribute(object, geometry.attributes.tangent, 0);
 						} else {
 							geometry = generateTangents(geometry);
 							geometry = mergeVertices(geometry);
