@@ -97,7 +97,6 @@
 			import { GLTFExporter } from 'three-examples/exporters/GLTFExporter.js';
 			import { OrbitControls } from 'three-examples/controls/OrbitControls.js';
 			import { mergeGeometries, mergeVertices, toCreasedNormals } from 'three-examples/utils/BufferGeometryUtils.js';
-			import { MeshBVH } from 'three-mesh-bvh';
 			import { MeshoptDecoder } from '../js/meshopt_decoder.mjs';
 			import { MeshoptSimplifier } from '../js/meshopt_simplifier.js';
 			import { MeshoptTangents } from '../js/meshopt_tangents.js';
@@ -112,20 +111,20 @@
 			var settings = {
 				wireframe: false,
 				wireframeOverlay: false,
-				resolution: 64,
+				resolution: 100,
 				thicken: false,
 				shell: false,
 				solve: true,
 				debug: false,
 				normalCrease: 120,
 				simplify: {
-					enabled: false,
+					enabled: true,
 					regularize: true,
 					solve: true,
 					errorThresholdLog10: 2.5,
 				},
 				paint: {
-					mode: 'vertex',
+					mode: 'texture',
 					resolution: 1024,
 					gutter: 1,
 					infill: true,
@@ -345,7 +344,6 @@
 				var result = mergeGeometries(geometries);
 				result.computeBoundingBox();
 				result.materials = materials;
-				result.bvh = new MeshBVH(result, { indirect: true });
 				result.thickness = result.boundingBox.getSize(new THREE.Vector3()).length() * 0.01;
 				return result;
 			}
@@ -479,7 +477,7 @@
 					remeshMaterial.roughness = 1;
 
 					if (settings.paint.mode != 'none') {
-						paintCache = paintCache || repaint.buildCache(merged.bvh, merged.materials);
+						paintCache = paintCache || repaint.buildCache(merged, merged.materials);
 					}
 
 					if (settings.paint.mode == 'vertex') {

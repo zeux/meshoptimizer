@@ -6,7 +6,7 @@
 // Texels that were not rasterized are infilled afterwards using the mips of the resulting texture.
 // When painting vertex colors, we directly rasterize points for target vertex/triangles and trace rays/eval materials as above.
 import * as THREE from 'three';
-import { BVHShaderGLSL, MeshBVHUniformStruct, FloatVertexAttributeTexture, UIntVertexAttributeTexture } from 'three-mesh-bvh';
+import { MeshBVH, BVHShaderGLSL, MeshBVHUniformStruct, FloatVertexAttributeTexture, UIntVertexAttributeTexture } from 'three-mesh-bvh';
 
 function expandGeometry(geometry, size, gutter) {
 	var position = geometry.attributes.position;
@@ -499,7 +499,9 @@ function createTexture(data, size, srgb) {
 	return texture;
 }
 
-export function buildCache(bvh, materials) {
+export function buildCache(geometry, materials) {
+	var bvh = new MeshBVH(geometry, { indirect: true });
+
 	var bvhgpu = new MeshBVHUniformStruct();
 	var attrgpu = {
 		normal: new FloatVertexAttributeTexture(),
@@ -510,11 +512,11 @@ export function buildCache(bvh, materials) {
 	};
 
 	bvhgpu.updateFrom(bvh);
-	attrgpu.normal.updateFrom(bvh.geometry.attributes.normal);
-	attrgpu.uv.updateFrom(bvh.geometry.attributes.uv);
-	attrgpu.color.updateFrom(bvh.geometry.attributes.color);
-	attrgpu.tangent.updateFrom(bvh.geometry.attributes.tangent);
-	attrgpu.material.updateFrom(bvh.geometry.attributes.material);
+	attrgpu.normal.updateFrom(geometry.attributes.normal);
+	attrgpu.uv.updateFrom(geometry.attributes.uv);
+	attrgpu.color.updateFrom(geometry.attributes.color);
+	attrgpu.tangent.updateFrom(geometry.attributes.tangent);
+	attrgpu.material.updateFrom(geometry.attributes.material);
 
 	var textures = createTextureArray(materials);
 	var matgpu = createMaterialTexture(materials, textures.layers);
