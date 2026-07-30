@@ -1069,6 +1069,37 @@ static void encodeFilterExpZero()
 		assert(decoded[i] == 0);
 }
 
+static void encodeFilterExpOverflow()
+{
+	// at bits=24, values with an all-ones mantissa round up to 2^23 which must be clamped
+	const float data[4] = {
+	    0.99999994f, // largest float below 1.0
+	    -0.99999994f,
+	    255.99998f, // largest float below 256.0
+	    1.f,
+	};
+	const unsigned int expected[4] = {
+	    0xe97fffff,
+	    0xe9800000, // -2^23 is representable as is
+	    0xf17fffff,
+	    0xea400000,
+	};
+
+	unsigned int encoded[4];
+	meshopt_encodeFilterExp(encoded, 4, 4, 24, data, meshopt_EncodeExpSeparate);
+
+	assert(memcmp(encoded, expected, sizeof(expected)) == 0);
+
+	float decoded[4];
+	memcpy(decoded, encoded, sizeof(decoded));
+	meshopt_decodeFilterExp(decoded, 4, 4);
+
+	assert(decoded[0] == 0.99999988f);
+	assert(decoded[1] == -1.f);
+	assert(decoded[2] == 255.99997f);
+	assert(decoded[3] == 1.f);
+}
+
 static void encodeFilterExpZeroShared()
 {
 	const float data[4] = {
@@ -3503,6 +3534,7 @@ void runTests()
 	encodeFilterQuat12();
 	encodeFilterExp();
 	encodeFilterExpZero();
+	encodeFilterExpOverflow();
 	encodeFilterExpZeroShared();
 	encodeFilterExpAlias();
 	encodeFilterExpClamp();

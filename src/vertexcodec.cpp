@@ -1006,7 +1006,7 @@ static inline const unsigned char* decodeBytesGroupSimd(const unsigned char* dat
 		// arrange bits such that low bits of nibbles of data64 contain all 2-bit elements of data32
 		unsigned long long data64 = ((unsigned long long)data32 << 30) | data32;
 
-		// adds all 1-bit nibbles together; the sum fits in 4 bits because datacnt=16 would have used mode 3
+		// adds all 1-bit nibbles together; the sum fits in 4 bits because datacnt=16 would have used a cheaper mode
 		int datacnt = int(((data64 & 0x1111111111111111ull) * 0x1111111111111111ull) >> 60);
 #endif
 
@@ -1042,7 +1042,7 @@ static inline const unsigned char* decodeBytesGroupSimd(const unsigned char* dat
 		data64 &= data64 >> 1;
 		data64 &= data64 >> 2;
 
-		// adds all 1-bit nibbles together; the sum fits in 4 bits because datacnt=16 would have used mode 3
+		// adds all 1-bit nibbles together; the sum fits in 4 bits because datacnt=16 would have used a cheaper mode
 		int datacnt = int(((data64 & 0x1111111111111111ull) * 0x1111111111111111ull) >> 60);
 #endif
 
@@ -1651,7 +1651,7 @@ size_t meshopt_encodeVertexBufferLevel(unsigned char* buffer, size_t buffer_size
 		for (size_t k = 0; k < vertex_size; k += 4)
 		{
 			int rot = level >= 3 ? estimateRotate(vertex_data, vertex_count, vertex_size, k, /* group_size= */ 16) : 0;
-			int channel = estimateChannel(vertex_data, vertex_count, vertex_size, k, vertex_block_size, /* block_skip= */ 3, /* max_channels= */ level >= 3 ? 3 : 2, rot);
+			int channel = estimateChannel(vertex_data, vertex_count, vertex_size, k, vertex_block_size, /* block_skip= */ 3, /* max_channel= */ level >= 3 ? 3 : 2, rot);
 
 			assert(unsigned(channel) < 2 || ((channel & 3) == 2 && unsigned(channel >> 4) < 8));
 			channels[k / 4] = (unsigned char)channel;

@@ -350,6 +350,23 @@ struct hash<std::pair<uint64_t, uint64_t> >
 };
 } // namespace std
 
+struct PrimitiveCacheEntry
+{
+	size_t offset;
+	size_t size;
+	QuantizationTexture qt;
+};
+
+static bool sameQuantization(const QuantizationTexture& lhs, const QuantizationTexture& rhs, const Settings& settings)
+{
+	if (!settings.quantize || settings.tex_float)
+		return true;
+
+	return lhs.offset[0] == rhs.offset[0] && lhs.offset[1] == rhs.offset[1] &&
+	       lhs.scale[0] == rhs.scale[0] && lhs.scale[1] == rhs.scale[1] &&
+	       lhs.bits == rhs.bits && lhs.normalized == rhs.normalized;
+}
+
 static size_t process(cgltf_data* data, const char* input_path, const char* output_path, const char* report_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const Settings& settings, std::string& json, std::string& bin, std::string& fallback, size_t& fallback_size, const char* meshopt_ext)
 {
 	if (settings.verbose)
@@ -582,7 +599,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 		ext_texture_transform = ext_texture_transform || mi.uses_texture_transform;
 	}
 
-	std::unordered_map<std::pair<uint64_t, uint64_t>, std::pair<size_t, size_t> > primitive_cache;
+	std::unordered_map<std::pair<uint64_t, uint64_t>, PrimitiveCacheEntry> primitive_cache;
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
@@ -614,18 +631,19 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 
 			if (prim.geometry_duplicate)
 			{
-				std::pair<size_t, size_t>& primitive_json = primitive_cache[std::make_pair(prim.geometry_hash[0], prim.geometry_hash[1])];
+				PrimitiveCacheEntry& entry = primitive_cache[std::make_pair(prim.geometry_hash[0], prim.geometry_hash[1])];
 
-				if (primitive_json.second)
+				if (entry.size && sameQuantization(entry.qt, qt, settings))
 				{
 					// reuse previously written accessors
-					json_meshes.append(json_meshes, primitive_json.first, primitive_json.second);
+					json_meshes.append(json_meshes, entry.offset, entry.size);
 				}
 				else
 				{
-					primitive_json.first = json_meshes.size();
+					entry.offset = json_meshes.size();
 					writeMeshGeometry(json_meshes, views, json_accessors, accr_offset, prim, qp, qt, settings);
-					primitive_json.second = json_meshes.size() - primitive_json.first;
+					entry.size = json_meshes.size() - entry.offset;
+					entry.qt = qt;
 				}
 			}
 			else
@@ -1776,6 +1794,54 @@ extern "C" int pack(int argc, char** argv)
 #endif
 
 #ifdef GLTFFUZZ
+extern "C" size_t LLVMFuzzerMutate(uint8_t* data, size_t size, size_t max_size);
+
+extern "C" size_t LLVMFuzzerCustomMutator(uint8_t* data, size_t size, size_t max_size, unsigned int seed)
+{
+	// parse glTF/JSON chunk headers
+	if (size < 28 || memcmp(data, "glTF", 4) != 0 || memcmp(data + 16, "JSON", 4) != 0)
+		return LLVMFuzzerMutate(data, size, max_size);
+
+	uint32_t total_size, json_size;
+	memcpy(&total_size, data + 8, 4);
+	memcpy(&json_size, data + 12, 4);
+
+	// parse BIN chunk header (note, we assume it's required for simplicity)
+	if (json_size > size - 28 || memcmp(data + 24 + json_size, "BIN", 4) != 0)
+		return LLVMFuzzerMutate(data, size, max_size);
+
+	uint32_t bin_size;
+	memcpy(&bin_size, data + 20 + json_size, 4);
+
+	// final validation; note that all chunks must be 4 byte aligned
+	if (total_size != size || bin_size > size - 28 - json_size || 28 + json_size + bin_size != size || ((bin_size | json_size) & 3) != 0)
+		return LLVMFuzzerMutate(data, size, max_size);
+
+	// pick chunk to mutate; we default to mutating JSON but mutate BIN with 10% probability
+	bool mutate_bin = seed % 10 == 0;
+	size_t target_offset = mutate_bin ? 28 + json_size : 20;
+	size_t target_size = mutate_bin ? bin_size : json_size;
+
+	size_t target_capacity = (max_size - (size - target_size)) & ~3;
+
+	// mutate chunk and pad it to 4 byte boundary to maintain GLB alignment
+	std::vector<uint8_t> target(data + target_offset, data + target_offset + target_size);
+	target.resize(target_capacity);
+	target.resize(LLVMFuzzerMutate(target.data(), target_size, target_capacity));
+	target.resize((target.size() + 3) & ~3, mutate_bin ? 0 : ' ');
+
+	uint32_t new_target_size = uint32_t(target.size());
+	uint32_t new_total_size = uint32_t(size - target_size + new_target_size);
+
+	// patch the target chunk and update chunk length as well as total length
+	memmove(data + target_offset + new_target_size, data + target_offset + target_size, size - target_offset - target_size);
+	memcpy(data + target_offset, target.data(), new_target_size);
+	memcpy(data + 8, &new_total_size, 4);
+	memcpy(data + target_offset - 8, &new_target_size, 4);
+
+	return new_total_size;
+}
+
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* buffer, size_t size)
 {
 	Settings settings = defaults();
@@ -1798,7 +1864,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* buffer, size_t size)
 
 	std::string json, bin, fallback;
 	size_t fallback_size = 0;
-	process(data, NULL, NULL, NULL, meshes, animations, settings, json, bin, fallback, fallback_size, NULL);
+	process(data, NULL, NULL, NULL, meshes, animations, settings, json, bin, fallback, fallback_size, "KHR_meshopt_compression");
 
 	cgltf_free(data);
 

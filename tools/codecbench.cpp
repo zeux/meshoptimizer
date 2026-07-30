@@ -256,6 +256,7 @@ struct File
 	std::vector<unsigned char> data;
 	size_t stride;
 	size_t count;
+	bool index;
 };
 
 File readFile(const char* path)
@@ -266,11 +267,6 @@ File readFile(const char* path)
 	const char* name = strrchr(path, '/');
 	name = name ? name + 1 : path;
 
-	int vcnt, vsz;
-	int sr = sscanf(name, "v%d_s%d_", &vcnt, &vsz);
-	assert(sr == 2);
-	(void)sr;
-
 	std::vector<unsigned char> input;
 	unsigned char buffer[4096];
 	size_t bytes_read;
@@ -280,22 +276,42 @@ File readFile(const char* path)
 
 	fclose(file);
 
-	File result = {};
-	result.count = vcnt;
-	result.stride = vsz;
+	int vcnt, vsz, icnt;
 
-	std::vector<unsigned char> decoded(result.count * result.stride);
-	int res = meshopt_decodeVertexBuffer(&decoded[0], result.count, result.stride, &input[0], input.size());
-	if (res != 0 && input.size() == decoded.size())
+	if (sscanf(name, "v%d_s%d_", &vcnt, &vsz) == 2)
 	{
-		// some files are not encoded
-		memcpy(decoded.data(), input.data(), decoded.size());
+		File result = {};
+		result.count = vcnt;
+		result.stride = vsz;
+
+		std::vector<unsigned char> decoded(result.count * result.stride);
+		int res = meshopt_decodeVertexBuffer(&decoded[0], result.count, result.stride, &input[0], input.size());
+		if (res != 0 && input.size() == decoded.size())
+		{
+			// some files are not encoded
+			memcpy(decoded.data(), input.data(), decoded.size());
+		}
+
+		result.data.resize(meshopt_encodeVertexBufferBound(result.count, result.stride));
+		result.data.resize(meshopt_encodeVertexBuffer(result.data.data(), result.data.size(), decoded.data(), result.count, result.stride));
+
+		return result;
 	}
+	else if (sscanf(name, "i%d_", &icnt) == 1)
+	{
+		File result = {};
+		result.count = icnt;
+		result.stride = icnt <= 0xffff ? 2 : 4; // note: technically 2-byte indices can be used for larger meshes in some cases, but we simplify
+		result.index = true;
+		result.data = input;
 
-	result.data.resize(meshopt_encodeVertexBufferBound(result.count, result.stride));
-	result.data.resize(meshopt_encodeVertexBuffer(result.data.data(), result.data.size(), decoded.data(), result.count, result.stride));
-
-	return result;
+		return result;
+	}
+	else
+	{
+		assert(!"Unrecognized file name");
+		return {};
+	}
 }
 
 int main(int argc, char** argv)
@@ -344,11 +360,18 @@ int main(int argc, char** argv)
 			{
 				double t0 = timestamp();
 
-				for (size_t i = 0; i < files.size(); ++i)
+				for (const File& file : files)
 				{
-					int rv = meshopt_decodeVertexBuffer(&buffer[0], files[i].count, files[i].stride, &files[i].data[0], files[i].data.size());
-					assert(rv == 0);
-					(void)rv;
+					int rc =
+					    file.index
+					        ? meshopt_decodeIndexBuffer(&buffer[0], file.count, int(file.stride), &file.data[0], file.data.size())
+					        : meshopt_decodeVertexBuffer(&buffer[0], file.count, file.stride, &file.data[0], file.data.size());
+
+					if (rc != 0)
+					{
+						fprintf(stderr, "Failed to decode %zu bytes into %zu elements with stride %d (index %d)\n", file.data.size(), file.count, int(file.stride), int(file.index));
+						abort();
+					}
 				}
 
 				double t1 = timestamp();
