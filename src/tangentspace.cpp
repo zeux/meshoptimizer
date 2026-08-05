@@ -65,6 +65,40 @@ static void computeFaceTangents(Tangent* result, size_t triangle_count, const un
 	}
 }
 
+struct VertexHasherP
+{
+	const float* vertex_positions;
+	size_t vertex_positions_stride_float;
+
+	size_t hash(unsigned int index) const
+	{
+		const unsigned int* p = reinterpret_cast<const unsigned int*>(vertex_positions + index * vertex_positions_stride_float);
+
+		unsigned int x = p[0], y = p[1], z = p[2];
+
+		// replace negative zero with zero
+		x = (x == 0x80000000) ? 0 : x;
+		y = (y == 0x80000000) ? 0 : y;
+		z = (z == 0x80000000) ? 0 : z;
+
+		// scramble bits to make sure that integer coordinates have entropy in lower bits
+		x ^= x >> 17;
+		y ^= y >> 17;
+		z ^= z >> 17;
+
+		// Optimized Spatial Hashing for Collision Detection of Deformable Objects
+		return (x * 73856093) ^ (y * 19349663) ^ (z * 83492791);
+	}
+
+	bool equal(unsigned int lhs, unsigned int rhs) const
+	{
+		const float* lp = vertex_positions + lhs * vertex_positions_stride_float;
+		const float* rp = vertex_positions + rhs * vertex_positions_stride_float;
+
+		return lp[0] == rp[0] && lp[1] == rp[1] && lp[2] == rp[2];
+	}
+};
+
 struct VertexHasherF
 {
 	const float* vertex_positions;
@@ -154,10 +188,9 @@ static T* hashLookup4(T* table, size_t buckets, const Hash& hash, const T& key, 
 	return NULL;
 }
 
-static void buildVertexRemap(unsigned int* remap, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_normals, size_t vertex_normals_stride, const float* vertex_uvs, size_t vertex_uvs_stride, meshopt_Allocator& allocator)
+template <typename VertexHasher>
+static void buildVertexRemap(unsigned int* remap, size_t vertex_count, VertexHasher& vertex_hasher, meshopt_Allocator& allocator)
 {
-	VertexHasherF vertex_hasher = {vertex_positions, vertex_positions_stride / sizeof(float), vertex_normals, vertex_normals_stride / sizeof(float), vertex_uvs, vertex_uvs_stride / sizeof(float)};
-
 	size_t vertex_table_size = hashBuckets4(vertex_count);
 	unsigned int* vertex_table = allocator.allocate<unsigned int>(vertex_table_size);
 	memset(vertex_table, -1, vertex_table_size * sizeof(unsigned int));
@@ -392,7 +425,8 @@ void meshopt_generateTangents(float* result, const unsigned int* indices, size_t
 
 	// compute vertex remap to unique vertex index
 	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
-	buildVertexRemap(remap, vertex_positions, vertex_count, vertex_positions_stride, vertex_normals, vertex_normals_stride, vertex_uvs, vertex_uvs_stride, allocator);
+	VertexHasherF vertex_hasher = {vertex_positions, vertex_positions_stride / sizeof(float), vertex_normals, vertex_normals_stride / sizeof(float), vertex_uvs, vertex_uvs_stride / sizeof(float)};
+	buildVertexRemap(remap, vertex_count, vertex_hasher, allocator);
 
 	// build adjacency information
 	CornerAdjacency adjacency = {};
