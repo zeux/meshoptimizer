@@ -65,6 +65,41 @@ static void computeFaceTangents(Tangent* result, size_t triangle_count, const un
 	}
 }
 
+struct Normal
+{
+	float x, y, z;
+};
+
+static void computeFaceNormals(Normal* result, size_t triangle_count, const unsigned int* indices, const float* vertex_positions, size_t vertex_positions_stride)
+{
+	size_t vertex_position_stride_float = vertex_positions_stride / sizeof(float);
+
+	for (size_t i = 0; i < triangle_count; ++i)
+	{
+		unsigned int a = indices ? indices[i * 3 + 0] : unsigned(i * 3 + 0);
+		unsigned int b = indices ? indices[i * 3 + 1] : unsigned(i * 3 + 1);
+		unsigned int c = indices ? indices[i * 3 + 2] : unsigned(i * 3 + 2);
+
+		const float* pa = &vertex_positions[a * vertex_position_stride_float];
+		const float* pb = &vertex_positions[b * vertex_position_stride_float];
+		const float* pc = &vertex_positions[c * vertex_position_stride_float];
+
+		float dp1x = pb[0] - pa[0], dp1y = pb[1] - pa[1], dp1z = pb[2] - pa[2];
+		float dp2x = pc[0] - pa[0], dp2y = pc[1] - pa[1], dp2z = pc[2] - pa[2];
+
+		float nx = dp1y * dp2z - dp1z * dp2y;
+		float ny = dp1z * dp2x - dp1x * dp2z;
+		float nz = dp1x * dp2y - dp1y * dp2x;
+
+		float nl = sqrtf(nx * nx + ny * ny + nz * nz);
+		float ns = nl != 0.f ? 1.f / nl : 0.f;
+
+		result[i].x = nx * ns;
+		result[i].y = ny * ns;
+		result[i].z = nz * ns;
+	}
+}
+
 struct VertexHasherP
 {
 	const float* vertex_positions;
@@ -490,4 +525,56 @@ void meshopt_generateTangents(float* result, const unsigned int* indices, size_t
 	for (size_t i = 0; i < index_count; ++i)
 		if (groups[i] != i)
 			memcpy(&result[i * 4], &result[size_t(groups[i]) * 4], sizeof(float) * 3); // .w was set per face earlier
+}
+
+void meshopt_generateNormals(float* result, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, float crease_angle)
+{
+	using namespace meshopt;
+
+	assert(indices || index_count == vertex_count);
+	assert(index_count % 3 == 0);
+	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
+
+	meshopt_Allocator allocator;
+
+	size_t face_count = index_count / 3;
+
+	// compute vertex remap to unique vertex index
+	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
+	VertexHasherP vertex_hasher = {vertex_positions, vertex_positions_stride / sizeof(float)};
+	buildVertexRemap(remap, vertex_count, vertex_hasher, allocator);
+
+	// build adjacency information
+	CornerAdjacency adjacency = {};
+	buildCornerAdjacency(adjacency, indices, index_count, remap, vertex_count, allocator);
+
+	// compute per-triangle normals
+	Normal* face_normals = allocator.allocate<Normal>(face_count);
+	computeFaceNormals(face_normals, face_count, indices, vertex_positions, vertex_positions_stride);
+
+	// compute per-corner normal groups: triangles adjacent to the same vertex with similar normals are merged in strips
+	unsigned int* groups = allocator.allocate<unsigned int>(index_count);
+	for (size_t i = 0; i < index_count; ++i)
+		groups[i] = unsigned(i);
+
+	// TODO: actually merge groups :)
+	for (size_t i = 0; i < index_count; ++i)
+		memcpy(&result[i * 3], &face_normals[i / 3], sizeof(float) * 3);
+
+	// finalize normal vectors by normalizing roots and propagating the rest
+	for (size_t i = 0; i < index_count; ++i)
+		if (groups[i] == i)
+		{
+			float* r = &result[i * 3];
+			float l = sqrtf(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]);
+			float s = l == 0.f ? 0.f : 1.f / l;
+
+			r[0] *= s;
+			r[1] *= s;
+			r[2] *= s;
+		}
+
+	for (size_t i = 0; i < index_count; ++i)
+		if (groups[i] != i)
+			memcpy(&result[i * 3], &result[size_t(groups[i]) * 3], sizeof(float) * 3);
 }
