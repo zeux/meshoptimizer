@@ -391,7 +391,7 @@ static void mergeNormalGroups(unsigned int* groups, const unsigned int* data, si
 			const Normal& fj = face_normals[tj];
 
 			// merge normal groups if triangles are adjacent and normal angle is below crease threshold
-			if ((njb == nic || njc == nib) && fi.x * fj.x + fi.y * fj.y + fi.z * fj.z >= crease_cutoff)
+			if ((njb == nic || njc == nib) && fi.x * fj.x + fi.y * fj.y + fi.z * fj.z > crease_cutoff)
 			{
 				// union normal groups for individual corners with gi as the root
 				unsigned int gi = follow2(groups, ti * 3 + (data[i] & 3));
@@ -526,6 +526,74 @@ static void accumulateNormals(float* result, const unsigned int* groups, const u
 	}
 }
 
+static void smoothNormals(float* result, float* scratch, const unsigned int* groups, size_t index_count, float alpha)
+{
+	static const int next[4] = {1, 2, 0, 1};
+
+	size_t face_count = index_count / 3;
+
+	// renormalize group roots so that smoothing accumulation sees unit-length normals
+	for (size_t i = 0; i < index_count; ++i)
+		if (groups[i] == i)
+		{
+			float* r = &result[i * 3];
+			float l = sqrtf(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]);
+			float s = l == 0.f ? 0.f : 1.f / l;
+
+			r[0] *= s;
+			r[1] *= s;
+			r[2] *= s;
+		}
+
+	memset(scratch, 0, index_count * 4 * sizeof(float));
+
+	// for each triangle, accumulate normal deltas alongside each edge in both directions
+	for (size_t i = 0; i < face_count; ++i)
+	{
+		for (int k = 0; k < 3; ++k)
+		{
+			unsigned int ga = groups[i * 3 + k];
+			unsigned int gb = groups[i * 3 + next[k]];
+
+			const float* na = &result[ga * 3];
+			const float* nb = &result[gb * 3];
+
+			// normal alignment is symmetric; we compute it once per edge and use dp^2 to strenthen the alignment
+			float dp = na[0] * nb[0] + na[1] * nb[1] + na[2] * nb[2];
+			float w = (dp > 0.f ? dp * dp : 0.f);
+
+			float nx = (nb[0] - na[0]) * w, ny = (nb[1] - na[1]) * w, nz = (nb[2] - na[2]) * w;
+
+			// accumulate deltas; the last component is used to compute delta averages below
+			float* sa = &scratch[ga * 4];
+			float* sb = &scratch[gb * 4];
+
+			sa[0] += nx;
+			sa[1] += ny;
+			sa[2] += nz;
+			sa[3] += 1.f;
+
+			sb[0] -= nx;
+			sb[1] -= ny;
+			sb[2] -= nz;
+			sb[3] += 1.f;
+		}
+	}
+
+	// apply average delta to group roots; note that we omit normalization as it will be done in a followup pass
+	for (size_t i = 0; i < index_count; ++i)
+		if (groups[i] == i && scratch[i * 4 + 3] > 0.f)
+		{
+			float* r = &result[i * 3];
+			const float* s = &scratch[i * 4];
+			float sw = alpha / s[3];
+
+			r[0] += s[0] * sw;
+			r[1] += s[1] * sw;
+			r[2] += s[2] * sw;
+		}
+}
+
 } // namespace meshopt
 
 void meshopt_generateTangents(float* result, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_normals, size_t vertex_normals_stride, const float* vertex_uvs, size_t vertex_uvs_stride, unsigned int options)
@@ -612,13 +680,14 @@ void meshopt_generateTangents(float* result, const unsigned int* indices, size_t
 			memcpy(&result[i * 4], &result[size_t(groups[i]) * 4], sizeof(float) * 3); // .w was set per face earlier
 }
 
-void meshopt_generateNormals(float* result, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, float crease_angle)
+void meshopt_generateNormals(float* result, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, float crease_angle, float smoothing)
 {
 	using namespace meshopt;
 
 	assert(indices || index_count == vertex_count);
 	assert(index_count % 3 == 0);
 	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
+	assert(vertex_positions_stride % sizeof(float) == 0);
 
 	meshopt_Allocator allocator;
 
@@ -653,6 +722,22 @@ void meshopt_generateNormals(float* result, const unsigned int* indices, size_t 
 	// accumulate normals into their own respective groups
 	memset(result, 0, index_count * sizeof(float) * 3);
 	accumulateNormals(result, groups, indices, index_count, remap, face_normals, vertex_positions, vertex_positions_stride);
+
+	if (smoothing > 0.f)
+	{
+		int passes = int(ceilf(smoothing));
+		passes = passes < 10 ? passes : 10; // clamp to avoid pathological cases
+
+		float* scratch = allocator.allocate<float>(index_count * 4);
+
+		for (int pass = 0; pass < passes; ++pass)
+		{
+			float rem = smoothing - float(pass);
+			float alpha = 0.5f * (rem < 1.f ? rem : 1.f);
+
+			smoothNormals(result, scratch, groups, index_count, alpha);
+		}
+	}
 
 	// finalize normal vectors by normalizing roots and propagating the rest
 	for (size_t i = 0; i < index_count; ++i)
