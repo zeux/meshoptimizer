@@ -414,7 +414,7 @@ inline float optacos(float x)
 	return x < 0.f ? 3.1415926f - r : r;
 }
 
-static void accumulateTangents(float* result, const unsigned int* groups, const unsigned int* indices, size_t index_count, const unsigned int* remap, const Tangent* face_tangents, const float* vertex_positions, size_t vertex_positions_stride, const float* vertex_normals, size_t vertex_normals_stride, unsigned int options)
+static void accumulateTangents(float* result, const unsigned int* groups, const unsigned int* indices, size_t index_count, const Tangent* face_tangents, const float* vertex_positions, size_t vertex_positions_stride, const float* vertex_normals, size_t vertex_normals_stride, unsigned int options)
 {
 	static const int next[4] = {1, 2, 0, 1};
 
@@ -434,9 +434,9 @@ static void accumulateTangents(float* result, const unsigned int* groups, const 
 		{
 			float* r = &result[size_t(groups[i * 3 + k]) * 4];
 
-			unsigned int a = indices ? remap[indices[i * 3 + k]] : remap[i * 3 + k];
-			unsigned int b = indices ? remap[indices[i * 3 + next[k]]] : remap[i * 3 + next[k]];
-			unsigned int c = indices ? remap[indices[i * 3 + next[k + 1]]] : remap[i * 3 + next[k + 1]];
+			unsigned int a = indices ? indices[i * 3 + k] : unsigned(i * 3 + k);
+			unsigned int b = indices ? indices[i * 3 + next[k]] : unsigned(i * 3 + next[k]);
+			unsigned int c = indices ? indices[i * 3 + next[k + 1]] : unsigned(i * 3 + next[k + 1]);
 
 			const float* pa = vertex_positions + a * vertex_position_stride_float;
 			const float* pb = vertex_positions + b * vertex_position_stride_float;
@@ -481,7 +481,7 @@ static void accumulateTangents(float* result, const unsigned int* groups, const 
 	}
 }
 
-static void accumulateNormals(float* result, const unsigned int* groups, const unsigned int* indices, size_t index_count, const unsigned int* remap, const Normal* face_normals, const float* vertex_positions, size_t vertex_positions_stride)
+static void accumulateNormals(float* result, const unsigned int* groups, const unsigned int* indices, size_t index_count, const Normal* face_normals, const float* vertex_positions, size_t vertex_positions_stride)
 {
 	static const int next[4] = {1, 2, 0, 1};
 
@@ -497,9 +497,9 @@ static void accumulateNormals(float* result, const unsigned int* groups, const u
 		{
 			float* r = &result[size_t(groups[i * 3 + k]) * 3];
 
-			unsigned int a = indices ? remap[indices[i * 3 + k]] : remap[i * 3 + k];
-			unsigned int b = indices ? remap[indices[i * 3 + next[k]]] : remap[i * 3 + next[k]];
-			unsigned int c = indices ? remap[indices[i * 3 + next[k + 1]]] : remap[i * 3 + next[k + 1]];
+			unsigned int a = indices ? indices[i * 3 + k] : unsigned(i * 3 + k);
+			unsigned int b = indices ? indices[i * 3 + next[k]] : unsigned(i * 3 + next[k]);
+			unsigned int c = indices ? indices[i * 3 + next[k + 1]] : unsigned(i * 3 + next[k + 1]);
 
 			const float* pa = vertex_positions + a * vertex_position_stride_float;
 			const float* pb = vertex_positions + b * vertex_position_stride_float;
@@ -648,7 +648,7 @@ void meshopt_generateTangents(float* result, const unsigned int* indices, size_t
 
 	// accumulate tangents into their own respective groups
 	memset(result, 0, index_count * sizeof(float) * 4);
-	accumulateTangents(result, groups, indices, index_count, remap, face_tangents, vertex_positions, vertex_positions_stride, vertex_normals, vertex_normals_stride, options);
+	accumulateTangents(result, groups, indices, index_count, face_tangents, vertex_positions, vertex_positions_stride, vertex_normals, vertex_normals_stride, options);
 
 	// finalize tangent signs for each face using facegroups
 	for (size_t i = 0; i < face_count; ++i)
@@ -688,11 +688,13 @@ void meshopt_generateNormals(float* result, const unsigned int* indices, size_t 
 	assert(index_count % 3 == 0);
 	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
+	assert(crease_angle >= 0 && crease_angle <= 3.1415927f);
+	assert(smoothing >= 0);
 
 	meshopt_Allocator allocator;
 
 	size_t face_count = index_count / 3;
-	float crease_cutoff = cosf(crease_angle); // TODO: degrees?
+	float crease_cutoff = cosf(crease_angle);
 
 	// compute vertex remap to unique vertex index
 	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
@@ -721,7 +723,7 @@ void meshopt_generateNormals(float* result, const unsigned int* indices, size_t 
 
 	// accumulate normals into their own respective groups
 	memset(result, 0, index_count * sizeof(float) * 3);
-	accumulateNormals(result, groups, indices, index_count, remap, face_normals, vertex_positions, vertex_positions_stride);
+	accumulateNormals(result, groups, indices, index_count, face_normals, vertex_positions, vertex_positions_stride);
 
 	if (smoothing > 0.f)
 	{
