@@ -364,6 +364,46 @@ static void mergeTangentGroups(unsigned int* groups, unsigned int* facegroups, u
 	}
 }
 
+static void mergeNormalGroups(unsigned int* groups, const unsigned int* data, size_t count, const unsigned int* indices, const unsigned int* remap, const Normal* face_normals, float crease_cutoff)
+{
+	static const int next[4] = {1, 2, 0, 1};
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		unsigned int ti = data[i] >> 2;
+		unsigned int cib = ti * 3 + next[(data[i] & 3) + 0];
+		unsigned int cic = ti * 3 + next[(data[i] & 3) + 1];
+
+		unsigned int nib = indices ? remap[indices[cib]] : remap[cib];
+		unsigned int nic = indices ? remap[indices[cic]] : remap[cic];
+
+		const Normal& fi = face_normals[ti];
+
+		for (size_t j = i + 1; j < count; ++j)
+		{
+			unsigned int tj = data[j] >> 2;
+			unsigned int cjb = tj * 3 + next[(data[j] & 3) + 0];
+			unsigned int cjc = tj * 3 + next[(data[j] & 3) + 1];
+
+			unsigned int njb = indices ? remap[indices[cjb]] : remap[cjb];
+			unsigned int njc = indices ? remap[indices[cjc]] : remap[cjc];
+
+			const Normal& fj = face_normals[tj];
+
+			// merge normal groups if triangles are adjacent and normal angle is below crease threshold
+			if ((njb == nic || njc == nib) && fi.x * fj.x + fi.y * fj.y + fi.z * fj.z >= crease_cutoff)
+			{
+				// union normal groups for individual corners with gi as the root
+				unsigned int gi = follow2(groups, ti * 3 + (data[i] & 3));
+				unsigned int gj = follow2(groups, tj * 3 + (data[j] & 3));
+
+				if (gi != gj)
+					groups[gj] = gi;
+			}
+		}
+	}
+}
+
 inline float optacos(float x)
 {
 	// approximation for acos(x) = sqrt(1 - abs(x)) * 2-degree polynomial, max error ~5e-4
@@ -374,7 +414,7 @@ inline float optacos(float x)
 	return x < 0.f ? 3.1415926f - r : r;
 }
 
-static void accumulateTangentGroups(float* result, const unsigned int* groups, const unsigned int* indices, size_t index_count, const unsigned int* remap, const Tangent* face_tangents, const float* vertex_positions, size_t vertex_positions_stride, const float* vertex_normals, size_t vertex_normals_stride, unsigned int options)
+static void accumulateTangents(float* result, const unsigned int* groups, const unsigned int* indices, size_t index_count, const unsigned int* remap, const Tangent* face_tangents, const float* vertex_positions, size_t vertex_positions_stride, const float* vertex_normals, size_t vertex_normals_stride, unsigned int options)
 {
 	static const int next[4] = {1, 2, 0, 1};
 
@@ -441,6 +481,51 @@ static void accumulateTangentGroups(float* result, const unsigned int* groups, c
 	}
 }
 
+static void accumulateNormals(float* result, const unsigned int* groups, const unsigned int* indices, size_t index_count, const unsigned int* remap, const Normal* face_normals, const float* vertex_positions, size_t vertex_positions_stride)
+{
+	static const int next[4] = {1, 2, 0, 1};
+
+	size_t vertex_position_stride_float = vertex_positions_stride / sizeof(float);
+
+	size_t face_count = index_count / 3;
+
+	for (size_t i = 0; i < face_count; ++i)
+	{
+		const Normal& n = face_normals[i];
+
+		for (int k = 0; k < 3; ++k)
+		{
+			float* r = &result[size_t(groups[i * 3 + k]) * 3];
+
+			unsigned int a = indices ? remap[indices[i * 3 + k]] : remap[i * 3 + k];
+			unsigned int b = indices ? remap[indices[i * 3 + next[k]]] : remap[i * 3 + next[k]];
+			unsigned int c = indices ? remap[indices[i * 3 + next[k + 1]]] : remap[i * 3 + next[k + 1]];
+
+			const float* pa = vertex_positions + a * vertex_position_stride_float;
+			const float* pb = vertex_positions + b * vertex_position_stride_float;
+			const float* pc = vertex_positions + c * vertex_position_stride_float;
+
+			// compute incident angle for weighting
+			float dp1x = pb[0] - pa[0], dp1y = pb[1] - pa[1], dp1z = pb[2] - pa[2];
+			float dp2x = pc[0] - pa[0], dp2y = pc[1] - pa[1], dp2z = pc[2] - pa[2];
+
+			float dp1l = dp1x * dp1x + dp1y * dp1y + dp1z * dp1z;
+			float dp2l = dp2x * dp2x + dp2y * dp2y + dp2z * dp2z;
+			float dpl = sqrtf(dp1l * dp2l);
+
+			float cosa = (dp1x * dp2x + dp1y * dp2y + dp1z * dp2z) * (dpl == 0.f ? 0.f : 1.f / dpl);
+			float angle = optacos(cosa); // optacos handles clamping to [-1..1]
+
+			// accumulate normal weighted by angle and edge length product; this weighting scheme matches the default scheme used for tangents
+			float w = angle * dpl;
+
+			r[0] += n.x * w;
+			r[1] += n.y * w;
+			r[2] += n.z * w;
+		}
+	}
+}
+
 } // namespace meshopt
 
 void meshopt_generateTangents(float* result, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_normals, size_t vertex_normals_stride, const float* vertex_uvs, size_t vertex_uvs_stride, unsigned int options)
@@ -495,7 +580,7 @@ void meshopt_generateTangents(float* result, const unsigned int* indices, size_t
 
 	// accumulate tangents into their own respective groups
 	memset(result, 0, index_count * sizeof(float) * 4);
-	accumulateTangentGroups(result, groups, indices, index_count, remap, face_tangents, vertex_positions, vertex_positions_stride, vertex_normals, vertex_normals_stride, options);
+	accumulateTangents(result, groups, indices, index_count, remap, face_tangents, vertex_positions, vertex_positions_stride, vertex_normals, vertex_normals_stride, options);
 
 	// finalize tangent signs for each face using facegroups
 	for (size_t i = 0; i < face_count; ++i)
@@ -538,6 +623,7 @@ void meshopt_generateNormals(float* result, const unsigned int* indices, size_t 
 	meshopt_Allocator allocator;
 
 	size_t face_count = index_count / 3;
+	float crease_cutoff = cosf(crease_angle); // TODO: degrees?
 
 	// compute vertex remap to unique vertex index
 	unsigned int* remap = allocator.allocate<unsigned int>(vertex_count);
@@ -557,9 +643,16 @@ void meshopt_generateNormals(float* result, const unsigned int* indices, size_t 
 	for (size_t i = 0; i < index_count; ++i)
 		groups[i] = unsigned(i);
 
-	// TODO: actually merge groups :)
+	for (size_t i = 0; i < vertex_count; ++i)
+		if (adjacency.offsets[i + 1] != adjacency.offsets[i])
+			mergeNormalGroups(groups, adjacency.data + adjacency.offsets[i], adjacency.offsets[i + 1] - adjacency.offsets[i], indices, remap, face_normals, crease_cutoff);
+
 	for (size_t i = 0; i < index_count; ++i)
-		memcpy(&result[i * 3], &face_normals[i / 3], sizeof(float) * 3);
+		groups[i] = follow2(groups, unsigned(i));
+
+	// accumulate normals into their own respective groups
+	memset(result, 0, index_count * sizeof(float) * 3);
+	accumulateNormals(result, groups, indices, index_count, remap, face_normals, vertex_positions, vertex_positions_stride);
 
 	// finalize normal vectors by normalizing roots and propagating the rest
 	for (size_t i = 0; i < index_count; ++i)
