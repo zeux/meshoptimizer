@@ -58,7 +58,7 @@ WASM_CLUSTERIZER_SOURCES=src/clusterizer.cpp src/meshletutils.cpp tools/wasmstub
 WASM_CLUSTERIZER_EXPORTS=meshopt_buildMeshletsBound meshopt_buildMeshletsFlex meshopt_buildMeshletsSpatial meshopt_computeClusterBounds meshopt_computeMeshletBounds meshopt_computeSphereBounds meshopt_optimizeMeshlet sbrk __wasm_call_ctors
 
 WASM_TANGENTS_SOURCES=src/tangentspace.cpp tools/wasmstubs.cpp
-WASM_TANGENTS_EXPORTS=meshopt_generateTangents sbrk __wasm_call_ctors
+WASM_TANGENTS_EXPORTS=meshopt_generateTangents meshopt_generateNormals sbrk __wasm_call_ctors
 
 ifneq ($(werror),)
 	CFLAGS+=-Werror

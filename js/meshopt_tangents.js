@@ -47,7 +47,7 @@ var MeshoptTangents = (function () {
 		return new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
 	}
 
-	function generate(
+	function gentangents(
 		indices,
 		index_count,
 		vertex_positions,
@@ -96,6 +96,37 @@ var MeshoptTangents = (function () {
 		return result;
 	}
 
+	function gennormals(indices, index_count, vertex_positions, vertex_count, vertex_positions_stride, crease_angle, smoothing) {
+		var sbrk = instance.exports.sbrk;
+
+		var resultp = sbrk(index_count * 12);
+		var indicesp = indices ? sbrk(indices.byteLength) : 0;
+		var positionsp = sbrk(vertex_positions.byteLength);
+
+		var heap = new Uint8Array(instance.exports.memory.buffer);
+		if (indices) heap.set(bytes(indices), indicesp);
+		heap.set(bytes(vertex_positions), positionsp);
+
+		instance.exports.meshopt_generateNormals(
+			resultp,
+			indicesp,
+			index_count,
+			positionsp,
+			vertex_count,
+			vertex_positions_stride * 4,
+			crease_angle,
+			smoothing
+		);
+
+		// heap may have grown
+		heap = new Uint8Array(instance.exports.memory.buffer);
+
+		var result = new Float32Array(heap.buffer, resultp, index_count * 3).slice();
+		sbrk(resultp - sbrk(0));
+
+		return result;
+	}
+
 	var tangentOptions = {
 		Compatible: 1,
 		ZeroFallback: 2,
@@ -104,6 +135,7 @@ var MeshoptTangents = (function () {
 	return {
 		ready: ready,
 		supported: true,
+
 		generateTangents: function (
 			indices,
 			vertex_positions,
@@ -145,7 +177,7 @@ var MeshoptTangents = (function () {
 			var index_count = indices ? indices.length : vertex_count;
 
 			var indices32 = indices === null || indices.BYTES_PER_ELEMENT == 4 ? indices : new Uint32Array(indices);
-			return generate(
+			return gentangents(
 				indices32,
 				index_count,
 				vertex_positions,
@@ -157,6 +189,27 @@ var MeshoptTangents = (function () {
 				vertex_uvs_stride,
 				options
 			);
+		},
+
+		generateNormals: function (indices, vertex_positions, vertex_positions_stride, crease_angle, smoothing) {
+			assert(
+				indices === null ||
+					indices instanceof Uint32Array ||
+					indices instanceof Int32Array ||
+					indices instanceof Uint16Array ||
+					indices instanceof Int16Array
+			);
+			assert(indices === null || indices.length % 3 == 0);
+			assert(vertex_positions instanceof Float32Array);
+			assert(vertex_positions.length % vertex_positions_stride == 0);
+			assert(vertex_positions_stride >= 3);
+			assert(indices !== null || (vertex_positions.length / vertex_positions_stride) % 3 == 0);
+
+			var vertex_count = vertex_positions.length / vertex_positions_stride;
+			var index_count = indices ? indices.length : vertex_count;
+
+			var indices32 = indices === null || indices.BYTES_PER_ELEMENT == 4 ? indices : new Uint32Array(indices);
+			return gennormals(indices32, index_count, vertex_positions, vertex_count, vertex_positions_stride, crease_angle, smoothing);
 		},
 	};
 })();
