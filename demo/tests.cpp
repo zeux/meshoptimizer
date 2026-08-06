@@ -3472,6 +3472,44 @@ static void tangentDegenerate()
 			assert(fabsf(tangents[i * 4 + k] - expected[i][k]) < 1e-3f);
 }
 
+static void normalsBasic()
+{
+	const float vertices[][3] = {
+	    {-1.f, -0.57735f, 0.f},
+	    {1.f, -0.57735f, 0.f},
+	    {0.f, 1.15470f, 0.f},
+	    {0.f, 0.f, 0.38f},
+	};
+
+	// flattened tetrahedron (apex is closer to the base so that we can get soft side edges)
+	const unsigned int indices[] = {0, 2, 1, 0, 1, 3, 1, 2, 3, 2, 0, 3};
+
+	float normals[12 * 3];
+	meshopt_generateNormals(normals, indices, 12, vertices[0], 4, sizeof(vertices[0]), 3.14159265f / 3.f, 0.f);
+
+	const float base[3] = {0.f, 0.f, -1.f};
+	const float side0[3] = {-0.2707f, -0.1563f, 0.9499f};
+	const float side1[3] = {0.2707f, -0.1563f, 0.9499f};
+	const float side2[3] = {0.f, 0.3126f, 0.9499f};
+	const float apex[3] = {0.f, 0.f, 1.f};
+
+	const float* expected[12] = {base, base, base, side0, side1, apex, side1, side2, apex, side2, side0, apex};
+
+	for (size_t i = 0; i < 12; ++i)
+		for (size_t k = 0; k < 3; ++k)
+			assert(fabsf(normals[i * 3 + k] - expected[i][k]) < 1e-3f);
+
+	// shared vertices around soft side edges get the same normal vector
+	for (size_t k = 0; k < 3; ++k)
+	{
+		assert(normals[3 * 3 + k] == normals[10 * 3 + k]); // side0
+		assert(normals[4 * 3 + k] == normals[6 * 3 + k]);  // side1
+		assert(normals[7 * 3 + k] == normals[9 * 3 + k]);  // side2
+		assert(normals[5 * 3 + k] == normals[8 * 3 + k]);  // apex
+		assert(normals[5 * 3 + k] == normals[11 * 3 + k]); // apex
+	}
+}
+
 void runTests()
 {
 	decodeIndexV0();
@@ -3611,4 +3649,5 @@ void runTests()
 
 	tangentsBasic();
 	tangentDegenerate();
+	normalsBasic();
 }
