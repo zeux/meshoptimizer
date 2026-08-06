@@ -908,6 +908,19 @@ for (size_t i = 0; i < indices.size(); ++i)
 
 The algorithm uses a MikkTSpace-like construction but by default, uses a modified weighting scheme that significantly improves tangent quality around beveled regions in the mesh. If the normal maps are baked from higher resolution geometry using MikkTSpace weighting, it's possible to produce MikkTSpace-compatible tangents by passing `meshopt_TangentCompatible` option as an extra argument to the function.
 
+While it is expected that the normals come from the authored mesh, this library also provides an algorithm to generate normals from positions alone:
+
+```c++
+const float crease = 1.f; // 1 rad ~= 60 deg
+const float smoothing = 1.5f;
+std::vector<vec3> normals(indices.size());
+meshopt_generateNormals(&normals[0].x, &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), crease, smoothing);
+```
+
+This function classifies edges as soft/hard based on the specified crease angle (in radians; 30/45/60 degrees are commonly used values) and computes a normal for every corner by averaging normals of incident faces connected by soft edges. Additionally, the `smoothing` parameter can be used to perform additional iterative smoothing of the resulting normals, with larger values resulting in smoother normals (recommended range `[0..5]`).
+
+Similarly to `meshopt_generateTangents`, this function computes per-corner normals (3 floats for each of 3 corners of each triangle). Applying them to mesh vertices requires de-indexing the mesh, or copying normals to existing vertices while duplicating vertices with different normals.
+
 ## Memory management
 
 Many algorithms allocate temporary memory to store intermediate results or accelerate processing. The amount of memory allocated is a function of various input parameters such as vertex count and index count. By default memory is allocated using `operator new` and `operator delete`; if these operators are overloaded by the application, the overloads will be used instead. Alternatively it's possible to specify custom allocation/deallocation functions using `meshopt_setAllocator`, e.g.
@@ -939,6 +952,7 @@ Currently, the following APIs are experimental:
 - `meshopt_SimplifyPermissive` mode for `meshopt_simplify*` functions
 - `meshopt_opacityMap*` functions (`meshopt_opacityMapMeasure`, `meshopt_opacityMapRasterize`, `meshopt_opacityMapCompact`, `meshopt_opacityMapEntrySize`)
 - `meshopt_generateTangents` function and `meshopt_Tangent*` flags
+- `meshopt_generateNormals` function
 - `meshopt_filterIndexBuffer` and `meshopt_filterIndexBufferMulti` functions
 - `meshopt_computePositionExponent` function
 
