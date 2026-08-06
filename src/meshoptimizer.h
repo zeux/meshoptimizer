@@ -940,7 +940,7 @@ enum
  * Bitangent can be reconstructed via cross(normal, tangent.xyz) * tangent.w.
  * To apply tangents to the mesh, either deindex and reindex it with the tangent stream, or copy tangents to existing vertex data while duplicating
  * vertices with different tangent vectors (e.g. on UV mirror seams).
- * Input can be indexed or unindexed (indices=NULL); this does not affect the resulting tangents, but indexed inputs are ~30% faster to process.
+ * Input can be indexed or unindexed (indices=NULL); this does not affect the resulting tangents, but indexed inputs are faster to process.
  *
  * result must contain enough space for the output tangent data (index_count*4 elements)
  * indices can be NULL if the input is unindexed
@@ -952,6 +952,16 @@ MESHOPTIMIZER_EXPERIMENTAL void meshopt_generateTangents(float* result, const un
 
 /**
  * Experimental: Normal generator
+ * Computes per-corner normal vectors; normals are averaged across soft edges, using crease angle to determine which edges are hard.
+ * To apply normals to the mesh, either deindex and reindex it with the normal stream, or copy normals to existing vertex data while duplicating
+ * vertices with different normal vectors (on normal seams).
+ * Input can be indexed or unindexed (indices=NULL); this does not affect the resulting normals, but indexed inputs are faster to process.
+ *
+ * result must contain enough space for the output normal data (index_count*3 elements)
+ * indices can be NULL if the input is unindexed
+ * vertex_positions should have float3 position in the first 12 bytes of each vertex
+ * crease_angle specifies the angle in radians below which normals are averaged across edges
+ * smoothing specifies the amount of smoothing to apply to resulting normals as a post-process; larger smoothing values take longer, with the recommended range being [0..5].
  */
 MESHOPTIMIZER_EXPERIMENTAL void meshopt_generateNormals(float* result, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, float crease_angle, float smoothing);
 
@@ -1148,6 +1158,8 @@ template <typename T>
 inline void meshopt_spatialSortTriangles(T* destination, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride);
 template <typename T>
 inline void meshopt_generateTangents(float* result, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, const float* vertex_normals, size_t vertex_normals_stride, const float* vertex_uvs, size_t vertex_uvs_stride, unsigned int options = 0);
+template <typename T>
+inline void meshopt_generateNormals(float* result, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, float crease_angle, float smoothing);
 template <typename T>
 inline size_t meshopt_remesh(float* destination, size_t max_triangle_count, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, int resolution, unsigned int options = 0);
 #endif
@@ -1665,6 +1677,14 @@ inline void meshopt_generateTangents(float* result, const T* indices, size_t ind
 	meshopt_IndexAdapter<T> in(NULL, indices, indices ? index_count : 0);
 
 	meshopt_generateTangents(result, indices ? in.data : NULL, index_count, vertex_positions, vertex_count, vertex_positions_stride, vertex_normals, vertex_normals_stride, vertex_uvs, vertex_uvs_stride, options);
+}
+
+template <typename T>
+inline void meshopt_generateNormals(float* result, const T* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, float crease_angle, float smoothing)
+{
+	meshopt_IndexAdapter<T> in(NULL, indices, indices ? index_count : 0);
+
+	meshopt_generateNormals(result, indices ? in.data : NULL, index_count, vertex_positions, vertex_count, vertex_positions_stride, crease_angle, smoothing);
 }
 
 template <typename T>
