@@ -23,6 +23,6 @@ export const MeshoptTangents: {
 		vertex_positions: Float32Array,
 		vertex_positions_stride: number,
 		crease_angle: number,
-		smoothing: number
+		smoothing?: number
 	) => Float32Array;
 };
