@@ -532,19 +532,6 @@ static void smoothNormals(float* result, float* scratch, const unsigned int* gro
 
 	size_t face_count = index_count / 3;
 
-	// renormalize group roots so that smoothing accumulation sees unit-length normals
-	for (size_t i = 0; i < index_count; ++i)
-		if (groups[i] == i)
-		{
-			float* r = &result[i * 3];
-			float l = sqrtf(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]);
-			float s = l == 0.f ? 0.f : 1.f / l;
-
-			r[0] *= s;
-			r[1] *= s;
-			r[2] *= s;
-		}
-
 	memset(scratch, 0, index_count * 4 * sizeof(float));
 
 	// for each triangle, accumulate normal deltas alongside each edge in both directions
@@ -558,7 +545,7 @@ static void smoothNormals(float* result, float* scratch, const unsigned int* gro
 			const float* na = &result[ga * 3];
 			const float* nb = &result[gb * 3];
 
-			// normal alignment is symmetric; we compute it once per edge and use dp^2 to strenthen the alignment
+			// normal alignment is symmetric; we compute it once per edge and use dp^2 for stronger alignment
 			float dp = na[0] * nb[0] + na[1] * nb[1] + na[2] * nb[2];
 			float w = (dp > 0.f ? dp * dp : 0.f);
 
@@ -580,17 +567,22 @@ static void smoothNormals(float* result, float* scratch, const unsigned int* gro
 		}
 	}
 
-	// apply average delta to group roots; note that we omit normalization as it will be done in a followup pass
+	// apply average delta to group roots and renormalize the results
 	for (size_t i = 0; i < index_count; ++i)
 		if (groups[i] == i && scratch[i * 4 + 3] > 0.f)
 		{
 			float* r = &result[i * 3];
 			const float* s = &scratch[i * 4];
-			float sw = alpha / s[3];
 
-			r[0] += s[0] * sw;
-			r[1] += s[1] * sw;
-			r[2] += s[2] * sw;
+			float sw = alpha / s[3];
+			float rx = r[0] + s[0] * sw, ry = r[1] + s[1] * sw, rz = r[2] + s[2] * sw;
+
+			float rl = sqrtf(rx * rx + ry * ry + rz * rz);
+			float rs = rl == 0.f ? 0.f : 1.f / rl;
+
+			r[0] = rx * rs;
+			r[1] = ry * rs;
+			r[2] = rz * rs;
 		}
 }
 
@@ -671,8 +663,8 @@ void meshopt_generateTangents(float* result, const unsigned int* indices, size_t
 			r[1] *= s;
 			r[2] *= s;
 
-			if ((options & meshopt_TangentZeroFallback) == 0)
-				r[0] = s == 0.f ? 1.f : r[0]; // for isolated degenerate triangles, use (1, 0, 0) tangent for consistency
+			// for isolated degenerate triangles, use (1, 0, 0) tangent for consistency
+			r[0] = (l == 0.f && (options & meshopt_TangentZeroFallback) == 0) ? 1.f : r[0];
 		}
 
 	for (size_t i = 0; i < index_count; ++i)
@@ -725,6 +717,19 @@ void meshopt_generateNormals(float* result, const unsigned int* indices, size_t 
 	memset(result, 0, index_count * sizeof(float) * 3);
 	accumulateNormals(result, groups, indices, index_count, face_normals, vertex_positions, vertex_positions_stride);
 
+	// normalize accumulated normals; we need to do this before smoothing as smoothing expects normalized inputs
+	for (size_t i = 0; i < index_count; ++i)
+		if (groups[i] == i)
+		{
+			float* r = &result[i * 3];
+			float l = sqrtf(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]);
+			float s = l == 0.f ? 0.f : 1.f / l;
+
+			r[0] *= s;
+			r[1] *= s;
+			r[2] *= s;
+		}
+
 	if (smoothing > 0.f)
 	{
 		int passes = int(ceilf(smoothing));
@@ -741,19 +746,7 @@ void meshopt_generateNormals(float* result, const unsigned int* indices, size_t 
 		}
 	}
 
-	// finalize normal vectors by normalizing roots and propagating the rest
-	for (size_t i = 0; i < index_count; ++i)
-		if (groups[i] == i)
-		{
-			float* r = &result[i * 3];
-			float l = sqrtf(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]);
-			float s = l == 0.f ? 0.f : 1.f / l;
-
-			r[0] *= s;
-			r[1] *= s;
-			r[2] *= s;
-		}
-
+	// finalize normal vectors by propagating the rest
 	for (size_t i = 0; i < index_count; ++i)
 		if (groups[i] != i)
 			memcpy(&result[i * 3], &result[size_t(groups[i]) * 3], sizeof(float) * 3);
