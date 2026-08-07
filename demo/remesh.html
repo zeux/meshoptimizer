@@ -128,6 +128,7 @@
 					mode: 'texture',
 					resolution: 1024,
 					gutter: 1,
+					preserveNormalSeams: true,
 					infill: true,
 					normals: false,
 					materials: false,
@@ -194,6 +195,7 @@
 			guiPaint.add(settings.paint, 'mode', ['none', 'vertex', 'texture']);
 			guiPaint.add(settings.paint, 'resolution', [256, 512, 1024, 2048]);
 			guiPaint.add(settings.paint, 'gutter', 0, 8, 1);
+			guiPaint.add(settings.paint, 'preserveNormalSeams').name('preserve normal seams');
 			guiPaint.add(settings.paint, 'infill');
 			guiPaint.add(settings.paint, 'normals').name('normal map');
 			guiPaint.add(settings.paint, 'materials').name('material map');
@@ -350,7 +352,7 @@
 				return result;
 			}
 
-			function unwrapMesh(geometry, resolution, gutter) {
+			function unwrapMesh(geometry, resolution, gutter, preserveNormalSeams) {
 				var positions = geometry.attributes.position.array;
 				var indices = new Uint32Array(geometry.index.array);
 
@@ -359,10 +361,12 @@
 					vertexPositionData: positions,
 					vertexCount: positions.length / 3,
 					vertexPositionStride: 12,
+					vertexNormalData: geometry.attributes.normal.array,
+					vertexNormalStride: 12,
 					indexData: indices,
 					indexCount: indices.length,
 				});
-				atlas.generate({ normalSeamWeight: 0 }, { resolution: resolution, padding: gutter });
+				atlas.generate({ normalSeamWeight: preserveNormalSeams ? 1000 : 0 }, { resolution: resolution, padding: gutter });
 
 				var mesh = atlas.getMesh(0);
 				var atlasIndices = new Uint32Array(mesh.indexCount);
@@ -500,7 +504,7 @@
 						remeshMaterial.vertexColors = true;
 						remeshMaterial.color.set(0xffffff);
 					} else if (settings.paint.mode == 'texture') {
-						geometry = unwrapMesh(geometry, settings.paint.resolution, settings.paint.gutter);
+						geometry = unwrapMesh(geometry, settings.paint.resolution, settings.paint.gutter, settings.paint.preserveNormalSeams);
 						if (settings.paint.normals) geometry = generateTangents(geometry);
 						geometry = mergeVertices(geometry);
 
