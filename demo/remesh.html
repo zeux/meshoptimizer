@@ -96,7 +96,7 @@
 			import { OBJLoader } from 'three-examples/loaders/OBJLoader.js';
 			import { GLTFExporter } from 'three-examples/exporters/GLTFExporter.js';
 			import { OrbitControls } from 'three-examples/controls/OrbitControls.js';
-			import { mergeGeometries, mergeVertices, toCreasedNormals } from 'three-examples/utils/BufferGeometryUtils.js';
+			import { mergeGeometries, mergeVertices } from 'three-examples/utils/BufferGeometryUtils.js';
 			import { MeshoptDecoder } from '../js/meshopt_decoder.mjs';
 			import { MeshoptSimplifier } from '../js/meshopt_simplifier.js';
 			import { MeshoptTangents } from '../js/meshopt_tangents.js';
@@ -116,7 +116,8 @@
 				shell: false,
 				solve: true,
 				debug: false,
-				normalCrease: 120,
+				normalCrease: 60,
+				normalSmoothing: 1.5,
 				simplify: {
 					enabled: true,
 					regularize: true,
@@ -127,6 +128,7 @@
 					mode: 'texture',
 					resolution: 1024,
 					gutter: 1,
+					preserveNormalSeams: true,
 					infill: true,
 					normals: false,
 					materials: false,
@@ -178,6 +180,7 @@
 			guiRemesh.add(settings, 'solve');
 			guiRemesh.add(settings, 'debug');
 			guiRemesh.add(settings, 'normalCrease', 0, 180, 1).name('normal crease');
+			guiRemesh.add(settings, 'normalSmoothing', 0, 10, 0.1).name('normal smoothing');
 			guiRemesh.add(settings, 'remesh');
 			guiRemesh.add(settings, 'revert');
 			guiRemesh.add(settings, 'exportFile');
@@ -192,6 +195,7 @@
 			guiPaint.add(settings.paint, 'mode', ['none', 'vertex', 'texture']);
 			guiPaint.add(settings.paint, 'resolution', [256, 512, 1024, 2048]);
 			guiPaint.add(settings.paint, 'gutter', 0, 8, 1);
+			guiPaint.add(settings.paint, 'preserveNormalSeams').name('preserve normal seams');
 			guiPaint.add(settings.paint, 'infill');
 			guiPaint.add(settings.paint, 'normals').name('normal map');
 			guiPaint.add(settings.paint, 'materials').name('material map');
@@ -348,7 +352,7 @@
 				return result;
 			}
 
-			function unwrapMesh(geometry, resolution, gutter) {
+			function unwrapMesh(geometry, resolution, gutter, preserveNormalSeams) {
 				var positions = geometry.attributes.position.array;
 				var indices = new Uint32Array(geometry.index.array);
 
@@ -357,10 +361,12 @@
 					vertexPositionData: positions,
 					vertexCount: positions.length / 3,
 					vertexPositionStride: 12,
+					vertexNormalData: geometry.attributes.normal.array,
+					vertexNormalStride: 12,
 					indexData: indices,
 					indexCount: indices.length,
 				});
-				atlas.generate({ normalSeamWeight: 0 }, { resolution: resolution, padding: gutter });
+				atlas.generate({ normalSeamWeight: preserveNormalSeams ? 1000 : 0 }, { resolution: resolution, padding: gutter });
 
 				var mesh = atlas.getMesh(0);
 				var atlasIndices = new Uint32Array(mesh.indexCount);
@@ -387,6 +393,17 @@
 				// tangents are computed per corner, for simplicity we deindex the geometry and expect caller to reindex
 				if (indices) geometry = geometry.toNonIndexed();
 				geometry.setAttribute('tangent', new THREE.BufferAttribute(tangents, 4));
+				return geometry;
+			}
+
+			function generateNormals(geometry, creaseAngle, smoothing) {
+				var attr = geometry.attributes;
+				var indices = geometry.index ? new Uint32Array(geometry.index.array) : null;
+				var normals = MeshoptTangents.generateNormals(indices, attr.position.array, 3, creaseAngle, smoothing);
+
+				// normals are computed per corner, for simplicity we deindex the geometry and expect caller to reindex
+				geometry = indices ? geometry.toNonIndexed() : geometry.clone();
+				geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
 				return geometry;
 			}
 
@@ -470,7 +487,9 @@
 						geometry = simplifyMesh(geometry, Math.pow(10, -settings.simplify.errorThresholdLog10), sflags, settings.simplify.solve);
 					}
 
-					geometry = mergeVertices(toCreasedNormals(geometry, THREE.MathUtils.degToRad(settings.debug ? 30 : settings.normalCrease)));
+					geometry = mergeVertices(
+						generateNormals(geometry, THREE.MathUtils.degToRad(settings.debug ? 30 : settings.normalCrease), settings.normalSmoothing)
+					);
 
 					remeshMaterial.vertexColors = false;
 					remeshMaterial.metalness = 0;
@@ -485,7 +504,7 @@
 						remeshMaterial.vertexColors = true;
 						remeshMaterial.color.set(0xffffff);
 					} else if (settings.paint.mode == 'texture') {
-						geometry = unwrapMesh(geometry, settings.paint.resolution, settings.paint.gutter);
+						geometry = unwrapMesh(geometry, settings.paint.resolution, settings.paint.gutter, settings.paint.preserveNormalSeams);
 						if (settings.paint.normals) geometry = generateTangents(geometry);
 						geometry = mergeVertices(geometry);
 
