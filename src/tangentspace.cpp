@@ -68,6 +68,7 @@ static void computeFaceTangents(Tangent* result, size_t triangle_count, const un
 struct Normal
 {
 	float x, y, z;
+	int id;
 };
 
 static void computeFaceNormals(Normal* result, size_t triangle_count, const unsigned int* indices, const float* vertex_positions, size_t vertex_positions_stride)
@@ -97,6 +98,7 @@ static void computeFaceNormals(Normal* result, size_t triangle_count, const unsi
 		result[i].x = nx * ns;
 		result[i].y = ny * ns;
 		result[i].z = nz * ns;
+		result[i].id = nl != 0.f;
 	}
 }
 
@@ -368,7 +370,7 @@ static void mergeNormalGroups(unsigned int* groups, const unsigned int* data, si
 			const Normal& fj = face_normals[tj];
 
 			// merge normal groups if triangles are adjacent and normal angle is below crease threshold
-			if ((njb == nic || njc == nib) && fi.x * fj.x + fi.y * fj.y + fi.z * fj.z > crease_cutoff)
+			if ((njb == nic || njc == nib) && fi.x * fj.x + fi.y * fj.y + fi.z * fj.z > crease_cutoff && fi.id == fj.id)
 			{
 				// union normal groups for individual corners with gi as the root
 				unsigned int gi = follow2(groups, ti * 3 + (data[i] & 3));
