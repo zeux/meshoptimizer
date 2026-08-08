@@ -237,9 +237,10 @@ function createMaterialTexture(materials, layers) {
 		data[i * stride + 16] = material.emissive ? material.emissive.r * material.emissiveIntensity : 0;
 		data[i * stride + 17] = material.emissive ? material.emissive.g * material.emissiveIntensity : 0;
 		data[i * stride + 18] = material.emissive ? material.emissive.b * material.emissiveIntensity : 0;
-		data[i * stride + 19] = material.roughness !== undefined ? material.roughness : 1;
 
 		data[i * stride + 20] = material.metalness !== undefined ? material.metalness : 0;
+		data[i * stride + 21] = material.roughness !== undefined ? material.roughness : 1;
+		data[i * stride + 22] = material.normalScale ? material.normalScale.x : 1;
 	}
 
 	var texture = new THREE.DataTexture(data, stride / 4, count, THREE.RGBAFormat, THREE.FloatType);
@@ -344,7 +345,7 @@ void main() {
 	vec4 md5 = texelFetch(materials, ivec2(5, mati), 0);
 
 	// md0: uv transform, md1.xyzw + md2.xy: layer indices in MAP_SLOTS order,
-	// md3: base color + ao intensity, md4: emissive color + roughness, md5.x: metalness
+	// md3: base color + ao intensity, md4.xyz: emissive color, md5.xyz: metalness + roughness + normal scale
 	vec2 point = uv * md0.xy + md0.zw;
 
 	vec3 color = md3.rgb;
@@ -358,7 +359,7 @@ void main() {
 		color *= 1.0 + md3.w * (occlusion - 1.0);
 	}
 
-	float roughness = md4.w;
+	float roughness = md5.y;
 	float metalness = md5.x;
 	if (md1.w >= 0.0) roughness *= texture(textures, vec3(point, md1.w)).g;
 	if (md2.x >= 0.0) metalness *= texture(textures, vec3(point, md2.x)).b;
@@ -381,6 +382,7 @@ void main() {
 			vec4 stangent = textureSampleBarycoord(attrTangent, bary, face.xyz);
 			vec3 bitangent = cross(snormal, stangent.xyz) * (stangent.w < 0.0 ? -1.0 : 1.0);
 			vec3 nmap = texture(textures, vec3(point, md2.y)).xyz * 2.0 - 1.0;
+			nmap.xy *= md5.z;
 
 			// replace source (smooth) normal with perturbed normal
 			snormal = stangent.xyz * nmap.x + bitangent * nmap.y + snormal * nmap.z;

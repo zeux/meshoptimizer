@@ -336,7 +336,7 @@
 							geometry.setAttribute('tangent', copyAttribute(object.geometry.attributes.tangent, source.count, 4, 0));
 							if (object.isSkinnedMesh) skinAttribute(object, geometry.attributes.tangent, 0);
 						} else {
-							geometry = generateTangents(geometry);
+							geometry = generateTangents(geometry, -1);
 							geometry = mergeVertices(geometry);
 						}
 
@@ -385,10 +385,11 @@
 				return geometry;
 			}
 
-			function generateTangents(geometry) {
+			function generateTangents(geometry, sign = 1) {
 				var attr = geometry.attributes;
 				var indices = geometry.index ? new Uint32Array(geometry.index.array) : null;
 				var tangents = MeshoptTangents.generateTangents(indices, attr.position.array, 3, attr.normal.array, 3, attr.uv.array, 2);
+				for (var i = 3; i < tangents.length; i += 4) tangents[i] *= sign;
 
 				// tangents are computed per corner, for simplicity we deindex the geometry and expect caller to reindex
 				if (indices) geometry = geometry.toNonIndexed();
