@@ -2,7 +2,7 @@ Thanks for deciding to contribute to meshoptimizer! These guidelines will try to
 
 ## Questions
 
-If you have a question regarding the library usage, please [open a GitHub issue](https://github.com/zeux/meshoptimizer/issues/new).
+If you have a question regarding the library usage, please [create a GitHub discussion](https://github.com/zeux/meshoptimizer/discussions/new/choose).
 Some questions just need answers, but it's nice to keep them for future reference in case other people want to know the same thing.
 Some questions help improve the library interface or documentation by inspiring future changes.
 
@@ -15,9 +15,8 @@ Of course, feel free to [create a pull request](https://help.github.com/articles
 
 ## Features
 
-New algorithms and improvements to existing algorithms are always welcome; you can open an issue or make the change yourself and submit a pull request.
+New algorithms and improvements to existing algorithms are always welcome; please open an issue describing an improvement you'd like to see or make before opening a pull request.
 
-For major features, consider opening an issue describing an improvement you'd like to see or make before opening a pull request.
 This will give us a chance to discuss the idea before implementing it - some algorithms may not be easy to integrate into existing programs, may not be robust to arbitrary meshes or may be expensive to run or implement/maintain, so a discussion helps make sure these don't block the algorithm development.
 
 ## Code style
@@ -61,4 +60,4 @@ You also agree by submitting your code that you grant all transferrable rights t
 
 ## AI
 
-AI-generated issues or pull requests, as well as pull request descriptions, will be closed. Repeat submissions may result in a ban.
+AI-generated issues or pull requests (including pull request descriptions), will be closed. Repeat submissions may result in a ban.
