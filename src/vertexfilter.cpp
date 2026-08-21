@@ -1437,16 +1437,19 @@ void meshopt_encodeFilterExp(void* destination_, size_t count, size_t stride, in
 
 			// note that we additionally scale the mantissa to make it a K-bit signed integer (K-1 bits for magnitude)
 			exp -= (bits - 1);
+			exp = exp > 127 ? 127 : exp;
 
 			// compute renormalized rounded mantissa for each component
 			const int mmask = (1 << 24) - 1;
 			const int mmax = mmask >> 1;
+			const int mmaxf = exp > 105 ? mmax >> (exp - 105) : mmax;
+			const int mminf = exp > 104 ? -mmaxf : -mmax - 1;
 
-			int m = int(v[j] * optexp2(-exp) + (v[j] >= 0 ? 0.5f : -0.5f));
-
-			// clamp mantissa so that rounding away from zero doesn't overflow
-			m = m > mmax ? mmax : m;
-
+			// split 2^-127 into normal factors to avoid dependence on denormal handling mode
+			float mf = exp == 127 ? v[j] * optexp2(-126) * 0.5f : v[j] * optexp2(-exp);
+			mf += (v[j] >= 0 ? 0.5f : -0.5f);
+			// clamp mantissa so that rounding away from zero doesn't overflow the storage or decoded float
+			int m = mf > mmaxf ? mmaxf : (mf < mminf ? mminf : int(mf));
 			d[j] = (m & mmask) | (unsigned(exp) << 24);
 		}
 	}

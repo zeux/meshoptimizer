@@ -1098,6 +1098,34 @@ static void encodeFilterExpOverflow()
 	assert(decoded[1] == -1.f);
 	assert(decoded[2] == 255.99997f);
 	assert(decoded[3] == 1.f);
+
+	// values near the finite float limit require exponent and mantissa saturation
+	const float large[4] = {
+	    3.402823466e+38f,
+	    1.f,
+	    -3.402823466e+38f,
+	    -1.f,
+	};
+	const unsigned int expected_large[4] = {
+	    0x7f000001,
+	    0x7f000000,
+	    0x7fffffff,
+	    0x7f000000,
+	};
+
+	unsigned int encoded_large[4];
+	meshopt_encodeFilterExp(encoded_large, 1, 16, 1, large, meshopt_EncodeExpSharedVector);
+
+	assert(memcmp(encoded_large, expected_large, sizeof(expected_large)) == 0);
+
+	float decoded_large[4];
+	memcpy(decoded_large, encoded_large, sizeof(decoded_large));
+	meshopt_decodeFilterExp(decoded_large, 1, 16);
+
+	assert(decoded_large[0] == ldexpf(1.f, 127));
+	assert(decoded_large[1] == 0.f);
+	assert(decoded_large[2] == -ldexpf(1.f, 127));
+	assert(decoded_large[3] == 0.f);
 }
 
 static void encodeFilterExpZeroShared()
