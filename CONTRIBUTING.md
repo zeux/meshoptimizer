@@ -58,3 +58,7 @@ If you prefer to not disclose the issues or information relevant to the issue su
 Any code you submit will become part of the repository and be distributed under the [meshoptimizer license](https://github.com/zeux/meshoptimizer/blob/master/LICENSE.md). By submitting code to the project you agree that the code is your work and that you can give it to the project.
 
 You also agree by submitting your code that you grant all transferrable rights to the code to the project maintainer, including for example re-licensing the code, modifying the code, and distributing it in source or binary forms. Specifically, this includes a requirement that you assign copyright to the project maintainer.
+
+## AI
+
+AI-generated issues or pull requests, as well as pull request descriptions, will be closed. Repeat submissions may result in a ban.
