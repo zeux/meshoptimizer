@@ -484,7 +484,8 @@
 					geometry = mergeVertices(geometry);
 
 					if (settings.simplify.enabled) {
-						var sflags = settings.simplify.regularize ? ['RegularizeLight'] : [];
+						var sflags = ['PreserveFolds'];
+						if (settings.simplify.regularize) sflags.push('RegularizeLight');
 						geometry = simplifyMesh(geometry, Math.pow(10, -settings.simplify.errorThresholdLog10), sflags, settings.simplify.solve);
 					}
 
