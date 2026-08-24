@@ -2664,6 +2664,33 @@ static void simplifyUpdateLocked(unsigned int options)
 	assert(vb[3][3] == 0.2f);
 }
 
+static void simplifyFolds()
+{
+	const float vb[] = {
+	    0, 0, 0, 1, 0, 0, 2, 0, 0,
+	    0, 1, 0, 1, 1, 0, 2, 1, 0 //
+	};
+
+	// 0 1 2
+	// 3 4 5 + flipped versions
+	const unsigned int ib[] = {
+	    0, 1, 3, 3, 1, 4, 1, 2, 4, 4, 2, 5,
+	    0, 3, 1, 3, 4, 1, 1, 4, 2, 4, 5, 2 //
+	};
+
+	unsigned int result[24];
+
+	// without fold preservation, the errors for all collapses are close to zero because there are no open edges to prevent this
+	assert(meshopt_simplify(result, ib, 24, vb, 6, 12, 0, 1e-3f) == 0);
+	assert(meshopt_simplify(result, ib, 24, vb, 6, 12, 0, 1e-3f, meshopt_SimplifyPreserveFolds) == 12);
+
+	const unsigned int expected[] = {
+	    0, 2, 3, 3, 2, 5, 0, 3, 2, 3, 5, 2 //
+	};
+
+	assert(memcmp(result, expected, sizeof(expected)) == 0);
+}
+
 static void filterTriangles()
 {
 	// v0/v3 match fully; v0/v4 match on prefix only
@@ -3653,6 +3680,7 @@ void runTests()
 	simplifyUpdate();
 	simplifyUpdateLocked(0);
 	simplifyUpdateLocked(meshopt_SimplifySparse);
+	simplifyFolds();
 
 	filterTriangles();
 	adjacency();
