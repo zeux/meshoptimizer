@@ -20,44 +20,44 @@
 namespace meshopt
 {
 
-// triangle corner is encoded as an edge with two nibbles corresponding to vertex codes; first nibble always corresponds to occupied vertex
+// triangles are encoded as three vertex codes in three nibbles
 // vertex codes match the bit order XYZ (e.g. 3 maps to X=1 Y=1 Z=0)
 struct Case
 {
 	unsigned char code;
-	unsigned char triangles[16];
+	unsigned short triangles[5]; // up to 4 triangles and a null terminator
 };
 
-// the base cases establish a canonical triangulation; unlike classing Marching Cubes, we only connect cube *corners* - not edges
+// the base cases establish a canonical triangulation; unlike classical Marching Cubes, we connect cube *corners* instead of edges
 static const Case kBaseCases[] = {
     {0x00, {}},
     {0x01, {}},
     {0x03, {}},
     {0x06, {}},
-    {0x07, {0x15, 0x26, 0x04}},
-    {0x0f, {0x15, 0x37, 0x04, 0x37, 0x26, 0x04}},
-    {0x16, {0x15, 0x26, 0x46, 0x10, 0x40, 0x20}},
-    {0x17, {0x15, 0x26, 0x45}},
+    {0x07, {0x120}},
+    {0x0f, {0x130, 0x320}},
+    {0x16, {0x124, 0x142}},
+    {0x17, {0x124}},
     {0x18, {}},
-    {0x19, {0x02, 0x46, 0x37, 0x45, 0x01, 0x37}},
-    {0x1b, {0x32, 0x46, 0x15, 0x32, 0x02, 0x46}},
-    {0x1d, {0x31, 0x26, 0x45, 0x31, 0x45, 0x01}},
-    {0x1e, {0x10, 0x40, 0x20, 0x15, 0x26, 0x46, 0x15, 0x37, 0x26}},
-    {0x1f, {0x45, 0x15, 0x26, 0x15, 0x37, 0x26}},
-    {0x3c, {0x37, 0x46, 0x57, 0x37, 0x26, 0x46, 0x51, 0x40, 0x31, 0x40, 0x20, 0x31}},
-    {0x3d, {0x57, 0x26, 0x46, 0x57, 0x37, 0x26, 0x31, 0x51, 0x01}},
-    {0x3f, {0x26, 0x57, 0x37, 0x46, 0x57, 0x26}},
-    {0x69, {0x01, 0x31, 0x51, 0x54, 0x64, 0x04, 0x32, 0x02, 0x62, 0x57, 0x37, 0x67}},
-    {0x6b, {0x02, 0x62, 0x32, 0x64, 0x04, 0x54, 0x37, 0x67, 0x57}},
-    {0x6f, {0x57, 0x37, 0x67, 0x54, 0x64, 0x04}},
-    {0x7e, {0x10, 0x40, 0x20, 0x57, 0x37, 0x67}},
-    {0x7f, {0x37, 0x67, 0x57}},
-    {0xf0, {0x51, 0x40, 0x73, 0x73, 0x40, 0x62}},
+    {0x19, {0x043, 0x403}},
+    {0x1b, {0x341, 0x304}},
+    {0x1d, {0x324, 0x340}},
+    {0x1e, {0x142, 0x124, 0x132}},
+    {0x1f, {0x412, 0x132}},
+    {0x3c, {0x345, 0x324, 0x543, 0x423}},
+    {0x3d, {0x524, 0x532, 0x350}},
+    {0x3f, {0x253, 0x452}},
+    {0x69, {0x035, 0x560, 0x306, 0x536}},
+    {0x6b, {0x063, 0x605, 0x365}},
+    {0x6f, {0x536, 0x560}},
+    {0x7e, {0x142, 0x536}},
+    {0x7f, {0x365}},
+    {0xf0, {0x547, 0x746}},
     {0xff, {}},
 };
 
 // for each cube case, a triangulation is derived from the base cases via 90 degree rotations
-static unsigned char kTriangleTable[256][16];
+static unsigned short kTriangleTable[256][5];
 static unsigned char kTriangleCount[256];
 
 static bool buildRemeshTables()
@@ -93,8 +93,8 @@ static bool buildRemeshTables()
 
 				for (int i = 0; kTriangleTable[code][i]; ++i)
 				{
-					unsigned char edge = kTriangleTable[code][i];
-					kTriangleTable[rotated][i] = (rotations[r][edge >> 4] << 4) | rotations[r][edge & 0xf];
+					unsigned short tri = kTriangleTable[code][i];
+					kTriangleTable[rotated][i] = (rotations[r][(tri >> 8) & 0xf] << 8) | (rotations[r][(tri >> 4) & 0xf] << 4) | rotations[r][tri & 0xf];
 				}
 
 				filled[rotated] = 1; // mark as pending
@@ -107,7 +107,7 @@ static bool buildRemeshTables()
 	for (int code = 0; code < 256; ++code)
 	{
 		int count = 0;
-		while (kTriangleTable[code][count * 3])
+		while (kTriangleTable[code][count])
 			count++;
 
 		kTriangleCount[code] = (unsigned char)count;
@@ -466,13 +466,12 @@ static void solve(Voxel* voxels, size_t voxel_count, float scale, unsigned int o
 #endif
 }
 
-static void emitVertex(float* destination, size_t index, int x, int y, int z, int edge, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, const float offset[3])
+static void emitVertex(float* destination, size_t index, int x, int y, int z, int corner, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, const float offset[3])
 {
-	int a = edge >> 4;
-	int ax = a & 1, ay = (a >> 1) & 1, az = (a >> 2) & 1;
+	int ox = corner & 1, oy = (corner >> 1) & 1, oz = (corner >> 2) & 1;
 
-	size_t row = (y + ay) + size_t(resolution) * (z + az);
-	size_t idx = (x + ax) + size_t(resolution) * row;
+	size_t row = (y + oy) + size_t(resolution) * (z + oz);
+	size_t idx = (x + ox) + size_t(resolution) * row;
 
 	if (destination)
 	{
@@ -518,18 +517,18 @@ static size_t polygonize(float* destination, size_t max_triangle_count, const un
 					continue;
 				}
 
-				const unsigned char* tris = kTriangleTable[cube];
+				const unsigned short* tris = kTriangleTable[cube];
 
-				for (int i = 0; tris[i]; i += 3)
+				for (int i = 0; tris[i]; ++i)
 				{
-					int ea = tris[i + 0], eb = tris[i + 1], ec = tris[i + 2];
+					unsigned short tri = tris[i];
 
 					// note: we only emit the triangle if we have space for it, but we count it regardless for consistent capacity estimation
 					float* target = (destination && result < max_triangle_count) ? destination : NULL;
 
-					emitVertex(target, result * 3 + 0, x, y, z, ea, grid, voxels, voxel_rows, resolution, offset);
-					emitVertex(target, result * 3 + 1, x, y, z, eb, grid, voxels, voxel_rows, resolution, offset);
-					emitVertex(target, result * 3 + 2, x, y, z, ec, grid, voxels, voxel_rows, resolution, offset);
+					emitVertex(target, result * 3 + 0, x, y, z, (tri >> 8) & 0xf, grid, voxels, voxel_rows, resolution, offset);
+					emitVertex(target, result * 3 + 1, x, y, z, (tri >> 4) & 0xf, grid, voxels, voxel_rows, resolution, offset);
+					emitVertex(target, result * 3 + 2, x, y, z, (tri >> 0) & 0xf, grid, voxels, voxel_rows, resolution, offset);
 					result++;
 				}
 			}
