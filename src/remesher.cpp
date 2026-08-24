@@ -14,12 +14,6 @@
 #include <stdio.h>
 #endif
 
-// Note: this is only exposed for development purposes; do *not* use
-enum
-{
-	meshopt_RemeshInternalDebug = 1 << 30
-};
-
 // This work is based on:
 // William Lorensen, Harvey Cline. Marching Cubes: A High Resolution 3D Surface Construction Algorithm. 1987
 // Michael Garland and Paul S. Heckbert. Surface simplification using quadric error metrics. 1997
@@ -493,7 +487,7 @@ static void solve(Voxel* voxels, size_t voxel_count, float scale, unsigned int o
 #endif
 }
 
-static size_t emitVertex(float* destination, size_t index, int x, int y, int z, int edge, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, float scale, const float offset[3], unsigned int options)
+static size_t emitVertex(float* destination, size_t index, int x, int y, int z, int edge, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, const float offset[3])
 {
 	int a = edge >> 4, b = edge & 0xf;
 	int ax = a & 1, ay = (a >> 1) & 1, az = (a >> 2) & 1;
@@ -503,18 +497,6 @@ static size_t emitVertex(float* destination, size_t index, int x, int y, int z, 
 	assert(grid[(x + ax) + size_t(resolution) * ((y + ay) + size_t(resolution) * (z + az))] != 0);
 	assert(grid[(x + bx) + size_t(resolution) * ((y + by) + size_t(resolution) * (z + bz))] == 0);
 
-	int oc = 0;
-	float os = 0.1f / scale;
-
-	if (options & meshopt_RemeshThicken)
-	{
-		// look at the opposite voxel to see if we have a thin sheet; the lookup is in bounds by construction since a->b is occupied->empty edge
-		int ox = bx - ax, oy = by - ay, oz = bz - az;
-		unsigned char og = grid[(x + ax - ox) + size_t(resolution) * ((y + ay - oy) + size_t(resolution) * (z + az - oz))];
-
-		oc = (ox + oy + oz > 0 && og == 0) ? (ox & 1) | ((oy & 1) << 1) | ((oz & 1) << 2) : 0;
-	}
-
 	size_t row = (y + ay) + size_t(resolution) * (z + az);
 	size_t idx = (x + ax) + size_t(resolution) * row;
 
@@ -523,22 +505,12 @@ static size_t emitVertex(float* destination, size_t index, int x, int y, int z, 
 		assert(grid[idx] != 0 && grid[idx] != 0xff);
 		const Voxel& vox = voxels[voxel_rows[row] + (grid[idx] - 1)];
 
-		if (options & meshopt_RemeshInternalDebug)
-		{
-			// -0.5 emits voxel center because grid coordinates are padded by 1, so we need to offset by -1+0.5
-			destination[index * 3 + 0] = (x + ax - 0.5f) / scale + offset[0];
-			destination[index * 3 + 1] = (y + ay - 0.5f) / scale + offset[1];
-			destination[index * 3 + 2] = (z + az - 0.5f) / scale + offset[2];
-		}
-		else
-		{
-			destination[index * 3 + 0] = vox.px + float((oc >> 0) & 1) * os + offset[0];
-			destination[index * 3 + 1] = vox.py + float((oc >> 1) & 1) * os + offset[1];
-			destination[index * 3 + 2] = vox.pz + float((oc >> 2) & 1) * os + offset[2];
-		}
+		destination[index * 3 + 0] = vox.px + offset[0];
+		destination[index * 3 + 1] = vox.py + offset[1];
+		destination[index * 3 + 2] = vox.pz + offset[2];
 	}
 
-	return idx * 8 + oc;
+	return idx;
 }
 
 static size_t polygonize(float* destination, size_t max_triangle_count, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, float scale, const float offset[3], unsigned int options)
@@ -567,7 +539,7 @@ static size_t polygonize(float* destination, size_t max_triangle_count, const un
 				if (cube == 0 || cube == 0xff)
 					continue;
 
-				if (!destination && (options & meshopt_RemeshThicken) == 0)
+				if (!destination)
 				{
 					// fast path: when in pure dual mode, we can statically determine the number of triangles the loop below will output based on cube configuration
 					result += kTriangleCountPure[cube];
@@ -580,13 +552,12 @@ static size_t polygonize(float* destination, size_t max_triangle_count, const un
 				{
 					int ea = tris[i + 0], eb = tris[i + 1], ec = tris[i + 2];
 
-					// note: we only emit the triangle if we have space for it, but we reject degenerate triangles purely based on vertex codes
-					// this results in consistent capacity estimation, as result advances the same way regardless of whether triangle data is written
+					// note: we only emit the triangle if we have space for it, but we count it regardless for consistent capacity estimation
 					float* target = (destination && result < max_triangle_count) ? destination : NULL;
 
-					size_t ca = emitVertex(target, result * 3 + 0, x, y, z, ea, grid, voxels, voxel_rows, resolution, scale, offset, options);
-					size_t cb = emitVertex(target, result * 3 + 1, x, y, z, eb, grid, voxels, voxel_rows, resolution, scale, offset, options);
-					size_t cc = emitVertex(target, result * 3 + 2, x, y, z, ec, grid, voxels, voxel_rows, resolution, scale, offset, options);
+					size_t ca = emitVertex(target, result * 3 + 0, x, y, z, ea, grid, voxels, voxel_rows, resolution, offset);
+					size_t cb = emitVertex(target, result * 3 + 1, x, y, z, eb, grid, voxels, voxel_rows, resolution, offset);
+					size_t cc = emitVertex(target, result * 3 + 2, x, y, z, ec, grid, voxels, voxel_rows, resolution, offset);
 
 					result += (ca != cb) && (cb != cc) && (cc != ca); // degenerate triangle
 				}

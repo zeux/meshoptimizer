@@ -972,7 +972,7 @@ MESHOPTIMIZER_EXPERIMENTAL void meshopt_generateNormals(float* result, const uns
  */
 enum
 {
-	/* Thicken thin geometry sheets, producing unique vertex positions for each side of thin geometry. */
+	/* Thicken thin geometry sheets, producing unique vertex positions for each side of thin geometry. Currently non-functional. */
 	meshopt_RemeshThicken = 1 << 0,
 	/* Produce a two-sided shell that wraps around surfaces of the original mesh, instead of a solid mesh. */
 	meshopt_RemeshShell = 1 << 1,
