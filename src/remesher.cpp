@@ -28,54 +28,37 @@ struct Case
 	unsigned char triangles[16];
 };
 
-// the base cases are originally taken from tables by Cory Gene Bloyd (see Bourke 1994), with additional tweaks
+// the base cases establish a canonical triangulation; unlike classing Marching Cubes, we only connect cube *corners* - not edges
 static const Case kBaseCases[] = {
-    // empty
     {0x00, {}},
-    {0xff, {}},
-    // corner triangle / complement
-    {0x01, {0x01, 0x02, 0x04}},
-    {0x7f, {0x37, 0x67, 0x57}},
-    // edge sliver / complement (diagonal quad)
-    {0x03, {0x13, 0x02, 0x04, 0x15, 0x13, 0x04}},
-    {0x3f, {0x26, 0x57, 0x37, 0x46, 0x57, 0x26}},
-    // face diagonal slivers / complement (two corner triangles)
-    {0x06, {0x20, 0x10, 0x15, 0x20, 0x15, 0x26, 0x13, 0x23, 0x15, 0x23, 0x26, 0x15}},
-    {0x6f, {0x57, 0x37, 0x67, 0x54, 0x64, 0x04}},
-    // two corner triangles / complement (diagonal triangles for slanted sheets)
-    {0x18, {0x31, 0x37, 0x32, 0x40, 0x46, 0x45}},
-    {0x7e, {0x10, 0x40, 0x20, 0x57, 0x37, 0x67}},
-    // face aligned triangle + slivers / complement (thin wedge + sliver)
-    {0x07, {0x13, 0x23, 0x26, 0x13, 0x26, 0x15, 0x15, 0x26, 0x04}},
-    {0x1f, {0x45, 0x26, 0x46, 0x45, 0x15, 0x26, 0x15, 0x37, 0x26}},
-    // diagonal corner triangle fin + slivers / complement (open tetrahedron)
-    {0x16, {0x15, 0x46, 0x45, 0x15, 0x26, 0x46, 0x15, 0x13, 0x26, 0x23, 0x26, 0x13, 0x10, 0x40, 0x20}},
-    {0x6b, {0x02, 0x62, 0x32, 0x64, 0x04, 0x54, 0x37, 0x67, 0x57}},
-    // diagonal face triangle fin + slivers / complement (quad + triangle)
-    {0x19, {0x02, 0x46, 0x37, 0x02, 0x37, 0x32, 0x46, 0x45, 0x37, 0x31, 0x37, 0x01, 0x45, 0x01, 0x37}},
-    {0x3d, {0x57, 0x26, 0x46, 0x57, 0x37, 0x26, 0x31, 0x51, 0x01}},
-    // diagonal corner triangle + slivers
-    {0x17, {0x45, 0x26, 0x46, 0x15, 0x26, 0x45, 0x15, 0x23, 0x26, 0x15, 0x13, 0x23}},
-    // thin wedge + slivers / mirrored
-    {0x1b, {0x32, 0x15, 0x37, 0x32, 0x46, 0x15, 0x32, 0x02, 0x46, 0x46, 0x45, 0x15}},
-    {0x1d, {0x31, 0x37, 0x26, 0x31, 0x26, 0x45, 0x31, 0x45, 0x01, 0x46, 0x45, 0x26}},
-    // thin wedge + sliver + opposing triangle
-    {0x1e, {0x10, 0x40, 0x20, 0x45, 0x15, 0x46, 0x15, 0x26, 0x46, 0x15, 0x37, 0x26}},
-    // tetrahedron
-    {0x69, {0x01, 0x31, 0x51, 0x54, 0x64, 0x04, 0x32, 0x02, 0x62, 0x57, 0x37, 0x67}},
-    // quad / complement (to use the same diagonal for thin sheets)
+    {0x01, {}},
+    {0x03, {}},
+    {0x06, {}},
+    {0x07, {0x15, 0x26, 0x04}},
     {0x0f, {0x15, 0x37, 0x04, 0x37, 0x26, 0x04}},
-    {0xf0, {0x51, 0x40, 0x73, 0x73, 0x40, 0x62}},
-    // diagonal quad pair / complement (for consistently rotated triangulation)
+    {0x16, {0x15, 0x26, 0x46, 0x10, 0x40, 0x20}},
+    {0x17, {0x15, 0x26, 0x45}},
+    {0x18, {}},
+    {0x19, {0x02, 0x46, 0x37, 0x45, 0x01, 0x37}},
+    {0x1b, {0x32, 0x46, 0x15, 0x32, 0x02, 0x46}},
+    {0x1d, {0x31, 0x26, 0x45, 0x31, 0x45, 0x01}},
+    {0x1e, {0x10, 0x40, 0x20, 0x15, 0x26, 0x46, 0x15, 0x37, 0x26}},
+    {0x1f, {0x45, 0x15, 0x26, 0x15, 0x37, 0x26}},
     {0x3c, {0x37, 0x46, 0x57, 0x37, 0x26, 0x46, 0x51, 0x40, 0x31, 0x40, 0x20, 0x31}},
-    {0x5a, {0x10, 0x40, 0x32, 0x32, 0x40, 0x62, 0x45, 0x15, 0x37, 0x45, 0x37, 0x67}},
+    {0x3d, {0x57, 0x26, 0x46, 0x57, 0x37, 0x26, 0x31, 0x51, 0x01}},
+    {0x3f, {0x26, 0x57, 0x37, 0x46, 0x57, 0x26}},
+    {0x69, {0x01, 0x31, 0x51, 0x54, 0x64, 0x04, 0x32, 0x02, 0x62, 0x57, 0x37, 0x67}},
+    {0x6b, {0x02, 0x62, 0x32, 0x64, 0x04, 0x54, 0x37, 0x67, 0x57}},
+    {0x6f, {0x57, 0x37, 0x67, 0x54, 0x64, 0x04}},
+    {0x7e, {0x10, 0x40, 0x20, 0x57, 0x37, 0x67}},
+    {0x7f, {0x37, 0x67, 0x57}},
+    {0xf0, {0x51, 0x40, 0x73, 0x73, 0x40, 0x62}},
+    {0xff, {}},
 };
 
-// for each cube case, an expanded triangulation where some sliver triangles will be collapsed in pure mode
+// for each cube case, a triangulation is derived from the base cases via 90 degree rotations
 static unsigned char kTriangleTable[256][16];
-
-// in pure mode, *all* sliver triangles are collapsed so we can pre-compute the triangle count from cube configuration to accelerate counting
-static unsigned char kTriangleCountPure[256];
+static unsigned char kTriangleCount[256];
 
 static bool buildRemeshTables()
 {
@@ -120,18 +103,14 @@ static bool buildRemeshTables()
 			filled[code] = 2; // mark as processed
 		}
 
-	// fill triangle counts for pure mode
+	// fill triangle counts
 	for (int code = 0; code < 256; ++code)
 	{
 		int count = 0;
+		while (kTriangleTable[code][count * 3])
+			count++;
 
-		for (int i = 0; kTriangleTable[code][i]; i += 3)
-		{
-			int a = kTriangleTable[code][i + 0] >> 4, b = kTriangleTable[code][i + 1] >> 4, c = kTriangleTable[code][i + 2] >> 4;
-			count += (a != b) && (b != c) && (c != a);
-		}
-
-		kTriangleCountPure[code] = (unsigned char)count;
+		kTriangleCount[code] = (unsigned char)count;
 	}
 
 	return true;
@@ -487,15 +466,10 @@ static void solve(Voxel* voxels, size_t voxel_count, float scale, unsigned int o
 #endif
 }
 
-static size_t emitVertex(float* destination, size_t index, int x, int y, int z, int edge, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, const float offset[3])
+static void emitVertex(float* destination, size_t index, int x, int y, int z, int edge, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, const float offset[3])
 {
-	int a = edge >> 4, b = edge & 0xf;
+	int a = edge >> 4;
 	int ax = a & 1, ay = (a >> 1) & 1, az = (a >> 2) & 1;
-	int bx = b & 1, by = (b >> 1) & 1, bz = (b >> 2) & 1;
-
-	// our edges are directional and always go from occupied (a) to empty (b) voxel
-	assert(grid[(x + ax) + size_t(resolution) * ((y + ay) + size_t(resolution) * (z + az))] != 0);
-	assert(grid[(x + bx) + size_t(resolution) * ((y + by) + size_t(resolution) * (z + bz))] == 0);
 
 	size_t row = (y + ay) + size_t(resolution) * (z + az);
 	size_t idx = (x + ax) + size_t(resolution) * row;
@@ -509,11 +483,9 @@ static size_t emitVertex(float* destination, size_t index, int x, int y, int z, 
 		destination[index * 3 + 1] = vox.py + offset[1];
 		destination[index * 3 + 2] = vox.pz + offset[2];
 	}
-
-	return idx;
 }
 
-static size_t polygonize(float* destination, size_t max_triangle_count, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, float scale, const float offset[3], unsigned int options)
+static size_t polygonize(float* destination, size_t max_triangle_count, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, const float offset[3])
 {
 	size_t result = 0;
 	size_t slice = size_t(resolution) * size_t(resolution);
@@ -541,8 +513,8 @@ static size_t polygonize(float* destination, size_t max_triangle_count, const un
 
 				if (!destination)
 				{
-					// fast path: when in pure dual mode, we can statically determine the number of triangles the loop below will output based on cube configuration
-					result += kTriangleCountPure[cube];
+					// fast path: we can statically determine the number of triangles the loop below will output based on cube configuration
+					result += kTriangleCount[cube];
 					continue;
 				}
 
@@ -555,11 +527,10 @@ static size_t polygonize(float* destination, size_t max_triangle_count, const un
 					// note: we only emit the triangle if we have space for it, but we count it regardless for consistent capacity estimation
 					float* target = (destination && result < max_triangle_count) ? destination : NULL;
 
-					size_t ca = emitVertex(target, result * 3 + 0, x, y, z, ea, grid, voxels, voxel_rows, resolution, offset);
-					size_t cb = emitVertex(target, result * 3 + 1, x, y, z, eb, grid, voxels, voxel_rows, resolution, offset);
-					size_t cc = emitVertex(target, result * 3 + 2, x, y, z, ec, grid, voxels, voxel_rows, resolution, offset);
-
-					result += (ca != cb) && (cb != cc) && (cc != ca); // degenerate triangle
+					emitVertex(target, result * 3 + 0, x, y, z, ea, grid, voxels, voxel_rows, resolution, offset);
+					emitVertex(target, result * 3 + 1, x, y, z, eb, grid, voxels, voxel_rows, resolution, offset);
+					emitVertex(target, result * 3 + 2, x, y, z, ec, grid, voxels, voxel_rows, resolution, offset);
+					result++;
 				}
 			}
 		}
@@ -639,7 +610,7 @@ size_t meshopt_remesh(float* destination, size_t max_triangle_count, const unsig
 		solve(voxels, voxel_count, scale, options);
 
 	// output triangles from the voxel grid; if destination is NULL, this still counts the number of triangles that would be generated
-	size_t result = polygonize(destination, max_triangle_count, grid, voxels, voxel_rows, resolution, scale, offset, options);
+	size_t result = polygonize(destination, max_triangle_count, grid, voxels, voxel_rows, resolution, offset);
 
 #if TRACE
 	printf("remesher: %zu triangles (%zu capacity)\n", result, max_triangle_count);
