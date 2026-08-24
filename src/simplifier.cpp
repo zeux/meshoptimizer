@@ -1185,6 +1185,10 @@ static void fillFoldQuadrics(Quadric* vertex_quadrics, const EdgeAdjacency& adja
 			unsigned int i1 = adjacency.data[i].next;
 			unsigned int i2 = adjacency.data[i].prev;
 
+			// since we only process paired edges each edge should occur twice; skip redundant edges
+			if (remap[i1] > remap[i0])
+				continue;
+
 			unsigned int i3 = oppositeVertex(adjacency, i1, i0, remap, wedge);
 
 			if (i3 == ~0u)
@@ -1203,8 +1207,11 @@ static void fillFoldQuadrics(Quadric* vertex_quadrics, const EdgeAdjacency& adja
 			if (normal.x * opposite.x + normal.y * opposite.y + normal.z * opposite.z >= -0.85f * nl * ol)
 				continue;
 
-			Quadric Q;
+			// use both triangles for symmetry since we won't visit this edge again
+			Quadric Q, QO;
 			quadricFromTriangleEdge(Q, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2], 1.f);
+			quadricFromTriangleEdge(QO, vertex_positions[i0], vertex_positions[i1], vertex_positions[i3], 1.f);
+			quadricAdd(Q, QO);
 
 			quadricAdd(vertex_quadrics[remap[i0]], Q);
 			quadricAdd(vertex_quadrics[remap[i1]], Q);
