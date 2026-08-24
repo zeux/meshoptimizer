@@ -466,22 +466,19 @@ static void solve(Voxel* voxels, size_t voxel_count, float scale, unsigned int o
 #endif
 }
 
-static void emitVertex(float* destination, size_t index, int x, int y, int z, int corner, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, const float offset[3])
+static void emitVertex(float* result, int x, int y, int z, int corner, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, const float offset[3])
 {
 	int ox = corner & 1, oy = (corner >> 1) & 1, oz = (corner >> 2) & 1;
 
 	size_t row = (y + oy) + size_t(resolution) * (z + oz);
 	size_t idx = (x + ox) + size_t(resolution) * row;
 
-	if (destination)
-	{
-		assert(grid[idx] != 0 && grid[idx] != 0xff);
-		const Voxel& vox = voxels[voxel_rows[row] + (grid[idx] - 1)];
+	assert(grid[idx] != 0 && grid[idx] != 0xff);
+	const Voxel& vox = voxels[voxel_rows[row] + (grid[idx] - 1)];
 
-		destination[index * 3 + 0] = vox.px + offset[0];
-		destination[index * 3 + 1] = vox.py + offset[1];
-		destination[index * 3 + 2] = vox.pz + offset[2];
-	}
+	result[0] = vox.px + offset[0];
+	result[1] = vox.py + offset[1];
+	result[2] = vox.pz + offset[2];
 }
 
 static size_t polygonize(float* destination, size_t max_triangle_count, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, const float offset[3])
@@ -521,14 +518,16 @@ static size_t polygonize(float* destination, size_t max_triangle_count, const un
 
 				for (int i = 0; tris[i]; ++i)
 				{
-					unsigned short tri = tris[i];
-
 					// note: we only emit the triangle if we have space for it, but we count it regardless for consistent capacity estimation
-					float* target = (destination && result < max_triangle_count) ? destination : NULL;
+					if (result < max_triangle_count)
+					{
+						unsigned short tri = tris[i];
 
-					emitVertex(target, result * 3 + 0, x, y, z, (tri >> 8) & 0xf, grid, voxels, voxel_rows, resolution, offset);
-					emitVertex(target, result * 3 + 1, x, y, z, (tri >> 4) & 0xf, grid, voxels, voxel_rows, resolution, offset);
-					emitVertex(target, result * 3 + 2, x, y, z, (tri >> 0) & 0xf, grid, voxels, voxel_rows, resolution, offset);
+						emitVertex(&destination[result * 9 + 0], x, y, z, (tri >> 8) & 0xf, grid, voxels, voxel_rows, resolution, offset);
+						emitVertex(&destination[result * 9 + 3], x, y, z, (tri >> 4) & 0xf, grid, voxels, voxel_rows, resolution, offset);
+						emitVertex(&destination[result * 9 + 6], x, y, z, (tri >> 0) & 0xf, grid, voxels, voxel_rows, resolution, offset);
+					}
+
 					result++;
 				}
 			}
