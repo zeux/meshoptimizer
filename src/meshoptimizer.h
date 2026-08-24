@@ -479,6 +479,8 @@ enum
 	meshopt_SimplifyPermissive = 1 << 5,
 	/* Produce more regular triangle sizes and shapes during simplification, at a small cost to geometric and attribute quality. */
 	meshopt_SimplifyRegularizeLight = 1 << 6,
+	/* Experimental: Try to preserve fold lines between opposite-facing triangles, at a small performance cost. */
+	meshopt_SimplifyPreserveFolds = 1 << 7,
 };
 
 /**
