@@ -987,7 +987,7 @@ enum
  * Returns the number of triangles in the new mesh, with destination containing a vertex position for each triangle corner.
  *
  * destination can be NULL; when it's not NULL, it must contain enough space for the resulting triangle buffer (max_triangle_count * 3 vertices, 3 floats per vertex)
- * max_triangle_count is the number of triangles that can be written; the returned value is always the number of triangles that would be generated given sufficient output space
+ * max_triangle_count is the number of triangles that can be written; when destination is NULL or insufficiently large, the returned value is an upper bound on the number of triangles
  * vertex_positions should have float3 position in the first 12 bytes of each vertex
  * resolution is the dimension of the internal voxel grid and should be in the range [4, 256]
  * options must be a bitmask composed of meshopt_RemeshX options; 0 is a safe default

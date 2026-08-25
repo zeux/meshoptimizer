@@ -531,6 +531,32 @@ static void emitVertex(float* result, int x, int y, int z, int corner, const uns
 	result[2] = vox.pz + offset[2];
 }
 
+// cell decider selects an alternate configuration if all voxel octants within the cell are empty
+static bool cellDecider(int x, int y, int z, int cube, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution)
+{
+	for (int c = 0; c < 8; ++c)
+		if (cube & (1 << c))
+		{
+			int ox = c & 1, oy = (c >> 1) & 1, oz = (c >> 2) & 1;
+
+			size_t row = (y + oy) + size_t(resolution) * (z + oz);
+			size_t idx = (x + ox) + size_t(resolution) * row;
+
+			assert(grid[idx] != 0);
+
+			// note: unlike vertex emission, which never consults interior occupied corners, here we need to skip corners without an occupied voxel
+			if (grid[idx] == 0xff)
+				continue;
+
+			const Voxel& vox = voxels[voxel_rows[row] + (grid[idx] - 1)];
+
+			if (vox.octants & (1 << (7 - c)))
+				return false;
+		}
+
+	return true;
+}
+
 static size_t polygonize(float* destination, size_t max_triangle_count, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, const float offset[3])
 {
 	size_t result = 0;
@@ -555,16 +581,19 @@ static size_t polygonize(float* destination, size_t max_triangle_count, const un
 				last = next;
 
 				if (cube == 0 || cube == 0xff)
-					continue;
+					continue; // TODO: alternatively we could skip this, or use kTriangleCount instead; the code below works regardless
 
 				if (!destination)
 				{
-					// fast path: we can statically determine the number of triangles the loop below will output based on cube configuration
+					// fast path: we can statically determine the upper bound on triangles the loop below will output based on cube configuration
 					result += kTriangleCount[cube];
 					continue;
 				}
 
-				const unsigned short* tris = kTriangleTable[cube];
+				// deciders are only evaluated for cells with an alternate configuration to reduce overhead
+				int alt = kTriangleAlt[cube] && cellDecider(x, y, z, cube, grid, voxels, voxel_rows, resolution);
+
+				const unsigned short* tris = kTriangleTable[cube][alt];
 
 				for (int i = 0; tris[i]; ++i)
 				{
@@ -592,6 +621,7 @@ size_t meshopt_remesh(float* destination, size_t max_triangle_count, const unsig
 {
 	using namespace meshopt;
 
+	assert(destination || max_triangle_count == 0);
 	assert(index_count % 3 == 0);
 	assert(vertex_positions_stride >= 12 && vertex_positions_stride <= 256);
 	assert(vertex_positions_stride % sizeof(float) == 0);
