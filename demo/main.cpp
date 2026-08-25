@@ -1715,7 +1715,7 @@ void normals(const Mesh& mesh, float smoothing)
 	    int(ceilf(smoothing)), int(mesh.indices.size()), int(vertex_count), (middle - start) * 1000, (end - middle) * 1000);
 }
 
-void remesh(const Mesh& mesh, char name, int resolution, unsigned int options = 0)
+void remesh(const Mesh& mesh, int resolution, unsigned int options = 0)
 {
 	double start = timestamp();
 	size_t capacity = meshopt_remesh(NULL, 0, &mesh.indices[0], mesh.indices.size(), &mesh.vertices[0].px, mesh.vertices.size(), sizeof(Vertex), resolution, options);
@@ -1726,7 +1726,7 @@ void remesh(const Mesh& mesh, char name, int resolution, unsigned int options = 
 
 	assert(count <= capacity);
 
-	printf("Remesh%c  : %d triangles => %d triangles in %.2f msec (count %.2f msec, compute %.2f msec)\n", name,
+	printf("Remesh%3d: %d triangles => %d triangles in %.2f msec (count %.2f msec, compute %.2f msec)\n", resolution,
 	    int(mesh.indices.size() / 3), int(count), (end - start) * 1000, (middle - start) * 1000, (end - middle) * 1000);
 }
 
@@ -1922,8 +1922,8 @@ void process(const char* path)
 	tangents(mesh);
 	normals(mesh, 1.5f);
 
-	remesh(mesh, ' ', 128);
-	remesh(mesh, 'T', 128, meshopt_RemeshThicken);
+	remesh(mesh, 128);
+	remesh(mesh, 128, meshopt_RemeshSolve);
 
 	if (path)
 		processDeinterleaved(path);
@@ -1935,8 +1935,7 @@ void processDev(const char* path)
 	if (!loadMesh(mesh, path))
 		return;
 
-	remesh(mesh, ' ', 128);
-	remesh(mesh, 'T', 128, meshopt_RemeshThicken);
+	remesh(mesh, 160, meshopt_RemeshSolve);
 }
 
 void processNanite(const char* path)
