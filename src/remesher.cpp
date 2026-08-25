@@ -127,6 +127,7 @@ static bool gRemeshTablesInitialized = buildRemeshTables();
 struct Voxel
 {
 	unsigned int coord;
+	unsigned char octants;
 
 	float px, py, pz;
 	float w;
@@ -296,9 +297,11 @@ static void voxelize(unsigned char* grid, Voxel* voxels, const unsigned int* vox
 				float py = sy + su * ey + sv * fy;
 				float pz = sz + su * ez + sv * fz;
 
-				int x = int(px * scale);
-				int y = int(py * scale);
-				int z = int(pz * scale);
+				// compute coordinates with an extra bit to use in octant mask
+				int hx = int(px * (scale * 2));
+				int hy = int(py * (scale * 2));
+				int hz = int(pz * (scale * 2));
+				int x = hx >> 1, y = hy >> 1, z = hz >> 1;
 
 				// safety: rounding errors and non-finite inputs may produce out of bounds coordinates, so we clamp them
 				int cutoff = resolution - 3;
@@ -315,6 +318,7 @@ static void voxelize(unsigned char* grid, Voxel* voxels, const unsigned int* vox
 					Voxel& vox = voxels[voxel_rows[row] + (grid[idx] - 1)];
 
 					vox.coord = (unsigned(x) << 20) | (unsigned(y) << 10) | unsigned(z);
+					vox.octants |= 1 << ((hx & 1) | ((hy & 1) << 1) | ((hz & 1) << 2));
 
 					voxelAccumulate(vox, px, py, pz, weight);
 
