@@ -120,6 +120,8 @@ static bool gRemeshTablesInitialized = buildRemeshTables();
 
 struct Voxel
 {
+	unsigned int coord;
+
 	float px, py, pz;
 	float w;
 
@@ -306,6 +308,8 @@ static void voxelize(unsigned char* grid, Voxel* voxels, const unsigned int* vox
 					assert(grid[idx] != 0 && grid[idx] != 0xff);
 					Voxel& vox = voxels[voxel_rows[row] + (grid[idx] - 1)];
 
+					vox.coord = (unsigned(x) << 20) | (unsigned(y) << 10) | unsigned(z);
+
 					voxelAccumulate(vox, px, py, pz, weight);
 
 					if (options & meshopt_RemeshSolve)
@@ -423,9 +427,12 @@ static void solidify(unsigned char* grid, unsigned int* worklist, unsigned char*
 
 static void solve(Voxel* voxels, size_t voxel_count, float scale, unsigned int options)
 {
+	// regularization factor is a tradeoff between solve stability/uniformity and adherence to the original surface
+	float factor = 3e-2f;
+
 	// cutoff is a squared distance in model space; sqrt(3)/scale is the voxel diagonal
-	float factor = 2e-2f;
 	float cutoff = 3.f / (scale * scale);
+	float rscale = 1.f / scale;
 
 	size_t solved = 0;
 
@@ -433,6 +440,11 @@ static void solve(Voxel* voxels, size_t voxel_count, float scale, unsigned int o
 	{
 		Voxel& vox = voxels[i];
 		float px = vox.px / vox.w, py = vox.py / vox.w, pz = vox.pz / vox.w;
+
+		// voxel corner, used for clamping and debug visualization
+		float cx = int((vox.coord >> 20) & 1023) * rscale;
+		float cy = int((vox.coord >> 10) & 1023) * rscale;
+		float cz = int((vox.coord >> 0) & 1023) * rscale;
 
 		if (options & meshopt_RemeshSolve)
 		{
@@ -445,9 +457,14 @@ static void solve(Voxel* voxels, size_t voxel_count, float scale, unsigned int o
 				// reject solutions that move the vertex too far from voxel centroid; this is a safety net in case regularization is insufficient
 				if (d < cutoff)
 				{
-					px = sx;
-					py = sy;
-					pz = sz;
+					// use a clamped solution to reduce intersections
+					px = sx > cx ? sx : cx;
+					px = px < cx + rscale ? px : cx + rscale;
+					py = sy > cy ? sy : cy;
+					py = py < cy + rscale ? py : cy + rscale;
+					pz = sz > cz ? sz : cz;
+					pz = pz < cz + rscale ? pz : cz + rscale;
+
 					solved++;
 				}
 			}
