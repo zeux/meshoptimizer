@@ -14,6 +14,12 @@
 #include <stdio.h>
 #endif
 
+// Note: this is only exposed for development purposes; do *not* use
+enum
+{
+	meshopt_RemeshInternalDebug = 1 << 30
+};
+
 // This work is based on:
 // William Lorensen, Harvey Cline. Marching Cubes: A High Resolution 3D Surface Construction Algorithm. 1987
 // Michael Garland and Paul S. Heckbert. Surface simplification using quadric error metrics. 1997
@@ -468,6 +474,13 @@ static void solve(Voxel* voxels, size_t voxel_count, float scale, unsigned int o
 					solved++;
 				}
 			}
+		}
+
+		if (options & meshopt_RemeshInternalDebug)
+		{
+			px = cx + 0.5f * rscale;
+			py = cy + 0.5f * rscale;
+			pz = cz + 0.5f * rscale;
 		}
 
 		vox.px = px;
