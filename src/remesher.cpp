@@ -31,40 +31,44 @@ namespace meshopt
 struct Case
 {
 	unsigned char code;
+	unsigned char hasalt;
 	unsigned short triangles[5]; // up to 4 triangles and a null terminator
+	unsigned short alternate[5]; // alternate triangulation, restricted to have <= triangles vs primary
 };
 
 // the base cases establish a canonical triangulation; unlike classical Marching Cubes, we connect cube *corners* instead of edges
+// each case may have an alternate triangulation, used based on deciders; crucially, open boundary edges must stay consistent as decider varies per cell
 static const Case kBaseCases[] = {
-    {0x00, {}},
-    {0x01, {}},
-    {0x03, {}},
-    {0x06, {}},
-    {0x07, {0x120}},
-    {0x0f, {0x130, 0x320}},
-    {0x16, {0x124, 0x142}},
-    {0x17, {0x124}},
-    {0x18, {}},
-    {0x19, {0x043, 0x403}},
-    {0x1b, {0x341, 0x304}},
-    {0x1d, {0x324, 0x340}},
-    {0x1e, {0x142, 0x124, 0x132}},
-    {0x1f, {0x412, 0x132}},
-    {0x3c, {0x345, 0x324, 0x543, 0x423}},
-    {0x3d, {0x524, 0x532, 0x350}},
-    {0x3f, {0x253, 0x452}},
-    {0x69, {0x035, 0x560, 0x306, 0x536}},
-    {0x6b, {0x063, 0x605, 0x365}},
-    {0x6f, {0x536, 0x560}},
-    {0x7e, {0x142, 0x536}},
-    {0x7f, {0x365}},
-    {0xf0, {0x547, 0x746}},
-    {0xff, {}},
+    {0x00, 0, {}, {}},
+    {0x01, 0, {}, {}},
+    {0x03, 0, {}, {}},
+    {0x06, 0, {}, {}},
+    {0x07, 0, {0x120}, {}},
+    {0x0f, 0, {0x130, 0x320}, {}},
+    {0x16, 1, {0x124, 0x142}, {}},
+    {0x17, 0, {0x124}, {}},
+    {0x18, 0, {}, {}},
+    {0x19, 1, {0x043, 0x403}, {}},
+    {0x1b, 0, {0x341, 0x304}, {}},
+    {0x1d, 0, {0x324, 0x340}, {}},
+    {0x1e, 1, {0x142, 0x124, 0x132}, {0x132}},
+    {0x1f, 0, {0x412, 0x132}, {}},
+    {0x3c, 1, {0x345, 0x324, 0x543, 0x423}, {}},
+    {0x3d, 0, {0x524, 0x532, 0x350}, {}},
+    {0x3f, 0, {0x253, 0x452}, {}},
+    {0x69, 1, {0x035, 0x560, 0x306, 0x536}, {}},
+    {0x6b, 1, {0x063, 0x605, 0x365}, {0x305}},
+    {0x6f, 0, {0x536, 0x560}, {}},
+    {0x7e, 0, {0x142, 0x536}, {}},
+    {0x7f, 0, {0x365}, {}},
+    {0xf0, 0, {0x547, 0x746}, {}},
+    {0xff, 0, {}, {}},
 };
 
 // for each cube case, a triangulation is derived from the base cases via 90 degree rotations
-static unsigned short kTriangleTable[256][5];
+static unsigned short kTriangleTable[256][2][5];
 static unsigned char kTriangleCount[256];
+static unsigned char kTriangleAlt[256];
 
 static bool buildRemeshTables()
 {
@@ -76,7 +80,9 @@ static bool buildRemeshTables()
 	// copy base cases as is; we will generate the rest via rotations
 	for (size_t i = 0; i < sizeof(kBaseCases) / sizeof(kBaseCases[0]); ++i)
 	{
-		memcpy(kTriangleTable[kBaseCases[i].code], kBaseCases[i].triangles, sizeof(kBaseCases[i].triangles));
+		const Case& c = kBaseCases[i];
+		memcpy(kTriangleTable[c.code][0], c.triangles, sizeof(c.triangles));
+		memcpy(kTriangleTable[c.code][1], c.hasalt ? c.alternate : c.triangles, sizeof(c.triangles));
 		filled[kBaseCases[i].code] = 1;
 	}
 
@@ -97,11 +103,12 @@ static bool buildRemeshTables()
 				if (filled[rotated])
 					continue;
 
-				for (int i = 0; kTriangleTable[code][i]; ++i)
-				{
-					unsigned short tri = kTriangleTable[code][i];
-					kTriangleTable[rotated][i] = (rotations[r][(tri >> 8) & 0xf] << 8) | (rotations[r][(tri >> 4) & 0xf] << 4) | rotations[r][tri & 0xf];
-				}
+				for (int k = 0; k < 2; ++k)
+					for (int i = 0; kTriangleTable[code][k][i]; ++i)
+					{
+						unsigned short tri = kTriangleTable[code][k][i];
+						kTriangleTable[rotated][k][i] = (rotations[r][(tri >> 8) & 0xf] << 8) | (rotations[r][(tri >> 4) & 0xf] << 4) | rotations[r][tri & 0xf];
+					}
 
 				filled[rotated] = 1; // mark as pending
 			}
@@ -113,10 +120,19 @@ static bool buildRemeshTables()
 	for (int code = 0; code < 256; ++code)
 	{
 		int count = 0;
-		while (kTriangleTable[code][count])
+		while (kTriangleTable[code][0][count])
 			count++;
 
 		kTriangleCount[code] = (unsigned char)count;
+	}
+
+	// fill alternate flags
+	for (int code = 0; code < 256; ++code)
+	{
+		kTriangleAlt[code] = memcmp(kTriangleTable[code][0], kTriangleTable[code][1], sizeof(kTriangleTable[code][0])) != 0;
+
+		// counting pass does not use alternate triangulations, so they need to stay at or below primary triangle count
+		assert(kTriangleTable[code][1][kTriangleCount[code]] == 0);
 	}
 
 	return true;
