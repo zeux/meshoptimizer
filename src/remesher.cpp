@@ -52,13 +52,13 @@ static const Case kBaseCases[] = {
     {0x1b, 1, {0x134, 0x430}, {0x410, 0x013}},
     {0x1d, 1, {0x243, 0x340}, {0x320, 0x024}},
     {0x1e, 1, {0x142, 0x432, 0x341}, {0x132}},
-    {0x1f, 0, {0x412, 0x213}, {}},
+    {0x1f, 2, {0x412, 0x213}, {0x134, 0x432}},
     {0x3c, 1, {0x345, 0x324, 0x543, 0x423}, {}},
     {0x3d, 1, {0x253, 0x524, 0x350}, {0x240, 0x504, 0x320}},
     {0x3f, 0, {0x253, 0x452}, {}},
     {0x69, 1, {0x035, 0x560, 0x306, 0x536}, {}},
     {0x6b, 1, {0x063, 0x605, 0x365}, {0x305}},
-    {0x6f, 1, {0x365, 0x560}, {0x530, 0x036}},
+    {0x6f, 2, {0x365, 0x560}, {0x530, 0x036}},
     {0x7e, 0, {0x142, 0x536}, {}},
     {0x7f, 0, {0x365}, {}},
     {0xf0, 0, {0x547, 0x746}, {}},
@@ -131,6 +131,10 @@ static bool buildRemeshTables()
 
 		// counting pass does not use alternate triangulations, so they need to stay at or below primary triangle count
 		assert(kTriangleTable[code][1][count] == 0);
+
+		// quadric decider expects a canonical quad encoding (0xabc 0xcbd)
+		if (kTriangleAlt[code] == 2)
+			assert(count == 2 && (kTriangleTable[code][0][0] & 0xf0) == (kTriangleTable[code][0][1] & 0xf0) && (kTriangleTable[code][0][0] & 0xf) == (kTriangleTable[code][0][1] >> 8));
 	}
 
 	return true;
@@ -146,10 +150,10 @@ struct Voxel
 	float px, py, pz;
 	float w;
 
-	// a00*x^2 + a11*y^2 + a22*z^2 + 2*a10*xy + 2*a20*xz + 2*a21*yz + 2*b0*x + 2*b1*y + 2*b2*z
+	// a00*x^2 + a11*y^2 + a22*z^2 + 2*a10*xy + 2*a20*xz + 2*a21*yz + 2*b0*x + 2*b1*y + 2*b2*z + c
 	float a00, a11, a22;
 	float a10, a20, a21;
-	float b0, b1, b2;
+	float b0, b1, b2, c;
 };
 
 static void voxelAccumulate(Voxel& vox, float px, float py, float pz, float w)
@@ -176,6 +180,16 @@ static void voxelAccumulateQ(Voxel& vox, float a, float b, float c, float d, flo
 	vox.b0 += a * dw;
 	vox.b1 += b * dw;
 	vox.b2 += c * dw;
+	vox.c += d * dw;
+}
+
+static float voxelError(const Voxel& vox, float x, float y, float z)
+{
+	float rx = (vox.b0 + vox.a10 * y) * 2.f + vox.a00 * x;
+	float ry = (vox.b1 + vox.a21 * z) * 2.f + vox.a11 * y;
+	float rz = (vox.b2 + vox.a20 * x) * 2.f + vox.a22 * z;
+
+	return fabsf(vox.c + rx * x + ry * y + rz * z);
 }
 
 static bool voxelSolve(float& rx, float& ry, float& rz, const Voxel& vox, float lambda)
@@ -530,7 +544,7 @@ static void emitVertex(float* result, int x, int y, int z, int corner, const uns
 	result[2] = vox.pz + offset[2];
 }
 
-static bool cellDecider(int x, int y, int z, int cube, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution)
+static bool octantDecider(int x, int y, int z, int cube, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution)
 {
 	for (int c = 0; c < 8; ++c)
 		if (cube & (1 << c))
@@ -553,11 +567,43 @@ static bool cellDecider(int x, int y, int z, int cube, const unsigned char* grid
 				return false;
 		}
 
-	// decider resolves only if *all* octants are empty
+	// select alternate configuration if *all* octants are empty
 	return true;
 }
 
-static size_t polygonize(float* destination, size_t max_triangle_count, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, const float offset[3])
+static bool quadricDecider(int x, int y, int z, int cube, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution)
+{
+	// quads are encoded implicitly as 0xabc 0xcbd
+	unsigned int quad = (kTriangleTable[cube][0][0] << 4) | (kTriangleTable[cube][0][1] & 0xf);
+
+	const Voxel* corner[4];
+
+	for (int i = 0; i < 4; ++i)
+	{
+		int c = (quad >> (12 - i * 4)) & 0xf;
+		size_t row = (y + ((c >> 1) & 1)) + size_t(resolution) * (z + ((c >> 2) & 1));
+		size_t idx = (x + (c & 1)) + size_t(resolution) * row;
+
+		assert(grid[idx] != 0 && grid[idx] != 0xff);
+		corner[i] = &voxels[voxel_rows[row] + (grid[idx] - 1)];
+	}
+
+	// evaluate error for midpoints of primary (bc) and alternate (ad) diagonal
+	float mx = (corner[1]->px + corner[2]->px) * 0.5f, my = (corner[1]->py + corner[2]->py) * 0.5f, mz = (corner[1]->pz + corner[2]->pz) * 0.5f;
+	float nx = (corner[0]->px + corner[3]->px) * 0.5f, ny = (corner[0]->py + corner[3]->py) * 0.5f, nz = (corner[0]->pz + corner[3]->pz) * 0.5f;
+	float error0 = 0, error1 = 0;
+
+	for (int i = 0; i < 4; ++i)
+	{
+		error0 += voxelError(*corner[i], mx, my, mz);
+		error1 += voxelError(*corner[i], nx, ny, nz);
+	}
+
+	// select alternate configuration if it is clearly better
+	return error1 < error0 * 0.9f;
+}
+
+static size_t polygonize(float* destination, size_t max_triangle_count, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, const float offset[3], unsigned int options)
 {
 	size_t result = 0;
 	size_t slice = size_t(resolution) * size_t(resolution);
@@ -591,7 +637,12 @@ static size_t polygonize(float* destination, size_t max_triangle_count, const un
 				}
 
 				// deciders are only evaluated for cells with an alternate configuration to reduce overhead
-				int alt = kTriangleAlt[cube] && cellDecider(x, y, z, cube, grid, voxels, voxel_rows, resolution);
+				int alt = 0;
+
+				if (kTriangleAlt[cube] == 1)
+					alt = octantDecider(x, y, z, cube, grid, voxels, voxel_rows, resolution);
+				else if (kTriangleAlt[cube] == 2 && (options & meshopt_RemeshSolve))
+					alt = quadricDecider(x, y, z, cube, grid, voxels, voxel_rows, resolution);
 
 				const unsigned short* tris = kTriangleTable[cube][alt];
 
@@ -688,7 +739,7 @@ size_t meshopt_remesh(float* destination, size_t max_triangle_count, const unsig
 		solve(voxels, voxel_count, scale, options);
 
 	// output triangles from the voxel grid; if destination is NULL, this still counts the number of triangles that would be generated
-	size_t result = polygonize(destination, max_triangle_count, grid, voxels, voxel_rows, resolution, offset);
+	size_t result = polygonize(destination, max_triangle_count, grid, voxels, voxel_rows, resolution, offset, options);
 
 #if TRACE
 	printf("remesher: %zu triangles (%zu capacity)\n", result, max_triangle_count);
