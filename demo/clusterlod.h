@@ -55,6 +55,9 @@ struct clodConfig
 	// use regularization during simplification to make triangle density more uniform, at some cost to overall triangle count; recommended for deformable objects
 	bool simplify_regularize;
 
+	// try to preserve fold lines between opposite-facing triangles during simplification, at a small performance cost
+	bool simplify_preserve_folds;
+
 	// should clodCluster::bounds be computed based on the geometry of each cluster
 	bool optimize_bounds;
 
@@ -465,7 +468,14 @@ static std::vector<unsigned int> simplify(const clodConfig& config, const clodMe
 
 	std::vector<unsigned int> lod(indices.size());
 
-	unsigned int options = meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute | (config.simplify_permissive ? meshopt_SimplifyPermissive : 0) | (config.simplify_regularize ? meshopt_SimplifyRegularize : 0);
+	unsigned int options = meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute;
+
+	if (config.simplify_permissive)
+		options |= meshopt_SimplifyPermissive;
+	if (config.simplify_regularize)
+		options |= meshopt_SimplifyRegularize;
+	if (config.simplify_preserve_folds)
+		options |= meshopt_SimplifyPreserveFolds;
 
 	lod.resize(meshopt_simplifyWithAttributes(&lod[0], &indices[0], indices.size(),
 	    mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride,
