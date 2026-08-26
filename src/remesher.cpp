@@ -31,7 +31,7 @@ namespace meshopt
 struct Case
 {
 	unsigned char code;
-	unsigned char hasalt;
+	unsigned char altmode;
 	unsigned short triangles[5]; // up to 4 triangles and a null terminator
 	unsigned short alternate[5]; // alternate triangulation, restricted to have <= triangles vs primary
 };
@@ -49,16 +49,16 @@ static const Case kBaseCases[] = {
     {0x17, 0, {0x124}, {}},
     {0x18, 0, {}, {}},
     {0x19, 1, {0x043, 0x403}, {}},
-    {0x1b, 1, {0x341, 0x304}, {0x104, 0x013}},
-    {0x1d, 1, {0x324, 0x340}, {0x203, 0x024}},
+    {0x1b, 1, {0x134, 0x430}, {0x410, 0x013}},
+    {0x1d, 1, {0x243, 0x340}, {0x320, 0x024}},
     {0x1e, 1, {0x142, 0x432, 0x341}, {0x132}},
-    {0x1f, 0, {0x412, 0x132}, {}},
+    {0x1f, 0, {0x412, 0x213}, {}},
     {0x3c, 1, {0x345, 0x324, 0x543, 0x423}, {}},
     {0x3d, 1, {0x253, 0x524, 0x350}, {0x240, 0x504, 0x320}},
     {0x3f, 0, {0x253, 0x452}, {}},
     {0x69, 1, {0x035, 0x560, 0x306, 0x536}, {}},
     {0x6b, 1, {0x063, 0x605, 0x365}, {0x305}},
-    {0x6f, 1, {0x536, 0x560}, {0x530, 0x360}},
+    {0x6f, 1, {0x365, 0x560}, {0x530, 0x036}},
     {0x7e, 0, {0x142, 0x536}, {}},
     {0x7f, 0, {0x365}, {}},
     {0xf0, 0, {0x547, 0x746}, {}},
@@ -82,7 +82,8 @@ static bool buildRemeshTables()
 	{
 		const Case& c = kBaseCases[i];
 		memcpy(kTriangleTable[c.code][0], c.triangles, sizeof(c.triangles));
-		memcpy(kTriangleTable[c.code][1], c.hasalt ? c.alternate : c.triangles, sizeof(c.triangles));
+		memcpy(kTriangleTable[c.code][1], c.altmode ? c.alternate : c.triangles, sizeof(c.triangles));
+		kTriangleAlt[c.code] = c.altmode;
 		filled[kBaseCases[i].code] = 1;
 	}
 
@@ -110,6 +111,7 @@ static bool buildRemeshTables()
 						kTriangleTable[rotated][k][i] = (rotations[r][(tri >> 8) & 0xf] << 8) | (rotations[r][(tri >> 4) & 0xf] << 4) | rotations[r][tri & 0xf];
 					}
 
+				kTriangleAlt[rotated] = kTriangleAlt[code];
 				filled[rotated] = 1; // mark as pending
 			}
 
@@ -126,7 +128,6 @@ static bool buildRemeshTables()
 			count++;
 
 		kTriangleCount[code] = (unsigned char)count;
-		kTriangleAlt[code] = memcmp(kTriangleTable[code][0], kTriangleTable[code][1], sizeof(kTriangleTable[code][0])) != 0;
 
 		// counting pass does not use alternate triangulations, so they need to stay at or below primary triangle count
 		assert(kTriangleTable[code][1][count] == 0);
