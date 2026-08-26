@@ -1189,7 +1189,7 @@ static void fillFoldQuadrics(Quadric* vertex_quadrics, const EdgeAdjacency& adja
 			if (remap[i1] > remap[i0])
 				continue;
 
-			unsigned int i3 = oppositeVertex(adjacency, i1, i0, remap, wedge);
+			unsigned int i3 = oppositeVertex(adjacency, i1, unsigned(i0), remap, wedge);
 
 			if (i3 == ~0u)
 				continue;
