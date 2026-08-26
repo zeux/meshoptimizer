@@ -116,23 +116,20 @@ static bool buildRemeshTables()
 			filled[code] = 2; // mark as processed
 		}
 
-	// fill triangle counts
+	// finalize auxiliary tables
 	for (int code = 0; code < 256; ++code)
 	{
+		assert(filled[code]);
+
 		int count = 0;
 		while (kTriangleTable[code][0][count])
 			count++;
 
 		kTriangleCount[code] = (unsigned char)count;
-	}
-
-	// fill alternate flags
-	for (int code = 0; code < 256; ++code)
-	{
 		kTriangleAlt[code] = memcmp(kTriangleTable[code][0], kTriangleTable[code][1], sizeof(kTriangleTable[code][0])) != 0;
 
 		// counting pass does not use alternate triangulations, so they need to stay at or below primary triangle count
-		assert(kTriangleTable[code][1][kTriangleCount[code]] == 0);
+		assert(kTriangleTable[code][1][count] == 0);
 	}
 
 	return true;
@@ -320,6 +317,7 @@ static void voxelize(unsigned char* grid, Voxel* voxels, const unsigned int* vox
 				int x = hx >> 1, y = hy >> 1, z = hz >> 1;
 
 				// safety: rounding errors and non-finite inputs may produce out of bounds coordinates, so we clamp them
+				// TODO: this does not fix subvoxel bits which may result in a wrong octant for boundary cells; ideally we'd fix this during grid scaling
 				int cutoff = resolution - 3;
 				x = unsigned(x) < unsigned(cutoff) ? x : cutoff;
 				y = unsigned(y) < unsigned(cutoff) ? y : cutoff;
@@ -440,7 +438,7 @@ static void solidify(unsigned char* grid, unsigned int* worklist, unsigned char*
 
 			for (int x = 1; x < resolution - 1; ++x)
 			{
-				unsigned char rep = (data[x] == 0 && datan[x] == 0xff) ? 0 : datan[x];
+				unsigned char rep = ((data[x] == 0) & (datan[x] == 0xff)) ? 0 : datan[x];
 				changed |= rep ^ datan[x];
 				datan[x] = rep;
 			}
@@ -531,7 +529,6 @@ static void emitVertex(float* result, int x, int y, int z, int corner, const uns
 	result[2] = vox.pz + offset[2];
 }
 
-// cell decider selects an alternate configuration if all voxel octants within the cell are empty
 static bool cellDecider(int x, int y, int z, int cube, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution)
 {
 	for (int c = 0; c < 8; ++c)
@@ -550,10 +547,12 @@ static bool cellDecider(int x, int y, int z, int cube, const unsigned char* grid
 
 			const Voxel& vox = voxels[voxel_rows[row] + (grid[idx] - 1)];
 
+			// test octant contained within the cell (opposite of the corner index)
 			if (vox.octants & (1 << (7 - c)))
 				return false;
 		}
 
+	// decider resolves only if *all* octants are empty
 	return true;
 }
 
@@ -683,7 +682,7 @@ size_t meshopt_remesh(float* destination, size_t max_triangle_count, const unsig
 	if (voxels)
 		voxelize(grid, voxels, voxel_rows, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride, resolution, scale, offset, options);
 
-	// compute final voxel positions; each voxel has a single resulting position that may be adjusted during polygonization
+	// compute final voxel positions; each voxel has a single resulting position that will be emitted during polygonization
 	if (voxels)
 		solve(voxels, voxel_count, scale, options);
 
