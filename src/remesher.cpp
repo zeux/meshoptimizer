@@ -257,12 +257,15 @@ static float measureGrid(const float* vertex_positions_data, size_t vertex_count
 	extent = (maxv[1] - minv[1]) < extent ? extent : (maxv[1] - minv[1]);
 	extent = (maxv[2] - minv[2]) < extent ? extent : (maxv[2] - minv[2]);
 
-	// note: we rescale model extents to [0..resolution - 2], because the first and last voxel are used as empty padding
+	// small subvoxel padding keeps vertices inside the last valid voxel to avoid clamping correctness issues
+	extent *= (resolution + 1e-2f) / float(resolution);
+
+	// rescale extents to [0..resolution - 2], because the first and last voxels are used as empty padding
 	float scale = extent == 0 ? 0.f : (resolution - 2) / extent;
 
-	out_offset[0] = minv[0];
-	out_offset[1] = minv[1];
-	out_offset[2] = minv[2];
+	// center mesh in the grid; this improves voxelization for symmetric inputs
+	for (int j = 0; j < 3; ++j)
+		out_offset[j] = minv[j] - (extent - (maxv[j] - minv[j])) * 0.5f;
 
 	return scale;
 }
@@ -332,7 +335,6 @@ static void voxelize(unsigned char* grid, Voxel* voxels, const unsigned int* vox
 				int x = hx >> 1, y = hy >> 1, z = hz >> 1;
 
 				// safety: rounding errors and non-finite inputs may produce out of bounds coordinates, so we clamp them
-				// TODO: this does not fix subvoxel bits which may result in a wrong octant for boundary cells; ideally we'd fix this during grid scaling
 				int cutoff = resolution - 3;
 				x = unsigned(x) < unsigned(cutoff) ? x : cutoff;
 				y = unsigned(y) < unsigned(cutoff) ? y : cutoff;
@@ -627,7 +629,7 @@ static size_t polygonize(float* destination, size_t max_triangle_count, const un
 				last = next;
 
 				if (cube == 0 || cube == 0xff)
-					continue; // TODO: alternatively we could skip this, or use kTriangleCount instead; the code below works regardless
+					continue;
 
 				if (!destination)
 				{
