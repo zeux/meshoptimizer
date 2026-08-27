@@ -17,4 +17,12 @@ export const MeshoptTangents: {
 		vertex_uvs_stride: number,
 		flags?: TangentsFlags[]
 	) => Float32Array;
+
+	generateNormals: (
+		indices: Uint32Array | null,
+		vertex_positions: Float32Array,
+		vertex_positions_stride: number,
+		crease_angle: number,
+		smoothing?: number
+	) => Float32Array;
 };
