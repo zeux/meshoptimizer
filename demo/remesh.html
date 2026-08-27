@@ -123,6 +123,7 @@
 					regularize: true,
 					solve: true,
 					errorThresholdLog10: 2.5,
+					forceTriangleCount: 0,
 				},
 				paint: {
 					mode: 'texture',
@@ -190,6 +191,7 @@
 			guiSimplify.add(settings.simplify, 'regularize');
 			guiSimplify.add(settings.simplify, 'solve');
 			guiSimplify.add(settings.simplify, 'errorThresholdLog10', 1.5, 3, 0.1);
+			guiSimplify.add(settings.simplify, 'forceTriangleCount');
 
 			var guiPaint = gui.addFolder('Paint');
 			guiPaint.add(settings.paint, 'mode', ['none', 'vertex', 'texture']);
@@ -441,16 +443,16 @@
 				showTexture('material-view', null);
 			}
 
-			function simplifyMesh(geo, threshold, flags, solve) {
+			function simplifyMesh(geo, target, threshold, flags, solve) {
 				var positions = solve ? new Float32Array(geo.attributes.position.array) : geo.attributes.position.array;
 				var indices = solve ? new Uint32Array(geo.index.array) : geo.index.array;
 
 				var res;
 				if (solve) {
-					res = MeshoptSimplifier.simplifyWithUpdate(indices, positions, 3, new Float32Array(), 0, [], null, 0, threshold, flags);
+					res = MeshoptSimplifier.simplifyWithUpdate(indices, positions, 3, new Float32Array(), 0, [], null, target * 3, threshold, flags);
 					res[0] = indices.slice(0, res[0]);
 				} else {
-					res = MeshoptSimplifier.simplify(indices, positions, 3, 0, threshold, flags);
+					res = MeshoptSimplifier.simplify(indices, positions, 3, target * 3, threshold, flags);
 				}
 
 				var [remap, unique] = MeshoptSimplifier.compactMesh(res[0]);
@@ -486,7 +488,8 @@
 					if (settings.simplify.enabled) {
 						var sflags = ['PreserveFolds'];
 						if (settings.simplify.regularize) sflags.push('RegularizeLight');
-						geometry = simplifyMesh(geometry, Math.pow(10, -settings.simplify.errorThresholdLog10), sflags, settings.simplify.solve);
+						var error = settings.simplify.forceTriangleCount ? 1 : Math.pow(10, -settings.simplify.errorThresholdLog10);
+						geometry = simplifyMesh(geometry, settings.simplify.forceTriangleCount, error, sflags, settings.simplify.solve);
 					}
 
 					geometry = mergeVertices(
