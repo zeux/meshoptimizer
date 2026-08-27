@@ -175,7 +175,7 @@
 
 			var guiRemesh = gui.addFolder('Remesh');
 			guiRemesh.add(settings, 'resolution', 4, 256, 1);
-			guiRemesh.add(settings, 'thicken');
+			guiRemesh.add(settings, 'thicken').disable();
 			guiRemesh.add(settings, 'shell');
 			guiRemesh.add(settings, 'solve');
 			guiRemesh.add(settings, 'debug');
@@ -189,7 +189,7 @@
 			guiSimplify.add(settings.simplify, 'enabled');
 			guiSimplify.add(settings.simplify, 'regularize');
 			guiSimplify.add(settings.simplify, 'solve');
-			guiSimplify.add(settings.simplify, 'errorThresholdLog10', 0, 3, 0.1);
+			guiSimplify.add(settings.simplify, 'errorThresholdLog10', 1.5, 3, 0.1);
 
 			var guiPaint = gui.addFolder('Paint');
 			guiPaint.add(settings.paint, 'mode', ['none', 'vertex', 'texture']);
@@ -484,7 +484,8 @@
 					geometry = mergeVertices(geometry);
 
 					if (settings.simplify.enabled) {
-						var sflags = settings.simplify.regularize ? ['RegularizeLight'] : [];
+						var sflags = ['PreserveFolds'];
+						if (settings.simplify.regularize) sflags.push('RegularizeLight');
 						geometry = simplifyMesh(geometry, Math.pow(10, -settings.simplify.errorThresholdLog10), sflags, settings.simplify.solve);
 					}
 

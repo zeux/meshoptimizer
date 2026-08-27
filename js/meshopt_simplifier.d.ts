@@ -1,6 +1,6 @@
 // This file is part of meshoptimizer library and is distributed under the terms of MIT License.
 // Copyright (C) 2016-2026, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
-export type SimplifierFlags = 'LockBorder' | 'Sparse' | 'ErrorAbsolute' | 'Prune' | 'Regularize' | 'Permissive' | 'RegularizeLight';
+export type SimplifierFlags = 'LockBorder' | 'Sparse' | 'ErrorAbsolute' | 'Prune' | 'Regularize' | 'Permissive' | 'RegularizeLight' | 'PreserveFolds';
 export type RemesherFlags = 'Thicken' | 'Shell' | 'Solve';
 
 /** @deprecated Use SimplifierFlags instead. */

@@ -479,6 +479,8 @@ enum
 	meshopt_SimplifyPermissive = 1 << 5,
 	/* Produce more regular triangle sizes and shapes during simplification, at a small cost to geometric and attribute quality. */
 	meshopt_SimplifyRegularizeLight = 1 << 6,
+	/* Experimental: Try to preserve fold lines between opposite-facing triangles, at a small performance cost. */
+	meshopt_SimplifyPreserveFolds = 1 << 7,
 };
 
 /**
@@ -970,7 +972,7 @@ MESHOPTIMIZER_EXPERIMENTAL void meshopt_generateNormals(float* result, const uns
  */
 enum
 {
-	/* Thicken thin geometry sheets, producing unique vertex positions for each side of thin geometry. */
+	/* Thicken thin geometry sheets, producing unique vertex positions for each side of thin geometry. Currently non-functional. */
 	meshopt_RemeshThicken = 1 << 0,
 	/* Produce a two-sided shell that wraps around surfaces of the original mesh, instead of a solid mesh. */
 	meshopt_RemeshShell = 1 << 1,
@@ -985,7 +987,7 @@ enum
  * Returns the number of triangles in the new mesh, with destination containing a vertex position for each triangle corner.
  *
  * destination can be NULL; when it's not NULL, it must contain enough space for the resulting triangle buffer (max_triangle_count * 3 vertices, 3 floats per vertex)
- * max_triangle_count is the number of triangles that can be written; the returned value is always the number of triangles that would be generated given sufficient output space
+ * max_triangle_count is the number of triangles that can be written; when destination is NULL or insufficiently large, the returned value is an upper bound on the number of triangles
  * vertex_positions should have float3 position in the first 12 bytes of each vertex
  * resolution is the dimension of the internal voxel grid and should be in the range [4, 256]
  * options must be a bitmask composed of meshopt_RemeshX options; 0 is a safe default
