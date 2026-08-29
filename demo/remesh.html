@@ -194,7 +194,7 @@
 			guiSimplify.add(settings.simplify, 'forceTriangleCount');
 
 			var guiPaint = gui.addFolder('Paint');
-			guiPaint.add(settings.paint, 'mode', ['none', 'vertex', 'texture']);
+			guiPaint.add(settings.paint, 'mode', ['none', 'vertex', 'facets', 'texture']);
 			guiPaint.add(settings.paint, 'resolution', [256, 512, 1024, 2048]);
 			guiPaint.add(settings.paint, 'gutter', 0, 8, 1);
 			guiPaint.add(settings.paint, 'preserveNormalSeams').name('preserve normal seams');
@@ -506,6 +506,15 @@
 
 					if (settings.paint.mode == 'vertex') {
 						repaint.transferColors(renderer, geometry, paintCache, merged.thickness);
+						remeshMaterial.vertexColors = true;
+						remeshMaterial.color.set(0xffffff);
+					} else if (settings.paint.mode == 'facets') {
+						geometry = geometry.toNonIndexed();
+						geometry.computeVertexNormals();
+						var indices = new Uint32Array(geometry.attributes.position.count);
+						for (var i = 0; i < indices.length; ++i) indices[i] = i;
+						geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+						repaint.transferColors(renderer, geometry, paintCache, merged.thickness, true);
 						remeshMaterial.vertexColors = true;
 						remeshMaterial.color.set(0xffffff);
 					} else if (settings.paint.mode == 'texture') {
