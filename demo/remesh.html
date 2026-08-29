@@ -499,128 +499,128 @@
 				return new Promise(requestAnimationFrame);
 			}
 
-			function remesh() {
-				Promise.all([MeshoptSimplifier.ready, MeshoptTangents.ready, initializeWatlas()]).then(async function () {
-					if (!merged) return;
+			async function remesh() {
+				if (!merged) return;
 
-					await showProgress('remesh');
-					var flags = [];
-					if (settings.thicken) flags.push('Thicken');
-					if (settings.shell) flags.push('Shell');
-					if (settings.solve) flags.push('Solve');
-					if (settings.debug) flags.push('_InternalDebug');
+				await Promise.all([MeshoptSimplifier.ready, MeshoptTangents.ready, initializeWatlas()]);
 
-					var result = MeshoptSimplifier.remesh(merged.index.array, merged.attributes.position.array, 3, settings.resolution, flags);
-					var geometry = new THREE.BufferGeometry();
-					geometry.setAttribute('position', new THREE.BufferAttribute(result, 3));
-					geometry.setIndex(new THREE.BufferAttribute(MeshoptSimplifier.generatePositionRemap(result, 3), 1));
+				await showProgress('remesh');
+				var flags = [];
+				if (settings.thicken) flags.push('Thicken');
+				if (settings.shell) flags.push('Shell');
+				if (settings.solve) flags.push('Solve');
+				if (settings.debug) flags.push('_InternalDebug');
 
-					if (settings.simplify.enabled) {
-						await showProgress('simplify');
-						var sflags = ['PreserveFolds', 'Sparse']; // Sparse is needed because we skip position compaction above to be able to use quick remap to generate indices
-						if (settings.simplify.regularize) sflags.push('RegularizeLight');
-						var error = settings.simplify.forceTriangleCount ? 1 : Math.pow(10, -settings.simplify.errorThresholdLog10);
-						if (settings.simplify.errorAuto) {
-							sflags.push('ErrorAbsolute'); // merged mesh is in world space, so we don't need to adjust error by mesh scale and can simply use world space units
-							var distance = Math.max(camera.position.distanceTo(merged.boundingSphere.center) - merged.boundingSphere.radius, 0);
-							error = distance * 1e-3 * (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) * 0.5)); // ~1 pixel at 1k x 1k
-						}
-						geometry = simplifyMesh(geometry, settings.simplify.forceTriangleCount, error, sflags, settings.simplify.solve);
+				var result = MeshoptSimplifier.remesh(merged.index.array, merged.attributes.position.array, 3, settings.resolution, flags);
+				var geometry = new THREE.BufferGeometry();
+				geometry.setAttribute('position', new THREE.BufferAttribute(result, 3));
+				geometry.setIndex(new THREE.BufferAttribute(MeshoptSimplifier.generatePositionRemap(result, 3), 1));
+
+				if (settings.simplify.enabled) {
+					await showProgress('simplify');
+					var sflags = ['PreserveFolds', 'Sparse']; // Sparse is needed because we skip position compaction above to be able to use quick remap to generate indices
+					if (settings.simplify.regularize) sflags.push('RegularizeLight');
+					var error = settings.simplify.forceTriangleCount ? 1 : Math.pow(10, -settings.simplify.errorThresholdLog10);
+					if (settings.simplify.errorAuto) {
+						sflags.push('ErrorAbsolute'); // merged mesh is in world space, so we don't need to adjust error by mesh scale and can simply use world space units
+						var distance = Math.max(camera.position.distanceTo(merged.boundingSphere.center) - merged.boundingSphere.radius, 0);
+						error = distance * 1e-3 * (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) * 0.5)); // ~1 pixel at 1k x 1k
 					}
+					geometry = simplifyMesh(geometry, settings.simplify.forceTriangleCount, error, sflags, settings.simplify.solve);
+				}
 
-					await showProgress('normals');
-					geometry = mergeVertices(
-						generateNormals(geometry, THREE.MathUtils.degToRad(settings.debug ? 30 : settings.normalCrease), settings.normalSmoothing)
+				await showProgress('normals');
+				geometry = mergeVertices(
+					generateNormals(geometry, THREE.MathUtils.degToRad(settings.debug ? 30 : settings.normalCrease), settings.normalSmoothing)
+				);
+
+				var material = remeshMaterial.clone();
+				material.map = material.normalMap = material.metalnessMap = material.roughnessMap = null;
+				material.vertexColors = false;
+				material.color.set(0xffffff);
+				material.metalness = 0;
+				material.roughness = 1;
+
+				if (settings.paint.mode != 'none' && !paintCache) {
+					await showProgress('paint cache');
+					paintCache = repaint.buildCache(merged, merged.materials);
+				}
+
+				if (settings.paint.mode == 'vertex') {
+					await showProgress('repaint');
+					repaint.transferColors(renderer, geometry, paintCache, merged.thickness);
+					material.vertexColors = true;
+				} else if (settings.paint.mode == 'facets') {
+					await showProgress('repaint');
+					geometry = geometry.toNonIndexed();
+					geometry.computeVertexNormals();
+					var indices = new Uint32Array(geometry.attributes.position.count);
+					for (var i = 0; i < indices.length; ++i) indices[i] = i;
+					geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+					repaint.transferColors(renderer, geometry, paintCache, merged.thickness, true);
+					material.vertexColors = true;
+				} else if (settings.paint.mode == 'texture') {
+					await showProgress('unwrap');
+					var maxIterations = settings.paint.atlasMode == 'quality' ? 1 : 0;
+					var maxChartSize = settings.paint.atlasMode == 'fast' ? 256 : settings.paint.atlasMode == 'balanced' ? 512 : 1024;
+					var preserveSeams = settings.paint.preserveNormalSeams;
+					geometry = unwrapMesh(geometry, settings.paint.resolution, settings.paint.gutter, preserveSeams, maxIterations, maxChartSize);
+					if (settings.paint.normals) {
+						await showProgress('tangents');
+						geometry = generateTangents(geometry);
+					}
+					geometry = mergeVertices(geometry);
+
+					await showProgress('repaint');
+					var textures = repaint.transferTexture(
+						renderer,
+						geometry,
+						paintCache,
+						merged.thickness,
+						settings.paint.resolution,
+						settings.paint.gutter,
+						settings.paint.infill,
+						settings.paint.normals,
+						settings.paint.materials
 					);
 
-					var material = remeshMaterial.clone();
-					material.map = material.normalMap = material.metalnessMap = material.roughnessMap = null;
-					material.vertexColors = false;
-					material.color.set(0xffffff);
-					material.metalness = 0;
-					material.roughness = 1;
+					material.map = textures.map;
+					material.normalMap = textures.normalMap;
 
-					if (settings.paint.mode != 'none' && !paintCache) {
-						await showProgress('paint cache');
-						paintCache = repaint.buildCache(merged, merged.materials);
+					if (settings.paint.materials) {
+						material.metalnessMap = textures.materialMap;
+						material.roughnessMap = textures.materialMap;
+						material.metalness = 1;
+					} else if (settings.paint.normals) {
+						// we need this to have a specular response
+						material.roughness = 0.5;
 					}
+				} else {
+					material.color.set(0xdddddd);
+				}
+				material.needsUpdate = true;
 
-					if (settings.paint.mode == 'vertex') {
-						await showProgress('repaint');
-						repaint.transferColors(renderer, geometry, paintCache, merged.thickness);
-						material.vertexColors = true;
-					} else if (settings.paint.mode == 'facets') {
-						await showProgress('repaint');
-						geometry = geometry.toNonIndexed();
-						geometry.computeVertexNormals();
-						var indices = new Uint32Array(geometry.attributes.position.count);
-						for (var i = 0; i < indices.length; ++i) indices[i] = i;
-						geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-						repaint.transferColors(renderer, geometry, paintCache, merged.thickness, true);
-						material.vertexColors = true;
-					} else if (settings.paint.mode == 'texture') {
-						await showProgress('unwrap');
-						var maxIterations = settings.paint.atlasMode == 'quality' ? 1 : 0;
-						var maxChartSize = settings.paint.atlasMode == 'fast' ? 256 : settings.paint.atlasMode == 'balanced' ? 512 : 1024;
-						var preserveSeams = settings.paint.preserveNormalSeams;
-						geometry = unwrapMesh(geometry, settings.paint.resolution, settings.paint.gutter, preserveSeams, maxIterations, maxChartSize);
-						if (settings.paint.normals) {
-							await showProgress('tangents');
-							geometry = generateTangents(geometry);
-						}
-						geometry = mergeVertices(geometry);
+				// remesh material + wireframe overlay material
+				geometry.addGroup(0, geometry.index.count, 0);
+				geometry.addGroup(0, geometry.index.count, 1);
 
-						await showProgress('repaint');
-						var textures = repaint.transferTexture(
-							renderer,
-							geometry,
-							paintCache,
-							merged.thickness,
-							settings.paint.resolution,
-							settings.paint.gutter,
-							settings.paint.infill,
-							settings.paint.normals,
-							settings.paint.materials
-						);
+				clearRemeshed();
+				remeshMaterial.dispose();
+				remeshMaterial = material;
+				remeshed = new THREE.Mesh(geometry, [remeshMaterial, wireframeMaterial]);
+				model.visible = false;
+				scene.add(remeshed);
+				showTexture('texture-view', remeshMaterial.map);
+				showTexture('normal-view', remeshMaterial.normalMap);
+				showTexture('material-view', remeshMaterial.metalnessMap);
+				update();
 
-						material.map = textures.map;
-						material.normalMap = textures.normalMap;
-
-						if (settings.paint.materials) {
-							material.metalnessMap = textures.materialMap;
-							material.roughnessMap = textures.materialMap;
-							material.metalness = 1;
-						} else if (settings.paint.normals) {
-							// we need this to have a specular response
-							material.roughness = 0.5;
-						}
-					} else {
-						material.color.set(0xdddddd);
-					}
-					material.needsUpdate = true;
-
-					// remesh material + wireframe overlay material
-					geometry.addGroup(0, geometry.index.count, 0);
-					geometry.addGroup(0, geometry.index.count, 1);
-
-					clearRemeshed();
-					remeshMaterial.dispose();
-					remeshMaterial = material;
-					remeshed = new THREE.Mesh(geometry, [remeshMaterial, wireframeMaterial]);
-					model.visible = false;
-					scene.add(remeshed);
-					showTexture('texture-view', remeshMaterial.map);
-					showTexture('normal-view', remeshMaterial.normalMap);
-					showTexture('material-view', remeshMaterial.metalnessMap);
-					update();
-
-					var triangles = geometry.index.count / 3;
-					stats.triangles = triangles;
-					stats.vertices = geometry.attributes.position.count;
-					stats.ratio = (triangles / (merged.index.count / 3)) * 100;
-					updateStatsDisplay();
-					progressLabel.hidden = true;
-				});
+				var triangles = geometry.index.count / 3;
+				stats.triangles = triangles;
+				stats.vertices = geometry.attributes.position.count;
+				stats.ratio = (triangles / (merged.index.count / 3)) * 100;
+				updateStatsDisplay();
+				progressLabel.hidden = true;
 			}
 
 			function exportGlb(name) {
