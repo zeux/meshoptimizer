@@ -52,6 +52,11 @@
 				font-size: 12px;
 				line-height: 1.4;
 			}
+			#progress-label {
+				left: 50%;
+				transform: translateX(-50%);
+				z-index: 1;
+			}
 			#texture-view,
 			#normal-view,
 			#material-view {
@@ -84,6 +89,7 @@
 	</head>
 
 	<body>
+		<div id="progress-label" class="renderer-label" hidden></div>
 		<div id="container"></div>
 		<canvas id="texture-view"></canvas>
 		<canvas id="normal-view"></canvas>
@@ -107,6 +113,7 @@
 			var container;
 			var camera, renderer, scene, controls, model, merged, remeshed, remeshMaterial, wireframeMaterial, stats;
 			var paintCache = null;
+			var progressLabel = document.getElementById('progress-label');
 
 			var settings = {
 				wireframe: false,
@@ -486,12 +493,17 @@
 				return rgeo;
 			}
 
+			function showProgress(stage) {
+				progressLabel.textContent = stage;
+				progressLabel.hidden = false;
+				return new Promise(requestAnimationFrame);
+			}
+
 			function remesh() {
-				Promise.all([MeshoptSimplifier.ready, MeshoptTangents.ready, initializeWatlas()]).then(function () {
+				Promise.all([MeshoptSimplifier.ready, MeshoptTangents.ready, initializeWatlas()]).then(async function () {
 					if (!merged) return;
 
-					clearRemeshed();
-
+					await showProgress('remesh');
 					var flags = [];
 					if (settings.thicken) flags.push('Thicken');
 					if (settings.shell) flags.push('Shell');
@@ -504,6 +516,7 @@
 					geometry.setIndex(new THREE.BufferAttribute(MeshoptSimplifier.generatePositionRemap(result, 3), 1));
 
 					if (settings.simplify.enabled) {
+						await showProgress('simplify');
 						var sflags = ['PreserveFolds', 'Sparse']; // Sparse is needed because we skip position compaction above to be able to use quick remap to generate indices
 						if (settings.simplify.regularize) sflags.push('RegularizeLight');
 						var error = settings.simplify.forceTriangleCount ? 1 : Math.pow(10, -settings.simplify.errorThresholdLog10);
@@ -515,39 +528,49 @@
 						geometry = simplifyMesh(geometry, settings.simplify.forceTriangleCount, error, sflags, settings.simplify.solve);
 					}
 
+					await showProgress('normals');
 					geometry = mergeVertices(
 						generateNormals(geometry, THREE.MathUtils.degToRad(settings.debug ? 30 : settings.normalCrease), settings.normalSmoothing)
 					);
 
-					remeshMaterial.vertexColors = false;
-					remeshMaterial.metalness = 0;
-					remeshMaterial.roughness = 1;
+					var material = remeshMaterial.clone();
+					material.map = material.normalMap = material.metalnessMap = material.roughnessMap = null;
+					material.vertexColors = false;
+					material.color.set(0xffffff);
+					material.metalness = 0;
+					material.roughness = 1;
 
-					if (settings.paint.mode != 'none') {
-						paintCache = paintCache || repaint.buildCache(merged, merged.materials);
+					if (settings.paint.mode != 'none' && !paintCache) {
+						await showProgress('paint cache');
+						paintCache = repaint.buildCache(merged, merged.materials);
 					}
 
 					if (settings.paint.mode == 'vertex') {
+						await showProgress('repaint');
 						repaint.transferColors(renderer, geometry, paintCache, merged.thickness);
-						remeshMaterial.vertexColors = true;
-						remeshMaterial.color.set(0xffffff);
+						material.vertexColors = true;
 					} else if (settings.paint.mode == 'facets') {
+						await showProgress('repaint');
 						geometry = geometry.toNonIndexed();
 						geometry.computeVertexNormals();
 						var indices = new Uint32Array(geometry.attributes.position.count);
 						for (var i = 0; i < indices.length; ++i) indices[i] = i;
 						geometry.setIndex(new THREE.BufferAttribute(indices, 1));
 						repaint.transferColors(renderer, geometry, paintCache, merged.thickness, true);
-						remeshMaterial.vertexColors = true;
-						remeshMaterial.color.set(0xffffff);
+						material.vertexColors = true;
 					} else if (settings.paint.mode == 'texture') {
+						await showProgress('unwrap');
 						var maxIterations = settings.paint.atlasMode == 'quality' ? 1 : 0;
 						var maxChartSize = settings.paint.atlasMode == 'fast' ? 256 : settings.paint.atlasMode == 'balanced' ? 512 : 1024;
 						var preserveSeams = settings.paint.preserveNormalSeams;
 						geometry = unwrapMesh(geometry, settings.paint.resolution, settings.paint.gutter, preserveSeams, maxIterations, maxChartSize);
-						if (settings.paint.normals) geometry = generateTangents(geometry);
+						if (settings.paint.normals) {
+							await showProgress('tangents');
+							geometry = generateTangents(geometry);
+						}
 						geometry = mergeVertices(geometry);
 
+						await showProgress('repaint');
 						var textures = repaint.transferTexture(
 							renderer,
 							geometry,
@@ -560,27 +583,29 @@
 							settings.paint.materials
 						);
 
-						remeshMaterial.color.set(0xffffff);
-						remeshMaterial.map = textures.map;
-						remeshMaterial.normalMap = textures.normalMap;
+						material.map = textures.map;
+						material.normalMap = textures.normalMap;
 
 						if (settings.paint.materials) {
-							remeshMaterial.metalnessMap = textures.materialMap;
-							remeshMaterial.roughnessMap = textures.materialMap;
-							remeshMaterial.metalness = 1;
+							material.metalnessMap = textures.materialMap;
+							material.roughnessMap = textures.materialMap;
+							material.metalness = 1;
 						} else if (settings.paint.normals) {
 							// we need this to have a specular response
-							remeshMaterial.roughness = 0.5;
+							material.roughness = 0.5;
 						}
 					} else {
-						remeshMaterial.color.set(0xdddddd);
+						material.color.set(0xdddddd);
 					}
-					remeshMaterial.needsUpdate = true;
+					material.needsUpdate = true;
 
 					// remesh material + wireframe overlay material
 					geometry.addGroup(0, geometry.index.count, 0);
 					geometry.addGroup(0, geometry.index.count, 1);
 
+					clearRemeshed();
+					remeshMaterial.dispose();
+					remeshMaterial = material;
 					remeshed = new THREE.Mesh(geometry, [remeshMaterial, wireframeMaterial]);
 					model.visible = false;
 					scene.add(remeshed);
@@ -594,6 +619,7 @@
 					stats.vertices = geometry.attributes.position.count;
 					stats.ratio = (triangles / (merged.index.count / 3)) * 100;
 					updateStatsDisplay();
+					progressLabel.hidden = true;
 				});
 			}
 
