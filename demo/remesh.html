@@ -172,6 +172,11 @@
 			};
 
 			var gui = new GUI({ width: 300 });
+			gui.add(settings, 'remesh');
+			gui.add(settings, 'revert');
+			gui.add(settings, 'loadFile');
+			gui.add(settings, 'exportFile');
+
 			var guiDisplay = gui.addFolder('Display');
 			guiDisplay.add(settings, 'wireframe').onChange(update);
 			guiDisplay.add(settings, 'wireframeOverlay').onChange(update);
@@ -184,9 +189,6 @@
 			guiRemesh.add(settings, 'debug');
 			guiRemesh.add(settings, 'normalCrease', 0, 180, 1).name('normal crease');
 			guiRemesh.add(settings, 'normalSmoothing', 0, 10, 0.1).name('normal smoothing');
-			guiRemesh.add(settings, 'remesh');
-			guiRemesh.add(settings, 'revert');
-			guiRemesh.add(settings, 'exportFile');
 
 			var guiSimplify = gui.addFolder('Simplify');
 			guiSimplify.add(settings.simplify, 'enabled');
@@ -206,11 +208,10 @@
 			guiPaint.add(settings.paint, 'normals').name('normal map');
 			guiPaint.add(settings.paint, 'materials').name('material map');
 
-			var guiLoad = gui.addFolder('Load');
-			guiLoad.add(settings, 'loadFile');
-			guiLoad.add(settings, 'updateModule');
-			guiLoad.add(settings, 'autoUpdate').onChange(autoReload);
-			guiLoad.add(settings, 'autoUpdateStatus').listen();
+			var guiUpdate = gui.addFolder('Update');
+			guiUpdate.add(settings, 'updateModule');
+			guiUpdate.add(settings, 'autoUpdate').onChange(autoReload);
+			guiUpdate.add(settings, 'autoUpdateStatus').listen();
 
 			init();
 			loadDefault();
