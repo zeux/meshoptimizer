@@ -130,6 +130,7 @@
 					mode: 'texture',
 					resolution: 1024,
 					gutter: 1,
+					atlasMode: 'balanced',
 					preserveNormalSeams: true,
 					infill: true,
 					normals: false,
@@ -199,7 +200,8 @@
 			guiPaint.add(settings.paint, 'mode', ['none', 'vertex', 'facets', 'texture']);
 			guiPaint.add(settings.paint, 'resolution', [256, 512, 1024, 2048]);
 			guiPaint.add(settings.paint, 'gutter', 0, 8, 1);
-			guiPaint.add(settings.paint, 'preserveNormalSeams').name('preserve normal seams');
+			guiPaint.add(settings.paint, 'atlasMode', ['fast', 'balanced', 'quality']);
+			guiPaint.add(settings.paint, 'preserveNormalSeams');
 			guiPaint.add(settings.paint, 'infill');
 			guiPaint.add(settings.paint, 'normals').name('normal map');
 			guiPaint.add(settings.paint, 'materials').name('material map');
@@ -357,9 +359,18 @@
 				return result;
 			}
 
-			function unwrapMesh(geometry, resolution, gutter, preserveNormalSeams) {
+			function unwrapMesh(geometry, resolution, gutter, preserveNormalSeams, maxIterations, maxChartSize) {
 				var positions = geometry.attributes.position.array;
 				var indices = new Uint32Array(geometry.index.array);
+
+				var triangle = new THREE.Triangle();
+				var avgTriangleArea = 0;
+				for (var i = 0; i < indices.length; i += 3) {
+					triangle.a.fromBufferAttribute(geometry.attributes.position, indices[i + 0]);
+					triangle.b.fromBufferAttribute(geometry.attributes.position, indices[i + 1]);
+					triangle.c.fromBufferAttribute(geometry.attributes.position, indices[i + 2]);
+					avgTriangleArea += triangle.getArea() / (indices.length / 3);
+				}
 
 				var atlas = new Atlas();
 				atlas.addMesh({
@@ -371,7 +382,10 @@
 					indexData: indices,
 					indexCount: indices.length,
 				});
-				atlas.generate({ normalSeamWeight: preserveNormalSeams ? 1000 : 0 }, { resolution: resolution, padding: gutter });
+				atlas.generate(
+					{ normalSeamWeight: preserveNormalSeams ? 1000 : 0, maxIterations: maxIterations, maxChartArea: maxChartSize * avgTriangleArea },
+					{ resolution: resolution, padding: gutter }
+				);
 
 				var mesh = atlas.getMesh(0);
 				var atlasIndices = new Uint32Array(mesh.indexCount);
@@ -526,7 +540,10 @@
 						remeshMaterial.vertexColors = true;
 						remeshMaterial.color.set(0xffffff);
 					} else if (settings.paint.mode == 'texture') {
-						geometry = unwrapMesh(geometry, settings.paint.resolution, settings.paint.gutter, settings.paint.preserveNormalSeams);
+						var maxIterations = settings.paint.atlasMode == 'quality' ? 1 : 0;
+						var maxChartSize = settings.paint.atlasMode == 'fast' ? 256 : settings.paint.atlasMode == 'balanced' ? 512 : 1024;
+						var preserveSeams = settings.paint.preserveNormalSeams;
+						geometry = unwrapMesh(geometry, settings.paint.resolution, settings.paint.gutter, preserveSeams, maxIterations, maxChartSize);
 						if (settings.paint.normals) geometry = generateTangents(geometry);
 						geometry = mergeVertices(geometry);
 
