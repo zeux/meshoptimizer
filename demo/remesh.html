@@ -122,6 +122,7 @@
 					enabled: true,
 					regularize: true,
 					solve: true,
+					errorAuto: false,
 					errorThresholdLog10: 2.5,
 					forceTriangleCount: 0,
 				},
@@ -190,6 +191,7 @@
 			guiSimplify.add(settings.simplify, 'enabled');
 			guiSimplify.add(settings.simplify, 'regularize');
 			guiSimplify.add(settings.simplify, 'solve');
+			guiSimplify.add(settings.simplify, 'errorAuto');
 			guiSimplify.add(settings.simplify, 'errorThresholdLog10', 1.5, 3, 0.1);
 			guiSimplify.add(settings.simplify, 'forceTriangleCount');
 
@@ -349,6 +351,7 @@
 
 				var result = mergeGeometries(geometries);
 				result.computeBoundingBox();
+				result.computeBoundingSphere();
 				result.materials = materials;
 				result.thickness = result.boundingBox.getSize(new THREE.Vector3()).length() * 0.01;
 				return result;
@@ -483,12 +486,17 @@
 					var result = MeshoptSimplifier.remesh(merged.index.array, merged.attributes.position.array, 3, settings.resolution, flags);
 					var geometry = new THREE.BufferGeometry();
 					geometry.setAttribute('position', new THREE.BufferAttribute(result, 3));
-					geometry = mergeVertices(geometry);
+					geometry.setIndex(new THREE.BufferAttribute(MeshoptSimplifier.generatePositionRemap(result, 3), 1));
 
 					if (settings.simplify.enabled) {
-						var sflags = ['PreserveFolds'];
+						var sflags = ['PreserveFolds', 'Sparse']; // Sparse is needed because we skip position compaction above to be able to use quick remap to generate indices
 						if (settings.simplify.regularize) sflags.push('RegularizeLight');
 						var error = settings.simplify.forceTriangleCount ? 1 : Math.pow(10, -settings.simplify.errorThresholdLog10);
+						if (settings.simplify.errorAuto) {
+							sflags.push('ErrorAbsolute'); // merged mesh is in world space, so we don't need to adjust error by mesh scale and can simply use world space units
+							var distance = Math.max(camera.position.distanceTo(merged.boundingSphere.center) - merged.boundingSphere.radius, 0);
+							error = distance * 1e-3 * (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) * 0.5)); // ~1 pixel at 1k x 1k
+						}
 						geometry = simplifyMesh(geometry, settings.simplify.forceTriangleCount, error, sflags, settings.simplify.solve);
 					}
 
@@ -699,6 +707,7 @@
 					scene.add(model);
 					merged = mergeMesh(model);
 					revert();
+					controls.target.set(0, 0, 0);
 				}
 
 				if (ext == 'gltf' || ext == 'glb') {
