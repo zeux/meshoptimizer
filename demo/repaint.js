@@ -122,7 +122,7 @@ function sampleGeometry(geometry, size) {
 	return result;
 }
 
-function extractColors(data, colors, indices) {
+function extractColors(data, colors, indices, facets) {
 	var vertices = colors.length / 4;
 	var triangles = indices.length / 3;
 
@@ -151,6 +151,19 @@ function extractColors(data, colors, indices) {
 
 		for (var k = 0; k < 3; ++k) colors[i + k] /= weight;
 		colors[i + 3] = 1;
+	}
+
+	if (facets) {
+		for (var i = 0; i < triangles; ++i) {
+			var a = indices[i * 3 + 0],
+				b = indices[i * 3 + 1],
+				c = indices[i * 3 + 2];
+
+			for (var k = 0; k < 3; ++k) {
+				var avg = (colors[a * 4 + k] + colors[b * 4 + k] + colors[c * 4 + k]) / 3;
+				colors[a * 4 + k] = colors[b * 4 + k] = colors[c * 4 + k] = avg;
+			}
+		}
 	}
 }
 
@@ -558,7 +571,7 @@ export function transferTexture(renderer, geometry, cache, thickness, size, gutt
 	};
 }
 
-export function transferColors(renderer, geometry, cache, thickness) {
+export function transferColors(renderer, geometry, cache, thickness, facets) {
 	var vertices = geometry.attributes.position.count;
 	var triangles = geometry.index.array.length / 3;
 	var size = Math.ceil(Math.sqrt(vertices + triangles));
@@ -574,7 +587,7 @@ export function transferColors(renderer, geometry, cache, thickness) {
 	samples.dispose();
 
 	var colors = new Float32Array(vertices * 4);
-	extractColors(data, colors, geometry.index.array);
+	extractColors(data, colors, geometry.index.array, facets);
 
 	geometry.setAttribute('color', new THREE.BufferAttribute(colors, 4));
 }
