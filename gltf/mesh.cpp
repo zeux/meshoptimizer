@@ -740,6 +740,44 @@ void generateTangents(Mesh& mesh)
 #endif
 }
 
+void generateNormals(Mesh& mesh, float crease_angle)
+{
+#ifdef GLTFPACK_NO_EXPERIMENTAL
+	// disabled until meshopt_generateNormals becomes stable
+	(void)mesh;
+	(void)crease_angle;
+#else
+	if (mesh.type != cgltf_primitive_type_triangles || mesh.indices.empty() || mesh.targets || getStream(mesh, cgltf_attribute_type_normal))
+		return;
+
+	Stream* positions = getStream(mesh, cgltf_attribute_type_position);
+	if (!positions)
+		return;
+
+	size_t vertex_count = positions->data.size();
+
+	std::vector<float> normals(mesh.indices.size() * 3);
+	meshopt_generateNormals(normals.data(), mesh.indices.data(), mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), crease_angle * (3.14159265f / 180.f), 1.5f);
+
+	std::vector<Attr> data(mesh.indices.size());
+	for (size_t i = 0; i < mesh.indices.size(); ++i)
+	{
+		data[i].f[0] = normals[i * 3 + 0];
+		data[i].f[1] = normals[i * 3 + 1];
+		data[i].f[2] = normals[i * 3 + 2];
+	}
+
+	// note: potentially invalidates positions but we no longer use these
+	mesh.streams.push_back(Stream());
+
+	Stream& normal = mesh.streams.back();
+	normal.type = cgltf_attribute_type_normal;
+	normal.data.resize(vertex_count);
+
+	splitVertices(mesh, normal, data.data());
+#endif
+}
+
 struct QuantizedTBN
 {
 	int8_t nx, ny, nz, nw;

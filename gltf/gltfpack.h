@@ -146,6 +146,9 @@ struct Settings
 	bool mesh_instancing;
 	bool mesh_interleaved;
 	bool mesh_tangents;
+	bool mesh_normals;
+
+	float normals_crease;
 
 	float simplify_ratio;
 	float simplify_error;
@@ -336,6 +339,7 @@ void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings);
 void filterEmptyMeshes(std::vector<Mesh>& meshes);
 void filterStreams(Mesh& mesh, const MaterialInfo& mi);
 void generateTangents(Mesh& mesh);
+void generateNormals(Mesh& mesh, float crease_angle);
 
 void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings);
 void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes, const Settings& settings);
