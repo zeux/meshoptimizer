@@ -670,6 +670,44 @@ static Stream& prepareTangentStream(Mesh& mesh, size_t vertex_count)
 
 	return tangent;
 }
+
+static void splitVertices(Mesh& mesh, Stream& target, const Attr* data)
+{
+	size_t vertex_count = target.data.size();
+
+	// seed each vertex with one of its corner values; the loop below fixes any mismatches
+	for (size_t i = 0; i < mesh.indices.size(); ++i)
+		target.data[mesh.indices[i]] = data[i];
+
+	std::vector<unsigned int> splits(vertex_count, ~0u);
+
+	for (size_t i = 0; i < mesh.indices.size(); ++i)
+	{
+		const Attr& a = data[i];
+		unsigned int v = mesh.indices[i];
+		unsigned int sv = v;
+
+		// walk the chain of split copies looking for a vertex whose attribute matches
+		while (sv != ~0u && !(target.data[sv].f[0] == a.f[0] && target.data[sv].f[1] == a.f[1] && target.data[sv].f[2] == a.f[2] && target.data[sv].f[3] == a.f[3]))
+			sv = splits[sv];
+
+		// no match in chain: append a new split copy with the target attribute and chain it
+		if (sv == ~0u)
+		{
+			sv = unsigned(target.data.size());
+
+			for (Stream& stream : mesh.streams)
+				stream.data.push_back(stream.data[v]);
+
+			target.data[sv] = a;
+
+			splits.push_back(splits[v]);
+			splits[v] = sv;
+		}
+
+		mesh.indices[i] = sv;
+	}
+}
 #endif
 
 void generateTangents(Mesh& mesh)
@@ -698,38 +736,7 @@ void generateTangents(Mesh& mesh)
 	// note: potentially invalidates positions/normals/uvs but we no longer use these
 	Stream& tangent = prepareTangentStream(mesh, vertex_count);
 
-	// seed each vertex with one of its corner tangents; the loop below fixes any mismatches
-	for (size_t i = 0; i < mesh.indices.size(); ++i)
-		tangent.data[mesh.indices[i]] = tangents[i];
-
-	std::vector<unsigned int> splits(vertex_count, ~0u);
-
-	for (size_t i = 0; i < mesh.indices.size(); ++i)
-	{
-		const Attr& t = tangents[i];
-		unsigned int v = mesh.indices[i];
-		unsigned int sv = v;
-
-		// walk the chain of split copies looking for a vertex whose tangent matches
-		while (sv != ~0u && !(tangent.data[sv].f[0] == t.f[0] && tangent.data[sv].f[1] == t.f[1] && tangent.data[sv].f[2] == t.f[2] && tangent.data[sv].f[3] == t.f[3]))
-			sv = splits[sv];
-
-		// no match in chain: append a new split copy with the target tangent and chain it
-		if (sv == ~0u)
-		{
-			sv = unsigned(tangent.data.size());
-
-			for (Stream& stream : mesh.streams)
-				stream.data.push_back(stream.data[v]);
-
-			tangent.data[sv] = t;
-
-			splits.push_back(splits[v]);
-			splits[v] = sv;
-		}
-
-		mesh.indices[i] = sv;
-	}
+	splitVertices(mesh, tangent, tangents.data());
 #endif
 }
 
