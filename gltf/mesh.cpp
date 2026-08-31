@@ -671,19 +671,22 @@ static Stream& prepareTangentStream(Mesh& mesh, size_t vertex_count)
 	return tangent;
 }
 
-static void splitVertices(Mesh& mesh, Stream& target, const Attr* data)
+template <int N>
+static void splitVertices(Mesh& mesh, Stream& target, const float* data)
 {
 	size_t vertex_count = target.data.size();
 
 	// seed each vertex with one of its corner values; the loop below fixes any mismatches
 	for (size_t i = 0; i < mesh.indices.size(); ++i)
-		target.data[mesh.indices[i]] = data[i];
+		memcpy(target.data[mesh.indices[i]].f, &data[i * N], N * sizeof(float));
 
 	std::vector<unsigned int> splits(vertex_count, ~0u);
 
 	for (size_t i = 0; i < mesh.indices.size(); ++i)
 	{
-		const Attr& a = data[i];
+		Attr a = {};
+		memcpy(a.f, &data[i * N], N * sizeof(float));
+
 		unsigned int v = mesh.indices[i];
 		unsigned int sv = v;
 
@@ -730,13 +733,13 @@ void generateTangents(Mesh& mesh)
 	size_t vertex_count = positions->data.size();
 	assert(normals->data.size() == vertex_count && uvs->data.size() == vertex_count);
 
-	std::vector<Attr> tangents(mesh.indices.size());
-	meshopt_generateTangents(tangents[0].f, mesh.indices.data(), mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), normals->data[0].f, sizeof(Attr), uvs->data[0].f, sizeof(Attr), 0);
+	std::vector<float> tangents(mesh.indices.size() * 4);
+	meshopt_generateTangents(tangents.data(), mesh.indices.data(), mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), normals->data[0].f, sizeof(Attr), uvs->data[0].f, sizeof(Attr), 0);
 
 	// note: potentially invalidates positions/normals/uvs but we no longer use these
 	Stream& tangent = prepareTangentStream(mesh, vertex_count);
 
-	splitVertices(mesh, tangent, tangents.data());
+	splitVertices<4>(mesh, tangent, tangents.data());
 #endif
 }
 
@@ -759,14 +762,6 @@ void generateNormals(Mesh& mesh, float crease_angle)
 	std::vector<float> normals(mesh.indices.size() * 3);
 	meshopt_generateNormals(normals.data(), mesh.indices.data(), mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), crease_angle * (3.14159265f / 180.f), 1.5f);
 
-	std::vector<Attr> data(mesh.indices.size());
-	for (size_t i = 0; i < mesh.indices.size(); ++i)
-	{
-		data[i].f[0] = normals[i * 3 + 0];
-		data[i].f[1] = normals[i * 3 + 1];
-		data[i].f[2] = normals[i * 3 + 2];
-	}
-
 	// note: potentially invalidates positions but we no longer use these
 	mesh.streams.push_back(Stream());
 
@@ -774,7 +769,7 @@ void generateNormals(Mesh& mesh, float crease_angle)
 	normal.type = cgltf_attribute_type_normal;
 	normal.data.resize(vertex_count);
 
-	splitVertices(mesh, normal, data.data());
+	splitVertices<3>(mesh, normal, normals.data());
 #endif
 }
 
