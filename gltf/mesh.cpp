@@ -670,6 +670,47 @@ static Stream& prepareTangentStream(Mesh& mesh, size_t vertex_count)
 
 	return tangent;
 }
+
+template <int N>
+static void splitVertices(Mesh& mesh, Stream& target, const float* data)
+{
+	size_t vertex_count = target.data.size();
+
+	// seed each vertex with one of its corner values; the loop below fixes any mismatches
+	for (size_t i = 0; i < mesh.indices.size(); ++i)
+		memcpy(target.data[mesh.indices[i]].f, &data[i * N], N * sizeof(float));
+
+	std::vector<unsigned int> splits(vertex_count, ~0u);
+
+	for (size_t i = 0; i < mesh.indices.size(); ++i)
+	{
+		Attr a = {};
+		memcpy(a.f, &data[i * N], N * sizeof(float));
+
+		unsigned int v = mesh.indices[i];
+		unsigned int sv = v;
+
+		// walk the chain of split copies looking for a vertex whose attribute matches
+		while (sv != ~0u && !(target.data[sv].f[0] == a.f[0] && target.data[sv].f[1] == a.f[1] && target.data[sv].f[2] == a.f[2] && target.data[sv].f[3] == a.f[3]))
+			sv = splits[sv];
+
+		// no match in chain: append a new split copy with the target attribute and chain it
+		if (sv == ~0u)
+		{
+			sv = unsigned(target.data.size());
+
+			for (Stream& stream : mesh.streams)
+				stream.data.push_back(stream.data[v]);
+
+			target.data[sv] = a;
+
+			splits.push_back(splits[v]);
+			splits[v] = sv;
+		}
+
+		mesh.indices[i] = sv;
+	}
+}
 #endif
 
 void generateTangents(Mesh& mesh)
@@ -692,44 +733,43 @@ void generateTangents(Mesh& mesh)
 	size_t vertex_count = positions->data.size();
 	assert(normals->data.size() == vertex_count && uvs->data.size() == vertex_count);
 
-	std::vector<Attr> tangents(mesh.indices.size());
-	meshopt_generateTangents(tangents[0].f, mesh.indices.data(), mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), normals->data[0].f, sizeof(Attr), uvs->data[0].f, sizeof(Attr), 0);
+	std::vector<float> tangents(mesh.indices.size() * 4);
+	meshopt_generateTangents(tangents.data(), mesh.indices.data(), mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), normals->data[0].f, sizeof(Attr), uvs->data[0].f, sizeof(Attr), 0);
 
 	// note: potentially invalidates positions/normals/uvs but we no longer use these
 	Stream& tangent = prepareTangentStream(mesh, vertex_count);
 
-	// seed each vertex with one of its corner tangents; the loop below fixes any mismatches
-	for (size_t i = 0; i < mesh.indices.size(); ++i)
-		tangent.data[mesh.indices[i]] = tangents[i];
+	splitVertices<4>(mesh, tangent, tangents.data());
+#endif
+}
 
-	std::vector<unsigned int> splits(vertex_count, ~0u);
+void generateNormals(Mesh& mesh, float crease_angle)
+{
+#ifdef GLTFPACK_NO_EXPERIMENTAL
+	// disabled until meshopt_generateNormals becomes stable
+	(void)mesh;
+	(void)crease_angle;
+#else
+	if (mesh.type != cgltf_primitive_type_triangles || mesh.indices.empty() || mesh.targets || getStream(mesh, cgltf_attribute_type_normal))
+		return;
 
-	for (size_t i = 0; i < mesh.indices.size(); ++i)
-	{
-		const Attr& t = tangents[i];
-		unsigned int v = mesh.indices[i];
-		unsigned int sv = v;
+	Stream* positions = getStream(mesh, cgltf_attribute_type_position);
+	if (!positions)
+		return;
 
-		// walk the chain of split copies looking for a vertex whose tangent matches
-		while (sv != ~0u && !(tangent.data[sv].f[0] == t.f[0] && tangent.data[sv].f[1] == t.f[1] && tangent.data[sv].f[2] == t.f[2] && tangent.data[sv].f[3] == t.f[3]))
-			sv = splits[sv];
+	size_t vertex_count = positions->data.size();
 
-		// no match in chain: append a new split copy with the target tangent and chain it
-		if (sv == ~0u)
-		{
-			sv = unsigned(tangent.data.size());
+	std::vector<float> normals(mesh.indices.size() * 3);
+	meshopt_generateNormals(normals.data(), mesh.indices.data(), mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), crease_angle * (3.14159265f / 180.f), 1.5f);
 
-			for (Stream& stream : mesh.streams)
-				stream.data.push_back(stream.data[v]);
+	// note: potentially invalidates positions but we no longer use these
+	mesh.streams.push_back(Stream());
 
-			tangent.data[sv] = t;
+	Stream& normal = mesh.streams.back();
+	normal.type = cgltf_attribute_type_normal;
+	normal.data.resize(vertex_count);
 
-			splits.push_back(splits[v]);
-			splits[v] = sv;
-		}
-
-		mesh.indices[i] = sv;
-	}
+	splitVertices<3>(mesh, normal, normals.data());
 #endif
 }
 
