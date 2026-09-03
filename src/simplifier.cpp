@@ -755,28 +755,15 @@ static void quadricAdd(QuadricGrad* G, const QuadricGrad* R, size_t attribute_co
 
 static float quadricEval(const Quadric& Q, const Vector3& v)
 {
-	float rx = Q.b0;
-	float ry = Q.b1;
-	float rz = Q.b2;
-
-	rx += Q.a10 * v.y;
-	ry += Q.a21 * v.z;
-	rz += Q.a20 * v.x;
-
-	rx *= 2;
-	ry *= 2;
-	rz *= 2;
+	float rx = (Q.b0 + Q.a10 * v.y) * 2.f;
+	float ry = (Q.b1 + Q.a21 * v.z) * 2.f;
+	float rz = (Q.b2 + Q.a20 * v.x) * 2.f;
 
 	rx += Q.a00 * v.x;
 	ry += Q.a11 * v.y;
 	rz += Q.a22 * v.z;
 
-	float r = Q.c;
-	r += rx * v.x;
-	r += ry * v.y;
-	r += rz * v.z;
-
-	return r;
+	return Q.c + rx * v.x + ry * v.y + rz * v.z;
 }
 
 static float quadricError(const Quadric& Q, const Vector3& v)
