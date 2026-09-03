@@ -2095,7 +2095,7 @@ struct CellHasher
 
 	size_t hash(unsigned int i) const
 	{
-		unsigned int h = vertex_ids[i];
+		unsigned int h = vertex_ids ? vertex_ids[i] : unsigned(i);
 
 		// MurmurHash2 finalizer
 		h ^= h >> 13;
@@ -2106,26 +2106,7 @@ struct CellHasher
 
 	bool equal(unsigned int lhs, unsigned int rhs) const
 	{
-		return vertex_ids[lhs] == vertex_ids[rhs];
-	}
-};
-
-struct IdHasher
-{
-	size_t hash(unsigned int id) const
-	{
-		unsigned int h = id;
-
-		// MurmurHash2 finalizer
-		h ^= h >> 13;
-		h *= 0x5bd1e995;
-		h ^= h >> 15;
-		return h;
-	}
-
-	bool equal(unsigned int lhs, unsigned int rhs) const
-	{
-		return lhs == rhs;
+		return vertex_ids ? vertex_ids[lhs] == vertex_ids[rhs] : lhs == rhs;
 	}
 };
 
@@ -2214,7 +2195,7 @@ static size_t fillVertexCells(unsigned int* table, size_t table_size, unsigned i
 
 static size_t countVertexCells(unsigned int* table, size_t table_size, const unsigned int* vertex_ids, size_t vertex_count)
 {
-	IdHasher hasher;
+	CellHasher hasher = {NULL};
 
 	memset(table, -1, table_size * sizeof(unsigned int));
 
