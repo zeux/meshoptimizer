@@ -299,6 +299,7 @@ enum VertexKind
 	Kind_Border,   // not on an attribute seam, has exactly two open edges
 	Kind_Seam,     // on an attribute seam with exactly two attribute seam edges
 	Kind_Complex,  // none of the above; these vertices can move as long as all wedges move to the target vertex
+	Kind_Fringe,   // complex vertex on a geometric border; can only move to another fringe vertex
 	Kind_Locked,   // none of the above; these vertices can't move
 
 	Kind_Count
@@ -307,14 +308,16 @@ enum VertexKind
 // manifold vertices can collapse onto anything
 // border/seam vertices can collapse onto border/seam respectively, or locked
 // complex vertices can collapse onto complex/locked
+// fringe vertices can only collapse onto fringe vertices; border, manifold and complex vertices can collapse onto them
 // a rule of thumb is that collapsing kind A into kind B preserves the kind B in the target vertex
 // for example, while we could collapse Complex into Manifold, this would mean the target vertex isn't Manifold anymore
 const unsigned char kCanCollapse[Kind_Count][Kind_Count] = {
-    {1, 1, 1, 1, 1},
-    {0, 1, 0, 0, 1},
-    {0, 0, 1, 0, 1},
-    {0, 0, 0, 1, 1},
-    {0, 0, 0, 0, 0},
+    {1, 1, 1, 1, 1, 1},
+    {0, 1, 0, 0, 1, 1},
+    {0, 0, 1, 0, 0, 1},
+    {0, 0, 0, 1, 1, 1},
+    {0, 0, 0, 0, 1, 0},
+    {0, 0, 0, 0, 0, 0},
 };
 
 // if a vertex is manifold or seam, adjoining edges are guaranteed to have an opposite edge
@@ -323,11 +326,12 @@ const unsigned char kCanCollapse[Kind_Count][Kind_Count] = {
 // while many complex collapses have the opposite edge, since complex vertices collapse to the
 // same wedge, keeping opposite edges separate improves the quality by considering both targets
 const unsigned char kHasOpposite[Kind_Count][Kind_Count] = {
-    {1, 1, 1, 1, 1},
-    {1, 0, 1, 0, 0},
-    {1, 1, 1, 0, 1},
-    {1, 0, 0, 0, 0},
-    {1, 0, 1, 0, 0},
+    {1, 1, 1, 1, 1, 1},
+    {1, 0, 1, 0, 0, 0},
+    {1, 1, 1, 0, 0, 1},
+    {1, 0, 0, 0, 0, 0},
+    {1, 0, 0, 0, 0, 0},
+    {1, 0, 1, 0, 0, 0},
 };
 
 static bool hasEdge(const EdgeAdjacency& adjacency, unsigned int a, unsigned int b)
@@ -532,7 +536,7 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 
 	if (options & meshopt_SimplifyLockBorder)
 		for (size_t i = 0; i < vertex_count; ++i)
-			if (result[i] == Kind_Border)
+			if (result[i] == Kind_Border || result[i] == Kind_Fringe)
 				result[i] = Kind_Locked;
 
 #if TRACE
@@ -1474,7 +1478,7 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 			else
 			{
 				// complex edges can have multiple wedges, so we need to aggregate errors for all wedges based on the selected target
-				if (vertex_kind[i0] == Kind_Complex)
+				if (vertex_kind[i0] == Kind_Complex || vertex_kind[i0] == Kind_Fringe)
 					for (unsigned int v = wedge[i0]; v != i0; v = wedge[v])
 					{
 						unsigned int t = getComplexTarget(v, i1, remap, loop, loopback);
@@ -1482,7 +1486,7 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 						ei += quadricError(attribute_quadrics[v], &attribute_gradients[v * attribute_count], attribute_count, vertex_positions[t], &vertex_attributes[t * attribute_count]);
 					}
 
-				if (vertex_kind[i1] == Kind_Complex && bidi)
+				if ((vertex_kind[i1] == Kind_Complex || vertex_kind[i1] == Kind_Fringe) && bidi)
 					for (unsigned int v = wedge[i1]; v != i1; v = wedge[v])
 					{
 						unsigned int t = getComplexTarget(v, i0, remap, loop, loopback);
@@ -1633,7 +1637,7 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		assert(collapse_remap[r0] == r0);
 		assert(collapse_remap[r1] == r1);
 
-		if (kind == Kind_Complex)
+		if (kind == Kind_Complex || kind == Kind_Fringe)
 		{
 			// remap all vertices in the complex to the target vertex
 			unsigned int v = i0;
@@ -1747,7 +1751,7 @@ static void solvePositions(Vector3* vertex_positions, size_t vertex_count, const
 
 		// moving vertices on an attribute discontinuity may result in extrapolating UV outside of the chart bounds
 		// moving vertices on a border requires a stronger edge quadric to preserve the border geometry
-		if (vertex_kind[i] == Kind_Locked || vertex_kind[i] == Kind_Seam || vertex_kind[i] == Kind_Border)
+		if (vertex_kind[i] != Kind_Manifold && vertex_kind[i] != Kind_Complex)
 			continue;
 
 		if (remap[i] != i)
@@ -1839,7 +1843,7 @@ static void solveAttributes(Vector3* vertex_positions, float* vertex_attributes,
 			unsigned int shared = ~0u;
 
 			// for complex vertices, preserve attribute continuity and use highest weight wedge if values were shared
-			if (vertex_kind[i] == Kind_Complex)
+			if (vertex_kind[i] == Kind_Complex || vertex_kind[i] == Kind_Fringe)
 			{
 				shared = unsigned(i);
 
@@ -2458,8 +2462,8 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 	for (size_t i = 0; i < vertex_count; ++i)
 		kinds[vertex_kind[i]] += remap[i] == i;
 
-	printf("kinds: manifold %d, border %d, seam %d, complex %d, locked %d\n",
-	    int(kinds[Kind_Manifold]), int(kinds[Kind_Border]), int(kinds[Kind_Seam]), int(kinds[Kind_Complex]), int(kinds[Kind_Locked]));
+	printf("kinds: manifold %d, border %d, seam %d, complex %d, fringe %d, locked %d\n",
+	    int(kinds[Kind_Manifold]), int(kinds[Kind_Border]), int(kinds[Kind_Seam]), int(kinds[Kind_Complex]), int(kinds[Kind_Fringe]), int(kinds[Kind_Locked]));
 #endif
 
 	Vector3* vertex_positions = allocator.allocate<Vector3>(vertex_count);
