@@ -403,10 +403,6 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 		}
 	}
 
-#if TRACE
-	size_t stats[4] = {};
-#endif
-
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
 		if (remap[i] == i)
@@ -437,7 +433,6 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 				else
 				{
 					result[i] = Kind_Locked;
-					TRACESTATS(0);
 				}
 			}
 			else if (wedge[wedge[i]] == i)
@@ -449,29 +444,21 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 
 				// seam should have one open half-edge for each vertex, and the edges need to "connect" - point to the same vertex post-remap
 				if (openiv != ~0u && openiv != i && openov != ~0u && openov != i &&
-				    openiw != ~0u && openiw != w && openow != ~0u && openow != w)
+				    openiw != ~0u && openiw != w && openow != ~0u && openow != w &&
+				    remap[openiv] == remap[openow] && remap[openov] == remap[openiw] && remap[openiv] != remap[openov])
 				{
-					if (remap[openiv] == remap[openow] && remap[openov] == remap[openiw] && remap[openiv] != remap[openov])
-					{
-						result[i] = Kind_Seam;
-					}
-					else
-					{
-						result[i] = Kind_Locked;
-						TRACESTATS(1);
-					}
+					result[i] = Kind_Seam;
 				}
 				else
 				{
+					// mismatched seam endpoints or disconnected seam; we don't have classification available
 					result[i] = Kind_Locked;
-					TRACESTATS(2);
 				}
 			}
 			else
 			{
 				// more than one vertex maps to this one; we don't have classification available
 				result[i] = Kind_Locked;
-				TRACESTATS(3);
 			}
 		}
 		else
@@ -540,11 +527,6 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 		for (size_t i = 0; i < vertex_count; ++i)
 			if (result[i] == Kind_Border || result[i] == Kind_Fringe)
 				result[i] = Kind_Locked;
-
-#if TRACE
-	printf("locked: many open edges %d, disconnected seam %d, many seam edges %d, many wedges %d\n",
-	    int(stats[0]), int(stats[1]), int(stats[2]), int(stats[3]));
-#endif
 }
 
 struct Vector3
@@ -1284,13 +1266,7 @@ static bool hasTriangleFlips(const EdgeAdjacency& adjacency, const Vector3* vert
 
 		// early-out when at least one triangle flips due to a collapse
 		if (hasTriangleFlip(vertex_positions[a], vertex_positions[b], v0, v1))
-		{
-#if TRACE >= 2
-			printf("edge block %d -> %d: flip welded %d %d %d\n", i0, i1, a, i0, b);
-#endif
-
 			return true;
-		}
 	}
 
 	return false;
@@ -1449,10 +1425,6 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 		float ei = quadricError(vertex_quadrics[remap[i0]], vertex_positions[i1]);
 		float ej = bidi ? quadricError(vertex_quadrics[remap[i1]], vertex_positions[i0]) : FLT_MAX;
 
-#if TRACE >= 3
-		float di = ei, dj = ej;
-#endif
-
 		if (attribute_count)
 		{
 			ei += quadricError(attribute_quadrics[i0], &attribute_gradients[i0 * attribute_count], attribute_count, vertex_positions[i1], &vertex_attributes[i1 * attribute_count]);
@@ -1501,16 +1473,6 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 		c.v0 = rev ? i1 : i0;
 		c.v1 = rev ? i0 : i1;
 		c.error = ej < ei ? ej : ei;
-
-#if TRACE >= 3
-		if (bidi)
-			printf("edge eval %d -> %d: error %f (pos %f, attr %f); reverse %f (pos %f, attr %f)\n",
-			    rev ? i1 : i0, rev ? i0 : i1,
-			    sqrtf(rev ? ej : ei), sqrtf(rev ? dj : di), sqrtf(rev ? ej - dj : ei - di),
-			    sqrtf(rev ? ei : ej), sqrtf(rev ? di : dj), sqrtf(rev ? ei - di : ej - dj));
-		else
-			printf("edge eval %d -> %d: error %f (pos %f, attr %f)\n", i0, i1, sqrtf(c.error), sqrtf(di), sqrtf(ei - di));
-#endif
 	}
 }
 
@@ -1628,10 +1590,6 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 			TRACESTATS(2);
 			continue;
 		}
-
-#if TRACE >= 2
-		printf("edge commit %d -> %d: kind %d->%d, error %f\n", i0, i1, vertex_kind[i0], vertex_kind[i1], sqrtf(c.error));
-#endif
 
 		assert(collapse_remap[r0] == r0);
 		assert(collapse_remap[r1] == r1);
@@ -2041,15 +1999,9 @@ static void measureComponents(float* component_errors, size_t component_count, c
 	}
 
 	// we've used the output buffer as scratch space, so we need to move the results to proper indices
+	// note: we keep the squared error to make it match quadric error metric
 	for (size_t i = 0; i < component_count; ++i)
-	{
-#if TRACE >= 2
-		printf("component %d: center %f %f %f, error %e\n", int(i),
-		    component_errors[i * 4 + 0], component_errors[i * 4 + 1], component_errors[i * 4 + 2], sqrtf(component_errors[i * 4 + 3]));
-#endif
-		// note: we keep the squared error to make it match quadric error metric
 		component_errors[i] = component_errors[i * 4 + 3];
-	}
 }
 
 static size_t pruneComponents(unsigned int* indices, size_t index_count, const unsigned int* components, const float* component_errors, size_t component_count, float error_cutoff, float& nexterror)
@@ -2553,7 +2505,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 			break;
 
 #if TRACE
-		printf("pass %d:%c", int(pass_count++), TRACE >= 2 ? '\n' : ' ');
+		printf("pass %d: ", int(pass_count++));
 #endif
 
 		rankEdgeCollapses(edge_collapses, edge_collapse_count, vertex_positions, vertex_attributes, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, remap, wedge, vertex_kind, loop, loopback);
