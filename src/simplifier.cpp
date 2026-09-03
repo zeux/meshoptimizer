@@ -493,10 +493,10 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 					continue;
 				}
 
-				bool protect = false;
+				unsigned int v = unsigned(i);
 
 				// vertex_lock may protect any wedge, not just the primary vertex, so we switch to complex only if no wedges are protected
-				unsigned int v = unsigned(i);
+				bool protect = false;
 				do
 				{
 					unsigned int rv = sparse_remap ? sparse_remap[v] : v;
@@ -504,18 +504,20 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 					v = wedge[v];
 				} while (v != i);
 
-				// protect if any adjoining edge doesn't have an opposite edge (indicating vertex is on the border)
+				// check if any adjoining edge doesn't have an opposite edge (indicating vertex is on the border)
+				bool border = false;
 				do
 				{
 					const EdgeAdjacency::Edge* edges = &adjacency.data[adjacency.offsets[v]];
 					size_t count = adjacency.offsets[v + 1] - adjacency.offsets[v];
 
 					for (size_t j = 0; j < count; ++j)
-						protect |= !hasEdge(adjacency, edges[j].next, v, remap, wedge);
+						border |= !hasEdge(adjacency, edges[j].next, v, remap, wedge);
 					v = wedge[v];
 				} while (v != i);
 
-				result[i] = protect ? result[i] : int(Kind_Complex);
+				// border vertices with attribute discontinuities can only collapse along the border, so they need a separate tagging
+				result[i] = protect ? result[i] : int(border ? Kind_Fringe : Kind_Complex);
 			}
 
 	if (vertex_lock)
@@ -1123,26 +1125,36 @@ static void fillEdgeQuadrics(Quadric* vertex_quadrics, const unsigned int* indic
 			unsigned char k0 = vertex_kind[i0];
 			unsigned char k1 = vertex_kind[i1];
 
-			// check that either i0 or i1 are border/seam and are on the same edge loop
-			// note that we need to add the error even for edged that connect e.g. border & locked
-			// if we don't do that, the adjacent border->border edge won't have correct errors for corners
-			if (k0 != Kind_Border && k0 != Kind_Seam && k1 != Kind_Border && k1 != Kind_Seam)
+			// early out: manifold vertices never lie on a border
+			if (k0 == Kind_Manifold || k1 == Kind_Manifold)
 				continue;
 
+			// one of the vertices must be border/seam/fringe; additional checks help validate the border
+			if (k0 != Kind_Border && k0 != Kind_Seam && k0 != Kind_Fringe && k1 != Kind_Border && k1 != Kind_Seam && k1 != Kind_Fringe)
+				continue;
+
+			// if i0/i1 are border/seam we check if they are on the same edge loop
+			// note that we need to add the error even for edges that connect e.g. border & locked
+			// if we don't do that, the adjacent border->border edge won't have correct errors for corners
 			if ((k0 == Kind_Border || k0 == Kind_Seam) && loop[i0] != i1)
 				continue;
 
 			if ((k1 == Kind_Border || k1 == Kind_Seam) && loopback[i1] != i0)
 				continue;
 
+			// fringe vertices don't have proper edge loops, so we need to add edge quadrics to fringe-fringe or fringe-locked edges
+			// note that border-fringe edges are still processed, guarded by the loop check above
+			if ((k0 == Kind_Fringe || k1 == Kind_Fringe) && (k0 == Kind_Complex || k1 == Kind_Complex))
+				continue;
+
 			unsigned int i2 = indices[i + next[e + 1]];
 
 			// we try hard to maintain border edge geometry; seam edges can move more freely
-			// due to topological restrictions on collapses, seam quadrics slightly improves collapse structure but aren't critical
+			// due to topological restrictions on collapses, seam quadrics slightly improve collapse structure but aren't critical
 			const float kEdgeWeightSeam = 0.5f; // applied twice due to opposite edges
 			const float kEdgeWeightBorder = 10.f;
 
-			float edgeWeight = (k0 == Kind_Border || k1 == Kind_Border) ? kEdgeWeightBorder : kEdgeWeightSeam;
+			float edgeWeight = (k0 == Kind_Seam || k1 == Kind_Seam) ? kEdgeWeightSeam : kEdgeWeightBorder;
 
 			Quadric Q;
 			quadricFromTriangleEdge(Q, vertex_positions[i0], vertex_positions[i1], vertex_positions[i2], edgeWeight);
@@ -1593,7 +1605,7 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		}
 
 		// we limit the error in each pass based on the error of optimal last collapse; since many collapses will be locked
-		// as they will share vertices with other successfull collapses, we need to increase the acceptable error by some factor
+		// as they will share vertices with other successful collapses, we need to increase the acceptable error by some factor
 		float error_goal = edge_collapse_goal < collapse_count ? 1.5f * collapses[collapse_order[edge_collapse_goal]].error : FLT_MAX;
 
 		// on average, each collapse is expected to lock 6 other collapses; to avoid degenerate passes on meshes with odd
@@ -1682,6 +1694,7 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 		collapse_locked[r1] = 1;
 
 		// border edges collapse 1 triangle, other edges collapse 2 or more
+		// fringe edges often collapse 1 but may also collapse 2 because they don't respect loops, so we conservatively assume 2
 		triangle_collapses += (kind == Kind_Border) ? 1 : 2;
 		edge_collapses++;
 
