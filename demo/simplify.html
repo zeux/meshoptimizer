@@ -157,6 +157,7 @@
 				permissive: false,
 				permissiveProtection: 2, // uvs
 				lockBorder: false,
+				preserveFolds: false,
 				preprune: 0.0,
 				prune: true,
 				regularize: false,
@@ -209,6 +210,7 @@
 			guiSimplify.add(settings, 'permissive').onChange(simplify);
 			guiSimplify.add(settings, 'permissiveProtection', { none: 0, uvs: 2, normals: 1, all: 3 }).onChange(simplify);
 			guiSimplify.add(settings, 'lockBorder').onChange(simplify);
+			guiSimplify.add(settings, 'preserveFolds').onChange(simplify);
 			guiSimplify.add(settings, 'prune').onChange(simplify);
 			guiSimplify.add(settings, 'regularize').onChange(simplify);
 			guiSimplify.add(settings, 'solve').onChange(simplify);
@@ -529,6 +531,9 @@
 				if (settings.lockBorder) {
 					flags.push('LockBorder');
 				}
+				if (settings.preserveFolds) {
+					flags.push('PreserveFolds');
+				}
 				if (settings.prune) {
 					flags.push('Prune');
 				}
@@ -610,7 +615,7 @@
 
 					var mask = (1 << 28) - 1;
 
-					for (var kind = 1; kind <= 6; ++kind) {
+					for (var kind = 1; kind <= 7; ++kind) {
 						var offset = dind.length;
 
 						for (var i = 0; i < dlen; i += 3) {
@@ -619,25 +624,27 @@
 									b = dind[i + ((e + 1) % 3)];
 								var ak = (a >> 28) & 7,
 									bk = (b >> 28) & 7;
+								var push = false;
 
-								if (a >> 31 != 0 && (ak == kind || bk == kind) && (ak == kind || ak == 4) && (bk == kind || bk == 4)) {
+								// vertex kinds: 1 border, 2 seam, 3 complex, 4 fringe, 5 locked
+								if (a >> 31 != 0 && kind <= 3 && (ak == kind || bk == kind) && (ak == kind || ak == 5) && (bk == kind || bk == 5)) {
 									// loop edge of current kind (allow one of the vertices to be locked)
-									// note: complex edges ignore loop metadata
-									dind.push(a & mask);
-									dind.push(a & mask);
-									dind.push(b & mask);
-								} else if (a >> 31 != 0 && kind == 5 && ak != bk && ak != 4 && bk != 4) {
+									push = true;
+								} else if (a >> 31 != 0 && kind == 4 && (ak == 4 || bk == 4) && (ak == 4 || ak == 1) && (bk == 4 || bk == 1)) {
+									// fringe loop edge (fringe-fringe or fringe-border; neither can be locked because these collapses aren't allowed)
+									push = true;
+								} else if (kind == 5 && (ak == 4 || ak == 5) && (bk == 4 || bk == 5) && (ak == 5 || bk == 5)) {
+									// locked edge (not marked as a loop, or fringe-locked because these are effectively locked too)
+									push = true;
+								} else if (a >> 31 != 0 && kind == 6 && ak != bk && ak != 5 && bk != 5 && (ak | bk) != 5) {
 									// mixed edge (neither vertex is locked, and they are of different kinds)
-									dind.push(a & mask);
-									dind.push(a & mask);
-									dind.push(b & mask);
-								} else if (a >> 31 == 0 && kind == 4 && ak == kind && bk == kind) {
-									// locked edge (not marked as a loop)
-									dind.push(a & mask);
-									dind.push(a & mask);
-									dind.push(b & mask);
-								} else if (a >> 31 == 0 && kind == 6 && ak == 3 && bk == 3) {
+									push = true;
+								} else if (a >> 31 == 0 && kind == 7 && (ak == 3 || ak == 4) && (bk == 3 || bk == 4)) {
 									// complex edge (not marked as a loop)
+									push = true;
+								}
+
+								if (push) {
 									dind.push(a & mask);
 									dind.push(a & mask);
 									dind.push(b & mask);
@@ -796,6 +803,7 @@
 										new THREE.MeshBasicMaterial({ color: 0x0000ff, wireframe: true }), // border
 										new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true }), // seam
 										new THREE.MeshBasicMaterial({ color: 0x009f9f, wireframe: true }), // complex
+										new THREE.MeshBasicMaterial({ color: 0x5f9fff, wireframe: true }), // fringe
 										new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true }), // locked
 										new THREE.MeshBasicMaterial({ color: 0xff9f00, wireframe: true }), // mixed edge
 										new THREE.MeshBasicMaterial({ color: 0x9f5f9f, wireframe: true }), // complex, no loop
