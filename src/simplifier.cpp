@@ -504,7 +504,7 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 				} while (v != i);
 
 				// border vertices with attribute discontinuities can only collapse along the border, so they need a separate tagging
-				result[i] = protect ? result[i] : int(border ? Kind_Fringe : Kind_Complex);
+				result[i] = protect ? result[i] : (unsigned char)(border ? Kind_Fringe : Kind_Complex);
 			}
 
 	if (vertex_lock)
@@ -1596,16 +1596,11 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 
 		if (kind == Kind_Complex || kind == Kind_Fringe)
 		{
-			// remap all vertices in the complex to the target vertex
-			unsigned int v = i0;
+			collapse_remap[i0] = i1;
 
-			do
-			{
-				unsigned int t = getComplexTarget(v, i1, remap, loop, loopback);
-
-				collapse_remap[v] = t;
-				v = wedge[v];
-			} while (v != i0);
+			// remap all vertices in the complex to the target vertex, using the same ranking that we used to evaluate the collapses
+			for (unsigned int v = wedge[i0]; v != i0; v = wedge[v])
+				collapse_remap[v] = getComplexTarget(v, i1, remap, loop, loopback);
 		}
 		else if (kind == Kind_Seam)
 		{
