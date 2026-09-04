@@ -157,6 +157,7 @@
 				permissive: false,
 				permissiveProtection: 2, // uvs
 				lockBorder: false,
+				preserveFolds: false,
 				preprune: 0.0,
 				prune: true,
 				regularize: false,
@@ -209,6 +210,7 @@
 			guiSimplify.add(settings, 'permissive').onChange(simplify);
 			guiSimplify.add(settings, 'permissiveProtection', { none: 0, uvs: 2, normals: 1, all: 3 }).onChange(simplify);
 			guiSimplify.add(settings, 'lockBorder').onChange(simplify);
+			guiSimplify.add(settings, 'preserveFolds').onChange(simplify);
 			guiSimplify.add(settings, 'prune').onChange(simplify);
 			guiSimplify.add(settings, 'regularize').onChange(simplify);
 			guiSimplify.add(settings, 'solve').onChange(simplify);
@@ -528,6 +530,9 @@
 				var flags = [];
 				if (settings.lockBorder) {
 					flags.push('LockBorder');
+				}
+				if (settings.preserveFolds) {
+					flags.push('PreserveFolds');
 				}
 				if (settings.prune) {
 					flags.push('Prune');
