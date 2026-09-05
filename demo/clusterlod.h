@@ -45,6 +45,9 @@ struct clodConfig
 	// limit error by edge length, aiming to remove subpixel triangles even if the attribute error is high
 	float simplify_error_edge_limit;
 
+	// clamp attribute error to match position error scale and avoid overly conservative LOD selection
+	bool simplify_error_clamped;
+
 	// use permissive simplification instead of regular simplification (make sure to use attribute_protect_mask if this is set!)
 	bool simplify_permissive;
 
@@ -470,6 +473,8 @@ static std::vector<unsigned int> simplify(const clodConfig& config, const clodMe
 
 	unsigned int options = meshopt_SimplifySparse | meshopt_SimplifyErrorAbsolute;
 
+	if (config.simplify_error_clamped)
+		options |= meshopt_SimplifyErrorClamped;
 	if (config.simplify_permissive)
 		options |= meshopt_SimplifyPermissive;
 	if (config.simplify_regularize)
@@ -585,6 +590,7 @@ clodConfig clodDefaultConfig(size_t max_triangles)
 	config.simplify_threshold = 0.85f;
 	config.simplify_error_merge_previous = 1.0f;
 	config.simplify_error_factor_sloppy = 2.0f;
+	config.simplify_error_clamped = true;
 	config.simplify_permissive = true;
 	config.simplify_fallback_permissive = false; // note: by default we run in permissive mode, but it's also possible to disable that and use it only as a fallback
 	config.simplify_fallback_sloppy = true;
