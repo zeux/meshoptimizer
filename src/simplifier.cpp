@@ -366,7 +366,7 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 	memset(loop, -1, vertex_count * sizeof(unsigned int));
 	memset(loopback, -1, vertex_count * sizeof(unsigned int));
 
-	// incoming & outgoing open edges: ~0u if no open edges, i if there are more than 1
+	// incoming & outgoing open edges: ~0u if no open edges, i if ambiguous or unused
 	// note that this is the same data as required in loop[] arrays; loop[] data is only used for border/seam by default
 	// in permissive mode we also use it to guide complex-complex collapses, so we fill it for all vertices
 	unsigned int* openinc = loopback;
@@ -397,6 +397,10 @@ static void classifyVertices(unsigned char* result, unsigned int* loop, unsigned
 				openout[vertex] = (openout[vertex] == ~0u) ? target : vertex;
 			}
 		}
+
+		// vertex is referenced by zero triangles; for permissive complex targeting, we mark it as unused (ambiguous) instead of not on a loop
+		if (count == 0)
+			openinc[vertex] = openout[vertex] = vertex;
 	}
 
 #if TRACE
@@ -1337,7 +1341,7 @@ static float getNeighborhoodRadius(const EdgeAdjacency& adjacency, const Vector3
 	return sqrtf(result);
 }
 
-static unsigned int getComplexTarget(unsigned int v, unsigned int target, const unsigned int* remap, const unsigned int* loop, const unsigned int* loopback)
+static unsigned int getComplexTarget(unsigned int v, unsigned int source, unsigned int target, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, const unsigned int* loop, const unsigned int* loopback)
 {
 	unsigned int r = remap[target];
 
@@ -1347,8 +1351,14 @@ static unsigned int getComplexTarget(unsigned int v, unsigned int target, const 
 		return loop[v];
 	else if (loopback[v] != ~0u && remap[loopback[v]] == r)
 		return loopback[v];
-	else
-		return target;
+
+	// if the collapse is alongside a double-sided surface, try to collapse the alternate wedge to the alternate of the target
+	unsigned int w = wedge[target];
+	if (loop[v] == ~0u && loopback[v] == ~0u && loop[w] == ~0u && loopback[w] == ~0u &&
+	    wedge[source] == v && wedge[v] == source && w != target && wedge[w] == target && vertex_kind[w] == Kind_Complex)
+		return w;
+
+	return target;
 }
 
 static size_t boundEdgeCollapses(const EdgeAdjacency& adjacency, size_t vertex_count, size_t index_count, unsigned char* vertex_kind)
@@ -1477,7 +1487,7 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 				if (vertex_kind[i0] == Kind_Complex)
 					for (unsigned int v = wedge[i0]; v != i0; v = wedge[v])
 					{
-						unsigned int t = getComplexTarget(v, i1, remap, loop, loopback);
+						unsigned int t = getComplexTarget(v, i0, i1, remap, wedge, vertex_kind, loop, loopback);
 
 						ei += quadricError(attribute_quadrics[v], &attribute_gradients[v * attribute_count], attribute_count, vertex_positions[t], &vertex_attributes[t * attribute_count]);
 					}
@@ -1485,7 +1495,7 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 				if (vertex_kind[i1] == Kind_Complex && bidi)
 					for (unsigned int v = wedge[i1]; v != i1; v = wedge[v])
 					{
-						unsigned int t = getComplexTarget(v, i0, remap, loop, loopback);
+						unsigned int t = getComplexTarget(v, i1, i0, remap, wedge, vertex_kind, loop, loopback);
 
 						ej += quadricError(attribute_quadrics[v], &attribute_gradients[v * attribute_count], attribute_count, vertex_positions[t], &vertex_attributes[t * attribute_count]);
 					}
@@ -1639,7 +1649,7 @@ static size_t performEdgeCollapses(unsigned int* collapse_remap, unsigned char* 
 
 			// remap all vertices in the complex to the target vertex, using the same ranking that we used to evaluate the collapses
 			for (unsigned int v = wedge[i0]; v != i0; v = wedge[v])
-				collapse_remap[v] = getComplexTarget(v, i1, remap, loop, loopback);
+				collapse_remap[v] = getComplexTarget(v, i0, i1, remap, wedge, vertex_kind, loop, loopback);
 		}
 		else if (kind == Kind_Seam)
 		{
