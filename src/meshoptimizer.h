@@ -475,7 +475,7 @@ enum
 	meshopt_SimplifyPrune = 1 << 3,
 	/* Produce more regular triangle sizes and shapes during simplification, at some cost to geometric and attribute quality. */
 	meshopt_SimplifyRegularize = 1 << 4,
-	/* Experimental: Allow collapses across attribute discontinuities, except for vertices that are tagged with meshopt_SimplifyVertex_Protect in vertex_lock. */
+	/* Allow collapses across attribute discontinuities, except for vertices that are tagged with meshopt_SimplifyVertex_Protect in vertex_lock. */
 	meshopt_SimplifyPermissive = 1 << 5,
 	/* Produce more regular triangle sizes and shapes during simplification, at a small cost to geometric and attribute quality. */
 	meshopt_SimplifyRegularizeLight = 1 << 6,
