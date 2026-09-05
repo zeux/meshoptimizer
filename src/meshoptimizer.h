@@ -481,6 +481,8 @@ enum
 	meshopt_SimplifyRegularizeLight = 1 << 6,
 	/* Experimental: Try to preserve fold lines between opposite-facing triangles, at a small performance cost. */
 	meshopt_SimplifyPreserveFolds = 1 << 7,
+	/* Experimental: Clamp attribute error to match position error scale and avoid extreme error values in areas with high attribute variance. */
+	meshopt_SimplifyErrorClamped = 1 << 8,
 };
 
 /**

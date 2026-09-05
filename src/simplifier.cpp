@@ -756,7 +756,7 @@ static float quadricError(const Quadric& Q, const Vector3& v)
 	return fabsf(r) * s;
 }
 
-static float quadricError(const Quadric& Q, const QuadricGrad* G, size_t attribute_count, const Vector3& v, const float* va)
+static float quadricError(const Quadric& Q, const QuadricGrad* G, size_t attribute_count, const Vector3& v, const float* va, bool clamped)
 {
 	float r = quadricEval(Q, v);
 
@@ -770,7 +770,9 @@ static float quadricError(const Quadric& Q, const QuadricGrad* G, size_t attribu
 	}
 
 	// note: unlike position error, we do not normalize by Q.w to retain edge scaling as described in quadricFromAttributes
-	return fabsf(r);
+	// we do support clamping, with the error limited to the cumulative weight (= area), which makes perceptual error map to position error more closely
+	float e = fabsf(r);
+	return clamped ? (e < Q.w ? e : Q.w) : e;
 }
 
 static void quadricFromPlane(Quadric& Q, float a, float b, float c, float d, float w)
@@ -1412,7 +1414,7 @@ static size_t pickEdgeCollapses(Collapse* collapses, size_t collapse_capacity, c
 	return collapse_count;
 }
 
-static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const Vector3* vertex_positions, const float* vertex_attributes, const Quadric* vertex_quadrics, const Quadric* attribute_quadrics, const QuadricGrad* attribute_gradients, size_t attribute_count, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, const unsigned int* loop, const unsigned int* loopback)
+static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const Vector3* vertex_positions, const float* vertex_attributes, const Quadric* vertex_quadrics, const Quadric* attribute_quadrics, const QuadricGrad* attribute_gradients, size_t attribute_count, const unsigned int* remap, const unsigned int* wedge, const unsigned char* vertex_kind, const unsigned int* loop, const unsigned int* loopback, bool clamped)
 {
 	for (size_t i = 0; i < collapse_count; ++i)
 	{
@@ -1427,8 +1429,8 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 
 		if (attribute_count)
 		{
-			ei += quadricError(attribute_quadrics[i0], &attribute_gradients[i0 * attribute_count], attribute_count, vertex_positions[i1], &vertex_attributes[i1 * attribute_count]);
-			ej += bidi ? quadricError(attribute_quadrics[i1], &attribute_gradients[i1 * attribute_count], attribute_count, vertex_positions[i0], &vertex_attributes[i0 * attribute_count]) : 0;
+			ei += quadricError(attribute_quadrics[i0], &attribute_gradients[i0 * attribute_count], attribute_count, vertex_positions[i1], &vertex_attributes[i1 * attribute_count], clamped);
+			ej += bidi ? quadricError(attribute_quadrics[i1], &attribute_gradients[i1 * attribute_count], attribute_count, vertex_positions[i0], &vertex_attributes[i0 * attribute_count], clamped) : 0;
 
 			// seam edges need to aggregate attribute errors between primary and secondary edges, as attribute quadrics are separate
 			if (vertex_kind[i0] == Kind_Seam)
@@ -1443,8 +1445,8 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 				// note: this should never happen due to the assertion above, but when disabled if we ever hit this case we'll get a memory safety issue; for now play it safe
 				s1 = (s1 != ~0u) ? s1 : wedge[i1];
 
-				ei += quadricError(attribute_quadrics[s0], &attribute_gradients[s0 * attribute_count], attribute_count, vertex_positions[s1], &vertex_attributes[s1 * attribute_count]);
-				ej += bidi ? quadricError(attribute_quadrics[s1], &attribute_gradients[s1 * attribute_count], attribute_count, vertex_positions[s0], &vertex_attributes[s0 * attribute_count]) : 0;
+				ei += quadricError(attribute_quadrics[s0], &attribute_gradients[s0 * attribute_count], attribute_count, vertex_positions[s1], &vertex_attributes[s1 * attribute_count], clamped);
+				ej += bidi ? quadricError(attribute_quadrics[s1], &attribute_gradients[s1 * attribute_count], attribute_count, vertex_positions[s0], &vertex_attributes[s0 * attribute_count], clamped) : 0;
 			}
 			else
 			{
@@ -1454,7 +1456,7 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 					{
 						unsigned int t = getComplexTarget(v, i1, remap, loop, loopback);
 
-						ei += quadricError(attribute_quadrics[v], &attribute_gradients[v * attribute_count], attribute_count, vertex_positions[t], &vertex_attributes[t * attribute_count]);
+						ei += quadricError(attribute_quadrics[v], &attribute_gradients[v * attribute_count], attribute_count, vertex_positions[t], &vertex_attributes[t * attribute_count], clamped);
 					}
 
 				if ((vertex_kind[i1] == Kind_Complex || vertex_kind[i1] == Kind_Fringe) && bidi)
@@ -1462,7 +1464,7 @@ static void rankEdgeCollapses(Collapse* collapses, size_t collapse_count, const 
 					{
 						unsigned int t = getComplexTarget(v, i0, remap, loop, loopback);
 
-						ej += quadricError(attribute_quadrics[v], &attribute_gradients[v * attribute_count], attribute_count, vertex_positions[t], &vertex_attributes[t * attribute_count]);
+						ej += quadricError(attribute_quadrics[v], &attribute_gradients[v * attribute_count], attribute_count, vertex_positions[t], &vertex_attributes[t * attribute_count], clamped);
 					}
 			}
 		}
@@ -2503,7 +2505,7 @@ size_t meshopt_simplifyEdge(unsigned int* destination, const unsigned int* indic
 		printf("pass %d: ", int(pass_count++));
 #endif
 
-		rankEdgeCollapses(edge_collapses, edge_collapse_count, vertex_positions, vertex_attributes, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, remap, wedge, vertex_kind, loop, loopback);
+		rankEdgeCollapses(edge_collapses, edge_collapse_count, vertex_positions, vertex_attributes, vertex_quadrics, attribute_quadrics, attribute_gradients, attribute_count, remap, wedge, vertex_kind, loop, loopback, (options & meshopt_SimplifyErrorClamped) != 0);
 
 		sortEdgeCollapses(collapse_order, edge_collapses, edge_collapse_count);
 
