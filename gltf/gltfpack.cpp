@@ -1461,16 +1461,6 @@ int main(int argc, char** argv)
 		{
 			fprintf(stderr, "Warning: attribute aware simplification is enabled by default; option -sv is only provided for compatibility and may be removed in the future\n");
 		}
-		else if (strcmp(arg, "-svd") == 0)
-		{
-			fprintf(stderr, "Warning: option -svd disables attribute aware simplification and is temporary; avoid production usage\n");
-			settings.simplify_attributes = false;
-		}
-		else if (strcmp(arg, "-ssd") == 0)
-		{
-			fprintf(stderr, "Warning: option -ssd disables scaled simplification error and is temporary; avoid production usage\n");
-			settings.simplify_scaled = false;
-		}
 		else if (strcmp(arg, "-sp") == 0)
 		{
 			settings.simplify_permissive = true;
