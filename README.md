@@ -596,7 +596,7 @@ The attributes are passed as a separate buffer (in the example above it's a subs
 
 Including texture coordinates in the attribute set is optional, as simplification generally preserves texture quality reasonably well by default; if included, a weight of around 10-100 is usually appropriate depending on the UV density. It's also possible to compute the weight automatically by setting it to the reciprocal average density of UVs, which can be computed as `1/sqrt(average UV area)` = `1/sqrt(sum(abs(uv area)) / triangle count)` over all triangles in the mesh, possibly scaled by a constant factor if necessary.
 
-Both the target error and the resulting error combine positional error and attribute error, so the error can be used to control the LOD while taking attribute quality into account, assuming carefully chosen weights.
+Both the target error and the resulting error combine positional error and attribute error, so the error can be used to control the LOD while taking attribute quality into account, assuming carefully chosen weights. When the error is used for LOD selection, enabling `meshopt_SimplifyErrorClamped` is recommended to avoid large attribute errors producing overly conservative LOD selection.
 
 ### Permissive simplification
 
@@ -659,6 +659,7 @@ For basic customization, a number of options can be passed via `options` bitmask
 - `meshopt_SimplifyRegularize` produces more regular triangle sizes and shapes during simplification, at some cost to geometric quality. This can improve geometric quality under deformation such as skinning. `meshopt_SimplifyRegularizeLight` can be used instead of this flag to use a smaller regularization factor, reducing the impact on geometric quality.
 - `meshopt_SimplifyPermissive` allows collapses across attribute discontinuities, except for vertices that are tagged with `meshopt_SimplifyVertex_Protect` via `vertex_lock`.
 - `meshopt_SimplifyPreserveFolds` tries to preserve fold lines between opposite-facing triangles at a small performance cost.
+- `meshopt_SimplifyErrorClamped` clamps attribute error to match position error scale and avoid extreme error values in areas with high attribute variance. This setting is recommended when using attribute aware simplification if error values are used for LOD selection or generation.
 
 When using `meshopt_simplifyWithAttributes`, it is also possible to lock certain vertices by providing a `vertex_lock` array that contains a value for each vertex in the mesh, with `meshopt_SimplifyVertex_Lock` set for vertices that should not be collapsed. This can be useful to preserve certain vertices, such as the boundary of the mesh, with more control than `meshopt_SimplifyLockBorder` option provides. When using `meshopt_simplifyWithUpdate`, locking vertices (whether via `vertex_lock` or `meshopt_SimplifyLockBorder`) will also prevent the simplifier from updating their positions and attributes; this can be useful together with `meshopt_SimplifySparse` for meshlet simplification, as meshlets at one level of hierarchy can be simplified together without excessive data copying.
 
@@ -950,7 +951,7 @@ Applications may configure the library to change the attributes of experimental 
 
 Currently, the following APIs are experimental:
 
-- `meshopt_SimplifyPermissive` mode and `meshopt_SimplifyPreserveFolds` flag for `meshopt_simplify*` functions
+- `meshopt_SimplifyPreserveFolds` and `meshopt_SimplifyErrorClamped` flags for `meshopt_simplify*` functions
 - `meshopt_opacityMap*` functions (`meshopt_opacityMapMeasure`, `meshopt_opacityMapRasterize`, `meshopt_opacityMapCompact`, `meshopt_opacityMapEntrySize`)
 - `meshopt_generateTangents` function and `meshopt_Tangent*` flags
 - `meshopt_generateNormals` function

@@ -166,6 +166,7 @@
 				autoTextureWeight: false,
 				errorThresholdLog10: 1,
 				errorScaled: true,
+				errorClamped: true,
 				normalWeight: 1.0,
 				colorWeight: 1.0,
 				textureWeight: 0.0,
@@ -224,6 +225,7 @@
 
 			guiSimplify.add(settings, 'autoTextureWeight').onChange(simplify);
 			guiSimplify.add(settings, 'errorScaled').onChange(simplify);
+			guiSimplify.add(settings, 'errorClamped').onChange(simplify);
 			guiSimplify.add(settings, 'errorThresholdLog10', 0, 3, 0.1).onChange(simplify);
 
 			var guiLod = gui.addFolder('LOD');
@@ -534,6 +536,9 @@
 				if (settings.preserveFolds) {
 					flags.push('PreserveFolds');
 				}
+				if (settings.errorClamped) {
+					flags.push('ErrorClamped');
+				}
 				if (settings.prune) {
 					flags.push('Prune');
 				}
@@ -629,6 +634,9 @@
 								// vertex kinds: 1 border, 2 seam, 3 complex, 4 fringe, 5 locked
 								if (a >> 31 != 0 && kind <= 3 && (ak == kind || bk == kind) && (ak == kind || ak == 5) && (bk == kind || bk == 5)) {
 									// loop edge of current kind (allow one of the vertices to be locked)
+									push = true;
+								} else if (a >> 31 != 0 && kind == 3 && ((ak == 3 && bk == 4) || (ak == 4 && bk == 3))) {
+									// complex-fringe loop edge (these don't use fringe edge quadrics so we draw them as complex)
 									push = true;
 								} else if (a >> 31 != 0 && kind == 4 && (ak == 4 || bk == 4) && (ak == 4 || ak == 1) && (bk == 4 || bk == 1)) {
 									// fringe loop edge (fringe-fringe or fringe-border; neither can be locked because these collapses aren't allowed)
