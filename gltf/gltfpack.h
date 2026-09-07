@@ -157,6 +157,7 @@ struct Settings
 	bool simplify_attributes;
 	bool simplify_scaled;
 	bool simplify_permissive;
+	bool simplify_update;
 
 	bool texture_ktx2;
 	bool texture_webp;
