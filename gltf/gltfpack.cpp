@@ -450,7 +450,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 	markNeededNodes(data, nodes, meshes, animations, settings);
 	markNeededMaterials(data, materials, meshes, settings);
 
-	if (settings.simplify_scaled && settings.simplify_ratio < 1)
+	if (settings.simplify_ratio < 1)
 		computeMeshQuality(meshes);
 
 	for (size_t i = 0; i < meshes.size(); ++i)
@@ -1265,8 +1265,6 @@ Settings defaults()
 	settings.mesh_dedup = true;
 	settings.simplify_ratio = 1.f;
 	settings.simplify_error = 1e-2f;
-	settings.simplify_attributes = true;
-	settings.simplify_scaled = true;
 
 	for (int kind = 0; kind < TextureKind__Count; ++kind)
 	{

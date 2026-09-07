@@ -154,8 +154,6 @@ struct Settings
 	float simplify_error;
 	bool simplify_aggressive;
 	bool simplify_lock_borders;
-	bool simplify_attributes;
-	bool simplify_scaled;
 	bool simplify_permissive;
 	bool simplify_update;
 

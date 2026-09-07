@@ -1068,7 +1068,7 @@ static void simplifyUvSplit(Mesh& mesh, std::vector<unsigned int>& remap)
 	}
 }
 
-static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attributes, bool aggressive, bool lock_borders, bool permissive, bool update)
+static void simplifyMesh(Mesh& mesh, float threshold, float error, bool aggressive, bool lock_borders, bool permissive, bool update)
 {
 	assert(mesh.type == cgltf_primitive_type_triangles);
 
@@ -1082,8 +1082,7 @@ static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attribut
 	size_t presplit_vertices = positions->data.size();
 
 	std::vector<unsigned int> uvremap;
-	if (attributes)
-		simplifyUvSplit(mesh, uvremap);
+	simplifyUvSplit(mesh, uvremap);
 
 	size_t vertex_count = positions->data.size();
 
@@ -1107,25 +1106,22 @@ static void simplifyMesh(Mesh& mesh, float threshold, float error, bool attribut
 
 	float attrw[8] = {};
 	std::vector<float> attrs;
-	if (attributes)
-		simplifyAttributes(attrs, attrw, sizeof(attrw) / sizeof(attrw[0]), mesh, update ? 1.f : 0.f);
+	simplifyAttributes(attrs, attrw, sizeof(attrw) / sizeof(attrw[0]), mesh, update ? 1.f : 0.f);
 
 	std::vector<unsigned char> locks;
-	if (attributes && permissive)
+	if (permissive)
 		simplifyProtect(locks, mesh, presplit_vertices);
 
-	if (attributes && update && !mesh.targets)
+	if (update && !mesh.targets)
 	{
 		indices = mesh.indices;
 		indices.resize(meshopt_simplifyWithUpdate(&indices[0], indices.size(), positions->data[0].f, vertex_count, sizeof(Attr),
 		    attrs.data(), sizeof(attrw), attrw, sizeof(attrw) / sizeof(attrw[0]), permissive ? locks.data() : NULL, target_index_count, target_error, options));
 		simplifyUpdate(attrs, sizeof(attrw) / sizeof(attrw[0]), mesh);
 	}
-	else if (attributes)
+	else
 		indices.resize(meshopt_simplifyWithAttributes(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr),
 		    attrs.data(), sizeof(attrw), attrw, sizeof(attrw) / sizeof(attrw[0]), permissive ? locks.data() : NULL, target_index_count, target_error, options));
-	else
-		indices.resize(meshopt_simplify(&indices[0], &mesh.indices[0], mesh.indices.size(), positions->data[0].f, vertex_count, sizeof(Attr), target_index_count, target_error, options));
 
 	mesh.indices.swap(indices);
 
@@ -1351,8 +1347,7 @@ void processMesh(Mesh& mesh, const Settings& settings)
 
 		if (settings.simplify_ratio < 1)
 		{
-			float error = settings.simplify_scaled ? settings.simplify_error / mesh.quality : settings.simplify_error;
-			simplifyMesh(mesh, settings.simplify_ratio, error, settings.simplify_attributes, settings.simplify_aggressive, settings.simplify_lock_borders, settings.simplify_permissive, settings.simplify_update);
+			simplifyMesh(mesh, settings.simplify_ratio, settings.simplify_error / mesh.quality, settings.simplify_aggressive, settings.simplify_lock_borders, settings.simplify_permissive, settings.simplify_update);
 		}
 
 		optimizeMesh(mesh, settings.compressmore);
