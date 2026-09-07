@@ -1112,7 +1112,8 @@ static void simplifyMesh(Mesh& mesh, float threshold, float error, bool aggressi
 	if (permissive)
 		simplifyProtect(locks, mesh, presplit_vertices);
 
-	if (update && !mesh.targets)
+	// for now we disable simplify-with-update if the mesh has a second texture coordinate since we don't currently update it and moving vertices may create UV distortion
+	if (update && !mesh.targets && !getStream(mesh, cgltf_attribute_type_texcoord, 1))
 	{
 		indices = mesh.indices;
 		indices.resize(meshopt_simplifyWithUpdate(&indices[0], indices.size(), positions->data[0].f, vertex_count, sizeof(Attr),
