@@ -952,11 +952,8 @@ Applications may configure the library to change the attributes of experimental 
 Currently, the following APIs are experimental:
 
 - `meshopt_SimplifyPreserveFolds` and `meshopt_SimplifyErrorClamped` flags for `meshopt_simplify*` functions
-- `meshopt_opacityMap*` functions (`meshopt_opacityMapMeasure`, `meshopt_opacityMapRasterize`, `meshopt_opacityMapCompact`, `meshopt_opacityMapEntrySize`)
-- `meshopt_generateTangents` function and `meshopt_Tangent*` flags
 - `meshopt_generateNormals` function
-- `meshopt_filterIndexBuffer` and `meshopt_filterIndexBufferMulti` functions
-- `meshopt_computePositionExponent` function
+- `meshopt_remesh` function and `meshopt_Remesh*` flags
 
 ## License
 
