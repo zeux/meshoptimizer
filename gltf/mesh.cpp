@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <unordered_map>
+#include <utility>
 
 #include <math.h>
 #include <stdint.h>
@@ -773,66 +774,65 @@ void generateNormals(Mesh& mesh, float crease_angle)
 #endif
 }
 
-struct QuantizedTBN
+static float reindexTolerance(cgltf_attribute_type type, const Settings& settings)
 {
-	int8_t nx, ny, nz, nw;
-	int8_t tx, ty, tz, tw;
-};
-
-static void quantizeTBN(QuantizedTBN* target, size_t offset, const Attr* source, size_t size, int bits)
-{
-	int8_t* target8 = reinterpret_cast<int8_t*>(target) + offset;
-
-	for (size_t i = 0; i < size; ++i)
+	switch (type)
 	{
-		target8[i * sizeof(QuantizedTBN) + 0] = int8_t(meshopt_quantizeSnorm(source[i].f[0], bits));
-		target8[i * sizeof(QuantizedTBN) + 1] = int8_t(meshopt_quantizeSnorm(source[i].f[1], bits));
-		target8[i * sizeof(QuantizedTBN) + 2] = int8_t(meshopt_quantizeSnorm(source[i].f[2], bits));
-		target8[i * sizeof(QuantizedTBN) + 3] = int8_t(meshopt_quantizeSnorm(source[i].f[3], bits));
+	case cgltf_attribute_type_normal:
+	case cgltf_attribute_type_tangent:
+		return std::max(2e-4f, settings.quantize ? 1.f / float(1 << settings.nrm_bits) : 0.f);
+
+	case cgltf_attribute_type_texcoord:
+		return std::max(5e-5f, settings.quantize ? 0.5f / float(1 << settings.tex_bits) : 0.f);
+
+	case cgltf_attribute_type_color:
+		return 0.5f / float(1 << settings.col_bits);
+
+	case cgltf_attribute_type_weights:
+		return 0.5f / 256.f;
+
+	default:
+		return 0.f;
 	}
 }
 
-static void reindexMesh(Mesh& mesh, bool quantize_tbn)
+static void reindexMesh(Mesh& mesh, const Settings& settings)
 {
 	size_t total_vertices = mesh.streams[0].data.size();
 	size_t total_indices = mesh.indices.size();
 
-	std::vector<QuantizedTBN> qtbn;
+	Stream* positions = getStream(mesh, cgltf_attribute_type_position);
+	if (!positions)
+		return;
 
-	std::vector<meshopt_Stream> streams;
+	std::vector<std::pair<const Attr*, float> > streams;
+	streams.reserve(mesh.streams.size());
+
 	for (size_t i = 0; i < mesh.streams.size(); ++i)
 	{
 		const Stream& attr = mesh.streams[i];
-		if (attr.target)
+		if (attr.type == cgltf_attribute_type_position || attr.target)
 			continue;
 
-		assert(attr.data.size() == total_vertices);
-
-		if (quantize_tbn && (attr.type == cgltf_attribute_type_normal || attr.type == cgltf_attribute_type_tangent))
-		{
-			if (qtbn.empty())
-			{
-				qtbn.resize(total_vertices);
-
-				meshopt_Stream stream = {&qtbn[0], sizeof(QuantizedTBN), sizeof(QuantizedTBN)};
-				streams.push_back(stream);
-			}
-
-			size_t offset = attr.type == cgltf_attribute_type_normal ? offsetof(QuantizedTBN, nx) : offsetof(QuantizedTBN, tx);
-			quantizeTBN(&qtbn[0], offset, &attr.data[0], total_vertices, /* bits= */ 8);
-		}
-		else
-		{
-			meshopt_Stream stream = {&attr.data[0], sizeof(Attr), sizeof(Attr)};
-			streams.push_back(stream);
-		}
+		streams.push_back(std::make_pair(attr.data.data(), reindexTolerance(attr.type, settings)));
 	}
 
-	if (streams.empty())
-		return;
-
 	std::vector<unsigned int> remap(total_vertices);
-	size_t unique_vertices = meshopt_generateVertexRemapMulti(&remap[0], &mesh.indices[0], total_indices, total_vertices, &streams[0], streams.size());
+	size_t unique_vertices = meshopt_generateVertexRemapCustom(&remap[0], &mesh.indices[0], total_indices, positions->data[0].f, total_vertices, sizeof(Attr),
+	    [&streams](unsigned int lhs, unsigned int rhs) -> bool
+	    {
+		    for (auto& sp : streams)
+		    {
+			    const Attr* data = sp.first;
+			    float dx = fabsf(data[lhs].f[0] - data[rhs].f[0]), dy = fabsf(data[lhs].f[1] - data[rhs].f[1]);
+			    float dz = fabsf(data[lhs].f[2] - data[rhs].f[2]), dw = fabsf(data[lhs].f[3] - data[rhs].f[3]);
+
+			    if (dx > sp.second || dy > sp.second || dz > sp.second || dw > sp.second)
+				    return false;
+		    }
+
+		    return true;
+	    });
 	assert(unique_vertices <= total_vertices);
 
 	meshopt_remapIndexBuffer(&mesh.indices[0], &mesh.indices[0], total_indices, &remap[0]);
@@ -1343,7 +1343,7 @@ void processMesh(Mesh& mesh, const Settings& settings)
 
 	case cgltf_primitive_type_triangles:
 		filterBones(mesh);
-		reindexMesh(mesh, settings.quantize && !settings.nrm_float);
+		reindexMesh(mesh, settings);
 		filterTriangles(mesh);
 
 		if (settings.simplify_ratio < 1)
