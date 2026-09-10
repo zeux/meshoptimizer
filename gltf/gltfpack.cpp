@@ -1766,12 +1766,6 @@ int main(int argc, char** argv)
 	}
 
 #ifdef GLTFPACK_NO_EXPERIMENTAL
-	if (settings.mesh_tangents)
-	{
-		fprintf(stderr, "Option -gt is not available in this build\n");
-		return 1;
-	}
-
 	if (settings.mesh_normals)
 	{
 		fprintf(stderr, "Option -gn is not available in this build\n");

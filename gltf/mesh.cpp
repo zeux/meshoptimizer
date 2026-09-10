@@ -641,7 +641,6 @@ void filterStreams(Mesh& mesh, const MaterialInfo& mi)
 	mesh.streams.resize(write);
 }
 
-#ifndef GLTFPACK_NO_EXPERIMENTAL
 static int getTangentTexcoord(const cgltf_material* material)
 {
 	if (material->normal_texture.texture)
@@ -712,14 +711,9 @@ static void splitVertices(Mesh& mesh, Stream& target, const float* data)
 		mesh.indices[i] = sv;
 	}
 }
-#endif
 
 void generateTangents(Mesh& mesh)
 {
-#ifdef GLTFPACK_NO_EXPERIMENTAL
-	// disabled until meshopt_generateTangents becomes stable
-	(void)mesh;
-#else
 	if (mesh.type != cgltf_primitive_type_triangles || mesh.indices.empty() || !mesh.material)
 		return;
 
@@ -741,7 +735,6 @@ void generateTangents(Mesh& mesh)
 	Stream& tangent = prepareTangentStream(mesh, vertex_count);
 
 	splitVertices<4>(mesh, tangent, tangents.data());
-#endif
 }
 
 void generateNormals(Mesh& mesh, float crease_angle)
