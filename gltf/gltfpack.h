@@ -126,7 +126,9 @@ struct Settings
 
 	bool pos_normalized;
 	bool pos_float;
+	bool pos_half;
 	bool tex_float;
+	bool tex_half;
 	bool nrm_float;
 
 	int trn_bits;
