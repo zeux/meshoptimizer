@@ -61,6 +61,10 @@ struct clodConfig
 	// try to preserve fold lines between opposite-facing triangles during simplification, at a small performance cost
 	bool simplify_preserve_folds;
 
+	// dilate open borders for each cluster to try to mitigate area loss; most useful for foliage, should not be enabled everywhere
+	// note: this will mutate vertex_positions in place; the caller should copy positions for each cluster in the output callback as they will be overwritten by simplified clusters
+	bool simplify_dilate_borders;
+
 	// should clodCluster::bounds be computed based on the geometry of each cluster
 	bool optimize_bounds;
 
@@ -552,6 +556,143 @@ static int outputGroup(const clodConfig& config, const clodMesh& mesh, const std
 	return output_callback ? output_callback(output_context, {depth, simplified}, group_clusters.data(), group_clusters.size()) : -1;
 }
 
+static unsigned long long* edgeLookup(std::vector<unsigned long long>& table, unsigned long long key)
+{
+	size_t mask = table.size() - 1;
+	size_t h = size_t((key * 0x9E3779B97F4A7C15ull) >> 32) & mask;
+
+	while (table[h] != ~0ull && table[h] != key)
+		h = (h + 1) & mask;
+
+	return &table[h];
+}
+
+static float boundaryArea(const clodMesh& mesh, const std::vector<unsigned int>& indices, const std::vector<unsigned char>& locks, const std::vector<unsigned int>& remap, std::vector<unsigned long long>& table)
+{
+	memset(table.data(), -1, sizeof(unsigned long long) * table.size());
+
+	for (size_t i = 0; i < indices.size(); i += 3)
+		for (int e = 0; e < 3; ++e)
+		{
+			unsigned int a = remap[indices[i + e]], b = remap[indices[i + (e == 2 ? 0 : e + 1)]];
+			unsigned long long id = (unsigned long long)a << 32 | b;
+			*edgeLookup(table, id) = id;
+		}
+
+	float area = 0.f;
+
+	for (size_t i = 0; i < indices.size(); i += 3)
+	{
+		bool border = false;
+
+		for (int e = 0; e < 3; ++e)
+		{
+			unsigned int a = remap[indices[i + e]], b = remap[indices[i + (e == 2 ? 0 : e + 1)]];
+			unsigned long long id = (unsigned long long)b << 32 | a;
+
+			// we only track border triangles - at least one edge should be unlocked and open (the reverse edge does not exist)
+			border |= (locks[a] & locks[b] & 1) == 0 && *edgeLookup(table, id) == ~0ull;
+		}
+
+		if (!border)
+			continue;
+
+		const float* va = &mesh.vertex_positions[indices[i + 0] * (mesh.vertex_positions_stride / sizeof(float))];
+		const float* vb = &mesh.vertex_positions[indices[i + 1] * (mesh.vertex_positions_stride / sizeof(float))];
+		const float* vc = &mesh.vertex_positions[indices[i + 2] * (mesh.vertex_positions_stride / sizeof(float))];
+
+		float ab[3] = {vb[0] - va[0], vb[1] - va[1], vb[2] - va[2]};
+		float ac[3] = {vc[0] - va[0], vc[1] - va[1], vc[2] - va[2]};
+		float nt[3] = {ab[1] * ac[2] - ab[2] * ac[1], ab[2] * ac[0] - ab[0] * ac[2], ab[0] * ac[1] - ab[1] * ac[0]};
+
+		area += sqrtf(nt[0] * nt[0] + nt[1] * nt[1] + nt[2] * nt[2]) * 0.5f;
+	}
+
+	return area;
+}
+
+static void dilateBorders(const clodMesh& mesh, const std::vector<unsigned int>& merged, const std::vector<unsigned int>& simplified, const std::vector<unsigned char>& locks, const std::vector<unsigned int>& remap, std::vector<float>& dilate_offsets)
+{
+	// hash table is sized to be able to track all edges
+	size_t table_size = 16;
+	while (table_size < merged.size() + merged.size() / 2)
+		table_size *= 2;
+
+	std::vector<unsigned long long> edge_table(table_size);
+
+	float old_area = boundaryArea(mesh, merged, locks, remap, edge_table);
+	if (old_area == 0.f)
+		return;
+
+	// limit expansion to cases of moderate area shrinkage; it may be unsafe to dilate otherwise
+	float new_area = boundaryArea(mesh, simplified, locks, remap, edge_table);
+	if (new_area >= old_area || new_area < old_area / 4)
+		return;
+
+	float perimeter = 0.f;
+
+	for (size_t i = 0; i < simplified.size(); i += 3)
+		for (int e = 0; e < 3; ++e)
+		{
+			unsigned int a = remap[simplified[i + e]], b = remap[simplified[i + (e == 2 ? 0 : e + 1)]];
+			unsigned long long id = (unsigned long long)b << 32 | a;
+
+			// the border check must match the one in boundaryArea (we also rely on table being filled by boundaryArea to avoid extra work)
+			if ((locks[a] & locks[b] & 1) != 0 || *edgeLookup(edge_table, id) != ~0ull)
+				continue;
+
+			const float* va = &mesh.vertex_positions[simplified[i + e] * (mesh.vertex_positions_stride / sizeof(float))];
+			const float* vb = &mesh.vertex_positions[simplified[i + (e == 2 ? 0 : e + 1)] * (mesh.vertex_positions_stride / sizeof(float))];
+			const float* vc = &mesh.vertex_positions[simplified[i + (e + 2) % 3] * (mesh.vertex_positions_stride / sizeof(float))];
+
+			float ev[3] = {vb[0] - va[0], vb[1] - va[1], vb[2] - va[2]};
+			float el = sqrtf(ev[0] * ev[0] + ev[1] * ev[1] + ev[2] * ev[2]);
+
+			// compute edge normal by projecting C onto AB
+			float cv[3] = {va[0] - vc[0], va[1] - vc[1], va[2] - vc[2]};
+			float cp = (cv[0] * ev[0] + cv[1] * ev[1] + cv[2] * ev[2]) / (el > 0.f ? el * el : 1.f);
+			float nv[3] = {cv[0] - ev[0] * cp, cv[1] - ev[1] * cp, cv[2] - ev[2] * cp};
+			float nl = sqrtf(nv[0] * nv[0] + nv[1] * nv[1] + nv[2] * nv[2]);
+
+			// accumulate edge normals weighted by edge length; we will renormalize by perimeter before applying
+			float ns = nl > 0.f ? el / nl : 0;
+
+			if ((locks[a] & 1) == 0)
+				dilate_offsets[a * 4 + 0] += nv[0] * ns, dilate_offsets[a * 4 + 1] += nv[1] * ns, dilate_offsets[a * 4 + 2] += nv[2] * ns, dilate_offsets[a * 4 + 3] += el;
+			if ((locks[b] & 1) == 0)
+				dilate_offsets[b * 4 + 0] += nv[0] * ns, dilate_offsets[b * 4 + 1] += nv[1] * ns, dilate_offsets[b * 4 + 2] += nv[2] * ns, dilate_offsets[b * 4 + 3] += el;
+
+			perimeter += el;
+		}
+
+	float distance = perimeter > 0.f ? (old_area - new_area) / perimeter : 0.f;
+
+	for (size_t i = 0; i < simplified.size(); ++i)
+	{
+		unsigned int r = remap[simplified[i]];
+		if (locks[r] & 1)
+			continue;
+
+		float* vi = const_cast<float*>(&mesh.vertex_positions[simplified[i] * (mesh.vertex_positions_stride / sizeof(float))]);
+		float* vr = const_cast<float*>(&mesh.vertex_positions[r * (mesh.vertex_positions_stride / sizeof(float))]);
+		float* n = &dilate_offsets[r * 4];
+
+		if (n[3] > 0.f)
+		{
+			// we average the normals and then divide by length twice: once to normalize, and once to extend the offset into a miter
+			float nx = n[0] / n[3], ny = n[1] / n[3], nz = n[2] / n[3];
+			float nn = nx * nx + ny * ny + nz * nz;
+			float ns = distance / (nn > 0.15f ? nn : 0.15f);
+
+			vr[0] += nx * ns, vr[1] += ny * ns, vr[2] += nz * ns;
+			n[0] = n[1] = n[2] = n[3] = 0.f;
+		}
+
+		// copy dilated positions back to all referencing wedges from the canonical copy updated above; no-op for vertices that weren't dilated
+		vi[0] = vr[0], vi[1] = vr[1], vi[2] = vr[2];
+	}
+}
+
 static clodNode mergeNodes(const clodNode* nodes, size_t offset, size_t count)
 {
 	clodNode result = {};
@@ -643,6 +784,8 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 		}
 	}
 
+	std::vector<float> dilate_offsets(config.simplify_dilate_borders ? mesh.vertex_count * 4 : 0);
+
 	// initial clusterization splits the original mesh
 	std::vector<Cluster> clusters = clusterize(config, mesh, mesh.indices, mesh.index_count);
 
@@ -694,6 +837,10 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 
 			// output the new group with all clusters; the resulting id will be recorded in new clusters as clodCluster::refined
 			int refined = outputGroup(config, mesh, clusters, groups[i], bounds, depth, output_context, output_callback);
+
+			// now that we've output the group with the original clusters, we need to dilate simplified clusters if requested
+			if (config.simplify_dilate_borders)
+				dilateBorders(mesh, merged, simplified, locks, remap, dilate_offsets);
 
 			// discard clusters from the group - they won't be used anymore
 			for (size_t j = 0; j < groups[i].size(); ++j)
