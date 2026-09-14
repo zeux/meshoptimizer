@@ -280,11 +280,7 @@ static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh&
 	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
 	std::vector<unsigned int> meshlet_vertices(index_count);
 
-#if MESHOPTIMIZER_VERSION < 1000
-	std::vector<unsigned char> meshlet_triangles(index_count + max_meshlets * 3); // account for 4b alignment
-#else
 	std::vector<unsigned char> meshlet_triangles(index_count);
-#endif
 
 	if (config.cluster_spatial)
 		meshlets.resize(meshopt_buildMeshletsSpatial(meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), indices, index_count,
@@ -301,13 +297,8 @@ static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh&
 	{
 		const meshopt_Meshlet& meshlet = meshlets[i];
 
-#if MESHOPTIMIZER_VERSION < 1010
-		if (config.optimize_clusters)
-			meshopt_optimizeMeshlet(&meshlet_vertices[meshlet.vertex_offset], &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count, meshlet.vertex_count);
-#else
 		if (config.optimize_clusters)
 			meshopt_optimizeMeshletLevel(&meshlet_vertices[meshlet.vertex_offset], meshlet.vertex_count, &meshlet_triangles[meshlet.triangle_offset], meshlet.triangle_count, config.optimize_clusters_level);
-#endif
 
 		clusters[i].vertices = meshlet.vertex_count;
 
@@ -717,10 +708,6 @@ clodConfig clodDefaultConfig(size_t max_triangles)
 	config.max_vertices = max_triangles;
 	config.min_triangles = max_triangles / 3;
 	config.max_triangles = max_triangles;
-
-#if MESHOPTIMIZER_VERSION < 1000
-	config.min_triangles &= ~3; // account for 4b alignment
-#endif
 
 	config.partition_spatial = true;
 	config.partition_size = 16;
