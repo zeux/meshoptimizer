@@ -466,6 +466,10 @@ static void simplifyFallback(std::vector<unsigned int>& lod, const clodMesh& mes
 	// restore original vertex indices
 	for (size_t i = 0; i < lod.size(); ++i)
 		lod[i] = subset[lod[i]].id;
+
+	// replace degenerate outputs with the first triangle; this ensures we do not produce empty clusters that break DAG invariants
+	if (lod.empty() && !indices.empty())
+		lod.assign(indices.begin(), indices.begin() + 3);
 }
 
 static std::vector<unsigned int> simplify(const clodConfig& config, const clodMesh& mesh, const std::vector<unsigned int>& indices, const std::vector<unsigned char>& locks, size_t target_count, float* error)
