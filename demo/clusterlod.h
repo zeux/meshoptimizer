@@ -225,7 +225,10 @@ namespace clod
 struct Cluster
 {
 	size_t vertices;
-	std::vector<unsigned int> indices;
+
+	// offset into indices vector in the processing loop
+	size_t index_offset;
+	size_t index_count;
 
 	int group;
 	int refined;
@@ -233,9 +236,9 @@ struct Cluster
 	clodBounds bounds;
 };
 
-static clodBounds boundsCompute(const clodMesh& mesh, const std::vector<unsigned int>& indices, float error)
+static clodBounds boundsCompute(const clodMesh& mesh, const unsigned int* indices, size_t index_count, float error)
 {
-	meshopt_Bounds bounds = meshopt_computeClusterBounds(&indices[0], indices.size(), mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride);
+	meshopt_Bounds bounds = meshopt_computeClusterBounds(indices, index_count, mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride);
 
 	clodBounds result;
 	result.center[0] = bounds.center[0];
@@ -273,7 +276,7 @@ static clodBounds mergeGroups(const std::vector<Cluster>& clusters, const std::v
 	return boundsMerge(bounds.data(), bounds.size(), sizeof(clodBounds));
 }
 
-static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh& mesh, const unsigned int* indices, size_t index_count)
+static std::vector<Cluster> clusterize(std::vector<unsigned int>& cluster_indices, const clodConfig& config, const clodMesh& mesh, const unsigned int* indices, size_t index_count)
 {
 	size_t max_meshlets = meshopt_buildMeshletsBound(index_count, config.max_vertices, config.min_triangles);
 
@@ -293,6 +296,9 @@ static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh&
 
 	std::vector<Cluster> clusters(meshlets.size());
 
+	size_t index_offset = cluster_indices.size();
+	cluster_indices.resize(index_offset + index_count);
+
 	for (size_t i = 0; i < meshlets.size(); ++i)
 	{
 		const meshopt_Meshlet& meshlet = meshlets[i];
@@ -303,9 +309,11 @@ static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh&
 		clusters[i].vertices = meshlet.vertex_count;
 
 		// note: we discard meshlet-local indices; they can be recovered by the caller using clodLocalIndices
-		clusters[i].indices.resize(meshlet.triangle_count * 3);
+		clusters[i].index_offset = index_offset;
+		clusters[i].index_count = meshlet.triangle_count * 3;
 		for (size_t j = 0; j < meshlet.triangle_count * 3; ++j)
-			clusters[i].indices[j] = meshlet_vertices[meshlet.vertex_offset + meshlet_triangles[meshlet.triangle_offset + j]];
+			cluster_indices[index_offset + j] = meshlet_vertices[meshlet.vertex_offset + meshlet_triangles[meshlet.triangle_offset + j]];
+		index_offset += meshlet.triangle_count * 3;
 
 		clusters[i].group = -1;
 		clusters[i].refined = -1;
@@ -314,7 +322,7 @@ static std::vector<Cluster> clusterize(const clodConfig& config, const clodMesh&
 	return clusters;
 }
 
-static std::vector<std::vector<int> > partition(const clodConfig& config, const clodMesh& mesh, const std::vector<Cluster>& clusters, const std::vector<int>& pending, const std::vector<unsigned int>& remap)
+static std::vector<std::vector<int> > partition(const clodConfig& config, const clodMesh& mesh, const std::vector<Cluster>& clusters, const std::vector<unsigned int>& indices, const std::vector<int>& pending, const std::vector<unsigned int>& remap)
 {
 	if (pending.size() <= config.partition_size)
 		return {pending};
@@ -325,7 +333,7 @@ static std::vector<std::vector<int> > partition(const clodConfig& config, const 
 	// copy cluster index data into a flat array for partitioning
 	size_t total_index_count = 0;
 	for (size_t i = 0; i < pending.size(); ++i)
-		total_index_count += clusters[pending[i]].indices.size();
+		total_index_count += clusters[pending[i]].index_count;
 
 	cluster_indices.reserve(total_index_count);
 
@@ -333,10 +341,10 @@ static std::vector<std::vector<int> > partition(const clodConfig& config, const 
 	{
 		const Cluster& cluster = clusters[pending[i]];
 
-		cluster_counts[i] = unsigned(cluster.indices.size());
+		cluster_counts[i] = unsigned(cluster.index_count);
 
-		for (size_t j = 0; j < cluster.indices.size(); ++j)
-			cluster_indices.push_back(remap[cluster.indices[j]]);
+		for (size_t j = 0; j < cluster.index_count; ++j)
+			cluster_indices.push_back(remap[indices[cluster.index_offset + j]]);
 	}
 
 	// partition clusters into groups; the output is a partition id per cluster
@@ -370,7 +378,7 @@ static std::vector<std::vector<int> > partition(const clodConfig& config, const 
 	return partitions;
 }
 
-static void lockBoundary(std::vector<unsigned char>& locks, const std::vector<std::vector<int> >& groups, const std::vector<Cluster>& clusters, const std::vector<unsigned int>& remap, const unsigned char* vertex_lock)
+static void lockBoundary(std::vector<unsigned char>& locks, const std::vector<std::vector<int> >& groups, const std::vector<Cluster>& clusters, const std::vector<unsigned int>& cluster_indices, const std::vector<unsigned int>& remap, const unsigned char* vertex_lock)
 {
 	// for each remapped vertex, use bit 7 as temporary storage to indicate that the vertex has been used by a different group previously
 	for (size_t i = 0; i < locks.size(); ++i)
@@ -383,9 +391,9 @@ static void lockBoundary(std::vector<unsigned char>& locks, const std::vector<st
 		{
 			const Cluster& cluster = clusters[groups[i][j]];
 
-			for (size_t k = 0; k < cluster.indices.size(); ++k)
+			for (size_t k = 0; k < cluster.index_count; ++k)
 			{
-				unsigned int v = cluster.indices[k];
+				unsigned int v = cluster_indices[cluster.index_offset + k];
 				unsigned int r = remap[v];
 
 				locks[r] |= locks[r] >> 7;
@@ -397,9 +405,9 @@ static void lockBoundary(std::vector<unsigned char>& locks, const std::vector<st
 		{
 			const Cluster& cluster = clusters[groups[i][j]];
 
-			for (size_t k = 0; k < cluster.indices.size(); ++k)
+			for (size_t k = 0; k < cluster.index_count; ++k)
 			{
-				unsigned int v = cluster.indices[k];
+				unsigned int v = cluster_indices[cluster.index_offset + k];
 				unsigned int r = remap[v];
 
 				locks[r] |= 1 << 7;
@@ -532,7 +540,7 @@ static std::vector<unsigned int> simplify(const clodConfig& config, const clodMe
 	return lod;
 }
 
-static int outputGroup(const clodConfig& config, const clodMesh& mesh, const std::vector<Cluster>& clusters, const std::vector<int>& group, const clodBounds& simplified, int depth, void* output_context, clodOutput output_callback)
+static int outputGroup(const clodConfig& config, const clodMesh& mesh, const std::vector<Cluster>& clusters, const std::vector<unsigned int>& cluster_indices, const std::vector<int>& group, const clodBounds& simplified, int depth, void* output_context, clodOutput output_callback)
 {
 	std::vector<clodCluster> group_clusters(group.size());
 
@@ -542,9 +550,9 @@ static int outputGroup(const clodConfig& config, const clodMesh& mesh, const std
 		clodCluster& result = group_clusters[i];
 
 		result.refined = cluster.refined;
-		result.bounds = (config.optimize_bounds && cluster.refined != -1) ? boundsCompute(mesh, cluster.indices, cluster.bounds.error) : cluster.bounds;
-		result.indices = cluster.indices.data();
-		result.index_count = cluster.indices.size();
+		result.bounds = (config.optimize_bounds && cluster.refined != -1) ? boundsCompute(mesh, cluster_indices.data() + cluster.index_offset, cluster.index_count, cluster.bounds.error) : cluster.bounds;
+		result.indices = cluster_indices.data() + cluster.index_offset;
+		result.index_count = cluster.index_count;
 		result.vertex_count = cluster.vertices;
 	}
 
@@ -778,27 +786,32 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 	std::vector<float> dilate_offsets(config.simplify_dilate_borders ? mesh.vertex_count * 4 : 0);
 
 	// initial clusterization splits the original mesh
-	std::vector<Cluster> clusters = clusterize(config, mesh, mesh.indices, mesh.index_count);
+	std::vector<unsigned int> cluster_indices;
+	std::vector<Cluster> clusters = clusterize(cluster_indices, config, mesh, mesh.indices, mesh.index_count);
 
 	// compute initial precise bounds; subsequent bounds will be using group-merged bounds
 	for (Cluster& cluster : clusters)
-		cluster.bounds = boundsCompute(mesh, cluster.indices, 0.f);
+		cluster.bounds = boundsCompute(mesh, cluster_indices.data() + cluster.index_offset, cluster.index_count, 0.f);
 
 	std::vector<int> pending(clusters.size());
 	for (size_t i = 0; i < clusters.size(); ++i)
 		pending[i] = int(i);
+
+	std::vector<unsigned int> pending_indices;
+	pending_indices.reserve(size_t(cluster_indices.size() * config.simplify_threshold));
 
 	int depth = 0;
 
 	// merge and simplify clusters until we can't merge anymore
 	while (pending.size() > 1)
 	{
-		std::vector<std::vector<int> > groups = partition(config, mesh, clusters, pending, remap);
+		std::vector<std::vector<int> > groups = partition(config, mesh, clusters, cluster_indices, pending, remap);
 
 		pending.clear();
+		pending_indices.clear();
 
 		// mark boundaries between groups with a lock bit to avoid gaps in simplified result
-		lockBoundary(locks, groups, clusters, remap, mesh.vertex_lock);
+		lockBoundary(locks, groups, clusters, cluster_indices, remap, mesh.vertex_lock);
 
 		// every group needs to be simplified now
 		for (size_t i = 0; i < groups.size(); ++i)
@@ -806,7 +819,7 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 			std::vector<unsigned int> merged;
 			merged.reserve(groups[i].size() * config.max_triangles * 3);
 			for (size_t j = 0; j < groups[i].size(); ++j)
-				merged.insert(merged.end(), clusters[groups[i][j]].indices.begin(), clusters[groups[i][j]].indices.end());
+				merged.insert(merged.end(), cluster_indices.begin() + clusters[groups[i][j]].index_offset, cluster_indices.begin() + clusters[groups[i][j]].index_offset + clusters[groups[i][j]].index_count);
 
 			size_t target_size = size_t((merged.size() / 3) * config.simplify_ratio) * 3;
 
@@ -819,7 +832,7 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 			if (simplified.size() > merged.size() * config.simplify_threshold)
 			{
 				bounds.error = FLT_MAX; // terminal group, won't simplify further
-				outputGroup(config, mesh, clusters, groups[i], bounds, depth, output_context, output_callback);
+				outputGroup(config, mesh, clusters, cluster_indices, groups[i], bounds, depth, output_context, output_callback);
 				continue; // simplification is stuck; abandon the merge
 			}
 
@@ -827,17 +840,13 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 			bounds.error = std::max(bounds.error * config.simplify_error_merge_previous, error) + error * config.simplify_error_merge_additive;
 
 			// output the new group with all clusters; the resulting id will be recorded in new clusters as clodCluster::refined
-			int refined = outputGroup(config, mesh, clusters, groups[i], bounds, depth, output_context, output_callback);
+			int refined = outputGroup(config, mesh, clusters, cluster_indices, groups[i], bounds, depth, output_context, output_callback);
 
 			// now that we've output the group with the original clusters, we need to dilate simplified clusters if requested
 			if (config.simplify_dilate_borders)
 				dilateBorders(mesh, merged, simplified, locks, remap, dilate_offsets);
 
-			// discard clusters from the group - they won't be used anymore
-			for (size_t j = 0; j < groups[i].size(); ++j)
-				clusters[groups[i][j]].indices = std::vector<unsigned int>();
-
-			std::vector<Cluster> split = clusterize(config, mesh, simplified.data(), simplified.size());
+			std::vector<Cluster> split = clusterize(pending_indices, config, mesh, simplified.data(), simplified.size());
 
 			for (Cluster& cluster : split)
 			{
@@ -852,6 +861,7 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 			}
 		}
 
+		cluster_indices.swap(pending_indices);
 		depth++;
 	}
 
@@ -863,7 +873,7 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 		clodBounds bounds = cluster.bounds;
 		bounds.error = FLT_MAX; // terminal group, won't simplify further
 
-		outputGroup(config, mesh, clusters, pending, bounds, depth, output_context, output_callback);
+		outputGroup(config, mesh, clusters, cluster_indices, pending, bounds, depth, output_context, output_callback);
 	}
 
 	return clusters.size();
