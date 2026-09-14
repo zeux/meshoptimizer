@@ -172,8 +172,7 @@ clodConfig clodDefaultConfig(size_t max_triangles);
 clodConfig clodDefaultConfigRT(size_t max_triangles);
 
 // build cluster LOD hierarchy, calling output callbacks as new clusters and groups are generated
-// returns the total number of clusters produced
-size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOutput output_callback);
+void clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOutput output_callback);
 
 // extract meshlet-local indices from cluster indices produced by clodBuild
 // fills triangles[] and vertices[] such that vertices[triangles[i]] == indices[i]
@@ -195,7 +194,7 @@ size_t clodBuildHierarchy(clodNode* nodes, const clodGroup* groups, size_t group
 } // extern "C"
 
 template <typename Output>
-size_t clodBuild(clodConfig config, clodMesh mesh, Output output)
+void clodBuild(clodConfig config, clodMesh mesh, Output output)
 {
 	struct Call
 	{
@@ -205,7 +204,7 @@ size_t clodBuild(clodConfig config, clodMesh mesh, Output output)
 		}
 	};
 
-	return clodBuild(config, mesh, &output, &Call::output);
+	clodBuild(config, mesh, &output, &Call::output);
 }
 #endif
 
@@ -754,7 +753,7 @@ clodConfig clodDefaultConfigRT(size_t max_triangles)
 	return config;
 }
 
-size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOutput output_callback)
+void clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOutput output_callback)
 {
 	using namespace clod;
 
@@ -798,7 +797,6 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 	pending.reserve(clusters.size());
 	pending_indices.reserve(size_t(cluster_indices.size() * config.simplify_threshold));
 
-	size_t cluster_count = clusters.size();
 	int depth = 0;
 
 	// merge and simplify clusters until we can't merge anymore
@@ -864,7 +862,6 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 
 		clusters.swap(pending);
 		cluster_indices.swap(pending_indices);
-		cluster_count += clusters.size();
 		depth++;
 	}
 
@@ -878,8 +875,6 @@ size_t clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOut
 
 		outputGroup(config, mesh, clusters.data(), clusters.size(), cluster_indices, bounds, depth, output_context, output_callback);
 	}
-
-	return cluster_count;
 }
 
 size_t clodLocalIndices(unsigned int* vertices, unsigned char* triangles, const unsigned int* indices, size_t index_count)
