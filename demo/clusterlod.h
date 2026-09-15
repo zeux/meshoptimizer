@@ -229,7 +229,6 @@ struct Cluster
 	size_t index_offset;
 	size_t index_count;
 
-	int group;
 	int refined;
 
 	clodBounds bounds;
@@ -239,31 +238,19 @@ static clodBounds boundsCompute(const clodMesh& mesh, const unsigned int* indice
 {
 	meshopt_Bounds bounds = meshopt_computeClusterBounds(indices, index_count, mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride);
 
-	clodBounds result;
-	result.center[0] = bounds.center[0];
-	result.center[1] = bounds.center[1];
-	result.center[2] = bounds.center[2];
-	result.radius = bounds.radius;
-	result.error = error;
-	return result;
+	return {{bounds.center[0], bounds.center[1], bounds.center[2]}, bounds.radius, error};
 }
 
 static clodBounds boundsMerge(const clodBounds* bounds, size_t count, size_t stride)
 {
 	meshopt_Bounds merged = meshopt_computeSphereBounds(&bounds[0].center[0], count, stride, &bounds[0].radius, stride);
 
-	clodBounds result = {};
-	result.center[0] = merged.center[0];
-	result.center[1] = merged.center[1];
-	result.center[2] = merged.center[2];
-	result.radius = merged.radius;
-
 	// merged bounds error must be conservative wrt cluster errors
-	result.error = 0.f;
+	float error = 0.f;
 	for (size_t j = 0; j < count; ++j)
-		result.error = std::max(result.error, reinterpret_cast<const clodBounds*>(reinterpret_cast<const char*>(bounds) + j * stride)->error);
+		error = std::max(error, reinterpret_cast<const clodBounds*>(reinterpret_cast<const char*>(bounds) + j * stride)->error);
 
-	return result;
+	return {{merged.center[0], merged.center[1], merged.center[2]}, merged.radius, error};
 }
 
 static void clusterize(std::vector<Cluster>& clusters, std::vector<unsigned int>& cluster_indices, const clodConfig& config, const clodMesh& mesh, const unsigned int* indices, size_t index_count, int refined = -1)
@@ -314,7 +301,6 @@ static void clusterize(std::vector<Cluster>& clusters, std::vector<unsigned int>
 			cluster_indices[index_offset + j] = meshlet_vertices[meshlet.vertex_offset + meshlet_triangles[meshlet.triangle_offset + j]];
 		index_offset += meshlet.triangle_count * 3;
 
-		cluster.group = -1;
 		cluster.refined = refined;
 	}
 }
@@ -622,7 +608,6 @@ static void dilateBorders(const clodMesh& mesh, const std::vector<unsigned int>&
 	while (table_size < merged.size() + merged.size() / 2)
 		table_size *= 2;
 
-	edge_table.clear();
 	edge_table.resize(table_size);
 
 	float old_area = boundaryArea(mesh, merged, locks, remap, edge_table);
@@ -802,6 +787,9 @@ void clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOutpu
 	pending.reserve(clusters.size());
 	pending_indices.reserve(size_t(cluster_indices.size() * config.simplify_threshold));
 
+	std::vector<unsigned int> merged, simplified;
+	merged.reserve((config.partition_size + config.partition_size / 3) * config.max_triangles * 3);
+
 	int depth = 0;
 
 	// merge and simplify clusters until we can't merge anymore
@@ -814,9 +802,6 @@ void clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOutpu
 
 		// mark boundaries between groups with a lock bit to avoid gaps in simplified result
 		lockBoundary(locks, clusters.data(), group_offsets.data(), group_offsets.size() - 1, cluster_indices, remap, mesh.vertex_lock);
-
-		std::vector<unsigned int> merged, simplified;
-		merged.reserve((config.partition_size + config.partition_size / 3) * config.max_triangles * 3);
 
 		// every group needs to be simplified now
 		for (size_t i = 0; i + 1 < group_offsets.size(); ++i)
