@@ -453,10 +453,6 @@ static void simplifyFallback(std::vector<unsigned int>& lod, const clodMesh& mes
 	// restore original vertex indices
 	for (size_t i = 0; i < lod.size(); ++i)
 		lod[i] = subset[lod[i]].id;
-
-	// replace degenerate outputs with the first triangle; this ensures we do not produce empty clusters that break DAG invariants
-	if (lod.empty() && !indices.empty())
-		lod.assign(indices.begin(), indices.begin() + 3);
 }
 
 static void simplify(std::vector<unsigned int>& lod, const clodConfig& config, const clodMesh& mesh, const std::vector<unsigned int>& indices, const std::vector<unsigned char>& locks, size_t target_count, float* error)
@@ -492,6 +488,10 @@ static void simplify(std::vector<unsigned int>& lod, const clodConfig& config, c
 		simplifyFallback(lod, mesh, indices, locks, target_count, error);
 		*error *= config.simplify_error_factor_sloppy; // scale error up to account for appearance degradation
 	}
+
+	// replace degenerate outputs with the first triangle; this ensures we do not produce empty clusters that break DAG invariants
+	if (lod.empty() && !indices.empty())
+		lod.assign(indices.begin(), indices.begin() + 3);
 
 	// optionally limit error by edge length, aiming to remove subpixel triangles even if the attribute error is high
 	if (config.simplify_error_edge_limit > 0)
