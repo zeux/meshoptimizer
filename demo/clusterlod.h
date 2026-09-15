@@ -269,28 +269,35 @@ static clodBounds boundsMerge(const clodBounds* bounds, size_t count, size_t str
 static void clusterize(std::vector<Cluster>& clusters, std::vector<unsigned int>& cluster_indices, const clodConfig& config, const clodMesh& mesh, const unsigned int* indices, size_t index_count, int refined = -1)
 {
 	size_t max_meshlets = meshopt_buildMeshletsBound(index_count, config.max_vertices, config.min_triangles);
+	size_t buffer_size = max_meshlets * sizeof(meshopt_Meshlet) + index_count * (sizeof(unsigned int) + sizeof(unsigned char));
 
-	std::vector<meshopt_Meshlet> meshlets(max_meshlets);
-	std::vector<unsigned int> meshlet_vertices(index_count);
+	// use stack buffer for small mesh subsets (should be enough for group clusterization; initial clusterization uses heap)
+	alignas(meshopt_Meshlet) char buffer_stack[32768];
+	std::vector<char> buffer_heap;
+	char* buffer = (buffer_size <= sizeof(buffer_stack)) ? buffer_stack : (buffer_heap.resize(buffer_size), buffer_heap.data());
 
-	std::vector<unsigned char> meshlet_triangles(index_count);
+	meshopt_Meshlet* meshlets = reinterpret_cast<meshopt_Meshlet*>(buffer);
+	unsigned int* meshlet_vertices = reinterpret_cast<unsigned int*>(meshlets + max_meshlets);
+	unsigned char* meshlet_triangles = reinterpret_cast<unsigned char*>(meshlet_vertices + index_count);
+
+	size_t meshlet_count;
 
 	if (config.cluster_spatial)
-		meshlets.resize(meshopt_buildMeshletsSpatial(meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), indices, index_count,
+		meshlet_count = meshopt_buildMeshletsSpatial(meshlets, meshlet_vertices, meshlet_triangles, indices, index_count,
 		    mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride,
-		    config.max_vertices, config.min_triangles, config.max_triangles, config.cluster_fill_weight));
+		    config.max_vertices, config.min_triangles, config.max_triangles, config.cluster_fill_weight);
 	else
-		meshlets.resize(meshopt_buildMeshletsFlex(meshlets.data(), meshlet_vertices.data(), meshlet_triangles.data(), indices, index_count,
+		meshlet_count = meshopt_buildMeshletsFlex(meshlets, meshlet_vertices, meshlet_triangles, indices, index_count,
 		    mesh.vertex_positions, mesh.vertex_count, mesh.vertex_positions_stride,
-		    config.max_vertices, config.min_triangles, config.max_triangles, 0.f, config.cluster_split_factor));
+		    config.max_vertices, config.min_triangles, config.max_triangles, 0.f, config.cluster_split_factor);
 
 	size_t cluster_offset = clusters.size();
-	clusters.resize(cluster_offset + meshlets.size());
+	clusters.resize(cluster_offset + meshlet_count);
 
 	size_t index_offset = cluster_indices.size();
 	cluster_indices.resize(index_offset + index_count);
 
-	for (size_t i = 0; i < meshlets.size(); ++i)
+	for (size_t i = 0; i < meshlet_count; ++i)
 	{
 		const meshopt_Meshlet& meshlet = meshlets[i];
 		Cluster& cluster = clusters[cluster_offset + i];
@@ -533,7 +540,10 @@ static void simplify(std::vector<unsigned int>& lod, const clodConfig& config, c
 
 static int outputGroup(const clodConfig& config, const clodMesh& mesh, const Cluster* group, size_t group_size, const std::vector<unsigned int>& cluster_indices, const clodBounds& simplified, int depth, void* output_context, clodOutput output_callback)
 {
-	std::vector<clodCluster> group_clusters(group_size);
+	// use stack buffer for small groups; should pretty much never trigger heap allocations
+	clodCluster clusters_stack[32];
+	std::vector<clodCluster> clusters_heap;
+	clodCluster* group_clusters = (group_size <= sizeof(clusters_stack) / sizeof(clusters_stack[0])) ? clusters_stack : (clusters_heap.resize(group_size), clusters_heap.data());
 
 	for (size_t i = 0; i < group_size; ++i)
 	{
@@ -547,7 +557,7 @@ static int outputGroup(const clodConfig& config, const clodMesh& mesh, const Clu
 		result.vertex_count = cluster.vertices;
 	}
 
-	return output_callback ? output_callback(output_context, {depth, simplified}, group_clusters.data(), group_clusters.size()) : -1;
+	return output_callback ? output_callback(output_context, {depth, simplified}, group_clusters, group_size) : -1;
 }
 
 static unsigned long long* edgeLookup(std::vector<unsigned long long>& table, unsigned long long key)
@@ -605,14 +615,15 @@ static float boundaryArea(const clodMesh& mesh, const std::vector<unsigned int>&
 	return area;
 }
 
-static void dilateBorders(const clodMesh& mesh, const std::vector<unsigned int>& merged, const std::vector<unsigned int>& simplified, const std::vector<unsigned char>& locks, const std::vector<unsigned int>& remap, std::vector<float>& dilate_offsets)
+static void dilateBorders(const clodMesh& mesh, const std::vector<unsigned int>& merged, const std::vector<unsigned int>& simplified, const std::vector<unsigned char>& locks, const std::vector<unsigned int>& remap, std::vector<float>& dilate_offsets, std::vector<unsigned long long>& edge_table)
 {
 	// hash table is sized to be able to track all edges
 	size_t table_size = 16;
 	while (table_size < merged.size() + merged.size() / 2)
 		table_size *= 2;
 
-	std::vector<unsigned long long> edge_table(table_size);
+	edge_table.clear();
+	edge_table.resize(table_size);
 
 	float old_area = boundaryArea(mesh, merged, locks, remap, edge_table);
 	if (old_area == 0.f)
@@ -775,6 +786,7 @@ void clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOutpu
 	}
 
 	std::vector<float> dilate_offsets(config.simplify_dilate_borders ? mesh.vertex_count * 4 : 0);
+	std::vector<unsigned long long> dilate_table;
 
 	// initial clusterization splits the original mesh
 	std::vector<unsigned int> cluster_indices;
@@ -839,7 +851,7 @@ void clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOutpu
 
 			// now that we've output the group with the original clusters, we need to dilate simplified clusters if requested
 			if (config.simplify_dilate_borders)
-				dilateBorders(mesh, merged, simplified, locks, remap, dilate_offsets);
+				dilateBorders(mesh, merged, simplified, locks, remap, dilate_offsets, dilate_table);
 
 			// enqueue new clusters for further processing
 			size_t cluster_offset = pending.size();
