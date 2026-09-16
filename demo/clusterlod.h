@@ -601,7 +601,7 @@ static float boundaryArea(const clodMesh& mesh, const std::vector<unsigned int>&
 	return area;
 }
 
-static void dilateBorders(const clodMesh& mesh, const std::vector<unsigned int>& merged, const std::vector<unsigned int>& simplified, const std::vector<unsigned char>& locks, const std::vector<unsigned int>& remap, std::vector<float>& dilate_offsets, std::vector<unsigned long long>& edge_table)
+static void dilateBorders(const clodMesh& mesh, const std::vector<unsigned int>& merged, const std::vector<unsigned int>& simplified, const std::vector<unsigned char>& locks, const std::vector<unsigned int>& remap, clodBounds& bounds, std::vector<float>& dilate_offsets, std::vector<unsigned long long>& edge_table)
 {
 	// hash table is sized to be able to track all edges
 	size_t table_size = 16;
@@ -676,6 +676,10 @@ static void dilateBorders(const clodMesh& mesh, const std::vector<unsigned int>&
 
 			vr[0] += nx * ns, vr[1] += ny * ns, vr[2] += nz * ns;
 			n[0] = n[1] = n[2] = n[3] = 0.f;
+
+			// expand group bounds to accommodate the offset vertex
+			float dx = vr[0] - bounds.center[0], dy = vr[1] - bounds.center[1], dz = vr[2] - bounds.center[2];
+			bounds.radius = std::max(bounds.radius, sqrtf(dx * dx + dy * dy + dz * dz));
 		}
 
 		// copy dilated positions back to all referencing wedges from the canonical copy updated above; no-op for vertices that weren't dilated
@@ -836,7 +840,7 @@ void clodBuild(clodConfig config, clodMesh mesh, void* output_context, clodOutpu
 
 			// now that we've output the group with the original clusters, we need to dilate simplified clusters if requested
 			if (config.simplify_dilate_borders)
-				dilateBorders(mesh, merged, simplified, locks, remap, dilate_offsets, dilate_table);
+				dilateBorders(mesh, merged, simplified, locks, remap, bounds, dilate_offsets, dilate_table);
 
 			// enqueue new clusters for further processing
 			size_t cluster_offset = pending.size();
