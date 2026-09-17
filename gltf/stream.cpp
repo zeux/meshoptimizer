@@ -164,6 +164,19 @@ QuantizationPosition prepareQuantizationPosition(const std::vector<Mesh>& meshes
 			fprintf(stderr, "Warning: position data has significant error (%.0f%%); consider using floating-point quantization (-vpf) or more bits (-vp N)\n", max_rel_error * 100);
 	}
 
+	if (b.isValid() && settings.quantize && settings.pos_half)
+	{
+		float amax = 0;
+		for (int k = 0; k < 3; ++k)
+		{
+			amax = std::max(amax, fabsf(b.min.f[0]));
+			amax = std::max(amax, fabsf(b.max.f[0]));
+		}
+
+		if (amax > 65500)
+			fprintf(stderr, "Warning: position data can't be represented by half-precision floating point; consider using floating-point quantization (-vpf)\n");
+	}
+
 	result.node_scale = result.scale / float((1 << result.bits) - 1) * (result.normalized ? 65535.f : 1.f);
 
 	return result;
@@ -299,7 +312,15 @@ void getPositionBounds(float min[3], float max[3], const Stream& stream, const Q
 
 	if (settings.quantize)
 	{
-		if (settings.pos_float)
+		if (settings.pos_half)
+		{
+			for (int k = 0; k < 3; ++k)
+			{
+				min[k] = meshopt_dequantizeHalf(meshopt_quantizeHalf(min[k]));
+				max[k] = meshopt_dequantizeHalf(meshopt_quantizeHalf(max[k]));
+			}
+		}
+		else if (settings.pos_float)
 		{
 			for (int k = 0; k < 3; ++k)
 			{
@@ -466,12 +487,35 @@ static StreamFormat writeVertexStreamFloat(std::string& bin, const Stream& strea
 	return format;
 }
 
+static StreamFormat writeVertexStreamHalf(std::string& bin, const Stream& stream, cgltf_type type, int components, size_t stride)
+{
+	assert(components >= 1 && components <= 4);
+	assert(stride >= sizeof(uint16_t) * components);
+
+	for (size_t i = 0; i < stream.data.size(); ++i)
+	{
+		const Attr& a = stream.data[i];
+
+		uint16_t v[4] = {};
+		for (int k = 0; k < components; ++k)
+			v[k] = meshopt_quantizeHalf(a.f[k]);
+
+		bin.append(reinterpret_cast<const char*>(v), stride);
+	}
+
+	StreamFormat format = {type, cgltf_component_type_r_16f, false, stride};
+	return format;
+}
+
 StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const QuantizationTexture& qt, const Settings& settings, bool filters)
 {
 	if (stream.type == cgltf_attribute_type_position)
 	{
 		if (!settings.quantize)
 			return writeVertexStreamRaw(bin, stream, cgltf_type_vec3, 3);
+
+		if (settings.pos_half)
+			return writeVertexStreamHalf(bin, stream, cgltf_type_vec3, 3, sizeof(uint16_t) * 4);
 
 		if (settings.pos_float)
 			return writeVertexStreamFloat(bin, stream, cgltf_type_vec3, 3, settings.compress && filters, qp.bits,
@@ -551,6 +595,9 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 	{
 		if (!settings.quantize)
 			return writeVertexStreamRaw(bin, stream, cgltf_type_vec2, 2);
+
+		if (settings.tex_half)
+			return writeVertexStreamHalf(bin, stream, cgltf_type_vec2, 2, sizeof(uint16_t) * 2);
 
 		// expand the encoded range to ensure it covers [0..1) interval
 		// this can slightly reduce precision but we should not need more precision inside 0..1, and this significantly improves compressed size when using encodeExpOne
