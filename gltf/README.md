@@ -102,6 +102,8 @@ Even if the source file does not use extensions, gltfpack may use some extension
 
 gltfpack does not support vendor-specific extensions or custom extensions, including ones defined in [Khronos glTF repository](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor). Unknown extension nodes are discarded from the output.
 
+Some Khronos extensions, notably Draco compression and extensions for interactive scenes (interactivity, animation pointer, node selectability/hoverability/visibility), are not supported.
+
 ## Custom data
 
 glTF files may contain custom application-specific data stored outside of custom extensions. gltfpack has limited support for preserving this data.
