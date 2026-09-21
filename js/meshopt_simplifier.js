@@ -348,9 +348,9 @@ var MeshoptSimplifier = (function () {
 	};
 
 	var remeshOptions = {
-		Thicken: 1,
-		Shell: 2,
-		Solve: 4,
+		Shell: 1,
+		Solve: 2,
+		Thicken: 0, // currently a no-op but may be re-added in the future
 		_InternalDebug: 1 << 30, // internal, don't use!
 	};
 
