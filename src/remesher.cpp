@@ -408,7 +408,7 @@ static void solidifyQueue(unsigned int row, unsigned int* worklist, unsigned cha
 	worklist[pending++] = row;
 }
 
-static void solidify(unsigned char* grid, unsigned int* worklist, unsigned char* queued, int resolution)
+static void solidify(unsigned char* grid, unsigned int* worklist, unsigned char* queued, const unsigned int* voxel_rows, int resolution)
 {
 	size_t pending = 0;
 	memset(queued, 0, size_t(resolution) * size_t(resolution));
@@ -417,6 +417,10 @@ static void solidify(unsigned char* grid, unsigned int* worklist, unsigned char*
 	for (int z = 1; z < resolution - 1; ++z)
 		for (int y = 1; y < resolution - 1; ++y)
 		{
+			// rows without occupied voxels shortcircuit the interior propagation and are kept as 'empty'
+			if (voxel_rows && voxel_rows[y + size_t(resolution) * z] == ~0u)
+				continue;
+
 			unsigned char* data = grid + size_t(resolution) * (y + size_t(resolution) * z);
 
 			for (int x = 1; x < resolution - 1; ++x)
@@ -436,12 +440,15 @@ static void solidify(unsigned char* grid, unsigned int* worklist, unsigned char*
 
 		unsigned char* data = grid + size_t(resolution) * row;
 
-		// propagate outside state to the interior within row
-		for (int x = 1; x < resolution - 1; ++x)
-			data[x] = (data[x] == 0xff && data[x - 1] == 0) ? 0 : data[x];
+		// propagate outside state to the interior within row; rows without occupied voxels have no 'inside' voxels
+		if (!voxel_rows || voxel_rows[row] != ~0u)
+		{
+			for (int x = 1; x < resolution - 1; ++x)
+				data[x] = (data[x] == 0xff && data[x - 1] == 0) ? 0 : data[x];
 
-		for (int x = resolution - 2; x >= 1; --x)
-			data[x] = (data[x] == 0xff && data[x + 1] == 0) ? 0 : data[x];
+			for (int x = resolution - 2; x >= 1; --x)
+				data[x] = (data[x] == 0xff && data[x + 1] == 0) ? 0 : data[x];
+		}
 
 		// propagate outside state to the interior into neighboring rows
 		int y = row % resolution, z = row / resolution;
@@ -452,6 +459,10 @@ static void solidify(unsigned char* grid, unsigned int* worklist, unsigned char*
 			int zn = z + (k == 2 ? -1 : (k == 3 ? 1 : 0));
 
 			if (yn < 1 || yn >= resolution - 1 || zn < 1 || zn >= resolution - 1)
+				continue;
+
+			// neighboring rows without occupied voxels have no 'inside' voxels and can be skipped
+			if (voxel_rows && voxel_rows[yn + size_t(resolution) * zn] == ~0u)
 				continue;
 
 			unsigned char* datan = grid + size_t(resolution) * (yn + size_t(resolution) * zn);
@@ -731,7 +742,7 @@ size_t meshopt_remesh(float* destination, size_t max_triangle_count, const unsig
 		unsigned int* worklist = allocator.allocate<unsigned int>(size_t(resolution) * size_t(resolution));
 		unsigned char* queued = allocator.allocate<unsigned char>(size_t(resolution) * size_t(resolution));
 
-		solidify(grid, worklist, queued, resolution);
+		solidify(grid, worklist, queued, voxel_rows, resolution);
 
 #if TRACE
 		size_t inside_count = 0, occupied_count = 0;
