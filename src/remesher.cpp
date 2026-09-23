@@ -270,6 +270,7 @@ static float measureGrid(const float* vertex_positions_data, size_t vertex_count
 	return scale;
 }
 
+template <int Voxels>
 static void voxelize(unsigned char* grid, Voxel* voxels, const unsigned int* voxel_rows, const unsigned int* indices, size_t index_count, const float* vertex_positions, size_t vertex_count, size_t vertex_positions_stride, int resolution, float scale, const float offset[3], unsigned int options)
 {
 	(void)vertex_count;
@@ -290,13 +291,13 @@ static void voxelize(unsigned char* grid, Voxel* voxels, const unsigned int* vox
 		float gx = vc[0] - vb[0], gy = vc[1] - vb[1], gz = vc[2] - vb[2];
 
 		// use maximum edge length to establish sampling rate
-		// TODO: this is wasteful for thin triangles
-		float el = sqrtf(ex * ex + ey * ey + ez * ez);
-		float fl = sqrtf(fx * fx + fy * fy + fz * fz);
-		float gl = sqrtf(gx * gx + gy * gy + gz * gz);
+		float el2 = ex * ex + ey * ey + ez * ez;
+		float fl2 = fx * fx + fy * fy + fz * fz;
+		float gl2 = gx * gx + gy * gy + gz * gz;
 
-		float max_edge = el > fl ? el : fl;
-		max_edge = max_edge > gl ? max_edge : gl;
+		float max_edge = el2 > fl2 ? el2 : fl2;
+		max_edge = max_edge > gl2 ? max_edge : gl2;
+		max_edge = sqrtf(max_edge);
 
 		// we target 2 samples per voxel edge which should be enough to hit all voxels at any rotation
 		int samples = int(max_edge * scale * 2.f);
@@ -307,18 +308,20 @@ static void voxelize(unsigned char* grid, Voxel* voxels, const unsigned int* vox
 		float nx = ey * fz - ez * fy, ny = ez * fx - ex * fz, nz = ex * fy - ey * fx;
 		float area = sqrtf(nx * nx + ny * ny + nz * nz);
 
-		float ns = area == 0.f ? 0.f : 1.f / area;
-		nx *= ns;
-		ny *= ns;
-		nz *= ns;
+		// skip degenerate triangles; they don't contribute to voxelization and may result in NaN when computing voxel centroid
+		if (area == 0.f)
+			continue;
+
+		float ns = 1.f / area;
+		nx *= ns, ny *= ns, nz *= ns;
 
 		float sx = va[0] - offset[0], sy = va[1] - offset[1], sz = va[2] - offset[2];
-		float sr = 1.f / float(samples);
+		float sr = 1.f;
 		float weight = area / float((samples + 1) * (samples + 2));
 
-		// skip degenerate triangles; they don't contribute to voxelization and may result in NaN when computing voxel centroid
-		if (weight == 0.f)
-			continue;
+		// this division is on a critical path, and for dense input meshes the branch is almost never taken so it's worth skipping it
+		if (samples > 1)
+			sr = 1.f / float(samples);
 
 		for (int u = 0; u <= samples; ++u)
 			for (int v = 0; v <= samples - u; ++v)
@@ -343,7 +346,7 @@ static void voxelize(unsigned char* grid, Voxel* voxels, const unsigned int* vox
 				size_t row = (y + 1) + size_t(resolution) * (z + 1);
 				size_t idx = (x + 1) + size_t(resolution) * row;
 
-				if (voxels)
+				if (Voxels)
 				{
 					assert(grid[idx] != 0 && grid[idx] != 0xff);
 					Voxel& vox = voxels[voxel_rows[row] + (grid[idx] - 1)];
@@ -693,7 +696,7 @@ size_t meshopt_remesh(float* destination, size_t max_triangle_count, const unsig
 	unsigned char* grid = allocator.allocate<unsigned char>(size_t(resolution) * size_t(resolution) * size_t(resolution));
 	memset(grid, 0, size_t(resolution) * size_t(resolution) * size_t(resolution));
 
-	voxelize(grid, NULL, NULL, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride, resolution, scale, offset, options);
+	voxelize<0>(grid, NULL, NULL, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride, resolution, scale, offset, options);
 
 	// allocate additional voxel data for each occupied voxel; this can be filled in the second pass to compute positions
 	// note that we only do this if we need to compute output triangles; counting runs skip it for performance
@@ -737,7 +740,7 @@ size_t meshopt_remesh(float* destination, size_t max_triangle_count, const unsig
 
 	// accumulate voxel positions: in the second pass, this computes enough data in each voxel to calculate positions
 	if (voxels)
-		voxelize(grid, voxels, voxel_rows, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride, resolution, scale, offset, options);
+		voxelize<1>(grid, voxels, voxel_rows, indices, index_count, vertex_positions, vertex_count, vertex_positions_stride, resolution, scale, offset, options);
 
 	// compute final voxel positions; each voxel has a single resulting position that will be emitted during polygonization
 	if (voxels)
