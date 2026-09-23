@@ -391,7 +391,8 @@ static size_t rowpack(unsigned char* grid, unsigned int* voxel_rows, int resolut
 
 		assert(count < 255); // we store offsets in a single byte, with 0 reserved for empty voxels and 0xff reserved for interior voxels
 
-		voxel_rows[i] = unsigned(result);
+		// mark empty rows with a sentinel, which is used to accelerate further processing
+		voxel_rows[i] = count ? unsigned(result) : ~0u;
 		result += count;
 	}
 
@@ -621,7 +622,13 @@ static size_t polygonize(float* destination, size_t max_triangle_count, const un
 	for (int z = 0; z < resolution - 1; ++z)
 		for (int y = 0; y < resolution - 1; ++y)
 		{
-			const unsigned char* data = grid + size_t(resolution) * (y + size_t(resolution) * z);
+			size_t row = y + size_t(resolution) * z;
+
+			// skip processing if all four rows are entirely empty as that guarantees empty output (even three out of four would be enough but that's more expensive to check)
+			if (voxel_rows && (voxel_rows[row] & voxel_rows[row + 1] & voxel_rows[row + resolution] & voxel_rows[row + resolution + 1]) == ~0u)
+				continue;
+
+			const unsigned char* data = grid + size_t(resolution) * row;
 
 			// we track each slice as a 8-bit code (matching cube indexing) as we iterate through the row to avoid extra lookups
 			int last = (data[0] != 0) | ((data[resolution] != 0) << 2) | ((data[slice] != 0) << 4) | ((data[slice + resolution] != 0) << 6);
