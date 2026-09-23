@@ -573,7 +573,7 @@ static bool octantDecider(int x, int y, int z, int cube, const unsigned char* gr
 	return true;
 }
 
-static bool quadricDecider(int x, int y, int z, int cube, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution)
+static bool quadricDecider(int x, int y, int z, int cube, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, float rscale)
 {
 	// quads are encoded implicitly as 0xabc 0xcbd
 	unsigned int quad = (kTriangleTable[cube][0][0] << 4) | (kTriangleTable[cube][0][1] & 0xf);
@@ -590,25 +590,28 @@ static bool quadricDecider(int x, int y, int z, int cube, const unsigned char* g
 		corner[i] = &voxels[voxel_rows[row] + (grid[idx] - 1)];
 	}
 
+	// accumulate the quadrics of all four corners; we sum (a+d)+(b+c) to get the same results on both sides of thin sheets
+	const Voxel *va = corner[0], *vb = corner[1], *vc = corner[2], *vd = corner[3];
+
+	Voxel sum = {};
+	sum.a00 = (va->a00 + vd->a00) + (vb->a00 + vc->a00), sum.a11 = (va->a11 + vd->a11) + (vb->a11 + vc->a11), sum.a22 = (va->a22 + vd->a22) + (vb->a22 + vc->a22);
+	sum.a10 = (va->a10 + vd->a10) + (vb->a10 + vc->a10), sum.a20 = (va->a20 + vd->a20) + (vb->a20 + vc->a20), sum.a21 = (va->a21 + vd->a21) + (vb->a21 + vc->a21);
+	sum.b0 = (va->b0 + vd->b0) + (vb->b0 + vc->b0), sum.b1 = (va->b1 + vd->b1) + (vb->b1 + vc->b1), sum.b2 = (va->b2 + vd->b2) + (vb->b2 + vc->b2);
+	sum.c = (va->c + vd->c) + (vb->c + vc->c), sum.w = (va->w + vd->w) + (vb->w + vc->w);
+
 	// evaluate error for midpoints of primary (bc) and alternate (ad) diagonal
-	float mx = (corner[1]->px + corner[2]->px) * 0.5f, my = (corner[1]->py + corner[2]->py) * 0.5f, mz = (corner[1]->pz + corner[2]->pz) * 0.5f;
-	float nx = (corner[0]->px + corner[3]->px) * 0.5f, ny = (corner[0]->py + corner[3]->py) * 0.5f, nz = (corner[0]->pz + corner[3]->pz) * 0.5f;
-	float error0 = 0, error1 = 0;
+	float error0 = voxelError(sum, (vb->px + vc->px) * 0.5f, (vb->py + vc->py) * 0.5f, (vb->pz + vc->pz) * 0.5f);
+	float error1 = voxelError(sum, (va->px + vd->px) * 0.5f, (va->py + vd->py) * 0.5f, (va->pz + vd->pz) * 0.5f);
 
-	for (int i = 0; i < 4; ++i)
-	{
-		error0 += voxelError(*corner[i], mx, my, mz);
-		error1 += voxelError(*corner[i], nx, ny, nz);
-	}
-
-	// select alternate configuration if it is clearly better
-	return error1 < error0 * 0.9f;
+	// select alternate configuration if it is clearly better and if the primary error is not too small, to avoid excessive flips
+	return error0 > sum.w * (0.1f * 0.1f * rscale * rscale) && error1 < error0 * (0.85f * 0.85f);
 }
 
-static size_t polygonize(float* destination, size_t max_triangle_count, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, const float offset[3], unsigned int options)
+static size_t polygonize(float* destination, size_t max_triangle_count, const unsigned char* grid, const Voxel* voxels, const unsigned int* voxel_rows, int resolution, float scale, const float offset[3], unsigned int options)
 {
 	size_t result = 0;
 	size_t slice = size_t(resolution) * size_t(resolution);
+	float rscale = 1.f / scale;
 
 	assert(gRemeshTablesInitialized);
 
@@ -644,7 +647,7 @@ static size_t polygonize(float* destination, size_t max_triangle_count, const un
 				if (kTriangleAlt[cube] == 1)
 					alt = octantDecider(x, y, z, cube, grid, voxels, voxel_rows, resolution);
 				else if (kTriangleAlt[cube] == 2 && (options & meshopt_RemeshSolve))
-					alt = quadricDecider(x, y, z, cube, grid, voxels, voxel_rows, resolution);
+					alt = quadricDecider(x, y, z, cube, grid, voxels, voxel_rows, resolution, rscale);
 
 				const unsigned short* tris = kTriangleTable[cube][alt];
 
@@ -741,7 +744,7 @@ size_t meshopt_remesh(float* destination, size_t max_triangle_count, const unsig
 		solve(voxels, voxel_count, scale, options);
 
 	// output triangles from the voxel grid; if destination is NULL, this still counts the number of triangles that would be generated
-	size_t result = polygonize(destination, max_triangle_count, grid, voxels, voxel_rows, resolution, offset, options);
+	size_t result = polygonize(destination, max_triangle_count, grid, voxels, voxel_rows, resolution, scale, offset, options);
 
 #if TRACE
 	printf("remesher: %zu triangles (%zu capacity)\n", result, max_triangle_count);
