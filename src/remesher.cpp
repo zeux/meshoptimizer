@@ -374,9 +374,19 @@ static size_t rowpack(unsigned char* grid, unsigned int* rowmap, int resolution)
 	size_t result = 0;
 	size_t slice = size_t(resolution) * size_t(resolution);
 
+	unsigned char zero[256];
+	memset(zero, 0, resolution);
+
 	for (size_t i = 0; i < slice; ++i)
 	{
 		unsigned char* data = grid + i * size_t(resolution);
+
+		if (memcmp(data, zero, resolution) == 0)
+		{
+			// mark empty rows with a sentinel to accelerate further processing
+			rowmap[i] = ~0u;
+			continue;
+		}
 
 		int count = 0;
 
@@ -390,8 +400,7 @@ static size_t rowpack(unsigned char* grid, unsigned int* rowmap, int resolution)
 
 		assert(count < 255); // we store offsets in a single byte, with 0 reserved for empty voxels and 0xff reserved for interior voxels
 
-		// mark empty rows with a sentinel, which is used to accelerate further processing
-		rowmap[i] = count ? unsigned(result) : ~0u;
+		rowmap[i] = unsigned(result);
 		result += count;
 	}
 
