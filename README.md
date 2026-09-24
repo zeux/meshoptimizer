@@ -688,14 +688,16 @@ The resulting indices can be used to render the simplified point cloud; to reduc
 
 ### Voxel remeshing
 
-The triangle simplification algorithms described above operate on the original mesh topology and preserve the overall structure of the mesh. This limits the degree to which they can simplify and can restrict the types of simplification being done; small features can be removed but can't be merged together, and extra interior detail is often preserved until later stages of simplification. An alternative approach is to reconstruct an entirely new mesh, that has a similar shape to the original. This library provides a voxel-based remeshing algorithm for this purpose, that can generate a new mesh at a given voxel resolution ([4..256]):
+The triangle simplification algorithms described above operate on the original mesh topology and preserve the overall structure of the mesh. This limits the degree to which they can simplify and can restrict the types of simplification being done; small features can be removed but can't be merged together, and extra interior detail is often preserved until later stages of simplification. An alternative approach is to reconstruct an entirely new mesh, that has a similar shape to the original. This library provides a voxel-based remeshing algorithm for this purpose, that can generate a new mesh at a given voxel resolution [4..256]:
 
 ```c++
 const int resolution = 100;
 const unsigned int options = meshopt_RemeshSolve;
-size_t capacity = meshopt_remesh(NULL, 0, &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), resolution, options);
+size_t capacity = meshopt_remesh(NULL, 0, &indices[0], indices.size(), &vertices[0].px, vertices.size(),
+    sizeof(Vertex), resolution, options);
 std::vector<float> triangles(capacity * 3 * 3);
-size_t count = meshopt_remesh(&triangles[0], capacity, &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), resolution, options);
+size_t count = meshopt_remesh(&triangles[0], capacity, &indices[0], indices.size(), &vertices[0].px, vertices.size(),
+    sizeof(Vertex), resolution, options);
 triangles.resize(count * 3 * 3); // count <= capacity
 ```
 
@@ -703,15 +705,18 @@ The resulting mesh is generated as an unindexed array of triangles, with 3 float
 
 The triangle count of the output scales with the resolution, but the scaling depends on the mesh. The example above runs remeshing twice: once without the output, to compute the upper bound on the number of triangles, and once more to do the actual remeshing. The initial counting pass is faster than the full remesh; however it's also possible to estimate the capacity and call `meshopt_remesh` on the output buffer directly. When the capacity is insufficient, `meshopt_remesh` writes as many triangles as possible and returns an upper bound on the total count; calling it again with a buffer of that size is guaranteed to succeed.
 
-When remeshing to reduce the triangle count, while it's possible to remesh to a smaller resolution, it is often preferable to remesh to a resolution that preserves enough detail and then simplify the resulting mesh to the desired triangle count using `meshopt_simplify`. In this case, the mesh needs to be reindexed before simplification; as a shortcut, using position remap as an index buffer and sparse simplification option will work well:
+When remeshing to reduce the triangle count, while it's possible to remesh to a smaller resolution, it is often preferable to remesh to a resolution that preserves enough detail and then simplify the resulting mesh to the desired triangle count using `meshopt_simplifyWithUpdate`. In this case, the mesh needs to be reindexed before simplification; as a shortcut, the position remap can be used as an index buffer together with the sparse simplification option. `meshopt_SimplifyPreserveFolds` is also important to keep thin double-sided geometry intact:
 
 ```c++
-std::vector<unsigned int> remap(count * 3);
-meshopt_generatePositionRemap(&remap[0], &triangles[0], count * 3, sizeof(float) * 3);
+std::vector<float> new_positions = triangles;
 std::vector<unsigned int> new_indices(count * 3);
-new_indices.resize(meshopt_simplify(&new_indices[0], &remap[0], count * 3, &triangles[0], count * 3, sizeof(float) * 3, target_index_count, target_error, meshopt_SimplifySparse));
-std::vector<float> new_positions(triangles.size());
-new_positions.resize(meshopt_optimizeVertexFetch(&new_positions[0], &new_indices[0], new_indices.size(), &triangles[0], triangles.size() / 3, sizeof(float) * 3) * 3);
+meshopt_generatePositionRemap(&new_indices[0], &new_positions[0], count * 3, sizeof(float) * 3);
+
+new_indices.resize(meshopt_simplifyWithUpdate(&new_indices[0], count * 3, &new_positions[0], count * 3,
+    sizeof(float) * 3, NULL, 0, NULL, 0, NULL, target_index_count, target_error,
+    meshopt_SimplifySparse | meshopt_SimplifyPreserveFolds));
+new_positions.resize(meshopt_optimizeVertexFetch(&new_positions[0], &new_indices[0], new_indices.size(),
+    &new_positions[0], count * 3, sizeof(float) * 3) * 3);
 ```
 
 If normals are needed in this workflow, it's recommended to generate them after simplification so that the simplifier is not restricted by the normal splits.
