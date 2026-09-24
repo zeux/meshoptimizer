@@ -686,6 +686,45 @@ indices.resize(meshopt_simplifyPoints(&indices[0], &points[0].x, points.size(), 
 
 The resulting indices can be used to render the simplified point cloud; to reduce the memory footprint, the point cloud can be reindexed to create an array of points from the indices.
 
+### Voxel remeshing
+
+The triangle simplification algorithms described above operate on the original mesh topology and preserve the overall structure of the mesh. This limits the degree to which they can simplify and can restrict the types of simplification being done; small features can be removed but can't be merged together, and extra interior detail is often preserved until later stages of simplification. An alternative approach is to reconstruct an entirely new mesh, that has a similar shape to the original. This library provides a voxel-based remeshing algorithm for this purpose, that can generate a new mesh at a given voxel resolution ([4..256]):
+
+```c++
+const int resolution = 100;
+const unsigned int options = meshopt_RemeshSolve;
+size_t capacity = meshopt_remesh(NULL, 0, &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), resolution, options);
+std::vector<float> triangles(capacity * 3 * 3);
+size_t count = meshopt_remesh(&triangles[0], capacity, &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), resolution, options);
+triangles.resize(count * 3 * 3); // count <= capacity
+```
+
+The resulting mesh is generated as an unindexed array of triangles, with 3 floats indicating the position of each of 3 corners of the resulting triangle. If mesh attributes such as vertex normals, tangents or texture coordinates are required, they will need to be generated or transferred from the original mesh.
+
+The triangle count of the output scales with the resolution, but the scaling depends on the mesh. The example above runs remeshing twice: once without the output, to compute the upper bound on the number of triangles, and once more to do the actual remeshing. The initial counting pass is faster than the full remesh; however it's also possible to estimate the capacity and call `meshopt_remesh` on the output buffer directly. When the capacity is insufficient, `meshopt_remesh` writes as many triangles as possible and returns an upper bound on the total count; calling it again with a buffer of that size is guaranteed to succeed.
+
+When remeshing to reduce the triangle count, while it's possible to remesh to a smaller resolution, it is often preferable to remesh to a resolution that preserves enough detail and then simplify the resulting mesh to the desired triangle count using `meshopt_simplify`. In this case, the mesh needs to be reindexed before simplification; as a shortcut, using position remap as an index buffer and sparse simplification option will work well:
+
+```c++
+std::vector<unsigned int> remap(count * 3);
+meshopt_generatePositionRemap(&remap[0], &triangles[0], count * 3, sizeof(float) * 3);
+std::vector<unsigned int> new_indices(count * 3);
+new_indices.resize(meshopt_simplify(&new_indices[0], &remap[0], count * 3, &triangles[0], count * 3, sizeof(float) * 3, target_index_count, target_error, meshopt_SimplifySparse));
+std::vector<float> new_positions(triangles.size());
+new_positions.resize(meshopt_optimizeVertexFetch(&new_positions[0], &new_indices[0], new_indices.size(), &triangles[0], triangles.size() / 3, sizeof(float) * 3) * 3);
+```
+
+If normals are needed in this workflow, it's recommended to generate them after simplification so that the simplifier is not restricted by the normal splits.
+
+The remesher uses a voxel-based algorithm; features under a voxel size that are next to each other will be merged, and gaps under a voxel size may be closed. Notably, features that are thinner than a voxel but are large, such as a cape or a wing, will still be preserved unlike traditional distance field based methods; the output may be infinitely thin and double-sided.
+
+To customize the behavior, additional options can be passed via `options` bitmask that adjust the behavior of the remesher:
+
+- `meshopt_RemeshShell` produces a two-sided shell that wraps around surfaces of the original mesh, instead of a solid mesh. By default, remesher will fill the closed interior, and geometry inside other geometry will be removed. This option is generally not recommended as it can double the number of triangles, and may produce self-intersecting geometry.
+- `meshopt_RemeshSolve` computes optimal output positions that approximate the original surface as closely as possible. This option is recommended unless more regular output is desired.
+
+> This feature is still experimental and is subject to change; API may be changed in future releases, and behavior may be improved. Additional features, such as thickening thin features, may be exposed through extra options in the future.
+
 ## Efficiency analyzers
 
 While the only way to get precise performance data is to measure performance on the target GPU, it can be valuable to measure the impact of these optimization in a GPU-independent manner. To this end, the library provides analyzers for all three major optimization routines. For each optimization there is a corresponding analyze function, like `meshopt_analyzeOverdraw`, that returns a struct with statistics.
