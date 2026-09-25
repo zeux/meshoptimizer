@@ -1761,15 +1761,15 @@ size_t meshopt_encodeVertexBufferBound(size_t vertex_count, size_t vertex_size)
 	size_t vertex_block_count = (vertex_count + vertex_block_size - 1) / vertex_block_size;
 
 	size_t vertex_block_control_size = vertex_size / 4;
-	size_t vertex_block_header_size = (vertex_block_size / kByteGroupSize + 3) / 4;
-	size_t vertex_block_data_size = vertex_block_size;
+	size_t vertex_byte_header_size = (vertex_block_size / kByteGroupSize + 3) / 4;
+	size_t vertex_byte_data_size = vertex_block_size;
 
 	size_t tail_size = vertex_size + (vertex_size / 4);
 	size_t tail_size_min = kTailMinSizeV0 > kTailMinSizeV1 ? kTailMinSizeV0 : kTailMinSizeV1;
 	size_t tail_size_pad = tail_size < tail_size_min ? tail_size_min : tail_size;
 	assert(tail_size_pad >= kByteGroupDecodeLimit);
 
-	return 1 + vertex_block_count * vertex_size * (vertex_block_control_size + vertex_block_header_size + vertex_block_data_size) + tail_size_pad;
+	return 1 + vertex_block_count * (vertex_block_control_size + vertex_size * (vertex_byte_header_size + vertex_byte_data_size)) + tail_size_pad;
 }
 
 void meshopt_encodeVertexVersion(int version)

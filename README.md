@@ -16,10 +16,10 @@ Two companion projects are developed and distributed alongside the library: [glt
 meshoptimizer is hosted on GitHub; you can download the latest release using git:
 
 ```
-git clone -b v1.2 https://github.com/zeux/meshoptimizer.git
+git clone -b v1.3 https://github.com/zeux/meshoptimizer.git
 ```
 
-Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v1.2.zip).
+Alternatively you can [download the .zip archive from GitHub](https://github.com/zeux/meshoptimizer/archive/v1.3.zip).
 
 The library is also available as a Linux package in several distributions ([ArchLinux](https://aur.archlinux.org/packages/meshoptimizer/), [Debian](https://packages.debian.org/libmeshoptimizer), [FreeBSD](https://www.freshports.org/misc/meshoptimizer/), [Nix](https://mynixos.com/nixpkgs/package/meshoptimizer), [Ubuntu](https://packages.ubuntu.com/libmeshoptimizer)), as well as a [Vcpkg port](https://github.com/microsoft/vcpkg/tree/master/ports/meshoptimizer) (see [installation instructions](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started)) and a [Conan package](https://conan.io/center/recipes/meshoptimizer).
 
@@ -189,9 +189,9 @@ While traditionally meshes have served as a unit of rendering, new approaches to
 
 ### Mesh shading
 
-Modern GPUs are beginning to deviate from the traditional rasterization model. NVidia GPUs starting from Turing and AMD GPUs starting from RDNA2 provide a new programmable geometry pipeline that, instead of being built around index buffers and vertex shaders, is built around mesh shaders - a new shader type that allows to provide a batch of work to the rasterizer.
+Modern GPUs can deviate from the traditional rasterization model. NVidia GPUs starting from Turing, AMD GPUs starting from RDNA2, Intel GPUs starting from Arc (Xe-HPG), and Apple GPUs starting from M3/A17 Pro provide a new programmable geometry pipeline that, instead of being built around index buffers and vertex shaders, is built around mesh shaders - a new shader type that allows to provide a batch of work to the rasterizer.
 
-Using mesh shaders in context of traditional mesh rendering provides an opportunity to use a variety of optimization techniques, starting from more efficient vertex reuse, using various forms of culling (e.g. cluster frustum or occlusion culling) and in-memory compression to maximize the utilization of GPU hardware. Beyond traditional rendering mesh shaders provide a richer programming model that can synthesize new geometry more efficiently than common alternatives such as geometry shaders. Mesh shading can be accessed via Vulkan or Direct3D 12 APIs; please refer to [Introduction to Turing Mesh Shaders](https://developer.nvidia.com/blog/introduction-turing-mesh-shaders/) and [Mesh Shaders and Amplification Shaders: Reinventing the Geometry Pipeline](https://devblogs.microsoft.com/directx/coming-to-directx-12-mesh-shaders-and-amplification-shaders-reinventing-the-geometry-pipeline/) for additional information.
+Using mesh shaders in context of traditional mesh rendering provides an opportunity to use a variety of optimization techniques, starting from more efficient vertex reuse, using various forms of culling (e.g. cluster frustum or occlusion culling) and in-memory compression to maximize the utilization of GPU hardware. Beyond traditional rendering mesh shaders provide a richer programming model that can synthesize new geometry more efficiently than common alternatives such as geometry shaders. Mesh shading can be accessed via Vulkan, Direct3D 12 or Metal APIs; please refer to [Introduction to Turing Mesh Shaders](https://developer.nvidia.com/blog/introduction-turing-mesh-shaders/) and [Mesh Shaders and Amplification Shaders: Reinventing the Geometry Pipeline](https://devblogs.microsoft.com/directx/coming-to-directx-12-mesh-shaders-and-amplification-shaders-reinventing-the-geometry-pipeline/) for additional information.
 
 To use mesh shaders for conventional rendering efficiently, geometry needs to be converted into a series of meshlets; each meshlet represents a small subset of the original mesh and comes with a small set of vertices and a separate micro-index buffer that references vertices in the meshlet. This information can be directly fed to the rasterizer from the mesh shader. This library provides algorithms to create meshlet data for a mesh, and - assuming geometry is static - can compute bounding information that can be used to perform cluster culling, rejecting meshlets that are invisible on screen.
 
@@ -226,6 +226,8 @@ meshlets.resize(meshlet_count);
 ```
 
 Depending on the application, other strategies of storing the data can be useful; for example, `meshlet_vertices` serves as indices into the original vertex buffer but it might be worthwhile to generate a mini vertex buffer for each meshlet to remove the extra indirection when accessing vertex data, or it might be desirable to compress vertex data as vertices in each meshlet are likely to be very spatially coherent.
+
+> Some proprietary platforms have additional restrictions on the index range that can be referenced by a meshlet. Building the library with `MESHOPTIMIZER_CLUSTERIZER_INDEXLIMIT` defined will ensure that generated meshlets conform to these restrictions, but the resulting meshlets can *not* be processed further as additional reordering may break the limits.
 
 For optimal performance, it is recommended to further optimize each meshlet in isolation for better triangle and vertex locality by calling `meshopt_optimizeMeshlet` on vertex and index data like so:
 
@@ -278,7 +280,7 @@ By default, the meshlet builder tries to form complete meshlets even if that req
 
 ### Clustered raytracing
 
-In addition to rasterization, meshlets can also be used for ray tracing. NVidia GPUs starting from Turing with recent drivers provide support for cluster acceleration structures (via `VK_NV_cluster_acceleration_structure` extension / NVAPI); instead of building a traditional BLAS, a cluster acceleration structure can be built for each meshlet and combined into a single clustered BLAS. While this currently results in reduced ray tracing performance for static geometry (for which a traditional BLAS may be more suitable), it allows updating the individual clusters without having to rebuild or refit the entire BLAS, which can be useful for mesh deformation or hierarchical level of detail.
+In addition to rasterization, meshlets can also be used for ray tracing. NVidia GPUs starting from Turing with recent drivers provide support for cluster acceleration structures (via `VK_NV_cluster_acceleration_structure` extension / NVAPI, or [DXR2](https://microsoft.github.io/DirectX-Specs/d3d/Raytracing2.html#clustered-geometry)); instead of building a traditional BLAS, a cluster acceleration structure can be built for each meshlet and combined into a single clustered BLAS. While this currently results in reduced ray tracing performance for static geometry (for which a traditional BLAS may be more suitable), it allows updating the individual clusters without having to rebuild or refit the entire BLAS, which can be useful for mesh deformation or hierarchical level of detail.
 
 When using meshlets for raytracing, the performance characteristics that matter differ from when rendering meshes with rasterization. For raytracing, clusters with optimal spatial division that minimize ray-triangle intersection tests are preferred, while for rasterization, clusters with maximum triangle count within vertex limits are ideal.
 
@@ -397,7 +399,7 @@ Alternatively you can use general purpose compression libraries like zstd or Ood
 
 To that end, this library provides algorithms to "encode" vertex and index data. The result of the encoding is generally significantly smaller than initial data, and remains compressible with general purpose compressors - so you can either store encoded data directly (for modest compression ratios and maximum decoding performance), or further compress it with LZ4/zstd/Oodle to maximize compression ratio.
 
-> Note: this compression scheme is available as a glTF extension [EXT_meshopt_compression](https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Vendor/EXT_meshopt_compression/README.md) as well as [KHR_meshopt_compression](https://github.com/KhronosGroup/glTF/pull/2517).
+> Note: this compression scheme is available as a glTF extension [EXT_meshopt_compression](https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Vendor/EXT_meshopt_compression/README.md) as well as [KHR_meshopt_compression](https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Khronos/KHR_meshopt_compression/README.md).
 
 ### Vertex compression
 
@@ -417,7 +419,7 @@ assert(res == 0);
 
 Note that vertex encoding assumes that vertex buffer was optimized for vertex fetch, and that vertices are quantized. Feeding unoptimized data into the encoder may result in poor compression ratios. The codec is lossless by itself - the only lossy step is quantization/reordering or filters that you may apply before encoding. Additionally, if the vertex data contains padding bytes, they should be zero-initialized to ensure that the encoder does not need to store uninitialized data.
 
-Decoder is heavily optimized and can directly target write-combined memory; you can expect it to run at 3-6 GB/s on modern desktop CPUs. Compression ratio depends on the data; vertex data compression ratio is typically around 2-4x (compared to already quantized and optimally packed data). General purpose lossless compressors can further improve the compression ratio at some cost to decoding performance.
+Decoder is heavily optimized and can directly target write-combined memory; you can expect it to run at 3-6 GB/s on modern desktop CPUs. Compression ratio depends on the data; vertex data compression ratio is typically around 2-4x (compared to already quantized and optimally packed data). General purpose lossless compressors can further improve the compression ratio at some cost to decoding performance. If decoding always targets regular cached memory, compiling the library with `MESHOPTIMIZER_VERTEXCODEC_ZEROCOPY` define can yield additional ~10% decoding performance.
 
 The vertex codec tries to take advantage of the inherent locality of sequential vertices and identify bit patterns that repeat in consecutive vertices. Typically, vertex cache + vertex fetch provides a reasonably local vertex traversal order; without an index buffer, it is recommended to sort vertices spatially (via `meshopt_spatialSortRemap`) to improve the compression ratio.
 
@@ -599,7 +601,7 @@ The attributes are passed as a separate buffer (in the example above it's a subs
 
 Including texture coordinates in the attribute set is optional, as simplification generally preserves texture quality reasonably well by default; if included, a weight of around 10-100 is usually appropriate depending on the UV density. It's also possible to compute the weight automatically by setting it to the reciprocal average density of UVs, which can be computed as `1/sqrt(average UV area)` = `1/sqrt(sum(abs(uv area)) / triangle count)` over all triangles in the mesh, possibly scaled by a constant factor if necessary.
 
-Both the target error and the resulting error combine positional error and attribute error, so the error can be used to control the LOD while taking attribute quality into account, assuming carefully chosen weights.
+Both the target error and the resulting error combine positional error and attribute error, so the error can be used to control the LOD while taking attribute quality into account, assuming carefully chosen weights. When the error is used for LOD selection, enabling `meshopt_SimplifyErrorClamped` is recommended to avoid large attribute errors producing overly conservative LOD selection.
 
 ### Permissive simplification
 
@@ -661,6 +663,8 @@ For basic customization, a number of options can be passed via `options` bitmask
 - `meshopt_SimplifyPrune` allows the simplifier to remove isolated components regardless of the topological restrictions inside the component. This is generally recommended for full-mesh simplification as it can improve quality and reduce triangle count; note that with this option, triangles connected to locked vertices may be removed as part of their component.
 - `meshopt_SimplifyRegularize` produces more regular triangle sizes and shapes during simplification, at some cost to geometric quality. This can improve geometric quality under deformation such as skinning. `meshopt_SimplifyRegularizeLight` can be used instead of this flag to use a smaller regularization factor, reducing the impact on geometric quality.
 - `meshopt_SimplifyPermissive` allows collapses across attribute discontinuities, except for vertices that are tagged with `meshopt_SimplifyVertex_Protect` via `vertex_lock`.
+- `meshopt_SimplifyPreserveFolds` tries to preserve fold lines between opposite-facing triangles at a small performance cost.
+- `meshopt_SimplifyErrorClamped` clamps attribute error to match position error scale and avoid extreme error values in areas with high attribute variance. This setting is recommended when using attribute aware simplification if error values are used for LOD selection or generation.
 
 When using `meshopt_simplifyWithAttributes`, it is also possible to lock certain vertices by providing a `vertex_lock` array that contains a value for each vertex in the mesh, with `meshopt_SimplifyVertex_Lock` set for vertices that should not be collapsed. This can be useful to preserve certain vertices, such as the boundary of the mesh, with more control than `meshopt_SimplifyLockBorder` option provides. When using `meshopt_simplifyWithUpdate`, locking vertices (whether via `vertex_lock` or `meshopt_SimplifyLockBorder`) will also prevent the simplifier from updating their positions and attributes; this can be useful together with `meshopt_SimplifySparse` for meshlet simplification, as meshlets at one level of hierarchy can be simplified together without excessive data copying.
 
@@ -668,7 +672,7 @@ Locking vertices restricts simplification and makes it more likely that the simp
 
 In addition to the `meshopt_SimplifyPrune` flag, you can explicitly prune isolated components by calling the `meshopt_simplifyPrune` function. This can be done before regular simplification or as the only step, which is useful for scenarios like isosurface cleanup. Similar to other simplification functions, the `target_error` argument controls the cutoff of component radius and is specified in relative units (e.g., `1e-2f` will remove components under 1%). If an absolute cutoff is desired, divide the parameter by the factor returned by `meshopt_simplifyScale`.
 
-Simplification currently assumes that the input mesh is using the same material for all triangles. If the mesh uses multiple materials, it is possible to split the mesh into subsets based on the material and simplify each subset independently, using `meshopt_SimplifyLockBorder` or `vertex_lock` to preserve material boundaries; however, this limits the collapses and may reduce the resulting quality. An alternative approach is to encode information about the material into the vertex buffer, ensuring that all three vertices referencing the same triangle have the same material ID; this may require duplicating vertices on the boundary between materials. After this, simplification can be performed as usual, and after simplification per-triangle material information can be computed from the vertex material IDs. There is no need to inform the simplifier of the value of the material ID: the implicit boundaries created by duplicating vertices with conflicting material IDs will be preserved automatically (unless permissive simplification is used, in which case material boundaries should be protected via `vertex_lock`). If the source mesh is already split into subsets with non-overlapping vertex indices, and permissive simplification is not used, it should be sufficient to concatenate the subsets into a single vertex/index buffer and simplify the entire mesh at once; the result can be split back into subsets after simplification.
+Simplification currently assumes that the input mesh is using the same material for all triangles. If the mesh uses multiple materials, it is possible to split the mesh into subsets based on the material and simplify each subset independently, using `meshopt_SimplifyLockBorder` or `vertex_lock` to preserve material boundaries; however, this limits the collapses and may reduce the resulting quality. An alternative approach is to encode information about the material into the vertex buffer, ensuring that all three vertices referencing the same triangle have the same material ID; this may require duplicating vertices on the boundary between materials. After this, simplification can be performed as usual, and after simplification per-triangle material information can be computed from the vertex material IDs. There is no need to inform the simplifier of the value of the material ID: the implicit boundaries created by duplicating vertices with conflicting material IDs will be preserved automatically (unless permissive simplification is used, in which case material boundaries should be protected via `vertex_lock` with `meshopt_SimplifyVertex_Protect`; alternatively, supplying the material ID as an additional attribute with a high weight penalizes collapses across material boundaries without strictly preventing them). If the source mesh is already split into subsets with non-overlapping vertex indices, and permissive simplification is not used, it should be sufficient to concatenate the subsets into a single vertex/index buffer and simplify the entire mesh at once; the result can be split back into subsets after simplification.
 
 When generating a LOD chain, you can either re-simplify each LOD from the original mesh or use the previous LOD as the starting point for the next level. The latter approach is more efficient and produces smoother visual transitions between LOD levels while preserving mesh attributes better. With this method, resulting error values from previous levels should be accumulated for LOD selection. Additionally, consider using `meshopt_SimplifySparse` to improve performance when generating deep LOD chains.
 
@@ -684,6 +688,50 @@ indices.resize(meshopt_simplifyPoints(&indices[0], &points[0].x, points.size(), 
 ```
 
 The resulting indices can be used to render the simplified point cloud; to reduce the memory footprint, the point cloud can be reindexed to create an array of points from the indices.
+
+### Voxel remeshing
+
+The triangle simplification algorithms described above operate on the original mesh topology and preserve the overall structure of the mesh. This limits the degree to which they can simplify and can restrict the types of simplification being done; small features can be removed but can't be merged together, and extra interior detail is often preserved until later stages of simplification. An alternative approach is to reconstruct an entirely new mesh, that has a similar shape to the original. This library provides a voxel-based remeshing algorithm for this purpose, that can generate a new mesh at a given voxel resolution `[4..256]`:
+
+```c++
+const int resolution = 100;
+const unsigned int options = meshopt_RemeshSolve;
+size_t capacity = meshopt_remesh(NULL, 0, &indices[0], indices.size(), &vertices[0].px, vertices.size(),
+    sizeof(Vertex), resolution, options);
+std::vector<float> triangles(capacity * 3 * 3);
+size_t count = meshopt_remesh(&triangles[0], capacity, &indices[0], indices.size(), &vertices[0].px, vertices.size(),
+    sizeof(Vertex), resolution, options);
+triangles.resize(count * 3 * 3); // count <= capacity
+```
+
+The resulting mesh is generated as an unindexed array of triangles, with 3 floats indicating the position of each of 3 corners of the resulting triangle. If mesh attributes such as vertex normals, tangents or texture coordinates are required, they will need to be generated or transferred from the original mesh.
+
+The triangle count of the output scales with the resolution, but the scaling depends on the mesh. The example above runs remeshing twice: once without the output, to compute the upper bound on the number of triangles, and once more to do the actual remeshing. The initial counting pass is faster than the full remesh; however it's also possible to estimate the capacity and call `meshopt_remesh` on the output buffer directly. When the capacity is insufficient, `meshopt_remesh` writes as many triangles as possible and returns an upper bound on the total count; calling it again with a buffer of that size is guaranteed to succeed.
+
+When remeshing to reduce the triangle count, while it's possible to remesh to a smaller resolution, it is often preferable to remesh to a resolution that preserves enough detail and then simplify the resulting mesh to the desired triangle count using `meshopt_simplifyWithUpdate`. In this case, the mesh needs to be reindexed before simplification; as a shortcut, the position remap can be used as an index buffer together with the sparse simplification option. `meshopt_SimplifyPreserveFolds` is also important to keep thin double-sided geometry intact:
+
+```c++
+std::vector<float> new_positions = triangles;
+std::vector<unsigned int> new_indices(count * 3);
+meshopt_generatePositionRemap(&new_indices[0], &new_positions[0], count * 3, sizeof(float) * 3);
+
+new_indices.resize(meshopt_simplifyWithUpdate(&new_indices[0], count * 3, &new_positions[0], count * 3,
+    sizeof(float) * 3, NULL, 0, NULL, 0, NULL, target_index_count, target_error,
+    meshopt_SimplifySparse | meshopt_SimplifyPreserveFolds));
+new_positions.resize(meshopt_optimizeVertexFetch(&new_positions[0], &new_indices[0], new_indices.size(),
+    &new_positions[0], count * 3, sizeof(float) * 3) * 3);
+```
+
+If normals are needed in this workflow, it's recommended to generate them after simplification so that the simplifier is not restricted by the normal splits. Compared to simplifying the original mesh, remeshing also avoids the topological restrictions: the output of the remesher is closed, with every edge matched by an opposite edge, and with an unlimited `target_error` the simplifier should be able to reach an arbitrarily low target.
+
+The remesher uses a voxel-based algorithm; features closer than a voxel may get merged, and gaps smaller than a voxel may be closed. Notably, features that are thinner than a voxel but are large, such as a cape or a wing, will still be preserved unlike traditional distance field based methods; the output may be infinitely thin and double-sided, and may require backface culling to render correctly. Features that are thin in two dimensions, such as wires or strands, may disappear.
+
+To customize the behavior, additional options can be passed via `options` bitmask that adjust the behavior of the remesher:
+
+- `meshopt_RemeshShell` produces a two-sided shell that wraps around surfaces of the original mesh, instead of a solid mesh. By default, remesher will fill the closed interior, and geometry inside other geometry will be removed. This option is generally not recommended as it can double the number of triangles, and may produce self-intersecting geometry.
+- `meshopt_RemeshSolve` computes optimal output positions that approximate the original surface as closely as possible. This option is recommended unless more regular output is desired.
+
+> This feature is still experimental and is subject to change; API may be changed in future releases, and behavior may be improved. Additional features, such as thickening thin features, may be exposed through extra options in the future.
 
 ## Efficiency analyzers
 
@@ -761,7 +809,7 @@ This creates an index buffer suitable for rendering with triangle-with-adjacency
 
 Note that the use of geometry shaders may have a performance impact on some GPUs; in some cases alternative implementation strategies may be more efficient.
 
-### Tessellation with displacement mapping
+### Tessellation with displacement
 
 For hardware tessellation with crack-free displacement mapping, this library can generate a special index buffer that supports PN-AEN tessellation:
 
@@ -911,6 +959,18 @@ for (size_t i = 0; i < indices.size(); ++i)
 
 The algorithm uses a MikkTSpace-like construction but by default, uses a modified weighting scheme that significantly improves tangent quality around beveled regions in the mesh. If the normal maps are baked from higher resolution geometry using MikkTSpace weighting, it's possible to produce MikkTSpace-compatible tangents by passing `meshopt_TangentCompatible` option as an extra argument to the function.
 
+While it is expected that the normals come from the authored mesh, this library also provides an algorithm to generate normals from positions alone:
+
+```c++
+const float crease = 1.f; // 1 rad ~= 60 deg
+std::vector<vec3> normals(indices.size());
+meshopt_generateNormals(&normals[0].x, &indices[0], indices.size(), &vertices[0].px, vertices.size(), sizeof(Vertex), crease);
+```
+
+This function classifies edges as soft/hard based on the specified crease angle (in radians; 30/45/60 degrees are commonly used values) and computes a normal for every corner by averaging normals of incident faces connected by soft edges. Additionally, the optional `smoothing` parameter can be used to perform additional iterative smoothing of the resulting normals, with larger values resulting in smoother normals (recommended range `[0..5]`, defaults to `0`).
+
+Similarly to `meshopt_generateTangents`, this function computes per-corner normals (3 floats for each of 3 corners of each triangle). Applying them to mesh vertices requires de-indexing the mesh, or copying normals to existing vertices while duplicating vertices with different normals.
+
 ## Memory management
 
 Many algorithms allocate temporary memory to store intermediate results or accelerate processing. The amount of memory allocated is a function of various input parameters such as vertex count and index count. By default memory is allocated using `operator new` and `operator delete`; if these operators are overloaded by the application, the overloads will be used instead. Alternatively it's possible to specify custom allocation/deallocation functions using `meshopt_setAllocator`, e.g.
@@ -922,6 +982,8 @@ meshopt_setAllocator(malloc, free);
 > Note that the library expects the allocation function to either throw in case of out-of-memory (in which case the exception will propagate to the caller) or abort, so technically the use of `malloc` above isn't safe. If you want to handle out-of-memory errors without using C++ exceptions, you can use `setjmp`/`longjmp` instead.
 
 When building meshoptimizer as a shared library, allocations from the templated index wrappers provided in the header (used when index data is not `unsigned int`) will only be redirected to these callbacks if the library is built with `MESHOPTIMIZER_ALLOC_EXPORT` defined.
+
+When building meshoptimizer with MSVC, if a non-default calling convention is used such as `__vectorcall` (via `/Gv`), `MESHOPTIMIZER_ALLOC_CALLCONV` should be defined to match the calling convention of `operator new`/`delete`.
 
 Vertex, index and meshlet decoders (`meshopt_decodeVertexBuffer`, `meshopt_decodeIndexBuffer`, `meshopt_decodeIndexSequence`, `meshopt_decodeMeshlet`, `meshopt_decodeMeshletRaw`) do not allocate memory and work completely within the buffer space provided via arguments.
 
@@ -939,11 +1001,9 @@ Applications may configure the library to change the attributes of experimental 
 
 Currently, the following APIs are experimental:
 
-- `meshopt_SimplifyPermissive` mode for `meshopt_simplify*` functions
-- `meshopt_opacityMap*` functions (`meshopt_opacityMapMeasure`, `meshopt_opacityMapRasterize`, `meshopt_opacityMapCompact`, `meshopt_opacityMapEntrySize`)
-- `meshopt_generateTangents` function and `meshopt_Tangent*` flags
-- `meshopt_filterIndexBuffer` and `meshopt_filterIndexBufferMulti` functions
-- `meshopt_computePositionExponent` function
+- `meshopt_SimplifyPreserveFolds` and `meshopt_SimplifyErrorClamped` flags for `meshopt_simplify*` functions
+- `meshopt_generateNormals` function
+- `meshopt_remesh` function and `meshopt_Remesh*` flags
 
 ## License
 

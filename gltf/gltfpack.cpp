@@ -437,6 +437,9 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 		if (!settings.keep_attributes)
 			filterStreams(mesh, mi);
 
+		if (settings.mesh_normals && (!mi.unlit || settings.keep_attributes))
+			generateNormals(mesh, settings.normals_crease);
+
 		if (settings.mesh_tangents && (mi.needs_tangents || settings.keep_attributes))
 			generateTangents(mesh);
 	}
@@ -447,7 +450,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 	markNeededNodes(data, nodes, meshes, animations, settings);
 	markNeededMaterials(data, materials, meshes, settings);
 
-	if (settings.simplify_scaled && settings.simplify_ratio < 1)
+	if (settings.simplify_ratio < 1)
 		computeMeshQuality(meshes);
 
 	for (size_t i = 0; i < meshes.size(); ++i)
@@ -1262,8 +1265,6 @@ Settings defaults()
 	settings.mesh_dedup = true;
 	settings.simplify_ratio = 1.f;
 	settings.simplify_error = 1e-2f;
-	settings.simplify_attributes = true;
-	settings.simplify_scaled = true;
 
 	for (int kind = 0; kind < TextureKind__Count; ++kind)
 	{
@@ -1384,6 +1385,11 @@ int main(int argc, char** argv)
 		{
 			settings.mesh_tangents = true;
 		}
+		else if (strcmp(arg, "-gn") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		{
+			settings.mesh_normals = true;
+			settings.normals_crease = clamp(float(atof(argv[++i])), 0.f, 180.f);
+		}
 		else if (strcmp(arg, "-at") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.trn_bits = clamp(atoi(argv[++i]), 1, 24);
@@ -1451,17 +1457,7 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-sv") == 0)
 		{
-			fprintf(stderr, "Warning: attribute aware simplification is enabled by default; option -sv is only provided for compatibility and may be removed in the future\n");
-		}
-		else if (strcmp(arg, "-svd") == 0)
-		{
-			fprintf(stderr, "Warning: option -svd disables attribute aware simplification and is temporary; avoid production usage\n");
-			settings.simplify_attributes = false;
-		}
-		else if (strcmp(arg, "-ssd") == 0)
-		{
-			fprintf(stderr, "Warning: option -ssd disables scaled simplification error and is temporary; avoid production usage\n");
-			settings.simplify_scaled = false;
+			settings.simplify_update = true;
 		}
 		else if (strcmp(arg, "-sp") == 0)
 		{
@@ -1689,6 +1685,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nSimplification:\n");
 			fprintf(stderr, "\t-si R: simplify meshes targeting triangle/point count ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\t-se E: limit simplification error to E (default: 0.01 = 1%% deviation; E should be between 0 and 1)\n");
+			fprintf(stderr, "\t-sv: simplify with vertex position and attribute optimization\n");
 			fprintf(stderr, "\t-sp: use permissive simplification mode to allow simplification across attribute discontinuities\n");
 			fprintf(stderr, "\t-sa: aggressively simplify to the target ratio disregarding quality\n");
 			fprintf(stderr, "\t-slb: lock border vertices during simplification to avoid gaps on connected meshes\n");
@@ -1706,6 +1703,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-vnf: use floating point attributes for normals\n");
 			fprintf(stderr, "\t-vi: use interleaved vertex attributes (reduces compression efficiency)\n");
 			fprintf(stderr, "\t-gt: generate tangent frames when needed, replacing existing tangents\n");
+			fprintf(stderr, "\t-gn A: generate normals when absent, using crease angle A (degrees)\n");
 			fprintf(stderr, "\t-kv: keep source vertex attributes even if they aren't used\n");
 			fprintf(stderr, "\nAnimations:\n");
 			fprintf(stderr, "\t-at N: use N-bit quantization for translations (default: 16; N should be between 1 and 24)\n");
@@ -1768,9 +1766,9 @@ int main(int argc, char** argv)
 	}
 
 #ifdef GLTFPACK_NO_EXPERIMENTAL
-	if (settings.mesh_tangents)
+	if (settings.mesh_normals)
 	{
-		fprintf(stderr, "Option -gt is not available in this build\n");
+		fprintf(stderr, "Option -gn is not available in this build\n");
 		return 1;
 	}
 #endif

@@ -153,6 +153,7 @@ To control behavior of the algorithm more precisely, `flags` may specify an arra
 - `'Sparse'` improves simplification performance assuming input indices are a sparse subset of the mesh. This can be useful when simplifying small mesh subsets independently. For consistency, it is recommended to use absolute errors when sparse simplification is desired.
 - `'Prune'` allows removal of isolated components regardless of the topological restrictions inside the component. This is generally recommended for full-mesh simplification as it can improve quality and reduce triangle count; note that with this option, triangles connected to locked vertices may be removed as part of their component.
 - `'Regularize'` produces more regular triangle sizes and shapes during simplification, at some cost to geometric quality. This can improve geometric quality under deformation such as skinning. `'RegularizeLight'` can be used instead for a smaller regularization factor, reducing the impact on geometric quality.
+- `'Permissive'` allows collapses across attribute discontinuities, except for vertices that are tagged with `2` via `vertex_lock`.
 
 In addition to the `Prune` flag, you can explicitly prune isolated components under a target threshold by calling the `simplifyPrune` function:
 
@@ -170,7 +171,7 @@ simplifyWithAttributes: (indices: Uint32Array, vertex_positions: Float32Array, v
 
 This function takes an additional `vertex_attributes` buffer that contains all the attributes to be used. The `attribute_weights` array contains a weight for each attribute, which is used to balance the importance of each attribute during simplification. For normalized attributes like normals and vertex colors, a weight around 1.0 is usually appropriate; internally, a change of `1/weight` in attribute value over a distance `d` is approximately equivalent to a change of `d` in position. Using higher weights may be appropriate to preserve attribute quality at the cost of position quality. If the attribute has a different scale (e.g. unnormalized vertex colors in [0..255] range), the weight should be divided by the scaling factor (1/255 in this example).
 
-The optional `vertex_lock` parameter can be used to lock some vertices in place, preventing them from being moved during simplification. This is a binary array of the same length as the number of vertices, where `1` means that the vertex is locked and `0` means that it is free to move. This can be used to preserve seams or other important features of the mesh.
+The optional `vertex_lock` parameter can be used to lock some vertices in place, preventing them from being moved during simplification. This is an array of the same length as the number of vertices, where `1` means that the vertex is locked and `0` means that it is free to move. This can be used to preserve seams or other important features of the mesh. In permissive mode, `2` can be used to protect seams while allowing vertices to collapse along them.
 
 All simplification functions described so far reuse the original vertex buffer and only produce a new index buffer; however, for more aggressive simplification to retain visual quality, it may be necessary to adjust vertex data for optimal appearance. This can be done by using a variant of the simplification function that updates vertex positions and attributes, `simplifyWithUpdate`:
 
@@ -296,7 +297,17 @@ For each triangle *corner* this writes a normalized tangent vector (xyz) and an 
 
 Because tangents are computed per corner, applying them to mesh vertices requires de-indexing the mesh and generating a new index/vertex buffer afterwards, or using indexed data and copying tangents to existing vertex data while duplicating vertices with different tangents. With the indexed input, if it contains UV mirroring, vertices along the mirror edge may have different tangent spaces on different sides of the edge and need to be split - copying tangents to existing vertex data without splitting will not produce correct results.
 
-The algorithm uses a MikkTSpace-like construction but by default, uses a modified weighting scheme that significantly improves tangent quality around beveled regions in the mesh. If the normal maps are baked from higher resolution geometry using MikkTSpace weighting, it's possible to produce MikkTSpace-compatible tangents by passing `'Compatible'` option in `flags`
+The algorithm uses a MikkTSpace-like construction but by default, uses a modified weighting scheme that significantly improves tangent quality around beveled regions in the mesh. If the normal maps are baked from higher resolution geometry using MikkTSpace weighting, it's possible to produce MikkTSpace-compatible tangents by passing `'Compatible'` option in `flags`.
+
+Additionally, this module provides a function to generate vertex normals from positions alone:
+
+```ts
+generateNormals: (indices: Uint32Array | null, vertex_positions: Float32Array, vertex_positions_stride: number, crease_angle: number, smoothing?: number) => Float32Array;
+```
+
+This function classifies edges as soft/hard based on the specified crease angle (in radians; 30/45/60 degrees are commonly used values) and computes a normal for every corner by averaging normals of incident faces connected by soft edges. Additionally, the `smoothing` parameter can be used to perform additional iterative smoothing of the resulting normals, with larger values resulting in smoother normals (recommended range `[0..5]`).
+
+Similarly to `generateTangents`, the function returns an array of per-corner normals (3 floats for each of 3 corners of each triangle). Applying them to mesh vertices requires de-indexing the mesh, or copying normals to existing vertices while duplicating vertices with different normals.
 
 ## License
 

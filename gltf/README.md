@@ -20,7 +20,7 @@ By default gltfpack outputs regular `.glb`/`.gltf` files that have been optimize
 
 When using `-c` option, gltfpack outputs compressed `.glb`/`.gltf` files that use meshoptimizer codecs to reduce the download size further. Loading these files requires extending GLTF loaders with support for [EXT_meshopt_compression](https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Vendor/EXT_meshopt_compression/README.md) extension; three.js supports it in r122+ (requires calling `GLTFLoader.setMeshoptDecoder`), Babylon.js supports it in 5.0+ without further setup.
 
-For better compression, you can use `-cc` option which applies additional compression; additionally make sure that your content delivery method is configured to use deflate (gzip) - meshoptimizer codecs are designed to produce output that can be compressed further with general purpose compressors. For maximum compression, consider using [KHR_meshopt_compression](https://github.com/KhronosGroup/glTF/pull/2517) extension with a higher compression level (`-cz` option).
+For better compression, you can use `-cc` option which applies additional compression; additionally make sure that your content delivery method is configured to use deflate (gzip) - meshoptimizer codecs are designed to produce output that can be compressed further with general purpose compressors. For maximum compression, consider using [KHR_meshopt_compression](https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Khronos/KHR_meshopt_compression/README.md) extension with a higher compression level (`-cz` option).
 
 gltfpack can also compress textures using Basis Universal format stored in a KTX2 container (`-tc` flag, requires support for `KHR_texture_basisu`) or using WebP format (`-tw` flag, requires support for `EXT_texture_webp`).
 
@@ -101,6 +101,8 @@ Even if the source file does not use extensions, gltfpack may use some extension
 - EXT_texture_webp (used when requested via `-tw`)
 
 gltfpack does not support vendor-specific extensions or custom extensions, including ones defined in [Khronos glTF repository](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor). Unknown extension nodes are discarded from the output.
+
+Some Khronos extensions, notably Draco compression and extensions for interactive scenes (interactivity, animation pointer, node selectability/hoverability/visibility), are not supported.
 
 ## Custom data
 

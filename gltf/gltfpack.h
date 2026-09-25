@@ -1,5 +1,5 @@
 /**
- * gltfpack - version 1.2
+ * gltfpack - version 1.3
  *
  * Copyright (C) 2016-2026, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
  * Report bugs and download new versions at https://github.com/zeux/meshoptimizer
@@ -146,14 +146,16 @@ struct Settings
 	bool mesh_instancing;
 	bool mesh_interleaved;
 	bool mesh_tangents;
+	bool mesh_normals;
+
+	float normals_crease;
 
 	float simplify_ratio;
 	float simplify_error;
 	bool simplify_aggressive;
 	bool simplify_lock_borders;
-	bool simplify_attributes;
-	bool simplify_scaled;
 	bool simplify_permissive;
+	bool simplify_update;
 
 	bool texture_ktx2;
 	bool texture_webp;
@@ -336,6 +338,7 @@ void mergeMeshes(std::vector<Mesh>& meshes, const Settings& settings);
 void filterEmptyMeshes(std::vector<Mesh>& meshes);
 void filterStreams(Mesh& mesh, const MaterialInfo& mi);
 void generateTangents(Mesh& mesh);
+void generateNormals(Mesh& mesh, float crease_angle);
 
 void mergeMeshMaterials(cgltf_data* data, std::vector<Mesh>& meshes, const Settings& settings);
 void markNeededMaterials(cgltf_data* data, std::vector<MaterialInfo>& materials, const std::vector<Mesh>& meshes, const Settings& settings);
