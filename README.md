@@ -688,7 +688,7 @@ The resulting indices can be used to render the simplified point cloud; to reduc
 
 ### Voxel remeshing
 
-The triangle simplification algorithms described above operate on the original mesh topology and preserve the overall structure of the mesh. This limits the degree to which they can simplify and can restrict the types of simplification being done; small features can be removed but can't be merged together, and extra interior detail is often preserved until later stages of simplification. An alternative approach is to reconstruct an entirely new mesh, that has a similar shape to the original. This library provides a voxel-based remeshing algorithm for this purpose, that can generate a new mesh at a given voxel resolution [4..256]:
+The triangle simplification algorithms described above operate on the original mesh topology and preserve the overall structure of the mesh. This limits the degree to which they can simplify and can restrict the types of simplification being done; small features can be removed but can't be merged together, and extra interior detail is often preserved until later stages of simplification. An alternative approach is to reconstruct an entirely new mesh, that has a similar shape to the original. This library provides a voxel-based remeshing algorithm for this purpose, that can generate a new mesh at a given voxel resolution `[4..256]`:
 
 ```c++
 const int resolution = 100;
@@ -721,7 +721,7 @@ new_positions.resize(meshopt_optimizeVertexFetch(&new_positions[0], &new_indices
 
 If normals are needed in this workflow, it's recommended to generate them after simplification so that the simplifier is not restricted by the normal splits. Compared to simplifying the original mesh, remeshing also avoids the topological restrictions: the output of the remesher is closed, with every edge matched by an opposite edge, and with an unlimited `target_error` the simplifier should be able to reach an arbitrarily low target.
 
-The remesher uses a voxel-based algorithm; features under a voxel size that are next to each other will be merged, and gaps under a voxel size may be closed. Notably, features that are thinner than a voxel but are large, such as a cape or a wing, will still be preserved unlike traditional distance field based methods; the output may be infinitely thin and double-sided.
+The remesher uses a voxel-based algorithm; features closer than a voxel may get merged, and gaps smaller than a voxel may be closed. Notably, features that are thinner than a voxel but are large, such as a cape or a wing, will still be preserved unlike traditional distance field based methods; the output may be infinitely thin and double-sided, and may require backface culling to render correctly. Features that are thin in two dimensions, such as wires or strands, may disappear.
 
 To customize the behavior, additional options can be passed via `options` bitmask that adjust the behavior of the remesher:
 
@@ -806,7 +806,7 @@ This creates an index buffer suitable for rendering with triangle-with-adjacency
 
 Note that the use of geometry shaders may have a performance impact on some GPUs; in some cases alternative implementation strategies may be more efficient.
 
-### Tessellation with displacement mapping
+### Tessellation with displacement
 
 For hardware tessellation with crack-free displacement mapping, this library can generate a special index buffer that supports PN-AEN tessellation:
 
