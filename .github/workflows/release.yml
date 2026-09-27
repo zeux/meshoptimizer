@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - 'master'
-      - 'archive'
     paths-ignore:
       - '*.md'
 
@@ -81,13 +80,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: v1.3
       - name: git archive
         run: |
           VERSION=$(sed -n 's/^project(meshoptimizer VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
           git archive --format=tar.gz --prefix=meshoptimizer-$VERSION/ -o meshoptimizer-$VERSION.tar.gz HEAD -- \
-            CMakeLists.txt LICENSE.md README.md demo extern gltf js src tools/objloader.cpp \
+            CMakeLists.txt LICENSE.md README.md demo extern gltf js src \
             ':(exclude)demo/pirate.*' ':(exclude)demo/*.html' ':(exclude)demo/*.js'
       - uses: actions/upload-artifact@v7
         with:

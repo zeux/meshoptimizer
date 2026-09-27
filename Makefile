@@ -8,7 +8,7 @@ BUILD=build/$(config)
 LIBRARY_SOURCES=$(wildcard src/*.cpp)
 LIBRARY_OBJECTS=$(LIBRARY_SOURCES:%=$(BUILD)/%.o)
 
-DEMO_SOURCES=$(wildcard demo/*.c demo/*.cpp) tools/objloader.cpp
+DEMO_SOURCES=$(wildcard demo/*.c demo/*.cpp)
 DEMO_OBJECTS=$(DEMO_SOURCES:%=$(BUILD)/%.o)
 
 GLTFPACK_SOURCES=$(wildcard gltf/*.cpp)
@@ -218,7 +218,7 @@ js/meshopt_decoder.cjs: js/meshopt_decoder.mjs
 $(DEMO): $(DEMO_OBJECTS) $(LIBRARY)
 	$(CXX) $^ $(LDFLAGS) -o $@
 
-vcachetuner: tools/vcachetuner.cpp tools/objloader.cpp $(LIBRARY)
+vcachetuner: tools/vcachetuner.cpp $(LIBRARY)
 	$(CXX) $^ -fopenmp $(CXXFLAGS) -std=c++11 $(LDFLAGS) -o $@
 
 codecbench: tools/codecbench.cpp $(LIBRARY)
