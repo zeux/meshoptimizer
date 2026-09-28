@@ -1,3 +1,7 @@
+#ifndef _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+
 #include "../src/meshoptimizer.h"
 
 #include <assert.h>
@@ -9,6 +13,7 @@
 
 #include <vector>
 
+#define FAST_OBJ_IMPLEMENTATION
 #include "../extern/fast_obj.h"
 
 #define SDEFL_IMPLEMENTATION
