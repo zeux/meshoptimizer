@@ -184,6 +184,7 @@ typedef enum cgltf_component_type
 	cgltf_component_type_r_16u, /* UNSIGNED_SHORT */
 	cgltf_component_type_r_32u, /* UNSIGNED_INT */
 	cgltf_component_type_r_32f, /* FLOAT */
+	cgltf_component_type_r_16f, /* HALF_FLOAT */
     cgltf_component_type_max_enum
 } cgltf_component_type;
 
@@ -4382,7 +4383,7 @@ static int cgltf_parse_json_diffuse_transmission(cgltf_options* options, jsmntok
 	// Defaults
 	cgltf_fill_float_array(out_diff_transmission->diffuse_transmission_color_factor, 3, 1.0f);
 	out_diff_transmission->diffuse_transmission_factor = 0.f;
-	
+
 	for (int j = 0; j < size; ++j)
 	{
 		CGLTF_CHECK_KEY(tokens[i]);
