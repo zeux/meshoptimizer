@@ -36,15 +36,21 @@ static unsigned int findStripFirst(const unsigned int buffer[][3], unsigned int 
 
 static int findStripNext(const unsigned int buffer[][3], unsigned int buffer_size, unsigned int e0, unsigned int e1)
 {
+	unsigned long long e = ((unsigned long long)e0 << 32) | e1;
+
 	for (size_t i = 0; i < buffer_size; ++i)
 	{
 		unsigned int a = buffer[i][0], b = buffer[i][1], c = buffer[i][2];
 
-		if (e0 == a && e1 == b)
+		unsigned long long ab = ((unsigned long long)a << 32) | b;
+		unsigned long long bc = ((unsigned long long)b << 32) | c;
+		unsigned long long ca = ((unsigned long long)c << 32) | a;
+
+		if (e == ab)
 			return (int(i) << 2) | 2;
-		else if (e0 == b && e1 == c)
+		else if (e == bc)
 			return (int(i) << 2) | 0;
-		else if (e0 == c && e1 == a)
+		else if (e == ca)
 			return (int(i) << 2) | 1;
 	}
 
@@ -132,8 +138,9 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 			// find next triangle (note that edge order flips on every iteration)
 			// in some cases we need to perform a swap to pick a different outgoing triangle edge
 			// for [a b c], the default strip edge is [b c], but we might want to use [a c]
-			int cont = findStripNext(buffer, buffer_size, parity ? strip[1] : v, parity ? v : strip[1]);
-			int swap = findStripNext(buffer, buffer_size, parity ? v : strip[0], parity ? strip[0] : v);
+			// note: we skip the search if the older strip vertex has no live triangles left for performance
+			int cont = valence[strip[1]] ? findStripNext(buffer, buffer_size, parity ? strip[1] : v, parity ? v : strip[1]) : -1;
+			int swap = valence[strip[0]] ? findStripNext(buffer, buffer_size, parity ? v : strip[0], parity ? strip[0] : v) : -1;
 
 			// when both edges have a neighbor, pick triangle with fewer neighbors to avoid future dead-ends
 			// this is locally sub-optimal (we spend one extra index to swap) but creates a smaller output in the end
