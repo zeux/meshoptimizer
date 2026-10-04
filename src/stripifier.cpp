@@ -47,6 +47,13 @@ static int findStripNext(const unsigned int buffer[][3], unsigned int buffer_siz
 	return -1;
 }
 
+static unsigned int countSharedVertices(const unsigned int* tri, const unsigned char* valence)
+{
+	unsigned char va = valence[tri[0]], vb = valence[tri[1]], vc = valence[tri[2]];
+
+	return (va > 1) + (vb > 1) + (vc > 1);
+}
+
 } // namespace meshopt
 
 size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, size_t index_count, size_t vertex_count, unsigned int restart_index)
@@ -58,7 +65,7 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 
 	meshopt_Allocator allocator;
 
-	const size_t buffer_capacity = 8;
+	const size_t buffer_capacity = 11;
 
 	unsigned int buffer[buffer_capacity][3] = {};
 	unsigned int buffer_size = 0;
@@ -121,7 +128,12 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 			// in some cases we need to perform a swap to pick a different outgoing triangle edge
 			// for [a b c], the default strip edge is [b c], but we might want to use [a c]
 			int cont = findStripNext(buffer, buffer_size, parity ? strip[1] : v, parity ? v : strip[1]);
-			int swap = cont < 0 ? findStripNext(buffer, buffer_size, parity ? v : strip[0], parity ? strip[0] : v) : -1;
+			int swap = findStripNext(buffer, buffer_size, parity ? v : strip[0], parity ? strip[0] : v);
+
+			// when both edges have a neighbor, pick triangle with fewer neighbors to avoid future dead-ends
+			// this is locally sub-optimal (we spend one extra index to swap) but creates a smaller output in the end
+			if (cont >= 0 && swap >= 0 && countSharedVertices(buffer[swap >> 2], valence) < countSharedVertices(buffer[cont >> 2], valence))
+				cont = -1;
 
 			if (cont < 0 && swap >= 0)
 			{
