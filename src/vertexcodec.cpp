@@ -197,14 +197,14 @@ static size_t encodeBytesGroupMeasure(const unsigned char* buffer, int bits)
 	if (bits == 8)
 		return kByteGroupSize;
 
-	size_t result = kByteGroupSize * bits / 8;
-
 	unsigned char sentinel = (1 << bits) - 1;
 
+	// equivalent to counting buffer[i] >= sentinel; using int accumulator and integer arithmetic vectorizes better than comparisons
+	int rest = 0;
 	for (size_t i = 0; i < kByteGroupSize; ++i)
-		result += buffer[i] >= sentinel;
+		rest += (buffer[i] + 256 - sentinel) >> 8;
 
-	return result;
+	return kByteGroupSize * bits / 8 + size_t(rest);
 }
 
 static unsigned char* encodeBytesGroup(unsigned char* data, const unsigned char* buffer, int bits)
