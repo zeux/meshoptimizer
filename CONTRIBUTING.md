@@ -28,17 +28,16 @@ As for naming conventions, this library uses `snake_case` for variables, `lowerC
 
 ## Dependencies
 
-Please note that this library uses C89 interface for all APIs and a C++98 implementation - C++11 features can not be used.
-This choice is made to maximize compatibility to make sure that any toolchain, including legacy proprietary gaming console toolchains, can compile this code.
-
+Please note that this library uses C89 interface for all APIs and a C++11 implementation.
 Additionally, the library code has zero external dependencies, does not depend on STL and does not use RTTI or exceptions.
-This, again, maximizes compatibility and makes sure the library can be used in environments where STL use is discouraged or prohibited, as well as maximizing runtime performance and minimizing compilation times.
+This maximizes compatibility and makes sure the library can be used in environments where STL use is discouraged or prohibited, as well as maximizing runtime performance and minimizing compilation times.
 
-The demo program uses STL since it serves as an example of usage and as a test harness, not as production-ready code.
+gltfpack and demo code (tests, `clusterlod.h`) use memory-friendly STL containers like `std::vector` when appropriate, which does not affect the library users.
+gltfpack additionally vendors `cgltf` and `fast_obj` dependencies, and can be optionally compiled against externally provided `basis_universal` or `libwebp`.
 
 ## Testing
 
-All pull requests will run through a continuous integration pipeline using GitHub Actions that will run the built-in unit tests and integration tests on Windows, macOS and Linux with gcc, clang and msvc compilers.
+All pull requests will run through a continuous integration pipeline using GitHub Actions that will run the built-in unit tests and integration tests on Windows, macOS and Linux with GCC, Clang and MSVC compilers.
 You can run the tests yourself using `make test` or building the demo program with `cmake -DBUILD_DEMO=ON` and running it.
 
 Unit tests can be found in `demo/tests.cpp` and functional tests - in `demo/main.cpp`; when making code changes please try to make sure they are covered by an existing test or add a new test accordingly.
@@ -46,7 +45,7 @@ Unit tests can be found in `demo/tests.cpp` and functional tests - in `demo/main
 ## Documentation
 
 Documentation for this library resides in the `meshoptimizer.h` header, with examples as part of a usage manual available in `README.md`.
-Changes to documentation are always welcome and should use issues/pull requests as outlined above; please note that `README.md` only contains documentation for stable algorithms, as experimental algorithms may change the interface without concern for backwards compatibility.
+Changes to documentation are always welcome and should use issues/pull requests as outlined above; please note that `README.md` may omit documentation for experimental algorithms as they may change the interface without concern for backwards compatibility.
 
 ## Sensitive communication
 
