@@ -789,7 +789,7 @@ size_t strip_size = meshopt_stripify(&strip[0], indices, index_count, vertex_cou
 ```
 
 Typically you should expect triangle strips to have ~50-60% of indices compared to triangle lists (~1.5-1.8 indices per triangle) and have ~5% worse ACMR.
-Note that triangle strips can be stitched with or without restart index support. Using restart indices can result in ~10% smaller index buffers, but on some GPUs restart indices may result in decreased performance.
+Note that triangle strips can be stitched with or without restart index support. Using restart indices can result in ~5-10% smaller index buffers, but on some GPUs restart indices may result in decreased performance.
 
 To reduce the triangle strip size further, it's recommended to use `meshopt_optimizeVertexCacheStrip` instead of `meshopt_optimizeVertexCache` when optimizing for vertex cache. This trades off some efficiency in vertex transform for smaller index buffers.
 

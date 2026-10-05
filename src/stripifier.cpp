@@ -87,8 +87,8 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 
 	size_t strip_size = 0;
 
-	// compute vertex valence; this is used to prioritize starting triangle for strips
-	// note: we use 8-bit counters for performance; for outlier vertices the valence is incorrect but that just affects the heuristic
+	// compute vertex valence; this is used to prioritize starting and continuation triangles for strips
+	// note: we use 8-bit counters for performance; for outlier vertices the valence is incorrect but that just affects the heuristics
 	unsigned char* valence = allocator.allocate<unsigned char>(vertex_count);
 	memset(valence, 0, vertex_count);
 
@@ -130,7 +130,7 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 			memmove(buffer[i], buffer[i + 1], (buffer_size - i - 1) * sizeof(buffer[0]));
 			buffer_size--;
 
-			// update vertex valences for strip start heuristic
+			// update vertex valences for strip start/next heuristic
 			valence[a]--;
 			valence[b]--;
 			valence[c]--;
@@ -189,7 +189,7 @@ size_t meshopt_stripify(unsigned int* destination, const unsigned int* indices, 
 			memmove(buffer[i], buffer[i + 1], (buffer_size - i - 1) * sizeof(buffer[0]));
 			buffer_size--;
 
-			// update vertex valences for strip start heuristic
+			// update vertex valences for strip start/next heuristic
 			valence[a]--;
 			valence[b]--;
 			valence[c]--;
