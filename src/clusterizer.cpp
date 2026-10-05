@@ -560,9 +560,12 @@ static size_t kdtreeBuild(size_t offset, KDNode* nodes, size_t node_count, const
 	float split = mean[axis];
 	size_t middle = kdtreePartition(indices, count, points, stride, axis, split);
 
-	// when the partition is degenerate simply consolidate the points into a single node
-	// this also ensures recursion depth is bounded on pathological inputs
-	if (middle <= leaf_size / 2 || middle >= count - leaf_size / 2 || depth >= kMeshletMaxTreeDepth)
+	// when the partition is degenerate, consolidate the points into a single node; also ensure recursion depth is bounded on pathological inputs
+	if (middle == 0 || middle == count || depth >= kMeshletMaxTreeDepth)
+		return kdtreeBuildLeaf(offset, nodes, node_count, indices, count);
+
+	// when the partition is unbalanced, consolidate the points into a single small node; large nodes are still split to prevent outlier points from creating very large leaves
+	if ((middle <= leaf_size / 2 || middle >= count - leaf_size / 2) && count <= leaf_size * 8)
 		return kdtreeBuildLeaf(offset, nodes, node_count, indices, count);
 
 	KDNode& result = nodes[offset];
