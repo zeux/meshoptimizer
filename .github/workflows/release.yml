@@ -11,7 +11,7 @@ jobs:
   gltfpack:
     strategy:
       matrix:
-        os: [{ name: windows, version: windows-latest }, { name: ubuntu, version: ubuntu-22.04 }, { name: macos, version: macos-14 }]
+        os: [{ name: windows, version: windows-latest }, { name: ubuntu, version: ubuntu-22.04 }, { name: macos, version: macos-15 }]
     name: gltfpack-${{matrix.os.name}}
     runs-on: ${{matrix.os.version}}
     steps:

@@ -233,9 +233,13 @@ jobs:
           sed -i -e "s/#####\(.*\)\(\/\/ unreachable.*\)/    -\1\2/" *.gcov
           bash <(curl -s https://codecov.io/bash) -f './gltf*.gcov' -X search -t ${{secrets.CODECOV_TOKEN}} -B ${{github.ref}}
 
-  macos-iphone:
-    runs-on: macos-14
+  android-armv7:
+    runs-on: ubuntu-latest
+    env:
+      werror: 1
     steps:
       - uses: actions/checkout@v6
       - name: make
-        run: make -j2 config=iphone
+        run: |
+          NDKBIN=$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin
+          make -j2 config=release CC=$NDKBIN/armv7a-linux-androideabi21-clang CXX=$NDKBIN/armv7a-linux-androideabi21-clang++
