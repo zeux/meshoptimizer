@@ -93,6 +93,7 @@ else()
 endif()
 
 target_include_directories(meshoptimizer INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>")
+set_target_properties(meshoptimizer PROPERTIES CXX_STANDARD 11)
 
 if(MESHOPT_BUILD_SHARED_LIBS)
     set_target_properties(meshoptimizer PROPERTIES CXX_VISIBILITY_PRESET hidden)
