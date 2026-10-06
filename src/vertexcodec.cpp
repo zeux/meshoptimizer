@@ -190,6 +190,7 @@ static bool encodeBytesGroupZero(const unsigned char* buffer)
 static size_t encodeBytesGroupMeasure(const unsigned char* buffer, int bits)
 {
 	assert(bits >= 0 && bits <= 8);
+	assert(kByteGroupSize == sizeof(unsigned long long) * 2);
 
 	if (bits == 0)
 		return encodeBytesGroupZero(buffer) ? 0 : size_t(-1);
@@ -197,14 +198,20 @@ static size_t encodeBytesGroupMeasure(const unsigned char* buffer, int bits)
 	if (bits == 8)
 		return kByteGroupSize;
 
-	unsigned char sentinel = (1 << bits) - 1;
+	unsigned long long v[2];
+	memcpy(v, buffer, sizeof(v));
 
-	// equivalent to counting buffer[i] >= sentinel; using int accumulator and integer arithmetic vectorizes better than comparisons
-	int rest = 0;
-	for (size_t i = 0; i < kByteGroupSize; ++i)
-		rest += (buffer[i] + 256 - sentinel) >> 8;
+	unsigned long long sent = ((1ull << bits) - 1) * 0x0101010101010101ull;
+	unsigned long long mask = 0x8080808080808080ull;
 
-	return kByteGroupSize * bits / 8 + size_t(rest);
+	// each byte gets high bit 1 iff x >= sentinel; subtraction borrows high bit, so we need to reset high bit to 1 for all bytes that already had it as 1
+	unsigned long long m0 = (((v[0] | mask) - sent) | v[0]) & mask;
+	unsigned long long m1 = (((v[1] | mask) - sent) | v[1]) & mask;
+
+	// adds all bytes together to get the number of bytes that were >= sentinel
+	size_t rest = size_t((((m0 >> 7) + (m1 >> 7)) * 0x0101010101010101ull) >> 56);
+
+	return kByteGroupSize / 8 * bits + rest;
 }
 
 static unsigned char* encodeBytesGroup(unsigned char* data, const unsigned char* buffer, int bits)
@@ -221,8 +228,8 @@ static unsigned char* encodeBytesGroup(unsigned char* data, const unsigned char*
 		return data + kByteGroupSize;
 	}
 
-	size_t byte_size = 8 / bits;
-	assert(kByteGroupSize % byte_size == 0);
+	assert(8 % bits == 0);
+	size_t byte_size = size_t(8) >> (bits >> 1); // 8 / bits for bits 1/2/4
 
 	// fixed portion: bits bits for each value
 	// variable portion: full byte for each out-of-range value (using 1...1 as sentinel)
