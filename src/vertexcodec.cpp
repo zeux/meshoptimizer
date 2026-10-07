@@ -328,27 +328,27 @@ static unsigned char* encodeBytes(unsigned char* data, unsigned char* data_end, 
 }
 
 template <typename T, bool Xor>
-static void encodeDeltas1(unsigned char* buffer, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned char last_vertex[256], size_t k, int rot)
+static void encodeDeltas1(unsigned char* buffer, const unsigned char* vertex, size_t vertex_count, size_t vertex_size, const unsigned char* last_vertex, int rot)
 {
-	size_t k0 = k & ~(sizeof(T) - 1);
-	int ks = (k & (sizeof(T) - 1)) * 8;
-
-	T p = last_vertex[k0];
-	for (size_t j = 1; j < sizeof(T); ++j)
-		p |= T(last_vertex[k0 + j]) << (j * 8);
-
-	const unsigned char* vertex = vertex_data + k0;
-
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
-		T v = vertex[0];
-		for (size_t j = 1; j < sizeof(T); ++j)
-			v |= vertex[j] << (j * 8);
+		for (size_t k = 0; k < 4; k += sizeof(T))
+		{
+			T p = last_vertex[k];
+			for (size_t j = 1; j < sizeof(T); ++j)
+				p |= last_vertex[k + j] << (j * 8);
 
-		T d = Xor ? T(rotate(v ^ p, rot)) : zigzag(T(v - p));
+			T v = vertex[k];
+			for (size_t j = 1; j < sizeof(T); ++j)
+				v |= vertex[k + j] << (j * 8);
 
-		buffer[i] = (unsigned char)(d >> ks);
-		p = v;
+			T d = Xor ? T(rotate(v ^ p, rot)) : zigzag(T(v - p));
+
+			for (size_t j = 0; j < sizeof(T); ++j)
+				buffer[(k + j) * kVertexBlockMaxSize + i] = (unsigned char)(d >> (j * 8));
+		}
+
+		last_vertex = vertex;
 		vertex += vertex_size;
 	}
 }
@@ -358,11 +358,11 @@ static void encodeDeltas(unsigned char* buffer, const unsigned char* vertex_data
 	switch (channel & 3)
 	{
 	case 0:
-		return encodeDeltas1<unsigned char, false>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, 0);
+		return encodeDeltas1<unsigned char, false>(buffer, vertex_data + k, vertex_count, vertex_size, last_vertex + k, 0);
 	case 1:
-		return encodeDeltas1<unsigned short, false>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, 0);
+		return encodeDeltas1<unsigned short, false>(buffer, vertex_data + k, vertex_count, vertex_size, last_vertex + k, 0);
 	case 2:
-		return encodeDeltas1<unsigned int, true>(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, channel >> 4);
+		return encodeDeltas1<unsigned int, true>(buffer, vertex_data + k, vertex_count, vertex_size, last_vertex + k, channel >> 4);
 	default:
 		assert(!"Unsupported channel encoding"); // unreachable
 	}
@@ -418,7 +418,7 @@ static int estimateRotate(const unsigned char* vertex_data, size_t vertex_count,
 
 static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, size_t k, size_t vertex_block_size, size_t block_skip, int max_channel, int xor_rot)
 {
-	unsigned char block[kVertexBlockMaxSize];
+	unsigned char blocks[kVertexBlockMaxSize * 4];
 	assert(vertex_block_size <= kVertexBlockMaxSize);
 
 	unsigned char last_vertex[256] = {};
@@ -435,12 +435,16 @@ static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count
 
 		// we sometimes encode elements we didn't fill when rounding to kByteGroupSize
 		if (block_size < block_size_aligned)
-			memset(block + block_size, 0, block_size_aligned - block_size);
+			for (size_t j = 0; j < 4; ++j)
+				memset(blocks + j * kVertexBlockMaxSize + block_size, 0, block_size_aligned - block_size);
 
 		for (int channel = 0; channel < max_channel; ++channel)
 			for (size_t j = 0; j < 4; ++j)
 			{
-				encodeDeltas(block, vertex_data + i * vertex_size, block_size, vertex_size, last_vertex, k + j, channel | (xor_rot << 4));
+				if (j == 0)
+					encodeDeltas(blocks, vertex_data + i * vertex_size, block_size, vertex_size, last_vertex, k, channel | (xor_rot << 4));
+
+				const unsigned char* block = blocks + j * kVertexBlockMaxSize;
 
 				for (size_t ig = 0; ig < block_size; ig += kByteGroupSize)
 				{
@@ -518,13 +522,13 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 	assert(vertex_count > 0 && vertex_count <= kVertexBlockMaxSize);
 	assert(vertex_size % 4 == 0);
 
-	unsigned char buffer[kVertexBlockMaxSize];
-	assert(sizeof(buffer) % kByteGroupSize == 0);
+	unsigned char buffers[kVertexBlockMaxSize * 4];
+	assert(kVertexBlockMaxSize % kByteGroupSize == 0);
 
 	size_t vertex_count_aligned = (vertex_count + kByteGroupSize - 1) & ~(kByteGroupSize - 1);
 
 	// we sometimes encode elements we didn't fill when rounding to kByteGroupSize
-	memset(buffer, 0, sizeof(buffer));
+	memset(buffers, 0, sizeof(buffers));
 
 	size_t control_size = version == 0 ? 0 : vertex_size / 4;
 	if (size_t(data_end - data) < control_size)
@@ -537,7 +541,10 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 
 	for (size_t k = 0; k < vertex_size; ++k)
 	{
-		encodeDeltas(buffer, vertex_data, vertex_count, vertex_size, last_vertex, k, version == 0 ? 0 : channels[k / 4]);
+		if (k % 4 == 0)
+			encodeDeltas(buffers, vertex_data, vertex_count, vertex_size, last_vertex, k, version == 0 ? 0 : channels[k / 4]);
+
+		const unsigned char* buffer = buffers + (k % 4) * kVertexBlockMaxSize;
 
 #if TRACE
 		const unsigned char* olddata = data;
