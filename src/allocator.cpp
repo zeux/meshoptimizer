@@ -3,6 +3,118 @@
 
 #include <assert.h>
 
+// allocator cache requires std::atomic and thread_local for thread safety; if these are not available, meshopt_setAllocatorCache is not supported
+#if !defined(MESHOPTIMIZER_ALLOC_NOCACHE) && __cplusplus < 201103L
+#define MESHOPTIMIZER_ALLOC_NOCACHE
+#endif
+
+#ifndef MESHOPTIMIZER_ALLOC_NOCACHE
+#include <atomic>
+#endif
+
+#ifndef MESHOPTIMIZER_ALLOC_NOCACHE
+namespace meshopt
+{
+
+struct GlobalCache
+{
+	void* data;
+	size_t block_size;
+	uint64_t all_blocks;
+
+	std::atomic<uint64_t> blocks{0};
+};
+
+struct LocalCache
+{
+	void* block;
+	size_t offset;
+	uint64_t block_mask;
+};
+
+static GlobalCache gCache;
+thread_local LocalCache gCacheLocal;
+
+static void* MESHOPTIMIZER_ALLOC_CALLCONV cacheAllocate(size_t size)
+{
+	GlobalCache& global = gCache;
+	LocalCache& local = gCacheLocal;
+
+	// try to grab an available local block
+	if (local.block == NULL && global.blocks.load() != 0 && size < global.block_size)
+	{
+		uint64_t blocks, mask;
+
+		do
+		{
+			blocks = global.blocks.load();
+			// prefer last index for coherency, but settle for lowest bit otherwise
+			mask = (blocks & local.block_mask) ? local.block_mask : blocks & -blocks;
+			// no available block, unlikely to get one soon
+			if (blocks == 0)
+				break;
+		} while (!global.blocks.compare_exchange_weak(blocks, blocks & ~mask));
+
+		if (mask)
+		{
+			// extract block index from mask (must only have one bit set)
+			int index = -1;
+			for (int i = 0; i < 64; ++i)
+				if (mask & (1ull << i))
+				{
+					index = i;
+					break;
+				}
+
+			assert(index >= 0);
+			assert(mask && (mask & (mask - 1)) == 0);
+
+			local.block = static_cast<char*>(global.data) + index * global.block_size;
+			local.block_mask = mask;
+		}
+	}
+
+	// allocate from local block if any
+	if (local.block && size < global.block_size && local.offset < global.block_size - size)
+	{
+		void* ptr = static_cast<char*>(local.block) + local.offset;
+		local.offset += size;
+		local.offset = (local.offset + 15) & ~size_t(15); // align future allocations to 16b
+		return ptr;
+	}
+
+	// fall back to system allocator
+	return ::operator new(size);
+}
+
+static void MESHOPTIMIZER_ALLOC_CALLCONV cacheDeallocate(void* ptr)
+{
+	GlobalCache& global = gCache;
+	LocalCache& local = gCacheLocal;
+
+	// has our allocation come from thread cache?
+	if (local.block && ptr >= local.block && ptr < static_cast<char*>(local.block) + global.block_size)
+	{
+		// meshopt allocations are guaranteed to be stack ordered
+		assert(ptr <= static_cast<char*>(local.block) + local.offset);
+		local.offset = static_cast<char*>(ptr) - static_cast<char*>(local.block);
+
+		// return local block to the pool
+		if (local.offset == 0)
+		{
+			assert(local.block_mask);
+			global.blocks |= local.block_mask;
+			local.block = NULL;
+			// keep block_mask as an affinity hint for the next allocation
+		}
+	}
+	else
+		::operator delete(ptr);
+}
+
+} // namespace meshopt
+#endif
+
 #ifdef MESHOPTIMIZER_ALLOC_EXPORT
 meshopt_Allocator::Storage& meshopt_Allocator::storage()
 {
@@ -19,3 +131,36 @@ void meshopt_setAllocator(void* (MESHOPTIMIZER_ALLOC_CALLCONV* allocate)(size_t)
 	s.allocate = allocate;
 	s.deallocate = deallocate;
 }
+
+#ifndef MESHOPTIMIZER_ALLOC_NOCACHE
+void meshopt_setAllocatorCache(size_t block_count, size_t block_size)
+{
+	using namespace meshopt;
+
+	assert(block_count <= 64);
+
+	// reset prior global state
+	// note: all previously allocated blocks must have been returned at this point; this is guaranteed by the absence of concurrent execution with meshopt_/clod functions
+	assert(gCache.blocks.load() == gCache.all_blocks);
+	::operator delete(gCache.data);
+	gCache.data = NULL;
+	gCache.block_size = 0;
+	gCache.all_blocks = 0;
+	gCache.blocks = 0;
+
+	block_size &= ~size_t(15);
+
+	if (block_count == 0 || block_size == 0)
+	{
+		meshopt_setAllocator(::operator new, ::operator delete);
+		return;
+	}
+
+	// allocate a block for each thread and mark each block as available
+	gCache.data = ::operator new(block_count * block_size);
+	gCache.block_size = block_size;
+	gCache.blocks = gCache.all_blocks = (block_count == 64) ? ~0ull : (1ull << block_count) - 1;
+
+	meshopt_setAllocator(cacheAllocate, cacheDeallocate);
+}
+#endif
