@@ -2,9 +2,10 @@
 #include "meshoptimizer.h"
 
 #include <assert.h>
+#include <stdint.h>
 
 // allocator cache requires std::atomic and thread_local for thread safety; if these are not available, meshopt_setAllocatorCache is not supported
-#if !defined(MESHOPTIMIZER_ALLOC_NOCACHE) && __cplusplus < 201103L
+#if !defined(MESHOPTIMIZER_ALLOC_NOCACHE) && __cplusplus < 201103L && !(defined(_MSC_VER) && _MSC_VER >= 1900)
 #define MESHOPTIMIZER_ALLOC_NOCACHE
 #endif
 
@@ -22,7 +23,8 @@ struct GlobalCache
 	size_t block_size;
 	uint64_t all_blocks;
 
-	std::atomic<uint64_t> blocks{0};
+	// available block mask; alignas to avoid false sharing between threads
+	alignas(128) std::atomic<uint64_t> blocks{0};
 };
 
 struct LocalCache
@@ -33,7 +35,7 @@ struct LocalCache
 };
 
 static GlobalCache gCache;
-thread_local LocalCache gCacheLocal;
+static thread_local LocalCache gCacheLocal;
 
 static void* MESHOPTIMIZER_ALLOC_CALLCONV cacheAllocate(size_t size)
 {
