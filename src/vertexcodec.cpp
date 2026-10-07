@@ -328,7 +328,7 @@ static unsigned char* encodeBytes(unsigned char* data, unsigned char* data_end, 
 }
 
 template <typename T, bool Xor>
-static void encodeDeltas1(unsigned char* buffer, const unsigned char* vertex, size_t vertex_count, size_t vertex_size, const unsigned char* last_vertex, int rot)
+static void encodeDeltas4(unsigned char* buffer, const unsigned char* vertex, size_t vertex_count, size_t vertex_size, const unsigned char* last_vertex, int rot)
 {
 	for (size_t i = 0; i < vertex_count; ++i)
 	{
@@ -355,14 +355,15 @@ static void encodeDeltas1(unsigned char* buffer, const unsigned char* vertex, si
 
 static void encodeDeltas(unsigned char* buffer, const unsigned char* vertex_data, size_t vertex_count, size_t vertex_size, const unsigned char last_vertex[256], size_t k, int channel)
 {
+	// encode deltas for a single channel (4 bytes per vertex) into [buffer + 0..3 * kVertexBlockMaxSize]
 	switch (channel & 3)
 	{
 	case 0:
-		return encodeDeltas1<unsigned char, false>(buffer, vertex_data + k, vertex_count, vertex_size, last_vertex + k, 0);
+		return encodeDeltas4<unsigned char, false>(buffer, vertex_data + k, vertex_count, vertex_size, last_vertex + k, 0);
 	case 1:
-		return encodeDeltas1<unsigned short, false>(buffer, vertex_data + k, vertex_count, vertex_size, last_vertex + k, 0);
+		return encodeDeltas4<unsigned short, false>(buffer, vertex_data + k, vertex_count, vertex_size, last_vertex + k, 0);
 	case 2:
-		return encodeDeltas1<unsigned int, true>(buffer, vertex_data + k, vertex_count, vertex_size, last_vertex + k, channel >> 4);
+		return encodeDeltas4<unsigned int, true>(buffer, vertex_data + k, vertex_count, vertex_size, last_vertex + k, channel >> 4);
 	default:
 		assert(!"Unsupported channel encoding"); // unreachable
 	}
@@ -441,6 +442,7 @@ static int estimateChannel(const unsigned char* vertex_data, size_t vertex_count
 		for (int channel = 0; channel < max_channel; ++channel)
 			for (size_t j = 0; j < 4; ++j)
 			{
+				// fill blocks with deltas for 4 bytes per vertex (current channel) at once
 				if (j == 0)
 					encodeDeltas(blocks, vertex_data + i * vertex_size, block_size, vertex_size, last_vertex, k, channel | (xor_rot << 4));
 
@@ -541,6 +543,7 @@ static unsigned char* encodeVertexBlock(unsigned char* data, unsigned char* data
 
 	for (size_t k = 0; k < vertex_size; ++k)
 	{
+		// fill buffers with deltas for 4 bytes per vertex (current channel) at once
 		if (k % 4 == 0)
 			encodeDeltas(buffers, vertex_data, vertex_count, vertex_size, last_vertex, k, version == 0 ? 0 : channels[k / 4]);
 
@@ -681,7 +684,7 @@ static const unsigned char* decodeBytes(const unsigned char* data, const unsigne
 }
 
 template <typename T, bool Xor>
-static void decodeDeltas1(const unsigned char* buffer, unsigned char* transposed, size_t vertex_count, size_t vertex_size, const unsigned char* last_vertex, int rot)
+static void decodeDeltas4(const unsigned char* buffer, unsigned char* transposed, size_t vertex_count, size_t vertex_size, const unsigned char* last_vertex, int rot)
 {
 	for (size_t k = 0; k < 4; k += sizeof(T))
 	{
@@ -772,13 +775,13 @@ static const unsigned char* decodeVertexBlock(const unsigned char* data, const u
 		switch (channel & 3)
 		{
 		case 0:
-			decodeDeltas1<unsigned char, false>(buffer, target + k, vertex_count, vertex_size, last_vertex + k, 0);
+			decodeDeltas4<unsigned char, false>(buffer, target + k, vertex_count, vertex_size, last_vertex + k, 0);
 			break;
 		case 1:
-			decodeDeltas1<unsigned short, false>(buffer, target + k, vertex_count, vertex_size, last_vertex + k, 0);
+			decodeDeltas4<unsigned short, false>(buffer, target + k, vertex_count, vertex_size, last_vertex + k, 0);
 			break;
 		case 2:
-			decodeDeltas1<unsigned int, true>(buffer, target + k, vertex_count, vertex_size, last_vertex + k, (32 - (channel >> 4)) & 31);
+			decodeDeltas4<unsigned int, true>(buffer, target + k, vertex_count, vertex_size, last_vertex + k, (32 - (channel >> 4)) & 31);
 			break;
 		default:
 			return NULL; // invalid channel type
