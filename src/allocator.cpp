@@ -45,19 +45,20 @@ static void* MESHOPTIMIZER_ALLOC_CALLCONV cacheAllocate(size_t size)
 	LocalCache& local = gCacheLocal;
 
 	// try to grab an available local block
-	if (local.block == NULL && global.blocks.load() != 0 && size < global.block_size)
+	if (local.block == NULL && size < global.block_size && global.blocks.load(std::memory_order_relaxed) != 0)
 	{
-		uint64_t blocks, mask;
+		uint64_t blocks = global.blocks.load(std::memory_order_relaxed);
+		uint64_t mask = 0;
 
 		do
 		{
-			blocks = global.blocks.load();
 			// prefer last index for coherency, but settle for lowest bit otherwise
 			mask = (blocks & local.block_mask) ? local.block_mask : blocks & (0 - blocks);
 			// no available block, unlikely to get one soon
 			if (blocks == 0)
 				break;
-		} while (!global.blocks.compare_exchange_weak(blocks, blocks & ~mask));
+			// reloads blocks on failure
+		} while (!global.blocks.compare_exchange_weak(blocks, blocks & ~mask, std::memory_order_acquire, std::memory_order_relaxed));
 
 		if (mask)
 		{
@@ -107,7 +108,7 @@ static void MESHOPTIMIZER_ALLOC_CALLCONV cacheDeallocate(void* ptr)
 		if (local.offset == 0)
 		{
 			assert(local.block_mask);
-			global.blocks |= local.block_mask;
+			global.blocks.fetch_or(local.block_mask, std::memory_order_release);
 			local.block = NULL;
 			// keep block_mask as an affinity hint for the next allocation
 		}
@@ -159,7 +160,7 @@ void meshopt_setAllocatorCache(size_t block_count, size_t block_size)
 		gCache.data_size = 0;
 		gCache.block_size = 0;
 		gCache.all_blocks = 0;
-		gCache.blocks = 0;
+		gCache.blocks.store(0);
 
 		// reset global allocator
 		allocator = gCache.fallback;
@@ -180,7 +181,8 @@ void meshopt_setAllocatorCache(size_t block_count, size_t block_size)
 
 		gCache.data_size = data_size;
 		gCache.block_size = block_size;
-		gCache.blocks = gCache.all_blocks = (block_count >= 64) ? ~0ull : (1ull << block_count) - 1;
+		gCache.all_blocks = (block_count >= 64) ? ~0ull : (1ull << block_count) - 1;
+		gCache.blocks.store(gCache.all_blocks);
 		gCache.fallback = allocator;
 
 		allocator.allocate = cacheAllocate;
