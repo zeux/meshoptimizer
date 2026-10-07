@@ -1047,6 +1047,7 @@ MESHOPTIMIZER_API void meshopt_setAllocator(void* (MESHOPTIMIZER_ALLOC_CALLCONV*
  * Experimental: Enable allocation cache
  * Allocates a fixed number of memory blocks to be used for temporary allocations in the library.
  * Each thread performing temporary allocations can only use one block at a time; block count should be set according to expected concurrency.
+ * Once cache is setup, using meshopt_setAllocator is prohibited; cache needs to be disabled (using block_count=0) before reconfiguring allocation callbacks.
  * This function is not thread safe and must not be called concurrently with any other meshopt_ function.
  *
  * block_count can be at most 64; when set to 0, the allocation cache is disabled.

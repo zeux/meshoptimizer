@@ -88,7 +88,6 @@ static void* MESHOPTIMIZER_ALLOC_CALLCONV cacheAllocate(size_t size)
 		return ptr;
 	}
 
-	// fall back to system allocator
 	return global.fallback.allocate(size);
 }
 
@@ -147,11 +146,12 @@ void meshopt_setAllocatorCache(size_t block_count, size_t block_size)
 	using namespace meshopt;
 
 	assert(block_count <= 64);
+	assert(block_count == 0 || block_size >= 16);
 
 	meshopt_Allocator::Storage& allocator = meshopt_Allocator::storage();
 
 	// reset prior global state
-	// note: all previously allocated blocks must have been returned at this point; this is guaranteed by the absence of concurrent execution with meshopt_/clod functions
+	// note: all previously allocated blocks must have been returned at this point; this is guaranteed by the absence of concurrent execution with meshopt_ functions
 	if (gCache.data)
 	{
 		assert(gCache.blocks.load() == gCache.all_blocks);
