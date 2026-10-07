@@ -140,6 +140,11 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 	float znear = 1e-2f;
 	float proj = 1.f / tanf(fovy * 3.1415926f / 180.f * 0.5f);
 
+	// this is optional, but it can noticeably reduce page faults on windows for large meshes
+	// for multi-threaded applications, set the first parameter to the expected concurrency; here we just need one thread
+	// in practice, you'd do this *once* before processing all meshes of course, not per mesh; the call is not thread-safe
+	meshopt_setAllocatorCache(1, 32 << 20);
+
 	clodBuild(config, mesh, [&](clodGroup group, const clodCluster* clusters, size_t cluster_count) -> int { // clang-format!
 		if (stats.size() <= size_t(group.depth))
 			stats.push_back({});
@@ -184,6 +189,8 @@ void nanite(const std::vector<Vertex>& vertices, const std::vector<unsigned int>
 		groups.push_back(group);
 		return int(groups.size() - 1);
 	});
+
+	meshopt_setAllocatorCache(0, 0);
 
 	// for cluster connectivity analysis and boundary statistics, we need a position-only remap that maps vertices with the same position to the same index
 	std::vector<unsigned int> remap(vertices.size());
