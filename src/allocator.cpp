@@ -23,6 +23,7 @@ struct GlobalCache
 	size_t data_size;
 	size_t block_size;
 	uint64_t all_blocks;
+	meshopt_Allocator::Storage fallback;
 
 	// available block mask; alignas to avoid false sharing between threads
 	alignas(128) std::atomic<uint64_t> blocks{0};
@@ -87,7 +88,7 @@ static void* MESHOPTIMIZER_ALLOC_CALLCONV cacheAllocate(size_t size)
 	}
 
 	// fall back to system allocator
-	return ::operator new(size);
+	return global.fallback.allocate(size);
 }
 
 static void MESHOPTIMIZER_ALLOC_CALLCONV cacheDeallocate(void* ptr)
@@ -112,7 +113,7 @@ static void MESHOPTIMIZER_ALLOC_CALLCONV cacheDeallocate(void* ptr)
 		}
 	}
 	else
-		::operator delete(ptr);
+		global.fallback.deallocate(ptr);
 }
 
 } // namespace meshopt
@@ -130,6 +131,10 @@ void meshopt_setAllocator(void* (MESHOPTIMIZER_ALLOC_CALLCONV* allocate)(size_t)
 {
 	assert(allocate && deallocate);
 
+#ifndef MESHOPTIMIZER_ALLOC_NOCACHE
+	assert(!meshopt::gCache.data); // changing allocation callbacks is prohibited if the cache is already set up
+#endif
+
 	meshopt_Allocator::Storage& s = meshopt_Allocator::storage();
 	s.allocate = allocate;
 	s.deallocate = deallocate;
@@ -142,32 +147,44 @@ void meshopt_setAllocatorCache(size_t block_count, size_t block_size)
 
 	assert(block_count <= 64);
 
+	meshopt_Allocator::Storage& allocator = meshopt_Allocator::storage();
+
 	// reset prior global state
 	// note: all previously allocated blocks must have been returned at this point; this is guaranteed by the absence of concurrent execution with meshopt_/clod functions
-	assert(gCache.blocks.load() == gCache.all_blocks);
-	::operator delete(gCache.data);
-	gCache.data = NULL;
-	gCache.data_size = 0;
-	gCache.block_size = 0;
-	gCache.all_blocks = 0;
-	gCache.blocks = 0;
-
-	block_size &= ~size_t(15);
-
-	if (block_count == 0 || block_size == 0)
+	if (gCache.data)
 	{
-		meshopt_setAllocator(::operator new, ::operator delete);
-		return;
+		assert(gCache.blocks.load() == gCache.all_blocks);
+		gCache.fallback.deallocate(gCache.data);
+		gCache.data = NULL;
+		gCache.data_size = 0;
+		gCache.block_size = 0;
+		gCache.all_blocks = 0;
+		gCache.blocks = 0;
+
+		// reset global allocator
+		allocator = gCache.fallback;
 	}
 
-	size_t data_size = block_count > size_t(-1) / block_size ? size_t(-1) : block_count * block_size;
+	// individual allocations are aligned to 16 bytes, so we only use a 16-byte-aligned subset
+	block_size &= ~size_t(15);
 
-	// allocate a block for each thread and mark each block as available
-	gCache.data = ::operator new(data_size);
-	gCache.data_size = data_size;
-	gCache.block_size = block_size;
-	gCache.blocks = gCache.all_blocks = (block_count >= 64) ? ~0ull : (1ull << block_count) - 1;
+	// setup the cache if requested
+	if (block_count && block_size)
+	{
+		size_t data_size = block_count > size_t(-1) / block_size ? size_t(-1) : block_count * block_size;
 
-	meshopt_setAllocator(cacheAllocate, cacheDeallocate);
+		// allocate a block for each thread and mark each block as available
+		gCache.data = allocator.allocate(data_size);
+		if (!gCache.data)
+			return;
+
+		gCache.data_size = data_size;
+		gCache.block_size = block_size;
+		gCache.blocks = gCache.all_blocks = (block_count >= 64) ? ~0ull : (1ull << block_count) - 1;
+		gCache.fallback = allocator;
+
+		allocator.allocate = cacheAllocate;
+		allocator.deallocate = cacheDeallocate;
+	}
 }
 #endif
