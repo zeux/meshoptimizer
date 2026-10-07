@@ -19,7 +19,7 @@ namespace meshopt
 
 struct GlobalCache
 {
-	std::atomic<uint64_t> blocks{0};
+	std::atomic<uint64_t> blocks;
 	char padding[120]; // avoid false sharing between threads
 
 	void* data;
@@ -36,8 +36,8 @@ struct LocalCache
 	uint64_t block_mask;
 };
 
-alignas(128) static GlobalCache gCache;
-static thread_local LocalCache gCacheLocal;
+alignas(128) static GlobalCache gCache = {};
+thread_local static LocalCache gCacheLocal;
 
 static void* MESHOPTIMIZER_ALLOC_CALLCONV cacheAllocate(size_t size)
 {
