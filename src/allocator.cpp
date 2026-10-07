@@ -20,6 +20,7 @@ namespace meshopt
 struct GlobalCache
 {
 	void* data;
+	size_t data_size;
 	size_t block_size;
 	uint64_t all_blocks;
 
@@ -80,7 +81,7 @@ static void* MESHOPTIMIZER_ALLOC_CALLCONV cacheAllocate(size_t size)
 	if (local.block && size < global.block_size && local.offset < global.block_size - size)
 	{
 		void* ptr = static_cast<char*>(local.block) + local.offset;
-		local.offset += size;
+		local.offset += size ? size : 1;
 		local.offset = (local.offset + 15) & ~size_t(15); // align future allocations to 16b
 		return ptr;
 	}
@@ -94,11 +95,11 @@ static void MESHOPTIMIZER_ALLOC_CALLCONV cacheDeallocate(void* ptr)
 	GlobalCache& global = gCache;
 	LocalCache& local = gCacheLocal;
 
-	// has our allocation come from thread cache?
-	if (local.block && ptr >= local.block && ptr < static_cast<char*>(local.block) + global.block_size)
+	// has our allocation come from the cache?
+	if (global.data && ptr >= global.data && ptr < static_cast<char*>(global.data) + global.data_size)
 	{
-		// meshopt allocations are guaranteed to be stack ordered
-		assert(ptr <= static_cast<char*>(local.block) + local.offset);
+		// meshopt allocations are guaranteed to be stack ordered and thread local
+		assert(local.block && ptr >= local.block && ptr < static_cast<char*>(local.block) + local.offset);
 		local.offset = static_cast<char*>(ptr) - static_cast<char*>(local.block);
 
 		// return local block to the pool
@@ -146,6 +147,7 @@ void meshopt_setAllocatorCache(size_t block_count, size_t block_size)
 	assert(gCache.blocks.load() == gCache.all_blocks);
 	::operator delete(gCache.data);
 	gCache.data = NULL;
+	gCache.data_size = 0;
 	gCache.block_size = 0;
 	gCache.all_blocks = 0;
 	gCache.blocks = 0;
@@ -158,10 +160,13 @@ void meshopt_setAllocatorCache(size_t block_count, size_t block_size)
 		return;
 	}
 
+	size_t data_size = block_count > size_t(-1) / block_size ? size_t(-1) : block_count * block_size;
+
 	// allocate a block for each thread and mark each block as available
-	gCache.data = ::operator new(block_count * block_size);
+	gCache.data = ::operator new(data_size);
+	gCache.data_size = data_size;
 	gCache.block_size = block_size;
-	gCache.blocks = gCache.all_blocks = (block_count == 64) ? ~0ull : (1ull << block_count) - 1;
+	gCache.blocks = gCache.all_blocks = (block_count >= 64) ? ~0ull : (1ull << block_count) - 1;
 
 	meshopt_setAllocator(cacheAllocate, cacheDeallocate);
 }
