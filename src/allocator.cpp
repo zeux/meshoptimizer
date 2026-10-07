@@ -19,14 +19,14 @@ namespace meshopt
 
 struct GlobalCache
 {
+	std::atomic<uint64_t> blocks{0};
+	char padding[120]; // avoid false sharing between threads
+
 	void* data;
 	size_t data_size;
 	size_t block_size;
 	uint64_t all_blocks;
 	meshopt_Allocator::Storage fallback;
-
-	// available block mask; alignas to avoid false sharing between threads
-	alignas(128) std::atomic<uint64_t> blocks{0};
 };
 
 struct LocalCache
@@ -36,7 +36,7 @@ struct LocalCache
 	uint64_t block_mask;
 };
 
-static GlobalCache gCache;
+alignas(128) static GlobalCache gCache;
 static thread_local LocalCache gCacheLocal;
 
 static void* MESHOPTIMIZER_ALLOC_CALLCONV cacheAllocate(size_t size)
@@ -53,7 +53,7 @@ static void* MESHOPTIMIZER_ALLOC_CALLCONV cacheAllocate(size_t size)
 		{
 			blocks = global.blocks.load();
 			// prefer last index for coherency, but settle for lowest bit otherwise
-			mask = (blocks & local.block_mask) ? local.block_mask : blocks & -blocks;
+			mask = (blocks & local.block_mask) ? local.block_mask : blocks & (0 - blocks);
 			// no available block, unlikely to get one soon
 			if (blocks == 0)
 				break;
