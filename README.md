@@ -978,6 +978,16 @@ meshopt_setAllocator(malloc, free);
 
 > Note that the library expects the allocation function to either throw in case of out-of-memory (in which case the exception will propagate to the caller) or abort, so technically the use of `malloc` above isn't safe. If you want to handle out-of-memory errors without using C++ exceptions, you can use `setjmp`/`longjmp` instead.
 
+For applications that end up using many allocations, such as when processing many small meshes or individual clusters as part of `clusterlod.h`, it may be beneficial to set up the allocator cache:
+
+```c++
+meshopt_setAllocatorCache(16, 32 << 20); // 16 threads x 32MB per thread
+```
+
+This will allocate a pool of memory that will be used for subsequent temporary allocations; this is particularly helpful for allocators that don't reuse larger allocations, or use global locks to manage heap memory, such as the default Windows heap. After processing is finished, `meshopt_setAllocatorCache(0, 0)` frees the cache; while the cache is active, the allocation callbacks can't be overridden, but if the cache is configured after `meshopt_setAllocator`, the cache itself and any allocations that don't fit will use the callbacks too.
+
+> Note that the combination of allocator cache and `setjmp`/`longjmp` allocation error handling is not supported.
+
 When building meshoptimizer as a shared library, allocations from the templated index wrappers provided in the header (used when index data is not `unsigned int`) will only be redirected to these callbacks if the library is built with `MESHOPTIMIZER_ALLOC_EXPORT` defined.
 
 When building meshoptimizer with MSVC, if a non-default calling convention is used such as `__vectorcall` (via `/Gv`), `MESHOPTIMIZER_ALLOC_CALLCONV` should be defined to match the calling convention of `operator new`/`delete`.
@@ -1001,6 +1011,7 @@ Currently, the following APIs are experimental:
 - `meshopt_SimplifyPreserveFolds` and `meshopt_SimplifyErrorClamped` flags for `meshopt_simplify*` functions
 - `meshopt_generateNormals` function
 - `meshopt_remesh` function and `meshopt_Remesh*` flags
+- `meshopt_setAllocatorCache` function
 
 ## License
 
