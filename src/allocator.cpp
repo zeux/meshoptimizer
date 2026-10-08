@@ -39,6 +39,14 @@ struct LocalCache
 alignas(128) static GlobalCache gCache = {};
 thread_local static LocalCache gCacheLocal;
 
+static int cacheIndex(uint64_t mask)
+{
+	int index = -1;
+	while (mask)
+		mask >>= 1, index++;
+	return index;
+}
+
 static void* MESHOPTIMIZER_ALLOC_CALLCONV cacheAllocate(size_t size)
 {
 	GlobalCache& global = gCache;
@@ -63,16 +71,8 @@ static void* MESHOPTIMIZER_ALLOC_CALLCONV cacheAllocate(size_t size)
 		if (mask)
 		{
 			// extract block index from mask (must only have one bit set)
-			int index = -1;
-			for (int i = 0; i < 64; ++i)
-				if (mask & (1ull << i))
-				{
-					index = i;
-					break;
-				}
-
-			assert(index >= 0);
-			assert(mask && (mask & (mask - 1)) == 0);
+			int index = cacheIndex(mask);
+			assert(mask == (1ull << index));
 
 			local.block = static_cast<char*>(global.data) + index * global.block_size;
 			local.block_mask = mask;
