@@ -1761,6 +1761,29 @@ static void customAllocator()
 	allocCount = freeCount = 0;
 }
 
+static void customAllocatorCache()
+{
+	meshopt_setAllocator(customAlloc, customFree);
+
+	// cache memory is allocated using the callbacks
+	meshopt_setAllocatorCache(2, 48);
+	assert(allocCount == 1 && freeCount == 0);
+
+	float vb[] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+	unsigned int ib[] = {0, 1, 2};
+
+	// in-place vertex copy (36 bytes) fits into the block, remap table (12 bytes) doesn't fit after it
+	meshopt_optimizeVertexFetch(vb, ib, 3, vb, 3, 12);
+	assert(allocCount == 2 && freeCount == 1);
+
+	meshopt_setAllocatorCache(0, 0);
+	assert(allocCount == 2 && freeCount == 2);
+
+	meshopt_setAllocator(operator new, operator delete);
+
+	allocCount = freeCount = 0;
+}
+
 static void emptyMesh()
 {
 	meshopt_optimizeVertexCache(NULL, NULL, 0, 0);
@@ -3652,6 +3675,7 @@ void runTests()
 	remapCustom();
 
 	customAllocator();
+	customAllocatorCache();
 
 	emptyMesh();
 
