@@ -3570,16 +3570,15 @@ static void normalsDegenerate()
 	    {0.f, 0.5f, 0.f},
 	};
 
-	// degenerate triangle connects the triangles across a hard edge
+	// degenerate triangle connects the triangles across a hard edge; corners inherit normals from adjacent triangles
 	const unsigned int indices[] = {0, 1, 2, 0, 2, 3, 0, 3, 4};
 
 	float normals[9 * 3];
 	meshopt_generateNormals(normals, indices, 9, vertices[0], 5, sizeof(vertices[0]), 3.14159265f * 3.f / 4.f, 0.f);
 
 	const float negative[3] = {0.f, 0.f, -1.f};
-	const float zero[3] = {0.f, 0.f, 0.f};
 	const float positive[3] = {0.f, 0.f, 1.f};
-	const float* expected[9] = {negative, negative, negative, zero, zero, zero, positive, positive, positive};
+	const float* expected[9] = {negative, negative, negative, negative, negative, positive, positive, positive, positive};
 
 	for (size_t i = 0; i < 9; ++i)
 		for (size_t k = 0; k < 3; ++k)
