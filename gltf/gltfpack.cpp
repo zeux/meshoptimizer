@@ -1074,6 +1074,17 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 			return 2;
 		}
 	}
+	else if (iext == ".ply")
+	{
+		const char* error = NULL;
+		data = parseSplats(input, meshes, &error);
+
+		if (!data)
+		{
+			fprintf(stderr, "Error loading %s: %s\n", input, error);
+			return 2;
+		}
+	}
 	else
 	{
 		fprintf(stderr, "Error loading %s: unknown extension (expected .gltf or .glb or .obj)\n", input);
