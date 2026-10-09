@@ -30,24 +30,39 @@ struct BasisSettings
 	int etc1s_q;
 	int uastc_l;
 	float uastc_q;
+	int xuastc_e;
+	int xuastc_q;
 };
 
 static const BasisSettings kBasisSettings[10] = {
-    {1, 1, 0, 4.f},
-    {1, 32, 0, 3.f},
-    {1, 64, 1, 2.f},
-    {1, 96, 1, 1.5f},
-    {1, 128, 1, 1.f}, // quality arguments aligned with basisu defaults
-    {1, 150, 1, 0.8f},
-    {1, 170, 1, 0.6f},
-    {1, 192, 1, 0.4f}, // gltfpack defaults
-    {1, 224, 2, 0.2f},
-    {1, 255, 2, 0.f},
+    {1, 1, 0, 4.f, 0, 10},
+    {1, 32, 0, 3.f, 0, 20},
+    {1, 64, 1, 2.f, 1, 30},
+    {1, 96, 1, 1.5f, 1, 40},
+    {1, 128, 1, 1.f, 1, 50},
+    {1, 150, 1, 0.8f, 1, 60},
+    {1, 170, 1, 0.6f, 1, 70},
+    {1, 192, 1, 0.4f, 1, 80}, // gltfpack defaults
+    {1, 224, 2, 0.2f, 2, 85},
+    {1, 255, 2, 0.f, 2, 90},
 };
 
-static void fillParams(basisu::basis_compressor_params& params, const char* input, const char* output, bool uastc, int width, int height, const BasisSettings& bs, const ImageInfo& info, const Settings& settings)
+static void fillParams(basisu::basis_compressor_params& params, const char* input, const char* output, TextureMode mode, int width, int height, const BasisSettings& bs, const ImageInfo& info, const Settings& settings)
 {
-	if (uastc)
+	if (mode == TextureMode_XUASTC)
+	{
+		params.m_uastc = true;
+
+#if BASISU_LIB_VERSION >= 200
+		params.m_xuastc_or_astc_ldr_basis_tex_format = int(basist::basis_tex_format::cXUASTC_LDR_4x4);
+		params.m_quality_level = bs.xuastc_q;
+		params.m_xuastc_ldr_effort_level = bs.xuastc_e;
+		params.m_xuastc_ldr_use_dct = true;
+		params.m_xuastc_ldr_use_lossy_supercompression = true;
+		params.m_xuastc_ldr_syntax = int(basist::astc_ldr_t::xuastc_ldr_syntax::cHybridArithZStd);
+#endif
+	}
+	else if (mode == TextureMode_UASTC)
 	{
 		static const uint32_t s_level_flags[basisu::TOTAL_PACK_UASTC_LEVELS] = {basisu::cPackUASTCLevelFastest, basisu::cPackUASTCLevelFaster, basisu::cPackUASTCLevelDefault, basisu::cPackUASTCLevelSlower, basisu::cPackUASTCLevelVerySlow};
 
@@ -110,7 +125,7 @@ static void fillParams(basisu::basis_compressor_params& params, const char* inpu
 	params.m_ktx2_srgb_transfer_func = info.srgb;
 #endif
 
-	if (uastc)
+	if (mode == TextureMode_UASTC)
 	{
 		params.m_ktx2_uastc_supercompression = basist::KTX2_SS_ZSTANDARD;
 		params.m_ktx2_zstd_supercompression_level = 9;
@@ -134,6 +149,11 @@ static void fillParams(basisu::basis_compressor_params& params, const char* inpu
 
 static const char* prepareEncode(basisu::basis_compressor_params& params, const cgltf_image& image, const char* input_path, const ImageInfo& info, const Settings& settings, const std::string& temp_prefix, std::string& temp_input, std::string& temp_output)
 {
+#if BASISU_LIB_VERSION < 200
+	if (settings.texture_mode[info.kind] == TextureMode_XUASTC)
+		return "XUASTC mode requires BasisU library version 2.0 or higher";
+#endif
+
 	std::string img_data;
 	std::string mime_type;
 
@@ -156,11 +176,11 @@ static const char* prepareEncode(basisu::basis_compressor_params& params, const 
 		return "error writing temporary file";
 
 	int quality = settings.texture_quality[info.kind];
-	bool uastc = settings.texture_mode[info.kind] == TextureMode_UASTC;
+	TextureMode mode = settings.texture_mode[info.kind];
 
 	const BasisSettings& bs = kBasisSettings[quality - 1];
 
-	fillParams(params, temp_input.c_str(), temp_output.c_str(), uastc, width, height, bs, info, settings);
+	fillParams(params, temp_input.c_str(), temp_output.c_str(), mode, width, height, bs, info, settings);
 
 	return NULL;
 }
@@ -181,8 +201,9 @@ void encodeImagesBasis(std::string* encoded, const cgltf_data* data, const std::
 	{
 		const cgltf_image& image = data->images[i];
 		ImageInfo info = images[i];
+		TextureMode mode = settings.texture_mode[info.kind];
 
-		if (settings.texture_mode[info.kind] == TextureMode_ETC1S || settings.texture_mode[info.kind] == TextureMode_UASTC)
+		if (mode == TextureMode_ETC1S || mode == TextureMode_UASTC || mode == TextureMode_XUASTC)
 			if (const char* error = prepareEncode(params[i], image, input_path, info, settings, temp_prefix + "-" + std::to_string(i), temp_inputs[i], temp_outputs[i]))
 				encoded[i] = error;
 	}
