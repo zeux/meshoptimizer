@@ -387,7 +387,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 StreamFormat writeIndexStream(std::string& bin, const std::vector<unsigned int>& stream);
 StreamFormat writeTimeStream(std::string& bin, const std::vector<float>& data);
 StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data, const Settings& settings, bool has_tangents = false);
-StreamFormat writeSplatStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const Settings& settings);
+StreamFormat writeSplatStream(std::string& bin, const Stream& stream, const Settings& settings);
 
 void compressVertexStream(std::string& bin, const std::string& data, size_t count, size_t stride, int level);
 void compressIndexStream(std::string& bin, const std::string& data, size_t count, size_t stride);

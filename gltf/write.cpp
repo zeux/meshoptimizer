@@ -1198,7 +1198,7 @@ void writeMeshSplats(std::string& json, std::vector<BufferView>& views, std::str
 		const Stream& stream = mesh.streams[j];
 
 		scratch.clear();
-		StreamFormat format = writeSplatStream(scratch, stream, qp, settings);
+		StreamFormat format = writeSplatStream(scratch, stream, settings);
 		BufferView::Compression compression = settings.compress ? BufferView::Compression_Attribute : BufferView::Compression_None;
 
 		size_t view = getBufferView(views, BufferView::Kind_Splat, format.filter, compression, format.stride, stream.splats);

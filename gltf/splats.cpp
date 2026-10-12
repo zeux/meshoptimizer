@@ -1,11 +1,12 @@
 // This file is part of gltfpack; see gltfpack.h for version/license details
 #include "gltfpack.h"
 
-#include "../extern/micro_ply.h"
-
 #include <memory>
 
 #include <math.h>
+
+#include "../extern/micro_ply.h"
+#include "../src/meshoptimizer.h"
 
 enum SplatAttribute
 {
@@ -300,27 +301,145 @@ static StreamFormat writeSplatStreamRaw(std::string& bin, const Stream& stream, 
 	return format;
 }
 
-StreamFormat writeSplatStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const Settings& settings)
+static StreamFormat writeSplatStreamFloat(std::string& bin, const Stream& stream, cgltf_type type, int components, bool expf, int bits, meshopt_EncodeExpMode mode)
 {
-	(void)qp;
-	(void)settings;
+	assert(components >= 1 && components <= 4);
 
-	if (stream.type == cgltf_attribute_type_position)
-		return writeSplatStreamRaw(bin, stream, cgltf_type_vec3, 3);
-	else if (stream.splats)
+	StreamFormat::Filter filter = expf ? StreamFormat::Filter_Exp : StreamFormat::Filter_None;
+
+	if (filter == StreamFormat::Filter_Exp)
 	{
-		SplatAttribute attr = SplatAttribute(stream.splats);
+		size_t offset = bin.size();
+		size_t stride = sizeof(float) * components;
+		for (size_t i = 0; i < stream.data.size(); ++i)
+			bin.append(reinterpret_cast<const char*>(stream.data[i].f), stride);
 
-		if (attr == Splat_Rotation)
-			return writeSplatStreamRaw(bin, stream, cgltf_type_vec4, 4);
-		else if (attr == Splat_Scale)
-			return writeSplatStreamRaw(bin, stream, cgltf_type_vec3, 3);
-		else if (attr == Splat_Opacity)
-			return writeSplatStreamRaw(bin, stream, cgltf_type_scalar, 1);
-		else if (attr == Splat_SH0 || attr == Splat_SH1 || attr == Splat_SH2 || attr == Splat_SH3)
-			return writeSplatStreamRaw(bin, stream, cgltf_type_vec3, 3);
+		meshopt_encodeFilterExp(&bin[offset], stream.data.size(), stride, bits + 1, reinterpret_cast<const float*>(&bin[offset]), mode);
+	}
+	else
+	{
+		for (size_t i = 0; i < stream.data.size(); ++i)
+		{
+			const Attr& a = stream.data[i];
+
+			float v[4];
+			for (int k = 0; k < components; ++k)
+				v[k] = meshopt_quantizeFloat(a.f[k], bits);
+			bin.append(reinterpret_cast<const char*>(v), sizeof(float) * components);
+		}
 	}
 
-	assert(!"Unexpected splat stream type");
-	return StreamFormat{};
+	StreamFormat format = {type, cgltf_component_type_r_32f, false, sizeof(float) * components, filter};
+	return format;
+}
+
+static void encodeSnorm(void* destination, size_t count, size_t stride, int bits, const float* data)
+{
+	assert(stride == 4 || stride == 8);
+	assert(bits >= 1 && bits <= 16);
+
+	signed char* d8 = static_cast<signed char*>(destination);
+	short* d16 = static_cast<short*>(destination);
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		const float* v = &data[i * 4];
+
+		int fx = meshopt_quantizeSnorm(v[0], bits);
+		int fy = meshopt_quantizeSnorm(v[1], bits);
+		int fz = meshopt_quantizeSnorm(v[2], bits);
+		int fw = meshopt_quantizeSnorm(v[3], bits);
+
+		if (stride == 4)
+		{
+			d8[i * 4 + 0] = (signed char)(fx);
+			d8[i * 4 + 1] = (signed char)(fy);
+			d8[i * 4 + 2] = (signed char)(fz);
+			d8[i * 4 + 3] = (signed char)(fw);
+		}
+		else
+		{
+			d16[i * 4 + 0] = short(fx);
+			d16[i * 4 + 1] = short(fy);
+			d16[i * 4 + 2] = short(fz);
+			d16[i * 4 + 3] = short(fw);
+		}
+	}
+}
+
+StreamFormat writeSplatStream(std::string& bin, const Stream& stream, const Settings& settings)
+{
+	assert(stream.type == cgltf_attribute_type_position || (stream.type == cgltf_attribute_type_custom && stream.splats));
+
+	(void)settings;
+
+	SplatAttribute attr = stream.type == cgltf_attribute_type_position ? Splat_Position : SplatAttribute(stream.splats);
+
+	if (attr == Splat_Position)
+	{
+		if (!settings.quantize)
+			return writeSplatStreamRaw(bin, stream, cgltf_type_vec3, 3);
+
+		return writeSplatStreamFloat(bin, stream, cgltf_type_vec3, 3, settings.compress, settings.pos_bits, meshopt_EncodeExpSharedComponent);
+	}
+	else if (attr == Splat_Rotation)
+	{
+		if (!settings.quantize)
+			return writeSplatStreamRaw(bin, stream, cgltf_type_vec4, 4);
+
+		StreamFormat::Filter filter = settings.compress ? StreamFormat::Filter_Quat : StreamFormat::Filter_None;
+		int bits = settings.nrm_bits + 1;
+
+		size_t offset = bin.size();
+		size_t stride = 8;
+		bin.resize(bin.size() + stream.data.size() * stride);
+
+		if (filter == StreamFormat::Filter_Quat)
+			meshopt_encodeFilterQuat(&bin[offset], stream.data.size(), stride, bits, stream.data[0].f);
+		else
+			encodeSnorm(&bin[offset], stream.data.size(), stride, 16, stream.data[0].f);
+
+		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16, true, 8, filter};
+		return format;
+	}
+	else if (attr == Splat_Scale)
+	{
+		if (!settings.quantize)
+			return writeSplatStreamRaw(bin, stream, cgltf_type_vec3, 3);
+
+		int bits = settings.tex_bits;
+		return writeSplatStreamFloat(bin, stream, cgltf_type_vec3, 3, settings.compress, bits, meshopt_EncodeExpSharedComponent);
+	}
+	else if (attr == Splat_Opacity)
+	{
+		if (!settings.quantize)
+			return writeSplatStreamRaw(bin, stream, cgltf_type_scalar, 1);
+
+		int bits = settings.col_bits;
+		return writeSplatStreamFloat(bin, stream, cgltf_type_scalar, 1, settings.compress, bits, meshopt_EncodeExpClamped);
+	}
+	else if (attr == Splat_SH0)
+	{
+		if (!settings.quantize)
+			return writeSplatStreamRaw(bin, stream, cgltf_type_vec3, 3);
+
+		int bits = settings.col_bits;
+		return writeSplatStreamFloat(bin, stream, cgltf_type_vec3, 3, settings.compress, bits, meshopt_EncodeExpSharedComponent);
+	}
+	else if (attr == Splat_SH1 || attr == Splat_SH2 || attr == Splat_SH3)
+	{
+		if (!settings.quantize)
+			return writeSplatStreamRaw(bin, stream, cgltf_type_vec3, 3);
+
+		int bits = settings.col_bits;
+		if (settings.compressmore)
+			bits -= (attr == Splat_SH1 ? 1 : (attr == Splat_SH2 ? 2 : 3));
+
+		return writeSplatStreamFloat(bin, stream, cgltf_type_vec3, 3, settings.compress, bits, meshopt_EncodeExpClamped);
+	}
+	else
+	{
+		assert(!"Unexpected splat stream type");
+		return StreamFormat{};
+	}
 }

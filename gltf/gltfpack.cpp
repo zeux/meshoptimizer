@@ -1105,6 +1105,9 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 
 		// override position storage to -vpf; we can't support any other form of position quantization as position & scale have the same transform
 		settings.pos_float = true;
+
+		// override compression to KHR_meshopt_compression for smaller files
+		settings.compresskhr = true;
 	}
 	else
 	{
