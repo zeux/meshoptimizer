@@ -66,23 +66,86 @@ static bool readProps(std::vector<Attr>& result, const ply_element_t& element, c
 	return true;
 }
 
-template <int N>
-static bool readSHProps(std::vector<Attr> (&result)[N], const ply_element_t& vtxe, int offset, int count)
+static int countSHProps(const ply_element_t& element)
 {
-	assert(N == (count + 2) / 3); // VEC3
+	for (int i = 0; i <= 45; ++i)
+	{
+		char pname[16];
+		snprintf(pname, sizeof(pname), "f_rest_%d", i);
 
-	for (int i = 0; i < count; i += 3)
+		if (!findPropFloat(element, pname))
+			return i;
+	}
+
+	// too many props; f_rest_45 implies >3 bands
+	return -1;
+}
+
+template <int N>
+static bool readSHProps(std::vector<Attr> (&result)[N], const ply_element_t& vtxe, int offset, int stride)
+{
+	for (int i = 0; i < N; ++i)
 	{
 		char pname[3][16];
-		snprintf(pname[0], sizeof(pname[0]), "f_rest_%d", offset + i + 0);
-		snprintf(pname[1], sizeof(pname[1]), "f_rest_%d", offset + i + 1);
-		snprintf(pname[2], sizeof(pname[2]), "f_rest_%d", offset + i + 2);
+		snprintf(pname[0], sizeof(pname[0]), "f_rest_%d", offset + i + stride * 0);
+		snprintf(pname[1], sizeof(pname[1]), "f_rest_%d", offset + i + stride * 1);
+		snprintf(pname[2], sizeof(pname[2]), "f_rest_%d", offset + i + stride * 2);
 
-		if (!readProps(result[i / 3], vtxe, pname[0], i + 1 < count ? pname[1] : NULL, i + 2 < count ? pname[2] : NULL, NULL))
+		if (!readProps(result[i], vtxe, pname[0], pname[1], pname[2], NULL))
 			return false;
 	}
 
 	return true;
+}
+
+static void convertSplats(std::vector<Attr>& position, std::vector<Attr>& rotation, std::vector<Attr>& scale, std::vector<Attr>& opacity, std::vector<Attr> (&sh1)[3], std::vector<Attr> (&sh2)[5], std::vector<Attr> (&sh3)[7], int shdim)
+{
+	for (size_t i = 0; i < position.size(); ++i)
+	{
+		// PLY splats store scale in log units, and opacity before the sigmoid activation
+		for (int k = 0; k < 3; ++k)
+			scale[i].f[k] = expf(scale[i].f[k]);
+
+		opacity[i].f[0] = 1.f / (1.f + expf(-opacity[i].f[0]));
+
+		// PLY splats are conventionally encoded in COLMAP coordinate space, with -X right -Y up -Z forward; glTF uses -X right +Y up +Z forward
+		// the conversion requires a fixup of positions, rotations, and SH bands, flipping Y & Z signs
+		position[i].f[1] *= -1;
+		position[i].f[2] *= -1;
+
+		rotation[i].f[1] *= -1;
+		rotation[i].f[2] *= -1;
+
+		// PLY rotation quaternions may or may not be normalized; normalize them just in case
+		float ql = sqrtf(rotation[i].f[0] * rotation[i].f[0] + rotation[i].f[1] * rotation[i].f[1] + rotation[i].f[2] * rotation[i].f[2] + rotation[i].f[3] * rotation[i].f[3]);
+
+		for (int k = 0; k < 4; ++k)
+			rotation[i].f[k] /= ql;
+
+		// for SH conversion, since coordinate space xform is flipping Y & Z, we need to flip coefficients for bands that encode odd-length products of Y & Z
+		for (int k = 0; k < 3; ++k)
+		{
+			if (shdim >= 1)
+			{
+				sh1[0][i].f[k] *= -1;
+				sh1[1][i].f[k] *= -1;
+			}
+
+			if (shdim >= 2)
+			{
+				sh2[0][i].f[k] *= -1;
+				sh2[3][i].f[k] *= -1;
+			}
+
+			if (shdim >= 3)
+			{
+				sh3[0][i].f[k] *= -1;
+				sh3[2][i].f[k] *= -1;
+				sh3[3][i].f[k] *= -1;
+				sh3[5][i].f[k] *= -1;
+			}
+		}
+	}
 }
 
 static void appendStream(Mesh& mesh, std::vector<Attr>&& data, cgltf_attribute_type type, const char* custom_name = NULL)
@@ -135,7 +198,7 @@ cgltf_data* parseSplats(const char* path, std::vector<Mesh>& meshes, const char*
 	ply_element_t vtxe = file.elements[0];
 
 	std::vector<Attr> position, rotation, scale, opacity, sh0;
-	if (!readProps(position, vtxe, "x", "y", "z", NULL) || !readProps(rotation, vtxe, "rot_0", "rot_1", "rot_2", "rot_3") ||
+	if (!readProps(position, vtxe, "x", "y", "z", NULL) || !readProps(rotation, vtxe, "rot_1", "rot_2", "rot_3", "rot_0") ||
 	    !readProps(scale, vtxe, "scale_0", "scale_1", "scale_2", NULL) || !readProps(opacity, vtxe, "opacity", NULL, NULL, NULL) ||
 	    !readProps(sh0, vtxe, "f_dc_0", "f_dc_1", "f_dc_2", NULL))
 	{
@@ -143,16 +206,20 @@ cgltf_data* parseSplats(const char* path, std::vector<Mesh>& meshes, const char*
 		return NULL;
 	}
 
-	std::vector<Attr> sh1[3], sh2[5], sh3[7];
-	bool hassh1 = readSHProps(sh1, vtxe, 0, 9);
-	bool hassh2 = readSHProps(sh2, vtxe, 9, 15);
-	bool hassh3 = readSHProps(sh3, vtxe, 24, 21);
+	int shprops = countSHProps(vtxe);
+	int shdim = shprops == 45 ? 3 : (shprops == 24 ? 2 : (shprops == 9 ? 1 : (shprops == 0 ? 0 : -1)));
 
-	if ((hassh3 && (!hassh1 || !hassh2)) || (hassh2 && !hassh1))
+	std::vector<Attr> sh1[3], sh2[5], sh3[7];
+	if (shdim < 0 ||
+	    (shdim >= 1 && !readSHProps(sh1, vtxe, 0, shprops / 3)) ||
+	    (shdim >= 2 && !readSHProps(sh2, vtxe, 3, shprops / 3)) ||
+	    (shdim >= 3 && !readSHProps(sh3, vtxe, 8, shprops / 3)))
 	{
 		*error = "invalid 3DGS PLY: inconsistent SH attributes";
 		return NULL;
 	}
+
+	convertSplats(position, rotation, scale, opacity, sh1, sh2, sh3, shdim);
 
 	meshes.push_back(Mesh());
 	Mesh& mesh = meshes.back();
@@ -166,13 +233,13 @@ cgltf_data* parseSplats(const char* path, std::vector<Mesh>& meshes, const char*
 	appendStream(mesh, std::move(opacity), cgltf_attribute_type_custom, "KHR_gaussian_splatting:OPACITY");
 	appendStream(mesh, std::move(sh0), cgltf_attribute_type_custom, kGltfSH[0][0]); // SH_DEGREE_0_COEF_0
 
-	if (hassh1)
+	if (shdim >= 1)
 		for (int k = 0; k < 3; ++k)
 			appendStream(mesh, std::move(sh1[k]), cgltf_attribute_type_custom, kGltfSH[1][k]);
-	if (hassh2)
+	if (shdim >= 2)
 		for (int k = 0; k < 5; ++k)
 			appendStream(mesh, std::move(sh2[k]), cgltf_attribute_type_custom, kGltfSH[2][k]);
-	if (hassh3)
+	if (shdim >= 3)
 		for (int k = 0; k < 7; ++k)
 			appendStream(mesh, std::move(sh3[k]), cgltf_attribute_type_custom, kGltfSH[3][k]);
 
