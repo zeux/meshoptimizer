@@ -260,6 +260,39 @@ cgltf_data* parseSplats(const char* path, std::vector<Mesh>& meshes, const char*
 	return data;
 }
 
+static Stream* getStream(Mesh& mesh, cgltf_attribute_type type, SplatAttribute attr, int index = 0)
+{
+	for (size_t i = 0; i < mesh.streams.size(); ++i)
+		if (mesh.streams[i].type == type && mesh.streams[i].index == index && mesh.streams[i].splats == attr)
+			return &mesh.streams[i];
+
+	return NULL;
+}
+
+void processSplatMesh(Mesh& mesh, const Settings& settings)
+{
+	(void)settings;
+
+	assert(mesh.splats && mesh.type == cgltf_primitive_type_points && mesh.indices.empty());
+
+	const Stream* positions = getStream(mesh, cgltf_attribute_type_position, Splat_Position);
+	if (!positions)
+		return;
+
+	// sort splats by position using Morton order
+	size_t vertex_count = mesh.streams[0].data.size();
+
+	std::vector<unsigned int> remap(vertex_count);
+	meshopt_spatialSortRemap(&remap[0], positions->data[0].f, vertex_count, sizeof(Attr));
+
+	for (size_t i = 0; i < mesh.streams.size(); ++i)
+	{
+		assert(mesh.streams[i].data.size() == vertex_count);
+
+		meshopt_remapVertexBuffer(&mesh.streams[i].data[0], &mesh.streams[i].data[0], vertex_count, sizeof(Attr), &remap[0]);
+	}
+}
+
 const char* splatAttributeType(int type)
 {
 	switch (SplatAttribute(type))

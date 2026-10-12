@@ -463,7 +463,11 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
 		Mesh& mesh = meshes[i];
-		processMesh(mesh, settings);
+
+		if (mesh.splats)
+			processSplatMesh(mesh, settings);
+		else
+			processMesh(mesh, settings);
 
 		if (mesh.geometry_duplicate)
 			hashMesh(mesh);

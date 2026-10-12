@@ -330,6 +330,7 @@ bool areExtrasEqual(const cgltf_extras& lhs, const cgltf_extras& rhs);
 
 void processAnimation(Animation& animation, const Settings& settings);
 void processMesh(Mesh& mesh, const Settings& settings);
+void processSplatMesh(Mesh& mesh, const Settings& settings);
 
 bool compareMeshTargets(const Mesh& lhs, const Mesh& rhs);
 bool compareMeshVariants(const Mesh& lhs, const Mesh& rhs);
