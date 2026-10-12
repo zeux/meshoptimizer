@@ -117,10 +117,10 @@ static void printSceneStats(const std::vector<BufferView>& views, const std::vec
 
 	printf("output: %d nodes, %d meshes (%d primitives), %d materials\n", int(node_offset), int(mesh_offset), int(meshes.size()), int(material_offset));
 	printf("output: JSON %d bytes, buffers %d bytes\n", int(json_size), int(bin_size));
-	printf("output: buffers: vertex %d bytes, index %d bytes, skin %d bytes, time %d bytes, keyframe %d bytes, instance %d bytes, image %d bytes\n",
+	printf("output: buffers: vertex %d bytes, index %d bytes, skin %d bytes, time %d bytes, keyframe %d bytes, instance %d bytes, image %d bytes, splat %d bytes\n",
 	    int(bytes[BufferView::Kind_Vertex]), int(bytes[BufferView::Kind_Index]), int(bytes[BufferView::Kind_Skin]),
 	    int(bytes[BufferView::Kind_Time]), int(bytes[BufferView::Kind_Keyframe]), int(bytes[BufferView::Kind_Instance]),
-	    int(bytes[BufferView::Kind_Image]));
+	    int(bytes[BufferView::Kind_Image]), int(bytes[BufferView::Kind_Splat]));
 }
 
 static void printAttributeStats(const std::vector<BufferView>& views, BufferView::Kind kind, const char* name)
@@ -158,6 +158,9 @@ static void printAttributeStats(const std::vector<BufferView>& views, BufferView
 
 		size_t count = view.data.size() / view.stride;
 
+		if (kind == BufferView::Kind_Splat && strncmp(variant, "SH_DEGREE_", 10) == 0)
+			count /= 1 + (atoi(variant + 10) * 2); // 1, 3, 5, 7 vectors per degree
+
 		if (view.compression == BufferView::Compression_None)
 			printf("stats: %s %s: %d bytes (%.1f bits)\n",
 			    name, variant, int(view.bytes), double(view.bytes) / double(count) * 8);
@@ -165,7 +168,7 @@ static void printAttributeStats(const std::vector<BufferView>& views, BufferView
 			printf("stats: %s %s: compressed %d bytes (%.1f bits), raw %d bytes (%d bits)\n",
 			    name, variant,
 			    int(view.bytes), double(view.bytes) / double(count) * 8,
-			    int(view.data.size()), int(view.stride * 8));
+			    int(view.data.size()), int(view.data.size() * 8 / count));
 	}
 }
 
@@ -510,6 +513,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 	bool ext_texture_basisu = false;
 	bool ext_texture_webp = false;
 	bool ext_splatting = false;
+	bool ext_quantization = false;
 
 	size_t accr_offset = 0;
 	size_t node_offset = 0;
@@ -655,6 +659,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 				{
 					entry.offset = json_meshes.size();
 					writeMeshGeometry(json_meshes, views, json_accessors, accr_offset, prim, qp, qt, settings);
+					ext_quantization = true;
 					entry.size = json_meshes.size() - entry.offset;
 					entry.qt = qt;
 				}
@@ -662,6 +667,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 			else
 			{
 				writeMeshGeometry(json_meshes, views, json_accessors, accr_offset, prim, qp, qt, settings);
+				ext_quantization = true;
 			}
 
 			if (prim.material)
@@ -882,7 +888,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 	append(json, "}");
 
 	const ExtensionInfo extensions[] = {
-	    {"KHR_mesh_quantization", settings.quantize, true},
+	    {"KHR_mesh_quantization", settings.quantize && ext_quantization, true},
 	    {meshopt_ext, settings.compress, !settings.fallback},
 	    {"KHR_texture_transform", (settings.quantize && !settings.tex_float && !json_textures.empty()) || ext_texture_transform, false},
 	    {"KHR_materials_pbrSpecularGlossiness", ext_pbr_specular_glossiness, false},
@@ -1096,6 +1102,9 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 			fprintf(stderr, "Error loading %s: %s\n", input, error);
 			return 2;
 		}
+
+		// override position storage to -vpf; we can't support any other form of position quantization as position & scale have the same transform
+		settings.pos_float = true;
 	}
 	else
 	{

@@ -50,20 +50,23 @@ static bool readProps(std::vector<Attr>& result, const ply_element_t& element, c
 	if ((x && !px) || (y && !py) || (z && !pz) || (w && !pw))
 		return false;
 
+	size_t count = size_t(element.count);
+
+	result.resize(count);
+
 	const char* data = static_cast<const char*>(element.data);
+	Attr* target = result.data();
 
-	result.resize(element.count);
-
-	for (size_t i = 0; i < result.size(); ++i)
+	for (size_t i = 0; i < count; ++i)
 	{
 		if (px)
-			memcpy(&result[i].f[0], data + px->offset, sizeof(float));
+			memcpy(&target[i].f[0], data + px->offset, sizeof(float));
 		if (py)
-			memcpy(&result[i].f[1], data + py->offset, sizeof(float));
+			memcpy(&target[i].f[1], data + py->offset, sizeof(float));
 		if (pz)
-			memcpy(&result[i].f[2], data + pz->offset, sizeof(float));
+			memcpy(&target[i].f[2], data + pz->offset, sizeof(float));
 		if (pw)
-			memcpy(&result[i].f[3], data + pw->offset, sizeof(float));
+			memcpy(&target[i].f[3], data + pw->offset, sizeof(float));
 
 		data += element.data_stride;
 	}
