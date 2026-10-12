@@ -750,15 +750,15 @@ void writeBufferView(std::string& json, BufferView::Kind kind, StreamFormat::Fil
 	append(json, bin_offset);
 	append(json, ",\"byteLength\":");
 	append(json, bin_size);
-	if (kind == BufferView::Kind_Vertex)
+	if (kind == BufferView::Kind_Vertex || kind == BufferView::Kind_Splat)
 	{
 		append(json, ",\"byteStride\":");
 		append(json, stride);
 	}
-	if (kind == BufferView::Kind_Vertex || kind == BufferView::Kind_Index)
+	if (kind == BufferView::Kind_Vertex || kind == BufferView::Kind_Index || kind == BufferView::Kind_Splat)
 	{
 		append(json, ",\"target\":");
-		append(json, (kind == BufferView::Kind_Vertex) ? "34962" : "34963");
+		append(json, (kind == BufferView::Kind_Index) ? "34963" : "34962");
 	}
 	if (compression != BufferView::Compression_None)
 	{
@@ -1173,6 +1173,35 @@ void writeMeshGeometry(std::string& json, std::vector<BufferView>& views, std::s
 		append(json, ",\"indices\":");
 		append(json, index_accr);
 	}
+}
+
+void writeMeshSplats(std::string& json, std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const Mesh& mesh, const QuantizationPosition& qp, const Settings& settings)
+{
+	std::string scratch;
+
+	append(json, "{\"attributes\":{");
+
+	for (size_t j = 0; j < mesh.streams.size(); ++j)
+	{
+		const Stream& stream = mesh.streams[j];
+
+		scratch.clear();
+		StreamFormat format = writeSplatStream(scratch, stream, qp, settings);
+		BufferView::Compression compression = settings.compress ? BufferView::Compression_Attribute : BufferView::Compression_None;
+
+		size_t view = getBufferView(views, BufferView::Kind_Splat, format.filter, compression, format.stride, stream.type);
+		size_t offset = views[view].data.size();
+		views[view].data += scratch;
+
+		writePrimitiveAccessor(json_accessors, stream, view, offset, format, qp, settings);
+
+		size_t vertex_accr = accr_offset++;
+		writePrimitiveAttribute(json, stream, vertex_accr);
+	}
+
+	append(json, "},\"mode\":0,\"extensions\":{\"KHR_gaussian_splatting\":{");
+	append(json, "\"kernel\":\"ellipse\",\"colorSpace\":\"srgb_rec709_display\"");
+	append(json, "}}");
 }
 
 static size_t writeAnimationTime(std::vector<BufferView>& views, std::string& json_accessors, size_t& accr_offset, const std::vector<float>& time, const Settings& settings)

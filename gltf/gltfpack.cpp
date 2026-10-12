@@ -505,6 +505,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 	bool ext_texture_transform = false;
 	bool ext_texture_basisu = false;
 	bool ext_texture_webp = false;
+	bool ext_splatting = false;
 
 	size_t accr_offset = 0;
 	size_t node_offset = 0;
@@ -632,7 +633,12 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 
 			comma(json_meshes);
 
-			if (prim.geometry_duplicate)
+			if (prim.splats)
+			{
+				writeMeshSplats(json_meshes, views, json_accessors, accr_offset, prim, qp, settings);
+				ext_splatting = true;
+			}
+			else if (prim.geometry_duplicate)
 			{
 				PrimitiveCacheEntry& entry = primitive_cache[std::make_pair(prim.geometry_hash[0], prim.geometry_hash[1])];
 
@@ -891,6 +897,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 	    {"KHR_materials_variants", data->variants_count > 0, false},
 	    {"KHR_lights_punctual", data->lights_count > 0, false},
 	    {"KHR_texture_basisu", (!json_textures.empty() && settings.texture_ktx2) || ext_texture_basisu, true},
+	    {"KHR_gaussian_splatting", ext_splatting, true},
 	    {"EXT_texture_webp", (!json_textures.empty() && settings.texture_webp) || ext_texture_webp, true},
 	    {"EXT_mesh_gpu_instancing", ext_instancing, true},
 	};

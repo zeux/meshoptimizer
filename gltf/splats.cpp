@@ -5,6 +5,8 @@
 
 #include <memory>
 
+#include <math.h>
+
 const char* kGltfSH[4][7] = {
     {"KHR_gaussian_splatting:SH_DEGREE_0_COEF_0"},
     {"KHR_gaussian_splatting:SH_DEGREE_1_COEF_0", "KHR_gaussian_splatting:SH_DEGREE_1_COEF_1", "KHR_gaussian_splatting:SH_DEGREE_1_COEF_2"},
@@ -98,24 +100,10 @@ static cgltf_data* createScene()
 	cgltf_data* data = (cgltf_data*)calloc(1, sizeof(cgltf_data));
 	data->memory.free_func = defaultFree;
 
-	data->nodes = (cgltf_node*)calloc(1, sizeof(cgltf_node));
-	data->nodes_count = 1;
-
-	cgltf_node* node = &data->nodes[0];
-
-	node->rotation[3] = 1.0f;
-	node->scale[0] = 1.0f;
-	node->scale[1] = 1.0f;
-	node->scale[2] = 1.0f;
-
 	data->scenes = (cgltf_scene*)calloc(1, sizeof(cgltf_scene));
 	data->scenes_count = 1;
 
 	data->scene = data->scenes;
-
-	data->scenes->nodes = (cgltf_node**)calloc(1, sizeof(cgltf_node*));
-	data->scenes->nodes_count = 1;
-	data->scenes->nodes[0] = node;
 
 	return data;
 }
@@ -170,6 +158,7 @@ cgltf_data* parseSplats(const char* path, std::vector<Mesh>& meshes, const char*
 	Mesh& mesh = meshes.back();
 
 	mesh.type = cgltf_primitive_type_points;
+	mesh.splats = true;
 
 	appendStream(mesh, std::move(position), cgltf_attribute_type_position);
 	appendStream(mesh, std::move(rotation), cgltf_attribute_type_custom, "KHR_gaussian_splatting:ROTATION");
@@ -190,4 +179,43 @@ cgltf_data* parseSplats(const char* path, std::vector<Mesh>& meshes, const char*
 	cgltf_data* data = createScene();
 
 	return data;
+}
+
+static StreamFormat writeSplatStreamRaw(std::string& bin, const Stream& stream, cgltf_type type, size_t components)
+{
+	assert(components >= 1 && components <= 4);
+
+	for (size_t i = 0; i < stream.data.size(); ++i)
+	{
+		const Attr& a = stream.data[i];
+
+		bin.append(reinterpret_cast<const char*>(a.f), sizeof(float) * components);
+	}
+
+	StreamFormat format = {type, cgltf_component_type_r_32f, false, sizeof(float) * components};
+	return format;
+}
+
+StreamFormat writeSplatStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const Settings& settings, bool filters)
+{
+	(void)qp;
+	(void)settings;
+	(void)filters;
+
+	if (stream.type == cgltf_attribute_type_position)
+		return writeSplatStreamRaw(bin, stream, cgltf_type_vec3, 3);
+	else if (stream.type == cgltf_attribute_type_custom)
+	{
+		if (strstr(stream.custom_name, "ROTATION"))
+			return writeSplatStreamRaw(bin, stream, cgltf_type_vec4, 4);
+		else if (strstr(stream.custom_name, "SCALE"))
+			return writeSplatStreamRaw(bin, stream, cgltf_type_vec3, 3);
+		else if (strstr(stream.custom_name, "SH_DEGREE"))
+			return writeSplatStreamRaw(bin, stream, cgltf_type_vec3, 3);
+		else if (strstr(stream.custom_name, "OPACITY"))
+			return writeSplatStreamRaw(bin, stream, cgltf_type_scalar, 1);
+	}
+
+	assert(!"Unexpected splat stream type");
+	return StreamFormat{};
 }
