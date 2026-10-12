@@ -7,11 +7,16 @@
 
 #include <math.h>
 
-const char* kGltfSH[4][7] = {
-    {"KHR_gaussian_splatting:SH_DEGREE_0_COEF_0"},
-    {"KHR_gaussian_splatting:SH_DEGREE_1_COEF_0", "KHR_gaussian_splatting:SH_DEGREE_1_COEF_1", "KHR_gaussian_splatting:SH_DEGREE_1_COEF_2"},
-    {"KHR_gaussian_splatting:SH_DEGREE_2_COEF_0", "KHR_gaussian_splatting:SH_DEGREE_2_COEF_1", "KHR_gaussian_splatting:SH_DEGREE_2_COEF_2", "KHR_gaussian_splatting:SH_DEGREE_2_COEF_3", "KHR_gaussian_splatting:SH_DEGREE_2_COEF_4"},
-    {"KHR_gaussian_splatting:SH_DEGREE_3_COEF_0", "KHR_gaussian_splatting:SH_DEGREE_3_COEF_1", "KHR_gaussian_splatting:SH_DEGREE_3_COEF_2", "KHR_gaussian_splatting:SH_DEGREE_3_COEF_3", "KHR_gaussian_splatting:SH_DEGREE_3_COEF_4", "KHR_gaussian_splatting:SH_DEGREE_3_COEF_5", "KHR_gaussian_splatting:SH_DEGREE_3_COEF_6"},
+enum SplatAttribute
+{
+	Splat_Position = 0,
+	Splat_Rotation,
+	Splat_Scale,
+	Splat_Opacity,
+	Splat_SH0,
+	Splat_SH1,
+	Splat_SH2,
+	Splat_SH3,
 };
 
 static void defaultFree(void*, void* p)
@@ -148,13 +153,14 @@ static void convertSplats(std::vector<Attr>& position, std::vector<Attr>& rotati
 	}
 }
 
-static void appendStream(Mesh& mesh, std::vector<Attr>&& data, cgltf_attribute_type type, const char* custom_name = NULL)
+static void appendStream(Mesh& mesh, std::vector<Attr>&& data, cgltf_attribute_type type, SplatAttribute attr, int index = 0)
 {
 	mesh.streams.push_back(Stream());
 	Stream& stream = mesh.streams.back();
 
 	stream.type = type;
-	stream.custom_name = custom_name;
+	stream.index = index;
+	stream.splats = attr;
 	stream.data.swap(data);
 }
 
@@ -227,25 +233,53 @@ cgltf_data* parseSplats(const char* path, std::vector<Mesh>& meshes, const char*
 	mesh.type = cgltf_primitive_type_points;
 	mesh.splats = true;
 
-	appendStream(mesh, std::move(position), cgltf_attribute_type_position);
-	appendStream(mesh, std::move(rotation), cgltf_attribute_type_custom, "KHR_gaussian_splatting:ROTATION");
-	appendStream(mesh, std::move(scale), cgltf_attribute_type_custom, "KHR_gaussian_splatting:SCALE");
-	appendStream(mesh, std::move(opacity), cgltf_attribute_type_custom, "KHR_gaussian_splatting:OPACITY");
-	appendStream(mesh, std::move(sh0), cgltf_attribute_type_custom, kGltfSH[0][0]); // SH_DEGREE_0_COEF_0
+	appendStream(mesh, std::move(position), cgltf_attribute_type_position, Splat_Position);
+	appendStream(mesh, std::move(rotation), cgltf_attribute_type_custom, Splat_Rotation);
+	appendStream(mesh, std::move(scale), cgltf_attribute_type_custom, Splat_Scale);
+	appendStream(mesh, std::move(opacity), cgltf_attribute_type_custom, Splat_Opacity);
+	appendStream(mesh, std::move(sh0), cgltf_attribute_type_custom, Splat_SH0, 0);
 
 	if (shdim >= 1)
 		for (int k = 0; k < 3; ++k)
-			appendStream(mesh, std::move(sh1[k]), cgltf_attribute_type_custom, kGltfSH[1][k]);
+			appendStream(mesh, std::move(sh1[k]), cgltf_attribute_type_custom, Splat_SH1, k);
+
 	if (shdim >= 2)
 		for (int k = 0; k < 5; ++k)
-			appendStream(mesh, std::move(sh2[k]), cgltf_attribute_type_custom, kGltfSH[2][k]);
+			appendStream(mesh, std::move(sh2[k]), cgltf_attribute_type_custom, Splat_SH2, k);
+
 	if (shdim >= 3)
 		for (int k = 0; k < 7; ++k)
-			appendStream(mesh, std::move(sh3[k]), cgltf_attribute_type_custom, kGltfSH[3][k]);
+			appendStream(mesh, std::move(sh3[k]), cgltf_attribute_type_custom, Splat_SH3, k);
 
 	cgltf_data* data = createScene();
 
 	return data;
+}
+
+const char* splatAttributeType(int type)
+{
+	switch (SplatAttribute(type))
+	{
+	case Splat_Position:
+		return "POSITION";
+	case Splat_Rotation:
+		return "ROTATION";
+	case Splat_Scale:
+		return "SCALE";
+	case Splat_Opacity:
+		return "OPACITY";
+	case Splat_SH0:
+		return "SH_DEGREE_0_COEF";
+	case Splat_SH1:
+		return "SH_DEGREE_1_COEF";
+	case Splat_SH2:
+		return "SH_DEGREE_2_COEF";
+	case Splat_SH3:
+		return "SH_DEGREE_3_COEF";
+	}
+
+	assert(!"Unknown splat attribute type");
+	return NULL;
 }
 
 static StreamFormat writeSplatStreamRaw(std::string& bin, const Stream& stream, cgltf_type type, size_t components)
@@ -263,24 +297,25 @@ static StreamFormat writeSplatStreamRaw(std::string& bin, const Stream& stream, 
 	return format;
 }
 
-StreamFormat writeSplatStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const Settings& settings, bool filters)
+StreamFormat writeSplatStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const Settings& settings)
 {
 	(void)qp;
 	(void)settings;
-	(void)filters;
 
 	if (stream.type == cgltf_attribute_type_position)
 		return writeSplatStreamRaw(bin, stream, cgltf_type_vec3, 3);
-	else if (stream.type == cgltf_attribute_type_custom)
+	else if (stream.splats)
 	{
-		if (strstr(stream.custom_name, "ROTATION"))
+		SplatAttribute attr = SplatAttribute(stream.splats);
+
+		if (attr == Splat_Rotation)
 			return writeSplatStreamRaw(bin, stream, cgltf_type_vec4, 4);
-		else if (strstr(stream.custom_name, "SCALE"))
+		else if (attr == Splat_Scale)
 			return writeSplatStreamRaw(bin, stream, cgltf_type_vec3, 3);
-		else if (strstr(stream.custom_name, "SH_DEGREE"))
-			return writeSplatStreamRaw(bin, stream, cgltf_type_vec3, 3);
-		else if (strstr(stream.custom_name, "OPACITY"))
+		else if (attr == Splat_Opacity)
 			return writeSplatStreamRaw(bin, stream, cgltf_type_scalar, 1);
+		else if (attr == Splat_SH0 || attr == Splat_SH1 || attr == Splat_SH2 || attr == Splat_SH3)
+			return writeSplatStreamRaw(bin, stream, cgltf_type_vec3, 3);
 	}
 
 	assert(!"Unexpected splat stream type");

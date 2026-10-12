@@ -1026,6 +1026,18 @@ static void writePrimitiveAttribute(std::string& json, const Stream& stream, siz
 	{
 		append(json, stream.custom_name);
 	}
+	else if (stream.splats)
+	{
+		const char* attr = splatAttributeType(stream.splats);
+
+		append(json, "KHR_gaussian_splatting:");
+		append(json, attr);
+		if (strstr(attr, "DEGREE"))
+		{
+			append(json, "_");
+			append(json, size_t(stream.index));
+		}
+	}
 	else
 	{
 		append(json, attributeType(stream.type));
@@ -1189,7 +1201,7 @@ void writeMeshSplats(std::string& json, std::vector<BufferView>& views, std::str
 		StreamFormat format = writeSplatStream(scratch, stream, qp, settings);
 		BufferView::Compression compression = settings.compress ? BufferView::Compression_Attribute : BufferView::Compression_None;
 
-		size_t view = getBufferView(views, BufferView::Kind_Splat, format.filter, compression, format.stride, stream.type);
+		size_t view = getBufferView(views, BufferView::Kind_Splat, format.filter, compression, format.stride, stream.splats);
 		size_t offset = views[view].data.size();
 		views[view].data += scratch;
 

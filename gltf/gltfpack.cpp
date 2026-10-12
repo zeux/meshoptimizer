@@ -149,6 +149,10 @@ static void printAttributeStats(const std::vector<BufferView>& views, BufferView
 			variant = animationPath(cgltf_animation_path_type(view.variant));
 			break;
 
+		case BufferView::Kind_Splat:
+			variant = splatAttributeType(view.variant);
+			break;
+
 		default:;
 		}
 
@@ -966,6 +970,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 		printAttributeStats(views, BufferView::Kind_Index, "index");
 		printAttributeStats(views, BufferView::Kind_Keyframe, "keyframe");
 		printAttributeStats(views, BufferView::Kind_Instance, "instance");
+		printAttributeStats(views, BufferView::Kind_Splat, "splat");
 
 		printImageStats(views, TextureKind_Generic, "generic");
 		printImageStats(views, TextureKind_Color, "color");

@@ -33,6 +33,7 @@ struct Stream
 	cgltf_attribute_type type;
 	int index;
 	int target; // 0 = base mesh, 1+ = morph target
+	int splats; // 1+ = splat attribute type
 
 	const char* custom_name; // only valid for cgltf_attribute_type_custom
 
@@ -386,7 +387,7 @@ StreamFormat writeVertexStream(std::string& bin, const Stream& stream, const Qua
 StreamFormat writeIndexStream(std::string& bin, const std::vector<unsigned int>& stream);
 StreamFormat writeTimeStream(std::string& bin, const std::vector<float>& data);
 StreamFormat writeKeyframeStream(std::string& bin, cgltf_animation_path_type type, const std::vector<Attr>& data, const Settings& settings, bool has_tangents = false);
-StreamFormat writeSplatStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const Settings& settings, bool filters = true);
+StreamFormat writeSplatStream(std::string& bin, const Stream& stream, const QuantizationPosition& qp, const Settings& settings);
 
 void compressVertexStream(std::string& bin, const std::string& data, size_t count, size_t stride, int level);
 void compressIndexStream(std::string& bin, const std::string& data, size_t count, size_t stride);
@@ -404,6 +405,7 @@ void appendJson(std::string& s, const char* data);
 
 const char* attributeType(cgltf_attribute_type type);
 const char* animationPath(cgltf_animation_path_type type);
+const char* splatAttributeType(int type);
 
 void writeMaterial(std::string& json, const cgltf_data* data, const cgltf_material& material, const QuantizationPosition* qp, const QuantizationTexture* qt, std::vector<TextureInfo>& textures);
 void writeBufferView(std::string& json, BufferView::Kind kind, StreamFormat::Filter filter, size_t count, size_t stride, size_t bin_offset, size_t bin_size, BufferView::Compression compression, size_t compressed_offset, size_t compressed_size, const char* meshopt_ext);
