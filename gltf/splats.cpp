@@ -274,7 +274,8 @@ void processSplatMesh(Mesh& mesh, const Settings& settings)
 	assert(mesh.splats && mesh.type == cgltf_primitive_type_points && mesh.indices.empty());
 
 	const Stream* positions = getStream(mesh, cgltf_attribute_type_position, Splat_Position);
-	if (!positions)
+	const Stream* opacity = getStream(mesh, cgltf_attribute_type_custom, Splat_Opacity);
+	if (!positions || !opacity)
 		return;
 
 	// sort splats by position using Morton order
@@ -283,11 +284,37 @@ void processSplatMesh(Mesh& mesh, const Settings& settings)
 	std::vector<unsigned int> remap(vertex_count);
 	meshopt_spatialSortRemap(&remap[0], positions->data[0].f, vertex_count, sizeof(Attr));
 
+	size_t result_count = vertex_count;
+
+	// when quantization is enabled, we can remove splats with low opacity
+	// for now this is gated behind -cc so that -c produces original splat set
+	if (settings.quantize && settings.compressmore)
+	{
+		float opacitymin = 2.f / float(1 << settings.col_bits);
+
+		// mark slots of surviving splats and number them in the remapped order (removed splats use ~0u)
+		std::vector<unsigned int> slots(vertex_count, ~0u);
+
+		for (size_t i = 0; i < vertex_count; ++i)
+			if (opacity->data[i].f[0] >= opacitymin)
+				slots[remap[i]] = 0;
+
+		result_count = 0;
+		for (size_t i = 0; i < vertex_count; ++i)
+			if (slots[i] != ~0u)
+				slots[i] = unsigned(result_count++);
+
+		// update old->new remap; surviving splats get the new linearized index
+		for (size_t i = 0; i < vertex_count; ++i)
+			remap[i] = slots[remap[i]];
+	}
+
 	for (size_t i = 0; i < mesh.streams.size(); ++i)
 	{
 		assert(mesh.streams[i].data.size() == vertex_count);
 
 		meshopt_remapVertexBuffer(&mesh.streams[i].data[0], &mesh.streams[i].data[0], vertex_count, sizeof(Attr), &remap[0]);
+		mesh.streams[i].data.resize(result_count);
 	}
 
 	// filter streams with excessive SH data
