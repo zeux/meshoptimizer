@@ -413,6 +413,41 @@ static StreamFormat writeSplatStreamFloat(std::string& bin, const Stream& stream
 	return format;
 }
 
+static StreamFormat writeSplatStreamExpSH(std::string& bin, const Stream& stream, int bits, int range)
+{
+	// values in (-2^range, 2^range) are encoded with fixed 2^-bits precision (like meshopt_EncodeExpClamped, but we need custom range support)
+	// to reduce the cost of sign flips on upper mantissa bytes, we try to shift mantissa left and leave low bytes as zero
+	int mbits = bits + range;
+	int shift = mbits + 1 <= 8 ? 16 : (mbits + 1 <= 16 ? 8 : 0);
+	float scale = ldexpf(1.f, -range);
+
+	for (size_t i = 0; i < stream.data.size(); ++i)
+	{
+		const Attr& a = stream.data[i];
+
+		float v[3] = {a.f[0] * scale, a.f[1] * scale, a.f[2] * scale};
+		unsigned int r[3];
+		meshopt_encodeFilterExp(r, 1, sizeof(r), mbits + 1, v, meshopt_EncodeExpClamped);
+
+		for (int k = 0; k < 3; ++k)
+		{
+			int m = int(r[k] << 8) >> 8;
+			int e = int(r[k]) >> 24;
+
+			// rounding may produce mantissa 2^mbits; clamp it so that m with sign bit fits into mbits+1 bits and shifting does not overflow
+			int mmax = 1 << mbits;
+			m = std::max(-(mmax - 1), std::min(m, mmax - 1));
+
+			r[k] = ((unsigned(m) << shift) & 0xffffff) | (unsigned(e + range - shift) << 24);
+		}
+
+		bin.append(reinterpret_cast<const char*>(r), sizeof(r));
+	}
+
+	StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_32f, false, sizeof(float) * 3, StreamFormat::Filter_Exp};
+	return format;
+}
+
 static void encodeSnorm(void* destination, size_t count, size_t stride, int bits, const float* data)
 {
 	assert(stride == 4 || stride == 8);
@@ -510,8 +545,11 @@ StreamFormat writeSplatStream(std::string& bin, const Stream& stream, const Sett
 		if (!settings.quantize)
 			return writeSplatStreamRaw(bin, stream, cgltf_type_vec3, 3);
 
-		int bits = settings.col_bits;
-		return writeSplatStreamFloat(bin, stream, cgltf_type_vec3, 3, settings.compress, bits, meshopt_EncodeExpSharedComponent);
+		if (!settings.compress)
+			return writeSplatStreamFloat(bin, stream, cgltf_type_vec3, 3, false, settings.col_bits, meshopt_EncodeExpSharedComponent);
+
+		int bits = settings.col_bits - 2 - (settings.compressmore ? 1 : 0); // -2 accounts for a larger range [-2..2] with a sign bit
+		return writeSplatStreamExpSH(bin, stream, bits, /* range= */ 1);
 	}
 	else if (attr == Splat_SH1 || attr == Splat_SH2 || attr == Splat_SH3)
 	{
@@ -535,7 +573,11 @@ StreamFormat writeSplatStream(std::string& bin, const Stream& stream, const Sett
 		else
 		{
 			int bits = settings.col_bits - (attr == Splat_SH1 ? 2 : 3); // 6/5/5 at default settings, excluding sign bit
-			return writeSplatStreamFloat(bin, stream, cgltf_type_vec3, 3, settings.compress, bits, meshopt_EncodeExpClamped);
+
+			if (!settings.compress)
+				return writeSplatStreamFloat(bin, stream, cgltf_type_vec3, 3, false, bits, meshopt_EncodeExpClamped);
+
+			return writeSplatStreamExpSH(bin, stream, bits, /* range= */ 0);
 		}
 	}
 	else
