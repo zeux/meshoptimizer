@@ -374,14 +374,20 @@ static void encodeSnorm(void* destination, size_t count, size_t stride, int bits
 	signed char* d8 = static_cast<signed char*>(destination);
 	short* d16 = static_cast<short*>(destination);
 
+	// to support bits != 8/16, we need to adjust the quantization scale so that division by 127/32767 during dequantization does not lose precision
+	// this is a no-op if bits matches stride, as step=1 and scale=1.0f
+	int range = stride == 4 ? 128 : 32768;
+	int step = 1 << ((stride == 4 ? 8 : 16) - bits);
+	float scale = float(range - 1) / float(range - step);
+
 	for (size_t i = 0; i < count; ++i)
 	{
 		const float* v = &data[i * 4];
 
-		int fx = meshopt_quantizeSnorm(v[0], bits);
-		int fy = meshopt_quantizeSnorm(v[1], bits);
-		int fz = meshopt_quantizeSnorm(v[2], bits);
-		int fw = meshopt_quantizeSnorm(v[3], bits);
+		int fx = meshopt_quantizeSnorm(v[0] * scale, bits) * step;
+		int fy = meshopt_quantizeSnorm(v[1] * scale, bits) * step;
+		int fz = meshopt_quantizeSnorm(v[2] * scale, bits) * step;
+		int fw = meshopt_quantizeSnorm(v[3] * scale, bits) * step;
 
 		if (stride == 4)
 		{
@@ -464,11 +470,25 @@ StreamFormat writeSplatStream(std::string& bin, const Stream& stream, const Sett
 		if (!settings.quantize)
 			return writeSplatStreamRaw(bin, stream, cgltf_type_vec3, 3);
 
-		int bits = settings.col_bits;
 		if (settings.compressmore)
-			bits -= (attr == Splat_SH1 ? 1 : (attr == Splat_SH2 ? 2 : 3));
+		{
+			// when using compressmore (-cc) we encode SH1-3 as normalized int8 to reduce decoding memory pressure and file sizes
+			// this is outside of the spec, but de-facto safe for many viewers and represent a significant spec gap that should be closed
+			size_t offset = bin.size();
+			size_t stride = 4;
+			bin.resize(bin.size() + stream.data.size() * stride);
 
-		return writeSplatStreamFloat(bin, stream, cgltf_type_vec3, 3, settings.compress, bits, meshopt_EncodeExpClamped);
+			int bits = settings.col_bits - (attr == Splat_SH1 ? 2 : (attr == Splat_SH2 ? 3 : 4));
+			encodeSnorm(&bin[offset], stream.data.size(), stride, bits, stream.data[0].f);
+
+			StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_8, true, 4, StreamFormat::Filter_None};
+			return format;
+		}
+		else
+		{
+			int bits = settings.col_bits - (attr == Splat_SH1 ? 1 : (attr == Splat_SH2 ? 2 : 3));
+			return writeSplatStreamFloat(bin, stream, cgltf_type_vec3, 3, settings.compress, bits, meshopt_EncodeExpClamped);
+		}
 	}
 	else
 	{
