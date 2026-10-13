@@ -521,6 +521,23 @@ StreamFormat writeSplatStream(std::string& bin, const Stream& stream, const Sett
 		else
 			encodeSnorm(&bin[offset], stream.data.size(), stride, 16, stream.data[0].f);
 
+		if (filter == StreamFormat::Filter_Quat && bits == 8 && settings.compressmore)
+		{
+			// with 8-bit components, we left-align the 16-bit components to keep the least significant byte as 0; this compresses a little better
+			// technically, .w now encodes a scale that's not quite 1.0; this works but is out of spec. in the future we could adjust the quantizer so that .w can encode 0x7ffc
+			for (size_t i = 0; i < stream.data.size(); ++i)
+			{
+				short v[4];
+				memcpy(v, &bin[offset + i * 8], sizeof(v));
+
+				for (int k = 0; k < 3; ++k)
+					v[k] = short(unsigned(v[k]) << 8);
+				v[3] = short(((v[3] | 3) << 8) | (v[3] & 3));
+
+				memcpy(&bin[offset + i * 8], v, sizeof(v));
+			}
+		}
+
 		StreamFormat format = {cgltf_type_vec4, cgltf_component_type_r_16, true, 8, filter};
 		return format;
 	}
