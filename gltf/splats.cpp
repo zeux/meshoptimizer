@@ -439,7 +439,8 @@ StreamFormat writeSplatStream(std::string& bin, const Stream& stream, const Sett
 		if (!settings.quantize)
 			return writeSplatStreamRaw(bin, stream, cgltf_type_vec3, 3);
 
-		return writeSplatStreamFloat(bin, stream, cgltf_type_vec3, 3, settings.compress, settings.pos_bits, meshopt_EncodeExpSharedComponent);
+		int bits = settings.pos_bits;
+		return writeSplatStreamFloat(bin, stream, cgltf_type_vec3, 3, settings.compress, bits, meshopt_EncodeExpSharedComponent);
 	}
 	else if (attr == Splat_Rotation)
 	{
@@ -447,7 +448,7 @@ StreamFormat writeSplatStream(std::string& bin, const Stream& stream, const Sett
 			return writeSplatStreamRaw(bin, stream, cgltf_type_vec4, 4);
 
 		StreamFormat::Filter filter = settings.compress ? StreamFormat::Filter_Quat : StreamFormat::Filter_None;
-		int bits = settings.nrm_bits + 1;
+		int bits = settings.nrm_bits + (settings.compressmore ? 0 : 1);
 
 		size_t offset = bin.size();
 		size_t stride = 8;
@@ -498,7 +499,7 @@ StreamFormat writeSplatStream(std::string& bin, const Stream& stream, const Sett
 			size_t stride = 4;
 			bin.resize(bin.size() + stream.data.size() * stride);
 
-			int bits = settings.col_bits - (attr == Splat_SH1 ? 2 : (attr == Splat_SH2 ? 3 : 4));
+			int bits = settings.col_bits - (attr == Splat_SH1 ? 3 : 4); // 5/4/4 at default settings, including sign bit
 			encodeSnorm(&bin[offset], stream.data.size(), stride, bits, stream.data[0].f);
 
 			StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_8, true, 4, StreamFormat::Filter_None};
@@ -506,7 +507,7 @@ StreamFormat writeSplatStream(std::string& bin, const Stream& stream, const Sett
 		}
 		else
 		{
-			int bits = settings.col_bits - (attr == Splat_SH1 ? 1 : (attr == Splat_SH2 ? 2 : 3));
+			int bits = settings.col_bits - (attr == Splat_SH1 ? 2 : 3); // 6/5/5 at default settings, excluding sign bit
 			return writeSplatStreamFloat(bin, stream, cgltf_type_vec3, 3, settings.compress, bits, meshopt_EncodeExpClamped);
 		}
 	}

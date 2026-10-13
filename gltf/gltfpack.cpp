@@ -1312,7 +1312,7 @@ Settings defaults()
 		settings.texture_quality[kind] = 8;
 	}
 
-	settings.splats_dim = 3;
+	settings.splats_dim = 2;
 
 	return settings;
 }
