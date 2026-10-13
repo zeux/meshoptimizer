@@ -1312,6 +1312,8 @@ Settings defaults()
 		settings.texture_quality[kind] = 8;
 	}
 
+	settings.splats_dim = 3;
+
 	return settings;
 }
 
@@ -1596,6 +1598,10 @@ int main(int argc, char** argv)
 		else if (strcmp(arg, "-tj") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.texture_jobs = clamp(atoi(argv[++i]), 0, 128);
+		}
+		else if (strcmp(arg, "-gsd") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		{
+			settings.splats_dim = clamp(atoi(argv[++i]), 0, 3);
 		}
 		else if (strcmp(arg, "-noq") == 0)
 		{

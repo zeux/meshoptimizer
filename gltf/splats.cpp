@@ -271,8 +271,6 @@ static Stream* getStream(Mesh& mesh, cgltf_attribute_type type, SplatAttribute a
 
 void processSplatMesh(Mesh& mesh, const Settings& settings)
 {
-	(void)settings;
-
 	assert(mesh.splats && mesh.type == cgltf_primitive_type_points && mesh.indices.empty());
 
 	const Stream* positions = getStream(mesh, cgltf_attribute_type_position, Splat_Position);
@@ -290,6 +288,28 @@ void processSplatMesh(Mesh& mesh, const Settings& settings)
 		assert(mesh.streams[i].data.size() == vertex_count);
 
 		meshopt_remapVertexBuffer(&mesh.streams[i].data[0], &mesh.streams[i].data[0], vertex_count, sizeof(Attr), &remap[0]);
+	}
+
+	// filter streams with excessive SH data
+	if (settings.splats_dim < 3)
+	{
+		size_t write = 0;
+
+		for (Stream& stream : mesh.streams)
+		{
+			if (stream.type == cgltf_attribute_type_custom && stream.splats >= Splat_SH1 && stream.splats <= Splat_SH3 && (stream.splats - Splat_SH0) > settings.splats_dim)
+				continue;
+
+			// the following code is roughly equivalent to streams[write] = std::move(stream), but is safe against self-move
+			std::vector<Attr> data;
+			data.swap(stream.data);
+
+			mesh.streams[write] = stream;
+			mesh.streams[write].data.swap(data);
+			write++;
+		}
+
+		mesh.streams.resize(write);
 	}
 }
 

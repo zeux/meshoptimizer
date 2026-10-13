@@ -174,6 +174,8 @@ struct Settings
 
 	int texture_jobs;
 
+	int splats_dim;
+
 	bool quantize;
 
 	bool compress;
