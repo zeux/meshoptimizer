@@ -117,10 +117,10 @@ static void printSceneStats(const std::vector<BufferView>& views, const std::vec
 
 	printf("output: %d nodes, %d meshes (%d primitives), %d materials\n", int(node_offset), int(mesh_offset), int(meshes.size()), int(material_offset));
 	printf("output: JSON %d bytes, buffers %d bytes\n", int(json_size), int(bin_size));
-	printf("output: buffers: vertex %d bytes, index %d bytes, skin %d bytes, time %d bytes, keyframe %d bytes, instance %d bytes, image %d bytes\n",
+	printf("output: buffers: vertex %d bytes, index %d bytes, skin %d bytes, time %d bytes, keyframe %d bytes, instance %d bytes, image %d bytes, splat %d bytes\n",
 	    int(bytes[BufferView::Kind_Vertex]), int(bytes[BufferView::Kind_Index]), int(bytes[BufferView::Kind_Skin]),
 	    int(bytes[BufferView::Kind_Time]), int(bytes[BufferView::Kind_Keyframe]), int(bytes[BufferView::Kind_Instance]),
-	    int(bytes[BufferView::Kind_Image]));
+	    int(bytes[BufferView::Kind_Image]), int(bytes[BufferView::Kind_Splat]));
 }
 
 static void printAttributeStats(const std::vector<BufferView>& views, BufferView::Kind kind, const char* name)
@@ -149,10 +149,17 @@ static void printAttributeStats(const std::vector<BufferView>& views, BufferView
 			variant = animationPath(cgltf_animation_path_type(view.variant));
 			break;
 
+		case BufferView::Kind_Splat:
+			variant = splatAttributeType(view.variant);
+			break;
+
 		default:;
 		}
 
 		size_t count = view.data.size() / view.stride;
+
+		if (kind == BufferView::Kind_Splat && strncmp(variant, "SH_DEGREE_", 10) == 0)
+			count /= 1 + (atoi(variant + 10) * 2); // 1, 3, 5, 7 vectors per degree
 
 		if (view.compression == BufferView::Compression_None)
 			printf("stats: %s %s: %d bytes (%.1f bits)\n",
@@ -161,7 +168,7 @@ static void printAttributeStats(const std::vector<BufferView>& views, BufferView
 			printf("stats: %s %s: compressed %d bytes (%.1f bits), raw %d bytes (%d bits)\n",
 			    name, variant,
 			    int(view.bytes), double(view.bytes) / double(count) * 8,
-			    int(view.data.size()), int(view.stride * 8));
+			    int(view.data.size()), int(view.data.size() * 8 / count));
 	}
 }
 
@@ -456,7 +463,11 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
 		Mesh& mesh = meshes[i];
-		processMesh(mesh, settings);
+
+		if (mesh.splats)
+			processSplatMesh(mesh, settings);
+		else
+			processMesh(mesh, settings);
 
 		if (mesh.geometry_duplicate)
 			hashMesh(mesh);
@@ -505,6 +516,8 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 	bool ext_texture_transform = false;
 	bool ext_texture_basisu = false;
 	bool ext_texture_webp = false;
+	bool ext_splatting = false;
+	bool ext_quantization = false;
 
 	size_t accr_offset = 0;
 	size_t node_offset = 0;
@@ -632,7 +645,12 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 
 			comma(json_meshes);
 
-			if (prim.geometry_duplicate)
+			if (prim.splats)
+			{
+				writeMeshSplats(json_meshes, views, json_accessors, accr_offset, prim, qp, settings);
+				ext_splatting = true;
+			}
+			else if (prim.geometry_duplicate)
 			{
 				PrimitiveCacheEntry& entry = primitive_cache[std::make_pair(prim.geometry_hash[0], prim.geometry_hash[1])];
 
@@ -645,6 +663,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 				{
 					entry.offset = json_meshes.size();
 					writeMeshGeometry(json_meshes, views, json_accessors, accr_offset, prim, qp, qt, settings);
+					ext_quantization = true;
 					entry.size = json_meshes.size() - entry.offset;
 					entry.qt = qt;
 				}
@@ -652,6 +671,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 			else
 			{
 				writeMeshGeometry(json_meshes, views, json_accessors, accr_offset, prim, qp, qt, settings);
+				ext_quantization = true;
 			}
 
 			if (prim.material)
@@ -872,7 +892,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 	append(json, "}");
 
 	const ExtensionInfo extensions[] = {
-	    {"KHR_mesh_quantization", settings.quantize, true},
+	    {"KHR_mesh_quantization", settings.quantize && ext_quantization, true},
 	    {meshopt_ext, settings.compress, !settings.fallback},
 	    {"KHR_texture_transform", (settings.quantize && !settings.tex_float && !json_textures.empty()) || ext_texture_transform, false},
 	    {"KHR_materials_pbrSpecularGlossiness", ext_pbr_specular_glossiness, false},
@@ -891,6 +911,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 	    {"KHR_materials_variants", data->variants_count > 0, false},
 	    {"KHR_lights_punctual", data->lights_count > 0, false},
 	    {"KHR_texture_basisu", (!json_textures.empty() && settings.texture_ktx2) || ext_texture_basisu, true},
+	    {"KHR_gaussian_splatting", ext_splatting, true},
 	    {"EXT_texture_webp", (!json_textures.empty() && settings.texture_webp) || ext_texture_webp, true},
 	    {"EXT_mesh_gpu_instancing", ext_instancing, true},
 	};
@@ -959,6 +980,7 @@ static size_t process(cgltf_data* data, const char* input_path, const char* outp
 		printAttributeStats(views, BufferView::Kind_Index, "index");
 		printAttributeStats(views, BufferView::Kind_Keyframe, "keyframe");
 		printAttributeStats(views, BufferView::Kind_Instance, "instance");
+		printAttributeStats(views, BufferView::Kind_Splat, "splat");
 
 		printImageStats(views, TextureKind_Generic, "generic");
 		printImageStats(views, TextureKind_Color, "color");
@@ -1074,9 +1096,34 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 			return 2;
 		}
 	}
+	else if (iext == ".ply")
+	{
+		if (settings.fallback)
+		{
+			fprintf(stderr, "Option -cf can not be used together with Gaussian Splats\n");
+			return 2;
+		}
+
+		const char* error = NULL;
+		data = parseSplats(input, meshes, &error);
+
+		if (!data)
+		{
+			fprintf(stderr, "Error loading %s: %s\n", input, error);
+			return 2;
+		}
+
+		fprintf(stderr, "Warning: Gaussian Splatting support is experimental; output structure, compression and quality may change\n");
+
+		// override position storage to -vpf; we can't support any other form of position quantization as position & scale have the same transform
+		settings.pos_float = true;
+
+		// override compression to KHR_meshopt_compression for smaller files
+		settings.compresskhr = true;
+	}
 	else
 	{
-		fprintf(stderr, "Error loading %s: unknown extension (expected .gltf or .glb or .obj)\n", input);
+		fprintf(stderr, "Error loading %s: unknown extension (expected .gltf, .glb, .obj or .ply)\n", input);
 		return 2;
 	}
 
@@ -1272,6 +1319,8 @@ Settings defaults()
 		settings.texture_scale[kind] = 1.f;
 		settings.texture_quality[kind] = 8;
 	}
+
+	settings.splats_dim = 2;
 
 	return settings;
 }
@@ -1558,6 +1607,10 @@ int main(int argc, char** argv)
 		{
 			settings.texture_jobs = clamp(atoi(argv[++i]), 0, 128);
 		}
+		else if (strcmp(arg, "-gsd") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		{
+			settings.splats_dim = clamp(atoi(argv[++i]), 0, 3);
+		}
 		else if (strcmp(arg, "-noq") == 0)
 		{
 			// TODO: Warn if -noq is used and suggest -vpf instead; use -noqq to silence
@@ -1660,7 +1713,7 @@ int main(int argc, char** argv)
 		if (help)
 		{
 			fprintf(stderr, "\nBasics:\n");
-			fprintf(stderr, "\t-i file: input file to process, .obj/.gltf/.glb\n");
+			fprintf(stderr, "\t-i file: input file to process, .gltf/.glb/.obj/.ply\n");
 			fprintf(stderr, "\t-o file: output file path, .gltf/.glb\n");
 			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc/-cz for higher compression ratio)\n");
 			fprintf(stderr, "\nTextures:\n");
@@ -1711,6 +1764,8 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-as N: use N-bit quantization for scale (default: 16; N should be between 1 and 24)\n");
 			fprintf(stderr, "\t-af N: resample animations at N Hz (default: 30; use 0 to disable)\n");
 			fprintf(stderr, "\t-ac: keep constant animation tracks even if they don't modify the node transform\n");
+			fprintf(stderr, "\nGaussian Splats:\n");
+			fprintf(stderr, "\t-gsd N: keep spherical harmonics up to degree N (default: 2; N should be between 0 and 3)\n");
 			fprintf(stderr, "\nScene:\n");
 			fprintf(stderr, "\t-kn: keep named nodes and meshes attached to named nodes so that named nodes can be transformed externally\n");
 			fprintf(stderr, "\t-km: keep named materials and disable named material merging\n");
@@ -1729,7 +1784,7 @@ int main(int argc, char** argv)
 		else
 		{
 			fprintf(stderr, "\nBasics:\n");
-			fprintf(stderr, "\t-i file: input file to process, .obj/.gltf/.glb\n");
+			fprintf(stderr, "\t-i file: input file to process, .gltf/.glb/.obj/.ply\n");
 			fprintf(stderr, "\t-o file: output file path, .gltf/.glb\n");
 			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc/-cz for higher compression ratio)\n");
 			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression\n");

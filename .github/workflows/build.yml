@@ -107,6 +107,14 @@ jobs:
         with:
           repository: KhronosGroup/glTF-Sample-Assets
           path: glTF-Sample-Assets
+      - uses: actions/checkout@v6
+        with:
+          repository: BabylonJS/Assets
+          ref: 5945275256c46909678d49fe68eb2683c44294ed
+          path: BabylonJS-Assets
+          sparse-checkout: splats/Unicorn_Stuffy.ply
+          sparse-checkout-cone-mode: false
+          filter: blob:none
       - name: work around ASLR+ASAN compatibility
         run: sudo sysctl -w vm.mmap_rnd_bits=28
       - name: make
@@ -121,6 +129,11 @@ jobs:
           find glTF-Sample-Assets -name '*.gltfpack.gltf' | xargs -P 2 -L 1 -d '\n' ./gltf_validator -r -a
         env:
           VALIDATOR: https://github.com/KhronosGroup/glTF-Validator/releases/download/2.0.0-dev.3.10/gltf_validator-2.0.0-dev.3.10-linux64.tar.xz
+      - name: test splats
+        run: |
+          for args in "" "-noq" "-c -gsd 3" "-cc"; do
+            ./gltfpack -i BabylonJS-Assets/splats/Unicorn_Stuffy.ply -o splats.glb $args
+          done
 
   gltfpack-js:
     runs-on: ubuntu-latest
@@ -182,6 +195,14 @@ jobs:
         with:
           repository: KhronosGroup/glTF-Sample-Assets
           path: glTF-Sample-Assets
+      - uses: actions/checkout@v6
+        with:
+          repository: BabylonJS/Assets
+          ref: 5945275256c46909678d49fe68eb2683c44294ed
+          path: BabylonJS-Assets
+          sparse-checkout: splats/Unicorn_Stuffy.ply
+          sparse-checkout-cone-mode: false
+          filter: blob:none
       - name: build basisu
         run: |
           cd basis_universal
@@ -217,6 +238,10 @@ jobs:
           ./gltfpack -test glTF-Sample-Assets/Models/VertexColorTest/glTF/VertexColorTest.gltf -si 0.5 -vc 12
           ./gltfpack -test glTF-Sample-Assets/Models/SimpleMeshes/glTF/SimpleMeshes.gltf -mm
           ./gltfpack -test glTF-Sample-Assets/Models/SimpleMeshes/glTF/SimpleMeshes.gltf -kn
+          ./gltfpack -test BabylonJS-Assets/splats/Unicorn_Stuffy.ply
+          ./gltfpack -test BabylonJS-Assets/splats/Unicorn_Stuffy.ply -noq
+          ./gltfpack -test BabylonJS-Assets/splats/Unicorn_Stuffy.ply -c -gsd 3
+          ./gltfpack -test BabylonJS-Assets/splats/Unicorn_Stuffy.ply -cc
           echo newmtl Leather > demo/pirate.mtl
           echo map_Kd leather.jpg >> demo/pirate.mtl
           echo map_d leather.jpg >> demo/pirate.mtl
@@ -227,6 +252,7 @@ jobs:
           ./gltfpack -h || true
           ./gltfpack -i glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -o box.glb -vv -r box.json
           ./gltfpack -i glTF-Sample-Assets/Models/BoxTextured/glTF/BoxTextured.gltf -o box.gltf -cf
+          ./gltfpack -i BabylonJS-Assets/splats/Unicorn_Stuffy.ply -o splats.glb -c -vv
       - name: upload coverage
         run: |
           find . -type f -name '*.gcno' -exec gcov -p {} +

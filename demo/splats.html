@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<title>meshoptimizer - splats</title>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+		<style>
+			body {
+				font-family: Monospace;
+				background-color: #300a24;
+				color: #fff;
+				margin: 0px;
+				overflow: hidden;
+			}
+			.renderer-label {
+				position: absolute;
+				top: 10px;
+				left: 10px;
+				background-color: rgba(0, 0, 0, 0.5);
+				padding: 5px 10px;
+				border-radius: 5px;
+				pointer-events: auto;
+				font-size: 14px;
+				transition: background-color 0.2s;
+				cursor: pointer;
+			}
+			.renderer-label:hover {
+				background-color: rgba(0, 0, 0, 0.7);
+			}
+		</style>
+
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.webgpu.js",
+					"three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.webgpu.js",
+					"three/tsl": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.tsl.js",
+					"three-examples/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+				}
+			}
+		</script>
+	</head>
+
+	<body>
+		<div class="renderer-label" id="label">load ply/glb/spz</div>
+		<input type="file" id="fileInput" style="display: none" accept=".ply,.glb,.spz" />
+
+		<script type="module">
+			import * as THREE from 'three';
+			import { GLTFLoader } from 'three-examples/loaders/GLTFLoader.js';
+			import { GLTFGaussianSplatLoaderExtension } from 'three-examples/loaders/GLTFGaussianSplatLoaderExtension.js';
+			import { GaussianSplatPLYLoader } from 'three-examples/loaders/GaussianSplatPLYLoader.js';
+			import { SPZLoader } from 'three-examples/loaders/SPZLoader.js';
+			import { GaussianSplat } from 'three-examples/objects/GaussianSplat.js';
+			import { OrbitControls } from 'three-examples/controls/OrbitControls.js';
+			import { MeshoptDecoder } from '../js/meshopt_decoder.mjs';
+
+			var container, label;
+			var camera, scene, renderer, controls;
+			var model;
+
+			init();
+
+			function loadFile() {
+				var input = document.getElementById('fileInput');
+				input.onchange = function () {
+					if (input.files.length > 0) {
+						var file = input.files[0];
+						var uri = URL.createObjectURL(file);
+						var ext = file.name.split('.').pop().toLowerCase();
+
+						label.textContent = file.name;
+						load(uri, ext);
+					}
+				};
+				input.click();
+			}
+
+			function load(path, ext) {
+				if (model) {
+					scene.remove(model);
+					model.traverse(function (child) {
+						if (child.geometry) {
+							child.geometry.dispose();
+						}
+					});
+					model = undefined;
+				}
+
+				var onProgress = function (xhr) {};
+				var onError = function (e) {
+					console.log(e);
+				};
+
+				function center(model) {
+					var bbox = new THREE.Box3().setFromObject(model);
+					var scale = 2 / Math.max(bbox.max.x - bbox.min.x, bbox.max.y - bbox.min.y, bbox.max.z - bbox.min.z);
+					var offset = new THREE.Vector3().addVectors(bbox.max, bbox.min).multiplyScalar(scale / 2);
+
+					model.scale.set(scale, scale, scale);
+					model.position.set(-offset.x, -offset.y, -offset.z);
+				}
+
+				if (ext == 'glb') {
+					var loader = new GLTFLoader();
+					loader.setMeshoptDecoder(MeshoptDecoder);
+					loader.register(function (parser) {
+						return new GLTFGaussianSplatLoaderExtension(parser);
+					});
+					loader.load(
+						path,
+						function (gltf) {
+							model = gltf.scene;
+							center(model);
+							scene.add(model);
+						},
+						onProgress,
+						onError
+					);
+				} else if (ext == 'ply') {
+					var loader = new GaussianSplatPLYLoader();
+					loader.load(
+						path,
+						function (geometry) {
+							model = new GaussianSplat(geometry);
+							model.rotation.x = Math.PI; // switch coordinate system to match glTF
+							center(model);
+							scene.add(model);
+						},
+						onProgress,
+						onError
+					);
+				} else if (ext == 'spz') {
+					var loader = new SPZLoader();
+					loader.load(
+						path,
+						function (geometry) {
+							model = new GaussianSplat(geometry);
+							center(model);
+							scene.add(model);
+						},
+						onProgress,
+						onError
+					);
+				} else {
+					console.error('Unsupported file format');
+				}
+			}
+
+			function init() {
+				// for now, switch color space to sRGB as three.js GaussianSplat does not support linear
+				THREE.ColorManagement.workingColorSpace = THREE.SRGBColorSpace;
+
+				container = document.createElement('div');
+				document.body.appendChild(container);
+
+				label = document.getElementById('label');
+				label.onclick = loadFile;
+
+				camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 100);
+				camera.position.y = 1.0;
+				camera.position.z = 3.0;
+
+				scene = new THREE.Scene();
+				scene.background = new THREE.Color(0x300a24);
+
+				renderer = new THREE.WebGPURenderer();
+				renderer.setPixelRatio(window.devicePixelRatio);
+				renderer.setSize(window.innerWidth, window.innerHeight);
+				renderer.setAnimationLoop(animate);
+				container.appendChild(renderer.domElement);
+
+				controls = new OrbitControls(camera, renderer.domElement);
+
+				window.addEventListener('resize', onWindowResize, false);
+			}
+
+			function onWindowResize() {
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize(window.innerWidth, window.innerHeight);
+			}
+
+			function animate() {
+				controls.update();
+				renderer.render(scene, camera);
+			}
+		</script>
+	</body>
+</html>
