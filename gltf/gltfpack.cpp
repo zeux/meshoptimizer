@@ -1113,6 +1113,8 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 			return 2;
 		}
 
+		fprintf(stderr, "Warning: Gaussian Splatting support is experimental; output structure, compression and quality may change\n");
+
 		// override position storage to -vpf; we can't support any other form of position quantization as position & scale have the same transform
 		settings.pos_float = true;
 
