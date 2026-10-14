@@ -421,6 +421,8 @@ static StreamFormat writeSplatStreamExpSH(std::string& bin, const Stream& stream
 	int shift = mbits + 1 <= 8 ? 16 : (mbits + 1 <= 16 ? 8 : 0);
 	float scale = ldexpf(1.f, -range);
 
+	bin.reserve(bin.size() + stream.data.size() * sizeof(float) * 3);
+
 	for (size_t i = 0; i < stream.data.size(); ++i)
 	{
 		const Attr& a = stream.data[i];
@@ -490,9 +492,7 @@ static void encodeSnorm(void* destination, size_t count, size_t stride, int bits
 
 StreamFormat writeSplatStream(std::string& bin, const Stream& stream, const Settings& settings)
 {
-	assert(stream.type == cgltf_attribute_type_position || (stream.type == cgltf_attribute_type_custom && stream.splats));
-
-	(void)settings;
+	assert(stream.type == cgltf_attribute_type_position || stream.splats);
 
 	SplatAttribute attr = stream.type == cgltf_attribute_type_position ? Splat_Position : SplatAttribute(stream.splats);
 
@@ -511,6 +511,7 @@ StreamFormat writeSplatStream(std::string& bin, const Stream& stream, const Sett
 
 		StreamFormat::Filter filter = settings.compress ? StreamFormat::Filter_Quat : StreamFormat::Filter_None;
 		int bits = settings.nrm_bits + (settings.compressmore ? 0 : 1);
+		bits = std::max(4, std::min(bits, 16)); // quaternion filter supports 4-16 bits
 
 		size_t offset = bin.size();
 		size_t stride = 8;
@@ -566,6 +567,7 @@ StreamFormat writeSplatStream(std::string& bin, const Stream& stream, const Sett
 			return writeSplatStreamFloat(bin, stream, cgltf_type_vec3, 3, false, settings.col_bits, meshopt_EncodeExpSharedComponent);
 
 		int bits = settings.col_bits - 2 - (settings.compressmore ? 1 : 0); // -2 accounts for a larger range [-2..2] with a sign bit
+		bits = std::max(bits, 1);
 		return writeSplatStreamExpSH(bin, stream, bits, /* range= */ 1);
 	}
 	else if (attr == Splat_SH1 || attr == Splat_SH2 || attr == Splat_SH3)
@@ -582,6 +584,7 @@ StreamFormat writeSplatStream(std::string& bin, const Stream& stream, const Sett
 			bin.resize(bin.size() + stream.data.size() * stride);
 
 			int bits = settings.col_bits - (attr == Splat_SH1 ? 3 : 4); // 5/4/4 at default settings, including sign bit
+			bits = std::max(1, std::min(bits, 8));
 			encodeSnorm(&bin[offset], stream.data.size(), stride, bits, stream.data[0].f);
 
 			StreamFormat format = {cgltf_type_vec3, cgltf_component_type_r_8, true, 4, StreamFormat::Filter_None};
@@ -590,6 +593,7 @@ StreamFormat writeSplatStream(std::string& bin, const Stream& stream, const Sett
 		else
 		{
 			int bits = settings.col_bits - (attr == Splat_SH1 ? 2 : 3); // 6/5/5 at default settings, excluding sign bit
+			bits = std::max(bits, 1);
 
 			if (!settings.compress)
 				return writeSplatStreamFloat(bin, stream, cgltf_type_vec3, 3, false, bits, meshopt_EncodeExpClamped);

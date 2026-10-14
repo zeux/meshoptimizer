@@ -1022,11 +1022,11 @@ static void writePrimitiveAttribute(std::string& json, const Stream& stream, siz
 {
 	comma(json);
 	append(json, "\"");
-	if (stream.custom_name)
+	if (stream.type == cgltf_attribute_type_custom && stream.custom_name)
 	{
 		append(json, stream.custom_name);
 	}
-	else if (stream.splats)
+	else if (stream.type == cgltf_attribute_type_custom && stream.splats)
 	{
 		const char* attr = splatAttributeType(stream.splats);
 

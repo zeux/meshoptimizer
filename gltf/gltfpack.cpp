@@ -1098,6 +1098,12 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 	}
 	else if (iext == ".ply")
 	{
+		if (settings.fallback)
+		{
+			fprintf(stderr, "Option -cf can not be used together with Gaussian Splats\n");
+			return 2;
+		}
+
 		const char* error = NULL;
 		data = parseSplats(input, meshes, &error);
 
@@ -1115,7 +1121,7 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 	}
 	else
 	{
-		fprintf(stderr, "Error loading %s: unknown extension (expected .gltf or .glb or .obj)\n", input);
+		fprintf(stderr, "Error loading %s: unknown extension (expected .gltf, .glb, .obj or .ply)\n", input);
 		return 2;
 	}
 
@@ -1705,7 +1711,7 @@ int main(int argc, char** argv)
 		if (help)
 		{
 			fprintf(stderr, "\nBasics:\n");
-			fprintf(stderr, "\t-i file: input file to process, .obj/.gltf/.glb\n");
+			fprintf(stderr, "\t-i file: input file to process, .gltf/.glb/.obj/.ply\n");
 			fprintf(stderr, "\t-o file: output file path, .gltf/.glb\n");
 			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc/-cz for higher compression ratio)\n");
 			fprintf(stderr, "\nTextures:\n");
@@ -1756,6 +1762,8 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-as N: use N-bit quantization for scale (default: 16; N should be between 1 and 24)\n");
 			fprintf(stderr, "\t-af N: resample animations at N Hz (default: 30; use 0 to disable)\n");
 			fprintf(stderr, "\t-ac: keep constant animation tracks even if they don't modify the node transform\n");
+			fprintf(stderr, "\nGaussian Splats:\n");
+			fprintf(stderr, "\t-gsd N: keep spherical harmonics up to degree N (default: 2; N should be between 0 and 3)\n");
 			fprintf(stderr, "\nScene:\n");
 			fprintf(stderr, "\t-kn: keep named nodes and meshes attached to named nodes so that named nodes can be transformed externally\n");
 			fprintf(stderr, "\t-km: keep named materials and disable named material merging\n");
@@ -1774,7 +1782,7 @@ int main(int argc, char** argv)
 		else
 		{
 			fprintf(stderr, "\nBasics:\n");
-			fprintf(stderr, "\t-i file: input file to process, .obj/.gltf/.glb\n");
+			fprintf(stderr, "\t-i file: input file to process, .gltf/.glb/.obj/.ply\n");
 			fprintf(stderr, "\t-o file: output file path, .gltf/.glb\n");
 			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc/-cz for higher compression ratio)\n");
 			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression\n");
