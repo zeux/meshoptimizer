@@ -93,9 +93,10 @@ gltfpack supports most Khronos extensions and some multi-vendor extensions in th
 Even if the source file does not use extensions, gltfpack may use some extensions in the output file either by default or when certain options are used:
 
 - KHR_mesh_quantization (used by default unless disabled via `-noq`)
-- KHR_meshopt_compression (used when requested via `-ce khr` or `-cz`)
+- KHR_meshopt_compression (used when requested via `-ce khr` or `-cz`, or when converting Gaussian Splatting assets)
 - KHR_texture_transform (used by default when textures are present, unless disabled via `-noq` or `-vtf`)
 - KHR_texture_basisu (used when requested via `-tc` or `-tu`)
+- KHR_gaussian_splatting (used when converting input Gaussian Splatting assets indicated via `.ply` extension)
 - EXT_meshopt_compression (used when requested via `-c` or `-cc`)
 - EXT_mesh_gpu_instancing (used when requested via `-mi`)
 - EXT_texture_webp (used when requested via `-tw`)
@@ -116,6 +117,22 @@ Unknown vertex or instance attributes are generally discarded. While it would be
 Additional application-specific data can be stored via the glTF `extras` property. While extras (outside of `asset`) are discarded by default, using the `-ke` option preserves extras in materials, nodes, primitives and scenes.
 
 In addition to `asset` extras, gltfpack unconditionally preserves morph target names specified via the `targetNames` property inside `extras` on meshes.
+
+## Gaussian Splatting
+
+gltfpack supports an experimental feature for converting input Gaussian Splatting assets to glTF, using [KHR_gaussian_splatting](https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Khronos/KHR_gaussian_splatting/README.md) extension for data representation, and [KHR_meshopt_compression](https://github.com/KhronosGroup/glTF/blob/main/extensions/2.0/Khronos/KHR_meshopt_compression/README.md) for compression.
+
+To convert the input file, it must have the `.ply` extension and store GS data in PLY ASCII or binary formats, using COLMAP (RDF) coordinate space and sRGB spherical harmonics. gltfpack automatically recognizes the extension and outputs the glTF file:
+
+```
+gltfpack -i input.ply -o result.glb -c
+```
+
+The output glTF file is limited in terms of attribute formats it can use, and is large unless compression is applied. It's therefore highly recommended to use `-c`/`-cc` options, which enable compression using `KHR_meshopt_compression` extension. `-c` usually results in perceptually indistinguishable output (if all SH degrees are kept); `-cc` results in a smaller file at the cost of some visual fidelity loss, and stores SH1-3 as normalized bytes which may require additional renderer support. For finer control, options `-vp`/`-vt`/`-vn`/`-vc` can be used to control the number of bits allocated to position/scale/rotation/SH components.
+
+By default, spherical harmonics degree 3 data is discarded; this can be controlled via `-gsd` flag, e.g. `-gsd 3` for a full-fidelity asset, or `-gsd 0` for the smallest color-only file.
+
+Note that `KHR_gaussian_splatting` extension in the *input* glTF files is not supported.
 
 ## Building
 
