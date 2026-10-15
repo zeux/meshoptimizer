@@ -116,6 +116,7 @@ enum TextureMode
 	TextureMode_Raw,
 	TextureMode_ETC1S,
 	TextureMode_UASTC,
+	TextureMode_XUASTC,
 	TextureMode_WebP,
 };
 
