@@ -1,5 +1,5 @@
 // This file is part of meshoptimizer library and is distributed under the terms of MIT License.
-// Copyright (C) 2016-2026, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
+// Copyright (C) 2016-2026, by Arseny Kapoulkine
 export type SimplifierFlags = 'LockBorder' | 'Sparse' | 'ErrorAbsolute' | 'Prune' | 'Regularize' | 'Permissive' | 'RegularizeLight' | 'PreserveFolds' | 'ErrorClamped';
 export type RemesherFlags = 'Shell' | 'Solve';
 

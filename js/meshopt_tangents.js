@@ -1,5 +1,5 @@
 // This file is part of meshoptimizer library and is distributed under the terms of MIT License.
-// Copyright (C) 2016-2026, by Arseny Kapoulkine (arseny.kapoulkine@gmail.com)
+// Copyright (C) 2016-2026, by Arseny Kapoulkine
 var MeshoptTangents = (function () {
 	// Built with clang version 22.1.0-wasi-sdk
 	// Built from meshoptimizer 1.3
